@@ -1,0 +1,6 @@
+[submodule "external/reshade"]
+	path = external/reshade
+	url = https://github.com/crosire/reshade
+[submodule "external/DirectXShaderCompiler"]
+	path = external/DirectXShaderCompiler
+	url = https://github.com/microsoft/DirectXShaderCompiler.git
