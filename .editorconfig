@@ -2,9 +2,12 @@
 # coding styles between different editors and IDEs
 # editorconfig.org
 
+
 root = true
 
+
 [*.{c++,cc,cpp,cxx,h,h++,hh,hpp,hxx,inl,ipp,tlh,tli}]
+# should follow https://google.github.io/styleguide/cppguide.html
 indent_style = space
 indent_size = 2
 
@@ -13,5 +16,11 @@ charset = utf-8
 trim_trailing_whitespace = true
 insert_final_newline = true
 
+cpp_indent_braces = false
 cpp_indent_case_contents_when_block = true
 cpp_new_line_before_open_brace_namespace = same_line
+cpp_new_line_before_open_brace_type = same_line
+cpp_new_line_before_open_brace_block = same_line
+cpp_new_line_before_else = false
+cpp_indent_case_labels = true
+
