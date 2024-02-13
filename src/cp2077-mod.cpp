@@ -43,8 +43,8 @@ struct InjectData {
   float highlights;
   float shadows;
   float colorGrading;
-  float pad02;
-  float pad03;
+  float paperWhite;
+  float exposure;
   float pad04;
 };
 
@@ -54,6 +54,8 @@ struct UserInjectData {
   float highlights;
   float shadows;
   float colorGrading;
+  float paperWhite;
+  float exposure;
 };
 
 static UserInjectData userInjectData = {
@@ -61,7 +63,9 @@ static UserInjectData userInjectData = {
   50.0f,
   50.0f,
   50.0f,
-  100.f
+  100.f,
+  203.f,
+  3.f
 };
 
 static InjectData injectData = {};
@@ -469,6 +473,8 @@ static void on_bind_pipeline(
   injectData.highlights = userInjectData.highlights * 0.02f;
   injectData.shadows = userInjectData.shadows * 0.02f;
   injectData.colorGrading = userInjectData.colorGrading * 0.01f;
+  injectData.paperWhite = userInjectData.paperWhite;
+  injectData.exposure = userInjectData.exposure;
 
   reshade::api::shader_stage stage = (computeShaderLayouts.find(layout.handle) != computeShaderLayouts.end())
     ? reshade::api::shader_stage::all_compute
@@ -529,6 +535,20 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     0.f,
     100.f,
     "%.0f");
+
+  ImGui::SliderFloat(
+    "Paperwhite",
+    &userInjectData.paperWhite,
+    80.f,
+    500.f,
+    "%.0f");
+
+  ImGui::SliderFloat(
+    "Exposure",
+    &userInjectData.exposure,
+    0.f,
+    10.f,
+    "%.1f");
 }
 
 
