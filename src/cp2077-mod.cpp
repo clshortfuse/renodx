@@ -7,6 +7,8 @@
 
 #include <embed/cp2077.h>
 
+#define DEBUG_LEVEL_0
+
 #include <vector>
 #include <fstream>
 #include <filesystem>
@@ -15,11 +17,11 @@
 #include <unordered_set>
 #include <unordered_map>
 #if 0
-  #include "../external/reshade/deps/imgui/imgui.h"
-  #include "../external/reshade/include/reshade.hpp"
+#include "../external/reshade/deps/imgui/imgui.h"
+#include "../external/reshade/include/reshade.hpp"
 #else
-  #include "C:/Users/clsho/Documents/GitHub/reshade/deps/imgui/imgui.h"
-  #include "C:/Users/clsho/Documents/GitHub/reshade/include/reshade.hpp"
+#include "C:/Users/clsho/Documents/GitHub/reshade/deps/imgui/imgui.h"
+#include "C:/Users/clsho/Documents/GitHub/reshade/include/reshade.hpp"
 #endif
 
 #include "../lib/crc32_hash.hpp"
@@ -31,13 +33,9 @@ std::shared_mutex s_mutex;
 std::unordered_set<uint32_t> codeInjections;
 std::unordered_set<uint64_t> trackedLayouts;
 std::unordered_set<uint64_t> trackedPipelines;
-std::unordered_set<uint64_t> loggedTables;
-std::unordered_map<uint32_t, uint64_t> replacedComputerShadersToPipelineMap;
-std::unordered_map<uint64_t, reshade::api::pipeline_layout> pipeLineToLayoutMap;
-std::unordered_map<uint64_t, reshade::api::pipeline_layout> moddedPipelineLayouts;
+std::unordered_set<uint64_t> computeShaderLayouts;
+std::unordered_map<uint64_t, reshade::api::pipeline_layout> pipelineToLayoutMap;
 std::unordered_map<uint64_t, uint32_t> moddedPipelineLayoutsIndex;
-std::unordered_map<uint64_t, reshade::api::pipeline> pipelineReplacements;
-std::unordered_map<reshade::api::command_list*, reshade::api::pipeline> commandListQueue;
 
 // MUST be 32bit aligned
 struct InjectData {
@@ -69,9 +67,7 @@ static UserInjectData userInjectData = {
 
 static InjectData injectData = {};
 
-#define TONE_MAPPER_COUNT 5
-
-static const char* toneMapperTypeStrings[TONE_MAPPER_COUNT] = {
+static const char* toneMapperTypeStrings[] = {
   "None",
   "Vanilla",
   "OpenDRT",
@@ -198,18 +194,7 @@ bool on_create_pipeline_layout(
 
   for (uint32_t paramIndex = 0; paramIndex < desc->count; ++paramIndex) {
     auto param = desc->params[paramIndex];
-    auto newParam = desc->params[paramIndex];
-    newParam.type = param.type;
     if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
-      // Copy ranges should not be needed
-      // reshade::api::descriptor_range* newRanges = new reshade::api::descriptor_range[param.descriptor_table.count];
-      // memcpy(
-      //   newRanges,
-      //   param.descriptor_table.ranges,
-      //   sizeof(reshade::api::descriptor_range) * param.descriptor_table.count);
-      // newParam.descriptor_table.ranges = newRanges;
-      // newParam.descriptor_table.count = param.descriptor_table.count;
-
       for (uint32_t rangeIndex = 0; rangeIndex < param.descriptor_table.count; ++rangeIndex) {
         auto range = param.descriptor_table.ranges[rangeIndex];
         if (range.type == reshade::api::descriptor_type::constant_buffer) {
@@ -235,7 +220,6 @@ bool on_create_pipeline_layout(
       }
     }
   }
-  logLayout(desc->count, desc->params, 0x001);
 
   // Fill in extra param
   newParams[desc->count].type = reshade::api::pipeline_layout_param_type::push_constants;
@@ -245,6 +229,10 @@ bool on_create_pipeline_layout(
   newParams[desc->count].push_constants.dx_register_space = 0;
   newParams[desc->count].push_constants.visibility = defaultVisibility;
 
+  desc->count = desc->count + 1;
+  desc->params = newParams;
+
+#ifdef DEBUG_LEVEL_0
   std::stringstream s;
   s << "on_init_pipeline_layout++(";
   s << "will insert new push_constant at ";
@@ -252,17 +240,14 @@ bool on_create_pipeline_layout(
   s << " )";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 
+#ifdef DEBUG_LEVEL_1
+  logLayout(desc->count, desc->params, 0x001);
   logLayout(desc->count + 1, newParams, 0x002);
+#endif
 
-  desc->count = desc->count + 1;
-  desc->params = newParams;
+#endif
 
   return true;
-
-  // Write over pointer
-  // ID3D12RootSignature*& previousSigPtr = (ID3D12RootSignature*&)layout.handle;
-  // ID3D12RootSignature*& newSigPtr = (ID3D12RootSignature*&)newLayout.handle;
-  // memcpy(previousSigPtr, newSigPtr, sizeof(ID3D12RootSignature*&));
 }
 
 // AfterCreateRootSignature
@@ -308,7 +293,9 @@ void on_init_pipeline_layout(
     }
   }
 
+  moddedPipelineLayoutsIndex.emplace(layout.handle, cbvIndex);
 
+#ifdef DEBUG_LEVEL_0
   std::stringstream s;
   s << "on_init_pipeline_layout++(";
   s << reinterpret_cast<void*>(layout.handle);
@@ -316,57 +303,9 @@ void on_init_pipeline_layout(
   s << cbvIndex;
   s << " )";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
-
-  moddedPipelineLayoutsIndex.emplace(layout.handle, cbvIndex);
+#endif
 }
 
-
-
-// Returns shader hash if can be replaced
-static uint32_t hasShaderReplacement(
-  reshade::api::device_api device_type,
-  const reshade::api::shader_desc& desc) {
-  if (desc.code_size == 0) return false;
-
-
-  uint32_t shader_hash = compute_crc32(
-    static_cast<const uint8_t*>(desc.code),
-    desc.code_size);
-
-  switch (shader_hash) {
-    case 0x71f27445: return true;
-  }
-  return false;
-}
-static bool injectShader(
-  uint32_t shader_hash,
-  reshade::api::device_api device_type,
-  reshade::api::shader_desc* desc) {
-  switch (shader_hash) {
-    case 0x71f27445:
-      desc->code = &_0x71f27445;
-      desc->code_size = sizeof(_0x71f27445);
-      break;
-    default:
-      return false;
-  }
-
-  uint32_t new_hash = compute_crc32(static_cast<const uint8_t*>(desc->code), desc->code_size);
-
-  codeInjections.emplace(new_hash);
-
-  std::stringstream s;
-  s << "injectShader:replace("
-    << "0x" << std::hex << shader_hash << std::dec
-    << " => "
-    << "0x" << std::hex << new_hash << std::dec
-    << " - " << desc->code_size << " bytes"
-    << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
-  s.clear();
-
-  return true;
-}
 
 static bool load_shader_code(
   reshade::api::device_api device_type,
@@ -386,10 +325,11 @@ static bool load_shader_code(
       return false;
   }
 
-  std::stringstream s;
-
   uint32_t new_hash = compute_crc32(static_cast<const uint8_t*>(desc->code), desc->code_size);
   codeInjections.emplace(new_hash);
+
+#ifdef DEBUG_LEVEL_0
+  std::stringstream s;
   s << "load_shader_code:replace("
     << "0x" << std::hex << shader_hash << std::dec
     << " => "
@@ -397,7 +337,7 @@ static bool load_shader_code(
     << " - " << desc->code_size << " bytes"
     << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
-
+#endif
 
   return true;
 }
@@ -422,15 +362,17 @@ static bool on_create_pipeline(
     }
   }
 
-  if (replaced_stages) {
-    trackedLayouts.emplace(layout.handle);
+  if (!replaced_stages) return false;
 
-    std::stringstream s;
-    s << "tracking layout handle(" << reinterpret_cast<void*>(layout.handle) << " | " << replaced_stages << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
-  }
+  trackedLayouts.emplace(layout.handle);
 
-  return replaced_stages;
+#ifdef DEBUG_LEVEL_0
+  std::stringstream s;
+  s << "tracking layout handle(" << reinterpret_cast<void*>(layout.handle) << " | " << replaced_stages << ")";
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
+
+  return true;
 }
 
 // After CreatePipelineState
@@ -441,8 +383,6 @@ static void on_init_pipeline(
   const reshade::api::pipeline_subobject* subobjects,
   reshade::api::pipeline pipeline) {
   if (trackedLayouts.find(layout.handle) == trackedLayouts.end()) return;
-
-  pipeLineToLayoutMap.emplace(pipeline.handle, layout);
 
   for (uint32_t i = 0; i < subobjectCount; ++i) {
     switch (subobjects[i].type) {
@@ -458,8 +398,13 @@ static void on_init_pipeline(
     auto shader_hash = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
     if (codeInjections.find(shader_hash) == codeInjections.end()) continue;
 
-    trackedPipelines.emplace(pipeline.handle);
+    pipelineToLayoutMap.emplace(pipeline.handle, layout);
 
+    if (subobjects[i].type == reshade::api::pipeline_subobject_type::compute_shader) {
+      computeShaderLayouts.emplace(layout.handle);
+    }
+
+#ifdef DEBUG_LEVEL_0
     std::stringstream s;
     s << "found changed shader ("
       << reinterpret_cast<void*>(pipeline.handle)
@@ -467,9 +412,7 @@ static void on_init_pipeline(
       << ", " << "0x" << std::hex << shader_hash << std::dec
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
-    if (subobjects[i].type == reshade::api::pipeline_subobject_type::compute_shader) {
-      replacedComputerShadersToPipelineMap.emplace(shader_hash, pipeline.handle);
-    }
+#endif
   }
 }
 
@@ -478,12 +421,10 @@ static void on_bind_pipeline(
   reshade::api::command_list* cmd_list,
   reshade::api::pipeline_stage type,
   reshade::api::pipeline pipeline) {
-  if (trackedPipelines.find(pipeline.handle) == trackedPipelines.end()) return;
-
   // const std::unique_lock<std::shared_mutex> lock(s_mutex);
 
-  auto pair0 = pipeLineToLayoutMap.find(pipeline.handle);
-  if (pair0 == pipeLineToLayoutMap.end()) return;
+  auto pair0 = pipelineToLayoutMap.find(pipeline.handle);
+  if (pair0 == pipelineToLayoutMap.end()) return;
   auto layout = pair0->second;
 
   auto pair2 = moddedPipelineLayoutsIndex.find(layout.handle);
@@ -496,8 +437,11 @@ static void on_bind_pipeline(
   injectData.shadows = userInjectData.shadows * 0.02f;
   injectData.colorGrading = userInjectData.colorGrading * 0.01f;
 
+  reshade::api::shader_stage stage = (computeShaderLayouts.find(layout.handle) != computeShaderLayouts.end())
+    ? reshade::api::shader_stage::all_compute
+    : reshade::api::shader_stage::all_graphics;
   cmd_list->push_constants(
-    reshade::api::shader_stage::all_compute,
+    stage,
     layout,
     param_index,
     0,
@@ -505,13 +449,12 @@ static void on_bind_pipeline(
     &injectData);
 }
 
-
 static void onRegisterOverlay(reshade::api::effect_runtime*) {
   ImGui::SliderInt(
     "Tone Mapper",
     &userInjectData.toneMapperType,
     0,
-    TONE_MAPPER_COUNT - 1,
+    (sizeof(toneMapperTypeStrings) / sizeof(char*)) - 1,
     toneMapperTypeStrings[userInjectData.toneMapperType],
     ImGuiSliderFlags_NoInput);
 
