@@ -20,7 +20,11 @@ set_target_properties(cp2077
     SUFFIX ".addon64"
 )
 
-target_embed_files(cp2077 FILES embed/0x71F27445.cso)
+target_embed_files(cp2077
+  FILES
+    embed/0x71F27445.cso
+    embed/0x97CA5A85.cso
+)
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})

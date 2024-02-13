@@ -32,7 +32,6 @@ extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Cyberpunk
 std::shared_mutex s_mutex;
 std::unordered_set<uint32_t> codeInjections;
 std::unordered_set<uint64_t> trackedLayouts;
-std::unordered_set<uint64_t> trackedPipelines;
 std::unordered_set<uint64_t> computeShaderLayouts;
 std::unordered_map<uint64_t, reshade::api::pipeline_layout> pipelineToLayoutMap;
 std::unordered_map<uint64_t, uint32_t> moddedPipelineLayoutsIndex;
@@ -176,21 +175,52 @@ void logLayout(
   }
 }
 
+static bool load_embedded_shader(
+  reshade::api::device_api device_type,
+  reshade::api::shader_desc* desc) {
+  if (desc->code_size == 0) return false;
+
+  uint32_t shader_hash = compute_crc32(
+    static_cast<const uint8_t*>(desc->code),
+    desc->code_size);
+
+  switch (shader_hash) {
+    case 0x71f27445:
+      desc->code = &_0x71f27445;
+      desc->code_size = sizeof(_0x71f27445);
+      break;
+    default:
+      return false;
+  }
+
+  uint32_t new_hash = compute_crc32(static_cast<const uint8_t*>(desc->code), desc->code_size);
+  codeInjections.emplace(new_hash);
+
+#ifdef DEBUG_LEVEL_0
+  std::stringstream s;
+  s << "load_shader_code:replace("
+    << "0x" << std::hex << shader_hash << std::dec
+    << " => "
+    << "0x" << std::hex << new_hash << std::dec
+    << " - " << desc->code_size << " bytes"
+    << ")";
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
+
+  return true;
+}
+
 // Before CreateRootSignature
-bool on_create_pipeline_layout(
+static bool on_create_pipeline_layout(
   reshade::api::device* device,
   reshade::api::pipeline_layout_desc* desc) {
   // Clone params with extra slot
-  reshade::api::pipeline_layout_param* newParams = new reshade::api::pipeline_layout_param[desc->count + 1];
-
   const std::unique_lock<std::shared_mutex> lock(s_mutex);
-
-  // Copy up to size of old
-  memcpy(newParams, desc->params, sizeof(reshade::api::pipeline_layout_param) * desc->count);
 
   bool foundVisiblity = false;
   reshade::api::shader_stage defaultVisibility = reshade::api::shader_stage::all;
   uint32_t cbvIndex = 0;
+  uint32_t pcCount = 0;
 
   for (uint32_t paramIndex = 0; paramIndex < desc->count; ++paramIndex) {
     auto param = desc->params[paramIndex];
@@ -209,6 +239,7 @@ bool on_create_pipeline_layout(
         }
       }
     } else if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
+      pcCount++;
       if (cbvIndex < param.push_constants.dx_register_index + param.push_constants.count) {
         cbvIndex = param.push_constants.dx_register_index + param.push_constants.count;
       }
@@ -221,28 +252,41 @@ bool on_create_pipeline_layout(
     }
   }
 
-  // Fill in extra param
-  newParams[desc->count].type = reshade::api::pipeline_layout_param_type::push_constants;
-  newParams[desc->count].push_constants.binding = 0;
-  newParams[desc->count].push_constants.count = sizeof(InjectData) / sizeof(uint32_t);
-  newParams[desc->count].push_constants.dx_register_index = cbvIndex;
-  newParams[desc->count].push_constants.dx_register_space = 0;
-  newParams[desc->count].push_constants.visibility = defaultVisibility;
+  if (pcCount != 0) return false;
+  if (cbvIndex != 14) return false;
 
-  desc->count = desc->count + 1;
+#ifdef DEBUG_LEVEL_1
+  logLayout(desc->count, desc->params, 0x001);
+#endif
+
+  uint32_t oldCount = (desc->count);
+  uint32_t newCount = oldCount + 1;
+  reshade::api::pipeline_layout_param* newParams = new reshade::api::pipeline_layout_param[newCount];
+
+  // Copy up to size of old
+  memcpy(newParams, desc->params, sizeof(reshade::api::pipeline_layout_param) * oldCount);
+
+  // Fill in extra param
+  newParams[oldCount].type = reshade::api::pipeline_layout_param_type::push_constants;
+  newParams[oldCount].push_constants.binding = 0;
+  newParams[oldCount].push_constants.count = sizeof(InjectData) / sizeof(uint32_t);
+  newParams[oldCount].push_constants.dx_register_index = cbvIndex;
+  newParams[oldCount].push_constants.dx_register_space = 0;
+  newParams[oldCount].push_constants.visibility = defaultVisibility;
+
+  desc->count = newCount;
   desc->params = newParams;
 
 #ifdef DEBUG_LEVEL_0
   std::stringstream s;
-  s << "on_init_pipeline_layout++(";
+  s << "on_create_pipeline_layout++(";
   s << "will insert new push_constant at ";
   s << cbvIndex;
   s << " )";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 
 #ifdef DEBUG_LEVEL_1
-  logLayout(desc->count, desc->params, 0x001);
-  logLayout(desc->count + 1, newParams, 0x002);
+  logLayout(newCount, newParams, 0x002);
 #endif
 
 #endif
@@ -251,26 +295,17 @@ bool on_create_pipeline_layout(
 }
 
 // AfterCreateRootSignature
-void on_init_pipeline_layout(
+static void on_init_pipeline_layout(
   reshade::api::device* device,
   const uint32_t paramCount,
   const reshade::api::pipeline_layout_param* params,
   reshade::api::pipeline_layout layout) {
+  const std::unique_lock<std::shared_mutex> lock(s_mutex);
+
   uint32_t cbvIndex = 0;
   for (uint32_t paramIndex = 0; paramIndex < paramCount; ++paramIndex) {
     auto param = params[paramIndex];
-    auto newParam = params[paramIndex];
-    newParam.type = param.type;
     if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
-      // Copy ranges should not be needed
-      // reshade::api::descriptor_range* newRanges = new reshade::api::descriptor_range[param.descriptor_table.count];
-      // memcpy(
-      //   newRanges,
-      //   param.descriptor_table.ranges,
-      //   sizeof(reshade::api::descriptor_range) * param.descriptor_table.count);
-      // newParam.descriptor_table.ranges = newRanges;
-      // newParam.descriptor_table.count = param.descriptor_table.count;
-
       for (uint32_t rangeIndex = 0; rangeIndex < param.descriptor_table.count; ++rangeIndex) {
         auto range = param.descriptor_table.ranges[rangeIndex];
         if (range.type == reshade::api::descriptor_type::constant_buffer) {
@@ -306,40 +341,21 @@ void on_init_pipeline_layout(
 #endif
 }
 
-
-static bool load_shader_code(
-  reshade::api::device_api device_type,
-  reshade::api::shader_desc* desc) {
-  if (desc->code_size == 0) return false;
-
-  uint32_t shader_hash = compute_crc32(
-    static_cast<const uint8_t*>(desc->code),
-    desc->code_size);
-
-  switch (shader_hash) {
-    case 0x71f27445:
-      desc->code = &_0x71f27445;
-      desc->code_size = sizeof(_0x71f27445);
-      break;
-    default:
-      return false;
-  }
-
-  uint32_t new_hash = compute_crc32(static_cast<const uint8_t*>(desc->code), desc->code_size);
-  codeInjections.emplace(new_hash);
+static void on_destroy_pipeline_layout(
+  reshade::api::device* device,
+  reshade::api::pipeline_layout layout) {
+  uint32_t changed = false;
+  changed |= moddedPipelineLayoutsIndex.erase(layout.handle);
+  changed |= trackedLayouts.erase(layout.handle);
+  if (!changed) return;
 
 #ifdef DEBUG_LEVEL_0
   std::stringstream s;
-  s << "load_shader_code:replace("
-    << "0x" << std::hex << shader_hash << std::dec
-    << " => "
-    << "0x" << std::hex << new_hash << std::dec
-    << " - " << desc->code_size << " bytes"
-    << ")";
+  s << "on_destroy_pipeline_layout(";
+  s << reinterpret_cast<void*>(layout.handle);
+  s << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
-
-  return true;
 }
 
 // Before CreatePipelineState
@@ -355,7 +371,7 @@ static bool on_create_pipeline(
     switch (subobjects[i].type) {
       case reshade::api::pipeline_subobject_type::compute_shader:
       case reshade::api::pipeline_subobject_type::pixel_shader:
-        replaced_stages |= load_shader_code(
+        replaced_stages |= load_embedded_shader(
           device_type,
           static_cast<reshade::api::shader_desc*>(subobjects[i].data));
         break;
@@ -416,6 +432,23 @@ static void on_init_pipeline(
   }
 }
 
+static void on_destroy_pipeline(
+  reshade::api::device* device,
+  reshade::api::pipeline pipeline) {
+  uint32_t changed = false;
+  changed |= pipelineToLayoutMap.erase(pipeline.handle);
+  changed |= computeShaderLayouts.erase(pipeline.handle);
+  if (!changed) return;
+
+#ifdef DEBUG_LEVEL_0
+  std::stringstream s;
+  s << "on_destroy_pipeline(";
+  s << reinterpret_cast<void*>(pipeline.handle);
+  s << " )";
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
+}
+
 // AfterSetPipelineState
 static void on_bind_pipeline(
   reshade::api::command_list* cmd_list,
@@ -441,15 +474,26 @@ static void on_bind_pipeline(
     ? reshade::api::shader_stage::all_compute
     : reshade::api::shader_stage::all_graphics;
   cmd_list->push_constants(
-    stage,
+    reshade::api::shader_stage::all_compute,
     layout,
     param_index,
     0,
     sizeof(InjectData) / sizeof(uint32_t),
     &injectData);
+
+#ifdef DEBUG_LEVEL_1
+  std::stringstream s;
+  s << "bind_pipeline++("
+    << reinterpret_cast<void*>(pipeline.handle)
+    << ", " << reinterpret_cast<void*>(layout.handle)
+    << ", " << param_index
+    << ")";
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
+
 }
 
-static void onRegisterOverlay(reshade::api::effect_runtime*) {
+static void on_register_overlay(reshade::api::effect_runtime*) {
   ImGui::SliderInt(
     "Tone Mapper",
     &userInjectData.toneMapperType,
@@ -493,24 +537,20 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
 
-      // Before CreateRootSignature
       reshade::register_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
-
-      // After CreateRootSignature
       reshade::register_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
+      reshade::register_event<reshade::addon_event::destroy_pipeline_layout>(on_destroy_pipeline_layout);
 
-      // Before CreatePipelineState
       reshade::register_event<reshade::addon_event::create_pipeline>(on_create_pipeline);
-
-      // After CreatePipelineState
       reshade::register_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
+      reshade::register_event<reshade::addon_event::destroy_pipeline>(on_destroy_pipeline);
 
-      // After SetPipelineState
       reshade::register_event<reshade::addon_event::bind_pipeline>(on_bind_pipeline);
 
-      reshade::register_overlay("RenoDX", onRegisterOverlay);
+      reshade::register_overlay("RenoDX", on_register_overlay);
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
       reshade::unregister_addon(hModule);
       break;
   }
