@@ -4,11 +4,10 @@
  */
 
 #define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
-
-#include <embed/cp2077.h>
-
 #define DEBUG_LEVEL_0
 
+#include <embed/0x71F27445.h>
+#include <embed/0x97CA5A85.h>
 #include <vector>
 #include <fstream>
 #include <filesystem>
@@ -16,6 +15,9 @@
 #include <shared_mutex>
 #include <unordered_set>
 #include <unordered_map>
+
+#include "./cp2077/struct.h"
+
 #if 0
 #include "../external/reshade/deps/imgui/imgui.h"
 #include "../external/reshade/include/reshade.hpp"
@@ -36,39 +38,39 @@ std::unordered_set<uint64_t> computeShaderLayouts;
 std::unordered_map<uint64_t, reshade::api::pipeline_layout> pipelineToLayoutMap;
 std::unordered_map<uint64_t, uint32_t> moddedPipelineLayoutsIndex;
 
-// MUST be 32bit aligned
-struct InjectData {
-  float toneMapperType;
-  float contrast;
-  float highlights;
-  float shadows;
-  float colorGrading;
-  float paperWhite;
-  float exposure;
-  float pad04;
-};
+// MUST be 4x32bit aligned
+ShaderInjectData shaderInjectData;
 
 struct UserInjectData {
-  int toneMapperType;
-  float contrast;
-  float highlights;
-  float shadows;
-  float colorGrading;
-  float paperWhite;
-  float exposure;
-};
+  float toneMapperPaperWhite = 203.f;
+  int toneMapperType = 2;
+  float toneMapperExposure = 50.f;
+  float toneMapperContrast = 50.f;
+  float toneMapperHighlights = 50.f;
+  float toneMapperShadows = 50.f;
+  int colorGradingWorkflow = 1;
+  float colorGradingStrength = 100.f;
+  int colorGradingScaling = 0;
+  float colorGradingLift = 0.f;
+  float colorGradingGamma = 1.f;
+  float colorGradingGain = 1.f;
+} userInjectData;
 
-static UserInjectData userInjectData = {
-  2,
-  50.0f,
-  50.0f,
-  50.0f,
-  100.f,
-  203.f,
-  3.f
-};
-
-static InjectData injectData = {};
+static void updateShaderData() {
+  const std::unique_lock<std::shared_mutex> lock(s_mutex);
+  shaderInjectData.toneMapperType = static_cast<float>(userInjectData.toneMapperType);
+  shaderInjectData.toneMapperPaperWhite = userInjectData.toneMapperPaperWhite;
+  shaderInjectData.toneMapperExposure = userInjectData.toneMapperExposure * 0.02f;
+  shaderInjectData.toneMapperContrast = userInjectData.toneMapperContrast * 0.02f;
+  shaderInjectData.toneMapperHighlights = userInjectData.toneMapperHighlights * 0.02f;
+  shaderInjectData.toneMapperShadows = userInjectData.toneMapperShadows * 0.02f;
+  shaderInjectData.colorGradingWorkflow = static_cast<float>(userInjectData.colorGradingWorkflow - 1);
+  shaderInjectData.colorGradingStrength = userInjectData.colorGradingStrength * 0.01f;
+  shaderInjectData.colorGradingScaling = static_cast<float>(userInjectData.colorGradingScaling);
+  shaderInjectData.colorGradingLift = userInjectData.colorGradingLift;
+  shaderInjectData.colorGradingGamma = userInjectData.colorGradingGamma;
+  shaderInjectData.colorGradingGain = userInjectData.colorGradingGain;
+}
 
 static const char* toneMapperTypeStrings[] = {
   "None",
@@ -76,6 +78,17 @@ static const char* toneMapperTypeStrings[] = {
   "OpenDRT",
   "DICE",
   "ACES",
+};
+
+static const char* colorGradingWorkflowStrings[] = {
+  "Before Tonemapping",
+  "Vanilla",
+  "After Tonemapping",
+};
+
+static const char* colorGradingScalingStrings[] = {
+  "None",
+  "Vanilla",
 };
 
 void logLayout(
@@ -192,6 +205,9 @@ static bool load_embedded_shader(
     case 0x71f27445:
       desc->code = &_0x71f27445;
       desc->code_size = sizeof(_0x71f27445);
+    case 0x97cA5A85:
+      desc->code = &_0x97cA5A85;
+      desc->code_size = sizeof(_0x97cA5A85);
       break;
     default:
       return false;
@@ -218,9 +234,6 @@ static bool load_embedded_shader(
 static bool on_create_pipeline_layout(
   reshade::api::device* device,
   reshade::api::pipeline_layout_desc* desc) {
-  // Clone params with extra slot
-  const std::unique_lock<std::shared_mutex> lock(s_mutex);
-
   bool foundVisiblity = false;
   reshade::api::shader_stage defaultVisibility = reshade::api::shader_stage::all;
   uint32_t cbvIndex = 0;
@@ -273,7 +286,7 @@ static bool on_create_pipeline_layout(
   // Fill in extra param
   newParams[oldCount].type = reshade::api::pipeline_layout_param_type::push_constants;
   newParams[oldCount].push_constants.binding = 0;
-  newParams[oldCount].push_constants.count = sizeof(InjectData) / sizeof(uint32_t);
+  newParams[oldCount].push_constants.count = sizeof(ShaderInjectData) / sizeof(uint32_t);
   newParams[oldCount].push_constants.dx_register_index = cbvIndex;
   newParams[oldCount].push_constants.dx_register_space = 0;
   newParams[oldCount].push_constants.visibility = defaultVisibility;
@@ -304,8 +317,6 @@ static void on_init_pipeline_layout(
   const uint32_t paramCount,
   const reshade::api::pipeline_layout_param* params,
   reshade::api::pipeline_layout layout) {
-  const std::unique_lock<std::shared_mutex> lock(s_mutex);
-
   uint32_t cbvIndex = 0;
   for (uint32_t paramIndex = 0; paramIndex < paramCount; ++paramIndex) {
     auto param = params[paramIndex];
@@ -331,7 +342,7 @@ static void on_init_pipeline_layout(
       }
     }
   }
-
+  const std::unique_lock<std::shared_mutex> lock(s_mutex);
   moddedPipelineLayoutsIndex.emplace(layout.handle, cbvIndex);
 
 #ifdef DEBUG_LEVEL_0
@@ -349,6 +360,7 @@ static void on_destroy_pipeline_layout(
   reshade::api::device* device,
   reshade::api::pipeline_layout layout) {
   uint32_t changed = false;
+  const std::unique_lock<std::shared_mutex> lock(s_mutex);
   changed |= moddedPipelineLayoutsIndex.erase(layout.handle);
   changed |= trackedLayouts.erase(layout.handle);
   if (!changed) return;
@@ -453,13 +465,13 @@ static void on_destroy_pipeline(
 #endif
 }
 
+
+
 // AfterSetPipelineState
 static void on_bind_pipeline(
   reshade::api::command_list* cmd_list,
   reshade::api::pipeline_stage type,
   reshade::api::pipeline pipeline) {
-  // const std::unique_lock<std::shared_mutex> lock(s_mutex);
-
   auto pair0 = pipelineToLayoutMap.find(pipeline.handle);
   if (pair0 == pipelineToLayoutMap.end()) return;
   auto layout = pair0->second;
@@ -468,24 +480,18 @@ static void on_bind_pipeline(
   if (pair2 == moddedPipelineLayoutsIndex.end()) return;
   uint32_t param_index = pair2->second;
 
-  injectData.toneMapperType = static_cast<float>(userInjectData.toneMapperType);
-  injectData.contrast = userInjectData.contrast * 0.02f;
-  injectData.highlights = userInjectData.highlights * 0.02f;
-  injectData.shadows = userInjectData.shadows * 0.02f;
-  injectData.colorGrading = userInjectData.colorGrading * 0.01f;
-  injectData.paperWhite = userInjectData.paperWhite;
-  injectData.exposure = userInjectData.exposure;
-
   reshade::api::shader_stage stage = (computeShaderLayouts.find(layout.handle) != computeShaderLayouts.end())
     ? reshade::api::shader_stage::all_compute
     : reshade::api::shader_stage::all_graphics;
+
+  const std::shared_lock<std::shared_mutex> lock(s_mutex);
   cmd_list->push_constants(
-    reshade::api::shader_stage::all_compute,
+    stage,
     layout,
     param_index,
     0,
-    sizeof(InjectData) / sizeof(uint32_t),
-    &injectData);
+    sizeof(ShaderInjectData) / sizeof(uint32_t),
+    &shaderInjectData);
 
 #ifdef DEBUG_LEVEL_1
   std::stringstream s;
@@ -496,66 +502,134 @@ static void on_bind_pipeline(
     << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
-
 }
 
 static void on_register_overlay(reshade::api::effect_runtime*) {
-  ImGui::SliderInt(
-    "Tone Mapper",
-    &userInjectData.toneMapperType,
-    0,
-    (sizeof(toneMapperTypeStrings) / sizeof(char*)) - 1,
-    toneMapperTypeStrings[userInjectData.toneMapperType],
-    ImGuiSliderFlags_NoInput);
+  bool updated = false;
 
-  ImGui::SliderFloat(
-    "Contrast",
-    &userInjectData.contrast,
-    0.f,
-    100.f,
-    "%.0f");
+  ImGui::SeparatorText("Tone Mapping");
+  {
+    updated |= ImGui::SliderInt(
+      "Tone Mapper",
+      &userInjectData.toneMapperType,
+      0,
+      (sizeof(toneMapperTypeStrings) / sizeof(char*)) - 1,
+      toneMapperTypeStrings[userInjectData.toneMapperType],
+      ImGuiSliderFlags_NoInput);
 
-  ImGui::SliderFloat(
-    "Highlights",
-    &userInjectData.highlights,
-    0.f,
-    100.f,
-    "%.0f");
+    updated |= ImGui::SliderFloat(
+      "Exposure",
+      &userInjectData.toneMapperExposure,
+      0.f,
+      100.f,
+      "%.0f");
+    ImGui::SetItemTooltip("Input scaling factor before passing to tone mapper.");
 
-  ImGui::SliderFloat(
-    "Shadows",
-    &userInjectData.shadows,
-    0.f,
-    100.f,
-    "%.0f");
 
-  ImGui::SliderFloat(
-    "Color Grading",
-    &userInjectData.colorGrading,
-    0.f,
-    100.f,
-    "%.0f");
+    ImGui::BeginDisabled(userInjectData.toneMapperType != 2 && userInjectData.toneMapperType != 4);
+    updated |= ImGui::SliderFloat(
+      "Paperwhite",
+      &userInjectData.toneMapperPaperWhite,
+      80.f,
+      500.f,
+      "%.0f");
+    ImGui::SetItemTooltip("Adjusts the brightness of 100%% white.");
+    ImGui::EndDisabled();
 
-  ImGui::SliderFloat(
-    "Paperwhite",
-    &userInjectData.paperWhite,
-    80.f,
-    500.f,
-    "%.0f");
+    ImGui::BeginDisabled(userInjectData.toneMapperType != 2);
+    updated |= ImGui::SliderFloat(
+      "Contrast",
+      &userInjectData.toneMapperContrast,
+      0.f,
+      100.f,
+      "%.0f");
+    ImGui::SetItemTooltip("Adjusts tone mapper's contrast factor (if avilable).");
+    ImGui::EndDisabled();
 
-  ImGui::SliderFloat(
-    "Exposure",
-    &userInjectData.exposure,
-    0.f,
-    10.f,
-    "%.1f");
+    ImGui::BeginDisabled(userInjectData.toneMapperType != 2);
+    updated |= ImGui::SliderFloat(
+      "Highlights",
+      &userInjectData.toneMapperHighlights,
+      0.f,
+      100.f,
+      "%.0f");
+    ImGui::EndDisabled();
+
+    ImGui::BeginDisabled(userInjectData.toneMapperType != 2 && userInjectData.toneMapperType != 4);
+    updated |= ImGui::SliderFloat(
+      "Shadows",
+      &userInjectData.toneMapperShadows,
+      0.f,
+      100.f,
+      "%.0f");
+    ImGui::SetItemTooltip("Adjusts tone mapper's shadows or black level (if avilable).");
+    ImGui::EndDisabled();
+  }
+
+  ImGui::SeparatorText("Color Grading");
+  {
+    updated |= ImGui::SliderInt(
+      "Workflow",
+      &userInjectData.colorGradingWorkflow,
+      0,
+      (sizeof(colorGradingWorkflowStrings) / sizeof(char*)) - 1,
+      colorGradingWorkflowStrings[userInjectData.colorGradingWorkflow],
+      ImGuiSliderFlags_NoInput);
+    ImGui::SetItemTooltip("Modifies order of when color grading is applied.");
+
+    updated |= ImGui::SliderFloat(
+      "Strength",
+      &userInjectData.colorGradingStrength,
+      0.f,
+      100.f,
+      "%.0f");
+    ImGui::SetItemTooltip("Modifies the strength of the LUT application.");
+
+    updated |= ImGui::SliderInt(
+      "Scaling",
+      &userInjectData.colorGradingScaling,
+      0,
+      (sizeof(colorGradingScalingStrings) / sizeof(char*)) - 1,
+      colorGradingScalingStrings[userInjectData.colorGradingScaling]);
+    ImGui::SetItemTooltip("Enables the game's original LUT scaling.");
+
+
+    ImGui::BeginDisabled();
+    updated |= ImGui::SliderFloat(
+      "Lift",
+      &userInjectData.colorGradingLift,
+      -2.f,
+      2.f,
+      "%.1f");
+
+    updated |= ImGui::SliderFloat(
+      "Gamma",
+      &userInjectData.colorGradingGamma,
+      0.f,
+      4.f,
+      "%.1f");
+
+    updated |= ImGui::SliderFloat(
+      "Gain",
+      &userInjectData.colorGradingGain,
+      0.f,
+      4.f,
+      "%.1f");
+
+    ImGui::EndDisabled();
+  }
+
+  if (updated) {
+    updateShaderData();
+  }
 }
-
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
   switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
+
+      updateShaderData();
 
       reshade::register_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
       reshade::register_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
@@ -571,6 +645,17 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
+      reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
+      reshade::unregister_event<reshade::addon_event::destroy_pipeline_layout>(on_destroy_pipeline_layout);
+
+      reshade::unregister_event<reshade::addon_event::create_pipeline>(on_create_pipeline);
+      reshade::unregister_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
+      reshade::unregister_event<reshade::addon_event::destroy_pipeline>(on_destroy_pipeline);
+
+      reshade::unregister_event<reshade::addon_event::bind_pipeline>(on_bind_pipeline);
+
+      reshade::register_overlay("RenoDX", on_register_overlay);
+
       reshade::unregister_addon(hModule);
       break;
   }

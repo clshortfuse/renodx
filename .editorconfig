@@ -6,7 +6,7 @@
 root = true
 
 
-[*.{c++,cc,cpp,cxx,h,h++,hh,hpp,hxx,inl,ipp,tlh,tli}]
+[*.{c, c++,cc,cpp,cxx,h,h++,hh,hpp,hxx,inl,ipp,tlh,tli}]
 # should follow https://google.github.io/styleguide/cppguide.html
 indent_style = space
 indent_size = 2
