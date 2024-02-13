@@ -8,10 +8,12 @@ project(renodx VERSION 0.1.0 LANGUAGES C CXX)
 include(CTest)
 enable_testing()
 
+# Use executable to convert resources to .h files for embedding
 add_executable(embedfile embedfile.c)
 
 function(build_shader_target)
   string(LENGTH ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/ PATH_LENGTH)
+
 
   file(GLOB SHADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/*.hlsl)
   foreach(FILE ${SHADER_FILES})
@@ -20,6 +22,7 @@ function(build_shader_target)
     string(LENGTH ${FILENAME} SHADER_HASH_LENGTH)
     math(EXPR SHADER_HASH_LENGTH "${SHADER_HASH_LENGTH} - 3 - 5")
     string(SUBSTRING ${FILENAME} 3 ${SHADER_HASH_LENGTH} SHADER_HASH)
+
     add_custom_command(
       OUTPUT embed/${SHADER_HASH}.cso
       COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bin/dxc.exe ${FILE} -WX -T ${SHADER_TARGET}_6_0 -E main -Fo ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso
@@ -30,6 +33,7 @@ function(build_shader_target)
       COMMAND embedfile ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso ${SHADER_HASH}
       DEPENDS embed/${SHADER_HASH}.cso
     )
+
     list(APPEND SHADER_HEADER_FILES embed/include/embed/${SHADER_HASH}.h)
   endforeach()
   LIST(JOIN SHADER_HEADER_FILES " " SHADER_HEADER_FILE_ITEMS)
@@ -39,7 +43,7 @@ endfunction()
 build_shader_target()
 
 add_library(cp2077 MODULE src/cp2077/addon.cpp)
-add_dependencies( cp2077 shaders )
+add_dependencies(cp2077 shaders)
 target_include_directories(cp2077 PRIVATE ${CMAKE_BINARY_DIR}/embed/include)
 target_include_directories(cp2077 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_definitions(cp2077 PRIVATE _UNICODE)
@@ -48,11 +52,6 @@ set_target_properties(cp2077
     PREFIX "renodx-"
     SUFFIX ".addon64"
 )
-
-
-
-
-
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
