@@ -34,15 +34,14 @@ add_custom_command(
 
 add_custom_target(shaders
   DEPENDS
-    embed/0x71f27445.cso
-    embed/0x97cA5A85.cso
     embed/include/embed/0x71f27445.h
     embed/include/embed/0x97cA5A85.h
 )
 
-add_library(cp2077 MODULE src/cp2077-mod.cpp)
+add_library(cp2077 MODULE src/cp2077/addon.cpp)
 add_dependencies( cp2077 shaders )
 target_include_directories(cp2077 PRIVATE ${CMAKE_BINARY_DIR}/embed/include)
+target_include_directories(cp2077 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_definitions(cp2077 PRIVATE _UNICODE)
 set_target_properties(cp2077
   PROPERTIES

@@ -8,6 +8,7 @@
 
 #include <embed/0x71F27445.h>
 #include <embed/0x97CA5A85.h>
+
 #include <vector>
 #include <fstream>
 #include <filesystem>
@@ -16,17 +17,17 @@
 #include <unordered_set>
 #include <unordered_map>
 
-#include "./cp2077/struct.h"
+#include <crc32_hash.hpp>
+
+#include "./cp2077.h"
 
 #if 0
-#include "../external/reshade/deps/imgui/imgui.h"
-#include "../external/reshade/include/reshade.hpp"
+#include "../../external/reshade/deps/imgui/imgui.h"
+#include "../../external/reshade/include/reshade.hpp"
 #else
 #include "C:/Users/clsho/Documents/GitHub/reshade/deps/imgui/imgui.h"
 #include "C:/Users/clsho/Documents/GitHub/reshade/include/reshade.hpp"
 #endif
-
-#include "../lib/crc32_hash.hpp"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - CP2077";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Cyberpunk2077";
@@ -44,7 +45,7 @@ ShaderInjectData shaderInjectData;
 struct UserInjectData {
   float toneMapperPaperWhite = 203.f;
   int toneMapperType = 2;
-  float toneMapperExposure = 50.f;
+  float toneMapperExposure = 1.f;
   float toneMapperContrast = 50.f;
   float toneMapperHighlights = 50.f;
   float toneMapperShadows = 50.f;
@@ -60,7 +61,7 @@ static void updateShaderData() {
   const std::unique_lock<std::shared_mutex> lock(s_mutex);
   shaderInjectData.toneMapperType = static_cast<float>(userInjectData.toneMapperType);
   shaderInjectData.toneMapperPaperWhite = userInjectData.toneMapperPaperWhite;
-  shaderInjectData.toneMapperExposure = userInjectData.toneMapperExposure * 0.02f;
+  shaderInjectData.toneMapperExposure = userInjectData.toneMapperExposure;
   shaderInjectData.toneMapperContrast = userInjectData.toneMapperContrast * 0.02f;
   shaderInjectData.toneMapperHighlights = userInjectData.toneMapperHighlights * 0.02f;
   shaderInjectData.toneMapperShadows = userInjectData.toneMapperShadows * 0.02f;
@@ -521,7 +522,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       "Exposure",
       &userInjectData.toneMapperExposure,
       0.f,
-      100.f,
+      10.f,
       "%.0f");
     ImGui::SetItemTooltip("Input scaling factor before passing to tone mapper.");
 
