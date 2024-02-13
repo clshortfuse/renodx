@@ -203,12 +203,12 @@ static bool load_embedded_shader(
     desc->code_size);
 
   switch (shader_hash) {
-    case 0x71f27445:
-      desc->code = &_0x71f27445;
-      desc->code_size = sizeof(_0x71f27445);
-    case 0x97cA5A85:
-      desc->code = &_0x97cA5A85;
-      desc->code_size = sizeof(_0x97cA5A85);
+    case 0x71F27445:
+      desc->code = &_0x71F27445;
+      desc->code_size = sizeof(_0x71F27445);
+    case 0x97CA5A85:
+      desc->code = &_0x97CA5A85;
+      desc->code_size = sizeof(_0x97CA5A85);
       break;
     default:
       return false;

@@ -10,33 +10,33 @@ enable_testing()
 
 add_executable(embedfile embedfile.c)
 
-add_custom_command(
-  OUTPUT embed/0x71f27445.cso
-  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bin/dxc.exe ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/cs_0x71f27445.hlsl -WX -T cs_6_0 -E main -Fo embed/0x71f27445.cso
-  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/cs_0x71f27445.hlsl
-)
-add_custom_command(
-  OUTPUT embed/0x97cA5A85.cso
-  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bin/dxc.exe ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/cs_0x97cA5A85.hlsl -WX -T cs_6_0 -E main -Fo embed/0x97cA5A85.cso
-  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/cs_0x97cA5A85.hlsl
-)
-add_custom_command(
-  OUTPUT embed/include/embed/0x97cA5A85.h
-  COMMAND embedfile ${CMAKE_BINARY_DIR}/embed/0x97cA5A85.cso 0x97cA5A85
-  DEPENDS embed/0x97cA5A85.cso
-)
+function(build_shader_target)
+  string(LENGTH ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/ PATH_LENGTH)
 
-add_custom_command(
-  OUTPUT embed/include/embed/0x71f27445.h
-  COMMAND embedfile ${CMAKE_BINARY_DIR}/embed/0x71f27445.cso 0x71f27445
-  DEPENDS embed/0x71f27445.cso
-)
+  file(GLOB SHADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/*.hlsl)
+  foreach(FILE ${SHADER_FILES})
+    string(SUBSTRING ${FILE} ${PATH_LENGTH} -1 FILENAME)
+    string(SUBSTRING ${FILENAME} 0 2 SHADER_TARGET)
+    string(LENGTH ${FILENAME} SHADER_HASH_LENGTH)
+    math(EXPR SHADER_HASH_LENGTH "${SHADER_HASH_LENGTH} - 3 - 5")
+    string(SUBSTRING ${FILENAME} 3 ${SHADER_HASH_LENGTH} SHADER_HASH)
+    add_custom_command(
+      OUTPUT embed/${SHADER_HASH}.cso
+      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bin/dxc.exe ${FILE} -WX -T ${SHADER_TARGET}_6_0 -E main -Fo ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso
+      DEPENDS ${FILE}
+    )
+    add_custom_command(
+      OUTPUT embed/include/embed/${SHADER_HASH}.h
+      COMMAND embedfile ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso ${SHADER_HASH}
+      DEPENDS embed/${SHADER_HASH}.cso
+    )
+    list(APPEND SHADER_HEADER_FILES embed/include/embed/${SHADER_HASH}.h)
+  endforeach()
+  LIST(JOIN SHADER_HEADER_FILES " " SHADER_HEADER_FILE_ITEMS)
+  add_custom_target(shaders DEPENDS ${SHADER_HEADER_FILES})
+endfunction()
 
-add_custom_target(shaders
-  DEPENDS
-    embed/include/embed/0x71f27445.h
-    embed/include/embed/0x97cA5A85.h
-)
+build_shader_target()
 
 add_library(cp2077 MODULE src/cp2077/addon.cpp)
 add_dependencies( cp2077 shaders )
