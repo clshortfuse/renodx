@@ -23,4 +23,3 @@ cpp_new_line_before_open_brace_type = same_line
 cpp_new_line_before_open_brace_block = same_line
 cpp_new_line_before_else = false
 cpp_indent_case_labels = true
-
