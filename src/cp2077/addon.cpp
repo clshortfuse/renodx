@@ -44,6 +44,7 @@ struct ModdedPipelineLayoutDesc {
 };
 
 std::shared_mutex s_mutex;
+std::vector<reshade::api::pipeline_layout_param*> createdParams;
 std::unordered_set<uint32_t> codeInjections;
 std::unordered_set<uint64_t> trackedLayouts;
 std::unordered_set<uint64_t> computeShaderLayouts;
@@ -324,6 +325,9 @@ static bool on_create_pipeline_layout(
   uint32_t newCount = oldCount + 1;
   reshade::api::pipeline_layout_param* newParams = new reshade::api::pipeline_layout_param[newCount];
 
+  // Store reference to free later
+  createdParams.push_back(newParams);
+
   // Copy up to size of old
   memcpy(newParams, desc->params, sizeof(reshade::api::pipeline_layout_param) * oldCount);
 
@@ -361,6 +365,12 @@ static void on_init_pipeline_layout(
   const uint32_t paramCount,
   const reshade::api::pipeline_layout_param* params,
   reshade::api::pipeline_layout layout) {
+  if (!createdParams.size()) return;  // No injected params
+  for (auto injectedParams : createdParams) {
+    free(injectedParams);
+  }
+  createdParams.clear();
+
   bool foundPC = false;
   ModdedPipelineLayoutDesc desc = { };
   for (uint32_t paramIndex = 0; paramIndex < paramCount; ++paramIndex) {
