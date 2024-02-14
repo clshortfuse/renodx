@@ -5,15 +5,21 @@
 
 #define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 #define DEBUG_LEVEL_0
+#define DEBUG_SLIDERS
 
 #include <embed/0x71F27445.h>
 #include <embed/0x97CA5A85.h>
+#include <embed/0xCBFFC2A3.h>
+#include <embed/0xC83E64DF.h>
+#include <embed/0xD2BBEBD9.h>
+#include <embed/0xC783FBA1.h>
 
 #include <vector>
 #include <fstream>
 #include <filesystem>
 #include <sstream>
 #include <shared_mutex>
+#include <random>
 #include <unordered_set>
 #include <unordered_map>
 
@@ -32,12 +38,17 @@
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - CP2077";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Cyberpunk2077";
 
+struct ModdedPipelineLayoutDesc {
+  uint32_t index;
+  reshade::api::shader_stage visibility;
+};
+
 std::shared_mutex s_mutex;
 std::unordered_set<uint32_t> codeInjections;
 std::unordered_set<uint64_t> trackedLayouts;
 std::unordered_set<uint64_t> computeShaderLayouts;
 std::unordered_map<uint64_t, reshade::api::pipeline_layout> pipelineToLayoutMap;
-std::unordered_map<uint64_t, uint32_t> moddedPipelineLayoutsIndex;
+std::unordered_map<uint64_t, ModdedPipelineLayoutDesc> moddedPipelineLayoutDesc;
 
 // MUST be 4x32bit aligned
 ShaderInjectData shaderInjectData;
@@ -55,6 +66,11 @@ struct UserInjectData {
   float colorGradingLift = 0.f;
   float colorGradingGamma = 1.f;
   float colorGradingGain = 1.f;
+  float filmGrainStrength = 0.f;
+  float debugValue00 = 1.f;
+  float debugValue01 = 1.f;
+  float debugValue02 = 1.f;
+  float debugValue03 = 1.f;
 } userInjectData;
 
 static void updateShaderData() {
@@ -71,6 +87,11 @@ static void updateShaderData() {
   shaderInjectData.colorGradingLift = userInjectData.colorGradingLift;
   shaderInjectData.colorGradingGamma = userInjectData.colorGradingGamma;
   shaderInjectData.colorGradingGain = userInjectData.colorGradingGain;
+  shaderInjectData.filmGrainStrength = userInjectData.filmGrainStrength;
+  shaderInjectData.debugValue00 = userInjectData.debugValue00;
+  shaderInjectData.debugValue01 = userInjectData.debugValue01;
+  shaderInjectData.debugValue02 = userInjectData.debugValue02;
+  shaderInjectData.debugValue03 = userInjectData.debugValue03;
 }
 
 static const char* toneMapperTypeStrings[] = {
@@ -211,6 +232,23 @@ static bool load_embedded_shader(
       desc->code = &_0x97CA5A85;
       desc->code_size = sizeof(_0x97CA5A85);
       break;
+    case 0xCBFFC2A3:
+      return false;
+      desc->code = &_0xCBFFC2A3;
+      desc->code_size = sizeof(_0xCBFFC2A3);
+      break;
+    case 0xC83E64DF:
+      desc->code = &_0xC83E64DF;
+      desc->code_size = sizeof(_0xC83E64DF);
+      break;
+    case 0xD2BBEBD9:
+      desc->code = &_0xD2BBEBD9;
+      desc->code_size = sizeof(_0xD2BBEBD9);
+      break;
+    case 0xC783FBA1:
+      desc->code = &_0xC783FBA1;
+      desc->code_size = sizeof(_0xC783FBA1);
+      break;
     default:
       return false;
   }
@@ -237,7 +275,7 @@ static bool on_create_pipeline_layout(
   reshade::api::device* device,
   reshade::api::pipeline_layout_desc* desc) {
   bool foundVisiblity = false;
-  reshade::api::shader_stage defaultVisibility = reshade::api::shader_stage::all;
+  uint32_t defaultVisibility = 0;
   uint32_t cbvIndex = 0;
   uint32_t pcCount = 0;
 
@@ -250,10 +288,7 @@ static bool on_create_pipeline_layout(
           if (cbvIndex < range.dx_register_index + range.count) {
             cbvIndex = range.dx_register_index + range.count;
           }
-        }
-
-        if (!foundVisiblity) {
-          defaultVisibility = range.visibility;
+          defaultVisibility |= (uint32_t)range.visibility;
           foundVisiblity = true;
         }
       }
@@ -261,11 +296,15 @@ static bool on_create_pipeline_layout(
       pcCount++;
       if (cbvIndex < param.push_constants.dx_register_index + param.push_constants.count) {
         cbvIndex = param.push_constants.dx_register_index + param.push_constants.count;
+        defaultVisibility |= (uint32_t)param.push_constants.visibility;
+        foundVisiblity = true;
       }
     } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
       if (param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer) {
         if (cbvIndex < param.push_descriptors.dx_register_index + param.push_descriptors.count) {
           cbvIndex = param.push_descriptors.dx_register_index + param.push_descriptors.count;
+          defaultVisibility |= (uint32_t)param.push_constants.visibility;
+          foundVisiblity = true;
         }
       }
     }
@@ -278,6 +317,9 @@ static bool on_create_pipeline_layout(
   logLayout(desc->count, desc->params, 0x001);
 #endif
 
+  if (!foundVisiblity) {
+    defaultVisibility = (uint32_t)reshade::api::shader_stage::all;
+  }
   uint32_t oldCount = (desc->count);
   uint32_t newCount = oldCount + 1;
   reshade::api::pipeline_layout_param* newParams = new reshade::api::pipeline_layout_param[newCount];
@@ -291,7 +333,7 @@ static bool on_create_pipeline_layout(
   newParams[oldCount].push_constants.count = sizeof(ShaderInjectData) / sizeof(uint32_t);
   newParams[oldCount].push_constants.dx_register_index = cbvIndex;
   newParams[oldCount].push_constants.dx_register_space = 0;
-  newParams[oldCount].push_constants.visibility = defaultVisibility;
+  newParams[oldCount].push_constants.visibility = (reshade::api::shader_stage)defaultVisibility;
 
   desc->count = newCount;
   desc->params = newParams;
@@ -319,41 +361,29 @@ static void on_init_pipeline_layout(
   const uint32_t paramCount,
   const reshade::api::pipeline_layout_param* params,
   reshade::api::pipeline_layout layout) {
-  uint32_t cbvIndex = 0;
+  bool foundPC = false;
+  ModdedPipelineLayoutDesc desc = { };
   for (uint32_t paramIndex = 0; paramIndex < paramCount; ++paramIndex) {
     auto param = params[paramIndex];
-    if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
-      for (uint32_t rangeIndex = 0; rangeIndex < param.descriptor_table.count; ++rangeIndex) {
-        auto range = param.descriptor_table.ranges[rangeIndex];
-        if (range.type == reshade::api::descriptor_type::constant_buffer) {
-          if (cbvIndex < range.dx_register_index + range.count) {
-            cbvIndex = range.dx_register_index + range.count;
-          }
-        }
-      }
-    } else if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
-      // TODO(clshortfuse): Log actual index (and not assume)
-      if (cbvIndex < param.push_constants.dx_register_index + param.push_constants.count) {
-        cbvIndex = param.push_constants.dx_register_index + param.push_constants.count;
-      }
-    } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
-      if (param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer) {
-        if (cbvIndex < param.push_descriptors.dx_register_index + param.push_descriptors.count) {
-          cbvIndex = param.push_descriptors.dx_register_index + param.push_descriptors.count;
-        }
+    if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
+      if (param.push_constants.count == sizeof(ShaderInjectData) / sizeof(uint32_t)) {
+        foundPC = true;
+        desc.index = param.push_constants.dx_register_index;
+        desc.visibility = param.push_constants.visibility;
       }
     }
   }
+  if (!foundPC) return;
   const std::unique_lock<std::shared_mutex> lock(s_mutex);
-  moddedPipelineLayoutsIndex.emplace(layout.handle, cbvIndex);
+  moddedPipelineLayoutDesc.emplace(layout.handle, desc);
 
 #ifdef DEBUG_LEVEL_0
   std::stringstream s;
-  s << "on_init_pipeline_layout++(";
-  s << reinterpret_cast<void*>(layout.handle);
-  s << " final CBV index is ";
-  s << cbvIndex;
-  s << " )";
+  s << "on_init_pipeline_layout++("
+    << reinterpret_cast<void*>(layout.handle)
+    << " , " << desc.index
+    << " , 0x" << std::hex << (uint32_t)desc.visibility
+    << " )";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
 }
@@ -363,7 +393,7 @@ static void on_destroy_pipeline_layout(
   reshade::api::pipeline_layout layout) {
   uint32_t changed = false;
   const std::unique_lock<std::shared_mutex> lock(s_mutex);
-  changed |= moddedPipelineLayoutsIndex.erase(layout.handle);
+  changed |= moddedPipelineLayoutDesc.erase(layout.handle);
   changed |= trackedLayouts.erase(layout.handle);
   if (!changed) return;
 
@@ -478,19 +508,23 @@ static void on_bind_pipeline(
   if (pair0 == pipelineToLayoutMap.end()) return;
   auto layout = pair0->second;
 
-  auto pair2 = moddedPipelineLayoutsIndex.find(layout.handle);
-  if (pair2 == moddedPipelineLayoutsIndex.end()) return;
-  uint32_t param_index = pair2->second;
+  auto pair2 = moddedPipelineLayoutDesc.find(layout.handle);
+  if (pair2 == moddedPipelineLayoutDesc.end()) return;
+  auto desc = pair2->second;
 
-  reshade::api::shader_stage stage = (computeShaderLayouts.find(layout.handle) != computeShaderLayouts.end())
-    ? reshade::api::shader_stage::all_compute
-    : reshade::api::shader_stage::all_graphics;
+  reshade::api::shader_stage stage = desc.visibility;
+  if (computeShaderLayouts.find(layout.handle) == computeShaderLayouts.end()) return;
+  // CP2077 uses two stages for pixel/vertex shaders. Forcing wrong stage cause issues
+  // Only inject buffers into compute shaders for now.
 
   const std::shared_lock<std::shared_mutex> lock(s_mutex);
+  // if (shaderInjectData.filmGrainStrength) {
+  //   shaderInjectData.filmGrainSeed = (float)rand() / (float)RAND_MAX;
+  // }
   cmd_list->push_constants(
-    stage,
+    reshade::api::shader_stage::all_compute,
     layout,
-    param_index,
+    desc.index,
     0,
     sizeof(ShaderInjectData) / sizeof(uint32_t),
     &shaderInjectData);
@@ -500,7 +534,8 @@ static void on_bind_pipeline(
   s << "bind_pipeline++("
     << reinterpret_cast<void*>(pipeline.handle)
     << ", " << reinterpret_cast<void*>(layout.handle)
-    << ", " << param_index
+    << ", " << desc.index
+    << ", " << std::hex << (uint32_t)desc.visibility
     << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
@@ -519,13 +554,15 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       toneMapperTypeStrings[userInjectData.toneMapperType],
       ImGuiSliderFlags_NoInput);
 
+    ImGui::BeginDisabled(userInjectData.toneMapperType <= 1);
     updated |= ImGui::SliderFloat(
       "Exposure",
       &userInjectData.toneMapperExposure,
       0.f,
       10.f,
-      "%.0f");
+      "%.2f");
     ImGui::SetItemTooltip("Input scaling factor before passing to tone mapper.");
+    ImGui::EndDisabled();
 
 
     ImGui::BeginDisabled(userInjectData.toneMapperType != 2 && userInjectData.toneMapperType != 4);
@@ -580,7 +617,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     ImGui::SetItemTooltip("Modifies order of when color grading is applied.");
 
     updated |= ImGui::SliderFloat(
-      "Strength",
+      "LUT Strength",
       &userInjectData.colorGradingStrength,
       0.f,
       100.f,
@@ -588,7 +625,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     ImGui::SetItemTooltip("Modifies the strength of the LUT application.");
 
     updated |= ImGui::SliderInt(
-      "Scaling",
+      "LUT Scaling",
       &userInjectData.colorGradingScaling,
       0,
       (sizeof(colorGradingScalingStrings) / sizeof(char*)) - 1,
@@ -620,6 +657,47 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
 
     ImGui::EndDisabled();
   }
+
+  ImGui::SeparatorText("Film Grain"); {
+    updated |= ImGui::SliderFloat(
+      "Film Grain Strength",
+      &userInjectData.filmGrainStrength,
+      0.f,
+      1.f,
+      "%.2f");
+    ImGui::SetItemTooltip("Controls the strength of the custom perceptual film grain.");
+  }
+
+#ifdef DEBUG_SLIDERS
+  ImGui::SeparatorText("Debug Tools");
+  {
+    updated |= ImGui::SliderFloat(
+      "Debug Value 00",
+      &userInjectData.debugValue00,
+      0.f,
+      2.f,
+      "%.2f");
+
+    updated |= ImGui::SliderFloat(
+      "Debug Value 01",
+      &userInjectData.debugValue01,
+      0.f,
+      2.f,
+      "%.2f");
+    updated |= ImGui::SliderFloat(
+      "Debug Value 02",
+      &userInjectData.debugValue02,
+      0.f,
+      2.f,
+      "%.2f");
+    updated |= ImGui::SliderFloat(
+      "Debug Value 03",
+      &userInjectData.debugValue03,
+      0.f,
+      2.f,
+      "%.2f");
+  }
+#endif
 
   if (updated) {
     updateShaderData();
