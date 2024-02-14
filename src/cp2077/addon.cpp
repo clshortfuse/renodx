@@ -206,6 +206,7 @@ static bool load_embedded_shader(
     case 0x71F27445:
       desc->code = &_0x71F27445;
       desc->code_size = sizeof(_0x71F27445);
+      break;
     case 0x97CA5A85:
       desc->code = &_0x97CA5A85;
       desc->code_size = sizeof(_0x97CA5A85);
