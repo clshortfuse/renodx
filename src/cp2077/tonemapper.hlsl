@@ -415,15 +415,13 @@ float4 tonemap() {
   float yMax = _20_m0[27u].y;  // User peak Nits
   float yMin = _20_m0[27u].x;  // 0.005
 
-  outputRGB *= toneMapperMidpoint;  // Exposure
-
-  outputRGB *= injectedData.toneMapperExposure;
-
   float3 odtFinal = outputRGB;
   float toneMapperType = injectedData.toneMapperType;
   if (toneMapperType == TONE_MAPPER_TYPE__NONE) {
     // noop
   } else if (toneMapperType == TONE_MAPPER_TYPE__VANILLA) {
+
+    outputRGB *= toneMapperMidpoint;  // Exposure
 
     // BT709 to AP0 (TODO: flatten matrix)
     float3 outputXYZ = mul(BT709_To_XYZ, outputRGB);
@@ -585,6 +583,7 @@ float4 tonemap() {
 
     odtFinal = odtUnknown;
   } else if (toneMapperType == TONE_MAPPER_TYPE__OPENDRT) {
+    outputRGB *= injectedData.toneMapperExposure;
     float peakNits = yMax;
     const float REFERENCE_WHITE = 203.f;
     const float CDPR_WHITE = 100.f;
@@ -597,8 +596,10 @@ float4 tonemap() {
     float paperwhiteScaler = REFERENCE_WHITE / CDPR_WHITE;
     odtFinal *= paperwhiteScaler;
   } else if (toneMapperType == TONE_MAPPER_TYPE__DICE) {
+    outputRGB *= injectedData.toneMapperExposure;
     odtFinal = DICETonemap(outputRGB, yMax / 100.f);
   } else if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
+    outputRGB *= injectedData.toneMapperExposure;
     float peakNits = yMax;
     const float REFERENCE_WHITE = 203.f;
     const float CDPR_WHITE = 100.f;
