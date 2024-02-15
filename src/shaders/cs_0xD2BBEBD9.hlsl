@@ -3,7 +3,7 @@
 #include "../cp2077/cp2077.h"
 
 cbuffer _13_15 : register(b6, space0) {
-  float4 _15_m0[1] : packoffset(c0);
+  float4 cb6[1] : packoffset(c0);
 }
 
 cbuffer injectedBuffer : register(b14, space0) {
@@ -19,9 +19,27 @@ struct SPIRV_Cross_Input {
 };
 
 void comp_main() {
+  float value0x = cb6[0u].x;
+  float value0y = cb6[0u].y;
+  float value0z = cb6[0u].z;
+
+  float randomNumber = float(asuint(cb6[0u]).w & 4095u);
+
+  float x44 = float(gl_GlobalInvocationID.x);
+  float x80 = float(gl_GlobalInvocationID.x & 255u);
+  float x125 = float((gl_GlobalInvocationID.x + 1u) & 255u);
+  float x147 = float((gl_GlobalInvocationID.x + 255u) & 255u);
+
+  float y45 = float(gl_GlobalInvocationID.y);
+  float y81 = float((gl_GlobalInvocationID.y + 1u) & 255u);
+  float y102 = float((gl_GlobalInvocationID.y + 255u) & 255u);
+  float y126 = float(gl_GlobalInvocationID.y & 255u);
+
+  // Uses hash33 function 10x
+  
   float _44 = frac(float(gl_GlobalInvocationID.x) * 0.103100001811981201171875f);
   float _45 = frac(float(gl_GlobalInvocationID.y) * 0.10300000011920928955078125f);
-  float _46 = frac(float(asuint(_15_m0[0u]).w & 4095u) * 0.097300000488758087158203125f);
+  float _46 = frac(float(asuint(cb6[0u]).w & 4095u) * 0.097300000488758087158203125f);
   float _50 = _46 + 33.3300018310546875f;
   float _51 = dot(float3(_44, _45, _46), float3(_45 + 33.3300018310546875f, _44 + 33.3300018310546875f, _50));
   float _55 = _51 + _44;
@@ -72,9 +90,9 @@ void comp_main() {
   float _209 = _205 + _81;
   float _211 = _208 + _209;
   float4 outputColor = float4(
-    ((((_15_m0[0u].x * (((frac(_183 * (_177 + _46)) + frac(_169 * (_163 + _46))) + frac(_197 * (_191 + _46))) + frac(_211 * (_205 + _46)))) * 0.5f) + frac(_58 * (_51 + _46))) + ((_15_m0[0u].x * (((frac(_110 * (_104 + _46)) + frac(_90 * (_84 + _46))) + frac(_135 * (_129 + _46))) + frac(_155 * (_149 + _46)))) * 0.75f)) / ((_15_m0[0u].x * 5.0f) + 1.0f),
-    ((((_15_m0[0u].y * (((frac((_180 * 2.0f) * _181) + frac((_166 * 2.0f) * _167)) + frac((_194 * 2.0f) * _195)) + frac((_208 * 2.0f) * _209))) * 0.5f) + frac((_55 * 2.0f) * _56)) + ((_15_m0[0u].y * (((frac((_107 * 2.0f) * _108) + frac((_87 * 2.0f) * _88)) + frac((_132 * 2.0f) * _133)) + frac((_152 * 2.0f) * _153))) * 0.75f)) / ((_15_m0[0u].y * 5.0f) + 1.0f),
-    ((((_15_m0[0u].z * (((frac(_183 * _180) + frac(_169 * _166)) + frac(_197 * _194)) + frac(_211 * _208))) * 0.5f) + frac(_58 * _55)) + ((_15_m0[0u].z * (((frac(_110 * _107) + frac(_90 * _87)) + frac(_135 * _132)) + frac(_155 * _152))) * 0.75f)) / ((_15_m0[0u].z * 5.0f) + 1.0f),
+    ((((value0x * (((frac(_183 * (_177 + _46)) + frac(_169 * (_163 + _46))) + frac(_197 * (_191 + _46))) + frac(_211 * (_205 + _46)))) * 0.5f) + frac(_58 * (_51 + _46))) + ((value0x * (((frac(_110 * (_104 + _46)) + frac(_90 * (_84 + _46))) + frac(_135 * (_129 + _46))) + frac(_155 * (_149 + _46)))) * 0.75f)) / ((value0x * 5.0f) + 1.0f),
+    ((((value0y * (((frac((_180 * 2.0f) * _181) + frac((_166 * 2.0f) * _167)) + frac((_194 * 2.0f) * _195)) + frac((_208 * 2.0f) * _209))) * 0.5f) + frac((_55 * 2.0f) * _56)) + ((value0y * (((frac((_107 * 2.0f) * _108) + frac((_87 * 2.0f) * _88)) + frac((_132 * 2.0f) * _133)) + frac((_152 * 2.0f) * _153))) * 0.75f)) / ((value0y * 5.0f) + 1.0f),
+    ((((value0z * (((frac(_183 * _180) + frac(_169 * _166)) + frac(_197 * _194)) + frac(_211 * _208))) * 0.5f) + frac(_58 * _55)) + ((value0z * (((frac(_110 * _107) + frac(_90 * _87)) + frac(_135 * _132)) + frac(_155 * _152))) * 0.75f)) / ((value0z * 5.0f) + 1.0f),
     0.0f
   );
 

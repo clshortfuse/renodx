@@ -7,88 +7,85 @@
 // [476 x i8]
 // 4 * 10 + 3 + 1 + 34 + 1 + 1 + (4*6) + 4 + 2 + 2 + 1 + 2
 struct GlobalShaderConstsType {
-  float4 const00;  //  _43_m0[0u].xyzw // EngineSeconds / 1.0 / Seconds / ??
-  float4 const01;  //  _43_m0[1u].xyzw
-  float4 const02;  //  _43_m0[2u].xyzw
-  float4 const03;  //  _43_m0[3u].xyzw
-  float4 const04;  //  _43_m0[4u].xyzw
-  float4 const05;  //  _43_m0[5u].xyzw
-  float4 const06;  //  _43_m0[6u].xyzw
-  float4 const07;  //  _43_m0[7u].xyzw
-  float4 const08;  //  _43_m0[8u].xyzw
-  float4 const09;  //  _43_m0[9u].xyzw
-  float4 const10;  // _43_m0[10u].xyzw
-  float const11;   // _43_m0[11u].x
-  float const12;   // _43_m0[11u].y
-  float const13;   // _43_m0[11u].z
-  int const14;     // _43_m0[11u].w
-  float const15;   // _43_m0[12u].x
-  float const16;   // _43_m0[12u].y
-  float const17;   // _43_m0[12u].z
-  float const18;   // _43_m0[12u].w
-  float const19;   // _43_m0[13u].x
-  float const20;   // _43_m0[13u].y
-  float const21;   // _43_m0[13u].z
-  float const22;   // _43_m0[13u].w
-  float const23;   // _43_m0[14u].x
-  float const24;   // _43_m0[14u].y
-  float const25;   // _43_m0[14u].z
-  float const26;   // _43_m0[14u].w
-  float const27;   // _43_m0[15u].x
-  float const28;   // _43_m0[15u].y
-  float const29;   // _43_m0[15u].z
-  float const30;   // _43_m0[15u].w
-  float const31;   // _43_m0[16u].x
-  float const32;   // _43_m0[16u].y
-  float const33;   // _43_m0[16u].z
-  float const34;   // _43_m0[16u].w
-  float const35;   // _43_m0[17u].x
-  float const36;   // _43_m0[17u].y
-  float const37;   // _43_m0[17u].z
-  float const38;   // _43_m0[17u].w
-  float const39;   // _43_m0[18u].x
-  float const40;   // _43_m0[18u].y
-  float const41;   // _43_m0[18u].z
-  float const42;   // _43_m0[18u].w
-  float const43;   // _43_m0[19u].x
-  float const44;   // _43_m0[19u].y
-  float const45;   // _43_m0[19u].z
-  float const46;   // _43_m0[19u].w
-  float const47;   // _43_m0[20u].x
-  float const48;   // _43_m0[20u].y
-  int const49;     // _43_m0[20u].z
-  float const50;   // _43_m0[20u].w
-  float4 const51
-    [6];           // _43_m0[21u].xyzw  _43_m0[22u].xyzw _43_m0[23u].xyzw _43_m0[24u].xyzw _43_m0[25u].xyzw _43_m0[26u].xyzw
-  float4 const52;  // _43_m0[27u].xyzw
-  int2 const53;    // _43_m0[28u].xy
-  int const54;     // _43_m0[28u].z
-  int const55;     // _43_m0[28u].w
-  float const56;   // _43_m0[29u].x
-  int const57;     // _43_m0[29u].y
-  int const58;     // _43_m0[29u].z
+  float4 const00;     //  _43_m0[0u].xyzw // EngineSeconds / 1.0 / Seconds / ??
+  float4 const01;     //  _43_m0[1u].xyzw
+  float4 const02;     //  _43_m0[2u].xyzw
+  float4 const03;     //  _43_m0[3u].xyzw
+  float4 const04;     //  _43_m0[4u].xyzw
+  float4 const05;     //  _43_m0[5u].xyzw
+  float4 const06;     //  _43_m0[6u].xyzw
+  float4 const07;     //  _43_m0[7u].xyzw
+  float4 const08;     //  _43_m0[8u].xyzw
+  float4 const09;     //  _43_m0[9u].xyzw
+  float4 const10;     // _43_m0[10u].xyzw
+  float const11;      // _43_m0[11u].x
+  float const12;      // _43_m0[11u].y
+  float const13;      // _43_m0[11u].z
+  int const14;        // _43_m0[11u].w
+  float const15;      // _43_m0[12u].x
+  float const16;      // _43_m0[12u].y
+  float const17;      // _43_m0[12u].z
+  float const18;      // _43_m0[12u].w
+  float const19;      // _43_m0[13u].x
+  float const20;      // _43_m0[13u].y
+  float const21;      // _43_m0[13u].z
+  float const22;      // _43_m0[13u].w
+  float const23;      // _43_m0[14u].x
+  float const24;      // _43_m0[14u].y
+  float const25;      // _43_m0[14u].z
+  float const26;      // _43_m0[14u].w
+  float const27;      // _43_m0[15u].x
+  float const28;      // _43_m0[15u].y
+  float const29;      // _43_m0[15u].z
+  float const30;      // _43_m0[15u].w
+  float const31;      // _43_m0[16u].x
+  float const32;      // _43_m0[16u].y
+  float const33;      // _43_m0[16u].z
+  float const34;      // _43_m0[16u].w
+  float const35;      // _43_m0[17u].x
+  float const36;      // _43_m0[17u].y
+  float const37;      // _43_m0[17u].z
+  float const38;      // _43_m0[17u].w
+  float const39;      // _43_m0[18u].x
+  float const40;      // _43_m0[18u].y
+  float const41;      // _43_m0[18u].z
+  float const42;      // _43_m0[18u].w
+  float const43;      // _43_m0[19u].x
+  float const44;      // _43_m0[19u].y
+  float const45;      // _43_m0[19u].z
+  float const46;      // _43_m0[19u].w
+  float const47;      // _43_m0[20u].x
+  float const48;      // _43_m0[20u].y
+  int const49;        // _43_m0[20u].z
+  float const50;      // _43_m0[20u].w
+  float4 const51[6];  // _43_m0[21u].xyzw  _43_m0[22u].xyzw _43_m0[23u].xyzw _43_m0[24u].xyzw _43_m0[25u].xyzw _43_m0[26u].xyzw
+  float4 const52;     // _43_m0[27u].xyzw
+  int2 const53;       // _43_m0[28u].xy
+  int const54;        // _43_m0[28u].z
+  int const55;        // _43_m0[28u].w
+  float const56;      // _43_m0[29u].x
+  int const57;        // _43_m0[29u].y
+  int const58;        // _43_m0[29u].z
 };
-
-struct PIXType {
-  int outputTypeEnum;       // _20_m0[0u].x
-  float paperWhiteScaling;  // _20_m0[0u].y
-  float blackFloorAdjust;   // _20_m0[0u].z  // 1.25 always?
-  float gammaCorrection;    // _20_m0[0u].w
-  float pqSaturation;       // _20_m0[1u].x
-  float3 const05;           // _20_m0[1u].yxw
-  float4 pqMatrix[3];       // _20_m0[2u].xyzw _20_m0[3u].xyzw _20_m0[4u].xyzw
-};
-
-cbuffer injectedBuffer : register(b14, space0) {
-  ShaderInjectData injectedData : packoffset(c0);
-}
 
 cbuffer GlobalShaderConsts : register(b0, space0) {
   GlobalShaderConstsType shaderConsts : packoffset(c0);
 }
 
 cbuffer PIX : register(b6, space0) {
-  PIXType pixConsts : packoffset(c0);
+  struct {
+    int outputTypeEnum;       // _20_m0[0u].x
+    float paperWhiteScaling;  // _20_m0[0u].y
+    float blackFloorAdjust;   // _20_m0[0u].z  // 1.25 always?
+    float gammaCorrection;    // _20_m0[0u].w
+    float pqSaturation;       // _20_m0[1u].x
+    float3 const05;           // _20_m0[1u].yxw
+    float4 pqMatrix[3];       // _20_m0[2u].xyzw _20_m0[3u].xyzw _20_m0[4u].xyzw
+  } pixConsts : packoffset(c0);
+}
+
+cbuffer injectedBuffer : register(b14, space0) {
+  ShaderInjectData injectedData : packoffset(c0);
 }
 
 struct PSSceneIn {
@@ -123,7 +120,6 @@ float3 srgbPostProcess(float3 srgb, float2 seed, float bits = 8.f) {
   newValue /= maxValue;
   return srgb + newValue;
 }
-
 
 float3 applyGammaCorrection(float3 inputColor) {
   return (pixConsts.gammaCorrection != 1.0f)
