@@ -6,8 +6,8 @@
 Language: Cpp
 BasedOnStyle: Google
 AccessModifierOffset: 2
-AlignAfterOpenBracket: AlwaysBreak
-AlignArrayOfStructures: None
+AlignAfterOpenBracket: BlockIndent
+AlignArrayOfStructures: Right
 AlignConsecutiveAssignments: None
 AlignConsecutiveBitFields: None
 AlignConsecutiveDeclarations: None

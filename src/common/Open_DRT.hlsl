@@ -158,7 +158,8 @@ float3 open_drt_transform(
   float3 rgb,
   float Lp = 100.f,
   float gb = 0.12,
-  float contrast = 1.f) {
+  float contrast = 1.f
+) {
   // **************************************************
   // Parameter Setup
   // --------------------------------------------------
@@ -402,7 +403,8 @@ float3 open_drt_transform(
   float3 rats_hs = float3(
     rats.x + hsf.z * hs.z - hsf.y * hs.y,
     rats.y + hsf.x * hs.x - hsf.z * hs.z,
-    rats.z + hsf.y * hs.y - hsf.x * hs.x);
+    rats.z + hsf.y * hs.y - hsf.x * hs.x
+  );
 
   // Mix hue shifted RGB ratios by ts, so that we shift where highlights were chroma compressed plus a bit.
   rats = rats_hs * ts + rats * (1.0f - ts);
@@ -452,14 +454,16 @@ float3 open_drt_transform_custom(
   float midGrayAdjustment = 1.f,
   float contrast = 1.f,
   float highlights = 0.575f,
-  float shadows = 1.f) {
+  float shadows = 1.f
+) {
   rgb = apply_user_shadows(rgb, shadows);
   rgb = apply_user_highlights(rgb, (2.f * highlights - 1.15f) * 203.f / peakNits);
   rgb = open_drt_transform(
     rgb * midGrayAdjustment,
     peakNits,
     (0.12f * 203.f / peakNits),
-    contrast);
+    contrast
+  );
 
   return rgb;
 }

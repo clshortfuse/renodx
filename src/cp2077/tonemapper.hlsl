@@ -412,7 +412,8 @@ float4 tonemap() {
     float3 toneMappedColor = float3(
       segmented_spline_c9_fwd(rgbPost.r, ODT_CONFIG),
       segmented_spline_c9_fwd(rgbPost.g, ODT_CONFIG),
-      segmented_spline_c9_fwd(rgbPost.b, ODT_CONFIG));
+      segmented_spline_c9_fwd(rgbPost.b, ODT_CONFIG)
+    );
 
     // Tone map by luminance
     if (_20_m0[28u].w != 0.0f) {
@@ -456,7 +457,8 @@ float4 tonemap() {
     float3 odtUnknown = float3(
       mad(_20_m0[21u].z, odtXYZ.z, mad(_20_m0[21u].y, odtXYZ.y, _20_m0[21u].x * odtXYZ.x)),
       mad(_20_m0[22u].z, odtXYZ.z, mad(_20_m0[22u].y, odtXYZ.y, _20_m0[22u].x * odtXYZ.x)),
-      mad(_20_m0[23u].z, odtXYZ.z, mad(_20_m0[23u].y, odtXYZ.y, _20_m0[23u].x * odtXYZ.x)));
+      mad(_20_m0[23u].z, odtXYZ.z, mad(_20_m0[23u].y, odtXYZ.y, _20_m0[23u].x * odtXYZ.x))
+    );
 
     // odtUnknown = mul(customMatrix0, odtXYZ);
 
@@ -467,7 +469,8 @@ float4 tonemap() {
       odtUnknown = float3(
         mad(_20_m0[24u].z, odtUnknown.z, mad(_20_m0[24u].y, odtUnknown.y, _20_m0[24u].x * odtUnknown.x)),
         mad(_20_m0[25u].z, odtUnknown.z, mad(_20_m0[25u].y, odtUnknown.y, _20_m0[25u].x * odtUnknown.x)),
-        mad(_20_m0[26u].z, odtUnknown.z, mad(_20_m0[26u].y, odtUnknown.y, _20_m0[26u].x * odtUnknown.x)));
+        mad(_20_m0[26u].z, odtUnknown.z, mad(_20_m0[26u].y, odtUnknown.y, _20_m0[26u].x * odtUnknown.x))
+      );
       float scale = 1.0f / min(80.0f, yMax);
       odtUnknown = mul(XYZ_2_REC709_MAT, odtUnknown);
       odtUnknown *= scale;
@@ -476,7 +479,8 @@ float4 tonemap() {
       odtUnknown = float3(
         mad(_20_m0[24u].z, odtUnknown.z, mad(_20_m0[24u].y, odtUnknown.y, _20_m0[24u].x * odtUnknown.x)),
         mad(_20_m0[25u].z, odtUnknown.z, mad(_20_m0[25u].y, odtUnknown.y, _20_m0[25u].x * odtUnknown.x)),
-        mad(_20_m0[26u].z, odtUnknown.z, mad(_20_m0[26u].y, odtUnknown.y, _20_m0[26u].x * odtUnknown.x)));
+        mad(_20_m0[26u].z, odtUnknown.z, mad(_20_m0[26u].y, odtUnknown.y, _20_m0[26u].x * odtUnknown.x))
+      );
       float scale = 1.0f / min(80.0f, yMax);
       odtUnknown = mul(XYZ_2_REC2020_MAT, odtUnknown);
     } else if (_20_m0[27u].z == 4.0f) {
@@ -485,7 +489,8 @@ float4 tonemap() {
       odtUnknown = float3(
         mad(_20_m0[24u].z, odtUnknown.z, mad(_20_m0[24u].y, odtUnknown.y, _20_m0[24u].x * odtUnknown.x)),
         mad(_20_m0[25u].z, odtUnknown.z, mad(_20_m0[25u].y, odtUnknown.y, _20_m0[25u].x * odtUnknown.x)),
-        mad(_20_m0[26u].z, odtUnknown.z, mad(_20_m0[26u].y, odtUnknown.y, _20_m0[26u].x * odtUnknown.x)));
+        mad(_20_m0[26u].z, odtUnknown.z, mad(_20_m0[26u].y, odtUnknown.y, _20_m0[26u].x * odtUnknown.x))
+      );
       odtUnknown *= scale;
       odtUnknown = saturate(odtUnknown);
       odtUnknown = pow(odtUnknown, 0.1593017578125f);
@@ -496,7 +501,8 @@ float4 tonemap() {
       // Heatmap?
       float maxScaledChannel = max(
         (yRange * odtUnknown.r) + yMin,
-        max((yRange * odtUnknown.g) + yMin, (yRange * odtUnknown.b) + yMin));
+        max((yRange * odtUnknown.g) + yMin, (yRange * odtUnknown.b) + yMin)
+      );
       float _3335 = max(min((log2(maxScaledChannel) * 0.5f) + 2.0f, 7.0f), 0.0f);
       uint _3336 = uint(int(_3335));
       float _3338 = _3335 - float(int(_3336));
@@ -507,7 +513,8 @@ float4 tonemap() {
       odtUnknown = float3(
         ((HEATMAP_COLORS[0u + (_3339 * 3u)] - HEATMAP_COLORS[_3353]) * _3338) + HEATMAP_COLORS[_3353],
         ((HEATMAP_COLORS[1u + (_3339 * 3u)] - HEATMAP_COLORS[_3357]) * _3338) + HEATMAP_COLORS[_3357],
-        ((HEATMAP_COLORS[2u + (_3339 * 3u)] - HEATMAP_COLORS[_3361]) * _3338) + HEATMAP_COLORS[_3361]);
+        ((HEATMAP_COLORS[2u + (_3339 * 3u)] - HEATMAP_COLORS[_3361]) * _3338) + HEATMAP_COLORS[_3361]
+      );
     }
 
     odtFinal = odtUnknown;
@@ -517,13 +524,14 @@ float4 tonemap() {
     const float REFERENCE_WHITE = 203.f;
     const float CDPR_WHITE = 100.f;
     odtFinal = open_drt_transform_custom(
-                 outputRGB,
-                 yMax,
-                 injectedData.toneMapperPaperWhite / REFERENCE_WHITE,
-                 injectedData.toneMapperContrast,
-                 injectedData.toneMapperHighlights,
-                 injectedData.toneMapperShadows)
-             * yMax / REFERENCE_WHITE;
+      outputRGB,
+      yMax,
+      injectedData.toneMapperPaperWhite / REFERENCE_WHITE,
+      injectedData.toneMapperContrast,
+      injectedData.toneMapperHighlights,
+      injectedData.toneMapperShadows
+    );
+    odtFinal *= yMax / REFERENCE_WHITE;
     float paperwhiteScaler = REFERENCE_WHITE / CDPR_WHITE;
     odtFinal *= paperwhiteScaler;
   } else if (toneMapperType == TONE_MAPPER_TYPE__DICE) {

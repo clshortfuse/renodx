@@ -117,7 +117,8 @@ static const char* colorGradingScalingStrings[] = {
 void logLayout(
   const uint32_t paramCount,
   const reshade::api::pipeline_layout_param* params,
-  uint32_t tag) {
+  uint32_t tag
+) {
   for (uint32_t paramIndex = 0; paramIndex < paramCount; ++paramIndex) {
     auto param = params[paramIndex];
     if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
@@ -217,12 +218,14 @@ void logLayout(
 
 static bool load_embedded_shader(
   reshade::api::device_api device_type,
-  reshade::api::shader_desc* desc) {
+  reshade::api::shader_desc* desc
+) {
   if (desc->code_size == 0) return false;
 
   uint32_t shader_hash = compute_crc32(
     static_cast<const uint8_t*>(desc->code),
-    desc->code_size);
+    desc->code_size
+  );
 
   switch (shader_hash) {
     case 0x71F27445:
@@ -256,7 +259,8 @@ static bool load_embedded_shader(
 
   uint32_t new_hash = compute_crc32(
     static_cast<const uint8_t*>(desc->code),
-    desc->code_size);
+    desc->code_size
+  );
   codeInjections.emplace(new_hash);
 
 #ifdef DEBUG_LEVEL_0
@@ -276,7 +280,8 @@ static bool load_embedded_shader(
 // Before CreateRootSignature
 static bool on_create_pipeline_layout(
   reshade::api::device* device,
-  reshade::api::pipeline_layout_desc* desc) {
+  reshade::api::pipeline_layout_desc* desc
+) {
   bool foundVisiblity = false;
   uint32_t defaultVisibility = 0;
   uint32_t cbvIndex = 0;
@@ -366,7 +371,8 @@ static void on_init_pipeline_layout(
   reshade::api::device* device,
   const uint32_t paramCount,
   const reshade::api::pipeline_layout_param* params,
-  reshade::api::pipeline_layout layout) {
+  reshade::api::pipeline_layout layout
+) {
   if (!createdParams.size()) return;  // No injected params
   for (auto injectedParams : createdParams) {
     free(injectedParams);
@@ -402,7 +408,8 @@ static void on_init_pipeline_layout(
 
 static void on_destroy_pipeline_layout(
   reshade::api::device* device,
-  reshade::api::pipeline_layout layout) {
+  reshade::api::pipeline_layout layout
+) {
   uint32_t changed = false;
   const std::unique_lock<std::shared_mutex> lock(s_mutex);
   changed |= moddedPipelineLayoutDesc.erase(layout.handle);
@@ -423,7 +430,8 @@ static bool on_create_pipeline(
   reshade::api::device* device,
   reshade::api::pipeline_layout layout,
   uint32_t subobject_count,
-  const reshade::api::pipeline_subobject* subobjects) {
+  const reshade::api::pipeline_subobject* subobjects
+) {
   bool replaced_stages = false;
   const reshade::api::device_api device_type = device->get_api();
 
@@ -433,7 +441,8 @@ static bool on_create_pipeline(
       case reshade::api::pipeline_subobject_type::pixel_shader:
         replaced_stages |= load_embedded_shader(
           device_type,
-          static_cast<reshade::api::shader_desc*>(subobjects[i].data));
+          static_cast<reshade::api::shader_desc*>(subobjects[i].data)
+        );
         break;
     }
   }
@@ -457,7 +466,8 @@ static void on_init_pipeline(
   reshade::api::pipeline_layout layout,
   uint32_t subobjectCount,
   const reshade::api::pipeline_subobject* subobjects,
-  reshade::api::pipeline pipeline) {
+  reshade::api::pipeline pipeline
+) {
   if (trackedLayouts.find(layout.handle) == trackedLayouts.end()) return;
 
   for (uint32_t i = 0; i < subobjectCount; ++i) {
@@ -494,7 +504,8 @@ static void on_init_pipeline(
 
 static void on_destroy_pipeline(
   reshade::api::device* device,
-  reshade::api::pipeline pipeline) {
+  reshade::api::pipeline pipeline
+) {
   uint32_t changed = false;
   changed |= pipelineToLayoutMap.erase(pipeline.handle);
   changed |= computeShaderLayouts.erase(pipeline.handle);
@@ -513,7 +524,8 @@ static void on_destroy_pipeline(
 static void on_bind_pipeline(
   reshade::api::command_list* cmd_list,
   reshade::api::pipeline_stage type,
-  reshade::api::pipeline pipeline) {
+  reshade::api::pipeline pipeline
+) {
   auto pair0 = pipelineToLayoutMap.find(pipeline.handle);
   if (pair0 == pipelineToLayoutMap.end()) return;
   auto layout = pair0->second;
@@ -537,7 +549,8 @@ static void on_bind_pipeline(
     desc.index,
     0,
     sizeof(ShaderInjectData) / sizeof(uint32_t),
-    &shaderInjectData);
+    &shaderInjectData
+  );
 
 #ifdef DEBUG_LEVEL_1
   std::stringstream s;
@@ -562,7 +575,8 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       0,
       (sizeof(toneMapperTypeStrings) / sizeof(char*)) - 1,
       toneMapperTypeStrings[userInjectData.toneMapperType],
-      ImGuiSliderFlags_NoInput);
+      ImGuiSliderFlags_NoInput
+    );
 
     ImGui::BeginDisabled(userInjectData.toneMapperType <= 1);
     updated |= ImGui::SliderFloat(
@@ -570,7 +584,8 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       &userInjectData.toneMapperExposure,
       0.f,
       10.f,
-      "%.2f");
+      "%.2f"
+    );
     ImGui::SetItemTooltip("Input scaling factor before passing to tone mapper.");
     ImGui::EndDisabled();
 
@@ -580,7 +595,8 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       &userInjectData.toneMapperPaperWhite,
       80.f,
       500.f,
-      "%.0f");
+      "%.0f"
+    );
     ImGui::SetItemTooltip("Adjusts the brightness of 100%% white.");
     ImGui::EndDisabled();
 
@@ -590,7 +606,8 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       &userInjectData.toneMapperContrast,
       0.f,
       100.f,
-      "%.0f");
+      "%.0f"
+    );
     ImGui::SetItemTooltip("Adjusts tone mapper's contrast factor (if avilable).");
     ImGui::EndDisabled();
 
@@ -600,7 +617,8 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       &userInjectData.toneMapperHighlights,
       0.f,
       100.f,
-      "%.0f");
+      "%.0f"
+    );
     ImGui::EndDisabled();
 
     ImGui::BeginDisabled(userInjectData.toneMapperType != 2 && userInjectData.toneMapperType != 4);
@@ -609,7 +627,8 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       &userInjectData.toneMapperShadows,
       0.f,
       100.f,
-      "%.0f");
+      "%.0f"
+    );
     ImGui::SetItemTooltip("Adjusts tone mapper's shadows or black level (if avilable).");
     ImGui::EndDisabled();
   }
@@ -622,7 +641,8 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       0,
       (sizeof(colorGradingWorkflowStrings) / sizeof(char*)) - 1,
       colorGradingWorkflowStrings[userInjectData.colorGradingWorkflow],
-      ImGuiSliderFlags_NoInput);
+      ImGuiSliderFlags_NoInput
+    );
     ImGui::SetItemTooltip("Modifies order of when color grading is applied.");
 
     updated |= ImGui::SliderFloat(
@@ -630,7 +650,8 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       &userInjectData.colorGradingStrength,
       0.f,
       100.f,
-      "%.0f");
+      "%.0f"
+    );
     ImGui::SetItemTooltip("Modifies the strength of the LUT application.");
 
     updated |= ImGui::SliderInt(
@@ -638,7 +659,8 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       &userInjectData.colorGradingScaling,
       0,
       (sizeof(colorGradingScalingStrings) / sizeof(char*)) - 1,
-      colorGradingScalingStrings[userInjectData.colorGradingScaling]);
+      colorGradingScalingStrings[userInjectData.colorGradingScaling]
+    );
     ImGui::SetItemTooltip("Enables the game's original LUT scaling.");
 
     ImGui::BeginDisabled();
@@ -647,21 +669,24 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       &userInjectData.colorGradingLift,
       -2.f,
       2.f,
-      "%.1f");
+      "%.1f"
+    );
 
     updated |= ImGui::SliderFloat(
       "Gamma",
       &userInjectData.colorGradingGamma,
       0.f,
       4.f,
-      "%.1f");
+      "%.1f"
+    );
 
     updated |= ImGui::SliderFloat(
       "Gain",
       &userInjectData.colorGradingGain,
       0.f,
       4.f,
-      "%.1f");
+      "%.1f"
+    );
 
     ImGui::EndDisabled();
   }
@@ -673,7 +698,8 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       &userInjectData.filmGrainStrength,
       0.f,
       1.f,
-      "%.2f");
+      "%.2f"
+    );
     ImGui::SetItemTooltip("Controls the strength of the custom perceptual film grain.");
   }
 
@@ -685,26 +711,30 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       &userInjectData.debugValue00,
       0.f,
       2.f,
-      "%.2f");
+      "%.2f"
+    );
 
     updated |= ImGui::SliderFloat(
       "Debug Value 01",
       &userInjectData.debugValue01,
       0.f,
       2.f,
-      "%.2f");
+      "%.2f"
+    );
     updated |= ImGui::SliderFloat(
       "Debug Value 02",
       &userInjectData.debugValue02,
       0.f,
       2.f,
-      "%.2f");
+      "%.2f"
+    );
     updated |= ImGui::SliderFloat(
       "Debug Value 03",
       &userInjectData.debugValue03,
       0.f,
       2.f,
-      "%.2f");
+      "%.2f"
+    );
   }
 #endif
 

@@ -36,7 +36,8 @@ float luminanceCompress(
   float ShoulderStart = 0.f,
   bool considerMaxValue = false,
   float InMaxValue = FLT_MAX,
-  float ModulationPow = 1.f) {
+  float ModulationPow = 1.f
+) {
   const float compressableValue = InValue - ShoulderStart;
   const float compressableRange = InMaxValue - ShoulderStart;
   const float compressedRange = max(OutMaxValue - ShoulderStart, FLT_MIN);
@@ -50,7 +51,8 @@ float3 DICETonemap(
   float3 Color,
   float MaxOutputLuminance,
   float HighlightsShoulderStart = 0.f,
-  float HighlightsModulationPow = 1.f) {
+  float HighlightsModulationPow = 1.f
+) {
   const float sourceLuminance = Luminance(Color);
   if (sourceLuminance > 0.0f) {
     const float compressedLuminance = luminanceCompress(sourceLuminance, MaxOutputLuminance, HighlightsShoulderStart, false, FLT_MAX, HighlightsModulationPow);

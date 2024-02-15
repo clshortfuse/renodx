@@ -43,7 +43,8 @@ float3 xyzFromBT709(float3 bt709) {
 
 float3 REC709toREC2020(float3 RGB709) {
   static const float3x3 ConvMat = {
-    0.627402, 0.329292, 0.043306, 0.069095, 0.919544, 0.011360, 0.016394, 0.088028, 0.895578};
+    0.627402, 0.329292, 0.043306, 0.069095, 0.919544, 0.011360, 0.016394, 0.088028, 0.895578
+  };
   return mul(ConvMat, RGB709);
 }
 
@@ -66,7 +67,8 @@ float3 srgbFromLinear(float3 color) {
   return float3(
     srgbFromLinear(color.r),
     srgbFromLinear(color.g),
-    srgbFromLinear(color.b));
+    srgbFromLinear(color.b)
+  );
 }
 
 float linearFromSRGB(float channel) {
@@ -79,7 +81,8 @@ float3 linearFromSRGB(float3 color) {
   return float3(
     srgbFromLinear(color.r),
     srgbFromLinear(color.g),
-    srgbFromLinear(color.b));
+    srgbFromLinear(color.b)
+  );
 }
 
 float arriC800FromLinear(float x) {
@@ -100,5 +103,6 @@ float3 arriC800FromLinear(float3 color) {
   return float3(
     arriC800FromLinear(color.r),
     arriC800FromLinear(color.g),
-    arriC800FromLinear(color.b));
+    arriC800FromLinear(color.b)
+  );
 }

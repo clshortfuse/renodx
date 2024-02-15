@@ -301,7 +301,8 @@ float3 aces_rrt_ap0(float3 ap0) {
   float3 rgbPost = float3(
     segmented_spline_c5_fwd(aces.r),
     segmented_spline_c5_fwd(aces.g),
-    segmented_spline_c5_fwd(aces.b));
+    segmented_spline_c5_fwd(aces.b)
+  );
 
   return rgbPost;
 }
@@ -610,7 +611,8 @@ float3 aces_gamut_compress(float3 linAP1) {
   float3 comprDist = float3(
     aces_gamut_compress_channel(dist.r, LIM_CYAN, THR_CYAN, PWR),
     aces_gamut_compress_channel(dist.g, LIM_MAGENTA, THR_MAGENTA, PWR),
-    aces_gamut_compress_channel(dist.b, LIM_YELLOW, THR_YELLOW, PWR));
+    aces_gamut_compress_channel(dist.b, LIM_YELLOW, THR_YELLOW, PWR)
+  );
 
   // Recalculate RGB from compressed distance and achromatic
   float3 comprLinAP1 = ach - comprDist * absAch;
@@ -694,5 +696,6 @@ float3 aces_rrt_odt(float3 srgb, float minY, float maxY) {
   return aces_odt(
     aces_rrt(srgb),
     minY,
-    maxY);
+    maxY
+  );
 }
