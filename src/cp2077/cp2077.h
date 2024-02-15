@@ -29,13 +29,10 @@ struct ShaderInjectData {
   float debugValue03;
 };
 
-
-
-#define TONE_MAPPER_TYPE__NONE 0.f
+#define TONE_MAPPER_TYPE__NONE    0.f
 #define TONE_MAPPER_TYPE__VANILLA 1.f
 #define TONE_MAPPER_TYPE__OPENDRT 2.f
-#define TONE_MAPPER_TYPE__DICE 3.f
-#define TONE_MAPPER_TYPE__ACES 4.f
-
+#define TONE_MAPPER_TYPE__DICE    3.f
+#define TONE_MAPPER_TYPE__ACES    4.f
 
 #endif  // SRC_CP2077_CP2077_H_

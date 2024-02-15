@@ -11,7 +11,7 @@
 
 /* Math helper functions ----------------------------*/
 
-#define LOG_OF_2 0.6931471805599453f
+#define LOG_OF_2   0.6931471805599453f
 #define LOG_OF_100 4.605170185988092f
 
 // // Safe division of float a by float b
@@ -36,7 +36,6 @@
 //   return pow(abs(a), b);
 // }
 
-
 // [0-2]
 float3 narrow_hue_angles(float3 v) {
   // Refactor: Clamp and vector subtraction
@@ -44,22 +43,18 @@ float3 narrow_hue_angles(float3 v) {
   //   min(2.0f, max(0.0f, v.x - (v.y + v.z))),
   //   min(2.0f, max(0.0f, v.y - (v.x + v.z))),
   //   min(2.0f, max(0.0f, v.z - (v.x + v.y))));
-  return clamp(v - float3(
-    (v.y + v.z),
-    (v.x + v.z),
-    (v.x + v.y)
-  ), 0, 2.f);
+  return clamp(v - float3((v.y + v.z), (v.x + v.z), (v.x + v.y)), 0, 2.f);
 }
 
 // [0+]
 float tonescale(float x, float m, float s, float c) {
   // Perf spowf not needed
-  return pow(m*x/(x + s), c);
+  return pow(m * x / (x + s), c);
 }
 
 // x is tonescale which is >=0 [0+]
 float flare(float x, float fl) {
-  return (x*x) / (x+fl);
+  return (x * x) / (x + fl);
 }
 
 // If x>=0 returns >=0
@@ -94,12 +89,11 @@ float3 shd_con(float3 rgb, float ex, float str) {
   const float w = str * str * str;
 
   const float n = max(rgb.x, max(rgb.y, rgb.z));
-  const float n2 = n*n;
+  const float n2 = n * n;
   const float dividend = n2 + w;
-  const float s = dividend ? (n2 + m*w) / dividend : 1.f; // Implicit divide by n
+  const float s = dividend ? (n2 + m * w) / dividend : 1.f;  // Implicit divide by n
   return rgb * s;
 }
-
 
 /* Highlight Contrast
     Invertible quadratic highlight contrast function. Same as ex_high without lin ext
@@ -108,13 +102,13 @@ float3 shd_con(float3 rgb, float ex, float str) {
 float3 hl_con(float3 rgb, float ex, float th) {
   // Parameter setup
   const float p = exp2(-ex);
-  const float t0 = 0.18f*exp2(th);
-  const float a = pow(t0, 1.0f - p)/p;
-  const float b = t0*(1.0f - 1.0f/p);
+  const float t0 = 0.18f * exp2(th);
+  const float a = pow(t0, 1.0f - p) / p;
+  const float b = t0 * (1.0f - 1.0f / p);
 
   const float n = max(rgb.x, max(rgb.y, rgb.z));
   if (n == 0.0f || n < t0) return rgb;
-  return rgb * (pow((n - b)/a, 1.0f/p) / n);
+  return rgb * (pow((n - b) / a, 1.0f / p) / n);
 }
 
 float3 ex_high(float3 rgb, float ex, float pv, float fa) {
@@ -149,8 +143,8 @@ float3 apply_aces_highlights(float3 rgb) {
 float3 apply_user_shadows(float3 rgb, float shadows = 1.f) {
   // Perf: explicit cube
   // rgb = shd_con(rgb, -1.8f, pow(2.f - shadows, 3) * 0.04); // 0.04 @ 1
-  rgb = shd_con(rgb, -1.8f, pow(2.f - shadows, 4.f) * 0.025); // 0.04 @ 1
-  rgb = shd_con(rgb, -0.50f * shadows * (1.f - shadows), 0.25f); // 0 @ 1
+  rgb = shd_con(rgb, -1.8f, pow(2.f - shadows, 4.f) * 0.025);     // 0.04 @ 1
+  rgb = shd_con(rgb, -0.50f * shadows * (1.f - shadows), 0.25f);  // 0 @ 1
 
   return rgb;
 }
@@ -164,31 +158,28 @@ float3 open_drt_transform(
   float3 rgb,
   float Lp = 100.f,
   float gb = 0.12,
-  float contrast = 1.f
-  )
-{
-
+  float contrast = 1.f) {
   // **************************************************
   // Parameter Setup
   // --------------------------------------------------
 
   // Dechroma
 
-  const static float dch = 0.40f; // 0.40f
+  const static float dch = 0.40f;  // 0.40f
 
   // Chroma contrast
-  const static float chc_p = 1.2f; // 1.2 // amount of contrast
-  const static float chc_m = 0.5f; // 0.5 // pivot of contrast curve
+  const static float chc_p = 1.2f;  // 1.2 // amount of contrast
+  const static float chc_m = 0.5f;  // 0.5 // pivot of contrast curve
 
   // Tonescale parameters
-  const float c = 1.1f * contrast; // 1.1 contrast
-  const static float fl = 0.01f; // flare/glare compensation
+  const float c = 1.1f * contrast;  // 1.1 contrast
+  const static float fl = 0.01f;    // flare/glare compensation
 
   // Weights: controls the "vibrancy" of each channel, and influences all other aspects of the display-rendering.
   const float3 static weights = float3(
-    0.25f, // 0.25
-    0.45f, // 0.45
-    0.30f  // 0.30
+    0.25f,  // 0.25
+    0.45f,  // 0.45
+    0.30f   // 0.30
   );
 
   // Weights are assumed add to 1, but also affect vibrancy.
@@ -197,11 +188,11 @@ float3 open_drt_transform(
 
   // Hue Shift RGB controls
   float3 static hs = float3(
-    0.30f, // 0.30f
-    -0.10f,   // -0.1f
+    0.30f,   // 0.30f
+    -0.10f,  // -0.1f
     -0.50f   // -0.5f
   );
-  
+
   /* Tonescale Parameters 
       ----------------------
     For the tonescale compression function, we use one inspired by the wisdom shared by Daniele Siragusano
@@ -234,26 +225,24 @@ float3 open_drt_transform(
   */
 
   // input scene-linear peak x intercept
-  float px = 256.0*log(Lp)/LOG_OF_100 - 128.0f;
+  float px = 256.0 * log(Lp) / LOG_OF_100 - 128.0f;
   // output display-linear peak y intercept
-  float py = Lp/100.0f;
+  float py = Lp / 100.0f;
   // input scene-linear middle grey x intercept
   float gx = 0.18f;
   // output display-linear middle grey y intercept
-  float gy = 11.696f/100.0f*(1.0f + gb*log(py)/LOG_OF_2);
+  float gy = 11.696f / 100.0f * (1.0f + gb * log(py) / LOG_OF_2);
   // s0 and s are input x scale for middle grey intersection constraint
   // m0 and m are output y scale for peak white intersection constraint
-  float s0 = flare_invert(gy, fl); // [0+]
-  float m0 = flare_invert(py, fl); // [0+]
-  const float ip = 1.0f/c;
-  float m0_ip = pow(m0, ip); // [0+]
-  float s0_ip = pow(s0, ip); // [0+]
+  float s0 = flare_invert(gy, fl);  // [0+]
+  float m0 = flare_invert(py, fl);  // [0+]
+  const float ip = 1.0f / c;
+  float m0_ip = pow(m0, ip);  // [0+]
+  float s0_ip = pow(s0, ip);  // [0+]
   // Perf: Store pow(m0, ip) and pow(s0, ip)
   // float s = (px*gx*(m0_ip - s0_ip))/(px*s0_ip - gx*m0_ip);
-  float s = (px*gx*(m0_ip - s0_ip))/(px*s0_ip - gx*m0_ip);
-  float m = m0_ip*(s + px)/px;
-
-
+  float s = (px * gx * (m0_ip - s0_ip)) / (px * s0_ip - gx * m0_ip);
+  float m = m0_ip * (s + px) / px;
 
   /* Rendering Code ------------------------------------------ */
 
@@ -264,13 +253,13 @@ float3 open_drt_transform(
   /* Take the the weighted sum of RGB. The weights
       scale the vector of each color channel, controlling the "vibrancy".
       We use this as a vector norm for separating color and intensity.
-  */ 
-  
+  */
+
   // Perf: Use dot for mult+add
   // weights *= rgb; // multiply rgb by weights
   // float lum = max(1e-8f, weights.x + weights.y + weights.z); // take the norm
   // Perf: Use safe division later instead of max
-  float lum = dot(rgb, weights); // take the norm
+  float lum = dot(rgb, weights);  // take the norm
 
   // Correct the unbalanced weights
   lum *= 1.f / weightSum;
@@ -284,15 +273,15 @@ float3 open_drt_transform(
 
   // Apply tonescale function to lum
   float ts;
-  ts = tonescale(lum, m, s, c); // [0+]
-  ts = flare(ts, fl); // [0+]
+  ts = tonescale(lum, m, s, c);  // [0+]
+  ts = flare(ts, fl);            // [0+]
 
   // Normalize so peak luminance is at 1.0
-  ts *= 100.0f/Lp;
+  ts *= 100.0f / Lp;
 
   // Clamp ts to display peak
   // Required when using low contrast
-  ts = min(1.0f, ts); // [0-1]
+  ts = min(1.0f, ts);  // [0-1]
 
   /* Gamut Compress ------------------------------------------ *
     Most of our data is now inside of the display gamut cube, but there may still be some gradient disruptions
@@ -329,7 +318,7 @@ float3 open_drt_transform(
       wide hue CMY = (mx - RGB)/mx
     and then "narrow down" the hue angle for each with channel subtraction (see narrow_hue_angles() function).
   */
-  
+
   const float mx = max(rats.x, max(rats.y, rats.z));
   const float mn = min(rats.x, min(rats.y, rats.z));
 
@@ -342,7 +331,6 @@ float3 open_drt_transform(
   // Perf: rats > 0.01
   // float rats_ch = 1.0f - sdivf(mn, mx);
   float rats_ch = 1.0f - (mn / mx);
-
 
   /* Chroma Value Compression ------------------------------------------ *
       RGB ratios may be greater than 1.0, which can result in discontinuities in highlight gradients.
@@ -358,13 +346,13 @@ float3 open_drt_transform(
   // float chf = ts*max(rats_h.x * rats_h.x, max(rats_h.y *  rats_h.y, rats_h.z *  rats_h.z));
   // Perf: All values squared is self*self
   float3 rats_h2 = rats_h * rats_h;
-  float chf = ts * max(rats_h2.x, max(rats_h2.y, rats_h2.z)); // [0+]
-  
+  float chf = ts * max(rats_h2.x, max(rats_h2.y, rats_h2.z));  // [0+]
+
   const float chf_m = 0.25f;
   const float chf_p = 0.65f;
   // Perf: chf is never negative
   // chf = 1.0f - spowf(spowf(chf/chf_m, 1.0f/chf_p)+1.0f, -chf_p);
-  chf = 1.0f - pow(pow(chf/chf_m, 1.0f/chf_p)+1.0f, -chf_p);
+  chf = 1.0f - pow(pow(chf / chf_m, 1.0f / chf_p) + 1.0f, -chf_p);
 
   // Max of rgb ratios
   // Perf: rats is unchanged, use mx
@@ -377,8 +365,7 @@ float3 open_drt_transform(
   float3 rats_n = (rats / rats_mx);
 
   // Mix based on chf
-  rats = rats_n*chf + rats*(1.0f - chf);
-
+  rats = rats_n * chf + rats * (1.0f - chf);
 
   /* Chroma Compression ------------------------------------------ *
       Here we set up the chroma compression factor, used to lerp towards 1.0
@@ -391,11 +378,10 @@ float3 open_drt_transform(
   float dechromaDelay = 3.f;
   float dechromaStrength = 0.15f;
   float dechromaBias = 0.10f;
-  float ccf = 1.0f - overallDechroma*(pow(ts, dechromaDelay/dch)*(1.0f-ts*dechromaStrength) + ts*ts*dechromaBias);
+  float ccf = 1.0f - overallDechroma * (pow(ts, dechromaDelay / dch) * (1.0f - ts * dechromaStrength) + ts * ts * dechromaBias);
 
   // Apply chroma compression to RGB Ratios
-  rats = rats*ccf + 1.0f - ccf;
-
+  rats = rats * ccf + 1.0f - ccf;
 
   /* Chroma Compression Hue Shift ------------------------------------------ *
       Since we compress chroma by lerping in a straight line towards 1.0 in rgb ratios, this can result in perceptual hue shifts
@@ -410,18 +396,16 @@ float3 open_drt_transform(
 
       We don't include the toe chroma compression for this hue shift. It is mostly important for highlights.
   */
-  float3 hsf = ccf*rats_h;
-  
+  float3 hsf = ccf * rats_h;
+
   // Apply hue shift to RGB Ratios
   float3 rats_hs = float3(
-    rats.x + hsf.z*hs.z - hsf.y*hs.y,
-    rats.y + hsf.x*hs.x - hsf.z*hs.z,
-    rats.z + hsf.y*hs.y - hsf.x*hs.x
-  );
+    rats.x + hsf.z * hs.z - hsf.y * hs.y,
+    rats.y + hsf.x * hs.x - hsf.z * hs.z,
+    rats.z + hsf.y * hs.y - hsf.x * hs.x);
 
   // Mix hue shifted RGB ratios by ts, so that we shift where highlights were chroma compressed plus a bit.
-  rats = rats_hs*ts + rats*(1.0f - ts);
-
+  rats = rats_hs * ts + rats * (1.0f - ts);
 
   /* Chroma Contrast
       Without this step, mid-range chroma in shadows and midtones looks too grey and dead.
@@ -435,22 +419,22 @@ float3 open_drt_transform(
       so that we do not boost saturation at grey (increases noise), nor do we boost saturation of highly
       saturated colors which might already be near the edge of the gamut volume.
   */
-  float chc_f = 4.0f*rats_ch*(1.0f - rats_ch);
+  float chc_f = 4.0f * rats_ch * (1.0f - rats_ch);
   // Perf: chc_m is > 0
   // float chc_sa = min(2.0f, sdivf(lum, chc_m*spowf(sdivf(lum, chc_m), chc_p)*chc_f + lum*(1.0f - chc_f)));
   // float chc_sa = min(2.0f, sdivf(lum, chc_m*spowf(lum / chc_m, chc_p)*chc_f + lum*(1.0f - chc_f)));
   // Perf: lum is > 0 && chc_f < 1
-  float chc_sa = min(2.0f, lum / (chc_m * pow(lum / chc_m, chc_p)*chc_f + lum*(1.0f - chc_f)));
+  float chc_sa = min(2.0f, lum / (chc_m * pow(lum / chc_m, chc_p) * chc_f + lum * (1.0f - chc_f)));
   // Perf: use dot for mult+add
   // float chc_L = 0.23f*rats.x + 0.69f*rats.y + 0.08f*rats.z; // Roughly P3 weights, doesn't matter
-  const static float3 chc_L_weights = float3(0.21f, 0.71f, 0.072f); // Roughly P3 weights, doesn't matter
+  const static float3 chc_L_weights = float3(0.21f, 0.71f, 0.072f);  // Roughly P3 weights, doesn't matter
   float chc_L = dot(rats, chc_L_weights);
 
   // Apply mid-range chroma contrast saturation boost
-  rats = chc_L*(1.0f - chc_sa) + rats*chc_sa;
+  rats = chc_L * (1.0f - chc_sa) + rats * chc_sa;
 
   // Apply tonescale to RGB Ratios
-  rgb = rats*ts;
+  rgb = rats * ts;
 
   // Clamp:
   // Colors below 0 are not yet supported (and will be clipped).
@@ -462,24 +446,20 @@ float3 open_drt_transform(
   return rgb;
 }
 
-
 float3 open_drt_transform_custom(
   float3 rgb,
   float peakNits = 203.f,
   float midGrayAdjustment = 1.f,
   float contrast = 1.f,
   float highlights = 0.575f,
-  float shadows = 1.f
-  )
-{
+  float shadows = 1.f) {
   rgb = apply_user_shadows(rgb, shadows);
-  rgb = apply_user_highlights(rgb, (2.f * highlights - 1.15f) * 203.f/peakNits);
+  rgb = apply_user_highlights(rgb, (2.f * highlights - 1.15f) * 203.f / peakNits);
   rgb = open_drt_transform(
     rgb * midGrayAdjustment,
     peakNits,
-    (0.12f * 203.f/peakNits),
-    contrast
-  );
+    (0.12f * 203.f / peakNits),
+    contrast);
 
   return rgb;
 }

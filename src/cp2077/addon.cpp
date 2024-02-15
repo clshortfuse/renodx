@@ -9,19 +9,19 @@
 
 #include <embed/0x71F27445.h>
 #include <embed/0x97CA5A85.h>
-#include <embed/0xCBFFC2A3.h>
-#include <embed/0xC83E64DF.h>
-#include <embed/0xD2BBEBD9.h>
 #include <embed/0xC783FBA1.h>
+#include <embed/0xC83E64DF.h>
+#include <embed/0xCBFFC2A3.h>
+#include <embed/0xD2BBEBD9.h>
 
-#include <vector>
-#include <fstream>
 #include <filesystem>
-#include <sstream>
-#include <shared_mutex>
+#include <fstream>
 #include <random>
-#include <unordered_set>
+#include <shared_mutex>
+#include <sstream>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #include <crc32_hash.hpp>
 
@@ -254,7 +254,9 @@ static bool load_embedded_shader(
       return false;
   }
 
-  uint32_t new_hash = compute_crc32(static_cast<const uint8_t*>(desc->code), desc->code_size);
+  uint32_t new_hash = compute_crc32(
+    static_cast<const uint8_t*>(desc->code),
+    desc->code_size);
   codeInjections.emplace(new_hash);
 
 #ifdef DEBUG_LEVEL_0
@@ -372,7 +374,7 @@ static void on_init_pipeline_layout(
   createdParams.clear();
 
   bool foundPC = false;
-  ModdedPipelineLayoutDesc desc = { };
+  ModdedPipelineLayoutDesc desc = {};
   for (uint32_t paramIndex = 0; paramIndex < paramCount; ++paramIndex) {
     auto param = params[paramIndex];
     if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
@@ -483,7 +485,7 @@ static void on_init_pipeline(
     s << "found changed shader ("
       << reinterpret_cast<void*>(pipeline.handle)
       << ", " << reinterpret_cast<void*>(layout.handle)
-      << ", " << "0x" << std::hex << shader_hash << std::dec
+      << ", 0x" << std::hex << shader_hash << std::dec
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
@@ -500,14 +502,12 @@ static void on_destroy_pipeline(
 
 #ifdef DEBUG_LEVEL_0
   std::stringstream s;
-  s << "on_destroy_pipeline(";
-  s << reinterpret_cast<void*>(pipeline.handle);
-  s << " )";
+  s << "on_destroy_pipeline("
+    << reinterpret_cast<void*>(pipeline.handle)
+    << " )";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
 }
-
-
 
 // AfterSetPipelineState
 static void on_bind_pipeline(
@@ -573,7 +573,6 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       "%.2f");
     ImGui::SetItemTooltip("Input scaling factor before passing to tone mapper.");
     ImGui::EndDisabled();
-
 
     ImGui::BeginDisabled(userInjectData.toneMapperType != 2 && userInjectData.toneMapperType != 4);
     updated |= ImGui::SliderFloat(
@@ -642,7 +641,6 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       colorGradingScalingStrings[userInjectData.colorGradingScaling]);
     ImGui::SetItemTooltip("Enables the game's original LUT scaling.");
 
-
     ImGui::BeginDisabled();
     updated |= ImGui::SliderFloat(
       "Lift",
@@ -668,7 +666,8 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     ImGui::EndDisabled();
   }
 
-  ImGui::SeparatorText("Film Grain"); {
+  ImGui::SeparatorText("Film Grain");
+  {
     updated |= ImGui::SliderFloat(
       "Film Grain Strength",
       &userInjectData.filmGrainStrength,

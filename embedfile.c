@@ -1,5 +1,5 @@
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 FILE* open_or_exit(const char* fname, const char* mode) {
   FILE* f = fopen(fname, mode);
@@ -12,9 +12,10 @@ FILE* open_or_exit(const char* fname, const char* mode) {
 
 int main(int argc, char** argv) {
   if (argc < 3) {
-    fprintf(stderr, "USAGE: %s {rsrc} {sym}\n\n"
-      "  Creates {sym} from the contents of {rsrc}\n",
-      argv[0]);
+    fprintf(stderr,
+            "USAGE: %s {rsrc} {sym}\n\n"
+            "  Creates {sym} from the contents of {rsrc}\n",
+            argv[0]);
     return EXIT_FAILURE;
   }
 
