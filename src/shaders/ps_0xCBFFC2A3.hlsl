@@ -1,6 +1,7 @@
 // Final output shader
 
 #include "../common/color.hlsl"
+#include "../common/random.hlsl"
 #include "../cp2077/cp2077.h"
 
 // [476 x i8]
@@ -75,7 +76,7 @@ struct PIXType {
   float gammaCorrection;    // _20_m0[0u].w
   float pqSaturation;       // _20_m0[1u].x
   float3 const05;           // _20_m0[1u].yxw
-  float3x4 pqMatrix;        // _20_m0[2u].xyzw _20_m0[3u].xyzw _20_m0[4u].xyzw
+  float4 pqMatrix[3];       // _20_m0[2u].xyzw _20_m0[3u].xyzw _20_m0[4u].xyzw
 };
 
 cbuffer injectedBuffer : register(b14, space0) {
@@ -95,18 +96,39 @@ struct PSSceneIn {
   float2 TEXCOORD : TEXCOORD0;
 };
 
-Texture2D<float4> _8 : register(t0, space0);
-
-static const uint OUTPUT_TYPE_SRGB8 = 0u;
-static const uint OUTPUT_TYPE_PQ = 1u;
-static const uint OUTPUT_TYPE_SCRGB = 2u;
-static const uint OUTPUT_TYPE_SRGB10 = 3u;
+Texture2D<float4> textureRender : register(t0, space0);
 
 // Maybe dithering?
-float3 srgbPostProcess(float3 srgb, float3 a, float3 b, float bits = 8.f) {
+float3 srgbPostProcess(float3 srgb, float2 seed, float bits = 8.f) {
+  float randomSeed = shaderConsts.const00.x * 64;
+  float3 randomA = hash33(float3(
+    seed.x * 2048.f,
+    seed.y * 2048.f,
+    randomSeed
+  ));
+
+  float3 randomB = hash33(float3(
+    (seed.x + 64.f) * 2048.f,
+    (seed.y + 64.f) * 2048.f,
+    randomSeed
+  ));
+
   float maxValue = pow(2.f, bits) - 1.f;
   float maxValueX2 = maxValue * 2.f;
-  return srgb + (((a - 0.5f) + (min(min(1.0f, srgb * maxValueX2), maxValueX2 - (srgb * maxValueX2)) * (b - 0.5f))) / maxValue);
+  // return srgb + (((a - 0.5f) + (min(min(1.0f, srgb * maxValueX2), maxValueX2 - (srgb * maxValueX2)) * (b - 0.5f))) / maxValue);
+
+  float3 newValue = min(min(1.0f, srgb * maxValueX2), maxValueX2 - (srgb * maxValueX2));
+  newValue *= (randomB - 0.5f);
+  newValue += (randomA - 0.5f);
+  newValue /= maxValue;
+  return srgb + newValue;
+}
+
+
+float3 applyGammaCorrection(float3 inputColor) {
+  return (pixConsts.gammaCorrection != 1.0f)
+         ? pow(inputColor, pixConsts.gammaCorrection)
+         : inputColor;
 }
 
 float4 main(PSSceneIn input) : SV_TARGET {
@@ -114,93 +136,58 @@ float4 main(PSSceneIn input) : SV_TARGET {
   float2 TEXCOORD = input.TEXCOORD;
   gl_FragCoord.w = 1.0 / gl_FragCoord.w;
 
-  const float4 inputColor = _8.Load(int3(uint2(uint(gl_FragCoord.x), uint(gl_FragCoord.y)), 0u));
-
-  // float3 clampedColor = max(0.f, inputColor.rgb);
-  float3 clampedColor = inputColor.rgb;
-
-  float3 correctedColor = (pixConsts.gammaCorrection != 1.0f)
-                          ? pow(clampedColor, pixConsts.gammaCorrection)
-                          : clampedColor;
+  const float4 inputColor = textureRender.Load(int3(uint2(uint(gl_FragCoord.x), uint(gl_FragCoord.y)), 0u));
 
   const float PAPERWHITE_NITS = pixConsts.paperWhiteScaling / 80.f;
 
-  const float paperWhiteScaling = pixConsts.paperWhiteScaling * (injectedData.debugValue00 - injectedData.debugValue00);
-
-  // Dithering for sRGB?
-  // TODO: Don't sample when in HDR
-  float _112 = frac(TEXCOORD.x * 211.1488037109375f);
-  float _113 = frac(TEXCOORD.y * 210.944000244140625f);
-  float _114 = frac(shaderConsts.const00.x * 6.227200031280517578125f);
-  float _118 = _114 + 33.3300018310546875f;
-  float _119 = dot(float3(_112, _113, _114), float3(_113 + 33.3300018310546875f, _112 + 33.3300018310546875f, _118));
-  float _123 = _119 + _112;
-  float _124 = _119 + _113;
-  float _126 = _123 + _124;
-  float _132 = frac(_126 * (_119 + _114));
-  float _133 = frac((_123 * 2.0f) * _124);
-  float _134 = frac(_126 * _123);
-
-  float3 minSRGB = float3(_132, _133, _134);
-
-  float _140 = frac((TEXCOORD.x + 64.0f) * 211.1488037109375f);
-  float _141 = frac((TEXCOORD.y + 64.0f) * 210.944000244140625f);
-  float _144 = dot(float3(_140, _141, _114), float3(_141 + 33.3300018310546875f, _140 + 33.3300018310546875f, _118));
-  float _147 = _144 + _140;
-  float _148 = _144 + _141;
-  float _150 = _147 + _148;
-  float _155 = frac(_150 * (_144 + _114));
-  float _156 = frac((_147 * 2.0f) * _148);
-  float _157 = frac(_150 * _147);
-
-  float3 maxSRGB = float3(_155, _156, _157);
+  const float paperWhiteScaling = pixConsts.paperWhiteScaling;
 
   // clang-format off
   const float3x3 rgbColorMatrix = float3x3(
-    pixConsts.pqMatrix[0][0], pixConsts.pqMatrix[1][0], pixConsts.pqMatrix[2][0],
-    pixConsts.pqMatrix[0][1], pixConsts.pqMatrix[1][1], pixConsts.pqMatrix[2][1],
-    pixConsts.pqMatrix[0][2], pixConsts.pqMatrix[1][2], pixConsts.pqMatrix[2][2]);
+    pixConsts.pqMatrix[0].x, pixConsts.pqMatrix[0].y, pixConsts.pqMatrix[0].z,
+    pixConsts.pqMatrix[1].x, pixConsts.pqMatrix[1].y, pixConsts.pqMatrix[1].z,
+    pixConsts.pqMatrix[2].x, pixConsts.pqMatrix[2].y, pixConsts.pqMatrix[2].z
+  );
   // clang-format on
 
   float3 outputColor;
   switch (pixConsts.outputTypeEnum) {
     case OUTPUT_TYPE_SRGB8:
       {
+        float3 clampedColor = max(0, inputColor.rgb);
+        float3 correctedColor = applyGammaCorrection(clampedColor);
         float3 srgbColor = srgbFromLinear(correctedColor);
-
-        float3 postProcessedSRGB = srgbPostProcess(srgbColor.rgb, minSRGB, maxSRGB, 8.f);
+        float3 postProcessedSRGB = srgbPostProcess(srgbColor.rgb, TEXCOORD, 8.f);
         outputColor.rgb = postProcessedSRGB.rgb;
       }
       break;
     case OUTPUT_TYPE_PQ:
       {
-        float3 rec2020 = REC709toREC2020(inputColor.rgb);
-        float3 matrixedColor = saturate(mul(rgbColorMatrix, rec2020));
+        float3 rec2020 = bt2020FromBT709(inputColor.rgb);
+        float3 matrixedColor = saturate(mul(rec2020, rgbColorMatrix));
         float3 newShiftedColor = ((matrixedColor - rec2020) * pixConsts.pqSaturation) + rec2020;
         float3 scaledShifted = newShiftedColor * paperWhiteScaling;
-
-        float3 pqColor = Linear_to_PQ(rec2020);
-
+        float3 pqColor = pqFromLinear(scaledShifted);
         outputColor.rgb = pqColor.rgb;
       }
       break;
     case OUTPUT_TYPE_SCRGB:
-      outputColor.rgb = correctedColor.rgb * paperWhiteScaling;
+      outputColor.rgb = inputColor.rgb * paperWhiteScaling;
       break;
     case OUTPUT_TYPE_SRGB10:
       {
-        float3 matrixedColor = mul(rgbColorMatrix, correctedColor);
+        float3 clampedColor = max(0, inputColor.rgb);
+        float3 correctedColor = applyGammaCorrection(clampedColor);
+        float3 matrixedColor = mul(correctedColor, rgbColorMatrix);
         float3 scaledColor = matrixedColor * paperWhiteScaling;
-
         float3 srgbColor = srgbFromLinear(scaledColor);
-
-        float3 postProcessedSRGB = srgbPostProcess(srgbColor.rgb, minSRGB, maxSRGB, 10.f);
+        float3 postProcessedSRGB = srgbPostProcess(srgbColor.rgb, TEXCOORD, 10.f);
         outputColor.rgb = postProcessedSRGB.rgb;
       }
       break;
     default:
       // Unknown default case
-      outputColor.rgb = (correctedColor.rgb * paperWhiteScaling) + pixConsts.blackFloorAdjust;
+      outputColor.rgb = (inputColor.rgb * paperWhiteScaling) + pixConsts.blackFloorAdjust;
   }
 
 #if 0

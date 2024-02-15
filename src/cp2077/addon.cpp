@@ -237,7 +237,6 @@ static bool load_embedded_shader(
       desc->code_size = sizeof(_0x97CA5A85);
       break;
     case 0xCBFFC2A3:
-      return false;
       desc->code = &_0xCBFFC2A3;
       desc->code_size = sizeof(_0xCBFFC2A3);
       break;
@@ -495,7 +494,8 @@ static void on_init_pipeline(
     s << "found changed shader ("
       << reinterpret_cast<void*>(pipeline.handle)
       << ", " << reinterpret_cast<void*>(layout.handle)
-      << ", 0x" << std::hex << shader_hash << std::dec
+      << ", hash: 0x" << std::hex << shader_hash << std::dec
+      << ", type: 0x" << std::hex << (uint32_t)subobjects[i].type << std::dec
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif

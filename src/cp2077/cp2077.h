@@ -35,4 +35,9 @@ struct ShaderInjectData {
 #define TONE_MAPPER_TYPE__DICE    3.f
 #define TONE_MAPPER_TYPE__ACES    4.f
 
+#define OUTPUT_TYPE_SRGB8  0u
+#define OUTPUT_TYPE_PQ     1u
+#define OUTPUT_TYPE_SCRGB  2u
+#define OUTPUT_TYPE_SRGB10 3u
+
 #endif  // SRC_CP2077_CP2077_H_

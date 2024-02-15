@@ -1,9 +1,3 @@
-static const float PQ_constant_M1 = 0.1593017578125f;
-static const float PQ_constant_M2 = 78.84375f;
-static const float PQ_constant_C1 = 0.8359375f;
-static const float PQ_constant_C2 = 18.8515625f;
-static const float PQ_constant_C3 = 18.6875f;
-
 // clang-format off
 static const float3x3 BT709_To_XYZ = {
   0.4123907983303070068359375f,    0.3575843274593353271484375f,   0.18048079311847686767578125f,
@@ -35,26 +29,31 @@ static const float3x3 XYZ_2_REC2020_MAT = {
    0.0176398574, -0.0427706133,  0.9421031212
 };
 
+static const float3x3 BT709_2_BT2020_MAT = {
+  0.627402, 0.329292, 0.043306,
+  0.069095, 0.919544, 0.011360,
+  0.016394, 0.088028, 0.895578,
+};
+
 // clang-format on
 
 float3 xyzFromBT709(float3 bt709) {
   return mul(BT709_To_XYZ, bt709);
 }
 
-float3 REC709toREC2020(float3 RGB709) {
-  static const float3x3 ConvMat = {
-    0.627402, 0.329292, 0.043306, 0.069095, 0.919544, 0.011360, 0.016394, 0.088028, 0.895578
-  };
-  return mul(ConvMat, RGB709);
+float3 bt2020FromBT709(float3 bt709) {
+  return mul(BT709_2_BT2020_MAT, bt709);
 }
 
-float3 Linear_to_PQ(float3 LinearColor) {
-  // LinearColor = max(LinearColor, 0.f);
-  float3 colorPow = pow(LinearColor, PQ_constant_M1);
-  float3 numerator = PQ_constant_C1 + PQ_constant_C2 * colorPow;
-  float3 denominator = 1.f + PQ_constant_C3 * colorPow;
-  float3 pq = pow(numerator / denominator, PQ_constant_M2);
-  return pq;
+float3 pqFromLinear(float3 linearColor) {
+  static const float m1 = 0.1593017578125f;
+  static const float m2 = 78.84375f;
+  static const float c1 = 0.8359375f;
+  static const float c2 = 18.8515625f;
+  static const float c3 = 18.6875f;
+
+  float3 yM1 = pow(linearColor, m1);
+  return pow((c1 + c2 * yM1) / (1.f + c3 * yM1), m2);
 }
 
 float srgbFromLinear(float channel) {
