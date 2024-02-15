@@ -1,7 +1,6 @@
 // Final output shader
 
-#include "../common/color.hlsl"
-#include "../common/random.hlsl"
+#include "../cp2077/colormath.hlsl"
 #include "../cp2077/cp2077.h"
 
 // [476 x i8]
@@ -95,38 +94,6 @@ struct PSSceneIn {
 
 Texture2D<float4> textureRender : register(t0, space0);
 
-// Maybe dithering?
-float3 srgbPostProcess(float3 srgb, float2 seed, float bits = 8.f) {
-  float randomSeed = shaderConsts.const00.x * 64;
-  float3 randomA = hash33(float3(
-    seed.x * 2048.f,
-    seed.y * 2048.f,
-    randomSeed
-  ));
-
-  float3 randomB = hash33(float3(
-    (seed.x + 64.f) * 2048.f,
-    (seed.y + 64.f) * 2048.f,
-    randomSeed
-  ));
-
-  float maxValue = pow(2.f, bits) - 1.f;
-  float maxValueX2 = maxValue * 2.f;
-  // return srgb + (((a - 0.5f) + (min(min(1.0f, srgb * maxValueX2), maxValueX2 - (srgb * maxValueX2)) * (b - 0.5f))) / maxValue);
-
-  float3 newValue = min(min(1.0f, srgb * maxValueX2), maxValueX2 - (srgb * maxValueX2));
-  newValue *= (randomB - 0.5f);
-  newValue += (randomA - 0.5f);
-  newValue /= maxValue;
-  return srgb + newValue;
-}
-
-float3 applyGammaCorrection(float3 inputColor) {
-  return (pixConsts.gammaCorrection != 1.0f)
-         ? pow(inputColor, pixConsts.gammaCorrection)
-         : inputColor;
-}
-
 float4 main(PSSceneIn input) : SV_TARGET {
   float4 gl_FragCoord = input.gl_FragCoord;
   float2 TEXCOORD = input.TEXCOORD;
@@ -134,58 +101,23 @@ float4 main(PSSceneIn input) : SV_TARGET {
 
   const float4 inputColor = textureRender.Load(int3(uint2(uint(gl_FragCoord.x), uint(gl_FragCoord.y)), 0u));
 
-  const float PAPERWHITE_NITS = pixConsts.paperWhiteScaling / 80.f;
+  ConvertColorParams params = {
+    pixConsts.outputTypeEnum,
+    pixConsts.paperWhiteScaling,
+    pixConsts.blackFloorAdjust,
+    pixConsts.gammaCorrection,
+    pixConsts.pqSaturation,
+    float3x3(
+      // clang-format off
+      pixConsts.pqMatrix[0].x, pixConsts.pqMatrix[0].y, pixConsts.pqMatrix[0].z,
+      pixConsts.pqMatrix[1].x, pixConsts.pqMatrix[1].y, pixConsts.pqMatrix[1].z,
+      pixConsts.pqMatrix[2].x, pixConsts.pqMatrix[2].y, pixConsts.pqMatrix[2].z
+      // clang-format on
+    ),
+    float3(TEXCOORD.x, TEXCOORD.y, shaderConsts.const00.x)
+  };
 
-  const float paperWhiteScaling = pixConsts.paperWhiteScaling;
-
-  // clang-format off
-  const float3x3 rgbColorMatrix = float3x3(
-    pixConsts.pqMatrix[0].x, pixConsts.pqMatrix[0].y, pixConsts.pqMatrix[0].z,
-    pixConsts.pqMatrix[1].x, pixConsts.pqMatrix[1].y, pixConsts.pqMatrix[1].z,
-    pixConsts.pqMatrix[2].x, pixConsts.pqMatrix[2].y, pixConsts.pqMatrix[2].z
-  );
-  // clang-format on
-
-  float3 outputColor;
-  switch (pixConsts.outputTypeEnum) {
-    case OUTPUT_TYPE_SRGB8:
-      {
-        float3 clampedColor = max(0, inputColor.rgb);
-        float3 correctedColor = applyGammaCorrection(clampedColor);
-        float3 srgbColor = srgbFromLinear(correctedColor);
-        float3 postProcessedSRGB = srgbPostProcess(srgbColor.rgb, TEXCOORD, 8.f);
-        outputColor.rgb = postProcessedSRGB.rgb;
-      }
-      break;
-    case OUTPUT_TYPE_PQ:
-      {
-        float3 rec2020 = bt2020FromBT709(inputColor.rgb);
-        float3 matrixedColor = saturate(mul(rec2020, rgbColorMatrix));
-        float3 newShiftedColor = ((matrixedColor - rec2020) * pixConsts.pqSaturation) + rec2020;
-        float3 scaledShifted = newShiftedColor * paperWhiteScaling;
-        float3 pqColor = pqFromLinear(scaledShifted);
-        outputColor.rgb = pqColor.rgb;
-      }
-      break;
-    case OUTPUT_TYPE_SCRGB:
-      outputColor.rgb = inputColor.rgb * paperWhiteScaling;
-      break;
-    case OUTPUT_TYPE_SRGB10:
-      {
-        float3 clampedColor = max(0, inputColor.rgb);
-        float3 correctedColor = applyGammaCorrection(clampedColor);
-        float3 matrixedColor = mul(correctedColor, rgbColorMatrix);
-        float3 scaledColor = matrixedColor * paperWhiteScaling;
-        float3 srgbColor = srgbFromLinear(scaledColor);
-        float3 postProcessedSRGB = srgbPostProcess(srgbColor.rgb, TEXCOORD, 10.f);
-        outputColor.rgb = postProcessedSRGB.rgb;
-      }
-      break;
-    default:
-      // Unknown default case
-      outputColor.rgb = (inputColor.rgb * paperWhiteScaling) + pixConsts.blackFloorAdjust;
-  }
-
+  float3 outputColor = convertColor(inputColor.rgb, params);
 #if 0
   // if (TEXCOORD.x > 0.75f) {
   //          if (TEXCOORD.y < 0.1f) outputColor.rgb = (100.f / 80.f) * shaderConsts.const00.x;
