@@ -106,7 +106,7 @@ float4 main(PSSceneIn input) : SV_TARGET {
     pixConsts.paperWhiteScaling,
     pixConsts.blackFloorAdjust,
     pixConsts.gammaCorrection,
-    1.f, // pixConsts.pqSaturation, // Broken in Vanilla
+    pixConsts.pqSaturation,
     float3x3(
       // clang-format off
       pixConsts.pqMatrix[0].x, pixConsts.pqMatrix[0].y, pixConsts.pqMatrix[0].z,
