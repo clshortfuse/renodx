@@ -67,7 +67,7 @@ struct UserInjectData {
   float colorGradingLift = 0.f;
   float colorGradingGamma = 1.f;
   float colorGradingGain = 1.f;
-  float filmGrainStrength = 0.f;
+  float filmGrainStrength = 1.f;
   float debugValue00 = 1.f;
   float debugValue01 = 1.f;
   float debugValue02 = 1.f;

@@ -1,5 +1,6 @@
 // Film Grain overlay
 
+#include "../common/filmgrain.hlsl"
 #include "../cp2077/colormath.hlsl"
 #include "../cp2077/cp2077.h"
 
@@ -39,46 +40,87 @@ struct SPIRV_Cross_Input {
 };
 
 void comp_main() {
-  float cb6_12x = cb6[12u].x;  // Film Grain Strength? Should be 0 or 1
 
   uint4 _73 = _18.Load(asuint(cb6[13u]).x + gl_WorkGroupID.x);
   uint _74 = _73.x;
   uint _82 = ((_74 << 4u) & 1048560u) + gl_LocalInvocationID.x;
   uint _83 = ((_74 >> 16u) << 4u) + gl_LocalInvocationID.y;
-  float4 _84 = textureRender.Load(int3(uint2(_82, _83), 0u));
-  float _87 = _84.x;
-  float _88 = _84.y;
-  float _89 = _84.z;
+  float3 inputColor = textureRender.Load(int3(uint2(_82, _83), 0u)).rgb;
+  float _87 = inputColor.r;
+  float _88 = inputColor.g;
+  float _89 = inputColor.b;
   float _97 = float(_82);
   float _98 = float(_83);
   float _282;
   float _283;
   float _284;
-  if (cb6_12x > 0.0f) {
-    uint _113 = 1u << (_12.Load(int3(uint2(uint(cb12[79u].x * _97), uint(cb12[79u].y * _98)), 0u)).y & 31u);
-    float4 _117 = _13.Load(int3(uint2(_82 & 255u, _83 & 255u), 0u));
-    float _119 = _117.x;
-    float _120 = _117.y;
-    float _121 = _117.z;
-    float _124 = ((_119 + _120) + _121) * 0.3333333432674407958984375f;
-    float _129 = cb6_12x * _87;
-    float _130 = cb6_12x * _88;
-    float _131 = cb6_12x * _89;
-    float _148 = _119 - _124;
-    float _149 = _120 - _124;
-    float _150 = _121 - _124;
-    float _154 = _124 + (-0.5f);
-    uint4 _168 = asuint(cb6[17u]);
-    float _172 = float(min((_168.x & _113), 1u));
-    float _201 = float(min((_168.y & _113), 1u));
-    float _230 = float(min((_168.z & _113), 1u));
-    float _259 = float(min((_168.w & _113), 1u));
-    float _266 = (((((((_154 + (cb6[18u].w * _148)) * cb6[18u].x) * _172) + 1.0f) * (_129 / max(1.0f - _129, 9.9999999747524270787835121154785e-07f))) * ((((_154 + (cb6[19u].w * _148)) * cb6[19u].x) * _201) + 1.0f)) * ((((_154 + (cb6[20u].w * _148)) * cb6[20u].x) * _230) + 1.0f)) * ((((_154 + (cb6[21u].w * _148)) * cb6[21u].x) * _259) + 1.0f);
-    float _267 = (((((((_154 + (cb6[18u].w * _149)) * cb6[18u].y) * _172) + 1.0f) * (_130 / max(1.0f - _130, 9.9999999747524270787835121154785e-07f))) * ((((_154 + (cb6[19u].w * _149)) * cb6[19u].y) * _201) + 1.0f)) * ((((_154 + (cb6[20u].w * _149)) * cb6[20u].y) * _230) + 1.0f)) * ((((_154 + (cb6[21u].w * _149)) * cb6[21u].y) * _259) + 1.0f);
-    float _268 = (((((((_154 + (cb6[18u].w * _150)) * cb6[18u].z) * _172) + 1.0f) * (_131 / max(1.0f - _131, 9.9999999747524270787835121154785e-07f))) * ((((_154 + (cb6[19u].w * _150)) * cb6[19u].z) * _201) + 1.0f)) * ((((_154 + (cb6[20u].w * _150)) * cb6[20u].z) * _230) + 1.0f)) * ((((_154 + (cb6[21u].w * _150)) * cb6[21u].z) * _259) + 1.0f);
-    _282 = cb6[12u].y * (_266 / max(_266 + 1.0f, 1.0f));
-    _283 = cb6[12u].y * (_267 / max(_267 + 1.0f, 1.0f));
-    _284 = cb6[12u].y * (_268 / max(_268 + 1.0f, 1.0f));
+
+  // 8.0 @ 100 nits
+  // 4.0 @ 200 nits
+  // 2.0 @ 400 nits
+  // 1.0 on SDR
+
+  float grainStrength = cb6[12u].x;  // Film Grain Strength? Should be 0 or 1
+  float uiPaperWhiteScaler = cb6[12u].y;
+
+  // float userUIPaperWhite = uiPaperWhiteScaler / 8.0f;
+
+  if (grainStrength > 0.0f) {
+    if (injectedData.filmGrainStrength) {
+      float3 grainColor = _13.Load(int3(uint2(_82 & 255u, _83 & 255u), 0u)).rgb;
+      float3 grainedColor = computeFilmGrain(
+        inputColor,
+        grainColor.xy,
+        frac(cb0[0u].x / 1000.f),
+        injectedData.filmGrainStrength * 0.03f,
+        (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f)
+        // ,injectedData.debugValue02 != 1.f
+      );
+      _282 = grainedColor.r;
+      _283 = grainedColor.g;
+      _284 = grainedColor.b;
+    } else {
+      uint _113 = 1u << (_12.Load(int3(uint2(uint(cb12[79u].x * _97), uint(cb12[79u].y * _98)), 0u)).y & 31u);
+      float3 grainStrengthAdjusted = inputColor * grainStrength;
+
+      float3 grainColor = _13.Load(int3(uint2(_82 & 255u, _83 & 255u), 0u)).rgb;
+
+      float averageChannel = (grainColor.r + grainColor.g + grainColor.z) / 3.f;
+      float3 distanceFromAverage = grainColor - averageChannel;
+
+      float _129 = grainStrengthAdjusted.r;
+      float _130 = grainStrengthAdjusted.g;
+      float _131 = grainStrengthAdjusted.b;
+
+      float _148 = distanceFromAverage.r;
+      float _149 = distanceFromAverage.g;
+      float _150 = distanceFromAverage.b;
+
+      float _154 = averageChannel - 0.5f;
+      uint4 _168 = asuint(cb6[17u]);
+
+      float _172 = float(min((_168.x & _113), 1u));
+      float _201 = float(min((_168.y & _113), 1u));
+      float _230 = float(min((_168.z & _113), 1u));
+      float _259 = float(min((_168.w & _113), 1u));
+      float _266 = (((((((_154 + (cb6[18u].w * _148)) * cb6[18u].x) * _172) + 1.0f)
+                      * (_129 / max(1.0f - _129, 9.9999999747524270787835121154785e-07f)))
+                     * ((((_154 + (cb6[19u].w * _148)) * cb6[19u].x) * _201) + 1.0f))
+                    * ((((_154 + (cb6[20u].w * _148)) * cb6[20u].x) * _230) + 1.0f))
+                 * ((((_154 + (cb6[21u].w * _148)) * cb6[21u].x) * _259) + 1.0f);
+
+      float _267 = (((((((_154 + (cb6[18u].w * _149)) * cb6[18u].y) * _172) + 1.0f) * (_130 / max(1.0f - _130, 9.9999999747524270787835121154785e-07f))) * ((((_154 + (cb6[19u].w * _149)) * cb6[19u].y) * _201) + 1.0f)) * ((((_154 + (cb6[20u].w * _149)) * cb6[20u].y) * _230) + 1.0f)) * ((((_154 + (cb6[21u].w * _149)) * cb6[21u].y) * _259) + 1.0f);
+      float _268 = (((((((_154 + (cb6[18u].w * _150)) * cb6[18u].z) * _172) + 1.0f) * (_131 / max(1.0f - _131, 9.9999999747524270787835121154785e-07f))) * ((((_154 + (cb6[19u].w * _150)) * cb6[19u].z) * _201) + 1.0f)) * ((((_154 + (cb6[20u].w * _150)) * cb6[20u].z) * _230) + 1.0f)) * ((((_154 + (cb6[21u].w * _150)) * cb6[21u].z) * _259) + 1.0f);
+      _282 = uiPaperWhiteScaler * (_266 / max(_266 + 1.0f, 1.0f));
+      _283 = uiPaperWhiteScaler * (_267 / max(_267 + 1.0f, 1.0f));
+      _284 = uiPaperWhiteScaler * (_268 / max(_268 + 1.0f, 1.0f));
+      // if (injectedData.debugValue02 != 1.f) {
+      //   float oldColorY = dot(inputColor, float3(0.2126390039920806884765625f, 0.715168654918670654296875f, 0.072192318737506866455078125f));
+      //   float newColorY = dot(float3(_282, _283, _284), float3(0.2126390039920806884765625f, 0.715168654918670654296875f, 0.072192318737506866455078125f));
+      //   float yChange = oldColorY ? (newColorY / oldColorY) - 1.f : 0;
+      //   _282 = _283 = _284 = abs(yChange);
+      // }
+    }
   } else {
     _282 = _87;
     _283 = _88;

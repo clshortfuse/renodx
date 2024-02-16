@@ -1,6 +1,7 @@
 // HUD Shader
 
-#include "../common/random.hlsl"
+#include "../common/filmgrain.hlsl"
+#include "../cp2077/colormath.hlsl"
 #include "../cp2077/cp2077.h"
 
 static float _312;
@@ -85,7 +86,7 @@ void comp_main() {
   float hudVisual00 = cb6[6u].w;
 
   float uiOutline = cb6[12u].x;
-  float uiOutlineBlend = cb6[12u].y;
+  float uiPaperWhiteScaler = cb6[12u].y;
 
   if (_118) {
     _119 = 0.0f;
@@ -217,7 +218,7 @@ void comp_main() {
                        * ((((_832 + (cb6[19u].w * _830)) * cb6[19u].y) * float(min((_838.y & _812), 1u))) + 1.0f))
                       * ((((_832 + (cb6[20u].w * _830)) * cb6[20u].y) * float(min((_838.z & _812), 1u))) + 1.0f))
                    * ((((_832 + (cb6[21u].w * _830)) * cb6[21u].y) * float(min((_838.w & _812), 1u))) + 1.0f);
-        _893 = uiOutlineBlend * (_887 / max(_887 + 1.0f, 1.0f));
+        _893 = uiPaperWhiteScaler * (_887 / max(_887 + 1.0f, 1.0f));
       } else {
         _893 = _585;
       }
@@ -243,32 +244,47 @@ void comp_main() {
       float frontier_phi_14_12_ladder_3;
       float frontier_phi_14_12_ladder_4;
       if (hasUiOutline) {
-        uint _1251 = 1u << (_12.Load(int3(uint2(uint(_39_m0[79u].x * float(_937)), uint(_39_m0[79u].y * float(_938))), 0u)).y & 31u);
         float4 _1254 = textureNoise.Load(int3(uint2(_937 & 255u, _938 & 255u), 0u));
-        float _1256 = _1254.x;
-        float _1257 = _1254.y;
-        float _1258 = _1254.z;
-        float _1261 = ((_1256 + _1257) + _1258) * 0.3333333432674407958984375f;
-        float _1262 = uiOutline * _941;
-        float _1263 = uiOutline * _942;
-        float _1264 = uiOutline * _943;
-        float _1277 = _1256 - _1261;
-        float _1278 = _1257 - _1261;
-        float _1279 = _1258 - _1261;
-        float _1283 = _1261 + (-0.5f);
-        uint4 _1295 = asuint(cb6[17u]);
-        float _1299 = float(min((_1295.x & _1251), 1u));
-        float _1327 = float(min((_1295.y & _1251), 1u));
-        float _1355 = float(min((_1295.z & _1251), 1u));
-        float _1383 = float(min((_1295.w & _1251), 1u));
-        float _1390 = (((((((_1283 + (cb6[18u].w * _1277)) * cb6[18u].x) * _1299) + 1.0f) * (_1262 / max(1.0f - _1262, 9.9999999747524270787835121154785e-07f))) * ((((_1283 + (cb6[19u].w * _1277)) * cb6[19u].x) * _1327) + 1.0f)) * ((((_1283 + (cb6[20u].w * _1277)) * cb6[20u].x) * _1355) + 1.0f)) * ((((_1283 + (cb6[21u].w * _1277)) * cb6[21u].x) * _1383) + 1.0f);
-        float _1391 = (((((((_1283 + (cb6[18u].w * _1278)) * cb6[18u].y) * _1299) + 1.0f) * (_1263 / max(1.0f - _1263, 9.9999999747524270787835121154785e-07f))) * ((((_1283 + (cb6[19u].w * _1278)) * cb6[19u].y) * _1327) + 1.0f)) * ((((_1283 + (cb6[20u].w * _1278)) * cb6[20u].y) * _1355) + 1.0f)) * ((((_1283 + (cb6[21u].w * _1278)) * cb6[21u].y) * _1383) + 1.0f);
-        float _1392 = (((((((_1283 + (cb6[18u].w * _1279)) * cb6[18u].z) * _1299) + 1.0f) * (_1264 / max(1.0f - _1264, 9.9999999747524270787835121154785e-07f))) * ((((_1283 + (cb6[19u].w * _1279)) * cb6[19u].z) * _1327) + 1.0f)) * ((((_1283 + (cb6[20u].w * _1279)) * cb6[20u].z) * _1355) + 1.0f)) * ((((_1283 + (cb6[21u].w * _1279)) * cb6[21u].z) * _1383) + 1.0f);
-        frontier_phi_14_12_ladder = _580;
-        frontier_phi_14_12_ladder_1 = _576;
-        frontier_phi_14_12_ladder_2 = uiOutlineBlend * (_1390 / max(_1390 + 1.0f, 1.0f));
-        frontier_phi_14_12_ladder_3 = uiOutlineBlend * (_1391 / max(_1391 + 1.0f, 1.0f));
-        frontier_phi_14_12_ladder_4 = uiOutlineBlend * (_1392 / max(_1392 + 1.0f, 1.0f));
+        if (injectedData.filmGrainStrength) {
+          float3 grainedColor = computeFilmGrain(
+            float3(_941, _942, _943),
+            _1254.xy,
+            frac(cb0[0u].x / 1000.f),
+            injectedData.filmGrainStrength * 0.03f,
+            (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f)
+          );
+          frontier_phi_14_12_ladder = _580;
+          frontier_phi_14_12_ladder_1 = _576;
+          frontier_phi_14_12_ladder_2 = grainedColor.r;
+          frontier_phi_14_12_ladder_3 = grainedColor.g;
+          frontier_phi_14_12_ladder_4 = grainedColor.b;
+        } else {
+          uint _1251 = 1u << (_12.Load(int3(uint2(uint(_39_m0[79u].x * float(_937)), uint(_39_m0[79u].y * float(_938))), 0u)).y & 31u);
+          float _1256 = _1254.x;
+          float _1257 = _1254.y;
+          float _1258 = _1254.z;
+          float _1261 = ((_1256 + _1257) + _1258) * 0.3333333432674407958984375f;
+          float _1262 = uiOutline * _941;
+          float _1263 = uiOutline * _942;
+          float _1264 = uiOutline * _943;
+          float _1277 = _1256 - _1261;
+          float _1278 = _1257 - _1261;
+          float _1279 = _1258 - _1261;
+          float _1283 = _1261 + (-0.5f);
+          uint4 _1295 = asuint(cb6[17u]);
+          float _1299 = float(min((_1295.x & _1251), 1u));
+          float _1327 = float(min((_1295.y & _1251), 1u));
+          float _1355 = float(min((_1295.z & _1251), 1u));
+          float _1383 = float(min((_1295.w & _1251), 1u));
+          float _1390 = (((((((_1283 + (cb6[18u].w * _1277)) * cb6[18u].x) * _1299) + 1.0f) * (_1262 / max(1.0f - _1262, 9.9999999747524270787835121154785e-07f))) * ((((_1283 + (cb6[19u].w * _1277)) * cb6[19u].x) * _1327) + 1.0f)) * ((((_1283 + (cb6[20u].w * _1277)) * cb6[20u].x) * _1355) + 1.0f)) * ((((_1283 + (cb6[21u].w * _1277)) * cb6[21u].x) * _1383) + 1.0f);
+          float _1391 = (((((((_1283 + (cb6[18u].w * _1278)) * cb6[18u].y) * _1299) + 1.0f) * (_1263 / max(1.0f - _1263, 9.9999999747524270787835121154785e-07f))) * ((((_1283 + (cb6[19u].w * _1278)) * cb6[19u].y) * _1327) + 1.0f)) * ((((_1283 + (cb6[20u].w * _1278)) * cb6[20u].y) * _1355) + 1.0f)) * ((((_1283 + (cb6[21u].w * _1278)) * cb6[21u].y) * _1383) + 1.0f);
+          float _1392 = (((((((_1283 + (cb6[18u].w * _1279)) * cb6[18u].z) * _1299) + 1.0f) * (_1264 / max(1.0f - _1264, 9.9999999747524270787835121154785e-07f))) * ((((_1283 + (cb6[19u].w * _1279)) * cb6[19u].z) * _1327) + 1.0f)) * ((((_1283 + (cb6[20u].w * _1279)) * cb6[20u].z) * _1355) + 1.0f)) * ((((_1283 + (cb6[21u].w * _1279)) * cb6[21u].z) * _1383) + 1.0f);
+          frontier_phi_14_12_ladder = _580;
+          frontier_phi_14_12_ladder_1 = _576;
+          frontier_phi_14_12_ladder_2 = uiPaperWhiteScaler * (_1390 / max(_1390 + 1.0f, 1.0f));
+          frontier_phi_14_12_ladder_3 = uiPaperWhiteScaler * (_1391 / max(_1391 + 1.0f, 1.0f));
+          frontier_phi_14_12_ladder_4 = uiPaperWhiteScaler * (_1392 / max(_1392 + 1.0f, 1.0f));
+        }
       } else {
         frontier_phi_14_12_ladder = _580;
         frontier_phi_14_12_ladder_1 = _576;
@@ -292,32 +308,46 @@ void comp_main() {
       float frontier_phi_14_6_ladder_3;
       float frontier_phi_14_6_ladder_4;
       if (hasUiOutline) {
-        uint _956 = 1u << (_12.Load(int3(uint2(uint(_39_m0[79u].x * _87), uint(_39_m0[79u].y * _88)), 0u)).y & 31u);
         float4 _959 = textureNoise.Load(int3(uint2(_85 & 255u, _86 & 255u), 0u));
-        float _961 = _959.x;
-        float _962 = _959.y;
-        float _963 = _959.z;
-        float _966 = ((_961 + _962) + _963) * 0.3333333432674407958984375f;
-        float _967 = uiOutline * _588;
-        float _968 = uiOutline * _589;
-        float _969 = uiOutline * _590;
-        float _982 = _961 - _966;
-        float _983 = _962 - _966;
-        float _984 = _963 - _966;
-        float _988 = _966 + (-0.5f);
-        uint4 _1000 = asuint(cb6[17u]);
-        float _1004 = float(min((_1000.x & _956), 1u));
-        float _1032 = float(min((_1000.y & _956), 1u));
-        float _1060 = float(min((_1000.z & _956), 1u));
-        float _1088 = float(min((_1000.w & _956), 1u));
-        float _1095 = (((((((_988 + (cb6[18u].w * _982)) * cb6[18u].x) * _1004) + 1.0f) * (_967 / max(1.0f - _967, 9.9999999747524270787835121154785e-07f))) * ((((_988 + (cb6[19u].w * _982)) * cb6[19u].x) * _1032) + 1.0f)) * ((((_988 + (cb6[20u].w * _982)) * cb6[20u].x) * _1060) + 1.0f)) * ((((_988 + (cb6[21u].w * _982)) * cb6[21u].x) * _1088) + 1.0f);
-        float _1096 = (((((((_988 + (cb6[18u].w * _983)) * cb6[18u].y) * _1004) + 1.0f) * (_968 / max(1.0f - _968, 9.9999999747524270787835121154785e-07f))) * ((((_988 + (cb6[19u].w * _983)) * cb6[19u].y) * _1032) + 1.0f)) * ((((_988 + (cb6[20u].w * _983)) * cb6[20u].y) * _1060) + 1.0f)) * ((((_988 + (cb6[21u].w * _983)) * cb6[21u].y) * _1088) + 1.0f);
-        float _1097 = (((((((_988 + (cb6[18u].w * _984)) * cb6[18u].z) * _1004) + 1.0f) * (_969 / max(1.0f - _969, 9.9999999747524270787835121154785e-07f))) * ((((_988 + (cb6[19u].w * _984)) * cb6[19u].z) * _1032) + 1.0f)) * ((((_988 + (cb6[20u].w * _984)) * cb6[20u].z) * _1060) + 1.0f)) * ((((_988 + (cb6[21u].w * _984)) * cb6[21u].z) * _1088) + 1.0f);
-        frontier_phi_14_6_ladder = _305;
-        frontier_phi_14_6_ladder_1 = _304;
-        frontier_phi_14_6_ladder_2 = uiOutlineBlend * (_1095 / max(_1095 + 1.0f, 1.0f));
-        frontier_phi_14_6_ladder_3 = uiOutlineBlend * (_1096 / max(_1096 + 1.0f, 1.0f));
-        frontier_phi_14_6_ladder_4 = uiOutlineBlend * (_1097 / max(_1097 + 1.0f, 1.0f));
+        if (injectedData.filmGrainStrength) {
+          float3 grainedColor = computeFilmGrain(
+            float3(_588, _589, _590),
+            _959.xy,
+            frac(cb0[0u].x / 1000.f),
+            injectedData.filmGrainStrength * 0.03f,
+            (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f)
+          );
+          frontier_phi_14_6_ladder_1 = _304;
+          frontier_phi_14_6_ladder_2 = grainedColor.r;
+          frontier_phi_14_6_ladder_3 = grainedColor.g;
+          frontier_phi_14_6_ladder_4 = grainedColor.b;
+        } else {
+          uint _956 = 1u << (_12.Load(int3(uint2(uint(_39_m0[79u].x * _87), uint(_39_m0[79u].y * _88)), 0u)).y & 31u);
+          float _961 = _959.x;
+          float _962 = _959.y;
+          float _963 = _959.z;
+          float _966 = ((_961 + _962) + _963) * 0.3333333432674407958984375f;
+          float _967 = uiOutline * _588;
+          float _968 = uiOutline * _589;
+          float _969 = uiOutline * _590;
+          float _982 = _961 - _966;
+          float _983 = _962 - _966;
+          float _984 = _963 - _966;
+          float _988 = _966 + (-0.5f);
+          uint4 _1000 = asuint(cb6[17u]);
+          float _1004 = float(min((_1000.x & _956), 1u));
+          float _1032 = float(min((_1000.y & _956), 1u));
+          float _1060 = float(min((_1000.z & _956), 1u));
+          float _1088 = float(min((_1000.w & _956), 1u));
+          float _1095 = (((((((_988 + (cb6[18u].w * _982)) * cb6[18u].x) * _1004) + 1.0f) * (_967 / max(1.0f - _967, 9.9999999747524270787835121154785e-07f))) * ((((_988 + (cb6[19u].w * _982)) * cb6[19u].x) * _1032) + 1.0f)) * ((((_988 + (cb6[20u].w * _982)) * cb6[20u].x) * _1060) + 1.0f)) * ((((_988 + (cb6[21u].w * _982)) * cb6[21u].x) * _1088) + 1.0f);
+          float _1096 = (((((((_988 + (cb6[18u].w * _983)) * cb6[18u].y) * _1004) + 1.0f) * (_968 / max(1.0f - _968, 9.9999999747524270787835121154785e-07f))) * ((((_988 + (cb6[19u].w * _983)) * cb6[19u].y) * _1032) + 1.0f)) * ((((_988 + (cb6[20u].w * _983)) * cb6[20u].y) * _1060) + 1.0f)) * ((((_988 + (cb6[21u].w * _983)) * cb6[21u].y) * _1088) + 1.0f);
+          float _1097 = (((((((_988 + (cb6[18u].w * _984)) * cb6[18u].z) * _1004) + 1.0f) * (_969 / max(1.0f - _969, 9.9999999747524270787835121154785e-07f))) * ((((_988 + (cb6[19u].w * _984)) * cb6[19u].z) * _1032) + 1.0f)) * ((((_988 + (cb6[20u].w * _984)) * cb6[20u].z) * _1060) + 1.0f)) * ((((_988 + (cb6[21u].w * _984)) * cb6[21u].z) * _1088) + 1.0f);
+          frontier_phi_14_6_ladder = _305;
+          frontier_phi_14_6_ladder_1 = _304;
+          frontier_phi_14_6_ladder_2 = uiPaperWhiteScaler * (_1095 / max(_1095 + 1.0f, 1.0f));
+          frontier_phi_14_6_ladder_3 = uiPaperWhiteScaler * (_1096 / max(_1096 + 1.0f, 1.0f));
+          frontier_phi_14_6_ladder_4 = uiPaperWhiteScaler * (_1097 / max(_1097 + 1.0f, 1.0f));
+        }
       } else {
         frontier_phi_14_6_ladder = _305;
         frontier_phi_14_6_ladder_1 = _304;
@@ -503,6 +533,7 @@ void comp_main() {
       float _2473;
       float _2475;
       for (;;) {
+        // Looks like hash44
         float _2484 = float(int(_2482));
         float _2485 = _2484 + _2476;
         float _2486 = _2484 + _2478;
@@ -593,30 +624,43 @@ void comp_main() {
     float _796;
     float _797;
     if (uiOutline > 0.0f) {
-      uint _632 = 1u << (_12.Load(int3(uint2(uint(_39_m0[79u].x * _87), uint(_39_m0[79u].y * _88)), 0u)).y & 31u);
       float4 _636 = textureNoise.Load(int3(uint2(_85 & 255u, _86 & 255u), 0u));
-      float _638 = _636.x * injectedData.debugValue00;
-      float _639 = _636.y * injectedData.debugValue00;
-      float _640 = _636.z * injectedData.debugValue00;
-      float _643 = ((_638 + _639) + _640) * 0.3333333432674407958984375f;
-      float _645 = uiOutline * _326;
-      float _646 = uiOutline * _327;
-      float _647 = uiOutline * _328;
-      float _662 = _638 - _643;
-      float _663 = _639 - _643;
-      float _664 = _640 - _643;
-      float _668 = _643 + (-0.5f);
-      uint4 _681 = asuint(cb6[17u]);
-      float _685 = float(min((_681.x & _632), 1u));
-      float _714 = float(min((_681.y & _632), 1u));
-      float _743 = float(min((_681.z & _632), 1u));
-      float _772 = float(min((_681.w & _632), 1u));
-      float _779 = (((((((_668 + (cb6[18u].w * _662)) * cb6[18u].x) * _685) + 1.0f) * (_645 / max(1.0f - _645, 9.9999999747524270787835121154785e-07f))) * ((((_668 + (cb6[19u].w * _662)) * cb6[19u].x) * _714) + 1.0f)) * ((((_668 + (cb6[20u].w * _662)) * cb6[20u].x) * _743) + 1.0f)) * ((((_668 + (cb6[21u].w * _662)) * cb6[21u].x) * _772) + 1.0f);
-      float _780 = (((((((_668 + (cb6[18u].w * _663)) * cb6[18u].y) * _685) + 1.0f) * (_646 / max(1.0f - _646, 9.9999999747524270787835121154785e-07f))) * ((((_668 + (cb6[19u].w * _663)) * cb6[19u].y) * _714) + 1.0f)) * ((((_668 + (cb6[20u].w * _663)) * cb6[20u].y) * _743) + 1.0f)) * ((((_668 + (cb6[21u].w * _663)) * cb6[21u].y) * _772) + 1.0f);
-      float _781 = (((((((_668 + (cb6[18u].w * _664)) * cb6[18u].z) * _685) + 1.0f) * (_647 / max(1.0f - _647, 9.9999999747524270787835121154785e-07f))) * ((((_668 + (cb6[19u].w * _664)) * cb6[19u].z) * _714) + 1.0f)) * ((((_668 + (cb6[20u].w * _664)) * cb6[20u].z) * _743) + 1.0f)) * ((((_668 + (cb6[21u].w * _664)) * cb6[21u].z) * _772) + 1.0f);
-      _795 = uiOutlineBlend * (_779 / max(_779 + 1.0f, 1.0f));
-      _796 = uiOutlineBlend * (_780 / max(_780 + 1.0f, 1.0f));
-      _797 = uiOutlineBlend * (_781 / max(_781 + 1.0f, 1.0f));
+      if (injectedData.filmGrainStrength) {
+        float3 grainedColor = computeFilmGrain(
+          float3(_326, _327, _328),
+          _636.xy,
+          frac(cb0[0u].x / 1000.f),
+          injectedData.filmGrainStrength * 0.03f,
+          (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f)
+        );
+        _795 = grainedColor.r;
+        _796 = grainedColor.g;
+        _797 = grainedColor.b;
+      } else {
+        uint _632 = 1u << (_12.Load(int3(uint2(uint(_39_m0[79u].x * _87), uint(_39_m0[79u].y * _88)), 0u)).y & 31u);
+        float _638 = _636.x;
+        float _639 = _636.y;
+        float _640 = _636.z;
+        float _643 = ((_638 + _639) + _640) * 0.3333333432674407958984375f;
+        float _645 = uiOutline * _326;
+        float _646 = uiOutline * _327;
+        float _647 = uiOutline * _328;
+        float _662 = _638 - _643;
+        float _663 = _639 - _643;
+        float _664 = _640 - _643;
+        float _668 = _643 + (-0.5f);
+        uint4 _681 = asuint(cb6[17u]);
+        float _685 = float(min((_681.x & _632), 1u));
+        float _714 = float(min((_681.y & _632), 1u));
+        float _743 = float(min((_681.z & _632), 1u));
+        float _772 = float(min((_681.w & _632), 1u));
+        float _779 = (((((((_668 + (cb6[18u].w * _662)) * cb6[18u].x) * _685) + 1.0f) * (_645 / max(1.0f - _645, 9.9999999747524270787835121154785e-07f))) * ((((_668 + (cb6[19u].w * _662)) * cb6[19u].x) * _714) + 1.0f)) * ((((_668 + (cb6[20u].w * _662)) * cb6[20u].x) * _743) + 1.0f)) * ((((_668 + (cb6[21u].w * _662)) * cb6[21u].x) * _772) + 1.0f);
+        float _780 = (((((((_668 + (cb6[18u].w * _663)) * cb6[18u].y) * _685) + 1.0f) * (_646 / max(1.0f - _646, 9.9999999747524270787835121154785e-07f))) * ((((_668 + (cb6[19u].w * _663)) * cb6[19u].y) * _714) + 1.0f)) * ((((_668 + (cb6[20u].w * _663)) * cb6[20u].y) * _743) + 1.0f)) * ((((_668 + (cb6[21u].w * _663)) * cb6[21u].y) * _772) + 1.0f);
+        float _781 = (((((((_668 + (cb6[18u].w * _664)) * cb6[18u].z) * _685) + 1.0f) * (_647 / max(1.0f - _647, 9.9999999747524270787835121154785e-07f))) * ((((_668 + (cb6[19u].w * _664)) * cb6[19u].z) * _714) + 1.0f)) * ((((_668 + (cb6[20u].w * _664)) * cb6[20u].z) * _743) + 1.0f)) * ((((_668 + (cb6[21u].w * _664)) * cb6[21u].z) * _772) + 1.0f);
+        _795 = uiPaperWhiteScaler * (_779 / max(_779 + 1.0f, 1.0f));
+        _796 = uiPaperWhiteScaler * (_780 / max(_780 + 1.0f, 1.0f));
+        _797 = uiPaperWhiteScaler * (_781 / max(_781 + 1.0f, 1.0f));
+      }
     } else {
       _795 = _326;
       _796 = _327;
@@ -677,6 +721,7 @@ void comp_main() {
   float _1158;
   float _1164;
   float _1170;
+  // color conversion
   if (_615.y == 0u) {
     _1158 = _606;
     _1164 = _608;
