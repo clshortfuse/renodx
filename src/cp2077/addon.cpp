@@ -66,7 +66,7 @@ struct UserInjectData {
   float colorGradingStrength = 100.f;
   int colorGradingScaling = 0;
   float colorGradingSaturation = 50.f;
-  float colorGradingGamma = 1.f;
+  int colorGradingWhitePoint = 1;
   float colorGradingGain = 1.f;
   float filmGrainStrength = 1.f;
   float debugValue00 = 1.f;
@@ -87,7 +87,7 @@ static void updateShaderData() {
   shaderInjectData.colorGradingStrength = userInjectData.colorGradingStrength * 0.01f;
   shaderInjectData.colorGradingScaling = static_cast<float>(userInjectData.colorGradingScaling);
   shaderInjectData.colorGradingSaturation = userInjectData.colorGradingSaturation * 0.02;
-  shaderInjectData.colorGradingGamma = userInjectData.colorGradingGamma;
+  shaderInjectData.colorGradingWhitePoint = static_cast<float>(userInjectData.colorGradingWhitePoint - 1);
   shaderInjectData.colorGradingGain = userInjectData.colorGradingGain;
   shaderInjectData.filmGrainStrength = userInjectData.filmGrainStrength;
   shaderInjectData.debugValue00 = userInjectData.debugValue00;
@@ -102,6 +102,7 @@ static void updateShaderData() {
     shaderInjectData.colorGradingScaling = 1.f;
     shaderInjectData.colorGradingSaturation = 1.f;
     shaderInjectData.filmGrainStrength = 0.f;
+    shaderInjectData.colorGradingWhitePoint = 0;
   }
 }
 
@@ -128,6 +129,11 @@ static const char* colorGradingScalingStrings[] = {
   "None",
   "Vanilla",
 };
+
+static const char* colorGradingWhitePointStrings[] = {
+  "D60",
+  "Vanilla",
+  "D65"};
 
 void logLayout(
   const uint32_t paramCount,
@@ -695,14 +701,16 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       "%.0f"
     );
 
-    ImGui::BeginDisabled();
-    updated |= ImGui::SliderFloat(
-      "Gamma",
-      &userInjectData.colorGradingGamma,
-      0.f,
-      4.f,
-      "%.1f"
+    updated |= ImGui::SliderInt(
+      "White Point",
+      &userInjectData.colorGradingWhitePoint,
+      0,
+      (sizeof(colorGradingWhitePointStrings) / sizeof(char*)) - 1,
+      colorGradingWhitePointStrings[userInjectData.colorGradingWhitePoint],
+      ImGuiSliderFlags_NoInput
     );
+
+    ImGui::BeginDisabled();
 
     updated |= ImGui::SliderFloat(
       "Gain",

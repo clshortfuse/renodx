@@ -401,15 +401,13 @@ float4 tonemap() {
     // Scales with paperwhite, which can be reversed
 
     const SegmentedSplineParams_c9 ODT_CONFIG = {
-      // coefsLow[10]
-      {cb6[8u].x, cb6[9u].x, cb6[10u].x, cb6[11u].x, cb6[12u].x, cb6[13u].x, cb6[14u].x, cb6[15u].x, cb6[16u].x, cb6[17u].x},
-      // coefsHigh[10]
-      {cb6[8u].y, cb6[9u].y, cb6[10u].y, cb6[11u].y, cb6[12u].y, cb6[13u].y, cb6[14u].y, cb6[15u].y, cb6[16u].y, cb6[17u].y},
-      {cb6[18u].x, cb6[18u].y},  // minPoint
-      {cb6[18u].z, cb6[18u].w},  // midPoint
-      {cb6[19u].x, cb6[19u].y},  // maxPoint
-      cb6[19u].z,                   // slopeLow
-      cb6[19u].w                    // slopeHigh
+      {cb6[8u].x, cb6[9u].x, cb6[10u].x, cb6[11u].x, cb6[12u].x, cb6[13u].x, cb6[14u].x, cb6[15u].x, cb6[16u].x, cb6[17u].x}, // coefsLow[10]
+      {cb6[8u].y, cb6[9u].y, cb6[10u].y, cb6[11u].y, cb6[12u].y, cb6[13u].y, cb6[14u].y, cb6[15u].y, cb6[16u].y, cb6[17u].y}, // coefsHigh[10]
+      {cb6[18u].x, cb6[18u].y}, // minPoint
+      {cb6[18u].z, cb6[18u].w}, // midPoint
+      {cb6[19u].x, cb6[19u].y}, // maxPoint
+      cb6[19u].z, // slopeLow
+      cb6[19u].w  // slopeHigh
     };
 
     float yRange = yMax - yMin;
@@ -447,7 +445,7 @@ float4 tonemap() {
 
     float3 odtXYZ = mul(AP1_2_XYZ_MAT, linearCV);
 
-    if (cb6[28u].z != 0.0f) {
+    if (injectedData.colorGradingWhitePoint == 1.f || (injectedData.colorGradingWhitePoint == 0.f && cb6[28u].z != 0.0f)) {
       odtXYZ = mul(D60_2_D65_CAT, odtXYZ);
     }
 
@@ -523,39 +521,48 @@ float4 tonemap() {
     }
 
     odtFinal = odtUnknown;
-  } else if (toneMapperType == TONE_MAPPER_TYPE__OPENDRT) {
+  } else {
     outputRGB *= injectedData.toneMapperExposure;
-    float peakNits = yMax;
-    const float REFERENCE_WHITE = 203.f;
-    const float CDPR_WHITE = 100.f;
-    odtFinal = open_drt_transform_custom(
-      outputRGB,
-      yMax,
-      injectedData.toneMapperPaperWhite / REFERENCE_WHITE,
-      injectedData.toneMapperContrast,
-      injectedData.toneMapperHighlights,
-      injectedData.toneMapperShadows
-    );
-    odtFinal *= yMax / REFERENCE_WHITE;
-    float paperwhiteScaler = REFERENCE_WHITE / CDPR_WHITE;
-    odtFinal *= paperwhiteScaler;
-  } else if (toneMapperType == TONE_MAPPER_TYPE__DICE) {
-    outputRGB *= injectedData.toneMapperExposure;
-    odtFinal = DICETonemap(outputRGB, yMax / 100.f);
-  } else if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
-    outputRGB *= injectedData.toneMapperExposure;
-    float peakNits = yMax;
-    const float REFERENCE_WHITE = 203.f;
-    const float CDPR_WHITE = 100.f;
-    float whiteNits = injectedData.toneMapperPaperWhite;
-    float acesMax = 108.f * (peakNits / whiteNits);
-    // Should match 203 peak (and look like SDR)
-    // 1 = 1e-4
-    float yMin = pow(10.f, lerp(-8.f, 0.f, injectedData.toneMapperShadows * 0.5f));
-    odtFinal = aces_rrt_odt(outputRGB, yMin, acesMax) * peakNits / REFERENCE_WHITE;
 
-    float paperwhiteScaler = REFERENCE_WHITE / CDPR_WHITE;
-    odtFinal *= paperwhiteScaler;
+    if (toneMapperType == TONE_MAPPER_TYPE__OPENDRT) {
+      outputRGB *= injectedData.toneMapperExposure;
+      float peakNits = yMax;
+      const float REFERENCE_WHITE = 203.f;
+      const float CDPR_WHITE = 100.f;
+      odtFinal = open_drt_transform_custom(
+        outputRGB,
+        yMax,
+        injectedData.toneMapperPaperWhite / REFERENCE_WHITE,
+        injectedData.toneMapperContrast,
+        injectedData.toneMapperHighlights,
+        injectedData.toneMapperShadows
+      );
+      odtFinal *= yMax / REFERENCE_WHITE;
+      float paperwhiteScaler = REFERENCE_WHITE / CDPR_WHITE;
+      odtFinal *= paperwhiteScaler;
+    } else if (toneMapperType == TONE_MAPPER_TYPE__DICE) {
+      odtFinal = DICETonemap(outputRGB, yMax / 100.f);
+    } else if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
+      float peakNits = yMax;
+      const float REFERENCE_WHITE = 203.f;
+      const float CDPR_WHITE = 100.f;
+      float whiteNits = injectedData.toneMapperPaperWhite;
+      float acesMax = 108.f * (peakNits / whiteNits);
+      // Should match 203 peak (and look like SDR)
+      // 1 = 1e-4
+      float yMin = pow(10.f, lerp(-8.f, 0.f, injectedData.toneMapperShadows * 0.5f));
+      odtFinal = aces_rrt_odt(outputRGB, yMin, acesMax) * peakNits / REFERENCE_WHITE;
+
+      float paperwhiteScaler = REFERENCE_WHITE / CDPR_WHITE;
+      odtFinal *= paperwhiteScaler;
+    }
+
+    if (injectedData.colorGradingWhitePoint == -1.0f || (injectedData.colorGradingWhitePoint == 0.f && cb6[28u].z == 0.f)) {
+      float3 xyz = xyzFromBT709(odtFinal);
+      // TODO flatten
+      xyz = mul(D65_2_D60_CAT, xyz);
+      odtFinal = mul(XYZ_2_REC709_MAT, xyz);
+    }
   }
 
   if (injectedData.colorGradingWorkflow == 1.f || asuint(cb6[42u]).y == 0u) {
