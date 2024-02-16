@@ -376,10 +376,12 @@ float3 open_drt_transform(
   // float ccf = 1.0f - pow(ts, 1.0f/dch);
   // float ccf = 1.0f - (pow(ts, 1.0f/dch)*(1.0f-ts) + ts*ts);
   float overallDechroma = 1.f;
-  float dechromaDelay = 3.f;
-  float dechromaStrength = 0.15f;
-  float dechromaBias = 0.10f;
+  float dechromaDelay = 1.f;
+  float dechromaStrength = 1.0f;
+  float dechromaBias = 1.0f;
   float ccf = 1.0f - overallDechroma * (pow(ts, dechromaDelay / dch) * (1.0f - ts * dechromaStrength) + ts * ts * dechromaBias);
+  // float ccf = 1.0f - (powf(ts, 1.0f/dch)*(1.0f-ts) + ts*ts);
+
 
   // Apply chroma compression to RGB Ratios
   rats = rats * ccf + 1.0f - ccf;
