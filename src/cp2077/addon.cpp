@@ -54,7 +54,7 @@ std::unordered_map<uint64_t, ModdedPipelineLayoutDesc> moddedPipelineLayoutDesc;
 // MUST be 4x32bit aligned
 ShaderInjectData shaderInjectData;
 
-struct UserInjectData {
+static struct UserInjectData {
   int presetIndex = 1;
   float toneMapperPaperWhite = 203.f;
   int toneMapperType = 2;
@@ -94,21 +94,13 @@ static void updateShaderData() {
   shaderInjectData.debugValue01 = userInjectData.debugValue01;
   shaderInjectData.debugValue02 = userInjectData.debugValue02;
   shaderInjectData.debugValue03 = userInjectData.debugValue03;
-
-  if (userInjectData.presetIndex == 0) {
-    shaderInjectData.toneMapperType = 1.00f;
-    shaderInjectData.colorGradingWorkflow = 0.f;
-    shaderInjectData.colorGradingStrength = 1.f;
-    shaderInjectData.colorGradingScaling = 1.f;
-    shaderInjectData.colorGradingSaturation = 1.f;
-    shaderInjectData.filmGrainStrength = 0.f;
-    shaderInjectData.colorGradingWhitePoint = 0;
-  }
 }
 
 static const char* presetStrings[] = {
   "Off",
-  "Custom"
+  "Preset #1",
+  "Preset #2",
+  "Preset #3",
 };
 
 static const char* toneMapperTypeStrings[] = {
@@ -133,7 +125,8 @@ static const char* colorGradingScalingStrings[] = {
 static const char* colorGradingWhitePointStrings[] = {
   "D60",
   "Vanilla",
-  "D65"};
+  "D65"
+};
 
 void logLayout(
   const uint32_t paramCount,
@@ -585,10 +578,66 @@ static void on_bind_pipeline(
 #endif
 }
 
-static void on_register_overlay(reshade::api::effect_runtime*) {
-  bool updated = false;
+static void load_settings(reshade::api::effect_runtime* runtime, const char* section = "renodx-cp2077-preset1") {
+  UserInjectData newData = {};
+  reshade::get_config_value(runtime, section, "toneMapperType", newData.toneMapperType);
+  reshade::get_config_value(runtime, section, "toneMapperExposure", newData.toneMapperExposure);
+  reshade::get_config_value(runtime, section, "toneMapperPaperWhite", newData.toneMapperPaperWhite);
+  reshade::get_config_value(runtime, section, "toneMapperExposure", newData.toneMapperExposure);
+  reshade::get_config_value(runtime, section, "toneMapperContrast", newData.toneMapperContrast);
+  reshade::get_config_value(runtime, section, "toneMapperHighlights", newData.toneMapperHighlights);
+  reshade::get_config_value(runtime, section, "toneMapperShadows", newData.toneMapperShadows);
+  reshade::get_config_value(runtime, section, "colorGradingWorkflow", newData.colorGradingWorkflow);
+  reshade::get_config_value(runtime, section, "colorGradingStrength", newData.colorGradingStrength);
+  reshade::get_config_value(runtime, section, "colorGradingScaling", newData.colorGradingScaling);
+  reshade::get_config_value(runtime, section, "colorGradingSaturation", newData.colorGradingSaturation);
+  reshade::get_config_value(runtime, section, "colorGradingWhitePoint", newData.colorGradingWhitePoint);
+  reshade::get_config_value(runtime, section, "colorGradingGain", newData.colorGradingGain);
+  reshade::get_config_value(runtime, section, "filmGrainStrength", newData.filmGrainStrength);
+  userInjectData.toneMapperType = newData.toneMapperType;
+  userInjectData.toneMapperExposure = newData.toneMapperExposure;
+  userInjectData.toneMapperPaperWhite = newData.toneMapperPaperWhite;
+  userInjectData.toneMapperExposure = newData.toneMapperExposure;
+  userInjectData.toneMapperContrast = newData.toneMapperContrast;
+  userInjectData.toneMapperHighlights = newData.toneMapperHighlights;
+  userInjectData.toneMapperShadows = newData.toneMapperShadows;
+  userInjectData.colorGradingWorkflow = newData.colorGradingWorkflow;
+  userInjectData.colorGradingStrength = newData.colorGradingStrength;
+  userInjectData.colorGradingScaling = newData.colorGradingScaling;
+  userInjectData.colorGradingSaturation = newData.colorGradingSaturation;
+  userInjectData.colorGradingWhitePoint = newData.colorGradingWhitePoint;
+  userInjectData.colorGradingGain = newData.colorGradingGain;
+  userInjectData.filmGrainStrength = newData.filmGrainStrength;
+}
 
-  updated |= ImGui::SliderInt(
+static void save_settings(reshade::api::effect_runtime* runtime, char* section = "renodx-cp2077-preset1") {
+  reshade::set_config_value(runtime, section, "toneMapperType", userInjectData.toneMapperType);
+  reshade::set_config_value(runtime, section, "toneMapperPaperWhite", userInjectData.toneMapperPaperWhite);
+  reshade::set_config_value(runtime, section, "toneMapperExposure", userInjectData.toneMapperExposure);
+  reshade::set_config_value(runtime, section, "toneMapperContrast", userInjectData.toneMapperContrast);
+  reshade::set_config_value(runtime, section, "toneMapperHighlights", userInjectData.toneMapperHighlights);
+  reshade::set_config_value(runtime, section, "toneMapperShadows", userInjectData.toneMapperShadows);
+  reshade::set_config_value(runtime, section, "colorGradingWorkflow", userInjectData.colorGradingWorkflow);
+  reshade::set_config_value(runtime, section, "colorGradingStrength", userInjectData.colorGradingStrength);
+  reshade::set_config_value(runtime, section, "colorGradingScaling", userInjectData.colorGradingScaling);
+  reshade::set_config_value(runtime, section, "colorGradingSaturation", userInjectData.colorGradingSaturation);
+  reshade::set_config_value(runtime, section, "colorGradingWhitePoint", userInjectData.colorGradingWhitePoint);
+  reshade::set_config_value(runtime, section, "colorGradingGain", userInjectData.colorGradingGain);
+  reshade::set_config_value(runtime, section, "filmGrainStrength", userInjectData.filmGrainStrength);
+}
+
+static bool has_performed_first_load = false;
+
+static void on_register_overlay(reshade::api::effect_runtime* runtime) {
+  bool updateShaders = false;
+  bool updateShadersOrPreset = false;
+  if (!has_performed_first_load) {
+    load_settings(runtime);
+    has_performed_first_load = true;
+    updateShaders = true;
+  }
+
+  bool changedPreset = ImGui::SliderInt(
     "Preset",
     &userInjectData.presetIndex,
     0,
@@ -596,10 +645,40 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     presetStrings[userInjectData.presetIndex],
     ImGuiSliderFlags_NoInput
   );
+  if (changedPreset) {
+    switch (userInjectData.presetIndex) {
+      case 0:
+        userInjectData.toneMapperPaperWhite = 203.f;
+        userInjectData.toneMapperType = 1.f;
+        userInjectData.toneMapperExposure = 1.f;
+        userInjectData.toneMapperContrast = 50.f;
+        userInjectData.toneMapperHighlights = 50.f;
+        userInjectData.toneMapperShadows = 50.f;
+        userInjectData.colorGradingWorkflow = 1;
+        userInjectData.colorGradingStrength = 100.f;
+        userInjectData.colorGradingScaling = 1;
+        userInjectData.colorGradingSaturation = 50.f;
+        userInjectData.colorGradingWhitePoint = 1;
+        userInjectData.colorGradingGain = 1.f;
+        userInjectData.filmGrainStrength = 0.f;
+        break;
+      case 1:
+        load_settings(runtime);
+        break;
+      case 2:
+        load_settings(runtime, "renodx-cp2077-preset2");
+        break;
+      case 3:
+        load_settings(runtime, "renodx-cp2077-preset3");
+        break;
+    }
+    updateShaders = true;
+  }
 
+  ImGui::BeginDisabled(userInjectData.presetIndex == 0);
   ImGui::SeparatorText("Tone Mapping");
   {
-    updated |= ImGui::SliderInt(
+    updateShadersOrPreset |= ImGui::SliderInt(
       "Tone Mapper",
       &userInjectData.toneMapperType,
       0,
@@ -609,7 +688,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     );
 
     ImGui::BeginDisabled(userInjectData.toneMapperType <= 1);
-    updated |= ImGui::SliderFloat(
+    updateShadersOrPreset |= ImGui::SliderFloat(
       "Exposure",
       &userInjectData.toneMapperExposure,
       0.f,
@@ -620,7 +699,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     ImGui::EndDisabled();
 
     ImGui::BeginDisabled(userInjectData.toneMapperType != 2 && userInjectData.toneMapperType != 4);
-    updated |= ImGui::SliderFloat(
+    updateShadersOrPreset |= ImGui::SliderFloat(
       "Paperwhite",
       &userInjectData.toneMapperPaperWhite,
       80.f,
@@ -631,7 +710,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     ImGui::EndDisabled();
 
     ImGui::BeginDisabled(userInjectData.toneMapperType != 2);
-    updated |= ImGui::SliderFloat(
+    updateShadersOrPreset |= ImGui::SliderFloat(
       "Contrast",
       &userInjectData.toneMapperContrast,
       0.f,
@@ -642,7 +721,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     ImGui::EndDisabled();
 
     ImGui::BeginDisabled(userInjectData.toneMapperType != 2);
-    updated |= ImGui::SliderFloat(
+    updateShadersOrPreset |= ImGui::SliderFloat(
       "Highlights",
       &userInjectData.toneMapperHighlights,
       0.f,
@@ -652,7 +731,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     ImGui::EndDisabled();
 
     ImGui::BeginDisabled(userInjectData.toneMapperType != 2 && userInjectData.toneMapperType != 4);
-    updated |= ImGui::SliderFloat(
+    updateShadersOrPreset |= ImGui::SliderFloat(
       "Shadows",
       &userInjectData.toneMapperShadows,
       0.f,
@@ -665,7 +744,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
 
   ImGui::SeparatorText("Color Grading");
   {
-    updated |= ImGui::SliderInt(
+    updateShadersOrPreset |= ImGui::SliderInt(
       "Workflow",
       &userInjectData.colorGradingWorkflow,
       0,
@@ -675,7 +754,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     );
     ImGui::SetItemTooltip("Modifies order of when color grading is applied.");
 
-    updated |= ImGui::SliderFloat(
+    updateShadersOrPreset |= ImGui::SliderFloat(
       "LUT Strength",
       &userInjectData.colorGradingStrength,
       0.f,
@@ -684,7 +763,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     );
     ImGui::SetItemTooltip("Modifies the strength of the LUT application.");
 
-    updated |= ImGui::SliderInt(
+    updateShadersOrPreset |= ImGui::SliderInt(
       "LUT Scaling",
       &userInjectData.colorGradingScaling,
       0,
@@ -693,7 +772,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     );
     ImGui::SetItemTooltip("Enables the game's original LUT scaling.");
 
-    updated |= ImGui::SliderFloat(
+    updateShadersOrPreset |= ImGui::SliderFloat(
       "Saturation",
       &userInjectData.colorGradingSaturation,
       0,
@@ -701,7 +780,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       "%.0f"
     );
 
-    updated |= ImGui::SliderInt(
+    updateShadersOrPreset |= ImGui::SliderInt(
       "White Point",
       &userInjectData.colorGradingWhitePoint,
       0,
@@ -712,7 +791,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
 
     ImGui::BeginDisabled();
 
-    updated |= ImGui::SliderFloat(
+    updateShadersOrPreset |= ImGui::SliderFloat(
       "Gain",
       &userInjectData.colorGradingGain,
       0.f,
@@ -725,7 +804,7 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
 
   ImGui::SeparatorText("Film Grain");
   {
-    updated |= ImGui::SliderFloat(
+    updateShadersOrPreset |= ImGui::SliderFloat(
       "Film Grain Strength",
       &userInjectData.filmGrainStrength,
       0.f,
@@ -735,10 +814,12 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     ImGui::SetItemTooltip("Controls the strength of the custom perceptual film grain.");
   }
 
+  ImGui::EndDisabled();
+
 #ifdef DEBUG_SLIDERS
   ImGui::SeparatorText("Debug Tools");
   {
-    updated |= ImGui::SliderFloat(
+    updateShaders |= ImGui::SliderFloat(
       "Debug Value 00",
       &userInjectData.debugValue00,
       0.f,
@@ -746,21 +827,21 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
       "%.2f"
     );
 
-    updated |= ImGui::SliderFloat(
+    updateShaders |= ImGui::SliderFloat(
       "Debug Value 01",
       &userInjectData.debugValue01,
       0.f,
       2.f,
       "%.2f"
     );
-    updated |= ImGui::SliderFloat(
+    updateShaders |= ImGui::SliderFloat(
       "Debug Value 02",
       &userInjectData.debugValue02,
       0.f,
       2.f,
       "%.2f"
     );
-    updated |= ImGui::SliderFloat(
+    updateShaders |= ImGui::SliderFloat(
       "Debug Value 03",
       &userInjectData.debugValue03,
       0.f,
@@ -770,8 +851,21 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
   }
 #endif
 
-  if (updated) {
+  if (updateShaders || updateShadersOrPreset) {
     updateShaderData();
+  }
+  if (!changedPreset && updateShadersOrPreset) {
+    switch (userInjectData.presetIndex) {
+      case 1:
+        save_settings(runtime, "renodx-cp2077-preset1");
+        break;
+      case 2:
+        save_settings(runtime, "renodx-cp2077-preset2");
+        break;
+      case 3:
+        save_settings(runtime, "renodx-cp2077-preset3");
+        break;
+    }
   }
 }
 
