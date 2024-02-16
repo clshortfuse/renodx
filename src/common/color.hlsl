@@ -45,6 +45,10 @@ float3 bt2020FromBT709(float3 bt709) {
   return mul(BT709_2_BT2020_MAT, bt709);
 }
 
+float yFromBT709(float3 bt709) {
+  return dot(bt709, float3(BT709_To_XYZ[1].r, BT709_To_XYZ[1].g, BT709_To_XYZ[1].b));
+}
+
 float3 pqFromLinear(float3 linearColor) {
   static const float m1 = 0.1593017578125f;
   static const float m2 = 78.84375f;

@@ -223,6 +223,11 @@ float3 sampleAllLUTs(const float3 color) {
     compositedColor = color;
   }
 
+  if (injectedData.colorGradingSaturation != 1.f) {
+    float luminance = yFromBT709(compositedColor);
+    return lerp(luminance, compositedColor, injectedData.colorGradingSaturation);
+  }
+
   // This was probably a for loop (0-7)
   if (textureCount > 1u) {
     compositedColor += sampleLUT(cb6[34u], color, 1u);

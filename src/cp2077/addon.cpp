@@ -55,6 +55,7 @@ std::unordered_map<uint64_t, ModdedPipelineLayoutDesc> moddedPipelineLayoutDesc;
 ShaderInjectData shaderInjectData;
 
 struct UserInjectData {
+  int presetIndex = 1;
   float toneMapperPaperWhite = 203.f;
   int toneMapperType = 2;
   float toneMapperExposure = 1.f;
@@ -64,7 +65,7 @@ struct UserInjectData {
   int colorGradingWorkflow = 1;
   float colorGradingStrength = 100.f;
   int colorGradingScaling = 0;
-  float colorGradingLift = 0.f;
+  float colorGradingSaturation = 50.f;
   float colorGradingGamma = 1.f;
   float colorGradingGain = 1.f;
   float filmGrainStrength = 1.f;
@@ -85,7 +86,7 @@ static void updateShaderData() {
   shaderInjectData.colorGradingWorkflow = static_cast<float>(userInjectData.colorGradingWorkflow - 1);
   shaderInjectData.colorGradingStrength = userInjectData.colorGradingStrength * 0.01f;
   shaderInjectData.colorGradingScaling = static_cast<float>(userInjectData.colorGradingScaling);
-  shaderInjectData.colorGradingLift = userInjectData.colorGradingLift;
+  shaderInjectData.colorGradingSaturation = userInjectData.colorGradingSaturation * 0.02;
   shaderInjectData.colorGradingGamma = userInjectData.colorGradingGamma;
   shaderInjectData.colorGradingGain = userInjectData.colorGradingGain;
   shaderInjectData.filmGrainStrength = userInjectData.filmGrainStrength;
@@ -93,7 +94,21 @@ static void updateShaderData() {
   shaderInjectData.debugValue01 = userInjectData.debugValue01;
   shaderInjectData.debugValue02 = userInjectData.debugValue02;
   shaderInjectData.debugValue03 = userInjectData.debugValue03;
+
+  if (userInjectData.presetIndex == 0) {
+    shaderInjectData.toneMapperType = 1.00f;
+    shaderInjectData.colorGradingWorkflow = 0.f;
+    shaderInjectData.colorGradingStrength = 1.f;
+    shaderInjectData.colorGradingScaling = 1.f;
+    shaderInjectData.colorGradingSaturation = 1.f;
+    shaderInjectData.filmGrainStrength = 0.f;
+  }
 }
+
+static const char* presetStrings[] = {
+  "Off",
+  "Custom"
+};
 
 static const char* toneMapperTypeStrings[] = {
   "None",
@@ -567,6 +582,15 @@ static void on_bind_pipeline(
 static void on_register_overlay(reshade::api::effect_runtime*) {
   bool updated = false;
 
+  updated |= ImGui::SliderInt(
+    "Preset",
+    &userInjectData.presetIndex,
+    0,
+    (sizeof(presetStrings) / sizeof(char*)) - 1,
+    presetStrings[userInjectData.presetIndex],
+    ImGuiSliderFlags_NoInput
+  );
+
   ImGui::SeparatorText("Tone Mapping");
   {
     updated |= ImGui::SliderInt(
@@ -663,15 +687,15 @@ static void on_register_overlay(reshade::api::effect_runtime*) {
     );
     ImGui::SetItemTooltip("Enables the game's original LUT scaling.");
 
-    ImGui::BeginDisabled();
     updated |= ImGui::SliderFloat(
-      "Lift",
-      &userInjectData.colorGradingLift,
-      -2.f,
-      2.f,
-      "%.1f"
+      "Saturation",
+      &userInjectData.colorGradingSaturation,
+      0,
+      100.f,
+      "%.0f"
     );
 
+    ImGui::BeginDisabled();
     updated |= ImGui::SliderFloat(
       "Gamma",
       &userInjectData.colorGradingGamma,
