@@ -525,6 +525,10 @@ float4 tonemap() {
     outputRGB *= injectedData.toneMapperExposure;
 
     if (toneMapperType == TONE_MAPPER_TYPE__OPENDRT) {
+      // Game doesn't use negative colors intentionally and expects them to be clamped.
+      // Map has negative colors that should be black
+      outputRGB = max(0, outputRGB);
+
       outputRGB *= injectedData.toneMapperExposure;
       float peakNits = yMax;
       const float REFERENCE_WHITE = 203.f;
