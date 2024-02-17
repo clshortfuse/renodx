@@ -578,7 +578,10 @@ static void on_bind_pipeline(
 #endif
 }
 
-static void load_settings(reshade::api::effect_runtime* runtime, const char* section = "renodx-cp2077-preset1") {
+static void load_settings(
+  reshade::api::effect_runtime* runtime = nullptr,
+  const char* section = "renodx-cp2077-preset1"
+) {
   UserInjectData newData = {};
   reshade::get_config_value(runtime, section, "toneMapperType", newData.toneMapperType);
   reshade::get_config_value(runtime, section, "toneMapperExposure", newData.toneMapperExposure);
@@ -626,16 +629,9 @@ static void save_settings(reshade::api::effect_runtime* runtime, char* section =
   reshade::set_config_value(runtime, section, "filmGrainStrength", userInjectData.filmGrainStrength);
 }
 
-static bool has_performed_first_load = false;
-
 static void on_register_overlay(reshade::api::effect_runtime* runtime) {
   bool updateShaders = false;
   bool updateShadersOrPreset = false;
-  if (!has_performed_first_load) {
-    load_settings(runtime);
-    has_performed_first_load = true;
-    updateShaders = true;
-  }
 
   bool changedPreset = ImGui::SliderInt(
     "Preset",
@@ -873,6 +869,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
 
+      load_settings();
       updateShaderData();
 
       reshade::register_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
