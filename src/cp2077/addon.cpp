@@ -7,7 +7,9 @@
 #define DEBUG_LEVEL_0
 #define DEBUG_SLIDERS
 
+#include <embed/0x61DBBA5C.h>
 #include <embed/0x71F27445.h>
+#include <embed/0x745E34E1.h>
 #include <embed/0x97CA5A85.h>
 #include <embed/0xC783FBA1.h>
 #include <embed/0xC83E64DF.h>
@@ -63,11 +65,11 @@ static struct UserInjectData {
   float toneMapperHighlights = 50.f;
   float toneMapperShadows = 50.f;
   float toneMapperDechroma = 50.f;
+  int toneMapperWhitePoint = 1;
   int colorGradingWorkflow = 1;
   float colorGradingStrength = 100.f;
   int colorGradingScaling = 0;
   float colorGradingSaturation = 50.f;
-  int colorGradingWhitePoint = 1;
   float filmGrainStrength = 1.f;
   float debugValue00 = 1.f;
   float debugValue01 = 1.f;
@@ -84,11 +86,11 @@ static void updateShaderData() {
   shaderInjectData.toneMapperHighlights = userInjectData.toneMapperHighlights * 0.02f;
   shaderInjectData.toneMapperShadows = userInjectData.toneMapperShadows * 0.02f;
   shaderInjectData.toneMapperDechroma = userInjectData.toneMapperDechroma * 0.02f;
+  shaderInjectData.toneMapperWhitePoint = static_cast<float>(userInjectData.toneMapperWhitePoint - 1);
   shaderInjectData.colorGradingWorkflow = static_cast<float>(userInjectData.colorGradingWorkflow - 1);
   shaderInjectData.colorGradingStrength = userInjectData.colorGradingStrength * 0.01f;
   shaderInjectData.colorGradingScaling = static_cast<float>(userInjectData.colorGradingScaling);
   shaderInjectData.colorGradingSaturation = userInjectData.colorGradingSaturation * 0.02;
-  shaderInjectData.colorGradingWhitePoint = static_cast<float>(userInjectData.colorGradingWhitePoint - 1);
   shaderInjectData.filmGrainStrength = userInjectData.filmGrainStrength;
   shaderInjectData.debugValue00 = userInjectData.debugValue00;
   shaderInjectData.debugValue01 = userInjectData.debugValue01;
@@ -111,6 +113,12 @@ static const char* toneMapperTypeStrings[] = {
   "ACES",
 };
 
+static const char* toneMapperWhitePointStrings[] = {
+  "D60",
+  "Vanilla",
+  "D65"
+};
+
 static const char* colorGradingWorkflowStrings[] = {
   "Before Tonemapping",
   "Vanilla",
@@ -120,12 +128,6 @@ static const char* colorGradingWorkflowStrings[] = {
 static const char* colorGradingScalingStrings[] = {
   "None",
   "Vanilla",
-};
-
-static const char* colorGradingWhitePointStrings[] = {
-  "D60",
-  "Vanilla",
-  "D65"
 };
 
 void logLayout(
@@ -245,6 +247,13 @@ static bool load_embedded_shader(
     case 0x71F27445:
       desc->code = &_0x71F27445;
       desc->code_size = sizeof(_0x71F27445);
+      break;
+    case 0x61DBBA5C:
+      desc->code = &_0x61DBBA5C;
+      desc->code_size = sizeof(_0x61DBBA5C);
+    case 0x745E34E1:
+      desc->code = &_0x745E34E1;
+      desc->code_size = sizeof(_0x745E34E1);
       break;
     case 0x97CA5A85:
       desc->code = &_0x97CA5A85;
@@ -591,11 +600,11 @@ static void load_settings(
   reshade::get_config_value(runtime, section, "toneMapperHighlights", newData.toneMapperHighlights);
   reshade::get_config_value(runtime, section, "toneMapperShadows", newData.toneMapperShadows);
   reshade::get_config_value(runtime, section, "toneMapperDechroma", newData.toneMapperDechroma);
+  reshade::get_config_value(runtime, section, "toneMapperWhitePoint", newData.toneMapperWhitePoint);
   reshade::get_config_value(runtime, section, "colorGradingWorkflow", newData.colorGradingWorkflow);
   reshade::get_config_value(runtime, section, "colorGradingStrength", newData.colorGradingStrength);
   reshade::get_config_value(runtime, section, "colorGradingScaling", newData.colorGradingScaling);
   reshade::get_config_value(runtime, section, "colorGradingSaturation", newData.colorGradingSaturation);
-  reshade::get_config_value(runtime, section, "colorGradingWhitePoint", newData.colorGradingWhitePoint);
   reshade::get_config_value(runtime, section, "filmGrainStrength", newData.filmGrainStrength);
   userInjectData.toneMapperType = newData.toneMapperType;
   userInjectData.toneMapperExposure = newData.toneMapperExposure;
@@ -605,11 +614,11 @@ static void load_settings(
   userInjectData.toneMapperHighlights = newData.toneMapperHighlights;
   userInjectData.toneMapperShadows = newData.toneMapperShadows;
   userInjectData.toneMapperDechroma = newData.toneMapperDechroma;
+  userInjectData.toneMapperWhitePoint = newData.toneMapperWhitePoint;
   userInjectData.colorGradingWorkflow = newData.colorGradingWorkflow;
   userInjectData.colorGradingStrength = newData.colorGradingStrength;
   userInjectData.colorGradingScaling = newData.colorGradingScaling;
   userInjectData.colorGradingSaturation = newData.colorGradingSaturation;
-  userInjectData.colorGradingWhitePoint = newData.colorGradingWhitePoint;
   userInjectData.filmGrainStrength = newData.filmGrainStrength;
 }
 
@@ -621,11 +630,11 @@ static void save_settings(reshade::api::effect_runtime* runtime, char* section =
   reshade::set_config_value(runtime, section, "toneMapperHighlights", userInjectData.toneMapperHighlights);
   reshade::set_config_value(runtime, section, "toneMapperShadows", userInjectData.toneMapperShadows);
   reshade::set_config_value(runtime, section, "toneMapperDechroma", userInjectData.toneMapperDechroma);
+  reshade::set_config_value(runtime, section, "toneMapperWhitePoint", userInjectData.toneMapperWhitePoint);
   reshade::set_config_value(runtime, section, "colorGradingWorkflow", userInjectData.colorGradingWorkflow);
   reshade::set_config_value(runtime, section, "colorGradingStrength", userInjectData.colorGradingStrength);
   reshade::set_config_value(runtime, section, "colorGradingScaling", userInjectData.colorGradingScaling);
   reshade::set_config_value(runtime, section, "colorGradingSaturation", userInjectData.colorGradingSaturation);
-  reshade::set_config_value(runtime, section, "colorGradingWhitePoint", userInjectData.colorGradingWhitePoint);
   reshade::set_config_value(runtime, section, "filmGrainStrength", userInjectData.filmGrainStrength);
 }
 
@@ -651,11 +660,11 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
         userInjectData.toneMapperHighlights = 50.f;
         userInjectData.toneMapperShadows = 50.f;
         userInjectData.toneMapperDechroma = 50.f;
+        userInjectData.toneMapperWhitePoint = 1;
         userInjectData.colorGradingWorkflow = 1;
         userInjectData.colorGradingStrength = 100.f;
         userInjectData.colorGradingScaling = 1;
         userInjectData.colorGradingSaturation = 50.f;
-        userInjectData.colorGradingWhitePoint = 1;
         userInjectData.filmGrainStrength = 0.f;
         break;
       case 1:
@@ -672,7 +681,7 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
   }
 
   ImGui::BeginDisabled(userInjectData.presetIndex == 0);
-  ImGui::SeparatorText("Tone Mapping");
+  ImGui::SeparatorText("HDR Tone Mapping");
   {
     updateShadersOrPreset |= ImGui::SliderInt(
       "Tone Mapper",
@@ -747,6 +756,15 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
     );
     ImGui::SetItemTooltip("Adjusts tone mapper's dechroma strength (if available).");
     ImGui::EndDisabled();
+
+    updateShadersOrPreset |= ImGui::SliderInt(
+      "White Point",
+      &userInjectData.toneMapperWhitePoint,
+      0,
+      (sizeof(toneMapperWhitePointStrings) / sizeof(char*)) - 1,
+      toneMapperWhitePointStrings[userInjectData.toneMapperWhitePoint],
+      ImGuiSliderFlags_NoInput
+    );
   }
 
   ImGui::SeparatorText("Color Grading");
@@ -785,15 +803,6 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
       0,
       100.f,
       "%.0f"
-    );
-
-    updateShadersOrPreset |= ImGui::SliderInt(
-      "White Point",
-      &userInjectData.colorGradingWhitePoint,
-      0,
-      (sizeof(colorGradingWhitePointStrings) / sizeof(char*)) - 1,
-      colorGradingWhitePointStrings[userInjectData.colorGradingWhitePoint],
-      ImGuiSliderFlags_NoInput
     );
   }
 

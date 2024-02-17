@@ -268,7 +268,7 @@ float3 applyGamma(float3 input, uint type) {
   return input;
 }
 
-float4 tonemap() {
+float4 tonemap(bool isHDR = false) {
   uint4 _69 = asuint(cb6[41u]);
   float _73 = float(_69.y + 4294967295u);
 
@@ -368,206 +368,210 @@ float4 tonemap() {
   }
 
   const float toneMapperMidpoint = cb6[42u].z;
-
-  float yMax = cb6[27u].y;  // User peak Nits
-  float yMin = cb6[27u].x;  // 0.005
-
   float3 odtFinal = outputRGB;
-  float toneMapperType = injectedData.toneMapperType;
-  if (toneMapperType == TONE_MAPPER_TYPE__NONE) {
-    // noop
-  } else if (toneMapperType == TONE_MAPPER_TYPE__VANILLA) {
-    outputRGB *= toneMapperMidpoint;  // Exposure
+  if (isHDR) {
+    // This branch should be optimized away by compiler
+    float yMax = cb6[27u].y;  // User peak Nits
+    float yMin = cb6[27u].x;  // 0.005
 
-    // BT709 to AP0 (TODO: flatten matrix)
-    float3 outputXYZ = mul(BT709_To_XYZ, outputRGB);
-    float3 outputXYZD60 = mul(D65_2_D60_CAT, outputXYZ);
-    float3 aces = mul(XYZ_2_AP0_MAT, outputXYZD60);
+    float toneMapperType = injectedData.toneMapperType;
+    if (toneMapperType == TONE_MAPPER_TYPE__NONE) {
+      // noop
+    } else if (toneMapperType == TONE_MAPPER_TYPE__VANILLA) {
+      outputRGB *= toneMapperMidpoint;  // Exposure
 
-    float3 rgbPost = aces_rrt_ap0(aces);
+      // BT709 to AP0 (TODO: flatten matrix)
+      float3 outputXYZ = mul(BT709_To_XYZ, outputRGB);
+      float3 outputXYZD60 = mul(D65_2_D60_CAT, outputXYZ);
+      float3 aces = mul(XYZ_2_AP0_MAT, outputXYZD60);
 
-    // --- RGB rendering space to OCES --- //
-    // CDPR converted AP1 to AP0 and back
+      float3 rgbPost = aces_rrt_ap0(aces);
 
-    // cb6[18u].x 0.000085
-    // cb6[18u].y 0.004944
-    // cb6[18u].z 2.387695
-    // cb6[18u].w 9.956054
-    // cb6[19u].x 1092.500
-    // cb6[19u].y 298.7500
-    // cb6[19u].z 0.000000
-    // cb6[19u].w 0.059738
+      // --- RGB rendering space to OCES --- //
+      // CDPR converted AP1 to AP0 and back
 
-    // Scales with paperwhite, which can be reversed
+      // cb6[18u].x 0.000085
+      // cb6[18u].y 0.004944
+      // cb6[18u].z 2.387695
+      // cb6[18u].w 9.956054
+      // cb6[19u].x 1092.500
+      // cb6[19u].y 298.7500
+      // cb6[19u].z 0.000000
+      // cb6[19u].w 0.059738
 
-    const SegmentedSplineParams_c9 ODT_CONFIG = {
-      {cb6[8u].x, cb6[9u].x, cb6[10u].x, cb6[11u].x, cb6[12u].x, cb6[13u].x, cb6[14u].x, cb6[15u].x, cb6[16u].x, cb6[17u].x}, // coefsLow[10]
-      {cb6[8u].y, cb6[9u].y, cb6[10u].y, cb6[11u].y, cb6[12u].y, cb6[13u].y, cb6[14u].y, cb6[15u].y, cb6[16u].y, cb6[17u].y}, // coefsHigh[10]
-      {cb6[18u].x, cb6[18u].y}, // minPoint
-      {cb6[18u].z, cb6[18u].w}, // midPoint
-      {cb6[19u].x, cb6[19u].y}, // maxPoint
-      cb6[19u].z, // slopeLow
-      cb6[19u].w  // slopeHigh
-    };
+      // Scales with paperwhite, which can be reversed
 
-    float yRange = yMax - yMin;
+      const SegmentedSplineParams_c9 ODT_CONFIG = {
+        {cb6[8u].x, cb6[9u].x, cb6[10u].x, cb6[11u].x, cb6[12u].x, cb6[13u].x, cb6[14u].x, cb6[15u].x, cb6[16u].x, cb6[17u].x}, // coefsLow[10]
+        {cb6[8u].y, cb6[9u].y, cb6[10u].y, cb6[11u].y, cb6[12u].y, cb6[13u].y, cb6[14u].y, cb6[15u].y, cb6[16u].y, cb6[17u].y}, // coefsHigh[10]
+        {cb6[18u].x, cb6[18u].y}, // minPoint
+        {cb6[18u].z, cb6[18u].w}, // midPoint
+        {cb6[19u].x, cb6[19u].y}, // maxPoint
+        cb6[19u].z, // slopeLow
+        cb6[19u].w  // slopeHigh
+      };
 
-    float3 toneMappedColor = float3(
-      segmented_spline_c9_fwd(rgbPost.r, ODT_CONFIG),
-      segmented_spline_c9_fwd(rgbPost.g, ODT_CONFIG),
-      segmented_spline_c9_fwd(rgbPost.b, ODT_CONFIG)
-    );
+      float yRange = yMax - yMin;
 
-    // Tone map by luminance
-    if (cb6[28u].w != 0.0f) {
-      float ap1Y = dot(rgbPost, AP1_RGB2Y);
-      float toneMappedByLuminance = segmented_spline_c9_fwd(ap1Y, ODT_CONFIG);
-      float scaleFactor = toneMappedByLuminance / ap1Y;
-      float3 scaledAndToneMapped = (rgbPost * scaleFactor);
-      toneMappedColor = (cb6[29u].x * (scaledAndToneMapped - toneMappedColor)) + toneMappedColor;
-    }
+      float3 toneMappedColor = float3(
+        segmented_spline_c9_fwd(rgbPost.r, ODT_CONFIG),
+        segmented_spline_c9_fwd(rgbPost.g, ODT_CONFIG),
+        segmented_spline_c9_fwd(rgbPost.b, ODT_CONFIG)
+      );
 
-    toneMappedColor = max(toneMappedColor, yMin);
+      // Tone map by luminance
+      if (cb6[28u].w != 0.0f) {
+        float ap1Y = dot(rgbPost, AP1_RGB2Y);
+        float toneMappedByLuminance = segmented_spline_c9_fwd(ap1Y, ODT_CONFIG);
+        float scaleFactor = toneMappedByLuminance / ap1Y;
+        float3 scaledAndToneMapped = (rgbPost * scaleFactor);
+        toneMappedColor = (cb6[29u].x * (scaledAndToneMapped - toneMappedColor)) + toneMappedColor;
+      }
 
-    float3 linearCV = Y_2_linCV(toneMappedColor, yMax, yMin);
+      toneMappedColor = max(toneMappedColor, yMin);
 
-    // dimSurround
-    if (cb6[28u].y != 0.0f) {
+      float3 linearCV = Y_2_linCV(toneMappedColor, yMax, yMin);
+
+      // dimSurround
+      if (cb6[28u].y != 0.0f) {
+        float3 odtXYZ = mul(AP1_2_XYZ_MAT, linearCV);
+        odtXYZ = darkToDim(odtXYZ, cb6[27u].w);
+        linearCV = mul(XYZ_2_AP1_MAT, odtXYZ);
+      }
+
+      // Apply desaturation to compensate for luminance difference
+      if (cb6[28u].x != 0.0f) {
+        linearCV = mul(ODT_SAT_MAT, linearCV);
+      }
+
       float3 odtXYZ = mul(AP1_2_XYZ_MAT, linearCV);
-      odtXYZ = darkToDim(odtXYZ, cb6[27u].w);
-      linearCV = mul(XYZ_2_AP1_MAT, odtXYZ);
-    }
 
-    // Apply desaturation to compensate for luminance difference
-    if (cb6[28u].x != 0.0f) {
-      linearCV = mul(ODT_SAT_MAT, linearCV);
-    }
+      if (injectedData.toneMapperWhitePoint == 1.f || (injectedData.toneMapperWhitePoint == 0.f && cb6[28u].z != 0.0f)) {
+        odtXYZ = mul(D60_2_D65_CAT, odtXYZ);
+      }
 
-    float3 odtXYZ = mul(AP1_2_XYZ_MAT, linearCV);
+      // Custom Matrix D60_2_D65?
 
-    if (injectedData.colorGradingWhitePoint == 1.f || (injectedData.colorGradingWhitePoint == 0.f && cb6[28u].z != 0.0f)) {
-      odtXYZ = mul(D60_2_D65_CAT, odtXYZ);
-    }
-
-    // Custom Matrix D60_2_D65?
-
-    // clang-format off
+      // clang-format off
     float3x3 customMatrix0 = float3x3(
       cb6[21u].x, cb6[21u].y, cb6[21u].z,
       cb6[22u].x, cb6[22u].y, cb6[22u].z,
       cb6[23u].x, cb6[23u].y, cb6[23u].z);
-    // clang-format on
-    float3 odtUnknown = float3(
-      mad(cb6[21u].z, odtXYZ.z, mad(cb6[21u].y, odtXYZ.y, cb6[21u].x * odtXYZ.x)),
-      mad(cb6[22u].z, odtXYZ.z, mad(cb6[22u].y, odtXYZ.y, cb6[22u].x * odtXYZ.x)),
-      mad(cb6[23u].z, odtXYZ.z, mad(cb6[23u].y, odtXYZ.y, cb6[23u].x * odtXYZ.x))
-    );
+      // clang-format on
+      float3 odtUnknown = float3(
+        mad(cb6[21u].z, odtXYZ.z, mad(cb6[21u].y, odtXYZ.y, cb6[21u].x * odtXYZ.x)),
+        mad(cb6[22u].z, odtXYZ.z, mad(cb6[22u].y, odtXYZ.y, cb6[22u].x * odtXYZ.x)),
+        mad(cb6[23u].z, odtXYZ.z, mad(cb6[23u].y, odtXYZ.y, cb6[23u].x * odtXYZ.x))
+      );
 
-    // odtUnknown = mul(customMatrix0, odtXYZ);
+      // odtUnknown = mul(customMatrix0, odtXYZ);
 
-    if (cb6[27u].z == 0.0f || cb6[27u].z == 1.f) {
-      odtUnknown = saturate(odtUnknown);
-    } else if (cb6[27u].z == 2.0f) {
-      odtUnknown = max((yRange * odtUnknown) + yMin, 0);
-      odtUnknown = float3(
-        mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
-        mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
-        mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x))
-      );
-      float scale = 1.0f / min(80.0f, yMax);
-      odtUnknown = mul(XYZ_2_REC709_MAT, odtUnknown);
-      odtUnknown *= scale;
-    } else if (cb6[27u].z == 3.0f) {
-      odtUnknown = max((yRange * odtUnknown) + yMin, 0);
-      odtUnknown = float3(
-        mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
-        mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
-        mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x))
-      );
-      float scale = 1.0f / min(80.0f, yMax);
-      odtUnknown = mul(XYZ_2_REC2020_MAT, odtUnknown);
-    } else if (cb6[27u].z == 4.0f) {
-      odtUnknown = max(odtUnknown, 0.f);
-      float scale = max(yMax, 80.0f) * 0.001000000047497451305389404296875f;
-      odtUnknown = float3(
-        mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
-        mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
-        mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x))
-      );
-      odtUnknown *= scale;
-      odtUnknown = saturate(odtUnknown);
-      odtUnknown = pow(odtUnknown, 0.1593017578125f);
-      odtUnknown = ((odtUnknown * 18.8515625f) + 0.8359375f) / ((odtUnknown * 18.6875f) + 1.0f);
-      odtUnknown = pow(odtUnknown, 78.84375f);
-      odtUnknown = saturate(odtUnknown);
+      if (cb6[27u].z == 0.0f || cb6[27u].z == 1.f) {
+        odtUnknown = saturate(odtUnknown);
+      } else if (cb6[27u].z == 2.0f) {
+        odtUnknown = max((yRange * odtUnknown) + yMin, 0);
+        odtUnknown = float3(
+          mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
+          mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
+          mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x))
+        );
+        float scale = 1.0f / min(80.0f, yMax);
+        odtUnknown = mul(XYZ_2_REC709_MAT, odtUnknown);
+        odtUnknown *= scale;
+      } else if (cb6[27u].z == 3.0f) {
+        odtUnknown = max((yRange * odtUnknown) + yMin, 0);
+        odtUnknown = float3(
+          mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
+          mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
+          mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x))
+        );
+        float scale = 1.0f / min(80.0f, yMax);
+        odtUnknown = mul(XYZ_2_REC2020_MAT, odtUnknown);
+      } else if (cb6[27u].z == 4.0f) {
+        odtUnknown = max(odtUnknown, 0.f);
+        float scale = max(yMax, 80.0f) * 0.001000000047497451305389404296875f;
+        odtUnknown = float3(
+          mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
+          mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
+          mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x))
+        );
+        odtUnknown *= scale;
+        odtUnknown = saturate(odtUnknown);
+        odtUnknown = pow(odtUnknown, 0.1593017578125f);
+        odtUnknown = ((odtUnknown * 18.8515625f) + 0.8359375f) / ((odtUnknown * 18.6875f) + 1.0f);
+        odtUnknown = pow(odtUnknown, 78.84375f);
+        odtUnknown = saturate(odtUnknown);
+      } else {
+        // Heatmap?
+        float maxScaledChannel = max(
+          (yRange * odtUnknown.r) + yMin,
+          max((yRange * odtUnknown.g) + yMin, (yRange * odtUnknown.b) + yMin)
+        );
+        float _3335 = max(min((log2(maxScaledChannel) * 0.5f) + 2.0f, 7.0f), 0.0f);
+        uint _3336 = uint(int(_3335));
+        float _3338 = _3335 - float(int(_3336));
+        uint _3339 = _3336 + 1u;
+        uint _3353 = 0u + (_3336 * 3u);
+        uint _3357 = 1u + (_3336 * 3u);
+        uint _3361 = 2u + (_3336 * 3u);
+        odtUnknown = float3(
+          ((HEATMAP_COLORS[0u + (_3339 * 3u)] - HEATMAP_COLORS[_3353]) * _3338) + HEATMAP_COLORS[_3353],
+          ((HEATMAP_COLORS[1u + (_3339 * 3u)] - HEATMAP_COLORS[_3357]) * _3338) + HEATMAP_COLORS[_3357],
+          ((HEATMAP_COLORS[2u + (_3339 * 3u)] - HEATMAP_COLORS[_3361]) * _3338) + HEATMAP_COLORS[_3361]
+        );
+      }
+
+      odtFinal = odtUnknown;
     } else {
-      // Heatmap?
-      float maxScaledChannel = max(
-        (yRange * odtUnknown.r) + yMin,
-        max((yRange * odtUnknown.g) + yMin, (yRange * odtUnknown.b) + yMin)
-      );
-      float _3335 = max(min((log2(maxScaledChannel) * 0.5f) + 2.0f, 7.0f), 0.0f);
-      uint _3336 = uint(int(_3335));
-      float _3338 = _3335 - float(int(_3336));
-      uint _3339 = _3336 + 1u;
-      uint _3353 = 0u + (_3336 * 3u);
-      uint _3357 = 1u + (_3336 * 3u);
-      uint _3361 = 2u + (_3336 * 3u);
-      odtUnknown = float3(
-        ((HEATMAP_COLORS[0u + (_3339 * 3u)] - HEATMAP_COLORS[_3353]) * _3338) + HEATMAP_COLORS[_3353],
-        ((HEATMAP_COLORS[1u + (_3339 * 3u)] - HEATMAP_COLORS[_3357]) * _3338) + HEATMAP_COLORS[_3357],
-        ((HEATMAP_COLORS[2u + (_3339 * 3u)] - HEATMAP_COLORS[_3361]) * _3338) + HEATMAP_COLORS[_3361]
-      );
-    }
-
-    odtFinal = odtUnknown;
-  } else {
-    outputRGB *= injectedData.toneMapperExposure;
-
-    if (toneMapperType == TONE_MAPPER_TYPE__OPENDRT) {
-      // Game doesn't use negative colors intentionally and expects them to be clamped.
-      // Map has negative colors that should be black
-      outputRGB = max(0, outputRGB);
-
       outputRGB *= injectedData.toneMapperExposure;
-      float peakNits = yMax;
-      const float REFERENCE_WHITE = 203.f;
-      const float CDPR_WHITE = 100.f;
-      odtFinal = open_drt_transform_custom(
-        outputRGB,
-        yMax,
-        injectedData.toneMapperPaperWhite / REFERENCE_WHITE,
-        injectedData.toneMapperContrast,
-        injectedData.toneMapperHighlights,
-        injectedData.toneMapperShadows,
-        injectedData.toneMapperDechroma
-      );
-      odtFinal *= yMax / REFERENCE_WHITE;
-      float paperwhiteScaler = REFERENCE_WHITE / CDPR_WHITE;
-      odtFinal *= paperwhiteScaler;
-    } else if (toneMapperType == TONE_MAPPER_TYPE__DICE) {
-      odtFinal = DICETonemap(outputRGB, yMax / 100.f);
-    } else if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
-      float peakNits = yMax;
-      const float REFERENCE_WHITE = 203.f;
-      const float CDPR_WHITE = 100.f;
-      float whiteNits = injectedData.toneMapperPaperWhite;
-      float acesMax = 108.f * (peakNits / whiteNits);
-      // Should match 203 peak (and look like SDR)
-      // 1 = 1e-4
-      float yMin = pow(10.f, lerp(-8.f, 0.f, injectedData.toneMapperShadows * 0.5f));
-      odtFinal = aces_rrt_odt(outputRGB, yMin, acesMax) * peakNits / REFERENCE_WHITE;
 
-      float paperwhiteScaler = REFERENCE_WHITE / CDPR_WHITE;
-      odtFinal *= paperwhiteScaler;
-    }
+      if (toneMapperType == TONE_MAPPER_TYPE__OPENDRT) {
+        // Game doesn't use negative colors intentionally and expects them to be clamped.
+        // Map has negative colors that should be black
+        outputRGB = max(0, outputRGB);
 
-    if (injectedData.colorGradingWhitePoint == -1.0f || (injectedData.colorGradingWhitePoint == 0.f && cb6[28u].z == 0.f)) {
-      float3 xyz = xyzFromBT709(odtFinal);
-      // TODO flatten
-      xyz = mul(D65_2_D60_CAT, xyz);
-      odtFinal = mul(XYZ_2_REC709_MAT, xyz);
+        outputRGB *= injectedData.toneMapperExposure;
+        float peakNits = yMax;
+        const float REFERENCE_WHITE = 203.f;
+        const float CDPR_WHITE = 100.f;
+        odtFinal = open_drt_transform_custom(
+          outputRGB,
+          yMax,
+          injectedData.toneMapperPaperWhite / REFERENCE_WHITE,
+          injectedData.toneMapperContrast,
+          injectedData.toneMapperHighlights,
+          injectedData.toneMapperShadows,
+          injectedData.toneMapperDechroma
+        );
+        odtFinal *= yMax / REFERENCE_WHITE;
+        float paperwhiteScaler = REFERENCE_WHITE / CDPR_WHITE;
+        odtFinal *= paperwhiteScaler;
+      } else if (toneMapperType == TONE_MAPPER_TYPE__DICE) {
+        odtFinal = DICETonemap(outputRGB, yMax / 100.f);
+      } else if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
+        float peakNits = yMax;
+        const float REFERENCE_WHITE = 203.f;
+        const float CDPR_WHITE = 100.f;
+        float whiteNits = injectedData.toneMapperPaperWhite;
+        float acesMax = 108.f * (peakNits / whiteNits);
+        // Should match 203 peak (and look like SDR)
+        // 1 = 1e-4
+        float yMin = pow(10.f, lerp(-8.f, 0.f, injectedData.toneMapperShadows * 0.5f));
+        odtFinal = aces_rrt_odt(outputRGB, yMin, acesMax) * peakNits / REFERENCE_WHITE;
+
+        float paperwhiteScaler = REFERENCE_WHITE / CDPR_WHITE;
+        odtFinal *= paperwhiteScaler;
+      }
+
+      if (injectedData.toneMapperWhitePoint == -1.0f || (injectedData.toneMapperWhitePoint == 0.f && cb6[28u].z == 0.f)) {
+        float3 xyz = xyzFromBT709(odtFinal);
+        // TODO flatten
+        xyz = mul(D65_2_D60_CAT, xyz);
+        odtFinal = mul(XYZ_2_REC709_MAT, xyz);
+      }
     }
+  } else {
+    outputRGB *= toneMapperMidpoint;
   }
 
   if (injectedData.colorGradingWorkflow == 1.f || asuint(cb6[42u]).y == 0u) {

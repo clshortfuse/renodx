@@ -11,12 +11,12 @@ struct ShaderInjectData {
   float toneMapperHighlights;
   float toneMapperShadows;
   float toneMapperDechroma;
+  float toneMapperWhitePoint;
+
   float colorGradingWorkflow;
   float colorGradingStrength;
-
   float colorGradingScaling;
   float colorGradingSaturation;
-  float colorGradingWhitePoint;
 
   float filmGrainStrength;
   float filmGrainFPSLimit;
