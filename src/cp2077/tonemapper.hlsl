@@ -535,7 +535,8 @@ float4 tonemap() {
         injectedData.toneMapperPaperWhite / REFERENCE_WHITE,
         injectedData.toneMapperContrast,
         injectedData.toneMapperHighlights,
-        injectedData.toneMapperShadows
+        injectedData.toneMapperShadows,
+        injectedData.toneMapperDechroma
       );
       odtFinal *= yMax / REFERENCE_WHITE;
       float paperwhiteScaler = REFERENCE_WHITE / CDPR_WHITE;

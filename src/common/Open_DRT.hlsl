@@ -158,7 +158,8 @@ float3 open_drt_transform(
   float3 rgb,
   float Lp = 100.f,
   float gb = 0.12,
-  float contrast = 1.f
+  float contrast = 1.f,
+  float dechroma = 1.f
 ) {
   // **************************************************
   // Parameter Setup
@@ -375,7 +376,7 @@ float3 open_drt_transform(
   */
   // float ccf = 1.0f - pow(ts, 1.0f/dch);
   // float ccf = 1.0f - (pow(ts, 1.0f/dch)*(1.0f-ts) + ts*ts);
-  float overallDechroma = 1.f;
+  float overallDechroma = 1.f * dechroma;
   float dechromaDelay = 1.f;
   float dechromaStrength = 1.0f;
   float dechromaBias = 1.0f;
@@ -456,7 +457,8 @@ float3 open_drt_transform_custom(
   float midGrayAdjustment = 1.f,
   float contrast = 1.f,
   float highlights = 0.575f,
-  float shadows = 1.f
+  float shadows = 1.f,
+  float dechroma = 1.f
 ) {
   rgb = apply_user_shadows(rgb, shadows);
   rgb = apply_user_highlights(rgb, (2.f * highlights - 1.15f) * 203.f / peakNits);
@@ -464,7 +466,8 @@ float3 open_drt_transform_custom(
     rgb * midGrayAdjustment,
     peakNits,
     (0.12f * 203.f / peakNits),
-    contrast
+    contrast,
+    dechroma
   );
 
   return rgb;
