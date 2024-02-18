@@ -1,7 +1,7 @@
 #ifndef SRC_CP2077_CP2077_H_
 #define SRC_CP2077_CP2077_H_
 
-// Must be 32x4
+// Must be 4x32bit aligned
 struct ShaderInjectData {
   float toneMapperType;
   float toneMapperPaperWhite;
@@ -18,9 +18,9 @@ struct ShaderInjectData {
   float colorGradingScaling;
   float colorGradingSaturation;
 
-  float filmGrainStrength;
-  float filmGrainFPSLimit;
-  float filmGrainPeakY;
+  float effectBloom;
+  float effectVignette;
+  float effectFilmGrain;
   float filmGrainSeed;
 
   float debugValue00;

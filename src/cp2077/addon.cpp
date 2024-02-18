@@ -7,10 +7,12 @@
 #define DEBUG_LEVEL_0
 #define DEBUG_SLIDERS
 
+#include <embed/0x5DF649A9.h>
 #include <embed/0x61DBBA5C.h>
 #include <embed/0x71F27445.h>
 #include <embed/0x745E34E1.h>
 #include <embed/0x97CA5A85.h>
+#include <embed/0xA61F2FEE.h>
 #include <embed/0xC783FBA1.h>
 #include <embed/0xC83E64DF.h>
 #include <embed/0xCBFFC2A3.h>
@@ -40,20 +42,14 @@
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - CP2077";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Cyberpunk2077";
 
-struct ModdedPipelineLayoutDesc {
-  uint32_t index;
-  reshade::api::shader_stage visibility;
-};
-
 std::shared_mutex s_mutex;
 std::vector<reshade::api::pipeline_layout_param*> createdParams;
 std::unordered_set<uint32_t> codeInjections;
 std::unordered_set<uint64_t> trackedLayouts;
 std::unordered_set<uint64_t> computeShaderLayouts;
 std::unordered_map<uint64_t, reshade::api::pipeline_layout> pipelineToLayoutMap;
-std::unordered_map<uint64_t, ModdedPipelineLayoutDesc> moddedPipelineLayoutDesc;
+std::unordered_map<uint64_t, uint32_t> moddedPipelineRootIndexes;
 
-// MUST be 4x32bit aligned
 ShaderInjectData shaderInjectData;
 
 static struct UserInjectData {
@@ -70,7 +66,9 @@ static struct UserInjectData {
   float colorGradingStrength = 100.f;
   int colorGradingScaling = 0;
   float colorGradingSaturation = 50.f;
-  float filmGrainStrength = 1.f;
+  float effectBloom = 50.f;
+  float effectVignette = 50.f;
+  float effectFilmGrain = 50.f;
   float debugValue00 = 1.f;
   float debugValue01 = 1.f;
   float debugValue02 = 1.f;
@@ -90,8 +88,10 @@ static void updateShaderData() {
   shaderInjectData.colorGradingWorkflow = static_cast<float>(userInjectData.colorGradingWorkflow - 1);
   shaderInjectData.colorGradingStrength = userInjectData.colorGradingStrength * 0.01f;
   shaderInjectData.colorGradingScaling = static_cast<float>(userInjectData.colorGradingScaling);
-  shaderInjectData.colorGradingSaturation = userInjectData.colorGradingSaturation * 0.02;
-  shaderInjectData.filmGrainStrength = userInjectData.filmGrainStrength;
+  shaderInjectData.colorGradingSaturation = userInjectData.colorGradingSaturation * 0.02f;
+  shaderInjectData.effectBloom = userInjectData.effectBloom * 0.02f;
+  shaderInjectData.effectVignette = userInjectData.effectVignette * 0.02f;
+  shaderInjectData.effectFilmGrain = userInjectData.effectFilmGrain * 0.02f;
   shaderInjectData.debugValue00 = userInjectData.debugValue00;
   shaderInjectData.debugValue01 = userInjectData.debugValue01;
   shaderInjectData.debugValue02 = userInjectData.debugValue02;
@@ -248,6 +248,14 @@ static bool load_embedded_shader(
       desc->code = &_0x71F27445;
       desc->code_size = sizeof(_0x71F27445);
       break;
+    case 0xA61F2FEE:
+      desc->code = &_0xA61F2FEE;
+      desc->code_size = sizeof(_0xA61F2FEE);
+      break;
+    case 0x5DF649A9:
+      desc->code = &_0x5DF649A9;
+      desc->code_size = sizeof(_0x5DF649A9);
+      break;
     case 0x61DBBA5C:
       desc->code = &_0x61DBBA5C;
       desc->code_size = sizeof(_0x61DBBA5C);
@@ -305,7 +313,6 @@ static bool on_create_pipeline_layout(
   reshade::api::pipeline_layout_desc* desc
 ) {
   bool foundVisiblity = false;
-  uint32_t defaultVisibility = 0;
   uint32_t cbvIndex = 0;
   uint32_t pcCount = 0;
 
@@ -318,23 +325,17 @@ static bool on_create_pipeline_layout(
           if (cbvIndex < range.dx_register_index + range.count) {
             cbvIndex = range.dx_register_index + range.count;
           }
-          defaultVisibility |= (uint32_t)range.visibility;
-          foundVisiblity = true;
         }
       }
     } else if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
       pcCount++;
       if (cbvIndex < param.push_constants.dx_register_index + param.push_constants.count) {
         cbvIndex = param.push_constants.dx_register_index + param.push_constants.count;
-        defaultVisibility |= (uint32_t)param.push_constants.visibility;
-        foundVisiblity = true;
       }
     } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
       if (param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer) {
         if (cbvIndex < param.push_descriptors.dx_register_index + param.push_descriptors.count) {
           cbvIndex = param.push_descriptors.dx_register_index + param.push_descriptors.count;
-          defaultVisibility |= (uint32_t)param.push_constants.visibility;
-          foundVisiblity = true;
         }
       }
     }
@@ -347,9 +348,6 @@ static bool on_create_pipeline_layout(
   logLayout(desc->count, desc->params, 0x001);
 #endif
 
-  if (!foundVisiblity) {
-    defaultVisibility = (uint32_t)reshade::api::shader_stage::all;
-  }
   uint32_t oldCount = (desc->count);
   uint32_t newCount = oldCount + 1;
   reshade::api::pipeline_layout_param* newParams = new reshade::api::pipeline_layout_param[newCount];
@@ -366,7 +364,7 @@ static bool on_create_pipeline_layout(
   newParams[oldCount].push_constants.count = sizeof(ShaderInjectData) / sizeof(uint32_t);
   newParams[oldCount].push_constants.dx_register_index = cbvIndex;
   newParams[oldCount].push_constants.dx_register_space = 0;
-  newParams[oldCount].push_constants.visibility = (reshade::api::shader_stage)defaultVisibility;
+  newParams[oldCount].push_constants.visibility = reshade::api::shader_stage::all;
 
   desc->count = newCount;
   desc->params = newParams;
@@ -401,28 +399,24 @@ static void on_init_pipeline_layout(
   }
   createdParams.clear();
 
-  bool foundPC = false;
-  ModdedPipelineLayoutDesc desc = {};
+  uint32_t foundParamIndex = -1;
   for (uint32_t paramIndex = 0; paramIndex < paramCount; ++paramIndex) {
     auto param = params[paramIndex];
     if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
       if (param.push_constants.count == sizeof(ShaderInjectData) / sizeof(uint32_t)) {
-        foundPC = true;
-        desc.index = param.push_constants.dx_register_index;
-        desc.visibility = param.push_constants.visibility;
+        foundParamIndex = paramIndex;
       }
     }
   }
-  if (!foundPC) return;
+  if (foundParamIndex == -1) return;
   const std::unique_lock<std::shared_mutex> lock(s_mutex);
-  moddedPipelineLayoutDesc.emplace(layout.handle, desc);
+  moddedPipelineRootIndexes.emplace(layout.handle, foundParamIndex);
 
 #ifdef DEBUG_LEVEL_0
   std::stringstream s;
   s << "on_init_pipeline_layout++("
     << reinterpret_cast<void*>(layout.handle)
-    << " , " << desc.index
-    << " , 0x" << std::hex << (uint32_t)desc.visibility
+    << " , " << foundParamIndex
     << " )";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
@@ -434,7 +428,7 @@ static void on_destroy_pipeline_layout(
 ) {
   uint32_t changed = false;
   const std::unique_lock<std::shared_mutex> lock(s_mutex);
-  changed |= moddedPipelineLayoutDesc.erase(layout.handle);
+  changed |= moddedPipelineRootIndexes.erase(layout.handle);
   changed |= trackedLayouts.erase(layout.handle);
   if (!changed) return;
 
@@ -553,23 +547,19 @@ static void on_bind_pipeline(
   if (pair0 == pipelineToLayoutMap.end()) return;
   auto layout = pair0->second;
 
-  auto pair2 = moddedPipelineLayoutDesc.find(layout.handle);
-  if (pair2 == moddedPipelineLayoutDesc.end()) return;
-  auto desc = pair2->second;
+  auto pair2 = moddedPipelineRootIndexes.find(layout.handle);
+  if (pair2 == moddedPipelineRootIndexes.end()) return;
+  uint32_t paramIndex = pair2->second;
 
-  reshade::api::shader_stage stage = desc.visibility;
-  if (computeShaderLayouts.find(layout.handle) == computeShaderLayouts.end()) return;
-  // CP2077 uses two stages for pixel/vertex shaders. Forcing wrong stage cause issues
-  // Only inject buffers into compute shaders for now.
+  auto stage = computeShaderLayouts.count(layout.handle) == 0
+               ? reshade::api::shader_stage::all_graphics
+               : reshade::api::shader_stage::all_compute;
 
   const std::shared_lock<std::shared_mutex> lock(s_mutex);
-  // if (shaderInjectData.filmGrainStrength) {
-  //   shaderInjectData.filmGrainSeed = (float)rand() / (float)RAND_MAX;
-  // }
   cmd_list->push_constants(
-    reshade::api::shader_stage::all_compute,
-    layout,
-    desc.index,
+    stage,   // Used by reshade to specify graphics or compute
+    layout,  // Unused
+    paramIndex,
     0,
     sizeof(ShaderInjectData) / sizeof(uint32_t),
     &shaderInjectData
@@ -605,21 +595,10 @@ static void load_settings(
   reshade::get_config_value(runtime, section, "colorGradingStrength", newData.colorGradingStrength);
   reshade::get_config_value(runtime, section, "colorGradingScaling", newData.colorGradingScaling);
   reshade::get_config_value(runtime, section, "colorGradingSaturation", newData.colorGradingSaturation);
-  reshade::get_config_value(runtime, section, "filmGrainStrength", newData.filmGrainStrength);
-  userInjectData.toneMapperType = newData.toneMapperType;
-  userInjectData.toneMapperExposure = newData.toneMapperExposure;
-  userInjectData.toneMapperPaperWhite = newData.toneMapperPaperWhite;
-  userInjectData.toneMapperExposure = newData.toneMapperExposure;
-  userInjectData.toneMapperContrast = newData.toneMapperContrast;
-  userInjectData.toneMapperHighlights = newData.toneMapperHighlights;
-  userInjectData.toneMapperShadows = newData.toneMapperShadows;
-  userInjectData.toneMapperDechroma = newData.toneMapperDechroma;
-  userInjectData.toneMapperWhitePoint = newData.toneMapperWhitePoint;
-  userInjectData.colorGradingWorkflow = newData.colorGradingWorkflow;
-  userInjectData.colorGradingStrength = newData.colorGradingStrength;
-  userInjectData.colorGradingScaling = newData.colorGradingScaling;
-  userInjectData.colorGradingSaturation = newData.colorGradingSaturation;
-  userInjectData.filmGrainStrength = newData.filmGrainStrength;
+  reshade::get_config_value(runtime, section, "effectBloom", newData.effectBloom);
+  reshade::get_config_value(runtime, section, "effectVignette", newData.effectVignette);
+  reshade::get_config_value(runtime, section, "effectFilmGrain", newData.effectFilmGrain);
+  memcpy(&userInjectData, &newData, sizeof(UserInjectData));
 }
 
 static void save_settings(reshade::api::effect_runtime* runtime, char* section = "renodx-cp2077-preset1") {
@@ -635,7 +614,9 @@ static void save_settings(reshade::api::effect_runtime* runtime, char* section =
   reshade::set_config_value(runtime, section, "colorGradingStrength", userInjectData.colorGradingStrength);
   reshade::set_config_value(runtime, section, "colorGradingScaling", userInjectData.colorGradingScaling);
   reshade::set_config_value(runtime, section, "colorGradingSaturation", userInjectData.colorGradingSaturation);
-  reshade::set_config_value(runtime, section, "filmGrainStrength", userInjectData.filmGrainStrength);
+  reshade::set_config_value(runtime, section, "effectBloom", userInjectData.effectBloom);
+  reshade::set_config_value(runtime, section, "effectVignette", userInjectData.effectVignette);
+  reshade::set_config_value(runtime, section, "effectFilmGrain", userInjectData.effectFilmGrain);
 }
 
 static void on_register_overlay(reshade::api::effect_runtime* runtime) {
@@ -665,7 +646,9 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
         userInjectData.colorGradingStrength = 100.f;
         userInjectData.colorGradingScaling = 1;
         userInjectData.colorGradingSaturation = 50.f;
-        userInjectData.filmGrainStrength = 0.f;
+        userInjectData.effectBloom = 50.f;
+        userInjectData.effectFilmGrain = 50.f;
+        userInjectData.effectVignette = 50.f;
         break;
       case 1:
         load_settings(runtime);
@@ -806,14 +789,32 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
     );
   }
 
-  ImGui::SeparatorText("Film Grain");
+  ImGui::SeparatorText("Effects");
   {
     updateShadersOrPreset |= ImGui::SliderFloat(
-      "Film Grain Strength",
-      &userInjectData.filmGrainStrength,
+      "Bloom",
+      &userInjectData.effectBloom,
       0.f,
-      2.f,
-      "%.2f"
+      100.f,
+      "%.0f"
+    );
+    ImGui::SetItemTooltip("Controls the strength of the bloom effect.");
+
+    updateShadersOrPreset |= ImGui::SliderFloat(
+      "Vignette",
+      &userInjectData.effectVignette,
+      0.f,
+      100.f,
+      "%.0f"
+    );
+    ImGui::SetItemTooltip("Controls the strength of the vignette effect.");
+
+    updateShadersOrPreset |= ImGui::SliderFloat(
+      "Film Grain",
+      &userInjectData.effectFilmGrain,
+      0.f,
+      100.f,
+      "%.0f"
     );
     ImGui::SetItemTooltip("Controls the strength of the custom perceptual film grain.");
   }
