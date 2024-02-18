@@ -598,7 +598,22 @@ static void load_settings(
   reshade::get_config_value(runtime, section, "effectBloom", newData.effectBloom);
   reshade::get_config_value(runtime, section, "effectVignette", newData.effectVignette);
   reshade::get_config_value(runtime, section, "effectFilmGrain", newData.effectFilmGrain);
-  memcpy(&userInjectData, &newData, sizeof(UserInjectData));
+  userInjectData.toneMapperType = newData.toneMapperType;
+  userInjectData.toneMapperExposure = newData.toneMapperExposure;
+  userInjectData.toneMapperPaperWhite = newData.toneMapperPaperWhite;
+  userInjectData.toneMapperExposure = newData.toneMapperExposure;
+  userInjectData.toneMapperContrast = newData.toneMapperContrast;
+  userInjectData.toneMapperHighlights = newData.toneMapperHighlights;
+  userInjectData.toneMapperShadows = newData.toneMapperShadows;
+  userInjectData.toneMapperDechroma = newData.toneMapperDechroma;
+  userInjectData.toneMapperWhitePoint = newData.toneMapperWhitePoint;
+  userInjectData.colorGradingWorkflow = newData.colorGradingWorkflow;
+  userInjectData.colorGradingStrength = newData.colorGradingStrength;
+  userInjectData.colorGradingScaling = newData.colorGradingScaling;
+  userInjectData.colorGradingSaturation = newData.colorGradingSaturation;
+  userInjectData.effectBloom = newData.effectBloom;
+  userInjectData.effectVignette = newData.effectVignette;
+  userInjectData.effectFilmGrain = newData.effectFilmGrain;
 }
 
 static void save_settings(reshade::api::effect_runtime* runtime, char* section = "renodx-cp2077-preset1") {
