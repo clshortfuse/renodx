@@ -635,7 +635,7 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
     switch (userInjectData.presetIndex) {
       case 0:
         userInjectData.toneMapperPaperWhite = 203.f;
-        userInjectData.toneMapperType = 1.f;
+        userInjectData.toneMapperType = 1;
         userInjectData.toneMapperExposure = 1.f;
         userInjectData.toneMapperContrast = 50.f;
         userInjectData.toneMapperHighlights = 50.f;
@@ -647,8 +647,8 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
         userInjectData.colorGradingScaling = 1;
         userInjectData.colorGradingSaturation = 50.f;
         userInjectData.effectBloom = 50.f;
-        userInjectData.effectFilmGrain = 50.f;
         userInjectData.effectVignette = 50.f;
+        userInjectData.effectFilmGrain = 0.f;
         break;
       case 1:
         load_settings(runtime);
