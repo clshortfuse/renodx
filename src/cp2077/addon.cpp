@@ -5,7 +5,7 @@
 
 #define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 #define DEBUG_LEVEL_0
-#define DEBUG_SLIDERS
+#define DEBUG_SLIDERS_OFF
 
 #include <embed/0x5DF649A9.h>
 #include <embed/0x61DBBA5C.h>
