@@ -1,3 +1,4 @@
+#include "../common/color.hlsl"
 #include "../common/random.hlsl"
 #include "./cp2077.h"
 
@@ -25,6 +26,7 @@ Texture2D<float4> textureUntonemapped : register(t0, space0);
 Texture2D<float4> textureBloom : register(t1, space0);
 Texture3D<float4> textureLUT[3] : register(t4, space0);
 Texture2D<uint4> textureMask : register(t51, space0);
+Texture2DArray<float4> textureArray : register(t67, space0);
 SamplerState sampler0 : register(s11, space0);
 
 static float4 gl_FragCoord;
@@ -39,48 +41,76 @@ struct SPIRV_Cross_Output {
   float4 SV_Target : SV_Target0;
 };
 
-float3 composite() {
+float3 composite(bool useTexArray = false) {
   const float cb6_10z = cb6[10u].z;  // Bloom width
   const float cb6_10w = cb6[10u].w;  // Bloom height
 
-  uint _58 = uint(int(gl_FragCoord.x));
-  uint _59 = uint(int(gl_FragCoord.y));
-  float _60 = float(int(_58));
-  float _61 = float(int(_59));
-  float _71 = (_60 + 0.5f) * cb6_10z;
-  float _72 = (_61 + 0.5f) * cb6_10w;
-
-  float _89 = (cb6[10u].x * ((_71 * 2.0f) + (-1.0f))) * cb6[14u].x;
-  float _90 = (((_72 * 2.0f) + (-1.0f)) * cb6[10u].y) * cb6[14u].x;
-  float3 inputColor = textureUntonemapped.Load(int3(uint2(_58, _59), 0u)).rgb;
-  float3 bloomColor = textureBloom.Sample(sampler0, float2(_71, _72)).rgb;
-
-  float3 bloomStrength = cb6[0u].rgb;
+  uint uFragx = uint(int(gl_FragCoord.x));
+  uint uFragy = uint(int(gl_FragCoord.y));
+  float fFragx = float(int(uFragx));
+  float fFragy = float(int(uFragy));
+  float bloomX = (fFragx + 0.5f) * cb6_10z;
+  float bloomY = (fFragy + 0.5f) * cb6_10w;
+  float bloomWidth = cb6[14u].x * cb6[10u].x * (2.0f * bloomX - 1.0f);
+  float bloomHeight = cb6[14u].x * cb6[10u].y * (2.0f * bloomY - 1.0f);
+  float bloomSize = dot(float2(bloomWidth, bloomHeight), float2(bloomWidth, bloomHeight));
+  float3 bloomStrength = cb6[0u].rgb * injectedData.effectBloom;
   float inputGain = cb6[0u].w;
   float postBloomGain = cb6[11u].w;
   float3 postBloomLift = cb6[11u].rgb;
+  float3 inputColor;
+  float3 bloomColor;
+  if (useTexArray) {
+    float _107 = exp2(log2(max(bloomSize - cb6[7u].w, 0.0f)) * cb6[7u].z);
+    float _112 = (_107 * bloomWidth) * cb6[7u].x;
+    float _113 = (_107 * bloomHeight) * cb6[7u].y;
+    float4 _124 = textureArray.Load(int4(uint3(uFragx & 63u, uFragy & 63u, asuint(cb0[28u]).y & 63u), 0u));
+    float _127 = _124.x;
+    float _131 = bloomY - (_127 * _113);
+    float _138 = (bloomX - (_127 * _112)) - (cb6[8u].w * 2.5f);
+    bloomColor = textureBloom.Sample(sampler0, float2(bloomX - (_112 * 2.5f), bloomY - (_113 * 2.5f))).rgb;
+    float _161 = cb6[8u].w + (_138 - _112);
+    float _176 = cb6[8u].w + (_161 - _112);
+    float _190 = cb6[8u].w + (_176 - _112);
+    float _bbb = cb6[8u].w + (_190 - _112);
+    float _157 = _131 - _113;
+    float _175 = _157 - _113;
+    float _189 = _175 - _113;
+    float _ccc = _189 - _113;
+    float4 _162 = textureUntonemapped.Sample(sampler0, float2(_161, _157));
+    float4 _177 = textureUntonemapped.Sample(sampler0, float2(_176, _175));
+    float4 _191 = textureUntonemapped.Sample(sampler0, float2(_190, _189));
+    float4 _aaa = textureUntonemapped.Sample(sampler0, float2(_bbb, _ccc));
+    float4 _ddd = textureUntonemapped.Sample(sampler0, float2(_138, _131));
+
+    // likely a matrix
+    inputColor.r = 0.625f * ((_177.x * 0.3f) + (_162.x * 0.1f) + (_191.x * 0.4f) + (_aaa.x * 0.8f));
+    inputColor.g = 0.90909087657928466796875f * ((_177.y * 0.5f) + (_162.y * 0.4f) + (_191.y * 0.2f));
+    inputColor.b = 0.76923072338104248046875f * ((_162.z * 0.3f) + (_ddd.z * 0.9f) + (_177.z * 0.1f));
+  } else {
+    inputColor = textureUntonemapped.Load(int3(uint2(uFragx, uFragy), 0u)).rgb;
+    bloomColor = textureBloom.Sample(sampler0, float2(bloomX, bloomY)).rgb;
+  }
 
   float3 outputColor = inputColor * inputGain;
-  outputColor += (bloomColor * bloomStrength * injectedData.effectBloom);
+  outputColor += (bloomColor * bloomStrength);
+  outputColor *= postBloomGain;
   outputColor += postBloomLift;
 
   float vignetteStrength = cb6[9u].x;
 
-  if (injectedData.effectVignette && vignetteStrength > 0.0f) {
+  if (vignetteStrength) {
     float3 vignetteColor = cb6[8u].rgb;
-    float vignetteFactor = exp2((-0.0f) - (cb6[9u].y * log2(abs((dot(float2(_89, _90), float2(_89, _90)) * vignetteStrength) + 1.0f))));
+    float vignetteFactor = exp2((-0.0f) - (cb6[9u].y * log2(abs((bloomSize * vignetteStrength) + 1.0f))));
     float3 mixedColor = lerp(vignetteColor, outputColor, vignetteFactor);
     outputColor = lerp(outputColor, mixedColor, injectedData.effectVignette);
   }
 
+  float3 fxColor = outputColor;
   float _168 = outputColor.r;
   float _169 = outputColor.g;
   float _170 = outputColor.b;
 
-  float _401;
-  float _402;
-  float _403;
-  uint _195;
   float _322;
   float _323;
   float _324;
@@ -90,93 +120,80 @@ float3 composite() {
   float _346;
   float _347;
   float _348;
-  uint _355;
-  bool _356;
-  for (;;) {
-    _195 = 1u << (textureMask.Load(int3(uint2(uint(cb12[79u].x * _60), uint(cb12[79u].y * _61)), 0u)).y & 31u);
 
-    float3 random = hash33(float3(
-      _60,
-      _61,
-      float(asuint(cb0[28u]).y)
-    ));
+  uint4 textureMaskColor = textureMask.Load(int3(uint2(uint(cb12[79u].x * fFragx), uint(cb12[79u].y * fFragy)), 0u));
+  uint _195 = 1u << (textureMaskColor.y & 31u);
 
-    random -= 0.5f;
-    float _230 = random.x;
-    float _232 = random.y;
-    float _233 = random.z;
+  // Pick LUT based on mask?
+  uint useLUT1 = min((asuint(cb6[12u]).x & _195), 1u);
+  uint useLUT2 = min((asuint(cb6[12u]).y & _195), 1u);
+  uint useLUT3 = min((asuint(cb6[12u]).z & _195), 1u);
 
-    uint4 _246 = asuint(cb6[13u]);
-    float _250 = float(min((_246.x & _195), 1u));
-    float _271 = float(min((_246.y & _195), 1u));
-    float _293 = float(min((_246.z & _195), 1u));
-    float _315 = float(min((_246.w & _195), 1u));
+  float3 lutInputColor;
+  float3 firstLUTColor;
+  float3 secondLUTColor;
+  float3 thirdLUTColor;
 
-    _322 = (((((_168 * SYS_TEXCOORD.x) * cb6[1u].y) * (((cb6[2u].x * _230) * _250) + 1.0f)) * (((cb6[3u].x * _230) * _271) + 1.0f)) * (((cb6[4u].x * _230) * _293) + 1.0f)) * (((cb6[5u].x * _230) * _315) + 1.0f);
-    _323 = (((((_169 * SYS_TEXCOORD.x) * cb6[1u].y) * (((cb6[2u].y * _232) * _250) + 1.0f)) * (((cb6[3u].y * _232) * _271) + 1.0f)) * (((cb6[4u].y * _232) * _293) + 1.0f)) * (((cb6[5u].y * _232) * _315) + 1.0f);
-    _324 = (((((_170 * SYS_TEXCOORD.x) * cb6[1u].y) * (((cb6[2u].z * _233) * _250) + 1.0f)) * (((cb6[3u].z * _233) * _271) + 1.0f)) * (((cb6[4u].z * _233) * _293) + 1.0f)) * (((cb6[5u].z * _233) * _315) + 1.0f);
-    _336 = (cb6[6u].x * log2(_322)) + cb6[6u].y;
-    _337 = (cb6[6u].x * log2(_323)) + cb6[6u].y;
-    _338 = (cb6[6u].x * log2(_324)) + cb6[6u].y;
+  float3 random = hash33(float3(
+    fFragx,
+    fFragy,
+    float(asuint(cb0[28u]).y)
+  ));
 
-    float4 _344 = textureLUT[4u].SampleLevel(sampler0, float3(_336, _337, _338), 0.0f);
-    _346 = _344.x;
-    _347 = _344.y;
-    _348 = _344.z;
-    _355 = min((asuint(cb6[12u]).x & _195), 1u);
-    _356 = _355 == 0u;
-    uint _372;
-    float _374;
-    float _376;
-    float _378;
-    if (_356) {
-      float4 _360 = textureLUT[5u].SampleLevel(sampler0, float3(_336, _337, _338), 0.0f);
-      uint _370 = min((asuint(cb6[12u]).y & _195), 1u);
-      uint frontier_phi_4_3_ladder;
-      float frontier_phi_4_3_ladder_1;
-      float frontier_phi_4_3_ladder_2;
-      float frontier_phi_4_3_ladder_3;
-      if (_370 == 0u) {
-        float4 _393 = textureLUT[6u].SampleLevel(sampler0, float3(_336, _337, _338), 0.0f);
-        uint _373 = min((asuint(cb6[12u]).z & _195), 1u);
-        if (_373 == 0u) {
-          _401 = _322;
-          _402 = _323;
-          _403 = _324;
-          break;
-        }
-        frontier_phi_4_3_ladder = _373;
-        frontier_phi_4_3_ladder_1 = _393.z;
-        frontier_phi_4_3_ladder_2 = _393.y;
-        frontier_phi_4_3_ladder_3 = _393.x;
-      } else {
-        frontier_phi_4_3_ladder = _370;
-        frontier_phi_4_3_ladder_1 = _360.z;
-        frontier_phi_4_3_ladder_2 = _360.y;
-        frontier_phi_4_3_ladder_3 = _360.x;
-      }
-      _372 = frontier_phi_4_3_ladder;
-      _374 = frontier_phi_4_3_ladder_1;
-      _376 = frontier_phi_4_3_ladder_2;
-      _378 = frontier_phi_4_3_ladder_3;
-    } else {
-      _372 = _355;
-      _374 = _348;
-      _376 = _347;
-      _378 = _346;
-    }
-    float _380 = float(_372);
-    _401 = ((_378 - _322) * _380) + _322;
-    _402 = ((_376 - _323) * _380) + _323;
-    _403 = ((_374 - _324) * _380) + _324;
-    break;
+  random -= 0.5f;
+  float _230 = random.x;
+  float _232 = random.y;
+  float _233 = random.z;
+
+  uint4 _246 = asuint(cb6[13u]);
+  float _250 = float(min((_246.x & _195), 1u));
+  float _271 = float(min((_246.y & _195), 1u));
+  float _293 = float(min((_246.z & _195), 1u));
+  float _315 = float(min((_246.w & _195), 1u));
+
+  float3 fallbackColor = fxColor;
+  fallbackColor *= SYS_TEXCOORD.x;
+  fallbackColor *= cb6[1u].y;
+  fallbackColor *= ((cb6[2u].rgb * random * _250) + 1.f);
+  fallbackColor *= ((cb6[3u].rgb * random * _271) + 1.f);
+  fallbackColor *= ((cb6[4u].rgb * random * _293) + 1.f);
+  fallbackColor *= ((cb6[5u].rgb * random * _315) + 1.f);
+
+  float3 lutColor = 1.f;
+  bool useLUT = false;
+  uint lutStrength = 0u;
+  uint lutIndex = 0u;
+  if (useLUT1) {
+    useLUT = true;
+    lutIndex = 0u;
+    lutStrength = useLUT1;
+  } else if (useLUT2) {
+    useLUT = true;
+    lutIndex = 1u;
+    lutStrength = useLUT2;
+  } else if (useLUT3) {
+    useLUT = true;
+    lutIndex = 2u;
+    lutStrength = useLUT3;
   }
-  float _404 = dot(float3(_401, _402, _403), float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f));
-  float _416 = max(9.9999997473787516355514526367188e-05f, dot(float3(_322, _323, _324), float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f)));
-  outputColor = float3(
-    ((cb6[1u].w * (((_404 * _322) / _416) - _401)) + _401) * cb6[1u].z,
-    ((cb6[1u].w * (((_404 * _323) / _416) - _402)) + _402) * cb6[1u].z,
-    ((cb6[1u].w * (((_404 * _324) / _416) - _403)) + _403) * cb6[1u].z
-  );
+  if (useLUT) {
+    // cb6[6u].x 5.869140 / 100
+    // cb6[6u].y 59.492 / 10
+    // float3 preInputColor = lerp(fxColor, fallbackColor, injectedData.debugValue02);
+    float3 lutInputColor = (cb6[6u].x * log2(fallbackColor)) + cb6[6u].y;
+    lutColor = textureLUT[lutIndex].SampleLevel(sampler0, lutInputColor, 0.0f).rgb;
+    outputColor = lerp(outputColor, lutColor, float(lutStrength));
+  } else {
+    outputColor = fallbackColor;
+  }
+
+  if (cb6[1u].w) {
+    float3 luttedColor = outputColor;
+    float outputColorY = yFromBT709(outputColor);
+    float fallbackColorY = yFromBT709(fallbackColor);
+    float3 rescaledFallbackColor = fallbackColor * (fallbackColorY ? (outputColorY / fallbackColorY) : 0);
+    outputColor = lerp(outputColor, rescaledFallbackColor, cb6[1u].w);
+  }
+  outputColor *= cb6[1u].z;
   return outputColor;
 }
