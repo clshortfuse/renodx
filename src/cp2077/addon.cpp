@@ -7,6 +7,7 @@
 #define DEBUG_LEVEL_0
 #define DEBUG_SLIDERS_OFF
 
+#include <embed/0x298A6BB0.h>
 #include <embed/0x5DF649A9.h>
 #include <embed/0x61DBBA5C.h>
 #include <embed/0x71F27445.h>
@@ -54,14 +55,15 @@ ShaderInjectData shaderInjectData;
 
 static struct UserInjectData {
   int presetIndex = 1;
+  int toneMapperType = static_cast<int>(TONE_MAPPER_TYPE__ACES);
+  float toneMapperPeakNits = 550.f;
   float toneMapperPaperWhite = 203.f;
-  int toneMapperType = 2;
-  float toneMapperExposure = 1.f;
-  float toneMapperContrast = 50.f;
-  float toneMapperHighlights = 50.f;
-  float toneMapperShadows = 50.f;
-  float toneMapperDechroma = 50.f;
   int toneMapperWhitePoint = 1;
+  float toneMapperHighlights = 50.f;
+  float toneMapperShadows = 60.f;
+  float toneMapperExposure = 2.f;
+  float toneMapperContrast = 55.f;
+  float toneMapperDechroma = 50.f;
   int colorGradingWorkflow = 1;
   float colorGradingStrength = 100.f;
   int colorGradingScaling = 0;
@@ -78,13 +80,15 @@ static struct UserInjectData {
 static void updateShaderData() {
   const std::unique_lock<std::shared_mutex> lock(s_mutex);
   shaderInjectData.toneMapperType = static_cast<float>(userInjectData.toneMapperType);
+  shaderInjectData.toneMapperPeakNits = userInjectData.toneMapperPeakNits;
   shaderInjectData.toneMapperPaperWhite = userInjectData.toneMapperPaperWhite;
-  shaderInjectData.toneMapperExposure = userInjectData.toneMapperExposure;
-  shaderInjectData.toneMapperContrast = userInjectData.toneMapperContrast * 0.02f;
+  shaderInjectData.toneMapperWhitePoint = static_cast<float>(userInjectData.toneMapperWhitePoint - 1);
   shaderInjectData.toneMapperHighlights = userInjectData.toneMapperHighlights * 0.02f;
   shaderInjectData.toneMapperShadows = userInjectData.toneMapperShadows * 0.02f;
+  shaderInjectData.toneMapperExposure = userInjectData.toneMapperExposure;
+  shaderInjectData.toneMapperContrast = userInjectData.toneMapperContrast * 0.02f;
   shaderInjectData.toneMapperDechroma = userInjectData.toneMapperDechroma * 0.02f;
-  shaderInjectData.toneMapperWhitePoint = static_cast<float>(userInjectData.toneMapperWhitePoint - 1);
+
   shaderInjectData.colorGradingWorkflow = static_cast<float>(userInjectData.colorGradingWorkflow - 1);
   shaderInjectData.colorGradingStrength = userInjectData.colorGradingStrength * 0.01f;
   shaderInjectData.colorGradingScaling = static_cast<float>(userInjectData.colorGradingScaling);
@@ -108,9 +112,8 @@ static const char* presetStrings[] = {
 static const char* toneMapperTypeStrings[] = {
   "None",
   "Vanilla",
-  "OpenDRT",
-  "DICE",
-  "ACES",
+  "ACES 1.3",
+  "OpenDRT"
 };
 
 static const char* toneMapperWhitePointStrings[] = {
@@ -252,6 +255,10 @@ static bool load_embedded_shader(
       desc->code = &_0xA61F2FEE;
       desc->code_size = sizeof(_0xA61F2FEE);
       break;
+    case 0x298A6BB0:
+      desc->code = &_0x298A6BB0;
+      desc->code_size = sizeof(_0x298A6BB0);
+      break;
     case 0x5DF649A9:
       desc->code = &_0x5DF649A9;
       desc->code_size = sizeof(_0x5DF649A9);
@@ -259,6 +266,7 @@ static bool load_embedded_shader(
     case 0x61DBBA5C:
       desc->code = &_0x61DBBA5C;
       desc->code_size = sizeof(_0x61DBBA5C);
+      break;
     case 0x745E34E1:
       desc->code = &_0x745E34E1;
       desc->code_size = sizeof(_0x745E34E1);
@@ -359,9 +367,11 @@ static bool on_create_pipeline_layout(
   memcpy(newParams, desc->params, sizeof(reshade::api::pipeline_layout_param) * oldCount);
 
   // Fill in extra param
+  uint32_t slots = sizeof(ShaderInjectData) / sizeof(uint32_t);
+  uint32_t maxCount = 64u - (oldCount + 1u) + 1u;
   newParams[oldCount].type = reshade::api::pipeline_layout_param_type::push_constants;
   newParams[oldCount].push_constants.binding = 0;
-  newParams[oldCount].push_constants.count = sizeof(ShaderInjectData) / sizeof(uint32_t);
+  newParams[oldCount].push_constants.count = min(slots, maxCount);
   newParams[oldCount].push_constants.dx_register_index = cbvIndex;
   newParams[oldCount].push_constants.dx_register_space = 0;
   newParams[oldCount].push_constants.visibility = reshade::api::shader_stage::all;
@@ -369,12 +379,24 @@ static bool on_create_pipeline_layout(
   desc->count = newCount;
   desc->params = newParams;
 
+  if (slots > maxCount) {
+    std::stringstream s;
+    s << "on_create_pipeline_layout("
+      << "shader injection oversized: "
+      << slots << "/" << maxCount
+      << " )";
+    reshade::log_message(reshade::log_level::warning, s.str().c_str());
+  }
+
 #ifdef DEBUG_LEVEL_0
   std::stringstream s;
-  s << "on_create_pipeline_layout++(";
-  s << "will insert new push_constant at ";
-  s << cbvIndex;
-  s << " )";
+  s << "on_create_pipeline_layout++("
+    << "will insert"
+    << " cbuffer " << cbvIndex
+    << " at root_index " << oldCount
+    << " with slot count " << slots
+    << " creating new size of " << (oldCount + 1u + slots)
+    << " )";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 
 #ifdef DEBUG_LEVEL_1
@@ -393,6 +415,7 @@ static void on_init_pipeline_layout(
   const reshade::api::pipeline_layout_param* params,
   reshade::api::pipeline_layout layout
 ) {
+  const std::unique_lock<std::shared_mutex> lock(s_mutex);
   if (!createdParams.size()) return;  // No injected params
   for (auto injectedParams : createdParams) {
     free(injectedParams);
@@ -409,7 +432,6 @@ static void on_init_pipeline_layout(
     }
   }
   if (foundParamIndex == -1) return;
-  const std::unique_lock<std::shared_mutex> lock(s_mutex);
   moddedPipelineRootIndexes.emplace(layout.handle, foundParamIndex);
 
 #ifdef DEBUG_LEVEL_0
@@ -543,6 +565,7 @@ static void on_bind_pipeline(
   reshade::api::pipeline_stage type,
   reshade::api::pipeline pipeline
 ) {
+  const std::unique_lock<std::shared_mutex> lock(s_mutex);
   auto pair0 = pipelineToLayoutMap.find(pipeline.handle);
   if (pair0 == pipelineToLayoutMap.end()) return;
   auto layout = pair0->second;
@@ -555,7 +578,6 @@ static void on_bind_pipeline(
                ? reshade::api::shader_stage::all_graphics
                : reshade::api::shader_stage::all_compute;
 
-  const std::shared_lock<std::shared_mutex> lock(s_mutex);
   cmd_list->push_constants(
     stage,   // Used by reshade to specify graphics or compute
     layout,  // Unused
@@ -583,14 +605,15 @@ static void load_settings(
 ) {
   UserInjectData newData = {};
   reshade::get_config_value(runtime, section, "toneMapperType", newData.toneMapperType);
-  reshade::get_config_value(runtime, section, "toneMapperExposure", newData.toneMapperExposure);
+  reshade::get_config_value(runtime, section, "toneMapperPeakNits", newData.toneMapperPeakNits);
   reshade::get_config_value(runtime, section, "toneMapperPaperWhite", newData.toneMapperPaperWhite);
-  reshade::get_config_value(runtime, section, "toneMapperExposure", newData.toneMapperExposure);
-  reshade::get_config_value(runtime, section, "toneMapperContrast", newData.toneMapperContrast);
+  reshade::get_config_value(runtime, section, "toneMapperWhitePoint", newData.toneMapperWhitePoint);
   reshade::get_config_value(runtime, section, "toneMapperHighlights", newData.toneMapperHighlights);
   reshade::get_config_value(runtime, section, "toneMapperShadows", newData.toneMapperShadows);
+  reshade::get_config_value(runtime, section, "toneMapperExposure", newData.toneMapperExposure);
+  reshade::get_config_value(runtime, section, "toneMapperContrast", newData.toneMapperContrast);
   reshade::get_config_value(runtime, section, "toneMapperDechroma", newData.toneMapperDechroma);
-  reshade::get_config_value(runtime, section, "toneMapperWhitePoint", newData.toneMapperWhitePoint);
+
   reshade::get_config_value(runtime, section, "colorGradingWorkflow", newData.colorGradingWorkflow);
   reshade::get_config_value(runtime, section, "colorGradingStrength", newData.colorGradingStrength);
   reshade::get_config_value(runtime, section, "colorGradingScaling", newData.colorGradingScaling);
@@ -599,14 +622,15 @@ static void load_settings(
   reshade::get_config_value(runtime, section, "effectVignette", newData.effectVignette);
   reshade::get_config_value(runtime, section, "effectFilmGrain", newData.effectFilmGrain);
   userInjectData.toneMapperType = newData.toneMapperType;
-  userInjectData.toneMapperExposure = newData.toneMapperExposure;
+  userInjectData.toneMapperPeakNits = newData.toneMapperPeakNits;
   userInjectData.toneMapperPaperWhite = newData.toneMapperPaperWhite;
-  userInjectData.toneMapperExposure = newData.toneMapperExposure;
-  userInjectData.toneMapperContrast = newData.toneMapperContrast;
+  userInjectData.toneMapperWhitePoint = newData.toneMapperWhitePoint;
   userInjectData.toneMapperHighlights = newData.toneMapperHighlights;
   userInjectData.toneMapperShadows = newData.toneMapperShadows;
+  userInjectData.toneMapperExposure = newData.toneMapperExposure;
+  userInjectData.toneMapperContrast = newData.toneMapperContrast;
   userInjectData.toneMapperDechroma = newData.toneMapperDechroma;
-  userInjectData.toneMapperWhitePoint = newData.toneMapperWhitePoint;
+
   userInjectData.colorGradingWorkflow = newData.colorGradingWorkflow;
   userInjectData.colorGradingStrength = newData.colorGradingStrength;
   userInjectData.colorGradingScaling = newData.colorGradingScaling;
@@ -618,13 +642,15 @@ static void load_settings(
 
 static void save_settings(reshade::api::effect_runtime* runtime, char* section = "renodx-cp2077-preset1") {
   reshade::set_config_value(runtime, section, "toneMapperType", userInjectData.toneMapperType);
+  reshade::set_config_value(runtime, section, "toneMapperPeakNits", userInjectData.toneMapperPeakNits);
   reshade::set_config_value(runtime, section, "toneMapperPaperWhite", userInjectData.toneMapperPaperWhite);
-  reshade::set_config_value(runtime, section, "toneMapperExposure", userInjectData.toneMapperExposure);
-  reshade::set_config_value(runtime, section, "toneMapperContrast", userInjectData.toneMapperContrast);
+  reshade::set_config_value(runtime, section, "toneMapperWhitePoint", userInjectData.toneMapperWhitePoint);
   reshade::set_config_value(runtime, section, "toneMapperHighlights", userInjectData.toneMapperHighlights);
   reshade::set_config_value(runtime, section, "toneMapperShadows", userInjectData.toneMapperShadows);
+  reshade::set_config_value(runtime, section, "toneMapperExposure", userInjectData.toneMapperExposure);
+  reshade::set_config_value(runtime, section, "toneMapperContrast", userInjectData.toneMapperContrast);
   reshade::set_config_value(runtime, section, "toneMapperDechroma", userInjectData.toneMapperDechroma);
-  reshade::set_config_value(runtime, section, "toneMapperWhitePoint", userInjectData.toneMapperWhitePoint);
+
   reshade::set_config_value(runtime, section, "colorGradingWorkflow", userInjectData.colorGradingWorkflow);
   reshade::set_config_value(runtime, section, "colorGradingStrength", userInjectData.colorGradingStrength);
   reshade::set_config_value(runtime, section, "colorGradingScaling", userInjectData.colorGradingScaling);
@@ -634,6 +660,7 @@ static void save_settings(reshade::api::effect_runtime* runtime, char* section =
   reshade::set_config_value(runtime, section, "effectFilmGrain", userInjectData.effectFilmGrain);
 }
 
+// @see https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 static void on_register_overlay(reshade::api::effect_runtime* runtime) {
   bool updateShaders = false;
   bool updateShadersOrPreset = false;
@@ -649,6 +676,7 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
   if (changedPreset) {
     switch (userInjectData.presetIndex) {
       case 0:
+        userInjectData.toneMapperPeakNits = 1000.f;
         userInjectData.toneMapperPaperWhite = 203.f;
         userInjectData.toneMapperType = 1;
         userInjectData.toneMapperExposure = 1.f;
@@ -690,79 +718,76 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
       ImGuiSliderFlags_NoInput
     );
 
-    ImGui::BeginDisabled(userInjectData.toneMapperType <= 1);
-    updateShadersOrPreset |= ImGui::SliderFloat(
-      "Exposure",
-      &userInjectData.toneMapperExposure,
-      0.f,
-      10.f,
-      "%.2f"
-    );
-    ImGui::SetItemTooltip("Input scaling factor before passing to tone mapper.");
-    ImGui::EndDisabled();
+    if (ImGui::BeginChild("Customize", ImVec2(-FLT_MIN, ImGui::GetTextLineHeightWithSpacing() * 8), ImGuiChildFlags_Border | ImGuiChildFlags_ResizeY)) {
+      if (userInjectData.toneMapperType >= 2) {
+        updateShadersOrPreset |= ImGui::SliderFloat(
+          "Peak Nits",
+          &userInjectData.toneMapperPeakNits,
+          48.f,
+          4000.f,
+          "%.0f"
+        );
+      }
 
-    ImGui::BeginDisabled(userInjectData.toneMapperType != 2 && userInjectData.toneMapperType != 4);
-    updateShadersOrPreset |= ImGui::SliderFloat(
-      "Paperwhite",
-      &userInjectData.toneMapperPaperWhite,
-      80.f,
-      500.f,
-      "%.0f"
-    );
-    ImGui::SetItemTooltip("Adjusts the brightness of 100%% white.");
-    ImGui::EndDisabled();
+      if (userInjectData.toneMapperType >= 2) {
+        updateShadersOrPreset |= ImGui::SliderFloat(
+          "Paperwhite",
+          &userInjectData.toneMapperPaperWhite,
+          48.f,
+          500.f,
+          "%.0f"
+        );
+        ImGui::SetItemTooltip("Adjusts the brightness of 100%% white.");
+      }
 
-    ImGui::BeginDisabled(userInjectData.toneMapperType != 2);
-    updateShadersOrPreset |= ImGui::SliderFloat(
-      "Contrast",
-      &userInjectData.toneMapperContrast,
-      0.f,
-      100.f,
-      "%.0f"
-    );
-    ImGui::SetItemTooltip("Adjusts tone mapper's contrast factor (if avilable).");
-    ImGui::EndDisabled();
+      if (userInjectData.toneMapperType != 0) {
+        updateShadersOrPreset |= ImGui::SliderInt(
+          "White Point",
+          &userInjectData.toneMapperWhitePoint,
+          0,
+          (sizeof(toneMapperWhitePointStrings) / sizeof(char*)) - 1,
+          toneMapperWhitePointStrings[userInjectData.toneMapperWhitePoint],
+          ImGuiSliderFlags_NoInput
+        );
+      }
 
-    ImGui::BeginDisabled(userInjectData.toneMapperType != 2);
-    updateShadersOrPreset |= ImGui::SliderFloat(
-      "Highlights",
-      &userInjectData.toneMapperHighlights,
-      0.f,
-      100.f,
-      "%.0f"
-    );
-    ImGui::EndDisabled();
+      if (userInjectData.toneMapperType >= 2) {
+        updateShadersOrPreset |= ImGui::SliderFloat(
+          "Highlights",
+          &userInjectData.toneMapperHighlights,
+          0.f,
+          100.f,
+          "%.0f"
+        );
 
-    ImGui::BeginDisabled(userInjectData.toneMapperType != 2 && userInjectData.toneMapperType != 4);
-    updateShadersOrPreset |= ImGui::SliderFloat(
-      "Shadows",
-      &userInjectData.toneMapperShadows,
-      0.f,
-      100.f,
-      "%.0f"
-    );
-    ImGui::SetItemTooltip("Adjusts tone mapper's shadows or black level (if available).");
-    ImGui::EndDisabled();
+        updateShadersOrPreset |= ImGui::SliderFloat(
+          "Shadows",
+          &userInjectData.toneMapperShadows,
+          0.f,
+          100.f,
+          "%.0f"
+        );
+        ImGui::SetItemTooltip("Adjusts tone mapper's shadows or black level.");
 
-    ImGui::BeginDisabled(userInjectData.toneMapperType != 2);
-    updateShadersOrPreset |= ImGui::SliderFloat(
-      "Dechroma",
-      &userInjectData.toneMapperDechroma,
-      0.f,
-      100.f,
-      "%.0f"
-    );
-    ImGui::SetItemTooltip("Adjusts tone mapper's dechroma strength (if available).");
-    ImGui::EndDisabled();
+        updateShadersOrPreset |= ImGui::SliderFloat(
+          "Exposure",
+          &userInjectData.toneMapperExposure,
+          0.f,
+          10.f,
+          "%.2f"
+        );
+        ImGui::SetItemTooltip("Input scaling factor before passing to tone mapper.");
+      }
 
-    updateShadersOrPreset |= ImGui::SliderInt(
-      "White Point",
-      &userInjectData.toneMapperWhitePoint,
-      0,
-      (sizeof(toneMapperWhitePointStrings) / sizeof(char*)) - 1,
-      toneMapperWhitePointStrings[userInjectData.toneMapperWhitePoint],
-      ImGuiSliderFlags_NoInput
-    );
+      if (userInjectData.toneMapperType == 3) {
+        updateShadersOrPreset |= ImGui::SliderFloat("Contrast", &userInjectData.toneMapperContrast, 0.f, 100.f, "%.0f");
+        ImGui::SetItemTooltip("Adjusts tone mapper's contrast factor.");
+
+        updateShadersOrPreset |= ImGui::SliderFloat("Dechroma", &userInjectData.toneMapperDechroma, 0.f, 100.f, "%.0f");
+        ImGui::SetItemTooltip("Adjusts tone mapper's dechroma strength.");
+      }
+    }
+    ImGui::EndChild();
   }
 
   ImGui::SeparatorText("Color Grading");

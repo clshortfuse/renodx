@@ -171,7 +171,7 @@ float3 open_drt_transform(
 
   // Chroma contrast
   const static float chc_p = 1.2f;  // 1.2 // amount of contrast
-  const static float chc_m = 0.5f;  // 0.5 // pivot of contrast curve
+  const static float chc_m = 0.7f;  // 0.5 // pivot of contrast curve
 
   // Tonescale parameters
   const float c = 1.1f * contrast;  // 1.1 contrast
@@ -179,9 +179,9 @@ float3 open_drt_transform(
 
   // Weights: controls the "vibrancy" of each channel, and influences all other aspects of the display-rendering.
   const float3 static weights = float3(
-    0.25f,  // 0.25
-    0.45f,  // 0.45
-    0.30f   // 0.30
+    0.21f,  // 0.25
+    0.71f,  // 0.45
+    0.07f   // 0.30
   );
 
   // Weights are assumed add to 1, but also affect vibrancy.
@@ -190,9 +190,9 @@ float3 open_drt_transform(
 
   // Hue Shift RGB controls
   float3 static hs = float3(
-    0.30f,   // 0.30f
-    -0.10f,  // -0.1f
-    -0.50f   // -0.5f
+    0.00f,  // 0.30f
+    0.00f,  // -0.1f
+    0.00f   // -0.5f
   );
 
   /* Tonescale Parameters 
@@ -455,17 +455,18 @@ float3 open_drt_transform_custom(
   float3 rgb,
   float peakNits = 203.f,
   float midGrayAdjustment = 1.f,
-  float contrast = 1.f,
   float highlights = 0.575f,
   float shadows = 1.f,
+  float contrast = 1.f,
   float dechroma = 1.f
 ) {
+  rgb = apply_aces_highlights(rgb);
   rgb = apply_user_shadows(rgb, shadows);
-  rgb = apply_user_highlights(rgb, (2.f * highlights - 1.15f) * 203.f / peakNits);
+  // rgb = apply_user_highlights(rgb, (2.f * highlights - 1.15f) * 203.f / peakNits);
   rgb = open_drt_transform(
-    rgb * midGrayAdjustment,
+    rgb,
     peakNits,
-    (0.12f * 203.f / peakNits),
+    midGrayAdjustment,
     contrast,
     dechroma
   );

@@ -1,28 +1,25 @@
 #ifndef SRC_CP2077_CP2077_H_
 #define SRC_CP2077_CP2077_H_
 
-// Must be 4x32bit aligned
+// Must be 32bit aligned
+// Should be 4x32
 struct ShaderInjectData {
   float toneMapperType;
+  float toneMapperPeakNits;
   float toneMapperPaperWhite;
+  float toneMapperWhitePoint;
   float toneMapperExposure;
-  float toneMapperContrast;
-
   float toneMapperHighlights;
   float toneMapperShadows;
+  float toneMapperContrast;
   float toneMapperDechroma;
-  float toneMapperWhitePoint;
-
   float colorGradingWorkflow;
   float colorGradingStrength;
   float colorGradingScaling;
   float colorGradingSaturation;
-
   float effectBloom;
   float effectVignette;
   float effectFilmGrain;
-  float filmGrainSeed;
-
   float debugValue00;
   float debugValue01;
   float debugValue02;
@@ -31,9 +28,8 @@ struct ShaderInjectData {
 
 #define TONE_MAPPER_TYPE__NONE    0.f
 #define TONE_MAPPER_TYPE__VANILLA 1.f
-#define TONE_MAPPER_TYPE__OPENDRT 2.f
-#define TONE_MAPPER_TYPE__DICE    3.f
-#define TONE_MAPPER_TYPE__ACES    4.f
+#define TONE_MAPPER_TYPE__ACES    2.f
+#define TONE_MAPPER_TYPE__OPENDRT 3.f
 
 #define OUTPUT_TYPE_SRGB8  0u
 #define OUTPUT_TYPE_PQ     1u
