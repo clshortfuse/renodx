@@ -58,6 +58,7 @@ static struct UserInjectData {
   int toneMapperType = static_cast<int>(TONE_MAPPER_TYPE__ACES);
   float toneMapperPeakNits = 550.f;
   float toneMapperPaperWhite = 203.f;
+  int toneMapperColorSpace = 1;
   int toneMapperWhitePoint = 1;
   float toneMapperHighlights = 50.f;
   float toneMapperShadows = 60.f;
@@ -82,6 +83,7 @@ static void updateShaderData() {
   shaderInjectData.toneMapperType = static_cast<float>(userInjectData.toneMapperType);
   shaderInjectData.toneMapperPeakNits = userInjectData.toneMapperPeakNits;
   shaderInjectData.toneMapperPaperWhite = userInjectData.toneMapperPaperWhite;
+  shaderInjectData.toneMapperColorSpace = static_cast<float>(userInjectData.toneMapperColorSpace);
   shaderInjectData.toneMapperWhitePoint = static_cast<float>(userInjectData.toneMapperWhitePoint - 1);
   shaderInjectData.toneMapperHighlights = userInjectData.toneMapperHighlights * 0.02f;
   shaderInjectData.toneMapperShadows = userInjectData.toneMapperShadows * 0.02f;
@@ -93,6 +95,7 @@ static void updateShaderData() {
   shaderInjectData.colorGradingStrength = userInjectData.colorGradingStrength * 0.01f;
   shaderInjectData.colorGradingScaling = static_cast<float>(userInjectData.colorGradingScaling);
   shaderInjectData.colorGradingSaturation = userInjectData.colorGradingSaturation * 0.02f;
+
   shaderInjectData.effectBloom = userInjectData.effectBloom * 0.02f;
   shaderInjectData.effectVignette = userInjectData.effectVignette * 0.02f;
   shaderInjectData.effectFilmGrain = userInjectData.effectFilmGrain * 0.02f;
@@ -114,6 +117,12 @@ static const char* toneMapperTypeStrings[] = {
   "Vanilla",
   "ACES 1.3",
   "OpenDRT"
+};
+
+static const char* toneMapperColorSpaceStrings[] = {
+  "BT.709",
+  "BT.2020",
+  "AP1"
 };
 
 static const char* toneMapperWhitePointStrings[] = {
@@ -607,6 +616,7 @@ static void load_settings(
   reshade::get_config_value(runtime, section, "toneMapperType", newData.toneMapperType);
   reshade::get_config_value(runtime, section, "toneMapperPeakNits", newData.toneMapperPeakNits);
   reshade::get_config_value(runtime, section, "toneMapperPaperWhite", newData.toneMapperPaperWhite);
+  reshade::get_config_value(runtime, section, "toneMapperColorSpace", newData.toneMapperColorSpace);
   reshade::get_config_value(runtime, section, "toneMapperWhitePoint", newData.toneMapperWhitePoint);
   reshade::get_config_value(runtime, section, "toneMapperHighlights", newData.toneMapperHighlights);
   reshade::get_config_value(runtime, section, "toneMapperShadows", newData.toneMapperShadows);
@@ -624,6 +634,7 @@ static void load_settings(
   userInjectData.toneMapperType = newData.toneMapperType;
   userInjectData.toneMapperPeakNits = newData.toneMapperPeakNits;
   userInjectData.toneMapperPaperWhite = newData.toneMapperPaperWhite;
+  userInjectData.toneMapperColorSpace = newData.toneMapperColorSpace;
   userInjectData.toneMapperWhitePoint = newData.toneMapperWhitePoint;
   userInjectData.toneMapperHighlights = newData.toneMapperHighlights;
   userInjectData.toneMapperShadows = newData.toneMapperShadows;
@@ -644,6 +655,7 @@ static void save_settings(reshade::api::effect_runtime* runtime, char* section =
   reshade::set_config_value(runtime, section, "toneMapperType", userInjectData.toneMapperType);
   reshade::set_config_value(runtime, section, "toneMapperPeakNits", userInjectData.toneMapperPeakNits);
   reshade::set_config_value(runtime, section, "toneMapperPaperWhite", userInjectData.toneMapperPaperWhite);
+  reshade::set_config_value(runtime, section, "toneMapperColorSpace", userInjectData.toneMapperColorSpace);
   reshade::set_config_value(runtime, section, "toneMapperWhitePoint", userInjectData.toneMapperWhitePoint);
   reshade::set_config_value(runtime, section, "toneMapperHighlights", userInjectData.toneMapperHighlights);
   reshade::set_config_value(runtime, section, "toneMapperShadows", userInjectData.toneMapperShadows);
@@ -676,15 +688,16 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
   if (changedPreset) {
     switch (userInjectData.presetIndex) {
       case 0:
+        userInjectData.toneMapperType = 1;
         userInjectData.toneMapperPeakNits = 1000.f;
         userInjectData.toneMapperPaperWhite = 203.f;
-        userInjectData.toneMapperType = 1;
+        userInjectData.toneMapperColorSpace = 1;
+        userInjectData.toneMapperWhitePoint = 1;
         userInjectData.toneMapperExposure = 1.f;
         userInjectData.toneMapperContrast = 50.f;
         userInjectData.toneMapperHighlights = 50.f;
         userInjectData.toneMapperShadows = 50.f;
         userInjectData.toneMapperDechroma = 50.f;
-        userInjectData.toneMapperWhitePoint = 1;
         userInjectData.colorGradingWorkflow = 1;
         userInjectData.colorGradingStrength = 100.f;
         userInjectData.colorGradingScaling = 1;
@@ -731,13 +744,25 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
 
       if (userInjectData.toneMapperType >= 2) {
         updateShadersOrPreset |= ImGui::SliderFloat(
-          "Paperwhite",
+          "Paper White",
           &userInjectData.toneMapperPaperWhite,
           48.f,
           500.f,
           "%.0f"
         );
         ImGui::SetItemTooltip("Adjusts the brightness of 100%% white.");
+      }
+
+      if (userInjectData.toneMapperType >= 2) {
+        updateShadersOrPreset |= ImGui::SliderInt(
+          "Color Space",
+          &userInjectData.toneMapperColorSpace,
+          0,
+          (sizeof(toneMapperColorSpaceStrings) / sizeof(char*)) - 1,
+          toneMapperColorSpaceStrings[userInjectData.toneMapperColorSpace],
+          ImGuiSliderFlags_NoInput
+        );
+        ImGui::SetItemTooltip("Configures workspace color space used by tone mapping.");
       }
 
       if (userInjectData.toneMapperType != 0) {

@@ -517,11 +517,13 @@ float4 tonemap(bool isHDR = false) {
 
     odtFinal = odtUnknown;
   } else {
-    outputRGB *= 1.25f; // Vanilla is boosted by 1.25x via matrices?
+    outputRGB *= 1.25f;  // Vanilla is boosted by 1.25x via matrices?
     // outputRGB = lerp(1.f, outputRGB, injectedData.debugValue00);
     outputRGB *= injectedData.toneMapperExposure;
     const float peakNits = injectedData.toneMapperPeakNits;
     const float paperWhite = min(peakNits, injectedData.toneMapperPaperWhite);
+
+    bool useD60 = (injectedData.toneMapperWhitePoint == -1.0f || (injectedData.toneMapperWhitePoint == 0.f && cb6[28u].z == 0.f));
 
     outputRGB = max(0, outputRGB);
     outputRGB = apply_user_highlights(outputRGB, (2.f * injectedData.toneMapperHighlights - 1.15f) * paperWhite / peakNits);
@@ -529,9 +531,21 @@ float4 tonemap(bool isHDR = false) {
       // OpenDRT is based around 100 nits for SDR
 
       // Size to BT2020
-      outputRGB = bt2020FromBT709(outputRGB);
-      outputRGB = max(outputRGB, 0.f);
+      float3x3 inputMatrix;
+      float3x3 outputMatrix;
 
+      if (injectedData.toneMapperColorSpace == 1.f) {
+        inputMatrix = useD60 ? BT709_2_BT2020D60_MAT : BT709_2_BT2020_MAT;
+        outputMatrix = BT2020_2_BT709_MAT;
+      } else if (injectedData.toneMapperColorSpace == 2.f) {
+        inputMatrix = BT709_2_AP1_MAT;
+        outputMatrix = useD60 ? AP1_2_BT709D60_MAT : AP1_2_BT709_MAT;
+      } else {
+        inputMatrix = useD60 ? BT709_2_BT709D60_MAT : IDENTITY_MAT;
+        outputMatrix = IDENTITY_MAT;
+      }
+
+      outputRGB = mul(inputMatrix, outputRGB);
       odtFinal = open_drt_transform_custom(
         outputRGB,
         100.f * (peakNits / paperWhite),
@@ -541,22 +555,31 @@ float4 tonemap(bool isHDR = false) {
         injectedData.toneMapperContrast,
         injectedData.toneMapperDechroma
       );
+      odtFinal = mul(outputMatrix, odtFinal);
     } else if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
       // ACES uses 48 nits for 100-nit SDR
       // Base 100-nit SDR = 203 SDR
       // Scaling is Peak Nits / Paper White
       float yMin = pow(10.f, lerp(-8.f, 0.f, injectedData.toneMapperShadows * 0.5f));
+      float3x3 clampMatrix;
+      float3x3 outputMatrix;
+      if (injectedData.toneMapperColorSpace == 1.f) {
+        clampMatrix = useD60 ? AP1_2_BT2020D60_MAT : AP1_2_BT2020_MAT;
+        outputMatrix = BT2020_2_BT709_MAT;
+      } else if (injectedData.toneMapperColorSpace == 2.f) {
+        clampMatrix = useD60 ? IDENTITY_MAT : AP1_2_AP1D65_MAT;
+        outputMatrix = AP1_2_BT709D60_MAT;  // Skip D65=>D60
+      } else {
+        clampMatrix = useD60 ? AP1_2_BT709D60_MAT : AP1_2_BT709_MAT;
+        outputMatrix = IDENTITY_MAT;
+      }
       odtFinal = aces_rrt_odt(
         outputRGB,
         yMin,
-        48.f * (peakNits / paperWhite)
+        48.f * (peakNits / paperWhite),
+        clampMatrix
       );
-    }
-
-    if (injectedData.toneMapperWhitePoint == -1.0f || (injectedData.toneMapperWhitePoint == 0.f && cb6[28u].z == 0.f)) {
-      odtFinal = mul(BT2020_2_BT709D60_MAT, odtFinal);
-    } else {
-      odtFinal = mul(BT2020_2_BT709_MAT, odtFinal);
+      odtFinal = mul(outputMatrix, odtFinal);
     }
 
     const float CDPR_WHITE = 100.f;

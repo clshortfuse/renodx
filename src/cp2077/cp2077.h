@@ -7,6 +7,7 @@ struct ShaderInjectData {
   float toneMapperType;
   float toneMapperPeakNits;
   float toneMapperPaperWhite;
+  float toneMapperColorSpace;
   float toneMapperWhitePoint;
   float toneMapperExposure;
   float toneMapperHighlights;

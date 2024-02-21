@@ -657,12 +657,12 @@ float3 aces_odt_tone_map(float3 rgbPre, float minY, float maxY) {
   return clamp(linearCV, 0.0, 65535.0f);
 }
 
-float3 aces_odt(float3 rgbPre, float minY, float maxY) {
+float3 aces_odt(float3 rgbPre, float minY, float maxY, float3x3 ap1Matrix = AP1_2_BT709_MAT) {
   float3 scaled = aces_odt_tone_map(rgbPre, minY, maxY);
 
   scaled = lerp(scaled, mul(BlueCorrectInvAP1, scaled), 0.6f);
 
-  float3 linearCV = mul(AP1_2_BT2020_MAT, scaled);
+  float3 linearCV = mul(ap1Matrix, scaled);
 
   linearCV = clamp(linearCV, 0.0, 65535.0f);
   float3 outputCV = linCV_2_Y(linearCV, maxY, minY);
@@ -671,10 +671,11 @@ float3 aces_odt(float3 rgbPre, float minY, float maxY) {
   return outputCV / maxY;
 }
 
-float3 aces_rrt_odt(float3 srgb, float minY, float maxY) {
+float3 aces_rrt_odt(float3 srgb, float minY, float maxY, float3x3 ap1Matrix = AP1_2_BT709_MAT) {
   return aces_odt(
     aces_rrt(srgb),
     minY,
-    maxY
+    maxY,
+    ap1Matrix
   );
 }
