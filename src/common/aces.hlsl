@@ -1,3 +1,5 @@
+#include "./color.hlsl"
+
 #define FLT_MIN asfloat(0x00800000)  //1.175494351e-38f
 #define FLT_MAX asfloat(0x7F7FFFFF)  //3.402823466e+38f
 
@@ -22,28 +24,10 @@ struct SegmentedSplineParams_c9 {
 };
 
 // clang-format off
-static const float3x3 XYZ_2_AP0_MAT = {
-   1.0498110175, 0.0000000000,-0.0000974845,
-  -0.4959030231, 1.3733130458, 0.0982400361,
-   0.0000000000, 0.0000000000, 0.9912520182,
-};
-
 static const float3x3 RRT_SAT_MAT = {
   0.9708890, 0.0269633, 0.00214758,
   0.0108892, 0.9869630, 0.00214758,
   0.0108892, 0.0269633, 0.96214800
-};
-
-static const float3x3 AP1_2_XYZ_MAT = {
-   0.6624541811, 0.1340042065, 0.1561876870,
-   0.2722287168, 0.6740817658, 0.0536895174,
-  -0.0055746495, 0.0040607335, 1.0103391003
-};
-
-static const float3x3 XYZ_2_AP1_MAT = {
-   1.6410233797, -0.3248032942, -0.2364246952,
-  -0.6636628587,  1.6153315917,  0.0167563477,
-   0.0117218943, -0.0082844420,  0.9883948585
 };
 
 static const float3x3 ODT_SAT_MAT = {
@@ -52,12 +36,7 @@ static const float3x3 ODT_SAT_MAT = {
   0.019056, 0.0471857, 0.93375800
 };
 
-// mul( AP0_2_XYZ_MAT, XYZ_2_AP1_MAT );
-static const float3x3 AP0_2_AP1_MAT = {
-   1.4514393161, -0.2365107469, -0.2149285693,
-  -0.0765537734,  1.1762296998, -0.0996759264,
-   0.0083161484, -0.0060324498,  0.9977163014,
-};
+
 
 static const float3x3 M = {
    0.5, -1.0, 0.5,
@@ -683,10 +662,10 @@ float3 aces_odt(float3 rgbPre, float minY, float maxY) {
 
   scaled = lerp(scaled, mul(BlueCorrectInvAP1, scaled), 0.6f);
 
-  float3 linearCV = mul(AP1_2_SRGB, scaled);
+  float3 linearCV = mul(AP1_2_BT2020_MAT, scaled);
 
   linearCV = clamp(linearCV, 0.0, 65535.0f);
-  float3 outputCV = linCV_2_Y(linearCV, maxY, 0.0);
+  float3 outputCV = linCV_2_Y(linearCV, maxY, minY);
   outputCV = clamp(outputCV, 0.0, 65535.0f);
 
   return outputCV / maxY;

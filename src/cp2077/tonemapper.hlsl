@@ -381,8 +381,7 @@ float4 tonemap(bool isHDR = false) {
     float peakNits = cb6[27u].y;      // User peak Nits
     outputRGB *= toneMapperMidpoint;  // Exposure
 
-    // BT709 to AP0 (TODO: flatten matrix)
-    float3 outputXYZ = mul(BT709_To_XYZ, outputRGB);
+    float3 outputXYZ = mul(BT709_2_XYZ_MAT, outputRGB);
     float3 outputXYZD60 = mul(D65_2_D60_CAT, outputXYZ);
     float3 aces = mul(XYZ_2_AP0_MAT, outputXYZD60);
 
@@ -454,41 +453,34 @@ float4 tonemap(bool isHDR = false) {
     // Custom Matrix D60_2_D65?
 
     // clang-format off
-      float3x3 customMatrix0 = float3x3(
-        cb6[21u].x, cb6[21u].y, cb6[21u].z,
-        cb6[22u].x, cb6[22u].y, cb6[22u].z,
-        cb6[23u].x, cb6[23u].y, cb6[23u].z
-      );
+    float3x3 customMatrix0 = float3x3(
+      cb6[21u].x, cb6[21u].y, cb6[21u].z,
+      cb6[22u].x, cb6[22u].y, cb6[22u].z,
+      cb6[23u].x, cb6[23u].y, cb6[23u].z
+    );
     // clang-format on
-    // float3 odtUnknown = float3(
-    //   mad(cb6[21u].z, odtXYZ.z, mad(cb6[21u].y, odtXYZ.y, cb6[21u].x * odtXYZ.x)),
-    //   mad(cb6[22u].z, odtXYZ.z, mad(cb6[22u].y, odtXYZ.y, cb6[22u].x * odtXYZ.x)),
-    //   mad(cb6[23u].z, odtXYZ.z, mad(cb6[23u].y, odtXYZ.y, cb6[23u].x * odtXYZ.x))
-    // );
 
-    // odtUnknown = mul(customMatrix0, odtXYZ);
-    float3 odtUnknown = odtXYZ;
+    float3 odtUnknown = mul(customMatrix0, odtXYZ);
     if (cb6[27u].z == 0.0f || cb6[27u].z == 1.f) {
       odtUnknown = saturate(odtUnknown);
     } else if (cb6[27u].z == 2.0f) {
       odtUnknown = max((yRange * odtUnknown) + minNits, 0);
-      // odtUnknown = float3(
-      //   mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
-      //   mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
-      //   mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x))
-      // );
-      odtUnknown = mul(XYZ_2_REC709_MAT, odtUnknown);
-      // odtUnknown /= min(80.0f, peakNits);
-      odtUnknown /= 100.f;
+      odtUnknown = float3(
+        mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
+        mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
+        mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x))
+      );
+      odtUnknown = mul(XYZ_2_BT709_MAT, odtUnknown);
+      odtUnknown /= min(80.0f, peakNits);
     } else if (cb6[27u].z == 3.0f) {
       odtUnknown = max((yRange * odtUnknown) + minNits, 0);
-      // odtUnknown = float3(
-      //   mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
-      //   mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
-      //   mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x))
-      // );
-      // float scale = 1.0f / min(80.0f, peakNits);
-      odtUnknown = mul(XYZ_2_REC2020_MAT, odtUnknown);
+      odtUnknown = float3(
+        mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
+        mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
+        mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x))
+      );
+      float scale = 1.0f / min(80.0f, peakNits);
+      odtUnknown = mul(XYZ_2_BT2020_MAT, odtUnknown);
     } else if (cb6[27u].z == 4.0f) {
       odtUnknown = max(odtUnknown, 0.f);
       float scale = max(peakNits, 80.0f) * 0.001000000047497451305389404296875f;
@@ -525,6 +517,7 @@ float4 tonemap(bool isHDR = false) {
 
     odtFinal = odtUnknown;
   } else {
+    outputRGB *= 1.25f; // Vanilla is boosted by 1.25x via matrices?
     // outputRGB = lerp(1.f, outputRGB, injectedData.debugValue00);
     outputRGB *= injectedData.toneMapperExposure;
     const float peakNits = injectedData.toneMapperPeakNits;
@@ -535,6 +528,10 @@ float4 tonemap(bool isHDR = false) {
     if (toneMapperType == TONE_MAPPER_TYPE__OPENDRT) {
       // OpenDRT is based around 100 nits for SDR
 
+      // Size to BT2020
+      outputRGB = bt2020FromBT709(outputRGB);
+      outputRGB = max(outputRGB, 0.f);
+
       odtFinal = open_drt_transform_custom(
         outputRGB,
         100.f * (peakNits / paperWhite),
@@ -544,7 +541,6 @@ float4 tonemap(bool isHDR = false) {
         injectedData.toneMapperContrast,
         injectedData.toneMapperDechroma
       );
-      // odtFinal = 1.f;
     } else if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
       // ACES uses 48 nits for 100-nit SDR
       // Base 100-nit SDR = 203 SDR
@@ -557,15 +553,14 @@ float4 tonemap(bool isHDR = false) {
       );
     }
 
+    if (injectedData.toneMapperWhitePoint == -1.0f || (injectedData.toneMapperWhitePoint == 0.f && cb6[28u].z == 0.f)) {
+      odtFinal = mul(BT2020_2_BT709D60_MAT, odtFinal);
+    } else {
+      odtFinal = mul(BT2020_2_BT709_MAT, odtFinal);
+    }
+
     const float CDPR_WHITE = 100.f;
     odtFinal *= peakNits / CDPR_WHITE;
-
-    if (injectedData.toneMapperWhitePoint == -1.0f || (injectedData.toneMapperWhitePoint == 0.f && cb6[28u].z == 0.f)) {
-      float3 xyz = xyzFromBT709(odtFinal);
-      // TODO flatten
-      xyz = mul(D65_2_D60_CAT, xyz);
-      odtFinal = mul(XYZ_2_REC709_MAT, xyz);
-    }
   }
 
   if (injectedData.colorGradingWorkflow == 1.f || asuint(cb6[42u]).y == 0u) {
