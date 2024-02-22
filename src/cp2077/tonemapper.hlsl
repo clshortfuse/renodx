@@ -20,7 +20,8 @@ static const float HEATMAP_COLORS[27] = {
 };
 // clang-format on
 
-static const float SQRT_HALF = sqrt(0.5f);
+static const float SQRT_HALF = sqrt(1.f / 2.f);   // 0.7071067811865476
+static const float SQRT_THIRD = sqrt(1.f / 3.f);  // 0.5773502691896257
 
 // 32x32bit
 struct SColorGrading {
@@ -205,8 +206,31 @@ float3 sampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
     }
 
     color /= scale;
+
+    if (injectedData.colorGradingScaling == 2.f && injectedData.colorGradingCorrection) {
+      float3 peakWhite = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, float(1.f).xxx, 0.0f).rgb;
+      if ((_503 & 240u) == 16u) {
+        peakWhite = linearFromSRGB(color);
+      }
+
+      const float lutPeakY = yFromBT709(peakWhite);
+      const float targetPeakY = 100.f;
+
+      // Only applies on LUTs that are clamped (all?)
+      if (lutPeakY < targetPeakY) {
+        // Inverse tonemap from clamped to peak.
+        const float inputY = yFromBT709(inputColor);
+        const float colorY = yFromBT709(color);
+        const float a = lutPeakY / targetPeakY;  // fixed per LUT 0.19f
+        const float b = lerp(1.f, 0.f, injectedData.colorGradingCorrection);
+        const float g = inputY;
+        const float h = colorY;
+        const float newY = h * pow((1.f / a), pow(g / targetPeakY, b / a));
+        color *= colorY ? newY / colorY : 0;
+      }
+    }
   }
-  if (injectedData.colorGradingScaling) {
+  if (injectedData.colorGradingScaling == 1.f) {
     color *= lutSettings.z;  // output scale
   }
   return color;
@@ -224,8 +248,8 @@ float3 sampleAllLUTs(const float3 color) {
   }
 
   if (injectedData.colorGradingSaturation != 1.f) {
-    float luminance = yFromBT709(compositedColor);
-    return lerp(luminance, compositedColor, injectedData.colorGradingSaturation);
+    float grayscale = yFromBT709(compositedColor);
+    compositedColor = lerp(grayscale, compositedColor, injectedData.colorGradingSaturation);
   }
 
   // This was probably a for loop (0-7)
@@ -270,104 +294,128 @@ float3 applyGamma(float3 input, uint type) {
 
 float4 tonemap(bool isHDR = false) {
   uint4 _69 = asuint(cb6[41u]);
-  float _73 = float(_69.y + 4294967295u);
+  uint lutSize = _69.y;
 
-  float _88 = exp2(((float(gl_GlobalInvocationID.x) / _73) - cb6[41u].w) / cb6[41u].z);
-  float _89 = exp2(((float(gl_GlobalInvocationID.y) / _73) - cb6[41u].w) / cb6[41u].z);
-  float _90 = exp2(((float(gl_GlobalInvocationID.z) / _73) - cb6[41u].w) / cb6[41u].z);
+  float maxLutSize = float(_69.y + 4294967295u);  // lutSize - 1u
 
-  const float3 inputColor = float3(_88, _89, _90);
+  const float3 position = float3(gl_GlobalInvocationID.xyz) / (float(lutSize) - 1.f);
+  float3 inputColor;
+  if (injectedData.colorGradingScaling == 2.f) {
+    float3 rec2020Color = linearFromPQ(position) * 10000.f / 100.f;
+    inputColor = max(0, bt709FromBT2020(rec2020Color));
+  } else {
+    inputColor = exp2((position - cb6[41u].w) / cb6[41u].z);
+  }
+
+  float3 outputRGB = inputColor;
 
   float3 color = inputColor;
-  float exposureMin = cb6[5u].w;
-  float exposureMax = cb6[6u].w;
+  float fogRangeMin = cb6[5u].w;  // 0.0001
+  float fogRangeMax = cb6[6u].w;  // 0.0045
 
   float _99 = 1.0f - cb6[6u].w;
 
-  float _118 = _88 - exposureMin;
-  float _119 = _89 - exposureMin;
-  float _120 = _90 - exposureMin;
-  float _136 = _88 - exposureMax;
+  float3 colorAdjust1 = cb6[5u].rgb;  // 0 0 0
 
-  float _137 = _89 - exposureMax;
-  float _138 = _90 - exposureMax;
+  float _118 = color.r - fogRangeMin;
+  float _119 = color.g - fogRangeMin;
+  float _120 = color.b - fogRangeMin;
+  float _136 = color.r - fogRangeMax;
+  float _137 = color.g - fogRangeMax;
+  float _138 = color.b - fogRangeMax;
 
-  float _194 = ((((_118 * (cb6[5u].x + 1.0f)) + exposureMin) * float((_88 >= exposureMin) && (_88 <= exposureMax))) + ((float(_88 < exposureMin) * exposureMin) * (((1.0f - cb6[4u].x) * (_88 / exposureMin)) + cb6[4u].x))) + (((_136 * (cb6[6u].x + 1.0f)) + exposureMax) * float(_88 > exposureMax));
-  float _195 = ((((_119 * (cb6[5u].y + 1.0f)) + exposureMin) * float((_89 >= exposureMin) && (_89 <= exposureMax))) + ((float(_89 < exposureMin) * exposureMin) * (((1.0f - cb6[4u].y) * (_89 / exposureMin)) + cb6[4u].y))) + (((_137 * (cb6[6u].y + 1.0f)) + exposureMax) * float(_89 > exposureMax));
-  float _196 = ((((_120 * (cb6[5u].z + 1.0f)) + exposureMin) * float((_90 >= exposureMin) && (_90 <= exposureMax))) + ((float(_90 < exposureMin) * exposureMin) * (((1.0f - cb6[4u].z) * (_90 / exposureMin)) + cb6[4u].z))) + (((_138 * (cb6[6u].z + 1.0f)) + exposureMax) * float(_90 > exposureMax));
+  float _194 = ((((_118 * (cb6[5u].r + 1.0f)) + fogRangeMin) * float((color.r >= fogRangeMin) && (color.r <= fogRangeMax)))
+                + ((float(color.r < fogRangeMin) * fogRangeMin) * (((1.0f - cb6[4u].x) * (color.r / fogRangeMin)) + cb6[4u].r)))
+             + (((_136 * (cb6[6u].r + 1.0f)) + fogRangeMax) * float(color.r > fogRangeMax));
+  float _195 = ((((_119 * (cb6[5u].g + 1.0f)) + fogRangeMin) * float((color.g >= fogRangeMin) && (color.g <= fogRangeMax))) + ((float(color.g < fogRangeMin) * fogRangeMin) * (((1.0f - cb6[4u].y) * (color.g / fogRangeMin)) + cb6[4u].y))) + (((_137 * (cb6[6u].y + 1.0f)) + fogRangeMax) * float(color.g > fogRangeMax));
+  float _196 = ((((_120 * (cb6[5u].b + 1.0f)) + fogRangeMin) * float((color.b >= fogRangeMin) && (color.b <= fogRangeMax))) + ((float(color.b < fogRangeMin) * fogRangeMin) * (((1.0f - cb6[4u].z) * (color.b / fogRangeMin)) + cb6[4u].z))) + (((_138 * (cb6[6u].z + 1.0f)) + fogRangeMax) * float(color.b > fogRangeMax));
 
-  color = float3(_194, _195, _196);
-  float3 gradingMix = cb6[0u].rgb;
-  float3 gradingPow = cb6[1u].rgb;
-  float3 gradingMult = cb6[2u].rgb;
-  float3 gradingGain = cb6[3u].rgb;
-  float colorExtra = cb6[4u].w;
-  float colorScaling = cb6[7u].x;
+  color = float3(_194, _195, _196);  // outside | inside
+  float3 fillWhite = cb6[0u].rgb;    // 0,0,0   | 0.00, 0.00, 0.00
+  float3 sceneGamma = cb6[1u].rgb;   // 1,1,1   | 1.00, 1.15, 1.05
+  float3 sceneGain = cb6[2u].rgb;    // 1,1,1   | 1.00, 1.18, 1.00
+  float3 sceneLift = cb6[3u].rgb;    // 0,0,0   | 0.00, 0.00, 0.00
+  float blackFloor = cb6[4u].w;      // 0       | 0.112
+  float brightness = cb6[7u].x;      // 1       | 1.000
 
-  color = (1.0f - color) * gradingMix + color;
-  color *= gradingMult;
-  color += gradingGain;
-  color = pow(max(color, 0), gradingPow);
-  color -= colorExtra;    // Could cause negative values
-  color *= colorScaling;  // Could amplify negative values
-  color += colorExtra;
+  float3 adjustedColor = inputColor;
+  adjustedColor = lerp(adjustedColor, 1.f, fillWhite);
+  adjustedColor *= sceneGain;
+  adjustedColor += sceneLift;
+  if (sceneGamma.r != 1.f || sceneGamma.g != 1.f || sceneGamma.b != 1.f) {
+    adjustedColor = pow(max(0, adjustedColor), sceneGamma);
+  }
+  adjustedColor = lerp(blackFloor, adjustedColor, brightness);
 
-  float _256 = color.r;
-  float _257 = color.g;
-  float _258 = color.b;
+  float _256 = adjustedColor.r;
+  float _257 = adjustedColor.g;
+  float _258 = adjustedColor.b;
 
-  float _260 = sin(cb6[7u].z);
-  float _261 = cos(cb6[7u].z);
-  float _262 = (-0.0f) - _260;
-  float _264 = _260 * 0.8164966106414794921875f;
-  float _266 = _261 * (-0.40824830532073974609375f);
-  float _268 = mad(SQRT_HALF, _262, _266);
-  float _270 = _260 * (-0.40824830532073974609375f);
-  float _271 = mad(SQRT_HALF, _261, _270);
-  float _272 = mad(-SQRT_HALF, _262, _266);
-  float _274 = mad(-SQRT_HALF, _261, _270);
-  float _279 = mad(0.5352036952972412109375f, 0.57735002040863037109375f, mad(_264, -0.3726499974727630615234375f, _261 * 0.69100105762481689453125f));
-  float _282 = _261 * (-0.3089949786663055419921875f);
-  float _286 = mad(0.5352036952972412109375f, 0.57735002040863037109375f, mad(_264, 0.3344599902629852294921875f, _282));
-  float _289 = mad(0.5352036952972412109375f, 0.57735002040863037109375f, mad(_264, -1.07974994182586669921875f, _282));
-  float _293 = mad(1.05481898784637451171875f, 0.57735002040863037109375f, mad(_271, -0.3726499974727630615234375f, _268 * 0.84630000591278076171875f));
-  float _295 = _268 * (-0.3784399926662445068359375f);
-  float _298 = mad(1.05481898784637451171875f, 0.57735002040863037109375f, mad(_271, 0.3344599902629852294921875f, _295));
-  float _300 = mad(1.05481898784637451171875f, 0.57735002040863037109375f, mad(_271, -1.07974994182586669921875f, _295));
-  float _303 = mad(0.1420280933380126953125f, 0.57735002040863037109375f, mad(_274, -0.3726499974727630615234375f, _272 * 0.84630000591278076171875f));
-  float _305 = _272 * (-0.3784399926662445068359375f);
-  float _307 = mad(0.1420280933380126953125f, 0.57735002040863037109375f, mad(_274, 0.3344599902629852294921875f, _305));
-  float _309 = mad(0.1420280933380126953125f, 0.57735002040863037109375f, mad(_274, -1.07974994182586669921875f, _305));
+  const float hueShift = cb6[7u].z;
+  // Add branch to skip if not hue shifting
+  if (hueShift) {
+    float _260 = sin(hueShift);  // sin(0)
+    float _261 = cos(hueShift);  // cos(0)
+    float _262 = (-0.0f) - _260;
+    float _264 = _260 * 0.8164966106414794921875f;
+    float _266 = _261 * (-0.40824830532073974609375f);
+    float _268 = mad(SQRT_HALF, _262, _266);
+    float _270 = _260 * (-0.40824830532073974609375f);
+    float _271 = mad(SQRT_HALF, _261, _270);
+    float _272 = mad(-SQRT_HALF, _262, _266);
+    float _274 = mad(-SQRT_HALF, _261, _270);
+    float _279 = mad(0.5352036952972412109375f, SQRT_THIRD, mad(_264, -0.3726499974727630615234375f, _261 * 0.69100105762481689453125f));
+    float _282 = _261 * (-0.3089949786663055419921875f);
+    float _286 = mad(0.5352036952972412109375f, SQRT_THIRD, mad(_264, 0.3344599902629852294921875f, _282));
+    float _289 = mad(0.5352036952972412109375f, SQRT_THIRD, mad(_264, -1.07974994182586669921875f, _282));
+    float _293 = mad(1.05481898784637451171875f, SQRT_THIRD, mad(_271, -0.3726499974727630615234375f, _268 * 0.84630000591278076171875f));
+    float _295 = _268 * (-0.3784399926662445068359375f);
+    float _298 = mad(1.05481898784637451171875f, SQRT_THIRD, mad(_271, 0.3344599902629852294921875f, _295));
+    float _300 = mad(1.05481898784637451171875f, SQRT_THIRD, mad(_271, -1.07974994182586669921875f, _295));
+    float _303 = mad(0.1420280933380126953125f, SQRT_THIRD, mad(_274, -0.3726499974727630615234375f, _272 * 0.84630000591278076171875f));
+    float _305 = _272 * (-0.3784399926662445068359375f);
+    float _307 = mad(0.1420280933380126953125f, SQRT_THIRD, mad(_274, 0.3344599902629852294921875f, _305));
+    float _309 = mad(0.1420280933380126953125f, SQRT_THIRD, mad(_274, -1.07974994182586669921875f, _305));
 
-  float bt601Strength = cb6[7u].y;  // 0.995483
-  float inverseBt601Strength = 1.0f - bt601Strength;
+    float bt601Strength = cb6[7u].y;  // 1
+    float inverseBt601Strength = 1.0f - bt601Strength;
 
-  float _311 = 1.0f - cb6[7u].y;
+    float _311 = 1.0f - cb6[7u].y;
 
-  float _312 = _311 * 0.2989999949932098388671875f;
-  float _314 = _312 + cb6[7u].y;
+    float _312 = _311 * 0.2989999949932098388671875f;
+    float _314 = _312 + cb6[7u].y;
 
-  float _315 = _311 * 0.58700001239776611328125f;
-  float _317 = _315 + cb6[7u].y;
+    float _315 = _311 * 0.58700001239776611328125f;
+    float _317 = _315 + cb6[7u].y;
+    float _318 = _311 * 0.114000000059604644775390625f;
+    float _320 = _318 + cb6[7u].y;
 
-  float _318 = _311 * 0.114000000059604644775390625f;
-  float _320 = _318 + cb6[7u].y;
+    // _314 = lerp(cb6[7u].y, 1.f, 0.299f)
+    // _317 = lerp(cb6[7u].y, 1.f, 0.587f)
+    // _320 = lerp(cb6[7u].y, 1.f, 0.114f)
 
-  float _324 = _312 * _279;
-  float _332 = _312 * _293;
-  float _340 = _312 * _303;
+    float _324 = _312 * _279;
+    float _332 = _312 * _293;
+    float _340 = _312 * _303;
 
-  float _355 = cb6[3u].w + mad(_258, mad(_309, _318, mad(_307, _315, _314 * _303)), mad(_257, mad(_300, _318, mad(_298, _315, _314 * _293)), mad(_289, _318, mad(_286, _315, _314 * _279)) * _256));
-  float _356 = cb6[3u].w + mad(_258, mad(_309, _318, mad(_307, _317, _340)), mad(_257, mad(_300, _318, mad(_298, _317, _332)), mad(_289, _318, mad(_286, _317, _324)) * _256));
-  float _357 = cb6[3u].w + mad(_258, mad(_309, _320, mad(_307, _315, _340)), mad(_257, mad(_300, _320, mad(_298, _315, _332)), mad(_289, _320, mad(_286, _315, _324)) * _256));
+    float _355 = cb6[3u].w + mad(_258, mad(_309, _318, mad(_307, _315, _314 * _303)), mad(_257, mad(_300, _318, mad(_298, _315, _314 * _293)), mad(_289, _318, mad(_286, _315, _314 * _279)) * _256));
+    float _356 = cb6[3u].w + mad(_258, mad(_309, _318, mad(_307, _317, _340)), mad(_257, mad(_300, _318, mad(_298, _317, _332)), mad(_289, _318, mad(_286, _317, _324)) * _256));
+    float _357 = cb6[3u].w + mad(_258, mad(_309, _320, mad(_307, _315, _340)), mad(_257, mad(_300, _320, mad(_298, _315, _332)), mad(_289, _320, mad(_286, _315, _324)) * _256));
+    outputRGB = float3(_355, _356, _357);
+  } else {
+    outputRGB = adjustedColor;
+  }
 
-  float3 outputRGB = float3(_355, _356, _357);
+  // outputRGB = lerp(inputColor, outputRGB, injectedData.debugValue03);
 
   if ((injectedData.colorGradingWorkflow == -1.f || asuint(cb6[42u]).y == 1u) && (_69.x != 0u)) {
     outputRGB = sampleAllLUTs(outputRGB);
   }
 
-  const float toneMapperMidpoint = cb6[42u].z;
+  float minNits = cb6[27u].x;  // 0.005
+  const float exposure = cb6[42u].z;
+  float peakNits = cb6[27u].y;           // User peak Nits
+  const float midGrayNits = cb6[18u].w;  // Usually 10.0
   float3 odtFinal = outputRGB;
   float toneMapperType = injectedData.toneMapperType;
 
@@ -375,11 +423,9 @@ float4 tonemap(bool isHDR = false) {
     // No-op
   } else if (!isHDR) {
     // This branch should be optimized away by compiler
-    outputRGB *= toneMapperMidpoint;
+    outputRGB *= exposure;
   } else if (toneMapperType == TONE_MAPPER_TYPE__VANILLA) {
-    float minNits = cb6[27u].x;       // 0.005
-    float peakNits = cb6[27u].y;      // User peak Nits
-    outputRGB *= toneMapperMidpoint;  // Exposure
+    outputRGB *= exposure;  // Exposure
 
     float3 outputXYZ = mul(BT709_2_XYZ_MAT, outputRGB);
     float3 outputXYZD60 = mul(D65_2_D60_CAT, outputXYZ);
@@ -405,8 +451,8 @@ float4 tonemap(bool isHDR = false) {
       {cb6[8u].x, cb6[9u].x, cb6[10u].x, cb6[11u].x, cb6[12u].x, cb6[13u].x, cb6[14u].x, cb6[15u].x, cb6[16u].x, cb6[17u].x}, // coefsLow[10]
       {cb6[8u].y, cb6[9u].y, cb6[10u].y, cb6[11u].y, cb6[12u].y, cb6[13u].y, cb6[14u].y, cb6[15u].y, cb6[16u].y, cb6[17u].y}, // coefsHigh[10]
       {cb6[18u].x, cb6[18u].y}, // minPoint
-      {cb6[18u].z, cb6[18u].w}, // midPoint
-      {cb6[19u].x, cb6[19u].y}, // maxPoint
+      {cb6[18u].z, midGrayNits}, // midPoint
+      {cb6[19u].x, cb6[19u].y}, // maxPoint - doesn't always match peak nits?
       cb6[19u].z, // slopeLow
       cb6[19u].w  // slopeHigh
     };
@@ -450,9 +496,8 @@ float4 tonemap(bool isHDR = false) {
       odtXYZ = mul(D60_2_D65_CAT, odtXYZ);
     }
 
-    // Custom Matrix D60_2_D65?
-
     // clang-format off
+    // XYZ_2_BT709_MAT
     float3x3 customMatrix0 = float3x3(
       cb6[21u].x, cb6[21u].y, cb6[21u].z,
       cb6[22u].x, cb6[22u].y, cb6[22u].z,
@@ -465,6 +510,7 @@ float4 tonemap(bool isHDR = false) {
       odtUnknown = saturate(odtUnknown);
     } else if (cb6[27u].z == 2.0f) {
       odtUnknown = max((yRange * odtUnknown) + minNits, 0);
+      // BT709_2_XYZ_MAT
       odtUnknown = float3(
         mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
         mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
@@ -517,11 +563,9 @@ float4 tonemap(bool isHDR = false) {
 
     odtFinal = odtUnknown;
   } else {
-    outputRGB *= 1.25f;  // Vanilla is boosted by 1.25x via matrices?
-    // outputRGB = lerp(1.f, outputRGB, injectedData.debugValue00);
-    outputRGB *= injectedData.toneMapperExposure;
-    const float peakNits = injectedData.toneMapperPeakNits;
-    const float paperWhite = min(peakNits, injectedData.toneMapperPaperWhite);
+    peakNits = injectedData.toneMapperPeakNits;
+    outputRGB *= exposure * injectedData.toneMapperExposure * (midGrayNits / 10.f);
+    const float paperWhite = injectedData.toneMapperPaperWhite;
 
     bool useD60 = (injectedData.toneMapperWhitePoint == -1.0f || (injectedData.toneMapperWhitePoint == 0.f && cb6[28u].z == 0.f));
 
@@ -592,10 +636,6 @@ float4 tonemap(bool isHDR = false) {
       odtFinal = sampleAllLUTs(odtFinal);
     }
   }
-
-  // odtFinal = lerp(1.f, odtFinal, injectedData.debugValue00);
-  // odtFinal = lerp(cb6[18u].z, odtFinal, injectedData.debugValue01);
-  // odtFinal = lerp(cb6[18u].w, odtFinal, injectedData.debugValue02);
 
   return float4(odtFinal.rgb, 0.f);
 }

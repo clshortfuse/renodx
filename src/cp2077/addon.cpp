@@ -62,13 +62,14 @@ static struct UserInjectData {
   int toneMapperWhitePoint = 1;
   float toneMapperHighlights = 50.f;
   float toneMapperShadows = 60.f;
-  float toneMapperExposure = 2.f;
+  float toneMapperExposure = 1.f;
   float toneMapperContrast = 55.f;
   float toneMapperDechroma = 50.f;
   int colorGradingWorkflow = 1;
   float colorGradingStrength = 100.f;
-  int colorGradingScaling = 0;
+  int colorGradingScaling = 2;
   float colorGradingSaturation = 50.f;
+  float colorGradingCorrection = 50.f;
   float effectBloom = 50.f;
   float effectVignette = 50.f;
   float effectFilmGrain = 50.f;
@@ -95,6 +96,7 @@ static void updateShaderData() {
   shaderInjectData.colorGradingStrength = userInjectData.colorGradingStrength * 0.01f;
   shaderInjectData.colorGradingScaling = static_cast<float>(userInjectData.colorGradingScaling);
   shaderInjectData.colorGradingSaturation = userInjectData.colorGradingSaturation * 0.02f;
+  shaderInjectData.colorGradingCorrection = userInjectData.colorGradingCorrection * 0.01f;
 
   shaderInjectData.effectBloom = userInjectData.effectBloom * 0.02f;
   shaderInjectData.effectVignette = userInjectData.effectVignette * 0.02f;
@@ -140,6 +142,7 @@ static const char* colorGradingWorkflowStrings[] = {
 static const char* colorGradingScalingStrings[] = {
   "None",
   "Vanilla",
+  "Custom"
 };
 
 void logLayout(
@@ -628,6 +631,7 @@ static void load_settings(
   reshade::get_config_value(runtime, section, "colorGradingStrength", newData.colorGradingStrength);
   reshade::get_config_value(runtime, section, "colorGradingScaling", newData.colorGradingScaling);
   reshade::get_config_value(runtime, section, "colorGradingSaturation", newData.colorGradingSaturation);
+  reshade::get_config_value(runtime, section, "colorGradingCorrection", newData.colorGradingCorrection);
   reshade::get_config_value(runtime, section, "effectBloom", newData.effectBloom);
   reshade::get_config_value(runtime, section, "effectVignette", newData.effectVignette);
   reshade::get_config_value(runtime, section, "effectFilmGrain", newData.effectFilmGrain);
@@ -646,6 +650,7 @@ static void load_settings(
   userInjectData.colorGradingStrength = newData.colorGradingStrength;
   userInjectData.colorGradingScaling = newData.colorGradingScaling;
   userInjectData.colorGradingSaturation = newData.colorGradingSaturation;
+  userInjectData.colorGradingCorrection = newData.colorGradingCorrection;
   userInjectData.effectBloom = newData.effectBloom;
   userInjectData.effectVignette = newData.effectVignette;
   userInjectData.effectFilmGrain = newData.effectFilmGrain;
@@ -667,6 +672,7 @@ static void save_settings(reshade::api::effect_runtime* runtime, char* section =
   reshade::set_config_value(runtime, section, "colorGradingStrength", userInjectData.colorGradingStrength);
   reshade::set_config_value(runtime, section, "colorGradingScaling", userInjectData.colorGradingScaling);
   reshade::set_config_value(runtime, section, "colorGradingSaturation", userInjectData.colorGradingSaturation);
+  reshade::set_config_value(runtime, section, "colorGradingCorrection", userInjectData.colorGradingCorrection);
   reshade::set_config_value(runtime, section, "effectBloom", userInjectData.effectBloom);
   reshade::set_config_value(runtime, section, "effectVignette", userInjectData.effectVignette);
   reshade::set_config_value(runtime, section, "effectFilmGrain", userInjectData.effectFilmGrain);
@@ -702,6 +708,7 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
         userInjectData.colorGradingStrength = 100.f;
         userInjectData.colorGradingScaling = 1;
         userInjectData.colorGradingSaturation = 50.f;
+        userInjectData.colorGradingCorrection = 50.f;
         userInjectData.effectBloom = 50.f;
         userInjectData.effectVignette = 50.f;
         userInjectData.effectFilmGrain = 0.f;
@@ -844,6 +851,17 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
       colorGradingScalingStrings[userInjectData.colorGradingScaling]
     );
     ImGui::SetItemTooltip("Enables the game's original LUT scaling.");
+
+    ImGui::BeginDisabled(userInjectData.colorGradingScaling != 2);
+    updateShadersOrPreset |= ImGui::SliderFloat(
+      "Correction",
+      &userInjectData.colorGradingCorrection,
+      0,
+      100.f,
+      "%.0f"
+    );
+    ImGui::SetItemTooltip("Sets the strength of the custom scaling option.");
+    ImGui::EndDisabled();
 
     updateShadersOrPreset |= ImGui::SliderFloat(
       "Saturation",

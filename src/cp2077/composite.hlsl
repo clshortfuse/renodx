@@ -41,6 +41,83 @@ struct SPIRV_Cross_Output {
   float4 SV_Target : SV_Target0;
 };
 
+#define DRAW_TONEMAPPER 0
+
+#if DRAW_TONEMAPPER
+static const uint DrawToneMapperSize = 512;
+static const uint ToneMapperPadding = 8;
+static const uint ToneMapperBins = DrawToneMapperSize - (2 * ToneMapperPadding);
+
+struct DrawToneMapperParams {
+  bool drawToneMapper;
+  uint toneMapperY;
+  float valueX;
+  float3 outputColor;
+};
+
+DrawToneMapperParams DrawToneMapperStart(float2 position, float3 inputColor) {
+  DrawToneMapperParams dtmParams = {false, -1u, 0, inputColor};
+  float width;
+  float height;
+  textureUntonemapped.GetDimensions(width, height);
+  int2 offset = int2(
+    position.x - (width - DrawToneMapperSize),
+    (DrawToneMapperSize)-position.y
+  );
+  if (offset.x >= 0 && offset.y >= 0) {
+    dtmParams.outputColor = float3(0.15f, 0.15f, 0.15f);
+    if (
+      offset.x >= ToneMapperPadding
+      && offset.y >= ToneMapperPadding
+      && offset.x < (DrawToneMapperSize - ToneMapperPadding)
+      && offset.y < (DrawToneMapperSize - ToneMapperPadding)
+    ) {
+      dtmParams.drawToneMapper = true;
+      uint toneMapperX = offset.x - ToneMapperPadding;
+      dtmParams.toneMapperY = offset.y - ToneMapperPadding;
+
+      // From 0.01 to Peak nits (in log)
+      const float xMin = log10(0.01 / 100.f);
+      const float xMax = log10(10000.f / 100.f);
+      const float xRange = xMax - xMin;
+      dtmParams.valueX = (float(toneMapperX) / float(ToneMapperBins)) * (xRange) + xMin;
+      dtmParams.valueX = pow(10.f, dtmParams.valueX);
+      dtmParams.outputColor = float3(dtmParams.valueX, dtmParams.valueX, dtmParams.valueX);
+    }
+  }
+  return dtmParams;
+}
+
+float3 DrawToneMapperEnd(float3 inputColor, inout DrawToneMapperParams dtmParams) {
+  // From 0.01 to Peak nits (in log)
+  const float yMin = log10(0.01);
+  const float yMax = log10(10000.f);
+  const float yRange = yMax - yMin;
+  float valueY = (float(dtmParams.toneMapperY) / float(ToneMapperBins)) * (yRange) + yMin;
+  float peakNits = injectedData.toneMapperPeakNits;
+  valueY = pow(10.f, valueY);
+  valueY /= 100.f;
+  float outputY = yFromBT709(inputColor);
+  if (outputY > valueY) {
+    if (outputY < 0.18f) {
+      return float3(0.3f, 0, 0.3f);
+    } else if (outputY > peakNits / 100.f) {
+      return float3(0, 0.3f, 0.3f);
+    } else {
+      return max(0.05f, valueY);
+    }
+  } else {
+    if (dtmParams.valueX < 0.18f) {
+      return float3(0, 0.3f, 0);
+    } else if (valueY >= peakNits / 100.f) {
+      return float3(0, 0, 0.3f);
+    } else {
+      return 0.05f;
+    }
+  }
+}
+#endif  // DRAW_TONEMAPPER
+
 float3 composite(bool useTexArray = false) {
   const float cb6_10z = cb6[10u].z;  // Bloom width
   const float cb6_10w = cb6[10u].w;  // Bloom height
@@ -61,7 +138,7 @@ float3 composite(bool useTexArray = false) {
   float3 inputColor;
   float3 bloomColor;
   if (useTexArray) {
-    float _107 = exp2(log2(max(bloomSize - cb6[7u].w, 0.0f)) * cb6[7u].z);
+    float _107 = pow(max(bloomSize - cb6[7u].w, 0.0f), cb6[7u].z);
     float _112 = (_107 * bloomWidth) * cb6[7u].x;
     float _113 = (_107 * bloomHeight) * cb6[7u].y;
     float4 _124 = textureArray.Load(int4(uint3(uFragx & 63u, uFragy & 63u, asuint(cb0[28u]).y & 63u), 0u));
@@ -105,6 +182,11 @@ float3 composite(bool useTexArray = false) {
     float3 mixedColor = lerp(vignetteColor, outputColor, vignetteFactor);
     outputColor = lerp(outputColor, mixedColor, injectedData.effectVignette);
   }
+
+#if DRAW_TONEMAPPER
+  DrawToneMapperParams dtmParams = DrawToneMapperStart(gl_FragCoord.xy, outputColor);
+  outputColor = dtmParams.outputColor;
+#endif
 
   float3 fxColor = outputColor;
   float _168 = outputColor.r;
@@ -177,10 +259,18 @@ float3 composite(bool useTexArray = false) {
     lutStrength = useLUT3;
   }
   if (useLUT) {
-    // cb6[6u].x 5.869140 / 100
-    // cb6[6u].y 59.492 / 10
-    // float3 preInputColor = lerp(fxColor, fallbackColor, injectedData.debugValue02);
-    float3 lutInputColor = (cb6[6u].x * log2(fallbackColor)) + cb6[6u].y;
+    if (injectedData.colorGradingScaling == 2.f) {
+      const float3 lutSize = 48.f;
+      float3 scale = (lutSize - 1.f) / lutSize;
+      float3 offset = 1.f / (2.f * lutSize);
+      float3 rec2020 = bt2020FromBT709(fallbackColor);             //
+      float3 pqColor = pqFromLinear((rec2020 * 100.f) / 10000.f);  // reset scale to 0-1 for 0-10000 nits
+      lutInputColor = scale * pqColor + offset;
+    } else {
+      // cb6[6u].x 0.05888671
+      // cb6[6u].y 0.59765625
+      lutInputColor = (cb6[6u].x * log2(fallbackColor)) + cb6[6u].y;
+    }
     lutColor = textureLUT[lutIndex].SampleLevel(sampler0, lutInputColor, 0.0f).rgb;
     outputColor = lerp(outputColor, lutColor, float(lutStrength));
   } else {
@@ -195,5 +285,10 @@ float3 composite(bool useTexArray = false) {
     outputColor = lerp(outputColor, rescaledFallbackColor, cb6[1u].w);
   }
   outputColor *= cb6[1u].z;
+
+#if DRAW_TONEMAPPER
+  if (dtmParams.drawToneMapper) outputColor = DrawToneMapperEnd(outputColor, dtmParams);
+#endif
+
   return outputColor;
 }
