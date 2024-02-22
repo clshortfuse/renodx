@@ -98,7 +98,6 @@ static const float3x3 AP1_2_BT2020_MAT = mul(XYZ_2_BT2020_MAT, mul(D60_2_D65_CAT
 static const float3x3 AP1_2_BT2020D60_MAT = mul(XYZ_2_BT2020_MAT, AP1_2_XYZ_MAT);
 static const float3x3 AP1_2_AP1D65_MAT = mul(XYZ_2_AP1_MAT, mul(D60_2_D65_CAT, AP1_2_XYZ_MAT));
 
-
 float3 xyzFromBT709(float3 bt709) {
   return mul(BT709_2_XYZ_MAT, bt709);
 }
@@ -115,6 +114,10 @@ float yFromBT709(float3 bt709) {
   return dot(bt709, float3(BT709_2_XYZ_MAT[1].r, BT709_2_XYZ_MAT[1].g, BT709_2_XYZ_MAT[1].b));
 }
 
+float yFromBT2020(float3 bt2020) {
+  return dot(bt2020, float3(BT2020_2_XYZ_MAT[1].r, BT2020_2_XYZ_MAT[1].g, BT2020_2_XYZ_MAT[1].b));
+}
+
 float3 pqFromLinear(float3 linearColor) {
   static const float m1 = 0.1593017578125f;
   static const float m2 = 78.84375f;
@@ -124,6 +127,17 @@ float3 pqFromLinear(float3 linearColor) {
 
   float3 yM1 = pow(linearColor, m1);
   return pow((c1 + c2 * yM1) / (1.f + c3 * yM1), m2);
+}
+
+float3 linearFromPQ(float3 pqColor) {
+  static const float m1 = 0.1593017578125f;
+  static const float m2 = 78.84375f;
+  static const float c1 = 0.8359375f;
+  static const float c2 = 18.8515625f;
+  static const float c3 = 18.6875f;
+
+  float3 eM12 = pow(pqColor, 1.f / m2);
+  return pow(max(eM12 - c1, 0) / (c2 - c3 * eM12), 1.f / m1);
 }
 
 float srgbFromLinear(float channel) {
@@ -173,6 +187,28 @@ float3 arriC800FromLinear(float3 color) {
     arriC800FromLinear(color.r),
     arriC800FromLinear(color.g),
     arriC800FromLinear(color.b)
+  );
+}
+
+float linearFromArriC800(float t) {
+  const float cut = 0.010591f;
+  const float a = 5.555556f;
+  const float b = 0.052272f;
+  const float c = 0.247190f;
+  const float d = 0.385537f;
+  const float e = 5.367655f;
+  const float f = 0.092809f;
+
+  return (t > e * cut + f)
+         ? (pow(10, (t - d) / c) - b) / a
+         : (t - f) / e;
+}
+
+float3 linearFromArriC800(float3 color) {
+  return float3(
+    linearFromArriC800(color.r),
+    linearFromArriC800(color.g),
+    linearFromArriC800(color.b)
   );
 }
 

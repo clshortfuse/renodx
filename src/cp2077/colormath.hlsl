@@ -56,8 +56,14 @@ float3 convertColor(float3 inputColor, ConvertColorParams params) {
     case OUTPUT_TYPE_PQ:
       {
         float3 rec2020 = bt2020FromBT709(inputColor.rgb);
-        float3 matrixedColor = saturate(mul(rec2020, params.colorMatrix));
-        float3 newShiftedColor = ((matrixedColor - rec2020) * params.pqSaturation) + rec2020;
+        // Removed because this caps to 100 nits
+        // Also because the matrix just seems to hue shift to green/yellow
+        // float3 matrixedColor = mul(rec2020, params.colorMatrix);
+        // matrixedColor = saturate(matrixedColor);
+        // float3 newShiftedColor = lerp(rec2020, matrixedColor, params.pqSaturation);
+
+        float3 grayscale = yFromBT2020(rec2020);
+        float3 newShiftedColor = lerp(grayscale, rec2020, 1.f + (params.pqSaturation * 0.25f));
         float3 scaledShifted = newShiftedColor * params.paperWhiteScaling;
         float3 pqColor = pqFromLinear(scaledShifted);
         outputColor.rgb = pqColor.rgb;
