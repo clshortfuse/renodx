@@ -5,6 +5,7 @@
 #include "../common/aces.hlsl"
 #include "../common/color.hlsl"
 #include "./cp2077.h"
+#include "./injectedBuffer.hlsl"
 
 // clang-format off
 static const float HEATMAP_COLORS[27] = {
@@ -154,10 +155,6 @@ struct UnknownType {
 
 cbuffer _18_20 : register(b6, space0) {
   float4 cb6[43] : packoffset(c0);
-}
-
-cbuffer injectedBuffer : register(b14, space0) {
-  ShaderInjectData injectedData : packoffset(c0);
 }
 
 Texture3D<float4> LUT_TEXTURES[8] : register(t0, space0);

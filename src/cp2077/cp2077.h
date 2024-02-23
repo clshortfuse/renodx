@@ -19,6 +19,7 @@ struct ShaderInjectData {
   float colorGradingScaling;
   float colorGradingSaturation;
   float colorGradingCorrection;
+  float colorGradingGamma;
   float effectBloom;
   float effectVignette;
   float effectFilmGrain;

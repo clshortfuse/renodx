@@ -3,6 +3,7 @@
 #include "../common/filmgrain.hlsl"
 #include "../cp2077/colormath.hlsl"
 #include "../cp2077/cp2077.h"
+#include "../cp2077/injectedBuffer.hlsl"
 
 static float _312;
 
@@ -16,10 +17,6 @@ cbuffer _41_43 : register(b6, space0) {
 
 cbuffer _37_39 : register(b12, space0) {
   float4 _39_m0[99] : packoffset(c0);
-}
-
-cbuffer injectedBuffer : register(b14, space0) {
-  ShaderInjectData injectedData : packoffset(c0);
 }
 
 Texture2D<float4> textureUI : register(t0, space0);

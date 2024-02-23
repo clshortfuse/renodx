@@ -3,6 +3,7 @@
 #include "../common/filmgrain.hlsl"
 #include "../cp2077/colormath.hlsl"
 #include "../cp2077/cp2077.h"
+#include "../cp2077/injectedBuffer.hlsl"
 
 cbuffer _27_29 : register(b0, space0) {
   float4 cb0[30] : packoffset(c0);
@@ -14,10 +15,6 @@ cbuffer _36_38 : register(b6, space0) {
 
 cbuffer _32_34 : register(b12, space0) {
   float4 cb12[99] : packoffset(c0);
-}
-
-cbuffer injectedBuffer : register(b14, space0) {
-  ShaderInjectData injectedData : packoffset(c0);
 }
 
 Texture2D<float4> textureRender : register(t32, space0);
@@ -40,7 +37,6 @@ struct SPIRV_Cross_Input {
 };
 
 void comp_main() {
-
   uint4 _73 = _18.Load(asuint(cb6[13u]).x + gl_WorkGroupID.x);
   uint _74 = _73.x;
   uint _82 = ((_74 << 4u) & 1048560u) + gl_LocalInvocationID.x;

@@ -1,14 +1,12 @@
 // Film Grain Generator
 
 #include "../cp2077/cp2077.h"
+#include "../cp2077/injectedBuffer.hlsl"
 
 cbuffer _13_15 : register(b6, space0) {
   float4 cb6[1] : packoffset(c0);
 }
 
-cbuffer injectedBuffer : register(b14, space0) {
-  ShaderInjectData injectedData : packoffset(c0);
-}
 
 RWTexture2D<float4> outputTexture : register(u0, space0);
 

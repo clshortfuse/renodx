@@ -1,6 +1,7 @@
 #include "../common/color.hlsl"
 #include "../common/random.hlsl"
 #include "./cp2077.h"
+#include "./injectedBuffer.hlsl"
 
 struct ConvertColorParams {
   uint outputTypeEnum;      // _20_m0[0u].x
@@ -43,6 +44,12 @@ float3 applyGammaCorrection(float3 inputColor, float gammaCorrection) {
 }
 
 float3 convertColor(float3 inputColor, ConvertColorParams params) {
+  if (injectedData.colorGradingGamma == 2.f) {
+    float3 inputColorSign = sign(inputColor);
+    inputColor = abs(inputColor);
+    inputColor = pow(srgbFromLinear(inputColor), 2.2f);
+    inputColor *= inputColorSign;
+  }
   float3 outputColor;
   switch (params.outputTypeEnum) {
     case OUTPUT_TYPE_SRGB8:

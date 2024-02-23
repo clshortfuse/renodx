@@ -154,6 +154,15 @@ float3 srgbFromLinear(float3 color) {
   );
 }
 
+float4 srgbFromLinear(float4 color) {
+  return float4(
+    srgbFromLinear(color.r),
+    srgbFromLinear(color.g),
+    srgbFromLinear(color.b),
+    srgbFromLinear(color.a)
+  );
+}
+
 float linearFromSRGB(float channel) {
   return (channel <= 0.04045f)
          ? (channel / 12.92f)
@@ -165,6 +174,15 @@ float3 linearFromSRGB(float3 color) {
     srgbFromLinear(color.r),
     srgbFromLinear(color.g),
     srgbFromLinear(color.b)
+  );
+}
+
+float4 linearFromSRGB(float4 color) {
+  return float4(
+    srgbFromLinear(color.r),
+    srgbFromLinear(color.g),
+    srgbFromLinear(color.b),
+    srgbFromLinear(color.a)
   );
 }
 

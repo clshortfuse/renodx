@@ -14,10 +14,13 @@
 #include <embed/0x745E34E1.h>
 #include <embed/0x97CA5A85.h>
 #include <embed/0xA61F2FEE.h>
+#include <embed/0xB489149F.h>
 #include <embed/0xC783FBA1.h>
 #include <embed/0xC83E64DF.h>
 #include <embed/0xCBFFC2A3.h>
 #include <embed/0xD2BBEBD9.h>
+#include <embed/0xDE517511.h>
+#include <embed/0xE57907C4.h>
 
 #include <filesystem>
 #include <fstream>
@@ -65,6 +68,7 @@ static struct UserInjectData {
   int colorGradingScaling = 2;
   float colorGradingSaturation = 50.f;
   float colorGradingCorrection = 50.f;
+  int colorGradingGamma = 1;
   float effectBloom = 50.f;
   float effectVignette = 50.f;
   float effectFilmGrain = 50.f;
@@ -92,6 +96,7 @@ static void updateShaderData() {
   shaderInjectData.colorGradingScaling = static_cast<float>(userInjectData.colorGradingScaling);
   shaderInjectData.colorGradingSaturation = userInjectData.colorGradingSaturation * 0.02f;
   shaderInjectData.colorGradingCorrection = userInjectData.colorGradingCorrection * 0.01f;
+  shaderInjectData.colorGradingGamma = static_cast<float>(userInjectData.colorGradingGamma);
 
   shaderInjectData.effectBloom = userInjectData.effectBloom * 0.02f;
   shaderInjectData.effectVignette = userInjectData.effectVignette * 0.02f;
@@ -138,6 +143,12 @@ static const char* colorGradingScalingStrings[] = {
   "None",
   "Vanilla",
   "Custom"
+};
+
+static const char* colorGradingGammaStrings[] = {
+  "Vanilla",
+  "Menus Only",
+  "Always"
 };
 
 void logLayout(
@@ -297,6 +308,18 @@ static bool load_embedded_shader(
     case 0xC783FBA1:
       desc->code = &_0xC783FBA1;
       desc->code_size = sizeof(_0xC783FBA1);
+      break;
+    case 0xDE517511:
+      desc->code = &_0xDE517511;
+      desc->code_size = sizeof(_0xDE517511);
+      break;
+    case 0xB489149F:
+      desc->code = &_0xB489149F;
+      desc->code_size = sizeof(_0xB489149F);
+      break;
+    case 0xE57907C4:
+      desc->code = &_0xE57907C4;
+      desc->code_size = sizeof(_0xE57907C4);
       break;
     default:
       return false;
@@ -628,6 +651,7 @@ static void load_settings(
   reshade::get_config_value(runtime, section, "colorGradingScaling", newData.colorGradingScaling);
   reshade::get_config_value(runtime, section, "colorGradingSaturation", newData.colorGradingSaturation);
   reshade::get_config_value(runtime, section, "colorGradingCorrection", newData.colorGradingCorrection);
+  reshade::get_config_value(runtime, section, "colorGradingGamma", newData.colorGradingGamma);
   reshade::get_config_value(runtime, section, "effectBloom", newData.effectBloom);
   reshade::get_config_value(runtime, section, "effectVignette", newData.effectVignette);
   reshade::get_config_value(runtime, section, "effectFilmGrain", newData.effectFilmGrain);
@@ -647,6 +671,8 @@ static void load_settings(
   userInjectData.colorGradingScaling = newData.colorGradingScaling;
   userInjectData.colorGradingSaturation = newData.colorGradingSaturation;
   userInjectData.colorGradingCorrection = newData.colorGradingCorrection;
+  userInjectData.colorGradingGamma = newData.colorGradingGamma;
+
   userInjectData.effectBloom = newData.effectBloom;
   userInjectData.effectVignette = newData.effectVignette;
   userInjectData.effectFilmGrain = newData.effectFilmGrain;
@@ -669,6 +695,7 @@ static void save_settings(reshade::api::effect_runtime* runtime, char* section =
   reshade::set_config_value(runtime, section, "colorGradingScaling", userInjectData.colorGradingScaling);
   reshade::set_config_value(runtime, section, "colorGradingSaturation", userInjectData.colorGradingSaturation);
   reshade::set_config_value(runtime, section, "colorGradingCorrection", userInjectData.colorGradingCorrection);
+  reshade::set_config_value(runtime, section, "colorGradingGamma", userInjectData.colorGradingGamma);
   reshade::set_config_value(runtime, section, "effectBloom", userInjectData.effectBloom);
   reshade::set_config_value(runtime, section, "effectVignette", userInjectData.effectVignette);
   reshade::set_config_value(runtime, section, "effectFilmGrain", userInjectData.effectFilmGrain);
@@ -705,6 +732,7 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
         userInjectData.colorGradingScaling = 1;
         userInjectData.colorGradingSaturation = 50.f;
         userInjectData.colorGradingCorrection = 50.f;
+        userInjectData.colorGradingGamma = 0;
         userInjectData.effectBloom = 50.f;
         userInjectData.effectVignette = 50.f;
         userInjectData.effectFilmGrain = 0.f;
@@ -866,6 +894,15 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
       100.f,
       "%.0f"
     );
+
+    updateShadersOrPreset |= ImGui::SliderInt(
+      "2.2 Gamma",
+      &userInjectData.colorGradingGamma,
+      0,
+      (sizeof(colorGradingGammaStrings) / sizeof(char*)) - 1,
+      colorGradingGammaStrings[userInjectData.colorGradingGamma]
+    );
+    ImGui::SetItemTooltip("Rescales sRGB's piecewise EOTF to 2.2 gamma");
   }
 
   ImGui::SeparatorText("Effects");
