@@ -1,6 +1,7 @@
 #include "../common/color.hlsl"
 #include "../common/random.hlsl"
 #include "./cp2077.h"
+#include "./injectedBuffer.hlsl"
 
 static float _468;
 static float _469;
@@ -18,9 +19,7 @@ cbuffer _27_29 : register(b12, space0) {
   float4 cb12[99] : packoffset(c0);
 }
 
-cbuffer injectedBuffer : register(b14, space0) {
-  ShaderInjectData injectedData : packoffset(c0);
-}
+
 
 Texture2D<float4> textureUntonemapped : register(t0, space0);
 Texture2D<float4> textureBloom : register(t1, space0);
