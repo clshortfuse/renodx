@@ -18,11 +18,9 @@ function(build_shader_target)
   file(GLOB SHADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/*.hlsl)
   foreach(FILE ${SHADER_FILES})
     string(SUBSTRING ${FILE} ${PATH_LENGTH} -1 FILENAME)
-    string(LENGTH ${FILENAME} SHADER_HASH_LENGTH)
-    math(EXPR TARGET_START "${SHADER_HASH_LENGTH} - 2 - 5")
-    math(EXPR HASH_START "${SHADER_HASH_LENGTH} - 10 - 3 - 5")
-    string(SUBSTRING ${FILENAME} ${TARGET_START} 2 SHADER_TARGET)
-    string(SUBSTRING ${FILENAME} ${HASH_START} 10 SHADER_HASH)
+    string(REGEX MATCH "(0x[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F])\.([^.]+)\.hlsl$" _ ${FILENAME} )
+    set(SHADER_HASH ${CMAKE_MATCH_1})
+    set(SHADER_TARGET ${CMAKE_MATCH_2})
 
     add_custom_command(
       OUTPUT embed/${SHADER_HASH}.cso
