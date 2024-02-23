@@ -32,13 +32,8 @@
 
 #include "./cp2077.h"
 
-#if 0
 #include "../../external/reshade/deps/imgui/imgui.h"
 #include "../../external/reshade/include/reshade.hpp"
-#else
-#include "C:/Users/clsho/Documents/GitHub/reshade/deps/imgui/imgui.h"
-#include "C:/Users/clsho/Documents/GitHub/reshade/include/reshade.hpp"
-#endif
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - CP2077";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Cyberpunk2077";
@@ -330,14 +325,15 @@ static bool load_embedded_shader(
 // Before CreateRootSignature
 static bool on_create_pipeline_layout(
   reshade::api::device* device,
-  reshade::api::pipeline_layout_desc* desc
+  uint32_t &param_count,
+  reshade::api::pipeline_layout_param*&params
 ) {
   bool foundVisiblity = false;
   uint32_t cbvIndex = 0;
   uint32_t pcCount = 0;
 
-  for (uint32_t paramIndex = 0; paramIndex < desc->count; ++paramIndex) {
-    auto param = desc->params[paramIndex];
+  for (uint32_t paramIndex = 0; paramIndex < param_count; ++paramIndex) {
+    auto param = params[paramIndex];
     if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
       for (uint32_t rangeIndex = 0; rangeIndex < param.descriptor_table.count; ++rangeIndex) {
         auto range = param.descriptor_table.ranges[rangeIndex];
@@ -365,10 +361,10 @@ static bool on_create_pipeline_layout(
   if (cbvIndex != 14) return false;
 
 #ifdef DEBUG_LEVEL_1
-  logLayout(desc->count, desc->params, 0x001);
+  logLayout(param_count, params, 0x001);
 #endif
 
-  uint32_t oldCount = (desc->count);
+  uint32_t oldCount = param_count;
   uint32_t newCount = oldCount + 1;
   reshade::api::pipeline_layout_param* newParams = new reshade::api::pipeline_layout_param[newCount];
 
@@ -376,7 +372,7 @@ static bool on_create_pipeline_layout(
   createdParams.push_back(newParams);
 
   // Copy up to size of old
-  memcpy(newParams, desc->params, sizeof(reshade::api::pipeline_layout_param) * oldCount);
+  memcpy(newParams, params, sizeof(reshade::api::pipeline_layout_param) * oldCount);
 
   // Fill in extra param
   uint32_t slots = sizeof(ShaderInjectData) / sizeof(uint32_t);
@@ -388,8 +384,8 @@ static bool on_create_pipeline_layout(
   newParams[oldCount].push_constants.dx_register_space = 0;
   newParams[oldCount].push_constants.visibility = reshade::api::shader_stage::all;
 
-  desc->count = newCount;
-  desc->params = newParams;
+  param_count = newCount;
+  params = newParams;
 
   if (slots > maxCount) {
     std::stringstream s;
@@ -604,8 +600,8 @@ static void on_bind_pipeline(
   s << "bind_pipeline++("
     << reinterpret_cast<void*>(pipeline.handle)
     << ", " << reinterpret_cast<void*>(layout.handle)
-    << ", " << desc.index
-    << ", " << std::hex << (uint32_t)desc.visibility
+    << ", " << paramIndex
+    << ", " << std::hex << (uint32_t)stage
     << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
