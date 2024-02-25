@@ -2,6 +2,7 @@
 
 #include "../cp2077/colormath.hlsl"
 #include "../cp2077/cp2077.h"
+#include "../cp2077/injectedBuffer.hlsl"
 
 // [476 x i8]
 // 4 * 10 + 3 + 1 + 34 + 1 + 1 + (4*6) + 4 + 2 + 2 + 1 + 2
@@ -81,10 +82,6 @@ cbuffer PIX : register(b6, space0) {
     float3 const05;           // _20_m0[1u].yxw
     float4 pqMatrix[3];       // _20_m0[2u].xyzw _20_m0[3u].xyzw _20_m0[4u].xyzw
   } pixConsts : packoffset(c0);
-}
-
-cbuffer injectedBuffer : register(b14, space0) {
-  ShaderInjectData injectedData : packoffset(c0);
 }
 
 struct PSSceneIn {
