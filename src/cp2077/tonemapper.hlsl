@@ -336,13 +336,16 @@ float4 tonemap(bool isHDR = false) {
   float brightness = cb6[7u].x;      // 1       | 1.000
 
   float3 adjustedColor = inputColor;
-  adjustedColor = lerp(adjustedColor, 1.f, fillWhite);
-  adjustedColor *= sceneGain;
-  adjustedColor += sceneLift;
-  if (sceneGamma.r != 1.f || sceneGamma.g != 1.f || sceneGamma.b != 1.f) {
-    adjustedColor = pow(max(0, adjustedColor), sceneGamma);
+  if (injectedData.colorGradingScene) {
+    adjustedColor = lerp(adjustedColor, 1.f, fillWhite);
+    adjustedColor *= sceneGain;
+    adjustedColor += sceneLift;
+    if (sceneGamma.r != 1.f || sceneGamma.g != 1.f || sceneGamma.b != 1.f) {
+      adjustedColor = pow(max(0, adjustedColor), sceneGamma);
+    }
+    adjustedColor = lerp(blackFloor, adjustedColor, brightness);
+    adjustedColor = lerp(inputColor, adjustedColor, injectedData.colorGradingScene);
   }
-  adjustedColor = lerp(blackFloor, adjustedColor, brightness);
 
   float _256 = adjustedColor.r;
   float _257 = adjustedColor.g;

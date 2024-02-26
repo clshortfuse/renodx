@@ -5,7 +5,7 @@
 
 #define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 #define DEBUG_LEVEL_0
-#define DEBUG_SLIDERS_OFF
+#define DEBUG_SLIDERS
 
 #include <embed/0x298A6BB0.h>
 #include <embed/0x5DF649A9.h>
@@ -65,6 +65,7 @@ static struct UserInjectData {
   float toneMapperDechroma = 50.f;
   int colorGradingWorkflow = 1;
   float colorGradingStrength = 100.f;
+  float colorGradingScene = 100.f;
   int colorGradingScaling = 2;
   float colorGradingSaturation = 50.f;
   float colorGradingCorrection = 50.f;
@@ -93,6 +94,7 @@ static void updateShaderData() {
 
   shaderInjectData.colorGradingWorkflow = static_cast<float>(userInjectData.colorGradingWorkflow - 1);
   shaderInjectData.colorGradingStrength = userInjectData.colorGradingStrength * 0.01f;
+  shaderInjectData.colorGradingScene = userInjectData.colorGradingScene * 0.01f;
   shaderInjectData.colorGradingScaling = static_cast<float>(userInjectData.colorGradingScaling);
   shaderInjectData.colorGradingSaturation = userInjectData.colorGradingSaturation * 0.02f;
   shaderInjectData.colorGradingCorrection = userInjectData.colorGradingCorrection * 0.01f;
@@ -648,6 +650,7 @@ static void load_settings(
 
   reshade::get_config_value(runtime, section, "colorGradingWorkflow", newData.colorGradingWorkflow);
   reshade::get_config_value(runtime, section, "colorGradingStrength", newData.colorGradingStrength);
+  reshade::get_config_value(runtime, section, "colorGradingScene", newData.colorGradingScene);
   reshade::get_config_value(runtime, section, "colorGradingScaling", newData.colorGradingScaling);
   reshade::get_config_value(runtime, section, "colorGradingSaturation", newData.colorGradingSaturation);
   reshade::get_config_value(runtime, section, "colorGradingCorrection", newData.colorGradingCorrection);
@@ -668,6 +671,7 @@ static void load_settings(
 
   userInjectData.colorGradingWorkflow = newData.colorGradingWorkflow;
   userInjectData.colorGradingStrength = newData.colorGradingStrength;
+  userInjectData.colorGradingScene = newData.colorGradingScene;
   userInjectData.colorGradingScaling = newData.colorGradingScaling;
   userInjectData.colorGradingSaturation = newData.colorGradingSaturation;
   userInjectData.colorGradingCorrection = newData.colorGradingCorrection;
@@ -692,6 +696,7 @@ static void save_settings(reshade::api::effect_runtime* runtime, char* section =
 
   reshade::set_config_value(runtime, section, "colorGradingWorkflow", userInjectData.colorGradingWorkflow);
   reshade::set_config_value(runtime, section, "colorGradingStrength", userInjectData.colorGradingStrength);
+  reshade::set_config_value(runtime, section, "colorGradingScene", userInjectData.colorGradingScene);
   reshade::set_config_value(runtime, section, "colorGradingScaling", userInjectData.colorGradingScaling);
   reshade::set_config_value(runtime, section, "colorGradingSaturation", userInjectData.colorGradingSaturation);
   reshade::set_config_value(runtime, section, "colorGradingCorrection", userInjectData.colorGradingCorrection);
@@ -729,6 +734,7 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
         userInjectData.toneMapperDechroma = 50.f;
         userInjectData.colorGradingWorkflow = 1;
         userInjectData.colorGradingStrength = 100.f;
+        userInjectData.colorGradingScene = 100.f;
         userInjectData.colorGradingScaling = 1;
         userInjectData.colorGradingSaturation = 50.f;
         userInjectData.colorGradingCorrection = 50.f;
@@ -857,6 +863,15 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
       ImGuiSliderFlags_NoInput
     );
     ImGui::SetItemTooltip("Modifies order of when color grading is applied.");
+
+    updateShadersOrPreset |= ImGui::SliderFloat(
+      "Scene Adjustments",
+      &userInjectData.colorGradingScene,
+      0.f,
+      100.f,
+      "%.0f"
+    );
+    ImGui::SetItemTooltip("Modifies the strength of the per scene adjustments.");
 
     updateShadersOrPreset |= ImGui::SliderFloat(
       "LUT Strength",
