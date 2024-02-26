@@ -889,9 +889,8 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
       (sizeof(colorGradingScalingStrings) / sizeof(char*)) - 1,
       colorGradingScalingStrings[userInjectData.colorGradingScaling]
     );
-    ImGui::SetItemTooltip("Enables the game's original LUT scaling.");
+    ImGui::SetItemTooltip("Enables the game's original LUT scaling.\n\n(Requires Rendering/LUT/Size to be 48 in the env)");
 
-    ImGui::BeginDisabled(userInjectData.colorGradingScaling != 2);
     updateShadersOrPreset |= ImGui::SliderFloat(
       "Correction",
       &userInjectData.colorGradingCorrection,
@@ -899,8 +898,7 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
       100.f,
       "%.0f"
     );
-    ImGui::SetItemTooltip("Sets the strength of the custom scaling option.");
-    ImGui::EndDisabled();
+    ImGui::SetItemTooltip("Sets the strength of the correction applied to clamped color grading LUTs.");
 
     updateShadersOrPreset |= ImGui::SliderFloat(
       "Saturation",

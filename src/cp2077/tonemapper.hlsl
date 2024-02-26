@@ -203,7 +203,7 @@ float3 sampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
 
     color /= scale;
 
-    if (injectedData.colorGradingScaling == 2.f && injectedData.colorGradingCorrection) {
+    if (injectedData.colorGradingCorrection) {
       float3 peakWhite = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, float(1.f).xxx, 0.0f).rgb;
       if ((_503 & 240u) == 16u) {
         peakWhite = linearFromSRGB(color);
