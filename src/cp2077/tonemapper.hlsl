@@ -222,7 +222,8 @@ float3 sampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
         const float g = inputY;
         const float h = colorY;
         const float newY = h * pow((1.f / a), pow(g / targetPeakY, b / a));
-        color *= colorY ? newY / colorY : 0;
+        // Only scale up, never down
+        color *= (colorY > 0) ? max(colorY, newY) / colorY : 1.f;
       }
     }
   }
