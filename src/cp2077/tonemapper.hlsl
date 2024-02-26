@@ -191,12 +191,11 @@ float3 sampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
       color = srgbFromLinear(color);
     }
 
-    if (injectedData.colorGradingScaling) {
-      color *= lutSettings.x;  // input scale
-      color += lutSettings.y;  // input floor
-    }
+    float lutScale = lutSettings.x;
+    float lutOffset = lutSettings.y;
+    float3 coordinates = lutScale * color + lutOffset;
 
-    color = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, color, 0.0f).rgb;
+    color = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, coordinates, 0.0f).rgb;
 
     if ((_503 & 240u) == 16u) {
       color = linearFromSRGB(color);
