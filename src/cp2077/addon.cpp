@@ -1036,7 +1036,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
 
       reshade::unregister_event<reshade::addon_event::bind_pipeline>(on_bind_pipeline);
 
-      reshade::register_overlay("RenoDX", on_register_overlay);
+      reshade::unregister_overlay("RenoDX", on_register_overlay);
 
       reshade::unregister_addon(hModule);
       break;
