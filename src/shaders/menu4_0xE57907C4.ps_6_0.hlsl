@@ -17,14 +17,10 @@ struct SPIRV_Cross_Output {
 
 void frag_main() {
   float4 _33 = _8.SampleLevel(_11, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
-  
-
   SV_Target.x = _33.x;
   SV_Target.y = _33.y;
   SV_Target.z = _33.z;
   SV_Target.w = _33.w;
-
-  
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {

@@ -24,7 +24,7 @@ function(build_shader_target)
 
     add_custom_command(
       OUTPUT embed/${SHADER_HASH}.cso
-      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bin/dxc.exe ${FILE} -WX -T ${SHADER_TARGET}_6_0 -E main -Fo ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso
+      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bin/dxc.exe ${FILE} -WX -T ${SHADER_TARGET} -E main -Fo ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso
       DEPENDS ${FILE}
     )
     add_custom_command(
