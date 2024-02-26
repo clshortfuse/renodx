@@ -41,16 +41,21 @@ endfunction()
 
 build_shader_target()
 
-add_library(cp2077 MODULE src/cp2077/addon.cpp)
-add_dependencies(cp2077 shaders)
-target_include_directories(cp2077 PRIVATE ${CMAKE_BINARY_DIR}/embed/include)
-target_include_directories(cp2077 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_compile_definitions(cp2077 PRIVATE _UNICODE)
-set_target_properties(cp2077
-  PROPERTIES
-    PREFIX "renodx-"
-    SUFFIX ".addon64"
-)
+list(APPEND ADDON_LIST cp2077)
+list(APPEND ADDON_LIST devkit)
+
+foreach(ADDON ${ADDON_LIST})
+  add_library(${ADDON} MODULE src/${ADDON}/addon.cpp)
+  add_dependencies(${ADDON} shaders)
+  target_include_directories(${ADDON} PRIVATE ${CMAKE_BINARY_DIR}/embed/include)
+  target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_definitions(${ADDON} PRIVATE _UNICODE)
+  set_target_properties(${ADDON}
+    PROPERTIES
+      PREFIX "renodx-"
+      SUFFIX ".addon64"
+  )
+endforeach()
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
