@@ -1,8 +1,8 @@
 // Final output shader
 
-#include "../cp2077/colormath.hlsl"
-#include "../cp2077/cp2077.h"
-#include "../cp2077/injectedBuffer.hlsl"
+#include "../../cp2077/colormath.hlsl"
+#include "../../cp2077/cp2077.h"
+#include "../../cp2077/injectedBuffer.hlsl"
 
 // [476 x i8]
 // 4 * 10 + 3 + 1 + 34 + 1 + 1 + (4*6) + 4 + 2 + 2 + 1 + 2

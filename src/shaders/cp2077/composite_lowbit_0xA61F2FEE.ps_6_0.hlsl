@@ -1,4 +1,4 @@
-#include "../cp2077/composite.hlsl"
+#include "../../cp2077/composite.hlsl"
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)
 {

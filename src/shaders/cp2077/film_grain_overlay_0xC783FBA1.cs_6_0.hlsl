@@ -1,9 +1,9 @@
 // Film Grain overlay
 
-#include "../common/filmgrain.hlsl"
-#include "../cp2077/colormath.hlsl"
-#include "../cp2077/cp2077.h"
-#include "../cp2077/injectedBuffer.hlsl"
+#include "../../common/filmgrain.hlsl"
+#include "../../cp2077/colormath.hlsl"
+#include "../../cp2077/cp2077.h"
+#include "../../cp2077/injectedBuffer.hlsl"
 
 cbuffer _27_29 : register(b0, space0) {
   float4 cb0[30] : packoffset(c0);

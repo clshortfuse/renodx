@@ -1,6 +1,6 @@
 // LUT + TONEMAPPER
 
-#include "../cp2077/tonemapper.hlsl"
+#include "../../cp2077/tonemapper.hlsl"
 
 [numthreads(8, 8, 8)] void main(SPIRV_Cross_Input stage_input) {
   gl_GlobalInvocationID = stage_input.gl_GlobalInvocationID;

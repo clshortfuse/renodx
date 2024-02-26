@@ -15,7 +15,7 @@ function(build_shader_target)
   string(LENGTH ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/ PATH_LENGTH)
 
 
-  file(GLOB SHADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/*.hlsl)
+  file(GLOB SHADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/**/*.hlsl)
   foreach(FILE ${SHADER_FILES})
     string(SUBSTRING ${FILE} ${PATH_LENGTH} -1 FILENAME)
     string(REGEX MATCH "(0x[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F])\.([^.]+)\.hlsl$" _ ${FILENAME} )
