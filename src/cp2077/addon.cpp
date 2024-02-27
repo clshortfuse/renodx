@@ -41,6 +41,29 @@
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - CP2077";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Cyberpunk2077";
 
+struct CustomShader {
+  uint32_t crc32;
+  const uint8_t* code;
+  uint8_t codeSize;
+};
+
+static std::unordered_map<uint32_t, CustomShader> customShaders = {
+  {0x298A6BB0, {0x298A6BB0, _0x298A6BB0, sizeof(0x298A6BB0)}},
+  {0x5DF649A9, {0x5DF649A9, _0x5DF649A9, sizeof(0x5DF649A9)}},
+  {0x61DBBA5C, {0x61DBBA5C, _0x61DBBA5C, sizeof(0x61DBBA5C)}},
+  {0x71F27445, {0x71F27445, _0x71F27445, sizeof(0x71F27445)}},
+  {0x745E34E1, {0x745E34E1, _0x745E34E1, sizeof(0x745E34E1)}},
+  {0x97CA5A85, {0x97CA5A85, _0x97CA5A85, sizeof(0x97CA5A85)}},
+  {0xA61F2FEE, {0xA61F2FEE, _0xA61F2FEE, sizeof(0xA61F2FEE)}},
+  {0xB489149F, {0xB489149F, _0xB489149F, sizeof(0xB489149F)}},
+  {0xC783FBA1, {0xC783FBA1, _0xC783FBA1, sizeof(0xC783FBA1)}},
+  {0xC83E64DF, {0xC83E64DF, _0xC83E64DF, sizeof(0xC83E64DF)}},
+  {0xCBFFC2A3, {0xCBFFC2A3, _0xCBFFC2A3, sizeof(0xCBFFC2A3)}},
+  {0xD2BBEBD9, {0xD2BBEBD9, _0xD2BBEBD9, sizeof(0xD2BBEBD9)}},
+  {0xDE517511, {0xDE517511, _0xDE517511, sizeof(0xDE517511)}},
+  {0xE57907C4, {0xE57907C4, _0xE57907C4, sizeof(0xE57907C4)}}
+};
+
 std::shared_mutex s_mutex;
 std::vector<reshade::api::pipeline_layout_param*> createdParams;
 std::unordered_set<uint32_t> codeInjections;
@@ -255,10 +278,7 @@ void logLayout(
   }
 }
 
-static bool load_embedded_shader(
-  reshade::api::device_api device_type,
-  reshade::api::shader_desc* desc
-) {
+static bool load_embedded_shader(reshade::api::shader_desc* desc) {
   if (desc->code_size == 0) return false;
 
   uint32_t shader_hash = compute_crc32(
@@ -266,66 +286,12 @@ static bool load_embedded_shader(
     desc->code_size
   );
 
-  switch (shader_hash) {
-    case 0x71F27445:
-      desc->code = &_0x71F27445;
-      desc->code_size = sizeof(_0x71F27445);
-      break;
-    case 0xA61F2FEE:
-      desc->code = &_0xA61F2FEE;
-      desc->code_size = sizeof(_0xA61F2FEE);
-      break;
-    case 0x298A6BB0:
-      desc->code = &_0x298A6BB0;
-      desc->code_size = sizeof(_0x298A6BB0);
-      break;
-    case 0x5DF649A9:
-      desc->code = &_0x5DF649A9;
-      desc->code_size = sizeof(_0x5DF649A9);
-      break;
-    case 0x61DBBA5C:
-      desc->code = &_0x61DBBA5C;
-      desc->code_size = sizeof(_0x61DBBA5C);
-      break;
-    case 0x745E34E1:
-      desc->code = &_0x745E34E1;
-      desc->code_size = sizeof(_0x745E34E1);
-      break;
-    case 0x97CA5A85:
-      desc->code = &_0x97CA5A85;
-      desc->code_size = sizeof(_0x97CA5A85);
-      break;
-    case 0xCBFFC2A3:
-      desc->code = &_0xCBFFC2A3;
-      desc->code_size = sizeof(_0xCBFFC2A3);
-      break;
-    case 0xC83E64DF:
-      desc->code = &_0xC83E64DF;
-      desc->code_size = sizeof(_0xC83E64DF);
-      break;
-    case 0xD2BBEBD9:
-      desc->code = &_0xD2BBEBD9;
-      desc->code_size = sizeof(_0xD2BBEBD9);
-      break;
-    case 0xC783FBA1:
-      desc->code = &_0xC783FBA1;
-      desc->code_size = sizeof(_0xC783FBA1);
-      break;
-    case 0xDE517511:
-      desc->code = &_0xDE517511;
-      desc->code_size = sizeof(_0xDE517511);
-      break;
-    case 0xB489149F:
-      desc->code = &_0xB489149F;
-      desc->code_size = sizeof(_0xB489149F);
-      break;
-    case 0xE57907C4:
-      desc->code = &_0xE57907C4;
-      desc->code_size = sizeof(_0xE57907C4);
-      break;
-    default:
-      return false;
-  }
+  const auto pair = customShaders.find(shader_hash);
+  if (pair == customShaders.end()) return false;
+  const auto customShader = pair->second;
+
+  desc->code = customShader.code;
+  desc->code_size = customShader.codeSize;
 
   uint32_t new_hash = compute_crc32(
     static_cast<const uint8_t*>(desc->code),
@@ -510,11 +476,7 @@ static bool on_create_pipeline(
     switch (subobjects[i].type) {
       case reshade::api::pipeline_subobject_type::compute_shader:
       case reshade::api::pipeline_subobject_type::pixel_shader:
-        replaced_stages |= load_embedded_shader(
-          device_type,
-          static_cast<reshade::api::shader_desc*>(subobjects[i].data)
-        );
-        break;
+        replaced_stages |= load_embedded_shader(static_cast<reshade::api::shader_desc*>(subobjects[i].data)) break;
     }
   }
 
