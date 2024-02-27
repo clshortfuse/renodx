@@ -476,7 +476,8 @@ static bool on_create_pipeline(
     switch (subobjects[i].type) {
       case reshade::api::pipeline_subobject_type::compute_shader:
       case reshade::api::pipeline_subobject_type::pixel_shader:
-        replaced_stages |= load_embedded_shader(static_cast<reshade::api::shader_desc*>(subobjects[i].data)) break;
+        replaced_stages |= load_embedded_shader(static_cast<reshade::api::shader_desc*>(subobjects[i].data));
+        break;
     }
   }
 
