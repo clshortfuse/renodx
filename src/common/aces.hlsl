@@ -599,8 +599,7 @@ float3 aces_gamut_compress(float3 linAP1) {
   return comprLinAP1;
 }
 
-float3 aces_rrt(float3 rgb) {
-  float3 aces = mul(sRGB_2_AP0, rgb);
+float3 aces_rrt(float3 aces) {
   // --- Glow module --- //
   // "Glow" module constants
   const float RRT_GLOW_GAIN = 0.05;
@@ -672,9 +671,10 @@ float3 aces_odt(float3 rgbPre, float minY, float maxY, float3x3 ap1Matrix = AP1_
 }
 
 float3 aces_rrt_odt(float3 srgb, float minY, float maxY, float3x3 ap1Matrix = AP1_2_BT709_MAT) {
+  float3 aces = mul(sRGB_2_AP0, srgb);
   return aces_odt(
-    aces_rrt(srgb),
-    minY,
+    aces_rrt(aces),
+    minY, 
     maxY,
     ap1Matrix
   );

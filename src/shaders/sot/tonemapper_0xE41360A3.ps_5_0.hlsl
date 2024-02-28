@@ -1,21 +1,17 @@
 #include "../../common/aces.hlsl"
 #include "../../common/color.hlsl"
 
-Texture3D<float4> luminanceLUT : register(t3);
+#define RENODX_SOT_ACES_TONEMAPPER 1
 
-Texture2D<float4> t2 : register(t2);
-
-Texture2D<float3> t1 : register(t1);
-
-Texture2D<float4> t0 : register(t0);
-
-SamplerState s3_s : register(s3);
-
-SamplerState s2_s : register(s2);
-
-SamplerState s1_s : register(s1);
+Texture2D<float4> textureBlackDummy : register(t0);
+Texture2D<float3> textureToneMap : register(t1);
+Texture2D<float4> textureSceneColorHalfRes : register(t2);
+Texture3D<float4> textureCombineLUTs : register(t3);
 
 SamplerState s0_s : register(s0);
+SamplerState s1_s : register(s1);
+SamplerState s2_s : register(s2);
+SamplerState s3_s : register(s3);
 
 cbuffer cb0 : register(b0) {
   float4 cb0[41];
@@ -72,61 +68,65 @@ PS_OUTPUT main(PS_INPUT psInput) {
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  const float userPeakNits = cb0[37].x;
+  float3 testColor = 1.f;
 
-  const float3 bloomColor = t2.Sample(s2_s, v0.xy).xyz;
+  const float userPeakNits = cb0[37].x;
+  const float colorContrastGain = cb0[37].w;
+  const float colorContrast = cb0[38].y;
+  const float finalGain = cb0[38].x;  // Usually 1.f
 
   // Random
-  float grain = grainFromUV(v2.zw);
+  float grain = grainFromUV(v2.zw) / 256.f - (1.f / 512.f);
 
-  r0.y = t1.Sample(s1_s, v3.zw).x;
-  r0.z = t1.Sample(s1_s, v3.xy).y;
-  r0.w = t1.Sample(s1_s, v0.xy).z;
+  float3 inputColor;
+  inputColor.r = textureToneMap.Sample(s1_s, v3.zw).r;
+  inputColor.g = textureToneMap.Sample(s1_s, v3.xy).g;
+  inputColor.b = textureToneMap.Sample(s1_s, v0.xy).b;
 
-  r1.xyz = bloomColor.rgb;
+  const float3 bloomColor = textureSceneColorHalfRes.Sample(s2_s, v0.xy).xyz;
+
+  r1.rgb = bloomColor.rgb;
 
   float2 texture0Coords = v0.zw * float2(0.5, -0.5) + float2(0.5, 0.5);
-  const float3 texture0Color = t0.Sample(s0_s, texture0Coords).xyz;
+  const float3 texture0Color = textureBlackDummy.Sample(s0_s, texture0Coords).xyz;
 
-  r2.xyz = texture0Color.rgb * cb1[0].xyz + cb0[33].xyz;
+  r2.xyz = texture0Color.rgb * cb1[0].xyz + cb0[33].xyz;  // Gain mask?
 
-  r1.xyz = r2.xyz * bloomColor.rgb;
-  r0.yzw = r0.yzw * cb0[32].xyz + r1.xyz;
-  r1.xyz = v1.xxx * r0.yzw;
+  r1.rgb = r2.xyz * bloomColor.rgb;
+
+  inputColor = inputColor * cb0[32].xyz + r1.rgb;
+
+  r1.rgb = v1.xxx * inputColor;
+  float3 bloomedColor = r1.rgb;
 
   // half3 ColorLookupTable( half3 LinearColor )
   // LUTEncodedColor = LinToLog( LinearColor + LogToLin( 0 ) );
 
   r2.xy = cb0[34].z * v1.yz;
 
-  // Bloom stretcher?
-  r1.w = dot(r2.xy, r2.xy);
-  r1.w = 1 + r1.w;
-  r1.w = rcp(r1.w);
-  r1.w = r1.w * r1.w;
+  // Vignette?
+  float vignette = 1.f + dot(r2.xy, r2.xy);
+  vignette = rcp(vignette);
+  vignette = vignette * vignette;
 
-  r2.xyz = r1.xyz * r1.www;
-  const float3 linearColor = r2.xyz;
-  r2.xyz = LinToLog(r2.xyz);
-
+  float3 vignettedColor = bloomedColor * vignette;
   // half3 ColorLookupTable( half3 LinearColor )
+  float3 lutLookupColor = LinToLog(vignettedColor);
   const float lutSize = 32.f;
   float3 lutScale = (lutSize - 1.f) / lutSize;
   float3 lutOffset = 1.f / (2.f * lutSize);
-  float lutCoords = r2.xyz * lutScale + lutOffset;
-  const float3 texture3Color = luminanceLUT.Sample(s3_s, lutCoords).rgb;
-  r2.xyz = texture3Color.rgb;
-  r3.xyz = r2.xyz * 1.05f;
-  const float3 luminanceFromLUT = r3.xyz;
+  float3 lutCoords = lutLookupColor * lutScale + lutOffset;
+  const float3 lutColor = textureCombineLUTs.Sample(s3_s, lutCoords).rgb;
+  const float3 colorGradedColor = lutColor.rgb * 1.05f;
 
   if (cb0[37].y != 0) {  // Tonemap by luminance?
-    float inputLuminance = yFromBT601(r1.xyz);
-    r1.w = yFromBT601(r1.xyz);
+    float inputLuminance = yFromBT601(bloomedColor);
+    r1.w = yFromBT601(bloomedColor);
 
-    float3 logColor = LinToLog(r1.xyz);
-    r4.rgb = LinToLog(r1.xyz);
+    float3 logColor = LinToLog(bloomedColor);
+    r4.rgb = LinToLog(bloomedColor);
     lutCoords = logColor * lutScale + lutOffset;
-    r4.rgb = luminanceLUT.Sample(s3_s, lutCoords).xyz;
+    r4.rgb = textureCombineLUTs.Sample(s3_s, lutCoords).xyz;
     r4.rgb = saturate(1.05f * r4.rgb);
 
     r4.rgb = pow(r4.rgb, 2.2f);
@@ -137,115 +137,105 @@ PS_OUTPUT main(PS_INPUT psInput) {
     r1.w = -1 + r1.w;
     r1.w = r2.w * r1.w + 1;
     r1.w = r3.w ? 1 : r1.w;
-    r4.xyz = r4.rgb * r1.www;
+    r4.rgb = r4.rgb * r1.www;
   }
-  r3.w = yFromBT601(r3.xyz);
-  r0.x = grain * 0.00390625 - 0.001953125;
+  r3.w = yFromBT601(colorGradedColor);
 
-  r2.xyz = r2.xyz * 1.05f + r0.x;
+  float3 grainedColor = colorGradedColor + grain;
 
   r0.x = cmp(v0.x < 0.5);
+
+  // Probably LUT output type in switch statement
   r5.xyzw = cmp(asint(cb0[37].yyyy) == int4(2, 1, 3, 4));
-  r1.w = (int)r5.z | (int)r5.y;
-  r1.w = (int)r5.w | (int)r1.w;
-  r0.x = r0.x ? r1.w : 0;
-  r0.x = (int)r0.x | (int)r5.x;
+  r1.w = (int)r5.z | (int)r5.y;  // type = 1 || 3
+  r1.w = (int)r5.w | (int)r1.w;  // type = 1 || 3 || 4
+  r0.x = r0.x ? r1.w : 0;        // (v0.x < 0.5) && (1 || 3 || 4)
+  r0.x = (int)r0.x | (int)r5.x;  // above || 2
   if (r0.x != 0) {
-    r6.xyz = saturate(r2.xyz);
-    r6.xyz = log2(r6.xyz);
-    r6.xyz = float3(2.20000005, 2.20000005, 2.20000005) * r6.xyz;
-    r6.xyz = exp2(r6.xyz);
-    r7.x = dot(float3(0.627403975, 0.329281986, 0.0433136001), r6.xyz);
-    r7.y = dot(float3(0.0690969974, 0.919539988, 0.0113612004), r6.xyz);
-    r7.z = dot(float3(0.0163915996, 0.088013202, 0.895595014), r6.xyz);
-    r6.xyz = float3(0.0599999987, 0.0599999987, 0.0599999987) * r7.xyz;
-    r6.xyz = log2(r6.xyz);
-    r6.xyz = float3(0.159301758, 0.159301758, 0.159301758) * r6.xyz;
-    r6.xyz = exp2(r6.xyz);
-    r7.xyz = r6.xyz * float3(18.8515625, 18.8515625, 18.8515625) + float3(0.8359375, 0.8359375, 0.8359375);
-    r6.xyz = r6.xyz * float3(18.6875, 18.6875, 18.6875) + float3(1, 1, 1);
-    r6.xyz = r7.xyz / r6.xyz;
-    r6.xyz = log2(r6.xyz);
-    r6.xyz = float3(78.84375, 78.84375, 78.84375) * r6.xyz;
-    r6.xyz = exp2(r6.xyz);
-    r3.xyz = min(float3(1, 1, 1), r6.xyz);
+    // SDR LUT, scale to 600 nits?
+    r6.rgb = saturate(grainedColor);           // Clamp SDR LUT output?
+    r6.rgb = pow(r6.rgb, 2.2f);                // 2.2 Gamma
+    r7.rgb = mul(BT709_2_BT2020_MAT, r6.rgb);  // PQ color space
+    r6.rgb = r7.rgb * 600 / 10000.f;           // Stretch to 600 nits
+    r6.rgb = pqFromLinear(r6.rgb);             // PQ
+    r3.rgb = min(r6.rgb, 1.f);                 // Clamp (again?)
   } else {
-    r0.x = cmp(asint(cb0[37].y) == 5);
-    r0.x = (int)r0.x | (int)r5.w;
-    r1.w = cmp(0.5 < v0.y);
-    r1.w = r1.w ? r5.z : 0;
-    r0.x = (int)r0.x | (int)r1.w;
+    r0.x = cmp(asint(cb0[37].y) == 5);  // type == 5
+    r0.x = (int)r0.x | (int)r5.w;       // type == 5 or 4
+    r1.w = cmp(0.5 < v0.y);             //
+    r1.w = r1.w ? r5.z : 0;             // (v0.y >= 0.5) && (type == 3)
+    r0.x = (int)r0.x | (int)r1.w;       // (5 or 4) || above
     if (r0.x != 0) {
-      r5.x = dot(float3(0.627403975, 0.329281986, 0.0433136001), r4.xyz);
-      r5.y = dot(float3(0.0690969974, 0.919539988, 0.0113612004), r4.xyz);
-      r5.z = dot(float3(0.0163915996, 0.088013202, 0.895595014), r4.xyz);
-      r0.x = 0.000199999995 * userPeakNits;
-      r4.xyz = float3(5.55555534, 5.55555534, 5.55555534) * r5.xyz;
-      r4.xyz = log2(r4.xyz);
-      r4.xyz = cb0[38].yyy * r4.xyz;
-      r4.xyz = exp2(r4.xyz);
-      r4.xyz = cb0[37].www * r4.xyz;
-      r5.xyz = float3(0.180000007, 0.180000007, 0.180000007) * r4.xyz;
-      r6.xyz = r4.xyz * float3(0.451800019, 0.451800019, 0.451800019) + float3(0.300000012, 0.300000012, 0.300000012);
-      r6.xyz = r6.xyz * r5.xyz;
-      r4.xyz = r4.xyz * float3(0.448200017, 0.448200017, 0.448200017) + float3(0.589999974, 0.589999974, 0.589999974);
-      r4.xyz = r5.xyz * r4.xyz + float3(0.400000006, 0.400000006, 0.400000006);
-      r4.xyz = saturate(r6.xyz / r4.xyz);
-      r4.xyz = r4.xyz * r0.xxx;
-      r4.xyz = cb0[38].xxx * r4.xyz;
+      r5.rgb = mul(BT709_2_BT2020_MAT, r4.rgb);
+
+      r4.rgb = pow(r5.rgb / 0.18f, colorContrast) * colorContrastGain;
+      r5.rgb = 0.18f * r4.rgb;
+
+      r6.rgb = r4.rgb * 0.4518f + 0.3f;
+      r6.rgb = r6.rgb * r5.rgb;
+
+      r4.rgb = r4.rgb * 0.4482f + 0.59f;
+      r4.rgb = r5.rgb * r4.rgb + 0.4f;
+      r4.rgb = saturate(r6.rgb / r4.rgb);
+      float newPeak = (2 * userPeakNits) / 10000.f;  // Maybe to stretch contrast?
+      r4.rgb = r4.rgb * newPeak;
+      r4.rgb = finalGain * r4.rgb;
     } else {
-      r0.xyz = -r0.yzw * v1.xxx + cb0[40].xyz;
-      r0.xyz = cb0[40].www * r0.xyz + r1.xyz;
+      // Default (0) case
 
-      r1.xyz = mul(BT709_2_BT2020_MAT, r0.xyz);
+      r0.rgb = lerp(bloomedColor, cb0[40].rgb, cb0[40].w);
+      r1.rgb = mul(BT709_2_BT2020_MAT, r0.rgb);
 
-      r0.x = 0.000199999995 * userPeakNits;
-      r0.yzw = float3(5.55555534, 5.55555534, 5.55555534) * r1.xyz;
-      r0.yzw = log2(r0.yzw);
-      r0.yzw = cb0[38].yyy * r0.yzw;
-      r0.yzw = exp2(r0.yzw);
-      r0.yzw = cb0[37].www * r0.yzw;
-      r1.xyz = float3(0.180000007, 0.180000007, 0.180000007) * r0.yzw;
-      r5.xyz = r0.yzw * float3(0.451800019, 0.451800019, 0.451800019) + float3(0.0299999993, 0.0299999993, 0.0299999993);
-      r5.xyz = r5.xyz * r1.xyz;
-      r0.yzw = r0.yzw * float3(0.437400043, 0.437400043, 0.437400043) + float3(0.589999974, 0.589999974, 0.589999974);
-      r0.yzw = r1.xyz * r0.yzw + float3(0.400000006, 0.400000006, 0.400000006);
-      r0.yzw = saturate(r5.xyz / r0.yzw);
-      r0.xyz = r0.yzw * r0.xxx;
-      r4.xyz = cb0[38].xxx * r0.xyz;
+#if RENODX_SOT_ACES_TONEMAPPER
+
+      const float newContrast = colorContrast * 1.5f;
+      const float newGain = colorContrastGain * 2.0f;
+      r0.yzw = r1.rgb / 0.18f;
+      r0.yzw = pow(r0.yzw, newContrast) * newGain;
+      r1.rgb = 0.18f * r0.yzw;
+
+      float3 ap0Color = mul(BT2020_2_AP0_MAT, r1.rgb);
+      ap0Color *= finalGain;
+      float3 tonemappedColor = aces_odt(
+        aces_rrt(ap0Color),
+        0.0001f,  // minY
+        48.f * (userPeakNits / 203.f),
+        AP1_2_BT2020_MAT
+      );
+      r4.rgb = tonemappedColor.rgb * userPeakNits / 10000.f;
+#else
+      r0.yzw = r1.rgb / 0.18f;
+      r0.yzw = pow(r0.yzw, colorContrast) * colorContrastGain;
+      r1.rgb = 0.18f * r0.yzw;
+
+      testColor = mul(BT2020_2_BT709_MAT, r1.rgb * finalGain);
+
+      r5.rgb = r0.yzw * 0.4518f + 0.03f;
+      r5.rgb = r5.rgb * r1.rgb;
+      r0.yzw = r0.yzw * 0.4374f + 0.59f;
+      r0.yzw = r1.rgb * r0.yzw + 0.4f;
+      r0.yzw = saturate(r5.rgb / r0.yzw);
+
+      float newPeak = (2 * userPeakNits) / 10000.f;  // Maybe to stretch contrast?
+      r0.rgb = r0.yzw * newPeak;
+
+      r4.rgb = finalGain * r0.rgb;
+#endif
     }
-    r0.xyz = log2(r4.xyz);
-    r0.xyz = float3(0.159301758, 0.159301758, 0.159301758) * r0.xyz;
-    r0.xyz = exp2(r0.xyz);
-    r1.xyz = r0.xyz * float3(18.8515625, 18.8515625, 18.8515625) + float3(0.8359375, 0.8359375, 0.8359375);
-    r0.xyz = r0.xyz * float3(18.6875, 18.6875, 18.6875) + float3(1, 1, 1);
-    r0.xyz = r1.xyz / r0.xyz;
-    r0.xyz = log2(r0.xyz);
-    r0.xyz = float3(78.84375, 78.84375, 78.84375) * r0.xyz;
-    r0.xyz = exp2(r0.xyz);
-    r3.xyz = min(float3(1, 1, 1), r0.xyz);
+    r3.rgb = pqFromLinear(r4.rgb);
+    r3.rgb = min(r3.rgb, 1.f);
   }
 
-  psOutput.o0.xyzw = r3.xyzw;
-  psOutput.o1.w = r3.w;
-  psOutput.o1.xyz = r2.xyz;
+  psOutput.o0.rgba = r3.rgba;
+  psOutput.o1.rgba = float4(grainedColor.rgb, r3.a);
 
   // TEST
-
-  float3 testColor = aces_rrt_odt(
-                       linearColor,
-                       0.0001,
-                       48.f * (userPeakNits / 203.f),
-                       AP1_2_BT2020_MAT
-                     )
-                   * userPeakNits;
-
-  // testColor = mul(BT709_2_BT2020_MAT, texture3Color);
-  // testColor *= userPeakNits;
+  testColor = mul(BT709_2_BT2020_MAT, inputColor);
+  testColor *= 80;
   testColor /= 10000.f;  // Scale for PQ
   testColor = max(0, testColor);
   testColor = pqFromLinear(testColor);
-  psOutput.o0.rgb = testColor.rgb;
+  // psOutput.o0.rgb = testColor.rgb;
 
   return psOutput;
 }
