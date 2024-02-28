@@ -22,13 +22,24 @@
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - DevKit";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX DevKit Module";
 
+struct CachedShader {
+  void* data = nullptr;
+  size_t size = 0;
+  int32_t index = -1;
+};
+
 std::shared_mutex s_mutex;
 std::unordered_set<uint64_t> computeShaderLayouts;
 std::unordered_map<uint64_t, reshade::api::pipeline_layout> pipelineToLayoutMap;
 std::unordered_map<uint64_t, uint32_t> pipelineToShaderHash;
+std::unordered_map<uint32_t, CachedShader> shaderCache;
+std::vector<uint32_t> traceHashes;
 
 static bool traceScheduled = false;
 static bool traceRunning = false;
+static uint32_t shaderCacheCount = 0;
+static uint32_t shaderCacheSize = 0;
+static uint32_t traceCount = 0;
 
 void logLayout(
   const uint32_t paramCount,
@@ -132,6 +143,14 @@ void logLayout(
   }
 }
 
+static void on_init_swapchain(reshade::api::swapchain* swapchain) {
+  std::stringstream s;
+  s << "init_swapchain"
+    << "(colorspace: " << (uint32_t)swapchain->get_color_space()
+    << ")";
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
+}
+
 // AfterCreateRootSignature
 static void on_init_pipeline_layout(
   reshade::api::device* device,
@@ -175,7 +194,7 @@ static void on_init_pipeline_layout(
   std::stringstream s;
   s << "on_init_pipeline_layout++("
     << reinterpret_cast<void*>(layout.handle)
-    << " , max injections: " << (maxCount / sizeof(uint32_t))
+    << " , max injections: " << (maxCount)
     << " )";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 }
@@ -200,6 +219,17 @@ static void on_init_pipeline(
     if (desc.code_size == 0) continue;
     // Pipeline has a pixel shader with code. Hash code and check
     auto shader_hash = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
+
+    // Cache shader
+
+    if (shaderCache.count(shader_hash) == 0) {
+      CachedShader cache = {malloc(desc.code_size), desc.code_size};
+      memcpy(cache.data, desc.code, cache.size);
+      shaderCache.emplace(shader_hash, cache);
+      shaderCacheCount++;
+      shaderCacheSize += cache.size;
+    }
+    pipelineToLayoutMap.emplace(pipeline.handle, layout);
     pipelineToLayoutMap.emplace(pipeline.handle, layout);
     pipelineToShaderHash.emplace(pipeline.handle, shader_hash);
 
@@ -247,6 +277,9 @@ static void on_bind_pipeline(
   if (pair1 != pipelineToShaderHash.end()) {
     shader_hash = pair1->second;
   }
+  if (shader_hash) {
+    traceHashes.push_back(shader_hash);
+  }
 
   std::stringstream s;
   s << "bind_pipeline("
@@ -258,13 +291,97 @@ static void on_bind_pipeline(
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 }
 
+static void on_bind_pipeline_states(
+  reshade::api::command_list* cmd_list,
+  uint32_t count,
+  const reshade::api::dynamic_state* states,
+  const uint32_t* values
+) {
+  if (!traceRunning) return;
+
+  for (uint32_t i = 0; i < count; i++) {
+    std::stringstream s;
+    s << "bind_pipeline_state"
+      << "(" << uint32_t(states[i])
+      << ", " << values[i]
+      << ")";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+  }
+}
+
+static bool on_draw(
+  reshade::api::command_list* cmd_list,
+  uint32_t vertex_count,
+  uint32_t instance_count,
+  uint32_t first_vertex,
+  uint32_t first_instance
+) {
+  if (traceRunning) {
+    std::stringstream s;
+    s << "on_draw"
+      << "(" << vertex_count
+      << ", " << instance_count
+      << ", " << first_vertex
+      << ", " << first_instance
+      << ")";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+  }
+  return false;
+}
+
+static bool on_draw_indexed(
+  reshade::api::command_list* cmd_list,
+  uint32_t index_count,
+  uint32_t instance_count,
+  uint32_t first_index,
+  int32_t vertex_offset,
+  uint32_t first_instance
+) {
+  if (traceRunning) {
+    std::stringstream s;
+    s << "on_draw_indexed"
+      << "(" << index_count
+      << ", " << instance_count
+      << ", " << first_index
+      << ", " << vertex_offset
+      << ", " << first_instance
+      << ")";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+  }
+  return false;
+}
+
+static bool on_draw_or_dispatch_indirect(
+  reshade::api::command_list* cmd_list,
+  reshade::api::indirect_command type,
+  reshade::api::resource buffer,
+  uint64_t offset,
+  uint32_t draw_count,
+  uint32_t stride
+) {
+  if (traceRunning) {
+    std::stringstream s;
+    s << "on_draw_or_dispatch_indirect"
+      << "(" << (uint32_t)type
+      << ", " << reinterpret_cast<void*>(buffer.handle)
+      << ", " << offset
+      << ", " << draw_count
+      << ", " << stride
+      << ")";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+  }
+  return false;
+}
+
 static void on_reshade_present(reshade::api::effect_runtime* runtime) {
   if (traceRunning) {
     reshade::log_message(reshade::log_level::info, "present()");
     reshade::log_message(reshade::log_level::info, "--- End Frame ---");
+    traceCount = traceHashes.size();
     traceRunning = false;
   } else if (traceScheduled) {
     traceScheduled = false;
+    traceHashes.clear();
     traceRunning = true;
     reshade::log_message(reshade::log_level::info, "--- Frame ---");
   }
@@ -275,6 +392,54 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
   if (ImGui::Button("Trace")) {
     traceScheduled = true;
   }
+  ImGui::SameLine();
+  ImGui::Text("Traced Shaders: %d", traceCount);
+
+  ImGui::Text("Cached Shaders: %d", shaderCacheCount);
+  ImGui::Text("Cached Shaders Size: %d", shaderCacheSize);
+  static int32_t selectedIndex = -1;
+  bool changedSelected = false;
+  if (ImGui::BeginChild("HashList", ImVec2(100, -FLT_MIN), ImGuiChildFlags_ResizeX)) {
+    if (ImGui::BeginListBox("##HashesListbox", ImVec2(-FLT_MIN, -FLT_MIN))) {
+      if (!traceRunning) {
+        for (auto index = 0; index < traceCount; index++) {
+          auto hash = traceHashes.at(index);
+          const bool isSelected = (selectedIndex == index);
+          std::stringstream name;
+          name << std::setfill('0') << std::setw(3) << index << std::setw(0)
+               << " - 0x" << std::hex << hash;
+          if (ImGui::Selectable(name.str().c_str(), isSelected)) {
+            selectedIndex = index;
+            changedSelected = true;
+          }
+
+          if (isSelected) {
+            ImGui::SetItemDefaultFocus();
+          }
+        }
+      }
+      ImGui::EndListBox();
+    }
+    ImGui::EndChild();
+  }
+
+  ImGui::SameLine();
+
+  if (ImGui::BeginChild("HashDetails", ImVec2(-FLT_MIN, -FLT_MIN))) {
+    ImGui::BeginDisabled(selectedIndex == -1);
+    if (ImGui::Button("Dump")) {
+    }
+    static char text[1024 * 16] = "";
+    if (changedSelected) {
+    }
+
+    if (ImGui::BeginChild("HashSourceCode", ImVec2(-FLT_MIN, -FLT_MIN), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+      ImGui::InputTextMultiline("##source", text, IM_ARRAYSIZE(text), ImVec2(-FLT_MIN, -FLT_MIN), ImGuiInputTextFlags_ReadOnly);
+      ImGui::EndChild();
+    }
+    ImGui::EndChild();
+    ImGui::EndDisabled();
+  }
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
@@ -282,19 +447,25 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
 
+      reshade::register_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
       reshade::register_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
-
       reshade::register_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
       reshade::register_event<reshade::addon_event::destroy_pipeline>(on_destroy_pipeline);
 
       reshade::register_event<reshade::addon_event::bind_pipeline>(on_bind_pipeline);
+      reshade::register_event<reshade::addon_event::bind_pipeline_states>(on_bind_pipeline_states);
+
+      reshade::register_event<reshade::addon_event::draw>(on_draw);
+      reshade::register_event<reshade::addon_event::draw_indexed>(on_draw_indexed);
+      reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(on_draw_or_dispatch_indirect);
 
       reshade::register_event<reshade::addon_event::reshade_present>(on_reshade_present);
 
-      reshade::register_overlay(nullptr, on_register_overlay);
+      reshade::register_overlay("RenoDX (DevKit)", on_register_overlay);
 
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
       reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
 
       reshade::unregister_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
@@ -304,7 +475,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
 
       reshade::unregister_event<reshade::addon_event::reshade_present>(on_reshade_present);
 
-      reshade::unregister_overlay(nullptr, on_register_overlay);
+      reshade::unregister_overlay("RenoDX (DevKit)", on_register_overlay);
 
       reshade::unregister_addon(hModule);
       break;
