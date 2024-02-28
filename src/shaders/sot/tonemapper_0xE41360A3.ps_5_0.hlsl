@@ -189,7 +189,7 @@ PS_OUTPUT main(PS_INPUT psInput) {
 #if RENODX_SOT_ACES_TONEMAPPER
 
       const float newContrast = colorContrast * 1.5f;
-      const float newGain = colorContrastGain * 2.0f;
+      const float newGain = colorContrastGain * 4.0f;
       r0.yzw = r1.rgb / 0.18f;
       r0.yzw = pow(r0.yzw, newContrast) * newGain;
       r1.rgb = 0.18f * r0.yzw;
