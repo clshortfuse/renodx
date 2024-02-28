@@ -186,15 +186,15 @@ PS_OUTPUT main(PS_INPUT psInput) {
       r0.rgb = lerp(bloomedColor, cb0[40].rgb, cb0[40].w);
       r1.rgb = mul(BT709_2_BT2020_MAT, r0.rgb);
 
-#if RENODX_SOT_ACES_TONEMAPPER
+      r0.yzw = r1.rgb / 0.18f;
+      r0.yzw = pow(r0.yzw, colorContrast) * colorContrastGain;
+      r1.rgb = 0.18f * r0.yzw;
 
-      const float newContrast = colorContrast * 1.0f;
-      const float newGain = colorContrastGain * 8.0f;
+#if RENODX_SOT_ACES_TONEMAPPER
+      r1.rgb *= 8.f;  // Scale up close to SDR;
+
       float hdrBrightness = pow(finalGain, 0.25f);  // 0-2
       float userPaperWhite = 200.f * hdrBrightness;
-      r0.yzw = r1.rgb / 0.18f;
-      r0.yzw = pow(r0.yzw, newContrast) * newGain;
-      r1.rgb = 0.18f * r0.yzw;
 
       float3 ap0Color = mul(BT2020_2_AP0_MAT, r1.rgb);
       float3 tonemappedColor = aces_odt(
@@ -205,11 +205,6 @@ PS_OUTPUT main(PS_INPUT psInput) {
       );
       r4.rgb = tonemappedColor.rgb * userPeakNits / 10000.f;
 #else
-      r0.yzw = r1.rgb / 0.18f;
-      r0.yzw = pow(r0.yzw, colorContrast) * colorContrastGain;
-      r1.rgb = 0.18f * r0.yzw;
-
-      testColor = mul(BT2020_2_BT709_MAT, r1.rgb * finalGain);
 
       r5.rgb = r0.yzw * 0.4518f + 0.03f;
       r5.rgb = r5.rgb * r1.rgb;
