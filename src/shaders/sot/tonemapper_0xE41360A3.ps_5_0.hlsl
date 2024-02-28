@@ -188,18 +188,19 @@ PS_OUTPUT main(PS_INPUT psInput) {
 
 #if RENODX_SOT_ACES_TONEMAPPER
 
-      const float newContrast = colorContrast * 1.5f;
-      const float newGain = colorContrastGain * 4.0f;
+      const float newContrast = colorContrast * 1.0f;
+      const float newGain = colorContrastGain * 8.0f;
+      float hdrBrightness = pow(finalGain, 0.25f);  // 0-2
+      float userPaperWhite = 200.f * hdrBrightness;
       r0.yzw = r1.rgb / 0.18f;
       r0.yzw = pow(r0.yzw, newContrast) * newGain;
       r1.rgb = 0.18f * r0.yzw;
 
       float3 ap0Color = mul(BT2020_2_AP0_MAT, r1.rgb);
-      ap0Color *= finalGain;
       float3 tonemappedColor = aces_odt(
         aces_rrt(ap0Color),
         0.0001f,  // minY
-        48.f * (userPeakNits / 203.f),
+        48.f * (userPeakNits / userPaperWhite),
         AP1_2_BT2020_MAT
       );
       r4.rgb = tonemappedColor.rgb * userPeakNits / 10000.f;
