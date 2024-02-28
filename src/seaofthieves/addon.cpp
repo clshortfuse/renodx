@@ -588,7 +588,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       // reshade::register_event<reshade::addon_event::draw_indexed>(on_draw_indexed);
       // reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(on_draw_or_dispatch_indirect);
 
-      reshade::register_overlay("RenoDX", on_register_overlay);
+      // reshade::register_overlay("RenoDX", on_register_overlay);
       break;
     case DLL_PROCESS_DETACH:
       // reshade::unregister_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
@@ -605,7 +605,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       // reshade::unregister_event<reshade::addon_event::draw_indexed>(on_draw_indexed);
       // reshade::unregister_event<reshade::addon_event::draw_or_dispatch_indirect>(on_draw_or_dispatch_indirect);
 
-      reshade::unregister_overlay("RenoDX", on_register_overlay);
+      // reshade::unregister_overlay("RenoDX", on_register_overlay);
 
       reshade::unregister_addon(hModule);
       break;
