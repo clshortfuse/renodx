@@ -8,6 +8,13 @@ project(renodx VERSION 0.1.0 LANGUAGES C CXX)
 include(CTest)
 enable_testing()
 
+
+# MOD LIST HERE
+list(APPEND ADDON_LIST cp2077)
+list(APPEND ADDON_LIST seaofthieves)
+list(APPEND ADDON_LIST devkit)
+
+
 # Use executable to convert resources to .h files for embedding
 add_executable(embedfile embedfile.c)
 
@@ -21,10 +28,16 @@ function(build_shader_target)
     string(REGEX MATCH "(0x[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F])\.([^.]+)\.hlsl$" _ ${FILENAME} )
     set(SHADER_HASH ${CMAKE_MATCH_1})
     set(SHADER_TARGET ${CMAKE_MATCH_2})
+    STRING(SUBSTRING ${SHADER_TARGET} 3 1 SHADER_TARGET_MAJOR)
+    set(SHADER_BINARY "dxc.exe")
+    if (SHADER_TARGET_MAJOR EQUAL "5")
+      set(SHADER_BINARY "fxc.exe")
+      set(SHADER_FLAGS "/Gec") # Compatibility mode
+    endif()
 
     add_custom_command(
       OUTPUT embed/${SHADER_HASH}.cso
-      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bin/dxc.exe ${FILE} -WX -T ${SHADER_TARGET} -E main -Fo ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso
+      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bin/${SHADER_BINARY} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /Qstrip_reflect -E main -Fo ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso
       DEPENDS ${FILE}
     )
     add_custom_command(
@@ -40,9 +53,6 @@ function(build_shader_target)
 endfunction()
 
 build_shader_target()
-
-list(APPEND ADDON_LIST cp2077)
-list(APPEND ADDON_LIST devkit)
 
 foreach(ADDON ${ADDON_LIST})
   add_library(${ADDON} MODULE src/${ADDON}/addon.cpp)

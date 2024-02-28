@@ -32,8 +32,6 @@ static const float3x3 AP0_2_AP1_MAT = {
    0.0083161484, -0.0060324498,  0.9977163014,
 };
 
-
-
 static const float3x3 XYZ_2_AP0_MAT = {
    1.0498110175, 0.0000000000,-0.0000974845,
   -0.4959030231, 1.3733130458, 0.0982400361,
@@ -108,6 +106,10 @@ float3 bt2020FromBT709(float3 bt709) {
 
 float3 bt709FromBT2020(float3 bt2020) {
   return mul(BT2020_2_BT709_MAT, bt2020);
+}
+
+float yFromBT601(float3 bt601) {
+  return dot(bt601, float3(0.299, 0.587, 0.114));
 }
 
 float yFromBT709(float3 bt709) {
