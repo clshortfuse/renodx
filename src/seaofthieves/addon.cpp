@@ -30,7 +30,7 @@
 #include "../../external/reshade/deps/imgui/imgui.h"
 #include "../../external/reshade/include/reshade.hpp"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX - SoT";
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Sea of Thieves";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Sea of Thieves";
 
 struct CustomShader {

@@ -15,7 +15,7 @@ void main(float2 v0 : TEXCOORD0, float4 v1 : SV_POSITION0, out float4 uiOutput :
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  const float uiPaperWhiteNits = cb0[23].x; // cb0[23].x;  // 200
+  const float uiPaperWhiteNits = cb0[23].x / 2.f; // cb0[23].x;  // 200
   const float gamma = cb0[23].y;             // 2.2
 
   const float4 inputColor = t0.SampleLevel(s0_s, v0.xy, 0).rgba;
