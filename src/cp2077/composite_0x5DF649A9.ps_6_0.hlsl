@@ -1,4 +1,4 @@
-#include "../../cp2077/composite.hlsl"
+#include "./composite.hlsl"
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {
   gl_FragCoord = stage_input.gl_FragCoord;

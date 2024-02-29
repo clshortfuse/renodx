@@ -1,9 +1,9 @@
 // HUD Shader
 
-#include "../../common/filmgrain.hlsl"
-#include "../../cp2077/colormath.hlsl"
-#include "../../cp2077/cp2077.h"
-#include "../../cp2077/injectedBuffer.hlsl"
+#include "../common/filmgrain.hlsl"
+#include "../cp2077/colormath.hlsl"
+#include "../cp2077/cp2077.h"
+#include "../cp2077/injectedBuffer.hlsl"
 
 static float _312;
 

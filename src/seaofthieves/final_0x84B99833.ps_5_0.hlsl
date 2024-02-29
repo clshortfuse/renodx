@@ -1,6 +1,6 @@
 // UI Alpha Compositing
 
-#include "../../common/color.hlsl"
+#include "../common/color.hlsl"
 
 Texture2D<float4> t0 : register(t0);
 

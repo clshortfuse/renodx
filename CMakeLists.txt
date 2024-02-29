@@ -19,34 +19,37 @@ list(APPEND ADDON_LIST devkit)
 add_executable(embedfile embedfile.c)
 
 function(build_shader_target)
-  string(LENGTH ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/ PATH_LENGTH)
+  string(LENGTH ${CMAKE_CURRENT_SOURCE_DIR}/src/ PATH_LENGTH)
+  
 
-
-  file(GLOB SHADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/**/*.hlsl)
+  file(GLOB SHADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/**/*.hlsl)
   foreach(FILE ${SHADER_FILES})
     string(SUBSTRING ${FILE} ${PATH_LENGTH} -1 FILENAME)
     string(REGEX MATCH "(0x[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F])\.([^.]+)\.hlsl$" _ ${FILENAME} )
     set(SHADER_HASH ${CMAKE_MATCH_1})
     set(SHADER_TARGET ${CMAKE_MATCH_2})
-    STRING(SUBSTRING ${SHADER_TARGET} 3 1 SHADER_TARGET_MAJOR)
-    set(SHADER_BINARY "dxc.exe")
-    if (SHADER_TARGET_MAJOR EQUAL "5")
-      set(SHADER_BINARY "fxc.exe")
-      set(SHADER_FLAGS "/Gec") # Compatibility mode
+    
+    if (SHADER_HASH AND SHADER_TARGET) 
+      STRING(SUBSTRING ${SHADER_TARGET} 3 1 SHADER_TARGET_MAJOR)
+      set(SHADER_BINARY "dxc.exe")
+      if (SHADER_TARGET_MAJOR EQUAL "5")
+        set(SHADER_BINARY "fxc.exe")
+        set(SHADER_FLAGS "/Gec") # Compatibility mode
+      endif()
+
+      add_custom_command(
+        OUTPUT embed/${SHADER_HASH}.cso
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bin/${SHADER_BINARY} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /Qstrip_reflect -E main -Fo ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso
+        DEPENDS ${FILE}
+      )
+      add_custom_command(
+        OUTPUT embed/include/embed/${SHADER_HASH}.h
+        COMMAND embedfile ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso ${SHADER_HASH}
+        DEPENDS embed/${SHADER_HASH}.cso
+      )
+
+      list(APPEND SHADER_HEADER_FILES embed/include/embed/${SHADER_HASH}.h)
     endif()
-
-    add_custom_command(
-      OUTPUT embed/${SHADER_HASH}.cso
-      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bin/${SHADER_BINARY} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /Qstrip_reflect -E main -Fo ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso
-      DEPENDS ${FILE}
-    )
-    add_custom_command(
-      OUTPUT embed/include/embed/${SHADER_HASH}.h
-      COMMAND embedfile ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso ${SHADER_HASH}
-      DEPENDS embed/${SHADER_HASH}.cso
-    )
-
-    list(APPEND SHADER_HEADER_FILES embed/include/embed/${SHADER_HASH}.h)
   endforeach()
   LIST(JOIN SHADER_HEADER_FILES " " SHADER_HEADER_FILE_ITEMS)
   add_custom_target(shaders DEPENDS ${SHADER_HEADER_FILES})

@@ -1,7 +1,7 @@
 // Film Grain Generator
 
-#include "../../cp2077/cp2077.h"
-#include "../../cp2077/injectedBuffer.hlsl"
+#include "./cp2077.h"
+#include "./injectedBuffer.hlsl"
 
 cbuffer _13_15 : register(b6, space0) {
   float4 cb6[1] : packoffset(c0);

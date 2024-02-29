@@ -1,5 +1,5 @@
-#include "../../common/color.hlsl"
-#include "../../cp2077/injectedBuffer.hlsl"
+#include "../common/color.hlsl"
+#include "./injectedBuffer.hlsl"
 
 static float _296;
 
