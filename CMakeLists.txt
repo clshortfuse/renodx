@@ -12,6 +12,7 @@ enable_testing()
 # MOD LIST HERE
 list(APPEND ADDON_LIST cp2077)
 list(APPEND ADDON_LIST seaofthieves)
+list(APPEND ADDON_LIST seaofstars)
 list(APPEND ADDON_LIST devkit)
 
 
@@ -31,9 +32,10 @@ function(build_shader_target)
     
     if (SHADER_HASH AND SHADER_TARGET) 
       STRING(SUBSTRING ${SHADER_TARGET} 3 1 SHADER_TARGET_MAJOR)
-      set(SHADER_BINARY "dxc.exe")
-      if (SHADER_TARGET_MAJOR EQUAL "5")
-        set(SHADER_BINARY "fxc.exe")
+      set(SHADER_BINARY "fxc.exe")
+      if (SHADER_TARGET_MAJOR EQUAL "6")
+        set(SHADER_BINARY "dxc.exe")
+      else()
         set(SHADER_FLAGS "/Gec") # Compatibility mode
       endif()
 
