@@ -531,6 +531,7 @@ namespace shaderreplacemod {
         _shaderInjection
       );
 
+#ifdef DEBUG_LEVEL_1
       std::stringstream s;
       s << "bind_pipeline++("
         << reinterpret_cast<void*>(pipeline.handle)
@@ -539,6 +540,7 @@ namespace shaderreplacemod {
         << ", " << std::hex << (uint32_t)stage
         << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
     } else {
       stage = computeShaderLayouts.count(layout.handle) == 0
               ? reshade::api::shader_stage::pixel
@@ -554,6 +556,7 @@ namespace shaderreplacemod {
         _shaderInjectionSize / sizeof(uint32_t),
         _shaderInjection
       );
+#ifdef DEBUG_LEVEL_1
       std::stringstream s;
       s << "bind_pipeline++("
         << reinterpret_cast<void*>(pipeline.handle)
@@ -562,6 +565,7 @@ namespace shaderreplacemod {
         << ", " << std::hex << (uint32_t)stage
         << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
     }
   }
 
