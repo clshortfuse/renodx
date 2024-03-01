@@ -9,13 +9,7 @@
 #include <embed/0x552A4A60.h>
 #include <embed/0x72B31CDE.h>
 
-#include <filesystem>
-#include <fstream>
-#include <random>
-#include <shared_mutex>
-#include <sstream>
-#include <unordered_map>
-#include <unordered_set>
+#include "./shared.h"
 
 #include "../../external/reshade/deps/imgui/imgui.h"
 #include "../../external/reshade/include/reshade.hpp"
@@ -29,18 +23,88 @@ shaderreplacemod::CustomShaders customShaders = {
   {0x72B31CDE, {0x72B31CDE, _0x72B31CDE, sizeof(_0x72B31CDE)}}
 };
 
+ShaderInjectData shaderInjection;
+
+struct {
+  int toneMapperEnum = 0u;
+  float gamePeakWhite = 1000.f;
+  float gamePaperWhite = 203.f;
+  float uiPaperWhite = 203.f;
+  float saturation = 1.f;
+} userSettings;
+
+static void updateInjection() {
+  shaderInjection.toneMapperEnum = static_cast<float>(userSettings.toneMapperEnum);
+  shaderInjection.gamePeakWhite = userSettings.gamePeakWhite;
+  shaderInjection.gamePaperWhite = userSettings.gamePaperWhite;
+  shaderInjection.uiPaperWhite = userSettings.uiPaperWhite;
+  shaderInjection.saturation = userSettings.saturation;
+}
+
+static void on_register_overlay(reshade::api::effect_runtime* runtime) {
+  bool settingsChanged = false;
+
+  static const char* toneMapperEnums[] = {
+    "Vanilla",
+    "None",
+    "ACES"
+  };
+  settingsChanged |= ImGui::SliderInt(
+    "Tone Mapper",
+    &userSettings.toneMapperEnum,
+    0,
+    2,
+    toneMapperEnums[userSettings.toneMapperEnum],
+    ImGuiSliderFlags_NoInput
+  );
+
+  settingsChanged |= ImGui::SliderFloat(
+    "Peak Brightness",
+    &userSettings.gamePeakWhite,
+    48.f,
+    4000.f,
+    "%.0f"
+  );
+  ImGui::SetItemTooltip("Adjusts the peak brightness in nits.");
+
+  settingsChanged |= ImGui::SliderFloat(
+    "Game Brightness",
+    &userSettings.gamePaperWhite,
+    48.f,
+    500.f,
+    "%.0f"
+  );
+  ImGui::SetItemTooltip("Adjusts the brightness of 100%% white in nits.");
+
+  settingsChanged |= ImGui::SliderFloat(
+    "UI Brightness",
+    &userSettings.uiPaperWhite,
+    48.f,
+    500.f,
+    "%.0f"
+  );
+  ImGui::SetItemTooltip("Adjusts the peak brightness of the UI in nits.");
+
+  if (settingsChanged) {
+    updateInjection();
+  }
+}
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
   switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
+      updateInjection();
+      reshade::register_overlay("RenoDX", on_register_overlay);
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_overlay("RenoDX", on_register_overlay);
       reshade::unregister_addon(hModule);
       break;
   }
 
   swapchainmod::use(fdwReason);
-  shaderreplacemod::use(fdwReason, &customShaders);
+  shaderreplacemod::use(fdwReason, &customShaders, &shaderInjection);
 
   return TRUE;
 }
