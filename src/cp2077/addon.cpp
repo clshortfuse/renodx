@@ -67,9 +67,9 @@ static struct UserInjectData {
   int toneMapperColorSpace = 1;
   int toneMapperWhitePoint = 1;
   float toneMapperHighlights = 50.f;
-  float toneMapperShadows = 60.f;
+  float toneMapperShadows = 90.f;
   float toneMapperExposure = 1.f;
-  float toneMapperContrast = 55.f;
+  float toneMapperContrast = 60.f;
   float toneMapperDechroma = 50.f;
   int colorGradingWorkflow = 1;
   float colorGradingStrength = 100.f;
