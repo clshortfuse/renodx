@@ -570,7 +570,6 @@ float4 tonemap(bool isHDR = false) {
     bool useD60 = (injectedData.toneMapperWhitePoint == -1.0f || (injectedData.toneMapperWhitePoint == 0.f && cb6[28u].z == 0.f));
 
     outputRGB = max(0, outputRGB);
-    outputRGB = apply_user_highlights(outputRGB, (2.f * injectedData.toneMapperHighlights - 1.15f) * paperWhite / peakNits);
     if (toneMapperType == TONE_MAPPER_TYPE__OPENDRT) {
       // OpenDRT is based around 100 nits for SDR
 
@@ -604,7 +603,6 @@ float4 tonemap(bool isHDR = false) {
       // ACES uses 48 nits for 100-nit SDR
       // Base 100-nit SDR = 203 SDR
       // Scaling is Peak Nits / Paper White
-      float yMin = pow(10.f, lerp(-8.f, 0.f, injectedData.toneMapperShadows * 0.5f));
       float3x3 clampMatrix;
       float3x3 outputMatrix;
       if (injectedData.toneMapperColorSpace == 1.f) {
@@ -617,9 +615,20 @@ float4 tonemap(bool isHDR = false) {
         clampMatrix = useD60 ? AP1_2_BT709D60_MAT : AP1_2_BT709_MAT;
         outputMatrix = IDENTITY_MAT;
       }
+      outputRGB = apply_user_shadows(outputRGB, injectedData.toneMapperShadows);
+      if (injectedData.toneMapperHighlights != 1.f) {
+        outputRGB = apply_user_highlights(outputRGB, injectedData.toneMapperHighlights);
+      }
+      if (injectedData.toneMapperContrast != 1.f) {
+        float3 workingColor = pow(outputRGB / 0.18f, injectedData.toneMapperContrast) * 0.18f;
+        // Working in BT709 still
+        float workingColorY = yFromBT709(workingColor);
+        float outputRGBY = yFromBT709(outputRGB);
+        outputRGB *= outputRGBY ? workingColorY / outputRGBY : 1.f;
+      }
       odtFinal = aces_rrt_odt(
         outputRGB,
-        yMin,
+        0.0001f, // MIN_LUM_RRT
         48.f * (peakNits / paperWhite),
         clampMatrix
       );

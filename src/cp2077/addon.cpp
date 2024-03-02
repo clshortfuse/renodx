@@ -357,7 +357,7 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
           100.f,
           "%.0f"
         );
-        ImGui::SetItemTooltip("Adjusts tone mapper's shadows or black level.");
+        ImGui::SetItemTooltip("Adjusts brightness of shadows.");
 
         updateShadersOrPreset |= ImGui::SliderFloat(
           "Exposure",
