@@ -5,14 +5,22 @@
 
 #define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 
+#include <array>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
+#include <memory>
 #include <random>
 #include <shared_mutex>
 #include <sstream>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#include <Windows.h>
 
 #include <crc32_hash.hpp>
 
@@ -26,6 +34,7 @@ struct CachedShader {
   void* data = nullptr;
   size_t size = 0;
   int32_t index = -1;
+  std::string source = "";
 };
 
 std::shared_mutex s_mutex;
@@ -228,6 +237,11 @@ static void on_init_pipeline(
       shaderCache.emplace(shader_hash, cache);
       shaderCacheCount++;
       shaderCacheSize += cache.size;
+      std::stringstream s;
+      s << "caching shader("
+        << "hash: 0x" << std::hex << shader_hash << std::dec
+        << ")";
+      reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
     pipelineToLayoutMap.emplace(pipeline.handle, layout);
     pipelineToLayoutMap.emplace(pipeline.handle, layout);
@@ -387,6 +401,117 @@ static void on_reshade_present(reshade::api::effect_runtime* runtime) {
   }
 }
 
+static const char* findFXC() {
+  std::string path = "C:\\Program Files (x86)\\Windows Kits\\10\\bin";
+  if (std::filesystem::exists(path) == false) return NULL;
+
+  for (const auto &entry : std::filesystem::directory_iterator(path)) {
+    auto fullPath = entry.path();
+    fullPath.append(".\\x64\\fxc.exe");
+    if (std::filesystem::exists(fullPath)) {
+      return fullPath.generic_string().c_str();
+    }
+  }
+  return NULL;
+}
+
+std::string exec(const char* cmd) {
+  std::array<char, 128> buffer;
+  std::string result;
+  std::unique_ptr<FILE, decltype(&_pclose)> pipe(_popen(cmd, "r"), _pclose);
+  if (!pipe) {
+    throw std::runtime_error("popen() failed!");
+  }
+  while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe.get()) != nullptr) {
+    result += buffer.data();
+  }
+  return result;
+}
+
+std::filesystem::path getShaderPath() {
+  wchar_t file_prefix[MAX_PATH] = L"";
+  GetModuleFileNameW(nullptr, file_prefix, ARRAYSIZE(file_prefix));
+
+  std::filesystem::path dump_path = file_prefix;
+  dump_path = dump_path.parent_path();
+  dump_path /= ".\\renodx-dev";
+  return dump_path;
+}
+
+void dumpShader(uint32_t shader_hash) {
+  auto dump_path = getShaderPath();
+
+  if (std::filesystem::exists(dump_path) == false) {
+    std::filesystem::create_directory(dump_path);
+  }
+  wchar_t hash_string[11];
+  swprintf_s(hash_string, L"0x%08X", shader_hash);
+
+  dump_path /= hash_string;
+  dump_path += L".cso";
+
+  auto cachedShader = shaderCache.find(shader_hash)->second;
+
+  std::ofstream file(dump_path, std::ios::binary);
+
+  file.write(static_cast<const char*>(cachedShader.data), cachedShader.size);
+}
+
+char* dumpFXC(uint32_t shader_hash, bool force = false) {
+  auto fxcExePath = findFXC();
+  if (fxcExePath == NULL) {
+    reshade::log_message(reshade::log_level::warning, "fxc.exe not found.");
+  }
+
+  // Prepend executable directory to image files
+  auto shaderPath = getShaderPath();
+  if (std::filesystem::exists(shaderPath) == false) {
+    std::filesystem::create_directory(shaderPath);
+  }
+
+  auto csoPath = shaderPath;
+  wchar_t hash_string[11];
+  swprintf_s(hash_string, L"0x%08X", shader_hash);
+
+  csoPath /= hash_string;
+  auto fxcPath = csoPath;
+
+  csoPath += L".cso";
+  fxcPath += L".fxc";
+
+  if (std::filesystem::exists(fxcPath) == false) {
+    if (std::filesystem::exists(csoPath) == false) {
+      dumpShader(shader_hash);
+    }
+
+    std::stringstream command;
+    command << "\""
+            << "\""
+            << fxcExePath
+            << "\""
+            << " -dumpbin "
+            << "\""
+            << csoPath.generic_string()
+            << "\" > \""
+            << fxcPath.generic_string()
+            << "\""
+            << "\"";
+
+    // Causes application focus to blur
+    std::system(command.str().c_str());
+  }
+
+  std::ifstream file(fxcPath, std::ios::binary);
+
+  file.seekg(0, std::ios::end);
+  size_t fileSize = file.tellg();
+  char* code = reinterpret_cast<char*>(malloc((fileSize + 1) * sizeof(char)));
+  file.seekg(0, std::ios::beg).read(code, fileSize);
+  code[fileSize] = NULL;
+
+  return code;
+}
+
 // @see https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 static void on_register_overlay(reshade::api::effect_runtime* runtime) {
   if (ImGui::Button("Trace")) {
@@ -425,16 +550,28 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
 
   ImGui::SameLine();
 
+  static std::string sourceCode = "";
   if (ImGui::BeginChild("HashDetails", ImVec2(-FLT_MIN, -FLT_MIN))) {
     ImGui::BeginDisabled(selectedIndex == -1);
-    if (ImGui::Button("Dump")) {
-    }
-    static char text[1024 * 16] = "";
     if (changedSelected) {
+      auto hash = traceHashes.at(selectedIndex);
+      auto cache = shaderCache.find(hash)->second;
+      if (cache.source.length() == 0) {
+        char* fxc = dumpFXC(hash);
+        cache.source.assign(fxc);
+        free(fxc);
+      }
+      sourceCode.assign(cache.source);
     }
 
     if (ImGui::BeginChild("HashSourceCode", ImVec2(-FLT_MIN, -FLT_MIN), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
-      ImGui::InputTextMultiline("##source", text, IM_ARRAYSIZE(text), ImVec2(-FLT_MIN, -FLT_MIN), ImGuiInputTextFlags_ReadOnly);
+      ImGui::InputTextMultiline(
+        "##source",
+        (char*)sourceCode.c_str(),
+        sourceCode.length(),
+        ImVec2(-FLT_MIN, -FLT_MIN),
+        ImGuiInputTextFlags_ReadOnly
+      );
       ImGui::EndChild();
     }
     ImGui::EndChild();
