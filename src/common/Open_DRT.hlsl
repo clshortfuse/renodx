@@ -171,7 +171,7 @@ float3 open_drt_transform(
 
   // Chroma contrast
   const static float chc_p = 1.2f;  // 1.2 // amount of contrast
-  const static float chc_m = 0.7f;  // 0.5 // pivot of contrast curve
+  const static float chc_m = 0.5f;  // 0.5 // pivot of contrast curve
 
   // Tonescale parameters
   const float c = 1.1f * contrast;  // 1.1 contrast
@@ -298,9 +298,9 @@ float3 open_drt_transform(
   // rats.x = powerptoe(rats.x, 0.05f, -0.05f, 1.0f);
 
   // Perf: Input and Output gamut are the same, skip compression
-  // rats.x = powerptoe_fixed(rats.x);
-  // rats.y = powerptoe_fixed(rats.y);
-  // rats.z = powerptoe_fixed(rats.z);
+  rats.x = powerptoe_fixed(rats.x);
+  rats.y = powerptoe_fixed(rats.y);
+  rats.z = powerptoe_fixed(rats.z);
 
   /* Calculate RGB CMY hue angles from the input RGB.
     The classical way of calculating hue angle from RGB is something like this
@@ -462,7 +462,7 @@ float3 open_drt_transform_custom(
 ) {
   rgb = apply_aces_highlights(rgb);
   rgb = apply_user_shadows(rgb, shadows);
-  // rgb = apply_user_highlights(rgb, (2.f * highlights - 1.15f) * 203.f / peakNits);
+  rgb = apply_user_highlights(rgb, (2.f * highlights - 1.15f) * 203.f / peakNits);
   rgb = open_drt_transform(
     rgb,
     peakNits,
