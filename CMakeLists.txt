@@ -40,17 +40,17 @@ function(build_shader_target)
       endif()
 
       add_custom_command(
-        OUTPUT embed/${SHADER_HASH}.cso
-        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bin/${SHADER_BINARY} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /Qstrip_reflect -E main -Fo ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/embed/${SHADER_HASH}.cso
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bin/${SHADER_BINARY} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /Qstrip_reflect -E main -Fo ${CMAKE_CURRENT_BINARY_DIR}/embed/${SHADER_HASH}.cso
         DEPENDS ${FILE}
       )
       add_custom_command(
-        OUTPUT embed/include/embed/${SHADER_HASH}.h
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/embed/include/embed/${SHADER_HASH}.h
         COMMAND embedfile ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso ${SHADER_HASH}
-        DEPENDS embed/${SHADER_HASH}.cso
+        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/embed/${SHADER_HASH}.cso
       )
 
-      list(APPEND SHADER_HEADER_FILES embed/include/embed/${SHADER_HASH}.h)
+      list(APPEND SHADER_HEADER_FILES ${CMAKE_CURRENT_BINARY_DIR}/embed/include/embed/${SHADER_HASH}.h)
     endif()
   endforeach()
   LIST(JOIN SHADER_HEADER_FILES " " SHADER_HEADER_FILE_ITEMS)
@@ -60,9 +60,9 @@ endfunction()
 build_shader_target()
 
 foreach(ADDON ${ADDON_LIST})
-  add_library(${ADDON} MODULE src/${ADDON}/addon.cpp)
+  add_library(${ADDON} MODULE ${CMAKE_CURRENT_SOURCE_DIR}/src/${ADDON}/addon.cpp)
   add_dependencies(${ADDON} shaders)
-  target_include_directories(${ADDON} PRIVATE ${CMAKE_BINARY_DIR}/embed/include)
+  target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/embed/include)
   target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_compile_definitions(${ADDON} PRIVATE _UNICODE)
   set_target_properties(${ADDON}
