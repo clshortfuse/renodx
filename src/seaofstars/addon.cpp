@@ -13,12 +13,13 @@
 
 #include "../../external/reshade/deps/imgui/imgui.h"
 #include "../../external/reshade/include/reshade.hpp"
-#include "../common/mods.hpp"
+#include "../common/shaderReplaceMod.hpp"
+#include "../common/swapChainUpgradeMod.hpp"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Sea of Stars";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Sea of Stars";
 
-shaderreplacemod::CustomShaders customShaders = {
+ShaderReplaceMod::CustomShaders customShaders = {
   {0x552A4A60, {0x552A4A60, _0x552A4A60, sizeof(_0x552A4A60)}},
   {0x72B31CDE, {0x72B31CDE, _0x72B31CDE, sizeof(_0x72B31CDE)}}
 };
@@ -103,8 +104,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       break;
   }
 
-  swapchainmod::use(fdwReason);
-  shaderreplacemod::use(fdwReason, &customShaders, &shaderInjection);
+  SwapChainUpgradeMod::use(fdwReason);
+  ShaderReplaceMod::use(fdwReason, &customShaders, &shaderInjection);
 
   return TRUE;
 }

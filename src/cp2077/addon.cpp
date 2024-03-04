@@ -5,7 +5,7 @@
 
 #define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 #define DEBUG_LEVEL_0
-#define DEBUG_SLIDERS
+#define DEBUG_SLIDERS_OFF
 
 #include <embed/0x298A6BB0.h>
 #include <embed/0x5DF649A9.h>
@@ -34,13 +34,13 @@
 #include "../../external/reshade/deps/imgui/imgui.h"
 #include "../../external/reshade/include/reshade.hpp"
 
-#include "../common/mods.hpp"
+#include "../common/shaderReplaceMod.hpp"
 #include "./cp2077.h"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - CP2077";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Cyberpunk2077";
 
-static shaderreplacemod::CustomShaders customShaders = {
+static ShaderReplaceMod::CustomShaders customShaders = {
   {0x298A6BB0, {0x298A6BB0, _0x298A6BB0, sizeof(_0x298A6BB0)}},
   {0x5DF649A9, {0x5DF649A9, _0x5DF649A9, sizeof(_0x5DF649A9)}},
   {0x61DBBA5C, {0x61DBBA5C, _0x61DBBA5C, sizeof(_0x61DBBA5C)}},
@@ -551,7 +551,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       break;
   }
 
-  shaderreplacemod::use(fdwReason, &customShaders, &shaderInjectData);
+  ShaderReplaceMod::use(fdwReason, &customShaders, &shaderInjectData);
 
   return TRUE;
 }
