@@ -150,7 +150,7 @@ float3 apply_user_shadows(float3 rgb, float shadows = 1.f) {
 }
 
 float3 apply_user_highlights(float3 rgb, float highlights = 1.f) {
-  rgb = hl_con(rgb, highlights, 2.f);
+  rgb = hl_con(rgb, (highlights - 1.f) * 4.f, 2.f);
   return rgb;
 }
 
