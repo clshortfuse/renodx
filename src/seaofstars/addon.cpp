@@ -20,8 +20,8 @@ extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Sea of Stars";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Sea of Stars";
 
 ShaderReplaceMod::CustomShaders customShaders = {
-  {0x552A4A60, {0x552A4A60, _0x552A4A60, sizeof(_0x552A4A60)}},
-  {0x72B31CDE, {0x72B31CDE, _0x72B31CDE, sizeof(_0x72B31CDE)}}
+  CustomShaderEntry(0x552A4A60),
+  CustomShaderEntry(0x72B31CDE)
 };
 
 ShaderInjectData shaderInjection;

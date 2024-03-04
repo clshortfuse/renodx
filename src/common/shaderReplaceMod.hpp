@@ -33,6 +33,8 @@ namespace ShaderReplaceMod {
 
   typedef std::unordered_map<uint32_t, CustomShader> CustomShaders;
 
+  #define CustomShaderEntry(crc32) {crc32, {crc32, _##crc32, sizeof(_##crc32)}}
+
   static float* _shaderInjection = nullptr;
   static size_t _shaderInjectionSize = 0;
 

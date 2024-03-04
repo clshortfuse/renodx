@@ -41,20 +41,20 @@ extern "C" __declspec(dllexport) const char* NAME = "RenoDX - CP2077";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Cyberpunk2077";
 
 static ShaderReplaceMod::CustomShaders customShaders = {
-  {0x298A6BB0, {0x298A6BB0, _0x298A6BB0, sizeof(_0x298A6BB0)}},
-  {0x5DF649A9, {0x5DF649A9, _0x5DF649A9, sizeof(_0x5DF649A9)}},
-  {0x61DBBA5C, {0x61DBBA5C, _0x61DBBA5C, sizeof(_0x61DBBA5C)}},
-  {0x71F27445, {0x71F27445, _0x71F27445, sizeof(_0x71F27445)}},
-  {0x745E34E1, {0x745E34E1, _0x745E34E1, sizeof(_0x745E34E1)}},
-  {0x97CA5A85, {0x97CA5A85, _0x97CA5A85, sizeof(_0x97CA5A85)}},
-  {0xA61F2FEE, {0xA61F2FEE, _0xA61F2FEE, sizeof(_0xA61F2FEE)}},
-  {0xB489149F, {0xB489149F, _0xB489149F, sizeof(_0xB489149F)}},
-  {0xC783FBA1, {0xC783FBA1, _0xC783FBA1, sizeof(_0xC783FBA1)}},
-  {0xC83E64DF, {0xC83E64DF, _0xC83E64DF, sizeof(_0xC83E64DF)}},
-  {0xCBFFC2A3, {0xCBFFC2A3, _0xCBFFC2A3, sizeof(_0xCBFFC2A3)}},
-  {0xD2BBEBD9, {0xD2BBEBD9, _0xD2BBEBD9, sizeof(_0xD2BBEBD9)}},
-  {0xDE517511, {0xDE517511, _0xDE517511, sizeof(_0xDE517511)}},
-  {0xE57907C4, {0xE57907C4, _0xE57907C4, sizeof(_0xE57907C4)}}
+  CustomShaderEntry(0x298A6BB0),
+  CustomShaderEntry(0x5DF649A9),
+  CustomShaderEntry(0x61DBBA5C),
+  CustomShaderEntry(0x71F27445),
+  CustomShaderEntry(0x745E34E1),
+  CustomShaderEntry(0x97CA5A85),
+  CustomShaderEntry(0xA61F2FEE),
+  CustomShaderEntry(0xB489149F),
+  CustomShaderEntry(0xC783FBA1),
+  CustomShaderEntry(0xC83E64DF),
+  CustomShaderEntry(0xCBFFC2A3),
+  CustomShaderEntry(0xD2BBEBD9),
+  CustomShaderEntry(0xDE517511),
+  CustomShaderEntry(0xE57907C4)
 };
 
 ShaderInjectData shaderInjectData;

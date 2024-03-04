@@ -18,8 +18,8 @@ extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Sea of Thieves";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Sea of Thieves";
 
 ShaderReplaceMod::CustomShaders customShaders = {
-  {0x84B99833, {0x84B99833, _0x84B99833, sizeof(_0x84B99833)}},
-  {0xE41360A3, {0xE41360A3, _0xE41360A3, sizeof(_0xE41360A3)}}
+  CustomShaderEntry(0x84B99833),
+  CustomShaderEntry(0xE41360A3)
 };
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
