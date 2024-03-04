@@ -243,7 +243,6 @@ namespace shaderreplacemod {
     uint32_t &param_count,
     reshade::api::pipeline_layout_param*&params
   ) {
-    reshade::log_message(reshade::log_level::debug, "oncreatepipelinelayout");
     uint32_t cbvIndex = 0;
     uint32_t pcCount = 0;
 
@@ -272,7 +271,15 @@ namespace shaderreplacemod {
       }
     }
 
-    if (pcCount != 0) return false;
+    if (pcCount != 0) {
+      std::stringstream s;
+      s << "on_create_pipeline_layout("
+        << "Pipeline layout already has push constants: " << pcCount
+        << " with cbvIndex: " << cbvIndex
+        << ")";
+      reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      return false;
+    }
 
     uint32_t oldCount = param_count;
     uint32_t newCount = oldCount + 1;
@@ -307,7 +314,7 @@ namespace shaderreplacemod {
     }
 
     std::stringstream s;
-    s << "on_create_pipeline_layout++("
+    s << "on_create_pipeline_layout("
       << "will insert"
       << " cbuffer " << cbvIndex
       << " at root_index " << oldCount
@@ -549,8 +556,8 @@ namespace shaderreplacemod {
       if (pair3 == moddedPipelineLayouts.end()) return;
       auto newLayout = pair3->second;
       cmd_list->push_constants(
-        stage,      // Used by reshade to specify graphics or compute
-        newLayout,  // Unused
+        stage,  // Used by reshade to specify graphics or compute
+        newLayout,
         0,
         0,
         _shaderInjectionSize / sizeof(uint32_t),
