@@ -19,9 +19,12 @@ list(APPEND ADDON_LIST devkit)
 # Use executable to convert resources to .h files for embedding
 add_executable(embedfile embedfile.c)
 
+if(NOT CMAKE_WINDOWS_KITS_10_DIR)
+  set(CMAKE_WINDOWS_KITS_10_DIR "C:/Program Files (x86)/Windows Kits/10")
+endif()
+
 function(build_shader_target)
   string(LENGTH ${CMAKE_CURRENT_SOURCE_DIR}/src/ PATH_LENGTH)
-  
 
   file(GLOB SHADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/**/*.hlsl)
   foreach(FILE ${SHADER_FILES})
@@ -41,7 +44,7 @@ function(build_shader_target)
 
       add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/embed/${SHADER_HASH}.cso
-        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/bin/${SHADER_BINARY} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /Qstrip_reflect -E main -Fo ${CMAKE_CURRENT_BINARY_DIR}/embed/${SHADER_HASH}.cso
+        COMMAND ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x64/${SHADER_BINARY} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /Qstrip_reflect -E main -Fo ${CMAKE_CURRENT_BINARY_DIR}/embed/${SHADER_HASH}.cso
         DEPENDS ${FILE}
       )
       add_custom_command(
