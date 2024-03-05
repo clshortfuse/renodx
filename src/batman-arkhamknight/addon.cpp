@@ -15,6 +15,7 @@
 #include <embed/0x8D4B625A.h>
 #include <embed/0x978BFB09.h>
 #include <embed/0xB6B56605.h>
+#include <embed/0xF01CCC7E.h>
 
 #include "./shared.h"
 
@@ -35,7 +36,8 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0xF3B4727D),
   CustomShaderEntry(0x8D4B625A),
   CustomShaderEntry(0x978BFB09),
-  CustomShaderEntry(0xB6B56605)
+  CustomShaderEntry(0xB6B56605),
+  CustomShaderEntry(0xF01CCC7E)
 };
 
 ShaderInjectData shaderInjection;

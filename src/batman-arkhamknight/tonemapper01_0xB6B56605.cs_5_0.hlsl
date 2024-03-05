@@ -96,7 +96,7 @@ cbuffer cb13 : register(b13) {
   r0.xyzw = r2.xyzw * r0.xyzw;
 
   float4 outputColor = r0.xyzw;
-  outputColor.rgb = pow(max(0, outputColor.rgb), 2.2f);
+  outputColor.rgb = pow(abs(r0.rgb), 2.2f) * sign(r0.rgb);
 
   float3 testColor = texture0Input.rgb;
   float inputY = yFromBT709(texture0Input.rgb);
@@ -109,7 +109,7 @@ cbuffer cb13 : register(b13) {
       break;
     case 2:
       outputColor.rgb = aces_rrt_odt(
-        testColor.rgb,
+        testColor.rgb * 203.f / 80.f,
         0.0001f,  // minY
         48.f * (injectedData.gamePeakWhite / injectedData.gamePaperWhite),
         IDENTITY_MAT  // Don't clip gamut
@@ -119,6 +119,7 @@ cbuffer cb13 : register(b13) {
       break;
     case 0:
     default:
+      outputColor.rgb *= 203.f / 80.f;
       break;
   }
 
