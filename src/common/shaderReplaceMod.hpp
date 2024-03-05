@@ -33,7 +33,10 @@ namespace ShaderReplaceMod {
 
   typedef std::unordered_map<uint32_t, CustomShader> CustomShaders;
 
-  #define CustomShaderEntry(crc32) {crc32, {crc32, _##crc32, sizeof(_##crc32)}}
+#define CustomShaderEntry(crc32) \
+  { \
+    crc32, { crc32, _##crc32, sizeof(_##crc32) } \
+  }
 
   static float* _shaderInjection = nullptr;
   static size_t _shaderInjectionSize = 0;
@@ -267,7 +270,7 @@ namespace ShaderReplaceMod {
       if (injectionIndex == 14) {
         std::stringstream s;
         s << "on_init_pipeline_layout("
-          << "Using last slot for buffer injection"
+          << "Using last slot for buffer injection "
           << reinterpret_cast<void*>(layout.handle)
           << ": " << injectionIndex
           << " )";
@@ -289,7 +292,7 @@ namespace ShaderReplaceMod {
         auto result = device->create_pipeline_layout(1, &newParams, &newLayout);
         std::stringstream s;
         s << "on_init_pipeline_layout("
-          << "Creating D3D11 Layout"
+          << "Creating D3D11 Layout "
           << reinterpret_cast<void*>(newLayout.handle)
           << ": " << result
           << " )";
@@ -302,7 +305,7 @@ namespace ShaderReplaceMod {
 
     std::stringstream s;
     s << "on_init_pipeline_layout("
-      << "Using injection index for"
+      << "Using injection index for "
       << reinterpret_cast<void*>(layout.handle)
       << ": " << injectionIndex
       << " )";
@@ -427,9 +430,9 @@ namespace ShaderReplaceMod {
       reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
     } else {
-      stage = computeShaderLayouts.count(layout.handle) == 0
-              ? reshade::api::shader_stage::pixel
-              : reshade::api::shader_stage::compute;
+      stage = (type == reshade::api::pipeline_stage::compute_shader)
+              ? reshade::api::shader_stage::compute
+              : reshade::api::shader_stage::pixel;
       auto pair3 = moddedPipelineLayouts.find(layout.handle);
       if (pair3 == moddedPipelineLayouts.end()) return;
       auto newLayout = pair3->second;
