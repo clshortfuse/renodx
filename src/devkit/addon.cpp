@@ -42,6 +42,7 @@ std::unordered_set<uint64_t> computeShaderLayouts;
 std::unordered_map<uint64_t, reshade::api::pipeline_layout> pipelineToLayoutMap;
 std::unordered_map<uint64_t, uint32_t> pipelineToShaderHash;
 std::unordered_map<uint32_t, CachedShader> shaderCache;
+std::unordered_set<uint32_t> originalShaders;
 std::vector<uint32_t> traceHashes;
 
 static bool traceScheduled = false;
@@ -61,7 +62,7 @@ void logLayout(
       for (uint32_t rangeIndex = 0; rangeIndex < param.descriptor_table.count; ++rangeIndex) {
         auto range = param.descriptor_table.ranges[rangeIndex];
         std::stringstream s;
-        s << "pipeline_layout(";
+        s << "logPipelineLayout(";
         s << tag;
         s << " | TBL";
         s << " | " << reinterpret_cast<void*>(&param.descriptor_table.ranges);
@@ -208,6 +209,29 @@ static void on_init_pipeline_layout(
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 }
 
+static bool on_create_pipeline(
+  reshade::api::device* device,
+  reshade::api::pipeline_layout layout,
+  uint32_t subobject_count,
+  const reshade::api::pipeline_subobject* subobjects
+) {
+  const reshade::api::device_api device_type = device->get_api();
+
+  for (uint32_t i = 0; i < subobject_count; ++i) {
+    switch (subobjects[i].type) {
+      case reshade::api::pipeline_subobject_type::compute_shader:
+      case reshade::api::pipeline_subobject_type::pixel_shader:
+        const reshade::api::shader_desc desc = *static_cast<const reshade::api::shader_desc*>(subobjects[i].data);
+        if (desc.code_size == 0) continue;
+        auto shader_hash = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
+        originalShaders.emplace(shader_hash);
+        break;
+    }
+  }
+
+  return false;
+}
+
 // After CreatePipelineState
 static void on_init_pipeline(
   reshade::api::device* device,
@@ -240,6 +264,7 @@ static void on_init_pipeline(
       std::stringstream s;
       s << "caching shader("
         << "hash: 0x" << std::hex << shader_hash << std::dec
+        << ", type: " << (uint32_t)subobjects[i].type
         << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
@@ -381,6 +406,29 @@ static bool on_draw_or_dispatch_indirect(
       << ", " << offset
       << ", " << draw_count
       << ", " << stride
+      << ")";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+  }
+  return false;
+}
+
+static bool on_copy_texture_region(
+  reshade::api::command_list* cmd_list,
+  reshade::api::resource source,
+  uint32_t source_subresource,
+  const reshade::api::subresource_box* source_box,
+  reshade::api::resource dest,
+  uint32_t dest_subresource,
+  const reshade::api::subresource_box* dest_box,
+  reshade::api::filter_mode filter
+) {
+  if (traceRunning) {
+    std::stringstream s;
+    s << "on_copy_texture_region"
+      << "(" << reinterpret_cast<void*>(source.handle)
+      << ", " << (source_subresource)
+      << ", " << reinterpret_cast<void*>(dest.handle)
+      << ", " << (uint32_t)filter
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
   }
@@ -530,9 +578,13 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
         for (auto index = 0; index < traceCount; index++) {
           auto hash = traceHashes.at(index);
           const bool isSelected = (selectedIndex == index);
+          const bool isModded = originalShaders.count(hash) == 0;
           std::stringstream name;
           name << std::setfill('0') << std::setw(3) << index << std::setw(0)
                << " - 0x" << std::hex << hash;
+          if (isModded) {
+            name << "*";
+          }
           if (ImGui::Selectable(name.str().c_str(), isSelected)) {
             selectedIndex = index;
             changedSelected = true;
@@ -555,13 +607,17 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
     ImGui::BeginDisabled(selectedIndex == -1);
     if (changedSelected) {
       auto hash = traceHashes.at(selectedIndex);
-      auto cache = shaderCache.find(hash)->second;
-      if (cache.source.length() == 0) {
-        char* fxc = dumpFXC(hash);
-        cache.source.assign(fxc);
-        free(fxc);
+      if (originalShaders.count(hash)) {
+        auto cache = shaderCache.find(hash)->second;
+        if (cache.source.length() == 0) {
+          char* fxc = dumpFXC(hash);
+          cache.source.assign(fxc);
+          free(fxc);
+        }
+        sourceCode.assign(cache.source);
+      } else {
+        sourceCode.assign("Modded shader.");
       }
-      sourceCode.assign(cache.source);
     }
 
     if (ImGui::BeginChild("HashSourceCode", ImVec2(-FLT_MIN, -FLT_MIN), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
@@ -589,12 +645,15 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       reshade::register_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
       reshade::register_event<reshade::addon_event::destroy_pipeline>(on_destroy_pipeline);
 
+      reshade::register_event<reshade::addon_event::create_pipeline>(on_create_pipeline);
       reshade::register_event<reshade::addon_event::bind_pipeline>(on_bind_pipeline);
       reshade::register_event<reshade::addon_event::bind_pipeline_states>(on_bind_pipeline_states);
 
       reshade::register_event<reshade::addon_event::draw>(on_draw);
       reshade::register_event<reshade::addon_event::draw_indexed>(on_draw_indexed);
       reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(on_draw_or_dispatch_indirect);
+
+      reshade::register_event<reshade::addon_event::copy_texture_region>(on_copy_texture_region);
 
       reshade::register_event<reshade::addon_event::reshade_present>(on_reshade_present);
 
@@ -605,10 +664,13 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       reshade::unregister_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
       reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
 
+      reshade::unregister_event<reshade::addon_event::create_pipeline>(on_create_pipeline);
       reshade::unregister_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
       reshade::unregister_event<reshade::addon_event::destroy_pipeline>(on_destroy_pipeline);
 
       reshade::unregister_event<reshade::addon_event::bind_pipeline>(on_bind_pipeline);
+
+      reshade::unregister_event<reshade::addon_event::copy_texture_region>(on_copy_texture_region);
 
       reshade::unregister_event<reshade::addon_event::reshade_present>(on_reshade_present);
 
