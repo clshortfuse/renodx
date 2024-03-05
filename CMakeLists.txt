@@ -14,6 +14,7 @@ list(APPEND ADDON_LIST cp2077)
 list(APPEND ADDON_LIST seaofthieves)
 list(APPEND ADDON_LIST seaofstars)
 list(APPEND ADDON_LIST devkit)
+list(APPEND ADDON_LIST batman-arkhamknight)
 
 
 # Use executable to convert resources to .h files for embedding
