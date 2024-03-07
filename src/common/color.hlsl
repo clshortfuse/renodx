@@ -175,18 +175,18 @@ float linearFromSRGB(float channel) {
 
 float3 linearFromSRGB(float3 color) {
   return float3(
-    srgbFromLinear(color.r),
-    srgbFromLinear(color.g),
-    srgbFromLinear(color.b)
+    linearFromSRGB(color.r),
+    linearFromSRGB(color.g),
+    linearFromSRGB(color.b)
   );
 }
 
 float4 linearFromSRGB(float4 color) {
   return float4(
-    srgbFromLinear(color.r),
-    srgbFromLinear(color.g),
-    srgbFromLinear(color.b),
-    srgbFromLinear(color.a)
+    linearFromSRGB(color.r),
+    linearFromSRGB(color.g),
+    linearFromSRGB(color.b),
+    color.a
   );
 }
 
