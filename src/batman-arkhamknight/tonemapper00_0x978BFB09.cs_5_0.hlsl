@@ -1,5 +1,6 @@
 // Used for motion blur
 
+#include "../common/Open_DRT.hlsl"
 #include "../common/aces.hlsl"
 #include "../common/color.hlsl"
 #include "./shared.h"
@@ -37,30 +38,38 @@ cbuffer cb13 : register(b13) {
   r0.xy = float2(2, -2) / cb0[6].xy;
   r1.xy = vThreadGroupID.xy;
   r1.zw = float2(0, 0);
-  r1.xyz = t5.Load(r1.xyz).xyz;
-  r0.zw = cmp(float2(3, 0) < r1.zz);
-  r0.w = r0.w ? 0.000000 : 0;
-  r0.z = r0.z ? 2 : r0.w;
-  r1.zw = (int2)vThreadID.xy;
-  r1.zw = cb0[7].zw + r1.zw;
-  r2.xy = (uint2)r1.zw;
-  r3.xyzw = (uint4)r2.xyyx;
-  r1.zw = -cb0[7].zw + r3.wz;
-  r1.zw = float2(0.5, 0.5) + r1.zw;
+  // r1.xyz = t5.Load(r1.xyz).xyz;
+  float3 texture5Input = t5.Load(uint3(vThreadGroupID.x, vThreadGroupID.y, 0)).rgb;
+
+  r1.rgb = texture5Input;
+  r0.z = (3 < r1.z) ? 2 : 0;
+
+  uint3 loadPosition = uint3(cb0[7].z + vThreadID.x, cb0[7].w + vThreadID.y, 0);
+  // r1.zw = vThreadID.xy + cb0[7].zw
+  // r2.xy = (uint2)r1.zw; // loadposition.xy
+  //  r3.xyzw = (uint4)r2.xyyx; // loadposition.xyyx
+
+  float range = 0.5f;
+  r1.zw = vThreadID.xy + range;
   r0.xy = r1.zw * r0.xy + float2(-1, 1);
   r0.xy = r0.xy * float2(0.5, -0.5) + float2(0.5, 0.5);
   r1.zw = cb0[7].xy * r0.xy;
+
   r2.zw = float2(0, 0);
 
-  const float4 texture0Input = t0.Load(r2.xyw);
+  const float4 texture0Input = t0.Load(loadPosition);
+
+  float3 testColor = texture0Input.rgb;
   r4.xyz = texture0Input.rgb;
-  r3.xyzw = cb0[11].xyxx + r3.xyzw;
+  r3.xyzw = cb0[11].xyxx + loadPosition.xyzx;
   r0.w = dot(r3.wyz, float3(23.1406918, 2.66514421, 9.19949627));
   r0.w = cos(r0.w);
   r3.xyzw = r0.wwww * r3.xyzw;
   r3.xyzw = frac(r3.xyzw);
   if (r0.z != 0) {
-    r5.xyz = t1.Load(r2.xyz).xyz;
+    float3 texture1Input = t1.Load(loadPosition).rgb;  // Motion blur mask?
+    r5.xyz = texture1Input.rgb;
+    testColor = texture1Input;
     r0.w = dot(r5.xy, r5.xy);
     r2.z = (uint)r0.z;
     r2.z = 1 + r2.z;
@@ -76,7 +85,7 @@ cbuffer cb13 : register(b13) {
       r5.w = (int)r4.w & 1;
       r6.z = (uint)r4.w;
       r6.z = r6.z * r2.z;
-      r9.xy = r5.ww ? r1.xy : r5.xy;
+      r9.xy = r5.ww ? texture5Input.xy : r5.xy;
       r5.w = 0.5 * r6.z;
       r6.zw = r9.xy * r5.ww;
       r9.xy = r0.xy * cb0[7].xy + r6.zw;
@@ -85,6 +94,7 @@ cbuffer cb13 : register(b13) {
       r9.zw = cb0[6].xy * r9.zw;
       r7.xy = (uint2)r9.zw;
       r10.xyz = t1.Load(r7.xyw).xyz;
+      // testColor = r10.rgb;
       r5.w = r10.z + -r5.z;
       r5.w = saturate(-r5.w * 200 + 1);
       r8.w = -r10.z + r5.z;
@@ -114,13 +124,21 @@ cbuffer cb13 : register(b13) {
       r4.w = (int)r4.w + 1;
     }
     r4.xyz = r8.xyz / r2.www;
+    // Motion Blur?
   }
+
+  float3 texture3Input = t3.SampleLevel(s0_s, r1.zw, 0).rgb;
+
   r0.z = 0.200000003 * cb0[10].x;
-  r1.xyz = t3.SampleLevel(s0_s, r1.zw, 0).xyz;
+  r1.rgb = texture3Input;
   r0.w = cb0[10].x * 0.200000003 + 1;
-  r1.xyzw = r1.zzxy * r0.wwww + -r0.zzzz;
-  r1.xyzw = max(float4(0, 0, 0, 0), r1.xyzw);
+  r1.xyzw = r1.zzxy * r0.w - r0.z;
+  r1.xyzw = max(0, r1.xyzw);
   r1.xyzw = r4.zzxy + r1.xyzw;
+
+  float3 bloomedInput = r1.zwy;
+
+  // More motion blur
   r0.z = t4.SampleLevel(s0_s, float2(0.5, 0.5), 0).x;
   r1.xyzw = r1.xyzw / r0.zzzz;
   r0.xy = r0.xy * float2(2, 2) + float2(-1, -1);
@@ -136,9 +154,11 @@ cbuffer cb13 : register(b13) {
   r4.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.300000012, 0.300000012, 0.300000012, 0.300000012);
   r0.xyzw = r0.xyzw * r4.xyzw + float4(0.0599999987, 0.0599999987, 0.0599999987, 0.0599999987);
   r0.xyzw = r1.xyzw / r0.xyzw;
+
   r0.xyzw = float4(-0.0333333351, -0.0333333351, -0.0333333351, -0.0333333351) + r0.xyzw;
   r0.xyzw = max(float4(0, 0, 0, 0), r0.xyzw);
   r0.xyzw = 1.66289866f * r0.xyzw;
+
   r0.xyzw = pow(r0.xyzw, 1.f / 2.2f);
   r0.xyzw = min(1.f, r0.xyzw);
   r1.xyw = float3(14.9998999, 0.9375, 0.05859375) * r0.xwz;
@@ -159,32 +179,37 @@ cbuffer cb13 : register(b13) {
   r0.xyzw = r1.xyzw * r0.xyzw;
 
   float4 outputColor = r0.xyzw;
-  outputColor.rgb = pow(abs(r0.rgb), 2.2f) * sign(r0.rgb);
+  outputColor.rgb = pow(max(r0.rgb, 0), 2.2f);
 
-  float3 testColor = texture0Input.rgb;
-  float inputY = yFromBT709(texture0Input.rgb);
-  float outputY = yFromBT709(outputColor.rgb);
-  testColor.rgb = outputColor.rgb * (outputY ? inputY / outputY : 1);
-  switch (injectedData.toneMapperEnum) {
-    case 1:
-      outputColor.rgb = texture0Input.rgb;  // Untonemapped
+  if (injectedData.toneMapperEnum == 0) {
+    outputColor.rgb *= 203.f / 80.f;
+  } else {
+    if (injectedData.toneMapperEnum == 1) {
+      outputColor.rgb = bloomedInput.rgb;  // Untonemapped
       outputColor.rgb *= injectedData.gamePaperWhite / 80.f;
-      break;
-    case 2:
-      outputColor.rgb = aces_rrt_odt(
-        testColor.rgb * 203.f / 80.f,
-        0.0001f,  // minY
-        48.f * (injectedData.gamePeakWhite / injectedData.gamePaperWhite),
-        IDENTITY_MAT  // Don't clip gamut
-      );
-      outputColor.rgb = mul(AP1_2_BT709_MAT, outputColor.rgb);
+    } else {
+      float inputY = yFromBT709(bloomedInput.rgb);
+      float outputY = yFromBT709(outputColor.rgb);
+      outputColor.rgb *= (outputY ? inputY / outputY : 1);
+      if (injectedData.toneMapperEnum == 2) {
+        outputColor.rgb = aces_rrt_odt(
+          outputColor.rgb * 203.f / 80.f,
+          0.0001f,  // minY
+          48.f * (injectedData.gamePeakWhite / injectedData.gamePaperWhite),
+          AP1_2_BT2020_MAT
+        );
+      } else {
+        outputColor.rgb = mul(BT709_2_BT2020_MAT, outputColor.rgb);
+        outputColor.rgb = open_drt_transform_custom(
+          outputColor.rgb * 203.f / 80.f,
+          100.f * (injectedData.gamePeakWhite / injectedData.gamePaperWhite),
+          0
+        );
+      }
+      outputColor.rgb = mul(BT2020_2_BT709_MAT, outputColor.rgb);
       outputColor.rgb *= injectedData.gamePeakWhite / 80.f;
-      break;
-    case 0:
-    default:
-      outputColor.rgb *= 203.f / 80.f;
-      break;
+    }
   }
 
-  u0[uint2(r2.x, r2.y)] = outputColor;
+  u0[uint2(loadPosition.x, loadPosition.y)] = outputColor;
 }

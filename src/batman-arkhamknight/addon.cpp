@@ -6,16 +6,17 @@
 #define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 #define DEBUG_LEVEL_0
 
-#include <embed/0x2C2D0899.h>
-#include <embed/0x5DAD9473.h>
-#include <embed/0x311E0BDA.h>
 #include <embed/0x2AC7F89E.h>
+#include <embed/0x2C2D0899.h>
+#include <embed/0x311E0BDA.h>
+#include <embed/0x3A4E0B90.h>
+#include <embed/0x5DAD9473.h>
 #include <embed/0x7527C8AD.h>
-#include <embed/0xF3B4727D.h>
 #include <embed/0x8D4B625A.h>
 #include <embed/0x978BFB09.h>
 #include <embed/0xB6B56605.h>
 #include <embed/0xF01CCC7E.h>
+#include <embed/0xF3B4727D.h>
 
 #include "./shared.h"
 
@@ -37,7 +38,9 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0x8D4B625A),
   CustomShaderEntry(0x978BFB09),
   CustomShaderEntry(0xB6B56605),
-  CustomShaderEntry(0xF01CCC7E)
+  CustomShaderEntry(0xF01CCC7E),
+  CustomShaderEntry(0x3A4E0B90)
+
 };
 
 ShaderInjectData shaderInjection;
@@ -62,13 +65,14 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
   static const char* toneMapperEnums[] = {
     "Vanilla",
     "None",
-    "ACES"
+    "ACES",
+    "OpenDRT"
   };
   settingsChanged |= ImGui::SliderInt(
     "Tone Mapper",
     &userSettings.toneMapperEnum,
     0,
-    2,
+    3,
     toneMapperEnums[userSettings.toneMapperEnum],
     ImGuiSliderFlags_NoInput
   );

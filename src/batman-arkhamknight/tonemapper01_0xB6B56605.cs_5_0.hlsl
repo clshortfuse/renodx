@@ -1,5 +1,6 @@
-// No motion blur tonemapper
+// No motion blur
 
+#include "../common/Open_DRT.hlsl"
 #include "../common/aces.hlsl"
 #include "../common/color.hlsl"
 #include "./shared.h"
@@ -49,7 +50,8 @@ cbuffer cb13 : register(b13) {
   r0.x = max(0, r0.x);
   r0.x = r0.x * r0.x + -1;
   r0.x = r0.x * 0.300000012 + 1;
-  r0.yzw = t2.SampleLevel(s0_s, r0.zw, 0).xyz;
+  r0.yzw = t2.SampleLevel(s0_s, r0.zw, 0).xyz;  // Bloom
+
   r3.x = 0.200000003 * cb0[10].x;
   r3.y = cb0[10].x * 0.200000003 + 1;
   r3.xyzw = r0.wwyz * r3.yyyy + -r3.xxxx;
@@ -59,6 +61,9 @@ cbuffer cb13 : register(b13) {
 
   r0.yzw = texture0Input.xyz;
   r3.xyzw = r0.wwyz + r3.xyzw;
+
+  const float3 bloomedInput = r3.zwy;
+
   r0.y = t3.SampleLevel(s0_s, float2(0.5, 0.5), 0).x;
   r3.xyzw = r3.xyzw / r0.yyyy;
   r0.xyzw = r3.xyzw * r0.xxxx;
@@ -98,29 +103,34 @@ cbuffer cb13 : register(b13) {
   float4 outputColor = r0.xyzw;
   outputColor.rgb = pow(abs(r0.rgb), 2.2f) * sign(r0.rgb);
 
-  float3 testColor = texture0Input.rgb;
-  float inputY = yFromBT709(texture0Input.rgb);
-  float outputY = yFromBT709(outputColor.rgb);
-  testColor.rgb = outputColor.rgb * (outputY ? inputY / outputY : 1);
-  switch (injectedData.toneMapperEnum) {
-    case 1:
-      outputColor.rgb = texture0Input.rgb;  // Untonemapped
+  if (injectedData.toneMapperEnum == 0) {
+    outputColor.rgb *= 203.f / 80.f;
+  } else {
+    if (injectedData.toneMapperEnum == 1) {
+      outputColor.rgb = bloomedInput.rgb;  // Untonemapped
       outputColor.rgb *= injectedData.gamePaperWhite / 80.f;
-      break;
-    case 2:
-      outputColor.rgb = aces_rrt_odt(
-        testColor.rgb * 203.f / 80.f,
-        0.0001f,  // minY
-        48.f * (injectedData.gamePeakWhite / injectedData.gamePaperWhite),
-        IDENTITY_MAT  // Don't clip gamut
-      );
-      outputColor.rgb = mul(AP1_2_BT709_MAT, outputColor.rgb);
+    } else {
+      float inputY = yFromBT709(bloomedInput.rgb);
+      float outputY = yFromBT709(outputColor.rgb);
+      outputColor.rgb *= (outputY ? inputY / outputY : 1);
+      if (injectedData.toneMapperEnum == 2) {
+        outputColor.rgb = aces_rrt_odt(
+          outputColor.rgb * 203.f / 80.f,
+          0.0001f,  // minY
+          48.f * (injectedData.gamePeakWhite / injectedData.gamePaperWhite),
+          AP1_2_BT2020_MAT
+        );
+      } else {
+        outputColor.rgb = mul(BT709_2_BT2020_MAT, outputColor.rgb);
+        outputColor.rgb = open_drt_transform_custom(
+          outputColor.rgb * 203.f / 80.f,
+          100.f * (injectedData.gamePeakWhite / injectedData.gamePaperWhite),
+          0
+        );
+      }
+      outputColor.rgb = mul(BT2020_2_BT709_MAT, outputColor.rgb);
       outputColor.rgb *= injectedData.gamePeakWhite / 80.f;
-      break;
-    case 0:
-    default:
-      outputColor.rgb *= 203.f / 80.f;
-      break;
+    }
   }
 
   u0[uint2(r1.x, r1.y)] = outputColor;
