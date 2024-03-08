@@ -178,7 +178,7 @@ float3 open_drt_transform(
   const static float fl = 0.01f;    // flare/glare compensation
 
   // Weights: controls the "vibrancy" of each channel, and influences all other aspects of the display-rendering.
-  const float3 static weights = float3(
+  const float3 weights = float3(
     0.21f,  // 0.25
     0.71f,  // 0.45
     0.07f   // 0.30
@@ -189,7 +189,7 @@ float3 open_drt_transform(
   float weightSum = weights.x + weights.y + weights.z;
 
   // Hue Shift RGB controls
-  float3 static hs = float3(
+  float3 hs = float3(
     0.00f,  // 0.30f
     0.00f,  // -0.1f
     0.00f   // -0.5f
@@ -455,14 +455,14 @@ float3 open_drt_transform_custom(
   float3 rgb,
   float peakNits = 203.f,
   float midGrayAdjustment = 1.f,
-  float highlights = 0.575f,
+  float highlights = 1.f,
   float shadows = 1.f,
   float contrast = 1.f,
   float dechroma = 1.f
 ) {
   rgb = apply_aces_highlights(rgb);
   rgb = apply_user_shadows(rgb, shadows);
-  rgb = apply_user_highlights(rgb, (2.f * highlights - 1.15f) * 203.f / peakNits);
+  rgb = apply_user_highlights(rgb, highlights);
   rgb = open_drt_transform(
     rgb,
     peakNits,
