@@ -24,17 +24,19 @@ if(NOT CMAKE_WINDOWS_KITS_10_DIR)
   set(CMAKE_WINDOWS_KITS_10_DIR "C:/Program Files (x86)/Windows Kits/10")
 endif()
 
-function(inspect_hlsl_imports FILE LIST)
+function(inspect_hlsl_imports FILE VARIABLE)
   file(STRINGS ${FILE} HLSL_IMPORTS REGEX "^#include \"([^\"]+)\"")
   foreach(IMPORT_LINE ${HLSL_IMPORTS})
     string(REGEX MATCH "^#include \"([^\"]+)\"" _ ${HLSL_IMPORTS})
     cmake_path(GET FILE PARENT_PATH FILE_DIRECTORY)
     cmake_path(ABSOLUTE_PATH CMAKE_MATCH_1 BASE_DIRECTORY ${FILE_DIRECTORY} OUTPUT_VARIABLE  HLSL_PATH )
     cmake_path(NORMAL_PATH HLSL_PATH)
-    list(APPEND ${LIST} ${HLSL_PATH})
+    list(APPEND LIST ${HLSL_PATH})
     # recursive
     inspect_hlsl_imports(${HLSL_PATH} LIST)
   endforeach()
+  # update in parent scope
+  set(${VARIABLE} ${LIST} PARENT_SCOPE)
 endfunction()
 
 function(build_shader_target)
@@ -56,9 +58,11 @@ function(build_shader_target)
         set(SHADER_FLAGS "/Gec") # Compatibility mode
       endif()
 
+      set(HLSL_DEPENDENCIES "")
+      set(HLSL_CHILD_DEPENDENCIES "")
       list(APPEND HLSL_DEPENDENCIES ${FILE})
-      inspect_hlsl_imports(${FILE} HLSL_DEPENDENCIES)
-
+      inspect_hlsl_imports(${FILE} HLSL_CHILD_DEPENDENCIES)
+      list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
       add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/embed/${SHADER_HASH}.cso
         COMMAND ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x64/${SHADER_BINARY} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /Qstrip_reflect -E main -Fo ${CMAKE_CURRENT_BINARY_DIR}/embed/${SHADER_HASH}.cso
