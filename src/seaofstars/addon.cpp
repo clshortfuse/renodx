@@ -4,6 +4,8 @@
  */
 
 #define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
+#define ImTextureID ImU64
+
 #define DEBUG_LEVEL_0
 
 #include <embed/0x552A4A60.h>

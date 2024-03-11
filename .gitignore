@@ -32,3 +32,5 @@
 *.app
 
 build/**
+build32/**
+

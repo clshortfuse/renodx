@@ -83,6 +83,11 @@ endfunction()
 
 build_shader_target()
 
+set(TARGET_SUFFIX ".addon64")
+if(CMAKE_GENERATOR_PLATFORM STREQUAL "Win32")
+  set(TARGET_SUFFIX ".addon32")
+endif()
+
 foreach(ADDON ${ADDON_LIST})
   add_library(${ADDON} MODULE ${CMAKE_CURRENT_SOURCE_DIR}/src/${ADDON}/addon.cpp)
   add_dependencies(${ADDON} shaders)
@@ -92,7 +97,7 @@ foreach(ADDON ${ADDON_LIST})
   set_target_properties(${ADDON}
     PROPERTIES
       PREFIX "renodx-"
-      SUFFIX ".addon64"
+      SUFFIX ${TARGET_SUFFIX}
   )
 endforeach()
 
