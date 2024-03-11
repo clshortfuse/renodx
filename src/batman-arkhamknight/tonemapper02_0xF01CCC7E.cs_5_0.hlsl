@@ -1,9 +1,6 @@
 // motion blur + effect
 
-#include "../common/Open_DRT.hlsl"
-#include "../common/aces.hlsl"
-#include "../common/color.hlsl"
-#include "./shared.h"
+#include "./tonemapper.hlsl"
 
 Texture2D<float4> t0 : register(t0);
 Texture2D<float4> t1 : register(t1);
@@ -21,17 +18,13 @@ cbuffer cb0 : register(b0) {
   float4 cb0[13];
 }
 
-cbuffer cb13 : register(b13) {
-  ShaderInjectData injectedData : packoffset(c0);
-}
-
 // 3Dmigoto declarations
 #define cmp -
 
 [numthreads(16, 16, 1)] void main(uint3 vThreadGroupID : SV_GroupID, uint3 vThreadID : SV_DispatchThreadID) {
-  // Needs manual fix for instruction:
-  // unknown dcl_: dcl_uav_typed_texture2d (float,float,float,float) u0
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10;
+  uint4 bitmask, uiDest;
+  float4 fDest;
 
   // Needs manual fix for instruction:
   // unknown dcl_: dcl_thread_group 16, 16, 1
@@ -118,16 +111,15 @@ cbuffer cb13 : register(b13) {
     }
     r4.xyz = r8.xyz / r5.www;
   }
-  r5.xyzw = t2.Load(r2.xyz).wxyz;  // Effect?
+  r5.xyzw = t2.Load(r2.xyz).wxyz;
   r5.x = saturate(r5.x);
   r4.xyzw = cb0[12].xxxx * r4.zzxy;
   r0.z = 1 + -r5.x;
   r4.xyzw = r4.xyzw * r0.zzzz + r5.wwyz;
-
   r0.z = 0.200000003 * cb0[10].x;
-  r1.xyz = t4.SampleLevel(s0_s, r1.zw, 0).xyz;  // Bloom
+  r1.xyz = t4.SampleLevel(s0_s, r1.zw, 0).xyz;
   r0.w = cb0[10].x * 0.200000003 + 1;
-  r1.xyzw = r1.zzxy * r0.w - r0.z;
+  r1.xyzw = r1.zzxy * r0.wwww + -r0.zzzz;
   r1.xyzw = max(float4(0, 0, 0, 0), r1.xyzw);
   r1.xyzw = r4.xyzw + r1.xyzw;
 
@@ -173,37 +165,8 @@ cbuffer cb13 : register(b13) {
   r0.xyzw = r1.xyzw * r0.xyzw;
 
   float4 outputColor = r0.xyzw;
-  outputColor.rgb = pow(abs(r0.rgb), 2.2f) * sign(r0.rgb);
 
-  if (injectedData.toneMapperEnum == 0) {
-    outputColor.rgb *= 203.f / 80.f;
-  } else {
-    if (injectedData.toneMapperEnum == 1) {
-      outputColor.rgb = bloomedInput.rgb;  // Untonemapped
-      outputColor.rgb *= injectedData.gamePaperWhite / 80.f;
-    } else {
-      float inputY = yFromBT709(bloomedInput.rgb);
-      float outputY = yFromBT709(outputColor.rgb);
-      outputColor.rgb *= (outputY ? inputY / outputY : 1);
-      if (injectedData.toneMapperEnum == 2) {
-        outputColor.rgb = aces_rrt_odt(
-          outputColor.rgb * 203.f / 80.f,
-          0.0001f,  // minY
-          48.f * (injectedData.gamePeakWhite / injectedData.gamePaperWhite),
-          AP1_2_BT2020_MAT
-        );
-      } else {
-        outputColor.rgb = mul(BT709_2_BT2020_MAT, outputColor.rgb);
-        outputColor.rgb = open_drt_transform_custom(
-          outputColor.rgb * 203.f / 80.f,
-          100.f * (injectedData.gamePeakWhite / injectedData.gamePaperWhite),
-          0
-        );
-      }
-      outputColor.rgb = mul(BT2020_2_BT709_MAT, outputColor.rgb);
-      outputColor.rgb *= injectedData.gamePeakWhite / 80.f;
-    }
-  }
+  outputColor.rgb = applyUserToneMap(outputColor.rgb, bloomedInput.rgb);
 
   u0[uint2(r2.x, r2.y)] = outputColor;
   // No code for instruction (needs manual fix):

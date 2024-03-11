@@ -1,9 +1,6 @@
 // no motion blur + effect
 
-#include "../common/Open_DRT.hlsl"
-#include "../common/aces.hlsl"
-#include "../common/color.hlsl"
-#include "./shared.h"
+#include "./tonemapper.hlsl"
 
 Texture2D<float4> t0 : register(t0);
 Texture2D<float4> t1 : register(t1);
@@ -17,10 +14,6 @@ RWTexture2D<float4> u0 : register(u0);
 
 cbuffer cb0 : register(b0) {
   float4 cb0[13];
-}
-
-cbuffer cb13 : register(b13) {
-  ShaderInjectData injectedData : packoffset(c0);
 }
 
 // 3Dmigoto declarations
@@ -104,37 +97,8 @@ cbuffer cb13 : register(b13) {
   r1.xyzw = r2.xyzw * r1.xyzw;
 
   float4 outputColor = r1.xyzw;
-  outputColor.rgb = pow(abs(r0.rgb), 2.2f) * sign(r0.rgb);
 
-  if (injectedData.toneMapperEnum == 0) {
-    outputColor.rgb *= 203.f / 80.f;
-  } else {
-    if (injectedData.toneMapperEnum == 1) {
-      outputColor.rgb = bloomedInput.rgb;  // Untonemapped
-      outputColor.rgb *= injectedData.gamePaperWhite / 80.f;
-    } else {
-      float inputY = yFromBT709(bloomedInput.rgb);
-      float outputY = yFromBT709(outputColor.rgb);
-      outputColor.rgb *= (outputY ? inputY / outputY : 1);
-      if (injectedData.toneMapperEnum == 2) {
-        outputColor.rgb = aces_rrt_odt(
-          outputColor.rgb * 203.f / 80.f,
-          0.0001f,  // minY
-          48.f * (injectedData.gamePeakWhite / injectedData.gamePaperWhite),
-          AP1_2_BT2020_MAT
-        );
-      } else {
-        outputColor.rgb = mul(BT709_2_BT2020_MAT, outputColor.rgb);
-        outputColor.rgb = open_drt_transform_custom(
-          outputColor.rgb * 203.f / 80.f,
-          100.f * (injectedData.gamePeakWhite / injectedData.gamePaperWhite),
-          0
-        );
-      }
-      outputColor.rgb = mul(BT2020_2_BT709_MAT, outputColor.rgb);
-      outputColor.rgb *= injectedData.gamePeakWhite / 80.f;
-    }
-  }
+  outputColor.rgb = applyUserToneMap(outputColor.rgb, bloomedInput.rgb);
 
   u0[uint2(r0.x, r0.y)] = outputColor;
 
