@@ -28,10 +28,11 @@ namespace SwapChainUpgradeMod {
   std::unordered_set<uint64_t> backBuffers;
   std::unordered_set<uint64_t> upgradedResources;
 
-  static uint32_t resourceUpgradeIndex = -1;
+  static int32_t resourceUpgradeIndex = -1;
+  static bool upgradeResourceViews = true;
   static reshade::api::device* currentDevice = nullptr;
-  static uint32_t swapChainHeight = -1;
-  static uint32_t swapChainWidth = -1;
+  static int32_t swapChainHeight = -1;
+  static int32_t swapChainWidth = -1;
   static reshade::api::effect_runtime* currentEffectRuntime = nullptr;
   static reshade::api::color_space currentColorSpace = reshade::api::color_space::unknown;
   static bool needsSRGBPostProcess = false;
@@ -47,6 +48,7 @@ namespace SwapChainUpgradeMod {
 
     switch (desc.back_buffer.texture.format) {
       case reshade::api::format::r8g8b8a8_unorm:
+      case reshade::api::format::r10g10b10a2_unorm:
         needsSRGBPostProcess = true;
       case reshade::api::format::r8g8b8a8_unorm_srgb:
         desc.back_buffer.texture.format = targetFormat;
@@ -120,19 +122,19 @@ namespace SwapChainUpgradeMod {
   static int32_t resourceCount = 0;
 
   static void on_init_swapchain(reshade::api::swapchain* swapchain) {
-    const auto device = swapchain->get_device();
-    currentDevice = device;
-    const size_t backBufferCount = swapchain->get_back_buffer_count();
+    if (upgradeResourceViews) {
+      const size_t backBufferCount = swapchain->get_back_buffer_count();
 
-    for (uint32_t index = 0; index < backBufferCount; index++) {
-      auto buffer = swapchain->get_back_buffer(index);
-      backBuffers.emplace(buffer.handle);
+      for (uint32_t index = 0; index < backBufferCount; index++) {
+        auto buffer = swapchain->get_back_buffer(index);
+        backBuffers.emplace(buffer.handle);
 
-      std::stringstream s;
-      s << "initSwapChain("
-        << "buffer: 0x" << std::hex << (uint32_t)buffer.handle << std::dec
-        << ")";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
+        std::stringstream s;
+        s << "initSwapChain("
+          << "buffer: 0x" << std::hex << (uint32_t)buffer.handle << std::dec
+          << ")";
+        reshade::log_message(reshade::log_level::info, s.str().c_str());
+      }
     }
 
     // Reshade doesn't actually inspect colorspace
@@ -150,12 +152,12 @@ namespace SwapChainUpgradeMod {
     reshade::api::resource_usage usage_type,
     reshade::api::resource_view_desc &desc
   ) {
-    if (device == nullptr) return false;
-    if (device != currentDevice) return false;
+    if (!upgradeResourceViews && resourceUpgradeIndex == -1) return false;
     if (desc.format == targetFormat) return false;
+    if (!resource.handle) return false;
     auto oldFormat = desc.format;
 
-    if (backBuffers.count(resource.handle)) {
+    if (upgradeResourceViews && backBuffers.count(resource.handle)) {
       desc.format = targetFormat;
     } else if (upgradedResources.count(resource.handle)) {
       desc.format = targetFormat;
@@ -190,15 +192,24 @@ namespace SwapChainUpgradeMod {
     reshade::api::subresource_data* initial_data,
     reshade::api::resource_usage initial_state
   ) {
-    if (device != currentDevice) return false;
-    if (resourceCount >= resourceUpgradeIndex) return false;
-    if (desc.texture.height != swapChainHeight) return false;
-    if (desc.texture.width != swapChainWidth) return false;
+    if (resourceCount > resourceUpgradeIndex) {
+      reshade::log_message(reshade::log_level::debug, "Over index");
+      return false;
+    }
+    if (desc.texture.height != swapChainHeight) {
+      reshade::log_message(reshade::log_level::debug, "Wrong Height");
+      return false;
+    }
+    if (desc.texture.width != swapChainWidth) {
+      reshade::log_message(reshade::log_level::debug, "Wrong Width");
+      return false;
+    }
 
     auto oldFormat = desc.texture.format;
     switch (desc.texture.format) {
+      case reshade::api::format::r10g10b10a2_unorm:
       case reshade::api::format::r8g8b8a8_unorm:
-        // case reshade::api::format::r8g8b8a8_unorm_srgb:
+      case reshade::api::format::r8g8b8a8_unorm_srgb:
         desc.texture.format = targetFormat;
         break;
       case reshade::api::format::r8g8b8a8_typeless:
@@ -279,7 +290,7 @@ namespace SwapChainUpgradeMod {
     }
   }
 
-  void on_present(
+  static void on_present(
     reshade::api::command_queue* queue,
     reshade::api::swapchain* swapchain,
     const reshade::api::rect* source_rect,
@@ -291,7 +302,31 @@ namespace SwapChainUpgradeMod {
     // Enable RenoDXHelper
   }
 
-  void use(DWORD fdwReason) {
+  static void setUseHDR10(bool value = true) {
+    if (value) {
+      targetFormat = reshade::api::format::r10g10b10a2_unorm;
+      targetColorSpace = reshade::api::color_space::hdr10_st2084;
+    } else {
+      targetFormat = reshade::api::format::r16g16b16a16_float;
+      targetColorSpace = reshade::api::color_space::extended_srgb_linear;
+    }
+  }
+
+  static void setUpgradeResourceViews(bool value = true) {
+    if (value) {
+      targetFormat = reshade::api::format::r10g10b10a2_unorm;
+      targetColorSpace = reshade::api::color_space::hdr10_st2084;
+    } else {
+      targetFormat = reshade::api::format::r16g16b16a16_float;
+      targetColorSpace = reshade::api::color_space::extended_srgb_linear;
+    }
+  }
+
+  static void setResourceUpgradeIndex(int32_t value = -1) {
+    resourceUpgradeIndex = value;
+  }
+
+  static void use(DWORD fdwReason) {
     switch (fdwReason) {
       case DLL_PROCESS_ATTACH:
         reshade::register_event<reshade::addon_event::create_swapchain>(on_create_swapchain);

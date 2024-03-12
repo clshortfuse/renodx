@@ -109,7 +109,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       break;
   }
 
-  SwapChainUpgradeMod::resourceUpgradeIndex = 4;
+  SwapChainUpgradeMod::resourceUpgradeIndex = 5;
   SwapChainUpgradeMod::use(fdwReason);
 
   ShaderReplaceMod::use(fdwReason, &customShaders, &shaderInjection);
