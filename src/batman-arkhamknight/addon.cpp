@@ -102,6 +102,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       if (!reshade::register_addon(hModule)) return FALSE;
       updateInjection();
       reshade::register_overlay("RenoDX", on_register_overlay);
+
+      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+        {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float, 3}
+      );
+
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_overlay("RenoDX", on_register_overlay);
@@ -109,7 +114,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       break;
   }
 
-  SwapChainUpgradeMod::resourceUpgradeIndex = 5;
   SwapChainUpgradeMod::use(fdwReason);
 
   ShaderReplaceMod::use(fdwReason, &customShaders, &shaderInjection);
