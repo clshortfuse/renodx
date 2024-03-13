@@ -33,10 +33,9 @@ namespace ShaderReplaceMod {
 
   typedef std::unordered_map<uint32_t, CustomShader> CustomShaders;
 
-#define CustomShaderEntry(crc32) \
-  { \
-    crc32, { crc32, _##crc32, sizeof(_##crc32) } \
-  }
+  // clang-format off
+#define CustomShaderEntry(crc32) { crc32, { crc32, _##crc32, sizeof(_##crc32) } }
+  // clang-format on
 
   static float* _shaderInjection = nullptr;
   static size_t _shaderInjectionSize = 0;
@@ -365,10 +364,10 @@ namespace ShaderReplaceMod {
           }
           auto cloneSubject = &newSubobjects[i];
 
-          auto desc = static_cast<reshade::api::shader_desc*>(cloneSubject->data);
+          auto newDesc = static_cast<reshade::api::shader_desc*>(cloneSubject->data);
 
-          desc->code = customShader.code;
-          desc->code_size = customShader.codeSize;
+          newDesc->code = customShader.code;
+          newDesc->code_size = customShader.codeSize;
         }
       }
     }
@@ -392,7 +391,10 @@ namespace ShaderReplaceMod {
         << ", size: " << subobjectCount
         << ", " << (builtPipelineOK ? "OK" : "FAILED!")
         << ")";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
+      reshade::log_message(
+        builtPipelineOK ? reshade::log_level::info : reshade::log_level::error,
+        s.str().c_str()
+      );
     }
   }
 
@@ -430,7 +432,7 @@ namespace ShaderReplaceMod {
       auto newPipeline = pipelineToClone->second;
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
-      s << "bind_pipeline(swapping pipeline"
+      s << "bind_pipeline(swapping pipeline "
         << reinterpret_cast<void*>(pipeline.handle)
         << " => " << reinterpret_cast<void*>(newPipeline.handle)
         << ", stage: " << std::hex << (uint32_t)type
@@ -468,7 +470,6 @@ namespace ShaderReplaceMod {
       auto pair3 = moddedPipelineLayouts.find(layout.handle);
       if (pair3 == moddedPipelineLayouts.end()) return;
       injectionLayout = pair3->second;
-
     }
     cmd_list->push_constants(
       stage,  // Used by reshade to specify graphics or compute
@@ -531,7 +532,6 @@ namespace ShaderReplaceMod {
         reshade::unregister_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
         reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
         reshade::unregister_event<reshade::addon_event::destroy_pipeline_layout>(on_destroy_pipeline_layout);
-
 
         break;
     }
