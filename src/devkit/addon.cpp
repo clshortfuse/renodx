@@ -31,6 +31,373 @@
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - DevKit";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX DevKit Module";
 
+namespace {
+  inline auto to_string(reshade::api::shader_stage value) {
+    switch (value) {
+      case reshade::api::shader_stage::vertex:          return "vertex";
+      case reshade::api::shader_stage::hull:            return "hull";
+      case reshade::api::shader_stage::domain:          return "domain";
+      case reshade::api::shader_stage::geometry:        return "geometry";
+      case reshade::api::shader_stage::pixel:           return "pixel";
+      case reshade::api::shader_stage::compute:         return "compute";
+      case reshade::api::shader_stage::amplification:   return "amplification";
+      case reshade::api::shader_stage::mesh:            return "mesh";
+      case reshade::api::shader_stage::raygen:          return "raygen";
+      case reshade::api::shader_stage::any_hit:         return "any_hit";
+      case reshade::api::shader_stage::closest_hit:     return "closest_hit";
+      case reshade::api::shader_stage::miss:            return "miss";
+      case reshade::api::shader_stage::intersection:    return "intersection";
+      case reshade::api::shader_stage::callable:        return "callable";
+      case reshade::api::shader_stage::all:             return "all";
+      case reshade::api::shader_stage::all_graphics:    return "all_graphics";
+      case reshade::api::shader_stage::all_ray_tracing: return "all_raytracing";
+      default:                                          return "unknown";
+    }
+  }
+
+  inline auto to_string(reshade::api::pipeline_stage value) {
+    switch (value) {
+      case reshade::api::pipeline_stage::vertex_shader:        return "vertex_shader";
+      case reshade::api::pipeline_stage::hull_shader:          return "hull_shader";
+      case reshade::api::pipeline_stage::domain_shader:        return "domain_shader";
+      case reshade::api::pipeline_stage::geometry_shader:      return "geometry_shader";
+      case reshade::api::pipeline_stage::pixel_shader:         return "pixel_shader";
+      case reshade::api::pipeline_stage::compute_shader:       return "compute_shader";
+      case reshade::api::pipeline_stage::amplification_shader: return "amplification_shader";
+      case reshade::api::pipeline_stage::mesh_shader:          return "mesh_shader";
+      case reshade::api::pipeline_stage::input_assembler:      return "input_assembler";
+      case reshade::api::pipeline_stage::stream_output:        return "stream_output";
+      case reshade::api::pipeline_stage::rasterizer:           return "rasterizer";
+      case reshade::api::pipeline_stage::depth_stencil:        return "depth_stencil";
+      case reshade::api::pipeline_stage::output_merger:        return "output_merger";
+      case reshade::api::pipeline_stage::all:                  return "all";
+      case reshade::api::pipeline_stage::all_graphics:         return "all_graphics";
+      case reshade::api::pipeline_stage::all_ray_tracing:      return "all_ray_tracing";
+      case reshade::api::pipeline_stage::all_shader_stages:    return "all_shader_stages";
+      default:                                                 return "unknown";
+    }
+  }
+
+  inline auto to_string(reshade::api::descriptor_type value) {
+    switch (value) {
+      case reshade::api::descriptor_type::sampler:                    return "sampler";
+      case reshade::api::descriptor_type::sampler_with_resource_view: return "sampler_with_resource_view";
+      case reshade::api::descriptor_type::shader_resource_view:       return "shader_resource_view";
+      case reshade::api::descriptor_type::unordered_access_view:      return "unordered_access_view";
+      case reshade::api::descriptor_type::constant_buffer:            return "constant_buffer";
+      case reshade::api::descriptor_type::acceleration_structure:     return "acceleration_structure";
+      default:                                                        return "unknown";
+    }
+  }
+
+  inline auto to_string(reshade::api::dynamic_state value) {
+    switch (value) {
+      case reshade::api::dynamic_state::alpha_test_enable:             return "alpha_test_enable";
+      case reshade::api::dynamic_state::alpha_reference_value:         return "alpha_reference_value";
+      case reshade::api::dynamic_state::alpha_func:                    return "alpha_func";
+      case reshade::api::dynamic_state::srgb_write_enable:             return "srgb_write_enable";
+      case reshade::api::dynamic_state::primitive_topology:            return "primitive_topology";
+      case reshade::api::dynamic_state::sample_mask:                   return "sample_mask";
+      case reshade::api::dynamic_state::alpha_to_coverage_enable:      return "alpha_to_coverage_enable";
+      case reshade::api::dynamic_state::blend_enable:                  return "blend_enable";
+      case reshade::api::dynamic_state::logic_op_enable:               return "logic_op_enable";
+      case reshade::api::dynamic_state::color_blend_op:                return "color_blend_op";
+      case reshade::api::dynamic_state::source_color_blend_factor:     return "src_color_blend_factor";
+      case reshade::api::dynamic_state::dest_color_blend_factor:       return "dst_color_blend_factor";
+      case reshade::api::dynamic_state::alpha_blend_op:                return "alpha_blend_op";
+      case reshade::api::dynamic_state::source_alpha_blend_factor:     return "src_alpha_blend_factor";
+      case reshade::api::dynamic_state::dest_alpha_blend_factor:       return "dst_alpha_blend_factor";
+      case reshade::api::dynamic_state::logic_op:                      return "logic_op";
+      case reshade::api::dynamic_state::blend_constant:                return "blend_constant";
+      case reshade::api::dynamic_state::render_target_write_mask:      return "render_target_write_mask";
+      case reshade::api::dynamic_state::fill_mode:                     return "fill_mode";
+      case reshade::api::dynamic_state::cull_mode:                     return "cull_mode";
+      case reshade::api::dynamic_state::front_counter_clockwise:       return "front_counter_clockwise";
+      case reshade::api::dynamic_state::depth_bias:                    return "depth_bias";
+      case reshade::api::dynamic_state::depth_bias_clamp:              return "depth_bias_clamp";
+      case reshade::api::dynamic_state::depth_bias_slope_scaled:       return "depth_bias_slope_scaled";
+      case reshade::api::dynamic_state::depth_clip_enable:             return "depth_clip_enable";
+      case reshade::api::dynamic_state::scissor_enable:                return "scissor_enable";
+      case reshade::api::dynamic_state::multisample_enable:            return "multisample_enable";
+      case reshade::api::dynamic_state::antialiased_line_enable:       return "antialiased_line_enable";
+      case reshade::api::dynamic_state::depth_enable:                  return "depth_enable";
+      case reshade::api::dynamic_state::depth_write_mask:              return "depth_write_mask";
+      case reshade::api::dynamic_state::depth_func:                    return "depth_func";
+      case reshade::api::dynamic_state::stencil_enable:                return "stencil_enable";
+      case reshade::api::dynamic_state::front_stencil_read_mask:       return "front_stencil_read_mask";
+      case reshade::api::dynamic_state::front_stencil_write_mask:      return "front_stencil_write_mask";
+      case reshade::api::dynamic_state::front_stencil_reference_value: return "front_stencil_reference_value";
+      case reshade::api::dynamic_state::front_stencil_func:            return "front_stencil_func";
+      case reshade::api::dynamic_state::front_stencil_pass_op:         return "front_stencil_pass_op";
+      case reshade::api::dynamic_state::front_stencil_fail_op:         return "front_stencil_fail_op";
+      case reshade::api::dynamic_state::front_stencil_depth_fail_op:   return "front_stencil_depth_fail_op";
+      case reshade::api::dynamic_state::back_stencil_read_mask:        return "back_stencil_read_mask";
+      case reshade::api::dynamic_state::back_stencil_write_mask:       return "back_stencil_write_mask";
+      case reshade::api::dynamic_state::back_stencil_reference_value:  return "back_stencil_reference_value";
+      case reshade::api::dynamic_state::back_stencil_func:             return "back_stencil_func";
+      case reshade::api::dynamic_state::back_stencil_pass_op:          return "back_stencil_pass_op";
+      case reshade::api::dynamic_state::back_stencil_fail_op:          return "back_stencil_fail_op";
+      case reshade::api::dynamic_state::back_stencil_depth_fail_op:    return "back_stencil_depth_fail_op";
+      case reshade::api::dynamic_state::unknown:
+      default:                                                         return "unknown";
+    }
+  }
+
+  inline auto to_string(reshade::api::resource_usage value) {
+    switch (value) {
+      case reshade::api::resource_usage::index_buffer:              return "index_buffer";
+      case reshade::api::resource_usage::vertex_buffer:             return "vertex_buffer";
+      case reshade::api::resource_usage::constant_buffer:           return "constant_buffer";
+      case reshade::api::resource_usage::stream_output:             return "stream_output";
+      case reshade::api::resource_usage::indirect_argument:         return "indirect_argument";
+      case reshade::api::resource_usage::depth_stencil:
+      case reshade::api::resource_usage::depth_stencil_read:
+      case reshade::api::resource_usage::depth_stencil_write:       return "depth_stencil";
+      case reshade::api::resource_usage::render_target:             return "render_target";
+      case reshade::api::resource_usage::shader_resource:
+      case reshade::api::resource_usage::shader_resource_pixel:
+      case reshade::api::resource_usage::shader_resource_non_pixel: return "shader_resource";
+      case reshade::api::resource_usage::unordered_access:          return "unordered_access";
+      case reshade::api::resource_usage::copy_dest:                 return "copy_dest";
+      case reshade::api::resource_usage::copy_source:               return "copy_source";
+      case reshade::api::resource_usage::resolve_dest:              return "resolve_dest";
+      case reshade::api::resource_usage::resolve_source:            return "resolve_source";
+      case reshade::api::resource_usage::acceleration_structure:    return "acceleration_structure";
+      case reshade::api::resource_usage::general:                   return "general";
+      case reshade::api::resource_usage::present:                   return "present";
+      case reshade::api::resource_usage::cpu_access:                return "cpu_access";
+      case reshade::api::resource_usage::undefined:
+      default:                                                      return "undefined";
+    }
+  }
+
+  inline auto to_string(reshade::api::format value) {
+    switch (value) {
+      case reshade::api::format::r1_unorm:              return "r1_unorm";
+      case reshade::api::format::l8_unorm:              return "l8_unorm";
+      case reshade::api::format::a8_unorm:              return "a8_unorm";
+      case reshade::api::format::r8_typeless:           return "r8_typeless";
+      case reshade::api::format::r8_uint:               return "r8_uint";
+      case reshade::api::format::r8_sint:               return "r8_sint";
+      case reshade::api::format::r8_unorm:              return "r8_unorm";
+      case reshade::api::format::r8_snorm:              return "r8_snorm";
+      case reshade::api::format::l8a8_unorm:            return "l8a8_unorm";
+      case reshade::api::format::r8g8_typeless:         return "r8g8_typeless";
+      case reshade::api::format::r8g8_uint:             return "r8g8_uint";
+      case reshade::api::format::r8g8_sint:             return "r8g8_sint";
+      case reshade::api::format::r8g8_unorm:            return "r8g8_unorm";
+      case reshade::api::format::r8g8_snorm:            return "r8g8_snorm";
+      case reshade::api::format::r8g8b8a8_typeless:     return "r8g8b8a8_typeless";
+      case reshade::api::format::r8g8b8a8_uint:         return "r8g8b8a8_uint";
+      case reshade::api::format::r8g8b8a8_sint:         return "r8g8b8a8_sint";
+      case reshade::api::format::r8g8b8a8_unorm:        return "r8g8b8a8_unorm";
+      case reshade::api::format::r8g8b8a8_unorm_srgb:   return "r8g8b8a8_unorm_srgb";
+      case reshade::api::format::r8g8b8a8_snorm:        return "r8g8b8a8_snorm";
+      case reshade::api::format::r8g8b8x8_unorm:        return "r8g8b8x8_unorm";
+      case reshade::api::format::r8g8b8x8_unorm_srgb:   return "r8g8b8x8_unorm_srgb";
+      case reshade::api::format::b8g8r8a8_typeless:     return "b8g8r8a8_typeless";
+      case reshade::api::format::b8g8r8a8_unorm:        return "b8g8r8a8_unorm";
+      case reshade::api::format::b8g8r8a8_unorm_srgb:   return "b8g8r8a8_unorm_srgb";
+      case reshade::api::format::b8g8r8x8_typeless:     return "b8g8r8x8_typeless";
+      case reshade::api::format::b8g8r8x8_unorm:        return "b8g8r8x8_unorm";
+      case reshade::api::format::b8g8r8x8_unorm_srgb:   return "b8g8r8x8_unorm_srgb";
+      case reshade::api::format::r10g10b10a2_typeless:  return "r10g10b10a2_typeless";
+      case reshade::api::format::r10g10b10a2_uint:      return "r10g10b10a2_uint";
+      case reshade::api::format::r10g10b10a2_unorm:     return "r10g10b10a2_unorm";
+      case reshade::api::format::r10g10b10a2_xr_bias:   return "r10g10b10a2_xr_bias";
+      case reshade::api::format::b10g10r10a2_typeless:  return "b10g10r10a2_typeless";
+      case reshade::api::format::b10g10r10a2_uint:      return "b10g10r10a2_uint";
+      case reshade::api::format::b10g10r10a2_unorm:     return "b10g10r10a2_unorm";
+      case reshade::api::format::l16_unorm:             return "l16_unorm";
+      case reshade::api::format::r16_typeless:          return "r16_typeless";
+      case reshade::api::format::r16_uint:              return "r16_uint";
+      case reshade::api::format::r16_sint:              return "r16_sint";
+      case reshade::api::format::r16_unorm:             return "r16_unorm";
+      case reshade::api::format::r16_snorm:             return "r16_snorm";
+      case reshade::api::format::r16_float:             return "r16_float";
+      case reshade::api::format::l16a16_unorm:          return "l16a16_unorm";
+      case reshade::api::format::r16g16_typeless:       return "r16g16_typeless";
+      case reshade::api::format::r16g16_uint:           return "r16g16_uint";
+      case reshade::api::format::r16g16_sint:           return "r16g16_sint";
+      case reshade::api::format::r16g16_unorm:          return "r16g16_unorm";
+      case reshade::api::format::r16g16_snorm:          return "r16g16_snorm";
+      case reshade::api::format::r16g16_float:          return "r16g16_float";
+      case reshade::api::format::r16g16b16a16_typeless: return "r16g16b16a16_typeless";
+      case reshade::api::format::r16g16b16a16_uint:     return "r16g16b16a16_uint";
+      case reshade::api::format::r16g16b16a16_sint:     return "r16g16b16a16_sint";
+      case reshade::api::format::r16g16b16a16_unorm:    return "r16g16b16a16_unorm";
+      case reshade::api::format::r16g16b16a16_snorm:    return "r16g16b16a16_snorm";
+      case reshade::api::format::r16g16b16a16_float:    return "r16g16b16a16_float";
+      case reshade::api::format::r32_typeless:          return "r32_typeless";
+      case reshade::api::format::r32_uint:              return "r32_uint";
+      case reshade::api::format::r32_sint:              return "r32_sint";
+      case reshade::api::format::r32_float:             return "r32_float";
+      case reshade::api::format::r32g32_typeless:       return "r32g32_typeless";
+      case reshade::api::format::r32g32_uint:           return "r32g32_uint";
+      case reshade::api::format::r32g32_sint:           return "r32g32_sint";
+      case reshade::api::format::r32g32_float:          return "r32g32_float";
+      case reshade::api::format::r32g32b32_typeless:    return "r32g32b32_typeless";
+      case reshade::api::format::r32g32b32_uint:        return "r32g32b32_uint";
+      case reshade::api::format::r32g32b32_sint:        return "r32g32b32_sint";
+      case reshade::api::format::r32g32b32_float:       return "r32g32b32_float";
+      case reshade::api::format::r32g32b32a32_typeless: return "r32g32b32a32_typeless";
+      case reshade::api::format::r32g32b32a32_uint:     return "r32g32b32a32_uint";
+      case reshade::api::format::r32g32b32a32_sint:     return "r32g32b32a32_sint";
+      case reshade::api::format::r32g32b32a32_float:    return "r32g32b32a32_float";
+      case reshade::api::format::r9g9b9e5:              return "r9g9b9e5";
+      case reshade::api::format::r11g11b10_float:       return "r11g11b10_float";
+      case reshade::api::format::b5g6r5_unorm:          return "b5g6r5_unorm";
+      case reshade::api::format::b5g5r5a1_unorm:        return "b5g5r5a1_unorm";
+      case reshade::api::format::b5g5r5x1_unorm:        return "b5g5r5x1_unorm";
+      case reshade::api::format::b4g4r4a4_unorm:        return "b4g4r4a4_unorm";
+      case reshade::api::format::a4b4g4r4_unorm:        return "a4b4g4r4_unorm";
+      case reshade::api::format::s8_uint:               return "s8_uint";
+      case reshade::api::format::d16_unorm:             return "d16_unorm";
+      case reshade::api::format::d16_unorm_s8_uint:     return "d16_unorm_s8_uint";
+      case reshade::api::format::d24_unorm_x8_uint:     return "d24_unorm_x8_uint";
+      case reshade::api::format::d24_unorm_s8_uint:     return "d24_unorm_s8_uint";
+      case reshade::api::format::d32_float:             return "d32_float";
+      case reshade::api::format::d32_float_s8_uint:     return "d32_float_s8_uint";
+      case reshade::api::format::r24_g8_typeless:       return "r24_g8_typeless";
+      case reshade::api::format::r24_unorm_x8_uint:     return "r24_unorm_x8_uint";
+      case reshade::api::format::x24_unorm_g8_uint:     return "x24_unorm_g8_uint";
+      case reshade::api::format::r32_g8_typeless:       return "r32_g8_typeless";
+      case reshade::api::format::r32_float_x8_uint:     return "r32_float_x8_uint";
+      case reshade::api::format::x32_float_g8_uint:     return "x32_float_g8_uint";
+      case reshade::api::format::bc1_typeless:          return "bc1_typeless";
+      case reshade::api::format::bc1_unorm:             return "bc1_unorm";
+      case reshade::api::format::bc1_unorm_srgb:        return "bc1_unorm_srgb";
+      case reshade::api::format::bc2_typeless:          return "bc2_typeless";
+      case reshade::api::format::bc2_unorm:             return "bc2_unorm";
+      case reshade::api::format::bc2_unorm_srgb:        return "bc2_unorm_srgb";
+      case reshade::api::format::bc3_typeless:          return "bc3_typeless";
+      case reshade::api::format::bc3_unorm:             return "bc3_unorm";
+      case reshade::api::format::bc3_unorm_srgb:        return "bc3_unorm_srgb";
+      case reshade::api::format::bc4_typeless:          return "bc4_typeless";
+      case reshade::api::format::bc4_unorm:             return "bc4_unorm";
+      case reshade::api::format::bc4_snorm:             return "bc4_snorm";
+      case reshade::api::format::bc5_typeless:          return "bc5_typeless";
+      case reshade::api::format::bc5_unorm:             return "bc5_unorm";
+      case reshade::api::format::bc5_snorm:             return "bc5_snorm";
+      case reshade::api::format::bc6h_typeless:         return "bc6h_typeless";
+      case reshade::api::format::bc6h_ufloat:           return "bc6h_ufloat";
+      case reshade::api::format::bc6h_sfloat:           return "bc6h_sfloat";
+      case reshade::api::format::bc7_typeless:          return "bc7_typeless";
+      case reshade::api::format::bc7_unorm:             return "bc7_unorm";
+      case reshade::api::format::bc7_unorm_srgb:        return "bc7_unorm_srgb";
+      case reshade::api::format::r8g8_b8g8_unorm:       return "r8g8_b8g8_unorm";
+      case reshade::api::format::g8r8_g8b8_unorm:       return "g8r8_g8b8_unorm";
+      case reshade::api::format::intz:                  return "intz";
+      case reshade::api::format::unknown:
+      default:                                          return "unknown";
+    }
+  }
+
+  inline auto to_string(reshade::api::pipeline_layout_param_type value) {
+    switch (value) {
+      case reshade::api::pipeline_layout_param_type::push_constants:               return "push_constants";
+      case reshade::api::pipeline_layout_param_type::descriptor_table:             return "descriptor_table";
+      case reshade::api::pipeline_layout_param_type::push_descriptors:             return "push_descriptors";
+      case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges: return "push_descriptors_with_ranges";
+      default:                                                                     return "unknown";
+    }
+  }
+
+  inline auto to_string(reshade::api::color_space value) {
+    switch (value) {
+      case reshade::api::color_space::srgb_nonlinear:       return "srgb_nonlinear";
+      case reshade::api::color_space::extended_srgb_linear: return "extended_srgb_linear";
+      case reshade::api::color_space::hdr10_st2084:         return "hdr10_st2084";
+      case reshade::api::color_space::hdr10_hlg:            return "hdr10_hlg";
+      case reshade::api::color_space::unknown:
+      default:                                              return "unknown";
+    }
+  }
+
+  inline auto to_string(reshade::api::resource_view_type value) {
+    switch (value) {
+      case reshade::api::resource_view_type::buffer:                       return "buffer";
+      case reshade::api::resource_view_type::texture_1d:                   return "texture_1d";
+      case reshade::api::resource_view_type::texture_1d_array:             return "texture_1d_array";
+      case reshade::api::resource_view_type::texture_2d:                   return "texture_2d";
+      case reshade::api::resource_view_type::texture_2d_array:             return "texture_2d_array";
+      case reshade::api::resource_view_type::texture_2d_multisample:       return "texture_2d_multisample";
+      case reshade::api::resource_view_type::texture_2d_multisample_array: return "texture_2d_multisample_array";
+      case reshade::api::resource_view_type::texture_3d:                   return "texture_3d";
+      case reshade::api::resource_view_type::texture_cube:                 return "texture_cube";
+      case reshade::api::resource_view_type::texture_cube_array:           return "texture_cube_array";
+      case reshade::api::resource_view_type::acceleration_structure:       return "acceleration_structure";
+      case reshade::api::resource_view_type::unknown:
+      default:                                                             return "unknown";
+    }
+  }
+
+  inline auto to_string(reshade::api::pipeline_subobject_type value) {
+    switch (value) {
+      case reshade::api::pipeline_subobject_type::vertex_shader:           return "vertex_shader";
+      case reshade::api::pipeline_subobject_type::hull_shader:             return "hull_shader";
+      case reshade::api::pipeline_subobject_type::domain_shader:           return "domain_shader";
+      case reshade::api::pipeline_subobject_type::geometry_shader:         return "geometry_shader";
+      case reshade::api::pipeline_subobject_type::pixel_shader:            return "pixel_shader";
+      case reshade::api::pipeline_subobject_type::compute_shader:          return "compute_shader";
+      case reshade::api::pipeline_subobject_type::input_layout:            return "input_layout";
+      case reshade::api::pipeline_subobject_type::stream_output_state:     return "stream_output_state";
+      case reshade::api::pipeline_subobject_type::blend_state:             return "blend_state";
+      case reshade::api::pipeline_subobject_type::rasterizer_state:        return "rasterizer_state";
+      case reshade::api::pipeline_subobject_type::depth_stencil_state:     return "depth_stencil_state";
+      case reshade::api::pipeline_subobject_type::primitive_topology:      return "primitive_topology";
+      case reshade::api::pipeline_subobject_type::depth_stencil_format:    return "depth_stencil_format";
+      case reshade::api::pipeline_subobject_type::render_target_formats:   return "render_target_formats";
+      case reshade::api::pipeline_subobject_type::sample_mask:             return "sample_mask";
+      case reshade::api::pipeline_subobject_type::sample_count:            return "sample_count";
+      case reshade::api::pipeline_subobject_type::viewport_count:          return "viewport_count";
+      case reshade::api::pipeline_subobject_type::dynamic_pipeline_states: return "dynamic_pipeline_states";
+      case reshade::api::pipeline_subobject_type::max_vertex_count:        return "max_vertex_count";
+      case reshade::api::pipeline_subobject_type::amplification_shader:    return "amplification_shader";
+      case reshade::api::pipeline_subobject_type::mesh_shader:             return "mesh_shader";
+      case reshade::api::pipeline_subobject_type::raygen_shader:           return "raygen_shader";
+      case reshade::api::pipeline_subobject_type::any_hit_shader:          return "any_hit_shader";
+      case reshade::api::pipeline_subobject_type::closest_hit_shader:      return "closest_hit_shader";
+      case reshade::api::pipeline_subobject_type::miss_shader:             return "miss_shader";
+      case reshade::api::pipeline_subobject_type::intersection_shader:     return "intersection_shader";
+      case reshade::api::pipeline_subobject_type::callable_shader:         return "callable_shader";
+      case reshade::api::pipeline_subobject_type::libraries:               return "libraries";
+      case reshade::api::pipeline_subobject_type::shader_groups:           return "shader_groups";
+      case reshade::api::pipeline_subobject_type::max_payload_size:        return "max_payload_size";
+      case reshade::api::pipeline_subobject_type::max_attribute_size:      return "max_attribute_size";
+      case reshade::api::pipeline_subobject_type::max_recursion_depth:     return "max_recursion_depth";
+      case reshade::api::pipeline_subobject_type::flags:                   return "flags";
+      default:
+      case reshade::api::pipeline_subobject_type::unknown:                 return "unknown";
+    }
+  }
+
+  inline auto to_string(reshade::api::indirect_command value) {
+    switch (value) {
+      case reshade::api::indirect_command::draw:          return "draw";
+      case reshade::api::indirect_command::draw_indexed:  return "draw_indexed";
+      case reshade::api::indirect_command::dispatch:      return "dispatch";
+      case reshade::api::indirect_command::dispatch_mesh: return "dispatch_mesh";
+      case reshade::api::indirect_command::dispatch_rays: return "dispatch_rays";
+      default:
+      case reshade::api::indirect_command::unknown:       return "unknown";
+    }
+  }
+
+  inline auto to_string(reshade::api::resource_type value) {
+    switch (value) {
+      case reshade::api::resource_type::buffer:     return "buffer";
+      case reshade::api::resource_type::texture_1d: return "texture_1d";
+      case reshade::api::resource_type::texture_2d: return "texture_2d";
+      case reshade::api::resource_type::texture_3d: return "texture_3d";
+      case reshade::api::resource_type::surface:    return "surface";
+      default:
+      case reshade::api::resource_type::unknown:    return "unknown";
+    }
+  }
+
+}  // namespace
+
 struct CachedPipeline {
   reshade::api::pipeline pipeline;
   reshade::api::device* device;
@@ -311,7 +678,7 @@ static void logLayout(
           << " | " << range.count
           << " | " << range.dx_register_index
           << " | " << range.dx_register_space
-          << " | " << (uint32_t)range.visibility
+          << " | " << to_string(range.visibility)
           << ")"
           << " [" << rangeIndex << "/" << param.descriptor_table.count << "]"
           << " [" << paramIndex << "/" << paramCount << "]";
@@ -326,7 +693,7 @@ static void logLayout(
         << " | " << param.push_constants.count
         << " | " << param.push_constants.dx_register_index
         << " | " << param.push_constants.dx_register_space
-        << " | " << (uint32_t)param.push_constants.visibility
+        << " | " << to_string(param.push_constants.visibility)
         << ")"
         << " [" << paramIndex << "/" << paramCount << "]";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -340,8 +707,8 @@ static void logLayout(
         << " | " << param.push_descriptors.count
         << " | " << param.push_descriptors.dx_register_index
         << " | " << param.push_descriptors.dx_register_space
-        << " | " << (uint32_t)param.push_descriptors.type
-        << " | " << (uint32_t)param.push_descriptors.visibility
+        << " | " << to_string(param.push_descriptors.type)
+        << " | " << to_string(param.push_descriptors.visibility)
         << ")"
         << " [" << paramIndex << "/" << paramCount << "]";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -358,7 +725,7 @@ static void logLayout(
       s << "logPipelineLayout("
         << tag
         << " | ???"
-        << " | " << (uint32_t)param.type
+        << " | " << to_string(param.type)
         << ")"
         << " [" << paramIndex << "/" << paramCount << "]";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -382,7 +749,7 @@ static void on_init_swapchain(reshade::api::swapchain* swapchain) {
 
   std::stringstream s;
   s << "init_swapchain"
-    << "(colorspace: " << (uint32_t)swapchain->get_color_space()
+    << "(colorspace: " << to_string(swapchain->get_color_space())
     << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 }
@@ -473,7 +840,7 @@ static void on_init_pipeline(
           std::stringstream s;
           s << "on_init_pipeline("
             << reinterpret_cast<void*>(pipeline.handle)
-            << ", subobject: " << (uint32_t)subobjects[i].type
+            << ", subobject: " << to_string(subobjects[i].type)
             << " )";
           reshade::log_message(reshade::log_level::debug, s.str().c_str());
         }
@@ -514,7 +881,7 @@ static void on_init_pipeline(
     std::stringstream s;
     s << "caching shader("
       << "hash: 0x" << std::hex << shader_hash << std::dec
-      << ", type: " << (uint32_t)subobjects[i].type
+      << ", type: " << to_string(subobjects[i].type)
       << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -546,7 +913,7 @@ static void on_destroy_pipeline(
   std::stringstream s;
   s << "on_destroy_pipeline("
     << reinterpret_cast<void*>(pipeline.handle)
-    << " )";
+    << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 }
 
@@ -566,7 +933,7 @@ static void on_bind_pipeline(
       s << "bind_pipeline(swapping pipeline "
         << reinterpret_cast<void*>(pipeline.handle)
         << " => " << reinterpret_cast<void*>(newPipeline.handle)
-        << ", stage: " << std::hex << (uint32_t)type
+        << ", stage: " << std::hex << to_string(type)
         << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
@@ -591,7 +958,7 @@ static void on_bind_pipeline(
     << traceHashes.size() << ": "
     << reinterpret_cast<void*>(cachedPipeline->pipeline.handle)
     << ", " << reinterpret_cast<void*>(cachedPipeline->layout.handle)
-    << ", type: " << std::hex << (uint32_t)type << std::dec
+    << ", type: " << std::hex << to_string(type) << std::dec
     << ", 0x" << std::hex << cachedPipeline->shaderHash << std::dec
     << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -681,7 +1048,7 @@ static bool on_draw_or_dispatch_indirect(
   if (traceRunning) {
     std::stringstream s;
     s << "on_draw_or_dispatch_indirect"
-      << "(" << (uint32_t)type
+      << "(" << to_string(type)
       << ", " << reinterpret_cast<void*>(buffer.handle)
       << ", " << offset
       << ", " << draw_count
@@ -784,16 +1151,25 @@ static void on_bind_render_targets_and_depth_stencil(
   const reshade::api::resource_view* rtvs,
   reshade::api::resource_view dsv
 ) {
-  if (traceRunning) {
+  if (!traceRunning) return;
+
+  if (count) {
     for (uint32_t i = 0; i < count; i++) {
       auto rtv = rtvs[i];
       std::stringstream s;
-      s << "on_bind_render_targets_and_depth_stencil("
+      s << "on_bind_render_targets("
         << reinterpret_cast<void*>(rtv.handle)
-        << ") => " << reinterpret_cast<void*>(dsv.handle)
+        << ")"
         << "[" << i << "]";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
+  }
+  if (dsv.handle) {
+    std::stringstream s;
+    s << "on_bind_depth_stencil("
+      << reinterpret_cast<void*>(dsv.handle)
+      << ")";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
   }
 }
 
@@ -809,12 +1185,27 @@ static void on_init_resource(
   s << "init_resource("
     << reinterpret_cast<void*>(resource.handle)
     << ", flags: " << std::hex << (uint32_t)desc.flags << std::dec
-    << ", size: " << (uint32_t)desc.buffer.size
     << ", state: " << std::hex << (uint32_t)initial_state << std::dec
-    << ", width: " << (uint32_t)desc.texture.width
-    << ", height: " << (uint32_t)desc.texture.height
-    << ", format: " << (uint32_t)desc.texture.format
-    << ")";
+    << ", type: " << to_string(desc.type);
+  switch (desc.type) {
+    case reshade::api::resource_type::buffer:
+      s << ", size: " << desc.buffer.size;
+      s << ", stride: " << desc.buffer.stride;
+      break;
+    case reshade::api::resource_type::texture_1d:
+    case reshade::api::resource_type::texture_2d:
+    case reshade::api::resource_type::texture_3d:
+    case reshade::api::resource_type::surface:
+      s << ", width: " << desc.texture.width
+        << ", height: " << desc.texture.height
+        << ", levels: " << desc.texture.levels
+        << ", format: " << to_string(desc.texture.format);
+      break;
+    default:
+    case reshade::api::resource_type::unknown:
+      break;
+  }
+  s << ")";
   reshade::log_message(
     desc.texture.format == reshade::api::format::unknown
       ? reshade::log_level::warning
@@ -834,13 +1225,13 @@ static void on_init_resource_view(
   std::stringstream s;
   s << "init_resource_view("
     << reinterpret_cast<void*>(view.handle)
-    << ", view type: " << (uint32_t)desc.type
-    << ", view format: " << (uint32_t)desc.format
+    << ", view type: " << to_string(desc.type)
+    << ", view format: " << to_string(desc.format)
     << ", resource: " << reinterpret_cast<void*>(resource.handle)
     << ", resource usage: " << std::hex << (uint32_t)usage_type << std::dec;
   if (resource.handle) {
     const auto resourceDesc = device->get_resource_desc(resource);
-    s << ", resource type: " << (uint32_t)resourceDesc.type;
+    s << ", resource type: " << to_string(resourceDesc.type);
 
     switch (resourceDesc.type) {
       default:
@@ -854,13 +1245,190 @@ static void on_init_resource_view(
       case reshade::api::resource_type::texture_2d:
       case reshade::api::resource_type::texture_3d:
       case reshade::api::resource_type::surface:
-        s << ", texture format: " << (uint32_t)resourceDesc.texture.format;
-        s << ", texture width: " << (uint32_t)resourceDesc.texture.width;
-        s << ", texture height: " << (uint32_t)resourceDesc.texture.height;
+        s << ", texture format: " << to_string(resourceDesc.texture.format);
+        s << ", texture width: " << resourceDesc.texture.width;
+        s << ", texture height: " << resourceDesc.texture.height;
     }
   }
   s << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
+}
+
+static void on_push_descriptors(
+  reshade::api::command_list* cmd_list,
+  reshade::api::shader_stage stages,
+  reshade::api::pipeline_layout layout,
+  uint32_t layout_param,
+  const reshade::api::descriptor_table_update &update
+) {
+  if (!traceRunning) return;
+  for (uint32_t i = 0; i < update.count; i++) {
+    std::stringstream s;
+    s << "push_descriptors("
+      << reinterpret_cast<void*>(layout.handle)
+      << "[" << layout_param << "]";
+    switch (update.type) {
+      case reshade::api::descriptor_type::sampler:
+        {
+          auto item = static_cast<const reshade::api::sampler*>(update.descriptors)[i];
+          s << ", sampler: " << reinterpret_cast<void*>(item.handle);
+        }
+        break;
+      case reshade::api::descriptor_type::sampler_with_resource_view:
+        {
+          auto item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[i];
+          s << ", sampler: " << reinterpret_cast<void*>(item.sampler.handle);
+          s << ", rsv: " << reinterpret_cast<void*>(item.view.handle);
+        }
+        break;
+      case reshade::api::descriptor_type::shader_resource_view:
+        {
+          auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
+          s << ", shaderrsv: " << reinterpret_cast<void*>(item.handle);
+        }
+        break;
+      case reshade::api::descriptor_type::unordered_access_view:
+        {
+          auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
+          s << ", uav: " << reinterpret_cast<void*>(item.handle);
+        }
+        break;
+      case reshade::api::descriptor_type::acceleration_structure:
+        {
+          auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
+          s << ", accl: " << reinterpret_cast<void*>(item.handle);
+        }
+        break;
+      case reshade::api::descriptor_type::constant_buffer:
+        {
+          auto item = static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
+          s << ", buffer: " << reinterpret_cast<void*>(item.buffer.handle);
+          s << ", size: " << item.size;
+          s << ", offset: " << item.offset;
+        }
+        break;
+      default:
+        break;
+    }
+
+    s << ")";
+    s << "[" << i << "]";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+  }
+}
+
+static void on_bind_descriptor_tables(
+  reshade::api::command_list*,
+  reshade::api::shader_stage stages,
+  reshade::api::pipeline_layout layout,
+  uint32_t first,
+  uint32_t count,
+  const reshade::api::descriptor_table* tables
+) {
+  if (!traceRunning) return;
+
+  for (uint32_t i = 0; i < count; ++i) {
+    std::stringstream s;
+    s << "bind_descriptor_table("
+      << reinterpret_cast<void*>(layout.handle)
+      << std::hex << (uint32_t)stages << std::dec
+      << ", index: " << (first + i)
+      << ", table: " << reinterpret_cast<void*>(tables[i].handle)
+      << ") [" << i << "]";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+  }
+}
+
+static bool on_copy_descriptor_tables(
+  reshade::api::device* device,
+  uint32_t count,
+  const reshade::api::descriptor_table_copy* copies
+) {
+  if (!traceRunning) return false;
+  for (uint32_t i = 0; i < count; i++) {
+    auto copy = copies[i];
+
+    std::stringstream s;
+    s << "copy_descriptor_tables("
+      << reinterpret_cast<void*>(copy.source_table.handle)
+      << "[" << copy.source_binding << "]"
+      << "[" << copy.source_array_offset << "]"
+      << " => "
+      << reinterpret_cast<void*>(copy.dest_table.handle)
+      << "[" << copy.dest_binding << "]"
+      << "[" << copy.dest_array_offset << "]"
+      << ", count: " << copy.count
+      << ") [" << i << "]";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+  }
+
+  return false;
+}
+
+static bool on_update_descriptor_tables(
+  reshade::api::device* device,
+  uint32_t count,
+  const reshade::api::descriptor_table_update* updates
+) {
+  if (!traceRunning) return false;
+  for (uint32_t i = 0; i < count; i++) {
+    auto update = updates[i];
+
+    std::stringstream s;
+    s << "update_descriptor_tables("
+      << reinterpret_cast<void*>(update.table.handle)
+      << "[" << update.binding << "]"
+      << "[" << update.array_offset << "]";
+    for (uint32_t j = 0; j < update.count; j++) {
+      switch (update.type) {
+        case reshade::api::descriptor_type::sampler:
+          {
+            auto item = static_cast<const reshade::api::sampler*>(update.descriptors)[j];
+            s << ", sampler: " << reinterpret_cast<void*>(item.handle);
+          }
+          break;
+        case reshade::api::descriptor_type::sampler_with_resource_view:
+          {
+            auto item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[j];
+            s << ", sampler: " << reinterpret_cast<void*>(item.sampler.handle);
+            s << ", rsv: " << reinterpret_cast<void*>(item.view.handle);
+          }
+          break;
+        case reshade::api::descriptor_type::shader_resource_view:
+          {
+            auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
+            s << ", shaderrsv: " << reinterpret_cast<void*>(item.handle);
+          }
+          break;
+        case reshade::api::descriptor_type::unordered_access_view:
+          {
+            auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
+            s << ", uav: " << reinterpret_cast<void*>(item.handle);
+          }
+          break;
+        case reshade::api::descriptor_type::acceleration_structure:
+          {
+            auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
+            s << ", accl: " << reinterpret_cast<void*>(item.handle);
+          }
+          break;
+        case reshade::api::descriptor_type::constant_buffer:
+          {
+            auto item = static_cast<const reshade::api::buffer_range*>(update.descriptors)[j];
+            s << ", buffer: " << reinterpret_cast<void*>(item.buffer.handle);
+            s << ", size: " << item.size;
+            s << ", offset: " << item.offset;
+          }
+          break;
+        default:
+          break;
+      }
+    }
+
+    s << ") [" << i << "]";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+  }
+  return false;
 }
 
 static void on_reshade_present(reshade::api::effect_runtime* runtime) {
@@ -1088,6 +1656,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
 
       reshade::register_event<reshade::addon_event::init_resource>(on_init_resource);
       reshade::register_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
+
+      reshade::register_event<reshade::addon_event::push_descriptors>(on_push_descriptors);
+      reshade::register_event<reshade::addon_event::bind_descriptor_tables>(on_bind_descriptor_tables);
+      reshade::register_event<reshade::addon_event::copy_descriptor_tables>(on_copy_descriptor_tables);
+      reshade::register_event<reshade::addon_event::update_descriptor_tables>(on_update_descriptor_tables);
 
       reshade::register_event<reshade::addon_event::draw>(on_draw);
       reshade::register_event<reshade::addon_event::dispatch>(on_dispatch);
