@@ -25,7 +25,7 @@ Texture2D<float4> PointSampler0TEXTURE : register(t0);
 float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
   float4 o0;
   float4 r0 = PointSampler0TEXTURE.Sample(PointSampler0_s, v1.xy).xyzw;
-  if (injectedData.toneMapperEnum == 1.f) {
+  if (injectedData.toneMapType == 1.f) {
     return r0;
   }
   o0.w = r0.w;

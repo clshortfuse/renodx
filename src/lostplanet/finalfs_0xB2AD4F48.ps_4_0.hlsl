@@ -15,7 +15,7 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
   float3 outputColor = pow(max(0, inputColor.rgb), 2.2f);
   // Convert to linear
 
-  outputColor.rgb *= injectedData.uiPaperWhite;
+  outputColor.rgb *= injectedData.toneMapUINits;
   outputColor.rgb /= 80.f;
   return float4(outputColor.rgb, inputColor.a);
 }

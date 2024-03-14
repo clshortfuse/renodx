@@ -55,14 +55,14 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
 
   float4 outputColor = o0.rgba;
 
-  if (injectedData.toneMapperEnum != 0.f) {
+  if (injectedData.toneMapType != 0.f) {
     outputColor.rgb = XfBaseSamplerRGBA.rgb;
   }
 
   outputColor.rgb = pow(max(0, outputColor.rgb), 2.2f);
   // Convert to linear
 
-  outputColor.rgb *= injectedData.uiPaperWhite;
+  outputColor.rgb *= injectedData.toneMapUINits;
   outputColor.rgb /= 80.f;
   return outputColor;
 }
