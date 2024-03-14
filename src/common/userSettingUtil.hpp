@@ -34,7 +34,7 @@ namespace UserSettingUtil {
     const char* label = key;
     const char* section = "";
     char const* tooltip = "";
-    std::vector<char*> labels = {};
+    std::vector<const char*> labels = {};
     float min = 0.f;
     float max = 100.f;
     char const* format = "%.f";
@@ -72,53 +72,58 @@ namespace UserSettingUtil {
     }
   };
 
-  typedef std::map<const char*, UserSetting*> UserSettings;
+  typedef std::vector<UserSetting*> UserSettings;
   UserSettings* _userSettings = nullptr;
+
+  static UserSetting* findUserSetting(const char* key) {
+    for (auto setting : *_userSettings) {
+      if (strcmp(setting->key, key) == 0) {
+        return setting;
+      }
+    }
+    return nullptr;
+  }
+
+  static bool updateUserSetting(const char* key, float value) {
+    auto setting = findUserSetting(key);
+    if (setting == nullptr) return false;
+    setting->set(value)->write();
+    return true;
+  }
 
   static void load_settings(
     reshade::api::effect_runtime* runtime = nullptr,
     const char* section = "renodx-preset1"
   ) {
-    UserSettings settings = *_userSettings;
-    for (auto pair : settings) {
-      auto key = pair.first;
-      auto userSetting = pair.second;
-      switch (userSetting->valueType) {
+    for (auto setting : *_userSettings) {
+      switch (setting->valueType) {
         default:
         case UserSettingValueType::floating:
-          if (!reshade::get_config_value(runtime, section, key, userSetting->value)) {
-            userSetting->value = userSetting->defaultValue;
-          }
-          break;
-        case UserSettingValueType::integer:
-          if (!reshade::get_config_value(runtime, section, key, userSetting->valueAsInt)) {
-            userSetting->valueAsInt = static_cast<int>(userSetting->defaultValue);
+          if (!reshade::get_config_value(runtime, section, setting->key, setting->value)) {
+            setting->value = setting->defaultValue;
           }
           break;
         case UserSettingValueType::boolean:
-          if (!reshade::get_config_value(runtime, section, key, userSetting->valueAsInt)) {
-            userSetting->valueAsInt = userSetting->defaultValue ? 1.f : 0.f;
+        case UserSettingValueType::integer:
+          if (!reshade::get_config_value(runtime, section, setting->key, setting->valueAsInt)) {
+            setting->valueAsInt = static_cast<int>(setting->defaultValue);
           }
           break;
       }
-      userSetting->write();
+      setting->write();
     }
   }
 
-  static void save_settings(reshade::api::effect_runtime* runtime, char* section = "renodx-preset1") {
-    UserSettings settings = *_userSettings;
-    for (auto pair : settings) {
-      auto key = pair.first;
-      auto userSetting = pair.second;
-      switch (userSetting->valueType) {
+  static void save_settings(reshade::api::effect_runtime* runtime, const char* section = "renodx-preset1") {
+    for (auto setting : *_userSettings) {
+      switch (setting->valueType) {
         default:
         case UserSettingValueType::floating:
-          reshade::set_config_value(runtime, section, key, userSetting->value);
+          reshade::set_config_value(runtime, section, setting->key, setting->value);
           break;
         case UserSettingValueType::integer:
-          reshade::set_config_value(runtime, section, key, userSetting->valueAsInt);
         case UserSettingValueType::boolean:
-          reshade::set_config_value(runtime, section, key, userSetting->valueAsInt);
+          reshade::set_config_value(runtime, section, setting->key, setting->valueAsInt);
           break;
       }
     }
@@ -156,60 +161,56 @@ namespace UserSettingUtil {
 
     bool anyChange = false;
     std::string lastSection = "";
-    UserSettings settings = *_userSettings;
-    for (auto pair : settings) {
-      auto key = pair.first;
-      auto userSetting = pair.second;
-
-      if (lastSection.compare(userSetting->section) != 0) {
-        ImGui::SeparatorText(userSetting->section);
-        lastSection.assign(userSetting->section);
+    for (auto setting : *_userSettings) {
+      if (lastSection.compare(setting->section) != 0) {
+        ImGui::SeparatorText(setting->section);
+        lastSection.assign(setting->section);
       }
       bool isDisabled = presetIndex == 0
-                     || (userSetting->isEnabled != nullptr
-                         && !userSetting->isEnabled());
+                     || (setting->isEnabled != nullptr
+                         && !setting->isEnabled());
       if (isDisabled) {
         ImGui::BeginDisabled();
       }
       bool changed = false;
-      switch (userSetting->valueType) {
+      switch (setting->valueType) {
         case UserSettingValueType::floating:
           changed |= ImGui::SliderFloat(
-            userSetting->label,
-            &userSetting->value,
-            userSetting->min,
-            userSetting->max,
-            userSetting->format
+            setting->label,
+            &setting->value,
+            setting->min,
+            setting->max,
+            setting->format
           );
           break;
         case UserSettingValueType::integer:
           changed |= ImGui::SliderInt(
-            userSetting->label,
-            &userSetting->valueAsInt,
-            userSetting->min,
-            userSetting->labels.size() ? userSetting->labels.size() - 1 : userSetting->min,
-            userSetting->labels.size() ? userSetting->labels.at(userSetting->valueAsInt) : userSetting->format,
+            setting->label,
+            &setting->valueAsInt,
+            setting->min,
+            setting->labels.size() ? setting->labels.size() - 1 : setting->min,
+            setting->labels.size() ? setting->labels.at(setting->valueAsInt) : setting->format,
             ImGuiSliderFlags_NoInput
           );
           break;
         case UserSettingValueType::boolean:
           changed |= ImGui::SliderInt(
-            userSetting->label,
-            &userSetting->valueAsInt,
+            setting->label,
+            &setting->valueAsInt,
             0,
             1,
-            userSetting->labels.size()
-              ? userSetting->labels.at(userSetting->valueAsInt)
-              : (userSetting->valueAsInt ? "On" : "Off"),
+            setting->labels.size()
+              ? setting->labels.at(setting->valueAsInt)
+              : (setting->valueAsInt ? "On" : "Off"),
             ImGuiSliderFlags_NoInput
           );
           break;
       }
-      if (strlen(userSetting->tooltip) != 0) {
-        ImGui::SetItemTooltip(userSetting->tooltip);
+      if (strlen(setting->tooltip) != 0) {
+        ImGui::SetItemTooltip(setting->tooltip);
       }
       if (changed) {
-        userSetting->write();
+        setting->write();
         anyChange = true;
       }
       if (isDisabled) {

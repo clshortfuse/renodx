@@ -35,127 +35,95 @@ ShaderInjectData shaderInjection;
 
 // clang-format off
 UserSettingUtil::UserSettings userSettings = {
-  {
-    "toneMapType", new UserSettingUtil::UserSetting{
-      "toneMapType",
-      &shaderInjection.toneMapType,
-      UserSettingUtil::UserSettingValueType::integer,
-      2.f,
-      "Tone Mapper",
-      "Tone Mapping",
-      "Sets the tone mapper type",
-      {"Vanilla", "None", "ACES", "OpenDRT"}
-    }
-  }, {
-    "toneMapPeakNits",  new UserSettingUtil::UserSetting{
-      "toneMapPeakNits",
-      &shaderInjection.toneMapPeakNits,
-      UserSettingUtil::UserSettingValueType::floating,
-      1000.f,
-      "Peak Brightness",
-      "Tone Mapping",
-      "Sets the value of peak white in nits",
-      {},
-      48.f, 4000.f
-    }
-  }, {
-    "toneMapGameNits", new UserSettingUtil::UserSetting{
-      "toneMapGameNits",
-      &shaderInjection.toneMapGameNits,
-      UserSettingUtil::UserSettingValueType::floating,
-      203.f,
-      "Game Brightness",
-      "Tone Mapping",
-      "Sets the value of 100%% white in nits",
-      {},
-      48.f, 500.f
-    }
-  }, {
-    "toneMapUINits", new UserSettingUtil::UserSetting{
-      "toneMapUINits",
-      &shaderInjection.toneMapUINits,
-      UserSettingUtil::UserSettingValueType::floating,
-      203.f,
-      "UI Brightness",
-      "Tone Mapping",
-      "Sets the brightness of UI and HUD elements in nits",
-      {},
-      48.f, 500.f
-    }
-  }, {
-    "colorGradeHighlights", new UserSettingUtil::UserSetting{
-      "colorGradeHighlights",
-      &shaderInjection.colorGradeHighlights,
-      UserSettingUtil::UserSettingValueType::floating,
-      50.f,
-      "Highlights",
-      "Color Grading",
-      "",
-      {},
-      0.f, 100.f,
-      "%.f",
-      nullptr,
-      [](float value) { return value * 0.02f; }
-    }
-  }, {
-    "colorGradeShadows", new UserSettingUtil::UserSetting{
-      "colorGradeShadows",
-      &shaderInjection.colorGradeShadows,
-      UserSettingUtil::UserSettingValueType::floating,
-      50.f,
-      "Shadows",
-      "Color Grading",
-      "",
-      {},
-      0.f, 100.f,
-      "%.f",
-      nullptr,
-      [](float value) { return value * 0.02f; }
-    }
-  }, {
-    "colorGradeContrast", new UserSettingUtil::UserSetting{
-      "colorGradeContrast",
-      &shaderInjection.colorGradeContrast,
-      UserSettingUtil::UserSettingValueType::floating,
-      50.f,
-      "Contrast",
-      "Color Grading",
-      "",
-      {},
-      0.f, 100.f,
-      "%.f",
-      nullptr,
-      [](float value) { return value * 0.02f; }
-    }
-  }, {
-    "colorGradeSaturation", new UserSettingUtil::UserSetting{
-      "colorGradeSaturation",
-      &shaderInjection.colorGradeSaturation,
-      UserSettingUtil::UserSettingValueType::floating,
-      50.f,
-      "Saturation",
-      "Color Grading",
-      "",
-      {},
-      0.f, 100.f,
-      "%.f",
-      nullptr,
-      [](float value) { return value * 0.02f; }
-    }
+  new UserSettingUtil::UserSetting {
+    .key = "toneMapType",
+    .binding = &shaderInjection.toneMapType,
+    .valueType = UserSettingUtil::UserSettingValueType::integer,
+    .defaultValue = 2.f,
+    .label = "Tone Mapper",
+    .section = "Tone Mapping",
+    .tooltip = "Sets the tone mapper type",
+    .labels = {"Vanilla", "None", "ACES", "OpenDRT"}
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "toneMapPeakNits",
+    .binding = &shaderInjection.toneMapPeakNits,
+    .defaultValue = 1000.f,
+    .label = "Peak Brightness",
+    .section = "Tone Mapping",
+    .tooltip = "Sets the value of peak white in nits",
+    .min = 48.f,
+    .max = 4000.f
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "toneMapGameNits",
+    .binding = &shaderInjection.toneMapGameNits,
+    .defaultValue = 203.f,
+    .label = "Game Brightness",
+    .section = "Tone Mapping",
+    .tooltip = "Sets the value of 100%% white in nits",
+    .min = 48.f,
+    .max = 500.f
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "toneMapUINits",
+    .binding = &shaderInjection.toneMapUINits,
+    .defaultValue = 203.f,
+    .label = "UI Brightness",
+    .section = "Tone Mapping",
+    .tooltip = "Sets the brightness of UI and HUD elements in nits",
+    .min = 48.f,
+    .max = 500.f
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeHighlights",
+    .binding = &shaderInjection.colorGradeHighlights,
+    .defaultValue = 50.f,
+    .label = "Highlights",
+    .section = "Color Grading",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeShadows",
+    .binding = &shaderInjection.colorGradeShadows,
+    .defaultValue = 50.f,
+    .label = "Shadows",
+    .section = "Color Grading",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeContrast",
+    .binding = &shaderInjection.colorGradeContrast,
+    .defaultValue = 50.f,
+    .label = "Contrast",
+    .section = "Color Grading",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeSaturation",
+    .binding = &shaderInjection.colorGradeSaturation,
+    .defaultValue = 50.f,
+    .label = "Saturation",
+    .section = "Color Grading",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
   }
 };
 
 // clang-format on
 
 static void onPresetOff() {
-  userSettings.find("toneMapType")->second->set(0)->write();
-  userSettings.find("toneMapPeakNits")->second->set(203)->write();
-  userSettings.find("toneMapGameNits")->second->set(203)->write();
-  userSettings.find("toneMapUINits")->second->set(203)->write();
-  userSettings.find("colorGradeHighlights")->second->set(50)->write();
-  userSettings.find("colorGradeShadows")->second->set(50)->write();
-  userSettings.find("colorGradeContrast")->second->set(50)->write();
-  userSettings.find("colorGradeSaturation")->second->set(50)->write();
+  UserSettingUtil::updateUserSetting("toneMapType", 0.f);
+  UserSettingUtil::updateUserSetting("toneMapPeakNits", 203.f);
+  UserSettingUtil::updateUserSetting("toneMapGameNits", 203.f);
+  UserSettingUtil::updateUserSetting("toneMapUINits", 203.f);
+  UserSettingUtil::updateUserSetting("colorGradeHighlights", 50.f);
+  UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
+  UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);
+  UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {

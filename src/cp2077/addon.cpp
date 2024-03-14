@@ -43,20 +43,20 @@ extern "C" __declspec(dllexport) const char* NAME = "RenoDX - CP2077";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Cyberpunk2077";
 
 static ShaderReplaceMod::CustomShaders customShaders = {
-  CustomShaderEntry(0x298A6BB0),
-  CustomShaderEntry(0x5DF649A9),
-  CustomShaderEntry(0x61DBBA5C),
-  CustomShaderEntry(0x71F27445),
-  CustomShaderEntry(0x745E34E1),
-  CustomShaderEntry(0x97CA5A85),
-  CustomShaderEntry(0xA61F2FEE),
-  CustomShaderEntry(0xB489149F),
-  CustomShaderEntry(0xC783FBA1),
-  CustomShaderEntry(0xC83E64DF),
-  CustomShaderEntry(0xCBFFC2A3),
-  CustomShaderEntry(0xD2BBEBD9),
-  CustomShaderEntry(0xDE517511),
-  CustomShaderEntry(0xE57907C4)
+  CustomShaderEntry(0xCBFFC2A3),  // output
+  CustomShaderEntry(0x298A6BB0),  // composite multisample
+  CustomShaderEntry(0x5DF649A9),  // composite
+  CustomShaderEntry(0xA61F2FEE),  // composite lowbit
+  CustomShaderEntry(0x71F27445),  // tonemapper
+  CustomShaderEntry(0x61DBBA5C),  // tonemapper sdr
+  CustomShaderEntry(0x97CA5A85),  // tonemapper lowbit
+  CustomShaderEntry(0x745E34E1),  // tonemapper sdr lowbit
+  CustomShaderEntry(0xC783FBA1),  // film grain overlay
+  CustomShaderEntry(0xC83E64DF),  // hud
+  CustomShaderEntry(0xD2BBEBD9),  // film grain gen
+  CustomShaderEntry(0xDE517511),  // menu
+  CustomShaderEntry(0xB489149F),  // menu3
+  CustomShaderEntry(0xE57907C4)   // menu4
 };
 
 ShaderInjectData shaderInjectData;
@@ -212,7 +212,7 @@ static void load_settings(
   userInjectData.effectFilmGrain = newData.effectFilmGrain;
 }
 
-static void save_settings(reshade::api::effect_runtime* runtime, char* section = "renodx-cp2077-preset1") {
+static void save_settings(reshade::api::effect_runtime* runtime, const char* section = "renodx-cp2077-preset1") {
   reshade::set_config_value(runtime, section, "toneMapperType", userInjectData.toneMapperType);
   reshade::set_config_value(runtime, section, "toneMapperPeakNits", userInjectData.toneMapperPeakNits);
   reshade::set_config_value(runtime, section, "toneMapperPaperWhite", userInjectData.toneMapperPaperWhite);
