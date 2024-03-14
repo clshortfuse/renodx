@@ -17,6 +17,7 @@ list(APPEND ADDON_LIST devkit)
 list(APPEND ADDON_LIST batman-arkhamknight)
 list(APPEND ADDON_LIST dyinglight2)
 list(APPEND ADDON_LIST hifirush)
+list(APPEND ADDON_LIST lostplanet)
 
 
 # Use executable to convert resources to .h files for embedding
