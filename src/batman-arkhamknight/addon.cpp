@@ -25,10 +25,10 @@ extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Batman: Arkham Kni
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Batman: Arkham Knight";
 
 ShaderReplaceMod::CustomShaders customShaders = {
-  CustomShaderEntry(0x978BFB09),
-  CustomShaderEntry(0xB6B56605),
-  CustomShaderEntry(0xF01CCC7E),
-  CustomShaderEntry(0x3A4E0B90)
+  CustomShaderEntry(0xB6B56605),  // tonemap
+  CustomShaderEntry(0x978BFB09),  // tonemap + motionblur
+  CustomShaderEntry(0xF01CCC7E),  // tonemap + fx
+  CustomShaderEntry(0x3A4E0B90)   // tonemap + fx + motionblur
 };
 
 ShaderInjectData shaderInjection;
@@ -131,6 +131,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
 
+      UserSettingUtil::useRenoDXHelper = true;
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
         {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float, 3}
       );

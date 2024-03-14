@@ -1,0 +1,25 @@
+#include "ReShade.fxh"
+
+uniform float RENODX_UI_NITS <
+  ui_type = "slider";
+  ui_min = 48.0;
+  ui_max = 500.0;
+  ui_step = 1;
+  ui_label = "UI Nits";
+  hidden = true;
+> = 203;
+
+float3 main(float4 pos : SV_Position, float2 texcoord : TexCoord ) : COLOR {
+  float3 inputColor = tex2D(ReShade::BackBuffer, texcoord).rgb;
+  float3 outputColor = inputColor;
+  outputColor = sign(outputColor) * pow(abs(outputColor), 2.2f);
+  outputColor *= RENODX_UI_NITS/80.f;
+  return outputColor;
+}
+
+technique RenoDXHelper < hidden = true; > {
+  pass {
+    VertexShader = PostProcessVS;
+    PixelShader = main;
+  }
+}
