@@ -10,6 +10,7 @@
 
 #include <embed/0x7EC02107.h>
 #include <embed/0x98F668B5.h>
+#include <embed/0xB2AD4F48.h>
 #include <embed/0xC1C7045A.h>
 
 #include "./shared.h"
@@ -23,6 +24,7 @@ extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Lost Planet";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Lost Planet";
 
 ShaderReplaceMod::CustomShaders customShaders = {
+  CustomShaderEntry(0xB2AD4F48),  // fullscreen
   CustomShaderEntry(0x7EC02107),  // output
   CustomShaderEntry(0xC1C7045A),  // matrix
   CustomShaderEntry(0x98F668B5)   // clamper
@@ -99,6 +101,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       if (!reshade::register_addon(hModule)) return FALSE;
       updateInjection();
       reshade::register_overlay("RenoDX", on_register_overlay);
+
+      // reshade::global_config().set("APP", "ForceWindowed", TRUE);
 
       // Most in-game buffers can be RGBA16 except one
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
