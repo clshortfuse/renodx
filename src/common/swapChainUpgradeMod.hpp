@@ -55,6 +55,7 @@ namespace SwapChainUpgradeMod {
     bool changed = true;
     auto oldFormat = desc.back_buffer.texture.format;
     auto oldPresentMode = desc.present_mode;
+    auto oldPresentFlags = desc.present_flags;
 
     switch (desc.back_buffer.texture.format) {
       case reshade::api::format::r8g8b8a8_unorm:
@@ -63,8 +64,10 @@ namespace SwapChainUpgradeMod {
       case reshade::api::format::r8g8b8a8_unorm_srgb:
         desc.back_buffer.texture.format = targetFormat;
         break;
-      default: changed = false;
+      default:
+        changed = false;
     }
+
     if (changed) {
       if (desc.back_buffer_count < 2) {
         desc.back_buffer_count = 2;
@@ -78,15 +81,27 @@ namespace SwapChainUpgradeMod {
           desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD);
           break;
       }
+
+      if (oldPresentFlags & DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH) {
+        desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+      }
+
+      if (oldPresentFlags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING == 0) {
+        oldPresentFlags &= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+      }
     }
 
     std::stringstream s;
     s << "createSwapChain("
       << "swap: " << (uint32_t)oldFormat << " => " << (uint32_t)desc.back_buffer.texture.format
-      << ", present:"
+      << ", present mode:"
       << "0x" << std::hex << (uint32_t)oldPresentMode << std::dec
       << " => "
       << "0x" << std::hex << (uint32_t)desc.present_mode << std::dec
+      << ", present flag:"
+      << "0x" << std::hex << (uint32_t)oldPresentFlags << std::dec
+      << " => "
+      << "0x" << std::hex << (uint32_t)desc.present_flags << std::dec
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
     return changed;
@@ -126,7 +141,42 @@ namespace SwapChainUpgradeMod {
     return true;
   }
 
-  static int32_t resourceCount = 0;
+  static void checkSwapchainSize(
+    reshade::api::swapchain* swapchain,
+    reshade::api::resource_desc buffer_desc
+  ) {
+    HWND outputWindow = (HWND)swapchain->get_hwnd();
+    if (outputWindow == nullptr) {
+      reshade::log_message(reshade::log_level::debug, "No HWND?");
+      return;
+    }
+    RECT window_rect = {};
+    GetClientRect(outputWindow, &window_rect);
+
+    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+    int windowWidth = window_rect.right - window_rect.left;
+    int windowHeight = window_rect.bottom - window_rect.top;
+
+    std::stringstream s;
+    s << "checkSwapchainSize("
+      << "screenWidth: " << screenWidth
+      << ", screenHeight: " << screenHeight
+      << ", bufferWidth: " << buffer_desc.texture.width
+      << ", bufferHeight: " << buffer_desc.texture.height
+      << ", windowWidth: " << windowWidth
+      << ", windowHeight: " << windowHeight
+      << ", windowTop: " << window_rect.top
+      << ", windowLeft: " << window_rect.left
+      << ")";
+    reshade::log_message(reshade::log_level::debug, s.str().c_str());
+
+    if (screenWidth != buffer_desc.texture.width) return;
+    if (screenHeight != buffer_desc.texture.height) return;
+    // if (window_rect.top == 0 && window_rect.left == 0) return;
+    SetWindowLongPtr(outputWindow, GWL_STYLE, WS_VISIBLE | WS_POPUP);
+    SetWindowPos(outputWindow, HWND_TOP, 0, 0, screenWidth, screenHeight, SWP_FRAMECHANGED);
+  }
 
   static void on_init_swapchain(reshade::api::swapchain* swapchain) {
     if (resourceUpgradeFinished) {
@@ -140,9 +190,9 @@ namespace SwapChainUpgradeMod {
         target->completed = false;
       }
     }
-    if (upgradeResourceViews) {
-      auto device = swapchain->get_device();
 
+    auto device = swapchain->get_device();
+    if (upgradeResourceViews) {
       const size_t backBufferCount = swapchain->get_back_buffer_count();
 
       for (uint32_t index = 0; index < backBufferCount; index++) {
@@ -150,6 +200,7 @@ namespace SwapChainUpgradeMod {
         if (index == 0) {
           auto desc = device->get_resource_desc(buffer);
           deviceBackBufferDesc.emplace(device, desc);
+          checkSwapchainSize(swapchain, desc);
         }
         backBuffers.emplace(buffer.handle);
 
@@ -159,6 +210,8 @@ namespace SwapChainUpgradeMod {
           << ")";
         reshade::log_message(reshade::log_level::info, s.str().c_str());
       }
+    } else {
+      checkSwapchainSize(swapchain, device->get_resource_desc(swapchain->get_back_buffer(0)));
     }
 
     // Reshade doesn't actually inspect colorspace
@@ -220,23 +273,23 @@ namespace SwapChainUpgradeMod {
       SwapChainUpgradeMod::SwapChainUpgradeTarget* target = &swapChainUpgradeTargets.data()[i];
       std::stringstream s;
       if (target->completed) continue;
-      if (oldFormat != target->oldFormat) continue;
-      s << "createResource(counting target"
-        << ", format: " << (uint32_t)target->oldFormat
-        << ", index: " << target->index
-        << ", counted: " << target->_counted
-        << ") [" << i << "]"
-        << "(" << len << ")";
-      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      if (oldFormat == target->oldFormat) {
+        s << "createResource(counting target"
+          << ", format: " << (uint32_t)target->oldFormat
+          << ", index: " << target->index
+          << ", counted: " << target->_counted
+          << ") [" << i << "]"
+          << "(" << len << ")";
+        reshade::log_message(reshade::log_level::debug, s.str().c_str());
 
-      target->_counted++;
-      if ((target->index + 1) == target->_counted) {
-        newFormat = target->newFormat;
-        target->completed = true;
-        break;
-      } else {
-        allCompleted = false;
+        target->_counted++;
+        if ((target->index + 1) == target->_counted) {
+          newFormat = target->newFormat;
+          target->completed = true;
+          continue;
+        }
       }
+      allCompleted = false;
     }
     if (oldFormat == newFormat) return false;
     if (allCompleted) {
@@ -251,7 +304,7 @@ namespace SwapChainUpgradeMod {
       << ", height: " << (uint32_t)desc.texture.height
       << ", format: " << (uint32_t)oldFormat << " => " << (uint32_t)newFormat
       << ", complete: " << allCompleted
-      << ") [" << resourceCount << "]";
+      << ")";
     reshade::log_message(
       desc.texture.format == reshade::api::format::unknown
         ? reshade::log_level::warning
@@ -275,7 +328,7 @@ namespace SwapChainUpgradeMod {
     upgradedResourceDevices.erase(device);
     upgradedResources.emplace(resource.handle);
     std::stringstream s;
-    s << "on_init_resource("
+    s << "on_init_resource(tracking "
       << reinterpret_cast<void*>(resource.handle)
       << ", flags: " << std::hex << (uint32_t)desc.flags << std::dec
       << ", state: " << std::hex << (uint32_t)initial_state << std::dec
@@ -304,13 +357,14 @@ namespace SwapChainUpgradeMod {
     if (upgradeResourceViews && backBuffers.count(resource.handle)) {
       desc.format = targetFormat;
     } else if (upgradedResources.count(resource.handle)) {
-      desc.format = targetFormat;
+      reshade::api::resource_desc resource_desc = device->get_resource_desc(resource);
+      desc.format = resource_desc.texture.format;
     } else {
       return false;
     }
 
     std::stringstream s;
-    s << "createResourceView("
+    s << "createResourceView(upgrading "
       << std::hex << (uint32_t)resource.handle << std::dec
       << ", view type: " << (uint32_t)desc.type
       << ", view format: " << (uint32_t)oldFormat << " => " << (uint32_t)desc.format
