@@ -41,24 +41,29 @@ namespace UserSettingUtil {
     bool (*isEnabled)() = [] {
       return true;
     };
-    float value = defaultValue;
-    int valueAsInt = static_cast<int>(defaultValue);
+
+    float (*parse)(float value) = [](float value) {
+      return value;
+    };
 
     UserSetting* write() {
       switch (this->valueType) {
         default:
         case UserSettingValueType::floating:
-          *this->binding = this->value;
+          *this->binding = this->parse(this->value);
           break;
         case UserSettingValueType::integer:
-          *this->binding = static_cast<float>(this->valueAsInt);
+          *this->binding = this->parse(static_cast<float>(this->valueAsInt));
           break;
         case UserSettingValueType::boolean:
-          *this->binding = this->valueAsInt ? 1.f : 0.f;
+          *this->binding = this->parse(this->valueAsInt) ? 1.f : 0.f;
           break;
       }
       return this;
     }
+
+    float value = defaultValue;
+    int valueAsInt = static_cast<int>(defaultValue);
 
     UserSetting* set(float value) {
       this->value = value;
@@ -160,7 +165,9 @@ namespace UserSettingUtil {
         ImGui::SeparatorText(userSetting->section);
         lastSection.assign(userSetting->section);
       }
-      bool isDisabled = presetIndex == 0 || !userSetting->isEnabled();
+      bool isDisabled = presetIndex == 0
+                     || (userSetting->isEnabled != nullptr
+                         && !userSetting->isEnabled());
       if (isDisabled) {
         ImGui::BeginDisabled();
       }
