@@ -234,4 +234,11 @@ float3 linearFromArriC800(float3 color) {
   );
 }
 
+float3 applyContrastSafe(float3 color, float contrast, float midGray = 0.18f, float3x3 colorspace = BT709_2_XYZ_MAT) {
+  float3 workingColor = pow(abs(color) / midGray, contrast) * midGray * sign(color);
+  float workingLuminance = dot(abs(workingColor), float3(colorspace[1].r, colorspace[1].g, colorspace[1].b));
+  float colorLuminance = dot(abs(color), float3(colorspace[1].r, colorspace[1].g, colorspace[1].b));
+  return color * (colorLuminance ? (workingLuminance / colorLuminance) : 1.f);
+}
+
 #endif  // SRC_COMMON_COLOR_HLSL_
