@@ -1444,7 +1444,7 @@ static void on_reshade_present(reshade::api::effect_runtime* runtime) {
     reshade::log_message(reshade::log_level::info, "--- Frame ---");
   }
   if (presentCount < 5) {
-    // presentCount++;
+    presentCount++;
   }
   if (needsLiveReload) {
     loadLiveShaders();
