@@ -332,7 +332,7 @@ namespace ShaderReplaceMod {
 
     bool needsClone = false;
     bool foundComputeShader = false;
-    bool foundInjection = false;
+    uint32_t foundInjection = 0;
     for (uint32_t i = 0; i < subobjectCount; ++i) {
       const auto subobject = subobjects[i];
       switch (subobject.type) {
@@ -351,7 +351,7 @@ namespace ShaderReplaceMod {
       auto shader_hash = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
 
       if (codeInjections.count(shader_hash) != 0) {
-        foundInjection = true;
+        foundInjection = shader_hash;
       } else {
         const auto pair = _customShaders->find(shader_hash);
         if (pair != _customShaders->end()) {
@@ -371,11 +371,10 @@ namespace ShaderReplaceMod {
         }
       }
     }
-    if (foundInjection || needsClone) {
-      pipelineToLayoutMap.emplace(pipeline.handle, layout);
-      if (foundComputeShader) {
-        computeShaderLayouts.emplace(pipeline.handle);
-      }
+    if (!foundInjection && !needsClone) return;
+    pipelineToLayoutMap.emplace(pipeline.handle, layout);
+    if (foundComputeShader) {
+      computeShaderLayouts.emplace(layout.handle);
     }
     if (needsClone) {
       reshade::api::pipeline newPipeline;
@@ -395,6 +394,15 @@ namespace ShaderReplaceMod {
         builtPipelineOK ? reshade::log_level::info : reshade::log_level::error,
         s.str().c_str()
       );
+    } else {
+      std::stringstream s;
+      s << "init_pipeline(injected "
+        << reinterpret_cast<void*>(pipeline.handle)
+        << ", layout: " << reinterpret_cast<void*>(layout.handle)
+        << ", injection: " << std::hex << foundInjection
+        << ", compute: " << foundComputeShader
+        << ")";
+      reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
   }
 
@@ -486,7 +494,7 @@ namespace ShaderReplaceMod {
       << " into " << reinterpret_cast<void*>(injectionLayout.handle)
       << "[" << paramIndex << "]"
       << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
-      << ", state: " << std::hex << (uint32_t)stage
+      << ", stage: " << (uint32_t)stage
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
