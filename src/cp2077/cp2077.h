@@ -4,34 +4,32 @@
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
-  float toneMapperType;
-  float toneMapperPeakNits;
-  float toneMapperPaperWhite;
-  float toneMapperColorSpace;
-  float toneMapperWhitePoint;
-  float toneMapperExposure;
-  float toneMapperHighlights;
-  float toneMapperShadows;
-  float toneMapperContrast;
-  float toneMapperDechroma;
-  float colorGradingWorkflow;
-  float colorGradingStrength;
-  float colorGradingScene;
-  float colorGradingScaling;
-  float colorGradingSaturation;
-  float colorGradingCorrection;
-  float colorGradingGamma;
-  float effectBloom;
-  float effectVignette;
-  float effectFilmGrain;
-  float debugValue00;
-  float debugValue01;
-  float debugValue02;
-  float debugValue03;
+  float toneMapType;
+  float toneMapPeakNits;
+  float toneMapGameNits;
+  float toneMapGammaCorrection;
+
+  float colorGradeExposure;
+  float colorGradeHighlights;
+  float colorGradeShadows;
+  float colorGradeContrast;
+
+  float colorGradeSaturation;
+  float colorGradeWhitePoint;
+  float colorGradeLUTStrength;
+  float colorGradeSceneGrading;
+
+  float fxBloom;
+  float fxVignette;
+  float fxFilmGrain;
+  float processingLUTCorrection;
+
+  float processingLUTOrder;
+  float processingInternalSampling;
 };
 
-#define TONE_MAPPER_TYPE__NONE    0.f
-#define TONE_MAPPER_TYPE__VANILLA 1.f
+#define TONE_MAPPER_TYPE__VANILLA 0.f
+#define TONE_MAPPER_TYPE__NONE    1.f
 #define TONE_MAPPER_TYPE__ACES    2.f
 #define TONE_MAPPER_TYPE__OPENDRT 3.f
 

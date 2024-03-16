@@ -19,8 +19,6 @@ cbuffer _27_29 : register(b12, space0) {
   float4 cb12[99] : packoffset(c0);
 }
 
-
-
 Texture2D<float4> textureUntonemapped : register(t0, space0);
 Texture2D<float4> textureBloom : register(t1, space0);
 Texture3D<float4> textureLUT[3] : register(t4, space0);
@@ -93,7 +91,7 @@ float3 DrawToneMapperEnd(float3 inputColor, inout DrawToneMapperParams dtmParams
   const float yMax = log10(10000.f);
   const float yRange = yMax - yMin;
   float valueY = (float(dtmParams.toneMapperY) / float(ToneMapperBins)) * (yRange) + yMin;
-  float peakNits = injectedData.toneMapperPeakNits;
+  float peakNits = injectedData.toneMapPeakNits;
   valueY = pow(10.f, valueY);
   valueY /= 100.f;
   float outputY = yFromBT709(inputColor);
@@ -130,7 +128,7 @@ float3 composite(bool useTexArray = false) {
   float bloomWidth = cb6[14u].x * cb6[10u].x * (2.0f * bloomX - 1.0f);
   float bloomHeight = cb6[14u].x * cb6[10u].y * (2.0f * bloomY - 1.0f);
   float bloomSize = dot(float2(bloomWidth, bloomHeight), float2(bloomWidth, bloomHeight));
-  float3 bloomStrength = cb6[0u].rgb * injectedData.effectBloom;
+  float3 bloomStrength = cb6[0u].rgb * injectedData.fxBloom;
   float inputGain = cb6[0u].w;
   float postBloomGain = cb6[11u].w;
   float3 postBloomLift = cb6[11u].rgb;
@@ -179,7 +177,7 @@ float3 composite(bool useTexArray = false) {
     float3 vignetteColor = cb6[8u].rgb;
     float vignetteFactor = exp2((-0.0f) - (cb6[9u].y * log2(abs((bloomSize * vignetteStrength) + 1.0f))));
     float3 mixedColor = lerp(vignetteColor, outputColor, vignetteFactor);
-    outputColor = lerp(outputColor, mixedColor, injectedData.effectVignette);
+    outputColor = lerp(outputColor, mixedColor, injectedData.fxVignette);
   }
 
 #if DRAW_TONEMAPPER
@@ -258,11 +256,11 @@ float3 composite(bool useTexArray = false) {
     lutStrength = useLUT3;
   }
   if (useLUT) {
-    if (injectedData.colorGradingScaling == 2.f) {
+    if (injectedData.processingInternalSampling == 1.f) {
       const float3 lutSize = 48.f;
       float3 scale = (lutSize - 1.f) / lutSize;
       float3 offset = 1.f / (2.f * lutSize);
-      float3 rec2020 = bt2020FromBT709(fallbackColor);             //
+      float3 rec2020 = bt2020FromBT709(fallbackColor);
       float3 pqColor = pqFromLinear((rec2020 * 100.f) / 10000.f);  // reset scale to 0-1 for 0-10000 nits
       lutInputColor = scale * pqColor + offset;
     } else {

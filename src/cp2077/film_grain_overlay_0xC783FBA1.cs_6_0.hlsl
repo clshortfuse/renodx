@@ -62,13 +62,13 @@ void comp_main() {
   // float userUIPaperWhite = uiPaperWhiteScaler / 8.0f;
 
   if (grainStrength > 0.0f) {
-    if (injectedData.effectFilmGrain) {
+    if (injectedData.fxFilmGrain) {
       float3 grainColor = _13.Load(int3(uint2(_82 & 255u, _83 & 255u), 0u)).rgb;
       float3 grainedColor = computeFilmGrain(
         inputColor,
         grainColor.xy,
         frac(cb0[0u].x / 1000.f),
-        injectedData.effectFilmGrain * 0.03f,
+        injectedData.fxFilmGrain * 0.03f,
         (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f)
         // ,injectedData.debugValue02 != 1.f
       );

@@ -348,7 +348,7 @@ void comp_main() {
     if (cb6[2u].x > 0.0f) {
       float4 _1789 = texture5.SampleLevel(_45, float2(_1411, 1.0f - _1412), 0.0f);
 
-      if (injectedData.colorGradingGamma == 1.f) {
+      if (injectedData.toneMapGammaCorrection == 1.f) {
         _1789 = pow(srgbFromLinear(max(0, _1789)), 2.2f);
       }
 
@@ -390,7 +390,7 @@ void comp_main() {
       float4 _2101 = uiTexture.SampleLevel(_45, float2((cb6[7u].z * _1415) + _1411, (cb6[7u].w * _1416) + _1412), 2.0f);
       float4 _2116 = uiTexture.SampleLevel(_45, float2((cb6[8u].x * _1415) + _1411, (cb6[8u].y * _1416) + _1412), 4.0f);
 
-      if (injectedData.colorGradingGamma == 1.f) {
+      if (injectedData.toneMapGammaCorrection == 1.f) {
         _2064 = pow(srgbFromLinear(max(0, _2064)), 2.2f);
         _2068 = pow(srgbFromLinear(max(0, _2068)), 2.2f);
         _2075 = pow(srgbFromLinear(max(0, _2075)), 2.2f);
@@ -421,7 +421,7 @@ void comp_main() {
       float _2273 = _1411 - cb6[3u].z;
       float _2274 = _1412 - cb6[3u].w;
       float4 _2280 = uiTexture.SampleLevel(_45, float2(_2273, _2274), 0.0f);
-      if (injectedData.colorGradingGamma == 1.f) {
+      if (injectedData.toneMapGammaCorrection == 1.f) {
         _2280 = pow(srgbFromLinear(max(0, _2280)), 2.2f);
       }
 

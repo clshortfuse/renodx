@@ -242,12 +242,12 @@ void comp_main() {
       float frontier_phi_14_12_ladder_4;
       if (hasUiOutline) {
         float4 _1254 = textureNoise.Load(int3(uint2(_937 & 255u, _938 & 255u), 0u));
-        if (injectedData.effectFilmGrain) {
+        if (injectedData.fxFilmGrain) {
           float3 grainedColor = computeFilmGrain(
             float3(_941, _942, _943),
             _1254.xy,
             frac(cb0[0u].x / 1000.f),
-            injectedData.effectFilmGrain * 0.03f,
+            injectedData.fxFilmGrain * 0.03f,
             (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f)
           );
           frontier_phi_14_12_ladder = _580;
@@ -306,12 +306,12 @@ void comp_main() {
       float frontier_phi_14_6_ladder_4;
       if (hasUiOutline) {
         float4 _959 = textureNoise.Load(int3(uint2(_85 & 255u, _86 & 255u), 0u));
-        if (injectedData.effectFilmGrain) {
+        if (injectedData.fxFilmGrain) {
           float3 grainedColor = computeFilmGrain(
             float3(_588, _589, _590),
             _959.xy,
             frac(cb0[0u].x / 1000.f),
-            injectedData.effectFilmGrain * 0.03f,
+            injectedData.fxFilmGrain * 0.03f,
             (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f)
           );
           frontier_phi_14_6_ladder_1 = _304;
@@ -622,12 +622,12 @@ void comp_main() {
     float _797;
     if (uiOutline > 0.0f) {
       float4 _636 = textureNoise.Load(int3(uint2(_85 & 255u, _86 & 255u), 0u));
-      if (injectedData.effectFilmGrain) {
+      if (injectedData.fxFilmGrain) {
         float3 grainedColor = computeFilmGrain(
           float3(_326, _327, _328),
           _636.xy,
           frac(cb0[0u].x / 1000.f),
-          injectedData.effectFilmGrain * 0.03f,
+          injectedData.fxFilmGrain * 0.03f,
           (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f)
         );
         _795 = grainedColor.r;

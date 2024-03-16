@@ -13,7 +13,7 @@ struct ConvertColorParams {
   float3 random3;
 };
 
-float3 srgbPostProcess(float3 srgb, float3 random3, float bits = 8.f) {
+float3 randomDither(float3 color, float3 random3, float bits = 8.f) {
   float3 randomA = hash33(float3(
     random3.x * 64.f * 64.f,
     random3.y * 64.f * 64.f,
@@ -28,41 +28,51 @@ float3 srgbPostProcess(float3 srgb, float3 random3, float bits = 8.f) {
 
   float maxValue = pow(2.f, bits) - 1.f;
   float maxValueX2 = maxValue * 2.f;
-  // return srgb + (((a - 0.5f) + (min(min(1.0f, srgb * maxValueX2), maxValueX2 - (srgb * maxValueX2)) * (b - 0.5f))) / maxValue);
+  // return color + (((a - 0.5f) + (min(min(1.0f, color * maxValueX2), maxValueX2 - (color * maxValueX2)) * (b - 0.5f))) / maxValue);
 
-  float3 newValue = min(min(1.0f, srgb * maxValueX2), maxValueX2 - (srgb * maxValueX2));
+  float3 newValue = min(min(1.0f, color * maxValueX2), maxValueX2 - (color * maxValueX2));
   newValue *= (randomB - 0.5f);
   newValue += (randomA - 0.5f);
   newValue /= maxValue;
-  return srgb + newValue;
+  return color + newValue;
 }
 
-float3 applyGammaCorrection(float3 inputColor, float gammaCorrection) {
-  return (gammaCorrection != 1.0f)
-         ? pow(inputColor, gammaCorrection)
+float3 gammaCorrectionHDRSafe(float3 inputColor) {
+  float3 inputColorSign = sign(inputColor);
+  inputColor = abs(inputColor);
+  inputColor = srgbFromLinear(inputColor);  // encode as srgb (as originally outputted)
+  inputColor = pow(inputColor, 2.2f);       // decode as 2.2 (as most monitors)
+  inputColor *= inputColorSign;
+  return inputColor;
+}
+
+float3 applyUserBrightness(float3 inputColor, float userBrightness = 1.f) {
+  return (userBrightness != 1.f)
+         ? pow(inputColor, userBrightness)
          : inputColor;
 }
 
 float3 convertColor(float3 inputColor, ConvertColorParams params) {
-  if (injectedData.colorGradingGamma == 2.f) {
-    float3 inputColorSign = sign(inputColor);
-    inputColor = abs(inputColor);
-    inputColor = pow(srgbFromLinear(inputColor), 2.2f);
-    inputColor *= inputColorSign;
-  }
-  float3 outputColor;
+  float3 outputColor = inputColor;
   switch (params.outputTypeEnum) {
     case OUTPUT_TYPE_SRGB8:
       {
-        float3 correctedColor = applyGammaCorrection(inputColor.rgb, params.gammaCorrection);
-        float3 srgbColor = srgbFromLinear(correctedColor);
-        float3 postProcessedSRGB = srgbPostProcess(srgbColor.rgb, params.random3, 8.f);
-        outputColor.rgb = postProcessedSRGB.rgb;
+        outputColor = max(0, outputColor);  // clamp to BT709
+        outputColor = applyUserBrightness(outputColor, params.gammaCorrection);
+        if (injectedData.toneMapGammaCorrection == 2.f) {
+          outputColor = pow(outputColor, 1.f / 2.2f);
+        } else {
+          outputColor = srgbFromLinear(outputColor);
+        }
+        outputColor = randomDither(outputColor.rgb, params.random3, 8.f);
       }
       break;
     case OUTPUT_TYPE_PQ:
       {
-        float3 rec2020 = bt2020FromBT709(inputColor.rgb);
+        if (injectedData.toneMapGammaCorrection == 2.f) {
+          outputColor = gammaCorrectionHDRSafe(outputColor);
+        }
+        float3 rec2020 = bt2020FromBT709(outputColor.rgb);
         // Removed because this caps to 100 nits
         // Also because the matrix just seems to hue shift to green/yellow
         // float3 matrixedColor = mul(rec2020, params.colorMatrix);
@@ -73,25 +83,33 @@ float3 convertColor(float3 inputColor, ConvertColorParams params) {
         float3 newShiftedColor = lerp(grayscale, rec2020, 1.f + (params.pqSaturation * 0.25f));
         float3 scaledShifted = newShiftedColor * params.paperWhiteScaling;
         float3 pqColor = pqFromLinear(scaledShifted);
-        outputColor.rgb = pqColor.rgb;
+        outputColor = pqColor;
       }
       break;
     case OUTPUT_TYPE_SCRGB:
-      outputColor.rgb = inputColor.rgb * params.paperWhiteScaling;
+      if (injectedData.toneMapGammaCorrection == 2.f) {
+        outputColor = gammaCorrectionHDRSafe(outputColor);
+      }
+      outputColor *= params.paperWhiteScaling;
       break;
     case OUTPUT_TYPE_SRGB10:
+      // Unknown usage
       {
-        float3 correctedColor = applyGammaCorrection(inputColor.rgb, params.gammaCorrection);
+        float3 correctedColor = applyUserBrightness(inputColor.rgb, params.gammaCorrection);
         float3 matrixedColor = mul(correctedColor, params.colorMatrix);
         float3 scaledColor = matrixedColor * params.paperWhiteScaling;
         float3 srgbColor = srgbFromLinear(scaledColor);
-        float3 postProcessedSRGB = srgbPostProcess(srgbColor.rgb, params.random3, 10.f);
+        float3 postProcessedSRGB = randomDither(srgbColor.rgb, params.random3, 10.f);
         outputColor.rgb = postProcessedSRGB.rgb;
       }
       break;
     default:
       // Unknown default case
-      outputColor.rgb = (inputColor.rgb * params.paperWhiteScaling) + params.blackFloorAdjust;
+      if (injectedData.toneMapGammaCorrection == 2.f) {
+        outputColor = gammaCorrectionHDRSafe(outputColor);
+      }
+      outputColor *= params.paperWhiteScaling;
+      outputColor += params.blackFloorAdjust;
   }
   return outputColor.rgb;
 }
