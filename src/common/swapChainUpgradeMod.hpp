@@ -149,6 +149,18 @@ namespace SwapChainUpgradeMod {
       reshade::log_message(reshade::log_level::debug, "No HWND?");
       return;
     }
+
+    IDXGISwapChain* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
+
+    IDXGIFactory* factory;
+    bool hr = native_swapchain->GetParent(IID_PPV_ARGS(&factory));
+    if (SUCCEEDED(hr)) {
+      factory->MakeWindowAssociation(outputWindow, DXGI_MWA_NO_WINDOW_CHANGES);
+      reshade::log_message(reshade::log_level::debug, "checkSwapchainSize(set DXGI_MWA_NO_WINDOW_CHANGES)");
+    } else {
+      reshade::log_message(reshade::log_level::error, "checkSwapchainSize(could not find DXGI factory)");
+    }
+
     RECT window_rect = {};
     GetClientRect(outputWindow, &window_rect);
 
