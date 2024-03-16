@@ -37,7 +37,7 @@ namespace UserSettingUtil {
     std::vector<const char*> labels = {};
     float min = 0.f;
     float max = 100.f;
-    char const* format = "%.f";
+    char const* format = "%.0f";
     bool (*isEnabled)() = [] {
       return true;
     };
