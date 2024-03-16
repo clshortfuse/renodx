@@ -60,7 +60,6 @@ namespace SwapChainUpgradeMod {
     switch (desc.back_buffer.texture.format) {
       case reshade::api::format::r8g8b8a8_unorm:
       case reshade::api::format::r10g10b10a2_unorm:
-        needsSRGBPostProcess = true;
       case reshade::api::format::r8g8b8a8_unorm_srgb:
         desc.back_buffer.texture.format = targetFormat;
         break;
@@ -386,7 +385,7 @@ namespace SwapChainUpgradeMod {
     }
   }
 
-  void on_init_effect_runtime(reshade::api::effect_runtime* runtime) {
+  static void on_init_effect_runtime(reshade::api::effect_runtime* runtime) {
     currentEffectRuntime = runtime;
     reshade::log_message(reshade::log_level::info, "Effect runtime created.");
     if (currentColorSpace != reshade::api::color_space::unknown) {
@@ -395,22 +394,31 @@ namespace SwapChainUpgradeMod {
     }
   }
 
-  void on_destroy_effect_runtime(reshade::api::effect_runtime* runtime) {
+  static void on_destroy_effect_runtime(reshade::api::effect_runtime* runtime) {
     if (currentEffectRuntime = runtime) {
       currentEffectRuntime = nullptr;
     }
   }
 
-  static void on_present(
-    reshade::api::command_queue* queue,
-    reshade::api::swapchain* swapchain,
-    const reshade::api::rect* source_rect,
-    const reshade::api::rect* dest_rect,
-    uint32_t dirty_rect_count,
-    const reshade::api::rect* dirty_rects
-  ) {
-    if (!needsSRGBPostProcess) return;
-    // Enable RenoDXHelper
+  static bool on_set_fullscreen_state(reshade::api::swapchain* swapchain, bool fullscreen, void* hmonitor) {
+    if (!fullscreen) return false;
+    HWND outputWindow = (HWND)swapchain->get_hwnd();
+    if (outputWindow) {
+      auto backBufferDesc = swapchain->get_device()->get_resource_desc(swapchain->get_back_buffer(0));
+      // HMONITOR monitor = (HMONITOR)hmonitor;
+      uint32_t screenWidth = GetSystemMetrics(SM_CXSCREEN);
+      uint32_t screenHeight = GetSystemMetrics(SM_CYSCREEN);
+      uint32_t textureWidth = backBufferDesc.texture.width;
+      uint32_t textureHeight = backBufferDesc.texture.height;
+      uint32_t top = floor((screenHeight - textureHeight) / 2.f);
+      uint32_t left = floor((screenWidth - textureWidth) / 2.f);
+      reshade::log_message(reshade::log_level::info, "Preventing fullscreen");
+      SetWindowLongPtr(outputWindow, GWL_STYLE, WS_VISIBLE | WS_POPUP);
+      SetWindowPos(outputWindow, HWND_TOP, left, top, textureWidth, textureHeight, SWP_FRAMECHANGED);
+      SetForegroundWindow(outputWindow);
+    }
+
+    return true;
   }
 
   static void setUseHDR10(bool value = true) {
@@ -442,7 +450,8 @@ namespace SwapChainUpgradeMod {
         reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
         reshade::register_event<reshade::addon_event::init_effect_runtime>(on_init_effect_runtime);
         reshade::register_event<reshade::addon_event::destroy_effect_runtime>(on_destroy_effect_runtime);
-        reshade::register_event<reshade::addon_event::present>(on_present);
+
+        reshade::register_event<reshade::addon_event::set_fullscreen_state>(on_set_fullscreen_state);
 
         break;
       case DLL_PROCESS_DETACH:
@@ -453,7 +462,6 @@ namespace SwapChainUpgradeMod {
         reshade::unregister_event<reshade::addon_event::destroy_device>(on_destroy_device);
         reshade::unregister_event<reshade::addon_event::init_effect_runtime>(on_init_effect_runtime);
         reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(on_destroy_effect_runtime);
-        reshade::unregister_event<reshade::addon_event::present>(on_present);
         break;
     }
   }
