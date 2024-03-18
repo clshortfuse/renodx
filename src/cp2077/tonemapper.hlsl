@@ -4,6 +4,7 @@
 #include "../common/Open_DRT.hlsl"
 #include "../common/aces.hlsl"
 #include "../common/color.hlsl"
+#include "../common/colorgrade.hlsl"
 #include "../common/lut.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
@@ -601,7 +602,7 @@ float4 tonemap(bool isACESMode = false) {
           100.f * (peakNits / paperWhite),
           0,
           1.f,
-          1.f
+          0
         );
         odtFinal = mul(outputMatrix, odtFinal);
       } else if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
