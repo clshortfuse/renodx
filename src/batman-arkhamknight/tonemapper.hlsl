@@ -1,6 +1,7 @@
 #include "../common/Open_DRT.hlsl"
 #include "../common/aces.hlsl"
 #include "../common/color.hlsl"
+#include "../common/colorgrade.hlsl"
 #include "./shared.h"
 
 cbuffer cb13 : register(b13) {
@@ -17,6 +18,7 @@ float3 applyUserToneMap(float3 inputColor, float3 untonemapped) {
   } else {
     if (injectedData.toneMapType == 1.f) {
       outputColor = untonemapped;  // Untonemapped
+      outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
     } else {
       // OutputColor was intended for 2.2 displays, using 2.2 numbers
       outputColor = pow(outputColor, 2.2f);  // Now in linear
@@ -31,19 +33,21 @@ float3 applyUserToneMap(float3 inputColor, float3 untonemapped) {
         outputColor = max(0, outputColor);
       }
 
-      if (injectedData.toneMapType == 2) {
+      if (injectedData.colorGradeShadows != 1.f) {
         outputColor = apply_user_shadows(outputColor, injectedData.colorGradeShadows);
-        if (injectedData.colorGradeHighlights != 1.f) {
-          outputColor = apply_user_highlights(outputColor, injectedData.colorGradeHighlights);
-        }
-        if (injectedData.colorGradeContrast != 1.f) {
-          float3 workingColor = pow(outputColor / 0.18f, injectedData.colorGradeContrast) * 0.18f;
-          // Working in BT709 still
-          float workingColorY = yFromBT709(workingColor);
-          float outputColorY = yFromBT709(outputColor);
-          outputColor *= outputColorY ? workingColorY / outputColorY : 1.f;
-        }
+      }
+      if (injectedData.colorGradeHighlights != 1.f) {
+        outputColor = apply_user_highlights(outputColor, injectedData.colorGradeHighlights);
+      }
+      if (injectedData.colorGradeContrast != 1.f) {
+        float3 workingColor = pow(outputColor / 0.18f, injectedData.colorGradeContrast) * 0.18f;
+        // Working in BT709 still
+        float workingColorY = yFromBT709(workingColor);
+        float outputColorY = yFromBT709(outputColor);
+        outputColor *= outputColorY ? workingColorY / outputColorY : 1.f;
+      }
 
+      if (injectedData.toneMapType == 2) {
         outputColor = aces_rrt_odt(
           outputColor * uncharted2Scaler,
           0.0001f,  // minY
@@ -51,15 +55,14 @@ float3 applyUserToneMap(float3 inputColor, float3 untonemapped) {
           AP1_2_BT2020_MAT
         );
       } else {
-        outputColor = mul(BT709_2_BT2020_MAT, outputColor);
         outputColor = max(0, outputColor);
-        outputColor = open_drt_transform_custom(
-          outputColor,
+        outputColor = apply_aces_highlights(outputColor);
+        outputColor = mul(BT709_2_BT2020_MAT, outputColor);
+        outputColor = open_drt_transform(
+          outputColor * uncharted2Scaler,
           100.f * (injectedData.toneMapPeakNits / injectedData.toneMapGameNits),
           0,
-          injectedData.colorGradeHighlights,
-          injectedData.colorGradeShadows,
-          injectedData.colorGradeContrast,
+          1.f,
           0
         );
       }
