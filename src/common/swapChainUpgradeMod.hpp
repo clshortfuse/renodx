@@ -28,7 +28,7 @@ namespace SwapChainUpgradeMod {
   struct SwapChainUpgradeTarget {
     reshade::api::format oldFormat = reshade::api::format::r8g8b8a8_unorm;
     reshade::api::format newFormat = reshade::api::format::r16g16b16a16_float;
-    uint32_t index = 0;
+    int32_t index = 0;
     uint32_t _counted = 0;
     bool completed = false;
   };
@@ -217,7 +217,7 @@ namespace SwapChainUpgradeMod {
 
         std::stringstream s;
         s << "initSwapChain("
-          << "buffer: 0x" << std::hex << (uint32_t)buffer.handle << std::dec
+          << "buffer: " << reinterpret_cast<void*>(buffer.handle)
           << ")";
         reshade::log_message(reshade::log_level::info, s.str().c_str());
       }
@@ -294,6 +294,11 @@ namespace SwapChainUpgradeMod {
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
 
         target->_counted++;
+        if (target->index == -1) {
+          newFormat = target->newFormat;
+          allCompleted = false;
+          continue;
+        }
         if ((target->index + 1) == target->_counted) {
           newFormat = target->newFormat;
           target->completed = true;
@@ -427,7 +432,9 @@ namespace SwapChainUpgradeMod {
       reshade::log_message(reshade::log_level::info, "Preventing fullscreen");
       SetWindowLongPtr(outputWindow, GWL_STYLE, WS_VISIBLE | WS_POPUP);
       SetWindowPos(outputWindow, HWND_TOP, left, top, textureWidth, textureHeight, SWP_FRAMECHANGED);
+      BringWindowToTop(outputWindow);
       SetForegroundWindow(outputWindow);
+      SetFocus(outputWindow);
     }
 
     return true;
