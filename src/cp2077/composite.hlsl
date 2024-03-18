@@ -1,4 +1,5 @@
 #include "../common/color.hlsl"
+#include "../common/lut.hlsl"
 #include "../common/random.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
@@ -208,7 +209,6 @@ float3 composite(bool useTexArray = false) {
   uint useLUT2 = min((asuint(cb6[12u]).y & _195), 1u);
   uint useLUT3 = min((asuint(cb6[12u]).z & _195), 1u);
 
-  float3 lutInputColor;
   float3 firstLUTColor;
   float3 secondLUTColor;
   float3 thirdLUTColor;
@@ -257,18 +257,16 @@ float3 composite(bool useTexArray = false) {
   }
   if (useLUT) {
     if (injectedData.processingInternalSampling == 1.f) {
-      const float3 lutSize = 48.f;
-      float3 scale = (lutSize - 1.f) / lutSize;
-      float3 offset = 1.f / (2.f * lutSize);
       float3 rec2020 = bt2020FromBT709(fallbackColor);
       float3 pqColor = pqFromLinear((rec2020 * 100.f) / 10000.f);  // reset scale to 0-1 for 0-10000 nits
-      lutInputColor = scale * pqColor + offset;
+
+      lutColor = sampleLUT(textureLUT[lutIndex], sampler0, pqColor).rgb;
     } else {
       // cb6[6u].x 0.05888671
       // cb6[6u].y 0.59765625
-      lutInputColor = (cb6[6u].x * log2(fallbackColor)) + cb6[6u].y;
+      float3 lutInputColor = (cb6[6u].x * log2(fallbackColor)) + cb6[6u].y;
+      lutColor = textureLUT[lutIndex].SampleLevel(sampler0, lutInputColor, 0.0f).rgb;
     }
-    lutColor = textureLUT[lutIndex].SampleLevel(sampler0, lutInputColor, 0.0f).rgb;
     outputColor = lerp(outputColor, lutColor, float(lutStrength));
   } else {
     outputColor = fallbackColor;

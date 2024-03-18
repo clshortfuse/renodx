@@ -4,6 +4,7 @@
 #include "../common/Open_DRT.hlsl"
 #include "../common/aces.hlsl"
 #include "../common/color.hlsl"
+#include "../common/lut.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
 
@@ -167,13 +168,6 @@ struct SPIRV_Cross_Input {
   uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
 };
 
-// https://www.glowybits.com/blog/2016/12/21/ifl_iss_hdr_1/
-float ColorGradeSmoothClamp(float x) {
-  const float u = 0.525;
-  float q = (2.0 - u - 1.0 / u + x * (2.0 + 2.0 / u - x / u)) / 4.0;
-  return (abs(1.0 - x) < u) ? q : saturate(x);
-}
-
 float3 sampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex) {
   float3 color = inputColor;
   if (lutSettings.x > 0.0f) {           // LUT Strength
@@ -209,26 +203,24 @@ float3 sampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
     color /= scale;
 
     if (injectedData.processingLUTCorrection) {
+      float3 minBlack = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, float(0.f).xxx, 0.0f).rgb;
       float3 peakWhite = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, float(1.f).xxx, 0.0f).rgb;
       if ((_503 & 240u) == 16u) {
-        peakWhite = linearFromSRGB(color);
+        peakWhite = linearFromSRGB(peakWhite);
+        minBlack = linearFromSRGB(minBlack);
       }
 
+      const float lutMinY = yFromBT709(minBlack);
       const float lutPeakY = yFromBT709(peakWhite);
       const float targetPeakY = 100.f;
 
       // Only applies on LUTs that are clamped (all?)
+      if (lutMinY > 0) {
+        color = lutCorrectionBlack(inputColor, color, lutMinY, injectedData.processingLUTCorrection);
+      }
+
       if (lutPeakY < targetPeakY) {
-        // Inverse tonemap from clamped to peak.
-        const float inputY = yFromBT709(inputColor);
-        const float colorY = yFromBT709(color);
-        const float a = lutPeakY / targetPeakY;  // fixed per LUT 0.19f
-        const float b = lerp(1.f, 0.f, injectedData.processingLUTCorrection);
-        const float g = inputY;
-        const float h = colorY;
-        const float newY = h * pow((1.f / a), pow(g / targetPeakY, b / a));
-        // Only scale up, never down
-        color *= (colorY > 0) ? max(colorY, newY) / colorY : 1.f;
+        color = lutCorrectionWhite(inputColor, color, lutPeakY, targetPeakY, injectedData.processingLUTCorrection);
       }
     }
   }
@@ -430,7 +422,9 @@ float4 tonemap(bool isACESMode = false) {
       outputRGB *= exposure;
     }
     outputRGB *= injectedData.colorGradeExposure;
-    outputRGB = apply_user_shadows(outputRGB, injectedData.colorGradeShadows);
+    if (injectedData.colorGradeShadows != 1.f) {
+      outputRGB = apply_user_shadows(outputRGB, injectedData.colorGradeShadows);
+    }
     if (injectedData.colorGradeHighlights != 1.f) {
       outputRGB = apply_user_highlights(outputRGB, injectedData.colorGradeHighlights);
     }
@@ -510,12 +504,12 @@ float4 tonemap(bool isACESMode = false) {
       }
 
       // clang-format off
-    // XYZ_2_BT709_MAT
-    float3x3 customMatrix0 = float3x3(
-      cb6[21u].x, cb6[21u].y, cb6[21u].z,
-      cb6[22u].x, cb6[22u].y, cb6[22u].z,
-      cb6[23u].x, cb6[23u].y, cb6[23u].z
-    );
+      // XYZ_2_BT709_MAT
+      float3x3 customMatrix0 = float3x3(
+        cb6[21u].x, cb6[21u].y, cb6[21u].z,
+        cb6[22u].x, cb6[22u].y, cb6[22u].z,
+        cb6[23u].x, cb6[23u].y, cb6[23u].z
+      );
       // clang-format on
 
       float3 odtUnknown = mul(customMatrix0, odtXYZ);

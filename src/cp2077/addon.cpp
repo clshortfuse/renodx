@@ -235,7 +235,7 @@ UserSettingUtil::UserSettings userSettings = {
     .defaultValue = 1.f,
     .label = "Internal Sampling",
     .section = "Processing",
-    .tooltip = "Selects whether to use the vanilla sampling or 48x48x48 with PQ for the game's internal rendering LUT.",
+    .tooltip = "Selects whether to use the vanilla sampling or PQ for the game's internal rendering LUT.",
     .labels = {"Vanilla", "PQ" }
   },
 #ifdef DEBUG_SLIDERS
