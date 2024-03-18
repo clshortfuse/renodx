@@ -1,6 +1,7 @@
-#include "../common/aces.hlsl"
 #include "../common/Open_DRT.hlsl"
+#include "../common/aces.hlsl"
 #include "../common/color.hlsl"
+#include "../common/colorgrade.hlsl"
 #include "./shared.h"
 
 cbuffer FilterColorCorrect : register(b0) {
@@ -43,32 +44,35 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
         outputColor = lerp(grayscale, outputColor, injectedData.colorGradeSaturation);
         outputColor = max(0, outputColor);
       }
+
+      if (injectedData.colorGradeShadows != 1.f) {
+        outputColor = apply_user_shadows(outputColor, injectedData.colorGradeShadows);
+      }
+      if (injectedData.colorGradeHighlights != 1.f) {
+        outputColor = apply_user_highlights(outputColor, injectedData.colorGradeHighlights);
+      }
+      if (injectedData.colorGradeContrast != 1.f) {
+        float3 workingColor = pow(outputColor / 0.18f, injectedData.colorGradeContrast) * 0.18f;
+        // Working in BT709 still
+        float workingColorY = yFromBT709(workingColor);
+        float outputColorY = yFromBT709(outputColor);
+        outputColor *= outputColorY ? workingColorY / outputColorY : 1.f;
+      }
+
       if (injectedData.toneMapType == 2.f) {
         // ACES
-        outputColor = apply_user_shadows(outputColor, injectedData.colorGradeShadows);
-        if (injectedData.colorGradeHighlights != 1.f) {
-          outputColor = apply_user_highlights(outputColor, injectedData.colorGradeHighlights);
-        }
-        if (injectedData.colorGradeContrast != 1.f) {
-          float3 workingColor = pow(outputColor / 0.18f, injectedData.colorGradeContrast) * 0.18f;
-          // Working in BT709 still
-          float workingColorY = yFromBT709(workingColor);
-          float outputColorY = yFromBT709(outputColor);
-          outputColor *= outputColorY ? workingColorY / outputColorY : 1.f;
-        }
         outputColor = aces_rrt_odt(
           outputColor,
           0.0001f,  // minY
           48.f * (injectedData.toneMapPeakNits / injectedData.toneMapGameNits)
         );
       } else {  // OpenDRT
-        outputColor = open_drt_transform_custom(
+        outputColor = apply_aces_highlights(outputColor);
+        outputColor = open_drt_transform(
           outputColor,
           100.f * (injectedData.toneMapPeakNits / injectedData.toneMapGameNits),
           0,
-          injectedData.colorGradeHighlights,
-          injectedData.colorGradeShadows,
-          injectedData.colorGradeContrast,
+          1.f,
           0
         );
       }
