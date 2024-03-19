@@ -21,11 +21,7 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
   float4 outputColor = inputColor;
   outputColor.rgb = pow(outputColor.rgb, cb0[133].rgb);  // 1.f anyway
   outputColor.a = inputColor.a;
-  if (injectedData.toneMapperEnum != 0) {
-    outputColor.rgb *= injectedData.uiPaperWhite;
-  } else {
-    outputColor.rgb *= 203.f;
-  }
-  outputColor.rgb /= 80.f;
+  
+  outputColor.rgb *= injectedData.toneMapUINits / 80.f;
   return outputColor;
 }

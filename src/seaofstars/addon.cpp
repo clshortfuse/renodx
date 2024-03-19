@@ -17,6 +17,7 @@
 #include "../../external/reshade/include/reshade.hpp"
 #include "../common/shaderReplaceMod.hpp"
 #include "../common/swapChainUpgradeMod.hpp"
+#include "../common/userSettingUtil.hpp"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Sea of Stars";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Sea of Stars";
@@ -28,84 +29,110 @@ ShaderReplaceMod::CustomShaders customShaders = {
 
 ShaderInjectData shaderInjection;
 
-struct {
-  int toneMapperEnum = 0u;
-  float gamePeakWhite = 1000.f;
-  float gamePaperWhite = 203.f;
-  float uiPaperWhite = 203.f;
-  float saturation = 1.f;
-} userSettings;
-
-static void updateInjection() {
-  shaderInjection.toneMapperEnum = static_cast<float>(userSettings.toneMapperEnum);
-  shaderInjection.gamePeakWhite = userSettings.gamePeakWhite;
-  shaderInjection.gamePaperWhite = userSettings.gamePaperWhite;
-  shaderInjection.uiPaperWhite = userSettings.uiPaperWhite;
-  shaderInjection.saturation = userSettings.saturation;
-}
-
-static void on_register_overlay(reshade::api::effect_runtime* runtime) {
-  bool settingsChanged = false;
-
-  static const char* toneMapperEnums[] = {
-    "Vanilla",
-    "None",
-    "ACES"
-  };
-  settingsChanged |= ImGui::SliderInt(
-    "Tone Mapper",
-    &userSettings.toneMapperEnum,
-    0,
-    2,
-    toneMapperEnums[userSettings.toneMapperEnum],
-    ImGuiSliderFlags_NoInput
-  );
-
-  settingsChanged |= ImGui::SliderFloat(
-    "Peak Brightness",
-    &userSettings.gamePeakWhite,
-    48.f,
-    4000.f,
-    "%.0f"
-  );
-  ImGui::SetItemTooltip("Adjusts the peak brightness in nits.");
-
-  settingsChanged |= ImGui::SliderFloat(
-    "Game Brightness",
-    &userSettings.gamePaperWhite,
-    48.f,
-    500.f,
-    "%.0f"
-  );
-  ImGui::SetItemTooltip("Adjusts the brightness of 100%% white in nits.");
-
-  settingsChanged |= ImGui::SliderFloat(
-    "UI Brightness",
-    &userSettings.uiPaperWhite,
-    48.f,
-    500.f,
-    "%.0f"
-  );
-  ImGui::SetItemTooltip("Adjusts the peak brightness of the UI in nits.");
-
-  if (settingsChanged) {
-    updateInjection();
+// clang-format off
+UserSettingUtil::UserSettings userSettings = {
+  new UserSettingUtil::UserSetting {
+    .key = "toneMapType",
+    .binding = &shaderInjection.toneMapType,
+    .valueType = UserSettingUtil::UserSettingValueType::integer,
+    .defaultValue = 3.f,
+    .label = "Tone Mapper",
+    .section = "Tone Mapping",
+    .tooltip = "Sets the tone mapper type",
+    .labels = {"Vanilla", "None", "ACES", "OpenDRT"}
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "toneMapPeakNits",
+    .binding = &shaderInjection.toneMapPeakNits,
+    .defaultValue = 1000.f,
+    .label = "Peak Brightness",
+    .section = "Tone Mapping",
+    .tooltip = "Sets the value of peak white in nits",
+    .min = 48.f,
+    .max = 4000.f
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "toneMapGameNits",
+    .binding = &shaderInjection.toneMapGameNits,
+    .defaultValue = 203.f,
+    .label = "Game Brightness",
+    .section = "Tone Mapping",
+    .tooltip = "Sets the value of 100%% white in nits",
+    .min = 48.f,
+    .max = 500.f
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "toneMapUINits",
+    .binding = &shaderInjection.toneMapUINits,
+    .defaultValue = 203.f,
+    .label = "UI Brightness",
+    .section = "Tone Mapping",
+    .tooltip = "Sets the brightness of UI and HUD elements in nits",
+    .min = 48.f,
+    .max = 500.f
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeHighlights",
+    .binding = &shaderInjection.colorGradeHighlights,
+    .defaultValue = 50.f,
+    .label = "Highlights",
+    .section = "Color Grading",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeShadows",
+    .binding = &shaderInjection.colorGradeShadows,
+    .defaultValue = 50.f,
+    .label = "Shadows",
+    .section = "Color Grading",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeContrast",
+    .binding = &shaderInjection.colorGradeContrast,
+    .defaultValue = 50.f,
+    .label = "Contrast",
+    .section = "Color Grading",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeSaturation",
+    .binding = &shaderInjection.colorGradeSaturation,
+    .defaultValue = 50.f,
+    .label = "Saturation",
+    .section = "Color Grading",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
   }
+};
+
+// clang-format on
+
+static void onPresetOff() {
+  UserSettingUtil::updateUserSetting("toneMapType", 0.f);
+  UserSettingUtil::updateUserSetting("toneMapPeakNits", 203.f);
+  UserSettingUtil::updateUserSetting("toneMapGameNits", 203.f);
+  UserSettingUtil::updateUserSetting("toneMapUINits", 203.f);
+  UserSettingUtil::updateUserSetting("colorGradeHighlights", 50.f);
+  UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
+  UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);
+  UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
   switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
-      updateInjection();
-      reshade::register_overlay("RenoDX", on_register_overlay);
       break;
     case DLL_PROCESS_DETACH:
-      reshade::unregister_overlay("RenoDX", on_register_overlay);
       reshade::unregister_addon(hModule);
       break;
   }
 
+  UserSettingUtil::use(fdwReason, &userSettings, &onPresetOff);
   SwapChainUpgradeMod::use(fdwReason);
   ShaderReplaceMod::use(fdwReason, &customShaders, &shaderInjection);
 
