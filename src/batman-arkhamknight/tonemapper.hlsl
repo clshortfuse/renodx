@@ -25,6 +25,7 @@ float3 applyUserToneMap(float3 inputColor, float3 untonemapped) {
 
       float inputY = yFromBT709(abs(untonemapped));
       float outputY = yFromBT709(outputColor);
+      outputY = lerp(inputY, outputY, saturate(inputY));
       outputColor *= (outputY ? inputY / outputY : 1);
 
       if (injectedData.colorGradeSaturation != 1.f) {
