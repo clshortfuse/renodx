@@ -39,6 +39,7 @@ namespace ShaderReplaceMod {
 
   static float* _shaderInjection = nullptr;
   static size_t _shaderInjectionSize = 0;
+  static int32_t expectedLayoutInjectionIndex = -1;
 
   static CustomShaders* _customShaders = nullptr;
 
@@ -143,6 +144,17 @@ namespace ShaderReplaceMod {
       }
     }
 
+
+    if (expectedLayoutInjectionIndex != -1 && cbvIndex != expectedLayoutInjectionIndex) {
+      std::stringstream s;
+      s << "on_create_pipeline_layout("
+        << "Pipeline layout index mismatch, actual: " << cbvIndex
+        << ", expected: " << expectedLayoutInjectionIndex
+        << ")";
+      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      return false;
+    }
+
     if (pcCount != 0) {
       std::stringstream s;
       s << "on_create_pipeline_layout("
@@ -152,6 +164,10 @@ namespace ShaderReplaceMod {
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
       return false;
     }
+
+    
+
+    
 
     uint32_t oldCount = param_count;
     uint32_t newCount = oldCount + 1;
