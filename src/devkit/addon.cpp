@@ -27,8 +27,8 @@
 
 #include "../../external/reshade/deps/imgui/imgui.h"
 #include "../../external/reshade/include/reshade.hpp"
+#include "../common/format.hpp"
 
-#include "../common/format.hlsl"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - DevKit";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX DevKit Module";
