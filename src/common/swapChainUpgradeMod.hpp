@@ -23,12 +23,13 @@
 
 #include <crc32_hash.hpp>
 #include "../../external/reshade/include/reshade.hpp"
+#include "../common/format.hpp"
 
 namespace SwapChainUpgradeMod {
   struct SwapChainUpgradeTarget {
     reshade::api::format oldFormat = reshade::api::format::r8g8b8a8_unorm;
     reshade::api::format newFormat = reshade::api::format::r16g16b16a16_float;
-    int32_t index = 0;
+    int32_t index = -1;
     uint32_t _counted = 0;
     bool completed = false;
   };
@@ -42,7 +43,7 @@ namespace SwapChainUpgradeMod {
 
   static bool upgradeResourceViews = true;
   static bool resourceUpgradeFinished = false;
-  static reshade::api::device* currentDevice = nullptr;
+
   static reshade::api::effect_runtime* currentEffectRuntime = nullptr;
   static reshade::api::color_space currentColorSpace = reshade::api::color_space::unknown;
   static bool needsSRGBPostProcess = false;
@@ -52,47 +53,33 @@ namespace SwapChainUpgradeMod {
 
   // Before CreatePipelineState
   static bool on_create_swapchain(reshade::api::swapchain_desc &desc, void* hwnd) {
-    bool changed = true;
     auto oldFormat = desc.back_buffer.texture.format;
     auto oldPresentMode = desc.present_mode;
     auto oldPresentFlags = desc.present_flags;
+    auto oldBufferCount = desc.back_buffer_count;
 
-    switch (desc.back_buffer.texture.format) {
-      case reshade::api::format::r8g8b8a8_unorm:
-      case reshade::api::format::r10g10b10a2_unorm:
-      case reshade::api::format::r8g8b8a8_unorm_srgb:
-        desc.back_buffer.texture.format = targetFormat;
+    desc.back_buffer.texture.format = targetFormat;
+
+    if (desc.back_buffer_count == 1) {
+      // 0 is only for resize, so if game uses more than 2 buffers, that will be retained
+      desc.back_buffer_count = 2;
+    }
+
+    switch (desc.present_mode) {
+      case static_cast<uint32_t>(DXGI_SWAP_EFFECT_SEQUENTIAL):
+        desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL);
         break;
-      default:
-        changed = false;
+      case static_cast<uint32_t>(DXGI_SWAP_EFFECT_DISCARD):
+        desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD);
+        break;
     }
 
-    if (changed) {
-      if (desc.back_buffer_count < 2) {
-        desc.back_buffer_count = 2;
-      }
-
-      switch (desc.present_mode) {
-        case static_cast<uint32_t>(DXGI_SWAP_EFFECT_SEQUENTIAL):
-          desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL);
-          break;
-        case static_cast<uint32_t>(DXGI_SWAP_EFFECT_DISCARD):
-          desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD);
-          break;
-      }
-
-      if (oldPresentFlags & DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH) {
-        desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-      }
-
-      if (oldPresentFlags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING == 0) {
-        oldPresentFlags &= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-      }
-    }
+    desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+    desc.present_flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
     std::stringstream s;
     s << "createSwapChain("
-      << "swap: " << (uint32_t)oldFormat << " => " << (uint32_t)desc.back_buffer.texture.format
+      << "swap: " << to_string(oldFormat) << " => " << to_string(desc.back_buffer.texture.format)
       << ", present mode:"
       << "0x" << std::hex << (uint32_t)oldPresentMode << std::dec
       << " => "
@@ -101,17 +88,23 @@ namespace SwapChainUpgradeMod {
       << "0x" << std::hex << (uint32_t)oldPresentFlags << std::dec
       << " => "
       << "0x" << std::hex << (uint32_t)desc.present_flags << std::dec
+      << ", buffers:"
+      << oldBufferCount
+      << " => "
+      << desc.back_buffer_count
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
-    return changed;
+
+    // No effect if nothing has actually changed
+    return true;
   }
 
   static bool changeColorSpace(reshade::api::swapchain* swapchain, reshade::api::color_space colorSpace) {
     IDXGISwapChain* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
 
-    ATL::CComPtr<IDXGISwapChain4> swapchain4;
+    IDXGISwapChain4* swapchain4;
 
-    if (!SUCCEEDED(native_swapchain->QueryInterface(__uuidof(IDXGISwapChain4), (void**)&swapchain4))) {
+    if (!SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
       reshade::log_message(reshade::log_level::error, "changeColorSpace(Failed to get native swap chain)");
       return false;
     }
@@ -259,6 +252,12 @@ namespace SwapChainUpgradeMod {
     reshade::api::resource_usage initial_state
   ) {
     if (resourceUpgradeFinished) return false;
+    if (!device) {
+      std::stringstream s;
+      s << "createResource(Empty device)";
+      reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      return false;
+    }
     auto pair = deviceBackBufferDesc.find(device);
     if (pair == deviceBackBufferDesc.end()) {
       std::stringstream s;
@@ -286,7 +285,7 @@ namespace SwapChainUpgradeMod {
       if (target->completed) continue;
       if (oldFormat == target->oldFormat) {
         s << "createResource(counting target"
-          << ", format: " << (uint32_t)target->oldFormat
+          << ", format: " << to_string(target->oldFormat)
           << ", index: " << target->index
           << ", counted: " << target->_counted
           << ") [" << i << "]"
@@ -318,7 +317,7 @@ namespace SwapChainUpgradeMod {
       << ", state: " << std::hex << (uint32_t)initial_state << std::dec
       << ", width: " << (uint32_t)desc.texture.width
       << ", height: " << (uint32_t)desc.texture.height
-      << ", format: " << (uint32_t)oldFormat << " => " << (uint32_t)newFormat
+      << ", format: " << to_string(oldFormat) << " => " << to_string(newFormat)
       << ", complete: " << allCompleted
       << ")";
     reshade::log_message(
@@ -350,7 +349,7 @@ namespace SwapChainUpgradeMod {
       << ", state: " << std::hex << (uint32_t)initial_state << std::dec
       << ", width: " << (uint32_t)desc.texture.width
       << ", height: " << (uint32_t)desc.texture.height
-      << ", format: " << (uint32_t)desc.texture.format
+      << ", format: " << to_string(desc.texture.format)
       << ")";
     reshade::log_message(
       desc.texture.format == reshade::api::format::unknown
@@ -383,7 +382,7 @@ namespace SwapChainUpgradeMod {
     s << "createResourceView(upgrading "
       << std::hex << (uint32_t)resource.handle << std::dec
       << ", view type: " << (uint32_t)desc.type
-      << ", view format: " << (uint32_t)oldFormat << " => " << (uint32_t)desc.format
+      << ", view format: " << to_string(oldFormat) << " => " << to_string(desc.format)
       << ", resource: " << reinterpret_cast<void*>(resource.handle)
       << ", resource usage: " << std::hex << (uint32_t)usage_type << std::dec
       << ")";
@@ -394,12 +393,6 @@ namespace SwapChainUpgradeMod {
       s.str().c_str()
     );
     return true;
-  }
-
-  static void on_destroy_device(reshade::api::device* device) {
-    if (currentDevice == device) {
-      currentDevice = nullptr;
-    }
   }
 
   static void on_init_effect_runtime(reshade::api::effect_runtime* runtime) {
@@ -466,7 +459,6 @@ namespace SwapChainUpgradeMod {
         // reshade::register_event<reshade::addon_event::destroy_resource>(on_create_resource);
 
         reshade::register_event<reshade::addon_event::create_resource_view>(on_create_resource_view);
-        reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
         reshade::register_event<reshade::addon_event::init_effect_runtime>(on_init_effect_runtime);
         reshade::register_event<reshade::addon_event::destroy_effect_runtime>(on_destroy_effect_runtime);
 
@@ -478,7 +470,6 @@ namespace SwapChainUpgradeMod {
         reshade::unregister_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
         reshade::unregister_event<reshade::addon_event::create_resource_view>(on_create_resource_view);
         reshade::unregister_event<reshade::addon_event::create_resource>(on_create_resource);
-        reshade::unregister_event<reshade::addon_event::destroy_device>(on_destroy_device);
         reshade::unregister_event<reshade::addon_event::init_effect_runtime>(on_init_effect_runtime);
         reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(on_destroy_effect_runtime);
         break;
