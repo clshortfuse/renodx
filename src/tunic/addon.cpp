@@ -162,7 +162,8 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
-  UserSettingUtil::updateUserSetting("colorGradeLUTStrength2", 100.f);
+  UserSettingUtil::updateUserSetting("fxScreenGlow", 100.f);
+  UserSettingUtil::updateUserSetting("processingLUTCorrection", 50.f);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
