@@ -292,22 +292,22 @@ float3 okLChFromOKLab(float3 oklab) {
 }
 
 float3 okLabFromOKLCh(float3 oklch) {
-	float L = oklch[0];
-	float C = oklch[1];
-	float h = oklch[2];
-	return float3(
-		L,
-		C * cos(h),
-		C * sin(h)
-	);
+  float L = oklch[0];
+  float C = oklch[1];
+  float h = oklch[2];
+  return float3(
+    L,
+    C * cos(h),
+    C * sin(h)
+  );
 }
 
-float3 okLChFromBT709(float bt709) {
+float3 okLChFromBT709(float3 bt709) {
   float3 okLab = okLabFromBT709(bt709);
   return okLChFromOKLab(okLab);
 }
 
-float3 bt709FromOKLCh(float oklch) {
+float3 bt709FromOKLCh(float3 oklch) {
   float3 okLab = okLabFromOKLCh(oklch);
   return bt709FromOKLab(okLab);
 }
