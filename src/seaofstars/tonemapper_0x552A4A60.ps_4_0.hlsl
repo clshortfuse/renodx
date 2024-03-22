@@ -133,9 +133,9 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
       outputColor *= (outputY ? inputY / outputY : 1);
 
       if (injectedData.colorGradeSaturation != 1.f) {
-        float grayscale = yFromBT709(outputColor);
-        outputColor = lerp(grayscale, outputColor, injectedData.colorGradeSaturation);
-        outputColor = max(0, outputColor);
+        float3 okLCh = okLChFromBT709(outputColor);
+        okLCh[1] *= injectedData.colorGradeSaturation;
+        outputColor = max(0, bt709FromOKLCh(okLCh));
       }
 
       if (injectedData.colorGradeShadows != 1.f) {

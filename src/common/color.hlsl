@@ -237,4 +237,79 @@ float3 linearFromArriC800(float3 color) {
   );
 }
 
+float3 okLabFromBT709(float3 bt709) {
+  // clang-format off
+  const float3x3 BT709_2_OKLABLMS = {
+    0.4122214708f, 0.5363325363f, 0.0514459929f,
+    0.2119034982f, 0.6806995451f, 0.1073969566f,
+    0.0883024619f, 0.2817188376f, 0.6299787005f
+  };
+  const float3x3 OKLABLMS_2_OKLAB = {
+    0.2104542553f,  0.7936177850f, -0.0040720468f,
+    1.9779984951f, -2.4285922050f,  0.4505937099f,
+    0.0259040371f,  0.7827717662f, -0.8086757660f
+  };
+  // clang-format on
+
+  float3 lms = mul(BT709_2_OKLABLMS, bt709);
+
+  lms = sign(lms) * pow(abs(lms), 1.f / 3.f);
+
+  return mul(OKLABLMS_2_OKLAB, lms);
+}
+
+float3 bt709FromOKLab(float3 oklab) {
+  // clang-format off
+  const float3x3 OKLAB_2_OKLABLMS = {
+    1.f,  0.3963377774f,  0.2158037573f,
+    1.f, -0.1055613458f, -0.0638541728f,
+    1.f, -0.0894841775f, -1.2914855480f
+  };
+
+  const float3x3 OKLABLMS_2_BT709 = {
+     4.0767416621f, -3.3077115913f,  0.2309699292f,
+    -1.2684380046f,  2.6097574011f, -0.3413193965f,
+    -0.0041960863f, -0.7034186147f,  1.7076147010f
+  };
+  // clang-format on
+
+  float3 lms = mul(OKLAB_2_OKLABLMS, oklab);
+
+  lms = lms * lms * lms;
+
+  return mul(OKLABLMS_2_BT709, lms);
+}
+
+float3 okLChFromOKLab(float3 oklab) {
+  float L = oklab[0];
+  float a = oklab[1];
+  float b = oklab[2];
+  return float3(
+    L,
+    sqrt((a * a) + (b * b)),
+    atan2(b, a)
+  );
+}
+
+float3 okLabFromOKLCh(float3 oklch) {
+	float L = oklch[0];
+	float C = oklch[1];
+	float h = oklch[2];
+	return float3(
+		L,
+		C * cos(h),
+		C * sin(h)
+	);
+}
+
+float3 okLChFromBT709(float bt709) {
+  float3 okLab = okLabFromBT709(bt709);
+  return okLChFromOKLab(okLab);
+}
+
+float3 bt709FromOKLCh(float oklch) {
+  float3 okLab = okLabFromOKLCh(oklch);
+  return bt709FromOKLab(okLab);
+}
+
 #endif  // SRC_COMMON_COLOR_HLSL_
