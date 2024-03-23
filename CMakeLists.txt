@@ -10,16 +10,21 @@ enable_testing()
 
 
 # MOD LIST HERE
-list(APPEND ADDON_LIST cp2077)
-list(APPEND ADDON_LIST seaofthieves)
-list(APPEND ADDON_LIST seaofstars)
-list(APPEND ADDON_LIST devkit)
-list(APPEND ADDON_LIST batman-arkhamknight)
-list(APPEND ADDON_LIST dyinglight2)
-list(APPEND ADDON_LIST hifirush)
-list(APPEND ADDON_LIST lostplanet)
-list(APPEND ADDON_LIST tunic)
+list(APPEND ADDON_LIST_11 cp2077)
+list(APPEND ADDON_LIST_11 lostplanet)
 
+# Reshade API 10 LIST
+list(APPEND ADDON_LIST_10 seaofthieves)
+list(APPEND ADDON_LIST_10 seaofstars)
+list(APPEND ADDON_LIST_10 devkit)
+list(APPEND ADDON_LIST_10 batman-arkhamknight)
+list(APPEND ADDON_LIST_10 dyinglight2)
+list(APPEND ADDON_LIST_10 hifirush)
+list(APPEND ADDON_LIST_10 tunic)
+list(APPEND ADDON_LIST_10 deusexmd)
+list(APPEND ADDON_LIST_10 horizonfw)
+
+list(APPEND ADDON_LIST ${ADDON_LIST_11} ${ADDON_LIST_10})
 
 # Use executable to convert resources to .h files for embedding
 add_executable(embedfile embedfile.c)
@@ -95,8 +100,13 @@ endif()
 foreach(ADDON ${ADDON_LIST})
   add_library(${ADDON} MODULE ${CMAKE_CURRENT_SOURCE_DIR}/src/${ADDON}/addon.cpp)
   add_dependencies(${ADDON} shaders)
-  target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/embed/include)
+  if(ADDON IN_LIST ADDON_LIST_10)
+    target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external/reshade_api_10/)
+  else()
+    target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external/reshade)
+  endif()
   target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/embed/include)
   target_compile_definitions(${ADDON} PRIVATE _UNICODE)
   set_target_properties(${ADDON}
     PROPERTIES
