@@ -151,27 +151,30 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
         float outputColorY = yFromBT709(outputColor);
         outputColor *= outputColorY ? workingColorY / outputColorY : 1.f;
       }
+      float hdrScale = (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
       if (injectedData.toneMapType == 2) {
         outputColor = aces_rrt_odt(
           outputColor * 203.f / 80.f,  // Should be midgray from LUT
-          0.0001f,                     // minY
-          48.f * (injectedData.toneMapPeakNits / injectedData.toneMapGameNits)
+          0.0001f / hdrScale,                     // minY
+          48.f * hdrScale
           // AP1_2_BT2020_MAT
         );
+        outputColor /= 48.f;
       } else {
         outputColor = apply_aces_highlights(outputColor);
         // outputColor = mul(BT709_2_BT2020_MAT, outputColor);
         outputColor = max(0, outputColor);
         outputColor = open_drt_transform(
           outputColor * 203.f / 80.f,  // Should be midgray from LUT
-          100.f * (injectedData.toneMapPeakNits / injectedData.toneMapGameNits),
+          100.f * hdrScale,
           0,
           1.f,
           0
         );
+        outputColor *= hdrScale;
       }
       // outputColor = mul(BT2020_2_BT709_MAT, outputColor);
-      outputColor *= injectedData.toneMapPeakNits / injectedData.toneMapUINits;
+      outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
     }
   }
 

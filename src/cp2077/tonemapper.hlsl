@@ -6,6 +6,7 @@
 #include "../common/color.hlsl"
 #include "../common/colorgrade.hlsl"
 #include "../common/lut.hlsl"
+#include "./aces_cdpr.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
 
@@ -578,6 +579,7 @@ float4 tonemap(bool isACESMode = false) {
       bool useD60 = (injectedData.colorGradeWhitePoint == -1.0f || (injectedData.colorGradeWhitePoint == 0.f && cb6[28u].z == 0.f));
 
       const bool isSDR = false;
+      const float CDPR_WHITE = 100.f;
 
       outputRGB = max(0, outputRGB);
       if (toneMapperType == TONE_MAPPER_TYPE__OPENDRT) {
@@ -605,6 +607,7 @@ float4 tonemap(bool isACESMode = false) {
           0
         );
         odtFinal = mul(outputMatrix, odtFinal);
+        odtFinal *= peakNits / paperWhite;
       } else if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
         // ACES uses 48 nits for 100-nit SDR
         // Base 100-nit SDR = 203 SDR
@@ -619,17 +622,17 @@ float4 tonemap(bool isACESMode = false) {
           outputMatrix = BT2020_2_BT709_MAT;
         }
 
-        odtFinal = aces_rrt_odt(
+        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
+        odtFinal = aces_rgc_rrt_odt(
           outputRGB,
-          0.0001f,  // MIN_LUM_RRT
-          48.f * (peakNits / paperWhite),
+          0.0001f / hdrScale,  // MIN_LUM_RRT
+          48.f * hdrScale,
           clampMatrix
         );
+        odtFinal /= 48.f;
         odtFinal = mul(outputMatrix, odtFinal);
       }
-
-      const float CDPR_WHITE = 100.f;
-      odtFinal *= peakNits / CDPR_WHITE;
+      odtFinal *= paperWhite / CDPR_WHITE;
     }
   }
 
