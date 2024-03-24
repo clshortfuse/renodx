@@ -59,27 +59,28 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
         outputColor *= outputColorY ? workingColorY / outputColorY : 1.f;
       }
 
+      float hdrScale = (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
       if (injectedData.toneMapType == 2.f) {
         // ACES
-        outputColor = aces_rrt_odt(
+        outputColor = aces_rgc_rrt_odt(
           outputColor,
-          0.0001f,  // minY
-          48.f * (injectedData.toneMapPeakNits / injectedData.toneMapGameNits)
+          0.0001f / hdrScale,  // minY
+          48.f * hdrScale
         );
+        outputColor /= 48.f;
       } else {  // OpenDRT
         outputColor = apply_aces_highlights(outputColor);
         outputColor = open_drt_transform(
           outputColor,
-          100.f * (injectedData.toneMapPeakNits / injectedData.toneMapGameNits),
+          100.f * hdrScale,
           0,
           1.f,
           0
         );
+        outputColor *= hdrScale;
       }
-      outputColor *= injectedData.toneMapPeakNits / injectedData.toneMapUINits;
-    } else {
-      outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
     }
+    outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
     outputColor = pow(outputColor, 1.f / 2.2f);
   }
 
