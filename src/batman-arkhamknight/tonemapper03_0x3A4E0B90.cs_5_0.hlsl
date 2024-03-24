@@ -1,5 +1,6 @@
 // no motion blur + effect
 
+#include "./shared.h"
 #include "./tonemapper.hlsl"
 
 Texture2D<float4> t0 : register(t0);
@@ -52,17 +53,21 @@ cbuffer cb0 : register(b0) {
   r0.z = max(0, r0.z);
   r0.z = r0.z * r0.z + -1;
   r0.z = r0.z * 0.300000012 + 1;
+
   r3.xyz = t3.SampleLevel(s0_s, r3.xy, 0).xyz;  // bloom
   r0.w = 0.200000003 * cb0[10].x;
   r3.w = cb0[10].x * 0.200000003 + 1;
   r3.xyzw = r3.zzxy * r3.wwww + -r0.wwww;
   r3.xyzw = max(float4(0, 0, 0, 0), r3.xyzw);
-  r1.xyzw = r3.xyzw + r1.xyzw;
+  // r1.xyzw = r3.xyzw + r1.xyzw;
+  r1 = r3 + (r1.xyzw * injectedData.fxBloom);
 
-  const float3 bloomedInput = r1.zwy;
   r0.w = t4.SampleLevel(s0_s, float2(0.5, 0.5), 0).x;
-  r1.xyzw = r1.xyzw / r0.wwww;
-  r1.xyzw = r1.xyzw * r0.zzzz;
+  // r1.xyzw = r1.xyzw / r0.wwww;
+  // r1.xyzw = r1.xyzw * r0.zzzz;
+  r1 = lerp(r1, r1 / r0.w * r0.z, injectedData.fxVignette);
+
+  const float3 untonemapped = r1.zwy;
   r3.xyzw = r1.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
   r3.xyzw = r1.yyzw * r3.xyzw + float4(0.00200000009, 0.00200000009, 0.00200000009, 0.00200000009);
   r4.xyzw = r1.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.300000012, 0.300000012, 0.300000012, 0.300000012);
@@ -74,6 +79,8 @@ cbuffer cb0 : register(b0) {
   r1.xyzw = log2(r1.xyzw);
   r1.xyzw = float4(0.454545468, 0.454545468, 0.454545468, 0.454545468) * r1.xyzw;
   r1.xyzw = exp2(r1.xyzw);
+
+  float4 lutInputColor = r1.zwxy;
   r1.xyzw = min(float4(1, 1, 1, 1), r1.xyzw);
   r3.xyw = float3(14.9998999, 0.9375, 0.05859375) * r1.xwz;
   r0.z = floor(r3.x);
@@ -84,6 +91,9 @@ cbuffer cb0 : register(b0) {
   r3.xyz = t2.SampleLevel(s0_s, r3.xy, 0).xyz;
   r1.xyzw = -r3.xyzx + r1.xyzx;
   r1.xyzw = r0.zzzz * r1.xyzw + r3.xyzx;
+
+  r3.xyzw = lerp(lutInputColor, r3.xyzw, injectedData.colorGradeLUTStrength);
+
   r3.xyzw = float4(1, 1, 1, 1) + -r1.wyzw;
   r3.xyzw = r3.xyzw * r3.xyzw;
   r3.xyzw = min(float4(1, 1, 1, 1), r3.xyzw);
@@ -98,7 +108,7 @@ cbuffer cb0 : register(b0) {
 
   float4 outputColor = r1.xyzw;
 
-  outputColor.rgb = applyUserToneMap(outputColor.rgb, bloomedInput.rgb);
+  outputColor.rgb = applyUserToneMap(outputColor.rgb, untonemapped.rgb);
 
   u0[uint2(r0.x, r0.y)] = outputColor;
 

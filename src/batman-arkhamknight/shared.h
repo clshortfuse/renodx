@@ -12,6 +12,15 @@ struct ShaderInjectData {
   float colorGradeShadows;
   float colorGradeContrast;
   float colorGradeSaturation;
+  float colorGradeLUTStrength;
+  float fxBloom;
+  float fxVignette;
 };
+
+#ifndef __cplusplus
+cbuffer cb13 : register(b13) {
+  ShaderInjectData injectedData : packoffset(c0);
+}
+#endif
 
 #endif  // SRC_BATMAN_ARKHAMKNIGHT_SHARED_H_

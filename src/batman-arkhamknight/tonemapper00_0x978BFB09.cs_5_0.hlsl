@@ -1,5 +1,6 @@
 // Used for motion blur
 
+#include "./shared.h"
 #include "./tonemapper.hlsl"
 
 // ---- Created with 3Dmigoto v1.3.16 on Mon Mar  4 16:16:30 2024
@@ -127,13 +128,13 @@ cbuffer cb0 : register(b0) {
   r0.w = cb0[10].x * 0.200000003 + 1;
   r1.xyzw = r1.zzxy * r0.w - r0.z;
   r1.xyzw = max(0, r1.xyzw);
-  r1.xyzw = r4.zzxy + r1.xyzw;
+  // r1.xyzw = r4.zzxy + r1.xyzw;
+  r1.xyzw = r4.zzxy + (r1.xyzw * injectedData.fxBloom);
 
-  float3 bloomedInput = r1.zwy;
 
-  // More motion blur
+  // Vignette sampling
   r0.z = t4.SampleLevel(s0_s, float2(0.5, 0.5), 0).x;
-  r1.xyzw = r1.xyzw / r0.zzzz;
+  // r1.xyzw = r1.xyzw / r0.zzzz;
   r0.xy = r0.xy * float2(2, 2) + float2(-1, -1);
   r0.xy = float2(0.769231021, 0.769231021) * r0.xy;
   r0.x = dot(r0.xy, r0.xy);
@@ -141,7 +142,10 @@ cbuffer cb0 : register(b0) {
   r0.x = max(0, r0.x);
   r0.x = r0.x * r0.x + -1;
   r0.x = r0.x * 0.300000012 + 1;
-  r0.xyzw = r1.xyzw * r0.xxxx;
+  // r0.xyzw = r1.xyzw * r0.xxxx;
+  r0 = lerp(r1, r1 / r0.z * r0.x, injectedData.fxVignette);
+
+  float3 untonemapped = r0.zwy;
   r1.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
   r1.xyzw = r0.yyzw * r1.xyzw + float4(0.00200000009, 0.00200000009, 0.00200000009, 0.00200000009);
   r4.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.300000012, 0.300000012, 0.300000012, 0.300000012);
@@ -153,6 +157,7 @@ cbuffer cb0 : register(b0) {
   r0.xyzw = 1.66289866f * r0.xyzw;
 
   r0.xyzw = pow(r0.xyzw, 1.f / 2.2f);
+  float4 lutInputColor = r0.zwxy;
   r0.xyzw = min(1.f, r0.xyzw);
   r1.xyw = float3(14.9998999, 0.9375, 0.05859375) * r0.xwz;
   r0.x = floor(r1.x);
@@ -163,6 +168,9 @@ cbuffer cb0 : register(b0) {
   r1.xyz = t2.SampleLevel(s0_s, r1.zw, 0).xyz;
   r1.xyzw = r1.xyzx + -r0.xzwx;
   r0.xyzw = r0.yyyy * r1.xyzw + r0.xzwx;
+
+  r0.xyzw = lerp(lutInputColor, r0.xyzw, injectedData.colorGradeLUTStrength);
+
   r1.xyzw = float4(1, 1, 1, 1) + -r0.wyzw;
   r1.xyzw = r1.xyzw * r1.xyzw;
   r1.xyzw = min(float4(1, 1, 1, 1), r1.xyzw);
@@ -173,7 +181,7 @@ cbuffer cb0 : register(b0) {
 
   float4 outputColor = r0.xyzw;
 
-  outputColor.rgb = applyUserToneMap(outputColor.rgb, bloomedInput.rgb);
+  outputColor.rgb = applyUserToneMap(outputColor.rgb, untonemapped.rgb);
 
   u0[uint2(loadPosition.x, loadPosition.y)] = outputColor;
 }

@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
@@ -13,13 +12,13 @@
 #include <embed/0xB6B56605.h>
 #include <embed/0xF01CCC7E.h>
 
-#include "./shared.h"
+#include <deps/imgui/imgui.h>
+#include <include/reshade.hpp>
 
-#include "../../external/reshade/deps/imgui/imgui.h"
-#include "../../external/reshade/include/reshade.hpp"
-#include "../common/UserSettingUtil.hpp"
+#include "../common/userSettingUtil.hpp"
 #include "../common/shaderReplaceMod.hpp"
 #include "../common/swapChainUpgradeMod.hpp"
+#include "./shared.h"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Batman: Arkham Knight";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Batman: Arkham Knight";
@@ -110,6 +109,33 @@ UserSettingUtil::UserSettings userSettings = {
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeLUTStrength",
+    .binding = &shaderInjection.colorGradeLUTStrength,
+    .defaultValue = 100.f,
+    .label = "LUTStrength",
+    .section = "Color Grading",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.01f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxBloom",
+    .binding = &shaderInjection.fxBloom,
+    .defaultValue = 50.f,
+    .label = "Bloom",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxVignette",
+    .binding = &shaderInjection.fxVignette,
+    .defaultValue = 50.f,
+    .label = "fxVignette",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
   }
 };
 
@@ -124,6 +150,9 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
+  UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
+  UserSettingUtil::updateUserSetting("fxBloom", 50.f);
+  UserSettingUtil::updateUserSetting("fxVignette", 50.f);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {

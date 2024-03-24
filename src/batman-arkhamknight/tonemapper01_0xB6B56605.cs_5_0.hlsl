@@ -1,5 +1,6 @@
 // No motion blur
 
+#include "./shared.h"
 #include "./tonemapper.hlsl"
 
 Texture2D<float4> t0 : register(t0);
@@ -43,27 +44,31 @@ cbuffer cb0 : register(b0) {
   r0.x = max(0, r0.x);
   r0.x = r0.x * r0.x + -1;
   r0.x = r0.x * 0.300000012 + 1;
-  
+
   r0.yzw = t2.SampleLevel(s0_s, r0.zw, 0).xyz;  // Bloom
-  r0.yzw = 0; // saturate(r0.yzw); // cap to SDR
+  // r0.yzw = saturate(r0.yzw); // cap to SDR
+  r0.yzw = max(0, r0.yzw);
 
   r3.x = 0.200000003 * cb0[10].x;
   r3.y = cb0[10].x * 0.200000003 + 1;
   r3.xyzw = r0.wwyz * r3.yyyy + -r3.xxxx;
   r3.xyzw = max(float4(0, 0, 0, 0), r3.xyzw);
   r1.zw = float2(0, 0);
-  
+
   const float4 texture0Input = t0.Load(r1.xyw);
   r0.yzw = texture0Input.xyz;
 
-  r3.xyzw = r0.wwyz + r3.xyzw;
+  r3.xyzw = r0.wwyz + (r3.xyzw * injectedData.fxBloom);
 
   // r3.zwy = texture0Input.xyz;
-  const float3 bloomedInput = r3.zwy;
 
   r0.y = t3.SampleLevel(s0_s, float2(0.5, 0.5), 0).x;
-  r3.xyzw = r3.xyzw / r0.yyyy;
-  r0.xyzw = r3.xyzw * r0.xxxx;
+  // r3.xyzw = r3.xyzw / r0.yyyy;
+  // r0.xyzw = r3.xyzw * r0.xxxx;
+  r0.xyzw = lerp(r3, r3 / r0.y * r0.x, injectedData.fxVignette);
+
+  float3 untonemapped = r0.zwy;
+
   r3.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
   r3.xyzw = r0.yyzw * r3.xyzw + float4(0.00200000009, 0.00200000009, 0.00200000009, 0.00200000009);
   r4.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.300000012, 0.300000012, 0.300000012, 0.300000012);
@@ -75,6 +80,8 @@ cbuffer cb0 : register(b0) {
   r0.xyzw = log2(r0.xyzw);
   r0.xyzw = float4(0.454545468, 0.454545468, 0.454545468, 0.454545468) * r0.xyzw;
   r0.xyzw = exp2(r0.xyzw);
+
+  float4 lutInputColor = r0.zwxy;
   r0.xyzw = min(float4(1, 1, 1, 1), r0.xyzw);
   r3.xyw = float3(14.9998999, 0.9375, 0.05859375) * r0.xwz;
   r0.x = floor(r3.x);
@@ -85,6 +92,9 @@ cbuffer cb0 : register(b0) {
   r3.xyz = t1.SampleLevel(s0_s, r3.xy, 0).xyz;
   r4.xyzw = -r3.xyzx + r0.yzwy;
   r0.xyzw = r0.xxxx * r4.xyzw + r3.xyzx;
+
+  r0.xyzw = lerp(lutInputColor, r0.xyzw, injectedData.colorGradeLUTStrength);
+
   r3.xyzw = float4(1, 1, 1, 1) + -r0.wyzw;
   r3.xyzw = r3.xyzw * r3.xyzw;
   r3.xyzw = min(float4(1, 1, 1, 1), r3.xyzw);
@@ -99,7 +109,7 @@ cbuffer cb0 : register(b0) {
 
   float4 outputColor = r0.xyzw;
 
-  outputColor.rgb = applyUserToneMap(outputColor.rgb, bloomedInput.rgb);
+  outputColor.rgb = applyUserToneMap(outputColor.rgb, untonemapped.rgb);
 
   u0[uint2(r1.x, r1.y)] = outputColor;
 
