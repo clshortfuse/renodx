@@ -102,15 +102,16 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1
       outputColor.rgb *= 203.f / 203.f;
       break;
     case 2:
-      outputColor.rgb = aces_rrt_odt(
+      float hdrScale = (1000.f / 203.f);
+      outputColor.rgb = aces_rgc_rrt_odt(
         testColor.rgb * 203.f / 80.f,
-        0.0001f,  // minY
-        48.f * (1000.f / 203.f),
+        0.0001f / hdrScale,  // minY
+        48.f * hdrScale,
         IDENTITY_MAT  // Don't clip gamut
       );
+      outputColor.rgb /= 48.f;
       outputColor.rgb = mul(AP1_2_BT709_MAT, outputColor.rgb);
       outputColor.rgb = max(0, outputColor.rgb);
-      outputColor.rgb *= 1000.f / 203.f;
 
       // Scale for later UI scaling
       outputColor.rgb *= 203.f / 203.f;
