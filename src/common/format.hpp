@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "../../external/reshade/include/reshade.hpp"
+#include <include/reshade.hpp>
 
 namespace {
   inline auto to_string(reshade::api::shader_stage value) {
