@@ -22,7 +22,7 @@
 #include <vector>
 
 #include <crc32_hash.hpp>
-#include "../../external/reshade/include/reshade.hpp"
+#include <include/reshade.hpp>
 #include "../common/format.hpp"
 
 namespace SwapChainUpgradeMod {
@@ -456,22 +456,31 @@ namespace SwapChainUpgradeMod {
 
         reshade::register_event<reshade::addon_event::init_resource>(on_init_resource);
         reshade::register_event<reshade::addon_event::create_resource>(on_create_resource);
-        // reshade::register_event<reshade::addon_event::destroy_resource>(on_create_resource);
 
         reshade::register_event<reshade::addon_event::create_resource_view>(on_create_resource_view);
         reshade::register_event<reshade::addon_event::init_effect_runtime>(on_init_effect_runtime);
         reshade::register_event<reshade::addon_event::destroy_effect_runtime>(on_destroy_effect_runtime);
 
+#if RESHADE_API_VERSION >= 11
         reshade::register_event<reshade::addon_event::set_fullscreen_state>(on_set_fullscreen_state);
+#endif
 
         break;
       case DLL_PROCESS_DETACH:
         reshade::unregister_event<reshade::addon_event::create_swapchain>(on_create_swapchain);
         reshade::unregister_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
-        reshade::unregister_event<reshade::addon_event::create_resource_view>(on_create_resource_view);
+        reshade::unregister_event<reshade::addon_event::destroy_swapchain>(on_destroy_swapchain);
+
+        reshade::unregister_event<reshade::addon_event::init_resource>(on_init_resource);
         reshade::unregister_event<reshade::addon_event::create_resource>(on_create_resource);
+
+        reshade::unregister_event<reshade::addon_event::create_resource_view>(on_create_resource_view);
         reshade::unregister_event<reshade::addon_event::init_effect_runtime>(on_init_effect_runtime);
         reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(on_destroy_effect_runtime);
+
+#if RESHADE_API_VERSION >= 11
+        reshade::unregister_event<reshade::addon_event::set_fullscreen_state>(on_set_fullscreen_state);
+#endif
         break;
     }
   }

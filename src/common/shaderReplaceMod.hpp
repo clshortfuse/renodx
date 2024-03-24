@@ -22,7 +22,7 @@
 #include <vector>
 
 #include <crc32_hash.hpp>
-#include "../../external/reshade/include/reshade.hpp"
+#include <include/reshade.hpp>
 
 namespace ShaderReplaceMod {
   struct CustomShader {
@@ -144,7 +144,6 @@ namespace ShaderReplaceMod {
       }
     }
 
-
     if (expectedLayoutInjectionIndex != -1 && cbvIndex != expectedLayoutInjectionIndex) {
       std::stringstream s;
       s << "on_create_pipeline_layout("
@@ -164,10 +163,6 @@ namespace ShaderReplaceMod {
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
       return false;
     }
-
-    
-
-    
 
     uint32_t oldCount = param_count;
     uint32_t newCount = oldCount + 1;
@@ -520,6 +515,7 @@ namespace ShaderReplaceMod {
   void use(DWORD fdwReason, CustomShaders* customShaders, T* injections = nullptr) {
     switch (fdwReason) {
       case DLL_PROCESS_ATTACH:
+
         reshade::register_event<reshade::addon_event::create_pipeline>(on_create_pipeline);
         reshade::register_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
         reshade::register_event<reshade::addon_event::destroy_pipeline>(on_destroy_pipeline);
@@ -536,7 +532,9 @@ namespace ShaderReplaceMod {
         if (_shaderInjection == nullptr && injections != nullptr) {
           _shaderInjectionSize = sizeof(T) / sizeof(uint32_t);
           _shaderInjection = reinterpret_cast<float*>(injections);
+#if RESHADE_API_VERSION >= 11
           reshade::register_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
+#endif
           reshade::register_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
           reshade::register_event<reshade::addon_event::destroy_pipeline_layout>(on_destroy_pipeline_layout);
 
@@ -547,13 +545,15 @@ namespace ShaderReplaceMod {
 
         break;
       case DLL_PROCESS_DETACH:
+
         reshade::unregister_event<reshade::addon_event::create_pipeline>(on_create_pipeline);
         reshade::unregister_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
         reshade::unregister_event<reshade::addon_event::destroy_pipeline>(on_destroy_pipeline);
 
         reshade::unregister_event<reshade::addon_event::bind_pipeline>(on_bind_pipeline);
-
+#if RESHADE_API_VERSION >= 11
         reshade::unregister_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
+#endif
         reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
         reshade::unregister_event<reshade::addon_event::destroy_pipeline_layout>(on_destroy_pipeline_layout);
 

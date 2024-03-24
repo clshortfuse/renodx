@@ -1,12 +1,11 @@
-#define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 #define ImTextureID ImU64
 
 #include <map>
 #include <string>
 #include <vector>
 
-#include "../../external/reshade/deps/imgui/imgui.h"
-#include "../../external/reshade/include/reshade.hpp"
+#include <deps/imgui/imgui.h>
+#include <include/reshade.hpp>
 
 namespace UserSettingUtil {
 
