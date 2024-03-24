@@ -1,5 +1,7 @@
 // Output tonemapper
 
+#include "shared.h"
+
 Texture2D<float4> t0 : register(t0);
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t2 : register(t2);
@@ -16,6 +18,10 @@ cbuffer cb0 : register(b0) {
 
 cbuffer cb1 : register(b1) {
   float4 cb1[136];
+}
+
+cbuffer cb2 : register(b2) {
+  ShaderInjectData injectedData : packoffset(c0);
 }
 
 // 3Dmigoto declarations
@@ -147,6 +153,10 @@ float4 main(
     o0.xyz = r0.xyz;
   }
 
+  // if (injectedData.toneMapType == 0) {
+  // } else if (injectedData.toneMapType == 1) {
+  //   o0.rgb = texture0Input.rgb;
+  // }
   o0.rgb = texture0Input.rgb;
   o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 1.f / 2.2f);
   return o0;
