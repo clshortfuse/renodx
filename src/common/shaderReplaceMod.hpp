@@ -24,6 +24,8 @@
 #include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
+#include "./format.hpp"
+
 namespace ShaderReplaceMod {
   struct CustomShader {
     uint32_t crc32;
@@ -39,6 +41,7 @@ namespace ShaderReplaceMod {
 
   static float* _shaderInjection = nullptr;
   static size_t _shaderInjectionSize = 0;
+  static bool usePipelineLayoutCloning = false;
   static int32_t expectedLayoutInjectionIndex = -1;
 
   static CustomShaders* _customShaders = nullptr;
@@ -212,41 +215,110 @@ namespace ShaderReplaceMod {
   // AfterCreateRootSignature
   static void on_init_pipeline_layout(
     reshade::api::device* device,
-    const uint32_t paramCount,
+    const uint32_t param_count,
     const reshade::api::pipeline_layout_param* params,
     reshade::api::pipeline_layout layout
   ) {
     uint32_t injectionIndex = -1;
     auto device_api = device->get_api();
     if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
-      const std::unique_lock<std::shared_mutex> lock(s_mutex);
-      if (!createdParams.size()) return;  // No injected params
-      for (auto injectedParams : createdParams) {
-        free(injectedParams);
-      }
-      createdParams.clear();
+      if (usePipelineLayoutCloning) {
+        uint32_t oldCount = param_count;
+        uint32_t newCount = oldCount + 1;
+        uint32_t cbvIndex = 0;
+        reshade::api::pipeline_layout_param* newParams = new reshade::api::pipeline_layout_param[newCount];
+        memcpy(newParams, params, sizeof(reshade::api::pipeline_layout_param) * oldCount);
 
-      for (uint32_t paramIndex = 0; paramIndex < paramCount; ++paramIndex) {
-        auto param = params[paramIndex];
-        if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
-          if (param.push_constants.count == _shaderInjectionSize) {
-            injectionIndex = paramIndex;
+        for (uint32_t paramIndex = 0; paramIndex < param_count; ++paramIndex) {
+          auto param = params[paramIndex];
+          if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
+            for (uint32_t rangeIndex = 0; rangeIndex < param.descriptor_table.count; ++rangeIndex) {
+              auto range = param.descriptor_table.ranges[rangeIndex];
+              if (range.type == reshade::api::descriptor_type::constant_buffer) {
+                if (cbvIndex < range.dx_register_index + range.count) {
+                  cbvIndex = range.dx_register_index + range.count;
+                }
+              }
+            }
+          } else if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
+            if (cbvIndex < param.push_constants.dx_register_index + param.push_constants.count) {
+              cbvIndex = param.push_constants.dx_register_index + param.push_constants.count;
+            }
+          } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
+            if (param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer) {
+              if (cbvIndex < param.push_descriptors.dx_register_index + param.push_descriptors.count) {
+                cbvIndex = param.push_descriptors.dx_register_index + param.push_descriptors.count;
+              }
+            }
           }
         }
-      }
-      if (injectionIndex == -1) {
+        uint32_t slots = _shaderInjectionSize;
+        uint32_t maxCount = 64u - (oldCount + 1u) + 1u;
+        newParams[oldCount].type = reshade::api::pipeline_layout_param_type::push_constants;
+        newParams[oldCount].push_constants.binding = 0;
+        newParams[oldCount].push_constants.count = (slots > maxCount) ? maxCount : slots;
+        newParams[oldCount].push_constants.dx_register_index = cbvIndex;
+        newParams[oldCount].push_constants.dx_register_space = 0;
+        newParams[oldCount].push_constants.visibility = reshade::api::shader_stage::all;
+
+        injectionIndex = oldCount;
+
+        if (slots > maxCount) {
+          std::stringstream s;
+          s << "on_init_pipeline_layout("
+            << reinterpret_cast<void*>(layout.handle)
+            << "shader injection oversized: "
+            << slots << "/" << maxCount
+            << " )";
+          reshade::log_message(reshade::log_level::warning, s.str().c_str());
+          free(newParams);
+          return;
+        }
+
+        reshade::api::pipeline_layout newLayout;
+        auto result = device->create_pipeline_layout(newCount, &newParams[0], &newLayout);
+        free(newParams);
         std::stringstream s;
-        s << "on_init_pipeline_layout++("
-          << "Injection index not found for "
+        s << "on_init_pipeline_layout(Cloning D3D12 Layout "
           << reinterpret_cast<void*>(layout.handle)
-          << " )";
-        reshade::log_message(reshade::log_level::warning, s.str().c_str());
-        return;
+          << " => "
+          << reinterpret_cast<void*>(newLayout.handle)
+          << " with cbvIndex: " << cbvIndex
+          << " at paramIndex: " << injectionIndex
+          << ": " << (result ? "OK" : "FAILED")
+          << ")";
+        reshade::log_message(result ? reshade::log_level::info : reshade::log_level::error, s.str().c_str());
+        moddedPipelineLayouts.emplace(layout.handle, newLayout);
+      } else {
+        const std::unique_lock<std::shared_mutex> lock(s_mutex);
+        if (!createdParams.size()) return;  // No injected params
+        for (auto injectedParams : createdParams) {
+          free(injectedParams);
+        }
+        createdParams.clear();
+
+        for (uint32_t paramIndex = 0; paramIndex < param_count; ++paramIndex) {
+          auto param = params[paramIndex];
+          if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
+            if (param.push_constants.count == _shaderInjectionSize) {
+              injectionIndex = paramIndex;
+            }
+          }
+        }
+        if (injectionIndex == -1) {
+          std::stringstream s;
+          s << "on_init_pipeline_layout++("
+            << "Injection index not found for "
+            << reinterpret_cast<void*>(layout.handle)
+            << " )";
+          reshade::log_message(reshade::log_level::warning, s.str().c_str());
+          return;
+        }
       }
 
     } else {
       injectionIndex = 0;
-      for (uint32_t paramIndex = 0; paramIndex < paramCount; paramIndex++) {
+      for (uint32_t paramIndex = 0; paramIndex < param_count; paramIndex++) {
         auto param = params[paramIndex];
         if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
           for (uint32_t rangeIndex = 0; rangeIndex < param.descriptor_table.count; ++rangeIndex) {
@@ -279,28 +351,27 @@ namespace ShaderReplaceMod {
         reshade::log_message(reshade::log_level::warning, s.str().c_str());
         injectionIndex = 13;
       }
-      {
-        // device->create_pipeline_layout(1)
 
-        reshade::api::pipeline_layout_param newParams;
-        newParams.type = reshade::api::pipeline_layout_param_type::push_constants;
-        //newParams.push_constants.binding = 0;
-        newParams.push_constants.count = 1;
-        newParams.push_constants.dx_register_index = injectionIndex;
-        newParams.push_constants.dx_register_space = 0;
-        newParams.push_constants.visibility = reshade::api::shader_stage::all;
+      // device->create_pipeline_layout(1)
 
-        reshade::api::pipeline_layout newLayout;
-        auto result = device->create_pipeline_layout(1, &newParams, &newLayout);
-        std::stringstream s;
-        s << "on_init_pipeline_layout("
-          << "Creating D3D11 Layout "
-          << reinterpret_cast<void*>(newLayout.handle)
-          << ": " << result
-          << " )";
-        reshade::log_message(reshade::log_level::warning, s.str().c_str());
-        moddedPipelineLayouts.emplace(layout.handle, newLayout);
-      }
+      reshade::api::pipeline_layout_param newParams;
+      newParams.type = reshade::api::pipeline_layout_param_type::push_constants;
+      //newParams.push_constants.binding = 0;
+      newParams.push_constants.count = 1;
+      newParams.push_constants.dx_register_index = injectionIndex;
+      newParams.push_constants.dx_register_space = 0;
+      newParams.push_constants.visibility = reshade::api::shader_stage::all;
+
+      reshade::api::pipeline_layout newLayout;
+      auto result = device->create_pipeline_layout(1, &newParams, &newLayout);
+      std::stringstream s;
+      s << "on_init_pipeline_layout("
+        << "Creating D3D11 Layout "
+        << reinterpret_cast<void*>(newLayout.handle)
+        << ": " << result
+        << " )";
+      reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      moddedPipelineLayouts.emplace(layout.handle, newLayout);
     }
 
     moddedPipelineRootIndexes.emplace(layout.handle, injectionIndex);
@@ -379,8 +450,20 @@ namespace ShaderReplaceMod {
 
           newDesc->code = customShader.code;
           newDesc->code_size = customShader.codeSize;
+          std::stringstream s;
+          s << "on_init_pipeline(injecting shader:"
+            << std::hex << shader_hash << std::dec
+            << ", layout: " << reinterpret_cast<void*>(layout.handle)
+            << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
+            << ")";
+          reshade::log_message(reshade::log_level::info, s.str().c_str());
         }
       }
+    }
+    if (usePipelineLayoutCloning && !needsClone) {
+      newSubobjects = new reshade::api::pipeline_subobject[subobjectCount];
+      memcpy(newSubobjects, subobjects, sizeof(reshade::api::pipeline_subobject) * subobjectCount);
+      needsClone = true;
     }
     if (!foundInjection && !needsClone) return;
     pipelineToLayoutMap.emplace(pipeline.handle, layout);
@@ -389,15 +472,29 @@ namespace ShaderReplaceMod {
     }
     if (needsClone) {
       reshade::api::pipeline newPipeline;
-      bool builtPipelineOK = device->create_pipeline(layout, subobjectCount, &newSubobjects[0], &newPipeline);
+      reshade::api::pipeline_layout cloneLayout = layout;
+
+      if (usePipelineLayoutCloning) {
+        auto device_api = device->get_api();
+        if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
+          auto pair3 = moddedPipelineLayouts.find(layout.handle);
+          if (pair3 != moddedPipelineLayouts.end()) {
+            cloneLayout = pair3->second;
+          }
+        }
+      }
+
+      bool builtPipelineOK = device->create_pipeline(cloneLayout, subobjectCount, &newSubobjects[0], &newPipeline);
       if (builtPipelineOK) {
         pipelineCloneMap.emplace(pipeline.handle, newPipeline);
       }
+      // free(newSubobjects);
       std::stringstream s;
       s << "init_pipeline(cloned "
         << reinterpret_cast<void*>(pipeline.handle)
         << " => " << reinterpret_cast<void*>(newPipeline.handle)
         << ", layout: " << reinterpret_cast<void*>(layout.handle)
+        << " (" << reinterpret_cast<void*>(cloneLayout.handle) << ")"
         << ", size: " << subobjectCount
         << ", " << (builtPipelineOK ? "OK" : "FAILED!")
         << ")";
@@ -405,6 +502,16 @@ namespace ShaderReplaceMod {
         builtPipelineOK ? reshade::log_level::info : reshade::log_level::error,
         s.str().c_str()
       );
+      if (!builtPipelineOK || subobjectCount == 16) {
+        for (uint32_t i = 0; i < subobjectCount; ++i) {
+          const auto subobject = subobjects[i];
+          std::stringstream s;
+          s << "on_init_pipeline(debug:"
+            << reinterpret_cast<void*>(pipeline.handle)
+            << ", type: " << to_string(subobject.type);
+          reshade::log_message(reshade::log_level::debug, s.str().c_str());
+        }
+      }
     } else {
       std::stringstream s;
       s << "init_pipeline(injected "
@@ -445,6 +552,63 @@ namespace ShaderReplaceMod {
     reshade::api::pipeline_stage type,
     reshade::api::pipeline pipeline
   ) {
+    if (_shaderInjectionSize != 0) {
+      auto pair0 = pipelineToLayoutMap.find(pipeline.handle);
+      if (pair0 != pipelineToLayoutMap.end()) {
+        auto layout = pair0->second;
+
+        auto injectionLayout = layout;
+        auto device = cmd_list->get_device();
+        auto device_api = device->get_api();
+        reshade::api::shader_stage stage;
+        uint32_t paramIndex = 0;
+        if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
+          auto pair2 = moddedPipelineRootIndexes.find(layout.handle);
+          if (pair2 == moddedPipelineRootIndexes.end()) return;
+          paramIndex = pair2->second;
+
+          stage = computeShaderLayouts.count(layout.handle) == 0
+                  ? reshade::api::shader_stage::all_graphics
+                  : reshade::api::shader_stage::all_compute;
+
+          if (usePipelineLayoutCloning) {
+            auto pair3 = moddedPipelineLayouts.find(layout.handle);
+            if (pair3 == moddedPipelineLayouts.end()) return;
+            injectionLayout = pair3->second;
+          }
+
+        } else {
+          stage = (type == reshade::api::pipeline_stage::compute_shader)
+                  ? reshade::api::shader_stage::compute
+                  : reshade::api::shader_stage::pixel;
+          auto pair3 = moddedPipelineLayouts.find(layout.handle);
+          if (pair3 == moddedPipelineLayouts.end()) return;
+          injectionLayout = pair3->second;
+        }
+
+#ifdef DEBUG_LEVEL_1
+        std::stringstream s;
+        s << "bind_pipeline(pushing "
+          << _shaderInjectionSize << " buffers"
+          << " into " << reinterpret_cast<void*>(injectionLayout.handle)
+          << "[" << paramIndex << "]"
+          << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
+          << ", stage: " << (uint32_t)stage
+          << ")";
+        reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
+
+        cmd_list->push_constants(
+          stage,  // Used by reshade to specify graphics or compute
+          injectionLayout,
+          paramIndex,
+          0,
+          _shaderInjectionSize,
+          _shaderInjection
+        );
+      }
+    }
+
     const std::unique_lock<std::shared_mutex> lock(s_mutex);
     auto pipelineToClone = pipelineCloneMap.find(pipeline.handle);
     if (pipelineToClone != pipelineCloneMap.end()) {
@@ -458,57 +622,54 @@ namespace ShaderReplaceMod {
         << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
+      // Must saw pipelinelayout first
       cmd_list->bind_pipeline(type, newPipeline);
       // Safe to call now or write before draw
     }
+  }
 
-    if (_shaderInjectionSize == 0) return;
+  void on_push_constants(
+    reshade::api::command_list* cmd_list,
+    reshade::api::shader_stage stages,
+    reshade::api::pipeline_layout layout,
+    uint32_t layout_param,
+    uint32_t first,
+    uint32_t count,
+    const void* values
+  ) {
+    auto pair = moddedPipelineLayouts.find(layout.handle);
+    if (pair == moddedPipelineLayouts.end()) return;
+    auto clonedLayout = pair->second;
+    cmd_list->push_constants(stages, clonedLayout, layout_param, first, count, values);
+  }
 
-    auto pair0 = pipelineToLayoutMap.find(pipeline.handle);
-    if (pair0 == pipelineToLayoutMap.end()) return;
-    auto layout = pair0->second;
+  void on_push_descriptors(
+    reshade::api::command_list* cmd_list,
+    reshade::api::shader_stage stages,
+    reshade::api::pipeline_layout layout,
+    uint32_t layout_param,
+    const reshade::api::descriptor_table_update &update
+  ) {
+    auto pair = moddedPipelineLayouts.find(layout.handle);
+    if (pair == moddedPipelineLayouts.end()) return;
+    auto clonedLayout = pair->second;
+    cmd_list->push_descriptors(stages, clonedLayout, layout_param, update);
+  }
 
-    auto injectionLayout = layout;
-    auto device = cmd_list->get_device();
-    auto device_api = device->get_api();
-    reshade::api::shader_stage stage;
-    uint32_t paramIndex = 0;
-    if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
-      auto pair2 = moddedPipelineRootIndexes.find(layout.handle);
-      if (pair2 == moddedPipelineRootIndexes.end()) return;
-      paramIndex = pair2->second;
-
-      stage = computeShaderLayouts.count(layout.handle) == 0
-              ? reshade::api::shader_stage::all_graphics
-              : reshade::api::shader_stage::all_compute;
-
-    } else {
-      stage = (type == reshade::api::pipeline_stage::compute_shader)
-              ? reshade::api::shader_stage::compute
-              : reshade::api::shader_stage::pixel;
-      auto pair3 = moddedPipelineLayouts.find(layout.handle);
-      if (pair3 == moddedPipelineLayouts.end()) return;
-      injectionLayout = pair3->second;
+  void on_bind_descriptor_tables(
+    reshade::api::command_list* cmd_list,
+    reshade::api::shader_stage stages,
+    reshade::api::pipeline_layout layout,
+    uint32_t first,
+    uint32_t count,
+    const reshade::api::descriptor_table* tables
+  ) {
+    auto pair = moddedPipelineLayouts.find(layout.handle);
+    if (pair == moddedPipelineLayouts.end()) return;
+    auto clonedLayout = pair->second;
+    for (uint32_t i = 0; i < count; ++i) {
+      cmd_list->bind_descriptor_table(stages, clonedLayout, (first + i), tables[i]);
     }
-    cmd_list->push_constants(
-      stage,  // Used by reshade to specify graphics or compute
-      injectionLayout,
-      paramIndex,
-      0,
-      _shaderInjectionSize,
-      _shaderInjection
-    );
-#ifdef DEBUG_LEVEL_1
-    std::stringstream s;
-    s << "bind_pipeline(injected "
-      << _shaderInjectionSize << " buffers"
-      << " into " << reinterpret_cast<void*>(injectionLayout.handle)
-      << "[" << paramIndex << "]"
-      << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
-      << ", stage: " << (uint32_t)stage
-      << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
-#endif
   }
 
   template <typename T = float*>
@@ -516,7 +677,9 @@ namespace ShaderReplaceMod {
     switch (fdwReason) {
       case DLL_PROCESS_ATTACH:
 
-        reshade::register_event<reshade::addon_event::create_pipeline>(on_create_pipeline);
+        if (!usePipelineLayoutCloning) {
+          reshade::register_event<reshade::addon_event::create_pipeline>(on_create_pipeline);
+        }
         reshade::register_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
         reshade::register_event<reshade::addon_event::destroy_pipeline>(on_destroy_pipeline);
 
@@ -533,10 +696,18 @@ namespace ShaderReplaceMod {
           _shaderInjectionSize = sizeof(T) / sizeof(uint32_t);
           _shaderInjection = reinterpret_cast<float*>(injections);
 #if RESHADE_API_VERSION >= 11
-          reshade::register_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
+          if (!usePipelineLayoutCloning) {
+            reshade::register_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
+          }
 #endif
           reshade::register_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
           reshade::register_event<reshade::addon_event::destroy_pipeline_layout>(on_destroy_pipeline_layout);
+
+          if (usePipelineLayoutCloning) {
+            reshade::register_event<reshade::addon_event::push_constants>(on_push_constants);
+            reshade::register_event<reshade::addon_event::push_descriptors>(on_push_descriptors);
+            reshade::register_event<reshade::addon_event::bind_descriptor_tables>(on_bind_descriptor_tables);
+          }
 
           std::stringstream s;
           s << "Attached Injections: " << _shaderInjectionSize;
