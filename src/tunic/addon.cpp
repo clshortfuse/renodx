@@ -3,12 +3,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-#define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
-
-#include "./shared.h"
 
 #include "./embed/0x1CCE11A3.h"
 #include "./embed/0x49E25D6C.h"
@@ -19,13 +16,15 @@
 #include "./embed/0xB274BE4D.h"
 #include "./embed/0xEEFE9737.h"
 
-#include "../../external/reshade/deps/imgui/imgui.h"
-#include "../../external/reshade/include/reshade.hpp"
+#include <deps/imgui/imgui.h>
+#include <include/reshade.hpp>
+
 #include "../common/UserSettingUtil.hpp"
 #include "../common/shaderReplaceMod.hpp"
 #include "../common/swapChainUpgradeMod.hpp"
+#include "./shared.h"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Tunic ";
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Tunic";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Tunic";
 
 ShaderReplaceMod::CustomShaders customShaders = {
@@ -37,7 +36,6 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0x5439FB55),
   CustomShaderEntry(0x54E583C8),  // glow effect
   CustomShaderEntry(0x4AC5CC39)   // tonemapper
-
 };
 
 ShaderInjectData shaderInjection;
@@ -171,15 +169,12 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
 
-       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
-         {reshade::api::format::r32_g8_typeless, reshade::api::format::r16g16b16a16_float, -1}
-       );
-//       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
-//         {reshade::api::format::r16g16b16a16_typeless, reshade::api::format::r16g16b16a16_float, -1}
-//       );
-       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
-         {reshade::api::format::r8g8b8a8_typeless, reshade::api::format::r16g16b16a16_float, -1}
-       );
+      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+        {reshade::api::format::r32_g8_typeless, reshade::api::format::r16g16b16a16_float}
+      );
+      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+        {reshade::api::format::r8g8b8a8_typeless, reshade::api::format::r16g16b16a16_float}
+      );
 
       break;
     case DLL_PROCESS_DETACH:

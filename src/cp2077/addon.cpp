@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
@@ -23,7 +22,6 @@
 #include <embed/0xD2BBEBD9.h>
 #include <embed/0xDE517511.h>
 #include <embed/0xE57907C4.h>
-
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -33,8 +31,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "../../external/reshade/deps/imgui/imgui.h"
-#include "../../external/reshade/include/reshade.hpp"
+#include <deps/imgui/imgui.h>
+#include <include/reshade.hpp>
 
 #include "../common/shaderReplaceMod.hpp"
 #include "../common/userSettingUtil.hpp"

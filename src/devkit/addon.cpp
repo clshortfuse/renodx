@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-#define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 #define ImTextureID ImU64
 
+#include <Windows.h>
 #include <array>
 #include <cstdio>
 #include <filesystem>
@@ -21,18 +21,14 @@
 #include <unordered_set>
 #include <vector>
 
-#include <Windows.h>
+#include <deps/imgui/imgui.h>
+#include <include/reshade.hpp>
 
 #include <crc32_hash.hpp>
-
-#include "../../external/reshade/deps/imgui/imgui.h"
-#include "../../external/reshade/include/reshade.hpp"
 #include "../common/format.hpp"
-
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - DevKit";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX DevKit Module";
-
 
 struct CachedPipeline {
   reshade::api::pipeline pipeline;

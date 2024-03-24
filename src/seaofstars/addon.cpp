@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
@@ -11,13 +10,13 @@
 #include <embed/0x552A4A60.h>
 #include <embed/0x72B31CDE.h>
 
-#include "./shared.h"
+#include <deps/imgui/imgui.h>
+#include <include/reshade.hpp>
 
-#include "../../external/reshade/deps/imgui/imgui.h"
-#include "../../external/reshade/include/reshade.hpp"
 #include "../common/shaderReplaceMod.hpp"
 #include "../common/swapChainUpgradeMod.hpp"
 #include "../common/userSettingUtil.hpp"
+#include "./shared.h"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Sea of Stars";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Sea of Stars";

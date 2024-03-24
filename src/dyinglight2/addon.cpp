@@ -3,20 +3,18 @@
  * SPDX-License-Identifier: MIT
  */
 
-#define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
 
-#include "./shared.h"
-
 #include <embed/0xA7F77A42.h>
 
-#define ImTextureID ImU64
-#include "../../external/reshade/deps/imgui/imgui.h"
-#include "../../external/reshade/include/reshade.hpp"
+#include <deps/imgui/imgui.h>
+#include <include/reshade.hpp>
+
 #include "../common/shaderReplaceMod.hpp"
 #include "../common/swapChainUpgradeMod.hpp"
+#include "./shared.h"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Dying Light 2";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Dying Light 2";

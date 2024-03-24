@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
@@ -11,8 +10,9 @@
 #include <embed/0x84B99833.h>
 #include <embed/0xE41360A3.h>
 
-#include "../../external/reshade/deps/imgui/imgui.h"
-#include "../../external/reshade/include/reshade.hpp"
+#include <deps/imgui/imgui.h>
+#include <include/reshade.hpp>
+
 #include "../common/shaderReplaceMod.hpp"
 #include "../common/swapChainUpgradeMod.hpp"
 
