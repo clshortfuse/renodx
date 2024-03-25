@@ -2,10 +2,17 @@
 #include "../common/aces.hlsl"
 #include "../common/color.hlsl"
 #include "../common/colorgrade.hlsl"
+#include "../common/graph.hlsl"
 #include "../common/tonemap.hlsl"
 #include "./shared.h"
 
+#define DRAW_TONEMAPPER 0
+
+#if DRAW_TONEMAPPER
+float3 applyUserToneMap(float3 inputColor, float3 untonemapped, DrawToneMapperParams dtmParams) {
+#else 
 float3 applyUserToneMap(float3 inputColor, float3 untonemapped) {
+#endif
   float3 outputColor = saturate(inputColor);
 
   float vanillaMidGray = uncharted2Tonemap(0.18f) / uncharted2Tonemap(2.2f);
@@ -18,9 +25,9 @@ float3 applyUserToneMap(float3 inputColor, float3 untonemapped) {
       outputColor = untonemapped;  // Untonemapped
     } else {
       // OutputColor was intended for 2.2 displays, using 2.2 numbers
-      outputColor = max(0, outputColor);     // should only have bt709 colors
-      outputColor = pow(outputColor, 2.2f);  // Now in linear
-      outputColor *= 0.18f / vanillaMidGray; // rescale to match midgray
+      outputColor = max(0, outputColor);      // should only have bt709 colors
+      outputColor = pow(outputColor, 2.2f);   // Now in linear
+      outputColor *= 0.18f / vanillaMidGray;  // rescale to match midgray
 
       float inputY = yFromBT709(abs(untonemapped));
       float outputY = yFromBT709(outputColor);
@@ -46,9 +53,9 @@ float3 applyUserToneMap(float3 inputColor, float3 untonemapped) {
         outputColor = lerp(grayscale, outputColor, injectedData.colorGradeSaturation);
         outputColor = max(0, outputColor);
       }
-      
+
       if (injectedData.toneMapType == 2) {
-        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / 0.10); // ACES mid gray is 10%
+        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / 0.10);  // ACES mid gray is 10%
         float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
         outputColor = aces_rgc_rrt_odt(
           outputColor,
@@ -61,7 +68,7 @@ float3 applyUserToneMap(float3 inputColor, float3 untonemapped) {
         // outputColor = apply_aces_highlights(outputColor);
         outputColor = mul(BT709_2_BT2020_MAT, outputColor);
         outputColor = max(0, outputColor);
-        const float openDRTMidGray = 11.696f / 100.f; // open_drt_transform(0.18);
+        const float openDRTMidGray = 11.696f / 100.f;  // open_drt_transform(0.18);
         float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / openDRTMidGray);
         float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
 
@@ -79,7 +86,13 @@ float3 applyUserToneMap(float3 inputColor, float3 untonemapped) {
     }
     // Send as 2.2 numbers
   }
+
+#if DRAW_TONEMAPPER
+  if (dtmParams.drawToneMapper) outputColor = DrawToneMapperEnd(outputColor, dtmParams);
+#endif
+
   outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+
   outputColor = sign(outputColor) * pow(abs(outputColor), 1.f / 2.2f);
   return outputColor;
 }

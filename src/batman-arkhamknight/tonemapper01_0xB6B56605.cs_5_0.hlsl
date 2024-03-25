@@ -67,6 +67,11 @@ cbuffer cb0 : register(b0) {
   // r0.xyzw = r3.xyzw * r0.xxxx;
   r0.xyzw = lerp(r3, r3 / r0.y * r0.x, injectedData.fxVignette);
 
+#if DRAW_TONEMAPPER
+  DrawToneMapperParams dtmParams = DrawToneMapperStart(r1.xy, r0.zwy, t0, injectedData.toneMapPeakNits);
+  r0.zwy = dtmParams.outputColor;
+#endif
+
   float3 untonemapped = r0.zwy;
 
   r3.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
@@ -107,9 +112,14 @@ cbuffer cb0 : register(b0) {
   r2.xyzw = r3.xyzw * r2.xyzw + float4(1, 1, 1, 1);
   r0.xyzw = r2.xyzw * r0.xyzw;
 
+
   float4 outputColor = r0.xyzw;
 
+#if DRAW_TONEMAPPER
+  outputColor.rgb = applyUserToneMap(outputColor.rgb, untonemapped.rgb, dtmParams);
+#else
   outputColor.rgb = applyUserToneMap(outputColor.rgb, untonemapped.rgb);
+#endif
 
   u0[uint2(r1.x, r1.y)] = outputColor;
 
