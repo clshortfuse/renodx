@@ -68,7 +68,7 @@ cbuffer cb0 : register(b0) {
   r1 = lerp(r1, r1 / r0.w * r0.z, injectedData.fxVignette);
 
 #if DRAW_TONEMAPPER
-  DrawToneMapperParams dtmParams = DrawToneMapperStart(r0.xy, r1.zwy, t0, injectedData.toneMapPeakNits);
+  DrawToneMapperParams dtmParams = DrawToneMapperStart(r0.xy, r1.zwy, t0, injectedData.toneMapPeakNits, injectedData.toneMapGameNits);
   r1.zwy = dtmParams.outputColor;
 #endif
 

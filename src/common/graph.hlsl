@@ -8,10 +8,11 @@ struct DrawToneMapperParams {
   float valueX;
   float3 outputColor;
   float peakNits;
+  float scale;
 };
 
-DrawToneMapperParams DrawToneMapperStart(float2 position, float3 inputColor, Texture2D textureUntonemapped, float peakNits) {
-  DrawToneMapperParams dtmParams = {false, -1u, 0, inputColor, peakNits};
+DrawToneMapperParams DrawToneMapperStart(float2 position, float3 inputColor, Texture2D textureUntonemapped, float peakNits, float scale = 80.f) {
+  DrawToneMapperParams dtmParams = {false, -1u, 0, inputColor, peakNits, scale};
   float width;
   float height;
   textureUntonemapped.GetDimensions(width, height);
@@ -32,8 +33,8 @@ DrawToneMapperParams DrawToneMapperStart(float2 position, float3 inputColor, Tex
       dtmParams.toneMapperY = offset.y - ToneMapperPadding;
 
       // From 0.01 to Peak nits (in log)
-      const float xMin = log10(0.01 / 100.f);
-      const float xMax = log10(10000.f / 100.f);
+      const float xMin = log10(0.01 / scale);
+      const float xMax = log10(10000.f / scale);
       const float xRange = xMax - xMin;
       dtmParams.valueX = (float(toneMapperX) / float(ToneMapperBins)) * (xRange) + xMin;
       dtmParams.valueX = pow(10.f, dtmParams.valueX);
@@ -50,13 +51,14 @@ float3 DrawToneMapperEnd(float3 inputColor, inout DrawToneMapperParams dtmParams
   const float yRange = yMax - yMin;
   float valueY = (float(dtmParams.toneMapperY) / float(ToneMapperBins)) * (yRange) + yMin;
   float peakNits = dtmParams.peakNits;
+  float scale = dtmParams.scale;
   valueY = pow(10.f, valueY);
-  valueY /= 100.f;
+  valueY /= scale;
   float outputY = yFromBT709(inputColor);
   if (outputY > valueY) {
     if (outputY < 0.18f) {
       return float3(0.3f, 0, 0.3f);
-    } else if (outputY > peakNits / 100.f) {
+    } else if (outputY > peakNits / scale) {
       return float3(0, 0.3f, 0.3f);
     } else {
       return max(0.05f, valueY);
@@ -64,7 +66,7 @@ float3 DrawToneMapperEnd(float3 inputColor, inout DrawToneMapperParams dtmParams
   } else {
     if (dtmParams.valueX < 0.18f) {
       return float3(0, 0.3f, 0);
-    } else if (valueY >= peakNits / 100.f) {
+    } else if (valueY >= peakNits / scale) {
       return float3(0, 0, 0.3f);
     } else {
       return 0.05f;

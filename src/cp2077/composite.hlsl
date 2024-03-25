@@ -108,7 +108,7 @@ float3 composite(bool useTexArray = false) {
   }
 
 #if DRAW_TONEMAPPER
-  DrawToneMapperParams dtmParams = DrawToneMapperStart(gl_FragCoord.xy, outputColor, injectedData.peakNits);
+  DrawToneMapperParams dtmParams = DrawToneMapperStart(gl_FragCoord.xy, outputColor, injectedData.peakNits, 100.f);
   outputColor = dtmParams.outputColor;
 #endif
 
