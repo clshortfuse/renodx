@@ -38,6 +38,7 @@ namespace ShaderReplaceMod {
 
   // clang-format off
 #define CustomShaderEntry(crc32) { crc32, { crc32, _##crc32, sizeof(_##crc32) } }
+#define BypassShaderEntry(crc32) { crc32, { crc32, nullptr, 0 } }
   // clang-format on
 
   static float* _shaderInjection = nullptr;
@@ -56,6 +57,9 @@ namespace ShaderReplaceMod {
     std::unordered_map<uint64_t, reshade::api::pipeline> pipelineCloneMap;
     std::unordered_map<uint64_t, int32_t> moddedPipelineRootIndexes;
     std::unordered_map<uint64_t, reshade::api::pipeline_layout> moddedPipelineLayouts;
+    std::unordered_map<uint64_t, uint32_t> pipelineToShaderHashMap;
+    std::unordered_set<uint32_t> bypassedShaders;
+    uint32_t currentShader;
   };
 
   static void on_init_device(reshade::api::device* device) {
@@ -110,23 +114,34 @@ namespace ShaderReplaceMod {
       desc->code = customShader.code;
       desc->code_size = customShader.codeSize;
 
-      uint32_t new_hash = compute_crc32(
-        static_cast<const uint8_t*>(desc->code),
-        desc->code_size
-      );
-      data.codeInjections.emplace(new_hash, shader_hash);
-
+      if (customShader.codeSize) {
+        uint32_t new_hash = compute_crc32(
+          static_cast<const uint8_t*>(desc->code),
+          desc->code_size
+        );
+        data.codeInjections.emplace(new_hash, shader_hash);
 #ifdef DEBUG_LEVEL_0
-      std::stringstream s;
-      s << "replaceShader("
-        << "0x" << std::hex << shader_hash << std::dec
-        << " => "
-        << "0x" << std::hex << new_hash << std::dec
-        << " - " << desc->code_size << " bytes"
-        << ")";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
+        std::stringstream s;
+        s << "create_pipeline(replace shader"
+          << "0x" << std::hex << shader_hash << std::dec
+          << " => "
+          << "0x" << std::hex << new_hash << std::dec
+          << " - " << desc->code_size << " bytes"
+          << ")";
+        reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
 
+      } else {
+        data.codeInjections.emplace(shader_hash, shader_hash);
+        data.bypassedShaders.emplace(shader_hash);
+#ifdef DEBUG_LEVEL_0
+        std::stringstream s;
+        s << "create_pipeline(bypass shader"
+          << "0x" << std::hex << shader_hash << std::dec
+          << ")";
+        reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
+      }
       replaced_stages = true;
     }
 
@@ -487,11 +502,13 @@ namespace ShaderReplaceMod {
       // Pipeline has a pixel shader with code. Hash code and check
       auto shader_hash = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
 
-      if (data.codeInjections.count(shader_hash) != 0) {
-        foundInjection = shader_hash;
+      auto codeInjectionPair = data.codeInjections.find(shader_hash);
+      if (codeInjectionPair != data.codeInjections.end()) {
+        foundInjection = codeInjectionPair->second;
       } else {
         const auto pair = _customShaders->find(shader_hash);
         if (pair != _customShaders->end()) {
+          foundInjection = shader_hash;
           const auto customShader = pair->second;
 
           if (!needsClone) {
@@ -503,11 +520,16 @@ namespace ShaderReplaceMod {
 
           auto newDesc = static_cast<reshade::api::shader_desc*>(cloneSubject->data);
 
-          newDesc->code = customShader.code;
-          newDesc->code_size = customShader.codeSize;
           std::stringstream s;
-          s << "on_init_pipeline(injecting shader:"
-            << std::hex << shader_hash << std::dec
+          if (customShader.codeSize) {
+            newDesc->code = customShader.code;
+            newDesc->code_size = customShader.codeSize;
+            s << "on_init_pipeline(injecting shader:";
+          } else {
+            data.bypassedShaders.emplace(shader_hash);
+            s << "on_init_pipeline(bypassing shader:";
+          }
+          s << std::hex << shader_hash << std::dec
             << ", layout: " << reinterpret_cast<void*>(layout.handle)
             << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
             << ")";
@@ -521,6 +543,9 @@ namespace ShaderReplaceMod {
       needsClone = true;
     }
     if (!foundInjection && !needsClone) return;
+    if (foundInjection) {
+      data.pipelineToShaderHashMap.emplace(pipeline.handle, foundInjection);
+    }
     data.pipelineToLayoutMap.emplace(pipeline.handle, layout);
     if (foundComputeShader) {
       data.computeShaderLayouts.emplace(layout.handle);
@@ -542,6 +567,7 @@ namespace ShaderReplaceMod {
       bool builtPipelineOK = device->create_pipeline(cloneLayout, subobjectCount, &newSubobjects[0], &newPipeline);
       if (builtPipelineOK) {
         data.pipelineCloneMap.emplace(pipeline.handle, newPipeline);
+        data.pipelineToShaderHashMap.emplace(newPipeline.handle, foundInjection);
       }
       // free(newSubobjects);
       std::stringstream s;
@@ -560,11 +586,40 @@ namespace ShaderReplaceMod {
       if (!builtPipelineOK) {
         for (uint32_t i = 0; i < subobjectCount; ++i) {
           const auto subobject = subobjects[i];
-          std::stringstream s;
-          s << "on_init_pipeline(debug:"
-            << reinterpret_cast<void*>(pipeline.handle)
-            << ", type: " << to_string(subobject.type);
-          reshade::log_message(reshade::log_level::debug, s.str().c_str());
+          for (uint32_t j = 0; (j < subobject.count) || (subobject.count == 0 && j == 0); j++) {
+            std::stringstream s;
+            s << "on_init_pipeline(debug:"
+              << reinterpret_cast<void*>(pipeline.handle)
+              << ", type: " << to_string(subobject.type);
+            switch (subobject.type) {
+              case reshade::api::pipeline_subobject_type::raygen_shader:
+                {
+                  if (subobject.data != nullptr) {
+                    auto desc = static_cast<const reshade::api::shader_desc*>(subobject.data);
+                    s << ", size: " << desc->code_size;
+                  } else {
+                    s << " (no data)";
+                  }
+                }
+                break;
+              case reshade::api::pipeline_subobject_type::primitive_topology:
+                {
+                  auto topology = *static_cast<const reshade::api::primitive_topology*>(subobject.data);
+                  s << ", topology: " << uint32_t(topology);
+                }
+                break;
+              case reshade::api::pipeline_subobject_type::dynamic_pipeline_states:
+                {
+                  const auto dynamicState = static_cast<const reshade::api::dynamic_state*>(subobject.data)[j];
+                  s << ", state: " << uint32_t(dynamicState) << "(" << to_string(dynamicState) << ")";
+                }
+                break;
+              default:
+                break;
+            }
+            s << ")";
+            reshade::log_message(reshade::log_level::debug, s.str().c_str());
+          }
         }
       }
     } else {
@@ -610,6 +665,13 @@ namespace ShaderReplaceMod {
   ) {
     auto device = cmd_list->get_device();
     auto &data = device->get_private_data<device_data>();
+    auto pipelineToShaderHashPair = data.pipelineToShaderHashMap.find(pipeline.handle);
+    if (pipelineToShaderHashPair != data.pipelineToShaderHashMap.end()) {
+      data.currentShader = pipelineToShaderHashPair->second;
+    } else {
+      data.currentShader = 0;
+    }
+
     if (usePipelineLayoutCloning || _shaderInjectionSize != 0) {
       auto pair0 = data.pipelineToLayoutMap.find(pipeline.handle);
       if (pair0 != data.pipelineToLayoutMap.end()) {
@@ -633,7 +695,6 @@ namespace ShaderReplaceMod {
             if (pair3 == data.moddedPipelineLayouts.end()) return;
             injectionLayout = pair3->second;
           }
-
         } else {
           stage = (type == reshade::api::pipeline_stage::compute_shader)
                   ? reshade::api::shader_stage::compute
@@ -783,6 +844,50 @@ namespace ShaderReplaceMod {
     }
   }
 
+  static bool on_draw(
+    reshade::api::command_list* cmd_list,
+    uint32_t vertex_count,
+    uint32_t instance_count,
+    uint32_t first_vertex,
+    uint32_t first_instance
+  ) {
+    auto &data = cmd_list->get_device()->get_private_data<device_data>();
+    if (data.bypassedShaders.count(data.currentShader)) return true;
+    return false;
+  }
+
+  static bool on_dispatch(reshade::api::command_list* cmd_list, uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z) {
+    auto &data = cmd_list->get_device()->get_private_data<device_data>();
+    if (data.bypassedShaders.count(data.currentShader)) return true;
+    return false;
+  }
+
+  static bool on_draw_indexed(
+    reshade::api::command_list* cmd_list,
+    uint32_t index_count,
+    uint32_t instance_count,
+    uint32_t first_index,
+    int32_t vertex_offset,
+    uint32_t first_instance
+  ) {
+    auto &data = cmd_list->get_device()->get_private_data<device_data>();
+    if (data.bypassedShaders.count(data.currentShader)) return true;
+    return false;
+  }
+
+  static bool on_draw_or_dispatch_indirect(
+    reshade::api::command_list* cmd_list,
+    reshade::api::indirect_command type,
+    reshade::api::resource buffer,
+    uint64_t offset,
+    uint32_t draw_count,
+    uint32_t stride
+  ) {
+    auto &data = cmd_list->get_device()->get_private_data<device_data>();
+    if (data.bypassedShaders.count(data.currentShader)) return true;
+    return false;
+  }
+
   template <typename T = float*>
   void use(DWORD fdwReason, CustomShaders* customShaders, T* injections = nullptr) {
     switch (fdwReason) {
@@ -798,6 +903,11 @@ namespace ShaderReplaceMod {
 
         reshade::register_event<reshade::addon_event::bind_pipeline>(on_bind_pipeline);
 
+        reshade::register_event<reshade::addon_event::draw>(on_draw);
+        reshade::register_event<reshade::addon_event::dispatch>(on_dispatch);
+        reshade::register_event<reshade::addon_event::draw_indexed>(on_draw_indexed);
+        reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(on_draw_or_dispatch_indirect);
+
         if (_customShaders == nullptr) {
           _customShaders = customShaders;
           std::stringstream s;
@@ -805,9 +915,11 @@ namespace ShaderReplaceMod {
           reshade::log_message(reshade::log_level::info, s.str().c_str());
         }
 
-        if (_shaderInjection == nullptr && injections != nullptr) {
-          _shaderInjectionSize = sizeof(T) / sizeof(uint32_t);
-          _shaderInjection = reinterpret_cast<float*>(injections);
+        if (usePipelineLayoutCloning || (injections != nullptr)) {
+          if (injections != nullptr) {
+            _shaderInjectionSize = sizeof(T) / sizeof(uint32_t);
+            _shaderInjection = reinterpret_cast<float*>(injections);
+          }
 #if RESHADE_API_VERSION >= 11
           if (!usePipelineLayoutCloning) {
             reshade::register_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
