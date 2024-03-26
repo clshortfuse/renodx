@@ -15,7 +15,6 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
-#include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -34,15 +33,19 @@ namespace SwapChainUpgradeMod {
     bool completed = false;
   };
 
-  std::unordered_set<uint64_t> backBuffers;
-  std::unordered_set<uint64_t> upgradedResources;
-  std::unordered_set<reshade::api::device*> upgradedResourceDevices;
-  std::unordered_map<reshade::api::device*, reshade::api::resource_desc> deviceBackBufferDesc;
+  struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) device_data {
+    bool upgradedResource = false;
+    bool hasBufferDesc = false;
+    bool resourceUpgradeFinished = false;
+    reshade::api::resource_desc deviceBackBufferDesc;
+    std::unordered_set<uint64_t> backBuffers;
+    std::unordered_set<uint64_t> upgradedResources;
+  };
 
-  std::vector<SwapChainUpgradeTarget> swapChainUpgradeTargets = {};
+  static std::vector<SwapChainUpgradeTarget> swapChainUpgradeTargets = {};
 
   static bool upgradeResourceViews = true;
-  static bool resourceUpgradeFinished = false;
+  static bool useSharedDevice = false;
 
   static reshade::api::effect_runtime* currentEffectRuntime = nullptr;
   static reshade::api::color_space currentColorSpace = reshade::api::color_space::unknown;
@@ -50,6 +53,24 @@ namespace SwapChainUpgradeMod {
   static reshade::api::format targetFormat = reshade::api::format::r16g16b16a16_float;
   static reshade::api::format targetFormatTypeless = reshade::api::format::r16g16b16a16_typeless;
   static reshade::api::color_space targetColorSpace = reshade::api::color_space::extended_srgb_linear;
+
+  static void on_init_device(reshade::api::device* device) {
+    std::stringstream s;
+    s << "init_device("
+      << reinterpret_cast<void*>(device->get_native())
+      << ")";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    device->create_private_data<device_data>();
+  }
+
+  static void on_destroy_device(reshade::api::device* device) {
+    std::stringstream s;
+    s << "destroy_device("
+      << reinterpret_cast<void*>(device->get_native())
+      << ")";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    device->destroy_private_data<device_data>();
+  }
 
   // Before CreatePipelineState
   static bool on_create_swapchain(reshade::api::swapchain_desc &desc, void* hwnd) {
@@ -183,9 +204,13 @@ namespace SwapChainUpgradeMod {
   }
 
   static void on_init_swapchain(reshade::api::swapchain* swapchain) {
-    if (resourceUpgradeFinished) {
+    auto device = swapchain->get_device();
+    if (!device) return;
+    auto &privateData = device->get_private_data<device_data>();
+
+    if (privateData.resourceUpgradeFinished) {
       reshade::log_message(reshade::log_level::debug, "initSwapChain(reset resource upgrade)");
-      resourceUpgradeFinished = false;
+      privateData.resourceUpgradeFinished = false;
       uint32_t len = swapChainUpgradeTargets.size();
       // Reset
       for (uint32_t i = 0; i < len; i++) {
@@ -195,27 +220,23 @@ namespace SwapChainUpgradeMod {
       }
     }
 
-    auto device = swapchain->get_device();
-    if (upgradeResourceViews) {
-      const size_t backBufferCount = swapchain->get_back_buffer_count();
+    const size_t backBufferCount = swapchain->get_back_buffer_count();
 
-      for (uint32_t index = 0; index < backBufferCount; index++) {
-        auto buffer = swapchain->get_back_buffer(index);
-        if (index == 0) {
-          auto desc = device->get_resource_desc(buffer);
-          deviceBackBufferDesc.emplace(device, desc);
-          checkSwapchainSize(swapchain, desc);
-        }
-        backBuffers.emplace(buffer.handle);
-
-        std::stringstream s;
-        s << "initSwapChain("
-          << "buffer: " << reinterpret_cast<void*>(buffer.handle)
-          << ")";
-        reshade::log_message(reshade::log_level::info, s.str().c_str());
+    for (uint32_t index = 0; index < backBufferCount; index++) {
+      auto buffer = swapchain->get_back_buffer(index);
+      if (index == 0) {
+        auto desc = device->get_resource_desc(buffer);
+        privateData.deviceBackBufferDesc = desc;
+        privateData.hasBufferDesc = true;
+        checkSwapchainSize(swapchain, desc);
       }
-    } else {
-      checkSwapchainSize(swapchain, device->get_resource_desc(swapchain->get_back_buffer(0)));
+      privateData.backBuffers.emplace(buffer.handle);
+
+      std::stringstream s;
+      s << "initSwapChain("
+        << "buffer: " << reinterpret_cast<void*>(buffer.handle)
+        << ")";
+      reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
 
     // Reshade doesn't actually inspect colorspace
@@ -228,20 +249,21 @@ namespace SwapChainUpgradeMod {
   }
 
   static void on_destroy_swapchain(reshade::api::swapchain* swapchain) {
-    if (upgradeResourceViews) {
-      auto device = swapchain->get_device();
-      deviceBackBufferDesc.erase(device);
-      const size_t backBufferCount = swapchain->get_back_buffer_count();
-      for (uint32_t index = 0; index < backBufferCount; index++) {
-        auto buffer = swapchain->get_back_buffer(index);
-        backBuffers.erase(buffer.handle);
+    auto device = swapchain->get_device();
+    if (!device) return;
+    auto &privateData = device->get_private_data<device_data>();
+    privateData.hasBufferDesc = false;
 
-        std::stringstream s;
-        s << "destroySwapchain("
-          << "buffer: 0x" << std::hex << (uint32_t)buffer.handle << std::dec
-          << ")";
-        reshade::log_message(reshade::log_level::info, s.str().c_str());
-      }
+    const size_t backBufferCount = swapchain->get_back_buffer_count();
+    for (uint32_t index = 0; index < backBufferCount; index++) {
+      auto buffer = swapchain->get_back_buffer(index);
+      privateData.backBuffers.erase(buffer.handle);
+
+      std::stringstream s;
+      s << "destroySwapchain("
+        << "buffer: 0x" << std::hex << (uint32_t)buffer.handle << std::dec
+        << ")";
+      reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
   }
 
@@ -251,21 +273,25 @@ namespace SwapChainUpgradeMod {
     reshade::api::subresource_data* initial_data,
     reshade::api::resource_usage initial_state
   ) {
-    if (resourceUpgradeFinished) return false;
     if (!device) {
       std::stringstream s;
       s << "createResource(Empty device)";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
       return false;
     }
-    auto pair = deviceBackBufferDesc.find(device);
-    if (pair == deviceBackBufferDesc.end()) {
+
+    auto &privateData = device->get_private_data<device_data>();
+    if (privateData.resourceUpgradeFinished) return false;
+
+    if (!privateData.hasBufferDesc) {
       std::stringstream s;
-      s << "createResource(Unknown device)";
+      s << "createResource(Unknown device "
+        << reinterpret_cast<void*>(device->get_native())
+        << ")";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
       return false;
     }
-    auto bufferDesc = pair->second;
+    auto bufferDesc = privateData.deviceBackBufferDesc;
     if (desc.texture.height != bufferDesc.texture.height) {
       return false;
     }
@@ -308,13 +334,13 @@ namespace SwapChainUpgradeMod {
     }
     if (oldFormat == newFormat) return false;
     if (allCompleted) {
-      resourceUpgradeFinished = true;
+      privateData.resourceUpgradeFinished = true;
     }
 
     std::stringstream s;
     s << "createResource(upgrading "
-      << std::hex << (uint32_t)desc.flags << std::dec
-      << ", state: " << std::hex << (uint32_t)initial_state << std::dec
+      << ", flags: 0x" << std::hex << (uint32_t)desc.flags << std::dec
+      << ", state: 0x" << std::hex << (uint32_t)initial_state << std::dec
       << ", width: " << (uint32_t)desc.texture.width
       << ", height: " << (uint32_t)desc.texture.height
       << ", format: " << to_string(oldFormat) << " => " << to_string(newFormat)
@@ -328,7 +354,7 @@ namespace SwapChainUpgradeMod {
     );
 
     desc.texture.format = newFormat;
-    upgradedResourceDevices.emplace(device);
+    privateData.upgradedResource = true;
     return true;
   }
 
@@ -339,9 +365,10 @@ namespace SwapChainUpgradeMod {
     reshade::api::resource_usage initial_state,
     reshade::api::resource resource
   ) {
-    if (!upgradedResourceDevices.count(device)) return;
-    upgradedResourceDevices.erase(device);
-    upgradedResources.emplace(resource.handle);
+    auto &privateData = device->get_private_data<device_data>();
+    if (!privateData.upgradedResource) return;
+    privateData.upgradedResource = false;
+    privateData.upgradedResources.emplace(resource.handle);
     std::stringstream s;
     s << "on_init_resource(tracking "
       << reinterpret_cast<void*>(resource.handle)
@@ -369,19 +396,36 @@ namespace SwapChainUpgradeMod {
     if (!resource.handle) return false;
     auto oldFormat = desc.format;
 
-    if (upgradeResourceViews && backBuffers.count(resource.handle)) {
+    auto &privateData = device->get_private_data<device_data>();
+    if (upgradeResourceViews && privateData.backBuffers.count(resource.handle)) {
       desc.format = targetFormat;
-    } else if (upgradedResources.count(resource.handle)) {
+    } else if (privateData.upgradedResources.count(resource.handle)) {
       reshade::api::resource_desc resource_desc = device->get_resource_desc(resource);
-      desc.format = resource_desc.texture.format;
+      switch (desc.format) {
+        case reshade::api::format::r8g8b8a8_typeless:
+        case reshade::api::format::b8g8r8a8_typeless:
+          desc.format = reshade::api::format::r16g16b16a16_typeless;
+          break;
+        case reshade::api::format::r8g8b8a8_unorm:
+        case reshade::api::format::b8g8r8a8_unorm:
+          desc.format = targetFormat;
+          break;
+        case reshade::api::format::r8g8b8a8_unorm_srgb:
+        case reshade::api::format::b8g8r8a8_unorm_srgb:
+          // Should upgrade shader
+          desc.format = targetFormat;
+          break;
+        default:
+          break;
+      }
     } else {
       return false;
     }
 
     std::stringstream s;
     s << "createResourceView(upgrading "
-      << std::hex << (uint32_t)resource.handle << std::dec
-      << ", view type: " << (uint32_t)desc.type
+      << reinterpret_cast<void*>(resource.handle)
+      << ", view type: " << to_string(desc.type)
       << ", view format: " << to_string(oldFormat) << " => " << to_string(desc.format)
       << ", resource: " << reinterpret_cast<void*>(resource.handle)
       << ", resource usage: " << std::hex << (uint32_t)usage_type << std::dec
@@ -450,6 +494,9 @@ namespace SwapChainUpgradeMod {
   static void use(DWORD fdwReason) {
     switch (fdwReason) {
       case DLL_PROCESS_ATTACH:
+        reshade::register_event<reshade::addon_event::init_device>(on_init_device);
+        reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
+
         reshade::register_event<reshade::addon_event::create_swapchain>(on_create_swapchain);
         reshade::register_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
         reshade::register_event<reshade::addon_event::destroy_swapchain>(on_destroy_swapchain);
