@@ -7,6 +7,10 @@
 
 #define DEBUG_LEVEL_0
 
+#include <embed/0x93269875.h>
+#include <embed/0x9F3842A8.h>
+#include <embed/0xC3126A03.h>
+#include <embed/0xC6FA129B.h>
 #include <embed/0xF6E7E494.h>
 
 #include <deps/imgui/imgui.h>
@@ -21,9 +25,11 @@ extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Hi-Fi Rush";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Hi-Fi Rush";
 
 ShaderReplaceMod::CustomShaders customShaders = {
-  // CustomShaderEntry(0xC3126A03),
-  CustomShaderEntry(0xF6E7E494)
-  // CustomShaderEntry(0xBEB7EB31)
+  CustomShaderEntry(0xC3126A03),
+  CustomShaderEntry(0xF6E7E494),
+  CustomShaderEntry(0xC6FA129B),
+  CustomShaderEntry(0x9F3842A8),
+  CustomShaderEntry(0x93269875)
 };
 
 ShaderInjectData shaderInjection;
@@ -38,7 +44,7 @@ UserSettingUtil::UserSettings userSettings = {
     .label = "Tone Mapper",
     .section = "Tone Mapping",
     .tooltip = "Sets the tone mapper type",
-    .labels = {"Vanilla", "None", "ACES", "OpenDRT"}
+    .labels = {"Vanilla", "None", "ACES", "OpenDRT", "DICE"}
   },
   new UserSettingUtil::UserSetting {
     .key = "toneMapPeakNits",
@@ -105,6 +111,15 @@ UserSettingUtil::UserSettings userSettings = {
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxBloom",
+    .binding = &shaderInjection.fxBloom,
+    .defaultValue = 50.f,
+    .label = "Bloom",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
   }
 };
 
@@ -119,15 +134,19 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
+  UserSettingUtil::updateUserSetting("fxBloom", 50.f);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
   switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
-      SwapChainUpgradeMod::upgradeResourceViews = false;
-      // ShaderReplaceMod::expectedCBufferIndex = 99;
-
+      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+        {reshade::api::format::b8g8r8a8_typeless, reshade::api::format::r16g16b16a16_typeless}
+      );
+      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+        {reshade::api::format::b8g8r8a8_unorm, reshade::api::format::r16g16b16a16_float}
+      );
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(hModule);

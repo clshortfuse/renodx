@@ -12,6 +12,7 @@ struct ShaderInjectData {
   float colorGradeShadows;
   float colorGradeContrast;
   float colorGradeSaturation;
+  float fxBloom;
 };
 
 #endif  // SRC_HIFIRUSH_SHARED_H_

@@ -1,11 +1,16 @@
 // Output tonemapper
 
+#include "../common/DICE.hlsl"
+#include "../common/Open_DRT.hlsl"
+#include "../common/aces.hlsl"
+#include "../common/color.hlsl"
+#include "../common/colorgrade.hlsl"
 #include "shared.h"
 
-Texture2D<float4> t0 : register(t0);
-Texture2D<float4> t1 : register(t1);
+Texture2D<float4> t0 : register(t0);  // Untonemapped
+Texture2D<float4> t1 : register(t1);  // Bloom
 Texture2D<float4> t2 : register(t2);
-Texture3D<float4> t3 : register(t3);
+Texture3D<float4> t3 : register(t3);  // 32x32x32 LUT
 
 SamplerState s0_s : register(s0);
 SamplerState s1_s : register(s1);
@@ -51,7 +56,9 @@ float4 main(
   r1.xy = max(cb0[50].zw, r1.xy);
   r1.xy = min(cb0[51].xy, r1.xy);
   r1.xyz = t1.Sample(s1_s, r1.xy).xyz;
+
   r2.xyz = cb1[135].zzz * r1.xyz;
+
   r3.xy = w0.xy * cb0[70].zw + cb0[70].xy;
   r3.yz = r3.xy * float2(0.5, -0.5) + float2(0.5, 0.5);
   r1.w = dot(r2.xyz, float3(0.300000012, 0.300000012, 0.300000012));
@@ -111,8 +118,11 @@ float4 main(
   r1.xyz = -r1.xyz * cb1[135].zzz + r5.xyz;
   r1.xyz = cb0[65].zzz * r1.xyz + r2.xyz;
   r1.xyz = r1.xyz * r3.xyz;
-  r1.xyz = r1.xyz * r4.xyz;
+  r1.xyz = r1.xyz * lerp(1.f, r4.xyz, injectedData.fxBloom);
+
   r0.yzw = r0.yzw * cb0[60].xyz + r1.xyz;
+  float3 untonemapped = r0.yzw;
+
   r0.yzw = r0.yzw * v1.xxx + float3(0.00266771927, 0.00266771927, 0.00266771927);
   r0.yzw = log2(r0.yzw);
 
@@ -122,6 +132,9 @@ float4 main(
   r1.xyz = float3(1.04999995, 1.04999995, 1.04999995) * r0.yzw;
   o0.w = saturate(dot(r1.xyz, float3(0.298999995, 0.587000012, 0.114)));
   r0.x = r0.x * 0.00390625 + -0.001953125;
+
+  // r0.x *= injectedData.fxNoise;
+
   r0.xyz = r0.yzw * float3(1.04999995, 1.04999995, 1.04999995) + r0.xxx;
   if (cb0[68].x != 0) {
     r1.xyz = log2(r0.xyz);
@@ -153,11 +166,80 @@ float4 main(
     o0.xyz = r0.xyz;
   }
 
-  // if (injectedData.toneMapType == 0) {
-  // } else if (injectedData.toneMapType == 1) {
-  //   o0.rgb = texture0Input.rgb;
-  // }
-  o0.rgb = texture0Input.rgb;
-  o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 1.f / 2.2f);
+  float3 outputColor = o0.rgb;
+  outputColor = max(0, outputColor);
+  if (injectedData.toneMapType == 0.f) {
+    outputColor = pow(outputColor, 2.2f);
+  } else {
+    outputColor = untonemapped.rgb;
+    if (injectedData.toneMapType != 1.f) {
+      if (injectedData.colorGradeShadows != 1.f) {
+        outputColor = apply_user_shadows(outputColor, injectedData.colorGradeShadows);
+      }
+      if (injectedData.colorGradeHighlights != 1.f) {
+        outputColor = apply_user_highlights(outputColor, injectedData.colorGradeHighlights);
+      }
+      if (injectedData.colorGradeContrast != 1.f) {
+        float3 workingColor = pow(outputColor / 0.18f, injectedData.colorGradeContrast) * 0.18f;
+        // Working in BT709 still
+        float workingColorY = yFromBT709(workingColor);
+        float outputColorY = yFromBT709(outputColor);
+        outputColor *= outputColorY ? workingColorY / outputColorY : 1.f;
+      }
+
+      if (injectedData.colorGradeSaturation != 1.f) {
+        float3 okLCh = okLChFromBT709(outputColor);
+        okLCh[1] *= injectedData.colorGradeSaturation;
+        outputColor = max(0, bt709FromOKLCh(okLCh));
+      }
+
+      const float vanillaMidGray = 0.18f;
+      if (injectedData.toneMapType == 2.f) {
+        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / 0.10);  // ACES mid gray is 10%
+        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
+        outputColor = aces_rgc_rrt_odt(
+          outputColor,
+          0.0001f / hdrScale,  // minY
+          48.f * hdrScale,
+          AP1_2_BT2020_MAT
+        );
+        outputColor /= 48.f;
+        outputColor *= (vanillaMidGray / 0.10);
+        outputColor = mul(BT2020_2_BT709_MAT, outputColor);
+      } else if (injectedData.toneMapType == 3.f) {
+        outputColor = mul(BT709_2_BT2020_MAT, outputColor);
+        outputColor = max(0, outputColor);
+        const float openDRTMidGray = 11.696f / 100.f;  // open_drt_transform(0.18);
+        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / openDRTMidGray);
+        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
+
+        outputColor = open_drt_transform(
+          outputColor,
+          100.f * hdrScale,
+          0,
+          1.f,
+          0
+        );
+        outputColor *= hdrScale;
+        outputColor *= (vanillaMidGray / openDRTMidGray);
+        outputColor = mul(BT2020_2_BT709_MAT, outputColor);
+      } else {
+        // Dice
+        outputColor = DICETonemap(outputColor, injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
+      }
+    }
+  }
+
+  outputColor *= injectedData.toneMapGameNits;  // Scale by user nits
+
+  // o0.rgb = mul(BT709_2_BT2020_MAT, o0.rgb);  // use bt2020
+  // o0.rgb /= 10000.f;                         // Scale for PQ
+  // o0.rgb = max(0, o0.rgb);                   // clamp out of gamut
+  // o0.rgb = pqFromLinear(o0.rgb);             // convert to PQ
+  // o0.rgb = min(1.f, o0.rgb);                 // clamp PQ (10K nits)
+
+  outputColor.rgb /= 80.f;
+  o0.rgb *= outputColor.rgb;
+
   return o0;
 }
