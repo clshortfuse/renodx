@@ -16,6 +16,7 @@
 #include <embed/0x97CA5A85.h>
 #include <embed/0xA61F2FEE.h>
 #include <embed/0xB489149F.h>
+#include <embed/0xBF8489D2.h>
 #include <embed/0xC783FBA1.h>
 #include <embed/0xC83E64DF.h>
 #include <embed/0xCBFFC2A3.h>
@@ -44,6 +45,7 @@ extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Cyberpunk
 static ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0xCBFFC2A3),  // output
   CustomShaderEntry(0x298A6BB0),  // composite multisample
+  CustomShaderEntry(0xBF8489D2),  // composite multisample lowbit
   CustomShaderEntry(0x5DF649A9),  // composite
   CustomShaderEntry(0xA61F2FEE),  // composite lowbit
   CustomShaderEntry(0x71F27445),  // tonemapper
