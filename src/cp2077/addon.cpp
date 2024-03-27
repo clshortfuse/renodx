@@ -279,7 +279,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
 
-      ShaderReplaceMod::expectedLayoutInjectionIndex = 14;
+      ShaderReplaceMod::expectedConstantBufferIndex = 14;
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(hModule);

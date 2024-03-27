@@ -44,7 +44,7 @@ namespace ShaderReplaceMod {
   static float* _shaderInjection = nullptr;
   static size_t _shaderInjectionSize = 0;
   static bool usePipelineLayoutCloning = false;
-  static int32_t expectedLayoutInjectionIndex = -1;
+  static int32_t expectedConstantBufferIndex = -1;
 
   static CustomShaders* _customShaders = nullptr;
 
@@ -122,7 +122,7 @@ namespace ShaderReplaceMod {
         data.codeInjections.emplace(new_hash, shader_hash);
 #ifdef DEBUG_LEVEL_0
         std::stringstream s;
-        s << "create_pipeline(replace shader"
+        s << "create_pipeline(replace shader "
           << "0x" << std::hex << shader_hash << std::dec
           << " => "
           << "0x" << std::hex << new_hash << std::dec
@@ -182,11 +182,11 @@ namespace ShaderReplaceMod {
       }
     }
 
-    if (expectedLayoutInjectionIndex != -1 && cbvIndex != expectedLayoutInjectionIndex) {
+    if (expectedConstantBufferIndex != -1 && cbvIndex != expectedConstantBufferIndex) {
       std::stringstream s;
       s << "on_create_pipeline_layout("
         << "Pipeline layout index mismatch, actual: " << cbvIndex
-        << ", expected: " << expectedLayoutInjectionIndex
+        << ", expected: " << expectedConstantBufferIndex
         << ")";
       reshade::log_message(reshade::log_level::debug, s.str().c_str());
       return false;
@@ -258,41 +258,40 @@ namespace ShaderReplaceMod {
     int32_t injectionIndex = -1;
     auto device_api = device->get_api();
     auto &data = device->get_private_data<device_data>();
+    uint32_t cbvIndex = 0;
+    for (uint32_t paramIndex = 0; paramIndex < param_count; paramIndex++) {
+      auto param = params[paramIndex];
+      if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
+        for (uint32_t rangeIndex = 0; rangeIndex < param.descriptor_table.count; ++rangeIndex) {
+          auto range = param.descriptor_table.ranges[rangeIndex];
+          if (range.type == reshade::api::descriptor_type::constant_buffer) {
+            if (cbvIndex < range.dx_register_index + range.count) {
+              cbvIndex = range.dx_register_index + range.count;
+            }
+          }
+        }
+      } else if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
+        if (cbvIndex < param.push_constants.dx_register_index + param.push_constants.count) {
+          cbvIndex = param.push_constants.dx_register_index + param.push_constants.count;
+        }
+      } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
+        if (param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer) {
+          if (cbvIndex < param.push_descriptors.dx_register_index + param.push_descriptors.count) {
+            cbvIndex = param.push_descriptors.dx_register_index + param.push_descriptors.count;
+          }
+        }
+      }
+    }
     if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
       if (usePipelineLayoutCloning) {
         uint32_t oldCount = param_count;
         uint32_t newCount = oldCount;
-        int32_t cbvIndex = -1;
         reshade::api::pipeline_layout_param* newParams = nullptr;
         if (_shaderInjectionSize) {
-          cbvIndex = 0;
           newCount = oldCount + 1;
           newParams = new reshade::api::pipeline_layout_param[newCount];
           memcpy(newParams, params, sizeof(reshade::api::pipeline_layout_param) * oldCount);
 
-          for (uint32_t paramIndex = 0; paramIndex < param_count; ++paramIndex) {
-            auto param = params[paramIndex];
-            if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
-              for (uint32_t rangeIndex = 0; rangeIndex < param.descriptor_table.count; ++rangeIndex) {
-                auto range = param.descriptor_table.ranges[rangeIndex];
-                if (range.type == reshade::api::descriptor_type::constant_buffer) {
-                  if (cbvIndex < range.dx_register_index + range.count) {
-                    cbvIndex = range.dx_register_index + range.count;
-                  }
-                }
-              }
-            } else if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
-              if (cbvIndex < param.push_constants.dx_register_index + param.push_constants.count) {
-                cbvIndex = param.push_constants.dx_register_index + param.push_constants.count;
-              }
-            } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
-              if (param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer) {
-                if (cbvIndex < param.push_descriptors.dx_register_index + param.push_descriptors.count) {
-                  cbvIndex = param.push_descriptors.dx_register_index + param.push_descriptors.count;
-                }
-              }
-            }
-          }
           uint32_t slots = _shaderInjectionSize;
           uint32_t maxCount = 64u - (oldCount + 1u) + 1u;
           newParams[oldCount].type = reshade::api::pipeline_layout_param_type::push_constants;
@@ -362,39 +361,25 @@ namespace ShaderReplaceMod {
       }
 
     } else {
-      injectionIndex = 0;
-      for (uint32_t paramIndex = 0; paramIndex < param_count; paramIndex++) {
-        auto param = params[paramIndex];
-        if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
-          for (uint32_t rangeIndex = 0; rangeIndex < param.descriptor_table.count; ++rangeIndex) {
-            auto range = param.descriptor_table.ranges[rangeIndex];
-            if (range.type == reshade::api::descriptor_type::constant_buffer) {
-              if (injectionIndex < range.dx_register_index + range.count) {
-                injectionIndex = range.dx_register_index + range.count;
-              }
-            }
-          }
-        } else if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
-          if (injectionIndex < param.push_constants.dx_register_index + param.push_constants.count) {
-            injectionIndex = param.push_constants.dx_register_index + param.push_constants.count;
-          }
-        } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
-          if (param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer) {
-            if (injectionIndex < param.push_descriptors.dx_register_index + param.push_descriptors.count) {
-              injectionIndex = param.push_descriptors.dx_register_index + param.push_descriptors.count;
-            }
-          }
-        }
+      if (expectedConstantBufferIndex != -1 && cbvIndex != expectedConstantBufferIndex) {
+        std::stringstream s;
+        s << "on_init_pipeline_layout("
+          << "Forcing cbuffer index "
+          << reinterpret_cast<void*>(layout.handle)
+          << ": " << cbvIndex
+          << " )";
+        reshade::log_message(reshade::log_level::warning, s.str().c_str());
+        cbvIndex = expectedConstantBufferIndex;
       }
-      if (injectionIndex == 14) {
+      if (cbvIndex == 14) {
         std::stringstream s;
         s << "on_init_pipeline_layout("
           << "Using last slot for buffer injection "
           << reinterpret_cast<void*>(layout.handle)
-          << ": " << injectionIndex
+          << ": " << cbvIndex
           << " )";
         reshade::log_message(reshade::log_level::warning, s.str().c_str());
-        injectionIndex = 13;
+        cbvIndex = 13;
       }
 
       // device->create_pipeline_layout(1)
@@ -403,7 +388,7 @@ namespace ShaderReplaceMod {
       newParams.type = reshade::api::pipeline_layout_param_type::push_constants;
       //newParams.push_constants.binding = 0;
       newParams.push_constants.count = 1;
-      newParams.push_constants.dx_register_index = injectionIndex;
+      newParams.push_constants.dx_register_index = cbvIndex;
       newParams.push_constants.dx_register_space = 0;
       newParams.push_constants.visibility = reshade::api::shader_stage::all;
 
@@ -417,6 +402,7 @@ namespace ShaderReplaceMod {
         << " )";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
       data.moddedPipelineLayouts.emplace(layout.handle, newLayout);
+      injectionIndex = cbvIndex;
     }
 
     data.moddedPipelineRootIndexes.emplace(layout.handle, injectionIndex);
@@ -567,6 +553,7 @@ namespace ShaderReplaceMod {
       bool builtPipelineOK = device->create_pipeline(cloneLayout, subobjectCount, &newSubobjects[0], &newPipeline);
       if (builtPipelineOK) {
         data.pipelineCloneMap.emplace(pipeline.handle, newPipeline);
+        data.pipelineToLayoutMap.emplace(newPipeline.handle, cloneLayout);
         data.pipelineToShaderHashMap.emplace(newPipeline.handle, foundInjection);
       }
       // free(newSubobjects);
@@ -618,7 +605,7 @@ namespace ShaderReplaceMod {
                 break;
             }
             s << ")";
-            reshade::log_message(reshade::log_level::debug, s.str().c_str());
+            reshade::log_message(reshade::log_level::warning, s.str().c_str());
           }
         }
       }
@@ -683,7 +670,14 @@ namespace ShaderReplaceMod {
         uint32_t paramIndex = 0;
         if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
           auto pair2 = data.moddedPipelineRootIndexes.find(layout.handle);
-          if (pair2 == data.moddedPipelineRootIndexes.end()) return;
+          if (pair2 == data.moddedPipelineRootIndexes.end()) {
+            std::stringstream s;
+            s << "bind_pipeline(did not find modded pipeline root index"
+              << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
+              << ")";
+            reshade::log_message(reshade::log_level::warning, s.str().c_str());
+            return;
+          }
           paramIndex = pair2->second;
 
           stage = data.computeShaderLayouts.count(layout.handle) == 0
@@ -692,7 +686,14 @@ namespace ShaderReplaceMod {
 
           if (usePipelineLayoutCloning) {
             auto pair3 = data.moddedPipelineLayouts.find(layout.handle);
-            if (pair3 == data.moddedPipelineLayouts.end()) return;
+            if (pair3 == data.moddedPipelineLayouts.end()) {
+              std::stringstream s;
+              s << "bind_pipeline(did not find modded pipeline layout"
+                << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
+                << ")";
+              reshade::log_message(reshade::log_level::warning, s.str().c_str());
+              return;
+            }
             injectionLayout = pair3->second;
           }
         } else {
@@ -700,7 +701,14 @@ namespace ShaderReplaceMod {
                   ? reshade::api::shader_stage::compute
                   : reshade::api::shader_stage::pixel;
           auto pair3 = data.moddedPipelineLayouts.find(layout.handle);
-          if (pair3 == data.moddedPipelineLayouts.end()) return;
+          if (pair3 == data.moddedPipelineLayouts.end()) {
+            std::stringstream s;
+            s << "bind_pipeline(did not find modded pipeline layout"
+              << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
+              << ")";
+            reshade::log_message(reshade::log_level::warning, s.str().c_str());
+            return;
+          }
           injectionLayout = pair3->second;
         }
 
