@@ -92,7 +92,7 @@ UserSettingUtil::UserSettings userSettings = {
     .section = "Tone Mapping",
     .tooltip = "Sets the value of 100%% white in nits",
     .min = 48.f,
-    .max = 500.f
+    .max = 1000.f
   },
     new UserSettingUtil::UserSetting {
     .key = "toneMapGammaCorrection",
