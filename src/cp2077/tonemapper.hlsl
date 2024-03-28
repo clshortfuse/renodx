@@ -244,8 +244,9 @@ float3 sampleAllLUTs(const float3 color) {
   }
 
   if (injectedData.colorGradeSaturation != 1.f) {
-    float grayscale = yFromBT709(abs(compositedColor));
-    compositedColor = lerp(grayscale, compositedColor, injectedData.colorGradeSaturation);
+    float3 okLCh = okLChFromBT709(compositedColor);
+    okLCh[1] *= injectedData.colorGradeSaturation;
+    compositedColor = bt709FromOKLCh(okLCh);
   }
 
   // This was probably a for loop (0-7)
