@@ -573,8 +573,7 @@ float4 tonemap(bool isACESMode = false) {
       odtFinal = odtUnknown;
     } else {
       peakNits = injectedData.toneMapPeakNits;
-      outputRGB *= (midGrayNits / 10.f);
-      const float paperWhite = injectedData.toneMapGameNits;
+      float vanillaMidGray = midGrayNits / 100.f;
 
       bool useD60 = (injectedData.colorGradeWhitePoint == -1.0f || (injectedData.colorGradeWhitePoint == 0.f && cb6[28u].z == 0.f));
 
@@ -599,40 +598,41 @@ float4 tonemap(bool isACESMode = false) {
 
         outputRGB = apply_aces_highlights(outputRGB);
         outputRGB = mul(inputMatrix, outputRGB);
+
+        const float openDRTMidGray = 11.696f / 100.f;  // open_drt_transform(0.18);
+        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / openDRTMidGray);
+        float hdrScale = (peakNits / paperWhite);
         odtFinal = open_drt_transform(
           outputRGB,
-          100.f * (peakNits / paperWhite),
+          100.f * hdrScale,
           0,
           1.f,
           0
         );
         odtFinal = mul(outputMatrix, odtFinal);
-        odtFinal *= peakNits / paperWhite;
+        odtFinal *= hdrScale;
+        odtFinal *= (vanillaMidGray / openDRTMidGray);
       } else if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
         // ACES uses 48 nits for 100-nit SDR
         // Base 100-nit SDR = 203 SDR
         // Scaling is Peak Nits / Paper White
-        float3x3 clampMatrix;
-        float3x3 outputMatrix;
-        if (isSDR) {
-          clampMatrix = useD60 ? AP1_2_BT709D60_MAT : AP1_2_BT709_MAT;
-          outputMatrix = IDENTITY_MAT;
-        } else {
-          clampMatrix = useD60 ? AP1_2_BT2020D60_MAT : AP1_2_BT2020_MAT;
-          outputMatrix = BT2020_2_BT709_MAT;
-        }
+        float3x3 outputMatrix = useD60 ? AP1_2_BT709D60_MAT : AP1_2_BT709_MAT;
 
-        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
+        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / 0.10);  // ACES mid gray is 10%
+        float hdrScale = (peakNits / paperWhite);
         odtFinal = aces_rgc_rrt_odt(
           outputRGB,
-          0.0001f / hdrScale,  // MIN_LUM_RRT
+          0.0001f / hdrScale,
           48.f * hdrScale,
-          clampMatrix
+          outputMatrix
         );
+        if (isSDR) {
+          odtFinal = max(0, odtFinal);
+        }
         odtFinal /= 48.f;
-        odtFinal = mul(outputMatrix, odtFinal);
+        odtFinal *= (vanillaMidGray / 0.10);
       }
-      odtFinal *= paperWhite / CDPR_WHITE;
+      odtFinal *= injectedData.toneMapGameNits / CDPR_WHITE;
     }
   }
 
