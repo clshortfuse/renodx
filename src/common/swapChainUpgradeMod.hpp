@@ -280,6 +280,8 @@ namespace SwapChainUpgradeMod {
       return false;
     }
 
+    if (desc.type != reshade::api::resource_type::texture_2d) return false;
+
     auto &privateData = device->get_private_data<device_data>();
     if (privateData.resourceUpgradeFinished) return false;
 
@@ -338,7 +340,7 @@ namespace SwapChainUpgradeMod {
     }
 
     std::stringstream s;
-    s << "createResource(upgrading "
+    s << "createResource(upgrading"
       << ", flags: 0x" << std::hex << (uint32_t)desc.flags << std::dec
       << ", state: 0x" << std::hex << (uint32_t)initial_state << std::dec
       << ", width: " << (uint32_t)desc.texture.width
@@ -392,15 +394,14 @@ namespace SwapChainUpgradeMod {
     reshade::api::resource_usage usage_type,
     reshade::api::resource_view_desc &desc
   ) {
-    if (desc.format == targetFormat) return false;
     if (!resource.handle) return false;
     auto oldFormat = desc.format;
 
     auto &privateData = device->get_private_data<device_data>();
+    reshade::api::resource_desc resource_desc = device->get_resource_desc(resource);
     if (upgradeResourceViews && privateData.backBuffers.count(resource.handle)) {
       desc.format = targetFormat;
     } else if (privateData.upgradedResources.count(resource.handle)) {
-      reshade::api::resource_desc resource_desc = device->get_resource_desc(resource);
       switch (desc.format) {
         case reshade::api::format::r8g8b8a8_typeless:
         case reshade::api::format::b8g8r8a8_typeless:
@@ -423,11 +424,12 @@ namespace SwapChainUpgradeMod {
     }
 
     std::stringstream s;
-    s << "createResourceView(upgrading "
-      << reinterpret_cast<void*>(resource.handle)
+    s << "createResourceView(upgrading"
       << ", view type: " << to_string(desc.type)
       << ", view format: " << to_string(oldFormat) << " => " << to_string(desc.format)
       << ", resource: " << reinterpret_cast<void*>(resource.handle)
+      << ", resource width: " << resource_desc.texture.width
+      << ", resource height: " << resource_desc.texture.height
       << ", resource usage: " << std::hex << (uint32_t)usage_type << std::dec
       << ")";
     reshade::log_message(
@@ -436,7 +438,7 @@ namespace SwapChainUpgradeMod {
         : reshade::log_level::info,
       s.str().c_str()
     );
-    return true;
+    return oldFormat != desc.format;
   }
 
   static void on_init_effect_runtime(reshade::api::effect_runtime* runtime) {
@@ -505,6 +507,7 @@ namespace SwapChainUpgradeMod {
         reshade::register_event<reshade::addon_event::create_resource>(on_create_resource);
 
         reshade::register_event<reshade::addon_event::create_resource_view>(on_create_resource_view);
+
         reshade::register_event<reshade::addon_event::init_effect_runtime>(on_init_effect_runtime);
         reshade::register_event<reshade::addon_event::destroy_effect_runtime>(on_destroy_effect_runtime);
 
@@ -514,13 +517,13 @@ namespace SwapChainUpgradeMod {
 
         break;
       case DLL_PROCESS_DETACH:
+        reshade::unregister_event<reshade::addon_event::init_device>(on_init_device);
+        reshade::unregister_event<reshade::addon_event::destroy_device>(on_destroy_device);
         reshade::unregister_event<reshade::addon_event::create_swapchain>(on_create_swapchain);
         reshade::unregister_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
         reshade::unregister_event<reshade::addon_event::destroy_swapchain>(on_destroy_swapchain);
-
         reshade::unregister_event<reshade::addon_event::init_resource>(on_init_resource);
         reshade::unregister_event<reshade::addon_event::create_resource>(on_create_resource);
-
         reshade::unregister_event<reshade::addon_event::create_resource_view>(on_create_resource_view);
         reshade::unregister_event<reshade::addon_event::init_effect_runtime>(on_init_effect_runtime);
         reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(on_destroy_effect_runtime);
