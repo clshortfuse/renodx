@@ -928,11 +928,11 @@ namespace ShaderReplaceMod {
             _shaderInjectionSize = sizeof(T) / sizeof(uint32_t);
             _shaderInjection = reinterpret_cast<float*>(injections);
           }
-#if RESHADE_API_VERSION >= 11
+
           if (!usePipelineLayoutCloning) {
             reshade::register_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
           }
-#endif
+
           reshade::register_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
           reshade::register_event<reshade::addon_event::destroy_pipeline_layout>(on_destroy_pipeline_layout);
 
@@ -950,16 +950,29 @@ namespace ShaderReplaceMod {
         break;
       case DLL_PROCESS_DETACH:
 
+        reshade::unregister_event<reshade::addon_event::init_device>(on_init_device);
+        reshade::unregister_event<reshade::addon_event::destroy_device>(on_destroy_device);
+
         reshade::unregister_event<reshade::addon_event::create_pipeline>(on_create_pipeline);
+
         reshade::unregister_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
         reshade::unregister_event<reshade::addon_event::destroy_pipeline>(on_destroy_pipeline);
 
         reshade::unregister_event<reshade::addon_event::bind_pipeline>(on_bind_pipeline);
-#if RESHADE_API_VERSION >= 11
+
+        reshade::unregister_event<reshade::addon_event::draw>(on_draw);
+        reshade::unregister_event<reshade::addon_event::dispatch>(on_dispatch);
+        reshade::unregister_event<reshade::addon_event::draw_indexed>(on_draw_indexed);
+        reshade::unregister_event<reshade::addon_event::draw_or_dispatch_indirect>(on_draw_or_dispatch_indirect);
+
         reshade::unregister_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
-#endif
+
         reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
         reshade::unregister_event<reshade::addon_event::destroy_pipeline_layout>(on_destroy_pipeline_layout);
+
+        reshade::unregister_event<reshade::addon_event::push_constants>(on_push_constants);
+        reshade::unregister_event<reshade::addon_event::push_descriptors>(on_push_descriptors);
+        reshade::unregister_event<reshade::addon_event::bind_descriptor_tables>(on_bind_descriptor_tables);
 
         break;
     }
