@@ -36,53 +36,51 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
   if (injectedData.toneMapType != 0) {
     outputColor = max(0, textureColor.rgb) * gXfInWhite * gXfOutWhite;
     outputColor = pow(outputColor, gXfInGamma.xyz);
-    outputColor = pow(outputColor, 2.2f);  // linear
-
-    if (injectedData.toneMapType != 1.f) {
-      if (injectedData.colorGradeSaturation != 1.f) {
-        float grayscale = yFromBT709(outputColor);
-        outputColor = lerp(grayscale, outputColor, injectedData.colorGradeSaturation);
-        outputColor = max(0, outputColor);
-      }
-
-      if (injectedData.colorGradeShadows != 1.f) {
-        outputColor = apply_user_shadows(outputColor, injectedData.colorGradeShadows);
-      }
-      if (injectedData.colorGradeHighlights != 1.f) {
-        outputColor = apply_user_highlights(outputColor, injectedData.colorGradeHighlights);
-      }
-      if (injectedData.colorGradeContrast != 1.f) {
-        float3 workingColor = pow(outputColor / 0.18f, injectedData.colorGradeContrast) * 0.18f;
-        // Working in BT709 still
-        float workingColorY = yFromBT709(workingColor);
-        float outputColorY = yFromBT709(outputColor);
-        outputColor *= outputColorY ? workingColorY / outputColorY : 1.f;
-      }
-
-      float hdrScale = (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-      if (injectedData.toneMapType == 2.f) {
-        // ACES
-        outputColor = aces_rgc_rrt_odt(
-          outputColor,
-          0.0001f / hdrScale,  // minY
-          48.f * hdrScale
-        );
-        outputColor /= 48.f;
-      } else {  // OpenDRT
-        outputColor = apply_aces_highlights(outputColor);
-        outputColor = open_drt_transform(
-          outputColor,
-          100.f * hdrScale,
-          0,
-          1.f,
-          0
-        );
-        outputColor *= hdrScale;
-      }
-    }
-    outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    outputColor = pow(outputColor, 1.f / 2.2f);
   }
+
+  outputColor = pow(outputColor, 2.2f);  // linear
+  outputColor = applyUserColorGrading(
+    outputColor,
+    1.f,
+    injectedData.colorGradeSaturation,
+    injectedData.colorGradeShadows,
+    injectedData.colorGradeHighlights,
+    injectedData.colorGradeContrast
+  );
+
+  const float vanillaMidGray = 0.18f;
+
+  if (injectedData.toneMapType == 2.f) {
+    const float ACES_MID_GRAY = 0.10f;
+    float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / ACES_MID_GRAY);
+    float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
+    outputColor = aces_rgc_rrt_odt(
+      outputColor,
+      0.0001f / hdrScale,
+      48.f * hdrScale
+    );
+    outputColor /= 48.f;
+    outputColor *= (vanillaMidGray / ACES_MID_GRAY);
+  } else if (injectedData.toneMapType == 3.f) {
+    const float OPENDRT_MID_GRAY = 11.696f / 100.f;  // open_drt_transform(0.18);
+    float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / OPENDRT_MID_GRAY);
+    float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
+    outputColor = mul(BT709_2_BT2020_MAT, outputColor);
+    outputColor = max(0, outputColor);
+    outputColor = open_drt_transform(
+      outputColor,
+      100.f * hdrScale,
+      0,
+      1.f,
+      0
+    );
+    outputColor = mul(BT2020_2_BT709_MAT, outputColor);
+    outputColor *= hdrScale;
+    outputColor *= (vanillaMidGray / OPENDRT_MID_GRAY);
+  }
+
+  outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+  outputColor = sign(outputColor) * pow(abs(outputColor), 1.f / 2.2f);
 
   return float4(outputColor.rgb, textureColor.a);
 }
