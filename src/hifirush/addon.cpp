@@ -44,7 +44,7 @@ UserSettingUtil::UserSettings userSettings = {
     .label = "Tone Mapper",
     .section = "Tone Mapping",
     .tooltip = "Sets the tone mapper type",
-    .labels = {"Vanilla", "None", "ACES", "OpenDRT", "DICE"}
+    .labels = {"Vanilla", "None", "ACES", "OpenDRT" }
   },
   new UserSettingUtil::UserSetting {
     .key = "toneMapPeakNits",
@@ -143,9 +143,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       if (!reshade::register_addon(hModule)) return FALSE;
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
         {reshade::api::format::b8g8r8a8_typeless, reshade::api::format::r16g16b16a16_typeless}
-      );
-      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
-        {reshade::api::format::b8g8r8a8_unorm, reshade::api::format::r16g16b16a16_float}
       );
       break;
     case DLL_PROCESS_DETACH:
