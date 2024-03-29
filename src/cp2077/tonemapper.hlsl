@@ -243,12 +243,6 @@ float3 sampleAllLUTs(const float3 color) {
     compositedColor = color;
   }
 
-  if (injectedData.colorGradeSaturation != 1.f) {
-    float3 okLCh = okLChFromBT709(compositedColor);
-    okLCh[1] *= injectedData.colorGradeSaturation;
-    compositedColor = bt709FromOKLCh(okLCh);
-  }
-
   // This was probably a for loop (0-7)
   if (textureCount > 1u) {
     compositedColor += sampleLUT(cb6[34u], color, 1u);
@@ -406,36 +400,34 @@ float4 tonemap(bool isACESMode = false) {
 
   // outputRGB = lerp(inputColor, outputRGB, injectedData.debugValue03);
 
-  if ((injectedData.processingLUTOrder == -1.f || asuint(cb6[42u]).y == 1u) && (_69.x != 0u)) {
-    outputRGB = sampleAllLUTs(outputRGB);
-  }
+  float exposure = cb6[42u].z;  // "baked with tonemapper midpoint"
 
-  float minNits = cb6[27u].x;            // 0.005
-  float exposure = cb6[42u].z;           // "baked with tonemapper midpoint"
-  float peakNits = cb6[27u].y;           // User peak Nits
-  const float midGrayNits = cb6[18u].w;  // Usually 10.0
-  float3 odtFinal = outputRGB;
-  float toneMapperType = injectedData.toneMapType;
+  if (isACESMode) {
+    if ((injectedData.processingLUTOrder == -1.f || asuint(cb6[42u]).y == 1u) && (_69.x != 0u)) {
+      outputRGB = sampleAllLUTs(outputRGB);
+    }
 
-  if (!isACESMode) {
-    outputRGB *= exposure;
-    odtFinal = outputRGB;
-  } else {
+    float minNits = cb6[27u].x;  // 0.005
+
+    float peakNits = cb6[27u].y;           // User peak Nits
+    const float midGrayNits = cb6[18u].w;  // Usually 10.0
+    float toneMapperType = injectedData.toneMapType;
+
     if (toneMapperType != TONE_MAPPER_TYPE__NONE) {
       outputRGB *= exposure;
     }
-    outputRGB *= injectedData.colorGradeExposure;
-    if (injectedData.colorGradeShadows != 1.f) {
-      outputRGB = apply_user_shadows(outputRGB, injectedData.colorGradeShadows);
-    }
-    if (injectedData.colorGradeHighlights != 1.f) {
-      outputRGB = apply_user_highlights(outputRGB, injectedData.colorGradeHighlights);
-    }
-    if (injectedData.colorGradeContrast != 1.f) {
-      outputRGB = applyContrastSafe(outputRGB, injectedData.colorGradeContrast);
-    }
+
+    outputRGB = applyUserColorGrading(
+      outputRGB,
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeSaturation,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeContrast
+    );
+
     if (toneMapperType == TONE_MAPPER_TYPE__NONE) {
-      odtFinal = outputRGB;
+      // outputRGB = outputRGB;
     } else if (toneMapperType == TONE_MAPPER_TYPE__VANILLA) {
       float3 outputXYZ = mul(BT709_2_XYZ_MAT, outputRGB);
       float3 outputXYZD60 = mul(D65_2_D60_CAT, outputXYZ);
@@ -571,7 +563,7 @@ float4 tonemap(bool isACESMode = false) {
         );
       }
 
-      odtFinal = odtUnknown;
+      outputRGB = odtUnknown;
     } else {
       peakNits = injectedData.toneMapPeakNits;
       float vanillaMidGray = midGrayNits / 100.f;
@@ -603,16 +595,16 @@ float4 tonemap(bool isACESMode = false) {
         const float openDRTMidGray = 11.696f / 100.f;  // open_drt_transform(0.18);
         float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / openDRTMidGray);
         float hdrScale = (peakNits / paperWhite);
-        odtFinal = open_drt_transform(
+        outputRGB = open_drt_transform(
           outputRGB,
           100.f * hdrScale,
           0,
           1.f,
           0
         );
-        odtFinal = mul(outputMatrix, odtFinal);
-        odtFinal *= hdrScale;
-        odtFinal *= (vanillaMidGray / openDRTMidGray);
+        outputRGB = mul(outputMatrix, outputRGB);
+        outputRGB *= hdrScale;
+        outputRGB *= (vanillaMidGray / openDRTMidGray);
       } else if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
         // ACES uses 48 nits for 100-nit SDR
         // Base 100-nit SDR = 203 SDR
@@ -621,28 +613,43 @@ float4 tonemap(bool isACESMode = false) {
 
         float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / 0.10);  // ACES mid gray is 10%
         float hdrScale = (peakNits / paperWhite);
-        odtFinal = aces_rgc_rrt_odt(
+        outputRGB = aces_rgc_rrt_odt(
           outputRGB,
           0.0001f / hdrScale,
           48.f * hdrScale,
           outputMatrix
         );
         if (isSDR) {
-          odtFinal = max(0, odtFinal);
+          outputRGB = max(0, outputRGB);
         }
-        odtFinal /= 48.f;
-        odtFinal *= (vanillaMidGray / 0.10);
+        outputRGB /= 48.f;
+        outputRGB *= (vanillaMidGray / 0.10);
       }
-      odtFinal *= injectedData.toneMapGameNits / CDPR_WHITE;
+      outputRGB *= injectedData.toneMapGameNits / CDPR_WHITE;
     }
+
+  } else {
+    outputRGB = applyUserColorGrading(
+      outputRGB,
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeSaturation,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeContrast
+    );
+    outputRGB = saturate(outputRGB);
+    if ((injectedData.processingLUTOrder == -1.f || asuint(cb6[42u]).y == 1u) && (_69.x != 0u)) {
+      outputRGB = sampleAllLUTs(outputRGB);
+    }
+    outputRGB *= exposure;
   }
 
   if (injectedData.processingLUTOrder == 1.f || asuint(cb6[42u]).y == 0u) {
     uint textureCount = asuint(cb6[41u]).x;
     if (textureCount != 0u) {
-      odtFinal = sampleAllLUTs(odtFinal);
+      outputRGB = sampleAllLUTs(outputRGB);
     }
   }
 
-  return float4(odtFinal.rgb, 0.f);
+  return float4(outputRGB.rgb, 0.f);
 }
