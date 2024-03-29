@@ -35,11 +35,14 @@ namespace SwapChainUpgradeMod {
 
   struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) device_data {
     bool upgradedResource = false;
+    bool upgradedResourceView = false;
     bool hasBufferDesc = false;
     bool resourceUpgradeFinished = false;
     reshade::api::resource_desc deviceBackBufferDesc;
     std::unordered_set<uint64_t> backBuffers;
     std::unordered_set<uint64_t> upgradedResources;
+    std::unordered_map<uint64_t, uint64_t> upgradedResourceViews;
+    std::unordered_set<uint64_t> backBufferResourceViews;
   };
 
   static std::vector<SwapChainUpgradeTarget> swapChainUpgradeTargets = {};
@@ -388,6 +391,11 @@ namespace SwapChainUpgradeMod {
     );
   }
 
+  static void on_destroy_resource(reshade::api::device* device, reshade::api::resource resource) {
+    auto &privateData = device->get_private_data<device_data>();
+    privateData.upgradedResources.erase(resource.handle);
+  }
+
   static bool on_create_resource_view(
     reshade::api::device* device,
     reshade::api::resource resource,
@@ -416,6 +424,9 @@ namespace SwapChainUpgradeMod {
           // Should upgrade shader
           desc.format = targetFormat;
           break;
+        case reshade::api::format::b10g10r10a2_unorm:
+          desc.format = targetFormat;
+          break;
         default:
           break;
       }
@@ -438,7 +449,31 @@ namespace SwapChainUpgradeMod {
         : reshade::log_level::info,
       s.str().c_str()
     );
+
+    privateData.upgradedResourceView = true;
     return oldFormat != desc.format;
+  }
+
+  static void on_init_resource_view(
+    reshade::api::device* device,
+    reshade::api::resource resource,
+    reshade::api::resource_usage usage_type,
+    const reshade::api::resource_view_desc &desc,
+    reshade::api::resource_view view
+  ) {
+    auto &privateData = device->get_private_data<device_data>();
+    if (privateData.backBuffers.contains(resource.handle)) {
+      privateData.backBufferResourceViews.emplace(view.handle);
+    }
+    if (!privateData.upgradedResourceView) return;
+    privateData.upgradedResourceView = false;
+    privateData.upgradedResourceViews.emplace(view.handle, resource.handle);
+  }
+
+  static void on_destroy_resource_view(reshade::api::device* device, reshade::api::resource_view view) {
+    auto &privateData = device->get_private_data<device_data>();
+    privateData.backBufferResourceViews.erase(view.handle);
+    privateData.upgradedResourceViews.erase(view.handle);
   }
 
   static void on_init_effect_runtime(reshade::api::effect_runtime* runtime) {
@@ -505,32 +540,37 @@ namespace SwapChainUpgradeMod {
 
         reshade::register_event<reshade::addon_event::init_resource>(on_init_resource);
         reshade::register_event<reshade::addon_event::create_resource>(on_create_resource);
+        reshade::register_event<reshade::addon_event::destroy_resource>(on_destroy_resource);
 
         reshade::register_event<reshade::addon_event::create_resource_view>(on_create_resource_view);
+        reshade::register_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
+        reshade::register_event<reshade::addon_event::destroy_resource_view>(on_destroy_resource_view);
 
         reshade::register_event<reshade::addon_event::init_effect_runtime>(on_init_effect_runtime);
         reshade::register_event<reshade::addon_event::destroy_effect_runtime>(on_destroy_effect_runtime);
 
-#if RESHADE_API_VERSION >= 11
         reshade::register_event<reshade::addon_event::set_fullscreen_state>(on_set_fullscreen_state);
-#endif
 
         break;
       case DLL_PROCESS_DETACH:
         reshade::unregister_event<reshade::addon_event::init_device>(on_init_device);
         reshade::unregister_event<reshade::addon_event::destroy_device>(on_destroy_device);
+
         reshade::unregister_event<reshade::addon_event::create_swapchain>(on_create_swapchain);
         reshade::unregister_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
         reshade::unregister_event<reshade::addon_event::destroy_swapchain>(on_destroy_swapchain);
+
         reshade::unregister_event<reshade::addon_event::init_resource>(on_init_resource);
         reshade::unregister_event<reshade::addon_event::create_resource>(on_create_resource);
+
         reshade::unregister_event<reshade::addon_event::create_resource_view>(on_create_resource_view);
+        reshade::unregister_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
+
         reshade::unregister_event<reshade::addon_event::init_effect_runtime>(on_init_effect_runtime);
         reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(on_destroy_effect_runtime);
 
-#if RESHADE_API_VERSION >= 11
         reshade::unregister_event<reshade::addon_event::set_fullscreen_state>(on_set_fullscreen_state);
-#endif
+
         break;
     }
   }
