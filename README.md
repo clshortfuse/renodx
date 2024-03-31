@@ -5,7 +5,7 @@ RenoDX, short for "Renovation Engine for DirectX Games", is a toolset to mod gam
 
 # Released mods
 
-* [Cyberpunk2077](https://www.nexusmods.com/cyberpunk2077/mods/13912)
+* [Cyberpunk 2077](https://www.nexusmods.com/cyberpunk2077/mods/13912)
 * [Lost Planet](https://www.nexusmods.com/lostplanetextremeconditioncoloniesedition/mods/2)
 * [Hi-Fi Rush](https://www.nexusmods.com/hifirush/mods/24)
 * [Tunic](https://www.nexusmods.com/tunic/mods/8)
