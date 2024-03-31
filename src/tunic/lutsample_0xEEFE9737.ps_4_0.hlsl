@@ -38,8 +38,9 @@ void main(
 
   r0.xyz = cb0[6].yyy * r0.xyz;  // scale
   float3 untonemapped = r0.rgb;
-  
-  r0.xyz = saturate(untonemapped);
+
+  float3 lutInputColor = saturate(untonemapped);
+  r0.xyz = lutInputColor;
   r0.w = 31 * r0.z;
   r0.xyz = r0.xyz * float3(0.0302734375, 0.96875, 31) + float3(0.00048828125, 0.015625, 0);
   r0.w = frac(r0.w);
@@ -51,97 +52,93 @@ void main(
   r0.xyz = r1.xyz + -r2.xyz;
   o0.xyz = r0.www * r0.xyz + r2.xyz;
 
-  // float3 standardSample = sampleLUT(t1, s1_s, saturate(untonemapped.rgb));
-  
-  // o0.rgb = lerp(untonemapped, o0.rgb, injectedData.colorGradeLUTStrength);
-
-  float3 outputColor = max(0, o0.rgb);  // Game apparently goes negative
-
-  outputColor = lerp(untonemapped, outputColor, injectedData.colorGradeLUTStrength);
-
-  outputColor = pow(outputColor, 2.2f);  // Now in linear
+  float3 outputColor = max(0, o0.rgb);
+  float3 midGrayGamma = 0.5f;
 
   if (injectedData.processingLUTCorrection) {
-    float3 lutMin = t1.SampleLevel(s1_s, float(0.f).xxx, 0.0f).rgb;
-    float3 lutMax = t1.SampleLevel(s1_s, float(1.f).xxx, 0.0f).rgb;
-    lutMin = pow(lutMin, 2.2f);
-    lutMax = pow(lutMax, 2.2f);
+    midGrayGamma = t1.SampleLevel(s1_s, float(0.5f).xxx, 0.0f).rgb;
+    float3 unclamped = unclampSDRLUT(
+      outputColor,
+      t1.SampleLevel(s1_s, float(0.f).xxx, 0.0f).rgb,
+      t1.SampleLevel(s1_s, float(1.f).xxx, 0.0f).rgb,
+      midGrayGamma,
+      lutInputColor
+    );
 
-    const float lutMinY = yFromBT709(lutMin);
-    const float lutMaxY = yFromBT709(lutMax);
-    const float targetPeakY = 1;
-
-    // Only applies on LUTs that are clamped (all?)
-    if (lutMinY > 0) {
-      outputColor = lutCorrectionBlack(untonemapped, outputColor, lutMinY, injectedData.processingLUTCorrection);
-    }
-
-    if (lutMaxY < targetPeakY) {
-      outputColor = lutCorrectionWhite(untonemapped, outputColor, lutMaxY, targetPeakY, injectedData.processingLUTCorrection);
-    }
+    outputColor = pow(outputColor, 2.2f);
+    float3 recolored = recolorUnclampedLUT(
+      outputColor,
+      pow(unclamped, 2.2f)
+    );
+    outputColor = lerp(outputColor, recolored, injectedData.processingLUTCorrection);
+  } else {
+    outputColor = pow(outputColor, 2.2f);
   }
+
+  untonemapped = pow(untonemapped, 2.2f);
+
+  outputColor = lerp(untonemapped, outputColor, injectedData.colorGradeLUTStrength);
 
   if (injectedData.toneMapType == 0) {
     // outputColor *= injectedData.toneMapGameNits / 80.f;
     // noop
   } else {
-    untonemapped = pow(max(0, untonemapped), 2.2f);
     if (injectedData.toneMapType == 1.f) {
       outputColor = untonemapped;  // Untonemapped
       // outputColor *= injectedData.toneMapGameNits / 80.f;
     } else {
+      float luttedColor = outputColor;
+
       float inputY = yFromBT709(untonemapped);
       float outputY = yFromBT709(outputColor);
       outputY = lerp(inputY, outputY, saturate(inputY));
       outputColor *= (outputY ? inputY / outputY : 1);
 
-      if (injectedData.colorGradeSaturation != 1.f) {
-        float3 okLCh = okLChFromBT709(outputColor);
-        okLCh[1] *= injectedData.colorGradeSaturation;
-        outputColor = max(0, bt709FromOKLCh(okLCh));
-      }
+      outputColor = applyUserColorGrading(
+        outputColor,
+        1.f,
+        injectedData.colorGradeSaturation,
+        injectedData.colorGradeShadows,
+        injectedData.colorGradeHighlights,
+        injectedData.colorGradeContrast
+      );
 
-      if (injectedData.colorGradeShadows != 1.f) {
-        outputColor = apply_user_shadows(outputColor, injectedData.colorGradeShadows);
-      }
-      if (injectedData.colorGradeHighlights != 1.f) {
-        outputColor = apply_user_highlights(outputColor, injectedData.colorGradeHighlights);
-      }
-      if (injectedData.colorGradeContrast != 1.f) {
-        float3 workingColor = pow(outputColor / 0.18f, injectedData.colorGradeContrast) * 0.18f;
-        // Working in BT709 still
-        float workingColorY = yFromBT709(workingColor);
-        float outputColorY = yFromBT709(outputColor);
-        outputColor *= outputColorY ? workingColorY / outputColorY : 1.f;
-      }
-      float hdrScale = (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-      if (injectedData.toneMapType == 2) {
+      float vanillaMidGray = pow(midGrayGamma, 2.2f);
+      if (injectedData.toneMapType == 2.f) {
+        const float ACES_MID_GRAY = 0.10f;
+        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / ACES_MID_GRAY);
+        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
         outputColor = aces_rgc_rrt_odt(
-          outputColor * 203.f / 80.f,  // Should be midgray from LUT
-          0.0001f / hdrScale,                     // minY
+          outputColor,
+          0.0001f / hdrScale,
           48.f * hdrScale
-          // AP1_2_BT2020_MAT
         );
         outputColor /= 48.f;
-      } else {
-        outputColor = apply_aces_highlights(outputColor);
-        // outputColor = mul(BT709_2_BT2020_MAT, outputColor);
+        outputColor *= (vanillaMidGray / ACES_MID_GRAY);
+
+      } else if (injectedData.toneMapType == 3.f) {
+        const float OPENDRT_MID_GRAY = 11.696f / 100.f;  // open_drt_transform(0.18);
+        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / OPENDRT_MID_GRAY);
+        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
+        outputColor = mul(BT709_2_BT2020_MAT, outputColor);
         outputColor = max(0, outputColor);
         outputColor = open_drt_transform(
-          outputColor * 203.f / 80.f,  // Should be midgray from LUT
+          outputColor,
           100.f * hdrScale,
           0,
           1.f,
           0
         );
+        outputColor = mul(BT2020_2_BT709_MAT, outputColor);
         outputColor *= hdrScale;
+        outputColor *= (vanillaMidGray / OPENDRT_MID_GRAY);
       }
       // outputColor = mul(BT2020_2_BT709_MAT, outputColor);
       outputColor *= injectedData.toneMapGameNits / 203.f;
     }
     // Send as 2.2 numbers
   }
-  outputColor = pow(max(0, outputColor), 1.f / 2.2f);
+  outputColor = sign(outputColor) * pow(abs(outputColor), 1.f / 2.2f);
 
   o0.rgb = outputColor.rgb;
   return;

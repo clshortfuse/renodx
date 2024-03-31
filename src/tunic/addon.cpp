@@ -139,7 +139,7 @@ UserSettingUtil::UserSettings userSettings = {
   new UserSettingUtil::UserSetting {
     .key = "processingLUTCorrection",
     .binding = &shaderInjection.processingLUTCorrection,
-    .defaultValue = 50.f,
+    .defaultValue = 100.f,
     .label = "LUT Correction",
     .section = "Processing",
     .tooltip = "Selects the strength of LUT correction process when color grading LUTs are not full range.",
@@ -161,7 +161,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
   UserSettingUtil::updateUserSetting("fxScreenGlow", 100.f);
-  UserSettingUtil::updateUserSetting("processingLUTCorrection", 50.f);
+  UserSettingUtil::updateUserSetting("processingLUTCorrection", 0.f);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
