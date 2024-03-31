@@ -108,3 +108,43 @@ float3 lutCorrectionWhite(float3 inputColor, float3 lutColor, float lutWhiteY, f
   lutColor *= (colorY > 0) ? max(colorY, newY) / colorY : 1.f;
   return lutColor;
 }
+
+float3 unclampSDRLUT(
+  float3 originalGamma,
+  float3 blackGamma,
+  float3 whiteGamma,
+  float3 midGrayGamma,
+  float3 neutralGamma
+) {
+  float3 addedGamma = blackGamma;
+  float3 removedGamma = 1.f - whiteGamma;
+
+  float midGrayAvg = (midGrayGamma.r + midGrayGamma.g + midGrayGamma.b) / 3.f;
+
+  float shadowLength = 1.f - midGrayAvg;
+  float shadowStop = max(neutralGamma.r, max(neutralGamma.g, neutralGamma.b));
+  float3 removeFog = addedGamma * max(0, shadowLength - shadowStop) / shadowLength;
+
+  float highlightsStart = midGrayAvg;
+  float highlightsStop = min(neutralGamma.r, min(neutralGamma.g, neutralGamma.b));
+  float3 liftHighlights = removedGamma * ((max(highlightsStart, highlightsStop) - highlightsStart) / highlightsStart);
+
+  float3 detintedInGamma = max(0, originalGamma - removeFog) + liftHighlights;
+  return detintedInGamma;
+}
+
+float3 recolorUnclampedLUT(float3 originalLinear, float3 detintedLinear) {
+  const float3 originalLab = okLabFromBT709(originalLinear);
+
+  float3 retintedLab = okLabFromBT709(detintedLinear);
+  retintedLab[0] = max(0, retintedLab[0]);
+  retintedLab[1] = originalLab[1];
+  retintedLab[2] = originalLab[2];
+
+  float3 outputLinear = bt709FromOKLab(retintedLab);
+
+  outputLinear = mul(BT709_2_AP1_MAT, outputLinear);  // Convert to AP1
+  outputLinear = max(0, outputLinear);                // Clamp to AP1
+  outputLinear = mul(AP1_2_BT709_MAT, outputLinear);  // Convert BT709
+  return outputLinear;
+}
