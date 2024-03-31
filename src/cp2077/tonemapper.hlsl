@@ -173,7 +173,7 @@ struct SPIRV_Cross_Input {
 float3 sampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex) {
   float3 color = inputColor;
   if (lutSettings.x > 0.0f) {           // LUT Strength
-    uint _503 = asuint(lutSettings.w);  // lut Type
+    uint _503 = asuint(lutSettings).w;  // lut Type
     uint _504 = _503 & 15u;
 
     float scale = 1.f;
@@ -186,21 +186,28 @@ float3 sampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
       color *= scale;
     }
 
-    if (_504 == 2u) {
-      color = arriC800FromLinear(color);
-    } else if (_504 == 1u) {
+    if (_504 == 1u) {
       color = srgbFromLinear(color);
+    } else if (_504 == 2u) {
+      color = arriC800FromLinear(color);
     }
 
+    color = saturate(color);  // Ensure within 0-1
+
+    float3 lutInputColor = color;
     float lutScale = lutSettings.x;
     float lutOffset = lutSettings.y;
     float3 coordinates = lutScale * color + lutOffset;
 
     color = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, coordinates, 0.0f).rgb;
 
+    float3 lutOutputColor = color;
+
     if ((_503 & 240u) == 16u) {
       color = linearFromSRGB(color);
     }
+
+    float3 lutOutputLinear = color;
 
     color /= scale;
 
@@ -208,62 +215,55 @@ float3 sampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
       float3 minBlack = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, float(0.f).xxx, 0.0f).rgb;
       float3 peakWhite = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, float(1.f).xxx, 0.0f).rgb;
       if ((_503 & 240u) == 16u) {
-        peakWhite = linearFromSRGB(peakWhite);
-        minBlack = linearFromSRGB(minBlack);
-      }
+        float3 midGray = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, float(0.5f).xxx, 0.0f).rgb;
 
-      const float lutMinY = yFromBT709(minBlack);
-      const float lutPeakY = yFromBT709(peakWhite);
-      const float targetPeakY = 100.f;
+        float3 unclamped = unclampSDRLUT(
+          lutOutputColor,
+          minBlack,
+          peakWhite,
+          midGray,
+          lutInputColor
+        );
 
-      // Only applies on LUTs that are clamped (all?)
-      if (lutMinY > 0) {
-        color = lutCorrectionBlack(inputColor, color, lutMinY, injectedData.processingLUTCorrection);
-      }
+        float3 recolored = recolorUnclampedLUT(
+          lutOutputLinear,
+          linearFromSRGB(unclamped)
+        );
+        color = lerp(color, recolored, min(injectedData.processingLUTCorrection * 2.f, 1.f));
+      } else {
+        const float lutMinY = yFromBT709(minBlack);
+        const float lutPeakY = yFromBT709(peakWhite);
+        const float targetPeakY = 100.f / max(lutSettings.z, 1.f);
 
-      if (lutPeakY < targetPeakY) {
-        color = lutCorrectionWhite(inputColor, color, lutPeakY, targetPeakY, injectedData.processingLUTCorrection);
+        // Only applies on LUTs that are clamped (all?)
+        if (lutMinY > 0) {
+          color = lutCorrectionBlack(inputColor, color, lutMinY, injectedData.processingLUTCorrection);
+        }
+
+        // Only scale up HDR LUTs
+        if (lutPeakY > 1.f && lutPeakY < targetPeakY) {
+          color = lutCorrectionWhite(inputColor, color, lutPeakY, targetPeakY, injectedData.processingLUTCorrection);
+        }
       }
     }
   }
-  if (injectedData.processingLUTCorrection == 0.f) {
-    color *= lutSettings.z;  // output scale
-  }
+  color *= lutSettings.z;  // lut blending
   return color;
 }
 
 float3 sampleAllLUTs(const float3 color) {
   uint textureCount = asuint(cb6[41u]).x;
 
-  float3 compositedColor;
+  float3 compositedColor = 0;
 
   if (injectedData.colorGradeLUTStrength) {  // 0 speed-hack
-    compositedColor = lerp(color, sampleLUT(cb6[33u], color, 0u), injectedData.colorGradeLUTStrength);
+    for (uint i = 0; i < textureCount; i++) {
+      float4 lutSettings = cb6[33u + i];
+      compositedColor += sampleLUT(lutSettings, color, i);
+    }
+    compositedColor = lerp(color, compositedColor, injectedData.colorGradeLUTStrength);
   } else {
     compositedColor = color;
-  }
-
-  // This was probably a for loop (0-7)
-  if (textureCount > 1u) {
-    compositedColor += sampleLUT(cb6[34u], color, 1u);
-  }
-  if (textureCount > 2u) {
-    compositedColor += sampleLUT(cb6[35u], color, 2u);
-  }
-  if (textureCount > 3u) {
-    compositedColor += sampleLUT(cb6[36u], color, 3u);
-  }
-  if (textureCount > 4u) {
-    compositedColor += sampleLUT(cb6[37u], color, 4u);
-  }
-  if (textureCount > 5u) {
-    compositedColor += sampleLUT(cb6[38u], color, 5u);
-  }
-  if (textureCount > 6u) {
-    compositedColor += sampleLUT(cb6[39u], color, 6u);
-  }
-  if (textureCount > 7u) {
-    compositedColor += sampleLUT(cb6[40u], color, 7u);
   }
 
   return compositedColor;
@@ -330,7 +330,7 @@ float4 tonemap(bool isACESMode = false) {
     float blackFloor = cb6[4u].w;      // 0       | 0.112
     float brightness = cb6[7u].x;      // 1       | 1.000
 
-    float3 adjustedColor = inputColor;
+    float3 adjustedColor = color;
     adjustedColor = lerp(adjustedColor, 1.f, fillWhite);
     adjustedColor *= sceneGain;
     adjustedColor += sceneLift;
@@ -637,7 +637,7 @@ float4 tonemap(bool isACESMode = false) {
       injectedData.colorGradeHighlights,
       injectedData.colorGradeContrast
     );
-    outputRGB = saturate(outputRGB);
+    outputRGB = max(0, outputRGB);
     if ((injectedData.processingLUTOrder == -1.f || asuint(cb6[42u]).y == 1u) && (_69.x != 0u)) {
       outputRGB = sampleAllLUTs(outputRGB);
     }
