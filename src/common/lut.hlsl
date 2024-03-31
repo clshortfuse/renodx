@@ -98,7 +98,7 @@ float3 lutCorrectionBlack(float3 inputColor, float3 lutColor, float lutBlackY, f
 }
 
 float3 lutCorrectionWhite(float3 inputColor, float3 lutColor, float lutWhiteY, float targetWhiteY, float strength) {
-  const float inputY = yFromBT709(inputColor);
+  const float inputY = min(targetWhiteY, yFromBT709(inputColor));
   const float colorY = yFromBT709(lutColor);
   const float a = lutWhiteY / targetWhiteY;
   const float b = lerp(1.f, 0.f, strength);
@@ -117,7 +117,7 @@ float3 unclampSDRLUT(
   float3 neutralGamma
 ) {
   float3 addedGamma = blackGamma;
-  float3 removedGamma = 1.f - whiteGamma;
+  float3 removedGamma = 1.f - min(1.f, whiteGamma);
 
   float midGrayAvg = (midGrayGamma.r + midGrayGamma.g + midGrayGamma.b) / 3.f;
 
