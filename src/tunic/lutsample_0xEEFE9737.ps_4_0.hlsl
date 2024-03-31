@@ -55,7 +55,7 @@ void main(
   float3 outputColor = max(0, o0.rgb);
   float3 midGrayGamma = 0.5f;
 
-  if (injectedData.processingLUTCorrection) {
+  if (injectedData.processingLUTScaling) {
     midGrayGamma = t1.SampleLevel(s1_s, float(0.5f).xxx, 0.0f).rgb;
     float3 unclamped = unclampSDRLUT(
       outputColor,
@@ -70,7 +70,7 @@ void main(
       outputColor,
       pow(unclamped, 2.2f)
     );
-    outputColor = lerp(outputColor, recolored, injectedData.processingLUTCorrection);
+    outputColor = lerp(outputColor, recolored, injectedData.processingLUTScaling);
   } else {
     outputColor = pow(outputColor, 2.2f);
   }

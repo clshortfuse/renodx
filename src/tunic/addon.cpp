@@ -137,12 +137,12 @@ UserSettingUtil::UserSettings userSettings = {
     .parse = [](float value) { return value * 0.01f; }
   },
   new UserSettingUtil::UserSetting {
-    .key = "processingLUTCorrection",
-    .binding = &shaderInjection.processingLUTCorrection,
+    .key = "processingLUTScaling",
+    .binding = &shaderInjection.processingLUTScaling,
     .defaultValue = 100.f,
-    .label = "LUT Correction",
+    .label = "LUT Scaling",
     .section = "Processing",
-    .tooltip = "Selects the strength of LUT correction process when color grading LUTs are not full range.",
+    .tooltip = "Selects the strength of LUT scaling process when color grading LUTs are not full range.",
     .max = 100.f,
     .parse = [](float value) { return value * 0.01f; }
   },
@@ -161,7 +161,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
   UserSettingUtil::updateUserSetting("fxScreenGlow", 100.f);
-  UserSettingUtil::updateUserSetting("processingLUTCorrection", 0.f);
+  UserSettingUtil::updateUserSetting("processingLUTScaling", 0.f);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
