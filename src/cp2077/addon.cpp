@@ -9,20 +9,18 @@
 #define DEBUG_SLIDERS_OFF
 
 #include <embed/0x298A6BB0.h>
+#include <embed/0x341CEB87.h>
 #include <embed/0x5DF649A9.h>
 #include <embed/0x61DBBA5C.h>
 #include <embed/0x71F27445.h>
 #include <embed/0x745E34E1.h>
 #include <embed/0x97CA5A85.h>
 #include <embed/0xA61F2FEE.h>
-#include <embed/0xB489149F.h>
 #include <embed/0xBF8489D2.h>
 #include <embed/0xC783FBA1.h>
 #include <embed/0xC83E64DF.h>
 #include <embed/0xCBFFC2A3.h>
-#include <embed/0xD2BBEBD9.h>
 #include <embed/0xDE517511.h>
-#include <embed/0xE57907C4.h>
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -44,6 +42,7 @@ extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Cyberpunk
 
 static ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0xCBFFC2A3),  // output
+  CustomShaderEntry(0x341CEB87),  // upscale
   CustomShaderEntry(0x298A6BB0),  // composite multisample
   CustomShaderEntry(0xBF8489D2),  // composite multisample lowbit
   CustomShaderEntry(0x5DF649A9),  // composite
@@ -54,10 +53,7 @@ static ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0x745E34E1),  // tonemapper sdr lowbit
   CustomShaderEntry(0xC783FBA1),  // film grain overlay
   CustomShaderEntry(0xC83E64DF),  // hud
-  CustomShaderEntry(0xD2BBEBD9),  // film grain gen
-  CustomShaderEntry(0xDE517511),  // menu
-  CustomShaderEntry(0xB489149F),  // menu3
-  CustomShaderEntry(0xE57907C4)   // menu4
+  CustomShaderEntry(0xDE517511)   // menu
 };
 
 ShaderInjectData shaderInjection;
