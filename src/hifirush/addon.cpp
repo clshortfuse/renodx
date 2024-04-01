@@ -7,10 +7,13 @@
 
 #define DEBUG_LEVEL_0
 
+#include <embed/0x4D868A70.h>
+#include <embed/0x8DAE8683.h>
 #include <embed/0x93269875.h>
 #include <embed/0x9F3842A8.h>
 #include <embed/0xC3126A03.h>
 #include <embed/0xC6FA129B.h>
+#include <embed/0xE3729F07.h>
 #include <embed/0xF6E7E494.h>
 
 #include <deps/imgui/imgui.h>
@@ -29,7 +32,10 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0xF6E7E494),
   CustomShaderEntry(0xC6FA129B),
   CustomShaderEntry(0x9F3842A8),
-  CustomShaderEntry(0x93269875)
+  CustomShaderEntry(0x93269875),
+  CustomShaderEntry(0xE3729F07),
+  CustomShaderEntry(0x8DAE8683),
+  CustomShaderEntry(0x4D868A70)
 };
 
 ShaderInjectData shaderInjection;
