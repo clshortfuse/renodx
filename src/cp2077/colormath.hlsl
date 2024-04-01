@@ -95,12 +95,16 @@ float3 convertColor(float3 inputColor, ConvertColorParams params) {
     case OUTPUT_TYPE_SRGB10:
       // Unknown usage
       {
-        float3 correctedColor = applyUserBrightness(inputColor.rgb, params.gammaCorrection);
-        float3 matrixedColor = mul(correctedColor, params.colorMatrix);
-        float3 scaledColor = matrixedColor * params.paperWhiteScaling;
-        float3 srgbColor = srgbFromLinear(scaledColor);
-        float3 postProcessedSRGB = randomDither(srgbColor.rgb, params.random3, 10.f);
-        outputColor.rgb = postProcessedSRGB.rgb;
+        outputColor = max(0, outputColor);  // clamp to BT709
+        outputColor = applyUserBrightness(outputColor, params.gammaCorrection);
+        outputColor = mul(outputColor, params.colorMatrix);
+        outputColor *= params.paperWhiteScaling;
+        if (injectedData.toneMapGammaCorrection == 2.f) {
+          outputColor = pow(outputColor, 1.f / 2.2f);
+        } else {
+          outputColor = srgbFromLinear(outputColor);
+        }
+        outputColor = randomDither(outputColor, params.random3, 10.f);
       }
       break;
     default:

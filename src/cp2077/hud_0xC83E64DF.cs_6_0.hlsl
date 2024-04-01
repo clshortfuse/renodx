@@ -1,9 +1,9 @@
 // HUD Shader
 
 #include "../common/filmgrain.hlsl"
-#include "../cp2077/colormath.hlsl"
-#include "../cp2077/cp2077.h"
-#include "../cp2077/injectedBuffer.hlsl"
+#include "./colormath.hlsl"
+#include "./cp2077.h"
+#include "./injectedBuffer.hlsl"
 
 static float _312;
 
@@ -714,239 +714,50 @@ void comp_main() {
     _608 = _123;
     _610 = _126;
   }
+
   uint4 _615 = asuint(cb6[13u]);
-  float _1158;
-  float _1164;
-  float _1170;
-  // color conversion
-  if (_615.y == 0u) {
-    _1158 = _606;
-    _1164 = _608;
-    _1170 = _610;
-  } else {
-    uint _1200 = _615.w;
-    float _1538;
-    float _1539;
-    float _1540;
-    if (cb6[14u].z != 1.0f) {
-      _1538 = pow(_606, cb6[14u].z);
-      _1539 = pow(_608, cb6[14u].z);
-      _1540 = pow(_610, cb6[14u].z);
-    } else {
-      _1538 = _606;
-      _1539 = _608;
-      _1540 = _610;
-    }
-    float _1550 = frac(_87 * 211.1488037109375f);
-    float _1551 = frac(_88 * 210.944000244140625f);
-    float _1552 = frac(cb0[0u].x * 6.227200031280517578125f);
-    float _1555 = _1552 + 33.3300018310546875f;
-    float _1556 = dot(float3(_1550, _1551, _1552), float3(_1551 + 33.3300018310546875f, _1550 + 33.3300018310546875f, _1555));
-    float _1559 = _1556 + _1550;
-    float _1560 = _1556 + _1551;
-    float _1562 = _1559 + _1560;
-    float _1567 = frac(_1562 * (_1556 + _1552));
-    float _1568 = frac((_1559 * 2.0f) * _1560);
-    float _1569 = frac(_1562 * _1559);
-    float _1575 = frac((_87 + 64.0f) * 211.1488037109375f);
-    float _1576 = frac((_88 + 64.0f) * 210.944000244140625f);
-    float _1579 = dot(float3(_1575, _1576, _1552), float3(_1576 + 33.3300018310546875f, _1575 + 33.3300018310546875f, _1555));
-    float _1582 = _1579 + _1575;
-    float _1583 = _1579 + _1576;
-    float _1585 = _1582 + _1583;
-    float _1590 = frac(_1585 * (_1579 + _1552));
-    float _1591 = frac((_1582 * 2.0f) * _1583);
-    float _1592 = frac(_1585 * _1582);
-    float frontier_phi_16_25_ladder;
-    float frontier_phi_16_25_ladder_1;
-    float frontier_phi_16_25_ladder_2;
-    if (_1200 == 0u) {
-      float _1728 = (_1538 <= 0.003130800090730190277099609375f) ? (_1538 * 12.9200000762939453125f) : ((exp2(log2(abs(_1538)) * 0.4166666567325592041015625f) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f));
-      float _1729 = (_1539 <= 0.003130800090730190277099609375f) ? (_1539 * 12.9200000762939453125f) : ((exp2(log2(abs(_1539)) * 0.4166666567325592041015625f) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f));
-      float _1730 = (_1540 <= 0.003130800090730190277099609375f) ? (_1540 * 12.9200000762939453125f) : ((exp2(log2(abs(_1540)) * 0.4166666567325592041015625f) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f));
-      float _1731 = _1728 * 510.0f;
-      float _1733 = _1729 * 510.0f;
-      float _1734 = _1730 * 510.0f;
-      frontier_phi_16_25_ladder = (((_1569 + (-0.5f)) + (min(min(1.0f, _1734), 510.0f - _1734) * (_1592 + (-0.5f)))) * 0.0039215688593685626983642578125f) + _1730;
-      frontier_phi_16_25_ladder_1 = (((_1567 + (-0.5f)) + (min(min(1.0f, _1731), 510.0f - _1731) * (_1590 + (-0.5f)))) * 0.0039215688593685626983642578125f) + _1728;
-      frontier_phi_16_25_ladder_2 = (((_1568 + (-0.5f)) + (min(min(1.0f, _1733), 510.0f - _1733) * (_1591 + (-0.5f)))) * 0.0039215688593685626983642578125f) + _1729;
-    } else {
-      float frontier_phi_16_25_ladder_33_ladder;
-      float frontier_phi_16_25_ladder_33_ladder_1;
-      float frontier_phi_16_25_ladder_33_ladder_2;
-      if (_1200 == 1u) {
-        float _1877 = mad(0.043306000530719757080078125f, _1540, mad(0.329291999340057373046875f, _1539, _1538 * 0.627402007579803466796875f));
-        float _1883 = mad(0.011359999887645244598388671875f, _1540, mad(0.9195439815521240234375f, _1539, _1538 * 0.06909500062465667724609375f));
-        float _1889 = mad(0.89557802677154541015625f, _1540, mad(0.08802799880504608154296875f, _1539, _1538 * 0.0163940005004405975341796875f));
-        float _1925 = exp2(log2(abs((((clamp(mad(_1889, cb6[22u].z, mad(_1883, cb6[22u].y, _1877 * cb6[22u].x)), 0.0f, 1.0f) - _1877) * cb6[16u].x) + _1877) * cb6[14u].x)) * 0.1593017578125f);
-        float _1926 = exp2(log2(abs((((clamp(mad(_1889, cb6[23u].z, mad(_1883, cb6[23u].y, _1877 * cb6[23u].x)), 0.0f, 1.0f) - _1883) * cb6[16u].x) + _1883) * cb6[14u].x)) * 0.1593017578125f);
-        float _1927 = exp2(log2(abs((((clamp(mad(_1889, cb6[24u].z, mad(_1883, cb6[24u].y, _1877 * cb6[24u].x)), 0.0f, 1.0f) - _1889) * cb6[16u].x) + _1889) * cb6[14u].x)) * 0.1593017578125f);
-        frontier_phi_16_25_ladder_33_ladder = exp2(log2(abs(((_1927 * 18.8515625f) + 0.8359375f) / ((_1927 * 18.6875f) + 1.0f))) * 78.84375f);
-        frontier_phi_16_25_ladder_33_ladder_1 = exp2(log2(abs(((_1925 * 18.8515625f) + 0.8359375f) / ((_1925 * 18.6875f) + 1.0f))) * 78.84375f);
-        frontier_phi_16_25_ladder_33_ladder_2 = exp2(log2(abs(((_1926 * 18.8515625f) + 0.8359375f) / ((_1926 * 18.6875f) + 1.0f))) * 78.84375f);
-      } else {
-        float frontier_phi_16_25_ladder_33_ladder_41_ladder;
-        float frontier_phi_16_25_ladder_33_ladder_41_ladder_1;
-        float frontier_phi_16_25_ladder_33_ladder_41_ladder_2;
-        if (_1200 == 2u) {
-          frontier_phi_16_25_ladder_33_ladder_41_ladder = _1540 * cb6[14u].x;
-          frontier_phi_16_25_ladder_33_ladder_41_ladder_1 = _1538 * cb6[14u].x;
-          frontier_phi_16_25_ladder_33_ladder_41_ladder_2 = _1539 * cb6[14u].x;
-        } else {
-          float frontier_phi_16_25_ladder_33_ladder_41_ladder_47_ladder;
-          float frontier_phi_16_25_ladder_33_ladder_41_ladder_47_ladder_1;
-          float frontier_phi_16_25_ladder_33_ladder_41_ladder_47_ladder_2;
-          if (_1200 == 3u) {
-            float _2185 = mad(_1540, cb6[22u].z, mad(_1539, cb6[22u].y, _1538 * cb6[22u].x)) * cb6[14u].x;
-            float _2186 = mad(_1540, cb6[23u].z, mad(_1539, cb6[23u].y, _1538 * cb6[23u].x)) * cb6[14u].x;
-            float _2187 = mad(_1540, cb6[24u].z, mad(_1539, cb6[24u].y, _1538 * cb6[24u].x)) * cb6[14u].x;
-            float _2212 = (_2185 <= 0.003130800090730190277099609375f) ? (_2185 * 12.9200000762939453125f) : ((exp2(log2(abs(_2185)) * 0.4166666567325592041015625f) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f));
-            float _2213 = (_2186 <= 0.003130800090730190277099609375f) ? (_2186 * 12.9200000762939453125f) : ((exp2(log2(abs(_2186)) * 0.4166666567325592041015625f) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f));
-            float _2214 = (_2187 <= 0.003130800090730190277099609375f) ? (_2187 * 12.9200000762939453125f) : ((exp2(log2(abs(_2187)) * 0.4166666567325592041015625f) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f));
-            float _2215 = _2212 * 2046.0f;
-            float _2217 = _2213 * 2046.0f;
-            float _2218 = _2214 * 2046.0f;
-            frontier_phi_16_25_ladder_33_ladder_41_ladder_47_ladder = (((_1569 + (-0.5f)) + (min(min(1.0f, _2218), 2046.0f - _2218) * (_1592 + (-0.5f)))) * 0.000977517105638980865478515625f) + _2214;
-            frontier_phi_16_25_ladder_33_ladder_41_ladder_47_ladder_1 = (((_1567 + (-0.5f)) + (min(min(1.0f, _2215), 2046.0f - _2215) * (_1590 + (-0.5f)))) * 0.000977517105638980865478515625f) + _2212;
-            frontier_phi_16_25_ladder_33_ladder_41_ladder_47_ladder_2 = (((_1568 + (-0.5f)) + (min(min(1.0f, _2217), 2046.0f - _2217) * (_1591 + (-0.5f)))) * 0.000977517105638980865478515625f) + _2213;
-          } else {
-            frontier_phi_16_25_ladder_33_ladder_41_ladder_47_ladder = (_1540 * cb6[14u].x) + cb6[14u].y;
-            frontier_phi_16_25_ladder_33_ladder_41_ladder_47_ladder_1 = (_1538 * cb6[14u].x) + cb6[14u].y;
-            frontier_phi_16_25_ladder_33_ladder_41_ladder_47_ladder_2 = (_1539 * cb6[14u].x) + cb6[14u].y;
-          }
-          frontier_phi_16_25_ladder_33_ladder_41_ladder = frontier_phi_16_25_ladder_33_ladder_41_ladder_47_ladder;
-          frontier_phi_16_25_ladder_33_ladder_41_ladder_1 = frontier_phi_16_25_ladder_33_ladder_41_ladder_47_ladder_1;
-          frontier_phi_16_25_ladder_33_ladder_41_ladder_2 = frontier_phi_16_25_ladder_33_ladder_41_ladder_47_ladder_2;
-        }
-        frontier_phi_16_25_ladder_33_ladder = frontier_phi_16_25_ladder_33_ladder_41_ladder;
-        frontier_phi_16_25_ladder_33_ladder_1 = frontier_phi_16_25_ladder_33_ladder_41_ladder_1;
-        frontier_phi_16_25_ladder_33_ladder_2 = frontier_phi_16_25_ladder_33_ladder_41_ladder_2;
-      }
-      frontier_phi_16_25_ladder = frontier_phi_16_25_ladder_33_ladder;
-      frontier_phi_16_25_ladder_1 = frontier_phi_16_25_ladder_33_ladder_1;
-      frontier_phi_16_25_ladder_2 = frontier_phi_16_25_ladder_33_ladder_2;
-    }
-    _1158 = frontier_phi_16_25_ladder_1;
-    _1164 = frontier_phi_16_25_ladder_2;
-    _1170 = frontier_phi_16_25_ladder;
+  float3 outputColor1 = float3(_606, _608, _610);
+  if (_615.y != 0u) {
+    ConvertColorParams params = {
+      _615.w,      // outputTypeEnum
+      cb6[14u].x,  // paperWhiteScaling
+      cb6[14u].y,  // blackFloorAdjust
+      cb6[14u].z,  // gammaCorrection
+      cb6[16u].x,  // pqSaturation
+      float3x3(
+        // clang-format off
+        cb6[22u].x, cb6[22u].y, cb6[22u].z,
+        cb6[23u].x, cb6[23u].y, cb6[23u].z,
+        cb6[24u].x, cb6[24u].y, cb6[24u].z
+        // clang-format on
+      ),                           // pqMatrix
+      float3(_87, _88, cb0[0u].x)  // random3
+    };
+    outputColor1 = convertColor(outputColor1, params);
   }
-  float _1473;
-  float _1479;
-  float _1485;
-  if (_134) {
-    _1473 = _311;
-    _1479 = _314;
-    _1485 = _316;
-  } else {
-    uint _1524 = _615.w;
-    float _1647;
-    float _1648;
-    float _1649;
-    if (cb6[15u].w != 1.0f) {
-      _1647 = exp2(log2(abs(_311)) * cb6[15u].w);
-      _1648 = exp2(log2(abs(_314)) * cb6[15u].w);
-      _1649 = exp2(log2(abs(_316)) * cb6[15u].w);
-    } else {
-      _1647 = _311;
-      _1648 = _314;
-      _1649 = _316;
-    }
-    float _1656 = frac(_87 * 211.1488037109375f);
-    float _1657 = frac(_88 * 210.944000244140625f);
-    float _1658 = frac(cb0[0u].x * 6.227200031280517578125f);
-    float _1661 = _1658 + 33.3300018310546875f;
-    float _1662 = dot(float3(_1656, _1657, _1658), float3(_1657 + 33.3300018310546875f, _1656 + 33.3300018310546875f, _1661));
-    float _1665 = _1662 + _1656;
-    float _1666 = _1662 + _1657;
-    float _1668 = _1665 + _1666;
-    float _1673 = frac(_1668 * (_1662 + _1658));
-    float _1674 = frac((_1665 * 2.0f) * _1666);
-    float _1675 = frac(_1668 * _1665);
-    float _1680 = frac((_87 + 64.0f) * 211.1488037109375f);
-    float _1681 = frac((_88 + 64.0f) * 210.944000244140625f);
-    float _1684 = dot(float3(_1680, _1681, _1658), float3(_1681 + 33.3300018310546875f, _1680 + 33.3300018310546875f, _1661));
-    float _1687 = _1684 + _1680;
-    float _1688 = _1684 + _1681;
-    float _1690 = _1687 + _1688;
-    float _1695 = frac(_1690 * (_1684 + _1658));
-    float _1696 = frac((_1687 * 2.0f) * _1688);
-    float _1697 = frac(_1690 * _1687);
-    float frontier_phi_22_31_ladder;
-    float frontier_phi_22_31_ladder_1;
-    float frontier_phi_22_31_ladder_2;
-    if (_1524 == 0u) {
-      float _1842 = (_1647 <= 0.003130800090730190277099609375f) ? (_1647 * 12.9200000762939453125f) : ((exp2(log2(abs(_1647)) * 0.4166666567325592041015625f) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f));
-      float _1843 = (_1648 <= 0.003130800090730190277099609375f) ? (_1648 * 12.9200000762939453125f) : ((exp2(log2(abs(_1648)) * 0.4166666567325592041015625f) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f));
-      float _1844 = (_1649 <= 0.003130800090730190277099609375f) ? (_1649 * 12.9200000762939453125f) : ((exp2(log2(abs(_1649)) * 0.4166666567325592041015625f) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f));
-      float _1845 = _1842 * 510.0f;
-      float _1846 = _1843 * 510.0f;
-      float _1847 = _1844 * 510.0f;
-      frontier_phi_22_31_ladder = (((_1673 + (-0.5f)) + (min(min(1.0f, _1845), 510.0f - _1845) * (_1695 + (-0.5f)))) * 0.0039215688593685626983642578125f) + _1842;
-      frontier_phi_22_31_ladder_1 = (((_1675 + (-0.5f)) + (min(min(1.0f, _1847), 510.0f - _1847) * (_1697 + (-0.5f)))) * 0.0039215688593685626983642578125f) + _1844;
-      frontier_phi_22_31_ladder_2 = (((_1674 + (-0.5f)) + (min(min(1.0f, _1846), 510.0f - _1846) * (_1696 + (-0.5f)))) * 0.0039215688593685626983642578125f) + _1843;
-    } else {
-      float frontier_phi_22_31_ladder_39_ladder;
-      float frontier_phi_22_31_ladder_39_ladder_1;
-      float frontier_phi_22_31_ladder_39_ladder_2;
-      if (_1524 == 1u) {
-        float _2002 = mad(0.043306000530719757080078125f, _1649, mad(0.329291999340057373046875f, _1648, _1647 * 0.627402007579803466796875f));
-        float _2005 = mad(0.011359999887645244598388671875f, _1649, mad(0.9195439815521240234375f, _1648, _1647 * 0.06909500062465667724609375f));
-        float _2008 = mad(0.89557802677154541015625f, _1649, mad(0.08802799880504608154296875f, _1648, _1647 * 0.0163940005004405975341796875f));
-        float _2042 = exp2(log2(abs((((clamp(mad(_2008, cb6[26u].z, mad(_2005, cb6[26u].y, _2002 * cb6[26u].x)), 0.0f, 1.0f) - _2002) * cb6[16u].x) + _2002) * cb6[15u].y)) * 0.1593017578125f);
-        float _2043 = exp2(log2(abs((((clamp(mad(_2008, cb6[27u].z, mad(_2005, cb6[27u].y, _2002 * cb6[27u].x)), 0.0f, 1.0f) - _2005) * cb6[16u].x) + _2005) * cb6[15u].y)) * 0.1593017578125f);
-        float _2044 = exp2(log2(abs((((clamp(mad(_2008, cb6[28u].z, mad(_2005, cb6[28u].y, _2002 * cb6[28u].x)), 0.0f, 1.0f) - _2008) * cb6[16u].x) + _2008) * cb6[15u].y)) * 0.1593017578125f);
-        frontier_phi_22_31_ladder_39_ladder = exp2(log2(abs(((_2042 * 18.8515625f) + 0.8359375f) / ((_2042 * 18.6875f) + 1.0f))) * 78.84375f);
-        frontier_phi_22_31_ladder_39_ladder_1 = exp2(log2(abs(((_2044 * 18.8515625f) + 0.8359375f) / ((_2044 * 18.6875f) + 1.0f))) * 78.84375f);
-        frontier_phi_22_31_ladder_39_ladder_2 = exp2(log2(abs(((_2043 * 18.8515625f) + 0.8359375f) / ((_2043 * 18.6875f) + 1.0f))) * 78.84375f);
-      } else {
-        float frontier_phi_22_31_ladder_39_ladder_45_ladder;
-        float frontier_phi_22_31_ladder_39_ladder_45_ladder_1;
-        float frontier_phi_22_31_ladder_39_ladder_45_ladder_2;
-        if (_1524 == 2u) {
-          frontier_phi_22_31_ladder_39_ladder_45_ladder = _1647 * cb6[15u].y;
-          frontier_phi_22_31_ladder_39_ladder_45_ladder_1 = _1649 * cb6[15u].y;
-          frontier_phi_22_31_ladder_39_ladder_45_ladder_2 = _1648 * cb6[15u].y;
-        } else {
-          float frontier_phi_22_31_ladder_39_ladder_45_ladder_51_ladder;
-          float frontier_phi_22_31_ladder_39_ladder_45_ladder_51_ladder_1;
-          float frontier_phi_22_31_ladder_39_ladder_45_ladder_51_ladder_2;
-          if (_1524 == 3u) {
-            float _2402 = mad(_1649, cb6[26u].z, mad(_1648, cb6[26u].y, _1647 * cb6[26u].x)) * cb6[15u].y;
-            float _2403 = mad(_1649, cb6[27u].z, mad(_1648, cb6[27u].y, _1647 * cb6[27u].x)) * cb6[15u].y;
-            float _2404 = mad(_1649, cb6[28u].z, mad(_1648, cb6[28u].y, _1647 * cb6[28u].x)) * cb6[15u].y;
-            float _2429 = (_2402 <= 0.003130800090730190277099609375f) ? (_2402 * 12.9200000762939453125f) : ((exp2(log2(abs(_2402)) * 0.4166666567325592041015625f) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f));
-            float _2430 = (_2403 <= 0.003130800090730190277099609375f) ? (_2403 * 12.9200000762939453125f) : ((exp2(log2(abs(_2403)) * 0.4166666567325592041015625f) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f));
-            float _2431 = (_2404 <= 0.003130800090730190277099609375f) ? (_2404 * 12.9200000762939453125f) : ((exp2(log2(abs(_2404)) * 0.4166666567325592041015625f) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f));
-            float _2432 = _2429 * 2046.0f;
-            float _2433 = _2430 * 2046.0f;
-            float _2434 = _2431 * 2046.0f;
-            frontier_phi_22_31_ladder_39_ladder_45_ladder_51_ladder = (((_1673 + (-0.5f)) + (min(min(1.0f, _2432), 2046.0f - _2432) * (_1695 + (-0.5f)))) * 0.000977517105638980865478515625f) + _2429;
-            frontier_phi_22_31_ladder_39_ladder_45_ladder_51_ladder_1 = (((_1675 + (-0.5f)) + (min(min(1.0f, _2434), 2046.0f - _2434) * (_1697 + (-0.5f)))) * 0.000977517105638980865478515625f) + _2431;
-            frontier_phi_22_31_ladder_39_ladder_45_ladder_51_ladder_2 = (((_1674 + (-0.5f)) + (min(min(1.0f, _2433), 2046.0f - _2433) * (_1696 + (-0.5f)))) * 0.000977517105638980865478515625f) + _2430;
-          } else {
-            frontier_phi_22_31_ladder_39_ladder_45_ladder_51_ladder = (_1647 * cb6[15u].y) + cb6[15u].z;
-            frontier_phi_22_31_ladder_39_ladder_45_ladder_51_ladder_1 = (_1649 * cb6[15u].y) + cb6[15u].z;
-            frontier_phi_22_31_ladder_39_ladder_45_ladder_51_ladder_2 = (_1648 * cb6[15u].y) + cb6[15u].z;
-          }
-          frontier_phi_22_31_ladder_39_ladder_45_ladder = frontier_phi_22_31_ladder_39_ladder_45_ladder_51_ladder;
-          frontier_phi_22_31_ladder_39_ladder_45_ladder_1 = frontier_phi_22_31_ladder_39_ladder_45_ladder_51_ladder_1;
-          frontier_phi_22_31_ladder_39_ladder_45_ladder_2 = frontier_phi_22_31_ladder_39_ladder_45_ladder_51_ladder_2;
-        }
-        frontier_phi_22_31_ladder_39_ladder = frontier_phi_22_31_ladder_39_ladder_45_ladder;
-        frontier_phi_22_31_ladder_39_ladder_1 = frontier_phi_22_31_ladder_39_ladder_45_ladder_1;
-        frontier_phi_22_31_ladder_39_ladder_2 = frontier_phi_22_31_ladder_39_ladder_45_ladder_2;
-      }
-      frontier_phi_22_31_ladder = frontier_phi_22_31_ladder_39_ladder;
-      frontier_phi_22_31_ladder_1 = frontier_phi_22_31_ladder_39_ladder_1;
-      frontier_phi_22_31_ladder_2 = frontier_phi_22_31_ladder_39_ladder_2;
-    }
-    _1473 = frontier_phi_22_31_ladder;
-    _1479 = frontier_phi_22_31_ladder_2;
-    _1485 = frontier_phi_22_31_ladder_1;
-  }
-  _27[uint2(_85, _86)] = float4(_1158, _1164, _1170, 1.0f);
-  if (!(asuint(cb6[15u]).x == 0u)) {
-    _28[uint2(_85, _86)] = float4(_1473, _1479, _1485, 1.0f);
+
+  _27[uint2(_85, _86)] = float4(outputColor1.rgb, 1.0f);
+
+  if (!_134) {
+    float3 outputColor2 = float3(_311, _314, _316);
+    ConvertColorParams params = {
+      _615.w,      // outputTypeEnum
+      cb6[15u].y,  // paperWhiteScaling
+      cb6[15u].z,  // blackFloorAdjust
+      cb6[15u].w,  // gammaCorrection
+      cb6[16u].x,  // pqSaturation
+      float3x3(
+        // clang-format off
+        cb6[26u].x, cb6[26u].y, cb6[26u].z,
+        cb6[27u].x, cb6[27u].y, cb6[27u].z,
+        cb6[28u].x, cb6[28u].y, cb6[28u].z
+        // clang-format on
+      ),                           // pqMatrix
+      float3(_87, _88, cb0[0u].x)  // random3
+    };
+
+    outputColor2 = convertColor(outputColor2, params);
+    _28[uint2(_85, _86)] = float4(outputColor2.rgb, 1.0f);
   }
 }
 
