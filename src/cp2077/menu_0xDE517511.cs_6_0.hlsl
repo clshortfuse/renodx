@@ -26,7 +26,7 @@ Texture2D<float4> _18 : register(t6, space0);
 Texture2D<float4> _19 : register(t8, space0);
 Texture2D<float4> _8 : register(t32, space0);
 Texture2D<uint4> _12 : register(t51, space0);
-Buffer<uint4> _22 : register(t9, space0);
+StructuredBuffer<float> _22 : register(t9, space0);
 Texture2D<float4> _23 : register(t10, space0);
 RWTexture2D<float4> _26 : register(u0, space0);
 RWTexture2D<float4> _27 : register(u1, space0);

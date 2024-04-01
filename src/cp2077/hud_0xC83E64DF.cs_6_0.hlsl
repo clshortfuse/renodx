@@ -25,12 +25,12 @@ Texture2D<float4> _15 : register(t2, space0);
 Texture2D<float4> _16 : register(t3, space0);
 Texture2D<float4> texture5 : register(t5, space0);
 Texture2D<float4> texture6 : register(t6, space0);
-Buffer<uint4> _21 : register(t7, space0);
+StructuredBuffer<uint> _21 : register(t7, space0);
 Texture2D<float4> _22 : register(t8, space0);
-Buffer<uint4> bufferHudMask : register(t9, space0);  // UI Mask?
+StructuredBuffer<float> bufferHudMask : register(t9, space0);  // UI Mask?
 Texture2D<float4> _24 : register(t10, space0);
 Texture2D<float4> textureRender : register(t32, space0);
-Texture2D<uint4> _12 : register(t51, space0);
+Texture2D<uint2> _12 : register(t51, space0);
 
 RWTexture2D<float4> _27 : register(u0, space0);
 RWTexture2D<float4> _28 : register(u1, space0);
