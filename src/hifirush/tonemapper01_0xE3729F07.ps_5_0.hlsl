@@ -123,7 +123,9 @@ float4 main(
   r2.xyz = -r2.xyz * cb1[135].zzz + r5.xyz;
   r2.xyz = cb0[65].zzz * r2.xyz + r3.xyz;
   r2.xyz = r2.xyz * r4.xyz;
-  r0.yzw = r2.xyz * r0.yzw;
+  // r0.yzw = r2.xyz * r0.yzw;
+  r0.yzw *= lerp(1.f, r2.xyz, injectedData.fxBloom);
+
   r0.yzw = r1.xyz * cb0[60].xyz + r0.yzw;
   float3 untonemapped = r0.yzw;
 
