@@ -1,5 +1,7 @@
 // Upscaler
 
+#include "../common/color.hlsl"
+
 cbuffer _16_18 : register(b6, space0) { float4 _18_m0[1] : packoffset(c0); }
 
 Texture2D<float4> _8 : register(t0, space0);
@@ -24,31 +26,24 @@ void comp_main() {
 
   // Keep BT2020 colors
 
-  // float _86 = sqrt(max(0.0f, _54.x));
-  // float _88 = sqrt(max(0.0f, _54.y));
-  // float _90 = sqrt(max(0.0f, _54.z));
-  // float _92 = sqrt(max(0.0f, _61.x));
-  // float _94 = sqrt(max(0.0f, _61.y));
-  // float _96 = sqrt(max(0.0f, _61.z));
-  // float _104 = sqrt(max(0.0f, _72.x));
-  // float _106 = sqrt(max(0.0f, _72.y));
-  // float _108 = sqrt(max(0.0f, _72.z));
-  // float _110 = sqrt(max(0.0f, _78.x));
-  // float _112 = sqrt(max(0.0f, _78.y));
-  // float _114 = sqrt(max(0.0f, _78.z));
+  _54.rgb = mul(BT709_2_AP1_MAT, _54.rgb);
+  _61.rgb = mul(BT709_2_AP1_MAT, _61.rgb);
+  _66.rgb = mul(BT709_2_AP1_MAT, _66.rgb);
+  _72.rgb = mul(BT709_2_AP1_MAT, _72.rgb);
+  _78.rgb = mul(BT709_2_AP1_MAT, _78.rgb);
 
-  float _86 = sign(_54.x) * sqrt(abs(_54.x));
-  float _88 = sign(_54.y) * sqrt(abs(_54.y));
-  float _90 = sign(_54.z) * sqrt(abs(_54.z));
-  float _92 = sign(_61.x) * sqrt(abs(_61.x));
-  float _94 = sign(_61.y) * sqrt(abs(_61.y));
-  float _96 = sign(_61.z) * sqrt(abs(_61.z));
-  float _104 = sign(_72.x) * sqrt(abs(_72.x));
-  float _106 = sign(_72.y) * sqrt(abs(_72.y));
-  float _108 = sign(_72.z) * sqrt(abs(_72.z));
-  float _110 = sign(_78.x) * sqrt(abs(_78.x));
-  float _112 = sign(_78.y) * sqrt(abs(_78.y));
-  float _114 = sign(_78.z) * sqrt(abs(_78.z));
+  float _86 = sqrt(max(0.0f, _54.x));
+  float _88 = sqrt(max(0.0f, _54.y));
+  float _90 = sqrt(max(0.0f, _54.z));
+  float _92 = sqrt(max(0.0f, _61.x));
+  float _94 = sqrt(max(0.0f, _61.y));
+  float _96 = sqrt(max(0.0f, _61.z));
+  float _104 = sqrt(max(0.0f, _72.x));
+  float _106 = sqrt(max(0.0f, _72.y));
+  float _108 = sqrt(max(0.0f, _72.z));
+  float _110 = sqrt(max(0.0f, _78.x));
+  float _112 = sqrt(max(0.0f, _78.y));
+  float _114 = sqrt(max(0.0f, _78.z));
 
   float _117 = min(min(_86, min(_92, _104)), _110);
   float _120 = min(min(_88, min(_94, _106)), _112);
@@ -73,14 +68,11 @@ void comp_main() {
   float _173 = (_171 * 4.0f) + 1.0f;
   float _177 = asfloat(2129764351u - asuint(_173));
   float _181 = (2.0f - (_177 * _173)) * _177;
-  // float _187 = _181 * ((_171 * (((_92 + _86) + _104) + _110)) + sqrt(max(0.0f, _66.x)));
-  // float _193 = _181 * ((_171 * (((_94 + _88) + _106) + _112)) + sqrt(max(0.0f, _66.y)));
-  // float _199 = _181 * ((_171 * (((_96 + _90) + _108) + _114)) + sqrt(max(0.0f, _66.z)));
-  float _187 = _181 * ((_171 * (((_92 + _86) + _104) + _110)) + (sqrt(abs(_66.x))));
-  float _193 = _181 * ((_171 * (((_94 + _88) + _106) + _112)) + (sqrt(abs(_66.y))));
-  float _199 = _181 * ((_171 * (((_96 + _90) + _108) + _114)) + (sqrt(abs(_66.z))));
+  float _187 = _181 * ((_171 * (((_92 + _86) + _104) + _110)) + sqrt(max(0.0f, _66.x)));
+  float _193 = _181 * ((_171 * (((_94 + _88) + _106) + _112)) + sqrt(max(0.0f, _66.y)));
+  float _199 = _181 * ((_171 * (((_96 + _90) + _108) + _114)) + sqrt(max(0.0f, _66.z)));
   float3 outputColor = float3(_187 * _187, _193 * _193, _199 * _199);
-  outputColor *= sign(_66.rgb);
+  outputColor = mul(AP1_2_BT709_MAT, outputColor);
 
   _11[uint2(_44, _45)] = float4(outputColor.rgb, 1.0f);
 }
