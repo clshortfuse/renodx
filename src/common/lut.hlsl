@@ -13,7 +13,7 @@ float3 centerLutTexel(float3 color, float size) {
   return scale * color + offset;
 }
 
-float3 sampleLUT(Texture3D lut, SamplerState samplerState, float3 color, float size = 0) {
+float3 sampleLUT(Texture3D<float3> lut, SamplerState samplerState, float3 color, float size = 0) {
   if (size == 0) {
     // Removed by compiler if specified
     float width;
