@@ -117,19 +117,19 @@ void main(
         outputColor *= (vanillaMidGray / ACES_MID_GRAY);
 
       } else if (injectedData.toneMapType == 3.f) {
-        const float OPENDRT_MID_GRAY = 11.696f / 100.f;  // open_drt_transform(0.18);
+        const float OPENDRT_MID_GRAY = 11.696f / 100.f;
         float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / OPENDRT_MID_GRAY);
         float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
-        outputColor = mul(BT709_2_BT2020_MAT, outputColor);
+        outputColor = mul(BT709_2_DISPLAYP3_MAT, outputColor);
         outputColor = max(0, outputColor);
-        outputColor = open_drt_transform(
+        outputColor = open_drt_transform_bt709(
           outputColor,
           100.f * hdrScale,
-          0,
+          0.12,
           1.f,
           0
         );
-        outputColor = mul(BT2020_2_BT709_MAT, outputColor);
+        outputColor = mul(DISPLAYP3_2_BT709_MAT, outputColor);
         outputColor *= hdrScale;
         outputColor *= (vanillaMidGray / OPENDRT_MID_GRAY);
       }

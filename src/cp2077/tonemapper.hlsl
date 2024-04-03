@@ -565,7 +565,6 @@ float4 tonemap(bool isACESMode = false) {
 
       outputRGB = odtUnknown;
     } else {
-      peakNits = injectedData.toneMapPeakNits;
       float vanillaMidGray = midGrayNits / 100.f;
 
       bool useD60 = (injectedData.colorGradeWhitePoint == -1.0f || (injectedData.colorGradeWhitePoint == 0.f && cb6[28u].z == 0.f));
@@ -573,11 +572,23 @@ float4 tonemap(bool isACESMode = false) {
       const bool isSDR = false;
       const float CDPR_WHITE = 100.f;
 
-      outputRGB = max(0, outputRGB);
-      if (toneMapperType == TONE_MAPPER_TYPE__OPENDRT) {
-        // OpenDRT is based around 100 nits for SDR
+      if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
+        const float ACES_MID_GRAY = 0.10f;
+        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / ACES_MID_GRAY);
+        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
+        outputRGB = aces_rgc_rrt_odt(
+          outputRGB,
+          0.0001f / hdrScale,
+          48.f * hdrScale,
+          useD60 ? AP1_2_BT709D60_MAT : AP1_2_BT709_MAT
+        );
+        if (isSDR) {
+          outputRGB = max(0, outputRGB);
+        }
+        outputRGB /= 48.f;
+        outputRGB *= (vanillaMidGray / ACES_MID_GRAY);
 
-        // Size to BT2020
+      } else if (toneMapperType == TONE_MAPPER_TYPE__OPENDRT) {
         float3x3 inputMatrix;
         float3x3 outputMatrix;
 
@@ -585,16 +596,16 @@ float4 tonemap(bool isACESMode = false) {
           inputMatrix = useD60 ? BT709_2_BT709D60_MAT : IDENTITY_MAT;
           outputMatrix = IDENTITY_MAT;
         } else {
-          inputMatrix = useD60 ? BT709_2_BT2020D60_MAT : BT709_2_BT2020_MAT;
-          outputMatrix = BT2020_2_BT709_MAT;
+          inputMatrix = useD60 ? BT709_2_DISPLAYP3D60_MAT : BT709_2_DISPLAYP3_MAT;
+          outputMatrix = DISPLAYP3_2_BT709_MAT;
         }
 
         outputRGB = apply_aces_highlights(outputRGB);
         outputRGB = mul(inputMatrix, outputRGB);
 
-        const float openDRTMidGray = 11.696f / 100.f;  // open_drt_transform(0.18);
-        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / openDRTMidGray);
-        float hdrScale = (peakNits / paperWhite);
+        const float OPENDRT_MID_GRAY = 11.696f / 100.f;
+        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / OPENDRT_MID_GRAY);
+        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
         outputRGB = open_drt_transform(
           outputRGB,
           100.f * hdrScale,
@@ -604,26 +615,7 @@ float4 tonemap(bool isACESMode = false) {
         );
         outputRGB = mul(outputMatrix, outputRGB);
         outputRGB *= hdrScale;
-        outputRGB *= (vanillaMidGray / openDRTMidGray);
-      } else if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
-        // ACES uses 48 nits for 100-nit SDR
-        // Base 100-nit SDR = 203 SDR
-        // Scaling is Peak Nits / Paper White
-        float3x3 outputMatrix = useD60 ? AP1_2_BT709D60_MAT : AP1_2_BT709_MAT;
-
-        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / 0.10);  // ACES mid gray is 10%
-        float hdrScale = (peakNits / paperWhite);
-        outputRGB = aces_rgc_rrt_odt(
-          outputRGB,
-          0.0001f / hdrScale,
-          48.f * hdrScale,
-          outputMatrix
-        );
-        if (isSDR) {
-          outputRGB = max(0, outputRGB);
-        }
-        outputRGB /= 48.f;
-        outputRGB *= (vanillaMidGray / 0.10);
+        outputRGB *= (vanillaMidGray / OPENDRT_MID_GRAY);
       }
       outputRGB *= injectedData.toneMapGameNits / CDPR_WHITE;
     }
