@@ -21,10 +21,10 @@ cbuffer _27_29 : register(b12, space0) {
   float4 cb12[99] : packoffset(c0);
 }
 
-Texture2D<float4> textureUntonemapped : register(t0, space0);
-Texture2D<float4> textureBloom : register(t1, space0);
-Texture3D<float4> textureLUT[3] : register(t4, space0);
-Texture2D<uint4> textureMask : register(t51, space0);
+Texture2D<float3> textureUntonemapped : register(t0, space0);
+Texture2D<float3> textureBloom : register(t1, space0);
+Texture3D<float3> textureLUT[3] : register(t4, space0);
+Texture2D<uint2> textureMask : register(t51, space0);
 Texture2DArray<float4> textureArray : register(t67, space0);
 SamplerState sampler0 : register(s11, space0);
 
@@ -78,11 +78,11 @@ float3 composite(bool useTexArray = false) {
     float _175 = _157 - _113;
     float _189 = _175 - _113;
     float _ccc = _189 - _113;
-    float4 _162 = textureUntonemapped.Sample(sampler0, float2(_161, _157));
-    float4 _177 = textureUntonemapped.Sample(sampler0, float2(_176, _175));
-    float4 _191 = textureUntonemapped.Sample(sampler0, float2(_190, _189));
-    float4 _aaa = textureUntonemapped.Sample(sampler0, float2(_bbb, _ccc));
-    float4 _ddd = textureUntonemapped.Sample(sampler0, float2(_138, _131));
+    float3 _162 = textureUntonemapped.Sample(sampler0, float2(_161, _157));
+    float3 _177 = textureUntonemapped.Sample(sampler0, float2(_176, _175));
+    float3 _191 = textureUntonemapped.Sample(sampler0, float2(_190, _189));
+    float3 _aaa = textureUntonemapped.Sample(sampler0, float2(_bbb, _ccc));
+    float3 _ddd = textureUntonemapped.Sample(sampler0, float2(_138, _131));
 
     // likely a matrix
     inputColor.r = 0.625f * ((_177.x * 0.3f) + (_162.x * 0.1f) + (_191.x * 0.4f) + (_aaa.x * 0.8f));
@@ -127,7 +127,7 @@ float3 composite(bool useTexArray = false) {
   float _347;
   float _348;
 
-  uint4 textureMaskColor = textureMask.Load(int3(uint2(uint(cb12[79u].x * fFragx), uint(cb12[79u].y * fFragy)), 0u));
+  uint2 textureMaskColor = textureMask.Load(int3(uint2(uint(cb12[79u].x * fFragx), uint(cb12[79u].y * fFragy)), 0u));
   uint _195 = 1u << (textureMaskColor.y & 31u);
 
   // Pick LUT based on mask?
