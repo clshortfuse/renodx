@@ -7,11 +7,16 @@
 
 #define DEBUG_LEVEL_0
 
-#include <embed/0x65B04AE5.h>
+#include <embed/0x00E2BDB5.h>
+#include <embed/0x11044178.h>
+#include <embed/0x40CB7397.h>
+#include <embed/0x48A33894.h>
+#include <embed/0x48BDD659.h>
 #include <embed/0x7FF6EC9E.h>
 #include <embed/0x84EF14ED.h>
-#include <embed/0xE3DF9B3A.h>
-#include <embed/0x0CBE2A90.h>
+#include <embed/0xAC144B8D.h>
+#include <embed/0xDA65F8ED.h>
+#include <embed/0xEDC9A10D.h>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -25,11 +30,16 @@ extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Deus Ex: Mankind D
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Deus Ex: Mankind Divided";
 
 ShaderReplaceMod::CustomShaders customShaders = {
-  // CustomShaderEntry(0x65B04AE5),
-  CustomShaderEntry(0x7FF6EC9E),
-  // CustomShaderEntry(0x84EF14ED),
-  // CustomShaderEntry(0x0CBE2A90)
-  // CustomShaderEntry(0xE3DF9B3A)
+  CustomShaderEntry(0x7FF6EC9E),  // Final
+  CustomShaderEntry(0x11044178),  // Film Grain
+  CustomShaderEntry(0x48A33894),  // Chromatic Aberration
+  CustomShaderEntry(0xDA65F8ED),  // Sharpen
+  CustomShaderEntry(0x84EF14ED),  // TemporalAA
+  CustomShaderEntry(0x00E2BDB5),  // TemporalAA Off
+  CustomShaderEntry(0x40CB7397),  // LUT + Overlay
+  CustomShaderEntry(0xEDC9A10D),  // LUT
+  CustomShaderEntry(0x48BDD659),  // Lens Flare
+  CustomShaderEntry(0xAC144B8D)  // BloomExp
 };
 
 ShaderInjectData shaderInjection;
@@ -40,7 +50,7 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "toneMapType",
     .binding = &shaderInjection.toneMapType,
     .valueType = UserSettingUtil::UserSettingValueType::integer,
-    .defaultValue = 2.f,
+    .defaultValue = 3.f,
     .label = "Tone Mapper",
     .section = "Tone Mapping",
     .tooltip = "Sets the tone mapper type",
@@ -75,6 +85,15 @@ UserSettingUtil::UserSettings userSettings = {
     .tooltip = "Sets the brightness of UI and HUD elements in nits",
     .min = 48.f,
     .max = 500.f
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeExposure",
+    .binding = &shaderInjection.colorGradeExposure,
+    .defaultValue = 1.f,
+    .label = "Expsoure",
+    .section = "Color Grading",
+    .max = 10.f,
+    .format = "%.2f"
   },
   new UserSettingUtil::UserSetting {
     .key = "colorGradeHighlights",
@@ -113,13 +132,58 @@ UserSettingUtil::UserSettings userSettings = {
     .parse = [](float value) { return value * 0.02f; }
   },
   new UserSettingUtil::UserSetting {
-    .key = "fxStencil",
-    .binding = &shaderInjection.fxStencil,
+    .key = "colorGradeLUTStrength",
+    .binding = &shaderInjection.colorGradeLUTStrength,
     .defaultValue = 100.f,
-    .label = "Stencil",
-    .section = "Effects",
+    .label = "LUT Strength",
+    .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.01f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxBloom",
+    .binding = &shaderInjection.fxBloom,
+    .defaultValue = 50.f,
+    .label = "Bloom",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxLensFlare",
+    .binding = &shaderInjection.fxLensFlare,
+    .defaultValue = 50.f,
+    .label = "Lens Flare",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxSharpen",
+    .binding = &shaderInjection.fxSharpen,
+    .defaultValue = 50.f,
+    .label = "Sharpen",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxChromaticAberration",
+    .binding = &shaderInjection.fxChromaticAberration,
+    .defaultValue = 50.f,
+    .label = "Chromatic Aberration",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxFilmGrain",
+    .binding = &shaderInjection.fxFilmGrain,
+    .defaultValue = 50.f,
+    .label = "Film Grain",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
   }
 };
 
@@ -130,10 +194,17 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("toneMapPeakNits", 203.f);
   UserSettingUtil::updateUserSetting("toneMapGameNits", 203.f);
   UserSettingUtil::updateUserSetting("toneMapUINits", 203.f);
+  UserSettingUtil::updateUserSetting("colorGradeExposure", 1.f);
   UserSettingUtil::updateUserSetting("colorGradeHighlights", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
+  UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
+  UserSettingUtil::updateUserSetting("fxBloom", 50.f);
+  UserSettingUtil::updateUserSetting("fxLensFlare", 50.f);
+  UserSettingUtil::updateUserSetting("fxSharpen", 50.f);
+  UserSettingUtil::updateUserSetting("fxChromaticAberration", 50.f);
+  UserSettingUtil::updateUserSetting("fxFilmGrain", 50.f);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {

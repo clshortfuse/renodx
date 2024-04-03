@@ -8,12 +8,19 @@ struct ShaderInjectData {
   float toneMapPeakNits;
   float toneMapGameNits;
   float toneMapUINits;
+  float colorGradeExposure;
   float colorGradeHighlights;
   float colorGradeShadows;
   float colorGradeContrast;
   float colorGradeSaturation;
-  float fxStencil;
+  float colorGradeLUTStrength;
+  float fxBloom;
+  float fxLensFlare;
+  float fxSharpen;
+  float fxChromaticAberration;
+  float fxFilmGrain;
 };
+
 
 #ifndef __cplusplus
 cbuffer cb13 : register(b13) {

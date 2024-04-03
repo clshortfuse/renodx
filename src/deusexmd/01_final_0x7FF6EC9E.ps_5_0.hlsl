@@ -25,12 +25,12 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_TA
   o0.rgb = r0.rgb;
   // o0.rgb = saturate(r0.rgb);
 
-  o0.rgb = pow(o0.rgb, 2.2);  // convert to linear;
+  o0.rgb = pow(o0.rgb, 2.2f);  // convert to linear;
 
   // o0.rgb = linearFromSRGB(o0.rgb);
 
-  // o0.rgb *= signs;
-
+  o0.rgb *= signs;
+  
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   o0.w = 1;
   return;
