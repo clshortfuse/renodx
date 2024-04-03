@@ -7,7 +7,6 @@
 
 #define DEBUG_LEVEL_0
 
-#include <atlbase.h>
 #include <d3d11.h>
 #include <d3d12.h>
 #include <dxgi.h>
@@ -59,6 +58,16 @@ namespace ShaderReplaceMod {
     std::unordered_map<uint64_t, reshade::api::pipeline_layout> moddedPipelineLayouts;
     std::unordered_map<uint64_t, uint32_t> pipelineToShaderHashMap;
     std::unordered_set<uint32_t> bypassedShaders;
+
+    struct {
+      bool isPending;
+      reshade::api::shader_stage stages;
+      reshade::api::pipeline_layout layout;
+      uint32_t layout_param;
+    } scheduledBufferInjection;
+
+    float shaderInjection[64];
+    size_t shaderInjectionSize;
     uint32_t currentShader;
   };
 
@@ -68,7 +77,15 @@ namespace ShaderReplaceMod {
       << reinterpret_cast<void*>(device->get_native())
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
-    device->create_private_data<device_data>();
+
+    auto &data = device->create_private_data<device_data>();
+
+    if (_shaderInjectionSize) {
+      data.shaderInjectionSize = _shaderInjectionSize;
+      size_t memSize = data.shaderInjectionSize * sizeof(uint32_t);
+      // data.shaderInjection = (float*)malloc(memSize);
+      memcpy(&data.shaderInjection, _shaderInjection, memSize);
+    }
   }
 
   static void on_destroy_device(reshade::api::device* device) {
@@ -77,6 +94,10 @@ namespace ShaderReplaceMod {
       << reinterpret_cast<void*>(device->get_native())
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
+    auto &data = device->get_private_data<device_data>();
+    // if (data.shaderInjection != nullptr) {
+    //   free(data.shaderInjection);
+    // }
     device->destroy_private_data<device_data>();
   }
 
@@ -214,7 +235,7 @@ namespace ShaderReplaceMod {
     memcpy(newParams, params, sizeof(reshade::api::pipeline_layout_param) * oldCount);
 
     // Fill in extra param
-    uint32_t slots = _shaderInjectionSize;
+    uint32_t slots = data.shaderInjectionSize;
     uint32_t maxCount = 64u - (oldCount + 1u) + 1u;
     newParams[oldCount].type = reshade::api::pipeline_layout_param_type::push_constants;
     newParams[oldCount].push_constants.binding = 0;
@@ -287,12 +308,12 @@ namespace ShaderReplaceMod {
         uint32_t oldCount = param_count;
         uint32_t newCount = oldCount;
         reshade::api::pipeline_layout_param* newParams = nullptr;
-        if (_shaderInjectionSize) {
+        if (data.shaderInjectionSize) {
           newCount = oldCount + 1;
           newParams = new reshade::api::pipeline_layout_param[newCount];
           memcpy(newParams, params, sizeof(reshade::api::pipeline_layout_param) * oldCount);
 
-          uint32_t slots = _shaderInjectionSize;
+          uint32_t slots = data.shaderInjectionSize;
           uint32_t maxCount = 64u - (oldCount + 1u) + 1u;
           newParams[oldCount].type = reshade::api::pipeline_layout_param_type::push_constants;
           newParams[oldCount].push_constants.binding = 0;
@@ -329,7 +350,7 @@ namespace ShaderReplaceMod {
           << reinterpret_cast<void*>(newLayout.handle)
           << ", cbvIndex: " << cbvIndex
           << ", paramIndex: " << injectionIndex
-          << ", slots : " << _shaderInjectionSize
+          << ", slots : " << data.shaderInjectionSize
           << ": " << (result ? "OK" : "FAILED")
           << ")";
         reshade::log_message(result ? reshade::log_level::info : reshade::log_level::error, s.str().c_str());
@@ -344,7 +365,7 @@ namespace ShaderReplaceMod {
         for (uint32_t paramIndex = 0; paramIndex < param_count; ++paramIndex) {
           auto param = params[paramIndex];
           if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
-            if (param.push_constants.count == _shaderInjectionSize) {
+            if (param.push_constants.count == data.shaderInjectionSize) {
               injectionIndex = paramIndex;
             }
           }
@@ -372,6 +393,7 @@ namespace ShaderReplaceMod {
         cbvIndex = expectedConstantBufferIndex;
       }
       if (cbvIndex == 14) {
+        cbvIndex = 13;
         std::stringstream s;
         s << "on_init_pipeline_layout("
           << "Using last slot for buffer injection "
@@ -379,7 +401,6 @@ namespace ShaderReplaceMod {
           << ": " << cbvIndex
           << " )";
         reshade::log_message(reshade::log_level::warning, s.str().c_str());
-        cbvIndex = 13;
       }
 
       // device->create_pipeline_layout(1)
@@ -614,7 +635,7 @@ namespace ShaderReplaceMod {
       s << "init_pipeline(injected "
         << reinterpret_cast<void*>(pipeline.handle)
         << ", layout: " << reinterpret_cast<void*>(layout.handle)
-        << ", injection: " << std::hex << foundInjection
+        << ", injection: 0x" << std::hex << foundInjection
         << ", compute: " << foundComputeShader
         << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -659,9 +680,10 @@ namespace ShaderReplaceMod {
       data.currentShader = 0;
     }
 
-    if (usePipelineLayoutCloning || _shaderInjectionSize != 0) {
+    if (usePipelineLayoutCloning || data.shaderInjectionSize != 0) {
       auto pair0 = data.pipelineToLayoutMap.find(pipeline.handle);
       if (pair0 != data.pipelineToLayoutMap.end()) {
+        auto scheduled = false;
         auto layout = pair0->second;
 
         auto injectionLayout = layout;
@@ -697,6 +719,7 @@ namespace ShaderReplaceMod {
             injectionLayout = pair3->second;
           }
         } else {
+          // Must be done before draw
           stage = (type == reshade::api::pipeline_stage::compute_shader)
                   ? reshade::api::shader_stage::compute
                   : reshade::api::shader_stage::pixel;
@@ -710,28 +733,41 @@ namespace ShaderReplaceMod {
             return;
           }
           injectionLayout = pair3->second;
+          scheduled = true;
         }
 
 #ifdef DEBUG_LEVEL_1
         std::stringstream s;
-        s << "bind_pipeline(pushing "
-          << _shaderInjectionSize << " buffers"
+        s << "bind_pipeline("
+          << (scheduled ? "scheduling " : " pushing")
+          << data.shaderInjectionSize << " buffers"
           << " into " << reinterpret_cast<void*>(injectionLayout.handle)
           << "[" << paramIndex << "]"
+          << ", shader: 0x" << std::hex << (uint32_t)data.currentShader << std::dec
           << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
-          << ", stage: " << (uint32_t)stage
+          << ", stage: 0x" << std::hex << (uint32_t)stage << std::dec << " ( " << to_string(stage) << " )"
+          << ", type: 0x" << std::hex << (uint32_t)type << std::dec << " ( " << to_string(type) << " )"
           << ")";
         reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
 
-        cmd_list->push_constants(
-          stage,  // Used by reshade to specify graphics or compute
-          injectionLayout,
-          paramIndex,
-          0,
-          _shaderInjectionSize,
-          _shaderInjection
-        );
+        if (scheduled) {
+          data.scheduledBufferInjection = {
+            true,
+            stage,
+            injectionLayout,
+            paramIndex
+          };
+        } else {
+          cmd_list->push_constants(
+            stage,  // Used by reshade to specify graphics or compute
+            injectionLayout,
+            paramIndex,
+            0,
+            data.shaderInjectionSize,
+            &data.shaderInjection
+          );
+        }
       }
     }
 
@@ -861,12 +897,54 @@ namespace ShaderReplaceMod {
   ) {
     auto &data = cmd_list->get_device()->get_private_data<device_data>();
     if (data.bypassedShaders.count(data.currentShader)) return true;
+    if (data.scheduledBufferInjection.isPending) {
+#ifdef DEBUG_LEVEL_1
+      std::stringstream s;
+      s << "on_draw(pushing "
+        << data.shaderInjectionSize << " buffers"
+        << " into " << reinterpret_cast<void*>(data.scheduledBufferInjection.layout.handle)
+        << "[" << data.scheduledBufferInjection.layout_param << "]"
+        << ", stage: 0x" << std::hex << (uint32_t)data.scheduledBufferInjection.stages << std::dec << " ( " << to_string(data.scheduledBufferInjection.stages) << " )"
+        << ")";
+      reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
+      cmd_list->push_constants(
+        data.scheduledBufferInjection.stages,
+        data.scheduledBufferInjection.layout,
+        data.scheduledBufferInjection.layout_param,
+        0,
+        data.shaderInjectionSize,
+        &data.shaderInjection
+      );
+      data.scheduledBufferInjection.isPending = false;
+    }
     return false;
   }
 
   static bool on_dispatch(reshade::api::command_list* cmd_list, uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z) {
     auto &data = cmd_list->get_device()->get_private_data<device_data>();
     if (data.bypassedShaders.count(data.currentShader)) return true;
+    if (data.scheduledBufferInjection.isPending) {
+#ifdef DEBUG_LEVEL_1
+      std::stringstream s;
+      s << "on_dispatch(pushing "
+        << data.shaderInjectionSize << " buffers"
+        << " into " << reinterpret_cast<void*>(data.scheduledBufferInjection.layout.handle)
+        << "[" << data.scheduledBufferInjection.layout_param << "]"
+        << ", stage: 0x" << std::hex << (uint32_t)data.scheduledBufferInjection.stages << std::dec << " ( " << to_string(data.scheduledBufferInjection.stages) << " )"
+        << ")";
+      reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
+      cmd_list->push_constants(
+        data.scheduledBufferInjection.stages,
+        data.scheduledBufferInjection.layout,
+        data.scheduledBufferInjection.layout_param,
+        0,
+        data.shaderInjectionSize,
+        &data.shaderInjection
+      );
+      data.scheduledBufferInjection.isPending = false;
+    }
     return false;
   }
 
@@ -880,6 +958,27 @@ namespace ShaderReplaceMod {
   ) {
     auto &data = cmd_list->get_device()->get_private_data<device_data>();
     if (data.bypassedShaders.count(data.currentShader)) return true;
+    if (data.scheduledBufferInjection.isPending) {
+#ifdef DEBUG_LEVEL_1
+      std::stringstream s;
+      s << "on_draw_indexed(pushing "
+        << data.shaderInjectionSize << " buffers"
+        << " into " << reinterpret_cast<void*>(data.scheduledBufferInjection.layout.handle)
+        << "[" << data.scheduledBufferInjection.layout_param << "]"
+        << ", stage: 0x" << std::hex << (uint32_t)data.scheduledBufferInjection.stages << std::dec << " ( " << to_string(data.scheduledBufferInjection.stages) << " )"
+        << ")";
+      reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
+      cmd_list->push_constants(
+        data.scheduledBufferInjection.stages,
+        data.scheduledBufferInjection.layout,
+        data.scheduledBufferInjection.layout_param,
+        0,
+        data.shaderInjectionSize,
+        &data.shaderInjection
+      );
+      data.scheduledBufferInjection.isPending = false;
+    }
     return false;
   }
 
@@ -893,7 +992,46 @@ namespace ShaderReplaceMod {
   ) {
     auto &data = cmd_list->get_device()->get_private_data<device_data>();
     if (data.bypassedShaders.count(data.currentShader)) return true;
+    if (data.scheduledBufferInjection.isPending) {
+#ifdef DEBUG_LEVEL_1
+      std::stringstream s;
+      s << "on_draw_or_dispatch_indirect(pushing "
+        << data.shaderInjectionSize << " buffers"
+        << " into " << reinterpret_cast<void*>(data.scheduledBufferInjection.layout.handle)
+        << "[" << data.scheduledBufferInjection.layout_param << "]"
+        << ", stage: 0x" << std::hex << (uint32_t)data.scheduledBufferInjection.stages << std::dec << " ( " << to_string(data.scheduledBufferInjection.stages) << " )"
+        << ")";
+      reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
+      cmd_list->push_constants(
+        data.scheduledBufferInjection.stages,
+        data.scheduledBufferInjection.layout,
+        data.scheduledBufferInjection.layout_param,
+        0,
+        data.shaderInjectionSize,
+        &data.shaderInjection
+      );
+      data.scheduledBufferInjection.isPending = false;
+    }
     return false;
+  }
+
+  static void on_present(
+    reshade::api::command_queue* queue,
+    reshade::api::swapchain* swapchain,
+    const reshade::api::rect* source_rect,
+    const reshade::api::rect* dest_rect,
+    uint32_t dirty_rect_count,
+    const reshade::api::rect* dirty_rects
+  ) {
+    auto &data = swapchain->get_device()->get_private_data<device_data>();
+    if (data.shaderInjectionSize != _shaderInjectionSize) {
+      data.shaderInjectionSize = _shaderInjectionSize;
+    }
+    if (data.shaderInjectionSize) {
+      size_t memSize = data.shaderInjectionSize * sizeof(uint32_t);
+      memcpy(&data.shaderInjection, _shaderInjection, memSize);
+    }
   }
 
   template <typename T = float*>
@@ -941,6 +1079,8 @@ namespace ShaderReplaceMod {
             reshade::register_event<reshade::addon_event::push_descriptors>(on_push_descriptors);
             reshade::register_event<reshade::addon_event::bind_descriptor_tables>(on_bind_descriptor_tables);
           }
+
+          reshade::register_event<reshade::addon_event::present>(on_present);
 
           std::stringstream s;
           s << "Attached Injections: " << _shaderInjectionSize;
