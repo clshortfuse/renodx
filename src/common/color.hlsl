@@ -50,6 +50,18 @@ static const float3x3 XYZ_2_AP1_MAT = float3x3(
    0.0117218943f, -0.0082844420f,  0.9883948585f
 );
 
+static const float3x3 DISPLAYP3_2_XYZ_MAT = float3x3(
+  0.4865709486f, 0.2656676932f, 0.1982172852f,
+  0.2289745641f, 0.6917385218f, 0.0792869141f,
+ -0.0000000000f, 0.0451133819f, 1.0439443689f
+);
+
+static const float3x3 XYZ_2_DISPLAYP3_MAT = float3x3(
+  2.4934969119f, -0.9313836179f, -0.4027107845f,
+ -0.8294889696f,  1.7626640603f,  0.0236246858f,
+  0.0358458302f, -0.0761723893f,  0.9568845240
+);
+
 // With Bradford
 static const float3x3 D65_2_D60_CAT = float3x3(
    1.01303,    0.00610531, -0.014971,
@@ -77,15 +89,21 @@ static const float3x3 BT709_2_AP1_MAT = mul(XYZ_2_AP1_MAT, mul(D65_2_D60_CAT, BT
 static const float3x3 BT709_2_BT2020_MAT = mul(XYZ_2_BT2020_MAT, BT709_2_XYZ_MAT);
 static const float3x3 BT709_2_BT709D60_MAT = mul(XYZ_2_BT709_MAT, mul(D65_2_D60_CAT, BT709_2_XYZ_MAT));
 static const float3x3 BT709_2_BT2020D60_MAT = mul(XYZ_2_BT2020_MAT, mul(D65_2_D60_CAT, BT709_2_XYZ_MAT));
+static const float3x3 BT709_2_DISPLAYP3_MAT = mul(XYZ_2_DISPLAYP3_MAT, BT709_2_XYZ_MAT);
+static const float3x3 BT709_2_DISPLAYP3D60_MAT = mul(XYZ_2_DISPLAYP3_MAT, mul(D65_2_D60_CAT, BT709_2_XYZ_MAT));
 
 static const float3x3 BT2020_2_AP0_MAT = mul(XYZ_2_AP0_MAT, mul(D65_2_D60_CAT, BT2020_2_XYZ_MAT));
 static const float3x3 BT2020_2_BT709_MAT = mul(XYZ_2_BT709_MAT, BT2020_2_XYZ_MAT);
+
+static const float3x3 DISPLAYP3_2_AP0_MAT = mul(XYZ_2_AP0_MAT, mul(D65_2_D60_CAT, DISPLAYP3_2_XYZ_MAT));
+static const float3x3 DISPLAYP3_2_BT709_MAT = mul(XYZ_2_BT709_MAT, DISPLAYP3_2_XYZ_MAT);
 
 static const float3x3 AP0_2_AP1_MAT = mul(XYZ_2_AP1_MAT, AP0_2_XYZ_MAT);
 
 static const float3x3 AP1_2_AP0_MAT = mul(XYZ_2_AP0_MAT, AP1_2_XYZ_MAT);
 static const float3x3 AP1_2_BT709_MAT = mul(XYZ_2_BT709_MAT, mul(D60_2_D65_CAT, AP1_2_XYZ_MAT));
 static const float3x3 AP1_2_BT2020_MAT = mul(XYZ_2_BT2020_MAT, mul(D60_2_D65_CAT, AP1_2_XYZ_MAT));
+
 static const float3x3 AP1_2_BT709D60_MAT = mul(XYZ_2_BT709_MAT, AP1_2_XYZ_MAT);
 static const float3x3 AP1_2_BT2020D60_MAT = mul(XYZ_2_BT2020_MAT, AP1_2_XYZ_MAT);
 static const float3x3 AP1_2_AP1D65_MAT = mul(XYZ_2_AP1_MAT, mul(D60_2_D65_CAT, AP1_2_XYZ_MAT));
