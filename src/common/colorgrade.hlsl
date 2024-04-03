@@ -59,6 +59,12 @@ float3 apply_user_highlights(float3 rgb, float highlights = 1.f) {
   return rgb;
 }
 
+float3 applySaturation(float3 bt709, float saturation = 1.f) {
+  float3 okLCh = okLChFromBT709(bt709);
+  okLCh[1] *= saturation;
+  return bt709FromOKLCh(okLCh);
+}
+
 float3 applyUserColorGrading(
   float3 color,
   float userExposure = 1.f,
@@ -71,9 +77,7 @@ float3 applyUserColorGrading(
     color *= userExposure;
   }
   if (userSaturation != 1.f) {
-    float3 okLCh = okLChFromBT709(color);
-    okLCh[1] *= userSaturation;
-    color = bt709FromOKLCh(okLCh);
+    color = applySaturation(color, userSaturation);
   }
   if (userShadows != 1.f) {
     color = apply_user_shadows(color, userShadows);
