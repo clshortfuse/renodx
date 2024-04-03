@@ -68,14 +68,14 @@ void main(
     outputColor = pow(outputColor, 2.2f);
     float3 recolored = recolorUnclampedLUT(
       outputColor,
-      pow(unclamped, 2.2f)
+      sign(unclamped) * pow(abs(unclamped), 2.2f)
     );
     outputColor = lerp(outputColor, recolored, injectedData.processingLUTScaling);
   } else {
     outputColor = pow(outputColor, 2.2f);
   }
 
-  untonemapped = pow(untonemapped, 2.2f);
+  untonemapped = pow(max(0, untonemapped), 2.2f);
 
   outputColor = lerp(untonemapped, outputColor, injectedData.colorGradeLUTStrength);
 
