@@ -66,8 +66,20 @@ namespace UserSettingUtil {
 
     UserSetting* set(float value) {
       this->value = value;
-      this->valueAsInt = (int)value;
+      this->valueAsInt = static_cast<int>(value);
       return this;
+    }
+
+    float getMax() {
+      switch (this->valueType) {
+        case UserSettingValueType::boolean:
+          return 1.f;
+        case UserSettingValueType::integer:
+          return this->labels.size() ? this->labels.size() - 1 : this->max;
+        case UserSettingValueType::floating:
+        default:
+          return this->max;
+      }
     }
   };
 
@@ -103,11 +115,21 @@ namespace UserSettingUtil {
           if (!reshade::get_config_value(runtime, section, setting->key, setting->value)) {
             setting->value = setting->defaultValue;
           }
+          if (setting->value > setting->getMax()) {
+            setting->value = setting->getMax();
+          } else if (setting->value < setting->min) {
+            setting->value = setting->min;
+          }
           break;
         case UserSettingValueType::boolean:
         case UserSettingValueType::integer:
           if (!reshade::get_config_value(runtime, section, setting->key, setting->valueAsInt)) {
             setting->valueAsInt = static_cast<int>(setting->defaultValue);
+          }
+          if (setting->valueAsInt > setting->getMax()) {
+            setting->valueAsInt = setting->getMax();
+          } else if (setting->valueAsInt < static_cast<int>(setting->min)) {
+            setting->valueAsInt = static_cast<int>(setting->min);
           }
           break;
       }
@@ -224,7 +246,7 @@ namespace UserSettingUtil {
             setting->label,
             &setting->valueAsInt,
             setting->min,
-            setting->labels.size() ? setting->labels.size() - 1 : setting->min,
+            setting->getMax(),
             setting->labels.size() ? setting->labels.at(setting->valueAsInt) : setting->format,
             ImGuiSliderFlags_NoInput
           );
