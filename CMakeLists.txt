@@ -19,7 +19,7 @@ list(APPEND ADDON_LIST seaofstars)
 list(APPEND ADDON_LIST devkit)
 list(APPEND ADDON_LIST batman-arkhamknight)
 list(APPEND ADDON_LIST tunic)
-list(APPEND ADDON_LIST deusexmd)
+list(APPEND ADDON_LIST dxmd)
 list(APPEND ADDON_LIST horizonfw)
 
 # Use executable to convert resources to .h files for embedding

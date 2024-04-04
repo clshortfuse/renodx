@@ -1,5 +1,5 @@
-#ifndef SRC_DEUSEXMD_SHARED_H_
-#define SRC_DEUSEXMD_SHARED_H_
+#ifndef SRC_DXMD_SHARED_H_
+#define SRC_DXMD_SHARED_H_
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -28,4 +28,4 @@ cbuffer cb13 : register(b13) {
 }
 #endif
 
-#endif  // SRC_DEUSEXMD_SHARED_H_
+#endif  // SRC_DXMD_SHARED_H_
