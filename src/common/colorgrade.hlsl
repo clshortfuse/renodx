@@ -48,9 +48,11 @@ float3 hl_con(float3 rgb, float ex, float th) {
 float3 apply_user_shadows(float3 rgb, float shadows = 1.f) {
   // Perf: explicit cube
   // rgb = shd_con(rgb, -1.8f, pow(2.f - shadows, 3) * 0.04); // 0.04 @ 1
-  rgb = sign(rgb) * shd_con(abs(rgb), -1.8f, pow(2.f - 2 * min(shadows, 1.f), 4.f) * 0.025);  // 0.04 @ 1
-  rgb = sign(rgb) * shd_con(abs(rgb), -0.50f * shadows * (1.f - shadows), 0.25f);             // 0 @ 1
-
+  float3 signs = sign(rgb);
+  rgb = abs(rgb);
+  rgb = shd_con(rgb, -1.8f, pow(2.f - 2 * min(shadows, 1.f), 4.f) * 0.025);  // 0.04 @ 1
+  rgb = shd_con(rgb, -0.50f * shadows * shadows * (1.f - shadows), 0.25f);             // 0 @ 1
+  rgb *= signs;
   return rgb;
 }
 
