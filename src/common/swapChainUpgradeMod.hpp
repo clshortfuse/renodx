@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <atlbase.h>
 #include <d3d11.h>
 #include <d3d12.h>
 #include <dxgi.h>
@@ -211,16 +210,14 @@ namespace SwapChainUpgradeMod {
     if (!device) return;
     auto &privateData = device->get_private_data<device_data>();
 
-    if (privateData.resourceUpgradeFinished) {
-      reshade::log_message(reshade::log_level::debug, "initSwapChain(reset resource upgrade)");
-      privateData.resourceUpgradeFinished = false;
-      uint32_t len = swapChainUpgradeTargets.size();
-      // Reset
-      for (uint32_t i = 0; i < len; i++) {
-        SwapChainUpgradeMod::SwapChainUpgradeTarget* target = &swapChainUpgradeTargets.data()[i];
-        target->_counted = 0;
-        target->completed = false;
-      }
+    reshade::log_message(reshade::log_level::debug, "initSwapChain(reset resource upgrade)");
+    privateData.resourceUpgradeFinished = false;
+    uint32_t len = swapChainUpgradeTargets.size();
+    // Reset
+    for (uint32_t i = 0; i < len; i++) {
+      SwapChainUpgradeMod::SwapChainUpgradeTarget* target = &swapChainUpgradeTargets.data()[i];
+      target->_counted = 0;
+      target->completed = false;
     }
 
     const size_t backBufferCount = swapchain->get_back_buffer_count();
@@ -404,15 +401,41 @@ namespace SwapChainUpgradeMod {
   ) {
     if (!resource.handle) return false;
     auto oldFormat = desc.format;
+    bool expected = false;
 
     auto &privateData = device->get_private_data<device_data>();
     reshade::api::resource_desc resource_desc = device->get_resource_desc(resource);
     if (upgradeResourceViews && privateData.backBuffers.count(resource.handle)) {
       desc.format = targetFormat;
-    } else if (privateData.upgradedResources.count(resource.handle)) {
+      expected = true;
+    } else if (privateData.upgradedResources.contains(resource.handle)) {
       switch (desc.format) {
         case reshade::api::format::r8g8b8a8_typeless:
         case reshade::api::format::b8g8r8a8_typeless:
+        case reshade::api::format::r10g10b10a2_typeless:
+          desc.format = reshade::api::format::r16g16b16a16_typeless;
+          break;
+        case reshade::api::format::r8g8b8a8_unorm:
+        case reshade::api::format::b8g8r8a8_unorm:
+          desc.format = targetFormat;
+          break;
+        case reshade::api::format::r8g8b8a8_unorm_srgb:
+        case reshade::api::format::b8g8r8a8_unorm_srgb:
+          // Should upgrade shader
+          desc.format = targetFormat;
+          break;
+        case reshade::api::format::b10g10r10a2_unorm:
+          desc.format = targetFormat;
+          break;
+        default:
+          break;
+      }
+      expected = true;
+    } else if (resource_desc.texture.format == targetFormat || resource_desc.texture.format == reshade::api::format::r16g16b16a16_typeless) {
+      switch (desc.format) {
+        case reshade::api::format::r8g8b8a8_typeless:
+        case reshade::api::format::b8g8r8a8_typeless:
+        case reshade::api::format::r10g10b10a2_typeless:
           desc.format = reshade::api::format::r16g16b16a16_typeless;
           break;
         case reshade::api::format::r8g8b8a8_unorm:
@@ -434,13 +457,17 @@ namespace SwapChainUpgradeMod {
       return false;
     }
 
+    if (oldFormat == desc.format) return false;
+
     std::stringstream s;
     s << "createResourceView(upgrading"
+      << ", expected: " << (expected ? "true" : "false")
       << ", view type: " << to_string(desc.type)
       << ", view format: " << to_string(oldFormat) << " => " << to_string(desc.format)
       << ", resource: " << reinterpret_cast<void*>(resource.handle)
       << ", resource width: " << resource_desc.texture.width
       << ", resource height: " << resource_desc.texture.height
+      << ", resource format: " << to_string(resource_desc.texture.format)
       << ", resource usage: " << std::hex << (uint32_t)usage_type << std::dec
       << ")";
     reshade::log_message(
@@ -451,7 +478,7 @@ namespace SwapChainUpgradeMod {
     );
 
     privateData.upgradedResourceView = true;
-    return oldFormat != desc.format;
+    return true;
   }
 
   static void on_init_resource_view(
@@ -474,6 +501,7 @@ namespace SwapChainUpgradeMod {
     auto &privateData = device->get_private_data<device_data>();
     privateData.backBufferResourceViews.erase(view.handle);
     privateData.upgradedResourceViews.erase(view.handle);
+    privateData.upgradedResourceView = false;
   }
 
   static void on_init_effect_runtime(reshade::api::effect_runtime* runtime) {
