@@ -39,7 +39,7 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0x40CB7397),  // LUT + Overlay
   CustomShaderEntry(0xEDC9A10D),  // LUT
   CustomShaderEntry(0x48BDD659),  // Lens Flare
-  CustomShaderEntry(0xAC144B8D)  // BloomExp
+  CustomShaderEntry(0xAC144B8D)   // BloomExp
 };
 
 ShaderInjectData shaderInjection;
@@ -51,6 +51,7 @@ UserSettingUtil::UserSettings userSettings = {
     .binding = &shaderInjection.toneMapType,
     .valueType = UserSettingUtil::UserSettingValueType::integer,
     .defaultValue = 3.f,
+    .canReset = false,
     .label = "Tone Mapper",
     .section = "Tone Mapping",
     .tooltip = "Sets the tone mapper type",
@@ -60,6 +61,7 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "toneMapPeakNits",
     .binding = &shaderInjection.toneMapPeakNits,
     .defaultValue = 1000.f,
+    .canReset = false,
     .label = "Peak Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the value of peak white in nits",
@@ -221,7 +223,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
         {reshade::api::format::r8g8b8a8_unorm_srgb, reshade::api::format::r16g16b16a16_float}
       );
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
-        {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float}
+        {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float, 0}
       );
 
       break;

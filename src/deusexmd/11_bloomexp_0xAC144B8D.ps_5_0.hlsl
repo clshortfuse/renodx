@@ -2,13 +2,10 @@
 
 #include "./shared.h"
 
-Texture2D<float4> t1 : register(t1);
-
 Texture2D<float4> t0 : register(t0);
-
-SamplerState s1_s : register(s1);
-
+Texture2D<float4> t1 : register(t1);
 SamplerState s0_s : register(s0);
+SamplerState s1_s : register(s1);
 
 cbuffer cb11 : register(b11) {
   float4 cb11[18];
