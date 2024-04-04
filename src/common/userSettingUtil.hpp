@@ -286,15 +286,22 @@ namespace UserSettingUtil {
         }
         auto font = ImGui::GetFont();
         auto oldScale = font->Scale;
+        auto previousFontSize = ImGui::GetFontSize();
         font->Scale *= 0.75f;
         ImGui::PushFont(font);
-        ImGui::AlignTextToFramePadding();
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, ImGui::GetFontSize() * 2);
-        ImGui::SetNextItemWidth(ImGui::GetFontSize());
+        auto currentFontSize = ImGui::GetFontSize();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, currentFontSize * 2);
+
+        ImVec2 cursor_pos = ImGui::GetCursorPos();
+        cursor_pos.y += (previousFontSize / 2.f) - (currentFontSize / 2.f);
+        ImGui::SetCursorPos(cursor_pos);
+
         if (ImGui::Button(reinterpret_cast<const char*>(u8"\uf0e2"))) {
           setting->set(setting->defaultValue);
           changed = true;
         }
+
         if (isUsingDefault) {
           ImGui::PopStyleColor(3);
         }
