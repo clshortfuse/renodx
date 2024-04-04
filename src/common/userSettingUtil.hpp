@@ -30,6 +30,7 @@ namespace UserSettingUtil {
     float* binding;
     UserSettingValueType valueType = UserSettingValueType::floating;
     float defaultValue = 0.f;
+    bool canReset = true;
     const char* label = key;
     const char* section = "";
     char const* tooltip = "";
@@ -45,30 +46,34 @@ namespace UserSettingUtil {
       return value;
     };
 
-    UserSetting* write() {
+    float get() {
       switch (this->valueType) {
         default:
         case UserSettingValueType::floating:
-          *this->binding = this->parse(this->value);
+          return this->value;
           break;
         case UserSettingValueType::integer:
-          *this->binding = this->parse(static_cast<float>(this->valueAsInt));
+          return static_cast<float>(this->valueAsInt);
           break;
         case UserSettingValueType::boolean:
-          *this->binding = this->parse(this->valueAsInt) ? 1.f : 0.f;
+          return (this->valueAsInt ? 1.f : 0.f);
           break;
       }
-      return this;
     }
-
-    float value = defaultValue;
-    int valueAsInt = static_cast<int>(defaultValue);
 
     UserSetting* set(float value) {
       this->value = value;
       this->valueAsInt = static_cast<int>(value);
       return this;
     }
+
+    UserSetting* write() {
+      *this->binding = this->parse(this->get());
+      return this;
+    }
+
+    float value = defaultValue;
+    int valueAsInt = static_cast<int>(defaultValue);
 
     float getMax() {
       switch (this->valueType) {
@@ -187,6 +192,7 @@ namespace UserSettingUtil {
   }
 
   // Runs first
+  // https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
   static void on_register_overlay(reshade::api::effect_runtime* runtime) {
     bool changedPreset = ImGui::SliderInt(
       "Preset",
@@ -266,6 +272,37 @@ namespace UserSettingUtil {
       }
       if (strlen(setting->tooltip) != 0) {
         ImGui::SetItemTooltip(setting->tooltip);
+      }
+
+      if (presetIndex != 0 && setting->canReset) {
+        ImGui::SameLine();
+        bool isUsingDefault = (setting->get() == setting->defaultValue);
+        ImGui::BeginDisabled(isUsingDefault);
+        ImGui::PushID(&setting->defaultValue);
+        if (isUsingDefault) {
+          ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(0, 0, 0.6f));
+          ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(0, 0, 0.7f));
+          ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(0, 0, 0.8f));
+        }
+        auto font = ImGui::GetFont();
+        auto oldScale = font->Scale;
+        font->Scale *= 0.75f;
+        ImGui::PushFont(font);
+        ImGui::AlignTextToFramePadding();
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, ImGui::GetFontSize() * 2);
+        ImGui::SetNextItemWidth(ImGui::GetFontSize());
+        if (ImGui::Button(reinterpret_cast<const char*>(u8"\uf0e2"))) {
+          setting->set(setting->defaultValue);
+          changed = true;
+        }
+        if (isUsingDefault) {
+          ImGui::PopStyleColor(3);
+        }
+        font->Scale = oldScale;
+        ImGui::PopFont();
+        ImGui::PopStyleVar();
+        ImGui::PopID();
+        ImGui::EndDisabled();
       }
 
       if (changed) {
