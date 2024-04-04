@@ -6,6 +6,7 @@ RenoDX, short for "Renovation Engine for DirectX Games", is a toolset to mod gam
 # Released mods
 
 * [Cyberpunk 2077](https://www.nexusmods.com/cyberpunk2077/mods/13912)
+* [Deus Ex: Mankind Divided](https://www.nexusmods.com/deusexmankinddivided/mods/28)
 * [Lost Planet](https://www.nexusmods.com/lostplanetextremeconditioncoloniesedition/mods/2)
 * [Hi-Fi Rush](https://www.nexusmods.com/hifirush/mods/24)
 * [Tunic](https://www.nexusmods.com/tunic/mods/8)
@@ -14,6 +15,5 @@ RenoDX, short for "Renovation Engine for DirectX Games", is a toolset to mod gam
 # Work in progress
 
 * Batman: Arkham Knight
-* Deus Ex: Mankind Divided
 * Dying Light 2
 * Sea of Stars
