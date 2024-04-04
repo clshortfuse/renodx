@@ -100,7 +100,7 @@ void main(
       outputColor = open_drt_transform_bt709(
         outputColor,
         100.f * hdrScale,
-        0.12,
+        0,
         1.f,
         0
       );
