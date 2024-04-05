@@ -86,23 +86,25 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "toneMapGameNits",
     .binding = &shaderInjection.toneMapGameNits,
     .defaultValue = 203.f,
+    .canReset = false,
     .label = "Game Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the value of 100%% white in nits",
     .min = 48.f,
     .max = 1000.f
   },
-    new UserSettingUtil::UserSetting {
+  new UserSettingUtil::UserSetting {
     .key = "toneMapGammaCorrection",
     .binding = &shaderInjection.toneMapGammaCorrection,
     .valueType = UserSettingUtil::UserSettingValueType::integer,
     .defaultValue = 0.f,
+    .canReset = false,
     .label = "Gamma Correction",
     .section = "Tone Mapping",
-    .tooltip = "Adjusts for 2.2 pure gamma instead of sRGB piecewise EOTF",
-    .labels = { "None", "Menus Only", "Always"}
+    .tooltip = "Emulates a 2.2 OETF (use with HDR or sRGB)",
+    .labels = { "Off", "Menus Only", "Always"}
   },
-    new UserSettingUtil::UserSetting {
+  new UserSettingUtil::UserSetting {
     .key = "colorGradeExposure",
     .binding = &shaderInjection.colorGradeExposure,
     .defaultValue = 1.f,

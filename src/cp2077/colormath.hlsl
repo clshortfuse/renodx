@@ -54,24 +54,20 @@ float3 applyUserBrightness(float3 inputColor, float userBrightness = 1.f) {
 
 float3 convertColor(float3 inputColor, ConvertColorParams params) {
   float3 outputColor = inputColor;
+  if (injectedData.toneMapGammaCorrection) {
+    outputColor = gammaCorrectionHDRSafe(outputColor);
+  }
   switch (params.outputTypeEnum) {
     case OUTPUT_TYPE_SRGB8:
       {
         outputColor = max(0, outputColor);  // clamp to BT709
         outputColor = applyUserBrightness(outputColor, params.gammaCorrection);
-        if (injectedData.toneMapGammaCorrection == 2.f) {
-          outputColor = pow(outputColor, 1.f / 2.2f);
-        } else {
-          outputColor = srgbFromLinear(outputColor);
-        }
+        outputColor = srgbFromLinear(outputColor);
         outputColor = randomDither(outputColor.rgb, params.random3, 8.f);
       }
       break;
     case OUTPUT_TYPE_PQ:
       {
-        if (injectedData.toneMapGammaCorrection == 2.f) {
-          outputColor = gammaCorrectionHDRSafe(outputColor);
-        }
         float3 rec2020 = bt2020FromBT709(outputColor.rgb);
         // Removed because this caps to 100 nits
         // Also because the matrix just seems to hue shift to green/yellow
@@ -87,9 +83,6 @@ float3 convertColor(float3 inputColor, ConvertColorParams params) {
       }
       break;
     case OUTPUT_TYPE_SCRGB:
-      if (injectedData.toneMapGammaCorrection == 2.f) {
-        outputColor = gammaCorrectionHDRSafe(outputColor);
-      }
       outputColor *= params.paperWhiteScaling;
       break;
     case OUTPUT_TYPE_SRGB10:
@@ -99,19 +92,12 @@ float3 convertColor(float3 inputColor, ConvertColorParams params) {
         outputColor = applyUserBrightness(outputColor, params.gammaCorrection);
         outputColor = mul(outputColor, params.colorMatrix);
         outputColor *= params.paperWhiteScaling;
-        if (injectedData.toneMapGammaCorrection == 2.f) {
-          outputColor = pow(outputColor, 1.f / 2.2f);
-        } else {
-          outputColor = srgbFromLinear(outputColor);
-        }
+        outputColor = srgbFromLinear(outputColor);
         outputColor = randomDither(outputColor, params.random3, 10.f);
       }
       break;
     default:
       // Unknown default case
-      if (injectedData.toneMapGammaCorrection == 2.f) {
-        outputColor = gammaCorrectionHDRSafe(outputColor);
-      }
       outputColor *= params.paperWhiteScaling;
       outputColor += params.blackFloorAdjust;
   }

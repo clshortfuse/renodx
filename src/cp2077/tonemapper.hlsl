@@ -576,6 +576,10 @@ float4 tonemap(bool isACESMode = false) {
         const float ACES_MID_GRAY = 0.10f;
         float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / ACES_MID_GRAY);
         float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
+        if (injectedData.toneMapGammaCorrection) {
+          hdrScale = linearFromSRGB(pow(hdrScale * injectedData.toneMapGameNits / CDPR_WHITE, 1.f / 2.2f));
+          hdrScale /= (injectedData.toneMapGameNits / CDPR_WHITE);
+        }
         outputRGB = aces_rgc_rrt_odt(
           outputRGB,
           0.0001f / hdrScale,
@@ -606,6 +610,10 @@ float4 tonemap(bool isACESMode = false) {
         const float OPENDRT_MID_GRAY = 11.696f / 100.f;
         float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / OPENDRT_MID_GRAY);
         float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
+        if (injectedData.toneMapGammaCorrection == 2.f) {
+          hdrScale = linearFromSRGB(pow(hdrScale * injectedData.toneMapGameNits / CDPR_WHITE, 1.f / 2.2f));
+          hdrScale /= (injectedData.toneMapGameNits / CDPR_WHITE);
+        }
         outputRGB = open_drt_transform(
           outputRGB,
           100.f * hdrScale,
