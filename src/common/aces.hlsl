@@ -323,11 +323,7 @@ float3 aces_gamut_compress(float3 linAP1) {
 }
 
 float3 aces_rrt(float3 aces) {
-  static const float3 AP1_RGB2Y = float3(
-    0.2722287168,  //AP1_2_XYZ_MAT[0][1],
-    0.6740817658,  //AP1_2_XYZ_MAT[1][1],
-    0.0536895174   //AP1_2_XYZ_MAT[2][1]
-  );
+  static const float3 AP1_RGB2Y = AP1_2_XYZ_MAT[1].rgb;
 
   // --- Glow module --- //
   // "Glow" module constants
@@ -468,7 +464,8 @@ float3 aces_odt(float3 rgbPre, float minY, float maxY, float3x3 odtMatrix = AP1_
 float3 aces_rrt_odt(float3 color, float minY, float maxY, float3x3 odtMatrix = AP1_2_BT709_MAT) {
   color = mul(BT709_2_AP0_MAT, color);
   color = aces_rrt(color);
-  return aces_odt(color, minY, maxY, odtMatrix);
+  color = aces_odt(color, minY, maxY, odtMatrix);
+  return color;
 }
 
 // ACES for Scene-Linear BT709 with:

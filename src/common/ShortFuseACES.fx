@@ -82,9 +82,6 @@ static const float3x3 IDENTITY_MAT = float3x3(
 
 // clang-format on
 
-
-
-
 #define FLT_MIN asfloat(0x00800000)  //1.175494351e-38f
 #define FLT_MAX asfloat(0x7F7FFFFF)  //3.402823466e+38f
 
@@ -106,6 +103,7 @@ static const float3x3 M = float3x3(
   -1.0,  1.0, 0.0,
    0.5,  0.5, 0.0
 );
+
 // clang-format on
 
 float rgb_2_yc(float3 rgb) {
@@ -262,22 +260,20 @@ float3 linCV_2_Y(float3 linCV, float Ymax, float Ymin) {
 
 float lookup_ACESmin(float minLumLog10) {
   static const float2x2 MIN_LUM_TABLE = float2x2(
-    log10(MIN_LUM_RRT), MIN_STOP_RRT,
-    log10(MIN_LUM_SDR), MIN_STOP_SDR
+    log10(MIN_LUM_RRT), MIN_STOP_RRT, log10(MIN_LUM_SDR), MIN_STOP_SDR
   );
   return 0.18 * exp2(interpolate1D(MIN_LUM_TABLE, minLumLog10));
 }
 
 float lookup_ACESmax(float maxLumLog10) {
   static const float2x2 MAX_LUM_TABLE = float2x2(
-    log10(MAX_LUM_SDR), MAX_STOP_SDR,
-    log10(MAX_LUM_RRT), MAX_STOP_RRT
+    log10(MAX_LUM_SDR), MAX_STOP_SDR, log10(MAX_LUM_RRT), MAX_STOP_RRT
   );
   return 0.18 * exp2(interpolate1D(MAX_LUM_TABLE, maxLumLog10));
 }
 
 float SSTS(
-  float x, 
+  float x,
   float3 yMin,
   float3 yMid,
   float3 yMax,
@@ -286,11 +282,11 @@ float SSTS(
   float3 coefsHighA,
   float3 coefsHighB
 ) {
-  const int N_KNOTS_LOW = 4;
-  const int N_KNOTS_HIGH = 4;
+  const uint N_KNOTS_LOW = 4;
+  const uint N_KNOTS_HIGH = 4;
 
   float coefsLow[6];
-  
+
   coefsLow[0] = coefsLowA.x;
   coefsLow[1] = coefsLowA.y;
   coefsLow[2] = coefsLowA.z;
@@ -321,7 +317,7 @@ float SSTS(
   } else if (logx >= yMid.x) {
     // Part of Midtones area (Must have slope)
     float knot_coord = (N_KNOTS_HIGH - 1) * (logx - yMid.x) / (yMax.x - yMid.x);
-    int j = knot_coord;
+    uint j = knot_coord;
     float t = knot_coord - j;
 
     float3 cf = float3(coefsHigh[j], coefsHigh[j + 1], coefsHigh[j + 2]);
@@ -330,7 +326,7 @@ float SSTS(
     logy = dot(monomials, mul(M, cf));
   } else if (logx > yMin.x) {
     float knot_coord = (N_KNOTS_LOW - 1) * (logx - yMin.x) / (yMid.x - yMin.x);
-    int j = knot_coord;
+    uint j = knot_coord;
     float t = knot_coord - j;
 
     float3 cf = float3(coefsLow[j], coefsLow[j + 1], coefsLow[j + 2]);
@@ -445,15 +441,12 @@ float3 aces_odt_tone_map(float3 rgbPre, float minY, float maxY) {
   // AcesParams PARAMS = init_aces_params(minY, maxY);
 
   static const float2x2 BENDS_LOW_TABLE = float2x2(
-    MIN_STOP_RRT, 0.18,
-    MIN_STOP_SDR, 0.35
+    MIN_STOP_RRT, 0.18, MIN_STOP_SDR, 0.35
   );
 
   static const float2x2 BENDS_HIGH_TABLE = float2x2(
-    MAX_STOP_SDR, 0.89,
-    MAX_STOP_RRT, 0.90
+    MAX_STOP_SDR, 0.89, MAX_STOP_RRT, 0.90
   );
-
 
   float minLumLog10 = log10(minLum);
   float maxLumLog10 = log10(maxLum);
@@ -476,7 +469,6 @@ float3 aces_odt_tone_map(float3 rgbPre, float minY, float maxY) {
   float knotIncLow = (logMid.x - logMin.x) / 3.;
   // float halfKnotInc = (logMid.x - logMin.x) / 6.;
 
-  
   // Determine two lowest coefficients (straddling minPt)
   // coefsLow[0] = (MIN_PT.z * (logMin.x- 0.5 * knotIncLow)) + ( logMin.y - MIN_PT.z * logMin.x);
   // coefsLow[1] = (MIN_PT.z * (logMin.x+ 0.5 * knotIncLow)) + ( logMin.y - MIN_PT.z * logMin.x);
@@ -517,27 +509,9 @@ float3 aces_odt_tone_map(float3 rgbPre, float minY, float maxY) {
   float pctHigh = interpolate1D(BENDS_HIGH_TABLE, log2(acesMax / 0.18));
   coefsHighA.z = logMid.y + pctHigh * (logMax.y - logMid.y);
 
-  rgbPost.x = SSTS(rgbPre.x, float3(logMin.x, logMin.y, 0),
-    float3(logMid.x, logMid.y, MID_PT.z),
-    float3(logMax.x, logMax.y, 0),
-    coefsLowA,
-    coefsLowB,
-    coefsHighA,
-    coefsHighB);
-  rgbPost.y = SSTS(rgbPre.y, float3(logMin.x, logMin.y, 0),
-    float3(logMid.x, logMid.y, MID_PT.z),
-    float3(logMax.x, logMax.y, 0),
-    coefsLowA,
-    coefsLowB,
-    coefsHighA,
-    coefsHighB);
-  rgbPost.z = SSTS(rgbPre.z, float3(logMin.x, logMin.y, 0),
-    float3(logMid.x, logMid.y, MID_PT.z),
-    float3(logMax.x, logMax.y, 0),
-    coefsLowA,
-    coefsLowB,
-    coefsHighA,
-    coefsHighB);
+  rgbPost.x = SSTS(rgbPre.x, float3(logMin.x, logMin.y, 0), float3(logMid.x, logMid.y, MID_PT.z), float3(logMax.x, logMax.y, 0), coefsLowA, coefsLowB, coefsHighA, coefsHighB);
+  rgbPost.y = SSTS(rgbPre.y, float3(logMin.x, logMin.y, 0), float3(logMid.x, logMid.y, MID_PT.z), float3(logMax.x, logMax.y, 0), coefsLowA, coefsLowB, coefsHighA, coefsHighB);
+  rgbPost.z = SSTS(rgbPre.z, float3(logMin.x, logMin.y, 0), float3(logMid.x, logMid.y, MID_PT.z), float3(logMax.x, logMax.y, 0), coefsLowA, coefsLowB, coefsHighA, coefsHighB);
 
   // Nits to Linear
   float3 linearCV = Y_2_linCV(rgbPost, maxY, minY);
@@ -572,54 +546,44 @@ float3 aces_rrt_odt(float3 color, float minY, float maxY, float3x3 odtMatrix) {
 float3 aces_rgc_rrt_odt(float3 color, float minY, float maxY, float3x3 odtMatrix) {
   static const float3x3 BT709_2_AP1_MAT = mul(XYZ_2_AP1_MAT, mul(D65_2_D60_CAT, BT709_2_XYZ_MAT));
 
-  color = mul(BT709_2_AP1_MAT, color);            // BT709 to AP1
-  color = aces_gamut_compress(color);             // Compresses to AP1
-  color = mul(AP1_2_AP0_MAT, color);              // Convert to AP0
-  color = aces_rrt(color);                        // RRT AP0 => AP1
-  return aces_odt(color, minY, maxY, odtMatrix);  // ODT AP1 => Matrix
+  color = mul(BT709_2_AP1_MAT, color);             // BT709 to AP1
+  color = aces_gamut_compress(color);              // Compresses to AP1
+  color = mul(AP1_2_AP0_MAT, color);               // Convert to AP0
+  color = aces_rrt(color);                         // RRT AP0 => AP1
+  color = aces_odt(color, minY, maxY, odtMatrix);  // ODT AP1 => Matrix
 }
 
-
-uniform float ACES_PEAK_NITS <
-  ui_type = "slider";
-  ui_min = 80;
-  ui_max = 10000;
-  ui_step = 1;
-  ui_label = "Peak Nits";
-  ui_tooltip = "Peak Nits";
+uniform float ACES_PEAK_NITS < ui_type = "slider";
+ui_min = 80;
+ui_max = 10000;
+ui_step = 1;
+ui_label = "Peak Nits";
+ui_tooltip = "Peak Nits";
 > = 800;
 
-uniform float ACES_PAPER_WHITE_NITS <
-  ui_type = "slider";
-  ui_min = 80;
-  ui_max = 500;
-  ui_step = 1;
-  ui_label = "Paper White Nits";
-  ui_tooltip = "Brightness of 100% diffuse white";
+uniform float ACES_PAPER_WHITE_NITS < ui_type = "slider";
+ui_min = 80;
+ui_max = 500;
+ui_step = 1;
+ui_label = "Paper White Nits";
+ui_tooltip = "Brightness of 100% diffuse white";
 > = 203;
 
-uniform float ACES_MIN_NITS <
-  ui_type = "slider";
-  ui_min = 0.00001;
-  ui_max = 1.0;
-  ui_label = "Min Nits";
-  ui_tooltip = "Peak Nits";
+uniform float ACES_MIN_NITS < ui_type = "slider";
+ui_min = 0.00001;
+ui_max = 1.0;
+ui_label = "Min Nits";
+ui_tooltip = "Peak Nits";
 > = 0.0001;
 
-uniform float ACES_EXPOSURE <
-  ui_type = "slider";
-  ui_min = 0;
-  ui_max = 10;
-  ui_step = 1;
-  ui_label = "Exposure";
+uniform float ACES_EXPOSURE < ui_type = "slider";
+ui_min = 0;
+ui_max = 10;
+ui_step = 1;
+ui_label = "Exposure";
 > = 1.0;
 
-
-
-float3 main(float4 pos : SV_Position, float2 texcoord : TexCoord ) : COLOR
-{
-
-  
+float3 main(float4 pos : SV_Position, float2 texcoord : TexCoord) : COLOR {
   static const float3x3 BT709_2_AP0_MAT = mul(XYZ_2_AP0_MAT, mul(D65_2_D60_CAT, BT709_2_XYZ_MAT));
   static const float3x3 BT2020_2_AP1_MAT = mul(XYZ_2_AP1_MAT, mul(D65_2_D60_CAT, BT2020_2_XYZ_MAT));
   static const float3x3 BT2020_2_AP0_MAT = mul(XYZ_2_AP0_MAT, mul(D65_2_D60_CAT, BT2020_2_XYZ_MAT));
@@ -633,7 +597,7 @@ float3 main(float4 pos : SV_Position, float2 texcoord : TexCoord ) : COLOR
   static const float3x3 AP1_2_BT2020D60_MAT = mul(XYZ_2_BT2020_MAT, AP1_2_XYZ_MAT);
   static const float3x3 AP1_2_AP1D65_MAT = mul(XYZ_2_AP1_MAT, mul(D60_2_D65_CAT, AP1_2_XYZ_MAT));
 
-  float3 inputColor = tex2D(ReShade::BackBuffer, texcoord ).rgb;
+  float3 inputColor = tex2D(ReShade::BackBuffer, texcoord).rgb;
 
   // ACES uses 48 nits for 100-nit SDR
   // Base 100-nit SDR = 203 SDR
@@ -647,20 +611,18 @@ float3 main(float4 pos : SV_Position, float2 texcoord : TexCoord ) : COLOR
   float hdrScale = peakNits / paperWhite;
   float3 outputColor = aces_rgc_rrt_odt(
     inputColor * ACES_EXPOSURE,
-    yMin / hdrScale,
+    yMin / (paperWhite / 48.f),
     48.f * hdrScale,
     clampMatrix
   );
-  outputColor *= paperWhite / 48.f;
+  outputColor /= 48.f;
   outputColor = mul(outputMatrix, outputColor);
-  
-  return outputColor / 80.f;
+  outputColor *= paperWhite / 80.f;
+  return outputColor;
 }
 
-technique ShortFuseACES
-{
-  pass
-  {
+technique ShortFuseACES {
+  pass {
     VertexShader = PostProcessVS;
     PixelShader = main;
   }

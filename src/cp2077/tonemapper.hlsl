@@ -575,22 +575,29 @@ float4 tonemap(bool isACESMode = false) {
       if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
         const float ACES_MID_GRAY = 0.10f;
         float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / ACES_MID_GRAY);
-        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
+
+        float acesScaling = paperWhite / 48.f;
+
+        float acesMin = 0.0001f / acesScaling;
+        float acesMax = 48.f * injectedData.toneMapPeakNits / paperWhite;
+
         if (injectedData.toneMapGammaCorrection) {
-          hdrScale = linearFromSRGB(pow(hdrScale * injectedData.toneMapGameNits / CDPR_WHITE, 1.f / 2.2f));
-          hdrScale /= (injectedData.toneMapGameNits / CDPR_WHITE);
+          acesMax = linearFromSRGB(pow(acesMax * acesScaling / CDPR_WHITE, 1.f / 2.2f));
+          acesMin = linearFromSRGB(pow(acesMin * acesScaling / CDPR_WHITE, 1.f / 2.2f));
+          acesMax /= acesScaling / CDPR_WHITE;
+          acesMin /= acesScaling / CDPR_WHITE;
         }
+
         outputRGB = aces_rgc_rrt_odt(
           outputRGB,
-          0.0001f / hdrScale,
-          48.f * hdrScale,
+          acesMin,
+          acesMax,
           useD60 ? AP1_2_BT709D60_MAT : AP1_2_BT709_MAT
         );
         if (isSDR) {
           outputRGB = max(0, outputRGB);
         }
-        outputRGB /= 48.f;
-        outputRGB *= (vanillaMidGray / ACES_MID_GRAY);
+        outputRGB *= acesScaling;
 
       } else if (toneMapperType == TONE_MAPPER_TYPE__OPENDRT) {
         float3x3 inputMatrix;
@@ -611,8 +618,8 @@ float4 tonemap(bool isACESMode = false) {
         float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / OPENDRT_MID_GRAY);
         float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
         if (injectedData.toneMapGammaCorrection == 2.f) {
-          hdrScale = linearFromSRGB(pow(hdrScale * injectedData.toneMapGameNits / CDPR_WHITE, 1.f / 2.2f));
-          hdrScale /= (injectedData.toneMapGameNits / CDPR_WHITE);
+          hdrScale = linearFromSRGB(pow(hdrScale * paperWhite / CDPR_WHITE, 1.f / 2.2f));
+          hdrScale /= (paperWhite / CDPR_WHITE);
         }
         outputRGB = open_drt_transform(
           outputRGB,
@@ -623,9 +630,9 @@ float4 tonemap(bool isACESMode = false) {
         );
         outputRGB = mul(outputMatrix, outputRGB);
         outputRGB *= hdrScale;
-        outputRGB *= (vanillaMidGray / OPENDRT_MID_GRAY);
+        outputRGB *= paperWhite;
       }
-      outputRGB *= injectedData.toneMapGameNits / CDPR_WHITE;
+      outputRGB /= CDPR_WHITE;
     }
 
   } else {

@@ -86,7 +86,7 @@ void main(
       float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
       outputColor = aces_rgc_rrt_odt(
         outputColor,
-        0.0001f / hdrScale,
+        0.0001f / (paperWhite / 48.f),
         48.f * hdrScale
       );
       outputColor /= 48.f;

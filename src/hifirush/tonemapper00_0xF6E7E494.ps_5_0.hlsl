@@ -1,3 +1,4 @@
+
 // Output tonemapper
 
 #include "../common/Open_DRT.hlsl"
@@ -188,7 +189,7 @@ float4 main(
     float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
     outputColor = aces_rgc_rrt_odt(
       outputColor,
-      0.0001f / hdrScale,
+      0.0001f / (paperWhite / 48.f),
       48.f * hdrScale
     );
     outputColor /= 48.f;
@@ -202,7 +203,7 @@ float4 main(
     outputColor = open_drt_transform_bt709(
       outputColor,
       100.f * hdrScale,
-      0.12,
+      0,
       1.f,
       0
     );
