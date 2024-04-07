@@ -54,7 +54,7 @@ float3 applyUserBrightness(float3 inputColor, float userBrightness = 1.f) {
 
 float3 convertColor(float3 inputColor, ConvertColorParams params) {
   float3 outputColor = inputColor;
-  if (injectedData.toneMapGammaCorrection) {
+  if (injectedData.toneMapGammaCorrection == 2.f) {
     outputColor = gammaCorrectionHDRSafe(outputColor);
   }
   switch (params.outputTypeEnum) {
