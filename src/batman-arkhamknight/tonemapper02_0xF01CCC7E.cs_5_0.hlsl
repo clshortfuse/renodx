@@ -1,5 +1,6 @@
 // motion blur + effect
 
+#include "../common/filmgrain.hlsl"
 #include "./shared.h"
 #include "./tonemapper.hlsl"
 
@@ -136,7 +137,6 @@ cbuffer cb0 : register(b0) {
   r0.x = r0.x * 0.300000012 + 1;
   // r0.xyzw = r1.xyzw * r0.xxxx;
   r0.xyzw = lerp(r1, r1 / r0.z * r0.x, injectedData.fxVignette);
-
 #if DRAW_TONEMAPPER
   DrawToneMapperParams dtmParams = DrawToneMapperStart(r2.xy, r0.zwy, t0, injectedData.toneMapPeakNits, injectedData.toneMapGameNits);
   r0.zwy = dtmParams.outputColor;
@@ -144,49 +144,73 @@ cbuffer cb0 : register(b0) {
 
   const float3 untonemapped = r0.zwy;
 
-  r1.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
-  r1.xyzw = r0.yyzw * r1.xyzw + float4(0.00200000009, 0.00200000009, 0.00200000009, 0.00200000009);
-  r4.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.300000012, 0.300000012, 0.300000012, 0.300000012);
-  r0.xyzw = r0.xyzw * r4.xyzw + float4(0.0599999987, 0.0599999987, 0.0599999987, 0.0599999987);
-  r0.xyzw = r1.xyzw / r0.xyzw;
-  r0.xyzw = float4(-0.0333333351, -0.0333333351, -0.0333333351, -0.0333333351) + r0.xyzw;
-  r0.xyzw = max(float4(0, 0, 0, 0), r0.xyzw);
-  r0.xyzw = float4(1.66289866, 1.66289866, 1.66289866, 1.66289866) * r0.xyzw;
-  r0.xyzw = log2(r0.xyzw);
-  r0.xyzw = float4(0.454545468, 0.454545468, 0.454545468, 0.454545468) * r0.xyzw;
-  r0.xyzw = exp2(r0.xyzw);
+  float3 outputColor = untonemapped;
+  if (injectedData.toneMapType == 0) {
+    r1.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
+    r1.xyzw = r0.yyzw * r1.xyzw + float4(0.00200000009, 0.00200000009, 0.00200000009, 0.00200000009);
+    r4.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.300000012, 0.300000012, 0.300000012, 0.300000012);
+    r0.xyzw = r0.xyzw * r4.xyzw + float4(0.0599999987, 0.0599999987, 0.0599999987, 0.0599999987);
+    r0.xyzw = r1.xyzw / r0.xyzw;
+    r0.xyzw = float4(-0.0333333351, -0.0333333351, -0.0333333351, -0.0333333351) + r0.xyzw;
+    r0.xyzw = max(float4(0, 0, 0, 0), r0.xyzw);
+    r0.xyzw = float4(1.66289866, 1.66289866, 1.66289866, 1.66289866) * r0.xyzw;
+    r0.xyzw = log2(r0.xyzw);
+    r0.xyzw = float4(0.454545468, 0.454545468, 0.454545468, 0.454545468) * r0.xyzw;
+    r0.xyzw = exp2(r0.xyzw);
 
-  float4 lutInputColor = r0.zwxy;
-  r0.xyzw = min(float4(1, 1, 1, 1), r0.xyzw);
-  r1.xyw = float3(14.9998999, 0.9375, 0.05859375) * r0.xwz;
-  r0.x = floor(r1.x);
-  r0.y = r0.y * 15 + -r0.x;
-  r1.x = r0.x * 0.0625 + r1.w;
-  r1.xyzw = float4(0.001953125, 0.03125, 0.064453125, 0.03125) + r1.xyxy;
-  r0.xzw = t3.SampleLevel(s0_s, r1.xy, 0).xyz;
-  r1.xyz = t3.SampleLevel(s0_s, r1.zw, 0).xyz;
-  r1.xyzw = r1.xyzx + -r0.xzwx;
-  r0.xyzw = r0.yyyy * r1.xyzw + r0.xzwx;
+    float4 lutInputColor = r0.zwxy;
+    r0.xyzw = min(float4(1, 1, 1, 1), r0.xyzw);
+    r1.xyw = float3(14.9998999, 0.9375, 0.05859375) * r0.xwz;
+    r0.x = floor(r1.x);
+    r0.y = r0.y * 15 + -r0.x;
+    r1.x = r0.x * 0.0625 + r1.w;
+    r1.xyzw = float4(0.001953125, 0.03125, 0.064453125, 0.03125) + r1.xyxy;
+    r0.xzw = t3.SampleLevel(s0_s, r1.xy, 0).xyz;
+    r1.xyz = t3.SampleLevel(s0_s, r1.zw, 0).xyz;
+    r1.xyzw = r1.xyzx + -r0.xzwx;
+    r0.xyzw = r0.yyyy * r1.xyzw + r0.xzwx;
 
-  r0.xyzw = lerp(lutInputColor, r0, injectedData.colorGradeLUTStrength);
+    r0.xyzw = lerp(lutInputColor, r0, injectedData.colorGradeLUTStrength);
+#if DRAW_TONEMAPPER
+    if (dtmParams.drawToneMapper)
+#endif
+      if (injectedData.fxFilmGrain) {
+        r1.xyzw = float4(1, 1, 1, 1) + -r0.wyzw;
+        r1.xyzw = r1.xyzw * r1.xyzw;
+        r1.xyzw = min(float4(1, 1, 1, 1), r1.xyzw);
+        r1.xyzw = cb0[11].zzzz * r1.xyzw * injectedData.fxFilmGrain;
+        r3.xyzw = float4(-0.333999991, -0.333999991, -0.333999991, -0.333999991) + r3.xyzw;
+        r1.xyzw = r1.xyzw * r3.xyzw + float4(1, 1, 1, 1);
+        r0.xyzw = r1.xyzw * r0.xyzw;
+      }
 
-  r1.xyzw = float4(1, 1, 1, 1) + -r0.wyzw;
-  r1.xyzw = r1.xyzw * r1.xyzw;
-  r1.xyzw = min(float4(1, 1, 1, 1), r1.xyzw);
-  r1.xyzw = cb0[11].zzzz * r1.xyzw;
-  r3.xyzw = float4(-0.333999991, -0.333999991, -0.333999991, -0.333999991) + r3.xyzw;
-  r1.xyzw = r1.xyzw * r3.xyzw + float4(1, 1, 1, 1);
-  r0.xyzw = r1.xyzw * r0.xyzw;
-
-  float4 outputColor = r0.xyzw;
+    outputColor = pow(r0.xyz, 2.2f);
+  } else {
+    outputColor = applyUserToneMap(untonemapped.rgb, t3, s0_s);
+#if DRAW_TONEMAPPER
+    if (!dtmParams.drawToneMapper)
+#endif
+      if (injectedData.fxFilmGrain) {
+        float3 grainedColor = computeFilmGrain(
+          outputColor,
+          cb0[11].xy,
+          frac(r3.x / 1000.f),
+          cb0[11].z * injectedData.fxFilmGrain * 0.03f,
+          1.f
+        );
+        outputColor = grainedColor;
+      }
+  }
 
 #if DRAW_TONEMAPPER
-  outputColor.rgb = applyUserToneMap(outputColor.rgb, untonemapped.rgb, dtmParams);
-#else
-  outputColor.rgb = applyUserToneMap(outputColor.rgb, untonemapped.rgb);
+  if (dtmParams.drawToneMapper) outputColor = DrawToneMapperEnd(outputColor, dtmParams);
 #endif
 
-  u0[uint2(r2.x, r2.y)] = outputColor;
+  outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+
+  outputColor = sign(outputColor) * pow(abs(outputColor), 1.f / 2.2f);
+
+  u0[uint2(r2.x, r2.y)] = outputColor.xyzx;
   // No code for instruction (needs manual fix):
   // store_uav_typed u0.xyzw, r2.xyyy, r0.xyzw
   return;

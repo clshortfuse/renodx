@@ -8,6 +8,7 @@ struct ShaderInjectData {
   float toneMapPeakNits;
   float toneMapGameNits;
   float toneMapUINits;
+  float colorGradeExposure;
   float colorGradeHighlights;
   float colorGradeShadows;
   float colorGradeContrast;
@@ -15,6 +16,7 @@ struct ShaderInjectData {
   float colorGradeLUTStrength;
   float fxBloom;
   float fxVignette;
+  float fxFilmGrain;
 };
 
 #ifndef __cplusplus

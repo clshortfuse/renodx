@@ -3,96 +3,103 @@
 #include "../common/color.hlsl"
 #include "../common/colorgrade.hlsl"
 #include "../common/graph.hlsl"
+#include "../common/lut.hlsl"
 #include "../common/tonemap.hlsl"
 #include "./shared.h"
 
 #define DRAW_TONEMAPPER 0
 
-#if DRAW_TONEMAPPER
-float3 applyUserToneMap(float3 inputColor, float3 untonemapped, DrawToneMapperParams dtmParams) {
-#else 
-float3 applyUserToneMap(float3 inputColor, float3 untonemapped) {
-#endif
-  float3 outputColor = saturate(inputColor);
+float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState lutSampler) {
+  float3 outputColor = untonemapped;
 
-  float vanillaMidGray = uncharted2Tonemap(0.18f) / uncharted2Tonemap(2.2f);
-  if (injectedData.toneMapType == 0) {
-    outputColor = max(0, outputColor);     // should only have bt709 colors
-    outputColor = pow(outputColor, 2.2f);  // Now in linear
-    // noop
-  } else {
-    if (injectedData.toneMapType == 1.f) {
-      outputColor = untonemapped;  // Untonemapped
-    } else {
-      // OutputColor was intended for 2.2 displays, using 2.2 numbers
-      outputColor = max(0, outputColor);      // should only have bt709 colors
-      outputColor = pow(outputColor, 2.2f);   // Now in linear
-      outputColor *= 0.18f / vanillaMidGray;  // rescale to match midgray
+  outputColor = applyUserColorGrading(
+    outputColor,
+    injectedData.colorGradeExposure,
+    injectedData.colorGradeSaturation,
+    injectedData.colorGradeShadows,
+    injectedData.colorGradeHighlights,
+    injectedData.colorGradeContrast
+  );
 
-      float inputY = yFromBT709(abs(untonemapped));
-      float outputY = yFromBT709(outputColor);
-      outputY = lerp(inputY, outputY, saturate(inputY));
-      outputColor *= (outputY ? inputY / outputY : 1);
+  float vanillaMidGray = 0.18f;
+  if (injectedData.toneMapType == 2.f) {
+    float paperWhite = injectedData.toneMapGameNits;  // ACES mid gray is 10%
+    float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
 
-      if (injectedData.colorGradeShadows != 1.f) {
-        outputColor = apply_user_shadows(outputColor, injectedData.colorGradeShadows);
-      }
-      if (injectedData.colorGradeHighlights != 1.f) {
-        outputColor = apply_user_highlights(outputColor, injectedData.colorGradeHighlights);
-      }
-      if (injectedData.colorGradeContrast != 1.f) {
-        float3 workingColor = pow(outputColor / 0.18f, injectedData.colorGradeContrast) * 0.18f;
-        // Working in BT709 still
-        float workingColorY = yFromBT709(workingColor);
-        float outputColorY = yFromBT709(outputColor);
-        outputColor *= outputColorY ? workingColorY / outputColorY : 1.f;
-      }
-
-      if (injectedData.colorGradeSaturation != 1.f) {
-        float grayscale = yFromBT709(outputColor);
-        outputColor = lerp(grayscale, outputColor, injectedData.colorGradeSaturation);
-        outputColor = max(0, outputColor);
-      }
-
-      if (injectedData.toneMapType == 2) {
-        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / 0.10);  // ACES mid gray is 10%
-        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
-        outputColor = aces_rgc_rrt_odt(
-          outputColor,
-          0.0001f / hdrScale,  // minY
-          48.f * hdrScale
-        );
-        outputColor /= 48.f;
-        outputColor *= (vanillaMidGray / 0.10);
-      } else {
-        // outputColor = apply_aces_highlights(outputColor);
-        outputColor = mul(BT709_2_BT2020_MAT, outputColor);
-        outputColor = max(0, outputColor);
-        const float openDRTMidGray = 11.696f / 100.f;  // open_drt_transform(0.18);
-        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / openDRTMidGray);
-        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
-
-        outputColor = open_drt_transform(
-          outputColor,
-          100.f * hdrScale,
-          0,
-          1.f,
-          0
-        );
-        outputColor *= hdrScale;
-        outputColor *= (vanillaMidGray / openDRTMidGray);
-        outputColor = mul(BT2020_2_BT709_MAT, outputColor);
-      }
+    if (injectedData.colorGradeLUTStrength) {
+      outputColor = max(0, outputColor);
     }
-    // Send as 2.2 numbers
+    float3 hdrColor = aces_rgc_rrt_odt(outputColor, 0.0001f / (paperWhite / 48.f), 48.f * hdrScale) / 48.f;
+    outputColor = hdrColor;
+    if (injectedData.colorGradeLUTStrength) {
+      float3 sdrColor = aces_rgc_rrt_odt(max(0, untonemapped), 0.0001f, 48.f) / 48.f;
+      sdrColor = saturate(sdrColor);
+
+      float3 sdrGammaColor = pow(sdrColor, 1.f / 2.2f);  // gamma
+      float3 luttedColor = sampleLUTAlt(lutTexture, lutSampler, sdrGammaColor, 16);
+      luttedColor = pow(luttedColor, 2.2f);  // linear
+
+      float scaledRatio = 1.f;
+      float outputY = yFromBT709(luttedColor);
+      float hdrY = yFromBT709(abs(hdrColor));
+      float sdrY = yFromBT709(sdrColor);
+      if (hdrY < sdrY) {
+        // If substracting (user contrast or paperwhite) scale down instead
+        scaledRatio = hdrY / sdrY;
+      } else {
+        float deltaY = hdrY - sdrY;
+        float newY = outputY + max(0, deltaY);  // deltaY may be NaN?
+        scaledRatio = outputY > 0 ? (newY / outputY) : 0;
+      }
+      luttedColor *= scaledRatio;
+      outputColor = lerp(outputColor, luttedColor, injectedData.colorGradeLUTStrength);
+    }
+  } else if (injectedData.toneMapType == 3.f) {
+    float paperWhite = injectedData.toneMapGameNits;
+    float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
+
+    float3 hdrColor = outputColor;
+    if (!injectedData.colorGradeLUTStrength) {
+      float3 hdrColor = mul(BT709_2_DISPLAYP3_MAT, outputColor);
+    }
+    hdrColor = max(0, hdrColor);
+    hdrColor = open_drt_transform_bt709(
+      hdrColor,
+      100.f * hdrScale,
+      0,
+      1.f,
+      0
+    );
+    if (!injectedData.colorGradeLUTStrength) {
+      hdrColor = mul(DISPLAYP3_2_BT709_MAT, hdrColor);
+    }
+    hdrColor *= hdrScale;
+    outputColor = hdrColor;
+
+    if (injectedData.colorGradeLUTStrength) {
+      float3 sdrColor = open_drt_transform_bt709(max(0, untonemapped), 100.f, 0, 1.f, 0);
+      sdrColor = saturate(sdrColor);
+
+      float3 sdrGammaColor = pow(sdrColor, 1.f / 2.2f);  // gamma
+      float3 luttedColor = sampleLUTAlt(lutTexture, lutSampler, sdrGammaColor, 16);
+      luttedColor = pow(luttedColor, 2.2f);  // linear
+
+      float scaledRatio = 1.f;
+      float outputY = yFromBT709(luttedColor);
+      float hdrY = yFromBT709(abs(hdrColor));
+      float sdrY = yFromBT709(sdrColor);
+      if (hdrY < sdrY) {
+        // If substracting (user contrast or paperwhite) scale down instead
+        scaledRatio = hdrY / sdrY;
+      } else {
+        float deltaY = hdrY - sdrY;
+        float newY = outputY + max(0, deltaY);  // deltaY may be NaN?
+        scaledRatio = outputY > 0 ? (newY / outputY) : 0;
+      }
+      luttedColor *= scaledRatio;
+      outputColor = lerp(outputColor, luttedColor, injectedData.colorGradeLUTStrength);
+    }
   }
 
-#if DRAW_TONEMAPPER
-  if (dtmParams.drawToneMapper) outputColor = DrawToneMapperEnd(outputColor, dtmParams);
-#endif
-
-  outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-
-  outputColor = sign(outputColor) * pow(abs(outputColor), 1.f / 2.2f);
   return outputColor;
 }

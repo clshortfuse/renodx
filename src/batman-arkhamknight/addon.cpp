@@ -39,6 +39,7 @@ UserSettingUtil::UserSettings userSettings = {
     .binding = &shaderInjection.toneMapType,
     .valueType = UserSettingUtil::UserSettingValueType::integer,
     .defaultValue = 2.f,
+    .canReset = false,
     .label = "Tone Mapper",
     .section = "Tone Mapping",
     .tooltip = "Sets the tone mapper type",
@@ -48,6 +49,7 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "toneMapPeakNits",
     .binding = &shaderInjection.toneMapPeakNits,
     .defaultValue = 1000.f,
+    .canReset = false,
     .label = "Peak Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the value of peak white in nits",
@@ -58,6 +60,7 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "toneMapGameNits",
     .binding = &shaderInjection.toneMapGameNits,
     .defaultValue = 203.f,
+    .canReset = false,
     .label = "Game Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the value of 100%% white in nits",
@@ -68,11 +71,21 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "toneMapUINits",
     .binding = &shaderInjection.toneMapUINits,
     .defaultValue = 203.f,
+    .canReset = false,
     .label = "UI Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the brightness of UI and HUD elements in nits",
     .min = 48.f,
     .max = 500.f
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeExposure",
+    .binding = &shaderInjection.colorGradeExposure,
+    .defaultValue = 1.f,
+    .label = "Expsoure",
+    .section = "Color Grading",
+    .max = 10.f,
+    .format = "%.2f"
   },
   new UserSettingUtil::UserSetting {
     .key = "colorGradeHighlights",
@@ -136,6 +149,15 @@ UserSettingUtil::UserSettings userSettings = {
     .section = "Effects",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxFilmGrain",
+    .binding = &shaderInjection.fxFilmGrain,
+    .defaultValue = 50.f,
+    .label = "fxFilmGrain",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
   }
 };
 
@@ -153,6 +175,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
   UserSettingUtil::updateUserSetting("fxBloom", 50.f);
   UserSettingUtil::updateUserSetting("fxVignette", 50.f);
+  UserSettingUtil::updateUserSetting("fxFilmGrain", 50.f);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
