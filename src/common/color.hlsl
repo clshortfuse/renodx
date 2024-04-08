@@ -205,25 +205,43 @@ float4 linearFromSRGB(float4 color) {
   );
 }
 
-float arriC800FromLinear(float x) {
-  const float cut = 0.010591f;
+float arriC800FromLinear(float x, float cut = 0.010591f) {
   const float a = 5.555556f;
   const float b = 0.052272f;
   const float c = 0.247190f;
   const float d = 0.385537f;
   const float e = 5.367655f;
   const float f = 0.092809f;
-
-  return (x > cut)
+  return (!cut || x > cut)
          ? (c * log10((a * x) + b) + d)
          : (e * x + f);
 }
 
-float3 arriC800FromLinear(float3 color) {
+float arriC1000FromLinear(float x, float cut = 0.011361f) {
+  const float a = 5.555556f;
+  const float b = 0.047996f;
+  const float c = 0.244161f;
+  const float d = 0.386036f;
+  const float e = 5.301883f;
+  const float f = 0.092814f;
+  return (!cut || x > cut)
+         ? (c * log10((a * x) + b) + d)
+         : (e * x + f);
+}
+
+float3 arriC800FromLinear(float3 color, float cut = 0.010591f) {
   return float3(
-    arriC800FromLinear(color.r),
-    arriC800FromLinear(color.g),
-    arriC800FromLinear(color.b)
+    arriC800FromLinear(color.r, cut),
+    arriC800FromLinear(color.g, cut),
+    arriC800FromLinear(color.b, cut)
+  );
+}
+
+float3 arriC1000FromLinear(float3 color, float cut = 0.011361f) {
+  return float3(
+    arriC1000FromLinear(color.r, cut),
+    arriC1000FromLinear(color.g, cut),
+    arriC1000FromLinear(color.b, cut)
   );
 }
 

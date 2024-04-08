@@ -1,3 +1,6 @@
+#ifndef SRC_COMMON_LUT_HLSL_
+#define SRC_COMMON_LUT_HLSL_
+
 #include "./color.hlsl"
 
 // https://www.glowybits.com/blog/2016/12/21/ifl_iss_hdr_1/
@@ -36,11 +39,12 @@ float3 sampleLUT(Texture2D lut, SamplerState samplerState, float3 color, float s
     lut.GetDimensions(width, height);
     size = min(width, height);
   }
+  float slice = 1.f / size;
+
   float zPosition = color.z * size - 0.5;
   float zInteger = floor(zPosition);
   half fraction = zPosition - zInteger;
 
-  float slice = 1.f / size;
   float2 uv = float2(
     (color.x + zInteger) * slice,
     color.y
@@ -50,6 +54,39 @@ float3 sampleLUT(Texture2D lut, SamplerState samplerState, float3 color, float s
 
   uv.x += slice;
   float3 color1 = lut.SampleLevel(samplerState, uv, 0).rgb;
+
+  return lerp(color0, color1, fraction);
+}
+
+float3 sampleLUTAlt(Texture2D lut, SamplerState samplerState, float3 color, float size = 0) {
+  if (size == 0) {
+    // Removed by compiler if specified
+    float width;
+    float height;
+    lut.GetDimensions(width, height);
+    size = min(width, height);
+  }
+
+  float texelCount = size - 1.f;
+  float lastPosition = texelCount / size;
+  float slice = 1.f / size;
+  float halfSlice = slice / 2.f;
+
+  float zPosition = color.z * texelCount;
+  float zInteger = floor(zPosition);
+  float fraction = zPosition - zInteger;
+
+  float offset = color.r * lastPosition / size;
+
+  float2 uv = float2(
+    zInteger * slice + offset,
+    lastPosition * color.g
+  );
+
+  float2 uv0 = uv.xy + float2(halfSlice / size, halfSlice);
+  float2 uv1 = uv.xy + float2((1.f + halfSlice) / size, halfSlice);
+  float3 color0 = lut.SampleLevel(samplerState, uv0, 0).rgb;
+  float3 color1 = lut.SampleLevel(samplerState, uv1, 0).rgb;
 
   return lerp(color0, color1, fraction);
 }
@@ -148,3 +185,5 @@ float3 recolorUnclampedLUT(float3 originalLinear, float3 detintedLinear) {
   outputLinear = mul(AP1_2_BT709_MAT, outputLinear);  // Convert BT709
   return outputLinear;
 }
+
+#endif  // SRC_COMMON_LUT_HLSL_
