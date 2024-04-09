@@ -565,7 +565,8 @@ float4 tonemap(bool isACESMode = false) {
 
       outputRGB = odtUnknown;
     } else {
-      float vanillaMidGray = midGrayNits / 100.f;
+      // Vanilla ACES balances around midgray, use paperwhite boost instead
+      float vanillaMidGray = 2.3f * (midGrayNits / 100.f);
 
       bool useD60 = (injectedData.colorGradeWhitePoint == -1.0f || (injectedData.colorGradeWhitePoint == 0.f && cb6[28u].z == 0.f));
 
@@ -581,7 +582,7 @@ float4 tonemap(bool isACESMode = false) {
         float acesMin = 0.0001f / acesScaling;
         float acesMax = 48.f * injectedData.toneMapPeakNits / paperWhite;
 
-        if (injectedData.toneMapGammaCorrection) {
+        if (injectedData.toneMapGammaCorrection == 2.f) {
           acesMax = linearFromSRGB(pow(acesMax * acesScaling / CDPR_WHITE, 1.f / 2.2f));
           acesMin = linearFromSRGB(pow(acesMin * acesScaling / CDPR_WHITE, 1.f / 2.2f));
           acesMax /= acesScaling / CDPR_WHITE;
@@ -616,21 +617,20 @@ float4 tonemap(bool isACESMode = false) {
 
         const float OPENDRT_MID_GRAY = 11.696f / 100.f;
         float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / OPENDRT_MID_GRAY);
-        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
+        float openDRTMax = (injectedData.toneMapPeakNits);
         if (injectedData.toneMapGammaCorrection == 2.f) {
-          hdrScale = linearFromSRGB(pow(hdrScale * paperWhite / CDPR_WHITE, 1.f / 2.2f));
-          hdrScale /= (paperWhite / CDPR_WHITE);
+          openDRTMax = linearFromSRGB(pow(injectedData.toneMapPeakNits / CDPR_WHITE, 1.f / 2.2f));
+          openDRTMax *= CDPR_WHITE;
         }
         outputRGB = open_drt_transform(
           outputRGB,
-          100.f * hdrScale,
+          100.f * (openDRTMax / paperWhite),
           0,
           1.f,
           0
         );
         outputRGB = mul(outputMatrix, outputRGB);
-        outputRGB *= hdrScale;
-        outputRGB *= paperWhite;
+        outputRGB *= openDRTMax;
       }
       outputRGB /= CDPR_WHITE;
     }
