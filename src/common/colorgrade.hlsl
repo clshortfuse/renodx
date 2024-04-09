@@ -51,7 +51,7 @@ float3 apply_user_shadows(float3 rgb, float shadows = 1.f) {
   float3 signs = sign(rgb);
   rgb = abs(rgb);
   rgb = shd_con(rgb, -1.8f, pow(2.f - 2 * min(shadows, 1.f), 4.f) * 0.025);  // 0.04 @ 1
-  rgb = shd_con(rgb, -0.50f * shadows * shadows * (1.f - shadows), 0.25f);             // 0 @ 1
+  rgb = shd_con(rgb, -0.50f * shadows * shadows * (1.f - shadows), 0.25f);   // 0 @ 1
   rgb *= signs;
   return rgb;
 }
@@ -64,7 +64,11 @@ float3 apply_user_highlights(float3 rgb, float highlights = 1.f) {
 float3 applySaturation(float3 bt709, float saturation = 1.f) {
   float3 okLCh = okLChFromBT709(bt709);
   okLCh[1] *= saturation;
-  return bt709FromOKLCh(okLCh);
+  float3 color = bt709FromOKLCh(okLCh);
+  color = mul(BT709_2_AP1_MAT, color);  // Convert to AP1
+  color = max(0, color);                // Clamp to AP1
+  color = mul(AP1_2_BT709_MAT, color);  // Convert BT709
+  return color;
 }
 
 float3 applyUserColorGrading(
