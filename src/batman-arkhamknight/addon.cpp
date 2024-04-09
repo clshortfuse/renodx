@@ -15,9 +15,9 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-#include "../common/userSettingUtil.hpp"
 #include "../common/shaderReplaceMod.hpp"
 #include "../common/swapChainUpgradeMod.hpp"
+#include "../common/userSettingUtil.hpp"
 #include "./shared.h"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Batman: Arkham Knight";
@@ -184,6 +184,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       if (!reshade::register_addon(hModule)) return FALSE;
 
       UserSettingUtil::useRenoDXHelper = true;
+      SwapChainUpgradeMod::preventFullScreen = false;
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
         {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float, 3}
       );

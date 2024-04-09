@@ -48,6 +48,7 @@ namespace SwapChainUpgradeMod {
 
   static bool upgradeResourceViews = true;
   static bool useSharedDevice = false;
+  static bool preventFullScreen = true;
 
   static reshade::api::effect_runtime* currentEffectRuntime = nullptr;
   static reshade::api::color_space currentColorSpace = reshade::api::color_space::unknown;
@@ -425,6 +426,7 @@ namespace SwapChainUpgradeMod {
           desc.format = targetFormat;
           break;
         case reshade::api::format::b10g10r10a2_unorm:
+        case reshade::api::format::r10g10b10a2_unorm:
           desc.format = targetFormat;
           break;
         default:
@@ -520,26 +522,43 @@ namespace SwapChainUpgradeMod {
   }
 
   static bool on_set_fullscreen_state(reshade::api::swapchain* swapchain, bool fullscreen, void* hmonitor) {
-    if (!fullscreen) return false;
-    HWND outputWindow = (HWND)swapchain->get_hwnd();
-    if (outputWindow) {
-      auto backBufferDesc = swapchain->get_device()->get_resource_desc(swapchain->get_back_buffer(0));
-      // HMONITOR monitor = (HMONITOR)hmonitor;
-      uint32_t screenWidth = GetSystemMetrics(SM_CXSCREEN);
-      uint32_t screenHeight = GetSystemMetrics(SM_CYSCREEN);
-      uint32_t textureWidth = backBufferDesc.texture.width;
-      uint32_t textureHeight = backBufferDesc.texture.height;
-      uint32_t top = floor((screenHeight - textureHeight) / 2.f);
-      uint32_t left = floor((screenWidth - textureWidth) / 2.f);
-      reshade::log_message(reshade::log_level::info, "Preventing fullscreen");
-      SetWindowLongPtr(outputWindow, GWL_STYLE, WS_VISIBLE | WS_POPUP);
-      SetWindowPos(outputWindow, HWND_TOP, left, top, textureWidth, textureHeight, SWP_FRAMECHANGED);
-      BringWindowToTop(outputWindow);
-      SetForegroundWindow(outputWindow);
-      SetFocus(outputWindow);
+    auto device = swapchain->get_device();
+    if (device) {
+      auto &privateData = device->get_private_data<device_data>();
+      reshade::log_message(reshade::log_level::debug, "set_fullscreen_state(reset resource upgrade)");
+      privateData.resourceUpgradeFinished = false;
+      uint32_t len = swapChainUpgradeTargets.size();
+      // Reset
+      for (uint32_t i = 0; i < len; i++) {
+        SwapChainUpgradeMod::SwapChainUpgradeTarget* target = &swapChainUpgradeTargets.data()[i];
+        target->_counted = 0;
+        target->completed = false;
+      }
     }
 
-    return true;
+    if (!fullscreen) return false;
+
+    if (preventFullScreen) {
+      HWND outputWindow = (HWND)swapchain->get_hwnd();
+      if (outputWindow) {
+        auto backBufferDesc = swapchain->get_device()->get_resource_desc(swapchain->get_back_buffer(0));
+        // HMONITOR monitor = (HMONITOR)hmonitor;
+        uint32_t screenWidth = GetSystemMetrics(SM_CXSCREEN);
+        uint32_t screenHeight = GetSystemMetrics(SM_CYSCREEN);
+        uint32_t textureWidth = backBufferDesc.texture.width;
+        uint32_t textureHeight = backBufferDesc.texture.height;
+        uint32_t top = floor((screenHeight - textureHeight) / 2.f);
+        uint32_t left = floor((screenWidth - textureWidth) / 2.f);
+        reshade::log_message(reshade::log_level::info, "Preventing fullscreen");
+        SetWindowLongPtr(outputWindow, GWL_STYLE, WS_VISIBLE | WS_POPUP);
+        SetWindowPos(outputWindow, HWND_TOP, left, top, textureWidth, textureHeight, SWP_FRAMECHANGED);
+        BringWindowToTop(outputWindow);
+        SetForegroundWindow(outputWindow);
+        SetFocus(outputWindow);
+      }
+      return true;
+    }
+    return false;
   }
 
   static void setUseHDR10(bool value = true) {
