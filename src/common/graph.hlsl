@@ -11,11 +11,8 @@ struct DrawToneMapperParams {
   float scale;
 };
 
-DrawToneMapperParams DrawToneMapperStart(float2 position, float3 inputColor, Texture2D textureUntonemapped, float peakNits, float scale = 80.f) {
+DrawToneMapperParams DrawToneMapperStart(float2 position, float3 inputColor, float width, float height, float peakNits, float scale = 80.f) {
   DrawToneMapperParams dtmParams = {false, -1u, 0, inputColor, peakNits, scale};
-  float width;
-  float height;
-  textureUntonemapped.GetDimensions(width, height);
   int2 offset = int2(
     position.x - (width - DrawToneMapperSize),
     (DrawToneMapperSize)-position.y
@@ -42,6 +39,20 @@ DrawToneMapperParams DrawToneMapperStart(float2 position, float3 inputColor, Tex
     }
   }
   return dtmParams;
+}
+
+DrawToneMapperParams DrawToneMapperStart(float2 position, float3 inputColor, Texture2D<float3> textureUntonemapped, float peakNits, float scale = 80.f) {
+  float width;
+  float height;
+  textureUntonemapped.GetDimensions(width, height);
+  return DrawToneMapperStart(position, inputColor, width, height, peakNits, scale);
+}
+
+DrawToneMapperParams DrawToneMapperStart(float2 position, float3 inputColor, Texture2D<float4> textureUntonemapped, float peakNits, float scale = 80.f) {
+  float width;
+  float height;
+  textureUntonemapped.GetDimensions(width, height);
+  return DrawToneMapperStart(position, inputColor, width, height, peakNits, scale);
 }
 
 float3 DrawToneMapperEnd(float3 inputColor, inout DrawToneMapperParams dtmParams) {

@@ -41,6 +41,7 @@ struct SPIRV_Cross_Output {
 };
 
 
+#define DRAW_TONEMAPPER 0
 
 float3 composite(bool useTexArray = false) {
   const float cb6_10z = cb6[10u].z;  // Bloom width
@@ -108,7 +109,7 @@ float3 composite(bool useTexArray = false) {
   }
 
 #if DRAW_TONEMAPPER
-  DrawToneMapperParams dtmParams = DrawToneMapperStart(gl_FragCoord.xy, outputColor, injectedData.peakNits, 100.f);
+  DrawToneMapperParams dtmParams = DrawToneMapperStart(gl_FragCoord.xy, outputColor, textureUntonemapped, injectedData.toneMapPeakNits, 100.f);
   outputColor = dtmParams.outputColor;
 #endif
 
