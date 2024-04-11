@@ -38,12 +38,12 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "toneMapType",
     .binding = &shaderInjection.toneMapType,
     .valueType = UserSettingUtil::UserSettingValueType::integer,
-    .defaultValue = 2.f,
+    .defaultValue = 4.f,
     .canReset = false,
     .label = "Tone Mapper",
     .section = "Tone Mapping",
     .tooltip = "Sets the tone mapper type",
-    .labels = {"Vanilla", "None", "ACES", "OpenDRT"}
+    .labels = {"Vanilla", "None", "ACES", "OpenDRT", "RenoDX"}
   },
   new UserSettingUtil::UserSetting {
     .key = "toneMapPeakNits",
@@ -82,7 +82,7 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "colorGradeExposure",
     .binding = &shaderInjection.colorGradeExposure,
     .defaultValue = 1.f,
-    .label = "Expsoure",
+    .label = "Exposure",
     .section = "Color Grading",
     .max = 10.f,
     .format = "%.2f"
@@ -168,6 +168,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("toneMapPeakNits", 203.f);
   UserSettingUtil::updateUserSetting("toneMapGameNits", 203.f);
   UserSettingUtil::updateUserSetting("toneMapUINits", 203.f);
+  UserSettingUtil::updateUserSetting("colorGradeExposure", 1.f);
   UserSettingUtil::updateUserSetting("colorGradeHighlights", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);

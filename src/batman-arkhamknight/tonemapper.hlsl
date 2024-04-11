@@ -128,6 +128,49 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
     } else {
       outputColor = hdrColor;
     }
+  } else if (injectedData.toneMapType == 4.f) {
+    float3 hdrColor = outputColor;
+    hdrColor = renodrt(
+      hdrColor,
+      injectedData.toneMapPeakNits / injectedData.toneMapGameNits * 100.f,
+      0.18f,
+      vanillaMidGray * 100.f,
+      1.2f,
+      0.0f
+    );
+
+    if (injectedData.colorGradeLUTStrength) {
+      float3 sdrColor = renodrt(
+        untonemapped,
+        100.f,
+        0.18f,
+        vanillaMidGray * 100.f,
+        1.2f,
+        0.0f
+      );
+      sdrColor = saturate(sdrColor);
+
+      float3 sdrGammaColor = pow(sdrColor, 1.f / 2.2f);  // gamma
+      float3 luttedColor = sampleLUTAlt(lutTexture, lutSampler, sdrGammaColor, 16);
+      luttedColor = pow(luttedColor, 2.2f);  // linear
+
+      float scaledRatio = 1.f;
+      float outputY = yFromBT709(abs(luttedColor));
+      float hdrY = yFromBT709(abs(hdrColor));
+      float sdrY = yFromBT709(abs(sdrColor));
+      if (hdrY < sdrY) {
+        // If substracting (user contrast or paperwhite) scale down instead
+        scaledRatio = hdrY / sdrY;
+      } else {
+        float deltaY = hdrY - sdrY;
+        float newY = outputY + max(0, deltaY);  // deltaY may be NaN?
+        scaledRatio = outputY > 0 ? (newY / outputY) : 0;
+      }
+      luttedColor *= scaledRatio;
+      outputColor = lerp(outputColor, luttedColor, injectedData.colorGradeLUTStrength);
+    } else {
+      outputColor = hdrColor;
+    }
   }
 
   return outputColor;

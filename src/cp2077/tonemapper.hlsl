@@ -6,6 +6,7 @@
 #include "../common/color.hlsl"
 #include "../common/colorgrade.hlsl"
 #include "../common/lut.hlsl"
+#include "../common/tonemap.hlsl"
 #include "./aces_cdpr.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
@@ -398,6 +399,8 @@ float4 tonemap(bool isACESMode = false) {
     outputRGB = lerp(inputColor, adjustedColor, injectedData.colorGradeSceneGrading);
   }
 
+  outputRGB = max(0, outputRGB);
+
   // outputRGB = lerp(inputColor, outputRGB, injectedData.debugValue03);
 
   float exposure = cb6[42u].z;  // "baked with tonemapper midpoint"
@@ -575,7 +578,7 @@ float4 tonemap(bool isACESMode = false) {
 
       if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
         const float ACES_MID_GRAY = 0.10f;
-        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / ACES_MID_GRAY);
+        float paperWhite = (100.f / 203.f) * injectedData.toneMapGameNits * (vanillaMidGray / ACES_MID_GRAY);
 
         float acesScaling = paperWhite / 48.f;
 
@@ -616,7 +619,7 @@ float4 tonemap(bool isACESMode = false) {
         outputRGB = mul(inputMatrix, outputRGB);
 
         const float OPENDRT_MID_GRAY = 11.696f / 100.f;
-        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / OPENDRT_MID_GRAY);
+        float paperWhite = (100.f / 203.f) * injectedData.toneMapGameNits * (vanillaMidGray / OPENDRT_MID_GRAY);
         float openDRTMax = (injectedData.toneMapPeakNits);
         if (injectedData.toneMapGammaCorrection == 2.f) {
           openDRTMax = linearFromSRGB(pow(injectedData.toneMapPeakNits / CDPR_WHITE, 1.f / 2.2f));
@@ -631,6 +634,30 @@ float4 tonemap(bool isACESMode = false) {
         );
         outputRGB = mul(outputMatrix, outputRGB);
         outputRGB *= openDRTMax;
+      } else if (toneMapperType == 4.f) {
+        if (useD60) {
+          outputRGB = mul(BT709_2_BT709D60_MAT, outputRGB);
+        }
+
+        float paperWhite = injectedData.toneMapGameNits;
+
+        float renoDRTMax = injectedData.toneMapPeakNits;
+        if (injectedData.toneMapGammaCorrection == 2.f) {
+          renoDRTMax = linearFromSRGB(pow(injectedData.toneMapPeakNits / CDPR_WHITE, 1.f / 2.2f));
+          renoDRTMax *= CDPR_WHITE;
+        }
+
+        outputRGB = renodrt(
+          outputRGB,
+          renoDRTMax / paperWhite * 100.f,
+          0.18f,
+          midGrayNits,
+          1.6f,
+          0.0f,
+          1.f,
+          1.2f
+        );
+        outputRGB *= paperWhite;
       }
       outputRGB /= CDPR_WHITE;
     }

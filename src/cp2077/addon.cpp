@@ -69,7 +69,7 @@ UserSettingUtil::UserSettings userSettings = {
     .label = "Tone Mapper",
     .section = "Tone Mapping",
     .tooltip = "Sets the tone mapper type",
-    .labels = {"Vanilla", "None", "ACES", "OpenDRT"}
+    .labels = {"Vanilla", "None", "ACES", "OpenDRT", "RenoDX"}
   },
   new UserSettingUtil::UserSetting {
     .key = "toneMapPeakNits",
