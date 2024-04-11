@@ -171,8 +171,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
 
+      // Always upgrade first of format
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
-        {reshade::api::format::r32_g8_typeless, reshade::api::format::r16g16b16a16_float}
+        {reshade::api::format::r8g8b8a8_typeless, reshade::api::format::r16g16b16a16_float, 0, true}
       );
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
         {reshade::api::format::r8g8b8a8_typeless, reshade::api::format::r16g16b16a16_float}
