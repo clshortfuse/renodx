@@ -31,7 +31,6 @@ float3 uncharted2Tonemap(float x) {
   return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
 }
 
-
 float3 renodrt(
   float3 bt709,
   float peakNits = 1000.f / 203.f * 100.f,
@@ -40,7 +39,8 @@ float3 renodrt(
   float contrast = 1.1f,
   float shadow = 0.01f,
   float dechroma = 1.f,
-  float saturation = 1.f
+  float saturation = 1.f,
+  float highlightBoost = 1.f
 ) {
   float n_r = 100.f;
   float n = 1000.f;
@@ -71,9 +71,16 @@ float3 renodrt(
 
   float lum = yFromBT709(abs(bt709));
 
+  float normalizedLum = lum / 0.18f;
+  float boostedLum = pow(normalizedLum, highlightBoost);
+  boostedLum = lerp(normalizedLum, boostedLum, saturate(normalizedLum));
+  boostedLum *= 0.18f;
+  bt709 *= (lum > 0 ? (boostedLum / lum) : 0);
+  lum = boostedLum;
+
   float m_0 = (n / n_r);
   float m_1 = 0.5 * (m_0 + sqrt(m_0 * (m_0 + (4.0 * t_1))));
-  float r_hit = r_hit_min + (r_hit_max * (log(m_0) / log(10000.0 / 100.0)));
+  float r_hit = r_hit_min + ((r_hit_max - r_hit_min) * (log(m_0) / log(10000.0 / 100.0)));
 
   float u = pow((r_hit / m_1) / ((r_hit / m_1) + 1.0), g);
   float m = m_1 / u;
@@ -106,4 +113,3 @@ float3 renodrt(
   color = mul(AP1_2_BT709_MAT, color);  // Convert BT709
   return color;
 }
-

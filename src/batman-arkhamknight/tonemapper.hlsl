@@ -135,8 +135,11 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
       injectedData.toneMapPeakNits / injectedData.toneMapGameNits * 100.f,
       0.18f,
       vanillaMidGray * 100.f,
-      1.2f,
-      0.0f
+      1.12f,
+      0,
+      1.f,  // dechroma
+      1.f,  // sat
+      1.2f  //highlight boost
     );
 
     if (injectedData.colorGradeLUTStrength) {
@@ -145,8 +148,11 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
         100.f,
         0.18f,
         vanillaMidGray * 100.f,
-        1.2f,
-        0.0f
+        1.12f,
+        0,
+        1.f,  // dechroma
+        1.f,  // sat
+        1.2f  //highlight boost
       );
       sdrColor = saturate(sdrColor);
 
