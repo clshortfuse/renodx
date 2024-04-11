@@ -28,6 +28,7 @@ namespace SwapChainUpgradeMod {
     reshade::api::format oldFormat = reshade::api::format::r8g8b8a8_unorm;
     reshade::api::format newFormat = reshade::api::format::r16g16b16a16_float;
     int32_t index = -1;
+    bool ignoreSize = false;
     uint32_t _counted = 0;
     bool completed = false;
   };
@@ -295,12 +296,6 @@ namespace SwapChainUpgradeMod {
       return false;
     }
     auto bufferDesc = privateData.deviceBackBufferDesc;
-    if (desc.texture.height != bufferDesc.texture.height) {
-      return false;
-    }
-    if (desc.texture.width != bufferDesc.texture.width) {
-      return false;
-    }
 
     uint32_t len = swapChainUpgradeTargets.size();
 
@@ -312,7 +307,7 @@ namespace SwapChainUpgradeMod {
       SwapChainUpgradeMod::SwapChainUpgradeTarget* target = &swapChainUpgradeTargets.data()[i];
       std::stringstream s;
       if (target->completed) continue;
-      if (oldFormat == target->oldFormat) {
+      if (oldFormat == target->oldFormat && (target->ignoreSize || ((desc.texture.height == bufferDesc.texture.height) && (desc.texture.width == bufferDesc.texture.width)))) {
         s << "createResource(counting target"
           << ", format: " << to_string(target->oldFormat)
           << ", index: " << target->index
