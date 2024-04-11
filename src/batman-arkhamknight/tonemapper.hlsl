@@ -7,7 +7,7 @@
 #include "../common/tonemap.hlsl"
 #include "./shared.h"
 
-#define DRAW_TONEMAPPER 0
+#define DRAW_TONEMAPPER 1
 
 float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState lutSampler) {
   float3 outputColor = untonemapped;
@@ -15,7 +15,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   outputColor = applyUserColorGrading(
     outputColor,
     injectedData.colorGradeExposure,
-    injectedData.colorGradeSaturation,
+    injectedData.colorGradeLUTStrength ? 1.f : injectedData.colorGradeSaturation,
     injectedData.colorGradeShadows,
     injectedData.colorGradeHighlights,
     injectedData.colorGradeContrast
@@ -69,6 +69,9 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
       }
       luttedColor *= scaledRatio;
       outputColor = lerp(outputColor, luttedColor, injectedData.colorGradeLUTStrength);
+      if (injectedData.colorGradeSaturation != 1.f) {
+        outputColor = applySaturation(injectedData.colorGradeSaturation);
+      }
     } else {
       outputColor = hdrColor;
     }
@@ -125,6 +128,9 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
       }
       luttedColor *= scaledRatio;
       outputColor = lerp(outputColor, luttedColor, injectedData.colorGradeLUTStrength);
+      if (injectedData.colorGradeSaturation != 1.f) {
+        outputColor = applySaturation(injectedData.colorGradeSaturation);
+      }
     } else {
       outputColor = hdrColor;
     }
@@ -137,7 +143,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
       vanillaMidGray * 100.f,
       1.12f,
       0,
-      1.f,  // dechroma
+      0.f,  // dechroma
       1.f,  // sat
       1.2f  //highlight boost
     );
@@ -150,7 +156,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
         vanillaMidGray * 100.f,
         1.12f,
         0,
-        1.f,  // dechroma
+        0.f,  // dechroma
         1.f,  // sat
         1.2f  //highlight boost
       );
@@ -174,6 +180,9 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
       }
       luttedColor *= scaledRatio;
       outputColor = lerp(outputColor, luttedColor, injectedData.colorGradeLUTStrength);
+      if (injectedData.colorGradeSaturation != 1.f) {
+        outputColor = applySaturation(injectedData.colorGradeSaturation);
+      }
     } else {
       outputColor = hdrColor;
     }

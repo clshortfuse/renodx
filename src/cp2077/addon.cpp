@@ -149,7 +149,17 @@ UserSettingUtil::UserSettings userSettings = {
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-    new UserSettingUtil::UserSetting {
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeDechroma",
+    .binding = &shaderInjection.colorGradeDechroma,
+    .defaultValue = 50.f,
+    .label = "Dechroma",
+    .section = "Color Grading",
+    .tooltip = "Strength of dechroma in highlights",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.01f; }
+  },
+  new UserSettingUtil::UserSetting {
     .key = "colorGradeWhitePoint",
     .binding = &shaderInjection.colorGradeWhitePoint,
     .valueType = UserSettingUtil::UserSettingValueType::integer,
@@ -238,17 +248,6 @@ UserSettingUtil::UserSettings userSettings = {
     .tooltip = "Selects whether to use the vanilla sampling or PQ for the game's internal rendering LUT.",
     .labels = {"Vanilla", "PQ" }
   },
-#ifdef DEBUG_SLIDERS
-  new UserSettingUtil::UserSetting {
-    .key = "debug01",
-    .binding = &shaderInjection.debug01,
-    .defaultValue = 50.f,
-    .label = "Debug 01",
-    .section = "Debug",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.02f; }
-  }
-#endif
 };
 
 // clang-format on
@@ -263,6 +262,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
+  UserSettingUtil::updateUserSetting("colorGradeDechroma", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeWhitePoint", 1);
   UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
   UserSettingUtil::updateUserSetting("colorGradeSceneGrading", 100.f);

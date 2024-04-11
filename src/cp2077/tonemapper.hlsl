@@ -652,9 +652,10 @@ float4 tonemap(bool isACESMode = false) {
           renoDRTMax / paperWhite * 100.f,
           0.18f,
           midGrayNits,
-          1.6f,
-          0.0f,
-          1.f,
+          1.8,
+          0,
+          injectedData.colorGradeDechroma,
+          1.45f,
           1.2f
         );
         outputRGB *= paperWhite;

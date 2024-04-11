@@ -13,8 +13,8 @@ struct ShaderInjectData {
   float colorGradeHighlights;
   float colorGradeShadows;
   float colorGradeContrast;
-
   float colorGradeSaturation;
+  float colorGradeDechroma;
   float colorGradeWhitePoint;
   float colorGradeLUTStrength;
   float colorGradeSceneGrading;
@@ -22,8 +22,8 @@ struct ShaderInjectData {
   float fxBloom;
   float fxVignette;
   float fxFilmGrain;
-  float processingLUTCorrection;
 
+  float processingLUTCorrection;
   float processingLUTOrder;
   float processingInternalSampling;
 };
