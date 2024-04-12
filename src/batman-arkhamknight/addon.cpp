@@ -38,12 +38,12 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "toneMapType",
     .binding = &shaderInjection.toneMapType,
     .valueType = UserSettingUtil::UserSettingValueType::integer,
-    .defaultValue = 4.f,
+    .defaultValue = 3.f,
     .canReset = false,
     .label = "Tone Mapper",
     .section = "Tone Mapping",
     .tooltip = "Sets the tone mapper type",
-    .labels = {"Vanilla", "None", "ACES", "OpenDRT", "RenoDX"}
+    .labels = {"Vanilla", "None", "ACES", "RenoDX"}
   },
   new UserSettingUtil::UserSetting {
     .key = "toneMapPeakNits",
@@ -127,7 +127,7 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "colorGradeLUTStrength",
     .binding = &shaderInjection.colorGradeLUTStrength,
     .defaultValue = 100.f,
-    .label = "LUTStrength",
+    .label = "LUT Strength",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.01f; }

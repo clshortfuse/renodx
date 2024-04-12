@@ -64,12 +64,12 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "toneMapType",
     .binding = &shaderInjection.toneMapType,
     .valueType = UserSettingUtil::UserSettingValueType::integer,
-    .defaultValue = 2.f,
+    .defaultValue = 3.f,
     .canReset = false,
     .label = "Tone Mapper",
     .section = "Tone Mapping",
     .tooltip = "Sets the tone mapper type",
-    .labels = {"Vanilla", "None", "ACES", "OpenDRT", "RenoDX"}
+    .labels = {"Vanilla", "None", "ACES", "RenoDX"}
   },
   new UserSettingUtil::UserSetting {
     .key = "toneMapPeakNits",

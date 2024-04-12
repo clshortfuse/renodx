@@ -342,4 +342,20 @@ float3 bt709FromOKLCh(float3 oklch) {
   return bt709FromOKLab(okLab);
 }
 
+float gammaCorrectEmulate22(float x, bool inverse = false) {
+  if (inverse) {
+    return linearFromSRGB(pow(x, 1.f / 2.2f));
+  } else {
+    return pow(srgbFromLinear(x), 2.2f);
+  }
+}
+
+float3 gammaCorrectEmulate22(float3 color, bool inverse = false) {
+  return float3(
+    gammaCorrectEmulate22(color.r),
+    gammaCorrectEmulate22(color.g),
+    gammaCorrectEmulate22(color.b)
+  );
+}
+
 #endif  // SRC_COMMON_COLOR_HLSL_

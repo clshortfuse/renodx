@@ -1,6 +1,3 @@
-#include "../common/Open_DRT.hlsl"
-#include "../common/aces.hlsl"
-#include "../common/colorgrade.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);

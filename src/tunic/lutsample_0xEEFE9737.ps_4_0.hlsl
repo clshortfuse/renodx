@@ -1,10 +1,8 @@
 // Game Render + LUT
 
-#include "../common/Open_DRT.hlsl"
-#include "../common/aces.hlsl"
 #include "../common/color.hlsl"
 #include "../common/colorgrade.hlsl"
-#include "../common/lut.hlsl"
+#include "../common/tonemap.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t1 : register(t1);
@@ -39,105 +37,50 @@ void main(
   r0.xyz = cb0[6].yyy * r0.xyz;  // scale
   float3 untonemapped = r0.rgb;
 
-  float3 lutInputColor = saturate(untonemapped);
-  r0.xyz = lutInputColor;
-  r0.w = 31 * r0.z;
-  r0.xyz = r0.xyz * float3(0.0302734375, 0.96875, 31) + float3(0.00048828125, 0.015625, 0);
-  r0.w = frac(r0.w);
-  r0.z = r0.z + -r0.w;
-  r0.xy = r0.zz * float2(0.03125, 0) + r0.xy;
-  r1.xy = float2(0.03125, 0) + r0.xy;
-  r2.xyzw = t1.SampleLevel(s1_s, r0.xy, 0).xyzw;
-  r1.xyzw = t1.SampleLevel(s1_s, r1.xy, 0).xyzw;
-  r0.xyz = r1.xyz + -r2.xyz;
-  o0.xyz = r0.www * r0.xyz + r2.xyz;
+  float vanillaMidGray = 0.18f;
 
-  float3 outputColor = max(0, o0.rgb);
-  float3 midGrayGamma = 0.5f;
+  float renoDRTContrast = 1.1f;
+  float renoDRTShadow = 0.f;
+  float renoDRTDechroma = 0.f;
+  float renoDRTSaturation = 1.05f;
+  float renoDRTHighlights = 1.f;
 
-  if (injectedData.processingLUTScaling) {
-    midGrayGamma = t1.SampleLevel(s1_s, float(0.5f).xxx, 0.0f).rgb;
-    float3 unclamped = unclampSDRLUT(
-      outputColor,
-      t1.SampleLevel(s1_s, float(0.f).xxx, 0.0f).rgb,
-      t1.SampleLevel(s1_s, float(1.f).xxx, 0.0f).rgb,
-      midGrayGamma,
-      lutInputColor
-    );
+  ToneMapParams tmParams = {
+    injectedData.toneMapType,
+    injectedData.toneMapPeakNits,
+    injectedData.toneMapGameNits,
+    0,
+    injectedData.colorGradeExposure,
+    injectedData.colorGradeHighlights,
+    injectedData.colorGradeShadows,
+    injectedData.colorGradeContrast,
+    injectedData.colorGradeSaturation,
+    vanillaMidGray,
+    renoDRTContrast,
+    renoDRTShadow,
+    renoDRTDechroma,
+    renoDRTSaturation,
+    renoDRTHighlights
+  };
+  ToneMapLUTParams lutParams = {
+    t1,
+    s1_s,
+    injectedData.colorGradeLUTStrength,
+    injectedData.colorGradeLUTScaling,  // Only scale black
+    TONE_MAP_LUT_TYPE__SRGB,
+    TONE_MAP_LUT_TYPE__SRGB,
+    32.f,         // size
+    float(0).xxx  // precompute
+  };
 
-    outputColor = pow(outputColor, 2.2f);
-    float3 recolored = recolorUnclampedLUT(
-      outputColor,
-      sign(unclamped) * pow(abs(unclamped), 2.2f)
-    );
-    outputColor = lerp(outputColor, recolored, injectedData.processingLUTScaling);
-  } else {
-    outputColor = pow(outputColor, 2.2f);
+  if (injectedData.toneMapType == 0.f) {
+    untonemapped = saturate(untonemapped);
   }
 
-  untonemapped = pow(max(0, untonemapped), 2.2f);
+  untonemapped = max(0, linearFromSRGB(untonemapped));
 
-  outputColor = lerp(untonemapped, outputColor, injectedData.colorGradeLUTStrength);
+  float3 outputColor = toneMap(untonemapped, tmParams, lutParams);
 
-  if (injectedData.toneMapType == 0) {
-    // outputColor *= injectedData.toneMapGameNits / 80.f;
-    // noop
-  } else {
-    if (injectedData.toneMapType == 1.f) {
-      outputColor = untonemapped;  // Untonemapped
-      // outputColor *= injectedData.toneMapGameNits / 80.f;
-    } else {
-      float luttedColor = outputColor;
-
-      float inputY = yFromBT709(untonemapped);
-      float outputY = yFromBT709(outputColor);
-      outputY = lerp(inputY, outputY, saturate(inputY));
-      outputColor *= (outputY ? inputY / outputY : 1);
-
-      outputColor = applyUserColorGrading(
-        outputColor,
-        1.f,
-        injectedData.colorGradeSaturation,
-        injectedData.colorGradeShadows,
-        injectedData.colorGradeHighlights,
-        injectedData.colorGradeContrast
-      );
-
-      float vanillaMidGray = pow(midGrayGamma, 2.2f);
-      if (injectedData.toneMapType == 2.f) {
-        const float ACES_MID_GRAY = 0.10f;
-        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / ACES_MID_GRAY);
-        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
-        outputColor = aces_rgc_rrt_odt(
-          outputColor,
-          0.0001f / (paperWhite / 48.f),
-          48.f * hdrScale
-        );
-        outputColor /= 48.f;
-        outputColor *= (vanillaMidGray / ACES_MID_GRAY);
-
-      } else if (injectedData.toneMapType == 3.f) {
-        const float OPENDRT_MID_GRAY = 11.696f / 100.f;
-        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / OPENDRT_MID_GRAY);
-        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
-        outputColor = mul(BT709_2_DISPLAYP3_MAT, outputColor);
-        outputColor = max(0, outputColor);
-        outputColor = open_drt_transform_bt709(
-          outputColor,
-          100.f * hdrScale,
-          0,
-          1.f,
-          0
-        );
-        outputColor = mul(DISPLAYP3_2_BT709_MAT, outputColor);
-        outputColor *= hdrScale;
-        outputColor *= (vanillaMidGray / OPENDRT_MID_GRAY);
-      }
-      // outputColor = mul(BT2020_2_BT709_MAT, outputColor);
-      outputColor *= injectedData.toneMapGameNits / 203.f;
-    }
-    // Send as 2.2 numbers
-  }
   outputColor = sign(outputColor) * pow(abs(outputColor), 1.f / 2.2f);
 
   o0.rgb = outputColor.rgb;

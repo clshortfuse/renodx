@@ -8,10 +8,16 @@ struct ShaderInjectData {
   float toneMapPeakNits;
   float toneMapGameNits;
   float toneMapUINits;
+  float toneMapGammaCorrection;
+  float colorGradeExposure;
   float colorGradeHighlights;
   float colorGradeShadows;
   float colorGradeContrast;
   float colorGradeSaturation;
+  float colorGradeLUTStrength;
+  float colorGradeLUTScaling;
+  float fxBloom;
+  float fxVignette;
 };
 
 #endif  // SRC_SEAOFSTARS_SHARED_H_

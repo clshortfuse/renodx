@@ -1,4 +1,7 @@
-#include "./color.hlsl"
+#include "./aces.hlsl"
+#include "./colorgrade.hlsl"
+#include "./lut.hlsl"
+#include "./renodrt.hlsl"
 
 // https://www.glowybits.com/blog/2016/12/21/ifl_iss_hdr_1/
 float3 RgbAcesHdrSrgb(float3 x) {
@@ -31,86 +34,258 @@ float3 uncharted2Tonemap(float x) {
   return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
 }
 
-float3 renodrt(
-  float3 bt709,
-  float peakNits = 1000.f / 203.f * 100.f,
-  float sceneGray = 0.18f,
-  float outputGrayNits = 10.f,
-  float contrast = 1.1f,
-  float shadow = 0.01f,
-  float dechroma = 0.5f,
-  float saturation = 1.f,
-  float highlightBoost = 1.f
-) {
-  float n_r = 100.f;
-  float n = 1000.f;
+struct ToneMapParams {
+  float type;
+  float peakNits;
+  float gameNits;
+  float gammaCorrection;
+  float exposure;
+  float highlights;
+  float shadows;
+  float contrast;
+  float saturation;
+  float vanillaMidGray;
+  float renoDRTContrast;
+  float renoDRTShadow;
+  float renoDRTDechroma;
+  float renoDRTSaturation;
+  float renoDRTHighlights;
+};
 
-  // drt cam
-  // n_r = 100
-  // g = 1.15
-  // c = 0.18
-  // c_d = 10.013
-  // w_g = 0.14
-  // t_1 = 0.04
-  // r_hit_min = 128
-  // r_hit_max = 896
+struct ToneMapLUTParams {
+  Texture2D lutTexture;
+  SamplerState lutSampler;
+  float strength;
+  float scaling;
+  uint inputType;
+  uint outputType;
+  float size;
+  float3 precompute;
+};
 
-  float g = 1.1;     // gamma/contrast
-  float c = 0.18;    // scene-referred gray
-  float c_d = 10;    // output gray in nits
-  float w_g = 0.0;   // gray change
-  float t_1 = 0.01;  // shadow toe
-  float r_hit_min = 128;
-  float r_hit_max = 256;
+#define TONE_MAP_TYPE__VANILLA 0
+#define TONE_MAP_TYPE__NONE    1
+#define TONE_MAP_TYPE__ACES    2
+#define TONE_MAP_TYPE__RENODRT 3
 
-  g = contrast;
-  c = sceneGray;
-  c_d = outputGrayNits;
-  n = peakNits;
-  t_1 = shadow;
+#define TONE_MAP_LUT_TYPE__LINEAR            0u
+#define TONE_MAP_LUT_TYPE__SRGB              1u
+#define TONE_MAP_LUT_TYPE__2_2               2u
+#define TONE_MAP_LUT_TYPE__ARRI_C800         3u
+#define TONE_MAP_LUT_TYPE__ARRI_C1000        4u
+#define TONE_MAP_LUT_TYPE__ARRI_C800_NO_CUT  5u
+#define TONE_MAP_LUT_TYPE__ARRI_C1000_NO_CUT 6u
 
-  float lum = yFromBT709(abs(bt709));
-  float3 originalLCh = okLChFromBT709(bt709);
+float3 renoDRTToneMap(float3 color, ToneMapParams params, bool sdr = false) {
+  float renoDRTMax = sdr ? 100.f : params.peakNits / params.gameNits;
+  if (!sdr && params.gammaCorrection) {
+    renoDRTMax = gammaCorrectEmulate22(renoDRTMax, true);
+  }
 
-  float normalizedLum = lum / 0.18f;
-  float boostedLum = pow(normalizedLum, highlightBoost);
-  boostedLum = lerp(normalizedLum, boostedLum, saturate(normalizedLum));
-  boostedLum *= 0.18f;
-  bt709 *= (lum > 0 ? (boostedLum / lum) : 0);
-  lum = boostedLum;
+  return renodrt(
+    color,
+    renoDRTMax * 100.f,
+    0.18f,
+    params.vanillaMidGray * 100.f,
+    params.renoDRTContrast,
+    params.renoDRTShadow,
+    params.renoDRTDechroma,
+    params.renoDRTSaturation,
+    params.renoDRTHighlights
+  );
+}
 
-  float m_0 = (n / n_r);
-  float m_1 = 0.5 * (m_0 + sqrt(m_0 * (m_0 + (4.0 * t_1))));
-  float r_hit = r_hit_min + ((r_hit_max - r_hit_min) * (log(m_0) / log(10000.0 / 100.0)));
+float3 acesToneMap(float3 color, ToneMapParams params, bool sdr = false) {
+  const float ACES_MID_GRAY = 0.10f;
+  float paperWhite = (sdr ? 100.f : params.gameNits) * (params.vanillaMidGray / ACES_MID_GRAY);
 
-  float u = pow((r_hit / m_1) / ((r_hit / m_1) + 1.0), g);
-  float m = m_1 / u;
-  float w_i = log(n / 100.0) / log(2.0);
-  float c_t = (c_d / n_r) * (1.0 + (w_i * w_g));
-  float g_ip = 0.5 * (c_t + sqrt(c_t * (c_t + (4.0 * t_1))));
-  float g_ipp2 = -m_1 * pow(g_ip / m, 1.0 / g) / (pow(g_ip / m, 1.0 / g) - 1.0);
-  float w_2 = c / g_ipp2;
-  float s_2 = w_2 * m_1;
-  float u_2 = pow((r_hit / m_1) / ((r_hit / m_1) + w_2), g);
-  float m_2 = m_1 / u_2;
+  float acesScaling = paperWhite / 48.f;
+  float acesMin = 0.0001f / acesScaling;
+  float acesMax = params.peakNits / paperWhite;
 
-  float ts = pow(max(0, lum) / (lum + s_2), g) * m_2;
+  if (!sdr && params.gammaCorrection) {
+    float scaling = params.gammaCorrection;
+    acesMax = gammaCorrectEmulate22(acesMax, true);
+    acesMin = gammaCorrectEmulate22(acesMin, true);
+  }
 
-  float flared = max(0, (ts * ts) / (ts + t_1));
-
-  float newY = clamp(flared, 0, m_0);
-
-  float3 outputColor = bt709 * (lum > 0 ? (newY / lum) : 0);
-
-  float3 newLCh = okLChFromBT709(outputColor);
-  newLCh[1] = lerp(newLCh[1], 0.f, saturate(pow(lum / (10000.f / 100.f), (1.f - dechroma))));
-  newLCh[1] *= saturation;
-  newLCh[2] = originalLCh[2];  // hue correction
-
-  // newLCh[1] *= saturation;
-  float3 color = bt709FromOKLCh(newLCh);
-  color = mul(BT709_2_AP1_MAT, color);  // Convert to AP1
-  color = max(0, color);                // Clamp to AP1
-  color = mul(AP1_2_BT709_MAT, color);  // Convert BT709
+  color = aces_rgc_rrt_odt(
+    color,
+    acesMin,
+    acesMax * 48.f
+  );
+  color *= (params.vanillaMidGray / ACES_MID_GRAY) / 48.f;
   return color;
+}
+
+float3 toneMapUpgrade(float3 hdrColor, float3 sdrColor, float3 lutColor, float lutStrength) {
+  float scaledRatio = 1.f;
+  float hdrY = yFromBT709(abs(hdrColor));
+  float sdrY = yFromBT709(abs(sdrColor));
+  float lutY = yFromBT709(abs(lutColor));
+  if (hdrY < sdrY) {
+    // If substracting (user contrast or paperwhite) scale down instead
+    scaledRatio = hdrY / sdrY;
+  } else {
+    float deltaY = hdrY - sdrY;
+    float newY = lutY + max(0, deltaY);  // deltaY may be NaN?
+    scaledRatio = lutY > 0 ? (newY / lutY) : 0;
+  }
+  float3 scaledColor = lutColor * scaledRatio;
+  return lerp(hdrColor, scaledColor, lutStrength);
+}
+
+float3 toneMap(float3 untonemapped, ToneMapParams params) {
+  float3 outputColor = untonemapped;
+
+  outputColor = applyUserColorGrading(
+    outputColor,
+    params.exposure,
+    params.saturation,
+    params.shadows,
+    params.highlights,
+    params.contrast
+  );
+  if (params.type == 2.f) {
+    outputColor = acesToneMap(outputColor, params);
+  } else if (params.type == 3.f) {
+    outputColor = renoDRTToneMap(outputColor, params);
+  }
+  return outputColor;
+}
+
+float3 sampleLUTColor(float3 color, ToneMapLUTParams lutParams) {
+  if (lutParams.precompute.x) {
+    return sampleLUT(
+      lutParams.lutTexture,
+      lutParams.lutSampler,
+      color,
+      lutParams.precompute
+    );
+  }
+  return sampleLUT(
+    lutParams.lutTexture,
+    lutParams.lutSampler,
+    color,
+    lutParams.size
+  );
+}
+
+float3 convertLUTInput(float3 color, ToneMapLUTParams lutParams) {
+  if (lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB) {
+    color = srgbFromLinear(saturate(color));
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__2_2) {
+    color = pow(saturate(color), 1.f / 2.2f);
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__ARRI_C800) {
+    color = arriC800FromLinear(color);
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__ARRI_C1000) {
+    color = arriC1000FromLinear(color);
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__ARRI_C800_NO_CUT) {
+    color = arriC800FromLinear(color, 0);
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__ARRI_C1000_NO_CUT) {
+    color = arriC1000FromLinear(color, 0);
+  }
+  return color;
+}
+
+float3 gammaLUTInput(float3 inputColor, float3 convertedInputColor, ToneMapLUTParams lutParams) {
+  if (lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB || lutParams.inputType == TONE_MAP_LUT_TYPE__2_2) {
+    return convertedInputColor;
+  } else {
+    return srgbFromLinear(max(0, inputColor));
+  }
+}
+
+float3 gammaLUTOutput(float3 color, ToneMapLUTParams lutParams) {
+  if (lutParams.outputType == TONE_MAP_LUT_TYPE__LINEAR) {
+    color = srgbFromLinear(max(0, color));
+  }
+  return color;
+}
+
+float3 linearLUTOutput(float3 color, ToneMapLUTParams lutParams) {
+  if (lutParams.outputType == TONE_MAP_LUT_TYPE__SRGB) {
+    color = sign(color) * linearFromSRGB(abs(color));
+  } else if (lutParams.outputType == TONE_MAP_LUT_TYPE__2_2) {
+    color = sign(color) * pow(abs(color), 2.2f);
+  }
+  return color;
+}
+
+float3 linearUnclampedLUTOutput(float3 color, ToneMapLUTParams lutParams) {
+  if (lutParams.outputType == TONE_MAP_LUT_TYPE__2_2) {
+    color = sign(color) * pow(abs(color), 2.2f);
+  } else {
+    color = sign(color) * linearFromSRGB(abs(color));
+  }
+  return color;
+}
+
+float3 sampleLUT(float3 inputColor, ToneMapLUTParams lutParams) {
+  float3 lutInputColor = convertLUTInput(inputColor, lutParams);
+  float3 lutOutputColor = sampleLUTColor(lutInputColor, lutParams);
+  float3 outputColor = linearLUTOutput(lutOutputColor, lutParams);
+  if (lutParams.scaling) {
+    float3 lutBlack = sampleLUTColor(convertLUTInput(0, lutParams), lutParams);
+    float3 lutWhite = sampleLUTColor(convertLUTInput(1.f, lutParams), lutParams);
+    float3 lutMid = sampleLUTColor(convertLUTInput(0.18f, lutParams), lutParams);
+
+    float3 unclamped = unclampSDRLUT(
+      gammaLUTOutput(lutOutputColor, lutParams),
+      gammaLUTOutput(lutBlack, lutParams),
+      gammaLUTOutput(lutWhite, lutParams),
+      gammaLUTOutput(lutMid, lutParams),
+      gammaLUTInput(inputColor, lutInputColor, lutParams)
+    );
+
+    float3 recolored = recolorUnclampedLUT(
+      outputColor,
+      linearUnclampedLUTOutput(unclamped, lutParams)
+    );
+    outputColor = lerp(outputColor, recolored, lutParams.scaling);
+  }
+  return outputColor;
+}
+
+float3 toneMap(float3 inputColor, ToneMapParams tmParams, ToneMapLUTParams lutParams) {
+  if (lutParams.strength == 0.f || tmParams.type == 1.f) {
+    return toneMap(inputColor, tmParams);
+  }
+
+  float3 outputColor = inputColor;
+
+  outputColor = applyUserColorGrading(
+    outputColor,
+    tmParams.exposure,
+    1.f,
+    tmParams.shadows,
+    tmParams.highlights,
+    tmParams.contrast
+  );
+  float3 hdrColor = outputColor;
+  float3 sdrColor = outputColor;
+  if (tmParams.type == 2.f) {
+    hdrColor = acesToneMap(outputColor, tmParams);
+    sdrColor = acesToneMap(outputColor, tmParams, true);
+  } else if (tmParams.type == 3.f) {
+    hdrColor = renoDRTToneMap(outputColor, tmParams);
+    sdrColor = renoDRTToneMap(outputColor, tmParams, true);
+  }
+
+  float3 lutColor;
+  if (lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB || lutParams.inputType == TONE_MAP_LUT_TYPE__2_2) {
+    lutColor = sampleLUT(sdrColor, lutParams);
+  } else {
+    lutColor = min(1.f, sampleLUT(outputColor, lutParams));
+  }
+
+  if (tmParams.type == 0.f) {
+    outputColor = lerp(outputColor, lutColor, lutParams.strength);
+  } else {
+    outputColor = toneMapUpgrade(hdrColor, sdrColor, lutColor, lutParams.strength);
+  }
+  if (tmParams.saturation != 1.f) {
+    outputColor = applySaturation(outputColor, tmParams.saturation);
+  }
+  return outputColor;
 }

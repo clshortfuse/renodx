@@ -1,3 +1,6 @@
+#ifndef SRC_COMMON_ACES_HLSL_
+#define SRC_COMMON_ACES_HLSL_
+
 #include "./color.hlsl"
 
 #define FLT_MIN asfloat(0x00800000)  //1.175494351e-38f
@@ -480,3 +483,5 @@ float3 aces_rgc_rrt_odt(float3 color, float minY, float maxY, float3x3 odtMatrix
   color = aces_odt(color, minY, maxY, odtMatrix);  // ODT AP1 => Matrix
   return color;
 }
+
+#endif  // SRC_COMMON_ACES_HLSL_

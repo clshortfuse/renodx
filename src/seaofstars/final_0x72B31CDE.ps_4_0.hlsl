@@ -1,3 +1,4 @@
+#include "../common/color.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -18,10 +19,13 @@ cbuffer cb13 : register(b13) {
 float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
   const float4 inputColor = t0.Sample(s0_s, v1.xy).rgba;
 
-  float4 outputColor = inputColor;
-  outputColor.rgb = pow(outputColor.rgb, cb0[133].rgb);  // 1.f anyway
-  outputColor.a = inputColor.a;
-  
+  float3 outputColor = inputColor.rgb;
+
+  if (injectedData.toneMapGammaCorrection) {
+    outputColor = sign(outputColor) * gammaCorrectEmulate22(outputColor);
+  }
+
   outputColor.rgb *= injectedData.toneMapUINits / 80.f;
-  return outputColor;
+
+  return float4(outputColor, inputColor.a);
 }

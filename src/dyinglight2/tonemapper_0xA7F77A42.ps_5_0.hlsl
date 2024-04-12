@@ -1,5 +1,7 @@
 #include "../common/ACES.hlsl"
+#include "../common/RenoDRT.hlsl"
 #include "../common/color.hlsl"
+#include "../common/colorgrade.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -13,10 +15,14 @@ cbuffer cb0 : register(b0) {
   float4 cb0[2];
 }
 
+cbuffer cb6 : register(b6) {
+  ShaderInjectData injectedData : packoffset(c0);
+}
+
 // 3Dmigoto declarations
 #define cmp -
 
-void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1, out float4 outputColor : SV_TARGET0) {
+void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1, out float4 o0 : SV_TARGET0) {
   float4 r0, r1, r2, r3;
 
   r0.x = -1000 + cb0[1].y;
@@ -45,7 +51,7 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1
   r1.zw = float2(0, 0);
   r2.y = t0.Load(r1.xyz).y;
 
-  const float3 texture0Color = r2.xyz;
+  const float3 untonemapped = r2.xyz;
 
   r1.xyz = log2(abs(r2.xyz));
   r1.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r1.xyz;
@@ -86,40 +92,73 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1
   r1.xyz = r0.www ? float3(0, 0, 0) : r0.xyz;
   r0.w = cmp(0 < cb0[0].z);
 
-  outputColor.xyz = r0.www ? r1.xyz : r0.xyz;
+  o0.xyz = r0.www ? r1.xyz : r0.xyz;
 
-  outputColor.w = 1;
+  o0.w = 1;
 
   // LUTs seem to have baked SDR cap. Use untonemapped input for luminance
-  outputColor.rgb = max(0, outputColor.rgb);
-  float inputY = yFromBT709(texture0Color.rgb);
-  float outputY = yFromBT709(outputColor.rgb);
-  float3 testColor = outputColor.rgb * (outputY ? inputY / outputY : 1);
+  float3 outputColor = o0.rgb;
+  outputColor = max(0, outputColor);
+  if (injectedData.toneMapType == 0.f) {
+    // outputColor = pow(outputColor, 2.2f);
+  } else {
+    outputColor = untonemapped.rgb;
+    if (injectedData.toneMapType != 1.f) {
+      float inputY = yFromBT709(abs(untonemapped));
+      float outputY = yFromBT709(outputColor);
+      outputY = lerp(inputY, outputY, saturate(inputY));
+      outputColor *= (outputY ? inputY / outputY : 1);
 
-  switch (2) {
-    case 1:
-      outputColor.rgb = v1.rgb;  // Untonemapped
-      outputColor.rgb *= 203.f / 203.f;
-      break;
-    case 2:
-      float hdrScale = (1000.f / 203.f);
-      outputColor.rgb = aces_rgc_rrt_odt(
-        testColor.rgb * 203.f / 80.f,
-        0.0001f / hdrScale,  // minY
-        48.f * hdrScale,
-        IDENTITY_MAT  // Don't clip gamut
-      );
-      outputColor.rgb /= 48.f;
-      outputColor.rgb = mul(AP1_2_BT709_MAT, outputColor.rgb);
-      outputColor.rgb = max(0, outputColor.rgb);
+      if (injectedData.colorGradeShadows != 1.f) {
+        // outputColor = apply_user_shadows(outputColor, injectedData.colorGradeShadows);
+      }
+      if (injectedData.colorGradeHighlights != 1.f) {
+        // outputColor = apply_user_highlights(outputColor, injectedData.colorGradeHighlights);
+      }
+      if (injectedData.colorGradeContrast != 1.f) {
+        float3 workingColor = pow(outputColor / 0.18f, injectedData.colorGradeContrast) * 0.18f;
+        // Working in BT709 still
+        float workingColorY = yFromBT709(workingColor);
+        float outputColorY = yFromBT709(outputColor);
+        outputColor *= outputColorY ? workingColorY / outputColorY : 1.f;
+      }
 
-      // Scale for later UI scaling
-      outputColor.rgb *= 203.f / 203.f;
-      break;
-    case 0:
-    default:
-      break;
+      if (injectedData.colorGradeSaturation != 1.f) {
+        float3 okLCh = okLChFromBT709(outputColor);
+        okLCh[1] *= injectedData.colorGradeSaturation;
+        outputColor = max(0, bt709FromOKLCh(okLCh));
+      }
+
+      const float vanillaMidGray = 0.18f;
+      if (injectedData.toneMapType == 2.f) {
+        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / 0.10);  // ACES mid gray is 10%
+        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
+        outputColor = aces_rgc_rrt_odt(
+          outputColor,
+          0.0001f / (paperWhite / 48.f),
+          48.f * hdrScale,
+          AP1_2_BT2020_MAT
+        );
+        outputColor /= 48.f;
+        outputColor *= (vanillaMidGray / 0.10);
+        outputColor = mul(BT2020_2_BT709_MAT, outputColor);
+      } else if (injectedData.toneMapType == 3.f) {
+        outputColor = renodrt(
+          outputColor,
+          injectedData.toneMapPeakNits / injectedData.toneMapGameNits * 100.f,
+          0.18f,
+          vanillaMidGray * 100.f
+        );
+        outputColor *= injectedData.toneMapGameNits;
+      }
+    }
   }
+
+  outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+
+  outputColor = sign(outputColor) * pow(abs(outputColor), 1.f / 2.2f);
+
+  o0.rgb = outputColor.rgb;
 
   return;
 }

@@ -31,7 +31,7 @@ struct ShaderInjectData {
 #define TONE_MAPPER_TYPE__VANILLA 0.f
 #define TONE_MAPPER_TYPE__NONE    1.f
 #define TONE_MAPPER_TYPE__ACES    2.f
-#define TONE_MAPPER_TYPE__OPENDRT 3.f
+#define TONE_MAPPER_TYPE__RENODX  3.f
 
 #define OUTPUT_TYPE_SRGB8  0u
 #define OUTPUT_TYPE_PQ     1u

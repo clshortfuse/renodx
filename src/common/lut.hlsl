@@ -31,7 +31,49 @@ float3 sampleLUT(Texture3D<float3> lut, SamplerState samplerState, float3 color,
   return lut.SampleLevel(samplerState, position, 0.0f).rgb;
 }
 
+float3 sampleLUT(Texture2D lut, SamplerState samplerState, float3 color, float3 precompute) {
+  float texelSize = precompute.x;
+  float slice = precompute.y;
+  float maxIndex = precompute.z;
+
+  float zPosition = color.z * maxIndex;
+  float zInteger = floor(zPosition);
+  float zFraction = zPosition - zInteger;
+  float zOffset = zInteger * slice;
+
+  float xOffset = (color.r * maxIndex * texelSize) + (texelSize * 0.5f);
+
+  float yOffset = (color.g * maxIndex * slice) + (slice * 0.5f);
+
+  float2 uv = float2(
+    zOffset + xOffset,
+    yOffset
+  );
+
+  float3 color0 = lut.SampleLevel(samplerState, uv, 0).rgb;
+  uv.x += slice;
+  float3 color1 = lut.SampleLevel(samplerState, uv, 0).rgb;
+
+  return lerp(color0, color1, zFraction);
+}
+
 float3 sampleLUT(Texture2D lut, SamplerState samplerState, float3 color, float size = 0) {
+  if (size == 0) {
+    // Removed by compiler if specified
+    float width;
+    float height;
+    lut.GetDimensions(width, height);
+    size = min(width, height);
+  }
+
+  float maxIndex = size - 1.f;
+  float slice = 1.f / size;
+  float texelSize = slice * slice;
+
+  return sampleLUT(lut, samplerState, color, float3(texelSize, slice, maxIndex));
+}
+
+float3 sampleLUTUnreal(Texture2D lut, SamplerState samplerState, float3 color, float size = 0) {
   if (size == 0) {
     // Removed by compiler if specified
     float width;
@@ -46,80 +88,15 @@ float3 sampleLUT(Texture2D lut, SamplerState samplerState, float3 color, float s
   half fraction = zPosition - zInteger;
 
   float2 uv = float2(
-    (color.x + zInteger) * slice,
-    color.y
+    (color.r + zInteger) * slice,
+    color.g
   );
 
   float3 color0 = lut.SampleLevel(samplerState, uv, 0).rgb;
-
   uv.x += slice;
   float3 color1 = lut.SampleLevel(samplerState, uv, 0).rgb;
 
   return lerp(color0, color1, fraction);
-}
-
-float3 sampleLUTAlt(Texture2D lut, SamplerState samplerState, float3 color, float size = 0) {
-  if (size == 0) {
-    // Removed by compiler if specified
-    float width;
-    float height;
-    lut.GetDimensions(width, height);
-    size = min(width, height);
-  }
-
-  float texelCount = size - 1.f;
-  float lastPosition = texelCount / size;
-  float slice = 1.f / size;
-  float halfSlice = slice / 2.f;
-
-  float zPosition = color.z * texelCount;
-  float zInteger = floor(zPosition);
-  float fraction = zPosition - zInteger;
-
-  float offset = color.r * lastPosition / size;
-
-  float2 uv = float2(
-    zInteger * slice + offset,
-    lastPosition * color.g
-  );
-
-  float2 uv0 = uv.xy + float2(halfSlice / size, halfSlice);
-  float2 uv1 = uv.xy + float2((1.f + halfSlice) / size, halfSlice);
-  float3 color0 = lut.SampleLevel(samplerState, uv0, 0).rgb;
-  float3 color1 = lut.SampleLevel(samplerState, uv1, 0).rgb;
-
-  return lerp(color0, color1, fraction);
-}
-
-// Untested
-float3 loadLUT(float3 color, Texture2D lut, float size = 0) {
-  if (size == 0) {
-    // Removed by compiler if specified
-    float width;
-    float height;
-    lut.GetDimensions(width, height);
-    size = min(width, height);
-  }
-
-  float positionMax = size - 1.f;
-
-  float3 texelFirst = floor(color * positionMax);
-  float3 texelSecond = ceil(color * positionMax);
-
-  float3 texelFirstUV = float3(
-    texelSecond.z * positionMax + texelFirst.x,
-    texelFirst.y,
-    0
-  );
-  float3 texelSecondUV = float3(
-    texelSecond.z * positionMax + texelSecond.x,
-    texelSecond.y,
-    0
-  );
-
-  float3 color0 = lut.Load(texelFirstUV).rgb;
-  float3 color1 = lut.Load(texelSecondUV).rgb;
-  return lerp(color0, color1, frac(color * positionMax));
 }
 
 float3 lutCorrectionBlack(float3 inputColor, float3 lutColor, float lutBlackY, float strength) {
@@ -149,8 +126,8 @@ float3 lutCorrectionWhite(float3 inputColor, float3 lutColor, float lutWhiteY, f
 float3 unclampSDRLUT(
   float3 originalGamma,
   float3 blackGamma,
-  float3 whiteGamma,
   float3 midGrayGamma,
+  float3 whiteGamma,
   float3 neutralGamma
 ) {
   float3 addedGamma = blackGamma;
@@ -166,14 +143,14 @@ float3 unclampSDRLUT(
   float highlightsStop = min(neutralGamma.r, min(neutralGamma.g, neutralGamma.b));
   float3 liftHighlights = removedGamma * ((max(highlightsStart, highlightsStop) - highlightsStart) / highlightsStart);
 
-  float3 detintedInGamma = max(0, originalGamma - removeFog) + liftHighlights;
-  return detintedInGamma;
+  float3 unclampedInGamma = max(0, originalGamma - removeFog) + liftHighlights;
+  return unclampedInGamma;
 }
 
-float3 recolorUnclampedLUT(float3 originalLinear, float3 detintedLinear) {
+float3 recolorUnclampedLUT(float3 originalLinear, float3 unclampedLinear) {
   const float3 originalLab = okLabFromBT709(originalLinear);
 
-  float3 retintedLab = okLabFromBT709(detintedLinear);
+  float3 retintedLab = okLabFromBT709(unclampedLinear);
   retintedLab[0] = max(0, retintedLab[0]);
   retintedLab[1] = originalLab[1];
   retintedLab[2] = originalLab[2];

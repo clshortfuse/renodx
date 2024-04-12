@@ -1,12 +1,10 @@
 // LUT + TONEMAPPER
 
-#include "../common/DICE.hlsl"
-#include "../common/Open_DRT.hlsl"
+#include "../common/RenoDRT.hlsl"
 #include "../common/aces.hlsl"
 #include "../common/color.hlsl"
 #include "../common/colorgrade.hlsl"
 #include "../common/lut.hlsl"
-#include "../common/tonemap.hlsl"
 #include "./aces_cdpr.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
@@ -221,8 +219,8 @@ float3 sampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
         float3 unclamped = unclampSDRLUT(
           lutOutputColor,
           minBlack,
-          peakWhite,
           midGray,
+          peakWhite,
           lutInputColor
         );
 
@@ -603,38 +601,7 @@ float4 tonemap(bool isACESMode = false) {
         }
         outputRGB *= acesScaling;
 
-      } else if (toneMapperType == TONE_MAPPER_TYPE__OPENDRT) {
-        float3x3 inputMatrix;
-        float3x3 outputMatrix;
-
-        if (isSDR) {
-          inputMatrix = useD60 ? BT709_2_BT709D60_MAT : IDENTITY_MAT;
-          outputMatrix = IDENTITY_MAT;
-        } else {
-          inputMatrix = useD60 ? BT709_2_DISPLAYP3D60_MAT : BT709_2_DISPLAYP3_MAT;
-          outputMatrix = DISPLAYP3_2_BT709_MAT;
-        }
-
-        outputRGB = apply_aces_highlights(outputRGB);
-        outputRGB = mul(inputMatrix, outputRGB);
-
-        const float OPENDRT_MID_GRAY = 11.696f / 100.f;
-        float paperWhite = (100.f / 203.f) * injectedData.toneMapGameNits * (vanillaMidGray / OPENDRT_MID_GRAY);
-        float openDRTMax = (injectedData.toneMapPeakNits);
-        if (injectedData.toneMapGammaCorrection == 2.f) {
-          openDRTMax = linearFromSRGB(pow(injectedData.toneMapPeakNits / CDPR_WHITE, 1.f / 2.2f));
-          openDRTMax *= CDPR_WHITE;
-        }
-        outputRGB = open_drt_transform(
-          outputRGB,
-          100.f * (openDRTMax / paperWhite),
-          0,
-          1.f,
-          0
-        );
-        outputRGB = mul(outputMatrix, outputRGB);
-        outputRGB *= openDRTMax;
-      } else if (toneMapperType == 4.f) {
+      } else if (toneMapperType == TONE_MAPPER_TYPE__RENODX) {
         if (useD60) {
           outputRGB = mul(BT709_2_BT709D60_MAT, outputRGB);
         }
@@ -652,11 +619,11 @@ float4 tonemap(bool isACESMode = false) {
           renoDRTMax / paperWhite * 100.f,
           0.18f,
           midGrayNits,
-          1.8,
-          0,
+          1.8,  // contrast
+          0.f,  // shadow
           injectedData.colorGradeDechroma,
-          1.45f,
-          1.2f
+          1.45f,  // saturation
+          1.2f    // highlights
         );
         outputRGB *= paperWhite;
       }

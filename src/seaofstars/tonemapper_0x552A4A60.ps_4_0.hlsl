@@ -1,8 +1,4 @@
-#include "../common/ACES.hlsl"
-#include "../common/Open_DRT.hlsl"
-#include "../common/color.hlsl"
-#include "../common/colorgrade.hlsl"
-#include "../common/unity.hlsl"
+#include "../common/tonemap.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -44,10 +40,10 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
   scaledBloom.rgb *= cb0[190].x;    // Bloom strength
   scaledBloom.rgb *= cb0[190].yzw;  // Bloom color
 
-  float3 untonemapped = inputColor.rgb + scaledBloom;
-  r0.rgb = untonemapped;
+  r0.rgb = inputColor.rgb + scaledBloom * injectedData.fxBloom;
 
-  if (cb0[198].z > 0) {
+  // ???
+  if (cb0[198].z >= 0) {
     r1.xy = -cb0[198].xy + v1.xy;
     r1.yz = cb0[198].zz * abs(r1.xy);
     r1.x = cb0[197].w * r1.y;
@@ -64,15 +60,58 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
   const float ARRI_LOG_C = 0.244161f;
   const float ARRI_LOG_D = 0.386036f;
 
-  r1.rgb = cb0[188].w * r0.brg;  // blue red green?
-  r1.rgb = ARRI_LOG_A * r1.rgb + ARRI_LOG_B;
-  r1.rgb = max(0, r1.rgb);
-  r1.rgb = log2(r1.rgb);
-  r1.rgb = saturate(r1.rgb * (ARRI_LOG_C * log10(2)) + ARRI_LOG_D);
+  r1.rgb = cb0[188].w * r0.rgb;  // exposure
 
-  float3 scaleOffset = cb0[188].xyz;
-  r1.rgb = ApplyLut2D(t3, s0_s, r1.gbr, scaleOffset);
+  float3 untonemapped = r1.rgb;
 
+  // r1.rgb = ARRI_LOG_A * r1.rgb + ARRI_LOG_B;
+  // r1.rgb = max(0, r1.rgb);
+  // r1.rgb = log2(r1.rgb);
+  // r1.rgb = saturate(r1.rgb * (ARRI_LOG_C * log10(2)) + ARRI_LOG_D);
+
+  float vanillaMidGray = 0.18f;
+
+  float renoDRTContrast = 1.0f;
+  float renoDRTShadow = 0;
+  float renoDRTDechroma = 0.f;
+  float renoDRTSaturation = 1.0f;
+  float renoDRTHighlights = 1.0f;
+
+  ToneMapParams tmParams = {
+    injectedData.toneMapType,
+    injectedData.toneMapPeakNits,
+    injectedData.toneMapGameNits,
+    injectedData.toneMapGammaCorrection,
+    injectedData.colorGradeExposure,
+    injectedData.colorGradeHighlights,
+    injectedData.colorGradeShadows,
+    injectedData.colorGradeContrast,
+    injectedData.colorGradeSaturation,
+    vanillaMidGray,
+    renoDRTContrast,
+    renoDRTShadow,
+    renoDRTDechroma,
+    renoDRTSaturation,
+    renoDRTHighlights
+  };
+  ToneMapLUTParams lutParams = {
+    t3,
+    s0_s,
+    injectedData.colorGradeLUTStrength,
+    injectedData.colorGradeLUTScaling,
+    TONE_MAP_LUT_TYPE__ARRI_C1000_NO_CUT,
+    TONE_MAP_LUT_TYPE__LINEAR,
+    0,            // size
+    cb0[188].xyz  // precompute
+  };
+
+  // HDR => SDR LUT+ToneMap
+
+  r1.rgb = toneMap(untonemapped, tmParams, lutParams);
+
+  float3 preSDRLutColor = r1.rgb;
+
+  // SDR LUT?
   if (cb0[203].y == 0.f) {
     r0.w = cmp(0 < cb0[189].w);
     if (r0.w != 0) {
@@ -95,9 +134,11 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
       r3.xyz = r3.xyz + -r2.xyz;
       r2.xyz = cb0[189].www * r3.xyz + r2.xyz;
 
-      r1.xyz = linearFromSRGB(r2.xyz);
+      r1.rgb = linearFromSRGB(r2.xyz);
     }
   }
+
+  // r1.rgb = lerp(preSDRLutColor, r1.rgb, injectedData.fxVignette);
 
   if (cb0[203].x < 1) {
     // Unstyled texture
@@ -118,64 +159,10 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
 
   float3 outputColor = r1.xyz;
 
-  if (injectedData.toneMapType == 0) {
-    outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    // noop
+  if (injectedData.toneMapGammaCorrection) {
+    outputColor *= gammaCorrectEmulate22(injectedData.toneMapGameNits / injectedData.toneMapUINits, true);
   } else {
-    untonemapped = pow(max(0, untonemapped), 2.2f);
-    if (injectedData.toneMapType == 1.f) {
-      outputColor = untonemapped;  // Untonemapped
-      outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    } else {
-      float inputY = yFromBT709(untonemapped);
-      float outputY = yFromBT709(outputColor);
-      outputY = lerp(inputY, outputY, saturate(inputY));
-      outputColor *= (outputY ? inputY / outputY : 1);
-
-      if (injectedData.colorGradeSaturation != 1.f) {
-        float3 okLCh = okLChFromBT709(outputColor);
-        okLCh[1] *= injectedData.colorGradeSaturation;
-        outputColor = max(0, bt709FromOKLCh(okLCh));
-      }
-
-      if (injectedData.colorGradeShadows != 1.f) {
-        outputColor = apply_user_shadows(outputColor, injectedData.colorGradeShadows);
-      }
-      if (injectedData.colorGradeHighlights != 1.f) {
-        outputColor = apply_user_highlights(outputColor, injectedData.colorGradeHighlights);
-      }
-      if (injectedData.colorGradeContrast != 1.f) {
-        float3 workingColor = pow(outputColor / 0.18f, injectedData.colorGradeContrast) * 0.18f;
-        // Working in BT709 still
-        float workingColorY = yFromBT709(workingColor);
-        float outputColorY = yFromBT709(outputColor);
-        outputColor *= outputColorY ? workingColorY / outputColorY : 1.f;
-      }
-      float hdrScale = (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-      if (injectedData.toneMapType == 2) {
-        outputColor = aces_rrt_odt(
-          outputColor * 203.f / 80.f,  // Should be midgray from LUT
-          0.0001f / hdrScale,                     // minY
-          48.f * hdrScale
-          // AP1_2_BT2020_MAT
-        );
-        outputColor /= 48.f;
-      } else {
-        outputColor = apply_aces_highlights(outputColor);
-        // outputColor = mul(BT709_2_BT2020_MAT, outputColor);
-        outputColor = max(0, outputColor);
-        outputColor = open_drt_transform(
-          outputColor * 203.f / 80.f,  // Should be midgray from LUT
-          100.f * hdrScale,
-          0,
-          1.f,
-          0
-        );
-        outputColor *= hdrScale;
-      }
-      // outputColor = mul(BT2020_2_BT709_MAT, outputColor);
-      outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    }
+    outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
   }
 
   return float4(outputColor.rgb, 1.f);

@@ -1,8 +1,6 @@
 // Film Grain
 
-#include "../common/Open_DRT.hlsl"
-#include "../common/aces.hlsl"
-#include "../common/colorgrade.hlsl"
+#include "../common/tonemap.hlsl"
 #include "../common/filmgrain.hlsl"
 #include "./shared.h"
 
@@ -70,44 +68,32 @@ void main(
     // Input is in gamma
     outputColor = pow(outputColor, 2.2f);
 
-    outputColor = applyUserColorGrading(
-      outputColor,
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeSaturation,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeContrast
-    );
+    float vanillaMidGray = 0.18f;
+    float renoDRTContrast = 1.05f;
+    float renoDRTShadow = 0;
+    float renoDRTDechroma = 0.5f;
+    float renoDRTSaturation = 1.05f;
+    float renoDRTHighlights = 1.f;
 
-    const float vanillaMidGray = 0.18f;
-    if (injectedData.toneMapType == 2.f) {
-      const float ACES_MID_GRAY = 0.10f;
-      float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / ACES_MID_GRAY);
-      float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
-      outputColor = aces_rgc_rrt_odt(
-        outputColor,
-        0.0001f / (paperWhite / 48.f),
-        48.f * hdrScale
-      );
-      outputColor /= 48.f;
-      outputColor *= (vanillaMidGray / ACES_MID_GRAY);
-    } else if (injectedData.toneMapType == 3.f) {
-      const float OPENDRT_MID_GRAY = 11.696f / 100.f;
-      float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / OPENDRT_MID_GRAY);
-      float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
-      outputColor = mul(BT709_2_DISPLAYP3_MAT, outputColor);
-      outputColor = max(0, outputColor);
-      outputColor = open_drt_transform_bt709(
-        outputColor,
-        100.f * hdrScale,
-        0,
-        1.f,
-        0
-      );
-      outputColor = mul(DISPLAYP3_2_BT709_MAT, outputColor);
-      outputColor *= hdrScale;
-      outputColor *= (vanillaMidGray / OPENDRT_MID_GRAY);
-    }
+    ToneMapParams tmParams = {
+      injectedData.toneMapType,
+      injectedData.toneMapPeakNits,
+      injectedData.toneMapGameNits,
+      0.f,
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation,
+      vanillaMidGray,
+      renoDRTContrast,
+      renoDRTShadow,
+      renoDRTDechroma,
+      renoDRTSaturation,
+      renoDRTHighlights
+    };
+
+    outputColor = toneMap(outputColor, tmParams);
 
     float3 grainedColor = computeFilmGrain(
       outputColor,
