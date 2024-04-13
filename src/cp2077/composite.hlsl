@@ -1,7 +1,7 @@
 #include "../common/color.hlsl"
+#include "../common/graph.hlsl"
 #include "../common/lut.hlsl"
 #include "../common/random.hlsl"
-#include "../common/graph.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
 
@@ -39,7 +39,6 @@ struct SPIRV_Cross_Input {
 struct SPIRV_Cross_Output {
   float4 SV_Target : SV_Target0;
 };
-
 
 #define DRAW_TONEMAPPER 0
 
