@@ -150,16 +150,6 @@ UserSettingUtil::UserSettings userSettings = {
     .parse = [](float value) { return value * 0.02f; }
   },
   new UserSettingUtil::UserSetting {
-    .key = "colorGradeDechroma",
-    .binding = &shaderInjection.colorGradeDechroma,
-    .defaultValue = 50.f,
-    .label = "Dechroma",
-    .section = "Color Grading",
-    .tooltip = "Strength of dechroma in highlights",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.01f; }
-  },
-  new UserSettingUtil::UserSetting {
     .key = "colorGradeWhitePoint",
     .binding = &shaderInjection.colorGradeWhitePoint,
     .valueType = UserSettingUtil::UserSettingValueType::integer,
@@ -262,7 +252,6 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
-  UserSettingUtil::updateUserSetting("colorGradeDechroma", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeWhitePoint", 1);
   UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
   UserSettingUtil::updateUserSetting("colorGradeSceneGrading", 100.f);

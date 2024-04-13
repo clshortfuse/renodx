@@ -621,8 +621,8 @@ float4 tonemap(bool isACESMode = false) {
           midGrayNits,
           1.8,  // contrast
           0.f,  // shadow
-          injectedData.colorGradeDechroma,
-          1.45f,  // saturation
+          0.60f,
+          1.40f,  // saturation
           1.2f    // highlights
         );
         outputRGB *= paperWhite;
