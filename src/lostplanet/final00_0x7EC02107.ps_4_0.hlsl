@@ -55,7 +55,7 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
 
   float4 outputColor = o0.rgba;
 
-  if (injectedData.toneMapType != 0.f) {
+  if (injectedData.toneMapType) {
     outputColor.rgb = XfBaseSamplerRGBA.rgb;
   }
 

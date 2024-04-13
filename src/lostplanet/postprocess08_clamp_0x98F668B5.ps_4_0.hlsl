@@ -21,6 +21,12 @@ Texture2D<float4> PointSampler0TEXTURE : register(t0);
 // 3Dmigoto declarations
 #define cmp -
 
+float3 tonemap(float3 color) {
+  float3 gXfInColor = (color - gXfInBlack) * gXfInWhite;
+  float3 gXfOutColor = (gXfInColor * gXfOutWhite) + gXfOutBlack;
+  return pow(saturate(gXfOutColor), gXfInGamma.xyz);
+}
+
 float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
   float4 textureColor = PointSampler0TEXTURE.Sample(PointSampler0_s, v1.xy).rgba;
 
@@ -31,13 +37,12 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
   outputColor = pow(outputColor, gXfInGamma.xyz);
 
   if (injectedData.toneMapType != 0) {
-    outputColor = max(0, textureColor.rgb) * gXfInWhite * gXfOutWhite;
-    outputColor = pow(outputColor, gXfInGamma.xyz);
+    outputColor = pow(max(0, gXfOutColor), gXfInGamma.xyz);
   }
 
   outputColor = pow(outputColor, 2.2f);  // linear
 
-  float vanillaMidGray = 0.18f;
+  float vanillaMidGray = 0.18f;  // pow(yFromBT709(tonemap(0.5f)), 2.2f);
   float renoDRTContrast = 1.0f;
   float renoDRTShadow = 0;
   float renoDRTDechroma = 0.5f;
