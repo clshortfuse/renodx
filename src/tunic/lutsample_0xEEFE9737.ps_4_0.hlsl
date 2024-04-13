@@ -66,7 +66,7 @@ void main(
     t1,
     s1_s,
     injectedData.colorGradeLUTStrength,
-    injectedData.colorGradeLUTScaling,  // Only scale black
+    injectedData.colorGradeLUTScaling,
     TONE_MAP_LUT_TYPE__SRGB,
     TONE_MAP_LUT_TYPE__SRGB,
     32.f,         // size
