@@ -77,7 +77,7 @@ struct ToneMapLUTParams {
 #define TONE_MAP_LUT_TYPE__ARRI_C1000_NO_CUT 6u
 
 float3 renoDRTToneMap(float3 color, ToneMapParams params, bool sdr = false) {
-  float renoDRTMax = sdr ? 100.f : params.peakNits / params.gameNits;
+  float renoDRTMax = sdr ? 1.f : (params.peakNits / params.gameNits);
   if (!sdr && params.gammaCorrection) {
     renoDRTMax = gammaCorrectEmulate22(renoDRTMax, true);
   }
@@ -97,11 +97,11 @@ float3 renoDRTToneMap(float3 color, ToneMapParams params, bool sdr = false) {
 
 float3 acesToneMap(float3 color, ToneMapParams params, bool sdr = false) {
   const float ACES_MID_GRAY = 0.10f;
-  float paperWhite = (sdr ? 100.f : params.gameNits) * (params.vanillaMidGray / ACES_MID_GRAY);
+  float paperWhite = (sdr ? 1.f : params.gameNits) * (params.vanillaMidGray / ACES_MID_GRAY);
 
   float acesScaling = paperWhite / 48.f;
   float acesMin = 0.0001f / acesScaling;
-  float acesMax = params.peakNits / paperWhite;
+  float acesMax = (sdr ? 1.f : params.peakNits) / paperWhite;
 
   if (!sdr && params.gammaCorrection) {
     float scaling = params.gammaCorrection;
