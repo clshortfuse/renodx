@@ -12,6 +12,7 @@ enable_testing()
 # MOD LIST HERE
 list(APPEND ADDON_LIST cp2077)
 list(APPEND ADDON_LIST lostplanet)
+list(APPEND ADDON_LIST lanoire)
 list(APPEND ADDON_LIST hifirush)
 list(APPEND ADDON_LIST dyinglight2)
 list(APPEND ADDON_LIST seaofthieves)
