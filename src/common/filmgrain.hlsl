@@ -1,8 +1,5 @@
-
-// Better random generator
-float rand(float2 uv) {
-  return frac(sin(dot(uv, float2(12.9898, 78.233))) * 43758.5453123);
-}
+#include "./color.hlsl"
+#include "./random.hlsl"
 
 // This is an attempt to replicate Kodak Vision 5242 with (0,3) range:
 // Should be channel independent (R/G/B), but just using R curve for now
@@ -29,7 +26,9 @@ float computeFilmGraininess(float density) {
 }
 
 float3 computeFilmGrain(float3 color, float2 xy, float seed, float strength, float paperWhite = 1.f, bool debug = false) {
-  float randomNumber = rand(xy + seed);
+  float2 seed2 = seedGen(xy * 43758.5453f + (100.f * seed));
+  float hash = wang(wang(seed2.x) + seed2.y);
+  float randomNumber = hash / 4294967295.f;
 
   // Film grain is based on film density
   // Film works in negative, meaning black has no density
@@ -38,8 +37,8 @@ float3 computeFilmGrain(float3 color, float2 xy, float seed, float strength, flo
 
   // Scaling is not not linear
 
-  float colorY = dot(color, float3(0.2126390039920806884765625f, 0.715168654918670654296875f, 0.072192318737506866455078125f));
-  // 
+  float colorY = yFromBT709(abs(color));
+
   float adjustedColorY = colorY * (1.f / paperWhite);
 
   // Emulate density from a chosen film stock (Removed)
