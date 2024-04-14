@@ -36,6 +36,7 @@ namespace SwapChainUpgradeMod {
   struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) device_data {
     bool upgradedResource = false;
     bool upgradedResourceView = false;
+    bool upgradeUnknownResourceViews = false;
     bool hasBufferDesc = false;
     bool resourceUpgradeFinished = false;
     reshade::api::resource_desc deviceBackBufferDesc;
@@ -400,8 +401,13 @@ namespace SwapChainUpgradeMod {
     bool expected = false;
 
     auto &privateData = device->get_private_data<device_data>();
+
+    if (!privateData.upgradeUnknownResourceViews && oldFormat == reshade::api::format::unknown) {
+      return false;
+    }
+
     reshade::api::resource_desc resource_desc = device->get_resource_desc(resource);
-    if (upgradeResourceViews && privateData.backBuffers.count(resource.handle)) {
+    if (upgradeResourceViews && privateData.backBuffers.contains(resource.handle)) {
       desc.format = targetFormat;
       expected = true;
     } else if (privateData.upgradedResources.contains(resource.handle)) {
@@ -413,15 +419,16 @@ namespace SwapChainUpgradeMod {
           break;
         case reshade::api::format::r8g8b8a8_unorm:
         case reshade::api::format::b8g8r8a8_unorm:
+          // Should upgrade shader
           desc.format = targetFormat;
           break;
         case reshade::api::format::r8g8b8a8_unorm_srgb:
         case reshade::api::format::b8g8r8a8_unorm_srgb:
-          // Should upgrade shader
           desc.format = targetFormat;
           break;
         case reshade::api::format::b10g10r10a2_unorm:
         case reshade::api::format::r10g10b10a2_unorm:
+          // Should upgrade shader
           desc.format = targetFormat;
           break;
         default:
@@ -465,7 +472,7 @@ namespace SwapChainUpgradeMod {
       << ", resource width: " << resource_desc.texture.width
       << ", resource height: " << resource_desc.texture.height
       << ", resource format: " << to_string(resource_desc.texture.format)
-      << ", resource usage: " << std::hex << (uint32_t)usage_type << std::dec
+      << ", resource usage: " << std::hex << to_string(usage_type) << std::dec
       << ")";
     reshade::log_message(
       oldFormat == reshade::api::format::unknown
