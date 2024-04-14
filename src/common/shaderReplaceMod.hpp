@@ -43,6 +43,7 @@ namespace ShaderReplaceMod {
   static float* _shaderInjection = nullptr;
   static size_t _shaderInjectionSize = 0;
   static bool usePipelineLayoutCloning = false;
+  static bool forcePipelineCloning = false;
   static int32_t expectedConstantBufferIndex = -1;
 
   static CustomShaders* _customShaders = nullptr;
@@ -1041,7 +1042,7 @@ namespace ShaderReplaceMod {
         reshade::register_event<reshade::addon_event::init_device>(on_init_device);
         reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
 
-        if (!usePipelineLayoutCloning) {
+        if (!usePipelineLayoutCloning && !forcePipelineCloning) {
           reshade::register_event<reshade::addon_event::create_pipeline>(on_create_pipeline);
         }
         reshade::register_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
