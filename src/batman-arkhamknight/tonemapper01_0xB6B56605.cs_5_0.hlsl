@@ -39,6 +39,9 @@ cbuffer cb0 : register(b0) {
   r0.xy = r0.zw * r0.xy + float2(-1, 1);
   r0.xy = r0.xy * float2(0.5, -0.5) + float2(0.5, 0.5);
   r0.zw = cb0[7].xy * r0.xy;
+
+  float2 screenXY = r0.zw;
+
   r0.xy = r0.xy * float2(2, 2) + float2(-1, -1);
   r0.xy = float2(0.769231021, 0.769231021) * r0.xy;
   r0.x = dot(r0.xy, r0.xy);
@@ -47,7 +50,7 @@ cbuffer cb0 : register(b0) {
   r0.x = r0.x * r0.x + -1;
   r0.x = r0.x * 0.300000012 + 1;
 
-  r0.yzw = t2.SampleLevel(s0_s, r0.zw, 0).xyz;  // Bloom
+  r0.yzw = t2.SampleLevel(s0_s, screenXY, 0).xyz;  // Bloom
   // r0.yzw = saturate(r0.yzw); // cap to SDR
   r0.yzw = max(0, r0.yzw);
 
@@ -127,9 +130,9 @@ cbuffer cb0 : register(b0) {
       if (injectedData.fxFilmGrain) {
         float3 grainedColor = computeFilmGrain(
           outputColor,
-          cb0[11].xy,
-          frac(r3.x / 1000.f),
-          cb0[11].z * injectedData.fxFilmGrain * 0.03f,
+          screenXY,
+          frac(r3.x),
+          cb0[11].z ? injectedData.fxFilmGrain * 0.03f : 0,
           1.f
         );
         outputColor = grainedColor;

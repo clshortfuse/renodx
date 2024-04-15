@@ -46,6 +46,8 @@ cbuffer cb0 : register(b0) {
   r0.xy = r1.zw * r0.xy + float2(-1, 1);
   r0.xy = r0.xy * float2(0.5, -0.5) + float2(0.5, 0.5);
   r1.zw = cb0[7].xy * r0.xy;
+
+  float2 screenXY = r1.zw;
   r2.zw = float2(0, 0);
   const float4 texture0Input = t0.Load(r2.xyw);
   r4.xyz = texture0Input.rgb;
@@ -119,7 +121,7 @@ cbuffer cb0 : register(b0) {
   r0.z = 1 + -r5.x;
   r4.xyzw = r4.xyzw * r0.zzzz + r5.wwyz;
   r0.z = 0.200000003 * cb0[10].x;
-  r1.xyz = t4.SampleLevel(s0_s, r1.zw, 0).xyz;
+  r1.xyz = t4.SampleLevel(s0_s, screenXY, 0).xyz;
   r0.w = cb0[10].x * 0.200000003 + 1;
   r1.xyzw = r1.zzxy * r0.wwww + -r0.zzzz;
   r1.xyzw = max(float4(0, 0, 0, 0), r1.xyzw);
@@ -193,9 +195,9 @@ cbuffer cb0 : register(b0) {
       if (injectedData.fxFilmGrain) {
         float3 grainedColor = computeFilmGrain(
           outputColor,
-          cb0[11].xy,
-          frac(r3.x / 1000.f),
-          cb0[11].z * injectedData.fxFilmGrain * 0.03f,
+          screenXY,
+          frac(r3.x),
+          cb0[11].z ? injectedData.fxFilmGrain * 0.03f : 0,
           1.f
         );
         outputColor = grainedColor;

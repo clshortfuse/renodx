@@ -50,6 +50,7 @@ cbuffer cb0 : register(b0) {
   r0.xy = r1.zw * r0.xy + float2(-1, 1);
   r0.xy = r0.xy * float2(0.5, -0.5) + float2(0.5, 0.5);
   r1.zw = cb0[7].xy * r0.xy;
+  float2 screenXY = r1.zw;
 
   r2.zw = float2(0, 0);
 
@@ -124,7 +125,7 @@ cbuffer cb0 : register(b0) {
     // Motion Blur?
   }
 
-  float3 texture3Input = t3.SampleLevel(s0_s, r1.zw, 0).rgb;
+  float3 texture3Input = t3.SampleLevel(s0_s, screenXY, 0).rgb;
 
   r0.z = 0.200000003 * cb0[10].x;
   r1.rgb = texture3Input;
@@ -207,9 +208,9 @@ cbuffer cb0 : register(b0) {
       if (injectedData.fxFilmGrain) {
         float3 grainedColor = computeFilmGrain(
           outputColor,
-          cb0[11].xy,
-          frac(r3.x / 1000.f),
-          cb0[11].z * injectedData.fxFilmGrain * 0.03f,
+          screenXY.xy,
+          frac(r3.x),
+          cb0[11].z ? injectedData.fxFilmGrain * 0.03f : 0,
           1.f
         );
         outputColor = grainedColor;
