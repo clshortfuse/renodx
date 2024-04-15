@@ -174,27 +174,56 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
 
   float3 finalFrame;
   if (injectedData.toneMapType == 0) {
-    r0.x = (dot(BloomOffsetWeight0.xyzw, r1.xyzw));
-    r0.y = (dot(BloomOffsetWeight1.xyzw, r1.xyzw));
-    r0.z = (dot(BloomOffsetWeight2.xyzw, r1.xyzw));
-    r0.xyz = saturate(r0.xyz);
-    r0.xyz = lerp(unfilteredColor, r0.xyz, injectedData.colorGradeColorFilter);
+    if (
+      injectedData.fxBlackWhite != 0
+      && !any(BloomOffsetWeight0.xyzw - BloomOffsetWeight1.xyzw)
+      && !any(BloomOffsetWeight0.xyzw - BloomOffsetWeight2.xyzw)
+      && !any(BloomOffsetWeight0.xyz - BloomOffsetWeight1.zxy)
+      && !any(BloomOffsetWeight0.xyz - BloomOffsetWeight2.yzx)
+    ) {
+      r0.xyz *= BloomOffsetWeight0.x * 3.f;
+      r0.xyz = saturate(r0.xyz);
 
-    r1.xy = GrainSettings2.zw * v4.zw + GrainSettings2.xy;
-    r1.xyzw = GrainTexture_T.Sample(GrainTexture_S_s, r1.xy).xyzw;
+      r1.xy = GrainSettings2.zw * v4.zw + GrainSettings2.xy;
+      r1.xyzw = GrainTexture_T.Sample(GrainTexture_S_s, r1.xy).xyzw;
 
-    r1.xyz = r0.xyz * r1.y - r0.xyz;
-    r0.xyz = GrainSettings.x * injectedData.fxFilmGrain * r1.xyz + r0.xyz;
+      r1.xyz = r0.xyz * r1.y - r0.xyz;
+      r0.xyz = GrainSettings.x * injectedData.fxFilmGrain * r1.xyz + r0.xyz;
 
-    r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
-    r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
-    finalFrame = pow(r2.rgb, 2.2f);
+      r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
+      r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
+      r2.rgb = pow(r2.rgb, 2.2f);
+
+      if (injectedData.fxBlackWhite == 1.f) {
+        r2.rgb = lerp(r2.rgb, yFromBT709(r2.rgb).xxx, injectedData.colorGradeColorFilter);
+      } else {
+        r2.rgb = applySaturation(r2.rgb, 1.f - injectedData.colorGradeColorFilter);
+      }
+      finalFrame = r2.rgb;
+    } else {
+      r0.x = (dot(BloomOffsetWeight0.xyzw, r1.xyzw));
+      r0.y = (dot(BloomOffsetWeight1.xyzw, r1.xyzw));
+      r0.z = (dot(BloomOffsetWeight2.xyzw, r1.xyzw));
+      r0.xyz = saturate(r0.xyz);
+      r0.xyz = lerp(unfilteredColor, r0.xyz, injectedData.colorGradeColorFilter);
+
+      r1.xy = GrainSettings2.zw * v4.zw + GrainSettings2.xy;
+      r1.xyzw = GrainTexture_T.Sample(GrainTexture_S_s, r1.xy).xyzw;
+
+      r1.xyz = r0.xyz * r1.y - r0.xyz;
+      r0.xyz = GrainSettings.x * injectedData.fxFilmGrain * r1.xyz + r0.xyz;
+
+      r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
+      r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
+      finalFrame = pow(r2.rgb, 2.2f);
+    }
+
   } else {
     float vanillaMidGray = 0.18f;
 
     float renoDRTContrast = 1.0f;
     float renoDRTShadow = 0;
-    float renoDRTDechroma = 0.f;
+    float renoDRTDechroma = 0.5f;
     float renoDRTSaturation = 1.0f;
     float renoDRTHighlights = 1.0f;
     ToneMapParams tmParams = {
@@ -219,7 +248,7 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
       outputColor = applyUserColorGrading(
         outputColor,
         tmParams.exposure,
-        1.f,
+        tmParams.saturation,
         tmParams.shadows,
         tmParams.highlights,
         tmParams.contrast
@@ -235,12 +264,32 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
       }
 
       r1.xyz = pow(saturate(sdrColor), 1.f / 2.2f);
-      r0.x = (dot(BloomOffsetWeight0.xyzw, r1.xyzw));
-      r0.y = (dot(BloomOffsetWeight1.xyzw, r1.xyzw));
-      r0.z = (dot(BloomOffsetWeight2.xyzw, r1.xyzw));
-      r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
-      r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
-      float3 lutColor = pow(saturate(r2.rgb), 2.2f);
+      if (
+        injectedData.fxBlackWhite
+        && !any(BloomOffsetWeight0.xyzw - BloomOffsetWeight1.xyzw)
+        && !any(BloomOffsetWeight0.xyzw - BloomOffsetWeight2.xyzw)
+        && !any(BloomOffsetWeight0.xyz - BloomOffsetWeight1.zxy)
+        && !any(BloomOffsetWeight0.xyz - BloomOffsetWeight2.yzx)
+      ) {
+        r0.xyz = r1.xyz * BloomOffsetWeight0.x * 3.f;
+        r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
+        r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
+        r2.rgb = pow(saturate(r2.rgb), 2.2f);
+        if (injectedData.fxBlackWhite == 1.f) {
+          r2.rgb = lerp(r2.rgb, yFromBT709(r2.rgb).xxx, injectedData.colorGradeColorFilter);
+        } else {
+          r2.rgb = applySaturation(r2.rgb, 1.f - injectedData.colorGradeColorFilter);
+        }
+      } else {
+        r0.x = (dot(BloomOffsetWeight0.xyzw, r1.xyzw));
+        r0.y = (dot(BloomOffsetWeight1.xyzw, r1.xyzw));
+        r0.z = (dot(BloomOffsetWeight2.xyzw, r1.xyzw));
+        r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
+        r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
+        r2.rgb = pow(saturate(r2.rgb), 2.2f);
+      }
+
+      float3 lutColor = r2;
 
       outputColor = toneMapUpgrade(hdrColor, sdrColor, lutColor, injectedData.colorGradeColorFilter);
       if (tmParams.saturation != 1.f) {

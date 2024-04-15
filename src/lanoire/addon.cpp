@@ -7,6 +7,7 @@
 
 #define DEBUG_LEVEL_0
 
+#include <embed/0x10A3CFDD.h>
 #include <embed/0x156045DD.h>
 #include <embed/0x231D2C5F.h>
 #include <embed/0x496A13D7.h>
@@ -35,7 +36,9 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0xA558B81D),
   CustomShaderEntry(0xE45962D5),
   CustomShaderEntry(0x156045DD),
-  CustomShaderEntry(0x496A13D7)
+  CustomShaderEntry(0x496A13D7),
+  CustomShaderEntry(0x10A3CFDD)
+
 };
 
 ShaderInjectData shaderInjection;
@@ -182,6 +185,17 @@ UserSettingUtil::UserSettings userSettings = {
     .section = "Effects",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxBlackWhite",
+    .binding = &shaderInjection.fxBlackWhite,
+    .valueType = UserSettingUtil::UserSettingValueType::integer,
+    .defaultValue = 1.f,
+    .canReset = false,
+    .label = "Black & White",
+    .section = "Effects",
+    .tooltip = "Method used to apply black and white effect.",
+    .labels = {"Vanilla", "By Luminance", "By Chrominance"}
   }
 };
 
@@ -203,6 +217,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("fxMask", 50.f);
   UserSettingUtil::updateUserSetting("fxFilmGrain", 50.f);
   UserSettingUtil::updateUserSetting("fxMotionBlur", 50.f);
+  UserSettingUtil::updateUserSetting("fxBlackWhite", 0);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
