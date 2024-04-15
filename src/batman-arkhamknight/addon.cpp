@@ -13,14 +13,18 @@
 #include <embed/0x311E0BDA.h>
 #include <embed/0x3A4E0B90.h>
 #include <embed/0x420BA351.h>
+#include <embed/0x45741188.h>
 #include <embed/0x5DAD9473.h>
 #include <embed/0x7527C8AD.h>
 #include <embed/0x8D4B625A.h>
 #include <embed/0x978BFB09.h>
+#include <embed/0xB4B3061C.h>
 #include <embed/0xB6B56605.h>
 #include <embed/0xBD36EC09.h>
+#include <embed/0xDB56A8CA.h>
 #include <embed/0xF01CCC7E.h>
 #include <embed/0xF3B4727D.h>
+#include <embed/0xFE8B44FC.h>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -34,20 +38,24 @@ extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Batman: Arkham Kni
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Batman: Arkham Knight";
 
 ShaderReplaceMod::CustomShaders customShaders = {
-  CustomShaderEntry(0x2C2D0899),  // ui
-  CustomShaderEntry(0x5DAD9473),  // ui
-  CustomShaderEntry(0x311E0BDA),  // ui
-  CustomShaderEntry(0x2AC7F89E),  // ui
-  CustomShaderEntry(0x7527C8AD),  // ui
-  CustomShaderEntry(0xF3B4727D),  // ui
-  CustomShaderEntry(0x8D4B625A),  // ui
-  CustomShaderEntry(0xBD36EC09),  // ui
-  CustomShaderEntry(0x420BA351),  // ui
-  CustomShaderEntry(0x12200F17),  // video
-  CustomShaderEntry(0xB6B56605),  // tonemap
-  CustomShaderEntry(0x978BFB09),  // tonemap + motionblur
-  CustomShaderEntry(0xF01CCC7E),  // tonemap + fx
-  CustomShaderEntry(0x3A4E0B90)   // tonemap + fx + motionblur
+  CustomSwapchainShader(0x2C2D0899),  // UI Text and Text Shadow (With alpha)
+  CustomSwapchainShader(0x5DAD9473),  // ui
+  CustomSwapchainShader(0x311E0BDA),  // ui
+  CustomSwapchainShader(0x2AC7F89E),  // ui
+  CustomSwapchainShader(0x7527C8AD),  // ui
+  CustomSwapchainShader(0xF3B4727D),  // ui
+  CustomSwapchainShader(0x8D4B625A),  // ui
+  CustomSwapchainShader(0xBD36EC09),  // ui
+  CustomSwapchainShader(0x420BA351),  // ui
+  CustomSwapchainShader(0xFE8B44FC),  // ui
+  CustomSwapchainShader(0xB4B3061C),  // ui
+  CustomSwapchainShader(0xDB56A8CA),  // ui
+  CustomSwapchainShader(0x45741188),  // ui
+  CustomShaderEntry(0x12200F17),      // video
+  CustomShaderEntry(0xB6B56605),      // tonemap
+  CustomShaderEntry(0x978BFB09),      // tonemap + motionblur
+  CustomShaderEntry(0xF01CCC7E),      // tonemap + fx
+  CustomShaderEntry(0x3A4E0B90)       // tonemap + fx + motionblur
 };
 
 ShaderInjectData shaderInjection;
@@ -204,7 +212,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
 
-      SwapChainUpgradeMod::preventFullScreen = false;
+      ShaderReplaceMod::traceUnmodifiedShaders = true;
+      SwapChainUpgradeMod::forceBorderless = false;
+      SwapChainUpgradeMod::preventFullScreen = true;
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
         {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float, 3}
       );

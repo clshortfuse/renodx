@@ -31,11 +31,13 @@ namespace ShaderReplaceMod {
     uint32_t crc32;
     const uint8_t* code;
     uint32_t codeSize;
+    bool swapChainOnly;
   };
 
   typedef std::unordered_map<uint32_t, CustomShader> CustomShaders;
 
   // clang-format off
+#define CustomSwapchainShader(crc32) { crc32, { crc32, _##crc32, sizeof(_##crc32), true } }
 #define CustomShaderEntry(crc32) { crc32, { crc32, _##crc32, sizeof(_##crc32) } }
 #define BypassShaderEntry(crc32) { crc32, { crc32, nullptr, 0 } }
   // clang-format on
@@ -44,9 +46,11 @@ namespace ShaderReplaceMod {
   static size_t _shaderInjectionSize = 0;
   static bool usePipelineLayoutCloning = false;
   static bool forcePipelineCloning = false;
+  static bool traceUnmodifiedShaders = false;
   static int32_t expectedConstantBufferIndex = -1;
 
   static CustomShaders* _customShaders = nullptr;
+  static std::unordered_set<uint32_t> _unmodifiedShaders;
 
   struct __declspec(uuid("018e7b9c-23fd-7863-baf8-a8dad2a6db9d")) device_data {
     std::vector<reshade::api::pipeline_layout_param*> createdParams;
@@ -55,10 +59,13 @@ namespace ShaderReplaceMod {
     std::unordered_set<uint64_t> computeShaderLayouts;
     std::unordered_map<uint64_t, reshade::api::pipeline_layout> pipelineToLayoutMap;
     std::unordered_map<uint64_t, reshade::api::pipeline> pipelineCloneMap;
+    std::unordered_set<uint64_t> swapchainOnlyPipelines;
     std::unordered_map<uint64_t, int32_t> moddedPipelineRootIndexes;
     std::unordered_map<uint64_t, reshade::api::pipeline_layout> moddedPipelineLayouts;
     std::unordered_map<uint64_t, uint32_t> pipelineToShaderHashMap;
     std::unordered_set<uint32_t> bypassedShaders;
+    std::unordered_set<uint64_t> backBuffers;
+    std::unordered_set<uint64_t> backBufferResourceViews;
 
     struct {
       bool isPending;
@@ -67,9 +74,17 @@ namespace ShaderReplaceMod {
       uint32_t layout_param;
     } scheduledBufferInjection;
 
+    struct {
+      bool isPending;
+      reshade::api::pipeline_stage type;
+      reshade::api::pipeline pipeline;
+    } scheduledSwapchainPipeline;
+
     float shaderInjection[64];
     size_t shaderInjectionSize;
     uint32_t currentShader;
+    std::unordered_set<uint64_t> currentRenderTargets;
+    bool hasSwapchainRenderTarget;
   };
 
   static void on_init_device(reshade::api::device* device) {
@@ -102,6 +117,77 @@ namespace ShaderReplaceMod {
     device->destroy_private_data<device_data>();
   }
 
+  static void on_init_swapchain(reshade::api::swapchain* swapchain) {
+    auto device = swapchain->get_device();
+    if (!device) return;
+    auto &privateData = device->get_private_data<device_data>();
+
+    const size_t backBufferCount = swapchain->get_back_buffer_count();
+
+    for (uint32_t index = 0; index < backBufferCount; index++) {
+      auto buffer = swapchain->get_back_buffer(index);
+      privateData.backBuffers.emplace(buffer.handle);
+    }
+  }
+
+  static void on_destroy_swapchain(reshade::api::swapchain* swapchain) {
+    auto device = swapchain->get_device();
+    if (!device) return;
+    auto &privateData = device->get_private_data<device_data>();
+
+    const size_t backBufferCount = swapchain->get_back_buffer_count();
+    for (uint32_t index = 0; index < backBufferCount; index++) {
+      auto buffer = swapchain->get_back_buffer(index);
+      privateData.backBuffers.erase(buffer.handle);
+    }
+  }
+
+  static void on_init_resource_view(
+    reshade::api::device* device,
+    reshade::api::resource resource,
+    reshade::api::resource_usage usage_type,
+    const reshade::api::resource_view_desc &desc,
+    reshade::api::resource_view view
+  ) {
+    auto &privateData = device->get_private_data<device_data>();
+    if (privateData.backBuffers.contains(resource.handle)) {
+      privateData.backBufferResourceViews.emplace(view.handle);
+    }
+  }
+
+  static void on_destroy_resource_view(reshade::api::device* device, reshade::api::resource_view view) {
+    auto &privateData = device->get_private_data<device_data>();
+    privateData.backBufferResourceViews.erase(view.handle);
+  }
+
+  static void on_bind_render_targets_and_depth_stencil(
+    reshade::api::command_list* cmd_list,
+    uint32_t count,
+    const reshade::api::resource_view* rtvs,
+    reshade::api::resource_view dsv
+  ) {
+    auto device = cmd_list->get_device();
+    if (device == nullptr) return;
+
+    device_data &privateData = device->get_private_data<device_data>();
+    privateData.currentRenderTargets.clear();
+    privateData.hasSwapchainRenderTarget = false;
+
+    if (!count) return;
+    for (uint32_t i = 0; i < count; i++) {
+      const reshade::api::resource_view rtv = rtvs[i];
+      if (!rtv.handle) continue;
+
+      // will crash if emplacing???
+      // privateData.currentRenderTargets.emplace(rtv.handle);
+
+      if (privateData.backBufferResourceViews.contains(rtv.handle)) {
+        privateData.hasSwapchainRenderTarget = true;
+        break;
+      }
+    }
+  }
+
   // Before CreatePipelineState
   static bool on_create_pipeline(
     reshade::api::device* device,
@@ -132,6 +218,7 @@ namespace ShaderReplaceMod {
       const auto pair = _customShaders->find(shader_hash);
       if (pair == _customShaders->end()) continue;
       const auto customShader = pair->second;
+      if (customShader.swapChainOnly) continue;
 
       desc->code = customShader.code;
       desc->code_size = customShader.codeSize;
@@ -468,7 +555,9 @@ namespace ShaderReplaceMod {
     auto &data = device->get_private_data<device_data>();
     bool needsClone = false;
     bool foundComputeShader = false;
+    bool swapchainOnly = false;
     uint32_t foundInjection = 0;
+    uint32_t foundShader = 0;
     for (uint32_t i = 0; i < subobjectCount; ++i) {
       const auto subobject = subobjects[i];
       switch (subobject.type) {
@@ -509,6 +598,7 @@ namespace ShaderReplaceMod {
 
       // Pipeline has a pixel shader with code. Hash code and check
       auto shader_hash = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
+      foundShader = shader_hash;
 
       auto codeInjectionPair = data.codeInjections.find(shader_hash);
       if (codeInjectionPair != data.codeInjections.end()) {
@@ -518,6 +608,7 @@ namespace ShaderReplaceMod {
         if (pair != _customShaders->end()) {
           foundInjection = shader_hash;
           const auto customShader = pair->second;
+          swapchainOnly = customShader.swapChainOnly;
 
           if (!needsClone) {
             newSubobjects = new reshade::api::pipeline_subobject[subobjectCount];
@@ -550,7 +641,12 @@ namespace ShaderReplaceMod {
       memcpy(newSubobjects, subobjects, sizeof(reshade::api::pipeline_subobject) * subobjectCount);
       needsClone = true;
     }
-    if (!foundInjection && !needsClone) return;
+    if (!foundInjection && !needsClone) {
+      if (foundShader) {
+        data.pipelineToShaderHashMap.emplace(pipeline.handle, foundShader);
+      }
+      return;
+    }
     if (foundInjection) {
       data.pipelineToShaderHashMap.emplace(pipeline.handle, foundInjection);
     }
@@ -577,6 +673,9 @@ namespace ShaderReplaceMod {
         data.pipelineCloneMap.emplace(pipeline.handle, newPipeline);
         data.pipelineToLayoutMap.emplace(newPipeline.handle, cloneLayout);
         data.pipelineToShaderHashMap.emplace(newPipeline.handle, foundInjection);
+        if (swapchainOnly) {
+          data.swapchainOnlyPipelines.emplace(newPipeline.handle);
+        }
       }
       // free(newSubobjects);
       std::stringstream s;
@@ -678,7 +777,7 @@ namespace ShaderReplaceMod {
     if (pipelineToShaderHashPair != data.pipelineToShaderHashMap.end()) {
       data.currentShader = pipelineToShaderHashPair->second;
     } else {
-      data.currentShader = 0;
+      // data.currentShader = 0;
     }
 
     if (usePipelineLayoutCloning || data.shaderInjectionSize != 0) {
@@ -775,18 +874,29 @@ namespace ShaderReplaceMod {
     auto pipelineToClone = data.pipelineCloneMap.find(pipeline.handle);
     if (pipelineToClone != data.pipelineCloneMap.end()) {
       auto newPipeline = pipelineToClone->second;
+
+      // Must set pipelinelayout first
+      bool scheduleBind = (data.swapchainOnlyPipelines.contains(newPipeline.handle));
+
+      if (scheduleBind) {
+        data.scheduledSwapchainPipeline = {
+          true,
+          type,
+          newPipeline
+        };
+      } else {
+        cmd_list->bind_pipeline(type, newPipeline);
+      }
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
       s << "bind_pipeline(swapping pipeline "
         << reinterpret_cast<void*>(pipeline.handle)
         << " => " << reinterpret_cast<void*>(newPipeline.handle)
         << ", stage: " << std::hex << (uint32_t)type
+        << ", scheduled: " << scheduleBind
         << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
-      // Must set pipelinelayout first
-      cmd_list->bind_pipeline(type, newPipeline);
-      // Safe to call now or write before draw
     }
   }
 
@@ -889,19 +999,46 @@ namespace ShaderReplaceMod {
     }
   }
 
-  static bool on_draw(
-    reshade::api::command_list* cmd_list,
-    uint32_t vertex_count,
-    uint32_t instance_count,
-    uint32_t first_vertex,
-    uint32_t first_instance
-  ) {
+  static bool handlePreDraw(reshade::api::command_list* cmd_list) {
     auto &data = cmd_list->get_device()->get_private_data<device_data>();
     if (data.bypassedShaders.count(data.currentShader)) return true;
+    if (
+      traceUnmodifiedShaders
+      && data.hasSwapchainRenderTarget
+      && !_customShaders->contains(data.currentShader)
+      && !_unmodifiedShaders.contains(data.currentShader)
+    ) {
+      std::stringstream s;
+      s << "handlePreDraw(unmodified shader writing to swapchain: "
+        << "0x" << std::hex << data.currentShader
+        << ")";
+      reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      _unmodifiedShaders.emplace(data.currentShader);
+    }
+    if (data.scheduledSwapchainPipeline.isPending) {
+#ifdef DEBUG_LEVEL_1
+      std::stringstream s;
+      s << "handlePreDraw(binding pipeline pending: "
+        << "0x" << std::hex << data.currentShader
+        << ", swapchain: " << (data.hasSwapchainRenderTarget ? "true" : "false")
+        << ")";
+      reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
+      if (data.hasSwapchainRenderTarget) {
+        cmd_list->bind_pipeline(
+          data.scheduledSwapchainPipeline.type,
+          data.scheduledSwapchainPipeline.pipeline
+        );
+      } else {
+        data.scheduledBufferInjection.isPending = false;
+      }
+      data.scheduledSwapchainPipeline.isPending = false;
+    }
+
     if (data.scheduledBufferInjection.isPending) {
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
-      s << "on_draw(pushing "
+      s << "handlePreDraw(pushing "
         << data.shaderInjectionSize << " buffers"
         << " into " << reinterpret_cast<void*>(data.scheduledBufferInjection.layout.handle)
         << "[" << data.scheduledBufferInjection.layout_param << "]"
@@ -922,31 +1059,23 @@ namespace ShaderReplaceMod {
     return false;
   }
 
-  static bool on_dispatch(reshade::api::command_list* cmd_list, uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z) {
-    auto &data = cmd_list->get_device()->get_private_data<device_data>();
-    if (data.bypassedShaders.count(data.currentShader)) return true;
-    if (data.scheduledBufferInjection.isPending) {
-#ifdef DEBUG_LEVEL_1
-      std::stringstream s;
-      s << "on_dispatch(pushing "
-        << data.shaderInjectionSize << " buffers"
-        << " into " << reinterpret_cast<void*>(data.scheduledBufferInjection.layout.handle)
-        << "[" << data.scheduledBufferInjection.layout_param << "]"
-        << ", stage: 0x" << std::hex << (uint32_t)data.scheduledBufferInjection.stages << std::dec << " ( " << to_string(data.scheduledBufferInjection.stages) << " )"
-        << ")";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
-#endif
-      cmd_list->push_constants(
-        data.scheduledBufferInjection.stages,
-        data.scheduledBufferInjection.layout,
-        data.scheduledBufferInjection.layout_param,
-        0,
-        data.shaderInjectionSize,
-        &data.shaderInjection
-      );
-      data.scheduledBufferInjection.isPending = false;
-    }
-    return false;
+  static bool on_draw(
+    reshade::api::command_list* cmd_list,
+    uint32_t vertex_count,
+    uint32_t instance_count,
+    uint32_t first_vertex,
+    uint32_t first_instance
+  ) {
+    return handlePreDraw(cmd_list);
+  }
+
+  static bool on_dispatch(
+    reshade::api::command_list* cmd_list,
+    uint32_t group_count_x,
+    uint32_t group_count_y,
+    uint32_t group_count_z
+  ) {
+    return handlePreDraw(cmd_list);
   }
 
   static bool on_draw_indexed(
@@ -957,30 +1086,7 @@ namespace ShaderReplaceMod {
     int32_t vertex_offset,
     uint32_t first_instance
   ) {
-    auto &data = cmd_list->get_device()->get_private_data<device_data>();
-    if (data.bypassedShaders.count(data.currentShader)) return true;
-    if (data.scheduledBufferInjection.isPending) {
-#ifdef DEBUG_LEVEL_1
-      std::stringstream s;
-      s << "on_draw_indexed(pushing "
-        << data.shaderInjectionSize << " buffers"
-        << " into " << reinterpret_cast<void*>(data.scheduledBufferInjection.layout.handle)
-        << "[" << data.scheduledBufferInjection.layout_param << "]"
-        << ", stage: 0x" << std::hex << (uint32_t)data.scheduledBufferInjection.stages << std::dec << " ( " << to_string(data.scheduledBufferInjection.stages) << " )"
-        << ")";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
-#endif
-      cmd_list->push_constants(
-        data.scheduledBufferInjection.stages,
-        data.scheduledBufferInjection.layout,
-        data.scheduledBufferInjection.layout_param,
-        0,
-        data.shaderInjectionSize,
-        &data.shaderInjection
-      );
-      data.scheduledBufferInjection.isPending = false;
-    }
-    return false;
+    return handlePreDraw(cmd_list);
   }
 
   static bool on_draw_or_dispatch_indirect(
@@ -991,30 +1097,7 @@ namespace ShaderReplaceMod {
     uint32_t draw_count,
     uint32_t stride
   ) {
-    auto &data = cmd_list->get_device()->get_private_data<device_data>();
-    if (data.bypassedShaders.count(data.currentShader)) return true;
-    if (data.scheduledBufferInjection.isPending) {
-#ifdef DEBUG_LEVEL_1
-      std::stringstream s;
-      s << "on_draw_or_dispatch_indirect(pushing "
-        << data.shaderInjectionSize << " buffers"
-        << " into " << reinterpret_cast<void*>(data.scheduledBufferInjection.layout.handle)
-        << "[" << data.scheduledBufferInjection.layout_param << "]"
-        << ", stage: 0x" << std::hex << (uint32_t)data.scheduledBufferInjection.stages << std::dec << " ( " << to_string(data.scheduledBufferInjection.stages) << " )"
-        << ")";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
-#endif
-      cmd_list->push_constants(
-        data.scheduledBufferInjection.stages,
-        data.scheduledBufferInjection.layout,
-        data.scheduledBufferInjection.layout_param,
-        0,
-        data.shaderInjectionSize,
-        &data.shaderInjection
-      );
-      data.scheduledBufferInjection.isPending = false;
-    }
-    return false;
+    return handlePreDraw(cmd_list);
   }
 
   static void on_present(
@@ -1042,6 +1125,11 @@ namespace ShaderReplaceMod {
         reshade::register_event<reshade::addon_event::init_device>(on_init_device);
         reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
 
+        reshade::register_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
+        reshade::register_event<reshade::addon_event::destroy_swapchain>(on_destroy_swapchain);
+        reshade::register_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
+        reshade::register_event<reshade::addon_event::destroy_resource_view>(on_destroy_resource_view);
+
         if (!usePipelineLayoutCloning && !forcePipelineCloning) {
           reshade::register_event<reshade::addon_event::create_pipeline>(on_create_pipeline);
         }
@@ -1049,6 +1137,8 @@ namespace ShaderReplaceMod {
         reshade::register_event<reshade::addon_event::destroy_pipeline>(on_destroy_pipeline);
 
         reshade::register_event<reshade::addon_event::bind_pipeline>(on_bind_pipeline);
+
+        reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(on_bind_render_targets_and_depth_stencil);
 
         reshade::register_event<reshade::addon_event::draw>(on_draw);
         reshade::register_event<reshade::addon_event::dispatch>(on_dispatch);
@@ -1094,12 +1184,19 @@ namespace ShaderReplaceMod {
         reshade::unregister_event<reshade::addon_event::init_device>(on_init_device);
         reshade::unregister_event<reshade::addon_event::destroy_device>(on_destroy_device);
 
+        reshade::unregister_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
+        reshade::unregister_event<reshade::addon_event::destroy_swapchain>(on_destroy_swapchain);
+        reshade::unregister_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
+        reshade::unregister_event<reshade::addon_event::destroy_resource_view>(on_destroy_resource_view);
+
         reshade::unregister_event<reshade::addon_event::create_pipeline>(on_create_pipeline);
 
         reshade::unregister_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
         reshade::unregister_event<reshade::addon_event::destroy_pipeline>(on_destroy_pipeline);
 
         reshade::unregister_event<reshade::addon_event::bind_pipeline>(on_bind_pipeline);
+
+        reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(on_bind_render_targets_and_depth_stencil);
 
         reshade::unregister_event<reshade::addon_event::draw>(on_draw);
         reshade::unregister_event<reshade::addon_event::dispatch>(on_dispatch);

@@ -8,15 +8,16 @@ cbuffer cb0 : register(b0) {
 // 3Dmigoto declarations
 #define cmp -
 
-void main(out float4 outputColor : SV_TARGET0) {
+void main(out float4 o0 : SV_TARGET0) {
   float4 r0;
 
   r0.xyz = saturate(cb0[6].xyz);
-  r0.xyz = cb0[6].xyz;
-  outputColor.xyz = pow(r0.xyz, cb0[7].x);
-  outputColor.w = cb0[6].w;
+  r0.xyz = log2(r0.xyz);
+  r0.xyz = cb0[7].xxx * r0.xyz;
+  o0.xyz = exp2(r0.xyz);
+  o0.w = cb0[6].w;
 
-  outputColor.rgb = pow(outputColor.rgb, 2.2f);
-  outputColor.rgb *= injectedData.toneMapUINits / 80.f;
+  o0.rgb = pow(o0.rgb, 2.2f);
+  o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
 }
