@@ -1,16 +1,8 @@
 #include "ReShade.fxh"
 
-uint seedGen(float2 p) {
-  return 19u * p.x + 47u * p.y + 101u;
-}
-
-uint wang(uint v) {
-  v = (v ^ 61u) ^ (v >> 16u);
-  v *= 9u;
-  v ^= v >> 4u;
-  v *= 0x27d4eb2du;
-  v ^= v >> 15u;
-  return v;
+// Better random generator
+float rand(float2 uv) {
+  return frac(sin(dot(uv, float2(12.9898, 78.233))) * 43758.5453123);
 }
 
 // This is an attempt to replicate Kodak Vision 5242 with (0,3) range:
@@ -38,9 +30,7 @@ float computeFilmGraininess(float density) {
 }
 
 float3 computeFilmGrain(float3 color, float2 xy, float seed, float strength, float paperWhite, bool debug) {
-  float2 seed2 = seedGen(xy * 43758.5453f + (100.f * seed));
-  float hash = wang(wang(seed2.x) + seed2.y);
-  float randomNumber = hash / 4294967295.f;
+  float randomNumber = rand(xy + seed);
 
   // Film grain is based on film density
   // Film works in negative, meaning black has no density
@@ -69,7 +59,7 @@ float3 computeFilmGrain(float3 color, float2 xy, float seed, float strength, flo
 
   if (debug) {
     // Output Visualization
-    outputColor = abs(yChange);
+    outputColor = abs(yChange) * paperWhite;
   }
 
   return outputColor;

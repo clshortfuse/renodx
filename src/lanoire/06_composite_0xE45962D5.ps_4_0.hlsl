@@ -5,7 +5,7 @@
 // Composite/Render
 
 cbuffer Buff2 : register(b2) {
-  float ElapsedTime : packoffset(c12);  // Injected
+  float ElapsedTime : packoffset(c12);  // Extracted
   float4 CameraParams : packoffset(c52);
   float4 DofParams : packoffset(c51);
   float4 ColorControlSettings : packoffset(c41);
@@ -324,7 +324,7 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
       float3 grainedColor = computeFilmGrain(
         finalFrame,
         v4.xy,
-        frac(ElapsedTime * 0.10f),
+        frac(ElapsedTime),
         injectedData.fxFilmGrain * 0.025f,
         1.f
       );
