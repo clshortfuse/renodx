@@ -208,9 +208,7 @@ cbuffer cb0 : register(b0) {
   if (dtmParams.drawToneMapper) outputColor = DrawToneMapperEnd(outputColor, dtmParams);
 #endif
 
-  outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-
-  outputColor = sign(outputColor) * pow(abs(outputColor), 1.f / 2.2f);
+  outputColor *= injectedData.toneMapGameNits / 80.f;
 
   u0[uint2(r2.x, r2.y)] = outputColor.xyzx;
   // No code for instruction (needs manual fix):
