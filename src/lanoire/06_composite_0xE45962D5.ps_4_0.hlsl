@@ -325,7 +325,7 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
         finalFrame,
         v4.xy,
         frac(ElapsedTime),
-        injectedData.fxFilmGrain * 0.025f,
+        injectedData.fxFilmGrain * 0.03f,
         1.f
       );
       finalFrame = grainedColor;
