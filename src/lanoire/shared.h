@@ -19,6 +19,7 @@ struct ShaderInjectData {
   float fxMask;
   float fxFilmGrain;
   float fxMotionBlur;
+  float fxBlackWhite;
 };
 
 #ifndef __cplusplus
