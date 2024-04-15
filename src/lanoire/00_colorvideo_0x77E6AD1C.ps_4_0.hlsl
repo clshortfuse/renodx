@@ -1,3 +1,4 @@
+#include "../common/tonemap.hlsl"
 #include "./shared.h"
 
 cbuffer dx11_constants : register(b0) {
@@ -31,6 +32,9 @@ void main(float4 v0 : SV_Position0, float2 v1 : TEXCOORD0, out float4 o0 : SV_TA
   o0.xyzw = consta.xyzw * r0.xyzw;
 
   o0 = pow(saturate(o0), 2.2f);
-  o0.rgb *= injectedData.toneMapGameNits / 80.f;  // Video as Gameplay
+  float videoPeak = injectedData.toneMapPeakNits / (injectedData.toneMapGameNits / 203.f);
+  o0.rgb = bt2446a_inverse_tonemapping_bt709(o0.rgb, 100.f, videoPeak);
+  o0.rgb *= injectedData.toneMapPeakNits / videoPeak;
+  o0.rgb /= 80.f;
   return;
 }
