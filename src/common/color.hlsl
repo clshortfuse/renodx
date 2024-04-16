@@ -367,4 +367,15 @@ float3 gammaCorrectEmulate22(float3 color, bool inverse = false) {
   );
 }
 
+float3 hueCorrection(float3 incorrectColor, float3 correctColor) {
+  float3 correctLCh = okLChFromBT709(correctColor);
+  float3 incorrectLCh = okLChFromBT709(incorrectColor);
+  incorrectLCh[2] = correctLCh[2];
+  float3 color = bt709FromOKLCh(incorrectLCh);
+  color = mul(BT709_2_AP1_MAT, color);  // Convert to AP1
+  color = max(0, color);                // Clamp to AP1
+  color = mul(AP1_2_BT709_MAT, color);  // Convert BT709
+  return color;
+}
+
 #endif  // SRC_COMMON_COLOR_HLSL_
