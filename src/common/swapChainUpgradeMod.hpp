@@ -51,6 +51,7 @@ namespace SwapChainUpgradeMod {
   static bool upgradeResourceViews = true;
   static bool useSharedDevice = false;
   static bool preventFullScreen = true;
+  static bool forceBorderless = true;
 
   static reshade::api::effect_runtime* currentEffectRuntime = nullptr;
   static reshade::api::color_space currentColorSpace = reshade::api::color_space::unknown;
@@ -100,7 +101,9 @@ namespace SwapChainUpgradeMod {
         break;
     }
 
-    desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+    if (preventFullScreen) {
+      desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+    }
     desc.present_flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
     std::stringstream s;
@@ -163,6 +166,7 @@ namespace SwapChainUpgradeMod {
     reshade::api::swapchain* swapchain,
     reshade::api::resource_desc buffer_desc
   ) {
+    if (!preventFullScreen && !forceBorderless) return;
     HWND outputWindow = (HWND)swapchain->get_hwnd();
     if (outputWindow == nullptr) {
       reshade::log_message(reshade::log_level::debug, "No HWND?");
@@ -171,41 +175,45 @@ namespace SwapChainUpgradeMod {
 
     IDXGISwapChain* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
 
-    IDXGIFactory* factory;
-    bool hr = native_swapchain->GetParent(IID_PPV_ARGS(&factory));
-    if (SUCCEEDED(hr)) {
-      factory->MakeWindowAssociation(outputWindow, DXGI_MWA_NO_WINDOW_CHANGES);
-      reshade::log_message(reshade::log_level::debug, "checkSwapchainSize(set DXGI_MWA_NO_WINDOW_CHANGES)");
-    } else {
-      reshade::log_message(reshade::log_level::error, "checkSwapchainSize(could not find DXGI factory)");
+    if (preventFullScreen) {
+      IDXGIFactory* factory;
+      bool hr = native_swapchain->GetParent(IID_PPV_ARGS(&factory));
+      if (SUCCEEDED(hr)) {
+        factory->MakeWindowAssociation(outputWindow, DXGI_MWA_NO_WINDOW_CHANGES);
+        reshade::log_message(reshade::log_level::debug, "checkSwapchainSize(set DXGI_MWA_NO_WINDOW_CHANGES)");
+      } else {
+        reshade::log_message(reshade::log_level::error, "checkSwapchainSize(could not find DXGI factory)");
+      }
     }
 
-    RECT window_rect = {};
-    GetClientRect(outputWindow, &window_rect);
+    if (forceBorderless) {
+      RECT window_rect = {};
+      GetClientRect(outputWindow, &window_rect);
 
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-    int windowWidth = window_rect.right - window_rect.left;
-    int windowHeight = window_rect.bottom - window_rect.top;
+      int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+      int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+      int windowWidth = window_rect.right - window_rect.left;
+      int windowHeight = window_rect.bottom - window_rect.top;
 
-    std::stringstream s;
-    s << "checkSwapchainSize("
-      << "screenWidth: " << screenWidth
-      << ", screenHeight: " << screenHeight
-      << ", bufferWidth: " << buffer_desc.texture.width
-      << ", bufferHeight: " << buffer_desc.texture.height
-      << ", windowWidth: " << windowWidth
-      << ", windowHeight: " << windowHeight
-      << ", windowTop: " << window_rect.top
-      << ", windowLeft: " << window_rect.left
-      << ")";
-    reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      std::stringstream s;
+      s << "checkSwapchainSize("
+        << "screenWidth: " << screenWidth
+        << ", screenHeight: " << screenHeight
+        << ", bufferWidth: " << buffer_desc.texture.width
+        << ", bufferHeight: " << buffer_desc.texture.height
+        << ", windowWidth: " << windowWidth
+        << ", windowHeight: " << windowHeight
+        << ", windowTop: " << window_rect.top
+        << ", windowLeft: " << window_rect.left
+        << ")";
+      reshade::log_message(reshade::log_level::debug, s.str().c_str());
 
-    if (screenWidth != buffer_desc.texture.width) return;
-    if (screenHeight != buffer_desc.texture.height) return;
-    // if (window_rect.top == 0 && window_rect.left == 0) return;
-    SetWindowLongPtr(outputWindow, GWL_STYLE, WS_VISIBLE | WS_POPUP);
-    SetWindowPos(outputWindow, HWND_TOP, 0, 0, screenWidth, screenHeight, SWP_FRAMECHANGED);
+      if (screenWidth != buffer_desc.texture.width) return;
+      if (screenHeight != buffer_desc.texture.height) return;
+      // if (window_rect.top == 0 && window_rect.left == 0) return;
+      SetWindowLongPtr(outputWindow, GWL_STYLE, WS_VISIBLE | WS_POPUP);
+      SetWindowPos(outputWindow, HWND_TOP, 0, 0, screenWidth, screenHeight, SWP_FRAMECHANGED);
+    }
   }
 
   static void on_init_swapchain(reshade::api::swapchain* swapchain) {
@@ -554,9 +562,6 @@ namespace SwapChainUpgradeMod {
         reshade::log_message(reshade::log_level::info, "Preventing fullscreen");
         SetWindowLongPtr(outputWindow, GWL_STYLE, WS_VISIBLE | WS_POPUP);
         SetWindowPos(outputWindow, HWND_TOP, left, top, textureWidth, textureHeight, SWP_FRAMECHANGED);
-        BringWindowToTop(outputWindow);
-        SetForegroundWindow(outputWindow);
-        SetFocus(outputWindow);
       }
       return true;
     }
