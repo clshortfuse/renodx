@@ -1,3 +1,4 @@
+#include "../common/color.hlsl"
 #include "./shared.h"
 
 SamplerState Sampler0_s : register(s0);
@@ -15,7 +16,8 @@ void main(
   out float4 o0 : SV_Target0)
 {
   o0.xyzw = Tex0.Sample(Sampler0_s, v2.xy).xyzw;
-  o0 = pow(saturate(o0), 2.2f);
+  o0 = saturate(o0);
+  o0 = injectedData.toneMapGammaCorrection ? pow(o0, 2.2f) : linearFromSRGBA(o0);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
 }

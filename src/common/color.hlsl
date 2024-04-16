@@ -205,6 +205,15 @@ float4 linearFromSRGB(float4 color) {
   );
 }
 
+float4 linearFromSRGBA(float4 color) {
+  return float4(
+    linearFromSRGB(color.r),
+    linearFromSRGB(color.g),
+    linearFromSRGB(color.b),
+    linearFromSRGB(color.a)
+  );
+}
+
 float arriC800FromLinear(float x, float cut = 0.010591f) {
   const float a = 5.555556f;
   const float b = 0.052272f;

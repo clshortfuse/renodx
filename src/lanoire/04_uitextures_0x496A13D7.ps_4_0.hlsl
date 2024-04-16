@@ -1,3 +1,4 @@
+#include "../common/color.hlsl"
 #include "./shared.h"
 
 cbuffer Buff1 : register(b1)
@@ -106,7 +107,8 @@ void main(
   }
   o0.xyzw = r0.xyzw;
 
-  o0 = pow(saturate(o0), 2.2f);
+  o0 = saturate(o0);
+  o0 = injectedData.toneMapGammaCorrection ? pow(o0, 2.2f) : linearFromSRGBA(o0);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
 }

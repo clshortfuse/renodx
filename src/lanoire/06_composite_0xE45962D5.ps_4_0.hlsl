@@ -1,3 +1,4 @@
+#include "../common/color.hlsl"
 #include "../common/filmgrain.hlsl"
 #include "../common/tonemap.hlsl"
 #include "./shared.h"
@@ -192,7 +193,7 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
 
       r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
       r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
-      r2.rgb = pow(r2.rgb, 2.2f);
+      r2.rgb = injectedData.toneMapGammaCorrection ? pow(r2.rgb, 2.2f) : linearFromSRGB(r2.rgb);
 
       if (injectedData.fxBlackWhite == 1.f) {
         r2.rgb = lerp(r2.rgb, yFromBT709(r2.rgb).xxx, injectedData.colorGradeColorFilter);
@@ -215,7 +216,7 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
 
       r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
       r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
-      finalFrame = pow(r2.rgb, 2.2f);
+      finalFrame = injectedData.toneMapGammaCorrection ? pow(r2.rgb, 2.2f) : linearFromSRGB(r2.rgb);
     }
 
   } else {
@@ -230,7 +231,7 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
       injectedData.toneMapType,
       injectedData.toneMapPeakNits,
       injectedData.toneMapGameNits,
-      0,
+      0,  // Gamma Correction not used here
       injectedData.colorGradeExposure,
       injectedData.colorGradeHighlights,
       injectedData.colorGradeShadows,
@@ -244,7 +245,10 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
       renoDRTHighlights
     };
     if (injectedData.colorGradeColorFilter) {
-      float3 outputColor = pow(max(0, unfilteredColor), 2.2f);
+      float3 outputColor = injectedData.toneMapGammaCorrection
+                           ? pow(max(0, unfilteredColor), 2.2f)
+                           : linearFromSRGB(max(0, unfilteredColor));
+
       outputColor = applyUserColorGrading(
         outputColor,
         tmParams.exposure,
@@ -263,7 +267,9 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
         sdrColor = renoDRTToneMap(outputColor, tmParams, true);
       }
 
-      r1.xyz = pow(saturate(sdrColor), 1.f / 2.2f);
+      r1.xyz = injectedData.toneMapGammaCorrection
+               ? pow(saturate(sdrColor), 1.f / 2.2f)
+               : srgbFromLinear(saturate(sdrColor));
       if (
         injectedData.fxBlackWhite
         && !any(BloomOffsetWeight0.xyzw - BloomOffsetWeight1.xyzw)
@@ -274,7 +280,10 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
         r0.xyz = r1.xyz * BloomOffsetWeight0.x * 3.f;
         r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
         r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
-        r2.rgb = pow(saturate(r2.rgb), 2.2f);
+        r2.rgb = injectedData.toneMapGammaCorrection
+                 ? pow(saturate(r2.rgb), 2.2f)
+                 : linearFromSRGB(saturate(r2.rgb));
+
         if (injectedData.fxBlackWhite == 1.f) {
           r2.rgb = lerp(r2.rgb, yFromBT709(r2.rgb).xxx, injectedData.colorGradeColorFilter);
         } else {
@@ -286,7 +295,9 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
         r0.z = (dot(BloomOffsetWeight2.xyzw, r1.xyzw));
         r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
         r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
-        r2.rgb = pow(saturate(r2.rgb), 2.2f);
+        r2.rgb = injectedData.toneMapGammaCorrection
+                 ? pow(saturate(r2.rgb), 2.2f)
+                 : linearFromSRGB(saturate(r2.rgb));
       }
 
       float3 lutColor = r2;
@@ -300,7 +311,9 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
       r0.rgb = unfilteredColor.rgb;
       r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
       r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
-      float3 outputColor = pow(max(0, r2.rgb), 2.2f);
+      float3 outputColor = injectedData.toneMapGammaCorrection
+                           ? pow(max(0, r2.rgb), 2.2f)
+                           : linearFromSRGB(max(0, r2.rgb));
       finalFrame = toneMap(outputColor, tmParams);
     }
   }
@@ -340,5 +353,8 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
   outputColor = min(outputColor, injectedData.toneMapPeakNits);
   outputColor /= 80.f;
 
-  return float4(outputColor.rgb, pow(r0.w, 2.2f));
+  float alpha = injectedData.toneMapGammaCorrection
+                ? pow(r0.w, 2.2f)
+                : linearFromSRGB(r0.w);
+  return float4(outputColor.rgb, alpha);
 }
