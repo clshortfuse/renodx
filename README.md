@@ -10,6 +10,7 @@ RenoDX, short for "Renovation Engine for DirectX Games", is a toolset to mod gam
 * [Lost Planet](https://www.nexusmods.com/lostplanetextremeconditioncoloniesedition/mods/2)
 * [Hi-Fi Rush](https://www.nexusmods.com/hifirush/mods/24)
 * [Tunic](https://www.nexusmods.com/tunic/mods/8)
+* [L.A. Noire](https://www.nexusmods.com/lanoire/mods/6)
 * ~~Sea of Thieves~~ (No longer supported because Easy Anti-Cheat)
 
 # Work in progress
