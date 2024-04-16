@@ -121,7 +121,7 @@ cbuffer cb0 : register(b0) {
         r2.xyzw = r3.xyzw * r2.xyzw + float4(1, 1, 1, 1);
         r0.xyzw = r2.xyzw * r0.xyzw;
       }
-    outputColor = pow(r0.xyz, 2.2f);
+    outputColor = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : linearFromSRGB(r0.rgb);
   } else {
     outputColor = applyUserToneMap(untonemapped.rgb, t1, s0_s);
 #if DRAW_TONEMAPPER

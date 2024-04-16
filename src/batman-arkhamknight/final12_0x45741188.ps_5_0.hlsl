@@ -1,3 +1,4 @@
+#include "../common/color.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -26,7 +27,8 @@ void main(float4 v0 : COLOR0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1, floa
   r0.xyz = cb0[5].www * r0.xyz;
   o0.xyz = exp2(r0.xyz);
 
-  o0.rgb = pow(saturate(o0.rgb), 2.2f);
+  o0.rgb = saturate(o0.rgb);
+  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
 }

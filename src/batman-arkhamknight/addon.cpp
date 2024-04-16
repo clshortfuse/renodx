@@ -109,6 +109,16 @@ UserSettingUtil::UserSettings userSettings = {
     .max = 500.f
   },
   new UserSettingUtil::UserSetting {
+    .key = "toneMapGammaCorrection",
+    .binding = &shaderInjection.toneMapGammaCorrection,
+    .valueType = UserSettingUtil::UserSettingValueType::boolean,
+    .defaultValue = 1.f,
+    .canReset = false,
+    .label = "Gamma Correction",
+    .section = "Tone Mapping",
+    .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
+  },
+  new UserSettingUtil::UserSetting {
     .key = "colorGradeExposure",
     .binding = &shaderInjection.colorGradeExposure,
     .defaultValue = 1.f,
@@ -198,6 +208,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("toneMapPeakNits", 203.f);
   UserSettingUtil::updateUserSetting("toneMapGameNits", 203.f);
   UserSettingUtil::updateUserSetting("toneMapUINits", 203.f);
+  UserSettingUtil::updateUserSetting("toneMapGammaCorrection", 0);
   UserSettingUtil::updateUserSetting("colorGradeExposure", 1.f);
   UserSettingUtil::updateUserSetting("colorGradeHighlights", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);

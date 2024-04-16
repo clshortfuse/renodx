@@ -24,7 +24,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
     injectedData.toneMapType,
     injectedData.toneMapPeakNits,
     injectedData.toneMapGameNits,
-    0,
+    injectedData.toneMapGammaCorrection - 1, // -1 == srgb
     injectedData.colorGradeExposure,
     injectedData.colorGradeHighlights,
     injectedData.colorGradeShadows,
@@ -49,6 +49,10 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   };
 
   outputColor = toneMap(untonemapped, tmParams, lutParams);
+
+  if (injectedData.toneMapGammaCorrection == 0.f) {
+    outputColor = gammaCorrectSafe(outputColor, true);
+  }
 
   return outputColor;
 }

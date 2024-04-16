@@ -351,19 +351,37 @@ float3 bt709FromOKLCh(float3 oklch) {
   return bt709FromOKLab(okLab);
 }
 
-float gammaCorrectEmulate22(float x, bool inverse = false) {
-  if (inverse) {
+float gammaCorrect(float x, bool pow2srgb = false) {
+  if (pow2srgb) {
     return linearFromSRGB(pow(x, 1.f / 2.2f));
   } else {
     return pow(srgbFromLinear(x), 2.2f);
   }
 }
 
-float3 gammaCorrectEmulate22(float3 color, bool inverse = false) {
+float gammaCorrectSafe(float x, bool pow2srgb = false) {
+  if (pow2srgb) {
+    return sign(x) * linearFromSRGB(pow(abs(x), 1.f / 2.2f));
+  } else {
+    return sign(x) * pow(srgbFromLinear(abs(x)), 2.2f);
+  }
+}
+
+float3 gammaCorrect(float3 color, bool pow2srgb = false) {
   return float3(
-    gammaCorrectEmulate22(color.r),
-    gammaCorrectEmulate22(color.g),
-    gammaCorrectEmulate22(color.b)
+    gammaCorrect(color.r, pow2srgb),
+    gammaCorrect(color.g, pow2srgb),
+    gammaCorrect(color.b, pow2srgb)
+  );
+}
+
+float3 gammaCorrectSafe(float3 color, bool pow2srgb = false) {
+  float3 signs = sign(color);
+  color = abs(color);
+  return signs * float3(
+    gammaCorrect(color.r, pow2srgb),
+    gammaCorrect(color.g, pow2srgb),
+    gammaCorrect(color.b, pow2srgb)
   );
 }
 
