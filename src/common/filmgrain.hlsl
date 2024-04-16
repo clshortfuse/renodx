@@ -26,9 +26,7 @@ float computeFilmGraininess(float density) {
 }
 
 float3 computeFilmGrain(float3 color, float2 xy, float seed, float strength, float paperWhite = 1.f, bool debug = false) {
-  float2 seed2 = seedGen(xy * 43758.5453f + (100.f * seed));
-  float hash = wang(wang(seed2.x) + seed2.y);
-  float randomNumber = hash / 4294967295.f;
+  float randomNumber = rand(xy + seed);
 
   // Film grain is based on film density
   // Film works in negative, meaning black has no density
