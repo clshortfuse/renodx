@@ -12,13 +12,20 @@ cbuffer cb0 : register(b0) {
 // 3Dmigoto declarations
 #define cmp -
 
-void main(float4 v0 : COLOR0, float2 v1 : TEXCOORD0, out float4 outputColor : SV_TARGET0) {
-  float4 r0 = t0.Sample(s0_s, v1.xy).xyzw;
-  r0.xyz = saturate(r0.xyz);
-  outputColor.w = v0.w * r0.w;
-  outputColor.xyz = pow(r0.xyz, cb0[5].w);
+void main(float4 v0 : COLOR0, float2 v1 : TEXCOORD0, out float4 o0 : SV_TARGET0) {
+  float4 r0;
+  uint4 bitmask, uiDest;
+  float4 fDest;
 
-  outputColor.rgb = pow(outputColor.rgb, 2.2f);
-  outputColor.rgb *= injectedData.toneMapUINits / 80.f;
+  r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
+  r0 = saturate(r0);
+  // r0.xyz = saturate(r0.xyz);
+  o0.w = v0.w * r0.w;
+  r0.xyz = log2(r0.xyz);
+  r0.xyz = cb0[5].www * r0.xyz;
+  o0.xyz = exp2(r0.xyz);
+
+  o0.rgb = pow(saturate(o0.rgb), 2.2f);
+  o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
 }

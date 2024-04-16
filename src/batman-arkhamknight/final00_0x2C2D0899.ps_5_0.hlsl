@@ -26,7 +26,7 @@ void main(float2 v0 : TEXCOORD0, float4 v1 : COLOR0, out float4 o0 : SV_TARGET0)
   r0.x = t0.Sample(s0_s, v0.xy).x;
   o0.w = v1.w * r0.x;
 
-  o0.rgb = pow(o0.rgb, 2.2f);
+  o0.rgb = pow(saturate(o0.rgb), 2.2f);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
 }

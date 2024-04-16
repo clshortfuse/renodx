@@ -16,6 +16,7 @@
 #include <embed/0x45741188.h>
 #include <embed/0x5DAD9473.h>
 #include <embed/0x7527C8AD.h>
+#include <embed/0x8CBD2352.h>
 #include <embed/0x8D4B625A.h>
 #include <embed/0x978BFB09.h>
 #include <embed/0xB4B3061C.h>
@@ -51,6 +52,7 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomSwapchainShader(0xB4B3061C),  // ui
   CustomSwapchainShader(0xDB56A8CA),  // ui
   CustomSwapchainShader(0x45741188),  // ui
+  CustomSwapchainShader(0x8CBD2352),  // ui
   CustomShaderEntry(0x12200F17),      // video
   CustomShaderEntry(0xB6B56605),      // tonemap
   CustomShaderEntry(0x978BFB09),      // tonemap + motionblur
