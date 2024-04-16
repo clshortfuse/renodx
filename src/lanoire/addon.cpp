@@ -203,7 +203,6 @@ UserSettingUtil::UserSettings userSettings = {
     .binding = &shaderInjection.fxBlackWhite,
     .valueType = UserSettingUtil::UserSettingValueType::integer,
     .defaultValue = 1.f,
-    .canReset = false,
     .label = "Black & White",
     .section = "Effects",
     .tooltip = "Method used to apply black and white effect.",
@@ -230,7 +229,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("fxMask", 50.f);
   UserSettingUtil::updateUserSetting("fxFilmGrain", 50.f);
   UserSettingUtil::updateUserSetting("fxMotionBlur", 50.f);
-  UserSettingUtil::updateUserSetting("fxBlackWhite", 0);
+  UserSettingUtil::updateUserSetting("fxBlackWhite", 0.f);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
