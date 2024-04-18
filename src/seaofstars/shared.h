@@ -18,6 +18,13 @@ struct ShaderInjectData {
   float colorGradeLUTScaling;
   float fxBloom;
   float fxVignette;
+  float fxHeroLight;
 };
+
+#ifndef __cplusplus
+cbuffer cb13 : register(b13) {
+  ShaderInjectData injectedData : packoffset(c0);
+}
+#endif
 
 #endif  // SRC_SEAOFSTARS_SHARED_H_

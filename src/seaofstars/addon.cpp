@@ -8,6 +8,7 @@
 #define DEBUG_LEVEL_0
 
 #include <embed/0x552A4A60.h>
+#include <embed/0x67758842.h>
 #include <embed/0x72B31CDE.h>
 
 #include <deps/imgui/imgui.h>
@@ -23,7 +24,8 @@ extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Sea of St
 
 ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0x552A4A60),
-  CustomShaderEntry(0x72B31CDE)
+  CustomShaderEntry(0x72B31CDE),
+  CustomShaderEntry(0x67758842)
 };
 
 ShaderInjectData shaderInjection;
@@ -56,6 +58,7 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "toneMapGameNits",
     .binding = &shaderInjection.toneMapGameNits,
     .defaultValue = 203.f,
+    .canReset = false,
     .label = "Game Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the value of 100%% white in nits",
@@ -66,6 +69,7 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "toneMapUINits",
     .binding = &shaderInjection.toneMapUINits,
     .defaultValue = 203.f,
+    .canReset = false,
     .label = "UI Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the brightness of UI and HUD elements in nits",
@@ -76,9 +80,10 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "toneMapGammaCorrection",
     .binding = &shaderInjection.toneMapGammaCorrection,
     .valueType = UserSettingUtil::UserSettingValueType::boolean,
+    .canReset = false,
     .label = "Gamma Correction",
     .section = "Tone Mapping",
-    .tooltip = "Emulates a 2.2 OETF (use with HDR or sRGB)",
+    .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
   },
   new UserSettingUtil::UserSetting {
     .key = "colorGradeExposure",
@@ -152,6 +157,24 @@ UserSettingUtil::UserSettings userSettings = {
     .section = "Effects",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxVignette",
+    .binding = &shaderInjection.fxVignette,
+    .defaultValue = 50.f,
+    .label = "Vignette",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxHeroLight",
+    .binding = &shaderInjection.fxHeroLight,
+    .defaultValue = 100.f,
+    .label = "Hero Light",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.01f; }
   }
 };
 
@@ -176,6 +199,8 @@ static void onPresetOff() {
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
   switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
+
+      ShaderReplaceMod::forcePipelineCloning = true;
       if (!reshade::register_addon(hModule)) return FALSE;
       break;
     case DLL_PROCESS_DETACH:

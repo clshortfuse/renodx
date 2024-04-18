@@ -9,10 +9,6 @@ cbuffer cb0 : register(b0) {
   float4 cb0[134];
 }
 
-cbuffer cb13 : register(b13) {
-  ShaderInjectData injectedData : packoffset(c0);
-}
-
 // 3Dmigoto declarations
 #define cmp -
 
@@ -22,7 +18,7 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
   float3 outputColor = inputColor.rgb;
 
   if (injectedData.toneMapGammaCorrection) {
-    outputColor = sign(outputColor) * gammaCorrectEmulate22(outputColor);
+    outputColor = gammaCorrectSafe(outputColor);
   }
 
   outputColor.rgb *= injectedData.toneMapUINits / 80.f;

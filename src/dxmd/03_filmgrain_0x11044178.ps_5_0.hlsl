@@ -55,10 +55,10 @@ void main(
     o0.xyz = applyUserColorGrading(
       o0.xyz,
       injectedData.colorGradeExposure,
-      injectedData.colorGradeSaturation,
-      injectedData.colorGradeShadows,
       injectedData.colorGradeHighlights,
-      injectedData.colorGradeContrast
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation
     );
   } else {
     r0.xyzw = t0.Sample(s1_s, v1.xy).xyzw;
@@ -69,11 +69,12 @@ void main(
     outputColor = pow(outputColor, 2.2f);
 
     float vanillaMidGray = 0.18f;
-    float renoDRTContrast = 1.05f;
-    float renoDRTShadow = 0;
-    float renoDRTDechroma = 0.5f;
-    float renoDRTSaturation = 1.05f;
     float renoDRTHighlights = 1.f;
+    float renoDRTShadows = 1.f;
+    float renoDRTContrast = 1.05f;
+    float renoDRTSaturation = 1.05f;
+    float renoDRTDechroma = 0.5f;
+    float renoDRTFlare = 0.f;
 
     ToneMapParams tmParams = {
       injectedData.toneMapType,
@@ -86,11 +87,12 @@ void main(
       injectedData.colorGradeContrast,
       injectedData.colorGradeSaturation,
       vanillaMidGray,
+      renoDRTHighlights,
+      renoDRTShadows,
       renoDRTContrast,
-      renoDRTShadow,
-      renoDRTDechroma,
       renoDRTSaturation,
-      renoDRTHighlights
+      renoDRTDechroma,
+      renoDRTFlare
     };
 
     outputColor = toneMap(outputColor, tmParams);

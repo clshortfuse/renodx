@@ -23,10 +23,10 @@ float3 applySaturation(float3 bt709, float saturation = 1.f) {
 float3 applyUserColorGrading(
   float3 color,
   float userExposure = 1.f,
-  float userSaturation = 1.f,
-  float userShadows = 1.f,
   float userHighlights = 1.f,
-  float userContrast = 1.f
+  float userShadows = 1.f,
+  float userContrast = 1.f,
+  float userSaturation = 1.f
 ) {
   if (userExposure == 1.f && userSaturation == 1.f && userShadows == 1.f && userHighlights == 1.f && userContrast == 1.f) {
     return color;
@@ -39,6 +39,7 @@ float3 applyUserColorGrading(
 
   float lum = yFromBT709(abs(color));
   float normalizedLum = lum / 0.18f;
+  
   float contrastedLum = pow(normalizedLum, userContrast);
 
   float highlightedLum = pow(contrastedLum, userHighlights);

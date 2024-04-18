@@ -421,10 +421,10 @@ float4 tonemap(bool isACESMode = false) {
     outputRGB = applyUserColorGrading(
       outputRGB,
       injectedData.colorGradeExposure,
-      injectedData.colorGradeSaturation,
-      injectedData.colorGradeShadows,
       injectedData.colorGradeHighlights,
-      injectedData.colorGradeContrast
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation
     );
 
     if (toneMapperType == TONE_MAPPER_TYPE__NONE) {
@@ -619,11 +619,13 @@ float4 tonemap(bool isACESMode = false) {
           renoDRTMax / paperWhite * 100.f,
           0.18f,
           midGrayNits,
-          1.8,  // contrast
-          0.f,  // shadow
-          0.60f,
+          1.f,    // exposure
+          1.2f,   // highlights
+          1.f,    // shadow
+          1.8,    // contrast
           1.40f,  // saturation
-          1.2f    // highlights
+          0.60f,
+          0.f
         );
         outputRGB *= paperWhite;
       }
@@ -634,10 +636,10 @@ float4 tonemap(bool isACESMode = false) {
     outputRGB = applyUserColorGrading(
       outputRGB,
       injectedData.colorGradeExposure,
-      injectedData.colorGradeSaturation,
-      injectedData.colorGradeShadows,
       injectedData.colorGradeHighlights,
-      injectedData.colorGradeContrast
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation
     );
     outputRGB = max(0, outputRGB);
     if ((injectedData.processingLUTOrder == -1.f || asuint(cb6[42u]).y == 1u) && (_69.x != 0u)) {

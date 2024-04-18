@@ -43,11 +43,12 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
   outputColor = pow(outputColor, 2.2f);  // linear
 
   float vanillaMidGray = 0.18f;  // pow(yFromBT709(tonemap(0.5f)), 2.2f);
-  float renoDRTContrast = 1.0f;
-  float renoDRTShadow = 0;
-  float renoDRTDechroma = 0.5f;
-  float renoDRTSaturation = 1.0f;
   float renoDRTHighlights = 1.0f;
+  float renoDRTShadows = 1.f;
+  float renoDRTContrast = 1.0f;
+  float renoDRTSaturation = 1.0f;
+  float renoDRTDechroma = 0.5f;
+  float renoDRTFlare = 0.0f;
 
   ToneMapParams tmParams = {
     injectedData.toneMapType,
@@ -60,11 +61,12 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
     injectedData.colorGradeContrast,
     injectedData.colorGradeSaturation,
     vanillaMidGray,
+    renoDRTHighlights,
+    renoDRTShadows,
     renoDRTContrast,
-    renoDRTShadow,
-    renoDRTDechroma,
     renoDRTSaturation,
-    renoDRTHighlights
+    renoDRTDechroma,
+    renoDRTFlare
   };
 
   outputColor = toneMap(outputColor, tmParams);

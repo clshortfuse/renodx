@@ -8,11 +8,13 @@ float3 renodrt(
   float peakNits = 1000.f / 203.f * 100.f,
   float sceneGray = 0.18f,
   float outputGrayNits = 10.f,
+  float exposure = 1.f,
+  float highlights = 1.f,
+  float shadows = 1.f,  // 0 = 0.10, 1.f = 0, >1 = contrast
   float contrast = 1.1f,
-  float shadow = 0.01f,
-  float dechroma = 0.5f,
   float saturation = 1.f,
-  float highlightBoost = 1.f
+  float dechroma = 0.5f,
+  float flare = 0.f
 ) {
   float n_r = 100.f;
   float n = 1000.f;
@@ -27,11 +29,11 @@ float3 renodrt(
   // r_hit_min = 128
   // r_hit_max = 896
 
-  float g = 1.1;     // gamma/contrast
-  float c = 0.18;    // scene-referred gray
-  float c_d = 10;    // output gray in nits
-  float w_g = 0.0;   // gray change
-  float t_1 = 0.01;  // shadow toe
+  float g = 1.1;       // gamma/contrast
+  float c = 0.18;      // scene-referred gray
+  float c_d = 10.013;  // output gray in nits
+  float w_g = 0.00f;   // gray change
+  float t_1 = 0.01;    // shadow toe
   float r_hit_min = 128;
   float r_hit_max = 256;
 
@@ -39,17 +41,22 @@ float3 renodrt(
   c = sceneGray;
   c_d = outputGrayNits;
   n = peakNits;
-  t_1 = shadow;
+  t_1 = flare;
 
-  float lum = yFromBT709(abs(bt709));
+  float originalY = yFromBT709(abs(bt709));
   float3 originalLCh = okLChFromBT709(bt709);
 
+  float lum = originalY * exposure;
+
   float normalizedLum = lum / 0.18f;
-  float boostedLum = pow(normalizedLum, highlightBoost);
-  boostedLum = lerp(normalizedLum, boostedLum, saturate(normalizedLum));
-  boostedLum *= 0.18f;
-  bt709 *= (lum > 0 ? (boostedLum / lum) : 0);
-  lum = boostedLum;
+
+  float highlightedLum = pow(normalizedLum, highlights);
+  highlightedLum = lerp(normalizedLum, highlightedLum, saturate(normalizedLum));
+
+  float shadowedLum = pow(highlightedLum, -1.f * (shadows - 2.f));
+  shadowedLum = lerp(shadowedLum, highlightedLum, saturate(highlightedLum));
+  shadowedLum *= 0.18f;
+  lum = shadowedLum;
 
   float m_0 = (n / n_r);
   float m_1 = 0.5 * (m_0 + sqrt(m_0 * (m_0 + (4.0 * t_1))));
@@ -72,17 +79,18 @@ float3 renodrt(
 
   float newY = clamp(flared, 0, m_0);
 
-  float3 outputColor = bt709 * (lum > 0 ? (newY / lum) : 0);
+  float3 outputColor = bt709 * (originalY > 0 ? (newY / originalY) : 0);
 
   float3 newLCh = okLChFromBT709(outputColor);
-  newLCh[1] = lerp(newLCh[1], 0.f, saturate(pow(lum / (10000.f / 100.f), (1.f - dechroma))));
+  newLCh[1] = lerp(newLCh[1], 0.f, saturate(pow(originalY / (10000.f / 100.f), (1.f - dechroma))));
   newLCh[1] *= saturation;
   newLCh[2] = originalLCh[2];  // hue correction
 
   float3 color = bt709FromOKLCh(newLCh);
   color = mul(BT709_2_AP1_MAT, color);  // Convert to AP1
-  color = max(0, color);                // Clamp to AP1
+  color = clamp(color, 0, m_0);         // Clamp to AP1
   color = mul(AP1_2_BT709_MAT, color);  // Convert BT709
+
   return color;
 }
 

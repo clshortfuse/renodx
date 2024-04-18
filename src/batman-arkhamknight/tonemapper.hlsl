@@ -15,7 +15,8 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   float vanillaMidGray = uncharted2Tonemap(0.18f) / uncharted2Tonemap(2.2f);
 
   float renoDRTContrast = 1.12f;
-  float renoDRTShadow = 0.0f;
+  float renoDRTFlare = 0.f;
+  float renoDRTShadows = 1.f;
   float renoDRTDechroma = 0.0f;
   float renoDRTSaturation = 1.05f;
   float renoDRTHighlights = 1.2f;
@@ -31,11 +32,12 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
     injectedData.colorGradeContrast,
     injectedData.colorGradeSaturation,
     vanillaMidGray,
+    renoDRTHighlights,
+    renoDRTShadows,
     renoDRTContrast,
-    renoDRTShadow,
-    renoDRTDechroma,
     renoDRTSaturation,
-    renoDRTHighlights
+    renoDRTDechroma,
+    renoDRTFlare
   };
   ToneMapLUTParams lutParams = {
     lutTexture,

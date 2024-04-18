@@ -4,18 +4,14 @@
 Texture2D<float4> t0 : register(t0);
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t2 : register(t2);
-Texture2D<float4> t3 : register(t3);
-Texture2D<float4> t4 : register(t4);
+Texture2D<float4> t3 : register(t3);  // ARRI LUT
+Texture2D<float4> t4 : register(t4);  // SRGB LUT
 
 SamplerState s0_s : register(s0);
 SamplerState s1_s : register(s1);
 
 cbuffer cb0 : register(b0) {
   float4 cb0[204];
-}
-
-cbuffer cb13 : register(b13) {
-  ShaderInjectData injectedData : packoffset(c0);
 }
 
 // 3Dmigoto declarations
@@ -40,7 +36,9 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
   scaledBloom.rgb *= cb0[190].x;    // Bloom strength
   scaledBloom.rgb *= cb0[190].yzw;  // Bloom color
 
-  r0.rgb = inputColor.rgb + scaledBloom * injectedData.fxBloom;
+  if (injectedData.fxBloom) {
+    r0.rgb = inputColor.rgb + scaledBloom * pow(injectedData.fxBloom, injectedData.fxBloom);
+  }
 
   // ???
   if (cb0[198].z >= 0) {
@@ -52,30 +50,26 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
     r0.w = pow(max(0, r0.w), cb0[198].w);
     r1.xyz = float3(1, 1, 1) + -cb0[197].xyz;
     r1.xyz = r0.www * r1.xyz + cb0[197].xyz;
-    r0.xyz = r1.xyz * r0.xyz;
+    r0.xyz = lerp(1.f, r1.xyz, injectedData.fxVignette) * r0.xyz;
   }
 
-  const float ARRI_LOG_A = 5.555556f;  // 1/0.18
-  const float ARRI_LOG_B = 0.047996f;
-  const float ARRI_LOG_C = 0.244161f;
-  const float ARRI_LOG_D = 0.386036f;
+  float3 untonemapped = r0.rgb;
 
-  r1.rgb = cb0[188].w * r0.rgb;  // exposure
-
-  float3 untonemapped = r1.rgb;
+  // r1.rgb = cb0[188].w * r0.rgb;  // exposure
 
   // r1.rgb = ARRI_LOG_A * r1.rgb + ARRI_LOG_B;
   // r1.rgb = max(0, r1.rgb);
   // r1.rgb = log2(r1.rgb);
   // r1.rgb = saturate(r1.rgb * (ARRI_LOG_C * log10(2)) + ARRI_LOG_D);
 
-  float vanillaMidGray = 0.18f;
+  float vanillaMidGray = unityNeutralTonemap(0.18f);
 
-  float renoDRTContrast = 1.0f;
-  float renoDRTShadow = 0;
-  float renoDRTDechroma = 0.f;
+  float renoDRTHighlights = 1.f;
+  float renoDRTShadows = 1.f;
+  float renoDRTContrast = 1.f;
   float renoDRTSaturation = 1.0f;
-  float renoDRTHighlights = 1.0f;
+  float renoDRTDechroma = 0.0f;
+  float renoDRTFlare = 0.0f;
 
   ToneMapParams tmParams = {
     injectedData.toneMapType,
@@ -88,58 +82,51 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
     injectedData.colorGradeContrast,
     injectedData.colorGradeSaturation,
     vanillaMidGray,
+    renoDRTHighlights,
+    renoDRTShadows,
     renoDRTContrast,
-    renoDRTShadow,
-    renoDRTDechroma,
     renoDRTSaturation,
-    renoDRTHighlights
+    renoDRTDechroma,
+    renoDRTFlare
   };
+
   ToneMapLUTParams lutParams = {
     t3,
     s0_s,
-    injectedData.colorGradeLUTStrength,
-    injectedData.colorGradeLUTScaling,
+    1.f,                                // Internal LUT
+    injectedData.colorGradeLUTScaling,  // Cleans up raised black floor
     TONE_MAP_LUT_TYPE__ARRI_C1000_NO_CUT,
     TONE_MAP_LUT_TYPE__LINEAR,
     0,            // size
     cb0[188].xyz  // precompute
   };
 
-  // HDR => SDR LUT+ToneMap
+  float3 outputColor = untonemapped;
+  if (tmParams.type == 1.f) {
+    outputColor = toneMap(untonemapped, tmParams);
+  } else {
+    outputColor = sampleLUT(untonemapped * cb0[188].w, lutParams);
+    float useSDRLUT = (cb0[203].y == 0 && cb0[189].w >= 0);
+    if (useSDRLUT) {
+      // Seems to be done in LUT builder now
+      // Leaving just in case
+      ToneMapLUTParams sdrLUTParams = {
+        t4,
+        s0_s,
+        cb0[189].w,
+        injectedData.colorGradeLUTScaling,
+        TONE_MAP_LUT_TYPE__SRGB,
+        TONE_MAP_LUT_TYPE__SRGB,
+        0,            // size
+        cb0[189].xyz  // precompute
+      };
 
-  r1.rgb = toneMap(untonemapped, tmParams, lutParams);
-
-  float3 preSDRLutColor = r1.rgb;
-
-  // SDR LUT?
-  if (cb0[203].y == 0.f) {
-    r0.w = cmp(0 < cb0[189].w);
-    if (r0.w != 0) {
-      r1.xyz = saturate(r1.xyz);
-      r2.xyz = srgbFromLinear(r1.xyz);
-
-      r3.xyz = cb0[189].zzz * r2.zxy;
-      r0.w = floor(r3.x);
-      r3.xw = float2(0.5, 0.5) * cb0[189].xy;
-      r3.yz = r3.yz * cb0[189].xy + r3.xw;
-      r3.x = r0.w * cb0[189].y + r3.y;
-      r4.xyzw = t4.SampleLevel(s0_s, r3.xz, 0).xyzw;
-      r5.x = cb0[189].y;
-      r5.y = 0;
-      r3.xy = r5.xy + r3.xz;
-      r3.xyzw = t4.SampleLevel(s0_s, r3.xy, 0).xyzw;
-      r0.w = r2.z * cb0[189].z + -r0.w;
-      r3.xyz = r3.xyz + -r4.xyz;
-      r3.xyz = r0.www * r3.xyz + r4.xyz;
-      r3.xyz = r3.xyz + -r2.xyz;
-      r2.xyz = cb0[189].www * r3.xyz + r2.xyz;
-
-      r1.rgb = linearFromSRGB(r2.xyz);
+      float3 sdrLutResult = sampleLUT(outputColor, sdrLUTParams);
+      outputColor = lerp(outputColor, sdrLutResult, cb0[189].w);
     }
   }
 
-  // r1.rgb = lerp(preSDRLutColor, r1.rgb, injectedData.fxVignette);
-
+  r1.xyz = outputColor;
   if (cb0[203].x < 1) {
     // Unstyled texture
     r2.xyzw = t1.SampleLevel(s1_s, v1.xy, 0).xyzw;
@@ -150,17 +137,22 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
     r0.w = r0.w ? 1.000000 : 0;
     r1.w = 1 + -cb0[203].x;
     r0.w = r0.w * r1.w + cb0[203].x;
-    r0.xyz = float3(-1.51571655, -1.51571655, -1.51571655) * r0.xyz;
+    r0.xyz = float3(-1.51571655, -1.51571655, -1.51571655) * untonemapped;
     r0.xyz = exp2(r0.xyz);
     r0.xyz = float3(1, 1, 1) + -r0.xyz;
     r2.xyz = r1.xyz + -r0.xyz;
     r1.xyz = r0.www * r2.xyz + r0.xyz;
+
+    outputColor = lerp(outputColor.xyz, r1.xyz, injectedData.fxHeroLight);
   }
 
-  float3 outputColor = r1.xyz;
-
   if (injectedData.toneMapGammaCorrection) {
-    outputColor *= gammaCorrectEmulate22(injectedData.toneMapGameNits / injectedData.toneMapUINits, true);
+    // Convert to expected output
+    outputColor = gammaCorrectSafe(outputColor);
+
+    // Adjust for shader transfer
+    outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+    outputColor = gammaCorrectSafe(outputColor, true);
   } else {
     outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
   }
