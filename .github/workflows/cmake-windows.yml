@@ -61,11 +61,6 @@ jobs:
     - name: Copy Binaries (x32)
       run: copy build32\Release\*.addon32 www\
 
-    - name: Generate Directory Listings
-      uses: jayanta525/github-pages-directory-listing@v4.0.0
-      with:
-        FOLDER: www
-
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v1
       with:
