@@ -88,9 +88,9 @@ float3 renodrt(
 
   float3 color = bt709FromOKLCh(newLCh);
   color = mul(BT709_2_AP1_MAT, color);  // Convert to AP1
-  color = clamp(color, 0, m_0);         // Clamp to AP1
+  color = max(0, color);                // Clamp to AP1
   color = mul(AP1_2_BT709_MAT, color);  // Convert BT709
-
+  color = min(m_0, color);              // Clamp to Peak
   return color;
 }
 
