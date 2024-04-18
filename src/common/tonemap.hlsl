@@ -177,8 +177,6 @@ float3 toneMapUpgrade(float3 hdrColor, float3 sdrColor, float3 lutColor, float l
     float newY = lutY + max(0, deltaY);  // deltaY may be NaN?
 
     scaledRatio = lutY > 0 ? (newY / lutY) : 0;
-    scaledRatio = lerp(1.f, scaledRatio, saturate(sdrY / 0.36f));
-    // USE SDR Lut before midgray
   }
   float3 scaledColor = lutColor * scaledRatio;
   return lerp(hdrColor, scaledColor, lutStrength);
