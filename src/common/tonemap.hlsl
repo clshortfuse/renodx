@@ -178,7 +178,9 @@ float3 toneMapUpgrade(float3 hdrColor, float3 sdrColor, float3 lutColor, float l
 
     scaledRatio = lutY > 0 ? (newY / lutY) : 0;
   }
+
   float3 scaledColor = lutColor * scaledRatio;
+  scaledColor = hueCorrection(scaledColor, lutColor);
   return lerp(hdrColor, scaledColor, lutStrength);
 }
 
@@ -245,6 +247,37 @@ float3 convertLUTInput(float3 color, ToneMapLUTParams lutParams) {
   return color;
 }
 
+float3 restoreSaturationLoss(float3 inputColor, float3 outputColor, ToneMapLUTParams lutParams) {
+  // Saturation (distance from grayscale)
+  float yIn = yFromBT709(abs(inputColor));
+  float3 satIn = inputColor - yIn;
+
+  float3 clamped = inputColor;
+  if (lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB) {
+    clamped = saturate(clamped);
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__2_2) {
+    clamped = saturate(clamped);
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__ARRI_C800) {
+    clamped = max(0, clamped);
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__ARRI_C1000) {
+    clamped = max(0, clamped);
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__ARRI_C800_NO_CUT) {
+    clamped = max(0, clamped);
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__ARRI_C1000_NO_CUT) {
+    clamped = max(0, clamped);
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__PQ) {
+    clamped = max(0, bt2020FromBT709(clamped));
+  }
+
+  float yClamped = yFromBT709(abs(yClamped));
+  float3 satClamped = clamped - yIn;
+
+  float yOut = yFromBT709(abs(outputColor));
+  float3 satOut = outputColor - yOut;
+  float3 newSat = satOut * satIn / satClamped;
+  return (yOut + newSat);
+}
+
 float3 gammaLUTInput(float3 inputColor, float3 convertedInputColor, ToneMapLUTParams lutParams) {
   if (lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB || lutParams.inputType == TONE_MAP_LUT_TYPE__2_2) {
     return convertedInputColor;
@@ -301,6 +334,9 @@ float3 sampleLUT(float3 inputColor, ToneMapLUTParams lutParams) {
     );
     outputColor = lerp(outputColor, recolored, lutParams.scaling);
   }
+  // Chrominance restoration
+  outputColor = restoreSaturationLoss(inputColor, outputColor, lutParams);
+
   return outputColor;
 }
 
@@ -314,12 +350,13 @@ float3 toneMap(float3 inputColor, ToneMapParams tmParams, ToneMapLUTParams lutPa
   float3 hdrColor;
   float3 sdrColor;
   if (tmParams.type == 3.f) {
+    tmParams.renoDRTSaturation *= tmParams.saturation;
+
     sdrColor = renoDRTToneMap(outputColor, tmParams, true);
 
     tmParams.renoDRTHighlights *= tmParams.highlights;
     tmParams.renoDRTShadows *= tmParams.shadows;
     tmParams.renoDRTContrast *= tmParams.contrast;
-    // tmParams.renoDRTSaturation *= tmParams.saturation;
     // tmParams.renoDRTDechroma *= tmParams.dechroma;
 
     hdrColor = renoDRTToneMap(outputColor, tmParams);
@@ -331,7 +368,7 @@ float3 toneMap(float3 inputColor, ToneMapParams tmParams, ToneMapLUTParams lutPa
       tmParams.highlights,
       tmParams.shadows,
       tmParams.contrast,
-      1.f
+      tmParams.saturation
     );
 
     if (tmParams.type == 2.f) {
@@ -354,9 +391,6 @@ float3 toneMap(float3 inputColor, ToneMapParams tmParams, ToneMapLUTParams lutPa
     outputColor = lerp(outputColor, lutColor, lutParams.strength);
   } else {
     outputColor = toneMapUpgrade(hdrColor, sdrColor, lutColor, lutParams.strength);
-  }
-  if (tmParams.saturation != 1.f) {
-    outputColor = applySaturation(outputColor, tmParams.saturation);
   }
   return outputColor;
 }
