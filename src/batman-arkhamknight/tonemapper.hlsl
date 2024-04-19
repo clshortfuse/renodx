@@ -17,7 +17,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   float renoDRTContrast = 1.12f;
   float renoDRTFlare = 0.f;
   float renoDRTShadows = 1.f;
-  float renoDRTDechroma = 0.0f;
+  float renoDRTDechroma = 0.5f;
   float renoDRTSaturation = 1.05f;
   float renoDRTHighlights = 1.2f;
 
