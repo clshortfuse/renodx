@@ -274,7 +274,7 @@ float3 restoreSaturationLoss(float3 inputColor, float3 outputColor, ToneMapLUTPa
 
   float yOut = yFromBT709(abs(outputColor));
   float3 satOut = outputColor - yOut;
-  float3 newSat = satOut * satIn / satClamped;
+  float3 newSat = satOut * (satClamped ? (satIn / satClamped) : 1.f);
   return (yOut + newSat);
 }
 
