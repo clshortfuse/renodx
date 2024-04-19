@@ -64,6 +64,7 @@ std::vector<uint32_t> traceHashes;
 static bool traceScheduled = false;
 static bool traceRunning = false;
 static bool needsLiveReload = false;
+static bool listUnique = false;
 static uint32_t shaderCacheCount = 0;
 static uint32_t shaderCacheSize = 0;
 static uint32_t traceCount = 0;
@@ -581,8 +582,18 @@ static void on_bind_pipeline(
   if (pair0 == pipelineCacheByPipelineHandle.end()) return;
   auto cachedPipeline = pair0->second;
 
-  bool isComputeShader = (computeShaderLayouts.count(cachedPipeline->layout.handle) != 0);
+  bool isComputeShader = computeShaderLayouts.contains(cachedPipeline->layout.handle);
 
+  if (listUnique) {
+    auto traceCount = traceHashes.size();
+    for (auto index = 0; index < traceCount; index++) {
+      auto hash = traceHashes.at(index);
+      if (hash == cachedPipeline->shaderHash) {
+        traceHashes.erase(traceHashes.begin() + index);
+        break;
+      }
+    }
+  }
   if (cachedPipeline->shaderHash) {
     traceHashes.push_back(cachedPipeline->shaderHash);
   }
@@ -592,7 +603,7 @@ static void on_bind_pipeline(
     << traceHashes.size() << ": "
     << reinterpret_cast<void*>(cachedPipeline->pipeline.handle)
     << ", " << reinterpret_cast<void*>(cachedPipeline->layout.handle)
-    << ", type: " << std::hex << (uint32_t)type << std::dec
+    << ", type: " << to_string(type) << " (" << std::hex << (uint32_t)type << std::dec << ")"
     << ", 0x" << std::hex << cachedPipeline->shaderHash << std::dec
     << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -869,7 +880,7 @@ static void on_init_resource_view(
     << ", view type: " << to_string(desc.type)
     << ", view format: " << to_string(desc.format)
     << ", resource: " << reinterpret_cast<void*>(resource.handle)
-    << ", resource usage: " << std::hex << (uint32_t)usage_type << std::dec;
+    << ", resource usage: " << to_string(usage_type) << std::hex << (uint32_t)usage_type << std::dec;
   if (desc.type == reshade::api::resource_view_type::buffer) return;
   if (resource.handle) {
     const auto resourceDesc = device->get_resource_desc(resource);
@@ -1236,6 +1247,7 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
   }
   ImGui::SameLine();
   ImGui::Text("Traced Shaders: %d", traceCount);
+  ImGui::Checkbox("List Unique Only", &listUnique);
 
   ImGui::Text("Cached Shaders: %d", shaderCacheCount);
   ImGui::SameLine();
