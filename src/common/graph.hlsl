@@ -1,3 +1,5 @@
+#include "./color.hlsl"
+
 static const uint DrawToneMapperSize = 512;
 static const uint ToneMapperPadding = 8;
 static const uint ToneMapperBins = DrawToneMapperSize - (2 * ToneMapperPadding);
@@ -13,7 +15,7 @@ struct DrawToneMapperParams {
 
 DrawToneMapperParams DrawToneMapperStart(float2 position, float3 inputColor, float width, float height, float peakNits, float scale = 80.f) {
   DrawToneMapperParams dtmParams = {false, -1u, 0, inputColor, peakNits, scale};
-  int2 offset = int2(
+  uint2 offset = uint2(
     position.x - (width - DrawToneMapperSize),
     (DrawToneMapperSize)-position.y
   );

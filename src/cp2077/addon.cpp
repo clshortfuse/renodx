@@ -101,7 +101,7 @@ UserSettingUtil::UserSettings userSettings = {
     .canReset = false,
     .label = "Gamma Correction",
     .section = "Tone Mapping",
-    .tooltip = "Emulates a 2.2 OETF (use with HDR or sRGB)",
+    .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
     .labels = { "Off", "Menus Only", "Always"}
   },
   new UserSettingUtil::UserSetting {

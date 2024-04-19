@@ -39,7 +39,7 @@ float3 applyUserColorGrading(
 
   float lum = yFromBT709(abs(color));
   float normalizedLum = lum / 0.18f;
-  
+
   float contrastedLum = pow(normalizedLum, userContrast);
 
   float highlightedLum = pow(contrastedLum, userHighlights);

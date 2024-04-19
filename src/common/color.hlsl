@@ -354,7 +354,7 @@ float3 bt709FromOKLCh(float3 oklch) {
 float gammaCorrect(float x, bool pow2srgb = false) {
   if (pow2srgb) {
     return linearFromSRGB(pow(x, 1.f / 2.2f));
-  } else {
+  } else {  // srgb2pow
     return pow(srgbFromLinear(x), 2.2f);
   }
 }
@@ -378,11 +378,13 @@ float3 gammaCorrect(float3 color, bool pow2srgb = false) {
 float3 gammaCorrectSafe(float3 color, bool pow2srgb = false) {
   float3 signs = sign(color);
   color = abs(color);
-  return signs * float3(
+  color = float3(
     gammaCorrect(color.r, pow2srgb),
     gammaCorrect(color.g, pow2srgb),
     gammaCorrect(color.b, pow2srgb)
   );
+  color *= signs;
+  return color;
 }
 
 float3 hueCorrection(float3 incorrectColor, float3 correctColor) {
