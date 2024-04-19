@@ -83,7 +83,7 @@ float3 renodrt(
 
   float3 newLCh = okLChFromBT709(outputColor);
   newLCh[1] = lerp(newLCh[1], 0.f, saturate(pow(originalY / (10000.f / 100.f), (1.f - dechroma))));
-  newLCh[1] *= saturation;
+  newLCh[1] *= lerp(saturation, 1.f, saturate(newLCh[0]));
   newLCh[2] = originalLCh[2];  // hue correction
 
   float3 color = bt709FromOKLCh(newLCh);
