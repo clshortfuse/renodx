@@ -1,10 +1,9 @@
 // LUT + TONEMAPPER
 
-#include "../common/RenoDRT.hlsl"
-#include "../common/aces.hlsl"
 #include "../common/color.hlsl"
 #include "../common/colorgrade.hlsl"
 #include "../common/lut.hlsl"
+#include "../common/tonemap.hlsl"
 #include "./aces_cdpr.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
@@ -418,18 +417,16 @@ float4 tonemap(bool isACESMode = false) {
       outputRGB *= exposure;
     }
 
-    outputRGB = applyUserColorGrading(
-      outputRGB,
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeContrast,
-      injectedData.colorGradeSaturation
-    );
+    if (toneMapperType == TONE_MAPPER_TYPE__VANILLA) {
+      outputRGB = applyUserColorGrading(
+        outputRGB,
+        injectedData.colorGradeExposure,
+        injectedData.colorGradeHighlights,
+        injectedData.colorGradeShadows,
+        injectedData.colorGradeContrast,
+        injectedData.colorGradeSaturation
+      );
 
-    if (toneMapperType == TONE_MAPPER_TYPE__NONE) {
-      // outputRGB = outputRGB;
-    } else if (toneMapperType == TONE_MAPPER_TYPE__VANILLA) {
       float3 outputXYZ = mul(BT709_2_XYZ_MAT, outputRGB);
       float3 outputXYZD60 = mul(D65_2_D60_CAT, outputXYZ);
       float3 aces = mul(XYZ_2_AP0_MAT, outputXYZD60);
@@ -566,70 +563,48 @@ float4 tonemap(bool isACESMode = false) {
 
       outputRGB = odtUnknown;
     } else {
-      // Vanilla ACES balances around midgray, use paperwhite boost instead
       float vanillaMidGray = 2.3f * (midGrayNits / 100.f);
 
+      float renoDRTHighlights = 1.20f;
+      float renoDRTShadows = 1.0f;
+      float renoDRTContrast = 1.80f;
+      float renoDRTSaturation = 1.40f;
+      float renoDRTDechroma = 0.60f;
+      float renoDRTFlare = 0.f;
+
+      ToneMapParams tmParams = {
+        injectedData.toneMapType,
+        injectedData.toneMapPeakNits,
+        (injectedData.toneMapType == 2.f ? (100.f / 203.f) : 1.f) * injectedData.toneMapGameNits,
+        injectedData.toneMapGammaCorrection == 2.f,
+        injectedData.colorGradeExposure,
+        injectedData.colorGradeHighlights,
+        injectedData.colorGradeShadows,
+        injectedData.colorGradeContrast,
+        injectedData.colorGradeSaturation,
+        vanillaMidGray,
+        midGrayNits,
+        renoDRTHighlights,
+        renoDRTShadows,
+        renoDRTContrast,
+        renoDRTSaturation,
+        renoDRTDechroma,
+        renoDRTFlare
+      };
+
+      outputRGB = toneMap(outputRGB, tmParams);
       bool useD60 = (injectedData.colorGradeWhitePoint == -1.0f || (injectedData.colorGradeWhitePoint == 0.f && cb6[28u].z == 0.f));
-
-      const bool isSDR = false;
-      const float CDPR_WHITE = 100.f;
-
-      if (toneMapperType == TONE_MAPPER_TYPE__ACES) {
-        const float ACES_MID_GRAY = 0.10f;
-        float paperWhite = (100.f / 203.f) * injectedData.toneMapGameNits * (vanillaMidGray / ACES_MID_GRAY);
-
-        float acesScaling = paperWhite / 48.f;
-
-        float acesMin = 0.0001f / acesScaling;
-        float acesMax = 48.f * injectedData.toneMapPeakNits / paperWhite;
-
-        if (injectedData.toneMapGammaCorrection == 2.f) {
-          acesMax = linearFromSRGB(pow(acesMax * acesScaling / CDPR_WHITE, 1.f / 2.2f));
-          acesMin = linearFromSRGB(pow(acesMin * acesScaling / CDPR_WHITE, 1.f / 2.2f));
-          acesMax /= acesScaling / CDPR_WHITE;
-          acesMin /= acesScaling / CDPR_WHITE;
-        }
-
-        outputRGB = aces_rgc_rrt_odt(
-          outputRGB,
-          acesMin,
-          acesMax,
-          useD60 ? AP1_2_BT709D60_MAT : AP1_2_BT709_MAT
-        );
-        if (isSDR) {
-          outputRGB = max(0, outputRGB);
-        }
-        outputRGB *= acesScaling;
-
-      } else if (toneMapperType == TONE_MAPPER_TYPE__RENODX) {
-        if (useD60) {
-          outputRGB = mul(BT709_2_BT709D60_MAT, outputRGB);
-        }
-
-        float paperWhite = injectedData.toneMapGameNits;
-
-        float renoDRTMax = injectedData.toneMapPeakNits;
-        if (injectedData.toneMapGammaCorrection == 2.f) {
-          renoDRTMax = linearFromSRGB(pow(injectedData.toneMapPeakNits / CDPR_WHITE, 1.f / 2.2f));
-          renoDRTMax *= CDPR_WHITE;
-        }
-
-        outputRGB = renodrt(
-          outputRGB,
-          renoDRTMax / paperWhite * 100.f,
-          0.18f,
-          midGrayNits,
-          1.f,    // exposure
-          1.2f,   // highlights
-          1.f,    // shadow
-          1.8,    // contrast
-          1.40f,  // saturation
-          0.60f,
-          0.f
-        );
-        outputRGB *= paperWhite;
+      if (useD60) {
+        outputRGB = mul(BT709_2_BT709D60_MAT, outputRGB);
       }
-      outputRGB /= CDPR_WHITE;
+
+      if (injectedData.toneMapGammaCorrection == 2.f) {
+        outputRGB = gammaCorrectSafe(outputRGB);
+        outputRGB *= tmParams.gameNits / 100.f;
+        outputRGB = gammaCorrectSafe(outputRGB, true);
+      } else {
+        outputRGB *= tmParams.gameNits / 100.f;
+      }
     }
 
   } else {

@@ -37,15 +37,6 @@ float3 randomDither(float3 color, float3 random3, float bits = 8.f) {
   return color + newValue;
 }
 
-float3 gammaCorrectionHDRSafe(float3 inputColor) {
-  float3 inputColorSign = sign(inputColor);
-  inputColor = abs(inputColor);
-  inputColor = srgbFromLinear(inputColor);  // encode as srgb (as originally outputted)
-  inputColor = pow(inputColor, 2.2f);       // decode as 2.2 (as most monitors)
-  inputColor *= inputColorSign;
-  return inputColor;
-}
-
 float3 applyUserBrightness(float3 inputColor, float userBrightness = 1.f) {
   return (userBrightness != 1.f)
          ? pow(inputColor, userBrightness)
@@ -55,7 +46,7 @@ float3 applyUserBrightness(float3 inputColor, float userBrightness = 1.f) {
 float3 convertColor(float3 inputColor, ConvertColorParams params) {
   float3 outputColor = inputColor;
   if (injectedData.toneMapGammaCorrection == 2.f) {
-    outputColor = gammaCorrectionHDRSafe(outputColor);
+    outputColor = gammaCorrectSafe(outputColor);
   }
   switch (params.outputTypeEnum) {
     case OUTPUT_TYPE_SRGB8:

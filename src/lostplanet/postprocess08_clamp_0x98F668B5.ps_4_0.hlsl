@@ -61,6 +61,7 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
     injectedData.colorGradeContrast,
     injectedData.colorGradeSaturation,
     vanillaMidGray,
+    vanillaMidGray * 100.f,
     renoDRTHighlights,
     renoDRTShadows,
     renoDRTContrast,

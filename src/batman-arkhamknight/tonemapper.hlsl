@@ -32,6 +32,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
     injectedData.colorGradeContrast,
     injectedData.colorGradeSaturation,
     vanillaMidGray,
+    vanillaMidGray * 100.f,
     renoDRTHighlights,
     renoDRTShadows,
     renoDRTContrast,

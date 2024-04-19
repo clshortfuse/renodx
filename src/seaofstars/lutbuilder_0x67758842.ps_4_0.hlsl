@@ -304,6 +304,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
       injectedData.colorGradeContrast,
       injectedData.colorGradeSaturation,
       vanillaMidGray,
+      vanillaMidGray * 100.f,
       renoDRTHighlights,
       renoDRTShadows,
       renoDRTContrast,
@@ -313,7 +314,6 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     };
 
     r0.xyz = toneMap(r0.xyz, tmParams, lutParams);
-
   }
 
   o0.xyz = r0.xyz;

@@ -238,6 +238,7 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
       injectedData.colorGradeContrast,
       injectedData.colorGradeSaturation,
       vanillaMidGray,
+      vanillaMidGray * 100.f,
       renoDRTHighlights,
       renoDRTShadows,
       renoDRTContrast,

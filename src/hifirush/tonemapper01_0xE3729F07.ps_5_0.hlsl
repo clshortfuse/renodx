@@ -191,6 +191,7 @@ float4 main(
     injectedData.colorGradeContrast,
     injectedData.colorGradeSaturation,
     vanillaMidGray,
+    vanillaMidGray * 100.f,
     renoDRTHighlights,
     renoDRTShadows,
     renoDRTContrast,

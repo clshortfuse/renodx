@@ -81,7 +81,8 @@ struct ToneMapParams {
   float shadows;
   float contrast;
   float saturation;
-  float vanillaMidGray;
+  float sceneMidGray;
+  float midGrayNits;
   float renoDRTHighlights;
   float renoDRTShadows;
   float renoDRTContrast;
@@ -125,7 +126,7 @@ float3 renoDRTToneMap(float3 color, ToneMapParams params, bool sdr = false) {
     color,
     renoDRTMax * 100.f,
     0.18f,
-    params.vanillaMidGray * 100.f,
+    params.midGrayNits,
     params.exposure,
     params.renoDRTHighlights,
     params.renoDRTShadows,
@@ -138,7 +139,7 @@ float3 renoDRTToneMap(float3 color, ToneMapParams params, bool sdr = false) {
 
 float3 acesToneMap(float3 color, ToneMapParams params, bool sdr = false) {
   const float ACES_MID_GRAY = 0.10f;
-  float midGrayScale = (params.vanillaMidGray / ACES_MID_GRAY);
+  float midGrayScale = (params.sceneMidGray / ACES_MID_GRAY);
   float paperWhite = (sdr ? 1.f : params.gameNits);
 
   float acesMin = (0.0001f) / paperWhite;
@@ -351,6 +352,7 @@ float3 toneMap(float3 inputColor, ToneMapParams tmParams, ToneMapLUTParams lutPa
   float3 sdrColor;
   if (tmParams.type == 3.f) {
     tmParams.renoDRTSaturation *= tmParams.saturation;
+    tmParams.renoDRTDechroma *= tmParams.saturation;
 
     sdrColor = renoDRTToneMap(outputColor, tmParams, true);
 
