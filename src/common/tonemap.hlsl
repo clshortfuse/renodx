@@ -352,7 +352,6 @@ float3 toneMap(float3 inputColor, ToneMapParams tmParams, ToneMapLUTParams lutPa
   float3 sdrColor;
   if (tmParams.type == 3.f) {
     tmParams.renoDRTSaturation *= tmParams.saturation;
-    tmParams.renoDRTDechroma = min(tmParams.renoDRTDechroma * tmParams.saturation, 0.75f);
 
     sdrColor = renoDRTToneMap(outputColor, tmParams, true);
 

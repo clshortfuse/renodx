@@ -17,7 +17,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   float renoDRTContrast = 1.12f;
   float renoDRTFlare = 0.f;
   float renoDRTShadows = 1.f;
-  float renoDRTDechroma = 0.5f;
+  float renoDRTDechroma = injectedData.colorGradeBlowout;
   float renoDRTSaturation = 1.05f;
   float renoDRTHighlights = 1.2f;
 
@@ -25,7 +25,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
     injectedData.toneMapType,
     injectedData.toneMapPeakNits,
     injectedData.toneMapGameNits,
-    injectedData.toneMapGammaCorrection - 1, // -1 == srgb
+    injectedData.toneMapGammaCorrection - 1,  // -1 == srgb
     injectedData.colorGradeExposure,
     injectedData.colorGradeHighlights,
     injectedData.colorGradeShadows,
