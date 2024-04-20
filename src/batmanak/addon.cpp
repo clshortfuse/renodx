@@ -67,7 +67,7 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomSwapchainShader(0x93793FBB),  // unknown
   CustomSwapchainShader(0xC6D12ACD),  // unknown
   CustomSwapchainShader(0xCD1E0E4C),  // unknown video
-  CustomShaderEntry(0x12200F17),      // video
+  CustomSwapchainShader(0x12200F17),  // video
   CustomShaderEntry(0xB6B56605),      // tonemap
   CustomShaderEntry(0x978BFB09),      // tonemap + motionblur
   CustomShaderEntry(0xF01CCC7E),      // tonemap + fx
