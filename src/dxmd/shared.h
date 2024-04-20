@@ -18,6 +18,7 @@ struct ShaderInjectData {
   float fxLensFlare;
   float fxSharpen;
   float fxChromaticAberration;
+  float fxVignette;
   float fxFilmGrain;
 };
 

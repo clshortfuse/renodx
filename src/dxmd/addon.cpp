@@ -179,6 +179,15 @@ UserSettingUtil::UserSettings userSettings = {
     .parse = [](float value) { return value * 0.02f; }
   },
   new UserSettingUtil::UserSetting {
+    .key = "fxVignette",
+    .binding = &shaderInjection.fxVignette,
+    .defaultValue = 50.f,
+    .label = "Vignette",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
     .key = "fxFilmGrain",
     .binding = &shaderInjection.fxFilmGrain,
     .defaultValue = 50.f,
@@ -206,6 +215,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("fxLensFlare", 50.f);
   UserSettingUtil::updateUserSetting("fxSharpen", 50.f);
   UserSettingUtil::updateUserSetting("fxChromaticAberration", 50.f);
+  UserSettingUtil::updateUserSetting("fxVignette", 50.f);
   UserSettingUtil::updateUserSetting("fxFilmGrain", 50.f);
 }
 
