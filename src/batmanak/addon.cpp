@@ -7,6 +7,7 @@
 
 #define DEBUG_LEVEL_0
 
+#include <embed/0x0C142BB2.h>
 #include <embed/0x12200F17.h>
 #include <embed/0x2AC7F89E.h>
 #include <embed/0x2C2D0899.h>
@@ -18,10 +19,16 @@
 #include <embed/0x7527C8AD.h>
 #include <embed/0x8CBD2352.h>
 #include <embed/0x8D4B625A.h>
+#include <embed/0x8F20CC31.h>
+#include <embed/0x931FF3DD.h>
+#include <embed/0x93793FBB.h>
 #include <embed/0x978BFB09.h>
 #include <embed/0xB4B3061C.h>
 #include <embed/0xB6B56605.h>
 #include <embed/0xBD36EC09.h>
+#include <embed/0xC6D12ACD.h>
+#include <embed/0xCD1E0E4C.h>
+#include <embed/0xD6A846C8.h>
 #include <embed/0xDB56A8CA.h>
 #include <embed/0xF01CCC7E.h>
 #include <embed/0xF3B4727D.h>
@@ -53,6 +60,13 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomSwapchainShader(0xDB56A8CA),  // ui
   CustomSwapchainShader(0x45741188),  // ui
   CustomSwapchainShader(0x8CBD2352),  // ui
+  CustomSwapchainShader(0xD6A846C8),  // unknown
+  CustomSwapchainShader(0x0C142BB2),  // unknown
+  CustomSwapchainShader(0x8F20CC31),  // unknown
+  CustomSwapchainShader(0x931FF3DD),  // unknown
+  CustomSwapchainShader(0x93793FBB),  // unknown
+  CustomSwapchainShader(0xC6D12ACD),  // unknown
+  CustomSwapchainShader(0xCD1E0E4C),  // unknown video
   CustomShaderEntry(0x12200F17),      // video
   CustomShaderEntry(0xB6B56605),      // tonemap
   CustomShaderEntry(0x978BFB09),      // tonemap + motionblur
