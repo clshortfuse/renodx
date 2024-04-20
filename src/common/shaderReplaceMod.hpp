@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -52,6 +53,7 @@ namespace ShaderReplaceMod {
   static CustomShaders* _customShaders = nullptr;
   static bool _usingSwapChainOnly = false;
   static bool _usingBypass = false;
+  static std::shared_mutex s_mutex;
 
   struct __declspec(uuid("018e7b9c-23fd-7863-baf8-a8dad2a6db9d")) device_data {
     std::vector<reshade::api::pipeline_layout_param*> createdParams;
@@ -83,7 +85,8 @@ namespace ShaderReplaceMod {
       reshade::api::pipeline pipeline;
     } scheduledSwapchainPipeline;
 
-    float shaderInjection[64];
+    CustomShaders customShaders;
+    void* shaderInjection;
     size_t shaderInjectionSize;
     uint32_t currentShader;
     std::unordered_set<uint64_t> currentRenderTargets;
@@ -100,11 +103,21 @@ namespace ShaderReplaceMod {
     auto &data = device->create_private_data<device_data>();
     data.traceUnmodifiedShaders = traceUnmodifiedShaders;
 
+    for (const auto &[hash, shader] : (*_customShaders)) {
+      CustomShader newShader = shader;
+      if (newShader.codeSize) {
+        newShader.code = (const uint8_t*)malloc(newShader.codeSize);
+        memcpy((void*)newShader.code, shader.code, newShader.codeSize);
+      }
+      data.customShaders.emplace(hash, newShader);
+    }
+
+    const std::unique_lock<std::shared_mutex> lock(s_mutex);
     if (_shaderInjectionSize) {
       data.shaderInjectionSize = _shaderInjectionSize;
       size_t memSize = data.shaderInjectionSize * sizeof(uint32_t);
-      // data.shaderInjection = (float*)malloc(memSize);
-      memcpy(&data.shaderInjection, _shaderInjection, memSize);
+      data.shaderInjection = malloc(memSize);
+      memcpy(data.shaderInjection, _shaderInjection, memSize);
     }
   }
 
@@ -115,9 +128,14 @@ namespace ShaderReplaceMod {
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
     auto &data = device->get_private_data<device_data>();
-    // if (data.shaderInjection != nullptr) {
-    //   free(data.shaderInjection);
-    // }
+    for (const auto &[hash, shader] : (data.customShaders)) {
+      if (shader.codeSize) {
+        free((void*)shader.code);
+      }
+    }
+    if (data.shaderInjectionSize) {
+      free(data.shaderInjection);
+    }
     device->destroy_private_data<device_data>();
   }
 
@@ -219,8 +237,8 @@ namespace ShaderReplaceMod {
         desc->code_size
       );
 
-      const auto pair = _customShaders->find(shader_hash);
-      if (pair == _customShaders->end()) continue;
+      const auto pair = data.customShaders.find(shader_hash);
+      if (pair == data.customShaders.end()) continue;
       const auto customShader = pair->second;
       if (customShader.swapChainOnly) continue;
 
@@ -608,8 +626,8 @@ namespace ShaderReplaceMod {
       if (codeInjectionPair != data.codeInjections.end()) {
         foundInjection = codeInjectionPair->second;
       } else {
-        const auto pair = _customShaders->find(shader_hash);
-        if (pair != _customShaders->end()) {
+        const auto pair = data.customShaders.find(shader_hash);
+        if (pair != data.customShaders.end()) {
           foundInjection = shader_hash;
           const auto customShader = pair->second;
           swapchainOnly = customShader.swapChainOnly;
@@ -869,7 +887,7 @@ namespace ShaderReplaceMod {
             paramIndex,
             0,
             data.shaderInjectionSize,
-            &data.shaderInjection
+            data.shaderInjection
           );
         }
       }
@@ -1010,7 +1028,7 @@ namespace ShaderReplaceMod {
       data.traceUnmodifiedShaders
       && data.hasSwapchainRenderTarget
       && !data.unmodifiedShaders.contains(data.currentShader)
-      && !_customShaders->contains(data.currentShader)
+      && !data.customShaders.contains(data.currentShader)
     ) {
       std::stringstream s;
       s << "handlePreDraw(unmodified shader writing to swapchain: "
@@ -1056,7 +1074,7 @@ namespace ShaderReplaceMod {
         data.scheduledBufferInjection.layout_param,
         0,
         data.shaderInjectionSize,
-        &data.shaderInjection
+        data.shaderInjection
       );
       data.scheduledBufferInjection.isPending = false;
     }
@@ -1113,12 +1131,10 @@ namespace ShaderReplaceMod {
     const reshade::api::rect* dirty_rects
   ) {
     auto &data = swapchain->get_device()->get_private_data<device_data>();
-    if (data.shaderInjectionSize != _shaderInjectionSize) {
-      data.shaderInjectionSize = _shaderInjectionSize;
-    }
     if (data.shaderInjectionSize) {
+      const std::unique_lock<std::shared_mutex> lock(s_mutex);
       size_t memSize = data.shaderInjectionSize * sizeof(uint32_t);
-      memcpy(&data.shaderInjection, _shaderInjection, memSize);
+      memcpy(data.shaderInjection, _shaderInjection, memSize);
     }
   }
 
