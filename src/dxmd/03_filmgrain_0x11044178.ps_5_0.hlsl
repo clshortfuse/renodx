@@ -33,9 +33,9 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : COLOR0, o
   r1.x = saturate(r1.x / r1.y);
   r1.x = 1 + -r1.x;
   r1.x = cb11[84].x * r1.x;
-  r1.y = t1.Sample(s0_s, v1.zw).x;
-  if (injectedData.toneMapType == 0.f) {
-    r1.y *= injectedData.fxFilmGrain;
+  // r1.y = t1.Sample(s0_s, v1.zw).x;
+  if (injectedData.toneMapType == 0.f && injectedData.fxFilmGrain) {
+    r1.y = t1.Sample(s0_s, v1.zw).x * injectedData.fxFilmGrain;
   } else {
     r1.y = 0;
   }
@@ -51,11 +51,15 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : COLOR0, o
   r0.xyz = v2.xyz * r0.xyz;
   r0.xyz = r0.xyz + r0.xyz;
   r0.xyz = lerp(inputColor, r0.xyz, injectedData.fxVignette);
-  o0.xyz = sign(r0.xyz) * max(0, cb11[95].xyz * v2.www + abs(r0.xyz));
+
+  float3 signs = sign(r0.xyz);
+  r0.xyz = max(0, cb11[95].xyz * v2.www + abs(r0.xyz));
+  r0.rgb = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : linearFromSRGB(r0.rgb);
+  r0.rgb *= signs;
+
   if (injectedData.toneMapType == 0.f) {
-    o0.xyz = sign(o0.xyz) * pow(abs(o0.xyz), 2.2f);
     o0.xyz = applyUserColorGrading(
-      o0.xyz,
+      r0.xyz,
       injectedData.colorGradeExposure,
       injectedData.colorGradeHighlights,
       injectedData.colorGradeShadows,
@@ -64,9 +68,6 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : COLOR0, o
     );
   } else {
     float3 outputColor = r0.rgb;
-
-    // Input is in gamma
-    outputColor = pow(outputColor, 2.2f);
 
     float vanillaMidGray = 0.18f;
     float renoDRTHighlights = 1.f;
@@ -80,7 +81,7 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : COLOR0, o
       injectedData.toneMapType,
       injectedData.toneMapPeakNits,
       injectedData.toneMapGameNits,
-      0.f,
+      0,
       injectedData.colorGradeExposure,
       injectedData.colorGradeHighlights,
       injectedData.colorGradeShadows,
@@ -108,8 +109,11 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : COLOR0, o
     o0.xyz = grainedColor;
   }
 
-  o0.xyz *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-  o0.xyz = sign(o0.xyz) * pow(abs(o0.xyz), 1.f / 2.2f);
+  o0.rgb *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+  signs = sign(o0.rgb);
+  o0.rgb = abs(o0.rgb);
+  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 1.f / 2.2f) : srgbFromLinear(o0.rgb);
+  o0.rgb *= signs;
 
   o0.w = r0.w;
   return;

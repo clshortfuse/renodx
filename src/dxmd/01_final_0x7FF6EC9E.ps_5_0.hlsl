@@ -1,5 +1,5 @@
-#include "./shared.h"
 #include "../common/color.hlsl"
+#include "./shared.h"
 
 cbuffer FlipConstantBuffer : register(b0) {
   float4 gamma : packoffset(c0);
@@ -21,16 +21,12 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_TA
   float3 signs = sign(r0.xyz);
   r0.rgb = pow(abs(r0.xyz), gamma.y);
   r0.rgb *= gamma.x;  // gain
-  
   o0.rgb = r0.rgb;
-  // o0.rgb = saturate(r0.rgb);
-
-  o0.rgb = pow(o0.rgb, 2.2f);  // convert to linear;
-
-  // o0.rgb = linearFromSRGB(o0.rgb);
-
+  o0.rgb = injectedData.toneMapGammaCorrection
+           ? pow(o0.rgb, 2.2f)
+           : linearFromSRGB(o0.rgb);
   o0.rgb *= signs;
-  
+
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   o0.w = 1;
   return;

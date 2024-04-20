@@ -72,6 +72,7 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "toneMapGameNits",
     .binding = &shaderInjection.toneMapGameNits,
     .defaultValue = 203.f,
+    .canReset = false,
     .label = "Game Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the value of 100%% white in nits",
@@ -82,11 +83,21 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "toneMapUINits",
     .binding = &shaderInjection.toneMapUINits,
     .defaultValue = 203.f,
+    .canReset = false,
     .label = "UI Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the brightness of UI and HUD elements in nits",
     .min = 48.f,
     .max = 500.f
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "toneMapGammaCorrection",
+    .binding = &shaderInjection.toneMapGammaCorrection,
+    .valueType = UserSettingUtil::UserSettingValueType::boolean,
+    .canReset = false,
+    .label = "Gamma Correction",
+    .section = "Tone Mapping",
+    .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
   },
   new UserSettingUtil::UserSetting {
     .key = "colorGradeExposure",
@@ -205,6 +216,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("toneMapPeakNits", 203.f);
   UserSettingUtil::updateUserSetting("toneMapGameNits", 203.f);
   UserSettingUtil::updateUserSetting("toneMapUINits", 203.f);
+  UserSettingUtil::updateUserSetting("toneMapGammaCorrection", 0);
   UserSettingUtil::updateUserSetting("colorGradeExposure", 1.f);
   UserSettingUtil::updateUserSetting("colorGradeHighlights", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
