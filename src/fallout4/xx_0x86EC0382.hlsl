@@ -4,10 +4,21 @@ struct u0_t {
 };
 RWStructuredBuffer<u0_t> u0 : register(u0);
 
+ByteAddressBuffer t0 :register(t0);
+ByteAddressBuffer t1 :register(t1);
+
 cbuffer cb0 : register(b0)
 {
   float4 cb0[21];
 }
+
+RWByteAddressBuffer u1 :register(u1);
+RWByteAddressBuffer u2 :register(u2);
+RWByteAddressBuffer u3 :register(u3);
+RWByteAddressBuffer u4 :register(u4);
+RWByteAddressBuffer u5 :register(u5);
+RWByteAddressBuffer u6 :register(u6);
+RWByteAddressBuffer u7 :register(u7);
 
 
 
@@ -16,7 +27,7 @@ cbuffer cb0 : register(b0)
 #define cmp -
 
 [numthreads(1, 1, 1)]
-void main)
+void main(uint3 vThreadID : SV_DispatchThreadID) 
 {
 // Needs manual fix for instruction:
 // unknown dcl_: dcl_resource_raw t0
@@ -75,9 +86,11 @@ void main)
       if (r6.y != 0) break;
       r6.y = (uint)r6.x << 4;
     // No code for instruction (needs manual fix):
-        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r7.xyzw, r6.y, t0.xyzw
+    // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r7.xyzw, r6.y, t0.xyzw
+        r7.xyzw = t0.Load4(r6.y);
     // No code for instruction (needs manual fix):
-        store_raw u2.xyzw, r6.y, r7.xyzw
+        u2.Store4(r6.y, r7.xyzw);
+        // store_raw u2.xyzw, r6.y, r7.xyzw
       r6.x = (int)r6.x + 1;
     }
     r1.w = dot(cb0[4].xyz, cb0[3].xyz);
@@ -162,7 +175,8 @@ void main)
         r23.x = (uint)r22.x >> 1;
         r23.x = (uint)r23.x << 2;
       // No code for instruction (needs manual fix):
-            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r23.y, r23.x, t0.xxxx
+            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r23.y, r23.x, t0.xxxx 
+r23.y = t0.Load(r23.x);
         r23.z = (uint)r23.y >> 16;
         r23.y = (int)r23.y & 0x0000ffff;
         r23.w = (int)-r22.w + 1;
@@ -173,14 +187,16 @@ void main)
         r22.yz = (uint2)r22.yz >> int2(1,1);
         r22.yz = (uint2)r22.yz << int2(2,2);
       // No code for instruction (needs manual fix):
-            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r23.z, r22.y, t0.xxxx
+            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r23.z, r22.y, t0.xxxx 
+r23.z = t0.Load(r22.y);
         r24.z = (uint)r23.z >> 16;
         r23.z = (int)r23.z & 0x0000ffff;
         r25.xy = (int2)-r24.xy + int2(1,1);
         r23.z = (int)r23.z * (int)r25.x;
         r23.z = mad((int)r24.z, (int)r24.x, (int)r23.z);
       // No code for instruction (needs manual fix):
-            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r24.z, r22.z, t0.xxxx
+            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r24.z, r22.z, t0.xxxx 
+r24.z = t0.Load(r22.z);
         r24.w = (uint)r24.z >> 16;
         r24.z = (int)r24.z & 0x0000ffff;
         r24.z = (int)r25.y * (int)r24.z;
@@ -188,33 +204,39 @@ void main)
         if (r14.w != 0) {
           r24.w = (int)r23.y * asint(cb0[5].x);
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r24.w, r24.w, t1.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r24.w, r24.w, t1.xxxx 
+r24.w = t1.Load(r24.w);
           r26.x = f16tof32(r24.w);
           r24.w = (uint)r24.w >> 16;
           r26.y = f16tof32(r24.w);
           r24.w = mad((int)r23.y, asint(cb0[5].x), 4);
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r24.w, r24.w, t1.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r24.w, r24.w, t1.xxxx 
+r24.w = t1.Load(r24.w);
           r26.z = f16tof32(r24.w);
           r25.z = (int)r23.z * asint(cb0[5].x);
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r25.z, r25.z, t1.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r25.z, r25.z, t1.xxxx 
+r25.z = t1.Load(r25.z);
           r27.x = f16tof32(r25.z);
           r25.z = (uint)r25.z >> 16;
           r27.y = f16tof32(r25.z);
           r25.z = mad((int)r23.z, asint(cb0[5].x), 4);
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r25.z, r25.z, t1.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r25.z, r25.z, t1.xxxx 
+r25.z = t1.Load(r25.z);
           r27.z = f16tof32(r25.z);
           r25.w = (int)r24.z * asint(cb0[5].x);
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r25.w, r25.w, t1.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r25.w, r25.w, t1.xxxx 
+r25.w = t1.Load(r25.w);
           r28.x = f16tof32(r25.w);
           r25.w = (uint)r25.w >> 16;
           r28.y = f16tof32(r25.w);
           r25.w = mad((int)r24.z, asint(cb0[5].x), 4);
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r25.w, r25.w, t1.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r25.w, r25.w, t1.xxxx 
+r25.w = t1.Load(r25.w);
           r28.z = f16tof32(r25.w);
           r29.xyz = -cb0[3].xyz + r26.xyz;
           r29.x = dot(r29.xyz, cb0[4].xyz);
@@ -254,7 +276,8 @@ void main)
               r30.x = f16tof32(r28.w);
               r31.xyz = mad((int3)r23.yyy, asint(cb0[5].xxx), asint(cb0[5].yzw));
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r31.x, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r31.x, t1.xxxx 
+r28.w = t1.Load(r31.x);
               r29.w = (int)r28.w & 255;
               r29.w = (uint)r29.w;
               r32.x = r29.w * 0.00784313772 + -1;
@@ -266,7 +289,8 @@ void main)
               r28.w = (uint)r28.w;
               r30.y = r28.w * 0.00784313772 + -1;
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r31.y, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r31.y, t1.xxxx 
+r28.w = t1.Load(r31.y);
               r29.w = (int)r28.w & 255;
               r29.w = (uint)r29.w;
               r33.x = r29.w * 0.00784313772 + -1;
@@ -278,13 +302,15 @@ void main)
               r28.w = (uint)r28.w;
               r30.z = r28.w * 0.00784313772 + -1;
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r31.z, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r31.z, t1.xxxx 
+r28.w = t1.Load(r31.z);
               r31.x = f16tof32(r28.w);
               r28.w = (uint)r28.w >> 16;
               r31.y = f16tof32(r28.w);
               r28.w = mad((int)r23.y, asint(cb0[5].x), (int)r13.y);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r28.w, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r28.w, t1.xxxx 
+r28.w = t1.Load(r28.w);
               r29.w = (int)r28.w & 255;
               r29.w = (uint)r29.w;
               r34.x = 0.00392156886 * r29.w;
@@ -297,13 +323,15 @@ void main)
               r34.w = 0.00392156886 * r30.w;
               r30.w = mad((int)r23.y, asint(cb0[5].x), asint(cb0[6].z));
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r32.w, r30.w, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r32.w, r30.w, t1.xxxx 
+r32.w = t1.Load(r30.w);
               r35.x = f16tof32(r32.w);
               r32.w = (uint)r32.w >> 16;
               r35.y = f16tof32(r32.w);
               r30.w = (int)r30.w + 4;
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.xy, r30.w, t1.xyxx
+                      // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.xy, r30.w, t1.xyxx 
+r36.xy = t1.Load2(r30.w);
               r35.z = f16tof32(r36.x);
               r37.xw = (uint2)r36.xy >> int2(16,24);
               r35.w = f16tof32(r37.x);
@@ -314,7 +342,8 @@ void main)
               r38.x = f16tof32(r30.w);
               r36.xzw = mad((int3)r23.zzz, asint(cb0[5].xxx), asint(cb0[5].yzw));
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r36.x, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r36.x, t1.xxxx 
+r30.w = t1.Load(r36.x);
               r32.w = (int)r30.w & 255;
               r32.w = (uint)r32.w;
               r39.x = r32.w * 0.00784313772 + -1;
@@ -326,7 +355,8 @@ void main)
               r30.w = (uint)r30.w;
               r38.y = r30.w * 0.00784313772 + -1;
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r36.z, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r36.z, t1.xxxx 
+r30.w = t1.Load(r36.z);
               r32.w = (int)r30.w & 255;
               r32.w = (uint)r32.w;
               r40.x = r32.w * 0.00784313772 + -1;
@@ -338,13 +368,15 @@ void main)
               r30.w = (uint)r30.w;
               r38.z = r30.w * 0.00784313772 + -1;
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r36.w, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r36.w, t1.xxxx 
+r30.w = t1.Load(r36.w);
               r41.x = f16tof32(r30.w);
               r30.w = (uint)r30.w >> 16;
               r41.y = f16tof32(r30.w);
               r30.w = mad((int)r23.z, asint(cb0[5].x), (int)r13.y);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r30.w, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r30.w, t1.xxxx 
+r30.w = t1.Load(r30.w);
               r32.w = (int)r30.w & 255;
               r32.w = (uint)r32.w;
               r42.x = 0.00392156886 * r32.w;
@@ -357,13 +389,15 @@ void main)
               r42.w = 0.00392156886 * r33.w;
               r33.w = mad((int)r23.z, asint(cb0[5].x), asint(cb0[6].z));
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.w, r33.w, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.w, r33.w, t1.xxxx 
+r36.w = t1.Load(r33.w);
               r43.x = f16tof32(r36.w);
               r36.w = (uint)r36.w >> 16;
               r43.y = f16tof32(r36.w);
               r33.w = (int)r33.w + 4;
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r41.zw, r33.w, t1.xxxy
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r41.zw, r33.w, t1.xxxy
+                        r41.zw = t1.Load2(r33.w);
               r43.z = f16tof32(r41.z);
               r44.xw = (uint2)r41.zw >> int2(16,24);
               r43.w = f16tof32(r44.x);
@@ -374,7 +408,8 @@ void main)
               r45.x = f16tof32(r33.w);
               r46.xyz = mad((int3)r24.zzz, asint(cb0[5].xxx), asint(cb0[5].yzw));
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r46.x, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r46.x, t1.xxxx 
+r33.w = t1.Load(r46.x);
               r36.w = (int)r33.w & 255;
               r36.w = (uint)r36.w;
               r47.x = r36.w * 0.00784313772 + -1;
@@ -386,7 +421,8 @@ void main)
               r33.w = (uint)r33.w;
               r45.y = r33.w * 0.00784313772 + -1;
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r46.y, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r46.y, t1.xxxx 
+r33.w = t1.Load(r46.y);
               r36.w = (int)r33.w & 255;
               r36.w = (uint)r36.w;
               r48.x = r36.w * 0.00784313772 + -1;
@@ -398,13 +434,15 @@ void main)
               r33.w = (uint)r33.w;
               r45.z = r33.w * 0.00784313772 + -1;
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r46.z, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r46.z, t1.xxxx 
+r33.w = t1.Load(r46.z);
               r46.x = f16tof32(r33.w);
               r33.w = (uint)r33.w >> 16;
               r46.y = f16tof32(r33.w);
               r33.w = mad((int)r24.z, asint(cb0[5].x), (int)r13.y);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r33.w, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r33.w, t1.xxxx 
+r33.w = t1.Load(r33.w);
               r36.w = (int)r33.w & 255;
               r36.w = (uint)r36.w;
               r49.x = 0.00392156886 * r36.w;
@@ -417,13 +455,15 @@ void main)
               r49.w = 0.00392156886 * r38.w;
               r38.w = mad((int)r24.z, asint(cb0[5].x), asint(cb0[6].z));
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r39.w, r38.w, t1.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r39.w, r38.w, t1.xxxx 
+r39.w = t1.Load(r38.w);
               r50.x = f16tof32(r39.w);
               r39.w = (uint)r39.w >> 16;
               r50.y = f16tof32(r39.w);
               r38.w = (int)r38.w + 4;
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r51.xy, r38.w, t1.xyxx
+                      // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r51.xy, r38.w, t1.xyxx 
+r51.xy = t1.Load2(r38.w);
               r50.z = f16tof32(r51.x);
               r52.xw = (uint2)r51.xy >> int2(16,24);
               r50.w = f16tof32(r52.x);
@@ -562,7 +602,8 @@ void main)
               r30.x = f32tof16(r30.x);
               r72.y = mad((int)r30.x, 0x00010000, (int)r72.z);
             // No code for instruction (needs manual fix):
-                        store_raw u1.xy, r41.z, r72.xyxx
+                      // store_raw u1.xy, r41.z, r72.xyxx 
+u1.Store2(r41.z, r72.xy);
               r32.xyz = r32.xyz * float3(127.5,127.5,127.5) + float3(127.5,127.5,127.5);
               r32.xyz = (uint3)r32.xyz;
               r30.x = mad((int)r32.y, 256, (int)r32.x);
@@ -572,30 +613,35 @@ void main)
               r30.x = mad((int)r30.y, 0x01000000, (int)r30.x);
               r32.xyz = mad((int3)r18.www, asint(cb0[7].xxx), asint(cb0[5].yzw));
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r32.x, r30.x
+                      // store_raw u1.x, r32.x, r30.x 
+u1.Store(r32.x, r30.x);
               r33.xyz = r33.xyz * float3(127.5,127.5,127.5) + float3(127.5,127.5,127.5);
               r33.xyz = (uint3)r33.xyz;
               r30.x = mad((int)r33.y, 256, (int)r33.x);
               r30.x = mad((int)r33.z, 0x00010000, (int)r30.x);
               r30.x = mad((int)r30.z, 0x01000000, (int)r30.x);
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r32.y, r30.x
+                      // store_raw u1.x, r32.y, r30.x 
+u1.Store(r32.y, r30.x);
               r30.xy = min(float2(2000,2000), r31.xy);
               r30.xy = f32tof16(r30.xy);
               r30.x = mad((int)r30.y, 0x00010000, (int)r30.x);
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r32.z, r30.x
+                      // store_raw u1.x, r32.z, r30.x 
+u1.Store(r32.z, r30.x);
               if (r13.y != 0) {
                 r30.x = mad((int)r18.w, asint(cb0[7].x), (int)r13.y);
                 bitmask.w = ((~(-1 << 24)) << 8) & 0xffffffff;  r28.w = (((uint)r31.z << 8) & bitmask.w) | ((uint)r28.w & ~bitmask.w);
                 r28.w = mad((int)r31.w, 0x00010000, (int)r28.w);
                 r28.w = mad((int)r29.w, 0x01000000, (int)r28.w);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r30.x, r28.w
+                          // store_raw u1.x, r30.x, r28.w 
+u1.Store(r30.x, r28.w);
               }
               r30.xy = mad((int2)r18.ww, asint(cb0[7].xx), asint(cb0[6].wz));
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r30.x, r29.x
+                      // store_raw u1.x, r30.x, r29.x 
+u1.Store(r30.x, r29.x);
               r31.xyzw = min(float4(2000,2000,2000,2000), r35.xyzw);
               r31.xyzw = f32tof16(r31.xyzw);
               r31.xy = mad((int2)r31.yw, int2(0x10000,0x10000), (int2)r31.xz);
@@ -603,11 +649,13 @@ void main)
               r28.w = mad((int)r37.z, 0x00010000, (int)r28.w);
               bitmask.z = ((~(-1 << 24)) << 0) & 0xffffffff;  r31.z = (((uint)r28.w << 0) & bitmask.z) | ((uint)r36.y & ~bitmask.z);
             // No code for instruction (needs manual fix):
-                        store_raw u1.xyz, r30.y, r31.xyzx
+                      // store_raw u1.xyz, r30.y, r31.xyzx 
+u1.Store3(r30.y, r31.xyz);
               r30.xy = (uint2)r19.xy >> int2(1,1);
               r30.xy = (uint2)r30.xy << int2(2,2);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r30.x, u3.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r30.x, u3.xxxx 
+r28.w = u3.Load(r30.x);
               r31.xy = (int2)r19.xy & int2(1,1);
               bitmask.z = ((~(-1 << 16)) << 16) & 0xffffffff;  r31.z = (((uint)r18.w << 16) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
               bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r31.w = (((uint)r18.w << 0) & bitmask.w) | ((uint)r28.w & ~bitmask.w);
@@ -615,20 +663,24 @@ void main)
               r28.w = (int)r31.w * (int)r32.x;
               r28.w = mad((int)r31.z, (int)r31.x, (int)r28.w);
             // No code for instruction (needs manual fix):
-                        store_raw u3.x, r30.x, r28.w
+                      // store_raw u3.x, r30.x, r28.w 
+u3.Store(r30.x, r28.w);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r30.y, u5.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r30.y, u5.xxxx 
+r28.w = u5.Load(r30.y);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r30.x = (((uint)r18.w << 16) & bitmask.x) | ((uint)r28.w & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r30.z = (((uint)r18.w << 0) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
               r28.w = (int)r32.y * (int)r30.z;
               r28.w = mad((int)r30.x, (int)r31.y, (int)r28.w);
             // No code for instruction (needs manual fix):
-                        store_raw u5.x, r30.y, r28.w
+                      // store_raw u5.x, r30.y, r28.w 
+u5.Store(r30.y, r28.w);
               r31.xyzw = (int4)r19.xyxy + int4(1,1,2,2);
               r30.xy = (uint2)r20.xy >> int2(1,1);
               r30.xy = (uint2)r30.xy << int2(2,2);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r30.x, u6.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r30.x, u6.xxxx 
+r28.w = u6.Load(r30.x);
               r32.xy = (int2)r20.xy & int2(1,1);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r33.x = (((uint)r18.w << 16) & bitmask.x) | ((uint)r28.w & ~bitmask.x);
               bitmask.y = ((~(-1 << 16)) << 0) & 0xffffffff;  r33.y = (((uint)r18.w << 0) & bitmask.y) | ((uint)r28.w & ~bitmask.y);
@@ -636,15 +688,18 @@ void main)
               r28.w = (int)r33.y * (int)r37.y;
               r28.w = mad((int)r33.x, (int)r32.x, (int)r28.w);
             // No code for instruction (needs manual fix):
-                        store_raw u6.x, r30.x, r28.w
+                      // store_raw u6.x, r30.x, r28.w 
+u6.Store(r30.x, r28.w);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r30.y, u7.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r30.y, u7.xxxx 
+r28.w = u7.Load(r30.y);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r30.x = (((uint)r18.w << 16) & bitmask.x) | ((uint)r28.w & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r30.z = (((uint)r18.w << 0) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
               r28.w = (int)r37.z * (int)r30.z;
               r28.w = mad((int)r30.x, (int)r32.y, (int)r28.w);
             // No code for instruction (needs manual fix):
-                        store_raw u7.x, r30.y, r28.w
+                      // store_raw u7.x, r30.y, r28.w 
+u7.Store(r30.y, r28.w);
               r72.xyzw = (int4)r20.xyxy + int4(1,1,2,2);
               r28.w = (int)r40.w + 1;
               r30.xyz = min(float3(2000,2000,2000), r51.xzw);
@@ -655,7 +710,8 @@ void main)
               r32.x = f32tof16(r32.x);
               r30.y = mad((int)r32.x, 0x00010000, (int)r30.z);
             // No code for instruction (needs manual fix):
-                        store_raw u1.xy, r29.w, r30.xyxx
+                      // store_raw u1.xy, r29.w, r30.xyxx 
+u1.Store2(r29.w, r30.xy);
               r32.xyz = r55.xzw * float3(127.5,127.5,127.5) + float3(127.5,127.5,127.5);
               r32.xyz = (uint3)r32.xyz;
               r32.yz = (uint2)r32.yz << int2(8,16);
@@ -667,7 +723,8 @@ void main)
               r29.w = (int)r29.w | (int)r32.x;
               r33.xyz = mad((int3)r40.www, asint(cb0[7].xxx), asint(cb0[5].yzw));
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r33.x, r29.w
+                      // store_raw u1.x, r33.x, r29.w 
+u1.Store(r33.x, r29.w);
               r51.xzw = r56.xyz * float3(127.5,127.5,127.5) + float3(127.5,127.5,127.5);
               r51.xzw = (uint3)r51.xzw;
               r32.xz = (uint2)r51.zw << int2(8,16);
@@ -675,12 +732,14 @@ void main)
               r30.z = (int)r32.z | (int)r30.z;
               r30.z = (int)r32.y | (int)r30.z;
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r33.y, r30.z
+                      // store_raw u1.x, r33.y, r30.z 
+u1.Store(r33.y, r30.z);
               r32.xy = min(float2(2000,2000), r58.xy);
               r32.xy = f32tof16(r32.xy);
               r32.x = mad((int)r32.y, 0x00010000, (int)r32.x);
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r33.z, r32.x
+                      // store_raw u1.x, r33.z, r32.x 
+u1.Store(r33.z, r32.x);
               if (r13.y != 0) {
                 r32.y = mad((int)r40.w, asint(cb0[7].x), (int)r13.y);
                 r55.xyzw = float4(255,255,255,255) * r59.xyzw;
@@ -690,11 +749,13 @@ void main)
                 r32.z = (int)r33.y | (int)r32.z;
                 r32.z = (int)r33.z | (int)r32.z;
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r32.y, r32.z
+                          // store_raw u1.x, r32.y, r32.z 
+u1.Store(r32.y, r32.z);
               }
               r32.yz = mad((int2)r40.ww, asint(cb0[7].xx), asint(cb0[6].wz));
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r32.y, r37.x
+                      // store_raw u1.x, r32.y, r37.x 
+u1.Store(r32.y, r37.x);
               r55.xyzw = min(float4(2000,2000,2000,2000), r60.xyzw);
               r55.xyzw = f32tof16(r55.xyzw);
               r33.xy = mad((int2)r55.yw, int2(0x10000,0x10000), (int2)r55.xz);
@@ -702,11 +763,13 @@ void main)
               r32.y = mad((int)r61.z, 0x00010000, (int)r32.y);
               r33.z = mad((int)r61.w, 0x01000000, (int)r32.y);
             // No code for instruction (needs manual fix):
-                        store_raw u1.xyz, r32.z, r33.xyzx
+                      // store_raw u1.xyz, r32.z, r33.xyzx 
+u1.Store3(r32.z, r33.xyz);
               r55.xyzw = (uint4)r31.xyzw >> int4(1,1,1,1);
               r55.xyzw = (uint4)r55.xyzw << int4(2,2,2,2);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r32.y, r55.x, u3.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r32.y, r55.x, u3.xxxx 
+r32.y = u3.Load(r55.x);
               r31.xyzw = (int4)r31.xyzw & int4(1,1,1,1);
               bitmask.y = ((~(-1 << 16)) << 16) & 0xffffffff;  r32.y = (((uint)r40.w << 16) & bitmask.y) | ((uint)r32.y & ~bitmask.y);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r32.z = (((uint)r40.w << 0) & bitmask.z) | ((uint)r32.y & ~bitmask.z);
@@ -714,19 +777,23 @@ void main)
               r32.z = (int)r32.z * (int)r56.x;
               r31.x = mad((int)r32.y, (int)r31.x, (int)r32.z);
             // No code for instruction (needs manual fix):
-                        store_raw u3.x, r55.x, r31.x
+                      // store_raw u3.x, r55.x, r31.x 
+u3.Store(r55.x, r31.x);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.x, r55.y, u5.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.x, r55.y, u5.xxxx 
+r31.x = u5.Load(r55.y);
               bitmask.y = ((~(-1 << 16)) << 16) & 0xffffffff;  r32.y = (((uint)r40.w << 16) & bitmask.y) | ((uint)r31.x & ~bitmask.y);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r32.z = (((uint)r40.w << 0) & bitmask.z) | ((uint)r31.x & ~bitmask.z);
               r31.x = (int)r56.y * (int)r32.z;
               r31.x = mad((int)r32.y, (int)r31.y, (int)r31.x);
             // No code for instruction (needs manual fix):
-                        store_raw u5.x, r55.y, r31.x
+                      // store_raw u5.x, r55.y, r31.x 
+u5.Store(r55.y, r31.x);
               r57.xyzw = (uint4)r72.xyzw >> int4(1,1,1,1);
               r57.xyzw = (uint4)r57.xyzw << int4(2,2,2,2);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.x, r57.x, u6.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.x, r57.x, u6.xxxx 
+r31.x = u6.Load(r57.x);
               r58.xyzw = (int4)r72.xyzw & int4(1,1,1,1);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r31.x = (((uint)r40.w << 16) & bitmask.x) | ((uint)r31.x & ~bitmask.x);
               bitmask.y = ((~(-1 << 16)) << 0) & 0xffffffff;  r31.y = (((uint)r40.w << 0) & bitmask.y) | ((uint)r31.x & ~bitmask.y);
@@ -734,15 +801,18 @@ void main)
               r31.y = (int)r31.y * (int)r60.x;
               r31.x = mad((int)r31.x, (int)r58.x, (int)r31.y);
             // No code for instruction (needs manual fix):
-                        store_raw u6.x, r57.x, r31.x
+                      // store_raw u6.x, r57.x, r31.x 
+u6.Store(r57.x, r31.x);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.x, r57.y, u7.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.x, r57.y, u7.xxxx 
+r31.x = u7.Load(r57.y);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r31.x = (((uint)r40.w << 16) & bitmask.x) | ((uint)r31.x & ~bitmask.x);
               bitmask.y = ((~(-1 << 16)) << 0) & 0xffffffff;  r31.y = (((uint)r40.w << 0) & bitmask.y) | ((uint)r31.x & ~bitmask.y);
               r31.y = (int)r60.y * (int)r31.y;
               r31.x = mad((int)r31.x, (int)r58.y, (int)r31.y);
             // No code for instruction (needs manual fix):
-                        store_raw u7.x, r57.y, r31.x
+                      // store_raw u7.x, r57.y, r31.x 
+u7.Store(r57.y, r31.x);
               r31.x = (int)r28.w + 1;
               r51.xzw = min(float3(2000,2000,2000), r54.xyz);
               r51.xzw = f32tof16(r51.xzw);
@@ -752,7 +822,8 @@ void main)
               r32.y = f32tof16(r32.y);
               r54.y = mad((int)r32.y, 0x00010000, (int)r51.w);
             // No code for instruction (needs manual fix):
-                        store_raw u1.xy, r31.y, r54.xyxx
+                      // store_raw u1.xy, r31.y, r54.xyxx 
+u1.Store2(r31.y, r54.xy);
               r51.xzw = r68.xyz * float3(127.5,127.5,127.5) + float3(127.5,127.5,127.5);
               r51.xzw = (uint3)r51.xzw;
               r32.yz = (uint2)r51.zw << int2(8,16);
@@ -764,7 +835,8 @@ void main)
               r31.y = (int)r31.y | (int)r32.y;
               r51.xzw = mad((int3)r28.www, asint(cb0[7].xxx), asint(cb0[5].yzw));
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r51.x, r31.y
+                      // store_raw u1.x, r51.x, r31.y 
+u1.Store(r51.x, r31.y);
               r61.xyz = r69.xyz * float3(127.5,127.5,127.5) + float3(127.5,127.5,127.5);
               r61.xyz = (uint3)r61.xyz;
               r37.yz = (uint2)r61.yz << int2(8,16);
@@ -772,12 +844,14 @@ void main)
               r32.y = (int)r37.z | (int)r32.y;
               r32.y = (int)r32.z | (int)r32.y;
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r51.z, r32.y
+                      // store_raw u1.x, r51.z, r32.y 
+u1.Store(r51.z, r32.y);
               r37.yz = min(float2(2000,2000), r65.zw);
               r37.yz = f32tof16(r37.yz);
               r32.z = mad((int)r37.z, 0x00010000, (int)r37.y);
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r51.w, r32.z
+                      // store_raw u1.x, r51.w, r32.z 
+u1.Store(r51.w, r32.z);
               if (r13.y != 0) {
                 r37.y = mad((int)r28.w, asint(cb0[7].x), (int)r13.y);
                 r61.xyzw = float4(255,255,255,255) * r34.xyzw;
@@ -787,11 +861,13 @@ void main)
                 r37.z = (int)r51.z | (int)r37.z;
                 r37.z = (int)r51.w | (int)r37.z;
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r37.y, r37.z
+                          // store_raw u1.x, r37.y, r37.z 
+u1.Store(r37.y, r37.z);
               }
               r37.yz = mad((int2)r28.ww, asint(cb0[7].xx), asint(cb0[6].wz));
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r37.y, r39.w
+                      // store_raw u1.x, r37.y, r39.w 
+u1.Store(r37.y, r39.w);
               r49.xyzw = min(float4(2000,2000,2000,2000), r49.xyzw);
               r49.xyzw = f32tof16(r49.xyzw);
               r49.xy = mad((int2)r49.yw, int2(0x10000,0x10000), (int2)r49.xz);
@@ -799,54 +875,67 @@ void main)
               r37.y = mad((int)r71.z, 0x00010000, (int)r37.y);
               r49.z = mad((int)r71.w, 0x01000000, (int)r37.y);
             // No code for instruction (needs manual fix):
-                        store_raw u1.xyz, r37.z, r49.xyzx
+                      // store_raw u1.xyz, r37.z, r49.xyzx 
+u1.Store3(r37.z, r49.xyz);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r37.y, r55.z, u3.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r37.y, r55.z, u3.xxxx 
+r37.y = u3.Load(r55.z);
               bitmask.y = ((~(-1 << 16)) << 16) & 0xffffffff;  r37.y = (((uint)r28.w << 16) & bitmask.y) | ((uint)r37.y & ~bitmask.y);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r37.z = (((uint)r28.w << 0) & bitmask.z) | ((uint)r37.y & ~bitmask.z);
               r37.z = (int)r56.z * (int)r37.z;
               r31.z = mad((int)r37.y, (int)r31.z, (int)r37.z);
             // No code for instruction (needs manual fix):
-                        store_raw u3.x, r55.z, r31.z
+                      // store_raw u3.x, r55.z, r31.z 
+u3.Store(r55.z, r31.z);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r55.w, u5.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r55.w, u5.xxxx 
+r31.z = u5.Load(r55.w);
               bitmask.y = ((~(-1 << 16)) << 16) & 0xffffffff;  r37.y = (((uint)r28.w << 16) & bitmask.y) | ((uint)r31.z & ~bitmask.y);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r37.z = (((uint)r28.w << 0) & bitmask.z) | ((uint)r31.z & ~bitmask.z);
               r31.z = (int)r56.w * (int)r37.z;
               r31.z = mad((int)r37.y, (int)r31.w, (int)r31.z);
             // No code for instruction (needs manual fix):
-                        store_raw u5.x, r55.w, r31.z
+                      // store_raw u5.x, r55.w, r31.z 
+u5.Store(r55.w, r31.z);
               r55.xyzw = (int4)r19.xyxy + int4(3,3,4,4);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r57.z, u6.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r57.z, u6.xxxx 
+r31.z = u6.Load(r57.z);
               bitmask.z = ((~(-1 << 16)) << 16) & 0xffffffff;  r31.z = (((uint)r28.w << 16) & bitmask.z) | ((uint)r31.z & ~bitmask.z);
               bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r31.w = (((uint)r28.w << 0) & bitmask.w) | ((uint)r31.z & ~bitmask.w);
               r31.w = (int)r60.z * (int)r31.w;
               r31.z = mad((int)r31.z, (int)r58.z, (int)r31.w);
             // No code for instruction (needs manual fix):
-                        store_raw u6.x, r57.z, r31.z
+                      // store_raw u6.x, r57.z, r31.z 
+u6.Store(r57.z, r31.z);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r57.w, u7.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r57.w, u7.xxxx 
+r31.z = u7.Load(r57.w);
               bitmask.z = ((~(-1 << 16)) << 16) & 0xffffffff;  r31.z = (((uint)r28.w << 16) & bitmask.z) | ((uint)r31.z & ~bitmask.z);
               bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r31.w = (((uint)r28.w << 0) & bitmask.w) | ((uint)r31.z & ~bitmask.w);
               r31.w = (int)r60.w * (int)r31.w;
               r31.z = mad((int)r31.z, (int)r58.w, (int)r31.w);
             // No code for instruction (needs manual fix):
-                        store_raw u7.x, r57.w, r31.z
+                      // store_raw u7.x, r57.w, r31.z 
+u7.Store(r57.w, r31.z);
               r56.xyzw = (int4)r20.xyxy + int4(3,3,4,4);
               r31.z = cmp((int)r40.w == 0x0000ffff);
               if (r31.z != 0) {
                 r31.z = (int)r31.x + 1;
                 r31.w = (int)r31.x * asint(cb0[7].x);
               // No code for instruction (needs manual fix):
-                            store_raw u1.xy, r31.w, r30.xyxx
+                          // store_raw u1.xy, r31.w, r30.xyxx 
+u1.Store2(r31.w, r30.xy);
                 r51.xzw = mad((int3)r31.xxx, asint(cb0[7].xxx), asint(cb0[5].yzw));
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r51.x, r29.w
+                          // store_raw u1.x, r51.x, r29.w 
+u1.Store(r51.x, r29.w);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r51.z, r30.z
+                          // store_raw u1.x, r51.z, r30.z 
+u1.Store(r51.z, r30.z);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r51.w, r32.x
+                          // store_raw u1.x, r51.w, r32.x 
+u1.Store(r51.w, r32.x);
                 if (r13.y != 0) {
                   r31.w = mad((int)r31.x, asint(cb0[7].x), (int)r13.y);
                   r57.xyzw = float4(255,255,255,255) * r59.xyzw;
@@ -856,20 +945,24 @@ void main)
                   r37.y = (int)r51.z | (int)r37.y;
                   r37.y = (int)r51.w | (int)r37.y;
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r31.w, r37.y
+                              // store_raw u1.x, r31.w, r37.y 
+u1.Store(r31.w, r37.y);
                 }
                 r37.yz = mad((int2)r31.xx, asint(cb0[7].xx), asint(cb0[6].wz));
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r37.y, r37.x
+                          // store_raw u1.x, r37.y, r37.x 
+u1.Store(r37.y, r37.x);
               // No code for instruction (needs manual fix):
-                            store_raw u1.xyz, r37.z, r33.xyzx
+                          // store_raw u1.xyz, r37.z, r33.xyzx 
+u1.Store3(r37.z, r33.xyz);
                 r40.w = r31.x;
                 r31.x = r31.z;
               }
               r57.xyzw = (uint4)r55.xyzw >> int4(1,1,1,1);
               r57.xyzw = (uint4)r57.xyzw << int4(2,2,2,2);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r57.x, u3.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r57.x, u3.xxxx 
+r31.z = u3.Load(r57.x);
               r55.xyzw = (int4)r55.xyzw & int4(1,1,1,1);
               bitmask.z = ((~(-1 << 16)) << 16) & 0xffffffff;  r31.z = (((uint)r40.w << 16) & bitmask.z) | ((uint)r31.z & ~bitmask.z);
               bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r31.w = (((uint)r40.w << 0) & bitmask.w) | ((uint)r31.z & ~bitmask.w);
@@ -877,19 +970,23 @@ void main)
               r31.w = (int)r31.w * (int)r58.x;
               r31.z = mad((int)r31.z, (int)r55.x, (int)r31.w);
             // No code for instruction (needs manual fix):
-                        store_raw u3.x, r57.x, r31.z
+                      // store_raw u3.x, r57.x, r31.z 
+u3.Store(r57.x, r31.z);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r57.y, u5.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r57.y, u5.xxxx 
+r31.z = u5.Load(r57.y);
               bitmask.z = ((~(-1 << 16)) << 16) & 0xffffffff;  r31.z = (((uint)r40.w << 16) & bitmask.z) | ((uint)r31.z & ~bitmask.z);
               bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r31.w = (((uint)r40.w << 0) & bitmask.w) | ((uint)r31.z & ~bitmask.w);
               r31.w = (int)r58.y * (int)r31.w;
               r31.z = mad((int)r31.z, (int)r55.y, (int)r31.w);
             // No code for instruction (needs manual fix):
-                        store_raw u5.x, r57.y, r31.z
+                      // store_raw u5.x, r57.y, r31.z 
+u5.Store(r57.y, r31.z);
               r60.xyzw = (uint4)r56.xyzw >> int4(1,1,1,1);
               r60.xyzw = (uint4)r60.xyzw << int4(2,2,2,2);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r60.x, u6.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r60.x, u6.xxxx 
+r31.z = u6.Load(r60.x);
               r56.xyzw = (int4)r56.xyzw & int4(1,1,1,1);
               bitmask.z = ((~(-1 << 16)) << 16) & 0xffffffff;  r31.z = (((uint)r40.w << 16) & bitmask.z) | ((uint)r31.z & ~bitmask.z);
               bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r31.w = (((uint)r40.w << 0) & bitmask.w) | ((uint)r31.z & ~bitmask.w);
@@ -897,15 +994,18 @@ void main)
               r31.w = (int)r31.w * (int)r61.x;
               r31.z = mad((int)r31.z, (int)r56.x, (int)r31.w);
             // No code for instruction (needs manual fix):
-                        store_raw u6.x, r60.x, r31.z
+                      // store_raw u6.x, r60.x, r31.z 
+u6.Store(r60.x, r31.z);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r60.y, u7.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r60.y, u7.xxxx 
+r31.z = u7.Load(r60.y);
               bitmask.z = ((~(-1 << 16)) << 16) & 0xffffffff;  r31.z = (((uint)r40.w << 16) & bitmask.z) | ((uint)r31.z & ~bitmask.z);
               bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r31.w = (((uint)r40.w << 0) & bitmask.w) | ((uint)r31.z & ~bitmask.w);
               r31.w = (int)r61.y * (int)r31.w;
               r31.z = mad((int)r31.z, (int)r56.y, (int)r31.w);
             // No code for instruction (needs manual fix):
-                        store_raw u7.x, r60.y, r31.z
+                      // store_raw u7.x, r60.y, r31.z 
+u7.Store(r60.y, r31.z);
               r31.z = (int)r31.x + 1;
               r51.xzw = min(float3(2000,2000,2000), r27.xyz);
               r51.xzw = f32tof16(r51.xzw);
@@ -915,7 +1015,8 @@ void main)
               r37.y = f32tof16(r37.y);
               r55.y = mad((int)r37.y, 0x00010000, (int)r51.w);
             // No code for instruction (needs manual fix):
-                        store_raw u1.xy, r31.w, r55.xyxx
+                      // store_raw u1.xy, r31.w, r55.xyxx 
+u1.Store2(r31.w, r55.xy);
               r39.xyz = r39.xyz * float3(127.5,127.5,127.5) + float3(127.5,127.5,127.5);
               r39.xyz = (uint3)r39.xyz;
               r31.w = mad((int)r39.y, 256, (int)r39.x);
@@ -925,30 +1026,35 @@ void main)
               r31.w = mad((int)r37.y, 0x01000000, (int)r31.w);
               r38.xyz = mad((int3)r31.xxx, asint(cb0[7].xxx), asint(cb0[5].yzw));
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r38.x, r31.w
+                      // store_raw u1.x, r38.x, r31.w 
+u1.Store(r38.x, r31.w);
               r39.xyz = r40.xyz * float3(127.5,127.5,127.5) + float3(127.5,127.5,127.5);
               r39.xyz = (uint3)r39.xyz;
               r31.w = mad((int)r39.y, 256, (int)r39.x);
               r31.w = mad((int)r39.z, 0x00010000, (int)r31.w);
               r31.w = mad((int)r37.z, 0x01000000, (int)r31.w);
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r38.y, r31.w
+                      // store_raw u1.x, r38.y, r31.w 
+u1.Store(r38.y, r31.w);
               r37.yz = min(float2(2000,2000), r41.xy);
               r37.yz = f32tof16(r37.yz);
               r31.w = mad((int)r37.z, 0x00010000, (int)r37.y);
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r38.z, r31.w
+                      // store_raw u1.x, r38.z, r31.w 
+u1.Store(r38.z, r31.w);
               if (r13.y != 0) {
                 r31.w = mad((int)r31.x, asint(cb0[7].x), (int)r13.y);
                 bitmask.w = ((~(-1 << 24)) << 8) & 0xffffffff;  r30.w = (((uint)r36.x << 8) & bitmask.w) | ((uint)r30.w & ~bitmask.w);
                 r30.w = mad((int)r36.z, 0x00010000, (int)r30.w);
                 r30.w = mad((int)r32.w, 0x01000000, (int)r30.w);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r31.w, r30.w
+                          // store_raw u1.x, r31.w, r30.w 
+u1.Store(r31.w, r30.w);
               }
               r36.xz = mad((int2)r31.xx, asint(cb0[7].xx), asint(cb0[6].wz));
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r36.x, r29.y
+                      // store_raw u1.x, r36.x, r29.y 
+u1.Store(r36.x, r29.y);
               r68.xyzw = min(float4(2000,2000,2000,2000), r43.xyzw);
               r68.xyzw = f32tof16(r68.xyzw);
               r38.xy = mad((int2)r68.yw, int2(0x10000,0x10000), (int2)r68.xz);
@@ -956,40 +1062,49 @@ void main)
               r30.w = mad((int)r44.z, 0x00010000, (int)r30.w);
               bitmask.z = ((~(-1 << 24)) << 0) & 0xffffffff;  r38.z = (((uint)r30.w << 0) & bitmask.z) | ((uint)r41.w & ~bitmask.z);
             // No code for instruction (needs manual fix):
-                        store_raw u1.xyz, r36.z, r38.xyzx
+                      // store_raw u1.xyz, r36.z, r38.xyzx 
+u1.Store3(r36.z, r38.xyz);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r57.z, u3.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r57.z, u3.xxxx 
+r30.w = u3.Load(r57.z);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r31.x << 16) & bitmask.x) | ((uint)r30.w & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r31.x << 0) & bitmask.z) | ((uint)r30.w & ~bitmask.z);
               r30.w = (int)r58.z * (int)r36.z;
               r30.w = mad((int)r36.x, (int)r55.z, (int)r30.w);
             // No code for instruction (needs manual fix):
-                        store_raw u3.x, r57.z, r30.w
+                      // store_raw u3.x, r57.z, r30.w 
+u3.Store(r57.z, r30.w);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r57.w, u5.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r57.w, u5.xxxx 
+r30.w = u5.Load(r57.w);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r31.x << 16) & bitmask.x) | ((uint)r30.w & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r31.x << 0) & bitmask.z) | ((uint)r30.w & ~bitmask.z);
               r30.w = (int)r58.w * (int)r36.z;
               r30.w = mad((int)r36.x, (int)r55.w, (int)r30.w);
             // No code for instruction (needs manual fix):
-                        store_raw u5.x, r57.w, r30.w
+                      // store_raw u5.x, r57.w, r30.w 
+u5.Store(r57.w, r30.w);
               r55.xyzw = (int4)r19.xyxy + int4(5,5,6,6);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r60.z, u6.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r60.z, u6.xxxx 
+r30.w = u6.Load(r60.z);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r31.x << 16) & bitmask.x) | ((uint)r30.w & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r31.x << 0) & bitmask.z) | ((uint)r30.w & ~bitmask.z);
               r30.w = (int)r61.z * (int)r36.z;
               r30.w = mad((int)r36.x, (int)r56.z, (int)r30.w);
             // No code for instruction (needs manual fix):
-                        store_raw u6.x, r60.z, r30.w
+                      // store_raw u6.x, r60.z, r30.w 
+u6.Store(r60.z, r30.w);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r60.w, u7.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.w, r60.w, u7.xxxx 
+r30.w = u7.Load(r60.w);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r31.x = (((uint)r31.x << 16) & bitmask.x) | ((uint)r30.w & ~bitmask.x);
               bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r31.w = (((uint)r31.x << 0) & bitmask.w) | ((uint)r30.w & ~bitmask.w);
               r30.w = (int)r61.w * (int)r31.w;
               r30.w = mad((int)r31.x, (int)r56.w, (int)r30.w);
             // No code for instruction (needs manual fix):
-                        store_raw u7.x, r60.w, r30.w
+                      // store_raw u7.x, r60.w, r30.w 
+u7.Store(r60.w, r30.w);
               r56.xyzw = (int4)r20.xyxy + int4(5,5,6,6);
               r30.w = (int)r31.z + 1;
               r38.xyz = min(float3(2000,2000,2000), r53.xyz);
@@ -1000,7 +1115,8 @@ void main)
               r31.w = f32tof16(r31.w);
               r38.y = mad((int)r31.w, 0x00010000, (int)r38.z);
             // No code for instruction (needs manual fix):
-                        store_raw u1.xy, r31.x, r38.xyxx
+                      // store_raw u1.xy, r31.x, r38.xyxx 
+u1.Store2(r31.x, r38.xy);
               r39.xyz = r62.xyz * float3(127.5,127.5,127.5) + float3(127.5,127.5,127.5);
               r39.xyz = (uint3)r39.xyz;
               r31.xw = (uint2)r39.yz << int2(8,16);
@@ -1012,7 +1128,8 @@ void main)
               r31.x = (int)r31.x | (int)r36.x;
               r39.xyz = mad((int3)r31.zzz, asint(cb0[7].xxx), asint(cb0[5].yzw));
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r39.x, r31.x
+                      // store_raw u1.x, r39.x, r31.x 
+u1.Store(r39.x, r31.x);
               r40.xyz = r63.xyz * float3(127.5,127.5,127.5) + float3(127.5,127.5,127.5);
               r40.xyz = (uint3)r40.xyz;
               r37.yz = (uint2)r40.yz << int2(8,16);
@@ -1020,12 +1137,14 @@ void main)
               r31.w = (int)r37.z | (int)r31.w;
               r31.w = (int)r36.z | (int)r31.w;
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r39.y, r31.w
+                      // store_raw u1.x, r39.y, r31.w 
+u1.Store(r39.y, r31.w);
               r36.xz = min(float2(2000,2000), r65.xy);
               r36.xz = f32tof16(r36.xz);
               r32.w = mad((int)r36.z, 0x00010000, (int)r36.x);
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r39.z, r32.w
+                      // store_raw u1.x, r39.z, r32.w 
+u1.Store(r39.z, r32.w);
               if (r13.y != 0) {
                 r36.x = mad((int)r31.z, asint(cb0[7].x), (int)r13.y);
                 r53.xyzw = float4(255,255,255,255) * r42.xyzw;
@@ -1035,11 +1154,13 @@ void main)
                 r36.z = (int)r39.y | (int)r36.z;
                 r36.z = (int)r39.z | (int)r36.z;
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r36.x, r36.z
+                          // store_raw u1.x, r36.x, r36.z 
+u1.Store(r36.x, r36.z);
               }
               r36.xz = mad((int2)r31.zz, asint(cb0[7].xx), asint(cb0[6].wz));
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r36.x, r38.w
+                      // store_raw u1.x, r36.x, r38.w 
+u1.Store(r36.x, r38.w);
               r53.xyzw = min(float4(2000,2000,2000,2000), r66.xyzw);
               r53.xyzw = f32tof16(r53.xyzw);
               r39.xy = mad((int2)r53.yw, int2(0x10000,0x10000), (int2)r53.xz);
@@ -1047,11 +1168,13 @@ void main)
               r36.x = mad((int)r67.z, 0x00010000, (int)r36.x);
               r39.z = mad((int)r67.w, 0x01000000, (int)r36.x);
             // No code for instruction (needs manual fix):
-                        store_raw u1.xyz, r36.z, r39.xyzx
+                      // store_raw u1.xyz, r36.z, r39.xyzx 
+u1.Store3(r36.z, r39.xyz);
               r53.xyzw = (uint4)r55.xyzw >> int4(1,1,1,1);
               r53.xyzw = (uint4)r53.xyzw << int4(2,2,2,2);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r53.x, u3.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r53.x, u3.xxxx 
+r36.x = u3.Load(r53.x);
               r55.xyzw = (int4)r55.xyzw & int4(1,1,1,1);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r31.z << 16) & bitmask.x) | ((uint)r36.x & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r31.z << 0) & bitmask.z) | ((uint)r36.x & ~bitmask.z);
@@ -1059,19 +1182,23 @@ void main)
               r36.z = (int)r36.z * (int)r57.x;
               r36.x = mad((int)r36.x, (int)r55.x, (int)r36.z);
             // No code for instruction (needs manual fix):
-                        store_raw u3.x, r53.x, r36.x
+                      // store_raw u3.x, r53.x, r36.x 
+u3.Store(r53.x, r36.x);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r53.y, u5.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r53.y, u5.xxxx 
+r36.x = u5.Load(r53.y);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r31.z << 16) & bitmask.x) | ((uint)r36.x & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r31.z << 0) & bitmask.z) | ((uint)r36.x & ~bitmask.z);
               r36.z = (int)r57.y * (int)r36.z;
               r36.x = mad((int)r36.x, (int)r55.y, (int)r36.z);
             // No code for instruction (needs manual fix):
-                        store_raw u5.x, r53.y, r36.x
+                      // store_raw u5.x, r53.y, r36.x 
+u5.Store(r53.y, r36.x);
               r58.xyzw = (uint4)r56.xyzw >> int4(1,1,1,1);
               r58.xyzw = (uint4)r58.xyzw << int4(2,2,2,2);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r58.x, u6.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r58.x, u6.xxxx 
+r36.x = u6.Load(r58.x);
               r56.xyzw = (int4)r56.xyzw & int4(1,1,1,1);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r31.z << 16) & bitmask.x) | ((uint)r36.x & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r31.z << 0) & bitmask.z) | ((uint)r36.x & ~bitmask.z);
@@ -1079,28 +1206,35 @@ void main)
               r36.z = (int)r36.z * (int)r60.x;
               r36.x = mad((int)r36.x, (int)r56.x, (int)r36.z);
             // No code for instruction (needs manual fix):
-                        store_raw u6.x, r58.x, r36.x
+                      // store_raw u6.x, r58.x, r36.x 
+u6.Store(r58.x, r36.x);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r58.y, u7.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r58.y, u7.xxxx 
+r36.x = u7.Load(r58.y);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r31.z << 16) & bitmask.x) | ((uint)r36.x & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r31.z << 0) & bitmask.z) | ((uint)r36.x & ~bitmask.z);
               r36.z = (int)r60.y * (int)r36.z;
               r36.x = mad((int)r36.x, (int)r56.y, (int)r36.z);
             // No code for instruction (needs manual fix):
-                        store_raw u7.x, r58.y, r36.x
+                      // store_raw u7.x, r58.y, r36.x 
+u7.Store(r58.y, r36.x);
               r36.x = cmp((int)r28.w == 0x0000ffff);
               if (r36.x != 0) {
                 r36.x = (int)r30.w + 1;
                 r36.z = (int)r30.w * asint(cb0[7].x);
               // No code for instruction (needs manual fix):
-                            store_raw u1.xy, r36.z, r54.xyxx
+                          // store_raw u1.xy, r36.z, r54.xyxx 
+u1.Store2(r36.z, r54.xy);
                 r40.xyz = mad((int3)r30.www, asint(cb0[7].xxx), asint(cb0[5].yzw));
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r40.x, r31.y
+                          // store_raw u1.x, r40.x, r31.y 
+u1.Store(r40.x, r31.y);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r40.y, r32.y
+                          // store_raw u1.x, r40.y, r32.y 
+u1.Store(r40.y, r32.y);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r40.z, r32.z
+                          // store_raw u1.x, r40.z, r32.z 
+u1.Store(r40.z, r32.z);
                 if (r13.y != 0) {
                   r36.z = mad((int)r30.w, asint(cb0[7].x), (int)r13.y);
                   r61.xyzw = float4(255,255,255,255) * r34.xyzw;
@@ -1110,63 +1244,78 @@ void main)
                   r37.y = (int)r40.y | (int)r37.y;
                   r37.y = (int)r40.z | (int)r37.y;
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r36.z, r37.y
+                              // store_raw u1.x, r36.z, r37.y 
+u1.Store(r36.z, r37.y);
                 }
                 r37.yz = mad((int2)r30.ww, asint(cb0[7].xx), asint(cb0[6].wz));
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r37.y, r39.w
+                          // store_raw u1.x, r37.y, r39.w 
+u1.Store(r37.y, r39.w);
               // No code for instruction (needs manual fix):
-                            store_raw u1.xyz, r37.z, r49.xyzx
+                          // store_raw u1.xyz, r37.z, r49.xyzx 
+u1.Store3(r37.z, r49.xyz);
                 r28.w = r30.w;
                 r30.w = r36.x;
               }
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r53.z, u3.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r53.z, u3.xxxx 
+r36.x = u3.Load(r53.z);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r28.w << 16) & bitmask.x) | ((uint)r36.x & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r28.w << 0) & bitmask.z) | ((uint)r36.x & ~bitmask.z);
               r36.z = (int)r57.z * (int)r36.z;
               r36.x = mad((int)r36.x, (int)r55.z, (int)r36.z);
             // No code for instruction (needs manual fix):
-                        store_raw u3.x, r53.z, r36.x
+                      // store_raw u3.x, r53.z, r36.x 
+u3.Store(r53.z, r36.x);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r53.w, u5.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r53.w, u5.xxxx 
+r36.x = u5.Load(r53.w);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r28.w << 16) & bitmask.x) | ((uint)r36.x & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r28.w << 0) & bitmask.z) | ((uint)r36.x & ~bitmask.z);
               r36.z = (int)r57.w * (int)r36.z;
               r36.x = mad((int)r36.x, (int)r55.w, (int)r36.z);
             // No code for instruction (needs manual fix):
-                        store_raw u5.x, r53.w, r36.x
+                      // store_raw u5.x, r53.w, r36.x 
+u5.Store(r53.w, r36.x);
               r53.xyzw = (int4)r19.xyxy + int4(7,7,8,8);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r58.z, u6.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r58.z, u6.xxxx 
+r36.x = u6.Load(r58.z);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r28.w << 16) & bitmask.x) | ((uint)r36.x & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r28.w << 0) & bitmask.z) | ((uint)r36.x & ~bitmask.z);
               r36.z = (int)r60.z * (int)r36.z;
               r36.x = mad((int)r36.x, (int)r56.z, (int)r36.z);
             // No code for instruction (needs manual fix):
-                        store_raw u6.x, r58.z, r36.x
+                      // store_raw u6.x, r58.z, r36.x 
+u6.Store(r58.z, r36.x);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r58.w, u7.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r58.w, u7.xxxx 
+r36.x = u7.Load(r58.w);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r28.w << 16) & bitmask.x) | ((uint)r36.x & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r28.w << 0) & bitmask.z) | ((uint)r36.x & ~bitmask.z);
               r36.z = (int)r60.w * (int)r36.z;
               r36.x = mad((int)r36.x, (int)r56.w, (int)r36.z);
             // No code for instruction (needs manual fix):
-                        store_raw u7.x, r58.w, r36.x
+                      // store_raw u7.x, r58.w, r36.x 
+u7.Store(r58.w, r36.x);
               r55.xyzw = (int4)r20.xyxy + int4(7,7,8,8);
               r36.x = cmp((int)r31.z == 0x0000ffff);
               if (r36.x != 0) {
                 r36.x = (int)r30.w + 1;
                 r36.z = (int)r30.w * asint(cb0[7].x);
               // No code for instruction (needs manual fix):
-                            store_raw u1.xy, r36.z, r38.xyxx
+                          // store_raw u1.xy, r36.z, r38.xyxx 
+u1.Store2(r36.z, r38.xy);
                 r40.xyz = mad((int3)r30.www, asint(cb0[7].xxx), asint(cb0[5].yzw));
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r40.x, r31.x
+                          // store_raw u1.x, r40.x, r31.x 
+u1.Store(r40.x, r31.x);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r40.y, r31.w
+                          // store_raw u1.x, r40.y, r31.w 
+u1.Store(r40.y, r31.w);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r40.z, r32.w
+                          // store_raw u1.x, r40.z, r32.w 
+u1.Store(r40.z, r32.w);
                 if (r13.y != 0) {
                   r36.z = mad((int)r30.w, asint(cb0[7].x), (int)r13.y);
                   r56.xyzw = float4(255,255,255,255) * r42.xyzw;
@@ -1176,20 +1325,24 @@ void main)
                   r37.y = (int)r40.y | (int)r37.y;
                   r37.y = (int)r40.z | (int)r37.y;
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r36.z, r37.y
+                              // store_raw u1.x, r36.z, r37.y 
+u1.Store(r36.z, r37.y);
                 }
                 r37.yz = mad((int2)r30.ww, asint(cb0[7].xx), asint(cb0[6].wz));
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r37.y, r38.w
+                          // store_raw u1.x, r37.y, r38.w 
+u1.Store(r37.y, r38.w);
               // No code for instruction (needs manual fix):
-                            store_raw u1.xyz, r37.z, r39.xyzx
+                          // store_raw u1.xyz, r37.z, r39.xyzx 
+u1.Store3(r37.z, r39.xyz);
                 r31.z = r30.w;
                 r30.w = r36.x;
               }
               r56.xyzw = (uint4)r53.xyzw >> int4(1,1,1,1);
               r56.xyzw = (uint4)r56.xyzw << int4(2,2,2,2);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r56.x, u3.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r56.x, u3.xxxx 
+r36.x = u3.Load(r56.x);
               r53.xyzw = (int4)r53.xyzw & int4(1,1,1,1);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r31.z << 16) & bitmask.x) | ((uint)r36.x & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r31.z << 0) & bitmask.z) | ((uint)r36.x & ~bitmask.z);
@@ -1197,19 +1350,23 @@ void main)
               r36.z = (int)r36.z * (int)r57.x;
               r36.x = mad((int)r36.x, (int)r53.x, (int)r36.z);
             // No code for instruction (needs manual fix):
-                        store_raw u3.x, r56.x, r36.x
+                      // store_raw u3.x, r56.x, r36.x 
+u3.Store(r56.x, r36.x);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r56.y, u5.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r56.y, u5.xxxx 
+r36.x = u5.Load(r56.y);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r31.z << 16) & bitmask.x) | ((uint)r36.x & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r31.z << 0) & bitmask.z) | ((uint)r36.x & ~bitmask.z);
               r36.z = (int)r57.y * (int)r36.z;
               r36.x = mad((int)r36.x, (int)r53.y, (int)r36.z);
             // No code for instruction (needs manual fix):
-                        store_raw u5.x, r56.y, r36.x
+                      // store_raw u5.x, r56.y, r36.x 
+u5.Store(r56.y, r36.x);
               r58.xyzw = (uint4)r55.xyzw >> int4(1,1,1,1);
               r58.xyzw = (uint4)r58.xyzw << int4(2,2,2,2);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r58.x, u6.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r58.x, u6.xxxx 
+r36.x = u6.Load(r58.x);
               r55.xyzw = (int4)r55.xyzw & int4(1,1,1,1);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r31.z << 16) & bitmask.x) | ((uint)r36.x & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r31.z << 0) & bitmask.z) | ((uint)r36.x & ~bitmask.z);
@@ -1217,15 +1374,18 @@ void main)
               r36.z = (int)r36.z * (int)r60.x;
               r36.x = mad((int)r36.x, (int)r55.x, (int)r36.z);
             // No code for instruction (needs manual fix):
-                        store_raw u6.x, r58.x, r36.x
+                      // store_raw u6.x, r58.x, r36.x 
+u6.Store(r58.x, r36.x);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r58.y, u7.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.x, r58.y, u7.xxxx 
+r36.x = u7.Load(r58.y);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r31.z << 16) & bitmask.x) | ((uint)r36.x & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r31.z << 0) & bitmask.z) | ((uint)r36.x & ~bitmask.z);
               r36.z = (int)r60.y * (int)r36.z;
               r36.x = mad((int)r36.x, (int)r55.y, (int)r36.z);
             // No code for instruction (needs manual fix):
-                        store_raw u7.x, r58.y, r36.x
+                      // store_raw u7.x, r58.y, r36.x 
+u7.Store(r58.y, r36.x);
               r18.w = (int)r30.w + 1;
               r40.xyz = min(float3(2000,2000,2000), r28.xyz);
               r40.xyz = f32tof16(r40.xyz);
@@ -1235,7 +1395,8 @@ void main)
               r36.z = f32tof16(r36.z);
               r40.y = mad((int)r36.z, 0x00010000, (int)r40.z);
             // No code for instruction (needs manual fix):
-                        store_raw u1.xy, r36.x, r40.xyxx
+                      // store_raw u1.xy, r36.x, r40.xyxx 
+u1.Store2(r36.x, r40.xy);
               r40.xyz = r47.xyz * float3(127.5,127.5,127.5) + float3(127.5,127.5,127.5);
               r40.xyz = (uint3)r40.xyz;
               r36.x = mad((int)r40.y, 256, (int)r40.x);
@@ -1245,30 +1406,35 @@ void main)
               r36.x = mad((int)r37.y, 0x01000000, (int)r36.x);
               r40.xyz = mad((int3)r30.www, asint(cb0[7].xxx), asint(cb0[5].yzw));
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r40.x, r36.x
+                      // store_raw u1.x, r40.x, r36.x 
+u1.Store(r40.x, r36.x);
               r41.xyz = r48.xyz * float3(127.5,127.5,127.5) + float3(127.5,127.5,127.5);
               r41.xyz = (uint3)r41.xyz;
               r36.x = mad((int)r41.y, 256, (int)r41.x);
               r36.x = mad((int)r41.z, 0x00010000, (int)r36.x);
               r36.x = mad((int)r37.z, 0x01000000, (int)r36.x);
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r40.y, r36.x
+                      // store_raw u1.x, r40.y, r36.x 
+u1.Store(r40.y, r36.x);
               r36.xz = min(float2(2000,2000), r46.xy);
               r36.xz = f32tof16(r36.xz);
               r36.x = mad((int)r36.z, 0x00010000, (int)r36.x);
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r40.z, r36.x
+                      // store_raw u1.x, r40.z, r36.x 
+u1.Store(r40.z, r36.x);
               if (r13.y != 0) {
                 r36.x = mad((int)r30.w, asint(cb0[7].x), (int)r13.y);
                 bitmask.w = ((~(-1 << 24)) << 8) & 0xffffffff;  r33.w = (((uint)r46.z << 8) & bitmask.w) | ((uint)r33.w & ~bitmask.w);
                 r33.w = mad((int)r46.w, 0x00010000, (int)r33.w);
                 r33.w = mad((int)r36.w, 0x01000000, (int)r33.w);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r36.x, r33.w
+                          // store_raw u1.x, r36.x, r33.w 
+u1.Store(r36.x, r33.w);
               }
               r36.xz = mad((int2)r30.ww, asint(cb0[7].xx), asint(cb0[6].wz));
             // No code for instruction (needs manual fix):
-                        store_raw u1.x, r36.x, r29.z
+                      // store_raw u1.x, r36.x, r29.z 
+u1.Store(r36.x, r29.z);
               r45.xyzw = min(float4(2000,2000,2000,2000), r50.xyzw);
               r45.xyzw = f32tof16(r45.xyzw);
               r40.xy = mad((int2)r45.yw, int2(0x10000,0x10000), (int2)r45.xz);
@@ -1276,54 +1442,67 @@ void main)
               r33.w = mad((int)r52.z, 0x00010000, (int)r33.w);
               bitmask.z = ((~(-1 << 24)) << 0) & 0xffffffff;  r40.z = (((uint)r33.w << 0) & bitmask.z) | ((uint)r51.y & ~bitmask.z);
             // No code for instruction (needs manual fix):
-                        store_raw u1.xyz, r36.z, r40.xyzx
+                      // store_raw u1.xyz, r36.z, r40.xyzx 
+u1.Store3(r36.z, r40.xyz);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r56.z, u3.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r56.z, u3.xxxx 
+r33.w = u3.Load(r56.z);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r30.w << 16) & bitmask.x) | ((uint)r33.w & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r30.w << 0) & bitmask.z) | ((uint)r33.w & ~bitmask.z);
               r33.w = (int)r57.z * (int)r36.z;
               r33.w = mad((int)r36.x, (int)r53.z, (int)r33.w);
             // No code for instruction (needs manual fix):
-                        store_raw u3.x, r56.z, r33.w
+                      // store_raw u3.x, r56.z, r33.w 
+u3.Store(r56.z, r33.w);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r56.w, u5.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r56.w, u5.xxxx 
+r33.w = u5.Load(r56.w);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r30.w << 16) & bitmask.x) | ((uint)r33.w & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r30.w << 0) & bitmask.z) | ((uint)r33.w & ~bitmask.z);
               r33.w = (int)r57.w * (int)r36.z;
               r33.w = mad((int)r36.x, (int)r53.w, (int)r33.w);
             // No code for instruction (needs manual fix):
-                        store_raw u5.x, r56.w, r33.w
+                      // store_raw u5.x, r56.w, r33.w 
+u5.Store(r56.w, r33.w);
               r45.xyzw = (int4)r19.xyxy + int4(9,9,10,10);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r58.z, u6.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r58.z, u6.xxxx 
+r33.w = u6.Load(r58.z);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r30.w << 16) & bitmask.x) | ((uint)r33.w & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r30.w << 0) & bitmask.z) | ((uint)r33.w & ~bitmask.z);
               r33.w = (int)r60.z * (int)r36.z;
               r33.w = mad((int)r36.x, (int)r55.z, (int)r33.w);
             // No code for instruction (needs manual fix):
-                        store_raw u6.x, r58.z, r33.w
+                      // store_raw u6.x, r58.z, r33.w 
+u6.Store(r58.z, r33.w);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r58.w, u7.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r58.w, u7.xxxx 
+r33.w = u7.Load(r58.w);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r30.w << 16) & bitmask.x) | ((uint)r33.w & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r30.w << 0) & bitmask.z) | ((uint)r33.w & ~bitmask.z);
               r30.w = (int)r60.w * (int)r36.z;
               r30.w = mad((int)r36.x, (int)r55.w, (int)r30.w);
             // No code for instruction (needs manual fix):
-                        store_raw u7.x, r58.w, r30.w
+                      // store_raw u7.x, r58.w, r30.w 
+u7.Store(r58.w, r30.w);
               r46.xyzw = (int4)r20.xyxy + int4(9,9,10,10);
               r30.w = cmp((int)r40.w == 0x0000ffff);
               if (r30.w != 0) {
                 r30.w = (int)r18.w + 1;
                 r33.w = (int)r18.w * asint(cb0[7].x);
               // No code for instruction (needs manual fix):
-                            store_raw u1.xy, r33.w, r30.xyxx
+                          // store_raw u1.xy, r33.w, r30.xyxx 
+u1.Store2(r33.w, r30.xy);
                 r36.xzw = mad((int3)r18.www, asint(cb0[7].xxx), asint(cb0[5].yzw));
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r36.x, r29.w
+                          // store_raw u1.x, r36.x, r29.w 
+u1.Store(r36.x, r29.w);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r36.z, r30.z
+                          // store_raw u1.x, r36.z, r30.z 
+u1.Store(r36.z, r30.z);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r36.w, r32.x
+                          // store_raw u1.x, r36.w, r32.x 
+u1.Store(r36.w, r32.x);
                 if (r13.y != 0) {
                   r29.w = mad((int)r18.w, asint(cb0[7].x), (int)r13.y);
                   r47.xyzw = float4(255,255,255,255) * r59.xyzw;
@@ -1333,20 +1512,24 @@ void main)
                   r30.x = (int)r30.y | (int)r30.x;
                   r30.x = (int)r30.z | (int)r30.x;
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r29.w, r30.x
+                              // store_raw u1.x, r29.w, r30.x 
+u1.Store(r29.w, r30.x);
                 }
                 r30.xy = mad((int2)r18.ww, asint(cb0[7].xx), asint(cb0[6].wz));
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r30.x, r37.x
+                          // store_raw u1.x, r30.x, r37.x 
+u1.Store(r30.x, r37.x);
               // No code for instruction (needs manual fix):
-                            store_raw u1.xyz, r30.y, r33.xyzx
+                          // store_raw u1.xyz, r30.y, r33.xyzx 
+u1.Store3(r30.y, r33.xyz);
                 r40.w = r18.w;
                 r18.w = r30.w;
               }
               r30.xyzw = (uint4)r45.xyzw >> int4(1,1,1,1);
               r30.xyzw = (uint4)r30.xyzw << int4(2,2,2,2);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r30.x, u3.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r30.x, u3.xxxx 
+r29.w = u3.Load(r30.x);
               r33.xyzw = (int4)r45.xyzw & int4(1,1,1,1);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r40.w << 16) & bitmask.x) | ((uint)r29.w & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r40.w << 0) & bitmask.z) | ((uint)r29.w & ~bitmask.z);
@@ -1354,19 +1537,23 @@ void main)
               r29.w = (int)r36.z * (int)r45.x;
               r29.w = mad((int)r36.x, (int)r33.x, (int)r29.w);
             // No code for instruction (needs manual fix):
-                        store_raw u3.x, r30.x, r29.w
+                      // store_raw u3.x, r30.x, r29.w 
+u3.Store(r30.x, r29.w);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r30.y, u5.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r30.y, u5.xxxx 
+r29.w = u5.Load(r30.y);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r36.x = (((uint)r40.w << 16) & bitmask.x) | ((uint)r29.w & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r36.z = (((uint)r40.w << 0) & bitmask.z) | ((uint)r29.w & ~bitmask.z);
               r29.w = (int)r45.y * (int)r36.z;
               r29.w = mad((int)r36.x, (int)r33.y, (int)r29.w);
             // No code for instruction (needs manual fix):
-                        store_raw u5.x, r30.y, r29.w
+                      // store_raw u5.x, r30.y, r29.w 
+u5.Store(r30.y, r29.w);
               r47.xyzw = (uint4)r46.xyzw >> int4(1,1,1,1);
               r47.xyzw = (uint4)r47.xyzw << int4(2,2,2,2);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r47.x, u6.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r47.x, u6.xxxx 
+r29.w = u6.Load(r47.x);
               r46.xyzw = (int4)r46.xyzw & int4(1,1,1,1);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r30.x = (((uint)r40.w << 16) & bitmask.x) | ((uint)r29.w & ~bitmask.x);
               bitmask.y = ((~(-1 << 16)) << 0) & 0xffffffff;  r30.y = (((uint)r40.w << 0) & bitmask.y) | ((uint)r29.w & ~bitmask.y);
@@ -1374,28 +1561,35 @@ void main)
               r29.w = (int)r30.y * (int)r48.x;
               r29.w = mad((int)r30.x, (int)r46.x, (int)r29.w);
             // No code for instruction (needs manual fix):
-                        store_raw u6.x, r47.x, r29.w
+                      // store_raw u6.x, r47.x, r29.w 
+u6.Store(r47.x, r29.w);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r47.y, u7.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r47.y, u7.xxxx 
+r29.w = u7.Load(r47.y);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r30.x = (((uint)r40.w << 16) & bitmask.x) | ((uint)r29.w & ~bitmask.x);
               bitmask.y = ((~(-1 << 16)) << 0) & 0xffffffff;  r30.y = (((uint)r40.w << 0) & bitmask.y) | ((uint)r29.w & ~bitmask.y);
               r29.w = (int)r48.y * (int)r30.y;
               r29.w = mad((int)r30.x, (int)r46.y, (int)r29.w);
             // No code for instruction (needs manual fix):
-                        store_raw u7.x, r47.y, r29.w
+                      // store_raw u7.x, r47.y, r29.w 
+u7.Store(r47.y, r29.w);
               r29.w = cmp((int)r31.z == 0x0000ffff);
               if (r29.w != 0) {
                 r29.w = (int)r18.w + 1;
                 r30.x = (int)r18.w * asint(cb0[7].x);
               // No code for instruction (needs manual fix):
-                            store_raw u1.xy, r30.x, r38.xyxx
+                          // store_raw u1.xy, r30.x, r38.xyxx 
+u1.Store2(r30.x, r38.xy);
                 r36.xzw = mad((int3)r18.www, asint(cb0[7].xxx), asint(cb0[5].yzw));
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r36.x, r31.x
+                          // store_raw u1.x, r36.x, r31.x 
+u1.Store(r36.x, r31.x);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r36.z, r31.w
+                          // store_raw u1.x, r36.z, r31.w 
+u1.Store(r36.z, r31.w);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r36.w, r32.w
+                          // store_raw u1.x, r36.w, r32.w 
+u1.Store(r36.w, r32.w);
                 if (r13.y != 0) {
                   r30.x = mad((int)r18.w, asint(cb0[7].x), (int)r13.y);
                   r40.xyzw = float4(255,255,255,255) * r42.xyzw;
@@ -1405,63 +1599,78 @@ void main)
                   r30.y = (int)r36.z | (int)r30.y;
                   r30.y = (int)r36.w | (int)r30.y;
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r30.x, r30.y
+                              // store_raw u1.x, r30.x, r30.y 
+u1.Store(r30.x, r30.y);
                 }
                 r30.xy = mad((int2)r18.ww, asint(cb0[7].xx), asint(cb0[6].wz));
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r30.x, r38.w
+                          // store_raw u1.x, r30.x, r38.w 
+u1.Store(r30.x, r38.w);
               // No code for instruction (needs manual fix):
-                            store_raw u1.xyz, r30.y, r39.xyzx
+                          // store_raw u1.xyz, r30.y, r39.xyzx 
+u1.Store3(r30.y, r39.xyz);
                 r31.z = r18.w;
                 r18.w = r29.w;
               }
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r30.z, u3.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r30.z, u3.xxxx 
+r29.w = u3.Load(r30.z);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r30.x = (((uint)r31.z << 16) & bitmask.x) | ((uint)r29.w & ~bitmask.x);
               bitmask.y = ((~(-1 << 16)) << 0) & 0xffffffff;  r30.y = (((uint)r31.z << 0) & bitmask.y) | ((uint)r29.w & ~bitmask.y);
               r29.w = (int)r45.z * (int)r30.y;
               r29.w = mad((int)r30.x, (int)r33.z, (int)r29.w);
             // No code for instruction (needs manual fix):
-                        store_raw u3.x, r30.z, r29.w
+                      // store_raw u3.x, r30.z, r29.w 
+u3.Store(r30.z, r29.w);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r30.w, u5.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r30.w, u5.xxxx 
+r29.w = u5.Load(r30.w);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r30.x = (((uint)r31.z << 16) & bitmask.x) | ((uint)r29.w & ~bitmask.x);
               bitmask.y = ((~(-1 << 16)) << 0) & 0xffffffff;  r30.y = (((uint)r31.z << 0) & bitmask.y) | ((uint)r29.w & ~bitmask.y);
               r29.w = (int)r45.w * (int)r30.y;
               r29.w = mad((int)r30.x, (int)r33.w, (int)r29.w);
             // No code for instruction (needs manual fix):
-                        store_raw u5.x, r30.w, r29.w
+                      // store_raw u5.x, r30.w, r29.w 
+u5.Store(r30.w, r29.w);
               r19.xyzw = (int4)r19.xyxy + int4(12,12,11,11);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r47.z, u6.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r47.z, u6.xxxx 
+r29.w = u6.Load(r47.z);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r30.x = (((uint)r31.z << 16) & bitmask.x) | ((uint)r29.w & ~bitmask.x);
               bitmask.y = ((~(-1 << 16)) << 0) & 0xffffffff;  r30.y = (((uint)r31.z << 0) & bitmask.y) | ((uint)r29.w & ~bitmask.y);
               r29.w = (int)r48.z * (int)r30.y;
               r29.w = mad((int)r30.x, (int)r46.z, (int)r29.w);
             // No code for instruction (needs manual fix):
-                        store_raw u6.x, r47.z, r29.w
+                      // store_raw u6.x, r47.z, r29.w 
+u6.Store(r47.z, r29.w);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r47.w, u7.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r47.w, u7.xxxx 
+r29.w = u7.Load(r47.w);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r30.x = (((uint)r31.z << 16) & bitmask.x) | ((uint)r29.w & ~bitmask.x);
               bitmask.y = ((~(-1 << 16)) << 0) & 0xffffffff;  r30.y = (((uint)r31.z << 0) & bitmask.y) | ((uint)r29.w & ~bitmask.y);
               r29.w = (int)r48.w * (int)r30.y;
               r29.w = mad((int)r30.x, (int)r46.w, (int)r29.w);
             // No code for instruction (needs manual fix):
-                        store_raw u7.x, r47.w, r29.w
+                      // store_raw u7.x, r47.w, r29.w 
+u7.Store(r47.w, r29.w);
               r20.xyzw = (int4)r20.xyxy + int4(12,12,11,11);
               r29.w = cmp((int)r28.w == 0x0000ffff);
               if (r29.w != 0) {
                 r29.w = (int)r18.w + 1;
                 r30.x = (int)r18.w * asint(cb0[7].x);
               // No code for instruction (needs manual fix):
-                            store_raw u1.xy, r30.x, r54.xyxx
+                          // store_raw u1.xy, r30.x, r54.xyxx 
+u1.Store2(r30.x, r54.xy);
                 r30.xyz = mad((int3)r18.www, asint(cb0[7].xxx), asint(cb0[5].yzw));
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r30.x, r31.y
+                          // store_raw u1.x, r30.x, r31.y 
+u1.Store(r30.x, r31.y);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r30.y, r32.y
+                          // store_raw u1.x, r30.y, r32.y 
+u1.Store(r30.y, r32.y);
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r30.z, r32.z
+                          // store_raw u1.x, r30.z, r32.z 
+u1.Store(r30.z, r32.z);
                 if (r13.y != 0) {
                   r30.x = mad((int)r18.w, asint(cb0[7].x), (int)r13.y);
                   r31.xyzw = float4(255,255,255,255) * r34.xyzw;
@@ -1471,20 +1680,24 @@ void main)
                   r30.y = (int)r30.z | (int)r30.y;
                   r30.y = (int)r30.w | (int)r30.y;
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r30.x, r30.y
+                              // store_raw u1.x, r30.x, r30.y 
+u1.Store(r30.x, r30.y);
                 }
                 r30.xy = mad((int2)r18.ww, asint(cb0[7].xx), asint(cb0[6].wz));
               // No code for instruction (needs manual fix):
-                            store_raw u1.x, r30.x, r39.w
+                          // store_raw u1.x, r30.x, r39.w 
+u1.Store(r30.x, r39.w);
               // No code for instruction (needs manual fix):
-                            store_raw u1.xyz, r30.y, r49.xyzx
+                          // store_raw u1.xyz, r30.y, r49.xyzx 
+u1.Store3(r30.y, r49.xyz);
                 r28.w = r18.w;
                 r18.w = r29.w;
               }
               r30.xy = (uint2)r19.zw >> int2(1,1);
               r30.xy = (uint2)r30.xy << int2(2,2);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r30.x, u3.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r30.x, u3.xxxx 
+r29.w = u3.Load(r30.x);
               r19.zw = (int2)r19.zw & int2(1,1);
               bitmask.z = ((~(-1 << 16)) << 16) & 0xffffffff;  r30.z = (((uint)r28.w << 16) & bitmask.z) | ((uint)r29.w & ~bitmask.z);
               bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r30.w = (((uint)r28.w << 0) & bitmask.w) | ((uint)r29.w & ~bitmask.w);
@@ -1492,19 +1705,23 @@ void main)
               r29.w = (int)r30.w * (int)r31.x;
               r19.z = mad((int)r30.z, (int)r19.z, (int)r29.w);
             // No code for instruction (needs manual fix):
-                        store_raw u3.x, r30.x, r19.z
+                      // store_raw u3.x, r30.x, r19.z 
+u3.Store(r30.x, r19.z);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r30.y, u5.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r30.y, u5.xxxx 
+r19.z = u5.Load(r30.y);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r30.x = (((uint)r28.w << 16) & bitmask.x) | ((uint)r19.z & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r30.z = (((uint)r28.w << 0) & bitmask.z) | ((uint)r19.z & ~bitmask.z);
               r19.z = (int)r31.y * (int)r30.z;
               r19.z = mad((int)r30.x, (int)r19.w, (int)r19.z);
             // No code for instruction (needs manual fix):
-                        store_raw u5.x, r30.y, r19.z
+                      // store_raw u5.x, r30.y, r19.z 
+u5.Store(r30.y, r19.z);
               r19.zw = (uint2)r20.zw >> int2(1,1);
               r19.zw = (uint2)r19.zw << int2(2,2);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r19.z, u6.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r29.w, r19.z, u6.xxxx 
+r29.w = u6.Load(r19.z);
               r30.xy = (int2)r20.zw & int2(1,1);
               bitmask.z = ((~(-1 << 16)) << 16) & 0xffffffff;  r30.z = (((uint)r28.w << 16) & bitmask.z) | ((uint)r29.w & ~bitmask.z);
               bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r30.w = (((uint)r28.w << 0) & bitmask.w) | ((uint)r29.w & ~bitmask.w);
@@ -1512,15 +1729,18 @@ void main)
               r29.w = (int)r30.w * (int)r31.x;
               r29.w = mad((int)r30.z, (int)r30.x, (int)r29.w);
             // No code for instruction (needs manual fix):
-                        store_raw u6.x, r19.z, r29.w
+                      // store_raw u6.x, r19.z, r29.w 
+u6.Store(r19.z, r29.w);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r19.w, u7.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r19.w, u7.xxxx 
+r19.z = u7.Load(r19.w);
               bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r30.x = (((uint)r28.w << 16) & bitmask.x) | ((uint)r19.z & ~bitmask.x);
               bitmask.z = ((~(-1 << 16)) << 0) & 0xffffffff;  r30.z = (((uint)r28.w << 0) & bitmask.z) | ((uint)r19.z & ~bitmask.z);
               r19.z = (int)r31.y * (int)r30.z;
               r19.z = mad((int)r30.x, (int)r30.y, (int)r19.z);
             // No code for instruction (needs manual fix):
-                        store_raw u7.x, r19.w, r19.z
+                      // store_raw u7.x, r19.w, r19.z 
+u7.Store(r19.w, r19.z);
               r30.xyzw = cmp(float4(0,0,0,0) < r35.xyzw);
               if (r30.x != 0) {
                 if (3 == 0) r19.z = 0; else if (3+5 < 32) {                 r19.z = (uint)r36.y << (32-(3 + 5)); r19.z = (uint)r19.z >> (32-3);                } else r19.z = (uint)r36.y >> 5;
@@ -1535,7 +1755,8 @@ void main)
                 r19.w = (int)r19.w | (int)r31.y;
                 r19.w = (int)r19.w | (int)r31.z;
                 r19.w = (int)r19.w | (int)r31.w;
-                bitmask.w = ((~(-1 << 1)) << r36.y) & 0xffffffff;  r19.w = (((uint)1 << r36.y) & bitmask.w) | ((uint)r19.w & ~bitmask.w);
+                bitmask.w = ((~(-1 << 1)) << (uint)r36.y) & 0xffffffff;
+                r19.w = ((uint)(1u << (uint)r36.y) & bitmask.w) | ((uint)r19.w & ~bitmask.w);
                 r19.z = 1 << (int)r19.z;
                 r31.xyzw = (int4)r19.zzzz & int4(1,2,4,8);
                 r31.xyzw = r31.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -1560,7 +1781,7 @@ void main)
                 r28.w = (int)r28.w | (int)r31.y;
                 r28.w = (int)r28.w | (int)r31.z;
                 r28.w = (int)r28.w | (int)r31.w;
-                bitmask.z = ((~(-1 << 1)) << r19.z) & 0xffffffff;  r19.z = (((uint)1 << r19.z) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
+                bitmask.z = ((~(-1 << 1)) << (uint)r19.z) & 0xffffffff;  r19.z = (((uint)1 << (uint)r19.z) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
                 r19.w = 1 << (int)r19.w;
                 r31.xyzw = (int4)r19.wwww & int4(1,2,4,8);
                 r31.xyzw = r31.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -1585,7 +1806,7 @@ void main)
                 r28.w = (int)r28.w | (int)r31.y;
                 r28.w = (int)r28.w | (int)r31.z;
                 r28.w = (int)r28.w | (int)r31.w;
-                bitmask.z = ((~(-1 << 1)) << r19.z) & 0xffffffff;  r19.z = (((uint)1 << r19.z) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
+                bitmask.z = ((~(-1 << 1)) << (uint)r19.z) & 0xffffffff;  r19.z = (((uint)1 << (uint)r19.z) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
                 r19.w = 1 << (int)r19.w;
                 r31.xyzw = (int4)r19.wwww & int4(1,2,4,8);
                 r31.xyzw = r31.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -1609,7 +1830,7 @@ void main)
                 r19.w = (int)r19.w | (int)r30.y;
                 r19.w = (int)r19.w | (int)r30.z;
                 r19.w = (int)r19.w | (int)r30.w;
-                bitmask.w = ((~(-1 << 1)) << r37.w) & 0xffffffff;  r19.w = (((uint)1 << r37.w) & bitmask.w) | ((uint)r19.w & ~bitmask.w);
+                bitmask.w = ((~(-1 << 1)) << (uint)r37.w) & 0xffffffff;  r19.w = (((uint)1 << (uint)r37.w) & bitmask.w) | ((uint)r19.w & ~bitmask.w);
                 r19.z = 1 << (int)r19.z;
                 r30.xyzw = (int4)r19.zzzz & int4(1,2,4,8);
                 r30.xyzw = r30.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -1634,7 +1855,7 @@ void main)
                 r19.w = (int)r19.w | (int)r31.y;
                 r19.w = (int)r19.w | (int)r31.z;
                 r19.w = (int)r19.w | (int)r31.w;
-                bitmask.w = ((~(-1 << 1)) << r41.w) & 0xffffffff;  r19.w = (((uint)1 << r41.w) & bitmask.w) | ((uint)r19.w & ~bitmask.w);
+                bitmask.w = ((~(-1 << 1)) << (uint)r41.w) & 0xffffffff;  r19.w = (((uint)1 << (uint)r41.w) & bitmask.w) | ((uint)r19.w & ~bitmask.w);
                 r19.z = 1 << (int)r19.z;
                 r31.xyzw = (int4)r19.zzzz & int4(1,2,4,8);
                 r31.xyzw = r31.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -1659,7 +1880,7 @@ void main)
                 r28.w = (int)r28.w | (int)r31.y;
                 r28.w = (int)r28.w | (int)r31.z;
                 r28.w = (int)r28.w | (int)r31.w;
-                bitmask.z = ((~(-1 << 1)) << r19.z) & 0xffffffff;  r19.z = (((uint)1 << r19.z) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
+                bitmask.z = ((~(-1 << 1)) << (uint)r19.z) & 0xffffffff;  r19.z = (((uint)1 << (uint)r19.z) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
                 r19.w = 1 << (int)r19.w;
                 r31.xyzw = (int4)r19.wwww & int4(1,2,4,8);
                 r31.xyzw = r31.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -1684,7 +1905,7 @@ void main)
                 r28.w = (int)r28.w | (int)r31.y;
                 r28.w = (int)r28.w | (int)r31.z;
                 r28.w = (int)r28.w | (int)r31.w;
-                bitmask.z = ((~(-1 << 1)) << r19.z) & 0xffffffff;  r19.z = (((uint)1 << r19.z) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
+                bitmask.z = ((~(-1 << 1)) << (uint)r19.z) & 0xffffffff;  r19.z = (((uint)1 << (uint)r19.z) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
                 r19.w = 1 << (int)r19.w;
                 r31.xyzw = (int4)r19.wwww & int4(1,2,4,8);
                 r31.xyzw = r31.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -1708,7 +1929,7 @@ void main)
                 r19.w = (int)r19.w | (int)r30.y;
                 r19.w = (int)r19.w | (int)r30.z;
                 r19.w = (int)r19.w | (int)r30.w;
-                bitmask.w = ((~(-1 << 1)) << r44.w) & 0xffffffff;  r19.w = (((uint)1 << r44.w) & bitmask.w) | ((uint)r19.w & ~bitmask.w);
+                bitmask.w = ((~(-1 << 1)) << (uint)r44.w) & 0xffffffff;  r19.w = (((uint)1 << (uint)r44.w) & bitmask.w) | ((uint)r19.w & ~bitmask.w);
                 r19.z = 1 << (int)r19.z;
                 r30.xyzw = (int4)r19.zzzz & int4(1,2,4,8);
                 r30.xyzw = r30.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -1733,7 +1954,7 @@ void main)
                 r19.w = (int)r19.w | (int)r31.y;
                 r19.w = (int)r19.w | (int)r31.z;
                 r19.w = (int)r19.w | (int)r31.w;
-                bitmask.w = ((~(-1 << 1)) << r51.y) & 0xffffffff;  r19.w = (((uint)1 << r51.y) & bitmask.w) | ((uint)r19.w & ~bitmask.w);
+                bitmask.w = ((~(-1 << 1)) << (uint)r51.y) & 0xffffffff;  r19.w = (((uint)1 << (uint)r51.y) & bitmask.w) | ((uint)r19.w & ~bitmask.w);
                 r19.z = 1 << (int)r19.z;
                 r31.xyzw = (int4)r19.zzzz & int4(1,2,4,8);
                 r31.xyzw = r31.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -1758,7 +1979,7 @@ void main)
                 r28.w = (int)r28.w | (int)r31.y;
                 r28.w = (int)r28.w | (int)r31.z;
                 r28.w = (int)r28.w | (int)r31.w;
-                bitmask.z = ((~(-1 << 1)) << r19.z) & 0xffffffff;  r19.z = (((uint)1 << r19.z) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
+                bitmask.z = ((~(-1 << 1)) << (uint)r19.z) & 0xffffffff;  r19.z = (((uint)1 << (uint)r19.z) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
                 r19.w = 1 << (int)r19.w;
                 r31.xyzw = (int4)r19.wwww & int4(1,2,4,8);
                 r31.xyzw = r31.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -1783,7 +2004,7 @@ void main)
                 r28.w = (int)r28.w | (int)r31.y;
                 r28.w = (int)r28.w | (int)r31.z;
                 r28.w = (int)r28.w | (int)r31.w;
-                bitmask.z = ((~(-1 << 1)) << r19.z) & 0xffffffff;  r19.z = (((uint)1 << r19.z) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
+                bitmask.z = ((~(-1 << 1)) << (uint)r19.z) & 0xffffffff;  r19.z = (((uint)1 << (uint)r19.z) & bitmask.z) | ((uint)r28.w & ~bitmask.z);
                 r19.w = 1 << (int)r19.w;
                 r31.xyzw = (int4)r19.wwww & int4(1,2,4,8);
                 r31.xyzw = r31.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -1807,7 +2028,7 @@ void main)
                 r19.w = (int)r19.w | (int)r30.y;
                 r19.w = (int)r19.w | (int)r30.z;
                 r19.w = (int)r19.w | (int)r30.w;
-                bitmask.w = ((~(-1 << 1)) << r52.w) & 0xffffffff;  r19.w = (((uint)1 << r52.w) & bitmask.w) | ((uint)r19.w & ~bitmask.w);
+                bitmask.w = ((~(-1 << 1)) << (uint)r52.w) & 0xffffffff;  r19.w = (((uint)1 << (uint)r52.w) & bitmask.w) | ((uint)r19.w & ~bitmask.w);
                 r19.z = 1 << (int)r19.z;
                 r30.xyzw = (int4)r19.zzzz & int4(1,2,4,8);
                 r30.xyzw = r30.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -1819,26 +2040,32 @@ void main)
                 r16.xyzw = (int4)r16.xyzw | (int4)r30.xyzw;
               }
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r23.x, u2.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r23.x, u2.xxxx 
+r19.z = u2.Load(r23.x);
               r19.zw = (int2)r19.zz & int2(0xffff,0xffff0000);
               r19.w = (int)r23.w * (int)r19.w;
               r19.z = mad((int)r19.z, (int)r22.w, (int)r19.w);
             // No code for instruction (needs manual fix):
-                        store_raw u2.x, r23.x, r19.z
+                      // store_raw u2.x, r23.x, r19.z 
+u2.Store(r23.x, r19.z);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r22.y, u2.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r22.y, u2.xxxx 
+r19.z = u2.Load(r22.y);
               r19.zw = (int2)r19.zz & int2(0xffff,0xffff0000);
               r19.w = (int)r25.x * (int)r19.w;
               r19.z = mad((int)r19.z, (int)r24.x, (int)r19.w);
             // No code for instruction (needs manual fix):
-                        store_raw u2.x, r22.y, r19.z
+                      // store_raw u2.x, r22.y, r19.z 
+u2.Store(r22.y, r19.z);
             // No code for instruction (needs manual fix):
-                        ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r22.z, u2.xxxx
+                        // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r22.z, u2.xxxx 
+r19.z = u2.Load(r22.z);
               r19.zw = (int2)r19.zz & int2(0xffff,0xffff0000);
               r19.w = (int)r25.y * (int)r19.w;
               r19.z = mad((int)r19.z, (int)r24.y, (int)r19.w);
             // No code for instruction (needs manual fix):
-                        store_raw u2.x, r22.z, r19.z
+                      // store_raw u2.x, r22.z, r19.z 
+u2.Store(r22.z, r19.z);
               r17.w = r12.w;
             } else {
               r30.xyz = cmp(r29.xyz < float3(5,5,5));
@@ -1855,7 +2082,8 @@ void main)
                 r19.z = f16tof32(r19.z);
                 r30.xyz = mad((int3)r23.yyy, asint(cb0[5].xxx), asint(cb0[5].yzw));
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r30.x, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r30.x, t1.xxxx 
+r19.w = t1.Load(r30.x);
                 r24.w = (int)r19.w & 255;
                 r24.w = (uint)r24.w;
                 r24.w = r24.w * 0.00784313772 + -1;
@@ -1867,7 +2095,8 @@ void main)
                 r19.w = (uint)r19.w;
                 r19.w = r19.w * 0.00784313772 + -1;
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r30.y, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r28.w, r30.y, t1.xxxx 
+r28.w = t1.Load(r30.y);
                 r29.w = (int)r28.w & 255;
                 r29.w = (uint)r29.w;
                 r29.w = r29.w * 0.00784313772 + -1;
@@ -1879,25 +2108,29 @@ void main)
                 r28.w = (uint)r28.w;
                 r28.w = r28.w * 0.00784313772 + -1;
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.y, r30.z, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r30.y, r30.z, t1.xxxx 
+r30.y = t1.Load(r30.z);
                 r30.z = f16tof32(r30.y);
                 r30.y = (uint)r30.y >> 16;
                 r30.y = f16tof32(r30.y);
                 r31.z = mad((int)r23.y, asint(cb0[5].x), (int)r13.y);
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r31.z, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r31.z, r31.z, t1.xxxx 
+r31.z = t1.Load(r31.z);
                 if (8 == 0) r32.x = 0; else if (8+8 < 32) {                 r32.x = (uint)r31.z << (32-(8 + 8)); r32.x = (uint)r32.x >> (32-8);                } else r32.x = (uint)r31.z >> 8;
                 if (8 == 0) r32.y = 0; else if (8+16 < 32) {                 r32.y = (uint)r31.z << (32-(8 + 16)); r32.y = (uint)r32.y >> (32-8);                } else r32.y = (uint)r31.z >> 16;
                 r31.w = (uint)r31.z >> 24;
                 r32.z = mad((int)r23.y, asint(cb0[5].x), asint(cb0[6].z));
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r32.w, r32.z, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r32.w, r32.z, t1.xxxx 
+r32.w = t1.Load(r32.z);
                 r33.x = f16tof32(r32.w);
                 r32.w = (uint)r32.w >> 16;
                 r32.w = f16tof32(r32.w);
                 r32.z = (int)r32.z + 4;
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.yz, r32.z, t1.xxyx
+                          // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.yz, r32.z, t1.xxyx
+                          r33.yz = t1.Load2(r32.z);
                 r32.z = f16tof32(r33.y);
                 r33.y = (uint)r33.y >> 16;
                 r33.y = f16tof32(r33.y);
@@ -1906,7 +2139,8 @@ void main)
                 r25.zw = (uint2)r25.zw >> int2(16,16);
                 r35.xyz = mad((int3)r23.zzz, asint(cb0[5].xxx), asint(cb0[5].yzw));
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r35.x, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r33.w, r35.x, t1.xxxx 
+r33.w = t1.Load(r35.x);
                 r34.z = (int)r33.w & 255;
                 r34.z = (uint)r34.z;
                 r34.z = r34.z * 0.00784313772 + -1;
@@ -1918,7 +2152,8 @@ void main)
                 r33.w = (uint)r33.w;
                 r33.w = r33.w * 0.00784313772 + -1;
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r34.w, r35.y, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r34.w, r35.y, t1.xxxx 
+r34.w = t1.Load(r35.y);
                 r35.y = (int)r34.w & 255;
                 r35.y = (uint)r35.y;
                 r35.y = r35.y * 0.00784313772 + -1;
@@ -1930,23 +2165,27 @@ void main)
                 r34.w = (uint)r34.w;
                 r34.w = r34.w * 0.00784313772 + -1;
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r35.z, r35.z, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r35.z, r35.z, t1.xxxx 
+r35.z = t1.Load(r35.z);
                 r36.z = f16tof32(r35.z);
                 r35.z = (uint)r35.z >> 16;
                 r35.z = f16tof32(r35.z);
                 r36.w = mad((int)r23.z, asint(cb0[5].x), (int)r13.y);
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.w, r36.w, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r36.w, r36.w, t1.xxxx 
+r36.w = t1.Load(r36.w);
                 if (8 == 0) r37.x = 0; else if (8+8 < 32) {                 r37.x = (uint)r36.w << (32-(8 + 8)); r37.x = (uint)r37.x >> (32-8);                } else r37.x = (uint)r36.w >> 8;
                 if (8 == 0) r37.y = 0; else if (8+16 < 32) {                 r37.y = (uint)r36.w << (32-(8 + 16)); r37.y = (uint)r37.y >> (32-8);                } else r37.y = (uint)r36.w >> 16;
                 r37.z = (uint)r36.w >> 24;
                 r37.w = mad((int)r23.z, asint(cb0[5].x), asint(cb0[6].z));
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r38.x, r37.w, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r38.x, r37.w, t1.xxxx 
+r38.x = t1.Load(r37.w);
                 r38.y = f16tof32(r38.x);
                 r37.w = (int)r37.w + 4;
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r38.zw, r37.w, t1.xxxy
+                          // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r38.zw, r37.w, t1.xxxy
+                            r38.zw = t1.Load2(r37.w);
                 r37.w = f16tof32(r38.z);
                 r38.xz = (uint2)r38.xz >> int2(16,16);
                 r38.xz = f16tof32(r38.xz);
@@ -1955,7 +2194,8 @@ void main)
                 r25.zw = f16tof32(r25.zw);
                 r40.xyz = mad((int3)r24.zzz, asint(cb0[5].xxx), asint(cb0[5].yzw));
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r39.z, r40.x, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r39.z, r40.x, t1.xxxx 
+r39.z = t1.Load(r40.x);
                 r39.w = (int)r39.z & 255;
                 r39.w = (uint)r39.w;
                 r39.w = r39.w * 0.00784313772 + -1;
@@ -1967,7 +2207,8 @@ void main)
                 r39.z = (uint)r39.z;
                 r39.z = r39.z * 0.00784313772 + -1;
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r40.y, r40.y, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r40.y, r40.y, t1.xxxx 
+r40.y = t1.Load(r40.y);
                 r41.x = (int)r40.y & 255;
                 r41.x = (uint)r41.x;
                 r41.x = r41.x * 0.00784313772 + -1;
@@ -1979,24 +2220,28 @@ void main)
                 r40.y = (uint)r40.y;
                 r40.y = r40.y * 0.00784313772 + -1;
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r40.z, r40.z, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r40.z, r40.z, t1.xxxx 
+r40.z = t1.Load(r40.z);
                 r41.w = f16tof32(r40.z);
                 r40.z = (uint)r40.z >> 16;
                 r40.z = f16tof32(r40.z);
                 r42.x = mad((int)r24.z, asint(cb0[5].x), (int)r13.y);
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r42.x, r42.x, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r42.x, r42.x, t1.xxxx 
+r42.x = t1.Load(r42.x);
                 if (8 == 0) r42.y = 0; else if (8+8 < 32) {                 r42.y = (uint)r42.x << (32-(8 + 8)); r42.y = (uint)r42.y >> (32-8);                } else r42.y = (uint)r42.x >> 8;
                 if (8 == 0) r42.z = 0; else if (8+16 < 32) {                 r42.z = (uint)r42.x << (32-(8 + 16)); r42.z = (uint)r42.z >> (32-8);                } else r42.z = (uint)r42.x >> 16;
                 r42.w = (uint)r42.x >> 24;
                 r43.x = mad((int)r24.z, asint(cb0[5].x), asint(cb0[6].z));
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r43.y, r43.x, t1.xxxx
+                            // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r43.y, r43.x, t1.xxxx 
+r43.y = t1.Load(r43.x);
                 r43.z = f16tof32(r43.y);
                 r43.y = (uint)r43.y >> 16;
                 r43.x = (int)r43.x + 4;
               // No code for instruction (needs manual fix):
-                            ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r43.xw, r43.x, t1.xxxy
+                          // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r43.xw, r43.x, t1.xxxy
+                            r43.xw = t1.Load2(r43.x);
                 r44.x = f16tof32(r43.x);
                 r43.x = (uint)r43.x >> 16;
                 r43.xy = f16tof32(r43.xy);
@@ -2012,7 +2257,8 @@ void main)
                   r46.x = f32tof16(r46.x);
                   r45.y = mad((int)r46.x, 0x00010000, (int)r45.z);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.xy, r45.w, r45.xyxx
+                              // store_raw u1.xy, r45.w, r45.xyxx 
+u1.Store2(r45.w, r45.xy);
                   r45.x = r24.w * 127.5 + 127.5;
                   r45.yz = r30.xw * float2(127.5,127.5) + float2(127.5,127.5);
                   r45.xyz = (uint3)r45.xyz;
@@ -2023,7 +2269,8 @@ void main)
                   r45.x = mad((int)r45.y, 0x01000000, (int)r45.x);
                   r45.yzw = mad((int3)r18.www, asint(cb0[7].xxx), asint(cb0[5].yzw));
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r45.y, r45.x
+                              // store_raw u1.x, r45.y, r45.x 
+u1.Store(r45.y, r45.x);
                   r45.x = r29.w * 127.5 + 127.5;
                   r45.x = (uint)r45.x;
                   r46.xy = r31.xy * float2(127.5,127.5) + float2(127.5,127.5);
@@ -2034,23 +2281,27 @@ void main)
                   r45.y = (uint)r45.y;
                   r45.x = mad((int)r45.y, 0x01000000, (int)r45.x);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r45.z, r45.x
+                              // store_raw u1.x, r45.z, r45.x 
+u1.Store(r45.z, r45.x);
                   r45.xy = min(float2(2000,2000), r30.zy);
                   r45.xy = f32tof16(r45.xy);
                   r45.x = mad((int)r45.y, 0x00010000, (int)r45.x);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r45.w, r45.x
+                              // store_raw u1.x, r45.w, r45.x 
+u1.Store(r45.w, r45.x);
                   if (r13.y != 0) {
                     r45.x = mad((int)r18.w, asint(cb0[7].x), (int)r13.y);
                     bitmask.y = ((~(-1 << 24)) << 8) & 0xffffffff;  r45.y = (((uint)r32.x << 8) & bitmask.y) | ((uint)r31.z & ~bitmask.y);
                     r45.y = mad((int)r32.y, 0x00010000, (int)r45.y);
                     r45.y = mad((int)r31.w, 0x01000000, (int)r45.y);
                   // No code for instruction (needs manual fix):
-                                    store_raw u1.x, r45.x, r45.y
+                                  // store_raw u1.x, r45.x, r45.y 
+u1.Store(r45.x, r45.y);
                   }
                   r45.xy = mad((int2)r18.ww, asint(cb0[7].xx), asint(cb0[6].wz));
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r45.x, r29.x
+                              // store_raw u1.x, r45.x, r29.x 
+u1.Store(r45.x, r29.x);
                   r45.x = min(2000, r33.x);
                   r45.z = min(2000, r32.w);
                   r45.xz = f32tof16(r45.xz);
@@ -2063,11 +2314,13 @@ void main)
                   r45.x = mad((int)r34.y, 0x00010000, (int)r45.x);
                   bitmask.z = ((~(-1 << 24)) << 0) & 0xffffffff;  r46.z = (((uint)r45.x << 0) & bitmask.z) | ((uint)r33.z & ~bitmask.z);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.xyz, r45.y, r46.xyzx
+                              // store_raw u1.xyz, r45.y, r46.xyzx 
+u1.Store3(r45.y, r46.xyz);
                   r45.x = (uint)r20.x >> 1;
                   r45.x = (uint)r45.x << 2;
                 // No code for instruction (needs manual fix):
-                                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r45.y, r45.x, u6.xxxx
+                                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r45.y, r45.x, u6.xxxx 
+r45.y = u6.Load(r45.x);
                   r45.z = (int)r20.x & 1;
                   bitmask.y = ((~(-1 << 16)) << 16) & 0xffffffff;  r45.y = (((uint)r18.w << 16) & bitmask.y) | ((uint)r45.y & ~bitmask.y);
                   bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r45.w = (((uint)r18.w << 0) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
@@ -2075,7 +2328,8 @@ void main)
                   r45.w = (int)r45.w * (int)r46.x;
                   r45.y = mad((int)r45.y, (int)r45.z, (int)r45.w);
                 // No code for instruction (needs manual fix):
-                                store_raw u6.x, r45.x, r45.y
+                              // store_raw u6.x, r45.x, r45.y 
+u6.Store(r45.x, r45.y);
                   r20.xzw = (int3)r20.xxx + int3(3,1,2);
                   r45.x = (int)r44.w + 1;
                   r45.yzw = min(float3(2000,2000,2000), r27.xyz);
@@ -2086,7 +2340,8 @@ void main)
                   r45.z = f32tof16(r45.z);
                   r46.y = mad((int)r45.z, 0x00010000, (int)r45.w);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.xy, r45.y, r46.xyxx
+                              // store_raw u1.xy, r45.y, r46.xyxx 
+u1.Store2(r45.y, r46.xy);
                   r45.y = r34.z * 127.5 + 127.5;
                   r45.zw = r35.xw * float2(127.5,127.5) + float2(127.5,127.5);
                   r45.yzw = (uint3)r45.yzw;
@@ -2097,7 +2352,8 @@ void main)
                   r45.y = mad((int)r45.z, 0x01000000, (int)r45.y);
                   r46.xyz = mad((int3)r44.www, asint(cb0[7].xxx), asint(cb0[5].yzw));
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r46.x, r45.y
+                              // store_raw u1.x, r46.x, r45.y 
+u1.Store(r46.x, r45.y);
                   r45.y = r35.y * 127.5 + 127.5;
                   r45.zw = r36.xy * float2(127.5,127.5) + float2(127.5,127.5);
                   r45.yzw = (uint3)r45.yzw;
@@ -2107,24 +2363,28 @@ void main)
                   r45.z = (uint)r45.z;
                   r45.y = mad((int)r45.z, 0x01000000, (int)r45.y);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r46.y, r45.y
+                              // store_raw u1.x, r46.y, r45.y 
+u1.Store(r46.y, r45.y);
                   r45.y = min(2000, r36.z);
                   r45.z = min(2000, r35.z);
                   r45.yz = f32tof16(r45.yz);
                   r45.y = mad((int)r45.z, 0x00010000, (int)r45.y);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r46.z, r45.y
+                              // store_raw u1.x, r46.z, r45.y 
+u1.Store(r46.z, r45.y);
                   if (r13.y != 0) {
                     r45.y = mad((int)r44.w, asint(cb0[7].x), (int)r13.y);
                     bitmask.z = ((~(-1 << 24)) << 8) & 0xffffffff;  r45.z = (((uint)r37.x << 8) & bitmask.z) | ((uint)r36.w & ~bitmask.z);
                     r45.z = mad((int)r37.y, 0x00010000, (int)r45.z);
                     r45.z = mad((int)r37.z, 0x01000000, (int)r45.z);
                   // No code for instruction (needs manual fix):
-                                    store_raw u1.x, r45.y, r45.z
+                                  // store_raw u1.x, r45.y, r45.z 
+u1.Store(r45.y, r45.z);
                   }
                   r45.yz = mad((int2)r44.ww, asint(cb0[7].xx), asint(cb0[6].wz));
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r45.y, r29.y
+                              // store_raw u1.x, r45.y, r29.y 
+u1.Store(r45.y, r29.y);
                   r45.yw = min(float2(2000,2000), r38.yx);
                   r45.yw = f32tof16(r45.yw);
                   r46.x = mad((int)r45.w, 0x00010000, (int)r45.y);
@@ -2136,11 +2396,13 @@ void main)
                   r45.y = mad((int)r39.y, 0x00010000, (int)r45.y);
                   bitmask.z = ((~(-1 << 24)) << 0) & 0xffffffff;  r46.z = (((uint)r45.y << 0) & bitmask.z) | ((uint)r38.w & ~bitmask.z);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.xyz, r45.z, r46.xyzx
+                              // store_raw u1.xyz, r45.z, r46.xyzx 
+u1.Store3(r45.z, r46.xyz);
                   r45.yz = (uint2)r20.zw >> int2(1,1);
                   r45.yz = (uint2)r45.yz << int2(2,2);
                 // No code for instruction (needs manual fix):
-                                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r45.w, r45.y, u6.xxxx
+                                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r45.w, r45.y, u6.xxxx 
+r45.w = u6.Load(r45.y);
                   r46.xy = (int2)r20.zw & int2(1,1);
                   bitmask.z = ((~(-1 << 16)) << 16) & 0xffffffff;  r46.z = (((uint)r44.w << 16) & bitmask.z) | ((uint)r45.w & ~bitmask.z);
                   bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r46.w = (((uint)r44.w << 0) & bitmask.w) | ((uint)r45.w & ~bitmask.w);
@@ -2148,7 +2410,8 @@ void main)
                   r44.w = (int)r46.w * (int)r47.x;
                   r44.w = mad((int)r46.z, (int)r46.x, (int)r44.w);
                 // No code for instruction (needs manual fix):
-                                store_raw u6.x, r45.y, r44.w
+                              // store_raw u6.x, r45.y, r44.w 
+u6.Store(r45.y, r44.w);
                   r18.w = (int)r45.x + 1;
                   r46.xzw = min(float3(2000,2000,2000), r28.xyz);
                   r46.xzw = f32tof16(r46.xzw);
@@ -2158,7 +2421,8 @@ void main)
                   r45.y = f32tof16(r45.y);
                   r48.y = mad((int)r45.y, 0x00010000, (int)r46.w);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.xy, r44.w, r48.xyxx
+                              // store_raw u1.xy, r44.w, r48.xyxx 
+u1.Store2(r44.w, r48.xy);
                   r44.w = r39.w * 127.5 + 127.5;
                   r44.w = (uint)r44.w;
                   r45.yw = r40.xw * float2(127.5,127.5) + float2(127.5,127.5);
@@ -2170,7 +2434,8 @@ void main)
                   r44.w = mad((int)r45.y, 0x01000000, (int)r44.w);
                   r46.xzw = mad((int3)r45.xxx, asint(cb0[7].xxx), asint(cb0[5].yzw));
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r46.x, r44.w
+                              // store_raw u1.x, r46.x, r44.w 
+u1.Store(r46.x, r44.w);
                   r44.w = r41.x * 127.5 + 127.5;
                   r44.w = (uint)r44.w;
                   r45.yw = r41.yz * float2(127.5,127.5) + float2(127.5,127.5);
@@ -2181,25 +2446,29 @@ void main)
                   r45.y = (uint)r45.y;
                   r44.w = mad((int)r45.y, 0x01000000, (int)r44.w);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r46.z, r44.w
+                              // store_raw u1.x, r46.z, r44.w 
+u1.Store(r46.z, r44.w);
                   r44.w = min(2000, r41.w);
                   r44.w = f32tof16(r44.w);
                   r45.y = min(2000, r40.z);
                   r45.y = f32tof16(r45.y);
                   r44.w = mad((int)r45.y, 0x00010000, (int)r44.w);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r46.w, r44.w
+                              // store_raw u1.x, r46.w, r44.w 
+u1.Store(r46.w, r44.w);
                   if (r13.y != 0) {
                     r44.w = mad((int)r45.x, asint(cb0[7].x), (int)r13.y);
                     bitmask.y = ((~(-1 << 24)) << 8) & 0xffffffff;  r45.y = (((uint)r42.y << 8) & bitmask.y) | ((uint)r42.x & ~bitmask.y);
                     r45.y = mad((int)r42.z, 0x00010000, (int)r45.y);
                     r45.y = mad((int)r42.w, 0x01000000, (int)r45.y);
                   // No code for instruction (needs manual fix):
-                                    store_raw u1.x, r44.w, r45.y
+                                  // store_raw u1.x, r44.w, r45.y 
+u1.Store(r44.w, r45.y);
                   }
                   r45.yw = mad((int2)r45.xx, asint(cb0[7].xx), asint(cb0[6].wz));
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r45.y, r29.z
+                              // store_raw u1.x, r45.y, r29.z 
+u1.Store(r45.y, r29.z);
                   r44.w = min(2000, r43.z);
                   r44.w = f32tof16(r44.w);
                   r45.y = min(2000, r43.y);
@@ -2214,15 +2483,18 @@ void main)
                   r44.w = mad((int)r44.z, 0x00010000, (int)r44.w);
                   bitmask.z = ((~(-1 << 24)) << 0) & 0xffffffff;  r48.z = (((uint)r44.w << 0) & bitmask.z) | ((uint)r43.w & ~bitmask.z);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.xyz, r45.w, r48.xyzx
+                              // store_raw u1.xyz, r45.w, r48.xyzx 
+u1.Store3(r45.w, r48.xyz);
                 // No code for instruction (needs manual fix):
-                                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r44.w, r45.z, u6.xxxx
+                                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r44.w, r45.z, u6.xxxx 
+r44.w = u6.Load(r45.z);
                   bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r45.x = (((uint)r45.x << 16) & bitmask.x) | ((uint)r44.w & ~bitmask.x);
                   bitmask.y = ((~(-1 << 16)) << 0) & 0xffffffff;  r45.y = (((uint)r45.x << 0) & bitmask.y) | ((uint)r44.w & ~bitmask.y);
                   r44.w = (int)r47.y * (int)r45.y;
                   r44.w = mad((int)r45.x, (int)r46.y, (int)r44.w);
                 // No code for instruction (needs manual fix):
-                                store_raw u6.x, r45.z, r44.w
+                              // store_raw u6.x, r45.z, r44.w 
+u6.Store(r45.z, r44.w);
                   r44.w = cmp(0 < r33.x);
                   if (r44.w != 0) {
                     if (3 == 0) r44.w = 0; else if (3+5 < 32) {                     r44.w = (uint)r33.z << (32-(3 + 5)); r44.w = (uint)r44.w >> (32-3);                    } else r44.w = (uint)r33.z >> 5;
@@ -2237,7 +2509,7 @@ void main)
                     r45.x = (int)r45.x | (int)r46.y;
                     r45.x = (int)r45.x | (int)r46.z;
                     r45.x = (int)r45.x | (int)r46.w;
-                    bitmask.x = ((~(-1 << 1)) << r33.z) & 0xffffffff;  r45.x = (((uint)1 << r33.z) & bitmask.x) | ((uint)r45.x & ~bitmask.x);
+                    bitmask.x = ((~(-1 << 1)) << (uint)r33.z) & 0xffffffff;  r45.x = (((uint)1 << (uint)r33.z) & bitmask.x) | ((uint)r45.x & ~bitmask.x);
                     r44.w = 1 << (int)r44.w;
                     r46.xyzw = (int4)r44.wwww & int4(1,2,4,8);
                     r46.xyzw = r46.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2263,7 +2535,7 @@ void main)
                     r45.y = (int)r45.y | (int)r46.y;
                     r45.y = (int)r45.y | (int)r46.z;
                     r45.y = (int)r45.y | (int)r46.w;
-                    bitmask.w = ((~(-1 << 1)) << r44.w) & 0xffffffff;  r44.w = (((uint)1 << r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
+                    bitmask.w = ((~(-1 << 1)) << (uint)r44.w) & 0xffffffff;  r44.w = (((uint)1 << (uint)r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
                     r45.x = 1 << (int)r45.x;
                     r46.xyzw = (int4)r45.xxxx & int4(1,2,4,8);
                     r46.xyzw = r46.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2289,7 +2561,7 @@ void main)
                     r45.y = (int)r45.y | (int)r46.y;
                     r45.y = (int)r45.y | (int)r46.z;
                     r45.y = (int)r45.y | (int)r46.w;
-                    bitmask.w = ((~(-1 << 1)) << r44.w) & 0xffffffff;  r44.w = (((uint)1 << r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
+                    bitmask.w = ((~(-1 << 1)) << (uint)r44.w) & 0xffffffff;  r44.w = (((uint)1 << (uint)r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
                     r45.x = 1 << (int)r45.x;
                     r46.xyzw = (int4)r45.xxxx & int4(1,2,4,8);
                     r46.xyzw = r46.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2315,7 +2587,7 @@ void main)
                     r45.y = (int)r45.y | (int)r46.y;
                     r45.y = (int)r45.y | (int)r46.z;
                     r45.y = (int)r45.y | (int)r46.w;
-                    bitmask.w = ((~(-1 << 1)) << r44.w) & 0xffffffff;  r44.w = (((uint)1 << r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
+                    bitmask.w = ((~(-1 << 1)) << (uint)r44.w) & 0xffffffff;  r44.w = (((uint)1 << (uint)r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
                     r45.x = 1 << (int)r45.x;
                     r46.xyzw = (int4)r45.xxxx & int4(1,2,4,8);
                     r46.xyzw = r46.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2340,7 +2612,7 @@ void main)
                     r45.x = (int)r45.x | (int)r46.y;
                     r45.x = (int)r45.x | (int)r46.z;
                     r45.x = (int)r45.x | (int)r46.w;
-                    bitmask.x = ((~(-1 << 1)) << r38.w) & 0xffffffff;  r45.x = (((uint)1 << r38.w) & bitmask.x) | ((uint)r45.x & ~bitmask.x);
+                    bitmask.x = ((~(-1 << 1)) << (uint)r38.w) & 0xffffffff;  r45.x = (((uint)1 << (uint)r38.w) & bitmask.x) | ((uint)r45.x & ~bitmask.x);
                     r44.w = 1 << (int)r44.w;
                     r46.xyzw = (int4)r44.wwww & int4(1,2,4,8);
                     r46.xyzw = r46.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2366,7 +2638,7 @@ void main)
                     r45.y = (int)r45.y | (int)r46.y;
                     r45.y = (int)r45.y | (int)r46.z;
                     r45.y = (int)r45.y | (int)r46.w;
-                    bitmask.w = ((~(-1 << 1)) << r44.w) & 0xffffffff;  r44.w = (((uint)1 << r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
+                    bitmask.w = ((~(-1 << 1)) << (uint)r44.w) & 0xffffffff;  r44.w = (((uint)1 << (uint)r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
                     r45.x = 1 << (int)r45.x;
                     r46.xyzw = (int4)r45.xxxx & int4(1,2,4,8);
                     r46.xyzw = r46.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2392,7 +2664,7 @@ void main)
                     r45.y = (int)r45.y | (int)r46.y;
                     r45.y = (int)r45.y | (int)r46.z;
                     r45.y = (int)r45.y | (int)r46.w;
-                    bitmask.w = ((~(-1 << 1)) << r44.w) & 0xffffffff;  r44.w = (((uint)1 << r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
+                    bitmask.w = ((~(-1 << 1)) << (uint)r44.w) & 0xffffffff;  r44.w = (((uint)1 << (uint)r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
                     r45.x = 1 << (int)r45.x;
                     r46.xyzw = (int4)r45.xxxx & int4(1,2,4,8);
                     r46.xyzw = r46.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2418,7 +2690,7 @@ void main)
                     r45.y = (int)r45.y | (int)r46.y;
                     r45.y = (int)r45.y | (int)r46.z;
                     r45.y = (int)r45.y | (int)r46.w;
-                    bitmask.w = ((~(-1 << 1)) << r44.w) & 0xffffffff;  r44.w = (((uint)1 << r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
+                    bitmask.w = ((~(-1 << 1)) << (uint)r44.w) & 0xffffffff;  r44.w = (((uint)1 << (uint)r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
                     r45.x = 1 << (int)r45.x;
                     r46.xyzw = (int4)r45.xxxx & int4(1,2,4,8);
                     r46.xyzw = r46.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2443,7 +2715,7 @@ void main)
                     r45.x = (int)r45.x | (int)r46.y;
                     r45.x = (int)r45.x | (int)r46.z;
                     r45.x = (int)r45.x | (int)r46.w;
-                    bitmask.x = ((~(-1 << 1)) << r43.w) & 0xffffffff;  r45.x = (((uint)1 << r43.w) & bitmask.x) | ((uint)r45.x & ~bitmask.x);
+                    bitmask.x = ((~(-1 << 1)) << (uint)r43.w) & 0xffffffff;  r45.x = (((uint)1 << (uint)r43.w) & bitmask.x) | ((uint)r45.x & ~bitmask.x);
                     r44.w = 1 << (int)r44.w;
                     r46.xyzw = (int4)r44.wwww & int4(1,2,4,8);
                     r46.xyzw = r46.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2469,7 +2741,7 @@ void main)
                     r45.y = (int)r45.y | (int)r46.y;
                     r45.y = (int)r45.y | (int)r46.z;
                     r45.y = (int)r45.y | (int)r46.w;
-                    bitmask.w = ((~(-1 << 1)) << r44.w) & 0xffffffff;  r44.w = (((uint)1 << r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
+                    bitmask.w = ((~(-1 << 1)) << (uint)r44.w) & 0xffffffff;  r44.w = (((uint)1 << (uint)r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
                     r45.x = 1 << (int)r45.x;
                     r46.xyzw = (int4)r45.xxxx & int4(1,2,4,8);
                     r46.xyzw = r46.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2495,7 +2767,7 @@ void main)
                     r45.y = (int)r45.y | (int)r46.y;
                     r45.y = (int)r45.y | (int)r46.z;
                     r45.y = (int)r45.y | (int)r46.w;
-                    bitmask.w = ((~(-1 << 1)) << r44.w) & 0xffffffff;  r44.w = (((uint)1 << r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
+                    bitmask.w = ((~(-1 << 1)) << (uint)r44.w) & 0xffffffff;  r44.w = (((uint)1 << (uint)r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
                     r45.x = 1 << (int)r45.x;
                     r46.xyzw = (int4)r45.xxxx & int4(1,2,4,8);
                     r46.xyzw = r46.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2521,7 +2793,7 @@ void main)
                     r45.y = (int)r45.y | (int)r46.y;
                     r45.y = (int)r45.y | (int)r46.z;
                     r45.y = (int)r45.y | (int)r46.w;
-                    bitmask.w = ((~(-1 << 1)) << r44.w) & 0xffffffff;  r44.w = (((uint)1 << r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
+                    bitmask.w = ((~(-1 << 1)) << (uint)r44.w) & 0xffffffff;  r44.w = (((uint)1 << (uint)r44.w) & bitmask.w) | ((uint)r45.y & ~bitmask.w);
                     r45.x = 1 << (int)r45.x;
                     r46.xyzw = (int4)r45.xxxx & int4(1,2,4,8);
                     r46.xyzw = r46.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2542,7 +2814,8 @@ void main)
                   r19.z = f32tof16(r19.z);
                   r26.y = mad((int)r19.z, 0x00010000, (int)r26.z);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.xy, r45.x, r26.xyxx
+                              // store_raw u1.xy, r45.x, r26.xyxx 
+u1.Store2(r45.x, r26.xy);
                   r19.z = r24.w * 127.5 + 127.5;
                   r19.z = (uint)r19.z;
                   r26.xy = r30.xw * float2(127.5,127.5) + float2(127.5,127.5);
@@ -2554,7 +2827,8 @@ void main)
                   r19.z = mad((int)r19.w, 0x01000000, (int)r19.z);
                   r26.xyz = mad((int3)r18.www, asint(cb0[7].xxx), asint(cb0[5].yzw));
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r26.x, r19.z
+                              // store_raw u1.x, r26.x, r19.z 
+u1.Store(r26.x, r19.z);
                   r19.z = r29.w * 127.5 + 127.5;
                   r19.z = (uint)r19.z;
                   r30.xw = r31.xy * float2(127.5,127.5) + float2(127.5,127.5);
@@ -2565,23 +2839,27 @@ void main)
                   r19.w = (uint)r19.w;
                   r19.z = mad((int)r19.w, 0x01000000, (int)r19.z);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r26.y, r19.z
+                              // store_raw u1.x, r26.y, r19.z 
+u1.Store(r26.y, r19.z);
                   r19.zw = min(float2(2000,2000), r30.zy);
                   r19.zw = f32tof16(r19.zw);
                   r19.z = mad((int)r19.w, 0x00010000, (int)r19.z);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r26.z, r19.z
+                              // store_raw u1.x, r26.z, r19.z 
+u1.Store(r26.z, r19.z);
                   if (r13.y != 0) {
                     r19.z = mad((int)r18.w, asint(cb0[7].x), (int)r13.y);
                     bitmask.w = ((~(-1 << 24)) << 8) & 0xffffffff;  r19.w = (((uint)r32.x << 8) & bitmask.w) | ((uint)r31.z & ~bitmask.w);
                     r19.w = mad((int)r32.y, 0x00010000, (int)r19.w);
                     r19.w = mad((int)r31.w, 0x01000000, (int)r19.w);
                   // No code for instruction (needs manual fix):
-                                    store_raw u1.x, r19.z, r19.w
+                                  // store_raw u1.x, r19.z, r19.w 
+u1.Store(r19.z, r19.w);
                   }
                   r19.zw = mad((int2)r18.ww, asint(cb0[7].xx), asint(cb0[6].wz));
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r19.z, r29.x
+                              // store_raw u1.x, r19.z, r29.x 
+u1.Store(r19.z, r29.x);
                   r19.z = min(2000, r33.x);
                   r19.z = f32tof16(r19.z);
                   r24.w = min(2000, r32.w);
@@ -2596,11 +2874,13 @@ void main)
                   r19.z = mad((int)r34.y, 0x00010000, (int)r19.z);
                   bitmask.z = ((~(-1 << 24)) << 0) & 0xffffffff;  r26.z = (((uint)r19.z << 0) & bitmask.z) | ((uint)r33.z & ~bitmask.z);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.xyz, r19.w, r26.xyzx
+                              // store_raw u1.xyz, r19.w, r26.xyzx 
+u1.Store3(r19.w, r26.xyz);
                   r19.z = (uint)r20.y >> 1;
                   r19.z = (uint)r19.z << 2;
                 // No code for instruction (needs manual fix):
-                                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r19.z, u7.xxxx
+                                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r19.z, u7.xxxx 
+r19.w = u7.Load(r19.z);
                   r24.w = (int)r20.y & 1;
                   bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r26.x = (((uint)r18.w << 16) & bitmask.x) | ((uint)r19.w & ~bitmask.x);
                   bitmask.y = ((~(-1 << 16)) << 0) & 0xffffffff;  r26.y = (((uint)r18.w << 0) & bitmask.y) | ((uint)r19.w & ~bitmask.y);
@@ -2608,7 +2888,8 @@ void main)
                   r19.w = (int)r19.w * (int)r26.y;
                   r19.w = mad((int)r26.x, (int)r24.w, (int)r19.w);
                 // No code for instruction (needs manual fix):
-                                store_raw u7.x, r19.z, r19.w
+                              // store_raw u7.x, r19.z, r19.w 
+u7.Store(r19.z, r19.w);
                   r20.yzw = (int3)r20.yyy + int3(3,1,2);
                   r19.z = (int)r44.w + 1;
                   r26.xyz = min(float3(2000,2000,2000), r27.xyz);
@@ -2619,7 +2900,8 @@ void main)
                   r24.w = f32tof16(r24.w);
                   r26.y = mad((int)r24.w, 0x00010000, (int)r26.z);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.xy, r19.w, r26.xyxx
+                              // store_raw u1.xy, r19.w, r26.xyxx 
+u1.Store2(r19.w, r26.xy);
                   r19.w = r34.z * 127.5 + 127.5;
                   r19.w = (uint)r19.w;
                   r26.xy = r35.xw * float2(127.5,127.5) + float2(127.5,127.5);
@@ -2631,7 +2913,8 @@ void main)
                   r19.w = mad((int)r24.w, 0x01000000, (int)r19.w);
                   r26.xyz = mad((int3)r44.www, asint(cb0[7].xxx), asint(cb0[5].yzw));
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r26.x, r19.w
+                              // store_raw u1.x, r26.x, r19.w 
+u1.Store(r26.x, r19.w);
                   r19.w = r35.y * 127.5 + 127.5;
                   r19.w = (uint)r19.w;
                   r27.xy = r36.xy * float2(127.5,127.5) + float2(127.5,127.5);
@@ -2642,25 +2925,29 @@ void main)
                   r24.w = (uint)r24.w;
                   r19.w = mad((int)r24.w, 0x01000000, (int)r19.w);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r26.y, r19.w
+                              // store_raw u1.x, r26.y, r19.w 
+u1.Store(r26.y, r19.w);
                   r19.w = min(2000, r36.z);
                   r19.w = f32tof16(r19.w);
                   r24.w = min(2000, r35.z);
                   r24.w = f32tof16(r24.w);
                   r19.w = mad((int)r24.w, 0x00010000, (int)r19.w);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r26.z, r19.w
+                              // store_raw u1.x, r26.z, r19.w 
+u1.Store(r26.z, r19.w);
                   if (r13.y != 0) {
                     r19.w = mad((int)r44.w, asint(cb0[7].x), (int)r13.y);
                     bitmask.w = ((~(-1 << 24)) << 8) & 0xffffffff;  r24.w = (((uint)r37.x << 8) & bitmask.w) | ((uint)r36.w & ~bitmask.w);
                     r24.w = mad((int)r37.y, 0x00010000, (int)r24.w);
                     r24.w = mad((int)r37.z, 0x01000000, (int)r24.w);
                   // No code for instruction (needs manual fix):
-                                    store_raw u1.x, r19.w, r24.w
+                                  // store_raw u1.x, r19.w, r24.w 
+u1.Store(r19.w, r24.w);
                   }
                   r26.xy = mad((int2)r44.ww, asint(cb0[7].xx), asint(cb0[6].wz));
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r26.x, r29.y
+                              // store_raw u1.x, r26.x, r29.y 
+u1.Store(r26.x, r29.y);
                   r19.w = min(2000, r38.y);
                   r19.w = f32tof16(r19.w);
                   r24.w = min(2000, r38.x);
@@ -2675,11 +2962,13 @@ void main)
                   r19.w = mad((int)r39.y, 0x00010000, (int)r19.w);
                   bitmask.z = ((~(-1 << 24)) << 0) & 0xffffffff;  r27.z = (((uint)r19.w << 0) & bitmask.z) | ((uint)r38.w & ~bitmask.z);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.xyz, r26.y, r27.xyzx
+                              // store_raw u1.xyz, r26.y, r27.xyzx 
+u1.Store3(r26.y, r27.xyz);
                   r26.xy = (uint2)r20.zw >> int2(1,1);
                   r26.xy = (uint2)r26.xy << int2(2,2);
                 // No code for instruction (needs manual fix):
-                                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r26.x, u7.xxxx
+                                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r26.x, u7.xxxx 
+r19.w = u7.Load(r26.x);
                   r20.zw = (int2)r20.zw & int2(1,1);
                   bitmask.x = ((~(-1 << 16)) << 16) & 0xffffffff;  r27.x = (((uint)r44.w << 16) & bitmask.x) | ((uint)r19.w & ~bitmask.x);
                   bitmask.y = ((~(-1 << 16)) << 0) & 0xffffffff;  r27.y = (((uint)r44.w << 0) & bitmask.y) | ((uint)r19.w & ~bitmask.y);
@@ -2687,7 +2976,8 @@ void main)
                   r19.w = (int)r27.y * (int)r29.x;
                   r19.w = mad((int)r27.x, (int)r20.z, (int)r19.w);
                 // No code for instruction (needs manual fix):
-                                store_raw u7.x, r26.x, r19.w
+                              // store_raw u7.x, r26.x, r19.w 
+u7.Store(r26.x, r19.w);
                   r18.w = (int)r19.z + 1;
                   r27.xyz = min(float3(2000,2000,2000), r28.xyz);
                   r27.xyz = f32tof16(r27.xyz);
@@ -2697,7 +2987,8 @@ void main)
                   r20.z = f32tof16(r20.z);
                   r27.y = mad((int)r20.z, 0x00010000, (int)r27.z);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.xy, r19.w, r27.xyxx
+                              // store_raw u1.xy, r19.w, r27.xyxx 
+u1.Store2(r19.w, r27.xy);
                   r19.w = r39.w * 127.5 + 127.5;
                   r19.w = (uint)r19.w;
                   r25.zw = r40.xw * float2(127.5,127.5) + float2(127.5,127.5);
@@ -2709,7 +3000,8 @@ void main)
                   r19.w = mad((int)r20.z, 0x01000000, (int)r19.w);
                   r27.xyz = mad((int3)r19.zzz, asint(cb0[7].xxx), asint(cb0[5].yzw));
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r27.x, r19.w
+                              // store_raw u1.x, r27.x, r19.w 
+u1.Store(r27.x, r19.w);
                   r19.w = r41.x * 127.5 + 127.5;
                   r19.w = (uint)r19.w;
                   r25.zw = r41.yz * float2(127.5,127.5) + float2(127.5,127.5);
@@ -2720,25 +3012,29 @@ void main)
                   r20.z = (uint)r20.z;
                   r19.w = mad((int)r20.z, 0x01000000, (int)r19.w);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r27.y, r19.w
+                              // store_raw u1.x, r27.y, r19.w 
+u1.Store(r27.y, r19.w);
                   r19.w = min(2000, r41.w);
                   r19.w = f32tof16(r19.w);
                   r20.z = min(2000, r40.z);
                   r20.z = f32tof16(r20.z);
                   r19.w = mad((int)r20.z, 0x00010000, (int)r19.w);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r27.z, r19.w
+                              // store_raw u1.x, r27.z, r19.w 
+u1.Store(r27.z, r19.w);
                   if (r13.y != 0) {
                     r19.w = mad((int)r19.z, asint(cb0[7].x), (int)r13.y);
                     bitmask.z = ((~(-1 << 24)) << 8) & 0xffffffff;  r20.z = (((uint)r42.y << 8) & bitmask.z) | ((uint)r42.x & ~bitmask.z);
                     r20.z = mad((int)r42.z, 0x00010000, (int)r20.z);
                     r20.z = mad((int)r42.w, 0x01000000, (int)r20.z);
                   // No code for instruction (needs manual fix):
-                                    store_raw u1.x, r19.w, r20.z
+                                  // store_raw u1.x, r19.w, r20.z 
+u1.Store(r19.w, r20.z);
                   }
                   r25.zw = mad((int2)r19.zz, asint(cb0[7].xx), asint(cb0[6].wz));
                 // No code for instruction (needs manual fix):
-                                store_raw u1.x, r25.z, r29.z
+                              // store_raw u1.x, r25.z, r29.z 
+u1.Store(r25.z, r29.z);
                   r19.w = min(2000, r43.z);
                   r19.w = f32tof16(r19.w);
                   r20.z = min(2000, r43.y);
@@ -2753,15 +3049,18 @@ void main)
                   r19.w = mad((int)r44.z, 0x00010000, (int)r19.w);
                   bitmask.z = ((~(-1 << 24)) << 0) & 0xffffffff;  r27.z = (((uint)r19.w << 0) & bitmask.z) | ((uint)r43.w & ~bitmask.z);
                 // No code for instruction (needs manual fix):
-                                store_raw u1.xyz, r25.w, r27.xyzx
+                              // store_raw u1.xyz, r25.w, r27.xyzx 
+u1.Store3(r25.w, r27.xyz);
                 // No code for instruction (needs manual fix):
-                                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r26.y, u7.xxxx
+                                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r26.y, u7.xxxx 
+r19.w = u7.Load(r26.y);
                   bitmask.z = ((~(-1 << 16)) << 16) & 0xffffffff;  r19.z = (((uint)r19.z << 16) & bitmask.z) | ((uint)r19.w & ~bitmask.z);
                   bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r19.w = (((uint)r19.z << 0) & bitmask.w) | ((uint)r19.w & ~bitmask.w);
                   r19.w = (int)r29.y * (int)r19.w;
                   r19.z = mad((int)r19.z, (int)r20.w, (int)r19.w);
                 // No code for instruction (needs manual fix):
-                                store_raw u7.x, r26.y, r19.z
+                              // store_raw u7.x, r26.y, r19.z 
+u7.Store(r26.y, r19.z);
                 }
               }
             }
@@ -2780,7 +3079,8 @@ void main)
           r19.z = (uint)r21.x >> 1;
           r19.z = (uint)r19.z << 2;
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r19.z, u4.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r19.z, u4.xxxx 
+r19.w = u4.Load(r19.z);
           r20.z = (int)r21.x & 1;
           bitmask.z = ((~(-1 << 16)) << 16) & 0xffffffff;  r25.z = (((uint)r23.y << 16) & bitmask.z) | ((uint)r19.w & ~bitmask.z);
           bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r25.w = (((uint)r23.y << 0) & bitmask.w) | ((uint)r19.w & ~bitmask.w);
@@ -2788,12 +3088,14 @@ void main)
           r19.w = (int)r19.w * (int)r25.w;
           r19.w = mad((int)r25.z, (int)r20.z, (int)r19.w);
         // No code for instruction (needs manual fix):
-                store_raw u4.x, r19.z, r19.w
+              // store_raw u4.x, r19.z, r19.w 
+u4.Store(r19.z, r19.w);
           r21.xyz = (int3)r21.xxx + int3(3,1,2);
           r19.zw = (uint2)r21.yz >> int2(1,1);
           r19.zw = (uint2)r19.zw << int2(2,2);
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r20.z, r19.z, u4.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r20.z, r19.z, u4.xxxx 
+r20.z = u4.Load(r19.z);
           r21.yz = (int2)r21.yz & int2(1,1);
           bitmask.z = ((~(-1 << 16)) << 16) & 0xffffffff;  r20.z = (((uint)r23.z << 16) & bitmask.z) | ((uint)r20.z & ~bitmask.z);
           bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r20.w = (((uint)r23.z << 0) & bitmask.w) | ((uint)r20.z & ~bitmask.w);
@@ -2801,24 +3103,29 @@ void main)
           r20.w = (int)r20.w * (int)r25.z;
           r20.z = mad((int)r20.z, (int)r21.y, (int)r20.w);
         // No code for instruction (needs manual fix):
-                store_raw u4.x, r19.z, r20.z
+              // store_raw u4.x, r19.z, r20.z 
+u4.Store(r19.z, r20.z);
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r19.w, u4.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r19.w, u4.xxxx 
+r19.z = u4.Load(r19.w);
           bitmask.z = ((~(-1 << 16)) << 16) & 0xffffffff;  r20.z = (((uint)r24.z << 16) & bitmask.z) | ((uint)r19.z & ~bitmask.z);
           bitmask.w = ((~(-1 << 16)) << 0) & 0xffffffff;  r20.w = (((uint)r24.z << 0) & bitmask.w) | ((uint)r19.z & ~bitmask.w);
           r19.z = (int)r25.w * (int)r20.w;
           r19.z = mad((int)r20.z, (int)r21.z, (int)r19.z);
         // No code for instruction (needs manual fix):
-                store_raw u4.x, r19.w, r19.z
+              // store_raw u4.x, r19.w, r19.z 
+u4.Store(r19.w, r19.z);
           r19.z = mad((int)r23.y, asint(cb0[5].x), asint(cb0[6].z));
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r19.z, t1.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r19.z, t1.xxxx 
+r19.w = t1.Load(r19.z);
           r20.z = f16tof32(r19.w);
           r19.w = (uint)r19.w >> 16;
           r19.w = f16tof32(r19.w);
           r19.z = (int)r19.z + 4;
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r21.yz, r19.z, t1.xxyx
+              // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r21.yz, r19.z, t1.xxyx
+              r21.yz = t1.Load2(r19.z);
           r19.z = f16tof32(r21.y);
           r20.w = (uint)r21.y >> 16;
           r20.w = f16tof32(r20.w);
@@ -2836,7 +3143,7 @@ void main)
             r21.y = (int)r21.y | (int)r27.y;
             r21.y = (int)r21.y | (int)r27.z;
             r21.y = (int)r21.y | (int)r27.w;
-            bitmask.y = ((~(-1 << 1)) << r21.z) & 0xffffffff;  r21.y = (((uint)1 << r21.z) & bitmask.y) | ((uint)r21.y & ~bitmask.y);
+            bitmask.y = ((~(-1 << 1)) << (uint)r21.z) & 0xffffffff;  r21.y = (((uint)1 << (uint)r21.z) & bitmask.y) | ((uint)r21.y & ~bitmask.y);
             r20.z = 1 << (int)r20.z;
             r27.xyzw = (int4)r20.zzzz & int4(1,2,4,8);
             r27.xyzw = r27.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2862,7 +3169,7 @@ void main)
             r21.y = (int)r21.y | (int)r27.y;
             r21.y = (int)r21.y | (int)r27.z;
             r21.y = (int)r21.y | (int)r27.w;
-            bitmask.w = ((~(-1 << 1)) << r19.w) & 0xffffffff;  r19.w = (((uint)1 << r19.w) & bitmask.w) | ((uint)r21.y & ~bitmask.w);
+            bitmask.w = ((~(-1 << 1)) << (uint)r19.w) & 0xffffffff;  r19.w = (((uint)1 << (uint)r19.w) & bitmask.w) | ((uint)r21.y & ~bitmask.w);
             r20.z = 1 << (int)r20.z;
             r27.xyzw = (int4)r20.zzzz & int4(1,2,4,8);
             r27.xyzw = r27.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2887,7 +3194,7 @@ void main)
             r20.z = (int)r20.z | (int)r27.y;
             r20.z = (int)r20.z | (int)r27.z;
             r20.z = (int)r20.z | (int)r27.w;
-            bitmask.z = ((~(-1 << 1)) << r19.z) & 0xffffffff;  r19.z = (((uint)1 << r19.z) & bitmask.z) | ((uint)r20.z & ~bitmask.z);
+            bitmask.z = ((~(-1 << 1)) << (uint)r19.z) & 0xffffffff;  r19.z = (((uint)1 << (uint)r19.z) & bitmask.z) | ((uint)r20.z & ~bitmask.z);
             r19.w = 1 << (int)r19.w;
             r27.xyzw = (int4)r19.wwww & int4(1,2,4,8);
             r27.xyzw = r27.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2913,7 +3220,7 @@ void main)
             r20.z = (int)r20.z | (int)r27.y;
             r20.z = (int)r20.z | (int)r27.z;
             r20.z = (int)r20.z | (int)r27.w;
-            bitmask.z = ((~(-1 << 1)) << r19.z) & 0xffffffff;  r19.z = (((uint)1 << r19.z) & bitmask.z) | ((uint)r20.z & ~bitmask.z);
+            bitmask.z = ((~(-1 << 1)) << (uint)r19.z) & 0xffffffff;  r19.z = (((uint)1 << (uint)r19.z) & bitmask.z) | ((uint)r20.z & ~bitmask.z);
             r19.w = 1 << (int)r19.w;
             r27.xyzw = (int4)r19.wwww & int4(1,2,4,8);
             r27.xyzw = r27.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2926,13 +3233,15 @@ void main)
           }
           r19.z = mad((int)r23.z, asint(cb0[5].x), asint(cb0[6].z));
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r19.z, t1.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r19.z, t1.xxxx 
+r19.w = t1.Load(r19.z);
           r20.z = f16tof32(r19.w);
           r19.w = (uint)r19.w >> 16;
           r19.w = f16tof32(r19.w);
           r19.z = (int)r19.z + 4;
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r21.yz, r19.z, t1.xxyx
+              // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r21.yz, r19.z, t1.xxyx
+              r21.yz = t1.Load2(r19.z);
           r19.z = f16tof32(r21.y);
           r20.w = (uint)r21.y >> 16;
           r20.w = f16tof32(r20.w);
@@ -2950,7 +3259,7 @@ void main)
             r21.y = (int)r21.y | (int)r27.y;
             r21.y = (int)r21.y | (int)r27.z;
             r21.y = (int)r21.y | (int)r27.w;
-            bitmask.y = ((~(-1 << 1)) << r21.z) & 0xffffffff;  r21.y = (((uint)1 << r21.z) & bitmask.y) | ((uint)r21.y & ~bitmask.y);
+            bitmask.y = ((~(-1 << 1)) << (uint)r21.z) & 0xffffffff;  r21.y = (((uint)1 << (uint)r21.z) & bitmask.y) | ((uint)r21.y & ~bitmask.y);
             r20.z = 1 << (int)r20.z;
             r27.xyzw = (int4)r20.zzzz & int4(1,2,4,8);
             r27.xyzw = r27.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -2976,7 +3285,7 @@ void main)
             r21.y = (int)r21.y | (int)r27.y;
             r21.y = (int)r21.y | (int)r27.z;
             r21.y = (int)r21.y | (int)r27.w;
-            bitmask.w = ((~(-1 << 1)) << r19.w) & 0xffffffff;  r19.w = (((uint)1 << r19.w) & bitmask.w) | ((uint)r21.y & ~bitmask.w);
+            bitmask.w = ((~(-1 << 1)) << (uint)r19.w) & 0xffffffff;  r19.w = (((uint)1 << (uint)r19.w) & bitmask.w) | ((uint)r21.y & ~bitmask.w);
             r20.z = 1 << (int)r20.z;
             r27.xyzw = (int4)r20.zzzz & int4(1,2,4,8);
             r27.xyzw = r27.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -3001,7 +3310,7 @@ void main)
             r20.z = (int)r20.z | (int)r27.y;
             r20.z = (int)r20.z | (int)r27.z;
             r20.z = (int)r20.z | (int)r27.w;
-            bitmask.z = ((~(-1 << 1)) << r19.z) & 0xffffffff;  r19.z = (((uint)1 << r19.z) & bitmask.z) | ((uint)r20.z & ~bitmask.z);
+            bitmask.z = ((~(-1 << 1)) << (uint)r19.z) & 0xffffffff;  r19.z = (((uint)1 << (uint)r19.z) & bitmask.z) | ((uint)r20.z & ~bitmask.z);
             r19.w = 1 << (int)r19.w;
             r27.xyzw = (int4)r19.wwww & int4(1,2,4,8);
             r27.xyzw = r27.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -3027,7 +3336,7 @@ void main)
             r20.z = (int)r20.z | (int)r27.y;
             r20.z = (int)r20.z | (int)r27.z;
             r20.z = (int)r20.z | (int)r27.w;
-            bitmask.z = ((~(-1 << 1)) << r19.z) & 0xffffffff;  r19.z = (((uint)1 << r19.z) & bitmask.z) | ((uint)r20.z & ~bitmask.z);
+            bitmask.z = ((~(-1 << 1)) << (uint)r19.z) & 0xffffffff;  r19.z = (((uint)1 << (uint)r19.z) & bitmask.z) | ((uint)r20.z & ~bitmask.z);
             r19.w = 1 << (int)r19.w;
             r27.xyzw = (int4)r19.wwww & int4(1,2,4,8);
             r27.xyzw = r27.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -3040,13 +3349,15 @@ void main)
           }
           r19.z = mad((int)r24.z, asint(cb0[5].x), asint(cb0[6].z));
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r19.z, t1.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.w, r19.z, t1.xxxx 
+r19.w = t1.Load(r19.z);
           r20.z = f16tof32(r19.w);
           r19.w = (uint)r19.w >> 16;
           r19.w = f16tof32(r19.w);
           r19.z = (int)r19.z + 4;
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r21.yz, r19.z, t1.xxyx
+              // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r21.yz, r19.z, t1.xxyx
+              r21.yz = t1.Load2(r19.z);
           r19.z = f16tof32(r21.y);
           r20.w = (uint)r21.y >> 16;
           r20.w = f16tof32(r20.w);
@@ -3064,7 +3375,7 @@ void main)
             r21.y = (int)r21.y | (int)r27.y;
             r21.y = (int)r21.y | (int)r27.z;
             r21.y = (int)r21.y | (int)r27.w;
-            bitmask.y = ((~(-1 << 1)) << r21.z) & 0xffffffff;  r21.y = (((uint)1 << r21.z) & bitmask.y) | ((uint)r21.y & ~bitmask.y);
+            bitmask.y = ((~(-1 << 1)) << (uint)r21.z) & 0xffffffff;  r21.y = (((uint)1 << (uint)r21.z) & bitmask.y) | ((uint)r21.y & ~bitmask.y);
             r20.z = 1 << (int)r20.z;
             r27.xyzw = (int4)r20.zzzz & int4(1,2,4,8);
             r27.xyzw = r27.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -3090,7 +3401,7 @@ void main)
             r21.y = (int)r21.y | (int)r27.y;
             r21.y = (int)r21.y | (int)r27.z;
             r21.y = (int)r21.y | (int)r27.w;
-            bitmask.w = ((~(-1 << 1)) << r19.w) & 0xffffffff;  r19.w = (((uint)1 << r19.w) & bitmask.w) | ((uint)r21.y & ~bitmask.w);
+            bitmask.w = ((~(-1 << 1)) << (uint)r19.w) & 0xffffffff;  r19.w = (((uint)1 << (uint)r19.w) & bitmask.w) | ((uint)r21.y & ~bitmask.w);
             r20.z = 1 << (int)r20.z;
             r27.xyzw = (int4)r20.zzzz & int4(1,2,4,8);
             r27.xyzw = r27.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -3115,7 +3426,7 @@ void main)
             r20.z = (int)r20.z | (int)r27.y;
             r20.z = (int)r20.z | (int)r27.z;
             r20.z = (int)r20.z | (int)r27.w;
-            bitmask.z = ((~(-1 << 1)) << r19.z) & 0xffffffff;  r19.z = (((uint)1 << r19.z) & bitmask.z) | ((uint)r20.z & ~bitmask.z);
+            bitmask.z = ((~(-1 << 1)) << (uint)r19.z) & 0xffffffff;  r19.z = (((uint)1 << (uint)r19.z) & bitmask.z) | ((uint)r20.z & ~bitmask.z);
             r19.w = 1 << (int)r19.w;
             r27.xyzw = (int4)r19.wwww & int4(1,2,4,8);
             r27.xyzw = r27.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -3141,7 +3452,7 @@ void main)
             r20.z = (int)r20.z | (int)r27.y;
             r20.z = (int)r20.z | (int)r27.z;
             r20.z = (int)r20.z | (int)r27.w;
-            bitmask.z = ((~(-1 << 1)) << r19.z) & 0xffffffff;  r19.z = (((uint)1 << r19.z) & bitmask.z) | ((uint)r20.z & ~bitmask.z);
+            bitmask.z = ((~(-1 << 1)) << (uint)r19.z) & 0xffffffff;  r19.z = (((uint)1 << (uint)r19.z) & bitmask.z) | ((uint)r20.z & ~bitmask.z);
             r19.w = 1 << (int)r19.w;
             r27.xyzw = (int4)r19.wwww & int4(1,2,4,8);
             r27.xyzw = r27.xyzw ? float4(1,1,1,1) : float4(0,0,0,0);
@@ -3153,26 +3464,32 @@ void main)
             r16.xyzw = (int4)r16.xyzw | (int4)r27.xyzw;
           }
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r23.x, u2.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r23.x, u2.xxxx 
+r19.z = u2.Load(r23.x);
           r19.zw = (int2)r19.zz & int2(0xffff,0xffff0000);
           r19.w = (int)r23.w * (int)r19.w;
           r19.z = mad((int)r19.z, (int)r22.w, (int)r19.w);
         // No code for instruction (needs manual fix):
-                store_raw u2.x, r23.x, r19.z
+              // store_raw u2.x, r23.x, r19.z 
+u2.Store(r23.x, r19.z);
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r22.y, u2.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r22.y, u2.xxxx 
+r19.z = u2.Load(r22.y);
           r19.zw = (int2)r19.zz & int2(0xffff,0xffff0000);
           r19.w = (int)r25.x * (int)r19.w;
           r19.z = mad((int)r19.z, (int)r24.x, (int)r19.w);
         // No code for instruction (needs manual fix):
-                store_raw u2.x, r22.y, r19.z
+              // store_raw u2.x, r22.y, r19.z 
+u2.Store(r22.y, r19.z);
         // No code for instruction (needs manual fix):
-                ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r22.z, u2.xxxx
+                // ld_raw_indexable(raw_buffer)(mixed,mixed,mixed,mixed) r19.z, r22.z, u2.xxxx 
+r19.z = u2.Load(r22.z);
           r19.zw = (int2)r19.zz & int2(0xffff,0xffff0000);
           r19.w = (int)r25.y * (int)r19.w;
           r19.z = mad((int)r19.z, (int)r24.y, (int)r19.w);
         // No code for instruction (needs manual fix):
-                store_raw u2.x, r22.z, r19.z
+              // store_raw u2.x, r22.z, r19.z 
+u2.Store(r22.z, r19.z);
         }
         r21.w = (int)r21.w | (int)r26.w;
       }

@@ -19,6 +19,9 @@
 #include <embed/0x8024E8B5.h>
 #include <embed/0x80802E60.h>
 // #include <embed/0x86EC0382.h>
+#include <embed/0x4FB4DA20.h>
+#include <embed/0x61CC29E6.h>
+#include <embed/0x8CAC3BD9.h>
 #include <embed/0x8E032125.h>
 #include <embed/0x8F009507.h>
 #include <embed/0xB14DB0F4.h>
@@ -45,7 +48,11 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomSwapchainShader(0x8F009507),  // renderselect
   CustomShaderEntry(0x80802E60),      // luts
   CustomShaderEntry(0xB74B05F4),      // vignette
-  CustomShaderEntry(0x8024E8B5),      // tonemap
+  BypassShaderEntry(0x48292339),
+  CustomShaderEntry(0x8CAC3BD9),  // taa (sdr only)
+  CustomShaderEntry(0x61CC29E6),  // taa2 (sdr only)
+  CustomShaderEntry(0x8024E8B5),  // tonemap
+  CustomShaderEntry(0x4FB4DA20),  // fxaa (clamping bt709)
   CustomSwapchainShader(0x13EEBAE5),
   CustomSwapchainShader(0x153BE4A2),
   CustomSwapchainShader(0x261AE7AB),
@@ -190,6 +197,24 @@ UserSettingUtil::UserSettings userSettings = {
     .parse = [](float value) { return value * 0.02f; }
   },
   new UserSettingUtil::UserSetting {
+    .key = "fxAutoExposure",
+    .binding = &shaderInjection.fxAutoExposure,
+    .defaultValue = 50.f,
+    .label = "Auto Exposure",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxSceneFilter",
+    .binding = &shaderInjection.fxSceneFilter,
+    .defaultValue = 50.f,
+    .label = "Scene Filter",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
     .key = "fxVignette",
     .binding = &shaderInjection.fxVignette,
     .defaultValue = 50.f,
@@ -216,6 +241,8 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
   UserSettingUtil::updateUserSetting("colorGradeLUTScaling", 0.f);
   UserSettingUtil::updateUserSetting("fxBloom", 50.f);
+  UserSettingUtil::updateUserSetting("fxAutoExposure", 50.f);
+  UserSettingUtil::updateUserSetting("fxSceneFilter", 50.f);
   UserSettingUtil::updateUserSetting("fxVignette", 50.f);
 }
 

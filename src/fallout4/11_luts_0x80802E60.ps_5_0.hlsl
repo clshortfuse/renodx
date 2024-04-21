@@ -39,11 +39,11 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
 
   float vanillaMidGray = toneMapCurve(0.18, 0.30f, 0.50f, 0.10f, 0.20f, 0.02f, 0.30f)
                        / toneMapCurve(5.6f, 0.30f, 0.50f, 0.10f, 0.20f, 0.02f, 0.30f);
-  float renoDRTContrast = 1.0f;
+  float renoDRTContrast = 1.5f;
   float renoDRTFlare = 0.f;
-  float renoDRTShadows = 1.0f;
+  float renoDRTShadows = 1.2f;
   float renoDRTDechroma = 0.5f;
-  float renoDRTSaturation = 1.0f;
+  float renoDRTSaturation = 1.1f;
   float renoDRTHighlights = 1.0f;
 
   ToneMapParams tmParams = {

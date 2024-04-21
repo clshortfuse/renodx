@@ -49,7 +49,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r1.w = r2.x ? cb2[1].x : r1.w;
 
   r0.xyz = r1.xyz * injectedData.fxBloom + r0.xyz;
-  r0.xyz = r0.xyz * r1.www;  // Hand glow?
+  r0.xyz = r0.xyz * lerp(1.f, r1.www, injectedData.fxAutoExposure);  // Hand glow?
   const float3 untonemapped = r0.xyz;
 
   // Hable
@@ -88,11 +88,14 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
 
   r0.x = dot(r1.xyz, float3(0.212500006, 0.715399981, 0.0720999986));
   r1.w = 0;
+  float3 outputColor = r1.xyz;
   r1.xyzw = r1.xyzw + -r0.xxxx;
   r1.xyzw = cb2[2].xxxx * r1.xyzw + r0.xxxx;
   r2.xyzw = r0.xxxx * cb2[3].xyzw + -r1.xyzw;
   r1.xyzw = cb2[3].wwww * r2.xyzw + r1.xyzw;
   r1.xyzw = cb2[2].wwww * r1.xyzw + -r0.wwww;
   o0.xyzw = cb2[2].zzzz * r1.xyzw + r0.wwww;
+
+  o0.xyz = lerp(outputColor, o0.xyz, injectedData.fxSceneFilter);
   return;
 }
