@@ -192,7 +192,7 @@ namespace ShaderReplaceMod {
     if (device == nullptr) return;
 
     device_data &data = device->get_private_data<device_data>();
-    data.currentRenderTargets.clear();
+    // data.currentRenderTargets.clear();
     data.hasSwapchainRenderTarget = false;
 
     if (!count) return;
@@ -1145,12 +1145,14 @@ namespace ShaderReplaceMod {
         reshade::register_event<reshade::addon_event::init_device>(on_init_device);
         reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
 
-        for (const auto &[hash, shader] : (*customShaders)) {
-          if (shader.swapChainOnly) _usingSwapChainOnly = true;
-          if (shader.codeSize == 0) _usingBypass = true;
+        if (!traceUnmodifiedShaders) {
+          for (const auto &[hash, shader] : (*customShaders)) {
+            if (shader.swapChainOnly) _usingSwapChainOnly = true;
+            if (shader.codeSize == 0) _usingBypass = true;
+          }
         }
 
-        if (_usingSwapChainOnly) {
+        if (traceUnmodifiedShaders || _usingSwapChainOnly) {
           reshade::register_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
           reshade::register_event<reshade::addon_event::destroy_swapchain>(on_destroy_swapchain);
           reshade::register_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
