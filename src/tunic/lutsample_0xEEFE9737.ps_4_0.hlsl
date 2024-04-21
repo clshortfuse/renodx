@@ -65,16 +65,14 @@ void main(
     renoDRTDechroma,
     renoDRTFlare
   };
-  ToneMapLUTParams lutParams = {
-    t1,
+  ToneMapLUTParams lutParams = buildLUTParams(
     s1_s,
     injectedData.colorGradeLUTStrength,
     injectedData.colorGradeLUTScaling,
     TONE_MAP_LUT_TYPE__SRGB,
     TONE_MAP_LUT_TYPE__SRGB,
-    32.f,         // size
-    float(0).xxx  // precompute
-  };
+    32.f
+  );
 
   if (injectedData.toneMapType == 0.f) {
     untonemapped = saturate(untonemapped);
@@ -82,7 +80,7 @@ void main(
 
   untonemapped = max(0, linearFromSRGB(untonemapped));
 
-  float3 outputColor = toneMap(untonemapped, tmParams, lutParams);
+  float3 outputColor = toneMap(untonemapped, tmParams, lutParams, t1);
 
   outputColor = sign(outputColor) * pow(abs(outputColor), 1.f / 2.2f);
 

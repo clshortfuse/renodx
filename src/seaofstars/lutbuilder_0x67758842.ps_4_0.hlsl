@@ -264,16 +264,14 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
 
   bool useSDRLut = (cb0[145].x >= 0) && (cb0[144].w >= 0);
 
-  ToneMapLUTParams lutParams = {
-    t8,
+  ToneMapLUTParams lutParams = buildLUTParams(
     s0_s,
     useSDRLut ? cb0[144].w * injectedData.colorGradeLUTStrength : 0,
     injectedData.colorGradeLUTScaling,
     TONE_MAP_LUT_TYPE__SRGB,
     TONE_MAP_LUT_TYPE__SRGB,
-    0,            // size
     cb0[144].xyz  // precompute
-  };
+  );
 
   if (injectedData.toneMapType == 0) {
     // SDR Tonemap (Uncharted2 like)
@@ -281,7 +279,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     r0.xyz = unityNeutralTonemap(r0.xyz);
 
     if (useSDRLut) {
-      r0.xyz = lerp(r0.xyz, sampleLUT(r0.xyz, lutParams), lutParams.strength);
+      r0.xyz = lerp(r0.xyz, sampleLUT(r0.xyz, lutParams, t8), lutParams.strength);
     }
   } else {
     float vanillaMidGray = unityNeutralTonemap(0.18f);
@@ -313,7 +311,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
       renoDRTFlare
     };
 
-    r0.xyz = toneMap(r0.xyz, tmParams, lutParams);
+    r0.xyz = toneMap(r0.xyz, tmParams, lutParams, t8);
   }
 
   o0.xyz = r0.xyz;

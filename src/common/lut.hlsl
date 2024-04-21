@@ -16,6 +16,21 @@ float3 centerLutTexel(float3 color, float size) {
   return scale * color + offset;
 }
 
+float3 sampleLUT(Texture3D lut, SamplerState samplerState, float3 color, float size = 0) {
+  if (size == 0) {
+    // Removed by compiler if specified
+    float width;
+    float height;
+    float depth;
+    lut.GetDimensions(width, height, depth);
+    size = height;
+  }
+
+  float3 position = centerLutTexel(color, size);
+
+  return lut.SampleLevel(samplerState, position, 0.0f).rgb;
+}
+
 float3 sampleLUT(Texture3D<float3> lut, SamplerState samplerState, float3 color, float size = 0) {
   if (size == 0) {
     // Removed by compiler if specified
@@ -58,6 +73,48 @@ float3 sampleLUT(Texture2D lut, SamplerState samplerState, float3 color, float3 
 }
 
 float3 sampleLUT(Texture2D lut, SamplerState samplerState, float3 color, float size = 0) {
+  if (size == 0) {
+    // Removed by compiler if specified
+    float width;
+    float height;
+    lut.GetDimensions(width, height);
+    size = min(width, height);
+  }
+
+  float maxIndex = size - 1.f;
+  float slice = 1.f / size;
+  float texelSize = slice * slice;
+
+  return sampleLUT(lut, samplerState, color, float3(texelSize, slice, maxIndex));
+}
+
+float3 sampleLUT(Texture2D<float3> lut, SamplerState samplerState, float3 color, float3 precompute) {
+  float texelSize = precompute.x;
+  float slice = precompute.y;
+  float maxIndex = precompute.z;
+
+  float zPosition = color.z * maxIndex;
+  float zInteger = floor(zPosition);
+  float zFraction = zPosition - zInteger;
+  float zOffset = zInteger * slice;
+
+  float xOffset = (color.r * maxIndex * texelSize) + (texelSize * 0.5f);
+
+  float yOffset = (color.g * maxIndex * slice) + (slice * 0.5f);
+
+  float2 uv = float2(
+    zOffset + xOffset,
+    yOffset
+  );
+
+  float3 color0 = lut.SampleLevel(samplerState, uv, 0).rgb;
+  uv.x += slice;
+  float3 color1 = lut.SampleLevel(samplerState, uv, 0).rgb;
+
+  return lerp(color0, color1, zFraction);
+}
+
+float3 sampleLUT(Texture2D<float3> lut, SamplerState samplerState, float3 color, float size = 0) {
   if (size == 0) {
     // Removed by compiler if specified
     float width;

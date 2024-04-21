@@ -40,18 +40,16 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
     renoDRTDechroma,
     renoDRTFlare
   };
-  ToneMapLUTParams lutParams = {
-    lutTexture,
+  ToneMapLUTParams lutParams = buildLUTParams(
     lutSampler,
     injectedData.colorGradeLUTStrength,
     0.f,  // Lut scaling not needed
     TONE_MAP_LUT_TYPE__2_2,
     TONE_MAP_LUT_TYPE__2_2,
-    16.f,         // size
-    float(0).xxx  // precompute
-  };
+    16.f
+  );
 
-  outputColor = toneMap(untonemapped, tmParams, lutParams);
+  outputColor = toneMap(untonemapped, tmParams, lutParams, lutTexture);
 
   if (injectedData.toneMapGammaCorrection == 0.f) {
     outputColor = gammaCorrectSafe(outputColor, true);

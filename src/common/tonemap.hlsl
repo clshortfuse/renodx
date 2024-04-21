@@ -92,7 +92,6 @@ struct ToneMapParams {
 };
 
 struct ToneMapLUTParams {
-  Texture2D lutTexture;
   SamplerState lutSampler;
   float strength;
   float scaling;
@@ -101,6 +100,16 @@ struct ToneMapLUTParams {
   float size;
   float3 precompute;
 };
+
+ToneMapLUTParams buildLUTParams(SamplerState lutSampler, float strength, float scaling, uint inputType, uint outputType, float size = 0) {
+  ToneMapLUTParams params = {lutSampler, strength, scaling, inputType, outputType, size, float(0).xxx};
+  return params;
+}
+
+ToneMapLUTParams buildLUTParams(SamplerState lutSampler, float strength, float scaling, uint inputType, uint outputType, float3 precompute) {
+  ToneMapLUTParams params = {lutSampler, strength, scaling, inputType, outputType, 0, precompute};
+  return params;
+}
 
 #define TONE_MAP_TYPE__VANILLA 0
 #define TONE_MAP_TYPE__NONE    1
@@ -211,22 +220,29 @@ float3 toneMap(float3 untonemapped, ToneMapParams params) {
   return outputColor;
 }
 
-float3 sampleLUTColor(float3 color, ToneMapLUTParams lutParams) {
-  if (lutParams.precompute.x) {
-    return sampleLUT(
-      lutParams.lutTexture,
-      lutParams.lutSampler,
-      color,
-      lutParams.precompute
-    );
+#define sampleLUTColorFunctionGenerator(textureType)                                        \
+  float3 sampleLUTColor(float3 color, ToneMapLUTParams lutParams, textureType lutTexture) { \
+    if (lutParams.precompute.x) {                                                           \
+      return sampleLUT(                                                                     \
+        lutTexture,                                                                         \
+        lutParams.lutSampler,                                                               \
+        color,                                                                              \
+        lutParams.precompute                                                                \
+                                                                                            \
+      );                                                                                    \
+    }                                                                                       \
+    return sampleLUT(                                                                       \
+      lutTexture,                                                                           \
+      lutParams.lutSampler,                                                                 \
+      color,                                                                                \
+      lutParams.size                                                                        \
+    );                                                                                      \
   }
-  return sampleLUT(
-    lutParams.lutTexture,
-    lutParams.lutSampler,
-    color,
-    lutParams.size
-  );
-}
+
+sampleLUTColorFunctionGenerator(Texture2D);
+sampleLUTColorFunctionGenerator(Texture2D<float3>);
+sampleLUTColorFunctionGenerator(Texture3D);
+sampleLUTColorFunctionGenerator(Texture3D<float3>);
 
 float3 convertLUTInput(float3 color, ToneMapLUTParams lutParams) {
   if (lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB) {
@@ -312,89 +328,95 @@ float3 linearUnclampedLUTOutput(float3 color, ToneMapLUTParams lutParams) {
   return color;
 }
 
-float3 sampleLUT(float3 inputColor, ToneMapLUTParams lutParams) {
-  float3 lutInputColor = convertLUTInput(inputColor, lutParams);
-  float3 lutOutputColor = sampleLUTColor(lutInputColor, lutParams);
-  float3 outputColor = linearLUTOutput(lutOutputColor, lutParams);
-  if (lutParams.scaling) {
-    float3 lutBlack = sampleLUTColor(convertLUTInput(0, lutParams), lutParams);
-    float3 lutMid = sampleLUTColor(convertLUTInput(0.18f, lutParams), lutParams);
-    float3 lutWhite = sampleLUTColor(convertLUTInput(1.f, lutParams), lutParams);
-
-    float3 unclamped = unclampSDRLUT(
-      gammaLUTOutput(lutOutputColor, lutParams),
-      gammaLUTOutput(lutBlack, lutParams),
-      gammaLUTOutput(lutMid, lutParams),
-      gammaLUTOutput(lutWhite, lutParams),
-      gammaLUTInput(inputColor, lutInputColor, lutParams)
-    );
-
-    float3 recolored = recolorUnclampedLUT(
-      outputColor,
-      linearUnclampedLUTOutput(unclamped, lutParams)
-    );
-    outputColor = lerp(outputColor, recolored, lutParams.scaling);
-  }
-  // Chrominance restoration
-  outputColor = restoreSaturationLoss(inputColor, outputColor, lutParams);
-
-  return outputColor;
-}
-
-float3 toneMap(float3 inputColor, ToneMapParams tmParams, ToneMapLUTParams lutParams) {
-  if (lutParams.strength == 0.f || tmParams.type == 1.f) {
-    return toneMap(inputColor, tmParams);
+#define sampleLUTFunctionGenerator(textureType)                                                 \
+  float3 sampleLUT(float3 inputColor, ToneMapLUTParams lutParams, textureType lutTexture) {     \
+    float3 lutInputColor = convertLUTInput(inputColor, lutParams);                              \
+    float3 lutOutputColor = sampleLUTColor(lutInputColor, lutParams, lutTexture);               \
+    float3 outputColor = linearLUTOutput(lutOutputColor, lutParams);                            \
+    if (lutParams.scaling) {                                                                    \
+      float3 lutBlack = sampleLUTColor(convertLUTInput(0, lutParams), lutParams, lutTexture);   \
+      float3 lutMid = sampleLUTColor(convertLUTInput(0.18f, lutParams), lutParams, lutTexture); \
+      float3 lutWhite = sampleLUTColor(convertLUTInput(1.f, lutParams), lutParams, lutTexture); \
+      float3 unclamped = unclampSDRLUT(                                                         \
+        gammaLUTOutput(lutOutputColor, lutParams),                                              \
+        gammaLUTOutput(lutBlack, lutParams),                                                    \
+        gammaLUTOutput(lutMid, lutParams),                                                      \
+        gammaLUTOutput(lutWhite, lutParams),                                                    \
+        gammaLUTInput(inputColor, lutInputColor, lutParams)                                     \
+      );                                                                                        \
+      float3 recolored = recolorUnclampedLUT(                                                   \
+        outputColor,                                                                            \
+        linearUnclampedLUTOutput(unclamped, lutParams)                                          \
+      );                                                                                        \
+      outputColor = lerp(outputColor, recolored, lutParams.scaling);                            \
+    }                                                                                           \
+    outputColor = restoreSaturationLoss(inputColor, outputColor, lutParams);                    \
+    return outputColor;                                                                         \
   }
 
-  float3 outputColor = inputColor;
+sampleLUTFunctionGenerator(Texture2D<float4>);
+sampleLUTFunctionGenerator(Texture2D<float3>);
+sampleLUTFunctionGenerator(Texture3D<float4>);
+sampleLUTFunctionGenerator(Texture3D<float3>);
 
-  float3 hdrColor;
-  float3 sdrColor;
-  if (tmParams.type == 3.f) {
-    tmParams.renoDRTSaturation *= tmParams.saturation;
-
-    sdrColor = renoDRTToneMap(outputColor, tmParams, true);
-
-    tmParams.renoDRTHighlights *= tmParams.highlights;
-    tmParams.renoDRTShadows *= tmParams.shadows;
-    tmParams.renoDRTContrast *= tmParams.contrast;
-    // tmParams.renoDRTDechroma *= tmParams.dechroma;
-
-    hdrColor = renoDRTToneMap(outputColor, tmParams);
-
-  } else {
-    outputColor = applyUserColorGrading(
-      outputColor,
-      tmParams.exposure,
-      tmParams.highlights,
-      tmParams.shadows,
-      tmParams.contrast,
-      tmParams.saturation
-    );
-
-    if (tmParams.type == 2.f) {
-      hdrColor = acesToneMap(outputColor, tmParams);
-      sdrColor = acesToneMap(outputColor, tmParams, true);
-    } else {
-      hdrColor = outputColor;
-      sdrColor = outputColor;
-    }
+#define toneMapFunctionGenerator(textureType)                                                                     \
+  float3 toneMap(float3 inputColor, ToneMapParams tmParams, ToneMapLUTParams lutParams, textureType lutTexture) { \
+    if (lutParams.strength == 0.f || tmParams.type == 1.f) {                                                      \
+      return toneMap(inputColor, tmParams);                                                                       \
+    }                                                                                                             \
+    float3 outputColor = inputColor;                                                                              \
+                                                                                                                  \
+    float3 hdrColor;                                                                                              \
+    float3 sdrColor;                                                                                              \
+    if (tmParams.type == 3.f) {                                                                                   \
+      tmParams.renoDRTSaturation *= tmParams.saturation;                                                          \
+                                                                                                                  \
+      sdrColor = renoDRTToneMap(outputColor, tmParams, true);                                                     \
+                                                                                                                  \
+      tmParams.renoDRTHighlights *= tmParams.highlights;                                                          \
+      tmParams.renoDRTShadows *= tmParams.shadows;                                                                \
+      tmParams.renoDRTContrast *= tmParams.contrast;                                                              \
+                                                                                                                  \
+      hdrColor = renoDRTToneMap(outputColor, tmParams);                                                           \
+                                                                                                                  \
+    } else {                                                                                                      \
+      outputColor = applyUserColorGrading(                                                                        \
+        outputColor,                                                                                              \
+        tmParams.exposure,                                                                                        \
+        tmParams.highlights,                                                                                      \
+        tmParams.shadows,                                                                                         \
+        tmParams.contrast,                                                                                        \
+        tmParams.saturation                                                                                       \
+      );                                                                                                          \
+                                                                                                                  \
+      if (tmParams.type == 2.f) {                                                                                 \
+        hdrColor = acesToneMap(outputColor, tmParams);                                                            \
+        sdrColor = acesToneMap(outputColor, tmParams, true);                                                      \
+      } else {                                                                                                    \
+        hdrColor = outputColor;                                                                                   \
+        sdrColor = outputColor;                                                                                   \
+      }                                                                                                           \
+    }                                                                                                             \
+                                                                                                                  \
+    float3 lutColor;                                                                                              \
+    if (lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB || lutParams.inputType == TONE_MAP_LUT_TYPE__2_2) {        \
+      lutColor = sampleLUT(sdrColor, lutParams, lutTexture);                                                      \
+    } else {                                                                                                      \
+      lutColor = min(1.f, sampleLUT(hdrColor, lutParams, lutTexture));                                            \
+    }                                                                                                             \
+                                                                                                                  \
+    if (tmParams.type == 0.f) {                                                                                   \
+      outputColor = lerp(outputColor, lutColor, lutParams.strength);                                              \
+    } else {                                                                                                      \
+      outputColor = toneMapUpgrade(hdrColor, sdrColor, lutColor, lutParams.strength);                             \
+    }                                                                                                             \
+    return outputColor;                                                                                           \
   }
 
-  float3 lutColor;
-  if (lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB || lutParams.inputType == TONE_MAP_LUT_TYPE__2_2) {
-    lutColor = sampleLUT(sdrColor, lutParams);
-  } else {
-    lutColor = min(1.f, sampleLUT(hdrColor, lutParams));
-  }
-
-  if (tmParams.type == 0.f) {
-    outputColor = lerp(outputColor, lutColor, lutParams.strength);
-  } else {
-    outputColor = toneMapUpgrade(hdrColor, sdrColor, lutColor, lutParams.strength);
-  }
-  return outputColor;
-}
+toneMapFunctionGenerator(Texture2D<float4>);
+toneMapFunctionGenerator(Texture2D<float3>);
+toneMapFunctionGenerator(Texture3D<float4>);
+toneMapFunctionGenerator(Texture3D<float3>);
 
 // BT2446A method
 // Input color should be SDR at 100 nits in BT.1886 (2.4)

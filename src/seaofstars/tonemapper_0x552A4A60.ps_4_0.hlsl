@@ -91,38 +91,34 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
     renoDRTFlare
   };
 
-  ToneMapLUTParams lutParams = {
-    t3,
+  ToneMapLUTParams lutParams = buildLUTParams(
     s0_s,
     1.f,                                // Internal LUT
     injectedData.colorGradeLUTScaling,  // Cleans up raised black floor
     TONE_MAP_LUT_TYPE__ARRI_C1000_NO_CUT,
     TONE_MAP_LUT_TYPE__LINEAR,
-    0,            // size
     cb0[188].xyz  // precompute
-  };
+  );
 
   float3 outputColor = untonemapped;
   if (tmParams.type == 1.f) {
     outputColor = toneMap(untonemapped, tmParams);
   } else {
-    outputColor = sampleLUT(untonemapped * cb0[188].w, lutParams);
+    outputColor = sampleLUT(untonemapped * cb0[188].w, lutParams, t3);
     float useSDRLUT = (cb0[203].y == 0 && cb0[189].w >= 0);
     if (useSDRLUT) {
       // Seems to be done in LUT builder now
       // Leaving just in case
-      ToneMapLUTParams sdrLUTParams = {
-        t4,
+      ToneMapLUTParams sdrLUTParams = buildLUTParams(
         s0_s,
         cb0[189].w,
         injectedData.colorGradeLUTScaling,
         TONE_MAP_LUT_TYPE__SRGB,
         TONE_MAP_LUT_TYPE__SRGB,
-        0,            // size
         cb0[189].xyz  // precompute
-      };
+      );
 
-      float3 sdrLutResult = sampleLUT(outputColor, sdrLUTParams);
+      float3 sdrLutResult = sampleLUT(outputColor, sdrLUTParams, t4);
       outputColor = lerp(outputColor, sdrLutResult, cb0[189].w);
     }
   }
