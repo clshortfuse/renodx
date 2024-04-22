@@ -265,7 +265,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("fxSceneFilter", 50.f);
   UserSettingUtil::updateUserSetting("fxDoF", 50.f);
   UserSettingUtil::updateUserSetting("fxVignette", 50.f);
-  UserSettingUtil::updateUserSetting("fxFilmGrain", 50.f);
+  UserSettingUtil::updateUserSetting("fxFilmGrain", 0.f);
 }
 
 static auto start = std::chrono::steady_clock::now();
