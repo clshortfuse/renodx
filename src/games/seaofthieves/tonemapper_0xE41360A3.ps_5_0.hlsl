@@ -1,5 +1,5 @@
-#include "../../common/aces.hlsl"
-#include "../../common/color.hlsl"
+#include "../../shaders/aces.hlsl"
+#include "../../shaders/color.hlsl"
 
 #define RENODX_SOT_ACES_TONEMAPPER 1
 

@@ -13,8 +13,8 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-#include "../../common/shaderReplaceMod.hpp"
-#include "../../common/swapChainUpgradeMod.hpp"
+#include "../../mods/shaderReplaceMod.hpp"
+#include "../../mods/swapChainUpgradeMod.hpp"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Sea of Thieves";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Sea of Thieves";

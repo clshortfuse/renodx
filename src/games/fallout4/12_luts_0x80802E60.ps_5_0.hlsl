@@ -1,5 +1,5 @@
-#include "../../common/tonemap.hlsl"
-#include "../../common/filmgrain.hlsl"
+#include "../../shaders/tonemap.hlsl"
+#include "../../shaders/filmgrain.hlsl"
 #include "./shared.h"
 
 Texture3D<float4> t6 : register(t6);

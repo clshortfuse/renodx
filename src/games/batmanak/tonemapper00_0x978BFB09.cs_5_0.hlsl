@@ -1,7 +1,7 @@
 // Used for motion blur
 
-#include "../../common/filmgrain.hlsl"
-#include "../../common/lut.hlsl"
+#include "../../shaders/filmgrain.hlsl"
+#include "../../shaders/lut.hlsl"
 #include "./shared.h"
 #include "./tonemapper.hlsl"
 

@@ -1,6 +1,6 @@
 // UI alpha layer
 
-#include "../../common/color.hlsl"
+#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 cbuffer Buff1 : register(b1)

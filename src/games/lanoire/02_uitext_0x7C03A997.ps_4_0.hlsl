@@ -1,6 +1,6 @@
 // UI Textboxes
 
-#include "../../common/color.hlsl"
+#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 cbuffer RenderStuff2 : register(b2) {

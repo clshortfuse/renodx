@@ -1,5 +1,5 @@
 // Sharpen + Clamp
-#include "../../common/color.hlsl"
+#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);

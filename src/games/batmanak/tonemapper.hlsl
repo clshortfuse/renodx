@@ -1,10 +1,10 @@
-#include "../../common/RenoDRT.hlsl"
-#include "../../common/aces.hlsl"
-#include "../../common/color.hlsl"
-#include "../../common/colorgrade.hlsl"
-#include "../../common/graph.hlsl"
-#include "../../common/lut.hlsl"
-#include "../../common/tonemap.hlsl"
+#include "../../shaders/RenoDRT.hlsl"
+#include "../../shaders/aces.hlsl"
+#include "../../shaders/color.hlsl"
+#include "../../shaders/colorgrade.hlsl"
+#include "../../shaders/graph.hlsl"
+#include "../../shaders/lut.hlsl"
+#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 #define DRAW_TONEMAPPER 0

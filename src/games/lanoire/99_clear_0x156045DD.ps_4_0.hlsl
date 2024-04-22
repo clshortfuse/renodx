@@ -1,4 +1,4 @@
-#include "../../common/color.hlsl"
+#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 SamplerState Sampler0_s : register(s0);

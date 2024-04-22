@@ -1,6 +1,6 @@
 // HUD Shader
 
-#include "../../common/filmgrain.hlsl"
+#include "../../shaders/filmgrain.hlsl"
 #include "./colormath.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"

@@ -1,5 +1,5 @@
-#include "../../common/color.hlsl"
-#include "../../common/tonemap.hlsl"
+#include "../../shaders/color.hlsl"
+#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 cbuffer dx11_constants : register(b0) {

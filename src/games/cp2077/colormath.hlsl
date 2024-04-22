@@ -1,5 +1,5 @@
-#include "../../common/color.hlsl"
-#include "../../common/random.hlsl"
+#include "../../shaders/color.hlsl"
+#include "../../shaders/random.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
 

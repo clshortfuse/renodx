@@ -1,7 +1,7 @@
 // After glow effect
 
 #include "./shared.h"
-#include "../../common/color.hlsl"
+#include "../../shaders/color.hlsl"
 
 
 Texture2D<float4> t1 : register(t1);

@@ -33,8 +33,8 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-#include "../../common/shaderReplaceMod.hpp"
-#include "../../common/userSettingUtil.hpp"
+#include "../../mods/shaderReplaceMod.hpp"
+#include "../../utils/userSettingUtil.hpp"
 #include "./cp2077.h"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - CP2077";

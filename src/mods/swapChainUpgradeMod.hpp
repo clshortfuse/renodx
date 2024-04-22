@@ -21,7 +21,7 @@
 
 #include <crc32_hash.hpp>
 #include <include/reshade.hpp>
-#include "../common/format.hpp"
+#include "../utils/format.hpp"
 
 namespace SwapChainUpgradeMod {
   struct SwapChainUpgradeTarget {
@@ -29,6 +29,7 @@ namespace SwapChainUpgradeMod {
     reshade::api::format newFormat = reshade::api::format::r16g16b16a16_float;
     int32_t index = -1;
     bool ignoreSize = false;
+    uint32_t shaderHash = 0;
     uint32_t _counted = 0;
     bool completed = false;
   };
@@ -44,6 +45,10 @@ namespace SwapChainUpgradeMod {
     std::unordered_set<uint64_t> upgradedResources;
     std::unordered_map<uint64_t, uint64_t> upgradedResourceViews;
     std::unordered_set<uint64_t> backBufferResourceViews;
+    std::unordered_map<uint64_t, uint64_t> resourceViewResources;
+    std::unordered_map<uint64_t, uint64_t> resourceClones;
+    std::unordered_map<uint64_t, uint32_t> pipelineToShaderHashMap;
+    uint32_t currentShader;
   };
 
   static std::vector<SwapChainUpgradeTarget> swapChainUpgradeTargets = {};
@@ -278,6 +283,59 @@ namespace SwapChainUpgradeMod {
     }
   }
 
+  // After CreatePipelineState
+  static void on_init_pipeline(
+    reshade::api::device* device,
+    reshade::api::pipeline_layout layout,
+    uint32_t subobjectCount,
+    const reshade::api::pipeline_subobject* subobjects,
+    reshade::api::pipeline pipeline
+  ) {
+    // DX12 can use PSO objects that need to be cloned
+    reshade::api::pipeline_subobject* newSubobjects = nullptr;
+
+    auto &data = device->get_private_data<device_data>();
+    uint32_t foundShader = 0;
+    for (uint32_t i = 0; i < subobjectCount; ++i) {
+      const auto subobject = subobjects[i];
+      switch (subobject.type) {
+        case reshade::api::pipeline_subobject_type::compute_shader:
+          // fallthrough
+        case reshade::api::pipeline_subobject_type::pixel_shader:
+          break;
+        default:
+          continue;
+      }
+      const reshade::api::shader_desc desc = *static_cast<const reshade::api::shader_desc*>(subobject.data);
+      if (desc.code_size == 0) continue;
+
+      // Pipeline has a pixel shader with code. Hash code and check
+      auto subObjectHash = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
+      for (auto target : swapChainUpgradeTargets) {
+        if (!target.shaderHash) continue;
+        if (target.shaderHash != subObjectHash) continue;
+        foundShader = subObjectHash;
+      }
+      if (foundShader) break;
+    }
+    if (foundShader) {
+      data.pipelineToShaderHashMap.emplace(pipeline.handle, foundShader);
+    }
+  }
+
+  static void on_bind_pipeline(
+    reshade::api::command_list* cmd_list,
+    reshade::api::pipeline_stage type,
+    reshade::api::pipeline pipeline
+  ) {
+    auto device = cmd_list->get_device();
+    auto &data = device->get_private_data<device_data>();
+    auto pipelineToShaderHashPair = data.pipelineToShaderHashMap.find(pipeline.handle);
+    if (pipelineToShaderHashPair != data.pipelineToShaderHashMap.end()) {
+      data.currentShader = pipelineToShaderHashPair->second;
+    }
+  }
+
   static bool on_create_resource(
     reshade::api::device* device,
     reshade::api::resource_desc &desc,
@@ -297,11 +355,13 @@ namespace SwapChainUpgradeMod {
     if (privateData.resourceUpgradeFinished) return false;
 
     if (!privateData.hasBufferDesc) {
+#if DEBUG_LEVEL >= 1
       std::stringstream s;
       s << "createResource(Unknown device "
         << reinterpret_cast<void*>(device->get_native())
         << ")";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
+#endif
       return false;
     }
     auto bufferDesc = privateData.deviceBackBufferDesc;

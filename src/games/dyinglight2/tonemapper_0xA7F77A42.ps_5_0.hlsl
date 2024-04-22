@@ -1,7 +1,7 @@
-#include "../../common/ACES.hlsl"
-#include "../../common/RenoDRT.hlsl"
-#include "../../common/color.hlsl"
-#include "../../common/colorgrade.hlsl"
+#include "../../shaders/ACES.hlsl"
+#include "../../shaders/RenoDRT.hlsl"
+#include "../../shaders/color.hlsl"
+#include "../../shaders/colorgrade.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);

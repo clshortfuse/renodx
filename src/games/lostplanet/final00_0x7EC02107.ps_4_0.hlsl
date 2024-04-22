@@ -1,4 +1,4 @@
-#include "../../common/color.hlsl"
+#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 cbuffer Gamma : register(b0) {

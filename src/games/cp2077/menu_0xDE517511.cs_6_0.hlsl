@@ -1,4 +1,4 @@
-#include "../../common/color.hlsl"
+#include "../../shaders/color.hlsl"
 #include "./colormath.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"

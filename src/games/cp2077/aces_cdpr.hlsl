@@ -1,4 +1,4 @@
-#include "../../common/color.hlsl"
+#include "../../shaders/color.hlsl"
 
 struct SegmentedSplineParams_c5 {
   float coefsLow[6];   // coefs for B-spline between minPoint and midPoint (units of log luminance)

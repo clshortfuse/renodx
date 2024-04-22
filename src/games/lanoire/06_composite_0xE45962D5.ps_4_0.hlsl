@@ -1,6 +1,6 @@
-#include "../../common/color.hlsl"
-#include "../../common/filmgrain.hlsl"
-#include "../../common/tonemap.hlsl"
+#include "../../shaders/color.hlsl"
+#include "../../shaders/filmgrain.hlsl"
+#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 // Composite/Render

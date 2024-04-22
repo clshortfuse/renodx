@@ -1,4 +1,4 @@
-#include "../../common/tonemap.hlsl"
+#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 SamplerState SampBase_s : register(s0);

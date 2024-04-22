@@ -1,9 +1,9 @@
 // LUT + TONEMAPPER
 
-#include "../../common/color.hlsl"
-#include "../../common/colorgrade.hlsl"
-#include "../../common/lut.hlsl"
-#include "../../common/tonemap.hlsl"
+#include "../../shaders/color.hlsl"
+#include "../../shaders/colorgrade.hlsl"
+#include "../../shaders/lut.hlsl"
+#include "../../shaders/tonemap.hlsl"
 #include "./aces_cdpr.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"

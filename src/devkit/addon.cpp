@@ -25,7 +25,7 @@
 #include <include/reshade.hpp>
 
 #include <crc32_hash.hpp>
-#include "../common/format.hpp"
+#include "../utils/format.hpp"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - DevKit";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX DevKit Module";
@@ -52,6 +52,9 @@ std::shared_mutex s_mutex;
 
 std::unordered_set<uint64_t> computeShaderLayouts;
 std::unordered_set<uint64_t> backBuffers;
+std::unordered_map<uint64_t, reshade::api::resource_view_desc> resourceViews;
+std::unordered_map<uint64_t, reshade::api::resource> resources;
+std::unordered_map<uint64_t, uint64_t> resourceViewsByResource;
 
 std::unordered_map<uint64_t, CachedPipeline*> pipelineCacheByPipelineHandle;
 std::unordered_map<uint32_t, CachedPipeline*> pipelineCacheByShaderHash;
@@ -67,6 +70,8 @@ static bool needsLiveReload = false;
 static bool listUnique = false;
 static uint32_t shaderCacheCount = 0;
 static uint32_t shaderCacheSize = 0;
+static uint32_t resourceCount = 0;
+static uint32_t resourceViewCount = 0;
 static uint32_t traceCount = 0;
 static uint32_t presentCount = 0;
 
@@ -1264,67 +1269,78 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
   ImGui::Text("Cached Shaders Size: %d", shaderCacheSize);
   static int32_t selectedIndex = -1;
   bool changedSelected = false;
-  if (ImGui::BeginChild("HashList", ImVec2(100, -FLT_MIN), ImGuiChildFlags_ResizeX)) {
-    if (ImGui::BeginListBox("##HashesListbox", ImVec2(-FLT_MIN, -FLT_MIN))) {
-      if (!traceRunning) {
-        for (auto index = 0; index < traceCount; index++) {
-          auto hash = traceHashes.at(index);
-          const bool isSelected = (selectedIndex == index);
-          auto pair = pipelineCacheByShaderHash.find(hash);
-          const bool isCloned = pair != pipelineCacheByShaderHash.end() && pair->second->cloned;
-          std::stringstream name;
-          name << std::setfill('0') << std::setw(3) << index << std::setw(0)
-               << " - 0x" << std::hex << hash;
-          if (isCloned) {
-            name << "*";
-          }
-          if (ImGui::Selectable(name.str().c_str(), isSelected)) {
-            selectedIndex = index;
-            changedSelected = true;
-          }
+  if (ImGui::BeginTabBar("##MyTabBar", ImGuiTabBarFlags_None)) {
+    if (ImGui::BeginTabItem("Events")) {
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("Shaders")) {
+      if (ImGui::BeginChild("HashList", ImVec2(100, -FLT_MIN), ImGuiChildFlags_ResizeX)) {
+        if (ImGui::BeginListBox("##HashesListbox", ImVec2(-FLT_MIN, -FLT_MIN))) {
+          if (!traceRunning) {
+            for (auto index = 0; index < traceCount; index++) {
+              auto hash = traceHashes.at(index);
+              const bool isSelected = (selectedIndex == index);
+              auto pair = pipelineCacheByShaderHash.find(hash);
+              const bool isCloned = pair != pipelineCacheByShaderHash.end() && pair->second->cloned;
+              std::stringstream name;
+              name << std::setfill('0') << std::setw(3) << index << std::setw(0)
+                   << " - 0x" << std::hex << hash;
+              if (isCloned) {
+                name << "*";
+              }
+              if (ImGui::Selectable(name.str().c_str(), isSelected)) {
+                selectedIndex = index;
+                changedSelected = true;
+              }
 
-          if (isSelected) {
-            ImGui::SetItemDefaultFocus();
+              if (isSelected) {
+                ImGui::SetItemDefaultFocus();
+              }
+            }
           }
+          ImGui::EndListBox();
         }
+        ImGui::EndChild();
       }
-      ImGui::EndListBox();
-    }
-    ImGui::EndChild();
-  }
 
-  ImGui::SameLine();
-
-  static std::string sourceCode = "";
-  if (ImGui::BeginChild("HashDetails", ImVec2(-FLT_MIN, -FLT_MIN))) {
-    ImGui::BeginDisabled(selectedIndex == -1);
-    if (changedSelected) {
-      auto hash = traceHashes.at(selectedIndex);
-      auto cache = shaderCache.find(hash)->second;
-      if (cache->source.length() == 0) {
-        char* fxc = dumpFXC(hash);
-        if (fxc == nullptr) {
-          cache->source.assign("Decompilation failed.");
-        } else {
-          cache->source.assign(fxc);
-          free(fxc);
+      ImGui::SameLine();
+      static std::string sourceCode = "";
+      if (ImGui::BeginChild("HashDetails", ImVec2(-FLT_MIN, -FLT_MIN))) {
+        ImGui::BeginDisabled(selectedIndex == -1);
+        if (changedSelected) {
+          auto hash = traceHashes.at(selectedIndex);
+          auto cache = shaderCache.find(hash)->second;
+          if (cache->source.length() == 0) {
+            char* fxc = dumpFXC(hash);
+            if (fxc == nullptr) {
+              cache->source.assign("Decompilation failed.");
+            } else {
+              cache->source.assign(fxc);
+              free(fxc);
+            }
+          }
+          sourceCode.assign(cache->source);
         }
-      }
-      sourceCode.assign(cache->source);
-    }
 
-    if (ImGui::BeginChild("HashSourceCode", ImVec2(-FLT_MIN, -FLT_MIN), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
-      ImGui::InputTextMultiline(
-        "##source",
-        (char*)sourceCode.c_str(),
-        sourceCode.length(),
-        ImVec2(-FLT_MIN, -FLT_MIN),
-        ImGuiInputTextFlags_ReadOnly
-      );
-      ImGui::EndChild();
+        if (ImGui::BeginChild("HashSourceCode", ImVec2(-FLT_MIN, -FLT_MIN), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+          ImGui::InputTextMultiline(
+            "##source",
+            (char*)sourceCode.c_str(),
+            sourceCode.length(),
+            ImVec2(-FLT_MIN, -FLT_MIN),
+            ImGuiInputTextFlags_ReadOnly
+          );
+          ImGui::EndChild();
+        }
+        ImGui::EndChild();
+        ImGui::EndDisabled();
+      }
+      ImGui::EndTabItem();
     }
-    ImGui::EndChild();
-    ImGui::EndDisabled();
+    if (ImGui::BeginTabItem("Resources")) {
+      ImGui::EndTabItem();
+    }
+    ImGui::EndTabBar();
   }
 }
 

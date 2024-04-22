@@ -1,6 +1,6 @@
 // no motion blur + effect
 
-#include "../../common/filmgrain.hlsl"
+#include "../../shaders/filmgrain.hlsl"
 #include "./shared.h"
 #include "./tonemapper.hlsl"
 

@@ -1,6 +1,6 @@
 // Upscaler
 
-#include "../../common/color.hlsl"
+#include "../../shaders/color.hlsl"
 
 cbuffer _16_18 : register(b6, space0) { float4 _18_m0[1] : packoffset(c0); }
 

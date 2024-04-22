@@ -1,4 +1,4 @@
-#include "../../common/color.hlsl"
+#include "../../shaders/color.hlsl"
 
 cbuffer _16_18 : register(b6, space0) {
   float4 cb6[1] : packoffset(c0);

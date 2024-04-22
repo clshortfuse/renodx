@@ -1,4 +1,4 @@
-#include "../../common/tonemap.hlsl"
+#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 cbuffer FilterColorCorrect : register(b0) {

@@ -1,8 +1,8 @@
 // Game Render + LUT
 
-#include "../../common/color.hlsl"
-#include "../../common/colorgrade.hlsl"
-#include "../../common/tonemap.hlsl"
+#include "../../shaders/color.hlsl"
+#include "../../shaders/colorgrade.hlsl"
+#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t1 : register(t1);

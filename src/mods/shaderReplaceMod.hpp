@@ -25,7 +25,7 @@
 #include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
-#include "./format.hpp"
+#include "../utils/format.hpp"
 
 namespace ShaderReplaceMod {
   struct CustomShader {

@@ -1,7 +1,7 @@
-#include "../../common/color.hlsl"
-#include "../../common/graph.hlsl"
-#include "../../common/lut.hlsl"
-#include "../../common/random.hlsl"
+#include "../../shaders/color.hlsl"
+#include "../../shaders/graph.hlsl"
+#include "../../shaders/lut.hlsl"
+#include "../../shaders/random.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
 
