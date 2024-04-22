@@ -15,12 +15,11 @@
 #include <embed/0x33F1B3F8.h>
 #include <embed/0x34AEF9A7.h>
 #include <embed/0x43E69DB9.h>
+#include <embed/0x4FB4DA20.h>
+#include <embed/0x61CC29E6.h>
 #include <embed/0x72826F5B.h>
 #include <embed/0x8024E8B5.h>
 #include <embed/0x80802E60.h>
-// #include <embed/0x86EC0382.h>
-#include <embed/0x4FB4DA20.h>
-#include <embed/0x61CC29E6.h>
 #include <embed/0x83660755.h>
 #include <embed/0x8CAC3BD9.h>
 #include <embed/0x8E032125.h>
@@ -34,7 +33,6 @@
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
-
 #include "../common/shaderReplaceMod.hpp"
 #include "../common/swapChainUpgradeMod.hpp"
 #include "../common/userSettingUtil.hpp"

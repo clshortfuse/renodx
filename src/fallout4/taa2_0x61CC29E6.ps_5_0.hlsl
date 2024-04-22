@@ -1,4 +1,6 @@
-// ---- Created with 3Dmigoto v1.3.16 on Sat Apr 20 18:02:54 2024
+#include "../common/color.hlsl"
+#include "./shared.h"
+
 Texture2D<float4> t0 : register(t0);  // render
 Texture2D<float4> t1 : register(t1);  // motion
 Texture2D<float4> t2 : register(t2);  // black
@@ -18,8 +20,14 @@ cbuffer cb2 : register(b2) {
 // 3Dmigoto declarations
 #define cmp -
 
-void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Target0, out float4 o1 : SV_Target1
-) {
+float3 convertRenderInput(float3 render) {
+  render = mul(BT709_2_BT2020_MAT, render);
+  render = max(0, render);
+  render = pqFromLinear((render * 80.f) / 10000.f);
+  return render;
+}
+
+void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Target0, out float4 o1 : SV_Target1) {
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -35,7 +43,11 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r0.z = cmp(r0.w == r0.z);
   r3.xy = r0.zz ? r0.xy : r1.xy;
   r4.xyz = t0.Sample(s0_s, r0.xy).yxz;  // render - (r4)
+  r4.xyz = convertRenderInput(r4.xyz);
+
   r5.xyz = t0.Sample(s0_s, r1.xy).yxz;  // render + (r5)
+  r5.xyz = convertRenderInput(r5.xyz);
+
   r0.x = cmp(r0.w == r1.z);
   r0.xy = r0.xx ? r2.zw : r3.xy;
   r1.xyzw = v1.xyxy + cb2[3].xyxy * float4(-1, 1, 0, -1);
@@ -78,19 +90,31 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r5.x = cmp(r5.w < r6.x);
   r4.w = dot(r4.xzy, float3(0.5, 0.25, 0.25));  // r4 luminance
   r7.xyz = t0.Sample(s0_s, r2.zw).yxz;
+  r7.xyz = convertRenderInput(r7.xyz);
+
   r2.xyz = t0.Sample(s0_s, r2.xy).yxz;
+  r2.xyz = convertRenderInput(r2.xyz);
+
   r7.w = dot(r7.xzy, float3(0.5, 0.25, 0.25));  // r7 luminance
   r4.x = cmp(r7.w < r6.x);
   r2.w = dot(r2.xzy, float3(0.5, 0.25, 0.25));  //
   r2.x = cmp(r2.w < r6.x);
   r8.xyz = t0.Sample(s0_s, r1.zw).yxz;
+  r8.xyz = convertRenderInput(r8.xyz);
+
   r1.xyz = t0.Sample(s0_s, r1.xy).yxz;
+  r1.xyz = convertRenderInput(r1.xyz);
+
   r8.w = dot(r8.xzy, float3(0.5, 0.25, 0.25));
   r7.x = cmp(r8.w < r6.x);
   r1.w = dot(r1.xzy, float3(0.5, 0.25, 0.25));
   r8.x = cmp(r1.w < r6.x);
   r9.xyz = t0.Sample(s0_s, r3.zw).yxz;
+  r9.xyz = convertRenderInput(r9.xyz);
+
   r3.xyz = t0.Sample(s0_s, r3.xy).yxz;
+  r3.xyz = convertRenderInput(r3.xyz);
+
   r9.w = dot(r9.xzy, float3(0.5, 0.25, 0.25));
   r10.x = cmp(r9.w < r6.x);
   r10.yzw = cb2[2].zzz * r9.yxz;
@@ -98,7 +122,10 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r10.yzw = r3.yxz * cb2[2].yyy + r10.yzw;
   r3.w = dot(r3.xzy, float3(0.5, 0.25, 0.25));
   r1.x = cmp(r3.w < r6.x);
-  r11.xyz = t0.Sample(s0_s, v1.xy).xyz;           // center
+  r11.xyz = t0.Sample(s0_s, v1.xy).xyz;  // center
+  float3 signs = sign(r11.xyz);
+  r11.xyz = convertRenderInput(r11.xyz);
+
   r12.x = dot(r11.yzx, float3(0.5, 0.25, 0.25));  // center luminance
   r3.x = cmp(r12.x < r6.x);
   r12.yz = r11.xz;
@@ -269,9 +296,8 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r1.xyz = r2.xyz + -r0.xyz;
   o1.xyz = saturate(cb2[4].www * r1.xyz + r0.xyz);
 
-  float newLuminance = dot(o1.xyz, float3(0.2126390059f, 0.7151686788f, 0.0721923154f));
-  float realLuminance = dot(r11.xyz, float3(0.2126390059f, 0.7151686788f, 0.0721923154f));
-  // o1.xyz *= newLuminance ? realLuminance / newLuminance : 0;
+  o1.xyz = linearFromPQ(o1.xyz) * 10000.f / 80.f;
+  o1.xyz = mul(BT2020_2_BT709_MAT, o1.xyz);
 
   o1.w = 1;
   return;
