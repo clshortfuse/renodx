@@ -51,6 +51,6 @@ void main(
   o0.xyz = r0.yzw / r0.xxx;
   o0.w = 1;
 
-  o0.xyz = lerp(inputColor, o0.xyz, injectedData.fxVignette);
+  // o0.xyz = lerp(inputColor, o0.xyz, injectedData.fxVignette);
   return;
 }
