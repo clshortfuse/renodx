@@ -134,15 +134,6 @@ namespace SwapChainUpgradeMod {
   }
 
   static bool changeColorSpace(reshade::api::swapchain* swapchain, reshade::api::color_space colorSpace) {
-    IDXGISwapChain* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
-
-    IDXGISwapChain4* swapchain4;
-
-    if (!SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
-      reshade::log_message(reshade::log_level::error, "changeColorSpace(Failed to get native swap chain)");
-      return false;
-    }
-
     DXGI_COLOR_SPACE_TYPE dxColorSpace = DXGI_COLOR_SPACE_CUSTOM;
     switch (colorSpace) {
       case reshade::api::color_space::srgb_nonlinear:       dxColorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709; break;
@@ -152,7 +143,18 @@ namespace SwapChainUpgradeMod {
       default:                                              return false;
     }
 
-    if (!SUCCEEDED(swapchain4->SetColorSpace1(dxColorSpace))) {
+    IDXGISwapChain* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
+
+    IDXGISwapChain4* swapchain4;
+
+    if (!SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
+      reshade::log_message(reshade::log_level::error, "changeColorSpace(Failed to get native swap chain)");
+      return false;
+    }
+
+    HRESULT hr = swapchain4->SetColorSpace1(dxColorSpace);
+    swapchain4->Release();
+    if (!SUCCEEDED(hr)) {
       return false;
     }
 
@@ -182,10 +184,10 @@ namespace SwapChainUpgradeMod {
 
     if (preventFullScreen) {
       IDXGIFactory* factory;
-      bool hr = native_swapchain->GetParent(IID_PPV_ARGS(&factory));
-      if (SUCCEEDED(hr)) {
+      if (SUCCEEDED(native_swapchain->GetParent(IID_PPV_ARGS(&factory)))) {
         factory->MakeWindowAssociation(outputWindow, DXGI_MWA_NO_WINDOW_CHANGES);
         reshade::log_message(reshade::log_level::debug, "checkSwapchainSize(set DXGI_MWA_NO_WINDOW_CHANGES)");
+        factory->Release();
       } else {
         reshade::log_message(reshade::log_level::error, "checkSwapchainSize(could not find DXGI factory)");
       }
