@@ -290,7 +290,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       ShaderReplaceMod::traceUnmodifiedShaders = true;
       SwapChainUpgradeMod::forceBorderless = false;
       SwapChainUpgradeMod::preventFullScreen = false;
-      ShaderReplaceMod::forcePipelineCloning = true;
+      // ShaderReplaceMod::forcePipelineCloning = true;
       if (!reshade::register_addon(hModule)) return FALSE;
 
       reshade::register_event<reshade::addon_event::present>(on_present);
