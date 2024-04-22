@@ -82,11 +82,11 @@ if(CMAKE_GENERATOR_PLATFORM STREQUAL "Win32")
 endif()
 
 file(GLOB ADDON_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/games/**/addon.cpp)
+list(APPEND ADDON_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/devkit/addon.cpp)
 foreach(FILE ${ADDON_FILES})
-  message("FILE:" ${FILE})
-  cmake_path(RELATIVE_PATH FILE BASE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/games OUTPUT_VARIABLE ADDON_PATH)
-  cmake_path(REMOVE_FILENAME ADDON_PATH)
-  string(REGEX REPLACE "/+$" "" ADDON "${ADDON_PATH}")
+  cmake_path(GET FILE PARENT_PATH ADDON_PATH)
+  cmake_path(GET ADDON_PATH FILENAME ADDON) # treat as filename
+
   add_library(${ADDON} MODULE ${FILE})
   add_dependencies(${ADDON} shaders)
   target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external/reshade)
