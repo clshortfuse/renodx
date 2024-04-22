@@ -21,6 +21,7 @@
 // #include <embed/0x86EC0382.h>
 #include <embed/0x4FB4DA20.h>
 #include <embed/0x61CC29E6.h>
+#include <embed/0x83660755.h>
 #include <embed/0x8CAC3BD9.h>
 #include <embed/0x8E032125.h>
 #include <embed/0x8F009507.h>
@@ -28,6 +29,8 @@
 #include <embed/0xB74B05F4.h>
 #include <embed/0xCC4CAE26.h>
 #include <embed/0xECFC10A2.h>
+
+#include <chrono>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -53,6 +56,7 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0x61CC29E6),  // taa2 (sdr only)
   CustomShaderEntry(0x8024E8B5),  // tonemap
   CustomShaderEntry(0x4FB4DA20),  // fxaa (clamping bt709)
+  CustomShaderEntry(0x83660755),
   CustomSwapchainShader(0x13EEBAE5),
   CustomSwapchainShader(0x153BE4A2),
   CustomSwapchainShader(0x261AE7AB),
@@ -215,6 +219,15 @@ UserSettingUtil::UserSettings userSettings = {
     .parse = [](float value) { return value * 0.02f; }
   },
   new UserSettingUtil::UserSetting {
+    .key = "fxDoF",
+    .binding = &shaderInjection.fxDoF,
+    .defaultValue = 50.f,
+    .label = "Depth of Field",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
     .key = "fxVignette",
     .binding = &shaderInjection.fxVignette,
     .defaultValue = 50.f,
@@ -222,7 +235,16 @@ UserSettingUtil::UserSettings userSettings = {
     .section = "Effects",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
-  }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxFilmGrain",
+    .binding = &shaderInjection.fxFilmGrain,
+    .defaultValue = 50.f,
+    .label = "Film Grain",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
 };
 
 // clang-format on
@@ -243,7 +265,23 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("fxBloom", 50.f);
   UserSettingUtil::updateUserSetting("fxAutoExposure", 50.f);
   UserSettingUtil::updateUserSetting("fxSceneFilter", 50.f);
+  UserSettingUtil::updateUserSetting("fxDoF", 50.f);
   UserSettingUtil::updateUserSetting("fxVignette", 50.f);
+  UserSettingUtil::updateUserSetting("fxFilmGrain", 50.f);
+}
+
+static auto start = std::chrono::steady_clock::now();
+
+static void on_present(
+  reshade::api::command_queue* queue,
+  reshade::api::swapchain* swapchain,
+  const reshade::api::rect* source_rect,
+  const reshade::api::rect* dest_rect,
+  uint32_t dirty_rect_count,
+  const reshade::api::rect* dirty_rects
+) {
+  auto end = std::chrono::steady_clock::now();
+  shaderInjection.elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
@@ -254,11 +292,15 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       ShaderReplaceMod::traceUnmodifiedShaders = true;
       SwapChainUpgradeMod::forceBorderless = false;
       SwapChainUpgradeMod::preventFullScreen = false;
-      // ShaderReplaceMod::forcePipelineCloning = true;
+      ShaderReplaceMod::forcePipelineCloning = true;
       if (!reshade::register_addon(hModule)) return FALSE;
+
+      reshade::register_event<reshade::addon_event::present>(on_present);
+
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(hModule);
+      reshade::unregister_event<reshade::addon_event::present>(on_present);
       break;
   }
 

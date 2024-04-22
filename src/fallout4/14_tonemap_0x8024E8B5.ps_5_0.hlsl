@@ -4,7 +4,7 @@
 Texture2D<float4> t0 : register(t0);  // blur/bloom?
 Texture2D<float4> t1 : register(t1);  // render
 Texture2D<float4> t2 : register(t2);  // 1x1 gray?
-Texture2D<float4> t3 : register(t3);  // first-hand hand on alpha
+Texture2D<float4> t3 : register(t3);  // depth
 
 SamplerState s0_s : register(s0);
 SamplerState s1_s : register(s1);

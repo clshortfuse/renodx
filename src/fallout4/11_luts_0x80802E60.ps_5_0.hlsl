@@ -1,4 +1,5 @@
 #include "../common/tonemap.hlsl"
+#include "../common/filmgrain.hlsl"
 #include "./shared.h"
 
 Texture3D<float4> t6 : register(t6);
@@ -141,6 +142,18 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     }
   }
   o0.rgb = outputColor;
+  if (injectedData.fxFilmGrain) {
+    float3 grainedColor = computeFilmGrain(
+      o0.rgb,
+      v1.xy,
+      frac(injectedData.elapsedTime / 1000.f),
+      injectedData.fxFilmGrain * 0.03f,
+      1.f
+    );
+    o0.xyz = grainedColor;
+  }
+  
+  
   if (injectedData.toneMapGammaCorrection) {
     o0.rgb = gammaCorrectSafe(o0.rgb);
   }
