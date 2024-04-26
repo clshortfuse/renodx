@@ -17,6 +17,8 @@
 #include <embed/0x43E69DB9.h>
 #include <embed/0x4FB4DA20.h>
 #include <embed/0x61CC29E6.h>
+#include <embed/0x67685D89.h>
+#include <embed/0x676B8B5D.h>
 #include <embed/0x72826F5B.h>
 #include <embed/0x8024E8B5.h>
 #include <embed/0x80802E60.h>
@@ -28,6 +30,7 @@
 #include <embed/0xB74B05F4.h>
 #include <embed/0xCC4CAE26.h>
 #include <embed/0xECFC10A2.h>
+#include <embed/0xFEBC673C.h>
 
 #include <chrono>
 
@@ -48,11 +51,14 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomSwapchainShader(0x0F2CC0D1),  // video
   CustomSwapchainShader(0x8F009507),  // renderselect
   CustomShaderEntry(0x80802E60),      // luts
-  CustomShaderEntry(0xB74B05F4),      // vignette?
-  BypassShaderEntry(0x48292339),
+  // CustomShaderEntry(0xB74B05F4),      // vignette old (unused)
+  // BypassShaderEntry(0x48292339),
   CustomShaderEntry(0x8CAC3BD9),  // taa (sdr only)
   CustomShaderEntry(0x61CC29E6),  // taa2 (sdr only)
-  CustomShaderEntry(0x8024E8B5),  // tonemap
+  CustomShaderEntry(0x8024E8B5),  // tonemap old a
+  CustomShaderEntry(0x676B8B5D),  // tonemap old b
+  CustomShaderEntry(0x67685D89),  // tonemapper new a
+  CustomShaderEntry(0xFEBC673C),  // tonemapper new b
   CustomShaderEntry(0x4FB4DA20),  // fxaa (clamping bt709)
   CustomShaderEntry(0x83660755),
   CustomSwapchainShader(0x13EEBAE5),

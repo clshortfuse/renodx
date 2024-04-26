@@ -1,10 +1,10 @@
 #include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
-Texture2D<float4> t0 : register(t0);  // blur/bloom?
-Texture2D<float4> t1 : register(t1);  // render
-Texture2D<float4> t2 : register(t2);  // 1x1 gray?
-Texture2D<float4> t3 : register(t3);  // depth
+Texture2D<float4> t0 : register(t0);
+Texture2D<float4> t1 : register(t1);
+Texture2D<float4> t2 : register(t2);
+Texture2D<float4> t3 : register(t3);
 
 SamplerState s0_s : register(s0);
 SamplerState s1_s : register(s1);
@@ -12,7 +12,7 @@ SamplerState s2_s : register(s2);
 SamplerState s3_s : register(s3);
 
 cbuffer cb2 : register(b2) {
-  float4 cb2[5];
+  float4 cb2[6];
 }
 
 // 3Dmigoto declarations
@@ -29,7 +29,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
 
   r0.w = t3.Sample(s3_s, v1.xy).w;
 
-  const float handMask = r0.w;
+  const float depthMask = r0.w;
 
   r0.w = r0.w * 255 + -4;
   r0.w = cmp(abs(r0.w) < 0.25);
@@ -47,9 +47,8 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r1.w = r2.x ? cb2[1].y : r1.w;
   r2.x = cmp(cb2[1].x < r1.w);
   r1.w = r2.x ? cb2[1].x : r1.w;
-
   r0.xyz = r1.xyz * injectedData.fxBloom + r0.xyz;
-  r0.xyz = r0.xyz * lerp(1.f, r1.www, injectedData.fxAutoExposure);  // Hand glow?
+  r0.xyz = r0.xyz * lerp(1.f, r1.www, injectedData.fxAutoExposure);
   const float3 untonemapped = r0.xyz;
 
   // Hable
@@ -94,7 +93,9 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r2.xyzw = r0.xxxx * cb2[3].xyzw + -r1.xyzw;
   r1.xyzw = cb2[3].wwww * r2.xyzw + r1.xyzw;
   r1.xyzw = cb2[2].wwww * r1.xyzw + -r0.wwww;
-  o0.xyzw = cb2[2].zzzz * r1.xyzw + r0.wwww;
+  r0.xyzw = cb2[2].zzzz * r1.xyzw + r0.wwww;
+  r1.xyzw = cb2[5].xyzw + -r0.xyzw;
+  o0.xyzw = cb2[5].wwww * r1.xyzw + r0.xyzw;
 
   o0.xyz = lerp(outputColor, o0.xyz, injectedData.fxSceneFilter);
   return;
