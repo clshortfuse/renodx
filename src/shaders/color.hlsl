@@ -178,6 +178,15 @@ float4 srgbFromLinear(float4 color) {
     srgbFromLinear(color.r),
     srgbFromLinear(color.g),
     srgbFromLinear(color.b),
+    color.a
+  );
+}
+
+float4 srgbaFromLinear(float4 color) {
+  return float4(
+    srgbFromLinear(color.r),
+    srgbFromLinear(color.g),
+    srgbFromLinear(color.b),
     srgbFromLinear(color.a)
   );
 }
