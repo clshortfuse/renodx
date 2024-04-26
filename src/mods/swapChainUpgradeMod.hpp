@@ -40,6 +40,7 @@ namespace SwapChainUpgradeMod {
     bool upgradeUnknownResourceViews = false;
     bool hasBufferDesc = false;
     bool resourceUpgradeFinished = false;
+    bool preventFullScreen = false;
     reshade::api::resource_desc deviceBackBufferDesc;
     std::unordered_set<uint64_t> backBuffers;
     std::unordered_set<uint64_t> upgradedResources;
@@ -71,7 +72,8 @@ namespace SwapChainUpgradeMod {
       << reinterpret_cast<void*>(device->get_native())
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
-    device->create_private_data<device_data>();
+    auto &data = device->create_private_data<device_data>();
+    data.preventFullScreen = preventFullScreen;
   }
 
   static void on_destroy_device(reshade::api::device* device) {
@@ -595,25 +597,23 @@ namespace SwapChainUpgradeMod {
 
   static bool on_set_fullscreen_state(reshade::api::swapchain* swapchain, bool fullscreen, void* hmonitor) {
     auto device = swapchain->get_device();
-    if (device) {
-      auto &privateData = device->get_private_data<device_data>();
-      reshade::log_message(reshade::log_level::debug, "set_fullscreen_state(reset resource upgrade)");
-      privateData.resourceUpgradeFinished = false;
-      uint32_t len = swapChainUpgradeTargets.size();
-      // Reset
-      for (uint32_t i = 0; i < len; i++) {
-        SwapChainUpgradeMod::SwapChainUpgradeTarget* target = &swapChainUpgradeTargets.data()[i];
-        target->_counted = 0;
-        target->completed = false;
-      }
+    if (!device) return false;
+    auto &privateData = device->get_private_data<device_data>();
+    reshade::log_message(reshade::log_level::debug, "set_fullscreen_state(reset resource upgrade)");
+    privateData.resourceUpgradeFinished = false;
+    uint32_t len = swapChainUpgradeTargets.size();
+    // Reset
+    for (uint32_t i = 0; i < len; i++) {
+      SwapChainUpgradeMod::SwapChainUpgradeTarget* target = &swapChainUpgradeTargets.data()[i];
+      target->_counted = 0;
+      target->completed = false;
     }
 
     if (!fullscreen) return false;
-
-    if (preventFullScreen) {
+    if (privateData.preventFullScreen) {
       HWND outputWindow = (HWND)swapchain->get_hwnd();
       if (outputWindow) {
-        auto backBufferDesc = swapchain->get_device()->get_resource_desc(swapchain->get_back_buffer(0));
+        auto backBufferDesc = device->get_resource_desc(swapchain->get_back_buffer(0));
         // HMONITOR monitor = (HMONITOR)hmonitor;
         uint32_t screenWidth = GetSystemMetrics(SM_CXSCREEN);
         uint32_t screenHeight = GetSystemMetrics(SM_CYSCREEN);
@@ -621,10 +621,10 @@ namespace SwapChainUpgradeMod {
         uint32_t textureHeight = backBufferDesc.texture.height;
         uint32_t top = floor((screenHeight - textureHeight) / 2.f);
         uint32_t left = floor((screenWidth - textureWidth) / 2.f);
-        reshade::log_message(reshade::log_level::info, "Preventing fullscreen");
         SetWindowLongPtr(outputWindow, GWL_STYLE, WS_VISIBLE | WS_POPUP);
         SetWindowPos(outputWindow, HWND_TOP, left, top, textureWidth, textureHeight, SWP_FRAMECHANGED);
       }
+      reshade::log_message(reshade::log_level::info, "Preventing fullscreen");
       return true;
     }
     return false;
