@@ -58,6 +58,7 @@ namespace SwapChainUpgradeMod {
   static bool useSharedDevice = false;
   static bool preventFullScreen = true;
   static bool forceBorderless = true;
+  static bool useResizeBuffer = false;
 
   static reshade::api::effect_runtime* currentEffectRuntime = nullptr;
   static reshade::api::color_space currentColorSpace = reshade::api::color_space::unknown;
@@ -92,11 +93,13 @@ namespace SwapChainUpgradeMod {
     auto oldPresentFlags = desc.present_flags;
     auto oldBufferCount = desc.back_buffer_count;
 
-    desc.back_buffer.texture.format = targetFormat;
+    if (!useResizeBuffer) {
+      desc.back_buffer.texture.format = targetFormat;
 
-    if (desc.back_buffer_count == 1) {
-      // 0 is only for resize, so if game uses more than 2 buffers, that will be retained
-      desc.back_buffer_count = 2;
+      if (desc.back_buffer_count == 1) {
+        // 0 is only for resize, so if game uses more than 2 buffers, that will be retained
+        desc.back_buffer_count = 2;
+      }
     }
 
     switch (desc.present_mode) {
@@ -108,10 +111,12 @@ namespace SwapChainUpgradeMod {
         break;
     }
 
-    if (preventFullScreen) {
-      desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+    if (!useResizeBuffer) {
+      if (preventFullScreen) {
+        desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+      }
+      desc.present_flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
     }
-    desc.present_flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
     std::stringstream s;
     s << "createSwapChain("
@@ -131,8 +136,9 @@ namespace SwapChainUpgradeMod {
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
 
-    // No effect if nothing has actually changed
-    return true;
+    return (oldFormat != desc.back_buffer.texture.format)
+        || (oldPresentMode != desc.present_mode)
+        || (oldPresentFlags != desc.present_flags);
   }
 
   static bool changeColorSpace(reshade::api::swapchain* swapchain, reshade::api::color_space colorSpace) {
@@ -259,6 +265,34 @@ namespace SwapChainUpgradeMod {
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
 
+    if (useResizeBuffer && privateData.deviceBackBufferDesc.texture.format != targetFormat) {
+      reshade::log_message(reshade::log_level::debug, "Wrong swapchain format. Resizing...");
+      IDXGISwapChain* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
+
+      IDXGISwapChain4* swapchain4;
+
+      if (!SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
+        reshade::log_message(reshade::log_level::error, "initSwapchain(Failed to get native swap chain)");
+        return;
+      }
+      HRESULT hr = swapchain4->ResizeBuffers(
+        backBufferCount < 2 ? 2 : 0,
+        privateData.deviceBackBufferDesc.texture.width,
+        privateData.deviceBackBufferDesc.texture.height,
+        DXGI_FORMAT_R16G16B16A16_FLOAT,
+        0x840
+      );
+
+      if (hr == DXGI_ERROR_INVALID_CALL) {
+        reshade::log_message(reshade::log_level::error, "initSwapchain(DXGI_ERROR_INVALID_CALL)");
+        return;
+      }
+      std::stringstream s;
+      s << "initSwapChain("
+        << "resize: " << hr
+        << ")";
+      reshade::log_message(reshade::log_level::info, s.str().c_str());
+    }
     // Reshade doesn't actually inspect colorspace
     // auto colorspace = swapchain->get_color_space();
     if (changeColorSpace(swapchain, targetColorSpace)) {
@@ -544,7 +578,7 @@ namespace SwapChainUpgradeMod {
       << ", resource width: " << resource_desc.texture.width
       << ", resource height: " << resource_desc.texture.height
       << ", resource format: " << to_string(resource_desc.texture.format)
-      << ", resource usage: " << std::hex << to_string(usage_type) << std::dec
+      << ", resource usage: " << to_string(usage_type)
       << ")";
     reshade::log_message(
       oldFormat == reshade::api::format::unknown
