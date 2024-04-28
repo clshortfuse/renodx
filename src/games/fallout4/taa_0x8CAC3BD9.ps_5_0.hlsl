@@ -19,9 +19,8 @@ cbuffer cb2 : register(b2) {
 #define cmp -
 
 float3 convertRenderInput(float3 render) {
-  render = mul(BT709_2_BT2020_MAT, render);
-  render = max(0, render);
-  render = pqFromLinear((render * 80.f) / 10000.f);
+  render /= injectedData.toneMapPeakNits / 80.f;
+  render = saturate(render);
   return render;
 }
 
@@ -234,8 +233,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r1.xyz = r2.xyz + -r0.xyz;
   o1.xyz = saturate(cb2[4].www * r1.xyz + r0.xyz);
 
-  o1.xyz = linearFromPQ(o1.xyz) * 10000.f / 80.f;
-  o1.xyz = mul(BT2020_2_BT709_MAT, o1.xyz);
+  o1.xyz *= injectedData.toneMapPeakNits / 80.f;
 
   o1.w = 1;
   return;
