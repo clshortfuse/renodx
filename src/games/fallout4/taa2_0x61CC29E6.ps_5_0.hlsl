@@ -43,10 +43,10 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r0.z = cmp(r0.w == r0.z);
   r3.xy = r0.zz ? r0.xy : r1.xy;
   r4.xyz = t0.Sample(s0_s, r0.xy).yxz;  // render - (r4)
-  r4.xyz = convertRenderInput(r4.xyz);
+  r4.yxz = convertRenderInput(r4.yxz);
 
   r5.xyz = t0.Sample(s0_s, r1.xy).yxz;  // render + (r5)
-  r5.xyz = convertRenderInput(r5.xyz);
+  r5.yxz = convertRenderInput(r5.yxz);
 
   r0.x = cmp(r0.w == r1.z);
   r0.xy = r0.xx ? r2.zw : r3.xy;
@@ -90,30 +90,30 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r5.x = cmp(r5.w < r6.x);
   r4.w = dot(r4.xzy, float3(0.5, 0.25, 0.25));  // r4 luminance
   r7.xyz = t0.Sample(s0_s, r2.zw).yxz;
-  r7.xyz = convertRenderInput(r7.xyz);
+  r7.yxz = convertRenderInput(r7.yxz);
 
   r2.xyz = t0.Sample(s0_s, r2.xy).yxz;
-  r2.xyz = convertRenderInput(r2.xyz);
+  r2.yxz = convertRenderInput(r2.yxz);
 
   r7.w = dot(r7.xzy, float3(0.5, 0.25, 0.25));  // r7 luminance
   r4.x = cmp(r7.w < r6.x);
   r2.w = dot(r2.xzy, float3(0.5, 0.25, 0.25));  //
   r2.x = cmp(r2.w < r6.x);
   r8.xyz = t0.Sample(s0_s, r1.zw).yxz;
-  r8.xyz = convertRenderInput(r8.xyz);
+  r8.yxz = convertRenderInput(r8.yxz);
 
   r1.xyz = t0.Sample(s0_s, r1.xy).yxz;
-  r1.xyz = convertRenderInput(r1.xyz);
+  r1.yxz = convertRenderInput(r1.yxz);
 
   r8.w = dot(r8.xzy, float3(0.5, 0.25, 0.25));
   r7.x = cmp(r8.w < r6.x);
   r1.w = dot(r1.xzy, float3(0.5, 0.25, 0.25));
   r8.x = cmp(r1.w < r6.x);
   r9.xyz = t0.Sample(s0_s, r3.zw).yxz;
-  r9.xyz = convertRenderInput(r9.xyz);
+  r9.yxz = convertRenderInput(r9.yxz);
 
   r3.xyz = t0.Sample(s0_s, r3.xy).yxz;
-  r3.xyz = convertRenderInput(r3.xyz);
+  r3.yxz = convertRenderInput(r3.yxz);
 
   r9.w = dot(r9.xzy, float3(0.5, 0.25, 0.25));
   r10.x = cmp(r9.w < r6.x);
@@ -123,7 +123,6 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r3.w = dot(r3.xzy, float3(0.5, 0.25, 0.25));
   r1.x = cmp(r3.w < r6.x);
   r11.xyz = t0.Sample(s0_s, v1.xy).xyz;  // center
-  float3 signs = sign(r11.xyz);
   r11.xyz = convertRenderInput(r11.xyz);
 
   r12.x = dot(r11.yzx, float3(0.5, 0.25, 0.25));  // center luminance
