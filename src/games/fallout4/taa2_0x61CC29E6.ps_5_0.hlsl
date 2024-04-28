@@ -21,8 +21,16 @@ cbuffer cb2 : register(b2) {
 #define cmp -
 
 float3 convertRenderInput(float3 render) {
-  render /= injectedData.toneMapPeakNits / 80.f;
-  render = saturate(render);
+  render /= injectedData.toneMapGameNits / 80.f;
+  render /= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
+  render = pow(saturate(render), 1.f / 2.2f);
+  return render;
+}
+
+float3 convertRenderOutput(float3 render) {
+  render = pow(saturate(render), 2.2f);
+  render *= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
+  render *= injectedData.toneMapGameNits / 80.f;
   return render;
 }
 
@@ -294,7 +302,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r1.xyz = r2.xyz + -r0.xyz;
   o1.xyz = saturate(cb2[4].www * r1.xyz + r0.xyz);
 
-  o1.xyz *= injectedData.toneMapPeakNits / 80.f;
+  o1.xyz = convertRenderOutput(o1.xyz);
 
   o1.w = 1;
   return;
