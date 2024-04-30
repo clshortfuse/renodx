@@ -112,14 +112,14 @@ static void loadLiveShaders() {
   }
 
   auto directory = getShaderPath();
+  if (std::filesystem::exists(directory) == false) {
+    std::filesystem::create_directory(directory);
+  }
+
   directory /= ".\\live";
 
   if (std::filesystem::exists(directory) == false) {
-    std::stringstream s;
-    s << "loadLiveShaders(Directory not found: "
-      << directory.string()
-      << ")";
-    reshade::log_message(reshade::log_level::warning, s.str().c_str());
+    std::filesystem::create_directory(directory);
     return;
   }
 
@@ -1241,10 +1241,14 @@ static void on_reshade_present(reshade::api::effect_runtime* runtime) {
 void dumpShader(uint32_t shader_hash) {
   auto dump_path = getShaderPath();
 
+  if (std::filesystem::exists(dump_path) == false) {
+    std::filesystem::create_directory(dump_path);
+  }
   dump_path /= ".\\dump";
   if (std::filesystem::exists(dump_path) == false) {
     std::filesystem::create_directory(dump_path);
   }
+
   wchar_t hash_string[11];
   swprintf_s(hash_string, L"0x%08X", shader_hash);
 
