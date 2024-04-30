@@ -77,8 +77,11 @@ std::vector<InstructionState> instructions;
 
 static bool traceScheduled = false;
 static bool traceRunning = false;
-static bool needsLiveReload = false;
+static bool needsUnloadShaders = false;
+static bool needsLoadShaders = false;
+static bool needsAutoLoadUpdate = false;
 static bool listUnique = false;
+static bool autoLiveReload = false;
 static uint32_t shaderCacheCount = 0;
 static uint32_t shaderCacheSize = 0;
 static uint32_t resourceCount = 0;
@@ -98,17 +101,21 @@ std::filesystem::path getShaderPath() {
   return dump_path;
 }
 
-static void loadLiveShaders() {
-  const std::unique_lock<std::shared_mutex> lock(s_mutex);
-  reshade::log_message(reshade::log_level::debug, "loadLiveShader()");
-
-  // Clear all shaders
+static void unloadCustomShaders() {
   for (auto pair : pipelineCacheByPipelineHandle) {
     auto cachedPipeline = pair.second;
     if (!cachedPipeline->cloned) continue;
     cachedPipeline->cloned = false;
     cachedPipeline->device->destroy_pipeline(cachedPipeline->pipelineClone);
   }
+}
+
+static void loadCustomShaders() {
+  const std::unique_lock<std::shared_mutex> lock(s_mutex);
+  reshade::log_message(reshade::log_level::debug, "loadCustomShaders()");
+
+  // Clear all shaders
+  unloadCustomShaders();
 
   auto directory = getShaderPath();
   if (std::filesystem::exists(directory) == false) {
@@ -124,13 +131,13 @@ static void loadLiveShaders() {
 
   for (const auto &entry : std::filesystem::directory_iterator(directory)) {
     if (!entry.is_regular_file()) {
-      reshade::log_message(reshade::log_level::warning, "loadLiveShaders(not a regular file)");
+      reshade::log_message(reshade::log_level::warning, "loadCustomShaders(not a regular file)");
       continue;
     }
     auto entryPath = entry.path();
     if (!entryPath.has_extension()) {
       std::stringstream s;
-      s << "loadLiveShaders(Missing extension: "
+      s << "loadCustomShaders(Missing extension: "
         << entryPath.string()
         << ")";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
@@ -152,7 +159,7 @@ static void loadLiveShaders() {
 
       {
         std::stringstream s;
-        s << "loadLiveShaders(Compiling file: "
+        s << "loadCustomShaders(Compiling file: "
           << entryPath.string()
           << ", hash: " << std::hex << shaderHash << std::dec
           << ", target: " << shaderTarget
@@ -166,7 +173,7 @@ static void loadLiveShaders() {
       );
       if (outBlob == nullptr) {
         std::stringstream s;
-        s << "loadLiveShaders(Compilation failed: "
+        s << "loadCustomShaders(Compilation failed: "
           << entryPath.string()
           << ")";
         reshade::log_message(reshade::log_level::warning, s.str().c_str());
@@ -176,7 +183,7 @@ static void loadLiveShaders() {
       code = (uint8_t*)outBlob->GetBufferPointer();
       {
         std::stringstream s;
-        s << "loadLiveShaders(Shader built with size: " << code_size << ")";
+        s << "loadCustomShaders(Shader built with size: " << code_size << ")";
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
       }
 
@@ -185,7 +192,7 @@ static void loadLiveShaders() {
       auto filename_string = filename.string();
       if (filename_string.size() != 14) {
         std::stringstream s;
-        s << "loadLiveShaders(Invalid cso file format: "
+        s << "loadCustomShaders(Invalid cso file format: "
           << filename_string
           << ")";
         reshade::log_message(reshade::log_level::warning, s.str().c_str());
@@ -197,7 +204,7 @@ static void loadLiveShaders() {
       code_size = file.tellg();
       {
         std::stringstream s;
-        s << "loadLiveShaders(Reading " << code_size << " from " << filename_string << ")";
+        s << "loadCustomShaders(Reading " << code_size << " from " << filename_string << ")";
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
       }
       code = new uint8_t[code_size];
@@ -205,7 +212,7 @@ static void loadLiveShaders() {
       file.read((char*)code, code_size);
     } else {
       std::stringstream s;
-      s << "loadLiveShaders(Skipping file: "
+      s << "loadCustomShaders(Skipping file: "
         << entryPath.string()
         << ")";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
@@ -215,7 +222,7 @@ static void loadLiveShaders() {
     auto pair = pipelineCacheByShaderHash.find(shaderHash);
     if (pair == pipelineCacheByShaderHash.end()) {
       std::stringstream s;
-      s << "loadLiveShaders(Unknown hash: 0x"
+      s << "loadCustomShaders(Unknown hash: 0x"
         << std::hex << shaderHash << std::dec
         << ")";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
@@ -228,7 +235,7 @@ static void loadLiveShaders() {
 
     {
       std::stringstream s;
-      s << "loadLiveShaders(Read "
+      s << "loadCustomShaders(Read "
         << code_size << " bytes "
         << " from " << entryPath.string()
         << ")";
@@ -243,7 +250,7 @@ static void loadLiveShaders() {
 
     {
       std::stringstream s;
-      s << "loadLiveShaders(Cloning pipeline "
+      s << "loadCustomShaders(Cloning pipeline "
         << reinterpret_cast<void*>(cachedPipeline->pipeline.handle)
         << " with " << subobjectCount << " object(s)"
         << ")";
@@ -289,7 +296,7 @@ static void loadLiveShaders() {
       auto new_hash = compute_crc32(static_cast<const uint8_t*>(newDesc->code), newDesc->code_size);
 
       std::stringstream s;
-      s << "loadLiveShaders(Injected pipeline data"
+      s << "loadCustomShaders(Injected pipeline data"
         << " with 0x" << std::hex << new_hash << std::dec
         << " (" << code_size << " bytes)"
         << ")";
@@ -314,7 +321,7 @@ static void loadLiveShaders() {
       &pipelineClone
     );
     std::stringstream s;
-    s << "loadLiveShaders(cloned "
+    s << "loadCustomShaders(cloned "
       << reinterpret_cast<void*>(cachedPipeline->pipeline.handle)
       << " => " << reinterpret_cast<void*>(pipelineClone.handle)
       << ", layout: " << reinterpret_cast<void*>(cachedPipeline->layout.handle)
@@ -328,6 +335,99 @@ static void loadLiveShaders() {
       cachedPipeline->pipelineClone = pipelineClone;
     }
     // free(code);
+  }
+}
+
+static OVERLAPPED overlapped;
+static HANDLE mTargetDirHandle;
+
+static bool needsWatcherInit = true;
+
+static std::aligned_storage_t<1U << 18, std::max<size_t>(alignof(FILE_NOTIFY_EXTENDED_INFORMATION), alignof(FILE_NOTIFY_INFORMATION))> watchBuffer;
+
+static void toggleLiveWatching();
+
+static void CALLBACK handleEventCallback(DWORD errorCode, DWORD bytesTransferred, LPOVERLAPPED overlapped) {
+  reshade::log_message(reshade::log_level::info, "Live callback.");
+  loadCustomShaders();
+  toggleLiveWatching();
+}
+
+static void checkForLiveUpdate() {
+  if (autoLiveReload) {
+    WaitForSingleObjectEx(overlapped.hEvent, 0, TRUE);
+  }
+}
+
+static void toggleLiveWatching() {
+  if (autoLiveReload) {
+    auto directory = getShaderPath();
+    if (std::filesystem::exists(directory) == false) {
+      std::filesystem::create_directory(directory);
+    }
+
+    directory /= ".\\live";
+
+    if (std::filesystem::exists(directory) == false) {
+      std::filesystem::create_directory(directory);
+    }
+
+    reshade::log_message(reshade::log_level::info, "Watching live.");
+    mTargetDirHandle = CreateFile(
+      directory.c_str(),
+      FILE_LIST_DIRECTORY,
+      (FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE),
+      NULL,
+      OPEN_EXISTING,
+      (FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED),
+      NULL
+    );
+    if (mTargetDirHandle == INVALID_HANDLE_VALUE) {
+      reshade::log_message(reshade::log_level::error, "toggleLiveWatching(targetHandle: invalid)");
+      return;
+    }
+    {
+      std::stringstream s;
+      s << "toggleLiveWatching(targetHandle: ";
+      s << reinterpret_cast<void*>(mTargetDirHandle);
+      reshade::log_message(reshade::log_level::info, s.str().c_str());
+    }
+
+    memset(&watchBuffer, 0, sizeof(watchBuffer));
+    overlapped = {0};
+    overlapped.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+
+    BOOL success = ReadDirectoryChangesExW(
+      mTargetDirHandle,
+      &watchBuffer,
+      sizeof(watchBuffer),
+      TRUE,
+      FILE_NOTIFY_CHANGE_FILE_NAME
+        | FILE_NOTIFY_CHANGE_DIR_NAME
+        | FILE_NOTIFY_CHANGE_ATTRIBUTES
+        | FILE_NOTIFY_CHANGE_SIZE
+        | FILE_NOTIFY_CHANGE_CREATION
+        | FILE_NOTIFY_CHANGE_LAST_WRITE,
+      NULL,
+      &overlapped,
+      &handleEventCallback,
+      ReadDirectoryNotifyExtendedInformation
+    );
+
+    if (success) {
+      reshade::log_message(reshade::log_level::info, "toggleLiveWatching(ReadDirectoryChangesExW: Listening.)");
+    } else {
+      std::stringstream s;
+      s << "toggleLiveWatching(ReadDirectoryChangesExW: Failed: ";
+      s << GetLastError();
+      s << ")";
+      reshade::log_message(reshade::log_level::error, s.str().c_str());
+    }
+
+    loadCustomShaders();
+  } else {
+    reshade::log_message(reshade::log_level::info, "Cancelling live.");
+    CancelIoEx(mTargetDirHandle, &overlapped);
   }
 }
 
@@ -1213,10 +1313,19 @@ static void on_reshade_present(reshade::api::effect_runtime* runtime) {
   if (presentCount <= MAX_PRESENT_COUNT) {
     presentCount++;
   }
-  if (needsLiveReload) {
-    loadLiveShaders();
-    needsLiveReload = false;
+  if (needsUnloadShaders) {
+    unloadCustomShaders();
+    needsUnloadShaders = false;
   }
+  if (needsLoadShaders) {
+    loadCustomShaders();
+    needsLoadShaders = false;
+  }
+  if (needsAutoLoadUpdate) {
+    toggleLiveWatching();
+    needsAutoLoadUpdate = false;
+  }
+  checkForLiveUpdate();
 }
 
 void dumpShader(uint32_t shader_hash) {
@@ -1249,26 +1358,33 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
     traceScheduled = true;
   }
   ImGui::SameLine();
-  ImGui::Text("Traced Shaders: %d", traceCount);
   ImGui::Checkbox("List Unique Only", &listUnique);
-
-  ImGui::Text("Cached Shaders: %d", shaderCacheCount);
   ImGui::SameLine();
-  if (ImGui::Button("Dump All")) {
+
+  if (ImGui::Button(std::format("Dump Shaders ({})", shaderCacheCount).c_str())) {
     for (auto shader : shaderCache) {
       dumpShader(shader.first);
     }
   }
 
-  if (ImGui::Button("Load Live Shaders")) {
-    needsLiveReload = true;
+  if (ImGui::Button("Unload Shaders")) {
+    needsUnloadShaders = true;
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Load Shaders")) {
+    needsLoadShaders = true;
+  }
+
+  ImGui::SameLine();
+  if (ImGui::Checkbox("Live", &autoLiveReload)) {
+    needsAutoLoadUpdate = true;
   }
 
   ImGui::Text("Cached Shaders Size: %d", shaderCacheSize);
   static int32_t selectedIndex = -1;
   bool changedSelected = false;
   if (ImGui::BeginTabBar("##MyTabBar", ImGuiTabBarFlags_None)) {
-    if (ImGui::BeginTabItem("Shaders")) {
+    if (ImGui::BeginTabItem(std::format("Shaders ({})", traceCount).c_str())) {
       if (ImGui::BeginChild("HashList", ImVec2(100, -FLT_MIN), ImGuiChildFlags_ResizeX)) {
         if (ImGui::BeginListBox("##HashesListbox", ImVec2(-FLT_MIN, -FLT_MIN))) {
           if (!traceRunning) {
