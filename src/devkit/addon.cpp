@@ -70,7 +70,6 @@ std::unordered_map<uint64_t, CachedPipeline*> pipelineCacheByPipelineHandle;
 std::unordered_map<uint32_t, CachedPipeline*> pipelineCacheByShaderHash;
 std::unordered_map<uint32_t, CachedShader*> shaderCache;
 
-std::unordered_map<uint64_t, reshade::api::pipeline> pipelineCloneMap;
 std::unordered_set<uint64_t> pipelineClones;
 
 std::vector<uint32_t> traceHashes;
@@ -107,8 +106,8 @@ static void loadLiveShaders() {
   for (auto pair : pipelineCacheByPipelineHandle) {
     auto cachedPipeline = pair.second;
     if (!cachedPipeline->cloned) continue;
-    cachedPipeline->device->destroy_pipeline(cachedPipeline->pipelineClone);
     cachedPipeline->cloned = false;
+    cachedPipeline->device->destroy_pipeline(cachedPipeline->pipelineClone);
   }
 
   auto directory = getShaderPath();
@@ -325,23 +324,8 @@ static void loadLiveShaders() {
     reshade::log_message(builtPipelineOK ? reshade::log_level::info : reshade::log_level::error, s.str().c_str());
 
     if (builtPipelineOK) {
-      auto pipelineClonePair = pipelineCloneMap.find(cachedPipeline->pipeline.handle);
-      if (pipelineClonePair != pipelineCloneMap.end()) {
-        reshade::api::pipeline oldPipelineClone = pipelineClonePair->second;
-        std::stringstream s;
-        s << "loadLiveShaders(destroying old pipeline: "
-          << reinterpret_cast<void*>(cachedPipeline->layout.handle)
-          << ", subobjectcount: " << oldPipelineClone.handle
-          << ")";
-        reshade::log_message(reshade::log_level::debug, s.str().c_str());
-        // cachedPipeline->device->destroy_pipeline(oldPipelineClone);
-        // Should release code from memory
-        pipelineCloneMap.erase(cachedPipeline->pipeline.handle);
-      }
-
-      pipelineCloneMap.emplace(cachedPipeline->pipeline.handle, pipelineClone);
-      cachedPipeline->pipelineClone = pipelineClone;
       cachedPipeline->cloned = true;
+      cachedPipeline->pipelineClone = pipelineClone;
     }
     // free(code);
   }
@@ -600,17 +584,16 @@ static void on_destroy_pipeline(
   changed |= computeShaderLayouts.erase(pipeline.handle);
   auto pipelineCachePair = pipelineCacheByPipelineHandle.find(pipeline.handle);
   if (pipelineCachePair != pipelineCacheByPipelineHandle.end()) {
+    auto cachedPipeline = pipelineCachePair->second;
+    if (cachedPipeline->cloned) {
+      cachedPipeline->cloned = false;
+      cachedPipeline->device->destroy_pipeline(cachedPipeline->pipelineClone);
+    }
     free(pipelineCachePair->second);
     pipelineCacheByPipelineHandle.erase(pipeline.handle);
     changed = true;
   }
 
-  auto pipelineClonePair = pipelineCloneMap.find(pipeline.handle);
-  if (pipelineClonePair != pipelineCloneMap.end()) {
-    pipelineCloneMap.erase(pipeline.handle);
-    device->destroy_pipeline(pipelineClonePair->second);
-    changed = true;
-  }
   if (!changed) return;
 
   std::stringstream s;
@@ -627,28 +610,26 @@ static void on_bind_pipeline(
   reshade::api::pipeline pipeline
 ) {
   const std::unique_lock<std::shared_mutex> lock(s_mutex);
-  auto pipelineToClone = pipelineCloneMap.find(pipeline.handle);
-  if (pipelineToClone != pipelineCloneMap.end()) {
-    auto newPipeline = pipelineToClone->second;
 
+  auto pair = pipelineCacheByPipelineHandle.find(pipeline.handle);
+  if (pair == pipelineCacheByPipelineHandle.end()) return;
+  auto cachedPipeline = pair->second;
+
+  if (cachedPipeline->cloned) {
     if (traceRunning) {
       std::stringstream s;
       s << "bind_pipeline(swapping pipeline "
         << reinterpret_cast<void*>(pipeline.handle)
-        << " => " << reinterpret_cast<void*>(newPipeline.handle)
+        << " => " << reinterpret_cast<void*>(cachedPipeline->pipelineClone.handle)
         << ", stage: " << to_string(type) << "(" << std::hex << (uint32_t)type << ")"
         << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
 
-    cmd_list->bind_pipeline(type, newPipeline);
+    cmd_list->bind_pipeline(type, cachedPipeline->pipelineClone);
   }
 
   if (!traceRunning) return;
-
-  auto pair0 = pipelineCacheByPipelineHandle.find(pipeline.handle);
-  if (pair0 == pipelineCacheByPipelineHandle.end()) return;
-  auto cachedPipeline = pair0->second;
 
   bool isComputeShader = computeShaderLayouts.contains(cachedPipeline->layout.handle);
 
