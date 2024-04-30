@@ -26,6 +26,8 @@
 
 #include <crc32_hash.hpp>
 #include "../utils/format.hpp"
+#include "../utils/pipelineUtil.hpp"
+#include "../utils/shaderCompiler.hpp"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - DevKit";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX DevKit Module";
@@ -39,6 +41,14 @@ struct CachedPipeline {
   bool cloned;
   reshade::api::pipeline pipelineClone;
   uint32_t shaderHash;
+};
+
+struct InstructionState {
+  reshade::addon_event action;
+  std::vector<uint64_t> textures;
+  std::vector<uint64_t> uavs;
+  std::vector<uint64_t> renderTargets;
+  uint32_t shader;
 };
 
 struct CachedShader {
@@ -61,8 +71,10 @@ std::unordered_map<uint32_t, CachedPipeline*> pipelineCacheByShaderHash;
 std::unordered_map<uint32_t, CachedShader*> shaderCache;
 
 std::unordered_map<uint64_t, reshade::api::pipeline> pipelineCloneMap;
+std::unordered_set<uint64_t> pipelineClones;
 
 std::vector<uint32_t> traceHashes;
+std::vector<InstructionState> instructions;
 
 static bool traceScheduled = false;
 static bool traceRunning = false;
@@ -125,7 +137,74 @@ static void loadLiveShaders() {
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
       continue;
     }
-    if (entryPath.extension().compare(".cso") != 0) {
+    uint32_t shaderHash;
+    size_t code_size = 0;
+    uint8_t* code = nullptr;
+
+    if (entryPath.extension().compare(".hlsl") == 0) {
+      auto filename = entryPath.filename();
+      auto filename_string = filename.string();
+      auto length = filename_string.length();
+
+      uint32_t versionMajor = std::stoi(filename_string.substr(length - 8, 1), nullptr, 10);
+      std::string shaderTarget = filename_string.substr(length - 11, 6);
+      std::string hashString = filename_string.substr(length - 20, 8);
+      shaderHash = std::stoul(hashString, nullptr, 16);
+
+      {
+        std::stringstream s;
+        s << "loadLiveShaders(Compiling file: "
+          << entryPath.string()
+          << ", hash: " << std::hex << shaderHash << std::dec
+          << ", target: " << shaderTarget
+          << ")";
+        reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      }
+
+      ID3DBlob* outBlob = ShaderCompilerUtil::compileShaderFromFile(
+        entryPath.c_str(),
+        shaderTarget.c_str()
+      );
+      if (outBlob == nullptr) {
+        std::stringstream s;
+        s << "loadLiveShaders(Compilation failed: "
+          << entryPath.string()
+          << ")";
+        reshade::log_message(reshade::log_level::warning, s.str().c_str());
+        continue;
+      }
+      code_size = outBlob->GetBufferSize();
+      code = (uint8_t*)outBlob->GetBufferPointer();
+      {
+        std::stringstream s;
+        s << "loadLiveShaders(Shader built with size: " << code_size << ")";
+        reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      }
+
+    } else if (entryPath.extension().compare(".cso") == 0) {
+      auto filename = entryPath.filename();
+      auto filename_string = filename.string();
+      if (filename_string.size() != 14) {
+        std::stringstream s;
+        s << "loadLiveShaders(Invalid cso file format: "
+          << filename_string
+          << ")";
+        reshade::log_message(reshade::log_level::warning, s.str().c_str());
+        continue;
+      }
+      shaderHash = std::stoul(filename_string.substr(2, 8), nullptr, 16);
+      std::ifstream file(entryPath, std::ios::binary);
+      file.seekg(0, std::ios::end);
+      code_size = file.tellg();
+      {
+        std::stringstream s;
+        s << "loadLiveShaders(Reading " << code_size << " from " << filename_string << ")";
+        reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      }
+      code = new uint8_t[code_size];
+      file.seekg(0, std::ios::beg);
+      file.read((char*)code, code_size);
+    } else {
       std::stringstream s;
       s << "loadLiveShaders(Skipping file: "
         << entryPath.string()
@@ -134,36 +213,19 @@ static void loadLiveShaders() {
       continue;
     }
 
-    auto filename = entryPath.filename();
-    auto filename_string = filename.string();
-    if (filename_string.size() != 14) {
-      std::stringstream s;
-      s << "loadLiveShaders(Filename length not 14: "
-        << filename_string
-        << ")";
-      reshade::log_message(reshade::log_level::warning, s.str().c_str());
-      continue;
-    }
-    uint32_t hash = std::stoi(filename_string.substr(2, 8), nullptr, 16);
-
-    auto pair = pipelineCacheByShaderHash.find(hash);
+    auto pair = pipelineCacheByShaderHash.find(shaderHash);
     if (pair == pipelineCacheByShaderHash.end()) {
       std::stringstream s;
       s << "loadLiveShaders(Unknown hash: 0x"
-        << std::hex << hash << std::dec
+        << std::hex << shaderHash << std::dec
         << ")";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      if (code_size) {
+        free(code);
+      }
       continue;
     }
     CachedPipeline* cachedPipeline = pair->second;
-
-    reshade::log_message(reshade::log_level::debug, "Reading file...");
-    std::ifstream file(entryPath, std::ios::binary);
-    file.seekg(0, std::ios::end);
-    size_t code_size = file.tellg();
-    char* code = reinterpret_cast<char*>(malloc((code_size + 1) * sizeof(char)));
-    file.seekg(0, std::ios::beg).read(code, code_size);
-    code[code_size] = NULL;
 
     {
       std::stringstream s;
@@ -178,8 +240,7 @@ static void loadLiveShaders() {
 
     uint32_t subobjectCount = cachedPipeline->subobjectCount;
     reshade::api::pipeline_subobject* subobjects = cachedPipeline->subobjectsCache;
-    reshade::api::pipeline_subobject* newSubobjects = new reshade::api::pipeline_subobject[subobjectCount];
-    memcpy(newSubobjects, cachedPipeline->subobjectsCache, sizeof(reshade::api::pipeline_subobject) * subobjectCount);
+    reshade::api::pipeline_subobject* newSubobjects = PipelineUtil::clonePipelineSubObjects(subobjectCount, subobjects);
 
     {
       std::stringstream s;
@@ -239,7 +300,7 @@ static void loadLiveShaders() {
     {
       std::stringstream s;
       s << "Creating pipeline clone ("
-        << "hash: 0x" << std::hex << hash << std::dec
+        << "hash: 0x" << std::hex << shaderHash << std::dec
         << ", layout: " << reinterpret_cast<void*>(cachedPipeline->layout.handle)
         << ", subobjectcount: " << subobjectCount
         << ")";
@@ -250,15 +311,9 @@ static void loadLiveShaders() {
     bool builtPipelineOK = cachedPipeline->device->create_pipeline(
       cachedPipeline->layout,
       subobjectCount,
-      &newSubobjects[0],
+      newSubobjects,
       &pipelineClone
     );
-    if (builtPipelineOK) {
-      pipelineCloneMap.emplace(cachedPipeline->pipeline.handle, pipelineClone);
-      cachedPipeline->pipelineClone = pipelineClone;
-      cachedPipeline->cloned = true;
-    }
-    // free(code);
     std::stringstream s;
     s << "loadLiveShaders(cloned "
       << reinterpret_cast<void*>(cachedPipeline->pipeline.handle)
@@ -268,6 +323,27 @@ static void loadLiveShaders() {
       << ", " << (builtPipelineOK ? "OK" : "FAILED!")
       << ")";
     reshade::log_message(builtPipelineOK ? reshade::log_level::info : reshade::log_level::error, s.str().c_str());
+
+    if (builtPipelineOK) {
+      auto pipelineClonePair = pipelineCloneMap.find(cachedPipeline->pipeline.handle);
+      if (pipelineClonePair != pipelineCloneMap.end()) {
+        reshade::api::pipeline oldPipelineClone = pipelineClonePair->second;
+        std::stringstream s;
+        s << "loadLiveShaders(destroying old pipeline: "
+          << reinterpret_cast<void*>(cachedPipeline->layout.handle)
+          << ", subobjectcount: " << oldPipelineClone.handle
+          << ")";
+        reshade::log_message(reshade::log_level::debug, s.str().c_str());
+        // cachedPipeline->device->destroy_pipeline(oldPipelineClone);
+        // Should release code from memory
+        pipelineCloneMap.erase(cachedPipeline->pipeline.handle);
+      }
+
+      pipelineCloneMap.emplace(cachedPipeline->pipeline.handle, pipelineClone);
+      cachedPipeline->pipelineClone = pipelineClone;
+      cachedPipeline->cloned = true;
+    }
+    // free(code);
   }
 }
 
@@ -292,13 +368,13 @@ static void logLayout(
             s << "SMP";
             break;
           case reshade::api::descriptor_type::sampler_with_resource_view:
-            s << "SRV";
+            s << "SMPRV";
             break;
-          case reshade::api::descriptor_type::shader_resource_view:
-            s << "SRV2";
+          case reshade::api::descriptor_type::texture_shader_resource_view:
+            s << "TSRV";
             break;
-          case reshade::api::descriptor_type::unordered_access_view:
-            s << "UAV";
+          case reshade::api::descriptor_type::texture_unordered_access_view:
+            s << "TUAV";
             break;
           case reshade::api::descriptor_type::constant_buffer:
             s << "CBV";
@@ -313,12 +389,12 @@ static void logLayout(
             s << "???";
         }
 
-        s << " | " << range.array_size
-          << " | " << range.binding
-          << " | " << range.count
-          << " | " << range.dx_register_index
-          << " | " << range.dx_register_space
-          << " | " << to_string(range.visibility)
+        s << ", array_size: " << range.array_size
+          << ", binding: " << range.binding
+          << ", count: " << range.count
+          << ", register: " << range.dx_register_index
+          << ", space: " << range.dx_register_space
+          << ", visibility: " << to_string(range.visibility)
           << ")"
           << " [" << rangeIndex << "/" << param.descriptor_table.count << "]"
           << " [" << paramIndex << "/" << paramCount << "]";
@@ -329,11 +405,11 @@ static void logLayout(
       s << "logPipelineLayout(";
       s << reinterpret_cast<void*>(layout.handle);
       s << " | PC"
-        << " | " << param.push_constants.binding
-        << " | " << param.push_constants.count
-        << " | " << param.push_constants.dx_register_index
-        << " | " << param.push_constants.dx_register_space
-        << " | " << to_string(param.push_constants.visibility)
+        << ", binding: " << param.push_constants.binding
+        << ", count " << param.push_constants.count
+        << ", register: " << param.push_constants.dx_register_index
+        << ", space: " << param.push_constants.dx_register_space
+        << ", visibility " << to_string(param.push_constants.visibility)
         << ")"
         << " [" << paramIndex << "/" << paramCount << "]";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -450,8 +526,7 @@ static void on_init_pipeline(
   const reshade::api::pipeline_subobject* subobjects,
   reshade::api::pipeline pipeline
 ) {
-  reshade::api::pipeline_subobject* newSubobjects = new reshade::api::pipeline_subobject[subobjectCount];
-  memcpy(newSubobjects, subobjects, sizeof(reshade::api::pipeline_subobject) * subobjectCount);
+  reshade::api::pipeline_subobject* newSubobjects = PipelineUtil::clonePipelineSubObjects(subobjectCount, subobjects);
 
   std::stringstream s;
   s << "on_init_pipeline("
@@ -469,6 +544,8 @@ static void on_init_pipeline(
     subobjectCount
   };
 
+  bool foundUsefulShader = false;
+
   for (uint32_t i = 0; i < subobjectCount; ++i) {
     switch (subobjects[i].type) {
       case reshade::api::pipeline_subobject_type::compute_shader:
@@ -476,48 +553,30 @@ static void on_init_pipeline(
       case reshade::api::pipeline_subobject_type::pixel_shader:
         break;
       default:
-        {
-          std::stringstream s;
-          s << "on_init_pipeline("
-            << reinterpret_cast<void*>(pipeline.handle)
-            << ", subobject: " << to_string(subobjects[i].type)
-            << " )";
-          reshade::log_message(reshade::log_level::debug, s.str().c_str());
-        }
-        // likely should be cloned
         continue;
     }
-    auto cloneSubject = &newSubobjects[i];
-    auto desc = static_cast<reshade::api::shader_desc*>(cloneSubject->data);
-    // Clone desc
-    reshade::api::shader_desc clonedDesc;
-    memcpy(&clonedDesc, desc, sizeof(reshade::api::shader_desc));
-    // Point to cloned desc
-    cloneSubject->data = &clonedDesc;
 
-    if (desc->code_size == 0) continue;
+    auto newDesc = static_cast<reshade::api::shader_desc*>(newSubobjects[i].data);
+    if (newDesc->code_size == 0) continue;
 
-    auto shader_hash = compute_crc32(static_cast<const uint8_t*>(desc->code), desc->code_size);
+    auto shader_hash = compute_crc32(static_cast<const uint8_t*>(newDesc->code), newDesc->code_size);
 
     // Cache shader
     CachedShader* cache = new CachedShader{
-      malloc(desc->code_size),
-      desc->code_size
+      malloc(newDesc->code_size),
+      newDesc->code_size
     };
-    memcpy(cache->data, desc->code, cache->size);
+    memcpy(cache->data, newDesc->code, cache->size);
     shaderCacheCount++;
     shaderCacheSize += cache->size;
     shaderCache.emplace(shader_hash, cache);
-
-    // Point to cached shader
-    clonedDesc.code = cache->data;
 
     // Indexes
     cachedPipeline->shaderHash = shader_hash;
     pipelineCacheByShaderHash.emplace(shader_hash, cachedPipeline);
 
     // Metrics
-
+    foundUsefulShader = true;
     std::stringstream s;
     s << "caching shader("
       << "hash: 0x" << std::hex << shader_hash << std::dec
@@ -525,6 +584,10 @@ static void on_init_pipeline(
       << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
+  }
+  if (!foundUsefulShader) {
+    free(newSubobjects);
+    return;
   }
   pipelineCacheByPipelineHandle.emplace(pipeline.handle, cachedPipeline);
 }
@@ -601,6 +664,8 @@ static void on_bind_pipeline(
   }
   if (cachedPipeline->shaderHash) {
     traceHashes.push_back(cachedPipeline->shaderHash);
+    // InstructionState state = instructions.at(instructions.size() - 1);
+    // state.shader = cachedPipeline->shaderHash;
   }
 
   std::stringstream s;
@@ -632,6 +697,16 @@ static void on_bind_pipeline_states(
   }
 }
 
+static void resetInstructionState() {
+  size_t count = instructions.size();
+  InstructionState oldState = instructions.at(count - 1);
+  instructions.resize(count + 1);
+  InstructionState newState = instructions.at(count);
+  newState.renderTargets = oldState.renderTargets;
+  newState.textures = oldState.textures;
+  newState.shader = oldState.shader;
+}
+
 static bool on_draw(
   reshade::api::command_list* cmd_list,
   uint32_t vertex_count,
@@ -648,6 +723,9 @@ static bool on_draw(
       << ", " << first_instance
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
+    // InstructionState state = instructions.at(instructions.size() - 1);
+    // state.action = reshade::addon_event::draw;
+    // resetInstructionState();
   }
   return false;
 }
@@ -661,6 +739,9 @@ static bool on_dispatch(reshade::api::command_list* cmd_list, uint32_t group_cou
       << ", " << group_count_z
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
+    // InstructionState state = instructions.at(instructions.size() - 1);
+    // state.action = reshade::addon_event::dispatch;
+    // resetInstructionState();
   }
   return false;
 }
@@ -683,6 +764,9 @@ static bool on_draw_indexed(
       << ", " << first_instance
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
+    // InstructionState state = instructions.at(instructions.size() - 1);
+    // state.action = reshade::addon_event::draw_indexed;
+    // resetInstructionState();
   }
   return false;
 }
@@ -705,6 +789,9 @@ static bool on_draw_or_dispatch_indirect(
       << ", " << stride
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
+    // InstructionState state = instructions.at(instructions.size() - 1);
+    // state.action = reshade::addon_event::draw_or_dispatch_indirect;
+    // resetInstructionState();
   }
   return false;
 }
@@ -804,8 +891,14 @@ static void on_bind_render_targets_and_depth_stencil(
   if (!traceRunning) return;
 
   if (count) {
+    // InstructionState state = instructions.at(instructions.size() - 1);
+    // state.renderTargets.clear();
+
     for (uint32_t i = 0; i < count; i++) {
       auto rtv = rtvs[i];
+      // if (rtv.handle) {
+      //   state.renderTargets.push_back(rtv.handle);
+      // }
       std::stringstream s;
       s << "on_bind_render_targets("
         << reinterpret_cast<void*>(rtv.handle)
@@ -882,10 +975,10 @@ static void on_init_resource_view(
   std::stringstream s;
   s << "init_resource_view("
     << reinterpret_cast<void*>(view.handle)
-    << ", view type: " << to_string(desc.type)
-    << ", view format: " << to_string(desc.format)
+    << ", view type: " << to_string(desc.type) << " (0x" << std::hex << (uint32_t)desc.type << std::dec << ")"
+    << ", view format: " << to_string(desc.format) << " (0x" << std::hex << (uint32_t)desc.format << std::dec << ")"
     << ", resource: " << reinterpret_cast<void*>(resource.handle)
-    << ", resource usage: " << to_string(usage_type) << std::hex << (uint32_t)usage_type << std::dec;
+    << ", resource usage: " << to_string(usage_type) << " 0x" << std::hex << (uint32_t)usage_type << std::dec;
   if (desc.type == reshade::api::resource_view_type::buffer) return;
   if (resource.handle) {
     const auto resourceDesc = device->get_resource_desc(resource);
@@ -978,7 +1071,7 @@ static void on_push_descriptors(
     }
 
     s << ")";
-    s << "[" << i << "/" << update.count << "]";
+    s << "[" << update.binding << " - " << update.count << "]";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
   }
 }
@@ -1131,6 +1224,8 @@ static void on_reshade_present(reshade::api::effect_runtime* runtime) {
   } else if (traceScheduled) {
     traceScheduled = false;
     traceHashes.clear();
+    // instructions.clear();
+    // resetInstructionState();
     traceRunning = true;
     reshade::log_message(reshade::log_level::info, "--- Frame ---");
   }
@@ -1143,36 +1238,10 @@ static void on_reshade_present(reshade::api::effect_runtime* runtime) {
   }
 }
 
-static const char* findFXC() {
-  std::string path = "C:\\Program Files (x86)\\Windows Kits\\10\\bin";
-  if (std::filesystem::exists(path) == false) return NULL;
-
-  for (const auto &entry : std::filesystem::directory_iterator(path)) {
-    auto fullPath = entry.path();
-    fullPath.append(".\\x64\\fxc.exe");
-    if (std::filesystem::exists(fullPath)) {
-      return fullPath.generic_string().c_str();
-    }
-  }
-  return NULL;
-}
-
-std::string exec(const char* cmd) {
-  std::array<char, 128> buffer;
-  std::string result;
-  std::unique_ptr<FILE, decltype(&_pclose)> pipe(_popen(cmd, "r"), _pclose);
-  if (!pipe) {
-    throw std::runtime_error("popen() failed!");
-  }
-  while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe.get()) != nullptr) {
-    result += buffer.data();
-  }
-  return result;
-}
-
 void dumpShader(uint32_t shader_hash) {
   auto dump_path = getShaderPath();
 
+  dump_path /= ".\\dump";
   if (std::filesystem::exists(dump_path) == false) {
     std::filesystem::create_directory(dump_path);
   }
@@ -1187,62 +1256,6 @@ void dumpShader(uint32_t shader_hash) {
   std::ofstream file(dump_path, std::ios::binary);
 
   file.write(static_cast<const char*>(cachedShader->data), cachedShader->size);
-}
-
-char* dumpFXC(uint32_t shader_hash, bool force = false) {
-  auto fxcExePath = findFXC();
-  if (fxcExePath == NULL) {
-    reshade::log_message(reshade::log_level::warning, "fxc.exe not found.");
-    return nullptr;
-  }
-
-  // Prepend executable directory to image files
-  auto shaderPath = getShaderPath();
-  if (std::filesystem::exists(shaderPath) == false) {
-    std::filesystem::create_directory(shaderPath);
-  }
-
-  auto csoPath = shaderPath;
-  wchar_t hash_string[11];
-  swprintf_s(hash_string, L"0x%08X", shader_hash);
-
-  csoPath /= hash_string;
-  auto fxcPath = csoPath;
-
-  csoPath += L".cso";
-  fxcPath += L".fxc";
-
-  if (std::filesystem::exists(fxcPath) == false) {
-    if (std::filesystem::exists(csoPath) == false) {
-      dumpShader(shader_hash);
-    }
-
-    std::stringstream command;
-    command << "\""
-            << "\""
-            << fxcExePath
-            << "\""
-            << " -dumpbin "
-            << "\""
-            << csoPath.generic_string()
-            << "\" > \""
-            << fxcPath.generic_string()
-            << "\""
-            << "\"";
-
-    // Causes application focus to blur
-    std::system(command.str().c_str());
-  }
-
-  std::ifstream file(fxcPath, std::ios::binary);
-
-  file.seekg(0, std::ios::end);
-  size_t fileSize = file.tellg();
-  char* code = reinterpret_cast<char*>(malloc((fileSize + 1) * sizeof(char)));
-  file.seekg(0, std::ios::beg).read(code, fileSize);
-  code[fileSize] = NULL;
-
-  return code;
 }
 
 // @see https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
@@ -1270,9 +1283,6 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
   static int32_t selectedIndex = -1;
   bool changedSelected = false;
   if (ImGui::BeginTabBar("##MyTabBar", ImGuiTabBarFlags_None)) {
-    if (ImGui::BeginTabItem("Events")) {
-      ImGui::EndTabItem();
-    }
     if (ImGui::BeginTabItem("Shaders")) {
       if (ImGui::BeginChild("HashList", ImVec2(100, -FLT_MIN), ImGuiChildFlags_ResizeX)) {
         if (ImGui::BeginListBox("##HashesListbox", ImVec2(-FLT_MIN, -FLT_MIN))) {
@@ -1311,12 +1321,12 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
           auto hash = traceHashes.at(selectedIndex);
           auto cache = shaderCache.find(hash)->second;
           if (cache->source.length() == 0) {
-            char* fxc = dumpFXC(hash);
-            if (fxc == nullptr) {
+            char* assemblyCode = ShaderCompilerUtil::disassembleShader(cache->data, cache->size);
+            if (assemblyCode == nullptr) {
               cache->source.assign("Decompilation failed.");
             } else {
-              cache->source.assign(fxc);
-              free(fxc);
+              cache->source.assign(assemblyCode);
+              free(assemblyCode);
             }
           }
           sourceCode.assign(cache->source);
@@ -1335,6 +1345,9 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
         ImGui::EndChild();
         ImGui::EndDisabled();
       }
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("Events")) {
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Resources")) {
@@ -1403,6 +1416,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       reshade::unregister_addon(hModule);
       break;
   }
+
+  // ResourceWatcher::use(fdwReason);
 
   return TRUE;
 }
