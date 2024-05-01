@@ -17,6 +17,7 @@ struct ShaderInjectData {
   float colorGradeBlowout;
   float colorGradeLUTStrength;
   float fxBloom;
+  float fxLensFlare;
   float fxVignette;
   float fxFilmGrain;
 };

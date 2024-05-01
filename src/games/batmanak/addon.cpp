@@ -23,6 +23,7 @@
 #include <embed/0x931FF3DD.h>
 #include <embed/0x93793FBB.h>
 #include <embed/0x978BFB09.h>
+#include <embed/0xB42A7F40.h>
 #include <embed/0xB4B3061C.h>
 #include <embed/0xB6B56605.h>
 #include <embed/0xBD36EC09.h>
@@ -73,7 +74,8 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0xB6B56605),      // tonemap
   CustomShaderEntry(0x978BFB09),      // tonemap + motionblur
   CustomShaderEntry(0xF01CCC7E),      // tonemap + fx
-  CustomShaderEntry(0x3A4E0B90)       // tonemap + fx + motionblur
+  CustomShaderEntry(0x3A4E0B90),      // tonemap + fx + motionblur
+  CustomShaderEntry(0xB42A7F40)       // lens flare
 };
 
 ShaderInjectData shaderInjection;
@@ -208,6 +210,15 @@ UserSettingUtil::UserSettings userSettings = {
     .parse = [](float value) { return value * 0.02f; }
   },
   new UserSettingUtil::UserSetting {
+    .key = "fxLensFlare",
+    .binding = &shaderInjection.fxLensFlare,
+    .defaultValue = 50.f,
+    .label = "Lens Flare",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
     .key = "fxVignette",
     .binding = &shaderInjection.fxVignette,
     .defaultValue = 50.f,
@@ -243,6 +254,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
   UserSettingUtil::updateUserSetting("colorGradeBlowout", 0.f);
   UserSettingUtil::updateUserSetting("fxBloom", 50.f);
+  UserSettingUtil::updateUserSetting("fxLensFlare", 50.f);
   UserSettingUtil::updateUserSetting("fxVignette", 50.f);
   UserSettingUtil::updateUserSetting("fxFilmGrain", 50.f);
 }
