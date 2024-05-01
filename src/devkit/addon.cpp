@@ -29,6 +29,9 @@
 #include "../utils/pipelineUtil.hpp"
 #include "../utils/shaderCompiler.hpp"
 
+#define ICON_FK_REFRESH u8"\uf021"
+#define ICON_FK_FLOPPY  u8"\uf0c7"
+
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - DevKit";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX DevKit Module";
 
@@ -40,6 +43,7 @@ struct CachedPipeline {
   uint32_t subobjectCount;
   bool cloned;
   reshade::api::pipeline pipelineClone;
+  std::filesystem::path hlslPath;
   uint32_t shaderHash;
 };
 
@@ -55,7 +59,7 @@ struct CachedShader {
   void* data = nullptr;
   size_t size = 0;
   int32_t index = -1;
-  std::string source = "";
+  std::string disasm = "";
 };
 
 std::shared_mutex s_mutex;
@@ -146,6 +150,7 @@ static void loadCustomShaders() {
     uint32_t shaderHash;
     size_t code_size = 0;
     uint8_t* code = nullptr;
+    bool isHLSL = false;
 
     if (entryPath.extension().compare(".hlsl") == 0) {
       auto filename = entryPath.filename();
@@ -181,6 +186,7 @@ static void loadCustomShaders() {
       }
       code_size = outBlob->GetBufferSize();
       code = (uint8_t*)outBlob->GetBufferPointer();
+      isHLSL = true;
       {
         std::stringstream s;
         s << "loadCustomShaders(Shader built with size: " << code_size << ")";
@@ -232,6 +238,12 @@ static void loadCustomShaders() {
       continue;
     }
     CachedPipeline* cachedPipeline = pair->second;
+
+    if (isHLSL) {
+      cachedPipeline->hlslPath = entryPath;
+    } else {
+      cachedPipeline->hlslPath = "";
+    }
 
     {
       std::stringstream s;
@@ -336,6 +348,16 @@ static void loadCustomShaders() {
     }
     // free(code);
   }
+}
+
+static char* readTextFile(std::filesystem::path path) {
+  std::ifstream file(path, std::ios::binary);
+  file.seekg(0, std::ios::end);
+  size_t file_size = file.tellg();
+  char* contents = reinterpret_cast<char*>(malloc((file_size + 1) * sizeof(char)));
+  file.seekg(0, std::ios::beg).read(contents, file_size);
+  contents[file_size] = NULL;
+  return contents;
 }
 
 static OVERLAPPED overlapped;
@@ -1361,11 +1383,13 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
   ImGui::Checkbox("List Unique Only", &listUnique);
   ImGui::SameLine();
 
+  ImGui::PushID("##DumpShaders");
   if (ImGui::Button(std::format("Dump Shaders ({})", shaderCacheCount).c_str())) {
     for (auto shader : shaderCache) {
       dumpShader(shader.first);
     }
   }
+  ImGui::PopID();
 
   if (ImGui::Button("Unload Shaders")) {
     needsUnloadShaders = true;
@@ -1376,15 +1400,20 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
   }
 
   ImGui::SameLine();
+  ImGui::PushID("##LiveCheckBox");
   if (ImGui::Checkbox("Live", &autoLiveReload)) {
     needsAutoLoadUpdate = true;
   }
+  ImGui::PopID();
 
   ImGui::Text("Cached Shaders Size: %d", shaderCacheSize);
   static int32_t selectedIndex = -1;
   bool changedSelected = false;
   if (ImGui::BeginTabBar("##MyTabBar", ImGuiTabBarFlags_None)) {
-    if (ImGui::BeginTabItem(std::format("Shaders ({})", traceCount).c_str())) {
+    ImGui::PushID("##ShadersTab");
+    auto handleShaderTab = ImGui::BeginTabItem(std::format("Shaders ({})", traceCount).c_str());
+    ImGui::PopID();
+    if (handleShaderTab) {
       if (ImGui::BeginChild("HashList", ImVec2(100, -FLT_MIN), ImGuiChildFlags_ResizeX)) {
         if (ImGui::BeginListBox("##HashesListbox", ImVec2(-FLT_MIN, -FLT_MIN))) {
           if (!traceRunning) {
@@ -1415,39 +1444,79 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
       }
 
       ImGui::SameLine();
-      static std::string sourceCode = "";
-      if (ImGui::BeginChild("HashDetails", ImVec2(-FLT_MIN, -FLT_MIN))) {
+      if (ImGui::BeginChild("##ShaderDetails", ImVec2(0, 0))) {
         ImGui::BeginDisabled(selectedIndex == -1);
-        if (changedSelected) {
-          auto hash = traceHashes.at(selectedIndex);
-          auto cache = shaderCache.find(hash)->second;
-          if (cache->source.length() == 0) {
-            char* assemblyCode = ShaderCompilerUtil::disassembleShader(cache->data, cache->size);
-            if (assemblyCode == nullptr) {
-              cache->source.assign("Decompilation failed.");
-            } else {
-              cache->source.assign(assemblyCode);
-              free(assemblyCode);
+        if (ImGui::BeginTabBar("##ShadersCodeTab", ImGuiTabBarFlags_None)) {
+          if (ImGui::BeginTabItem("Disassembly")) {
+            static std::string disasmString = "";
+            if (changedSelected) {
+              auto hash = traceHashes.at(selectedIndex);
+              auto cache = shaderCache.find(hash)->second;
+              if (cache->disasm.length() == 0) {
+                char* disasmCode = ShaderCompilerUtil::disassembleShader(cache->data, cache->size);
+                if (disasmCode == nullptr) {
+                  cache->disasm.assign("Decompilation failed.");
+                } else {
+                  cache->disasm.assign(disasmCode);
+                  free(disasmCode);
+                }
+              }
+              disasmString.assign(cache->disasm);
             }
-          }
-          sourceCode.assign(cache->source);
-        }
 
-        if (ImGui::BeginChild("HashSourceCode", ImVec2(-FLT_MIN, -FLT_MIN), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
-          ImGui::InputTextMultiline(
-            "##source",
-            (char*)sourceCode.c_str(),
-            sourceCode.length(),
-            ImVec2(-FLT_MIN, -FLT_MIN),
-            ImGuiInputTextFlags_ReadOnly
-          );
-          ImGui::EndChild();
+            if (ImGui::BeginChild("DisassemblyCode")) {
+              ImGui::InputTextMultiline(
+                "##disassemblyCode",
+                (char*)disasmString.c_str(),
+                disasmString.length(),
+                ImVec2(-FLT_MIN, -FLT_MIN),
+                ImGuiInputTextFlags_ReadOnly
+              );
+              ImGui::EndChild();  // DisassemblyCode
+            }
+            ImGui::EndTabItem();  // Disassembly
+          }
+
+          ImGui::PushID("##LiveTabItem");
+          bool openLiveTabItem = ImGui::BeginTabItem("Live");
+          ImGui::PopID();
+          if (openLiveTabItem) {
+            static std::string hlslString = "";
+            if (changedSelected) {
+              auto hash = traceHashes.at(selectedIndex);
+              auto pair = pipelineCacheByShaderHash.find(hash);
+              if (pair != pipelineCacheByShaderHash.end() && !pair->second->hlslPath.empty()) {
+                hlslString.assign(readTextFile(pair->second->hlslPath));
+              } else {
+                hlslString.assign("");
+              }
+            }
+
+            // Attemping this breaks ImGui
+            // if (ImGui::BeginChild("##LiveCodeToolbar", ImVec2(-FLT_MIN, 0))) {
+            //   ImGui::EndChild();
+            // }
+
+            if (ImGui::BeginChild("LiveCode")) {
+              ImGui::InputTextMultiline(
+                "##liveCode",
+                (char*)hlslString.c_str(),
+                hlslString.length(),
+                ImVec2(-FLT_MIN, -FLT_MIN)
+              );
+              ImGui::EndChild();
+            }
+            ImGui::EndTabItem();  // Live
+          }
+
+          ImGui::EndTabBar();  // ShadersCodeTab
         }
-        ImGui::EndChild();
         ImGui::EndDisabled();
+        ImGui::EndChild();  // ##ShaderDetails
       }
-      ImGui::EndTabItem();
+      ImGui::EndTabItem();  // Shaders
     }
+
     if (ImGui::BeginTabItem("Events")) {
       ImGui::EndTabItem();
     }
