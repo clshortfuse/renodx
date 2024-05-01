@@ -132,8 +132,7 @@ cbuffer cb0 : register(b0) {
   r0.w = cb0[10].x * 0.200000003 + 1;
   r1.xyzw = r1.zzxy * r0.w - r0.z;
   r1.xyzw = max(0, r1.xyzw);
-  // r1.xyzw = r4.zzxy + r1.xyzw;
-  r1.xyzw = r4.zzxy + (r1.xyzw * injectedData.fxBloom);
+  r1.xyzw = r4.zzxy + r1.xyzw; // Bloom + LensFlare
 
   // Vignette sampling
   r0.z = t4.SampleLevel(s0_s, float2(0.5, 0.5), 0).x;

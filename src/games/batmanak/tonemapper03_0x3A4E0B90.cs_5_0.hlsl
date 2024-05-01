@@ -62,8 +62,7 @@ cbuffer cb0 : register(b0) {
   r3.w = cb0[10].x * 0.200000003 + 1;
   r3.xyzw = r3.zzxy * r3.wwww + -r0.wwww;
   r3.xyzw = max(float4(0, 0, 0, 0), r3.xyzw);
-  // r1.xyzw = r3.xyzw + r1.xyzw;
-  r1 = r3 + (r1.xyzw * injectedData.fxBloom);
+  r1.xyzw = r3.xyzw + r1.xyzw;  // Bloom + LensFlare
 
   r0.w = t4.SampleLevel(s0_s, float2(0.5, 0.5), 0).x;
   // r1.xyzw = r1.xyzw / r0.wwww;

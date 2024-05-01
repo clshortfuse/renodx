@@ -63,7 +63,7 @@ cbuffer cb0 : register(b0) {
   const float4 texture0Input = t0.Load(r1.xyw);
   r0.yzw = texture0Input.xyz;
 
-  r3.xyzw = r0.wwyz + (r3.xyzw * injectedData.fxBloom);
+  r3.xyzw = r0.wwyz + r3.xyzw; // Bloom + LensFlare
 
   // r3.zwy = texture0Input.xyz;
 
