@@ -93,6 +93,17 @@ namespace UserSettingUtil {
   typedef std::vector<UserSetting*> UserSettings;
   UserSettings* _userSettings = nullptr;
 
+#define AddDebugSetting(injection, name) \
+  new UserSettingUtil::UserSetting {     \
+    .key = "debug" #name,                \
+    .binding = &##injection.debug##name, \
+    .defaultValue = 1.f,                 \
+    .label = "Debug" #name,              \
+    .section = "Debug",                  \
+    .max = 2.f,                          \
+    .format = "%.2f"                     \
+  }
+
   bool useRenoDXHelper = false;
 
   static UserSetting* findUserSetting(const char* key) {
