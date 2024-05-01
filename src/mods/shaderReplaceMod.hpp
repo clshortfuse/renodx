@@ -49,6 +49,7 @@ namespace ShaderReplaceMod {
   static bool forcePipelineCloning = false;
   static bool traceUnmodifiedShaders = false;
   static int32_t expectedConstantBufferIndex = -1;
+  static uint32_t expectedConstantBufferSpace = 0;
 
   static CustomShaders* _customShaders = nullptr;
   static bool _usingSwapChainOnly = false;
@@ -351,7 +352,7 @@ namespace ShaderReplaceMod {
     newParams[oldCount].push_constants.binding = 0;
     newParams[oldCount].push_constants.count = (slots > maxCount) ? maxCount : slots;
     newParams[oldCount].push_constants.dx_register_index = cbvIndex;
-    newParams[oldCount].push_constants.dx_register_space = 0;
+    newParams[oldCount].push_constants.dx_register_space = expectedConstantBufferSpace;
     newParams[oldCount].push_constants.visibility = reshade::api::shader_stage::all;
 
     param_count = newCount;
@@ -368,8 +369,7 @@ namespace ShaderReplaceMod {
 
     std::stringstream s;
     s << "on_create_pipeline_layout("
-      << "will insert"
-      << " cbuffer " << cbvIndex
+      << "will insert cbuffer " << cbvIndex
       << " at root_index " << oldCount
       << " with slot count " << slots
       << " creating new size of " << (oldCount + 1u + slots)
@@ -429,7 +429,7 @@ namespace ShaderReplaceMod {
           newParams[oldCount].push_constants.binding = 0;
           newParams[oldCount].push_constants.count = (slots > maxCount) ? maxCount : slots;
           newParams[oldCount].push_constants.dx_register_index = cbvIndex;
-          newParams[oldCount].push_constants.dx_register_space = 0;
+          newParams[oldCount].push_constants.dx_register_space = expectedConstantBufferSpace;
           newParams[oldCount].push_constants.visibility = reshade::api::shader_stage::all;
 
           injectionIndex = oldCount;
@@ -520,7 +520,7 @@ namespace ShaderReplaceMod {
       //newParams.push_constants.binding = 0;
       newParams.push_constants.count = 1;
       newParams.push_constants.dx_register_index = cbvIndex;
-      newParams.push_constants.dx_register_space = 0;
+      newParams.push_constants.dx_register_space = expectedConstantBufferSpace;
       newParams.push_constants.visibility = reshade::api::shader_stage::all;
 
       reshade::api::pipeline_layout newLayout;
@@ -861,7 +861,7 @@ namespace ShaderReplaceMod {
 #ifdef DEBUG_LEVEL_1
         std::stringstream s;
         s << "bind_pipeline("
-          << (scheduled ? "scheduling " : " pushing")
+          << (scheduled ? "scheduling " : "pushing ")
           << data.shaderInjectionSize << " buffers"
           << " into " << reinterpret_cast<void*>(injectionLayout.handle)
           << "[" << paramIndex << "]"
