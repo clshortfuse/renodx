@@ -7,6 +7,8 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
+#define ICON_FK_UNDO u8"\uf0e2"
+
 namespace UserSettingUtil {
 
   static int presetIndex = 1;
@@ -297,7 +299,7 @@ namespace UserSettingUtil {
         cursor_pos.y += (previousFontSize / 2.f) - (currentFontSize / 2.f);
         ImGui::SetCursorPos(cursor_pos);
 
-        if (ImGui::Button(reinterpret_cast<const char*>(u8"\uf0e2"))) {
+        if (ImGui::Button(reinterpret_cast<const char*>(ICON_FK_UNDO))) {
           setting->set(setting->defaultValue);
           changed = true;
         }
