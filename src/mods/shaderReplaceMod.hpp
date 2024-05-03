@@ -71,7 +71,11 @@ namespace ShaderReplaceMod {
     std::unordered_set<uint32_t> unmodifiedShaders;
     std::unordered_set<uint64_t> backBuffers;
     std::unordered_set<uint64_t> backBufferResourceViews;
-    bool traceUnmodifiedShaders;
+    bool usePipelineLayoutCloning = false;
+    // bool forcePipelineCloning = false;
+    bool traceUnmodifiedShaders = false;
+    int32_t expectedConstantBufferIndex = -1;
+    uint32_t expectedConstantBufferSpace = 0;
 
     struct {
       bool isPending;
@@ -102,7 +106,10 @@ namespace ShaderReplaceMod {
     reshade::log_message(reshade::log_level::info, s.str().c_str());
 
     auto &data = device->create_private_data<device_data>();
+    data.usePipelineLayoutCloning = usePipelineLayoutCloning;
     data.traceUnmodifiedShaders = traceUnmodifiedShaders;
+    data.expectedConstantBufferIndex = expectedConstantBufferIndex;
+    data.expectedConstantBufferSpace = expectedConstantBufferSpace;
 
     for (const auto &[hash, shader] : (*_customShaders)) {
       CustomShader newShader = shader;
@@ -289,6 +296,8 @@ namespace ShaderReplaceMod {
     uint32_t cbvIndex = 0;
     uint32_t pcCount = 0;
 
+    auto &data = device->get_private_data<device_data>();
+
     for (uint32_t paramIndex = 0; paramIndex < param_count; ++paramIndex) {
       auto param = params[paramIndex];
       if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
@@ -314,11 +323,11 @@ namespace ShaderReplaceMod {
       }
     }
 
-    if (expectedConstantBufferIndex != -1 && cbvIndex != expectedConstantBufferIndex) {
+    if (data.expectedConstantBufferIndex != -1 && cbvIndex != data.expectedConstantBufferIndex) {
       std::stringstream s;
       s << "on_create_pipeline_layout("
         << "Pipeline layout index mismatch, actual: " << cbvIndex
-        << ", expected: " << expectedConstantBufferIndex
+        << ", expected: " << data.expectedConstantBufferIndex
         << ")";
       reshade::log_message(reshade::log_level::debug, s.str().c_str());
       return false;
@@ -339,7 +348,6 @@ namespace ShaderReplaceMod {
     reshade::api::pipeline_layout_param* newParams = new reshade::api::pipeline_layout_param[newCount];
 
     // Store reference to free later
-    auto &data = device->get_private_data<device_data>();
     data.createdParams.push_back(newParams);
 
     // Copy up to size of old
@@ -352,7 +360,7 @@ namespace ShaderReplaceMod {
     newParams[oldCount].push_constants.binding = 0;
     newParams[oldCount].push_constants.count = (slots > maxCount) ? maxCount : slots;
     newParams[oldCount].push_constants.dx_register_index = cbvIndex;
-    newParams[oldCount].push_constants.dx_register_space = expectedConstantBufferSpace;
+    newParams[oldCount].push_constants.dx_register_space = data.expectedConstantBufferSpace;
     newParams[oldCount].push_constants.visibility = reshade::api::shader_stage::all;
 
     param_count = newCount;
@@ -414,7 +422,7 @@ namespace ShaderReplaceMod {
       }
     }
     if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
-      if (usePipelineLayoutCloning) {
+      if (data.usePipelineLayoutCloning) {
         uint32_t oldCount = param_count;
         uint32_t newCount = oldCount;
         reshade::api::pipeline_layout_param* newParams = nullptr;
@@ -429,7 +437,7 @@ namespace ShaderReplaceMod {
           newParams[oldCount].push_constants.binding = 0;
           newParams[oldCount].push_constants.count = (slots > maxCount) ? maxCount : slots;
           newParams[oldCount].push_constants.dx_register_index = cbvIndex;
-          newParams[oldCount].push_constants.dx_register_space = expectedConstantBufferSpace;
+          newParams[oldCount].push_constants.dx_register_space = data.expectedConstantBufferSpace;
           newParams[oldCount].push_constants.visibility = reshade::api::shader_stage::all;
 
           injectionIndex = oldCount;
@@ -492,7 +500,7 @@ namespace ShaderReplaceMod {
       }
 
     } else {
-      if (expectedConstantBufferIndex != -1 && cbvIndex != expectedConstantBufferIndex) {
+      if (data.expectedConstantBufferIndex != -1 && cbvIndex != data.expectedConstantBufferIndex) {
         std::stringstream s;
         s << "on_init_pipeline_layout("
           << "Forcing cbuffer index "
@@ -500,7 +508,7 @@ namespace ShaderReplaceMod {
           << ": " << cbvIndex
           << " )";
         reshade::log_message(reshade::log_level::warning, s.str().c_str());
-        cbvIndex = expectedConstantBufferIndex;
+        cbvIndex = data.expectedConstantBufferIndex;
       }
       if (cbvIndex == 14) {
         cbvIndex = 13;
@@ -520,7 +528,7 @@ namespace ShaderReplaceMod {
       //newParams.push_constants.binding = 0;
       newParams.push_constants.count = 1;
       newParams.push_constants.dx_register_index = cbvIndex;
-      newParams.push_constants.dx_register_space = expectedConstantBufferSpace;
+      newParams.push_constants.dx_register_space = data.expectedConstantBufferSpace;
       newParams.push_constants.visibility = reshade::api::shader_stage::all;
 
       reshade::api::pipeline_layout newLayout;
@@ -658,7 +666,7 @@ namespace ShaderReplaceMod {
         }
       }
     }
-    if (usePipelineLayoutCloning && !needsClone) {
+    if (data.usePipelineLayoutCloning && !needsClone) {
       newSubobjects = new reshade::api::pipeline_subobject[subobjectCount];
       memcpy(newSubobjects, subobjects, sizeof(reshade::api::pipeline_subobject) * subobjectCount);
       needsClone = true;
@@ -680,7 +688,7 @@ namespace ShaderReplaceMod {
       reshade::api::pipeline newPipeline;
       reshade::api::pipeline_layout cloneLayout = layout;
 
-      if (usePipelineLayoutCloning) {
+      if (data.usePipelineLayoutCloning) {
         auto device_api = device->get_api();
         if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
           auto pair3 = data.moddedPipelineLayouts.find(layout.handle);
@@ -802,7 +810,7 @@ namespace ShaderReplaceMod {
       // data.currentShader = 0;
     }
 
-    if (usePipelineLayoutCloning || data.shaderInjectionSize != 0) {
+    if (data.usePipelineLayoutCloning || data.shaderInjectionSize != 0) {
       auto pair0 = data.pipelineToLayoutMap.find(pipeline.handle);
       if (pair0 != data.pipelineToLayoutMap.end()) {
         auto scheduled = false;
@@ -828,7 +836,7 @@ namespace ShaderReplaceMod {
                   ? reshade::api::shader_stage::all_graphics
                   : reshade::api::shader_stage::all_compute;
 
-          if (usePipelineLayoutCloning) {
+          if (data.usePipelineLayoutCloning) {
             auto pair3 = data.moddedPipelineLayouts.find(layout.handle);
             if (pair3 == data.moddedPipelineLayouts.end()) {
               std::stringstream s;
