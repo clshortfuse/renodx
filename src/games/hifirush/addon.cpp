@@ -11,11 +11,14 @@
 #include <embed/0x8DAE8683.h>
 #include <embed/0x93269875.h>
 #include <embed/0x9F3842A8.h>
+#include <embed/0xBEB7EB31.h>
 #include <embed/0xC3126A03.h>
 #include <embed/0xC6FA129B.h>
+#include <embed/0xC916AF3F.h>
+#include <embed/0xCF3E9D48.h>
 #include <embed/0xE3729F07.h>
 #include <embed/0xF6E7E494.h>
-#include <embed/0xBEB7EB31.h>
+#include <embed/0xFD6093D2.h>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -37,7 +40,10 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0xE3729F07),
   CustomShaderEntry(0x8DAE8683),
   CustomShaderEntry(0x4D868A70),
-  CustomShaderEntry(0xBEB7EB31)
+  CustomShaderEntry(0xBEB7EB31),
+  CustomShaderEntry(0xC916AF3F),
+  CustomShaderEntry(0xCF3E9D48),
+  CustomShaderEntry(0xFD6093D2)
 };
 
 ShaderInjectData shaderInjection;
@@ -161,6 +167,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
   switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
+      ShaderReplaceMod::traceUnmodifiedShaders = true;
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
         {reshade::api::format::b8g8r8a8_typeless, reshade::api::format::r16g16b16a16_typeless}
       );
