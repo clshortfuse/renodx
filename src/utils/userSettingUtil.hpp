@@ -1,11 +1,16 @@
+#pragma once
+
 #define ImTextureID ImU64
 
 #include <map>
 #include <string>
 #include <vector>
 
+
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
+
+#include "./mutex.hpp"
 
 #define ICON_FK_UNDO u8"\uf0e2"
 
@@ -207,6 +212,7 @@ namespace UserSettingUtil {
   // Runs first
   // https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
   static void on_register_overlay(reshade::api::effect_runtime* runtime) {
+    const std::unique_lock lock(MutexUtil::g_mutex0);
     bool changedPreset = ImGui::SliderInt(
       "Preset",
       &presetIndex,

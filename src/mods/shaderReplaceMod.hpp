@@ -16,7 +16,6 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
-#include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -26,6 +25,7 @@
 #include <include/reshade.hpp>
 
 #include "../utils/format.hpp"
+#include "../utils/mutex.hpp"
 
 namespace ShaderReplaceMod {
   struct CustomShader {
@@ -54,7 +54,6 @@ namespace ShaderReplaceMod {
   static CustomShaders* _customShaders = nullptr;
   static bool _usingSwapChainOnly = false;
   static bool _usingBypass = false;
-  static std::shared_mutex s_mutex;
 
   struct __declspec(uuid("018e7b9c-23fd-7863-baf8-a8dad2a6db9d")) device_data {
     std::vector<reshade::api::pipeline_layout_param*> createdParams;
@@ -105,6 +104,8 @@ namespace ShaderReplaceMod {
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
 
+    std::shared_lock lock(MutexUtil::g_mutex0);
+
     auto &data = device->create_private_data<device_data>();
     data.usePipelineLayoutCloning = usePipelineLayoutCloning;
     data.traceUnmodifiedShaders = traceUnmodifiedShaders;
@@ -120,7 +121,6 @@ namespace ShaderReplaceMod {
       data.customShaders.emplace(hash, newShader);
     }
 
-    const std::unique_lock<std::shared_mutex> lock(s_mutex);
     if (_shaderInjectionSize) {
       data.shaderInjectionSize = _shaderInjectionSize;
       size_t memSize = data.shaderInjectionSize * sizeof(uint32_t);
@@ -1140,7 +1140,7 @@ namespace ShaderReplaceMod {
   ) {
     auto &data = swapchain->get_device()->get_private_data<device_data>();
     if (data.shaderInjectionSize) {
-      const std::unique_lock<std::shared_mutex> lock(s_mutex);
+      std::shared_lock lock(MutexUtil::g_mutex0);
       size_t memSize = data.shaderInjectionSize * sizeof(uint32_t);
       memcpy(data.shaderInjection, _shaderInjection, memSize);
     }
