@@ -119,11 +119,12 @@ ToneMapLUTParams buildLUTParams(SamplerState lutSampler, float strength, float s
 #define TONE_MAP_LUT_TYPE__LINEAR            0u
 #define TONE_MAP_LUT_TYPE__SRGB              1u
 #define TONE_MAP_LUT_TYPE__2_2               2u
-#define TONE_MAP_LUT_TYPE__ARRI_C800         3u
-#define TONE_MAP_LUT_TYPE__ARRI_C1000        4u
-#define TONE_MAP_LUT_TYPE__ARRI_C800_NO_CUT  5u
-#define TONE_MAP_LUT_TYPE__ARRI_C1000_NO_CUT 6u
-#define TONE_MAP_LUT_TYPE__PQ                7u
+#define TONE_MAP_LUT_TYPE__2_0               3u
+#define TONE_MAP_LUT_TYPE__ARRI_C800         4u
+#define TONE_MAP_LUT_TYPE__ARRI_C1000        5u
+#define TONE_MAP_LUT_TYPE__ARRI_C800_NO_CUT  6u
+#define TONE_MAP_LUT_TYPE__ARRI_C1000_NO_CUT 7u
+#define TONE_MAP_LUT_TYPE__PQ                8u
 
 float3 renoDRTToneMap(float3 color, ToneMapParams params, bool sdr = false) {
   float renoDRTMax = sdr ? 1.f : (params.peakNits / params.gameNits);
@@ -249,6 +250,8 @@ float3 convertLUTInput(float3 color, ToneMapLUTParams lutParams) {
     color = srgbFromLinear(saturate(color));
   } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__2_2) {
     color = pow(saturate(color), 1.f / 2.2f);
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__2_0) {
+    color = sqrt(saturate(color));
   } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__ARRI_C800) {
     color = arriC800FromLinear(max(0, color));
   } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__ARRI_C1000) {
@@ -274,6 +277,8 @@ float3 restoreSaturationLoss(float3 inputColor, float3 outputColor, ToneMapLUTPa
     clamped = saturate(clamped);
   } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__2_2) {
     clamped = saturate(clamped);
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__2_0) {
+    clamped = saturate(clamped);
   } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__ARRI_C800) {
     clamped = max(0, clamped);
   } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__ARRI_C1000) {
@@ -296,7 +301,11 @@ float3 restoreSaturationLoss(float3 inputColor, float3 outputColor, ToneMapLUTPa
 }
 
 float3 gammaLUTInput(float3 inputColor, float3 convertedInputColor, ToneMapLUTParams lutParams) {
-  if (lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB || lutParams.inputType == TONE_MAP_LUT_TYPE__2_2) {
+  if (
+    lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB
+    || lutParams.inputType == TONE_MAP_LUT_TYPE__2_2
+    || lutParams.inputType == TONE_MAP_LUT_TYPE__2_0
+  ) {
     return convertedInputColor;
   } else {
     return srgbFromLinear(max(0, inputColor));
@@ -315,6 +324,8 @@ float3 linearLUTOutput(float3 color, ToneMapLUTParams lutParams) {
     color = sign(color) * linearFromSRGB(abs(color));
   } else if (lutParams.outputType == TONE_MAP_LUT_TYPE__2_2) {
     color = sign(color) * pow(abs(color), 2.2f);
+  } else if (lutParams.outputType == TONE_MAP_LUT_TYPE__2_0) {
+    color = sign(color) * color * color;
   }
   return color;
 }
@@ -399,7 +410,11 @@ sampleLUTFunctionGenerator(Texture3D<float3>);
     }                                                                                                             \
                                                                                                                   \
     float3 lutColor;                                                                                              \
-    if (lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB || lutParams.inputType == TONE_MAP_LUT_TYPE__2_2) {        \
+    if (                                                                                                          \
+      lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB                                                              \
+      || lutParams.inputType == TONE_MAP_LUT_TYPE__2_2                                                            \
+      || lutParams.inputType == TONE_MAP_LUT_TYPE__2_0                                                            \
+    ) {                                                                                                           \
       lutColor = sampleLUT(sdrColor, lutParams, lutTexture);                                                      \
     } else {                                                                                                      \
       lutColor = min(1.f, sampleLUT(hdrColor, lutParams, lutTexture));                                            \
