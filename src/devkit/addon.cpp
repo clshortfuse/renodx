@@ -64,9 +64,12 @@ struct CachedShader {
 
 std::shared_mutex s_mutex;
 
+struct __declspec(uuid("3b70b2b2-52dc-4637-bd45-c1171c4c322e")) device_data {
+  std::unordered_map<uint64_t, uint64_t> resourceViews;
+};
+
 std::unordered_set<uint64_t> computeShaderLayouts;
 std::unordered_set<uint64_t> backBuffers;
-std::unordered_map<uint64_t, reshade::api::resource_view_desc> resourceViews;
 std::unordered_map<uint64_t, reshade::api::resource> resources;
 std::unordered_map<uint64_t, uint64_t> resourceViewsByResource;
 
@@ -93,7 +96,15 @@ static uint32_t resourceViewCount = 0;
 static uint32_t traceCount = 0;
 static uint32_t presentCount = 0;
 
-static const uint32_t MAX_PRESENT_COUNT = 300 * 60;
+static const uint32_t MAX_PRESENT_COUNT = 60;
+
+static uint64_t getResourceByViewHandle(device_data &data, uint64_t handle) {
+  auto pair = data.resourceViews.find(handle);
+  if (pair != data.resourceViews.end()) {
+    return pair->second;
+  }
+  return 0;
+}
 
 std::filesystem::path getShaderPath() {
   wchar_t file_prefix[MAX_PATH] = L"";
@@ -492,7 +503,7 @@ static void logLayout(
             s << "ACC";
             break;
           default:
-            s << "???";
+            s << "??? (0x" << std::hex << (uint32_t)range.type << std::dec << ")";
         }
 
         s << ", array_size: " << range.array_size
@@ -546,13 +557,32 @@ static void logLayout(
       std::stringstream s;
       s << "logPipelineLayout("
         << reinterpret_cast<void*>(layout.handle)
-        << " | ???"
+        << " | ??? (0x" << std::hex << (uint32_t)param.type << std::dec << ")"
         << " | " << to_string(param.type)
         << ")"
         << " [" << paramIndex << "/" << paramCount << "]";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
   }
+}
+
+static void on_init_device(reshade::api::device* device) {
+  std::stringstream s;
+  s << "init_device("
+    << reinterpret_cast<void*>(device->get_native())
+    << ")";
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
+
+  device->create_private_data<device_data>();
+}
+
+static void on_destroy_device(reshade::api::device* device) {
+  std::stringstream s;
+  s << "destroy_device("
+    << reinterpret_cast<void*>(device->get_native())
+    << ")";
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  device->destroy_private_data<device_data>();
 }
 
 static void on_init_swapchain(reshade::api::swapchain* swapchain) {
@@ -993,6 +1023,7 @@ static void on_bind_render_targets_and_depth_stencil(
 ) {
   if (!traceRunning) return;
 
+  auto &data = cmd_list->get_device()->get_private_data<device_data>();
   if (count) {
     // InstructionState state = instructions.at(instructions.size() - 1);
     // state.renderTargets.clear();
@@ -1005,6 +1036,7 @@ static void on_bind_render_targets_and_depth_stencil(
       std::stringstream s;
       s << "on_bind_render_targets("
         << reinterpret_cast<void*>(rtv.handle)
+        << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, rtv.handle))
         << ")"
         << "[" << i << "]";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -1074,6 +1106,8 @@ static void on_init_resource_view(
   const reshade::api::resource_view_desc &desc,
   reshade::api::resource_view view
 ) {
+  auto &data = device->get_private_data<device_data>();
+  data.resourceViews.emplace(view.handle, resource.handle);
   if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
   std::stringstream s;
   s << "init_resource_view("
@@ -1116,6 +1150,12 @@ static void on_init_resource_view(
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 }
 
+static void on_destroy_resource_view(reshade::api::device* device, reshade::api::resource_view view) {
+  if (device == nullptr) return;
+  auto &data = device->get_private_data<device_data>();
+  data.resourceViews.erase(view.handle);
+}
+
 static void on_push_descriptors(
   reshade::api::command_list* cmd_list,
   reshade::api::shader_stage stages,
@@ -1123,7 +1163,8 @@ static void on_push_descriptors(
   uint32_t layout_param,
   const reshade::api::descriptor_table_update &update
 ) {
-  if (!traceRunning || presentCount >= MAX_PRESENT_COUNT) return;
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
+  auto &data = cmd_list->get_device()->get_private_data<device_data>();
   for (uint32_t i = 0; i < update.count; i++) {
     std::stringstream s;
     s << "push_descriptors("
@@ -1141,18 +1182,21 @@ static void on_push_descriptors(
           auto item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[i];
           s << ", sampler: " << reinterpret_cast<void*>(item.sampler.handle);
           s << ", rsv: " << reinterpret_cast<void*>(item.view.handle);
+          s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.view.handle));
         }
         break;
       case reshade::api::descriptor_type::shader_resource_view:
         {
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
           s << ", shaderrsv: " << reinterpret_cast<void*>(item.handle);
+          s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.handle));
         }
         break;
       case reshade::api::descriptor_type::unordered_access_view:
         {
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
           s << ", uav: " << reinterpret_cast<void*>(item.handle);
+          s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.handle));
         }
         break;
       case reshade::api::descriptor_type::acceleration_structure:
@@ -1174,7 +1218,7 @@ static void on_push_descriptors(
     }
 
     s << ")";
-    s << "[" << update.binding << " - " << update.count << "]";
+    s << "[" << update.binding << " - " << i << " / " << update.count << "]";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
   }
 }
@@ -1187,13 +1231,13 @@ static void on_bind_descriptor_tables(
   uint32_t count,
   const reshade::api::descriptor_table* tables
 ) {
-  if (!traceRunning || presentCount >= MAX_PRESENT_COUNT) return;
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
 
   for (uint32_t i = 0; i < count; ++i) {
     std::stringstream s;
     s << "bind_descriptor_table("
       << reinterpret_cast<void*>(layout.handle)
-      << std::hex << (uint32_t)stages << std::dec
+      << ", stages: " << to_string(stages) << "(" << std::hex << (uint32_t)stages << std::dec << ")"
       << ", index: " << (first + i)
       << ", table: " << reinterpret_cast<void*>(tables[i].handle)
       << ") [" << i << "]";
@@ -1232,7 +1276,8 @@ static bool on_update_descriptor_tables(
   uint32_t count,
   const reshade::api::descriptor_table_update* updates
 ) {
-  if (!traceRunning || presentCount >= MAX_PRESENT_COUNT) return false;
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return false;
+  auto &data = device->get_private_data<device_data>();
   for (uint32_t i = 0; i < count; i++) {
     auto update = updates[i];
 
@@ -1254,18 +1299,21 @@ static bool on_update_descriptor_tables(
             auto item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[j];
             s << ", sampler: " << reinterpret_cast<void*>(item.sampler.handle);
             s << ", rsv: " << reinterpret_cast<void*>(item.view.handle);
+            s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.view.handle));
           }
           break;
         case reshade::api::descriptor_type::shader_resource_view:
           {
             auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
             s << ", shaderrsv: " << reinterpret_cast<void*>(item.handle);
+            s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.handle));
           }
           break;
         case reshade::api::descriptor_type::unordered_access_view:
           {
             auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
             s << ", uav: " << reinterpret_cast<void*>(item.handle);
+            s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.handle));
           }
           break;
         case reshade::api::descriptor_type::acceleration_structure:
@@ -1302,7 +1350,7 @@ void on_push_constants(
   uint32_t count,
   const void* values
 ) {
-  if (!traceRunning || presentCount >= MAX_PRESENT_COUNT) return;
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
   std::stringstream s;
   s << "push_constants("
     << reinterpret_cast<void*>(layout.handle)
@@ -1532,6 +1580,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
 
+      reshade::register_event<reshade::addon_event::init_device>(on_init_device);
+      reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
       reshade::register_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
       reshade::register_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
       reshade::register_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
@@ -1543,6 +1593,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       reshade::register_event<reshade::addon_event::init_resource>(on_init_resource);
       reshade::register_event<reshade::addon_event::destroy_resource>(on_destroy_resource);
       reshade::register_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
+      reshade::register_event<reshade::addon_event::destroy_resource_view>(on_destroy_resource_view);
 
       reshade::register_event<reshade::addon_event::push_descriptors>(on_push_descriptors);
       reshade::register_event<reshade::addon_event::bind_descriptor_tables>(on_bind_descriptor_tables);
