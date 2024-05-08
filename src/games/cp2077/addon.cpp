@@ -267,7 +267,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
 
-      ShaderReplaceMod::forcePipelineCloning = true;
+      // ShaderReplaceMod::forcePipelineCloning = true;
       ShaderReplaceMod::expectedConstantBufferIndex = 14;
       break;
     case DLL_PROCESS_DETACH:
