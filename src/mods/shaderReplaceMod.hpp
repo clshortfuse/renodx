@@ -33,6 +33,7 @@ namespace ShaderReplaceMod {
     const uint8_t* code;
     uint32_t codeSize;
     bool swapChainOnly;
+    int32_t index = -1;
   };
 
   typedef std::unordered_map<uint32_t, CustomShader> CustomShaders;
@@ -41,6 +42,7 @@ namespace ShaderReplaceMod {
 #define CustomSwapchainShader(crc32) { crc32, { crc32, _##crc32, sizeof(_##crc32), true } }
 #define CustomShaderEntry(crc32) { crc32, { crc32, _##crc32, sizeof(_##crc32) } }
 #define BypassShaderEntry(crc32) { crc32, { crc32, nullptr, 0 } }
+#define CustomCountedShader(crc32, index) { crc32, { crc32, _##crc32, sizeof(_##crc32), false, ##index} }
   // clang-format on
 
   static float* _shaderInjection = nullptr;
@@ -54,6 +56,7 @@ namespace ShaderReplaceMod {
   static CustomShaders* _customShaders = nullptr;
   static bool _usingSwapChainOnly = false;
   static bool _usingBypass = false;
+  static bool _usingCountedShaders = false;
 
   struct __declspec(uuid("018e7b9c-23fd-7863-baf8-a8dad2a6db9d")) device_data {
     std::vector<reshade::api::pipeline_layout_param*> createdParams;
@@ -70,6 +73,7 @@ namespace ShaderReplaceMod {
     std::unordered_set<uint32_t> unmodifiedShaders;
     std::unordered_set<uint64_t> backBuffers;
     std::unordered_set<uint64_t> backBufferResourceViews;
+    std::unordered_map<uint32_t, uint32_t> countedShaders;
     bool usePipelineLayoutCloning = false;
     // bool forcePipelineCloning = false;
     bool traceUnmodifiedShaders = false;
@@ -803,7 +807,46 @@ namespace ShaderReplaceMod {
     std::unique_lock lock(data.mutex);
     auto pipelineToShaderHashPair = data.pipelineToShaderHashMap.find(pipeline.handle);
     if (pipelineToShaderHashPair != data.pipelineToShaderHashMap.end()) {
-      data.currentShader = pipelineToShaderHashPair->second;
+      uint32_t shaderHash = pipelineToShaderHashPair->second;
+      data.currentShader = shaderHash;
+
+      if (_usingCountedShaders) {
+        auto shaderInfo = data.customShaders.find(shaderHash);
+        if (shaderInfo != data.customShaders.end()) {
+          uint32_t expectedIndex = shaderInfo->second.index;
+          if (expectedIndex != -1) {
+            auto countedPair = data.countedShaders.find(shaderHash);
+            uint32_t count = 0;
+            if (countedPair != data.countedShaders.end()) {
+              count = countedPair->second;
+            }
+            data.countedShaders.emplace(shaderHash, count + 1);
+
+            if (expectedIndex != count) {
+#ifdef DEBUG_LEVEL_1
+              std::stringstream s;
+              s << "bind_pipeline("
+                << "skipping 0x" << std::hex << shaderHash << std::dec
+                << ", count: " << count
+                << ", index: " << expectedIndex
+                << ")";
+              reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
+              // Abort if not correct count
+              return;
+            }
+#ifdef DEBUG_LEVEL_1
+            std::stringstream s;
+            s << "bind_pipeline("
+              << "applying 0x" << std::hex << shaderHash << std::dec
+              << ", count: " << count
+              << ", index: " << expectedIndex
+              << ")";
+            reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
+          }
+        }
+      }
     } else {
       // data.currentShader = 0;
     }
@@ -1132,6 +1175,19 @@ namespace ShaderReplaceMod {
     return handlePreDraw(cmd_list);
   }
 
+  static void on_present(
+    reshade::api::command_queue* queue,
+    reshade::api::swapchain* swapchain,
+    const reshade::api::rect* source_rect,
+    const reshade::api::rect* dest_rect,
+    uint32_t dirty_rect_count,
+    const reshade::api::rect* dirty_rects
+  ) {
+    auto &data = swapchain->get_device()->get_private_data<device_data>();
+    std::unique_lock lock(data.mutex);
+    data.countedShaders.clear();
+  }
+
   template <typename T = float*>
   void use(DWORD fdwReason, CustomShaders* customShaders, T* injections = nullptr) {
     switch (fdwReason) {
@@ -1143,6 +1199,7 @@ namespace ShaderReplaceMod {
           for (const auto &[hash, shader] : (*customShaders)) {
             if (shader.swapChainOnly) _usingSwapChainOnly = true;
             if (shader.codeSize == 0) _usingBypass = true;
+            if (shader.index != -1) _usingCountedShaders = true;
           }
         }
 
@@ -1152,6 +1209,10 @@ namespace ShaderReplaceMod {
           reshade::register_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
           reshade::register_event<reshade::addon_event::destroy_resource_view>(on_destroy_resource_view);
           reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(on_bind_render_targets_and_depth_stencil);
+        }
+
+        if (_usingCountedShaders) {
+          reshade::register_event<reshade::addon_event::present>(on_present);
         }
 
         if (!usePipelineLayoutCloning && !forcePipelineCloning) {
