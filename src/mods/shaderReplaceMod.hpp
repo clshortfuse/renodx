@@ -50,7 +50,6 @@ namespace ShaderReplaceMod {
   static bool traceUnmodifiedShaders = false;
   static int32_t expectedConstantBufferIndex = -1;
   static uint32_t expectedConstantBufferSpace = 0;
-  static std::unordered_set<uint32_t> _unmodifiedShaders;
 
   static CustomShaders* _customShaders = nullptr;
   static bool _usingSwapChainOnly = false;
@@ -73,36 +72,10 @@ namespace ShaderReplaceMod {
     std::unordered_set<uint64_t> backBufferResourceViews;
     bool usePipelineLayoutCloning = false;
     // bool forcePipelineCloning = false;
+    bool traceUnmodifiedShaders = false;
     int32_t expectedConstantBufferIndex = -1;
     uint32_t expectedConstantBufferSpace = 0;
     std::shared_mutex mutex;
-
-    CustomShaders customShaders;
-    std::unordered_set<uint32_t> customShaderHashes;
-  };
-
-  struct __declspec(uuid("80cb9433-ab39-439b-8ab1-e42dc854401b")) cmd_list_data {
-    std::unordered_map<uint64_t, reshade::api::pipeline_layout> moddedPipelineLayouts;
-    std::unordered_set<uint64_t> backBufferResourceViews;
-    std::unordered_set<uint32_t> customShaderHashes;
-    std::unordered_map<uint64_t, uint32_t> pipelineToShaderHashMap;
-    std::unordered_map<uint64_t, int32_t> moddedPipelineRootIndexes;
-    std::unordered_map<uint64_t, reshade::api::pipeline_layout> pipelineToLayoutMap;
-    std::unordered_set<uint64_t> swapchainOnlyPipelines;
-    std::unordered_set<uint64_t> computeShaderLayouts;
-    std::unordered_set<uint32_t> bypassedShaders;
-    std::unordered_set<uint64_t> currentRenderTargets;
-    std::unordered_set<uint32_t> unmodifiedShaders;
-    std::unordered_map<uint64_t, reshade::api::pipeline> pipelineCloneMap;
-
-    bool usePipelineLayoutCloning = false;
-    bool needsDeviceInit = false;
-
-    uint32_t currentShader;
-    bool hasSwapchainRenderTarget;
-    bool traceUnmodifiedShaders = false;
-
-    reshade::api::device_api deviceApi;
 
     struct {
       bool isPending;
@@ -116,6 +89,11 @@ namespace ShaderReplaceMod {
       reshade::api::pipeline_stage type;
       reshade::api::pipeline pipeline;
     } scheduledSwapchainPipeline;
+
+    CustomShaders customShaders;
+    uint32_t currentShader;
+    std::unordered_set<uint64_t> currentRenderTargets;
+    bool hasSwapchainRenderTarget;
   };
 
   static void on_init_device(reshade::api::device* device) {
@@ -129,6 +107,7 @@ namespace ShaderReplaceMod {
 
     auto &data = device->create_private_data<device_data>();
     data.usePipelineLayoutCloning = usePipelineLayoutCloning;
+    data.traceUnmodifiedShaders = traceUnmodifiedShaders;
     data.expectedConstantBufferIndex = expectedConstantBufferIndex;
     data.expectedConstantBufferSpace = expectedConstantBufferSpace;
 
@@ -139,7 +118,6 @@ namespace ShaderReplaceMod {
         memcpy((void*)newShader.code, shader.code, newShader.codeSize);
       }
       data.customShaders.emplace(hash, newShader);
-      data.customShaderHashes.emplace(hash);
     }
   }
 
@@ -149,81 +127,13 @@ namespace ShaderReplaceMod {
       << reinterpret_cast<void*>(device->get_native())
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
-
-    device->destroy_private_data<device_data>();
-  }
-
-  static void update_command_list(reshade::api::command_list* cmd_list) {
-    auto &data = cmd_list->get_private_data<cmd_list_data>();
-
-    auto device = cmd_list->get_device();
-    auto &deviceData = device->get_private_data<device_data>();
-    std::shared_lock lock(deviceData.mutex);
-    data.moddedPipelineLayouts = deviceData.moddedPipelineLayouts;
-    data.backBufferResourceViews = deviceData.backBufferResourceViews;
-    data.customShaderHashes = deviceData.customShaderHashes;
-    data.pipelineToShaderHashMap = deviceData.pipelineToShaderHashMap;
-    data.moddedPipelineRootIndexes = deviceData.moddedPipelineRootIndexes;
-    data.pipelineToLayoutMap = deviceData.pipelineToLayoutMap;
-    data.swapchainOnlyPipelines = deviceData.swapchainOnlyPipelines;
-    data.computeShaderLayouts = deviceData.computeShaderLayouts;
-    data.bypassedShaders = deviceData.bypassedShaders;
-    // data.currentRenderTargets = deviceData.currentRenderTargets;
-    data.unmodifiedShaders = deviceData.unmodifiedShaders;
-    data.pipelineCloneMap = deviceData.pipelineCloneMap;
-    data.deviceApi = device->get_api();
-  }
-
-  static void on_init_command_list(reshade::api::command_list* cmd_list) {
-#ifdef DEBUG_LEVEL_1
-    std::stringstream s;
-    s << "init_command_list(create_command_list"
-      << reinterpret_cast<void*>(cmd_list->get_native())
-      << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
-#endif
-
-    auto &data = cmd_list->create_private_data<cmd_list_data>();
-
-    update_command_list(cmd_list);
-
-    {
-      std::shared_lock lock(MutexUtil::g_mutex0);
-      data.traceUnmodifiedShaders = traceUnmodifiedShaders;
-      data.unmodifiedShaders = _unmodifiedShaders;
-      data.usePipelineLayoutCloning = usePipelineLayoutCloning;
-    }
-  }
-
-  static void on_execute_command_list(reshade::api::command_queue* queue, reshade::api::command_list* cmd_list) {
-#ifdef DEBUG_LEVEL_1
-    std::stringstream s;
-    s << "execute_command_list(execute_command_list"
-      << reinterpret_cast<void*>(cmd_list->get_native())
-      << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
-#endif
-    update_command_list(cmd_list);
-  }
-
-  static void on_destroy_command_list(reshade::api::command_list* cmd_list) {
-#ifdef DEBUG_LEVEL_1
-    std::stringstream s;
-    s << "destroy_command_list(create_command_list"
-      << reinterpret_cast<void*>(cmd_list->get_native())
-      << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
-#endif
-
-    auto &data = cmd_list->get_private_data<cmd_list_data>();
-    {
-      // Log back unmodified shaders
-      std::shared_lock lock(MutexUtil::g_mutex0);
-      for (const auto hash : data.unmodifiedShaders) {
-        _unmodifiedShaders.emplace(hash);
+    auto &data = device->get_private_data<device_data>();
+    for (const auto &[hash, shader] : (data.customShaders)) {
+      if (shader.codeSize) {
+        free((void*)shader.code);
       }
     }
-    cmd_list->destroy_private_data<cmd_list_data>();
+    device->destroy_private_data<device_data>();
   }
 
   static void on_init_swapchain(reshade::api::swapchain* swapchain) {
@@ -276,7 +186,11 @@ namespace ShaderReplaceMod {
     const reshade::api::resource_view* rtvs,
     reshade::api::resource_view dsv
   ) {
-    cmd_list_data &data = cmd_list->get_private_data<cmd_list_data>();
+    auto device = cmd_list->get_device();
+    if (device == nullptr) return;
+
+    device_data &data = device->get_private_data<device_data>();
+    std::unique_lock lock(data.mutex);
     // data.currentRenderTargets.clear();
     data.hasSwapchainRenderTarget = false;
 
@@ -285,7 +199,8 @@ namespace ShaderReplaceMod {
       const reshade::api::resource_view rtv = rtvs[i];
       if (!rtv.handle) continue;
 
-      // data.currentRenderTargets.emplace(rtv.handle);
+      // will crash if emplacing???
+      // privateData.currentRenderTargets.emplace(rtv.handle);
 
       if (data.backBufferResourceViews.contains(rtv.handle)) {
         data.hasSwapchainRenderTarget = true;
@@ -883,7 +798,9 @@ namespace ShaderReplaceMod {
     reshade::api::pipeline_stage type,
     reshade::api::pipeline pipeline
   ) {
-    auto &data = cmd_list->get_private_data<cmd_list_data>();
+    auto device = cmd_list->get_device();
+    auto &data = device->get_private_data<device_data>();
+    std::unique_lock lock(data.mutex);
     auto pipelineToShaderHashPair = data.pipelineToShaderHashMap.find(pipeline.handle);
     if (pipelineToShaderHashPair != data.pipelineToShaderHashMap.end()) {
       data.currentShader = pipelineToShaderHashPair->second;
@@ -898,9 +815,10 @@ namespace ShaderReplaceMod {
         auto layout = pair0->second;
 
         auto injectionLayout = layout;
+        auto device_api = device->get_api();
         reshade::api::shader_stage stage;
         uint32_t paramIndex = 0;
-        if (data.deviceApi == reshade::api::device_api::d3d12 || data.deviceApi == reshade::api::device_api::vulkan) {
+        if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
           auto pair2 = data.moddedPipelineRootIndexes.find(layout.handle);
           if (pair2 == data.moddedPipelineRootIndexes.end()) {
             std::stringstream s;
@@ -1019,7 +937,8 @@ namespace ShaderReplaceMod {
     uint32_t count,
     const void* values
   ) {
-    auto &data = cmd_list->get_private_data<cmd_list_data>();
+    auto &data = cmd_list->get_device()->get_private_data<device_data>();
+    std::unique_lock lock(data.mutex);
     auto pair = data.moddedPipelineLayouts.find(layout.handle);
     if (pair == data.moddedPipelineLayouts.end()) return;
     auto clonedLayout = pair->second;
@@ -1046,7 +965,8 @@ namespace ShaderReplaceMod {
     uint32_t layout_param,
     const reshade::api::descriptor_table_update &update
   ) {
-    auto &data = cmd_list->get_private_data<cmd_list_data>();
+    auto &data = cmd_list->get_device()->get_private_data<device_data>();
+    std::unique_lock lock(data.mutex);
     auto pair = data.moddedPipelineLayouts.find(layout.handle);
     if (pair == data.moddedPipelineLayouts.end()) return;
     auto clonedLayout = pair->second;
@@ -1088,7 +1008,8 @@ namespace ShaderReplaceMod {
     uint32_t count,
     const reshade::api::descriptor_table* tables
   ) {
-    auto &data = cmd_list->get_private_data<cmd_list_data>();
+    auto &data = cmd_list->get_device()->get_private_data<device_data>();
+    std::unique_lock lock(data.mutex);
     auto pair = data.moddedPipelineLayouts.find(layout.handle);
     if (pair == data.moddedPipelineLayouts.end()) return;
     auto clonedLayout = pair->second;
@@ -1110,13 +1031,14 @@ namespace ShaderReplaceMod {
   }
 
   static bool handlePreDraw(reshade::api::command_list* cmd_list) {
-    auto &data = cmd_list->get_private_data<cmd_list_data>();
+    auto &data = cmd_list->get_device()->get_private_data<device_data>();
+    std::unique_lock lock(data.mutex);
     if (data.bypassedShaders.count(data.currentShader)) return true;
     if (
       data.traceUnmodifiedShaders
       && data.hasSwapchainRenderTarget
       && !data.unmodifiedShaders.contains(data.currentShader)
-      && !data.customShaderHashes.contains(data.currentShader)
+      && !data.customShaders.contains(data.currentShader)
     ) {
       std::stringstream s;
       s << "handlePreDraw(unmodified shader writing to swapchain: "
@@ -1216,9 +1138,6 @@ namespace ShaderReplaceMod {
       case DLL_PROCESS_ATTACH:
         reshade::register_event<reshade::addon_event::init_device>(on_init_device);
         reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
-        reshade::register_event<reshade::addon_event::init_command_list>(on_init_command_list);
-        reshade::register_event<reshade::addon_event::execute_command_list>(on_execute_command_list);
-        reshade::register_event<reshade::addon_event::destroy_command_list>(on_destroy_command_list);
 
         if (!traceUnmodifiedShaders) {
           for (const auto &[hash, shader] : (*customShaders)) {
