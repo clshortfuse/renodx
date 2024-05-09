@@ -175,6 +175,24 @@ UserSettingUtil::UserSettings userSettings = {
     .parse = [](float value) { return value * 0.01f; }
   },
   new UserSettingUtil::UserSetting {
+    .key = "fxLensFlare",
+    .binding = &shaderInjection.fxLensFlare,
+    .defaultValue = 50.f,
+    .label = "Lens Flare",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxBloom",
+    .binding = &shaderInjection.fxBloom,
+    .defaultValue = 50.f,
+    .label = "Bloom",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
     .key = "fxVignette",
     .binding = &shaderInjection.fxVignette,
     .defaultValue = 50.f,
@@ -209,6 +227,8 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
   UserSettingUtil::updateUserSetting("colorGradingLutStrength", 100.f);
   UserSettingUtil::updateUserSetting("colorGradingLutScaling", 0.f);
+  UserSettingUtil::updateUserSetting("fxLensFlare", 50.f);
+  UserSettingUtil::updateUserSetting("fxBloom", 50.f);
   UserSettingUtil::updateUserSetting("fxVignette", 50.f);
   // UserSettingUtil::updateUserSetting("fxMotionBlur", 100.f);
 }
