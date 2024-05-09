@@ -50,6 +50,7 @@ namespace SwapChainUpgradeMod {
     std::unordered_map<uint64_t, uint64_t> resourceClones;
     std::unordered_map<uint64_t, uint32_t> pipelineToShaderHashMap;
     uint32_t currentShader;
+    std::shared_mutex mutex;
   };
 
   static std::vector<SwapChainUpgradeTarget> swapChainUpgradeTargets = {};
@@ -234,10 +235,11 @@ namespace SwapChainUpgradeMod {
   static void on_init_swapchain(reshade::api::swapchain* swapchain) {
     auto device = swapchain->get_device();
     if (!device) return;
-    auto &privateData = device->get_private_data<device_data>();
+    auto &data = device->get_private_data<device_data>();
+    std::unique_lock lock(data.mutex);
 
     reshade::log_message(reshade::log_level::debug, "initSwapChain(reset resource upgrade)");
-    privateData.resourceUpgradeFinished = false;
+    data.resourceUpgradeFinished = false;
     uint32_t len = swapChainUpgradeTargets.size();
     // Reset
     for (uint32_t i = 0; i < len; i++) {
@@ -252,11 +254,11 @@ namespace SwapChainUpgradeMod {
       auto buffer = swapchain->get_back_buffer(index);
       if (index == 0) {
         auto desc = device->get_resource_desc(buffer);
-        privateData.deviceBackBufferDesc = desc;
-        privateData.hasBufferDesc = true;
+        data.deviceBackBufferDesc = desc;
+        data.hasBufferDesc = true;
         checkSwapchainSize(swapchain, desc);
       }
-      privateData.backBuffers.emplace(buffer.handle);
+      data.backBuffers.emplace(buffer.handle);
 
       std::stringstream s;
       s << "initSwapChain("
@@ -265,23 +267,35 @@ namespace SwapChainUpgradeMod {
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
 
-    if (useResizeBuffer && privateData.deviceBackBufferDesc.texture.format != targetFormat) {
+    if (useResizeBuffer && data.deviceBackBufferDesc.texture.format != targetFormat) {
       reshade::log_message(reshade::log_level::debug, "Wrong swapchain format. Resizing...");
       IDXGISwapChain* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
 
       IDXGISwapChain4* swapchain4;
 
-      if (!SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
+      if (FAILED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
         reshade::log_message(reshade::log_level::error, "initSwapchain(Failed to get native swap chain)");
         return;
       }
+
+      DXGI_SWAP_CHAIN_DESC1 desc;
+      if (FAILED(swapchain4->GetDesc1(&desc))) {
+        reshade::log_message(reshade::log_level::error, "initSwapchain(Failed to get desc)");
+        swapchain4->Release();
+        return;
+      }
+
       HRESULT hr = swapchain4->ResizeBuffers(
-        backBufferCount < 2 ? 2 : 0,
-        privateData.deviceBackBufferDesc.texture.width,
-        privateData.deviceBackBufferDesc.texture.height,
-        DXGI_FORMAT_R16G16B16A16_FLOAT,
-        0x840
+        desc.BufferCount == 1 ? 2 : 0,
+        desc.Width,
+        desc.Height,
+        (targetFormat == reshade::api::format::r16g16b16a16_float)
+          ? DXGI_FORMAT_R16G16B16A16_FLOAT
+          : DXGI_FORMAT_R10G10B10A2_UNORM,
+        desc.Flags
       );
+
+      swapchain4->Release();
 
       if (hr == DXGI_ERROR_INVALID_CALL) {
         reshade::log_message(reshade::log_level::error, "initSwapchain(DXGI_ERROR_INVALID_CALL)");
@@ -305,13 +319,14 @@ namespace SwapChainUpgradeMod {
   static void on_destroy_swapchain(reshade::api::swapchain* swapchain) {
     auto device = swapchain->get_device();
     if (!device) return;
-    auto &privateData = device->get_private_data<device_data>();
-    privateData.hasBufferDesc = false;
+    auto &data = device->get_private_data<device_data>();
+    std::unique_lock lock(data.mutex);
+    data.hasBufferDesc = false;
 
     const size_t backBufferCount = swapchain->get_back_buffer_count();
     for (uint32_t index = 0; index < backBufferCount; index++) {
       auto buffer = swapchain->get_back_buffer(index);
-      privateData.backBuffers.erase(buffer.handle);
+      data.backBuffers.erase(buffer.handle);
 
       std::stringstream s;
       s << "destroySwapchain("
@@ -332,7 +347,6 @@ namespace SwapChainUpgradeMod {
     // DX12 can use PSO objects that need to be cloned
     reshade::api::pipeline_subobject* newSubobjects = nullptr;
 
-    auto &data = device->get_private_data<device_data>();
     uint32_t foundShader = 0;
     for (uint32_t i = 0; i < subobjectCount; ++i) {
       const auto subobject = subobjects[i];
@@ -357,6 +371,8 @@ namespace SwapChainUpgradeMod {
       if (foundShader) break;
     }
     if (foundShader) {
+      auto &data = device->get_private_data<device_data>();
+      std::unique_lock lock(data.mutex);
       data.pipelineToShaderHashMap.emplace(pipeline.handle, foundShader);
     }
   }
@@ -368,6 +384,7 @@ namespace SwapChainUpgradeMod {
   ) {
     auto device = cmd_list->get_device();
     auto &data = device->get_private_data<device_data>();
+    std::unique_lock lock(data.mutex);
     auto pipelineToShaderHashPair = data.pipelineToShaderHashMap.find(pipeline.handle);
     if (pipelineToShaderHashPair != data.pipelineToShaderHashMap.end()) {
       data.currentShader = pipelineToShaderHashPair->second;
@@ -390,6 +407,7 @@ namespace SwapChainUpgradeMod {
     if (desc.type != reshade::api::resource_type::texture_2d) return false;
 
     auto &privateData = device->get_private_data<device_data>();
+    std::unique_lock lock(privateData.mutex);
     if (privateData.resourceUpgradeFinished) return false;
 
     if (!privateData.hasBufferDesc) {
@@ -471,6 +489,7 @@ namespace SwapChainUpgradeMod {
     reshade::api::resource resource
   ) {
     auto &privateData = device->get_private_data<device_data>();
+    std::unique_lock lock(privateData.mutex);
     if (!privateData.upgradedResource) return;
     privateData.upgradedResource = false;
     privateData.upgradedResources.emplace(resource.handle);
@@ -493,6 +512,7 @@ namespace SwapChainUpgradeMod {
 
   static void on_destroy_resource(reshade::api::device* device, reshade::api::resource resource) {
     auto &privateData = device->get_private_data<device_data>();
+    std::unique_lock lock(privateData.mutex);
     privateData.upgradedResources.erase(resource.handle);
   }
 
@@ -507,6 +527,7 @@ namespace SwapChainUpgradeMod {
     bool expected = false;
 
     auto &privateData = device->get_private_data<device_data>();
+    std::unique_lock lock(privateData.mutex);
 
     if (!privateData.upgradeUnknownResourceViews && oldFormat == reshade::api::format::unknown) {
       return false;
@@ -525,6 +546,7 @@ namespace SwapChainUpgradeMod {
           break;
         case reshade::api::format::r8g8b8a8_unorm:
         case reshade::api::format::b8g8r8a8_unorm:
+        case reshade::api::format::r8g8b8a8_snorm:
           // Should upgrade shader
           desc.format = targetFormat;
           break;
@@ -599,6 +621,7 @@ namespace SwapChainUpgradeMod {
     reshade::api::resource_view view
   ) {
     auto &privateData = device->get_private_data<device_data>();
+    std::unique_lock lock(privateData.mutex);
     if (privateData.backBuffers.contains(resource.handle)) {
       privateData.backBufferResourceViews.emplace(view.handle);
     }
@@ -609,6 +632,7 @@ namespace SwapChainUpgradeMod {
 
   static void on_destroy_resource_view(reshade::api::device* device, reshade::api::resource_view view) {
     auto &privateData = device->get_private_data<device_data>();
+    std::unique_lock lock(privateData.mutex);
     privateData.backBufferResourceViews.erase(view.handle);
     privateData.upgradedResourceViews.erase(view.handle);
     privateData.upgradedResourceView = false;
@@ -633,6 +657,7 @@ namespace SwapChainUpgradeMod {
     auto device = swapchain->get_device();
     if (!device) return false;
     auto &privateData = device->get_private_data<device_data>();
+    std::unique_lock lock(privateData.mutex);
     reshade::log_message(reshade::log_level::debug, "set_fullscreen_state(reset resource upgrade)");
     privateData.resourceUpgradeFinished = false;
     uint32_t len = swapChainUpgradeTargets.size();
