@@ -2,7 +2,7 @@
 #include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sun May 12 21:53:08 2024
-Texture2D<float4> t5 : register(t5);
+Texture2D<float4> t5 : register(t5);  // previous frame?
 
 Texture2D<float4> t4 : register(t4);  // normal
 
