@@ -7,9 +7,10 @@
 
 #define DEBUG_LEVEL_0
 
+#include <embed/0x0F2CC0D1.h> //video
 #include <embed/0x7684FC16.h> // FXAA
 #include <embed/0x2C63040A.h> // LUT
-#include <embed/0x160805BC.h>   // maybe also LUT?
+#include <embed/0x160805BC.h> // maybe also LUT?
 #include <embed/0x3778E664.h> // TAA
 #include <embed/0xAF2731D9.h> // TAA
 #include <embed/0x1BDD7570.h> // Tonemap
@@ -59,16 +60,17 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomSwapchainShader(0xCC4CAE26),
   CustomSwapchainShader(0xECFC10A2)
   */
-  CustomShaderEntry(0x7684FC16),  // FXAA
-  CustomShaderEntry(0x2C63040A),  // LUT
-  CustomShaderEntry(0x160805BC),  // Maybe also LUT?
+  CustomSwapchainShader(0x0F2CC0D1),  // video
+  CustomShaderEntry(0x7684FC16),      // FXAA
+  CustomShaderEntry(0x2C63040A),      // LUT
+  CustomShaderEntry(0x160805BC),      // Maybe also LUT?
 
-  CustomShaderEntry(0x3778E664),  // TAA
-  CustomShaderEntry(0xAF2731D9),  // TAA
-  CustomShaderEntry(0x1BDD7570),  // Tonemap
-  CustomShaderEntry(0x2A868728),  // Tonemap
-  CustomShaderEntry(0x5D002D1E),  // Tonemap
-  CustomShaderEntry(0xBF6561E2)   // Tonemap
+  CustomShaderEntry(0x3778E664),      // TAA
+  CustomShaderEntry(0xAF2731D9),      // TAA
+  CustomShaderEntry(0x1BDD7570),      // Tonemap
+  CustomShaderEntry(0x2A868728),      // Tonemap
+  CustomShaderEntry(0x5D002D1E),      // Tonemap
+  CustomShaderEntry(0xBF6561E2)       // Tonemap
 
 };
 
