@@ -157,15 +157,18 @@ float3 sampleLUTUnreal(Texture2D lut, SamplerState samplerState, float3 color, f
 }
 
 float3 lutCorrectionBlack(float3 inputColor, float3 lutColor, float lutBlackY, float strength) {
-  const float inputY = yFromBT709(inputColor);
-  const float colorY = yFromBT709(lutColor);
-  const float a = lutBlackY;
-  const float b = lerp(0, lutBlackY, strength);
-  const float g = inputY;
-  const float h = colorY;
-  const float newY = h - pow(lutBlackY, pow(1.f + g, b / a));
-  lutColor *= (colorY > 0) ? min(colorY, newY) / colorY : 1.f;
-  return lutColor;
+    const float inputY = yFromBT709(inputColor);
+    const float h = yFromBT709(lutColor);
+    const float a = lutBlackY;
+    const float b = lerp(0, lutBlackY, strength);
+
+    // focus on only affecting darker regions
+    float exponentBase = 1.f + inputY;
+    float exponentPower = b / a * 100.0; // '100' amplifies focus on darker regions
+
+    const float newY = h - pow(lutBlackY, pow(exponentBase, exponentPower));
+    lutColor *= (h > 0) ? min(h, newY) / h : 1.f;
+    return lutColor;
 }
 
 float3 lutCorrectionWhite(float3 inputColor, float3 lutColor, float lutWhiteY, float targetWhiteY, float strength) {
