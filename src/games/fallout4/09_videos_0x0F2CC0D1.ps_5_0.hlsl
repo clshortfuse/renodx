@@ -22,7 +22,7 @@ void main(
   o0.rgb = saturate(o0.rgb);
   o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
   float videoPeak = injectedData.toneMapPeakNits / (injectedData.toneMapGameNits / 203.f);
-  o0.rgb = bt2446a_inverse_tonemapping_bt709(o0.rgb, 100.f, videoPeak);
+  o0.rgb = bt2446a_inverse_tonemapping_bt709(o0.rgb, 100.f * injectedData.toneMapGameNits/injectedData.toneMapPeakNits, videoPeak);
   o0.rgb *= injectedData.toneMapPeakNits / videoPeak;
   o0.rgb /= 80.f;
   return;
