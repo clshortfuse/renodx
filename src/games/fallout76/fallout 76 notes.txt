@@ -1,4 +1,4 @@
-important things I found (use quick search in vscode)
+things I found (use quick search in vscode)
     references to 2.2:
         (0.454545468)
         r7.xyz = float3(2.20000005,2.20000005,2.20000005) * r7.xyz;
@@ -25,6 +25,7 @@ important shaders:
         0xBF6561E2.hlsl
     lut?
         0x2C63040A.hlsl
+        0x160805BC.ps_5_0.hlsl
     no idea but looks important
         0x1BF9D9D2.hlsl
     vignette
