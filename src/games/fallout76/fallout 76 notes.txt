@@ -19,4 +19,7 @@ important shaders:
         0xBF6561E2.hlsl
         0x5D002D1E.hlsl
         0xBF6561E2.hlsl
-    
+    lut?
+        0x2C63040A.hlsl
+    no idea but looks important
+        0x1BF9D9D2.hlsl
