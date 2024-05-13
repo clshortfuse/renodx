@@ -1,25 +1,10 @@
-things I found (use quick search in vscode)
-    references to 2.2:
-        (0.454545468)
-        r7.xyz = float3(2.20000005,2.20000005,2.20000005) * r7.xyz;
-
-    converting srgb to ycbcr:
-        dot(r3.xyz, float3(0.212500006,0.715399981,0.0720999986))
-
-    found in tonemapping shaders in both fallout 4 and 76:
-        if (r0.w != 0) {
-            o0.xyz = r0.xyz;
-            o0.w = 1;
-            return;
-        }
-
-    bt.601 primaries:
-        r2.xy = float2(0.298999995,0.587000012) * r2.xy;
-        r0.y = dot(float3(0.298999995,0.587000012,0.114), r1.xyz);
-
 completed:
     video
         0x0F2CC0D1.hlsl
+
+maybe completed:
+    taa:
+        0xAF2731D9.ps_5_0.hlsl
 
 todo shaders:
     tonemapping
@@ -42,3 +27,25 @@ todo shaders:
         0xC9C77523.hlsl
     fxaa
         0x7684FC16.hlsl
+    taa
+        0x3778E664
+
+
+notes (use quick search in vscode)
+    references to 2.2:
+        (0.454545468)
+        r7.xyz = float3(2.20000005,2.20000005,2.20000005) * r7.xyz;
+
+    converting srgb to ycbcr:
+        dot(r3.xyz, float3(0.212500006,0.715399981,0.0720999986))
+
+    found in tonemapping shaders in both fallout 4 and 76:
+        if (r0.w != 0) {
+            o0.xyz = r0.xyz;
+            o0.w = 1;
+            return;
+        }
+
+    bt.601 primaries:
+        r2.xy = float2(0.298999995,0.587000012) * r2.xy;
+        r0.y = dot(float3(0.298999995,0.587000012,0.114), r1.xyz);
