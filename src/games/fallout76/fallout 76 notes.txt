@@ -1,0 +1,22 @@
+important things I found (use quick search in vscode)
+    references to 1/2.2:
+        (0.454545468)
+    converting srgb to ycbcr:
+        dot(r3.xyz, float3(0.212500006,0.715399981,0.0720999986))
+    found in tonemapping shaders in both fallout 4 and 76:
+        if (r0.w != 0) {
+            o0.xyz = r0.xyz;
+            o0.w = 1;
+            return;
+        }
+    bt.601 primaries:
+        r2.xy = float2(0.298999995,0.587000012) * r2.xy;
+        r0.y = dot(float3(0.298999995,0.587000012,0.114), r1.xyz);
+
+important shaders:
+    tonemapping?
+        0x2A868728.hlsl
+        0xBF6561E2.hlsl
+        0x5D002D1E.hlsl
+        0xBF6561E2.hlsl
+    
