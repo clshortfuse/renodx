@@ -15,6 +15,7 @@ struct ShaderInjectData {
   float colorGradeSaturation;
   float colorGradeLUTStrength;
   float colorGradeLUTScaling;
+  float fxNoise;
   float fxScreenGlow;
 };
 

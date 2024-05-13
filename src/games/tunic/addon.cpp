@@ -7,21 +7,22 @@
 
 #define DEBUG_LEVEL_0
 
-#include "./embed/0x1CCE11A3.h"
-#include "./embed/0x49E25D6C.h"
-#include "./embed/0x4AC5CC39.h"
-#include "./embed/0x5439FB55.h"
-#include "./embed/0x54E583C8.h"
-#include "./embed/0x55B0DCB7.h"
-#include "./embed/0xB274BE4D.h"
-#include "./embed/0xEEFE9737.h"
+#include <embed/0x1CCE11A3.h>
+#include <embed/0x49E25D6C.h>
+#include <embed/0x4AC5CC39.h>
+#include <embed/0x5439FB55.h>
+#include <embed/0x54E583C8.h>
+#include <embed/0x55B0DCB7.h>
+#include <embed/0xAA66A0B6.h>
+#include <embed/0xB274BE4D.h>
+#include <embed/0xEEFE9737.h>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-#include "../../utils/userSettingUtil.hpp"
 #include "../../mods/shaderReplaceMod.hpp"
 #include "../../mods/swapChainUpgradeMod.hpp"
+#include "../../utils/userSettingUtil.hpp"
 #include "./shared.h"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Tunic";
@@ -32,7 +33,8 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0x1CCE11A3),  // UI/video
   CustomShaderEntry(0xB274BE4D),  // booklet
   CustomShaderEntry(0x55B0DCB7),
-  CustomShaderEntry(0xEEFE9737),
+  CustomShaderEntry(0xEEFE9737),  // LUT
+  CustomShaderEntry(0xAA66A0B6),  // LUT + Noise
   CustomShaderEntry(0x5439FB55),
   CustomShaderEntry(0x54E583C8),  // glow effect
   CustomShaderEntry(0x4AC5CC39)   // tonemapper
@@ -149,6 +151,16 @@ UserSettingUtil::UserSettings userSettings = {
     .parse = [](float value) { return value * 0.01f; }
   },
   new UserSettingUtil::UserSetting {
+    .key = "fxNoise",
+    .binding = &shaderInjection.fxNoise,
+    .defaultValue = 50.f,
+    .label = "fxNoise",
+    .section = "Effects",
+    .tooltip = "Noise pattern added to game in some areas.",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
+  new UserSettingUtil::UserSetting {
     .key = "fxScreenGlow",
     .binding = &shaderInjection.fxScreenGlow,
     .defaultValue = 100.f,
@@ -173,6 +185,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
   UserSettingUtil::updateUserSetting("colorGradeLUTScaling", 0.f);
+  UserSettingUtil::updateUserSetting("fxNoise", 50.f);
   UserSettingUtil::updateUserSetting("fxScreenGlow", 100.f);
 }
 
