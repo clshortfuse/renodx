@@ -17,7 +17,11 @@ things I found (use quick search in vscode)
         r2.xy = float2(0.298999995,0.587000012) * r2.xy;
         r0.y = dot(float3(0.298999995,0.587000012,0.114), r1.xyz);
 
-important shaders:
+completed:
+    video
+        0x0F2CC0D1.hlsl
+
+todo shaders:
     tonemapping
         0x2A868728.hlsl
         0xBF6561E2.hlsl
@@ -33,8 +37,6 @@ important shaders:
     cursor?
         0xA6AB1C75.hlsl
         0x2CA9CD55.hlsl
-    videos?
-        0x0F2CC0D1.hlsl
     dof?
         0x283C8F43.hlsl
         0xC9C77523.hlsl
