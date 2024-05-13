@@ -1,4 +1,4 @@
-// Game Render + LUT
+// Game Render + LUT + Noise
 
 #include "../../shaders/color.hlsl"
 #include "../../shaders/colorgrade.hlsl"
@@ -25,10 +25,16 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyzw = t0.Sample(s0_s, v3.xy).xyzw;
-  o0.w = r0.w;
+  r0.xy = cb0[2].zw * v1.xy;
+  r0.x = dot(float2(171, 231), r0.xy);
+  r0.xyz = float3(0.00970873795, 0.0140845068, 0.010309278) * r0.xxx;
+  r0.xyz = frac(r0.xyz);
+  r0.xyz = float3(-0.5, -0.5, -0.5) + r0.xyz;
+  r0.xyz = float3(0.00392156886, 0.00392156886, 0.00392156886) * r0.xyz;
+  r1.xyzw = t0.Sample(s0_s, v3.xy).xyzw;
+  // r0.xyz = saturate(r1.xyz * cb0[6].yyy + r0.xyz);
+  r0.xyz = (r1.xyz * cb0[6].yyy + r0.xyz * injectedData.fxNoise);
 
-  r0.xyz = cb0[6].yyy * r0.xyz;  // scale
   float3 untonemapped = r0.rgb;
 
   float vanillaMidGray = 0.18f;
