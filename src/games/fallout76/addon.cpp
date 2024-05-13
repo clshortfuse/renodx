@@ -31,7 +31,7 @@ extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Fallout 76";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Fallout 76";
 
 ShaderReplaceMod::CustomShaders customShaders = {
-  /*
+  /* stuff from fallout 4
   CustomSwapchainShader(0x72826F5B),  // cursor
   CustomSwapchainShader(0x21C1F78D),  // ui compsite
   CustomSwapchainShader(0xB14DB0F4),  // ui boxes
