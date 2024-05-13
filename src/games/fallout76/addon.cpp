@@ -9,7 +9,7 @@
 
 #include <embed/0x7684FC16.h> // FXAA
 #include <embed/0x2C63040A.h> // LUT
-#include <embed/0x160805BC>   // maybe also LUT?
+#include <embed/0x160805BC.h>   // maybe also LUT?
 #include <embed/0x3778E664.h> // TAA
 #include <embed/0xAF2731D9.h> // TAA
 #include <embed/0x1BDD7570.h> // Tonemap
