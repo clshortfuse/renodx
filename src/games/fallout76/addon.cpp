@@ -7,7 +7,7 @@
 
 #define DEBUG_LEVEL_0
 
-#include <embed/0x0F2CC0D1.h> //video
+#include <embed/0x0F2CC0D1.h> // video
 #include <embed/0x7684FC16.h> // FXAA
 #include <embed/0x2C63040A.h> // LUT
 #include <embed/0x160805BC.h> // maybe also LUT?
