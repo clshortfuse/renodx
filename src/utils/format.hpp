@@ -7,7 +7,10 @@
 
 #include <include/reshade.hpp>
 
+#define PRINT_CRC32(crc32) "0x" << std::hex << std::setw(8) << std::setfill('0') << crc32 << std::setfill(' ') << std::dec
+
 namespace {
+
   inline auto to_string(reshade::api::shader_stage value) {
     switch (value) {
       case reshade::api::shader_stage::vertex:          return "vertex";
@@ -56,13 +59,16 @@ namespace {
 
   inline auto to_string(reshade::api::descriptor_type value) {
     switch (value) {
-      case reshade::api::descriptor_type::sampler:                    return "sampler";
-      case reshade::api::descriptor_type::sampler_with_resource_view: return "sampler_with_resource_view";
-      case reshade::api::descriptor_type::shader_resource_view:       return "shader_resource_view";
-      case reshade::api::descriptor_type::unordered_access_view:      return "unordered_access_view";
-      case reshade::api::descriptor_type::constant_buffer:            return "constant_buffer";
-      case reshade::api::descriptor_type::acceleration_structure:     return "acceleration_structure";
-      default:                                                        return "unknown";
+      case reshade::api::descriptor_type::sampler:                      return "sampler";
+      case reshade::api::descriptor_type::sampler_with_resource_view:   return "sampler_with_resource_view";
+      case reshade::api::descriptor_type::shader_resource_view:         return "shader_resource_view";
+      case reshade::api::descriptor_type::unordered_access_view:        return "unordered_access_view";
+      case reshade::api::descriptor_type::buffer_shader_resource_view:  return "buffer_shader_resource_view";
+      case reshade::api::descriptor_type::buffer_unordered_access_view: return "buffer_unordered_access_view";
+      case reshade::api::descriptor_type::constant_buffer:              return "constant_buffer";
+      case reshade::api::descriptor_type::shader_storage_buffer:        return "shader_storage_buffer";
+      case reshade::api::descriptor_type::acceleration_structure:       return "acceleration_structure";
+      default:                                                          return "unknown";
     }
   }
 
