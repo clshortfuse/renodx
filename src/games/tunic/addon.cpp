@@ -139,7 +139,7 @@ UserSettingUtil::UserSettings userSettings = {
     .section = "Color Grading",
     .tooltip = "Controls highlight desaturation due to overexposure.",
     .max = 100.f,
-    .parse = [](float value) { return value * 0.02f; }
+    .parse = [](float value) { return value * 0.01f; }
   },
   new UserSettingUtil::UserSetting {
     .key = "colorGradeLUTStrength",
