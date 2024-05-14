@@ -42,7 +42,7 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1
   float renoDRTContrast = 1.1f;
   float renoDRTFlare = 0.f;
   float renoDRTShadows = 1.f;
-  float renoDRTDechroma = 0.5f;
+  float renoDRTDechroma = injectedData.colorGradeBlowout;
   float renoDRTSaturation = 1.05f;
   float renoDRTHighlights = 1.f;
 

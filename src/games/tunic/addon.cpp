@@ -132,6 +132,16 @@ UserSettingUtil::UserSettings userSettings = {
     .parse = [](float value) { return value * 0.02f; }
   },
   new UserSettingUtil::UserSetting {
+    .key = "colorGradeBlowout",
+    .binding = &shaderInjection.colorGradeBlowout,
+    .defaultValue = 50.f,
+    .label = "Blowout",
+    .section = "Color Grading",
+    .tooltip = "Controls highlight desaturation due to overexposure.",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.01f; }
+  },
+  new UserSettingUtil::UserSetting {
     .key = "colorGradeLUTStrength",
     .binding = &shaderInjection.colorGradeLUTStrength,
     .defaultValue = 100.f,
@@ -154,7 +164,7 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "fxNoise",
     .binding = &shaderInjection.fxNoise,
     .defaultValue = 50.f,
-    .label = "fxNoise",
+    .label = "Noise",
     .section = "Effects",
     .tooltip = "Noise pattern added to game in some areas.",
     .max = 100.f,
@@ -183,6 +193,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
+  UserSettingUtil::updateUserSetting("colorGradeBlowout", 0.f);
   UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
   UserSettingUtil::updateUserSetting("colorGradeLUTScaling", 0.f);
   UserSettingUtil::updateUserSetting("fxNoise", 50.f);
@@ -191,6 +202,7 @@ static void onPresetOff() {
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
   switch (fdwReason) {
+
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
 
