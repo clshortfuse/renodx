@@ -1,13 +1,13 @@
 // ---- Created with 3Dmigoto v1.3.16 on Sun May 12 21:52:47 2024
 Texture2D<float4> t4 : register(t4);
 
-Texture2D<float4> t3 : register(t3);
+Texture2D<float4> t3 : register(t3);  // depth
 
 Texture2D<float4> t2 : register(t2);
 
 Texture2D<float4> t1 : register(t1);
 
-Texture2D<float4> t0 : register(t0);
+Texture2D<float4> t0 : register(t0);  // render
 
 SamplerState s8_s : register(s8);
 
@@ -17,6 +17,14 @@ SamplerState s1_s : register(s1);
 
 SamplerState s0_s : register(s0);
 
+/* 
+fo76: 2 cbuffers  63 values in all 4 shaders
+
+fo4:  1 cbuffer   5  values in 2 shaders
+      1 cbuffer   6  values in 2 shaders
+      
+why so different?
+*/
 cbuffer cb2 : register(b2)
 {
   float4 cb2[8];
@@ -43,11 +51,21 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
+  /* depth tests */
   r0.xyz = t0.Sample(s0_s, v1.xy).xyz;
-  r0.w = t3.SampleLevel(s3_s, v1.xy, 0).w;
-  r0.w = 255 * r0.w;
+
+  const float3 renderInput = r0.xyz
+
+  r0.w = t3.SampleLevel(s3_s, v1.xy, 0).w;  // use LOD level 0
+
+  const float depthMask = r0.w 
+
+  r0.w = 255 * r0.w;  // scale depth
+  // depth stencil test?
+  // related to bloom?
   r0.w = (uint)r0.w;
   r0.w = cmp((int)r0.w == 1);
+  
   r1.xy = (int2)v0.xy;
   r1.zw = float2(0,0);
   r1.x = t4.Load(r1.xyz).x;
@@ -56,8 +74,10 @@ void main(
   if (r0.w != 0) {
     o0.xyz = r0.xyz;
     o0.w = 1;
-    return;
+    return; // exit shader early based on depth?
   }
+
+  /* various color calculations */
   r0.w = t1.Sample(s1_s, v1.xy).x;
   r1.x = t1.Sample(s1_s, float2(0.5,0.5)).x;
   r1.yz = v1.xy * cb2[7].zw + float2(-0.5,-0.5);
@@ -79,6 +99,8 @@ void main(
   r1.z = r1.z * r1.w;
   r1.z = exp2(r1.z);
   r1.y = r1.y * r1.z;
+
+  /* color adjustments based on parameters */
   r1.zw = cb2[1].xy * r0.ww;
   r1.y = max(r1.y, r1.z);
   r1.y = min(r1.y, r1.w);
@@ -110,6 +132,8 @@ void main(
   r0.w = r1.x * r0.w;
   r0.xyz = r0.xyz * r0.www;
   r0.w = cmp(0.5 < cb2[2].w);
+
+  /* tone mapping */
   r1.x = max(9.99999975e-005, cb2[2].y);
   r1.y = 0.560000002 / r1.x;
   r1.y = 2.43000007 + r1.y;
@@ -126,7 +150,7 @@ void main(
   r2.xyz = r0.xyz * r2.xyz + r1.yyy;
   r1.xyz = saturate(r1.xzw / r2.xyz);
   r0.xyz = r0.www ? r1.xyz : r0.xyz;
-  r1.x = dot(r0.xyz, float3(0.212500006,0.715399981,0.0720999986));
+  r1.x = dot(r0.xyz, float3(0.212500006,0.715399981,0.0720999986)); // converting srgb to ycbcr
   r0.w = 0;
   r0.xyzw = -r1.xxxx + r0.xyzw;
   r0.xyzw = cb2[3].xxxx * r0.xyzw + r1.xxxx;
@@ -134,7 +158,7 @@ void main(
   r0.xyzw = cb2[4].wwww * r1.xyzw + r0.xyzw;
   r0.w = cb2[3].w * r0.w;
   r0.xyz = cb2[3].www * r0.xyz + -cb2[0].xxx;
-  o0.xyz = cb2[3].zzz * r0.xyz + cb2[0].xxx;
+  o0.xyz = cb2[3].zzz * r0.xyz + cb2[0].xxx;  // final output color
   o0.w = r0.w;
   return;
 }
