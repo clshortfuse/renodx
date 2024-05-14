@@ -256,6 +256,7 @@ namespace ShaderReplaceMod {
             cbvIndex = param.push_descriptors.dx_register_index + param.push_descriptors.count;
           }
         }
+#if RESHADE_API_VERSION >= 13
       } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers) {
         for (uint32_t rangeIndex = 0; rangeIndex < param.descriptor_table_with_static_samplers.count; ++rangeIndex) {
           auto range = param.descriptor_table_with_static_samplers.ranges[rangeIndex];
@@ -270,6 +271,7 @@ namespace ShaderReplaceMod {
             }
           }
         }
+#endif
       }
     }
 
