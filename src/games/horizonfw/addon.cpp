@@ -132,7 +132,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
   }
 
   // UserSettingUtil::use(fdwReason, &userSettings, &onPresetOff);
-  ShaderReplaceMod::use(fdwReason, &customShaders);
+  ShaderReplaceMod::use(fdwReason, customShaders);
 
   return TRUE;
 }

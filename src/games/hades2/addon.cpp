@@ -169,7 +169,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
 
   UserSettingUtil::use(fdwReason, &userSettings, &onPresetOff);
   SwapChainUpgradeMod::use(fdwReason);
-  ShaderReplaceMod::use(fdwReason, &customShaders, &shaderInjection);
+  ShaderReplaceMod::use(fdwReason, customShaders, &shaderInjection);
 
   return TRUE;
 }

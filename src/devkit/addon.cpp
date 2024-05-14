@@ -5,7 +5,10 @@
 
 #define ImTextureID ImU64
 
+#pragma comment(lib, "dxguid.lib")
+
 #include <Windows.h>
+#include <d3d12.h>
 #include <array>
 #include <cstdio>
 #include <filesystem>
@@ -66,6 +69,10 @@ std::shared_mutex s_mutex;
 
 struct __declspec(uuid("3b70b2b2-52dc-4637-bd45-c1171c4c322e")) device_data {
   std::unordered_map<uint64_t, uint64_t> resourceViews;
+  std::unordered_map<uint64_t, std::string> resourceNames;
+  std::unordered_set<uint64_t> resources;
+  std::shared_mutex mutex;
+  reshade::api::device_api device_api;
 };
 
 std::unordered_set<uint64_t> computeShaderLayouts;
@@ -74,6 +81,7 @@ std::unordered_map<uint64_t, reshade::api::resource> resources;
 std::unordered_map<uint64_t, uint64_t> resourceViewsByResource;
 
 std::unordered_map<uint64_t, CachedPipeline*> pipelineCacheByPipelineHandle;
+std::unordered_map<uint64_t, reshade::api::device*> pipelinesToDestroy;
 std::unordered_map<uint32_t, CachedPipeline*> pipelineCacheByShaderHash;
 std::unordered_map<uint32_t, CachedShader*> shaderCache;
 
@@ -98,12 +106,48 @@ static uint32_t presentCount = 0;
 
 static const uint32_t MAX_PRESENT_COUNT = 60;
 
+inline void GetD3DName(ID3D12Resource* obj, std::string &name) {
+  if (!obj) {
+    return;
+  }
+
+  char c_name[128] = {};
+  UINT size = sizeof(name);
+  HRESULT hr = obj->GetPrivateData(WKPDID_D3DDebugObjectName, &size, c_name);
+  if (hr == S_OK) {
+    name = c_name;
+  }
+}
+
 static uint64_t getResourceByViewHandle(device_data &data, uint64_t handle) {
   auto pair = data.resourceViews.find(handle);
   if (pair != data.resourceViews.end()) {
     return pair->second;
   }
   return 0;
+}
+
+static std::string getResourceNameByViewHandle(device_data &data, uint64_t handle) {
+  if (data.device_api != reshade::api::device_api::d3d12) return "?";
+  return "?";
+
+  auto rsvHandle = getResourceByViewHandle(data, handle);
+  if (rsvHandle == 0) return "?";
+  if (!data.resources.contains(rsvHandle)) return "?";
+
+  auto pair = data.resourceNames.find(rsvHandle);
+  if (pair != data.resourceNames.end()) {
+    return pair->second;
+  }
+
+  ID3D12Resource* d3d12resource = reinterpret_cast<ID3D12Resource*>(rsvHandle);
+
+  std::string name = "";
+  GetD3DName(d3d12resource, name);
+  if (name.length()) {
+    data.resourceNames.emplace(rsvHandle, name);
+  }
+  return name;
 }
 
 std::filesystem::path getShaderPath() {
@@ -121,7 +165,7 @@ static void unloadCustomShaders() {
     auto cachedPipeline = pair.second;
     if (!cachedPipeline->cloned) continue;
     cachedPipeline->cloned = false;
-    cachedPipeline->device->destroy_pipeline(cachedPipeline->pipelineClone);
+    pipelinesToDestroy.emplace(cachedPipeline->pipelineClone.handle, cachedPipeline->device);
   }
 }
 
@@ -534,14 +578,14 @@ static void logLayout(
       std::stringstream s;
       s << "logPipelineLayout(";
       s << reinterpret_cast<void*>(layout.handle);
-      s << " | PD"
-        << " | " << param.push_descriptors.array_size
-        << " | " << param.push_descriptors.binding
-        << " | " << param.push_descriptors.count
-        << " | " << param.push_descriptors.dx_register_index
-        << " | " << param.push_descriptors.dx_register_space
-        << " | " << to_string(param.push_descriptors.type)
-        << " | " << to_string(param.push_descriptors.visibility)
+      s << " | PD |"
+        << " array_size: " << param.push_descriptors.array_size
+        << ", binding: " << param.push_descriptors.binding
+        << ", count " << param.push_descriptors.count
+        << ", register: " << param.push_descriptors.dx_register_index
+        << ", space: " << param.push_descriptors.dx_register_space
+        << ", type: " << to_string(param.push_descriptors.type)
+        << ", visibility " << to_string(param.push_descriptors.visibility)
         << ")"
         << " [" << paramIndex << "/" << paramCount << "]";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -553,6 +597,61 @@ static void logLayout(
         << ")"
         << " [" << paramIndex << "/" << paramCount << "]";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
+#if RESHADE_API_VERSION >= 13
+    } else if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers) {
+      for (uint32_t rangeIndex = 0; rangeIndex < param.descriptor_table_with_static_samplers.count; ++rangeIndex) {
+        auto range = param.descriptor_table_with_static_samplers.ranges[rangeIndex];
+        std::stringstream s;
+        s << "logPipelineLayout(";
+        s << reinterpret_cast<void*>(layout.handle);
+        s << " | TBLSS";
+        s << " | " << reinterpret_cast<void*>(&param.descriptor_table.ranges);
+        s << " | ";
+        if (range.static_samplers == nullptr) {
+          s << " null ";
+        } else {
+          s << ", filter: " << (uint32_t)range.static_samplers->filter;
+          s << ", address_u: " << (uint32_t)range.static_samplers->address_u;
+          s << ", address_v: " << (uint32_t)range.static_samplers->address_v;
+          s << ", address_w: " << (uint32_t)range.static_samplers->address_w;
+          s << ", mip_lod_bias: " << (uint32_t)range.static_samplers->mip_lod_bias;
+          s << ", max_anisotropy: " << (uint32_t)range.static_samplers->max_anisotropy;
+          s << ", compare_op: " << (uint32_t)range.static_samplers->compare_op;
+          s << ", border_color: [" << range.static_samplers->border_color[0] << ", " << range.static_samplers->border_color[1] << ", " << range.static_samplers->border_color[2] << ", " << range.static_samplers->border_color[3] << "]";
+          s << ", min_lod: " << range.static_samplers->min_lod;
+          s << ", max_lod: " << range.static_samplers->max_lod;
+        }
+        reshade::log_message(reshade::log_level::info, s.str().c_str());
+      }
+    } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers) {
+      for (uint32_t rangeIndex = 0; rangeIndex < param.descriptor_table.count; ++rangeIndex) {
+        auto range = param.descriptor_table_with_static_samplers.ranges[rangeIndex];
+        std::stringstream s;
+        s << "logPipelineLayout(";
+        s << reinterpret_cast<void*>(layout.handle);
+        s << " | PDSS";
+        s << " | " << reinterpret_cast<void*>(&range);
+        s << " | ";
+        if (range.static_samplers == nullptr) {
+          s << "not";
+        } else {
+          s << "filter: " << (uint32_t)range.static_samplers->filter
+            << ", address_u: " << (uint32_t)range.static_samplers->address_u
+            << ", address_v: " << (uint32_t)range.static_samplers->address_v
+            << ", address_w: " << (uint32_t)range.static_samplers->address_w
+            << ", mip_lod_bias: " << (uint32_t)range.static_samplers->mip_lod_bias
+            << ", max_anisotropy: " << (uint32_t)range.static_samplers->max_anisotropy
+            << ", compare_op: " << (uint32_t)range.static_samplers->compare_op
+            << ", border_color: [" << range.static_samplers->border_color[0] << ", " << range.static_samplers->border_color[1] << ", " << range.static_samplers->border_color[2] << ", " << range.static_samplers->border_color[3] << "]"
+            << ", min_lod: " << range.static_samplers->min_lod
+            << ", max_lod: " << range.static_samplers->max_lod;
+        }
+        s << ")"
+          << " [" << rangeIndex << "/" << param.descriptor_table.count << "]"
+          << " [" << paramIndex << "/" << paramCount << "]";
+        reshade::log_message(reshade::log_level::info, s.str().c_str());
+      }
+#endif
     } else {
       std::stringstream s;
       s << "logPipelineLayout("
@@ -573,7 +672,8 @@ static void on_init_device(reshade::api::device* device) {
     << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 
-  device->create_private_data<device_data>();
+  auto &data = device->create_private_data<device_data>();
+  data.device_api = device->get_api();
 }
 
 static void on_destroy_device(reshade::api::device* device) {
@@ -939,16 +1039,64 @@ static bool on_copy_texture_region(
   const reshade::api::subresource_box* dest_box,
   reshade::api::filter_mode filter
 ) {
-  if (traceRunning) {
-    std::stringstream s;
-    s << "on_copy_texture_region"
-      << "(" << reinterpret_cast<void*>(source.handle)
-      << ", " << (source_subresource)
-      << ", " << reinterpret_cast<void*>(dest.handle)
-      << ", " << (uint32_t)filter
-      << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
-  }
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return false;
+  std::stringstream s;
+  s << "on_copy_texture_region"
+    << "(" << reinterpret_cast<void*>(source.handle)
+    << ", " << (source_subresource)
+    << ", " << reinterpret_cast<void*>(dest.handle)
+    << ", " << (uint32_t)filter
+    << ")";
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
+
+  return false;
+}
+
+static bool on_copy_texture_to_buffer(
+  reshade::api::command_list* cmd_list,
+  reshade::api::resource source,
+  uint32_t source_subresource,
+  const reshade::api::subresource_box* source_box,
+  reshade::api::resource dest,
+  uint64_t dest_offset,
+  uint32_t row_length,
+  uint32_t slice_height
+) {
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return false;
+  std::stringstream s;
+  s << "on_copy_texture_region"
+    << "(" << reinterpret_cast<void*>(source.handle)
+    << "[" << source_subresource << "]"
+    << "(" << source_box->top << ", " << source_box->left << ", " << source_box->front << ")"
+    << " => " << reinterpret_cast<void*>(dest.handle)
+    << "[" << dest_offset << "]"
+    << ")";
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
+
+  return false;
+}
+
+static bool on_copy_buffer_to_texture(
+  reshade::api::command_list* cmd_list,
+  reshade::api::resource source,
+  uint64_t source_offset,
+  uint32_t row_length,
+  uint32_t slice_height,
+  reshade::api::resource dest,
+  uint32_t dest_subresource,
+  const reshade::api::subresource_box* dest_box
+) {
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return false;
+  std::stringstream s;
+  s << "on_copy_texture_region"
+    << "(" << reinterpret_cast<void*>(source.handle)
+    << "[" << source_offset << "]"
+    << " => " << reinterpret_cast<void*>(dest.handle)
+    << "[" << dest_subresource << "]"
+    << "(" << dest_box->top << ", " << dest_box->left << ", " << dest_box->front << ")"
+    << ")";
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
+
   return false;
 }
 
@@ -964,17 +1112,16 @@ static bool on_resolve_texture_region(
   int32_t dest_z,
   reshade::api::format format
 ) {
-  if (traceRunning) {
-    std::stringstream s;
-    s << "on_resolve_texture_region"
-      << "(" << reinterpret_cast<void*>(source.handle)
-      << ": " << (source_subresource)
-      << " => " << reinterpret_cast<void*>(dest.handle)
-      << ": " << (dest_subresource)
-      << ", (" << dest_x << ", " << dest_y << ", " << dest_z << ") "
-      << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
-  }
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return false;
+  std::stringstream s;
+  s << "on_resolve_texture_region"
+    << "(" << reinterpret_cast<void*>(source.handle)
+    << ": " << (source_subresource)
+    << " => " << reinterpret_cast<void*>(dest.handle)
+    << ": " << (dest_subresource)
+    << ", (" << dest_x << ", " << dest_y << ", " << dest_z << ") "
+    << ")";
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
   return false;
 }
 
@@ -983,14 +1130,13 @@ static bool on_copy_resource(
   reshade::api::resource source,
   reshade::api::resource dest
 ) {
-  if (traceRunning) {
-    std::stringstream s;
-    s << "on_copy_resource"
-      << "(" << reinterpret_cast<void*>(source.handle)
-      << " => " << reinterpret_cast<void*>(dest.handle)
-      << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
-  }
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return false;
+  std::stringstream s;
+  s << "on_copy_resource"
+    << "(" << reinterpret_cast<void*>(source.handle)
+    << " => " << reinterpret_cast<void*>(dest.handle)
+    << ")";
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
   return false;
 }
 
@@ -1001,17 +1147,16 @@ static void on_barrier(
   const reshade::api::resource_usage* old_states,
   const reshade::api::resource_usage* new_states
 ) {
-  if (traceRunning) {
-    for (uint32_t i = 0; i < count; i++) {
-      std::stringstream s;
-      s << "on_barrier("
-        << reinterpret_cast<void*>(resources[i].handle)
-        << ", " << std::hex << (uint32_t)old_states[i] << std::dec << " (" << to_string(old_states[i]) << ")"
-        << " => " << std::hex << (uint32_t)new_states[i] << std::dec << " (" << to_string(new_states[i]) << ")"
-        << ")"
-        << "[" << i << "]";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
-    }
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
+  for (uint32_t i = 0; i < count; i++) {
+    std::stringstream s;
+    s << "on_barrier("
+      << reinterpret_cast<void*>(resources[i].handle)
+      << ", " << std::hex << (uint32_t)old_states[i] << std::dec << " (" << to_string(old_states[i]) << ")"
+      << " => " << std::hex << (uint32_t)new_states[i] << std::dec << " (" << to_string(new_states[i]) << ")"
+      << ")"
+      << "[" << i << "]";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
   }
 }
 
@@ -1023,11 +1168,11 @@ static void on_bind_render_targets_and_depth_stencil(
 ) {
   if (!traceRunning) return;
 
-  auto &data = cmd_list->get_device()->get_private_data<device_data>();
   if (count) {
     // InstructionState state = instructions.at(instructions.size() - 1);
     // state.renderTargets.clear();
-
+    auto &data = cmd_list->get_device()->get_private_data<device_data>();
+    std::shared_lock lock(data.mutex);
     for (uint32_t i = 0; i < count; i++) {
       auto rtv = rtvs[i];
       // if (rtv.handle) {
@@ -1036,7 +1181,8 @@ static void on_bind_render_targets_and_depth_stencil(
       std::stringstream s;
       s << "on_bind_render_targets("
         << reinterpret_cast<void*>(rtv.handle)
-        << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, rtv.handle))
+        << ", res: " << reinterpret_cast<void*>(getResourceByViewHandle(data, rtv.handle))
+        << ", name: " << getResourceNameByViewHandle(data, rtv.handle)
         << ")"
         << "[" << i << "]";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -1058,18 +1204,23 @@ static void on_init_resource(
   reshade::api::resource_usage initial_state,
   reshade::api::resource resource
 ) {
-  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
+  auto &data = device->get_private_data<device_data>();
+  std::unique_lock lock(data.mutex);
+  data.resources.emplace(resource.handle);
   bool warn = false;
   std::stringstream s;
-  s << "init_resource("
-    << reinterpret_cast<void*>(resource.handle)
-    << ", flags: " << std::hex << (uint32_t)desc.flags << std::dec
+  s << "init_resource(";
+  s << reinterpret_cast<void*>(resource.handle);
+  s << ", flags: " << std::hex << (uint32_t)desc.flags << std::dec
     << ", state: " << std::hex << (uint32_t)initial_state << std::dec
-    << ", type: " << to_string(desc.type);
+    << ", type: " << to_string(desc.type)
+    << ", usage: " << std::hex << (uint32_t)desc.usage << std::dec;
+
   switch (desc.type) {
     case reshade::api::resource_type::buffer:
       s << ", size: " << desc.buffer.size;
       s << ", stride: " << desc.buffer.stride;
+      if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
       break;
     case reshade::api::resource_type::texture_1d:
     case reshade::api::resource_type::texture_2d:
@@ -1087,6 +1238,7 @@ static void on_init_resource(
     case reshade::api::resource_type::unknown:
       break;
   }
+
   s << ")";
   reshade::log_message(
     warn
@@ -1097,6 +1249,9 @@ static void on_init_resource(
 }
 
 static void on_destroy_resource(reshade::api::device* device, reshade::api::resource resource) {
+  auto &data = device->get_private_data<device_data>();
+  std::unique_lock lock(data.mutex);
+  data.resources.erase(resource.handle);
 }
 
 static void on_init_resource_view(
@@ -1165,6 +1320,7 @@ static void on_push_descriptors(
 ) {
   if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
   auto &data = cmd_list->get_device()->get_private_data<device_data>();
+  std::shared_lock lock(data.mutex);
   for (uint32_t i = 0; i < update.count; i++) {
     std::stringstream s;
     s << "push_descriptors("
@@ -1182,7 +1338,8 @@ static void on_push_descriptors(
           auto item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[i];
           s << ", sampler: " << reinterpret_cast<void*>(item.sampler.handle);
           s << ", rsv: " << reinterpret_cast<void*>(item.view.handle);
-          s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.view.handle));
+          s << ", res: " << reinterpret_cast<void*>(getResourceByViewHandle(data, item.view.handle));
+          // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
         }
         break;
       case reshade::api::descriptor_type::shader_resource_view:
@@ -1190,6 +1347,7 @@ static void on_push_descriptors(
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
           s << ", shaderrsv: " << reinterpret_cast<void*>(item.handle);
           s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.handle));
+          // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
         }
         break;
       case reshade::api::descriptor_type::unordered_access_view:
@@ -1197,6 +1355,7 @@ static void on_push_descriptors(
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
           s << ", uav: " << reinterpret_cast<void*>(item.handle);
           s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.handle));
+          // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
         }
         break;
       case reshade::api::descriptor_type::acceleration_structure:
@@ -1278,6 +1437,7 @@ static bool on_update_descriptor_tables(
 ) {
   if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return false;
   auto &data = device->get_private_data<device_data>();
+  std::shared_lock lock(data.mutex);
   for (uint32_t i = 0; i < count; i++) {
     auto update = updates[i];
 
@@ -1300,6 +1460,7 @@ static bool on_update_descriptor_tables(
             s << ", sampler: " << reinterpret_cast<void*>(item.sampler.handle);
             s << ", rsv: " << reinterpret_cast<void*>(item.view.handle);
             s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.view.handle));
+            // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
           }
           break;
         case reshade::api::descriptor_type::shader_resource_view:
@@ -1307,13 +1468,15 @@ static bool on_update_descriptor_tables(
             auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
             s << ", shaderrsv: " << reinterpret_cast<void*>(item.handle);
             s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.handle));
+            // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
           }
           break;
         case reshade::api::descriptor_type::unordered_access_view:
           {
             auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
             s << ", uav: " << reinterpret_cast<void*>(item.handle);
-            s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.handle));
+            s << ", res: " << reinterpret_cast<void*>(getResourceByViewHandle(data, item.handle));
+            // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
           }
           break;
         case reshade::api::descriptor_type::acceleration_structure:
@@ -1338,6 +1501,23 @@ static bool on_update_descriptor_tables(
     s << ") [" << i << "]";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
   }
+  return false;
+}
+
+bool on_clear_unordered_access_view_uint(
+  reshade::api::command_list* cmd_list,
+  reshade::api::resource_view uav,
+  const uint32_t values[4],
+  uint32_t rect_count,
+  const reshade::api::rect* rects
+) {
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return false;
+  std::stringstream s;
+  s << "on_clear_unordered_access_view_uint("
+    << reinterpret_cast<void*>(uav.handle)
+    << ")";
+
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
   return false;
 }
 
@@ -1366,6 +1546,41 @@ void on_push_constants(
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 }
 
+void on_map_buffer_region(
+  reshade::api::device* device,
+  reshade::api::resource resource,
+  uint64_t offset,
+  uint64_t size,
+  reshade::api::map_access access,
+  void** data
+) {
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
+  std::stringstream s;
+  s << "map_buffer_region("
+    << reinterpret_cast<void*>(resource.handle)
+    << ")";
+
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
+}
+
+void on_map_texture_region(
+  reshade::api::device* device,
+  reshade::api::resource resource,
+  uint32_t subresource,
+  const reshade::api::subresource_box* box,
+  reshade::api::map_access access,
+  reshade::api::subresource_data* data
+) {
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
+  std::stringstream s;
+  s << "map_texture_region("
+    << reinterpret_cast<void*>(resource.handle)
+    << "[" << subresource << "]"
+    << ")";
+
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
+}
+
 static void on_reshade_present(reshade::api::effect_runtime* runtime) {
   if (traceRunning) {
     reshade::log_message(reshade::log_level::info, "present()");
@@ -1386,6 +1601,11 @@ static void on_reshade_present(reshade::api::effect_runtime* runtime) {
   if (needsUnloadShaders) {
     unloadCustomShaders();
     needsUnloadShaders = false;
+  } else {
+    for (auto pair : pipelinesToDestroy) {
+      pair.second->destroy_pipeline(reshade::api::pipeline{pair.first});
+    }
+    pipelinesToDestroy.clear();
   }
   if (needsLoadShaders) {
     loadCustomShaders();
@@ -1584,6 +1804,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
       reshade::register_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
       reshade::register_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
+
       reshade::register_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
       reshade::register_event<reshade::addon_event::destroy_pipeline>(on_destroy_pipeline);
 
@@ -1601,6 +1822,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       reshade::register_event<reshade::addon_event::update_descriptor_tables>(on_update_descriptor_tables);
       reshade::register_event<reshade::addon_event::push_constants>(on_push_constants);
 
+      reshade::register_event<reshade::addon_event::clear_unordered_access_view_uint>(on_clear_unordered_access_view_uint);
+
+      reshade::register_event<reshade::addon_event::map_buffer_region>(on_map_buffer_region);
+      reshade::register_event<reshade::addon_event::map_texture_region>(on_map_texture_region);
+
       reshade::register_event<reshade::addon_event::draw>(on_draw);
       reshade::register_event<reshade::addon_event::dispatch>(on_dispatch);
       reshade::register_event<reshade::addon_event::draw_indexed>(on_draw_indexed);
@@ -1608,6 +1834,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(on_bind_render_targets_and_depth_stencil);
 
       reshade::register_event<reshade::addon_event::copy_texture_region>(on_copy_texture_region);
+      reshade::register_event<reshade::addon_event::copy_texture_to_buffer>(on_copy_texture_to_buffer);
+      reshade::register_event<reshade::addon_event::copy_buffer_to_texture>(on_copy_buffer_to_texture);
       reshade::register_event<reshade::addon_event::resolve_texture_region>(on_resolve_texture_region);
 
       reshade::register_event<reshade::addon_event::copy_resource>(on_copy_resource);
