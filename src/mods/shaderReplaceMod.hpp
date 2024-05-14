@@ -25,6 +25,7 @@
 #include <include/reshade.hpp>
 
 #include "../utils/ShaderUtil.hpp"
+#include "../utils/SwapchainUtil.hpp"
 #include "../utils/format.hpp"
 #include "../utils/mutex.hpp"
 
@@ -79,7 +80,6 @@ namespace ShaderReplaceMod {
   };
 
   struct __declspec(uuid("979ad94d-1186-4749-a7b7-7cc5959de675")) CommandListData {
-    std::unordered_set<uint64_t> currentRenderTargets;
     bool hasSwapchainRenderTarget;
     std::shared_mutex mutex;
   };
@@ -114,6 +114,7 @@ namespace ShaderReplaceMod {
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
     auto &data = device->get_private_data<DeviceData>();
+    std::unique_lock lock(data.mutex);
     for (const auto &[hash, shader] : (data.customShaders)) {
       if (shader.codeSize) {
         free((void*)shader.code);
@@ -130,53 +131,6 @@ namespace ShaderReplaceMod {
     cmd_list->destroy_private_data<CommandListData>();
   }
 
-  static void on_init_swapchain(reshade::api::swapchain* swapchain) {
-    auto device = swapchain->get_device();
-    if (!device) return;
-    auto &privateData = device->get_private_data<DeviceData>();
-    std::unique_lock lock(privateData.mutex);
-
-    const size_t backBufferCount = swapchain->get_back_buffer_count();
-
-    for (uint32_t index = 0; index < backBufferCount; index++) {
-      auto buffer = swapchain->get_back_buffer(index);
-      privateData.backBuffers.emplace(buffer.handle);
-    }
-  }
-
-  static void on_destroy_swapchain(reshade::api::swapchain* swapchain) {
-    auto device = swapchain->get_device();
-    if (!device) return;
-    auto &privateData = device->get_private_data<DeviceData>();
-    std::unique_lock lock(privateData.mutex);
-
-    const size_t backBufferCount = swapchain->get_back_buffer_count();
-    for (uint32_t index = 0; index < backBufferCount; index++) {
-      auto buffer = swapchain->get_back_buffer(index);
-      privateData.backBuffers.erase(buffer.handle);
-    }
-  }
-
-  static void on_init_resource_view(
-    reshade::api::device* device,
-    reshade::api::resource resource,
-    reshade::api::resource_usage usage_type,
-    const reshade::api::resource_view_desc &desc,
-    reshade::api::resource_view view
-  ) {
-    auto &data = device->get_private_data<DeviceData>();
-    std::unique_lock lock(data.mutex);
-    if (data.backBuffers.contains(resource.handle)) {
-      data.backBufferResourceViews.emplace(view.handle);
-    }
-  }
-
-  static void on_destroy_resource_view(reshade::api::device* device, reshade::api::resource_view view) {
-    auto &privateData = device->get_private_data<DeviceData>();
-    std::unique_lock lock(privateData.mutex);
-    privateData.backBufferResourceViews.erase(view.handle);
-  }
-
   static void on_bind_render_targets_and_depth_stencil(
     reshade::api::command_list* cmd_list,
     uint32_t count,
@@ -188,20 +142,16 @@ namespace ShaderReplaceMod {
     if (device == nullptr) return;
 
     CommandListData &cmd_list_data = cmd_list->get_private_data<CommandListData>();
-    cmd_list_data.hasSwapchainRenderTarget = false;
+    std::shared_lock lock(cmd_list_data.mutex);
 
-    DeviceData &device_data = device->get_private_data<DeviceData>();
-    std::unique_lock lock(device_data.mutex);
-    // data.currentRenderTargets.clear();
+    cmd_list_data.hasSwapchainRenderTarget = false;
 
     for (uint32_t i = 0; i < count; i++) {
       const reshade::api::resource_view rtv = rtvs[i];
       if (!rtv.handle) continue;
 
-      // will crash if emplacing???
-      // privateData.currentRenderTargets.emplace(rtv.handle);
-
-      if (device_data.backBufferResourceViews.contains(rtv.handle)) {
+      auto resource = device->get_resource_from_view(rtv);
+      if (SwapchainUtil::isBackBuffer(device, resource)) {
         cmd_list_data.hasSwapchainRenderTarget = true;
         break;
       }
@@ -657,57 +607,46 @@ namespace ShaderReplaceMod {
 
     uint32_t shaderHash = shaderState.currentShaderHash;
 
+    bool isSwapchainWrite = cmd_list_data.hasSwapchainRenderTarget && !isDispatch;
+
     auto customShaderInfoPair = device_data.customShaders.find(shaderHash);
     if (customShaderInfoPair == device_data.customShaders.end()) {
+      // Unrecognized shader
+
+      if (
+        isSwapchainWrite
+        && device_data.traceUnmodifiedShaders
+        && !device_data.unmodifiedShaders.contains(shaderHash)
+        && !device_data.customShaders.contains(shaderHash)
+      ) {
+        std::stringstream s;
+        s << "handlePreDraw(unmodified shader writing to swapchain: "
+          << PRINT_CRC32(shaderHash)
+          << ")";
+        reshade::log_message(reshade::log_level::warning, s.str().c_str());
+        device_data.unmodifiedShaders.emplace(shaderHash);
+      }
       return false;
     }
 
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
-    s << "handlePreDraw(found expected shader: "
+    s << "handlePreDraw(found shader: "
       << PRINT_CRC32(shaderHash)
-      << ", " << PRINT_CRC32(customShaderInfoPair->second.crc32)
       << ")";
     reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
 
     auto customShaderInfo = customShaderInfoPair->second;
 
-    if (customShaderInfo.codeSize == 0) {
+    if (customShaderInfo.swapChainOnly && !isSwapchainWrite) {
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
-      s << "handlePreDraw(bypassing shader: "
+      s << "handlePreDraw(aborting because swapchain only: "
         << PRINT_CRC32(shaderHash)
         << ")";
       reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
-      return true;
-    }
-
-    if (
-      !isDispatch
-      && device_data.traceUnmodifiedShaders
-      && cmd_list_data.hasSwapchainRenderTarget
-      && !device_data.unmodifiedShaders.contains(shaderHash)
-      && !device_data.customShaders.contains(shaderHash)
-    ) {
-      std::stringstream s;
-      s << "handlePreDraw(unmodified shader writing to swapchain: "
-        << PRINT_CRC32(shaderHash)
-        << ")";
-      reshade::log_message(reshade::log_level::warning, s.str().c_str());
-      device_data.unmodifiedShaders.emplace(shaderHash);
-    }
-
-    if (!customShaderInfo.swapChainOnly && cmd_list_data.hasSwapchainRenderTarget) {
-#ifdef DEBUG_LEVEL_1
-      std::stringstream s;
-      s << "handlePreDraw(not swapchain only: "
-        << PRINT_CRC32(shaderHash)
-        << ")";
-      reshade::log_message(reshade::log_level::debug, s.str().c_str());
-#endif
-
       return false;
     }
 
@@ -856,6 +795,7 @@ namespace ShaderReplaceMod {
   template <typename T = float*>
   void use(DWORD fdwReason, CustomShaders* customShaders, T* injections = nullptr) {
     ShaderUtil::use(fdwReason);
+    SwapchainUtil::use(fdwReason);
 
     switch (fdwReason) {
       case DLL_PROCESS_ATTACH:
@@ -872,10 +812,6 @@ namespace ShaderReplaceMod {
         }
 
         if (traceUnmodifiedShaders || _usingSwapChainOnly) {
-          reshade::register_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
-          reshade::register_event<reshade::addon_event::destroy_swapchain>(on_destroy_swapchain);
-          reshade::register_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
-          reshade::register_event<reshade::addon_event::destroy_resource_view>(on_destroy_resource_view);
           reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(on_bind_render_targets_and_depth_stencil);
         }
 
@@ -944,11 +880,6 @@ namespace ShaderReplaceMod {
 
         reshade::unregister_event<reshade::addon_event::init_device>(on_init_device);
         reshade::unregister_event<reshade::addon_event::destroy_device>(on_destroy_device);
-
-        reshade::unregister_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
-        reshade::unregister_event<reshade::addon_event::destroy_swapchain>(on_destroy_swapchain);
-        reshade::unregister_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
-        reshade::unregister_event<reshade::addon_event::destroy_resource_view>(on_destroy_resource_view);
 
         reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(on_bind_render_targets_and_depth_stencil);
 
