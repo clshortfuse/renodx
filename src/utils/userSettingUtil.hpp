@@ -174,43 +174,12 @@ namespace UserSettingUtil {
     }
   }
 
-  static void updateRenoDXHelper(reshade::api::effect_runtime* runtime, float toneMapUINits = 0) {
-    auto technique = runtime->find_technique("RenoDXHelper.addonfx", "RenoDXHelper");
 
-    if (!technique.handle) return;
-
-    if (!useRenoDXHelper) {
-      runtime->set_technique_state(technique, false);
-      return;
-    }
-    auto variable = runtime->find_uniform_variable("RenoDXHelper.addonfx", "RENODX_UI_NITS");
-    if (!variable.handle) return;
-    runtime->set_technique_state(technique, true);
-    if (toneMapUINits <= 0.f) {
-      auto setting = findUserSetting("toneMapUINits");
-      if (setting) {
-        toneMapUINits = setting->value;
-      } else {
-        return;
-      }
-    }
-    runtime->set_uniform_value_float(variable, toneMapUINits);
-  }
-
-  static void on_reshade_begin_effects(
-    reshade::api::effect_runtime* runtime,
-    reshade::api::command_list* cmd_list,
-    reshade::api::resource_view rtv,
-    reshade::api::resource_view rtv_srgb
-  ) {
-    // run once
-    updateRenoDXHelper(runtime);
-    reshade::unregister_event<reshade::addon_event::reshade_begin_effects>(on_reshade_begin_effects);
-  }
 
   // Runs first
   // https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
   static void on_register_overlay(reshade::api::effect_runtime* runtime) {
+    std::unique_lock lock(MutexUtil::g_mutex0);
     bool changedPreset = ImGui::SliderInt(
       "Preset",
       &presetIndex,
@@ -237,7 +206,6 @@ namespace UserSettingUtil {
           load_settings(runtime, "renodx-preset3");
           break;
       }
-      updateRenoDXHelper(runtime);
     }
 
     bool anyChange = false;
@@ -331,9 +299,6 @@ namespace UserSettingUtil {
 
       if (changed) {
         setting->write();
-        if (useRenoDXHelper && strcmp(setting->key, "toneMapUINits") == 0) {
-          updateRenoDXHelper(runtime, setting->value);
-        }
         anyChange = true;
       }
       if (isDisabled) {
@@ -362,7 +327,6 @@ namespace UserSettingUtil {
         _onPresetOff = onPresetOff;
         load_settings();
         reshade::register_overlay("RenoDX", on_register_overlay);
-        reshade::register_event<reshade::addon_event::reshade_begin_effects>(on_reshade_begin_effects);
 
         break;
       case DLL_PROCESS_DETACH:
