@@ -59,8 +59,13 @@ namespace ShaderUtil {
     uint32_t size,
     void* data
   ) {
+    void* newData = nullptr;
+    if (size) {
+      newData = malloc(size);
+      memcpy(newData, data, size);
+    }
     std::unique_lock lock(mutex);
-    createPipelineReplacements.emplace(shader_hash, std::tuple<size_t, void*>(size, data));
+    createPipelineReplacements.emplace(shader_hash, std::tuple<size_t, void*>(size, newData));
   }
 
   static void removeCreatePipelineReplacement(
@@ -77,8 +82,13 @@ namespace ShaderUtil {
     uint32_t size,
     void* data
   ) {
+    void* newData = nullptr;
+    if (size) {
+      newData = malloc(size);
+      memcpy(newData, data, size);
+    }
     std::unique_lock lock(mutex);
-    initPipelineReplacements.emplace(shader_hash, std::tuple<size_t, void*>(size, data));
+    initPipelineReplacements.emplace(shader_hash, std::tuple<size_t, void*>(size, newData));
   }
 
   static void removeInitPipelineReplacement(
@@ -386,8 +396,6 @@ namespace ShaderUtil {
       cmd_list_data.currentShaderPipeline = pipeline;
     }
   }
-
-  static bool inUse = false;
 
   void use(DWORD fdwReason) {
     switch (fdwReason) {
