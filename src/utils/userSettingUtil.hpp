@@ -108,8 +108,6 @@ namespace UserSettingUtil {
     .format = "%.2f"                     \
   }
 
-  bool useRenoDXHelper = false;
-
   static UserSetting* findUserSetting(const char* key) {
     for (auto setting : *_userSettings) {
       if (strcmp(setting->key, key) == 0) {
