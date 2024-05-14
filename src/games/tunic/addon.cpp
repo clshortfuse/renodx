@@ -164,7 +164,7 @@ UserSettingUtil::UserSettings userSettings = {
     .key = "fxNoise",
     .binding = &shaderInjection.fxNoise,
     .defaultValue = 50.f,
-    .label = "fxNoise",
+    .label = "Noise",
     .section = "Effects",
     .tooltip = "Noise pattern added to game in some areas.",
     .max = 100.f,
@@ -202,7 +202,6 @@ static void onPresetOff() {
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
   switch (fdwReason) {
-    ShaderReplaceMod::forcePipelineCloning = true;
 
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(hModule)) return FALSE;
