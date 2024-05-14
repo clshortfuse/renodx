@@ -224,7 +224,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
 
   SwapChainUpgradeMod::use(fdwReason);
 
-  ShaderReplaceMod::use(fdwReason, &customShaders, &shaderInjection);
+  ShaderReplaceMod::use(fdwReason, customShaders, &shaderInjection);
 
   return TRUE;
 }

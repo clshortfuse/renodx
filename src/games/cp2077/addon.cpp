@@ -8,6 +8,8 @@
 #define DEBUG_LEVEL_0
 #define DEBUG_SLIDERS_OFF
 
+#include <deps/imgui/imgui.h>
+
 #include <embed/0x298A6BB0.h>
 #include <embed/0x341CEB87.h>
 #include <embed/0x5DF649A9.h>
@@ -29,9 +31,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
-
 #include "../../mods/shaderReplaceMod.hpp"
 #include "../../utils/userSettingUtil.hpp"
 #include "./cp2077.h"
@@ -101,7 +101,7 @@ UserSettingUtil::UserSettings userSettings = {
     .label = "Gamma Correction",
     .section = "Tone Mapping",
     .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
-    .labels = { "Off", "Menus Only", "Always"}
+    .labels = { "Off", "UI/Menu Only", "On"}
   },
   new UserSettingUtil::UserSetting {
     .key = "colorGradeExposure",
@@ -265,10 +265,10 @@ static void onPresetOff() {
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
   switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
+      ShaderReplaceMod::expectedConstantBufferIndex = 14;
+
       if (!reshade::register_addon(hModule)) return FALSE;
 
-      // ShaderReplaceMod::forcePipelineCloning = true;
-      ShaderReplaceMod::expectedConstantBufferIndex = 14;
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(hModule);
@@ -277,7 +277,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
 
   UserSettingUtil::use(fdwReason, &userSettings, &onPresetOff);
 
-  ShaderReplaceMod::use(fdwReason, &customShaders, &shaderInjection);
+  ShaderReplaceMod::use(fdwReason, customShaders, &shaderInjection);
 
   return TRUE;
 }

@@ -34,7 +34,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       break;
   }
 
-  ShaderReplaceMod::use(fdwReason, &customShaders);
+  ShaderReplaceMod::use(fdwReason, customShaders);
 
   return TRUE;
 }

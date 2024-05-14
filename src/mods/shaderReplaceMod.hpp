@@ -96,15 +96,7 @@ namespace ShaderReplaceMod {
     data.traceUnmodifiedShaders = traceUnmodifiedShaders;
     data.expectedConstantBufferIndex = expectedConstantBufferIndex;
     data.expectedConstantBufferSpace = expectedConstantBufferSpace;
-
-    for (const auto &[hash, shader] : _customShaders) {
-      CustomShader newShader = shader;
-      if (newShader.codeSize) {
-        newShader.code = (const uint8_t*)malloc(newShader.codeSize);
-        memcpy((void*)newShader.code, shader.code, newShader.codeSize);
-      }
-      data.customShaders.emplace(hash, newShader);
-    }
+    data.customShaders = _customShaders;
   }
 
   static void on_destroy_device(reshade::api::device* device) {
@@ -113,13 +105,6 @@ namespace ShaderReplaceMod {
       << reinterpret_cast<void*>(device)
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
-    auto &data = device->get_private_data<DeviceData>();
-    std::unique_lock lock(data.mutex);
-    for (const auto &[hash, shader] : (data.customShaders)) {
-      if (shader.codeSize) {
-        free((void*)shader.code);
-      }
-    }
     device->destroy_private_data<DeviceData>();
   }
 
@@ -141,10 +126,7 @@ namespace ShaderReplaceMod {
     auto device = cmd_list->get_device();
     if (device == nullptr) return;
 
-    CommandListData &cmd_list_data = cmd_list->get_private_data<CommandListData>();
-    std::shared_lock lock(cmd_list_data.mutex);
-
-    cmd_list_data.hasSwapchainRenderTarget = false;
+    bool foundSwapchainRTV = false;
 
     for (uint32_t i = 0; i < count; i++) {
       const reshade::api::resource_view rtv = rtvs[i];
@@ -152,10 +134,14 @@ namespace ShaderReplaceMod {
 
       auto resource = device->get_resource_from_view(rtv);
       if (SwapchainUtil::isBackBuffer(device, resource)) {
-        cmd_list_data.hasSwapchainRenderTarget = true;
+        foundSwapchainRTV = true;
         break;
       }
     }
+
+    CommandListData &cmd_list_data = cmd_list->get_private_data<CommandListData>();
+    std::unique_lock lock(cmd_list_data.mutex);
+    cmd_list_data.hasSwapchainRenderTarget = foundSwapchainRTV;
   }
 
   // Shader Injection
@@ -793,7 +779,7 @@ namespace ShaderReplaceMod {
   }
 
   template <typename T = float*>
-  void use(DWORD fdwReason, CustomShaders* customShaders, T* injections = nullptr) {
+  void use(DWORD fdwReason, CustomShaders customShaders, T* injections = nullptr) {
     ShaderUtil::use(fdwReason);
     SwapchainUtil::use(fdwReason);
 
@@ -804,7 +790,7 @@ namespace ShaderReplaceMod {
         reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
 
         if (!traceUnmodifiedShaders) {
-          for (const auto &[hash, shader] : (*customShaders)) {
+          for (const auto &[hash, shader] : (customShaders)) {
             if (shader.swapChainOnly) _usingSwapChainOnly = true;
             if (shader.codeSize == 0) _usingBypass = true;
             if (shader.index != -1) _usingCountedShaders = true;
@@ -820,11 +806,11 @@ namespace ShaderReplaceMod {
         }
 
         if (forcePipelineCloning || usePipelineLayoutCloning) {
-          for (const auto &[hash, shader] : (*customShaders)) {
+          for (const auto &[hash, shader] : (customShaders)) {
             ShaderUtil::addInitPipelineReplacement(hash, shader.codeSize, (void*)shader.code);
           }
         } else {
-          for (const auto &[hash, shader] : (*customShaders)) {
+          for (const auto &[hash, shader] : (customShaders)) {
             if (!shader.swapChainOnly && shader.codeSize && shader.index == -1) {
               ShaderUtil::addCreatePipelineReplacement(hash, shader.codeSize, (void*)shader.code);
             }
@@ -841,11 +827,11 @@ namespace ShaderReplaceMod {
         reshade::register_event<reshade::addon_event::draw_indexed>(on_draw_indexed);
         reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(on_draw_or_dispatch_indirect);
 
-        _customShaders = *customShaders;
+        _customShaders = customShaders;
         {
           std::stringstream s;
           s << "Attached Custom Shaders: " << _customShaders.size()
-            << " from " << (void*)customShaders
+            << " from " << (void*)&customShaders
             << " to " << (void*)&_customShaders;
           reshade::log_message(reshade::log_level::info, s.str().c_str());
         }
