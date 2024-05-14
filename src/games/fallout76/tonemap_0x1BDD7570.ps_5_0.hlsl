@@ -22,7 +22,7 @@ fo76: 2 cbuffers  63 values in all 4 shaders
 
 fo4:  1 cbuffer   5  values in 2 shaders
       1 cbuffer   6  values in 2 shaders
-      
+
 why so different?
 */
 cbuffer cb2 : register(b2)
@@ -54,11 +54,11 @@ void main(
   /* depth tests */
   r0.xyz = t0.Sample(s0_s, v1.xy).xyz;
 
-  const float3 renderInput = r0.xyz
+  const float3 renderInput = r0.xyz;
 
   r0.w = t3.SampleLevel(s3_s, v1.xy, 0).w;  // use LOD level 0
 
-  const float depthMask = r0.w 
+  const float depthMask = r0.w;
 
   r0.w = 255 * r0.w;  // scale depth
   // depth stencil test?
