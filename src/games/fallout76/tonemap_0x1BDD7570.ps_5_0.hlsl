@@ -138,7 +138,7 @@ void main(
 
   /* tone mapping */
   r1.x = max(9.99999975e-005, cb2[2].y);
-  r1.y = 0.560000002 / r1.x;
+  r1.y = 0.560000002 / r1.x; // .56 = 11.2 (linear white point) * .5 * .1 (linear angle)?
   r1.y = 2.43000007 + r1.y;
   r1.x = r1.x * r1.x;
   r1.x = 0.140000001 / r1.x;
@@ -147,7 +147,7 @@ void main(
   r1.y = -r1.y * 2.43000007 + 0.0299999993;
   r1.z = -0.589999974 + r1.x;
   r1.y = r1.z * cb2[0].x + r1.y;
-  r1.xzw = r1.xxx * r0.xyz + float3(0.0299999993,0.0299999993,0.0299999993);
+  r1.xzw = r1.xxx * r0.xyz + float3(0.0299999993,0.0299999993,0.0299999993); // .03 = .3 (linear strength) * .1 (linear angle)?
   r1.xzw = r1.xzw * r0.xyz;
   r2.xyz = r0.xyz * float3(2.43000007,2.43000007,2.43000007) + float3(0.589999974,0.589999974,0.589999974);
   r2.xyz = r0.xyz * r2.xyz + r1.yyy;
