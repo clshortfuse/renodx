@@ -1,3 +1,6 @@
+#include "../../shaders/color.hlsl"
+#include "./shared.h"
+
 // ---- Created with 3Dmigoto v1.3.16 on Sun May 12 21:53:07 2024
 
 
@@ -21,5 +24,9 @@ void main(
   r0.w = v1.w * r0.w;
   o0.xyz = r0.xyz * r0.www;
   o0.w = r0.w;
+
+  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
+  o0.rgb *= injectedData.toneMapUINits / 80.f;
+
   return;
 }

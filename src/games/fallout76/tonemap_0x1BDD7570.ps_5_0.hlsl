@@ -1,3 +1,6 @@
+#include "../../shaders/color.hlsl"
+#include "./shared.h"
+
 // ---- Created with 3Dmigoto v1.3.16 on Sun May 12 21:52:47 2024
 Texture2D<float4> t4 : register(t4);
 
@@ -160,5 +163,9 @@ void main(
   r0.xyz = cb2[3].www * r0.xyz + -cb2[0].xxx;
   o0.xyz = cb2[3].zzz * r0.xyz + cb2[0].xxx;  // final output color
   o0.w = r0.w;
+
+  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
+  o0.rgb *= injectedData.toneMapGameNits / 80.f;
+
   return;
 }

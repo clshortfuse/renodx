@@ -17,6 +17,8 @@
 #include <embed/0x2A868728.h> // Tonemap
 #include <embed/0x5D002D1E.h> // Tonemap
 #include <embed/0xBF6561E2.h> // Tonemap
+#include <embed/0x2CA9CD55.h> // cursor?
+#include <embed/0xA6AB1C75.h> // cursor?
 
 
 #include <chrono>
@@ -61,6 +63,9 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomSwapchainShader(0xECFC10A2)
   */
   CustomSwapchainShader(0x0F2CC0D1),  // video
+  CustomSwapchainShader(0x2CA9CD55),  // cursor?
+  CustomSwapchainShader(0xA6AB1C75),  // cursor?
+
   CustomShaderEntry(0x7684FC16),      // FXAA
   CustomShaderEntry(0x2C63040A),      // LUT
   CustomShaderEntry(0x160805BC),      // Maybe also LUT?
@@ -297,7 +302,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
 
   UserSettingUtil::use(fdwReason, &userSettings, &onPresetOff);
   SwapChainUpgradeMod::use(fdwReason);
-  ShaderReplaceMod::use(fdwReason, &customShaders, &shaderInjection);
+  ShaderReplaceMod::use(fdwReason, customShaders, &shaderInjection);
 
   return TRUE;
 }
