@@ -18,7 +18,8 @@ void main(
   float4 r0;
   uint4 bitmask, uiDest;
   float4 fDest;
-
+  
+  /* code block also appears in LUT shader */
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
   r0.xyz = log2(r0.xyz);
   o0.w = r0.w;
