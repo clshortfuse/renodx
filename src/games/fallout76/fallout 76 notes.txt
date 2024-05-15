@@ -1,6 +1,5 @@
-completed:
-    video
-        0x0F2CC0D1.hlsl
+completed
+    UI (99% done)
 
 maybe completed:
     taa:
@@ -14,14 +13,11 @@ todo shaders:
         0xBF6561E2.hlsl
     lut?
         0x2C63040A.hlsl
-        0x160805BC.ps_5_0.hlsl
+        0x160805BC.hlsl
     no idea but looks important
         0x1BF9D9D2.hlsl
     vignette
         0x2E5E8174.hlsl
-    cursor?
-        0xA6AB1C75.hlsl
-        0x2CA9CD55.hlsl
     dof?
         0x283C8F43.hlsl
         0xC9C77523.hlsl
