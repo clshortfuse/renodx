@@ -7,6 +7,21 @@
 
 #define DEBUG_LEVEL_0
 
+#include <embed/0x2CA9CD55.h> // text/UI
+#include <embed/0xA6AB1C75.h> // text
+#include <embed/0xF2CCBA8C.h> // UI
+#include <embed/0x69B52EA7.h> // Images
+#include <embed/0x6CF04AC0.h> // UI
+#include <embed/0x7AAE8C2B.h> // Images
+#include <embed/0x28213F99.h> // UI
+#include <embed/0x21A11DE7.h> // UI
+#include <embed/0x4B3388FE.h> // UI
+#include <embed/0x4D248432.h> // UI
+#include <embed/0x19558629.h> // UI
+#include <embed/0x46A6A1FE.h> // Loading Screen
+#include <embed/0xFEA4E7DB.h> // Loading Screen
+#include <embed/0xD66588EF.h> // Loading Screen
+#include <embed/0x3C8AF2C9.h> // Loading Screen Composite
 #include <embed/0x0F2CC0D1.h> // video
 #include <embed/0x7684FC16.h> // FXAA
 #include <embed/0x2C63040A.h> // LUT
@@ -17,16 +32,6 @@
 #include <embed/0x2A868728.h> // Tonemap
 #include <embed/0x5D002D1E.h> // Tonemap
 #include <embed/0xBF6561E2.h> // Tonemap
-#include <embed/0x2CA9CD55.h> // text/UI
-#include <embed/0xA6AB1C75.h> // text
-#include <embed/0xF2CCBA8C.h> // UI
-#include <embed/0x69B52EA7.h> // Images - UI elements flicker
-#include <embed/0x6CF04AC0.h> // UI
-#include <embed/0x7AAE8C2B.h> // Images
-#include <embed/0x28213F99.h> // UI
-#include <embed/0x21A11DE7.h> // UI
-#include <embed/0x4B3388FE.h> // UI
-#include <embed/0x4D248432.h> // UI?
 
 
 #include <chrono>
@@ -42,58 +47,33 @@ extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Fallout 76";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Fallout 76";
 
 ShaderReplaceMod::CustomShaders customShaders = {
-  /* stuff from fallout 4
-  CustomSwapchainShader(0x72826F5B),  // cursor
-  CustomSwapchainShader(0x21C1F78D),  // ui compsite
-  CustomSwapchainShader(0xB14DB0F4),  // ui boxes
-  CustomSwapchainShader(0x0F2CC0D1),  // video
-  CustomSwapchainShader(0x8F009507),  // renderselect
-  CustomShaderEntry(0x80802E60),      // luts
-  // CustomShaderEntry(0xB74B05F4),      // vignette old (unused)
-  // BypassShaderEntry(0x48292339),
-  CustomShaderEntry(0x8CAC3BD9),  // taa (sdr only)
-  CustomShaderEntry(0x61CC29E6),  // taa2 (sdr only)
-  CustomShaderEntry(0x8024E8B5),  // tonemap old a
-  CustomShaderEntry(0x676B8B5D),  // tonemap old b
-  CustomShaderEntry(0x67685D89),  // tonemapper new a
-  CustomShaderEntry(0xFEBC673C),  // tonemapper new b
-  CustomShaderEntry(0x4FB4DA20),  // fxaa (clamping bt709)
-  CustomShaderEntry(0x83660755),
-  CustomSwapchainShader(0x13EEBAE5),
-  CustomSwapchainShader(0x153BE4A2),
-  CustomSwapchainShader(0x261AE7AB),
-  CustomSwapchainShader(0x33F1B3F8),
-  CustomSwapchainShader(0x34AEF9A7),
-  CustomSwapchainShader(0x43E69DB9),
-  // CustomSwapchainShader(0x86EC0382),
-  CustomSwapchainShader(0x8E032125),
-  CustomSwapchainShader(0xCC4CAE26),
-  CustomSwapchainShader(0xECFC10A2)
-  */
-
-
-  CustomSwapchainShader(0x0F2CC0D1),  // video
   CustomSwapchainShader(0x2CA9CD55),  // text/UI
   CustomSwapchainShader(0xA6AB1C75),  // text
-  CustomSwapchainShader(0xF2CCBA8C),  // UI?
-  CustomSwapchainShader(0x69B52EA7),  // Images - UI elements flicker
+  CustomSwapchainShader(0xF2CCBA8C),  // UI
+  CustomSwapchainShader(0x69B52EA7),  // Images
   CustomSwapchainShader(0x6CF04AC0),  // UI
   CustomSwapchainShader(0x7AAE8C2B),  // Images
-  CustomSwapchainShader(0x28213F99),  // UI?
-  CustomSwapchainShader(0x21A11DE7),  // UI?
-  CustomSwapchainShader(0x4B3388FE),  // UI?
+  CustomSwapchainShader(0x28213F99),  // UI
+  CustomSwapchainShader(0x21A11DE7),  // UI
+  CustomSwapchainShader(0x4B3388FE),  // UI
   CustomSwapchainShader(0x4D248432),  // UI
-
-  CustomShaderEntry(0x7684FC16),      // FXAA
-  CustomShaderEntry(0x2C63040A),      // LUT
-  CustomShaderEntry(0x160805BC),      // Maybe also LUT?
-
-  CustomShaderEntry(0x3778E664),      // TAA
-  CustomShaderEntry(0xAF2731D9),      // TAA
+  CustomSwapchainShader(0x19558629),  // UI
+  CustomSwapchainShader(0x0F2CC0D1),  // video
+  CustomSwapchainShader(0x19558629),  // Loading Screen
+  CustomSwapchainShader(0xFEA4E7DB),  // Loading Screen
+  CustomSwapchainShader(0xD66588EF),  // Loading Screen
+  CustomSwapchainShader(0x3C8AF2C9),  // Loading Screen
   CustomShaderEntry(0x1BDD7570),      // Tonemap
   CustomShaderEntry(0x2A868728),      // Tonemap
   CustomShaderEntry(0x5D002D1E),      // Tonemap
-  CustomShaderEntry(0xBF6561E2)       // Tonemap
+  CustomShaderEntry(0xBF6561E2),      // Tonemap
+  CustomShaderEntry(0x2C63040A),      // LUT
+  CustomShaderEntry(0x160805BC),      // LUT?
+  CustomShaderEntry(0x7684FC16),      // FXAA
+  CustomShaderEntry(0x3778E664),      // TAA
+  CustomShaderEntry(0xAF2731D9),      // TAA
+
+
 
 };
 
