@@ -62,6 +62,8 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomSwapchainShader(0xCC4CAE26),
   CustomSwapchainShader(0xECFC10A2)
   */
+
+
   CustomSwapchainShader(0x0F2CC0D1),  // video
   CustomSwapchainShader(0x2CA9CD55),  // cursor?
   CustomSwapchainShader(0xA6AB1C75),  // cursor?
