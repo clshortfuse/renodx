@@ -10,15 +10,23 @@
 #include <embed/0x0F2CC0D1.h> // video
 #include <embed/0x7684FC16.h> // FXAA
 #include <embed/0x2C63040A.h> // LUT
-#include <embed/0x160805BC.h> // maybe also LUT?
+#include <embed/0x160805BC.h> // LUT?
 #include <embed/0x3778E664.h> // TAA
 #include <embed/0xAF2731D9.h> // TAA
 #include <embed/0x1BDD7570.h> // Tonemap
 #include <embed/0x2A868728.h> // Tonemap
 #include <embed/0x5D002D1E.h> // Tonemap
 #include <embed/0xBF6561E2.h> // Tonemap
-#include <embed/0x2CA9CD55.h> // cursor?
-#include <embed/0xA6AB1C75.h> // cursor?
+#include <embed/0x2CA9CD55.h> // text/UI
+#include <embed/0xA6AB1C75.h> // text
+#include <embed/0xF2CCBA8C.h> // UI
+#include <embed/0x69B52EA7.h> // Images - UI elements flicker
+#include <embed/0x6CF04AC0.h> // UI
+#include <embed/0x7AAE8C2B.h> // Images
+#include <embed/0x28213F99.h> // UI
+#include <embed/0x21A11DE7.h> // UI
+#include <embed/0x4B3388FE.h> // UI
+#include <embed/0x4D248432.h> // UI?
 
 
 #include <chrono>
@@ -65,8 +73,16 @@ ShaderReplaceMod::CustomShaders customShaders = {
 
 
   CustomSwapchainShader(0x0F2CC0D1),  // video
-  CustomSwapchainShader(0x2CA9CD55),  // cursor?
-  CustomSwapchainShader(0xA6AB1C75),  // cursor?
+  CustomSwapchainShader(0x2CA9CD55),  // text/UI
+  CustomSwapchainShader(0xA6AB1C75),  // text
+  CustomSwapchainShader(0xF2CCBA8C),  // UI?
+  CustomSwapchainShader(0x69B52EA7),  // Images - UI elements flicker
+  CustomSwapchainShader(0x6CF04AC0),  // UI
+  CustomSwapchainShader(0x7AAE8C2B),  // Images
+  CustomSwapchainShader(0x28213F99),  // UI?
+  CustomSwapchainShader(0x21A11DE7),  // UI?
+  CustomSwapchainShader(0x4B3388FE),  // UI?
+  CustomSwapchainShader(0x4D248432),  // UI
 
   CustomShaderEntry(0x7684FC16),      // FXAA
   CustomShaderEntry(0x2C63040A),      // LUT
