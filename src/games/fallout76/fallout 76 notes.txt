@@ -1,11 +1,11 @@
 completed
-    UI (99% done)
+    UI
 
 maybe completed:
-    taa:
+    taa
         0xAF2731D9.ps_5_0.hlsl
 
-todo shaders:
+todo:
     tonemapping
         0x2A868728.hlsl
         0xBF6561E2.hlsl
