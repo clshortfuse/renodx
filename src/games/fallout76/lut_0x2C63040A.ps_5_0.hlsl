@@ -47,7 +47,6 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
   //r0.xyz = log2(r0.xyz);
-  o0.w = r0.w;
 
   float vanillaMidGray = toneMapCurve(0.18, 0.30f, 0.50f, 0.10f, 0.20f, 0.02f, 0.30f)
                        / toneMapCurve(5.6f, 0.30f, 0.50f, 0.10f, 0.20f, 0.02f, 0.30f);
@@ -133,6 +132,7 @@ void main(
 
     r2.xyz = cb2[0].xxx * r2.xyz;
     r0.xyz = r0.xyz * cb2[1].xxx + r2.xyz;
+    o0.w = r0.w;
 
     //r2.xyz = t4.Sample(s4_s, r1.xyz).xyz;
     lutParams.lutSampler = s4_s;
