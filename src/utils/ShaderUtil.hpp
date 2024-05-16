@@ -42,8 +42,6 @@ namespace ShaderUtil {
 
   struct __declspec(uuid("8707f724-c7e5-420e-89d6-cc032c732d2d")) CommandListData {
     std::shared_mutex mutex;
-    std::unordered_set<uint64_t> currentRenderTargets;
-    bool hasSwapchainRenderTarget;
     uint32_t currentShaderHash;
     reshade::api::pipeline_stage currentShaderPipelineStage = reshade::api::pipeline_stage::all;
     reshade::api::pipeline currentShaderPipeline = {0};
@@ -121,7 +119,7 @@ namespace ShaderUtil {
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
     s << "ShaderUtil::on_init_device("
-      << reinterpret_cast<void*>(device->get_native())
+      << reinterpret_cast<void*>(device)
       << ", computeShaderLayouts " << (void*)&data.computeShaderLayouts
       << ", mutex " << (void*)&data.mutex
       << ", pipelineToLayoutMap " << (void*)&data.pipelineToLayoutMap
@@ -138,7 +136,7 @@ namespace ShaderUtil {
   static void on_destroy_device(reshade::api::device* device) {
     std::stringstream s;
     s << "ShaderUtil::on_destroy_device("
-      << reinterpret_cast<void*>(device->get_native())
+      << reinterpret_cast<void*>(device)
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
     device->destroy_private_data<DeviceData>();
@@ -150,12 +148,10 @@ namespace ShaderUtil {
 
     std::stringstream s;
     s << "ShaderUtil::on_init_command_list("
-      << reinterpret_cast<void*>(cmd_list->get_native())
-      << ", currentRenderTargets " << (void*)&data.currentRenderTargets
+      << reinterpret_cast<void*>(cmd_list)
       << ", currentShaderHash " << (void*)&data.currentShaderHash
       << ", currentShaderPipeline " << (void*)&data.currentShaderPipeline
       << ", currentShaderPipelineStage " << (void*)&data.currentShaderPipelineStage
-      << ", hasSwapchainRenderTarget " << (void*)&data.hasSwapchainRenderTarget
       << ", mutex " << (void*)&data.mutex
       << ")";
     reshade::log_message(reshade::log_level::debug, s.str().c_str());

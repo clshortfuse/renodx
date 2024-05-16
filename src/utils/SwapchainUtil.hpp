@@ -39,10 +39,13 @@ namespace SwapchainUtil {
   struct __declspec(uuid("4721e307-0cf3-4293-b4a5-40d0a4e62544")) DeviceData {
     std::unordered_set<reshade::api::swapchain*> swapchains;
     std::unordered_set<uint64_t> backBuffers;
+    reshade::api::resource_desc backBufferDesc;
     std::shared_mutex mutex;
   };
 
   struct __declspec(uuid("25b7ec11-a51f-4884-a6f7-f381d198b9af")) CommandListData {
+    std::vector<reshade::api::resource_view> currentRenderTargets;
+    bool hasSwapchainRenderTarget;
     std::shared_mutex mutex;
   };
 
@@ -68,11 +71,14 @@ namespace SwapchainUtil {
       auto &deviceData = device->get_private_data<DeviceData>();
       std::unique_lock lock(deviceData.mutex);
       deviceData.swapchains.emplace(swapchain);
-      if (backBufferCount) {
-        deviceData.backBuffers.insert(
-          swapchainData.backBuffers.begin(),
-          swapchainData.backBuffers.end()
-        );
+
+      for (uint32_t index = 0; index < backBufferCount; index++) {
+        auto buffer = swapchain->get_back_buffer(index);
+        deviceData.backBuffers.emplace(buffer.handle);
+        if (index == 0) {
+          auto desc = device->get_resource_desc(buffer);
+          deviceData.backBufferDesc = desc;
+        }
       }
     }
   }
@@ -110,6 +116,48 @@ namespace SwapchainUtil {
     return isBackBuffer(device, resource);
   }
 
+  static reshade::api::resource_desc getBackBufferDesc(reshade::api::device* device) {
+    auto &deviceData = device->get_private_data<DeviceData>();
+    std::shared_lock lock(deviceData.mutex);
+    return deviceData.backBufferDesc;
+  }
+
+  static reshade::api::resource_desc getBackBufferDesc(reshade::api::command_list* cmd_list) {
+    auto device = cmd_list->get_device();
+    if (device == nullptr) return {};
+    return getBackBufferDesc(device);
+  }
+
+  static void on_bind_render_targets_and_depth_stencil(
+    reshade::api::command_list* cmd_list,
+    uint32_t count,
+    const reshade::api::resource_view* rtvs,
+    reshade::api::resource_view dsv
+  ) {
+    if (!count) return;
+    auto device = cmd_list->get_device();
+    auto &deviceData = device->get_private_data<DeviceData>();
+    std::shared_lock deviceLock(deviceData.mutex);
+
+    auto &cmdListData = cmd_list->get_private_data<CommandListData>();
+    std::unique_lock cmdListLock(cmdListData.mutex);
+
+    bool foundSwapchainRTV = false;
+    cmdListData.currentRenderTargets.assign(&rtvs[0], &rtvs[count - 1]);
+
+    for (uint32_t i = 0; i < count; i++) {
+      const reshade::api::resource_view rtv = rtvs[i];
+      if (!foundSwapchainRTV) {
+        auto resource = device->get_resource_from_view(rtv);
+        if (deviceData.backBuffers.contains(resource.handle)) {
+          foundSwapchainRTV = true;
+        }
+      }
+    }
+
+    cmdListData.hasSwapchainRenderTarget = foundSwapchainRTV;
+  }
+
   void use(DWORD fdwReason) {
     switch (fdwReason) {
       case DLL_PROCESS_ATTACH:
@@ -119,6 +167,7 @@ namespace SwapchainUtil {
         reshade::register_event<reshade::addon_event::destroy_swapchain>(on_destroy_swapchain);
         reshade::register_event<reshade::addon_event::init_command_list>(on_init_command_list);
         reshade::register_event<reshade::addon_event::destroy_command_list>(on_destroy_command_list);
+        reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(on_bind_render_targets_and_depth_stencil);
 
         break;
       case DLL_PROCESS_DETACH:
