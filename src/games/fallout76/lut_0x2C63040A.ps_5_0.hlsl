@@ -124,11 +124,11 @@ void main(
 
     //r0.xyz = float3(0.454545468,0.454545468,0.454545468) * r0.xyz;
     //r0.xyz = exp2(r0.xyz);
-    //r1.xyz = r0.xyz * float3(0.9375,0.9375,0.9375) + float3(0.03125,0.03125,0.03125);
+    r1.xyz = r0.xyz * float3(0.9375,0.9375,0.9375) + float3(0.03125,0.03125,0.03125);
 
     r0.xyz = sdrColor;    
     //r2.xyz = t3.Sample(s3_s, r1.xyz).xyz;
-    r2.xyz = sampleLut(r1.xyz, lutParams, t3);
+    r2.xyz = sampleLUT(r1.xyz, lutParams, t3);
 
     r2.xyz = cb2[0].xxx * r2.xyz;
     r0.xyz = r0.xyz * cb2[1].xxx + r2.xyz;
@@ -136,7 +136,7 @@ void main(
 
     //r2.xyz = t4.Sample(s4_s, r1.xyz).xyz;
     lutParams.lutSampler = s4_s;
-    r2.xyz = sampleLut(r0.xyz, lutParams, t4);
+    r2.xyz = sampleLUT(r0.xyz, lutParams, t4);
 
     r0.xyz = r2.xyz * cb2[0].yyy + r0.xyz;
     
@@ -146,7 +146,7 @@ void main(
     
     //r1.xyz = t6.Sample(s6_s, r1.xyz).xyz;
     lutParams.lutSampler = s6_s;
-    r1.xyz = sampleLut(r1.xyz, lutParams, t6);
+    r1.xyz = sampleLUT(r1.xyz, lutParams, t6);
 
     r0.xyz = r2.xyz * cb2[0].zzz + r0.xyz;
     float3 lutColor = r1.xyz * cb2[0].www + r0.xyz;
