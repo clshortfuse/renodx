@@ -1,4 +1,5 @@
 #include "../../shaders/color.hlsl"
+#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sun May 12 21:52:47 2024
@@ -54,14 +55,16 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
+
+
   /* depth tests */
   r0.xyz = t0.Sample(s0_s, v1.xy).xyz;
 
-  const float3 renderInput = r0.xyz;
+  //const float3 renderInput = r0.xyz;
 
   r0.w = t3.SampleLevel(s3_s, v1.xy, 0).w;  // use LOD level 0
 
-  const float depthMask = r0.w;
+  //const float depthMask = r0.w;
 
   r0.w = 255 * r0.w;  // scale depth
   // depth stencil test?
@@ -103,6 +106,7 @@ void main(
   r1.z = exp2(r1.z);
   r1.y = r1.y * r1.z;
 
+
   /* color adjustments based on parameters */
   r1.zw = cb2[1].xy * r0.ww;
   r1.y = max(r1.y, r1.z);
@@ -136,25 +140,38 @@ void main(
   r0.xyz = r0.xyz * r0.www;
   r0.w = cmp(0.5 < cb2[2].w);
 
+  const float3 untonemapped = r0.xyz;
+
   /* tone mapping */
-  r1.x = max(9.99999975e-005, cb2[2].y);
-  r1.y = 0.560000002 / r1.x; // .56 = 11.2 (linear white point) * .5 * .1 (linear angle)?
-  r1.y = 2.43000007 + r1.y;
-  r1.x = r1.x * r1.x;
-  r1.x = 0.140000001 / r1.x;
-  r1.x = r1.y + r1.x;
-  r1.y = cb2[0].x * cb2[0].x;
-  r1.y = -r1.y * 2.43000007 + 0.0299999993;
-  r1.z = -0.589999974 + r1.x;
-  r1.y = r1.z * cb2[0].x + r1.y;
-  r1.xzw = r1.xxx * r0.xyz + float3(0.0299999993,0.0299999993,0.0299999993); // .03 = .3 (linear strength) * .1 (linear angle)?
-  r1.xzw = r1.xzw * r0.xyz;
-  r2.xyz = r0.xyz * float3(2.43000007,2.43000007,2.43000007) + float3(0.589999974,0.589999974,0.589999974);
-  r2.xyz = r0.xyz * r2.xyz + r1.yyy;
-  r1.xyz = saturate(r1.xzw / r2.xyz);
-  r0.xyz = r0.www ? r1.xyz : r0.xyz;
+  if (injectedData.toneMapType == 0) { // Vanilla tonemapper
+    r1.x = max(9.99999975e-005, cb2[2].y);
+    r1.y = 0.560000002 / r1.x; // .56 = 11.2 (linear white point) * .5 * .1 (linear angle)?
+    r1.y = 2.43000007 + r1.y;
+    r1.x = r1.x * r1.x;
+    r1.x = 0.140000001 / r1.x;
+    r1.x = r1.y + r1.x;
+    r1.y = cb2[0].x * cb2[0].x;
+    r1.y = -r1.y * 2.43000007 + 0.0299999993; // -r1.y * 2.43 * .03 (linear strength) * .01 (linear toe)?
+    r1.z = -0.589999974 + r1.x;
+    r1.y = r1.z * cb2[0].x + r1.y;
+    r1.xzw = r1.xxx * r0.xyz + float3(0.0299999993,0.0299999993,0.0299999993); // .03 = .3 (linear strength) * .1 (linear angle)?
+    r1.xzw = r1.xzw * r0.xyz;
+    r2.xyz = r0.xyz * float3(2.43000007,2.43000007,2.43000007) + float3(0.589999974,0.589999974,0.589999974);
+    r2.xyz = r0.xyz * r2.xyz + r1.yyy;
+    r1.xyz = saturate(r1.xzw / r2.xyz);
+    r0.xyz = r0.www ? r1.xyz : r0.xyz;
+
+    // replicate vanilla tonemapper
+    //r0.xyz = toneMapCurve(r0.xyz, 0.30f, 0.5f, 0.14f, 0.15f, .02f, 0.30f) / toneMapCurve(5.6f, 0.30f, 0.5f, 0.14f, 0.15f, .02f, 0.30f);
+    //o0.xyz = r0.xyz;
+
+  }
+  else { // untonemapped
+    r0.xyz = untonemapped;
+  }
   r1.x = dot(r0.xyz, float3(0.212500006,0.715399981,0.0720999986)); // converting srgb to ycbcr
   r0.w = 0;
+  float3 outputColor = r0.xyz; // before scene filter
   r0.xyzw = -r1.xxxx + r0.xyzw;
   r0.xyzw = cb2[3].xxxx * r0.xyzw + r1.xxxx;
   r1.xyzw = r1.xxxx * cb2[4].xyzw + -r0.xyzw;
@@ -164,8 +181,6 @@ void main(
   o0.xyz = cb2[3].zzz * r0.xyz + cb2[0].xxx;  // final output color
   o0.w = r0.w;
 
-  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
-  o0.rgb *= injectedData.toneMapGameNits / 80.f;
-
+  o0.xyz = lerp(outputColor, o0.xyz, injectedData.fxSceneFilter);
   return;
 }
