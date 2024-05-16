@@ -81,7 +81,7 @@ void main(
     s3_s,
     injectedData.colorGradeLUTStrength,
     injectedData.colorGradeLUTScaling,  // Cleans up raised black floor
-    TONE_MAP_LUT_TYPE__2_2,
+    TONE_MAP_LUT_TYPE__LINEAR
     TONE_MAP_LUT_TYPE__2_2,
     16
   );
