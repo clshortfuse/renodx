@@ -28,6 +28,9 @@
 #include <embed/0x160805BC.h> // LUT?
 #include <embed/0x3778E664.h> // TAA
 #include <embed/0xAF2731D9.h> // TAA
+//#include <embed/0x73F96489.h> // TAA?
+//#include <embed/0xC9C77523.h> // DOF?
+
 #include <embed/0x1BDD7570.h> // Tonemap
 #include <embed/0x2A868728.h> // Tonemap
 #include <embed/0x5D002D1E.h> // Tonemap
@@ -72,6 +75,10 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0x7684FC16),      // FXAA
   CustomShaderEntry(0x3778E664),      // TAA
   CustomShaderEntry(0xAF2731D9),      // TAA
+  //CustomShaderEntry(0x73F96489),      // TAA?
+  
+  //CustomShaderEntry(0xC9C77523),      // DOF?
+
 
 
 

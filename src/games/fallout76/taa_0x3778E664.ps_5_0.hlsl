@@ -1,3 +1,6 @@
+#include "../../shaders/color.hlsl"
+#include "./shared.h"
+
 // ---- Created with 3Dmigoto v1.3.16 on Sun May 12 21:52:51 2024
 Texture2D<float4> t3 : register(t3);
 
@@ -25,8 +28,21 @@ cbuffer cb12 : register(b12)
   float4 cb12[53];
 }
 
+// Convert render input for HDR
+float3 convertRenderInput(float3 render) {
+  render /= injectedData.toneMapGameNits / 80.f;
+  render /= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
+  render = pow(saturate(render), 1.f / 2.2f); // Apply inverse gamma correction
+  return render;
+}
 
-
+// Convert render output for HDR
+float3 convertRenderOutput(float3 render) {
+  render = pow(saturate(render), 2.2f); // Apply gamma correction
+  render *= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
+  render *= injectedData.toneMapGameNits / 80.f;
+  return render;
+}
 
 // 3Dmigoto declarations
 #define cmp -
@@ -52,8 +68,13 @@ void main(
   r0.w = min(r0.z, r0.w);
   r0.z = cmp(r0.w == r0.z);
   r3.xy = r0.zz ? r0.xy : r1.xy;
+  
   r4.xyz = t0.Sample(s0_s, r0.xy).yxz;
+  r4.yxz = convertRenderInput(r4.yxz); // HDR input conversion
+
   r5.xyz = t0.Sample(s0_s, r1.xy).yxz;
+  r5.yxz = convertRenderInput(r5.yxz); // HDR input conversion
+
   r0.x = cmp(r0.w == r1.z);
   r0.xy = r0.xx ? r2.zw : r3.xy;
   r1.xyzw = cb2[3].xyxy * float4(-1,1,0,-1) + v1.xyxy;
@@ -90,18 +111,30 @@ void main(
   r0.x = min(1, r0.x);
   r6.xy = t1.Sample(s1_s, r0.zw).xz;
   r7.xyz = t0.Sample(s0_s, r1.zw).yxz;
+  r7.yxz = convertRenderInput(r7.yxz); // HDR input conversion
+
   r1.xyz = t0.Sample(s0_s, r1.xy).yxz;
+  r1.yxz = convertRenderInput(r1.yxz); // HDR input conversion
+
   r7.w = dot(r7.xzy, float3(0.5,0.25,0.25));
   r0.y = cmp(r7.w < r6.x);
   r1.w = dot(r1.xzy, float3(0.5,0.25,0.25));
   r6.z = cmp(r1.w < r6.x);
+
   r8.xyz = t0.Sample(s0_s, r3.zw).yxz;
+  r8.yxz = convertRenderInput(r8.yxz); // HDR input conversion
+
   r3.xyz = t0.Sample(s0_s, r3.xy).yxz;
+  r3.yxz = convertRenderInput(r3.yxz); // HDR input conversion
+
   r8.w = dot(r8.xzy, float3(0.5,0.25,0.25));
   r6.w = cmp(r8.w < r6.x);
   r3.w = dot(r3.xzy, float3(0.5,0.25,0.25));
   r7.x = cmp(r3.w < r6.x);
+  
   r9.xyz = t0.Sample(s0_s, v1.xy).xyz;
+  r9.xyz = convertRenderInput(r9.xyz); // HDR input conversion
+
   r10.x = dot(r9.yzx, float3(0.5,0.25,0.25));
   r9.w = cmp(r10.x < r6.x);
   r10.yz = r9.xz;
@@ -125,7 +158,11 @@ void main(
   r13.xyz = r1.xxx ? r7.yzw : r11.xyz;
   r11.xyz = r0.yyy ? r11.xyz : r13.xyz;
   r13.xyz = t0.Sample(s0_s, r2.xy).yxz;
+  r13.yxz = convertRenderInput(r13.yxz); // HDR input conversion
+
   r2.xyz = t0.Sample(s0_s, r2.zw).yxz;
+  r2.yxz = convertRenderInput(r2.yxz); // HDR input conversion
+
   r13.w = dot(r13.xzy, float3(0.5,0.25,0.25));
   r1.x = cmp(r13.w < r11.z);
   r14.xyz = r1.xxx ? r13.yzw : r11.xyz;
@@ -229,6 +266,10 @@ void main(
   r0.xyz = saturate(r1.xyz * cb2[4].zzz + r0.xyz);
   r1.xyz = r2.xyz + -r0.xyz;
   o1.xyz = saturate(cb2[4].www * r1.xyz + r0.xyz);
+
+  // HDR output conversion
+  o1.xyz = convertRenderOutput(o1.xyz);
+
   o1.w = 1;
   return;
 }

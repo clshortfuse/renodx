@@ -1,4 +1,4 @@
-// ---- Created with 3Dmigoto v1.3.16 on Sun May 12 21:52:49 2024
+// ---- Created with 3Dmigoto v1.3.16 on Wed May 15 18:40:56 2024
 Texture2D<float4> t2 : register(t2);
 
 Texture2D<float4> t1 : register(t1);
@@ -13,7 +13,7 @@ SamplerState s0_s : register(s0);
 
 cbuffer cb2 : register(b2)
 {
-  float4 cb2[3];
+  float4 cb2[5];
 }
 
 
@@ -44,17 +44,25 @@ void main(
   r0.w = r0.w ? r1.y : 0;
   r0.z = r0.w ? r0.z : 0;
   r0.w = -cb2[0].z + r0.y;
-  r0.y = cmp(cb2[0].z < r0.y);
-  r0.y = r1.z ? r0.y : 0;
+  r0.w = r0.w / cb2[0].y;
+  r1.y = cmp(cb2[0].z < r0.y);
+  r1.y = r1.z ? r1.y : 0;
   r1.x = ~(int)r1.x;
   r0.x = (int)r0.x | (int)r1.x;
-  r0.w = r0.w / cb2[0].y;
-  r0.y = saturate(r0.y ? r0.w : r0.z);
-  r0.y = cb2[1].x * r0.y;
-  r0.x = r0.x ? r0.y : 0;
+  r0.z = saturate(r1.y ? r0.w : r0.z);
+  r0.z = cb2[1].x * r0.z;
+  r0.x = r0.x ? r0.z : 0;
   r1.xyzw = t1.Sample(s1_s, v1.xy).xyzw;
   r2.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
   r1.xyzw = -r2.xyzw + r1.xyzw;
-  o0.xyzw = r0.xxxx * r1.xyzw + r2.xyzw;
+  r1.xyzw = r0.xxxx * r1.xyzw + r2.xyzw;
+  r0.xzw = cb2[3].xyz + -r1.xyz;
+  r2.x = cb2[4].x + -cb2[4].y;
+  r2.x = 1 / r2.x;
+  r2.y = cb2[4].y * r2.x;
+  r0.y = saturate(r0.y * r2.x + -r2.y);
+  r0.y = cb2[3].w * r0.y;
+  o0.xyz = r0.yyy * r0.xzw + r1.xyz;
+  o0.w = r1.w;
   return;
 }

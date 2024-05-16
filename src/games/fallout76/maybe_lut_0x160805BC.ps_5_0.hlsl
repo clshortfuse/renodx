@@ -1,3 +1,6 @@
+#include "../../shaders/tonemap.hlsl"
+#include "./shared.h"
+
 // ---- Created with 3Dmigoto v1.3.16 on Sun May 12 21:52:46 2024
 Texture3D<float4> t6 : register(t6);
 
@@ -53,4 +56,7 @@ void main(
   r0.xyz = r2.xyz * cb2[0].zzz + r0.xyz;
   o0.xyz = r1.xyz * cb2[0].www + r0.xyz;
   return;
+
+  //o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
+  //o0.rgb *= injectedData.toneMapGameNits / 80.f;
 }
