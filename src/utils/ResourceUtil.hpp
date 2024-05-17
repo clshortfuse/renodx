@@ -62,12 +62,12 @@ namespace ResourceUtil {
       case DLL_PROCESS_ATTACH:
         reshade::register_event<reshade::addon_event::init_device>(on_init_device);
         reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
-
+        reshade::register_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
         break;
       case DLL_PROCESS_DETACH:
         reshade::unregister_event<reshade::addon_event::init_device>(on_init_device);
         reshade::unregister_event<reshade::addon_event::destroy_device>(on_destroy_device);
-
+        reshade::unregister_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
         break;
     }
   }
