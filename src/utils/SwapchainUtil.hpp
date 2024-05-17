@@ -5,18 +5,6 @@
 
 #pragma once
 
-#include <d3d11.h>
-#include <d3d12.h>
-#include <dxgi.h>
-#include <dxgi1_6.h>
-#include <stdio.h>
-
-#include <filesystem>
-#include <fstream>
-#include <random>
-#include <shared_mutex>
-#include <sstream>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -24,8 +12,8 @@
 #include <include/reshade.hpp>
 
 #include "./format.hpp"
-#include "./mutex.hpp"
 #include "./pipelineUtil.hpp"
+#include "./ResourceUtil.hpp"
 
 namespace SwapchainUtil {
 
@@ -143,13 +131,13 @@ namespace SwapchainUtil {
     std::unique_lock cmdListLock(cmdListData.mutex);
 
     bool foundSwapchainRTV = false;
-    cmdListData.currentRenderTargets.assign(&rtvs[0], &rtvs[count - 1]);
+    cmdListData.currentRenderTargets.assign(rtvs, rtvs + count);
 
     for (uint32_t i = 0; i < count; i++) {
       const reshade::api::resource_view rtv = rtvs[i];
       if (!foundSwapchainRTV) {
-        auto resource = device->get_resource_from_view(rtv);
-        if (deviceData.backBuffers.contains(resource.handle)) {
+        auto resource = ResourceUtil::getResourceFromResourceView(device, rtv);
+        if (resource.handle && deviceData.backBuffers.contains(resource.handle)) {
           foundSwapchainRTV = true;
         }
       }
@@ -159,6 +147,7 @@ namespace SwapchainUtil {
   }
 
   void use(DWORD fdwReason) {
+    ResourceUtil::use(fdwReason);
     switch (fdwReason) {
       case DLL_PROCESS_ATTACH:
         reshade::register_event<reshade::addon_event::init_device>(on_init_device);
