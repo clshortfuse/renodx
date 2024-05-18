@@ -134,10 +134,11 @@ inline void GetD3DName(ID3D12Resource* obj, std::string &name) {
 }
 
 static uint64_t getResourceByViewHandle(device_data &data, uint64_t handle) {
-  auto pair = data.resourceViews.find(handle);
-  if (pair != data.resourceViews.end()) {
-    return pair->second;
-  }
+  if (
+    auto pair = data.resourceViews.find(handle);
+    pair != data.resourceViews.end()
+  ) return pair->second;
+
   return 0;
 }
 
@@ -146,10 +147,10 @@ static std::string getResourceNameByViewHandle(device_data &data, uint64_t handl
   if (resourceHandle == 0) return "?";
   if (!data.resources.contains(resourceHandle)) return "?";
 
-  auto pair = data.resourceNames.find(resourceHandle);
-  if (pair != data.resourceNames.end()) {
-    return pair->second;
-  }
+  if (
+    auto pair = data.resourceNames.find(resourceHandle);
+    pair != data.resourceNames.end()
+  ) return pair->second;
 
   std::string name = "";
   if (data.device_api == reshade::api::device_api::d3d11) {
@@ -722,6 +723,15 @@ static void on_init_swapchain(reshade::api::swapchain* swapchain) {
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 }
 
+static bool on_create_pipeline_layout(
+  reshade::api::device* device,
+  uint32_t &param_count,
+  reshade::api::pipeline_layout_param*&params
+) {
+  // noop
+  return false;
+}
+
 // AfterCreateRootSignature
 static void on_init_pipeline_layout(
   reshade::api::device* device,
@@ -850,8 +860,11 @@ static void on_destroy_pipeline(
 ) {
   uint32_t changed = false;
   changed |= computeShaderLayouts.erase(pipeline.handle);
-  auto pipelineCachePair = pipelineCacheByPipelineHandle.find(pipeline.handle);
-  if (pipelineCachePair != pipelineCacheByPipelineHandle.end()) {
+
+  if (
+    auto pipelineCachePair = pipelineCacheByPipelineHandle.find(pipeline.handle);
+    pipelineCachePair != pipelineCacheByPipelineHandle.end()
+  ) {
     auto cachedPipeline = pipelineCachePair->second;
     if (cachedPipeline->cloned) {
       cachedPipeline->cloned = false;
@@ -881,6 +894,7 @@ static void on_bind_pipeline(
 
   auto pair = pipelineCacheByPipelineHandle.find(pipeline.handle);
   if (pair == pipelineCacheByPipelineHandle.end()) return;
+
   auto cachedPipeline = pair->second;
 
   if (cachedPipeline->cloned) {
@@ -1221,9 +1235,6 @@ static void on_init_resource(
   reshade::api::resource_usage initial_state,
   reshade::api::resource resource
 ) {
-  auto &data = device->get_private_data<device_data>();
-  std::unique_lock lock(data.mutex);
-  data.resources.emplace(resource.handle);
   bool warn = false;
   std::stringstream s;
   s << "init_resource(";
@@ -1263,6 +1274,9 @@ static void on_init_resource(
       : reshade::log_level::info,
     s.str().c_str()
   );
+  auto &data = device->get_private_data<device_data>();
+  std::unique_lock lock(data.mutex);
+  data.resources.emplace(resource.handle);
 }
 
 static void on_destroy_resource(reshade::api::device* device, reshade::api::resource resource) {
@@ -1283,8 +1297,6 @@ static void on_init_resource_view(
   const reshade::api::resource_view_desc &desc,
   reshade::api::resource_view view
 ) {
-  auto &data = device->get_private_data<device_data>();
-  data.resourceViews.emplace(view.handle, resource.handle);
   // if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
   std::stringstream s;
   s << "init_resource_view("
@@ -1293,7 +1305,7 @@ static void on_init_resource_view(
     << ", view format: " << to_string(desc.format) << " (0x" << std::hex << (uint32_t)desc.format << std::dec << ")"
     << ", resource: " << reinterpret_cast<void*>(resource.handle)
     << ", resource usage: " << to_string(usage_type) << " 0x" << std::hex << (uint32_t)usage_type << std::dec;
-  if (desc.type == reshade::api::resource_view_type::buffer) return;
+  // if (desc.type == reshade::api::resource_view_type::buffer) return;
   if (resource.handle) {
     const auto resourceDesc = device->get_resource_desc(resource);
     s << ", resource type: " << to_string(resourceDesc.type);
@@ -1325,16 +1337,34 @@ static void on_init_resource_view(
   }
   s << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
+  auto &data = device->get_private_data<device_data>();
+  std::unique_lock lock(data.mutex);
+  if (data.resourceViews.contains(view.handle)) {
+    std::stringstream s;
+    s << "init_resource_view(reused view: "
+      << (void*)view.handle
+      << ")";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    if (!resource.handle) {
+      data.resourceViews.erase(view.handle);
+      return;
+    }
+  }
+  if (resource.handle) {
+    data.resourceViews.emplace(view.handle, resource.handle);
+  }
 }
 
 static void on_destroy_resource_view(reshade::api::device* device, reshade::api::resource_view view) {
-  auto &data = device->get_private_data<device_data>();
-  data.resourceViews.erase(view.handle);
   std::stringstream s;
   s << "on_destroy_resource_view("
     << (void*)view.handle
     << ")";
   reshade::log_message(reshade::log_level::debug, s.str().c_str());
+
+  auto &data = device->get_private_data<device_data>();
+  std::unique_lock lock(data.mutex);
+  data.resourceViews.erase(view.handle);
 }
 
 static void on_push_descriptors(
@@ -1462,7 +1492,7 @@ static bool on_update_descriptor_tables(
   uint32_t count,
   const reshade::api::descriptor_table_update* updates
 ) {
-  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return false;
+  // if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return false;
   auto &data = device->get_private_data<device_data>();
   std::shared_lock lock(data.mutex);
   for (uint32_t i = 0; i < count; i++) {
@@ -1489,10 +1519,26 @@ static bool on_update_descriptor_tables(
             // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
           }
           break;
+        case reshade::api::descriptor_type::buffer_shader_resource_view:
+          {
+            auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
+            s << ", b-srv: " << reinterpret_cast<void*>(item.handle);
+            s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.handle));
+            // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
+          }
+          break;
+        case reshade::api::descriptor_type::buffer_unordered_access_view:
+          {
+            auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
+            s << ", b-uav: " << reinterpret_cast<void*>(item.handle);
+            s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.handle));
+            // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
+          }
+          break;
         case reshade::api::descriptor_type::shader_resource_view:
           {
             auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
-            s << ", shaderrsv: " << reinterpret_cast<void*>(item.handle);
+            s << ", srv: " << reinterpret_cast<void*>(item.handle);
             s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, item.handle));
             // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
           }
@@ -1505,12 +1551,6 @@ static bool on_update_descriptor_tables(
             // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
           }
           break;
-        case reshade::api::descriptor_type::acceleration_structure:
-          {
-            auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
-            s << ", accl: " << reinterpret_cast<void*>(item.handle);
-          }
-          break;
         case reshade::api::descriptor_type::constant_buffer:
           {
             auto item = static_cast<const reshade::api::buffer_range*>(update.descriptors)[j];
@@ -1518,6 +1558,17 @@ static bool on_update_descriptor_tables(
             s << ", size: " << item.size;
             s << ", offset: " << item.offset;
           }
+          break;
+        case reshade::api::descriptor_type::shader_storage_buffer:
+          {
+            auto item = static_cast<const reshade::api::buffer_range*>(update.descriptors)[j];
+            s << ", buffer: " << reinterpret_cast<void*>(item.buffer.handle);
+            s << ", size: " << item.size;
+            s << ", offset: " << item.offset;
+          }
+          break;
+        case reshade::api::descriptor_type::acceleration_structure:
+          s << ", accl: unknown";
           break;
         default:
           break;
@@ -1777,8 +1828,11 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
             static std::string hlslString = "";
             if (changedSelected) {
               auto hash = traceHashes.at(selectedIndex);
-              auto pair = pipelineCacheByShaderHash.find(hash);
-              if (pair != pipelineCacheByShaderHash.end() && !pair->second->hlslPath.empty()) {
+
+              if (
+                auto pair = pipelineCacheByShaderHash.find(hash);
+                pair != pipelineCacheByShaderHash.end() && !pair->second->hlslPath.empty()
+              ) {
                 hlslString.assign(readTextFile(pair->second->hlslPath));
               } else {
                 hlslString.assign("");
@@ -1828,6 +1882,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       reshade::register_event<reshade::addon_event::init_device>(on_init_device);
       reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
       reshade::register_event<reshade::addon_event::init_swapchain>(on_init_swapchain);
+
+      reshade::register_event<reshade::addon_event::create_pipeline_layout>(on_create_pipeline_layout);
       reshade::register_event<reshade::addon_event::init_pipeline_layout>(on_init_pipeline_layout);
 
       reshade::register_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
