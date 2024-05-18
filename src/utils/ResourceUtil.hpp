@@ -56,9 +56,12 @@ namespace ResourceUtil {
   static reshade::api::resource getResourceFromResourceView(reshade::api::device* device, reshade::api::resource_view resourceView) {
     auto &data = device->get_private_data<DeviceData>();
     std::unique_lock lock(data.mutex);
-    reshade::api::resource resource;
-    auto pair = data.resourceViewResources.find(resourceView.handle);
-    if (pair != data.resourceViewResources.end()) {
+    reshade::api::resource resource = {0};
+
+    if (
+      auto pair = data.resourceViewResources.find(resourceView.handle);
+      pair != data.resourceViewResources.end()
+    ) {
       resource.handle = pair->second;
     }
     return resource;

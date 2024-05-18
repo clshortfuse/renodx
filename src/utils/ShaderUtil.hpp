@@ -165,9 +165,13 @@ namespace ShaderUtil {
   static uint32_t getShaderHashByPipeline(reshade::api::device* device, reshade::api::pipeline pipeline) {
     auto &device_data = device->get_private_data<DeviceData>();
     std::shared_lock lock(device_data.mutex);
-    auto pair = device_data.pipelineToShaderHashMap.find(pipeline.handle);
-    if (pair == device_data.pipelineToShaderHashMap.end()) return 0;
-    return pair->second;
+
+    if (
+      auto pair = device_data.pipelineToShaderHashMap.find(pipeline.handle);
+      pair != device_data.pipelineToShaderHashMap.end()
+    ) return pair->second;
+
+    return 0;
   }
 
   // Before CreatePipelineState
@@ -198,8 +202,11 @@ namespace ShaderUtil {
       );
 
       std::shared_lock lock(mutex);
-      auto pair = createPipelineReplacements.find(shader_hash);
-      if (pair != createPipelineReplacements.end()) {
+
+      if (
+        auto pair = createPipelineReplacements.find(shader_hash);
+        pair != createPipelineReplacements.end()
+      ) {
         changed = true;
         size_t size = std::get<size_t>(pair->second);
         desc->code_size = size;
@@ -212,8 +219,8 @@ namespace ShaderUtil {
             static_cast<const uint8_t*>(desc->code),
             desc->code_size
           );
-          data.shaderReplacements.emplace(shader_hash, new_hash);
-          data.shaderReplacementsInverse.emplace(new_hash, shader_hash);
+          data.shaderReplacements[shader_hash] = new_hash;
+          data.shaderReplacementsInverse[new_hash] = shader_hash;
 
         } else {
           desc->code = nullptr;
@@ -263,10 +270,13 @@ namespace ShaderUtil {
       foundShader = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
 
       std::shared_lock lock(mutex);
-      auto pair = data.shaderReplacementsInverse.find(foundShader);
-      if (pair != data.shaderReplacementsInverse.end()) {
+
+      if (
+        auto pair = data.shaderReplacementsInverse.find(foundShader);
+        pair != data.shaderReplacementsInverse.end()
+      ) {
         uint32_t original_hash = pair->second;
-        data.pipelineToShaderHashMap.emplace(pipeline.handle, original_hash);
+        data.pipelineToShaderHashMap[pipeline.handle] = original_hash;
 
         std::stringstream s;
         s << "ShaderUtil::on_init_pipeline(found replacement: "
@@ -277,9 +287,12 @@ namespace ShaderUtil {
           << ")";
         reshade::log_message(reshade::log_level::info, s.str().c_str());
       } else {
-        data.pipelineToShaderHashMap.emplace(pipeline.handle, foundShader);
-        auto pair = initPipelineReplacements.find(foundShader);
-        if (pair != initPipelineReplacements.end()) {
+        data.pipelineToShaderHashMap[pipeline.handle] = foundShader;
+
+        if (
+          auto pair = initPipelineReplacements.find(foundShader);
+          pair != initPipelineReplacements.end()
+        ) {
           if (newSubobjects == nullptr) {
             newSubobjects = PipelineUtil::clonePipelineSubObjects(subobjectCount, subobjects);
           }
@@ -303,7 +316,7 @@ namespace ShaderUtil {
         }
       }
     }
-    data.pipelineToLayoutMap.emplace(pipeline.handle, layout.handle);
+    data.pipelineToLayoutMap[pipeline.handle] = layout.handle;
     if (foundComputeShader) {
       data.computeShaderLayouts.emplace(layout.handle);
     }
@@ -311,10 +324,10 @@ namespace ShaderUtil {
       reshade::api::pipeline newPipeline;
       bool builtPipelineOK = device->create_pipeline(layout, subobjectCount, newSubobjects, &newPipeline);
       if (builtPipelineOK) {
-        data.pipelineToLayoutMap.emplace(newPipeline.handle, layout.handle);
-        data.pipelineToShaderHashMap.emplace(newPipeline.handle, foundShader);
-        data.pipelineToPipelineReplacement.emplace(pipeline.handle, newPipeline.handle);
-        data.shaderToPipelineReplacement.emplace(foundShader, newPipeline.handle);
+        data.pipelineToLayoutMap[newPipeline.handle] = layout.handle;
+        data.pipelineToShaderHashMap[newPipeline.handle] = foundShader;
+        data.pipelineToPipelineReplacement[pipeline.handle] = newPipeline.handle;
+        data.shaderToPipelineReplacement[foundShader] = newPipeline.handle;
 
         std::stringstream s;
         s << "ShaderUtil::on_init_pipeline(clone pipeline "
@@ -341,8 +354,10 @@ namespace ShaderUtil {
     auto &data = device->get_private_data<DeviceData>();
     std::unique_lock lock(data.mutex);
     {
-      auto pair = data.pipelineToShaderHashMap.find(pipeline.handle);
-      if (pair != data.pipelineToShaderHashMap.end()) {
+      if (
+        auto pair = data.pipelineToShaderHashMap.find(pipeline.handle);
+        pair != data.pipelineToShaderHashMap.end()
+      ) {
         uint32_t shader_hash = pair->second;
         data.shaderToPipelineReplacement.erase(shader_hash);
       }
@@ -350,8 +365,10 @@ namespace ShaderUtil {
     }
 
     {
-      auto pair = data.pipelineToPipelineReplacement.find(pipeline.handle);
-      if (pair != data.pipelineToPipelineReplacement.end()) {
+      if (
+        auto pair = data.pipelineToPipelineReplacement.find(pipeline.handle);
+        pair != data.pipelineToPipelineReplacement.end()
+      ) {
         uint64_t pipelineReplacementHandle = pair->second;
         device->destroy_pipeline({pipelineReplacementHandle});
         data.pipelineToLayoutMap.erase(pipelineReplacementHandle);
@@ -372,10 +389,11 @@ namespace ShaderUtil {
     auto device = cmd_list->get_device();
     auto &device_data = device->get_private_data<DeviceData>();
     std::unique_lock lock(device_data.mutex);
-    auto pair = device_data.pipelineToShaderHashMap.find(pipeline.handle);
-    if (pair == device_data.pipelineToShaderHashMap.end()) {
-      // Unknown shader
-    } else {
+
+    if (
+      auto pair = device_data.pipelineToShaderHashMap.find(pipeline.handle);
+      pair != device_data.pipelineToShaderHashMap.end()
+    ) {
       auto &cmd_list_data = cmd_list->get_private_data<CommandListData>();
       std::unique_lock lock(cmd_list_data.mutex);
 #ifdef DEBUG_LEVEL_1

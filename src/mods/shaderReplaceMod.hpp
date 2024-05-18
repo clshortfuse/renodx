@@ -604,16 +604,25 @@ namespace ShaderReplaceMod {
     std::shared_lock shaderDeviceLock(shaderDeviceState.mutex);
 
     if (_shaderInjectionSize != 0) {
-      auto pair0 = shaderDeviceState.pipelineToLayoutMap.find(shaderState.currentShaderPipeline.handle);
-      if (pair0 != shaderDeviceState.pipelineToLayoutMap.end()) {
-        reshade::api::pipeline_layout layout = {pair0->second};
+      if (
+        auto pair = shaderDeviceState.pipelineToLayoutMap.find(shaderState.currentShaderPipeline.handle);
+        pair != shaderDeviceState.pipelineToLayoutMap.end()
+      ) {
+        reshade::api::pipeline_layout layout = {pair->second};
         auto injectionLayout = layout;
         auto device_api = device->get_api();
         reshade::api::shader_stage stage = reshade::api::shader_stage::all_graphics;
         uint32_t paramIndex = 0;
         if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
-          auto pair2 = device_data.moddedPipelineRootIndexes.find(layout.handle);
-          if (pair2 == device_data.moddedPipelineRootIndexes.end()) {
+          if (
+            auto pair = device_data.moddedPipelineRootIndexes.find(layout.handle);
+            pair != device_data.moddedPipelineRootIndexes.end()
+          ) {
+            paramIndex = pair->second;
+            stage = shaderDeviceState.computeShaderLayouts.contains(layout.handle)
+                    ? reshade::api::shader_stage::all_compute
+                    : reshade::api::shader_stage::all_graphics;
+          } else {
             std::stringstream s;
             s << "handlePreDraw(did not find modded pipeline root index"
               << ", pipeline: " << reinterpret_cast<void*>(shaderState.currentShaderPipeline.handle)
@@ -621,18 +630,19 @@ namespace ShaderReplaceMod {
             reshade::log_message(reshade::log_level::warning, s.str().c_str());
             return false;
           }
-          paramIndex = pair2->second;
 
-          stage = shaderDeviceState.computeShaderLayouts.contains(layout.handle)
-                  ? reshade::api::shader_stage::all_compute
-                  : reshade::api::shader_stage::all_graphics;
         } else {
           // Must be done before draw
           stage = (shaderState.currentShaderPipelineStage == reshade::api::pipeline_stage::compute_shader)
                   ? reshade::api::shader_stage::compute
                   : reshade::api::shader_stage::pixel;
-          auto pair3 = device_data.moddedPipelineLayouts.find(layout.handle);
-          if (pair3 == device_data.moddedPipelineLayouts.end()) {
+
+          if (
+            auto pair = device_data.moddedPipelineLayouts.find(layout.handle);
+            pair != device_data.moddedPipelineLayouts.end()
+          ) {
+            injectionLayout = pair->second;
+          } else {
             std::stringstream s;
             s << "handlePreDraw(did not find modded pipeline layout"
               << ", pipeline: " << reinterpret_cast<void*>(shaderState.currentShaderPipeline.handle)
@@ -640,8 +650,8 @@ namespace ShaderReplaceMod {
             reshade::log_message(reshade::log_level::warning, s.str().c_str());
             return false;
           }
-          injectionLayout = pair3->second;
         }
+
         std::shared_lock lock(MutexUtil::g_mutex0);
 
 #ifdef DEBUG_LEVEL_1
@@ -668,21 +678,21 @@ namespace ShaderReplaceMod {
 
     // perform bind pipeline (replace shader)
 
-    {
+    if (
       auto pair = shaderDeviceState.pipelineToPipelineReplacement.find(shaderState.currentShaderPipeline.handle);
-      if (pair != shaderDeviceState.pipelineToPipelineReplacement.end()) {
+      pair != shaderDeviceState.pipelineToPipelineReplacement.end()
+    ) {
 #ifdef DEBUG_LEVEL_1
-        std::stringstream s;
-        s << "handlePreDraw(binding pipeline: "
-          << PRINT_CRC32(shaderHash)
-          << ", stage: " << to_string(shaderState.currentShaderPipelineStage)
-          << ", handle: " << (void*)pair->second
-          << ")";
-        reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      std::stringstream s;
+      s << "handlePreDraw(binding pipeline: "
+        << PRINT_CRC32(shaderHash)
+        << ", stage: " << to_string(shaderState.currentShaderPipelineStage)
+        << ", handle: " << (void*)pair->second
+        << ")";
+      reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
-        cmd_list->bind_pipeline(shaderState.currentShaderPipelineStage, {pair->second});
-        // has replacemnt that can be bound;
-      }
+      cmd_list->bind_pipeline(shaderState.currentShaderPipelineStage, {pair->second});
+      // has replacemnt that can be bound;
     }
 
     return false;
