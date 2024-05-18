@@ -46,20 +46,20 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
 
-  float vanillaMidGray = toneMapCurve(0.18, 0.30f, 0.50f, 0.10f, 0.20f, 0.02f, 0.30f)
-                       / toneMapCurve(5.6f, 0.30f, 0.50f, 0.10f, 0.20f, 0.02f, 0.30f);
-  float renoDRTContrast = 1.5f;
-  float renoDRTFlare = 0.f;
-  float renoDRTShadows = 1.2f;
-  float renoDRTDechroma = 0.5f;
-  float renoDRTSaturation = 1.1f;
+  float vanillaMidGray = injectedData.midGray; //toneMapCurve(0.18, 0.30f, 0.50f, 0.10f, 0.20f, 0.02f, 0.30f)
+                      // / toneMapCurve(5.6f, 0.30f, 0.50f, 0.10f, 0.20f, 0.02f, 0.30f);
+  float renoDRTContrast = 1.f;
+  float renoDRTFlare = injectedData.renoDRTFlare;
+  float renoDRTShadows = 1.f;
+  float renoDRTDechroma = injectedData.colorGradeDechroma;
+  float renoDRTSaturation = 1.f;
   float renoDRTHighlights = 1.0f;
 
   ToneMapParams tmParams = {
     injectedData.toneMapType,
     injectedData.toneMapPeakNits,
     injectedData.toneMapGameNits,
-    injectedData.toneMapGammaCorrection,  // LUT output was in 2.2
+    injectedData.toneMapGammaCorrection - 1,  // LUT output was in 2.2
     injectedData.colorGradeExposure,
     injectedData.colorGradeHighlights,
     injectedData.colorGradeShadows,
@@ -124,7 +124,7 @@ void main(
 
 
 
-    r1.xyz = r0.xyz * float3(0.9375,0.9375,0.9375) + float3(0.03125,0.03125,0.03125);
+    r1.xyz = r0.xyz; // float3(0.9375,0.9375,0.9375) + float3(0.03125,0.03125,0.03125);
     
     //r2.xyz = t3.Sample(s3_s, r1.xyz).xyz;
     r2.xyz = sampleLUT(r0.xyz, lutParams, t3);
@@ -174,8 +174,8 @@ void main(
   }
   
   
-  if (injectedData.toneMapGammaCorrection) {
-    o0.rgb = gammaCorrectSafe(o0.rgb);
+  if (!injectedData.toneMapGammaCorrection) {
+    o0.rgb = gammaCorrectSafe(o0.rgb, true);
   }
 
   o0.rgb *= injectedData.toneMapGameNits / 80.f;
