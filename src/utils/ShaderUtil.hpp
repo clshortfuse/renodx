@@ -72,6 +72,7 @@ namespace ShaderUtil {
     void* data
   ) {
     std::unique_lock lock(mutex);
+    // Leak
     createPipelineReplacements.erase(shader_hash);
   }
 
@@ -95,6 +96,7 @@ namespace ShaderUtil {
     void* data
   ) {
     std::unique_lock lock(mutex);
+    // Leak
     initPipelineReplacements.erase(shader_hash);
   }
 
@@ -105,7 +107,7 @@ namespace ShaderUtil {
   ) {
     auto &device_data = device->get_private_data<DeviceData>();
     std::unique_lock lock(device_data.mutex);
-    device_data.pipelineToShaderHashMap.emplace(pipeline.handle, shader_hash);
+    device_data.pipelineToShaderHashMap[pipeline.handle] = shader_hash;
   }
 
   static uint32_t getCurrentShader(reshade::api::command_list* cmd_list) {
