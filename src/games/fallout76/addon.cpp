@@ -26,10 +26,11 @@
 //#include <embed/0x7684FC16.h> // FXAA
 #include <embed/0x2C63040A.h> // LUT
 #include <embed/0x160805BC.h> // LUT?
-//#include <embed/0x3778E664.h> // TAA
-//#include <embed/0xAF2731D9.h> // TAA
+#include <embed/0x3778E664.h> // TAA
+#include <embed/0xAF2731D9.h> // TAA
 //#include <embed/0x73F96489.h> // TAA?
-//#include <embed/0xC9C77523.h> // DOF?
+#include <embed/0xC9C77523.h> // DOF?
+#include <embed/0x283C8F43.h> // DOF?
 
 #include <embed/0x1BDD7570.h> // Tonemap
 #include <embed/0x2A868728.h> // Tonemap
@@ -73,13 +74,16 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0xBF6561E2),      // Tonemap
   CustomShaderEntry(0x2C63040A),      // LUT
   CustomShaderEntry(0x160805BC),      // LUT?
+  
+
   //CustomShaderEntry(0x7684FC16),      // FXAA
-  //CustomShaderEntry(0x3778E664),      // TAA
-  //CustomShaderEntry(0xAF2731D9),      // TAA
+  CustomShaderEntry(0x3778E664),      // TAA
+  CustomShaderEntry(0xAF2731D9),      // TAA
   //CustomShaderEntry(0x438DFC72),      // TAA
   //CustomShaderEntry(0x73F96489),      // TAA?
   
-  //CustomShaderEntry(0xC9C77523),      // DOF?
+  CustomShaderEntry(0xC9C77523),      // DOF?
+  CustomShaderEntry(0x283C8F43),      // DOF?
 
 
 
