@@ -23,11 +23,11 @@
 #include <embed/0xD66588EF.h> // Loading Screen
 #include <embed/0x3C8AF2C9.h> // Loading Screen Composite
 #include <embed/0x0F2CC0D1.h> // video
-#include <embed/0x7684FC16.h> // FXAA
+//#include <embed/0x7684FC16.h> // FXAA
 #include <embed/0x2C63040A.h> // LUT
 #include <embed/0x160805BC.h> // LUT?
-#include <embed/0x3778E664.h> // TAA
-#include <embed/0xAF2731D9.h> // TAA
+//#include <embed/0x3778E664.h> // TAA
+//#include <embed/0xAF2731D9.h> // TAA
 //#include <embed/0x73F96489.h> // TAA?
 //#include <embed/0xC9C77523.h> // DOF?
 
@@ -35,6 +35,7 @@
 #include <embed/0x2A868728.h> // Tonemap
 #include <embed/0x5D002D1E.h> // Tonemap
 #include <embed/0xBF6561E2.h> // Tonemap
+//#include <embed/0x438DFC72.h>
 
 
 #include <chrono>
@@ -72,9 +73,10 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0xBF6561E2),      // Tonemap
   CustomShaderEntry(0x2C63040A),      // LUT
   CustomShaderEntry(0x160805BC),      // LUT?
-  CustomShaderEntry(0x7684FC16),      // FXAA
-  CustomShaderEntry(0x3778E664),      // TAA
-  CustomShaderEntry(0xAF2731D9),      // TAA
+  //CustomShaderEntry(0x7684FC16),      // FXAA
+  //CustomShaderEntry(0x3778E664),      // TAA
+  //CustomShaderEntry(0xAF2731D9),      // TAA
+  //CustomShaderEntry(0x438DFC72),      // TAA
   //CustomShaderEntry(0x73F96489),      // TAA?
   
   //CustomShaderEntry(0xC9C77523),      // DOF?
@@ -187,6 +189,15 @@ UserSettingUtil::UserSettings userSettings = {
     .parse = [](float value) { return value * 0.02f; }
   },
   new UserSettingUtil::UserSetting {
+    .key = "colorGradeDechroma",
+    .binding = &shaderInjection.colorGradeDechroma,
+    .defaultValue = 50.f,
+    .label = "Dechroma",
+    .section = "Color Grading",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.01f; }
+  },
+  new UserSettingUtil::UserSetting {
     .key = "colorGradeLUTStrength",
     .binding = &shaderInjection.colorGradeLUTStrength,
     .defaultValue = 100.f,
@@ -244,12 +255,31 @@ UserSettingUtil::UserSettings userSettings = {
   new UserSettingUtil::UserSetting {
     .key = "fxFilmGrain",
     .binding = &shaderInjection.fxFilmGrain,
-    .defaultValue = 50.f,
+    .defaultValue = 0.f,
     .label = "Film Grain",
     .section = "Effects",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
+  new UserSettingUtil::UserSetting {
+    .key = "midGray",
+    .binding = &shaderInjection.midGray,
+    .defaultValue = .22f,
+    .label = "vanillaMidGray",
+    .section = "Tonemapper Advanced Settings",
+    .max = .4f,
+    .format = "%.4f"
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "renoDRTFlare",
+    .binding = &shaderInjection.renoDRTFlare,
+    .defaultValue = 0.f,
+    .label = "renoDRTFlare",
+    .section = "Tonemapper Advanced Settings",
+    .max = 0.5f,
+    .format = "%.4f"
+  }
+
 };
 
 // clang-format on
