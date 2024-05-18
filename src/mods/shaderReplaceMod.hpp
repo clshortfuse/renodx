@@ -53,6 +53,7 @@ namespace ShaderReplaceMod {
   static bool forcePipelineCloning = false;
   static bool traceUnmodifiedShaders = false;
   static bool allowMultiplePushConstants = false;
+  static bool retainDX12LayoutParams = false;
   static int32_t expectedConstantBufferIndex = -1;
   static uint32_t expectedConstantBufferSpace = 0;
 
@@ -344,8 +345,8 @@ namespace ShaderReplaceMod {
           reshade::log_message(reshade::log_level::warning, s.str().c_str());
           return;
         };
-        for (auto injectedParams : data.createdParams) {
-          if (injectedParams != nullptr) {
+        if (!retainDX12LayoutParams) {
+          for (auto injectedParams : data.createdParams) {
             free(injectedParams);
           }
         }
