@@ -137,13 +137,13 @@ void main(
   r1.x = cb2[1].w * r1.x;
   r1.x = exp2(r1.x);
   r0.w = r1.x * r0.w;
-  r0.xyz = r0.xyz * r0.www;
+  r0.xyz = r0.xyz * r0.www * injectedData.fxAutoExposure;
   r0.w = cmp(0.5 < cb2[2].w);
 
   const float3 untonemapped = r0.xyz;
 
   /* tone mapping */
-  if (injectedData.toneMapType == 0) { // Vanilla tonemapper
+  if (injectedData.toneMapType == 0) { // Vanilla
     r1.x = max(9.99999975e-005, cb2[2].y);
     r1.y = 0.560000002 / r1.x; // .56 = 11.2 (linear white point) * .5 * .1 (linear angle)?
     r1.y = 2.43000007 + r1.y;

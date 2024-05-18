@@ -1,3 +1,7 @@
+#include "../../shaders/color.hlsl"
+#include "../../shaders/tonemap.hlsl"
+#include "./shared.h"
+
 // ---- Created with 3Dmigoto v1.3.16 on Sun May 12 21:52:49 2024
 Texture2D<float4> t4 : register(t4);
 
@@ -115,9 +119,12 @@ void main(
   r1.x = cb2[1].w * r1.x;
   r1.x = exp2(r1.x);
   r0.w = r1.x * r0.w;
-  r0.xyz = r0.xyz * r0.www;
+  r0.xyz = r0.xyz * r0.www * injectedData.fxAutoExposure;
   r1.x = cmp(0.5 < cb2[2].w);
-  if (r1.x != 0) {
+
+  const float3 untonemapped = r0.xyz; // store untonemapped image
+
+  if (r1.x != 0 & injectedData.toneMapType == 0) { // Vanilla
     r1.xy = float2(-1,-2) + cb2[2].xx;
     r2.xyz = r0.xyz * float3(2.50999999,2.50999999,2.50999999) + float3(0.0299999993,0.0299999993,0.0299999993);
     r2.xyz = r2.xyz * r0.xyz;
@@ -157,8 +164,12 @@ void main(
     r1.yzw = r1.yyy ? r3.xyz : r4.xyz;
     r0.xyz = r1.xxx ? r2.xyz : r1.yzw;
   }
+  else { // untonemapped
+    r0.xyz = untonemapped;
+  }
   r1.x = dot(r0.xyz, float3(0.212500006,0.715399981,0.0720999986));
   r0.w = 0;
+  float3 outputColor = r0.xyz; // before scene filter
   r0.xyzw = -r1.xxxx + r0.xyzw;
   r0.xyzw = cb2[3].xxxx * r0.xyzw + r1.xxxx;
   r1.xyzw = r1.xxxx * cb2[4].xyzw + -r0.xyzw;
@@ -168,5 +179,7 @@ void main(
   r1.xyz = cb2[3].zzz * r0.xyz + cb2[0].xxx;
   r0.xyzw = cb2[5].xyzw + -r1.xyzw;
   o0.xyzw = cb2[5].wwww * r0.xyzw + r1.xyzw;
+
+  o0.xyz = lerp(outputColor, o0.xyz, injectedData.fxSceneFilter);
   return;
 }
