@@ -79,11 +79,6 @@ namespace ShaderReplaceMod {
     CustomShaders customShaders;
   };
 
-  struct __declspec(uuid("979ad94d-1186-4749-a7b7-7cc5959de675")) CommandListData {
-    bool hasSwapchainRenderTarget;
-    std::shared_mutex mutex;
-  };
-
   static void on_init_device(reshade::api::device* device) {
     std::stringstream s;
     s << "init_device("
@@ -106,42 +101,6 @@ namespace ShaderReplaceMod {
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
     device->destroy_private_data<DeviceData>();
-  }
-
-  static void on_init_command_list(reshade::api::command_list* cmd_list) {
-    cmd_list->create_private_data<CommandListData>();
-  }
-
-  static void on_destroy_command_list(reshade::api::command_list* cmd_list) {
-    cmd_list->destroy_private_data<CommandListData>();
-  }
-
-  static void on_bind_render_targets_and_depth_stencil(
-    reshade::api::command_list* cmd_list,
-    uint32_t count,
-    const reshade::api::resource_view* rtvs,
-    reshade::api::resource_view dsv
-  ) {
-    if (!count) return;
-    auto device = cmd_list->get_device();
-    if (device == nullptr) return;
-
-    bool foundSwapchainRTV = false;
-
-    for (uint32_t i = 0; i < count; i++) {
-      const reshade::api::resource_view rtv = rtvs[i];
-      if (!rtv.handle) continue;
-
-      auto resource = device->get_resource_from_view(rtv);
-      if (SwapchainUtil::isBackBuffer(device, resource)) {
-        foundSwapchainRTV = true;
-        break;
-      }
-    }
-
-    CommandListData &cmd_list_data = cmd_list->get_private_data<CommandListData>();
-    std::unique_lock lock(cmd_list_data.mutex);
-    cmd_list_data.hasSwapchainRenderTarget = foundSwapchainRTV;
   }
 
   // Shader Injection
@@ -582,18 +541,19 @@ namespace ShaderReplaceMod {
   }
 
   static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch = false) {
-    auto &cmd_list_data = cmd_list->get_private_data<CommandListData>();
-    std::shared_lock localCommandListLock(cmd_list_data.mutex);
     auto device = cmd_list->get_device();
     auto &device_data = device->get_private_data<DeviceData>();
     std::unique_lock localDeviceLock(device_data.mutex);
 
     ShaderUtil::CommandListData &shaderState = cmd_list->get_private_data<ShaderUtil::CommandListData>();
-    std::shared_lock shaderCommandListLock(cmd_list_data.mutex);
+    std::shared_lock shaderCommandListLock(shaderState.mutex);
+
+    SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
+    std::shared_lock swapchainCommandListLock(swapchainState.mutex);
 
     uint32_t shaderHash = shaderState.currentShaderHash;
 
-    bool isSwapchainWrite = cmd_list_data.hasSwapchainRenderTarget && !isDispatch;
+    bool isSwapchainWrite = swapchainState.hasSwapchainRenderTarget && !isDispatch;
 
     auto customShaderInfoPair = device_data.customShaders.find(shaderHash);
     if (customShaderInfoPair == device_data.customShaders.end()) {
@@ -797,10 +757,6 @@ namespace ShaderReplaceMod {
           }
         }
 
-        if (traceUnmodifiedShaders || _usingSwapChainOnly) {
-          reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(on_bind_render_targets_and_depth_stencil);
-        }
-
         if (_usingCountedShaders) {
           reshade::register_event<reshade::addon_event::present>(on_present);
         }
@@ -818,9 +774,6 @@ namespace ShaderReplaceMod {
             ShaderUtil::addInitPipelineReplacement(hash, shader.codeSize, (void*)shader.code);
           }
         }
-
-        reshade::register_event<reshade::addon_event::init_command_list>(on_init_command_list);
-        reshade::register_event<reshade::addon_event::destroy_command_list>(on_destroy_command_list);
 
         reshade::register_event<reshade::addon_event::draw>(on_draw);
         reshade::register_event<reshade::addon_event::dispatch>(on_dispatch);
@@ -866,8 +819,6 @@ namespace ShaderReplaceMod {
 
         reshade::unregister_event<reshade::addon_event::init_device>(on_init_device);
         reshade::unregister_event<reshade::addon_event::destroy_device>(on_destroy_device);
-
-        reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(on_bind_render_targets_and_depth_stencil);
 
         reshade::unregister_event<reshade::addon_event::draw>(on_draw);
         reshade::unregister_event<reshade::addon_event::dispatch>(on_dispatch);
