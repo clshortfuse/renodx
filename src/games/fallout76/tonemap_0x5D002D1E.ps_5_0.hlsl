@@ -1,3 +1,7 @@
+#include "../../shaders/color.hlsl"
+#include "../../shaders/tonemap.hlsl"
+#include "./shared.h"
+
 // ---- Created with 3Dmigoto v1.3.16 on Sun May 12 21:52:55 2024
 Texture2D<float4> t4 : register(t4);
 
@@ -108,26 +112,38 @@ void main(
   r1.x = cb2[1].w * r1.x;
   r1.x = exp2(r1.x);
   r0.w = r1.x * r0.w;
-  r0.xyz = r0.xyz * r0.www;
+  r0.xyz = r0.xyz * lerp(1.f, r0.www, injectedData.fxAutoExposure);
   r0.w = cmp(0.5 < cb2[2].w);
-  r1.x = max(9.99999975e-005, cb2[2].y);
-  r1.y = 0.560000002 / r1.x;
-  r1.y = 2.43000007 + r1.y;
-  r1.x = r1.x * r1.x;
-  r1.x = 0.140000001 / r1.x;
-  r1.x = r1.y + r1.x;
-  r1.y = cb2[0].x * cb2[0].x;
-  r1.y = -r1.y * 2.43000007 + 0.0299999993;
-  r1.z = -0.589999974 + r1.x;
-  r1.y = r1.z * cb2[0].x + r1.y;
-  r1.xzw = r1.xxx * r0.xyz + float3(0.0299999993,0.0299999993,0.0299999993);
-  r1.xzw = r1.xzw * r0.xyz;
-  r2.xyz = r0.xyz * float3(2.43000007,2.43000007,2.43000007) + float3(0.589999974,0.589999974,0.589999974);
-  r2.xyz = r0.xyz * r2.xyz + r1.yyy;
-  r1.xyz = saturate(r1.xzw / r2.xyz);
-  r0.xyz = r0.www ? r1.xyz : r0.xyz;
+  
+  const float3 untonemapped = r0.xyz;
+
+  // tonemapping
+  if (injectedData.toneMapType == 0) { // vanilla
+    r1.x = max(9.99999975e-005, cb2[2].y);
+    r1.y = 0.560000002 / r1.x;
+    r1.y = 2.43000007 + r1.y;
+    r1.x = r1.x * r1.x;
+    r1.x = 0.140000001 / r1.x;
+    r1.x = r1.y + r1.x;
+    r1.y = cb2[0].x * cb2[0].x;
+    r1.y = -r1.y * 2.43000007 + 0.0299999993;
+    r1.z = -0.589999974 + r1.x;
+    r1.y = r1.z * cb2[0].x + r1.y;
+    r1.xzw = r1.xxx * r0.xyz + float3(0.0299999993,0.0299999993,0.0299999993);
+    r1.xzw = r1.xzw * r0.xyz;
+    r2.xyz = r0.xyz * float3(2.43000007,2.43000007,2.43000007) + float3(0.589999974,0.589999974,0.589999974);
+    r2.xyz = r0.xyz * r2.xyz + r1.yyy;
+    r1.xyz = saturate(r1.xzw / r2.xyz);
+    r0.xyz = r0.www ? r1.xyz : r0.xyz;
+  }
+  else { // untonemapped
+    r0.xyz = untonemapped;
+  }
+
+  // scene filter adjustments
   r1.x = dot(r0.xyz, float3(0.212500006,0.715399981,0.0720999986));
   r0.w = 0;
+  float3 outputColor = r0.xyz; // before scene filter
   r0.xyzw = -r1.xxxx + r0.xyzw;
   r0.xyzw = cb2[3].xxxx * r0.xyzw + r1.xxxx;
   r1.xyzw = r1.xxxx * cb2[4].xyzw + -r0.xyzw;
@@ -137,5 +153,8 @@ void main(
   r1.xyz = cb2[3].zzz * r0.xyz + cb2[0].xxx;
   r0.xyzw = cb2[5].xyzw + -r1.xyzw;
   o0.xyzw = cb2[5].wwww * r0.xyzw + r1.xyzw;
+
+  o0.xyz = lerp(outputColor, o0.xyz, injectedData.fxSceneFilter);
+
   return;
 }

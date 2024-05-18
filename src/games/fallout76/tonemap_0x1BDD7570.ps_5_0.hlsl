@@ -137,7 +137,7 @@ void main(
   r1.x = cb2[1].w * r1.x;
   r1.x = exp2(r1.x);
   r0.w = r1.x * r0.w;
-  r0.xyz = r0.xyz * r0.www * injectedData.fxAutoExposure;
+  r0.xyz = r0.xyz * lerp(1.f, r0.www, injectedData.fxAutoExposure);
   r0.w = cmp(0.5 < cb2[2].w);
 
   const float3 untonemapped = r0.xyz;
