@@ -48,5 +48,10 @@ void main(
   r0.x = r0.x ? r0.y : 0;
   r1.xyzw = t1.Sample(s1_s, v1.xy).xyzw;
   r2.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
+  // r1.xyzw = -r2.xyzw + r1.xyzw;
+  // o0.xyzw = r0.xxxx * r1.xyzw + r2.xyzw;
+  
+  // o0.xyzw = r0.xxxx * (r1.xyzw - r2.xyzw) + r2.xyzw;
+  o0.xyzw = lerp(r2.xyzw, r1.xyzw, r0.x * injectedData.fxDoF);
   return;
 }
