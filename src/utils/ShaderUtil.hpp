@@ -393,9 +393,13 @@ namespace ShaderUtil {
     }
   }
 
+  static bool attached = false;
+
   void use(DWORD fdwReason) {
     switch (fdwReason) {
       case DLL_PROCESS_ATTACH:
+        if (attached) return;
+        attached = true;
         reshade::register_event<reshade::addon_event::init_device>(on_init_device);
         reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
         reshade::register_event<reshade::addon_event::init_command_list>(on_init_command_list);

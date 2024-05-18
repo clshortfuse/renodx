@@ -11,9 +11,9 @@
 #include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
+#include "./ResourceUtil.hpp"
 #include "./format.hpp"
 #include "./pipelineUtil.hpp"
-#include "./ResourceUtil.hpp"
 
 namespace SwapchainUtil {
 
@@ -146,10 +146,14 @@ namespace SwapchainUtil {
     cmdListData.hasSwapchainRenderTarget = foundSwapchainRTV;
   }
 
+  static bool attached = false;
+
   void use(DWORD fdwReason) {
     ResourceUtil::use(fdwReason);
     switch (fdwReason) {
       case DLL_PROCESS_ATTACH:
+        if (attached) return;
+        attached = true;
         reshade::register_event<reshade::addon_event::init_device>(on_init_device);
         reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
         reshade::register_event<reshade::addon_event::init_swapchain>(on_init_swapchain);

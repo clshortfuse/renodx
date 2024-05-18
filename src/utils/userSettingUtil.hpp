@@ -172,8 +172,6 @@ namespace UserSettingUtil {
     }
   }
 
-
-
   // Runs first
   // https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
   static void on_register_overlay(reshade::api::effect_runtime* runtime) {
@@ -318,9 +316,14 @@ namespace UserSettingUtil {
     }
   }
 
+  static bool attached = false;
+
   static void use(DWORD fdwReason, UserSettings* userSettings, void (*onPresetOff)() = nullptr) {
     switch (fdwReason) {
       case DLL_PROCESS_ATTACH:
+        if (attached) return;
+        attached = true;
+
         _userSettings = userSettings;
         _onPresetOff = onPresetOff;
         load_settings();
