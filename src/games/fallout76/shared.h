@@ -22,6 +22,9 @@ struct ShaderInjectData {
   float fxDoF;
   float fxFilmGrain;
   float elapsedTime;
+  float midGray;
+  float colorGradeDechroma;
+  float renoDRTFlare;
 };
 
 #ifndef __cplusplus
