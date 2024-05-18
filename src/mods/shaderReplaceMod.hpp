@@ -333,7 +333,7 @@ namespace ShaderReplaceMod {
           << ": " << (result ? "OK" : "FAILED")
           << ")";
         reshade::log_message(result ? reshade::log_level::info : reshade::log_level::error, s.str().c_str());
-        data.moddedPipelineLayouts.emplace(layout.handle, newLayout);
+        data.moddedPipelineLayouts[layout.handle] = newLayout;
       } else {
         if (!data.createdParams.size()) {
           // No injected params
@@ -409,11 +409,11 @@ namespace ShaderReplaceMod {
         << ": " << result
         << " )";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
-      data.moddedPipelineLayouts.emplace(layout.handle, newLayout);
+      data.moddedPipelineLayouts[layout.handle] = newLayout;
       injectionIndex = cbvIndex;
     }
 
-    data.moddedPipelineRootIndexes.emplace(layout.handle, injectionIndex);
+    data.moddedPipelineRootIndexes[layout.handle] = injectionIndex;
 
     std::stringstream s;
     s << "on_init_pipeline_layout("

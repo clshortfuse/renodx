@@ -35,10 +35,22 @@ namespace ResourceUtil {
     const reshade::api::resource_view_desc &desc,
     reshade::api::resource_view view
   ) {
-    if (!resource.handle) return;
     auto &data = device->get_private_data<DeviceData>();
     std::unique_lock lock(data.mutex);
-    data.resourceViewResources.emplace(view.handle, resource.handle);
+    if (!resource.handle) {
+      data.resourceViewResources.erase(view.handle);
+      return;
+    }
+    data.resourceViewResources[view.handle] = resource.handle;
+  }
+
+  static void on_destroy_resource_view(
+    reshade::api::device* device,
+    reshade::api::resource_view view
+  ) {
+    auto &data = device->get_private_data<DeviceData>();
+    std::unique_lock lock(data.mutex);
+    data.resourceViewResources.erase(view.handle);
   }
 
   static reshade::api::resource getResourceFromResourceView(reshade::api::device* device, reshade::api::resource_view resourceView) {
@@ -57,17 +69,43 @@ namespace ResourceUtil {
     return getResourceFromResourceView(device, resourceView);
   }
 
+  static void setResourceFromResourceView(reshade::api::device* device, reshade::api::resource_view resourceView, reshade::api::resource resource) {
+    auto &data = device->get_private_data<DeviceData>();
+    std::unique_lock lock(data.mutex);
+    data.resourceViewResources[resourceView.handle] = resource.handle;
+  }
+
+  static void setResourceFromResourceView(reshade::api::command_list* cmd_list, reshade::api::resource_view resourceView, reshade::api::resource resource) {
+    auto device = cmd_list->get_device();
+    return setResourceFromResourceView(device, resourceView, resource);
+  }
+
+  static void removeResourceFromResourceView(reshade::api::device* device, reshade::api::resource_view resourceView) {
+    auto &data = device->get_private_data<DeviceData>();
+    std::unique_lock lock(data.mutex);
+    data.resourceViewResources.erase(resourceView.handle);
+  }
+
+  static void removeResourceFromResourceView(reshade::api::command_list* cmd_list, reshade::api::resource_view resourceView) {
+    auto device = cmd_list->get_device();
+    return removeResourceFromResourceView(device, resourceView);
+  }
+
+  static bool attached = false;
+
   void use(DWORD fdwReason) {
     switch (fdwReason) {
       case DLL_PROCESS_ATTACH:
         reshade::register_event<reshade::addon_event::init_device>(on_init_device);
         reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
         reshade::register_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
+        reshade::register_event<reshade::addon_event::destroy_resource_view>(on_destroy_resource_view);
         break;
       case DLL_PROCESS_DETACH:
         reshade::unregister_event<reshade::addon_event::init_device>(on_init_device);
         reshade::unregister_event<reshade::addon_event::destroy_device>(on_destroy_device);
         reshade::unregister_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
+        reshade::unregister_event<reshade::addon_event::destroy_resource_view>(on_destroy_resource_view);
         break;
     }
   }

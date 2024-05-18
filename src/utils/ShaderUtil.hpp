@@ -63,7 +63,7 @@ namespace ShaderUtil {
       memcpy(newData, data, size);
     }
     std::unique_lock lock(mutex);
-    createPipelineReplacements.emplace(shader_hash, std::tuple<size_t, void*>(size, newData));
+    createPipelineReplacements[shader_hash] = std::tuple<size_t, void*>(size, newData);
   }
 
   static void removeCreatePipelineReplacement(
@@ -86,7 +86,7 @@ namespace ShaderUtil {
       memcpy(newData, data, size);
     }
     std::unique_lock lock(mutex);
-    initPipelineReplacements.emplace(shader_hash, std::tuple<size_t, void*>(size, newData));
+    initPipelineReplacements[shader_hash] = std::tuple<size_t, void*>(size, newData);
   }
 
   static void removeInitPipelineReplacement(
