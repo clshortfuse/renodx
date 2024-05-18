@@ -147,7 +147,10 @@ namespace ShaderReplaceMod {
         }
       } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
         if (param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer) {
-          if (cbvIndex < param.push_descriptors.dx_register_index + param.push_descriptors.count) {
+          if (
+            param.push_descriptors.dx_register_space == data.expectedConstantBufferSpace
+            && cbvIndex < param.push_descriptors.dx_register_index + param.push_descriptors.count
+          ) {
             cbvIndex = param.push_descriptors.dx_register_index + param.push_descriptors.count;
           }
         }
