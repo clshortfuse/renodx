@@ -21,7 +21,7 @@ float3 RgbAcesSdrSrgb(float3 x) {
 // https://www.slideshare.net/ozlael/hable-john-uncharted2-hdr-lighting
 // http://filmicworlds.com/blog/filmic-tonemapping-operators/
 
-const float uncharted2Tonemap_W = 11.2;  // Linear White
+static const float uncharted2Tonemap_W = 11.2;  // Linear White
 
 float toneMapCurve(float x, float a, float b, float c, float d, float e, float f) {
   return ((x * (a * x + c * b) + d * e) / (x * (a * x + b) + d * f)) - e / f;
@@ -296,7 +296,11 @@ float3 restoreSaturationLoss(float3 inputColor, float3 outputColor, ToneMapLUTPa
 
   float yOut = yFromBT709(abs(outputColor));
   float3 satOut = outputColor - yOut;
-  float3 newSat = satOut * (satClamped ? (satIn / satClamped) : 1.f);
+  float3 newSat = float3(
+    satOut.r * (satClamped.r ? (satIn.r / satClamped.r) : 1.f),
+    satOut.g * (satClamped.g ? (satIn.g / satClamped.g) : 1.f),
+    satOut.b * (satClamped.b ? (satIn.b / satClamped.b) : 1.f)
+  );
   return (yOut + newSat);
 }
 

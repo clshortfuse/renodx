@@ -47,6 +47,7 @@ function(build_shader_target)
       set(SHADER_BINARY "fxc.exe")
       if (SHADER_TARGET_MAJOR EQUAL "6")
         set(SHADER_BINARY "dxc.exe")
+        set(SHADER_FLAGS "/HV 2021")
       else()
         set(SHADER_FLAGS "/Gec") # Compatibility mode
       endif()
