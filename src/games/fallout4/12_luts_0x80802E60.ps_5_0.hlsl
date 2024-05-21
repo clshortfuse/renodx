@@ -51,7 +51,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     injectedData.toneMapType,
     injectedData.toneMapPeakNits,
     injectedData.toneMapGameNits,
-    injectedData.toneMapGammaCorrection,  // LUT output was in 2.2
+    injectedData.toneMapGammaCorrection - 1,  // LUT output was in 2.2
     injectedData.colorGradeExposure,
     injectedData.colorGradeHighlights,
     injectedData.colorGradeShadows,
@@ -154,8 +154,8 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   }
   
   
-  if (injectedData.toneMapGammaCorrection) {
-    o0.rgb = gammaCorrectSafe(o0.rgb);
+  if (injectedData.toneMapGammaCorrection == 0) {
+    o0.rgb = gammaCorrectSafe(o0.rgb, true);
   }
 
   o0.rgb *= injectedData.toneMapGameNits / 80.f;
