@@ -118,13 +118,14 @@ ToneMapLUTParams buildLUTParams(SamplerState lutSampler, float strength, float s
 
 #define TONE_MAP_LUT_TYPE__LINEAR            0u
 #define TONE_MAP_LUT_TYPE__SRGB              1u
-#define TONE_MAP_LUT_TYPE__2_2               2u
-#define TONE_MAP_LUT_TYPE__2_0               3u
-#define TONE_MAP_LUT_TYPE__ARRI_C800         4u
-#define TONE_MAP_LUT_TYPE__ARRI_C1000        5u
-#define TONE_MAP_LUT_TYPE__ARRI_C800_NO_CUT  6u
-#define TONE_MAP_LUT_TYPE__ARRI_C1000_NO_CUT 7u
-#define TONE_MAP_LUT_TYPE__PQ                8u
+#define TONE_MAP_LUT_TYPE__2_4               2u
+#define TONE_MAP_LUT_TYPE__2_2               3u
+#define TONE_MAP_LUT_TYPE__2_0               4u
+#define TONE_MAP_LUT_TYPE__ARRI_C800         5u
+#define TONE_MAP_LUT_TYPE__ARRI_C1000        6u
+#define TONE_MAP_LUT_TYPE__ARRI_C800_NO_CUT  7u
+#define TONE_MAP_LUT_TYPE__ARRI_C1000_NO_CUT 8u
+#define TONE_MAP_LUT_TYPE__PQ                9u
 
 float3 renoDRTToneMap(float3 color, ToneMapParams params, bool sdr = false) {
   float renoDRTMax = sdr ? 1.f : (params.peakNits / params.gameNits);
@@ -227,15 +228,15 @@ float3 toneMap(float3 untonemapped, ToneMapParams params) {
       return sampleLUT(                                                                     \
         lutTexture,                                                                         \
         lutParams.lutSampler,                                                               \
-        color,                                                                              \
-        lutParams.precompute                                                                \
+        color.rgb,                                                                          \
+        lutParams.precompute.xyz                                                            \
                                                                                             \
       );                                                                                    \
     }                                                                                       \
     return sampleLUT(                                                                       \
       lutTexture,                                                                           \
       lutParams.lutSampler,                                                                 \
-      color,                                                                                \
+      color.rgb,                                                                            \
       lutParams.size                                                                        \
     );                                                                                      \
   }
@@ -248,6 +249,8 @@ sampleLUTColorFunctionGenerator(Texture3D<float3>);
 float3 convertLUTInput(float3 color, ToneMapLUTParams lutParams) {
   if (lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB) {
     color = srgbFromLinear(saturate(color));
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__2_4) {
+    color = pow(saturate(color), 1.f / 2.4f);
   } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__2_2) {
     color = pow(saturate(color), 1.f / 2.2f);
   } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__2_0) {
@@ -274,6 +277,8 @@ float3 restoreSaturationLoss(float3 inputColor, float3 outputColor, ToneMapLUTPa
 
   float3 clamped = inputColor;
   if (lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB) {
+    clamped = saturate(clamped);
+  } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__2_4) {
     clamped = saturate(clamped);
   } else if (lutParams.inputType == TONE_MAP_LUT_TYPE__2_2) {
     clamped = saturate(clamped);
@@ -307,6 +312,7 @@ float3 restoreSaturationLoss(float3 inputColor, float3 outputColor, ToneMapLUTPa
 float3 gammaLUTInput(float3 inputColor, float3 convertedInputColor, ToneMapLUTParams lutParams) {
   if (
     lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB
+    || lutParams.inputType == TONE_MAP_LUT_TYPE__2_4
     || lutParams.inputType == TONE_MAP_LUT_TYPE__2_2
     || lutParams.inputType == TONE_MAP_LUT_TYPE__2_0
   ) {
@@ -326,6 +332,8 @@ float3 gammaLUTOutput(float3 color, ToneMapLUTParams lutParams) {
 float3 linearLUTOutput(float3 color, ToneMapLUTParams lutParams) {
   if (lutParams.outputType == TONE_MAP_LUT_TYPE__SRGB) {
     color = sign(color) * linearFromSRGB(abs(color));
+  } else if (lutParams.outputType == TONE_MAP_LUT_TYPE__2_4) {
+    color = sign(color) * pow(abs(color), 2.4f);
   } else if (lutParams.outputType == TONE_MAP_LUT_TYPE__2_2) {
     color = sign(color) * pow(abs(color), 2.2f);
   } else if (lutParams.outputType == TONE_MAP_LUT_TYPE__2_0) {
@@ -335,7 +343,9 @@ float3 linearLUTOutput(float3 color, ToneMapLUTParams lutParams) {
 }
 
 float3 linearUnclampedLUTOutput(float3 color, ToneMapLUTParams lutParams) {
-  if (lutParams.outputType == TONE_MAP_LUT_TYPE__2_2) {
+  if (lutParams.outputType == TONE_MAP_LUT_TYPE__2_4) {
+    color = sign(color) * pow(abs(color), 2.4f);
+  } else if (lutParams.outputType == TONE_MAP_LUT_TYPE__2_2) {
     color = sign(color) * pow(abs(color), 2.2f);
   } else {
     color = sign(color) * linearFromSRGB(abs(color));
@@ -416,6 +426,7 @@ sampleLUTFunctionGenerator(Texture3D<float3>);
     float3 lutColor;                                                                                              \
     if (                                                                                                          \
       lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB                                                              \
+      || lutParams.inputType == TONE_MAP_LUT_TYPE__2_4                                                            \
       || lutParams.inputType == TONE_MAP_LUT_TYPE__2_2                                                            \
       || lutParams.inputType == TONE_MAP_LUT_TYPE__2_0                                                            \
     ) {                                                                                                           \
