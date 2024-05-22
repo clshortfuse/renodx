@@ -53,7 +53,19 @@ void frag_main() {
   // outputColor = abs(outputColor);
   // outputColor = injectedData.toneMapGammaCorrection ? pow(outputColor, 2.2f) : linearFromSRGB(outputColor.rgb);
   // outputColor *= signs;
-  SV_Target.rgb *= injectedData.toneMapUINits / 80.f;
+
+  float3 outputColor = SV_Target.rgb;
+  float3 signs = sign(outputColor);
+  outputColor = abs(outputColor);
+  if (injectedData.toneMapGammaCorrection == 0.f) {
+    outputColor = linearFromSRGB(outputColor);
+  } else if (injectedData.toneMapGammaCorrection == 1.f) {
+    outputColor = pow(outputColor, 2.2f);
+  } else if (injectedData.toneMapGammaCorrection == 2.f) {
+    outputColor = pow(outputColor, 2.4f);
+  }
+  outputColor *= signs;
+  SV_Target.rgb = outputColor * injectedData.toneMapUINits / 80.f;
 
   // SV_Target.rgb = outputColor;
 }

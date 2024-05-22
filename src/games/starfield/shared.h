@@ -16,6 +16,8 @@ struct ShaderInjectData {
   float colorGradeSaturation;
   float colorGradeLUTStrength;
   float colorGradeLUTScaling;
+  float colorGradeSceneGrading;
+  float fxBloom;
   float fxFilmGrain;
   float elapsedTime;
 };

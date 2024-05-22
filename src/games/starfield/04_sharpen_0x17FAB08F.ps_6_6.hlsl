@@ -26,7 +26,11 @@ struct SPIRV_Cross_Output {
 
 void frag_main() {
   float4 _42 = _8.Sample(_23, float2(TEXCOORD.x, TEXCOORD.y));
-  float3 inputColor = _42.rgb;
+
+  // Remove out of gamut colors
+  float3 signs = sign(_42.rgb);
+  _42.rgb = abs(_42.rgb);
+
   float _45 = _42.x;
   float _46 = _42.y;
   float _47 = _42.z;
@@ -72,16 +76,10 @@ void frag_main() {
   SV_Target.x = _208;
   SV_Target.y = _209;
   SV_Target.z = _210;
-  // SV_Target.rgb = inputColor.rgb;
   SV_Target.w = 1.0f;
 
-  // float3 outputColor = SV_Target.rgb;
-  // float3 signs = sign(outputColor.rgb);
-  // outputColor = abs(outputColor);
-  // outputColor = injectedData.toneMapGammaCorrection ? pow(outputColor, 2.2f) : linearFromSRGB(outputColor.rgb);
-  // outputColor *= signs;
-  // outputColor *= injectedData.toneMapGameNits / 80.f;
-  // SV_Target.rgb = outputColor;
+  // Revert back out of gamut colors
+  SV_Target.rgb *= signs;
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {

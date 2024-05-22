@@ -6,6 +6,7 @@
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
+// #define DEBUG_LEVEL_1
 
 #include <embed/0x0A152BB1.h>
 #include <embed/0x0D5ADD1F.h>
@@ -32,8 +33,8 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0xAC5319C5),      // film grain
   CustomShaderEntry(0x0A152BB1),      // tonemap
   CustomShaderEntry(0x17FAB08F),      // sharpen/copy
-  CustomShaderEntry(0xE9D9E225),      // ui
-  CustomShaderEntry(0x32580F53)       // movie
+  // CustomShaderEntry(0xE9D9E225),      // ui
+  CustomShaderEntry(0x32580F53)  // movie
 };
 
 ShaderInjectData shaderInjection;
@@ -87,11 +88,12 @@ UserSettingUtil::UserSettings userSettings = {
   new UserSettingUtil::UserSetting {
     .key = "toneMapGammaCorrection",
     .binding = &shaderInjection.toneMapGammaCorrection,
-    .valueType = UserSettingUtil::UserSettingValueType::boolean,
+    .valueType = UserSettingUtil::UserSettingValueType::integer,
     .canReset = false,
     .label = "Gamma Correction",
     .section = "Tone Mapping",
-    .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
+    .tooltip = "Emulates an EOTF",
+    .labels = { "Off", "2.2", "2.4"}
   },
   new UserSettingUtil::UserSetting {
     .key = "colorGradeExposure",
@@ -157,6 +159,25 @@ UserSettingUtil::UserSettings userSettings = {
     .max = 100.f,
     .parse = [](float value) { return value * 0.01f; }
   },
+    new UserSettingUtil::UserSetting {
+    .key = "colorGradeSceneGrading",
+    .binding = &shaderInjection.colorGradeSceneGrading,
+    .defaultValue = 100.f,
+    .label = "Scene Grading",
+    .section = "Color Grading",
+    .tooltip = "Selects the strength of the game's custom scene grading.",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.01f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxBloom",
+    .binding = &shaderInjection.fxBloom,
+    .defaultValue = 50.f,
+    .label = "Bloom",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
   new UserSettingUtil::UserSetting {
     .key = "fxFilmGrain",
     .binding = &shaderInjection.fxFilmGrain,
@@ -198,11 +219,11 @@ static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch 
   // 0xe9d9e225 (ui)         (rgb8a_unorm tUI => rgb8a_unorm tComposite)
   if (
     true
-    && shaderHash != 0x0a152bb1
-    && shaderHash != 0x17fab08f
-    && shaderHash != 0xe9d9e225
-    && shaderHash != 0x0d5add1f
-    && shaderHash != 0xac5319c5
+    && shaderHash != 0x0a152bb1  // tonemapper
+    && shaderHash != 0x17fab08f  // sharpener
+    && shaderHash != 0xe9d9e225  // ui
+    && shaderHash != 0x0d5add1f  // copy
+    && shaderHash != 0xac5319c5  // film grain
   ) {
     return false;
   }
@@ -265,29 +286,18 @@ static void on_present(
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
   switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
-      // ShaderReplaceMod::forcePipelineCloning = true;
+      ShaderReplaceMod::forcePipelineCloning = true;
       ShaderReplaceMod::allowMultiplePushConstants = true;
       // ShaderReplaceMod::expectedConstantBufferIndex = 3;
       ShaderReplaceMod::expectedConstantBufferSpace = 9;
       ShaderReplaceMod::retainDX12LayoutParams = true;
       SwapChainUpgradeMod::useResourceCloning = true;
-      // UI Resource
-      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
-        {
-          .oldFormat = reshade::api::format::r8g8b8a8_typeless,
-          .newFormat = reshade::api::format::r16g16b16a16_typeless,
-          .index = 0,
-          .useResourceViewCloning = true,
-          .useResourceViewHotSwap = false,
-          // .state = (reshade::api::resource_usage::render_target | reshade::api::resource_usage::unordered_access | reshade::api::resource_usage::shader_resource_non_pixel | reshade::api::resource_usage::shader_resource_pixel | reshade::api::resource_usage::copy_dest | reshade::api::resource_usage::copy_source | reshade::api::resource_usage::resolve_dest)
-        }
-      );
 
       // RGBA8 Resource pool
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
         {
           .oldFormat = reshade::api::format::r8g8b8a8_typeless,
-          .newFormat = reshade::api::format::r16g16b16a16_typeless,
+          .newFormat = reshade::api::format::r16g16b16a16_float,
           .ignoreSize = true,
           .useResourceViewCloning = true,
           .useResourceViewHotSwap = true,

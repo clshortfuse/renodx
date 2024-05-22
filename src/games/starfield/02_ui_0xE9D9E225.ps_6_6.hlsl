@@ -22,7 +22,8 @@ struct SPIRV_Cross_Output {
 
 void frag_main() {
   float4 _35 = _8.Sample(_18, float2(TEXCOORD.x, TEXCOORD.y));
-  float3 inputColor = _35.rgb;
+  float3 signs = sign(_35.rgb);
+  _35.rgb = abs(_35.rgb);
   uint4 _46 = asuint(_15_m0[0u]);
   float _48 = asfloat(_46.x);
   float _49 = _48 * _35.x;
@@ -37,17 +38,10 @@ void frag_main() {
   SV_Target.x = max((exp2(log2((_112 / (sqrt((_112 * _112) + 1.0f) * _119)) + 0.5f) * _142) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f), 0.0f);
   SV_Target.y = max((exp2(log2((_113 / (sqrt((_113 * _113) + 1.0f) * _119)) + 0.5f) * _142) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f), 0.0f);
   SV_Target.z = max((exp2(log2((_114 / (sqrt((_114 * _114) + 1.0f) * _119)) + 0.5f) * _142) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f), 0.0f);
-  // SV_Target.rgb = inputColor.rgb;
-  // SV_Target.rgb = 10.f;
   SV_Target.w = _35.w;
 
-  float3 outputColor = SV_Target.rgb;
-  float3 signs = sign(outputColor.rgb);
-  outputColor = abs(outputColor);
-  outputColor = injectedData.toneMapGammaCorrection ? pow(outputColor, 2.2f) : linearFromSRGB(outputColor.rgb);
-  outputColor *= signs;
-  // outputColor *= injectedData.toneMapUINits / 80.f;
-  SV_Target.rgb = outputColor;
+  SV_Target.rgb *= signs;
+
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {

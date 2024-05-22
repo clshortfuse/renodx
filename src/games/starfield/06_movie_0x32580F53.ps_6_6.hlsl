@@ -47,12 +47,13 @@ void frag_main() {
   float3 outputColor = SV_Target.rgb;
   float3 signs = sign(outputColor.rgb);
   outputColor = abs(outputColor);
-
-  outputColor = injectedData.toneMapGammaCorrection ? pow(outputColor, 2.2f) : linearFromSRGB(outputColor);
+  outputColor = linearFromSRGB(outputColor);
   float videoPeak = injectedData.toneMapPeakNits / (injectedData.toneMapGameNits / 203.f);
   outputColor.rgb = bt2446a_inverse_tonemapping_bt709(outputColor, 100.f, videoPeak);
   outputColor.rgb /= videoPeak;  // 1.0 = Video Peak
   outputColor.rgb *= injectedData.toneMapPeakNits / injectedData.toneMapUINits;
+  outputColor = srgbFromLinear(outputColor);
+  outputColor *= signs;
 
   SV_Target.rgb = outputColor;
 }

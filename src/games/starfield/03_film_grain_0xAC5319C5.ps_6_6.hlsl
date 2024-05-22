@@ -34,9 +34,10 @@ void frag_main() {
 
   if (injectedData.fxFilmGrain) {
     float3 outputColor = SV_Target.rgb;
-    outputColor /= injectedData.toneMapGameNits / injectedData.toneMapUINits;
     float3 signs = sign(outputColor);
     outputColor = abs(outputColor);
+    outputColor = linearFromSRGB(outputColor);
+    outputColor /= injectedData.toneMapGameNits / injectedData.toneMapUINits;
     outputColor = computeFilmGrain(
       outputColor,
       TEXCOORD.xy,
@@ -44,9 +45,9 @@ void frag_main() {
       _34.z ? injectedData.fxFilmGrain * 0.03f : 0,
       1.f
     );
-    outputColor *= signs;
-
     outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+    outputColor = srgbFromLinear(outputColor);
+    outputColor *= signs;
     SV_Target.rgb = outputColor;
   }
   SV_Target.w = 1.0f;
