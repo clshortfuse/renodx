@@ -39,6 +39,7 @@ cbuffer SharedFrameData : register(b0, space6) {
   } frameData : packoffset(c0);
 }
 
+#ifdef USE_TONEMAP
 cbuffer PerSceneConstants : register(b0, space7) {
   float4 _28_m0[3265] : packoffset(c0);
 }
@@ -50,12 +51,17 @@ cbuffer stub_PushConstantWrapper_HDRComposite : register(b0, space0) {
     uint value02;      // _33_m0[2u].x
   } pushConstants : packoffset(c0);
 }
+#endif
 
-Texture2D<float3> _8 : register(t0, space9);   // untonemapped
-Texture2D<float> _9 : register(t1, space9);    // unknown R8_UNORM
+Texture2D<float3> _8 : register(t0, space9);  // untonemapped
+Texture2D<float> _9 : register(t1, space9);   // unknown R8_UNORM
+#ifdef USE_BLOOM
 Texture2D<float3> _10 : register(t2, space9);  // bloom
+#endif
 Texture3D<float3> _13 : register(t3, space9);  // rgba16_float LUT
 
+
+#ifdef USE_TONEMAP
 struct HDRCompositeData {
   float4 value00;
   float4 value01;
@@ -64,24 +70,15 @@ struct HDRCompositeData {
   float value04;
   uint value05;
 };
-
 StructuredBuffer<HDRCompositeData> _17 : register(t4, space9);
+#endif
 SamplerState _36 : register(s0, space9);
 
-static float4 gl_FragCoord;
-static float2 TEXCOORD;
-static float4 SV_Target;
+float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOORD0) : SV_Target {
+  float3 _126 = _8.Load(int3(uint2(uint(gl_FragCoord.x), uint(gl_FragCoord.y)), 0u));
+  float3 inputColor = _126;
 
-struct SPIRV_Cross_Input {
-  float4 gl_FragCoord : SV_Position;
-  float2 TEXCOORD : TEXCOORD0;
-};
-
-struct SPIRV_Cross_Output {
-  float4 SV_Target : SV_Target0;
-};
-
-void frag_main() {
+#ifdef USE_TONEMAP
   uint _64 = pushConstants.value00;
   uint _66 = _64 * 12u;
   float4 colorFilter = _17[_64].value00;
@@ -95,7 +92,8 @@ void frag_main() {
   float _111 = _17[_64].value02;
   float _116 = _17[_64].value03;
   float _122 = _17[_64].value04;
-  float3 _126 = _8.Load(int3(uint2(uint(gl_FragCoord.x), uint(gl_FragCoord.y)), 0u));
+
+#ifdef USE_BLOOM
   float _138;
   if (frameData.value08 == 0u) {
     _138 = 1.0f;
@@ -103,10 +101,9 @@ void frag_main() {
     _138 = lerp(frameData.value09, 1.f, 0.85f);
   }
   float3 _146 = _10.SampleLevel(_36, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);  // Bloom
-
   float _152 = asfloat(pushConstants.value02);
-
-  float3 bloomedColor = _126 + (_138 * _146 * _152 * injectedData.fxBloom);
+  inputColor = _126 + (_138 * _146 * _152 * injectedData.fxBloom);
+#endif  // USE_BLOOM
 
   float vanillaMidGray = 0.18f;
   float renoDRTContrast = 1.2f;
@@ -123,9 +120,6 @@ void frag_main() {
   // float renoDRTDechroma = 0.5f;
   // float renoDRTSaturation = 1.0f;
   // float renoDRTHighlights = 1.0f;
-
-  float3 inputColor = bloomedColor;
-  // float3 outputColor = inputColor;
 
   float3 hdrColor;
   float3 sdrColor;
@@ -417,9 +411,11 @@ void frag_main() {
   float3 postGrayScaledColor = lerp(constant316, brightendColor, _122);
   float3 colorFiltered2 = lerp(postGrayScaledColor, colorFilter2.rgb, colorFilter2Strength);
 
-  float _231 = postGrayScaledColor.r;
-  float _232 = postGrayScaledColor.g;
-  float _233 = postGrayScaledColor.b;
+#else   // USE_TONEMAP
+  float3 hdrColor = inputColor;
+  float3 sdrColor = saturate(inputColor);
+  float3 colorFiltered2 = sdrColor;
+#endif  // USE_TONEMAP
 
   float _246 = max(frameData.value07, 0.001000000047497451305389404296875f);
 
@@ -482,7 +478,7 @@ void frag_main() {
   // outputColor = sign(outputColor) * pow(outputColor, 1.f/2.4f);
 
   float3 outputColor;
-  if (tmParams.type == 0.f) {
+  if (injectedData.toneMapType == 0.f) {
     outputColor = lerp(sceneGradedColor, lutColor, lutParams.strength);
   } else {
     outputColor = toneMapUpgrade(hdrColor, sdrColor, lutColor, lutParams.strength);
@@ -495,17 +491,5 @@ void frag_main() {
 
   outputColor *= outputSigns;
 
-  SV_Target.rgb = outputColor.rgb;
-
-  SV_Target.w = 1.0f;
-}
-
-SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {
-  gl_FragCoord = stage_input.gl_FragCoord;
-  gl_FragCoord.w = 1.0 / gl_FragCoord.w;
-  TEXCOORD = stage_input.TEXCOORD;
-  frag_main();
-  SPIRV_Cross_Output stage_output;
-  stage_output.SV_Target = SV_Target;
-  return stage_output;
+  return float4(outputColor, 1.0f);
 }
