@@ -1236,6 +1236,13 @@ static void on_init_resource(
   reshade::api::resource_usage initial_state,
   reshade::api::resource resource
 ) {
+  {
+    auto &data = device->get_private_data<device_data>();
+    std::unique_lock lock(data.mutex);
+    data.resources.emplace(resource.handle);
+  }
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
+
   bool warn = false;
   std::stringstream s;
   s << "init_resource(";
@@ -1275,15 +1282,14 @@ static void on_init_resource(
       : reshade::log_level::info,
     s.str().c_str()
   );
-  auto &data = device->get_private_data<device_data>();
-  std::unique_lock lock(data.mutex);
-  data.resources.emplace(resource.handle);
 }
 
 static void on_destroy_resource(reshade::api::device* device, reshade::api::resource resource) {
   auto &data = device->get_private_data<device_data>();
   std::unique_lock lock(data.mutex);
   data.resources.erase(resource.handle);
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
+
   std::stringstream s;
   s << "on_destroy_resource("
     << (void*)resource.handle
@@ -1298,7 +1304,26 @@ static void on_init_resource_view(
   const reshade::api::resource_view_desc &desc,
   reshade::api::resource_view view
 ) {
-  // if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
+  auto &data = device->get_private_data<device_data>();
+  std::unique_lock lock(data.mutex);
+  if (data.resourceViews.contains(view.handle)) {
+    if (traceRunning || presentCount < MAX_PRESENT_COUNT) {
+      std::stringstream s;
+      s << "init_resource_view(reused view: "
+        << (void*)view.handle
+        << ")";
+      reshade::log_message(reshade::log_level::info, s.str().c_str());
+    }
+    if (!resource.handle) {
+      data.resourceViews.erase(view.handle);
+      return;
+    }
+  }
+  if (resource.handle) {
+    data.resourceViews.emplace(view.handle, resource.handle);
+  }
+
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
   std::stringstream s;
   s << "init_resource_view("
     << reinterpret_cast<void*>(view.handle)
@@ -1338,22 +1363,6 @@ static void on_init_resource_view(
   }
   s << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
-  auto &data = device->get_private_data<device_data>();
-  std::unique_lock lock(data.mutex);
-  if (data.resourceViews.contains(view.handle)) {
-    std::stringstream s;
-    s << "init_resource_view(reused view: "
-      << (void*)view.handle
-      << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
-    if (!resource.handle) {
-      data.resourceViews.erase(view.handle);
-      return;
-    }
-  }
-  if (resource.handle) {
-    data.resourceViews.emplace(view.handle, resource.handle);
-  }
 }
 
 static void on_destroy_resource_view(reshade::api::device* device, reshade::api::resource_view view) {
@@ -1493,7 +1502,7 @@ static bool on_update_descriptor_tables(
   uint32_t count,
   const reshade::api::descriptor_table_update* updates
 ) {
-  // if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return false;
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return false;
   auto &data = device->get_private_data<device_data>();
   std::shared_lock lock(data.mutex);
   for (uint32_t i = 0; i < count; i++) {
