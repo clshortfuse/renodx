@@ -788,8 +788,7 @@ static void on_init_pipeline(
   const reshade::api::pipeline_subobject* subobjects,
   reshade::api::pipeline pipeline
 ) {
-  reshade::api::pipeline_subobject* newSubobjects = PipelineUtil::clonePipelineSubObjects(subobjectCount, subobjects);
-
+  const std::unique_lock<std::shared_mutex> lock(s_mutex);
   std::stringstream s;
   s << "on_init_pipeline("
     << reinterpret_cast<void*>(pipeline.handle)
@@ -797,6 +796,8 @@ static void on_init_pipeline(
     << ", subobjects: " << (subobjectCount)
     << " )";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
+
+  reshade::api::pipeline_subobject* newSubobjects = PipelineUtil::clonePipelineSubObjects(subobjectCount, subobjects);
 
   CachedPipeline* cachedPipeline = new CachedPipeline{
     pipeline,
