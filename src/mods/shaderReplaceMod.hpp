@@ -549,15 +549,41 @@ namespace ShaderReplaceMod {
     auto &device_data = device->get_private_data<DeviceData>();
     std::unique_lock localDeviceLock(device_data.mutex);
 
-    ShaderUtil::CommandListData &shaderState = cmd_list->get_private_data<ShaderUtil::CommandListData>();
-    std::shared_lock shaderCommandListLock(shaderState.mutex);
+    uint32_t shaderHash;
+    reshade::api::pipeline currentShaderPipeline;
+    reshade::api::pipeline_stage currentShaderPipelineStage;
+    {
+      ShaderUtil::CommandListData &shaderState = cmd_list->get_private_data<ShaderUtil::CommandListData>();
+      if (&shaderState == nullptr) {
+        std::stringstream s;
+        s << "ShaderReplaceMod::handlePreDraw(null data: "
+          << reinterpret_cast<void*>(cmd_list)
+          << ")";
+        reshade::log_message(reshade::log_level::debug, s.str().c_str());
+        return false;
+      }
 
-    SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
-    std::shared_lock swapchainCommandListLock(swapchainState.mutex);
+      std::shared_lock shaderCommandListLock(shaderState.mutex);
+      shaderHash = shaderState.currentShaderHash;
+      currentShaderPipeline = shaderState.currentShaderPipeline;
+      currentShaderPipelineStage = shaderState.currentShaderPipelineStage;
+    }
 
-    uint32_t shaderHash = shaderState.currentShaderHash;
+    bool isSwapchainWrite;
+    {
+      SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
+      if (&swapchainState == nullptr) {
+        std::stringstream s;
+        s << "handlePreDraw(null data: "
+          << reinterpret_cast<void*>(cmd_list)
+          << ")";
+        reshade::log_message(reshade::log_level::debug, s.str().c_str());
+        return false;
+      }
+      std::shared_lock swapchainCommandListLock(swapchainState.mutex);
 
-    bool isSwapchainWrite = swapchainState.hasSwapchainRenderTarget && !isDispatch;
+      isSwapchainWrite = swapchainState.hasSwapchainRenderTarget && !isDispatch;
+    }
 
     auto customShaderInfoPair = device_data.customShaders.find(shaderHash);
     if (customShaderInfoPair == device_data.customShaders.end()) {
@@ -605,7 +631,7 @@ namespace ShaderReplaceMod {
 
     if (_shaderInjectionSize != 0) {
       if (
-        auto pair = shaderDeviceState.pipelineToLayoutMap.find(shaderState.currentShaderPipeline.handle);
+        auto pair = shaderDeviceState.pipelineToLayoutMap.find(currentShaderPipeline.handle);
         pair != shaderDeviceState.pipelineToLayoutMap.end()
       ) {
         reshade::api::pipeline_layout layout = {pair->second};
@@ -625,7 +651,7 @@ namespace ShaderReplaceMod {
           } else {
             std::stringstream s;
             s << "handlePreDraw(did not find modded pipeline root index"
-              << ", pipeline: " << reinterpret_cast<void*>(shaderState.currentShaderPipeline.handle)
+              << ", pipeline: " << reinterpret_cast<void*>(currentShaderPipeline.handle)
               << ")";
             reshade::log_message(reshade::log_level::warning, s.str().c_str());
             return false;
@@ -633,7 +659,7 @@ namespace ShaderReplaceMod {
 
         } else {
           // Must be done before draw
-          stage = (shaderState.currentShaderPipelineStage == reshade::api::pipeline_stage::compute_shader)
+          stage = (currentShaderPipelineStage == reshade::api::pipeline_stage::compute_shader)
                   ? reshade::api::shader_stage::compute
                   : reshade::api::shader_stage::pixel;
 
@@ -645,7 +671,7 @@ namespace ShaderReplaceMod {
           } else {
             std::stringstream s;
             s << "handlePreDraw(did not find modded pipeline layout"
-              << ", pipeline: " << reinterpret_cast<void*>(shaderState.currentShaderPipeline.handle)
+              << ", pipeline: " << reinterpret_cast<void*>(currentShaderPipeline.handle)
               << ")";
             reshade::log_message(reshade::log_level::warning, s.str().c_str());
             return false;
@@ -679,19 +705,19 @@ namespace ShaderReplaceMod {
     // perform bind pipeline (replace shader)
 
     if (
-      auto pair = shaderDeviceState.pipelineToPipelineReplacement.find(shaderState.currentShaderPipeline.handle);
+      auto pair = shaderDeviceState.pipelineToPipelineReplacement.find(currentShaderPipeline.handle);
       pair != shaderDeviceState.pipelineToPipelineReplacement.end()
     ) {
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
       s << "handlePreDraw(binding pipeline: "
         << PRINT_CRC32(shaderHash)
-        << ", stage: " << to_string(shaderState.currentShaderPipelineStage)
+        << ", stage: " << to_string(currentShaderPipelineStage)
         << ", handle: " << (void*)pair->second
         << ")";
       reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
-      cmd_list->bind_pipeline(shaderState.currentShaderPipelineStage, {pair->second});
+      cmd_list->bind_pipeline(currentShaderPipelineStage, {pair->second});
       // has replacemnt that can be bound;
     }
 
@@ -752,13 +778,18 @@ namespace ShaderReplaceMod {
     data.countedShaders.clear();
   }
 
+  static bool attached = false;
+
   template <typename T = float*>
-  void use(DWORD fdwReason, CustomShaders customShaders, T* injections = nullptr) {
+  static void use(DWORD fdwReason, CustomShaders customShaders, T* injections = nullptr) {
     ShaderUtil::use(fdwReason);
     SwapchainUtil::use(fdwReason);
 
     switch (fdwReason) {
       case DLL_PROCESS_ATTACH:
+        if (attached) return;
+        attached = true;
+        reshade::log_message(reshade::log_level::info, "ShaderReplaceMod attached.");
 
         reshade::register_event<reshade::addon_event::init_device>(on_init_device);
         reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
