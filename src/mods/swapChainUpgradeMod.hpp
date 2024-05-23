@@ -79,6 +79,7 @@ namespace SwapChainUpgradeMod {
     // <originalResource.handle, clonedResource.handle>
     std::unordered_map<uint64_t, uint64_t> clonedResources;
     // <clonedResource.handle>
+    std::unordered_set<uint64_t> permanentClonedResources;
     std::unordered_set<uint64_t> enabledClonedResources;
     std::unordered_map<uint64_t, reshade::api::resource_view> upgradedResourceViews;
 
@@ -722,6 +723,7 @@ namespace SwapChainUpgradeMod {
         resource
       );
       if (!hotSwap) {
+        privateData.permanentClonedResources.emplace(clonedResource.handle);
         privateData.enabledClonedResources.emplace(clonedResource.handle);
       }
       s << ", clone: " << reinterpret_cast<void*>(clonedResource.handle);
@@ -780,6 +782,7 @@ namespace SwapChainUpgradeMod {
 #endif
 
         data.enabledClonedResources.erase(cloneResource.handle);
+        data.permanentClonedResources.erase(cloneResource.handle);
         device->destroy_resource(cloneResource);
         data.clonedResources.erase(resource.handle);
       }
@@ -1799,6 +1802,9 @@ namespace SwapChainUpgradeMod {
       }
     }
     data.tableDescriptorResourceViewReplacements.clear();
+    for (auto item : data.permanentClonedResources) {
+      data.enabledClonedResources.emplace(item);
+    }
   }
 
   static bool activateCloneHotSwap(
