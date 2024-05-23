@@ -93,9 +93,13 @@ namespace SwapchainUtil {
   }
 
   static bool isBackBuffer(reshade::api::device* device, reshade::api::resource resource) {
-    auto &deviceData = device->get_private_data<DeviceData>();
-    std::shared_lock lock(deviceData.mutex);
-    return deviceData.backBuffers.contains(resource.handle);
+    bool result = false;
+    {
+      auto &deviceData = device->get_private_data<DeviceData>();
+      std::shared_lock lock(deviceData.mutex);
+      result = deviceData.backBuffers.contains(resource.handle);
+    }
+    return result;
   }
 
   static bool isBackBuffer(reshade::api::command_list* cmd_list, reshade::api::resource resource) {
@@ -105,9 +109,13 @@ namespace SwapchainUtil {
   }
 
   static reshade::api::resource_desc getBackBufferDesc(reshade::api::device* device) {
-    auto &deviceData = device->get_private_data<DeviceData>();
-    std::shared_lock lock(deviceData.mutex);
-    return deviceData.backBufferDesc;
+    reshade::api::resource_desc desc = {};
+    {
+      auto &deviceData = device->get_private_data<DeviceData>();
+      std::shared_lock lock(deviceData.mutex);
+      desc = deviceData.backBufferDesc;
+    }
+    return desc;
   }
 
   static reshade::api::resource_desc getBackBufferDesc(reshade::api::command_list* cmd_list) {

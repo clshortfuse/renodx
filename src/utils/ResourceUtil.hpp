@@ -21,7 +21,12 @@ namespace ResourceUtil {
   };
 
   static void on_init_device(reshade::api::device* device) {
-    auto &data = device->create_private_data<DeviceData>();
+    device->create_private_data<DeviceData>();
+#ifdef DEBUG_LEVEL_1
+    std::stringstream s;
+    s << "ResourceUtil::on_init_device(" << (void*)device << ")";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
   }
 
   static void on_destroy_device(reshade::api::device* device) {
@@ -42,6 +47,13 @@ namespace ResourceUtil {
       return;
     }
     data.resourceViewResources[view.handle] = resource.handle;
+#ifdef DEBUG_LEVEL_2
+    std::stringstream s;
+    s << "ResourceUtil::on_init_resource_view("
+      << "view: " << (void*)view.handle
+      << ", res: " << (void*)resource.handle;
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+#endif
   }
 
   static void on_destroy_resource_view(
@@ -54,15 +66,17 @@ namespace ResourceUtil {
   }
 
   static reshade::api::resource getResourceFromResourceView(reshade::api::device* device, reshade::api::resource_view resourceView) {
-    auto &data = device->get_private_data<DeviceData>();
-    std::unique_lock lock(data.mutex);
     reshade::api::resource resource = {0};
+    {
+      auto &data = device->get_private_data<DeviceData>();
+      std::shared_lock lock(data.mutex);
 
-    if (
-      auto pair = data.resourceViewResources.find(resourceView.handle);
-      pair != data.resourceViewResources.end()
-    ) {
-      resource.handle = pair->second;
+      if (
+        auto pair = data.resourceViewResources.find(resourceView.handle);
+        pair != data.resourceViewResources.end()
+      ) {
+        resource.handle = pair->second;
+      }
     }
     return resource;
   }
@@ -96,11 +110,13 @@ namespace ResourceUtil {
 
   static bool attached = false;
 
-  void use(DWORD fdwReason) {
+  static void use(DWORD fdwReason) {
     switch (fdwReason) {
       case DLL_PROCESS_ATTACH:
         if (attached) return;
         attached = true;
+        reshade::log_message(reshade::log_level::info, "ResourceUtil attached.");
+
         reshade::register_event<reshade::addon_event::init_device>(on_init_device);
         reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
         reshade::register_event<reshade::addon_event::init_resource_view>(on_init_resource_view);
