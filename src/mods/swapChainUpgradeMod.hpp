@@ -44,6 +44,8 @@ namespace SwapChainUpgradeMod {
   static bool useResourceCloning = false;
   static bool useResourceFallbacks = false;
   static bool useResizeBuffer = false;
+  static bool useResizeBufferOnSetFullScreen = false;
+  static bool useResizeBufferOnPresent = false;
   static bool upgradeUnknownResourceViews = false;
   static bool upgradeResourceViews = true;
   static bool preventFullScreen = true;
@@ -315,6 +317,87 @@ namespace SwapChainUpgradeMod {
     }
   }
 
+  static void resize_buffer(
+    reshade::api::swapchain* swapchain
+  ) {
+    IDXGISwapChain* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
+
+    IDXGISwapChain4* swapchain4;
+
+    if (FAILED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
+      reshade::log_message(reshade::log_level::error, "resize_buffer(Failed to get native swap chain)");
+      return;
+    }
+
+    DXGI_SWAP_CHAIN_DESC1 desc;
+    if (FAILED(swapchain4->GetDesc1(&desc))) {
+      reshade::log_message(reshade::log_level::error, "resize_buffer(Failed to get desc)");
+      swapchain4->Release();
+      swapchain4 = nullptr;
+      return;
+    }
+
+    auto newFormat = (targetFormat == reshade::api::format::r16g16b16a16_float)
+                     ? DXGI_FORMAT_R16G16B16A16_FLOAT
+                     : DXGI_FORMAT_R10G10B10A2_UNORM;
+    if (desc.Format == newFormat) {
+      reshade::log_message(reshade::log_level::debug, "resize_buffer(Format OK)");
+      swapchain4->Release();
+      swapchain4 = nullptr;
+      return;
+    }
+    reshade::log_message(reshade::log_level::debug, "resize_buffer(Resizing...)");
+
+    HRESULT hr = swapchain4->ResizeBuffers(
+      desc.BufferCount == 1 ? 2 : 0,
+      desc.Width,
+      desc.Height,
+      newFormat,
+      desc.Flags
+    );
+
+    swapchain4->Release();
+    swapchain4 = nullptr;
+
+    if (hr == DXGI_ERROR_INVALID_CALL) {
+      std::stringstream s;
+      s << "resize_buffer(DXGI_ERROR_INVALID_CALL"
+        << ", BufferCount = " << desc.BufferCount
+        << ", Width = " << desc.Width
+        << ", Height = " << desc.Height
+        << ", Format = " << to_string(desc.Format)
+        << ", Flags = 0x" << std::hex << desc.Flags << std::dec
+        << ')';
+      reshade::log_message(reshade::log_level::error, s.str().c_str());
+      return;
+    }
+    std::stringstream s;
+    s << "resize_buffer("
+      << "resize: " << hr
+      << ")";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+
+    // Reshade doesn't actually inspect colorspace
+    // auto colorspace = swapchain->get_color_space();
+    if (changeColorSpace(swapchain, targetColorSpace)) {
+      reshade::log_message(reshade::log_level::info, "resize_buffer(Color Space: OK)");
+    } else {
+      reshade::log_message(reshade::log_level::error, "resize_buffer(Color Space: Failed.)");
+    }
+  }
+
+  static void on_present_for_resize_buffer(
+    reshade::api::command_queue* queue,
+    reshade::api::swapchain* swapchain,
+    const reshade::api::rect* source_rect,
+    const reshade::api::rect* dest_rect,
+    uint32_t dirty_rect_count,
+    const reshade::api::rect* dirty_rects
+  ) {
+    reshade::unregister_event<reshade::addon_event::present>(on_present_for_resize_buffer);
+    resize_buffer(swapchain);
+  }
+
   static void on_init_swapchain(reshade::api::swapchain* swapchain) {
     auto device = swapchain->get_device();
     if (!device) return;
@@ -335,46 +418,12 @@ namespace SwapChainUpgradeMod {
     checkSwapchainSize(swapchain, deviceBackBufferDesc);
 
     if (useResizeBuffer && deviceBackBufferDesc.texture.format != targetFormat) {
-      reshade::log_message(reshade::log_level::debug, "Wrong swapchain format. Resizing...");
-      IDXGISwapChain* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
-
-      IDXGISwapChain4* swapchain4;
-
-      if (FAILED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
-        reshade::log_message(reshade::log_level::error, "initSwapchain(Failed to get native swap chain)");
-        return;
+      if (useResizeBufferOnPresent) {
+        reshade::register_event<reshade::addon_event::present>(on_present_for_resize_buffer);
+      } else if (!useResizeBufferOnSetFullScreen) {
+        resize_buffer(swapchain);
       }
-
-      DXGI_SWAP_CHAIN_DESC1 desc;
-      if (FAILED(swapchain4->GetDesc1(&desc))) {
-        reshade::log_message(reshade::log_level::error, "initSwapchain(Failed to get desc)");
-        swapchain4->Release();
-        swapchain4 = nullptr;
-        return;
-      }
-
-      HRESULT hr = swapchain4->ResizeBuffers(
-        desc.BufferCount == 1 ? 2 : 0,
-        desc.Width,
-        desc.Height,
-        (targetFormat == reshade::api::format::r16g16b16a16_float)
-          ? DXGI_FORMAT_R16G16B16A16_FLOAT
-          : DXGI_FORMAT_R10G10B10A2_UNORM,
-        desc.Flags
-      );
-
-      swapchain4->Release();
-      swapchain4 = nullptr;
-
-      if (hr == DXGI_ERROR_INVALID_CALL) {
-        reshade::log_message(reshade::log_level::error, "initSwapchain(DXGI_ERROR_INVALID_CALL)");
-        return;
-      }
-      std::stringstream s;
-      s << "initSwapChain("
-        << "resize: " << hr
-        << ")";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
+      return;
     }
     // Reshade doesn't actually inspect colorspace
     // auto colorspace = swapchain->get_color_space();
@@ -2396,6 +2445,9 @@ namespace SwapChainUpgradeMod {
   }
 
   static bool on_set_fullscreen_state(reshade::api::swapchain* swapchain, bool fullscreen, void* hmonitor) {
+    if (useResizeBuffer && useResizeBufferOnSetFullScreen) {
+      resize_buffer(swapchain);
+    }
     auto device = swapchain->get_device();
     if (!device) return false;
     auto &privateData = device->get_private_data<device_data>();
