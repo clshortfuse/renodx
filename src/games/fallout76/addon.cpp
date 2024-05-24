@@ -8,37 +8,36 @@
 
 #define DEBUG_LEVEL_0
 
-#include <embed/0x2CA9CD55.h> // text/UI
-#include <embed/0xA6AB1C75.h> // text
-#include <embed/0xF2CCBA8C.h> // UI
-#include <embed/0x69B52EA7.h> // Images
-#include <embed/0x6CF04AC0.h> // UI
-#include <embed/0x7AAE8C2B.h> // Images
-#include <embed/0x28213F99.h> // UI
-#include <embed/0x21A11DE7.h> // UI
-#include <embed/0x4B3388FE.h> // UI
-#include <embed/0x4D248432.h> // UI
-#include <embed/0x19558629.h> // UI
-#include <embed/0x46A6A1FE.h> // Loading Screen
-#include <embed/0xFEA4E7DB.h> // Loading Screen
-#include <embed/0xD66588EF.h> // Loading Screen
-#include <embed/0x3C8AF2C9.h> // Loading Screen Composite
-#include <embed/0x0F2CC0D1.h> // video
+#include <embed/0x0F2CC0D1.h>  // video
+#include <embed/0x19558629.h>  // UI
+#include <embed/0x21A11DE7.h>  // UI
+#include <embed/0x28213F99.h>  // UI
+#include <embed/0x2CA9CD55.h>  // text/UI
+#include <embed/0x3C8AF2C9.h>  // Loading Screen Composite
+#include <embed/0x46A6A1FE.h>  // Loading Screen
+#include <embed/0x4B3388FE.h>  // UI
+#include <embed/0x4D248432.h>  // UI
+#include <embed/0x69B52EA7.h>  // Images
+#include <embed/0x6CF04AC0.h>  // UI
+#include <embed/0x7AAE8C2B.h>  // Images
+#include <embed/0xA6AB1C75.h>  // text
+#include <embed/0xD66588EF.h>  // Loading Screen
+#include <embed/0xF2CCBA8C.h>  // UI
+#include <embed/0xFEA4E7DB.h>  // Loading Screen
 //#include <embed/0x7684FC16.h> // FXAA
-#include <embed/0x2C63040A.h> // LUT
-#include <embed/0x160805BC.h> // LUT?
-#include <embed/0x3778E664.h> // TAA
-#include <embed/0xAF2731D9.h> // TAA
+#include <embed/0x160805BC.h>  // LUT?
+#include <embed/0x2C63040A.h>  // LUT
+#include <embed/0x3778E664.h>  // TAA
+#include <embed/0xAF2731D9.h>  // TAA
 //#include <embed/0x73F96489.h> // TAA?
 //#include <embed/0xC9C77523.h> // DOF?
 //#include <embed/0x283C8F43.h> // DOF?
 
-#include <embed/0x1BDD7570.h> // Tonemap
-#include <embed/0x2A868728.h> // Tonemap
-#include <embed/0x5D002D1E.h> // Tonemap
-#include <embed/0xBF6561E2.h> // Tonemap
+#include <embed/0x1BDD7570.h>  // Tonemap
+#include <embed/0x2A868728.h>  // Tonemap
+#include <embed/0x5D002D1E.h>  // Tonemap
+#include <embed/0xBF6561E2.h>  // Tonemap
 //#include <embed/0x438DFC72.h>
-
 
 #include <chrono>
 
@@ -75,19 +74,15 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0xBF6561E2),      // Tonemap
   CustomShaderEntry(0x2C63040A),      // LUT
   CustomShaderEntry(0x160805BC),      // LUT?
-  
 
   //CustomShaderEntry(0x7684FC16),      // FXAA
-  CustomShaderEntry(0x3778E664),      // TAA
-  CustomShaderEntry(0xAF2731D9),      // TAA
+  CustomShaderEntry(0x3778E664),  // TAA
+  CustomShaderEntry(0xAF2731D9),  // TAA
   //CustomShaderEntry(0x438DFC72),      // TAA
   //CustomShaderEntry(0x73F96489),      // TAA?
-  
+
   //CustomShaderEntry(0xC9C77523),      // DOF?
   //CustomShaderEntry(0x283C8F43),      // DOF?
-
-
-
 
 };
 
@@ -205,7 +200,7 @@ UserSettingUtil::UserSettings userSettings = {
   new UserSettingUtil::UserSetting {
     .key = "colorGradeLUTScaling",
     .binding = &shaderInjection.colorGradeLUTScaling,
-    .defaultValue = 50.f,
+    .defaultValue = 100.f,
     .label = "LUT Scaling",
     .section = "Color Grading",
     .tooltip = "Scales the color grade LUT to full range when size is clamped.",
