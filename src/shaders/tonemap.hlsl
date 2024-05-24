@@ -468,112 +468,82 @@ float3 bt2446a_inverse_tonemapping(
 
   // Rec. ITU-R BT.2020-2 Table 4
   //Y'tmo
-  const float y_tmo = dot(color, k_bt2020);
+  const float y_tmo = dot(color, BT2020_2_XYZ_MAT[1].rgb);
+
+  float luma = y_tmo;
+  float3 bt2020Chromas = (2.f - 2.f * BT2020_2_XYZ_MAT[1].rgb);
+  float3 sdrChromas = (color.rgb - luma) / bt2020Chromas.rgb;
+
   //C'b,tmo
-  const float c_b_tmo = (color.b - y_tmo) / k_bt2020_b_helper;
+  // const float c_b_tmo = (color.b - y_tmo) / k_bt2020_b_helper;
   //C'r,tmo
-  const float c_r_tmo = (color.r - y_tmo) / k_bt2020_r_helper;
+  // const float c_r_tmo = (color.r - y_tmo) / k_bt2020_r_helper;
 
-  // fast path as per Rep. ITU-R BT.2446-1 Table 4
-  // matches the output of the inversed version for the given input
-  if ((sdr_nits > 99.f && sdr_nits < 101.f) && (target_nits > 999.f && target_nits < 1001.f))
-  //avoid float issues
+  // adjusted luma component (inverse)
+  // get Y'sdr
+  const float y_sdr = y_tmo + max(0.1f * sdrChromas.r, 0.f);
+
+  // Tone mapping step 3 (inverse)
+  // get Y'c
+  const float p_sdr = 1 + 32 * pow(sdr_nits / 10000.f, gamma);
+  //Y'c
+  const float y_c = log((y_sdr * (p_sdr - 1)) + 1) / log(p_sdr);  //log = ln
+
+  // Tone mapping step 2 (inverse)
+  // get Y'p
+  float y_p = 0.f;
+
+  const float y_p_0 = y_c / 1.0770f;
+  const float y_p_2 = (y_c - 0.5000f) / 0.5000f;
+
+  const float _first = -2.7811f;
+  const float _sqrt = sqrt(4.83307641 - 4.604 * y_c);
+  const float _div = -2.302f;
+  const float y_p_1 = (_first + _sqrt) / _div;
+
+  if (y_p_0 <= 0.7399f)
+    y_p = y_p_0;
+  else if (y_p_1 > 0.7399f && y_p_1 < 0.9909f)
+    y_p = y_p_1;
+  else if (y_p_2 >= 0.9909f)
+    y_p = y_p_2;
+  else  //y_p_1 sometimes (about 0.12% out of the full RGB range)
+        //is less than 0.7399f or more than 0.9909f because of float inaccuracies
   {
-    sdr_nits = 100.f;
-    target_nits = 1000.f;
+    //error is small enough (less than 0.001) for this to be OK
+    //ideally you would choose between y_p_0 and y_p_1 if y_p_1 < 0.7399f depending on which is closer to 0.7399f
+    //or between y_p_1 and y_p_2 if y_p_1 > 0.9909f depending on which is closer to 0.9909f
+    y_p = y_p_1;
 
-    const float a1 = 1.8712e-5;
-    const float b1 = -2.7334e-3;
-    const float c1 = 1.3141;
-    const float a2 = 2.8305e-6;
-    const float b2 = -7.4622e-4;
-    const float c2 = 1.2328;
-
-    const float yy_ = 255.0f * y_tmo;
-
-    const float t = 70;
-
-    float e = yy_ <= t ? a1 * pow(yy_, 2.f) + b1 * yy_ + c1 : a2 * pow(yy_, 2.f) + b2 * yy_ + c2;
-
-    const float y_hdr = pow(yy_, e);
-
-    float s_c = y_tmo > 0.f ? 1.075f * (y_hdr / y_tmo) : 1.f;
-
-    const float c_b_hdr = c_b_tmo * s_c;
-    const float c_r_hdr = c_r_tmo * s_c;
-
-    color = float3(
-      clamp(y_hdr + k_bt2020_r_helper * c_r_hdr, 0.f, 1000.f),
-      clamp(y_hdr - 0.16455312684366 * c_b_hdr - 0.57135312684366 * c_r_hdr, 0.f, 1000.f),
-      clamp(y_hdr + k_bt2020_b_helper * c_b_hdr, 0.f, 1000.f)
-    );
-    color /= 1000.f;
-  } else {
-    // adjusted luma component (inverse)
-    // get Y'sdr
-    const float y_sdr = y_tmo + max(0.1f * c_r_tmo, 0.f);
-
-    // Tone mapping step 3 (inverse)
-    // get Y'c
-    const float p_sdr = 1 + 32 * pow(sdr_nits / 10000.f, gamma);
-    //Y'c
-    const float y_c = log((y_sdr * (p_sdr - 1)) + 1) / log(p_sdr);  //log = ln
-
-    // Tone mapping step 2 (inverse)
-    // get Y'p
-    float y_p = 0.f;
-
-    const float y_p_0 = y_c / 1.0770f;
-    const float y_p_2 = (y_c - 0.5000f) / 0.5000f;
-
-    const float _first = -2.7811f;
-    const float _sqrt = sqrt(4.83307641 - 4.604 * y_c);
-    const float _div = -2.302f;
-    const float y_p_1 = (_first + _sqrt) / _div;
-
-    if (y_p_0 <= 0.7399f)
-      y_p = y_p_0;
-    else if (y_p_1 > 0.7399f && y_p_1 < 0.9909f)
-      y_p = y_p_1;
-    else if (y_p_2 >= 0.9909f)
-      y_p = y_p_2;
-    else  //y_p_1 sometimes (about 0.12% out of the full RGB range)
-          //is less than 0.7399f or more than 0.9909f because of float inaccuracies
-    {
-      //error is small enough (less than 0.001) for this to be OK
-      //ideally you would choose between y_p_0 and y_p_1 if y_p_1 < 0.7399f depending on which is closer to 0.7399f
-      //or between y_p_1 and y_p_2 if y_p_1 > 0.9909f depending on which is closer to 0.9909f
-      y_p = y_p_1;
-
-      //this clamps it to 2 float steps above 0.7399f or 2 float steps below 0.9909f
-      //if (y_p_1 < 0.7399f)
-      //	y_p = 0.7399001f;
-      //else
-      //	y_p = 0.99089986f;
-    }
-
-    // Tone mapping step 1 (inverse)
-    // get Y'
-    const float p_hdr = 1 + 32 * pow(target_nits / 10000.f, gamma);
-    //Y'
-    const float y_ = (pow(p_hdr, y_p) - 1) / (p_hdr - 1);
-
-    // Colour scaling function
-    float col_scale = 0.f;
-    if (y_ > 0.f)  // avoid divison by zero
-      col_scale = y_sdr / (1.1f * y_);
-
-    // Colour difference signals (inverse) and Luma (inverse)
-    // get R'G'B'
-    color.b = ((c_b_tmo * k_bt2020_b_helper) / col_scale) + y_;
-    color.r = ((c_r_tmo * k_bt2020_r_helper) / col_scale) + y_;
-    color.g = (y_ - (k_bt2020.r * color.r + k_bt2020.b * color.b)) / k_bt2020.g;
-
-    //safety
-    color.r = clamp(color.r, 0.f, 1.f);
-    color.g = clamp(color.g, 0.f, 1.f);
-    color.b = clamp(color.b, 0.f, 1.f);
+    //this clamps it to 2 float steps above 0.7399f or 2 float steps below 0.9909f
+    //if (y_p_1 < 0.7399f)
+    //	y_p = 0.7399001f;
+    //else
+    //	y_p = 0.99089986f;
   }
+
+  // Tone mapping step 1 (inverse)
+  // get Y'
+  const float p_hdr = 1 + 32 * pow(target_nits / 10000.f, gamma);
+  //Y'
+  const float y_ = (pow(p_hdr, y_p) - 1) / (p_hdr - 1);
+
+  // Colour scaling function
+  float col_scale = y_ > 0 ? y_sdr / (1.1f * y_) : 1.f;
+
+  // Colour difference signals (inverse) and Luma (inverse)
+  // get R'G'B'
+  color = (bt2020Chromas * sdrChromas) / col_scale + y_;
+  // color.b = ((c_b_tmo * k_bt2020_b_helper) / col_scale) + y_;
+  // color.r = ((c_r_tmo * k_bt2020_r_helper) / col_scale) + y_;
+  // color.g = (y_ - (k_bt2020.r * color.r + k_bt2020.b * color.b)) / k_bt2020.g;
+
+  //safety
+  // color.r = clamp(color.r, 0.f, 1.f);
+  // color.g = clamp(color.g, 0.f, 1.f);
+  // color.b = clamp(color.b, 0.f, 1.f);
+
+  color = saturate(color);
 
   // R'G'B' gamma expansion
   color = pow(color, inverse_gamma);
@@ -587,5 +557,83 @@ float3 bt2446a_inverse_tonemapping(
 float3 bt2446a_inverse_tonemapping_bt709(float3 bt709, float sdr_nits, float target_nits) {
   float3 bt2020 = mul(BT709_2_BT2020_MAT, bt709);
   float3 newColor = bt2446a_inverse_tonemapping(bt2020, sdr_nits, target_nits);
-  return newColor;
+  return mul(BT2020_2_BT709_MAT, newColor);
+}
+
+/**
+ * Only useful for 100/1000 nits by using parametric function
+ * Section 4 of BT2446
+ * @link https://www.itu.int/dms_pub/itu-r/opb/rep/R-REP-BT.2446-1-2021-PDF-E.pdf
+ */
+float3 bt2446aFromBT2020GammaOptimized(float3 inputColor) {
+  /**
+   * Starting with an SDR 𝑅𝐺𝐵 signal encoded in the Recommendation ITU-R
+   * BT.2020 colour space, conversion to HDR proceeds by first converting this
+   * signal to 𝑌′𝐶𝑏′𝐶𝑟′, as specified in Table 4 of Recommendation ITU-R
+   * BT.2020.
+   */
+
+  float luma = dot(inputColor, BT2020_2_XYZ_MAT[1].rgb);
+  // float chromaBlue = (inputColor.b - luma) / 1.8814f;
+  // float chromaRed = (inputColor.r - luma) / 1.4746f;
+
+  float3 bt2020Chromas = (2.f - 2.f * BT2020_2_XYZ_MAT[1].rgb);
+  float3 sdrChromas = (inputColor.rgb - luma) / bt2020Chromas.rgb;
+
+  /**
+   * Then, the (previously normalised) 𝑌′ channel is expanded, and the 𝐶𝑏′and
+   * 𝐶𝑟′ channels are adjusted to match the visual perception of chromatic
+   * content at different luminance levels.
+   */
+
+  // 𝑌′′
+  float lumaAdjusted = 255.f * luma;
+
+  const float T = 70.f;
+  const float a1 = 1.8712e-5f;
+  const float b1 = -2.7334e-3f;
+  const float c1 = 1.3141f;
+  const float a2 = 2.8305e-6f;
+  const float b2 = -7.4622e-4f;
+  const float c2 = 1.2528f;
+  float E = (lumaAdjusted <= T)
+            ? a1 * (lumaAdjusted * lumaAdjusted) + (b1 * lumaAdjusted) + c1
+            : a2 * (lumaAdjusted * lumaAdjusted) + (b2 * lumaAdjusted) + c2;
+
+  float lumaHDR = pow(lumaAdjusted, E);
+
+  float chromaScalingFactor = luma > 0
+                              ? 1.075f * (lumaHDR / luma)
+                              : 1.f;
+
+  float3 hdrChromas = sdrChromas * chromaScalingFactor;
+
+  // float chromaBlueHDR = chromaBlue * chromaScalingFactor;
+  // float chromaRedHDR = chromaRed * chromaScalingFactor;
+
+  // float3 colorScaledHDR = float3(
+  //   lumaHDR + (1.4746 * chromaRedHDR),
+  //   lumaHDR - (0.16455f * chromaBlueHDR) - (0.57135f * chromaRedHDR),
+  //   lumaHDR + (1.8814f * chromaBlueHDR)
+  // );
+
+  float3 colorScaledHDR = lumaHDR + (bt2020Chromas * hdrChromas);
+  float3 normalizedHDR = colorScaledHDR / 1000.f;
+
+  float3 clampedHDR = saturate(colorScaledHDR);
+  float3 linearHDR = pow(normalizedHDR, 2.4f);
+  float3 linearHDRInNits = linearHDR * 1000.f;
+  return linearHDRInNits;
+}
+
+/**
+ * Section 4 of BT2446
+ * @link https://www.itu.int/dms_pub/itu-r/opb/rep/R-REP-BT.2446-1-2021-PDF-E.pdf
+ */
+float3 bt2446aFromBT709Linear(float3 bt709) {
+  float3 bt2020 = mul(BT709_2_BT2020_MAT, bt709);
+  float3 bt2020Gamma = pow(bt2020, 1.f / 2.4f);
+  float3 newColor = bt2446aFromBT2020GammaOptimized(bt2020Gamma);
+  float3 itmoColor = mul(BT2020_2_BT709_MAT, newColor);
+  return itmoColor;
 }
