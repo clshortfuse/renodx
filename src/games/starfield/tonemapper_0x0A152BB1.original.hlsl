@@ -14,37 +14,209 @@ struct FrameDebug {
   uint value12;   // _23_m0[6u].w
 };
 
+struct FrameData {
+  uint value00;           // _23_m0[0u].x
+  uint value01;           // _23_m0[0u].y
+  float2 value02;         // _23_m0[0u].zw
+  float value03;          // _23_m0[1u].x
+  float value04;          // _23_m0[1u].y
+  float value05;          // _23_m0[1u].z
+  float fGamma;           // _23_m0[1u].w
+  float fContrast;        // _23_m0[2u].x
+  uint supportsHDR;       // _23_m0[2u].y
+  float fBrightnessHDR;   // _23_m0[2u].z
+  float lutScalingPow;    // _23_m0[2u].w
+  FrameDebug frameDebug;  // _23_m0[3u-6u].xyzw
+  float4 value12;         // _23_m0[7u].xyzw
+  float value13;          // _23_m0[8u].x
+  float value14;          // _23_m0[8u].y
+  uint value15;           // _23_m0[8u].z
+  uint value16;           // _23_m0[8u].w
+};
+
+
+
+struct EffectsAlphaThresholdParams {
+  float effectsAlphaThresholdParams00;
+  float effectsAlphaThresholdParams01;
+  float effectsAlphaThresholdParams02;
+  float effectsAlphaThresholdParams03;
+};
+
+struct TonemappingParams {
+  float acesParam00;
+  float acesParam01;
+  float hableToeStrength;
+  float hableToeLength;
+  float hableShoulderStrength;
+  float hableShoulderLength;
+  float hableShoulderAngle;
+  uint tonemappingParams07;
+};
+
+struct GPUDebugGeometrySettings {
+  uint gpuDebugGeometrySettings00;
+  uint gpuDebugGeometrySettings01;
+  uint gpuDebugGeometrySettings02;
+  uint gpuDebugGeometrySettings03;
+};
+
+struct TiledLightingDebug {
+  uint tiledLightingDebug00;
+  uint tiledLightingDebug01;
+  float tiledLightingDebug02;
+  float tiledLightingDebug03;
+  float tiledLightingDebug04;
+  uint tiledLightingDebug05;
+  uint tiledLightingDebug06;
+  uint tiledLightingDebug07;
+};
+
+struct MomentBasedOITSettings {
+  float momentBasedOITSettings00;
+  float momentBasedOITSettings01;
+  float momentBasedOITSettings02;
+  float momentBasedOITSettings03;
+  float momentBasedOITSettings04;
+  float momentBasedOITSettings05;
+  float momentBasedOITSettings06;
+  float momentBasedOITSettings07;
+  float2 momentBasedOITSettings08;
+  float momentBasedOITSettings09;
+  float momentBasedOITSettings10;
+  float momentBasedOITSettings11;
+  uint momentBasedOITSettings12;
+  uint momentBasedOITSettings13;
+  uint momentBasedOITSettings14;
+};
+
+struct CameraBlock {
+  float3 cameraBlock00;
+  uint cameraBlock01;
+  float4x4 cameraBlock02;
+  float4x4 cameraBlock03;
+  float4x4 cameraBlock04;
+  float4x4 cameraBlock05;
+  float4x4 cameraBlock06;
+  float4x4 cameraBlock07;
+  float3 cameraBlock08;
+  uint cameraBlock09;
+  float4x4 cameraBlock10;
+  float4x4 cameraBlock11;
+  float4x4 cameraBlock12;
+  float4 cameraBlock13;
+  float4 cameraBlock14;
+  float4 cameraBlock15;
+  float4 cameraBlock16;
+  float2 cameraBlock17;
+  float cameraBlock18;
+  float cameraBlock19;
+};
+
+struct ResolutionBlock {
+  float2 resolutionBlock00;
+  float2 resolutionBlock01;
+  float2 resolutionBlock02;
+  float2 resolutionBlock03;
+  uint4 resolutionBlock04;
+  float2 resolutionBlock05;
+  float2 resolutionBlock06;
+  float2 resolutionBlock07;
+  float2 resolutionBlock08;
+  float2 resolutionBlock09;
+  uint2 resolutionBlock10;
+  uint4 resolutionBlock11;
+  float resolutionBlock12;
+  uint resolutionBlock13;
+  uint resolutionBlock14;
+  uint resolutionBlock15;
+};
+
+struct CameraBlockArray {
+  CameraBlock cameraBlockArray00[3];
+  ResolutionBlock cameraBlockArray01[5];
+};
+
+struct VolumeShape {
+  uint volumeShape00;
+  float3 volumeShape01;
+  float4x3 volumeShape02;
+  float4x3 volumeShape03;
+};
+
+struct Force {
+  float3 force00;
+  uint force01;
+  VolumeShape volumeShape;
+  float force03;
+  float force04;
+  uint force05;
+  uint force06;
+  float4 force07;
+  float4 force08[8];
+};
+
+struct WindData {
+  uint windData00;
+  float windData01;
+  float windData02;
+  float windData03;
+  float windData04;
+  float windData05;
+  float windData06;
+  float windData07;
+  float windData08;
+  float windData09;
+  float windData10;
+  float windData11;
+  Force force[8];
+};
+
+struct CameraExposureData {
+  float cameraExposureData00;
+  float cameraExposureData01;
+  float cameraExposureData02;
+  float cameraExposureData03;
+  float cameraExposureData04;
+  float cameraExposureData05;
+  float cameraExposureData06;
+  float cameraExposureData07;
+};
+
+struct GlobalLightData {
+  uint globalLightData00;
+  uint globalLightData01;
+  uint globalLightData02;
+  uint globalLightData03;
+};
+
+
+struct SPerSceneConstants {
+  CameraBlockArray cameraBlockArray;
+  WindData windData;
+  CameraExposureData cameraExposureData;
+  GlobalLightData globalLightData;
+  float4 data01[2936];
+  MomentBasedOITSettings momentBasedOITSettings;
+  TiledLightingDebug tiledLightingDebug;
+  GPUDebugGeometrySettings gpuDebugGeometrySettings;
+  TonemappingParams tonemappingParams;
+  EffectsAlphaThresholdParams effectsAlphaThresholdParams;
+};
+
 cbuffer SharedFrameData : register(b0, space6) {
-  struct FrameData {
-    uint value00;           // _23_m0[0u].x
-    uint value01;           // _23_m0[0u].y
-    float2 value02;         // _23_m0[0u].zw
-    float value03;          // _23_m0[1u].x
-    float value04;          // _23_m0[1u].y
-    float value05;          // _23_m0[1u].z
-    float value06;          // _23_m0[1u].w
-    float value07;          // _23_m0[2u].x
-    uint value08;           // _23_m0[2u].y
-    float value09;          // _23_m0[2u].z
-    float value10;          // _23_m0[2u].w
-    FrameDebug frameDebug;  // _23_m0[3u-6u].xyzw
-    float4 value12;         // _23_m0[7u].xyzw
-    float value13;          // _23_m0[8u].x
-    float value14;          // _23_m0[8u].y
-    uint value15;           // _23_m0[8u].z
-    uint value16;           // _23_m0[8u].w
-  } frameData : packoffset(c0);
+  FrameData frameData : packoffset(c0);
 }
 
 cbuffer PerSceneConstants : register(b0, space7) {
-  float4 _28_m0[3265] : packoffset(c0);
+  SPerSceneConstants perSceneConstants : packoffset(c0);
 }
 
 cbuffer stub_PushConstantWrapper_HDRComposite : register(b0, space0) {
   struct PushConstantWrapper_HDRComposite {
-    uint value00;  // _33_m0[0u].x
-    uint value01;  // _33_m0[1u].x
-    uint value02;  // _33_m0[2u].x
+    uint bufferIndex;     // _33_m0[0u].x // 1u
+    uint toneMapperEnum;  // _33_m0[1u].x // 3u
+    uint bloomStrength;   // _33_m0[2u].x // 0.28f
   } pushConstants : packoffset(c0);
 }
 
@@ -65,21 +237,8 @@ struct HDRCompositeData {
 StructuredBuffer<HDRCompositeData> _17 : register(t4, space9);
 SamplerState _36 : register(s0, space9);
 
-static float4 gl_FragCoord;
-static float2 TEXCOORD;
-static float4 SV_Target;
-
-struct SPIRV_Cross_Input {
-  float4 gl_FragCoord : SV_Position;
-  float2 TEXCOORD : TEXCOORD0;
-};
-
-struct SPIRV_Cross_Output {
-  float4 SV_Target : SV_Target0;
-};
-
-void frag_main() {
-  uint _64 = pushConstants.value00;
+float4 main(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOORD0) : SV_Target0 {
+  uint _64 = pushConstants.bufferIndex;  // 1u
   uint _66 = _64 * 12u;
   float4 colorFilter = _17[_64].value00;
 
@@ -94,14 +253,14 @@ void frag_main() {
   float _122 = _17[_64].value04;
   float3 _126 = _8.Load(int3(uint2(uint(gl_FragCoord.x), uint(gl_FragCoord.y)), 0u));
   float _138;
-  if (frameData.value08 == 0u) {
-    _138 = 1.0f;
+  if (frameData.supportsHDR) {
+    _138 = lerp(frameData.fBrightnessHDR, 1.f, 0.85f);
   } else {
-    _138 = lerp(frameData.value09, 1.f, 0.85f);
+    _138 = 1.f;
   }
   float3 _146 = _10.SampleLevel(_36, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);  // Bloom
 
-  float _152 = asfloat(pushConstants.value02);
+  float _152 = asfloat(pushConstants.bloomStrength);  // Cast
 
   float3 bloomedColor = _126 + (_138 * _146 * _152);
 
@@ -109,30 +268,30 @@ void frag_main() {
   float _160 = bloomedColor.g;
   float _161 = bloomedColor.b;
 
-  uint _162 = pushConstants.value01;
+  uint _162 = pushConstants.toneMapperEnum;
   float _175;
   float _180;
   float _185;
   float3 toneMappedColor;
-  if (pushConstants.value01 == 0u) {
+  if (pushConstants.toneMapperEnum == 0u) {
     toneMappedColor = saturate(bloomedColor);
-  } else if (pushConstants.value01 == 1u) {
+  } else if (pushConstants.toneMapperEnum == 1u) {
     toneMappedColor = saturate((((bloomedColor * 2.51f) + 0.03f) * bloomedColor) / ((((bloomedColor * 2.43f) + 0.59f) * bloomedColor) + 0.14f));
-  } else if (pushConstants.value01 == 2u) {
-    float _467 = ((0.56f / _28_m0[3262u].x) + 2.43f) + (_28_m0[3262u].y / (_28_m0[3262u].x * _28_m0[3262u].x));
-    toneMappedColor = saturate((((_467 * bloomedColor) + 0.03f) * bloomedColor) / (_28_m0[3262u].y + (((bloomedColor * 2.43f) + 0.59f) * bloomedColor)));
-  } else if (pushConstants.value01 == 3u) {
+  } else if (pushConstants.toneMapperEnum == 2u) {
+    float _467 = ((0.56f / perSceneConstants.tonemappingParams.acesParam00) + 2.43f) + (perSceneConstants.tonemappingParams.acesParam01 / (perSceneConstants.tonemappingParams.acesParam00 * perSceneConstants.tonemappingParams.acesParam00));
+    toneMappedColor = saturate((((_467 * bloomedColor) + 0.03f) * bloomedColor) / (perSceneConstants.tonemappingParams.acesParam01 + (((bloomedColor * 2.43f) + 0.59f) * bloomedColor)));
+  } else if (pushConstants.toneMapperEnum == 3u) {
     float _57[3];
     _57[0u] = _159;
     _57[1u] = _160;
     _57[2u] = _161;
-    float _520 = pow(saturate(_28_m0[3262u].w), 2.2f);
-    float _522a = saturate(_28_m0[3262u].z);
-    float _525a = saturate(_28_m0[3263u].y);
+    float _520 = pow(saturate(perSceneConstants.tonemappingParams.hableToeLength), 2.2f);
+    float _522a = saturate(perSceneConstants.tonemappingParams.hableToeStrength);
+    float _525a = saturate(perSceneConstants.tonemappingParams.hableShoulderLength);
     float _525b = clamp(_525a, 1.1920928955078125e-07f, 0.999989986419677734375f);
 
-    float _517 = max(0.0f, _28_m0[3263u].x);
-    float _519 = saturate(_28_m0[3263u].z);
+    float _517 = max(0.0f, perSceneConstants.tonemappingParams.hableShoulderStrength);
+    float _519 = saturate(perSceneConstants.tonemappingParams.hableShoulderAngle);
 
     float _522 = _520 * 0.5f * (1.0f - _522a);
     float _523 = 1.0f - _522;
@@ -230,7 +389,7 @@ void frag_main() {
   } else {
     toneMappedColor = saturate(bloomedColor);
   }
-  float constant316 = _28_m0[316u].z;
+  float constant316 = perSceneConstants.cameraExposureData.cameraExposureData02;
 
   float toneMappedY = dot(toneMappedColor, float3(0.2125000059604644775390625f, 0.7153999805450439453125f, 0.07209999859333038330078125f));
   float3 preGrayScaledColor = lerp(toneMappedY, toneMappedColor, _111);
@@ -239,14 +398,17 @@ void frag_main() {
   float3 postGrayScaledColor = lerp(constant316, brightendColor, _122);
   float3 colorFiltered2 = lerp(postGrayScaledColor, colorFilter2, colorFilter2Strength);
 
-  float _246 = max(frameData.value07, 0.001000000047497451305389404296875f);
+  float _246 = max(frameData.fContrast, 0.001000000047497451305389404296875f);
 
   float3 preContrast = (colorFiltered2 * 2.f - 1.f) * _246;
 
   float _263 = (_246 / sqrt((_246 * _246) + 1.0f)) * 2.0f;
 
   float3 contrastedColor = preContrast / (sqrt((preContrast * preContrast) + 1.0f) * _263) + 0.5f;
-  float3 gammaColor = pow(contrastedColor, 1.0f / max(frameData.value06, 0.001000000047497451305389404296875f));
+  float3 gammaColor = pow(contrastedColor, 1.0f / max(frameData.fGamma, 0.001000000047497451305389404296875f));
+  gammaColor *= 1.055f;
+  gammaColor -= 0.055f;
+  gammaColor = max(0, gammaColor);
   float _305 = gammaColor.r;
   float _306 = gammaColor.g;
   float _307 = gammaColor.b;
@@ -261,7 +423,7 @@ void frag_main() {
   float _338 = lutBlendedColor.b;
 
   float3 finalColor;
-  if (frameData.value08 == 0u) {
+  if (frameData.supportsHDR == 0u) {
     finalColor = lutBlendedColor;
   } else {
     float3 lutBlack = _13.Sample(_36, 0.03125f.xxx);                   // Sample first texel
@@ -273,20 +435,9 @@ void frag_main() {
     float3 scaledColor = saturate(rangeGap * (lutBlendedColor - lutBlackMin));
     float3 unknownScaling = 1.f - exp2(scaledColor * scaledColor * -14.42694091796875f);
 
-    float3 contrastedColor2 = pow(scaledColor, frameData.value10);
-    finalColor = (frameData.value09 * (((contrastedColor2 * unknownScaling) - lutBlendedColor) + ((1.0f - contrastedColor2) * scaledColor))) + lutBlendedColor;
+    float3 contrastedColor2 = pow(scaledColor, frameData.lutScalingPow);  // 3.5f
+    finalColor = (frameData.fBrightnessHDR * (((contrastedColor2 * unknownScaling) - lutBlendedColor) + ((1.0f - contrastedColor2) * scaledColor))) + lutBlendedColor;
   }
-  SV_Target.rgb = finalColor;
 
-  SV_Target.w = 1.0f;
-}
-
-SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {
-  gl_FragCoord = stage_input.gl_FragCoord;
-  gl_FragCoord.w = 1.0 / gl_FragCoord.w;
-  TEXCOORD = stage_input.TEXCOORD;
-  frag_main();
-  SPIRV_Cross_Output stage_output;
-  stage_output.SV_Target = SV_Target;
-  return stage_output;
+  return float4(finalColor.rgb, 1.f);
 }

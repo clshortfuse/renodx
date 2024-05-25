@@ -25,11 +25,11 @@ cbuffer SharedFrameData : register(b0, space6) {
     float value03;          // _23_m0[1u].x
     float value04;          // _23_m0[1u].y
     float value05;          // _23_m0[1u].z
-    float value06;          // _23_m0[1u].w
-    float value07;          // _23_m0[2u].x
-    uint value08;           // _23_m0[2u].y
-    float value09;          // _23_m0[2u].z
-    float value10;          // _23_m0[2u].w
+    float fGamma;          // _23_m0[1u].w
+    float fContrast;          // _23_m0[2u].x
+    uint supportsHDR;           // _23_m0[2u].y
+    float fBrightnessHDR;          // _23_m0[2u].z
+    float lutScalingPow;          // _23_m0[2u].w
     FrameDebug frameDebug;  // _23_m0[3u-6u].xyzw
     float4 value12;         // _23_m0[7u].xyzw
     float value13;          // _23_m0[8u].x
@@ -60,7 +60,6 @@ Texture2D<float3> _10 : register(t2, space9);  // bloom
 #endif
 Texture3D<float3> _13 : register(t3, space9);  // rgba16_float LUT
 
-
 #ifdef USE_TONEMAP
 struct HDRCompositeData {
   float4 value00;
@@ -70,6 +69,7 @@ struct HDRCompositeData {
   float value04;
   uint value05;
 };
+
 StructuredBuffer<HDRCompositeData> _17 : register(t4, space9);
 #endif
 SamplerState _36 : register(s0, space9);
@@ -95,10 +95,10 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
 
 #ifdef USE_BLOOM
   float _138;
-  if (frameData.value08 == 0u) {
+  if (frameData.supportsHDR == 0u) {
     _138 = 1.0f;
   } else {
-    _138 = lerp(frameData.value09, 1.f, 0.85f);
+    _138 = lerp(frameData.fBrightnessHDR, 1.f, 0.85f);
   }
   float3 _146 = _10.SampleLevel(_36, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);  // Bloom
   float _152 = asfloat(pushConstants.value02);
@@ -417,7 +417,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
   float3 colorFiltered2 = sdrColor;
 #endif  // USE_TONEMAP
 
-  float _246 = max(frameData.value07, 0.001000000047497451305389404296875f);
+  float _246 = max(frameData.fContrast, 0.001000000047497451305389404296875f);
 
   float3 preContrast = (colorFiltered2 * 2.f - 1.f) * _246;
 
@@ -433,12 +433,12 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
     _36,
     injectedData.colorGradeLUTStrength,
     injectedData.colorGradeLUTScaling,
-    TONE_MAP_LUT_TYPE__2_4,
-    TONE_MAP_LUT_TYPE__2_4,
+    TONE_MAP_LUT_TYPE__SRGB,
+    TONE_MAP_LUT_TYPE__SRGB,
     16.f
   );
 
-  // float3 gammaColor = pow(contrastedColor, 1.0f / max(frameData.value06, 0.001000000047497451305389404296875f));
+  // float3 gammaColor = pow(contrastedColor, 1.0f / max(frameData.fGamma, 0.001000000047497451305389404296875f));
   // float _305 = gammaColor.r;
   // float _306 = gammaColor.g;
   // float _307 = gammaColor.b;
@@ -451,7 +451,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
   // Back in "output gamma"
 
   // float3 finalColor;
-  if (frameData.value08 == 0u) {
+  if (frameData.supportsHDR == 0u) {
     // finalColor = lutColor;
   } else if (injectedData.colorGradeLUTScaling == 0.f) {
     // Vanilla LUT Scaling
@@ -463,14 +463,11 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
     float lutRange = max(0.0f, lutWhiteMax - lutBlackMin);
     float rangeGap = 1.0f / lutRange;
     float3 scaledColor = saturate(rangeGap * (lutColorInGamma - lutBlackMin));
-    float _410 = scaledColor.r;
-    float _411 = scaledColor.g;
-    float _412 = scaledColor.b;
 
     float3 unknownScaling = 1.f - exp2(scaledColor * scaledColor * -14.42694091796875f);
 
-    float3 contrastedColor2 = pow(scaledColor, frameData.value10);
-    float3 lutScaled = (frameData.value09 * (((contrastedColor2 * unknownScaling) - lutColorInGamma) + ((1.0f - contrastedColor2) * scaledColor))) + lutColorInGamma;
+    float3 contrastedColor2 = pow(scaledColor, frameData.lutScalingPow);
+    float3 lutScaled = (frameData.fBrightnessHDR * (((contrastedColor2 * unknownScaling) - lutColorInGamma) + ((1.0f - contrastedColor2) * scaledColor))) + lutColorInGamma;
     lutColor = pow(saturate(lutColorInGamma), 2.4f);
   }
 
