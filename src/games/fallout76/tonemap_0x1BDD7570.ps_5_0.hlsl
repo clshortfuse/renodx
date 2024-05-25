@@ -165,7 +165,7 @@ void main(
   else { // untonemapped
     r0.xyz = untonemapped;
   }
-  r1.x = dot(r0.xyz, float3(0.212500006,0.715399981,0.0720999986)); // converting srgb to ycbcr
+  r1.x = dot(r0.xyz, float3(0.212500006,0.715399981,0.0720999986)); // ~BT709 luminance
   r0.w = 0;
   float3 outputColor = r0.xyz; // before scene filter
   r0.xyzw = -r1.xxxx + r0.xyzw;

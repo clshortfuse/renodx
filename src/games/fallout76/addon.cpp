@@ -72,8 +72,8 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0x2A868728),      // Tonemap
   CustomShaderEntry(0x5D002D1E),      // Tonemap
   CustomShaderEntry(0xBF6561E2),      // Tonemap
-  CustomShaderEntry(0x2C63040A),      // LUT
-  CustomShaderEntry(0x160805BC),      // LUT?
+  CustomShaderEntry(0x2C63040A),      // LUT (Linear)
+  CustomShaderEntry(0x160805BC),      // LUT (Gamma)
 
   //CustomShaderEntry(0x7684FC16),      // FXAA
   CustomShaderEntry(0x3778E664),  // TAA
@@ -208,24 +208,6 @@ UserSettingUtil::UserSettings userSettings = {
     .parse = [](float value) { return value * 0.01f; }
   },
   new UserSettingUtil::UserSetting {
-    .key = "fxBloom",
-    .binding = &shaderInjection.fxBloom,
-    .defaultValue = 50.f,
-    .label = "Bloom",
-    .section = "Effects",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.02f; }
-  },
-  new UserSettingUtil::UserSetting {
-    .key = "fxAutoExposure",
-    .binding = &shaderInjection.fxAutoExposure,
-    .defaultValue = 50.f,
-    .label = "Auto Exposure",
-    .section = "Effects",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.02f; }
-  },
-  new UserSettingUtil::UserSetting {
     .key = "fxSceneFilter",
     .binding = &shaderInjection.fxSceneFilter,
     .defaultValue = 50.f,
@@ -234,17 +216,6 @@ UserSettingUtil::UserSettings userSettings = {
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  /* game already has DOF slider
-  new UserSettingUtil::UserSetting {
-    .key = "fxDoF",
-    .binding = &shaderInjection.fxDoF,
-    .defaultValue = 50.f,
-    .label = "Depth of Field",
-    .section = "Effects",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.02f; }
-  },
-  */
   new UserSettingUtil::UserSetting {
     .key = "fxFilmGrain",
     .binding = &shaderInjection.fxFilmGrain,
@@ -271,10 +242,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
   UserSettingUtil::updateUserSetting("colorGradeLUTScaling", 0.f);
-  UserSettingUtil::updateUserSetting("fxBloom", 50.f);
-  UserSettingUtil::updateUserSetting("fxAutoExposure", 50.f);
   UserSettingUtil::updateUserSetting("fxSceneFilter", 50.f);
-  UserSettingUtil::updateUserSetting("fxDoF", 50.f);
   UserSettingUtil::updateUserSetting("fxFilmGrain", 0.f);
 }
 

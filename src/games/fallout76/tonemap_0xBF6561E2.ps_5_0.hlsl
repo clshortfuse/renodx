@@ -126,6 +126,7 @@ void main(
 
   // tonemapping
   if (r1.x != 0 & injectedData.toneMapType == 0) { // vanilla
+    // Select ACES or Uncharted2 tonemapper
     r1.xy = float2(-1,-2) + cb2[2].xx;
     r2.xyz = r0.xyz * float3(2.50999999,2.50999999,2.50999999) + float3(0.0299999993,0.0299999993,0.0299999993);
     r2.xyz = r2.xyz * r0.xyz;
