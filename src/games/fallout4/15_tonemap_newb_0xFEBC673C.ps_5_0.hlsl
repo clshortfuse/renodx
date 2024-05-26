@@ -51,35 +51,32 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r0.xyz = r0.xyz * lerp(1.f, r1.www, injectedData.fxAutoExposure);
   const float3 untonemapped = r0.xyz;
 
-  // Hable
+    // Uncharted 2
   // ((x * (a * x + c * b) + d * e) / (x * (a * x + b) + d * f)) - e / f;
-  // Modified
-  // ((2x * (a * x + c * b) + d * e) / (2x * (a * x + b) + d * f)) - e / f;
-  // float A = 0.30;      // Shoulder Strength
+  // float inputExposure = 2.f;
+  // float A = 0.15;      // Shoulder Strength
   // float B = 0.50;      // Linear Strength
   // float C = 0.10;      // Linear Angle
   // float D = 0.20;      // Toe Strength
   // float E = cb2[1].w;  // Toe Numerator (commonly 0.02)
   // float F = 0.30;      // Toe Denominator
-  // float W = 5.6;
+  // float W = 11.2;
   // C * B = 0.05;
+
   if (injectedData.toneMapType == 0.f) {
-    // r1.xyz = r0.xyz + r0.xyz;
-    // r2.xyz = r0.xyz * 0.30f + 0.05f;               // (x * a + c * b)
-    // r3.xy = float2(0.20f, 3.333333f) * cb2[1].ww;  // d*e, e/f
-    // r2.xyz = r1.xyz * r2.xyz + r3.xxx;             // 2x * (x * a + c * b) + (d * e)
-    // r0.xyz = r0.xyz * 0.30f + 0.5f;                // (x * a + b)
-    // r0.xyz = r1.xyz * r0.xyz + 0.06f;              // 2x * ((x * a + b) + (d * f)
-    // r0.xyz = r2.xyz / r0.xyz;                      // ((x * (a * x + c * b) + d * e) / (x * (a * x + b) + d * f))
-    // r0.xyz = -cb2[1].www * 3.333333f + r0.xyz;     // r0.xyz - (e / f);
+    r1.xyz = r0.xyz + r0.xyz;
+    r2.xyz = r0.xyz * 0.30f + 0.05f;               // (x * a + c * b)
+    r3.xy = float2(0.20f, 3.333333f) * cb2[1].ww;  // d*e, e/f
+    r2.xyz = r1.xyz * r2.xyz + r3.xxx;             // 2x * (x * a + c * b) + (d * e)
+    r0.xyz = r0.xyz * 0.30f + 0.5f;                // (x * a + b)
+    r0.xyz = r1.xyz * r0.xyz + 0.06f;              // 2x * ((x * a + b) + (d * f)
+    r0.xyz = r2.xyz / r0.xyz;                      // ((x * (a * x + c * b) + d * e) / (x * (a * x + b) + d * f))
+    r0.xyz = -cb2[1].www * 3.333333f + r0.xyz;     // r0.xyz - (e / f);
 
-    // r1.x = cb2[1].w * 0.20f + 19.3759995;  // (2x * (x * a + c * b) + (d * e) )
-    // r1.x = r1.x * 0.0408563502 + -r3.y;    // r1.x / (24.476) - (e / f)
-    // r1.x = 1 / r1.x;                       // rcp
-    // r1.xyz = r1.xxx * r0.xyz;              // toneMap / tonemap(white)
-
-    r1.xyz = toneMapCurve(untonemapped, 0.30f, 0.50f, 0.10f, 0.20f, cb2[1].w, 0.30f)
-           / toneMapCurve(5.6f, 0.30f, 0.50f, 0.10f, 0.20f, cb2[1].w, 0.30f);
+    r1.x = cb2[1].w * 0.20f + 19.3759995;  // (2x * (x * a + c * b) + (d * e) )
+    r1.x = r1.x * 0.0408563502 + -r3.y;    // r1.x / (24.476) - (e / f)
+    r1.x = 1 / r1.x;                       // rcp
+    r1.xyz = r1.xxx * r0.xyz;              // toneMap / tonemap(white)
   } else {
     r1.xyz = untonemapped;
   }

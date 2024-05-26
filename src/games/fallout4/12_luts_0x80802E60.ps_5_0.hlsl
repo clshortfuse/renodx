@@ -1,5 +1,5 @@
-#include "../../shaders/tonemap.hlsl"
 #include "../../shaders/filmgrain.hlsl"
+#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 Texture3D<float4> t6 : register(t6);
@@ -38,13 +38,14 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
 
   o0.w = r0.w;
 
-  float vanillaMidGray = toneMapCurve(0.18, 0.30f, 0.50f, 0.10f, 0.20f, 0.02f, 0.30f)
-                       / toneMapCurve(5.6f, 0.30f, 0.50f, 0.10f, 0.20f, 0.02f, 0.30f);
-  float renoDRTContrast = 1.5f;
+  float vanillaMidGray = toneMapCurve(0.18f * 2.f, 0.15f, 0.50f, 0.10f, 0.20f, 0.02f, 0.30f)
+                       / toneMapCurve(11.2f, 0.15f, 0.50f, 0.10f, 0.20f, 0.02f, 0.30f);
+
+  float renoDRTContrast = 1.0f;
   float renoDRTFlare = 0.f;
-  float renoDRTShadows = 1.2f;
-  float renoDRTDechroma = 0.5f;
-  float renoDRTSaturation = 1.1f;
+  float renoDRTShadows = 1.0f;
+  float renoDRTDechroma = injectedData.colorGradeBlowout;
+  float renoDRTSaturation = 1.0f;
   float renoDRTHighlights = 1.0f;
 
   ToneMapParams tmParams = {
@@ -152,8 +153,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     );
     o0.xyz = grainedColor;
   }
-  
-  
+
   if (injectedData.toneMapGammaCorrection == 0) {
     o0.rgb = gammaCorrectSafe(o0.rgb, true);
   }
