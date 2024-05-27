@@ -113,10 +113,21 @@ namespace ShaderCompilerUtil {
               &outBlob,
               &errorBlob
             ))) {
+          std::stringstream s;
+          s << "compileShaderFromFileFXC(Compilation failed";
           if (errorBlob != nullptr) {
-            free(errorBlob);
-            return nullptr;
+            // auto error_size = errorBlob->GetBufferSize();
+            auto error = (uint8_t*)errorBlob->GetBufferPointer();
+            s << ": " << error;
+            errorBlob->Release();
+          } else {
+            s << ".";
           }
+          s << ")";
+          if (outBlob) {
+            outBlob->Release();
+          }
+          outBlob = nullptr;
         }
       }
       FreeLibrary(d3d_compiler);
@@ -296,15 +307,20 @@ namespace ShaderCompilerUtil {
       std::stringstream s;
       s << "compileShaderFromFileDXC(Compilation failed";
       if (errorBlob != nullptr) {
-        s << ": " << errorBlob;
-        free(errorBlob);
+        // auto error_size = errorBlob->GetBufferSize();
+        auto error = (uint8_t*)errorBlob->GetBufferPointer();
+        s << ": " << error;
+        errorBlob->Release();
       } else {
         s << ".";
       }
       s << ")";
 
+      if (outBlob) {
+        outBlob->Release();
+      }
+      outBlob = nullptr;
       reshade::log_message(reshade::log_level::error, s.str().c_str());
-      return nullptr;
     }
 
     return outBlob;
