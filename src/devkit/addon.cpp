@@ -232,9 +232,13 @@ static void loadCustomShaders() {
       auto filename_string = filename.string();
       auto length = filename_string.length();
 
-      uint32_t versionMajor = std::stoi(filename_string.substr(length - 8, 1), nullptr, 10);
-      std::string shaderTarget = filename_string.substr(length - 11, 6);
-      std::string hashString = filename_string.substr(length - 20, 8);
+      if (length < strlen("0x12345678.xx_x_x.hlsl")) continue;
+      std::string shaderTarget = filename_string.substr(length - strlen("xx_x_x.hlsl"), strlen("xx_x_x"));
+      if (shaderTarget[2] != '_') continue;
+      if (shaderTarget[4] != '_') continue;
+  
+      uint32_t versionMajor = shaderTarget[3] - '0';
+      std::string hashString = filename_string.substr(length - strlen("12345678.xx_x_x.hlsl"), 8);
       shaderHash = std::stoul(hashString, nullptr, 16);
 
       {
