@@ -219,7 +219,7 @@ namespace ShaderCompilerUtil {
       // if(Flags1 & D3DCOMPILE_PARTIAL_PRECISION) arguments.push_back(L"/Gpp");
       if (Flags1 & D3DCOMPILE_RESOURCES_MAY_ALIAS)
         arguments.push_back(L"/res_may_alias");
-      arguments.push_back(L"-HV");
+      arguments.push_back(L"/HV");
       arguments.push_back(L"2021");
 
       IFR(CreateCompiler(&compiler));
@@ -288,7 +288,7 @@ namespace ShaderCompilerUtil {
           D3D_COMPILE_STANDARD_FILE_INCLUDE,
           "main",
           shaderTarget,
-          D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY,
+          0,
           0,
           &outBlob,
           &errorBlob
