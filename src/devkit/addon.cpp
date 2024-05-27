@@ -260,7 +260,10 @@ static void loadCustomShaders() {
         continue;
       }
       code_size = outBlob->GetBufferSize();
-      code = (uint8_t*)outBlob->GetBufferPointer();
+      code = reinterpret_cast<uint8_t*>(malloc(code_size));  // Clone to release;
+      memcpy(code, outBlob->GetBufferPointer(), code_size);
+      outBlob->Release();
+
       isHLSL = true;
       {
         std::stringstream s;
@@ -1508,7 +1511,6 @@ static bool on_copy_descriptor_tables(
           s << ", res:" << reinterpret_cast<void*>(getResourceByViewHandle(data, view.handle));
         }
       }
-      
 
       s << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
