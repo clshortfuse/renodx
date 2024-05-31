@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <array>
 #include <bitset>
 #include <cassert>
 #include <charconv>
@@ -169,7 +170,7 @@ std::string_view string_view_from_csub_match(const std::csub_match &match) {
   return std::string_view{match.first, match.second};
 }
 
-std::vector<std::string_view> string_view_match(const std::string_view &input, const std::regex &regex) {
+std::vector<std::string_view> string_view_match_all(const std::string_view &input, const std::regex &regex) {
   std::cmatch matches;
   std::regex_match(input.data(), input.data() + input.size(), matches, regex);
   if (matches.size() == 0) return {};
@@ -181,7 +182,20 @@ std::vector<std::string_view> string_view_match(const std::string_view &input, c
   return results;
 }
 
-std::vector<std::pair<std::string_view, std::string_view>> string_view_split(const std::string_view &input, const std::regex &separator, const std::vector<int> &submatches) {
+template <size_t N>
+std::array<std::string_view, N> string_view_match(const std::string_view &input, const std::regex &regex) {
+  std::array<std::string_view, N> results;
+
+  std::cmatch matches;
+  std::regex_match(input.data(), input.data() + input.size(), matches, regex);
+  if (matches.size() == 0) return {};
+  for (size_t i = 1; i < matches.size(); ++i) {
+    results[i - 1] = string_view_from_csub_match(matches[i]);
+  }
+  return results;
+}
+
+std::vector<std::pair<std::string_view, std::string_view>> string_view_split_all(const std::string_view &input, const std::regex &separator, const std::vector<int> &submatches) {
   std::cregex_token_iterator iter(input.data(), input.data() + input.size(), separator, submatches);
   std::cregex_token_iterator end;
   std::vector<std::pair<std::string_view, std::string_view>> results = {};
@@ -194,7 +208,38 @@ std::vector<std::pair<std::string_view, std::string_view>> string_view_split(con
   return results;
 }
 
-std::vector<std::string_view> string_view_split(const std::string_view &input, const std::regex &separator, uint32_t submatch = -1) {
+template <size_t N1, size_t N2>
+std::array<std::array<std::string_view, N2>, N1> string_view_split(const std::string_view &input, const std::regex &separator, const std::array<int, N2> &submatches) {
+  std::vector<int> submatchesv = {submatches.data(), submatches.data() + N2};
+  std::cregex_token_iterator iter(input.data(), input.data() + input.size(), separator, submatchesv);
+  std::cregex_token_iterator end;
+  std::array<std::array<std::string_view, N2>, N1> results;
+  size_t count = 0;
+  while (iter != end) {
+    std::array<std::string_view, N2> record;
+    for (size_t i = 0; i < N2; ++i) {
+      record[i] = string_view_from_csub_match(*iter++);
+    }
+    results[count++] = record;
+  }
+
+  return results;
+}
+
+template <size_t N>
+std::array<std::string_view, N> string_view_split(const std::string_view &input, const std::regex &separator, uint32_t submatch = -1) {
+  std::cregex_token_iterator iter(input.data(), input.data() + input.size(), separator, submatch);
+  std::cregex_token_iterator end;
+  std::array<std::string_view, N> results;
+  size_t count = 0;
+  while (iter != end) {
+    results[count++] = string_view_from_csub_match(*iter++);
+  }
+
+  return results;
+}
+
+std::vector<std::string_view> string_view_split_all(const std::string_view &input, const std::regex &separator, uint32_t submatch = -1) {
   std::cregex_token_iterator iter(input.data(), input.data() + input.size(), separator, submatch);
   std::cregex_token_iterator end;
   std::vector<std::string_view> results = {};
@@ -205,7 +250,7 @@ std::vector<std::string_view> string_view_split(const std::string_view &input, c
   return results;
 }
 
-std::vector<std::string_view> string_view_split(const std::string_view &input, const char separator) {
+std::vector<std::string_view> string_view_split_all(const std::string_view &input, const char separator) {
   std::vector<std::string_view> results;
 
   std::string_view::size_type pos = 0;
@@ -323,27 +368,22 @@ struct Signature1 {
 
   explicit Signature1(std::string_view line) {
     /** 
-   * @example
-   * ; TEXCOORD                 0   xy          0     NONE   float   xy  
-   * ; SV_Position              0   xyzw        1      POS   float       
-   * ; SV_RenderTargetArrayIndex     0   x           2  RTINDEX    uint   x   
-   */
+     * @example
+     * ; TEXCOORD                 0   xy          0     NONE   float   xy  
+     * ; SV_Position              0   xyzw        1      POS   float       
+     * ; SV_RenderTargetArrayIndex     0   x           2  RTINDEX    uint   x   
+     */
+
     static auto regex = std::regex{R"/(; (\S+)\s+(\S+)\s+((?:x| )(?:y| )(?:z| )(?:w| ))\s+(\S+)\s+(\S+)\s+(\S+)\s*([xyzw ]*))/"};
-    std::cmatch results;
-    std::regex_match(line.data(), line.data() + line.size(), results, regex);
+    auto [name, index, mask, dxregister, sysValue, format, used] = string_view_match<7>(line, regex);
 
-    if (results.size() != 8) {
-      throw std::invalid_argument("Could not parse signature");
-    }
-    size_t matchIndex = 0;
-
-    this->name = signatureNameFromString(string_view_from_csub_match(results[++matchIndex]));
-    std::from_chars(results[++matchIndex].first, results[matchIndex].second, this->index);
-    this->mask = flagsFromCoordinates(string_view_from_csub_match(results[++matchIndex]));
-    std::from_chars(results[++matchIndex].first, results[matchIndex].second, this->dxregister);
-    this->sysValue = sysValueFromString(string_view_from_csub_match(results[++matchIndex]));
-    this->format = formatFromString(string_view_from_csub_match(results[++matchIndex]));
-    this->used = flagsFromCoordinates(string_view_from_csub_match(results[++matchIndex]));
+    this->name = signatureNameFromString(name);
+    std::from_chars(index.data(), index.data() + index.size(), this->index);
+    this->mask = flagsFromCoordinates(mask);
+    std::from_chars(dxregister.data(), dxregister.data() + dxregister.size(), this->dxregister);
+    this->sysValue = sysValueFromString(sysValue);
+    this->format = formatFromString(format);
+    this->used = flagsFromCoordinates(used);
   }
 };
 
@@ -391,18 +431,12 @@ struct Signature2 {
      * ; SV_Target                0
      */
     static auto regex = std::regex{R"/(; (\S+)\s+(\S+)(?:$|(?:(.{23})\s*(\S+)?)))/"};
-    std::cmatch results;
-    std::regex_match(line.data(), line.data() + line.size(), results, regex);
+    auto [name, index, interpMode, dynIndex] = string_view_match<4>(line, regex);
 
-    if (results.size() != 5) {
-      throw std::invalid_argument("Could not parse signature");
-    }
-    size_t matchIndex = 0;
-
-    this->name = signatureNameFromString(string_view_from_csub_match(results[++matchIndex]));
-    std::from_chars(results[++matchIndex].first, results[matchIndex].second, this->index);
-    this->interpMode = interpModeFromString(string_view_trim(string_view_from_csub_match(results[++matchIndex])));
-    this->dynIndex = dynIndexFromString(string_view_trim(string_view_from_csub_match(results[++matchIndex])));
+    this->name = signatureNameFromString(name);
+    std::from_chars(index.data(), index.data() + index.size(), this->index);
+    this->interpMode = interpModeFromString(string_view_trim(interpMode));
+    this->dynIndex = dynIndexFromString(string_view_trim(dynIndex));
   }
 };
 
@@ -428,13 +462,9 @@ struct BufferDefinition {
 
   explicit BufferDefinition(std::string_view line) {
     static auto regex = std::regex{R"/(; ((?:cbuffer)|(?:Resource bind info for))(\w*))/"};
-    std::cmatch results;
-    std::regex_match(line.data(), line.data() + line.size(), results, regex);
-    size_t matchIndex = 0;
-    this->bufferType = bufferTypeFromString(string_view_from_csub_match(results[++matchIndex]));
-    if (results.size() == 3) {
-      this->name = string_view_from_csub_match(results[++matchIndex]);
-    }
+    auto [bufferType, name] = string_view_match<2>(line, regex);
+    this->bufferType = bufferTypeFromString(bufferType);
+    this->name = name;
   }
 };
 
@@ -499,16 +529,14 @@ struct ResourceBinding {
   explicit ResourceBinding(std::string_view line) {
     // ; _31_33                            cbuffer      NA          NA     CB0            cb0     1
     static auto regex = std::regex{R"/(; (.{30})\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*)/"};
-    std::cmatch results;
-    std::regex_match(line.data(), line.data() + line.size(), results, regex);
-    size_t matchIndex = 0;
-    this->name = string_view_trim(string_view_from_csub_match(results[++matchIndex]));
-    this->type = resourceTypeFromString(string_view_from_csub_match(results[++matchIndex]));
-    this->format = resourceFormatFromString(string_view_from_csub_match(results[++matchIndex]));
-    this->dimensions = resourceDimensionsFromString(string_view_from_csub_match(results[++matchIndex]));
-    this->ID = string_view_from_csub_match(results[++matchIndex]);
-    this->hlslBinding = string_view_from_csub_match(results[++matchIndex]);
-    std::from_chars(results[++matchIndex].first, results[matchIndex].second, this->count);
+    auto [name, type, format, dimensions, id, hlslBinding, count] = string_view_match<7>(line, regex);
+    this->name = string_view_trim(name);
+    this->type = resourceTypeFromString(type);
+    this->format = resourceFormatFromString(format);
+    this->dimensions = resourceDimensionsFromString(dimensions);
+    this->ID = id;
+    this->hlslBinding = hlslBinding;
+    std::from_chars(count.data(), count.data() + count.size(), this->count);
   }
 };
 
@@ -521,29 +549,15 @@ struct TypeDefinition {
   explicit TypeDefinition(std::string_view line) {
     // %"class.Texture3D<vector<float, 4> >" = type { <4 x float>, %"class.Texture3D<vector<float, 4> >::mips_type" }
     static auto regex = std::regex{R"/(^(%(?:(?:"[^"]+")|\S+)) = type \{([^}]+)\}$)/"};
-    static auto type_split = std::regex(R"/( ((?:[^%][^},]+)|(?:%"[^"]+"))(?:,| ))/");
 
-    std::cmatch results;
-    std::regex_match(line.data(), line.data() + line.size(), results, regex);
-    if (results.size() == 2) {
-      throw std::invalid_argument("Cannot parse type definition.");
-    }
-    size_t matchIndex = 0;
-    this->name = string_view_from_csub_match(results[++matchIndex]);
-    auto types = string_view_from_csub_match(results[++matchIndex]);
-    this->types = string_view_split(types, type_split, 1);
+    auto [name, types] = string_view_match<2>(line, regex);
+
+    this->name = name;
+
+    static auto type_split = std::regex(R"/( ((?:[^%][^},]+)|(?:%"[^"]+"))(?:,| ))/");
+    this->types = string_view_split_all(types, type_split, 1);
   }
 };
-
-/* %dx.types.ResBind = { i32 bindStart, i32 bindEnd, i32 space, i8 ResBindEnum }}
-ResBindEnum = {
-  TEXTURE,
-  ?
-  CBUFFER,
-  SAMPLER,
-
-}
-*/
 
 std::map<std::string, std::string> resourceBindings = {};
 
@@ -670,123 +684,127 @@ struct CodeAssign {
 
   explicit CodeAssign(std::string_view line) {
     static auto codeAssignRegex = std::regex{R"/(^  %(\d+) = ([^;\r\n]+)(?:; ([^\r\n]+))?$)/"};
-    std::cmatch results;
-    std::regex_match(line.data(), line.data() + line.size(), results, codeAssignRegex);
-    if (results.size() < 2) {
+
+    auto results = string_view_match<3>(line, codeAssignRegex);
+    if (results.size() < 3) {
       throw std::invalid_argument("Could not parse code assignment");
     }
-    size_t matchIndex = 0;
-    this->variable = string_view_from_csub_match(results[++matchIndex]);
-    this->assignment = string_view_from_csub_match(results[++matchIndex]);
-    this->comment = string_view_from_csub_match(results[++matchIndex]);
+    auto [variable, assignment, comment] = results;
+    this->variable = variable;
+    this->assignment = assignment;
+    this->comment = comment;
 
     // std::cout << "parsing: " << this->assignment << std::endl;
-    this->instruction = string_view_split(this->assignment, ' ').at(0);
+    this->instruction = string_view_split_all(this->assignment, ' ').at(0);
     if (this->instruction == "call") {
       static auto regex = std::regex{R"/(call (\S+) ([^(]+)\(([^)]+)\)\s*)/"};
-      auto parsed = string_view_match(this->assignment, regex);
-      if (parsed.size() == 0) {
-        throw std::invalid_argument("Could not parse code assignment call");
-      }
-      auto type = parsed[0];
-      auto functionName = parsed[1];
-      auto functionParamsString = parsed[2];
       static auto paramRegex = std::regex(R"/(\s*(\S+) ((?:\d+)|(?:\{[^}]+\})|(?:%\d+)|(?:\S+))(?:(?:, )|(?:\s*$)))/");
-      auto paramMatches = string_view_split(functionParamsString, paramRegex, {1, 2});
+      auto [type, functionName, functionParamsString] = string_view_match<3>(this->assignment, regex);
+      // auto paramMatches = string_view_split_all(functionParamsString, paramRegex, {1, 2});
       if (functionName == "@dx.op.createHandleFromBinding") {
+        auto [opNumber, bind, index, nonUniformIndex] = string_view_split<4>(functionParamsString, paramRegex, 2);
         std::string bindStart = "0";
         std::string bindEnd = "0";
         std::string space = "0";
         std::string resourceType = "0";
-        if (paramMatches[1].second != "zeroinitializer") {
-          auto innerParams = string_view_split(paramMatches[1].second.substr(1, paramMatches[1].second.size() - 2), paramRegex, {1, 2});
-          bindStart = parseInt(innerParams[0].second);
-          bindEnd = parseInt(innerParams[1].second);
-          space = parseInt(innerParams[2].second);
-          resourceType = innerParams[3].second;
+        if (bind != "zeroinitializer") {
+          auto innerParams = string_view_split<4>(bind.substr(1, bind.size() - 2), paramRegex, 2);
+          bindStart = parseInt(innerParams[0]);
+          bindEnd = parseInt(innerParams[1]);
+          space = parseInt(innerParams[2]);
+          resourceType = innerParams[3];
         }
 
         if (resourceType == "0") {
-          this->decompiled = std::format("// texture _{} = t{};", this->variable, parseInt(paramMatches[2].second));
-          resourceBindings[std::string(this->variable)] = std::format("t{}", parseInt(paramMatches[2].second));
+          this->decompiled = std::format("// texture _{} = t{};", this->variable, parseInt(index));
+          resourceBindings[std::string(this->variable)] = std::format("t{}", parseInt(index));
         } else if (resourceType == "2") {
-          this->decompiled = std::format("// cbuffer _{} = cb{};", this->variable, parseInt(paramMatches[2].second));
-          resourceBindings[std::string(this->variable)] = std::format("cb{}", parseInt(paramMatches[2].second));
+          this->decompiled = std::format("// cbuffer _{} = cb{};", this->variable, parseInt(index));
+          resourceBindings[std::string(this->variable)] = std::format("cb{}", parseInt(index));
         } else if (resourceType == "3") {
-          this->decompiled = std::format("// SamplerState _{} = s{};", this->variable, parseInt(paramMatches[2].second));
-          resourceBindings[std::string(this->variable)] = std::format("s{}", parseInt(paramMatches[2].second));
+          this->decompiled = std::format("// SamplerState _{} = s{};", this->variable, parseInt(index));
+          resourceBindings[std::string(this->variable)] = std::format("s{}", parseInt(index));
         } else {
           throw std::invalid_argument("Unknown resource type");
         }
       } else if (functionName == "@dx.op.annotateHandle") {
-        auto ref = std::string{paramMatches[1].second.substr(1)};
+        auto [opNumber, res, props] = string_view_split<3>(functionParamsString, paramRegex, 2);
+        auto ref = std::string{res.substr(1)};
         resourceBindings[std::string(this->variable)] = resourceBindings.at(ref);
         this->decompiled = std::format("// _{} = _{};", this->variable, ref);
       } else if (functionName == "@dx.op.loadInput.f32") {
         //   @dx.op.loadInput.f32(i32 4, i32 3, i32 0, i8 0, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
-        this->decompiled = std::format("float _{} = arg{}.{};", this->variable, paramMatches[1].second, parseIndex(paramMatches[3].second));
+        auto [opNumber, inputSigId, rowIndex, colIndex, gsVertexAxis] = string_view_split<5>(functionParamsString, paramRegex, 2);
+        this->decompiled = std::format("float _{} = arg{}.{};", this->variable, inputSigId, parseIndex(colIndex));
       } else if (functionName == "@dx.op.cbufferLoadLegacy.f32") {
-        auto ref = std::string{paramMatches[1].second.substr(1)};
-        this->decompiled = std::format("float4 _{} = {}[{}u];", this->variable, resourceBindings.at(ref), parseInt(paramMatches[2].second));
+        auto [opNumber, handle, regIndex] = string_view_split<3>(functionParamsString, paramRegex, 2);
+        auto ref = std::string{handle.substr(1)};
+        this->decompiled = std::format("float4 _{} = {}[{}u];", this->variable, resourceBindings.at(ref), parseInt(regIndex));
       } else if (functionName == "@dx.op.cbufferLoadLegacy.i32") {
-        auto ref = std::string{paramMatches[1].second.substr(1)};
-        this->decompiled = std::format("int4 _{} = {}[{}u];", this->variable, resourceBindings.at(ref), parseInt(paramMatches[2].second));
+        auto [opNumber, handle, regIndex] = string_view_split<3>(functionParamsString, paramRegex, 2);
+        auto ref = std::string{handle.substr(1)};
+        this->decompiled = std::format("int4 _{} = {}[{}u];", this->variable, resourceBindings.at(ref), parseInt(regIndex));
       } else if (functionName == "@dx.op.unary.f32") {
-        if (auto pair = unaryFloatOps.find(std::string(paramMatches[0].second));
+        auto [opNumber, value] = string_view_split<2>(functionParamsString, paramRegex, 2);
+        if (auto pair = unaryFloatOps.find(std::string(opNumber));
             pair != unaryFloatOps.end()) {
-          this->decompiled = std::format("{} _{} = {}({});", parseType(type), this->variable, pair->second, parseFloat(paramMatches[1].second));
+          this->decompiled = std::format("{} _{} = {}({});", parseType(type), this->variable, pair->second, parseFloat(value));
         } else {
           throw std::invalid_argument("Unknown @dx.op.unary.f32");
         }
       } else if (functionName == "@dx.op.unary.i32") {
-        if (auto pair = unaryInt32Ops.find(std::string(paramMatches[0].second));
+        auto [opNumber, value] = string_view_split<2>(functionParamsString, paramRegex, 2);
+        if (auto pair = unaryInt32Ops.find(std::string(opNumber));
             pair != unaryInt32Ops.end()) {
-          this->decompiled = std::format("{} _{} = {}({});", parseType(type), this->variable, pair->second, parseFloat(paramMatches[1].second));
+          this->decompiled = std::format("{} _{} = {}({});", parseType(type), this->variable, pair->second, parseFloat(value));
         } else {
           throw std::invalid_argument("Unknown @dx.op.unary.i32");
         }
       } else if (functionName == "@dx.op.unaryBits.i32") {
-        if (auto pair = unaryBitsOps.find(std::string(paramMatches[0].second));
+        auto [opNumber, value] = string_view_split<2>(functionParamsString, paramRegex, 2);
+        if (auto pair = unaryBitsOps.find(std::string(opNumber));
             pair != unaryBitsOps.end()) {
-          if (paramMatches[0].second == "33") {
-            this->decompiled = std::format("uint _{} = {}({});", this->variable, pair->second, parseFloat(paramMatches[1].second));
+          if (opNumber == "33") {
+            this->decompiled = std::format("uint _{} = {}({});", this->variable, pair->second, parseFloat(value));
           } else {
-            this->decompiled = std::format("{} _{} = {}({});", parseType(type), this->variable, pair->second, parseFloat(paramMatches[1].second));
+            this->decompiled = std::format("{} _{} = {}({});", parseType(type), this->variable, pair->second, parseFloat(value));
           }
         } else {
           throw std::invalid_argument("Unknown @dx.op.unaryBits.i32");
         }
       } else if (functionName == "@dx.op.binary.f32") {
-        if (auto pair = binaryFloatOps.find(std::string(paramMatches[0].second));
+        auto [opNumber, a, b] = string_view_split<3>(functionParamsString, paramRegex, 2);
+        if (auto pair = binaryFloatOps.find(std::string(opNumber));
             pair != unaryBitsOps.end()) {
-          this->decompiled = std::format("{} _{} = {}({}, {});", parseType(type), this->variable, pair->second, parseFloat(paramMatches[1].second), parseFloat(paramMatches[2].second));
+          this->decompiled = std::format("{} _{} = {}({}, {});", parseType(type), this->variable, pair->second, parseFloat(a), parseFloat(b));
         } else {
           throw std::invalid_argument("Unknown @dx.op.binary.f32");
         }
       } else if (functionName == "@dx.op.sample.f32") {
-        auto refResource = std::string{paramMatches[1].second.substr(1)};
-        auto refSampler = std::string{paramMatches[2].second.substr(1)};
+        auto [opNumber, srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp] = string_view_split<11>(functionParamsString, paramRegex, 2);
+        auto refResource = std::string{srv.substr(1)};
+        auto refSampler = std::string{sampler.substr(1)};
 
-        bool hasCoordZ = paramMatches[5].second != "undef";
-        bool hasCoordW = paramMatches[6].second != "undef";
-        bool hasOffsetY = paramMatches[8].second != "undef";
-        bool hasOffsetZ = paramMatches[9].second != "undef";
-        bool hasClamp = paramMatches[10].second != "undef";
+        bool hasCoordZ = coord2 != "undef";
+        bool hasCoordW = coord3 != "undef";
+        bool hasOffsetY = offset1 != "undef";
+        bool hasOffsetZ = offset2 != "undef";
+        bool hasClamp = clamp != "undef";
         std::string coords;
         if (hasCoordW) {
-          coords = std::format("float4({}, {}, {}, {})", parseFloat(paramMatches[3].second), parseFloat(paramMatches[4].second), parseFloat(paramMatches[5].second), parseFloat(paramMatches[6].second));
+          coords = std::format("float4({}, {}, {}, {})", parseFloat(coord0), parseFloat(coord1), parseFloat(coord2), parseFloat(coord3));
         } else if (hasCoordZ) {
-          coords = std::format("float3({}, {}, {})", parseFloat(paramMatches[3].second), parseFloat(paramMatches[4].second), parseFloat(paramMatches[5].second));
+          coords = std::format("float3({}, {}, {})", parseFloat(coord0), parseFloat(coord1), parseFloat(coord2));
         } else {
-          coords = std::format("float2({}, {})", parseFloat(paramMatches[3].second), parseFloat(paramMatches[4].second));
+          coords = std::format("float2({}, {})", parseFloat(coord0), parseFloat(coord1));
         }
         std::string offset;
         if (hasOffsetZ) {
-          offset = std::format("int3({}, {}, {})", parseInt(paramMatches[7].second), parseInt(paramMatches[8].second), parseInt(paramMatches[9].second));
+          offset = std::format("int3({}, {}, {})", parseInt(offset0), parseInt(offset1), parseInt(offset2));
         } else if (hasCoordZ) {
-          offset = std::format("int2({}, {})", parseInt(paramMatches[7].second), parseInt(paramMatches[8].second));
+          offset = std::format("int2({}, {})", parseInt(offset0), parseInt(offset1));
         } else {
-          offset = std::format("{}", parseInt(paramMatches[7].second));
+          offset = std::format("{}", parseInt(offset0));
         }
         if (hasClamp) {
           throw std::invalid_argument("Unknown clamp");
@@ -796,41 +814,45 @@ struct CodeAssign {
           this->decompiled = std::format("float4 _{} = {}.Sample({}, {}, {});", this->variable, resourceBindings.at(refResource), resourceBindings.at(refSampler), coords, offset);
         }
       } else if (functionName == "@dx.op.sampleLevel.f32") {
-        auto refResource = std::string{paramMatches[1].second.substr(1)};
-        auto refSampler = std::string{paramMatches[2].second.substr(1)};
+        auto [opNumber, srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, LOD] = string_view_split<11>(functionParamsString, paramRegex, 2);
+        auto refResource = std::string{srv.substr(1)};
+        auto refSampler = std::string{sampler.substr(1)};
 
-        bool hasCoordZ = paramMatches[5].second != "undef";
-        bool hasCoordW = paramMatches[6].second != "undef";
-        bool hasOffsetY = paramMatches[8].second != "undef";
-        bool hasOffsetZ = paramMatches[9].second != "undef";
+        bool hasCoordZ = coord2 != "undef";
+        bool hasCoordW = coord3 != "undef";
+        bool hasOffsetY = offset1 != "undef";
+        bool hasOffsetZ = offset2 != "undef";
         std::string coords;
         if (hasCoordW) {
-          coords = std::format("float4({}, {}, {}, {})", parseFloat(paramMatches[3].second), parseFloat(paramMatches[4].second), parseFloat(paramMatches[5].second), parseFloat(paramMatches[6].second));
+          coords = std::format("float4({}, {}, {}, {})", parseFloat(coord0), parseFloat(coord1), parseFloat(coord2), parseFloat(coord3));
         } else if (hasCoordZ) {
-          coords = std::format("float3({}, {}, {})", parseFloat(paramMatches[3].second), parseFloat(paramMatches[4].second), parseFloat(paramMatches[5].second));
+          coords = std::format("float3({}, {}, {})", parseFloat(coord0), parseFloat(coord1), parseFloat(coord2));
         } else {
-          coords = std::format("float2({}, {})", parseFloat(paramMatches[3].second), parseFloat(paramMatches[4].second));
+          coords = std::format("float2({}, {})", parseFloat(coord0), parseFloat(coord1));
         }
         std::string offset;
         if (hasOffsetZ) {
-          offset = std::format("int3({}, {}, {})", parseInt(paramMatches[7].second), parseInt(paramMatches[8].second), parseInt(paramMatches[9].second));
+          offset = std::format("int3({}, {}, {})", parseInt(offset0), parseInt(offset1), parseInt(offset2));
         } else if (hasCoordZ) {
-          offset = std::format("int2({}, {})", parseInt(paramMatches[7].second), parseInt(paramMatches[8].second));
+          offset = std::format("int2({}, {})", parseInt(offset0), parseInt(offset1));
         } else {
-          offset = std::format("{}", parseInt(paramMatches[7].second));
+          offset = std::format("{}", parseInt(offset0));
         }
         if (offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
-          this->decompiled = std::format("float4 _{} = {}.SampleLevel({}, {}, {});", this->variable, resourceBindings.at(refResource), resourceBindings.at(refSampler), coords, parseFloat(paramMatches[10].second));
+          this->decompiled = std::format("float4 _{} = {}.SampleLevel({}, {}, {});", this->variable, resourceBindings.at(refResource), resourceBindings.at(refSampler), coords, parseFloat(LOD));
         } else {
-          this->decompiled = std::format("float4 _{} = {}.SampleLevel({}, {}, {}, {});", this->variable, resourceBindings.at(refResource), resourceBindings.at(refSampler), coords, parseFloat(paramMatches[10].second), offset);
+          this->decompiled = std::format("float4 _{} = {}.SampleLevel({}, {}, {}, {});", this->variable, resourceBindings.at(refResource), resourceBindings.at(refSampler), coords, parseFloat(LOD), offset);
         }
       } else if (functionName == "@dx.op.dot2.f32") {
-        this->decompiled = std::format("float _{} = dot(float2({}, {}), float2({}, {});", this->variable, parseFloat(paramMatches[1].second), parseFloat(paramMatches[2].second), parseFloat(paramMatches[3].second), parseFloat(paramMatches[4].second));
+        auto [opNumber, ax, ay, bx, by] = string_view_split<5>(functionParamsString, paramRegex, 2);
+        this->decompiled = std::format("float _{} = dot(float2({}, {}), float2({}, {});", this->variable, parseFloat(ax), parseFloat(ay), parseFloat(bx), parseFloat(by));
       } else if (functionName == "@dx.op.dot3.f32") {
-        this->decompiled = std::format("float _{} = dot(float3({}, {}, {}), float3({}, {}, {});", this->variable, parseFloat(paramMatches[1].second), parseFloat(paramMatches[2].second), parseFloat(paramMatches[3].second), parseFloat(paramMatches[4].second), parseFloat(paramMatches[5].second), parseFloat(paramMatches[6].second));
+        auto [opNumber, ax, ay, az, bx, by, bz] = string_view_split<7>(functionParamsString, paramRegex, 2);
+        this->decompiled = std::format("float _{} = dot(float3({}, {}, {}), float3({}, {}, {});", this->variable, parseFloat(ax), parseFloat(ay), parseFloat(az), parseFloat(bx), parseFloat(by), parseFloat(bz));
       } else if (functionName == "@dx.op.rawBufferLoad.f32") {
-        auto ref = std::string{paramMatches[1].second.substr(1)};
-        this->decompiled = std::format("float4 _{} = {}.Load({} + ({} / {}));", this->variable, resourceBindings.at(ref), parseInt(paramMatches[2].second), parseInt(paramMatches[3].second), parseInt(paramMatches[5].second));
+        auto [opNumber, srv, index, elementOffset, mask, alignment] = string_view_split<6>(functionParamsString, paramRegex, 2);
+        auto ref = std::string{srv.substr(1)};
+        this->decompiled = std::format("float4 _{} = {}.Load({} + ({} / {}));", this->variable, resourceBindings.at(ref), parseInt(index), parseInt(elementOffset), parseInt(alignment));
       } else {
         throw std::invalid_argument("Unknown function name");
       }
@@ -839,67 +861,66 @@ struct CodeAssign {
       // this->decompiled = "// " + std::string{this->comment};
     } else if (this->instruction == "extractvalue") {
       // extractvalue %dx.types.ResRet.f32 %448, 0
-      auto parsed = string_view_match(this->assignment, std::regex{"extractvalue (\\S+) (\\S+), (\\S+)"});
-      auto type = parsed[0];
+      auto [type, input, index] = string_view_match<3>(this->assignment, std::regex{"extractvalue (\\S+) (\\S+), (\\S+)"});
       if (type == R"(%dx.types.CBufRet.f32)" || type == R"(%dx.types.ResRet.f32)") {
         // float4 value
-        this->decompiled = std::format("float _{} = {}.{};", this->variable, parseVariable(parsed[1]), parseIndex(parsed[2]));
+        this->decompiled = std::format("float _{} = {}.{};", this->variable, parseVariable(input), parseIndex(index));
       } else if (type == R"(%dx.types.CBufRet.i32)" || type == R"(%dx.types.ResRet.i32)") {
         // float4 value
-        this->decompiled = std::format("int4 _{} = {}.{};", this->variable, parseVariable(parsed[1]), parseIndex(parsed[2]));
+        this->decompiled = std::format("int4 _{} = {}.{};", this->variable, parseVariable(input), parseIndex(index));
       } else {
         throw std::invalid_argument("Unknown extractvalue type");
       }
     } else if (this->instruction == "fmul") {
-      auto parsed = string_view_match(this->assignment, std::regex{"fmul (fast )?(\\S+) (\\S+), (\\S+)"});
-      this->decompiled = std::format("{} _{} = {} * {};", parsed[1], this->variable, parseFloat(parsed[2]), parseFloat(parsed[3]));
+      auto [a, b] = string_view_match<2>(this->assignment, std::regex{"fmul (?:fast )?(?:float) (\\S+), (\\S+)"});
+      this->decompiled = std::format("float _{} = {} * {};", this->variable, parseFloat(a), parseFloat(b));
     } else if (this->instruction == "fdiv") {
-      auto parsed = string_view_match(this->assignment, std::regex{"fdiv (fast )?(\\S+) (\\S+), (\\S+)"});
-      this->decompiled = std::format("{} _{} = {} / {};", parsed[1], this->variable, parseFloat(parsed[2]), parseFloat(parsed[3]));
+      auto [a, b] = string_view_match<2>(this->assignment, std::regex{"fdiv (?:fast )?(?:float) (\\S+), (\\S+)"});
+      this->decompiled = std::format("float _{} = {} / {};", this->variable, parseFloat(a), parseFloat(b));
     } else if (this->instruction == "fadd") {
-      auto parsed = string_view_match(this->assignment, std::regex{"fadd (fast )?(\\S+) (\\S+), (\\S+)"});
-      this->decompiled = std::format("{} _{} = {} + {};", parsed[1], this->variable, parseFloat(parsed[2]), parseFloat(parsed[3]));
+      auto [a, b] = string_view_match<2>(this->assignment, std::regex{"fadd (?:fast )?(?:float) (\\S+), (\\S+)"});
+      this->decompiled = std::format("float _{} = {} + {};", this->variable, parseFloat(a), parseFloat(b));
     } else if (this->instruction == "fsub") {
-      auto parsed = string_view_match(this->assignment, std::regex{"fsub (fast )?(\\S+) (\\S+), (\\S+)"});
-      this->decompiled = std::format("{} _{} = {} - {};", parsed[1], this->variable, parseFloat(parsed[2]), parseFloat(parsed[3]));
+      auto [a, b] = string_view_match<2>(this->assignment, std::regex{"fsub (?:fast )?(?:float) (\\S+), (\\S+)"});
+      this->decompiled = std::format("float _{} = {} - {};", this->variable, parseFloat(a), parseFloat(b));
     } else if (this->instruction == "fcmp") {
       // %39 = fcmp fast ogt float %37, 0.000000e+00
-      auto parsed = string_view_match(this->assignment, std::regex{"fcmp (fast )?(\\S+) (\\S+) (\\S+), (\\S+)"});
-      this->decompiled = std::format("{} _{} = ({} {} {});", parseType(parsed[2]), this->variable, parseFloat(parsed[3]), parseOperator(parsed[1]), parseFloat(parsed[4]));
+      auto [op, type, a, b] = string_view_match<4>(this->assignment, std::regex{"fcmp (?:fast )?(\\S+) (\\S+) (\\S+), (\\S+)"});
+      this->decompiled = std::format("{} _{} = ({} {} {});", parseType(type), this->variable, parseFloat(a), parseOperator(op), parseFloat(b));
     } else if (this->instruction == "icmp") {
       // %39 = fcmp fast ogt float %37, 0.000000e+00
-      auto parsed = string_view_match(this->assignment, std::regex{"icmp (fast )?(\\S+) (\\S+) (\\S+), (\\S+)"});
-      this->decompiled = std::format("{} _{} = ({} {} {});", parseType(parsed[2]), this->variable, parseInt(parsed[3]), parseOperator(parsed[1]), parseInt(parsed[4]));
+      auto [op, type, a, b] = string_view_match<4>(this->assignment, std::regex{"icmp (?:fast )?(\\S+) (\\S+) (\\S+), (\\S+)"});
+      this->decompiled = std::format("{} _{} = ({} {} {});", parseType(type), this->variable, parseInt(a), parseOperator(op), parseInt(b));
     } else if (this->instruction == "sub") {
       // sub nsw i32 %43, %45
-      auto parsed = string_view_match(this->assignment, std::regex{"sub (nsw )?(\\S+) (\\S+), (\\S+)"});
-      auto noSignedWrap = parsed[0].length();
-      if (noSignedWrap) {
-        this->decompiled = std::format("int _{} = {} - {};", this->variable, parseInt(parsed[2]), parseInt(parsed[3]));
+      auto [noSignedWrap, a, b] = string_view_match<3>(this->assignment, std::regex{"sub (nsw )?(?:\\S+) (\\S+), (\\S+)"});
+      if (noSignedWrap.length() != 0) {
+        this->decompiled = std::format("int _{} = {} - {};", this->variable, parseInt(a), parseInt(b));
       } else {
-        this->decompiled = std::format("uint _{} = {} - {};", this->variable, parseInt(parsed[2]), parseInt(parsed[3]));
+        this->decompiled = std::format("uint _{} = {} - {};", this->variable, parseInt(a), parseInt(b));
       }
     } else if (this->instruction == "zext") {
       // %43 = zext i1 %39 to i32
-      auto parsed = string_view_match(this->assignment, std::regex{"zext (fast )?(\\S+) (\\S+) to (\\S+)"});
-      this->decompiled = std::format("int _{} = int({});", this->variable, parseInt(parsed[2]));
+      auto [a] = string_view_match<1>(this->assignment, std::regex{"zext (?:fast )?(?:\\S+) (\\S+) to (?:\\S+)"});
+      this->decompiled = std::format("int _{} = int({});", this->variable, parseInt(a));
     } else if (this->instruction == "sitofp") {
       // sitofp i32 %47 to float
-      auto parsed = string_view_match(this->assignment, std::regex{"sitofp (\\S+) (\\S+) to (\\S+)"});
-      this->decompiled = std::format("float _{} = float({});", this->variable, parseInt(parsed[1]));
+      auto [a] = string_view_match<1>(this->assignment, std::regex{"sitofp (?:\\S+) (\\S+) to (?:\\S+)"});
+      this->decompiled = std::format("float _{} = float({});", this->variable, parseInt(a));
     } else if (this->instruction == "uitofp") {
       // uitofp i32 %158 to float
-      auto parsed = string_view_match(this->assignment, std::regex{"uitofp (\\S+) (\\S+) to (\\S+)"});
-      this->decompiled = std::format("float _{} = float({});", this->variable, parseInt(parsed[1]));
+      auto [a] = string_view_match<1>(this->assignment, std::regex{"uitofp (?:\\S+) (\\S+) to (?:\\S+)"});
+      this->decompiled = std::format("float _{} = float({});", this->variable, parseInt(a));
     } else if (this->instruction == "fptoui") {
-      auto parsed = string_view_match(this->assignment, std::regex{"fptoui (\\S+) (\\S+) to (\\S+)"});
-      this->decompiled = std::format("uint _{} = uint({});", this->variable, parseFloat(parsed[1]));
+      auto [a] = string_view_match<1>(this->assignment, std::regex{"fptoui (?:\\S+) (\\S+) to (?:\\S+)"});
+      this->decompiled = std::format("uint _{} = uint({});", this->variable, parseFloat(a));
     } else if (this->instruction == "and") {
-      auto parsed = string_view_match(this->assignment, std::regex{"and (\\S+) (\\S+), (\\S+)"});
-      this->decompiled = std::format("{} _{} = {} & {};", parseType(parsed[0]), this->variable, parseInt(parsed[1]), parseInt(parsed[2]));
+      auto [type, a, b] = string_view_match<3>(this->assignment, std::regex{"and (\\S+) (\\S+), (\\S+)"});
+      this->decompiled = std::format("{} _{} = {} & {};", parseType(type), this->variable, parseInt(a), parseInt(b));
     } else {
       throw std::invalid_argument("Could not parse code assignment");
     }
+    std::cout << "// " << line << std::endl;
     std::cout << this->decompiled << std::endl;
   }
 };
@@ -918,16 +939,11 @@ struct CodeFunction {
     static auto regex = std::regex{R"/(define (\S+) @([^(]+)\(([^)]*)\) \{)/"};
     static auto param_split = std::regex(R"/( ((?:[^%][^},]+)|(?:%"[^"]+"))(?:,| ))/");
 
-    auto results = string_view_match(line, regex);
+    auto [returnType, name, params] = string_view_match<3>(line, regex);
 
-    if (results.size() != 3) {
-      throw std::invalid_argument("Could not parse function definition");
-    }
-    size_t matchIndex = 0;
-    this->returnType = results[matchIndex++];
-    this->name = results[matchIndex++];
-    auto params = results[matchIndex++];
-    this->parameters = string_view_split(params, param_split, 1);
+    this->returnType = returnType;
+    this->name = name;
+    this->parameters = string_view_split_all(params, param_split, 1);
   }
 
   void addCodeAssign(std::string_view line) {
@@ -937,7 +953,7 @@ struct CodeFunction {
 };
 
 std::string decompile(std::string_view disassembly) {
-  auto lines = string_view_split(disassembly, '\n');
+  auto lines = string_view_split_all(disassembly, '\n');
   size_t line_number = 0;
   decompiler_state state = decompiler_state::start;
   size_t inputSigSectionCount = 0;
