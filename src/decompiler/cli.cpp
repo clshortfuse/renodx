@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-#include "./dxdecomp.hpp"
+#include "./dxdisasm.hpp"
 
 enum class decompiler_state : uint32_t {
   start,
