@@ -11,6 +11,7 @@
 #include <dxcapi.h>
 
 #include <string>
+#include <vector>
 
 #include <include/reshade.hpp>
 
@@ -128,6 +129,7 @@ namespace ShaderCompilerUtil {
             outBlob->Release();
           }
           outBlob = nullptr;
+          reshade::log_message(reshade::log_level::error, s.str().c_str());
         }
       }
       FreeLibrary(d3d_compiler);
