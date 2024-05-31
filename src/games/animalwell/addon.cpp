@@ -177,20 +177,27 @@ static void onPresetOff() {
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
+  if (fdwReason == DLL_PROCESS_ATTACH && !reshade::register_addon(hModule)) return FALSE;
+
   switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
 
       ShaderReplaceMod::forcePipelineCloning = true;
       // SwapChainUpgradeMod::setUseHDR10(true);
 
+      // SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+      //   {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float, 33, true}  // Composite
+      // );
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
-        {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float, 33, true}  // Composite
+        {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float, 34, true}
+      );
+      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+        {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float, 35, true}
       );
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
         {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float, 36, true}  // Main Texture
       );
 
-      if (!reshade::register_addon(hModule)) return FALSE;
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(hModule);
