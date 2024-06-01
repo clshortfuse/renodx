@@ -24,6 +24,7 @@
 #include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
+#include "../utils/ResourceUtil.hpp"
 #include "../utils/ShaderUtil.hpp"
 #include "../utils/SwapchainUtil.hpp"
 #include "../utils/format.hpp"
@@ -54,6 +55,7 @@ namespace ShaderReplaceMod {
   static bool traceUnmodifiedShaders = false;
   static bool allowMultiplePushConstants = false;
   static bool retainDX12LayoutParams = false;
+  static float* resourceTagFloat = nullptr;
   static int32_t expectedConstantBufferIndex = -1;
   static uint32_t expectedConstantBufferSpace = 0;
 
@@ -569,8 +571,10 @@ namespace ShaderReplaceMod {
       currentShaderPipelineStage = shaderState.currentShaderPipelineStage;
     }
 
-    bool isSwapchainWrite;
-    {
+    float resourceTag = -1;
+
+    bool isSwapchainWrite = false;
+    if (!isDispatch) {
       SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
       if (&swapchainState == nullptr) {
         std::stringstream s;
@@ -582,7 +586,13 @@ namespace ShaderReplaceMod {
       }
       std::shared_lock swapchainCommandListLock(swapchainState.mutex);
 
-      isSwapchainWrite = swapchainState.hasSwapchainRenderTarget && !isDispatch;
+      isSwapchainWrite = swapchainState.hasSwapchainRenderTarget;
+      if (resourceTagFloat != nullptr) {
+        if (swapchainState.currentRenderTargets.size() != 0) {
+          auto rv = swapchainState.currentRenderTargets.at(0);
+          resourceTag = ResourceUtil::getResourceTag(device, rv);
+        }
+      }
     }
 
     auto customShaderInfoPair = device_data.customShaders.find(shaderHash);
@@ -678,8 +688,6 @@ namespace ShaderReplaceMod {
           }
         }
 
-        std::shared_lock lock(MutexUtil::g_mutex0);
-
 #ifdef DEBUG_LEVEL_1
         std::stringstream s;
         s << "handlePreDraw(pushing constants: "
@@ -687,10 +695,17 @@ namespace ShaderReplaceMod {
           << ", layout: " << (void*)injectionLayout.handle << "[" << paramIndex << "]"
           << ", stage: " << to_string(stage)
           << ", data: " << (void*)_shaderInjection
+          << ", resourceTag: " << resourceTag
           << ")";
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
 
+        if (resourceTagFloat != nullptr) {
+          std::unique_lock lock(MutexUtil::g_mutex0);
+          *resourceTagFloat = resourceTag;
+        }
+
+        std::shared_lock lock(MutexUtil::g_mutex0);
         cmd_list->push_constants(
           stage,  // Used by reshade to specify graphics or compute
           injectionLayout,
@@ -784,6 +799,7 @@ namespace ShaderReplaceMod {
   static void use(DWORD fdwReason, CustomShaders customShaders, T* injections = nullptr) {
     ShaderUtil::use(fdwReason);
     SwapchainUtil::use(fdwReason);
+    ResourceUtil::use(fdwReason);
 
     switch (fdwReason) {
       case DLL_PROCESS_ATTACH:

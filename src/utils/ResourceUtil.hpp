@@ -17,6 +17,7 @@ namespace ResourceUtil {
   struct __declspec(uuid("3ca7d390-8d24-4491-a15f-1d558542ab2c")) DeviceData {
     // <resource_view.handle, resource.handle>
     std::unordered_map<uint64_t, uint64_t> resourceViewResources;
+    std::unordered_map<uint64_t, float> resourceTags;
     std::shared_mutex mutex;
   };
 
@@ -106,6 +107,36 @@ namespace ResourceUtil {
   static void removeResourceFromResourceView(reshade::api::command_list* cmd_list, reshade::api::resource_view resourceView) {
     auto device = cmd_list->get_device();
     return removeResourceFromResourceView(device, resourceView);
+  }
+
+  static float getResourceTag(reshade::api::device* device, reshade::api::resource resource) {
+    auto &data = device->get_private_data<DeviceData>();
+    std::unique_lock lock(data.mutex);
+    auto pair = data.resourceTags.find(resource.handle);
+    if (pair == data.resourceTags.end()) return -1;
+    return pair->second;
+  }
+
+  static float getResourceTag(reshade::api::device* device, reshade::api::resource_view resourceView) {
+    auto &data = device->get_private_data<DeviceData>();
+    std::unique_lock lock(data.mutex);
+    auto rvPairs = data.resourceViewResources.find(resourceView.handle);
+    if (rvPairs == data.resourceViewResources.end()) return -1;
+    auto rPairs = data.resourceTags.find(rvPairs->second);
+    if (rPairs == data.resourceTags.end()) return -1;
+    return rPairs->second;
+  }
+
+  static void setResourceTag(reshade::api::device* device, reshade::api::resource resource, float tag) {
+    auto &data = device->get_private_data<DeviceData>();
+    std::unique_lock lock(data.mutex);
+    data.resourceTags[resource.handle] = tag;
+  }
+
+  static void removeResourceTag(reshade::api::device* device, reshade::api::resource resource) {
+    auto &data = device->get_private_data<DeviceData>();
+    std::unique_lock lock(data.mutex);
+    data.resourceTags.erase(resource.handle);
   }
 
   static bool attached = false;

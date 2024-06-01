@@ -38,6 +38,7 @@ namespace SwapChainUpgradeMod {
     bool useResourceViewCloning = false;
     bool useResourceViewHotSwap = false;
     reshade::api::resource_usage state = reshade::api::resource_usage::undefined;
+    float resourceTag = -1;
     uint32_t _counted = 0;
     bool completed = false;
   };
@@ -57,6 +58,7 @@ namespace SwapChainUpgradeMod {
     reshade::api::resource originalResource;
     reshade::api::resource_view originalResourceView;
 
+    float pendingResourceTag = -1;
     bool upgradedResource = false;
     bool upgradedResourceNeedsViewClone = false;
     bool upgradedResourceView = false;
@@ -502,6 +504,7 @@ namespace SwapChainUpgradeMod {
     auto oldFormat = desc.texture.format;
     auto newFormat = desc.texture.format;
 
+    float resourceTag = -1;
     bool allCompleted = true;
     for (uint32_t i = 0; i < len; i++) {
       SwapChainUpgradeMod::SwapChainUpgradeTarget* target = &swapChainUpgradeTargets.data()[i];
@@ -524,11 +527,13 @@ namespace SwapChainUpgradeMod {
 
         target->_counted++;
         if (target->index == -1) {
+          resourceTag = target->resourceTag;
           newFormat = target->newFormat;
           allCompleted = false;
           continue;
         }
         if ((target->index + 1) == target->_counted) {
+          resourceTag = target->resourceTag;
           newFormat = target->newFormat;
           target->completed = true;
           continue;
@@ -574,6 +579,7 @@ namespace SwapChainUpgradeMod {
 
     privateData.originalResource = originalResource;
     desc.texture.format = newFormat;
+    privateData.pendingResourceTag = resourceTag;
     privateData.upgradedResource = true;
     return true;
   }
@@ -619,6 +625,10 @@ namespace SwapChainUpgradeMod {
       << ", format: " << to_string(desc.texture.format);
     if (privateData.upgradedResource) {
       privateData.upgradedResource = false;
+      if (privateData.pendingResourceTag != -1) {
+        ResourceUtil::setResourceTag(device, resource, privateData.pendingResourceTag);
+        privateData.pendingResourceTag = -1;
+      }
 
       privateData.upgradedResources[resource.handle] = privateData.originalResource;
       if (privateData.originalResource.handle) {
@@ -649,6 +659,7 @@ namespace SwapChainUpgradeMod {
       bool allCompleted = true;
       bool hotSwap = false;
       bool matched = false;
+      float resourceTag = -1;
       for (uint32_t i = 0; i < len; i++) {
         SwapChainUpgradeMod::SwapChainUpgradeTarget* target = &swapChainUpgradeTargets.data()[i];
         std::stringstream s;
@@ -672,6 +683,7 @@ namespace SwapChainUpgradeMod {
           target->_counted++;
           if (matched) continue;
           if ((target->index + 1) == target->_counted) {
+            resourceTag = target->resourceTag;
             newFormat = target->newFormat;
             target->completed = true;
             hotSwap = target->useResourceViewHotSwap;
@@ -679,6 +691,7 @@ namespace SwapChainUpgradeMod {
             continue;
           }
           if (target->index == -1) {
+            resourceTag = target->resourceTag;
             newFormat = target->newFormat;
             allCompleted = false;
             hotSwap = target->useResourceViewHotSwap;
@@ -705,6 +718,9 @@ namespace SwapChainUpgradeMod {
         initial_state,
         resource
       );
+      if (resourceTag != -1) {
+        ResourceUtil::setResourceTag(device, resource, resourceTag);
+      }
       if (!hotSwap) {
         privateData.permanentClonedResources.emplace(clonedResource.handle);
         privateData.enabledClonedResources.emplace(clonedResource.handle);
@@ -729,6 +745,8 @@ namespace SwapChainUpgradeMod {
   }
 
   static void on_destroy_resource(reshade::api::device* device, reshade::api::resource resource) {
+    ResourceUtil::removeResourceTag(device, resource);
+
     auto &data = device->get_private_data<device_data>();
     std::unique_lock lock(data.mutex);
 #ifdef DEBUG_LEVEL_1
