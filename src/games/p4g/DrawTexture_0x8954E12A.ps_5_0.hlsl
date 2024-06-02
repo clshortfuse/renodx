@@ -1,3 +1,4 @@
+#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 cbuffer psConstant3 : register(b2)
@@ -44,9 +45,11 @@ void main(
   r1.yzw = float3(-0.5,-0.5,-0.5) + r0.xyz;
   r1.yzw = uRGBcol.xyz * r1.yzw;
   r1.yzw = r1.yzw * float3(1.10000002,1.10000002,1.10000002) + float3(0.5,0.5,0.5);
-  r0.xyz = r1.xxx ? r1.yzw  * (injectedData.toneMapUINits / injectedData.toneMapGameNits) : r0.xyz;
+  r1.yzw = linearFromSRGB(r1.yzw);  // added
+  r1.yzw *= injectedData.toneMapUINits /injectedData.toneMapGameNits;  // added
+  r1.yzw = srgbFromLinear(r1.yzw);  // added
+  r0.xyz = r1.xxx ? r1.yzw : r0.xyz;
   o0.xyzw = r0.xyzw;
 
-  //o0.xyz *= injectedData.toneMapUINits / injectedData.toneMapGameNits;  // added
   return;
 }
