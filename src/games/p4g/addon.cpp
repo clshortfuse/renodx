@@ -142,25 +142,6 @@ UserSettingUtil::UserSettings userSettings = {
     .max = 100.f,
     .parse = [](float value) { return value * 0.01f; }
   },
-  /*new UserSettingUtil::UserSetting {
-    .key = "colorGradeLUTStrength",
-    .binding = &shaderInjection.colorGradeLUTStrength,
-    .defaultValue = 100.f,
-    .label = "LUT Strength",
-    .section = "Color Grading",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.01f; }
-  },
-  new UserSettingUtil::UserSetting {
-    .key = "colorGradeLUTScaling",
-    .binding = &shaderInjection.colorGradeLUTScaling,
-    .defaultValue = 100.f,
-    .label = "LUT Scaling",
-    .section = "Color Grading",
-    .tooltip = "Scales the color grade LUT to full range when size is clamped.",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.01f; }
-  }*/
 };
 
 // clang-format on
@@ -177,8 +158,6 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeBlowout", 0.f);
-  //UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
-  //UserSettingUtil::updateUserSetting("colorGradeLUTScaling", 0.f);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {

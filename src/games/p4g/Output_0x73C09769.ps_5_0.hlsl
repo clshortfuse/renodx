@@ -1,3 +1,4 @@
+#include "../../shaders/color.hlsl"
 #include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
@@ -28,45 +29,50 @@ void main(
   o0.xyz = r0.xyz;
   o0.w = 1;
 
-  // additions:
+  // additions
   if (injectedData.toneMapType == 0.f) {
     o0.rgb = saturate(o0.rgb);
     o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
   } else {
-    float vanillaMidGray = 0.18f;
-    
-    float renoDRTContrast = 1.1f;
-    float renoDRTFlare = 0.f;
-    float renoDRTShadows = 1.f;
-    float renoDRTDechroma = injectedData.colorGradeBlowout;
-    float renoDRTSaturation = 1.05f;
-    float renoDRTHighlights = 1.f;
-    
-    ToneMapParams tmParams = {
-      injectedData.toneMapType,
-      injectedData.toneMapPeakNits,
-      injectedData.toneMapGameNits,
-      injectedData.toneMapGammaCorrection,  // -1 == srgb
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeContrast,
-      injectedData.colorGradeSaturation,
-      vanillaMidGray,
-      vanillaMidGray * 100.f,
-      renoDRTHighlights,
-      renoDRTShadows,
-      renoDRTContrast,
-      renoDRTSaturation,
-      renoDRTDechroma,
-      renoDRTFlare
-    };
-    o0.rgb = max(0, o0.rgb);
+    o0.rgb = bt2020FromBT709(o0.rgb);  // Convert to BT2020
+    o0.rgb = max(0, o0.rgb);           // Clamp to BT2020
     o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
-    o0.rgb = toneMap(o0.rgb, tmParams);
+    o0.rgb = bt709FromBT2020(o0.rgb);  // Convert back to BT709
   }
 
-  o0.rgb *= injectedData.toneMapGameNits / 80.f;
+  // tonemap here
+  float vanillaMidGray = 0.18f;
+  
+  float renoDRTContrast = 1.f;
+  float renoDRTFlare = 0.f;
+  float renoDRTShadows = 1.f;
+  float renoDRTDechroma = injectedData.colorGradeBlowout;
+  float renoDRTSaturation = 1.f;
+  float renoDRTHighlights = 1.f;
+  
+  ToneMapParams tmParams = {
+    injectedData.toneMapType,
+    injectedData.toneMapPeakNits,
+    injectedData.toneMapGameNits,
+    injectedData.toneMapGammaCorrection,
+    injectedData.colorGradeExposure,
+    injectedData.colorGradeHighlights,
+    injectedData.colorGradeShadows,
+    injectedData.colorGradeContrast,
+    injectedData.colorGradeSaturation,
+    vanillaMidGray,
+    vanillaMidGray * 100.f,
+    renoDRTHighlights,
+    renoDRTShadows,
+    renoDRTContrast,
+    renoDRTSaturation,
+    renoDRTDechroma,
+    renoDRTFlare
+  };
 
+  o0.rgb = toneMap(o0.rgb, tmParams);
+
+  o0.rgb *= injectedData.toneMapGameNits / 80.f;
+  
   return;
 }
