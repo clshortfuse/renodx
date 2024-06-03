@@ -135,7 +135,7 @@ UserSettingUtil::UserSettings userSettings = {
   new UserSettingUtil::UserSetting {
     .key = "colorGradeBlowout",
     .binding = &shaderInjection.colorGradeBlowout,
-    .defaultValue = 20.f,
+    .defaultValue = 50.f,
     .label = "Blowout",
     .section = "Color Grading",
     .tooltip = "Controls highlight desaturation due to overexposure.",
