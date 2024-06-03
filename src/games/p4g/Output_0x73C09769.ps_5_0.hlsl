@@ -32,13 +32,11 @@ void main(
   // additions
   if (injectedData.toneMapType == 0.f) {
     o0.rgb = saturate(o0.rgb);
-    o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
   } else {
-    o0.rgb = bt2020FromBT709(o0.rgb);  // Convert to BT2020
-    o0.rgb = max(0, o0.rgb);           // Clamp to BT2020
-    o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
-    o0.rgb = bt709FromBT2020(o0.rgb);  // Convert back to BT709
+    o0.rgb = max(0, o0.rgb);
   }
+
+  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
 
   // tonemap here
   float vanillaMidGray = 0.18f;
