@@ -15,6 +15,7 @@
 #include <embed/0x3C417D7D.h>
 #include <embed/0x528CB4B5.h>
 #include <embed/0x82BED845.h>
+#include <embed/0x897995AE.h>
 #include <embed/0x9BA33763.h>
 #include <embed/0x9D9CE449.h>
 #include <embed/0xA293670C.h>
@@ -49,7 +50,8 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomSwapchainShader(0x82BED845),  // xx
   CustomShaderEntry(0xB3A6A785),
   CustomShaderEntry(0x528CB4B5),
-  CustomShaderEntry(0xB2DE2A96)
+  CustomShaderEntry(0xB2DE2A96),
+  CustomShaderEntry(0x897995AE)
 
 };
 

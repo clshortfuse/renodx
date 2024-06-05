@@ -1,23 +1,16 @@
 #include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
+Texture2D<float4> t0 : register(t0);
+Texture2D<float4> t1 : register(t1);
+Texture2D<float4> t3 : register(t3);
+Texture2D<float4> t4 : register(t4);
+Texture2D<float4> t8 : register(t8);
+Texture2D<float4> t9 : register(t9);
 Texture3D<float4> t10 : register(t10);
 
-Texture2D<float4> t9 : register(t9);
-
-Texture2D<float4> t8 : register(t8);
-
-Texture2D<float4> t4 : register(t4);
-
-Texture2D<float4> t3 : register(t3);
-
-Texture2D<float4> t1 : register(t1);
-
-Texture2D<float4> t0 : register(t0);
-
-SamplerState s3_s : register(s3);
-
 SamplerState s2_s : register(s2);
+SamplerState s3_s : register(s3);
 
 cbuffer cb0 : register(b0) {
   float4 cb0[17];
@@ -26,11 +19,7 @@ cbuffer cb0 : register(b0) {
 // 3Dmigoto declarations
 #define cmp -
 
-void main(
-  float4 v0 : SV_Position0,
-              float4 v1 : TEXCOORD0,
-                          out float4 o0 : SV_Target0
-) {
+void main(float4 v0 : SV_Position0, float4 v1 : TEXCOORD0, out float4 o0 : SV_Target0) {
   float4 r0, r1, r2, r3;
   uint4 bitmask, uiDest;
   float4 fDest;
