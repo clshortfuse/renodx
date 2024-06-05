@@ -2,7 +2,7 @@
 
 
 # renodx
-RenoDX, short for "Renovation Engine for DirectX Games", is a toolset to mod games. Currently it can replace shaders, inject buffers, add overlays, upgrade swapchains, upgrade texture resources, and write user settings to disks. Because RenoDX uses Reshade's add-on system, compatibility is expected to be pretty wide. Using Reshade simplies all the hook necessary to tap into DirectX without worrying about patching version-specific exe files.
+RenoDX, short for "Renovation Engine for DirectX Games", is a toolset to mod games. Currently it can replace shaders, inject buffers, add overlays, upgrade swapchains, upgrade texture resources, and write user settings to disk. Because RenoDX uses Reshade's add-on system, compatibility is expected to be pretty wide. Using Reshade simplifies all the hooks necessary to tap into DirectX without worrying about patching version-specific exe files.
 
 
 # Modded Games
