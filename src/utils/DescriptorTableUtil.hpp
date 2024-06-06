@@ -328,7 +328,7 @@ namespace DescriptorTableUtil {
 
 #ifdef DEBUG_LEVEL_1
           std::stringstream s;
-          s << "on_copy_descriptor_tables(copy descriptor table entry: "
+          s << "copy_descriptor_tables(copy descriptor table entry: "
             << reinterpret_cast<void*>(update.table.handle)
             << "[" << update.binding + j << "]"
             << " => "
@@ -376,6 +376,45 @@ namespace DescriptorTableUtil {
       }
       logDescriptorTableResourceView(data, update.table, update.binding + i, update);
     }
+  }
+
+  static reshade::api::descriptor_table_update* clone_descriptor_table_updates(
+    const reshade::api::descriptor_table_update* updates,
+    uint32_t count
+  ) {
+    size_t size = sizeof(reshade::api::descriptor_table_update) * count;
+    reshade::api::descriptor_table_update* clone = (reshade::api::descriptor_table_update*)malloc(size);
+    memcpy(clone, updates, size);
+    for (size_t i = 0; i < count; ++i) {
+      auto &update = updates[i];
+      size_t descriptor_size = 0;
+      switch (update.type) {
+        case reshade::api::descriptor_type::sampler:
+          descriptor_size = sizeof(reshade::api::sampler) * update.count;
+          break;
+        case reshade::api::descriptor_type::sampler_with_resource_view:
+          descriptor_size = sizeof(reshade::api::sampler_with_resource_view) * update.count;
+          break;
+        case reshade::api::descriptor_type::buffer_shader_resource_view:
+        case reshade::api::descriptor_type::buffer_unordered_access_view:
+        case reshade::api::descriptor_type::shader_resource_view:
+        case reshade::api::descriptor_type::unordered_access_view:
+          descriptor_size = sizeof(reshade::api::resource_view) * update.count;
+          break;
+        case reshade::api::descriptor_type::constant_buffer:
+        case reshade::api::descriptor_type::shader_storage_buffer:
+          descriptor_size = sizeof(reshade::api::buffer_range) * update.count;
+          break;
+        case reshade::api::descriptor_type::acceleration_structure:
+          descriptor_size = sizeof(reshade::api::resource_view) * update.count;
+          break;
+        default:
+          break;
+      }
+      clone[i].descriptors = malloc(descriptor_size);
+      memcpy((void*)clone[i].descriptors, update.descriptors, descriptor_size);
+    }
+    return clone;
   }
 
   static bool attached = false;
