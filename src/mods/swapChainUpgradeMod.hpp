@@ -2309,6 +2309,13 @@ namespace SwapChainUpgradeMod {
     cmd_list->bind_render_targets_and_depth_stencil(count, new_rtvs);
   }
 
+  static void discardDescriptors(reshade::api::command_list* cmd_list) {
+    auto &cmd_data = cmd_list->get_private_data<CommandListData>();
+    std::unique_lock lock(cmd_data.mutex);
+    cmd_data.unboundDescriptors.clear();
+    cmd_data.unpushedUpdates.clear();
+  }
+
   static void flushDescriptors(reshade::api::command_list* cmd_list) {
     auto &cmd_data = cmd_list->get_private_data<CommandListData>();
     std::unique_lock lock(cmd_data.mutex);
@@ -2452,29 +2459,6 @@ namespace SwapChainUpgradeMod {
         }
       }
     }
-  }
-
-  static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch = false) {
-    auto &cmd_data = cmd_list->get_private_data<CommandListData>();
-    std::unique_lock lock(cmd_data.mutex);
-    cmd_data.unboundDescriptors.clear();
-    cmd_data.unpushedUpdates.clear();
-  }
-
-  static bool on_draw(reshade::api::command_list* cmd_list, uint32_t vertex_count, uint32_t instance_count, uint32_t first_vertex, uint32_t first_instance) {
-    return handlePreDraw(cmd_list);
-  }
-
-  static bool on_draw_indexed(reshade::api::command_list* cmd_list, uint32_t index_count, uint32_t instance_count, uint32_t first_index, int32_t vertex_offset, uint32_t first_instance) {
-    return handlePreDraw(cmd_list);
-  }
-
-  static bool on_draw_or_dispatch_indirect(reshade::api::command_list* cmd_list, reshade::api::indirect_command type, reshade::api::resource buffer, uint64_t offset, uint32_t draw_count, uint32_t stride) {
-    return handlePreDraw(cmd_list);
-  }
-
-  static bool on_dispatch(reshade::api::command_list* cmd_list, uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z) {
-    return handlePreDraw(cmd_list, true);
   }
 
   static void on_init_effect_runtime(reshade::api::effect_runtime* runtime) {

@@ -232,47 +232,48 @@ static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch 
   // 0x17FAB08F (sharpen?)   (rgb8a_unorm tRender => rgb8a_unorm tComposite)
   // 0xe9d9e225 (ui)         (rgb8a_unorm tUI => rgb8a_unorm tComposite)
   if (
-    true
-    && shaderHash != 0x0a152bb1  // tonemapper
-    && shaderHash != 0x054D0CB8  // tonemapper
-    && shaderHash != 0x3B344832  // tonemapper
-    && shaderHash != 0x17fab08f  // sharpener
-    && shaderHash != 0x32580F53  // movie
-    && shaderHash != 0xe9d9e225  // ui
-    && shaderHash != 0x0d5add1f  // copy
-    && shaderHash != 0x1C18052A  // CAS1
-    && shaderHash != 0x58E74610  // CAS2
-    && shaderHash != 0x4348FFAE  // CAS3
-    && shaderHash != 0xEED8A831  // CAS4
+    !isDispatch
+    && (shaderHash == 0x0a152bb1     // tonemapper
+        || shaderHash == 0x054D0CB8  // tonemapper
+        || shaderHash == 0x3B344832  // tonemapper
+        || shaderHash == 0x17fab08f  // sharpener
+        || shaderHash == 0x32580F53  // movie
+        || shaderHash == 0xe9d9e225  // ui
+        || shaderHash == 0x0d5add1f  // copy
+        || shaderHash == 0x1C18052A  // CAS1
+        || shaderHash == 0x58E74610  // CAS2
+        || shaderHash == 0x4348FFAE  // CAS3
+        || shaderHash == 0xEED8A831  // CAS4
+    )
   ) {
-    return false;
-  }
-
-  std::vector<reshade::api::resource_view> currentTargets;
-  {
-    SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
-    std::shared_lock swapchainCommandListLock(swapchainState.mutex);
-    currentTargets = swapchainState.currentRenderTargets;
-  }
-
-  bool changed = false;
-  uint32_t renderTargetCount = currentTargets.size();
-  for (uint32_t i = 0; i < renderTargetCount; i++) {
-    auto render_target = currentTargets.at(i);
-    if (render_target.handle == 0) continue;
-    std::stringstream s;
-    if (SwapChainUpgradeMod::activateCloneHotSwap(cmd_list->get_device(), render_target)) {
-      changed = true;
+    std::vector<reshade::api::resource_view> currentTargets;
+    {
+      SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
+      std::shared_lock swapchainCommandListLock(swapchainState.mutex);
+      currentTargets = swapchainState.currentRenderTargets;
     }
-  }
-  if (changed) {
-    // Change render targets to desired
-    SwapChainUpgradeMod::rewriteRenderTargets(
-      cmd_list,
-      renderTargetCount,
-      currentTargets.data()
-    );
-    SwapChainUpgradeMod::flushDescriptors(cmd_list);
+
+    bool changed = false;
+    uint32_t renderTargetCount = currentTargets.size();
+    for (uint32_t i = 0; i < renderTargetCount; i++) {
+      auto render_target = currentTargets.at(i);
+      if (render_target.handle == 0) continue;
+      std::stringstream s;
+      if (SwapChainUpgradeMod::activateCloneHotSwap(cmd_list->get_device(), render_target)) {
+        changed = true;
+      }
+    }
+    if (changed) {
+      // Change render targets to desired
+      SwapChainUpgradeMod::rewriteRenderTargets(
+        cmd_list,
+        renderTargetCount,
+        currentTargets.data()
+      );
+      SwapChainUpgradeMod::flushDescriptors(cmd_list);
+    }
+  } else {
+    SwapChainUpgradeMod::discardDescriptors(cmd_list);
   }
 
   return false;
@@ -358,6 +359,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
     reshade::register_event<reshade::addon_event::draw>(on_draw);
     reshade::register_event<reshade::addon_event::draw_indexed>(on_draw_indexed);
     reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(on_draw_or_dispatch_indirect);
+    reshade::register_event<reshade::addon_event::dispatch>(on_dispatch);
 
     reshade::register_event<reshade::addon_event::present>(on_present);
   }
