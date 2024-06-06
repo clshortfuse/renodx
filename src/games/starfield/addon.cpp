@@ -5,15 +5,21 @@
 
 #define ImTextureID ImU64
 
-#define DEBUG_LEVEL_0
+// #define DEBUG_LEVEL_0
 // #define DEBUG_LEVEL_1
 
+#include <embed/0x054D0CB8.h>
 #include <embed/0x0A152BB1.h>
 #include <embed/0x0D5ADD1F.h>
 #include <embed/0x17FAB08F.h>
+#include <embed/0x1C18052A.h>
 #include <embed/0x32580F53.h>
+#include <embed/0x3B344832.h>
+#include <embed/0x4348FFAE.h>
+#include <embed/0x58E74610.h>
 #include <embed/0xAC5319C5.h>
 #include <embed/0xE9D9E225.h>
+#include <embed/0xEED8A831.h>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -31,10 +37,16 @@ extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Starfield
 ShaderReplaceMod::CustomShaders customShaders = {
   CustomSwapchainShader(0x0D5ADD1F),  // output
   CustomShaderEntry(0xAC5319C5),      // film grain
-  CustomShaderEntry(0x0A152BB1),      // tonemap
-  CustomShaderEntry(0x17FAB08F),      // sharpen/copy
-  // CustomShaderEntry(0xE9D9E225),      // ui
-  CustomShaderEntry(0x32580F53)  // movie
+  CustomShaderEntry(0x0A152BB1),      // HDRComposite
+  CustomShaderEntry(0x054D0CB8),      // HDRComposite (no bloom)
+  CustomShaderEntry(0x3B344832),      // HDRComposite (lut only)
+  CustomShaderEntry(0x17FAB08F),      // PostSharpen
+  CustomShaderEntry(0x1C18052A),      // CAS1
+  CustomShaderEntry(0x58E74610),      // CAS2
+  CustomShaderEntry(0x4348FFAE),      // CAS3
+  CustomShaderEntry(0xEED8A831),      // CAS4
+  // CustomShaderEntry(0xE9D9E225),   // ui
+  CustomShaderEntry(0x32580F53)  // movie,
 };
 
 ShaderInjectData shaderInjection;
@@ -208,10 +220,12 @@ static void onPresetOff() {
 }
 
 static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch = false) {
-  ShaderUtil::CommandListData &shaderState = cmd_list->get_private_data<ShaderUtil::CommandListData>();
-  std::shared_lock shaderCommandListLock(shaderState.mutex);
-
-  uint32_t shaderHash = shaderState.currentShaderHash;
+  uint32_t shaderHash;
+  {
+    ShaderUtil::CommandListData &shaderState = cmd_list->get_private_data<ShaderUtil::CommandListData>();
+    std::shared_lock shaderCommandListLock(shaderState.mutex);
+    shaderHash = shaderState.currentShaderHash;
+  }
 
   // flow
   // 0x0a152bb1 (tonemapper) (r11g11b10 => rgb8a_unorm tRender)
@@ -220,21 +234,31 @@ static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch 
   if (
     true
     && shaderHash != 0x0a152bb1  // tonemapper
+    && shaderHash != 0x054D0CB8  // tonemapper
+    && shaderHash != 0x3B344832  // tonemapper
     && shaderHash != 0x17fab08f  // sharpener
+    && shaderHash != 0x32580F53  // movie
     && shaderHash != 0xe9d9e225  // ui
     && shaderHash != 0x0d5add1f  // copy
-    && shaderHash != 0xac5319c5  // film grain
+    && shaderHash != 0x1C18052A  // CAS1
+    && shaderHash != 0x58E74610  // CAS2
+    && shaderHash != 0x4348FFAE  // CAS3
+    && shaderHash != 0xEED8A831  // CAS4
   ) {
     return false;
   }
 
-  SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
-  std::shared_lock swapchainCommandListLock(swapchainState.mutex);
+  std::vector<reshade::api::resource_view> currentTargets;
+  {
+    SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
+    std::shared_lock swapchainCommandListLock(swapchainState.mutex);
+    currentTargets = swapchainState.currentRenderTargets;
+  }
 
   bool changed = false;
-  uint32_t renderTargetCount = swapchainState.currentRenderTargets.size();
+  uint32_t renderTargetCount = currentTargets.size();
   for (uint32_t i = 0; i < renderTargetCount; i++) {
-    auto render_target = swapchainState.currentRenderTargets.at(i);
+    auto render_target = currentTargets.at(i);
     if (render_target.handle == 0) continue;
     std::stringstream s;
     if (SwapChainUpgradeMod::activateCloneHotSwap(cmd_list->get_device(), render_target)) {
@@ -246,8 +270,9 @@ static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch 
     SwapChainUpgradeMod::rewriteRenderTargets(
       cmd_list,
       renderTargetCount,
-      swapchainState.currentRenderTargets.data()
+      currentTargets.data()
     );
+    SwapChainUpgradeMod::flushDescriptors(cmd_list);
   }
 
   return false;
@@ -284,6 +309,8 @@ static void on_present(
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
+  if (fdwReason == DLL_PROCESS_ATTACH && !reshade::register_addon(hModule)) return FALSE;
+
   switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
       ShaderReplaceMod::forcePipelineCloning = true;
@@ -292,8 +319,21 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       ShaderReplaceMod::expectedConstantBufferSpace = 9;
       ShaderReplaceMod::retainDX12LayoutParams = true;
       SwapChainUpgradeMod::useResourceCloning = true;
+      SwapChainUpgradeMod::useResizeBuffer = true;
+      SwapChainUpgradeMod::useResizeBufferOnSetFullScreen = true;
+      SwapChainUpgradeMod::preventFullScreen = true;
 
       // RGBA8 Resource pool
+      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+        {
+          .oldFormat = reshade::api::format::r8g8b8a8_typeless,
+          .newFormat = reshade::api::format::r16g16b16a16_float,
+          .index = 0,
+          .useResourceViewCloning = true,
+          .useResourceViewHotSwap = false,
+        }
+      );
+
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
         {
           .oldFormat = reshade::api::format::r8g8b8a8_typeless,
@@ -301,27 +341,24 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
           .ignoreSize = true,
           .useResourceViewCloning = true,
           .useResourceViewHotSwap = true,
-          // .state = (reshade::api::resource_usage::render_target | reshade::api::resource_usage::unordered_access | reshade::api::resource_usage::shader_resource_non_pixel | reshade::api::resource_usage::shader_resource_pixel | reshade::api::resource_usage::copy_dest | reshade::api::resource_usage::copy_source | reshade::api::resource_usage::resolve_dest)
         }
       );
-
-      if (!reshade::register_addon(hModule)) return FALSE;
-
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(hModule);
       break;
   }
 
-  ShaderUtil::use(fdwReason);
   UserSettingUtil::use(fdwReason, &userSettings, &onPresetOff);
   SwapChainUpgradeMod::use(fdwReason);
   ShaderReplaceMod::use(fdwReason, customShaders, &shaderInjection);
 
+  ShaderUtil::use(fdwReason);
   if (fdwReason == DLL_PROCESS_ATTACH) {
     reshade::register_event<reshade::addon_event::draw>(on_draw);
     reshade::register_event<reshade::addon_event::draw_indexed>(on_draw_indexed);
     reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(on_draw_or_dispatch_indirect);
+
     reshade::register_event<reshade::addon_event::present>(on_present);
   }
 

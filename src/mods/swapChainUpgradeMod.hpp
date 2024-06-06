@@ -54,6 +54,27 @@ namespace SwapChainUpgradeMod {
   static bool preventFullScreen = true;
   static bool forceBorderless = true;
 
+  struct bound_descriptor_info {
+    reshade::api::shader_stage stages;
+    reshade::api::pipeline_layout layout;
+    uint32_t first;
+    uint32_t count;
+    std::vector<reshade::api::descriptor_table> tables;
+  };
+
+  struct push_descriptor_info {
+    reshade::api::shader_stage stages;
+    reshade::api::pipeline_layout layout;
+    uint32_t layout_param;
+    reshade::api::descriptor_table_update update;
+  };
+
+  struct heap_descriptor_info {
+    std::vector<reshade::api::descriptor_table_update> updates;
+    uint64_t replacement_descriptor_handle;
+    bool is_active;
+  };
+
   struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) device_data {
     reshade::api::resource originalResource;
     reshade::api::resource_view originalResourceView;
@@ -103,6 +124,18 @@ namespace SwapChainUpgradeMod {
 
     // <descriptor_table.handle[index], <cloneResourceView.handle>>
     std::unordered_map<std::pair<uint64_t, uint32_t>, uint64_t, DescriptorTableUtil::hash_pair> tableDescriptorResourceViewReplacements;
+
+    // <descriptor_heap.handle, std::map<base_offset, descriptor_table>>
+    std::unordered_map<uint64_t, std::unordered_map<uint32_t, heap_descriptor_info*>> heapDescriptorInfos;
+
+    std::unordered_map<uint64_t, uint64_t> descriptorTableClones;
+    std::unordered_set<uint64_t> activeDescriptorTableClones;
+  };
+
+  struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData {
+    std::shared_mutex mutex;
+    std::vector<bound_descriptor_info> unboundDescriptors;
+    std::vector<push_descriptor_info> unpushedUpdates;
   };
 
   static std::vector<SwapChainUpgradeTarget> swapChainUpgradeTargets = {};
@@ -131,6 +164,14 @@ namespace SwapChainUpgradeMod {
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
     device->destroy_private_data<device_data>();
+  }
+
+  static void on_init_command_list(reshade::api::command_list* cmd_list) {
+    cmd_list->create_private_data<CommandListData>();
+  }
+
+  static void on_destroy_command_list(reshade::api::command_list* cmd_list) {
+    cmd_list->destroy_private_data<CommandListData>();
   }
 
   // Clones resource and schedules render target assignments
@@ -725,6 +766,7 @@ namespace SwapChainUpgradeMod {
         privateData.permanentClonedResources.emplace(clonedResource.handle);
         privateData.enabledClonedResources.emplace(clonedResource.handle);
       }
+      s << ", newformat: " << to_string(new_desc.texture.format);
       s << ", clone: " << reinterpret_cast<void*>(clonedResource.handle);
       s << ", hotswap: " << (hotSwap ? "true" : "false");
     } else {
@@ -753,7 +795,7 @@ namespace SwapChainUpgradeMod {
     {
       std::stringstream s;
       s << "on_destroy_resource(destroy resource"
-        << ", resource: " << (void*)resource.handle
+        << ", resource: " << reinterpret_cast<void*>(resource.handle)
         << ")";
       reshade::log_message(reshade::log_level::debug, s.str().c_str());
     }
@@ -776,8 +818,8 @@ namespace SwapChainUpgradeMod {
 #ifdef DEBUG_LEVEL_1
         std::stringstream s;
         s << "on_destroy_resource(destroy cloned resource and views"
-          << ", resource: " << (void*)resource.handle
-          << ", clone: " << (void*)cloneResource.handle
+          << ", resource: " << reinterpret_cast<void*>(resource.handle)
+          << ", clone: " << reinterpret_cast<void*>(cloneResource.handle)
           << ")";
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
@@ -1138,6 +1180,9 @@ namespace SwapChainUpgradeMod {
     reshade::api::resource_view view
   ) {
     if (!resource.handle) return;
+#ifdef DEBUG_LEVEL_2
+    reshade::log_message(reshade::log_level::debug, "init_resource_view()");
+#endif
     auto &privateData = device->get_private_data<device_data>();
     std::unique_lock lock(privateData.mutex);
 
@@ -1246,12 +1291,16 @@ namespace SwapChainUpgradeMod {
       }
     }
 
-    if (!privateData.upgradedResourceView) return;
-    privateData.upgradedResourceView = false;
-    if (privateData.originalResourceView.handle) {
-      privateData.upgradedResourceViews[view.handle] = privateData.originalResourceView;
-      privateData.originalResourceView = {0};
+    if (privateData.upgradedResourceView) {
+      privateData.upgradedResourceView = false;
+      if (privateData.originalResourceView.handle) {
+        privateData.upgradedResourceViews[view.handle] = privateData.originalResourceView;
+        privateData.originalResourceView = {0};
+      }
     }
+#ifdef DEBUG_LEVEL_2
+    reshade::log_message(reshade::log_level::debug, "init_resource_view(done)");
+#endif
   }
 
   static void on_destroy_resource_view(reshade::api::device* device, reshade::api::resource_view view) {
@@ -1268,7 +1317,7 @@ namespace SwapChainUpgradeMod {
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
     s << "findReplacementResourceView(looking for : "
-      << (void*)resourceView.handle
+      << reinterpret_cast<void*>(resourceView.handle)
       << ", usage: " << to_string(usage)
       << ")";
     reshade::log_message(reshade::log_level::debug, s.str().c_str());
@@ -1289,7 +1338,7 @@ namespace SwapChainUpgradeMod {
         std::stringstream s;
 #ifdef DEBUG_LEVEL_1
         s << "findReplacementResourceView(unknown usage: "
-          << (void*)resourceView.handle
+          << reinterpret_cast<void*>(resourceView.handle)
           << ", usage: " << to_string(usage)
           << ")";
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
@@ -1302,9 +1351,9 @@ namespace SwapChainUpgradeMod {
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
       s << "findReplacementResourceView(found: "
-        << "rsv: " << (void*)resourceView.handle
+        << "rsv: " << reinterpret_cast<void*>(resourceView.handle)
         << " => "
-        << "res: " << (void*)pair2->second
+        << "res: " << reinterpret_cast<void*>(pair2->second)
         << ")";
       reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
@@ -1314,7 +1363,7 @@ namespace SwapChainUpgradeMod {
     {
       std::stringstream s;
       s << "findReplacementResourceView(no clone exists: "
-        << "rsv: " << (void*)resourceView.handle
+        << "rsv: " << reinterpret_cast<void*>(resourceView.handle)
         << ")";
       reshade::log_message(reshade::log_level::debug, s.str().c_str());
     }
@@ -1392,9 +1441,9 @@ namespace SwapChainUpgradeMod {
     {
       std::stringstream s;
       s << "logDescriptorTableReplacement("
-        << (void*)table.handle
+        << reinterpret_cast<void*>(table.handle)
         << "[" << index << "]"
-        << ", view " << (void*)view.handle
+        << ", view " << reinterpret_cast<void*>(view.handle)
         << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
@@ -1408,9 +1457,9 @@ namespace SwapChainUpgradeMod {
       {
         std::stringstream s;
         s << "logDescriptorTableReplacement(insert "
-          << (void*)table.handle
+          << reinterpret_cast<void*>(table.handle)
           << "[" << index << "]"
-          << ", view " << (void*)view.handle
+          << ", view " << reinterpret_cast<void*>(view.handle)
           << ", size " << oldSize << " => " << data.tableDescriptorResourceViewReplacements.size()
           << ")";
         reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -1420,9 +1469,9 @@ namespace SwapChainUpgradeMod {
         {
           std::stringstream s;
           s << "logDescriptorTableReplacement(list "
-            << (void*)key.first
+            << reinterpret_cast<void*>(key.first)
             << "[" << key.second << "]"
-            << ", view " << (void*)pair.second
+            << ", view " << reinterpret_cast<void*>(pair.second)
             << ")";
           reshade::log_message(reshade::log_level::info, s.str().c_str());
         }
@@ -1437,9 +1486,9 @@ namespace SwapChainUpgradeMod {
     {
       std::stringstream s;
       s << "logDescriptorTableReplacement(remove "
-        << (void*)table.handle
+        << reinterpret_cast<void*>(table.handle)
         << "[" << index << "]"
-        << ", view " << (void*)view.handle
+        << ", view " << reinterpret_cast<void*>(view.handle)
         << ", size " << oldSize << " => " << data.tableDescriptorResourceViewReplacements.size()
         << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -1459,8 +1508,8 @@ namespace SwapChainUpgradeMod {
     {
       std::stringstream s;
       s << "flushResourceViewInDescriptorTable(resource: "
-        << (void*)resource.handle
-        << ", device: " << (void*)device
+        << reinterpret_cast<void*>(resource.handle)
+        << ", device: " << reinterpret_cast<void*>(device)
         << ")";
       reshade::log_message(reshade::log_level::debug, s.str().c_str());
     }
@@ -1475,9 +1524,7 @@ namespace SwapChainUpgradeMod {
       ) {
         auto uavHandle = uavHandles->second;
         auto &descriptorTableData = device->get_private_data<DescriptorTableUtil::DeviceData>();
-        reshade::log_message(reshade::log_level::debug, "flushResourceViewInDescriptorTable(mutex1)");
         std::unique_lock lock(descriptorTableData.mutex);
-        reshade::log_message(reshade::log_level::debug, "flushResourceViewInDescriptorTable(ok1)");
         if (
           auto locations = descriptorTableData.resourceViewTableDescriptionLocations.find(uavHandle);
           locations != descriptorTableData.resourceViewTableDescriptionLocations.end()
@@ -1518,9 +1565,7 @@ namespace SwapChainUpgradeMod {
       ) {
         auto srvHandle = srvHandles->second;
         auto &descriptorTableData = device->get_private_data<DescriptorTableUtil::DeviceData>();
-        reshade::log_message(reshade::log_level::debug, "flushResourceViewInDescriptorTable(mutex2)");
         std::unique_lock lock(descriptorTableData.mutex);
-        reshade::log_message(reshade::log_level::debug, "flushResourceViewInDescriptorTable(ok2)");
         if (
           auto locations = descriptorTableData.resourceViewTableDescriptionLocations.find(srvHandle);
           locations != descriptorTableData.resourceViewTableDescriptionLocations.end()
@@ -1579,46 +1624,6 @@ namespace SwapChainUpgradeMod {
 #endif
     data.enabledClonedResources.clear();
 
-    auto &descriptorTableData = device->get_private_data<DescriptorTableUtil::DeviceData>();
-    std::shared_lock descriptorTableDataLock(descriptorTableData.mutex);
-
-    for (auto pair : data.tableDescriptorResourceViewReplacements) {
-      auto primaryKey = pair.first;
-      if (auto updates = descriptorTableData.tableDescriptorResourceViews.find(primaryKey);
-          updates != descriptorTableData.tableDescriptorResourceViews.end()) {
-        auto matchedKey = updates->first;
-        auto update = updates->second;
-
-#ifdef DEBUG_LEVEL_1
-        std::stringstream s;
-        s << "on_present(reset update: "
-          << reinterpret_cast<void*>(update.table.handle)
-          << "[" << update.binding << "]"
-          << "(" << update.count << ")"
-          << ","
-          << reinterpret_cast<void*>(primaryKey.first)
-          << "[" << primaryKey.second << "]"
-          << " == "
-          << reinterpret_cast<void*>(matchedKey.first)
-          << "[" << matchedKey.second << "]"
-          << ", type: " << to_string(update.type)
-          << ", view: " << reinterpret_cast<void*>(DescriptorTableUtil::getResourceViewFromDescriptorUpdate(update).handle)
-          << " => " << reinterpret_cast<void*>(pair.second)
-          << ")";
-        reshade::log_message(reshade::log_level::debug, s.str().c_str());
-#endif
-        device->update_descriptors(update);
-      } else {
-        std::stringstream s;
-        s << "on_present(unknown replacement: "
-          << reinterpret_cast<void*>(primaryKey.first)
-          << "[" << primaryKey.second << "]: "
-          << reinterpret_cast<void*>(pair.second)
-          << ")";
-        reshade::log_message(reshade::log_level::warning, s.str().c_str());
-      }
-    }
-    data.tableDescriptorResourceViewReplacements.clear();
     for (auto item : data.permanentClonedResources) {
       data.enabledClonedResources.emplace(item);
     }
@@ -1632,7 +1637,7 @@ namespace SwapChainUpgradeMod {
     if (!resource.handle) {
       std::stringstream s;
       s << "activateCloneHotSwap(no handle for rsv "
-        << (void*)resource_view.handle
+        << reinterpret_cast<void*>(resource_view.handle)
         << ")";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
       return false;
@@ -1651,7 +1656,7 @@ namespace SwapChainUpgradeMod {
         s << ("backbuffer ");
       }
       s << "not cloned "
-        << (void*)resource.handle
+        << reinterpret_cast<void*>(resource.handle)
         << ")";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
 #endif
@@ -1670,16 +1675,16 @@ namespace SwapChainUpgradeMod {
     {
       std::stringstream s;
       s << "activateCloneHotSwap(activating: "
-        << (void*)resource.handle
+        << reinterpret_cast<void*>(resource.handle)
         << ")";
       reshade::log_message(reshade::log_level::debug, s.str().c_str());
     }
     if (!data.resourceSRVClones.contains(resource.handle)) {
       std::stringstream s;
       s << "activateCloneHotSwap(no srv "
-        << (void*)resource.handle
+        << reinterpret_cast<void*>(resource.handle)
         << " => "
-        << (void*)cloneResource.handle
+        << reinterpret_cast<void*>(cloneResource.handle)
         << ")";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
     }
@@ -1687,23 +1692,23 @@ namespace SwapChainUpgradeMod {
     if (!data.resourceUAVClones.contains(resource.handle)) {
       std::stringstream s;
       s << "activateCloneHotSwap(no uav "
-        << (void*)resource.handle
+        << reinterpret_cast<void*>(resource.handle)
         << " => "
-        << (void*)cloneResource.handle
+        << reinterpret_cast<void*>(cloneResource.handle)
         << ")";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
     }
 #endif
 
     // data.pendingResourceViewUpdateFlush.emplace(resource.handle);
-    flushResourceViewInDescriptorTable(device, resource);
+    // flushResourceViewInDescriptorTable(device, resource);
 
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
     s << "activateCloneHotSwap(activated "
-      << (void*)resource.handle
+      << reinterpret_cast<void*>(resource.handle)
       << " => "
-      << (void*)cloneResource.handle
+      << reinterpret_cast<void*>(cloneResource.handle)
       << ")";
     reshade::log_message(reshade::log_level::warning, s.str().c_str());
 #endif
@@ -1720,15 +1725,16 @@ namespace SwapChainUpgradeMod {
     const reshade::api::descriptor_table_update* updates
   ) {
     if (!count) return false;
-
-    size_t size = count * sizeof(reshade::api::descriptor_table_update);
-
-    reshade::api::descriptor_table_update* new_updates = (reshade::api::descriptor_table_update*)malloc(size);
-    memcpy(new_updates, updates, size);
+#ifdef DEBUG_LEVEL_2
+    reshade::log_message(reshade::log_level::debug, "update_descriptor_tables()");
+#endif
+    reshade::api::descriptor_table_update* new_updates = nullptr;
     bool changed = false;
+    bool active = false;
 
     for (uint32_t i = 0; i < count; i++) {
       auto &update = updates[i];
+      if (!update.table.handle) continue;
       for (uint32_t j = 0; j < update.count; j++) {
         switch (update.type) {
           case reshade::api::descriptor_type::sampler_with_resource_view:
@@ -1736,38 +1742,40 @@ namespace SwapChainUpgradeMod {
               auto item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[j];
               auto resourceView = item.view;
               auto &data = device->get_private_data<device_data>();
-              reshade::log_message(reshade::log_level::debug, "on_update_descriptor_tables(mutex1)");
               std::unique_lock lock(data.mutex);
-              reshade::log_message(reshade::log_level::debug, "on_update_descriptor_tables(ok1)");
               auto newResourceView = findReplacementResourceView(
                 data,
                 resourceView,
                 reshade::api::resource_usage::shader_resource
               );
+              if (newResourceView.handle == 0) {
+                std::stringstream s;
+                s << "update_descriptor_tables(invalid resource view clone for : "
+                  << reinterpret_cast<void*>(resourceView.handle)
+                  << ")";
+                reshade::log_message(reshade::log_level::warning, s.str().c_str());
+                break;
+              }
               if (resourceView.handle == newResourceView.handle) break;
 
               auto newResource = ResourceUtil::getResourceFromResourceView(device, newResourceView);
               if (!newResource.handle) break;
 
-              if (
-                auto enabledClonedResource = data.enabledClonedResources.find(newResource.handle);
-                enabledClonedResource != data.enabledClonedResources.end()
-              ) {
 #ifdef DEBUG_LEVEL_1
-                std::stringstream s;
-                s << "update_descriptor_tables(rewriting descriptor table: "
-                  << reinterpret_cast<void*>(update.table.handle)
-                  << "[" << update.binding + j << "]"
-                  << ", rsv: "
-                  << reinterpret_cast<void*>(resourceView.handle)
-                  << " => "
-                  << reinterpret_cast<void*>(newResourceView.handle)
-                  << ", type: shader_resource)";
-                reshade::log_message(reshade::log_level::debug, s.str().c_str());
+              std::stringstream s;
+              s << "update_descriptor_tables(found clonable: "
+                << reinterpret_cast<void*>(newResourceView.handle)
+                << ")";
+              reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
-                ((reshade::api::sampler_with_resource_view*)(new_updates[i].descriptors))[j].view = newResourceView;
-                logDescriptorTableReplacement(data, update.table, update.binding + j, newResourceView);
-                changed = true;
+              if (!changed) {
+                new_updates = DescriptorTableUtil::clone_descriptor_table_updates(updates, count);
+              }
+
+              ((reshade::api::sampler_with_resource_view*)(new_updates[i].descriptors))[j].view = newResourceView;
+              changed = true;
+              if (data.enabledClonedResources.contains(newResource.handle)) {
+                active = true;
               }
             }
             break;
@@ -1784,31 +1792,34 @@ namespace SwapChainUpgradeMod {
                 resourceView,
                 update.type
               );
+              if (newResourceView.handle == 0) {
+                std::stringstream s;
+                s << "update_descriptor_tables(invalid resource view clone for : "
+                  << reinterpret_cast<void*>(resourceView.handle)
+                  << ")";
+                reshade::log_message(reshade::log_level::warning, s.str().c_str());
+                break;
+              }
               if (resourceView.handle == newResourceView.handle) break;
               auto newResource = ResourceUtil::getResourceFromResourceView(device, newResourceView);
               if (!newResource.handle) break;
 
-              if (
-                auto enabledClonedResource = data.enabledClonedResources.find(newResource.handle);
-                enabledClonedResource != data.enabledClonedResources.end()
-              ) {
 #ifdef DEBUG_LEVEL_1
-                std::stringstream s;
-                s << "update_descriptor_tables(rewriting descriptor table: "
-                  << reinterpret_cast<void*>(update.table.handle)
-                  << "[" << update.binding + j << "]"
-                  << ", rsv: "
-                  << reinterpret_cast<void*>(resourceView.handle)
-                  << " => "
-                  << reinterpret_cast<void*>(newResourceView.handle)
-                  << ", type: " << to_string(update.type);
-                reshade::log_message(reshade::log_level::debug, s.str().c_str());
+              std::stringstream s;
+              s << "update_descriptor_tables(found clonable: "
+                << reinterpret_cast<void*>(newResourceView.handle)
+                << ")";
+              reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
 
-                ((reshade::api::resource_view*)(new_updates[i].descriptors))[j] = newResourceView;
-                logDescriptorTableReplacement(data, update.table, update.binding + j, newResourceView);
+              if (!changed) {
+                new_updates = DescriptorTableUtil::clone_descriptor_table_updates(updates, count);
+              }
 
-                changed = true;
+              ((reshade::api::resource_view*)(new_updates[i].descriptors))[j] = newResourceView;
+              changed = true;
+              if (data.enabledClonedResources.contains(newResource.handle)) {
+                active = true;
               }
             }
             break;
@@ -1817,12 +1828,62 @@ namespace SwapChainUpgradeMod {
         }
       }
     }
+
     if (changed) {
-      device->update_descriptor_tables(count, new_updates);
-      return true;
+      auto originalTableHandle = updates[0].table.handle;
+      auto &data = device->get_private_data<device_data>();
+      std::unique_lock lock(data.mutex);
+
+      uint32_t base_offset = 0;
+      reshade::api::descriptor_heap heap = {0};
+      device->get_descriptor_heap_offset(updates[0].table, 0, 0, &heap, &base_offset);
+
+#ifdef DEBUG_LEVEL_1
+      std::stringstream s;
+      s << "update_descriptor_tables(caching descriptor table: "
+        << reinterpret_cast<void*>(updates[0].table.handle)
+        << ", count: " << count
+        << ", active: " << (active ? "true" : "false")
+        << ", heap: " << reinterpret_cast<void*>(heap.handle)
+        << "[" << base_offset << "]"
+        << ")";
+      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+#endif
+
+      std::vector<reshade::api::descriptor_table_update> vector(new_updates, new_updates + count);
+
+      if (auto pair = data.heapDescriptorInfos.find(heap.handle); pair != data.heapDescriptorInfos.end()) {
+        auto &map = pair->second;
+        if (auto pair2 = map.find(base_offset); pair2 != map.end()) {
+          map[base_offset]->updates = vector;
+          map[base_offset]->replacement_descriptor_handle = 0;
+          map[base_offset]->is_active = active;
+        } else {
+          map[base_offset] = new heap_descriptor_info{
+            .updates = vector,
+            .is_active = active,
+          };
+        }
+      } else {
+        data.heapDescriptorInfos[heap.handle] = {
+          {base_offset,
+           new heap_descriptor_info{
+           .updates = vector,
+           .is_active = active,
+           }}
+        };
+      }
+
     } else {
-      // free(new_updates);
+#ifdef DEBUG_LEVEL_1
+      std::stringstream s;
+      s << "update_descriptor_tables(no clonable.)";
+      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+#endif
     }
+#ifdef DEBUG_LEVEL_2
+    reshade::log_message(reshade::log_level::debug, "update_descriptor_tables(done)");
+#endif
     return false;
   }
 
@@ -1832,43 +1893,70 @@ namespace SwapChainUpgradeMod {
     const reshade::api::descriptor_table_copy* copies
   ) {
     if (!useResourceCloning) return false;
-
+#ifdef DEBUG_LEVEL_2
+    reshade::log_message(reshade::log_level::debug, "copy_descriptor_tables()");
+#endif
     for (uint32_t i = 0; i < count; i++) {
       auto &copy = copies[i];
       for (uint32_t j = 0; j < copy.count; j++) {
         auto &data = device->get_private_data<device_data>();
         std::unique_lock lock(data.mutex);
-        auto originPrimaryKey = std::pair<uint64_t, uint32_t>(copy.source_table.handle, copy.source_binding + j);
-        if (
-          auto pair = data.tableDescriptorResourceViewReplacements.find(originPrimaryKey);
-          pair != data.tableDescriptorResourceViewReplacements.end()
-        ) {
-          // Track replacement copy
-          auto view = reshade::api::resource_view{pair->second};
 
+        reshade::api::descriptor_heap source_heap = {0};
+        uint32_t source_base_offset = 0;
+        device->get_descriptor_heap_offset(copy.source_table, copy.source_binding + j, copy.source_array_offset, &source_heap, &source_base_offset);
+        reshade::api::descriptor_heap dest_heap = {0};
+        uint32_t dest_base_offset = 0;
+        device->get_descriptor_heap_offset(copy.dest_table, copy.dest_binding + j, copy.dest_array_offset, &dest_heap, &dest_base_offset);
+
+        bool erase = false;
+        if (auto pair = data.heapDescriptorInfos.find(source_heap.handle); pair != data.heapDescriptorInfos.end()) {
+          auto &source_map = pair->second;
+          if (auto pair2 = source_map.find(source_base_offset); pair2 != source_map.end()) {
+            if (dest_heap.handle == source_heap.handle) {
+              source_map[dest_base_offset] = source_map[source_base_offset];
+            } else {
+              if (auto pair3 = data.heapDescriptorInfos.find(dest_heap.handle); pair3 != data.heapDescriptorInfos.end()) {
+                auto &dest_map = pair3->second;
+                dest_map[dest_base_offset] = source_map[source_base_offset];
+              } else {
+                data.heapDescriptorInfos[dest_heap.handle] = {
+                  {dest_base_offset, source_map[source_base_offset]}
+                };
+              }
+            }
 #ifdef DEBUG_LEVEL_1
-          std::stringstream s;
-          s << "on_copy_descriptor_tables(copy descriptor log replacement: "
-            << reinterpret_cast<void*>(copy.dest_table.handle)
-            << "[" << copy.dest_binding + j + j << "]"
-            << ", view: "
-            << reinterpret_cast<void*>(view.handle)
-            << ")";
-          reshade::log_message(reshade::log_level::debug, s.str().c_str());
+            std::stringstream s;
+            s << "copy_descriptor_tables(cloning heap: "
+              << reinterpret_cast<void*>(source_heap.handle)
+              << "[" << source_base_offset << "]"
+              << " => "
+              << reinterpret_cast<void*>(dest_heap.handle)
+              << "[" << dest_base_offset << "]"
+              << ", table: " << reinterpret_cast<void*>(source_map[source_base_offset]->replacement_descriptor_handle)
+              << ", size: " << source_map[source_base_offset]->updates.size()
+              << ")";
+            reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
-
-          if (!copy.dest_table.handle) {
-            logDescriptorTableReplacement(data, copy.source_table, copy.source_binding + j);
           } else {
-            logDescriptorTableReplacement(data, copy.dest_table, copy.dest_binding + j, view);
+            erase = true;
           }
-
         } else {
-          logDescriptorTableReplacement(data, copy.dest_table, copy.dest_binding + j);
-          // Not a replacement
+          erase = true;
+        }
+        if (erase) {
+          if (auto pair3 = data.heapDescriptorInfos.find(dest_heap.handle); pair3 != data.heapDescriptorInfos.end()) {
+            auto &dest_map = pair3->second;
+            dest_map.erase(dest_base_offset);
+          }
         }
       }
     }
+
+#ifdef DEBUG_LEVEL_2
+    reshade::log_message(reshade::log_level::debug, "copy_descriptor_tables(done)");
+#endif
+
     return false;
   }
 
@@ -1881,6 +1969,164 @@ namespace SwapChainUpgradeMod {
     const reshade::api::descriptor_table* tables
   ) {
     if (!count) return;
+#ifdef DEBUG_LEVEL_2
+    reshade::log_message(reshade::log_level::debug, "bind_descriptor_tables()");
+#endif
+    auto device = cmd_list->get_device();
+    reshade::api::descriptor_table* new_tables = nullptr;
+    bool built_new_tables = false;
+    bool active = false;
+
+    auto &data = device->get_private_data<device_data>();
+    std::unique_lock lock(data.mutex);
+    reshade::api::descriptor_heap heap = {0};
+    uint32_t base_offset = 0;
+    for (uint32_t i = 0; i < count; ++i) {
+      device->get_descriptor_heap_offset(tables[i], 0, 0, &heap, &base_offset);
+
+      heap_descriptor_info* info = nullptr;
+      bool found_info = false;
+      if (auto pair = data.heapDescriptorInfos.find(heap.handle); pair != data.heapDescriptorInfos.end()) {
+        auto &map = pair->second;
+        if (auto pair2 = map.find(base_offset); pair2 != map.end()) {
+          info = pair2->second;
+          found_info = true;
+
+#ifdef DEBUG_LEVEL_1
+          std::stringstream s;
+          s << "bind_descriptor_tables(found heap info: "
+            << reinterpret_cast<void*>(heap.handle)
+            << "[" << base_offset << "]"
+            << ", handle: " << reinterpret_cast<void*>(info->replacement_descriptor_handle)
+            << ", size: " << info->updates.size()
+            << ")";
+          reshade::log_message(reshade::log_level::debug, s.str().c_str());
+#endif
+        }
+      }
+      if (found_info) {
+        if (info->replacement_descriptor_handle == 0) {
+          reshade::api::descriptor_table new_table = {0};
+          bool allocated = device->allocate_descriptor_table(layout, first + i, &new_table);
+          if (new_table.handle == 0) {
+            std::stringstream s;
+            s << "bind_descriptor_tables(could not allocate new table: "
+              << reinterpret_cast<void*>(tables[i].handle)
+              << " via "
+              << reinterpret_cast<void*>(layout.handle)
+              << "[" << first + i << "]"
+              << ", allocated: " << (allocated ? "true" : "false")
+              << ")";
+            reshade::log_message(reshade::log_level::warning, s.str().c_str());
+
+            allocated = device->allocate_descriptor_table({0}, 0u, &new_table);
+            if (new_table.handle == 0) {
+              std::stringstream s;
+              s << "bind_descriptor_tables(could not allocate new table (2): "
+                << reinterpret_cast<void*>(tables[i].handle)
+                << " via "
+                << reinterpret_cast<void*>(0)
+                << "[" << first + i << "]"
+                << ", allocated: " << (allocated ? "true" : "false")
+                << ")";
+              reshade::log_message(reshade::log_level::error, s.str().c_str());
+              continue;
+            }
+            info->replacement_descriptor_handle = new_table.handle;
+          }
+#ifdef DEBUG_LEVEL_1
+          std::stringstream s;
+          s << "bind_descriptor_tables(allocate new table pre-bind: "
+            << reinterpret_cast<void*>(tables[i].handle)
+            << " => "
+            << reinterpret_cast<void*>(new_table.handle)
+            << " via "
+            << reinterpret_cast<void*>(layout.handle)
+            << "[" << first + i << "]"
+            << ", updates: " << reinterpret_cast<void*>(&info->updates)
+            << " (" << info->updates.size() << ")"
+            << ")";
+          reshade::log_message(reshade::log_level::debug, s.str().c_str());
+#endif
+
+          auto update_data = info->updates.data();
+          auto len = info->updates.size();
+          for (uint32_t j = 0; j < len; ++j) {
+            auto &item = update_data[j];
+            item.table = {new_table.handle};
+          }
+#ifdef DEBUG_LEVEL_1
+          std::stringstream s2;
+          s2 << "bind_descriptor_tables(updated created table: "
+             << reinterpret_cast<void*>(&info->updates)
+             << ", size" << len
+             << ")";
+          reshade::log_message(reshade::log_level::debug, s2.str().c_str());
+#endif
+          device->update_descriptor_tables(len, update_data);
+          info->replacement_descriptor_handle = new_table.handle;
+        } else {
+#ifdef DEBUG_LEVEL_1
+          std::stringstream s;
+          s << "bind_descriptor_tables(no base_offset: "
+            << reinterpret_cast<void*>(heap.handle) << "[" << base_offset << "]"
+            << ")";
+          reshade::log_message(reshade::log_level::debug, s.str().c_str());
+#endif
+        }
+
+        if (info->replacement_descriptor_handle != 0) {
+          if (!built_new_tables) {
+            size_t size = count * sizeof(reshade::api::descriptor_table);
+            new_tables = (reshade::api::descriptor_table*)malloc(size);
+            memcpy(new_tables, tables, size);
+            built_new_tables = true;
+          }
+          new_tables[i].handle = info->replacement_descriptor_handle;
+
+#ifdef DEBUG_LEVEL_1
+          std::stringstream s;
+          s << "bind_descriptor_tables(replace bind: "
+            << reinterpret_cast<void*>(tables[i].handle)
+            << " => "
+            << reinterpret_cast<void*>(new_tables[i].handle)
+            << ")";
+          reshade::log_message(reshade::log_level::debug, s.str().c_str());
+#endif
+
+          if (info->is_active) {
+            active = true;
+          }
+        }
+      }
+    }
+
+    if (active) {
+#ifdef DEBUG_LEVEL_1
+      std::stringstream s;
+      s << "bind_descriptor_tables(apply bind)";
+      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+#endif
+      cmd_list->bind_descriptor_tables(stages, layout, first, count, new_tables);
+    } else if (built_new_tables) {
+      auto &cmd_data = cmd_list->get_private_data<CommandListData>();
+      std::unique_lock lock(cmd_data.mutex);
+#ifdef DEBUG_LEVEL_1
+      std::stringstream s;
+      s << "bind_descriptor_tables(storing unbound descriptor)";
+      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+#endif
+      cmd_data.unboundDescriptors.push_back({
+        .stages = stages,
+        .layout = layout,
+        .first = first,
+        .count = count,
+        .tables = {new_tables[0], new_tables[count - 1]},
+      });
+    }
+#ifdef DEBUG_LEVEL_2
+    reshade::log_message(reshade::log_level::debug, "bind_descriptor_tables(done)");
+#endif
   }
 
   // Set DescriptorTables RSVs
@@ -1894,12 +2140,12 @@ namespace SwapChainUpgradeMod {
     if (!update.count) return;
     auto device = cmd_list->get_device();
 
-    reshade::api::descriptor_table_update new_update = update;
-    bool changedPush = false;
+    reshade::api::descriptor_table_update new_update;
+    bool changed = false;
+    bool active = false;
 
     for (uint32_t i = 0; i < update.count; i++) {
       if (!update.table.handle) continue;
-      bool changed = false;
       switch (update.type) {
         case reshade::api::descriptor_type::sampler_with_resource_view:
           {
@@ -1915,127 +2161,91 @@ namespace SwapChainUpgradeMod {
             auto newResource = ResourceUtil::getResourceFromResourceView(device, newResourceView);
             if (!newResource.handle) break;
 
-            if (
-              auto enabledClonedResource = data.enabledClonedResources.find(newResource.handle);
-              enabledClonedResource != data.enabledClonedResources.end()
-            ) {
-#ifdef DEBUG_LEVEL_1
-              std::stringstream s;
-              s << "update_descriptor_tables(rewriting descriptor table: "
-                << reinterpret_cast<void*>(update.table.handle)
-                << "[" << update.binding + i << "]"
-                << ", rsv: "
-                << reinterpret_cast<void*>(resourceView.handle)
-                << " => "
-                << reinterpret_cast<void*>(newResourceView.handle)
-                << ", type: shader_resource)";
-              reshade::log_message(reshade::log_level::debug, s.str().c_str());
-#endif
-              ((reshade::api::sampler_with_resource_view*)(new_update.descriptors))[i].view = newResourceView;
-              logDescriptorTableReplacement(data, update.table, update.binding + i, newResourceView);
-
-              changed = true;
-            } else {
-              // queueResourceViewInDescriptorTable(
-              //   data,
-              //   resourceView,
-              //   update.table,
-              //   update.binding + i,
-              //   update.type
-              // );
+            if (!changed) {
+              new_update = DescriptorTableUtil::clone_descriptor_table_updates(&update, 1)[0];
             }
 
+            ((reshade::api::sampler_with_resource_view*)(new_update.descriptors))[i].view = newResourceView;
             changed = true;
-          }
-          break;
-        case reshade::api::descriptor_type::shader_resource_view:
-          {
-            auto resourceView = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
-
-            auto &data = device->get_private_data<device_data>();
-            std::unique_lock lock(data.mutex);
-            auto newResourceView = findReplacementResourceView(
-              data,
-              resourceView,
-              reshade::api::resource_usage::shader_resource
-            );
-            if (resourceView.handle == newResourceView.handle) break;
-            auto newResource = ResourceUtil::getResourceFromResourceView(device, newResourceView);
-            if (!newResource.handle) break;
-
-            if (
-              auto enabledClonedResource = data.enabledClonedResources.find(newResource.handle);
-              enabledClonedResource != data.enabledClonedResources.end()
-            ) {
-#ifdef DEBUG_LEVEL_1
-              std::stringstream s;
-              s << "update_descriptor_tables(rewriting descriptor table: "
-                << reinterpret_cast<void*>(update.table.handle)
-                << "[" << update.binding + i << "]"
-                << ", rsv: "
-                << reinterpret_cast<void*>(resourceView.handle)
-                << " => "
-                << reinterpret_cast<void*>(newResourceView.handle)
-                << ", type: shader_resource)";
-              reshade::log_message(reshade::log_level::debug, s.str().c_str());
-#endif
-              ((reshade::api::resource_view*)(new_update.descriptors))[i] = resourceView;
-              logDescriptorTableReplacement(data, update.table, update.binding + i, newResourceView);
-              changed = true;
+            if (data.enabledClonedResources.contains(newResource.handle)) {
+              active = true;
             }
           }
           break;
+        case reshade::api::descriptor_type::buffer_shader_resource_view:
+        case reshade::api::descriptor_type::buffer_unordered_access_view:
+        case reshade::api::descriptor_type::shader_resource_view:
         case reshade::api::descriptor_type::unordered_access_view:
           {
             auto resourceView = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
-
             auto &data = device->get_private_data<device_data>();
             std::unique_lock lock(data.mutex);
             auto newResourceView = findReplacementResourceView(
               data,
               resourceView,
-              reshade::api::resource_usage::unordered_access
+              update.type
             );
+            if (newResourceView.handle == 0) {
+              std::stringstream s;
+              s << "push_descriptors(invalid resource view clone for : "
+                << reinterpret_cast<void*>(resourceView.handle)
+                << ")";
+              reshade::log_message(reshade::log_level::warning, s.str().c_str());
+              break;
+            }
             if (resourceView.handle == newResourceView.handle) break;
             auto newResource = ResourceUtil::getResourceFromResourceView(device, newResourceView);
             if (!newResource.handle) break;
 
-            if (
-              auto enabledClonedResource = data.enabledClonedResources.find(newResource.handle);
-              enabledClonedResource != data.enabledClonedResources.end()
-            ) {
 #ifdef DEBUG_LEVEL_1
-              std::stringstream s;
-              s << "update_descriptor_tables(rewriting descriptor table: "
-                << reinterpret_cast<void*>(update.table.handle)
-                << "[" << update.binding + i << "]"
-                << ", rsv: "
-                << reinterpret_cast<void*>(resourceView.handle)
-                << " => "
-                << reinterpret_cast<void*>(newResourceView.handle)
-                << ", type: unordered_access)";
-              reshade::log_message(reshade::log_level::debug, s.str().c_str());
+            std::stringstream s;
+            s << "push_descriptors(found clonable: "
+              << reinterpret_cast<void*>(newResourceView.handle)
+              << ")";
+            reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
-              ((reshade::api::resource_view*)(new_update.descriptors))[i] = resourceView;
-              logDescriptorTableReplacement(data, update.table, update.binding + i, newResourceView);
-              changed = true;
+
+            if (!changed) {
+              new_update = DescriptorTableUtil::clone_descriptor_table_updates(&update, 1)[0];
+            }
+
+            ((reshade::api::resource_view*)(new_update.descriptors))[i] = newResourceView;
+            changed = true;
+            if (data.enabledClonedResources.contains(newResource.handle)) {
+              active = true;
             }
           }
           break;
         default:
           break;
       }
-      if (changed) {
-        changedPush = true;
-      } else {
-        auto &data = device->get_private_data<device_data>();
-        std::unique_lock lock(data.mutex);
-        logDescriptorTableReplacement(data, update.table, update.binding + i);
-      }
     }
-    if (changedPush) {
+
+    if (active) {
+#ifdef DEBUG_LEVEL_1
+      std::stringstream s;
+      s << "push_descriptors(apply push)";
+      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+#endif
       cmd_list->push_descriptors(stages, layout, layout_param, new_update);
+    } else if (changed) {
+      auto &cmd_data = cmd_list->get_private_data<CommandListData>();
+      std::unique_lock lock(cmd_data.mutex);
+#ifdef DEBUG_LEVEL_1
+      std::stringstream s;
+      s << "push_descriptors(storing unpushed descriptor)";
+      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+#endif
+      cmd_data.unpushedUpdates.push_back({
+        .stages = stages,
+        .layout = layout,
+        .layout_param = layout_param,
+        .update = new_update,
+      });
     }
+#ifdef DEBUG_LEVEL_2
+    reshade::log_message(reshade::log_level::debug, "bind_descriptor_tables(done)");
+#endif
   }
 
   static void rewriteRenderTargets(
@@ -2046,18 +2256,17 @@ namespace SwapChainUpgradeMod {
     if (!count) return;
 
     auto device = cmd_list->get_device();
-    if (device == nullptr) return;
 
     size_t size = count * sizeof(reshade::api::resource_view);
     reshade::api::resource_view* new_rtvs = (reshade::api::resource_view*)malloc(size);
     memcpy(new_rtvs, rtvs, count);
     bool changed = false;
+    auto &data = device->get_private_data<device_data>();
+    std::shared_lock lock(data.mutex);
     for (uint32_t i = 0; i < count; i++) {
       const reshade::api::resource_view resourceView = rtvs[i];
       if (!resourceView.handle) continue;
 
-      auto &data = device->get_private_data<device_data>();
-      std::shared_lock lock(data.mutex);
       auto newResourceView = findReplacementResourceView(
         data,
         resourceView,
@@ -2078,7 +2287,7 @@ namespace SwapChainUpgradeMod {
           << reinterpret_cast<void*>(resourceView.handle)
           << " => "
           << reinterpret_cast<void*>(newResourceView.handle)
-          << ", res: " << newResource.handle
+          << ", res: " << reinterpret_cast<void*>(newResource.handle)
           << ") [" << i << "]";
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
@@ -2098,6 +2307,31 @@ namespace SwapChainUpgradeMod {
     }
     if (!changed) return;
     cmd_list->bind_render_targets_and_depth_stencil(count, new_rtvs);
+  }
+
+  static void flushDescriptors(reshade::api::command_list* cmd_list) {
+    auto &cmd_data = cmd_list->get_private_data<CommandListData>();
+    std::unique_lock lock(cmd_data.mutex);
+    for (auto info : cmd_data.unboundDescriptors) {
+      cmd_list->bind_descriptor_tables(
+        info.stages,
+        info.layout,
+        info.first,
+        info.count,
+        info.tables.data()
+      );
+    }
+    cmd_data.unboundDescriptors.clear();
+
+    for (auto info : cmd_data.unpushedUpdates) {
+      cmd_list->push_descriptors(
+        info.stages,
+        info.layout,
+        info.layout_param,
+        info.update
+      );
+    }
+    cmd_data.unpushedUpdates.clear();
   }
 
   // Set render target RSV
@@ -2220,6 +2454,29 @@ namespace SwapChainUpgradeMod {
     }
   }
 
+  static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch = false) {
+    auto &cmd_data = cmd_list->get_private_data<CommandListData>();
+    std::unique_lock lock(cmd_data.mutex);
+    cmd_data.unboundDescriptors.clear();
+    cmd_data.unpushedUpdates.clear();
+  }
+
+  static bool on_draw(reshade::api::command_list* cmd_list, uint32_t vertex_count, uint32_t instance_count, uint32_t first_vertex, uint32_t first_instance) {
+    return handlePreDraw(cmd_list);
+  }
+
+  static bool on_draw_indexed(reshade::api::command_list* cmd_list, uint32_t index_count, uint32_t instance_count, uint32_t first_index, int32_t vertex_offset, uint32_t first_instance) {
+    return handlePreDraw(cmd_list);
+  }
+
+  static bool on_draw_or_dispatch_indirect(reshade::api::command_list* cmd_list, reshade::api::indirect_command type, reshade::api::resource buffer, uint64_t offset, uint32_t draw_count, uint32_t stride) {
+    return handlePreDraw(cmd_list);
+  }
+
+  static bool on_dispatch(reshade::api::command_list* cmd_list, uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z) {
+    return handlePreDraw(cmd_list, true);
+  }
+
   static void on_init_effect_runtime(reshade::api::effect_runtime* runtime) {
     currentEffectRuntime = runtime;
     reshade::log_message(reshade::log_level::info, "Effect runtime created.");
@@ -2319,10 +2576,14 @@ namespace SwapChainUpgradeMod {
         reshade::register_event<reshade::addon_event::destroy_resource_view>(on_destroy_resource_view);
 
         if (useResourceCloning) {
+          reshade::register_event<reshade::addon_event::init_command_list>(on_init_command_list);
+          reshade::register_event<reshade::addon_event::destroy_command_list>(on_destroy_command_list);
+
           reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(on_bind_render_targets_and_depth_stencil);
           reshade::register_event<reshade::addon_event::push_descriptors>(on_push_descriptors);
           reshade::register_event<reshade::addon_event::update_descriptor_tables>(on_update_descriptor_tables);
-          // reshade::register_event<reshade::addon_event::copy_descriptor_tables>(on_copy_descriptor_tables);
+          reshade::register_event<reshade::addon_event::copy_descriptor_tables>(on_copy_descriptor_tables);
+          reshade::register_event<reshade::addon_event::bind_descriptor_tables>(on_bind_descriptor_tables);
           reshade::register_event<reshade::addon_event::clear_render_target_view>(on_clear_render_target_view);
           reshade::register_event<reshade::addon_event::clear_unordered_access_view_uint>(on_clear_unordered_access_view_uint);
           reshade::register_event<reshade::addon_event::clear_unordered_access_view_float>(on_clear_unordered_access_view_float);
