@@ -38,6 +38,38 @@ namespace SwapChainUpgradeMod {
     bool useResourceViewCloning = false;
     bool useResourceViewHotSwap = false;
     reshade::api::resource_usage state = reshade::api::resource_usage::undefined;
+
+    const float ASPECT_RATIO_IGNORE = -1.f;
+    const float ASPECT_RATIO_BACK_BUFFER = 0.f;
+    float aspectRatio = ASPECT_RATIO_IGNORE;
+
+    bool checkResourceView(
+      reshade::api::resource_desc desc,
+      reshade::api::resource_desc backBufferDesc
+    ) {
+      if (desc.texture.format != this->oldFormat) return false;
+      if (this->state != reshade::api::resource_usage::undefined) {
+        if (this->state != desc.usage) return false;
+      }
+      if (!this->ignoreSize) {
+        if (this->aspectRatio == ASPECT_RATIO_IGNORE) {
+          if (desc.texture.width != backBufferDesc.texture.width) return false;
+          if (desc.texture.height != backBufferDesc.texture.height) return false;
+        } else {
+          float viewRatio = desc.texture.width / desc.texture.height;
+          float targetRatio;
+          if (desc.texture.height == ASPECT_RATIO_BACK_BUFFER) {
+            targetRatio = backBufferDesc.texture.width / backBufferDesc.texture.height;
+          } else {
+            targetRatio = this->aspectRatio;
+          }
+          const float tolerance = 0.0001f;
+          if (std::abs(viewRatio - targetRatio) < tolerance) return false;
+        }
+      }
+      return true;
+    }
+
     float resourceTag = -1;
     uint32_t _counted = 0;
     bool completed = false;
@@ -553,9 +585,7 @@ namespace SwapChainUpgradeMod {
       if (target->completed) continue;
       if (
         !target->useResourceViewCloning
-        && oldFormat == target->oldFormat
-        && (target->ignoreSize || ((desc.texture.height == deviceBackBufferDesc.texture.height) && (desc.texture.width == deviceBackBufferDesc.texture.width)))
-        && (target->state == reshade::api::resource_usage::undefined || (desc.usage == target->state))
+        && target->checkResourceView(desc, deviceBackBufferDesc)
       ) {
         s << "createResource(counting target"
           << ", format: " << to_string(target->oldFormat)
@@ -707,9 +737,7 @@ namespace SwapChainUpgradeMod {
         if (target->completed) continue;
         if (
           target->useResourceViewCloning
-          && oldFormat == target->oldFormat
-          && (target->ignoreSize || ((desc.texture.height == deviceBackBufferDesc.texture.height) && (desc.texture.width == deviceBackBufferDesc.texture.width)))
-          && (target->state == reshade::api::resource_usage::undefined || (desc.usage == target->state))
+          && target->checkResourceView(desc, deviceBackBufferDesc)
         ) {
           s << "on_init_resource(counting target"
             << ", format: " << to_string(target->oldFormat)
