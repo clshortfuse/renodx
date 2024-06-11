@@ -56,7 +56,7 @@ namespace SwapChainUpgradeMod {
           if (desc.texture.width != backBufferDesc.texture.width) return false;
           if (desc.texture.height != backBufferDesc.texture.height) return false;
         } else {
-          float viewRatio = desc.texture.width / desc.texture.height;
+          float viewRatio = (float)desc.texture.width / (float)desc.texture.height;
           float targetRatio;
           if (this->aspectRatio == ASPECT_RATIO_BACK_BUFFER) {
             targetRatio = backBufferDesc.texture.width / backBufferDesc.texture.height;
