@@ -43,6 +43,8 @@ namespace SwapChainUpgradeMod {
     const float ASPECT_RATIO_BACK_BUFFER = 0.f;
     float aspectRatio = ASPECT_RATIO_IGNORE;
 
+    bool forceUnorderedAccess = false;
+
     bool checkResourceView(
       reshade::api::resource_desc desc,
       reshade::api::resource_desc backBufferDesc
@@ -577,6 +579,8 @@ namespace SwapChainUpgradeMod {
 
     auto oldFormat = desc.texture.format;
     auto newFormat = desc.texture.format;
+    bool oldUnorderedAccess = (desc.usage & reshade::api::resource_usage::unordered_access) != 0;
+    bool newUnorderedAccess = oldUnorderedAccess;
 
     float resourceTag = -1;
     bool allCompleted = true;
@@ -602,6 +606,9 @@ namespace SwapChainUpgradeMod {
         if (target->index != -1 && (target->index + 1) == target->_counted) {
           resourceTag = target->resourceTag;
           newFormat = target->newFormat;
+          if (target->forceUnorderedAccess) {
+            newUnorderedAccess = true;
+          }
           target->completed = true;
           foundExact = true;
           continue;
@@ -610,6 +617,9 @@ namespace SwapChainUpgradeMod {
           if (!foundExact) {
             resourceTag = target->resourceTag;
             newFormat = target->newFormat;
+            if (target->forceUnorderedAccess) {
+              newUnorderedAccess = true;
+            }
           }
           allCompleted = false;
           continue;
@@ -617,7 +627,7 @@ namespace SwapChainUpgradeMod {
       }
       allCompleted = false;
     }
-    if (oldFormat == newFormat) return false;
+    if (oldFormat == newFormat && oldUnorderedAccess == newUnorderedAccess) return false;
     if (allCompleted) {
       privateData.resourceUpgradeFinished = true;
     }
@@ -655,6 +665,9 @@ namespace SwapChainUpgradeMod {
 
     privateData.originalResource = originalResource;
     desc.texture.format = newFormat;
+    if (newUnorderedAccess) {
+      desc.usage |= reshade::api::resource_usage::unordered_access;
+    }
     privateData.pendingResourceTag = resourceTag;
     privateData.upgradedResource = true;
     return true;
@@ -731,6 +744,8 @@ namespace SwapChainUpgradeMod {
 
       auto oldFormat = desc.texture.format;
       auto newFormat = desc.texture.format;
+      bool oldUnorderedAccess = (desc.usage & reshade::api::resource_usage::unordered_access) != 0;
+      bool newUnorderedAccess = oldUnorderedAccess;
 
       bool allCompleted = true;
       bool hotSwap = false;
@@ -758,6 +773,9 @@ namespace SwapChainUpgradeMod {
           if (target->index != -1 && (target->index + 1) == target->_counted) {
             resourceTag = target->resourceTag;
             newFormat = target->newFormat;
+            if (target->forceUnorderedAccess) {
+              newUnorderedAccess = true;
+            }
             target->completed = true;
             hotSwap = target->useResourceViewHotSwap;
             foundExact = true;
@@ -767,6 +785,9 @@ namespace SwapChainUpgradeMod {
             if (!foundExact) {
               resourceTag = target->resourceTag;
               newFormat = target->newFormat;
+              if (target->forceUnorderedAccess) {
+                newUnorderedAccess = true;
+              }
               hotSwap = target->useResourceViewHotSwap;
             }
             allCompleted = false;
@@ -787,6 +808,9 @@ namespace SwapChainUpgradeMod {
 
       reshade::api::resource_desc new_desc = desc;
       new_desc.texture.format = newFormat;
+      if (newUnorderedAccess) {
+        new_desc.usage |= reshade::api::resource_usage::unordered_access;
+      }
       reshade::api::resource clonedResource = cloneResource(
         device,
         &privateData,
