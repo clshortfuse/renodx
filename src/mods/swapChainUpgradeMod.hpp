@@ -51,7 +51,7 @@ namespace SwapChainUpgradeMod {
       if (this->state != reshade::api::resource_usage::undefined) {
         if (this->state != desc.usage) return false;
       }
-      if (!this->ignoreSize) {
+      if (this->ignoreSize == false) {
         if (this->aspectRatio == ASPECT_RATIO_IGNORE) {
           if (desc.texture.width != backBufferDesc.texture.width) return false;
           if (desc.texture.height != backBufferDesc.texture.height) return false;
@@ -63,8 +63,9 @@ namespace SwapChainUpgradeMod {
           } else {
             targetRatio = this->aspectRatio;
           }
-          const float tolerance = 0.0001f;
-          if (std::abs(viewRatio - targetRatio) < tolerance) return false;
+          static const float tolerance = 0.0001f;
+          float diff = std::abs(viewRatio - targetRatio);
+          if (diff > tolerance) return false;
         }
       }
       return true;
