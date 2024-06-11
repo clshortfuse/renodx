@@ -2280,18 +2280,21 @@ namespace SwapChainUpgradeMod {
       });
     }
 #ifdef DEBUG_LEVEL_2
-    reshade::log_message(reshade::log_level::debug, "bind_descriptor_tables(done)");
+    reshade::log_message(reshade::log_level::debug, "push_descriptors(done)");
 #endif
   }
 
   static void rewriteRenderTargets(
     reshade::api::command_list* cmd_list,
     uint32_t count,
-    const reshade::api::resource_view* rtvs
+    const reshade::api::resource_view* rtvs,
+    reshade::api::resource_view dsv
   ) {
     if (!count) return;
 
     auto device = cmd_list->get_device();
+
+    size_t lastNonNull = -1;
 
     size_t size = count * sizeof(reshade::api::resource_view);
     reshade::api::resource_view* new_rtvs = (reshade::api::resource_view*)malloc(size);
@@ -2302,6 +2305,7 @@ namespace SwapChainUpgradeMod {
     for (uint32_t i = 0; i < count; i++) {
       const reshade::api::resource_view resourceView = rtvs[i];
       if (!resourceView.handle) continue;
+      lastNonNull = i;
 
       auto newResourceView = findReplacementResourceView(
         data,
@@ -2342,7 +2346,7 @@ namespace SwapChainUpgradeMod {
       }
     }
     if (!changed) return;
-    cmd_list->bind_render_targets_and_depth_stencil(count, new_rtvs);
+    cmd_list->bind_render_targets_and_depth_stencil(lastNonNull + 1, new_rtvs, dsv);
   }
 
   static void discardDescriptors(reshade::api::command_list* cmd_list) {
@@ -2386,7 +2390,8 @@ namespace SwapChainUpgradeMod {
   ) {
     if (!count) return;
 
-    rewriteRenderTargets(cmd_list, count, rtvs);
+
+    rewriteRenderTargets(cmd_list, count, rtvs, dsv);
   }
 
   static bool on_clear_render_target_view(
