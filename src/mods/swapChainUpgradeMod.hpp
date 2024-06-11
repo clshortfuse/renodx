@@ -1048,7 +1048,7 @@ namespace SwapChainUpgradeMod {
     }
     reshade::api::resource_view_desc new_desc = desc;
     reshade::api::resource_desc resource_desc = device->get_resource_desc(resource);
-    if (upgradeResourceViews && SwapchainUtil::isBackBuffer(resource)) {
+    if (upgradeResourceViews && SwapchainUtil::isBackBuffer(device, resource)) {
       new_desc.format = targetFormat;
       expected = true;
     } else if (privateData.upgradedResources.contains(resource.handle) || privateData.clonedResources.contains(resource.handle)) {
