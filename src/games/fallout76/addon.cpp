@@ -23,15 +23,19 @@
 #include <embed/0xA6AB1C75.h>  // text
 #include <embed/0xD66588EF.h>  // Loading Screen
 #include <embed/0xF2CCBA8C.h>  // UI
+#include <embed/0x1CA86895.h>  // UI Popup, team popup in bottom right corner
 #include <embed/0xFEA4E7DB.h>  // Loading Screen
 //#include <embed/0x7684FC16.h> // FXAA
-#include <embed/0x160805BC.h>  // LUT?
+#include <embed/0x160805BC.h>  // LUT
 #include <embed/0x2C63040A.h>  // LUT
 #include <embed/0x3778E664.h>  // TAA
 #include <embed/0xAF2731D9.h>  // TAA
 //#include <embed/0x73F96489.h> // TAA?
 //#include <embed/0xC9C77523.h> // DOF?
 //#include <embed/0x283C8F43.h> // DOF?
+#include <embed/0xA3C662FB.h>  // Pipboy
+#include <embed/0xB38E2BDA.h>  // Quickboy
+
 
 #include <embed/0x1BDD7570.h>  // Tonemap
 #include <embed/0x2A868728.h>  // Tonemap
@@ -68,12 +72,15 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomSwapchainShader(0xFEA4E7DB),  // Loading Screen
   CustomSwapchainShader(0xD66588EF),  // Loading Screen
   CustomSwapchainShader(0x3C8AF2C9),  // Loading Screen
+  CustomSwapchainShader(0x1CA86895),  // UI Popup, team popup in bottom right corner
   CustomShaderEntry(0x1BDD7570),      // Tonemap
   CustomShaderEntry(0x2A868728),      // Tonemap
   CustomShaderEntry(0x5D002D1E),      // Tonemap
   CustomShaderEntry(0xBF6561E2),      // Tonemap
   CustomShaderEntry(0x2C63040A),      // LUT (Linear)
   CustomShaderEntry(0x160805BC),      // LUT (Gamma)
+  CustomShaderEntry(0xA3C662FB),      // Pipboy
+  CustomShaderEntry(0xB38E2BDA),      // Quickboy
 
   //CustomShaderEntry(0x7684FC16),      // FXAA
   CustomShaderEntry(0x3778E664),  // TAA

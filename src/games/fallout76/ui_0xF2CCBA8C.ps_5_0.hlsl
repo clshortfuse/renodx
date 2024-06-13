@@ -15,7 +15,7 @@ void main(
   out float4 o0 : SV_Target0)
 {
   o0.w = v1.w * v0.w;
-  o0.xyz = v0.xyz;
+  o0.xyz = saturate(v0.xyz);  //  o0.xyz = v0.xyz;
 
   o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
   o0.rgb *= injectedData.toneMapUINits / 80.f;

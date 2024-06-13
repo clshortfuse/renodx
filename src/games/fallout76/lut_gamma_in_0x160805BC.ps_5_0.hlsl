@@ -37,7 +37,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
   // Gamma to Linear
-  r0.xyz = sign(r0.xyz) * pow(max(0, r0.xyz), 2.2f);
+  r0.xyz = sign(r0.xyz) * pow(abs(r0.xyz), 2.2f);
 
   float vanillaMidGray = 0.18f;
   float renoDRTContrast = 0.90f;
