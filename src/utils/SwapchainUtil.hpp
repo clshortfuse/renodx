@@ -33,6 +33,7 @@ namespace SwapchainUtil {
 
   struct __declspec(uuid("25b7ec11-a51f-4884-a6f7-f381d198b9af")) CommandListData {
     std::vector<reshade::api::resource_view> currentRenderTargets;
+    reshade::api::resource_view currentDepthStencil;
     bool hasSwapchainRenderTarget;
     std::shared_mutex mutex;
   };
@@ -130,7 +131,6 @@ namespace SwapchainUtil {
     const reshade::api::resource_view* rtvs,
     reshade::api::resource_view dsv
   ) {
-    if (!count) return;
     auto device = cmd_list->get_device();
     auto &deviceData = device->get_private_data<DeviceData>();
     std::shared_lock deviceLock(deviceData.mutex);
@@ -140,6 +140,7 @@ namespace SwapchainUtil {
 
     bool foundSwapchainRTV = false;
     cmdListData.currentRenderTargets.assign(rtvs, rtvs + count);
+    cmdListData.currentDepthStencil = dsv;
 
     for (uint32_t i = 0; i < count; i++) {
       const reshade::api::resource_view rtv = rtvs[i];

@@ -38,6 +38,41 @@ namespace SwapChainUpgradeMod {
     bool useResourceViewCloning = false;
     bool useResourceViewHotSwap = false;
     reshade::api::resource_usage state = reshade::api::resource_usage::undefined;
+
+    const float ASPECT_RATIO_IGNORE = -1.f;
+    const float ASPECT_RATIO_BACK_BUFFER = 0.f;
+    float aspectRatio = ASPECT_RATIO_IGNORE;
+
+    bool forceUnorderedAccess = false;
+
+    bool checkResourceView(
+      reshade::api::resource_desc desc,
+      reshade::api::resource_desc backBufferDesc
+    ) {
+      if (desc.texture.format != this->oldFormat) return false;
+      if (this->state != reshade::api::resource_usage::undefined) {
+        if (this->state != desc.usage) return false;
+      }
+      if (this->ignoreSize == false) {
+        if (this->aspectRatio == ASPECT_RATIO_IGNORE) {
+          if (desc.texture.width != backBufferDesc.texture.width) return false;
+          if (desc.texture.height != backBufferDesc.texture.height) return false;
+        } else {
+          float viewRatio = (float)desc.texture.width / (float)desc.texture.height;
+          float targetRatio;
+          if (this->aspectRatio == ASPECT_RATIO_BACK_BUFFER) {
+            targetRatio = backBufferDesc.texture.width / backBufferDesc.texture.height;
+          } else {
+            targetRatio = this->aspectRatio;
+          }
+          static const float tolerance = 0.0001f;
+          float diff = std::abs(viewRatio - targetRatio);
+          if (diff > tolerance) return false;
+        }
+      }
+      return true;
+    }
+
     float resourceTag = -1;
     uint32_t _counted = 0;
     bool completed = false;
@@ -193,7 +228,7 @@ namespace SwapChainUpgradeMod {
       &cloneResource
     );
     privateData->clonedResources[resource.handle] = cloneResource.handle;
-    privateData->resourcesThatNeedResourceViewClones.emplace(resource.handle);
+    privateData->resourcesThatNeedResourceViewClones.insert(resource.handle);
     return cloneResource;
   }
 
@@ -544,45 +579,55 @@ namespace SwapChainUpgradeMod {
 
     auto oldFormat = desc.texture.format;
     auto newFormat = desc.texture.format;
+    bool oldUnorderedAccess = (desc.usage & reshade::api::resource_usage::unordered_access) != 0;
+    bool newUnorderedAccess = oldUnorderedAccess;
 
     float resourceTag = -1;
     bool allCompleted = true;
+    bool foundExact = false;
     for (uint32_t i = 0; i < len; i++) {
       SwapChainUpgradeMod::SwapChainUpgradeTarget* target = &swapChainUpgradeTargets.data()[i];
       std::stringstream s;
       if (target->completed) continue;
       if (
         !target->useResourceViewCloning
-        && oldFormat == target->oldFormat
-        && (target->ignoreSize || ((desc.texture.height == deviceBackBufferDesc.texture.height) && (desc.texture.width == deviceBackBufferDesc.texture.width)))
-        && (target->state == reshade::api::resource_usage::undefined || (desc.usage == target->state))
+        && target->checkResourceView(desc, deviceBackBufferDesc)
       ) {
         s << "createResource(counting target"
           << ", format: " << to_string(target->oldFormat)
           << ", usage: " << std::hex << (uint32_t)desc.usage << std::dec
           << ", index: " << target->index
           << ", counted: " << target->_counted
-          << ", data: " << reinterpret_cast<void*>(initial_data)
+          // << ", data: " << reinterpret_cast<void*>(initial_data)
           << ") [" << i << "/" << len << "]";
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
 
         target->_counted++;
-        if (target->index == -1) {
+        if (target->index != -1 && (target->index + 1) == target->_counted) {
           resourceTag = target->resourceTag;
           newFormat = target->newFormat;
-          allCompleted = false;
+          if (target->forceUnorderedAccess) {
+            newUnorderedAccess = true;
+          }
+          target->completed = true;
+          foundExact = true;
           continue;
         }
-        if ((target->index + 1) == target->_counted) {
-          resourceTag = target->resourceTag;
-          newFormat = target->newFormat;
-          target->completed = true;
+        if (target->index == -1) {
+          if (!foundExact) {
+            resourceTag = target->resourceTag;
+            newFormat = target->newFormat;
+            if (target->forceUnorderedAccess) {
+              newUnorderedAccess = true;
+            }
+          }
+          allCompleted = false;
           continue;
         }
       }
       allCompleted = false;
     }
-    if (oldFormat == newFormat) return false;
+    if (oldFormat == newFormat && oldUnorderedAccess == newUnorderedAccess) return false;
     if (allCompleted) {
       privateData.resourceUpgradeFinished = true;
     }
@@ -620,6 +665,9 @@ namespace SwapChainUpgradeMod {
 
     privateData.originalResource = originalResource;
     desc.texture.format = newFormat;
+    if (newUnorderedAccess) {
+      desc.usage |= reshade::api::resource_usage::unordered_access;
+    }
     privateData.pendingResourceTag = resourceTag;
     privateData.upgradedResource = true;
     return true;
@@ -696,10 +744,12 @@ namespace SwapChainUpgradeMod {
 
       auto oldFormat = desc.texture.format;
       auto newFormat = desc.texture.format;
+      bool oldUnorderedAccess = (desc.usage & reshade::api::resource_usage::unordered_access) != 0;
+      bool newUnorderedAccess = oldUnorderedAccess;
 
       bool allCompleted = true;
       bool hotSwap = false;
-      bool matched = false;
+      bool foundExact = false;
       float resourceTag = -1;
       for (uint32_t i = 0; i < len; i++) {
         SwapChainUpgradeMod::SwapChainUpgradeTarget* target = &swapChainUpgradeTargets.data()[i];
@@ -707,9 +757,7 @@ namespace SwapChainUpgradeMod {
         if (target->completed) continue;
         if (
           target->useResourceViewCloning
-          && oldFormat == target->oldFormat
-          && (target->ignoreSize || ((desc.texture.height == deviceBackBufferDesc.texture.height) && (desc.texture.width == deviceBackBufferDesc.texture.width)))
-          && (target->state == reshade::api::resource_usage::undefined || (desc.usage == target->state))
+          && target->checkResourceView(desc, deviceBackBufferDesc)
         ) {
           s << "on_init_resource(counting target"
             << ", format: " << to_string(target->oldFormat)
@@ -717,26 +765,32 @@ namespace SwapChainUpgradeMod {
             << ", index: " << target->index
             << ", counted: " << target->_counted
             << ") [" << i << "/" << len << "]";
-#ifdef DEBUG_LEVEL_1
+#ifdef DEBUG_LEVEL_0
           reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
 
           target->_counted++;
-          if (matched) continue;
-          if ((target->index + 1) == target->_counted) {
+          if (target->index != -1 && (target->index + 1) == target->_counted) {
             resourceTag = target->resourceTag;
             newFormat = target->newFormat;
+            if (target->forceUnorderedAccess) {
+              newUnorderedAccess = true;
+            }
             target->completed = true;
             hotSwap = target->useResourceViewHotSwap;
-            matched = true;
+            foundExact = true;
             continue;
           }
           if (target->index == -1) {
-            resourceTag = target->resourceTag;
-            newFormat = target->newFormat;
+            if (!foundExact) {
+              resourceTag = target->resourceTag;
+              newFormat = target->newFormat;
+              if (target->forceUnorderedAccess) {
+                newUnorderedAccess = true;
+              }
+              hotSwap = target->useResourceViewHotSwap;
+            }
             allCompleted = false;
-            hotSwap = target->useResourceViewHotSwap;
-            matched = true;
             continue;
           }
         }
@@ -746,11 +800,17 @@ namespace SwapChainUpgradeMod {
         return;
       }
       if (allCompleted) {
+#ifdef DEBUG_LEVEL_0
+        reshade::log_message(reshade::log_level::debug, "All resource cloning completed.");
+#endif
         privateData.resourceUpgradeFinished = true;
       }
 
       reshade::api::resource_desc new_desc = desc;
       new_desc.texture.format = newFormat;
+      if (newUnorderedAccess) {
+        new_desc.usage |= reshade::api::resource_usage::unordered_access;
+      }
       reshade::api::resource clonedResource = cloneResource(
         device,
         &privateData,
@@ -763,8 +823,8 @@ namespace SwapChainUpgradeMod {
         ResourceUtil::setResourceTag(device, resource, resourceTag);
       }
       if (!hotSwap) {
-        privateData.permanentClonedResources.emplace(clonedResource.handle);
-        privateData.enabledClonedResources.emplace(clonedResource.handle);
+        privateData.permanentClonedResources.insert(clonedResource.handle);
+        privateData.enabledClonedResources.insert(clonedResource.handle);
       }
       s << ", newformat: " << to_string(new_desc.texture.format);
       s << ", clone: " << reinterpret_cast<void*>(clonedResource.handle);
@@ -1244,7 +1304,7 @@ namespace SwapChainUpgradeMod {
         s << " => " << reinterpret_cast<void*>(clonedResourceViewResource.handle);
       }
 
-      privateData.resourceViewsCloned.emplace(view.handle);
+      privateData.resourceViewsCloned.insert(view.handle);
 
       if (usage_type == reshade::api::resource_usage::render_target) {
         privateData.renderTargetResourceViewClones[view.handle] = clonedResourceView.handle;
@@ -1625,7 +1685,7 @@ namespace SwapChainUpgradeMod {
     data.enabledClonedResources.clear();
 
     for (auto item : data.permanentClonedResources) {
-      data.enabledClonedResources.emplace(item);
+      data.enabledClonedResources.insert(item);
     }
   }
 
@@ -1652,7 +1712,7 @@ namespace SwapChainUpgradeMod {
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
       s << "activateCloneHotSwap(";
-      if (SwapchainUtil::isBackBuffer(device, resource)) {
+      if (SwapchainUtil::isBackBuffer(resource)) {
         s << ("backbuffer ");
       }
       s << "not cloned "
@@ -1700,7 +1760,7 @@ namespace SwapChainUpgradeMod {
     }
 #endif
 
-    // data.pendingResourceViewUpdateFlush.emplace(resource.handle);
+    // data.pendingResourceViewUpdateFlush.insert(resource.handle);
     // flushResourceViewInDescriptorTable(device, resource);
 
 #ifdef DEBUG_LEVEL_1
@@ -1714,7 +1774,7 @@ namespace SwapChainUpgradeMod {
 #endif
 
     reshade::register_event<reshade::addon_event::present>(on_present_for_descriptor_reset);
-    data.enabledClonedResources.emplace(cloneResource.handle);
+    data.enabledClonedResources.insert(cloneResource.handle);
     return true;
   }
 
@@ -2244,18 +2304,21 @@ namespace SwapChainUpgradeMod {
       });
     }
 #ifdef DEBUG_LEVEL_2
-    reshade::log_message(reshade::log_level::debug, "bind_descriptor_tables(done)");
+    reshade::log_message(reshade::log_level::debug, "push_descriptors(done)");
 #endif
   }
 
   static void rewriteRenderTargets(
     reshade::api::command_list* cmd_list,
     uint32_t count,
-    const reshade::api::resource_view* rtvs
+    const reshade::api::resource_view* rtvs,
+    reshade::api::resource_view dsv
   ) {
     if (!count) return;
 
     auto device = cmd_list->get_device();
+
+    size_t lastNonNull = -1;
 
     size_t size = count * sizeof(reshade::api::resource_view);
     reshade::api::resource_view* new_rtvs = (reshade::api::resource_view*)malloc(size);
@@ -2266,6 +2329,7 @@ namespace SwapChainUpgradeMod {
     for (uint32_t i = 0; i < count; i++) {
       const reshade::api::resource_view resourceView = rtvs[i];
       if (!resourceView.handle) continue;
+      lastNonNull = i;
 
       auto newResourceView = findReplacementResourceView(
         data,
@@ -2306,7 +2370,7 @@ namespace SwapChainUpgradeMod {
       }
     }
     if (!changed) return;
-    cmd_list->bind_render_targets_and_depth_stencil(count, new_rtvs);
+    cmd_list->bind_render_targets_and_depth_stencil(lastNonNull + 1, new_rtvs, dsv);
   }
 
   static void discardDescriptors(reshade::api::command_list* cmd_list) {
@@ -2350,7 +2414,8 @@ namespace SwapChainUpgradeMod {
   ) {
     if (!count) return;
 
-    rewriteRenderTargets(cmd_list, count, rtvs);
+
+    rewriteRenderTargets(cmd_list, count, rtvs, dsv);
   }
 
   static bool on_clear_render_target_view(

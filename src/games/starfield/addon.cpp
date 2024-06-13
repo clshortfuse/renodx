@@ -247,10 +247,12 @@ static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch 
     )
   ) {
     std::vector<reshade::api::resource_view> currentTargets;
+    reshade::api::resource_view currentDepthStencil;
     {
       SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
       std::shared_lock swapchainCommandListLock(swapchainState.mutex);
       currentTargets = swapchainState.currentRenderTargets;
+      currentDepthStencil = swapchainState.currentDepthStencil;
     }
 
     bool changed = false;
@@ -268,7 +270,8 @@ static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch 
       SwapChainUpgradeMod::rewriteRenderTargets(
         cmd_list,
         renderTargetCount,
-        currentTargets.data()
+        currentTargets.data(),
+        currentDepthStencil
       );
       SwapChainUpgradeMod::flushDescriptors(cmd_list);
     }
