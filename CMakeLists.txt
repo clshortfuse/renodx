@@ -33,14 +33,15 @@ function(inspect_hlsl_imports FILE VARIABLE)
 endfunction()
 
 function(build_shader_target)
-  string(LENGTH ${CMAKE_CURRENT_SOURCE_DIR}/src/ PATH_LENGTH)
-
   file(GLOB SHADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/games/**/*.hlsl)
   foreach(FILE ${SHADER_FILES})
     cmake_path(GET FILE FILENAME FILENAME)
+    cmake_path(GET FILE PARENT_PATH TARGET_PATH)
+    cmake_path(GET TARGET_PATH FILENAME TARGET_NAME)
     string(REGEX MATCH "(0x[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F])\\.([pc]s_[0-9]_[0-9])\\.hlsl$" _ ${FILENAME} )
     set(SHADER_HASH ${CMAKE_MATCH_1})
     set(SHADER_TARGET ${CMAKE_MATCH_2})
+    SET(EMBED_FOLDER ${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}.include/embed)
     
     if (SHADER_HASH AND SHADER_TARGET) 
       STRING(SUBSTRING ${SHADER_TARGET} 3 1 SHADER_TARGET_MAJOR)
@@ -58,17 +59,17 @@ function(build_shader_target)
       inspect_hlsl_imports(${FILE} HLSL_CHILD_DEPENDENCIES)
       list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
       add_custom_command(
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/embed/${SHADER_HASH}.cso
-        COMMAND ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x64/${SHADER_BINARY} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /O3 /Qstrip_reflect -E main -Fo ${CMAKE_CURRENT_BINARY_DIR}/embed/${SHADER_HASH}.cso
+        OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.cso
+        COMMAND ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x64/${SHADER_BINARY} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}.cso
         DEPENDS ${HLSL_DEPENDENCIES}
       )
       add_custom_command(
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/embed/include/embed/${SHADER_HASH}.h
-        COMMAND embedfile ${CMAKE_BINARY_DIR}/embed/${SHADER_HASH}.cso ${SHADER_HASH}
-        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/embed/${SHADER_HASH}.cso
+        OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.h
+        COMMAND embedfile ${EMBED_FOLDER}/${SHADER_HASH}.cso ${EMBED_FOLDER}/${SHADER_HASH}
+        DEPENDS ${EMBED_FOLDER}/${SHADER_HASH}.cso
       )
 
-      list(APPEND SHADER_HEADER_FILES ${CMAKE_CURRENT_BINARY_DIR}/embed/include/embed/${SHADER_HASH}.h)
+      list(APPEND SHADER_HEADER_FILES ${EMBED_FOLDER}/${SHADER_HASH}.h)
     endif()
   endforeach()
   LIST(JOIN SHADER_HEADER_FILES " " SHADER_HEADER_FILE_ITEMS)
@@ -92,7 +93,7 @@ foreach(FILE ${ADDON_FILES})
   add_dependencies(${ADDON} shaders)
   target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external/reshade)
   target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-  target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/embed/include)
+  target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include)
   target_compile_definitions(${ADDON} PRIVATE _UNICODE)
   set_target_properties(${ADDON}
     PROPERTIES

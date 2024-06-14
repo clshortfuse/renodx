@@ -10,11 +10,25 @@ FILE* open_or_exit(const char* fname, const char* mode) {
   return f;
 }
 
+const char* GetFileNameFromPath(const char* _buffer)
+{
+    char c;
+    int  i;
+    for (i = 0; ;++i) {
+        c = *((char*)_buffer+i);
+        if (c == '\\' || c == '/')
+            return GetFileNameFromPath((char*)_buffer + i + 1);
+        if (c == '\0')
+            return _buffer;
+    }
+    return "";
+}
+
 int main(int argc, char** argv) {
   if (argc < 3) {
     fprintf(stderr,
       "USAGE: %s {rsrc} {sym}\n\n"
-      "  Creates {sym} from the contents of {rsrc}\n",
+      "  Creates {sym}.h from the contents of {rsrc}\n",
       argv[0]);
     return EXIT_FAILURE;
   }
@@ -23,13 +37,14 @@ int main(int argc, char** argv) {
   const char* sym = argv[2];
 
   char symfile[256];
-  snprintf(symfile, sizeof(symfile), "embed/include/embed/%s.h", sym);
+  snprintf(symfile, sizeof(symfile), "%s.h", sym);
+  char* symbasename = GetFileNameFromPath(sym);
 
   FILE* out = open_or_exit(symfile, "wt");
-  fprintf(out, "#ifndef _%s_EMBED_FILE\n", sym);
-  fprintf(out, "#define _%s_EMBED_FILE\n", sym);
+  fprintf(out, "#ifndef _%s_EMBED_FILE\n", symbasename);
+  fprintf(out, "#define _%s_EMBED_FILE\n", symbasename);
   fprintf(out, "#include <cstdint>\n");
-  fprintf(out, "const std::uint8_t _%s[] = {\n", sym);
+  fprintf(out, "const std::uint8_t _%s[] = {\n", symbasename);
 
   unsigned char buf[256];
   size_t nread = 0;
