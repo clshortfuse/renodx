@@ -151,6 +151,15 @@ UserSettingUtil::UserSettings userSettings = {
     .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
   },
   new UserSettingUtil::UserSetting {
+    .key = "toneMapHueCorrection",
+    .binding = &shaderInjection.toneMapHueCorrection,
+    .valueType = UserSettingUtil::UserSettingValueType::boolean,
+    .defaultValue = 1,
+    .label = "Hue Correction",
+    .section = "Tone Mapping",
+    .tooltip = "Emulates hue shifting from the vanilla tonemapper",
+  },
+  new UserSettingUtil::UserSetting {
     .key = "colorGradeExposure",
     .binding = &shaderInjection.colorGradeExposure,
     .defaultValue = 1.f,
@@ -195,6 +204,25 @@ UserSettingUtil::UserSettings userSettings = {
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeBlowout",
+    .binding = &shaderInjection.colorGradeBlowout,
+    .defaultValue = 82.f,
+    .label = "Blowout",
+    .section = "Color Grading",
+    .tooltip = "Controls highlight desaturation due to overexposure.",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.01f; }
+  },
+  // new UserSettingUtil::UserSetting {
+  //   .key = "renoDRTFlare",
+  //   .binding = &shaderInjection.renoDRTFlare,
+  //   .defaultValue = 0.5f,
+  //   .label = "renoDRTFlare",
+  //   .section = "Tonemapper Settings",
+  //   .max = 1.0f,
+  //   .format = "%.4f"
+  // },
   new UserSettingUtil::UserSetting {
     .key = "colorGradeLUTStrength",
     .binding = &shaderInjection.colorGradeLUTStrength,
@@ -242,6 +270,7 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("toneMapGameNits", 203.f);
   UserSettingUtil::updateUserSetting("toneMapUINits", 203.f);
   UserSettingUtil::updateUserSetting("toneMapGammaCorrection", 0);
+  UserSettingUtil::updateUserSetting("toneMapHueCorrection", 1);
   UserSettingUtil::updateUserSetting("colorGradeExposure", 1.f);
   UserSettingUtil::updateUserSetting("colorGradeHighlights", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
