@@ -118,7 +118,7 @@ void main(
   const float3 untonemapped = r0.xyz;
 
   // tonemapping
-  if (injectedData.toneMapType == 0) { // vanilla
+  if (injectedData.toneMapType == 0 || injectedData.toneMapHueCorrection) { // vanilla
     r1.x = max(9.99999975e-005, cb2[2].y);
     r1.y = 0.560000002 / r1.x;
     r1.y = 2.43000007 + r1.y;
@@ -135,6 +135,10 @@ void main(
     r2.xyz = r0.xyz * r2.xyz + r1.yyy;
     r1.xyz = saturate(r1.xzw / r2.xyz);
     r0.xyz = r0.www ? r1.xyz : r0.xyz;
+    
+    if (injectedData.toneMapType != 0) {
+      r0.xyz = hueCorrection(untonemapped, r0.xyz);
+    }
   }
   else { // untonemapped
     r0.xyz = untonemapped;

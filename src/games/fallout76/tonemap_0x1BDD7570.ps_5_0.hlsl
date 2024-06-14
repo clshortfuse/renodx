@@ -144,7 +144,7 @@ void main(
   const float3 untonemapped = r0.xyz;
 
   /* tone mapping */
-  if (injectedData.toneMapType == 0) { // Vanilla
+  if (injectedData.toneMapType == 0 || injectedData.toneMapHueCorrection) { // Vanilla
     r1.x = max(9.99999975e-005, cb2[2].y);
     r1.y = 0.560000002 / r1.x; // .56 = 11.2 (linear white point) * .5 * .1 (linear angle)?
     r1.y = 2.43000007 + r1.y;
@@ -161,9 +161,13 @@ void main(
     r2.xyz = r0.xyz * r2.xyz + r1.yyy;
     r1.xyz = saturate(r1.xzw / r2.xyz);
     r0.xyz = r0.www ? r1.xyz : r0.xyz;
+
+    if (injectedData.toneMapType != 0) {
+      r0.xyz = hueCorrection(untonemapped, r0.xyz);
+    }
   }
   else { // untonemapped
-    r0.xyz = untonemapped;
+      r0.xyz = untonemapped;
   }
   r1.x = dot(r0.xyz, float3(0.212500006,0.715399981,0.0720999986)); // ~BT709 luminance
   r0.w = 0;

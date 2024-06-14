@@ -9,11 +9,13 @@ struct ShaderInjectData {
   float toneMapGameNits;
   float toneMapUINits;
   float toneMapGammaCorrection;
+  float toneMapHueCorrection;
   float colorGradeExposure;
   float colorGradeHighlights;
   float colorGradeShadows;
   float colorGradeContrast;
   float colorGradeSaturation;
+  float colorGradeBlowout;
   float colorGradeLUTStrength;
   float colorGradeLUTScaling;
   float fxBloom;
@@ -22,7 +24,7 @@ struct ShaderInjectData {
   float fxDoF;
   float fxFilmGrain;
   float elapsedTime;
-  float renoDRTFlare;
+  // float renoDRTFlare;
 };
 
 #ifndef __cplusplus

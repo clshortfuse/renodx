@@ -41,12 +41,12 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   o0.w = r0.w;
 
   float vanillaMidGray = 0.18f;
-  float renoDRTContrast = 0.90f;
+  float renoDRTContrast = 0.96f;
   float renoDRTFlare = 0.5f;
-  float renoDRTShadows = 0.90f;
-  float renoDRTDechroma = 0.83f;
-  float renoDRTSaturation = 2.0f;
-  float renoDRTHighlights = 1.2f;
+  float renoDRTShadows = 1.f;
+  float renoDRTDechroma = injectedData.colorGradeBlowout;
+  float renoDRTSaturation = 2.f;
+  float renoDRTHighlights = 1.f;
 
   ToneMapParams tmParams = {
     injectedData.toneMapType,

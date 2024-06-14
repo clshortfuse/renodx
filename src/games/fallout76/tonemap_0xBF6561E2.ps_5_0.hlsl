@@ -125,7 +125,7 @@ void main(
   const float3 untonemapped = r0.xyz;
 
   // tonemapping
-  if (r1.x != 0 & injectedData.toneMapType == 0) { // vanilla
+  if (r1.x != 0 && (injectedData.toneMapType == 0 || injectedData.toneMapHueCorrection)) { // vanilla
     // Select ACES or Uncharted2 tonemapper
     r1.xy = float2(-1,-2) + cb2[2].xx;
     r2.xyz = r0.xyz * float3(2.50999999,2.50999999,2.50999999) + float3(0.0299999993,0.0299999993,0.0299999993);
@@ -165,6 +165,10 @@ void main(
     r4.xyz = r4.xyz * r1.zzz;
     r1.yzw = r1.yyy ? r3.xyz : r4.xyz;
     r0.xyz = r1.xxx ? r2.xyz : r1.yzw;
+
+    if (injectedData.toneMapType != 0) {
+      r0.xyz = hueCorrection(untonemapped, r0.xyz);
+    }
   }
   else { // untonemapped
     r0.xyz = untonemapped;

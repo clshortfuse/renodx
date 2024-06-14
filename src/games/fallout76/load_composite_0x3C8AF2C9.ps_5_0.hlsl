@@ -61,6 +61,7 @@ void main(
   o0.xyz = r2.zzz ? r1.xyz : r0.xyz;
   o0.w = 1;
 
+  o0.rgb = saturate(o0.rgb);
   o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
 
