@@ -498,7 +498,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
            .newFormat = reshade::api::format::r16g16b16a16_float,
            .index = a_index,
            .aspectRatio = 16.f / 9.f,
-           .forceUnorderedAccess = true
+           .usageSet = (uint32_t)reshade::api::resource_usage::unordered_access
           }
         );
         SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
