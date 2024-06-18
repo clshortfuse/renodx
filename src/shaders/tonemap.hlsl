@@ -1,3 +1,6 @@
+#ifndef SRC_SHADERS_TONEMAP_HLSL_
+#define SRC_SHADERS_TONEMAP_HLSL_
+
 #include "./aces.hlsl"
 #include "./colorgrade.hlsl"
 #include "./lut.hlsl"
@@ -165,12 +168,15 @@ float3 toneMapUpgrade(float3 hdrColor, float3 sdrColor, float3 postProcessColor,
 
   if (hdrY < sdrY) {
     // If substracting (user contrast or paperwhite) scale down instead
+    // Should only apply on mismatched HDR
     scaledRatio = hdrY / sdrY;
   } else {
     float deltaY = hdrY - sdrY;
-    float newY = postProcessY + max(0, deltaY);  // deltaY may be NaN?
+    deltaY = max(0, deltaY);  // Cleans up NaN
+    float newY = postProcessY + deltaY;
 
-    scaledRatio = postProcessY > 0 ? (newY / postProcessY) : 0;
+    bool isValidY = (postProcessY > 0);  // Cleans up NaN and ignore black
+    scaledRatio = isValidY ? (newY / postProcessY) : 0;
   }
 
   float3 scaledColor = postProcessColor * scaledRatio;
@@ -457,3 +463,5 @@ float3 bt2446aFromBT709Linear(float3 bt709) {
   float3 itmoColor = mul(BT2020_2_BT709_MAT, newColor);
   return itmoColor;
 }
+
+#endif  // SRC_SHADERS_TONEMAP_HLSL_
