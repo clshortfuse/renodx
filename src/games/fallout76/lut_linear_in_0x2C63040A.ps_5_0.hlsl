@@ -68,7 +68,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     renoDRTFlare
   };
 
-  ToneMapLUTParams lutParams = buildLUTParams(
+  LUTParams lutParams = buildLUTParams(
     s3_s,
     injectedData.colorGradeLUTStrength,
     injectedData.colorGradeLUTScaling,  // Cleans up raised black floor

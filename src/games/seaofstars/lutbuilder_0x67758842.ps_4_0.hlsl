@@ -264,7 +264,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
 
   bool useSDRLut = (cb0[145].x >= 0) && (cb0[144].w >= 0);
 
-  ToneMapLUTParams lutParams = buildLUTParams(
+  LUTParams lutParams = buildLUTParams(
     s0_s,
     useSDRLut ? cb0[144].w * injectedData.colorGradeLUTStrength : 0,
     injectedData.colorGradeLUTScaling,

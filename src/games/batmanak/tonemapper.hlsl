@@ -40,12 +40,12 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
     renoDRTDechroma,
     renoDRTFlare
   };
-  ToneMapLUTParams lutParams = buildLUTParams(
+  LUTParams lutParams = buildLUTParams(
     lutSampler,
     injectedData.colorGradeLUTStrength,
     0.f,  // Lut scaling not needed
-    TONE_MAP_LUT_TYPE__2_2,
-    TONE_MAP_LUT_TYPE__2_2,
+    LUT_TYPE__2_2,
+    LUT_TYPE__2_2,
     16.f
   );
 

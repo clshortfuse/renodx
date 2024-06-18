@@ -91,7 +91,7 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
     renoDRTFlare
   };
 
-  ToneMapLUTParams lutParams = buildLUTParams(
+  LUTParams lutParams = buildLUTParams(
     s0_s,
     1.f,                                // Internal LUT
     injectedData.colorGradeLUTScaling,  // Cleans up raised black floor
@@ -109,7 +109,7 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
     if (useSDRLUT) {
       // Seems to be done in LUT builder now
       // Leaving just in case
-      ToneMapLUTParams sdrLUTParams = buildLUTParams(
+      LUTParams sdrLUTParams = buildLUTParams(
         s0_s,
         cb0[189].w,
         injectedData.colorGradeLUTScaling,

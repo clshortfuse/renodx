@@ -429,7 +429,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
 
   float lutStrength = _9.Sample(_36, float2(TEXCOORD.x, TEXCOORD.y));
 
-  ToneMapLUTParams lutParams = buildLUTParams(
+  LUTParams lutParams = buildLUTParams(
     _36,
     injectedData.colorGradeLUTStrength,
     injectedData.colorGradeLUTScaling,

@@ -183,7 +183,7 @@ void main(float4 v0 : SV_Position0, float4 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     renoDRTDechroma,
     renoDRTFlare
   };
-  ToneMapLUTParams lutParams = buildLUTParams(
+  LUTParams lutParams = buildLUTParams(
     s2_s,
     injectedData.colorGradeLUTStrength,
     injectedData.colorGradeLUTScaling,
