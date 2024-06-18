@@ -2,6 +2,7 @@
 #define SRC_COMMON_LUT_HLSL_
 
 #include "./color.hlsl"
+#include "./math.hlsl"
 
 // https://www.glowybits.com/blog/2016/12/21/ifl_iss_hdr_1/
 float ColorGradeSmoothClamp(float x) {
@@ -220,6 +221,67 @@ float3 recolorUnclampedLUT(float3 originalLinear, float3 unclampedLinear) {
   outputLinear = max(0, outputLinear);                // Clamp to AP1
   outputLinear = mul(AP1_2_BT709_MAT, outputLinear);  // Convert BT709
   return outputLinear;
+}
+
+// Sample that allows to go beyond the 0-1 coordinates range through extrapolation.
+// It finds the rate of change (acceleration) of the LUT color around the requested clamped coordinates, and guesses what color the sampling would have with the out of range coordinates.
+// Extrapolating LUT by re-apply the rate of change has the benefit of consistency. If the LUT has the same color at (e.g.) uv 0.9 0.9 and 1.0 1.0, thus clipping to white or black, the extrapolation will also stay clipped.
+// Additionally, if the LUT had inverted colors or highly fluctuating colors, extrapolation would work a lot better than a raw LUT out of range extraction with a luminance multiplier.
+// 
+// This function does not acknowledge the LUT transfer function nor any specific LUT properties.
+// This function allows your to pick whether you want to extrapolate diagonal, horizontal or veretical coordinates.
+// Note that this function might return "invalid colors", they could have negative values etc etc, so make sure to clamp them after if you need to.
+// This version is for a 2D float4 texture with a single gradient (not a 3D map reprojected in 2D with horizontal/vertical slices), but the logic applies to 3D textures too.
+// 
+// "unclampedUV" is expected to have been remapped within the range that excludes that last half texels at the edges.
+// "extrapolationDirection" 0 is both hor and ver. 1 is hor only. 2 is ver only.
+float4 sampleLUTWithExtrapolation(Texture2D<float4> lut, SamplerState samplerState, float2 unclampedUV, const int extrapolationDirection = 0)
+{
+    // LUT size in texels
+    float lutWidth;
+    float lutHeight;
+    lut.GetDimensions(lutWidth, lutHeight);
+    const float2 lutSize = float2(lutWidth, lutHeight);
+    const float2 lutMax = lutSize - 1.0;
+    const float2 uvScale = lutMax / lutSize; // Also "1-(1/lutSize)"
+    const float2 uvOffset = 1.0 / (2.0 * lutSize); // Also "(1/lutSize)/2"
+    // The uv distance between the center of one texel and the next one
+    const float2 lutTexelRange = 1.0 / lutMax;
+    
+    // Remap the input coords to also include the last half texels at the edges, essentually working in full 0-1 range,
+    // we will re-map them out when sampling, this is essential for proper extrapolation math.
+    unclampedUV = (unclampedUV - uvOffset) / uvScale;
+    
+    const float2 clampedUV = saturate(unclampedUV);
+    const float distanceFromUnclampedToClamped = length(unclampedUV - clampedUV);
+    const bool uvOutOfRange = distanceFromUnclampedToClamped > FLT_MIN; // Some threshold is needed to avoid divisions by tiny numbers
+    
+    const float4 clampedSample = lut.Sample(samplerState, (clampedUV * uvScale) + uvOffset).xyzw; // Use "clampedUV" instead of "unclampedUV" as we don't know what kind of sampler was in use here
+    
+    if (uvOutOfRange && extrapolationDirection >= 0) {
+        float2 centeredUV;
+        // Diagonal
+        if (extrapolationDirection == 0) {
+            // Find the direction between the clamped and unclamped coordinates, flip it, and use it to determine
+            // where more centered texel for extrapolation is.
+            centeredUV = clampedUV - (normalize(unclampedUV - clampedUV) * (1.0 - lutTexelRange));
+        }
+        // Horizontal or Vertical (use Diagonal if you want both Horizontal and Vertical at the same time)
+        else {
+            const bool extrapolateHorizontalCoordinates = extrapolationDirection == 0 || extrapolationDirection == 1;
+            const bool extrapolateVerticalCoordinates = extrapolationDirection == 0 || extrapolationDirection == 2;
+            centeredUV = float2(clampedUV.x >= 0.5 ? max(clampedUV.x - lutTexelRange.x, 0.5) : min(clampedUV.x + lutTexelRange.x, 0.5), clampedUV.y >= 0.5 ? max(clampedUV.y - lutTexelRange.y, 0.5) : min(clampedUV.y + lutTexelRange.y, 0.5));
+            centeredUV = float2(extrapolateHorizontalCoordinates ? centeredUV.x : unclampedUV.x, extrapolateVerticalCoordinates ? centeredUV.y : unclampedUV.y);
+        }
+        
+        const float4 centeredSample = lut.Sample(samplerState, (centeredUV * uvScale) + uvOffset).xyzw;
+        // Note: if we are only doing "Horizontal" or "Vertical" extrapolation, we could replace this "length()" calculation with a simple subtraction
+        const float distanceFromClampedToCentered = length(clampedUV - centeredUV);
+        const float extrapolationRatio = distanceFromClampedToCentered == 0.0 ? 0.0 : (distanceFromUnclampedToClamped / distanceFromClampedToCentered);
+        const float4 extrapolatedSample = lerp(centeredSample, clampedSample, 1.0 + extrapolationRatio);
+        return extrapolatedSample;
+    }
+    return clampedSample;
 }
 
 #endif  // SRC_COMMON_LUT_HLSL_
