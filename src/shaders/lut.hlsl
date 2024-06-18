@@ -1,5 +1,5 @@
-#ifndef SRC_COMMON_LUT_HLSL_
-#define SRC_COMMON_LUT_HLSL_
+#ifndef SRC_SHADERS_LUT_HLSL_
+#define SRC_SHADERS_LUT_HLSL_
 
 #include "./color.hlsl"
 
@@ -47,119 +47,104 @@ float3 centerLUTTexel(float3 color, float size) {
   return scale * color + offset;
 }
 
-float3 sampleLUT(Texture3D lut, SamplerState samplerState, float3 color, float size = 0) {
-  if (size == 0) {
-    // Removed by compiler if specified
-    float width;
-    float height;
-    float depth;
-    lut.GetDimensions(width, height, depth);
-    size = height;
+#define sampleLUTTexture3DFunctionGenerator(textureType)                                       \
+  float3 sampleLUT(textureType lut, SamplerState samplerState, float3 color, float size = 0) { \
+    if (size == 0) {                                                                           \
+      /* Removed by compiler if specified */                                                   \
+      float width;                                                                             \
+      float height;                                                                            \
+      float depth;                                                                             \
+      lut.GetDimensions(width, height, depth);                                                 \
+      size = height;                                                                           \
+    }                                                                                          \
+                                                                                               \
+    float3 position = centerLUTTexel(color, size);                                             \
+                                                                                               \
+    return lut.SampleLevel(samplerState, position, 0.0f).rgb;                                  \
   }
 
-  float3 position = centerLUTTexel(color, size);
-
-  return lut.SampleLevel(samplerState, position, 0.0f).rgb;
-}
-
-float3 sampleLUT(Texture3D<float3> lut, SamplerState samplerState, float3 color, float size = 0) {
-  if (size == 0) {
-    // Removed by compiler if specified
-    float width;
-    float height;
-    float depth;
-    lut.GetDimensions(width, height, depth);
-    size = height;
+#define sampleLUTTexture2DPrecomputedFunctionGenerator(textureType)                               \
+  float3 sampleLUT(textureType lut, SamplerState samplerState, float3 color, float3 precompute) { \
+    float texelSize = precompute.x;                                                               \
+    float slice = precompute.y;                                                                   \
+    float maxIndex = precompute.z;                                                                \
+                                                                                                  \
+    float zPosition = color.z * maxIndex;                                                         \
+    float zInteger = floor(zPosition);                                                            \
+    float zFraction = zPosition - zInteger;                                                       \
+    float zOffset = zInteger * slice;                                                             \
+                                                                                                  \
+    float xOffset = (color.r * maxIndex * texelSize) + (texelSize * 0.5f);                        \
+                                                                                                  \
+    float yOffset = (color.g * maxIndex * slice) + (slice * 0.5f);                                \
+                                                                                                  \
+    float2 uv = float2(                                                                           \
+      zOffset + xOffset,                                                                          \
+      yOffset                                                                                     \
+    );                                                                                            \
+                                                                                                  \
+    float3 color0 = lut.SampleLevel(samplerState, uv, 0).rgb;                                     \
+    uv.x += slice;                                                                                \
+    float3 color1 = lut.SampleLevel(samplerState, uv, 0).rgb;                                     \
+                                                                                                  \
+    return lerp(color0, color1, zFraction);                                                       \
   }
 
-  float3 position = centerLUTTexel(color, size);
-
-  return lut.SampleLevel(samplerState, position, 0.0f).rgb;
-}
-
-float3 sampleLUT(Texture2D lut, SamplerState samplerState, float3 color, float3 precompute) {
-  float texelSize = precompute.x;
-  float slice = precompute.y;
-  float maxIndex = precompute.z;
-
-  float zPosition = color.z * maxIndex;
-  float zInteger = floor(zPosition);
-  float zFraction = zPosition - zInteger;
-  float zOffset = zInteger * slice;
-
-  float xOffset = (color.r * maxIndex * texelSize) + (texelSize * 0.5f);
-
-  float yOffset = (color.g * maxIndex * slice) + (slice * 0.5f);
-
-  float2 uv = float2(
-    zOffset + xOffset,
-    yOffset
-  );
-
-  float3 color0 = lut.SampleLevel(samplerState, uv, 0).rgb;
-  uv.x += slice;
-  float3 color1 = lut.SampleLevel(samplerState, uv, 0).rgb;
-
-  return lerp(color0, color1, zFraction);
-}
-
-float3 sampleLUT(Texture2D lut, SamplerState samplerState, float3 color, float size = 0) {
-  if (size == 0) {
-    // Removed by compiler if specified
-    float width;
-    float height;
-    lut.GetDimensions(width, height);
-    size = min(width, height);
+#define sampleLUTTexture2DFunctionGenerator(textureType)                                       \
+  float3 sampleLUT(textureType lut, SamplerState samplerState, float3 color, float size = 0) { \
+    if (size == 0) {                                                                           \
+      /* Removed by compiler if specified */                                                   \
+      float width;                                                                             \
+      float height;                                                                            \
+      lut.GetDimensions(width, height);                                                        \
+      size = min(width, height);                                                               \
+    }                                                                                          \
+                                                                                               \
+    float maxIndex = size - 1.f;                                                               \
+    float slice = 1.f / size;                                                                  \
+    float texelSize = slice * slice;                                                           \
+                                                                                               \
+    return sampleLUT(lut, samplerState, color, float3(texelSize, slice, maxIndex));            \
   }
 
-  float maxIndex = size - 1.f;
-  float slice = 1.f / size;
-  float texelSize = slice * slice;
-
-  return sampleLUT(lut, samplerState, color, float3(texelSize, slice, maxIndex));
-}
-
-float3 sampleLUT(Texture2D<float3> lut, SamplerState samplerState, float3 color, float3 precompute) {
-  float texelSize = precompute.x;
-  float slice = precompute.y;
-  float maxIndex = precompute.z;
-
-  float zPosition = color.z * maxIndex;
-  float zInteger = floor(zPosition);
-  float zFraction = zPosition - zInteger;
-  float zOffset = zInteger * slice;
-
-  float xOffset = (color.r * maxIndex * texelSize) + (texelSize * 0.5f);
-
-  float yOffset = (color.g * maxIndex * slice) + (slice * 0.5f);
-
-  float2 uv = float2(
-    zOffset + xOffset,
-    yOffset
-  );
-
-  float3 color0 = lut.SampleLevel(samplerState, uv, 0).rgb;
-  uv.x += slice;
-  float3 color1 = lut.SampleLevel(samplerState, uv, 0).rgb;
-
-  return lerp(color0, color1, zFraction);
-}
-
-float3 sampleLUT(Texture2D<float3> lut, SamplerState samplerState, float3 color, float size = 0) {
-  if (size == 0) {
-    // Removed by compiler if specified
-    float width;
-    float height;
-    lut.GetDimensions(width, height);
-    size = min(width, height);
+#define sampleLUT3DColorFunctionGenerator(textureType)                               \
+  float3 sampleLUTColor(float3 color, LUTParams lutParams, textureType lutTexture) { \
+    return sampleLUT(                                                                \
+      lutTexture,                                                                    \
+      lutParams.lutSampler,                                                          \
+      color.rgb,                                                                     \
+      lutParams.size                                                                 \
+    );                                                                               \
   }
 
-  float maxIndex = size - 1.f;
-  float slice = 1.f / size;
-  float texelSize = slice * slice;
+#define sampleLUT2DColorFunctionGenerator(textureType)                               \
+  float3 sampleLUTColor(float3 color, LUTParams lutParams, textureType lutTexture) { \
+    if (lutParams.precompute.x) {                                                    \
+      return sampleLUT(                                                              \
+        lutTexture,                                                                  \
+        lutParams.lutSampler,                                                        \
+        color.rgb,                                                                   \
+        lutParams.precompute.xyz                                                     \
+      );                                                                             \
+    }                                                                                \
+    return sampleLUT(                                                                \
+      lutTexture,                                                                    \
+      lutParams.lutSampler,                                                          \
+      color.rgb,                                                                     \
+      lutParams.size                                                                 \
+    );                                                                               \
+  }
 
-  return sampleLUT(lut, samplerState, color, float3(texelSize, slice, maxIndex));
-}
+sampleLUTTexture3DFunctionGenerator(Texture3D<float4>);
+sampleLUTTexture3DFunctionGenerator(Texture3D<float3>);
+sampleLUTTexture2DPrecomputedFunctionGenerator(Texture2D<float4>);
+sampleLUTTexture2DPrecomputedFunctionGenerator(Texture2D<float3>);
+sampleLUTTexture2DFunctionGenerator(Texture2D<float4>);
+sampleLUTTexture2DFunctionGenerator(Texture2D<float3>);
+sampleLUT3DColorFunctionGenerator(Texture3D<float4>);
+sampleLUT3DColorFunctionGenerator(Texture3D<float3>);
+sampleLUT2DColorFunctionGenerator(Texture2D<float4>);
+sampleLUT2DColorFunctionGenerator(Texture2D<float3>);
 
 float3 sampleLUTUnreal(Texture2D lut, SamplerState samplerState, float3 color, float size = 0) {
   if (size == 0) {
@@ -252,29 +237,6 @@ float3 recolorUnclampedLUT(float3 originalLinear, float3 unclampedLinear) {
   outputLinear = mul(AP1_2_BT709_MAT, outputLinear);  // Convert BT709
   return outputLinear;
 }
-
-#define sampleLUTColorFunctionGenerator(textureType)                                 \
-  float3 sampleLUTColor(float3 color, LUTParams lutParams, textureType lutTexture) { \
-    if (lutParams.precompute.x) {                                                    \
-      return sampleLUT(                                                              \
-        lutTexture,                                                                  \
-        lutParams.lutSampler,                                                        \
-        color.rgb,                                                                   \
-        lutParams.precompute.xyz                                                     \
-      );                                                                             \
-    }                                                                                \
-    return sampleLUT(                                                                \
-      lutTexture,                                                                    \
-      lutParams.lutSampler,                                                          \
-      color.rgb,                                                                     \
-      lutParams.size                                                                 \
-    );                                                                               \
-  }
-
-sampleLUTColorFunctionGenerator(Texture2D);
-sampleLUTColorFunctionGenerator(Texture2D<float3>);
-sampleLUTColorFunctionGenerator(Texture3D);
-sampleLUTColorFunctionGenerator(Texture3D<float3>);
 
 float3 convertLUTInput(float3 color, LUTParams lutParams) {
   if (lutParams.inputType == LUT_TYPE__SRGB) {
@@ -384,7 +346,7 @@ float3 restoreLUTSaturationLoss(float3 inputColor, float3 outputColor, LUTParams
 }
 
 #define sampleLUTFunctionGenerator(textureType)                                                 \
-  float3 sampleLUT(float3 inputColor, LUTParams lutParams, textureType lutTexture) {            \
+  float3 sampleLUT(textureType lutTexture, LUTParams lutParams, float3 inputColor) {            \
     float3 lutInputColor = convertLUTInput(inputColor, lutParams);                              \
     float3 lutOutputColor = sampleLUTColor(lutInputColor, lutParams, lutTexture);               \
     float3 outputColor = linearLUTOutput(lutOutputColor, lutParams);                            \
@@ -409,9 +371,20 @@ float3 restoreLUTSaturationLoss(float3 inputColor, float3 outputColor, LUTParams
     return outputColor;                                                                         \
   }
 
-sampleLUTFunctionGenerator(Texture2D<float4>);
-sampleLUTFunctionGenerator(Texture2D<float3>);
+// Deprecated
+#define sampleLUTDeprecatedFunctionGenerator(textureType)                            \
+  float3 sampleLUT(float3 inputColor, LUTParams lutParams, textureType lutTexture) { \
+    return sampleLUT(lutTexture, lutParams, inputColor);                             \
+  }
+
 sampleLUTFunctionGenerator(Texture3D<float4>);
 sampleLUTFunctionGenerator(Texture3D<float3>);
+sampleLUTFunctionGenerator(Texture2D<float4>);
+sampleLUTFunctionGenerator(Texture2D<float3>);
 
-#endif  // SRC_COMMON_LUT_HLSL_
+sampleLUTDeprecatedFunctionGenerator(Texture3D<float4>);
+sampleLUTDeprecatedFunctionGenerator(Texture3D<float3>);
+sampleLUTDeprecatedFunctionGenerator(Texture2D<float4>);
+sampleLUTDeprecatedFunctionGenerator(Texture2D<float3>);
+
+#endif  // SRC_SHADERS_LUT_HLSL_

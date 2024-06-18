@@ -279,7 +279,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     r0.xyz = unityNeutralTonemap(r0.xyz);
 
     if (useSDRLut) {
-      r0.xyz = lerp(r0.xyz, sampleLUT(r0.xyz, lutParams, t8), lutParams.strength);
+      r0.xyz = lerp(r0.xyz, sampleLUT(t8, lutParams, r0.xyz), lutParams.strength);
     }
   } else {
     float vanillaMidGray = unityNeutralTonemap(0.18f);

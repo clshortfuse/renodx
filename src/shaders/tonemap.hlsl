@@ -250,9 +250,9 @@ float3 toneMap(float3 untonemapped, ToneMapParams params) {
       || lutParams.inputType == TONE_MAP_LUT_TYPE__2_2                                                     \
       || lutParams.inputType == TONE_MAP_LUT_TYPE__2_0                                                     \
     ) {                                                                                                    \
-      lutColor = sampleLUT(sdrColor, lutParams, lutTexture);                                               \
+      lutColor = sampleLUT(lutTexture, lutParams, sdrColor);                                               \
     } else {                                                                                               \
-      lutColor = min(1.f, sampleLUT(hdrColor, lutParams, lutTexture));                                     \
+      lutColor = min(1.f, sampleLUT(lutTexture, lutParams, hdrColor));                                     \
     }                                                                                                      \
                                                                                                            \
     if (tmParams.type == 0.f) {                                                                            \

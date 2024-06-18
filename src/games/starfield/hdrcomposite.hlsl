@@ -446,7 +446,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
   // float3 lutCoordinates = float3((_305 * 0.9375f) + 0.03125f, (_306 * 0.9375f) + 0.03125f, (_307 * 0.9375f) + 0.03125f);
   // float3 lutOutputColor = _13.Sample(_36, lutCoordinates);
   // float3 lutBlendedColor = lerp(lutOutputColor, gammaColor, lutStrength);
-  float3 lutColor = sampleLUT(sceneGradedColor, lutParams, _13);
+  float3 lutColor = sampleLUT(_13, lutParams, sceneGradedColor);
 
   // Back in "output gamma"
 
@@ -468,7 +468,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
 
     float3 contrastedColor2 = pow(scaledColor, frameData.lutScalingPow);
     float3 lutScaled = (frameData.fBrightnessHDR * (((contrastedColor2 * unknownScaling) - lutColorInGamma) + ((1.0f - contrastedColor2) * scaledColor))) + lutColorInGamma;
-    lutColor = pow(saturate(lutColorInGamma), 2.4f);
+    lutColor = linearFromSRGB(saturate(lutColorInGamma));
   }
 
   // undo gamma

@@ -104,7 +104,7 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
   if (tmParams.type == 1.f) {
     outputColor = toneMap(untonemapped, tmParams);
   } else {
-    outputColor = sampleLUT(untonemapped * cb0[188].w, lutParams, t3);
+    outputColor = sampleLUT(t3, lutParams, untonemapped * cb0[188].w);
     float useSDRLUT = (cb0[203].y == 0 && cb0[189].w >= 0);
     if (useSDRLUT) {
       // Seems to be done in LUT builder now
@@ -118,7 +118,7 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
         cb0[189].xyz  // precompute
       );
 
-      float3 sdrLutResult = sampleLUT(outputColor, sdrLUTParams, t4);
+      float3 sdrLutResult = sampleLUT(t4, sdrLUTParams, outputColor);
       outputColor = lerp(outputColor, sdrLutResult, cb0[189].w);
     }
   }

@@ -117,7 +117,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     r1.xyz = r0.xyz;  // float3(0.9375,0.9375,0.9375) + float3(0.03125,0.03125,0.03125);
 
     //r2.xyz = t3.Sample(s3_s, r1.xyz).xyz;
-    r2.xyz = sampleLUT(r0.xyz, lutParams, t3);
+    r2.xyz = sampleLUT(t3, lutParams, r0.xyz);
 
     r2.xyz = cb2[0].xxx * r2.xyz;
     r0.xyz = r0.xyz * cb2[1].xxx + r2.xyz;
@@ -125,27 +125,27 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
 
     //r2.xyz = t4.Sample(s4_s, r1.xyz).xyz;
     lutParams.lutSampler = s4_s;
-    r2.xyz = sampleLUT(r1.xyz, lutParams, t4);
+    r2.xyz = sampleLUT(t4, lutParams, r1.xyz);
 
     r0.xyz = r2.xyz * cb2[0].yyy + r0.xyz;
 
     //r2.xyz = t5.Sample(s5_s, r1.xyz).xyz;
     lutParams.lutSampler = s5_s;
-    r2.xyz = sampleLUT(r1.xyz, lutParams, t5);
+    r2.xyz = sampleLUT(t5, lutParams, r1.xyz);
 
     //r1.xyz = t6.Sample(s6_s, r1.xyz).xyz;
     lutParams.lutSampler = s6_s;
-    r1.xyz = sampleLUT(r1.xyz, lutParams, t6);
+    r1.xyz = sampleLUT(t6, lutParams, r1.xyz);
 
     r0.xyz = r2.xyz * cb2[0].zzz + r0.xyz;
 
     //o0.xyz = r1.xyz * cb2[0].www + r0.xyz;
-    float3 lutColor = r1.xyz * cb2[0].www + r0.xyz;
+    float3 postProcessColor = r1.xyz * cb2[0].www + r0.xyz;
 
     if (tmParams.type == 0.f) {
-      outputColor = lerp(outputColor, lutColor, lutParams.strength);
+      outputColor = lerp(outputColor, postProcessColor, lutParams.strength);
     } else {
-      outputColor = toneMapUpgrade(hdrColor, sdrColor, lutColor, lutParams.strength);
+      outputColor = toneMapUpgrade(hdrColor, sdrColor, postProcessColor, lutParams.strength);
     }
   }
   o0.rgb = outputColor;
