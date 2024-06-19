@@ -84,6 +84,10 @@ static const float3x3 IDENTITY_MAT = float3x3(
 
 // clang-format on
 
+static const float sRGB_WhiteLevelNits = 80.0;
+static const float BT709_WhiteLevelNits = 100.0;
+static const float ITU_WhiteLevelNits = 203.0;
+
 static const float3x3 BT709_2_AP0_MAT = mul(XYZ_2_AP0_MAT, mul(D65_2_D60_CAT, BT709_2_XYZ_MAT));
 static const float3x3 BT709_2_AP1_MAT = mul(XYZ_2_AP1_MAT, mul(D65_2_D60_CAT, BT709_2_XYZ_MAT));
 static const float3x3 BT709_2_BT2020_MAT = mul(XYZ_2_BT2020_MAT, BT709_2_XYZ_MAT);

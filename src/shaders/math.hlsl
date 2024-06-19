@@ -13,20 +13,20 @@ float average(float3 color)
 }
 
 // Returns 1 or FLT_MAX if "dividend" is 0
-float safeDivision(float quotient, float dividend, bool returnMax = false)
+float safeDivision(float quotient, float dividend, bool fallbackMax = false)
 {
 	if (dividend == 0.f) {
-		return returnMax ? (FLT_MAX * sign(quotient)) : 1.f;
-	}
+        return fallbackMax ? (FLT_MAX * sign(quotient)) : 1.f;
+    }
     return quotient / dividend;
 }
 
 // Returns 1 or FLT_MAX if "dividend" is 0
-float3 safeDivision(float3 quotient, float3 dividend, bool returnMax = false)
+float3 safeDivision(float3 quotient, float3 dividend, bool fallbackMax = false)
 {
-    return float3(safeDivision(quotient.x, dividend.x, returnMax),
-	              safeDivision(quotient.y, dividend.y, returnMax),
-	              safeDivision(quotient.z, dividend.z, returnMax));
+    return float3(safeDivision(quotient.x, dividend.x, fallbackMax),
+	              safeDivision(quotient.y, dividend.y, fallbackMax),
+	              safeDivision(quotient.z, dividend.z, fallbackMax));
 }
 
 #endif  // SRC_COMMON_MATH_HLSL_

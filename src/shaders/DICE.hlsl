@@ -1,5 +1,4 @@
-#define FLT_MIN asfloat(0x00800000)  //1.175494351e-38f
-#define FLT_MAX asfloat(0x7F7FFFFF)  //3.402823466e+38f
+#include "math.hlsl"
 
 // sRGB/BT.709
 float Luminance(float3 color) {
@@ -60,8 +59,10 @@ float3 DICETonemap(
   }
   return Color;
 
+#if 0 // By channel implementation
   Color.r = luminanceCompress(Color.r, MaxOutputLuminance, HighlightsShoulderStart, false, FLT_MAX, HighlightsModulationPow);
   Color.g = luminanceCompress(Color.g, MaxOutputLuminance, HighlightsShoulderStart, false, FLT_MAX, HighlightsModulationPow);
   Color.b = luminanceCompress(Color.b, MaxOutputLuminance, HighlightsShoulderStart, false, FLT_MAX, HighlightsModulationPow);
   return Color;
+#endif
 }
