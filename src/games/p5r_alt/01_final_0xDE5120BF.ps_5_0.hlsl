@@ -290,9 +290,6 @@ void main(
   // o0.xyzw = r1.xyzw;
   o0.rgb = inputColor.rgb;
   o0.a = saturate(inputColor.a);
-  if (injectedData.uiState == UI_STATE__DRAWING) {
-    o0.rgb = bt709FromBT2020(max(0, o0.rgb));
-  }
   float3 signs = sign(o0.rgb);
   o0.rgb = abs(o0.rgb);
   o0.rgb = (injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb));

@@ -1,5 +1,5 @@
-#include "./shared.h"
 #include "../../shaders/color.hlsl"
+#include "./shared.h"
 
 cbuffer GFD_PSCONST_SYSTEM : register(b0) {
   float4 clearColor : packoffset(c0);
@@ -13,14 +13,10 @@ Texture2D<float4> colorTexture : register(t0);
 // 3Dmigoto declarations
 #define cmp -
 
-void main(
-  float4 v0 : SV_POSITION0,
-              float4 v1 : TEXCOORD0,
-                          out float4 o0 : SV_TARGET0
-) {
-  float4 r0, r1, r2, r3, r4, r5, r6;
-  uint4 bitmask, uiDest;
-  float4 fDest;
+float4 main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0) : SV_TARGET0 {
+  if (injectedData.uiState == UI_STATE__MIN_ALPHA) return 1.f;
+  if (injectedData.uiState == UI_STATE__MAX_ALPHA) return 0.f;
+  float4 r0, r1, r2, r3, r4, r5, r6, o0;
 
   r0.xy = resolutionRev.xy;
   r1.xyz = float3(0.298999995, 0.587000012, 0.114);
@@ -111,23 +107,6 @@ void main(
   r0.xyzw = r1.xyzw * r0.wwww;
   r0.xyzw = r6.xyzw + r0.xyzw;
   o0.xyzw = r0.xyzw;
-  // o0.rgb = inputColor;
 
-  o0.a = inputColor.a;
-  switch (injectedData.uiState) {
-    default:
-    case UI_STATE__NONE:
-      break;
-    case UI_STATE__DRAWING:
-      o0.rgb = max(0, bt2020FromBT709(o0.rgb));
-      break;
-    case UI_STATE__MIN_ALPHA:
-      o0.a = 1.f;
-      break;
-    case UI_STATE__MAX_ALPHA:
-      o0.a = 0.f;
-      break;
-  }
-
-  return;
+  return o0;
 }
