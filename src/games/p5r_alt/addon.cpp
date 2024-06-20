@@ -9,16 +9,29 @@
 // #define DEBUG_LEVEL_1
 // #define DEBUG_LEVEL_2
 
+#include <algorithm>
+
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
-#include "d3d11_1.h"
 
+#include <embed/0xB6E26AC7.h>
+#include <embed/0xDE5120BF.h>
+
+#include <embed/0x060C3E22.h>
+#include <embed/0x23A501DC.h>
+#include <embed/0x2944b564.h>
 #include <embed/0x3C2773E3.h>
+#include <embed/0x4016ED43.h>
+#include <embed/0x5C4DD977.h>
+#include <embed/0x7C0751EF.h>
 #include <embed/0x960502CC.h>
+#include <embed/0xAB823647.h>
 #include <embed/0xB6E26AC7.h>
 #include <embed/0xCC71BBE3.h>
-#include <embed/0xDE5120BF.h>
+#include <embed/0xCF70BF33.h>
+#include <embed/0xD434C03A.h>
 #include <embed/0xE126DD24.h>
+#include <embed/0xEBBDB212.h>
 
 #include "../../mods/shaderReplaceMod.hpp"
 #include "../../mods/swapChainUpgradeMod.hpp"
@@ -30,27 +43,25 @@ extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Personal 5 Royal";
 
 ShaderReplaceMod::CustomShaders customShaders = {
-  CustomShaderEntry(0xDE5120BF),
-  CustomShaderEntry(0xCC71BBE3),
-  CustomShaderEntry(0x3C2773E3),
-  CustomShaderEntry(0xE126DD24),
   CustomShaderEntry(0xB6E26AC7),
+  CustomShaderEntry(0xDE5120BF),
+
+  CustomShaderEntry(0x060C3E22),
+  CustomShaderEntry(0x23A501DC),
+  CustomShaderEntry(0x2944B564),
+  CustomShaderEntry(0x3C2773E3),
+  CustomShaderEntry(0x4016ED43),
+  CustomShaderEntry(0x5C4DD977),
+  CustomShaderEntry(0x7C0751EF),
   CustomShaderEntry(0x960502CC),
-  // CustomShaderEntry(0xCF70BF33),
-  // CustomShaderEntry(0xDE5120BF),
-  // CustomShaderEntry(0xCC71BBE3),
-  // CustomShaderEntry(0x027109D8),
-  // CustomShaderEntry(0xE126DD24),
-  // CustomShaderEntry(0xAB823647),
-  // CustomShaderEntry(0x9C35A562),
-  // CustomShaderEntry(0xB6E26AC7),
-  // CustomShaderEntry(0xD70EB7CA),
-  // CustomShaderEntry(0x960502CC),
-  // CustomShaderEntry(0x4016ED43),
-  // CustomShaderEntry(0xBB722F0A),
-  // CustomShaderEntry(0x0D85D1F6),
-  // CustomShaderEntry(0xC6D14699),
-  // CustomShaderEntry(0x53D4388A)
+  CustomShaderEntry(0xAB823647),
+  CustomShaderEntry(0xB6E26AC7),
+  CustomShaderEntry(0xCC71BBE3),
+  CustomShaderEntry(0xCF70BF33),
+  CustomShaderEntry(0xD434C03A),
+  CustomShaderEntry(0xE126DD24),
+  CustomShaderEntry(0xEBBDB212)
+
 };
 
 ShaderInjectData shaderInjection;
@@ -228,10 +239,7 @@ static void on_present(
   uint32_t dirty_rect_count,
   const reshade::api::rect* dirty_rects
 ) {
-  shaderInjection.uiState = UI_STATE__NONE;
-  auto device = swapchain->get_device();
-  auto &data = device->get_private_data<DeviceData>();
-  std::unique_lock lock(data.mutex);
+  shaderInjection.clampState = CLAMP_STATE__NONE;
 }
 
 static bool on_ui_draw(reshade::api::command_list* cmd_list, uint32_t index_count, uint32_t instance_count, uint32_t first_index, int32_t vertex_offset, uint32_t first_instance) {
@@ -246,14 +254,27 @@ static bool on_ui_draw(reshade::api::command_list* cmd_list, uint32_t index_coun
   }
 
   auto device = cmd_list->get_device();
+  if (!currentTargets.size()) return false;
+  const auto target0 = currentTargets[0];
+  auto resource = device->get_resource_from_view(target0);
+  if (!resource.handle) return false;
+  auto desc = device->get_resource_desc(resource);
+  if (desc.texture.format != reshade::api::format::r16g16b16a16_typeless) return false;
+
   auto &data = device->get_private_data<DeviceData>();
   std::shared_lock readOnlyLock(data.mutex);
 
   if (!data.min_alpha_pipeline.handle) {
     reshade::api::blend_desc blend_desc = {};
-    blend_desc.blend_enable[0] = true;
-    blend_desc.alpha_blend_op[0] = reshade::api::blend_op::min;
-    blend_desc.render_target_write_mask[0] = 0x8;
+    for (size_t i = 0; i < 7; ++i) {
+      using namespace reshade::api;
+      blend_desc.blend_enable[i] = true;
+      blend_desc.source_color_blend_factor[i] = blend_factor::zero;
+      blend_desc.dest_color_blend_factor[i] = blend_factor::one;
+      blend_desc.color_blend_op[i] = blend_op::add;
+      blend_desc.alpha_blend_op[i] = blend_op::min;
+      blend_desc.render_target_write_mask[i] = 0xF;
+    }
     auto subobjects = reshade::api::pipeline_subobject{
       .type = reshade::api::pipeline_subobject_type::blend_state,
       .count = 1,
@@ -270,9 +291,15 @@ static bool on_ui_draw(reshade::api::command_list* cmd_list, uint32_t index_coun
 
   if (!data.max_alpha_pipeline.handle) {
     reshade::api::blend_desc blend_desc = {};
-    blend_desc.blend_enable[0] = true;
-    blend_desc.alpha_blend_op[0] = reshade::api::blend_op::max;
-    blend_desc.render_target_write_mask[0] = 0x8;
+    for (size_t i = 0; i < 7; ++i) {
+      using namespace reshade::api;
+      blend_desc.blend_enable[i] = true;
+      blend_desc.source_color_blend_factor[i] = blend_factor::zero;
+      blend_desc.dest_color_blend_factor[i] = blend_factor::one;
+      blend_desc.color_blend_op[i] = blend_op::add;
+      blend_desc.alpha_blend_op[i] = blend_op::max;
+      blend_desc.render_target_write_mask[i] = 0xF;
+    }
     auto subobjects = reshade::api::pipeline_subobject{
       .type = reshade::api::pipeline_subobject_type::blend_state,
       .count = 1,
@@ -288,25 +315,45 @@ static bool on_ui_draw(reshade::api::command_list* cmd_list, uint32_t index_coun
   }
 
   cmd_list->bind_render_targets_and_depth_stencil(currentTargets.size(), currentTargets.data(), {0});
-  shaderInjection.uiState = UI_STATE__MIN_ALPHA;
+  shaderInjection.clampState = CLAMP_STATE__MIN_ALPHA;
   ShaderReplaceMod::handlePreDraw(cmd_list);  // Performs push
   cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, data.min_alpha_pipeline);
   cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
 
-  shaderInjection.uiState = UI_STATE__MAX_ALPHA;
+  shaderInjection.clampState = CLAMP_STATE__MAX_ALPHA;
   ShaderReplaceMod::handlePreDraw(cmd_list);  // Performs push
   cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, data.max_alpha_pipeline);
   cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
 
-  shaderInjection.uiState = UI_STATE__DRAWING;
+  shaderInjection.clampState = CLAMP_STATE__OUTPUT;
   ShaderReplaceMod::handlePreDraw(cmd_list);  // Performs push
   auto &commandListData = cmd_list->get_private_data<CommandListData>();
   std::shared_lock lock(data.mutex);
   cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, commandListData.lastOutputMerger);
   cmd_list->bind_render_targets_and_depth_stencil(currentTargets.size(), currentTargets.data(), currentDepthStencil);
+  cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
+  shaderInjection.clampState = CLAMP_STATE__NONE;
 
-  return false;
+  return true;
 }
+
+static std::unordered_set<uint32_t> g_8bitHashes = {
+  0x060C3E22,
+  0x23A501DC,
+  0x2944b564,
+  0x3C2773E3,
+  0x4016ED43,
+  0x5C4DD977,
+  0x7C0751EF,
+  0x960502CC,
+  0xAB823647,
+  0xB6E26AC7,
+  0xCC71BBE3,
+  0xCF70BF33,
+  0xD434C03A,
+  0xE126DD24,
+  0xEBBDB212,
+};
 
 static bool on_draw_indexed(reshade::api::command_list* cmd_list, uint32_t index_count, uint32_t instance_count, uint32_t first_index, int32_t vertex_offset, uint32_t first_instance) {
   uint32_t shaderHash;
@@ -316,24 +363,40 @@ static bool on_draw_indexed(reshade::api::command_list* cmd_list, uint32_t index
     shaderHash = shaderState.currentShaderHash;
   }
 
-  if (shaderHash == 0xb6e26ac7) {
-    shaderInjection.uiState = UI_STATE__DRAWING;
-    return false;
+  if (g_8bitHashes.contains(shaderHash)) {
+    return on_ui_draw(cmd_list, index_count, instance_count, first_index, vertex_offset, first_instance);
+  }
+  if (shaderHash == 0xB6E26AC7) return false;
+  if (shaderHash == 0xC6D14699) return false;  // Video
+
+  return false;
+
+  // Report unclamped 8bit hashes
+
+  auto device = cmd_list->get_device();
+  std::vector<reshade::api::resource_view> currentTargets;
+  reshade::api::resource_view currentDepthStencil;
+
+  {
+    SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
+    std::shared_lock swapchainCommandListLock(swapchainState.mutex);
+    currentTargets = swapchainState.currentRenderTargets;
+    currentDepthStencil = swapchainState.currentDepthStencil;
   }
 
-  if (shaderInjection.uiState == UI_STATE__DRAWING) {
-    if (
-      shaderHash == 0xE126DD24
-      || shaderHash == 0xCC71BBE3
-      || shaderHash == 0x3C2773E3
-      || shaderHash == 0x960502CC
-    ) {
-      return on_ui_draw(cmd_list, index_count, instance_count, first_index, vertex_offset, first_instance);
-    }
+  if (!currentTargets.size()) return false;
+  const auto target0 = currentTargets[0];
+  auto resource = device->get_resource_from_view(target0);
+  if (!resource.handle) return false;
+  auto desc = device->get_resource_desc(resource);
+  if (desc.texture.format == reshade::api::format::r16g16b16a16_typeless) {
+    std::stringstream s;
+    s << "on_draw_indexed(Unclamped alpha: " << PRINT_CRC32(shaderHash) << ")";
+    reshade::log_message(reshade::log_level::warning, s.str().c_str());
   }
+
   return false;
 }
-
 
 static void on_bind_pipeline(
   reshade::api::command_list* cmd_list,
@@ -352,6 +415,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
     case DLL_PROCESS_ATTACH:
 
       // ShaderReplaceMod::forcePipelineCloning = true;
+      ShaderReplaceMod::expectedConstantBufferIndex = 7u;
 
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
         {

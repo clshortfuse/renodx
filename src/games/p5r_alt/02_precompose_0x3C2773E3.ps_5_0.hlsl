@@ -14,8 +14,8 @@ Texture2D<float4> colorTexture : register(t0);
 #define cmp -
 
 float4 main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0) : SV_TARGET0 {
-  if (injectedData.uiState == UI_STATE__MIN_ALPHA) return 1.f;
-  if (injectedData.uiState == UI_STATE__MAX_ALPHA) return 0.f;
+  if (injectedData.clampState == CLAMP_STATE__MIN_ALPHA) return 1.f;
+  if (injectedData.clampState == CLAMP_STATE__MAX_ALPHA) return 0.f;
   float4 r0, r1, r2, r3, r4, r5, r6, o0;
 
   r0.xy = resolutionRev.xy;

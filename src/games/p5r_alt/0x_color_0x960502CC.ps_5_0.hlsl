@@ -15,8 +15,8 @@ Texture2D<float4> t_weight : register(t1);
 #define cmp -
 
 float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, float4 v2 : TEXCOORD1) : SV_TARGET0 {
-  if (injectedData.uiState == UI_STATE__MIN_ALPHA) return 1.f;
-  if (injectedData.uiState == UI_STATE__MAX_ALPHA) return 0.f;
+  if (injectedData.clampState == CLAMP_STATE__MIN_ALPHA) return 1.f;
+  if (injectedData.clampState == CLAMP_STATE__MAX_ALPHA) return 0.f;
   float4 r0, r1, r2, r3, o0;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -60,5 +60,8 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, float4 v2 : TEXCOOR
     r1.xyzw = t_color.SampleLevel(t_color_sampler_s, r0.xy, r0.z).xyzw;
   }
   o0.xyzw = r1.xyzw;
+  if (injectedData.clampState == CLAMP_STATE__OUTPUT) {
+    o0 = saturate(o0);
+  }
   return o0;
 }

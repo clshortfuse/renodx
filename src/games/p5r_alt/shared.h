@@ -16,16 +16,16 @@ struct ShaderInjectData {
   float colorGradeSaturation;
   float colorGradeLUTStrength;
   float colorGradeLUTScaling;
-  float uiState;
+  float clampState;
 };
 
-#define UI_STATE__NONE      0.f
-#define UI_STATE__DRAWING   1.f
-#define UI_STATE__MIN_ALPHA 2.f
-#define UI_STATE__MAX_ALPHA 3.f
+#define CLAMP_STATE__NONE      0.f
+#define CLAMP_STATE__OUTPUT    1.f
+#define CLAMP_STATE__MIN_ALPHA 2.f
+#define CLAMP_STATE__MAX_ALPHA 3.f
 
 #ifndef __cplusplus
-cbuffer cb13 : register(b13) {
+cbuffer cb7 : register(b7) {
   ShaderInjectData injectedData : packoffset(c0);
 }
 #endif
