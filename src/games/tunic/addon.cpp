@@ -25,7 +25,7 @@
 #include "../../utils/userSettingUtil.hpp"
 #include "./shared.h"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Tunic";
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Tunic";
 
 ShaderReplaceMod::CustomShaders customShaders = {

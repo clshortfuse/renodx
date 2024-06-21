@@ -32,7 +32,7 @@
 #include "../../utils/userSettingUtil.hpp"
 #include "./shared.h"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Just Cause 4";
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Just Cause 4";
 
 ShaderReplaceMod::CustomShaders customShaders = {

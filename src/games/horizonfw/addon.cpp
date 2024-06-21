@@ -16,7 +16,7 @@
 #include "../../utils/userSettingUtil.hpp"
 #include "./shared.h"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Horizon Forbidden West";
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Horizon Forbidden West";
 
 ShaderReplaceMod::CustomShaders customShaders = {

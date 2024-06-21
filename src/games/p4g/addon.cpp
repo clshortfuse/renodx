@@ -20,7 +20,7 @@
 #include "../../utils/userSettingUtil.hpp"
 #include "./shared.h"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Persona 4 Golden";
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Persona 4 Golden";
 
 ShaderReplaceMod::CustomShaders customShaders = {

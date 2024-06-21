@@ -37,7 +37,7 @@
 #define ICON_FK_REFRESH u8"\uf021"
 #define ICON_FK_FLOPPY  u8"\uf0c7"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX - DevKit";
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX DevKit";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX DevKit Module";
 
 struct CachedPipeline {

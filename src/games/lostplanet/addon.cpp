@@ -21,7 +21,7 @@
 #include "../../mods/swapChainUpgradeMod.hpp"
 #include "./shared.h"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Lost Planet";
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Lost Planet";
 
 ShaderReplaceMod::CustomShaders customShaders = {

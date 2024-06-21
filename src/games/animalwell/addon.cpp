@@ -22,7 +22,8 @@ extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Animal We
 
 ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0x0076212D),
-  CustomShaderEntry(0x20C9EB92)
+  CustomShaderEntry(0x20C9EB92),
+  CustomShaderEntry(0xC2157826)
   // CustomShaderEntry(0x72B31CDE),
   // CustomShaderEntry(0x67758842)
 };

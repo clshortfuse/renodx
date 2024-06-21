@@ -16,7 +16,7 @@
 #include "../../mods/shaderReplaceMod.hpp"
 #include "../../mods/swapChainUpgradeMod.hpp"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Sea of Thieves";
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Sea of Thieves";
 
 ShaderReplaceMod::CustomShaders customShaders = {

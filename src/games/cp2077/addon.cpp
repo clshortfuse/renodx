@@ -36,7 +36,7 @@
 #include "../../utils/userSettingUtil.hpp"
 #include "./cp2077.h"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX - CP2077";
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Cyberpunk2077";
 
 static ShaderReplaceMod::CustomShaders customShaders = {
