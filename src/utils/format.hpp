@@ -34,6 +34,46 @@ namespace {
     }
   }
 
+  inline auto to_string(boolean value) {
+    return value ? "true" : "false";
+  }
+
+  inline auto to_string(reshade::api::blend_factor value) {
+    switch (value) {
+      case reshade::api::blend_factor::zero:                     return "zero";
+      case reshade::api::blend_factor::one:                      return "one";
+      case reshade::api::blend_factor::source_color:             return "source_color";
+      case reshade::api::blend_factor::one_minus_source_color:   return "one_minus_source_color";
+      case reshade::api::blend_factor::dest_color:               return "dest_color";
+      case reshade::api::blend_factor::one_minus_dest_color:     return "one_minus_dest_color";
+      case reshade::api::blend_factor::source_alpha:             return "source_alpha";
+      case reshade::api::blend_factor::one_minus_source_alpha:   return "one_minus_source_alpha";
+      case reshade::api::blend_factor::dest_alpha:               return "dest_alpha";
+      case reshade::api::blend_factor::one_minus_dest_alpha:     return "one_minus_dest_alpha";
+      case reshade::api::blend_factor::constant_color:           return "constant_color";
+      case reshade::api::blend_factor::one_minus_constant_color: return "one_minus_constant_color";
+      case reshade::api::blend_factor::constant_alpha:           return "constant_alpha";
+      case reshade::api::blend_factor::one_minus_constant_alpha: return "one_minus_constant_alpha";
+      case reshade::api::blend_factor::source_alpha_saturate:    return "source_alpha_saturate";
+      case reshade::api::blend_factor::source1_color:            return "source1_color";
+      case reshade::api::blend_factor::one_minus_source1_color:  return "one_minus_source1_color";
+      case reshade::api::blend_factor::source1_alpha:            return "source1_alpha";
+      case reshade::api::blend_factor::one_minus_source1_alpha:  return "one_minus_source1_alpha";
+      default:                                                   return "unknown";
+    };
+  }
+
+  inline auto to_string(reshade::api::blend_op value) {
+    switch (value) {
+      case reshade::api::blend_op::add:              return "add";
+      case reshade::api::blend_op::subtract:         return "subtract";
+      case reshade::api::blend_op::reverse_subtract: return "reverse_subtract";
+      case reshade::api::blend_op::min:              return "min";
+      case reshade::api::blend_op::max:              return "max";
+      default:                                       return "unknown";
+    };
+  }
+
   inline auto to_string(reshade::api::pipeline_stage value) {
     switch (value) {
       case reshade::api::pipeline_stage::vertex_shader:        return "vertex_shader";
