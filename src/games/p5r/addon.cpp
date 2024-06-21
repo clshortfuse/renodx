@@ -256,10 +256,8 @@ static bool on_ui_draw(reshade::api::command_list* cmd_list, uint32_t index_coun
   auto device = cmd_list->get_device();
   if (!currentTargets.size()) return false;
   const auto target0 = currentTargets[0];
-  auto resource = device->get_resource_from_view(target0);
-  if (!resource.handle) return false;
-  auto desc = device->get_resource_desc(resource);
-  if (desc.texture.format != reshade::api::format::r16g16b16a16_typeless) return false;
+  auto resourceTag = ResourceUtil::getResourceTag(device, target0);
+  if (resourceTag != 1.f) return false;
 
   auto &data = device->get_private_data<DeviceData>();
   std::shared_lock readOnlyLock(data.mutex);
@@ -269,11 +267,8 @@ static bool on_ui_draw(reshade::api::command_list* cmd_list, uint32_t index_coun
     for (size_t i = 0; i < 7; ++i) {
       using namespace reshade::api;
       blend_desc.blend_enable[i] = true;
-      blend_desc.source_color_blend_factor[i] = blend_factor::zero;
-      blend_desc.dest_color_blend_factor[i] = blend_factor::one;
-      blend_desc.color_blend_op[i] = blend_op::add;
       blend_desc.alpha_blend_op[i] = blend_op::min;
-      blend_desc.render_target_write_mask[i] = 0xF;
+      blend_desc.render_target_write_mask[i] = 0x8;
     }
     auto subobjects = reshade::api::pipeline_subobject{
       .type = reshade::api::pipeline_subobject_type::blend_state,
@@ -294,11 +289,8 @@ static bool on_ui_draw(reshade::api::command_list* cmd_list, uint32_t index_coun
     for (size_t i = 0; i < 7; ++i) {
       using namespace reshade::api;
       blend_desc.blend_enable[i] = true;
-      blend_desc.source_color_blend_factor[i] = blend_factor::zero;
-      blend_desc.dest_color_blend_factor[i] = blend_factor::one;
-      blend_desc.color_blend_op[i] = blend_op::add;
       blend_desc.alpha_blend_op[i] = blend_op::max;
-      blend_desc.render_target_write_mask[i] = 0xF;
+      blend_desc.render_target_write_mask[i] = 0x8;
     }
     auto subobjects = reshade::api::pipeline_subobject{
       .type = reshade::api::pipeline_subobject_type::blend_state,
@@ -437,12 +429,14 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
           .oldFormat = reshade::api::format::r8g8b8a8_typeless,
           .newFormat = reshade::api::format::r16g16b16a16_typeless,
           .aspectRatio = 16.f / 9.f,
+          .resourceTag = 1.f,
         }
       );
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
         {
           .oldFormat = reshade::api::format::r8g8b8a8_typeless,
           .newFormat = reshade::api::format::r16g16b16a16_typeless,
+          .resourceTag = 1.f,
         }
       );
 
