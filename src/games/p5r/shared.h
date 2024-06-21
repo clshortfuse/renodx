@@ -16,6 +16,8 @@ struct ShaderInjectData {
   float colorGradeSaturation;
   float colorGradeLUTStrength;
   float colorGradeLUTScaling;
+  float colorGradeColorSpace;
+  float fxBloom;
   float clampState;
 };
 
@@ -23,6 +25,11 @@ struct ShaderInjectData {
 #define CLAMP_STATE__OUTPUT    1.f
 #define CLAMP_STATE__MIN_ALPHA 2.f
 #define CLAMP_STATE__MAX_ALPHA 3.f
+
+#define COLOR_SPACE__NONE   0.f
+#define COLOR_SPACE__BT709  1.f
+#define COLOR_SPACE__BT2020 2.f
+#define COLOR_SPACE__AP1    3.f
 
 #ifndef __cplusplus
 cbuffer cb7 : register(b7) {

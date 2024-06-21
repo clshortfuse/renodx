@@ -1,5 +1,5 @@
-#include "./shared.h"
 #include "../../shaders/color.hlsl"
+#include "./shared.h"
 
 cbuffer GFD_PSCONST_GAMMA : register(b13) {
   float4 clearColor : packoffset(c0);
@@ -295,6 +295,5 @@ void main(
   o0.rgb = (injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb));
   o0.rgb *= signs;
   o0.rgb *= injectedData.toneMapUINits / 80.f;
-  
   return;
 }

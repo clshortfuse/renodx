@@ -167,7 +167,7 @@ static std::string getResourceNameByViewHandle(device_data &data, uint64_t handl
     name = "?";
   }
   if (name.length()) {
-    data.resourceNames.emplace(resourceHandle, name);
+    data.resourceNames[resourceHandle] = name;
   }
   return name;
 }
@@ -187,7 +187,7 @@ static void unloadCustomShaders() {
     auto cachedPipeline = pair.second;
     if (!cachedPipeline->cloned) continue;
     cachedPipeline->cloned = false;
-    pipelinesToDestroy.emplace(cachedPipeline->pipelineClone.handle, cachedPipeline->device);
+    pipelinesToDestroy[cachedPipeline->pipelineClone.handle] = cachedPipeline->device;
   }
 }
 
@@ -795,13 +795,16 @@ static void on_init_pipeline(
   reshade::api::pipeline pipeline
 ) {
   const std::unique_lock<std::shared_mutex> lock(s_mutex);
-  std::stringstream s;
-  s << "on_init_pipeline("
-    << reinterpret_cast<void*>(pipeline.handle)
-    << " on " << reinterpret_cast<void*>(layout.handle)
-    << ", subobjects: " << (subobjectCount)
-    << " )";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  if (!subobjectCount) {
+    std::stringstream s;
+    s << "on_init_pipeline("
+      << reinterpret_cast<void*>(pipeline.handle)
+      << ", layout:" << reinterpret_cast<void*>(layout.handle)
+      << ", subobjects: " << (subobjectCount)
+      << " )";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    return;
+  }
 
   reshade::api::pipeline_subobject* newSubobjects = PipelineUtil::clonePipelineSubObjects(subobjectCount, subobjects);
 
@@ -816,49 +819,82 @@ static void on_init_pipeline(
   bool foundUsefulShader = false;
 
   for (uint32_t i = 0; i < subobjectCount; ++i) {
-    switch (subobjects[i].type) {
-      case reshade::api::pipeline_subobject_type::compute_shader:
-        computeShaderLayouts.emplace(layout.handle);
-      case reshade::api::pipeline_subobject_type::pixel_shader:
-        break;
-      default:
-        continue;
+    const auto &subobject = subobjects[i];
+    for (uint32_t j = 0; j < subobject.count; ++j) {
+      std::stringstream s;
+      s << "on_init_pipeline("
+        << reinterpret_cast<void*>(pipeline.handle)
+        << "[" << i << "][" << j << "]"
+        << ", layout:" << reinterpret_cast<void*>(layout.handle)
+        << ", type: " << to_string(subobject.type);
+      switch (subobject.type) {
+        case reshade::api::pipeline_subobject_type::vertex_shader:
+        case reshade::api::pipeline_subobject_type::hull_shader:
+        case reshade::api::pipeline_subobject_type::domain_shader:
+        case reshade::api::pipeline_subobject_type::geometry_shader:
+          // reshade::api::shader_desc &desc = static_cast<reshade::api::shader_desc*>(subobjects[i].data[j]);
+          break;
+        case reshade::api::pipeline_subobject_type::blend_state:
+          break;
+          {
+            auto &desc = static_cast<reshade::api::blend_desc*>(subobject.data)[j];
+            s << ", alpha_to_coverage_enable: " << to_string(desc.alpha_to_coverage_enable)
+              << ", source_color_blend_factor: " << to_string(desc.source_color_blend_factor[0])
+              << ", dest_color_blend_factor: " << to_string(desc.dest_color_blend_factor[0])
+              << ", color_blend_op: " << to_string(desc.color_blend_op[0])
+              << ", source_alpha_blend_factor: " << to_string(desc.source_alpha_blend_factor[0])
+              << ", dest_alpha_blend_factor: " << to_string(desc.dest_alpha_blend_factor[0])
+              << ", alpha_blend_op: " << to_string(desc.alpha_blend_op[0])
+              << ", render_target_write_mask: " << std::hex << desc.render_target_write_mask[0] << std::dec;
+          }
+          break;
+        case reshade::api::pipeline_subobject_type::compute_shader:
+        case reshade::api::pipeline_subobject_type::pixel_shader:
+          {
+            // reshade::api::shader_desc* desc = (static_cast<reshade::api::shader_desc*>(subobject.data))[j];
+            auto newDesc = static_cast<reshade::api::shader_desc*>(newSubobjects[i].data);
+            if (newDesc->code_size == 0) break;
+            auto shader_hash = compute_crc32(static_cast<const uint8_t*>(newDesc->code), newDesc->code_size);
+
+            // Cache shader
+            CachedShader* cache = new CachedShader{
+              malloc(newDesc->code_size),
+              newDesc->code_size
+            };
+            memcpy(cache->data, newDesc->code, cache->size);
+            shaderCacheCount++;
+            shaderCacheSize += cache->size;
+            shaderCache[shader_hash] = cache;
+
+            // Indexes
+            cachedPipeline->shaderHash = shader_hash;
+            pipelineCacheByShaderHash[shader_hash] = cachedPipeline;
+
+            // Metrics
+            foundUsefulShader = true;
+            {
+              std::stringstream s2;
+              s2 << "caching shader("
+                 << "hash: " << PRINT_CRC32(shader_hash)
+                 << ", type: " << to_string(subobject.type)
+                 << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
+                 << ")";
+              reshade::log_message(reshade::log_level::info, s2.str().c_str());
+            }
+          }
+          break;
+      }
+
+      s << " )";
+
+      reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
-
-    auto newDesc = static_cast<reshade::api::shader_desc*>(newSubobjects[i].data);
-    if (newDesc->code_size == 0) continue;
-
-    auto shader_hash = compute_crc32(static_cast<const uint8_t*>(newDesc->code), newDesc->code_size);
-
-    // Cache shader
-    CachedShader* cache = new CachedShader{
-      malloc(newDesc->code_size),
-      newDesc->code_size
-    };
-    memcpy(cache->data, newDesc->code, cache->size);
-    shaderCacheCount++;
-    shaderCacheSize += cache->size;
-    shaderCache.emplace(shader_hash, cache);
-
-    // Indexes
-    cachedPipeline->shaderHash = shader_hash;
-    pipelineCacheByShaderHash.emplace(shader_hash, cachedPipeline);
-
-    // Metrics
-    foundUsefulShader = true;
-    std::stringstream s;
-    s << "caching shader("
-      << "hash: " << PRINT_CRC32(shader_hash)
-      << ", type: " << to_string(subobjects[i].type)
-      << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
-      << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
   }
   if (!foundUsefulShader) {
     free(newSubobjects);
     return;
   }
-  pipelineCacheByPipelineHandle.emplace(pipeline.handle, cachedPipeline);
+  pipelineCacheByPipelineHandle[pipeline.handle] = cachedPipeline;
 }
 
 static void on_destroy_pipeline(
@@ -894,9 +930,27 @@ static void on_destroy_pipeline(
 // AfterSetPipelineState
 static void on_bind_pipeline(
   reshade::api::command_list* cmd_list,
-  reshade::api::pipeline_stage type,
+  reshade::api::pipeline_stage stages,
   reshade::api::pipeline pipeline
 ) {
+  if (traceRunning) {
+    switch (stages) {
+      case reshade::api::pipeline_stage::pixel_shader:
+      case reshade::api::pipeline_stage::compute_shader:
+        break;
+      default:
+      case reshade::api::pipeline_stage::output_merger:
+        {
+          std::stringstream s;
+          s << "bind_pipeline("
+            << reinterpret_cast<void*>(pipeline.handle)
+            << ", stages: " << to_string(stages) << " (" << std::hex << (uint32_t)stages << std::dec << ")"
+            << ")";
+          reshade::log_message(reshade::log_level::info, s.str().c_str());
+        }
+        break;
+    }
+  }
   const std::unique_lock<std::shared_mutex> lock(s_mutex);
 
   auto pair = pipelineCacheByPipelineHandle.find(pipeline.handle);
@@ -910,12 +964,12 @@ static void on_bind_pipeline(
       s << "bind_pipeline(swapping pipeline "
         << reinterpret_cast<void*>(pipeline.handle)
         << " => " << reinterpret_cast<void*>(cachedPipeline->pipelineClone.handle)
-        << ", stage: " << to_string(type) << "(" << std::hex << (uint32_t)type << ")"
+        << ", stages: " << to_string(stages) << "(" << std::hex << (uint32_t)stages << ")"
         << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
 
-    cmd_list->bind_pipeline(type, cachedPipeline->pipelineClone);
+    cmd_list->bind_pipeline(stages, cachedPipeline->pipelineClone);
   }
 
   if (!traceRunning) return;
@@ -943,7 +997,7 @@ static void on_bind_pipeline(
     << traceHashes.size() << ": "
     << reinterpret_cast<void*>(cachedPipeline->pipeline.handle)
     << ", " << reinterpret_cast<void*>(cachedPipeline->layout.handle)
-    << ", type: " << to_string(type) << " (" << std::hex << (uint32_t)type << std::dec << ")"
+    << ", stages: " << to_string(stages) << " (" << std::hex << (uint32_t)stages << std::dec << ")"
     << ", " << PRINT_CRC32(cachedPipeline->shaderHash)
     << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -1398,7 +1452,8 @@ static void on_push_descriptors(
     s << "push_descriptors("
       << reinterpret_cast<void*>(layout.handle)
       << "[" << layout_param << "]"
-      << "[" << update.binding + i << "]";
+      << "[" << update.binding + i << "]"
+      << ", type: " << to_string(update.type);
 
     auto logHeap = [=]() {
       std::stringstream s2;
@@ -1668,6 +1723,23 @@ static bool on_update_descriptor_tables(
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
   }
+  return false;
+}
+
+static bool on_clear_render_target_view(
+  reshade::api::command_list* cmd_list,
+  reshade::api::resource_view rtv,
+  const float color[4],
+  uint32_t rect_count,
+  const reshade::api::rect* rects
+) {
+  if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return false;
+  std::stringstream s;
+  s << "on_clear_render_target_view("
+    << reinterpret_cast<void*>(rtv.handle)
+    << ")";
+
+  reshade::log_message(reshade::log_level::info, s.str().c_str());
   return false;
 }
 
@@ -1996,6 +2068,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       reshade::register_event<reshade::addon_event::update_descriptor_tables>(on_update_descriptor_tables);
       reshade::register_event<reshade::addon_event::push_constants>(on_push_constants);
 
+      reshade::register_event<reshade::addon_event::clear_render_target_view>(on_clear_render_target_view);
       reshade::register_event<reshade::addon_event::clear_unordered_access_view_uint>(on_clear_unordered_access_view_uint);
 
       reshade::register_event<reshade::addon_event::map_buffer_region>(on_map_buffer_region);

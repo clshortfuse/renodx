@@ -41,7 +41,6 @@ namespace ShaderUtil {
   };
 
   struct __declspec(uuid("8707f724-c7e5-420e-89d6-cc032c732d2d")) CommandListData {
-    std::shared_mutex mutex;
     uint32_t currentShaderHash;
     reshade::api::pipeline_stage currentShaderPipelineStage = reshade::api::pipeline_stage::all;
     reshade::api::pipeline currentShaderPipeline = {0};
@@ -112,7 +111,6 @@ namespace ShaderUtil {
 
   static uint32_t getCurrentShader(reshade::api::command_list* cmd_list) {
     auto &cmd_list_data = cmd_list->get_private_data<CommandListData>();
-    std::shared_lock lock(cmd_list_data.mutex);
     return cmd_list_data.currentShaderHash;
   }
 
@@ -122,14 +120,6 @@ namespace ShaderUtil {
     std::stringstream s;
     s << "ShaderUtil::on_init_device("
       << reinterpret_cast<void*>(device)
-      << ", computeShaderLayouts " << (void*)&data.computeShaderLayouts
-      << ", mutex " << (void*)&data.mutex
-      << ", pipelineToLayoutMap " << (void*)&data.pipelineToLayoutMap
-      << ", pipelineToPipelineReplacement " << (void*)&data.pipelineToPipelineReplacement
-      << ", pipelineToShaderHashMap " << (void*)&data.pipelineToShaderHashMap
-      << ", shaderReplacements " << (void*)&data.shaderReplacements
-      << ", shaderReplacementsInverse " << (void*)&data.shaderReplacementsInverse
-      << ", shaderToPipelineReplacement " << (void*)&data.shaderToPipelineReplacement
       << ")";
     reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
@@ -286,6 +276,7 @@ namespace ShaderUtil {
           << " => "
           << PRINT_CRC32(foundShader)
           << " on " << (void*)pipeline.handle
+          << ", layout: " << reinterpret_cast<void*>(layout.handle)
           << ")";
         reshade::log_message(reshade::log_level::info, s.str().c_str());
       } else {
@@ -313,10 +304,20 @@ namespace ShaderUtil {
             << PRINT_CRC32(foundShader)
             << ", compute: " << (foundComputeShader ? "true" : "false")
             << ", loc: " << (void*)desc->code
+            << ", layout: " << reinterpret_cast<void*>(layout.handle)
             << ")";
           reshade::log_message(reshade::log_level::info, s.str().c_str());
         }
       }
+    }
+    if (data.pipelineToLayoutMap.contains(pipeline.handle)) {
+      std::stringstream s;
+      s << "ShaderUtil::on_init_pipeline(pipeline already exists?"
+        << PRINT_CRC32(foundShader)
+        << ", compute: " << (foundComputeShader ? "true" : "false")
+        << ", layout: " << reinterpret_cast<void*>(layout.handle)
+        << ")";
+      reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
     data.pipelineToLayoutMap[pipeline.handle] = layout.handle;
     if (foundComputeShader) {
@@ -336,12 +337,14 @@ namespace ShaderUtil {
           << (void*)pipeline.handle
           << " => "
           << (void*)newPipeline.handle
+          << ", layout: " << reinterpret_cast<void*>(layout.handle)
           << ")";
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
       } else {
         std::stringstream s;
-        s << "ShaderUtil::on_init_pipeline(failed to clone layout "
-          << (void*)layout.handle
+        s << "ShaderUtil::on_init_pipeline(failed to clone pipeline "
+          << reinterpret_cast<void*>(pipeline.handle)
+          << ", layout: " << reinterpret_cast<void*>(layout.handle)
           << ")";
         reshade::log_message(reshade::log_level::error, s.str().c_str());
         // Log error
@@ -397,7 +400,6 @@ namespace ShaderUtil {
       pair != device_data.pipelineToShaderHashMap.end()
     ) {
       auto &cmd_list_data = cmd_list->get_private_data<CommandListData>();
-      std::unique_lock lock(cmd_list_data.mutex);
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
       s << "ShaderUtil::on_bind_pipeline(shader: "

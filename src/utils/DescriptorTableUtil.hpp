@@ -74,10 +74,6 @@ namespace DescriptorTableUtil {
     std::shared_mutex mutex;
   };
 
-  struct __declspec(uuid("018fa2c9-9a68-782c-8a4a-d6b106ed5fb4")) CommandListData {
-    std::shared_mutex mutex;
-  };
-
   static std::shared_mutex mutex;
 
   static reshade::api::resource_view getResourceViewFromDescriptorUpdate(

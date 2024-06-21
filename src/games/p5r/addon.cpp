@@ -17,6 +17,9 @@
 #include <embed/0xB6E26AC7.h>
 #include <embed/0xDE5120BF.h>
 
+#include <embed/0x0D85D1F6.h>
+#include <embed/0xC6D14699.h>
+
 #include <embed/0x060C3E22.h>
 #include <embed/0x23A501DC.h>
 #include <embed/0x2944b564.h>
@@ -40,11 +43,14 @@
 #include "./shared.h"
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Personal 5 Royal";
+extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Persona 5 Royal";
 
 ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0xB6E26AC7),
   CustomShaderEntry(0xDE5120BF),
+
+  CustomShaderEntry(0x0D85D1F6),
+  CustomShaderEntry(0xC6D14699),
 
   CustomShaderEntry(0x060C3E22),
   CustomShaderEntry(0x23A501DC),
@@ -184,7 +190,27 @@ UserSettingUtil::UserSettings userSettings = {
     .tooltip = "Scales the color grade LUT to full range when size is clamped.",
     .max = 100.f,
     .parse = [](float value) { return value * 0.01f; }
-  }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeColorSpace",
+    .binding = &shaderInjection.colorGradeColorSpace,
+    .valueType = UserSettingUtil::UserSettingValueType::integer,
+    .defaultValue = 3.f,
+    .canReset = false,
+    .label = "Color Space",
+    .section = "Color Grading",
+    .tooltip = "Selects color space gamut when clamping",
+    .labels = {"None", "BT709", "BT2020", "AP1"}
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "fxBloom",
+    .binding = &shaderInjection.fxBloom,
+    .defaultValue = 50.f,
+    .label = "Bloom",
+    .section = "Effects",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; }
+  },
 };
 
 // clang-format on
@@ -202,16 +228,19 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
   UserSettingUtil::updateUserSetting("colorGradeLUTScaling", 0.f);
+  UserSettingUtil::updateUserSetting("colorGradeColorSpace", 1.f);
+  UserSettingUtil::updateUserSetting("fxBloom", 50.f);
 }
 
 struct __declspec(uuid("5958c7c4-19b2-4300-af4d-c6802d6c7635")) DeviceData {
   std::shared_mutex mutex;
   reshade::api::pipeline min_alpha_pipeline = {0};
   reshade::api::pipeline max_alpha_pipeline = {0};
+  reshade::api::pipeline_layout injectionLayout = {0};
+  std::unordered_set<uint64_t> unsafe_blend_pipelines = {};
 };
 
 struct __declspec(uuid("452ac839-081c-4891-9880-8533c0a63666")) CommandListData {
-  std::shared_mutex mutex;
   reshade::api::pipeline lastOutputMerger;
 };
 
@@ -231,6 +260,8 @@ static void on_destroy_command_list(reshade::api::command_list* cmd_list) {
   cmd_list->destroy_private_data<CommandListData>();
 }
 
+static bool g_completed_render = false;
+
 static void on_present(
   reshade::api::command_queue* queue,
   reshade::api::swapchain* swapchain,
@@ -239,94 +270,7 @@ static void on_present(
   uint32_t dirty_rect_count,
   const reshade::api::rect* dirty_rects
 ) {
-  shaderInjection.clampState = CLAMP_STATE__NONE;
-}
-
-static bool on_ui_draw(reshade::api::command_list* cmd_list, uint32_t index_count, uint32_t instance_count, uint32_t first_index, int32_t vertex_offset, uint32_t first_instance) {
-  std::vector<reshade::api::resource_view> currentTargets;
-  reshade::api::resource_view currentDepthStencil;
-
-  {
-    SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
-    std::shared_lock swapchainCommandListLock(swapchainState.mutex);
-    currentTargets = swapchainState.currentRenderTargets;
-    currentDepthStencil = swapchainState.currentDepthStencil;
-  }
-
-  auto device = cmd_list->get_device();
-  if (!currentTargets.size()) return false;
-  const auto target0 = currentTargets[0];
-  auto resourceTag = ResourceUtil::getResourceTag(device, target0);
-  if (resourceTag != 1.f) return false;
-
-  auto &data = device->get_private_data<DeviceData>();
-  std::shared_lock readOnlyLock(data.mutex);
-
-  if (!data.min_alpha_pipeline.handle) {
-    reshade::api::blend_desc blend_desc = {};
-    for (size_t i = 0; i < 7; ++i) {
-      using namespace reshade::api;
-      blend_desc.blend_enable[i] = true;
-      blend_desc.alpha_blend_op[i] = blend_op::min;
-      blend_desc.render_target_write_mask[i] = 0x8;
-    }
-    auto subobjects = reshade::api::pipeline_subobject{
-      .type = reshade::api::pipeline_subobject_type::blend_state,
-      .count = 1,
-      .data = &blend_desc,
-    };
-
-    readOnlyLock.unlock();
-    {
-      std::unique_lock lock(data.mutex);
-      device->create_pipeline({0xFFFFFFFFFFFFFFFF}, 1, &subobjects, &data.min_alpha_pipeline);
-    }
-    readOnlyLock.lock();
-  }
-
-  if (!data.max_alpha_pipeline.handle) {
-    reshade::api::blend_desc blend_desc = {};
-    for (size_t i = 0; i < 7; ++i) {
-      using namespace reshade::api;
-      blend_desc.blend_enable[i] = true;
-      blend_desc.alpha_blend_op[i] = blend_op::max;
-      blend_desc.render_target_write_mask[i] = 0x8;
-    }
-    auto subobjects = reshade::api::pipeline_subobject{
-      .type = reshade::api::pipeline_subobject_type::blend_state,
-      .count = 1,
-      .data = &blend_desc,
-    };
-
-    readOnlyLock.unlock();
-    {
-      std::unique_lock lock(data.mutex);
-      device->create_pipeline({0xFFFFFFFFFFFFFFFF}, 1, &subobjects, &data.max_alpha_pipeline);
-    }
-    readOnlyLock.lock();
-  }
-
-  cmd_list->bind_render_targets_and_depth_stencil(currentTargets.size(), currentTargets.data(), {0});
-  shaderInjection.clampState = CLAMP_STATE__MIN_ALPHA;
-  ShaderReplaceMod::handlePreDraw(cmd_list);  // Performs push
-  cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, data.min_alpha_pipeline);
-  cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
-
-  shaderInjection.clampState = CLAMP_STATE__MAX_ALPHA;
-  ShaderReplaceMod::handlePreDraw(cmd_list);  // Performs push
-  cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, data.max_alpha_pipeline);
-  cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
-
-  shaderInjection.clampState = CLAMP_STATE__OUTPUT;
-  ShaderReplaceMod::handlePreDraw(cmd_list);  // Performs push
-  auto &commandListData = cmd_list->get_private_data<CommandListData>();
-  std::shared_lock lock(data.mutex);
-  cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, commandListData.lastOutputMerger);
-  cmd_list->bind_render_targets_and_depth_stencil(currentTargets.size(), currentTargets.data(), currentDepthStencil);
-  cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
-  shaderInjection.clampState = CLAMP_STATE__NONE;
-
-  return true;
+  g_completed_render = false;
 }
 
 static std::unordered_set<uint32_t> g_8bitHashes = {
@@ -347,47 +291,189 @@ static std::unordered_set<uint32_t> g_8bitHashes = {
   0xEBBDB212,
 };
 
-static bool on_draw_indexed(reshade::api::command_list* cmd_list, uint32_t index_count, uint32_t instance_count, uint32_t first_index, int32_t vertex_offset, uint32_t first_instance) {
-  uint32_t shaderHash;
-  {
-    ShaderUtil::CommandListData &shaderState = cmd_list->get_private_data<ShaderUtil::CommandListData>();
-    std::shared_lock shaderCommandListLock(shaderState.mutex);
-    shaderHash = shaderState.currentShaderHash;
+static void pushConstants(reshade::api::command_list* cmd_list, reshade::api::pipeline_layout layout) {
+  static float shaderInjectionSize = sizeof(shaderInjection) / sizeof(uint32_t);
+  cmd_list->push_constants(
+    reshade::api::shader_stage::all_graphics,  // Used by reshade to specify graphics or compute
+    layout,
+    0,
+    0,
+    shaderInjectionSize,
+    &shaderInjection
+  );
+}
+
+static bool on_draw_indexed(
+  reshade::api::command_list* cmd_list,
+  uint32_t index_count,
+  uint32_t instance_count,
+  uint32_t first_index,
+  int32_t vertex_offset,
+  uint32_t first_instance
+) {
+  if (!shaderInjection.colorGradeLUTScaling) return false;
+  auto &commandListData = cmd_list->get_private_data<CommandListData>();
+  if (commandListData.lastOutputMerger.handle == 0) return false;
+
+  ShaderUtil::CommandListData &shaderState = cmd_list->get_private_data<ShaderUtil::CommandListData>();
+
+  if (shaderState.currentShaderHash == 0xC6D14699) return false;  // Video
+  if (shaderState.currentShaderHash == 0xB6E26AC7) {
+    g_completed_render = true;
+    return false;
   }
+  if (!g_completed_render) return false;
+  if (!g_8bitHashes.contains(shaderState.currentShaderHash)) return false;
 
-  if (g_8bitHashes.contains(shaderHash)) {
-    return on_ui_draw(cmd_list, index_count, instance_count, first_index, vertex_offset, first_instance);
-  }
-  if (shaderHash == 0xB6E26AC7) return false;
-  if (shaderHash == 0xC6D14699) return false;  // Video
+  SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
 
-  return false;
-
-  // Report unclamped 8bit hashes
+  if (!swapchainState.currentRenderTargets.size()) return false;
+  const auto target0 = swapchainState.currentRenderTargets[0];
 
   auto device = cmd_list->get_device();
-  std::vector<reshade::api::resource_view> currentTargets;
-  reshade::api::resource_view currentDepthStencil;
 
-  {
-    SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
-    std::shared_lock swapchainCommandListLock(swapchainState.mutex);
-    currentTargets = swapchainState.currentRenderTargets;
-    currentDepthStencil = swapchainState.currentDepthStencil;
+  auto resourceTag = ResourceUtil::getResourceTag(device, target0);
+  if (resourceTag != 1.f) return false;
+
+  auto &data = device->get_private_data<DeviceData>();
+  std::shared_lock readOnlyLock(data.mutex);
+  if (data.unsafe_blend_pipelines.contains(commandListData.lastOutputMerger.handle)) {
+    if (!data.min_alpha_pipeline.handle) {
+      using namespace reshade::api;
+      blend_desc blend_desc = {};
+      blend_desc.blend_enable[0] = true;
+      blend_desc.alpha_blend_op[0] = blend_op::min;
+      blend_desc.render_target_write_mask[0] = 0x8;
+
+      auto subobjects = pipeline_subobject{
+        .type = pipeline_subobject_type::blend_state,
+        .count = 1,
+        .data = &blend_desc,
+      };
+
+      readOnlyLock.unlock();
+      {
+        std::unique_lock lock(data.mutex);
+        device->create_pipeline({0xFFFFFFFFFFFFFFFF}, 1, &subobjects, &data.min_alpha_pipeline);
+      }
+      readOnlyLock.lock();
+    }
+
+    if (!data.max_alpha_pipeline.handle) {
+      using namespace reshade::api;
+      blend_desc blend_desc = {};
+      blend_desc.blend_enable[0] = true;
+      blend_desc.alpha_blend_op[0] = blend_op::max;
+      blend_desc.render_target_write_mask[0] = 0x8;
+      auto subobjects = pipeline_subobject{
+        .type = pipeline_subobject_type::blend_state,
+        .count = 1,
+        .data = &blend_desc,
+      };
+
+      readOnlyLock.unlock();
+      {
+        std::unique_lock lock(data.mutex);
+        device->create_pipeline({0xFFFFFFFFFFFFFFFF}, 1, &subobjects, &data.max_alpha_pipeline);
+      }
+      readOnlyLock.lock();
+    }
+
+    if (!data.injectionLayout.handle) {
+      auto &shaderReplaceDeviceData = device->get_private_data<ShaderReplaceMod::DeviceData>();
+      std::shared_lock lock(shaderReplaceDeviceData.mutex);
+      if (
+        auto pair = shaderReplaceDeviceData.moddedPipelineLayouts.find(0xFFFFFFFFFFFFFFFF);
+        pair != shaderReplaceDeviceData.moddedPipelineLayouts.end()
+      ) {
+        readOnlyLock.unlock();
+        {
+          std::unique_lock lock(data.mutex);
+          data.injectionLayout = pair->second;
+        }
+        readOnlyLock.lock();
+      } else {
+        return false;
+      }
+    }
+
+    cmd_list->bind_render_targets_and_depth_stencil(swapchainState.currentRenderTargets.size(), swapchainState.currentRenderTargets.data(), {0});
+
+    shaderInjection.clampState = CLAMP_STATE__MIN_ALPHA;
+    pushConstants(cmd_list, data.injectionLayout);
+    cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, data.min_alpha_pipeline);
+    cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
+
+    shaderInjection.clampState = CLAMP_STATE__MAX_ALPHA;
+    pushConstants(cmd_list, data.injectionLayout);
+    cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, data.max_alpha_pipeline);
+    cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
+    cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, commandListData.lastOutputMerger);
+    cmd_list->bind_render_targets_and_depth_stencil(swapchainState.currentRenderTargets.size(), swapchainState.currentRenderTargets.data(), swapchainState.currentDepthStencil);
   }
 
-  if (!currentTargets.size()) return false;
-  const auto target0 = currentTargets[0];
-  auto resource = device->get_resource_from_view(target0);
-  if (!resource.handle) return false;
-  auto desc = device->get_resource_desc(resource);
-  if (desc.texture.format == reshade::api::format::r16g16b16a16_typeless) {
-    std::stringstream s;
-    s << "on_draw_indexed(Unclamped alpha: " << PRINT_CRC32(shaderHash) << ")";
-    reshade::log_message(reshade::log_level::warning, s.str().c_str());
-  }
+  shaderInjection.clampState = CLAMP_STATE__OUTPUT;
+  pushConstants(cmd_list, data.injectionLayout);
+  cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
+  shaderInjection.clampState = CLAMP_STATE__NONE;
 
-  return false;
+  return true;
+}
+
+// After CreatePipelineState
+static void on_init_pipeline(
+  reshade::api::device* device,
+  reshade::api::pipeline_layout layout,
+  uint32_t subobjectCount,
+  const reshade::api::pipeline_subobject* subobjects,
+  reshade::api::pipeline pipeline
+) {
+  bool unsafe = false;
+  for (uint32_t i = 0; i < subobjectCount; ++i) {
+    if (unsafe) break;
+
+    const auto &subobject = subobjects[i];
+    if (subobject.type != reshade::api::pipeline_subobject_type::blend_state) continue;
+    for (uint32_t j = 0; j < subobject.count; ++j) {
+      auto &desc = static_cast<reshade::api::blend_desc*>(subobject.data)[j];
+      if (!desc.blend_enable) continue;
+
+      if (desc.render_target_write_mask[0] & 0x1 || desc.render_target_write_mask[0] & 0x2 || desc.render_target_write_mask[0] & 0x4) {
+        if (desc.color_blend_op[0] != reshade::api::blend_op::min && desc.color_blend_op[0] != reshade::api::blend_op::max) {
+          if (
+            desc.source_color_blend_factor[0] == reshade::api::blend_factor::dest_alpha
+            || desc.source_color_blend_factor[0] == reshade::api::blend_factor::one_minus_dest_alpha
+            || desc.dest_color_blend_factor[0] == reshade::api::blend_factor::dest_alpha
+            || desc.dest_color_blend_factor[0] == reshade::api::blend_factor::one_minus_dest_alpha
+          ) {
+            unsafe = true;
+            break;
+          }
+        }
+      }
+      if (desc.render_target_write_mask[0] & 0x8) {
+        if (desc.alpha_blend_op[0] == reshade::api::blend_op::min || desc.alpha_blend_op[0] == reshade::api::blend_op::max) {
+          unsafe = true;
+          break;
+        }
+        if (
+          desc.source_alpha_blend_factor[0] == reshade::api::blend_factor::dest_alpha
+          || desc.source_alpha_blend_factor[0] == reshade::api::blend_factor::one_minus_dest_alpha
+          || desc.dest_alpha_blend_factor[0] == reshade::api::blend_factor::one
+          || desc.dest_alpha_blend_factor[0] == reshade::api::blend_factor::dest_alpha
+          || desc.dest_alpha_blend_factor[0] == reshade::api::blend_factor::one_minus_dest_alpha
+        ) {
+          unsafe = true;
+          break;
+        }
+      }
+    }
+  }
+  if (unsafe) {
+    auto &data = device->get_private_data<DeviceData>();
+    std::unique_lock lock(data.mutex);
+    data.unsafe_blend_pipelines.emplace(pipeline.handle);
+  }
 }
 
 static void on_bind_pipeline(
@@ -396,17 +482,23 @@ static void on_bind_pipeline(
   reshade::api::pipeline pipeline
 ) {
   if (type != reshade::api::pipeline_stage::output_merger) return;
-  if (type != reshade::api::pipeline_stage::output_merger) return;
   auto &data = cmd_list->get_private_data<CommandListData>();
-  std::unique_lock lock(data.mutex);
   data.lastOutputMerger = pipeline;
+}
+
+static void on_destroy_pipeline(
+  reshade::api::device* device,
+  reshade::api::pipeline pipeline
+) {
+  auto &data = device->get_private_data<DeviceData>();
+  std::unique_lock lock(data.mutex);
+  data.unsafe_blend_pipelines.erase(pipeline.handle);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
   switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
 
-      // ShaderReplaceMod::forcePipelineCloning = true;
       ShaderReplaceMod::expectedConstantBufferIndex = 7u;
 
       SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
@@ -440,12 +532,16 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
         }
       );
 
+      shaderInjection.clampState = CLAMP_STATE__NONE;
+
       if (!reshade::register_addon(hModule)) return FALSE;
       reshade::register_event<reshade::addon_event::init_device>(on_init_device);
       reshade::register_event<reshade::addon_event::destroy_device>(on_destroy_device);
       reshade::register_event<reshade::addon_event::init_command_list>(on_init_command_list);
       reshade::register_event<reshade::addon_event::destroy_command_list>(on_destroy_command_list);
+      reshade::register_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
       reshade::register_event<reshade::addon_event::bind_pipeline>(on_bind_pipeline);
+      reshade::register_event<reshade::addon_event::destroy_pipeline>(on_destroy_pipeline);
 
       break;
     case DLL_PROCESS_DETACH:
@@ -455,6 +551,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       break;
   }
 
+  ResourceUtil::use(fdwReason);
   ShaderUtil::use(fdwReason);  // First to trace
   UserSettingUtil::use(fdwReason, &userSettings, &onPresetOff);
   SwapChainUpgradeMod::use(fdwReason);
