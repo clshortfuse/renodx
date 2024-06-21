@@ -92,6 +92,7 @@ struct ToneMapParams {
   float renoDRTSaturation;
   float renoDRTDechroma;
   float renoDRTFlare;
+  float4 correctColor;
 };
 
 #define TONE_MAP_TYPE__VANILLA 0
@@ -129,7 +130,8 @@ ToneMapParams buildToneMapParams(
   float renoDRTContrast = 1.f,
   float renoDRTSaturation = 1.f,
   float renoDRTDechroma = 0.5f,
-  float renoDRTFlare = 0.f
+  float renoDRTFlare = 0.f,
+  float4 correctColor = float4(0, 0, 0, 0)
 ) {
   ToneMapParams toneMapParams = {
     type,
@@ -148,7 +150,8 @@ ToneMapParams buildToneMapParams(
     renoDRTContrast,
     renoDRTSaturation,
     renoDRTDechroma,
-    renoDRTFlare
+    renoDRTFlare,
+    correctColor
   };
   return toneMapParams;
 }
@@ -235,6 +238,9 @@ float3 toneMap(float3 untonemapped, ToneMapParams params) {
     params.renoDRTSaturation *= params.saturation;
     // params.renoDRTDechroma *= params.dechroma;
     outputColor = renoDRTToneMap(outputColor, params);
+    if (params.correctColor.a) {
+      outputColor = lerp(outputColor, hueCorrection(outputColor, params.correctColor.rgb), params.correctColor.a);
+    }
   } else {
     outputColor = applyUserColorGrading(
       outputColor,
@@ -246,6 +252,9 @@ float3 toneMap(float3 untonemapped, ToneMapParams params) {
     );
     if (params.type == 2.f) {
       outputColor = acesToneMap(outputColor, params);
+      if (params.correctColor.a) {
+        outputColor = lerp(outputColor, hueCorrection(outputColor, params.correctColor.rgb), params.correctColor.a);
+      }
     }
   }
   return outputColor;
@@ -264,12 +273,18 @@ float3 toneMap(float3 untonemapped, ToneMapParams params) {
       tmParams.renoDRTSaturation *= tmParams.saturation;                                                   \
                                                                                                            \
       sdrColor = renoDRTToneMap(outputColor, tmParams, true);                                              \
+      if (tmParams.correctColor.a) {                                                                       \
+        sdrColor = lerp(sdrColor, hueCorrection(sdrColor, tmParams.correctColor.rgb), tmParams.correctColor.a);   \
+      }                                                                                                    \
                                                                                                            \
       tmParams.renoDRTHighlights *= tmParams.highlights;                                                   \
       tmParams.renoDRTShadows *= tmParams.shadows;                                                         \
       tmParams.renoDRTContrast *= tmParams.contrast;                                                       \
                                                                                                            \
       hdrColor = renoDRTToneMap(outputColor, tmParams);                                                    \
+      if (tmParams.correctColor.a) {                                                                       \
+        hdrColor = lerp(hdrColor, hueCorrection(hdrColor, tmParams.correctColor.rgb), tmParams.correctColor.a);   \
+      }                                                                                                    \
                                                                                                            \
     } else {                                                                                               \
       outputColor = applyUserColorGrading(                                                                 \
@@ -283,10 +298,22 @@ float3 toneMap(float3 untonemapped, ToneMapParams params) {
                                                                                                            \
       if (tmParams.type == 2.f) {                                                                          \
         hdrColor = acesToneMap(outputColor, tmParams);                                                     \
+        if (tmParams.correctColor.a) {                                                                     \
+          hdrColor = lerp(hdrColor, hueCorrection(hdrColor, tmParams.correctColor.rgb), tmParams.correctColor.a); \
+        }                                                                                                  \
         sdrColor = acesToneMap(outputColor, tmParams, true);                                               \
+        if (tmParams.correctColor.a) {                                                                     \
+          sdrColor = lerp(sdrColor, hueCorrection(sdrColor, tmParams.correctColor.rgb), tmParams.correctColor.a); \
+        }                                                                                                  \
       } else {                                                                                             \
         hdrColor = outputColor;                                                                            \
+        if (tmParams.correctColor.a) {                                                                     \
+          hdrColor = lerp(hdrColor, hueCorrection(hdrColor, tmParams.correctColor.rgb), tmParams.correctColor.a); \
+        }                                                                                                  \
         sdrColor = outputColor;                                                                            \
+        if (tmParams.correctColor.a) {                                                                     \
+          sdrColor = lerp(sdrColor, hueCorrection(sdrColor, tmParams.correctColor.rgb), tmParams.correctColor.a); \
+        }                                                                                                  \
       }                                                                                                    \
     }                                                                                                      \
                                                                                                            \
