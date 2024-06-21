@@ -112,6 +112,47 @@ typedef struct LUTParams ToneMapLUTParams;
 #define TONE_MAP_LUT_TYPE__ARRI_C1000_NO_CUT LUT_TYPE__ARRI_C1000_NO_CUT
 #define TONE_MAP_LUT_TYPE__PQ                LUT_TYPE__PQ
 
+ToneMapParams buildToneMapParams(
+  float type = 0.f,
+  float peakNits = 203.f,
+  float gameNits = 203.f,
+  float gammaCorrection = 0,
+  float exposure = 1.f,
+  float highlights = 1.f,
+  float shadows = 1.f,
+  float contrast = 1.f,
+  float saturation = 1.f,
+  float sceneMidGray = 0.18f,
+  float midGrayNits = 18.f,
+  float renoDRTHighlights = 1.f,
+  float renoDRTShadows = 1.f,
+  float renoDRTContrast = 1.f,
+  float renoDRTSaturation = 1.f,
+  float renoDRTDechroma = 0.5f,
+  float renoDRTFlare = 0.f
+) {
+  ToneMapParams toneMapParams = {
+    type,
+    peakNits,
+    gameNits,
+    gammaCorrection,
+    exposure,
+    highlights,
+    shadows,
+    contrast,
+    saturation,
+    sceneMidGray,
+    midGrayNits,
+    renoDRTHighlights,
+    renoDRTShadows,
+    renoDRTContrast,
+    renoDRTSaturation,
+    renoDRTDechroma,
+    renoDRTFlare
+  };
+  return toneMapParams;
+}
+
 float3 renoDRTToneMap(float3 color, ToneMapParams params, bool sdr = false) {
   float renoDRTMax = sdr ? 1.f : (params.peakNits / params.gameNits);
   if (!sdr && params.gammaCorrection != 0) {
