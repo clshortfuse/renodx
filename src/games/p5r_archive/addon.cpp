@@ -29,7 +29,7 @@
 #include "../../utils/userSettingUtil.hpp"
 #include "./p5r.h"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Persona 5 Royal";
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Persona 5 Royal";
 
 ShaderReplaceMod::CustomShaders customShaders = {
