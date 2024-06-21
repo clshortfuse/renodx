@@ -227,7 +227,7 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
     float renoDRTSaturation = 1.0f;
     float renoDRTDechroma = 0.5f;
     float renoDRTFlare = 0.f;
-    ToneMapParams tmParams = {
+    ToneMapParams tmParams = buildToneMapParams(
       injectedData.toneMapType,
       injectedData.toneMapPeakNits,
       injectedData.toneMapGameNits,
@@ -245,7 +245,7 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
       renoDRTSaturation,
       renoDRTDechroma,
       renoDRTFlare
-    };
+    );
     if (injectedData.colorGradeColorFilter) {
       float3 outputColor = injectedData.toneMapGammaCorrection
                            ? pow(max(0, unfilteredColor), 2.2f)
@@ -302,9 +302,9 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
                  : linearFromSRGB(saturate(r2.rgb));
       }
 
-      float3 lutColor = r2;
+      float3 postProcessColor = r2;
 
-      outputColor = toneMapUpgrade(hdrColor, sdrColor, lutColor, injectedData.colorGradeColorFilter);
+      outputColor = toneMapUpgrade(hdrColor, sdrColor, postProcessColor, injectedData.colorGradeColorFilter);
       if (tmParams.saturation != 1.f) {
         outputColor = applySaturation(outputColor, tmParams.saturation);
       }

@@ -63,7 +63,7 @@ void main(
   float renoDRTSaturation = 1.0f;
   float renoDRTHighlights = 1.0f;
 
-  ToneMapParams tmParams = {
+  ToneMapParams tmParams = buildToneMapParams(
     injectedData.toneMapType,
     injectedData.toneMapPeakNits,
     injectedData.toneMapGameNits,
@@ -81,7 +81,7 @@ void main(
     renoDRTSaturation,
     renoDRTDechroma,
     renoDRTFlare
-  };
+  );
 
   o0 = max(0, o0);
   o0 = injectedData.toneMapGammaCorrection ? pow(o0, 2.2f) : linearFromSRGBA(o0);

@@ -178,7 +178,7 @@ float4 main(
   float renoDRTSaturation = 1.15f;
   float renoDRTHighlights = 1.f;
 
-  ToneMapParams tmParams = {
+  ToneMapParams tmParams = buildToneMapParams(
     injectedData.toneMapType,
     injectedData.toneMapPeakNits,
     injectedData.toneMapGameNits,
@@ -196,7 +196,7 @@ float4 main(
     renoDRTSaturation,
     renoDRTDechroma,
     renoDRTFlare
-  };
+  );
 
   outputColor = toneMap(outputColor, tmParams);
 

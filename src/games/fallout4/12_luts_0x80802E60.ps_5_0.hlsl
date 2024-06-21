@@ -48,7 +48,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   float renoDRTSaturation = 1.0f;
   float renoDRTHighlights = 1.0f;
 
-  ToneMapParams tmParams = {
+  ToneMapParams tmParams = buildToneMapParams(
     injectedData.toneMapType,
     injectedData.toneMapPeakNits,
     injectedData.toneMapGameNits,
@@ -66,7 +66,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     renoDRTSaturation,
     renoDRTDechroma,
     renoDRTFlare
-  };
+  );
 
   LUTParams lutParams = buildLUTParams(
     s4_s,

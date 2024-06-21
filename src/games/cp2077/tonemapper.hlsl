@@ -572,7 +572,7 @@ float4 tonemap(bool isACESMode = false) {
       float renoDRTDechroma = 0.60f;
       float renoDRTFlare = 0.f;
 
-      ToneMapParams tmParams = {
+      ToneMapParams tmParams = buildToneMapParams(
         injectedData.toneMapType,
         injectedData.toneMapPeakNits,
         (injectedData.toneMapType == 2.f ? (100.f / 203.f) : 1.f) * injectedData.toneMapGameNits,
@@ -590,7 +590,7 @@ float4 tonemap(bool isACESMode = false) {
         renoDRTSaturation,
         renoDRTDechroma,
         renoDRTFlare
-      };
+      );
 
       outputRGB = toneMap(outputRGB, tmParams);
       bool useD60 = (injectedData.colorGradeWhitePoint == -1.0f || (injectedData.colorGradeWhitePoint == 0.f && cb6[28u].z == 0.f));

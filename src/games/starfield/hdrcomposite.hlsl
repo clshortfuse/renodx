@@ -228,7 +228,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
     }
   }
 
-  ToneMapParams tmParams = {
+  ToneMapParams tmParams = buildToneMapParams(
     injectedData.toneMapType,
     injectedData.toneMapPeakNits,
     injectedData.toneMapGameNits,
@@ -246,7 +246,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
     renoDRTSaturation,
     renoDRTDechroma,
     renoDRTFlare
-  };
+  );
 
   if (tmParams.type == 3.f) {
     tmParams.renoDRTSaturation *= tmParams.saturation;

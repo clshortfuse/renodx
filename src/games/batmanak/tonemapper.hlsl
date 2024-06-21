@@ -21,7 +21,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   float renoDRTSaturation = 1.05f;
   float renoDRTHighlights = 1.2f;
 
-  ToneMapParams tmParams = {
+  ToneMapParams tmParams = buildToneMapParams(
     injectedData.toneMapType,
     injectedData.toneMapPeakNits,
     injectedData.toneMapGameNits,
@@ -39,7 +39,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
     renoDRTSaturation,
     renoDRTDechroma,
     renoDRTFlare
-  };
+  );
   LUTParams lutParams = buildLUTParams(
     lutSampler,
     injectedData.colorGradeLUTStrength,

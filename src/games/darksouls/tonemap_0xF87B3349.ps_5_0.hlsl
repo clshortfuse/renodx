@@ -213,7 +213,8 @@ void main(float4 v0
 
   if (injectedData.toneMapType != 0) {
 
-    ToneMapParams tmParams = {injectedData.toneMapType,
+    ToneMapParams tmParams = buildToneMapParams(
+                              injectedData.toneMapType,
                               injectedData.toneMapPeakNits,
                               injectedData.toneMapGameNits,
                               injectedData.toneMapGammaCorrection,
@@ -229,7 +230,7 @@ void main(float4 v0
                               renoDRTContrast,
                               renoDRTSaturation,
                               renoDRTDechroma,
-                              renoDRTFlare};
+                              renoDRTFlare);
 
     if (injectedData.toneMapHueCorrection) {
       r1.xyz = hueCorrection(toneMap(untonemapped, tmParams), r1.xyz);
