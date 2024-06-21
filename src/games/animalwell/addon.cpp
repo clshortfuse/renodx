@@ -10,6 +10,7 @@
 #include <deps/imgui/imgui.h>
 #include <embed/0x0076212D.h>
 #include <embed/0x20C9EB92.h>
+#include <embed/0xC2157826.h>
 #include <include/reshade.hpp>
 
 #include "../../mods/shaderReplaceMod.hpp"
@@ -17,7 +18,7 @@
 #include "../../utils/userSettingUtil.hpp"
 #include "./shared.h"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX - Animal Well";
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Animal Well";
 
 ShaderReplaceMod::CustomShaders customShaders = {
