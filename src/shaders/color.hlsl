@@ -407,4 +407,51 @@ float3 hueCorrection(float3 incorrectColor, float3 correctColor) {
   return color;
 }
 
+// taken from Filoppi: https://github.com/Filoppi/PumboAutoHDR/blob/master/Shaders/Pumbo/Color.fxh
+// Bizarre matrix but this expands sRGB to between P3 and AP1
+// CIE 1931 chromaticities:	x		y
+//				Red:		0.6965	0.3065
+//				Green:		0.245	0.718
+//				Blue:		0.1302	0.0456
+//				White:		0.31271	0.32902
+static const float3x3 Wide_2_XYZ_MAT = float3x3(
+  0.5441691, 0.2395926, 0.1666943,
+  0.2394656, 0.7021530, 0.0583814,
+  -0.0023439, 0.0361834, 1.0552183);
+
+// taken from Filoppi: https://github.com/Filoppi/PumboAutoHDR/blob/master/Shaders/Pumbo/Color.fxh 
+// Expand bright saturated colors outside the sRGB (REC.709) gamut to fake wide gamut rendering (BT.2020).
+// Inspired by Unreal Engine 4/5 (ACES).
+// Input (and output) needs to be in sRGB linear space.
+// Calling this with a value of 0 still results in changes (it's actually an edge case, don't call it, it produces invalid/imaginary colors).
+// Calling this with values above 1 yields diminishing returns.
+float3 expandGamut(float3 vHDRColor, float fExpandGamut /*= 1.0f*/)
+{
+  vHDRColor *= 203.f/80.f;  // expects 203 paperwhite
+
+  const float3x3 sRGB_2_AP1 = mul(XYZ_2_AP1_MAT, mul(D65_2_D60_CAT, BT709_2_XYZ_MAT));
+  const float3x3 AP1_2_sRGB = mul(XYZ_2_BT709_MAT, mul(D60_2_D65_CAT, AP1_2_XYZ_MAT));
+  const float3x3 Wide_2_AP1 = mul(XYZ_2_AP1_MAT, Wide_2_XYZ_MAT);
+  const float3x3 ExpandMat = mul(Wide_2_AP1, AP1_2_sRGB);
+
+  float3 ColorAP1 = mul(sRGB_2_AP1, vHDRColor);
+
+  float LumaAP1 = dot(ColorAP1, float3(0.2722287168, 0.6740817658, 0.0536895174));
+  if (LumaAP1 <= 0.f)
+  {
+      return vHDRColor;
+  }
+  float3 ChromaAP1 = ColorAP1 / LumaAP1;
+
+  float ChromaDistSqr = dot(ChromaAP1 - 1, ChromaAP1 - 1);
+  float ExpandAmount = (1 - exp2(-4 * ChromaDistSqr)) * (1 - exp2(-4 * fExpandGamut * LumaAP1 * LumaAP1));
+
+  float3 ColorExpand = mul(ExpandMat, ColorAP1);
+  ColorAP1 = lerp(ColorAP1, ColorExpand, ExpandAmount);
+
+  vHDRColor = mul(AP1_2_sRGB, ColorAP1);
+  vHDRColor *= 80.f/203.f;  // scale paper white back down
+  return vHDRColor;
+}
+
 #endif  // SRC_COMMON_COLOR_HLSL_
