@@ -34,8 +34,8 @@ namespace SwapchainUtil {
   struct __declspec(uuid("25b7ec11-a51f-4884-a6f7-f381d198b9af")) CommandListData {
     std::vector<reshade::api::resource_view> currentRenderTargets;
     reshade::api::resource_view currentDepthStencil;
+    bool hasSwapchainRenderTargetDirty = true;
     bool hasSwapchainRenderTarget;
-    std::shared_mutex mutex;
   };
 
   static std::shared_mutex mutex;
@@ -131,28 +131,51 @@ namespace SwapchainUtil {
     const reshade::api::resource_view* rtvs,
     reshade::api::resource_view dsv
   ) {
+    auto &cmdListData = cmd_list->get_private_data<CommandListData>();
+    bool foundSwapchainRTV = false;
+    cmdListData.currentRenderTargets.assign(rtvs, rtvs + count);
+    cmdListData.currentDepthStencil = dsv;
+    uint32_t counted = 0;
+    for (uint32_t i = 0; i < count; i++) {
+      const reshade::api::resource_view rtv = rtvs[i];
+      if (rtv.handle) {
+        counted++;
+      }
+    }
+    cmdListData.currentRenderTargets.resize(counted);
+    cmdListData.hasSwapchainRenderTargetDirty = true;
+  }
+
+  static bool hasBackBufferRenderTarget(reshade::api::command_list* cmd_list) {
+    auto &cmdListData = cmd_list->get_private_data<CommandListData>();
+
+    if (!cmdListData.hasSwapchainRenderTargetDirty) {
+      return cmdListData.hasSwapchainRenderTarget;
+    }
+
+    uint32_t count = cmdListData.currentRenderTargets.size();
+    if (!count) {
+      cmdListData.hasSwapchainRenderTargetDirty = false;
+      cmdListData.hasSwapchainRenderTarget = false;
+      return false;
+    }
     auto device = cmd_list->get_device();
     auto &deviceData = device->get_private_data<DeviceData>();
     std::shared_lock deviceLock(deviceData.mutex);
 
-    auto &cmdListData = cmd_list->get_private_data<CommandListData>();
-    std::unique_lock cmdListLock(cmdListData.mutex);
-
     bool foundSwapchainRTV = false;
-    cmdListData.currentRenderTargets.assign(rtvs, rtvs + count);
-    cmdListData.currentDepthStencil = dsv;
-
     for (uint32_t i = 0; i < count; i++) {
-      const reshade::api::resource_view rtv = rtvs[i];
-      if (!foundSwapchainRTV) {
-        auto resource = ResourceUtil::getResourceFromResourceView(device, rtv);
-        if (resource.handle && deviceData.backBuffers.contains(resource.handle)) {
-          foundSwapchainRTV = true;
-        }
+      const reshade::api::resource_view rtv = cmdListData.currentRenderTargets[i];
+      auto resource = ResourceUtil::getResourceFromResourceView(device, rtv);
+      if (resource.handle && deviceData.backBuffers.contains(resource.handle)) {
+        foundSwapchainRTV = true;
+        break;
       }
     }
 
+    cmdListData.hasSwapchainRenderTargetDirty = false;
     cmdListData.hasSwapchainRenderTarget = foundSwapchainRTV;
+    return foundSwapchainRTV;
   }
 
   static bool attached = false;

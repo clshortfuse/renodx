@@ -220,12 +220,7 @@ static void onPresetOff() {
 }
 
 static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch = false) {
-  uint32_t shaderHash;
-  {
-    ShaderUtil::CommandListData &shaderState = cmd_list->get_private_data<ShaderUtil::CommandListData>();
-    std::shared_lock shaderCommandListLock(shaderState.mutex);
-    shaderHash = shaderState.currentShaderHash;
-  }
+  ShaderUtil::CommandListData &shaderState = cmd_list->get_private_data<ShaderUtil::CommandListData>();
 
   // flow
   // 0x0a152bb1 (tonemapper) (r11g11b10 => rgb8a_unorm tRender)
@@ -233,32 +228,21 @@ static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch 
   // 0xe9d9e225 (ui)         (rgb8a_unorm tUI => rgb8a_unorm tComposite)
   if (
     !isDispatch
-    && (shaderHash == 0x0a152bb1     // tonemapper
-        || shaderHash == 0x054D0CB8  // tonemapper
-        || shaderHash == 0x3B344832  // tonemapper
-        || shaderHash == 0x17fab08f  // sharpener
-        || shaderHash == 0x32580F53  // movie
-        || shaderHash == 0xe9d9e225  // ui
-        || shaderHash == 0x0d5add1f  // copy
-        || shaderHash == 0x1C18052A  // CAS1
-        || shaderHash == 0x58E74610  // CAS2
-        || shaderHash == 0x4348FFAE  // CAS3
-        || shaderHash == 0xEED8A831  // CAS4
+    && (shaderState.currentShaderHash == 0x0a152bb1     // tonemapper
+        || shaderState.currentShaderHash == 0x054D0CB8  // tonemapper
+        || shaderState.currentShaderHash == 0x3B344832  // tonemapper
+        || shaderState.currentShaderHash == 0x17fab08f  // sharpener
+        || shaderState.currentShaderHash == 0x32580F53  // movie
+        || shaderState.currentShaderHash == 0xe9d9e225  // ui
+        || shaderState.currentShaderHash == 0x0d5add1f  // copy
     )
   ) {
-    std::vector<reshade::api::resource_view> currentTargets;
-    reshade::api::resource_view currentDepthStencil;
-    {
-      SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
-      std::shared_lock swapchainCommandListLock(swapchainState.mutex);
-      currentTargets = swapchainState.currentRenderTargets;
-      currentDepthStencil = swapchainState.currentDepthStencil;
-    }
+    SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
 
     bool changed = false;
-    uint32_t renderTargetCount = currentTargets.size();
+    uint32_t renderTargetCount = swapchainState.currentRenderTargets.size();
     for (uint32_t i = 0; i < renderTargetCount; i++) {
-      auto render_target = currentTargets.at(i);
+      auto render_target = swapchainState.currentRenderTargets[i];
       if (render_target.handle == 0) continue;
       std::stringstream s;
       if (SwapChainUpgradeMod::activateCloneHotSwap(cmd_list->get_device(), render_target)) {
@@ -270,8 +254,8 @@ static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch 
       SwapChainUpgradeMod::rewriteRenderTargets(
         cmd_list,
         renderTargetCount,
-        currentTargets.data(),
-        currentDepthStencil
+        swapchainState.currentRenderTargets.data(),
+        swapchainState.currentDepthStencil
       );
       SwapChainUpgradeMod::flushDescriptors(cmd_list);
     }

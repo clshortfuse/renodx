@@ -181,7 +181,6 @@ namespace SwapChainUpgradeMod {
   };
 
   struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData {
-    std::shared_mutex mutex;
     std::vector<bound_descriptor_info> unboundDescriptors;
     std::vector<push_descriptor_info> unpushedUpdates;
   };
@@ -2175,7 +2174,6 @@ namespace SwapChainUpgradeMod {
       cmd_list->bind_descriptor_tables(stages, layout, first, count, new_tables);
     } else if (built_new_tables) {
       auto &cmd_data = cmd_list->get_private_data<CommandListData>();
-      std::unique_lock lock(cmd_data.mutex);
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
       s << "bind_descriptor_tables(storing unbound descriptor)";
@@ -2297,7 +2295,6 @@ namespace SwapChainUpgradeMod {
       cmd_list->push_descriptors(stages, layout, layout_param, new_update);
     } else if (changed) {
       auto &cmd_data = cmd_list->get_private_data<CommandListData>();
-      std::unique_lock lock(cmd_data.mutex);
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
       s << "push_descriptors(storing unpushed descriptor)";
@@ -2382,14 +2379,12 @@ namespace SwapChainUpgradeMod {
 
   static void discardDescriptors(reshade::api::command_list* cmd_list) {
     auto &cmd_data = cmd_list->get_private_data<CommandListData>();
-    std::unique_lock lock(cmd_data.mutex);
     cmd_data.unboundDescriptors.clear();
     cmd_data.unpushedUpdates.clear();
   }
 
   static void flushDescriptors(reshade::api::command_list* cmd_list) {
     auto &cmd_data = cmd_list->get_private_data<CommandListData>();
-    std::unique_lock lock(cmd_data.mutex);
     for (auto info : cmd_data.unboundDescriptors) {
       cmd_list->bind_descriptor_tables(
         info.stages,
