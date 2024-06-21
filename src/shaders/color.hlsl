@@ -125,6 +125,30 @@ float3 bt709FromBT2020(float3 bt2020) {
   return mul(BT2020_2_BT709_MAT, bt2020);
 }
 
+float3 bt709FromAP1(float3 ap1) {
+  return mul(AP1_2_BT709_MAT, ap1);
+}
+
+float3 ap1FromBT709(float3 bt709) {
+  return mul(BT709_2_AP1_MAT, bt709);
+}
+
+float3 clampBT709ToBT709(float3 bt709) {
+  return max(0, bt709);
+}
+
+float3 clampBT709ToBT2020(float3 bt709) {
+  float3 bt2020 = bt2020FromBT709(bt709);
+  bt2020 = max(0, bt2020);
+  return bt709FromBT2020(bt2020);
+}
+
+float3 clampBT709ToAP1(float3 bt709) {
+  float3 ap1 = ap1FromBT709(bt709);
+  ap1 = max(0, ap1);
+  return bt709FromAP1(ap1);
+}
+
 float yFromBT601(float3 bt601) {
   return dot(BT601_2_Y, bt601);
 }

@@ -328,8 +328,6 @@ static void on_bind_render_targets_and_depth_stencil(reshade::api::command_list*
 
   if (afterTonemapping) {
     ShaderUtil::CommandListData &shaderState = cmd_list->get_private_data<ShaderUtil::CommandListData>();
-    std::shared_lock shaderCommandListLock(shaderState.mutex);
-
     uint32_t shaderHash = shaderState.currentShaderHash;
     if (rtvs && rtvs->handle != 0) {
       if (is_ui_shader(shaderHash)) {
@@ -391,7 +389,6 @@ static void on_bind_pipeline(reshade::api::command_list* cmd_list, reshade::api:
   state.pipelines[type] = pipeline;
 
   ShaderUtil::CommandListData &shaderState = cmd_list->get_private_data<ShaderUtil::CommandListData>();
-  std::shared_lock shaderCommandListLock(shaderState.mutex);
   uint32_t shaderHash = shaderState.currentShaderHash;
 
   if (afterTonemapping && is_ui_shader(shaderHash) && type == reshade::api::pipeline_stage::output_merger) {
