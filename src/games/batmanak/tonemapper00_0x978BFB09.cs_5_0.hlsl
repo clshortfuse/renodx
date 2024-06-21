@@ -155,22 +155,23 @@ cbuffer cb0 : register(b0) {
   float3 untonemapped = r0.zwy;
 
   float3 outputColor = untonemapped;
+  r1.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
+  r1.xyzw = r0.yyzw * r1.xyzw + float4(0.00200000009, 0.00200000009, 0.00200000009, 0.00200000009);
+  r4.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.300000012, 0.300000012, 0.300000012, 0.300000012);
+  r0.xyzw = r0.xyzw * r4.xyzw + float4(0.0599999987, 0.0599999987, 0.0599999987, 0.0599999987);
+  r0.xyzw = r1.xyzw / r0.xyzw;
+
+  r0.xyzw = float4(-0.0333333351, -0.0333333351, -0.0333333351, -0.0333333351) + r0.xyzw;
+  r0.xyzw = max(float4(0, 0, 0, 0), r0.xyzw);
+  r0.xyzw = 1.66289866f * r0.xyzw;
+
+  float3 correctColor = r0.zwx;
+
   if (injectedData.toneMapType == 0) {
-    r1.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
-    r1.xyzw = r0.yyzw * r1.xyzw + float4(0.00200000009, 0.00200000009, 0.00200000009, 0.00200000009);
-    r4.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.300000012, 0.300000012, 0.300000012, 0.300000012);
-    r0.xyzw = r0.xyzw * r4.xyzw + float4(0.0599999987, 0.0599999987, 0.0599999987, 0.0599999987);
-    r0.xyzw = r1.xyzw / r0.xyzw;
-
-    r0.xyzw = float4(-0.0333333351, -0.0333333351, -0.0333333351, -0.0333333351) + r0.xyzw;
-    r0.xyzw = max(float4(0, 0, 0, 0), r0.xyzw);
-    r0.xyzw = 1.66289866f * r0.xyzw;
-
     r0.xyzw = pow(r0.xyzw, 1.f / 2.2f);
     float4 lutInputColor = r0.zwxy;
     if (injectedData.colorGradeLUTStrength) {
       r0.xyzw = min(1.f, r0.xyzw);  // clip to white
-
       r1.xyw = float3(14.9998999, 0.9375, 0.05859375) * r0.xwz;
       r0.x = floor(r1.x);
       r0.y = r0.y * 15 + -r0.x;
@@ -200,7 +201,11 @@ cbuffer cb0 : register(b0) {
       }
     outputColor = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : linearFromSRGB(r0.rgb);
   } else {
-    outputColor = applyUserToneMap(untonemapped.rgb, t2, s0_s);
+    outputColor = applyUserToneMap(untonemapped.rgb, t2, s0_s, correctColor);
+    // if (injectedData.toneMapHueCorrection) {
+    //   r0.rgb = injectedData.toneMapGammaCorrection ? sign(r0.rgb) * pow(abs(r0.rgb), 2.2f) : linearFromSRGB(r0.rgb);
+    //   outputColor = hueCorrection(outputColor, r0.rgb);
+    // }
 #if DRAW_TONEMAPPER
     if (!dtmParams.drawToneMapper)
 #endif

@@ -146,15 +146,18 @@ cbuffer cb0 : register(b0) {
   const float3 untonemapped = r0.zwy;
 
   float3 outputColor = untonemapped;
+  r1.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
+  r1.xyzw = r0.yyzw * r1.xyzw + float4(0.00200000009, 0.00200000009, 0.00200000009, 0.00200000009);
+  r4.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.300000012, 0.300000012, 0.300000012, 0.300000012);
+  r0.xyzw = r0.xyzw * r4.xyzw + float4(0.0599999987, 0.0599999987, 0.0599999987, 0.0599999987);
+  r0.xyzw = r1.xyzw / r0.xyzw;
+  r0.xyzw = float4(-0.0333333351, -0.0333333351, -0.0333333351, -0.0333333351) + r0.xyzw;
+  r0.xyzw = max(float4(0, 0, 0, 0), r0.xyzw);
+  r0.xyzw = float4(1.66289866, 1.66289866, 1.66289866, 1.66289866) * r0.xyzw;
+
+  float3 correctColor = r0.zwx;
+
   if (injectedData.toneMapType == 0) {
-    r1.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
-    r1.xyzw = r0.yyzw * r1.xyzw + float4(0.00200000009, 0.00200000009, 0.00200000009, 0.00200000009);
-    r4.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.300000012, 0.300000012, 0.300000012, 0.300000012);
-    r0.xyzw = r0.xyzw * r4.xyzw + float4(0.0599999987, 0.0599999987, 0.0599999987, 0.0599999987);
-    r0.xyzw = r1.xyzw / r0.xyzw;
-    r0.xyzw = float4(-0.0333333351, -0.0333333351, -0.0333333351, -0.0333333351) + r0.xyzw;
-    r0.xyzw = max(float4(0, 0, 0, 0), r0.xyzw);
-    r0.xyzw = float4(1.66289866, 1.66289866, 1.66289866, 1.66289866) * r0.xyzw;
     r0.xyzw = log2(r0.xyzw);
     r0.xyzw = float4(0.454545468, 0.454545468, 0.454545468, 0.454545468) * r0.xyzw;
     r0.xyzw = exp2(r0.xyzw);
@@ -187,7 +190,7 @@ cbuffer cb0 : register(b0) {
 
     outputColor = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : linearFromSRGB(r0.rgb);
   } else {
-    outputColor = applyUserToneMap(untonemapped.rgb, t3, s0_s);
+    outputColor = applyUserToneMap(untonemapped.rgb, t3, s0_s, correctColor);
 #if DRAW_TONEMAPPER
     if (!dtmParams.drawToneMapper)
 #endif

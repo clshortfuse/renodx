@@ -250,6 +250,9 @@ float3 toneMap(float3 untonemapped, ToneMapParams params) {
       params.contrast,
       params.saturation
     );
+    if (params.type == 1.f) {
+      outputColor = lerp(outputColor, hueCorrection(outputColor, params.correctColor.rgb), params.correctColor.a);
+    }
     if (params.type == 2.f) {
       outputColor = acesToneMap(outputColor, params);
       if (params.correctColor.a) {

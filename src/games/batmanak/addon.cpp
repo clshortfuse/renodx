@@ -137,6 +137,16 @@ UserSettingUtil::UserSettings userSettings = {
     .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
   },
   new UserSettingUtil::UserSetting {
+    .key = "toneMapHueCorrection",
+    .binding = &shaderInjection.toneMapHueCorrection,
+    .defaultValue = 100.f,
+    .label = "Hue Correction",
+    .section = "Tone Mapping",
+    .tooltip = "Emulates hue shifting from the vanilla tonemapper",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.01f; }
+  },
+  new UserSettingUtil::UserSetting {
     .key = "colorGradeExposure",
     .binding = &shaderInjection.colorGradeExposure,
     .defaultValue = 1.f,
@@ -188,6 +198,16 @@ UserSettingUtil::UserSettings userSettings = {
     .label = "Blowout",
     .section = "Color Grading",
     .tooltip = "Controls highlight desaturation due to overexposure.",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.01f; }
+  },
+  new UserSettingUtil::UserSetting {
+    .key = "colorGradeExpandGamut",
+    .binding = &shaderInjection.colorGradeExpandGamut,
+    .defaultValue = 0.f,
+    .label = "Gamut Expansion",
+    .section = "Color Grading",
+    .tooltip = "Generates HDR colors (BT.2020) from bright saturated SDR (BT.709) ones.",
     .max = 100.f,
     .parse = [](float value) { return value * 0.01f; }
   },
@@ -246,11 +266,13 @@ static void onPresetOff() {
   UserSettingUtil::updateUserSetting("toneMapGameNits", 203.f);
   UserSettingUtil::updateUserSetting("toneMapUINits", 203.f);
   UserSettingUtil::updateUserSetting("toneMapGammaCorrection", 0);
+  UserSettingUtil::updateUserSetting("toneMapHueCorrection", 0.f);
   UserSettingUtil::updateUserSetting("colorGradeExposure", 1.f);
   UserSettingUtil::updateUserSetting("colorGradeHighlights", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);
   UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
+  UserSettingUtil::updateUserSetting("colorGradeExpandGamut", 0.f);
   UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
   UserSettingUtil::updateUserSetting("colorGradeBlowout", 0.f);
   UserSettingUtil::updateUserSetting("fxBloom", 50.f);

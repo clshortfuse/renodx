@@ -74,23 +74,27 @@ cbuffer cb0 : register(b0) {
   r1.zwy = dtmParams.outputColor;
 #endif
 
-  const float3 untonemapped = r1.zwy;
+  float3 untonemapped = r1.zwy;
 
   float3 outputColor = r3.xyz;
+  r3.xyzw = r1.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
+  r3.xyzw = r1.yyzw * r3.xyzw + float4(0.00200000009, 0.00200000009, 0.00200000009, 0.00200000009);
+  r4.xyzw = r1.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.300000012, 0.300000012, 0.300000012, 0.300000012);
+  r1.xyzw = r1.xyzw * r4.xyzw + float4(0.0599999987, 0.0599999987, 0.0599999987, 0.0599999987);
+  r1.xyzw = r3.xyzw / r1.xyzw;
+  r1.xyzw = float4(-0.0333333351, -0.0333333351, -0.0333333351, -0.0333333351) + r1.xyzw;
+  r1.xyzw = max(float4(0, 0, 0, 0), r1.xyzw);
+  r1.xyzw = float4(1.66289866, 1.66289866, 1.66289866, 1.66289866) * r1.xyzw;
+
+  float3 correctColor = r1.zwx;
+
   if (injectedData.toneMapType == 0) {
-    r3.xyzw = r1.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
-    r3.xyzw = r1.yyzw * r3.xyzw + float4(0.00200000009, 0.00200000009, 0.00200000009, 0.00200000009);
-    r4.xyzw = r1.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.300000012, 0.300000012, 0.300000012, 0.300000012);
-    r1.xyzw = r1.xyzw * r4.xyzw + float4(0.0599999987, 0.0599999987, 0.0599999987, 0.0599999987);
-    r1.xyzw = r3.xyzw / r1.xyzw;
-    r1.xyzw = float4(-0.0333333351, -0.0333333351, -0.0333333351, -0.0333333351) + r1.xyzw;
-    r1.xyzw = max(float4(0, 0, 0, 0), r1.xyzw);
-    r1.xyzw = float4(1.66289866, 1.66289866, 1.66289866, 1.66289866) * r1.xyzw;
     r1.xyzw = log2(r1.xyzw);
     r1.xyzw = float4(0.454545468, 0.454545468, 0.454545468, 0.454545468) * r1.xyzw;
     r1.xyzw = exp2(r1.xyzw);
 
     float4 lutInputColor = r1.zwxy;
+
     r1.xyzw = min(float4(1, 1, 1, 1), r1.xyzw);
     r3.xyw = float3(14.9998999, 0.9375, 0.05859375) * r1.xwz;
     r0.z = floor(r3.x);
@@ -122,7 +126,7 @@ cbuffer cb0 : register(b0) {
 
     outputColor = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : linearFromSRGB(r0.rgb);
   } else {
-    outputColor = applyUserToneMap(untonemapped.rgb, t2, s0_s);
+    outputColor = applyUserToneMap(untonemapped.rgb, t2, s0_s, correctColor);
 #if DRAW_TONEMAPPER
     if (!dtmParams.drawToneMapper)
 #endif

@@ -9,10 +9,13 @@
 
 #define DRAW_TONEMAPPER 0
 
-float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState lutSampler) {
+float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState lutSampler, float3 vanilla) {
   float3 outputColor = untonemapped;
 
   float vanillaMidGray = uncharted2Tonemap(0.18f) / uncharted2Tonemap(2.2f);
+  float4 correctColor;
+  correctColor.rgb = vanilla.rgb;
+  correctColor.a = injectedData.toneMapHueCorrection;
 
   float renoDRTContrast = 1.12f;
   float renoDRTFlare = 0.f;
@@ -38,18 +41,23 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
     renoDRTContrast,
     renoDRTSaturation,
     renoDRTDechroma,
-    renoDRTFlare
+    renoDRTFlare,
+    correctColor
   );
-  LUTParams lutParams = buildLUTParams(
+  ToneMapLUTParams lutParams = buildLUTParams(
     lutSampler,
     injectedData.colorGradeLUTStrength,
     0.f,  // Lut scaling not needed
-    LUT_TYPE__2_2,
-    LUT_TYPE__2_2,
+    TONE_MAP_LUT_TYPE__2_2,
+    TONE_MAP_LUT_TYPE__2_2,
     16.f
   );
 
   outputColor = toneMap(untonemapped, tmParams, lutParams, lutTexture);
+
+  if (injectedData.colorGradeExpandGamut > 0.f) {
+    outputColor = hueCorrection(expandGamut(outputColor, injectedData.colorGradeExpandGamut), outputColor);
+  }
 
   if (injectedData.toneMapGammaCorrection == 0.f) {
     outputColor = gammaCorrectSafe(outputColor, true);
