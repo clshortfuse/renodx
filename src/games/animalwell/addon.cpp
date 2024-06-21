@@ -185,20 +185,23 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
     case DLL_PROCESS_ATTACH:
 
       ShaderReplaceMod::forcePipelineCloning = true;
+      ShaderReplaceMod::resourceTagFloat = &shaderInjection.resourceTag;
       // SwapChainUpgradeMod::setUseHDR10(true);
 
-      // SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
-      //   {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float, 33, true}  // Composite
-      // );
-      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
-        {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float, 34, true}
-      );
-      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
-        {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float, 35, true}
-      );
-      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
-        {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float, 36, true}  // Main Texture
-      );
+      // Composite = 33;
+      // Bloom 0 = 34;
+      // Bloom 1 = 35;
+      // Main Texture = 36;
+      for (auto index : {34, 35, 36}) {
+        SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+          {.oldFormat = reshade::api::format::r8g8b8a8_unorm,
+           .newFormat = reshade::api::format::r16g16b16a16_float,
+           .index = index,
+           .ignoreSize = true,
+           .resourceTag = (float)index
+          }
+        );
+      }
 
       break;
     case DLL_PROCESS_DETACH:
