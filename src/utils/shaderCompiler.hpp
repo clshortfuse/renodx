@@ -17,15 +17,13 @@
 
 namespace ShaderCompilerUtil {
 
-  char* disassembleShaderFXC(void* data, size_t size, LPCWSTR library = L"D3DCompiler_47.dll") {
-    char* result = nullptr;
-
+  CComPtr<ID3DBlob> disassembleShaderFXC(const void* data, size_t size, LPCWSTR library = L"D3DCompiler_47.dll") {
     HMODULE d3d_compiler = LoadLibraryW(library);
     if (d3d_compiler != nullptr) {
       pD3DDisassemble d3d_disassemble = pD3DDisassemble(GetProcAddress(d3d_compiler, "D3DDisassemble"));
 
       if (d3d_disassemble != nullptr) {
-        ID3DBlob* outBlob = nullptr;
+        CComPtr<ID3DBlob> outBlob;
         if (SUCCEEDED(d3d_disassemble(
               data,
               size,
@@ -33,12 +31,12 @@ namespace ShaderCompilerUtil {
               nullptr,
               &outBlob
             ))) {
-          result = (char*)outBlob->GetBufferPointer();
+          return outBlob;
         }
       }
       FreeLibrary(d3d_compiler);
     }
-    return result;
+    return nullptr;
   }
 
   HRESULT CreateLibrary(IDxcLibrary** pLibrary) {
@@ -65,29 +63,32 @@ namespace ShaderCompilerUtil {
     return dxcCreateInstance(CLSID_DxcCompiler, __uuidof(IDxcCompiler), (void**)ppCompiler);
   }
 
-  char* disassembleShaderDXC(void* data, size_t size) {
+  CComPtr<ID3DBlob> disassembleShaderDXC(const void* data, size_t size) {
     CComPtr<IDxcLibrary> library;
     CComPtr<IDxcCompiler> compiler;
     CComPtr<IDxcBlobEncoding> source;
     CComPtr<IDxcBlobEncoding> disassemblyText;
-
-    ID3DBlob* ppDisassembly = nullptr;
+    CComPtr<ID3DBlob> disassembly;
 
     if (FAILED(CreateLibrary(&library))) return nullptr;
     if (FAILED(library->CreateBlobWithEncodingFromPinned(data, size, CP_ACP, &source))) return nullptr;
     if (FAILED(CreateCompiler(&compiler))) return nullptr;
     if (FAILED(compiler->Disassemble(source, &disassemblyText))) return nullptr;
-    if (FAILED(disassemblyText.QueryInterface(&ppDisassembly))) return nullptr;
+    if (FAILED(disassemblyText.QueryInterface(&disassembly))) return nullptr;
 
-    return (char*)ppDisassembly->GetBufferPointer();
+    return disassembly;
   }
 
-  char* disassembleShader(void* code, size_t size) {
-    char* result = disassembleShaderFXC(code, size);
+  std::string disassembleShader(void* code, size_t size) {
+    CComPtr<ID3DBlob> result = disassembleShaderFXC(code, size);
     if (result == nullptr) {
       result = disassembleShaderDXC(code, size);
     }
-    return result;
+    if (result == nullptr) {
+      return "";
+    }
+    std::string outString((char*)result->GetBufferPointer(), result->GetBufferSize());
+    return outString;
   }
 
   ID3DBlob* compileShaderFromFileFXC(LPCWSTR filePath, LPCSTR shaderTarget, LPCWSTR library = L"D3DCompiler_47.dll") {

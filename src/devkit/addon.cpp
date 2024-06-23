@@ -316,7 +316,7 @@ static void loadCustomShaders() {
         << ")";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
       if (code_size) {
-        free(code);
+        delete code;
       }
       continue;
     }
@@ -431,7 +431,7 @@ static void loadCustomShaders() {
       cachedPipeline->cloned = true;
       cachedPipeline->pipelineClone = pipelineClone;
     }
-    // free(code);
+    // delete code;
   }
 }
 
@@ -855,7 +855,7 @@ static void on_init_pipeline(
     reshade::log_message(reshade::log_level::info, s.str().c_str());
   }
   if (!foundUsefulShader) {
-    free(newSubobjects);
+    delete newSubobjects;
     return;
   }
   pipelineCacheByPipelineHandle.emplace(pipeline.handle, cachedPipeline);
@@ -877,7 +877,7 @@ static void on_destroy_pipeline(
       cachedPipeline->cloned = false;
       cachedPipeline->device->destroy_pipeline(cachedPipeline->pipelineClone);
     }
-    free(pipelineCachePair->second);
+    delete pipelineCachePair->second;
     pipelineCacheByPipelineHandle.erase(pipeline.handle);
     changed = true;
   }
@@ -1888,12 +1888,11 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
               auto hash = traceHashes.at(selectedIndex);
               auto cache = shaderCache.find(hash)->second;
               if (cache->disasm.length() == 0) {
-                char* disasmCode = ShaderCompilerUtil::disassembleShader(cache->data, cache->size);
-                if (disasmCode == nullptr) {
+                const std::string disasmCode = ShaderCompilerUtil::disassembleShader(cache->data, cache->size);
+                if (disasmCode.empty()) {
                   cache->disasm.assign("Decompilation failed.");
                 } else {
                   cache->disasm.assign(disasmCode);
-                  free(disasmCode);
                 }
               }
               disasmString.assign(cache->disasm);
