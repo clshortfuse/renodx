@@ -30,20 +30,20 @@
 namespace ShaderUtil {
 
   struct __declspec(uuid("908f0889-64d8-4e22-bd26-ded3dd0cef77")) DeviceData {
-    std::unordered_set<uint64_t> computeShaderLayouts;
     std::unordered_map<uint64_t, uint64_t> pipelineToLayoutMap;
-    std::unordered_map<uint32_t, uint64_t> shaderToPipelineReplacement;
-    std::unordered_map<uint64_t, uint64_t> pipelineToPipelineReplacement;
-    std::unordered_map<uint64_t, uint32_t> pipelineToShaderHashMap;
+    std::unordered_map<uint32_t, std::pair<uint64_t, reshade::api::pipeline_subobject_type>> shaderToPipelineReplacement;
+    std::unordered_map<uint64_t, std::pair<uint64_t, reshade::api::pipeline_subobject_type>> pipelineToPipelineReplacement;
+    std::unordered_map<uint64_t, std::pair<uint32_t, reshade::api::pipeline_subobject_type>> pipelineToShaderHashMap;
     std::unordered_map<uint32_t, uint32_t> shaderReplacements;         // Old => New
     std::unordered_map<uint32_t, uint32_t> shaderReplacementsInverse;  // New => Old
     std::shared_mutex mutex;
   };
 
   struct __declspec(uuid("8707f724-c7e5-420e-89d6-cc032c732d2d")) CommandListData {
-    uint32_t currentShaderHash;
-    reshade::api::pipeline_stage currentShaderPipelineStage = reshade::api::pipeline_stage::all;
-    reshade::api::pipeline currentShaderPipeline = {0};
+    uint32_t pixelShaderHash = 0;
+    uint32_t computeShaderHash = 0;
+    reshade::api::pipeline_layout pipelineLayout = {0};
+    reshade::api::pipeline_stage pipeline_stage = reshade::api::pipeline_stage::all;
   };
 
   static std::shared_mutex mutex;
@@ -99,19 +99,14 @@ namespace ShaderUtil {
     initPipelineReplacements.erase(shader_hash);
   }
 
-  static void addShaderToPipelineTrace(
-    reshade::api::device* device,
-    uint32_t shader_hash,
-    reshade::api::pipeline pipeline
-  ) {
-    auto &device_data = device->get_private_data<DeviceData>();
-    std::unique_lock lock(device_data.mutex);
-    device_data.pipelineToShaderHashMap[pipeline.handle] = shader_hash;
+  static uint32_t getPixelShaderHash(reshade::api::command_list* cmd_list) {
+    auto &cmd_list_data = cmd_list->get_private_data<CommandListData>();
+    return cmd_list_data.pixelShaderHash;
   }
 
-  static uint32_t getCurrentShader(reshade::api::command_list* cmd_list) {
+  static uint32_t getComputeShaderHash(reshade::api::command_list* cmd_list) {
     auto &cmd_list_data = cmd_list->get_private_data<CommandListData>();
-    return cmd_list_data.currentShaderHash;
+    return cmd_list_data.computeShaderHash;
   }
 
   static void on_init_device(reshade::api::device* device) {
@@ -136,34 +131,10 @@ namespace ShaderUtil {
 
   static void on_init_command_list(reshade::api::command_list* cmd_list) {
     auto &data = cmd_list->create_private_data<CommandListData>();
-#ifdef DEBUG_LEVEL_1
-
-    std::stringstream s;
-    s << "ShaderUtil::on_init_command_list("
-      << reinterpret_cast<void*>(cmd_list)
-      << ", currentShaderHash " << (void*)&data.currentShaderHash
-      << ", currentShaderPipeline " << (void*)&data.currentShaderPipeline
-      << ", currentShaderPipelineStage " << (void*)&data.currentShaderPipelineStage
-      << ", mutex " << (void*)&data.mutex
-      << ")";
-    reshade::log_message(reshade::log_level::debug, s.str().c_str());
-#endif
   }
 
   static void on_destroy_command_list(reshade::api::command_list* cmd_list) {
     cmd_list->destroy_private_data<CommandListData>();
-  }
-
-  static uint32_t getShaderHashByPipeline(reshade::api::device* device, reshade::api::pipeline pipeline) {
-    auto &device_data = device->get_private_data<DeviceData>();
-    std::shared_lock lock(device_data.mutex);
-
-    if (
-      auto pair = device_data.pipelineToShaderHashMap.find(pipeline.handle);
-      pair != device_data.pipelineToShaderHashMap.end()
-    ) return pair->second;
-
-    return 0;
   }
 
   // Before CreatePipelineState
@@ -200,12 +171,12 @@ namespace ShaderUtil {
         pair != createPipelineReplacements.end()
       ) {
         changed = true;
-        size_t size = std::get<size_t>(pair->second);
-        desc->code_size = size;
+        const auto &[code_size, code] = pair->second;
+        desc->code_size = code_size;
 
-        if (size) {
+        if (code_size) {
           void* copy = (void*)malloc(desc->code_size);  // leak;
-          memcpy(copy, std::get<void*>(pair->second), desc->code_size);
+          memcpy(copy, code, desc->code_size);
           desc->code = copy;
           uint32_t new_hash = compute_crc32(
             static_cast<const uint8_t*>(desc->code),
@@ -220,13 +191,96 @@ namespace ShaderUtil {
         std::stringstream s;
         s << "ShaderUtil::on_create_pipeline(replacing "
           << PRINT_CRC32(shader_hash)
-          << " with " << size << " bytes "
+          << " with " << code_size << " bytes "
           << " at " << (void*)desc->code
           << ")";
         reshade::log_message(reshade::log_level::info, s.str().c_str());
       }
     }
     return changed;
+  }
+
+  static void trace_shader(
+    reshade::api::device* device,
+    DeviceData &data,
+    const reshade::api::pipeline &original_pipeline,
+    const reshade::api::pipeline_layout &original_layout,
+    const reshade::api::pipeline_subobject &original_subobject,
+    const uint32_t original_hash
+  ) {
+    data.pipelineToLayoutMap[original_pipeline.handle] = original_layout.handle;
+    data.pipelineToShaderHashMap[original_pipeline.handle] = {
+      original_hash,
+      original_subobject.type,
+    };
+  }
+
+  static reshade::api::pipeline create_shader_replacement(
+    reshade::api::device* device,
+    DeviceData &data,
+    reshade::api::pipeline &original_pipeline,
+    reshade::api::pipeline_layout &original_layout,
+    size_t subobject_count,
+    const reshade::api::pipeline_subobject* original_subobjects,
+    size_t index,
+    uint32_t original_hash,
+    size_t new_size,
+    void* new_code
+  ) {
+    reshade::api::pipeline_subobject* new_pipeline_subobjects = new reshade::api::pipeline_subobject[subobject_count];
+    memcpy(new_pipeline_subobjects, original_subobjects, sizeof(reshade::api::pipeline_subobject) * subobject_count);
+
+    reshade::api::pipeline_subobject_type type = new_pipeline_subobjects[index].type;
+    reshade::api::shader_desc* desc = (reshade::api::shader_desc*)(new_pipeline_subobjects[index].data);
+
+    desc->code_size = new_size;
+    if (new_size) {
+      void* copy = (void*)malloc(new_size);  // leak;
+      memcpy(copy, new_code, new_size);
+      desc->code = copy;
+    } else {
+      desc->code = nullptr;
+    }
+
+    reshade::api::pipeline new_pipeline;
+    bool builtPipelineOK = device->create_pipeline(original_layout, subobject_count, new_pipeline_subobjects, &new_pipeline);
+    if (builtPipelineOK) {
+      data.pipelineToLayoutMap[new_pipeline.handle] = original_layout.handle;
+      data.pipelineToShaderHashMap[new_pipeline.handle] = {
+        original_hash,
+        type,
+      };
+      data.pipelineToPipelineReplacement[original_pipeline.handle] = {
+        new_pipeline.handle,
+        type
+      };
+      data.shaderToPipelineReplacement[original_hash] = {
+        new_pipeline.handle,
+        type
+      };
+
+      std::stringstream s;
+      s << "ShaderUtil::on_init_pipeline(clone pipeline "
+        << (void*)original_pipeline.handle
+        << " => "
+        << (void*)new_pipeline.handle
+        << ", layout: " << reinterpret_cast<void*>(original_layout.handle)
+        << ")";
+      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+    } else {
+      std::stringstream s;
+      s << "ShaderUtil::on_init_pipeline(failed to clone pipeline "
+        << reinterpret_cast<void*>(original_pipeline.handle)
+        << ", layout: " << reinterpret_cast<void*>(original_layout.handle)
+        << ", hash: " << PRINT_CRC32(original_hash)
+        << ", type: " << to_string(type)
+        << ", size: " << new_size
+        << ", data: " << reinterpret_cast<void*>(new_code)
+        << ")";
+      reshade::log_message(reshade::log_level::error, s.str().c_str());
+      // Log error
+    }
+    return new_pipeline;
   }
 
   // After CreatePipelineState
@@ -238,18 +292,10 @@ namespace ShaderUtil {
     reshade::api::pipeline pipeline
   ) {
     auto &data = device->get_private_data<DeviceData>();
-    std::unique_lock lock(data.mutex);
-
-    bool foundComputeShader = false;
-    uint32_t foundShader = 0;
-    reshade::api::pipeline_subobject* newSubobjects = nullptr;
-
     for (uint32_t i = 0; i < subobjectCount; ++i) {
       const auto subobject = subobjects[i];
       switch (subobject.type) {
         case reshade::api::pipeline_subobject_type::compute_shader:
-          foundComputeShader = true;
-          // fallthrough
         case reshade::api::pipeline_subobject_type::pixel_shader:
           break;
         default:
@@ -259,16 +305,14 @@ namespace ShaderUtil {
       if (desc.code_size == 0) continue;
 
       // Pipeline has a pixel shader with code. Hash code and check
-      foundShader = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
-
-      std::shared_lock lock(mutex);
-
+      uint32_t foundShader = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
+      std::unique_lock lock(data.mutex);
       if (
         auto pair = data.shaderReplacementsInverse.find(foundShader);
         pair != data.shaderReplacementsInverse.end()
       ) {
         uint32_t original_hash = pair->second;
-        data.pipelineToShaderHashMap[pipeline.handle] = original_hash;
+        trace_shader(device, data, pipeline, layout, subobject, original_hash);
 
         std::stringstream s;
         s << "ShaderUtil::on_init_pipeline(found replacement: "
@@ -280,74 +324,37 @@ namespace ShaderUtil {
           << ")";
         reshade::log_message(reshade::log_level::info, s.str().c_str());
       } else {
-        data.pipelineToShaderHashMap[pipeline.handle] = foundShader;
+        trace_shader(device, data, pipeline, layout, subobject, foundShader);
 
         if (
           auto pair = initPipelineReplacements.find(foundShader);
           pair != initPipelineReplacements.end()
         ) {
-          if (newSubobjects == nullptr) {
-            newSubobjects = PipelineUtil::clonePipelineSubObjects(subobjectCount, subobjects);
-          }
-          reshade::api::shader_desc* desc = (reshade::api::shader_desc*)(newSubobjects[i].data);
-          desc->code_size = std::get<size_t>(pair->second);
-          if (desc->code_size) {
-            void* copy = (void*)malloc(desc->code_size);  // leak;
-            memcpy(copy, std::get<void*>(pair->second), desc->code_size);
-            desc->code = copy;
-          } else {
-            desc->code = nullptr;
-          }
+          const auto &[code_size, code] = pair->second;
+          uint32_t new_shader_hash = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
 
           std::stringstream s;
-          s << "ShaderUtil::on_init_pipeline(clone replacement "
+          s << "ShaderUtil::on_init_pipeline(prep replacement: "
             << PRINT_CRC32(foundShader)
-            << ", compute: " << (foundComputeShader ? "true" : "false")
-            << ", loc: " << (void*)desc->code
+            << ", code_size: " << code_size
+            << ", code: " << reinterpret_cast<void*>(code)
             << ", layout: " << reinterpret_cast<void*>(layout.handle)
+            << ", new_shader_hash: " << PRINT_CRC32(new_shader_hash)
             << ")";
           reshade::log_message(reshade::log_level::info, s.str().c_str());
+          create_shader_replacement(
+            device,
+            data,
+            pipeline,
+            layout,
+            subobjectCount,
+            subobjects,
+            i,
+            foundShader,
+            code_size,
+            code
+          );
         }
-      }
-    }
-    if (data.pipelineToLayoutMap.contains(pipeline.handle)) {
-      std::stringstream s;
-      s << "ShaderUtil::on_init_pipeline(pipeline already exists?"
-        << PRINT_CRC32(foundShader)
-        << ", compute: " << (foundComputeShader ? "true" : "false")
-        << ", layout: " << reinterpret_cast<void*>(layout.handle)
-        << ")";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
-    }
-    data.pipelineToLayoutMap[pipeline.handle] = layout.handle;
-    if (foundComputeShader) {
-      data.computeShaderLayouts.emplace(layout.handle);
-    }
-    if (newSubobjects != nullptr) {
-      reshade::api::pipeline newPipeline;
-      bool builtPipelineOK = device->create_pipeline(layout, subobjectCount, newSubobjects, &newPipeline);
-      if (builtPipelineOK) {
-        data.pipelineToLayoutMap[newPipeline.handle] = layout.handle;
-        data.pipelineToShaderHashMap[newPipeline.handle] = foundShader;
-        data.pipelineToPipelineReplacement[pipeline.handle] = newPipeline.handle;
-        data.shaderToPipelineReplacement[foundShader] = newPipeline.handle;
-
-        std::stringstream s;
-        s << "ShaderUtil::on_init_pipeline(clone pipeline "
-          << (void*)pipeline.handle
-          << " => "
-          << (void*)newPipeline.handle
-          << ", layout: " << reinterpret_cast<void*>(layout.handle)
-          << ")";
-        reshade::log_message(reshade::log_level::debug, s.str().c_str());
-      } else {
-        std::stringstream s;
-        s << "ShaderUtil::on_init_pipeline(failed to clone pipeline "
-          << reinterpret_cast<void*>(pipeline.handle)
-          << ", layout: " << reinterpret_cast<void*>(layout.handle)
-          << ")";
-        reshade::log_message(reshade::log_level::error, s.str().c_str());
-        // Log error
       }
     }
   }
@@ -363,7 +370,7 @@ namespace ShaderUtil {
         auto pair = data.pipelineToShaderHashMap.find(pipeline.handle);
         pair != data.pipelineToShaderHashMap.end()
       ) {
-        uint32_t shader_hash = pair->second;
+        uint32_t shader_hash = std::get<uint32_t>(pair->second);
         data.shaderToPipelineReplacement.erase(shader_hash);
       }
       data.pipelineToShaderHashMap.erase(pipeline.handle);
@@ -374,10 +381,10 @@ namespace ShaderUtil {
         auto pair = data.pipelineToPipelineReplacement.find(pipeline.handle);
         pair != data.pipelineToPipelineReplacement.end()
       ) {
-        uint64_t pipelineReplacementHandle = pair->second;
-        device->destroy_pipeline({pipelineReplacementHandle});
-        data.pipelineToLayoutMap.erase(pipelineReplacementHandle);
-        data.pipelineToShaderHashMap.erase(pipelineReplacementHandle);
+        uint64_t replacement_handle = std::get<uint64_t>(pair->second);
+        device->destroy_pipeline({replacement_handle});
+        data.pipelineToLayoutMap.erase(replacement_handle);
+        data.pipelineToShaderHashMap.erase(replacement_handle);
       }
       data.pipelineToPipelineReplacement.erase(pipeline.handle);
     }
@@ -388,7 +395,7 @@ namespace ShaderUtil {
   // AfterSetPipelineState
   static void on_bind_pipeline(
     reshade::api::command_list* cmd_list,
-    reshade::api::pipeline_stage type,
+    reshade::api::pipeline_stage stage,
     reshade::api::pipeline pipeline
   ) {
     auto device = cmd_list->get_device();
@@ -400,18 +407,32 @@ namespace ShaderUtil {
       pair != device_data.pipelineToShaderHashMap.end()
     ) {
       auto &cmd_list_data = cmd_list->get_private_data<CommandListData>();
+      const auto &[shader_hash, shader_type] = pair->second;
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
       s << "ShaderUtil::on_bind_pipeline(shader: "
-        << PRINT_CRC32(pair->second)
-        << ", type: " << to_string(type)
-        << ", pipeline: " << (void*)pipeline.handle
+        << PRINT_CRC32(shader_hash)
+        << ", type: " << to_string(shader_type)
+        << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
         << ")";
       // reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
-      cmd_list_data.currentShaderHash = pair->second;
-      cmd_list_data.currentShaderPipelineStage = type;
-      cmd_list_data.currentShaderPipeline = pipeline;
+
+      if (shader_type == reshade::api::pipeline_subobject_type::pixel_shader) {
+        cmd_list_data.pixelShaderHash = shader_hash;
+        cmd_list_data.computeShaderHash = 0;
+      } else {
+        cmd_list_data.pixelShaderHash = 0;
+        cmd_list_data.computeShaderHash = shader_hash;
+      }
+      cmd_list_data.pipeline_stage = stage;
+      if (
+        auto pair2 = device_data.pipelineToLayoutMap.find(pipeline.handle);
+        pair2 != device_data.pipelineToLayoutMap.end()
+      ) {
+        uint64_t pipeline_layout_handle = pair2->second;
+        cmd_list_data.pipelineLayout = {pipeline_layout_handle};
+      }
     }
   }
 

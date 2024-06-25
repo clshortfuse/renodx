@@ -228,13 +228,13 @@ static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch 
   // 0xe9d9e225 (ui)         (rgb8a_unorm tUI => rgb8a_unorm tComposite)
   if (
     !isDispatch
-    && (shaderState.currentShaderHash == 0x0a152bb1     // tonemapper
-        || shaderState.currentShaderHash == 0x054D0CB8  // tonemapper
-        || shaderState.currentShaderHash == 0x3B344832  // tonemapper
-        || shaderState.currentShaderHash == 0x17fab08f  // sharpener
-        || shaderState.currentShaderHash == 0x32580F53  // movie
-        || shaderState.currentShaderHash == 0xe9d9e225  // ui
-        || shaderState.currentShaderHash == 0x0d5add1f  // copy
+    && (shaderState.pixelShaderHash == 0x0a152bb1     // tonemapper
+        || shaderState.pixelShaderHash == 0x054D0CB8  // tonemapper
+        || shaderState.pixelShaderHash == 0x3B344832  // tonemapper
+        || shaderState.pixelShaderHash == 0x17fab08f  // sharpener
+        || shaderState.pixelShaderHash == 0x32580F53  // movie
+        || shaderState.pixelShaderHash == 0xe9d9e225  // ui
+        || shaderState.pixelShaderHash == 0x0d5add1f  // copy
     )
   ) {
     SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();

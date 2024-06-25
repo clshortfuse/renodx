@@ -317,13 +317,13 @@ static bool on_draw_indexed(
 
   ShaderUtil::CommandListData &shaderState = cmd_list->get_private_data<ShaderUtil::CommandListData>();
 
-  if (shaderState.currentShaderHash == 0xC6D14699) return false;  // Video
-  if (shaderState.currentShaderHash == 0xB6E26AC7) {
+  if (shaderState.pixelShaderHash == 0xC6D14699) return false;  // Video
+  if (shaderState.pixelShaderHash == 0xB6E26AC7) {
     g_completed_render = true;
     return false;
   }
   if (!g_completed_render) return false;
-  if (!g_8bitHashes.contains(shaderState.currentShaderHash)) return false;
+  if (!g_8bitHashes.contains(shaderState.pixelShaderHash)) return false;
 
   SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
 
