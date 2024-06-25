@@ -48,13 +48,14 @@ namespace ShaderReplaceMod {
 #define CustomCountedShader(crc32, index) { crc32, { crc32, _##crc32, sizeof(_##crc32), false, ##index} }
   // clang-format on
 
+  static thread_local std::vector<reshade::api::pipeline_layout_param*> createdParams;
+
   static float* _shaderInjection = nullptr;
   static size_t _shaderInjectionSize = 0;
   static bool usePipelineLayoutCloning = false;
   static bool forcePipelineCloning = false;
   static bool traceUnmodifiedShaders = false;
   static bool allowMultiplePushConstants = false;
-  static bool retainDX12LayoutParams = false;
   static float* resourceTagFloat = nullptr;
   static int32_t expectedConstantBufferIndex = -1;
   static uint32_t expectedConstantBufferSpace = 0;
@@ -65,7 +66,6 @@ namespace ShaderReplaceMod {
   static bool _usingCountedShaders = false;
 
   struct __declspec(uuid("018e7b9c-23fd-7863-baf8-a8dad2a6db9d")) DeviceData {
-    std::vector<reshade::api::pipeline_layout_param*> createdParams;
     std::unordered_map<uint64_t, int32_t> moddedPipelineRootIndexes;
     std::unordered_map<uint64_t, reshade::api::pipeline_layout> moddedPipelineLayouts;
     std::unordered_set<uint32_t> unmodifiedShaders;
@@ -201,7 +201,7 @@ namespace ShaderReplaceMod {
     auto newParams = reinterpret_cast<reshade::api::pipeline_layout_param*>(malloc(sizeof(reshade::api::pipeline_layout_param) * newCount));
 
     // Store reference to free later
-    data.createdParams.push_back(newParams);
+    createdParams.push_back(newParams);
 
     // Copy up to size of old
     memcpy(newParams, params, sizeof(reshade::api::pipeline_layout_param) * oldCount);
@@ -367,7 +367,7 @@ namespace ShaderReplaceMod {
         reshade::log_message(result ? reshade::log_level::info : reshade::log_level::error, s.str().c_str());
         data.moddedPipelineLayouts[layout.handle] = newLayout;
       } else {
-        if (!data.createdParams.size()) {
+        if (!createdParams.size()) {
           // No injected params
           std::stringstream s;
           s << "on_init_pipeline_layout++("
@@ -377,24 +377,12 @@ namespace ShaderReplaceMod {
           reshade::log_message(reshade::log_level::warning, s.str().c_str());
           return;
         };
-        if (!retainDX12LayoutParams) {
-          for (reshade::api::pipeline_layout_param* injectedParams : data.createdParams) {
-            free(injectedParams);
-            injectedParams = nullptr;
-          }
-        } else {
-          for (reshade::api::pipeline_layout_param* injectedParams : data.createdParams) {
-            std::stringstream s;
-            s << "init_pipeline_layout("
-              << reinterpret_cast<void*>(layout.handle)
-              << ", retaining params at: "
-              << reinterpret_cast<void*>(injectedParams)
-              << ")";
-            reshade::log_message(reshade::log_level::warning, s.str().c_str());
-          }
+
+        for (reshade::api::pipeline_layout_param* injectedParams : createdParams) {
+          free(injectedParams);
         }
 
-        data.createdParams.clear();
+        createdParams.clear();
 
         if (param_count > 0) {
           if (params[param_count - 1].type == reshade::api::pipeline_layout_param_type::push_constants) {

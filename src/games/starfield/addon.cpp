@@ -305,7 +305,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       ShaderReplaceMod::allowMultiplePushConstants = true;
       // ShaderReplaceMod::expectedConstantBufferIndex = 3;
       ShaderReplaceMod::expectedConstantBufferSpace = 9;
-      ShaderReplaceMod::retainDX12LayoutParams = true;
       SwapChainUpgradeMod::useResourceCloning = true;
       SwapChainUpgradeMod::useResizeBuffer = true;
       SwapChainUpgradeMod::useResizeBufferOnSetFullScreen = true;
