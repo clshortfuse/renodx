@@ -317,6 +317,7 @@ static void loadCustomShaders() {
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
       if (code_size) {
         free(code);
+        code = nullptr;
       }
       continue;
     }
@@ -892,6 +893,7 @@ static void on_init_pipeline(
   }
   if (!foundUsefulShader) {
     free(newSubobjects);
+    newSubobjects = nullptr;
     return;
   }
   pipelineCacheByPipelineHandle[pipeline.handle] = cachedPipeline;
@@ -914,6 +916,7 @@ static void on_destroy_pipeline(
       cachedPipeline->device->destroy_pipeline(cachedPipeline->pipelineClone);
     }
     free(pipelineCachePair->second);
+    pipelineCachePair->second = nullptr;
     pipelineCacheByPipelineHandle.erase(pipeline.handle);
     changed = true;
   }
@@ -1966,6 +1969,7 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
                 } else {
                   cache->disasm.assign(disasmCode);
                   free(disasmCode);
+                  disasmCode = nullptr;
                 }
               }
               disasmString.assign(cache->disasm);

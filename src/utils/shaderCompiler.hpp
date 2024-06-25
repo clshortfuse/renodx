@@ -33,7 +33,10 @@ namespace ShaderCompilerUtil {
               nullptr,
               &outBlob
             ))) {
-          result = (char*)outBlob->GetBufferPointer();
+          size_t code_size = outBlob->GetBufferSize();
+          result = reinterpret_cast<char*>(malloc(code_size));
+          memcpy(result, outBlob->GetBufferPointer(), code_size);
+          outBlob->Release();
         }
       }
       FreeLibrary(d3d_compiler);
@@ -79,7 +82,12 @@ namespace ShaderCompilerUtil {
     if (FAILED(compiler->Disassemble(source, &disassemblyText))) return nullptr;
     if (FAILED(disassemblyText.QueryInterface(&ppDisassembly))) return nullptr;
 
-    return (char*)ppDisassembly->GetBufferPointer();
+    size_t code_size = ppDisassembly->GetBufferSize();
+    char* result = reinterpret_cast<char*>(malloc(code_size));
+    memcpy(result, ppDisassembly->GetBufferPointer(), code_size);
+    ppDisassembly->Release();
+
+    return result;
   }
 
   char* disassembleShader(void* code, size_t size) {
