@@ -277,21 +277,21 @@ namespace SwapChainUpgradeMod {
     }
 
     std::stringstream s;
-    s << "createSwapChain("
-      << "swap: " << to_string(oldFormat) << " => " << to_string(desc.back_buffer.texture.format)
-      << ", present mode:"
-      << "0x" << std::hex << (uint32_t)oldPresentMode << std::dec
-      << " => "
-      << "0x" << std::hex << (uint32_t)desc.present_mode << std::dec
-      << ", present flag:"
-      << "0x" << std::hex << (uint32_t)oldPresentFlags << std::dec
-      << " => "
-      << "0x" << std::hex << (uint32_t)desc.present_flags << std::dec
-      << ", buffers:"
-      << oldBufferCount
-      << " => "
-      << desc.back_buffer_count
-      << ")";
+    s << "createSwapChain(";
+    s << "swap: " << oldFormat << " => " << desc.back_buffer.texture.format;
+    s << ", present mode:";
+    s << "0x" << std::hex << (uint32_t)oldPresentMode << std::dec;
+    s << " => ";
+    s << "0x" << std::hex << (uint32_t)desc.present_mode << std::dec;
+    s << ", present flag:";
+    s << "0x" << std::hex << (uint32_t)oldPresentFlags << std::dec;
+    s << " => ";
+    s << "0x" << std::hex << (uint32_t)desc.present_flags << std::dec;
+    s << ", buffers:";
+    s << oldBufferCount;
+    s << " => ";
+    s << desc.back_buffer_count;
+    s << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
 
     return (oldFormat != desc.back_buffer.texture.format)
@@ -435,13 +435,13 @@ namespace SwapChainUpgradeMod {
 
     if (hr == DXGI_ERROR_INVALID_CALL) {
       std::stringstream s;
-      s << "resize_buffer(DXGI_ERROR_INVALID_CALL"
-        << ", BufferCount = " << desc.BufferCount
-        << ", Width = " << desc.Width
-        << ", Height = " << desc.Height
-        << ", Format = " << to_string(desc.Format)
-        << ", Flags = 0x" << std::hex << desc.Flags << std::dec
-        << ')';
+      s << "resize_buffer(DXGI_ERROR_INVALID_CALL";
+      s << ", BufferCount = " << desc.BufferCount;
+      s << ", Width = " << desc.Width;
+      s << ", Height = " << desc.Height;
+      s << ", Format = " << desc.Format;
+      s << ", Flags = 0x" << std::hex << desc.Flags << std::dec;
+      s << ')';
       reshade::log_message(reshade::log_level::error, s.str().c_str());
       return;
     }
@@ -603,13 +603,13 @@ namespace SwapChainUpgradeMod {
         !target->useResourceViewCloning
         && target->checkResourceDesc(desc, deviceBackBufferDesc, initial_state)
       ) {
-        s << "createResource(counting target"
-          << ", format: " << to_string(target->oldFormat)
-          << ", usage: " << std::hex << (uint32_t)desc.usage << std::dec
-          << ", index: " << target->index
-          << ", counted: " << target->_counted
-          // << ", data: " << reinterpret_cast<void*>(initial_data)
-          << ") [" << i << "/" << len << "]";
+        s << "createResource(counting target";
+        s << ", format: " << target->oldFormat;
+        s << ", usage: " << std::hex << (uint32_t)desc.usage << std::dec;
+        s << ", index: " << target->index;
+        s << ", counted: " << target->_counted;
+        // s << ", data: " << reinterpret_cast<void*>(initial_data);
+        s << ") [" << i << "/" << len << "]";
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
 
         target->_counted++;
@@ -637,14 +637,14 @@ namespace SwapChainUpgradeMod {
     }
 
     std::stringstream s;
-    s << "createResource(upgrading"
-      << ", flags: 0x" << std::hex << (uint32_t)desc.flags << std::dec
-      << ", state: 0x" << std::hex << (uint32_t)initial_state << std::dec
-      << ", format: " << to_string(desc.texture.format) << " => " << to_string(foundTarget->newFormat)
-      << ", width: " << (uint32_t)desc.texture.width
-      << ", height: " << (uint32_t)desc.texture.height
-      << ", usage: " << to_string(desc.usage) << "(" << std::hex << (uint32_t)(desc.usage) << std::dec << ")"
-      << ", complete: " << allCompleted;
+    s << "createResource(upgrading";
+    s << ", flags: 0x" << std::hex << (uint32_t)desc.flags << std::dec;
+    s << ", state: 0x" << std::hex << (uint32_t)initial_state << std::dec;
+    s << ", format: " << desc.texture.format << " => " << foundTarget->newFormat;
+    s << ", width: " << (uint32_t)desc.texture.width;
+    s << ", height: " << (uint32_t)desc.texture.height;
+    s << ", usage: " << desc.usage << "(" << std::hex << (uint32_t)(desc.usage) << std::dec << ")";
+    s << ", complete: " << allCompleted;
     reshade::api::resource originalResource = {0};
     if (useResourceFallbacks) {
       device->create_resource(
@@ -704,13 +704,13 @@ namespace SwapChainUpgradeMod {
     }
 
     std::stringstream s;
-    s << "on_init_resource(tracking "
-      << reinterpret_cast<void*>(resource.handle)
-      << ", flags: " << std::hex << (uint32_t)desc.flags << std::dec
-      << ", state: " << std::hex << (uint32_t)initial_state << std::dec
-      << ", width: " << (uint32_t)desc.texture.width
-      << ", height: " << (uint32_t)desc.texture.height
-      << ", format: " << to_string(desc.texture.format);
+    s << "on_init_resource(tracking ";
+    s << reinterpret_cast<void*>(resource.handle);
+    s << ", flags: " << std::hex << (uint32_t)desc.flags << std::dec;
+    s << ", state: " << std::hex << (uint32_t)initial_state << std::dec;
+    s << ", width: " << (uint32_t)desc.texture.width;
+    s << ", height: " << (uint32_t)desc.texture.height;
+    s << ", format: " << desc.texture.format;
     if (privateData.appliedTarget) {
       if (privateData.appliedTarget->resourceTag != -1) {
         ResourceUtil::setResourceTag(device, resource, privateData.appliedTarget->resourceTag);
@@ -752,12 +752,12 @@ namespace SwapChainUpgradeMod {
           target->useResourceViewCloning
           && target->checkResourceDesc(desc, deviceBackBufferDesc, initial_state)
         ) {
-          s << "on_init_resource(counting target"
-            << ", format: " << to_string(target->oldFormat)
-            << ", usage: " << std::hex << (uint32_t)desc.usage << std::dec
-            << ", index: " << target->index
-            << ", counted: " << target->_counted
-            << ") [" << i << "/" << len << "]";
+          s << "on_init_resource(counting target";
+          s << ", format: " << target->oldFormat;
+          s << ", usage: " << std::hex << (uint32_t)desc.usage << std::dec;
+          s << ", index: " << target->index;
+          s << ", counted: " << target->_counted;
+          s << ") [" << i << "/" << len << "]";
 #ifdef DEBUG_LEVEL_0
           reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
@@ -807,7 +807,7 @@ namespace SwapChainUpgradeMod {
         privateData.enabledClonedResources.insert(clonedResource.handle);
       }
       privateData.resourceUpgradeTargets[resource.handle] = foundTarget;
-      s << ", newformat: " << to_string(new_desc.texture.format);
+      s << ", newformat: " << new_desc.texture.format;
       s << ", clone: " << reinterpret_cast<void*>(clonedResource.handle);
       s << ", hotswap: " << (foundTarget->useResourceViewHotSwap ? "true" : "false");
     } else {
@@ -1096,7 +1096,7 @@ namespace SwapChainUpgradeMod {
           default:
             {
               std::stringstream s;
-              s << "unexpected case(" << to_string(desc.format) << ")";
+              s << "unexpected case(" << desc.format << ")";
               reshade::log_message(reshade::log_level::warning, s.str().c_str());
             }
             break;
@@ -1126,7 +1126,7 @@ namespace SwapChainUpgradeMod {
         default:
           {
             std::stringstream s;
-            s << "unexpected case(" << to_string(desc.format) << ")";
+            s << "unexpected case(" << desc.format << ")";
             reshade::log_message(reshade::log_level::warning, s.str().c_str());
           }
           break;
@@ -1137,17 +1137,16 @@ namespace SwapChainUpgradeMod {
 
     bool changed = (desc.format != new_desc.format);
     std::stringstream s;
-    s << "createResourceView("
-      << (changed ? "upgrading" : "logging")
-      << ", expected: " << (expected ? "true" : "false")
-      << ", view type: " << to_string(desc.type)
-      << ", view format: " << to_string(desc.format) << " => " << to_string(new_desc.format)
-      << ", resource: " << reinterpret_cast<void*>(resource.handle)
-      << ", resource width: " << resource_desc.texture.width
-      << ", resource height: " << resource_desc.texture.height
-      << ", resource format: " << to_string(resource_desc.texture.format)
-      << ", resource usage: " << to_string(usage_type)
-      << ")";
+    s << "createResourceView(" << (changed ? "upgrading" : "logging");
+    s << ", expected: " << (expected ? "true" : "false");
+    s << ", view type: " << desc.type;
+    s << ", view format: " << desc.format << " => " << new_desc.format;
+    s << ", resource: " << reinterpret_cast<void*>(resource.handle);
+    s << ", resource width: " << resource_desc.texture.width;
+    s << ", resource height: " << resource_desc.texture.height;
+    s << ", resource format: " << resource_desc.texture.format;
+    s << ", resource usage: " << usage_type;
+    s << ")";
 
     if (!changed) {
 #ifdef DEBUG_LEVEL_1
@@ -1384,10 +1383,10 @@ namespace SwapChainUpgradeMod {
   ) {
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
-    s << "findReplacementResourceView(looking for : "
-      << reinterpret_cast<void*>(resourceView.handle)
-      << ", usage: " << to_string(usage)
-      << ")";
+    s << "findReplacementResourceView(looking for : ";
+    s << reinterpret_cast<void*>(resourceView.handle);
+    s << ", usage: " << usage;
+    s << ")";
     reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
 
@@ -1405,10 +1404,10 @@ namespace SwapChainUpgradeMod {
       default:
         std::stringstream s;
 #ifdef DEBUG_LEVEL_1
-        s << "findReplacementResourceView(unknown usage: "
-          << reinterpret_cast<void*>(resourceView.handle)
-          << ", usage: " << to_string(usage)
-          << ")";
+        s << "findReplacementResourceView(unknown usage: ";
+        s << reinterpret_cast<void*>(resourceView.handle);
+        s << ", usage: " << usage;
+        s << ")";
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
         return resourceView;
@@ -2514,12 +2513,12 @@ namespace SwapChainUpgradeMod {
         if (data.enabledClonedResources.contains(cloneResource.handle)) {
 #ifdef DEBUG_LEVEL_1
           std::stringstream s;
-          s << "on_barrier(apply barrier clone: "
-            << reinterpret_cast<void*>(resource.handle)
-            << " => "
-            << reinterpret_cast<void*>(cloneResource.handle)
-            << ", state: " << to_string(old_state) << " => " << to_string(new_state)
-            << ")";
+          s << "on_barrier(apply barrier clone: ";
+          s << reinterpret_cast<void*>(resource.handle);
+          s << " => ";
+          s << reinterpret_cast<void*>(cloneResource.handle);
+          s << ", state: " << old_state << " => " << new_state;
+          s << ")";
           reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
           cmd_list->barrier(cloneResource, old_state, new_state);

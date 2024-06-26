@@ -186,7 +186,7 @@ namespace DescriptorTableUtil {
             << (void*)table.handle
             << "[" << index << "]"
             << " replace shrunk view: "
-            << to_string(shrunkUpdate.type)
+            << shrunkUpdate.type
             << ")";
           reshade::log_message(reshade::log_level::info, s.str().c_str());
         }
@@ -202,7 +202,7 @@ namespace DescriptorTableUtil {
             << (void*)table.handle
             << "[" << index << "]"
             << " insert shrunk view: "
-            << to_string(shrunkUpdate.type)
+            << shrunkUpdate.type
             << ")";
           reshade::log_message(reshade::log_level::info, s.str().c_str());
         }
@@ -332,7 +332,7 @@ namespace DescriptorTableUtil {
             << "[" << copy.dest_binding + j << "]"
             << ", view: "
             << reinterpret_cast<void*>(getResourceViewFromDescriptorUpdate(update).handle)
-            << ", type: " << to_string(update.type)
+            << ", type: " << update.type
             << ")";
           reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif

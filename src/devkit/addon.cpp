@@ -579,7 +579,7 @@ static void logLayout(
           << ", count: " << range.count
           << ", register: " << range.dx_register_index
           << ", space: " << range.dx_register_space
-          << ", visibility: " << to_string(range.visibility)
+          << ", visibility: " << range.visibility
           << ")"
           << " [" << rangeIndex << "/" << param.descriptor_table.count << "]";
         reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -593,7 +593,7 @@ static void logLayout(
         << ", count " << param.push_constants.count
         << ", register: " << param.push_constants.dx_register_index
         << ", space: " << param.push_constants.dx_register_space
-        << ", visibility " << to_string(param.push_constants.visibility)
+        << ", visibility " << param.push_constants.visibility
         << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
@@ -606,8 +606,8 @@ static void logLayout(
         << ", count " << param.push_descriptors.count
         << ", register: " << param.push_descriptors.dx_register_index
         << ", space: " << param.push_descriptors.dx_register_space
-        << ", type: " << to_string(param.push_descriptors.type)
-        << ", visibility " << to_string(param.push_descriptors.visibility)
+        << ", type: " << param.push_descriptors.type
+        << ", visibility " << param.push_descriptors.visibility
         << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges) {
@@ -676,7 +676,7 @@ static void logLayout(
       s << "logPipelineLayout("
         << reinterpret_cast<void*>(layout.handle) << "[" << paramIndex << "]"
         << " | ??? (0x" << std::hex << (uint32_t)param.type << std::dec << ")"
-        << " | " << to_string(param.type)
+        << " | " << param.type
         << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
@@ -687,6 +687,7 @@ static void on_init_device(reshade::api::device* device) {
   std::stringstream s;
   s << "init_device("
     << reinterpret_cast<void*>(device)
+    << ", api: " << device->get_api()
     << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 
@@ -718,7 +719,7 @@ static void on_init_swapchain(reshade::api::swapchain* swapchain) {
 
   std::stringstream s;
   s << "init_swapchain"
-    << "(colorspace: " << to_string(swapchain->get_color_space())
+    << "(colorspace: " << swapchain->get_color_space()
     << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 }
@@ -820,7 +821,7 @@ static void on_init_pipeline(
         << reinterpret_cast<void*>(pipeline.handle)
         << "[" << i << "][" << j << "]"
         << ", layout:" << reinterpret_cast<void*>(layout.handle)
-        << ", type: " << to_string(subobject.type);
+        << ", type: " << subobject.type;
       switch (subobject.type) {
         case reshade::api::pipeline_subobject_type::vertex_shader:
         case reshade::api::pipeline_subobject_type::hull_shader:
@@ -832,13 +833,13 @@ static void on_init_pipeline(
           break;
           {
             auto &desc = static_cast<reshade::api::blend_desc*>(subobject.data)[j];
-            s << ", alpha_to_coverage_enable: " << to_string(desc.alpha_to_coverage_enable)
-              << ", source_color_blend_factor: " << to_string(desc.source_color_blend_factor[0])
-              << ", dest_color_blend_factor: " << to_string(desc.dest_color_blend_factor[0])
-              << ", color_blend_op: " << to_string(desc.color_blend_op[0])
-              << ", source_alpha_blend_factor: " << to_string(desc.source_alpha_blend_factor[0])
-              << ", dest_alpha_blend_factor: " << to_string(desc.dest_alpha_blend_factor[0])
-              << ", alpha_blend_op: " << to_string(desc.alpha_blend_op[0])
+            s << ", alpha_to_coverage_enable: " << desc.alpha_to_coverage_enable
+              << ", source_color_blend_factor: " << desc.source_color_blend_factor[0]
+              << ", dest_color_blend_factor: " << desc.dest_color_blend_factor[0]
+              << ", color_blend_op: " << desc.color_blend_op[0]
+              << ", source_alpha_blend_factor: " << desc.source_alpha_blend_factor[0]
+              << ", dest_alpha_blend_factor: " << desc.dest_alpha_blend_factor[0]
+              << ", alpha_blend_op: " << desc.alpha_blend_op[0]
               << ", render_target_write_mask: " << std::hex << desc.render_target_write_mask[0] << std::dec;
           }
           break;
@@ -870,7 +871,7 @@ static void on_init_pipeline(
               std::stringstream s2;
               s2 << "caching shader("
                  << "hash: " << PRINT_CRC32(shader_hash)
-                 << ", type: " << to_string(subobject.type)
+                 << ", type: " << subobject.type
                  << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
                  << ")";
               reshade::log_message(reshade::log_level::info, s2.str().c_str());
@@ -938,10 +939,9 @@ static void on_bind_pipeline(
       case reshade::api::pipeline_stage::output_merger:
         {
           std::stringstream s;
-          s << "bind_pipeline("
-            << reinterpret_cast<void*>(pipeline.handle)
-            << ", stages: " << to_string(stages) << " (" << std::hex << (uint32_t)stages << std::dec << ")"
-            << ")";
+          s << "bind_pipeline(" << reinterpret_cast<void*>(pipeline.handle);
+          s << ", stages: " << stages << " (" << std::hex << (uint32_t)stages << std::dec << ")";
+          s << ")";
           reshade::log_message(reshade::log_level::info, s.str().c_str());
         }
         break;
@@ -957,11 +957,10 @@ static void on_bind_pipeline(
   if (cachedPipeline->cloned) {
     if (traceRunning) {
       std::stringstream s;
-      s << "bind_pipeline(swapping pipeline "
-        << reinterpret_cast<void*>(pipeline.handle)
-        << " => " << reinterpret_cast<void*>(cachedPipeline->pipelineClone.handle)
-        << ", stages: " << to_string(stages) << "(" << std::hex << (uint32_t)stages << ")"
-        << ")";
+      s << "bind_pipeline(swapping pipeline " << reinterpret_cast<void*>(pipeline.handle);
+      s << " => " << reinterpret_cast<void*>(cachedPipeline->pipelineClone.handle);
+      s << ", stages: " << stages << "(" << std::hex << (uint32_t)stages << ")";
+      s << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
 
@@ -993,7 +992,7 @@ static void on_bind_pipeline(
     << traceHashes.size() << ": "
     << reinterpret_cast<void*>(cachedPipeline->pipeline.handle)
     << ", " << reinterpret_cast<void*>(cachedPipeline->layout.handle)
-    << ", stages: " << to_string(stages) << " (" << std::hex << (uint32_t)stages << std::dec << ")"
+    << ", stages: " << stages << " (" << std::hex << (uint32_t)stages << std::dec << ")"
     << ", " << PRINT_CRC32(cachedPipeline->shaderHash)
     << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -1010,7 +1009,7 @@ static void on_bind_pipeline_states(
   for (uint32_t i = 0; i < count; i++) {
     std::stringstream s;
     s << "bind_pipeline_state"
-      << "(" << to_string(states[i])
+      << "(" << states[i]
       << ", " << values[i]
       << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
@@ -1101,13 +1100,12 @@ static bool on_draw_or_dispatch_indirect(
 ) {
   if (traceRunning) {
     std::stringstream s;
-    s << "on_draw_or_dispatch_indirect"
-      << "(" << to_string(type)
-      << ", " << reinterpret_cast<void*>(buffer.handle)
-      << ", " << offset
-      << ", " << draw_count
-      << ", " << stride
-      << ")";
+    s << "on_draw_or_dispatch_indirect(" << type;
+    s << ", " << reinterpret_cast<void*>(buffer.handle);
+    s << ", " << offset;
+    s << ", " << draw_count;
+    s << ", " << stride;
+    s << ")";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
     // InstructionState state = instructions.at(instructions.size() - 1);
     // state.action = reshade::addon_event::draw_or_dispatch_indirect;
@@ -1237,12 +1235,10 @@ static void on_barrier(
   if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
   for (uint32_t i = 0; i < count; i++) {
     std::stringstream s;
-    s << "on_barrier("
-      << reinterpret_cast<void*>(resources[i].handle)
-      << ", " << std::hex << (uint32_t)old_states[i] << std::dec << " (" << to_string(old_states[i]) << ")"
-      << " => " << std::hex << (uint32_t)new_states[i] << std::dec << " (" << to_string(new_states[i]) << ")"
-      << ")"
-      << "[" << i << "]";
+    s << "on_barrier(" << reinterpret_cast<void*>(resources[i].handle);
+    s << ", " << std::hex << (uint32_t)old_states[i] << std::dec << " (" << old_states[i] << ")";
+    s << " => " << std::hex << (uint32_t)new_states[i] << std::dec << " (" << new_states[i] << ")";
+    s << ")" << "[" << i << "]";
     reshade::log_message(reshade::log_level::info, s.str().c_str());
   }
 }
@@ -1300,12 +1296,11 @@ static void on_init_resource(
 
   bool warn = false;
   std::stringstream s;
-  s << "init_resource(";
-  s << reinterpret_cast<void*>(resource.handle);
-  s << ", flags: " << std::hex << (uint32_t)desc.flags << std::dec
-    << ", state: " << std::hex << (uint32_t)initial_state << std::dec
-    << ", type: " << to_string(desc.type)
-    << ", usage: " << std::hex << (uint32_t)desc.usage << std::dec;
+  s << "init_resource(" << reinterpret_cast<void*>(resource.handle);
+  s << ", flags: " << std::hex << (uint32_t)desc.flags << std::dec;
+  s << ", state: " << std::hex << (uint32_t)initial_state << std::dec;
+  s << ", type: " << desc.type;
+  s << ", usage: " << std::hex << (uint32_t)desc.usage << std::dec;
 
   switch (desc.type) {
     case reshade::api::resource_type::buffer:
@@ -1317,10 +1312,10 @@ static void on_init_resource(
     case reshade::api::resource_type::texture_2d:
     case reshade::api::resource_type::texture_3d:
     case reshade::api::resource_type::surface:
-      s << ", width: " << desc.texture.width
-        << ", height: " << desc.texture.height
-        << ", levels: " << desc.texture.levels
-        << ", format: " << to_string(desc.texture.format);
+      s << ", width: " << desc.texture.width;
+      s << ", height: " << desc.texture.height;
+      s << ", levels: " << desc.texture.levels;
+      s << ", format: " << desc.texture.format;
       if (desc.texture.format == reshade::api::format::unknown) {
         warn = true;
       }
@@ -1380,16 +1375,15 @@ static void on_init_resource_view(
 
   if (!forceAll && !traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
   std::stringstream s;
-  s << "init_resource_view("
-    << reinterpret_cast<void*>(view.handle)
-    << ", view type: " << to_string(desc.type) << " (0x" << std::hex << (uint32_t)desc.type << std::dec << ")"
-    << ", view format: " << to_string(desc.format) << " (0x" << std::hex << (uint32_t)desc.format << std::dec << ")"
-    << ", resource: " << reinterpret_cast<void*>(resource.handle)
-    << ", resource usage: " << to_string(usage_type) << " 0x" << std::hex << (uint32_t)usage_type << std::dec;
+  s << "init_resource_view(" << reinterpret_cast<void*>(view.handle);
+  s << ", view type: " << desc.type << " (0x" << std::hex << (uint32_t)desc.type << std::dec << ")";
+  s << ", view format: " << desc.format << " (0x" << std::hex << (uint32_t)desc.format << std::dec << ")";
+  s << ", resource: " << reinterpret_cast<void*>(resource.handle);
+  s << ", resource usage: " << usage_type << " 0x" << std::hex << (uint32_t)usage_type << std::dec;
   // if (desc.type == reshade::api::resource_view_type::buffer) return;
   if (resource.handle) {
     const auto resourceDesc = device->get_resource_desc(resource);
-    s << ", resource type: " << to_string(resourceDesc.type);
+    s << ", resource type: " << resourceDesc.type;
 
     switch (resourceDesc.type) {
       default:
@@ -1404,12 +1398,12 @@ static void on_init_resource_view(
       case reshade::api::resource_type::texture_1d:
       case reshade::api::resource_type::texture_2d:
       case reshade::api::resource_type::surface:
-        s << ", texture format: " << to_string(resourceDesc.texture.format);
+        s << ", texture format: " << resourceDesc.texture.format;
         s << ", texture width: " << resourceDesc.texture.width;
         s << ", texture height: " << resourceDesc.texture.height;
         break;
       case reshade::api::resource_type::texture_3d:
-        s << ", texture format: " << to_string(resourceDesc.texture.format);
+        s << ", texture format: " << resourceDesc.texture.format;
         s << ", texture width: " << resourceDesc.texture.width;
         s << ", texture height: " << resourceDesc.texture.height;
         s << ", texture depth: " << resourceDesc.texture.depth_or_layers;
@@ -1445,11 +1439,9 @@ static void on_push_descriptors(
   std::shared_lock lock(data.mutex);
   for (uint32_t i = 0; i < update.count; i++) {
     std::stringstream s;
-    s << "push_descriptors("
-      << reinterpret_cast<void*>(layout.handle)
-      << "[" << layout_param << "]"
-      << "[" << update.binding + i << "]"
-      << ", type: " << to_string(update.type);
+    s << "push_descriptors(" << reinterpret_cast<void*>(layout.handle);
+    s << "[" << layout_param << "]" << "[" << update.binding + i << "]";
+    s << ", type: " << update.type;
 
     auto logHeap = [=]() {
       std::stringstream s2;
@@ -1513,7 +1505,7 @@ static void on_push_descriptors(
         }
         break;
       default:
-        s << ", type: " << to_string(update.type);
+        s << ", type: " << update.type;
         break;
     }
 
@@ -1535,10 +1527,10 @@ static void on_bind_descriptor_tables(
   auto device = cmd_list->get_device();
   for (uint32_t i = 0; i < count; ++i) {
     std::stringstream s;
-    s << "bind_descriptor_table("
-      << reinterpret_cast<void*>(layout.handle) << "[" << (first + i) << "]"
-      << ", stages: " << to_string(stages) << "(" << std::hex << (uint32_t)stages << std::dec << ")"
-      << ", table: " << reinterpret_cast<void*>(tables[i].handle);
+    s << "bind_descriptor_table(" << reinterpret_cast<void*>(layout.handle);
+    s << "[" << (first + i) << "]";
+    s << ", stages: " << stages << "(" << std::hex << (uint32_t)stages << std::dec << ")";
+    s << ", table: " << reinterpret_cast<void*>(tables[i].handle);
     uint32_t base_offset = 0;
     reshade::api::descriptor_heap heap = {0};
     device->get_descriptor_heap_offset(tables[i], 0, 0, &heap, &base_offset);
@@ -1767,12 +1759,11 @@ void on_push_constants(
 ) {
   if (!traceRunning && presentCount >= MAX_PRESENT_COUNT) return;
   std::stringstream s;
-  s << "push_constants("
-    << reinterpret_cast<void*>(layout.handle)
-    << "[" << layout_param << "]"
-    << ", stage: " << std::hex << (uint32_t)stages << std::dec << " (" << to_string(stages) << ")"
-    << ", count: " << count
-    << "{ 0x";
+  s << "push_constants(" << reinterpret_cast<void*>(layout.handle);
+  s << "[" << layout_param << "]";
+  s << ", stage: " << std::hex << (uint32_t)stages << std::dec << " (" << stages << ")";
+  s << ", count: " << count;
+  s << "{ 0x";
   for (uint32_t i = 0; i < count; i++) {
     s << std::hex << static_cast<const uint32_t*>(values)[i] << std::dec << ", ";
   }

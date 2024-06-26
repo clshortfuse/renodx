@@ -13,6 +13,13 @@ namespace PipelineUtil {
     reshade::api::pipeline_subobject* newSubobjects = new reshade::api::pipeline_subobject[subobjectCount];
     memcpy(newSubobjects, subobjects, sizeof(reshade::api::pipeline_subobject) * subobjectCount);
     for (uint32_t i = 0; i < subobjectCount; ++i) {
+#ifdef DEBUG_LEVEL_2
+      {
+        std::stringstream s;
+        s << "clonePipelineSubObjects(cloning " << subobjects[i].type << "[" << i << "]";
+        reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      }
+#endif
       switch (subobjects[i].type) {
         case reshade::api::pipeline_subobject_type::vertex_shader:
         case reshade::api::pipeline_subobject_type::hull_shader:
@@ -31,16 +38,18 @@ namespace PipelineUtil {
               newDesc->code = codeCopy;
             }
 
+#ifdef DEBUG_LEVEL_1
             std::stringstream s;
             s << "clonePipelineSubObjects(cloning "
-              << to_string(subobjects[i].type)
-              << " with 0x" << std::hex << compute_crc32(static_cast<const uint8_t*>(oldDesc->code), oldDesc->code_size) << std::dec
-              << " => 0x" << std::hex << compute_crc32(static_cast<const uint8_t*>(newDesc->code), newDesc->code_size) << std::dec
+              << subobjects[i].type
+              << " with " << PRINT_CRC32(compute_crc32(static_cast<const uint8_t*>(oldDesc->code), oldDesc->code_size))
+              << " => " << PRINT_CRC32(compute_crc32(static_cast<const uint8_t*>(newDesc->code), newDesc->code_size))
               << " (" << oldDesc->code_size << " bytes)"
               << " from " << reinterpret_cast<const void*>(oldDesc->code)
               << " to " << reinterpret_cast<const void*>(newDesc->code)
               << ")";
             reshade::log_message(reshade::log_level::debug, s.str().c_str());
+#endif
           }
           break;
         case reshade::api::pipeline_subobject_type::input_layout:

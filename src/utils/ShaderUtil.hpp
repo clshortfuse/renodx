@@ -273,7 +273,7 @@ namespace ShaderUtil {
         << reinterpret_cast<void*>(original_pipeline.handle)
         << ", layout: " << reinterpret_cast<void*>(original_layout.handle)
         << ", hash: " << PRINT_CRC32(original_hash)
-        << ", type: " << to_string(type)
+        << ", type: " << type
         << ", size: " << new_size
         << ", data: " << reinterpret_cast<void*>(new_code)
         << ")";
@@ -412,7 +412,7 @@ namespace ShaderUtil {
       std::stringstream s;
       s << "ShaderUtil::on_bind_pipeline(shader: "
         << PRINT_CRC32(shader_hash)
-        << ", type: " << to_string(shader_type)
+        << ", type: " << shader_type
         << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
         << ")";
       // reshade::log_message(reshade::log_level::debug, s.str().c_str());

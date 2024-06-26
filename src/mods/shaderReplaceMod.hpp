@@ -519,15 +519,14 @@ namespace ShaderReplaceMod {
 
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
-    s << "push_descriptors(clone push "
-      << reinterpret_cast<void*>(layout.handle)
-      << " => " << reinterpret_cast<void*>(clonedLayout.handle)
-      << ", param: " << layout_param
-      << ", table: " << reinterpret_cast<void*>(update.table.handle)
-      << ", binding: " << update.binding
-      << ", array_offset: " << update.array_offset
-      << ", count: " << update.count
-      << ", type: " << to_string(update.type);
+    s << "push_descriptors(clone push " << reinterpret_cast<void*>(layout.handle);
+    s << " => " << reinterpret_cast<void*>(clonedLayout.handle);
+    s << ", param: " << layout_param;
+    s << ", table: " << reinterpret_cast<void*>(update.table.handle);
+    s << ", binding: " << update.binding;
+    s << ", array_offset: " << update.array_offset;
+    s << ", count: " << update.count;
+    s << ", type: " << update.type;
     switch (update.type) {
       case reshade::api::descriptor_type::constant_buffer:
         {
@@ -562,13 +561,12 @@ namespace ShaderReplaceMod {
     for (uint32_t i = 0; i < count; ++i) {
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
-      s << "bind_descriptor_tables(clone bind "
-        << reinterpret_cast<void*>(layout.handle)
-        << " => " << reinterpret_cast<void*>(clonedLayout.handle)
-        << ", stages: 0x" << std::hex << (uint32_t)stages << std::dec << " (" << to_string(stages) << ")"
-        << ", param: " << first + i
-        << ", table: " << reinterpret_cast<void*>(tables[i].handle)
-        << ")";
+      s << "bind_descriptor_tables(clone bind " << reinterpret_cast<void*>(layout.handle);
+      s << " => " << reinterpret_cast<void*>(clonedLayout.handle);
+      s << ", stages: 0x" << std::hex << (uint32_t)stages << std::dec << " (" << stages << ")";
+      s << ", param: " << first + i;
+      s << ", table: " << reinterpret_cast<void*>(tables[i].handle);
+      s << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
       cmd_list->bind_descriptor_table(stages, clonedLayout, (first + i), tables[i]);
@@ -690,7 +688,7 @@ namespace ShaderReplaceMod {
         s << "handlePreDraw(pushing constants: "
           << PRINT_CRC32(shaderHash)
           << ", layout: " << (void*)injectionLayout.handle << "[" << paramIndex << "]"
-          << ", stage: " << to_string(stage)
+          << ", stage: " << stage
           << ", resourceTag: " << resourceTag
           << ")";
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
@@ -726,7 +724,7 @@ namespace ShaderReplaceMod {
         << PRINT_CRC32(shaderHash)
         << ", dispatch: " << (isDispatch ? "true" : "false")
         << ", handle: " << reinterpret_cast<void*>(pipeline_handle)
-        << ", stage: " << to_string(shaderState.pipeline_stage)
+        << ", stage: " << shaderState.pipeline_stage
         << ")";
       reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
