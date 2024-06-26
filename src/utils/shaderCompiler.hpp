@@ -17,15 +17,15 @@
 
 namespace ShaderCompilerUtil {
 
-  char* disassembleShaderFXC(void* data, size_t size, LPCWSTR library = L"D3DCompiler_47.dll") {
-    char* result = nullptr;
+  std::optional<std::string> disassembleShaderFXC(void* data, size_t size, LPCWSTR library = L"D3DCompiler_47.dll") {
+    std::optional<std::string> result;
 
     HMODULE d3d_compiler = LoadLibraryW(library);
     if (d3d_compiler != nullptr) {
       pD3DDisassemble d3d_disassemble = pD3DDisassemble(GetProcAddress(d3d_compiler, "D3DDisassemble"));
 
       if (d3d_disassemble != nullptr) {
-        ID3DBlob* outBlob = nullptr;
+        CComPtr<ID3DBlob> outBlob;
         if (SUCCEEDED(d3d_disassemble(
               data,
               size,
@@ -33,10 +33,7 @@ namespace ShaderCompilerUtil {
               nullptr,
               &outBlob
             ))) {
-          size_t code_size = outBlob->GetBufferSize();
-          result = reinterpret_cast<char*>(malloc(code_size));
-          memcpy(result, outBlob->GetBufferPointer(), code_size);
-          outBlob->Release();
+          result = {(char*)outBlob->GetBufferPointer(), (size_t)outBlob->GetBufferSize()};
         }
       }
       FreeLibrary(d3d_compiler);
@@ -68,38 +65,37 @@ namespace ShaderCompilerUtil {
     return dxcCreateInstance(CLSID_DxcCompiler, __uuidof(IDxcCompiler), (void**)ppCompiler);
   }
 
-  char* disassembleShaderDXC(void* data, size_t size) {
+  std::optional<std::string> disassembleShaderDXC(void* data, size_t size) {
     CComPtr<IDxcLibrary> library;
     CComPtr<IDxcCompiler> compiler;
     CComPtr<IDxcBlobEncoding> source;
     CComPtr<IDxcBlobEncoding> disassemblyText;
+    CComPtr<ID3DBlob> ppDisassembly;
 
-    ID3DBlob* ppDisassembly = nullptr;
+    std::optional<std::string> result;
 
-    if (FAILED(CreateLibrary(&library))) return nullptr;
-    if (FAILED(library->CreateBlobWithEncodingFromPinned(data, size, CP_ACP, &source))) return nullptr;
-    if (FAILED(CreateCompiler(&compiler))) return nullptr;
-    if (FAILED(compiler->Disassemble(source, &disassemblyText))) return nullptr;
-    if (FAILED(disassemblyText.QueryInterface(&ppDisassembly))) return nullptr;
+    if (FAILED(CreateLibrary(&library))) return result;
+    if (FAILED(library->CreateBlobWithEncodingFromPinned(data, size, CP_ACP, &source))) return result;
+    if (FAILED(CreateCompiler(&compiler))) return result;
+    if (FAILED(compiler->Disassemble(source, &disassemblyText))) return result;
+    if (FAILED(disassemblyText.QueryInterface(&ppDisassembly))) return result;
 
-    size_t code_size = ppDisassembly->GetBufferSize();
-    char* result = reinterpret_cast<char*>(malloc(code_size));
-    memcpy(result, ppDisassembly->GetBufferPointer(), code_size);
-    ppDisassembly->Release();
+    result = {(char*)ppDisassembly->GetBufferPointer(), ppDisassembly->GetBufferSize()};
 
     return result;
   }
 
-  char* disassembleShader(void* code, size_t size) {
-    char* result = disassembleShaderFXC(code, size);
-    if (result == nullptr) {
+  std::optional<std::string> disassembleShader(void* code, size_t size) {
+    auto result = disassembleShaderFXC(code, size);
+    if (!result.has_value()) {
       result = disassembleShaderDXC(code, size);
     }
     return result;
   }
 
-  ID3DBlob* compileShaderFromFileFXC(LPCWSTR filePath, LPCSTR shaderTarget, LPCWSTR library = L"D3DCompiler_47.dll") {
-    ID3DBlob* outBlob = nullptr;
+  std::vector<uint8_t> compileShaderFromFileFXC(LPCWSTR filePath, LPCSTR shaderTarget, LPCWSTR library = L"D3DCompiler_47.dll") {
+    std::vector<uint8_t> result;
+    CComPtr<ID3DBlob> outBlob;
 
     HMODULE d3d_compiler = LoadLibraryW(library);
     if (d3d_compiler != nullptr) {
@@ -110,8 +106,8 @@ namespace ShaderCompilerUtil {
       pD3DCompileFromFile d3d_compilefromfile = pD3DCompileFromFile(GetProcAddress(d3d_compiler, "D3DCompileFromFile"));
 
       if (d3d_compilefromfile != nullptr) {
-        ID3DBlob* errorBlob = nullptr;
-        if (FAILED(d3d_compilefromfile(
+        CComPtr<ID3DBlob> errorBlob;
+        if (SUCCEEDED(d3d_compilefromfile(
               filePath,
               nullptr,
               D3D_COMPILE_STANDARD_FILE_INCLUDE,
@@ -122,27 +118,28 @@ namespace ShaderCompilerUtil {
               &outBlob,
               &errorBlob
             ))) {
+          result.assign(
+            (uint8_t*)outBlob->GetBufferPointer(),
+            (uint8_t*)outBlob->GetBufferPointer() + outBlob->GetBufferSize()
+          );
+        } else {
           std::stringstream s;
           s << "compileShaderFromFileFXC(Compilation failed";
           if (errorBlob != nullptr) {
             // auto error_size = errorBlob->GetBufferSize();
             auto error = (uint8_t*)errorBlob->GetBufferPointer();
             s << ": " << error;
-            errorBlob->Release();
           } else {
             s << ".";
           }
           s << ")";
-          if (outBlob) {
-            outBlob->Release();
-          }
-          outBlob = nullptr;
           reshade::log_message(reshade::log_level::error, s.str().c_str());
         }
       }
       FreeLibrary(d3d_compiler);
     }
-    return outBlob;
+
+    return result;
   }
 
 #define IFR(x)          \
@@ -299,11 +296,12 @@ namespace ShaderCompilerUtil {
     return CompileFromBlob(source, pFileName, pDefines, includeHandler, pEntrypoint, pTarget, Flags1, Flags2, ppCode, ppErrorMsgs);
   }
 
-  ID3DBlob* compileShaderFromFileDXC(LPCWSTR filePath, LPCSTR shaderTarget) {
-    ID3DBlob* outBlob = nullptr;
+  std::vector<uint8_t> compileShaderFromFileDXC(LPCWSTR filePath, LPCSTR shaderTarget) {
+    std::vector<uint8_t> result;
 
-    ID3DBlob* errorBlob = nullptr;
-    if (FAILED(BridgeD3DCompileFromFile(
+    CComPtr<ID3DBlob> outBlob;
+    CComPtr<ID3DBlob> errorBlob;
+    if (SUCCEEDED(BridgeD3DCompileFromFile(
           filePath,
           nullptr,
           D3D_COMPILE_STANDARD_FILE_INCLUDE,
@@ -314,29 +312,29 @@ namespace ShaderCompilerUtil {
           &outBlob,
           &errorBlob
         ))) {
+      result.assign(
+        (uint8_t*)outBlob->GetBufferPointer(),
+        (uint8_t*)outBlob->GetBufferPointer() + outBlob->GetBufferSize()
+      );
+    } else {
       std::stringstream s;
       s << "compileShaderFromFileDXC(Compilation failed";
       if (errorBlob != nullptr) {
         // auto error_size = errorBlob->GetBufferSize();
         auto error = (uint8_t*)errorBlob->GetBufferPointer();
         s << ": " << error;
-        errorBlob->Release();
       } else {
         s << ".";
       }
       s << ")";
 
-      if (outBlob) {
-        outBlob->Release();
-      }
-      outBlob = nullptr;
       reshade::log_message(reshade::log_level::error, s.str().c_str());
     }
 
-    return outBlob;
+    return result;
   }
 
-  ID3DBlob* compileShaderFromFile(LPCWSTR filePath, LPCSTR shaderTarget, LPCWSTR library = L"D3DCompiler_47.dll") {
+  std::vector<uint8_t> compileShaderFromFile(LPCWSTR filePath, LPCSTR shaderTarget, LPCWSTR library = L"D3DCompiler_47.dll") {
     if (shaderTarget[3] < '6') {
       return compileShaderFromFileFXC(filePath, shaderTarget, library);
     }

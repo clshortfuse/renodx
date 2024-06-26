@@ -225,8 +225,7 @@ static void loadCustomShaders() {
       continue;
     }
     uint32_t shaderHash;
-    size_t code_size = 0;
-    uint8_t* code = nullptr;
+    std::vector<uint8_t> code;
     bool isHLSL = false;
 
     if (entryPath.extension().compare(".hlsl") == 0) {
@@ -252,11 +251,11 @@ static void loadCustomShaders() {
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
       }
 
-      ID3DBlob* outBlob = ShaderCompilerUtil::compileShaderFromFile(
+      code = ShaderCompilerUtil::compileShaderFromFile(
         entryPath.c_str(),
         shaderTarget.c_str()
       );
-      if (outBlob == nullptr) {
+      if (code.size() == 0) {
         std::stringstream s;
         s << "loadCustomShaders(Compilation failed: "
           << entryPath.string()
@@ -264,15 +263,11 @@ static void loadCustomShaders() {
         reshade::log_message(reshade::log_level::warning, s.str().c_str());
         continue;
       }
-      code_size = outBlob->GetBufferSize();
-      code = reinterpret_cast<uint8_t*>(malloc(code_size));  // Clone to release;
-      memcpy(code, outBlob->GetBufferPointer(), code_size);
-      outBlob->Release();
 
       isHLSL = true;
       {
         std::stringstream s;
-        s << "loadCustomShaders(Shader built with size: " << code_size << ")";
+        s << "loadCustomShaders(Shader built with size: " << code.size() << ")";
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
       }
 
@@ -290,15 +285,16 @@ static void loadCustomShaders() {
       shaderHash = std::stoul(filename_string.substr(2, 8), nullptr, 16);
       std::ifstream file(entryPath, std::ios::binary);
       file.seekg(0, std::ios::end);
-      code_size = file.tellg();
+      code.resize(file.tellg());
       {
         std::stringstream s;
-        s << "loadCustomShaders(Reading " << code_size << " from " << filename_string << ")";
+        s << "loadCustomShaders(Reading " << code.size() << " from " << filename_string << ")";
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
       }
-      code = new uint8_t[code_size];
-      file.seekg(0, std::ios::beg);
-      file.read((char*)code, code_size);
+      if (code.size() > 0) {
+        file.seekg(0, std::ios::beg);
+        file.read((char*)code.data(), code.size());
+      }
     } else {
       std::stringstream s;
       s << "loadCustomShaders(Skipping file: "
@@ -315,10 +311,6 @@ static void loadCustomShaders() {
         << PRINT_CRC32(shaderHash)
         << ")";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
-      if (code_size) {
-        free(code);
-        code = nullptr;
-      }
       continue;
     }
     CachedPipeline* cachedPipeline = pair->second;
@@ -332,7 +324,7 @@ static void loadCustomShaders() {
     {
       std::stringstream s;
       s << "loadCustomShaders(Read "
-        << code_size << " bytes "
+        << code.size() << " bytes "
         << " from " << entryPath.string()
         << ")";
       reshade::log_message(reshade::log_level::debug, s.str().c_str());
@@ -388,15 +380,17 @@ static void loadCustomShaders() {
 
       auto newDesc = static_cast<reshade::api::shader_desc*>(cloneSubject->data);
 
-      newDesc->code = code;
-      newDesc->code_size = code_size;
+      newDesc->code_size = code.size();
+      newDesc->code = malloc(code.size());
+      // TODO: Workaround leak
+      memcpy((void*)newDesc->code, code.data(), code.size());
 
       auto new_hash = compute_crc32(static_cast<const uint8_t*>(newDesc->code), newDesc->code_size);
 
       std::stringstream s;
       s << "loadCustomShaders(Injected pipeline data"
         << " with " << PRINT_CRC32(new_hash)
-        << " (" << code_size << " bytes)"
+        << " (" << code.size() << " bytes)"
         << ")";
       reshade::log_message(reshade::log_level::debug, s.str().c_str());
     }
@@ -432,7 +426,6 @@ static void loadCustomShaders() {
       cachedPipeline->cloned = true;
       cachedPipeline->pipelineClone = pipelineClone;
     }
-    // free(code);
   }
 }
 
@@ -1963,13 +1956,11 @@ static void on_register_overlay(reshade::api::effect_runtime* runtime) {
               auto hash = traceHashes.at(selectedIndex);
               auto cache = shaderCache.find(hash)->second;
               if (cache->disasm.length() == 0) {
-                char* disasmCode = ShaderCompilerUtil::disassembleShader(cache->data, cache->size);
-                if (disasmCode == nullptr) {
-                  cache->disasm.assign("Decompilation failed.");
+                auto disasmCode = ShaderCompilerUtil::disassembleShader(cache->data, cache->size);
+                if (disasmCode.has_value()) {
+                  cache->disasm.assign(disasmCode.value());
                 } else {
-                  cache->disasm.assign(disasmCode);
-                  free(disasmCode);
-                  disasmCode = nullptr;
+                  cache->disasm.assign("Decompilation failed.");
                 }
               }
               disasmString.assign(cache->disasm);
