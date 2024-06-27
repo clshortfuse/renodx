@@ -1203,9 +1203,11 @@ bool OnCopyBufferToTexture(
     << "(" << reinterpret_cast<void*>(source.handle)
     << "[" << source_offset << "]"
     << " => " << reinterpret_cast<void*>(dest.handle)
-    << "[" << dest_subresource << "]"
-    << "(" << dest_box->top << ", " << dest_box->left << ", " << dest_box->front << ")"
-    << ")";
+    << "[" << dest_subresource << "]";
+  if (dest_box != nullptr) {
+    s << "(" << dest_box->top << ", " << dest_box->left << ", " << dest_box->front << ")";
+  }
+  s << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 
   return false;
