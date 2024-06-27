@@ -994,7 +994,7 @@ void OnBindPipeline(
 
   if (!trace_running) return;
 
-  // const bool is_compute_shader = compute_shader_layouts.count(cached_pipeline->layout.handle) != 0;
+  // const bool is_compute_shader = compute_shader_layouts.contains(cached_pipeline->layout.handle);
 
   if (list_unique) {
     auto trace_count = trace_hashes.size();
@@ -1384,7 +1384,7 @@ void OnInitResourceView(
 ) {
   auto &data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
-  if (data.resource_views.count(view.handle) != 0) {
+  if (data.resourceViews.contains(view.handle)) {
     if (trace_running || present_count < MAX_PRESENT_COUNT) {
       std::stringstream s;
       s << "init_resource_view(reused view: "

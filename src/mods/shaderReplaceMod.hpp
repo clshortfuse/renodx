@@ -600,7 +600,8 @@ namespace ShaderReplaceMod {
         !isDispatch
         && device_data.traceUnmodifiedShaders
         && SwapchainUtil::hasBackBufferRenderTarget(cmd_list)
-        && device_data.unmodifiedShaders.count(shaderHash) == 0
+        && !device_data.unmodifiedShaders.contains(shaderHash)
+        && !device_data.customShaders.contains(shaderHash)
       ) {
         std::stringstream s;
         s << "handlePreDraw(unmodified shader writing to swapchain: "
