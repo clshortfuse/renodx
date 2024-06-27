@@ -3,7 +3,6 @@
 
 # Use for HLSL
 
-Language: Cpp
 BasedOnStyle: Google
 AccessModifierOffset: 2
 AlignAfterOpenBracket: BlockIndent
@@ -14,7 +13,7 @@ AlignConsecutiveDeclarations: None
 AlignConsecutiveMacros: Consecutive
 AlignConsecutiveShortCaseStatements:
   Enabled: true
-AlignEscapedNewlines: DontAlign
+AlignEscapedNewlines: Right
 AlignOperands: AlignAfterOperator
 #AlignTrailingComments: 
 AllowAllArgumentsOnNextLine: true
@@ -118,7 +117,7 @@ LambdaBodyIndentation: Signature
 #Macros 
 #MainIncludeChar 
 MaxEmptyLinesToKeep: 1
-NamespaceIndentation: All
+NamespaceIndentation: Inner
 #NamespaceMacros 
 #ObjCBinPackProtocolList
 #ObjCBlockIndentWidth 
@@ -140,8 +139,8 @@ PenaltyExcessCharacter: 100
 PenaltyIndentedWhitespace: 1000
 PenaltyReturnTypeOnItsOwnLine: 1000000
 PointerAlignment: Left
-#QualifierAlignment 
-#QualifierOrder 
+QualifierAlignment: Custom
+QualifierOrder: [inline, static, volatile, const, type]
 #RawStringFormats 
 ReferenceAlignment: Right
 ReflowComments: false
@@ -153,7 +152,7 @@ RemoveSemicolon: true
 SeparateDefinitionBlocks: Always
 ShortNamespaceLines: 10
 #SkipMacroDefinitionBody 
-SortIncludes: CaseSensitive
+SortIncludes: CaseInsensitive
 #SortJavaStaticImport 
 SortUsingDeclarations: LexicographicNumeric
 SpaceAfterCStyleCast: false

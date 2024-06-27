@@ -1,0 +1,46 @@
+# https://clang.llvm.org/extra/clang-tidy/checks/list.html
+
+---
+Checks: 
+  - bug-prone-*
+  - cppcoreguidelines-
+  - google-*
+  - llvm-*
+  - misc-*
+  - modernize-*
+  - performance-*
+  - portability-*
+  - readability-*
+  - -modernize-avoid-c-arrays
+  - -modernize-use-trailing-return-type
+  - -misc-include-cleaner
+  - -misc-unused-parameters
+  - -performance-no-int-to-ptr
+  - -readability-function-cognitive-complexity
+  - -readability-magic-numbers
+  - -readability-uppercase-literal-suffix
+  - -readability-identifier-length
+CheckOptions:
+  readability-braces-around-statements.ShortStatementLines: 1
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.ClassConstantCase: UPPER_CASE
+  readability-identifier-naming.ClassMemberCase: lower_case
+  readability-identifier-naming.ClassMemberSuffix: _
+  readability-identifier-naming.ClassMethodCase: CamelCase
+  readability-identifier-naming.ConstantCase: UPPER_CASE
+  readability-identifier-naming.ConstantMemberCase: UPPER_CASE
+  readability-identifier-naming.ConstantParameterCase: lower_case
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.FunctionCase: CamelCase
+  readability-identifier-naming.LocalVariableCase: lower_case
+  readability-identifier-naming.LocalConstantCase: lower_case
+  readability-identifier-naming.MethodCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.GlobalFunctionCase: CamelCase
+  readability-identifier-naming.VariableCase: lower_case
+
+
+WarningsAsErrors: 'google-*'
+HeaderFilterRegex: ''
+HeaderFileExtensions:         ['', 'h','hh','hpp','hxx']
+ImplementationFileExtensions: ['c','cc','cpp','cxx']

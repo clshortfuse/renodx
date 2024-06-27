@@ -8,14 +8,15 @@ project(renodx VERSION 0.1.0 LANGUAGES C CXX)
 include(CTest)
 enable_testing()
 
-
-
 # Use executable to convert resources to .h files for embedding
 add_executable(embedfile embedfile.c)
 add_executable(decomp ./src/decompiler/cli.cpp)
 
 if(NOT CMAKE_WINDOWS_KITS_10_DIR)
   set(CMAKE_WINDOWS_KITS_10_DIR "C:/Program Files (x86)/Windows Kits/10")
+endif()
+if(NOT CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION)
+  set(CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION "10.0.26100.0")
 endif()
 
 function(inspect_hlsl_imports FILE VARIABLE)
@@ -94,15 +95,21 @@ foreach(FILE ${ADDON_FILES})
   add_library(${ADDON} MODULE ${FILE})
   build_shader_target(${ADDON} ${CMAKE_CURRENT_SOURCE_DIR}/src/games/${ADDON})
   add_dependencies(${ADDON} ${ADDON}-shaders)
-  target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external/reshade)
-  target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/reshade)
+  target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include)
-  target_compile_definitions(${ADDON} PRIVATE _UNICODE)
+  #target_compile_definitions(${ADDON} PRIVATE _UNICODE)
   set_target_properties(${ADDON}
     PROPERTIES
       PREFIX "renodx-"
       SUFFIX ${TARGET_SUFFIX}
   )
+  # find_program(CLANG_TIDY_BIN clang-tidy REQUIRED)
+  # set(__TIDY_CMD "${CLANG_TIDY_BIN}")
+  # set_target_properties(${ADDON} PROPERTIES
+  #   C_CLANG_TIDY   ${__TIDY_CMD}
+  #   CXX_CLANG_TIDY "${__TIDY_CMD};--extra-arg=/EHsc"
+  # )
 endforeach()
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})

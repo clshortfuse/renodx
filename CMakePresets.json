@@ -1,0 +1,92 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 23,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "x64",
+      "hidden": true,
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "toolset": {
+        "value": "v143,host=x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /GR /EHsc",
+        "CMAKE_CXX_STANDARD_LIBRARIES": "kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib",
+        "CMAKE_C_FLAGS": "/DWIN32 /D_WINDOWS"
+      }
+    },
+    {
+      "name": "ninja-x64",
+      "inherits": "x64",
+      "displayName": "Ninja x64",
+      "generator": "Ninja Multi-Config",
+      "environment": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl.exe",
+        "CMAKE_CXX_COMPILER": "cl.exe"
+      },
+      "binaryDir": "build.ninja"
+    },
+    {
+      "name": "vs-x64",
+      "displayName": "Visual Studio x64",
+      "description": "Generates Visual Studio solution and project files. Slower build than ninja.",
+      "inherits": "x64",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "build"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "ninja-x64-debug",
+      "displayName": "Ninja x64 Debug",
+      "configurePreset": "ninja-x64",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ninja-x64-release",
+      "displayName": "Ninja x64 Release",
+      "configurePreset": "ninja-x64",
+      "configuration": "Release"
+    },
+    {
+      "name": "ninja-x64-RelWithDebInfo",
+      "displayName": "Ninja x64 RelWithDebInfo",
+      "configurePreset": "ninja-x64",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "vs-x64-debug",
+      "displayName": "Visual Studio x64 Debug",
+      "configurePreset": "vs-x64",
+      "configuration": "Debug"
+    },
+    {
+      "name": "vs-x64-release",
+      "displayName": "Visual Studio x64 Release",
+      "configurePreset": "vs-x64",
+      "configuration": "Release"
+    },
+    {
+      "name": "vs-x64-RelWithDebInfo",
+      "displayName": "Visual Studio x64 RelWithDebInfo",
+      "configurePreset": "vs-x64",
+      "configuration": "RelWithDebInfo"
+    }
+  ]
+}
