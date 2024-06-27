@@ -1174,13 +1174,14 @@ bool OnCopyTextureToBuffer(
 ) {
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
   std::stringstream s;
-  s << "on_copy_texture_region"
-    << "(" << reinterpret_cast<void*>(source.handle)
-    << "[" << source_subresource << "]"
-    << "(" << source_box->top << ", " << source_box->left << ", " << source_box->front << ")"
-    << " => " << reinterpret_cast<void*>(dest.handle)
-    << "[" << dest_offset << "]"
-    << ")";
+  s << "on_copy_texture_region(" << reinterpret_cast<void*>(source.handle);
+  s << "[" << source_subresource << "]";
+  if (source_box != nullptr) {
+    s << "(" << source_box->top << ", " << source_box->left << ", " << source_box->front << ")";
+  }
+  s << " => " << reinterpret_cast<void*>(dest.handle);
+  s << "[" << dest_offset << "]";
+  s << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 
   return false;
