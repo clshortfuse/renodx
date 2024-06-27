@@ -98,7 +98,7 @@ namespace SwapchainUtil {
     {
       auto &deviceData = device->get_private_data<DeviceData>();
       std::shared_lock lock(deviceData.mutex);
-      result = deviceData.backBuffers.contains(resource.handle);
+      result = deviceData.backBuffers.count(resource.handle) != 0;
     }
     return result;
   }
@@ -167,7 +167,7 @@ namespace SwapchainUtil {
     for (uint32_t i = 0; i < count; i++) {
       const reshade::api::resource_view rtv = cmdListData.currentRenderTargets[i];
       auto resource = ResourceUtil::getResourceFromResourceView(device, rtv);
-      if (resource.handle && deviceData.backBuffers.contains(resource.handle)) {
+      if (resource.handle && deviceData.backBuffers.count(resource.handle)!= 0) {
         foundSwapchainRTV = true;
         break;
       }

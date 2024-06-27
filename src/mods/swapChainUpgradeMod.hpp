@@ -1181,7 +1181,7 @@ namespace SwapChainUpgradeMod {
       }
     } else if (
       useResourceCloning
-      && privateData.resourcesThatNeedResourceViewClones.contains(resource.handle)
+      && privateData.resourcesThatNeedResourceViewClones.count(resource.handle) != 0
     ) {
       // Upgrade on init instead (allows resource view handle reuse)
       return false;
@@ -1211,7 +1211,7 @@ namespace SwapChainUpgradeMod {
       data.upgradedResourceViews.erase(view.handle);
     }
 
-    if (data.resourceViewsCloned.contains(view.handle)) {
+    if (data.resourceViewsCloned.count(view.handle) != 0) {
       if (
         auto pair = data.uavResourceViewClones.find(view.handle);
         pair != data.uavResourceViewClones.end()
@@ -1256,8 +1256,8 @@ namespace SwapChainUpgradeMod {
     release_resource_view(device, privateData, view);
     if (
       useResourceCloning
-      && privateData.resourcesThatNeedResourceViewClones.contains(resource.handle)
-      && privateData.clonedResources.contains(resource.handle)
+      && privateData.resourcesThatNeedResourceViewClones.count(resource.handle) != 0
+      && privateData.clonedResources.count(resource.handle) != 0
     ) {
       reshade::api::resource_view_desc new_desc = desc;
       switch (desc.format) {
@@ -1339,7 +1339,7 @@ namespace SwapChainUpgradeMod {
 #endif
     } else {
       if (useResourceCloning) {
-        bool wasCloned = privateData.resourceViewsCloned.contains(resource.handle);
+        bool wasCloned = privateData.resourceViewsCloned.count(resource.handle) != 0;
 #ifdef DEBUG_LEVEL_1
         std::stringstream s;
         s << "on_init_resource_view(unused view "
@@ -1733,7 +1733,7 @@ namespace SwapChainUpgradeMod {
 
     cloneResource = reshade::api::resource{clonedResourcePair->second};
 
-    if (data.enabledClonedResources.contains(cloneResource.handle)) {
+    if (data.enabledClonedResources.count(cloneResource.handle) != 0) {
       // Already activated
       return false;
     }
@@ -1748,7 +1748,7 @@ namespace SwapChainUpgradeMod {
         << ")";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
     }
-    if (!data.resourceSRVClones.contains(resource.handle)) {
+    if (data.resourceSRVClones.count(resource.handle) == 0) {
       std::stringstream s;
       s << "activateCloneHotSwap(no srv, res: "
         << reinterpret_cast<void*>(resource.handle)
@@ -1758,7 +1758,7 @@ namespace SwapChainUpgradeMod {
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
     }
 
-    if (!data.resourceUAVClones.contains(resource.handle)) {
+    if (data.resourceUAVClones.count(resource.handle) == 0) {
       std::stringstream s;
       s << "activateCloneHotSwap(no uav, res: "
         << reinterpret_cast<void*>(resource.handle)
@@ -1837,7 +1837,7 @@ namespace SwapChainUpgradeMod {
 
               ((reshade::api::sampler_with_resource_view*)(new_updates[i].descriptors))[j].view = newResourceView;
               changed = true;
-              if (data.enabledClonedResources.contains(newResource.handle)) {
+              if (data.enabledClonedResources.count(newResource.handle) != 0) {
                 active = true;
               }
             }
@@ -1881,7 +1881,7 @@ namespace SwapChainUpgradeMod {
 
               ((reshade::api::resource_view*)(new_updates[i].descriptors))[j] = newResourceView;
               changed = true;
-              if (data.enabledClonedResources.contains(newResource.handle)) {
+              if (data.enabledClonedResources.count(newResource.handle) != 0) {
                 active = true;
               }
             }
@@ -2230,7 +2230,7 @@ namespace SwapChainUpgradeMod {
 
             ((reshade::api::sampler_with_resource_view*)(new_update.descriptors))[i].view = newResourceView;
             changed = true;
-            if (data.enabledClonedResources.contains(newResource.handle)) {
+            if (data.enabledClonedResources.count(newResource.handle) != 0) {
               active = true;
             }
           }
@@ -2275,7 +2275,7 @@ namespace SwapChainUpgradeMod {
 
             ((reshade::api::resource_view*)(new_update.descriptors))[i] = newResourceView;
             changed = true;
-            if (data.enabledClonedResources.contains(newResource.handle)) {
+            if (data.enabledClonedResources.count(newResource.handle) != 0) {
               active = true;
             }
           }
@@ -2510,7 +2510,7 @@ namespace SwapChainUpgradeMod {
         pair != data.clonedResources.end()
       ) {
         auto cloneResource = reshade::api::resource{pair->second};
-        if (data.enabledClonedResources.contains(cloneResource.handle)) {
+        if (data.enabledClonedResources.count(cloneResource.handle) != 0) {
 #ifdef DEBUG_LEVEL_1
           std::stringstream s;
           s << "on_barrier(apply barrier clone: ";

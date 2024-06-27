@@ -323,7 +323,7 @@ static bool on_draw_indexed(
     return false;
   }
   if (!g_completed_render) return false;
-  if (!g_8bitHashes.contains(shaderState.pixelShaderHash)) return false;
+  if (g_8bitHashes.count(shaderState.pixelShaderHash) == 0) return false;
 
   SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
 
@@ -337,7 +337,7 @@ static bool on_draw_indexed(
 
   auto &data = device->get_private_data<DeviceData>();
   std::shared_lock readOnlyLock(data.mutex);
-  if (data.unsafe_blend_pipelines.contains(commandListData.lastOutputMerger.handle)) {
+  if (data.unsafe_blend_pipelines.count(commandListData.lastOutputMerger.handle) != 0) {
     if (!data.min_alpha_pipeline.handle) {
       using namespace reshade::api;
       blend_desc blend_desc = {};

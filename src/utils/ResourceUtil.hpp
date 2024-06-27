@@ -64,7 +64,7 @@ namespace ResourceUtil {
       return;
     }
 #ifdef DEBUG_LEVEL_1
-    if (data.resourceViewResources.contains(view.handle)) {
+    if (data.resourceViewResources.count(view.handle) != 0) {
       std::stringstream s;
       s << "ResourceUtil::init_resource_view("
         << "Redefinition of: " << (void*)view.handle
