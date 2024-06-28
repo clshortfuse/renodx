@@ -12,6 +12,10 @@ enable_testing()
 add_executable(embedfile embedfile.c)
 add_executable(decomp ./src/decompiler/cli.cpp)
 
+if(NOT CMAKE_WINDOWS_KITS_10_DIR)
+  set(CMAKE_WINDOWS_KITS_10_DIR "C:/Program Files (x86)/Windows Kits/10")
+endif()
+
 find_program(CLANG_TIDY_BIN clang-tidy)
 find_program(FXC_BIN fxc.exe
   HINTS ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x64/
