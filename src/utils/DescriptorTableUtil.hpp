@@ -11,21 +11,17 @@
 #include <dxgi1_6.h>
 #include <cstdio>
 
-#include <filesystem>
-#include <fstream>
-#include <random>
 #include <shared_mutex>
-#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
-#include <vector>
 
 #include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
+#ifdef DEBUG_LEVEL_1
 #include "./format.hpp"
-#include "./mutex.hpp"
+#endif
 
 namespace renodx::utils::descriptor {
 

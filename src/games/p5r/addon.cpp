@@ -37,7 +37,6 @@
 
 #include "../../mods/shaderReplaceMod.hpp"
 #include "../../mods/swapChainUpgradeMod.hpp"
-#include "../../utils/mutex.hpp"
 #include "../../utils/userSettingUtil.hpp"
 #include "./shared.h"
 

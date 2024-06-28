@@ -7,10 +7,9 @@
 
 #include <shared_mutex>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <include/reshade.hpp>
-
-#include "./format.hpp"
 
 namespace renodx::utils::resource {
 

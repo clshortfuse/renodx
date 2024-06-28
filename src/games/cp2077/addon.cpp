@@ -23,13 +23,6 @@
 #include <embed/0xC83E64DF.h>
 #include <embed/0xCBFFC2A3.h>
 #include <embed/0xDE517511.h>
-#include <filesystem>
-#include <fstream>
-#include <random>
-#include <sstream>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
 
 #include <include/reshade.hpp>
 #include "../../mods/shaderReplaceMod.hpp"

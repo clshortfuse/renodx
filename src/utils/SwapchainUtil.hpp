@@ -11,8 +11,6 @@
 #include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
-#include "./format.hpp"
-#include "./pipelineUtil.hpp"
 #include "./ResourceUtil.hpp"
 
 namespace renodx::utils::swapchain {

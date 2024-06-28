@@ -9,23 +9,17 @@
 #include <d3d12.h>
 #include <dxgi.h>
 #include <dxgi1_6.h>
-#include <stdio.h>
+#include <cstdio>
 
-#include <filesystem>
-#include <fstream>
-#include <random>
 #include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
 #include "./format.hpp"
-#include "./mutex.hpp"
-#include "./pipelineUtil.hpp"
 
 namespace renodx::utils::shader {
 

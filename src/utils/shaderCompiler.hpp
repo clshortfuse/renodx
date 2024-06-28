@@ -10,7 +10,9 @@
 #include <d3dcompiler.h>
 #include <dxcapi.h>
 
+#include <optional>
 #include <string>
+#include <sstream>
 #include <vector>
 
 #include <include/reshade.hpp>

@@ -5,6 +5,12 @@
 
 #pragma once
 
+#include "dxgiformat.h"
+
+#include <ios>
+#include <iomanip>
+#include <ostream>
+
 #include <include/reshade.hpp>
 
 #define PRINT_CRC32(crc32) "0x" << std::hex << std::setw(8) << std::setfill('0') << crc32 << std::setfill(' ') << std::dec
