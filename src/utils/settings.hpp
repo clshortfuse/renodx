@@ -16,10 +16,10 @@ namespace renodx::utils::settings {
 
 static int preset_index = 1;
 static const char* preset_strings[] = {
-  "Off",
-  "Preset #1",
-  "Preset #2",
-  "Preset #3",
+    "Off",
+    "Preset #1",
+    "Preset #2",
+    "Preset #3",
 };
 
 static void (*on_preset_off)();
@@ -88,8 +88,8 @@ struct Setting {
         return 1.f;
       case SettingValueType::INTEGER:
         return this->labels.empty()
-               ? this->max
-               : (this->labels.size() - 1);
+                   ? this->max
+                   : (this->labels.size() - 1);
       case SettingValueType::FLOAT:
       default:
         return this->max;
@@ -100,15 +100,15 @@ struct Setting {
 using Settings = std::vector<Setting*>;
 static Settings* settings = nullptr;
 
-#define AddDebugSetting(injection, name)          \
+#define AddDebugSetting(injection, name) \
   new renodx::utils::settings::Setting { \
-    .key = "debug" #name,                         \
-    .binding = &##injection.debug##name,          \
-    .default_value = 1.f,                         \
-    .label = "Debug" #name,                       \
-    .section = "Debug",                           \
-    .max = 2.f,                                   \
-    .format = "%.2f"                              \
+    .key = "debug" #name,                \
+    .binding = &##injection.debug##name, \
+    .default_value = 1.f,                \
+    .label = "Debug" #name,              \
+    .section = "Debug",                  \
+    .max = 2.f,                          \
+    .format = "%.2f",                    \
   }
 
 static Setting* FindSetting(const char* key) {
@@ -128,9 +128,8 @@ static bool UpdateSetting(const char* key, float value) {
 }
 
 static void LoadSettings(
-  reshade::api::effect_runtime* runtime = nullptr,
-  const char* section = "renodx-preset1"
-) {
+    reshade::api::effect_runtime* runtime = nullptr,
+    const char* section = "renodx-preset1") {
   for (auto* setting : *settings) {
     switch (setting->value_type) {
       default:
@@ -180,13 +179,12 @@ static void SaveSettings(reshade::api::effect_runtime* runtime, const char* sect
 static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   const std::unique_lock lock(renodx::utils::mutex::global_mutex);
   const bool changed_preset = ImGui::SliderInt(
-    "Preset",
-    &preset_index,
-    0,
-    (sizeof(preset_strings) / sizeof(char*)) - 1,
-    preset_strings[preset_index],
-    ImGuiSliderFlags_NoInput
-  );
+      "Preset",
+      &preset_index,
+      0,
+      (sizeof(preset_strings) / sizeof(char*)) - 1,
+      preset_strings[preset_index],
+      ImGuiSliderFlags_NoInput);
 
   if (changed_preset) {
     switch (preset_index) {
@@ -215,8 +213,8 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       last_section.assign(setting->section);
     }
     const bool is_disabled = preset_index == 0
-                          || (setting->is_enabled != nullptr
-                              && !setting->is_enabled());
+                             || (setting->is_enabled != nullptr
+                                 && !setting->is_enabled());
     if (is_disabled) {
       ImGui::BeginDisabled();
     }
@@ -224,34 +222,31 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
     switch (setting->value_type) {
       case SettingValueType::FLOAT:
         changed |= ImGui::SliderFloat(
-          setting->label,
-          &setting->value,
-          setting->min,
-          setting->max,
-          setting->format
-        );
+            setting->label,
+            &setting->value,
+            setting->min,
+            setting->max,
+            setting->format);
         break;
       case SettingValueType::INTEGER:
         changed |= ImGui::SliderInt(
-          setting->label,
-          &setting->value_as_int,
-          setting->min,
-          setting->GetMax(),
-          setting->labels.empty() ? setting->format : setting->labels.at(setting->value_as_int),
-          ImGuiSliderFlags_NoInput
-        );
+            setting->label,
+            &setting->value_as_int,
+            setting->min,
+            setting->GetMax(),
+            setting->labels.empty() ? setting->format : setting->labels.at(setting->value_as_int),
+            ImGuiSliderFlags_NoInput);
         break;
       case SettingValueType::BOOLEAN:
         changed |= ImGui::SliderInt(
-          setting->label,
-          &setting->value_as_int,
-          0,
-          1,
-          setting->labels.empty()
-            ? ((setting->value_as_int == 0) ? "Off" : "On")  // NOLINT(readability-avoid-nested-conditional-operator)
-            : setting->labels.at(setting->value_as_int),
-          ImGuiSliderFlags_NoInput
-        );
+            setting->label,
+            &setting->value_as_int,
+            0,
+            1,
+            setting->labels.empty()
+                ? ((setting->value_as_int == 0) ? "Off" : "On")  // NOLINT(readability-avoid-nested-conditional-operator)
+                : setting->labels.at(setting->value_as_int),
+            ImGuiSliderFlags_NoInput);
         break;
     }
     if (strlen(setting->tooltip) != 0) {

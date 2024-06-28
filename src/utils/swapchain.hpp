@@ -39,7 +39,7 @@ struct __declspec(uuid("25b7ec11-a51f-4884-a6f7-f381d198b9af")) CommandListData 
 static std::shared_mutex mutex;
 
 static void OnInitDevice(reshade::api::device* device) {
-  auto &data = device->create_private_data<DeviceData>();
+  auto& data = device->create_private_data<DeviceData>();
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
@@ -47,7 +47,7 @@ static void OnDestroyDevice(reshade::api::device* device) {
 }
 
 static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
-  auto &swapchain_data = swapchain->create_private_data<SwapchainData>();
+  auto& swapchain_data = swapchain->create_private_data<SwapchainData>();
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
   for (uint32_t index = 0; index < back_buffer_count; index++) {
     auto buffer = swapchain->get_back_buffer(index);
@@ -55,7 +55,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   }
   auto* device = swapchain->get_device();
   if (device != nullptr) {
-    auto &device_data = device->get_private_data<DeviceData>();
+    auto& device_data = device->get_private_data<DeviceData>();
     const std::unique_lock lock(device_data.mutex);
     device_data.swapchains.emplace(swapchain);
 
@@ -71,10 +71,10 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
 }
 
 static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
-  auto &swapchain_data = swapchain->get_private_data<SwapchainData>();
+  auto& swapchain_data = swapchain->get_private_data<SwapchainData>();
   auto* device = swapchain->get_device();
   if (device != nullptr) {
-    auto &device_data = device->get_private_data<DeviceData>();
+    auto& device_data = device->get_private_data<DeviceData>();
     const std::unique_lock lock(device_data.mutex);
     device_data.swapchains.erase(swapchain);
     for (const uint64_t handle : swapchain_data.back_buffers) {
@@ -84,7 +84,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
 }
 
 static void OnInitCommandList(reshade::api::command_list* cmd_list) {
-  auto &data = cmd_list->create_private_data<CommandListData>();
+  auto& data = cmd_list->create_private_data<CommandListData>();
 }
 
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
@@ -94,7 +94,7 @@ static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
 static bool IsBackBuffer(reshade::api::device* device, reshade::api::resource resource) {
   bool result = false;
   {
-    auto &device_data = device->get_private_data<DeviceData>();
+    auto& device_data = device->get_private_data<DeviceData>();
     const std::shared_lock lock(device_data.mutex);
     result = device_data.back_buffers.contains(resource.handle);
   }
@@ -110,7 +110,7 @@ static bool IsBackBuffer(reshade::api::command_list* cmd_list, reshade::api::res
 static reshade::api::resource_desc GetBackBufferDesc(reshade::api::device* device) {
   reshade::api::resource_desc desc = {};
   {
-    auto &device_data = device->get_private_data<DeviceData>();
+    auto& device_data = device->get_private_data<DeviceData>();
     const std::shared_lock lock(device_data.mutex);
     desc = device_data.back_buffer_desc;
   }
@@ -124,12 +124,11 @@ static reshade::api::resource_desc GetBackBufferDesc(reshade::api::command_list*
 }
 
 static void OnBindRenderTargetsAndDepthStencil(
-  reshade::api::command_list* cmd_list,
-  uint32_t count,
-  const reshade::api::resource_view* rtvs,
-  reshade::api::resource_view dsv
-) {
-  auto &cmd_list_data = cmd_list->get_private_data<CommandListData>();
+    reshade::api::command_list* cmd_list,
+    uint32_t count,
+    const reshade::api::resource_view* rtvs,
+    reshade::api::resource_view dsv) {
+  auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
   const bool found_swapchain_rtv = false;
   cmd_list_data.current_render_targets.assign(rtvs, rtvs + count);
   cmd_list_data.current_depth_stencil = dsv;
@@ -145,7 +144,7 @@ static void OnBindRenderTargetsAndDepthStencil(
 }
 
 static bool HasBackBufferRenderTarget(reshade::api::command_list* cmd_list) {
-  auto &cmd_list_data = cmd_list->get_private_data<CommandListData>();
+  auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
 
   if (!cmd_list_data.has_swapchain_render_target_dirty) {
     return cmd_list_data.has_swapchain_render_target;
@@ -158,7 +157,7 @@ static bool HasBackBufferRenderTarget(reshade::api::command_list* cmd_list) {
     return false;
   }
   auto* device = cmd_list->get_device();
-  auto &device_data = device->get_private_data<DeviceData>();
+  auto& device_data = device->get_private_data<DeviceData>();
   const std::shared_lock device_lock(device_data.mutex);
 
   bool found_swapchain_rtv = false;

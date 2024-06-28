@@ -30,33 +30,31 @@ static void OnDestroyDevice(reshade::api::device* device) {
 }
 
 static void OnInitResource(
-  reshade::api::device* device,
-  const reshade::api::resource_desc &desc,
-  const reshade::api::subresource_data* initial_data,
-  reshade::api::resource_usage initial_state,
-  reshade::api::resource resource
-) {
+    reshade::api::device* device,
+    const reshade::api::resource_desc& desc,
+    const reshade::api::subresource_data* initial_data,
+    reshade::api::resource_usage initial_state,
+    reshade::api::resource resource) {
   if (resource.handle == 0) return;
-  auto &data = device->get_private_data<DeviceData>();
+  auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   data.resources.insert(resource.handle);
 }
 
 static void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
   if (resource.handle == 0) return;
-  auto &data = device->get_private_data<DeviceData>();
+  auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   data.resources.erase(resource.handle);
 }
 
 static void OnInitResourceView(
-  reshade::api::device* device,
-  reshade::api::resource resource,
-  reshade::api::resource_usage usage_type,
-  const reshade::api::resource_view_desc &desc,
-  reshade::api::resource_view view
-) {
-  auto &data = device->get_private_data<DeviceData>();
+    reshade::api::device* device,
+    reshade::api::resource resource,
+    reshade::api::resource_usage usage_type,
+    const reshade::api::resource_view_desc& desc,
+    reshade::api::resource_view view) {
+  auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   if (resource.handle == 0) {
     data.resource_view_resources.erase(view.handle);
@@ -65,9 +63,9 @@ static void OnInitResourceView(
 #ifdef DEBUG_LEVEL_1
   if (data.resource_view_resources.contains(view.handle)) {
     std::stringstream s;
-    s << "utils::resource::OnInitResourceView("
-      << "Redefinition of: " << reinterpret_cast<void*>(view.handle)
-      << ", res: " << reinterpret_cast<void*>(resource.handle);
+    s << "utils::resource::OnInitResourceView(";
+    s << "Redefinition of: " << reinterpret_cast<void*>(view.handle);
+    s << ", res: " << reinterpret_cast<void*>(resource.handle);
     reshade::log_message(reshade::log_level::warning, s.str().c_str());
   }
 #endif
@@ -75,34 +73,31 @@ static void OnInitResourceView(
 
 #ifdef DEBUG_LEVEL_2
   std::stringstream s;
-  s << "utils::resource::OnInitResourceView("
-    << "view: " << reinterpret_cast<void*>(view.handle)
-    << ", res: " << reinterpret_cast<void*>(resource.handle)
-    << ")";
+  s << "utils::resource::OnInitResourceView(";
+  s << "view: " << reinterpret_cast<void*>(view.handle);
+  s << ", res: " << reinterpret_cast<void*>(resource.handle);
+  s << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
 #endif
 }
 
 static void OnDestroyResourceView(
-  reshade::api::device* device,
-  reshade::api::resource_view view
-) {
-  auto &data = device->get_private_data<DeviceData>();
+    reshade::api::device* device,
+    reshade::api::resource_view view) {
+  auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   data.resource_view_resources.erase(view.handle);
 }
 
 static reshade::api::resource GetResourceFromResourceView(
-  reshade::api::device* device,
-  reshade::api::resource_view resource_view
-) {
-  auto &data = device->get_private_data<DeviceData>();
+    reshade::api::device* device,
+    reshade::api::resource_view resource_view) {
+  auto& data = device->get_private_data<DeviceData>();
   const std::shared_lock lock(data.mutex);
 
   if (
-    auto pair = data.resource_view_resources.find(resource_view.handle);
-    pair != data.resource_view_resources.end()
-  ) {
+      auto pair = data.resource_view_resources.find(resource_view.handle);
+      pair != data.resource_view_resources.end()) {
     return {pair->second};
   }
 
@@ -110,34 +105,31 @@ static reshade::api::resource GetResourceFromResourceView(
 }
 
 static reshade::api::resource GetResourceFromResourceView(
-  reshade::api::command_list* cmd_list,
-  reshade::api::resource_view resource_view
-) {
+    reshade::api::command_list* cmd_list,
+    reshade::api::resource_view resource_view) {
   auto* device = cmd_list->get_device();
   return GetResourceFromResourceView(device, resource_view);
 }
 
 static void SetResourceFromResourceView(
-  reshade::api::device* device,
-  reshade::api::resource_view resource_view,
-  reshade::api::resource resource
-) {
-  auto &data = device->get_private_data<DeviceData>();
+    reshade::api::device* device,
+    reshade::api::resource_view resource_view,
+    reshade::api::resource resource) {
+  auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   data.resource_view_resources[resource_view.handle] = resource.handle;
 }
 
 static void SetResourceFromResourceView(
-  reshade::api::command_list* cmd_list,
-  reshade::api::resource_view resource_view,
-  reshade::api::resource resource
-) {
+    reshade::api::command_list* cmd_list,
+    reshade::api::resource_view resource_view,
+    reshade::api::resource resource) {
   auto* device = cmd_list->get_device();
   SetResourceFromResourceView(device, resource_view, resource);
 }
 
 static void RemoveResourceFromResourceView(reshade::api::device* device, reshade::api::resource_view resource_view) {
-  auto &data = device->get_private_data<DeviceData>();
+  auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   data.resource_view_resources.erase(resource_view.handle);
 }
@@ -148,7 +140,7 @@ static void RemoveResourceFromResourceView(reshade::api::command_list* cmd_list,
 }
 
 static float GetResourceTag(reshade::api::device* device, reshade::api::resource resource) {
-  auto &data = device->get_private_data<DeviceData>();
+  auto& data = device->get_private_data<DeviceData>();
   const std::shared_lock lock(data.mutex);
   auto pair = data.resource_tags.find(resource.handle);
   if (pair == data.resource_tags.end()) return -1;
@@ -156,7 +148,7 @@ static float GetResourceTag(reshade::api::device* device, reshade::api::resource
 }
 
 static float GetResourceTag(reshade::api::device* device, reshade::api::resource_view resource_view) {
-  auto &data = device->get_private_data<DeviceData>();
+  auto& data = device->get_private_data<DeviceData>();
   const std::shared_lock lock(data.mutex);
   auto rv_pairs = data.resource_view_resources.find(resource_view.handle);
   if (rv_pairs == data.resource_view_resources.end()) return -1;
@@ -166,13 +158,13 @@ static float GetResourceTag(reshade::api::device* device, reshade::api::resource
 }
 
 static void SetResourceTag(reshade::api::device* device, reshade::api::resource resource, float tag) {
-  auto &data = device->get_private_data<DeviceData>();
+  auto& data = device->get_private_data<DeviceData>();
   const std::shared_lock lock(data.mutex);
   data.resource_tags[resource.handle] = tag;
 }
 
 static void RemoveResourceTag(reshade::api::device* device, reshade::api::resource resource) {
-  auto &data = device->get_private_data<DeviceData>();
+  auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   data.resource_tags.erase(resource.handle);
 }

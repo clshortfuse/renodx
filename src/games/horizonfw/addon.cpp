@@ -19,95 +19,92 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-  CustomShaderEntry(0x81FF83CE)
-  // CustomShaderEntry(0xE3DF9B3A)
+    CustomShaderEntry(0x81FF83CE),
+    // CustomShaderEntry(0xE3DF9B3A)
 };
 
 ShaderInjectData shader_injection;
 
-// clang-format off
 renodx::utils::settings::Settings settings = {
-  new renodx::utils::settings::Setting {
-    .key = "toneMapType",
-    .binding = &shader_injection.toneMapType,
-    .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-    .default_value = 2.f,
-    .can_reset = false,
-    .label = "Tone Mapper",
-    .section = "Tone Mapping",
-    .tooltip = "Sets the tone mapper type",
-    .labels = {"Vanilla", "None", "ACES", "RenoDRT"}
-  },
-  new renodx::utils::settings::Setting {
-    .key = "toneMapPeakNits",
-    .binding = &shader_injection.toneMapPeakNits,
-    .default_value = 1000.f,
-    .can_reset = false,
-    .label = "Peak Brightness",
-    .section = "Tone Mapping",
-    .tooltip = "Sets the value of peak white in nits",
-    .min = 48.f,
-    .max = 4000.f
-  },
-  new renodx::utils::settings::Setting {
-    .key = "toneMapGameNits",
-    .binding = &shader_injection.toneMapGameNits,
-    .default_value = 203.f,
-    .label = "Game Brightness",
-    .section = "Tone Mapping",
-    .tooltip = "Sets the value of 100%% white in nits",
-    .min = 48.f,
-    .max = 500.f
-  },
-  new renodx::utils::settings::Setting {
-    .key = "toneMapUINits",
-    .binding = &shader_injection.toneMapUINits,
-    .default_value = 203.f,
-    .label = "UI Brightness",
-    .section = "Tone Mapping",
-    .tooltip = "Sets the brightness of UI and HUD elements in nits",
-    .min = 48.f,
-    .max = 500.f
-  },
-  new renodx::utils::settings::Setting {
-    .key = "colorGradeHighlights",
-    .binding = &shader_injection.colorGradeHighlights,
-    .default_value = 50.f,
-    .label = "Highlights",
-    .section = "Color Grading",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.02f; }
-  },
-  new renodx::utils::settings::Setting {
-    .key = "colorGradeShadows",
-    .binding = &shader_injection.colorGradeShadows,
-    .default_value = 50.f,
-    .label = "Shadows",
-    .section = "Color Grading",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.02f; }
-  },
-  new renodx::utils::settings::Setting {
-    .key = "colorGradeContrast",
-    .binding = &shader_injection.colorGradeContrast,
-    .default_value = 50.f,
-    .label = "Contrast",
-    .section = "Color Grading",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.02f; }
-  },
-  new renodx::utils::settings::Setting {
-    .key = "colorGradeSaturation",
-    .binding = &shader_injection.colorGradeSaturation,
-    .default_value = 50.f,
-    .label = "Saturation",
-    .section = "Color Grading",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.02f; }
-  }
+    new renodx::utils::settings::Setting{
+        .key = "toneMapType",
+        .binding = &shader_injection.toneMapType,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 2.f,
+        .can_reset = false,
+        .label = "Tone Mapper",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the tone mapper type",
+        .labels = {"Vanilla", "None", "ACES", "RenoDRT"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapPeakNits",
+        .binding = &shader_injection.toneMapPeakNits,
+        .default_value = 1000.f,
+        .can_reset = false,
+        .label = "Peak Brightness",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the value of peak white in nits",
+        .min = 48.f,
+        .max = 4000.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapGameNits",
+        .binding = &shader_injection.toneMapGameNits,
+        .default_value = 203.f,
+        .label = "Game Brightness",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the value of 100%% white in nits",
+        .min = 48.f,
+        .max = 500.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapUINits",
+        .binding = &shader_injection.toneMapUINits,
+        .default_value = 203.f,
+        .label = "UI Brightness",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the brightness of UI and HUD elements in nits",
+        .min = 48.f,
+        .max = 500.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeHighlights",
+        .binding = &shader_injection.colorGradeHighlights,
+        .default_value = 50.f,
+        .label = "Highlights",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeShadows",
+        .binding = &shader_injection.colorGradeShadows,
+        .default_value = 50.f,
+        .label = "Shadows",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeContrast",
+        .binding = &shader_injection.colorGradeContrast,
+        .default_value = 50.f,
+        .label = "Contrast",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeSaturation",
+        .binding = &shader_injection.colorGradeSaturation,
+        .default_value = 50.f,
+        .label = "Saturation",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
 };
-
-// clang-format on
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);

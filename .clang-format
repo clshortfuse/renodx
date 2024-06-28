@@ -4,192 +4,25 @@
 # Use for HLSL
 
 BasedOnStyle: Google
-AccessModifierOffset: 2
-AlignAfterOpenBracket: BlockIndent
-AlignArrayOfStructures: Right
-AlignConsecutiveAssignments: None
-AlignConsecutiveBitFields: None
-AlignConsecutiveDeclarations: None
-AlignConsecutiveMacros: Consecutive
-AlignConsecutiveShortCaseStatements:
-  Enabled: true
-AlignEscapedNewlines: Right
-AlignOperands: AlignAfterOperator
-#AlignTrailingComments: 
-AllowAllArgumentsOnNextLine: true
-#AllowAllConstructorInitializersOnNextLine: true
-AllowAllParametersOfDeclarationOnNextLine: false
-#AllowShortCompoundRequirementOnASingleLine: true
-AllowShortEnumsOnASingleLine: true
 
-#AllowBreakBeforeNoexceptSpecifier: 
-AllowShortBlocksOnASingleLine: Empty
+AlignConsecutiveMacros: Consecutive
+AlignConsecutiveShortCaseStatements: # Custom
+  Enabled: true
 AllowShortCaseLabelsOnASingleLine: true
-#AllowShortFunctionsOnASingleLine: Inline
-AllowShortIfStatementsOnASingleLine: WithoutElse
-AllowShortLambdasOnASingleLine: Inline
-AllowShortLoopsOnASingleLine: false #
-AlwaysBreakAfterDefinitionReturnType: None
-AlwaysBreakAfterReturnType: None
-AlwaysBreakBeforeMultilineStrings: true
-#AlwaysBreakTemplateDeclarations: Yes# This option is renamed to BreakTemplateDeclarations.
-#AttributeMacros: 
-BinPackArguments: false
-BinPackParameters: false
-#BitFieldColonSpacing
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterCaseLabel: false
-  AfterClass: false
-  AfterControlStatement: Never
-  AfterEnum: false
-  AfterFunction: false
-  AfterNamespace: false
-  #AfterObjCDeclaration
-  AfterStruct: false
-  AfterUnion: false
-  AfterExternBlock: false
-  BeforeCatch: false
-  BeforeElse: false
-  BeforeLambdaBody: false
-  BeforeWhile: false
-  IndentBraces: false
-  SplitEmptyFunction: false
-  SplitEmptyRecord: false
-  SplitEmptyNamespace: false
-BracedInitializerIndentWidth: 2
-#BreakAdjacentStringLiterals: true
-#BreakAfterAttributes: 
-#BreakAfterJavaFieldAnnotations
-#BreakAfterReturnType: None # clang19
-#BreakArrays
-BreakBeforeBinaryOperators: All
-#BreakBeforeBraces: Custom
-#BreakBeforeConceptDeclarations
-#BreakBeforeInlineASMColon
-BreakBeforeTernaryOperators: true
-BreakConstructorInitializers: BeforeColon
-BreakInheritanceList: BeforeColon
-#BreakStringLiterals: 
-#BreakTemplateDeclarations
-ColumnLimit: 0 # Breaks BinPackParameters
-#CommentPragmas
-CompactNamespaces: false
-#ConstructorInitializerAllOnOneLineOrOnePerLine # This option is deprecated. See CurrentLine of PackConstructorInitializers.
-#ConstructorInitializerIndentWidth: 0
-ContinuationIndentWidth: 2
-Cpp11BracedListStyle: true
-#DeriveLineEnding # This option is deprecated. See DeriveLF and DeriveCRLF of LineEnding.
-DerivePointerAlignment: false  # Make sure the * or & align on the left
-#DisableFormat
-EmptyLineAfterAccessModifier: Never
-EmptyLineBeforeAccessModifier: Leave
-ExperimentalAutoDetectBinPacking: true
-FixNamespaceComments: true
-#ForEachMacros
-#IfMacros
+
+BreakBeforeBinaryOperators: NonAssignment # Optional
+
+ColumnLimit: 0 # Forcefully compresses valid spacing
+
+DerivePointerAlignment: false # Optional
+
 IncludeBlocks: Preserve
-#IncludeCategories
-#IncludeIsMainRegex
-#IncludeIsMainSourceRegex
-IndentAccessModifiers: false
-IndentCaseBlocks: true
-IndentCaseLabels: true
-IndentExternBlock: Indent
-IndentGotoLabels: true
-IndentPPDirectives: None
-IndentWidth: 2
-IndentRequiresClause: true
-IndentWrappedFunctionNames: true
-InsertBraces: false
-InsertNewlineAtEOF: true
-#InsertTrailingCommas 
-#IntegerLiteralSeparator 
-#JavaImportGroups 
-#JavaScriptQuotes 
-#JavaScriptWrapImports 
-#KeepEmptyLinesAtEOF 
-KeepEmptyLinesAtTheStartOfBlocks: false
-LambdaBodyIndentation: Signature
-#LineEnding 
-#MacroBlockBegin 
-#MacroBlockEnd 
-#Macros 
-#MainIncludeChar 
-MaxEmptyLinesToKeep: 1
-NamespaceIndentation: Inner
-#NamespaceMacros 
-#ObjCBinPackProtocolList
-#ObjCBlockIndentWidth 
-#ObjCBreakBeforeNestedBlockParam 
-#ObjCPropertyAttributeOrder 
-#ObjCSpaceAfterProperty 
-#ObjCSpaceBeforeProtocolList 
-#PPIndentWidth:
-PackConstructorInitializers: CurrentLine
-PenaltyBreakAssignment: 1000000
-PenaltyBreakBeforeFirstCallParameter: 100000
-PenaltyBreakComment: 1
-PenaltyBreakFirstLessLess: 100
-PenaltyBreakOpenParenthesis: 2
-#PenaltyBreakScopeResolution: 10000000
-PenaltyBreakString: 100000
-PenaltyBreakTemplateDeclaration: 1
-PenaltyExcessCharacter: 100
-PenaltyIndentedWhitespace: 1000
-PenaltyReturnTypeOnItsOwnLine: 1000000
-PointerAlignment: Left
+
+MaxEmptyLinesToKeep: 1 # Custom
+
 QualifierAlignment: Custom
 QualifierOrder: [inline, static, volatile, const, type]
-#RawStringFormats 
-ReferenceAlignment: Right
-ReflowComments: false
-RemoveBracesLLVM: false
-RemoveParentheses: Leave
-RemoveSemicolon: true
-#RequiresClausePosition 
-#RequiresExpressionIndentation 
-SeparateDefinitionBlocks: Always
-ShortNamespaceLines: 10
-#SkipMacroDefinitionBody 
+
 SortIncludes: CaseInsensitive
-#SortJavaStaticImport 
-SortUsingDeclarations: LexicographicNumeric
-SpaceAfterCStyleCast: false
-SpaceAfterLogicalNot: false
-SpaceAfterTemplateKeyword: true
-SpaceAroundPointerQualifiers: Before
-SpaceBeforeAssignmentOperators: true
-SpaceBeforeCaseColon: false
-SpaceBeforeCpp11BracedList: false
-SpaceBeforeCtorInitializerColon: true
-SpaceBeforeInheritanceColon: true
-#SpaceBeforeJsonColon 
-SpaceBeforeParens: ControlStatements
-#SpaceBeforeParensOptions 
-SpaceBeforeRangeBasedForLoopColon: true
-SpaceBeforeSquareBrackets: false
-SpaceInEmptyBlock: false
-SpaceInEmptyParentheses: false # This option is deprecated. See InEmptyParentheses of SpacesInParensOptions.
-SpacesBeforeTrailingComments: 2
-SpacesInAngles: false
-SpacesInCStyleCastParentheses: false # This option is deprecated. See InCStyleCasts of SpacesInParensOptions.
-SpacesInConditionalStatement: false # This option is deprecated. See InConditionalStatements of SpacesInParensOptions.
-SpacesInContainerLiterals: false
-SpacesInLineCommentPrefix:
-  Minimum: 1
-  Maximum: -1
-#SpacesInParens
-#SpacesInParensOptions
-SpacesInParentheses: false # This option is deprecated. The previous behavior is preserved by using SpacesInParens with Custom and by setting all SpacesInParensOptions to true except for InCStyleCasts and InEmptyParentheses.
-SpacesInSquareBrackets: false
+
 Standard: c++20
-#StatementAttributeLikeMacros 
-#StatementMacros 
-TabWidth: 2
-#TypeNames 
-#TypenameMacros 
-#UseCRLF 
-UseTab: Never
-#VerilogBreakBetweenInstancePorts 
-#WhitespaceSensitiveMacros

@@ -8,7 +8,8 @@
 
 // https://www.glowybits.com/blog/2016/12/21/ifl_iss_hdr_1/
 float3 RgbAcesHdrSrgb(float3 x) {
-  x = (x * (x * (x * (x * 2708.7142 + 6801.1525) + 1079.5474) + 1.1614649) - 0.00004139375) / (x * (x * (x * (x * 983.38937 + 4132.0662) + 2881.6522) + 128.35911) + 1.0);
+  x = (x * (x * (x * (x * 2708.7142 + 6801.1525) + 1079.5474) + 1.1614649) - 0.00004139375)
+      / (x * (x * (x * (x * 983.38937 + 4132.0662) + 2881.6522) + 128.35911) + 1.0);
   return max(x, 0.0);
 }
 
@@ -17,8 +18,8 @@ float3 RgbAcesHdrSrgb(float3 x) {
 
 float3 RgbAcesSdrSrgb(float3 x) {
   return saturate(
-    (x * (x * (x * (x * 8.4680 + 1.0) - 0.002957) + 0.0001004) - 0.0000001274) / (x * (x * (x * (x * 8.3604 + 1.8227) + 0.2189) - 0.002117) + 0.00003673)
-  );
+      (x * (x * (x * (x * 8.4680 + 1.0) - 0.002957) + 0.0001004) - 0.0000001274)
+      / (x * (x * (x * (x * 8.3604 + 1.8227) + 0.2189) - 0.002117) + 0.00003673));
 }
 
 // https://www.slideshare.net/ozlael/hable-john-uncharted2-hdr-lighting
@@ -113,43 +114,41 @@ typedef struct LUTParams ToneMapLUTParams;
 #define TONE_MAP_LUT_TYPE__PQ                LUT_TYPE__PQ
 
 ToneMapParams buildToneMapParams(
-  float type = 0.f,
-  float peakNits = 203.f,
-  float gameNits = 203.f,
-  float gammaCorrection = 0,
-  float exposure = 1.f,
-  float highlights = 1.f,
-  float shadows = 1.f,
-  float contrast = 1.f,
-  float saturation = 1.f,
-  float sceneMidGray = 0.18f,
-  float midGrayNits = 18.f,
-  float renoDRTHighlights = 1.f,
-  float renoDRTShadows = 1.f,
-  float renoDRTContrast = 1.f,
-  float renoDRTSaturation = 1.f,
-  float renoDRTDechroma = 0.5f,
-  float renoDRTFlare = 0.f
-) {
+    float type = 0.f,
+    float peakNits = 203.f,
+    float gameNits = 203.f,
+    float gammaCorrection = 0,
+    float exposure = 1.f,
+    float highlights = 1.f,
+    float shadows = 1.f,
+    float contrast = 1.f,
+    float saturation = 1.f,
+    float sceneMidGray = 0.18f,
+    float midGrayNits = 18.f,
+    float renoDRTHighlights = 1.f,
+    float renoDRTShadows = 1.f,
+    float renoDRTContrast = 1.f,
+    float renoDRTSaturation = 1.f,
+    float renoDRTDechroma = 0.5f,
+    float renoDRTFlare = 0.f) {
   ToneMapParams toneMapParams = {
-    type,
-    peakNits,
-    gameNits,
-    gammaCorrection,
-    exposure,
-    highlights,
-    shadows,
-    contrast,
-    saturation,
-    sceneMidGray,
-    midGrayNits,
-    renoDRTHighlights,
-    renoDRTShadows,
-    renoDRTContrast,
-    renoDRTSaturation,
-    renoDRTDechroma,
-    renoDRTFlare
-  };
+      type,
+      peakNits,
+      gameNits,
+      gammaCorrection,
+      exposure,
+      highlights,
+      shadows,
+      contrast,
+      saturation,
+      sceneMidGray,
+      midGrayNits,
+      renoDRTHighlights,
+      renoDRTShadows,
+      renoDRTContrast,
+      renoDRTSaturation,
+      renoDRTDechroma,
+      renoDRTFlare};
   return toneMapParams;
 }
 
@@ -160,18 +159,17 @@ float3 renoDRTToneMap(float3 color, ToneMapParams params, bool sdr = false) {
   }
 
   return renodrt(
-    color,
-    renoDRTMax * 100.f,
-    0.18f,
-    params.midGrayNits,
-    params.exposure,
-    params.renoDRTHighlights,
-    params.renoDRTShadows,
-    params.renoDRTContrast,
-    params.renoDRTSaturation,
-    params.renoDRTDechroma,
-    params.renoDRTFlare
-  );
+      color,
+      renoDRTMax * 100.f,
+      0.18f,
+      params.midGrayNits,
+      params.exposure,
+      params.renoDRTHighlights,
+      params.renoDRTShadows,
+      params.renoDRTContrast,
+      params.renoDRTSaturation,
+      params.renoDRTDechroma,
+      params.renoDRTFlare);
 }
 
 float3 acesToneMap(float3 color, ToneMapParams params, bool sdr = false) {
@@ -189,11 +187,7 @@ float3 acesToneMap(float3 color, ToneMapParams params, bool sdr = false) {
   acesMax /= midGrayScale;
   acesMin /= midGrayScale;
 
-  color = aces_rgc_rrt_odt(
-    color,
-    acesMin * 48.f,
-    acesMax * 48.f
-  );
+  color = aces_rgc_rrt_odt(color, acesMin * 48.f, acesMax * 48.f);
   color /= 48.f;
   color *= midGrayScale;
 
@@ -237,13 +231,12 @@ float3 toneMap(float3 untonemapped, ToneMapParams params) {
     outputColor = renoDRTToneMap(outputColor, params);
   } else {
     outputColor = applyUserColorGrading(
-      outputColor,
-      params.exposure,
-      params.highlights,
-      params.shadows,
-      params.contrast,
-      params.saturation
-    );
+        outputColor,
+        params.exposure,
+        params.highlights,
+        params.shadows,
+        params.contrast,
+        params.saturation);
     if (params.type == 2.f) {
       outputColor = acesToneMap(outputColor, params);
     }
@@ -251,63 +244,56 @@ float3 toneMap(float3 untonemapped, ToneMapParams params) {
   return outputColor;
 }
 
-#define toneMapFunctionGenerator(textureType)                                                              \
-  float3 toneMap(float3 inputColor, ToneMapParams tmParams, LUTParams lutParams, textureType lutTexture) { \
-    if (lutParams.strength == 0.f || tmParams.type == 1.f) {                                               \
-      return toneMap(inputColor, tmParams);                                                                \
-    }                                                                                                      \
-    float3 outputColor = inputColor;                                                                       \
-                                                                                                           \
-    float3 hdrColor;                                                                                       \
-    float3 sdrColor;                                                                                       \
-    if (tmParams.type == 3.f) {                                                                            \
-      tmParams.renoDRTSaturation *= tmParams.saturation;                                                   \
-                                                                                                           \
-      sdrColor = renoDRTToneMap(outputColor, tmParams, true);                                              \
-                                                                                                           \
-      tmParams.renoDRTHighlights *= tmParams.highlights;                                                   \
-      tmParams.renoDRTShadows *= tmParams.shadows;                                                         \
-      tmParams.renoDRTContrast *= tmParams.contrast;                                                       \
-                                                                                                           \
-      hdrColor = renoDRTToneMap(outputColor, tmParams);                                                    \
-                                                                                                           \
-    } else {                                                                                               \
-      outputColor = applyUserColorGrading(                                                                 \
-        outputColor,                                                                                       \
-        tmParams.exposure,                                                                                 \
-        tmParams.highlights,                                                                               \
-        tmParams.shadows,                                                                                  \
-        tmParams.contrast,                                                                                 \
-        tmParams.saturation                                                                                \
-      );                                                                                                   \
-                                                                                                           \
-      if (tmParams.type == 2.f) {                                                                          \
-        hdrColor = acesToneMap(outputColor, tmParams);                                                     \
-        sdrColor = acesToneMap(outputColor, tmParams, true);                                               \
-      } else {                                                                                             \
-        hdrColor = outputColor;                                                                            \
-        sdrColor = outputColor;                                                                            \
-      }                                                                                                    \
-    }                                                                                                      \
-                                                                                                           \
-    float3 lutColor;                                                                                       \
-    if (                                                                                                   \
-      lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB                                                       \
-      || lutParams.inputType == TONE_MAP_LUT_TYPE__2_4                                                     \
-      || lutParams.inputType == TONE_MAP_LUT_TYPE__2_2                                                     \
-      || lutParams.inputType == TONE_MAP_LUT_TYPE__2_0                                                     \
-    ) {                                                                                                    \
-      lutColor = sampleLUT(lutTexture, lutParams, sdrColor);                                               \
-    } else {                                                                                               \
-      lutColor = min(1.f, sampleLUT(lutTexture, lutParams, hdrColor));                                     \
-    }                                                                                                      \
-                                                                                                           \
-    if (tmParams.type == 0.f) {                                                                            \
-      outputColor = lerp(outputColor, lutColor, lutParams.strength);                                       \
-    } else {                                                                                               \
-      outputColor = toneMapUpgrade(hdrColor, sdrColor, lutColor, lutParams.strength);                      \
-    }                                                                                                      \
-    return outputColor;                                                                                    \
+#define toneMapFunctionGenerator(textureType)                                                                             \
+  float3 toneMap(float3 inputColor, ToneMapParams tmParams, LUTParams lutParams, textureType lutTexture) {                \
+    if (lutParams.strength == 0.f || tmParams.type == 1.f) {                                                              \
+      return toneMap(inputColor, tmParams);                                                                               \
+    }                                                                                                                     \
+    float3 outputColor = inputColor;                                                                                      \
+                                                                                                                          \
+    float3 hdrColor;                                                                                                      \
+    float3 sdrColor;                                                                                                      \
+    if (tmParams.type == 3.f) {                                                                                           \
+      tmParams.renoDRTSaturation *= tmParams.saturation;                                                                  \
+                                                                                                                          \
+      sdrColor = renoDRTToneMap(outputColor, tmParams, true);                                                             \
+                                                                                                                          \
+      tmParams.renoDRTHighlights *= tmParams.highlights;                                                                  \
+      tmParams.renoDRTShadows *= tmParams.shadows;                                                                        \
+      tmParams.renoDRTContrast *= tmParams.contrast;                                                                      \
+                                                                                                                          \
+      hdrColor = renoDRTToneMap(outputColor, tmParams);                                                                   \
+                                                                                                                          \
+    } else {                                                                                                              \
+      outputColor = applyUserColorGrading(                                                                                \
+          outputColor, tmParams.exposure, tmParams.highlights, tmParams.shadows, tmParams.contrast, tmParams.saturation); \
+                                                                                                                          \
+      if (tmParams.type == 2.f) {                                                                                         \
+        hdrColor = acesToneMap(outputColor, tmParams);                                                                    \
+        sdrColor = acesToneMap(outputColor, tmParams, true);                                                              \
+      } else {                                                                                                            \
+        hdrColor = outputColor;                                                                                           \
+        sdrColor = outputColor;                                                                                           \
+      }                                                                                                                   \
+    }                                                                                                                     \
+                                                                                                                          \
+    float3 lutColor;                                                                                                      \
+    if (                                                                                                                  \
+        lutParams.inputType == TONE_MAP_LUT_TYPE__SRGB                                                                    \
+        || lutParams.inputType == TONE_MAP_LUT_TYPE__2_4                                                                  \
+        || lutParams.inputType == TONE_MAP_LUT_TYPE__2_2                                                                  \
+        || lutParams.inputType == TONE_MAP_LUT_TYPE__2_0) {                                                               \
+      lutColor = sampleLUT(lutTexture, lutParams, sdrColor);                                                              \
+    } else {                                                                                                              \
+      lutColor = min(1.f, sampleLUT(lutTexture, lutParams, hdrColor));                                                    \
+    }                                                                                                                     \
+                                                                                                                          \
+    if (tmParams.type == 0.f) {                                                                                           \
+      outputColor = lerp(outputColor, lutColor, lutParams.strength);                                                      \
+    } else {                                                                                                              \
+      outputColor = toneMapUpgrade(hdrColor, sdrColor, lutColor, lutParams.strength);                                     \
+    }                                                                                                                     \
+    return outputColor;                                                                                                   \
   }
 
 toneMapFunctionGenerator(Texture2D<float4>);
@@ -317,34 +303,30 @@ toneMapFunctionGenerator(Texture3D<float3>);
 
 // BT2446A method
 // Input color should be SDR at 100 nits in BT.1886 (2.4)
-float3 bt2446a_inverse_tonemapping(
-  float3 color,
-  float sdr_nits,
-  float target_nits
-) {
+float3 bt2446a_inverse_tonemapping(float3 color, float sdr_nits, float target_nits) {
   const float3 k_bt2020 = float3(0.262698338956556, 0.678008765772817, 0.0592928952706273);
   const float k_bt2020_r_helper = 1.47460332208689;  // 2 - 2 * 0.262698338956556
   const float k_bt2020_b_helper = 1.88141420945875;  // 2 - 2 * 0.0592928952706273
 
-  //gamma
+  // gamma
   const float inverse_gamma = 2.4f;
   const float gamma = 1.f / inverse_gamma;
 
-  //RGB->R'G'B' gamma compression
+  // RGB->R'G'B' gamma compression
   color = pow(color, gamma);
 
   // Rec. ITU-R BT.2020-2 Table 4
-  //Y'tmo
+  // Y'tmo
   const float y_tmo = dot(color, BT2020_2_XYZ_MAT[1].rgb);
 
   float luma = y_tmo;
   float3 bt2020Chromas = (2.f - 2.f * BT2020_2_XYZ_MAT[1].rgb);
   float3 sdrChromas = (color.rgb - luma) / bt2020Chromas.rgb;
 
-  //C'b,tmo
-  // const float c_b_tmo = (color.b - y_tmo) / k_bt2020_b_helper;
-  //C'r,tmo
-  // const float c_r_tmo = (color.r - y_tmo) / k_bt2020_r_helper;
+  // C'b,tmo
+  //  const float c_b_tmo = (color.b - y_tmo) / k_bt2020_b_helper;
+  // C'r,tmo
+  //  const float c_r_tmo = (color.r - y_tmo) / k_bt2020_r_helper;
 
   // adjusted luma component (inverse)
   // get Y'sdr
@@ -353,8 +335,8 @@ float3 bt2446a_inverse_tonemapping(
   // Tone mapping step 3 (inverse)
   // get Y'c
   const float p_sdr = 1 + 32 * pow(sdr_nits / 10000.f, gamma);
-  //Y'c
-  const float y_c = log((y_sdr * (p_sdr - 1)) + 1) / log(p_sdr);  //log = ln
+  // Y'c
+  const float y_c = log((y_sdr * (p_sdr - 1)) + 1) / log(p_sdr);  // log = ln
 
   // Tone mapping step 2 (inverse)
   // get Y'p
@@ -374,25 +356,25 @@ float3 bt2446a_inverse_tonemapping(
     y_p = y_p_1;
   else if (y_p_2 >= 0.9909f)
     y_p = y_p_2;
-  else  //y_p_1 sometimes (about 0.12% out of the full RGB range)
-        //is less than 0.7399f or more than 0.9909f because of float inaccuracies
+  else  // y_p_1 sometimes (about 0.12% out of the full RGB range)
+        // is less than 0.7399f or more than 0.9909f because of float inaccuracies
   {
-    //error is small enough (less than 0.001) for this to be OK
-    //ideally you would choose between y_p_0 and y_p_1 if y_p_1 < 0.7399f depending on which is closer to 0.7399f
-    //or between y_p_1 and y_p_2 if y_p_1 > 0.9909f depending on which is closer to 0.9909f
+    // error is small enough (less than 0.001) for this to be OK
+    // ideally you would choose between y_p_0 and y_p_1 if y_p_1 < 0.7399f depending on which is closer to 0.7399f
+    // or between y_p_1 and y_p_2 if y_p_1 > 0.9909f depending on which is closer to 0.9909f
     y_p = y_p_1;
 
-    //this clamps it to 2 float steps above 0.7399f or 2 float steps below 0.9909f
-    //if (y_p_1 < 0.7399f)
+    // this clamps it to 2 float steps above 0.7399f or 2 float steps below 0.9909f
+    // if (y_p_1 < 0.7399f)
     //	y_p = 0.7399001f;
-    //else
+    // else
     //	y_p = 0.99089986f;
   }
 
   // Tone mapping step 1 (inverse)
   // get Y'
   const float p_hdr = 1 + 32 * pow(target_nits / 10000.f, gamma);
-  //Y'
+  // Y'
   const float y_ = (pow(p_hdr, y_p) - 1) / (p_hdr - 1);
 
   // Colour scaling function
@@ -405,10 +387,10 @@ float3 bt2446a_inverse_tonemapping(
   // color.r = ((c_r_tmo * k_bt2020_r_helper) / col_scale) + y_;
   // color.g = (y_ - (k_bt2020.r * color.r + k_bt2020.b * color.b)) / k_bt2020.g;
 
-  //safety
-  // color.r = clamp(color.r, 0.f, 1.f);
-  // color.g = clamp(color.g, 0.f, 1.f);
-  // color.b = clamp(color.b, 0.f, 1.f);
+  // safety
+  //  color.r = clamp(color.r, 0.f, 1.f);
+  //  color.g = clamp(color.g, 0.f, 1.f);
+  //  color.b = clamp(color.b, 0.f, 1.f);
 
   color = saturate(color);
 
@@ -464,14 +446,14 @@ float3 bt2446aFromBT2020GammaOptimized(float3 inputColor) {
   const float b2 = -7.4622e-4f;
   const float c2 = 1.2528f;
   float E = (lumaAdjusted <= T)
-            ? a1 * (lumaAdjusted * lumaAdjusted) + (b1 * lumaAdjusted) + c1
-            : a2 * (lumaAdjusted * lumaAdjusted) + (b2 * lumaAdjusted) + c2;
+                ? a1 * (lumaAdjusted * lumaAdjusted) + (b1 * lumaAdjusted) + c1
+                : a2 * (lumaAdjusted * lumaAdjusted) + (b2 * lumaAdjusted) + c2;
 
   float lumaHDR = pow(lumaAdjusted, E);
 
   float chromaScalingFactor = luma > 0
-                              ? 1.075f * (lumaHDR / luma)
-                              : 1.f;
+                                  ? 1.075f * (lumaHDR / luma)
+                                  : 1.f;
 
   float3 hdrChromas = sdrChromas * chromaScalingFactor;
 

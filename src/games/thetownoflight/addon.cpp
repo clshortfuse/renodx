@@ -21,8 +21,8 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-  CustomShaderEntry(0x9D6291BC),  // Color grading LUT + fog + fade
-  CustomShaderEntry(0xB103EAA6),  // Post process (e.g. contrast) + user gamma adjustment (defaulted to 1)
+    CustomShaderEntry(0x9D6291BC),  // Color grading LUT + fog + fade
+    CustomShaderEntry(0xB103EAA6),  // Post process (e.g. contrast) + user gamma adjustment (defaulted to 1)
 };
 
 }  // namespace
@@ -39,25 +39,31 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
-        {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float}
-      );
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+      });
 #if 1  // NOLINT Seemingly unused (they might be used for copies of the scene buffer used as UI background)
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
-        {reshade::api::format::r8g8b8a8_typeless, reshade::api::format::r16g16b16a16_float}
-      );
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
-        {reshade::api::format::r8g8b8a8_unorm_srgb, reshade::api::format::r16g16b16a16_float}
-      );
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
-        {reshade::api::format::b8g8r8a8_typeless, reshade::api::format::r16g16b16a16_float}
-      );
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
-        {reshade::api::format::b8g8r8a8_unorm, reshade::api::format::r16g16b16a16_float}
-      );
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
-        {reshade::api::format::b8g8r8a8_unorm_srgb, reshade::api::format::r16g16b16a16_float}
-      );
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+      });
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_unorm_srgb,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+      });
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::b8g8r8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+      });
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::b8g8r8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+      });
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::b8g8r8a8_unorm_srgb,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+      });
 #endif
 
       break;

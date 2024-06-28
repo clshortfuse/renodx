@@ -41,173 +41,169 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-  CustomShaderEntry(0xB6E26AC7),
-  CustomShaderEntry(0xDE5120BF),
+    CustomShaderEntry(0xB6E26AC7),
+    CustomShaderEntry(0xDE5120BF),
 
-  CustomShaderEntry(0x0D85D1F6),
-  CustomShaderEntry(0xC6D14699),
+    CustomShaderEntry(0x0D85D1F6),
+    CustomShaderEntry(0xC6D14699),
 
-  CustomShaderEntry(0x060C3E22),
-  CustomShaderEntry(0x23A501DC),
-  CustomShaderEntry(0x2944B564),
-  CustomShaderEntry(0x3C2773E3),
-  CustomShaderEntry(0x4016ED43),
-  CustomShaderEntry(0x5C4DD977),
-  CustomShaderEntry(0x7C0751EF),
-  CustomShaderEntry(0x960502CC),
-  CustomShaderEntry(0xAB823647),
-  CustomShaderEntry(0xCC71BBE3),
-  CustomShaderEntry(0xCF70BF33),
-  CustomShaderEntry(0xD434C03A),
-  CustomShaderEntry(0xE126DD24),
-  CustomShaderEntry(0xEBBDB212)
-
+    CustomShaderEntry(0x060C3E22),
+    CustomShaderEntry(0x23A501DC),
+    CustomShaderEntry(0x2944B564),
+    CustomShaderEntry(0x3C2773E3),
+    CustomShaderEntry(0x4016ED43),
+    CustomShaderEntry(0x5C4DD977),
+    CustomShaderEntry(0x7C0751EF),
+    CustomShaderEntry(0x960502CC),
+    CustomShaderEntry(0xAB823647),
+    CustomShaderEntry(0xCC71BBE3),
+    CustomShaderEntry(0xCF70BF33),
+    CustomShaderEntry(0xD434C03A),
+    CustomShaderEntry(0xE126DD24),
+    CustomShaderEntry(0xEBBDB212),
 };
 
 ShaderInjectData shader_injection;
 
-// clang-format off
 renodx::utils::settings::Settings settings = {
-  new renodx::utils::settings::Setting {
-    .key = "toneMapType",
-    .binding = &shader_injection.toneMapType,
-    .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-    .default_value = 3.f,
-    .can_reset = false,
-    .label = "Tone Mapper",
-    .section = "Tone Mapping",
-    .tooltip = "Sets the tone mapper type",
-    .labels = {"Vanilla", "None", "ACES", "RenoDRT"}
-  },
-  new renodx::utils::settings::Setting {
-    .key = "toneMapPeakNits",
-    .binding = &shader_injection.toneMapPeakNits,
-    .default_value = 1000.f,
-    .can_reset = false,
-    .label = "Peak Brightness",
-    .section = "Tone Mapping",
-    .tooltip = "Sets the value of peak white in nits",
-    .min = 48.f,
-    .max = 4000.f
-  },
-  new renodx::utils::settings::Setting {
-    .key = "toneMapGameNits",
-    .binding = &shader_injection.toneMapGameNits,
-    .default_value = 203.f,
-    .can_reset = false,
-    .label = "Game Brightness",
-    .section = "Tone Mapping",
-    .tooltip = "Sets the value of 100%% white in nits",
-    .min = 48.f,
-    .max = 500.f
-  },
-  new renodx::utils::settings::Setting {
-    .key = "toneMapUINits",
-    .binding = &shader_injection.toneMapUINits,
-    .default_value = 203.f,
-    .can_reset = false,
-    .label = "UI Brightness",
-    .section = "Tone Mapping",
-    .tooltip = "Sets the brightness of UI and HUD elements in nits",
-    .min = 48.f,
-    .max = 500.f
-  },
-  new renodx::utils::settings::Setting {
-    .key = "toneMapGammaCorrection",
-    .binding = &shader_injection.toneMapGammaCorrection,
-    .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-    .can_reset = false,
-    .label = "Gamma Correction",
-    .section = "Tone Mapping",
-    .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
-  },
-  new renodx::utils::settings::Setting {
-    .key = "colorGradeExposure",
-    .binding = &shader_injection.colorGradeExposure,
-    .default_value = 1.f,
-    .label = "Exposure",
-    .section = "Color Grading",
-    .max = 10.f,
-    .format = "%.2f"
-  },
-  new renodx::utils::settings::Setting {
-    .key = "colorGradeHighlights",
-    .binding = &shader_injection.colorGradeHighlights,
-    .default_value = 50.f,
-    .label = "Highlights",
-    .section = "Color Grading",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.02f; }
-  },
-  new renodx::utils::settings::Setting {
-    .key = "colorGradeShadows",
-    .binding = &shader_injection.colorGradeShadows,
-    .default_value = 50.f,
-    .label = "Shadows",
-    .section = "Color Grading",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.02f; }
-  },
-  new renodx::utils::settings::Setting {
-    .key = "colorGradeContrast",
-    .binding = &shader_injection.colorGradeContrast,
-    .default_value = 50.f,
-    .label = "Contrast",
-    .section = "Color Grading",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.02f; }
-  },
-  new renodx::utils::settings::Setting {
-    .key = "colorGradeSaturation",
-    .binding = &shader_injection.colorGradeSaturation,
-    .default_value = 50.f,
-    .label = "Saturation",
-    .section = "Color Grading",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.02f; }
-  },
-  new renodx::utils::settings::Setting {
-    .key = "colorGradeLUTStrength",
-    .binding = &shader_injection.colorGradeLUTStrength,
-    .default_value = 100.f,
-    .label = "LUT Strength",
-    .section = "Color Grading",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.01f; }
-  },
-  new renodx::utils::settings::Setting {
-    .key = "colorGradeLUTScaling",
-    .binding = &shader_injection.colorGradeLUTScaling,
-    .default_value = 100.f,
-    .label = "LUT Scaling",
-    .section = "Color Grading",
-    .tooltip = "Scales the color grade LUT to full range when size is clamped.",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.01f; }
-  },
-  new renodx::utils::settings::Setting {
-    .key = "colorGradeColorSpace",
-    .binding = &shader_injection.colorGradeColorSpace,
-    .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-    .default_value = 3.f,
-    .can_reset = false,
-    .label = "Color Space",
-    .section = "Color Grading",
-    .tooltip = "Selects color space gamut when clamping",
-    .labels = {"None", "BT709", "BT2020", "AP1"}
-  },
-  new renodx::utils::settings::Setting {
-    .key = "fxBloom",
-    .binding = &shader_injection.fxBloom,
-    .default_value = 50.f,
-    .label = "Bloom",
-    .section = "Effects",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.02f; }
-  },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapType",
+        .binding = &shader_injection.toneMapType,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 3.f,
+        .can_reset = false,
+        .label = "Tone Mapper",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the tone mapper type",
+        .labels = {"Vanilla", "None", "ACES", "RenoDRT"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapPeakNits",
+        .binding = &shader_injection.toneMapPeakNits,
+        .default_value = 1000.f,
+        .can_reset = false,
+        .label = "Peak Brightness",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the value of peak white in nits",
+        .min = 48.f,
+        .max = 4000.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapGameNits",
+        .binding = &shader_injection.toneMapGameNits,
+        .default_value = 203.f,
+        .can_reset = false,
+        .label = "Game Brightness",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the value of 100%% white in nits",
+        .min = 48.f,
+        .max = 500.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapUINits",
+        .binding = &shader_injection.toneMapUINits,
+        .default_value = 203.f,
+        .can_reset = false,
+        .label = "UI Brightness",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the brightness of UI and HUD elements in nits",
+        .min = 48.f,
+        .max = 500.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapGammaCorrection",
+        .binding = &shader_injection.toneMapGammaCorrection,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .can_reset = false,
+        .label = "Gamma Correction",
+        .section = "Tone Mapping",
+        .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeExposure",
+        .binding = &shader_injection.colorGradeExposure,
+        .default_value = 1.f,
+        .label = "Exposure",
+        .section = "Color Grading",
+        .max = 10.f,
+        .format = "%.2f",
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeHighlights",
+        .binding = &shader_injection.colorGradeHighlights,
+        .default_value = 50.f,
+        .label = "Highlights",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeShadows",
+        .binding = &shader_injection.colorGradeShadows,
+        .default_value = 50.f,
+        .label = "Shadows",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeContrast",
+        .binding = &shader_injection.colorGradeContrast,
+        .default_value = 50.f,
+        .label = "Contrast",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeSaturation",
+        .binding = &shader_injection.colorGradeSaturation,
+        .default_value = 50.f,
+        .label = "Saturation",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeLUTStrength",
+        .binding = &shader_injection.colorGradeLUTStrength,
+        .default_value = 100.f,
+        .label = "LUT Strength",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeLUTScaling",
+        .binding = &shader_injection.colorGradeLUTScaling,
+        .default_value = 100.f,
+        .label = "LUT Scaling",
+        .section = "Color Grading",
+        .tooltip = "Scales the color grade LUT to full range when size is clamped.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeColorSpace",
+        .binding = &shader_injection.colorGradeColorSpace,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 3.f,
+        .can_reset = false,
+        .label = "Color Space",
+        .section = "Color Grading",
+        .tooltip = "Selects color space gamut when clamping",
+        .labels = {"None", "BT709", "BT2020", "AP1"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "fxBloom",
+        .binding = &shader_injection.fxBloom,
+        .default_value = 50.f,
+        .label = "Bloom",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
 };
-
-// clang-format on
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
@@ -257,59 +253,56 @@ void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
 bool g_completed_render = false;
 
 void OnPresent(
-  reshade::api::command_queue* queue,
-  reshade::api::swapchain* swapchain,
-  const reshade::api::rect* source_rect,
-  const reshade::api::rect* dest_rect,
-  uint32_t dirty_rect_count,
-  const reshade::api::rect* dirty_rects
-) {
+    reshade::api::command_queue* queue,
+    reshade::api::swapchain* swapchain,
+    const reshade::api::rect* source_rect,
+    const reshade::api::rect* dest_rect,
+    uint32_t dirty_rect_count,
+    const reshade::api::rect* dirty_rects) {
   g_completed_render = false;
 }
 
 std::unordered_set<uint32_t> g_8bit_hashes = {
-  0x060C3E22,
-  0x23A501DC,
-  0x2944b564,
-  0x3C2773E3,
-  0x4016ED43,
-  0x5C4DD977,
-  0x7C0751EF,
-  0x960502CC,
-  0xAB823647,
-  0xB6E26AC7,
-  0xCC71BBE3,
-  0xCF70BF33,
-  0xD434C03A,
-  0xE126DD24,
-  0xEBBDB212,
+    0x060C3E22,
+    0x23A501DC,
+    0x2944b564,
+    0x3C2773E3,
+    0x4016ED43,
+    0x5C4DD977,
+    0x7C0751EF,
+    0x960502CC,
+    0xAB823647,
+    0xB6E26AC7,
+    0xCC71BBE3,
+    0xCF70BF33,
+    0xD434C03A,
+    0xE126DD24,
+    0xEBBDB212,
 };
 
 void PushConstants(reshade::api::command_list* cmd_list, reshade::api::pipeline_layout layout) {
   static const float shader_injection_size = sizeof(shader_injection) / sizeof(uint32_t);
   cmd_list->push_constants(
-    reshade::api::shader_stage::all_graphics,  // Used by reshade to specify graphics or compute
-    layout,
-    0,
-    0,
-    shader_injection_size,
-    &shader_injection
-  );
+      reshade::api::shader_stage::all_graphics,  // Used by reshade to specify graphics or compute
+      layout,
+      0,
+      0,
+      shader_injection_size,
+      &shader_injection);
 }
 
 bool OnDrawIndexed(
-  reshade::api::command_list* cmd_list,
-  uint32_t index_count,
-  uint32_t instance_count,
-  uint32_t first_index,
-  int32_t vertex_offset,
-  uint32_t first_instance
-) {
+    reshade::api::command_list* cmd_list,
+    uint32_t index_count,
+    uint32_t instance_count,
+    uint32_t first_index,
+    int32_t vertex_offset,
+    uint32_t first_instance) {
   if (shader_injection.colorGradeLUTScaling == 0.f) return false;
-  auto &command_list_data = cmd_list->get_private_data<CommandListData>();
+  auto& command_list_data = cmd_list->get_private_data<CommandListData>();
   if (command_list_data.last_output_merger.handle == 0) return false;
 
-  auto &shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
+  auto& shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
 
   if (shader_state.pixel_shader_hash == 0xC6D14699) return false;  // Video
   if (shader_state.pixel_shader_hash == 0xB6E26AC7) {
@@ -319,7 +312,7 @@ bool OnDrawIndexed(
   if (!g_completed_render) return false;
   if (!g_8bit_hashes.contains(shader_state.pixel_shader_hash)) return false;
 
-  auto &swapchain_state = cmd_list->get_private_data<renodx::utils::swapchain::CommandListData>();
+  auto& swapchain_state = cmd_list->get_private_data<renodx::utils::swapchain::CommandListData>();
 
   if (swapchain_state.current_render_targets.empty()) return false;
   const auto target0 = swapchain_state.current_render_targets[0];
@@ -329,7 +322,7 @@ bool OnDrawIndexed(
   auto resource_tag = renodx::utils::resource::GetResourceTag(device, target0);
   if (resource_tag != 1.f) return false;
 
-  auto &data = device->get_private_data<DeviceData>();
+  auto& data = device->get_private_data<DeviceData>();
   std::shared_lock read_only_lock(data.mutex);
   if (data.unsafe_blend_pipelines.contains(command_list_data.last_output_merger.handle)) {
     if (data.min_alpha_pipeline.handle == 0) {
@@ -339,9 +332,9 @@ bool OnDrawIndexed(
       blend_desc.render_target_write_mask[0] = 0x8;
 
       auto subobjects = reshade::api::pipeline_subobject{
-        .type = reshade::api::pipeline_subobject_type::blend_state,
-        .count = 1,
-        .data = &blend_desc,
+          .type = reshade::api::pipeline_subobject_type::blend_state,
+          .count = 1,
+          .data = &blend_desc,
       };
 
       read_only_lock.unlock();
@@ -358,9 +351,9 @@ bool OnDrawIndexed(
       blend_desc.alpha_blend_op[0] = reshade::api::blend_op::max;
       blend_desc.render_target_write_mask[0] = 0x8;
       auto subobjects = reshade::api::pipeline_subobject{
-        .type = reshade::api::pipeline_subobject_type::blend_state,
-        .count = 1,
-        .data = &blend_desc,
+          .type = reshade::api::pipeline_subobject_type::blend_state,
+          .count = 1,
+          .data = &blend_desc,
       };
 
       read_only_lock.unlock();
@@ -372,12 +365,11 @@ bool OnDrawIndexed(
     }
 
     if (data.injection_layout.handle == 0) {
-      auto &shader_replace_device_data = device->get_private_data<renodx::mods::shader::DeviceData>();
+      auto& shader_replace_device_data = device->get_private_data<renodx::mods::shader::DeviceData>();
       const std::shared_lock lock(shader_replace_device_data.mutex);
       if (
-        auto pair = shader_replace_device_data.modded_pipeline_layouts.find(0xFFFFFFFFFFFFFFFF);
-        pair != shader_replace_device_data.modded_pipeline_layouts.end()
-      ) {
+          auto pair = shader_replace_device_data.modded_pipeline_layouts.find(0xFFFFFFFFFFFFFFFF);
+          pair != shader_replace_device_data.modded_pipeline_layouts.end()) {
         read_only_lock.unlock();
         {
           const std::unique_lock lock(data.mutex);
@@ -389,7 +381,10 @@ bool OnDrawIndexed(
       }
     }
 
-    cmd_list->bind_render_targets_and_depth_stencil(swapchain_state.current_render_targets.size(), swapchain_state.current_render_targets.data(), {0});
+    cmd_list->bind_render_targets_and_depth_stencil(
+        swapchain_state.current_render_targets.size(),
+        swapchain_state.current_render_targets.data(),
+        {0});
 
     shader_injection.clampState = CLAMP_STATE__MIN_ALPHA;
     PushConstants(cmd_list, data.injection_layout);
@@ -401,7 +396,10 @@ bool OnDrawIndexed(
     cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, data.max_alpha_pipeline);
     cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
     cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, command_list_data.last_output_merger);
-    cmd_list->bind_render_targets_and_depth_stencil(swapchain_state.current_render_targets.size(), swapchain_state.current_render_targets.data(), swapchain_state.current_depth_stencil);
+    cmd_list->bind_render_targets_and_depth_stencil(
+        swapchain_state.current_render_targets.size(),
+        swapchain_state.current_render_targets.data(),
+        swapchain_state.current_depth_stencil);
   }
 
   shader_injection.clampState = CLAMP_STATE__OUTPUT;
@@ -414,47 +412,48 @@ bool OnDrawIndexed(
 
 // After CreatePipelineState
 void OnInitPipeline(
-  reshade::api::device* device,
-  reshade::api::pipeline_layout layout,
-  uint32_t subobject_count,
-  const reshade::api::pipeline_subobject* subobjects,
-  reshade::api::pipeline pipeline
-) {
+    reshade::api::device* device,
+    reshade::api::pipeline_layout layout,
+    uint32_t subobject_count,
+    const reshade::api::pipeline_subobject* subobjects,
+    reshade::api::pipeline pipeline) {
   bool unsafe = false;
   for (uint32_t i = 0; i < subobject_count; ++i) {
     if (unsafe) break;
 
-    const auto &subobject = subobjects[i];
+    const auto& subobject = subobjects[i];
     if (subobject.type != reshade::api::pipeline_subobject_type::blend_state) continue;
     for (uint32_t j = 0; j < subobject.count; ++j) {
-      auto &desc = static_cast<reshade::api::blend_desc*>(subobject.data)[j];
+      auto& desc = static_cast<reshade::api::blend_desc*>(subobject.data)[j];
       if (!desc.blend_enable[0]) continue;
 
-      if (((desc.render_target_write_mask[0] & 0x1) != 0) || ((desc.render_target_write_mask[0] & 0x2) != 0) || ((desc.render_target_write_mask[0] & 0x4) != 0)) {
-        if (desc.color_blend_op[0] != reshade::api::blend_op::min && desc.color_blend_op[0] != reshade::api::blend_op::max) {
+      if (((desc.render_target_write_mask[0] & 0x1) != 0)
+          || ((desc.render_target_write_mask[0] & 0x2) != 0)
+          || ((desc.render_target_write_mask[0] & 0x4) != 0)) {
+        if (desc.color_blend_op[0] != reshade::api::blend_op::min
+            && desc.color_blend_op[0] != reshade::api::blend_op::max) {
           if (
-            desc.source_color_blend_factor[0] == reshade::api::blend_factor::dest_alpha
-            || desc.source_color_blend_factor[0] == reshade::api::blend_factor::one_minus_dest_alpha
-            || desc.dest_color_blend_factor[0] == reshade::api::blend_factor::dest_alpha
-            || desc.dest_color_blend_factor[0] == reshade::api::blend_factor::one_minus_dest_alpha
-          ) {
+              desc.source_color_blend_factor[0] == reshade::api::blend_factor::dest_alpha
+              || desc.source_color_blend_factor[0] == reshade::api::blend_factor::one_minus_dest_alpha
+              || desc.dest_color_blend_factor[0] == reshade::api::blend_factor::dest_alpha
+              || desc.dest_color_blend_factor[0] == reshade::api::blend_factor::one_minus_dest_alpha) {
             unsafe = true;
             break;
           }
         }
       }
       if ((desc.render_target_write_mask[0] & 0x8) != 0) {
-        if (desc.alpha_blend_op[0] == reshade::api::blend_op::min || desc.alpha_blend_op[0] == reshade::api::blend_op::max) {
+        if (desc.alpha_blend_op[0] == reshade::api::blend_op::min
+            || desc.alpha_blend_op[0] == reshade::api::blend_op::max) {
           unsafe = true;
           break;
         }
         if (
-          desc.source_alpha_blend_factor[0] == reshade::api::blend_factor::dest_alpha
-          || desc.source_alpha_blend_factor[0] == reshade::api::blend_factor::one_minus_dest_alpha
-          || desc.dest_alpha_blend_factor[0] == reshade::api::blend_factor::one
-          || desc.dest_alpha_blend_factor[0] == reshade::api::blend_factor::dest_alpha
-          || desc.dest_alpha_blend_factor[0] == reshade::api::blend_factor::one_minus_dest_alpha
-        ) {
+            desc.source_alpha_blend_factor[0] == reshade::api::blend_factor::dest_alpha
+            || desc.source_alpha_blend_factor[0] == reshade::api::blend_factor::one_minus_dest_alpha
+            || desc.dest_alpha_blend_factor[0] == reshade::api::blend_factor::one
+            || desc.dest_alpha_blend_factor[0] == reshade::api::blend_factor::dest_alpha
+            || desc.dest_alpha_blend_factor[0] == reshade::api::blend_factor::one_minus_dest_alpha) {
           unsafe = true;
           break;
         }
@@ -462,27 +461,25 @@ void OnInitPipeline(
     }
   }
   if (unsafe) {
-    auto &data = device->get_private_data<DeviceData>();
+    auto& data = device->get_private_data<DeviceData>();
     const std::unique_lock lock(data.mutex);
     data.unsafe_blend_pipelines.emplace(pipeline.handle);
   }
 }
 
 void OnBindPipeline(
-  reshade::api::command_list* cmd_list,
-  reshade::api::pipeline_stage type,
-  reshade::api::pipeline pipeline
-) {
+    reshade::api::command_list* cmd_list,
+    reshade::api::pipeline_stage type,
+    reshade::api::pipeline pipeline) {
   if (type != reshade::api::pipeline_stage::output_merger) return;
-  auto &data = cmd_list->get_private_data<CommandListData>();
+  auto& data = cmd_list->get_private_data<CommandListData>();
   data.last_output_merger = pipeline;
 }
 
 void OnDestroyPipeline(
-  reshade::api::device* device,
-  reshade::api::pipeline pipeline
-) {
-  auto &data = device->get_private_data<DeviceData>();
+    reshade::api::device* device,
+    reshade::api::pipeline pipeline) {
+  auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   data.unsafe_blend_pipelines.erase(pipeline.handle);
 }
@@ -502,36 +499,28 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::shader::expected_constant_buffer_index = 7u;
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
-        {
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r10g10b10a2_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .aspect_ratio = 16.f / 9.f,
-        }
-      );
+      });
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
-        {
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r10g10b10a2_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
-        }
-      );
+      });
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
-        {
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
           .aspect_ratio = 16.f / 9.f,
           .resource_tag = 1.f,
-        }
-      );
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
-        {
+      });
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
           .resource_tag = 1.f,
-        }
-      );
+      });
 
       shader_injection.clampState = CLAMP_STATE__NONE;
 

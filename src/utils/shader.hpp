@@ -46,70 +46,66 @@ static std::unordered_map<uint32_t, std::vector<uint8_t>> create_pipeline_replac
 static std::unordered_map<uint32_t, std::vector<uint8_t>> init_pipeline_replacements;
 
 static void AddCreatePipelineReplacement(
-  uint32_t shader_hash,
-  uint32_t size,
-  const uint8_t* data
-) {
+    uint32_t shader_hash,
+    uint32_t size,
+    const uint8_t* data) {
   const std::unique_lock lock(mutex);
   create_pipeline_replacements[shader_hash] = std::vector<uint8_t>(data, data + size);
 }
 
 static void RemoveCreatePipelineReplacement(
-  uint32_t shader_hash
-) {
+    uint32_t shader_hash) {
   const std::unique_lock lock(mutex);
   create_pipeline_replacements.erase(shader_hash);
 }
 
 static void AddInitPipelineReplacement(
-  uint32_t shader_hash,
-  uint32_t size,
-  const uint8_t* data
-) {
+    uint32_t shader_hash,
+    uint32_t size,
+    const uint8_t* data) {
   const std::unique_lock lock(mutex);
   init_pipeline_replacements[shader_hash] = std::vector<uint8_t>(data, data + size);
 }
 
 static void RemoveInitPipelineReplacement(
-  uint32_t shader_hash
-) {
+    uint32_t shader_hash) {
   const std::unique_lock lock(mutex);
   // Leak
   init_pipeline_replacements.erase(shader_hash);
 }
 
 static uint32_t GetPixelShaderHash(reshade::api::command_list* cmd_list) {
-  auto &cmd_list_data = cmd_list->get_private_data<CommandListData>();
+  auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
   return cmd_list_data.pixel_shader_hash;
 }
 
 static uint32_t GetComputeShaderHash(reshade::api::command_list* cmd_list) {
-  auto &cmd_list_data = cmd_list->get_private_data<CommandListData>();
+  auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
   return cmd_list_data.compute_shader_hash;
 }
 
 static void OnInitDevice(reshade::api::device* device) {
-  auto &data = device->create_private_data<DeviceData>();
+  auto& data = device->create_private_data<DeviceData>();
 #ifdef DEBUG_LEVEL_1
   std::stringstream s;
-  s << "utils::shader::OnInitDevice("
-    << reinterpret_cast<void*>(device)
-    << ")";
+  s << "utils::shader::OnInitDevice(";
+  s << reinterpret_cast<void*>(device);
+  s << ")";
   reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
   std::stringstream s;
-  s << "utils::shader::OnDestroyDevice("
-    << reinterpret_cast<void*>(device)
-    << ")";
+  s << "utils::shader::OnDestroyDevice(";
+  s << reinterpret_cast<void*>(device);
+  s << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
   device->destroy_private_data<DeviceData>();
 }
 
 static void OnInitCommandList(reshade::api::command_list* cmd_list) {
-  auto &data = cmd_list->create_private_data<CommandListData>();
+  auto& data = cmd_list->create_private_data<CommandListData>();
 }
 
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
@@ -118,12 +114,11 @@ static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
 
 // Before CreatePipelineState
 static bool OnCreatePipeline(
-  reshade::api::device* device,
-  reshade::api::pipeline_layout layout,
-  uint32_t subobject_count,
-  const reshade::api::pipeline_subobject* subobjects
-) {
-  auto &data = device->get_private_data<DeviceData>();
+    reshade::api::device* device,
+    reshade::api::pipeline_layout layout,
+    uint32_t subobject_count,
+    const reshade::api::pipeline_subobject* subobjects) {
+  auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   bool changed = false;
 
@@ -139,16 +134,14 @@ static bool OnCreatePipeline(
     if (desc->code_size == 0) continue;
 
     const uint32_t shader_hash = compute_crc32(
-      static_cast<const uint8_t*>(desc->code),
-      desc->code_size
-    );
+        static_cast<const uint8_t*>(desc->code),
+        desc->code_size);
 
     const std::shared_lock lock(mutex);
 
     if (
-      auto pair = create_pipeline_replacements.find(shader_hash);
-      pair != create_pipeline_replacements.end()
-    ) {
+        auto pair = create_pipeline_replacements.find(shader_hash);
+        pair != create_pipeline_replacements.end()) {
       changed = true;
       const auto replacement = pair->second;
       auto new_size = replacement.size();
@@ -159,9 +152,8 @@ static bool OnCreatePipeline(
         memcpy(copy, replacement.data(), desc->code_size);
         desc->code = copy;
         const uint32_t new_hash = compute_crc32(
-          replacement.data(),
-          new_size
-        );
+            replacement.data(),
+            new_size);
         data.shader_replacements[shader_hash] = new_hash;
         data.shader_replacements_inverse[new_hash] = shader_hash;
 
@@ -169,11 +161,11 @@ static bool OnCreatePipeline(
         desc->code = nullptr;
       }
       std::stringstream s;
-      s << "utils::shader::OnCreatePipeline(replacing "
-        << PRINT_CRC32(shader_hash)
-        << " with " << new_size << " bytes "
-        << " at " << const_cast<void*>(desc->code)
-        << ")";
+      s << "utils::shader::OnCreatePipeline(replacing ";
+      s << PRINT_CRC32(shader_hash);
+      s << " with " << new_size << " bytes ";
+      s << " at " << const_cast<void*>(desc->code);
+      s << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
   }
@@ -181,32 +173,30 @@ static bool OnCreatePipeline(
 }
 
 static void TraceShader(
-  reshade::api::device* device,
-  DeviceData &data,
-  const reshade::api::pipeline &original_pipeline,
-  const reshade::api::pipeline_layout &original_layout,
-  const reshade::api::pipeline_subobject &original_subobject,
-  const uint32_t original_hash
-) {
+    reshade::api::device* device,
+    DeviceData& data,
+    const reshade::api::pipeline& original_pipeline,
+    const reshade::api::pipeline_layout& original_layout,
+    const reshade::api::pipeline_subobject& original_subobject,
+    const uint32_t original_hash) {
   data.pipeline_to_layout_map[original_pipeline.handle] = original_layout.handle;
   data.pipeline_to_shader_hash_map[original_pipeline.handle] = {
-    original_hash,
-    original_subobject.type,
+      original_hash,
+      original_subobject.type,
   };
 }
 
 static reshade::api::pipeline CreateShaderReplacement(
-  reshade::api::device* device,
-  DeviceData &data,
-  reshade::api::pipeline &original_pipeline,
-  reshade::api::pipeline_layout &original_layout,
-  size_t subobject_count,
-  const reshade::api::pipeline_subobject* original_subobjects,
-  size_t index,
-  uint32_t original_hash,
-  size_t new_size,
-  const uint8_t* new_code
-) {
+    reshade::api::device* device,
+    DeviceData& data,
+    reshade::api::pipeline& original_pipeline,
+    reshade::api::pipeline_layout& original_layout,
+    size_t subobject_count,
+    const reshade::api::pipeline_subobject* original_subobjects,
+    size_t index,
+    uint32_t original_hash,
+    size_t new_size,
+    const uint8_t* new_code) {
   auto* new_pipeline_subobjects = new reshade::api::pipeline_subobject[subobject_count];
   memcpy(new_pipeline_subobjects, original_subobjects, sizeof(reshade::api::pipeline_subobject) * subobject_count);
 
@@ -224,44 +214,43 @@ static reshade::api::pipeline CreateShaderReplacement(
 
   reshade::api::pipeline new_pipeline;
   const bool built_pipeline_ok = device->create_pipeline(
-    original_layout,
-    subobject_count,
-    new_pipeline_subobjects,
-    &new_pipeline
-  );
+      original_layout,
+      subobject_count,
+      new_pipeline_subobjects,
+      &new_pipeline);
   if (built_pipeline_ok) {
     data.pipeline_to_layout_map[new_pipeline.handle] = original_layout.handle;
     data.pipeline_to_shader_hash_map[new_pipeline.handle] = {
-      original_hash,
-      type,
+        original_hash,
+        type,
     };
     data.pipeline_to_pipeline_replacement[original_pipeline.handle] = {
-      new_pipeline.handle,
-      type
+        new_pipeline.handle,
+        type,
     };
     data.shader_to_pipeline_replacement[original_hash] = {
-      new_pipeline.handle,
-      type
+        new_pipeline.handle,
+        type,
     };
 
     std::stringstream s;
-    s << "utils::shader::OnInitPipeline(clone pipeline "
-      << reinterpret_cast<void*>(original_pipeline.handle)
-      << " => "
-      << reinterpret_cast<void*>(new_pipeline.handle)
-      << ", layout: " << reinterpret_cast<void*>(original_layout.handle)
-      << ")";
+    s << "utils::shader::OnInitPipeline(clone pipeline ";
+    s << reinterpret_cast<void*>(original_pipeline.handle);
+    s << " => ";
+    s << reinterpret_cast<void*>(new_pipeline.handle);
+    s << ", layout: " << reinterpret_cast<void*>(original_layout.handle);
+    s << ")";
     reshade::log_message(reshade::log_level::debug, s.str().c_str());
   } else {
     std::stringstream s;
-    s << "utils::shader::OnInitPipeline(failed to clone pipeline "
-      << reinterpret_cast<void*>(original_pipeline.handle)
-      << ", layout: " << reinterpret_cast<void*>(original_layout.handle)
-      << ", hash: " << PRINT_CRC32(original_hash)
-      << ", type: " << type
-      << ", size: " << new_size
-      << ", data: " << new_code
-      << ")";
+    s << "utils::shader::OnInitPipeline(failed to clone pipeline ";
+    s << reinterpret_cast<void*>(original_pipeline.handle);
+    s << ", layout: " << reinterpret_cast<void*>(original_layout.handle);
+    s << ", hash: " << PRINT_CRC32(original_hash);
+    s << ", type: " << type;
+    s << ", size: " << new_size;
+    s << ", data: " << new_code;
+    s << ")";
     reshade::log_message(reshade::log_level::error, s.str().c_str());
     // Log error
   }
@@ -270,13 +259,12 @@ static reshade::api::pipeline CreateShaderReplacement(
 
 // After CreatePipelineState
 static void OnInitPipeline(
-  reshade::api::device* device,
-  reshade::api::pipeline_layout layout,
-  uint32_t subobject_count,
-  const reshade::api::pipeline_subobject* subobjects,
-  reshade::api::pipeline pipeline
-) {
-  auto &data = device->get_private_data<DeviceData>();
+    reshade::api::device* device,
+    reshade::api::pipeline_layout layout,
+    uint32_t subobject_count,
+    const reshade::api::pipeline_subobject* subobjects,
+    reshade::api::pipeline pipeline) {
+  auto& data = device->get_private_data<DeviceData>();
   for (uint32_t i = 0; i < subobject_count; ++i) {
     const auto subobject = subobjects[i];
     switch (subobject.type) {
@@ -293,69 +281,64 @@ static void OnInitPipeline(
     const uint32_t found_shader = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
     const std::unique_lock lock(data.mutex);
     if (
-      auto pair = data.shader_replacements_inverse.find(found_shader);
-      pair != data.shader_replacements_inverse.end()
-    ) {
+        auto pair = data.shader_replacements_inverse.find(found_shader);
+        pair != data.shader_replacements_inverse.end()) {
       const uint32_t original_hash = pair->second;
       TraceShader(device, data, pipeline, layout, subobject, original_hash);
 
       std::stringstream s;
-      s << "utils::shader::OnInitPipeline(found replacement: "
-        << PRINT_CRC32(original_hash)
-        << " => "
-        << PRINT_CRC32(found_shader)
-        << " on " << reinterpret_cast<void*>(pipeline.handle)
-        << ", layout: " << reinterpret_cast<void*>(layout.handle)
-        << ")";
+      s << "utils::shader::OnInitPipeline(found replacement: ";
+      s << PRINT_CRC32(original_hash);
+      s << " => ";
+      s << PRINT_CRC32(found_shader);
+      s << " on " << reinterpret_cast<void*>(pipeline.handle);
+      s << ", layout: " << reinterpret_cast<void*>(layout.handle);
+      s << ")";
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     } else {
       TraceShader(device, data, pipeline, layout, subobject, found_shader);
 
       if (
-        auto pair = init_pipeline_replacements.find(found_shader);
-        pair != init_pipeline_replacements.end()
-      ) {
+          auto pair = init_pipeline_replacements.find(found_shader);
+          pair != init_pipeline_replacements.end()) {
         const auto replacement = pair->second;
         const uint32_t new_size = replacement.size();
         const uint32_t new_shader_hash = compute_crc32(replacement.data(), new_size);
 
         std::stringstream s;
-        s << "utils::shader::OnInitPipeline(prep replacement: "
-          << PRINT_CRC32(found_shader)
-          << ", code_size: " << new_size
-          << ", code: " << reinterpret_cast<const void*>(replacement.data())
-          << ", layout: " << reinterpret_cast<void*>(layout.handle)
-          << ", new_shader_hash: " << PRINT_CRC32(new_shader_hash)
-          << ")";
+        s << "utils::shader::OnInitPipeline(prep replacement: ";
+        s << PRINT_CRC32(found_shader);
+        s << ", code_size: " << new_size;
+        s << ", code: " << reinterpret_cast<const void*>(replacement.data());
+        s << ", layout: " << reinterpret_cast<void*>(layout.handle);
+        s << ", new_shader_hash: " << PRINT_CRC32(new_shader_hash);
+        s << ")";
         reshade::log_message(reshade::log_level::info, s.str().c_str());
         CreateShaderReplacement(
-          device,
-          data,
-          pipeline,
-          layout,
-          subobject_count,
-          subobjects,
-          i,
-          found_shader,
-          new_size,
-          replacement.data()
-        );
+            device,
+            data,
+            pipeline,
+            layout,
+            subobject_count,
+            subobjects,
+            i,
+            found_shader,
+            new_size,
+            replacement.data());
       }
     }
   }
 }
 
 static void OnDestroyPipeline(
-  reshade::api::device* device,
-  reshade::api::pipeline pipeline
-) {
-  auto &data = device->get_private_data<DeviceData>();
+    reshade::api::device* device,
+    reshade::api::pipeline pipeline) {
+  auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   {
     if (
-      auto pair = data.pipeline_to_shader_hash_map.find(pipeline.handle);
-      pair != data.pipeline_to_shader_hash_map.end()
-    ) {
+        auto pair = data.pipeline_to_shader_hash_map.find(pipeline.handle);
+        pair != data.pipeline_to_shader_hash_map.end()) {
       const uint32_t shader_hash = std::get<uint32_t>(pair->second);
       data.shader_to_pipeline_replacement.erase(shader_hash);
     }
@@ -364,9 +347,8 @@ static void OnDestroyPipeline(
 
   {
     if (
-      auto pair = data.pipeline_to_pipeline_replacement.find(pipeline.handle);
-      pair != data.pipeline_to_pipeline_replacement.end()
-    ) {
+        auto pair = data.pipeline_to_pipeline_replacement.find(pipeline.handle);
+        pair != data.pipeline_to_pipeline_replacement.end()) {
       const uint64_t replacement_handle = std::get<uint64_t>(pair->second);
       device->destroy_pipeline({replacement_handle});
       data.pipeline_to_layout_map.erase(replacement_handle);
@@ -380,27 +362,25 @@ static void OnDestroyPipeline(
 
 // AfterSetPipelineState
 static void OnBindPipeline(
-  reshade::api::command_list* cmd_list,
-  reshade::api::pipeline_stage stage,
-  reshade::api::pipeline pipeline
-) {
+    reshade::api::command_list* cmd_list,
+    reshade::api::pipeline_stage stage,
+    reshade::api::pipeline pipeline) {
   auto* device = cmd_list->get_device();
-  auto &device_data = device->get_private_data<DeviceData>();
+  auto& device_data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(device_data.mutex);
 
   if (
-    auto pair = device_data.pipeline_to_shader_hash_map.find(pipeline.handle);
-    pair != device_data.pipeline_to_shader_hash_map.end()
-  ) {
-    auto &cmd_list_data = cmd_list->get_private_data<CommandListData>();
-    const auto &[shader_hash, shader_type] = pair->second;
+      auto pair = device_data.pipeline_to_shader_hash_map.find(pipeline.handle);
+      pair != device_data.pipeline_to_shader_hash_map.end()) {
+    auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
+    const auto& [shader_hash, shader_type] = pair->second;
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
-    s << "utils::shader::OnBindPipeline(shader: "
-      << PRINT_CRC32(shader_hash)
-      << ", type: " << shader_type
-      << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle)
-      << ")";
+    s << "utils::shader::OnBindPipeline(shader: ";
+    s << PRINT_CRC32(shader_hash);
+    s << ", type: " << shader_type;
+    s << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle);
+    s << ")";
     // reshade::log_message(reshade::log_level::debug, s.str().c_str());
 #endif
 
@@ -413,9 +393,8 @@ static void OnBindPipeline(
     }
     cmd_list_data.pipeline_stage = stage;
     if (
-      auto pair2 = device_data.pipeline_to_layout_map.find(pipeline.handle);
-      pair2 != device_data.pipeline_to_layout_map.end()
-    ) {
+        auto pair2 = device_data.pipeline_to_layout_map.find(pipeline.handle);
+        pair2 != device_data.pipeline_to_layout_map.end()) {
       const uint64_t pipeline_layout_handle = pair2->second;
       cmd_list_data.pipeline_layout = {pipeline_layout_handle};
     }

@@ -16,10 +16,9 @@
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 
-
 renodx::mods::shader::CustomShaders custom_shaders = {
-  CustomShaderEntry(0x84B99833),
-  CustomShaderEntry(0xE41360A3)
+    CustomShaderEntry(0x84B99833),
+    CustomShaderEntry(0xE41360A3),
 };
 
 // NOLINTBEGIN(readability-identifier-naming)
