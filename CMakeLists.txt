@@ -16,7 +16,6 @@ if(NOT CMAKE_WINDOWS_KITS_10_DIR)
   set(CMAKE_WINDOWS_KITS_10_DIR "C:/Program Files (x86)/Windows Kits/10")
 endif()
 
-find_program(CLANG_TIDY_BIN clang-tidy)
 find_program(FXC_BIN fxc.exe
   HINTS ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x64/
   REQUIRED)
@@ -109,13 +108,6 @@ foreach(FILE ${ADDON_FILES})
       PREFIX "renodx-"
       SUFFIX ${TARGET_SUFFIX}
   )
-
-  if(NOT "${CLANG_TIDY_BIN}" STREQUAL "CLANG_TIDY_BIN-NOTFOUND")
-    set_target_properties(${ADDON} PROPERTIES
-      C_CLANG_TIDY   ${CLANG_TIDY_BIN}
-      CXX_CLANG_TIDY "${CLANG_TIDY_BIN};--extra-arg=/EHsc"
-    )
-  endif()
 endforeach()
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
