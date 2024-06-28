@@ -1,4 +1,4 @@
-[![CMake on Windows](https://github.com/clshortfuse/renodx/actions/workflows/cmake-windows.yml/badge.svg)](https://github.com/clshortfuse/renodx/actions/workflows/cmake-windows.yml) [![Discord](https://img.shields.io/discord/1161035767917850784?logo=discord&logoColor=%23fff&label=Discord&labelColor=%235865F2)](https://discord.gg/5WZXDpmbpP)
+[![CMake (Ninja)](https://github.com/clshortfuse/renodx/actions/workflows/cmake-ninja.yml/badge.svg)](https://github.com/clshortfuse/renodx/actions/workflows/cmake-ninja.yml) [![CMake (Visual Studio)](https://github.com/clshortfuse/renodx/actions/workflows/cmake-visual-studio.yml/badge.svg)](https://github.com/clshortfuse/renodx/actions/workflows/cmake-visual-studio.yml) [![Discord](https://img.shields.io/discord/1161035767917850784?logo=discord&logoColor=%23fff&label=Discord&labelColor=%235865F2)](https://discord.gg/5WZXDpmbpP)
 
 
 # renodx
