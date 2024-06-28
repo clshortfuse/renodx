@@ -1,12 +1,8 @@
 # This starter workflow is for a CMake project running on multiple platforms. There is a different starter workflow if you just want a single platform.
 # See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-single-platform.yml
-name: CMake (Ninja)
+name: clang-tidy-review
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+on: [pull_request]
 
 jobs:
   build:
@@ -16,6 +12,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: true
+
     - uses: GuillaumeFalourd/setup-windows10-sdk-action@v2
       with:
         sdk-version: 22621
@@ -26,14 +23,17 @@ jobs:
     - name: Setup VS Dev Environment
       uses: seanmiddleditch/gha-setup-vsdevenv@v4
 
-    - name: Configure CMake (x64)
-      run: >
-        cmake
-        --preset ninja-x64
+    - uses: ZedThree/clang-tidy-review@v0.14.0
+      id: review
+      with:
+        # CMake command to run in order to generate compile_commands.json
+        cmake_command: cmake --preset ninja-x64
+        build_dir: build.ninja
+    
+    # Uploads an artefact containing clang_fixes.json
+    - uses: ZedThree/clang-tidy-review/upload@v0.14.0
+      id: upload-review
 
-    - name: Build (x64)
-      run: >
-        cmake
-        --build
-        --preset ninja-x64-release
-        --verbose
+    # If there are any comments, fail the check
+    - if: steps.review.outputs.total_comments > 0
+      run: exit 1

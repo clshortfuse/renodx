@@ -14,14 +14,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: true
+
     - uses: GuillaumeFalourd/setup-windows10-sdk-action@v2
       with:
         sdk-version: 22621
 
-    - name: Update submodules
-      run: |
-        git submodule update --init --recursive
-        
     - name: Configure CMake (x64)
       run: >
         cmake
