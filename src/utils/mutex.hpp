@@ -2,6 +2,8 @@
 
 #include <shared_mutex>
 
-namespace MutexUtil {
-  static std::shared_mutex g_mutex0;
-}
+namespace renodx::utils::mutex {
+
+static std::shared_mutex global_mutex;
+
+}  // namespace renodx::utils::mutex

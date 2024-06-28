@@ -1,15 +1,16 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 
-uint32_t float_as_uint32(float a) {
+inline uint32_t FloatAsUint32(float a) {
   uint32_t r;
   memcpy(&r, &a, sizeof r);
   return r;
 }
 
-uint16_t float2half_rn(float a) {
-  uint32_t ia = float_as_uint32(a);
+inline uint16_t Float2Half(float a) {
+  uint32_t ia = FloatAsUint32(a);
   uint16_t ir;
 
   ir = (ia >> 16) & 0x8000;
@@ -20,7 +21,7 @@ uint16_t float2half_rn(float a) {
       ir |= 0x7e00 | ((ia >> (24 - 11)) & 0x1ff); /* NaN, quietened */
     }
   } else if ((ia & 0x7f800000) >= 0x33000000) {
-    int shift = (int)((ia >> 23) & 0xff) - 127;
+    const int shift = static_cast<int>((ia >> 23) & 0xff) - 127;
     if (shift > 15) {
       ir |= 0x7c00; /* infinity */
     } else {
@@ -34,7 +35,7 @@ uint16_t float2half_rn(float a) {
         ir = ir + ((14 + shift) << 10);
       }
       /* IEEE-754 round to nearest of even */
-      if ((ia > 0x80000000) || ((ia == 0x80000000) && (ir & 1))) {
+      if ((ia > 0x80000000) || ((ia == 0x80000000) && ((ir & 1) != 0))) {
         ir++;
       }
     }

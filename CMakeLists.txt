@@ -104,12 +104,12 @@ foreach(FILE ${ADDON_FILES})
       PREFIX "renodx-"
       SUFFIX ${TARGET_SUFFIX}
   )
-  # find_program(CLANG_TIDY_BIN clang-tidy REQUIRED)
-  # set(__TIDY_CMD "${CLANG_TIDY_BIN}")
-  # set_target_properties(${ADDON} PROPERTIES
-  #   C_CLANG_TIDY   ${__TIDY_CMD}
-  #   CXX_CLANG_TIDY "${__TIDY_CMD};--extra-arg=/EHsc"
-  # )
+  find_program(CLANG_TIDY_BIN clang-tidy REQUIRED)
+  set(__TIDY_CMD "${CLANG_TIDY_BIN}")
+  set_target_properties(${ADDON} PROPERTIES
+    C_CLANG_TIDY   ${__TIDY_CMD}
+    CXX_CLANG_TIDY "${__TIDY_CMD};--extra-arg=/EHsc"
+  )
 endforeach()
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})

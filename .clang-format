@@ -57,7 +57,7 @@ BraceWrapping:
   SplitEmptyFunction: false
   SplitEmptyRecord: false
   SplitEmptyNamespace: false
-#BracedInitializerIndentWidth: 2
+BracedInitializerIndentWidth: 2
 #BreakAdjacentStringLiterals: true
 #BreakAfterAttributes: 
 #BreakAfterJavaFieldAnnotations
@@ -183,7 +183,7 @@ SpacesInLineCommentPrefix:
 #SpacesInParensOptions
 SpacesInParentheses: false # This option is deprecated. The previous behavior is preserved by using SpacesInParens with Custom and by setting all SpacesInParensOptions to true except for InCStyleCasts and InEmptyParentheses.
 SpacesInSquareBrackets: false
-Standard: c++17
+Standard: c++20
 #StatementAttributeLikeMacros 
 #StatementMacros 
 TabWidth: 2

@@ -16,25 +16,30 @@
 #include "../../mods/shaderReplaceMod.hpp"
 #include "../../mods/swapChainUpgradeMod.hpp"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Sea of Thieves";
 
-ShaderReplaceMod::CustomShaders customShaders = {
+renodx::mods::shader::CustomShaders custom_shaders = {
   CustomShaderEntry(0x84B99833),
   CustomShaderEntry(0xE41360A3)
 };
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
-  switch (fdwReason) {
+// NOLINTBEGIN(readability-identifier-naming)
+
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
+extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Sea of Thieves";
+
+// NOLINTEND(readability-identifier-naming)
+
+BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
+  switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
-      if (!reshade::register_addon(hModule)) return FALSE;
+      if (!reshade::register_addon(h_module)) return FALSE;
       break;
     case DLL_PROCESS_DETACH:
-      reshade::unregister_addon(hModule);
+      reshade::unregister_addon(h_module);
       break;
   }
 
-  ShaderReplaceMod::use(fdwReason, customShaders);
+  renodx::mods::shader::Use(fdw_reason, custom_shaders);
 
   return TRUE;
 }

@@ -9,7 +9,7 @@
 
 #define PRINT_CRC32(crc32) "0x" << std::hex << std::setw(8) << std::setfill('0') << crc32 << std::setfill(' ') << std::dec
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::device_api value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::device_api value) {
   switch (value) {
     case reshade::api::device_api::d3d9:   return os << "d3d9";
     case reshade::api::device_api::d3d10:  return os << "d3d10";
@@ -21,7 +21,7 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::device_api value)
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::shader_stage value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::shader_stage value) {
   switch (value) {
     case reshade::api::shader_stage::vertex:          return os << "vertex";
     case reshade::api::shader_stage::hull:            return os << "hull";
@@ -44,11 +44,11 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::shader_stage valu
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const boolean value) {
-  return os << (value ? "true" : "false");
+inline std::ostream &operator<<(std::ostream &os, const boolean value) {
+  return os << ((value != 0u) ? "true" : "false");
 }
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::blend_factor value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::blend_factor value) {
   switch (value) {
     case reshade::api::blend_factor::zero:                     return os << "zero";
     case reshade::api::blend_factor::one:                      return os << "one";
@@ -73,7 +73,7 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::blend_factor valu
   };
 }
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::blend_op value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::blend_op value) {
   switch (value) {
     case reshade::api::blend_op::add:              return os << "add";
     case reshade::api::blend_op::subtract:         return os << "subtract";
@@ -84,7 +84,7 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::blend_op value) {
   };
 }
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::pipeline_stage value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::pipeline_stage value) {
   switch (value) {
     case reshade::api::pipeline_stage::vertex_shader:        return os << "vertex_shader";
     case reshade::api::pipeline_stage::hull_shader:          return os << "hull_shader";
@@ -107,7 +107,7 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::pipeline_stage va
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::descriptor_type value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::descriptor_type value) {
   switch (value) {
     case reshade::api::descriptor_type::sampler:                      return os << "sampler";
     case reshade::api::descriptor_type::sampler_with_resource_view:   return os << "sampler_with_resource_view";
@@ -122,7 +122,7 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::descriptor_type v
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::dynamic_state value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::dynamic_state value) {
   switch (value) {
     case reshade::api::dynamic_state::alpha_test_enable:               return os << "alpha_test_enable";
     case reshade::api::dynamic_state::alpha_reference_value:           return os << "alpha_reference_value";
@@ -176,7 +176,7 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::dynamic_state val
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::resource_usage value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::resource_usage value) {
   switch (value) {
     case reshade::api::resource_usage::index_buffer:              return os << "index_buffer";
     case reshade::api::resource_usage::vertex_buffer:             return os << "vertex_buffer";
@@ -204,7 +204,7 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::resource_usage va
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::format value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::format value) {
   switch (value) {
     case reshade::api::format::r1_unorm:              return os << "r1_unorm";
     case reshade::api::format::l8_unorm:              return os << "l8_unorm";
@@ -326,7 +326,7 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::format value) {
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::pipeline_layout_param_type value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::pipeline_layout_param_type value) {
   switch (value) {
     case reshade::api::pipeline_layout_param_type::push_constants:               return os << "push_constants";
     case reshade::api::pipeline_layout_param_type::descriptor_table:             return os << "descriptor_table";
@@ -336,7 +336,7 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::pipeline_layout_p
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::color_space value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::color_space value) {
   switch (value) {
     case reshade::api::color_space::srgb_nonlinear:       return os << "srgb_nonlinear";
     case reshade::api::color_space::extended_srgb_linear: return os << "extended_srgb_linear";
@@ -347,7 +347,7 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::color_space value
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::resource_view_type value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::resource_view_type value) {
   switch (value) {
     case reshade::api::resource_view_type::buffer:                       return os << "buffer";
     case reshade::api::resource_view_type::texture_1d:                   return os << "texture_1d";
@@ -365,7 +365,7 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::resource_view_typ
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::pipeline_subobject_type value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::pipeline_subobject_type value) {
   switch (value) {
     case reshade::api::pipeline_subobject_type::vertex_shader:           return os << "vertex_shader";
     case reshade::api::pipeline_subobject_type::hull_shader:             return os << "hull_shader";
@@ -405,7 +405,7 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::pipeline_subobjec
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::indirect_command value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::indirect_command value) {
   switch (value) {
     case reshade::api::indirect_command::draw:          return os << "draw";
     case reshade::api::indirect_command::draw_indexed:  return os << "draw_indexed";
@@ -417,7 +417,7 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::indirect_command 
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const reshade::api::resource_type value) {
+inline std::ostream &operator<<(std::ostream &os, const reshade::api::resource_type value) {
   switch (value) {
     case reshade::api::resource_type::buffer:     return os << "buffer";
     case reshade::api::resource_type::texture_1d: return os << "texture_1d";
@@ -429,7 +429,7 @@ std::ostream &operator<<(std::ostream &os, const reshade::api::resource_type val
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const DXGI_FORMAT value) {
+inline std::ostream &operator<<(std::ostream &os, const DXGI_FORMAT value) {
   switch (value) {
     case DXGI_FORMAT_R32G32B32A32_TYPELESS:                   return os << "DXGI_FORMAT_R32G32B32A32_TYPELESS";
     case DXGI_FORMAT_R32G32B32A32_FLOAT:                      return os << "DXGI_FORMAT_R32G32B32A32_FLOAT";

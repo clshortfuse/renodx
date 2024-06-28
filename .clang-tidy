@@ -1,7 +1,6 @@
 # https://clang.llvm.org/extra/clang-tidy/checks/list.html
-
 ---
-Checks: 
+Checks:
   - bug-prone-*
   - cppcoreguidelines-
   - google-*
@@ -11,9 +10,12 @@ Checks:
   - performance-*
   - portability-*
   - readability-*
+  - -llvm-header-guard
+  - -llvm-include-order
   - -modernize-avoid-c-arrays
   - -modernize-use-trailing-return-type
   - -misc-include-cleaner
+  - -misc-non-private-member-variables-in-classes
   - -misc-unused-parameters
   - -performance-no-int-to-ptr
   - -readability-function-cognitive-complexity
@@ -32,15 +34,17 @@ CheckOptions:
   readability-identifier-naming.ConstantParameterCase: lower_case
   readability-identifier-naming.EnumCase: CamelCase
   readability-identifier-naming.FunctionCase: CamelCase
+  readability-identifier-naming.GlobalFunctionCase: CamelCase
   readability-identifier-naming.LocalVariableCase: lower_case
   readability-identifier-naming.LocalConstantCase: lower_case
   readability-identifier-naming.MethodCase: CamelCase
+  readability-identifier-naming.MemberCase: lower_case
+  readability-identifier-naming.NamespaceCase: lower_case
+  readability-identifier-naming.ParameterCase: lower_case
   readability-identifier-naming.StructCase: CamelCase
-  readability-identifier-naming.GlobalFunctionCase: CamelCase
   readability-identifier-naming.VariableCase: lower_case
 
-
-WarningsAsErrors: 'google-*'
-HeaderFilterRegex: ''
-HeaderFileExtensions:         ['', 'h','hh','hpp','hxx']
-ImplementationFileExtensions: ['c','cc','cpp','cxx']
+WarningsAsErrors: ""
+HeaderFilterRegex: ".*.hpp"
+HeaderFileExtensions: ["", "h", "hh", "hpp", "hxx"]
+ImplementationFileExtensions: ["c", "cc", "cpp", "cxx"]

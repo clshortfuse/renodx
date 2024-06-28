@@ -18,36 +18,44 @@
 #include "../../mods/swapChainUpgradeMod.hpp"
 #include "../../utils/userSettingUtil.hpp"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX - The Town of Light";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for The Town of Light";
+namespace {
 
-ShaderReplaceMod::CustomShaders customShaders = {
+renodx::mods::shader::CustomShaders custom_shaders = {
   CustomShaderEntry(0x9D6291BC),  // Color grading LUT + fog + fade
   CustomShaderEntry(0xB103EAA6),  // Post process (e.g. contrast) + user gamma adjustment (defaulted to 1)
 };
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
-  switch (fdwReason) {
-    case DLL_PROCESS_ATTACH:
-      if (!reshade::register_addon(hModule)) return FALSE;
+}  // namespace
 
-      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+// NOLINTBEGIN(readability-identifier-naming)
+
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
+extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for The Town of Light";
+
+// NOLINTEND(readability-identifier-naming)
+
+BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
+  switch (fdw_reason) {
+    case DLL_PROCESS_ATTACH:
+      if (!reshade::register_addon(h_module)) return FALSE;
+
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
         {reshade::api::format::r8g8b8a8_unorm, reshade::api::format::r16g16b16a16_float}
       );
-#if 1 // Seemengly unused (they might be used for copies of the scene buffer used as UI background)
-      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+#if 1  // NOLINT Seemingly unused (they might be used for copies of the scene buffer used as UI background)
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
         {reshade::api::format::r8g8b8a8_typeless, reshade::api::format::r16g16b16a16_float}
       );
-      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
         {reshade::api::format::r8g8b8a8_unorm_srgb, reshade::api::format::r16g16b16a16_float}
       );
-      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
         {reshade::api::format::b8g8r8a8_typeless, reshade::api::format::r16g16b16a16_float}
       );
-      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
         {reshade::api::format::b8g8r8a8_unorm, reshade::api::format::r16g16b16a16_float}
       );
-      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
         {reshade::api::format::b8g8r8a8_unorm_srgb, reshade::api::format::r16g16b16a16_float}
       );
 #endif
@@ -55,15 +63,15 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
       break;
 
     case DLL_PROCESS_DETACH:
-      reshade::unregister_addon(hModule);
+      reshade::unregister_addon(h_module);
       break;
   }
 
-  // TODO: add user shader settings for tonemapping (paper white, peak brightness), and allow selecting between sRGB vs 2.2 gamma
-  // TODO: add a final shader pass that does linearization, at the moment the mod requires an external ReShade shader to be linearized (with gamma 2.2) and for paper white scaling (80->203 nits)
+  // TODO(Filoppi): add user shader settings for tonemapping (paper white, peak brightness), and allow selecting between sRGB vs 2.2 gamma
+  // TODO(Filoppi): add a final shader pass that does linearization, at the moment the mod requires an external ReShade shader to be linearized (with gamma 2.2) and for paper white scaling (80->203 nits)
 
-  SwapChainUpgradeMod::use(fdwReason);
-  ShaderReplaceMod::use(fdwReason, customShaders);
+  renodx::mods::swapchain::Use(fdw_reason);
+  renodx::mods::shader::Use(fdw_reason, custom_shaders);
 
   return TRUE;
 }

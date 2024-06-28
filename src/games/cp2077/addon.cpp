@@ -36,10 +36,9 @@
 #include "../../utils/userSettingUtil.hpp"
 #include "./cp2077.h"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Cyberpunk2077";
+namespace {
 
-static ShaderReplaceMod::CustomShaders customShaders = {
+renodx::mods::shader::CustomShaders custom_shaders = {
   CustomShaderEntry(0xCBFFC2A3),  // output
   CustomShaderEntry(0x341CEB87),  // upscale
   CustomShaderEntry(0x298A6BB0),  // composite multisample
@@ -55,183 +54,183 @@ static ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0xDE517511)   // menu
 };
 
-ShaderInjectData shaderInjection;
+ShaderInjectData shader_injection;
 
 // clang-format off
-UserSettingUtil::UserSettings userSettings = {
-  new UserSettingUtil::UserSetting {
+renodx::utils::user_settings::UserSettings user_settings = {
+  new renodx::utils::user_settings::UserSetting {
     .key = "toneMapType",
-    .binding = &shaderInjection.toneMapType,
-    .valueType = UserSettingUtil::UserSettingValueType::integer,
-    .defaultValue = 3.f,
-    .canReset = false,
+    .binding = &shader_injection.toneMapType,
+    .value_type = renodx::utils::user_settings::UserSettingValueType::INTEGER,
+    .default_value = 3.f,
+    .can_reset = false,
     .label = "Tone Mapper",
     .section = "Tone Mapping",
     .tooltip = "Sets the tone mapper type",
-    .labels = {"Vanilla", "None", "ACES", "RenoDX"}
+    .labels = {"Vanilla", "None", "ACES", "RenoDRT"}
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "toneMapPeakNits",
-    .binding = &shaderInjection.toneMapPeakNits,
-    .defaultValue = 1000.f,
-    .canReset = false,
+    .binding = &shader_injection.toneMapPeakNits,
+    .default_value = 1000.f,
+    .can_reset = false,
     .label = "Peak Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the value of peak white in nits",
     .min = 48.f,
     .max = 4000.f
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "toneMapGameNits",
-    .binding = &shaderInjection.toneMapGameNits,
-    .defaultValue = 203.f,
-    .canReset = false,
+    .binding = &shader_injection.toneMapGameNits,
+    .default_value = 203.f,
+    .can_reset = false,
     .label = "Game Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the value of 100%% white in nits",
     .min = 48.f,
     .max = 1000.f
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "toneMapGammaCorrection",
-    .binding = &shaderInjection.toneMapGammaCorrection,
-    .valueType = UserSettingUtil::UserSettingValueType::integer,
-    .defaultValue = 0.f,
-    .canReset = false,
+    .binding = &shader_injection.toneMapGammaCorrection,
+    .value_type = renodx::utils::user_settings::UserSettingValueType::INTEGER,
+    .default_value = 0.f,
+    .can_reset = false,
     .label = "Gamma Correction",
     .section = "Tone Mapping",
     .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
     .labels = { "Off", "UI/Menu Only", "On"}
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeExposure",
-    .binding = &shaderInjection.colorGradeExposure,
-    .defaultValue = 1.f,
+    .binding = &shader_injection.colorGradeExposure,
+    .default_value = 1.f,
     .label = "Exposure",
     .section = "Color Grading",
     .max = 10.f,
     .format = "%.2f"
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeHighlights",
-    .binding = &shaderInjection.colorGradeHighlights,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.colorGradeHighlights,
+    .default_value = 50.f,
     .label = "Highlights",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeShadows",
-    .binding = &shaderInjection.colorGradeShadows,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.colorGradeShadows,
+    .default_value = 50.f,
     .label = "Shadows",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeContrast",
-    .binding = &shaderInjection.colorGradeContrast,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.colorGradeContrast,
+    .default_value = 50.f,
     .label = "Contrast",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeSaturation",
-    .binding = &shaderInjection.colorGradeSaturation,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.colorGradeSaturation,
+    .default_value = 50.f,
     .label = "Saturation",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeWhitePoint",
-    .binding = &shaderInjection.colorGradeWhitePoint,
-    .valueType = UserSettingUtil::UserSettingValueType::integer,
-    .defaultValue = 1.f,
+    .binding = &shader_injection.colorGradeWhitePoint,
+    .value_type = renodx::utils::user_settings::UserSettingValueType::INTEGER,
+    .default_value = 1.f,
     .label = "White Point",
     .section = "Color Grading",
     .tooltip = "Selects whether to force the game's whitepoint",
     .labels = { "D60", "Vanilla", "D65"},
     .parse = [](float value) { return value - 1.f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeLUTStrength",
-    .binding = &shaderInjection.colorGradeLUTStrength,
-    .defaultValue = 100.f,
+    .binding = &shader_injection.colorGradeLUTStrength,
+    .default_value = 100.f,
     .label = "LUT Strength",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.01f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeSceneGrading",
-    .binding = &shaderInjection.colorGradeSceneGrading,
-    .defaultValue = 100.f,
+    .binding = &shader_injection.colorGradeSceneGrading,
+    .default_value = 100.f,
     .label = "Scene Grading",
     .section = "Color Grading",
     .tooltip = "Selects the strength of the game's custom scene grading.",
     .max = 100.f,
     .parse = [](float value) { return value * 0.01f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "fxBloom",
-    .binding = &shaderInjection.fxBloom,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.fxBloom,
+    .default_value = 50.f,
     .label = "Bloom",
     .section = "Effects",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "fxVignette",
-    .binding = &shaderInjection.fxVignette,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.fxVignette,
+    .default_value = 50.f,
     .label = "Vignette",
     .section = "Effects",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "fxFilmGrain",
-    .binding = &shaderInjection.fxFilmGrain,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.fxFilmGrain,
+    .default_value = 50.f,
     .label = "Custom Film Grain",
     .section = "Effects",
     .tooltip = "Adjusts the strength of the custom perceptual film grain",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "processingLUTCorrection",
-    .binding = &shaderInjection.processingLUTCorrection,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.processingLUTCorrection,
+    .default_value = 50.f,
     .label = "LUT Correction",
     .section = "Processing",
     .tooltip = "Selects the strength of LUT correction process when color grading LUTs are not full range.",
     .max = 100.f,
     .parse = [](float value) { return value * 0.01f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "processingLUTOrder",
-    .binding = &shaderInjection.processingLUTOrder,
-    .valueType = UserSettingUtil::UserSettingValueType::integer,
-    .defaultValue = 1.f,
+    .binding = &shader_injection.processingLUTOrder,
+    .value_type = renodx::utils::user_settings::UserSettingValueType::INTEGER,
+    .default_value = 1.f,
     .label = "LUT Order",
     .section = "Processing",
     .tooltip = "Selects whether to force when color grading LUTs are applied.",
     .labels = {"Before Tone Map", "Vanilla", "After Tone Map" },
     .parse = [](float value) { return value - 1.f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "processingInternalSampling",
-    .binding = &shaderInjection.processingInternalSampling,
-    .valueType = UserSettingUtil::UserSettingValueType::integer,
-    .defaultValue = 1.f,
+    .binding = &shader_injection.processingInternalSampling,
+    .value_type = renodx::utils::user_settings::UserSettingValueType::INTEGER,
+    .default_value = 1.f,
     .label = "Internal Sampling",
     .section = "Processing",
     .tooltip = "Selects whether to use the vanilla sampling or PQ for the game's internal rendering LUT.",
@@ -241,43 +240,52 @@ UserSettingUtil::UserSettings userSettings = {
 
 // clang-format on
 
-static void onPresetOff() {
-  UserSettingUtil::updateUserSetting("toneMapType", 0);
-  UserSettingUtil::updateUserSetting("toneMapPeakNits", 1000.f);
-  UserSettingUtil::updateUserSetting("toneMapGameNits", 203.f);
-  UserSettingUtil::updateUserSetting("toneMapGammaCorrection", 0);
-  UserSettingUtil::updateUserSetting("colorGradeExposure", 1.f);
-  UserSettingUtil::updateUserSetting("colorGradeHighlights", 50.f);
-  UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
-  UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);
-  UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
-  UserSettingUtil::updateUserSetting("colorGradeWhitePoint", 1);
-  UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
-  UserSettingUtil::updateUserSetting("colorGradeSceneGrading", 100.f);
-  UserSettingUtil::updateUserSetting("fxBloom", 50.f);
-  UserSettingUtil::updateUserSetting("fxVignette", 50.f);
-  UserSettingUtil::updateUserSetting("fxFilmGrain", 0.f);
-  UserSettingUtil::updateUserSetting("processingLUTCorrection", 0.f);
-  UserSettingUtil::updateUserSetting("processingLUTOrder", 1.f);
-  UserSettingUtil::updateUserSetting("processingInternalSampling", 0.f);
+void OnPresetOff() {
+  renodx::utils::user_settings::UpdateUserSetting("toneMapType", 0);
+  renodx::utils::user_settings::UpdateUserSetting("toneMapPeakNits", 1000.f);
+  renodx::utils::user_settings::UpdateUserSetting("toneMapGameNits", 203.f);
+  renodx::utils::user_settings::UpdateUserSetting("toneMapGammaCorrection", 0);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeExposure", 1.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeHighlights", 50.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeShadows", 50.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeContrast", 50.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeSaturation", 50.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeWhitePoint", 1);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeLUTStrength", 100.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeSceneGrading", 100.f);
+  renodx::utils::user_settings::UpdateUserSetting("fxBloom", 50.f);
+  renodx::utils::user_settings::UpdateUserSetting("fxVignette", 50.f);
+  renodx::utils::user_settings::UpdateUserSetting("fxFilmGrain", 0.f);
+  renodx::utils::user_settings::UpdateUserSetting("processingLUTCorrection", 0.f);
+  renodx::utils::user_settings::UpdateUserSetting("processingLUTOrder", 1.f);
+  renodx::utils::user_settings::UpdateUserSetting("processingInternalSampling", 0.f);
 }
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
-  switch (fdwReason) {
-    case DLL_PROCESS_ATTACH:
-      ShaderReplaceMod::expectedConstantBufferIndex = 14;
+}  // namespace
 
-      if (!reshade::register_addon(hModule)) return FALSE;
+// NOLINTBEGIN(readability-identifier-naming)
+
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
+extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Cyberpunk2077";
+
+// NOLINTEND(readability-identifier-naming)
+
+BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
+  switch (fdw_reason) {
+    case DLL_PROCESS_ATTACH:
+      renodx::mods::shader::expected_constant_buffer_index = 14;
+
+      if (!reshade::register_addon(h_module)) return FALSE;
 
       break;
     case DLL_PROCESS_DETACH:
-      reshade::unregister_addon(hModule);
+      reshade::unregister_addon(h_module);
       break;
   }
 
-  UserSettingUtil::use(fdwReason, &userSettings, &onPresetOff);
+  renodx::utils::user_settings::Use(fdw_reason, &user_settings, &OnPresetOff);
 
-  ShaderReplaceMod::use(fdwReason, customShaders, &shaderInjection);
+  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
 }

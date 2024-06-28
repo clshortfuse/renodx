@@ -6,6 +6,8 @@
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
+#define DEBUG_LEVEL_1
+// #define DEBUG_LEVEL_2
 
 #include <embed/0x4D868A70.h>
 #include <embed/0x8DAE8683.h>
@@ -28,119 +30,118 @@
 #include "../../utils/userSettingUtil.hpp"
 #include "./shared.h"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Hi-Fi Rush";
+namespace {
 
-ShaderReplaceMod::CustomShaders customShaders = {
+renodx::mods::shader::CustomShaders custom_shaders = {
   CustomShaderEntry(0xC3126A03),
-  CustomShaderEntry(0xF6E7E494),
-  CustomShaderEntry(0xC6FA129B),
-  CustomShaderEntry(0x9F3842A8),
-  CustomShaderEntry(0x93269875),
-  CustomShaderEntry(0xE3729F07),
-  CustomShaderEntry(0x8DAE8683),
-  CustomShaderEntry(0x4D868A70),
-  CustomShaderEntry(0xBEB7EB31),
-  CustomShaderEntry(0xC916AF3F),
-  CustomShaderEntry(0xCF3E9D48),
-  CustomShaderEntry(0xFD6093D2)
+  // CustomShaderEntry(0xF6E7E494),
+  // CustomShaderEntry(0xC6FA129B),
+  // CustomShaderEntry(0x9F3842A8),
+  // CustomShaderEntry(0x93269875),
+  // CustomShaderEntry(0xE3729F07),
+  // CustomShaderEntry(0x8DAE8683),
+  // CustomShaderEntry(0x4D868A70),
+  // CustomShaderEntry(0xBEB7EB31),
+  // CustomShaderEntry(0xC916AF3F),
+  // CustomShaderEntry(0xCF3E9D48),
+  // CustomShaderEntry(0xFD6093D2)
 };
 
-ShaderInjectData shaderInjection;
+ShaderInjectData shader_injection;
 
 // clang-format off
-UserSettingUtil::UserSettings userSettings = {
-  new UserSettingUtil::UserSetting {
+renodx::utils::user_settings::UserSettings user_settings = {
+  new renodx::utils::user_settings::UserSetting {
     .key = "toneMapType",
-    .binding = &shaderInjection.toneMapType,
-    .valueType = UserSettingUtil::UserSettingValueType::integer,
-    .defaultValue = 3.f,
-    .canReset = false,
+    .binding = &shader_injection.toneMapType,
+    .value_type = renodx::utils::user_settings::UserSettingValueType::INTEGER,
+    .default_value = 3.f,
+    .can_reset = false,
     .label = "Tone Mapper",
     .section = "Tone Mapping",
     .tooltip = "Sets the tone mapper type",
     .labels = {"Vanilla", "None", "ACES", "RenoDX" }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "toneMapPeakNits",
-    .binding = &shaderInjection.toneMapPeakNits,
-    .defaultValue = 1000.f,
-    .canReset = false,
+    .binding = &shader_injection.toneMapPeakNits,
+    .default_value = 1000.f,
+    .can_reset = false,
     .label = "Peak Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the value of peak white in nits",
     .min = 48.f,
     .max = 4000.f
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "toneMapGameNits",
-    .binding = &shaderInjection.toneMapGameNits,
-    .defaultValue = 203.f,
+    .binding = &shader_injection.toneMapGameNits,
+    .default_value = 203.f,
     .label = "Game Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the value of 100%% white in nits",
     .min = 48.f,
     .max = 500.f
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "toneMapUINits",
-    .binding = &shaderInjection.toneMapUINits,
-    .defaultValue = 203.f,
+    .binding = &shader_injection.toneMapUINits,
+    .default_value = 203.f,
     .label = "UI Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the brightness of UI and HUD elements in nits",
     .min = 48.f,
     .max = 500.f
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeExposure",
-    .binding = &shaderInjection.colorGradeExposure,
-    .defaultValue = 1.f,
+    .binding = &shader_injection.colorGradeExposure,
+    .default_value = 1.f,
     .label = "Exposure",
     .section = "Color Grading",
     .max = 10.f,
     .format = "%.2f"
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeHighlights",
-    .binding = &shaderInjection.colorGradeHighlights,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.colorGradeHighlights,
+    .default_value = 50.f,
     .label = "Highlights",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeShadows",
-    .binding = &shaderInjection.colorGradeShadows,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.colorGradeShadows,
+    .default_value = 50.f,
     .label = "Shadows",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeContrast",
-    .binding = &shaderInjection.colorGradeContrast,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.colorGradeContrast,
+    .default_value = 50.f,
     .label = "Contrast",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeSaturation",
-    .binding = &shaderInjection.colorGradeSaturation,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.colorGradeSaturation,
+    .default_value = 50.f,
     .label = "Saturation",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "fxBloom",
-    .binding = &shaderInjection.fxBloom,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.fxBloom,
+    .default_value = 50.f,
     .label = "Bloom",
     .section = "Effects",
     .max = 100.f,
@@ -150,38 +151,55 @@ UserSettingUtil::UserSettings userSettings = {
 
 // clang-format on
 
-static void onPresetOff() {
-  UserSettingUtil::updateUserSetting("toneMapType", 0.f);
-  UserSettingUtil::updateUserSetting("toneMapPeakNits", 203.f);
-  UserSettingUtil::updateUserSetting("toneMapGameNits", 203.f);
-  UserSettingUtil::updateUserSetting("toneMapUINits", 203.f);
-  UserSettingUtil::updateUserSetting("colorGradeExposure", 1.f);
-  UserSettingUtil::updateUserSetting("colorGradeHighlights", 50.f);
-  UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
-  UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);
-  UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
-  UserSettingUtil::updateUserSetting("fxBloom", 50.f);
+void OnPresetOff() {
+  renodx::utils::user_settings::UpdateUserSetting("toneMapType", 0.f);
+  renodx::utils::user_settings::UpdateUserSetting("toneMapPeakNits", 203.f);
+  renodx::utils::user_settings::UpdateUserSetting("toneMapGameNits", 203.f);
+  renodx::utils::user_settings::UpdateUserSetting("toneMapUINits", 203.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeExposure", 1.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeHighlights", 50.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeShadows", 50.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeContrast", 50.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeSaturation", 50.f);
+  renodx::utils::user_settings::UpdateUserSetting("fxBloom", 50.f);
 }
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
-  switch (fdwReason) {
+}  // namespace
+
+// NOLINTBEGIN(readability-identifier-naming)
+
+extern "C" __declspec(dllexport) const char* name = "RenoDX";
+extern "C" __declspec(dllexport) const char* description = "RenoDX for Hi-Fi Rush";
+
+// NOLINTEND(readability-identifier-naming)
+
+BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
+  switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
-      if (!reshade::register_addon(hModule)) return FALSE;
-      ShaderReplaceMod::traceUnmodifiedShaders = true;
-      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
-        {reshade::api::format::b8g8r8a8_typeless, reshade::api::format::r16g16b16a16_typeless}
+      if (!reshade::register_addon(h_module)) return FALSE;
+      // renodx::mods::shader::trace_unmodified_shaders = true;
+      // renodx::mods::shader::allowMultiplePushConstants = true;
+      // renodx::mods::shader::expected_constant_buffer_index = 1;
+      // renodx::mods::shader::usePipelineLayoutCloning = true;
+
+      // renodx::mods::swapchain::setUseHDR10(true);
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
+        {//
+         .old_format = reshade::api::format::b8g8r8a8_typeless,
+         .new_format = reshade::api::format::r16g16b16a16_typeless
+        }
       );
       break;
     case DLL_PROCESS_DETACH:
-      reshade::unregister_addon(hModule);
+      reshade::unregister_addon(h_module);
       break;
   }
 
-  UserSettingUtil::use(fdwReason, &userSettings, &onPresetOff);
+  renodx::utils::user_settings::Use(fdw_reason, &user_settings, &OnPresetOff);
 
-  SwapChainUpgradeMod::use(fdwReason);
+  renodx::mods::swapchain::Use(fdw_reason);
 
-  ShaderReplaceMod::use(fdwReason, customShaders, &shaderInjection);
+  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
 }

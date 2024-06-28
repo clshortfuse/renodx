@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-FILE* open_or_exit(const char* fname, const char* mode) {
+FILE* OpenOrExit(const char* fname, const char* mode) {
   FILE* f = fopen(fname, mode);
   if (f == NULL) {
     perror(fname);
@@ -10,18 +10,19 @@ FILE* open_or_exit(const char* fname, const char* mode) {
   return f;
 }
 
-const char* GetFileNameFromPath(const char* _buffer)
-{
-    char c;
-    int  i;
-    for (i = 0; ;++i) {
-        c = *((char*)_buffer+i);
-        if (c == '\\' || c == '/')
-            return GetFileNameFromPath((char*)_buffer + i + 1);
-        if (c == '\0')
-            return _buffer;
+const char* GetFileNameFromPath(const char* buffer) {
+  char c;
+  int i;
+  for (i = 0;; ++i) {
+    c = *((char*)buffer + i);
+    if (c == '\\' || c == '/') {
+      return GetFileNameFromPath((char*)buffer + i + 1);
     }
-    return "";
+    if (c == '\0') {
+      return buffer;
+    }
+  }
+  return "";
 }
 
 int main(int argc, char** argv) {
@@ -33,14 +34,14 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
 
-  FILE* in = open_or_exit(argv[1], "rb");
+  FILE* in = OpenOrExit(argv[1], "rb");
   const char* sym = argv[2];
 
   char symfile[256];
   snprintf(symfile, sizeof(symfile), "%s.h", sym);
   char* symbasename = GetFileNameFromPath(sym);
 
-  FILE* out = open_or_exit(symfile, "wt");
+  FILE* out = OpenOrExit(symfile, "wt");
   fprintf(out, "#ifndef _%s_EMBED_FILE\n", symbasename);
   fprintf(out, "#define _%s_EMBED_FILE\n", symbasename);
   fprintf(out, "#include <cstdint>\n");

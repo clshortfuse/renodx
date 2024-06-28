@@ -7,6 +7,7 @@
 
 // #define DEBUG_LEVEL_0
 // #define DEBUG_LEVEL_1
+// #define DEBUG_LEVEL_2
 
 #include <embed/0x054D0CB8.h>
 #include <embed/0x0A152BB1.h>
@@ -31,10 +32,9 @@
 #include "../../utils/userSettingUtil.hpp"
 #include "./shared.h"
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Starfield";
+namespace {
 
-ShaderReplaceMod::CustomShaders customShaders = {
+renodx::mods::shader::CustomShaders custom_shaders = {
   CustomSwapchainShader(0x0D5ADD1F),  // output
   CustomShaderEntry(0xAC5319C5),      // film grain
   CustomShaderEntry(0x0A152BB1),      // HDRComposite
@@ -49,151 +49,151 @@ ShaderReplaceMod::CustomShaders customShaders = {
   CustomShaderEntry(0x32580F53)  // movie,
 };
 
-ShaderInjectData shaderInjection;
+ShaderInjectData shader_injection;
 
 // clang-format off
-UserSettingUtil::UserSettings userSettings = {
-  new UserSettingUtil::UserSetting {
+renodx::utils::user_settings::UserSettings user_settings = {
+  new renodx::utils::user_settings::UserSetting {
     .key = "toneMapType",
-    .binding = &shaderInjection.toneMapType,
-    .valueType = UserSettingUtil::UserSettingValueType::integer,
-    .defaultValue = 3.f,
-    .canReset = false,
+    .binding = &shader_injection.toneMapType,
+    .value_type = renodx::utils::user_settings::UserSettingValueType::INTEGER,
+    .default_value = 3.f,
+    .can_reset = false,
     .label = "Tone Mapper",
     .section = "Tone Mapping",
     .tooltip = "Sets the tone mapper type",
     .labels = {"Vanilla", "None", "ACES", "RenoDRT"}
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "toneMapPeakNits",
-    .binding = &shaderInjection.toneMapPeakNits,
-    .defaultValue = 1000.f,
-    .canReset = false,
+    .binding = &shader_injection.toneMapPeakNits,
+    .default_value = 1000.f,
+    .can_reset = false,
     .label = "Peak Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the value of peak white in nits",
     .min = 48.f,
     .max = 4000.f
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "toneMapGameNits",
-    .binding = &shaderInjection.toneMapGameNits,
-    .defaultValue = 203.f,
-    .canReset = false,
+    .binding = &shader_injection.toneMapGameNits,
+    .default_value = 203.f,
+    .can_reset = false,
     .label = "Game Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the value of 100%% white in nits",
     .min = 48.f,
     .max = 500.f
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "toneMapUINits",
-    .binding = &shaderInjection.toneMapUINits,
-    .defaultValue = 203.f,
-    .canReset = false,
+    .binding = &shader_injection.toneMapUINits,
+    .default_value = 203.f,
+    .can_reset = false,
     .label = "UI Brightness",
     .section = "Tone Mapping",
     .tooltip = "Sets the brightness of UI and HUD elements in nits",
     .min = 48.f,
     .max = 500.f
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "toneMapGammaCorrection",
-    .binding = &shaderInjection.toneMapGammaCorrection,
-    .valueType = UserSettingUtil::UserSettingValueType::integer,
-    .canReset = false,
+    .binding = &shader_injection.toneMapGammaCorrection,
+    .value_type = renodx::utils::user_settings::UserSettingValueType::INTEGER,
+    .can_reset = false,
     .label = "Gamma Correction",
     .section = "Tone Mapping",
     .tooltip = "Emulates an EOTF",
     .labels = { "Off", "2.2", "2.4"}
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeExposure",
-    .binding = &shaderInjection.colorGradeExposure,
-    .defaultValue = 1.f,
+    .binding = &shader_injection.colorGradeExposure,
+    .default_value = 1.f,
     .label = "Exposure",
     .section = "Color Grading",
     .max = 10.f,
     .format = "%.2f"
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeHighlights",
-    .binding = &shaderInjection.colorGradeHighlights,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.colorGradeHighlights,
+    .default_value = 50.f,
     .label = "Highlights",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeShadows",
-    .binding = &shaderInjection.colorGradeShadows,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.colorGradeShadows,
+    .default_value = 50.f,
     .label = "Shadows",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeContrast",
-    .binding = &shaderInjection.colorGradeContrast,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.colorGradeContrast,
+    .default_value = 50.f,
     .label = "Contrast",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeSaturation",
-    .binding = &shaderInjection.colorGradeSaturation,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.colorGradeSaturation,
+    .default_value = 50.f,
     .label = "Saturation",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeLUTStrength",
-    .binding = &shaderInjection.colorGradeLUTStrength,
-    .defaultValue = 100.f,
+    .binding = &shader_injection.colorGradeLUTStrength,
+    .default_value = 100.f,
     .label = "LUT Strength",
     .section = "Color Grading",
     .max = 100.f,
     .parse = [](float value) { return value * 0.01f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeLUTScaling",
-    .binding = &shaderInjection.colorGradeLUTScaling,
-    .defaultValue = 100.f,
+    .binding = &shader_injection.colorGradeLUTScaling,
+    .default_value = 100.f,
     .label = "LUT Scaling",
     .section = "Color Grading",
     .tooltip = "Scales the color grade LUT to full range when size is clamped.",
     .max = 100.f,
     .parse = [](float value) { return value * 0.01f; }
   },
-    new UserSettingUtil::UserSetting {
+    new renodx::utils::user_settings::UserSetting {
     .key = "colorGradeSceneGrading",
-    .binding = &shaderInjection.colorGradeSceneGrading,
-    .defaultValue = 100.f,
+    .binding = &shader_injection.colorGradeSceneGrading,
+    .default_value = 100.f,
     .label = "Scene Grading",
     .section = "Color Grading",
     .tooltip = "Selects the strength of the game's custom scene grading.",
     .max = 100.f,
     .parse = [](float value) { return value * 0.01f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "fxBloom",
-    .binding = &shaderInjection.fxBloom,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.fxBloom,
+    .default_value = 50.f,
     .label = "Bloom",
     .section = "Effects",
     .max = 100.f,
     .parse = [](float value) { return value * 0.02f; }
   },
-  new UserSettingUtil::UserSetting {
+  new renodx::utils::user_settings::UserSetting {
     .key = "fxFilmGrain",
-    .binding = &shaderInjection.fxFilmGrain,
-    .defaultValue = 50.f,
+    .binding = &shader_injection.fxFilmGrain,
+    .default_value = 50.f,
     .label = "FilmGrain",
     .section = "Effects",
     .max = 100.f,
@@ -203,88 +203,87 @@ UserSettingUtil::UserSettings userSettings = {
 
 // clang-format on
 
-static void onPresetOff() {
-  UserSettingUtil::updateUserSetting("toneMapType", 0.f);
-  UserSettingUtil::updateUserSetting("toneMapPeakNits", 203.f);
-  UserSettingUtil::updateUserSetting("toneMapGameNits", 203.f);
-  UserSettingUtil::updateUserSetting("toneMapUINits", 203.f);
-  UserSettingUtil::updateUserSetting("toneMapGammaCorrection", 0);
-  UserSettingUtil::updateUserSetting("colorGradeExposure", 1.f);
-  UserSettingUtil::updateUserSetting("colorGradeHighlights", 50.f);
-  UserSettingUtil::updateUserSetting("colorGradeShadows", 50.f);
-  UserSettingUtil::updateUserSetting("colorGradeContrast", 50.f);
-  UserSettingUtil::updateUserSetting("colorGradeSaturation", 50.f);
-  UserSettingUtil::updateUserSetting("colorGradeLUTStrength", 100.f);
-  UserSettingUtil::updateUserSetting("colorGradeLUTScaling", 0.f);
-  // UserSettingUtil::updateUserSetting("colorGradeLUTScaling", 0.f);
+void OnPresetOff() {
+  renodx::utils::user_settings::UpdateUserSetting("toneMapType", 0.f);
+  renodx::utils::user_settings::UpdateUserSetting("toneMapPeakNits", 203.f);
+  renodx::utils::user_settings::UpdateUserSetting("toneMapGameNits", 203.f);
+  renodx::utils::user_settings::UpdateUserSetting("toneMapUINits", 203.f);
+  renodx::utils::user_settings::UpdateUserSetting("toneMapGammaCorrection", 0);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeExposure", 1.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeHighlights", 50.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeShadows", 50.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeContrast", 50.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeSaturation", 50.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeLUTStrength", 100.f);
+  renodx::utils::user_settings::UpdateUserSetting("colorGradeLUTScaling", 0.f);
+  // renodx::utils::user_settings::UpdateUserSetting("colorGradeLUTScaling", 0.f);
 }
 
-static bool handlePreDraw(reshade::api::command_list* cmd_list, bool isDispatch = false) {
-  ShaderUtil::CommandListData &shaderState = cmd_list->get_private_data<ShaderUtil::CommandListData>();
+bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = false) {
+  const auto &shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
 
   // flow
   // 0x0a152bb1 (tonemapper) (r11g11b10 => rgb8a_unorm tRender)
   // 0x17FAB08F (sharpen?)   (rgb8a_unorm tRender => rgb8a_unorm tComposite)
   // 0xe9d9e225 (ui)         (rgb8a_unorm tUI => rgb8a_unorm tComposite)
   if (
-    !isDispatch
-    && (shaderState.pixelShaderHash == 0x0a152bb1     // tonemapper
-        || shaderState.pixelShaderHash == 0x054D0CB8  // tonemapper
-        || shaderState.pixelShaderHash == 0x3B344832  // tonemapper
-        || shaderState.pixelShaderHash == 0x17fab08f  // sharpener
-        || shaderState.pixelShaderHash == 0x32580F53  // movie
-        || shaderState.pixelShaderHash == 0xe9d9e225  // ui
-        || shaderState.pixelShaderHash == 0x0d5add1f  // copy
+    !is_dispatch
+    && (shader_state.pixel_shader_hash == 0x0a152bb1     // tonemapper
+        || shader_state.pixel_shader_hash == 0x054D0CB8  // tonemapper
+        || shader_state.pixel_shader_hash == 0x3B344832  // tonemapper
+        || shader_state.pixel_shader_hash == 0x17fab08f  // sharpener
+        || shader_state.pixel_shader_hash == 0x32580F53  // movie
+        || shader_state.pixel_shader_hash == 0xe9d9e225  // ui
+        || shader_state.pixel_shader_hash == 0x0d5add1f  // copy
     )
   ) {
-    SwapchainUtil::CommandListData &swapchainState = cmd_list->get_private_data<SwapchainUtil::CommandListData>();
+    auto &swapchain_state = cmd_list->get_private_data<renodx::utils::swapchain::CommandListData>();
 
     bool changed = false;
-    uint32_t renderTargetCount = swapchainState.currentRenderTargets.size();
-    for (uint32_t i = 0; i < renderTargetCount; i++) {
-      auto render_target = swapchainState.currentRenderTargets[i];
+    const uint32_t render_target_count = swapchain_state.current_render_targets.size();
+    for (uint32_t i = 0; i < render_target_count; i++) {
+      auto render_target = swapchain_state.current_render_targets[i];
       if (render_target.handle == 0) continue;
-      std::stringstream s;
-      if (SwapChainUpgradeMod::activateCloneHotSwap(cmd_list->get_device(), render_target)) {
+      if (renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), render_target)) {
         changed = true;
       }
     }
     if (changed) {
       // Change render targets to desired
-      SwapChainUpgradeMod::rewriteRenderTargets(
+      renodx::mods::swapchain::RewriteRenderTargets(
         cmd_list,
-        renderTargetCount,
-        swapchainState.currentRenderTargets.data(),
-        swapchainState.currentDepthStencil
+        render_target_count,
+        swapchain_state.current_render_targets.data(),
+        swapchain_state.current_depth_stencil
       );
-      SwapChainUpgradeMod::flushDescriptors(cmd_list);
+      renodx::mods::swapchain::FlushDescriptors(cmd_list);
     }
   } else {
-    SwapChainUpgradeMod::discardDescriptors(cmd_list);
+    renodx::mods::swapchain::DiscardDescriptors(cmd_list);
   }
 
   return false;
 }
 
-static bool on_draw(reshade::api::command_list* cmd_list, uint32_t vertex_count, uint32_t instance_count, uint32_t first_vertex, uint32_t first_instance) {
-  return handlePreDraw(cmd_list);
+bool OnDraw(reshade::api::command_list* cmd_list, uint32_t vertex_count, uint32_t instance_count, uint32_t first_vertex, uint32_t first_instance) {
+  return HandlePreDraw(cmd_list);
 }
 
-static bool on_draw_indexed(reshade::api::command_list* cmd_list, uint32_t index_count, uint32_t instance_count, uint32_t first_index, int32_t vertex_offset, uint32_t first_instance) {
-  return handlePreDraw(cmd_list);
+bool OnDrawIndexed(reshade::api::command_list* cmd_list, uint32_t index_count, uint32_t instance_count, uint32_t first_index, int32_t vertex_offset, uint32_t first_instance) {
+  return HandlePreDraw(cmd_list);
 }
 
-static bool on_draw_or_dispatch_indirect(reshade::api::command_list* cmd_list, reshade::api::indirect_command type, reshade::api::resource buffer, uint64_t offset, uint32_t draw_count, uint32_t stride) {
-  return handlePreDraw(cmd_list);
+bool OnDrawOrDispatchIndirect(reshade::api::command_list* cmd_list, reshade::api::indirect_command type, reshade::api::resource buffer, uint64_t offset, uint32_t draw_count, uint32_t stride) {
+  return HandlePreDraw(cmd_list);
 }
 
-static bool on_dispatch(reshade::api::command_list* cmd_list, uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z) {
-  return handlePreDraw(cmd_list, true);
+bool OnDispatch(reshade::api::command_list* cmd_list, uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z) {
+  return HandlePreDraw(cmd_list, true);
 }
 
-static auto start = std::chrono::steady_clock::now();
+auto timestamp_start = std::chrono::steady_clock::now();
 
-static void on_present(
+void OnPresent(
   reshade::api::command_queue* queue,
   reshade::api::swapchain* swapchain,
   const reshade::api::rect* source_rect,
@@ -292,62 +291,77 @@ static void on_present(
   uint32_t dirty_rect_count,
   const reshade::api::rect* dirty_rects
 ) {
-  auto end = std::chrono::steady_clock::now();
-  shaderInjection.elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+  auto timestamp_end = std::chrono::steady_clock::now();
+  shader_injection.elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(timestamp_end - timestamp_start).count();
 }
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID) {
-  if (fdwReason == DLL_PROCESS_ATTACH && !reshade::register_addon(hModule)) return FALSE;
+}  // namespace
 
-  switch (fdwReason) {
+// NOLINTBEGIN(readability-identifier-naming)
+
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
+extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Starfield";
+
+// NOLINTEND(readability-identifier-naming)
+
+BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
+  if (fdw_reason == DLL_PROCESS_ATTACH && !reshade::register_addon(h_module)) return FALSE;
+
+  switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
-      ShaderReplaceMod::forcePipelineCloning = true;
-      ShaderReplaceMod::allowMultiplePushConstants = true;
-      // ShaderReplaceMod::expectedConstantBufferIndex = 3;
-      ShaderReplaceMod::expectedConstantBufferSpace = 9;
-      SwapChainUpgradeMod::useResourceCloning = true;
-      SwapChainUpgradeMod::useResizeBuffer = true;
-      SwapChainUpgradeMod::useResizeBufferOnSetFullScreen = true;
-      SwapChainUpgradeMod::preventFullScreen = true;
+      renodx::mods::shader::force_pipeline_cloning = true;
+      renodx::mods::shader::allow_multiple_push_constants = true;
+      // renodx::mods::shader::expected_constant_buffer_index = 3;
+      renodx::mods::shader::expected_constant_buffer_space = 9;
+      renodx::mods::swapchain::use_resource_cloning = true;
+      // renodx::mods::swapchain::use_resize_buffer = true;
+      // renodx::mods::swapchain::use_resize_bufferOnSetFullScreen = true;
+      renodx::mods::swapchain::prevent_full_screen = true;
 
       // RGBA8 Resource pool
-      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
         {
-          .oldFormat = reshade::api::format::r8g8b8a8_typeless,
-          .newFormat = reshade::api::format::r16g16b16a16_float,
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_float,
           .index = 0,
-          .useResourceViewCloning = true,
-          .useResourceViewHotSwap = false,
+          .use_resource_view_cloning = true,
+          .use_resource_view_hot_swap = false,
         }
       );
 
-      SwapChainUpgradeMod::swapChainUpgradeTargets.push_back(
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
         {
-          .oldFormat = reshade::api::format::r8g8b8a8_typeless,
-          .newFormat = reshade::api::format::r16g16b16a16_float,
-          .ignoreSize = true,
-          .useResourceViewCloning = true,
-          .useResourceViewHotSwap = true,
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          // .ignore_size = true,
+          .use_resource_view_cloning = true,
+          .use_resource_view_hot_swap = true,
+        }
+      );
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
+        {
+          .old_format = reshade::api::format::r16g16b16a16_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .ignore_size = true,
         }
       );
       break;
     case DLL_PROCESS_DETACH:
-      reshade::unregister_addon(hModule);
+      reshade::unregister_addon(h_module);
       break;
   }
 
-  UserSettingUtil::use(fdwReason, &userSettings, &onPresetOff);
-  SwapChainUpgradeMod::use(fdwReason);
-  ShaderReplaceMod::use(fdwReason, customShaders, &shaderInjection);
+  renodx::utils::user_settings::Use(fdw_reason, &user_settings, &OnPresetOff);
+  renodx::mods::swapchain::Use(fdw_reason);
+  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
-  ShaderUtil::use(fdwReason);
-  if (fdwReason == DLL_PROCESS_ATTACH) {
-    reshade::register_event<reshade::addon_event::draw>(on_draw);
-    reshade::register_event<reshade::addon_event::draw_indexed>(on_draw_indexed);
-    reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(on_draw_or_dispatch_indirect);
-    reshade::register_event<reshade::addon_event::dispatch>(on_dispatch);
-
-    reshade::register_event<reshade::addon_event::present>(on_present);
+  renodx::utils::shader::Use(fdw_reason);
+  if (fdw_reason == DLL_PROCESS_ATTACH) {
+    reshade::register_event<reshade::addon_event::draw>(OnDraw);
+    reshade::register_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
+    reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
+    reshade::register_event<reshade::addon_event::dispatch>(OnDispatch);
+    reshade::register_event<reshade::addon_event::present>(OnPresent);
   }
 
   return TRUE;

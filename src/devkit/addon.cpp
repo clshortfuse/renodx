@@ -38,23 +38,16 @@
 #define ICON_FK_REFRESH u8"\uf021"
 #define ICON_FK_FLOPPY  u8"\uf0c7"
 
-// NOLINTBEGIN(readability-identifier-naming)
-
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX DevKit";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX DevKit Module";
-
-// NOLINTEND(readability-identifier-naming)
-
 namespace {
 struct CachedPipeline {
   reshade::api::pipeline pipeline;
   reshade::api::device* device;
   reshade::api::pipeline_layout layout;
-  reshade::api::pipeline_subobject* subobjectsCache;
+  reshade::api::pipeline_subobject* subobjects_cache;
   uint32_t subobject_count;
   bool cloned;
   reshade::api::pipeline pipeline_clone;
-  std::filesystem::path hlslPath;
+  std::filesystem::path hlsl_path;
   uint32_t shader_hash;
 };
 
@@ -62,7 +55,7 @@ struct InstructionState {
   reshade::addon_event action;
   std::vector<uint64_t> textures;
   std::vector<uint64_t> uavs;
-  std::vector<uint64_t> renderTargets;
+  std::vector<uint64_t> render_targets;
   uint32_t shader;
 };
 
@@ -77,10 +70,10 @@ std::shared_mutex s_mutex;
 
 struct __declspec(uuid("3b70b2b2-52dc-4637-bd45-c1171c4c322e")) DeviceData {
   // <resource.handle, resource_view.handle>
-  std::unordered_map<uint64_t, uint64_t> resourceViews;
+  std::unordered_map<uint64_t, uint64_t> resource_views;
   // <resource.handle, vector<resource_view.handle>>
-  std::unordered_map<uint64_t, std::vector<uint64_t>> resourceViewsByResource;
-  std::unordered_map<uint64_t, std::string> resourceNames;
+  std::unordered_map<uint64_t, std::vector<uint64_t>> resource_views_by_resource;
+  std::unordered_map<uint64_t, std::string> resource_names;
   std::unordered_set<uint64_t> resources;
   std::shared_mutex mutex;
   reshade::api::device_api device_api;
@@ -144,8 +137,8 @@ inline void GetD3DName(ID3D12Resource* obj, std::string &name) {
 
 uint64_t GetResourceByViewHandle(DeviceData &data, uint64_t handle) {
   if (
-    auto pair = data.resourceViews.find(handle);
-    pair != data.resourceViews.end()
+    auto pair = data.resource_views.find(handle);
+    pair != data.resource_views.end()
   ) return pair->second;
 
   return 0;
@@ -158,8 +151,8 @@ std::string GetResourceNameByViewHandle(DeviceData &data, uint64_t handle) {
   if (!data.resources.contains(resource_handle)) return "?";
 
   if (
-    auto pair = data.resourceNames.find(resource_handle);
-    pair != data.resourceNames.end()
+    auto pair = data.resource_names.find(resource_handle);
+    pair != data.resource_names.end()
   ) return pair->second;
 
   std::string name;
@@ -173,7 +166,7 @@ std::string GetResourceNameByViewHandle(DeviceData &data, uint64_t handle) {
     name = "?";
   }
   if (!name.empty()) {
-    data.resourceNames[resource_handle] = name;
+    data.resource_names[resource_handle] = name;
   }
   return name;
 }
@@ -258,7 +251,7 @@ void LoadCustomShaders() {
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
       }
 
-      code = ShaderCompilerUtil::compileShaderFromFile(
+      code = renodx::utils::shader::compiler::CompileShaderFromFile(
         entry_path.c_str(),
         shader_target.c_str()
       );
@@ -323,9 +316,9 @@ void LoadCustomShaders() {
     CachedPipeline* cached_pipeline = pair->second;
 
     if (is_hlsl) {
-      cached_pipeline->hlslPath = entry_path;
+      cached_pipeline->hlsl_path = entry_path;
     } else {
-      cached_pipeline->hlslPath = "";
+      cached_pipeline->hlsl_path = "";
     }
 
     {
@@ -340,8 +333,8 @@ void LoadCustomShaders() {
     // DX12 can use PSO objects that need to be cloned
 
     const uint32_t subobject_count = cached_pipeline->subobject_count;
-    reshade::api::pipeline_subobject* subobjects = cached_pipeline->subobjectsCache;
-    reshade::api::pipeline_subobject* new_subobjects = PipelineUtil::clonePipelineSubObjects(subobject_count, subobjects);
+    reshade::api::pipeline_subobject* subobjects = cached_pipeline->subobjects_cache;
+    reshade::api::pipeline_subobject* new_subobjects = renodx::utils::pipeline::ClonePipelineSubObjects(subobject_count, subobjects);
 
     {
       std::stringstream s;
@@ -456,7 +449,7 @@ std::aligned_storage_t<1U << 18, std::max<size_t>(alignof(FILE_NOTIFY_EXTENDED_I
 
 void ToggleLiveWatching();
 
-void CALLBACK HandleEventCallback(DWORD errorCode, DWORD bytesTransferred, LPOVERLAPPED overlapped) {
+void CALLBACK HandleEventCallback(DWORD error_code, DWORD bytes_transferred, LPOVERLAPPED overlapped) {
   reshade::log_message(reshade::log_level::info, "Live callback.");
   LoadCustomShaders();
   ToggleLiveWatching();
@@ -824,7 +817,7 @@ void OnInitPipeline(
     return;
   }
 
-  reshade::api::pipeline_subobject* new_subobjects = PipelineUtil::clonePipelineSubObjects(subobject_count, subobjects);
+  reshade::api::pipeline_subobject* new_subobjects = renodx::utils::pipeline::ClonePipelineSubObjects(subobject_count, subobjects);
 
   auto* cached_pipeline = new CachedPipeline{
     pipeline,
@@ -1046,7 +1039,7 @@ void ResetInstructionState() {
   const InstructionState old_state = instructions.at(count - 1);
   instructions.resize(count + 1);
   InstructionState new_state = instructions.at(count);
-  new_state.renderTargets = old_state.renderTargets;
+  new_state.render_targets = old_state.render_targets;
   new_state.textures = old_state.textures;
   new_state.shader = old_state.shader;
 }
@@ -1384,7 +1377,7 @@ void OnInitResourceView(
 ) {
   auto &data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
-  if (data.resourceViews.contains(view.handle)) {
+  if (data.resource_views.contains(view.handle)) {
     if (trace_running || present_count < MAX_PRESENT_COUNT) {
       std::stringstream s;
       s << "init_resource_view(reused view: "
@@ -1393,12 +1386,12 @@ void OnInitResourceView(
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
     if (resource.handle == 0) {
-      data.resourceViews.erase(view.handle);
+      data.resource_views.erase(view.handle);
       return;
     }
   }
   if (resource.handle != 0) {
-    data.resourceViews.emplace(view.handle, resource.handle);
+    data.resource_views.emplace(view.handle, resource.handle);
   }
 
   if (!force_all && !trace_running && present_count >= MAX_PRESENT_COUNT) return;
@@ -1451,7 +1444,7 @@ void OnDestroyResourceView(reshade::api::device* device, reshade::api::resource_
 
   auto &data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
-  data.resourceViews.erase(view.handle);
+  data.resource_views.erase(view.handle);
 }
 
 void OnPushDescriptors(
@@ -1564,14 +1557,14 @@ void OnBindDescriptorTables(
     device->get_descriptor_heap_offset(tables[i], 0, 0, &heap, &base_offset);
     s << ", heap: " << reinterpret_cast<void*>(heap.handle) << "[" << base_offset << "]";
 
-    auto &descriptor_data = device->get_private_data<DescriptorTableUtil::DeviceData>();
+    auto &descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
     const std::shared_lock decriptor_lock(descriptor_data.mutex);
     for (uint32_t j = 0; j < 13; ++j) {
       auto origin_primary_key = std::pair<uint64_t, uint32_t>(tables[i].handle, j);
-      if (auto pair = descriptor_data.tableDescriptorResourceViews.find(origin_primary_key);
-          pair != descriptor_data.tableDescriptorResourceViews.end()) {
+      if (auto pair = descriptor_data.table_descriptor_resource_views.find(origin_primary_key);
+          pair != descriptor_data.table_descriptor_resource_views.end()) {
         auto update = pair->second;
-        auto view = DescriptorTableUtil::getResourceViewFromDescriptorUpdate(update);
+        auto view = renodx::utils::descriptor::GetResourceViewFromDescriptorUpdate(update);
         if (view.handle != 0) {
           auto &data = device->get_private_data<DeviceData>();
           const std::shared_lock lock(data.mutex);
@@ -1607,18 +1600,22 @@ bool OnCopyDescriptorTables(
 
       uint32_t base_offset = 0;
       reshade::api::descriptor_heap heap = {0};
-      device->get_descriptor_heap_offset(copy.source_table, copy.source_binding + j, copy.source_array_offset, &heap, &base_offset);
+      device->get_descriptor_heap_offset(
+        copy.source_table, copy.source_binding + j, copy.source_array_offset, &heap, &base_offset
+      );
       s << ", heap: " << reinterpret_cast<void*>(heap.handle) << "[" << base_offset << "]";
-      device->get_descriptor_heap_offset(copy.dest_table, copy.dest_binding + j, copy.dest_array_offset, &heap, &base_offset);
+      device->get_descriptor_heap_offset(
+        copy.dest_table, copy.dest_binding + j, copy.dest_array_offset, &heap, &base_offset
+      );
       s << " => " << reinterpret_cast<void*>(heap.handle) << "[" << base_offset << "]";
 
-      auto &descriptor_data = device->get_private_data<DescriptorTableUtil::DeviceData>();
+      auto &descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
       const std::shared_lock decriptor_lock(descriptor_data.mutex);
       auto origin_primary_key = std::pair<uint64_t, uint32_t>(copy.source_table.handle, copy.source_binding + j);
-      if (auto pair = descriptor_data.tableDescriptorResourceViews.find(origin_primary_key);
-          pair != descriptor_data.tableDescriptorResourceViews.end()) {
+      if (auto pair = descriptor_data.table_descriptor_resource_views.find(origin_primary_key);
+          pair != descriptor_data.table_descriptor_resource_views.end()) {
         auto update = pair->second;
-        auto view = DescriptorTableUtil::getResourceViewFromDescriptorUpdate(update);
+        auto view = renodx::utils::descriptor::GetResourceViewFromDescriptorUpdate(update);
         if (view.handle != 0) {
           auto &data = device->get_private_data<DeviceData>();
           const std::shared_lock lock(data.mutex);
@@ -1975,7 +1972,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
               auto hash = trace_hashes.at(selected_index);
               auto* cache = shader_cache.find(hash)->second;
               if (cache->disasm.empty()) {
-                auto disasm_code = ShaderCompilerUtil::disassembleShader(cache->data, cache->size);
+                auto disasm_code = renodx::utils::shader::compiler::DisassembleShader(cache->data, cache->size);
                 if (disasm_code.has_value()) {
                   cache->disasm.assign(disasm_code.value());
                 } else {
@@ -2008,9 +2005,9 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
               if (
                 auto pair = pipeline_cache_by_shader_hash.find(hash);
-                pair != pipeline_cache_by_shader_hash.end() && !pair->second->hlslPath.empty()
+                pair != pipeline_cache_by_shader_hash.end() && !pair->second->hlsl_path.empty()
               ) {
-                auto result = ReadTextFile(pair->second->hlslPath);
+                auto result = ReadTextFile(pair->second->hlsl_path);
                 if (result.has_value()) {
                   hlsl_string.assign(result.value());
                 } else {
@@ -2057,12 +2054,19 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 }
 }  // namespace
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpvReserved) {
-  switch (fdwReason) {
-    case DLL_PROCESS_ATTACH:
-      if (!reshade::register_addon(hModule)) return FALSE;
+// NOLINTBEGIN(readability-identifier-naming)
 
-      DescriptorTableUtil::use(fdwReason);
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX DevKit";
+extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX DevKit Module";
+
+// NOLINTEND(readability-identifier-naming)
+
+BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
+  switch (fdw_reason) {
+    case DLL_PROCESS_ATTACH:
+      if (!reshade::register_addon(h_module)) return FALSE;
+
+      renodx::utils::descriptor::Use(fdw_reason);
 
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
@@ -2115,7 +2119,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpvReserved) {
 
       break;
     case DLL_PROCESS_DETACH:
-      DescriptorTableUtil::use(fdwReason);
+      renodx::utils::descriptor::Use(fdw_reason);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(OnInitPipelineLayout);
 
@@ -2130,11 +2134,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpvReserved) {
 
       reshade::unregister_overlay("RenoDX (DevKit)", OnRegisterOverlay);
 
-      reshade::unregister_addon(hModule);
+      reshade::unregister_addon(h_module);
       break;
   }
 
-  // ResourceWatcher::use(fdwReason);
+  // ResourceWatcher::Use(fdwReason);
 
   return TRUE;
 }
