@@ -182,7 +182,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       }
 
       if (!reshade::register_addon(h_module)) return FALSE;
-    } break;
+      break;
+    }
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(h_module);
       break;

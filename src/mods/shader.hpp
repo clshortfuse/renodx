@@ -517,7 +517,8 @@ inline void OnPushDescriptors(
       s << ", buffer: " << reinterpret_cast<void*>(range->buffer.handle);
       s << ", offset: " << range->offset;
       s << ", size: " << range->size;
-    } break;
+      break;
+    }
     default:
       break;
   }

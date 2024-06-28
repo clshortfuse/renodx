@@ -558,7 +558,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID /*unused*/) {
       renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
       renodx::mods::swapchain::Use(fdw_reason);
       renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
-    } break;
+      break;
+    }
 
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
