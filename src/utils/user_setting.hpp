@@ -12,7 +12,7 @@
 
 #define ICON_FK_UNDO u8"\uf0e2"
 
-namespace renodx::utils::user_settings {
+namespace renodx::utils::settings {
 
 static int preset_index = 1;
 static const char* preset_strings[] = {
@@ -24,16 +24,16 @@ static const char* preset_strings[] = {
 
 static void (*on_preset_off)();
 
-enum class UserSettingValueType : uint8_t {
+enum class SettingValueType : uint8_t {
   FLOAT = 0,
   INTEGER = 1,
   BOOLEAN = 2
 };
 
-struct UserSetting {
+struct Setting {
   const char* key;
   float* binding;
-  UserSettingValueType value_type = UserSettingValueType::FLOAT;
+  SettingValueType value_type = SettingValueType::FLOAT;
   float default_value = 0.f;
   bool can_reset = true;
   const char* label = key;
@@ -55,25 +55,25 @@ struct UserSetting {
   float GetValue() const {
     switch (this->value_type) {
       default:
-      case UserSettingValueType::FLOAT:
+      case SettingValueType::FLOAT:
         return this->value;
         break;
-      case UserSettingValueType::INTEGER:
+      case SettingValueType::INTEGER:
         return static_cast<float>(this->value_as_int);
         break;
-      case UserSettingValueType::BOOLEAN:
+      case SettingValueType::BOOLEAN:
         return ((this->value_as_int == 0) ? 0.f : 1.f);
         break;
     }
   }
 
-  UserSetting* Set(float value) {
+  Setting* Set(float value) {
     this->value = value;
     this->value_as_int = static_cast<int>(value);
     return this;
   }
 
-  UserSetting* Write() {
+  Setting* Write() {
     *this->binding = this->parse(this->GetValue());
     return this;
   }
@@ -84,24 +84,24 @@ struct UserSetting {
   [[nodiscard]]
   float GetMax() const {
     switch (this->value_type) {
-      case UserSettingValueType::BOOLEAN:
+      case SettingValueType::BOOLEAN:
         return 1.f;
-      case UserSettingValueType::INTEGER:
+      case SettingValueType::INTEGER:
         return this->labels.empty()
                ? this->max
                : (this->labels.size() - 1);
-      case UserSettingValueType::FLOAT:
+      case SettingValueType::FLOAT:
       default:
         return this->max;
     }
   }
 };
 
-using UserSettings = std::vector<UserSetting*>;
-static UserSettings* user_settings = nullptr;
+using Settings = std::vector<Setting*>;
+static Settings* settings = nullptr;
 
 #define AddDebugSetting(injection, name)          \
-  new renodx::utils::user_settings::UserSetting { \
+  new renodx::utils::settings::Setting { \
     .key = "debug" #name,                         \
     .binding = &##injection.debug##name,          \
     .default_value = 1.f,                         \
@@ -111,8 +111,8 @@ static UserSettings* user_settings = nullptr;
     .format = "%.2f"                              \
   }
 
-static UserSetting* FindUserSetting(const char* key) {
-  for (auto* setting : *user_settings) {
+static Setting* FindSetting(const char* key) {
+  for (auto* setting : *settings) {
     if (strcmp(setting->key, key) == 0) {
       return setting;
     }
@@ -120,8 +120,8 @@ static UserSetting* FindUserSetting(const char* key) {
   return nullptr;
 }
 
-static bool UpdateUserSetting(const char* key, float value) {
-  auto* setting = FindUserSetting(key);
+static bool UpdateSetting(const char* key, float value) {
+  auto* setting = FindSetting(key);
   if (setting == nullptr) return false;
   setting->Set(value)->Write();
   return true;
@@ -131,10 +131,10 @@ static void LoadSettings(
   reshade::api::effect_runtime* runtime = nullptr,
   const char* section = "renodx-preset1"
 ) {
-  for (auto* setting : *user_settings) {
+  for (auto* setting : *settings) {
     switch (setting->value_type) {
       default:
-      case UserSettingValueType::FLOAT:
+      case SettingValueType::FLOAT:
         if (!reshade::get_config_value(runtime, section, setting->key, setting->value)) {
           setting->value = setting->default_value;
         }
@@ -144,8 +144,8 @@ static void LoadSettings(
           setting->value = setting->min;
         }
         break;
-      case UserSettingValueType::BOOLEAN:
-      case UserSettingValueType::INTEGER:
+      case SettingValueType::BOOLEAN:
+      case SettingValueType::INTEGER:
         if (!reshade::get_config_value(runtime, section, setting->key, setting->value_as_int)) {
           setting->value_as_int = static_cast<int>(setting->default_value);
         }
@@ -161,14 +161,14 @@ static void LoadSettings(
 }
 
 static void SaveSettings(reshade::api::effect_runtime* runtime, const char* section = "renodx-preset1") {
-  for (auto* setting : *user_settings) {
+  for (auto* setting : *settings) {
     switch (setting->value_type) {
       default:
-      case UserSettingValueType::FLOAT:
+      case SettingValueType::FLOAT:
         reshade::set_config_value(runtime, section, setting->key, setting->value);
         break;
-      case UserSettingValueType::INTEGER:
-      case UserSettingValueType::BOOLEAN:
+      case SettingValueType::INTEGER:
+      case SettingValueType::BOOLEAN:
         reshade::set_config_value(runtime, section, setting->key, setting->value_as_int);
         break;
     }
@@ -209,7 +209,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
   bool any_change = false;
   std::string last_section;
-  for (auto* setting : *user_settings) {
+  for (auto* setting : *settings) {
     if (last_section != setting->section) {
       ImGui::SeparatorText(setting->section);
       last_section.assign(setting->section);
@@ -222,7 +222,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
     }
     bool changed = false;
     switch (setting->value_type) {
-      case UserSettingValueType::FLOAT:
+      case SettingValueType::FLOAT:
         changed |= ImGui::SliderFloat(
           setting->label,
           &setting->value,
@@ -231,7 +231,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           setting->format
         );
         break;
-      case UserSettingValueType::INTEGER:
+      case SettingValueType::INTEGER:
         changed |= ImGui::SliderInt(
           setting->label,
           &setting->value_as_int,
@@ -241,7 +241,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           ImGuiSliderFlags_NoInput
         );
         break;
-      case UserSettingValueType::BOOLEAN:
+      case SettingValueType::BOOLEAN:
         changed |= ImGui::SliderInt(
           setting->label,
           &setting->value_as_int,
@@ -321,13 +321,13 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
 static bool attached = false;
 
-static void Use(DWORD fdw_reason, UserSettings* new_settings, void (*new_on_preset_off)() = nullptr) {
+static void Use(DWORD fdw_reason, Settings* new_settings, void (*new_on_preset_off)() = nullptr) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (attached) return;
       attached = true;
 
-      user_settings = new_settings;
+      settings = new_settings;
       on_preset_off = new_on_preset_off;
       LoadSettings();
       reshade::register_overlay("RenoDX", OnRegisterOverlay);
@@ -339,4 +339,4 @@ static void Use(DWORD fdw_reason, UserSettings* new_settings, void (*new_on_pres
   }
 }
 
-}  // namespace renodx::utils::user_settings
+}  // namespace renodx::utils::settings
