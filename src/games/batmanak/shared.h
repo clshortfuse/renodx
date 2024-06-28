@@ -20,6 +20,8 @@ struct ShaderInjectData {
   float fxLensFlare;
   float fxVignette;
   float fxFilmGrain;
+  float colorGradeExpandGamut;
+  float toneMapHueCorrection;
 };
 
 #ifndef __cplusplus
