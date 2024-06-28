@@ -12,12 +12,9 @@ enable_testing()
 add_executable(embedfile embedfile.c)
 add_executable(decomp ./src/decompiler/cli.cpp)
 
-if(NOT CMAKE_WINDOWS_KITS_10_DIR)
-  set(CMAKE_WINDOWS_KITS_10_DIR "C:/Program Files (x86)/Windows Kits/10")
-endif()
-if(NOT CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION)
-  set(CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION "10.0.26100.0")
-endif()
+find_program(CLANG_TIDY_BIN clang-tidy)
+find_program(FXC_BIN fxc.exe REQUIRED)
+find_program(DXC_BIN dxc.exe REQUIRED)
 
 function(inspect_hlsl_imports FILE VARIABLE)
   file(STRINGS ${FILE} HLSL_IMPORTS REGEX "^#include \"([^\"]+)\"")
@@ -46,9 +43,9 @@ function(build_shader_target ADDON ADDON_PATH)
     
     if (SHADER_HASH AND SHADER_TARGET) 
       STRING(SUBSTRING ${SHADER_TARGET} 3 1 SHADER_TARGET_MAJOR)
-      set(SHADER_BINARY "fxc.exe")
+      set(SHADER_COMPILER ${FXC_BIN})
       if (SHADER_TARGET_MAJOR EQUAL "6")
-        set(SHADER_BINARY "dxc.exe")
+        set(SHADER_COMPILER ${DXC_BIN})
         set(SHADER_FLAGS "/HV 2021")
       elseif(SHADER_TARGET_MAJOR EQUAL "5")
         if (SHADER_TARGET_MINOR EQUAL "0")
@@ -65,7 +62,7 @@ function(build_shader_target ADDON ADDON_PATH)
       list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
       add_custom_command(
         OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.cso
-        COMMAND ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x64/${SHADER_BINARY} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}.cso
+        COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}.cso
         DEPENDS ${HLSL_DEPENDENCIES}
       )
       add_custom_command(
@@ -104,12 +101,13 @@ foreach(FILE ${ADDON_FILES})
       PREFIX "renodx-"
       SUFFIX ${TARGET_SUFFIX}
   )
-  find_program(CLANG_TIDY_BIN clang-tidy REQUIRED)
-  set(__TIDY_CMD "${CLANG_TIDY_BIN}")
-  set_target_properties(${ADDON} PROPERTIES
-    C_CLANG_TIDY   ${__TIDY_CMD}
-    CXX_CLANG_TIDY "${__TIDY_CMD};--extra-arg=/EHsc"
-  )
+
+  if(NOT "${CLANG_TIDY_BIN}" STREQUAL "CLANG_TIDY_BIN-NOTFOUND")
+    set_target_properties(${ADDON} PROPERTIES
+      C_CLANG_TIDY   ${CLANG_TIDY_BIN}
+      CXX_CLANG_TIDY "${CLANG_TIDY_BIN};--extra-arg=/EHsc"
+    )
+  endif()
 endforeach()
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
