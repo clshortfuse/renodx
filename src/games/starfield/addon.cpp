@@ -29,7 +29,7 @@
 #include "../../mods/swapchain.hpp"
 #include "../../utils/shader.hpp"
 #include "../../utils/swapchain.hpp"
-#include "../../utils/user_setting.hpp"
+#include "../../utils/settings.hpp"
 #include "./shared.h"
 
 namespace {

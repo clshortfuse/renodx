@@ -14,7 +14,7 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
-#include "../../utils/user_setting.hpp"
+#include "../../utils/settings.hpp"
 #include "./shared.h"
 
 namespace {

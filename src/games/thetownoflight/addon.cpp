@@ -16,7 +16,7 @@
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
-#include "../../utils/user_setting.hpp"
+#include "../../utils/settings.hpp"
 
 namespace {
 

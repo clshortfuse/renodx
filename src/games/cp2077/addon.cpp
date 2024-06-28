@@ -26,7 +26,7 @@
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
-#include "../../utils/user_setting.hpp"
+#include "../../utils/settings.hpp"
 #include "./cp2077.h"
 
 namespace {

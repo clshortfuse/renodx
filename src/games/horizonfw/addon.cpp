@@ -13,7 +13,7 @@
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
-#include "../../utils/user_setting.hpp"
+#include "../../utils/settings.hpp"
 #include "./shared.h"
 
 namespace {
