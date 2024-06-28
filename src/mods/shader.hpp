@@ -23,9 +23,9 @@
 
 #include "../utils/format.hpp"
 #include "../utils/mutex.hpp"
-#include "../utils/ResourceUtil.hpp"
-#include "../utils/ShaderUtil.hpp"
-#include "../utils/SwapchainUtil.hpp"
+#include "../utils/resource.hpp"
+#include "../utils/shader.hpp"
+#include "../utils/swapchain.hpp"
 
 namespace renodx::mods::shader {
 struct CustomShader {

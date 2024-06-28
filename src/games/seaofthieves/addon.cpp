@@ -13,8 +13,8 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-#include "../../mods/shaderReplaceMod.hpp"
-#include "../../mods/swapChainUpgradeMod.hpp"
+#include "../../mods/shader.hpp"
+#include "../../mods/swapchain.hpp"
 
 
 renodx::mods::shader::CustomShaders custom_shaders = {

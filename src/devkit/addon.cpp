@@ -26,10 +26,10 @@
 #include <include/reshade.hpp>
 
 #include <crc32_hash.hpp>
-#include "../utils/DescriptorTableUtil.hpp"
+#include "../utils/descriptor.hpp"
 #include "../utils/format.hpp"
-#include "../utils/pipelineUtil.hpp"
-#include "../utils/shaderCompiler.hpp"
+#include "../utils/pipeline.hpp"
+#include "../utils/shader_compiler.hpp"
 
 #define ICON_FK_REFRESH u8"\uf021"
 #define ICON_FK_FLOPPY  u8"\uf0c7"

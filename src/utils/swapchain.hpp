@@ -11,7 +11,7 @@
 #include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
-#include "./ResourceUtil.hpp"
+#include "./resource.hpp"
 
 namespace renodx::utils::swapchain {
 

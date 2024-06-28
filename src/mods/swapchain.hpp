@@ -19,11 +19,11 @@
 
 #include <include/reshade.hpp>
 
-#include "../utils/DescriptorTableUtil.hpp"
+#include "../utils/descriptor.hpp"
 #include "../utils/float16.hpp"
 #include "../utils/format.hpp"
-#include "../utils/ResourceUtil.hpp"
-#include "../utils/SwapchainUtil.hpp"
+#include "../utils/resource.hpp"
+#include "../utils/swapchain.hpp"
 
 namespace renodx::mods::swapchain {
 struct SwapChainUpgradeTarget {

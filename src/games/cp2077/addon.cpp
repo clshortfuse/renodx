@@ -25,8 +25,8 @@
 #include <embed/0xDE517511.h>
 
 #include <include/reshade.hpp>
-#include "../../mods/shaderReplaceMod.hpp"
-#include "../../utils/userSettingUtil.hpp"
+#include "../../mods/shader.hpp"
+#include "../../utils/user_setting.hpp"
 #include "./cp2077.h"
 
 namespace {

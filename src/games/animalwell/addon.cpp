@@ -13,9 +13,9 @@
 #include <embed/0xC2157826.h>
 #include <include/reshade.hpp>
 
-#include "../../mods/shaderReplaceMod.hpp"
-#include "../../mods/swapChainUpgradeMod.hpp"
-#include "../../utils/userSettingUtil.hpp"
+#include "../../mods/shader.hpp"
+#include "../../mods/swapchain.hpp"
+#include "../../utils/user_setting.hpp"
 #include "./shared.h"
 
 namespace {

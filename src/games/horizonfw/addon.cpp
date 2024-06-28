@@ -12,8 +12,8 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-#include "../../mods/shaderReplaceMod.hpp"
-#include "../../utils/userSettingUtil.hpp"
+#include "../../mods/shader.hpp"
+#include "../../utils/user_setting.hpp"
 #include "./shared.h"
 
 namespace {
