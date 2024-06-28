@@ -21,11 +21,16 @@ jobs:
     - name: Update submodules
       run: |
         git submodule update --init --recursive
-        
+
+    - name: Install ninja-build tool
+      uses: seanmiddleditch/gha-setup-ninja@v5
+
+    - name: Setup VS Dev Environment
+      uses: seanmiddleditch/gha-setup-vsdevenv@v4
+
     - name: Configure CMake (x64)
       run: >
         cmake
-        -DCMAKE_SYSTEM_VERSION=10.0.22621.0
         --preset ninja-x64
 
     - name: Build (x64)
