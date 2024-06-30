@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Carlos Lopez
+ * Copyright (C) 2024 Filippo Tarpini
  * SPDX-License-Identifier: MIT
  */
 
