@@ -3,17 +3,11 @@
 SamplerState smpAlbedo_s : register(s0);
 Texture2D<float4> texAlbedo : register(t0);
 
-
 // 3Dmigoto declarations
 #define cmp -
 
-void main(
-  float4 v0 : COLOR0,
-  float2 v1 : TEXCOORD0,
-  float2 w1 : TEXCOORD1,
-  out float4 o0 : SV_TARGET0)
-{
-  float4 r0,r1;
+void main(float4 v0 : COLOR0, float2 v1 : TEXCOORD0, float2 w1 : TEXCOORD1, out float4 o0 : SV_TARGET0) {
+  float4 r0, r1;
   uint4 bitmask, uiDest;
   float4 fDest;
 
@@ -38,37 +32,36 @@ void main(
 
   // tonemap here
   float vanillaMidGray = 0.18f;
-  
+
   float renoDRTContrast = 1.f;
   float renoDRTFlare = 0.f;
   float renoDRTShadows = 1.f;
   float renoDRTDechroma = injectedData.colorGradeBlowout;
   float renoDRTSaturation = 1.f;
   float renoDRTHighlights = 1.f;
-  
+
   renodx::tonemap::Config config = renodx::tonemap::config::Create(
-    injectedData.toneMapType,
-    injectedData.toneMapPeakNits,
-    injectedData.toneMapGameNits,
-    injectedData.toneMapGammaCorrection,
-    injectedData.colorGradeExposure,
-    injectedData.colorGradeHighlights,
-    injectedData.colorGradeShadows,
-    injectedData.colorGradeContrast,
-    injectedData.colorGradeSaturation,
-    vanillaMidGray,
-    vanillaMidGray * 100.f,
-    renoDRTHighlights,
-    renoDRTShadows,
-    renoDRTContrast,
-    renoDRTSaturation,
-    renoDRTDechroma,
-    renoDRTFlare
-  );
+      injectedData.toneMapType,
+      injectedData.toneMapPeakNits,
+      injectedData.toneMapGameNits,
+      injectedData.toneMapGammaCorrection,
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation,
+      vanillaMidGray,
+      vanillaMidGray * 100.f,
+      renoDRTHighlights,
+      renoDRTShadows,
+      renoDRTContrast,
+      renoDRTSaturation,
+      renoDRTDechroma,
+      renoDRTFlare);
 
   o0.rgb = renodx::tonemap::config::Apply(o0.rgb, config);
 
   o0.rgb *= injectedData.toneMapGameNits / 80.f;
-  
+
   return;
 }
