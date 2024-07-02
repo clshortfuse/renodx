@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 cbuffer GFD_PSCONST_GAMMA : register(b13) {
@@ -13,10 +12,9 @@ Texture2D<float4> sourceTexture : register(t0);
 #define cmp -
 
 void main(
-  float4 v0 : SV_POSITION0,
-              float2 v1 : TEXCOORD0,
-                          out float4 o0 : SV_TARGET0
-) {
+    float4 v0 : SV_POSITION0,
+                float2 v1 : TEXCOORD0,
+                            out float4 o0 : SV_TARGET0) {
   float4 r0, r1, r2, r3, r4;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -292,7 +290,9 @@ void main(
   o0.a = saturate(inputColor.a);
   float3 signs = sign(o0.rgb);
   o0.rgb = abs(o0.rgb);
-  o0.rgb = (injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb));
+  o0.rgb = (injectedData.toneMapGammaCorrection
+                ? pow(o0.rgb, 2.2f)
+                : renodx::color::bt709::from::SRGB(o0.rgb));
   o0.rgb *= signs;
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
