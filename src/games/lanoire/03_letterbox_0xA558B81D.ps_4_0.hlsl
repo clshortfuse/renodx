@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 // Letterbox/fade
@@ -83,7 +82,9 @@ void main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v2 
   o0.xyz = GenericTint1.xyz;
   o0.w = r0.x;
   o0 = saturate(o0);
-  o0 = injectedData.toneMapGammaCorrection ? pow(o0, 2.2f) : linearFromSRGBA(o0);
+  o0 = injectedData.toneMapGammaCorrection
+           ? pow(o0, 2.2f)
+           : renodx::color::bt709::from::SRGBA(o0);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
 }

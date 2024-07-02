@@ -1,5 +1,3 @@
-#include "../../shaders/filmgrain.hlsl"
-#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 cbuffer GFD_PSCONST_CORRECT : register(b12) {
@@ -83,7 +81,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_TA
 
     float3 vanillaToneMapped = ((1 - untonemapped) - (1 - maxChannel)) / maxChannel;
 
-    r0.xyz = colorBalance.xyz + r0.xyz; // Add to tonemapped
+    r0.xyz = colorBalance.xyz + r0.xyz;  // Add to tonemapped
     // r0.xyz = r0.xyz * r0.www; // scale up by max channel
     // r0.xyz = r0.xyz + r2.xxx; // add (1 )
     // r0.xyz = -r0.xyz;
@@ -120,36 +118,35 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_TA
   float renoDRTSaturation = 1.f;
   float renoDRTHighlights = 1.f;
 
-  ToneMapParams tmParams = buildToneMapParams(
-    injectedData.toneMapType,
-    injectedData.toneMapPeakNits,
-    injectedData.toneMapGameNits,
-    injectedData.toneMapGammaCorrection - 1,
-    injectedData.colorGradeExposure,
-    injectedData.colorGradeHighlights,
-    injectedData.colorGradeShadows,
-    injectedData.colorGradeContrast,
-    injectedData.colorGradeSaturation,
-    vanillaMidGray,
-    vanillaMidGray * 100.f,
-    renoDRTHighlights,
-    renoDRTShadows,
-    renoDRTContrast,
-    renoDRTSaturation,
-    renoDRTDechroma,
-    renoDRTFlare
-  );
+  renodx::tonemap::Config config = renodx::tonemap::config::Create(
+      injectedData.toneMapType,
+      injectedData.toneMapPeakNits,
+      injectedData.toneMapGameNits,
+      injectedData.toneMapGammaCorrection - 1,
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation,
+      vanillaMidGray,
+      vanillaMidGray * 100.f,
+      renoDRTHighlights,
+      renoDRTShadows,
+      renoDRTContrast,
+      renoDRTSaturation,
+      renoDRTDechroma,
+      renoDRTFlare);
 
   o0.rgb = sign(r0.xyz) * pow(abs(r0.xyz), 2.2f);
 
-  o0.rgb = toneMap(o0.rgb, tmParams);
+  o0.rgb = renodx::tonemap::config::Apply(o0.rgb, config);
 
   if (injectedData.colorGradeColorSpace == COLOR_SPACE__BT709) {
-    o0.rgb = clampBT709ToBT709(o0.rgb);
+    o0.rgb = renodx::color::bt709::clamp::BT709(o0.rgb);
   } else if (injectedData.colorGradeColorSpace == COLOR_SPACE__BT2020) {
-    o0.rgb = clampBT709ToBT2020(o0.rgb);
+    o0.rgb = renodx::color::bt709::clamp::BT2020(o0.rgb);
   } else if (injectedData.colorGradeColorSpace == COLOR_SPACE__AP1) {
-    o0.rgb = clampBT709ToAP1(o0.rgb);
+    o0.rgb = renodx::color::bt709::clamp::AP1(o0.rgb);
   }
 
   o0.rgb *= injectedData.toneMapGameNits / injectedData.toneMapUINits;

@@ -1,4 +1,4 @@
-#include "../../shaders/color.hlsl"
+#include "./cp2077.h"
 
 cbuffer _16_18 : register(b6, space0) {
   float4 cb6[1] : packoffset(c0);
@@ -42,11 +42,10 @@ void comp_main() {
   float _185 = ((((clamp((cb6[0u].z * _105) + cb6[0u].w, 0.0f, 1.0f) * _105) + (clamp((cb6[0u].z * _84) + cb6[0u].w, 0.0f, 1.0f) * _84)) * 0.3162162303924560546875f) + ((_54 * 0.2270270287990570068359375f) * clamp((cb6[0u].z * _54) + cb6[0u].w, 0.0f, 1.0f))) + (((clamp((cb6[0u].z * _160) + cb6[0u].w, 0.0f, 1.0f) * _160) + (clamp((cb6[0u].z * _139) + cb6[0u].w, 0.0f, 1.0f) * _139)) * 0.0702702701091766357421875f);
 
   float4 outputColor = float4(
-    srgbFromLinear(_183),
-    srgbFromLinear(_184),
-    srgbFromLinear(_185),
-    (((_101.w + _80.w) * 0.3162162303924560546875f) + (_49.w * 0.2270270287990570068359375f)) + ((_156.w + _135.w) * 0.0702702701091766357421875f)
-  );
+      renodx::color::srgb::from::BT709(_183),
+      renodx::color::srgb::from::BT709(_184),
+      renodx::color::srgb::from::BT709(_185),
+      (((_101.w + _80.w) * 0.3162162303924560546875f) + (_49.w * 0.2270270287990570068359375f)) + ((_156.w + _135.w) * 0.0702702701091766357421875f));
 
   _11[uint2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y)] = outputColor;
 }

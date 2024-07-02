@@ -1,32 +1,44 @@
 #ifndef SRC_COMMON_MATH_HLSL_
 #define SRC_COMMON_MATH_HLSL_
 
-#define FLT_MIN asfloat(0x00800000) //1.175494351e-38f
-#define FLT_MAX asfloat(0x7F7FFFFF) //3.402823466e+38f
-#define FLT10_MAX 64512.f
-#define FLT11_MAX 65024.f
-#define FLT16_MAX 65504.f
+namespace renodx {
+namespace math {
 
-float average(float3 color)
-{
-	return (color.x + color.y + color.z) / 3.f;
+static const float FLT_MIN = asfloat(0x00800000);  // 1.175494351e-38f
+static const float FLT_MAX = asfloat(0x7F7FFFFF);  // 3.402823466e+38f
+static const float FLT10_MAX = 64512.f;
+static const float FLT11_MAX = 65024.f;
+static const float FLT16_MAX = 65504.f;
+
+float Average(float3 color) {
+  return (color.x + color.y + color.z) / 3.f;
 }
 
 // Returns 1 or FLT_MAX if "dividend" is 0
-float safeDivision(float quotient, float dividend, bool fallbackMax = false)
-{
-	if (dividend == 0.f) {
-        return fallbackMax ? (FLT_MAX * sign(quotient)) : 1.f;
-    }
-    return quotient / dividend;
+float SafeDivision(float quotient, float dividend) {
+  return (dividend == 0.f)
+             ? FLT_MAX * sign(quotient)
+             : (quotient / dividend);
 }
 
-// Returns 1 or FLT_MAX if "dividend" is 0
-float3 safeDivision(float3 quotient, float3 dividend, bool fallbackMax = false)
-{
-    return float3(safeDivision(quotient.x, dividend.x, fallbackMax),
-	              safeDivision(quotient.y, dividend.y, fallbackMax),
-	              safeDivision(quotient.z, dividend.z, fallbackMax));
+float SafeDivision(float quotient, float dividend, float fallback) {
+  return (dividend == 0.f)
+             ? fallback
+             : (quotient / dividend);
 }
 
+float3 SafeDivision(float3 quotient, float3 dividend) {
+  return float3(SafeDivision(quotient.x, dividend.x, FLT_MAX * sign(quotient.x)),
+                SafeDivision(quotient.y, dividend.y, FLT_MAX * sign(quotient.y)),
+                SafeDivision(quotient.z, dividend.z, FLT_MAX * sign(quotient.z)));
+}
+
+float3 SafeDivision(float3 quotient, float3 dividend, float3 fallback) {
+  return float3(SafeDivision(quotient.x, dividend.x, fallback.x),
+                SafeDivision(quotient.y, dividend.y, fallback.y),
+                SafeDivision(quotient.z, dividend.z, fallback.z));
+}
+
+}  // namespace math
+}  // namespace renodx
 #endif  // SRC_COMMON_MATH_HLSL_

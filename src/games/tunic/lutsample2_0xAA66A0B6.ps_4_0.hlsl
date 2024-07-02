@@ -1,8 +1,5 @@
 // Game Render + LUT + Noise
 
-#include "../../shaders/color.hlsl"
-#include "../../shaders/colorgrade.hlsl"
-#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t1 : register(t1);
@@ -46,42 +43,40 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1
   float renoDRTSaturation = 1.05f;
   float renoDRTHighlights = 1.f;
 
-  ToneMapParams tmParams = buildToneMapParams(
-    injectedData.toneMapType,
-    injectedData.toneMapPeakNits,
-    injectedData.toneMapGameNits,
-    0,
-    injectedData.colorGradeExposure,
-    injectedData.colorGradeHighlights,
-    injectedData.colorGradeShadows,
-    injectedData.colorGradeContrast,
-    injectedData.colorGradeSaturation,
-    vanillaMidGray,
-    vanillaMidGray * 100.f,
-    renoDRTHighlights,
-    renoDRTShadows,
-    renoDRTContrast,
-    renoDRTSaturation,
-    renoDRTDechroma,
-    renoDRTFlare
-  );
+  renodx::tonemap::Config config = renodx::tonemap::config::Create(
+      injectedData.toneMapType,
+      injectedData.toneMapPeakNits,
+      injectedData.toneMapGameNits,
+      0,
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation,
+      vanillaMidGray,
+      vanillaMidGray * 100.f,
+      renoDRTHighlights,
+      renoDRTShadows,
+      renoDRTContrast,
+      renoDRTSaturation,
+      renoDRTDechroma,
+      renoDRTFlare);
 
-  LUTParams lutParams = buildLUTParams(
-    s1_s,
-    injectedData.colorGradeLUTStrength,
-    injectedData.colorGradeLUTScaling,
-    TONE_MAP_LUT_TYPE__SRGB,
-    TONE_MAP_LUT_TYPE__SRGB,
-    32.f
-  );
+  renodx::lut::Config lut_config = renodx::lut::config::Create(
+      s1_s,
+      injectedData.colorGradeLUTStrength,
+      injectedData.colorGradeLUTScaling,
+      renodx::lut::config::type::SRGB,
+      renodx::lut::config::type::SRGB,
+      32.f);
 
   if (injectedData.toneMapType == 0.f) {
     untonemapped = saturate(untonemapped);
   }
 
-  untonemapped = max(0, linearFromSRGB(untonemapped));
+  untonemapped = max(0, renodx::color::bt709::from::SRGB(untonemapped));
 
-  float3 outputColor = toneMap(untonemapped, tmParams, lutParams, t1);
+  float3 outputColor = renodx::tonemap::config::Apply(untonemapped, config, lut_config, t1);
 
   outputColor = sign(outputColor) * pow(abs(outputColor), 1.f / 2.2f);
 

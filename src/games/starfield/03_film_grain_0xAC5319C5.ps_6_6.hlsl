@@ -1,4 +1,3 @@
-#include "../../shaders/filmgrain.hlsl"
 #include "./shared.h"
 
 // acb300db9ca1244918096157e996d141
@@ -36,17 +35,16 @@ void frag_main() {
     float3 outputColor = SV_Target.rgb;
     float3 signs = sign(outputColor);
     outputColor = abs(outputColor);
-    outputColor = linearFromSRGB(outputColor);
+    outputColor = renodx::color::bt709::from::SRGB(outputColor);
     outputColor /= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    outputColor = computeFilmGrain(
-      outputColor,
-      TEXCOORD.xy,
-      frac(injectedData.elapsedTime / 1000.f),
-      _34.z ? injectedData.fxFilmGrain * 0.03f : 0,
-      1.f
-    );
+    outputColor = renodx::effects::ApplyFilmGrain(
+        outputColor,
+        TEXCOORD.xy,
+        frac(injectedData.elapsedTime / 1000.f),
+        _34.z ? injectedData.fxFilmGrain * 0.03f : 0,
+        1.f);
     outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    outputColor = srgbFromLinear(outputColor);
+    outputColor = renodx::color::srgb::from::BT709(outputColor);
     outputColor *= signs;
     SV_Target.rgb = outputColor;
   }

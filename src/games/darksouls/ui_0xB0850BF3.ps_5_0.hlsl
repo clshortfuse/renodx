@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.3.16 on Tue Jun 04 23:18:28 2024
@@ -14,7 +13,7 @@ void main(float4 v0
   o0.xyzw = v1.xyzw;
 
   o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f)
-                                               : linearFromSRGB(o0.rgb);
+                                               : renodx::color::bt709::from::SRGB(o0.rgb);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
 
   // TODO: figure out what this shader does

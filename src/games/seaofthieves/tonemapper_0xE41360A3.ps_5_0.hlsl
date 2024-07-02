@@ -1,5 +1,4 @@
-#include "../../shaders/aces.hlsl"
-#include "../../shaders/color.hlsl"
+#include "./seaofthieves.h"
 
 #define RENODX_SOT_ACES_TONEMAPPER 1
 
@@ -48,10 +47,10 @@ float3 LinToLog(float3 LinearColor) {
 
   // Using stripped down, 'pure log', formula. Parameterized by grey points and dynamic range covered.
   float3 LogColor = log2(LinearColor) / LinearRange - log2(LinearGrey) / LinearRange + ExposureGrey / 1023.0;  // scalar: 3log2 3mad
-  //float3 LogColor = (log2(LinearColor) - log2(LinearGrey)) / LinearRange + ExposureGrey / 1023.0;
-  //float3 LogColor = log2( LinearColor / LinearGrey ) / LinearRange + ExposureGrey / 1023.0;
-  //float3 LogColor = (0.432699 * log10(0.5 * LinearColor + 0.037584) + 0.616596) + 0.03;	// SLog
-  //float3 LogColor = ( 300 * log10( LinearColor * (1 - .0108) + .0108 ) + 685 ) / 1023;	// Cineon
+  // float3 LogColor = (log2(LinearColor) - log2(LinearGrey)) / LinearRange + ExposureGrey / 1023.0;
+  // float3 LogColor = log2( LinearColor / LinearGrey ) / LinearRange + ExposureGrey / 1023.0;
+  // float3 LogColor = (0.432699 * log10(0.5 * LinearColor + 0.037584) + 0.616596) + 0.03;	// SLog
+  // float3 LogColor = ( 300 * log10( LinearColor * (1 - .0108) + .0108 ) + 685 ) / 1023;	// Cineon
   LogColor = saturate(LogColor);
 
   return LogColor;
@@ -120,8 +119,8 @@ PS_OUTPUT main(PS_INPUT psInput) {
   const float3 colorGradedColor = lutColor.rgb * 1.05f;
 
   if (cb0[37].y != 0) {  // Tonemap by luminance?
-    float inputLuminance = yFromBT601(bloomedColor);
-    r1.w = yFromBT601(bloomedColor);
+    float inputLuminance = renodx::color::y::from::BT601(bloomedColor);
+    r1.w = renodx::color::y::from::BT601(bloomedColor);
 
     float3 logColor = LinToLog(bloomedColor);
     r4.rgb = LinToLog(bloomedColor);
@@ -131,7 +130,7 @@ PS_OUTPUT main(PS_INPUT psInput) {
 
     r4.rgb = pow(r4.rgb, 2.2f);
 
-    r2.w = yFromBT601(r4.xyz);
+    r2.w = renodx::color::y::from::BT601(r4.xyz);
     r3.w = cmp(r2.w < 9.99999975e-05);
     r1.w = inputLuminance / r2.w;
     r1.w = -1 + r1.w;
@@ -139,7 +138,7 @@ PS_OUTPUT main(PS_INPUT psInput) {
     r1.w = r3.w ? 1 : r1.w;
     r4.rgb = r4.rgb * r1.www;
   }
-  r3.w = yFromBT601(colorGradedColor);
+  r3.w = renodx::color::y::from::BT601(colorGradedColor);
 
   float3 grainedColor = colorGradedColor + grain;
 
@@ -153,12 +152,12 @@ PS_OUTPUT main(PS_INPUT psInput) {
   r0.x = (int)r0.x | (int)r5.x;  // above || 2
   if (r0.x != 0) {
     // SDR LUT, scale to 600 nits?
-    r6.rgb = saturate(grainedColor);           // Clamp SDR LUT output?
-    r6.rgb = pow(r6.rgb, 2.2f);                // 2.2 Gamma
-    r7.rgb = mul(BT709_2_BT2020_MAT, r6.rgb);  // PQ color space
-    r6.rgb = r7.rgb * 600 / 10000.f;           // Stretch to 600 nits
-    r6.rgb = pqFromLinear(r6.rgb);             // PQ
-    r3.rgb = min(r6.rgb, 1.f);                 // Clamp (again?)
+    r6.rgb = saturate(grainedColor);                           // Clamp SDR LUT output?
+    r6.rgb = pow(r6.rgb, 2.2f);                                // 2.2 Gamma
+    r7.rgb = mul(renodx::color::BT709_TO_BT2020_MAT, r6.rgb);  // PQ color space
+    r6.rgb = r7.rgb * 600 / 10000.f;                           // Stretch to 600 nits
+    r6.rgb = renodx::color::pq::from::BT2020(r6.rgb);          // PQ
+    r3.rgb = min(r6.rgb, 1.f);                                 // Clamp (again?)
   } else {
     r0.x = cmp(asint(cb0[37].y) == 5);  // type == 5
     r0.x = (int)r0.x | (int)r5.w;       // type == 5 or 4
@@ -166,7 +165,7 @@ PS_OUTPUT main(PS_INPUT psInput) {
     r1.w = r1.w ? r5.z : 0;             // (v0.y >= 0.5) && (type == 3)
     r0.x = (int)r0.x | (int)r1.w;       // (5 or 4) || above
     if (r0.x != 0) {
-      r5.rgb = mul(BT709_2_BT2020_MAT, r4.rgb);
+      r5.rgb = mul(renodx::color::BT709_TO_BT2020_MAT, r4.rgb);
 
       r4.rgb = pow(r5.rgb / 0.18f, colorContrast) * colorContrastGain;
       r5.rgb = 0.18f * r4.rgb;
@@ -184,7 +183,7 @@ PS_OUTPUT main(PS_INPUT psInput) {
       // Default (0) case
 
       r0.rgb = lerp(bloomedColor, cb0[40].rgb, cb0[40].w);
-      r1.rgb = mul(BT709_2_BT2020_MAT, r0.rgb);
+      r1.rgb = mul(renodx::color::BT709_TO_BT2020_MAT, r0.rgb);
 
       r0.yzw = r1.rgb / 0.18f;
       r0.yzw = pow(r0.yzw, colorContrast) * colorContrastGain;
@@ -196,13 +195,12 @@ PS_OUTPUT main(PS_INPUT psInput) {
       float hdrBrightness = pow(finalGain, 0.25f);  // 0-2
       float userPaperWhite = 200.f * hdrBrightness;
 
-      float3 ap0Color = mul(BT2020_2_AP0_MAT, r1.rgb);
-      float3 tonemappedColor = aces_odt(
-        aces_rrt(ap0Color),
-        0.0001f,  // minY
-        48.f * (userPeakNits / userPaperWhite),
-        AP1_2_BT2020_MAT
-      );
+      float3 ap0Color = mul(renodx::color::BT2020_TO_AP0_MAT, r1.rgb);
+      float3 tonemappedColor = renodx::tonemap::aces::ODT(
+          renodx::tonemap::aces::RRT(ap0Color),
+          0.0001f,  // minY
+          48.f * (userPeakNits / userPaperWhite),
+          renodx::color::AP1_TO_BT2020_MAT);
       r4.rgb = tonemappedColor.rgb * userPeakNits / 10000.f;
 #else
 
@@ -218,7 +216,7 @@ PS_OUTPUT main(PS_INPUT psInput) {
       r4.rgb = finalGain * r0.rgb;
 #endif
     }
-    r3.rgb = pqFromLinear(r4.rgb);
+    r3.rgb = renodx::color::pq::from::BT2020(r4.rgb);
     r3.rgb = min(r3.rgb, 1.f);
   }
 
@@ -226,11 +224,11 @@ PS_OUTPUT main(PS_INPUT psInput) {
   psOutput.o1.rgba = float4(grainedColor.rgb, r3.a);
 
   // TEST
-  testColor = mul(BT709_2_BT2020_MAT, inputColor);
+  testColor = mul(renodx::color::BT709_TO_BT2020_MAT, inputColor);
   testColor *= 80;
   testColor /= 10000.f;  // Scale for PQ
   testColor = max(0, testColor);
-  testColor = pqFromLinear(testColor);
+  testColor = renodx::color::pq::from::BT2020(testColor);
   // psOutput.o0.rgb = testColor.rgb;
 
   return psOutput;

@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 cbuffer _13_15 : register(b0, space0) {
@@ -51,23 +50,31 @@ void frag_main() {
   // float3 outputColor = SV_Target.rgb;
   // float3 signs = sign(outputColor.rgb);
   // outputColor = abs(outputColor);
-  // outputColor = injectedData.toneMapGammaCorrection ? pow(outputColor, 2.2f) : linearFromSRGB(outputColor.rgb);
+  // outputColor = injectedData.toneMapGammaCorrection ? pow(outputColor, 2.2f) : renodx::color::bt709::from::SRGB(outputColor.rgb);
   // outputColor *= signs;
 
   float3 outputColor = SV_Target.rgb;
   float3 signs = sign(outputColor);
   outputColor = abs(outputColor);
   if (injectedData.toneMapGammaCorrection == 0.f) {
-    outputColor = linearFromSRGB(outputColor);
+    outputColor = renodx::color::bt709::from::SRGB(outputColor);
   } else if (injectedData.toneMapGammaCorrection == 1.f) {
     outputColor = pow(outputColor, 2.2f);
   } else if (injectedData.toneMapGammaCorrection == 2.f) {
-    outputColor = pow(outputColor, 2.4f);
+    outputColor = pow(outputColor, 2.2f);
   }
   outputColor *= signs;
-  SV_Target.rgb = outputColor * injectedData.toneMapUINits / 80.f;
+  SV_Target.rgb = outputColor * injectedData.toneMapUINits;
 
-  // SV_Target.rgb = outputColor;
+  if (injectedData.toneMapGammaCorrection == 2.f) {
+    SV_Target.rgb = renodx::color::bt2020::from::BT709(SV_Target.rgb);  // use bt2020
+    SV_Target.rgb /= 10000.f;                                           // Scale for PQ
+    SV_Target.rgb = max(0, SV_Target.rgb);                              // clamp out of gamut
+    SV_Target.rgb = renodx::color::pq::from::BT2020(SV_Target.rgb);     // convert to PQ
+    SV_Target.rgb = min(1.f, SV_Target.rgb);                            // clamp PQ (10K nits)
+  } else {
+    SV_Target.rgb /= 80.f;
+  }
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {

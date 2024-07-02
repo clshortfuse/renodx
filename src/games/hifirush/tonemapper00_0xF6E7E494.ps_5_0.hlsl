@@ -1,7 +1,6 @@
 
 // Output tonemapper
 
-#include "../../shaders/tonemap.hlsl"
 #include "shared.h"
 
 Texture2D<float4> t0 : register(t0);  // Untonemapped
@@ -29,14 +28,7 @@ cbuffer cb2 : register(b2) {
 // 3Dmigoto declarations
 #define cmp -
 
-float4 main(
-  linear noperspective float2 v0 : TEXCOORD0,
-                                   linear noperspective float2 w0 : TEXCOORD3,
-                                                                    linear noperspective float3 v1 : TEXCOORD1,
-                                                                                                     linear noperspective float4 v2 : TEXCOORD2,
-                                                                                                                                      float2 v3 : TEXCOORD4,
-                                                                                                                                                  float4 v4 : SV_POSITION0
-) : SV_Target0 {
+float4 main(linear noperspective float2 v0 : TEXCOORD0, linear noperspective float2 w0 : TEXCOORD3, linear noperspective float3 v1 : TEXCOORD1, linear noperspective float4 v2 : TEXCOORD2, float2 v3 : TEXCOORD4, float4 v4 : SV_POSITION0) : SV_Target0 {
   float4 r0, r1, r2, r3, r4, r5, o0;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -178,34 +170,33 @@ float4 main(
   float renoDRTSaturation = 1.15f;
   float renoDRTHighlights = 1.f;
 
-  ToneMapParams tmParams = buildToneMapParams(
-    injectedData.toneMapType,
-    injectedData.toneMapPeakNits,
-    injectedData.toneMapGameNits,
-    0,
-    injectedData.colorGradeExposure,
-    injectedData.colorGradeHighlights,
-    injectedData.colorGradeShadows,
-    injectedData.colorGradeContrast,
-    injectedData.colorGradeSaturation,
-    vanillaMidGray,
-    vanillaMidGray * 100.f,
-    renoDRTHighlights,
-    renoDRTShadows,
-    renoDRTContrast,
-    renoDRTSaturation,
-    renoDRTDechroma,
-    renoDRTFlare
-  );
+  renodx::tonemap::Config config = renodx::tonemap::config::Create(
+      injectedData.toneMapType,
+      injectedData.toneMapPeakNits,
+      injectedData.toneMapGameNits,
+      0,
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation,
+      vanillaMidGray,
+      vanillaMidGray * 100.f,
+      renoDRTHighlights,
+      renoDRTShadows,
+      renoDRTContrast,
+      renoDRTSaturation,
+      renoDRTDechroma,
+      renoDRTFlare);
 
-  outputColor = toneMap(outputColor, tmParams);
+  outputColor = renodx::tonemap::config::Apply(outputColor, config);
 
   outputColor *= injectedData.toneMapGameNits;  // Scale by user nits
 
-  // o0.rgb = mul(BT709_2_BT2020_MAT, o0.rgb);  // use bt2020
+  // o0.rgb = mul(BT709_TO_BT2020_MAT, o0.rgb);  // use bt2020
   // o0.rgb /= 10000.f;                         // Scale for PQ
   // o0.rgb = max(0, o0.rgb);                   // clamp out of gamut
-  // o0.rgb = pqFromLinear(o0.rgb);             // convert to PQ
+  // o0.rgb = renodx::color::pq::from::BT2020(o0.rgb);             // convert to PQ
   // o0.rgb = min(1.f, o0.rgb);                 // clamp PQ (10K nits)
 
   outputColor.rgb /= 80.f;

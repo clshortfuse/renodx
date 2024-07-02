@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t7 : register(t7);
@@ -28,17 +27,7 @@ cbuffer cb1 : register(b1) {
 // 3Dmigoto declarations
 #define cmp -
 
-void main(
-  float4 v0 : SV_POSITION0,
-              float4 v1 : TEXCOORD0,
-                          float4 v2 : TEXCOORD4,
-                                      float4 v3 : TEXCOORD7,
-                                                  float4 v4 : TEXCOORD8,
-                                                              float3 v5 : TEXCOORD9,
-                                                                          float4 v6 : COLOR0,
-                                                                                      float4 v7 : COLOR1,
-                                                                                                  out float4 o0 : SV_Target0
-) {
+void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD4, float4 v3 : TEXCOORD7, float4 v4 : TEXCOORD8, float3 v5 : TEXCOORD9, float4 v6 : COLOR0, float4 v7 : COLOR1, out float4 o0 : SV_Target0) {
   float4 r0, r1, r2;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -87,7 +76,9 @@ void main(
   o0.w = r1.x;
 
   o0.rgb = saturate(o0.rgb);
-  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
+  o0.rgb = injectedData.toneMapGammaCorrection
+               ? pow(o0.rgb, 2.2f)
+               : renodx::color::bt709::from::SRGB(o0.rgb);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
 }

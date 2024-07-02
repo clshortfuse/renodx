@@ -193,7 +193,7 @@ void frag_main() {
     _575 = _192;
   } else {
     float _738 = TEXCOORD.y - _203.y;
-    //float _739 = (TEXCOORD.x - _203.x) * asfloat(bufferT1.Load((_59 + 404u)).x);
+    // float _739 = (TEXCOORD.x - _203.x) * asfloat(bufferT1.Load((_59 + 404u)).x);
     float _739 = (TEXCOORD.x - _203.x) * _739a;
     float _759 = exp2(log2(saturate((asfloat(bufferT1.Load((index396)).x) * sqrt((_739 * _739) + (_738 * _738))) + asfloat(bufferT1.Load((_59 + 400u)).x))) * value408);
     _571 = (_759 * (value416 - _180)) + _180;

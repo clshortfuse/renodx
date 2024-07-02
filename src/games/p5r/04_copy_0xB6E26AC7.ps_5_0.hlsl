@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 SamplerState diffuseSampler_s : register(s0);

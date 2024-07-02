@@ -1,5 +1,3 @@
-#include "../../shaders/color.hlsl"
-#include "../../shaders/random.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
 
@@ -14,17 +12,15 @@ struct ConvertColorParams {
 };
 
 float3 randomDither(float3 color, float3 random3, float bits = 8.f) {
-  float3 randomA = hash33(float3(
-    random3.x * 64.f * 64.f,
-    random3.y * 64.f * 64.f,
-    random3.z * 64.f
-  ));
+  float3 randomA = renodx::random::Hash33(float3(
+      random3.x * 64.f * 64.f,
+      random3.y * 64.f * 64.f,
+      random3.z * 64.f));
 
-  float3 randomB = hash33(float3(
-    (random3.x + 64.f) * 64.f * 64.f,
-    (random3.y + 64.f) * 64.f * 64.f,
-    random3.z * 64.f
-  ));
+  float3 randomB = renodx::random::Hash33(float3(
+      (random3.x + 64.f) * 64.f * 64.f,
+      (random3.y + 64.f) * 64.f * 64.f,
+      random3.z * 64.f));
 
   float maxValue = pow(2.f, bits) - 1.f;
   float maxValueX2 = maxValue * 2.f;
@@ -39,40 +35,38 @@ float3 randomDither(float3 color, float3 random3, float bits = 8.f) {
 
 float3 applyUserBrightness(float3 inputColor, float userBrightness = 1.f) {
   return (userBrightness != 1.f)
-         ? pow(inputColor, userBrightness)
-         : inputColor;
+             ? pow(inputColor, userBrightness)
+             : inputColor;
 }
 
 float3 convertColor(float3 inputColor, ConvertColorParams params) {
   float3 outputColor = inputColor;
   if (injectedData.toneMapGammaCorrection == 2.f) {
-    outputColor = gammaCorrectSafe(outputColor);
+    outputColor = renodx::color::correct::GammaSafe(outputColor);
   }
   switch (params.outputTypeEnum) {
-    case OUTPUT_TYPE_SRGB8:
-      {
-        outputColor = max(0, outputColor);  // clamp to BT709
-        outputColor = applyUserBrightness(outputColor, params.gammaCorrection);
-        outputColor = srgbFromLinear(outputColor);
-        outputColor = randomDither(outputColor.rgb, params.random3, 8.f);
-      }
+    case OUTPUT_TYPE_SRGB8: {
+      outputColor = max(0, outputColor);  // clamp to BT709
+      outputColor = applyUserBrightness(outputColor, params.gammaCorrection);
+      outputColor = renodx::color::srgb::from::BT709(outputColor);
+      outputColor = randomDither(outputColor.rgb, params.random3, 8.f);
       break;
-    case OUTPUT_TYPE_PQ:
-      {
-        float3 rec2020 = bt2020FromBT709(outputColor.rgb);
-        // Removed because this caps to 100 nits
-        // Also because the matrix just seems to hue shift to green/yellow
-        // float3 matrixedColor = mul(rec2020, params.colorMatrix);
-        // matrixedColor = saturate(matrixedColor);
-        // float3 newShiftedColor = lerp(rec2020, matrixedColor, params.pqSaturation);
+    }
+    case OUTPUT_TYPE_PQ: {
+      float3 rec2020 = renodx::color::bt2020::from::BT709(outputColor.rgb);
+      // Removed because this caps to 100 nits
+      // Also because the matrix just seems to hue shift to green/yellow
+      // float3 matrixedColor = mul(rec2020, params.colorMatrix);
+      // matrixedColor = saturate(matrixedColor);
+      // float3 newShiftedColor = lerp(rec2020, matrixedColor, params.pqSaturation);
 
-        float3 grayscale = yFromBT2020(rec2020);
-        float3 newShiftedColor = lerp(grayscale, rec2020, 1.f + (params.pqSaturation * 0.25f));
-        float3 scaledShifted = newShiftedColor * params.paperWhiteScaling;
-        float3 pqColor = pqFromLinear(scaledShifted);
-        outputColor = pqColor;
-      }
+      float3 grayscale = renodx::color::y::from::BT2020(rec2020);
+      float3 newShiftedColor = lerp(grayscale, rec2020, 1.f + (params.pqSaturation * 0.25f));
+      float3 scaledShifted = newShiftedColor * params.paperWhiteScaling;
+      float3 pqColor = renodx::color::pq::from::BT2020(scaledShifted);
+      outputColor = pqColor;
       break;
+    }
     case OUTPUT_TYPE_SCRGB:
       outputColor *= params.paperWhiteScaling;
       break;
@@ -83,7 +77,7 @@ float3 convertColor(float3 inputColor, ConvertColorParams params) {
         outputColor = applyUserBrightness(outputColor, params.gammaCorrection);
         outputColor = mul(outputColor, params.colorMatrix);
         outputColor *= params.paperWhiteScaling;
-        outputColor = srgbFromLinear(outputColor);
+        outputColor = renodx::color::srgb::from::BT709(outputColor);
         outputColor = randomDither(outputColor, params.random3, 10.f);
       }
       break;

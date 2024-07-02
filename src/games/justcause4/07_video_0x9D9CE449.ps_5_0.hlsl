@@ -1,4 +1,3 @@
-#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 SamplerState sampler_tex_0__s : register(s0);
@@ -28,9 +27,11 @@ void main(float4 v0 : COLOR0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Target0)
   o0.w = v0.w;
 
   o0.rgb = saturate(o0.rgb);
-  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
+  o0.rgb = injectedData.toneMapGammaCorrection
+               ? pow(o0.rgb, 2.2f)
+               : renodx::color::bt709::from::SRGB(o0.rgb);
   float videoPeak = injectedData.toneMapUINits / (injectedData.toneMapUINits / 203.f);
-  o0.rgb = bt2446a_inverse_tonemapping_bt709(o0.rgb, 100.f, videoPeak);
+  o0.rgb = renodx::tonemap::inverse::bt2446a::BT709(o0.rgb, 100.f, videoPeak);
   o0.rgb *= injectedData.toneMapUINits / videoPeak;
   o0.rgb /= 80.f;
   return;

@@ -1,5 +1,4 @@
 // Sharpen + Clamp
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -45,7 +44,6 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
   r0.xyz = r1.xyz + (cb11[0].zzz * max(0, r0.xyz) * injectedData.fxSharpen);
   // o0.w = r1.w;
   // o0.xyz = max(float3(0,0,0), r0.xyz);
-
 
   return float4(r0.xyz, r1.w);
 }

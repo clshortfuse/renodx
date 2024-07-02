@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -29,7 +28,7 @@ void main(float4 v0 : TEXCOORD0, float4 v1 : TEXCOORD1, float2 v2 : TEXCOORD2, o
       if (r1.z != 0) break;
       r1.zw = r1.xy * cb0[8].xy + v2.xy;
       r3.xyzw = t0.SampleLevel(s0_s, r1.zw, 0).xyzw;
-      r3 = saturate(r3); // sdr clamp
+      r3 = saturate(r3);  // sdr clamp
       r2.xyzw = r3.xyzw + r2.xyzw;
       r1.y = 1 + r1.y;
     }
@@ -49,7 +48,9 @@ void main(float4 v0 : TEXCOORD0, float4 v1 : TEXCOORD1, float2 v2 : TEXCOORD2, o
   o0.w = r0.w;
 
   o0.rgb = saturate(o0.rgb);
-  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
+  o0.rgb = injectedData.toneMapGammaCorrection
+               ? pow(o0.rgb, 2.2f)
+               : renodx::color::bt709::from::SRGB(o0.rgb);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
 }

@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -51,7 +50,9 @@ void main(float4 v0 : SV_Position0, float4 v1 : COLOR0, float2 v2 : TEXCOORD0, f
   o0.w = r0.w;
 
   o0.rgb = saturate(o0.rgb);
-  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
+  o0.rgb = injectedData.toneMapGammaCorrection
+               ? pow(o0.rgb, 2.2f)
+               : renodx::color::bt709::from::SRGB(o0.rgb);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
 }

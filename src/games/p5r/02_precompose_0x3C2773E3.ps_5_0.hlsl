@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 cbuffer GFD_PSCONST_SYSTEM : register(b0) {

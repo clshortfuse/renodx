@@ -1,67 +1,71 @@
-#ifndef SRC_COMMON_COLORGRADE_HLSL_
-#define SRC_COMMON_COLORGRADE_HLSL_
+#ifndef SRC_SHADERS_COLOR_GRADE_HLSL_
+#define SRC_SHADERS_COLOR_GRADE_HLSL_
 
 #include "./color.hlsl"
 
-float3 applyContrastSafe(float3 color, float contrast, float midGray = 0.18f, float3x3 colorspace = BT709_2_XYZ_MAT) {
-  float3 workingColor = pow(abs(color) / midGray, contrast) * sign(color) * midGray;
-  float workingLuminance = dot(abs(workingColor), float3(colorspace[1].r, colorspace[1].g, colorspace[1].b));
-  float colorLuminance = dot(abs(color), float3(colorspace[1].r, colorspace[1].g, colorspace[1].b));
-  return color * (colorLuminance ? (workingLuminance / colorLuminance) : 1.f);
+namespace renodx {
+namespace color {
+namespace grade {
+
+float3 Contrast(float3 color, float contrast, float mid_gray = 0.18f, float3x3 color_space = renodx::color::BT709_TO_XYZ_MAT) {
+  float3 signs = sign(color);
+  color = abs(color);
+  float3 working_color = pow(color / mid_gray, contrast) * mid_gray;
+  float working_y = dot(working_color, float3(color_space[1].r, color_space[1].g, color_space[1].b));
+  float color_y = dot(color, float3(color_space[1].r, color_space[1].g, color_space[1].b));
+  return signs * color * (color_y > 0 ? (working_y / color_y) : 1.f);
 }
 
-float3 applySaturation(float3 bt709, float saturation = 1.f) {
-  float3 okLCh = okLChFromBT709(bt709);
-  okLCh[1] *= saturation;
-  float3 color = bt709FromOKLCh(okLCh);
-  color = mul(BT709_2_AP1_MAT, color);  // Convert to AP1
-  color = max(0, color);                // Clamp to AP1
-  color = mul(AP1_2_BT709_MAT, color);  // Convert BT709
+float3 Saturation(float3 bt709, float saturation = 1.f) {
+  float3 lch = renodx::color::oklch::from::BT709(bt709);
+  lch[1] *= saturation;
+  float3 color = renodx::color::bt709::from::OkLCh(lch);
+  color = renodx::color::bt709::clamp::AP1(color);
   return color;
 }
 
-float3 applyUserColorGrading(
-  float3 color,
-  float userExposure = 1.f,
-  float userHighlights = 1.f,
-  float userShadows = 1.f,
-  float userContrast = 1.f,
-  float userSaturation = 1.f
-) {
-  if (userExposure == 1.f && userSaturation == 1.f && userShadows == 1.f && userHighlights == 1.f && userContrast == 1.f) {
+float3 UserColorGrading(
+    float3 color,
+    float exposure = 1.f,
+    float highlights = 1.f,
+    float shadows = 1.f,
+    float contrast = 1.f,
+    float saturation = 1.f) {
+  if (exposure == 1.f && saturation == 1.f && shadows == 1.f && highlights == 1.f && contrast == 1.f) {
     return color;
   }
 
   // Store original color
-  float3 originalLCh = okLChFromBT709(color);
+  float3 lch_original = renodx::color::oklch::from::BT709(color);
 
-  color *= userExposure;
+  color *= exposure;
 
-  float lum = yFromBT709(abs(color));
-  float normalizedLum = lum / 0.18f;
+  float y = renodx::color::y::from::BT709(abs(color));
+  const float y_normalized = y / 0.18f;
 
-  float contrastedLum = pow(normalizedLum, userContrast);
+  const float y_contrasted = pow(y_normalized, contrast);
 
-  float highlightedLum = pow(contrastedLum, userHighlights);
-  highlightedLum = lerp(contrastedLum, highlightedLum, saturate(contrastedLum));
+  float y_highlighted = pow(y_contrasted, highlights);
+  y_highlighted = lerp(y_contrasted, y_highlighted, saturate(y_contrasted));
 
-  float shadowedLum = pow(highlightedLum, -1.f * (userShadows - 2.f));
-  shadowedLum = lerp(shadowedLum, highlightedLum, saturate(highlightedLum));
+  float y_shadowed = pow(y_highlighted, -1.f * (shadows - 2.f));
+  y_shadowed = lerp(y_shadowed, y_highlighted, saturate(y_highlighted));
 
-  shadowedLum *= 0.18f;
+  const float y_final = y_shadowed * 0.18f;
 
-  color *= (lum > 0 ? (shadowedLum / lum) : 0);
+  color *= (y > 0 ? (y_final / y) : 0);
 
-  float3 newLCh = okLChFromBT709(color);
-  newLCh[1] *= userSaturation;
-  newLCh[2] = originalLCh[2];  // hue correction
+  float3 lch_new = renodx::color::oklch::from::BT709(color);
+  lch_new[1] *= saturation;
+  lch_new[2] = lch_original[2];  // hue correction
 
-  color = bt709FromOKLCh(newLCh);
-  color = mul(BT709_2_AP1_MAT, color);  // Convert to AP1
-  color = max(0, color);                // Clamp to AP1
-  color = mul(AP1_2_BT709_MAT, color);  // Convert BT709
+  color = renodx::color::bt709::from::OkLCh(lch_new);
+  color = renodx::color::bt709::clamp::AP1(color);
 
   return color;
 }
+}  // namespace grade
+}  // namespace color
+}  // namespace renodx
 
-#endif  // SRC_COMMON_COLORGRADE_HLSL_
+#endif  // SRC_SHADERS_COLOR_GRADE_HLSL_

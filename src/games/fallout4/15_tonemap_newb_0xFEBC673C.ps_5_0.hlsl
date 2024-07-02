@@ -1,4 +1,3 @@
-#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -51,7 +50,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r0.xyz = r0.xyz * lerp(1.f, r1.www, injectedData.fxAutoExposure);
   const float3 untonemapped = r0.xyz;
 
-    // Uncharted 2
+  // Uncharted 2
   // ((x * (a * x + c * b) + d * e) / (x * (a * x + b) + d * f)) - e / f;
   // float inputExposure = 2.f;
   // float A = 0.15;      // Shoulder Strength

@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -18,7 +17,7 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
   float3 outputColor = inputColor.rgb;
 
   if (injectedData.toneMapGammaCorrection) {
-    outputColor = gammaCorrectSafe(outputColor);
+    outputColor = renodx::color::correct::GammaSafe(outputColor);
   }
 
   outputColor.rgb *= injectedData.toneMapUINits / 80.f;

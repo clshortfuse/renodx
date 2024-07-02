@@ -1,5 +1,3 @@
-#include "../../shaders/filmgrain.hlsl"
-#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.3.16 on Tue Jun 04 23:18:36 2024
@@ -107,7 +105,7 @@ void main(float4 v0
 
   r0.xyz = gSMP_0.Sample(gSMP_0Sampler_s, v1.xy).xyz;
   r1.xyzw = gSMP_1.Sample(gSMP_1Sampler_s, v1.xy).wxyz;
-  if (injectedData.toneMapType == 0) { // Clamp vanilla tonemapper to BT709
+  if (injectedData.toneMapType == 0) {  // Clamp vanilla tonemapper to BT709
     r0.xyz = max(0, r0.xyz);
     r1.yzw = max(0, r1.yzw);
   }
@@ -122,127 +120,127 @@ void main(float4 v0
   float3 untonemapped = r0.xyz;
 
   switch (r0.w) {
-  case 0: // Vanilla tonemapper 0
-    r0.w = gSMP_5.Sample(gSMP_5Sampler_s, float2(0.5, 0.5)).x;
-    r0.w = max(DL_FREG_056.z, r0.w);
-    r0.w = min(DL_FREG_056.w, r0.w);
-    r0.w = 9.99999975e-005 + r0.w;
-    r0.w = DL_FREG_054.x / r0.w;
-    r2.xyz = r0.xyz * r0.www;
-    if (injectedData.toneMapType != 0) { // Custom tonemappers
-      untonemapped = r2.xyz;
-    }
-    r0.w = DL_FREG_055.z * DL_FREG_055.y; // Start of tonemap 0
-    r3.xyz = DL_FREG_055.xxx * r2.xyz + r0.www;
-    r4.xy = DL_FREG_055.ww * DL_FREG_054.zw;
-    r3.xyz = r2.xyz * r3.xyz + r4.xxx;
-    r5.xyz = DL_FREG_055.xxx * r2.xyz + DL_FREG_055.yyy;
-    r2.xyz = r2.xyz * r5.xyz + r4.yyy;
-    r2.xyz = r3.xyz / r2.xyz;
-    r1.w = DL_FREG_054.z / DL_FREG_054.w;
-    r2.xyz = r2.xyz + -r1.www;
-    r0.w = DL_FREG_055.x * DL_FREG_054.y + r0.w;
-    r0.w = DL_FREG_054.y * r0.w + r4.x;
-    r2.w = DL_FREG_055.x * DL_FREG_054.y + DL_FREG_055.y;
-    r2.w = DL_FREG_054.y * r2.w + r4.y;
-    r0.w = r0.w / r2.w;
-    r0.w = r0.w + -r1.w;
-    r1.xyz = r2.xyz / r0.www;
-    break;
+    case 0:  // Vanilla tonemapper 0
+      r0.w = gSMP_5.Sample(gSMP_5Sampler_s, float2(0.5, 0.5)).x;
+      r0.w = max(DL_FREG_056.z, r0.w);
+      r0.w = min(DL_FREG_056.w, r0.w);
+      r0.w = 9.99999975e-005 + r0.w;
+      r0.w = DL_FREG_054.x / r0.w;
+      r2.xyz = r0.xyz * r0.www;
+      if (injectedData.toneMapType != 0) {  // Custom tonemappers
+        untonemapped = r2.xyz;
+      }
+      r0.w = DL_FREG_055.z * DL_FREG_055.y;  // Start of tonemap 0
+      r3.xyz = DL_FREG_055.xxx * r2.xyz + r0.www;
+      r4.xy = DL_FREG_055.ww * DL_FREG_054.zw;
+      r3.xyz = r2.xyz * r3.xyz + r4.xxx;
+      r5.xyz = DL_FREG_055.xxx * r2.xyz + DL_FREG_055.yyy;
+      r2.xyz = r2.xyz * r5.xyz + r4.yyy;
+      r2.xyz = r3.xyz / r2.xyz;
+      r1.w = DL_FREG_054.z / DL_FREG_054.w;
+      r2.xyz = r2.xyz + -r1.www;
+      r0.w = DL_FREG_055.x * DL_FREG_054.y + r0.w;
+      r0.w = DL_FREG_054.y * r0.w + r4.x;
+      r2.w = DL_FREG_055.x * DL_FREG_054.y + DL_FREG_055.y;
+      r2.w = DL_FREG_054.y * r2.w + r4.y;
+      r0.w = r0.w / r2.w;
+      r0.w = r0.w + -r1.w;
+      r1.xyz = r2.xyz / r0.www;
+      break;
 
-  case 1: // Vanilla tonemapper 1
-    r0.w = gSMP_5.Sample(gSMP_5Sampler_s, float2(0.5, 0.5)).x;
-    r0.w = max(DL_FREG_056.z, r0.w);
-    r0.w = min(DL_FREG_056.w, r0.w);
-    r0.w = 9.99999975e-005 + r0.w;
-    r0.w = DL_FREG_054.x / r0.w;
-    r2.xyz = r0.xyz * r0.www;
-    if (injectedData.toneMapType != 0) { // Custom tonemappers
-      vanillaMidGray = .15f;
-      renoDRTContrast = 0.92f;
-      renoDRTFlare = 0.f;
-      renoDRTShadows = 1.f;
-      // renoDRTDechroma = 0.7f;
-      renoDRTSaturation = 1.3f;
-      renoDRTHighlights = 1.f;
-      untonemapped = r2.xyz;
-    }
-    r0.w = dot(r2.xyz, float3(0.212672904, 0.715152204,
-                              0.0721750036)); // Start of tonemap 1
-    r0.w = max(9.99999975e-005, r0.w);
-    r1.w = 1 + r0.w;
-    r1.w = r0.w / r1.w;
-    r2.xyz = r1.www * r2.xyz;
-    r1.xyz = r2.xyz / r0.www;
-    break;
+    case 1:  // Vanilla tonemapper 1
+      r0.w = gSMP_5.Sample(gSMP_5Sampler_s, float2(0.5, 0.5)).x;
+      r0.w = max(DL_FREG_056.z, r0.w);
+      r0.w = min(DL_FREG_056.w, r0.w);
+      r0.w = 9.99999975e-005 + r0.w;
+      r0.w = DL_FREG_054.x / r0.w;
+      r2.xyz = r0.xyz * r0.www;
+      if (injectedData.toneMapType != 0) {  // Custom tonemappers
+        vanillaMidGray = .15f;
+        renoDRTContrast = 0.92f;
+        renoDRTFlare = 0.f;
+        renoDRTShadows = 1.f;
+        // renoDRTDechroma = 0.7f;
+        renoDRTSaturation = 1.3f;
+        renoDRTHighlights = 1.f;
+        untonemapped = r2.xyz;
+      }
+      r0.w = dot(r2.xyz, float3(0.212672904, 0.715152204,
+                                0.0721750036));  // Start of tonemap 1
+      r0.w = max(9.99999975e-005, r0.w);
+      r1.w = 1 + r0.w;
+      r1.w = r0.w / r1.w;
+      r2.xyz = r1.www * r2.xyz;
+      r1.xyz = r2.xyz / r0.www;
+      break;
 
-  case 2: // Vanilla tonemapper 2
-    r0.w = gSMP_5.Sample(gSMP_5Sampler_s, float2(0.5, 0.5)).x;
-    r0.w = max(DL_FREG_056.z, r0.w);
-    r0.w = min(DL_FREG_056.w, r0.w);
-    r0.w = 9.99999975e-005 + r0.w;
-    r0.w = DL_FREG_054.x / r0.w;
-    r0.xyz = r0.xyz * r0.www;
-    if (injectedData.toneMapType != 0) { // Custom tonemappers
-      vanillaMidGray = .151f;
-      renoDRTContrast = 0.94f;
-      renoDRTFlare = 0.f;
-      renoDRTShadows = 1.f;
-      // renoDRTDechroma = 0.7f;
-      renoDRTSaturation = 1.3f;
-      renoDRTHighlights = 1.f;
-      untonemapped = r0.xyz;
-    }
-    r0.w = dot(r0.xyz, float3(0.212672904, 0.715152204,
-                              0.0721750036)); // Start of tonemap 2
-    r0.w = max(9.99999975e-005, r0.w);
-    r1.w = DL_FREG_054.y * DL_FREG_054.y;
-    r1.w = r0.w / r1.w;
-    r1.w = 1 + r1.w;
-    r1.w = r1.w * r0.w;
-    r2.x = 1 + r0.w;
-    r1.w = r1.w / r2.x;
-    r0.xyz = r1.www * r0.xyz;
-    r1.xyz = r0.xyz / r0.www;
-    break;
+    case 2:  // Vanilla tonemapper 2
+      r0.w = gSMP_5.Sample(gSMP_5Sampler_s, float2(0.5, 0.5)).x;
+      r0.w = max(DL_FREG_056.z, r0.w);
+      r0.w = min(DL_FREG_056.w, r0.w);
+      r0.w = 9.99999975e-005 + r0.w;
+      r0.w = DL_FREG_054.x / r0.w;
+      r0.xyz = r0.xyz * r0.www;
+      if (injectedData.toneMapType != 0) {  // Custom tonemappers
+        vanillaMidGray = .151f;
+        renoDRTContrast = 0.94f;
+        renoDRTFlare = 0.f;
+        renoDRTShadows = 1.f;
+        // renoDRTDechroma = 0.7f;
+        renoDRTSaturation = 1.3f;
+        renoDRTHighlights = 1.f;
+        untonemapped = r0.xyz;
+      }
+      r0.w = dot(r0.xyz, float3(0.212672904, 0.715152204,
+                                0.0721750036));  // Start of tonemap 2
+      r0.w = max(9.99999975e-005, r0.w);
+      r1.w = DL_FREG_054.y * DL_FREG_054.y;
+      r1.w = r0.w / r1.w;
+      r1.w = 1 + r1.w;
+      r1.w = r1.w * r0.w;
+      r2.x = 1 + r0.w;
+      r1.w = r1.w / r2.x;
+      r0.xyz = r1.www * r0.xyz;
+      r1.xyz = r0.xyz / r0.www;
+      break;
 
-  default: // Debug?
-    r1.xyz = float3(1, 0, 1);
-    break;
+    default:  // Debug?
+      r1.xyz = float3(1, 0, 1);
+      break;
   }
 
   if (injectedData.toneMapType != 0) {
-
-    ToneMapParams tmParams = buildToneMapParams(
-                              injectedData.toneMapType,
-                              injectedData.toneMapPeakNits,
-                              injectedData.toneMapGameNits,
-                              injectedData.toneMapGammaCorrection,
-                              injectedData.colorGradeExposure,
-                              injectedData.colorGradeHighlights,
-                              injectedData.colorGradeShadows,
-                              injectedData.colorGradeContrast,
-                              injectedData.colorGradeSaturation,
-                              vanillaMidGray,
-                              vanillaMidGray * 100.f,
-                              renoDRTHighlights,
-                              renoDRTShadows,
-                              renoDRTContrast,
-                              renoDRTSaturation,
-                              renoDRTDechroma,
-                              renoDRTFlare);
+    float3 tonemapped = renodx::tonemap::config::Apply(
+        untonemapped,
+        renodx::tonemap::config::Create(
+            injectedData.toneMapType,
+            injectedData.toneMapPeakNits,
+            injectedData.toneMapGameNits,
+            injectedData.toneMapGammaCorrection,
+            injectedData.colorGradeExposure,
+            injectedData.colorGradeHighlights,
+            injectedData.colorGradeShadows,
+            injectedData.colorGradeContrast,
+            injectedData.colorGradeSaturation,
+            vanillaMidGray,
+            vanillaMidGray * 100.f,
+            renoDRTHighlights,
+            renoDRTShadows,
+            renoDRTContrast,
+            renoDRTSaturation,
+            renoDRTDechroma,
+            renoDRTFlare));
 
     if (injectedData.toneMapHueCorrection) {
-      r1.xyz = hueCorrection(toneMap(untonemapped, tmParams), r1.xyz);
+      r1.xyz = renodx::color::correct::Hue(tonemapped, r1.xyz);
     } else {
-      r1.xyz = toneMap(untonemapped, tmParams);
+      r1.xyz = tonemapped;
     }
-  } else { // Clamp vanilla tonemapper to BT709
+  } else {  // Clamp vanilla tonemapper to BT709
     r0.xyz = max(0, r1.xyz);
   }
 
-  r0.xyz = sign(r1.xyz) *
-           pow(abs(r1.xyz), 1.f / 2.2f); // Linearize before color grade
+  r0.xyz = sign(r1.xyz) * pow(abs(r1.xyz), 1.f / 2.2f);  // Linearize before color grade
 
   const float3 preLUT = r0.xyz;
 
@@ -270,25 +268,23 @@ void main(float4 v0
            injectedData.colorGradeLUTStrength);
 
   if (injectedData.fxFilmGrain) {
-    float3 grainedColor =
-        computeFilmGrain(r0.rgb, v1.xy, frac(injectedData.elapsedTime / 1000.f),
-                         injectedData.fxFilmGrain * 0.03f, 1.f);
+    float3 grainedColor = renodx::effects::ApplyFilmGrain(
+        r0.rgb, v1.xy, frac(injectedData.elapsedTime / 1000.f),
+        injectedData.fxFilmGrain * 0.03f, 1.f);
     r0.xyz = grainedColor;
   }
 
-  if (injectedData.toneMapType == 0) { // Cap vanilla tonemapper
+  if (injectedData.toneMapType == 0) {  // Cap vanilla tonemapper
     r0.xyz = clamp(r0.xyz, 0, injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
   }
 
   r0.rgb = injectedData.toneMapGammaCorrection
                ? sign(r0.rgb) * pow(abs(r0.rgb), 2.2f)
-               : linearFromSRGB(r0.rgb);
+               : renodx::color::bt709::from::SRGB(r0.rgb);
 
   r0.rgb *= injectedData.toneMapGameNits / 80.f;
 
-  r0.rgb = mul(BT709_2_BT2020_MAT, r0.rgb); // Convert to BT2020
-  r0.rgb = max(0, r0.rgb);               // Clamp to BT2020
-  r0.rgb = mul(BT2020_2_BT709_MAT, r0.rgb); // Convert BT709
+  r0.rgb = renodx::color::bt709::clamp::BT2020(r0.rgb);
 
   o0.w = dot(r0.xyz, float3(0.298999995, 0.587000012, 0.114));
   o0.xyz = r0.xyz;

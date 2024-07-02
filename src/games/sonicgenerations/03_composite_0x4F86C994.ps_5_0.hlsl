@@ -1,8 +1,6 @@
 #include "./shared.h"
-#include "../../shaders/tonemap.hlsl"
 
-cbuffer cbGlobalsShared : register(b1)
-{
+cbuffer cbGlobalsShared : register(b1) {
   uint g_Booleans : packoffset(c0);
   uint g_Flags : packoffset(c0.y);
   float g_AlphaThreshold : packoffset(c0.z);
@@ -11,10 +9,8 @@ cbuffer cbGlobalsShared : register(b1)
 SamplerState s0_s_s : register(s0);
 Texture2D<float4> s0 : register(t0);
 
-
 // 3Dmigoto declarations
 #define cmp -
-
 
 void main(
   float4 v0 : SV_Position0,
@@ -39,9 +35,8 @@ void main(
   out float4 o0 : SV_Target0,
   out float4 o1 : SV_Target1,
   out float4 o2 : SV_Target2,
-  out float4 o3 : SV_Target3)
-{
-  float4 r0,r1;
+  out float4 o3 : SV_Target3) {
+  float4 r0, r1;
   uint4 bitmask, uiDest;
   float4 fDest;
 
@@ -63,32 +58,35 @@ void main(
   float renoDRTSaturation = 1.0f;
   float renoDRTHighlights = 1.0f;
 
-  ToneMapParams tmParams = buildToneMapParams(
-    injectedData.toneMapType,
-    injectedData.toneMapPeakNits,
-    injectedData.toneMapGameNits,
-    injectedData.toneMapGammaCorrection,  // -1 == srgb
-    injectedData.colorGradeExposure,
-    injectedData.colorGradeHighlights,
-    injectedData.colorGradeShadows,
-    injectedData.colorGradeContrast,
-    injectedData.colorGradeSaturation,
-    vanillaMidGray,
-    vanillaMidGray * 100.f,
-    renoDRTHighlights,
-    renoDRTShadows,
-    renoDRTContrast,
-    renoDRTSaturation,
-    renoDRTDechroma,
-    renoDRTFlare
-  );
+  renodx::tonemap::Config config = renodx::tonemap::config::Create(
+      injectedData.toneMapType,
+      injectedData.toneMapPeakNits,
+      injectedData.toneMapGameNits,
+      injectedData.toneMapGammaCorrection,  // -1 == srgb
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation,
+      vanillaMidGray,
+      vanillaMidGray * 100.f,
+      renoDRTHighlights,
+      renoDRTShadows,
+      renoDRTContrast,
+      renoDRTSaturation,
+      renoDRTDechroma,
+      renoDRTFlare);
 
   o0 = max(0, o0);
-  o0 = injectedData.toneMapGammaCorrection ? pow(o0, 2.2f) : linearFromSRGBA(o0);
-  o0.rgb = toneMap(o0.rgb, tmParams);
+  o0 = injectedData.toneMapGammaCorrection
+           ? pow(o0, 2.2f)
+           : renodx::color::bt709::from::SRGBA(o0);
+  o0.rgb = renodx::tonemap::config::Apply(o0.rgb, config);
   o0 = max(0, o0);
   o0.rgb *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-  o0 = injectedData.toneMapGammaCorrection ? pow(o0, 1.f / 2.2f) : srgbaFromLinear(o0);
+  o0 = injectedData.toneMapGammaCorrection
+           ? pow(o0, 1.f / 2.2f)
+           : renodx::color::srgba::from::BT709(o0);
 
   return;
 }

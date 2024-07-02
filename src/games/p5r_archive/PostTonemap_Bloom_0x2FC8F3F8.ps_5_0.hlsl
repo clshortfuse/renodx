@@ -1,14 +1,11 @@
-#include "../../shaders/color.hlsl"
 
-cbuffer GFD_PSCONST_CORRECT : register(b12)
-{
+cbuffer GFD_PSCONST_CORRECT : register(b12) {
   float3 colorBalance : packoffset(c0);
   float _reserve00 : packoffset(c0.w);
   float2 colorBlend : packoffset(c1);
 }
 
-cbuffer GFD_PSCONST_HDR : register(b11)
-{
+cbuffer GFD_PSCONST_HDR : register(b11) {
   float middleGray : packoffset(c0);
   float adaptedLum : packoffset(c0.y);
   float bloomScale : packoffset(c0.z);
@@ -20,17 +17,11 @@ SamplerState bloomSampler_s : register(s1);
 Texture2D<float4> opaueTexture : register(t0);
 Texture2D<float4> bloomTexture : register(t1);
 
-
 // 3Dmigoto declarations
 #define cmp -
 
-
-void main(
-  float4 v0 : SV_POSITION0,
-  float2 v1 : TEXCOORD0,
-  out float4 o0 : SV_TARGET0)
-{
-  float4 r0,r1,r2;
+void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_TARGET0) {
+  float4 r0, r1, r2;
   uint4 bitmask, uiDest;
   float4 fDest;
 
@@ -48,7 +39,7 @@ void main(
   r2.x = -r0.w;
   r2.x = 1 + r2.x;
   r0.xyz = -r0.xyz;
-  r0.xyz = float3(1,1,1) + r0.xyz;
+  r0.xyz = float3(1, 1, 1) + r0.xyz;
   r2.yzw = -r2.xxx;
   r0.xyz = r2.yzw + r0.xyz;
   r0.xyz = r0.xyz / r0.www;
@@ -56,13 +47,13 @@ void main(
   r0.xyz = r0.xyz * r0.www;
   r0.xyz = r0.xyz + r2.xxx;
   r0.xyz = -r0.xyz;
-  r0.xyz = float3(1,1,1) + r0.xyz;
+  r0.xyz = float3(1, 1, 1) + r0.xyz;
   r0.xyz = r0.xyz / colorBlend.xxx;
   r0.xyz = -r0.xyz;
-  r0.xyz = float3(1,1,1) + r0.xyz;
+  r0.xyz = float3(1, 1, 1) + r0.xyz;
   r0.xyz = r0.xyz / colorBlend.yyy;
   r0.xyz = -r0.xyz;
-  r1.xyz = float3(1,1,1) + r0.xyz;
+  r1.xyz = float3(1, 1, 1) + r0.xyz;
   r1.xyz = r1.xyz;
   r1.w = r1.w;
   o0.xyzw = r1.xyzw;

@@ -1,7 +1,5 @@
 // Film Grain
 
-#include "../../shaders/filmgrain.hlsl"
-#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);  // Render
@@ -54,18 +52,17 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : COLOR0, o
 
   float3 signs = sign(r0.xyz);
   r0.xyz = max(0, cb11[95].xyz * v2.www + abs(r0.xyz));
-  r0.rgb = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : linearFromSRGB(r0.rgb);
+  r0.rgb = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : renodx::color::bt709::from::SRGB(r0.rgb);
   r0.rgb *= signs;
 
   if (injectedData.toneMapType == 0.f) {
-    o0.xyz = applyUserColorGrading(
-      r0.xyz,
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeContrast,
-      injectedData.colorGradeSaturation
-    );
+    o0.xyz = renodx::color::grade::UserColorGrading(
+        r0.xyz,
+        injectedData.colorGradeExposure,
+        injectedData.colorGradeHighlights,
+        injectedData.colorGradeShadows,
+        injectedData.colorGradeContrast,
+        injectedData.colorGradeSaturation);
   } else {
     float3 outputColor = r0.rgb;
 
@@ -77,42 +74,42 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : COLOR0, o
     float renoDRTDechroma = 0.5f;
     float renoDRTFlare = 0.f;
 
-    ToneMapParams tmParams = buildToneMapParams(
-      injectedData.toneMapType,
-      injectedData.toneMapPeakNits,
-      injectedData.toneMapGameNits,
-      0,
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeContrast,
-      injectedData.colorGradeSaturation,
-      vanillaMidGray,
-      vanillaMidGray * 100.f,
-      renoDRTHighlights,
-      renoDRTShadows,
-      renoDRTContrast,
-      renoDRTSaturation,
-      renoDRTDechroma,
-      renoDRTFlare
-    );
+    renodx::tonemap::Config config = renodx::tonemap::config::Create(
+        injectedData.toneMapType,
+        injectedData.toneMapPeakNits,
+        injectedData.toneMapGameNits,
+        0,
+        injectedData.colorGradeExposure,
+        injectedData.colorGradeHighlights,
+        injectedData.colorGradeShadows,
+        injectedData.colorGradeContrast,
+        injectedData.colorGradeSaturation,
+        vanillaMidGray,
+        vanillaMidGray * 100.f,
+        renoDRTHighlights,
+        renoDRTShadows,
+        renoDRTContrast,
+        renoDRTSaturation,
+        renoDRTDechroma,
+        renoDRTFlare);
 
-    outputColor = toneMap(outputColor, tmParams);
+    outputColor = renodx::tonemap::config::Apply(outputColor, config);
 
-    float3 grainedColor = computeFilmGrain(
-      outputColor,
-      v1.xy,
-      frac(t1.Sample(s0_s, v1.zw).x / 1000.f),
-      injectedData.fxFilmGrain * 0.03f,
-      1.f
-    );
+    float3 grainedColor = renodx::effects::ApplyFilmGrain(
+        outputColor,
+        v1.xy,
+        frac(t1.Sample(s0_s, v1.zw).x / 1000.f),
+        injectedData.fxFilmGrain * 0.03f,
+        1.f);
     o0.xyz = grainedColor;
   }
 
   o0.rgb *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
   signs = sign(o0.rgb);
   o0.rgb = abs(o0.rgb);
-  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 1.f / 2.2f) : srgbFromLinear(o0.rgb);
+  o0.rgb = injectedData.toneMapGammaCorrection
+               ? pow(o0.rgb, 1.f / 2.2f)
+               : renodx::color::srgb::from::BT709(o0.rgb);
   o0.rgb *= signs;
 
   o0.w = r0.w;

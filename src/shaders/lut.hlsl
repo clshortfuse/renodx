@@ -3,150 +3,136 @@
 
 #include "./color.hlsl"
 
-struct LUTParams {
-  SamplerState lutSampler;
+namespace renodx {
+namespace lut {
+struct Config {
+  SamplerState lut_sampler;
   float strength;
   float scaling;
-  uint inputType;
-  uint outputType;
+  uint type_input;
+  uint type_output;
   float size;
   float3 precompute;
 };
 
-#define LUT_TYPE__LINEAR            0u
-#define LUT_TYPE__SRGB              1u
-#define LUT_TYPE__2_4               2u
-#define LUT_TYPE__2_2               3u
-#define LUT_TYPE__2_0               4u
-#define LUT_TYPE__ARRI_C800         5u
-#define LUT_TYPE__ARRI_C1000        6u
-#define LUT_TYPE__ARRI_C800_NO_CUT  7u
-#define LUT_TYPE__ARRI_C1000_NO_CUT 8u
-#define LUT_TYPE__PQ                9u
+namespace config {
+namespace type {
+static const uint LINEAR = 0u;
+static const uint SRGB = 1u;
+static const uint GAMMA_2_4 = 2u;
+static const uint GAMMA_2_2 = 3u;
+static const uint GAMMA_2_0 = 4u;
+static const uint ARRI_C800 = 5u;
+static const uint ARRI_C1000 = 6u;
+static const uint ARRI_C800_NO_CUT = 7u;
+static const uint ARRI_C1000_NO_CUT = 8u;
+static const uint PQ = 9u;
+}  // namespace type
 
-LUTParams buildLUTParams(SamplerState lutSampler, float strength, float scaling, uint inputType, uint outputType, float size = 0) {
-  LUTParams params = {lutSampler, strength, scaling, inputType, outputType, size, float(0).xxx};
-  return params;
+Config Create(SamplerState lut_sampler, float strength, float scaling, uint type_input, uint type_output, float size = 0) {
+  Config config = {lut_sampler, strength, scaling, type_input, type_output, size, float3(0, 0, 0)};
+  return config;
 }
 
-LUTParams buildLUTParams(SamplerState lutSampler, float strength, float scaling, uint inputType, uint outputType, float3 precompute) {
-  LUTParams params = {lutSampler, strength, scaling, inputType, outputType, 0, precompute};
-  return params;
+Config Create(SamplerState lut_sampler, float strength, float scaling, uint type_input, uint type_output, float3 precompute) {
+  Config config = {lut_sampler, strength, scaling, type_input, type_output, 0, precompute};
+  return config;
 }
+}  // namespace config
 
-// https://www.glowybits.com/blog/2016/12/21/ifl_iss_hdr_1/
-float ColorGradeSmoothClamp(float x) {
-  const float u = 0.525;
-  float q = (2.0 - u - 1.0 / u + x * (2.0 + 2.0 / u - x / u)) / 4.0;
-  return (abs(1.0 - x) < u) ? q : saturate(x);
-}
-
-float3 centerLUTTexel(float3 color, float size) {
+float3 CenterTexel(float3 color, float size) {
   float scale = (size - 1.f) / size;
   float offset = 1.f / (2.f * size);
   return scale * color + offset;
 }
 
-#define sampleLUTTexture3DFunctionGenerator(textureType)                                       \
-  float3 sampleLUT(textureType lut, SamplerState samplerState, float3 color, float size = 0) { \
-    if (size == 0) {                                                                           \
-      /* Removed by compiler if specified */                                                   \
-      float width;                                                                             \
-      float height;                                                                            \
-      float depth;                                                                             \
-      lut.GetDimensions(width, height, depth);                                                 \
-      size = height;                                                                           \
-    }                                                                                          \
-                                                                                               \
-    float3 position = centerLUTTexel(color, size);                                             \
-                                                                                               \
-    return lut.SampleLevel(samplerState, position, 0.0f).rgb;                                  \
-  }
-
-#define sampleLUTTexture2DPrecomputedFunctionGenerator(textureType)                               \
-  float3 sampleLUT(textureType lut, SamplerState samplerState, float3 color, float3 precompute) { \
-    float texelSize = precompute.x;                                                               \
-    float slice = precompute.y;                                                                   \
-    float maxIndex = precompute.z;                                                                \
-                                                                                                  \
-    float zPosition = color.z * maxIndex;                                                         \
-    float zInteger = floor(zPosition);                                                            \
-    float zFraction = zPosition - zInteger;                                                       \
-    float zOffset = zInteger * slice;                                                             \
-                                                                                                  \
-    float xOffset = (color.r * maxIndex * texelSize) + (texelSize * 0.5f);                        \
-                                                                                                  \
-    float yOffset = (color.g * maxIndex * slice) + (slice * 0.5f);                                \
-                                                                                                  \
-    float2 uv = float2(                                                                           \
-      zOffset + xOffset,                                                                          \
-      yOffset                                                                                     \
-    );                                                                                            \
-                                                                                                  \
-    float3 color0 = lut.SampleLevel(samplerState, uv, 0).rgb;                                     \
-    uv.x += slice;                                                                                \
-    float3 color1 = lut.SampleLevel(samplerState, uv, 0).rgb;                                     \
-                                                                                                  \
-    return lerp(color0, color1, zFraction);                                                       \
-  }
-
-#define sampleLUTTexture2DFunctionGenerator(textureType)                                       \
-  float3 sampleLUT(textureType lut, SamplerState samplerState, float3 color, float size = 0) { \
-    if (size == 0) {                                                                           \
-      /* Removed by compiler if specified */                                                   \
-      float width;                                                                             \
-      float height;                                                                            \
-      lut.GetDimensions(width, height);                                                        \
-      size = min(width, height);                                                               \
-    }                                                                                          \
-                                                                                               \
-    float maxIndex = size - 1.f;                                                               \
-    float slice = 1.f / size;                                                                  \
-    float texelSize = slice * slice;                                                           \
-                                                                                               \
-    return sampleLUT(lut, samplerState, color, float3(texelSize, slice, maxIndex));            \
-  }
-
-#define sampleLUT3DColorFunctionGenerator(textureType)                               \
-  float3 sampleLUTColor(float3 color, LUTParams lutParams, textureType lutTexture) { \
-    return sampleLUT(                                                                \
-      lutTexture,                                                                    \
-      lutParams.lutSampler,                                                          \
-      color.rgb,                                                                     \
-      lutParams.size                                                                 \
-    );                                                                               \
-  }
-
-#define sampleLUT2DColorFunctionGenerator(textureType)                               \
-  float3 sampleLUTColor(float3 color, LUTParams lutParams, textureType lutTexture) { \
-    if (lutParams.precompute.x) {                                                    \
-      return sampleLUT(                                                              \
-        lutTexture,                                                                  \
-        lutParams.lutSampler,                                                        \
-        color.rgb,                                                                   \
-        lutParams.precompute.xyz                                                     \
-      );                                                                             \
+#define SAMPLE_TEXTURE_3D_FUNCTION_GENERATOR(TextureType)                            \
+  float3 Sample(TextureType lut, SamplerState state, float3 color, float size = 0) { \
+    if (size == 0) {                                                                 \
+      /* Removed by compiler if specified */                                         \
+      float width;                                                                   \
+      float height;                                                                  \
+      float depth;                                                                   \
+      lut.GetDimensions(width, height, depth);                                       \
+      size = height;                                                                 \
     }                                                                                \
-    return sampleLUT(                                                                \
-      lutTexture,                                                                    \
-      lutParams.lutSampler,                                                          \
-      color.rgb,                                                                     \
-      lutParams.size                                                                 \
-    );                                                                               \
+                                                                                     \
+    float3 position = CenterTexel(color, size);                                      \
+                                                                                     \
+    return lut.SampleLevel(state, position, 0.0f).rgb;                               \
   }
 
-sampleLUTTexture3DFunctionGenerator(Texture3D<float4>);
-sampleLUTTexture3DFunctionGenerator(Texture3D<float3>);
-sampleLUTTexture2DPrecomputedFunctionGenerator(Texture2D<float4>);
-sampleLUTTexture2DPrecomputedFunctionGenerator(Texture2D<float3>);
-sampleLUTTexture2DFunctionGenerator(Texture2D<float4>);
-sampleLUTTexture2DFunctionGenerator(Texture2D<float3>);
-sampleLUT3DColorFunctionGenerator(Texture3D<float4>);
-sampleLUT3DColorFunctionGenerator(Texture3D<float3>);
-sampleLUT2DColorFunctionGenerator(Texture2D<float4>);
-sampleLUT2DColorFunctionGenerator(Texture2D<float3>);
+#define SAMPLE_TEXTURE_2D_PRECOMPUTED_FUNCTION_GENERATOR(TextureType)                   \
+  float3 Sample(TextureType lut, SamplerState state, float3 color, float3 precompute) { \
+    float texel_size = precompute.x;                                                    \
+    float slice = precompute.y;                                                         \
+    float max_index = precompute.z;                                                     \
+                                                                                        \
+    float z_position = color.z * max_index;                                             \
+    float z_integer = floor(z_position);                                                \
+    float z_fraction = z_position - z_integer;                                          \
+                                                                                        \
+    const float x_offset = (color.r * max_index * texel_size) + (texel_size * 0.5f);    \
+    const float y_offset = (color.g * max_index * slice) + (slice * 0.5f);              \
+    const float z_offset = z_integer * slice;                                           \
+                                                                                        \
+    float2 uv = float2(z_offset + x_offset, y_offset);                                  \
+                                                                                        \
+    float3 color0 = lut.SampleLevel(state, uv, 0).rgb;                                  \
+    uv.x += slice;                                                                      \
+    float3 color1 = lut.SampleLevel(state, uv, 0).rgb;                                  \
+                                                                                        \
+    return lerp(color0, color1, z_fraction);                                            \
+  }
 
-float3 sampleLUTUnreal(Texture2D lut, SamplerState samplerState, float3 color, float size = 0) {
+#define SAMPLE_TEXTURE_2D_FUNCTION_GENERATOR(TextureType)                            \
+  float3 Sample(TextureType lut, SamplerState state, float3 color, float size = 0) { \
+    if (size == 0) {                                                                 \
+      /* Removed by compiler if specified */                                         \
+      float width;                                                                   \
+      float height;                                                                  \
+      lut.GetDimensions(width, height);                                              \
+      size = min(width, height);                                                     \
+    }                                                                                \
+                                                                                     \
+    const float max_index = size - 1.f;                                              \
+    const float slice = 1.f / size;                                                  \
+    const float texel_size = slice * slice;                                          \
+                                                                                     \
+    return Sample(lut, state, color, float3(texel_size, slice, max_index));          \
+  }
+
+#define SAMPLE_COLOR_3D_FUNCTION_GENERATOR(TextureType)                      \
+  float3 SampleColor(float3 color, Config config, TextureType lut_texture) { \
+    return Sample(lut_texture, config.lut_sampler, color.rgb, config.size);  \
+  }
+
+#define SAMPLE_COLOR_2D_FUNCTION_GENERATOR(TextureType)                                 \
+  float3 SampleColor(float3 color, Config config, TextureType lut_texture) {            \
+    if (config.precompute.x) {                                                          \
+      return Sample(lut_texture, config.lut_sampler, color.rgb, config.precompute.xyz); \
+    }                                                                                   \
+    return Sample(lut_texture, config.lut_sampler, color.rgb, config.size);             \
+  }
+
+SAMPLE_TEXTURE_3D_FUNCTION_GENERATOR(Texture3D<float4>);
+SAMPLE_TEXTURE_3D_FUNCTION_GENERATOR(Texture3D<float3>);
+SAMPLE_TEXTURE_2D_PRECOMPUTED_FUNCTION_GENERATOR(Texture2D<float4>);
+SAMPLE_TEXTURE_2D_PRECOMPUTED_FUNCTION_GENERATOR(Texture2D<float3>);
+SAMPLE_TEXTURE_2D_FUNCTION_GENERATOR(Texture2D<float4>);
+SAMPLE_TEXTURE_2D_FUNCTION_GENERATOR(Texture2D<float3>);
+SAMPLE_COLOR_3D_FUNCTION_GENERATOR(Texture3D<float4>);
+SAMPLE_COLOR_3D_FUNCTION_GENERATOR(Texture3D<float3>);
+SAMPLE_COLOR_2D_FUNCTION_GENERATOR(Texture2D<float4>);
+SAMPLE_COLOR_2D_FUNCTION_GENERATOR(Texture2D<float3>);
+
+#undef SAMPLE_TEXTURE_3D_FUNCTION_GENERATOR
+#undef SAMPLE_TEXTURE_2D_PRECOMPUTED_FUNCTION_GENERATOR
+#undef SAMPLE_TEXTURE_2D_FUNCTION_GENERATOR
+#undef SAMPLE_COLOR_3D_FUNCTION_GENERATOR
+#undef SAMPLE_COLOR_2D_FUNCTION_GENERATOR
+
+float3 SampleUnreal(Texture2D lut, SamplerState state, float3 color, float size = 0) {
   if (size == 0) {
     // Removed by compiler if specified
     float width;
@@ -156,235 +142,221 @@ float3 sampleLUTUnreal(Texture2D lut, SamplerState samplerState, float3 color, f
   }
   float slice = 1.f / size;
 
-  float zPosition = color.z * size - 0.5;
-  float zInteger = floor(zPosition);
-  half fraction = zPosition - zInteger;
+  float z_position = color.z * size - 0.5;
+  float z_integer = floor(z_position);
+  half fraction = z_position - z_integer;
 
-  float2 uv = float2(
-    (color.r + zInteger) * slice,
-    color.g
-  );
+  float2 uv = float2((color.r + z_integer) * slice, color.g);
 
-  float3 color0 = lut.SampleLevel(samplerState, uv, 0).rgb;
+  float3 color0 = lut.SampleLevel(state, uv, 0).rgb;
   uv.x += slice;
-  float3 color1 = lut.SampleLevel(samplerState, uv, 0).rgb;
+  float3 color1 = lut.SampleLevel(state, uv, 0).rgb;
 
   return lerp(color0, color1, fraction);
 }
 
-float3 lutCorrectionBlack(float3 inputColor, float3 lutColor, float lutBlackY, float strength) {
-  const float inputY = yFromBT709(inputColor);
-  const float colorY = yFromBT709(lutColor);
-  const float a = lutBlackY;
-  const float b = lerp(0, lutBlackY, strength);
-  const float g = inputY;
-  const float h = colorY;
-  const float newY = h - pow(lutBlackY, pow(1.f + g, b / a));
-  lutColor *= (colorY > 0) ? min(colorY, newY) / colorY : 1.f;
-  return lutColor;
+float3 CorrectBlack(float3 color_input, float3 lut_color, float lut_black_y, float strength) {
+  const float input_y = renodx::color::y::from::BT709(color_input);
+  const float color_y = renodx::color::y::from::BT709(lut_color);
+  const float a = lut_black_y;
+  const float b = lerp(0, lut_black_y, strength);
+  const float g = input_y;
+  const float h = color_y;
+  const float new_y = h - pow(lut_black_y, pow(1.f + g, b / a));
+  lut_color *= (color_y > 0) ? min(color_y, new_y) / color_y : 1.f;
+  return lut_color;
 }
 
-float3 lutCorrectionWhite(float3 inputColor, float3 lutColor, float lutWhiteY, float targetWhiteY, float strength) {
-  const float inputY = min(targetWhiteY, yFromBT709(inputColor));
-  const float colorY = yFromBT709(lutColor);
-  const float a = lutWhiteY / targetWhiteY;
+float3 CorrectWhite(float3 color_input, float3 lut_color, float lut_white_y, float target_white_y, float strength) {
+  const float input_y = min(target_white_y, renodx::color::y::from::BT709(color_input));
+  const float color_y = renodx::color::y::from::BT709(lut_color);
+  const float a = lut_white_y / target_white_y;
   const float b = lerp(1.f, 0.f, strength);
-  const float g = inputY;
-  const float h = colorY;
-  const float newY = h * pow((1.f / a), pow(g / targetWhiteY, b / a));
-  lutColor *= (colorY > 0) ? max(colorY, newY) / colorY : 1.f;
-  return lutColor;
+  const float g = input_y;
+  const float h = color_y;
+  const float new_y = h * pow((1.f / a), pow(g / target_white_y, b / a));
+  lut_color *= (color_y > 0) ? max(color_y, new_y) / color_y : 1.f;
+  return lut_color;
 }
 
-float3 unclampSDRLUT(
-  float3 originalGamma,
-  float3 blackGamma,
-  float3 midGrayGamma,
-  float3 whiteGamma,
-  float3 neutralGamma
-) {
-  float3 addedGamma = blackGamma;
-  float3 removedGamma = 1.f - min(1.f, whiteGamma);
+float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 white_gamma, float3 neutral_gamma) {
+  const float3 added_gamma = black_gamma;
+  const float3 removed_gamma = 1.f - min(1.f, white_gamma);
 
-  float midGrayAvg = (midGrayGamma.r + midGrayGamma.g + midGrayGamma.b) / 3.f;
+  const float mid_gray_average = (mid_gray_gamma.r + mid_gray_gamma.g + mid_gray_gamma.b) / 3.f;
 
   // Remove relative to distance to inverse midgray
-  float shadowLength = 1.f - midGrayAvg;
-  float shadowStop = max(neutralGamma.r, max(neutralGamma.g, neutralGamma.b));
-  float3 removeFog = addedGamma * max(0, shadowLength - shadowStop) / shadowLength;
+  const float shadow_length = 1.f - mid_gray_average;
+  const float shadow_stop = max(neutral_gamma.r, max(neutral_gamma.g, neutral_gamma.b));
+  const float3 floor_remove = added_gamma * max(0, shadow_length - shadow_stop) / shadow_length;
 
   // Add back relative to distance from midgray
-  float highlightsLength = midGrayAvg;
-  float highlightsStop = 1.f - min(neutralGamma.r, min(neutralGamma.g, neutralGamma.b));
-  float3 liftHighlights = removedGamma * (max(0, highlightsLength - highlightsStop) / highlightsLength);
+  const float highlights_length = mid_gray_average;
+  const float highlights_stop = 1.f - min(neutral_gamma.r, min(neutral_gamma.g, neutral_gamma.b));
+  const float3 ceiling_add = removed_gamma * (max(0, highlights_length - highlights_stop) / highlights_length);
 
-  float3 unclampedInGamma = max(0, originalGamma - removeFog) + liftHighlights;
-  return unclampedInGamma;
+  const float3 unclamped_gamma = max(0, original_gamma - floor_remove) + ceiling_add;
+  return unclamped_gamma;
 }
 
-float3 recolorUnclampedLUT(float3 originalLinear, float3 unclampedLinear) {
-  const float3 originalLab = okLabFromBT709(originalLinear);
+float3 RecolorUnclamped(float3 original_linear, float3 unclamped_linear) {
+  const float3 original_lab = renodx::color::oklab::from::BT709(original_linear);
 
-  float3 retintedLab = okLabFromBT709(unclampedLinear);
-  retintedLab[0] = max(0, retintedLab[0]);
-  retintedLab[1] = originalLab[1];
-  retintedLab[2] = originalLab[2];
+  float3 retinted_lab = renodx::color::oklab::from::BT709(unclamped_linear);
+  retinted_lab[0] = max(0, retinted_lab[0]);
+  retinted_lab[1] = original_lab[1];
+  retinted_lab[2] = original_lab[2];
 
-  float3 outputLinear = bt709FromOKLab(retintedLab);
-
-  outputLinear = mul(BT709_2_AP1_MAT, outputLinear);  // Convert to AP1
-  outputLinear = max(0, outputLinear);                // Clamp to AP1
-  outputLinear = mul(AP1_2_BT709_MAT, outputLinear);  // Convert BT709
-  return outputLinear;
+  float3 retinted_linear = renodx::color::bt709::from::OkLab(retinted_lab);
+  retinted_linear = renodx::color::bt709::clamp::AP1(retinted_linear);
+  return retinted_linear;
 }
 
-float3 convertLUTInput(float3 color, LUTParams lutParams) {
-  if (lutParams.inputType == LUT_TYPE__SRGB) {
-    color = srgbFromLinear(saturate(color));
-  } else if (lutParams.inputType == LUT_TYPE__2_4) {
+float3 ConvertInput(float3 color, Config config) {
+  if (config.type_input == config::type::SRGB) {
+    color = renodx::color::srgb::from::BT709(saturate(color));
+  } else if (config.type_input == config::type::GAMMA_2_4) {
     color = pow(saturate(color), 1.f / 2.4f);
-  } else if (lutParams.inputType == LUT_TYPE__2_2) {
+  } else if (config.type_input == config::type::GAMMA_2_2) {
     color = pow(saturate(color), 1.f / 2.2f);
-  } else if (lutParams.inputType == LUT_TYPE__2_0) {
+  } else if (config.type_input == config::type::GAMMA_2_0) {
     color = sqrt(saturate(color));
-  } else if (lutParams.inputType == LUT_TYPE__ARRI_C800) {
-    color = arriC800FromLinear(max(0, color));
-  } else if (lutParams.inputType == LUT_TYPE__ARRI_C1000) {
-    color = arriC1000FromLinear(max(0, color));
-  } else if (lutParams.inputType == LUT_TYPE__ARRI_C800_NO_CUT) {
-    color = arriC800FromLinear(max(0, color), 0);
-  } else if (lutParams.inputType == LUT_TYPE__ARRI_C1000_NO_CUT) {
-    color = arriC1000FromLinear(max(0, color), 0);
-  } else if (lutParams.inputType == LUT_TYPE__PQ) {
-    float3 rec2020 = bt2020FromBT709(color);
-    color = pqFromLinear((rec2020 * 100.f) / 10000.f);
+  } else if (config.type_input == config::type::ARRI_C800) {
+    color = renodx::color::arri::logc::c800::Encode(max(0, color));
+  } else if (config.type_input == config::type::ARRI_C1000) {
+    color = renodx::color::arri::logc::c1000::Encode(max(0, color));
+  } else if (config.type_input == config::type::ARRI_C800_NO_CUT) {
+    color = renodx::color::arri::logc::c800::Encode(max(0, color), 0);
+  } else if (config.type_input == config::type::ARRI_C1000_NO_CUT) {
+    color = renodx::color::arri::logc::c1000::Encode(max(0, color), 0);
+  } else if (config.type_input == config::type::PQ) {
+    float3 bt2020 = renodx::color::bt2020::from::BT709(color);
+    color = renodx::color::pq::from::BT2020((bt2020 * 100.f) / 10000.f);
   }
   return color;
 }
 
-float3 gammaLUTOutput(float3 color, LUTParams lutParams) {
-  if (lutParams.outputType == LUT_TYPE__LINEAR) {
-    color = srgbFromLinear(max(0, color));
+float3 GammaOutput(float3 color, Config config) {
+  if (config.type_output == config::type::LINEAR) {
+    color = renodx::color::srgb::from::BT709(max(0, color));
   }
   return color;
 }
 
-float3 linearLUTOutput(float3 color, LUTParams lutParams) {
-  if (lutParams.outputType == LUT_TYPE__SRGB) {
-    color = sign(color) * linearFromSRGB(abs(color));
-  } else if (lutParams.outputType == LUT_TYPE__2_4) {
+float3 LinearOutput(float3 color, Config config) {
+  if (config.type_output == config::type::SRGB) {
+    color = sign(color) * renodx::color::bt709::from::SRGB(abs(color));
+  } else if (config.type_output == config::type::GAMMA_2_4) {
     color = sign(color) * pow(abs(color), 2.4f);
-  } else if (lutParams.outputType == LUT_TYPE__2_2) {
+  } else if (config.type_output == config::type::GAMMA_2_2) {
     color = sign(color) * pow(abs(color), 2.2f);
-  } else if (lutParams.outputType == LUT_TYPE__2_0) {
+  } else if (config.type_output == config::type::GAMMA_2_0) {
     color = sign(color) * color * color;
   }
   return color;
 }
 
-float3 gammaLUTInput(float3 inputColor, float3 convertedInputColor, LUTParams lutParams) {
+float3 GammaInput(float3 color_input, float3 color_input_converted, Config config) {
   if (
-    lutParams.inputType == LUT_TYPE__SRGB
-    || lutParams.inputType == LUT_TYPE__2_4
-    || lutParams.inputType == LUT_TYPE__2_2
-    || lutParams.inputType == LUT_TYPE__2_0
-  ) {
-    return convertedInputColor;
-  } else {
-    return srgbFromLinear(max(0, inputColor));
+      config.type_input == config::type::SRGB
+      || config.type_input == config::type::GAMMA_2_4
+      || config.type_input == config::type::GAMMA_2_2
+      || config.type_input == config::type::GAMMA_2_0) {
+    return color_input_converted;
   }
+  return renodx::color::srgb::from::BT709(max(0, color_input));
 }
 
-float3 linearUnclampedLUTOutput(float3 color, LUTParams lutParams) {
-  if (lutParams.outputType == LUT_TYPE__2_4) {
+float3 LinearUnclampedOutput(float3 color, Config config) {
+  if (config.type_output == config::type::GAMMA_2_4) {
     color = sign(color) * pow(abs(color), 2.4f);
-  } else if (lutParams.outputType == LUT_TYPE__2_2) {
+  } else if (config.type_output == config::type::GAMMA_2_2) {
     color = sign(color) * pow(abs(color), 2.2f);
   } else {
-    color = sign(color) * linearFromSRGB(abs(color));
+    color = sign(color) * renodx::color::bt709::from::SRGB(abs(color));
   }
   return color;
 }
 
-float3 restoreLUTSaturationLoss(float3 inputColor, float3 outputColor, LUTParams lutParams) {
+float3 RestoreSaturationLoss(float3 color_input, float3 color_output, Config config) {
   // Saturation (distance from grayscale)
-  float yIn = yFromBT709(abs(inputColor));
-  float3 satIn = inputColor - yIn;
+  float y_in = renodx::color::y::from::BT709(abs(color_input));
+  float3 sat_in = color_input - y_in;
 
-  float3 clamped = inputColor;
-  if (lutParams.inputType == LUT_TYPE__SRGB) {
+  float3 clamped = color_input;
+  if (config.type_input == config::type::SRGB) {
     clamped = saturate(clamped);
-  } else if (lutParams.inputType == LUT_TYPE__2_4) {
+  } else if (config.type_input == config::type::GAMMA_2_4) {
     clamped = saturate(clamped);
-  } else if (lutParams.inputType == LUT_TYPE__2_2) {
+  } else if (config.type_input == config::type::GAMMA_2_2) {
     clamped = saturate(clamped);
-  } else if (lutParams.inputType == LUT_TYPE__2_0) {
+  } else if (config.type_input == config::type::GAMMA_2_0) {
     clamped = saturate(clamped);
-  } else if (lutParams.inputType == LUT_TYPE__ARRI_C800) {
+  } else if (config.type_input == config::type::ARRI_C800) {
     clamped = max(0, clamped);
-  } else if (lutParams.inputType == LUT_TYPE__ARRI_C1000) {
+  } else if (config.type_input == config::type::ARRI_C1000) {
     clamped = max(0, clamped);
-  } else if (lutParams.inputType == LUT_TYPE__ARRI_C800_NO_CUT) {
+  } else if (config.type_input == config::type::ARRI_C800_NO_CUT) {
     clamped = max(0, clamped);
-  } else if (lutParams.inputType == LUT_TYPE__ARRI_C1000_NO_CUT) {
+  } else if (config.type_input == config::type::ARRI_C1000_NO_CUT) {
     clamped = max(0, clamped);
-  } else if (lutParams.inputType == LUT_TYPE__PQ) {
-    clamped = max(0, bt2020FromBT709(clamped));
+  } else if (config.type_input == config::type::PQ) {
+    clamped = max(0, renodx::color::bt709::from::BT2020(clamped));
   }
 
-  float yClamped = yFromBT709(abs(yClamped));
-  float3 satClamped = clamped - yIn;
+  float3 sat_clamped = clamped - y_in;
 
-  float yOut = yFromBT709(abs(outputColor));
-  float3 satOut = outputColor - yOut;
-  float3 newSat = float3(
-    satOut.r * (satClamped.r ? (satIn.r / satClamped.r) : 1.f),
-    satOut.g * (satClamped.g ? (satIn.g / satClamped.g) : 1.f),
-    satOut.b * (satClamped.b ? (satIn.b / satClamped.b) : 1.f)
-  );
-  return (yOut + newSat);
+  float y_out = renodx::color::y::from::BT709(abs(color_output));
+  float3 sat_out = color_output - y_out;
+  float3 sat_new = float3(
+      sat_out.r * (sat_clamped.r ? (sat_in.r / sat_clamped.r) : 1.f),
+      sat_out.g * (sat_clamped.g ? (sat_in.g / sat_clamped.g) : 1.f),
+      sat_out.b * (sat_clamped.b ? (sat_in.b / sat_clamped.b) : 1.f));
+  return (y_out + sat_new);
 }
 
-#define sampleLUTFunctionGenerator(textureType)                                                 \
-  float3 sampleLUT(textureType lutTexture, LUTParams lutParams, float3 inputColor) {            \
-    float3 lutInputColor = convertLUTInput(inputColor, lutParams);                              \
-    float3 lutOutputColor = sampleLUTColor(lutInputColor, lutParams, lutTexture);               \
-    float3 outputColor = linearLUTOutput(lutOutputColor, lutParams);                            \
-    if (lutParams.scaling) {                                                                    \
-      float3 lutBlack = sampleLUTColor(convertLUTInput(0, lutParams), lutParams, lutTexture);   \
-      float3 lutMid = sampleLUTColor(convertLUTInput(0.18f, lutParams), lutParams, lutTexture); \
-      float3 lutWhite = sampleLUTColor(convertLUTInput(1.f, lutParams), lutParams, lutTexture); \
-      float3 unclamped = unclampSDRLUT(                                                         \
-        gammaLUTOutput(lutOutputColor, lutParams),                                              \
-        gammaLUTOutput(lutBlack, lutParams),                                                    \
-        gammaLUTOutput(lutMid, lutParams),                                                      \
-        gammaLUTOutput(lutWhite, lutParams),                                                    \
-        gammaLUTInput(inputColor, lutInputColor, lutParams)                                     \
-      );                                                                                        \
-      float3 recolored = recolorUnclampedLUT(                                                   \
-        outputColor,                                                                            \
-        linearUnclampedLUTOutput(unclamped, lutParams)                                          \
-      );                                                                                        \
-      outputColor = lerp(outputColor, recolored, lutParams.scaling);                            \
-    }                                                                                           \
-    outputColor = restoreLUTSaturationLoss(inputColor, outputColor, lutParams);                 \
-    return outputColor;                                                                         \
+#define SAMPLE_FUNCTION_GENERATOR(textureType)                                                     \
+  float3 Sample(textureType lut_texture, Config config, float3 color_input) {                      \
+    float3 lutInputColor = ConvertInput(color_input, config);                                      \
+    float3 lutOutputColor = SampleColor(lutInputColor, config, lut_texture);                       \
+    float3 color_output = LinearOutput(lutOutputColor, config);                                    \
+    if (config.scaling) {                                                                          \
+      float3 lutBlack = SampleColor(ConvertInput(0, config), config, lut_texture);                 \
+      float3 lutMid = SampleColor(ConvertInput(0.18f, config), config, lut_texture);               \
+      float3 lutWhite = SampleColor(ConvertInput(1.f, config), config, lut_texture);               \
+      float3 unclamped = Unclamp(                                                                  \
+          GammaOutput(lutOutputColor, config),                                                     \
+          GammaOutput(lutBlack, config),                                                           \
+          GammaOutput(lutMid, config),                                                             \
+          GammaOutput(lutWhite, config),                                                           \
+          GammaInput(color_input, lutInputColor, config));                                         \
+      float3 recolored = RecolorUnclamped(color_output, LinearUnclampedOutput(unclamped, config)); \
+      color_output = lerp(color_output, recolored, config.scaling);                                \
+    }                                                                                              \
+    color_output = RestoreSaturationLoss(color_input, color_output, config);                       \
+    return color_output;                                                                           \
   }
+
+SAMPLE_FUNCTION_GENERATOR(Texture3D<float4>);
+SAMPLE_FUNCTION_GENERATOR(Texture3D<float3>);
+SAMPLE_FUNCTION_GENERATOR(Texture2D<float4>);
+SAMPLE_FUNCTION_GENERATOR(Texture2D<float3>);
+
+#undef SAMPLE_FUNCTION_GENERATOR
 
 // Deprecated
-#define sampleLUTDeprecatedFunctionGenerator(textureType)                            \
-  float3 sampleLUT(float3 inputColor, LUTParams lutParams, textureType lutTexture) { \
-    return sampleLUT(lutTexture, lutParams, inputColor);                             \
+#define SAMPLE_DEPRECATED_FUNCTION_GENERATOR(textureType)                     \
+  float3 Sample(float3 color_input, Config config, textureType lut_texture) { \
+    return Sample(lut_texture, config, color_input);                          \
   }
 
-sampleLUTFunctionGenerator(Texture3D<float4>);
-sampleLUTFunctionGenerator(Texture3D<float3>);
-sampleLUTFunctionGenerator(Texture2D<float4>);
-sampleLUTFunctionGenerator(Texture2D<float3>);
+SAMPLE_DEPRECATED_FUNCTION_GENERATOR(Texture3D<float4>);
+SAMPLE_DEPRECATED_FUNCTION_GENERATOR(Texture3D<float3>);
+SAMPLE_DEPRECATED_FUNCTION_GENERATOR(Texture2D<float4>);
+SAMPLE_DEPRECATED_FUNCTION_GENERATOR(Texture2D<float3>);
 
-sampleLUTDeprecatedFunctionGenerator(Texture3D<float4>);
-sampleLUTDeprecatedFunctionGenerator(Texture3D<float3>);
-sampleLUTDeprecatedFunctionGenerator(Texture2D<float4>);
-sampleLUTDeprecatedFunctionGenerator(Texture2D<float3>);
+#undef SAMPLE_DEPRECATED_FUNCTION_GENERATOR
+}  // namespace lut
+}  // namespace renodx
 
 #endif  // SRC_SHADERS_LUT_HLSL_

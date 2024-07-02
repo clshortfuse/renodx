@@ -1,6 +1,4 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
-
 
 cbuffer _13_15 : register(b0, space0) {
   float4 _15_m0[1] : packoffset(c0);
@@ -41,7 +39,6 @@ void frag_main() {
   SV_Target.w = _35.w;
 
   SV_Target.rgb *= signs;
-
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {

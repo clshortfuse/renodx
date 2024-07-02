@@ -1,8 +1,6 @@
-#include "../../shaders/tonemap.hlsl"
 #include "./p5r.h"
 
-cbuffer GFD_PSCONST_GAMMA : register(b13)
-{
+cbuffer GFD_PSCONST_GAMMA : register(b13) {
   float4 clearColor : packoffset(c0);
   float4 gammaTable : packoffset(c1);
 }
@@ -13,18 +11,14 @@ Texture2D<float4> sourceTexture : register(t0);
 // 3Dmigoto declarations
 #define cmp -
 
-//#define DO_BRIGHTNESS
-//#define HDR10
+// #define DO_BRIGHTNESS
+// #define HDR10
 
-void main(
-  float4 v0 : SV_POSITION0,
-  float2 v1 : TEXCOORD0,
-  out float4 o0 : SV_TARGET0)
-{
-  float4 r0,r1,r2,r3,r4;
+void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_TARGET0) {
+  float4 r0, r1, r2, r3, r4;
 
   r0 = sourceTexture.Sample(sourceSampler_s, v1.xy);
-  
+
 #ifdef DO_BRIGHTNESS
   r0.x = 4 * r0.x;
   r0.w = cmp(r0.x < 1);
@@ -137,7 +131,7 @@ void main(
   if (r0.x != 0) {
     r1.xyz = r1.xyz;
     r1.w = r1.w;
-    r0.xyz = float3(-0.5,-0.5,-0.5);
+    r0.xyz = float3(-0.5, -0.5, -0.5);
     r0.xyz = r1.xyz + r0.xyz;
     r0.w = clearColor.x;
     r0.w = (int)r0.w & 255;
@@ -146,7 +140,7 @@ void main(
     r0.w = 0.112000003 * r0.w;
     r0.w = 1 + r0.w;
     r0.xyz = r0.xyz * r0.www;
-    r0.xyz = float3(0.5,0.5,0.5) + r0.xyz;
+    r0.xyz = float3(0.5, 0.5, 0.5) + r0.xyz;
     r0.w = clearColor.x;
     r0.w = (int)r0.w & 255;
     r0.w = (uint)r0.w;
@@ -273,17 +267,17 @@ void main(
     r2.x = 0.699999988 * r2.x;
     r3.z = r2.z + r2.x;
     r0.yzw = r3.xyz + r0.yzw;
-    r2.xyz = max(float3(0,0,0), r0.yzw);
+    r2.xyz = max(float3(0, 0, 0), r0.yzw);
     r2.w = max(0, r1.w);
-    r2.xyzw = min(float4(1,1,1,1), r2.xyzw);
+    r2.xyzw = min(float4(1, 1, 1, 1), r2.xyzw);
     r2.xyzw = r2.xyzw;
     r2.xyzw = r2.xyzw * r0.xxxx;
     r0.x = -r0.x;
     r0.x = 1 + r0.x;
     r0.xyzw = r1.xyzw * r0.xxxx;
     r0.xyzw = r2.xyzw + r0.xyzw;
-    r0.xyzw = max(float4(0,0,0,0), r0.xyzw);
-    r1.xyzw = min(float4(1,1,1,1), r0.xyzw);
+    r0.xyzw = max(float4(0, 0, 0, 0), r0.xyzw);
+    r1.xyzw = min(float4(1, 1, 1, 1), r0.xyzw);
     r1.xyzw = r1.xyzw;
     r1.xyzw = r1.xyzw;
   }
@@ -305,19 +299,19 @@ void main(
     o0.rgb = max(0, o0.rgb);
   }
 
-  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
+  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : renodx::color::bt709::from::SRGB(o0.rgb);
 
 #ifdef HDR10
-  o0.rgb = mul(BT709_2_BT2020_MAT, o0.rgb);
+  o0.rgb = mul(BT709_TO_BT2020_MAT, o0.rgb);
 #endif
 
-   o0.rgb *= injectedData.toneMapGameNits;
+  o0.rgb *= injectedData.toneMapGameNits;
 #ifdef HDR10
-  o0.rgb /= 10000.f;  
-  o0.rgb = pqFromLinear(o0.rgb);
+  o0.rgb /= 10000.f;
+  o0.rgb = renodx::color::pq::from::BT2020(o0.rgb);
 #else
   o0.rgb /= 80.f;
 #endif
-  
+
   return;
 }

@@ -1,5 +1,4 @@
 #include "./shared.h"
-#include "../../shaders/tonemap.hlsl"
 
 cbuffer cbGlobalsPS : register(b0)
 {

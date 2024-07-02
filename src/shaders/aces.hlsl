@@ -2,10 +2,12 @@
 #define SRC_COMMON_ACES_HLSL_
 
 #include "./color.hlsl"
+#include "./math.hlsl"
 
-#define FLT_MIN asfloat(0x00800000)  //1.175494351e-38f
-#define FLT_MAX asfloat(0x7F7FFFFF)  //3.402823466e+38f
 
+namespace renodx {
+namespace tonemap {
+namespace aces {
 // clang-format off
 static const float3x3 RRT_SAT_MAT = float3x3(
   0.9708890, 0.0269633, 0.00214758,
@@ -27,8 +29,8 @@ static const float3x3 M = float3x3(
 
 // clang-format on
 
-float rgb_2_yc(float3 rgb) {
-  float ycRadiusWeight = 1.75;
+float Rgb2Yc(float3 rgb) {
+  const float yc_radius_weight = 1.75;
   // Converts RGB to a luminance proxy, here called YC
   // YC is ~ Y + K * Chroma
   // Constant YC is a cone-shaped surface in RGB space, with the tip on the
@@ -48,46 +50,46 @@ float rgb_2_yc(float3 rgb) {
 
   float chroma = sqrt(b * (b - g) + g * (g - r) + r * (r - b));
 
-  return (b + g + r + ycRadiusWeight * chroma) / 3.;
+  return (b + g + r + yc_radius_weight * chroma) / 3.;
 }
 
-float rgb_2_saturation(float3 rgb) {
+float Rgb2Saturation(float3 rgb) {
   float minrgb = min(min(rgb.r, rgb.g), rgb.b);
   float maxrgb = max(max(rgb.r, rgb.g), rgb.b);
   return (max(maxrgb, 1e-10) - max(minrgb, 1e-10)) / max(maxrgb, 1e-2);
 }
 
 // Sigmoid function in the range 0 to 1 spanning -2 to +2.
-float sigmoid_shaper(float x) {
+float SigmoidShaper(float x) {
   float t = max(1 - abs(0.5 * x), 0);
   float y = 1 + sign(x) * (1 - t * t);
   return 0.5 * y;
 }
 
-float glow_fwd(float ycIn, float glowGainIn, float glowMid) {
-  float glowGainOut;
+float GlowFwd(float yc_in, float glow_gain_in, float glow_mid) {
+  float glow_gain_out;
 
-  if (ycIn <= 2. / 3. * glowMid) {
-    glowGainOut = glowGainIn;
-  } else if (ycIn >= 2 * glowMid) {
-    glowGainOut = 0;
+  if (yc_in <= 2. / 3. * glow_mid) {
+    glow_gain_out = glow_gain_in;
+  } else if (yc_in >= 2 * glow_mid) {
+    glow_gain_out = 0;
   } else {
-    glowGainOut = glowGainIn * (glowMid / ycIn - 0.5);
+    glow_gain_out = glow_gain_in * (glow_mid / yc_in - 0.5);
   }
 
-  return glowGainOut;
+  return glow_gain_out;
 }
 
 // Transformations from RGB to other color representations
-float rgb_2_hue(float3 rgb) {
-  const float ACES_PI = 3.14159265359f;
+float Rgb2Hue(float3 rgb) {
+  const float aces_pi = 3.14159265359f;
   // Returns a geometric hue angle in degrees (0-360) based on RGB values.
   // For neutral colors, hue is undefined and the function will return a quiet NaN value.
   float hue;
   if (rgb.r == rgb.g && rgb.g == rgb.b) {
     hue = 0.0;  // RGB triplets where RGB are equal have an undefined hue
   } else {
-    hue = (180.0f / ACES_PI) * atan2(sqrt(3.0f) * (rgb.g - rgb.b), 2.0f * rgb.r - rgb.g - rgb.b);
+    hue = (180.0f / aces_pi) * atan2(sqrt(3.0f) * (rgb.g - rgb.b), 2.0f * rgb.r - rgb.g - rgb.b);
   }
 
   if (hue < 0.0f) {
@@ -97,43 +99,40 @@ float rgb_2_hue(float3 rgb) {
   return clamp(hue, 0, 360.f);
 }
 
-float center_hue(float hue, float centerH) {
-  float hueCentered = hue - centerH;
-  if (hueCentered < -180.)
-    hueCentered += 360;
-  else if (hueCentered > 180.)
-    hueCentered -= 360;
-  return hueCentered;
+float CenterHue(float hue, float center_h) {
+  float hue_centered = hue - center_h;
+  if (hue_centered < -180.) {
+    hue_centered += 360;
+  } else if (hue_centered > 180.) {
+    hue_centered -= 360;
+  }
+  return hue_centered;
 }
 
-float3 Y_2_linCV(float3 Y, float Ymax, float Ymin) {
-  return (Y - Ymin) / (Ymax - Ymin);
+float3 YToLinCV(float3 y, float y_max, float y_min) {
+  return (y - y_min) / (y_max - y_min);
 }
 
-float3 XYZ_2_xyY(half3 XYZ) {
-  half divisor = max(dot(XYZ, (1.0).xxx), 1e-4);
-  return float3(XYZ.xy / divisor, XYZ.y);
+float3 XYZToXyY(half3 xyz) {
+  half divisor = max(dot(xyz, (1.0).xxx), 1e-4);
+  return float3(xyz.xy / divisor, xyz.y);
 }
 
-float3 xyY_2_XYZ(half3 xyY) {
-  half m = xyY.z / max(xyY.y, 1e-4);
-  float3 XYZ = float3(xyY.xz, (1.0 - xyY.x - xyY.y));
-  XYZ.xz *= m;
-  return XYZ;
+float3 XyYToXYZ(half3 xy_y) {
+  half m = xy_y.z / max(xy_y.y, 1e-4);
+  float3 xyz = float3(xy_y.xz, (1.0 - xy_y.x - xy_y.y));
+  xyz.xz *= m;
+  return xyz;
 }
 
 static const float DIM_SURROUND_GAMMA = 0.9811;
 
-float3 darkToDim(float3 XYZ, float dimSurroundGamma = DIM_SURROUND_GAMMA) {
-  float3 xyY = XYZ_2_xyY(XYZ);
-  xyY.z = clamp(xyY.z, 0.0, 65504.0f);
-  xyY.z = pow(xyY.z, DIM_SURROUND_GAMMA);
-  return xyY_2_XYZ(xyY);
+float3 DarkToDim(float3 xyz, float dim_surround_gamma = DIM_SURROUND_GAMMA) {
+  float3 xy_y = XYZToXyY(xyz);
+  xy_y.z = clamp(xy_y.z, 0.0, 65504.0f);
+  xy_y.z = pow(xy_y.z, DIM_SURROUND_GAMMA);
+  return XyYToXYZ(xy_y);
 }
-
-// clang-format off
-
-// clang-format on
 
 static const float MIN_STOP_SDR = -6.5;
 static const float MAX_STOP_SDR = 6.5;
@@ -148,44 +147,36 @@ static const float MIN_LUM_RRT = 0.0001;
 static const float MAX_LUM_RRT = 10000.0;
 
 static const float2x2 MIN_LUM_TABLE = float2x2(
-  log10(MIN_LUM_RRT),
-  MIN_STOP_RRT,
-  log10(MIN_LUM_SDR),
-  MIN_STOP_SDR
-);
+    log10(MIN_LUM_RRT), MIN_STOP_RRT,
+    log10(MIN_LUM_SDR), MIN_STOP_SDR);
 
 static const float2x2 MAX_LUM_TABLE = float2x2(
-  log10(MAX_LUM_SDR),
-  MAX_STOP_SDR,
-  log10(MAX_LUM_RRT),
-  MAX_STOP_RRT
-);
-
-// clang-format on
+    log10(MAX_LUM_SDR), MAX_STOP_SDR,
+    log10(MAX_LUM_RRT), MAX_STOP_RRT);
 
 // Transformations between CIE XYZ tristimulus values and CIE x,y
 // chromaticity coordinates
-float3 XYZ_2_xyY(float3 XYZ) {
-  float3 xyY;
-  float divisor = (XYZ[0] + XYZ[1] + XYZ[2]);
+float3 XYZToXyY(float3 xyz) {
+  float3 xy_y;
+  float divisor = (xyz[0] + xyz[1] + xyz[2]);
   if (divisor == 0.) divisor = 1e-10;
-  xyY[0] = XYZ[0] / divisor;
-  xyY[1] = XYZ[1] / divisor;
-  xyY[2] = XYZ[1];
+  xy_y[0] = xyz[0] / divisor;
+  xy_y[1] = xyz[1] / divisor;
+  xy_y[2] = xyz[1];
 
-  return xyY;
+  return xy_y;
 }
 
-float3 xyY_2_XYZ(float3 xyY) {
-  float3 XYZ;
-  XYZ[0] = xyY[0] * xyY[2] / max(xyY[1], 1e-10);
-  XYZ[1] = xyY[2];
-  XYZ[2] = (1.0 - xyY[0] - xyY[1]) * xyY[2] / max(xyY[1], 1e-10);
+float3 XyYToXYZ(float3 xy_y) {
+  float3 xyz;
+  xyz[0] = xy_y[0] * xy_y[2] / max(xy_y[1], 1e-10);
+  xyz[1] = xy_y[2];
+  xyz[2] = (1.0 - xy_y[0] - xy_y[1]) * xy_y[2] / max(xy_y[1], 1e-10);
 
-  return XYZ;
+  return xyz;
 }
 
-float interpolate1D(float2x2 table, float p) {
+float Interpolate1D(float2x2 table, float p) {
   if (p < table[0].x) return table[0].y;
   if (p >= table[1].x) return table[1].y;
   // p = clamp(p, table[0].x, table[1].x);
@@ -193,104 +184,99 @@ float interpolate1D(float2x2 table, float p) {
   return table[0].y * (1 - s) + table[1].y * s;
 }
 
-float3 linCV_2_Y(float3 linCV, float Ymax, float Ymin) {
-  return linCV * (Ymax - Ymin) + Ymin;
+float3 LinCv2Y(float3 lin_cv, float y_max, float y_min) {
+  return lin_cv * (y_max - y_min) + y_min;
 }
 
-float lookup_ACESmin(float minLumLog10) {
-  return 0.18 * exp2(interpolate1D(MIN_LUM_TABLE, minLumLog10));
+float LookUpAcesMin(float min_lum_log10) {
+  return 0.18 * exp2(Interpolate1D(MIN_LUM_TABLE, min_lum_log10));
 }
 
-float lookup_ACESmax(float maxLumLog10) {
-  return 0.18 * exp2(interpolate1D(MAX_LUM_TABLE, maxLumLog10));
+float LookUpAcesMax(float max_lum_log10) {
+  return 0.18 * exp2(Interpolate1D(MAX_LUM_TABLE, max_lum_log10));
 }
 
 float SSTS(
-  float x,
-  float3 yMin,
-  float3 yMid,
-  float3 yMax,
-  float3 coefsLowA,
-  float3 coefsLowB,
-  float3 coefsHighA,
-  float3 coefsHighB
-) {
-  const uint N_KNOTS_LOW = 4;
-  const uint N_KNOTS_HIGH = 4;
+    float x,
+    float3 y_min, float3 y_mid, float3 y_max,
+    float3 coefs_low_a, float3 coefs_low_b,
+    float3 coefs_high_a, float3 coefs_high_b) {
+  static const uint N_KNOTS_LOW = 4;
+  static const uint N_KNOTS_HIGH = 4;
 
-  float coefsLow[6];
+  float coefs_low[6];
 
-  coefsLow[0] = coefsLowA.x;
-  coefsLow[1] = coefsLowA.y;
-  coefsLow[2] = coefsLowA.z;
-  coefsLow[3] = coefsLowB.x;
-  coefsLow[4] = coefsLowB.y;
-  coefsLow[5] = coefsLowB.z;
-  float coefsHigh[6];
-  coefsHigh[0] = coefsHighA.x;
-  coefsHigh[1] = coefsHighA.y;
-  coefsHigh[2] = coefsHighA.z;
-  coefsHigh[3] = coefsHighB.x;
-  coefsHigh[4] = coefsHighB.y;
-  coefsHigh[5] = coefsHighB.z;
+  coefs_low[0] = coefs_low_a.x;
+  coefs_low[1] = coefs_low_a.y;
+  coefs_low[2] = coefs_low_a.z;
+  coefs_low[3] = coefs_low_b.x;
+  coefs_low[4] = coefs_low_b.y;
+  coefs_low[5] = coefs_low_b.z;
+  float coefs_high[6];
+  coefs_high[0] = coefs_high_a.x;
+  coefs_high[1] = coefs_high_a.y;
+  coefs_high[2] = coefs_high_a.z;
+  coefs_high[3] = coefs_high_b.x;
+  coefs_high[4] = coefs_high_b.y;
+  coefs_high[5] = coefs_high_b.z;
 
   // Check for negatives or zero before taking the log. If negative or zero,
   // set to HALF_MIN.
-  float logx = log10(max(x, FLT_MIN));
+  float log_x = log10(max(x, renodx::math::FLT_MIN));
 
-  float logy;
+  float log_y;
 
-  if (logx > yMax.x) {
+  if (log_x > y_max.x) {
     // Above max breakpoint (overshoot)
     // If MAX_PT slope is 0, this is just a straight line and always returns
     // maxLum
     // y = mx+b
-    // logy = computeGraphY(C.Max.z, logx, (C.Max.y) - (C.Max.z * (C.Max.x)));
-    logy = yMax.y;
-  } else if (logx >= yMid.x) {
+    // log_y = computeGraphY(C.Max.z, log_x, (C.Max.y) - (C.Max.z * (C.Max.x)));
+    log_y = y_max.y;
+  } else if (log_x >= y_mid.x) {
     // Part of Midtones area (Must have slope)
-    float knot_coord = (N_KNOTS_HIGH - 1) * (logx - yMid.x) / (yMax.x - yMid.x);
+    float knot_coord = (N_KNOTS_HIGH - 1) * (log_x - y_mid.x) / (y_max.x - y_mid.x);
     uint j = knot_coord;
     float t = knot_coord - j;
 
-    float3 cf = float3(coefsHigh[j], coefsHigh[j + 1], coefsHigh[j + 2]);
+    float3 cf = float3(coefs_high[j], coefs_high[j + 1], coefs_high[j + 2]);
 
     float3 monomials = float3(t * t, t, 1.0);
-    logy = dot(monomials, mul(M, cf));
-  } else if (logx > yMin.x) {
-    float knot_coord = (N_KNOTS_LOW - 1) * (logx - yMin.x) / (yMid.x - yMin.x);
+    log_y = dot(monomials, mul(M, cf));
+  } else if (log_x > y_min.x) {
+    float knot_coord = (N_KNOTS_LOW - 1) * (log_x - y_min.x) / (y_mid.x - y_min.x);
     uint j = knot_coord;
     float t = knot_coord - j;
 
-    float3 cf = float3(coefsLow[j], coefsLow[j + 1], coefsLow[j + 2]);
+    float3 cf = float3(coefs_low[j], coefs_low[j + 1], coefs_low[j + 2]);
 
     float3 monomials = float3(t * t, t, 1.0);
-    logy = dot(monomials, mul(M, cf));
-  } else {  //(logx <= (C.Min.x))
+    log_y = dot(monomials, mul(M, cf));
+  } else {  //(log_x <= (C.Min.x))
     // Below min breakpoint (undershoot)
-    // logy = computeGraphY(C.Min.z, logx, ((C.Min.y) - C.Min.z * (C.Min.x)));
-    logy = yMin.y;
+    // log_y = computeGraphY(C.Min.z, log_x, ((C.Min.y) - C.Min.z * (C.Min.x)));
+    log_y = y_min.y;
   }
 
-  return pow(10.0, logy);
+  return pow(10.0, log_y);
 }
 
-static float LIM_CYAN = 1.147f;
-static float LIM_MAGENTA = 1.264f;
-static float LIM_YELLOW = 1.312f;
-static float THR_CYAN = 0.815f;
-static float THR_MAGENTA = 0.803f;
-static float THR_YELLOW = 0.880f;
-static float PWR = 1.2f;
+static const float LIM_CYAN = 1.147f;
+static const float LIM_MAGENTA = 1.264f;
+static const float LIM_YELLOW = 1.312f;
+static const float THR_CYAN = 0.815f;
+static const float THR_MAGENTA = 0.803f;
+static const float THR_YELLOW = 0.880f;
+static const float PWR = 1.2f;
 
-float aces_gamut_compress_channel(float dist, float lim, float thr, float pwr) {
-  float comprDist;
+float GamutCompressChannel(float dist, float lim, float thr, float pwr) {
+  float compr_dist;
   float scl;
   float nd;
   float p;
 
   if (dist < thr) {
-    comprDist = dist;  // No compression below threshold
+    compr_dist = dist;  // No compression below threshold
   } else {
     // Calculate scale factor for y = 1 intersect
     scl = (lim - thr) / pow(pow((1.0 - thr) / (lim - thr), -pwr) - 1.0, 1.0 / pwr);
@@ -299,175 +285,172 @@ float aces_gamut_compress_channel(float dist, float lim, float thr, float pwr) {
     nd = (dist - thr) / scl;
     p = pow(nd, pwr);
 
-    comprDist = thr + scl * nd / (pow(1.0 + p, 1.0 / pwr));  // Compress
+    compr_dist = thr + scl * nd / (pow(1.0 + p, 1.0 / pwr));  // Compress
   }
 
-  return comprDist;
+  return compr_dist;
 }
 
-float3 aces_gamut_compress(float3 linAP1) {
+float3 GamutCompress(float3 lin_ap1) {
   // Achromatic axis
-  float ach = max(linAP1.r, max(linAP1.g, linAP1.b));
-  float absAch = abs(ach);
+  float ach = max(lin_ap1.r, max(lin_ap1.g, lin_ap1.b));
+  float abs_ach = abs(ach);
   // Distance from the achromatic axis for each color component aka inverse RGB ratios
-  float3 dist = ach ? (ach - linAP1) / absAch : 0;
+  float3 dist = ach ? (ach - lin_ap1) / abs_ach : 0;
 
   // Compress distance with parameterized shaper function
-  float3 comprDist = float3(
-    aces_gamut_compress_channel(dist.r, LIM_CYAN, THR_CYAN, PWR),
-    aces_gamut_compress_channel(dist.g, LIM_MAGENTA, THR_MAGENTA, PWR),
-    aces_gamut_compress_channel(dist.b, LIM_YELLOW, THR_YELLOW, PWR)
-  );
+  float3 compr_dist = float3(
+      GamutCompressChannel(dist.r, LIM_CYAN, THR_CYAN, PWR),
+      GamutCompressChannel(dist.g, LIM_MAGENTA, THR_MAGENTA, PWR),
+      GamutCompressChannel(dist.b, LIM_YELLOW, THR_YELLOW, PWR));
 
   // Recalculate RGB from compressed distance and achromatic
-  float3 comprLinAP1 = ach - comprDist * absAch;
+  float3 compr_lin_ap1 = ach - compr_dist * abs_ach;
 
-  return comprLinAP1;
+  return compr_lin_ap1;
 }
 
-float3 aces_rrt(float3 aces) {
-  static const float3 AP1_RGB2Y = AP1_2_XYZ_MAT[1].rgb;
+float3 RRT(float3 aces) {
+  static const float3 AP1_RGB2Y = renodx::color::AP1_TO_XYZ_MAT[1].rgb;
 
   // --- Glow module --- //
   // "Glow" module constants
-  const float RRT_GLOW_GAIN = 0.05;
-  const float RRT_GLOW_MID = 0.08;
-  float saturation = rgb_2_saturation(aces);
-  float ycIn = rgb_2_yc(aces);
-  float s = sigmoid_shaper((saturation - 0.4) / 0.2);
-  float addedGlow = 1.0 + glow_fwd(ycIn, RRT_GLOW_GAIN * s, RRT_GLOW_MID);
-  aces *= addedGlow;
+  static const float RRT_GLOW_GAIN = 0.05;
+  static const float RRT_GLOW_MID = 0.08;
+  float saturation = Rgb2Saturation(aces);
+  float yc_in = Rgb2Yc(aces);
+  const float s = SigmoidShaper((saturation - 0.4) / 0.2);
+  float added_glow = 1.0 + GlowFwd(yc_in, RRT_GLOW_GAIN * s, RRT_GLOW_MID);
+  aces *= added_glow;
 
   // --- Red modifier --- //
   // Red modifier constants
-  const float RRT_RED_SCALE = 0.82;
-  const float RRT_RED_PIVOT = 0.03;
-  const float RRT_RED_HUE = 0.;
-  const float RRT_RED_WIDTH = 135.;
-  float hue = rgb_2_hue(aces);
-  float centeredHue = center_hue(hue, RRT_RED_HUE);
-  float hueWeight;
+  static const float RRT_RED_SCALE = 0.82;
+  static const float RRT_RED_PIVOT = 0.03;
+  static const float RRT_RED_HUE = 0.;
+  static const float RRT_RED_WIDTH = 135.;
+  float hue = Rgb2Hue(aces);
+  const float centered_hue = CenterHue(hue, RRT_RED_HUE);
+  float hue_weight;
   {
-    //hueWeight = cubic_basis_shaper(centeredHue, RRT_RED_WIDTH);
-    hueWeight = smoothstep(0.0, 1.0, 1.0 - abs(2.0 * centeredHue / RRT_RED_WIDTH));
-    hueWeight *= hueWeight;
+    // hueWeight = cubic_basis_shaper(centeredHue, RRT_RED_WIDTH);
+    hue_weight = smoothstep(0.0, 1.0, 1.0 - abs(2.0 * centered_hue / RRT_RED_WIDTH));
+    hue_weight *= hue_weight;
   }
 
-  aces.r += hueWeight * saturation * (RRT_RED_PIVOT - aces.r) * (1. - RRT_RED_SCALE);
+  aces.r += hue_weight * saturation * (RRT_RED_PIVOT - aces.r) * (1. - RRT_RED_SCALE);
 
   // --- ACES to RGB rendering space --- //
   aces = clamp(aces, 0, 65535.0f);
-  float3 rgbPre = mul(AP0_2_AP1_MAT, aces);
-  rgbPre = clamp(rgbPre, 0, 65504.0f);
+  float3 rgb_pre = mul(renodx::color::AP0_TO_AP1_MAT, aces);
+  rgb_pre = clamp(rgb_pre, 0, 65504.0f);
 
   // --- Global desaturation --- //
   // rgbPre = mul( RRT_SAT_MAT, rgbPre);
-  const float RRT_SAT_FACTOR = 0.96f;
-  rgbPre = lerp(dot(rgbPre, AP1_RGB2Y).xxx, rgbPre, RRT_SAT_FACTOR);
+  static const float RRT_SAT_FACTOR = 0.96f;
+  rgb_pre = lerp(dot(rgb_pre, AP1_RGB2Y).xxx, rgb_pre, RRT_SAT_FACTOR);
 
-  return rgbPre;
+  return rgb_pre;
 }
 
-float3 aces_odt_tone_map(float3 rgbPre, float minY, float maxY) {
-  float minLum = minY;
-  float maxLum = maxY;
-  float3 rgbPost;
+float3 ODTToneMap(float3 rgb_pre, float min_y, float max_y) {
+  const float min_lum = min_y;
+  const float max_lum = max_y;
   // Aces-dev has more expensive version
   // AcesParams PARAMS = init_aces_params(minY, maxY);
 
   static const float2x2 BENDS_LOW_TABLE = float2x2(
-    MIN_STOP_RRT, 0.18, MIN_STOP_SDR, 0.35
-  );
+      MIN_STOP_RRT, 0.18, MIN_STOP_SDR, 0.35);
 
   static const float2x2 BENDS_HIGH_TABLE = float2x2(
-    MAX_STOP_SDR, 0.89, MAX_STOP_RRT, 0.90
-  );
+      MAX_STOP_SDR, 0.89, MAX_STOP_RRT, 0.90);
 
-  float minLumLog10 = log10(minLum);
-  float maxLumLog10 = log10(maxLum);
-  float acesMin = lookup_ACESmin(minLumLog10);
-  float acesMax = lookup_ACESmax(maxLumLog10);
+  float min_lum_log10 = log10(min_lum);
+  float max_lum_log10 = log10(max_lum);
+  const float aces_min = LookUpAcesMin(min_lum_log10);
+  const float aces_max = LookUpAcesMax(max_lum_log10);
   // float3 MIN_PT = float3(lookup_ACESmin(minLum), minLum, 0.0);
-  float3 MID_PT = float3(0.18, 4.8, 1.55);
+  static const float3 MID_PT = float3(0.18, 4.8, 1.55);
   // float3 MAX_PT = float3(lookup_ACESmax(maxLum), maxLum, 0.0);
-  // float coefsLow[5];
-  // float coefsHigh[5];
-  float3 coefsLowA;
-  float3 coefsLowB;
-  float3 coefsHighA;
-  float3 coefsHighB;
+  // float coefs_low[5];
+  // float coefs_high[5];
+  float3 coefs_low_a;
+  float3 coefs_low_b;
+  float3 coefs_high_a;
+  float3 coefs_high_b;
 
-  float2 logMin = float2(log10(acesMin), minLumLog10);
-  float2 logMid = float2(log10(MID_PT.xy));
-  float2 logMax = float2(log10(acesMax), maxLumLog10);
+  float2 log_min = float2(log10(aces_min), min_lum_log10);
+  static const float2 LOG_MID = float2(log10(MID_PT.xy));
+  float2 log_max = float2(log10(aces_max), max_lum_log10);
 
-  float knotIncLow = (logMid.x - logMin.x) / 3.;
-  // float halfKnotInc = (logMid.x - logMin.x) / 6.;
+  float knot_inc_low = (LOG_MID.x - log_min.x) / 3.;
+  // float halfKnotInc = (logMid.x - log_min.x) / 6.;
 
   // Determine two lowest coefficients (straddling minPt)
-  // coefsLow[0] = (MIN_PT.z * (logMin.x- 0.5 * knotIncLow)) + ( logMin.y - MIN_PT.z * logMin.x);
-  // coefsLow[1] = (MIN_PT.z * (logMin.x+ 0.5 * knotIncLow)) + ( logMin.y - MIN_PT.z * logMin.x);
+  // coefs_low[0] = (MIN_PT.z * (log_min.x- 0.5 * knot_inc_low)) + ( log_min.y - MIN_PT.z * log_min.x);
+  // coefs_low[1] = (MIN_PT.z * (log_min.x+ 0.5 * knot_inc_low)) + ( log_min.y - MIN_PT.z * log_min.x);
   // NOTE: if slope=0, then the above becomes just
-  coefsLowA.x = logMin.y;
-  coefsLowA.y = coefsLowA.x;
+  coefs_low_a.x = log_min.y;
+  coefs_low_a.y = coefs_low_a.x;
   // leaving it as a variable for now in case we decide we need non-zero slope extensions
 
   // Determine two highest coefficients (straddling midPt)
-  float minCoef = (logMid.y - MID_PT.z * logMid.x);
-  coefsLowB.x = (MID_PT.z * (logMid.x - 0.5 * knotIncLow)) + (logMid.y - MID_PT.z * logMid.x);
-  coefsLowB.y = (MID_PT.z * (logMid.x + 0.5 * knotIncLow)) + (logMid.y - MID_PT.z * logMid.x);
-  coefsLowB.z = coefsLowB.y;
+  float min_coef = (LOG_MID.y - MID_PT.z * LOG_MID.x);
+  coefs_low_b.x = (MID_PT.z * (LOG_MID.x - 0.5 * knot_inc_low)) + (LOG_MID.y - MID_PT.z * LOG_MID.x);
+  coefs_low_b.y = (MID_PT.z * (LOG_MID.x + 0.5 * knot_inc_low)) + (LOG_MID.y - MID_PT.z * LOG_MID.x);
+  coefs_low_b.z = coefs_low_b.y;
 
   // Middle coefficient (which defines the "sharpness of the bend") is linearly interpolated
-  float pctLow = interpolate1D(BENDS_LOW_TABLE, log2(acesMin / 0.18));
-  coefsLowA.z = logMin.y + pctLow * (logMid.y - logMin.y);
+  float pct_low = Interpolate1D(BENDS_LOW_TABLE, log2(aces_min / 0.18));
+  coefs_low_a.z = log_min.y + pct_low * (LOG_MID.y - log_min.y);
 
-  float knotIncHigh = (logMax.x - logMid.x) / 3.0f;
-  // float halfKnotInc = (logMax.x - logMid.x) / 6.;
+  float knot_inc_high = (log_max.x - LOG_MID.x) / 3.0f;
+  // float halfKnotInc = (log_max.x - logMid.x) / 6.;
 
   // Determine two lowest coefficients (straddling midPt)
   // float minCoef = ( logMid.y - MID_PT.z * logMid.x);
-  coefsHighA.x = (MID_PT.z * (logMid.x - 0.5 * knotIncHigh)) + minCoef;
-  coefsHighA.y = (MID_PT.z * (logMid.x + 0.5 * knotIncHigh)) + minCoef;
+  coefs_high_a.x = (MID_PT.z * (LOG_MID.x - 0.5 * knot_inc_high)) + min_coef;
+  coefs_high_a.y = (MID_PT.z * (LOG_MID.x + 0.5 * knot_inc_high)) + min_coef;
 
   // Determine two highest coefficients (straddling maxPt)
-  // coefsHigh[3] = (MAX_PT.z * (logMax.x-0.5*knotIncHigh)) + ( logMax.y - MAX_PT.z * logMax.x);
-  // coefsHigh[4] = (MAX_PT.z * (logMax.x+0.5*knotIncHigh)) + ( logMax.y - MAX_PT.z * logMax.x);
+  // coefs_high[3] = (MAX_PT.z * (log_max.x-0.5*knotIncHigh)) + ( log_max.y - MAX_PT.z * log_max.x);
+  // coefs_high[4] = (MAX_PT.z * (log_max.x+0.5*knotIncHigh)) + ( log_max.y - MAX_PT.z * log_max.x);
   // NOTE: if slope=0, then the above becomes just
-  coefsHighB.x = logMax.y;
-  coefsHighB.y = coefsHighB.x;
-  coefsHighB.z = coefsHighB.y;
+  coefs_high_b.x = log_max.y;
+  coefs_high_b.y = coefs_high_b.x;
+  coefs_high_b.z = coefs_high_b.y;
   // leaving it as a variable for now in case we decide we need non-zero slope extensions
 
   // Middle coefficient (which defines the "sharpness of the bend") is linearly interpolated
 
-  float pctHigh = interpolate1D(BENDS_HIGH_TABLE, log2(acesMax / 0.18));
-  coefsHighA.z = logMid.y + pctHigh * (logMax.y - logMid.y);
+  float pct_high = Interpolate1D(BENDS_HIGH_TABLE, log2(aces_max / 0.18));
+  coefs_high_a.z = LOG_MID.y + pct_high * (log_max.y - LOG_MID.y);
 
-  rgbPost.x = SSTS(rgbPre.x, float3(logMin.x, logMin.y, 0), float3(logMid.x, logMid.y, MID_PT.z), float3(logMax.x, logMax.y, 0), coefsLowA, coefsLowB, coefsHighA, coefsHighB);
-  rgbPost.y = SSTS(rgbPre.y, float3(logMin.x, logMin.y, 0), float3(logMid.x, logMid.y, MID_PT.z), float3(logMax.x, logMax.y, 0), coefsLowA, coefsLowB, coefsHighA, coefsHighB);
-  rgbPost.z = SSTS(rgbPre.z, float3(logMin.x, logMin.y, 0), float3(logMid.x, logMid.y, MID_PT.z), float3(logMax.x, logMax.y, 0), coefsLowA, coefsLowB, coefsHighA, coefsHighB);
+  float3 rgb_post = float3(
+      SSTS(rgb_pre.x, float3(log_min.x, log_min.y, 0), float3(LOG_MID.x, LOG_MID.y, MID_PT.z), float3(log_max.x, log_max.y, 0), coefs_low_a, coefs_low_b, coefs_high_a, coefs_high_b),
+      SSTS(rgb_pre.y, float3(log_min.x, log_min.y, 0), float3(LOG_MID.x, LOG_MID.y, MID_PT.z), float3(log_max.x, log_max.y, 0), coefs_low_a, coefs_low_b, coefs_high_a, coefs_high_b),
+      SSTS(rgb_pre.z, float3(log_min.x, log_min.y, 0), float3(LOG_MID.x, LOG_MID.y, MID_PT.z), float3(log_max.x, log_max.y, 0), coefs_low_a, coefs_low_b, coefs_high_a, coefs_high_b));
 
   // Nits to Linear
-  float3 linearCV = Y_2_linCV(rgbPost, maxY, minY);
-  return clamp(rgbPost, 0.0, 65535.0f);
+  float3 linear_cv = YToLinCV(rgb_post, max_y, min_y);
+  return clamp(rgb_post, 0.0, 65535.0f);
 }
 
-float3 aces_odt(float3 rgbPre, float minY, float maxY, float3x3 odtMatrix = AP1_2_BT709_MAT) {
-  float3 tonescaled = aces_odt_tone_map(rgbPre, minY, maxY);
+float3 ODT(float3 rgb_pre, float min_y, float max_y, float3x3 odt_matrix = renodx::color::AP1_TO_BT709_MAT) {
+  float3 tonescaled = ODTToneMap(rgb_pre, min_y, max_y);
 
-  float3 outputColor = mul(odtMatrix, tonescaled);
+  float3 output_color = mul(odt_matrix, tonescaled);
 
-  return outputColor;
+  return output_color;
 }
 
 // ACES with
 // Reference Rendering Transform
 // Output Display Transform
-float3 aces_rrt_odt(float3 color, float minY, float maxY, float3x3 odtMatrix = AP1_2_BT709_MAT) {
-  color = mul(BT709_2_AP0_MAT, color);
-  color = aces_rrt(color);
-  color = aces_odt(color, minY, maxY, odtMatrix);
+float3 RRTAndODT(float3 color, float min_y, float max_y, float3x3 odt_matrix = renodx::color::AP1_TO_BT709_MAT) {
+  color = mul(renodx::color::BT709_TO_AP0_MAT, color);
+  color = RRT(color);
+  color = ODT(color, min_y, max_y, odt_matrix);
   return color;
 }
 
@@ -475,13 +458,16 @@ float3 aces_rrt_odt(float3 color, float minY, float maxY, float3x3 odtMatrix = A
 // Reference Gamma Compression
 // Reference Rendering Transform
 // Output Display Transform
-float3 aces_rgc_rrt_odt(float3 color, float minY, float maxY, float3x3 odtMatrix = AP1_2_BT709_MAT) {
-  color = mul(BT709_2_AP1_MAT, color);             // BT709 to AP1
-  color = aces_gamut_compress(color);              // Compresses to AP1
-  color = mul(AP1_2_AP0_MAT, color);               // Convert to AP0
-  color = aces_rrt(color);                         // RRT AP0 => AP1
-  color = aces_odt(color, minY, maxY, odtMatrix);  // ODT AP1 => Matrix
+float3 RGCAndRRTAndODT(float3 color, float min_y, float max_y, float3x3 odt_matrix = renodx::color::AP1_TO_BT709_MAT) {
+  color = mul(renodx::color::BT709_TO_AP1_MAT, color);  // BT709 to AP1
+  color = GamutCompress(color);                     // Compresses to AP1
+  color = mul(renodx::color::AP1_TO_AP0_MAT, color);    // Convert to AP0
+  color = RRT(color);                               // RRT AP0 => AP1
+  color = ODT(color, min_y, max_y, odt_matrix);     // ODT AP1 => Matrix
   return color;
 }
+}  // namespace aces
+}  // namespace tonemap
+}  // namespace renodx
 
 #endif  // SRC_COMMON_ACES_HLSL_

@@ -1,10 +1,8 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sun May 12 21:52:57 2024
 
-cbuffer Constants : register(b0)
-{
+cbuffer Constants : register(b0) {
   float4 fsize : packoffset(c0);
   float4 offset : packoffset(c1);
   float4 scolor : packoffset(c2);
@@ -17,18 +15,11 @@ SamplerState sampler_tex_s : register(s1);
 Texture2D<float4> srctex : register(t0);
 Texture2D<float4> tex : register(t1);
 
-
 // 3Dmigoto declarations
 #define cmp -
 
-
-void main(
-  float4 v0 : TEXCOORD0,
-  float4 v1 : TEXCOORD1,
-  float2 v2 : TEXCOORD2,
-  out float4 o0 : SV_Target0)
-{
-  float4 r0,r1,r2;
+void main(float4 v0 : TEXCOORD0, float4 v1 : TEXCOORD1, float2 v2 : TEXCOORD2, out float4 o0 : SV_Target0) {
+  float4 r0, r1, r2;
   uint4 bitmask, uiDest;
   float4 fDest;
 
@@ -66,7 +57,9 @@ void main(
   r0.xyzw = v1.wwww * r0.xyzw;
   o0.xyzw = saturate(v0.xyzw * r0.wwww + r0.xyzw);
 
-  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
+  o0.rgb = injectedData.toneMapGammaCorrection
+               ? pow(o0.rgb, 2.2f)
+               : renodx::color::bt709::from::SRGB(o0.rgb);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
 
   return;

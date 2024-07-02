@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.3.16 on Tue Jun 04 23:18:20 2024
@@ -37,11 +36,10 @@ void main(float4 v0
   r2.xyzw = g_Texture.Sample(g_TextureSampler_s, v4.zw).xyzw;
   r0.xyzw = -r2.xyzw + r0.xyzw;
   r0.xyzw = r0.xyzw * gFC_FontSharpParam.xxxx + r1.xyzw;
-  o0.xyzw =
-      saturate(v1.xyzw * r0.xyzw); // Added saturate() to cap text brightness
+  o0.xyzw = saturate(v1.xyzw * r0.xyzw);  // Added saturate() to cap text brightness
 
   o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f)
-                                               : linearFromSRGB(o0.rgb);
+                                               : renodx::color::bt709::from::SRGB(o0.rgb);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
 
   return;

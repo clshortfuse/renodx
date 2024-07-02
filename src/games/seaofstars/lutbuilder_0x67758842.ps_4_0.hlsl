@@ -1,4 +1,3 @@
-#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);  // _CurveMaster
@@ -264,25 +263,25 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
 
   bool useSDRLut = (cb0[145].x >= 0) && (cb0[144].w >= 0);
 
-  LUTParams lutParams = buildLUTParams(
-    s0_s,
-    useSDRLut ? cb0[144].w * injectedData.colorGradeLUTStrength : 0,
-    injectedData.colorGradeLUTScaling,
-    TONE_MAP_LUT_TYPE__SRGB,
-    TONE_MAP_LUT_TYPE__SRGB,
-    cb0[144].xyz  // precompute
+  renodx::lut::Config lut_config = renodx::lut::config::Create(
+      s0_s,
+      useSDRLut ? cb0[144].w * injectedData.colorGradeLUTStrength : 0,
+      injectedData.colorGradeLUTScaling,
+      renodx::lut::config::type::SRGB,
+      renodx::lut::config::type::SRGB,
+      cb0[144].xyz  // precompute
   );
 
   if (injectedData.toneMapType == 0) {
     // SDR Tonemap (Uncharted2 like)
 
-    r0.xyz = unityNeutralTonemap(r0.xyz);
+    r0.xyz = renodx::tonemap::unity::BT709(r0.xyz);
 
     if (useSDRLut) {
-      r0.xyz = lerp(r0.xyz, sampleLUT(t8, lutParams, r0.xyz), lutParams.strength);
+      r0.xyz = lerp(r0.xyz, renodx::lut::Sample(t8, lut_config, r0.xyz), lut_config.strength);
     }
   } else {
-    float vanillaMidGray = unityNeutralTonemap(0.18f);
+    float vanillaMidGray = renodx::tonemap::unity::BT709(0.18f);
 
     float renoDRTHighlights = 1.f;
     float renoDRTShadows = 1.f;
@@ -291,27 +290,26 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     float renoDRTDechroma = 0.0f;
     float renoDRTFlare = 0.0f;
 
-    ToneMapParams tmParams = buildToneMapParams(
-      injectedData.toneMapType,
-      injectedData.toneMapPeakNits,
-      injectedData.toneMapGameNits,
-      injectedData.toneMapGammaCorrection,
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeContrast,
-      injectedData.colorGradeSaturation,
-      vanillaMidGray,
-      vanillaMidGray * 100.f,
-      renoDRTHighlights,
-      renoDRTShadows,
-      renoDRTContrast,
-      renoDRTSaturation,
-      renoDRTDechroma,
-      renoDRTFlare
-    );
+    renodx::tonemap::Config config = renodx::tonemap::config::Create(
+        injectedData.toneMapType,
+        injectedData.toneMapPeakNits,
+        injectedData.toneMapGameNits,
+        injectedData.toneMapGammaCorrection,
+        injectedData.colorGradeExposure,
+        injectedData.colorGradeHighlights,
+        injectedData.colorGradeShadows,
+        injectedData.colorGradeContrast,
+        injectedData.colorGradeSaturation,
+        vanillaMidGray,
+        vanillaMidGray * 100.f,
+        renoDRTHighlights,
+        renoDRTShadows,
+        renoDRTContrast,
+        renoDRTSaturation,
+        renoDRTDechroma,
+        renoDRTFlare);
 
-    r0.xyz = toneMap(r0.xyz, tmParams, lutParams, t8);
+    r0.xyz = renodx::tonemap::config::Apply(r0.xyz, config, lut_config, t8);
   }
 
   o0.xyz = r0.xyz;

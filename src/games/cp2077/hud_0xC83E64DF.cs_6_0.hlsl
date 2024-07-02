@@ -1,6 +1,5 @@
 // HUD Shader
 
-#include "../../shaders/filmgrain.hlsl"
 #include "./colormath.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
@@ -214,7 +213,7 @@ void comp_main() {
                         * (_823 / max(1.0f - _823, 9.9999999747524270787835121154785e-07f)))
                        * ((((_832 + (cb6[19u].w * _830)) * cb6[19u].y) * float(min((_838.y & _812), 1u))) + 1.0f))
                       * ((((_832 + (cb6[20u].w * _830)) * cb6[20u].y) * float(min((_838.z & _812), 1u))) + 1.0f))
-                   * ((((_832 + (cb6[21u].w * _830)) * cb6[21u].y) * float(min((_838.w & _812), 1u))) + 1.0f);
+                     * ((((_832 + (cb6[21u].w * _830)) * cb6[21u].y) * float(min((_838.w & _812), 1u))) + 1.0f);
         _893 = uiPaperWhiteScaler * (_887 / max(_887 + 1.0f, 1.0f));
       } else {
         _893 = _585;
@@ -243,13 +242,12 @@ void comp_main() {
       if (hasUiOutline) {
         float4 _1254 = textureNoise.Load(int3(uint2(_937 & 255u, _938 & 255u), 0u));
         if (injectedData.fxFilmGrain) {
-          float3 grainedColor = computeFilmGrain(
-            float3(_941, _942, _943),
-            _1254.xy,
-            frac(cb0[0u].x / 1000.f),
-            injectedData.fxFilmGrain * 0.03f,
-            (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f)
-          );
+          float3 grainedColor = renodx::effects::ApplyFilmGrain(
+              float3(_941, _942, _943),
+              _1254.xy,
+              frac(cb0[0u].x / 1000.f),
+              injectedData.fxFilmGrain * 0.03f,
+              (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f));
           frontier_phi_14_12_ladder = _580;
           frontier_phi_14_12_ladder_1 = _576;
           frontier_phi_14_12_ladder_2 = grainedColor.r;
@@ -307,13 +305,12 @@ void comp_main() {
       if (hasUiOutline) {
         float4 _959 = textureNoise.Load(int3(uint2(_85 & 255u, _86 & 255u), 0u));
         if (injectedData.fxFilmGrain) {
-          float3 grainedColor = computeFilmGrain(
-            float3(_588, _589, _590),
-            _959.xy,
-            frac(cb0[0u].x / 1000.f),
-            injectedData.fxFilmGrain * 0.03f,
-            (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f)
-          );
+          float3 grainedColor = renodx::effects::ApplyFilmGrain(
+              float3(_588, _589, _590),
+              _959.xy,
+              frac(cb0[0u].x / 1000.f),
+              injectedData.fxFilmGrain * 0.03f,
+              (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f));
           frontier_phi_14_6_ladder_1 = _304;
           frontier_phi_14_6_ladder_2 = grainedColor.r;
           frontier_phi_14_6_ladder_3 = grainedColor.g;
@@ -623,13 +620,12 @@ void comp_main() {
     if (uiOutline > 0.0f) {
       float4 _636 = textureNoise.Load(int3(uint2(_85 & 255u, _86 & 255u), 0u));
       if (injectedData.fxFilmGrain) {
-        float3 grainedColor = computeFilmGrain(
-          float3(_326, _327, _328),
-          _636.xy,
-          frac(cb0[0u].x / 1000.f),
-          injectedData.fxFilmGrain * 0.03f,
-          (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f)
-        );
+        float3 grainedColor = renodx::effects::ApplyFilmGrain(
+            float3(_326, _327, _328),
+            _636.xy,
+            frac(cb0[0u].x / 1000.f),
+            injectedData.fxFilmGrain * 0.03f,
+            (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f));
         _795 = grainedColor.r;
         _796 = grainedColor.g;
         _797 = grainedColor.b;
@@ -719,19 +715,16 @@ void comp_main() {
   float3 outputColor1 = float3(_606, _608, _610);
   if (_615.y != 0u) {
     ConvertColorParams params = {
-      _615.w,      // outputTypeEnum
-      cb6[14u].x,  // paperWhiteScaling
-      cb6[14u].y,  // blackFloorAdjust
-      cb6[14u].z,  // gammaCorrection
-      cb6[16u].x,  // pqSaturation
-      float3x3(
-        // clang-format off
-        cb6[22u].x, cb6[22u].y, cb6[22u].z,
-        cb6[23u].x, cb6[23u].y, cb6[23u].z,
-        cb6[24u].x, cb6[24u].y, cb6[24u].z
-        // clang-format on
-      ),                           // pqMatrix
-      float3(_87, _88, cb0[0u].x)  // random3
+        _615.w,      // outputTypeEnum
+        cb6[14u].x,  // paperWhiteScaling
+        cb6[14u].y,  // blackFloorAdjust
+        cb6[14u].z,  // gammaCorrection
+        cb6[16u].x,  // pqSaturation
+        float3x3(
+            cb6[22u].x, cb6[22u].y, cb6[22u].z,
+            cb6[23u].x, cb6[23u].y, cb6[23u].z,
+            cb6[24u].x, cb6[24u].y, cb6[24u].z),  // pqMatrix
+        float3(_87, _88, cb0[0u].x)               // random3
     };
     outputColor1 = convertColor(outputColor1, params);
   }
@@ -741,19 +734,16 @@ void comp_main() {
   if (!_134) {
     float3 outputColor2 = float3(_311, _314, _316);
     ConvertColorParams params = {
-      _615.w,      // outputTypeEnum
-      cb6[15u].y,  // paperWhiteScaling
-      cb6[15u].z,  // blackFloorAdjust
-      cb6[15u].w,  // gammaCorrection
-      cb6[16u].x,  // pqSaturation
-      float3x3(
-        // clang-format off
-        cb6[26u].x, cb6[26u].y, cb6[26u].z,
-        cb6[27u].x, cb6[27u].y, cb6[27u].z,
-        cb6[28u].x, cb6[28u].y, cb6[28u].z
-        // clang-format on
-      ),                           // pqMatrix
-      float3(_87, _88, cb0[0u].x)  // random3
+        _615.w,      // outputTypeEnum
+        cb6[15u].y,  // paperWhiteScaling
+        cb6[15u].z,  // blackFloorAdjust
+        cb6[15u].w,  // gammaCorrection
+        cb6[16u].x,  // pqSaturation
+        float3x3(
+            cb6[26u].x, cb6[26u].y, cb6[26u].z,
+            cb6[27u].x, cb6[27u].y, cb6[27u].z,
+            cb6[28u].x, cb6[28u].y, cb6[28u].z),  // pqMatrix
+        float3(_87, _88, cb0[0u].x)               // random3
     };
 
     outputColor2 = convertColor(outputColor2, params);

@@ -1,68 +1,74 @@
-#include "math.hlsl"
 
-// sRGB/BT.709
-float Luminance(float3 color) {
-  // Fixed from "wrong" values: 0.2125 0.7154 0.0721
-  // Note: this might sum up to exactly 1, but it's pretty much fine either way
-  return dot(color, float3(0.2126390039920806884765625f, 0.715168654918670654296875f, 0.072192318737506866455078125f));
-}
+#include "./math.hlsl"
+
+namespace renodx {
+namespace tonemap {
+namespace dice {
+namespace internal {
 
 // Aplies exponential ("Photographic") luminance/luma compression.
 // The pow can modulate the curve without changing the values around the edges.
-float rangeCompress(float X, float Max = FLT_MAX, float Pow = 1.f) {
+float RangeCompress(float x, float max_value = asfloat(0x7F7FFFFF), float modulation = 1.f) {
   // Branches are for static parameters optimizations
-  if (Pow == 1.f && Max == FLT_MAX) {
+  if (modulation == 1.f && max_value == renodx::math::FLT_MAX) {
     // This does e^X. We expect X to be between 0 and 1.
-    return 1.f - exp(-X);
+    return 1.f - exp(-x);
   }
-  if (Pow == 1.f && Max != FLT_MAX) {
-    const float fLostRange = exp(-Max);
-    const float fRestoreRangeScale = 1.f / (1.f - fLostRange);
-    return (1.f - exp(-X)) * fRestoreRangeScale;
+  if (modulation == 1.f && max_value != renodx::math::FLT_MAX) {
+    const float lost_range = exp(-max_value);
+    const float restore_range_scale = 1.f / (1.f - lost_range);
+    return (1.f - exp(-x)) * restore_range_scale;
   }
-  if (Pow != 1.f && Max == FLT_MAX) {
-    return (1.f - pow(exp(-X), Pow));
+  if (modulation != 1.f && max_value == renodx::math::FLT_MAX) {
+    return (1.f - pow(exp(-x), modulation));
   }
-  const float lostRange = pow(exp(-Max), Pow);
-  const float restoreRangeScale = 1.f / (1.f - lostRange);
-  return (1.f - pow(exp(-X), Pow)) * restoreRangeScale;
+  const float lost_range = pow(exp(-max_value), modulation);
+  const float restore_range_scale = 1.f / (1.f - lost_range);
+  return (1.f - pow(exp(-x), modulation)) * restore_range_scale;
 }
 
 // Refurbished DICE HDR tonemapper (per channel or luminance)
-float luminanceCompress(
-  float InValue,
-  float OutMaxValue,
-  float ShoulderStart = 0.f,
-  bool considerMaxValue = false,
-  float InMaxValue = FLT_MAX,
-  float ModulationPow = 1.f
-) {
-  const float compressableValue = InValue - ShoulderStart;
-  const float compressableRange = InMaxValue - ShoulderStart;
-  const float compressedRange = max(OutMaxValue - ShoulderStart, FLT_MIN);
-  const float possibleOutValue = ShoulderStart + compressedRange * rangeCompress(compressableValue / compressedRange, considerMaxValue ? (compressableRange / compressedRange) : FLT_MAX, ModulationPow);
-  return (InValue <= ShoulderStart) ? InValue : possibleOutValue;
+float LuminanceCompress(float value_in, float value_out_max, float shoulder_start = 0.f, bool use_value_max = false,
+                        float value_in_max = asfloat(0x7F7FFFFF), float modulation_pow = 1.f) {
+  const float compressable_value = value_in - shoulder_start;
+  const float compressable_range = value_in_max - shoulder_start;
+  const float compressed_range = max(value_out_max - shoulder_start, renodx::math::FLT_MIN);
+  const float possible_out_value =
+      shoulder_start
+      + (compressed_range
+         * internal::RangeCompress(compressable_value / compressed_range,
+                                   use_value_max ? (compressable_range / compressed_range) : renodx::math::FLT_MAX,
+                                   modulation_pow));
+  return (value_in <= shoulder_start) ? value_in : possible_out_value;
 }
+
+}  // namespace internal
 
 // Tonemapper inspired from DICE. Can work by luminance to maintain hue.
-// "HighlightsShoulderStart" should be between 0 and 1. Determines where the highlights curve (shoulder) starts. Leaving at zero for now as it's a simple and good looking default.
-float3 DICETonemap(
-  float3 Color,
-  float MaxOutputLuminance,
-  float HighlightsShoulderStart = 0.f,
-  float HighlightsModulationPow = 1.f
-) {
-  const float sourceLuminance = Luminance(Color);
-  if (sourceLuminance > 0.0f) {
-    const float compressedLuminance = luminanceCompress(sourceLuminance, MaxOutputLuminance, HighlightsShoulderStart, false, FLT_MAX, HighlightsModulationPow);
-    Color *= compressedLuminance / sourceLuminance;
+// "highlights_shoulder_start" should be between 0 and 1. Determines where the highlights curve (shoulder) starts.
+// Leaving at zero for now as it's a simple and good looking default.
+float3 BT709(float3 color, float output_luminance_max, float highlights_shoulder_start = 0.f,
+             float highlights_modulation_pow = 1.f) {
+  const float source_luminance = renodx::color::y::from::BT709(color);
+  if (source_luminance > 0.0f) {
+    const float compressed_luminance =
+        internal::LuminanceCompress(source_luminance, output_luminance_max, highlights_shoulder_start, false,
+                                    renodx::math::FLT_MAX, highlights_modulation_pow);
+    color *= compressed_luminance / source_luminance;
   }
-  return Color;
+  return color;
 
-#if 0 // By channel implementation
-  Color.r = luminanceCompress(Color.r, MaxOutputLuminance, HighlightsShoulderStart, false, FLT_MAX, HighlightsModulationPow);
-  Color.g = luminanceCompress(Color.g, MaxOutputLuminance, HighlightsShoulderStart, false, FLT_MAX, HighlightsModulationPow);
-  Color.b = luminanceCompress(Color.b, MaxOutputLuminance, HighlightsShoulderStart, false, FLT_MAX, HighlightsModulationPow);
-  return Color;
+#if 0  // NOLINT By channel implementation
+  color.r = internal::LuminanceCompress(color.r, output_luminance_max, highlights_shoulder_start, false,
+                                        renodx::math::FLT_MAX, highlights_modulation_pow);
+  color.g = internal::LuminanceCompress(color.g, output_luminance_max, highlights_shoulder_start, false,
+                                        renodx::math::FLT_MAX, highlights_modulation_pow);
+  color.b = internal::LuminanceCompress(color.b, output_luminance_max, highlights_shoulder_start, false,
+                                        renodx::math::FLT_MAX, highlights_modulation_pow);
+  return color;
 #endif
 }
+
+}  // namespace dice
+}  // namespace tonemap
+}  // namespace renodx

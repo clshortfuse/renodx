@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl";
 #include "./shared.h"
 
 Texture2D<float4> Texture : register(t0, space2);
@@ -30,7 +29,9 @@ void frag_main() {
   SV_Target.w = _34.w;
   float3 signs = sign(SV_Target.xyz);
   SV_Target.xyz = abs(SV_Target.xyz);
-  SV_Target.xyz = injectedData.toneMapGammaCorrection ? pow(SV_Target.xyz, 2.2f) : linearFromSRGB(SV_Target.xyz);
+  SV_Target.xyz = injectedData.toneMapGammaCorrection
+                      ? pow(SV_Target.xyz, 2.2f)
+                      : renodx::color::bt709::from::SRGB(SV_Target.xyz);
   SV_Target.xyz *= signs;
   SV_Target.xyz *= injectedData.toneMapUINits / 80.f;
 }

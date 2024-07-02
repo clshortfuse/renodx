@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sun May 12 21:52:51 2024
@@ -18,13 +17,11 @@ SamplerState s1_s : register(s1);
 
 SamplerState s0_s : register(s0);
 
-cbuffer cb2 : register(b2)
-{
+cbuffer cb2 : register(b2) {
   float4 cb2[5];
 }
 
-cbuffer cb12 : register(b12)
-{
+cbuffer cb12 : register(b12) {
   float4 cb12[53];
 }
 
@@ -32,13 +29,13 @@ cbuffer cb12 : register(b12)
 float3 convertRenderInput(float3 render) {
   render /= injectedData.toneMapGameNits / 80.f;
   render /= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
-  render = pow(saturate(render), 1.f / 2.2f); // Apply inverse gamma correction
+  render = pow(saturate(render), 1.f / 2.2f);  // Apply inverse gamma correction
   return render;
 }
 
 // Convert render output for HDR
 float3 convertRenderOutput(float3 render) {
-  render = pow(saturate(render), 2.2f); // Apply gamma correction
+  render = pow(saturate(render), 2.2f);  // Apply gamma correction
   render *= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
   render *= injectedData.toneMapGameNits / 80.f;
   return render;
@@ -47,14 +44,8 @@ float3 convertRenderOutput(float3 render) {
 // 3Dmigoto declarations
 #define cmp -
 
-
-void main(
-  float4 v0 : SV_POSITION0,
-  float2 v1 : TEXCOORD0,
-  out float4 o0 : SV_Target0,
-  out float4 o1 : SV_Target1)
-{
-  float4 r0,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12,r13,r14,r15;
+void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Target0, out float4 o1 : SV_Target1) {
+  float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15;
   uint4 bitmask, uiDest;
   float4 fDest;
 
@@ -62,22 +53,22 @@ void main(
   r0.z = t3.Sample(s3_s, r0.xy).x;
   r1.xy = cb2[3].xy + v1.xy;
   r0.w = t3.Sample(s3_s, r1.xy).x;
-  r2.xyzw = cb2[3].xyxy * float4(1,0,1,-1) + v1.xyxy;
+  r2.xyzw = cb2[3].xyxy * float4(1, 0, 1, -1) + v1.xyxy;
   r1.z = t3.Sample(s3_s, r2.zw).x;
   r0.w = min(r1.z, r0.w);
   r0.w = min(r0.z, r0.w);
   r0.z = cmp(r0.w == r0.z);
   r3.xy = r0.zz ? r0.xy : r1.xy;
-  
+
   r4.xyz = t0.Sample(s0_s, r0.xy).yxz;
-  r4.yxz = convertRenderInput(r4.yxz); // HDR input conversion
+  r4.yxz = convertRenderInput(r4.yxz);  // HDR input conversion
 
   r5.xyz = t0.Sample(s0_s, r1.xy).yxz;
-  r5.yxz = convertRenderInput(r5.yxz); // HDR input conversion
+  r5.yxz = convertRenderInput(r5.yxz);  // HDR input conversion
 
   r0.x = cmp(r0.w == r1.z);
   r0.xy = r0.xx ? r2.zw : r3.xy;
-  r1.xyzw = cb2[3].xyxy * float4(-1,1,0,-1) + v1.xyxy;
+  r1.xyzw = cb2[3].xyxy * float4(-1, 1, 0, -1) + v1.xyxy;
   r0.z = t3.Sample(s3_s, r1.zw).x;
   r0.w = min(r0.z, r0.w);
   r3.x = t3.Sample(s3_s, r2.xy).x;
@@ -86,7 +77,7 @@ void main(
   r0.xy = r3.xx ? r2.xy : r0.xy;
   r0.z = cmp(r0.w == r0.z);
   r0.xy = r0.zz ? r1.zw : r0.xy;
-  r3.xyzw = cb2[3].xyxy * float4(0,1,-1,0) + v1.xyxy;
+  r3.xyzw = cb2[3].xyxy * float4(0, 1, -1, 0) + v1.xyxy;
   r0.z = t3.Sample(s3_s, r3.zw).x;
   r0.w = min(r0.z, r0.w);
   r6.x = t3.Sample(s3_s, r1.xy).x;
@@ -111,36 +102,36 @@ void main(
   r0.x = min(1, r0.x);
   r6.xy = t1.Sample(s1_s, r0.zw).xz;
   r7.xyz = t0.Sample(s0_s, r1.zw).yxz;
-  r7.yxz = convertRenderInput(r7.yxz); // HDR input conversion
+  r7.yxz = convertRenderInput(r7.yxz);  // HDR input conversion
 
   r1.xyz = t0.Sample(s0_s, r1.xy).yxz;
-  r1.yxz = convertRenderInput(r1.yxz); // HDR input conversion
+  r1.yxz = convertRenderInput(r1.yxz);  // HDR input conversion
 
-  r7.w = dot(r7.xzy, float3(0.5,0.25,0.25));
+  r7.w = dot(r7.xzy, float3(0.5, 0.25, 0.25));
   r0.y = cmp(r7.w < r6.x);
-  r1.w = dot(r1.xzy, float3(0.5,0.25,0.25));
+  r1.w = dot(r1.xzy, float3(0.5, 0.25, 0.25));
   r6.z = cmp(r1.w < r6.x);
 
   r8.xyz = t0.Sample(s0_s, r3.zw).yxz;
-  r8.yxz = convertRenderInput(r8.yxz); // HDR input conversion
+  r8.yxz = convertRenderInput(r8.yxz);  // HDR input conversion
 
   r3.xyz = t0.Sample(s0_s, r3.xy).yxz;
-  r3.yxz = convertRenderInput(r3.yxz); // HDR input conversion
+  r3.yxz = convertRenderInput(r3.yxz);  // HDR input conversion
 
-  r8.w = dot(r8.xzy, float3(0.5,0.25,0.25));
+  r8.w = dot(r8.xzy, float3(0.5, 0.25, 0.25));
   r6.w = cmp(r8.w < r6.x);
-  r3.w = dot(r3.xzy, float3(0.5,0.25,0.25));
+  r3.w = dot(r3.xzy, float3(0.5, 0.25, 0.25));
   r7.x = cmp(r3.w < r6.x);
-  
-  r9.xyz = t0.Sample(s0_s, v1.xy).xyz;
-  r9.xyz = convertRenderInput(r9.xyz); // HDR input conversion
 
-  r10.x = dot(r9.yzx, float3(0.5,0.25,0.25));
+  r9.xyz = t0.Sample(s0_s, v1.xy).xyz;
+  r9.xyz = convertRenderInput(r9.xyz);  // HDR input conversion
+
+  r10.x = dot(r9.yzx, float3(0.5, 0.25, 0.25));
   r9.w = cmp(r10.x < r6.x);
   r10.yz = r9.xz;
   r11.x = cmp(r10.x < 1.00100005);
-  r11.xyz = r11.xxx ? r10.yzx : float3(1.00100005,1.00100005,1.00100005);
-  r11.xyz = r9.www ? float3(1.00100005,1.00100005,1.00100005) : r11.xyz;
+  r11.xyz = r11.xxx ? r10.yzx : float3(1.00100005, 1.00100005, 1.00100005);
+  r11.xyz = r9.www ? float3(1.00100005, 1.00100005, 1.00100005) : r11.xyz;
   r11.w = cmp(r3.w < r11.z);
   r12.xyz = r11.www ? r3.yzw : r11.xyz;
   r11.xyz = r7.xxx ? r11.xyz : r12.xyz;
@@ -158,32 +149,32 @@ void main(
   r13.xyz = r1.xxx ? r7.yzw : r11.xyz;
   r11.xyz = r0.yyy ? r11.xyz : r13.xyz;
   r13.xyz = t0.Sample(s0_s, r2.xy).yxz;
-  r13.yxz = convertRenderInput(r13.yxz); // HDR input conversion
+  r13.yxz = convertRenderInput(r13.yxz);  // HDR input conversion
 
   r2.xyz = t0.Sample(s0_s, r2.zw).yxz;
-  r2.yxz = convertRenderInput(r2.yxz); // HDR input conversion
+  r2.yxz = convertRenderInput(r2.yxz);  // HDR input conversion
 
-  r13.w = dot(r13.xzy, float3(0.5,0.25,0.25));
+  r13.w = dot(r13.xzy, float3(0.5, 0.25, 0.25));
   r1.x = cmp(r13.w < r11.z);
   r14.xyz = r1.xxx ? r13.yzw : r11.xyz;
   r1.x = cmp(r13.w < r6.x);
   r11.xyz = r1.xxx ? r11.xyz : r14.xyz;
-  r2.w = dot(r2.xzy, float3(0.5,0.25,0.25));
+  r2.w = dot(r2.xzy, float3(0.5, 0.25, 0.25));
   r2.x = cmp(r2.w < r11.z);
   r14.xyz = r2.xxx ? r2.yzw : r11.xyz;
   r2.x = cmp(r2.w < r6.x);
   r11.xyz = r2.xxx ? r11.xyz : r14.xyz;
-  r4.w = dot(r4.xzy, float3(0.5,0.25,0.25));
+  r4.w = dot(r4.xzy, float3(0.5, 0.25, 0.25));
   r3.x = cmp(r4.w < r11.z);
   r14.xyz = r3.xxx ? r4.yzw : r11.xyz;
   r3.x = cmp(r4.w < r6.x);
   r11.yzw = r3.xxx ? r11.xyz : r14.xyz;
-  r5.w = dot(r5.xzy, float3(0.5,0.25,0.25));
+  r5.w = dot(r5.xzy, float3(0.5, 0.25, 0.25));
   r4.x = cmp(r5.w < r11.w);
   r14.yzw = r4.xxx ? r5.yzw : r11.yzw;
   r4.x = cmp(-0.00100000005 < r10.x);
-  r15.xyz = r4.xxx ? r10.yzx : float3(-0.00100000005,-0.00100000005,-0.00100000005);
-  r15.xyz = r9.www ? r15.xyz : float3(-0.00100000005,-0.00100000005,-0.00100000005);
+  r15.xyz = r4.xxx ? r10.yzx : float3(-0.00100000005, -0.00100000005, -0.00100000005);
+  r15.xyz = r9.www ? r15.xyz : float3(-0.00100000005, -0.00100000005, -0.00100000005);
   r4.x = cmp(r15.z < r3.w);
   r3.yzw = r4.xxx ? r3.yzw : r15.xyz;
   r3.yzw = r7.xxx ? r3.yzw : r15.xyz;
@@ -228,7 +219,7 @@ void main(
   r6.x = min(r0.y, r2.x);
   r2.xyzw = r2.xyzw + -r1.xyzw;
   r0.y = min(r0.z, r0.w);
-  r0.zw = cmp(r0.zw >= float2(1,1));
+  r0.zw = cmp(r0.zw >= float2(1, 1));
   r0.y = cmp(0 >= r0.y);
   r0.y = (int)r0.z | (int)r0.y;
   r0.y = (int)r0.w | (int)r0.y;
@@ -252,7 +243,7 @@ void main(
   r0.z = r0.w * r0.z;
   r0.z = cmp(abs(r0.z) < 0.00999999978);
   o0.x = saturate(r0.z ? r10.x : r3.x);
-  o0.yw = float2(0,0);
+  o0.yw = float2(0, 0);
   r0.z = cmp(0.00999999978 < r2.x);
   r0.z = r0.z ? r1.x : 0.5;
   r1.xyz = r0.zzz * r2.yzw + r1.yzw;

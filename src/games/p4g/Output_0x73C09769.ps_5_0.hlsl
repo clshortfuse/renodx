@@ -1,5 +1,3 @@
-#include "../../shaders/color.hlsl"
-#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 SamplerState smpAlbedo_s : register(s0);
@@ -36,7 +34,7 @@ void main(
     o0.rgb = max(0, o0.rgb);
   }
 
-  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
+  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : renodx::color::bt709::from::SRGB(o0.rgb);
 
   // tonemap here
   float vanillaMidGray = 0.18f;
@@ -48,7 +46,7 @@ void main(
   float renoDRTSaturation = 1.f;
   float renoDRTHighlights = 1.f;
   
-  ToneMapParams tmParams = buildToneMapParams(
+  renodx::tonemap::Config config = renodx::tonemap::config::Create(
     injectedData.toneMapType,
     injectedData.toneMapPeakNits,
     injectedData.toneMapGameNits,
@@ -68,7 +66,7 @@ void main(
     renoDRTFlare
   );
 
-  o0.rgb = toneMap(o0.rgb, tmParams);
+  o0.rgb = renodx::tonemap::config::Apply(o0.rgb, config);
 
   o0.rgb *= injectedData.toneMapGameNits / 80.f;
   

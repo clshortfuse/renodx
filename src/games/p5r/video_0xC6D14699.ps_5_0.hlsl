@@ -1,4 +1,3 @@
-#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 SamplerState samp0_s : register(s0);
@@ -37,7 +36,7 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : COLOR0, float2 v2 : TEXCOORD0, o
   if (injectedData.toneMapType >= 1.f) {
     float scaling = injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
     float videoPeak = 203.f * scaling;
-    o0.rgb = bt2446a_inverse_tonemapping_bt709(o0.rgb, 100.f / scaling, videoPeak);
+    o0.rgb = renodx::tonemap::inverse::bt2446a::BT709(o0.rgb, 100.f / scaling, videoPeak);
     o0.rgb /= videoPeak;  // Normalize to 1.0
     o0.rgb *= injectedData.toneMapPeakNits / injectedData.toneMapUINits;
   } else {

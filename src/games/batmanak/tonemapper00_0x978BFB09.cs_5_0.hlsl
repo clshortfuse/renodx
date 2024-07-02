@@ -1,7 +1,5 @@
 // Used for motion blur
 
-#include "../../shaders/filmgrain.hlsl"
-#include "../../shaders/lut.hlsl"
 #include "./shared.h"
 #include "./tonemapper.hlsl"
 
@@ -148,8 +146,8 @@ cbuffer cb0 : register(b0) {
   r0 = lerp(r1, r1 / r0.z * r0.x, injectedData.fxVignette);
 
 #if DRAW_TONEMAPPER
-  DrawToneMapperParams dtmParams = DrawToneMapperStart(loadPosition.xy, r0.zwy, t0, injectedData.toneMapPeakNits, injectedData.toneMapGameNits);
-  r0.zwy = dtmParams.outputColor;
+  renodx::debug::graph::Config graph_config = renodx::debug::graph::DrawStart(loadPosition.xy, r0.zwy, t0, injectedData.toneMapPeakNits, injectedData.toneMapGameNits);
+  r0.zwy = graph_config.color;
 #endif
 
   float3 untonemapped = r0.zwy;
@@ -185,7 +183,7 @@ cbuffer cb0 : register(b0) {
       r0.xyzw = lutInputColor;
     }
 #if DRAW_TONEMAPPER
-    if (!dtmParams.drawToneMapper)
+    if (!graph_config.draw)
 #endif
       if (injectedData.fxFilmGrain) {
         r1.xyzw = 1.f - r0.wyzw;
@@ -198,14 +196,14 @@ cbuffer cb0 : register(b0) {
         r1.xyzw = r1.xyzw * r3.xyzw + 1.f;
         r0.xyzw = r1.xyzw * r0.xyzw;
       }
-    outputColor = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : linearFromSRGB(r0.rgb);
+    outputColor = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : renodx::color::bt709::from::SRGB(r0.rgb);
   } else {
     outputColor = applyUserToneMap(untonemapped.rgb, t2, s0_s);
 #if DRAW_TONEMAPPER
-    if (!dtmParams.drawToneMapper)
+    if (!graph_config.draw)
 #endif
       if (injectedData.fxFilmGrain) {
-        float3 grainedColor = computeFilmGrain(
+        float3 grainedColor = renodx::effects::ApplyFilmGrain(
           outputColor,
           screenXY.xy,
           frac(r3.x),
@@ -217,7 +215,7 @@ cbuffer cb0 : register(b0) {
   }
 
 #if DRAW_TONEMAPPER
-  if (dtmParams.drawToneMapper) outputColor = DrawToneMapperEnd(outputColor, dtmParams);
+  if (graph_config.draw) outputColor = renodx::debug::graph::DrawEnd(outputColor, graph_config);
 #endif
 
   outputColor *= injectedData.toneMapGameNits / 80.f;

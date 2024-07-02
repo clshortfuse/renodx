@@ -1,4 +1,3 @@
-#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -68,33 +67,31 @@ void main(float4 v0 : SV_Position0, float4 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   float renoDRTSaturation = 1.0f;
   float renoDRTHighlights = 1.0f;
 
-  ToneMapParams tmParams = buildToneMapParams(
-    injectedData.toneMapType,
-    injectedData.toneMapPeakNits,
-    injectedData.toneMapGameNits,
-    injectedData.toneMapGammaCorrection,  // -1 == srgb
-    injectedData.colorGradeExposure,
-    injectedData.colorGradeHighlights,
-    injectedData.colorGradeShadows,
-    injectedData.colorGradeContrast,
-    injectedData.colorGradeSaturation,
-    vanillaMidGray,
-    vanillaMidGray * 100.f,
-    renoDRTHighlights,
-    renoDRTShadows,
-    renoDRTContrast,
-    renoDRTSaturation,
-    renoDRTDechroma,
-    renoDRTFlare
-  );
-  LUTParams lutParams = buildLUTParams(
-    s2_s,
-    injectedData.colorGradeLUTStrength,
-    injectedData.colorGradeLUTScaling,
-    TONE_MAP_LUT_TYPE__2_0,
-    TONE_MAP_LUT_TYPE__2_0,
-    16.f
-  );
+  renodx::tonemap::Config config = renodx::tonemap::config::Create(
+      injectedData.toneMapType,
+      injectedData.toneMapPeakNits,
+      injectedData.toneMapGameNits,
+      injectedData.toneMapGammaCorrection,  // -1 == srgb
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation,
+      vanillaMidGray,
+      vanillaMidGray * 100.f,
+      renoDRTHighlights,
+      renoDRTShadows,
+      renoDRTContrast,
+      renoDRTSaturation,
+      renoDRTDechroma,
+      renoDRTFlare);
+  renodx::lut::Config lut_config = renodx::lut::config::Create(
+      s2_s,
+      injectedData.colorGradeLUTStrength,
+      injectedData.colorGradeLUTScaling,
+      renodx::lut::config::type::GAMMA_2_0,
+      renodx::lut::config::type::GAMMA_2_0,
+      16.f);
 
   if (injectedData.toneMapType == 0.f) {
     r0.xyz = cb0[8].xxx * r1.xyz;
@@ -117,11 +114,11 @@ void main(float4 v0 : SV_Position0, float4 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     r0.xyz = t10.Sample(s2_s, r0.xyz).xyz;
     r0.xyz = r0.xyz * r0.xyz;
   } else {
-    r0.xyz = toneMap(untonemapped, tmParams, lutParams, t10);
+    r0.xyz = renodx::tonemap::config::Apply(untonemapped, config, lut_config, t10);
   }
 
   if (injectedData.toneMapGammaCorrection) {
-    r0.xyz = gammaCorrectSafe(r0.xyz);
+    r0.xyz = renodx::color::correct::GammaSafe(r0.xyz);
   }
   r0.xyz = r0.xyz * cb0[10].xxx + cb0[10].yyy;
   r0.w = r0.w / r1.x;

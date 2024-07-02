@@ -1,6 +1,5 @@
 // writes to texture or swapchain
 
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t1 : register(t1);
@@ -37,7 +36,7 @@ void main(float4 v0 : TEXCOORD0, float4 v1 : TEXCOORD1, float2 v2 : TEXCOORD2, o
       r1.y = cb0[8].y + r2.y;
       r0.zw = r1.xy * cb0[11].xy + v2.xy;
       r0.z = t1.SampleLevel(s1_s, r0.zw, 0).w;
-      r0.z = saturate(r0.z); // sdr clamp
+      r0.z = saturate(r0.z);  // sdr clamp
       r2.x = r2.x + r0.z;
       r2.y = 1 + r2.y;
     }
@@ -48,7 +47,7 @@ void main(float4 v0 : TEXCOORD0, float4 v1 : TEXCOORD1, float2 v2 : TEXCOORD2, o
   r0.yz = cb0[10].xy * v2.xy;
   r1.xyzw = t0.SampleLevel(s0_s, r0.yz, 0).xyzw;
 
-  r1 = saturate(r1); // SDR Clamp
+  r1 = saturate(r1);  // SDR Clamp
 
   r0.y = 1 + -r1.w;
   r0.x = r0.x * r0.y;
@@ -66,7 +65,9 @@ void main(float4 v0 : TEXCOORD0, float4 v1 : TEXCOORD1, float2 v2 : TEXCOORD2, o
   o0.w = r0.w;
 
   o0.rgb = saturate(o0.rgb);
-  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
+  o0.rgb = injectedData.toneMapGammaCorrection
+               ? pow(o0.rgb, 2.2f)
+               : renodx::color::bt709::from::SRGB(o0.rgb);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
 }

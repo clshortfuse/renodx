@@ -1,7 +1,3 @@
-#include "../../shaders/color.hlsl"
-#include "../../shaders/graph.hlsl"
-#include "../../shaders/lut.hlsl"
-#include "../../shaders/random.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
 
@@ -108,8 +104,8 @@ float3 composite(bool useTexArray = false) {
   }
 
 #if DRAW_TONEMAPPER
-  DrawToneMapperParams dtmParams = DrawToneMapperStart(gl_FragCoord.xy, outputColor, textureUntonemapped, injectedData.toneMapPeakNits, 100.f);
-  outputColor = dtmParams.outputColor;
+  renodx::debug::graph::Config graph_config = DrawStart(gl_FragCoord.xy, outputColor, textureUntonemapped, injectedData.toneMapPeakNits, 100.f);
+  outputColor = graph_config.color;
 #endif
 
   float3 fxColor = outputColor;
@@ -139,11 +135,10 @@ float3 composite(bool useTexArray = false) {
   float3 secondLUTColor;
   float3 thirdLUTColor;
 
-  float3 random = hash33(float3(
-    fFragx,
-    fFragy,
-    float(asuint(cb0[28u]).y)
-  ));
+  float3 random = renodx::random::Hash33(float3(
+      fFragx,
+      fFragy,
+      float(asuint(cb0[28u]).y)));
 
   random -= 0.5f;
   float _230 = random.x;
@@ -183,10 +178,10 @@ float3 composite(bool useTexArray = false) {
   }
   if (useLUT) {
     if (injectedData.processingInternalSampling == 1.f) {
-      float3 rec2020 = bt2020FromBT709(fallbackColor);
-      float3 pqColor = pqFromLinear((rec2020 * 100.f) / 10000.f);  // reset scale to 0-1 for 0-10000 nits
+      float3 rec2020 = renodx::color::bt2020::from::BT709(fallbackColor);
+      float3 pqColor = renodx::color::pq::from::BT2020((rec2020 * 100.f) / 10000.f);  // reset scale to 0-1 for 0-10000 nits
 
-      lutColor = sampleLUT(textureLUT[lutIndex], sampler0, pqColor).rgb;
+      lutColor = renodx::lut::Sample(textureLUT[lutIndex], sampler0, pqColor).rgb;
     } else {
       // cb6[6u].x 0.05888671
       // cb6[6u].y 0.59765625
@@ -200,15 +195,15 @@ float3 composite(bool useTexArray = false) {
 
   if (cb6[1u].w) {
     float3 luttedColor = outputColor;
-    float outputColorY = yFromBT709(outputColor);
-    float fallbackColorY = yFromBT709(fallbackColor);
+    float outputColorY = renodx::color::y::from::BT709(outputColor);
+    float fallbackColorY = renodx::color::y::from::BT709(fallbackColor);
     float3 rescaledFallbackColor = fallbackColor * (fallbackColorY ? (outputColorY / fallbackColorY) : 0);
     outputColor = lerp(outputColor, rescaledFallbackColor, cb6[1u].w);
   }
   outputColor *= cb6[1u].z;
 
 #if DRAW_TONEMAPPER
-  if (dtmParams.drawToneMapper) outputColor = DrawToneMapperEnd(outputColor, dtmParams);
+  if (graph_config.draw) outputColor = renodx::debug::graph::DrawEnd(outputColor, graph_config);
 #endif
 
   return outputColor;

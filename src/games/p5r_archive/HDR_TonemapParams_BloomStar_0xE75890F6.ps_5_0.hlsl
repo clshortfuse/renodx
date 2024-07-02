@@ -1,7 +1,6 @@
-#include "../../shaders/tonemap.hlsl"
+#include "./p5r.h"
 
-cbuffer GFD_PSCONST_HDR : register(b11)
-{
+cbuffer GFD_PSCONST_HDR : register(b11) {
   float middleGray : packoffset(c0);
   float adaptedLum : packoffset(c0.y);
   float bloomScale : packoffset(c0.z);
@@ -32,11 +31,10 @@ Texture2D<float4> starTexture : register(t2);
 #define cmp -
 
 void main(
-  float4 v0 : SV_POSITION0,
-  float2 v1 : TEXCOORD0,
-  out float4 o0 : SV_TARGET0)
-{
-  float4 r0,r1,r2,r3,r4,r5,r6;
+    float4 v0 : SV_POSITION0,
+                float2 v1 : TEXCOORD0,
+                            out float4 o0 : SV_TARGET0) {
+  float4 r0, r1, r2, r3, r4, r5, r6;
   uint4 bitmask, uiDest;
   float4 fDest;
 
@@ -64,8 +62,8 @@ void main(
   r5.xyz = -paramEperF;
   r3.xyz = r5.xyz + r3.xyz;
   r3.xyz = r3.xyz / paramF_White;
-  r3.xyz = max(float3(0,0,0), r3.xyz);
-  r3.xyz = min(float3(1,1,1), r3.xyz);
+  r3.xyz = max(float3(0, 0, 0), r3.xyz);
+  r3.xyz = min(float3(1, 1, 1), r3.xyz);
   r5.xyz = -r2.xyz;
   r3.xyz = r5.xyz + r3.xyz;
   r3.xyz = interpolate * r3.xyz;
@@ -78,7 +76,7 @@ void main(
   o0.xyzw = r4.xyzw;
 
   float3 lutColor = r4.xyz;
-  o0.xyz = toneMapUpgrade(hdrColor, sdrColor, lutColor, 1.f);
+  o0.xyz = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, lutColor, 1.f);
   o0.rgb = max(0, o0.rgb);
 
   return;

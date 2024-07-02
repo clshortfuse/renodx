@@ -1,4 +1,3 @@
-#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -62,7 +61,7 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
   // r1.rgb = log2(r1.rgb);
   // r1.rgb = saturate(r1.rgb * (ARRI_LOG_C * log10(2)) + ARRI_LOG_D);
 
-  float vanillaMidGray = unityNeutralTonemap(0.18f);
+  float vanillaMidGray = renodx::tonemap::unity::BT709(0.18f);
 
   float renoDRTHighlights = 1.f;
   float renoDRTShadows = 1.f;
@@ -71,54 +70,55 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
   float renoDRTDechroma = 0.0f;
   float renoDRTFlare = 0.0f;
 
-  ToneMapParams tmParams = buildToneMapParams(
-    injectedData.toneMapType,
-    injectedData.toneMapPeakNits,
-    injectedData.toneMapGameNits,
-    injectedData.toneMapGammaCorrection,
-    injectedData.colorGradeExposure,
-    injectedData.colorGradeHighlights,
-    injectedData.colorGradeShadows,
-    injectedData.colorGradeContrast,
-    injectedData.colorGradeSaturation,
-    vanillaMidGray,
-    vanillaMidGray * 100.f,
-    renoDRTHighlights,
-    renoDRTShadows,
-    renoDRTContrast,
-    renoDRTSaturation,
-    renoDRTDechroma,
-    renoDRTFlare
-  );
+  renodx::tonemap::Config config = renodx::tonemap::config::Create(
+      injectedData.toneMapType,
+      injectedData.toneMapPeakNits,
+      injectedData.toneMapGameNits,
+      injectedData.toneMapGammaCorrection,
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation,
+      vanillaMidGray,
+      vanillaMidGray * 100.f,
+      renoDRTHighlights,
+      renoDRTShadows,
+      renoDRTContrast,
+      renoDRTSaturation,
+      renoDRTDechroma,
+      renoDRTFlare);
 
-  LUTParams lutParams = buildLUTParams(
-    s0_s,
-    1.f,                                // Internal LUT
-    injectedData.colorGradeLUTScaling,  // Cleans up raised black floor
-    TONE_MAP_LUT_TYPE__ARRI_C1000_NO_CUT,
-    TONE_MAP_LUT_TYPE__LINEAR,
-    cb0[188].xyz  // precompute
+  renodx::lut::Config lut_config = renodx::lut::config::Create(
+      s0_s,
+      1.f,                                // Internal LUT
+      injectedData.colorGradeLUTScaling,  // Cleans up raised black floor
+      renodx::lut::config::type::ARRI_C1000_NO_CUT,
+      renodx::lut::config::type::LINEAR,
+      cb0[188].xyz  // precompute
   );
 
   float3 outputColor = untonemapped;
-  if (tmParams.type == 1.f) {
-    outputColor = toneMap(untonemapped, tmParams);
+  if (config.type == 1.f) {
+    outputColor = renodx::tonemap::config::Apply(untonemapped, config);
   } else {
-    outputColor = sampleLUT(t3, lutParams, untonemapped * cb0[188].w);
+    outputColor = renodx::lut::Sample(t3, lut_config, untonemapped * cb0[188].w);
     float useSDRLUT = (cb0[203].y == 0 && cb0[189].w >= 0);
     if (useSDRLUT) {
       // Seems to be done in LUT builder now
       // Leaving just in case
-      LUTParams sdrLUTParams = buildLUTParams(
-        s0_s,
-        cb0[189].w,
-        injectedData.colorGradeLUTScaling,
-        TONE_MAP_LUT_TYPE__SRGB,
-        TONE_MAP_LUT_TYPE__SRGB,
-        cb0[189].xyz  // precompute
-      );
 
-      float3 sdrLutResult = sampleLUT(t4, sdrLUTParams, outputColor);
+      float3 sdrLutResult = renodx::lut::Sample(
+          t4,
+          renodx::lut::config::Create(
+              s0_s,
+              cb0[189].w,
+              injectedData.colorGradeLUTScaling,
+              renodx::lut::config::type::SRGB,
+              renodx::lut::config::type::SRGB,
+              cb0[189].xyz  // precompute
+              ),
+          outputColor);
       outputColor = lerp(outputColor, sdrLutResult, cb0[189].w);
     }
   }
@@ -145,11 +145,11 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
 
   if (injectedData.toneMapGammaCorrection) {
     // Convert to expected output
-    outputColor = gammaCorrectSafe(outputColor);
+    outputColor = renodx::color::correct::GammaSafe(outputColor);
 
     // Adjust for shader transfer
     outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    outputColor = gammaCorrectSafe(outputColor, true);
+    outputColor = renodx::color::correct::GammaSafe(outputColor, true);
   } else {
     outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
   }

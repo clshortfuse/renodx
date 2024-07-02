@@ -1,6 +1,4 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
-
 
 cbuffer GUICommon_Instance_cbufferUBO : register(b0, space1) {
   float4 GUICommon_Instance_cbuffer_m0[213] : packoffset(c0);
@@ -30,7 +28,9 @@ void frag_main() {
   SV_Target.w = ((GUICommon_Instance_cbuffer_m0[8u].x >= 0.0f) ? GUICommon_Instance_cbuffer_m0[8u].x : COLOR.w) * _48.w;
 
   SV_Target.rgb = max(0, SV_Target.rgb);
-  SV_Target.rgb = injectedData.toneMapGammaCorrection ? pow(SV_Target.rgb, 2.2f) : linearFromSRGB(SV_Target.rgb);
+  SV_Target.rgb = injectedData.toneMapGammaCorrection
+                      ? pow(SV_Target.rgb, 2.2f)
+                      : renodx::color::bt709::from::SRGB(SV_Target.rgb);
   SV_Target.rgb *= injectedData.toneMapUINits / 80.f;
   // SV_Target.rgb = 0;
   // SV_Target.a = 1.f;

@@ -1,4 +1,3 @@
-#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 struct FrameDebug {
@@ -25,11 +24,11 @@ cbuffer SharedFrameData : register(b0, space6) {
     float value03;          // _23_m0[1u].x
     float value04;          // _23_m0[1u].y
     float value05;          // _23_m0[1u].z
-    float fGamma;          // _23_m0[1u].w
-    float fContrast;          // _23_m0[2u].x
-    uint supportsHDR;           // _23_m0[2u].y
-    float fBrightnessHDR;          // _23_m0[2u].z
-    float lutScalingPow;          // _23_m0[2u].w
+    float fGamma;           // _23_m0[1u].w
+    float fContrast;        // _23_m0[2u].x
+    uint supportsHDR;       // _23_m0[2u].y
+    float fBrightnessHDR;   // _23_m0[2u].z
+    float lutScalingPow;    // _23_m0[2u].w
     FrameDebug frameDebug;  // _23_m0[3u-6u].xyzw
     float4 value12;         // _23_m0[7u].xyzw
     float value13;          // _23_m0[8u].x
@@ -194,8 +193,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
         float frontier_phi_20_17_ladder;
         if (_600 > 0.0f) {
           frontier_phi_20_17_ladder = exp2(
-            ((((log2(_600) * _562) + _563) * 0.693147182464599609375f) + _567) * 1.44269502162933349609375f
-          );
+              ((((log2(_600) * _562) + _563) * 0.693147182464599609375f) + _567) * 1.44269502162933349609375f);
         } else {
           frontier_phi_20_17_ladder = 0.0f;
         }
@@ -228,52 +226,50 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
     }
   }
 
-  ToneMapParams tmParams = buildToneMapParams(
-    injectedData.toneMapType,
-    injectedData.toneMapPeakNits,
-    injectedData.toneMapGameNits,
-    injectedData.toneMapGammaCorrection,  // -1 == srgb
-    injectedData.colorGradeExposure,
-    injectedData.colorGradeHighlights,
-    injectedData.colorGradeShadows,
-    injectedData.colorGradeContrast,
-    injectedData.colorGradeSaturation,
-    vanillaMidGray,
-    vanillaMidGray * 100.f,
-    renoDRTHighlights,
-    renoDRTShadows,
-    renoDRTContrast,
-    renoDRTSaturation,
-    renoDRTDechroma,
-    renoDRTFlare
-  );
+  renodx::tonemap::Config config = renodx::tonemap::config::Create(
+      injectedData.toneMapType,
+      injectedData.toneMapPeakNits,
+      injectedData.toneMapGameNits,
+      injectedData.toneMapGammaCorrection,  // -1 == srgb
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation,
+      vanillaMidGray,
+      vanillaMidGray * 100.f,
+      renoDRTHighlights,
+      renoDRTShadows,
+      renoDRTContrast,
+      renoDRTSaturation,
+      renoDRTDechroma,
+      renoDRTFlare);
 
-  if (tmParams.type == 3.f) {
-    tmParams.renoDRTSaturation *= tmParams.saturation;
+  if (config.type == 3.f) {
+    config.reno_drt_saturation *= config.saturation;
 
-    sdrColor = renoDRTToneMap(inputColor, tmParams, true);
+    sdrColor = renodx::tonemap::config::ApplyRenoDRT(inputColor, config, true);
 
-    tmParams.renoDRTHighlights *= tmParams.highlights;
-    tmParams.renoDRTShadows *= tmParams.shadows;
-    tmParams.renoDRTContrast *= tmParams.contrast;
+    config.reno_drt_highlights *= config.highlights;
+    config.reno_drt_shadows *= config.shadows;
+    config.reno_drt_contrast *= config.contrast;
 
-    hdrColor = renoDRTToneMap(inputColor, tmParams);
+    hdrColor = renodx::tonemap::config::ApplyRenoDRT(inputColor, config);
   } else {
-    inputColor = applyUserColorGrading(
-      inputColor,
-      tmParams.exposure,
-      tmParams.highlights,
-      tmParams.shadows,
-      tmParams.contrast,
-      tmParams.saturation
-    );
+    inputColor = renodx::color::grade::UserColorGrading(
+        inputColor,
+        config.exposure,
+        config.highlights,
+        config.shadows,
+        config.contrast,
+        config.saturation);
 
-    if (tmParams.type == 1.f) {
+    if (config.type == 1.f) {
       hdrColor = inputColor;
       sdrColor = saturate(inputColor);
-    } else if (tmParams.type == 2.f) {
-      hdrColor = acesToneMap(inputColor, tmParams);
-      sdrColor = acesToneMap(inputColor, tmParams, true);
+    } else if (config.type == 2.f) {
+      hdrColor = renodx::tonemap::config::ApplyACES(inputColor, config);
+      sdrColor = renodx::tonemap::config::ApplyACES(inputColor, config, true);
     } else {
       if (pushConstants.toneMapType == 0u) {
         // Clip SDR
@@ -353,8 +349,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
             float frontier_phi_20_17_ladder;
             if (_600 > 0.0f) {
               frontier_phi_20_17_ladder = exp2(
-                ((((log2(_600) * _562) + _563) * 0.693147182464599609375f) + _567) * 1.44269502162933349609375f
-              );
+                  ((((log2(_600) * _562) + _563) * 0.693147182464599609375f) + _567) * 1.44269502162933349609375f);
             } else {
               frontier_phi_20_17_ladder = 0.0f;
             }
@@ -429,14 +424,13 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
 
   float lutStrength = _9.Sample(_36, float2(TEXCOORD.x, TEXCOORD.y));
 
-  LUTParams lutParams = buildLUTParams(
-    _36,
-    injectedData.colorGradeLUTStrength,
-    injectedData.colorGradeLUTScaling,
-    TONE_MAP_LUT_TYPE__SRGB,
-    TONE_MAP_LUT_TYPE__SRGB,
-    16.f
-  );
+  renodx::lut::Config lut_config = renodx::lut::config::Create(
+      _36,
+      injectedData.colorGradeLUTStrength,
+      injectedData.colorGradeLUTScaling,
+      renodx::lut::config::type::SRGB,
+      renodx::lut::config::type::SRGB,
+      16.f);
 
   // float3 gammaColor = pow(contrastedColor, 1.0f / max(frameData.fGamma, 0.001000000047497451305389404296875f));
   // float _305 = gammaColor.r;
@@ -446,7 +440,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
   // float3 lutCoordinates = float3((_305 * 0.9375f) + 0.03125f, (_306 * 0.9375f) + 0.03125f, (_307 * 0.9375f) + 0.03125f);
   // float3 lutOutputColor = _13.Sample(_36, lutCoordinates);
   // float3 lutBlendedColor = lerp(lutOutputColor, gammaColor, lutStrength);
-  float3 lutColor = sampleLUT(_13, lutParams, sceneGradedColor);
+  float3 lutColor = renodx::lut::Sample(_13, lut_config, sceneGradedColor);
 
   // Back in "output gamma"
 
@@ -468,7 +462,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
 
     float3 contrastedColor2 = pow(scaledColor, frameData.lutScalingPow);
     float3 lutScaled = (frameData.fBrightnessHDR * (((contrastedColor2 * unknownScaling) - lutColorInGamma) + ((1.0f - contrastedColor2) * scaledColor))) + lutColorInGamma;
-    lutColor = linearFromSRGB(saturate(lutColorInGamma));
+    lutColor = renodx::color::bt709::from::SRGB(saturate(lutColorInGamma));
   }
 
   // undo gamma
@@ -476,15 +470,15 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
 
   float3 outputColor;
   if (injectedData.toneMapType == 0.f) {
-    outputColor = lerp(sceneGradedColor, lutColor, lutParams.strength);
+    outputColor = lerp(sceneGradedColor, lutColor, lut_config.strength);
   } else {
-    outputColor = toneMapUpgrade(hdrColor, sdrColor, lutColor, lutParams.strength);
+    outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, lutColor, lut_config.strength);
   }
   outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
 
   float3 outputSigns = sign(outputColor);
   outputColor = abs(outputColor);
-  outputColor = srgbFromLinear(outputColor);
+  outputColor = renodx::color::srgb::from::BT709(outputColor);
 
   outputColor *= outputSigns;
 

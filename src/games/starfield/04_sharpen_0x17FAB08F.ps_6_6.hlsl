@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 cbuffer _13_15 : register(b0, space7) {
@@ -81,6 +80,7 @@ void frag_main() {
 
   // Revert back out of gamut colors
   SV_Target.rgb *= signs;
+  SV_Target.rgb = _42.rgb;
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {

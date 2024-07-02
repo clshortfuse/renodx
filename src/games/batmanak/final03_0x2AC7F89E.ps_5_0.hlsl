@@ -1,4 +1,3 @@
-#include "../../shaders/color.hlsl"
 #include "./shared.h"
 
 cbuffer cb0 : register(b0) {
@@ -8,13 +7,7 @@ cbuffer cb0 : register(b0) {
 // 3Dmigoto declarations
 #define cmp -
 
-void main(
-  float4 v0 : COLOR0,
-  float4 v1 : COLOR1,
-  float4 v2 : TEXCOORD0,
-  float4 v3 : TEXCOORD1,
-  out float4 o0 : SV_TARGET0)
-{
+void main(float4 v0 : COLOR0, float4 v1 : COLOR1, float4 v2 : TEXCOORD0, float4 v3 : TEXCOORD1, out float4 o0 : SV_TARGET0) {
   float4 r0;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -27,7 +20,9 @@ void main(
   o0.xyz = exp2(r0.xyz);
 
   o0.rgb = saturate(o0.rgb);
-  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : linearFromSRGB(o0.rgb);
+  o0.rgb = injectedData.toneMapGammaCorrection
+               ? pow(o0.rgb, 2.2f)
+               : renodx::color::bt709::from::SRGB(o0.rgb);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
 }

@@ -1,26 +1,20 @@
 // LUT + TONEMAPPER
 
-#include "../../shaders/color.hlsl"
-#include "../../shaders/colorgrade.hlsl"
-#include "../../shaders/lut.hlsl"
-#include "../../shaders/tonemap.hlsl"
 #include "./aces_cdpr.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
 
-// clang-format off
 static const float HEATMAP_COLORS[27] = {
-  0.0f, 0.0f, 0.0f,  // Black
-  0.0f, 0.0f, 1.0f,  // Blue
-  0.0f, 1.0f, 1.0f,  // Cyan
-  0.0f, 1.0f, 0.0f,  // Green
-  1.0f, 1.0f, 0.0f,  // Yellow
-  1.0f, 0.0f, 0.0f,  // Red
-  1.0f, 0.0f, 1.0f,  // Magenta
-  1.0f, 1.0f, 1.0f,  // White
-  1.0f, 1.0f, 1.0f,   // White
+    0.0f, 0.0f, 0.0f,  // Black
+    0.0f, 0.0f, 1.0f,  // Blue
+    0.0f, 1.0f, 1.0f,  // Cyan
+    0.0f, 1.0f, 0.0f,  // Green
+    1.0f, 1.0f, 0.0f,  // Yellow
+    1.0f, 0.0f, 0.0f,  // Red
+    1.0f, 0.0f, 1.0f,  // Magenta
+    1.0f, 1.0f, 1.0f,  // White
+    1.0f, 1.0f, 1.0f,  // White
 };
-// clang-format on
 
 static const float SQRT_HALF = sqrt(1.f / 2.f);   // 0.7071067811865476
 static const float SQRT_THIRD = sqrt(1.f / 3.f);  // 0.5773502691896257
@@ -137,8 +131,7 @@ struct UnknownType {
   float4 const32;
   // float4 const33;
   float const33x;  // cb6[33u].x 0.77226562
-  float
-    const33y;  // cb6[33u].y 0.01245117 (100) 0.00622558 (200) 0.00498046 (250) 0.004150039 (300) 0.00311279 (400)  0.00249023 (500)
+  float const33y;  // cb6[33u].y 0.01245117 (100) 0.00622558 (200) 0.00498046 (250) 0.004150039 (300) 0.00311279 (400)  0.00249023 (500)
   float4 const34;
   float4 const35;
   float4 const36;
@@ -168,7 +161,7 @@ struct SPIRV_Cross_Input {
   uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
 };
 
-float3 sampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex) {
+float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex) {
   float3 color = inputColor;
   if (lutSettings.x > 0.0f) {           // LUT Strength
     uint _503 = asuint(lutSettings).w;  // lut Type
@@ -179,15 +172,15 @@ float3 sampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
     if (_504 < 2u) {
       float gMax = max(color.r, max(color.g, color.b));
       gMax = max(gMax, 1e-6);
-      float gClamped = ColorGradeSmoothClamp(gMax);
+      float gClamped = renodx::tonemap::SmoothClamp(gMax);
       scale = gClamped / gMax;
       color *= scale;
     }
 
     if (_504 == 1u) {
-      color = srgbFromLinear(color);
+      color = renodx::color::srgb::from::BT709(color);
     } else if (_504 == 2u) {
-      color = arriC800FromLinear(color);
+      color = renodx::color::arri::logc::c800::Encode(color);
     }
 
     color = saturate(color);  // Ensure within 0-1
@@ -202,7 +195,7 @@ float3 sampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
     float3 lutOutputColor = color;
 
     if ((_503 & 240u) == 16u) {
-      color = linearFromSRGB(color);
+      color = renodx::color::bt709::from::SRGB(color);
     }
 
     float3 lutOutputLinear = color;
@@ -215,32 +208,30 @@ float3 sampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
       if ((_503 & 240u) == 16u) {
         float3 midGray = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, float(0.5f).xxx, 0.0f).rgb;
 
-        float3 unclamped = unclampSDRLUT(
-          lutOutputColor,
-          minBlack,
-          midGray,
-          peakWhite,
-          lutInputColor
-        );
+        float3 unclamped = renodx::lut::Unclamp(
+            lutOutputColor,
+            minBlack,
+            midGray,
+            peakWhite,
+            lutInputColor);
 
-        float3 recolored = recolorUnclampedLUT(
-          lutOutputLinear,
-          linearFromSRGB(unclamped)
-        );
+        float3 recolored = renodx::lut::RecolorUnclamped(
+            lutOutputLinear,
+            renodx::color::bt709::from::SRGB(unclamped));
         color = lerp(color, recolored, min(injectedData.processingLUTCorrection * 2.f, 1.f));
       } else {
-        const float lutMinY = yFromBT709(minBlack);
-        const float lutPeakY = yFromBT709(peakWhite);
+        const float lutMinY = renodx::color::y::from::BT709(minBlack);
+        const float lutPeakY = renodx::color::y::from::BT709(peakWhite);
         const float targetPeakY = 100.f / max(lutSettings.z, 1.f);
 
         // Only applies on LUTs that are clamped (all?)
         if (lutMinY > 0) {
-          color = lutCorrectionBlack(inputColor, color, lutMinY, injectedData.processingLUTCorrection);
+          color = renodx::lut::CorrectBlack(inputColor, color, lutMinY, injectedData.processingLUTCorrection);
         }
 
         // Only scale up HDR LUTs
         if (lutPeakY > 1.f && lutPeakY < targetPeakY) {
-          color = lutCorrectionWhite(inputColor, color, lutPeakY, targetPeakY, injectedData.processingLUTCorrection);
+          color = renodx::lut::CorrectWhite(inputColor, color, lutPeakY, targetPeakY, injectedData.processingLUTCorrection);
         }
       }
     }
@@ -257,7 +248,7 @@ float3 sampleAllLUTs(const float3 color) {
   if (injectedData.colorGradeLUTStrength) {  // 0 speed-hack
     for (uint i = 0; i < textureCount; i++) {
       float4 lutSettings = cb6[33u + i];
-      compositedColor += sampleLUT(lutSettings, color, i);
+      compositedColor += SampleLUT(lutSettings, color, i);
     }
     compositedColor = lerp(color, compositedColor, injectedData.colorGradeLUTStrength);
   } else {
@@ -273,14 +264,6 @@ float3 sampleAllLUTs(const float3 color) {
 // cb6[41u].y
 // 69.y (gameplay 48) / (photo mode 24)
 
-float3 applyGamma(float3 input, uint type) {
-  if (type == 2u)
-    return arriC800FromLinear(input);
-  if (type == 1u)
-    return srgbFromLinear(input);
-  return input;
-}
-
 float4 tonemap(bool isACESMode = false) {
   uint4 _69 = asuint(cb6[41u]);
   uint lutSize = _69.y;
@@ -290,8 +273,8 @@ float4 tonemap(bool isACESMode = false) {
   const float3 position = float3(gl_GlobalInvocationID.xyz) / (float(lutSize) - 1.f);
   float3 inputColor;
   if (injectedData.processingInternalSampling == 1.f) {
-    float3 rec2020Color = linearFromPQ(position) * 10000.f / 100.f;
-    inputColor = max(0, bt709FromBT2020(rec2020Color));
+    float3 rec2020Color = renodx::color::bt2020::from::PQ(position) * 10000.f / 100.f;
+    inputColor = max(0, renodx::color::bt709::from::BT2020(rec2020Color));
   } else {
     inputColor = exp2((position - cb6[41u].w) / cb6[41u].z);
   }
@@ -316,7 +299,7 @@ float4 tonemap(bool isACESMode = false) {
 
     float _194 = ((((_118 * (cb6[5u].r + 1.0f)) + fogRangeMin) * float((color.r >= fogRangeMin) && (color.r <= fogRangeMax)))
                   + ((float(color.r < fogRangeMin) * fogRangeMin) * (((1.0f - cb6[4u].x) * (color.r / fogRangeMin)) + cb6[4u].r)))
-               + (((_136 * (cb6[6u].r + 1.0f)) + fogRangeMax) * float(color.r > fogRangeMax));
+                 + (((_136 * (cb6[6u].r + 1.0f)) + fogRangeMax) * float(color.r > fogRangeMax));
     float _195 = ((((_119 * (cb6[5u].g + 1.0f)) + fogRangeMin) * float((color.g >= fogRangeMin) && (color.g <= fogRangeMax))) + ((float(color.g < fogRangeMin) * fogRangeMin) * (((1.0f - cb6[4u].y) * (color.g / fogRangeMin)) + cb6[4u].y))) + (((_137 * (cb6[6u].y + 1.0f)) + fogRangeMax) * float(color.g > fogRangeMax));
     float _196 = ((((_120 * (cb6[5u].b + 1.0f)) + fogRangeMin) * float((color.b >= fogRangeMin) && (color.b <= fogRangeMax))) + ((float(color.b < fogRangeMin) * fogRangeMin) * (((1.0f - cb6[4u].z) * (color.b / fogRangeMin)) + cb6[4u].z))) + (((_138 * (cb6[6u].z + 1.0f)) + fogRangeMax) * float(color.b > fogRangeMax));
 
@@ -418,18 +401,17 @@ float4 tonemap(bool isACESMode = false) {
     }
 
     if (toneMapperType == TONE_MAPPER_TYPE__VANILLA) {
-      outputRGB = applyUserColorGrading(
-        outputRGB,
-        injectedData.colorGradeExposure,
-        injectedData.colorGradeHighlights,
-        injectedData.colorGradeShadows,
-        injectedData.colorGradeContrast,
-        injectedData.colorGradeSaturation
-      );
+      outputRGB = renodx::color::grade::UserColorGrading(
+          outputRGB,
+          injectedData.colorGradeExposure,
+          injectedData.colorGradeHighlights,
+          injectedData.colorGradeShadows,
+          injectedData.colorGradeContrast,
+          injectedData.colorGradeSaturation);
 
-      float3 outputXYZ = mul(BT709_2_XYZ_MAT, outputRGB);
-      float3 outputXYZD60 = mul(D65_2_D60_CAT, outputXYZ);
-      float3 aces = mul(XYZ_2_AP0_MAT, outputXYZD60);
+      float3 outputXYZ = mul(renodx::color::BT709_TO_XYZ_MAT, outputRGB);
+      float3 outputXYZD60 = mul(renodx::color::D65_TO_D60_CAT, outputXYZ);
+      float3 aces = mul(renodx::color::XYZ_TO_AP0_MAT, outputXYZD60);
 
       float3 rgbPost = aces_rrt_ap0(aces);
 
@@ -448,22 +430,21 @@ float4 tonemap(bool isACESMode = false) {
       // Scales with paperwhite, which can be reversed
 
       const SegmentedSplineParams_c9 ODT_CONFIG = {
-        {cb6[8u].x, cb6[9u].x, cb6[10u].x, cb6[11u].x, cb6[12u].x, cb6[13u].x, cb6[14u].x, cb6[15u].x, cb6[16u].x, cb6[17u].x}, // coefsLow[10]
-        {cb6[8u].y, cb6[9u].y, cb6[10u].y, cb6[11u].y, cb6[12u].y, cb6[13u].y, cb6[14u].y, cb6[15u].y, cb6[16u].y, cb6[17u].y}, // coefsHigh[10]
-        {cb6[18u].x, cb6[18u].y}, // minPoint
-        {cb6[18u].z, midGrayNits}, // midPoint
-        {cb6[19u].x, cb6[19u].y}, // maxPoint - doesn't always match peak nits?
-        cb6[19u].z, // slopeLow
-        cb6[19u].w  // slopeHigh
+          {cb6[8u].x, cb6[9u].x, cb6[10u].x, cb6[11u].x, cb6[12u].x, cb6[13u].x, cb6[14u].x, cb6[15u].x, cb6[16u].x, cb6[17u].x},  // coefsLow[10]
+          {cb6[8u].y, cb6[9u].y, cb6[10u].y, cb6[11u].y, cb6[12u].y, cb6[13u].y, cb6[14u].y, cb6[15u].y, cb6[16u].y, cb6[17u].y},  // coefsHigh[10]
+          {cb6[18u].x, cb6[18u].y},                                                                                                // minPoint
+          {cb6[18u].z, midGrayNits},                                                                                               // midPoint
+          {cb6[19u].x, cb6[19u].y},                                                                                                // maxPoint - doesn't always match peak nits?
+          cb6[19u].z,                                                                                                              // slopeLow
+          cb6[19u].w                                                                                                               // slopeHigh
       };
 
       float yRange = peakNits - minNits;
 
       float3 toneMappedColor = float3(
-        segmented_spline_c9_fwd(rgbPost.r, ODT_CONFIG),
-        segmented_spline_c9_fwd(rgbPost.g, ODT_CONFIG),
-        segmented_spline_c9_fwd(rgbPost.b, ODT_CONFIG)
-      );
+          segmented_spline_c9_fwd(rgbPost.r, ODT_CONFIG),
+          segmented_spline_c9_fwd(rgbPost.g, ODT_CONFIG),
+          segmented_spline_c9_fwd(rgbPost.b, ODT_CONFIG));
 
       // Tone map by luminance
       if (cb6[28u].w != 0.0f) {
@@ -476,65 +457,59 @@ float4 tonemap(bool isACESMode = false) {
 
       toneMappedColor = max(toneMappedColor, minNits);
 
-      float3 linearCV = Y_2_linCV(toneMappedColor, peakNits, minNits);
+      float3 linearCV = renodx::tonemap::aces::YToLinCV(toneMappedColor, peakNits, minNits);
 
       // dimSurround
       if (cb6[28u].y != 0.0f) {
-        float3 odtXYZ = mul(AP1_2_XYZ_MAT, linearCV);
-        odtXYZ = darkToDim(odtXYZ, cb6[27u].w);
-        linearCV = mul(XYZ_2_AP1_MAT, odtXYZ);
+        float3 odtXYZ = mul(renodx::color::AP1_TO_XYZ_MAT, linearCV);
+        odtXYZ = renodx::tonemap::aces::DarkToDim(odtXYZ, cb6[27u].w);
+        linearCV = mul(renodx::color::XYZ_TO_AP1_MAT, odtXYZ);
       }
 
       // Apply desaturation to compensate for luminance difference
       if (cb6[28u].x != 0.0f) {
-        linearCV = mul(ODT_SAT_MAT, linearCV);
+        linearCV = mul(renodx::tonemap::aces::ODT_SAT_MAT, linearCV);
       }
 
-      float3 odtXYZ = mul(AP1_2_XYZ_MAT, linearCV);
+      float3 odtXYZ = mul(renodx::color::AP1_TO_XYZ_MAT, linearCV);
 
       if (injectedData.colorGradeWhitePoint == 1.f || (injectedData.colorGradeWhitePoint == 0.f && cb6[28u].z != 0.0f)) {
-        odtXYZ = mul(D60_2_D65_CAT, odtXYZ);
+        odtXYZ = mul(renodx::color::D60_TO_D65_MAT, odtXYZ);
       }
 
-      // clang-format off
-      // XYZ_2_BT709_MAT
+      // XYZ_TO_BT709_MAT
       float3x3 customMatrix0 = float3x3(
-        cb6[21u].x, cb6[21u].y, cb6[21u].z,
-        cb6[22u].x, cb6[22u].y, cb6[22u].z,
-        cb6[23u].x, cb6[23u].y, cb6[23u].z
-      );
-      // clang-format on
+          cb6[21u].x, cb6[21u].y, cb6[21u].z,
+          cb6[22u].x, cb6[22u].y, cb6[22u].z,
+          cb6[23u].x, cb6[23u].y, cb6[23u].z);
 
       float3 odtUnknown = mul(customMatrix0, odtXYZ);
       if (cb6[27u].z == 0.0f || cb6[27u].z == 1.f) {
         odtUnknown = saturate(odtUnknown);
       } else if (cb6[27u].z == 2.0f) {
         odtUnknown = max((yRange * odtUnknown) + minNits, 0);
-        // BT709_2_XYZ_MAT
+        // BT709_TO_XYZ_MAT
         odtUnknown = float3(
-          mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
-          mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
-          mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x))
-        );
-        odtUnknown = mul(XYZ_2_BT709_MAT, odtUnknown);
+            mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
+            mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
+            mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x)));
+        odtUnknown = mul(renodx::color::XYZ_TO_BT709_MAT, odtUnknown);
         odtUnknown /= min(80.0f, peakNits);
       } else if (cb6[27u].z == 3.0f) {
         odtUnknown = max((yRange * odtUnknown) + minNits, 0);
         odtUnknown = float3(
-          mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
-          mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
-          mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x))
-        );
+            mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
+            mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
+            mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x)));
         float scale = 1.0f / min(80.0f, peakNits);
-        odtUnknown = mul(XYZ_2_BT2020_MAT, odtUnknown);
+        odtUnknown = mul(renodx::color::XYZ_TO_BT2020_MAT, odtUnknown);
       } else if (cb6[27u].z == 4.0f) {
         odtUnknown = max(odtUnknown, 0.f);
         float scale = max(peakNits, 80.0f) * 0.001000000047497451305389404296875f;
         odtUnknown = float3(
-          mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
-          mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
-          mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x))
-        );
+            mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
+            mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
+            mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x)));
         odtUnknown *= scale;
         odtUnknown = saturate(odtUnknown);
         odtUnknown = pow(odtUnknown, 0.1593017578125f);
@@ -544,9 +519,8 @@ float4 tonemap(bool isACESMode = false) {
       } else {
         // Heatmap?
         float maxScaledChannel = max(
-          (yRange * odtUnknown.r) + minNits,
-          max((yRange * odtUnknown.g) + minNits, (yRange * odtUnknown.b) + minNits)
-        );
+            (yRange * odtUnknown.r) + minNits,
+            max((yRange * odtUnknown.g) + minNits, (yRange * odtUnknown.b) + minNits));
         float _3335 = max(min((log2(maxScaledChannel) * 0.5f) + 2.0f, 7.0f), 0.0f);
         uint _3336 = uint(int(_3335));
         float _3338 = _3335 - float(int(_3336));
@@ -555,10 +529,9 @@ float4 tonemap(bool isACESMode = false) {
         uint _3357 = 1u + (_3336 * 3u);
         uint _3361 = 2u + (_3336 * 3u);
         odtUnknown = float3(
-          ((HEATMAP_COLORS[0u + (_3339 * 3u)] - HEATMAP_COLORS[_3353]) * _3338) + HEATMAP_COLORS[_3353],
-          ((HEATMAP_COLORS[1u + (_3339 * 3u)] - HEATMAP_COLORS[_3357]) * _3338) + HEATMAP_COLORS[_3357],
-          ((HEATMAP_COLORS[2u + (_3339 * 3u)] - HEATMAP_COLORS[_3361]) * _3338) + HEATMAP_COLORS[_3361]
-        );
+            ((HEATMAP_COLORS[0u + (_3339 * 3u)] - HEATMAP_COLORS[_3353]) * _3338) + HEATMAP_COLORS[_3353],
+            ((HEATMAP_COLORS[1u + (_3339 * 3u)] - HEATMAP_COLORS[_3357]) * _3338) + HEATMAP_COLORS[_3357],
+            ((HEATMAP_COLORS[2u + (_3339 * 3u)] - HEATMAP_COLORS[_3361]) * _3338) + HEATMAP_COLORS[_3361]);
       }
 
       outputRGB = odtUnknown;
@@ -572,50 +545,48 @@ float4 tonemap(bool isACESMode = false) {
       float renoDRTDechroma = 0.60f;
       float renoDRTFlare = 0.f;
 
-      ToneMapParams tmParams = buildToneMapParams(
-        injectedData.toneMapType,
-        injectedData.toneMapPeakNits,
-        (injectedData.toneMapType == 2.f ? (100.f / 203.f) : 1.f) * injectedData.toneMapGameNits,
-        injectedData.toneMapGammaCorrection == 2.f,
-        injectedData.colorGradeExposure,
-        injectedData.colorGradeHighlights,
-        injectedData.colorGradeShadows,
-        injectedData.colorGradeContrast,
-        injectedData.colorGradeSaturation,
-        vanillaMidGray,
-        midGrayNits,
-        renoDRTHighlights,
-        renoDRTShadows,
-        renoDRTContrast,
-        renoDRTSaturation,
-        renoDRTDechroma,
-        renoDRTFlare
-      );
+      renodx::tonemap::Config config = renodx::tonemap::config::Create(
+          injectedData.toneMapType,
+          injectedData.toneMapPeakNits,
+          (injectedData.toneMapType == 2.f ? (100.f / 203.f) : 1.f) * injectedData.toneMapGameNits,
+          injectedData.toneMapGammaCorrection == 2.f,
+          injectedData.colorGradeExposure,
+          injectedData.colorGradeHighlights,
+          injectedData.colorGradeShadows,
+          injectedData.colorGradeContrast,
+          injectedData.colorGradeSaturation,
+          vanillaMidGray,
+          midGrayNits,
+          renoDRTHighlights,
+          renoDRTShadows,
+          renoDRTContrast,
+          renoDRTSaturation,
+          renoDRTDechroma,
+          renoDRTFlare);
 
-      outputRGB = toneMap(outputRGB, tmParams);
+      outputRGB = renodx::tonemap::config::Apply(outputRGB, config);
       bool useD60 = (injectedData.colorGradeWhitePoint == -1.0f || (injectedData.colorGradeWhitePoint == 0.f && cb6[28u].z == 0.f));
       if (useD60) {
-        outputRGB = mul(BT709_2_BT709D60_MAT, outputRGB);
+        outputRGB = mul(renodx::color::BT709_TO_BT709D60_MAT, outputRGB);
       }
 
       if (injectedData.toneMapGammaCorrection == 2.f) {
-        outputRGB = gammaCorrectSafe(outputRGB);
-        outputRGB *= tmParams.gameNits / 100.f;
-        outputRGB = gammaCorrectSafe(outputRGB, true);
+        outputRGB = renodx::color::correct::GammaSafe(outputRGB);
+        outputRGB *= config.game_nits / 100.f;
+        outputRGB = renodx::color::correct::GammaSafe(outputRGB, true);
       } else {
-        outputRGB *= tmParams.gameNits / 100.f;
+        outputRGB *= config.game_nits / 100.f;
       }
     }
 
   } else {
-    outputRGB = applyUserColorGrading(
-      outputRGB,
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeContrast,
-      injectedData.colorGradeSaturation
-    );
+    outputRGB = renodx::color::grade::UserColorGrading(
+        outputRGB,
+        injectedData.colorGradeExposure,
+        injectedData.colorGradeHighlights,
+        injectedData.colorGradeShadows,
+        injectedData.colorGradeContrast,
+        injectedData.colorGradeSaturation);
     outputRGB = max(0, outputRGB);
     if ((injectedData.processingLUTOrder == -1.f || asuint(cb6[42u]).y == 1u) && (_69.x != 0u)) {
       outputRGB = sampleAllLUTs(outputRGB);

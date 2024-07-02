@@ -1,6 +1,5 @@
 // no motion blur + effect
 
-#include "../../shaders/filmgrain.hlsl"
 #include "./shared.h"
 #include "./tonemapper.hlsl"
 
@@ -70,8 +69,8 @@ cbuffer cb0 : register(b0) {
   r1 = lerp(r1, r1 / r0.w * r0.z, injectedData.fxVignette);
 
 #if DRAW_TONEMAPPER
-  DrawToneMapperParams dtmParams = DrawToneMapperStart(r0.xy, r1.zwy, t0, injectedData.toneMapPeakNits, injectedData.toneMapGameNits);
-  r1.zwy = dtmParams.outputColor;
+  DrawToneMapperParams graph_config = renodx::debug::DrawToneMapperStart(r0.xy, r1.zwy, t0, injectedData.toneMapPeakNits, injectedData.toneMapGameNits);
+  r1.zwy = graph_config.color;
 #endif
 
   const float3 untonemapped = r1.zwy;
@@ -104,7 +103,7 @@ cbuffer cb0 : register(b0) {
 
     r3.xyzw = lerp(lutInputColor, r3.xyzw, injectedData.colorGradeLUTStrength);
 #if DRAW_TONEMAPPER
-    if (!dtmParams.drawToneMapper)
+    if (!graph_config.draw)
 #endif
       if (injectedData.fxFilmGrain) {
         r3.xyzw = float4(1, 1, 1, 1) + -r1.wyzw;
@@ -119,27 +118,27 @@ cbuffer cb0 : register(b0) {
         r2.xyzw = r3.xyzw * r2.xyzw + float4(1, 1, 1, 1);
         r1.xyzw = r2.xyzw * r1.xyzw;
       }
+    r0.rgb = max(0, r0.rgb);
 
-    outputColor = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : linearFromSRGB(r0.rgb);
+    outputColor = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : renodx::color::bt709::from::SRGB(r0.rgb);
   } else {
     outputColor = applyUserToneMap(untonemapped.rgb, t2, s0_s);
 #if DRAW_TONEMAPPER
-    if (!dtmParams.drawToneMapper)
+    if (!graph_config.draw)
 #endif
       if (injectedData.fxFilmGrain) {
-        float3 grainedColor = computeFilmGrain(
-          outputColor,
-          screenXY,
-          frac(r3.x),
-          cb0[11].z ? injectedData.fxFilmGrain * 0.03f : 0,
-          1.f
-        );
+        float3 grainedColor = renodx::effects::ApplyFilmGrain(
+            outputColor,
+            screenXY,
+            frac(r3.x),
+            cb0[11].z ? injectedData.fxFilmGrain * 0.03f : 0,
+            1.f);
         outputColor = grainedColor;
       }
   }
 
 #if DRAW_TONEMAPPER
-  if (dtmParams.drawToneMapper) outputColor = DrawToneMapperEnd(outputColor, dtmParams);
+  if (graph_config.draw) outputColor = renodx::debug::renodx::debug::graph::DrawEnd(outputColor, graph_config);
 #endif
 
   outputColor *= injectedData.toneMapGameNits / 80.f;

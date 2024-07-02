@@ -1,6 +1,5 @@
 // Film Grain overlay
 
-#include "../../shaders/filmgrain.hlsl"
 #include "./colormath.hlsl"
 #include "./cp2077.h"
 #include "./injectedBuffer.hlsl"
@@ -64,13 +63,13 @@ void comp_main() {
   if (grainStrength > 0.0f) {
     if (injectedData.fxFilmGrain) {
       float3 grainColor = _13.Load(int3(uint2(_82 & 255u, _83 & 255u), 0u)).rgb;
-      float3 grainedColor = computeFilmGrain(
-        inputColor,
-        grainColor.xy,
-        frac(cb0[0u].x / 1000.f),
-        injectedData.fxFilmGrain * 0.03f,
-        (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f)
-        // ,injectedData.debugValue02 != 1.f
+      float3 grainedColor = renodx::effects::ApplyFilmGrain(
+          inputColor,
+          grainColor.xy,
+          frac(cb0[0u].x / 1000.f),
+          injectedData.fxFilmGrain * 0.03f,
+          (uiPaperWhiteScaler == 1.f) ? 1.f : (203.f / 100.f)
+          // ,injectedData.debugValue02 != 1.f
       );
       _282 = grainedColor.r;
       _283 = grainedColor.g;
@@ -103,7 +102,7 @@ void comp_main() {
                       * (_129 / max(1.0f - _129, 9.9999999747524270787835121154785e-07f)))
                      * ((((_154 + (cb6[19u].w * _148)) * cb6[19u].x) * _201) + 1.0f))
                     * ((((_154 + (cb6[20u].w * _148)) * cb6[20u].x) * _230) + 1.0f))
-                 * ((((_154 + (cb6[21u].w * _148)) * cb6[21u].x) * _259) + 1.0f);
+                   * ((((_154 + (cb6[21u].w * _148)) * cb6[21u].x) * _259) + 1.0f);
 
       float _267 = (((((((_154 + (cb6[18u].w * _149)) * cb6[18u].y) * _172) + 1.0f) * (_130 / max(1.0f - _130, 9.9999999747524270787835121154785e-07f))) * ((((_154 + (cb6[19u].w * _149)) * cb6[19u].y) * _201) + 1.0f)) * ((((_154 + (cb6[20u].w * _149)) * cb6[20u].y) * _230) + 1.0f)) * ((((_154 + (cb6[21u].w * _149)) * cb6[21u].y) * _259) + 1.0f);
       float _268 = (((((((_154 + (cb6[18u].w * _150)) * cb6[18u].z) * _172) + 1.0f) * (_131 / max(1.0f - _131, 9.9999999747524270787835121154785e-07f))) * ((((_154 + (cb6[19u].w * _150)) * cb6[19u].z) * _201) + 1.0f)) * ((((_154 + (cb6[20u].w * _150)) * cb6[20u].z) * _230) + 1.0f)) * ((((_154 + (cb6[21u].w * _150)) * cb6[21u].z) * _259) + 1.0f);
@@ -176,19 +175,16 @@ void comp_main() {
   float3 outputColor1 = float3(_374, _376, _378);
   if (_382.y != 0u) {
     ConvertColorParams params = {
-      _382.w,      // outputTypeEnum
-      cb6[14u].x,  // paperWhiteScaling
-      cb6[14u].y,  // blackFloorAdjust
-      cb6[14u].z,  // gammaCorrection
-      cb6[16u].x,  // pqSaturation
-      float3x3(
-        // clang-format off
-        cb6[22u].x, cb6[22u].y, cb6[22u].z,
-        cb6[23u].x, cb6[23u].y, cb6[23u].z,
-        cb6[24u].x, cb6[24u].y, cb6[24u].z
-        // clang-format on
-      ),                           // pqMatrix
-      float3(_97, _98, cb0[0u].x)  // random3
+        _382.w,      // outputTypeEnum
+        cb6[14u].x,  // paperWhiteScaling
+        cb6[14u].y,  // blackFloorAdjust
+        cb6[14u].z,  // gammaCorrection
+        cb6[16u].x,  // pqSaturation
+        float3x3(
+            cb6[22u].x, cb6[22u].y, cb6[22u].z,
+            cb6[23u].x, cb6[23u].y, cb6[23u].z,
+            cb6[24u].x, cb6[24u].y, cb6[24u].z),  // pqMatrix
+        float3(_97, _98, cb0[0u].x)               // random3
     };
     outputColor1 = convertColor(outputColor1, params);
   }
@@ -197,19 +193,16 @@ void comp_main() {
 
   if (asuint(cb6[15u]).x != 0u) {
     ConvertColorParams params = {
-      _382.w,      // outputTypeEnum
-      cb6[15u].y,  // paperWhiteScaling
-      cb6[15u].z,  // blackFloorAdjust
-      cb6[15u].w,  // gammaCorrection
-      cb6[16u].x,  // pqSaturation
-      float3x3(
-        // clang-format off
-        cb6[26u].x, cb6[26u].y, cb6[26u].z,
-        cb6[27u].x, cb6[27u].y, cb6[27u].z,
-        cb6[28u].x, cb6[28u].y, cb6[28u].z
-        // clang-format on
-      ),                           // pqMatrix
-      float3(_97, _98, cb0[0u].x)  // random3
+        _382.w,      // outputTypeEnum
+        cb6[15u].y,  // paperWhiteScaling
+        cb6[15u].z,  // blackFloorAdjust
+        cb6[15u].w,  // gammaCorrection
+        cb6[16u].x,  // pqSaturation
+        float3x3(
+            cb6[26u].x, cb6[26u].y, cb6[26u].z,
+            cb6[27u].x, cb6[27u].y, cb6[27u].z,
+            cb6[28u].x, cb6[28u].y, cb6[28u].z),  // pqMatrix
+        float3(_97, _98, cb0[0u].x)               // random3
     };
 
     float3 outputColor2 = float3(_311, _313, _315);

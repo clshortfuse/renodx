@@ -1,6 +1,3 @@
-#include "../../shaders/color.hlsl"
-#include "../../shaders/filmgrain.hlsl"
-#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 // Composite/Render
@@ -176,12 +173,11 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
   float3 finalFrame;
   if (injectedData.toneMapType == 0) {
     if (
-      injectedData.fxBlackWhite != 0
-      && !any(BloomOffsetWeight0.xyzw - BloomOffsetWeight1.xyzw)
-      && !any(BloomOffsetWeight0.xyzw - BloomOffsetWeight2.xyzw)
-      && !any(BloomOffsetWeight0.xyz - BloomOffsetWeight1.zxy)
-      && !any(BloomOffsetWeight0.xyz - BloomOffsetWeight2.yzx)
-    ) {
+        injectedData.fxBlackWhite != 0
+        && !any(BloomOffsetWeight0.xyzw - BloomOffsetWeight1.xyzw)
+        && !any(BloomOffsetWeight0.xyzw - BloomOffsetWeight2.xyzw)
+        && !any(BloomOffsetWeight0.xyz - BloomOffsetWeight1.zxy)
+        && !any(BloomOffsetWeight0.xyz - BloomOffsetWeight2.yzx)) {
       r0.xyz *= BloomOffsetWeight0.x * 3.f;
       r0.xyz = saturate(r0.xyz);
 
@@ -193,12 +189,14 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
 
       r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
       r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
-      r2.rgb = injectedData.toneMapGammaCorrection ? pow(r2.rgb, 2.2f) : linearFromSRGB(r2.rgb);
+      r2.rgb = injectedData.toneMapGammaCorrection
+                   ? pow(r2.rgb, 2.2f)
+                   : renodx::color::bt709::from::SRGB(r2.rgb);
 
       if (injectedData.fxBlackWhite == 1.f) {
-        r2.rgb = lerp(r2.rgb, yFromBT709(r2.rgb).xxx, injectedData.colorGradeColorFilter);
+        r2.rgb = lerp(r2.rgb, renodx::color::y::from::BT709(r2.rgb).xxx, injectedData.colorGradeColorFilter);
       } else {
-        r2.rgb = applySaturation(r2.rgb, 1.f - injectedData.colorGradeColorFilter);
+        r2.rgb = renodx::color::grade::Saturation(r2.rgb, 1.f - injectedData.colorGradeColorFilter);
       }
       finalFrame = r2.rgb;
     } else {
@@ -216,7 +214,7 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
 
       r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
       r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
-      finalFrame = injectedData.toneMapGammaCorrection ? pow(r2.rgb, 2.2f) : linearFromSRGB(r2.rgb);
+      finalFrame = injectedData.toneMapGammaCorrection ? pow(r2.rgb, 2.2f) : renodx::color::bt709::from::SRGB(r2.rgb);
     }
 
   } else {
@@ -227,69 +225,66 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
     float renoDRTSaturation = 1.0f;
     float renoDRTDechroma = 0.5f;
     float renoDRTFlare = 0.f;
-    ToneMapParams tmParams = buildToneMapParams(
-      injectedData.toneMapType,
-      injectedData.toneMapPeakNits,
-      injectedData.toneMapGameNits,
-      0,  // Gamma Correction not used here
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeContrast,
-      injectedData.colorGradeSaturation,
-      vanillaMidGray,
-      vanillaMidGray * 100.f,
-      renoDRTHighlights,
-      renoDRTShadows,
-      renoDRTContrast,
-      renoDRTSaturation,
-      renoDRTDechroma,
-      renoDRTFlare
-    );
+    renodx::tonemap::Config config = renodx::tonemap::config::Create(
+        injectedData.toneMapType,
+        injectedData.toneMapPeakNits,
+        injectedData.toneMapGameNits,
+        0,  // Gamma Correction not used here
+        injectedData.colorGradeExposure,
+        injectedData.colorGradeHighlights,
+        injectedData.colorGradeShadows,
+        injectedData.colorGradeContrast,
+        injectedData.colorGradeSaturation,
+        vanillaMidGray,
+        vanillaMidGray * 100.f,
+        renoDRTHighlights,
+        renoDRTShadows,
+        renoDRTContrast,
+        renoDRTSaturation,
+        renoDRTDechroma,
+        renoDRTFlare);
     if (injectedData.colorGradeColorFilter) {
       float3 outputColor = injectedData.toneMapGammaCorrection
-                           ? pow(max(0, unfilteredColor), 2.2f)
-                           : linearFromSRGB(max(0, unfilteredColor));
+                               ? pow(max(0, unfilteredColor), 2.2f)
+                               : renodx::color::bt709::from::SRGB(max(0, unfilteredColor));
 
-      outputColor = applyUserColorGrading(
-        outputColor,
-        tmParams.exposure,
-        tmParams.highlights,
-        tmParams.shadows,
-        tmParams.contrast,
-        tmParams.saturation
-      );
+      outputColor = renodx::color::grade::UserColorGrading(
+          outputColor,
+          config.exposure,
+          config.highlights,
+          config.shadows,
+          config.contrast,
+          config.saturation);
       float3 hdrColor = outputColor;
       float3 sdrColor = outputColor;
-      if (tmParams.type == 2.f) {
-        hdrColor = acesToneMap(outputColor, tmParams);
-        sdrColor = acesToneMap(outputColor, tmParams, true);
-      } else if (tmParams.type == 3.f) {
-        hdrColor = renoDRTToneMap(outputColor, tmParams);
-        sdrColor = renoDRTToneMap(outputColor, tmParams, true);
+      if (config.type == 2.f) {
+        hdrColor = renodx::tonemap::config::ApplyACES(outputColor, config);
+        sdrColor = renodx::tonemap::config::ApplyACES(outputColor, config, true);
+      } else if (config.type == 3.f) {
+        hdrColor = renodx::tonemap::config::ApplyRenoDRT(outputColor, config);
+        sdrColor = renodx::tonemap::config::ApplyRenoDRT(outputColor, config, true);
       }
 
       r1.xyz = injectedData.toneMapGammaCorrection
-               ? pow(saturate(sdrColor), 1.f / 2.2f)
-               : srgbFromLinear(saturate(sdrColor));
+                   ? pow(saturate(sdrColor), 1.f / 2.2f)
+                   : renodx::color::srgb::from::BT709(saturate(sdrColor));
       if (
-        injectedData.fxBlackWhite
-        && !any(BloomOffsetWeight0.xyzw - BloomOffsetWeight1.xyzw)
-        && !any(BloomOffsetWeight0.xyzw - BloomOffsetWeight2.xyzw)
-        && !any(BloomOffsetWeight0.xyz - BloomOffsetWeight1.zxy)
-        && !any(BloomOffsetWeight0.xyz - BloomOffsetWeight2.yzx)
-      ) {
+          injectedData.fxBlackWhite
+          && !any(BloomOffsetWeight0.xyzw - BloomOffsetWeight1.xyzw)
+          && !any(BloomOffsetWeight0.xyzw - BloomOffsetWeight2.xyzw)
+          && !any(BloomOffsetWeight0.xyz - BloomOffsetWeight1.zxy)
+          && !any(BloomOffsetWeight0.xyz - BloomOffsetWeight2.yzx)) {
         r0.xyz = r1.xyz * BloomOffsetWeight0.x * 3.f;
         r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
         r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
         r2.rgb = injectedData.toneMapGammaCorrection
-                 ? pow(saturate(r2.rgb), 2.2f)
-                 : linearFromSRGB(saturate(r2.rgb));
+                     ? pow(saturate(r2.rgb), 2.2f)
+                     : renodx::color::bt709::from::SRGB(saturate(r2.rgb));
 
         if (injectedData.fxBlackWhite == 1.f) {
-          r2.rgb = lerp(r2.rgb, yFromBT709(r2.rgb).xxx, injectedData.colorGradeColorFilter);
+          r2.rgb = lerp(r2.rgb, renodx::color::y::from::BT709(r2.rgb).xxx, injectedData.colorGradeColorFilter);
         } else {
-          r2.rgb = applySaturation(r2.rgb, 1.f - injectedData.colorGradeColorFilter);
+          r2.rgb = renodx::color::grade::Saturation(r2.rgb, 1.f - injectedData.colorGradeColorFilter);
         }
       } else {
         r0.x = (dot(BloomOffsetWeight0.xyzw, r1.xyzw));
@@ -298,15 +293,15 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
         r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
         r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
         r2.rgb = injectedData.toneMapGammaCorrection
-                 ? pow(saturate(r2.rgb), 2.2f)
-                 : linearFromSRGB(saturate(r2.rgb));
+                     ? pow(saturate(r2.rgb), 2.2f)
+                     : renodx::color::bt709::from::SRGB(saturate(r2.rgb));
       }
 
       float3 postProcessColor = r2;
 
-      outputColor = toneMapUpgrade(hdrColor, sdrColor, postProcessColor, injectedData.colorGradeColorFilter);
-      if (tmParams.saturation != 1.f) {
-        outputColor = applySaturation(outputColor, tmParams.saturation);
+      outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, postProcessColor, injectedData.colorGradeColorFilter);
+      if (config.saturation != 1.f) {
+        outputColor = renodx::color::grade::Saturation(outputColor, config.saturation);
       }
       finalFrame = outputColor;
     } else {
@@ -314,9 +309,9 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
       r1.xyz = lerp(ColorMask.xyz, ColorMask2.xyz, v4.w);
       r2.xyz = lerp(r0.xyz, r0.xyz * r1.xyz, injectedData.fxMask);
       float3 outputColor = injectedData.toneMapGammaCorrection
-                           ? pow(max(0, r2.rgb), 2.2f)
-                           : linearFromSRGB(max(0, r2.rgb));
-      finalFrame = toneMap(outputColor, tmParams);
+                               ? pow(max(0, r2.rgb), 2.2f)
+                               : renodx::color::bt709::from::SRGB(max(0, r2.rgb));
+      finalFrame = renodx::tonemap::config::Apply(outputColor, config);
     }
   }
 
@@ -336,13 +331,12 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
 
   if (injectedData.toneMapType) {
     if (injectedData.fxFilmGrain) {
-      float3 grainedColor = computeFilmGrain(
-        finalFrame,
-        v4.xy,
-        frac(ElapsedTime),
-        injectedData.fxFilmGrain * 0.03f,
-        1.f
-      );
+      float3 grainedColor = renodx::effects::ApplyFilmGrain(
+          finalFrame,
+          v4.xy,
+          frac(ElapsedTime),
+          injectedData.fxFilmGrain * 0.03f,
+          1.f);
       finalFrame = grainedColor;
     }
   }
@@ -356,7 +350,7 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
   outputColor /= 80.f;
 
   float alpha = injectedData.toneMapGammaCorrection
-                ? pow(r0.w, 2.2f)
-                : linearFromSRGB(r0.w);
+                    ? pow(r0.w, 2.2f)
+                    : renodx::color::bt709::from::SRGB(r0.w);
   return float4(outputColor.rgb, alpha);
 }

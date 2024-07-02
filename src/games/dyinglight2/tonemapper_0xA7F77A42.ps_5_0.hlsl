@@ -1,7 +1,3 @@
-#include "../../shaders/ACES.hlsl"
-#include "../../shaders/RenoDRT.hlsl"
-#include "../../shaders/color.hlsl"
-#include "../../shaders/colorgrade.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -104,8 +100,8 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1
   } else {
     outputColor = untonemapped.rgb;
     if (injectedData.toneMapType != 1.f) {
-      float inputY = yFromBT709(abs(untonemapped));
-      float outputY = yFromBT709(outputColor);
+      float inputY = renodx::color::y::from::BT709(abs(untonemapped));
+      float outputY = renodx::color::y::from::BT709(outputColor);
       outputY = lerp(inputY, outputY, saturate(inputY));
       outputColor *= (outputY ? inputY / outputY : 1);
 
@@ -118,37 +114,35 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1
       if (injectedData.colorGradeContrast != 1.f) {
         float3 workingColor = pow(outputColor / 0.18f, injectedData.colorGradeContrast) * 0.18f;
         // Working in BT709 still
-        float workingColorY = yFromBT709(workingColor);
-        float outputColorY = yFromBT709(outputColor);
+        float workingColorY = renodx::color::y::from::BT709(workingColor);
+        float outputColorY = renodx::color::y::from::BT709(outputColor);
         outputColor *= outputColorY ? workingColorY / outputColorY : 1.f;
       }
 
       if (injectedData.colorGradeSaturation != 1.f) {
-        float3 okLCh = okLChFromBT709(outputColor);
+        float3 okLCh = renodx::color::oklch::from::BT709(outputColor);
         okLCh[1] *= injectedData.colorGradeSaturation;
-        outputColor = max(0, bt709FromOKLCh(okLCh));
+        outputColor = max(0, renodx::color::bt709::from::OkLCh(okLCh));
       }
 
       const float vanillaMidGray = 0.18f;
       if (injectedData.toneMapType == 2.f) {
         float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / 0.10);  // ACES mid gray is 10%
         float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
-        outputColor = aces_rgc_rrt_odt(
-          outputColor,
-          0.0001f / (paperWhite / 48.f),
-          48.f * hdrScale,
-          AP1_2_BT2020_MAT
-        );
+        outputColor = renodx::tonemap::aces::RGCAndRRTAndODT(
+            outputColor,
+            0.0001f / (paperWhite / 48.f),
+            48.f * hdrScale,
+            renodx::color::AP1_TO_BT2020_MAT);
         outputColor /= 48.f;
         outputColor *= (vanillaMidGray / 0.10);
-        outputColor = mul(BT2020_2_BT709_MAT, outputColor);
+        outputColor = mul(renodx::color::BT2020_TO_BT709_MAT, outputColor);
       } else if (injectedData.toneMapType == 3.f) {
-        outputColor = renodrt(
-          outputColor,
-          injectedData.toneMapPeakNits / injectedData.toneMapGameNits * 100.f,
-          0.18f,
-          vanillaMidGray * 100.f
-        );
+        outputColor = renodx::tonemap::renodrt::BT709(
+            outputColor,
+            injectedData.toneMapPeakNits / injectedData.toneMapGameNits * 100.f,
+            0.18f,
+            vanillaMidGray * 100.f);
         outputColor *= injectedData.toneMapGameNits;
       }
     }

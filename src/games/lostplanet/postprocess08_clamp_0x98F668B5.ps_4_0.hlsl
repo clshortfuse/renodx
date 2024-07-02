@@ -1,4 +1,3 @@
-#include "../../shaders/tonemap.hlsl"
 #include "./shared.h"
 
 cbuffer FilterColorCorrect : register(b0) {
@@ -42,7 +41,7 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
 
   outputColor = pow(outputColor, 2.2f);  // linear
 
-  float vanillaMidGray = 0.18f;  // pow(yFromBT709(tonemap(0.5f)), 2.2f);
+  float vanillaMidGray = 0.18f;  // pow(renodx::color::y::from::BT709(tonemap(0.5f)), 2.2f);
   float renoDRTHighlights = 1.0f;
   float renoDRTShadows = 1.f;
   float renoDRTContrast = 1.0f;
@@ -50,27 +49,26 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_TARGET0 {
   float renoDRTDechroma = 0.5f;
   float renoDRTFlare = 0.0f;
 
-  ToneMapParams tmParams = buildToneMapParams(
-    injectedData.toneMapType,
-    injectedData.toneMapPeakNits,
-    injectedData.toneMapGameNits,
-    0,
-    injectedData.colorGradeExposure,
-    injectedData.colorGradeHighlights,
-    injectedData.colorGradeShadows,
-    injectedData.colorGradeContrast,
-    injectedData.colorGradeSaturation,
-    vanillaMidGray,
-    vanillaMidGray * 100.f,
-    renoDRTHighlights,
-    renoDRTShadows,
-    renoDRTContrast,
-    renoDRTSaturation,
-    renoDRTDechroma,
-    renoDRTFlare
-  );
+  renodx::tonemap::Config config = renodx::tonemap::config::Create(
+      injectedData.toneMapType,
+      injectedData.toneMapPeakNits,
+      injectedData.toneMapGameNits,
+      0,
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation,
+      vanillaMidGray,
+      vanillaMidGray * 100.f,
+      renoDRTHighlights,
+      renoDRTShadows,
+      renoDRTContrast,
+      renoDRTSaturation,
+      renoDRTDechroma,
+      renoDRTFlare);
 
-  outputColor = toneMap(outputColor, tmParams);
+  outputColor = renodx::tonemap::config::Apply(outputColor, config);
 
   outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
   outputColor = sign(outputColor) * pow(abs(outputColor), 1.f / 2.2f);
