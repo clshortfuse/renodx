@@ -64,6 +64,8 @@ void main(
   r2.xyz = r2.xyz * cb0[66].xyz + cb0[61].xyz;
   r1.xyz = r2.xyz * r1.xyz;
   r0.yzw = r0.yzw * cb0[60].xyz + r1.xyz;
+    float3 untonemapped = r0.yzw;
+    
   r0.yzw = v1.xxx * r0.yzw;
   r1.xy = cb0[62].xx * v1.yz;
   r1.x = dot(r1.xy, r1.xy);
@@ -157,7 +159,7 @@ void main(
     }
     else
     {
-        //outputColor = untonemapped;
+        outputColor = untonemapped;
     }
     float vanillaMidGray = 0.18f;
     float renoDRTContrast = 1.1f;
