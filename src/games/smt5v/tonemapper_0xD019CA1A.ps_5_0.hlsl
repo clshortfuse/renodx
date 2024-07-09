@@ -60,7 +60,11 @@ void main(
     r0.yw = cb0[38].zw * r0.yz;
     r2.xy = r0.yw * cb1[130].xy + cb1[129].xy;
     r0.yw = r0.yw * cb0[5].xy + cb0[4].xy;
-    r3.xyz = t2.Sample(s1_s, r0.yw).xyz;
+    
+    r3.xyz = t2.Sample(s1_s, r0.yw).xyz; //og input, ersh?
+    //o0.xyz = r3.xyz; //testing
+    //return; //testing
+    
     r0.yw = cb1[132].zw * r2.xy;
     r2.x = t0.SampleLevel(s0_s, r0.yw, 0).x;
     r0.y = t1.SampleLevel(s0_s, r0.yw, 0).x;
@@ -109,7 +113,7 @@ void main(
     r0.z = -r0.z * cb0[38].w + 1;
     r0.y = -cb4[3].x + r0.y;
     r0.w = cb4[3].y + -cb4[3].x;
-    r0.y = saturate(r0.y / r0.w); //removed saturate
+    r0.y = saturate(r0.y / r0.w); 
     r2.xyz = float3(-0.5, -0.5, -0.5) + r3.xyz;
     r2.xyz = cb4[2].xxx * r2.xyz;
     r2.xyz = r0.yyy * r2.xyz + float3(0.5, 0.5, 0.5);
@@ -118,12 +122,27 @@ void main(
     r0.xyw = r0.xxx * r4.xyz + r2.xyz;
     r2.xyz = float3(1, 1, 1) + -r0.xyw;
     r0.xyw = r3.xyz * r0.xyw;
-    r0.xyw = r0.xyw + r0.xyw; //maybe brightness
+    r0.xyw = r0.xyw + r0.xyw; //maybe brightness  -- Adrian [vanilla code]
+    
+    //o0.xyz = r0.xyw; //testing
+    
+    //return;
+
     r4.xyz = float3(1, 1, 1) + -r3.xyz;
     r3.xyz = cmp(r3.xyz >= float3(0.5, 0.5, 0.5));
     r4.xyz = r4.xyz + r4.xyz;
     r2.xyz = -r4.xyz * r2.xyz + float3(1, 1, 1);
-    //r0.xyw = r3.xyz ? r2.xyz : r0.xyw; //vanilla tonemapper
+   
+    
+    if (injectedData.toneMapType == 0)
+    {
+        r0.xyw = r3.xyz ? r2.xyz : r0.xyw; //vanilla tonemapper
+        //o0.xyz = r3.xyw; //testing
+    }
+    
+    
+    
+
     r0.xyw = float3(1, 1, 1) + -r0.xyw;
     r1.w = dot(-r1.xyz, -r1.xyz);
     r1.w = rsqrt(r1.w);

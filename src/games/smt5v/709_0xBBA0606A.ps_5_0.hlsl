@@ -84,6 +84,7 @@ void main(
     r0.yzw = r0.yzw * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625); //lut? [vanilla code]
     //write our lerp here
     r0.yzw = lerp(prelut, t3.Sample(s3_s, r0.yzw).xyz, injectedData.colorGradeLUTStrength); //the magical lerp
+    //r0.yzw = pow(r0.yzw, 2.2);
     //r0.yzw = t3.Sample(s3_s, r0.yzw).xyz; //lut? [vanilla code] ^ implemented in the magical lerp
     
     
