@@ -134,9 +134,9 @@ void main(
     r2.xyz = -r4.xyz * r2.xyz + float3(1, 1, 1);
    
     
-    if (injectedData.toneMapType == 0)
+    if (injectedData.toneMapType == 0.f)
     {
-        r0.xyw = r3.xyz ? r2.xyz : r0.xyw; //vanilla tonemapper
+        r0.xyw = r3.xyz ? r2.xyz : r0.xyw; //removes 80 nit clamp
         //o0.xyz = r3.xyw; //testing
     }
     

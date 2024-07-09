@@ -26,15 +26,14 @@ void main(
     
 
   //copied from hifi rush, honestly idk; just makes the whole frame blue if lut strength is above 1
- //   if (injectedData.toneMapType != 0)
- //   {
-//
- //       o0 = 0;
-//
- //       return;
-//
- //   }
-    
+  /*  if (injectedData.toneMapType == 0)
+    {
+
+        o0 = 0;
+
+        return;
+    }
+   */ 
   const float4 icb[] = { { -4.000000, -0.718548, -4.970622, 0.808913},
                               { -4.000000, 2.081031, -3.029378, 1.191087},
                               { -3.157377, 3.668124, -2.126200, 1.568300},

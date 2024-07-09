@@ -64,7 +64,8 @@ void main(
   r2.xyz = r2.xyz * cb0[66].xyz + cb0[61].xyz;
   r1.xyz = r2.xyz * r1.xyz;
   r0.yzw = r0.yzw * cb0[60].xyz + r1.xyz;
-    float3 untonemapped = r0.yzw;
+    
+    float3 untonemapped = r0.yzw; //untonemapped image?
     
   r0.yzw = v1.xxx * r0.yzw;
   r1.xy = cb0[62].xx * v1.yz;
@@ -82,12 +83,12 @@ void main(
     //LUT stuff Start
     
   //lets get lerping
-    float3 prelut = r0.yzw; //added for lerp -- param 1
+    //float3 prelut = r0.yzw; //added for lerp -- param 1
     r0.yzw = r0.yzw * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625); //lut? [vanilla code]
     //write our lerp here
-    r0.yzw = lerp(prelut, t3.Sample(s3_s, r0.yzw).xyz, injectedData.colorGradeLUTStrength); //the magical lerp
+    //r0.yzw = lerp(prelut, t3.Sample(s3_s, r0.yzw).xyz, injectedData.colorGradeLUTStrength); //the magical lerp
     //r0.yzw = pow(r0.yzw, 2.2); //random test
-    //r0.yzw = t3.Sample(s3_s, r0.yzw).xyz; //lut? [vanilla code] ^ implemented in the magical lerp
+    r0.yzw = t3.Sample(s3_s, r0.yzw).xyz; //lut? [vanilla code] ^ implemented in the magical lerp
     
     
     //LUT stuff End
@@ -151,25 +152,33 @@ void main(
     
     //custom code end
     
-    float3 outputColor = o0.rgb;
-    outputColor = max(0, outputColor);
     if (injectedData.toneMapType == 0.f)
     {
-        outputColor = pow(outputColor, 2.2f);
+        o0.rgb *= 203.f;
+        return;
     }
-    else
-    {
-        outputColor = untonemapped;
-    }
-    float vanillaMidGray = 0.18f;
-    float renoDRTContrast = 1.1f;
-    float renoDRTFlare = 0.f;
-    float renoDRTShadows = 1.f;
-    float renoDRTDechroma = 0.5f;
-    float renoDRTSaturation = 1.15f;
-    float renoDRTHighlights = 1.f;
+        
+        
+    
+            float3 outputColor = o0.rgb;
+            outputColor = max(0, outputColor);
+            if (injectedData.toneMapType == 0.f)
+            {
+                outputColor = pow(outputColor, 2.2f);
+            }
+            else
+            {
+                outputColor = untonemapped;
+            }
+            float vanillaMidGray = 1.0f;
+            float renoDRTContrast = 1.80f;
+            float renoDRTFlare = 0.f;
+            float renoDRTShadows = 1.0f;
+            float renoDRTDechroma = 0.60;
+            float renoDRTSaturation = 1.40;
+            float renoDRTHighlights = 1.20;
 
-    renodx::tonemap::Config config = renodx::tonemap::config::Create(
+            renodx::tonemap::Config config = renodx::tonemap::config::Create(
       injectedData.toneMapType,
       injectedData.toneMapPeakNits,
       injectedData.toneMapGameNits,
@@ -188,22 +197,22 @@ void main(
       renoDRTDechroma,
       renoDRTFlare);
 
-    outputColor = renodx::tonemap::config::Apply(outputColor, config);
+            outputColor = renodx::tonemap::config::Apply(outputColor, config);
 
-    outputColor *= injectedData.toneMapGameNits; // Scale by user nits
+            outputColor *= injectedData.toneMapGameNits; // Scale by user nits
 
-  // o0.rgb = mul(renodx::color::BT709_TO_BT2020_MAT, o0.rgb);  // use bt2020
-  // o0.rgb /= 10000.f;                         // Scale for PQ
-  // o0.rgb = max(0, o0.rgb);                   // clamp out of gamut
-  // o0.rgb = renodx::color::pq::from::BT2020(o0.rgb);             // convert to PQ
+   //o0.rgb = mul(renodx::color::BT709_TO_BT2020_MAT, o0.rgb);  // use bt2020
+   //o0.rgb /= 10000.f;                         // Scale for PQ
+   //o0.rgb = max(0, o0.rgb);                   // clamp out of gamut
+   //o0.rgb = renodx::color::pq::from::BT2020(o0.rgb);             // convert to PQ
   // o0.rgb = min(1.f, o0.rgb);                 // clamp PQ (10K nits)
+   // outputColor.rgb = max(0, outputColor.rgb); //clamp 709
+            outputColor.rgb /= 80.f;
+            o0.rgb = outputColor.rgb;
 
-    outputColor.rgb /= 80.f;
-    o0.rgb = outputColor.rgb;
-
-    return;
+            return;
+        }
     
     
     
-  //return;
-}
+  //return
