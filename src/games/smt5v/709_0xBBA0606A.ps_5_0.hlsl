@@ -74,7 +74,7 @@ void main(
   r0.yzw = log2(r0.yzw);
 
   //r0.yzw = saturate(r0.yzw * float3(0.0714285746,0.0714285746,0.0714285746) + float3(0.610726953,0.610726953,0.610726953));
-  r0.yzw = r0.yzw * float3(0.0714285746, 0.0714285746, 0.0714285746) + float3(0.610726953, 0.610726953, 0.610726953); //no saturate
+  r0.yzw = r0.yzw * float3(0.0714285746, 0.0714285746, 0.0714285746) + float3(0.610726953, 0.610726953, 0.610726953); //no saturate -- IMPORTANT LUT
   
     
     //LUT stuff Start
@@ -129,7 +129,9 @@ void main(
     o0.xyz = r0.xyz;
   }
     
+    //vanilla code end
     //custom code start
+    
     //copy pasta from Shortfuse's Tunic start
     //float4 t1Color = t1.Sample(s1_s, r1.xy).xyzw; // last frame
     //r1.xyzw = t1Color;

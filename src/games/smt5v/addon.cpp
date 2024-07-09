@@ -20,6 +20,7 @@
 #include <embed/0xC3126A03.h> //ui
 #include <embed/0x2FA199F2.h> //ui
 #include <embed/0xBBA0606A.h> //rec709
+#include <embed/0xC1BCC6B5.h> //Lut Builder
 #include <embed/0xD019CA1A.h> //Tonemapper/unclamp
 
 
@@ -50,6 +51,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomSwapchainShader(0xC3126A03),  // UI
     CustomSwapchainShader(0x2FA199F2),  // UI
     CustomShaderEntry(0xBBA0606A),       // 709??
+    CustomShaderEntry(0xC1BCC6B5),      // Lut Builder
     CustomShaderEntry(0xD019CA1A)       // Tonemapper!!
 
 };
