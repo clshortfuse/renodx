@@ -147,9 +147,59 @@ void main(
     
     //custom code end
     
-    o0.rgb *= injectedData.toneMapGameNits / 80.f;
+    float3 outputColor = o0.rgb;
+    outputColor = max(0, outputColor);
+    if (injectedData.toneMapType == 0.f)
+    {
+        outputColor = pow(outputColor, 2.2f);
+    }
+    else
+    {
+        //outputColor = untonemapped;
+    }
+    float vanillaMidGray = 0.18f;
+    float renoDRTContrast = 1.1f;
+    float renoDRTFlare = 0.f;
+    float renoDRTShadows = 1.f;
+    float renoDRTDechroma = 0.5f;
+    float renoDRTSaturation = 1.15f;
+    float renoDRTHighlights = 1.f;
+
+    renodx::tonemap::Config config = renodx::tonemap::config::Create(
+      injectedData.toneMapType,
+      injectedData.toneMapPeakNits,
+      injectedData.toneMapGameNits,
+      0,
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation,
+      vanillaMidGray,
+      vanillaMidGray * 100.f,
+      renoDRTHighlights,
+      renoDRTShadows,
+      renoDRTContrast,
+      renoDRTSaturation,
+      renoDRTDechroma,
+      renoDRTFlare);
+
+    outputColor = renodx::tonemap::config::Apply(outputColor, config);
+
+    outputColor *= injectedData.toneMapGameNits; // Scale by user nits
+
+  // o0.rgb = mul(BT709_TO_BT2020_MAT, o0.rgb);  // use bt2020
+  // o0.rgb /= 10000.f;                         // Scale for PQ
+  // o0.rgb = max(0, o0.rgb);                   // clamp out of gamut
+  // o0.rgb = renodx::color::pq::from::BT2020(o0.rgb);             // convert to PQ
+  // o0.rgb = min(1.f, o0.rgb);                 // clamp PQ (10K nits)
+
+    outputColor.rgb /= 80.f;
+    o0.rgb = outputColor.rgb;
+
+    return;
     
     
     
-  return;
+  //return;
 }
