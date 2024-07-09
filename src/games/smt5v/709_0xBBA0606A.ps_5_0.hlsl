@@ -75,10 +75,22 @@ void main(
 
   //r0.yzw = saturate(r0.yzw * float3(0.0714285746,0.0714285746,0.0714285746) + float3(0.610726953,0.610726953,0.610726953));
   r0.yzw = r0.yzw * float3(0.0714285746, 0.0714285746, 0.0714285746) + float3(0.610726953, 0.610726953, 0.610726953); //no saturate
+  
     
-  r0.yzw = r0.yzw * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625);
-  r0.yzw = t3.Sample(s3_s, r0.yzw).xyz;
+    //LUT stuff Start
+    
+  //lets get lerping
+    float3 prelut = r0.yzw; //added for lerp -- param 1
+    r0.yzw = r0.yzw * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625); //lut? [vanilla code]
+    //write our lerp here
+    r0.yzw = lerp(prelut, t3.Sample(s3_s, r0.yzw).xyz, injectedData.colorGradeLUTStrength); //the magical lerp
+    r0.yzw = t3.Sample(s3_s, r0.yzw).xyz; //lut? [vanilla code]
+    
+    
+    //LUT stuff End
+    
   r1.xyz = float3(1.04999995,1.04999995,1.04999995) * r0.yzw;
+    
   //o0.w = saturate(dot(r1.xyz, float3(0.298999995,0.587000012,0.114))); //rec709
     o0.w = dot(r1.xyz, float3(0.2126f, 0.7152f, 0.0722f)); //rec709 no saturate
   r0.x = r0.x * 0.00390625 + -0.001953125;
@@ -142,6 +154,7 @@ void main(
     //custom code end
     
     o0.rgb *= injectedData.toneMapGameNits / 80.f;
+    
     
     
   return;

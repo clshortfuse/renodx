@@ -92,7 +92,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapUINits",
         .binding = &shader_injection.toneMapUINits,
-        .default_value = 203.f,
+        .default_value = 80.f,
         .label = "UI Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
