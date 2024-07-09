@@ -73,8 +73,8 @@ void main(
   r0.yzw = r0.yzw * r1.xxx + float3(0.00266771927,0.00266771927,0.00266771927);
   r0.yzw = log2(r0.yzw);
 
-  //r0.yzw = saturate(r0.yzw * float3(0.0714285746,0.0714285746,0.0714285746) + float3(0.610726953,0.610726953,0.610726953));
-  r0.yzw = r0.yzw * float3(0.0714285746, 0.0714285746, 0.0714285746) + float3(0.610726953, 0.610726953, 0.610726953); //no saturate -- IMPORTANT LUT
+  r0.yzw = saturate(r0.yzw * float3(0.0714285746,0.0714285746,0.0714285746) + float3(0.610726953,0.610726953,0.610726953));
+  //r0.yzw = r0.yzw * float3(0.0714285746, 0.0714285746, 0.0714285746) + float3(0.610726953, 0.610726953, 0.610726953); //no saturate -- IMPORTANT LUT
   
     
     //LUT stuff Start
@@ -84,7 +84,7 @@ void main(
     r0.yzw = r0.yzw * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625); //lut? [vanilla code]
     //write our lerp here
     r0.yzw = lerp(prelut, t3.Sample(s3_s, r0.yzw).xyz, injectedData.colorGradeLUTStrength); //the magical lerp
-    //r0.yzw = pow(r0.yzw, 2.2);
+    //r0.yzw = pow(r0.yzw, 2.2); //random test
     //r0.yzw = t3.Sample(s3_s, r0.yzw).xyz; //lut? [vanilla code] ^ implemented in the magical lerp
     
     
@@ -190,7 +190,7 @@ void main(
 
     outputColor *= injectedData.toneMapGameNits; // Scale by user nits
 
-  // o0.rgb = mul(BT709_TO_BT2020_MAT, o0.rgb);  // use bt2020
+  // o0.rgb = mul(renodx::color::BT709_TO_BT2020_MAT, o0.rgb);  // use bt2020
   // o0.rgb /= 10000.f;                         // Scale for PQ
   // o0.rgb = max(0, o0.rgb);                   // clamp out of gamut
   // o0.rgb = renodx::color::pq::from::BT2020(o0.rgb);             // convert to PQ
