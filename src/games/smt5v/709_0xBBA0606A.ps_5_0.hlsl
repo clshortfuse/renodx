@@ -84,26 +84,19 @@ void main(
     r0.yzw = r0.yzw * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625); //lut? [vanilla code]
     //write our lerp here
     r0.yzw = lerp(prelut, t3.Sample(s3_s, r0.yzw).xyz, injectedData.colorGradeLUTStrength); //the magical lerp
-    r0.yzw = t3.Sample(s3_s, r0.yzw).xyz; //lut? [vanilla code]
+    //r0.yzw = t3.Sample(s3_s, r0.yzw).xyz; //lut? [vanilla code] ^ implemented in the magical lerp
     
     
     //LUT stuff End
     
   r1.xyz = float3(1.04999995,1.04999995,1.04999995) * r0.yzw;
     
-  //o0.w = saturate(dot(r1.xyz, float3(0.298999995,0.587000012,0.114))); //rec709
-    o0.w = dot(r1.xyz, float3(0.2126f, 0.7152f, 0.0722f)); //rec709 no saturate
+  //o0.w = saturate(dot(r1.xyz, float3(0.298999995,0.587000012,0.114))); //rec601
+    //o0.w = dot(r1.xyz, float3(0.2126f, 0.7152f, 0.0722f)); //rec709 no saturate
+    o0.w = saturate(dot(r1.xyz, float3(0.2126f, 0.7152f, 0.0722f))); //rec709 + saturate
   r0.x = r0.x * 0.00390625 + -0.001953125;
   r0.xyz = r0.yzw * float3(1.04999995,1.04999995,1.04999995) + r0.xxx;
-        //jesus musa start
-    o0.rgb = r0.yzw;
 
-    o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear
-    o0.rgb *= 203.f / 80.f;
-    o0.w = dot(r0.yzw, float3(0.2126f, 0.7152f, 0.0722f)); // get bt709 luminance
-    
-   // return;
-    //jesus musa end
   if (cb0[65].x != 0) {
     r1.xyz = log2(r0.xyz);
     r1.xyz = float3(0.0126833133,0.0126833133,0.0126833133) * r1.xyz;
