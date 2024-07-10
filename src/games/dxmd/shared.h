@@ -1,5 +1,5 @@
-#ifndef SRC_DXMD_SHARED_H_
-#define SRC_DXMD_SHARED_H_
+#ifndef SRC_SMT5V_SHARED_H_
+#define SRC_SMT5V_SHARED_H_
 
 #ifndef __cplusplus
 #include "../../shaders/renodx.hlsl"
@@ -12,19 +12,16 @@ struct ShaderInjectData {
   float toneMapPeakNits;
   float toneMapGameNits;
   float toneMapUINits;
-  float toneMapGammaCorrection;
   float colorGradeExposure;
   float colorGradeHighlights;
   float colorGradeShadows;
   float colorGradeContrast;
   float colorGradeSaturation;
+  float colorGradeBlowout;
   float colorGradeLUTStrength;
-  float fxBloom;
-  float fxLensFlare;
-  float fxSharpen;
-  float fxChromaticAberration;
-  float fxVignette;
-  float fxFilmGrain;
+  float colorGradeLUTScaling;
+  float fxNoise;
+  float fxScreenGlow;
 };
 
 #ifndef __cplusplus
@@ -33,4 +30,4 @@ cbuffer cb13 : register(b13) {
 }
 #endif
 
-#endif  // SRC_DXMD_SHARED_H_
+#endif  // SRC_TUNIC_SHARED_H_
