@@ -129,7 +129,10 @@ void main(
   r1.xzw = cmp(r1.xzw >= float3(0.5,0.5,0.5));
   r3.xyz = r3.xyz + r3.xyz;
   r2.xyz = -r3.xyz * r2.xyz + float3(1,1,1);
-  r0.xyz = r1.xzw ? r2.xyz : r0.xyz; //test unclamp
+    if (injectedData.toneMapType == 0.f)
+    {
+        r0.xyz = r1.xzw ? r2.xyz : r0.xyz; //unclamp
+    }
   r1.xzw = float3(-1,-1,-1) + cb3[7].xyz;
   r1.xyz = r1.yyy * r1.xzw + float3(1,1,1);
   r2.xyz = r1.xyz * r0.xyz;
@@ -140,10 +143,10 @@ void main(
   
     //add paper white
     
-   // o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear
+    o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear to 2.2
 
     
-   // o0.xyz *= injectedData.toneMapGameNits / 80.f; //paper white
+    o0.xyz *= injectedData.toneMapGameNits / 80.f; //paper white
     
     
   return;

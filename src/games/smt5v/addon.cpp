@@ -60,7 +60,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xC1BCC6B5),      // Lut Builder
     CustomShaderEntry(0xD019CA1A),       // Tonemapper!! [game world]
     CustomShaderEntry(0x4D541E80),      // Tonemapper!! [shop/in-engine cutscenes]
-    CustomShaderEntry(0x3CFCA6D5)       // Tonemapper!! [tokyo]
+    CustomShaderEntry(0x3CFCA6D5)       // Tonemapper!! [tokyo/classroom]
 
 };
 
