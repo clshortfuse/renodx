@@ -1,5 +1,6 @@
 // ---- Created with 3Dmigoto v1.3.16 on Sun Jul  7 23:09:00 2024
 #include "./shared.h"
+#include "../../shaders/colorcorrect.hlsl"
 
 Texture2D<float4> t2 : register(t2);
 
@@ -124,7 +125,7 @@ void main(
     r0.xyw = r3.xyz * r0.xyw;
     r0.xyw = r0.xyw + r0.xyw; //maybe brightness  -- Adrian [vanilla code]
     
-    //o0.xyz = r0.xyw; //testing
+    
     
     //return;
 
@@ -173,7 +174,15 @@ void main(
     r0.xyz = r0.xyz ? r1.xyz : r2.xyz;
     r1.xyz = cb4[1].xyz + -r0.xyz;
     r0.xyz = cb4[6].zzz * r1.xyz + r0.xyz;
-    o0.xyz = max(float3(0, 0, 0), r0.xyz); //idk adrian commented it
+    //o0.xyz = max(float3(0, 0, 0), r0.xyz); //idk adrian commented it -- clamping to 709
+    o0.xyz = r0.xyz; //idk adrian commented it -- clamping to 709
     o0.w = 1;
+    
+    //o0.xyz = renodx::color::correct::GammaSafe(o0.xyz);
+    o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear
+
+    
+    o0.xyz *= injectedData.toneMapGameNits / 80.f; //paper white
+    
     return;
 }

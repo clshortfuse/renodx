@@ -19,9 +19,13 @@
 #include <embed/0x8EC8EF33.h> //ui
 #include <embed/0xC3126A03.h> //ui
 #include <embed/0x2FA199F2.h> //ui
+#include <embed/0x76B068AD.h> //ui
+#include <embed/0xB86F8772.h> //ui
 #include <embed/0xBBA0606A.h> //rec709
 #include <embed/0xC1BCC6B5.h> //Lut Builder
-#include <embed/0xD019CA1A.h> //Tonemapper/unclamp
+#include <embed/0xD019CA1A.h> //Tonemapper/unclamp [game world]
+#include <embed/0x4D541E80.h> //Tonemapper/unclamp [shop/in-engine cutscenes]
+#include <embed/0x3CFCA6D5.h> //Tonemapper/unclamp [tokyo]
 
 
 
@@ -50,9 +54,13 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomSwapchainShader(0x8EC8EF33),  // UI
     CustomSwapchainShader(0xC3126A03),  // UI
     CustomSwapchainShader(0x2FA199F2),  // UI
+    CustomSwapchainShader(0x76B068AD),  // UI
+    CustomSwapchainShader(0xB86F8772),  // UI
     CustomShaderEntry(0xBBA0606A),       // 709??
     CustomShaderEntry(0xC1BCC6B5),      // Lut Builder
-    CustomShaderEntry(0xD019CA1A)       // Tonemapper!!
+    CustomShaderEntry(0xD019CA1A),       // Tonemapper!! [game world]
+    CustomShaderEntry(0x4D541E80),      // Tonemapper!! [shop/in-engine cutscenes]
+    CustomShaderEntry(0x3CFCA6D5)       // Tonemapper!! [tokyo]
 
 };
 

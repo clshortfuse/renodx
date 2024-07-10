@@ -51,7 +51,7 @@ void main(
   r0.x = sin(r0.x);
   r0.x = 493013 * r0.x;
   r0.x = frac(r0.x);
-  r0.yzw = t0.Sample(s0_s, v0.xy).xyz; //Renderer? 
+  r0.yzw = t0.Sample(s0_s, v0.xy).xyz; //Renderer?
   r0.yzw = cb1[135].zzz * r0.yzw;
   r1.xy = cb0[58].zw * v0.xy + cb0[59].xy;
   r1.xy = max(cb0[50].zw, r1.xy);
@@ -65,22 +65,27 @@ void main(
   r1.xyz = r2.xyz * r1.xyz;
   r0.yzw = r0.yzw * cb0[60].xyz + r1.xyz;
     
-    float3 untonemapped = r0.yzw; //untonemapped image?
     
-  r0.yzw = v1.xxx * r0.yzw;
+    
+  r0.yzw = v1.xxx * r0.yzw; //auto exposure?
   r1.xy = cb0[62].xx * v1.yz;
   r1.x = dot(r1.xy, r1.xy);
   r1.x = 1 + r1.x;
   r1.x = rcp(r1.x);
   r1.x = r1.x * r1.x;
+    
+    float3 untonemapped = r0.yzw; //untonemapped image?  
   r0.yzw = r0.yzw * r1.xxx + float3(0.00266771927,0.00266771927,0.00266771927);
-  r0.yzw = log2(r0.yzw);
+  
+    
+    r0.yzw = log2(r0.yzw);
 
-  r0.yzw = saturate(r0.yzw * float3(0.0714285746,0.0714285746,0.0714285746) + float3(0.610726953,0.610726953,0.610726953));
-  //r0.yzw = r0.yzw * float3(0.0714285746, 0.0714285746, 0.0714285746) + float3(0.610726953, 0.610726953, 0.610726953); //no saturate -- IMPORTANT LUT
+  //r0.yzw = saturate(r0.yzw * float3(0.0714285746,0.0714285746,0.0714285746) + float3(0.610726953,0.610726953,0.610726953));
+  r0.yzw = r0.yzw * float3(0.0714285746, 0.0714285746, 0.0714285746) + float3(0.610726953, 0.610726953, 0.610726953); //no saturate -- IMPORTANT LUT
   
     
     //LUT stuff Start
+    
     
   //lets get lerping
     //float3 prelut = r0.yzw; //added for lerp -- param 1
@@ -152,11 +157,7 @@ void main(
     
     //custom code end
     
-    if (injectedData.toneMapType == 0.f)
-    {
-        o0.rgb *= 203.f;
-        return;
-    }
+
         
         
     
@@ -164,19 +165,19 @@ void main(
             outputColor = max(0, outputColor);
             if (injectedData.toneMapType == 0.f)
             {
-                outputColor = pow(outputColor, 2.2f);
+               // outputColor = pow(outputColor, 2.2f);
             }
             else
             {
                 outputColor = untonemapped;
             }
-            float vanillaMidGray = 1.0f;
-            float renoDRTContrast = 1.80f;
-            float renoDRTFlare = 0.f;
-            float renoDRTShadows = 1.0f;
-            float renoDRTDechroma = 0.60;
-            float renoDRTSaturation = 1.40;
-            float renoDRTHighlights = 1.20;
+    float vanillaMidGray = 0.18f;
+    float renoDRTContrast = 1.1f;
+    float renoDRTFlare = 0.f;
+    float renoDRTShadows = 1.f;
+    float renoDRTDechroma = 0.5f;
+    float renoDRTSaturation = 1.15f;
+    float renoDRTHighlights = 1.f;
 
             renodx::tonemap::Config config = renodx::tonemap::config::Create(
       injectedData.toneMapType,
@@ -199,7 +200,7 @@ void main(
 
             outputColor = renodx::tonemap::config::Apply(outputColor, config);
 
-            outputColor *= injectedData.toneMapGameNits; // Scale by user nits
+            //outputColor *= injectedData.toneMapGameNits; // Scale by user nits
 
    //o0.rgb = mul(renodx::color::BT709_TO_BT2020_MAT, o0.rgb);  // use bt2020
    //o0.rgb /= 10000.f;                         // Scale for PQ
@@ -207,7 +208,7 @@ void main(
    //o0.rgb = renodx::color::pq::from::BT2020(o0.rgb);             // convert to PQ
   // o0.rgb = min(1.f, o0.rgb);                 // clamp PQ (10K nits)
    // outputColor.rgb = max(0, outputColor.rgb); //clamp 709
-            outputColor.rgb /= 80.f;
+            //outputColor.rgb /= 80.f;
             o0.rgb = outputColor.rgb;
 
             return;
