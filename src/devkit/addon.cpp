@@ -100,14 +100,16 @@ std::unordered_set<uint32_t> custom_shader_files;
 std::vector<uint32_t> trace_hashes;
 std::vector<InstructionState> instructions;
 
+// Settings
+bool auto_dump = false;
+bool auto_live_reload = false;
+bool list_unique = false;
+
 bool trace_scheduled = false;
 bool trace_running = false;
 bool needs_unload_shaders = false;
 bool needs_load_shaders = false;
-bool needs_auto_load_update = false;
-bool list_unique = false;
-bool auto_dump = false;
-bool auto_live_reload = false;
+bool needs_auto_load_update = auto_live_reload;
 bool cloned_pipelines_changed = false;
 uint32_t cloned_pipeline_count = 0;
 uint32_t shader_cache_count = 0;
@@ -2266,6 +2268,26 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
   cloned_pipelines_changed = false;
 }
+
+void Init() {
+  // Add all the shaders we have already dumped to the dumped list to avoid live re-dumping them
+  auto dump_path = GetShaderPath();
+  if (std::filesystem::exists(dump_path)) {
+    dump_path /= ".\\dump";
+    if (std::filesystem::exists(dump_path)) {
+      for (const auto& entry : std::filesystem::directory_iterator(dump_path)) {
+        if (!entry.is_regular_file()) continue;
+        const auto& entry_path = entry.path();
+        if (entry_path.extension() != ".cso") continue;
+        const auto& entry_path_string = entry_path.filename().string();
+        if (entry_path_string.starts_with("0x") && entry_path_string.length() > 2 + 8) {
+          const std::string hash = entry_path_string.substr(2, 8);
+          dumped_shaders.emplace(std::stoul(hash, nullptr, 16));
+        }
+      }
+    }
+  }
+}
 }  // namespace
 
 // NOLINTBEGIN(readability-identifier-naming)
@@ -2330,6 +2352,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::reshade_present>(OnReshadePresent);
 
       reshade::register_overlay("RenoDX (DevKit)", OnRegisterOverlay);
+
+      Init();
 
       break;
     case DLL_PROCESS_DETACH:
