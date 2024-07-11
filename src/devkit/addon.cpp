@@ -287,6 +287,21 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
       const std::string hash_string = filename_string.substr(length - strlen("12345678.xx_x_x.hlsl"), 8);
       shader_hash = std::stoul(hash_string, nullptr, 16);
 
+      // Early out before compiling to avoid stutters with live reload
+      if (!pipelines_filter.empty()) {
+        bool pipeline_found = false;
+        for (const auto& pipeline_pair : pipeline_cache_by_pipeline_handle) {
+          if (pipeline_pair.second->shader_hash != shader_hash) continue;
+          if (pipelines_filter.contains(pipeline_pair.first)) {
+            pipeline_found = true;
+          }
+          break;
+        }
+        if (!pipeline_found) {
+          continue;
+        }
+      }
+
       {
         std::stringstream s;
         s << "loadCustomShaders(Compiling file: ";
@@ -339,6 +354,21 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
         continue;
       }
       shader_hash = std::stoul(filename_string.substr(2, 8), nullptr, 16);
+
+      if (!pipelines_filter.empty()) {
+        bool pipeline_found = false;
+        for (const auto& pipeline_pair : pipeline_cache_by_pipeline_handle) {
+          if (pipeline_pair.second->shader_hash != shader_hash) continue;
+          if (pipelines_filter.contains(pipeline_pair.first)) {
+            pipeline_found = true;
+          }
+          break;
+        }
+        if (!pipeline_found) {
+          continue;
+        }
+      }
+
       std::ifstream file(entry_path, std::ios::binary);
       file.seekg(0, std::ios::end);
       code.resize(file.tellg());
@@ -378,10 +408,6 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
 
     // Re-clone all the pipelines that used this shader hash
     for (CachedPipeline* cached_pipeline : pipelines_pair->second) {
-      if (!pipelines_filter.empty() && !pipelines_filter.contains(cached_pipeline->pipeline.handle)) {
-        continue;
-      }
-
       if (is_hlsl) {
         cached_pipeline->hlsl_path = entry_path;
       } else {
