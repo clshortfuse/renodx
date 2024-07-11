@@ -2166,9 +2166,11 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       if (ImGui::BeginChild("##ShaderDetails", ImVec2(0, 0))) {
         ImGui::BeginDisabled(selected_index == -1);
         if (ImGui::BeginTabBar("##ShadersCodeTab", ImGuiTabBarFlags_None)) {
-          if (ImGui::BeginTabItem("Disassembly")) {
+          const bool open_disassembly_tab_item = ImGui::BeginTabItem("Disassembly");
+          static bool opened_disassembly_tab_item = false;
+          if (open_disassembly_tab_item) {
             static std::string disasm_string;
-            if (changed_selected) {
+            if (changed_selected || opened_disassembly_tab_item != open_disassembly_tab_item) {
               auto hash = trace_hashes.at(selected_index);
               auto* cache = shader_cache.find(hash)->second;
               if (cache->disasm.empty()) {
@@ -2193,6 +2195,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
             }
             ImGui::EndTabItem();  // Disassembly
           }
+          opened_disassembly_tab_item = open_disassembly_tab_item;
 
           ImGui::PushID("##LiveTabItem");
           const bool open_live_tab_item = ImGui::BeginTabItem("Live");
