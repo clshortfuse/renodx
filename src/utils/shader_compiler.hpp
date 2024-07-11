@@ -97,7 +97,7 @@ inline std::optional<std::string> DisassembleShader(void* code, size_t size) {
   return result;
 }
 
-inline std::vector<uint8_t> CompileShaderFromFileFXC(LPCWSTR file_path, LPCSTR shader_target, LPCWSTR library = L"D3DCompiler_47.dll") {
+inline std::vector<uint8_t> CompileShaderFromFileFXC(LPCWSTR file_path, LPCSTR shader_target, std::string* out_error = nullptr, LPCWSTR library = L"D3DCompiler_47.dll") {
   std::vector<uint8_t> result;
   CComPtr<ID3DBlob> out_blob;
 
@@ -131,6 +131,9 @@ inline std::vector<uint8_t> CompileShaderFromFileFXC(LPCWSTR file_path, LPCSTR s
           // auto error_size = error_blob->GetBufferSize();
           auto* error = reinterpret_cast<uint8_t*>(error_blob->GetBufferPointer());
           s << ": " << error;
+          if (out_error != nullptr) {
+            out_error->assign((char*)error);
+          }
         } else {
           s << ".";
         }
@@ -307,7 +310,7 @@ inline HRESULT WINAPI BridgeD3DCompileFromFile(
   return CompileFromBlob(source, file_name, defines, include_handler, entrypoint, target, flags1, flags2, code, error_messages);
 }
 
-inline std::vector<uint8_t> CompileShaderFromFileDXC(LPCWSTR file_path, LPCSTR shader_target) {
+inline std::vector<uint8_t> CompileShaderFromFileDXC(LPCWSTR file_path, LPCSTR shader_target, std::string* out_error = nullptr) {
   std::vector<uint8_t> result;
 
   CComPtr<ID3DBlob> out_blob;
@@ -332,6 +335,9 @@ inline std::vector<uint8_t> CompileShaderFromFileDXC(LPCWSTR file_path, LPCSTR s
       // auto error_size = error_blob->GetBufferSize();
       auto* error = reinterpret_cast<uint8_t*>(error_blob->GetBufferPointer());
       s << ": " << error;
+      if (out_error != nullptr) {
+        out_error->assign((char*)error);
+      }
     } else {
       s << ".";
     }
@@ -343,11 +349,11 @@ inline std::vector<uint8_t> CompileShaderFromFileDXC(LPCWSTR file_path, LPCSTR s
   return result;
 }
 
-inline std::vector<uint8_t> CompileShaderFromFile(LPCWSTR file_path, LPCSTR shader_target, LPCWSTR library = L"D3DCompiler_47.dll") {
+inline std::vector<uint8_t> CompileShaderFromFile(LPCWSTR file_path, LPCSTR shader_target, std::string* out_error = nullptr, LPCWSTR library = L"D3DCompiler_47.dll") {
   if (shader_target[3] < '6') {
-    return CompileShaderFromFileFXC(file_path, shader_target, library);
+    return CompileShaderFromFileFXC(file_path, shader_target, out_error, library);
   }
-  return CompileShaderFromFileDXC(file_path, shader_target);
+  return CompileShaderFromFileDXC(file_path, shader_target, out_error);
 }
 
 }  // namespace renodx::utils::shader::compiler
