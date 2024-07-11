@@ -92,6 +92,9 @@ std::unordered_set<uint32_t> shaders_to_dump;
 
 // All the shaders we have already dumped
 std::unordered_set<uint32_t> dumped_shaders;
+// All the shaders the user has (and has had) as custom in the live folder
+std::unordered_set<uint32_t> custom_shader_files;
+
 //std::unordered_set<uint64_t> pipeline_clones;
 
 std::vector<uint32_t> trace_hashes;
@@ -215,10 +218,11 @@ void DestroyPipelineSubojects(reshade::api::pipeline_subobject* subojects, uint3
   delete[] subojects;  // NOLINT
 }
 
-void UnloadCustomShaders(const CachedPipeline* cached_pipeline_filter = nullptr, bool immediate = false) {
-  for (auto pair : pipeline_cache_by_pipeline_handle) {
+void UnloadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = std::unordered_set<uint64_t>(), bool immediate = false) {
+  for (auto& pair : pipeline_cache_by_pipeline_handle) {
     auto& cached_pipeline = pair.second;
-    if (!cached_pipeline || (cached_pipeline_filter && cached_pipeline_filter != cached_pipeline)) continue;
+    if (cached_pipeline == nullptr || (!pipelines_filter.empty() && !pipelines_filter.contains(cached_pipeline->pipeline.handle))) continue;
+
     if (!cached_pipeline->cloned) continue;
     cached_pipeline->cloned = false;  // This stops the cloned pipeline from being used in the next frame, allowing us to destroy it
     cloned_pipeline_count--;
@@ -226,19 +230,19 @@ void UnloadCustomShaders(const CachedPipeline* cached_pipeline_filter = nullptr,
 
     if (immediate) {
       cached_pipeline->device->destroy_pipeline(reshade::api::pipeline{cached_pipeline->pipeline_clone.handle});
-      cached_pipeline = nullptr;
     } else {
       pipelines_to_destroy[cached_pipeline->pipeline_clone.handle] = cached_pipeline->device;
     }
+    cached_pipeline->pipeline_clone = {0};
   }
 }
 
-void LoadCustomShaders(const CachedPipeline* cached_pipeline_filter = nullptr) {
+void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = std::unordered_set<uint64_t>()) {
   const std::unique_lock<std::shared_mutex> lock(s_mutex);
   reshade::log_message(reshade::log_level::debug, "loadCustomShaders()");
 
   // Clear all previously loaded custom shaders
-  UnloadCustomShaders(cached_pipeline_filter);
+  UnloadCustomShaders(pipelines_filter);
 
   auto directory = GetShaderPath();
   if (!std::filesystem::exists(directory)) {
@@ -353,8 +357,14 @@ void LoadCustomShaders(const CachedPipeline* cached_pipeline_filter = nullptr) {
       continue;
     }
 
-    auto pair = pipeline_cache_by_shader_hash.find(shader_hash);
-    if (pair == pipeline_cache_by_shader_hash.end() || pair->second == nullptr || (cached_pipeline_filter && cached_pipeline_filter != pair->second)) {
+    // These are never removed for now (e.g. if the user delete a custom shader file), it wouldn't be very useful
+    if (!custom_shader_files.contains(shader_hash))
+    {
+      custom_shader_files.emplace(shader_hash);
+    }
+
+    auto pipeline_pair = pipeline_cache_by_shader_hash.find(shader_hash);
+    if (pipeline_pair == pipeline_cache_by_shader_hash.end() || pipeline_pair->second == nullptr) {
       std::stringstream s;
       s << "loadCustomShaders(Unknown hash: ";
       s << PRINT_CRC32(shader_hash);
@@ -362,7 +372,12 @@ void LoadCustomShaders(const CachedPipeline* cached_pipeline_filter = nullptr) {
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
       continue;
     }
-    CachedPipeline* cached_pipeline = pair->second;
+
+    CachedPipeline* cached_pipeline = pipeline_pair->second;
+
+    if (!pipelines_filter.empty() && !pipelines_filter.contains(cached_pipeline->pipeline.handle)) {
+      continue;
+    }
 
     if (is_hlsl) {
       cached_pipeline->hlsl_path = entry_path;
@@ -472,6 +487,7 @@ void LoadCustomShaders(const CachedPipeline* cached_pipeline_filter = nullptr) {
     reshade::log_message(built_pipeline_ok ? reshade::log_level::info : reshade::log_level::error, s.str().c_str());
 
     if (built_pipeline_ok) {
+      assert(!cached_pipeline->cloned && cached_pipeline->pipeline_clone.handle == 0);
       cached_pipeline->cloned = true;
       cached_pipeline->pipeline_clone = pipeline_clone;
       cloned_pipeline_count++;
@@ -880,7 +896,8 @@ void OnInitPipeline(
       new_subobjects,
       subobject_count};
 
-  bool found_useful_shader = false;
+  bool found_replaceable_shader = false;
+  bool found_custom_shader_file = false;
 
   for (uint32_t i = 0; i < subobject_count; ++i) {
     const auto& subobject = subobjects[i];
@@ -923,6 +940,16 @@ void OnInitPipeline(
           if (new_desc->code_size == 0) break;
           auto shader_hash = compute_crc32(static_cast<const uint8_t*>(new_desc->code), new_desc->code_size);
 
+          // Delete any previous shader with the same hash (unlikely to happen, but safer nonetheless)
+          if (auto previous_shader_conditional = shader_cache.find(shader_hash); previous_shader_conditional != shader_cache.end() && previous_shader_conditional->second != nullptr)
+          {
+            auto& previous_shader = previous_shader_conditional->second;
+            shader_cache_count--;
+            shader_cache_size -= previous_shader->size;
+            delete previous_shader->data;
+            delete previous_shader;
+          }
+
           // Cache shader
           auto* cache = new CachedShader{
               malloc(new_desc->code_size),
@@ -932,16 +959,18 @@ void OnInitPipeline(
           shader_cache_count++;
           shader_cache_size += cache->size;
           shader_cache[shader_hash] = cache;
+          shaders_to_dump.emplace(shader_hash);
 
           // Indexes
           cached_pipeline->shader_hash = shader_hash;
 
           // Make sure we didn't already have a valid pipeline in there (this should never happen)
-          auto pair = pipeline_cache_by_shader_hash.find(shader_hash);
-          assert(pair == pipeline_cache_by_shader_hash.end() || pair.second == nullptr);
+          auto previous_pipeline = pipeline_cache_by_shader_hash.find(shader_hash);
+          assert(previous_pipeline == pipeline_cache_by_shader_hash.end() || previous_pipeline->second == nullptr);
 
           pipeline_cache_by_shader_hash[shader_hash] = cached_pipeline;
-          found_useful_shader = true;
+          found_replaceable_shader = true;
+          found_custom_shader_file |= custom_shader_files.contains(shader_hash);
 
           // Metrics
           {
@@ -964,7 +993,7 @@ void OnInitPipeline(
       reshade::log_message(reshade::log_level::info, s.str().c_str());
     }
   }
-  if (!found_useful_shader) {
+  if (!found_replaceable_shader) {
     delete cached_pipeline;
     cached_pipeline = nullptr;
     DestroyPipelineSubojects(new_subobjects, subobject_count);
@@ -973,10 +1002,16 @@ void OnInitPipeline(
   }
   pipeline_cache_by_pipeline_handle[pipeline.handle] = cached_pipeline;
 
-  // Automatically load any custom shaders that might have been bound to this pipeline
-  if (auto_live_reload) {
-    // Immediately cloning and replacing the pipeline is unsafe, we need to delay it to the next frame
+  // Automatically load any custom shaders that might have been bound to this pipeline.
+  // To avoid this slowing down everything, we only do it if we detect the user already had a matching shader in its custom shaders folder.
+  // Note that this will only load newly created (first used) shaders, but if the user had unloaded other shaders manually, they will stay unloaded.
+  if (auto_live_reload && found_custom_shader_file) {
+    // Immediately cloning and replacing the pipeline is unsafe, we need to delay it to the next frame.
     pipelines_to_reload.emplace(pipeline.handle);
+#if 0 // Unsafe, this hangs the game (even if it seems like it should be safe given it doesn't do anything other than create a cloned pipeline without binding it yet).
+    LoadCustomShaders(pipelines_to_reload);
+    pipelines_to_reload.clear();
+#endif
   }
 }
 
@@ -997,6 +1032,7 @@ void OnDestroyPipeline(
         auto& cached_pipeline_2 = pipeline_cache_2_pair.second;
         if (cached_pipeline_2 == cached_pipeline) {
           cached_pipeline_2 = nullptr;
+          break;
         }
       }
 
@@ -1902,6 +1938,12 @@ void OnReshadePresent(reshade::api::effect_runtime* runtime) {
     }
     shaders_to_dump.clear();
   }
+
+  // Load new shaders here so it's more thread safe
+  if (auto_live_reload && !pipelines_to_reload.empty()) {
+    LoadCustomShaders(pipelines_to_reload);
+  }
+  pipelines_to_reload.clear();
 
   // Destroy the cloned pipelines in the following frame to avoid crashes
   for (auto pair : pipelines_to_destroy) {
