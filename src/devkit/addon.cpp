@@ -79,11 +79,17 @@ struct __declspec(uuid("3b70b2b2-52dc-4637-bd45-c1171c4c322e")) DeviceData {
 std::unordered_set<uint64_t> compute_shader_layouts;
 
 std::unordered_map<uint64_t, CachedPipeline*> pipeline_cache_by_pipeline_handle;
-std::unordered_set<uint64_t> pipelines_to_reload;
-std::unordered_map<uint64_t, reshade::api::device*> pipelines_to_destroy;
 std::unordered_map<uint32_t, CachedPipeline*> pipeline_cache_by_shader_hash;
 std::unordered_map<uint32_t, CachedShader*> shader_cache;
 
+std::unordered_set<uint64_t> pipelines_to_reload;
+static_assert(sizeof(reshade::api::pipeline::handle) == sizeof(uint64_t));
+// Map of "reshade::api::pipeline::handle"
+std::unordered_map<uint64_t, reshade::api::device*> pipelines_to_destroy;
+std::unordered_set<uint32_t> shaders_to_dump;
+
+// All the shaders we have already dumped
+std::unordered_set<uint32_t> dumped_shaders;
 //std::unordered_set<uint64_t> pipeline_clones;
 
 std::vector<uint32_t> trace_hashes;
@@ -95,6 +101,7 @@ bool needs_unload_shaders = false;
 bool needs_load_shaders = false;
 bool needs_auto_load_update = false;
 bool list_unique = false;
+bool auto_dump = false;
 bool auto_live_reload = false;
 bool cloned_pipelines_changed = false;
 uint32_t cloned_pipeline_count = 0;
@@ -108,6 +115,10 @@ uint32_t present_count = 0;
 const uint32_t MAX_PRESENT_COUNT = 60;
 bool force_all = false;
 bool trace_names = false;
+
+// Forward declares:
+void ToggleLiveWatching();
+void DumpShader(uint32_t shader_hash, bool auto_detect_type);
 
 inline void GetD3DName(ID3D11DeviceChild* obj, std::string& name) {
   if (obj == nullptr) {
@@ -483,8 +494,6 @@ HANDLE m_target_dir_handle = INVALID_HANDLE_VALUE;
 bool needs_watcher_init = true;
 
 std::aligned_storage_t<1U << 18, std::max<size_t>(alignof(FILE_NOTIFY_EXTENDED_INFORMATION), alignof(FILE_NOTIFY_INFORMATION))> watch_buffer;
-
-void ToggleLiveWatching();
 
 void CALLBACK HandleEventCallback(DWORD error_code, DWORD bytes_transferred, LPOVERLAPPED overlapped) {
   reshade::log_message(reshade::log_level::info, "Live callback.");
@@ -1873,12 +1882,14 @@ void OnReshadePresent(reshade::api::effect_runtime* runtime) {
     present_count++;
   }
 
-  for (auto pipeline_handle_to_reload : pipelines_to_reload) {
-    auto pipeline_to_reload = pipeline_cache_by_pipeline_handle.find(pipeline_handle_to_reload);
-    if (pipeline_to_reload != pipeline_cache_by_pipeline_handle.end() && pipeline_to_reload->second != nullptr) {
-      auto& pipeline_cache_to_reload = pipeline_to_reload->second;
-      LoadCustomShaders(pipeline_cache_to_reload);
+  // Dump new shaders here so it's more thread safe
+  if (auto_dump) {
+    for (auto shader_to_dump : shaders_to_dump) {
+      if (!dumped_shaders.contains(shader_to_dump)) {
+        DumpShader(shader_to_dump, true);
+      }
     }
+    shaders_to_dump.clear();
   }
 
   // Destroy the cloned pipelines in the following frame to avoid crashes
@@ -1895,6 +1906,7 @@ void OnReshadePresent(reshade::api::effect_runtime* runtime) {
     LoadCustomShaders();
     needs_load_shaders = false;
   }
+
   if (needs_auto_load_update) {
     ToggleLiveWatching();
     needs_auto_load_update = false;
@@ -1950,6 +1962,10 @@ void DumpShader(uint32_t shader_hash, bool auto_detect_type = true) {
   std::ofstream file(dump_path, std::ios::binary);
 
   file.write(static_cast<const char*>(cached_shader->data), cached_shader->size);
+
+  if (!dumped_shaders.contains(shader_hash)) {
+    dumped_shaders.emplace(shader_hash);
+  }
 }
 
 // @see https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
@@ -1966,7 +1982,13 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
     for (auto shader : shader_cache) {
       DumpShader(shader.first, true);
     }
+    shaders_to_dump.clear();
   }
+  ImGui::PopID();
+
+  ImGui::SameLine();
+  ImGui::PushID("##AutoDumpCheckBox");
+  ImGui::Checkbox("Auto Dump", &auto_dump);
   ImGui::PopID();
 
   if (ImGui::Button(std::format("Unload Shaders ({})", cloned_pipeline_count).c_str())) {
@@ -1979,8 +2001,8 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   }
 
   ImGui::SameLine();
-  ImGui::PushID("##LiveCheckBox");
-  if (ImGui::Checkbox("Live", &auto_live_reload)) {
+  ImGui::PushID("##LiveReloadCheckBox");
+  if (ImGui::Checkbox("Live Reload", &auto_live_reload)) {
     needs_auto_load_update = true;
   }
   ImGui::PopID();
