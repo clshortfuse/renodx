@@ -1938,14 +1938,15 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           ImGui::PushID("##LiveTabItem");
           const bool open_live_tab_item = ImGui::BeginTabItem("Live");
           ImGui::PopID();
+          static bool opened_live_tab_item = false;
           if (open_live_tab_item) {
             static std::string hlsl_string;
-            if (changed_selected) {
+            if (changed_selected || opened_live_tab_item != open_live_tab_item) {
               auto hash = trace_hashes.at(selected_index);
 
               if (
                   auto pair = pipeline_cache_by_shader_hash.find(hash);
-                  pair != pipeline_cache_by_shader_hash.end() && !pair->second->hlsl_path.empty()) {
+                  pair != pipeline_cache_by_shader_hash.end() && pair->second != nullptr && !pair->second->hlsl_path.empty()) {
                 auto result = ReadTextFile(pair->second->hlsl_path);
                 if (result.has_value()) {
                   hlsl_string.assign(result.value());
@@ -1956,6 +1957,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
                 hlsl_string.assign("");
               }
             }
+            opened_live_tab_item = open_live_tab_item;
 
             // Attemping this breaks ImGui
             // if (ImGui::BeginChild("##LiveCodeToolbar", ImVec2(-FLT_MIN, 0))) {
