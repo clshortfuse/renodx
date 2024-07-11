@@ -970,7 +970,7 @@ void OnInitPipeline(
 
           // Make sure we didn't already have a valid pipeline in there (this should never happen)
           auto pipelines_pair = pipeline_caches_by_shader_hash.find(shader_hash);
-          if (pipelines_pair == pipeline_caches_by_shader_hash.end()) {
+          if (pipelines_pair != pipeline_caches_by_shader_hash.end()) {
             pipelines_pair->second.emplace(cached_pipeline);
           } else {
             pipeline_caches_by_shader_hash[shader_hash] = { cached_pipeline };
