@@ -433,7 +433,7 @@ std::optional<std::string> ReadTextFile(const std::filesystem::path& path) {
 }
 
 OVERLAPPED overlapped;
-HANDLE m_target_dir_handle;
+HANDLE m_target_dir_handle = INVALID_HANDLE_VALUE;
 
 bool needs_watcher_init = true;
 
@@ -467,6 +467,12 @@ void ToggleLiveWatching() {
     }
 
     reshade::log_message(reshade::log_level::info, "Watching live.");
+
+    // Clean up any previous handle for safety
+    if (m_target_dir_handle != INVALID_HANDLE_VALUE) {
+      CancelIoEx(m_target_dir_handle, &overlapped);
+    }
+
     m_target_dir_handle = CreateFileW(
         directory.c_str(),
         FILE_LIST_DIRECTORY,
