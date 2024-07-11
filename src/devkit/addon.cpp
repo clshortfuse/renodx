@@ -44,6 +44,8 @@ struct CachedPipeline {
   bool cloned;
   reshade::api::pipeline pipeline_clone;
   std::filesystem::path hlsl_path;
+  std::string compilation_error;
+  // Original shader hash (for now we only support one)
   uint32_t shader_hash;
 };
 
@@ -291,15 +293,23 @@ void LoadCustomShaders(const CachedPipeline* cached_pipeline_filter = nullptr) {
         reshade::log_message(reshade::log_level::debug, s.str().c_str());
       }
 
+      std::string compilation_error_string;
       code = renodx::utils::shader::compiler::CompileShaderFromFile(
           entry_path.c_str(),
-          shader_target.c_str());
+          shader_target.c_str(),
+          &compilation_error_string);
       if (code.empty()) {
         std::stringstream s;
         s << "loadCustomShaders(Compilation failed: ";
         s << entry_path.string();
         s << ")";
         reshade::log_message(reshade::log_level::warning, s.str().c_str());
+
+        auto pipeline_pair = pipeline_cache_by_shader_hash.find(shader_hash);
+        if (pipeline_pair != pipeline_cache_by_shader_hash.end() && pipeline_pair->second != nullptr) {
+          pipeline_pair->second->compilation_error = compilation_error_string;
+        }
+
         continue;
       }
 
@@ -357,8 +367,9 @@ void LoadCustomShaders(const CachedPipeline* cached_pipeline_filter = nullptr) {
     if (is_hlsl) {
       cached_pipeline->hlsl_path = entry_path;
     } else {
-      cached_pipeline->hlsl_path = "";
+      cached_pipeline->hlsl_path.clear();
     }
+    cached_pipeline->compilation_error.clear();
 
     {
       std::stringstream s;
@@ -2023,12 +2034,17 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
               const bool is_selected = (selected_index == index);
               auto pair = pipeline_cache_by_shader_hash.find(hash);
               const bool is_cloned = pair != pipeline_cache_by_shader_hash.end() && pair->second != nullptr && pair->second->cloned;
+
               std::stringstream name;
               name << std::setfill('0') << std::setw(3) << index << std::setw(0);
               name << " - " << PRINT_CRC32(hash);
+              auto text_color = IM_COL32(255, 255, 255, 255);
+
+              // Find if the shader has been modified
               if (is_cloned) {
                 if (!pair->second->hlsl_path.empty()) {
                   name << "* - ";
+
                   // TODO: add support for more name variations
                   static const std::string full_template_name = "0x12345678.xx_x_x.hlsl";
                   static const auto characters_to_remove_from_end = full_template_name.length();
@@ -2036,18 +2052,27 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
                   filename_string.erase(filename_string.length() - min(characters_to_remove_from_end, filename_string.length()));
                   if (filename_string.ends_with("_"))
                   {
-                    filename_string.erase(1);
+                    filename_string.erase(filename_string.length() - 1);
                   }
                   name << filename_string;
                 }
                 else {
                   name << "*";
                 }
+
+                text_color = IM_COL32(0, 255, 0, 255);
               }
+              // Highlight loading error
+              if (!pair->second->compilation_error.empty()) {
+                text_color = IM_COL32(255, 0, 0, 255);
+              }
+
+              ImGui::PushStyleColor(ImGuiCol_Text, text_color);
               if (ImGui::Selectable(name.str().c_str(), is_selected)) {
                 selected_index = index;
                 changed_selected = true;
               }
+              ImGui::PopStyleColor();
 
               if (is_selected) {
                 ImGui::SetItemDefaultFocus();
@@ -2097,20 +2122,31 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           static bool opened_live_tab_item = false;
           if (open_live_tab_item) {
             static std::string hlsl_string;
+            static bool hlsl_error = false;
             if (changed_selected || opened_live_tab_item != open_live_tab_item || cloned_pipelines_changed) {
               auto hash = trace_hashes.at(selected_index);
 
               if (
                   auto pair = pipeline_cache_by_shader_hash.find(hash);
-                  pair != pipeline_cache_by_shader_hash.end() && pair->second != nullptr && !pair->second->hlsl_path.empty()) {
-                auto result = ReadTextFile(pair->second->hlsl_path);
-                if (result.has_value()) {
-                  hlsl_string.assign(result.value());
+                  pair != pipeline_cache_by_shader_hash.end() && pair->second != nullptr) {
+
+                // If the custom shader has a compilation error, print that, otherwise read the file text
+                if (!pair->second->compilation_error.empty()) {
+                  hlsl_string = pair->second->compilation_error;
+                  hlsl_error = true;
+                } else if (!pair->second->hlsl_path.empty()) {
+                  auto result = ReadTextFile(pair->second->hlsl_path);
+                  if (result.has_value()) {
+                    hlsl_string.assign(result.value());
+                    hlsl_error = false;
+                  } else {
+                    hlsl_string.assign("FAILED TO READ FILE");
+                    hlsl_error = true;
+                  }
                 } else {
-                  hlsl_string.assign("Failed to read file.");
+                  hlsl_string.clear();
+                  hlsl_error = false;
                 }
-              } else {
-                hlsl_string.assign("");
               }
             }
             opened_live_tab_item = open_live_tab_item;
@@ -2121,11 +2157,13 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
             // }
 
             if (ImGui::BeginChild("LiveCode")) {
+              ImGui::PushStyleColor(ImGuiCol_Text, hlsl_error ? IM_COL32(255, 0, 0, 255) : IM_COL32(255, 255, 255, 255));
               ImGui::InputTextMultiline(
                   "##liveCode",
                   const_cast<char*>(hlsl_string.c_str()),
                   hlsl_string.length(),
                   ImVec2(-FLT_MIN, -FLT_MIN));
+              ImGui::PopStyleColor();
               ImGui::EndChild();
             }
             ImGui::EndTabItem();  // Live
