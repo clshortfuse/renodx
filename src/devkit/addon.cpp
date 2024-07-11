@@ -1978,16 +1978,20 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
               name << " - " << PRINT_CRC32(hash);
               if (is_cloned) {
                 if (!pair->second->hlsl_path.empty()) {
-                  name << " * ";
+                  name << "* - ";
                   // TODO: add support for more name variations
                   static const std::string full_template_name = "0x12345678.xx_x_x.hlsl";
                   static const auto characters_to_remove_from_end = full_template_name.length();
                   auto filename_string = pair->second->hlsl_path.filename().string();
                   filename_string.erase(filename_string.length() - min(characters_to_remove_from_end, filename_string.length()));
+                  if (filename_string.ends_with("_"))
+                  {
+                    filename_string.erase(1);
+                  }
                   name << filename_string;
                 }
                 else {
-                  name << " *";
+                  name << "*";
                 }
               }
               if (ImGui::Selectable(name.str().c_str(), is_selected)) {
