@@ -78,11 +78,12 @@ struct __declspec(uuid("3b70b2b2-52dc-4637-bd45-c1171c4c322e")) DeviceData {
 std::unordered_set<uint64_t> compute_shader_layouts;
 
 std::unordered_map<uint64_t, CachedPipeline*> pipeline_cache_by_pipeline_handle;
+std::unordered_set<uint64_t> pipelines_to_reload;
 std::unordered_map<uint64_t, reshade::api::device*> pipelines_to_destroy;
 std::unordered_map<uint32_t, CachedPipeline*> pipeline_cache_by_shader_hash;
 std::unordered_map<uint32_t, CachedShader*> shader_cache;
 
-std::unordered_set<uint64_t> pipeline_clones;
+//std::unordered_set<uint64_t> pipeline_clones;
 
 std::vector<uint32_t> trace_hashes;
 std::vector<InstructionState> instructions;
@@ -946,6 +947,12 @@ void OnInitPipeline(
     return;
   }
   pipeline_cache_by_pipeline_handle[pipeline.handle] = cached_pipeline;
+
+  // Automatically load any custom shaders that might have been bound to this pipeline
+  if (auto_live_reload) {
+    // Immediately cloning and replacing the pipeline is unsafe, we need to delay it to the next frame
+    pipelines_to_reload.emplace(pipeline.handle);
+  }
 }
 
 void OnDestroyPipeline(
@@ -1859,15 +1866,24 @@ void OnReshadePresent(reshade::api::effect_runtime* runtime) {
   if (present_count <= MAX_PRESENT_COUNT) {
     present_count++;
   }
+
+  for (auto pipeline_handle_to_reload : pipelines_to_reload) {
+    auto pipeline_to_reload = pipeline_cache_by_pipeline_handle.find(pipeline_handle_to_reload);
+    if (pipeline_to_reload != pipeline_cache_by_pipeline_handle.end() && pipeline_to_reload->second != nullptr) {
+      auto& pipeline_cache_to_reload = pipeline_to_reload->second;
+      LoadCustomShaders(pipeline_cache_to_reload);
+    }
+  }
+
+  // Destroy the cloned pipelines in the following frame to avoid crashes
+  for (auto pair : pipelines_to_destroy) {
+    pair.second->destroy_pipeline(reshade::api::pipeline{pair.first});
+  }
+  pipelines_to_destroy.clear();
+
   if (needs_unload_shaders) {
     UnloadCustomShaders();
     needs_unload_shaders = false;
-  } else {
-    // Destroy the cloned pipelines in the following frame to avoid crashes
-    for (auto pair : pipelines_to_destroy) {
-      pair.second->destroy_pipeline(reshade::api::pipeline{pair.first});
-    }
-    pipelines_to_destroy.clear();
   }
   if (needs_load_shaders) {
     LoadCustomShaders();
