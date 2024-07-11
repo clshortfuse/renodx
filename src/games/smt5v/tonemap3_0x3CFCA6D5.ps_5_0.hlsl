@@ -129,6 +129,7 @@ void main(
   r1.xzw = cmp(r1.xzw >= float3(0.5,0.5,0.5));
   r3.xyz = r3.xyz + r3.xyz;
   r2.xyz = -r3.xyz * r2.xyz + float3(1,1,1);
+    //unclamp 80 nits
     if (injectedData.toneMapType == 0.f)
     {
         r0.xyz = r1.xzw ? r2.xyz : r0.xyz; //unclamp

@@ -183,7 +183,7 @@ void main(
     }
     else
     {
-    
+       
     o0.xyz = r0.xyz; //remove clamp [added]
     }
     
