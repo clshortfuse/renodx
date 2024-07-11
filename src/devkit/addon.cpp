@@ -58,6 +58,7 @@ struct InstructionState {
 struct CachedShader {
   void* data = nullptr;
   size_t size = 0;
+  reshade::api::pipeline_subobject_type type;
   int32_t index = -1;
   std::string disasm;
 };
@@ -905,7 +906,8 @@ void OnInitPipeline(
           // Cache shader
           auto* cache = new CachedShader{
               malloc(new_desc->code_size),
-              new_desc->code_size};
+              new_desc->code_size,
+              subobject.type};
           memcpy(cache->data, new_desc->code, cache->size);
           shader_cache_count++;
           shader_cache_size += cache->size;
@@ -1900,7 +1902,7 @@ void OnReshadePresent(reshade::api::effect_runtime* runtime) {
   CheckForLiveUpdate();
 }
 
-void DumpShader(uint32_t shader_hash) {
+void DumpShader(uint32_t shader_hash, bool auto_detect_type = true) {
   auto dump_path = GetShaderPath();
 
   if (!std::filesystem::exists(dump_path)) {
@@ -1915,9 +1917,35 @@ void DumpShader(uint32_t shader_hash) {
   swprintf_s(hash_string, L"0x%08X", shader_hash);
 
   dump_path /= hash_string;
-  dump_path += L".cso";
 
   auto* cached_shader = shader_cache.find(shader_hash)->second;
+
+  // Automatically find the shader type and append it to the name (a bit hacky). This can make dumping relevantly slower.
+  if (auto_detect_type) {
+    if (cached_shader->disasm.empty()) {
+      auto disasm_code = renodx::utils::shader::compiler::DisassembleShader(cached_shader->data, cached_shader->size);
+      if (disasm_code.has_value()) {
+        cached_shader->disasm.assign(disasm_code.value());
+      } else {
+        cached_shader->disasm.assign("DECOMPILATION FAILED");
+      }
+    }
+
+    // TODO: implement vertex and compute shaders detection too
+    if (cached_shader->type == reshade::api::pipeline_subobject_type::pixel_shader) {
+      static const std::string template_pixel_shader_name = "ps_";
+      static const std::string template_pixel_shader_full_name = template_pixel_shader_name  + "x_x";
+
+      const auto type_index = cached_shader->disasm.find(template_pixel_shader_name);
+      if (type_index != std::string::npos) {
+        const std::string type = cached_shader->disasm.substr(type_index, template_pixel_shader_full_name.length());
+        dump_path += "_";
+        dump_path += type;
+      }
+    }
+  }
+
+  dump_path += L".cso";
 
   std::ofstream file(dump_path, std::ios::binary);
 
@@ -1931,12 +1959,12 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   }
   ImGui::SameLine();
   ImGui::Checkbox("List Unique Only", &list_unique);
-  ImGui::SameLine();
 
+  ImGui::SameLine();
   ImGui::PushID("##DumpShaders");
   if (ImGui::Button(std::format("Dump Shaders ({})", shader_cache_count).c_str())) {
     for (auto shader : shader_cache) {
-      DumpShader(shader.first);
+      DumpShader(shader.first, true);
     }
   }
   ImGui::PopID();
@@ -2023,7 +2051,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
                 if (disasm_code.has_value()) {
                   cache->disasm.assign(disasm_code.value());
                 } else {
-                  cache->disasm.assign("Decompilation failed.");
+                  cache->disasm.assign("DECOMPILATION FAILED");
                 }
               }
               disasm_string.assign(cache->disasm);
