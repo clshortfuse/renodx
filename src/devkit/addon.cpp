@@ -973,9 +973,10 @@ void OnInitPipeline(
           auto shader_hash = compute_crc32(static_cast<const uint8_t*>(new_desc->code), new_desc->code_size);
 
           // Delete any previous shader with the same hash (unlikely to happen, but safer nonetheless)
-          if (auto previous_shader_pair = shader_cache.find(shader_hash); previous_shader_pair != shader_cache.end() && previous_shader_pair->second != nullptr)
-          {
+          if (auto previous_shader_pair = shader_cache.find(shader_hash); previous_shader_pair != shader_cache.end() && previous_shader_pair->second != nullptr) {
             auto& previous_shader = previous_shader_pair->second;
+            // Make sure that two shaders have the same hash, their code size also matches (theoretically we could check even more, but the chances hashes overlapping is extremely small)
+            assert(previous_shader->size == new_desc->code_size);
             shader_cache_count--;
             shader_cache_size -= previous_shader->size;
             delete previous_shader->data;
