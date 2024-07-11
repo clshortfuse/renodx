@@ -2171,7 +2171,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           static bool opened_disassembly_tab_item = false;
           if (open_disassembly_tab_item) {
             static std::string disasm_string;
-            if (changed_selected || opened_disassembly_tab_item != open_disassembly_tab_item) {
+            if (!trace_hashes.empty() && (changed_selected || opened_disassembly_tab_item != open_disassembly_tab_item)) {
               auto hash = trace_hashes.at(selected_index);
               auto* cache = shader_cache.find(hash)->second;
               if (cache->disasm.empty()) {
@@ -2205,7 +2205,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           if (open_live_tab_item) {
             static std::string hlsl_string;
             static bool hlsl_error = false;
-            if (changed_selected || opened_live_tab_item != open_live_tab_item || cloned_pipelines_changed) {
+            if (!trace_hashes.empty() && (changed_selected || opened_live_tab_item != open_live_tab_item || cloned_pipelines_changed)) {
               auto hash = trace_hashes.at(selected_index);
               
               if (
