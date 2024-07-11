@@ -95,6 +95,7 @@ bool needs_load_shaders = false;
 bool needs_auto_load_update = false;
 bool list_unique = false;
 bool auto_live_reload = false;
+bool cloned_pipelines_changed = false;
 uint32_t cloned_pipeline_count = 0;
 uint32_t shader_cache_count = 0;
 uint32_t shader_cache_size = 0;
@@ -207,6 +208,7 @@ void UnloadCustomShaders(const CachedPipeline* cached_pipeline_filter = nullptr,
     if (!cached_pipeline->cloned) continue;
     cached_pipeline->cloned = false;  // This stops the cloned pipeline from being used in the next frame, allowing us to destroy it
     cloned_pipeline_count--;
+    cloned_pipelines_changed = true;
 
     if (immediate) {
       cached_pipeline->device->destroy_pipeline(reshade::api::pipeline{cached_pipeline->pipeline_clone.handle});
@@ -450,6 +452,7 @@ void LoadCustomShaders(const CachedPipeline* cached_pipeline_filter = nullptr) {
       cached_pipeline->cloned = true;
       cached_pipeline->pipeline_clone = pipeline_clone;
       cloned_pipeline_count++;
+      cloned_pipelines_changed = true;
     }
     // Clean up unused cloned subobjects
     else {
@@ -980,6 +983,7 @@ void OnDestroyPipeline(
         cached_pipeline->cloned = false;
         cached_pipeline->device->destroy_pipeline(cached_pipeline->pipeline_clone);
         cloned_pipeline_count--;
+        cloned_pipelines_changed = true;
       }
       free(cached_pipeline);
       cached_pipeline = nullptr;
@@ -2039,7 +2043,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           static bool opened_live_tab_item = false;
           if (open_live_tab_item) {
             static std::string hlsl_string;
-            if (changed_selected || opened_live_tab_item != open_live_tab_item) {
+            if (changed_selected || opened_live_tab_item != open_live_tab_item || cloned_pipelines_changed) {
               auto hash = trace_hashes.at(selected_index);
 
               if (
@@ -2089,6 +2093,8 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
     }
     ImGui::EndTabBar();
   }
+
+  cloned_pipelines_changed = false;
 }
 }  // namespace
 
