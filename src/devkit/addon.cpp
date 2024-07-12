@@ -47,6 +47,8 @@ struct CachedPipeline {
   std::string compilation_error;
   // Original shader hash (for now we only support one)
   uint32_t shader_hash;
+  // If true, this pipeline is currently being "tested"
+  bool test;
 };
 
 struct InstructionState {
@@ -230,6 +232,7 @@ void UnloadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = 
 
     if (!cached_pipeline->cloned) continue;
     cached_pipeline->cloned = false;  // This stops the cloned pipeline from being used in the next frame, allowing us to destroy it
+    cached_pipeline->test = false;  // Disable testing here, otherwise we might not always have a way to do it
     cached_pipeline->compilation_error.clear();
     cloned_pipeline_count--;
     cloned_pipelines_changed = true;
@@ -1125,7 +1128,12 @@ void OnBindPipeline(
 
   auto* cached_pipeline = pair->second;
 
-  if (cached_pipeline->cloned) {
+  if (cached_pipeline->test) {
+    // This will make the shader output black, or skip drawing, so we can easily detect it. This might not be very safe but seems to work.
+    // TODO: replace the pipeline with a shader that outputs all "SV_Target" as purple for more visiblity
+    cmd_list->bind_pipeline(stages, reshade::api::pipeline{0});
+  }
+  else if (cached_pipeline->cloned) {
     if (trace_running) {
       std::stringstream s;
       s << "bind_pipeline(swapping pipeline " << reinterpret_cast<void*>(pipeline.handle);
@@ -2177,7 +2185,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           static bool opened_disassembly_tab_item = false;
           if (open_disassembly_tab_item) {
             static std::string disasm_string;
-            if (!trace_hashes.empty() && (changed_selected || opened_disassembly_tab_item != open_disassembly_tab_item)) {
+            if (selected_index >= 0 && trace_hashes.size() >= selected_index + 1 && (changed_selected || opened_disassembly_tab_item != open_disassembly_tab_item)) {
               auto hash = trace_hashes.at(selected_index);
               auto* cache = shader_cache.find(hash)->second;
               if (cache->disasm.empty()) {
@@ -2211,7 +2219,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           if (open_live_tab_item) {
             static std::string hlsl_string;
             static bool hlsl_error = false;
-            if (!trace_hashes.empty() && (changed_selected || opened_live_tab_item != open_live_tab_item || cloned_pipelines_changed)) {
+            if (selected_index >= 0 && trace_hashes.size() >= selected_index + 1 && (changed_selected || opened_live_tab_item != open_live_tab_item || cloned_pipelines_changed)) {
               auto hash = trace_hashes.at(selected_index);
               
               if (
@@ -2257,6 +2265,26 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
               ImGui::EndChild();
             }
             ImGui::EndTabItem();  // Live
+          }
+          
+          ImGui::PushID("##SettingsTabItem");
+          const bool open_settings_tab_item = ImGui::BeginTabItem("Settings");
+          ImGui::PopID();
+          if (open_settings_tab_item && selected_index >= 0 && trace_hashes.size() >= selected_index + 1) {
+            auto hash = trace_hashes.at(selected_index);
+            if (auto pipelines_pair = pipeline_caches_by_shader_hash.find(hash); pipelines_pair != pipeline_caches_by_shader_hash.end()) {
+              bool test_shader = pipelines_pair->second.size() > 0 && (*pipelines_pair->second.begin())->test; // Fall back on reading the first pipeline that uses this shader hash
+              if (ImGui::BeginChild("Settings")) {
+                ImGui::Checkbox("Test Shader (skips drawing, or draws black)", &test_shader);
+                ImGui::EndChild();
+              }
+
+              for (auto& pipeline : pipelines_pair->second) {
+                pipeline->test = test_shader;
+              }
+            }
+
+            ImGui::EndTabItem();  // Settings
           }
 
           ImGui::EndTabBar();  // ShadersCodeTab
