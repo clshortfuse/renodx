@@ -2131,7 +2131,6 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
               auto pipeline_handle = trace_pipeline_handles.at(index);
               const bool is_selected = (selected_index == index);
               const auto pipeline_pair = pipeline_cache_by_pipeline_handle.find(pipeline_handle);
-              // Just pick the first pipeline associated to the shader here, they should all be the same as far as we are concerned
               const bool is_valid = pipeline_pair != pipeline_cache_by_pipeline_handle.end() && pipeline_pair->second != nullptr;
               std::stringstream name;
               auto text_color = IM_COL32(255, 255, 255, 255);
@@ -2184,6 +2183,8 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
                 ImGui::SetItemDefaultFocus();
               }
             }
+          } else {
+            selected_index = max(selected_index, trace_count - 1);
           }
           ImGui::EndListBox();
         }
