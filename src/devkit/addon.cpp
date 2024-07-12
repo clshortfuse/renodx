@@ -99,7 +99,8 @@ std::unordered_set<uint32_t> custom_shader_files;
 
 //std::unordered_set<uint64_t> pipeline_clones;
 
-std::vector<uint32_t> trace_hashes;
+std::vector<uint32_t> trace_shader_hashes;
+std::vector<uint64_t> trace_pipeline_handles;
 std::vector<InstructionState> instructions;
 
 constexpr uint32_t MAX_SHADER_DEFINES = 3;
@@ -1150,25 +1151,33 @@ void OnBindPipeline(
 
   // const bool is_compute_shader = compute_shader_layouts.contains(cached_pipeline->layout.handle);
 
+  bool add_pipeline_trace = true;
   if (list_unique) {
-    auto trace_count = trace_hashes.size();
+    auto trace_count = trace_shader_hashes.size();
     for (auto index = 0; index < trace_count; index++) {
-      auto hash = trace_hashes.at(index);
+      auto hash = trace_shader_hashes.at(index);
       if (hash == cached_pipeline->shader_hash) {
-        trace_hashes.erase(trace_hashes.begin() + index);
+        trace_shader_hashes.erase(trace_shader_hashes.begin() + index);
+        add_pipeline_trace = false;
         break;
       }
     }
   }
+
+  // Pipelines are always "unique"
+  if (add_pipeline_trace) {
+    trace_pipeline_handles.push_back(cached_pipeline->pipeline.handle);
+  }
+
   if (cached_pipeline->shader_hash != 0) {
-    trace_hashes.push_back(cached_pipeline->shader_hash);
+    trace_shader_hashes.push_back(cached_pipeline->shader_hash);
     // InstructionState state = instructions.at(instructions.size() - 1);
     // state.shader = cached_pipeline->shader_hash;
   }
 
   std::stringstream s;
   s << "bind_pipeline(";
-  s << trace_hashes.size() << ": ";
+  s << trace_pipeline_handles.size() << ": ";
   s << reinterpret_cast<void*>(cached_pipeline->pipeline.handle);
   s << ", " << reinterpret_cast<void*>(cached_pipeline->layout.handle);
   s << ", stages: " << stages << " (" << std::hex << static_cast<uint32_t>(stages) << std::dec << ")";
@@ -1961,11 +1970,12 @@ void OnReshadePresent(reshade::api::effect_runtime* runtime) {
   if (trace_running) {
     reshade::log_message(reshade::log_level::info, "present()");
     reshade::log_message(reshade::log_level::info, "--- End Frame ---");
-    trace_count = trace_hashes.size();
+    trace_count = trace_pipeline_handles.size();
     trace_running = false;
   } else if (trace_scheduled) {
     trace_scheduled = false;
-    trace_hashes.clear();
+    trace_shader_hashes.clear();
+    trace_pipeline_handles.clear();
     // instructions.clear();
     // resetInstructionState();
     trace_running = true;
@@ -2073,7 +2083,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
     trace_scheduled = true;
   }
   ImGui::SameLine();
-  ImGui::Checkbox("List Unique Only", &list_unique);
+  ImGui::Checkbox("List Unique Shaders Only", &list_unique);
 
   ImGui::SameLine();
   ImGui::PushID("##DumpShaders");
@@ -2111,36 +2121,36 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   bool changed_selected = false;
   if (ImGui::BeginTabBar("##MyTabBar", ImGuiTabBarFlags_None)) {
     ImGui::PushID("##ShadersTab");
-    auto handle_shader_tab = ImGui::BeginTabItem(std::format("Shaders ({})", trace_count).c_str());
+    auto handle_shader_tab = ImGui::BeginTabItem(std::format("Traced Shaders ({})", trace_count).c_str());
     ImGui::PopID();
     if (handle_shader_tab) {
       if (ImGui::BeginChild("HashList", ImVec2(100, -FLT_MIN), ImGuiChildFlags_ResizeX)) {
         if (ImGui::BeginListBox("##HashesListbox", ImVec2(-FLT_MIN, -FLT_MIN))) {
           if (!trace_running) {
             for (auto index = 0; index < trace_count; index++) {
-              auto hash = trace_hashes.at(index);
+              auto pipeline_handle = trace_pipeline_handles.at(index);
               const bool is_selected = (selected_index == index);
-              auto pipelines_pair = pipeline_caches_by_shader_hash.find(hash);
+              const auto pipeline_pair = pipeline_cache_by_pipeline_handle.find(pipeline_handle);
               // Just pick the first pipeline associated to the shader here, they should all be the same as far as we are concerned
-              const bool is_valid = pipelines_pair != pipeline_caches_by_shader_hash.end() && !pipelines_pair->second.empty();
-
+              const bool is_valid = pipeline_pair != pipeline_cache_by_pipeline_handle.end() && pipeline_pair->second != nullptr;
               std::stringstream name;
-              name << std::setfill('0') << std::setw(3) << index << std::setw(0);
-              name << " - " << PRINT_CRC32(hash);
               auto text_color = IM_COL32(255, 255, 255, 255);
 
-              if (is_valid)
-              {
-                const auto pipeline = pipelines_pair->second.begin(); 
+              if (is_valid) {
+                const auto pipeline = pipeline_pair->second;
+
+                name << std::setfill('0') << std::setw(3) << index << std::setw(0);
+                name << " - " << PRINT_CRC32(pipeline->shader_hash);
+
                 // Find if the shader has been modified
-                if ((*pipeline)->cloned) {
-                  if (!(*pipeline)->hlsl_path.empty()) {
+                if (pipeline->cloned) {
+                  if (!pipeline->hlsl_path.empty()) {
                     name << "* - ";
 
                     // TODO: add support for more name variations
                     static const std::string full_template_name = "0x12345678.xx_x_x.hlsl";
                     static const auto characters_to_remove_from_end = full_template_name.length();
-                    auto filename_string = (*pipeline)->hlsl_path.filename().string();
+                    auto filename_string = pipeline->hlsl_path.filename().string();
                     filename_string.erase(filename_string.length() - min(characters_to_remove_from_end, filename_string.length()));
                     if (filename_string.ends_with("_"))
                     {
@@ -2155,9 +2165,12 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
                   text_color = IM_COL32(0, 255, 0, 255);
                 }
                 // Highlight loading error
-                if (!(*pipeline)->compilation_error.empty()) {
+                if (!pipeline->compilation_error.empty()) {
                   text_color = IM_COL32(255, 0, 0, 255);
                 }
+              } else {
+                text_color = IM_COL32(255, 0, 0, 255);
+                name << " - ERROR: CANNOT FIND PIPELINE";
               }
 
               ImGui::PushStyleColor(ImGuiCol_Text, text_color);
@@ -2185,18 +2198,20 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           static bool opened_disassembly_tab_item = false;
           if (open_disassembly_tab_item) {
             static std::string disasm_string;
-            if (selected_index >= 0 && trace_hashes.size() >= selected_index + 1 && (changed_selected || opened_disassembly_tab_item != open_disassembly_tab_item)) {
-              auto hash = trace_hashes.at(selected_index);
-              auto* cache = shader_cache.find(hash)->second;
-              if (cache->disasm.empty()) {
-                auto disasm_code = renodx::utils::shader::compiler::DisassembleShader(cache->data, cache->size);
-                if (disasm_code.has_value()) {
-                  cache->disasm.assign(disasm_code.value());
-                } else {
-                  cache->disasm.assign("DECOMPILATION FAILED");
+            if (selected_index >= 0 && trace_pipeline_handles.size() >= selected_index + 1 && (changed_selected || opened_disassembly_tab_item != open_disassembly_tab_item)) {
+              const auto pipeline_handle = trace_pipeline_handles.at(selected_index);
+              if (auto pipeline_pair = pipeline_cache_by_pipeline_handle.find(pipeline_handle); pipeline_pair != pipeline_cache_by_pipeline_handle.end() && pipeline_pair->second != nullptr) {
+                auto* cache = shader_cache.contains(pipeline_pair->second->shader_hash) ? shader_cache[pipeline_pair->second->shader_hash] : nullptr;
+                if (cache && cache->disasm.empty()) {
+                  auto disasm_code = renodx::utils::shader::compiler::DisassembleShader(cache->data, cache->size);
+                  if (disasm_code.has_value()) {
+                    cache->disasm.assign(disasm_code.value());
+                  } else {
+                    cache->disasm.assign("DECOMPILATION FAILED");
+                  }
                 }
+                disasm_string.assign(cache ? cache->disasm : "");
               }
-              disasm_string.assign(cache->disasm);
             }
 
             if (ImGui::BeginChild("DisassemblyCode")) {
@@ -2219,21 +2234,20 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           if (open_live_tab_item) {
             static std::string hlsl_string;
             static bool hlsl_error = false;
-            if (selected_index >= 0 && trace_hashes.size() >= selected_index + 1 && (changed_selected || opened_live_tab_item != open_live_tab_item || cloned_pipelines_changed)) {
-              auto hash = trace_hashes.at(selected_index);
+            if (selected_index >= 0 && trace_pipeline_handles.size() >= selected_index + 1 && (changed_selected || opened_live_tab_item != open_live_tab_item || cloned_pipelines_changed)) {
+              auto pipeline_handle = trace_pipeline_handles.at(selected_index);
               
               if (
-                  auto pipelines_pair = pipeline_caches_by_shader_hash.find(hash);
-                  pipelines_pair != pipeline_caches_by_shader_hash.end() && !pipelines_pair->second.empty()) {
+                  auto pipeline_pair = pipeline_cache_by_pipeline_handle.find(pipeline_handle);
+                  pipeline_pair != pipeline_cache_by_pipeline_handle.end() && pipeline_pair->second != nullptr) {
 
-                // Just pick the first pipeline associated to the shader here, they should all be the same as far as we are concerned
-                const auto pipeline = pipelines_pair->second.begin(); 
+                const auto pipeline = pipeline_pair->second; 
                 // If the custom shader has a compilation error, print that, otherwise read the file text
-                if (!(*pipeline)->compilation_error.empty()) {
-                  hlsl_string = (*pipeline)->compilation_error;
+                if (!pipeline->compilation_error.empty()) {
+                  hlsl_string = pipeline->compilation_error;
                   hlsl_error = true;
-                } else if (!(*pipeline)->hlsl_path.empty()) {
-                  auto result = ReadTextFile((*pipeline)->hlsl_path);
+                } else if (!pipeline->hlsl_path.empty()) {
+                  auto result = ReadTextFile(pipeline->hlsl_path);
                   if (result.has_value()) {
                     hlsl_string.assign(result.value());
                     hlsl_error = false;
@@ -2270,18 +2284,15 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           ImGui::PushID("##SettingsTabItem");
           const bool open_settings_tab_item = ImGui::BeginTabItem("Settings");
           ImGui::PopID();
-          if (open_settings_tab_item && selected_index >= 0 && trace_hashes.size() >= selected_index + 1) {
-            auto hash = trace_hashes.at(selected_index);
-            if (auto pipelines_pair = pipeline_caches_by_shader_hash.find(hash); pipelines_pair != pipeline_caches_by_shader_hash.end()) {
-              bool test_shader = pipelines_pair->second.size() > 0 && (*pipelines_pair->second.begin())->test; // Fall back on reading the first pipeline that uses this shader hash
+          if (open_settings_tab_item && selected_index >= 0 && trace_pipeline_handles.size() >= selected_index + 1) {
+            auto pipeline_handle = trace_pipeline_handles.at(selected_index);
+            if (auto pipeline_pair = pipeline_cache_by_pipeline_handle.find(pipeline_handle); pipeline_pair != pipeline_cache_by_pipeline_handle.end() && pipeline_pair->second != nullptr) {
+              bool test_pipeline = pipeline_pair->second->test;  // Fall back on reading the first pipeline that uses this shader hash
               if (ImGui::BeginChild("Settings")) {
-                ImGui::Checkbox("Test Shader (skips drawing, or draws black)", &test_shader);
+                ImGui::Checkbox("Test Shader (skips drawing, or draws black)", &test_pipeline);
                 ImGui::EndChild();
               }
-
-              for (auto& pipeline : pipelines_pair->second) {
-                pipeline->test = test_shader;
-              }
+              pipeline_pair->second->test = test_pipeline;
             }
 
             ImGui::EndTabItem();  // Settings
