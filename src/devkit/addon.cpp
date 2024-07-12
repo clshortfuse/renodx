@@ -227,6 +227,7 @@ void UnloadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = 
 
     if (!cached_pipeline->cloned) continue;
     cached_pipeline->cloned = false;  // This stops the cloned pipeline from being used in the next frame, allowing us to destroy it
+    cached_pipeline->compilation_error.clear();
     cloned_pipeline_count--;
     cloned_pipelines_changed = true;
 
@@ -1072,6 +1073,7 @@ void OnDestroyPipeline(
       if (cached_pipeline->cloned) {
         cached_pipeline->cloned = false;
         cached_pipeline->device->destroy_pipeline(cached_pipeline->pipeline_clone);
+        cached_pipeline->compilation_error.clear();
         cloned_pipeline_count--;
         cloned_pipelines_changed = true;
       }
