@@ -236,7 +236,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!reshade::register_addon(h_module)) return FALSE;
       renodx::mods::shader::force_pipeline_cloning = true; //So the mod works with the toolkit
 
-      
+      /*
       // render targets upgrade
       // RGBA8_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
@@ -262,7 +262,23 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       });
       
       
-      // BGRA8 makes the game get crazy bright + unwanted stuff
+
+      //RGB10A2_unorm
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r10g10b10a2_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .ignore_size = true,
+      });
+      
+      // R11G11B10_float
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r11g11b10_float,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          //.ignore_size = true,
+      });
+      */
+
+       // BGRA8 makes the game get crazy bright + unwanted stuff
       /*
       // BGRA8_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
@@ -271,9 +287,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           //.index = 0,
           //.ignore_size = true,
       });
-      
 
-      
+
+
       // BGRA8_unorm_srgb
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::b8g8r8a8_unorm_srgb,
@@ -289,20 +305,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           //.ignore_size = true,
       });
       */
-      //RGB10A2_unorm
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r10g10b10a2_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .ignore_size = true,
-      });
-      
-      // R11G11B10_float
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r11g11b10_float,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          //.ignore_size = true,
-      });
-      
 
       break;
     case DLL_PROCESS_DETACH:

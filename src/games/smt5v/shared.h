@@ -22,6 +22,7 @@ struct ShaderInjectData {
   float colorGradeLUTScaling;
   float fxNoise;
   float fxScreenGlow;
+  float fxBloom;
 };
 
 #ifndef __cplusplus

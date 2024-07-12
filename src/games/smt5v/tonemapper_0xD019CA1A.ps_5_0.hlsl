@@ -63,8 +63,7 @@ void main(
     r0.yw = r0.yw * cb0[5].xy + cb0[4].xy;
     
     r3.xyz = t2.Sample(s1_s, r0.yw).xyz; //og input, ersh?
-    //o0.xyz = r3.xyz; //testing
-    //return; //testing
+
     
     r0.yw = cb1[132].zw * r2.xy;
     r2.x = t0.SampleLevel(s0_s, r0.yw, 0).x;
@@ -174,25 +173,19 @@ void main(
     r1.xyz = cb4[1].xyz + -r0.xyz;
     r0.xyz = cb4[6].zzz * r1.xyz + r0.xyz;
     
-    
-    //remove 709 clamp
-    if (injectedData.toneMapType == 0.f)
-    {
-    
-    o0.xyz = max(float3(0, 0, 0), r0.xyz); //709 clamp? [vanilla code]
-    }
-    else
-    {
-       
-    o0.xyz = r0.xyz; //remove clamp [added]
-    }
-    
+    o0.xyz = max(float3(0, 0, 0), r0.xyz); //709 clamp? [vanilla code]    
+        
     o0.w = 1;
       
     
     //o0.xyz = renodx::color::correct::GammaSafe(o0.xyz);
+    
+    if (injectedData.toneMapType == 0.f)
+    {  
     o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear to 2.2
-
+    }
+    
+    //o0.rgb = renodx::color::bt709::from::SRGB(r0.rgb);
     
     o0.xyz *= injectedData.toneMapGameNits / 80.f; //paper white
     

@@ -144,8 +144,10 @@ void main(
   
     //add paper white
     
+    if (injectedData.toneMapType == 0.f)
+    {
     o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear to 2.2
-
+    }
     
     o0.xyz *= injectedData.toneMapGameNits / 80.f; //paper white
     
