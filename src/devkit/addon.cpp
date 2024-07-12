@@ -100,10 +100,13 @@ std::unordered_set<uint32_t> custom_shader_files;
 std::vector<uint32_t> trace_hashes;
 std::vector<InstructionState> instructions;
 
+constexpr uint32_t MAX_SHADER_DEFINES = 3;
+
 // Settings
 bool auto_dump = false;
 bool auto_live_reload = false;
 bool list_unique = false;
+std::vector<std::string> shader_defines;
 
 bool trace_scheduled = false;
 bool trace_running = false;
@@ -319,6 +322,7 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
       code = renodx::utils::shader::compiler::CompileShaderFromFile(
           entry_path.c_str(),
           shader_target.c_str(),
+          shader_defines,
           &compilation_error_string);
       if (code.empty()) {
         std::stringstream s;
@@ -2263,12 +2267,39 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       ImGui::EndTabItem();  // Shaders
     }
 
+#if 0  // TODO: implement
     if (ImGui::BeginTabItem("Events")) {
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Resources")) {
       ImGui::EndTabItem();
     }
+#endif
+    if (ImGui::BeginTabItem("Shader Defines")) {
+      // TODO: make this dynamic with + and - buttons
+      static std::string defines_titles[MAX_SHADER_DEFINES*2];
+      static char defines_text[MAX_SHADER_DEFINES*2][50];
+
+      for (int i = 0; i < (MAX_SHADER_DEFINES * 2) - 1; i += 2) {
+        if (defines_titles[i].empty()) {
+          defines_titles[i] = "Define " + std::to_string(i/2) + " Name";
+          defines_titles[i+1] = "Define " + std::to_string(i/2) + " Value";
+        }
+        // ImGUI doesn't work with std::string data, it seems to need c style char arrays.
+        ImGui::PushID(defines_titles[i].data());
+        ImGui::InputTextWithHint("", defines_titles[i].data(), &defines_text[i][0], IM_ARRAYSIZE(defines_text[i]), ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_AlwaysOverwrite);
+        ImGui::PopID();
+        ImGui::SameLine();
+        ImGui::PushID(defines_titles[i+1].data());
+        ImGui::InputTextWithHint("", defines_titles[i+1].data(), &defines_text[i+1][0], IM_ARRAYSIZE(defines_text[i+1]), ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_AlwaysOverwrite);
+        ImGui::PopID();
+        shader_defines[i] = &defines_text[i][0];
+        shader_defines[i+1] = &defines_text[i+1][0];
+      }
+
+      ImGui::EndTabItem();
+    }
+
     ImGui::EndTabBar();
   }
 
@@ -2293,6 +2324,9 @@ void Init() {
       }
     }
   }
+
+  // Pre-allocate shader defines
+  shader_defines.assign(MAX_SHADER_DEFINES * 2, "");
 }
 }  // namespace
 
