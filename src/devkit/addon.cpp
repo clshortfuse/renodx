@@ -108,7 +108,8 @@ constexpr uint32_t MAX_SHADER_DEFINES = 3;
 // Settings
 bool auto_dump = false;
 bool auto_live_reload = false;
-bool list_unique = false;
+bool trace_list_unique_shaders_only = false;
+bool trace_ignore_vertex_shaders = true;
 std::vector<std::string> shader_defines;
 
 bool trace_scheduled = false;
@@ -209,13 +210,16 @@ void DestroyPipelineSubojects(reshade::api::pipeline_subobject* subojects, uint3
     auto& suboject = subojects[i];
 
     switch (suboject.type) {
+      case reshade::api::pipeline_subobject_type::vertex_shader:
+        [[fallthrough]];
       case reshade::api::pipeline_subobject_type::compute_shader:
         [[fallthrough]];
       case reshade::api::pipeline_subobject_type::pixel_shader: {
         auto* desc = static_cast<reshade::api::shader_desc*>(suboject.data);
         delete desc->code;
         desc->code = nullptr;
-      } break;
+        break;
+      }
       default:
         break;
     }
@@ -457,6 +461,8 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
   #endif
         const auto& subobject = subobjects[i];
         switch (subobject.type) {
+          case reshade::api::pipeline_subobject_type::vertex_shader:
+            [[fallthrough]];
           case reshade::api::pipeline_subobject_type::compute_shader:
             [[fallthrough]];
           case reshade::api::pipeline_subobject_type::pixel_shader:
@@ -950,8 +956,6 @@ void OnInitPipeline(
       s << ", layout:" << reinterpret_cast<void*>(layout.handle);
       s << ", type: " << subobject.type;
       switch (subobject.type) {
-        case reshade::api::pipeline_subobject_type::vertex_shader:
-          [[fallthrough]];
         case reshade::api::pipeline_subobject_type::hull_shader:
           [[fallthrough]];
         case reshade::api::pipeline_subobject_type::domain_shader:
@@ -973,6 +977,8 @@ void OnInitPipeline(
             s << ", render_target_write_mask: " << std::hex << desc.render_target_write_mask[0] << std::dec;
           }
           break;
+        case reshade::api::pipeline_subobject_type::vertex_shader:
+          [[fallthrough]];
         case reshade::api::pipeline_subobject_type::compute_shader:
           [[fallthrough]];
         case reshade::api::pipeline_subobject_type::pixel_shader: {
@@ -1108,6 +1114,7 @@ void OnBindPipeline(
     reshade::api::pipeline pipeline) {
   if (trace_running) {
     switch (stages) {
+      case reshade::api::pipeline_stage::vertex_shader:
       case reshade::api::pipeline_stage::pixel_shader:
       case reshade::api::pipeline_stage::compute_shader:
         break;
@@ -1152,7 +1159,7 @@ void OnBindPipeline(
   // const bool is_compute_shader = compute_shader_layouts.contains(cached_pipeline->layout.handle);
 
   bool add_pipeline_trace = true;
-  if (list_unique) {
+  if (trace_list_unique_shaders_only) {
     auto trace_count = trace_shader_hashes.size();
     for (auto index = 0; index < trace_count; index++) {
       auto hash = trace_shader_hashes.at(index);
@@ -1162,6 +1169,10 @@ void OnBindPipeline(
         break;
       }
     }
+  }
+
+  if (trace_ignore_vertex_shaders && stages == reshade::api::pipeline_stage::vertex_shader) {
+    add_pipeline_trace = false;
   }
 
   // Pipelines are always "unique"
@@ -2052,15 +2063,34 @@ void DumpShader(uint32_t shader_hash, bool auto_detect_type = true) {
       }
     }
 
-    // TODO: implement vertex and compute shaders detection too
-    if (cached_shader->type == reshade::api::pipeline_subobject_type::pixel_shader) {
+    if (cached_shader->type == reshade::api::pipeline_subobject_type::vertex_shader
+        || cached_shader->type == reshade::api::pipeline_subobject_type::pixel_shader
+        || cached_shader->type == reshade::api::pipeline_subobject_type::compute_shader) {
+      static const std::string template_vertex_shader_name = "vs_";
       static const std::string template_pixel_shader_name = "ps_";
-      static const std::string template_pixel_shader_full_name = template_pixel_shader_name  + "x_x";
+      static const std::string template_compute_shader_name = "cs_";
+      static const std::string template_shader_full_name = "x_x";
 
-      const auto type_index = cached_shader->disasm.find(template_pixel_shader_name);
+      std::string_view template_shader_name;
+      switch (cached_shader->type) {
+        case reshade::api::pipeline_subobject_type::vertex_shader: {
+          template_shader_name = template_vertex_shader_name;
+          break;
+        }
+        default:
+        case reshade::api::pipeline_subobject_type::pixel_shader: {
+          template_shader_name = template_pixel_shader_name;
+          break;
+        }
+        case reshade::api::pipeline_subobject_type::compute_shader: {
+          template_shader_name = template_compute_shader_name;
+          break;
+        }
+      }
+      const auto type_index = cached_shader->disasm.find(template_shader_name);
       if (type_index != std::string::npos) {
-        const std::string type = cached_shader->disasm.substr(type_index, template_pixel_shader_full_name.length());
-        dump_path += "_";
+        const std::string type = cached_shader->disasm.substr(type_index, template_shader_name.length() + template_shader_full_name.length());
+        dump_path += ".";
         dump_path += type;
       }
     }
@@ -2083,7 +2113,10 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
     trace_scheduled = true;
   }
   ImGui::SameLine();
-  ImGui::Checkbox("List Unique Shaders Only", &list_unique);
+  ImGui::Checkbox("List Unique Shaders Only", &trace_list_unique_shaders_only);
+
+  ImGui::SameLine();
+  ImGui::Checkbox("Ignore Vertex Shaders", &trace_ignore_vertex_shaders);
 
   ImGui::SameLine();
   ImGui::PushID("##DumpShaders");
@@ -2289,6 +2322,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
             auto pipeline_handle = trace_pipeline_handles.at(selected_index);
             if (auto pipeline_pair = pipeline_cache_by_pipeline_handle.find(pipeline_handle); pipeline_pair != pipeline_cache_by_pipeline_handle.end() && pipeline_pair->second != nullptr) {
               bool test_pipeline = pipeline_pair->second->test;  // Fall back on reading the first pipeline that uses this shader hash
+              // TODO: skip showing the setting for vertex shaders
               if (ImGui::BeginChild("Settings")) {
                 ImGui::Checkbox("Test Shader (skips drawing, or draws black)", &test_pipeline);
                 ImGui::EndChild();
