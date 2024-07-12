@@ -231,9 +231,9 @@ void UnloadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = 
     auto& cached_pipeline = pair.second;
     if (cached_pipeline == nullptr || (!pipelines_filter.empty() && !pipelines_filter.contains(cached_pipeline->pipeline.handle))) continue;
 
+    cached_pipeline->test = false;  // Disable testing here, otherwise we might not always have a way to do it
     if (!cached_pipeline->cloned) continue;
     cached_pipeline->cloned = false;  // This stops the cloned pipeline from being used in the next frame, allowing us to destroy it
-    cached_pipeline->test = false;  // Disable testing here, otherwise we might not always have a way to do it
     cached_pipeline->compilation_error.clear();
     cloned_pipeline_count--;
     cloned_pipelines_changed = true;
@@ -1130,7 +1130,7 @@ void OnBindPipeline(
   auto* cached_pipeline = pair->second;
 
   if (cached_pipeline->test) {
-    // This will make the shader output black, or skip drawing, so we can easily detect it. This might not be very safe but seems to work.
+    // This will make the shader output black, or skip drawing, so we can easily detect it. This might not be very safe but seems to work in DX11.
     // TODO: replace the pipeline with a shader that outputs all "SV_Target" as purple for more visiblity
     cmd_list->bind_pipeline(stages, reshade::api::pipeline{0});
   }
