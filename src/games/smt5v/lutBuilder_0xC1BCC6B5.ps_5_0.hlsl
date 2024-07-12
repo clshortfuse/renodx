@@ -24,16 +24,16 @@ void main(
   out float4 o0 : SV_Target0)
 {
     
+  
 
-  //copied from hifi rush, honestly idk; just makes the whole frame blue if lut strength is above 1
-  /*  if (injectedData.toneMapType == 0)
-    {
-
-        o0 = 0;
-
-        return;
-    }
-   */ 
+ //copied from hifi rush, honestly idk; just makes the whole frame blue if lut strength is above 1
+ //only build lut if tonemapper is vanilla?
+///   if (injectedData.toneMapType != 0)
+///   {
+//        o0 = 0;
+//       return;
+  // }
+    
   const float4 icb[] = { { -4.000000, -0.718548, -4.970622, 0.808913},
                               { -4.000000, 2.081031, -3.029378, 1.191087},
                               { -3.157377, 3.668124, -2.126200, 1.568300},
@@ -77,6 +77,11 @@ void main(
   r1.xyz = exp2(r1.xyz);
   r1.xyz = r1.xyz * float3(0.180000007,0.180000007,0.180000007) + float3(-0.00266771927,-0.00266771927,-0.00266771927);
   r0.xyz = r0.zzz ? r0.xyw : r1.xyz;
+    //test code copied
+    //float3 inputColor = r0.rgb; //copied from shortfuse
+    //o0.xyz = r0.rgb; //Added code, Untonemapped image?
+    //return;
+
   r1.x = dot(float3(0.613191485,0.33951208,0.0473663323), r0.xyz);
   r1.y = dot(float3(0.0702069029,0.916335821,0.0134500116), r0.xyz);
   r1.z = dot(float3(0.0206188709,0.109567292,0.869606733), r0.xyz);
@@ -410,9 +415,9 @@ void main(
   r3.xyz = exp2(r2.xyz);
   if (cb0[65].z == 0) {
     r4.xyz = float3(12.9200001,12.9200001,12.9200001) * r3.xyz;
-    r5.xyz = cmp(r3.xyz >= float3(0.00313066994,0.00313066994,0.00313066994));
-    r2.xyz = float3(0.416666657,0.416666657,0.416666657) * r2.xyz;
-    r2.xyz = exp2(r2.xyz);
+    r5.xyz = cmp(r3.xyz >= float3(0.00313066994,0.00313066994,0.00313066994)); //sRGB ?
+    r2.xyz = float3(0.416666657,0.416666657,0.416666657) * r2.xyz; //2.4 gamma
+    r2.xyz = exp2(r2.xyz); //2.4 gamma
     r2.xyz = r2.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
     r2.xyz = r5.xyz ? r2.xyz : r4.xyz;
   } else {
@@ -834,6 +839,7 @@ void main(
             }
           }
         }
+                
         r0.w = 3.32192802 * r1.w;
         r7.y = exp2(r0.w);
         r0.w = cmp(0 >= r2.w);

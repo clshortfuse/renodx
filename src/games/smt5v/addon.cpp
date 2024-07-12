@@ -76,7 +76,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "ACES", "RenoDRT"},
+        .labels = {"Vanilla", "None", "ACES", "RenoDX"},
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
@@ -102,7 +102,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapUINits",
         .binding = &shader_injection.toneMapUINits,
-        .default_value = 80.f,
+        .default_value = 203.f,
         .label = "UI Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
@@ -155,52 +155,13 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeBlowout",
-        .binding = &shader_injection.colorGradeBlowout,
+        .key = "fxBloom",
+        .binding = &shader_injection.fxBloom,
         .default_value = 50.f,
-        .label = "Blowout",
-        .section = "Color Grading",
-        .tooltip = "Controls highlight desaturation due to overexposure.",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "colorGradeLUTStrength",
-        .binding = &shader_injection.colorGradeLUTStrength,
-        .default_value = 100.f,
-        .label = "LUT Strength",
-        .section = "Color Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "colorGradeLUTScaling",
-        .binding = &shader_injection.colorGradeLUTScaling,
-        .default_value = 100.f,
-        .label = "LUT Scaling",
-        .section = "Color Grading",
-        .tooltip = "Scales the color grade LUT to full range when size is clamped.",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "fxNoise",
-        .binding = &shader_injection.fxNoise,
-        .default_value = 50.f,
-        .label = "Noise",
+        .label = "Bloom",
         .section = "Effects",
-        .tooltip = "Noise pattern added to game in some areas.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "fxScreenGlow",
-        .binding = &shader_injection.fxScreenGlow,
-        .default_value = 100.f,
-        .label = "Screen Glow",
-        .section = "Effects",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
     },
 };
 
@@ -214,11 +175,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeBlowout", 0.f);
-  renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
-  renodx::utils::settings::UpdateSetting("fxNoise", 50.f);
-  renodx::utils::settings::UpdateSetting("fxScreenGlow", 100.f);
+  renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
 }
 
 }  // namespace

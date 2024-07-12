@@ -73,7 +73,8 @@ cbuffer cb0 : register(b0)
     r2.xyz = r2.xyz * cb0[66].xyz + cb0[61].xyz;
     r1.xyz = r2.xyz * r1.xyz;
     r0.yzw = r0.yzw * cb0[60].xyz + r1.xyz; 
-
+    
+    //float3 untonemapped = r0.yzw; //untonemapped image?
     r0.yzw = v1.xxx * r0.yzw; //auto exposure?
     r1.xy = cb0[62].xx * v1.yz;
     r1.x = dot(r1.xy, r1.xy);
@@ -83,13 +84,13 @@ cbuffer cb0 : register(b0)
     
 
     
-    float3 untonemapped = r0.yzw; //untonemapped image?
+    
     
     //messing with mid grey
-    if (injectedData.toneMapType != 0.f)
-    {
-        r0.yzw = float3(0.18, 0.18, 0.18);
-    }
+    //if (injectedData.toneMapType != 0.f)
+    //{
+    //    r0.yzw = float3(0.18, 0.18, 0.18);
+    //}
     
     r0.yzw = r0.yzw * r1.xxx + float3(0.00266771927, 0.00266771927, 0.00266771927);
   
@@ -148,10 +149,11 @@ cbuffer cb0 : register(b0)
         r1.xyz = sign(r1.xyz) * pow(r1.xyz, 1 / 2.4); //2.4 gamma re-written
         
         //get luminance data for middle grey
-        if (injectedData.toneMapType != 0.f)
-        {
-        r1.xyz = dot(float3(0.298999995, 0.587000012, 0.114), r0.yzw);
-        }
+        //if (injectedData.toneMapType != 0.f)
+        //{
+        //r1.xyz = dot(float3(0.298999995, 0.587000012, 0.114), r0.yzw);
+        //}
+        
         r1.xyz = r1.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
         o0.xyz = min(r2.xyz, r1.xyz);
 
@@ -181,9 +183,10 @@ cbuffer cb0 : register(b0)
     }
     else
     {
-        outputColor = untonemapped;
+        //outputColor = untonemapped;
     }
-    float vanillaMidGray = renodx::color::y::from::BT709(r0.rgb);
+    //float vanillaMidGray = renodx::color::y::from::BT709(r1.rgb);
+    float vanillaMidGray = 0.18f;
     float renoDRTContrast = 1.1f;
     float renoDRTFlare = 0.f;
     float renoDRTShadows = 1.f;

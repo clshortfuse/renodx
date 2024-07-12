@@ -180,10 +180,9 @@ void main(
     
     //o0.xyz = renodx::color::correct::GammaSafe(o0.xyz);
     
-    if (injectedData.toneMapType == 0.f)
-    {  
+          
     o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear to 2.2
-    }
+    
     
     //o0.rgb = renodx::color::bt709::from::SRGB(r0.rgb);
     

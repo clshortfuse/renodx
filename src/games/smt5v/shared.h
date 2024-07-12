@@ -17,11 +17,6 @@ struct ShaderInjectData {
   float colorGradeShadows;
   float colorGradeContrast;
   float colorGradeSaturation;
-  float colorGradeBlowout;
-  float colorGradeLUTStrength;
-  float colorGradeLUTScaling;
-  float fxNoise;
-  float fxScreenGlow;
   float fxBloom;
 };
 
@@ -31,4 +26,4 @@ cbuffer cb13 : register(b13) {
 }
 #endif
 
-#endif  // SRC_TUNIC_SHARED_H_
+#endif  // SRC_SMT5V_SHARED_H_
