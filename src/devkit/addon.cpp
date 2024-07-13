@@ -443,8 +443,12 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
       continue;
     }
 
-    // Re-clone all the pipelines that used this shader hash
+    // Re-clone all the pipelines that used this shader hash (except the ones that are filtered out)
     for (CachedPipeline* cached_pipeline : pipelines_pair->second) {
+      if (!pipelines_filter.empty() && !pipelines_filter.contains(cached_pipeline->pipeline.handle)) continue;
+      // Force destroy this pipeline in case it was already cloned
+      UnloadCustomShaders({cached_pipeline->pipeline.handle});
+
       if (is_hlsl) {
         cached_pipeline->hlsl_path = entry_path;
       } else {
