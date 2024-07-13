@@ -327,7 +327,7 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
       if (!pipelines_filter.empty()) {
         bool pipeline_found = false;
         for (const auto& pipeline_pair : pipeline_cache_by_pipeline_handle) {
-          if (std::find(pipeline_pair.second->shader_hashes.begin(), pipeline_pair.second->shader_hashes.end(), shader_hash) != pipeline_pair.second->shader_hashes.end()) continue;
+          if (std::find(pipeline_pair.second->shader_hashes.begin(), pipeline_pair.second->shader_hashes.end(), shader_hash) == pipeline_pair.second->shader_hashes.end()) continue;
           if (pipelines_filter.contains(pipeline_pair.first)) {
             pipeline_found = true;
           }
@@ -395,7 +395,7 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
       if (!pipelines_filter.empty()) {
         bool pipeline_found = false;
         for (const auto& pipeline_pair : pipeline_cache_by_pipeline_handle) {
-          if (std::find(pipeline_pair.second->shader_hashes.begin(), pipeline_pair.second->shader_hashes.end(), shader_hash) != pipeline_pair.second->shader_hashes.end()) continue;
+          if (std::find(pipeline_pair.second->shader_hashes.begin(), pipeline_pair.second->shader_hashes.end(), shader_hash) == pipeline_pair.second->shader_hashes.end()) continue;
           if (pipelines_filter.contains(pipeline_pair.first)) {
             pipeline_found = true;
           }
