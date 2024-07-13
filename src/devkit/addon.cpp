@@ -1093,6 +1093,8 @@ void OnDestroyPipeline(
   uint32_t changed = 0;
   changed |= compute_shader_layouts.erase(pipeline.handle);
 
+  pipelines_to_reload.erase(pipeline.handle);
+
   if (
       auto pipeline_cache_pair = pipeline_cache_by_pipeline_handle.find(pipeline.handle);
       pipeline_cache_pair != pipeline_cache_by_pipeline_handle.end()) {
@@ -2167,6 +2169,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
   if (ImGui::Button(std::format("Unload Shaders ({})", cloned_pipeline_count).c_str())) {
     needs_unload_shaders = true;
+    pipelines_to_reload.clear();
     // For consistency, disable live reload, it makes no sense for it to be on if we have unloaded shaders
     if (auto_live_reload) {
       auto_live_reload = false;
