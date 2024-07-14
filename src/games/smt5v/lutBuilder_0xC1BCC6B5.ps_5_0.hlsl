@@ -26,7 +26,7 @@ void main(
     
   
 
- //copied from hifi rush, honestly idk; just makes the whole frame blue if lut strength is above 1
+ //copied from hifi rush, honestly idk; just makes the whole frame blue
  //only build lut if tonemapper is vanilla?
 ///   if (injectedData.toneMapType != 0)
 ///   {
@@ -130,6 +130,8 @@ void main(
   r1.xyz = r1.xyz * r2.xyz + r3.xyz;
   r1.w = 1 / cb0[65].x;
   r1.w = saturate(r1.w * r0.w);
+    
+
   
   
   r2.x = r1.w * -2 + 3;
@@ -197,9 +199,11 @@ void main(
   r1.x = dot(float3(1.70505154,-0.621790707,-0.0832583979), r0.xyz);
   r1.y = dot(float3(-0.130257145,1.14080286,-0.0105485283), r0.xyz);
   r1.z = dot(float3(-0.0240032747,-0.128968775,1.15297174), r0.xyz);
+    
+
   
   if (cb0[44].y != 0) {
-  
+        
     r2.x = dot(r1.xyz, cb0[28].xyz);
     r2.y = dot(r1.xyz, cb0[29].xyz);
     r2.z = dot(r1.xyz, cb0[30].xyz);
@@ -400,6 +404,7 @@ void main(
     r3.y = dot(float3(-0.130257145,1.14080286,-0.0105485283), r0.xyz);
     r3.z = dot(float3(-0.0240032747,-0.128968775,1.15297174), r0.xyz);
     r2.xyz = max(float3(0,0,0), r3.xyz);
+        //maybe closer to the untonemapped image down here?
 	
   }
   r0.xyz = r2.xyz * r2.xyz;
@@ -413,6 +418,7 @@ void main(
   r2.xyz = log2(r2.xyz);
   r2.xyz = cb0[27].yyy * r2.xyz;
   r3.xyz = exp2(r2.xyz);
+
   if (cb0[65].z == 0) {
     r4.xyz = float3(12.9200001,12.9200001,12.9200001) * r3.xyz;
     r5.xyz = cmp(r3.xyz >= float3(0.00313066994,0.00313066994,0.00313066994)); //sRGB ?
@@ -420,7 +426,7 @@ void main(
     r2.xyz = exp2(r2.xyz); //2.4 gamma
     r2.xyz = r2.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
     r2.xyz = r5.xyz ? r2.xyz : r4.xyz;
-  } else {
+    } else {
     r4.xyzw = cmp(asint(cb0[65].wwww) == int4(1,2,3,4));
     r5.xyz = r4.www ? float3(1,0,0) : float3(1.70505154,-0.621790707,-0.0832583979);
     r6.xyz = r4.www ? float3(0,1,0) : float3(-0.130257145,1.14080286,-0.0105485283);
@@ -899,7 +905,7 @@ void main(
         r8.x = dot(r5.xyz, r7.xyz);
         r8.y = dot(r6.xyz, r7.xyz);
         r8.z = dot(r4.xyz, r7.xyz);
-        r7.xyz = float3(9.99999975e-05,9.99999975e-05,9.99999975e-05) * r8.xyz;
+        r7.xyz = float3(9.99999975e-05,9.99999975e-05,9.99999975e-05) * r8.xyz; // GPT4 said color stuff is happening here, but its prolly junk for us
         r7.xyz = log2(r7.xyz);
         r7.xyz = float3(0.159301758,0.159301758,0.159301758) * r7.xyz;
         r7.xyz = exp2(r7.xyz);
@@ -910,7 +916,7 @@ void main(
         r7.xyz = log2(r7.xyz);
         r7.xyz = float3(78.84375,78.84375,78.84375) * r7.xyz;
         r2.xyz = exp2(r7.xyz);
-      } else {
+            } else {
         r7.xy = cmp(asint(cb0[65].zz) == int2(4,6));
         r0.w = (int)r7.y | (int)r7.x;
         if (r0.w != 0) {
@@ -1188,6 +1194,7 @@ void main(
               }
             }
           }
+
           r0.w = 3.32192802 * r0.w;
           r9.z = exp2(r0.w);
           r7.x = dot(float3(0.695452213,0.140678704,0.163869068), r9.xyz);
@@ -1200,6 +1207,8 @@ void main(
           r0.w = log2(r0.w);
           r0.w = r3.w ? -13.2877121 : r0.w;
           r3.w = cmp(-12.7838678 >= r0.w);
+                    
+
           if (r3.w != 0) {
             r3.w = -2.30102992;
           } else {
@@ -1416,9 +1425,10 @@ void main(
       }
     }
   }
+    //o0.xyz = r2.xyz; //maybe no tonemapper with color correction?
+    //return; //added 
   o0.xyz = float3(0.952381015,0.952381015,0.952381015) * r2.xyz;
-  //o0.xyz = float3(0.952381015,0.952381015,0.952381015) * r2.xyz;
-  //o0.xyz = float3(1,1,1) ;
+    
   o0.w = 0;
   
   
