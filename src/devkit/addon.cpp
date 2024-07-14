@@ -123,7 +123,7 @@ std::vector<uint32_t> trace_shader_hashes;
 std::vector<uint64_t> trace_pipeline_handles;
 std::vector<InstructionState> instructions;
 
-constexpr uint32_t MAX_SHADER_DEFINES = 3;
+constexpr uint32_t MAX_SHADER_DEFINES = 4;
 
 // Settings
 bool auto_dump = false;
