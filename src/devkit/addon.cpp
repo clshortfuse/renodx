@@ -274,7 +274,7 @@ void DestroyPipelineSubojects(reshade::api::pipeline_subobject* subojects, uint3
 void ClearCustomShader(uint32_t shader_hash) {
   const std::lock_guard<std::recursive_mutex> lock(s_mutex_loading);
   auto custom_shader = custom_shaders_cache.find(shader_hash);
-  if (custom_shader != custom_shaders_cache.end()) {
+  if (custom_shader != custom_shaders_cache.end() && custom_shader->second != nullptr) {
     custom_shader->second->code.clear();
     custom_shader->second->is_hlsl = false;
     custom_shader->second->file_path.clear();
@@ -472,7 +472,7 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
     auto custom_shader = custom_shaders_cache[shader_hash];
 
     // Skip shaders that don't have code binaries at the moment
-    if (custom_shader->code.empty()) continue;
+    if (custom_shader == nullptr || custom_shader->code.empty()) continue;
 
     auto pipelines_pair = pipeline_caches_by_shader_hash.find(shader_hash);
     if (pipelines_pair == pipeline_caches_by_shader_hash.end()) {
