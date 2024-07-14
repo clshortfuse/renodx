@@ -132,6 +132,12 @@ void main(
     r2.xyz = log2(r2.xyz);
     r2.xyz = r3.xyz * r2.xyz;
     r2.xyz = exp2(r2.xyz);
+  
+  // purple sword
+  //r2.xyz = sign(r2.xyz) * pow(r2.xyz, 1 / 2.4);
+  //o0.xyz = r2.xyz;
+  //return;
+  
     r3.xyz = r5.xyz * r5.www;
     r4.xyz = r6.xyz + r6.www;
     r2.xyz = r2.xyz * r3.xyz + r4.xyz;
@@ -172,8 +178,9 @@ void main(
     r1.x = dot(float3(1.70505154, -0.621790707, -0.0832583979), r0.xyz);
     r1.y = dot(float3(-0.130257145, 1.14080286, -0.0105485283), r0.xyz);
     r1.z = dot(float3(-0.0240032747, -0.128968775, 1.15297174), r0.xyz);
+    
     if (cb0[44].y != 0)
-    {
+    { // not needed, "else" is chosen
         r2.x = dot(r1.xyz, cb0[28].xyz);
         r2.y = dot(r1.xyz, cb0[29].xyz);
         r2.z = dot(r1.xyz, cb0[30].xyz);
@@ -201,14 +208,40 @@ void main(
     }
     else
     {
+	// main lut stuff
+	
+	// if uncommented, makes the sword purple (applies no lut/color correction)
+	//r0.xyz = sign(r0.xyz) * pow(r0.xyz, 1 / 2.4);
+	//o0.xyz = r0.xyz;
+	//return;
+	// ---
+	
+	// makes sword white instead of purple (first color correction)
         r3.x = dot(float3(0.938639402, 1.02359565e-10, 0.0613606237), r0.xyz);
         r3.y = dot(float3(8.36008554e-11, 0.830794156, 0.169205874), r0.xyz);
         r3.z = dot(float3(2.13187367e-12, -5.63307213e-12, 1), r0.xyz);
+        
+	
+	// early return
+	//r3.xyz = sign(r3.xyz) * pow(r3.xyz, 1 / 2.4);
+	//o0.xyz = r3.xyz;
+	//return;
+	// ---
+	
         r3.xyz = r3.xyz + -r0.xyz;
         r0.xyz = cb0[66].xxx * r3.xyz + r0.xyz;
+	
+	// desaturates the yellow tones
         r3.y = dot(float3(0.695452213, 0.140678704, 0.163869068), r0.xyz);
         r3.z = dot(float3(0.0447945632, 0.859671116, 0.0955343172), r0.xyz);
         r3.w = dot(float3(-0.00552588236, 0.00402521016, 1.00150073), r0.xyz);
+	
+	// early return
+    //    r3.xyz = sign(r3.yzw) * pow(r3.yzw, 1 / 2.4);
+    //    o0.xyz = r3.xyz;
+    //    return;
+	// ---
+	
         r0.w = min(r3.y, r3.z);
         r0.w = min(r0.w, r3.w);
         r1.w = max(r3.y, r3.z);
@@ -301,6 +334,7 @@ void main(
         r3.z = dot(float3(0.00831614807, -0.00603244966, 0.997716308), r4.xzw);
         r3.xyz = max(float3(0, 0, 0), r3.xyz);
         r0.w = dot(r3.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
+        
         r3.xyz = r3.xyz + -r0.www;
         r3.xyz = r3.xyz * float3(0.959999979, 0.959999979, 0.959999979) + r0.www;
         r4.xy = float2(1, 0.180000007) + cb0[36].ww;
@@ -369,11 +403,14 @@ void main(
         r3.x = dot(float3(1.06537485, 1.44678506e-06, -0.0653710067), r0.xyz);
         r3.y = dot(float3(-3.45525592e-07, 1.20366347, -0.203667715), r0.xyz);
         r3.z = dot(float3(1.9865448e-08, 2.12079581e-08, 0.999999583), r0.xyz);
+        
         r3.xyz = r3.xyz + -r0.xyz;
         r0.xyz = cb0[66].xxx * r3.xyz + r0.xyz;
         r3.x = dot(float3(1.70505154, -0.621790707, -0.0832583979), r0.xyz);
         r3.y = dot(float3(-0.130257145, 1.14080286, -0.0105485283), r0.xyz);
         r3.z = dot(float3(-0.0240032747, -0.128968775, 1.15297174), r0.xyz);
+	
+	// final with lut/color correction
         r2.xyz = max(float3(0, 0, 0), r3.xyz);
     }
     r0.xyz = r2.xyz * r2.xyz;
@@ -384,21 +421,18 @@ void main(
     r0.xyz = -r0.xyz * cb0[42].yzw + cb0[43].xyz;
     r0.xyz = cb0[43].www * r0.xyz + r2.xyz;
     r2.xyz = max(float3(0, 0, 0), r0.xyz);
-    r2.xyz = log2(r2.xyz);
-    r2.xyz = cb0[27].yyy * r2.xyz;
-    r3.xyz = exp2(r2.xyz);
+  //r2.xyz = log2(r2.xyz);
+  //r2.xyz = cb0[27].yyy * r2.xyz;
     if (cb0[65].z == 0)
     {
-        r4.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r3.xyz;
-        r5.xyz = cmp(r3.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994)); //sRGB?
-        r2.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r2.xyz; //2.4 gamma
-        r2.xyz = exp2(r2.xyz); //2.4 gamma
-        r2.xyz = r2.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
-        r2.xyz = r5.xyz ? r2.xyz : r4.xyz;
+    //r2.xyz = float3(0.416666657,0.416666657,0.416666657) * r2.xyz; // main color correction
+    //r2.xyz = exp2(r2.xyz);
+        r2.xyz = sign(r2.xyz) * pow(r2.xyz, 1 / 2.4); //2.4 gamma
+        r2.xyz = r2.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997); // slightly touches shadows
         o0.xyz = r2.xyz;
         return;
     }
-    o0.xyz = float3(0.952381015, 0.952381015, 0.952381015) * r2.xyz;
+  //o0.xyz = float3(0.952381015,0.952381015,0.952381015) * r2.xyz;
     o0.w = 0;
     return;
 }
