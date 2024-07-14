@@ -74,7 +74,7 @@ cbuffer cb0 : register(b0)
     r1.xyz = r2.xyz * r1.xyz;
     r0.yzw = r0.yzw * cb0[60].xyz + r1.xyz; 
     
-    
+ 
     r0.yzw = v1.xxx * r0.yzw; //auto exposure?
     r1.xy = cb0[62].xx * v1.yz;
     r1.x = dot(r1.xy, r1.xy);
