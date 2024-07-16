@@ -118,6 +118,7 @@ void main(
   r4.xyz = r4.xyz + r4.xyz;
   r3.xyz = -r4.xyz * r3.xyz + float3(1,1,1);
   r1.xyz = r1.xyz ? r3.xyz : r2.xyz; //test unclamp
+    r0.xyz = r0.xyz; //unclamps shop
   r1.xyz = float3(1,1,1) + -r1.xyz;
   r2.xyz = -cb3[6].xyz + cb3[5].xyz;
   r0.yzw = r0.yyy * r2.xyz + cb3[6].xyz;
@@ -134,7 +135,7 @@ void main(
  //   o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear
 
     
- //   o0.xyz *= injectedData.toneMapGameNits / 80.f; //paper white
+    o0.xyz *= injectedData.toneMapGameNits / 80.f; //paper white
   
   return;
 }

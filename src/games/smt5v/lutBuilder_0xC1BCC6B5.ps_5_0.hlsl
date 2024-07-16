@@ -109,7 +109,7 @@ void main(
     r3.xyz = r5.xyz + r5.www;
     r1.xyz = r1.xyz * r2.xyz + r3.xyz;
     r1.w = 1 / cb0[65].x;
-    r1.w = saturate(r1.w * r0.w);
+    r1.w = saturate(r1.w * r0.w); //removed saturate
     r2.x = r1.w * -2 + 3;
     r1.w = r1.w * r1.w;
     r1.w = -r2.x * r1.w + 1;
@@ -144,7 +144,7 @@ void main(
     r2.w = 1 + -cb0[65].y;
     r3.x = -cb0[65].y + r0.w;
     r2.w = 1 / r2.w;
-    r2.w = saturate(r3.x * r2.w);
+    r2.w = saturate(r3.x * r2.w); //removed saturate
     r3.x = r2.w * -2 + 3;
     r2.w = r2.w * r2.w;
     r3.y = r3.x * r2.w;
@@ -242,11 +242,11 @@ void main(
     //    return;
 	// ---
 	
-        r0.w = min(r3.y, r3.z);
-        r0.w = min(r0.w, r3.w);
-        r1.w = max(r3.y, r3.z);
-        r1.w = max(r1.w, r3.w);
-        r4.xy = max(float2(1.00000001e-10, 0.00999999978), r1.ww);
+       r0.w = min(r3.y, r3.z);
+       r0.w = min(r0.w, r3.w);
+       r1.w = max(r3.y, r3.z);
+       r1.w = max(r1.w, r3.w);
+       r4.xy = max(float2(1.00000001e-10, 0.00999999978), r1.ww);
         r0.w = max(1.00000001e-10, r0.w);
         r0.w = r4.x + -r0.w;
         r0.w = r0.w / r4.y;

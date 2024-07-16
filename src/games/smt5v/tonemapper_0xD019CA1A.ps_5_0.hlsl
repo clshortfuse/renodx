@@ -113,7 +113,7 @@ void main(
     r0.z = -r0.z * cb0[38].w + 1;
     r0.y = -cb4[3].x + r0.y;
     r0.w = cb4[3].y + -cb4[3].x;
-    r0.y = saturate(r0.y / r0.w); 
+    r0.y = saturate(r0.y / r0.w);
     r2.xyz = float3(-0.5, -0.5, -0.5) + r3.xyz;
     r2.xyz = cb4[2].xxx * r2.xyz;
     r2.xyz = r0.yyy * r2.xyz + float3(0.5, 0.5, 0.5);
@@ -180,8 +180,8 @@ void main(
     
     //o0.xyz = renodx::color::correct::GammaSafe(o0.xyz);
     
-          
-    o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear to 2.2
+      
+    //o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear to 2.2
     
     
     //o0.rgb = renodx::color::bt709::from::SRGB(r0.rgb);
