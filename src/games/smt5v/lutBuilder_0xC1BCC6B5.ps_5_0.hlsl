@@ -63,6 +63,7 @@ void main(
     r1.xyz = exp2(r1.xyz);
     r1.xyz = r1.xyz * float3(0.180000007, 0.180000007, 0.180000007) + float3(-0.00266771927, -0.00266771927, -0.00266771927);
     r0.xyz = r0.zzz ? r0.xyw : r1.xyz;
+    //ACES sRGB_2_AP1 [ https://github.com/Unity-Technologies/PostProcessing/blob/v2/PostProcessing/Shaders/ACES.hlsl ]
     r1.x = dot(float3(0.613191485, 0.33951208, 0.0473663323), r0.xyz);
     r1.y = dot(float3(0.0702069029, 0.916335821, 0.0134500116), r0.xyz);
     r1.z = dot(float3(0.0206188709, 0.109567292, 0.869606733), r0.xyz);
@@ -175,6 +176,7 @@ void main(
     r0.xyz = r0.xyz * r0.www;
     r0.xyz = r1.xyz * r1.www + r0.xyz;
     r0.xyz = r2.xyz * r3.yyy + r0.xyz;
+    // ACES AP1_2_sRGB [ https://github.com/Unity-Technologies/PostProcessing/blob/v2/PostProcessing/Shaders/ACES.hlsl ]
     r1.x = dot(float3(1.70505154, -0.621790707, -0.0832583979), r0.xyz);
     r1.y = dot(float3(-0.130257145, 1.14080286, -0.0105485283), r0.xyz);
     r1.z = dot(float3(-0.0240032747, -0.128968775, 1.15297174), r0.xyz);
@@ -217,6 +219,7 @@ void main(
 	// ---
 	
 	// makes sword white instead of purple (first color correction)
+        // ACES ODT_SAT_FACTOR? 
         r3.x = dot(float3(0.938639402, 1.02359565e-10, 0.0613606237), r0.xyz);
         r3.y = dot(float3(8.36008554e-11, 0.830794156, 0.169205874), r0.xyz);
         r3.z = dot(float3(2.13187367e-12, -5.63307213e-12, 1), r0.xyz);
@@ -232,6 +235,7 @@ void main(
         r0.xyz = cb0[66].xxx * r3.xyz + r0.xyz;
 	
 	// desaturates the yellow tones
+    // ACES AP1_2_AP0_MAT [ https://github.com/Unity-Technologies/PostProcessing/blob/v2/PostProcessing/Shaders/ACES.hlsl ]
         r3.y = dot(float3(0.695452213, 0.140678704, 0.163869068), r0.xyz);
         r3.z = dot(float3(0.0447945632, 0.859671116, 0.0955343172), r0.xyz);
         r3.w = dot(float3(-0.00552588236, 0.00402521016, 1.00150073), r0.xyz);
@@ -329,6 +333,7 @@ void main(
         r1.w = -r3.y * r1.w + 0.0299999993;
         r0.w = r1.w * r0.w;
         r4.x = r0.w * 0.180000007 + r4.y;
+        //ACES AP0_2_AP1_MAT [ https://github.com/Unity-Technologies/PostProcessing/blob/v2/PostProcessing/Shaders/ACES.hlsl ]
         r3.x = dot(float3(1.45143926, -0.236510754, -0.214928567), r4.xzw);
         r3.y = dot(float3(-0.0765537769, 1.17622972, -0.0996759236), r4.xzw);
         r3.z = dot(float3(0.00831614807, -0.00603244966, 0.997716308), r4.xzw);
@@ -406,6 +411,7 @@ void main(
         
         r3.xyz = r3.xyz + -r0.xyz;
         r0.xyz = cb0[66].xxx * r3.xyz + r0.xyz;
+        //ACES AP0_2_sRGB [ https://github.com/Unity-Technologies/PostProcessing/blob/v2/PostProcessing/Shaders/ACES.hlsl ]
         r3.x = dot(float3(1.70505154, -0.621790707, -0.0832583979), r0.xyz);
         r3.y = dot(float3(-0.130257145, 1.14080286, -0.0105485283), r0.xyz);
         r3.z = dot(float3(-0.0240032747, -0.128968775, 1.15297174), r0.xyz);
