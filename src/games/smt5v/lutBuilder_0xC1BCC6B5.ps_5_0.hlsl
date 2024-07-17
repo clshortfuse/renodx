@@ -49,9 +49,9 @@ void main(
     r2.z = log2(r1.z);
     r0.xyw = float3(0.0126833133, 0.0126833133, 0.0126833133) * r2.xyz;
     r0.xyw = exp2(r0.xyw);
-    r2.xyz = float3(-0.8359375, -0.8359375, -0.8359375) + r0.xyw;
+    r2.xyz = float3(-0.8359375, -0.8359375, -0.8359375) + r0.xyw; //static const float pq_c1 = 0.8359375;  3424.0 / 4096.0 or pq_c3 - pq_c2 + 1.0; [ ACES.ush ]
     r2.xyz = max(float3(0, 0, 0), r2.xyz);
-    r0.xyw = -r0.xyw * float3(18.6875, 18.6875, 18.6875) + float3(18.8515625, 18.8515625, 18.8515625);
+    r0.xyw = -r0.xyw * float3(18.6875, 18.6875, 18.6875) + float3(18.8515625, 18.8515625, 18.8515625); // static const float pq_c3 = 18.6875; // ( 2392.0 / 4096.0 ) * 32.0; -- static const float pq_c2 = 18.8515625; // ( 2413.0 / 4096.0 ) * 32.0; [ ACES.ush ]
     r0.xyw = r2.xyz / r0.xyw;
     r0.xyw = log2(r0.xyw);
     r0.xyw = float3(6.27739477, 6.27739477, 6.27739477) * r0.xyw;
@@ -63,6 +63,7 @@ void main(
     r1.xyz = exp2(r1.xyz);
     r1.xyz = r1.xyz * float3(0.180000007, 0.180000007, 0.180000007) + float3(-0.00266771927, -0.00266771927, -0.00266771927);
     r0.xyz = r0.zzz ? r0.xyw : r1.xyz;
+
     //ACES sRGB_2_AP1 [ https://github.com/Unity-Technologies/PostProcessing/blob/v2/PostProcessing/Shaders/ACES.hlsl ]
     r1.x = dot(float3(0.613191485, 0.33951208, 0.0473663323), r0.xyz);
     r1.y = dot(float3(0.0702069029, 0.916335821, 0.0134500116), r0.xyz);
@@ -402,6 +403,7 @@ void main(
         r4.xyz = r4.xyz * r5.xyz;
         r3.xyz = r3.xyz + -r7.xyz;
         r3.xyz = r4.xyz * r3.xyz + r7.xyz;
+        // static const float3 AP1_RGB2Y -- [ ACES.ush]
         r0.w = dot(r3.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
         r3.xyz = r3.xyz + -r0.www;
         r3.xyz = r3.xyz * float3(0.930000007, 0.930000007, 0.930000007) + r0.www;
