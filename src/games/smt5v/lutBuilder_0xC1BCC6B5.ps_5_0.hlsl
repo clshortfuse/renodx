@@ -67,6 +67,7 @@ void main(
     r1.x = dot(float3(0.613191485, 0.33951208, 0.0473663323), r0.xyz);
     r1.y = dot(float3(0.0702069029, 0.916335821, 0.0134500116), r0.xyz);
     r1.z = dot(float3(0.0206188709, 0.109567292, 0.869606733), r0.xyz);
+    // AP1_RGB2Y
     r0.x = dot(r1.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
     r0.yzw = r1.xyz / r0.xxx;
     r0.yzw = float3(-1, -1, -1) + r0.yzw;
@@ -85,6 +86,7 @@ void main(
     r0.yzw = r2.xyz + -r1.xyz;
     r0.xyz = r0.xxx * r0.yzw + r1.xyz;
     r0.xyz = cb0[44].yyy ? r1.xyz : r0.xyz;
+    // AP1_RGB2Y
     r0.w = dot(r0.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
     r1.xyzw = cb0[50].xyzw * cb0[45].xyzw;
     r2.xyzw = cb0[51].xyzw * cb0[46].xyzw;
@@ -338,6 +340,7 @@ void main(
         r3.y = dot(float3(-0.0765537769, 1.17622972, -0.0996759236), r4.xzw);
         r3.z = dot(float3(0.00831614807, -0.00603244966, 0.997716308), r4.xzw);
         r3.xyz = max(float3(0, 0, 0), r3.xyz);
+        // AP1_RGB2Y
         r0.w = dot(r3.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
         
         r3.xyz = r3.xyz + -r0.www;
