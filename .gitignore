@@ -36,3 +36,4 @@ build.ninja/**
 build32/**
 
 **/.vshistory/
+.cache/**
