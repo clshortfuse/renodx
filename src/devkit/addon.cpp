@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <cstdlib>
 #define ImTextureID ImU64
 
 #pragma comment(lib, "dxguid.lib")
@@ -149,7 +150,7 @@ bool auto_load = true;
 bool live_reload = false;
 bool trace_list_unique_shaders_only = false;
 bool trace_ignore_vertex_shaders = true;
-static const bool precompile_custom_shaders = true;
+const bool PRECOMPILE_CUSTOM_SHADERS = true;
 std::vector<std::string> shader_defines;
 
 bool trace_scheduled = false;
@@ -258,7 +259,7 @@ void DestroyPipelineSubojects(reshade::api::pipeline_subobject* subojects, uint3
         [[fallthrough]];
       case reshade::api::pipeline_subobject_type::pixel_shader: {
         auto* desc = static_cast<reshade::api::shader_desc*>(suboject.data);
-        delete desc->code;
+        free(const_cast<void*>(desc->code));
         desc->code = nullptr;
         break;
       }
@@ -266,10 +267,10 @@ void DestroyPipelineSubojects(reshade::api::pipeline_subobject* subojects, uint3
         break;
     }
 
-    delete suboject.data;
+    free(suboject.data);
     suboject.data = nullptr;
   }
-  delete[] subojects;  // NOLINT
+  delete[] subojects;
 }
 
 void ClearCustomShader(uint32_t shader_hash) {
@@ -290,8 +291,7 @@ void UnloadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = 
     if (cached_pipeline == nullptr || (!pipelines_filter.empty() && !pipelines_filter.contains(cached_pipeline->pipeline.handle))) continue;
 
     // In case this is a full "unload" of all shaders
-    if (pipelines_filter.empty())
-    {
+    if (pipelines_filter.empty()) {
       // Disable testing here, otherwise we might not always have a way to do it
       cached_pipeline->test = false;
 
@@ -402,8 +402,7 @@ void CompileCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter =
     auto& custom_shader = custom_shaders_cache[shader_hash];
     if (!has_custom_shader || custom_shader == nullptr) {
       custom_shader = new CachedCustomShader();
-    }
-    else {
+    } else {
       ClearCustomShader(shader_hash);
     }
     custom_shader->file_path = entry_path;
@@ -478,7 +477,7 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
   const std::lock_guard<std::recursive_mutex> lock_loading(s_mutex_loading);
   for (const auto& custom_shader_pair : custom_shaders_cache) {
     uint32_t shader_hash = custom_shader_pair.first;
-    auto custom_shader = custom_shaders_cache[shader_hash];
+    auto* custom_shader = custom_shaders_cache[shader_hash];
 
     // Skip shaders that don't have code binaries at the moment
     if (custom_shader == nullptr || custom_shader->code.empty()) continue;
@@ -528,9 +527,9 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
       reshade::log_message(reshade::log_level::debug, "Iterating pipeline...");
 
       for (uint32_t i = 0; i < subobject_count; ++i) {
-  #ifdef DEBUG_LEVEL_2
+#ifdef DEBUG_LEVEL_2
         reshade::log_message(reshade::log_level::debug, "Checking subobject...");
-  #endif
+#endif
         const auto& subobject = subobjects[i];
         switch (subobject.type) {
           case reshade::api::pipeline_subobject_type::vertex_shader:
@@ -542,7 +541,7 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
           default:
             continue;
         }
-  #if 0
+#if 0
         const reshade::api::shader_desc& desc = *static_cast<const reshade::api::shader_desc*>(subobject.data);
 
         if (desc.code_size == 0) {
@@ -557,7 +556,7 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
           reshade::log_message(reshade::log_level::warning, "");
           continue;
         }
-  #endif
+#endif
 
         auto& clone_subject = new_subobjects[i];
 
@@ -1071,8 +1070,9 @@ void OnInitPipeline(
               assert(previous_shader->size == new_desc->code_size);
               shader_cache_count--;
               shader_cache_size -= previous_shader->size;
-              delete previous_shader->data;
-              delete previous_shader;
+              free(previous_shader->data);
+              free(previous_shader);
+              previous_shader = nullptr;
             }
 
             // Cache shader
@@ -1096,7 +1096,7 @@ void OnInitPipeline(
           if (pipelines_pair != pipeline_caches_by_shader_hash.end()) {
             pipelines_pair->second.emplace(cached_pipeline);
           } else {
-            pipeline_caches_by_shader_hash[shader_hash] = { cached_pipeline };
+            pipeline_caches_by_shader_hash[shader_hash] = {cached_pipeline};
           }
           found_replaceable_shader = true;
           {
@@ -1140,11 +1140,11 @@ void OnInitPipeline(
     const std::lock_guard<std::recursive_mutex> lock_loading(s_mutex_loading);
     // Immediately cloning and replacing the pipeline might be unsafe, we need to delay it to the next frame.
     pipelines_to_reload.emplace(pipeline.handle);
-    if (precompile_custom_shaders) {
+    if (PRECOMPILE_CUSTOM_SHADERS) {
       // If done with the "immediate" flag, this is unsafe, it hangs the game (even if it seems like it should be safe given it doesn't do anything other than create a cloned pipeline without binding it yet).
       // If done without the "immediate" flag, this will cause a hitch due to shader compilation (unless precompile_custom_shaders is true), and still start drawing one frame after, so it's better to rely on the "AutoLoadShaders()" function.
       const bool immediate = true;
-      LoadCustomShaders(pipelines_to_reload, !precompile_custom_shaders, immediate);
+      LoadCustomShaders(pipelines_to_reload, !PRECOMPILE_CUSTOM_SHADERS, immediate);
       pipelines_to_reload.clear();
     }
   }
@@ -1216,7 +1216,7 @@ void OnBindPipeline(
         break;
       default:
       case reshade::api::pipeline_stage::input_assembler:
-      case reshade::api::pipeline_stage::output_merger: {
+      case reshade::api::pipeline_stage::output_merger:   {
         std::stringstream s;
         s << "bind_pipeline(" << reinterpret_cast<void*>(pipeline.handle);
         s << ", stages: " << stages << " (" << std::hex << static_cast<uint32_t>(stages) << std::dec << ")";
@@ -1237,8 +1237,7 @@ void OnBindPipeline(
     // This will make the shader output black, or skip drawing, so we can easily detect it. This might not be very safe but seems to work in DX11.
     // TODO: replace the pipeline with a shader that outputs all "SV_Target" as purple for more visiblity
     cmd_list->bind_pipeline(stages, reshade::api::pipeline{0});
-  }
-  else if (cached_pipeline->cloned && cached_pipeline->ready_for_binding) {
+  } else if (cached_pipeline->cloned && cached_pipeline->ready_for_binding) {
     if (trace_running) {
       std::stringstream s;
       s << "bind_pipeline(swapping pipeline " << reinterpret_cast<void*>(pipeline.handle);
@@ -2135,7 +2134,7 @@ void OnReshadePresent(reshade::api::effect_runtime* runtime) {
 
   if (needs_unload_shaders) {
     UnloadCustomShaders();
-#if 1 // Optionally unload all custom shaders data
+#if 1  // Optionally unload all custom shaders data
     const std::lock_guard<std::recursive_mutex> lock(s_mutex_loading);
     custom_shaders_cache.clear();
 #endif
@@ -2185,30 +2184,30 @@ void DumpShader(uint32_t shader_hash, bool auto_detect_type = true) {
     if (cached_shader->type == reshade::api::pipeline_subobject_type::vertex_shader
         || cached_shader->type == reshade::api::pipeline_subobject_type::pixel_shader
         || cached_shader->type == reshade::api::pipeline_subobject_type::compute_shader) {
-      static const std::string template_vertex_shader_name = "vs_";
-      static const std::string template_pixel_shader_name = "ps_";
-      static const std::string template_compute_shader_name = "cs_";
-      static const std::string template_shader_full_name = "x_x";
+      static const std::string TEMPLATE_VERTEX_SHADER_NAME = "vs_";
+      static const std::string TEMPLATE_PIXEL_SHADER_NAME = "ps_";
+      static const std::string TEMPLATE_COMPUTE_SHADER_NAME = "cs_";
+      static const std::string TEMPLATE_SHADER_FULL_NAME = "x_x";
 
       std::string_view template_shader_name;
       switch (cached_shader->type) {
         case reshade::api::pipeline_subobject_type::vertex_shader: {
-          template_shader_name = template_vertex_shader_name;
+          template_shader_name = TEMPLATE_VERTEX_SHADER_NAME;
           break;
         }
         default:
         case reshade::api::pipeline_subobject_type::pixel_shader: {
-          template_shader_name = template_pixel_shader_name;
+          template_shader_name = TEMPLATE_PIXEL_SHADER_NAME;
           break;
         }
         case reshade::api::pipeline_subobject_type::compute_shader: {
-          template_shader_name = template_compute_shader_name;
+          template_shader_name = TEMPLATE_COMPUTE_SHADER_NAME;
           break;
         }
       }
       const auto type_index = cached_shader->disasm.find(template_shader_name);
       if (type_index != std::string::npos) {
-        const std::string type = cached_shader->disasm.substr(type_index, template_shader_name.length() + template_shader_full_name.length());
+        const std::string type = cached_shader->disasm.substr(type_index, template_shader_name.length() + TEMPLATE_SHADER_FULL_NAME.length());
         dump_path += ".";
         dump_path += type;
       }
@@ -2259,7 +2258,7 @@ void AutoLoadShaders() {
     pipelines_to_reload_copy = pipelines_to_reload;
     pipelines_to_reload.clear();
   }
-  LoadCustomShaders(pipelines_to_reload_copy, !precompile_custom_shaders);
+  LoadCustomShaders(pipelines_to_reload_copy, !PRECOMPILE_CUSTOM_SHADERS);
   thread_auto_loading_running = false;
 }
 
@@ -2362,7 +2361,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
               auto text_color = IM_COL32(255, 255, 255, 255);
 
               if (is_valid) {
-                const auto pipeline = pipeline_pair->second;
+                const auto* pipeline = pipeline_pair->second;
 
                 name << std::setfill('0') << std::setw(3) << index << std::setw(0);
                 for (auto shader_hash : pipeline->shader_hashes) {
@@ -2371,14 +2370,13 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
                 // Pick the default color by shader type
                 if (pipeline->HasVertexShader()) {
-                  text_color = IM_COL32(255, 255, 0, 255); // Yellow
-                }
-                else if (pipeline->HasComputeShader()) {
-                  text_color = IM_COL32(128, 0, 128, 255); // Purple
+                  text_color = IM_COL32(255, 255, 0, 255);  // Yellow
+                } else if (pipeline->HasComputeShader()) {
+                  text_color = IM_COL32(128, 0, 128, 255);  // Purple
                 }
 
                 const std::lock_guard<std::recursive_mutex> lock_loading(s_mutex_loading);
-                const auto custom_shader = !pipeline->shader_hashes.empty() ? custom_shaders_cache[pipeline->shader_hashes[0]] : nullptr;
+                const auto* custom_shader = !pipeline->shader_hashes.empty() ? custom_shaders_cache[pipeline->shader_hashes[0]] : nullptr;
 
                 // Find if the shader has been modified
                 if (pipeline->cloned) {
@@ -2387,17 +2385,15 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
                     name << "* - ";
 
                     // TODO: add support for more name variations
-                    static const std::string full_template_name = "0x12345678.xx_x_x.hlsl";
-                    static const auto characters_to_remove_from_end = full_template_name.length();
+                    static const std::string FULL_TEMPLATE_NAME = "0x12345678.xx_x_x.hlsl";
+                    static const auto CHARACTERS_TO_REMOVE_FROM_END = FULL_TEMPLATE_NAME.length();
                     auto filename_string = custom_shader->file_path.filename().string();
-                    filename_string.erase(filename_string.length() - min(characters_to_remove_from_end, filename_string.length()));
-                    if (filename_string.ends_with("_"))
-                    {
+                    filename_string.erase(filename_string.length() - min(CHARACTERS_TO_REMOVE_FROM_END, filename_string.length()));
+                    if (filename_string.ends_with("_")) {
                       filename_string.erase(filename_string.length() - 1);
                     }
                     name << filename_string;
-                  }
-                  else {
+                  } else {
                     name << "*";
                   }
 
@@ -2445,7 +2441,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
               if (auto pipeline_pair = pipeline_cache_by_pipeline_handle.find(pipeline_handle); pipeline_pair != pipeline_cache_by_pipeline_handle.end() && pipeline_pair->second != nullptr) {
                 const std::lock_guard<std::recursive_mutex> lock_dumping(s_mutex_dumping);
                 auto* cache = (!pipeline_pair->second->shader_hashes.empty() && shader_cache.contains(pipeline_pair->second->shader_hashes[0])) ? shader_cache[pipeline_pair->second->shader_hashes[0]] : nullptr;
-                if (cache && cache->disasm.empty()) {
+                if ((cache != nullptr) && cache->disasm.empty()) {
                   auto disasm_code = renodx::utils::shader::compiler::DisassembleShader(cache->data, cache->size);
                   if (disasm_code.has_value()) {
                     cache->disasm.assign(disasm_code.value());
@@ -2485,10 +2481,9 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
               if (
                   auto pipeline_pair = pipeline_cache_by_pipeline_handle.find(pipeline_handle);
                   pipeline_pair != pipeline_cache_by_pipeline_handle.end() && pipeline_pair->second != nullptr) {
-
-                const auto pipeline = pipeline_pair->second;
+                const auto* pipeline = pipeline_pair->second;
                 const std::lock_guard<std::recursive_mutex> lock_loading(s_mutex_loading);
-                const auto custom_shader = !pipeline->shader_hashes.empty() ? custom_shaders_cache[pipeline->shader_hashes[0]] : nullptr;
+                const auto* custom_shader = !pipeline->shader_hashes.empty() ? custom_shaders_cache[pipeline->shader_hashes[0]] : nullptr;
                 // If the custom shader has a compilation error, print that, otherwise read the file text
                 if (custom_shader != nullptr && !custom_shader->compilation_error.empty()) {
                   hlsl_string = custom_shader->compilation_error;
@@ -2531,7 +2526,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
             }
             ImGui::EndTabItem();  // Live
           }
-          
+
           ImGui::PushID("##SettingsTabItem");
           const bool open_settings_tab_item = ImGui::BeginTabItem("Settings");
           ImGui::PopID();
@@ -2569,24 +2564,24 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 #endif
     if (ImGui::BeginTabItem("Shader Defines")) {
       // TODO: make this dynamic with + and - buttons
-      static std::string defines_titles[MAX_SHADER_DEFINES*2];
-      static char defines_text[MAX_SHADER_DEFINES*2][50];
+      static std::string defines_titles[MAX_SHADER_DEFINES * 2];
+      static char defines_text[MAX_SHADER_DEFINES * 2][50];
 
       for (int i = 0; i < (MAX_SHADER_DEFINES * 2) - 1; i += 2) {
         if (defines_titles[i].empty()) {
-          defines_titles[i] = "Define " + std::to_string(i/2) + " Name";
-          defines_titles[i+1] = "Define " + std::to_string(i/2) + " Value";
+          defines_titles[i] = "Define " + std::to_string(i / 2) + " Name";
+          defines_titles[i + 1] = "Define " + std::to_string(i / 2) + " Value";
         }
         // ImGUI doesn't work with std::string data, it seems to need c style char arrays.
         ImGui::PushID(defines_titles[i].data());
         ImGui::InputTextWithHint("", defines_titles[i].data(), &defines_text[i][0], IM_ARRAYSIZE(defines_text[i]), ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_AlwaysOverwrite);
         ImGui::PopID();
         ImGui::SameLine();
-        ImGui::PushID(defines_titles[i+1].data());
-        ImGui::InputTextWithHint("", defines_titles[i+1].data(), &defines_text[i+1][0], IM_ARRAYSIZE(defines_text[i+1]), ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_AlwaysOverwrite);
+        ImGui::PushID(defines_titles[i + 1].data());
+        ImGui::InputTextWithHint("", defines_titles[i + 1].data(), &defines_text[i + 1][0], IM_ARRAYSIZE(defines_text[i + 1]), ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_AlwaysOverwrite);
         ImGui::PopID();
         shader_defines[i] = &defines_text[i][0];
-        shader_defines[i+1] = &defines_text[i+1][0];
+        shader_defines[i + 1] = &defines_text[i + 1][0];
       }
 
       ImGui::EndTabItem();
@@ -2626,10 +2621,7 @@ void Init() {
 
   // Pre-load all shaders to minimize the wait before replacing them after they are found in game ("auto_load"),
   // and to fill the list of shaders we customized, so we can know which ones we need replace on the spot.
-  if (precompile_custom_shaders) {
-    if (thread_auto_loading.joinable()) {
-      thread_auto_loading.join();
-    }
+  if (PRECOMPILE_CUSTOM_SHADERS && !thread_auto_loading_running) {
     thread_auto_loading_running = true;
     static std::binary_semaphore async_shader_compilation_semaphore{0};
     thread_auto_loading = std::thread([] {
