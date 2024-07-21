@@ -134,11 +134,11 @@ void main(
     r2.xyz = -r4.xyz * r2.xyz + float3(1, 1, 1);
    
     
-    if (injectedData.toneMapType == 0.f)
-    {
-        r0.xyw = r3.xyz ? r2.xyz : r0.xyw; //removes 80 nit clamp
-    }
-    //r0.xyz = r0.xyz; //testing
+    //if (injectedData.toneMapType == 0.f)
+    //{
+    //    r0.xyw = r3.xyz ? r2.xyz : r0.xyw; //removes 80 nit clamp
+    //}
+    
     
     
     
@@ -174,9 +174,12 @@ void main(
     r1.xyz = cb4[1].xyz + -r0.xyz;
     r0.xyz = cb4[6].zzz * r1.xyz + r0.xyz;
     
-    o0.xyz = max(float3(0, 0, 0), r0.xyz); //709 clamp? / final brightness? [vanilla code]    
+    //o0.xyz = max(float3(0, 0, 0), r0.xyz); //709 clamp? / final brightness? [vanilla code]
+    o0.rgb = r0.xyz;
+    float3 untonemapped = r0.xyz;
+    
         
-    o0.w = 1;
+    
       
     
     //o0.xyz = renodx::color::correct::GammaSafe(o0.xyz);
@@ -187,7 +190,76 @@ void main(
     
     //o0.rgb = renodx::color::bt709::from::SRGB(r0.rgb);
     
-    o0.xyz *= injectedData.toneMapGameNits / 80.f; //paper white
+    //o0.xyz *= injectedData.toneMapGameNits / 80.f; //paper white
+    
+    
+    
+    
+    float3 outputColor = o0.rgb;
+    outputColor = max(0, outputColor);
+    if (injectedData.toneMapType == 0.f)
+    {
+               //outputColor = pow(outputColor, 2.2f);
+               // we handle paper white in the tonemapper_ shaders
+    }
+    else
+    {
+        outputColor = untonemapped;
+    }
+    //float vanillaMidGray = renodx::color::y::from::BT709(r1.xyz);
+    float vanillaMidGray = 0.18f;
+    float renoDRTContrast = 1.1f;
+    float renoDRTFlare = 0.f;
+    float renoDRTShadows = 1.f;
+    float renoDRTDechroma = 0.5f;
+    float renoDRTSaturation = 1.15f;
+    float renoDRTHighlights = 1.f;
+
+    renodx::tonemap::Config config = renodx::tonemap::config::Create(
+      injectedData.toneMapType,
+      injectedData.toneMapPeakNits,
+      injectedData.toneMapGameNits,
+      0,
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation,
+      vanillaMidGray,
+      vanillaMidGray * 100.f,
+      renoDRTHighlights,
+      renoDRTShadows,
+      renoDRTContrast,
+      renoDRTSaturation,
+      renoDRTDechroma,
+      renoDRTFlare);
+
+    outputColor = renodx::tonemap::config::Apply(outputColor, config);
+
+    outputColor *= injectedData.toneMapGameNits; // Scale by user nits
+
+   //o0.rgb = mul(renodx::color::BT709_TO_BT2020_MAT, o0.rgb);  // use bt2020
+   //o0.rgb /= 10000.f;                         // Scale for PQ
+   //o0.rgb = max(0, o0.rgb);                   // clamp out of gamut
+   //o0.rgb = renodx::color::pq::from::BT2020(o0.rgb);             // convert to PQ
+   //o0.rgb = min(1.f, o0.rgb);                 // clamp PQ (10K nits)
+   //outputColor.rgb = max(0, outputColor.rgb); //clamp 709
+   
+    
+    
+    //o0.xyz = renodx::color::correct::GammaSafe(o0.xyz);
+    
+   
+    
+    outputColor.rgb /= 80.f;
+
+    
+    o0.rgb = outputColor.rgb;
+    
+    o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear to 2.2
+    
+    o0.w = 1; //vanilla
+    
     
     return;
 }
