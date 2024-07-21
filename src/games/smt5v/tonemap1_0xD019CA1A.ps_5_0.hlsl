@@ -174,7 +174,7 @@ void main(
     r1.xyz = cb4[1].xyz + -r0.xyz;
     r0.xyz = cb4[6].zzz * r1.xyz + r0.xyz;
     
-    o0.xyz = max(float3(0, 0, 0), r0.xyz); //709 clamp? [vanilla code]    
+    o0.xyz = max(float3(0, 0, 0), r0.xyz); //709 clamp? / final brightness? [vanilla code]    
         
     o0.w = 1;
       

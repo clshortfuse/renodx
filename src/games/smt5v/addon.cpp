@@ -20,6 +20,8 @@
 #include <embed/0xC3126A03.h> //ui
 #include <embed/0x2FA199F2.h> //ui
 #include <embed/0x76B068AD.h> //ui
+#include <embed/0x3884890C.h> //ui -- Pause menu skills/items/essence/etc text
+#include <embed/0x27A2F211.h> //ui -- The background in the pause/load menus
 #include <embed/0xB86F8772.h> //ui -- Speach bubbles above npc's heads
 #include <embed/0x12E3927E.h> //ui -- dialog box
 #include <embed/0xBBA0606A.h> //rec709
@@ -56,6 +58,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomSwapchainShader(0xC3126A03),  // UI
     CustomSwapchainShader(0x2FA199F2),  // UI
     CustomSwapchainShader(0x76B068AD),  // UI
+    CustomSwapchainShader(0x3884890C),  // UI -- Pause menu skills/items/essence/etc text
+    CustomSwapchainShader(0x27A2F211),  // UI -- The background in the pause/load menus
     CustomSwapchainShader(0xB86F8772),  // UI -- Speach bubbles above npc's heads
     CustomSwapchainShader(0x12E3927E),  // UI -- Dialog box
     CustomShaderEntry(0xBBA0606A),       // 709??

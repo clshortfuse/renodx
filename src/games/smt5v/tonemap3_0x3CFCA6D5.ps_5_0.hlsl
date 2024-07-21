@@ -130,10 +130,10 @@ void main(
   r3.xyz = r3.xyz + r3.xyz;
   r2.xyz = -r3.xyz * r2.xyz + float3(1,1,1);
     //unclamp 80 nits
-    if (injectedData.toneMapType == 0.f)
-    {
-        r0.xyz = r1.xzw ? r2.xyz : r0.xyz; //unclamp
-    }
+   // if (injectedData.toneMapType == 0.f)
+   // {
+   //     r0.xyz = r1.xzw ? r2.xyz : r0.xyz; //unclamp
+   // }
   r1.xzw = float3(-1,-1,-1) + cb3[7].xyz;
   r1.xyz = r1.yyy * r1.xzw + float3(1,1,1);
   r2.xyz = r1.xyz * r0.xyz;

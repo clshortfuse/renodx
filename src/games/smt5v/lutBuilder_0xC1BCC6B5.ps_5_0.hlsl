@@ -1,4 +1,6 @@
 // ---- Created with 3Dmigoto v1.3.16 on Mon Jul  8 21:01:04 2024
+#include "./shared.h"
+
 cbuffer cb0 : register(b0)
 {
     float4 cb0[67];
@@ -249,11 +251,11 @@ void main(
     //    return;
 	// ---
 	
-       r0.w = min(r3.y, r3.z);
-       r0.w = min(r0.w, r3.w);
-       r1.w = max(r3.y, r3.z);
-       r1.w = max(r1.w, r3.w);
-       r4.xy = max(float2(1.00000001e-10, 0.00999999978), r1.ww);
+        r0.w = min(r3.y, r3.z);
+        r0.w = min(r0.w, r3.w);
+        r1.w = max(r3.y, r3.z);
+        r1.w = max(r1.w, r3.w);
+        r4.xy = max(float2(1.00000001e-10, 0.00999999978), r1.ww);
         r0.w = max(1.00000001e-10, r0.w);
         r0.w = r4.x + -r0.w;
         r0.w = r0.w / r4.y;
