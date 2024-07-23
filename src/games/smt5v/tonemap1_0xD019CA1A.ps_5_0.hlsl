@@ -236,7 +236,7 @@ void main(
 
     outputColor = renodx::tonemap::config::Apply(outputColor, config);
 
-    outputColor *= injectedData.toneMapGameNits; // Scale by user nits
+    
 
    //o0.rgb = mul(renodx::color::BT709_TO_BT2020_MAT, o0.rgb);  // use bt2020
    //o0.rgb /= 10000.f;                         // Scale for PQ
@@ -249,17 +249,20 @@ void main(
     
     //o0.xyz = renodx::color::correct::GammaSafe(o0.xyz);
     
-   
     
+    //o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear to 2.2
+    
+    outputColor.rgb = sign(outputColor.rgb) * pow(abs(outputColor.rgb), 2.2f); //linear to 2.2 with output color instead of o0.rgb
+    
+    outputColor *= injectedData.toneMapGameNits; // Scale by user nits
+        
     outputColor.rgb /= 80.f;
-
-    
+        
     o0.rgb = outputColor.rgb;
-    
-    o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear to 2.2
-    
+        
     o0.w = 1; //vanilla
     
+     
     
     return;
 }
