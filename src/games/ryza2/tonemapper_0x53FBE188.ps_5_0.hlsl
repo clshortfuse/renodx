@@ -71,59 +71,71 @@ void main(
 
     
     
-  r0.xyzw = smplScene_Tex.Sample(smplScene_s, v1.xy).xyzw;
-  r1.xy = smplScene_Tex.Sample(smplScene_s, v2.xy).xy;
-  r1.zw = smplScene_Tex.Sample(smplScene_s, v2.zw).xy;
-  r2.xy = smplScene_Tex.Sample(smplScene_s, v3.xy).xy;
-  r2.zw = smplScene_Tex.Sample(smplScene_s, v3.zw).xy;
-  r3.x = r0.y * 1.9632107 + r0.x;
-  r4.z = r1.y * 1.9632107 + r1.x;
-  r4.w = r1.w * 1.9632107 + r1.z;
-  r4.y = r2.y * 1.9632107 + r2.x;
-  r4.x = r2.w * 1.9632107 + r2.z;
-  r1.xy = min(r4.zy, r4.wx);
-  r1.x = min(r1.x, r1.y);
-  r1.x = min(r3.x, r1.x);
-  r1.yz = max(r4.zy, r4.wx);
-  r1.y = max(r1.y, r1.z);
-  r1.y = max(r3.x, r1.y);
-  r1.z = r1.y + -r1.x;
-  r1.w = fFXAAEdgeThreshold * r1.y;
-  r1.w = max(fFXAAEdgeThresholdMin, r1.w);
-  r1.z = cmp(r1.z < r1.w);
-  r2.xyzw = r4.yzzw + r4.xwyx;
-  r2.xy = r2.xz + -r2.yw;
-  r1.w = dot(r2.xy, r2.xy);
-  r1.w = max(1.00000001e-07, r1.w);
-  r1.w = sqrt(r1.w);
-  r2.xy = r2.xy / r1.ww;
-  r1.w = min(abs(r2.x), abs(r2.y));
-  r1.w = r1.w * fFXAAEdgeSharpness + 0.00100000005;
-  r2.zw = r2.xy / r1.ww;
-  r2.zw = max(-fFXAAPixelRange, r2.zw);
-  r2.zw = min(fFXAAPixelRange, r2.zw);
-  r3.xy = vRecipScreenSize.xy * fFXAAPixelRange;
-  r4.xy = vRecipScreenSize.zw * r2.xy;
-  r4.zw = r3.xy * r2.zw;
-  r2.xyzw = v1.xyxy + -r4.xyzw;
-  r3.xyzw = v1.xyxy + r4.xyzw;
-  r4.xyz = smplScene_Tex.Sample(smplScene_s, r2.xy).xyz;
-  r5.xyz = smplScene_Tex.Sample(smplScene_s, r3.xy).xyz;
-  r2.xyz = smplScene_Tex.Sample(smplScene_s, r2.zw).xyz;
-  r3.xyz = smplScene_Tex.Sample(smplScene_s, r3.zw).xyz;
-  if (r1.z == 0) {
-    r4.xyz = r5.xyz + r4.xyz;
-    r5.xyz = float3(0.5,0.5,0.5) * r4.xyz;
-    r2.xyz = r3.xyz + r2.xyz;
-    r2.xyz = float3(0.25,0.25,0.25) * r2.xyz;
-    r2.xyz = r4.xyz * float3(0.25,0.25,0.25) + r2.xyz;
-    r1.z = r2.y * 1.9632107 + r2.x;
-    r1.x = cmp(r1.z < r1.x);
-    r1.y = cmp(r1.y < r1.z);
-    r1.x = (int)r1.y | (int)r1.x;
-    r0.xyz = r1.xxx ? r5.xyz : r2.xyz;
-  }
+    
+      r0.xyzw = smplScene_Tex.Sample(smplScene_s, v1.xy).xyzw;
+    
+        if (injectedData.fxaa == 1){ //FXAA on/off
+        r1.xy = smplScene_Tex.Sample(smplScene_s, v2.xy).xy;
+        r1.zw = smplScene_Tex.Sample(smplScene_s, v2.zw).xy;
+        r2.xy = smplScene_Tex.Sample(smplScene_s, v3.xy).xy;
+        r2.zw = smplScene_Tex.Sample(smplScene_s, v3.zw).xy;
+        r3.x = r0.y * 1.9632107 + r0.x;
+        r4.z = r1.y * 1.9632107 + r1.x;
+        r4.w = r1.w * 1.9632107 + r1.z;
+        r4.y = r2.y * 1.9632107 + r2.x;
+        r4.x = r2.w * 1.9632107 + r2.z;
+        r1.xy = min(r4.zy, r4.wx);
+        r1.x = min(r1.x, r1.y);
+        r1.x = min(r3.x, r1.x);
+        r1.yz = max(r4.zy, r4.wx);
+        r1.y = max(r1.y, r1.z);
+        r1.y = max(r3.x, r1.y);
+        r1.z = r1.y + -r1.x;
+        r1.w = fFXAAEdgeThreshold * r1.y;
+        r1.w = max(fFXAAEdgeThresholdMin, r1.w);
+        r1.z = cmp(r1.z < r1.w);
+        r2.xyzw = r4.yzzw + r4.xwyx;
+        r2.xy = r2.xz + -r2.yw;
+        r1.w = dot(r2.xy, r2.xy);
+        r1.w = max(1.00000001e-07, r1.w);
+        r1.w = sqrt(r1.w);
+        r2.xy = r2.xy / r1.ww;
+        r1.w = min(abs(r2.x), abs(r2.y));
+        r1.w = r1.w * fFXAAEdgeSharpness + 0.00100000005;
+        r2.zw = r2.xy / r1.ww;
+        r2.zw = max(-fFXAAPixelRange, r2.zw);
+        r2.zw = min(fFXAAPixelRange, r2.zw);
+        r3.xy = vRecipScreenSize.xy * fFXAAPixelRange;
+        r4.xy = vRecipScreenSize.zw * r2.xy;
+        r4.zw = r3.xy * r2.zw;
+        r2.xyzw = v1.xyxy + -r4.xyzw;
+        r3.xyzw = v1.xyxy + r4.xyzw;
+
+    
+        r4.xyz = smplScene_Tex.Sample(smplScene_s, r2.xy).xyz;
+        r5.xyz = smplScene_Tex.Sample(smplScene_s, r3.xy).xyz;
+        r2.xyz = smplScene_Tex.Sample(smplScene_s, r2.zw).xyz;
+        r3.xyz = smplScene_Tex.Sample(smplScene_s, r3.zw).xyz;
+        if (r1.z == 0)
+        {
+            r4.xyz = r5.xyz + r4.xyz;
+            r5.xyz = float3(0.5, 0.5, 0.5) * r4.xyz;
+            r2.xyz = r3.xyz + r2.xyz;
+            r2.xyz = float3(0.25, 0.25, 0.25) * r2.xyz;
+            r2.xyz = r4.xyz * float3(0.25, 0.25, 0.25) + r2.xyz;
+            r1.z = r2.y * 1.9632107 + r2.x;
+            r1.x = cmp(r1.z < r1.x);
+            r1.y = cmp(r1.y < r1.z);
+            r1.x = (int) r1.y | (int) r1.x;
+            r0.xyz = r1.xxx ? r5.xyz : r2.xyz;
+        }
+  
+    } //FXAA slider end
+    
+    
+    //DOF Start
   r1.x = smplAdaptedLumCur_Tex.Sample(smplAdaptedLumCur_s, float2(0.25,0.5)).x;
+        
   r1.yzw = r1.xxx * r0.xyz;
   r2.x = smplDOFMerge_Tex.Sample(smplDOFMerge_s, v1.xy).w;
   r2.y = cmp(fKIDSDOFType == 0.000000);
@@ -191,17 +203,21 @@ void main(
       r2.yzw = r2.xxx * r0.xyz + r1.yzw;
     }
   }
-  if (injectedData.bloom == 1){
+  
+  if (injectedData.bloom == 1){ //Bloom on/off
       r0.xyz = smplBloom_Tex.Sample(smplBloom_s, v1.xy).xyz;
       r0.xyz = r0.xyz * fBloomWeight + r2.yzw;
   }
     
   r1.xyz = smplStar_Tex.Sample(smplStar_s, v1.xy).xyz;
   r0.xyz = r1.xyz * fStarWeight + r0.xyz;
+  
   r1.xyz = smplFlare_Tex.Sample(smplFlare_s, v1.xy).xyz;
   r0.xyz = r1.xyz * fLensFlareWeight + r0.xyz;
+  
   r1.xyz = smplLightShaftLinWork2_Tex.Sample(smplLightShaftLinWork2_s, v1.xy).xyz;
   r0.xyz = r1.xyz * vLightShaftPower.xyz + r0.xyz;
+  
   r1.xyz = vColorScale.xyz * r0.xyz;
   //r1.x = dot(r1.xyz, float3(0.298909992,0.586610019,0.114480004)); //rec601 og code
     r1.x = dot(r1.xyz, float3(0.2126390059f, 0.7151686788f, 0.0721923154f)); //Fixed to rec709

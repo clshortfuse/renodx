@@ -140,6 +140,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
+
     new renodx::utils::settings::Setting{
         .key = "bloom",
         .binding = &shader_injection.bloom,
@@ -151,6 +152,20 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Enable/Disable Bloom",
        
     },
+
+    new renodx::utils::settings::Setting{
+        .key = "fxaa",
+        .binding = &shader_injection.fxaa,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1,
+        .can_reset = false,
+        .label = "FXAA",
+        .section = "Effects",
+        .tooltip = "Enable/Disable FXAA",
+
+    },
+
+
 };
 
 void OnPresetOff() {
@@ -166,6 +181,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeBlowout", 80.f);
   //Start PostProcess effects on/off
   renodx::utils::settings::UpdateSetting("bloom", 1);
+  renodx::utils::settings::UpdateSetting("fxaa", 1);
 }
 
 }  // namespace
