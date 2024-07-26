@@ -191,8 +191,11 @@ void main(
       r2.yzw = r2.xxx * r0.xyz + r1.yzw;
     }
   }
-  r0.xyz = smplBloom_Tex.Sample(smplBloom_s, v1.xy).xyz;
-  r0.xyz = r0.xyz * fBloomWeight + r2.yzw;
+  if (injectedData.bloom == 1){
+      r0.xyz = smplBloom_Tex.Sample(smplBloom_s, v1.xy).xyz;
+      r0.xyz = r0.xyz * fBloomWeight + r2.yzw;
+  }
+    
   r1.xyz = smplStar_Tex.Sample(smplStar_s, v1.xy).xyz;
   r0.xyz = r1.xyz * fStarWeight + r0.xyz;
   r1.xyz = smplFlare_Tex.Sample(smplFlare_s, v1.xy).xyz;
@@ -200,7 +203,8 @@ void main(
   r1.xyz = smplLightShaftLinWork2_Tex.Sample(smplLightShaftLinWork2_s, v1.xy).xyz;
   r0.xyz = r1.xyz * vLightShaftPower.xyz + r0.xyz;
   r1.xyz = vColorScale.xyz * r0.xyz;
-  r1.x = dot(r1.xyz, float3(0.298909992,0.586610019,0.114480004)); //rec601
+  //r1.x = dot(r1.xyz, float3(0.298909992,0.586610019,0.114480004)); //rec601 og code
+    r1.x = dot(r1.xyz, float3(0.2126390059f, 0.7151686788f, 0.0721923154f)); //Fixed to rec709
   r0.xyz = r0.xyz * vColorScale.xyz + -r1.xxx;
   r0.xyz = vSaturationScale.xyz * r0.xyz + r1.xxx;
   r1.xy = v1.xy * vScreenSize.xy + -vSpotParams.xy;
@@ -219,10 +223,9 @@ void main(
   r1.xyz = fLimbDarkeningWeight * r1.xyz;
   
   
-    
+    float3 untonemapped = r0.xyz;
 
-  /*
-  //commenting per adrian's code from Ryza1
+ //Original Tonemapper Start
   r0.xyz = r0.xyz * r1.www + r1.xyz;
   r1.xyz = r0.xyz * float3(0.219999999,0.219999999,0.219999999) + float3(0.0299999993,0.0299999993,0.0299999993);
   r1.xyz = r0.xyz * r1.xyz + float3(0.00200000009,0.00200000009,0.00200000009);
@@ -234,28 +237,37 @@ void main(
   r0.xyz = log2(r0.xyz);
   r0.xyz = fGamma * r0.xyz;
   o0.xyz = exp2(r0.xyz);
-  */     
+  //Original tonemapper end
         
-
-        o0.xyz = r0.xyz; //Untonemapped final output
-    
- 
-    
+    float3 originalSDR = o0.xyz;
+    float3 outputColor;
+        
     
  
     //start custom tonemapper
-    float3 untonemapped = r0.xyz;
+    if (injectedData.toneMapType == 0.f)
+    {
+        originalSDR.rgb = renodx::color::correct::PowerGammaCorrect(originalSDR.rgb); //2.2 gamma correction
+        outputColor = originalSDR;
+    }
+    else
+    {
+        outputColor = untonemapped;
+        outputColor /= 1.717f; // makes untonemapped better match vanilla sdr mid-tones and shadows
+        
+    }
     
 
-    float3 outputColor = o0.rgb;
+    
     
     outputColor = max(0, outputColor);
     //float vanillaMidGray = renodx::color::y::from::BT709(r1.xyz);
     float vanillaMidGray = 0.18f;
-    float renoDRTContrast = 1.1f;
+    float renoDRTContrast = 1.f;
     float renoDRTFlare = 0.f;
     float renoDRTShadows = 1.f;
-    float renoDRTDechroma = 0.5f;
+    //float renoDRTDechroma = 0.8f;
+    float renoDRTDechroma = injectedData.colorGradeBlowout;
     float renoDRTSaturation = 1.15f;
     float renoDRTHighlights = 1.f;
 
@@ -282,7 +294,7 @@ void main(
     
     
     
-    //o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb); //2.2 gamma correction
+    
     
     outputColor *= injectedData.toneMapGameNits; // Scale by user nits
         
@@ -293,7 +305,7 @@ void main(
     //end custom tonemapper
 
   
-  o0.w = r0.w; //vanilla code
+    o0.w = r0.w; //vanilla code -- alpha; leaving for compat
     
     
   return;

@@ -129,14 +129,27 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
+
+     new renodx::utils::settings::Setting{
+        .key = "colorGradeBlowout",
+        .binding = &shader_injection.colorGradeBlowout,
+        .default_value = 80.f,
+        .label = "Blowout",
+        .section = "Color Grading",
+        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
     new renodx::utils::settings::Setting{
-        .key = "fxBloom",
-        .binding = &shader_injection.fxBloom,
-        .default_value = 50.f,
+        .key = "bloom",
+        .binding = &shader_injection.bloom,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1,
+        .can_reset = false,
         .label = "Bloom",
         .section = "Effects",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
+        .tooltip = "Enable/Disable Bloom",
+       
     },
 };
 
@@ -150,7 +163,9 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
+  renodx::utils::settings::UpdateSetting("colorGradeBlowout", 80.f);
+  //Start PostProcess effects on/off
+  renodx::utils::settings::UpdateSetting("bloom", 1);
 }
 
 }  // namespace
@@ -178,79 +193,20 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::b8g8r8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_float,
-    //      .index = 39,
-          //.ignore_size = true,
+    //   .index = 39,
+    //   .ignore_size = true,
       });
 
 
      // BGRA8_unorm
-     // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //   .old_format = reshade::api::format::b8g8r8a8_unorm,
-      //   .new_format = reshade::api::format::r16g16b16a16_float,
-       //  .index = 39,
-          //.ignore_size = true,
+    //  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+     //    .old_format = reshade::api::format::b8g8r8a8_unorm,
+     //    .new_format = reshade::api::format::r16g16b16a16_float,
+     //  .index = 39,
+     //.ignore_size = true,
     //  });
 
-      /*
-      // RGBA8_unorm
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          //.index = 0,
-          //.ignore_size = true,
 
-      });
-      */
-      /*
-      // render targets upgrade
-      // RGBA8_typeless
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_typeless,   
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          //.index = 0,
-          .ignore_size = true,
-      });
-      
-      // RGBA8_unorm_srgb
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm_srgb,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          //.index = 0,
-          .ignore_size = true,
-      });
-      
-      
-      
-      //RGB10A2_unorm
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r10g10b10a2_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .ignore_size = true,
-      });
-      
-      // R11G11B10_float
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r11g11b10_float,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          //.ignore_size = true,
-      });
-      */
-
-
-      /*
-
-      
-      
-       
-      // BGRA8_unorm_srgb
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::b8g8r8a8_unorm_srgb,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          //.index = 0,
-          .ignore_size = true,
-      });
-
-      */
 
       break;
     case DLL_PROCESS_DETACH:

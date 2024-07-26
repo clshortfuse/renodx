@@ -17,7 +17,8 @@ struct ShaderInjectData {
   float colorGradeShadows;
   float colorGradeContrast;
   float colorGradeSaturation;
-  float fxBloom;
+  float colorGradeBlowout;
+  float bloom;
 };
 
 #ifndef __cplusplus
