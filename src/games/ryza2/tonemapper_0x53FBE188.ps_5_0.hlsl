@@ -307,6 +307,12 @@ void main(
       renoDRTFlare);
 
     outputColor = renodx::tonemap::config::Apply(outputColor, config);
+ 
+    if (injectedData.toneMapHueCorrection)
+    {
+        float3 hueCorrected = renodx::color::correct::Hue(outputColor, originalSDR);
+        outputColor = lerp(outputColor, hueCorrected, injectedData.toneMapHueCorrection);
+    }
     
     outputColor *= injectedData.toneMapGameNits; // Scale by user nits
         
