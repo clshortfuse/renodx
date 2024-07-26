@@ -12,6 +12,7 @@
 #include <embed/0x3387BE75.h> //ui --portraits
 #include <embed/0xD9560318.h> //ui --npc chat bubbles
 #include <embed/0xCE8ED088.h> //ui -- cutscene static images
+#include <embed/0x5D15CFEE.h> //videos -- pre-renderd movies
 #include <embed/0x53FBE188.h> // tonemapper
 
 
@@ -34,7 +35,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x892226E0),  // UI -- Fixs artifacts in menus
     CustomShaderEntry(0x3387BE75),  // UI -- Portraits
     CustomShaderEntry(0xD9560318),  // UI -- NPC chat bubbles
-    CustomShaderEntry(0xCE8ED088), //UI -- cutscene static images
+    CustomShaderEntry(0xCE8ED088), // UI -- cutscene static images
+    CustomShaderEntry(0x5D15CFEE), // videos -- pre-rendered movies
     CustomShaderEntry(0x53FBE188)  // Tonemapper!!
 
 };
@@ -147,11 +149,12 @@ renodx::utils::settings::Settings settings = {
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
         .default_value = 1,
         .can_reset = false,
-        .label = "Bloom",
+        .label = "Bloom + DoF",
         .section = "Effects",
-        .tooltip = "Enable/Disable Bloom",
+        .tooltip = "Enable/Disable Bloom + Depth of Field",
        
     },
+
 
     new renodx::utils::settings::Setting{
         .key = "fxaa",
@@ -209,8 +212,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::b8g8r8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_float,
-    //   .index = 39,
-    //   .ignore_size = true,
+    //   .index = 39, //Maybe find the specific render target that uncaps the game one day, but not right now
+    //   .ignore_size = true, //Ignoring size allows you to uncap when the game runs in a sub-native resolution, but tons of artifacts are created
       });
 
 

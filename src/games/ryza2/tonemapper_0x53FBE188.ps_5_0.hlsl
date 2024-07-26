@@ -133,9 +133,7 @@ void main(
     } //FXAA slider end
     
     
-    //DOF Start
   r1.x = smplAdaptedLumCur_Tex.Sample(smplAdaptedLumCur_s, float2(0.25,0.5)).x;
-        
   r1.yzw = r1.xxx * r0.xyz;
   r2.x = smplDOFMerge_Tex.Sample(smplDOFMerge_s, v1.xy).w;
   r2.y = cmp(fKIDSDOFType == 0.000000);
@@ -199,10 +197,12 @@ void main(
       r2.x = saturate(fDistantBlurIntensity * r2.x);
       r2.x = sqrt(r2.x);
       r3.xyz = smplBlurFront_Tex.Sample(smplBlurFront_s, v1.xy).xyz;
-      r0.xyz = -r0.xyz * r1.xxx + r3.xyz;
+      r0.xyz = -r0.xyz * r1.xxx + r3.xyz;           
       r2.yzw = r2.xxx * r0.xyz + r1.yzw;
     }
   }
+
+ 
   
   if (injectedData.bloom == 1){ //Bloom on/off
       r0.xyz = smplBloom_Tex.Sample(smplBloom_s, v1.xy).xyz;
@@ -307,10 +307,6 @@ void main(
       renoDRTFlare);
 
     outputColor = renodx::tonemap::config::Apply(outputColor, config);
-    
-    
-    
-    
     
     outputColor *= injectedData.toneMapGameNits; // Scale by user nits
         
