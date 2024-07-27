@@ -13,6 +13,7 @@
 #include <embed/0xD9560318.h> //ui --npc chat bubbles
 #include <embed/0xCE8ED088.h> //ui -- cutscene static images
 #include <embed/0x5D15CFEE.h> //videos -- pre-renderd movies
+#include <embed/0x21E7062A.h> //combat artifacts
 #include <embed/0x53FBE188.h> // tonemapper
 
 
@@ -37,7 +38,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xD9560318),  // UI -- NPC chat bubbles
     CustomShaderEntry(0xCE8ED088), // UI -- cutscene static images
     CustomShaderEntry(0x5D15CFEE), // videos -- pre-rendered movies
+    CustomShaderEntry(0x21E7062A), // combat artifacts
     CustomShaderEntry(0x53FBE188)  // Tonemapper!!
+	
 
 };
 
@@ -135,7 +138,7 @@ renodx::utils::settings::Settings settings = {
      new renodx::utils::settings::Setting{
         .key = "colorGradeBlowout",
         .binding = &shader_injection.colorGradeBlowout,
-        .default_value = 80.f,
+        .default_value = 50.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
@@ -154,6 +157,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
 
+
+    new renodx::utils::settings::Setting{
+        .key = "blend",
+        .binding = &shader_injection.blend,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 0,
+        .can_reset = false,
+        .label = "Blend SDR/HDR",
+        .section = "Color Grading",
+        .tooltip = "Enable/Disable Blend",
+    },
 
     new renodx::utils::settings::Setting{
         .key = "bloom",
@@ -193,8 +207,9 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeBlowout", 80.f);
+  renodx::utils::settings::UpdateSetting("colorGradeBlowout", 50.f);
   renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 50.f);
+  renodx::utils::settings::UpdateSetting("blend", 0);
   //Start PostProcess effects on/off
   renodx::utils::settings::UpdateSetting("bloom", 1);
   renodx::utils::settings::UpdateSetting("fxaa", 1);

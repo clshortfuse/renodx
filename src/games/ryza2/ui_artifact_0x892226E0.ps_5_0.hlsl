@@ -30,6 +30,8 @@ void main(
   r1.xyzw = sEffect.Sample(__smpsEffect_s, r1.xy).xyzw; 
   r0.xyz = sScene.Load(r0.xyz).xyz;
   r0.xyz = r0.xyz * r1.www + r1.xyz;
+    
+  //tonemapping and 2.4 gamma below?
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r1.xyz = r0.xyz * float3(0.219999999,0.219999999,0.219999999) + float3(0.0299999993,0.0299999993,0.0299999993);
   r1.xyz = r0.xyz * r1.xyz + float3(0.00200000009,0.00200000009,0.00200000009);

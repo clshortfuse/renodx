@@ -237,12 +237,12 @@ void main(
   r1.xyz = r1.xzw * r1.yyy;
   r1.w = 1 + -fLimbDarkeningWeight;
   r1.xyz = fLimbDarkeningWeight * r1.xyz;
-  
-  
+  r0.xyz = r0.xyz * r1.www + r1.xyz;
+    
     float3 untonemapped = r0.xyz;
 
  //Original Tonemapper Start
-  r0.xyz = r0.xyz * r1.www + r1.xyz;
+
   r1.xyz = r0.xyz * float3(0.219999999,0.219999999,0.219999999) + float3(0.0299999993,0.0299999993,0.0299999993);
   r1.xyz = r0.xyz * r1.xyz + float3(0.00200000009,0.00200000009,0.00200000009);
   r2.xyz = r0.xyz * float3(0.219999999,0.219999999,0.219999999) + float3(0.300000012,0.300000012,0.300000012);
@@ -257,34 +257,42 @@ void main(
         
     float3 originalSDR = o0.xyz;
     float3 outputColor;
+    
+    originalSDR.rgb = renodx::color::correct::PowerGammaCorrect(originalSDR.rgb); //2.2 gamma correction for SDR; helps hue correction
         
     
  
     //start custom tonemapper
     if (injectedData.toneMapType == 0.f)
     {
-        originalSDR.rgb = renodx::color::correct::PowerGammaCorrect(originalSDR.rgb); //2.2 gamma correction
+        
         outputColor = originalSDR;
     }
     else
     {
+        if (injectedData.blend){ //added blend to fix colors up 
+            untonemapped.rgb = lerp(originalSDR.rgb * 1.717f, untonemapped.rgb, saturate(originalSDR.rgb * 1.717f));
+        }
         outputColor = untonemapped;
-        outputColor /= 1.717f; // makes untonemapped better match vanilla sdr mid-tones and shadows
+        //outputColor /= 1.717f; // makes untonemapped better match vanilla sdr mid-tones and shadows
         
     }
     
-
+    if (injectedData.toneMapType == 1.f)
+    {
+        outputColor /= 1.717f; // makes untonemapped better match vanilla sdr mid-tones and shadows
+    }
     
     
     outputColor = max(0, outputColor);
     //float vanillaMidGray = renodx::color::y::from::BT709(r1.xyz);
-    float vanillaMidGray = 0.18f;
+    float vanillaMidGray = 0.1f; //0.18f old default
     float renoDRTContrast = 1.f;
     float renoDRTFlare = 0.f;
     float renoDRTShadows = 1.f;
     //float renoDRTDechroma = 0.8f;
     float renoDRTDechroma = injectedData.colorGradeBlowout;
-    float renoDRTSaturation = 1.15f;
+    float renoDRTSaturation = 1.15; //
     float renoDRTHighlights = 1.f;
 
     renodx::tonemap::Config config = renodx::tonemap::config::Create(
@@ -307,6 +315,8 @@ void main(
       renoDRTFlare);
 
     outputColor = renodx::tonemap::config::Apply(outputColor, config);
+    
+   
  
     if (injectedData.toneMapHueCorrection)
     {
