@@ -21,6 +21,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <semaphore>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -140,7 +141,7 @@ std::vector<uint32_t> trace_shader_hashes;
 std::vector<uint64_t> trace_pipeline_handles;
 std::vector<InstructionState> instructions;
 
-constexpr uint32_t MAX_SHADER_DEFINES = 4;
+constexpr uint32_t MAX_SHADER_DEFINES = 10;
 
 // Settings
 bool auto_dump = true;
@@ -373,7 +374,12 @@ void CompileCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter =
     }
     // Any other case (non hlsl non cso) is already earlied out above
 
-    const uint32_t shader_hash = std::stoul(hash_string, nullptr, 16);
+    uint32_t shader_hash;
+    try {
+      shader_hash = std::stoul(hash_string, nullptr, 16);
+    } catch (const std::exception& e) {
+      continue;
+    }
 
     // Early out before compiling
     if (!pipelines_filter.empty()) {
@@ -392,8 +398,9 @@ void CompileCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter =
     }
 
     const std::lock_guard<std::recursive_mutex> lock(s_mutex_loading);
+    const bool has_custom_shader = custom_shaders_cache.find(shader_hash) != custom_shaders_cache.end();
     auto& custom_shader = custom_shaders_cache[shader_hash];
-    if (custom_shader == nullptr) {
+    if (!has_custom_shader || custom_shader == nullptr) {
       custom_shader = new CachedCustomShader();
     }
     else {
@@ -466,6 +473,8 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
   // Clear all previously loaded custom shaders
   UnloadCustomShaders(pipelines_filter, immediate_unload, false);
 
+  std::unordered_set<uint64_t> cloned_pipelines;
+
   const std::lock_guard<std::recursive_mutex> lock_loading(s_mutex_loading);
   for (const auto& custom_shader_pair : custom_shaders_cache) {
     uint32_t shader_hash = custom_shader_pair.first;
@@ -486,7 +495,10 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
 
     // Re-clone all the pipelines that used this shader hash (except the ones that are filtered out)
     for (CachedPipeline* cached_pipeline : pipelines_pair->second) {
+      if (cached_pipeline == nullptr) continue;
       if (!pipelines_filter.empty() && !pipelines_filter.contains(cached_pipeline->pipeline.handle)) continue;
+      if (cloned_pipelines.contains(cached_pipeline->pipeline.handle)) { assert(false); continue; }
+      cloned_pipelines.emplace(cached_pipeline->pipeline.handle);
       // Force destroy this pipeline in case it was already cloned
       UnloadCustomShaders({cached_pipeline->pipeline.handle}, immediate_unload, false);
 
@@ -889,7 +901,6 @@ void OnInitDevice(reshade::api::device* device) {
   s << ", api: " << device->get_api();
   s << ")";
   reshade::log_message(reshade::log_level::info, s.str().c_str());
-
   auto& data = device->create_private_data<DeviceData>();
   data.device_api = device->get_api();
 }
@@ -939,7 +950,6 @@ void OnInitPipelineLayout(
     reshade::api::pipeline_layout layout) {
   LogLayout(param_count, params, layout);
 
-  const bool found_visiblity = false;
   uint32_t cbv_index = 0;
   uint32_t pc_count = 0;
 
@@ -2588,6 +2598,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
 void Init() {
   // Add all the shaders we have already dumped to the dumped list to avoid live re-dumping them
+  dumped_shaders.clear();
   auto dump_path = GetShaderPath();
   if (std::filesystem::exists(dump_path)) {
     dump_path /= ".\\dump";
@@ -2600,29 +2611,40 @@ void Init() {
         const auto& entry_path_string = entry_path.filename().string();
         if (entry_path_string.starts_with("0x") && entry_path_string.length() > 2 + 8) {
           const std::string hash = entry_path_string.substr(2, 8);
-          dumped_shaders.emplace(std::stoul(hash, nullptr, 16));
+          try {
+            dumped_shaders.emplace(std::stoul(hash, nullptr, 16));
+          } catch (const std::exception& e) {
+            continue;
+          }
         }
       }
     }
   }
 
+  // Pre-allocate shader defines and cbuffers
+  shader_defines.assign(MAX_SHADER_DEFINES * 2, "");
+
   // Pre-load all shaders to minimize the wait before replacing them after they are found in game ("auto_load"),
   // and to fill the list of shaders we customized, so we can know which ones we need replace on the spot.
-  if (precompile_custom_shaders && !thread_auto_loading_running) {
+  if (precompile_custom_shaders) {
+    if (thread_auto_loading.joinable()) {
+      thread_auto_loading.join();
+    }
     thread_auto_loading_running = true;
-    thread_auto_loading = std::thread([]() {
-      // We need to lock this mutex for the whole async shader loading, so that if the game starts loading shaders, we can already see if we have a custom version and live load it ("live_load"), otherwise the "custom_shaders_cache" list would be incomplete
+    static std::binary_semaphore async_shader_compilation_semaphore{0};
+    thread_auto_loading = std::thread([] {
+      //  We need to lock this mutex for the whole async shader loading, so that if the game starts loading shaders, we can already see if we have a custom version and live load it ("live_load"), otherwise the "custom_shaders_cache" list would be incomplete
       const std::lock_guard<std::recursive_mutex> lock(s_mutex_loading);
+      // This is needed to make sure this thread locks "s_mutex_loading" before any other function could
+      async_shader_compilation_semaphore.release();
       CompileCustomShaders();
       thread_auto_loading_running = false;
     });
+    async_shader_compilation_semaphore.acquire();
   }
-
-  // Pre-allocate shader defines
-  shader_defines.assign(MAX_SHADER_DEFINES * 2, "");
 }
 
-void Unit() {
+void Uninit() {
   if (thread_auto_dumping.joinable()) {
     thread_auto_dumping.join();
   }
@@ -2638,6 +2660,14 @@ extern "C" __declspec(dllexport) const char* NAME = "RenoDX DevKit";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX DevKit Module";
 
 // NOLINTEND(readability-identifier-naming)
+
+extern "C" __declspec(dllexport) bool AddonInit(HMODULE addon_module, HMODULE reshade_module) {
+  Init();
+  return true;
+}
+extern "C" __declspec(dllexport) void AddonUninit(HMODULE addon_module, HMODULE reshade_module) {
+  Uninit();
+}
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
@@ -2695,12 +2725,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       reshade::register_overlay("RenoDX (DevKit)", OnRegisterOverlay);
 
-      Init();
-
       break;
     case DLL_PROCESS_DETACH:
-      Unit();
-
       renodx::utils::descriptor::Use(fdw_reason);
 
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
@@ -2718,6 +2744,17 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::unregister_overlay("RenoDX (DevKit)", OnRegisterOverlay);
 
       reshade::unregister_addon(h_module);
+
+      if (thread_auto_dumping.joinable()) {
+        thread_auto_dumping.detach();
+        while (thread_auto_dumping_running) {
+        }
+      }
+      if (thread_auto_loading.joinable()) {
+        thread_auto_loading.detach();
+        while (thread_auto_loading_running) {
+        }
+      }
 
       break;
   }
