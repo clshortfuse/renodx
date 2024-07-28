@@ -6,11 +6,12 @@
 #pragma once
 
 #include <include/reshade.hpp>
+#include <span>
 #include "./format.hpp"
 
 namespace renodx::utils::pipeline {
 
-static reshade::api::pipeline_subobject* ClonePipelineSubObjects(uint32_t subobject_count, const reshade::api::pipeline_subobject* subobjects) {
+static reshade::api::pipeline_subobject* ClonePipelineSubObjects(const reshade::api::pipeline_subobject* subobjects, uint32_t subobject_count) {
   auto* new_subobjects = new reshade::api::pipeline_subobject[subobject_count];
   memcpy(new_subobjects, subobjects, sizeof(reshade::api::pipeline_subobject) * subobject_count);
   for (uint32_t i = 0; i < subobject_count; ++i) {
@@ -124,6 +125,31 @@ static reshade::api::pipeline_subobject* ClonePipelineSubObjects(uint32_t subobj
   }
 
   return new_subobjects;
+}
+
+static void DestroyPipelineSubobjects(std::span<reshade::api::pipeline_subobject> subobjects) {
+  for (auto& subobject : subobjects) {
+    switch (subobject.type) {
+      case reshade::api::pipeline_subobject_type::vertex_shader:
+      case reshade::api::pipeline_subobject_type::compute_shader:
+      case reshade::api::pipeline_subobject_type::pixel_shader:   {
+        auto* desc = static_cast<reshade::api::shader_desc*>(subobject.data);
+        free(const_cast<void*>(desc->code));
+        desc->code = nullptr;
+        break;
+      }
+      default:
+        break;
+    }
+
+    free(subobject.data);
+    subobject.data = nullptr;
+  }
+}
+
+static void DestroyPipelineSubobjects(reshade::api::pipeline_subobject* subobjects, uint32_t subobject_count) {
+  DestroyPipelineSubobjects({subobjects, subobjects + subobject_count});
+  delete[] subobjects;
 }
 
 }  // namespace renodx::utils::pipeline
