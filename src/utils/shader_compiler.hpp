@@ -10,9 +10,11 @@
 #include <d3dcompiler.h>
 #include <dxcapi.h>
 
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <include/reshade.hpp>
@@ -111,8 +113,9 @@ inline std::optional<std::string> DisassembleShader(void* code, size_t size) {
   return result;
 }
 
-inline std::vector<uint8_t> CompileShaderFromFileFXC(LPCWSTR file_path, LPCSTR shader_target, const D3D_SHADER_MACRO* defines = nullptr, std::string* out_error = nullptr, LPCWSTR library = L"D3DCompiler_47.dll") {
-
+inline std::vector<uint8_t> CompileShaderFromFileFXC(
+    LPCWSTR file_path, LPCSTR shader_target, const D3D_SHADER_MACRO* defines = nullptr,
+    std::string* out_error = nullptr, LPCWSTR library = L"D3DCompiler_47.dll") {
   typedef HRESULT(WINAPI * pD3DCompileFromFile)(LPCWSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
   static std::unordered_map<LPCWSTR, pD3DCompileFromFile> d3d_compilefromfile;
   {
@@ -150,7 +153,7 @@ inline std::vector<uint8_t> CompileShaderFromFileFXC(LPCWSTR file_path, LPCSTR s
         auto* error = reinterpret_cast<uint8_t*>(error_blob->GetBufferPointer());
         s << ": " << error;
         if (out_error != nullptr) {
-          out_error->assign((char*)error);
+          out_error->assign(reinterpret_cast<char*>(error));
         }
       } else {
         s << ".";
@@ -356,7 +359,7 @@ inline std::vector<uint8_t> CompileShaderFromFileDXC(LPCWSTR file_path, LPCSTR s
       auto* error = reinterpret_cast<uint8_t*>(error_blob->GetBufferPointer());
       s << ": " << error;
       if (out_error != nullptr) {
-        out_error->assign((char*)error);
+        out_error->assign(reinterpret_cast<char*>(error));
       }
     } else {
       s << ".";
@@ -373,7 +376,7 @@ inline std::vector<uint8_t> CompileShaderFromFile(LPCWSTR file_path, LPCSTR shad
   std::vector<D3D_SHADER_MACRO> local_defines;
   for (int i = 0; i < defines.size() && defines.size() > 1; i += 2) {
     if (!defines[i].empty() && !defines[i + 1].empty()) {
-      local_defines.push_back({defines[i].c_str(), defines[i+1].c_str()});
+      local_defines.push_back({defines[i].c_str(), defines[i + 1].c_str()});
     }
   }
   if (local_defines.size() > 0) {
