@@ -374,7 +374,12 @@ void CompileCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter =
     }
     // Any other case (non hlsl non cso) is already earlied out above
 
-    const uint32_t shader_hash = std::stoul(hash_string, nullptr, 16);
+    uint32_t shader_hash;
+    try {
+      shader_hash = std::stoul(hash_string, nullptr, 16);
+    } catch (const std::exception& e) {
+      continue;
+    }
 
     // Early out before compiling
     if (!pipelines_filter.empty()) {
@@ -2600,7 +2605,11 @@ void Init() {
         const auto& entry_path_string = entry_path.filename().string();
         if (entry_path_string.starts_with("0x") && entry_path_string.length() > 2 + 8) {
           const std::string hash = entry_path_string.substr(2, 8);
-          dumped_shaders.emplace(std::stoul(hash, nullptr, 16));
+          try {
+            dumped_shaders.emplace(std::stoul(hash, nullptr, 16));
+          } catch (const std::exception& e) {
+            continue;
+          }
         }
       }
     }
