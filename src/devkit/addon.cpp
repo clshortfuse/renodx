@@ -398,8 +398,9 @@ void CompileCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter =
     }
 
     const std::lock_guard<std::recursive_mutex> lock(s_mutex_loading);
+    const bool has_custom_shader = custom_shaders_cache.find(shader_hash) != custom_shaders_cache.end();
     auto& custom_shader = custom_shaders_cache[shader_hash];
-    if (custom_shader == nullptr) {
+    if (!has_custom_shader || custom_shader == nullptr) {
       custom_shader = new CachedCustomShader();
     }
     else {
@@ -472,6 +473,8 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
   // Clear all previously loaded custom shaders
   UnloadCustomShaders(pipelines_filter, immediate_unload, false);
 
+  std::unordered_set<uint64_t> cloned_pipelines;
+
   const std::lock_guard<std::recursive_mutex> lock_loading(s_mutex_loading);
   for (const auto& custom_shader_pair : custom_shaders_cache) {
     uint32_t shader_hash = custom_shader_pair.first;
@@ -492,7 +495,10 @@ void LoadCustomShaders(const std::unordered_set<uint64_t>& pipelines_filter = st
 
     // Re-clone all the pipelines that used this shader hash (except the ones that are filtered out)
     for (CachedPipeline* cached_pipeline : pipelines_pair->second) {
+      if (cached_pipeline == nullptr) continue;
       if (!pipelines_filter.empty() && !pipelines_filter.contains(cached_pipeline->pipeline.handle)) continue;
+      if (cloned_pipelines.contains(cached_pipeline->pipeline.handle)) { assert(false); continue; }
+      cloned_pipelines.emplace(cached_pipeline->pipeline.handle);
       // Force destroy this pipeline in case it was already cloned
       UnloadCustomShaders({cached_pipeline->pipeline.handle}, immediate_unload, false);
 
