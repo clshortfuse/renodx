@@ -9,165 +9,58 @@
 #include <atlbase.h>
 #include <d3dcompiler.h>
 #include <dxcapi.h>
+#include <mmiscapi.h>
+#include <winsock.h>
 
+#include <cstdint>
+#include <exception>
+#include <ios>
+#include <map>
 #include <mutex>
 #include <optional>
-#include <sstream>
+#include <shared_mutex>
+#include <span>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include <include/reshade.hpp>
+#include "format.hpp"
 
 namespace renodx::utils::shader::compiler {
 
-static std::mutex s_mutex_shader_compiler;
+namespace internal {
 
-inline std::optional<std::string> DisassembleShaderFXC(void* data, size_t size, LPCWSTR library = L"D3DCompiler_47.dll") {
-  std::optional<std::string> result;
-
-  // TODO: unify this with "CompileShaderFromFileFXC()", as it loads the same dll.
-  static std::unordered_map<LPCWSTR, pD3DDisassemble> d3d_disassemble;
-  {
-    const std::lock_guard<std::mutex> lock(s_mutex_shader_compiler);
-    static std::unordered_map<LPCWSTR, HMODULE> d3d_compiler;
-    d3d_compiler[library] = LoadLibraryW(library);
-    if (d3d_compiler[library] != nullptr) {
-      // NOLINTNEXTLINE(google-readability-casting)
-      d3d_disassemble[library] = pD3DDisassemble(GetProcAddress(d3d_compiler[library], "D3DDisassemble"));
-    }
-  }
-
-  if (d3d_disassemble[library] != nullptr) {
-    CComPtr<ID3DBlob> out_blob;
-    if (SUCCEEDED(d3d_disassemble[library](
-            data,
-            size,
-            D3D_DISASM_ENABLE_INSTRUCTION_NUMBERING | D3D_DISASM_ENABLE_INSTRUCTION_OFFSET,
-            nullptr,
-            &out_blob))) {
-      result = {reinterpret_cast<char*>(out_blob->GetBufferPointer()), out_blob->GetBufferSize()};
-    }
-  }
-
-#if 0  // Not much point in unloading the library, we'd need to keep "s_mutex_shader_compiler" locked the whole time.
-  FreeLibrary(d3d_compiler[library]);
-#endif
-
-  return result;
-}
+static HMODULE fxc_compiler_library = nullptr;
+static HMODULE dxc_compiler_library = nullptr;
+static std::shared_mutex mutex_fxc_compiler;
+static std::shared_mutex mutex_dxc_compiler;
 
 inline HRESULT CreateLibrary(IDxcLibrary** dxc_library) {
-  const std::lock_guard<std::mutex> lock(s_mutex_shader_compiler);
   // HMODULE dxil_loader = LoadLibraryW(L"dxil.dll");
-  HMODULE dx_compiler = LoadLibraryW(L"dxcompiler.dll");
-  if (dx_compiler == nullptr) {
-    reshade::log_message(reshade::log_level::error, "dxcompiler.dll not loaded");
+  if (dxc_compiler_library == nullptr) {
+    dxc_compiler_library = LoadLibraryW(L"dxcompiler.dll");
+  }
+  if (dxc_compiler_library == nullptr) {
     return -1;
   }
   // NOLINTNEXTLINE(google-readability-casting)
-  auto dxc_create_instance = DxcCreateInstanceProc(GetProcAddress(dx_compiler, "DxcCreateInstance"));
+  auto dxc_create_instance = DxcCreateInstanceProc(GetProcAddress(dxc_compiler_library, "DxcCreateInstance"));
   if (dxc_create_instance == nullptr) return -1;
   return dxc_create_instance(CLSID_DxcLibrary, __uuidof(IDxcLibrary), reinterpret_cast<void**>(dxc_library));
 }
 
 inline HRESULT CreateCompiler(IDxcCompiler** dxc_compiler) {
-  const std::lock_guard<std::mutex> lock(s_mutex_shader_compiler);
   // HMODULE dxil_loader = LoadLibraryW(L"dxil.dll");
-  HMODULE dx_compiler = LoadLibraryW(L"dxcompiler.dll");
-  if (dx_compiler == nullptr) {
-    reshade::log_message(reshade::log_level::error, "dxcompiler.dll not loaded");
+  if (dxc_compiler_library == nullptr) {
+    dxc_compiler_library = LoadLibraryW(L"dxcompiler.dll");
+  }
+  if (dxc_compiler_library == nullptr) {
     return -1;
   }
   // NOLINTNEXTLINE(google-readability-casting)
-  auto dxc_create_instance = DxcCreateInstanceProc(GetProcAddress(dx_compiler, "DxcCreateInstance"));
+  auto dxc_create_instance = DxcCreateInstanceProc(GetProcAddress(dxc_compiler_library, "DxcCreateInstance"));
   if (dxc_create_instance == nullptr) return -1;
   return dxc_create_instance(CLSID_DxcCompiler, __uuidof(IDxcCompiler), reinterpret_cast<void**>(dxc_compiler));
-}
-
-inline std::optional<std::string> DisassembleShaderDXC(void* data, size_t size) {
-  CComPtr<IDxcLibrary> library;
-  CComPtr<IDxcCompiler> compiler;
-  CComPtr<IDxcBlobEncoding> source;
-  CComPtr<IDxcBlobEncoding> disassembly_text;
-  CComPtr<ID3DBlob> disassembly;
-
-  std::optional<std::string> result;
-
-  if (FAILED(CreateLibrary(&library))) return result;
-  if (FAILED(library->CreateBlobWithEncodingFromPinned(data, size, CP_ACP, &source))) return result;
-  if (FAILED(CreateCompiler(&compiler))) return result;
-  if (FAILED(compiler->Disassemble(source, &disassembly_text))) return result;
-  if (FAILED(disassembly_text.QueryInterface(&disassembly))) return result;
-
-  result = {reinterpret_cast<char*>(disassembly->GetBufferPointer()), disassembly->GetBufferSize()};
-
-  return result;
-}
-
-inline std::optional<std::string> DisassembleShader(void* code, size_t size) {
-  auto result = DisassembleShaderFXC(code, size);
-  if (!result.has_value()) {
-    result = DisassembleShaderDXC(code, size);
-  }
-  return result;
-}
-
-inline std::vector<uint8_t> CompileShaderFromFileFXC(
-    LPCWSTR file_path, LPCSTR shader_target, const D3D_SHADER_MACRO* defines = nullptr,
-    std::string* out_error = nullptr, LPCWSTR library = L"D3DCompiler_47.dll") {
-  typedef HRESULT(WINAPI * pD3DCompileFromFile)(LPCWSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
-  static std::unordered_map<LPCWSTR, pD3DCompileFromFile> d3d_compilefromfile;
-  {
-    const std::lock_guard<std::mutex> lock(s_mutex_shader_compiler);
-    static std::unordered_map<LPCWSTR, HMODULE> d3d_compiler;
-    d3d_compiler[library] = LoadLibraryW(library);
-    if (d3d_compiler[library] != nullptr) {
-      // NOLINTNEXTLINE(google-readability-casting)
-      d3d_compilefromfile[library] = pD3DCompileFromFile(GetProcAddress(d3d_compiler[library], "D3DCompileFromFile"));
-    }
-  }
-
-  std::vector<uint8_t> result;
-  CComPtr<ID3DBlob> out_blob;
-  if (d3d_compilefromfile[library] != nullptr) {
-    CComPtr<ID3DBlob> error_blob;
-    if (SUCCEEDED(d3d_compilefromfile[library](
-            file_path,
-            defines,
-            D3D_COMPILE_STANDARD_FILE_INCLUDE,
-            "main",
-            shader_target,
-            D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY,
-            0,
-            &out_blob,
-            &error_blob))) {
-      result.assign(
-          reinterpret_cast<uint8_t*>(out_blob->GetBufferPointer()),
-          reinterpret_cast<uint8_t*>(out_blob->GetBufferPointer()) + out_blob->GetBufferSize());
-    } else {
-      std::stringstream s;
-      s << "CompileShaderFromFileFXC(Compilation failed";
-      if (error_blob != nullptr) {
-        // auto error_size = error_blob->GetBufferSize();
-        auto* error = reinterpret_cast<uint8_t*>(error_blob->GetBufferPointer());
-        s << ": " << error;
-        if (out_error != nullptr) {
-          out_error->assign(reinterpret_cast<char*>(error));
-        }
-      } else {
-        s << ".";
-      }
-      s << ")";
-      reshade::log_message(reshade::log_level::error, s.str().c_str());
-    }
-  }
-
-#if 0  // Not much point in unloading the library, we'd need to keep "s_mutex_shader_compiler" locked the whole time.
-  FreeLibrary(d3d_compiler[library]);
-#endif
-
-  return result;
 }
 
 #define IFR(x)                \
@@ -219,8 +112,7 @@ inline HRESULT CompileFromBlob(
       while (cursor != nullptr && cursor->Name != nullptr) {
         define_values.emplace_back(CA2W(cursor->Name, CP_UTF8));
         if (cursor->Definition != nullptr) {
-          define_values.emplace_back(
-              CA2W(cursor->Definition, CP_UTF8));
+          define_values.emplace_back(CA2W(cursor->Definition, CP_UTF8));
         } else {
           define_values.emplace_back(/* empty */);
         }
@@ -333,12 +225,69 @@ inline HRESULT WINAPI BridgeD3DCompileFromFile(
   return CompileFromBlob(source, file_name, defines, include_handler, entrypoint, target, flags1, flags2, code, error_messages);
 }
 
-inline std::vector<uint8_t> CompileShaderFromFileDXC(LPCWSTR file_path, LPCSTR shader_target, const D3D_SHADER_MACRO* defines = nullptr, std::string* out_error = nullptr) {
+inline std::vector<uint8_t> CompileShaderFromFileFXC(
+    LPCWSTR file_path,
+    LPCSTR shader_target,
+    const D3D_SHADER_MACRO* defines = nullptr) {
+  CComPtr<ID3DBlob> out_blob;
+
+  if (fxc_compiler_library == nullptr) {
+    std::stringstream s;
+    s << "CompileShaderFromFileFXC(Loading D3DCompiler_47.dll)";
+    reshade::log_message(reshade::log_level::debug, s.str().c_str());
+    fxc_compiler_library = LoadLibraryW(L"D3DCompiler_47.dll");
+  }
+  if (fxc_compiler_library == nullptr) {
+    throw std::exception("Could not to load D3DCompiler_47.dll");
+  }
+
+  typedef HRESULT(WINAPI * pD3DCompileFromFile)(
+      LPCWSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
+
+  {
+    std::stringstream s;
+    s << "CompileShaderFromFileFXC(GetProcAddress)";
+    reshade::log_message(reshade::log_level::debug, s.str().c_str());
+  }
+  // NOLINTNEXTLINE(google-readability-casting)
+  auto d3d_compilefromfile = pD3DCompileFromFile(GetProcAddress(fxc_compiler_library, "D3DCompileFromFile"));
+  if (d3d_compilefromfile == nullptr) {
+    throw std::exception("Could not to load D3DCompileFromFile from D3DCompiler_47.dll");
+  }
+
+  std::unique_lock lock(mutex_fxc_compiler);
+  CComPtr<ID3DBlob> error_blob;
+  if (FAILED(d3d_compilefromfile(
+          file_path,
+          defines,
+          D3D_COMPILE_STANDARD_FILE_INCLUDE,
+          "main",
+          shader_target,
+          D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY,
+          0,
+          &out_blob,
+          &error_blob))) {
+    if (error_blob == nullptr) throw std::exception("Unknown error occurred.");
+
+    throw std::exception(
+        std::string(reinterpret_cast<char*>(error_blob->GetBufferPointer()),
+                    error_blob->GetBufferSize())
+            .c_str());
+  }
+  return {reinterpret_cast<uint8_t*>(out_blob->GetBufferPointer()),
+          reinterpret_cast<uint8_t*>(out_blob->GetBufferPointer()) + out_blob->GetBufferSize()};
+}
+
+inline std::vector<uint8_t> CompileShaderFromFileDXC(
+    LPCWSTR file_path,
+    LPCSTR shader_target,
+    const D3D_SHADER_MACRO* defines = nullptr) {
   std::vector<uint8_t> result;
 
   CComPtr<ID3DBlob> out_blob;
   CComPtr<ID3DBlob> error_blob;
-  if (SUCCEEDED(BridgeD3DCompileFromFile(
+  std::unique_lock lock(mutex_dxc_compiler);
+  if (FAILED(internal::BridgeD3DCompileFromFile(
           file_path,
           defines,
           D3D_COMPILE_STANDARD_FILE_INCLUDE,
@@ -348,45 +297,167 @@ inline std::vector<uint8_t> CompileShaderFromFileDXC(LPCWSTR file_path, LPCSTR s
           0,
           &out_blob,
           &error_blob))) {
-    result.assign(
-        reinterpret_cast<uint8_t*>(out_blob->GetBufferPointer()),
-        reinterpret_cast<uint8_t*>(out_blob->GetBufferPointer()) + out_blob->GetBufferSize());
-  } else {
-    std::stringstream s;
-    s << "CompileShaderFromFileDXC(Compilation failed";
-    if (error_blob != nullptr) {
-      // auto error_size = error_blob->GetBufferSize();
-      auto* error = reinterpret_cast<uint8_t*>(error_blob->GetBufferPointer());
-      s << ": " << error;
-      if (out_error != nullptr) {
-        out_error->assign(reinterpret_cast<char*>(error));
-      }
-    } else {
-      s << ".";
-    }
-    s << ")";
+    if (error_blob == nullptr) throw std::exception("Unknown error occurred.");
 
-    reshade::log_message(reshade::log_level::error, s.str().c_str());
+    throw std::exception(std::string(reinterpret_cast<char*>(error_blob->GetBufferPointer()),
+                                     error_blob->GetBufferSize())
+                             .c_str());
   }
-
-  return result;
+  return {reinterpret_cast<uint8_t*>(out_blob->GetBufferPointer()),
+          reinterpret_cast<uint8_t*>(out_blob->GetBufferPointer()) + out_blob->GetBufferSize()};
 }
 
-inline std::vector<uint8_t> CompileShaderFromFile(LPCWSTR file_path, LPCSTR shader_target, const std::vector<std::string>& defines = {}, std::string* out_error = nullptr, LPCWSTR fxc_library = L"D3DCompiler_47.dll") {
-  std::vector<D3D_SHADER_MACRO> local_defines;
-  for (int i = 0; i < defines.size() && defines.size() > 1; i += 2) {
-    if (!defines[i].empty() && !defines[i + 1].empty()) {
-      local_defines.push_back({defines[i].c_str(), defines[i + 1].c_str()});
+inline std::string DisassembleShaderFXC(std::span<uint8_t> blob) {
+  if (fxc_compiler_library == nullptr) {
+    fxc_compiler_library = LoadLibraryW(L"D3DCompiler_47.dll");
+  }
+  if (fxc_compiler_library == nullptr) throw std::exception("Could not to load D3DCompiler_47.dll");
+
+  // NOLINTNEXTLINE(google-readability-casting)
+  auto d3d_disassemble = pD3DDisassemble(GetProcAddress(fxc_compiler_library, "D3DDisassemble"));
+
+  if (d3d_disassemble == nullptr) throw std::exception("Could not to load D3DDisassemble in D3DCompiler_47.dll");
+
+  // Function may not be thread-safe
+  std::unique_lock lock(mutex_fxc_compiler);
+  CComPtr<ID3DBlob> out_blob;
+  if (FAILED(d3d_disassemble(
+          blob.data(),
+          blob.size(),
+          D3D_DISASM_ENABLE_INSTRUCTION_NUMBERING | D3D_DISASM_ENABLE_INSTRUCTION_OFFSET,
+          nullptr,
+          &out_blob))) {
+    throw std::exception("Disassembly failed");
+  }
+
+  return {
+      reinterpret_cast<char*>(out_blob->GetBufferPointer()),
+      out_blob->GetBufferSize()};
+}
+
+inline std::string DisassembleShaderDXC(std::span<uint8_t> blob) {
+  CComPtr<IDxcLibrary> library;
+  CComPtr<IDxcCompiler> compiler;
+  CComPtr<IDxcBlobEncoding> source;
+  CComPtr<IDxcBlobEncoding> disassembly_text;
+  CComPtr<ID3DBlob> disassembly;
+
+  std::unique_lock lock(mutex_dxc_compiler);
+  if (FAILED(internal::CreateLibrary(&library))) throw std::exception("Could not create library.");
+  if (FAILED(library->CreateBlobWithEncodingFromPinned(blob.data(), blob.size(), CP_ACP, &source))) throw std::exception("Could not prepare blob.");
+  if (FAILED(internal::CreateCompiler(&compiler))) throw std::exception("Could not create compiler object.");
+  if (FAILED(compiler->Disassemble(source, &disassembly_text))) throw std::exception("Could not disassemble.");
+  if (FAILED(disassembly_text.QueryInterface(&disassembly))) throw std::exception("Could not find diassembly");
+
+  return {
+      reinterpret_cast<char*>(disassembly->GetBufferPointer()),
+      disassembly->GetBufferSize(),
+  };
+}
+
+}  // namespace internal
+
+// Also compatible with DXBC
+struct DxilContainerHeader {
+  uint32_t four_cc;
+  uint8_t digest[16];
+  uint16_t major_version;
+  uint16_t minor_version;
+  uint32_t container_size;
+  uint32_t part_count;
+};
+struct DxilPartHeader {
+  uint32_t four_cc;
+  uint32_t part_size;
+};
+
+struct DxilProgramVersion {
+  uint32_t value = 0xffff0000;
+  [[nodiscard]] unsigned int GetMajor() const { return (value & 0xf0) >> 4; }
+  [[nodiscard]] unsigned int GetMinor() const { return (value & 0xf); }
+  [[nodiscard]] unsigned int GetKind() const { return (value & 0xffff0000) >> 16; }
+  [[nodiscard]] const char* GetKindAbbr() const {
+    switch (this->GetKind()) {
+      case D3D11_SHVER_PIXEL_SHADER:    return "ps";
+      case D3D11_SHVER_VERTEX_SHADER:   return "vs";
+      case D3D11_SHVER_GEOMETRY_SHADER: return "gs";
+      case D3D11_SHVER_HULL_SHADER:     return "hs";
+      case D3D11_SHVER_DOMAIN_SHADER:   return "ds";
+      case D3D11_SHVER_COMPUTE_SHADER:  return "cs";
+      default:                          return "??";
     }
   }
-  if (local_defines.size() > 0) {
+};
+
+constexpr uint32_t FourCC(char char0, char char1, char char2, char char3) {
+  return static_cast<uint32_t>(static_cast<uint8_t>(char0))
+         | (static_cast<uint32_t>(static_cast<uint8_t>(char1)) << 8)
+         | (static_cast<uint32_t>(static_cast<uint8_t>(char2)) << 16)
+         | (static_cast<uint32_t>(static_cast<uint8_t>(char3)) << 24);
+}
+
+inline DxilProgramVersion DecodeShaderVersion(std::span<uint8_t> blob) {
+  if (blob.size() < sizeof(DxilContainerHeader)) throw std::exception("Invalid shader size.");
+  auto* header = reinterpret_cast<DxilContainerHeader*>(blob.data());
+
+  switch (header->four_cc) {
+    case FourCC('D', 'X', 'B', 'C'):
+    case FourCC('D', 'X', 'I', 'L'):
+      break;
+    default:
+      throw std::exception("Unrecognized header.");
+  }
+
+  auto part_offsets = std::span<uint32_t>(
+      reinterpret_cast<uint32_t*>(blob.data() + sizeof(DxilContainerHeader)),
+      header->part_count);
+
+  for (auto offset : part_offsets) {
+    auto* part_header = reinterpret_cast<DxilPartHeader*>(blob.data() + offset);
+
+    switch (part_header->four_cc) {
+      case FourCC('S', 'H', 'D', 'R'):
+      case FourCC('S', 'H', 'E', 'X'):
+      case FourCC('D', 'X', 'I', 'L'):
+        break;
+      default:
+        continue;
+    }
+    auto part_data = blob.subspan(
+        offset + sizeof(DxilPartHeader),
+        part_header->part_size);
+    auto* program_version = reinterpret_cast<DxilProgramVersion*>(part_data.data());
+    return *program_version;
+  }
+  return DxilProgramVersion{};  // No shader (shader layout perhaps)
+}
+
+inline std::string DisassembleShader(std::span<uint8_t> blob) {
+  auto version = DecodeShaderVersion(blob);
+  if (version.GetMajor() < 6) {
+    return internal::DisassembleShaderFXC(blob);
+  }
+  return internal::DisassembleShaderDXC(blob);
+}
+
+inline std::vector<uint8_t> CompileShaderFromFile(
+    LPCWSTR file_path,
+    LPCSTR shader_target,
+    const std::vector<std::pair<std::string, std::string>>& defines = {}) {
+  std::vector<D3D_SHADER_MACRO> local_defines;
+  for (const auto& [key, value] : defines) {
+    if (!key.empty() && !value.empty()) {
+      local_defines.push_back({key.c_str(), value.c_str()});
+    }
+  }
+  if (!local_defines.empty()) {
     local_defines.push_back({nullptr, nullptr});
   }
 
   if (shader_target[3] < '6') {
-    return CompileShaderFromFileFXC(file_path, shader_target, local_defines.data(), out_error, fxc_library);
+    return internal::CompileShaderFromFileFXC(file_path, shader_target, local_defines.empty() ? nullptr : local_defines.data());
   }
-  return CompileShaderFromFileDXC(file_path, shader_target, local_defines.data(), out_error);
+  return internal::CompileShaderFromFileDXC(file_path, shader_target, local_defines.empty() ? nullptr : local_defines.data());
 }
 
 }  // namespace renodx::utils::shader::compiler

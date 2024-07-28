@@ -175,6 +175,16 @@ static bool HasBackBufferRenderTarget(reshade::api::command_list* cmd_list) {
   return found_swapchain_rtv;
 }
 
+static std::vector<reshade::api::resource_view>& GetRenderTargets(reshade::api::command_list* cmd_list) {
+  auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
+  return cmd_list_data.current_render_targets;
+};
+
+static reshade::api::resource_view& GetDepthStencil(reshade::api::command_list* cmd_list) {
+  auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
+  return cmd_list_data.current_depth_stencil;
+};
+
 static bool attached = false;
 
 inline void Use(DWORD fdw_reason) {

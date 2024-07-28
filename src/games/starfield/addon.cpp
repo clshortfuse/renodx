@@ -223,15 +223,17 @@ bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = fals
   // 0x0a152bb1 (tonemapper) (r11g11b10 => rgb8a_unorm tRender)
   // 0x17FAB08F (sharpen?)   (rgb8a_unorm tRender => rgb8a_unorm tComposite)
   // 0xe9d9e225 (ui)         (rgb8a_unorm tUI => rgb8a_unorm tComposite)
+
+  auto pixel_shader_hash = shader_state.GetCurrentPixelShaderHash();
   if (
       !is_dispatch
-      && (shader_state.pixel_shader_hash == 0x0a152bb1     // tonemapper
-          || shader_state.pixel_shader_hash == 0x054D0CB8  // tonemapper
-          || shader_state.pixel_shader_hash == 0x3B344832  // tonemapper
-          || shader_state.pixel_shader_hash == 0x17fab08f  // sharpener
-          || shader_state.pixel_shader_hash == 0x32580F53  // movie
-          || shader_state.pixel_shader_hash == 0xe9d9e225  // ui
-          || shader_state.pixel_shader_hash == 0x0d5add1f  // copy
+      && (pixel_shader_hash == 0x0a152bb1     // tonemapper
+          || pixel_shader_hash == 0x054D0CB8  // tonemapper
+          || pixel_shader_hash == 0x3B344832  // tonemapper
+          || pixel_shader_hash == 0x17fab08f  // sharpener
+          || pixel_shader_hash == 0x32580F53  // movie
+          || pixel_shader_hash == 0xe9d9e225  // ui
+          || pixel_shader_hash == 0x0d5add1f  // copy
           )) {
     auto& swapchain_state = cmd_list->get_private_data<renodx::utils::swapchain::CommandListData>();
 

@@ -11,6 +11,7 @@
 #include <d3d12.h>
 #include <dxgi.h>
 #include <dxgi1_6.h>
+#include <cstdint>
 #include <cstdio>
 
 #include <sstream>
@@ -30,8 +31,7 @@
 namespace renodx::mods::shader {
 struct CustomShader {
   uint32_t crc32;
-  const uint8_t* code;
-  uint32_t code_size;
+  std::vector<uint8_t> code;
   bool swap_chain_only;
   int32_t index = -1;
 };
@@ -39,10 +39,10 @@ struct CustomShader {
 using CustomShaders = std::unordered_map<uint32_t, CustomShader>;
 
 // clang-format off
-#define CustomSwapchainShader(crc32) { crc32, { crc32, _##crc32, sizeof(_##crc32), true } }
-#define CustomShaderEntry(crc32) { crc32, { crc32, _##crc32, sizeof(_##crc32) } }
-#define BypassShaderEntry(crc32) { crc32, { crc32, nullptr, 0 } }
-#define CustomCountedShader(crc32, index) { crc32, { crc32, _##crc32, sizeof(_##crc32), false, ##index} }
+#define CustomSwapchainShader(crc32) { crc32, { crc32, std::vector<uint8_t>(_##crc32, _##crc32 + sizeof(_##crc32)), true } }
+#define CustomShaderEntry(crc32) { crc32, { crc32, std::vector<uint8_t>(_##crc32, _##crc32 + sizeof(_##crc32)) } }
+#define BypassShaderEntry(crc32) { crc32, { crc32, std::vector<uint8_t>(0) } }
+#define CustomCountedShader(crc32, index) { crc32, { crc32, std::vector<uint8_t>(_##crc32, _##crc32 + sizeof(_##crc32)), false, ##index} }
 // clang-format on
 
 static thread_local std::vector<reshade::api::pipeline_layout_param*> created_params;
@@ -560,7 +560,7 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
   auto& device_data = device->get_private_data<DeviceData>();
   const std::unique_lock local_device_lock(device_data.mutex);
 
-  const auto& shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
+  auto& shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
 
   float resource_tag = -1;
 
@@ -572,7 +572,8 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
     }
   }
 
-  const uint32_t shader_hash = is_dispatch ? shader_state.compute_shader_hash : shader_state.pixel_shader_hash;
+  const uint32_t shader_hash = is_dispatch ? shader_state.GetCurrentComputeShaderHash()
+                                           : shader_state.GetCurrentPixelShaderHash();
 
   auto custom_shader_info_pair = device_data.custom_shaders.find(shader_hash);
   if (custom_shader_info_pair == device_data.custom_shaders.end()) {
@@ -687,26 +688,6 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
           shader_injection);
     }
   }
-
-  // perform bind pipeline (replace shader)
-  if (
-      auto pair = shader_device_state.shader_to_pipeline_replacement.find(shader_hash);
-      pair != shader_device_state.shader_to_pipeline_replacement.end()) {
-    // has replacement that can be bound;
-    const auto& [pipeline_handle, pipeline_type] = pair->second;
-#ifdef DEBUG_LEVEL_1
-    std::stringstream s;
-    s << "mods::shader::HandlePreDraw(binding pipeline: ";
-    s << PRINT_CRC32(shader_hash);
-    s << ", dispatch: " << (is_dispatch ? "true" : "false");
-    s << ", handle: " << reinterpret_cast<void*>(pipeline_handle);
-    s << ", stage: " << shader_state.pipeline_stage;
-    s << ")";
-    reshade::log_message(reshade::log_level::debug, s.str().c_str());
-#endif
-
-    cmd_list->bind_pipeline(shader_state.pipeline_stage, {pipeline_handle});
-  }
   return false;
 }
 
@@ -763,6 +744,7 @@ static bool attached = false;
 
 template <typename T = float*>
 static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injections = nullptr) {
+  renodx::utils::shader::use_replace_on_bind = true;
   renodx::utils::shader::Use(fdw_reason);
   renodx::utils::swapchain::Use(fdw_reason);
   renodx::utils::resource::Use(fdw_reason);
@@ -779,7 +761,7 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
       if (!trace_unmodified_shaders) {
         for (const auto& [hash, shader] : (new_custom_shaders)) {
           if (shader.swap_chain_only) using_swap_chain_only = true;
-          if (shader.code_size == 0) using_bypass = true;
+          if (shader.code.empty()) using_bypass = true;
           if (shader.index != -1) using_counted_shaders = true;
         }
       }
@@ -790,15 +772,15 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
 
       if (force_pipeline_cloning || use_pipeline_layout_cloning) {
         for (const auto& [hash, shader] : (new_custom_shaders)) {
-          renodx::utils::shader::AddInitPipelineReplacement(hash, shader.code_size, shader.code);
+          renodx::utils::shader::AddInitPipelineReplacement(hash, shader.code);
         }
       } else {
         for (const auto& [hash, shader] : (new_custom_shaders)) {
-          if (!shader.swap_chain_only && shader.code_size && shader.index == -1) {
-            renodx::utils::shader::AddCreatePipelineReplacement(hash, shader.code_size, shader.code);
+          if (!shader.swap_chain_only && !shader.code.empty() && shader.index == -1) {
+            renodx::utils::shader::AddCreatePipelineReplacement(hash, shader.code);
           }
           // Use Init as fallback
-          renodx::utils::shader::AddInitPipelineReplacement(hash, shader.code_size, shader.code);
+          renodx::utils::shader::AddInitPipelineReplacement(hash, shader.code);
         }
       }
 
