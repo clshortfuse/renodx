@@ -29,7 +29,7 @@ struct __declspec(uuid("4721e307-0cf3-4293-b4a5-40d0a4e62544")) DeviceData {
   std::shared_mutex mutex;
 };
 
-struct __declspec(uuid("25b7ec11-a51f-4884-a6f7-f381d198b9af")) CommandListData {
+struct __declspec(uuid("3cf9a628-8518-4509-84c3-9fbe9a295212")) CommandListData {
   std::vector<reshade::api::resource_view> current_render_targets;
   reshade::api::resource_view current_depth_stencil;
   bool has_swapchain_render_target_dirty = true;
@@ -174,6 +174,16 @@ static bool HasBackBufferRenderTarget(reshade::api::command_list* cmd_list) {
   cmd_list_data.has_swapchain_render_target = found_swapchain_rtv;
   return found_swapchain_rtv;
 }
+
+static std::vector<reshade::api::resource_view>& GetRenderTargets(reshade::api::command_list* cmd_list) {
+  auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
+  return cmd_list_data.current_render_targets;
+};
+
+static reshade::api::resource_view& GetDepthStencil(reshade::api::command_list* cmd_list) {
+  auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
+  return cmd_list_data.current_depth_stencil;
+};
 
 static bool attached = false;
 

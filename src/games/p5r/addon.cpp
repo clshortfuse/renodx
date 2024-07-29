@@ -304,13 +304,14 @@ bool OnDrawIndexed(
 
   auto& shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
 
-  if (shader_state.pixel_shader_hash == 0xC6D14699) return false;  // Video
-  if (shader_state.pixel_shader_hash == 0xB6E26AC7) {
+  auto pixel_shader_hash = shader_state.GetCurrentPixelShaderHash();
+  if (pixel_shader_hash == 0xC6D14699) return false;  // Video
+  if (pixel_shader_hash == 0xB6E26AC7) {
     g_completed_render = true;
     return false;
   }
   if (!g_completed_render) return false;
-  if (!g_8bit_hashes.contains(shader_state.pixel_shader_hash)) return false;
+  if (!g_8bit_hashes.contains(pixel_shader_hash)) return false;
 
   auto& swapchain_state = cmd_list->get_private_data<renodx::utils::swapchain::CommandListData>();
 
@@ -469,9 +470,9 @@ void OnInitPipeline(
 
 void OnBindPipeline(
     reshade::api::command_list* cmd_list,
-    reshade::api::pipeline_stage type,
+    reshade::api::pipeline_stage stages,
     reshade::api::pipeline pipeline) {
-  if (type != reshade::api::pipeline_stage::output_merger) return;
+  if (stages != reshade::api::pipeline_stage::output_merger) return;
   auto& data = cmd_list->get_private_data<CommandListData>();
   data.last_output_merger = pipeline;
 }
