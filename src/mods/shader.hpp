@@ -744,7 +744,6 @@ static bool attached = false;
 
 template <typename T = float*>
 static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injections = nullptr) {
-  renodx::utils::shader::use_replace_on_bind = true;
   renodx::utils::shader::Use(fdw_reason);
   renodx::utils::swapchain::Use(fdw_reason);
   renodx::utils::resource::Use(fdw_reason);
@@ -772,15 +771,15 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
 
       if (force_pipeline_cloning || use_pipeline_layout_cloning) {
         for (const auto& [hash, shader] : (new_custom_shaders)) {
-          renodx::utils::shader::AddInitPipelineReplacement(hash, shader.code);
+          renodx::utils::shader::AddRuntimeReplacement(hash, shader.code);
         }
       } else {
         for (const auto& [hash, shader] : (new_custom_shaders)) {
           if (!shader.swap_chain_only && !shader.code.empty() && shader.index == -1) {
-            renodx::utils::shader::AddCreatePipelineReplacement(hash, shader.code);
+            renodx::utils::shader::AddCompileTimeReplacement(hash, shader.code);
           }
-          // Use Init as fallback
-          renodx::utils::shader::AddInitPipelineReplacement(hash, shader.code);
+          // Use Runtime as fallback
+          renodx::utils::shader::AddRuntimeReplacement(hash, shader.code);
         }
       }
 
