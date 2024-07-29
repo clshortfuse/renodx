@@ -272,9 +272,9 @@ void PerformShaderReload(reshade::api::device* device) {
   auto& data = device->get_private_data<DeviceData>();
   std::unique_lock lock(data.mutex);
   for (auto& [shader_hash, custom_shader] : new_shaders) {
-    renodx::utils::shader::RemoveInitPipelineReplacement(shader_hash, device);
+    renodx::utils::shader::RemoveRuntimeReplacement(shader_hash, device);
     if (!custom_shader.removed && custom_shader.IsCompilationOK()) {
-      renodx::utils::shader::AddInitPipelineReplacement(shader_hash, custom_shader.GetCompilationData());
+      renodx::utils::shader::AddRuntimeReplacement(shader_hash, custom_shader.GetCompilationData());
     }
 
     auto& details = data.GetShaderDetails(shader_hash);
@@ -322,8 +322,8 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
   {
     ImGui::BeginDisabled(setting_live_reload);
-    if (ImGui::Button(std::format("Unload Shaders ({})", renodx::utils::shader::init_replacement_count.load()).c_str())) {
-      renodx::utils::shader::RemoveAllInitPipelineReplacements(runtime->get_device());
+    if (ImGui::Button(std::format("Unload Shaders ({})", renodx::utils::shader::runtime_replacement_count.load()).c_str())) {
+      renodx::utils::shader::RemoveAllRuntimeReplacements(runtime->get_device());
       renodx::utils::shader::compiler::watcher::CompileSync();
     }
     ImGui::EndDisabled();
@@ -812,7 +812,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::swapchain::Use(fdw_reason);
 
       renodx::utils::shader::use_replace_async = true;
-      renodx::utils::shader::use_replace_on_bind = true;
 
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
