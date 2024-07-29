@@ -8,12 +8,14 @@
 #define DEBUG_LEVEL_0
 
 #include <embed/0x006F1991.h> //ui -- overworld hud
-#include <embed/0x892226E0.h> //ui --fixs artifacts in menus
-#include <embed/0x3387BE75.h> //ui --portraits
-#include <embed/0xD9560318.h> //ui --npc chat bubbles
+#include <embed/0x892226E0.h> //ui -- fixs artifacts in menus (1)
+#include <embed/0x9F6B73CA.h> //ui -- fixs artifacts in menus (2)
+#include <embed/0x3387BE75.h> //ui -- portraits
+#include <embed/0xD9560318.h> //ui -- npc chat bubbles
 #include <embed/0xCE8ED088.h> //ui -- cutscene static images
 #include <embed/0x5D15CFEE.h> //videos -- pre-renderd movies
 #include <embed/0x21E7062A.h> //combat artifacts
+#include <embed/0xEA314404.h> // wardrobe
 #include <embed/0x53FBE188.h> // tonemapper
 
 
@@ -33,12 +35,14 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 
     CustomShaderEntry(0x006F1991),  // UI -- overworld hud
-    CustomShaderEntry(0x892226E0),  // UI -- Fixs artifacts in menus
+    CustomShaderEntry(0x892226E0),  // UI -- Fixs artifacts in menus (1)
+    CustomShaderEntry(0x9F6B73CA), // UI -- Fixs artifacts in menus (2)
     CustomShaderEntry(0x3387BE75),  // UI -- Portraits
     CustomShaderEntry(0xD9560318),  // UI -- NPC chat bubbles
     CustomShaderEntry(0xCE8ED088), // UI -- cutscene static images
     CustomShaderEntry(0x5D15CFEE), // videos -- pre-rendered movies
     CustomShaderEntry(0x21E7062A), // combat artifacts
+    CustomShaderEntry(0xEA314404), // wardrobe
     CustomShaderEntry(0x53FBE188)  // Tonemapper!!
 	
 
