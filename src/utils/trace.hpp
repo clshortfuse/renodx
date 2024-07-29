@@ -44,6 +44,30 @@ inline std::optional<std::string> GetD3DNameW(T* obj) {
   return GetD3DName(obj);
 }
 
+inline std::optional<std::string> GetDebugName(reshade::api::device_api device_api, reshade::api::resource_view resource_view) {
+  if (device_api == reshade::api::device_api::d3d11) {
+    auto* native_resource = reinterpret_cast<ID3D11DeviceChild*>(resource_view.handle);
+    return renodx::utils::trace::GetD3DName(native_resource);
+  }
+  return std::nullopt;
+}
+inline std::optional<std::string> GetDebugName(reshade::api::device_api device_api, uint64_t handle) {
+  if (device_api == reshade::api::device_api::d3d11) {
+    auto* native_resource = reinterpret_cast<ID3D11DeviceChild*>(handle);
+    return renodx::utils::trace::GetD3DName(native_resource);
+  }
+  if (device_api == reshade::api::device_api::d3d12) {
+    auto* native_resource = reinterpret_cast<ID3D12DeviceChild*>(handle);
+    return renodx::utils::trace::GetD3DNameW(native_resource);
+  }
+  return std::nullopt;
+}
+
+template <typename T>
+inline std::optional<std::string> GetDebugName(reshade::api::device_api device_api, T object) {
+  return GetDebugName(device_api, object.handle);
+}
+
 namespace internal {
 struct __declspec(uuid("3b70b2b2-52dc-4637-bd45-c1171c4c322e")) DeviceData {
   // <resource.handle, resource_view.handle>

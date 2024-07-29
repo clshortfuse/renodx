@@ -68,6 +68,7 @@ struct PipelineShaderDetails {
   std::unordered_map<reshade::api::pipeline_stage, uint32_t> shader_hashes_by_stage;
   std::optional<reshade::api::pipeline> replacement_pipeline = std::nullopt;
   reshade::api::pipeline_stage replacement_stages = reshade::api::pipeline_stage{0};
+  std::optional<std::string> tag;
   bool destroyed = false;
 
   std::optional<std::vector<uint8_t>> GetShaderData(uint32_t shader_hash, size_t index = -1) {

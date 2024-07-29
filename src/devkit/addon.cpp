@@ -131,23 +131,20 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
         .resource_view_desc = device->get_resource_view_desc(resource_view),
         .resource = device->get_resource_from_view(resource_view),
     };
+    auto device_api = device->get_api();
+    if (device_api == reshade::api::device_api::d3d11) {
+      auto resource_view_tag = renodx::utils::trace::GetDebugName(device->get_api(), resource_view);
+      if (resource_view_tag.has_value()) {
+        details.resource_view_tag = resource_view_tag.value();
+      }
+    }
+
     if (details.resource.handle != 0u) {
       details.resource_desc = device->get_resource_desc(details.resource);
       details.is_swapchain = renodx::utils::swapchain::IsBackBuffer(device, details.resource);
-
-      auto device_api = device->get_api();
-      if (device_api == reshade::api::device_api::d3d11) {
-        auto* native_resource = reinterpret_cast<ID3D11DeviceChild*>(details.resource.handle);
-        auto result = renodx::utils::trace::GetD3DName(native_resource);
-        if (result.has_value()) {
-          details.resource_tag = result.value();
-        }
-      } else if (device_api == reshade::api::device_api::d3d12) {
-        auto* native_resource = reinterpret_cast<ID3D12Resource*>(details.resource.handle);
-        auto result = renodx::utils::trace::GetD3DNameW(native_resource);
-        if (result.has_value()) {
-          details.resource_tag = result.value();
-        }
+      auto resource_tag = renodx::utils::trace::GetDebugName(device->get_api(), details.resource);
+      if (resource_tag.has_value()) {
+        details.resource_tag = resource_tag.value();
       }
     }
 
@@ -418,6 +415,14 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
                 auto pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(device, {pipeline_handle});
                 if (!pipeline_details.has_value()) continue;
 
+                if (!pipeline_details->tag.has_value()) {
+                  pipeline_details->tag = "";
+                  auto result = renodx::utils::trace::GetDebugName(device->get_api(), pipeline_handle);
+                  if (result.has_value()) {
+                    pipeline_details->tag = result.value();
+                  }
+                }
+
                 for (auto& [subobject_index, shader_hash] : pipeline_details->shader_hashes_by_index) {
                   ++row_index;  // Count rows regardless of tree node state
                   if (draw_node_open) {
@@ -502,6 +507,9 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
                     }
 
                     ImGui::TableNextColumn();  // Tag
+                    if (!pipeline_details->tag->empty()) {
+                      ImGui::TextUnformatted(pipeline_details->tag->c_str());
+                    }
 
                     ImGui::TableNextColumn();  // Index
                     ImGui::Text("%03d", draw_index);
@@ -532,6 +540,9 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
                   }
 
                   ImGui::TableNextColumn();
+                  if (!render_target.resource_view_tag.empty()) {
+                    ImGui::TextUnformatted(render_target.resource_view_tag.c_str());
+                  }
 
                   ImGui::TableNextColumn();  // Index
                   ImGui::Text("%03d", draw_index);
