@@ -454,7 +454,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
                         if (!shader_data.has_value()) throw std::exception("Failed to get shader data");
                         shader_details.program_version = renodx::utils::shader::compiler::DecodeShaderVersion(shader_data.value());
                       } catch (const std::exception& e) {
-                        reshade::log_message(reshade::log_level::error, s.str().c_str());
+                        reshade::log_message(reshade::log_level::error, e.what());
                       }
                     }
                     // Fallback to subobject
