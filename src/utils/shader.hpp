@@ -542,7 +542,7 @@ static void OnBindPipeline(
         pair != details.shader_hashes_by_stage.end()) {
       cmd_list_data.current_shaders_hashes[compatible_stage] = pair->second;
     }
-    if (details.HasReplacementPipeline() && ((details.replacement_stages | compatible_stage) != 0)) {
+    if (details.HasReplacementPipeline() && ((details.replacement_stages & compatible_stage) == compatible_stage)) {
       if (use_replace_on_bind) {
         cmd_list->bind_pipeline(stage, pipeline);
       } else {
