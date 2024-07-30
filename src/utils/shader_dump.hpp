@@ -141,6 +141,7 @@ static void CheckShadersOnDisk() {
       s << ")";
       reshade::log_message(reshade::log_level::warning, s.str().c_str());
     } else {
+#ifdef DEBUG_LEVEL_1
       std::stringstream s;
       s << "utils::shader::dump(Found shader: ";
       s << PRINT_CRC32(shader_hash);
@@ -148,6 +149,7 @@ static void CheckShadersOnDisk() {
       s << entry_path;
       s << ")";
       reshade::log_message(reshade::log_level::debug, s.str().c_str());
+#endif
     }
   }
 
