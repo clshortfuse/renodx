@@ -279,8 +279,8 @@ static void RemoveQueuedRuntimeReplacements(reshade::api::device* device) {
           auto& details = details_pair->second;
           if (details.HasReplacementPipeline()) {
             device->destroy_pipeline(details.GetReplacementPipeline());
-            details.replacement_pipeline.reset();
           }
+          details.replacement_pipeline.reset();
           data.ignored_pipelines.erase(pipeline_handle);
         }
       }
