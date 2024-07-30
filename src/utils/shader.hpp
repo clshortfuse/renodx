@@ -544,7 +544,7 @@ static void OnBindPipeline(
     }
     if (details.HasReplacementPipeline() && ((details.replacement_stages & compatible_stage) == compatible_stage)) {
       if (use_replace_on_bind) {
-        cmd_list->bind_pipeline(stage, pipeline);
+        cmd_list->bind_pipeline(stage, details.replacement_pipeline.value());
       } else {
         cmd_list_data.pending_replacements[compatible_stage] = details.replacement_pipeline.value();
       }
