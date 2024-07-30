@@ -61,8 +61,14 @@ struct ResourceViewDetails {
   bool is_swapchain;
 };
 
+struct PipelineBindDetails {
+  reshade::api::pipeline pipeline;
+  reshade::api::pipeline_stage pipeline_stage;
+  std::vector<uint32_t> shader_hashes;
+};
+
 struct DrawDetails {
-  std::vector<uint64_t> pipeline_handles_seen;
+  std::vector<PipelineBindDetails> pipeline_binds;
   enum class DrawMethods {
     PRESENT,
     DRAW,
@@ -200,17 +206,24 @@ void OnBindPipeline(
     reshade::api::command_list* cmd_list,
     reshade::api::pipeline_stage stages,
     reshade::api::pipeline pipeline) {
-  if ((stages
-       | ((reshade::api::pipeline_stage::vertex_shader
-           | reshade::api::pipeline_stage::pixel_shader
-           | reshade::api::pipeline_stage::compute_shader)))
-      == 0u) return;
-
   if (!is_snapshotting) return;
 
   auto& data = cmd_list->get_private_data<CommandListData>();
   auto& details = data.GetCurrentDrawDetails();
-  details.pipeline_handles_seen.push_back(pipeline.handle);
+
+  PipelineBindDetails bind_details = {
+      .pipeline = pipeline,
+      .pipeline_stage = stages,
+  };
+  auto shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
+  for (auto compatible_stage : renodx::utils::shader::COMPATIBLE_STAGES) {
+    if ((stages & compatible_stage) == compatible_stage) {
+      auto shader_hash = shader_state.GetCurrentShaderHash(compatible_stage);
+      bind_details.shader_hashes.push_back(shader_hash);
+    }
+  }
+
+  details.pipeline_binds.push_back(bind_details);
 }
 
 bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_method) {
@@ -411,19 +424,19 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
               ImGui::TableNextColumn();
               ImGui::Text("%03d", draw_index);
 
-              for (auto pipeline_handle : draw_details.pipeline_handles_seen) {
-                auto pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(device, {pipeline_handle});
+              for (const auto& pipeline_bind : draw_details.pipeline_binds) {
+                auto pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(device, pipeline_bind.pipeline);
                 if (!pipeline_details.has_value()) continue;
 
                 if (!pipeline_details->tag.has_value()) {
                   pipeline_details->tag = "";
-                  auto result = renodx::utils::trace::GetDebugName(device->get_api(), pipeline_handle);
+                  auto result = renodx::utils::trace::GetDebugName(device->get_api(), pipeline_bind.pipeline);
                   if (result.has_value()) {
                     pipeline_details->tag = result.value();
                   }
                 }
 
-                for (auto& [subobject_index, shader_hash] : pipeline_details->shader_hashes_by_index) {
+                for (const auto& shader_hash : pipeline_bind.shader_hashes) {
                   ++row_index;  // Count rows regardless of tree node state
                   if (draw_node_open) {
                     auto& shader_details = data.GetShaderDetails(shader_hash);
@@ -435,38 +448,31 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
                                         | setting_row_selection.GetTreeNodeFlag(row_index);
 
                     ImGui::PushID(row_index);
-                    if (!shader_details.program_version.has_value()) {
+                    if (shader_hash != 0u && !shader_details.program_version.has_value()) {
                       try {
-                        auto shader_data = pipeline_details->GetShaderData(shader_hash, subobject_index);
+                        auto shader_data = pipeline_details->GetShaderData(shader_hash);
                         if (!shader_data.has_value()) throw std::exception("Failed to get shader data");
                         shader_details.program_version = renodx::utils::shader::compiler::DecodeShaderVersion(shader_data.value());
                       } catch (const std::exception& e) {
-                        reshade::log_message(reshade::log_level::error, e.what());
+                        reshade::log_message(reshade::log_level::error, s.str().c_str());
                       }
                     }
                     // Fallback to subobject
-                    if (!shader_details.program_version.has_value()) {
-                      static std::unordered_map<reshade::api::pipeline_subobject_type, const char*> mapping = {
-                          {reshade::api::pipeline_subobject_type::vertex_shader, "vs"},
-                          {reshade::api::pipeline_subobject_type::pixel_shader, "ps"},
-                          {reshade::api::pipeline_subobject_type::compute_shader, "cs"},
-                      };
-                      if (auto pair = mapping.find(pipeline_details->subobjects[subobject_index].type); pair != mapping.end()) {
-                        ImGui::TreeNodeEx("", bullet_flags, "%s", pair->second);
-                      } else {
-                        ImGui::TreeNodeEx("", bullet_flags, "%s", "Unknown Shader");
-                      }
-                    } else {
+                    if (shader_details.program_version.has_value()) {
                       ImGui::TreeNodeEx("", bullet_flags, "%s_%d_%d",
                                         shader_details.program_version->GetKindAbbr(),
                                         shader_details.program_version->GetMajor(),
                                         shader_details.program_version->GetMinor());
+                    } else {
+                      std::stringstream s;
+                      s << pipeline_bind.pipeline_stage;
+                      ImGui::TreeNodeEx("", bullet_flags, "%s", s.str().c_str());
                     }
                     ImGui::PopID();
                     if (ImGui::IsItemClicked()) {
                       setting_row_selection = {
                           .row_id = row_index,
-                          .pipeline_handle = pipeline_handle,
+                          .pipeline_handle = pipeline_bind.pipeline.handle,
                           .shader_hash = shader_hash,
                       };
 

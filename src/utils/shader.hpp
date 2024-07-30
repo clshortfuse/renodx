@@ -499,7 +499,7 @@ static void OnBindPipeline(
 
   if (pipeline.handle == 0) {
     for (auto compatible_stage : COMPATIBLE_STAGES) {
-      if ((stage | compatible_stage) != 0) {
+      if ((stage & compatible_stage) == compatible_stage) {
         cmd_list_data.current_shaders_hashes.erase(compatible_stage);
         if (use_replace_on_bind) {
           cmd_list_data.pending_replacements.erase(compatible_stage);
@@ -537,7 +537,7 @@ static void OnBindPipeline(
   }
 
   for (auto compatible_stage : COMPATIBLE_STAGES) {
-    if ((stage | compatible_stage) == 0) continue;
+    if ((stage & compatible_stage) != compatible_stage) continue;
     if (auto pair = details.shader_hashes_by_stage.find(compatible_stage);
         pair != details.shader_hashes_by_stage.end()) {
       cmd_list_data.current_shaders_hashes[compatible_stage] = pair->second;
