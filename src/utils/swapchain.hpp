@@ -5,6 +5,9 @@
 
 #pragma once
 
+#include <dxgi1_6.h>
+#include <ios>
+#include <mutex>
 #include <unordered_set>
 #include <vector>
 
@@ -14,6 +17,12 @@
 #include "./resource.hpp"
 
 namespace renodx::utils::swapchain {
+
+namespace internal {
+static std::shared_mutex mutex;
+static reshade::api::effect_runtime* current_effect_runtime = nullptr;
+static reshade::api::color_space current_color_space = reshade::api::color_space::unknown;
+}  // namespace internal
 
 struct __declspec(uuid("25b7ec11-a51f-4884-a6f7-f381d198b9af")) SwapchainData {
   reshade::api::swapchain_desc original_descc;
@@ -80,6 +89,23 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
     for (const uint64_t handle : swapchain_data.back_buffers) {
       device_data.back_buffers.erase(handle);
     }
+  }
+}
+
+static void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
+  std::unique_lock lock(internal::mutex);
+  internal::current_effect_runtime = runtime;
+  reshade::log_message(reshade::log_level::info, "Effect runtime created.");
+  if (internal::current_color_space != reshade::api::color_space::unknown) {
+    runtime->set_color_space(internal::current_color_space);
+    reshade::log_message(reshade::log_level::info, "Effect runtime colorspace updated.");
+  }
+}
+
+static void OnDestroyEffectRuntime(reshade::api::effect_runtime* runtime) {
+  std::unique_lock lock(internal::mutex);
+  if (internal::current_effect_runtime == runtime) {
+    internal::current_effect_runtime = nullptr;
   }
 }
 
@@ -185,6 +211,133 @@ static reshade::api::resource_view& GetDepthStencil(reshade::api::command_list* 
   return cmd_list_data.current_depth_stencil;
 };
 
+static bool IsDirectX(reshade::api::swapchain* swapchain) {
+  auto* device = swapchain->get_device();
+  switch (device->get_api()) {
+    case reshade::api::device_api::d3d9:
+    case reshade::api::device_api::d3d10:
+    case reshade::api::device_api::d3d11:
+    case reshade::api::device_api::d3d12:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::color_space color_space) {
+  if (!IsDirectX(swapchain)) return false;
+
+  DXGI_COLOR_SPACE_TYPE dx_color_space = DXGI_COLOR_SPACE_CUSTOM;
+  switch (color_space) {
+    case reshade::api::color_space::srgb_nonlinear:       dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709; break;
+    case reshade::api::color_space::extended_srgb_linear: dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709; break;
+    case reshade::api::color_space::hdr10_st2084:         dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020; break;
+    case reshade::api::color_space::hdr10_hlg:            dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P2020; break;
+    default:                                              return false;
+  }
+
+  auto* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
+
+  IDXGISwapChain4* swapchain4;
+
+  if (!SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
+    reshade::log_message(reshade::log_level::error, "changeColorSpace(Failed to get native swap chain)");
+    return false;
+  }
+
+  const HRESULT hr = swapchain4->SetColorSpace1(dx_color_space);
+  swapchain4->Release();
+  swapchain4 = nullptr;
+  if (!SUCCEEDED(hr)) {
+    return false;
+  }
+
+  std::unique_lock lock(internal::mutex);
+  internal::current_color_space = color_space;
+
+  if (internal::current_effect_runtime != nullptr) {
+    internal::current_effect_runtime->set_color_space(internal::current_color_space);
+  } else {
+    reshade::log_message(reshade::log_level::warning, "renodx::utils::swapchain::ChangeColorSpace(effectRuntimeNotSet)");
+  }
+
+  return true;
+}
+
+static void ResizeBuffer(
+    reshade::api::swapchain* swapchain,
+    reshade::api::format format = reshade::api::format::r16g16b16a16_float,
+    reshade::api::color_space color_space = reshade::api::color_space::unknown) {
+  if (!IsDirectX(swapchain)) return;
+  auto* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
+
+  IDXGISwapChain4* swapchain4;
+
+  if (FAILED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
+    reshade::log_message(reshade::log_level::error, "resize_buffer(Failed to get native swap chain)");
+    return;
+  }
+
+  DXGI_SWAP_CHAIN_DESC1 desc;
+  if (FAILED(swapchain4->GetDesc1(&desc))) {
+    reshade::log_message(reshade::log_level::error, "resize_buffer(Failed to get desc)");
+    swapchain4->Release();
+    swapchain4 = nullptr;
+    return;
+  }
+
+  // Reshade formats are mostly compatible with DXGI_FORMAT
+  auto new_format = static_cast<DXGI_FORMAT>(format);
+
+  if (desc.Format == new_format) {
+    reshade::log_message(reshade::log_level::debug, "resize_buffer(Format OK)");
+    swapchain4->Release();
+    swapchain4 = nullptr;
+    return;
+  }
+  reshade::log_message(reshade::log_level::debug, "resize_buffer(Resizing...)");
+
+  const HRESULT hr = swapchain4->ResizeBuffers(
+      desc.BufferCount == 1 ? 2 : 0,
+      desc.Width,
+      desc.Height,
+      new_format,
+      desc.Flags);
+
+  swapchain4->Release();
+  swapchain4 = nullptr;
+
+  if (hr == DXGI_ERROR_INVALID_CALL) {
+    std::stringstream s;
+    s << "mods::swapchain::ResizeBuffer(DXGI_ERROR_INVALID_CALL";
+    s << ", BufferCount = " << desc.BufferCount;
+    s << ", Width = " << desc.Width;
+    s << ", Height = " << desc.Height;
+    s << ", Format = " << desc.Format;
+    s << ", Flags = 0x" << std::hex << desc.Flags << std::dec;
+    s << ')';
+    reshade::log_message(reshade::log_level::error, s.str().c_str());
+    return;
+  }
+  {
+    std::stringstream s;
+    s << "mods::swapchain::ResizeBuffer(";
+    s << "resize: " << hr;
+    s << ")";
+    reshade::log_message(reshade::log_level::info, s.str().c_str());
+  }
+
+  // Reshade doesn't actually inspect colorspace
+  // auto colorspace = swapchain->get_color_space();
+  if (color_space != reshade::api::color_space::unknown) {
+    if (ChangeColorSpace(swapchain, color_space)) {
+      reshade::log_message(reshade::log_level::info, "resize_buffer(Color Space: OK)");
+    } else {
+      reshade::log_message(reshade::log_level::error, "resize_buffer(Color Space: Failed.)");
+    }
+  }
+}
+
 static bool attached = false;
 
 inline void Use(DWORD fdw_reason) {
@@ -200,6 +353,8 @@ inline void Use(DWORD fdw_reason) {
       reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
       reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
       reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
+      reshade::register_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
+      reshade::register_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
 
       break;
     case DLL_PROCESS_DETACH:
@@ -209,6 +364,8 @@ inline void Use(DWORD fdw_reason) {
       reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
       reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitCommandList);
       reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
+      reshade::unregister_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
+      reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
 
       break;
   }

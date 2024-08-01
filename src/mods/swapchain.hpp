@@ -186,8 +186,6 @@ struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData 
 
 static std::vector<SwapChainUpgradeTarget> swap_chain_upgrade_targets = {};
 
-static reshade::api::effect_runtime* current_effect_runtime = nullptr;
-static reshade::api::color_space current_color_space = reshade::api::color_space::unknown;
 static reshade::api::format target_format = reshade::api::format::r16g16b16a16_float;
 static reshade::api::color_space target_color_space = reshade::api::color_space::extended_srgb_linear;
 
@@ -294,42 +292,7 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
          || (old_present_flags != desc.present_flags);
 }
 
-static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::color_space color_space) {
-  DXGI_COLOR_SPACE_TYPE dx_color_space = DXGI_COLOR_SPACE_CUSTOM;
-  switch (color_space) {
-    case reshade::api::color_space::srgb_nonlinear:       dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709; break;
-    case reshade::api::color_space::extended_srgb_linear: dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709; break;
-    case reshade::api::color_space::hdr10_st2084:         dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020; break;
-    case reshade::api::color_space::hdr10_hlg:            dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P2020; break;
-    default:                                              return false;
-  }
 
-  auto* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
-
-  IDXGISwapChain4* swapchain4;
-
-  if (!SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
-    reshade::log_message(reshade::log_level::error, "changeColorSpace(Failed to get native swap chain)");
-    return false;
-  }
-
-  const HRESULT hr = swapchain4->SetColorSpace1(dx_color_space);
-  swapchain4->Release();
-  swapchain4 = nullptr;
-  if (!SUCCEEDED(hr)) {
-    return false;
-  }
-
-  current_color_space = color_space;
-
-  if (current_effect_runtime != nullptr) {
-    current_effect_runtime->set_color_space(current_color_space);
-  } else {
-    reshade::log_message(reshade::log_level::warning, "changeColorSpace(effectRuntimeNotSet)");
-  }
-
-  return true;
-}
 
 static void CheckSwapchainSize(
     reshade::api::swapchain* swapchain,
@@ -385,72 +348,7 @@ static void CheckSwapchainSize(
   }
 }
 
-static void ResizeBuffer(
-    reshade::api::swapchain* swapchain) {
-  auto* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
 
-  IDXGISwapChain4* swapchain4;
-
-  if (FAILED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
-    reshade::log_message(reshade::log_level::error, "resize_buffer(Failed to get native swap chain)");
-    return;
-  }
-
-  DXGI_SWAP_CHAIN_DESC1 desc;
-  if (FAILED(swapchain4->GetDesc1(&desc))) {
-    reshade::log_message(reshade::log_level::error, "resize_buffer(Failed to get desc)");
-    swapchain4->Release();
-    swapchain4 = nullptr;
-    return;
-  }
-
-  auto new_format = (target_format == reshade::api::format::r16g16b16a16_float)
-                        ? DXGI_FORMAT_R16G16B16A16_FLOAT
-                        : DXGI_FORMAT_R10G10B10A2_UNORM;
-  if (desc.Format == new_format) {
-    reshade::log_message(reshade::log_level::debug, "resize_buffer(Format OK)");
-    swapchain4->Release();
-    swapchain4 = nullptr;
-    return;
-  }
-  reshade::log_message(reshade::log_level::debug, "resize_buffer(Resizing...)");
-
-  const HRESULT hr = swapchain4->ResizeBuffers(
-      desc.BufferCount == 1 ? 2 : 0,
-      desc.Width,
-      desc.Height,
-      new_format,
-      desc.Flags);
-
-  swapchain4->Release();
-  swapchain4 = nullptr;
-
-  if (hr == DXGI_ERROR_INVALID_CALL) {
-    std::stringstream s;
-    s << "mods::swapchain::ResizeBuffer(DXGI_ERROR_INVALID_CALL";
-    s << ", BufferCount = " << desc.BufferCount;
-    s << ", Width = " << desc.Width;
-    s << ", Height = " << desc.Height;
-    s << ", Format = " << desc.Format;
-    s << ", Flags = 0x" << std::hex << desc.Flags << std::dec;
-    s << ')';
-    reshade::log_message(reshade::log_level::error, s.str().c_str());
-    return;
-  }
-  std::stringstream s;
-  s << "mods::swapchain::ResizeBuffer(";
-  s << "resize: " << hr;
-  s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
-
-  // Reshade doesn't actually inspect colorspace
-  // auto colorspace = swapchain->get_color_space();
-  if (ChangeColorSpace(swapchain, target_color_space)) {
-    reshade::log_message(reshade::log_level::info, "resize_buffer(Color Space: OK)");
-  } else {
-    reshade::log_message(reshade::log_level::error, "resize_buffer(Color Space: Failed.)");
-  }
-}
 
 static void OnPresentForResizeBuffer(
     reshade::api::command_queue* queue,
@@ -461,7 +359,7 @@ static void OnPresentForResizeBuffer(
     const reshade::api::rect* dirty_rects) {
   if (use_resize_buffer_on_demand && !use_resize_buffer_on_present) return;
   reshade::unregister_event<reshade::addon_event::present>(OnPresentForResizeBuffer);
-  ResizeBuffer(swapchain);
+  renodx::utils::swapchain::ResizeBuffer(swapchain, target_format, target_color_space);
 }
 
 static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
@@ -488,17 +386,11 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
     if (use_resize_buffer_on_demand || use_resize_buffer_on_present) {
       reshade::register_event<reshade::addon_event::present>(OnPresentForResizeBuffer);
     } else if (!use_resize_buffer_on_set_full_screen) {
-      ResizeBuffer(swapchain);
+      renodx::utils::swapchain::ResizeBuffer(swapchain, target_format, target_color_space);
     }
     return;
   }
-  // Reshade doesn't actually inspect colorspace
-  // auto colorspace = swapchain->get_color_space();
-  if (ChangeColorSpace(swapchain, target_color_space)) {
-    reshade::log_message(reshade::log_level::info, "initSwapChain(Color Space: OK)");
-  } else {
-    reshade::log_message(reshade::log_level::error, "initSwapChain(Color Space: Failed.)");
-  }
+  renodx::utils::swapchain::ChangeColorSpace(swapchain, target_color_space);
 }
 
 static bool OnCreateResource(
@@ -2426,24 +2318,10 @@ static void OnBarrier(
   }
 }
 
-static void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
-  current_effect_runtime = runtime;
-  reshade::log_message(reshade::log_level::info, "Effect runtime created.");
-  if (current_color_space != reshade::api::color_space::unknown) {
-    runtime->set_color_space(current_color_space);
-    reshade::log_message(reshade::log_level::info, "Effect runtime colorspace updated.");
-  }
-}
-
-static void OnDestroyEffectRuntime(reshade::api::effect_runtime* runtime) {
-  if (current_effect_runtime == runtime) {
-    current_effect_runtime = nullptr;
-  }
-}
 
 static bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullscreen, void* hmonitor) {
   if (use_resize_buffer && use_resize_buffer_on_set_full_screen) {
-    ResizeBuffer(swapchain);
+    renodx::utils::swapchain::ResizeBuffer(swapchain, target_format, target_color_space);
   }
   auto* device = swapchain->get_device();
   if (device == nullptr) return false;
@@ -2544,8 +2422,6 @@ static void Use(DWORD fdw_reason) {
         // reshade::register_event<reshade::addon_event::barrier>(on_barrier);
       }
 
-      reshade::register_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
-      reshade::register_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
 
       reshade::register_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
 
@@ -2563,8 +2439,6 @@ static void Use(DWORD fdw_reason) {
       reshade::unregister_event<reshade::addon_event::create_resource_view>(OnCreateResourceView);
       reshade::unregister_event<reshade::addon_event::init_resource_view>(OnInitResourceView);
 
-      reshade::unregister_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
-      reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
 
       reshade::unregister_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
 
