@@ -217,7 +217,7 @@ void OnBindPipeline(
   };
   auto shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
   for (auto compatible_stage : renodx::utils::shader::COMPATIBLE_STAGES) {
-    if ((stages & compatible_stage) == compatible_stage) {
+    if ((stages & compatible_stage) != 0u) {
       auto shader_hash = shader_state.GetCurrentShaderHash(compatible_stage);
       bind_details.shader_hashes.push_back(shader_hash);
     }
@@ -293,9 +293,9 @@ void PerformShaderReload(reshade::api::device* device) {
   auto& data = device->get_private_data<DeviceData>();
   std::unique_lock lock(data.mutex);
   for (auto& [shader_hash, custom_shader] : new_shaders) {
-    renodx::utils::shader::RemoveRuntimeReplacement(shader_hash, device);
+    renodx::utils::shader::RemoveRuntimeReplacements(device, {shader_hash});
     if (!custom_shader.removed && custom_shader.IsCompilationOK()) {
-      renodx::utils::shader::AddRuntimeReplacement(shader_hash, custom_shader.GetCompilationData());
+      renodx::utils::shader::AddRuntimeReplacement(device, shader_hash, custom_shader.GetCompilationData());
     }
 
     auto& details = data.GetShaderDetails(shader_hash);
@@ -344,7 +344,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   {
     ImGui::BeginDisabled(setting_live_reload);
     if (ImGui::Button(std::format("Unload Shaders ({})", renodx::utils::shader::runtime_replacement_count.load()).c_str())) {
-      renodx::utils::shader::RemoveAllRuntimeReplacements(runtime->get_device());
+      renodx::utils::shader::RemoveRuntimeReplacements(runtime->get_device());
       renodx::utils::shader::compiler::watcher::CompileSync();
     }
     ImGui::EndDisabled();

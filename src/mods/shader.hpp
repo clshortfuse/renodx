@@ -771,15 +771,15 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
 
       if (force_pipeline_cloning || use_pipeline_layout_cloning) {
         for (const auto& [hash, shader] : (new_custom_shaders)) {
-          renodx::utils::shader::AddRuntimeReplacement(hash, shader.code);
+          renodx::utils::shader::QueueRuntimeReplacement(hash, shader.code);
         }
       } else {
         for (const auto& [hash, shader] : (new_custom_shaders)) {
           if (!shader.swap_chain_only && !shader.code.empty() && shader.index == -1) {
-            renodx::utils::shader::AddCompileTimeReplacement(hash, shader.code);
+            renodx::utils::shader::QueueCompileTimeReplacement(hash, shader.code);
           }
           // Use Runtime as fallback
-          renodx::utils::shader::AddRuntimeReplacement(hash, shader.code);
+          renodx::utils::shader::QueueRuntimeReplacement(hash, shader.code);
         }
       }
 
