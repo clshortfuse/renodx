@@ -39,4 +39,6 @@ RenoDX, short for "Renovation Engine for DirectX Games", is a toolset to mod gam
 
 # Marat's mods
 
-* [Ryza 2](https://marat569.github.io/renodx/renodx-ryza2.addon64)
+* [Atelier Ryza 2](https://marat569.github.io/renodx/renodx-ryza2.addon64)
+
+* [Atelier Ryza 3](https://marat569.github.io/renodx/renodx-ryza3.addon64)
