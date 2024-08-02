@@ -26,6 +26,14 @@
 #include "../utils/swapchain.hpp"
 
 namespace renodx::mods::swapchain {
+struct HashUint32T {
+  template <typename T>
+  inline typename std::uint32_t
+  operator()(const T value) const {
+    return static_cast<std::uint32_t>(value);
+  }
+};
+
 struct SwapChainUpgradeTarget {
   reshade::api::format old_format = reshade::api::format::r8g8b8a8_unorm;
   reshade::api::format new_format = reshade::api::format::r16g16b16a16_float;
@@ -46,7 +54,11 @@ struct SwapChainUpgradeTarget {
 
   bool ignore_reset = false;
 
-  std::unordered_map<reshade::api::resource_usage, std::unordered_map<reshade::api::format, reshade::api::format>> view_upgrades;
+  std::unordered_map<
+      reshade::api::resource_usage,
+      std::unordered_map<reshade::api::format, reshade::api::format>,
+      HashUint32T>
+      view_upgrades;
 
   [[nodiscard]]
   bool CheckResourceDesc(
