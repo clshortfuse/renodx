@@ -19,53 +19,21 @@
 #include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
+#include "./hash.hpp"
+
 #ifdef DEBUG_LEVEL_1
 #include "./format.hpp"
 #endif
 
 namespace renodx::utils::descriptor {
 
-struct HashPair {
-  /// https://chromium.googlesource.com/chromium/+/02456cb7f063e2d2f6ee3c7cbacbfc239b171ac3/cc/hash_pair.h
-  template <class T1, class T2>
-  size_t operator()(const std::pair<T1, T2> value) const {
-    const uint32_t short_random1 = 842304669U;
-    const uint32_t short_random2 = 619063811U;
-    const uint32_t short_random3 = 937041849U;
-    const uint32_t short_random4 = 3309708029U;
 
-    const uint64_t value1 = value.first;
-    const uint64_t value2 = value.second;
-    const auto value1a = static_cast<uint32_t>(value1 & 0xffffffff);
-    const auto value1b = static_cast<uint32_t>((value1 >> 32) & 0xffffffff);
-    const auto value2a = static_cast<uint32_t>(value2 & 0xffffffff);
-    const auto value2b = static_cast<uint32_t>((value2 >> 32) & 0xffffffff);
-
-    const uint64_t product1 = static_cast<uint64_t>(value1a) * short_random1;
-    const uint64_t product2 = static_cast<uint64_t>(value1b) * short_random2;
-    const uint64_t product3 = static_cast<uint64_t>(value2a) * short_random3;
-    const uint64_t product4 = static_cast<uint64_t>(value2b) * short_random4;
-
-    uint64_t hash64 = product1 + product2 + product3 + product4;
-
-    if (sizeof(std::size_t) >= sizeof(uint64_t)) {
-      return static_cast<std::size_t>(hash64);
-    }
-
-    const uint64_t odd_random = 1578233944LL << 32 | 194370989LL;
-    const uint32_t shift_random = 20591U << 16;
-
-    hash64 = hash64 * odd_random + shift_random;
-    const auto high_bits = static_cast<std::size_t>(hash64 >> (sizeof(uint64_t) - sizeof(std::size_t)));
-    return high_bits;
-  }
-};
 
 struct __declspec(uuid("018fa2c9-7a8b-76dc-bc84-87c53574223f")) DeviceData {
   // <descriptor_table.handle[index], <resourceView.handle>>
-  std::unordered_map<std::pair<uint64_t, uint32_t>, reshade::api::descriptor_table_update, HashPair> table_descriptor_resource_views;
+  std::unordered_map<std::pair<uint64_t, uint32_t>, reshade::api::descriptor_table_update, hash::HashPair> table_descriptor_resource_views;
   // Index of table_descriptor_resource_views
-  std::unordered_map<uint64_t, std::unordered_set<std::pair<uint64_t, uint32_t>, HashPair>*> resource_view_table_description_locations;
+  std::unordered_map<uint64_t, std::unordered_set<std::pair<uint64_t, uint32_t>, hash::HashPair>*> resource_view_table_description_locations;
 
   std::shared_mutex mutex;
 };
@@ -216,7 +184,7 @@ static bool LogDescriptorTableResourceView(
         reshade::log_message(reshade::log_level::info, s.str().c_str());
       }
 #endif
-      data.resource_view_table_description_locations.insert({view.handle, new std::unordered_set<std::pair<uint64_t, uint32_t>, HashPair>{primary_key}});
+      data.resource_view_table_description_locations.insert({view.handle, new std::unordered_set<std::pair<uint64_t, uint32_t>, hash::HashPair>{primary_key}});
     }
     return true;
   }
