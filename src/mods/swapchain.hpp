@@ -44,9 +44,9 @@ struct SwapChainUpgradeTarget {
   reshade::api::resource_usage usage = reshade::api::resource_usage::undefined;
   reshade::api::resource_usage state = reshade::api::resource_usage::undefined;
 
-  constexpr static const float ASPECT_RATIO_IGNORE = -1.f;
-  constexpr static const float ASPECT_RATIO_BACK_BUFFER = 0.f;
-  float aspect_ratio = ASPECT_RATIO_IGNORE;
+  static const int16_t BACK_BUFFER = -1;
+  static const int16_t ANY = -2;
+  float aspect_ratio = ANY;
 
   uint32_t usage_set = 0;
   uint32_t usage_unset = 0;
@@ -58,15 +58,13 @@ struct SwapChainUpgradeTarget {
       reshade::api::format, utils::hash::HashPair>
       view_upgrades;
 
-  static const int16_t DIMENSIONS_BACKBUFFER = -1;
-  static const int16_t DIMENSIONS_ANY = -2;
   struct Dimensions {
-    int16_t width = DIMENSIONS_ANY;
-    int16_t height = DIMENSIONS_ANY;
-    int16_t depth = DIMENSIONS_ANY;
+    int16_t width = ANY;
+    int16_t height = ANY;
+    int16_t depth = ANY;
   };
-  Dimensions dimensions = {DIMENSIONS_BACKBUFFER, DIMENSIONS_BACKBUFFER, DIMENSIONS_BACKBUFFER};
-  Dimensions new_dimensions = {DIMENSIONS_ANY, DIMENSIONS_ANY, DIMENSIONS_ANY};
+  Dimensions dimensions = {BACK_BUFFER, BACK_BUFFER, BACK_BUFFER};
+  Dimensions new_dimensions = {ANY, ANY, ANY};
 
   [[nodiscard]] bool CheckResourceDesc(
       reshade::api::resource_desc desc,
@@ -80,14 +78,14 @@ struct SwapChainUpgradeTarget {
       if (this->state != state) return false;
     }
     if (!this->ignore_size) {
-      if (this->aspect_ratio == ASPECT_RATIO_IGNORE) {
-        if (dimensions.width == DIMENSIONS_BACKBUFFER) {
+      if (this->aspect_ratio == ANY) {
+        if (dimensions.width == BACK_BUFFER) {
           if (desc.texture.width != back_buffer_desc.texture.width) return false;
         } else if (dimensions.width > 0) {
           if (desc.texture.width != dimensions.width) return false;
         }
 
-        if (dimensions.height == DIMENSIONS_BACKBUFFER) {
+        if (dimensions.height == BACK_BUFFER) {
           if (desc.texture.height != back_buffer_desc.texture.height) return false;
         } else if (dimensions.height > 0) {
           if (desc.texture.height != dimensions.height) return false;
@@ -99,7 +97,7 @@ struct SwapChainUpgradeTarget {
       } else {
         const float view_ratio = static_cast<float>(desc.texture.width) / static_cast<float>(desc.texture.height);
         float target_ratio;
-        if (this->aspect_ratio == ASPECT_RATIO_BACK_BUFFER) {
+        if (this->aspect_ratio == BACK_BUFFER) {
           target_ratio = back_buffer_desc.texture.width / back_buffer_desc.texture.height;
         } else {
           target_ratio = this->aspect_ratio;
@@ -533,13 +531,13 @@ static bool OnCreateResource(
 
   desc.texture.format = found_target->new_format;
 
-  if (found_target->new_dimensions.width == SwapChainUpgradeTarget::DIMENSIONS_BACKBUFFER) {
+  if (found_target->new_dimensions.width == SwapChainUpgradeTarget::BACK_BUFFER) {
     desc.texture.width = device_back_buffer_desc.texture.width;
   } else if (found_target->new_dimensions.width >= 0) {
     desc.texture.width = found_target->new_dimensions.width;
   }
 
-  if (found_target->new_dimensions.height == SwapChainUpgradeTarget::DIMENSIONS_BACKBUFFER) {
+  if (found_target->new_dimensions.height == SwapChainUpgradeTarget::BACK_BUFFER) {
     desc.texture.height = device_back_buffer_desc.texture.height;
   } else if (found_target->new_dimensions.height >= 0) {
     desc.texture.height = found_target->new_dimensions.height;
