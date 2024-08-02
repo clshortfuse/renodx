@@ -53,6 +53,8 @@ struct SwapChainUpgradeTarget {
       reshade::api::format, utils::hash::HashPair>
       view_upgrades;
 
+  std::pair<uint8_t, uint8_t> dimensions = {0, 0};
+
   [[nodiscard]]
   bool CheckResourceDesc(
       reshade::api::resource_desc desc,
@@ -66,20 +68,25 @@ struct SwapChainUpgradeTarget {
       if (this->state != state) return false;
     }
     if (!this->ignore_size) {
-      if (this->aspect_ratio == ASPECT_RATIO_IGNORE) {
-        if (desc.texture.width != back_buffer_desc.texture.width) return false;
-        if (desc.texture.height != back_buffer_desc.texture.height) return false;
+      if (this->dimensions.first != 0 && this->dimensions.second != 0) {
+        if (desc.texture.width != this->dimensions.first) return false;
+        if (desc.texture.height != this->dimensions.second) return false;
       } else {
-        const float view_ratio = static_cast<float>(desc.texture.width) / static_cast<float>(desc.texture.height);
-        float target_ratio;
-        if (this->aspect_ratio == ASPECT_RATIO_BACK_BUFFER) {
-          target_ratio = back_buffer_desc.texture.width / back_buffer_desc.texture.height;
+        if (this->aspect_ratio == ASPECT_RATIO_IGNORE) {
+          if (desc.texture.width != back_buffer_desc.texture.width) return false;
+          if (desc.texture.height != back_buffer_desc.texture.height) return false;
         } else {
-          target_ratio = this->aspect_ratio;
+          const float view_ratio = static_cast<float>(desc.texture.width) / static_cast<float>(desc.texture.height);
+          float target_ratio;
+          if (this->aspect_ratio == ASPECT_RATIO_BACK_BUFFER) {
+            target_ratio = back_buffer_desc.texture.width / back_buffer_desc.texture.height;
+          } else {
+            target_ratio = this->aspect_ratio;
+          }
+          static const float tolerance = 0.0001f;
+          const float diff = std::abs(view_ratio - target_ratio);
+          if (diff > tolerance) return false;
         }
-        static const float tolerance = 0.0001f;
-        const float diff = std::abs(view_ratio - target_ratio);
-        if (diff > tolerance) return false;
       }
     }
     return true;
