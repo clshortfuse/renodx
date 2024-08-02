@@ -10,11 +10,16 @@
 #include <dxgi.h>
 #include <dxgi1_6.h>
 
+#include <array>
+#include <cstdint>
 #include <cstdio>
+#include <initializer_list>
+#include <optional>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <include/reshade.hpp>
@@ -39,8 +44,8 @@ struct SwapChainUpgradeTarget {
   reshade::api::resource_usage usage = reshade::api::resource_usage::undefined;
   reshade::api::resource_usage state = reshade::api::resource_usage::undefined;
 
-  const float ASPECT_RATIO_IGNORE = -1.f;
-  const float ASPECT_RATIO_BACK_BUFFER = 0.f;
+  constexpr static const float ASPECT_RATIO_IGNORE = -1.f;
+  constexpr static const float ASPECT_RATIO_BACK_BUFFER = 0.f;
   float aspect_ratio = ASPECT_RATIO_IGNORE;
 
   uint32_t usage_set = 0;
@@ -53,11 +58,17 @@ struct SwapChainUpgradeTarget {
       reshade::api::format, utils::hash::HashPair>
       view_upgrades;
 
-  std::pair<uint8_t, uint8_t> dimensions = {0, 0};
-  std::pair<uint8_t, uint8_t> new_dimensions = {0, 0};
+  static const int16_t DIMENSIONS_BACKBUFFER = -1;
+  static const int16_t DIMENSIONS_ANY = -2;
+  struct Dimensions {
+    int16_t width = DIMENSIONS_ANY;
+    int16_t height = DIMENSIONS_ANY;
+    int16_t depth = DIMENSIONS_ANY;
+  };
+  Dimensions dimensions = {DIMENSIONS_BACKBUFFER, DIMENSIONS_BACKBUFFER, DIMENSIONS_BACKBUFFER};
+  Dimensions new_dimensions = {DIMENSIONS_ANY, DIMENSIONS_ANY, DIMENSIONS_ANY};
 
-  [[nodiscard]]
-  bool CheckResourceDesc(
+  [[nodiscard]] bool CheckResourceDesc(
       reshade::api::resource_desc desc,
       reshade::api::resource_desc back_buffer_desc,
       reshade::api::resource_usage state = reshade::api::resource_usage::undefined) const {
@@ -69,25 +80,33 @@ struct SwapChainUpgradeTarget {
       if (this->state != state) return false;
     }
     if (!this->ignore_size) {
-      if (this->dimensions.first != 0 && this->dimensions.second != 0) {
-        if (desc.texture.width != this->dimensions.first) return false;
-        if (desc.texture.height != this->dimensions.second) return false;
-      } else {
-        if (this->aspect_ratio == ASPECT_RATIO_IGNORE) {
+      if (this->aspect_ratio == ASPECT_RATIO_IGNORE) {
+        if (dimensions.width == DIMENSIONS_BACKBUFFER) {
           if (desc.texture.width != back_buffer_desc.texture.width) return false;
-          if (desc.texture.height != back_buffer_desc.texture.height) return false;
-        } else {
-          const float view_ratio = static_cast<float>(desc.texture.width) / static_cast<float>(desc.texture.height);
-          float target_ratio;
-          if (this->aspect_ratio == ASPECT_RATIO_BACK_BUFFER) {
-            target_ratio = back_buffer_desc.texture.width / back_buffer_desc.texture.height;
-          } else {
-            target_ratio = this->aspect_ratio;
-          }
-          static const float tolerance = 0.0001f;
-          const float diff = std::abs(view_ratio - target_ratio);
-          if (diff > tolerance) return false;
+        } else if (dimensions.width > 0) {
+          if (desc.texture.width != dimensions.width) return false;
         }
+
+        if (dimensions.height == DIMENSIONS_BACKBUFFER) {
+          if (desc.texture.height != back_buffer_desc.texture.height) return false;
+        } else if (dimensions.height > 0) {
+          if (desc.texture.height != dimensions.height) return false;
+        }
+
+        if (dimensions.depth >= 0) {
+          if (desc.texture.depth_or_layers != dimensions.depth) return false;
+        }
+      } else {
+        const float view_ratio = static_cast<float>(desc.texture.width) / static_cast<float>(desc.texture.height);
+        float target_ratio;
+        if (this->aspect_ratio == ASPECT_RATIO_BACK_BUFFER) {
+          target_ratio = back_buffer_desc.texture.width / back_buffer_desc.texture.height;
+        } else {
+          target_ratio = this->aspect_ratio;
+        }
+        static const float TOLERANCE = 0.0001f;
+        const float diff = std::abs(view_ratio - target_ratio);
+        if (diff > TOLERANCE) return false;
       }
     }
     return true;
@@ -514,11 +533,20 @@ static bool OnCreateResource(
 
   desc.texture.format = found_target->new_format;
 
-  if (found_target->new_dimensions.first != 0u) {
-    desc.texture.width = found_target->new_dimensions.first;
+  if (found_target->new_dimensions.width == SwapChainUpgradeTarget::DIMENSIONS_BACKBUFFER) {
+    desc.texture.width = device_back_buffer_desc.texture.width;
+  } else if (found_target->new_dimensions.width >= 0) {
+    desc.texture.width = found_target->new_dimensions.width;
   }
-  if (found_target->new_dimensions.second != 0u) {
-    desc.texture.height = found_target->new_dimensions.second;
+
+  if (found_target->new_dimensions.height == SwapChainUpgradeTarget::DIMENSIONS_BACKBUFFER) {
+    desc.texture.height = device_back_buffer_desc.texture.height;
+  } else if (found_target->new_dimensions.height >= 0) {
+    desc.texture.height = found_target->new_dimensions.height;
+  }
+
+  if (found_target->new_dimensions.depth >= 0) {
+    desc.texture.depth_or_layers = found_target->new_dimensions.depth;
   }
 
   desc.usage = static_cast<reshade::api::resource_usage>(static_cast<uint32_t>(desc.usage) | found_target->usage_set & ~found_target->usage_unset);
