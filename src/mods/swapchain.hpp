@@ -22,17 +22,11 @@
 #include "../utils/descriptor.hpp"
 #include "../utils/float16.hpp"
 #include "../utils/format.hpp"
+#include "../utils/hash.hpp"
 #include "../utils/resource.hpp"
 #include "../utils/swapchain.hpp"
 
 namespace renodx::mods::swapchain {
-struct HashUint32T {
-  template <typename T>
-  inline typename std::uint32_t
-  operator()(const T value) const {
-    return static_cast<std::uint32_t>(value);
-  }
-};
 
 struct SwapChainUpgradeTarget {
   reshade::api::format old_format = reshade::api::format::r8g8b8a8_unorm;
@@ -55,9 +49,8 @@ struct SwapChainUpgradeTarget {
   bool ignore_reset = false;
 
   std::unordered_map<
-      reshade::api::resource_usage,
-      std::unordered_map<reshade::api::format, reshade::api::format>,
-      HashUint32T>
+      std::pair<reshade::api::resource_usage, reshade::api::format>,
+      reshade::api::format, utils::hash::HashPair>
       view_upgrades;
 
   [[nodiscard]]
@@ -182,7 +175,7 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   std::unordered_map<uint64_t, reshade::api::resource> rebuilt_buffers;
 
   // <descriptor_table.handle[index], <clone_resource_view.handle>>
-  std::unordered_map<std::pair<uint64_t, uint32_t>, uint64_t, renodx::utils::descriptor::HashPair> table_descriptor_resource_view_replacements;
+  std::unordered_map<std::pair<uint64_t, uint32_t>, uint64_t, utils::hash::HashPair> table_descriptor_resource_view_replacements;
 
   // <descriptor_heap.handle, std::map<base_offset, descriptor_table>>
   std::unordered_map<uint64_t, std::unordered_map<uint32_t, HeapDescriptorInfo*>> heap_descriptor_infos;
@@ -304,8 +297,6 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
          || (old_present_flags != desc.present_flags);
 }
 
-
-
 static void CheckSwapchainSize(
     reshade::api::swapchain* swapchain,
     reshade::api::resource_desc buffer_desc) {
@@ -359,8 +350,6 @@ static void CheckSwapchainSize(
     SetWindowPos(output_window, HWND_TOP, 0, 0, screen_width, screen_height, SWP_FRAMECHANGED);
   }
 }
-
-
 
 static void OnPresentForResizeBuffer(
     reshade::api::command_queue* queue,
@@ -902,14 +891,10 @@ static bool OnCreateResourceView(
              pair != private_data.resource_upgrade_targets.end()) {
     auto* target = pair->second;
     bool found_upgrade = false;
-    if (auto pair2 = target->view_upgrades.find(usage_type);
+    if (auto pair2 = target->view_upgrades.find({usage_type, desc.format});
         pair2 != target->view_upgrades.end()) {
-      auto format_map = pair2->second;
-      if (auto pair3 = format_map.find(desc.format);
-          pair3 != format_map.end()) {
-        new_desc.format = pair3->second;
-        found_upgrade = true;
-      }
+      new_desc.format = pair2->second;
+      found_upgrade = true;
     }
     if (!found_upgrade) {
       switch (desc.format) {
@@ -2330,7 +2315,6 @@ static void OnBarrier(
   }
 }
 
-
 static bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullscreen, void* hmonitor) {
   if (use_resize_buffer && use_resize_buffer_on_set_full_screen) {
     renodx::utils::swapchain::ResizeBuffer(swapchain, target_format, target_color_space);
@@ -2434,7 +2418,6 @@ static void Use(DWORD fdw_reason) {
         // reshade::register_event<reshade::addon_event::barrier>(on_barrier);
       }
 
-
       reshade::register_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
 
       break;
@@ -2450,7 +2433,6 @@ static void Use(DWORD fdw_reason) {
 
       reshade::unregister_event<reshade::addon_event::create_resource_view>(OnCreateResourceView);
       reshade::unregister_event<reshade::addon_event::init_resource_view>(OnInitResourceView);
-
 
       reshade::unregister_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
 
