@@ -54,6 +54,7 @@ struct SwapChainUpgradeTarget {
       view_upgrades;
 
   std::pair<uint8_t, uint8_t> dimensions = {0, 0};
+  std::pair<uint8_t, uint8_t> new_dimensions = {0, 0};
 
   [[nodiscard]]
   bool CheckResourceDesc(
@@ -512,6 +513,14 @@ static bool OnCreateResource(
       s.str().c_str());
 
   desc.texture.format = found_target->new_format;
+
+  if (found_target->new_dimensions.first != 0u) {
+    desc.texture.width = found_target->new_dimensions.first;
+  }
+  if (found_target->new_dimensions.second != 0u) {
+    desc.texture.height = found_target->new_dimensions.second;
+  }
+
   desc.usage = static_cast<reshade::api::resource_usage>(static_cast<uint32_t>(desc.usage) | found_target->usage_set & ~found_target->usage_unset);
 
   private_data.original_resource = original_resource;
