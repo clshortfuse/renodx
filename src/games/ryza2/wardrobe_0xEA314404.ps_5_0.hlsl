@@ -1,9 +1,10 @@
 // ---- Created with 3Dmigoto v1.3.16 on Tue Jul 23 02:31:56 2024
 #include "./shared.h"
+#include "./tonemapper.hlsl" //Include our custom tonemapper
+
 
 // This shader controls the warwdrobe, where you change outfits
 // When the wardrobe is active, the main tonemapper is unloaded, and replaced with this shader
-// I'll just paste in reno's tonemapper here :sadge:
 
 cbuffer _Globals : register(b0)
 {
@@ -107,77 +108,12 @@ void main(
   r0.xyz = fGamma * r0.xyz;
   o0.xyz = exp2(r0.xyz);
  //vanilla tonemapper end
-    
-  
-    float3 originalSDR = o0.xyz;
+
+    float3 vanillaColor = o0.xyz;
+   
     float3 outputColor;
 
-    originalSDR.rgb = renodx::color::correct::PowerGammaCorrect(originalSDR.rgb); //2.2 gamma correction for SDR; helps hue correction
-        
-    
- 
-    //start custom tonemapper
-    if (injectedData.toneMapType == 0.f)
-    {
-        
-        outputColor = originalSDR;
-    }
-    else
-    {
-        if (injectedData.blend)
-        { //added blend to fix colors up 
-            untonemapped.rgb = lerp(originalSDR.rgb * 1.717f, untonemapped.rgb, saturate(originalSDR.rgb * 1.717f));
-        }
-        outputColor = untonemapped;
-        //outputColor /= 1.717f; // makes untonemapped better match vanilla sdr mid-tones and shadows
-        
-    }
-    
-    if (injectedData.toneMapType == 1.f)
-    {
-        outputColor /= 1.717f; // makes untonemapped better match vanilla sdr mid-tones and shadows
-    }
-    
-    
-    outputColor = max(0, outputColor);
-    //float vanillaMidGray = renodx::color::y::from::BT709(r1.xyz);
-    float vanillaMidGray = 0.1f; //0.18f old default
-    float renoDRTContrast = 1.f;
-    float renoDRTFlare = 0.f;
-    float renoDRTShadows = 1.f;
-    //float renoDRTDechroma = 0.8f;
-    float renoDRTDechroma = injectedData.colorGradeBlowout;
-    float renoDRTSaturation = 1.15; //
-    float renoDRTHighlights = 1.f;
-
-    renodx::tonemap::Config config = renodx::tonemap::config::Create(
-      injectedData.toneMapType,
-      injectedData.toneMapPeakNits,
-      injectedData.toneMapGameNits,
-      0,
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeContrast,
-      injectedData.colorGradeSaturation,
-      vanillaMidGray,
-      vanillaMidGray * 100.f,
-      renoDRTHighlights,
-      renoDRTShadows,
-      renoDRTContrast,
-      renoDRTSaturation,
-      renoDRTDechroma,
-      renoDRTFlare);
-
-    outputColor = renodx::tonemap::config::Apply(outputColor, config);
-    
-   
- 
-    if (injectedData.toneMapHueCorrection)
-    {
-        float3 hueCorrected = renodx::color::correct::Hue(outputColor, originalSDR);
-        outputColor = lerp(outputColor, hueCorrected, injectedData.toneMapHueCorrection);
-    }
+    outputColor = applyUserTonemap(untonemapped, vanillaColor, 0.1f); //apply our custom tonemap
     
     outputColor *= injectedData.toneMapGameNits; // Scale by user nits
         
