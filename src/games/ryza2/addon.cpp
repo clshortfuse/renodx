@@ -7,6 +7,8 @@
 
 #define DEBUG_LEVEL_0
 
+//#define DEBUG_LEVEL_1 //added
+
 #include <embed/0x006F1991.h> //ui -- overworld hud
 #include <embed/0x892226E0.h> //ui -- fixs artifacts in menus (1)
 #include <embed/0x9F6B73CA.h> //ui -- fixs artifacts in menus (2)
@@ -185,6 +187,16 @@ renodx::utils::settings::Settings settings = {
        
     },
 
+     new renodx::utils::settings::Setting{
+        .key = "fxBloom",
+        .binding = &shader_injection.fxBloom,
+        .default_value = 50.f,
+        .label = "Bloom Strength",
+        .section = "Effects",
+        .tooltip = "Controls Bloom Strength",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
 
     new renodx::utils::settings::Setting{
         .key = "fxaa",
@@ -216,6 +228,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("blend", 0);
   //Start PostProcess effects on/off
   renodx::utils::settings::UpdateSetting("bloom", 1);
+  renodx::utils::settings::UpdateSetting("fxBloom", 50);
   renodx::utils::settings::UpdateSetting("fxaa", 1);
 }
 
@@ -232,7 +245,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
-      //renodx::mods::shader::force_pipeline_cloning = true; //So the mod works with the toolkit
+      renodx::mods::shader::force_pipeline_cloning = true; //So the mod works with the toolkit
 
       renodx::mods::swapchain::force_borderless = false; //needed for stability
       renodx::mods::swapchain::prevent_full_screen = false; //needed for stability
