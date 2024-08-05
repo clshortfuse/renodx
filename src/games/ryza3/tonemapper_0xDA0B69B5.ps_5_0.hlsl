@@ -1,8 +1,10 @@
 // ---- Created with 3Dmigoto v1.3.16 on Wed Jul 31 20:19:10 2024
+//main tonemapper [all effects on + taa + AA off]
 
 #include "./shared.h"
+#include "./tonemapper.hlsl" //Include our custom tonemapper
 
-//main tonemapper [all effects on + taa]
+
 
 cbuffer _Globals : register(b0)
 {
@@ -83,7 +85,9 @@ void main(
 
   r0.xyzw = smplScene_Tex.Sample(smplScene_s, v1.xy).xyzw;
   
+    
   //CA
+    if (injectedData.chromaticAberration){ //CA on/off
   r1.x = cmp(fChromaAberraParam.x != 0.000000);
   if (r1.x != 0) {
     r1.xy = -fChromaAberraParam.xy * float2(-0.166666672,-0.166666672) + v1.xy;
@@ -120,8 +124,8 @@ void main(
       r3.w = (int)r3.w + 1;
     }
     r0.xyz = r4.xyz / r5.xyz;
-  }
-    
+  }//CA end
+}
   
   r1.x = smplAdaptedLumCur_Tex.Sample(smplAdaptedLumCur_s, float2(0.25,0.5)).x;
   r1.yzw = r1.xxx * r0.xyz;
@@ -196,7 +200,7 @@ void main(
   
     if (injectedData.bloom){ //enable/disable bloom
   r0.xyz = smplBloom_Tex.Sample(smplBloom_s, v1.xy).xyz;
-  r0.xyz = r0.xyz * fBloomWeight + r2.yzw;
+  r0.xyz = r0.xyz * (fBloomWeight * injectedData.fxBloom) + r2.yzw; //added bloom strength slider
     }
     
   r1.xyz = smplStar_Tex.Sample(smplStar_s, v1.xy).xyz;
@@ -230,7 +234,7 @@ void main(
   
     float3 untonemapped = r0.xyz;
     
-  //hable start
+  //hable start + Gamma
   r1.xyz = r0.xyz * float3(0.219999999,0.219999999,0.219999999) + float3(0.0299999993,0.0299999993,0.0299999993);
   r1.xyz = r0.xyz * r1.xyz + float3(0.00200000009,0.00200000009,0.00200000009);
   r2.xyz = r0.xyz * float3(0.219999999,0.219999999,0.219999999) + float3(0.300000012,0.300000012,0.300000012);
@@ -238,13 +242,32 @@ void main(
   r0.xyz = r1.xyz / r0.xyz;
   r0.xyz = float3(-0.0333000012,-0.0333000012,-0.0333000012) + r0.xyz;
   r0.xyz = SimulateHDRParams.xxx * r0.xyz;
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = fGamma * r0.xyz;
-  r0.xyz = exp2(r0.xyz);
+  //r0.xyz = log2(r0.xyz); comment out gamma
+  //r0.xyz = fGamma * r0.xyz;
+  //r0.xyz = exp2(r0.xyz);
   //hable/vanilla tonemapper end
     
     float3 vanillaColor = r0.xyz; //Our SDR is right after hable 
        
+  //second hable run to calculate midgrey
+    r0.rgb = (0.18f, 0.18f, 0.18f);
+    
+    r1.xyz = r0.xyz * float3(0.219999999, 0.219999999, 0.219999999) + float3(0.0299999993, 0.0299999993, 0.0299999993);
+    r1.xyz = r0.xyz * r1.xyz + float3(0.00200000009, 0.00200000009, 0.00200000009);
+    r2.xyz = r0.xyz * float3(0.219999999, 0.219999999, 0.219999999) + float3(0.300000012, 0.300000012, 0.300000012);
+    r0.xyz = r0.xyz * r2.xyz + float3(0.0599999987, 0.0599999987, 0.0599999987);
+    r0.xyz = r1.xyz / r0.xyz;
+    r0.xyz = float3(-0.0333000012, -0.0333000012, -0.0333000012) + r0.xyz;
+    r0.xyz = SimulateHDRParams.xxx * r0.xyz;
+    
+    float3 vanMidGray = r0.rgb;
+  // second hable run end
+    
+  // Start custom tonemapper before new stuff
+    r0.rgb = applyUserTonemap(untonemapped, vanillaColor, renodx::color::y::from::BT709(vanMidGray)); //Apply our custom tonemapper from tonemapper.hlsl
+ 
+  // New stuff expects power gamma
+    r0.rgb = renodx::color::correct::PowerGammaCorrect(r0.rgb, fGamma);
 
   //new stuff -- we still want to run this
   r1.x = cmp(fSaturationScaleEx == 1.000000);
@@ -262,73 +285,18 @@ void main(
   r2.xyz = -r1.zzz + r0.xyz;
   r1.yzw = r1.yyy * r2.xyz + r1.zzz;
   o0.xyz = r1.xxx ? r0.xyz : r1.yzw; //bool? if true, output halbe, else?
+  o0.w = r0.w; //vanilla alpha  
      //vanilla shader end
     
-    float3 originalSDR = o0.rgb;
-    originalSDR.rgb = renodx::color::correct::PowerGammaCorrect(originalSDR.rgb); //2.2 gamma correction for SDR
+   
+    //final paper white and gamma correction
     
+    //o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb, fGamma); //fGamma = 1, I think this linearizes the gamma
+    o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb); //2.2 power gamma; we need both fGamma + 2.2 for proper power gamma output
     
-    float3 outputColor;
-    
-    if (injectedData.toneMapType == 0)
-    {
-        outputColor = originalSDR;
-    }
-    else
-    {
-        if (injectedData.blend)
-        { //added blend to fix colors up 
-            untonemapped.rgb = lerp(originalSDR.rgb * 1.717f, untonemapped.rgb, saturate(originalSDR.rgb));
-        }
-        outputColor = untonemapped;
-    }
-
-    outputColor = max(0, outputColor);
-    //float vanillaMidGray = renodx::color::y::from::BT709(r1.xyz);
-    float vanillaMidGray = 0.1f; //0.18f old default
-    float renoDRTContrast = 1.f;
-    float renoDRTFlare = 0.f;
-    float renoDRTShadows = 1.f;
-    //float renoDRTDechroma = 0.8f;
-    float renoDRTDechroma = injectedData.colorGradeBlowout;
-    float renoDRTSaturation = 1.15; //
-    float renoDRTHighlights = 1.f;
-
-    renodx::tonemap::Config config = renodx::tonemap::config::Create(
-      injectedData.toneMapType,
-      injectedData.toneMapPeakNits,
-      injectedData.toneMapGameNits,
-      0,
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeContrast,
-      injectedData.colorGradeSaturation,
-      vanillaMidGray,
-      vanillaMidGray * 100.f,
-      renoDRTHighlights,
-      renoDRTShadows,
-      renoDRTContrast,
-      renoDRTSaturation,
-      renoDRTDechroma,
-      renoDRTFlare);
-
-    outputColor = renodx::tonemap::config::Apply(outputColor, config);
-    
-    if (injectedData.toneMapHueCorrection)
-    {
-        float3 hueCorrected = renodx::color::correct::Hue(outputColor, originalSDR);
-        outputColor = lerp(outputColor, hueCorrected, injectedData.toneMapHueCorrection);
-    }
-     
-    outputColor.rgb *= injectedData.toneMapGameNits; // Scale by user nits
+    o0.rgb *= injectedData.toneMapGameNits; // Scale by user nits
         
-    outputColor.rgb /= 80.f;
-    
-    o0.rgb = outputColor.rgb; //final output
-       
-
-  o0.w = r0.w;//vanilla alpha
+    o0.rgb /= 80.f;
   
   
   return;

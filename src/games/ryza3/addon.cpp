@@ -17,7 +17,9 @@
 #include <embed/0x21E7062A.h> // Combat Artifacts
 #include <embed/0x9F6B73CA.h> // Combat/ui artifacts 2
 #include <embed/0x892226E0.h> // ui artifacts
-#include <embed/0xDA0B69B5.h> // tonemapper
+#include <embed/0xD13E98FA.h> // wardrobe tonemapper
+#include <embed/0xDA0B69B5.h> // tonemapper TAA/AA OFF
+#include <embed/0xD87A1EAB.h> // tonemapper FXAA
 
 
 
@@ -44,7 +46,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x21E7062A),  // Combat Artifacts
 	  CustomShaderEntry(0x9F6B73CA), // Combat artifacts 2
 	  CustomShaderEntry(0x892226E0), // UI Artifacts
-    CustomShaderEntry(0xDA0B69B5),  // Tonemapper!!
+    CustomShaderEntry(0xD13E98FA), // Wardrobe tonemapper
+    CustomShaderEntry(0xDA0B69B5),  // Tonemapper!! [TAA/AA off]
+    CustomShaderEntry(0xD87A1EAB), // Tonemapper!! [FXAA]
 	
 
 };
@@ -186,19 +190,29 @@ renodx::utils::settings::Settings settings = {
        
     },
 
+     new renodx::utils::settings::Setting{
+        .key = "fxBloom",
+        .binding = &shader_injection.fxBloom,
+        .default_value = 50.f,
+        .label = "Bloom Strength",
+        .section = "Effects",
+        .tooltip = "Controls Bloom Strength",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+
 
     new renodx::utils::settings::Setting{
-        .key = "Anti-Aliasing",
-        .binding = &shader_injection.AntiAliasing,
+        .key = "chromaticAberration",
+        .binding = &shader_injection.chromaticAberration,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
         .default_value = 1,
         .can_reset = false,
-        .label = "AntiAliasing",
+        .label = "Chromatic Aberration",
         .section = "Effects",
-        .tooltip = "Enable/Disable AntiAliasing",
+        .tooltip = "Enable/Disable chromaticAberration",
 
     },
-
 
 };
 
@@ -214,10 +228,11 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeBlowout", 50.f);
   renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 50.f);
-  renodx::utils::settings::UpdateSetting("blend", 1);
+  renodx::utils::settings::UpdateSetting("blend", 0);
   //Start PostProcess effects on/off
   renodx::utils::settings::UpdateSetting("bloom", 1);
-  renodx::utils::settings::UpdateSetting("fxaa", 1);
+  renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
+  renodx::utils::settings::UpdateSetting("chromaticAberration", 1);
 }
 
 }  // namespace
@@ -225,7 +240,7 @@ void OnPresetOff() {
 // NOLINTBEGIN(readability-identifier-naming)
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Ryza2";
+extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Ryza3";
 
 // NOLINTEND(readability-identifier-naming)
 

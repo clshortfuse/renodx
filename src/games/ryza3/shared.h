@@ -21,7 +21,8 @@ struct ShaderInjectData {
   float toneMapHueCorrection;
   float blend;
   float bloom;
-  float AntiAliasing;
+  float fxBloom;
+  float chromaticAberration;
 };
 
 #ifndef __cplusplus
