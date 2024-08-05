@@ -2,8 +2,7 @@
 // The wardrobe's shader when you swap costumes
 // Only loads when you're in the wardrobe
 // Functions like the main tonemapper, but uses FXAA regardless of AA settings lol
-// We're going to double tonemap since this is basically a UI element, so being crazy accurate isnt a big deal
-// Ontop of being a cursed shader, we have to force SDR/HDR blend
+
 
 #include "./shared.h"
 #include "./tonemapper.hlsl" //Include our custom tonemapper
@@ -141,7 +140,7 @@ void main(
     r2.xyz = r0.xxx ? r0.yzw : r2.xyz;
   } //fxaa end
   
-   
+    float3 untonemapped = r2.rgb;
     
   //vanilla tonemapper / hable start
   r0.xyz = r2.xyz * float3(0.219999999,0.219999999,0.219999999) + float3(0.0299999993,0.0299999993,0.0299999993);
@@ -151,15 +150,16 @@ void main(
   r0.xyz = r0.xyz / r1.xyz;
   r0.xyz = float3(-0.0333000012,-0.0333000012,-0.0333000012) + r0.xyz;
   r0.xyz = SimulateHDRParams.xxx * r0.xyz;
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = fGamma * r0.xyz;
-  r0.xyz = exp2(r0.xyz);
+ // r0.xyz = log2(r0.xyz);
+ // r0.xyz = fGamma * r0.xyz;
+ // r0.xyz = exp2(r0.xyz);
   //hable end
     
+    float3 vanillaColor = r0.rgb;
     
   
  //second hable run to get mid grey
-    r0.rgb = float3(0.18f, 0.18f, 0.18f);
+    r2.rgb = float3(0.18f, 0.18f, 0.18f);
     
     r0.xyz = r2.xyz * float3(0.219999999, 0.219999999, 0.219999999) + float3(0.0299999993, 0.0299999993, 0.0299999993);
     r0.xyz = r2.xyz * r0.xyz + float3(0.00200000009, 0.00200000009, 0.00200000009);
@@ -171,10 +171,14 @@ void main(
     float3 vanMidGray = r0.rgb;
     //second hable run end
 
-    
-  
+ 
 
-  
+ // Custom tonemapper here
+    r0.rgb = applyUserTonemap(untonemapped, vanillaColor, renodx::color::y::from::BT709(vanMidGray));
+
+ //new stuff expects fGamma    
+    r0.rgb = renodx::color::correct::PowerGammaCorrect(r0.rgb, fGamma); //fGamma = 1, I think this linearizes the gamma
+    
     //new stuff
   r0.w = cmp(fSaturationScaleEx == 1.000000);
   r1.x = cmp(1 < fSaturationScaleEx);
@@ -193,57 +197,10 @@ void main(
   r2.xyz = r0.www ? r0.xyz : r1.xyz;
   o0.xyzw = r2.xyzw;
     //vanilla shader end
-    float3 untonemapped = o0.rgb;
-    float3 vanillaColor = o0.rgb;
-    
-    //start custom tonemapper
-    float3 outputColor;
-    if (injectedData.toneMapType == 0.f)
-    {
-        outputColor = vanillaColor;
-        outputColor = max(0, outputColor); //clamps to 709/no negative colors for the vanilla tonemapper
-    }
-    else
-    {
-        outputColor = untonemapped;
-    }
-    
-     // Start custom tonemapper 
-    float vanillaMidGray = renodx::color::y::from::BT709(vanMidGray); //calculate mid grey from the second hable run
-    float renoDRTContrast = 1.f;
-    float renoDRTFlare = 0.f;
-    float renoDRTShadows = 1.f;
-    //float renoDRTDechroma = 0.8f;
-    float renoDRTDechroma = injectedData.colorGradeBlowout;
-    float renoDRTSaturation = 1.f; //
-    float renoDRTHighlights = 1.f;
 
-    renodx::tonemap::Config config = renodx::tonemap::config::Create(
-      injectedData.toneMapType,
-      injectedData.toneMapPeakNits,
-      injectedData.toneMapGameNits,
-      1,
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeContrast,
-      injectedData.colorGradeSaturation,
-      vanillaMidGray,
-      vanillaMidGray * 100.f,
-      renoDRTHighlights,
-      renoDRTShadows,
-      renoDRTContrast,
-      renoDRTSaturation,
-      renoDRTDechroma,
-      renoDRTFlare);
-
-    outputColor = renodx::tonemap::config::Apply(outputColor, config);
-    outputColor = lerp(vanillaColor, outputColor, saturate(vanillaColor)); // combine tonemappers -- force blend
-    o0.rgb = outputColor.rgb;
     
     
     //add final gamma correction/paper white scaling
-    o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb, fGamma); //fGamma = 1, I think this linearizes the gamma
     o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb); //2.2 power gamma; we need both fGamma + 2.2 for proper power gamma output
     
     o0.rgb *= injectedData.toneMapGameNits; // Scale by user nits
