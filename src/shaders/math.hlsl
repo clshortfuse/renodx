@@ -10,10 +10,14 @@ static const float FLT10_MAX = 64512.f;
 static const float FLT11_MAX = 65024.f;
 static const float FLT16_MAX = 65504.f;
 
- float3 safePow(float3 color, float exponent = 2.2f){
+ float3 SafePow(float3 color, float exponent = 2.2f){
   return sign(color) * pow(abs(color), exponent);
  }
 
+ float1 SafePow(float1 color, float exponent = 2.2f){
+  return sign(color) * pow(abs(color), exponent);
+ }
+        
 float3 pow(float3 color, float exponent = 2.2f){
   return pow(color, exponent);
  }
