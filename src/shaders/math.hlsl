@@ -18,7 +18,7 @@ static const float FLT16_MAX = 65504.f;
   return sign(color) * pow(abs(color), exponent);
  }
         
-float3 pow(float3 color, float exponent = 2.2f){
+float3 Pow(float3 color, float exponent = 2.2f){
   return pow(color, exponent);
  }
         
