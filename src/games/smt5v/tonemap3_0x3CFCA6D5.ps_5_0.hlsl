@@ -2,7 +2,7 @@
 //unclamps tokyo/gameworld
 
 #include "./shared.h"
-#include "../../shaders/colorcorrect.hlsl"
+#include "./tonemapper.hlsl"  //Include our custom tonemapper
 
 Texture2D<float4> t2 : register(t2);
 
@@ -42,7 +42,7 @@ cbuffer cb0 : register(b0)
 
 
 void main(
-  float4 v0 : SV_POSITION0,
+    float4 v0 : SV_POSITION0,
   out float4 o0 : SV_Target0)
 {
   float4 r0,r1,r2,r3,r4;
@@ -130,27 +130,21 @@ void main(
   r3.xyz = r3.xyz + r3.xyz;
   r2.xyz = -r3.xyz * r2.xyz + float3(1,1,1);
     //unclamp 80 nits
-   // if (injectedData.toneMapType == 0.f)
-   // {
-   //     r0.xyz = r1.xzw ? r2.xyz : r0.xyz; //unclamp
-   // }
+  // if (injectedData.toneMapType == 0.f)
+  // {
+  //     r0.xyz = r1.xzw ? r2.xyz : r0.xyz; //unclamp
+  // }
   r1.xzw = float3(-1,-1,-1) + cb3[7].xyz;
   r1.xyz = r1.yyy * r1.xzw + float3(1,1,1);
   r2.xyz = r1.xyz * r0.xyz;
   r0.xyz = -r0.xyz * r1.xyz + cb3[8].xyz;
   r0.xyz = cb3[14].zzz * r0.xyz + r2.xyz;
-  o0.xyz = max(float3(0,0,0), r0.xyz);
+  o0.xyz = max(float3(0, 0, 0), r0.xyz);
+
+  float3 untonemapped = r0.xyz;
+  // Use central tonemapper
+  o0.rgb = applyUserTonemap(untonemapped).rgb;
   o0.w = 1;
-  
-    //add paper white
-    
-    //if (injectedData.toneMapType == 0.f)
-    //{
-    o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear to 2.2
-    //}
-    
-    o0.xyz *= injectedData.toneMapGameNits / 80.f; //paper white
-    
-    
+
   return;
 }

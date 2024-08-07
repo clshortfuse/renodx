@@ -1,8 +1,9 @@
 // ---- Created with 3Dmigoto v1.3.16 on Tue Jul  9 19:31:08 2024
 // unclamps shops and other out of magic world elements
 
+#include "./tonemapper.hlsl"  //Include our custom tonemapper
 #include "./shared.h"
-#include "../../shaders/colorcorrect.hlsl"
+
 
 Texture2D<float4> t2 : register(t2);
 
@@ -42,7 +43,7 @@ cbuffer cb0 : register(b0)
 
 
 void main(
-  float4 v0 : SV_POSITION0,
+    float4 v0 : SV_POSITION0,
   out float4 o0 : SV_Target0)
 {
   float4 r0,r1,r2,r3,r4;
@@ -126,16 +127,12 @@ void main(
   r0.xyz = -r1.xyz * r0.xyz + float3(1,1,1);
   r1.xyz = cb3[7].xyz + -r0.xyz;
   r0.xyz = cb3[12].www * r1.xyz + r0.xyz;
-  o0.xyz = max(float3(0,0,0), r0.xyz);
-  o0.w = 1;
-  
-    
-        //add paper white
-    
-    o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f); // linear
+  o0.xyz = max(float3(0, 0, 0), r0.xyz);
 
-    
-    o0.xyz *= injectedData.toneMapGameNits / 80.f; //paper white
-  
+  float3 untonemapped = r0.xyz;
+  // Use central tonemapper
+  o0.rgb = applyUserTonemap(untonemapped).rgb;
+  o0.w = 1;
+
   return;
 }

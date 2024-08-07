@@ -7,30 +7,29 @@
 
 #define DEBUG_LEVEL_0
 
-#include <embed/0x94614EA1.h> //ui
-#include <embed/0xC6FA129B.h> //ui
-#include <embed/0xC90A6F07.h> //ui
-#include <embed/0xEAADB3AA.h> //ui
-#include <embed/0x099B9006.h> //ui -- Party's faces
-#include <embed/0xC3979EE8.h> //ui
-#include <embed/0x29A889E6.h> //ui
-#include <embed/0x2FB8A3BC.h> //ui
-#include <embed/0x6D432834.h> //ui
-#include <embed/0x8EC8EF33.h> //ui
-#include <embed/0xC3126A03.h> //ui
-#include <embed/0x2FA199F2.h> //ui
-#include <embed/0x76B068AD.h> //ui
-#include <embed/0x3884890C.h> //ui -- Pause menu skills/items/essence/etc text
-#include <embed/0x27A2F211.h> //ui -- The background in the pause/load menus
-#include <embed/0xB86F8772.h> //ui -- Speach bubbles above npc's heads
-#include <embed/0x12E3927E.h> //ui -- dialog box
-#include <embed/0xBBA0606A.h> //rec709
-#include <embed/0xC1BCC6B5.h> //Lut Builder
-#include <embed/0xD019CA1A.h> //Tonemapper/unclamp [game world]
-#include <embed/0x4D541E80.h> //Tonemapper/unclamp [shop/in-engine cutscenes]
-#include <embed/0x3CFCA6D5.h> //Tonemapper/unclamp [tokyo]
-
-
+#include <embed/0x099B9006.h>  //ui -- Party's faces
+#include <embed/0x12E3927E.h>  //ui -- dialog box
+#include <embed/0x27A2F211.h>  //ui -- The background in the pause/load menus
+#include <embed/0x29A889E6.h>  //ui
+#include <embed/0x2FA199F2.h>  //ui
+#include <embed/0x2FB8A3BC.h>  //ui
+#include <embed/0x3884890C.h>  //ui -- Pause menu skills/items/essence/etc text
+#include <embed/0x3CFCA6D5.h>  //Tonemapper/unclamp [tokyo]
+#include <embed/0x4D541E80.h>  //Tonemapper/unclamp [shop/in-engine cutscenes]
+#include <embed/0x6D432834.h>  //ui
+#include <embed/0x76B068AD.h>  //ui
+#include <embed/0x8EC8EF33.h>  //ui
+#include <embed/0x94614EA1.h>  //ui
+#include <embed/0xB86F8772.h>  //ui -- Speach bubbles above npc's heads
+#include <embed/0xBBA0606A.h>  //rec709
+#include <embed/0xC1BCC6B5.h>  //Lut Builder
+#include <embed/0xC3126A03.h>  //ui
+#include <embed/0xC3979EE8.h>  //ui
+#include <embed/0xC6FA129B.h>  //ui
+#include <embed/0xC90A6F07.h>  //ui
+#include <embed/0xD019CA1A.h>  //Tonemapper/unclamp [game world]
+#include <embed/0xD2F5778E.h>  //Tonemapper/unclamp [stats]
+#include <embed/0xEAADB3AA.h>  //ui
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -44,11 +43,11 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     // dx11 only
-   // todo: gamma correct faces and some other UI shaders
-    CustomSwapchainShader(0x94614EA1),  // UI 
+    // todo: gamma correct faces and some other UI shaders
+    CustomSwapchainShader(0x94614EA1),  // UI
     CustomSwapchainShader(0xC6FA129B),  // UI
     CustomSwapchainShader(0xC90A6F07),  // UI
-    CustomSwapchainShader(0xEAADB3AA),   // UI
+    CustomSwapchainShader(0xEAADB3AA),  // UI
     CustomSwapchainShader(0x099B9006),  // UI -- Party's Faces
     CustomSwapchainShader(0xC3979EE8),  // UI
     CustomSwapchainShader(0x29A889E6),  // UI
@@ -62,12 +61,12 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomSwapchainShader(0x27A2F211),  // UI -- The background in the pause/load menus
     CustomSwapchainShader(0xB86F8772),  // UI -- Speach bubbles above npc's heads
     CustomSwapchainShader(0x12E3927E),  // UI -- Dialog box
-    CustomShaderEntry(0xBBA0606A),       // 709??
+    CustomShaderEntry(0xBBA0606A),      // 709??
     CustomShaderEntry(0xC1BCC6B5),      // Lut Builder
-    CustomShaderEntry(0xD019CA1A),       // Tonemapper!! [game world]
+    CustomShaderEntry(0xD019CA1A),      // Tonemapper!! [game world]
     CustomShaderEntry(0x4D541E80),      // Tonemapper!! [shop/in-engine cutscenes]
-    CustomShaderEntry(0x3CFCA6D5)       // Tonemapper!! [tokyo/classroom]
-
+    CustomShaderEntry(0x3CFCA6D5),      // Tonemapper!! [tokyo/classroom]
+    CustomShaderEntry(0xD2F5778E)       // Tonemapper!! [stats]
 };
 
 ShaderInjectData shader_injection;
@@ -197,10 +196,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
-      renodx::mods::shader::force_pipeline_cloning = true; //So the mod works with the toolkit
+      renodx::mods::shader::force_pipeline_cloning = true;  // So the mod works with the toolkit
 
-
-       // BGRA8_typeless pushes highlights in a good way
+      // BGRA8_typeless pushes highlights in a good way
       /*
       // BGRA8_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
@@ -215,12 +213,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       // render targets upgrade
       // RGBA8_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_typeless,   
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_float,
           //.index = 0,
           .ignore_size = true,
       });
-      
+
       // RGBA8_unorm
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
@@ -235,16 +233,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           //.index = 0,
           .ignore_size = true,
       });
-      
-      
-      
+
+
+
       //RGB10A2_unorm
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r10g10b10a2_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .ignore_size = true,
       });
-      
+
       // R11G11B10_float
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r11g11b10_float,
@@ -252,7 +250,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           //.ignore_size = true,
       });
       */
-
 
       /*
       // BGRA8_unorm
@@ -262,9 +259,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           //.index = 0,
           //.ignore_size = true,
       });
-      
-      
-       
+
+
+
       // BGRA8_unorm_srgb
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::b8g8r8a8_unorm_srgb,
