@@ -246,6 +246,19 @@ static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::c
   }
 
   const HRESULT hr = swapchain4->SetColorSpace1(dx_color_space);
+
+  {
+    // Notify SpecialK of color space change
+    // {018B57E4-1493-4953-ADF2-DE6D99CC05E5}
+    static constexpr GUID SKID_SWAP_CHAIN_COLOR_SPACE =
+        {0x18b57e4, 0x1493, 0x4953, {0xad, 0xf2, 0xde, 0x6d, 0x99, 0xcc, 0x5, 0xe5}};
+
+    swapchain4->SetPrivateData(
+        SKID_SWAP_CHAIN_COLOR_SPACE,
+        sizeof(DXGI_COLOR_SPACE_TYPE),
+        &dx_color_space);
+  }
+
   swapchain4->Release();
   swapchain4 = nullptr;
   if (!SUCCEEDED(hr)) {
