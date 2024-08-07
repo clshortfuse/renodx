@@ -74,7 +74,8 @@ void main(
   o0.xyz = max(float3(0,0,0), r0.xyz);
   o0.w = 1;
   
-  o0.rgb *= injectedData.toneMapUINits / 80.f;
+  o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb); //2.2 gamma correction
+  o0.rgb *= injectedData.toneMapUINits / 80.f; //Added ui slider
   
   return;
 }
