@@ -9,6 +9,18 @@ static const float FLT_MAX = asfloat(0x7F7FFFFF);  // 3.402823466e+38f
 static const float FLT10_MAX = 64512.f;
 static const float FLT11_MAX = 65024.f;
 static const float FLT16_MAX = 65504.f;
+
+ float3 SafePow(float3 color, float exponent){
+  return sign(color) * pow(abs(color), exponent);
+ }
+
+ float SafePow(float color, float exponent){
+  return sign(color) * pow(abs(color), exponent);
+ }
+        
+float3 Pow(float3 color, float exponent){
+  return pow(color, exponent);
+ }
         
 float Average(float3 color) {
   return (color.x + color.y + color.z) / 3.f;
