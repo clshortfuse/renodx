@@ -54,7 +54,7 @@ void main(
   r0.x = cmp(r1.x < 0);
   if (r0.x != 0) discard; //testing
     
-    o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb); //2.2 gamma correction
+    o0.rgb = renodx::math::SafePow(o0.rgb, 2.2f); //2.2 gamma correction
     o0.rgb *= injectedData.toneMapUINits / 80.f; //Added ui slider
   return;
 }

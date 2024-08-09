@@ -285,9 +285,9 @@ void main(
     
     outputColor = applyUserTonemap(untonemapped, vanillaColor, renodx::color::y::from::BT709(r0.rgb)); //Apply our custom tonemapper from tonemapper.hlsl
     
-    outputColor = renodx::color::correct::PowerGammaCorrect(outputColor, fGamma); //fGamma = 1, I think this linearizes the gamma
-    outputColor = renodx::color::correct::PowerGammaCorrect(outputColor); //2.2 power gamma; might not be needed; but no harm leaving it in
-
+    outputColor = renodx::math::SafePow(outputColor, fGamma); //fGamma first
+    outputColor = renodx::math::SafePow(outputColor, 2.2f); //2.2 gamma
+    
     
     outputColor *= injectedData.toneMapGameNits; // Scale by user nits
         

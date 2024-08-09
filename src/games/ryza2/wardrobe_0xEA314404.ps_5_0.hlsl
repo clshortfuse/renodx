@@ -124,5 +124,6 @@ void main(
     //end custom tonemapper
 
     o0.w = r0.w; //vanilla alpha
+    
   return;
 }
