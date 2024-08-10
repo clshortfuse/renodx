@@ -32,9 +32,9 @@ void main(
   r0.xyzw = v0.xyzw * r0.xyzw;
   o0.xyzw = HdrRangeInv * r0.xyzw;
   
-      o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb); //2.2 gamma correction
+ //     o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb); //2.2 gamma correction
     
-    o0.rgb *= injectedData.toneMapGameNits / 80.f; //Using paper white saling, the movies are too bright for bt2446a
+ //   o0.rgb *= injectedData.toneMapGameNits / 80.f; //Using paper white saling, the movies are too bright for bt2446a
   
   return;
 }

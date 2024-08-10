@@ -45,8 +45,9 @@ void main(
   r0.x = cmp(r1.x < 0);
   if (r0.x != 0) discard;
   
-      o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb); //2.2 gamma correction
-    o0.rgb *= injectedData.toneMapUINits / 80.f; //Added ui slider
+    o0.rgb = renodx::math::SafePow(o0.rgb, 2.2f); // 2.2 gamma correction
+    o0.rgb *= injectedData.toneMapUINits / injectedData.toneMapGameNits; //Ratio of UI:Game brightness
+    o0.rgb = renodx::math::SafePow(o0.rgb, 1/2.2); //Inverse 2.2 gamma
   
   return;
 }

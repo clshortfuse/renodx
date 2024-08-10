@@ -267,7 +267,7 @@ void main(
     r0.rgb = applyUserTonemap(untonemapped, vanillaColor, renodx::color::y::from::BT709(vanMidGray)); //Apply our custom tonemapper from tonemapper.hlsl
  
   // New stuff expects power gamma
-    r0.rgb = renodx::color::correct::PowerGammaCorrect(r0.rgb, fGamma);
+    r0.rgb = renodx::math::SafePow(r0.rgb, fGamma);
 
   //new stuff -- we still want to run this
   r1.x = cmp(fSaturationScaleEx == 1.000000);
@@ -288,15 +288,17 @@ void main(
   o0.w = r0.w; //vanilla alpha  
      //vanilla shader end
     
-   
-    //final paper white and gamma correction
+
+    //final paper white and gamma correction -- moved to Final
     
-    //o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb, fGamma); //fGamma = 1, I think this linearizes the gamma
-    o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb); //2.2 power gamma; we need both fGamma + 2.2 for proper power gamma output
+    //o0.rgb = renodx::math::SafePow(o0.rgb, fGamma); //fGamma = 1, I think this linearizes the gamma
+    //o0.rgb = renodx::math::SafePow(o0.rgb); //2.2 power gamma; we need both fGamma + 2.2 for proper power gamma output
+    //o0.rgb = renodx::math::SafePow(o0.rgb);
+
     
-    o0.rgb *= injectedData.toneMapGameNits; // Scale by user nits
+    //o0.rgb *= injectedData.toneMapGameNits; // Scale by user nits
         
-    o0.rgb /= 80.f;
+    //o0.rgb /= 80.f;
   
   
   return;

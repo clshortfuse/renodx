@@ -20,6 +20,7 @@
 #include <embed/0xD13E98FA.h> // wardrobe tonemapper
 #include <embed/0xDA0B69B5.h> // tonemapper TAA/AA OFF
 #include <embed/0xD87A1EAB.h> // tonemapper FXAA
+#include <embed/0xBB055A34.h> // Final
 
 
 
@@ -49,6 +50,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xD13E98FA), // Wardrobe tonemapper
     CustomShaderEntry(0xDA0B69B5),  // Tonemapper!! [TAA/AA off]
     CustomShaderEntry(0xD87A1EAB), // Tonemapper!! [FXAA]
+    CustomShaderEntry(0xBB055A34), // Final
 	
 
 };

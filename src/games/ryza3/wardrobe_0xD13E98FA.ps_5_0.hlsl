@@ -177,7 +177,7 @@ void main(
     r0.rgb = applyUserTonemap(untonemapped, vanillaColor, renodx::color::y::from::BT709(vanMidGray));
 
  //new stuff expects fGamma    
-    r0.rgb = renodx::color::correct::PowerGammaCorrect(r0.rgb, fGamma); //fGamma = 1, I think this linearizes the gamma
+    r0.rgb = renodx::math::SafePow(r0.rgb, fGamma); //fGamma = 1, I think this linearizes the gamma
     
     //new stuff
   r0.w = cmp(fSaturationScaleEx == 1.000000);
@@ -200,12 +200,12 @@ void main(
 
     
     
-    //add final gamma correction/paper white scaling
-    o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb); //2.2 power gamma; we need both fGamma + 2.2 for proper power gamma output
+    //add final gamma correction/paper white scaling -- Moved to Final
+    //o0.rgb = renodx::math::SafePow(o0.rgb); //2.2 power gamma; we need both fGamma + 2.2 for proper power gamma output
     
-    o0.rgb *= injectedData.toneMapGameNits; // Scale by user nits
+    //o0.rgb *= injectedData.toneMapGameNits; // Scale by user nits
         
-    o0.rgb /= 80.f;
+    //o0.rgb /= 80.f;
     
   return;
 }

@@ -1,5 +1,5 @@
 // ---- Created with 3Dmigoto v1.3.16 on Wed Jul 31 20:56:53 2024
-// UI, Chat Bubbles
+// UI, Chat Bubbles -- guassian blur
 
 #include "./shared.h"
 
@@ -45,8 +45,8 @@ void main(
   r0.xyz = sGaussianBlur.Sample(__smpsGaussianBlur_s, r0.xy).xyz;
   o0.xyz = r0.xyz;
   
-    o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb); //2.2 gamma correction
-    o0.rgb *= injectedData.toneMapUINits / 80.f; //Added ui slider    
+    //o0.rgb = renodx::color::correct::PowerGammaCorrect(o0.rgb); //2.2 gamma correction
+    //o0.rgb *= injectedData.toneMapUINits / 80.f; //Added ui slider    
   
   return;
 }
