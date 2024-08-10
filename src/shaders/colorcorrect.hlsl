@@ -38,18 +38,6 @@ float3 GammaSafe(float3 color, bool pow2srgb = false) {
   color *= signs;
   return color;
 }
-            
- float3 PowerGammaCorrect(float3 color, float gamma = 2.2f, bool signs = true){
-  //o0.rgb = sign(o0.rgb) * pow(abs(o0.rgb), 2.2f)
-                if (signs == true)
-                {
-                 return sign(color) * pow(abs(color), gamma);
-                
-                } else {
-                 return pow(abs(color), gamma);
-                }
-                     
-  }
 
 float3 Hue(float3 incorrect_color, float3 correct_color) {
   float3 correct_lch = renodx::color::oklch::from::BT709(correct_color);
