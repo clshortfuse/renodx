@@ -39,7 +39,7 @@ float3 applyUserTonemap(float3 untonemapped) {
       renoDRTFlare);
 
   outputColor = renodx::tonemap::config::Apply(outputColor, config);
-  outputColor = renodx::color::correct::PowerGammaCorrect(outputColor);  // 2.2 power gamma; might not be needed; but no harm leaving it in
+  outputColor = renodx::math::SafePow(outputColor, 2.2f);  // 2.2 power gamma; might not be needed; but no harm leaving it in
 
   outputColor *= injectedData.toneMapGameNits;  // Scale by user nits
 
