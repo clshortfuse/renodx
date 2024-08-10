@@ -19,6 +19,7 @@
 #include <embed/0x21E7062A.h> //combat artifacts
 #include <embed/0xEA314404.h> // wardrobe
 #include <embed/0x53FBE188.h> // tonemapper
+#include <embed/0xBB055A34.h> // Final
 
 
 
@@ -45,7 +46,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x5D15CFEE), // videos -- pre-rendered movies
     CustomShaderEntry(0x21E7062A), // combat artifacts
     CustomShaderEntry(0xEA314404), // wardrobe
-    CustomShaderEntry(0x53FBE188)  // Tonemapper!!
+    CustomShaderEntry(0x53FBE188),  // Tonemapper!!
+    CustomShaderEntry(0xBB055A34), // Final
 	
 
 };

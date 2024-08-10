@@ -1,4 +1,5 @@
 // ---- Created with 3Dmigoto v1.3.16 on Tue Jul 23 02:31:55 2024
+// Blur effect in menu -- prolly an effect shader
 #include "./shared.h"
 
 cbuffer _Globals : register(b0)
@@ -42,7 +43,7 @@ void main(
   r0.xyz = sGaussianBlur.Sample(__smpsGaussianBlur_s, r0.xy).xyz;
   o0.xyz = r0.xyz;
     
-    o0.rgb = renodx::math::SafePow(o0.rgb, 2.2f); //2.2 gamma correction
-    o0.rgb *= injectedData.toneMapUINits / 80.f; //Added ui slider
+ //   o0.rgb = renodx::math::SafePow(o0.rgb, 2.2f); //2.2 gamma correction
+ //   o0.rgb *= injectedData.toneMapUINits / 80.f; //Added ui slider
   return;
 }

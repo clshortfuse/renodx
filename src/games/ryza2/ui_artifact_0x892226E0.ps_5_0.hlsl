@@ -31,8 +31,12 @@ void main(
     r1.xyzw = sEffect.Sample(__smpsEffect_s, r1.xy).xyzw;
     r0.xyz = sScene.Load(r0.xyz).xyz;
     //r0.xyz = r0.xyz * r1.www + r1.xyz; //vanilla code, we're going to make this our new output
+    
+
+    
     o0.xyz = r0.xyz * r1.www + r1.xyz; //new rgb output
     o0.w = 1; //alpha output
+  
     return; //early return to skip below code
     
   //Hable and 2.2 gamma below

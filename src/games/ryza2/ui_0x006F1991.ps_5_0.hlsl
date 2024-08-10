@@ -1,4 +1,5 @@
 // ---- Created with 3Dmigoto v1.3.16 on Tue Jul 23 02:31:40 2024
+// Main world UI shader
 
 #include "./shared.h"
 
@@ -32,8 +33,8 @@ void main(
     
 
        
-  //r1.x = dot(r0.xyz, float3(0.300000012,0.589999974,0.109999999)); //rec 601, scuffed edition
-    r1.x = dot(r0.xyz, float3(0.2126390059f, 0.7151686788f, 0.0721923154f)); //fixed to 709
+  r1.x = dot(r0.xyz, float3(0.300000012,0.589999974,0.109999999)); //rec 601, scuffed edition
+  //  r1.x = dot(r0.xyz, float3(0.2126390059f, 0.7151686788f, 0.0721923154f)); //fixed to 709
     
   r1.xyz = r1.xxx + -r0.xyz;
   r1.w = 0;
@@ -52,9 +53,11 @@ void main(
   r0.xyzw = materialColor.xyzw * r0.xyzw;
   o0.xyzw = r0.xyzw;
   r0.x = cmp(r1.x < 0);
-  if (r0.x != 0) discard; //testing
+  if (r0.x != 0) discard; 
     
     o0.rgb = renodx::math::SafePow(o0.rgb, 2.2f); //2.2 gamma correction
-    o0.rgb *= injectedData.toneMapUINits / 80.f; //Added ui slider
+    o0.rgb *= injectedData.toneMapUINits / injectedData.toneMapGameNits; //Ratio of UI:Game brightness
+    o0.rgb = renodx::math::SafePow(o0.rgb, 1/2.2); //Inverse 2.2 gamma
+    
   return;
 }

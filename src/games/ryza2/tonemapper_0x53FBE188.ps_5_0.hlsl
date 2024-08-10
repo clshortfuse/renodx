@@ -284,14 +284,14 @@ void main(
     float3 outputColor;
     
     outputColor = applyUserTonemap(untonemapped, vanillaColor, renodx::color::y::from::BT709(r0.rgb)); //Apply our custom tonemapper from tonemapper.hlsl
-    
-    outputColor = renodx::math::SafePow(outputColor, fGamma); //fGamma first
-    outputColor = renodx::math::SafePow(outputColor, 2.2f); //2.2 gamma
-    
-    
-    outputColor *= injectedData.toneMapGameNits; // Scale by user nits
+ 
+
+      outputColor = renodx::math::SafePow(outputColor, fGamma); //fGamma first [inverse 2.2]
+// Moving gamma and Paper White to the Final shader 
+//   outputColor = renodx::math::SafePow(outputColor, 2.2f); //2.2 gamma
+//   outputColor *= injectedData.toneMapGameNits; // Scale by user nits
         
-    outputColor.rgb /= 80.f;
+ //   outputColor.rgb /= 80.f;
         
     o0.rgb = outputColor.rgb;
     

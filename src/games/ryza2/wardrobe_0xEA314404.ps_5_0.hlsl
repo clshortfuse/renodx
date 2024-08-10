@@ -115,9 +115,11 @@ void main(
 
     outputColor = applyUserTonemap(untonemapped, vanillaColor, 0.1f); //apply our custom tonemap
     
-    outputColor *= injectedData.toneMapGameNits; // Scale by user nits
+    outputColor = renodx::math::SafePow(outputColor, fGamma); //fGamma first [inverse 2.2]
+    
+    //outputColor *= injectedData.toneMapGameNits; // Scale by user nits
         
-    outputColor.rgb /= 80.f;
+    //outputColor.rgb /= 80.f;
         
     o0.rgb = outputColor.rgb;
     
