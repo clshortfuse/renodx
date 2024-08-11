@@ -45,7 +45,8 @@ float3 applyUserTonemap(float3 untonemapped, float3 vanillaColor, float midGray)
       renoDRTContrast,
       renoDRTSaturation,
       renoDRTDechroma,
-      renoDRTFlare);
+      renoDRTFlare,
+      renodx::tonemap::config::hue_correction_type::CUSTOM, (injectedData.toneMapHueCorrection), vanillaColor);
 
     outputColor = renodx::tonemap::config::Apply(outputColor, config);
     
