@@ -100,10 +100,10 @@ float3 BT709(
       if (hue_correction_strength == 1.f) {
         lch_new[2] = restore_lch[2];  // Full hue override
       } else {
-        lab_new = float3(lab_new[0], lerp(lab_new.yz, restore_lab.yz, hue_correction_strength));
-        float3 lch_temp = lab_new = renodx::color::oklch::from::OkLab(lab_new);
-        lch_temp[1] = lch_new[1];  // custom chroma restore
-        lch_new = lch_temp;
+        float old_chroma = lch_new[1];  // Store old chroma
+        lab_new.yz = lerp(lab_new.yz, restore_lab.yz, hue_correction_strength);
+        lch_new = renodx::color::oklch::from::OkLab(lab_new);
+        lch_new[1] = old_chroma; // chroma restore
       }
     }
 
