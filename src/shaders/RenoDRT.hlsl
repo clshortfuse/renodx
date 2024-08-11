@@ -8,16 +8,18 @@ namespace tonemap {
 namespace renodrt {
 float3 BT709(
     float3 bt709,
-    float nits_peak = 1000.f / 203.f * 100.f,
-    float mid_gray_value = 0.18f,
-    float mid_gray_nits = 10.f,
-    float exposure = 1.f,
-    float highlights = 1.f,
-    float shadows = 1.f,  // 0 = 0.10, 1.f = 0, >1 = contrast
-    float contrast = 1.1f,
-    float saturation = 1.f,
-    float dechroma = 0.5f,
-    float flare = 0.f) {
+    float nits_peak,
+    float mid_gray_value,
+    float mid_gray_nits,
+    float exposure,
+    float highlights,
+    float shadows,  // 0 = 0.10, 1.f = 0, >1 = contrast
+    float contrast,
+    float saturation,
+    float dechroma,
+    float flare,
+    float hue_correction_strength,
+    float3 hue_correction_source) {
   const float n_r = 100.f;
   float n = 1000.f;
 
@@ -46,7 +48,13 @@ float3 BT709(
   t_1 = flare;
 
   float y_original = renodx::color::y::from::BT709(abs(bt709));
-  float3 lch_original = renodx::color::oklch::from::BT709(bt709);
+
+  float3 restore_lab = (hue_correction_strength == 0)
+                           ? 0
+                           : renodx::color::oklab::from::BT709(hue_correction_source);
+  float3 restore_lch = (hue_correction_strength == 0)
+                           ? 0
+                           : renodx::color::oklch::from::OkLab(restore_lab);
 
   float y = y_original * exposure;
 
@@ -82,16 +90,64 @@ float3 BT709(
   float y_new = clamp(flared, 0, m_0);
 
   float3 color_output = bt709 * (y_original > 0 ? (y_new / y_original) : 0);
+  float3 color = color_output;
 
-  float3 lch_new = renodx::color::oklch::from::BT709(color_output);
-  lch_new[1] = lerp(lch_new[1], 0.f, saturate(pow(y_original / (10000.f / 100.f), (1.f - dechroma))));
-  lch_new[1] *= saturation;
-  lch_new[2] = lch_original[2];  // hue correction
+  if (dechroma != 0.f || saturation != 1.f || hue_correction_strength != 0.f) {
+    float3 lab_new = renodx::color::oklab::from::BT709(color_output);
+    float3 lch_new = renodx::color::oklch::from::OkLab(lab_new);
 
-  float3 color = renodx::color::bt709::from::OkLCh(lch_new);
-  color = renodx::color::bt709::clamp::AP1(color);
-  color = min(m_0, color);  // Clamp to Peak
+    if (hue_correction_strength != 0.f) {
+      if (hue_correction_strength == 1.f) {
+        lch_new[2] = restore_lch[2];  // Full hue override
+      } else {
+        lab_new = float3(lab_new[0], lerp(lab_new.yz, restore_lab.yz, hue_correction_strength));
+        float3 lch_temp = lab_new = renodx::color::oklch::from::OkLab(lab_new);
+        lch_temp[1] = lch_new[1];  // custom chroma restore
+        lch_new = lch_temp;
+      }
+    }
+
+    if (dechroma != 0.f) {
+      lch_new[1] = lerp(lch_new[1], 0.f, saturate(pow(y_original / (10000.f / 100.f), (1.f - dechroma))));
+    }
+    if (saturation != 1.f) {
+      lch_new[1] *= saturation;
+    }
+
+    color = renodx::color::bt709::from::OkLCh(lch_new);
+
+    color = renodx::color::bt709::clamp::AP1(color);
+    color = min(m_0, color);  // Clamp to Peak
+  }
   return color;
+}
+float3 BT709(
+    float3 bt709,
+    float nits_peak = 1000.f / 203.f * 100.f,
+    float mid_gray_value = 0.18f,
+    float mid_gray_nits = 10.f,
+    float exposure = 1.f,
+    float highlights = 1.f,
+    float shadows = 1.f,
+    float contrast = 1.1f,
+    float saturation = 1.f,
+    float dechroma = 0.5f,
+    float flare = 0.f,
+    float hue_correction_strength = 1.f) {
+  return BT709(
+      bt709,
+      nits_peak,
+      mid_gray_value,
+      mid_gray_nits,
+      exposure,
+      highlights,
+      shadows,
+      contrast,
+      saturation,
+      dechroma,
+      flare,
+      hue_correction_strength,
+      bt709);
 }
 }  // namespace renodrt
 }  // namespace tonemap

@@ -88,6 +88,9 @@ struct Config {
   float reno_drt_saturation;
   float reno_drt_dechroma;
   float reno_drt_flare;
+  float hue_correction_type;
+  float hue_correction_strength;
+  float3 hue_correction_color;
 };
 
 float3 UpgradeToneMap(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength) {
@@ -117,14 +120,20 @@ float3 UpgradeToneMap(float3 color_hdr, float3 color_sdr, float3 post_process_co
 
 namespace config {
 namespace type {
-static const uint VANILLA = 0;
-static const uint NONE = 1;
-static const uint ACES = 2;
-static const uint RENODRT = 3;
+static const float VANILLA = 0.f;
+static const float NONE = 1.f;
+static const float ACES = 2.f;
+static const float RENODRT = 3.f;
 }  // namespace type
 
+namespace hue_correction_type {
+static const float INPUT = 0.f;
+static const float CLAMPED = 1.f;
+static const float CUSTOM = 2.f;
+}  // namespace hue_correction_type
+
 Config Create(
-    float type = 0.f,
+    float type = config::type::VANILLA,
     float peak_nits = 203.f,
     float game_nits = 203.f,
     float gamma_correction = 0,
@@ -140,7 +149,10 @@ Config Create(
     float reno_drt_contrast = 1.f,
     float reno_drt_saturation = 1.f,
     float reno_drt_dechroma = 0.5f,
-    float reno_drt_flare = 0.f) {
+    float reno_drt_flare = 0.f,
+    float hue_correction_type = config::hue_correction_type::INPUT,
+    float hue_correction_strength = 1.f,
+    float3 hue_correction_color = 0) {
   const Config config = {
       type,
       peak_nits,
@@ -158,7 +170,10 @@ Config Create(
       reno_drt_contrast,
       reno_drt_saturation,
       reno_drt_dechroma,
-      reno_drt_flare};
+      reno_drt_flare,
+      hue_correction_type,
+      hue_correction_strength,
+      hue_correction_color};
   return config;
 }
 
@@ -179,7 +194,11 @@ float3 ApplyRenoDRT(float3 color, Config config, bool sdr = false) {
       config.reno_drt_contrast,
       config.reno_drt_saturation,
       config.reno_drt_dechroma,
-      config.reno_drt_flare);
+      config.reno_drt_flare,
+      config.hue_correction_strength,
+      (config.hue_correction_type == config::hue_correction_type::CUSTOM)    ? config.hue_correction_color
+      : (config.hue_correction_type == config::hue_correction_type::CLAMPED) ? clamp(color, 0, 1)
+                                                                             : color);
 }
 
 float3 ApplyACES(float3 color, Config config, bool sdr = false) {
@@ -204,12 +223,10 @@ float3 ApplyACES(float3 color, Config config, bool sdr = false) {
   return color;
 }
 
-
-
 float3 Apply(float3 untonemapped, Config config) {
   float3 color = untonemapped;
 
-  if (config.type == 3.f) {
+  if (config.type == config::type::RENODRT) {
     config.reno_drt_highlights *= config.highlights;
     config.reno_drt_shadows *= config.shadows;
     config.reno_drt_contrast *= config.contrast;
@@ -224,7 +241,7 @@ float3 Apply(float3 untonemapped, Config config) {
         config.shadows,
         config.contrast,
         config.saturation);
-    if (config.type == 2.f) {
+    if (config.type == config::type::ACES) {
       color = ApplyACES(color, config);
     }
   }
@@ -240,7 +257,7 @@ float3 Apply(float3 untonemapped, Config config) {
                                                                                                                  \
     float3 color_hdr;                                                                                            \
     float3 color_sdr;                                                                                            \
-    if (config.type == 3.f) {                                                                                    \
+    if (config.type == config::type::RENODRT) {                                                                  \
       config.reno_drt_saturation *= config.saturation;                                                           \
                                                                                                                  \
       color_sdr = ApplyRenoDRT(color_output, config, true);                                                      \
@@ -255,7 +272,7 @@ float3 Apply(float3 untonemapped, Config config) {
       color_output = renodx::color::grade::UserColorGrading(                                                     \
           color_output, config.exposure, config.highlights, config.shadows, config.contrast, config.saturation); \
                                                                                                                  \
-      if (config.type == 2.f) {                                                                                  \
+      if (config.type == config::type::ACES) {                                                                   \
         color_hdr = ApplyACES(color_output, config);                                                             \
         color_sdr = ApplyACES(color_output, config, true);                                                       \
       } else {                                                                                                   \
@@ -275,7 +292,7 @@ float3 Apply(float3 untonemapped, Config config) {
       color_lut = min(1.f, renodx::lut::Sample(lut_texture, lut_config, color_hdr));                             \
     }                                                                                                            \
                                                                                                                  \
-    if (config.type == 0.f) {                                                                                    \
+    if (config.type == config::type::VANILLA) {                                                                  \
       color_output = lerp(color_output, color_lut, lut_config.strength);                                         \
     } else {                                                                                                     \
       color_output = UpgradeToneMap(color_hdr, color_sdr, color_lut, lut_config.strength);                       \
