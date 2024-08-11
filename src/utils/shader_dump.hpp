@@ -48,7 +48,7 @@ static void OnInitPipeline(
   if (!details.has_value()) return;
 
   std::unique_lock lock(mutex);
-  for (auto& [subobject_index, shader_hash] : details->shader_hashes_by_index) {
+  for (const auto& [subobject_index, shader_hash] : details->shader_hashes_by_index) {
     // Store immediately in case pipeline destroyed before present
     if (shaders_seen.contains(shader_hash)) continue;
     shaders_seen.emplace(shader_hash);

@@ -72,9 +72,9 @@ struct PipelineShaderDetails {
   std::optional<std::string> tag;
   bool destroyed = false;
 
-  std::optional<std::vector<uint8_t>> GetShaderData(uint32_t shader_hash, size_t index = -1) {
+  std::optional<std::vector<uint8_t>> GetShaderData(uint32_t shader_hash, size_t index = -1) const {
     if (index == -1) {
-      for (auto& [item_index, item_shader_hash] : shader_hashes_by_index) {
+      for (const auto& [item_index, item_shader_hash] : shader_hashes_by_index) {
         if (item_shader_hash != shader_hash) continue;
         index = item_index;
       }
@@ -147,7 +147,7 @@ struct PipelineShaderDetails {
 struct __declspec(uuid("908f0889-64d8-4e22-bd26-ded3dd0cef77")) DeviceData {
   std::shared_mutex mutex;
 
-  std::unordered_map<uint32_t, std::unordered_set<uint64_t>> shader_pipelines;
+  std::unordered_map<uint32_t, std::unordered_set<uint64_t>> shader_pipeline_handles;
   std::unordered_map<uint64_t, PipelineShaderDetails> pipeline_shader_details;
   std::unordered_set<uint64_t> incompatible_pipelines;
   std::unordered_set<uint64_t> ignored_pipelines;
@@ -302,9 +302,10 @@ static void AddRuntimeReplacement(
     const std::vector<uint8_t>& shader_data) {
   auto& data = device->get_private_data<DeviceData>();
   data.runtime_replacements[shader_hash] = std::vector<uint8_t>(shader_data);
+  runtime_replacement_count = data.runtime_replacements.size();
 }
 
-static std::optional<PipelineShaderDetails> GetPipelineShaderDetails(reshade::api::device* device, reshade::api::pipeline pipeline) {
+static std::optional<const PipelineShaderDetails> GetPipelineShaderDetails(reshade::api::device* device, reshade::api::pipeline pipeline) {
   auto& data = device->get_private_data<DeviceData>();
   std::unique_lock device_lock(data.mutex);
   if (auto details_pair = data.pipeline_shader_details.find(pipeline.handle);
@@ -319,10 +320,10 @@ static void RemoveRuntimeReplacements(reshade::api::device* device, const std::u
   std::unique_lock device_lock(data.mutex);
   for (auto& [shader_hash, replacement] : data.runtime_replacements) {
     if (!filter.empty() && !filter.contains(shader_hash)) continue;
-    if (auto entry = data.shader_pipelines.find(shader_hash);
-        entry != data.shader_pipelines.end()) {
-      auto& pipeline_set = entry->second;
-      for (auto pipeline_handle : pipeline_set) {
+    if (auto pair = data.shader_pipeline_handles.find(shader_hash);
+        pair != data.shader_pipeline_handles.end()) {
+      auto& pipeline_handles = pair->second;
+      for (auto pipeline_handle : pipeline_handles) {
         if (auto details_pair = data.pipeline_shader_details.find(pipeline_handle);
             details_pair != data.pipeline_shader_details.end()) {
           auto& details = details_pair->second;
@@ -342,6 +343,7 @@ static void RemoveRuntimeReplacements(reshade::api::device* device, const std::u
       data.runtime_replacements.erase(shader_hash);
     }
   }
+  runtime_replacement_count = data.runtime_replacements.size();
 }
 
 static CommandListData& GetCurrentState(reshade::api::command_list* cmd_list) {
@@ -436,12 +438,12 @@ static void OnInitPipeline(
   }
 
   for (const auto shader_hash : details.shader_hashes) {
-    if (auto pair = data.shader_pipelines.find(shader_hash);
-        pair != data.shader_pipelines.end()) {
-      auto& set = pair->second;
-      set.emplace(pipeline.handle);
+    if (auto pair = data.shader_pipeline_handles.find(shader_hash);
+        pair != data.shader_pipeline_handles.end()) {
+      auto& pipeline_handles = pair->second;
+      pipeline_handles.emplace(pipeline.handle);
     } else {
-      data.shader_pipelines[shader_hash] = {pipeline.handle};
+      data.shader_pipeline_handles[shader_hash] = {pipeline.handle};
     }
   }
 
@@ -473,10 +475,10 @@ static void OnDestroyPipeline(
         details.replacement_pipeline.reset();
       }
       for (auto shader_hash : details.shader_hashes) {
-        if (auto shader_pipelines_pair = data.shader_pipelines.find(shader_hash);
-            shader_pipelines_pair != data.shader_pipelines.end()) {
-          auto& set = shader_pipelines_pair->second;
-          set.erase(pipeline.handle);
+        if (auto shader_pipelines_pair = data.shader_pipeline_handles.find(shader_hash);
+            shader_pipelines_pair != data.shader_pipeline_handles.end()) {
+          auto& pipeline_handles = shader_pipelines_pair->second;
+          pipeline_handles.erase(pipeline.handle);
         }
       }
       details.destroyed = true;
@@ -637,7 +639,12 @@ static void OnInitDevice(reshade::api::device* device) {
       reshade::log_message(reshade::log_level::debug, s.str().c_str());
     }
   }
+  runtime_replacement_count = data->runtime_replacements.size();
 };
+
+inline DeviceData& GetShaderDeviceData(reshade::api::device* device) {
+  return device->get_private_data<DeviceData>();
+}
 
 static bool attached = false;
 

@@ -42,6 +42,17 @@ struct CustomShader {
   [[nodiscard]] std::exception GetCompilationException() const {
     return std::get<std::exception>(compilation);
   }
+
+  [[nodiscard]] std::string GetFileAlias() const {
+    if (!is_hlsl) return "";
+    static const auto CHARACTERS_TO_REMOVE_FROM_END = std::string("0x12345678.xx_x_x.hlsl").length();
+    auto filename = file_path.filename().string();
+    filename.erase(filename.length() - min(CHARACTERS_TO_REMOVE_FROM_END, filename.length()));
+    if (filename.ends_with("_")) {
+      filename.erase(filename.length() - 1);
+    }
+    return filename;
+  }
 };
 
 namespace internal {

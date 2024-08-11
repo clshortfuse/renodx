@@ -904,7 +904,7 @@ static void OnPushDescriptors(
     reshade::api::pipeline_layout layout,
     uint32_t layout_param,
     const reshade::api::descriptor_table_update& update) {
-  if (!trace_running && present_count >= MAX_PRESENT_COUNT) return;
+  if (!trace_running) return;
   auto* device = cmd_list->get_device();
   auto& data = device->get_private_data<DeviceData>();
   const std::shared_lock lock(data.mutex);
