@@ -49,18 +49,15 @@ float3 applyUserTonemap(float3 untonemapped, float3 vanillaColor, float midGray)
 
     outputColor = renodx::tonemap::config::Apply(outputColor, config);
     
+    
     if (injectedData.toneMapType != 0)
     {
-        if (injectedData.toneMapHueCorrection) //hue correction
-        {
-            float3 hueCorrected = renodx::color::correct::Hue(outputColor, vanillaColor);
-            outputColor = lerp(outputColor, hueCorrected, injectedData.toneMapHueCorrection);
-        }
-    
+        
         if (injectedData.blend) //HDR/SDR blend for color correction
         {
             outputColor = lerp(vanillaColor, outputColor, saturate(vanillaColor)); // combine tonemappers 
         }
+        
     }
     
     return outputColor;
