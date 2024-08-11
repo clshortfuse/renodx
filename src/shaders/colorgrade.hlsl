@@ -26,17 +26,25 @@ float3 Saturation(float3 bt709, float saturation = 1.f) {
 
 float3 UserColorGrading(
     float3 color,
-    float exposure = 1.f,
-    float highlights = 1.f,
-    float shadows = 1.f,
-    float contrast = 1.f,
-    float saturation = 1.f) {
-  if (exposure == 1.f && saturation == 1.f && shadows == 1.f && highlights == 1.f && contrast == 1.f) {
+    float exposure,
+    float highlights,
+    float shadows,
+    float contrast,
+    float saturation,
+    float hue_correction_strength,
+    float3 hue_correction_source) {
+  if (exposure == 1.f && saturation == 1.f && shadows == 1.f && highlights == 1.f && contrast == 1.f && hue_correction_strength == 0.f) {
     return color;
   }
 
   // Store original color
-  float3 lch_original = renodx::color::oklch::from::BT709(color);
+
+  float3 restore_lab = (hue_correction_strength == 0)
+                           ? 0
+                           : renodx::color::oklab::from::BT709(hue_correction_source);
+  float3 restore_lch = (hue_correction_strength == 0)
+                           ? 0
+                           : renodx::color::oklch::from::OkLab(restore_lab);
 
   color *= exposure;
 
@@ -55,14 +63,50 @@ float3 UserColorGrading(
 
   color *= (y > 0 ? (y_final / y) : 0);
 
-  float3 lch_new = renodx::color::oklch::from::BT709(color);
-  lch_new[1] *= saturation;
-  lch_new[2] = lch_original[2];  // hue correction
+  if (saturation != 1.f || hue_correction_strength != 0.f) {
+    float3 lab_new = renodx::color::oklab::from::BT709(color);
+    float3 lch_new = renodx::color::oklch::from::OkLab(lab_new);
 
-  color = renodx::color::bt709::from::OkLCh(lch_new);
-  color = renodx::color::bt709::clamp::AP1(color);
+    if (hue_correction_strength != 0.f) {
+      if (hue_correction_strength == 1.f) {
+        lch_new[2] = restore_lch[2];  // Full hue override
+      } else {
+        lab_new = float3(lab_new[0], lerp(lab_new.yz, restore_lab.yz, hue_correction_strength));
+        float3 lch_temp = lab_new = renodx::color::oklch::from::OkLab(lab_new);
+        lch_temp[1] = lch_new[1];  // custom chroma restore
+        lch_new = lch_temp;
+      }
+    }
+
+    if (saturation != 1.f) {
+      lch_new[1] *= saturation;
+    }
+
+    color = renodx::color::bt709::from::OkLCh(lch_new);
+
+    color = renodx::color::bt709::clamp::AP1(color);
+  }
 
   return color;
+}
+
+float3 UserColorGrading(
+    float3 color,
+    float exposure = 1.f,
+    float highlights = 1.f,
+    float shadows = 1.f,
+    float contrast = 1.f,
+    float saturation = 1.f,
+    float hue_correction_strength = 1.f) {
+  return UserColorGrading(
+      color,
+      exposure,
+      highlights,
+      shadows,
+      contrast,
+      saturation,
+      hue_correction_strength,
+      color);
 }
 }  // namespace grade
 }  // namespace color
