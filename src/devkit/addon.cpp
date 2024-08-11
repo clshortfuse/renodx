@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cstdlib>
 #include <exception>
+#include <initializer_list>
 #include <mutex>
 #include <optional>
 #include <variant>
@@ -18,7 +19,6 @@
 #include <Windows.h>
 
 #include <cstdio>
-#include <filesystem>
 #include <shared_mutex>
 #include <sstream>
 #include <string>
@@ -37,8 +37,21 @@
 #include "../utils/swapchain.hpp"
 #include "../utils/trace.hpp"
 
-#define ICON_FK_REFRESH u8"\uf021"
-#define ICON_FK_FLOPPY  u8"\uf0c7"
+#define ICON_FK_CANCEL      reinterpret_cast<const char*>(u8"\uf00d")
+#define ICON_FK_FILE        reinterpret_cast<const char*>(u8"\uf016")
+#define ICON_FK_FILE_CODE   reinterpret_cast<const char*>(u8"\uf1c9")
+#define ICON_FK_FILE_IMAGE  reinterpret_cast<const char*>(u8"\uf1c5")
+#define ICON_FK_FLOPPY      reinterpret_cast<const char*>(u8"\uf0c7")
+#define ICON_FK_FOLDER      reinterpret_cast<const char*>(u8"\uf114")
+#define ICON_FK_FOLDER_OPEN reinterpret_cast<const char*>(u8"\uf115")
+#define ICON_FK_MINUS       reinterpret_cast<const char*>(u8"\uf068")
+#define ICON_FK_OK          reinterpret_cast<const char*>(u8"\uf00c")
+#define ICON_FK_PENCIL      reinterpret_cast<const char*>(u8"\uf040")
+#define ICON_FK_PLUS        reinterpret_cast<const char*>(u8"\uf067")
+#define ICON_FK_REFRESH     reinterpret_cast<const char*>(u8"\uf021")
+#define ICON_FK_SEARCH      reinterpret_cast<const char*>(u8"\uf002")
+#define ICON_FK_UNDO        reinterpret_cast<const char*>(u8"\uf0e2")
+#define ICON_FK_WARNING     reinterpret_cast<const char*>(u8"\uf071")
 
 namespace {
 
@@ -46,9 +59,25 @@ std::atomic_bool is_snapshotting = false;
 
 struct ShaderDetails {
   uint32_t shader_hash;
+  std::vector<uint8_t> shader_data;
   std::variant<std::nullopt_t, std::exception, std::string> disassembly = std::nullopt;
   std::optional<renodx::utils::shader::compiler::DxilProgramVersion> program_version = std::nullopt;
-  std::optional<renodx::utils::shader::compiler::watcher::CustomShader> custom_shader = std::nullopt;
+  std::vector<uint8_t> init_shader;
+  std::optional<renodx::utils::shader::compiler::watcher::CustomShader> disk_shader = std::nullopt;
+
+  enum class ShaderSource : int {
+    ORIGINAL_SHADER = 0,
+    ADDON_SHADER = 1,
+    DISK_SHADER = 2,
+    BYPASS = 3,
+  } shader_source = ShaderSource::ORIGINAL_SHADER;
+
+  constexpr static const char* SHADER_SOURCE_NAMES[] = {
+      "Original",
+      "Add-on",
+      "File",
+      "Bypass",
+  };
 };
 
 struct ResourceViewDetails {
@@ -164,26 +193,122 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
 // Settings
 std::atomic_bool is_tracing_pipelines = false;
 
+const uint32_t SETTING_NAV_RAIL_SIZE = 48;
+const std::vector<std::pair<const char*, const char*>> SETTING_NAV_TITLES = {
+    {"Snapshot", ICON_FK_SEARCH},
+    {"Shaders", ICON_FK_FLOPPY},
+    {"Defines", ICON_FK_PENCIL},
+};
+
 bool setting_auto_dump = false;
-bool setting_auto_compile = false;
 bool setting_live_reload = false;
 bool setting_unique_shaders_only = false;
 bool setting_show_vertex_shaders = false;
+uint32_t setting_nav_item = 0;
 
-struct {
-  uint32_t row_id = 0;
-  uint64_t pipeline_handle = 0;
+struct SettingSelection {
   uint32_t shader_hash = 0;
   uint64_t resource_handle = 0;
+  int shader_view = 0;
 
-  [[nodiscard]] auto GetTreeNodeFlag(uint32_t row_index) const {
-    return row_index == row_id ? ImGuiTreeNodeFlags_Selected : 0;
+  bool is_pinned = false;
+  bool is_current = false;
+  bool is_alive = true;
+
+  [[nodiscard]] auto GetTreeNodeFlags() const {
+    return is_current ? ImGuiTreeNodeFlags_Selected : 0;
   }
 
-} setting_row_selection;
+  [[nodiscard]] auto GetTabItemFlags() const {
+    return is_current ? ImGuiTabItemFlags_SetSelected : 0;
+  }
+};
+
+std::vector<SettingSelection> setting_open_tabs;
+
+void MakeSelectionCurrent(SettingSelection selection) {
+  bool marked_current = false;
+  for (auto& item : setting_open_tabs) {
+    if (selection.shader_hash != 0u) {
+      marked_current |=
+          item.is_current =
+              (item.shader_hash == selection.shader_hash);
+    } else if (selection.resource_handle != 0u) {
+      marked_current |=
+          item.is_current =
+              (item.resource_handle == selection.resource_handle);
+    }
+  }
+  if (marked_current) return;
+  for (auto& item : setting_open_tabs) {
+    if (item.is_pinned) continue;
+
+    if ((selection.shader_hash != 0u && item.shader_hash != 0u)
+        || (selection.resource_handle != 0u && item.resource_handle != 0u)) {
+      item.shader_hash = selection.shader_hash;
+      item.resource_handle = selection.resource_handle;
+      item.is_current = true;
+      return;
+    }
+  }
+  selection.is_current = true;
+  setting_open_tabs.push_back(selection);
+}
+
+SettingSelection& GetSelection(SettingSelection& selection) {
+  for (auto& item : setting_open_tabs) {
+    if (selection.shader_hash != 0u) {
+      if (item.shader_hash == selection.shader_hash) {
+        return item;
+      }
+    }
+    if (selection.resource_handle != 0u) {
+      if (item.resource_handle == selection.resource_handle) {
+        return item;
+      }
+    }
+  }
+  return selection;
+}
+
+std::optional<std::reference_wrapper<SettingSelection>> GetCurrentSelection() {
+  for (auto& item : setting_open_tabs) {
+    if (item.is_current) return item;
+  }
+  return std::nullopt;
+}
+
+void RemoveSelection(SettingSelection& selection) {
+  auto iterator = setting_open_tabs.begin();
+  while (iterator != setting_open_tabs.end()) {
+    if (selection.shader_hash != 0u) {
+      if (iterator->shader_hash == selection.shader_hash) {
+        setting_open_tabs.erase(iterator);
+        return;
+      }
+    }
+    if (selection.resource_handle != 0u) {
+      if (iterator->resource_handle == selection.resource_handle) {
+        setting_open_tabs.erase(iterator);
+        return;
+      }
+    }
+    ++iterator;
+  }
+}
+
+void RemoveDeadSelections() {
+  auto iterator = setting_open_tabs.begin();
+  while (iterator != setting_open_tabs.end()) {
+    if (!iterator->is_alive) {
+      setting_open_tabs.erase(iterator);
+    } else {
+      ++iterator;
+    }
+  }
+}
 
 std::vector<std::pair<std::string, std::string>> setting_shader_defines;
-
 bool setting_shader_defines_changed = false;
 
 void OnInitDevice(reshade::api::device* device) {
@@ -283,15 +408,13 @@ bool OnDrawOrDispatchIndirect(
   return OnDraw(cmd_list, DrawDetails::DrawMethods::DRAW_INDEXED_OR_INDIRECT);
 }
 
-void PerformShaderReload(reshade::api::device* device) {
+void PerformShaderReload(reshade::api::device* device, DeviceData& data) {
   if (setting_live_reload) {
     if (!renodx::utils::shader::compiler::watcher::HasChanged()) return;
   } else {
     renodx::utils::shader::compiler::watcher::CompileSync();
   }
   auto new_shaders = renodx::utils::shader::compiler::watcher::FlushCompiledShaders();
-  auto& data = device->get_private_data<DeviceData>();
-  std::unique_lock lock(data.mutex);
   for (auto& [shader_hash, custom_shader] : new_shaders) {
     renodx::utils::shader::RemoveRuntimeReplacements(device, {shader_hash});
     if (!custom_shader.removed && custom_shader.IsCompilationOK()) {
@@ -299,7 +422,601 @@ void PerformShaderReload(reshade::api::device* device) {
     }
 
     auto& details = data.GetShaderDetails(shader_hash);
-    details.custom_shader = custom_shader;
+    details.disk_shader = custom_shader;
+  }
+}
+
+void RenderFileAlias(std::optional<renodx::utils::shader::compiler::watcher::CustomShader>& disk_shader) {
+  if (disk_shader.has_value()) {
+    // Has custom shader file
+    std::string file_alias = disk_shader->GetFileAlias();
+    if (disk_shader->IsCompilationOK()) {
+      if (file_alias.empty()) {
+        ImGui::TextColored(ImVec4(0, 255, 0, 128), "Custom");
+      } else {
+        ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", file_alias.c_str());
+      }
+    } else {
+      if (file_alias.empty()) {
+        ImGui::TextColored(ImVec4(255, 0, 0, 128), "Custom");
+      } else {
+        ImGui::TextColored(ImVec4(255, 0, 0, 255), "%s", file_alias.c_str());
+      }
+    }
+  } else {
+    ImGui::TextUnformatted("");
+  }
+}
+
+void RenderMenuBar(reshade::api::device* device, DeviceData& data) {
+  if (ImGui::BeginMenuBar()) {
+    ImGui::PushID("##SnapshotButton");
+    if (ImGui::MenuItem("Snapshot")) {
+      data.StartSnapshot();
+    }
+    ImGui::PopID();
+
+    ImGui::PushID("##menu_shaders_auto_dump");
+    ImGui::MenuItem("Auto Dump", "", &setting_auto_dump);
+    ImGui::PopID();
+
+    ImGui::PushID("##menu_shaders_dump");
+    if (ImGui::MenuItem(std::format("Shaders Dump ({})", renodx::utils::shader::dump::pending_dump_count.load()).c_str(), "", false, setting_auto_dump)) {
+      renodx::utils::shader::dump::DumpAllPending();
+    }
+    ImGui::PopID();
+
+    ImGui::PushID("##menu_shaders_auto_load");
+    ImGui::MenuItem("Live Shaders", "", &setting_live_reload);
+    ImGui::PopID();
+
+    ImGui::PushID("##menu_shaders_load");
+    if (ImGui::MenuItem(std::format("Load Shaders ({})", renodx::utils::shader::compiler::watcher::custom_shaders_count.load()).c_str())) {
+      setting_live_reload = false;
+      PerformShaderReload(device, data);
+    }
+    ImGui::PopID();
+
+    ImGui::PushID("##menu_shaders_auto_load");
+    if (ImGui::MenuItem(std::format("Unload Shaders", renodx::utils::shader::runtime_replacement_count.load()).c_str())) {
+      setting_live_reload = false;
+      renodx::utils::shader::RemoveRuntimeReplacements(device);
+      renodx::utils::shader::compiler::watcher::CompileSync();
+    }
+    ImGui::PopID();
+
+    ImGui::PushID("##TraceButton");
+    if (ImGui::MenuItem("Trace")) {
+      renodx::utils::trace::trace_scheduled = true;
+    }
+    ImGui::PopID();
+
+    ImGui::EndMenuBar();
+  }
+}
+
+void RenderNavRail(reshade::api::device* device, DeviceData& data) {
+  if (ImGui::BeginChild("##NavRail", ImVec2(SETTING_NAV_RAIL_SIZE, 0))) {
+    for (auto i = 0; i < SETTING_NAV_TITLES.size(); ++i) {
+      auto* font = ImGui::GetFont();
+      auto old_scale = font->Scale;
+      auto previous_font_size = ImGui::GetFontSize();
+      font->Scale *= SETTING_NAV_RAIL_SIZE / previous_font_size;
+      ImGui::PushFont(font);
+      auto current_font_size = ImGui::GetFontSize();
+
+      bool selected = setting_nav_item == i;
+      if (!selected) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+      }
+      ImGui::PushID(std::format("##nav_rail_{}", i).c_str());
+      if (ImGui::Button(
+              SETTING_NAV_TITLES[i].second,
+              ImVec2(SETTING_NAV_RAIL_SIZE, SETTING_NAV_RAIL_SIZE))) {
+        setting_nav_item = i;
+      }
+      ImGui::PopID();
+      if (!selected) {
+        ImGui::PopStyleColor();
+      }
+
+      font->Scale = old_scale;
+      ImGui::PopFont();
+
+      ImGui::SetItemTooltip("%s", SETTING_NAV_TITLES[i].first);
+    }
+
+    ImGui::EndChild();
+  }
+}
+
+void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
+  static ImGuiTreeNodeFlags tree_node_flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_SpanFullWidth;
+  if (ImGui::BeginTable(
+          "##SnapshotTree",
+          5,
+          ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_Resizable | ImGuiTableFlags_Hideable
+              | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_ScrollY,
+          ImVec2(-4, -4))) {
+    static const float TEXT_BASE_WIDTH = ImGui::CalcTextSize("A").x;
+    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthStretch, TEXT_BASE_WIDTH * 24.0f);
+    ImGui::TableSetupColumn("Ref", ImGuiTableColumnFlags_None, TEXT_BASE_WIDTH * 16.0f);
+    ImGui::TableSetupColumn("Info", ImGuiTableColumnFlags_None, TEXT_BASE_WIDTH * 24.0f);
+    ImGui::TableSetupColumn("Tag", ImGuiTableColumnFlags_None, TEXT_BASE_WIDTH * 24.0f);
+    ImGui::TableSetupColumn("Index", ImGuiTableColumnFlags_None, TEXT_BASE_WIDTH * 4.0f);
+    ImGui::TableSetupScrollFreeze(0, 1);
+    ImGui::TableHeadersRow();
+
+    uint32_t row_index = 0x2000;
+    int draw_index = 0;
+    for (auto& command_list_data : data.command_list_data) {
+      for (auto& draw_details : command_list_data.draw_details) {
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::PushID(row_index);
+        bool draw_node_open = ImGui::TreeNodeEx("", tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen, "%s", draw_details.DrawMethodString().c_str());
+        ImGui::PopID();
+
+        ImGui::TableNextColumn();  // Ref
+
+        ImGui::TableNextColumn();  // Info
+
+        ImGui::TableNextColumn();  // Tag
+
+        ImGui::TableNextColumn();
+        ImGui::Text("%03d", draw_index);
+
+        for (const auto& pipeline_bind : draw_details.pipeline_binds) {
+          auto& shader_device_data = renodx::utils::shader::GetShaderDeviceData(device);
+          std::unique_lock shader_data_lock(shader_device_data.mutex);
+          auto details_pair = shader_device_data.pipeline_shader_details.find(pipeline_bind.pipeline.handle);
+          if (details_pair == shader_device_data.pipeline_shader_details.end()) continue;
+          auto& pipeline_details = details_pair->second;
+
+          if (!pipeline_details.tag.has_value()) {
+            pipeline_details.tag = "";
+            auto result = renodx::utils::trace::GetDebugName(device->get_api(), pipeline_bind.pipeline);
+            if (result.has_value()) {
+              pipeline_details.tag = result.value();
+            }
+          }
+
+          for (const auto& shader_hash : pipeline_bind.shader_hashes) {
+            ++row_index;  // Count rows regardless of tree node state
+            if (draw_node_open) {
+              auto& shader_details = data.GetShaderDetails(shader_hash);
+
+              ImGui::TableNextRow();
+              ImGui::TableNextColumn();
+
+              SettingSelection search = {.shader_hash = shader_hash};
+              auto& selection = GetSelection(search);
+
+              auto bullet_flags = tree_node_flags | ImGuiTreeNodeFlags_Leaf
+                                  | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
+                                  | selection.GetTreeNodeFlags();
+
+              ImGui::PushID(row_index);
+              if (shader_hash != 0u && !shader_details.program_version.has_value()) {
+                if (shader_details.shader_data.empty()) {
+                  auto shader_data = pipeline_details.GetShaderData(shader_hash);
+                  if (!shader_data.has_value()) throw std::exception("Failed to get shader data");
+                  shader_details.shader_data = shader_data.value();
+                }
+                try {
+                  shader_details.program_version = renodx::utils::shader::compiler::DecodeShaderVersion(shader_details.shader_data);
+                } catch (const std::exception& e) {
+                  reshade::log_message(reshade::log_level::error, e.what());
+                }
+              }
+              // Fallback to subobject
+              if (shader_details.program_version.has_value()) {
+                ImGui::TreeNodeEx("", bullet_flags, "%s_%d_%d",
+                                  shader_details.program_version->GetKindAbbr(),
+                                  shader_details.program_version->GetMajor(),
+                                  shader_details.program_version->GetMinor());
+              } else {
+                std::stringstream s;
+                s << pipeline_bind.pipeline_stage;
+                ImGui::TreeNodeEx("", bullet_flags, "%s", s.str().c_str());
+              }
+              ImGui::PopID();
+              if (ImGui::IsItemClicked()) {
+                MakeSelectionCurrent(selection);
+                ImGui::SetItemDefaultFocus();
+              }
+              if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                selection.is_pinned = true;
+              }
+              ImGui::TableNextColumn();  // Reference
+              ImGui::Text("0x%08X", shader_hash);
+
+              ImGui::TableNextColumn();  // Name
+              RenderFileAlias(shader_details.disk_shader);
+
+              ImGui::TableNextColumn();  // Tag
+              if (!pipeline_details.tag->empty()) {
+                ImGui::TextUnformatted(pipeline_details.tag->c_str());
+              }
+
+              ImGui::TableNextColumn();  // Index
+              ImGui::Text("%03d", draw_index);
+            }
+          }
+        }
+        int render_target_index = 0;
+        for (auto& render_target : draw_details.render_targets) {
+          ++row_index;
+          bool rtv_node_open = false;
+          if (draw_node_open) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::PushID(row_index);
+            rtv_node_open = ImGui::TreeNodeEx("", tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen, "RTV%d", render_target_index++);
+            ImGui::PopID();
+
+            ImGui::TableNextColumn();
+            ImGui::Text("0x%016llX", render_target.resource_view.handle);
+
+            ImGui::TableNextColumn();
+            std::stringstream s;
+            s << render_target.resource_view_desc.format;
+            if (render_target.is_swapchain) {
+              ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
+            } else {
+              ImGui::TextUnformatted(s.str().c_str());
+            }
+
+            ImGui::TableNextColumn();
+            if (!render_target.resource_view_tag.empty()) {
+              ImGui::TextUnformatted(render_target.resource_view_tag.c_str());
+            }
+
+            ImGui::TableNextColumn();  // Index
+            ImGui::Text("%03d", draw_index);
+          }
+          ++row_index;
+          if (rtv_node_open) {
+            SettingSelection search = {.resource_handle = render_target.resource.handle};
+            auto& selection = GetSelection(search);
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            auto bullet_flags = tree_node_flags | ImGuiTreeNodeFlags_Leaf
+                                | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
+                                | selection.GetTreeNodeFlags();
+            ImGui::PushID(row_index);
+            ImGui::TreeNodeEx("", bullet_flags, "Resource");
+            ImGui::PopID();
+            if (ImGui::IsItemClicked()) {
+              MakeSelectionCurrent(selection);
+              ImGui::SetItemDefaultFocus();
+            }
+
+            ImGui::TableNextColumn();
+            ImGui::Text("0x%016llX", render_target.resource.handle);
+
+            ImGui::TableNextColumn();
+            std::stringstream s;
+            s << render_target.resource_desc.texture.format;
+
+            if (render_target.is_swapchain) {
+              ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
+            } else {
+              ImGui::TextUnformatted(s.str().c_str());
+            }
+
+            ImGui::TableNextColumn();
+            if (!render_target.resource_tag.empty()) {
+              ImGui::TextUnformatted(render_target.resource_tag.c_str());
+            }
+
+            ImGui::TableNextColumn();  // Index
+            ImGui::Text("%03d", draw_index);
+
+            ImGui::TreePop();
+          }
+        }
+
+        if (draw_node_open) {
+          ImGui::TreePop();
+        }
+        ++row_index;
+        ++draw_index;
+      }
+    }
+
+    ImGui::EndTable();
+  }  // BeginTable
+}
+
+void RenderShadersPane(reshade::api::device* device, DeviceData& data) {
+  static ImGuiTreeNodeFlags tree_node_flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_SpanFullWidth;
+  if (ImGui::BeginTable(
+          "##ShadersPaneTable",
+          3,
+          ImGuiTableFlags_BordersInner | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY
+              | ImGuiTableFlags_Sortable | ImGuiTableFlags_SortMulti,
+          ImVec2(0, 0))) {
+    ImGui::TableSetupColumn("Hash", ImGuiTableColumnFlags_NoHide);
+    ImGui::TableSetupColumn("Alias", ImGuiTableColumnFlags_NoHide);
+    ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_DefaultHide);
+    ImGui::TableSetupScrollFreeze(0, 1);
+    ImGui::TableHeadersRow();
+
+    int cell_index_id = 0x10000;
+
+    for (auto& [shader_hash, shader_details] : data.shader_details) {
+      SettingSelection search = {.shader_hash = shader_hash};
+      auto& selection = GetSelection(search);
+
+      // Undocumented ImGui Combo height
+      const auto combo_height = ImGui::GetTextLineHeightWithSpacing();
+      ImGui::TableNextRow(ImGuiTableRowFlags_None, combo_height);
+      if (ImGui::TableSetColumnIndex(0)) {
+        ImGui::PushID(cell_index_id++);
+
+        // ImGui full size (0,0) applies to text not row
+        // ImGui borders are always present, just transparent
+        const auto row_border_size = 1;
+        const auto selectable_height = combo_height + (2 * row_border_size);
+
+        ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0, 0.5f));
+        if (ImGui::Selectable(
+                std::format("0x{:08x}", shader_details.shader_hash).c_str(),
+                selection.is_current,
+                ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap,
+                ImVec2(0, selectable_height))) {
+          MakeSelectionCurrent(selection);
+          ImGui::SetItemDefaultFocus();
+        }
+        ImGui::PopStyleVar();
+        ImGui::PopID();
+      }
+
+      if (ImGui::TableSetColumnIndex(1)) {
+        ImGui::PushID(cell_index_id++);
+        ImGui::AlignTextToFramePadding();
+        RenderFileAlias(shader_details.disk_shader);
+        ImGui::PopID();
+      }
+
+      if (ImGui::TableSetColumnIndex(2)) {
+        ImGui::PushID(cell_index_id++);
+        ImGui::SetNextItemWidth(ImGui::GetColumnWidth(2));
+        if (ImGui::BeginCombo(
+                "",
+                ShaderDetails::SHADER_SOURCE_NAMES[static_cast<int>(shader_details.shader_source)],
+                ImGuiComboFlags_None)) {
+          for (int i = 0; i < IM_ARRAYSIZE(ShaderDetails::SHADER_SOURCE_NAMES); ++i) {
+            const bool is_selected = (i == static_cast<int>(shader_details.shader_source));
+            if (ImGui::Selectable(ShaderDetails::SHADER_SOURCE_NAMES[i], is_selected)) {
+              shader_details.shader_source = static_cast<ShaderDetails::ShaderSource>(i);
+            }
+            if (is_selected) {
+              ImGui::SetItemDefaultFocus();
+            }
+          }
+          ImGui::EndCombo();
+        };
+        ImGui::PopID();
+      }
+    }
+
+    ImGui::EndTable();
+  }  // ShadersPaneTable
+}
+
+void RenderShaderDefinesPane(reshade::api::device* device, DeviceData& data) {
+  static ImGuiTreeNodeFlags tree_node_flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_SpanFullWidth;
+  if (ImGui::BeginTable(
+          "##ShaderDefinesTable",
+          4,
+          ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_Resizable
+              | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_ScrollY,
+          ImVec2(-4, -4))) {
+    static const float TEXT_BASE_WIDTH = ImGui::CalcTextSize("A").x;
+    ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_NoHide);
+    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
+    ImGui::TableSetupColumn("Options", ImGuiTableColumnFlags_NoHide);
+    ImGui::TableSetupScrollFreeze(0, 1);
+    ImGui::TableHeadersRow();
+
+    int row_index = 0;
+    int cell_index_id = 0x8000;
+    static std::vector<size_t> shader_define_remove_indexes;
+
+    for (auto& [key, value] : setting_shader_defines) {
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::PushID(cell_index_id++);
+      char temp_key[128] = "";
+      key.copy(temp_key, 128);
+      ImGui::SetNextItemWidth(-FLT_MIN);
+      if (ImGui::InputText("", temp_key, 128, ImGuiInputTextFlags_CharsNoBlank)) {
+        key.assign(temp_key);
+        setting_shader_defines_changed = true;
+      }
+      ImGui::PopID();
+
+      ImGui::TableNextColumn();
+      ImGui::PushID(cell_index_id++);
+      char temp_value[128] = "";
+      value.copy(temp_value, 128);
+      ImGui::SetNextItemWidth(-FLT_MIN);
+      if (ImGui::InputText("", temp_value, 128, ImGuiInputTextFlags_CharsNoBlank)) {
+        value.assign(temp_value);
+        setting_shader_defines_changed = true;
+      }
+      ImGui::PopID();
+
+      ImGui::TableNextColumn();
+      ImGui::PushID(cell_index_id++);
+      if (ImGui::Button("Remove")) {
+        setting_shader_defines_changed = true;
+        shader_define_remove_indexes.push_back(row_index);
+      }
+      ImGui::PopID();
+      row_index++;
+    }
+    while (shader_define_remove_indexes.size() != 0) {
+      auto remove_index = shader_define_remove_indexes.rbegin()[0];
+      setting_shader_defines.erase(setting_shader_defines.begin() + remove_index);
+      shader_define_remove_indexes.pop_back();
+    }
+
+    ImGui::TableNextRow();
+    ImGui::BeginDisabled();
+    ImGui::TableNextColumn();
+    ImGui::PushID(cell_index_id++);
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    char temp_key[128];
+    ImGui::InputText("", temp_key, 128, ImGuiInputTextFlags_CharsNoBlank);
+    ImGui::PopID();
+
+    ImGui::TableNextColumn();
+    ImGui::PushID(cell_index_id++);
+    char temp_value[128] = "";
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputText("", temp_value, 128, ImGuiInputTextFlags_CharsNoBlank);
+    ImGui::PopID();
+    ImGui::EndDisabled();
+
+    ImGui::TableNextColumn();
+    ImGui::PushID(cell_index_id++);
+    if (ImGui::Button("Add")) {
+      setting_shader_defines.emplace_back();
+    }
+    ImGui::PopID();
+
+    ImGui::EndTable();
+  }  // ShaderDefinesTable
+}
+
+void RenderShaderViewDisassembly(reshade::api::device* device, DeviceData& data, ShaderDetails& shader_details) {
+  std::string disassembly_string;
+  bool failed = false;
+  if (std::holds_alternative<std::nullopt_t>(shader_details.disassembly)) {
+    // Never disassembled
+    try {
+      if (shader_details.shader_data.empty()) {
+        reshade::api::pipeline pipeline = {0};
+        {
+          // Get pipeline handle
+          auto& shader_device_data = renodx::utils::shader::GetShaderDeviceData(device);
+          std::shared_lock lock(shader_device_data.mutex);
+          auto pair = shader_device_data.shader_pipeline_handles.find(shader_details.shader_hash);
+          if (pair == shader_device_data.shader_pipeline_handles.end()) {
+            throw std::exception("Shader data not found.");
+          }
+          auto& pipeline_handles = pair->second;
+          if (pipeline_handles.empty()) throw std::exception("Shader data not found.");
+          pipeline = {*(pipeline_handles.begin())};
+        }
+        auto pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(device, pipeline);
+        if (!pipeline_details.has_value()) throw std::exception("Shader data not found");
+        auto shader_data = pipeline_details->GetShaderData(shader_details.shader_hash);
+        if (!shader_data.has_value()) throw std::exception("Invalid shader selection");
+        shader_details.shader_data = shader_data.value();
+      }
+      shader_details.disassembly = renodx::utils::shader::compiler::DisassembleShader(shader_details.shader_data);
+    } catch (std::exception& e) {
+      shader_details.disassembly = e;
+    }
+  }
+
+  if (std::holds_alternative<std::exception>(shader_details.disassembly)) {
+    disassembly_string.assign(std::get<std::exception>(shader_details.disassembly).what());
+    failed = true;
+  } else {
+    disassembly_string.assign(std::get<std::string>(shader_details.disassembly));
+  }
+
+  if (failed) {
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(192, 0, 0, 255));
+  }
+  ImGui::InputTextMultiline(
+      "##disassemblyCode",
+      const_cast<char*>(disassembly_string.c_str()),
+      disassembly_string.length(),
+      ImVec2(-4, -4),
+      ImGuiInputTextFlags_ReadOnly);
+  if (failed) {
+    ImGui::PopStyleColor();
+  }
+}
+
+void RenderShaderViewLive(reshade::api::device* device, DeviceData& data, ShaderDetails& shader_details) {
+  std::string live_string;
+  bool failed = false;
+  if (shader_details.disk_shader.has_value()) {
+    if (!shader_details.disk_shader->IsCompilationOK()) {
+      live_string = shader_details.disk_shader->GetCompilationException().what();
+    } else if (shader_details.disk_shader->is_hlsl) {
+      try {
+        live_string = renodx::utils::path::ReadTextFile(shader_details.disk_shader->file_path);
+      } catch (std::exception& e) {
+        live_string = e.what();
+        failed = true;
+      }
+    }
+  }
+  if (failed) {
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(192, 0, 0, 255));
+  }
+  ImGui::InputTextMultiline(
+      std::format("##shader_view_live_0x{:08x}", shader_details.shader_hash).c_str(),
+      const_cast<char*>(live_string.c_str()),
+      live_string.length(),
+      ImVec2(-4, -4));
+  if (failed) {
+    ImGui::PopStyleColor();
+  }
+}
+
+// Returns false selection is to be removed
+void RenderShaderView(reshade::api::device* device, DeviceData& data, SettingSelection& selection) {
+  ImGui::PushID(std::format("##shader_view_tab_0x{:08x}", selection.shader_hash).c_str());
+  auto style = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+  if (!selection.is_pinned) {
+    style.w *= 0.5f;
+  } else if (selection.is_current) {
+  }
+  ImGui::PushStyleColor(ImGuiCol_Text, style);
+  bool open = ImGui::BeginTabItem(
+      std::format("0x{:08x}", selection.shader_hash).c_str(),
+      &selection.is_alive,
+      selection.GetTabItemFlags());
+
+  ImGui::PopStyleColor();
+  ImGui::PopID();
+
+  if (ImGui::IsItemClicked()) {
+    MakeSelectionCurrent(selection);
+  }
+  if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    selection.is_pinned = true;
+  }
+
+  if (open) {
+    if (ImGui::BeginChild(
+            std::format("##shader_view_tab_child_0x{:08x}", selection.shader_hash).c_str(),
+            ImVec2(0, 0))) {
+      auto& shader_details = data.GetShaderDetails(selection.shader_hash);
+
+      switch (selection.shader_view) {
+        case 0:
+          RenderShaderViewDisassembly(device, data, shader_details);
+          break;
+        case 1:
+          RenderShaderViewLive(device, data, shader_details);
+          break;
+        default:
+          break;
+      }
+      ImGui::EndChild();
+    }
+    ImGui::EndTabItem();
   }
 }
 
@@ -307,500 +1024,72 @@ void PerformShaderReload(reshade::api::device* device) {
 void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   auto* device = runtime->get_device();
   auto& data = device->get_private_data<DeviceData>();
+  std::unique_lock lock(data.mutex);  // Probably not needed
+  static auto setting_window_size = 0;
+  static auto setting_side_sheet_width = 0;
 
-  {
-    ImGui::PushID("##SnapshotButton");
-    if (ImGui::Button("Take Snapshot")) {
-      std::unique_lock lock(data.mutex);
-      data.StartSnapshot();
-    }
-    ImGui::PopID();
-
-    ImGui::SameLine();
-    ImGui::PushID("##TraceButton");
-    if (ImGui::Button("Log Trace")) {
-      renodx::utils::trace::trace_scheduled = true;
-    }
-    ImGui::PopID();
-  }
-
-  {
-    ImGui::BeginDisabled(setting_auto_dump);
-    ImGui::PushID("##DumpShaders");
-    if (ImGui::Button(std::format("Dump Shaders ({})", renodx::utils::shader::dump::pending_dump_count.load()).c_str())) {
-      renodx::utils::shader::dump::DumpAllPending();
-    }
-    ImGui::PopID();
-    ImGui::EndDisabled();
-
-    ImGui::SameLine();
-    ImGui::PushID("##AutoDumpCheckBox");
-    if (ImGui::Checkbox("Auto", &setting_auto_dump)) {
-      // noop
-    }
-    ImGui::PopID();
-  }
-
-  {
-    ImGui::BeginDisabled(setting_live_reload);
-    if (ImGui::Button(std::format("Unload Shaders ({})", renodx::utils::shader::runtime_replacement_count.load()).c_str())) {
-      renodx::utils::shader::RemoveRuntimeReplacements(runtime->get_device());
-      renodx::utils::shader::compiler::watcher::CompileSync();
-    }
-    ImGui::EndDisabled();
-
-    ImGui::SameLine();
-    ImGui::BeginDisabled(setting_live_reload);
-    if (ImGui::Button(std::format("Load Shaders ({})", renodx::utils::shader::compiler::watcher::custom_shaders_count.load()).c_str())) {
-      PerformShaderReload(runtime->get_device());
-    }
-    ImGui::EndDisabled();
-
-    ImGui::SameLine();
-    ImGui::PushID("##LiveReloadCheckBox");
-    ImGui::BeginDisabled(setting_live_reload);
-
-    if (ImGui::Checkbox("Auto Compile", &setting_auto_compile)) {
-      if (setting_auto_compile) {
-        renodx::utils::shader::compiler::watcher::Start();
-      } else {
-        renodx::utils::shader::compiler::watcher::Stop();
+  if (ImGui::BeginChild("DevKit", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_MenuBar)) {
+    {
+      auto width = ImGui::CalcItemWidth();
+      if (setting_window_size != width) {
+        setting_window_size = width;
+        setting_side_sheet_width = 0;
       }
     }
-    ImGui::EndDisabled();
-    ImGui::PopID();
+
+    RenderMenuBar(device, data);
+
+    RenderNavRail(device, data);
 
     ImGui::SameLine();
-    ImGui::BeginDisabled(!setting_auto_compile);
-    ImGui::PushID("##LiveReloadCheckBox");
-    if (ImGui::Checkbox("Live Reload", &setting_live_reload)) {
-      // noop
+    if (ImGui::BeginChild("##LayoutList", ImVec2(72, 0), ImGuiChildFlags_ResizeX)) {
+      switch (setting_nav_item) {
+        case 0:
+          RenderCapturePane(device, data);
+          break;
+        case 1:
+          RenderShadersPane(device, data);
+          break;
+        case 2:
+          RenderShaderDefinesPane(device, data);
+        default:
+          break;
+      }
+      ImGui::EndChild();
     }
-    ImGui::PopID();
-    ImGui::EndDisabled();
-  }
 
-  bool changed_selected = false;
-  if (ImGui::BeginTabBar("##MyTabBar", ImGuiTabBarFlags_None)) {
-    std::unique_lock lock(data.mutex);
+    ImGui::SameLine();
 
-    ImGui::PushID("##SnapshotTab");
-    auto handle_snapshot_tab = ImGui::BeginTabItem("Capture");
-    ImGui::PopID();
-    if (handle_snapshot_tab) {
-      if (ImGui::BeginChild("##SnapshotList", ImVec2(96, 0), ImGuiChildFlags_ResizeX)) {
-        static ImGuiTreeNodeFlags tree_node_flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_SpanFullWidth;
-        if (ImGui::BeginTable(
-                "##SnapshotTree",
-                5,
-                ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_Resizable | ImGuiTableFlags_Hideable
-                    | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_ScrollY,
-                ImVec2(-4, -4))) {
-          static const float TEXT_BASE_WIDTH = ImGui::CalcTextSize("A").x;
-          ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthStretch, TEXT_BASE_WIDTH * 24.0f);
-          ImGui::TableSetupColumn("Ref", ImGuiTableColumnFlags_None, TEXT_BASE_WIDTH * 16.0f);
-          ImGui::TableSetupColumn("Info", ImGuiTableColumnFlags_None, TEXT_BASE_WIDTH * 24.0f);
-          ImGui::TableSetupColumn("Tag", ImGuiTableColumnFlags_None, TEXT_BASE_WIDTH * 24.0f);
-          ImGui::TableSetupColumn("Index", ImGuiTableColumnFlags_None, TEXT_BASE_WIDTH * 4.0f);
-          ImGui::TableSetupScrollFreeze(0, 1);
-          ImGui::TableHeadersRow();
-
-          uint32_t row_index = 0x2000;
-          int draw_index = 0;
-          for (auto& command_list_data : data.command_list_data) {
-            for (auto& draw_details : command_list_data.draw_details) {
-              ImGui::TableNextRow();
-              ImGui::TableNextColumn();
-              ImGui::PushID(row_index);
-              bool draw_node_open = ImGui::TreeNodeEx("", tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen, "%s", draw_details.DrawMethodString().c_str());
-              ImGui::PopID();
-
-              ImGui::TableNextColumn();  // Ref
-
-              ImGui::TableNextColumn();  // Info
-
-              ImGui::TableNextColumn();  // Tag
-
-              ImGui::TableNextColumn();
-              ImGui::Text("%03d", draw_index);
-
-              for (const auto& pipeline_bind : draw_details.pipeline_binds) {
-                auto pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(device, pipeline_bind.pipeline);
-                if (!pipeline_details.has_value()) continue;
-
-                if (!pipeline_details->tag.has_value()) {
-                  pipeline_details->tag = "";
-                  auto result = renodx::utils::trace::GetDebugName(device->get_api(), pipeline_bind.pipeline);
-                  if (result.has_value()) {
-                    pipeline_details->tag = result.value();
-                  }
-                }
-
-                for (const auto& shader_hash : pipeline_bind.shader_hashes) {
-                  ++row_index;  // Count rows regardless of tree node state
-                  if (draw_node_open) {
-                    auto& shader_details = data.GetShaderDetails(shader_hash);
-
-                    ImGui::TableNextRow();
-                    ImGui::TableNextColumn();
-
-                    auto bullet_flags = tree_node_flags | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
-                                        | setting_row_selection.GetTreeNodeFlag(row_index);
-
-                    ImGui::PushID(row_index);
-                    if (shader_hash != 0u && !shader_details.program_version.has_value()) {
-                      try {
-                        auto shader_data = pipeline_details->GetShaderData(shader_hash);
-                        if (!shader_data.has_value()) throw std::exception("Failed to get shader data");
-                        shader_details.program_version = renodx::utils::shader::compiler::DecodeShaderVersion(shader_data.value());
-                      } catch (const std::exception& e) {
-                        reshade::log_message(reshade::log_level::error, e.what());
-                      }
-                    }
-                    // Fallback to subobject
-                    if (shader_details.program_version.has_value()) {
-                      ImGui::TreeNodeEx("", bullet_flags, "%s_%d_%d",
-                                        shader_details.program_version->GetKindAbbr(),
-                                        shader_details.program_version->GetMajor(),
-                                        shader_details.program_version->GetMinor());
-                    } else {
-                      std::stringstream s;
-                      s << pipeline_bind.pipeline_stage;
-                      ImGui::TreeNodeEx("", bullet_flags, "%s", s.str().c_str());
-                    }
-                    ImGui::PopID();
-                    if (ImGui::IsItemClicked()) {
-                      setting_row_selection = {
-                          .row_id = row_index,
-                          .pipeline_handle = pipeline_bind.pipeline.handle,
-                          .shader_hash = shader_hash,
-                      };
-
-                      ImGui::SetItemDefaultFocus();
-                    }
-
-                    ImGui::TableNextColumn();  // Reference
-                    ImGui::Text("0x%08X", shader_hash);
-
-                    ImGui::TableNextColumn();  // Name
-                    if (shader_details.custom_shader.has_value()) {
-                      // Has custom shader file
-                      std::string file_alias;
-                      if (shader_details.custom_shader->is_hlsl) {
-                        static const auto CHARACTERS_TO_REMOVE_FROM_END = std::string("0x12345678.xx_x_x.hlsl").length();
-                        auto filename = shader_details.custom_shader->file_path.filename().string();
-                        filename.erase(filename.length() - min(CHARACTERS_TO_REMOVE_FROM_END, filename.length()));
-                        if (filename.ends_with("_")) {
-                          filename.erase(filename.length() - 1);
-                        }
-                        file_alias.assign(filename);
-                      }
-                      if (shader_details.custom_shader->IsCompilationOK()) {
-                        if (file_alias.empty()) {
-                          ImGui::TextColored(ImVec4(0, 255, 0, 128), "Custom");
-                        } else {
-                          ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", file_alias.c_str());
-                        }
-                      } else {
-                        if (file_alias.empty()) {
-                          ImGui::TextColored(ImVec4(255, 0, 0, 128), "Custom");
-                        } else {
-                          ImGui::TextColored(ImVec4(255, 0, 0, 255), "%s", file_alias.c_str());
-                        }
-                      }
-                    } else {
-                      ImGui::TextUnformatted("");
-                    }
-
-                    ImGui::TableNextColumn();  // Tag
-                    if (!pipeline_details->tag->empty()) {
-                      ImGui::TextUnformatted(pipeline_details->tag->c_str());
-                    }
-
-                    ImGui::TableNextColumn();  // Index
-                    ImGui::Text("%03d", draw_index);
-                  }
-                }
-              }
-              int render_target_index = 0;
-              for (auto& render_target : draw_details.render_targets) {
-                ++row_index;
-                bool rtv_node_open = false;
-                if (draw_node_open) {
-                  ImGui::TableNextRow();
-                  ImGui::TableNextColumn();
-                  ImGui::PushID(row_index);
-                  rtv_node_open = ImGui::TreeNodeEx("", tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen, "RTV%d", render_target_index++);
-                  ImGui::PopID();
-
-                  ImGui::TableNextColumn();
-                  ImGui::Text("0x%016llX", render_target.resource_view.handle);
-
-                  ImGui::TableNextColumn();
-                  std::stringstream s;
-                  s << render_target.resource_view_desc.format;
-                  if (render_target.is_swapchain) {
-                    ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
-                  } else {
-                    ImGui::TextUnformatted(s.str().c_str());
-                  }
-
-                  ImGui::TableNextColumn();
-                  if (!render_target.resource_view_tag.empty()) {
-                    ImGui::TextUnformatted(render_target.resource_view_tag.c_str());
-                  }
-
-                  ImGui::TableNextColumn();  // Index
-                  ImGui::Text("%03d", draw_index);
-                }
-                ++row_index;
-                if (rtv_node_open) {
-                  ImGui::TableNextRow();
-                  ImGui::TableNextColumn();
-                  auto bullet_flags = tree_node_flags | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
-                                      | setting_row_selection.GetTreeNodeFlag(row_index);
-                  ImGui::PushID(row_index);
-                  ImGui::TreeNodeEx("", bullet_flags, "Resource");
-                  ImGui::PopID();
-                  if (ImGui::IsItemClicked()) {
-                    setting_row_selection = {
-                        .row_id = row_index,
-                        .resource_handle = render_target.resource.handle,
-                    };
-                    ImGui::SetItemDefaultFocus();
-                  }
-
-                  ImGui::TableNextColumn();
-                  ImGui::Text("0x%016llX", render_target.resource.handle);
-
-                  ImGui::TableNextColumn();
-                  std::stringstream s;
-                  s << render_target.resource_desc.texture.format;
-
-                  if (render_target.is_swapchain) {
-                    ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
-                  } else {
-                    ImGui::TextUnformatted(s.str().c_str());
-                  }
-
-                  ImGui::TableNextColumn();
-                  if (!render_target.resource_tag.empty()) {
-                    ImGui::TextUnformatted(render_target.resource_tag.c_str());
-                  }
-
-                  ImGui::TableNextColumn();  // Index
-                  ImGui::Text("%03d", draw_index);
-
-                  ImGui::TreePop();
-                }
-              }
-
-              if (draw_node_open) {
-                ImGui::TreePop();
-              }
-              ++row_index;
-              ++draw_index;
+    ImGui::SetNextWindowSizeConstraints({0, 0}, {ImGui::GetContentRegionAvail().x - setting_side_sheet_width, FLT_MAX});
+    if (ImGui::BeginChild("##Details", {0, 0}, ImGuiChildFlags_ResizeX)) {
+      if (!setting_open_tabs.empty()) {
+        if (ImGui::BeginTabBar("##SelectedTabs", ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_FittingPolicyScroll)) {
+          for (auto& selection : setting_open_tabs) {
+            if (selection.shader_hash != 0u) {
+              RenderShaderView(device, data, selection);
             }
           }
-
-          ImGui::EndTable();
-        }  // BeginTable
-
-        ImGui::EndChild();
-      }  // BeginChild ##DrawList
-
-      ImGui::SameLine();
-      if (ImGui::BeginChild("##ShaderDetails", ImVec2(0, 0))) {
-        if (ImGui::BeginTabBar("##ShadersCodeTab", ImGuiTabBarFlags_None)) {
-          if (ImGui::BeginTabItem("Disassembly")) {
-            if (ImGui::BeginChild("DisassemblyCode")) {
-              std::string disassembly_string;
-              bool failed = false;
-              if (setting_row_selection.shader_hash != 0) {
-                auto shader_details = data.GetShaderDetails(setting_row_selection.shader_hash);
-                if (std::holds_alternative<std::nullopt_t>(shader_details.disassembly)) {
-                  // Never disassembled
-                  try {
-                    auto pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(device, {setting_row_selection.pipeline_handle});
-                    if (!pipeline_details.has_value()) throw std::exception("Shader blob not found");
-                    auto shader_data = pipeline_details->GetShaderData(setting_row_selection.shader_hash);
-                    if (!shader_data.has_value()) throw std::exception("Invalid shader selection");
-                    shader_details.disassembly = renodx::utils::shader::compiler::DisassembleShader(shader_data.value());
-                  } catch (std::exception& e) {
-                    shader_details.disassembly = e;
-                  }
-                }
-
-                if (std::holds_alternative<std::exception>(shader_details.disassembly)) {
-                  disassembly_string.assign(std::get<std::exception>(shader_details.disassembly).what());
-                  failed = true;
-                } else {
-                  disassembly_string.assign(std::get<std::string>(shader_details.disassembly));
-                }
-              }
-              if (failed) {
-                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(192, 0, 0, 255));
-              }
-              ImGui::InputTextMultiline(
-                  "##disassemblyCode",
-                  const_cast<char*>(disassembly_string.c_str()),
-                  disassembly_string.length(),
-                  ImVec2(-4, -4),
-                  ImGuiInputTextFlags_ReadOnly);
-              if (failed) {
-                ImGui::PopStyleColor();
-              }
-              ImGui::EndChild();  // DisassemblyCode
-            }  // BeginChild DisassemblyCode
-            ImGui::EndTabItem();  // Disassembly
-          }  // BeginTabItem Disassembly
-
-          ImGui::PushID("##LiveTabItem");
-          const bool open_live_tab_item = ImGui::BeginTabItem("Live");
-          ImGui::PopID();
-          static bool opened_live_tab_item = false;
-          if (open_live_tab_item) {
-            std::string live_string;
-            bool failed = false;
-            if (setting_row_selection.shader_hash != 0) {
-              auto shader_details = data.GetShaderDetails(setting_row_selection.shader_hash);
-              if (shader_details.custom_shader.has_value()) {
-                if (!shader_details.custom_shader->IsCompilationOK()) {
-                  live_string = shader_details.custom_shader->GetCompilationException().what();
-                } else if (shader_details.custom_shader->is_hlsl) {
-                  try {
-                    live_string = renodx::utils::path::ReadTextFile(shader_details.custom_shader->file_path);
-                  } catch (std::exception& e) {
-                    live_string = e.what();
-                    failed = true;
-                  }
-                }
-              }
-
-              if (ImGui::BeginChild("LiveCode")) {
-                if (failed) {
-                  ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(192, 0, 0, 255));
-                }
-                ImGui::InputTextMultiline(
-                    "##liveCode",
-                    const_cast<char*>(live_string.c_str()),
-                    live_string.length(),
-                    ImVec2(-4, -4));
-                if (failed) {
-                  ImGui::PopStyleColor();
-                }
-                ImGui::EndChild();
-              }  // BeginChild LiveCode
-            }
-
-            ImGui::EndTabItem();
-          }  // open_live_tab_item
-
+          RemoveDeadSelections();
           ImGui::EndTabBar();
-        }  // BeginTabBar ShadersCodeTab
-
-        ImGui::EndChild();  // ##ShaderDetails
-      }  // BeginChild ##ShaderDetails
-      ImGui::EndTabItem();
-    }  // handle_capture_tab
-
-    ImGui::PushID("##ShaderDefinesTab");
-    auto handle_shader_defines_tab = ImGui::BeginTabItem("Shader Defines");
-    ImGui::PopID();
-    if (handle_shader_defines_tab) {
-      if (ImGui::BeginChild("##ShaderDefinesChild", ImVec2(0, 0))) {
-        static ImGuiTreeNodeFlags tree_node_flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_SpanFullWidth;
-        if (ImGui::BeginTable(
-                "##ShaderDefinesTable",
-                4,
-                ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_Resizable
-                    | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_ScrollY,
-                ImVec2(-4, -4))) {
-          static const float TEXT_BASE_WIDTH = ImGui::CalcTextSize("A").x;
-          ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_NoHide);
-          ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
-          ImGui::TableSetupColumn("Options", ImGuiTableColumnFlags_NoHide);
-          ImGui::TableSetupScrollFreeze(0, 1);
-          ImGui::TableHeadersRow();
-
-          int row_index = 0;
-          int cell_index_id = 0x8000;
-          static std::vector<size_t> shader_define_remove_indexes;
-
-          for (auto& [key, value] : setting_shader_defines) {
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::PushID(cell_index_id++);
-            char temp_key[128] = "";
-            key.copy(temp_key, 128);
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::InputText("", temp_key, 128, ImGuiInputTextFlags_CharsNoBlank)) {
-              key.assign(temp_key);
-              setting_shader_defines_changed = true;
-            }
-            ImGui::PopID();
-
-            ImGui::TableNextColumn();
-            ImGui::PushID(cell_index_id++);
-            char temp_value[128] = "";
-            value.copy(temp_value, 128);
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::InputText("", temp_value, 128, ImGuiInputTextFlags_CharsNoBlank)) {
-              value.assign(temp_value);
-              setting_shader_defines_changed = true;
-            }
-            ImGui::PopID();
-
-            ImGui::TableNextColumn();
-            ImGui::PushID(cell_index_id++);
-            if (ImGui::Button("Remove")) {
-              setting_shader_defines_changed = true;
-              shader_define_remove_indexes.push_back(row_index);
-            }
-            ImGui::PopID();
-            row_index++;
-          }
-          while (shader_define_remove_indexes.size() != 0) {
-            auto remove_index = shader_define_remove_indexes.rbegin()[0];
-            setting_shader_defines.erase(setting_shader_defines.begin() + remove_index);
-            shader_define_remove_indexes.pop_back();
-          }
-
-          ImGui::TableNextRow();
-          ImGui::BeginDisabled();
-          ImGui::TableNextColumn();
-          ImGui::PushID(cell_index_id++);
-          ImGui::SetNextItemWidth(-FLT_MIN);
-          char temp_key[128];
-          ImGui::InputText("", temp_key, 128, ImGuiInputTextFlags_CharsNoBlank);
-          ImGui::PopID();
-
-          ImGui::TableNextColumn();
-          ImGui::PushID(cell_index_id++);
-          char temp_value[128] = "";
-          ImGui::SetNextItemWidth(-FLT_MIN);
-          ImGui::InputText("", temp_value, 128, ImGuiInputTextFlags_CharsNoBlank);
-          ImGui::PopID();
-          ImGui::EndDisabled();
-
-          ImGui::TableNextColumn();
-          ImGui::PushID(cell_index_id++);
-          if (ImGui::Button("Add")) {
-            setting_shader_defines.emplace_back();
-          }
-          ImGui::PopID();
-
-          ImGui::EndTable();
-        }  // ShaderDefinesTable
-
-        ImGui::EndChild();
+        }
+      }
+      ImGui::EndChild();
+    }
+    ImGui::SameLine();
+    if (ImGui::BeginChild("##SideSheet", {0, 0}, ImGuiChildFlags_AutoResizeX)) {
+      auto selection = GetCurrentSelection();
+      if (selection.has_value()) {
+        if (selection->get().shader_hash != 0u) {
+          ImGui::RadioButton("Disassembly", &selection->get().shader_view, 0);
+          ImGui::RadioButton("Live Shader", &selection->get().shader_view, 1);
+        }
       }
 
-      ImGui::EndTabItem();
-    }  // handle_shader_defines_tab
-
-    ImGui::EndTabBar();
-  }  // BeginTabBar MyTabBar
+      setting_side_sheet_width = ImGui::CalcItemWidth();
+      ImGui::EndChild();
+    }
+  }
+  ImGui::EndChild();
 }
 
 void OnPresent(
@@ -813,13 +1102,14 @@ void OnPresent(
   auto* device = swapchain->get_device();
   if (setting_shader_defines_changed) {
     renodx::utils::shader::compiler::watcher::SetShaderDefines(setting_shader_defines);
-    if (setting_auto_compile) {
-      renodx::utils::shader::compiler::watcher::RequestCompile();
-    }
+    renodx::utils::shader::compiler::watcher::RequestCompile();
     setting_shader_defines_changed = false;
   }
   if (setting_live_reload) {
-    PerformShaderReload(swapchain->get_device());
+    auto* device = swapchain->get_device();
+    auto& data = device->get_private_data<DeviceData>();
+    std::unique_lock lock(data.mutex);
+    PerformShaderReload(device, data);
   }
   if (setting_auto_dump) {
     renodx::utils::shader::dump::DumpAllPending();
@@ -830,12 +1120,8 @@ void OnPresent(
 
 }  // namespace
 
-// NOLINTBEGIN(readability-identifier-naming)
-
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX DevKit";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX DevKit Module";
-
-// NOLINTEND(readability-identifier-naming)
+extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX DevKit";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX DevKit Module";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
@@ -861,7 +1147,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::dispatch>(OnDispatch);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
 
-      reshade::register_overlay("RenoDX (DevKit)", OnRegisterOverlay);
+      reshade::register_overlay("RenoDX DevKit", OnRegisterOverlay);
 
       break;
     case DLL_PROCESS_DETACH:
@@ -877,7 +1163,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::unregister_event<reshade::addon_event::dispatch>(OnDispatch);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
 
-      reshade::unregister_overlay("RenoDX (DevKit)", OnRegisterOverlay);
+      reshade::unregister_overlay("RenoDX DevKit", OnRegisterOverlay);
 
       reshade::unregister_addon(h_module);
 
