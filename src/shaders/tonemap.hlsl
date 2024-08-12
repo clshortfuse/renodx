@@ -25,6 +25,15 @@ float SmoothClamp(float x) {
   return (abs(1.0 - x) < u) ? q : saturate(x);
 }
 
+float3 Reinhard(float3 color) {
+  return color / (1.0f + color);
+}
+
+float3 ReinhardExtended(float3 color, float max_white = 1000.f / 203.f) {
+  return (color * (1.0f + (color / (max_white * max_white))))
+         / (1.0f + color);
+}
+
 // https://www.slideshare.net/ozlael/hable-john-uncharted2-hdr-lighting
 // http://filmicworlds.com/blog/filmic-tonemapping-operators/
 
