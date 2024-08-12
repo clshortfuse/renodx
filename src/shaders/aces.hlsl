@@ -1,33 +1,27 @@
-#ifndef SRC_COMMON_ACES_HLSL_
-#define SRC_COMMON_ACES_HLSL_
+#ifndef SRC_SHADERS_ACES_HLSL_
+#define SRC_SHADERS_ACES_HLSL_
 
 #include "./color.hlsl"
 #include "./math.hlsl"
 
-
 namespace renodx {
 namespace tonemap {
 namespace aces {
-// clang-format off
+
 static const float3x3 RRT_SAT_MAT = float3x3(
-  0.9708890, 0.0269633, 0.00214758,
-  0.0108892, 0.9869630, 0.00214758,
-  0.0108892, 0.0269633, 0.96214800
-);
+    0.9708890, 0.0269633, 0.00214758,
+    0.0108892, 0.9869630, 0.00214758,
+    0.0108892, 0.0269633, 0.96214800);
 
 static const float3x3 ODT_SAT_MAT = float3x3(
-  0.949056, 0.0471857, 0.00375827,
-  0.019056, 0.9771860, 0.00375827,
-  0.019056, 0.0471857, 0.93375800
-);
+    0.949056, 0.0471857, 0.00375827,
+    0.019056, 0.9771860, 0.00375827,
+    0.019056, 0.0471857, 0.93375800);
 
 static const float3x3 M = float3x3(
-   0.5, -1.0, 0.5,
-  -1.0,  1.0, 0.0,
-   0.5,  0.5, 0.0
-);
-
-// clang-format on
+    0.5, -1.0, 0.5,
+    -1.0, 1.0, 0.0,
+    0.5, 0.5, 0.0);
 
 float Rgb2Yc(float3 rgb) {
   const float yc_radius_weight = 1.75;
@@ -460,14 +454,14 @@ float3 RRTAndODT(float3 color, float min_y, float max_y, float3x3 odt_matrix = r
 // Output Display Transform
 float3 RGCAndRRTAndODT(float3 color, float min_y, float max_y, float3x3 odt_matrix = renodx::color::AP1_TO_BT709_MAT) {
   color = mul(renodx::color::BT709_TO_AP1_MAT, color);  // BT709 to AP1
-  color = GamutCompress(color);                     // Compresses to AP1
+  color = GamutCompress(color);                         // Compresses to AP1
   color = mul(renodx::color::AP1_TO_AP0_MAT, color);    // Convert to AP0
-  color = RRT(color);                               // RRT AP0 => AP1
-  color = ODT(color, min_y, max_y, odt_matrix);     // ODT AP1 => Matrix
+  color = RRT(color);                                   // RRT AP0 => AP1
+  color = ODT(color, min_y, max_y, odt_matrix);         // ODT AP1 => Matrix
   return color;
 }
 }  // namespace aces
 }  // namespace tonemap
 }  // namespace renodx
 
-#endif  // SRC_COMMON_ACES_HLSL_
+#endif  // SRC_SHADERS_ACES_HLSL_

@@ -1,5 +1,5 @@
-#ifndef SRC_COMMON_MATH_HLSL_
-#define SRC_COMMON_MATH_HLSL_
+#ifndef SRC_SHADERS_MATH_HLSL_
+#define SRC_SHADERS_MATH_HLSL_
 
 namespace renodx {
 namespace math {
@@ -10,18 +10,18 @@ static const float FLT10_MAX = 64512.f;
 static const float FLT11_MAX = 65024.f;
 static const float FLT16_MAX = 65504.f;
 
- float3 SafePow(float3 color, float exponent){
+float3 SafePow(float3 color, float exponent) {
   return sign(color) * pow(abs(color), exponent);
- }
+}
 
- float SafePow(float color, float exponent){
+float1 SafePow(float color, float exponent) {
   return sign(color) * pow(abs(color), exponent);
- }
-        
-float3 Pow(float3 color, float exponent){
+}
+
+float3 Pow(float3 color, float exponent) {
   return pow(color, exponent);
- }
-        
+}
+
 float Average(float3 color) {
   return (color.x + color.y + color.z) / 3.f;
 }
@@ -53,4 +53,4 @@ float3 SafeDivision(float3 quotient, float3 dividend, float3 fallback) {
 
 }  // namespace math
 }  // namespace renodx
-#endif  // SRC_COMMON_MATH_HLSL_
+#endif  // SRC_SHADERS_MATH_HLSL_
