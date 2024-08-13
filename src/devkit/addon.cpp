@@ -461,7 +461,7 @@ void RenderMenuBar(reshade::api::device* device, DeviceData& data) {
     ImGui::PopID();
 
     ImGui::PushID("##menu_shaders_dump");
-    if (ImGui::MenuItem(std::format("Shaders Dump ({})", renodx::utils::shader::dump::pending_dump_count.load()).c_str(), "", false, setting_auto_dump)) {
+    if (ImGui::MenuItem(std::format("Dump Shaders ({})", renodx::utils::shader::dump::pending_dump_count.load()).c_str(), "", false, !setting_auto_dump)) {
       renodx::utils::shader::dump::DumpAllPending();
     }
     ImGui::PopID();
