@@ -1,3 +1,5 @@
+#ifndef SRC_SHADERS_DICE_HLSL_
+#define SRC_SHADERS_DICE_HLSL_
 
 #include "./math.hlsl"
 
@@ -72,3 +74,5 @@ float3 BT709(float3 color, float output_luminance_max, float highlights_shoulder
 }  // namespace dice
 }  // namespace tonemap
 }  // namespace renodx
+
+#endif // SRC_SHADERS_DICE_HLSL_

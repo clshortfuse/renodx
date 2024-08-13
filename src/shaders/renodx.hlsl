@@ -11,5 +11,6 @@
 #include "./random.hlsl"
 #include "./tonemap.hlsl"
 #include "./DICE.hlsl"
+#include "./math.hlsl"
 
 #endif  // SRC_SHADERS_RENODX_HLSL_

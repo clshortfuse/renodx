@@ -25,6 +25,30 @@ float SmoothClamp(float x) {
   return (abs(1.0 - x) < u) ? q : saturate(x);
 }
 
+float3 Reinhard(float x) {
+  return x / (1.0f + x);
+}
+
+float3 Reinhard(float3 color) {
+  return color / (1.0f + color);
+}
+
+float3 ReinhardExtended(float3 color, float max_white = 1000.f / 203.f) {
+  return (color * (1.0f + (color / (max_white * max_white))))
+         / (1.0f + color);
+}
+
+// Narkowicz
+float3 ACESFittedSDR(float3 color) {
+  color *= 0.6f;
+  const float a = 2.51f;
+  const float b = 0.03f;
+  const float c = 2.43f;
+  const float d = 0.59f;
+  const float e = 0.14f;
+  return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0f, 1.0f);
+}
+
 // https://www.slideshare.net/ozlael/hable-john-uncharted2-hdr-lighting
 // http://filmicworlds.com/blog/filmic-tonemapping-operators/
 
@@ -265,8 +289,12 @@ float3 Apply(float3 untonemapped, Config config) {
       config.reno_drt_highlights *= config.highlights;                                                           \
       config.reno_drt_shadows *= config.shadows;                                                                 \
       config.reno_drt_contrast *= config.contrast;                                                               \
+      uint previous_hue_correction_type = config.hue_correction_type;                                            \
+      config.hue_correction_type = config::hue_correction_type::INPUT;                                           \
                                                                                                                  \
       color_hdr = ApplyRenoDRT(color_output, config);                                                            \
+                                                                                                                 \
+      config.hue_correction_type = previous_hue_correction_type;                                                 \
                                                                                                                  \
     } else {                                                                                                     \
       color_output = renodx::color::grade::UserColorGrading(                                                     \
