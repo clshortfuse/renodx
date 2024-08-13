@@ -72,7 +72,7 @@ struct PipelineShaderDetails {
   std::optional<std::string> tag;
   bool destroyed = false;
 
-  std::optional<std::vector<uint8_t>> GetShaderData(uint32_t shader_hash, size_t index = -1) const {
+  [[nodiscard]] std::optional<std::vector<uint8_t>> GetShaderData(uint32_t shader_hash, size_t index = -1) const {
     if (index == -1) {
       for (const auto& [item_index, item_shader_hash] : shader_hashes_by_index) {
         if (item_shader_hash != shader_hash) continue;
@@ -497,7 +497,7 @@ static void OnBindPipeline(
     reshade::api::pipeline pipeline) {
   auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
 
-  if (pipeline.handle == 0) {
+  if (pipeline.handle == 0 || (stage == reshade::api::pipeline_stage::all)) {
     for (auto compatible_stage : COMPATIBLE_STAGES) {
       if ((stage & compatible_stage) == compatible_stage) {
         cmd_list_data.current_shaders_hashes.erase(compatible_stage);
@@ -506,7 +506,7 @@ static void OnBindPipeline(
         }
       }
     }
-    return;
+    if (pipeline.handle == 0) return;
   }
 
   auto* device = cmd_list->get_device();

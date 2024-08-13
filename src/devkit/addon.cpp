@@ -461,7 +461,7 @@ void RenderMenuBar(reshade::api::device* device, DeviceData& data) {
     ImGui::PopID();
 
     ImGui::PushID("##menu_shaders_dump");
-    if (ImGui::MenuItem(std::format("Shaders Dump ({})", renodx::utils::shader::dump::pending_dump_count.load()).c_str(), "", false, setting_auto_dump)) {
+    if (ImGui::MenuItem(std::format("Dump Shaders ({})", renodx::utils::shader::dump::pending_dump_count.load()).c_str(), "", false, !setting_auto_dump)) {
       renodx::utils::shader::dump::DumpAllPending();
     }
     ImGui::PopID();
@@ -734,20 +734,25 @@ void RenderShadersPane(reshade::api::device* device, DeviceData& data) {
   static ImGuiTreeNodeFlags tree_node_flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_SpanFullWidth;
   if (ImGui::BeginTable(
           "##ShadersPaneTable",
-          3,
+          4,
           ImGuiTableFlags_BordersInner | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY
               | ImGuiTableFlags_Sortable | ImGuiTableFlags_SortMulti,
           ImVec2(0, 0))) {
     ImGui::TableSetupColumn("Hash", ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupColumn("Alias", ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_DefaultHide);
+    ImGui::TableSetupColumn("Snapshot", ImGuiTableColumnFlags_DefaultHide);
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableHeadersRow();
 
     int cell_index_id = 0x10000;
+    int current_snapshot_index = 0;
 
-    for (auto& [shader_hash, shader_details] : data.shader_details) {
-      SettingSelection search = {.shader_hash = shader_hash};
+    std::unordered_set<uint32_t> drawn_hashes;
+
+    auto draw_row = [&](ShaderDetails& shader_details, int snapshot_index = -1) {
+      if (drawn_hashes.contains(shader_details.shader_hash)) return;
+      SettingSelection search = {.shader_hash = shader_details.shader_hash};
       auto& selection = GetSelection(search);
 
       // Undocumented ImGui Combo height
@@ -801,6 +806,33 @@ void RenderShadersPane(reshade::api::device* device, DeviceData& data) {
         };
         ImGui::PopID();
       }
+
+      if (ImGui::TableSetColumnIndex(3)) {
+        ImGui::PushID(cell_index_id++);
+        if (snapshot_index == -1) {
+          ImGui::TextUnformatted("");
+        } else {
+          ImGui::Text("%03d", snapshot_index);
+        }
+        ImGui::PopID();
+      }
+      drawn_hashes.emplace(shader_details.shader_hash);
+    };
+
+    for (auto& command_list_data : data.command_list_data) {
+      for (auto& draw_details : command_list_data.draw_details) {
+        for (const auto& pipeline_bind : draw_details.pipeline_binds) {
+          for (const auto& shader_hash : pipeline_bind.shader_hashes) {
+            auto& shader_details = data.GetShaderDetails(shader_hash);
+            draw_row(shader_details, current_snapshot_index);
+          }
+        }
+        current_snapshot_index++;
+      }
+    }
+
+    for (auto& [shader_hash, shader_details] : data.shader_details) {
+      draw_row(shader_details);
     }
 
     ImGui::EndTable();
