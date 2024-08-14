@@ -23,6 +23,17 @@ void main(float4 v0
   o0.w = 1;
   o0.xyz = g_Texture.Sample(g_TextureSampler_s, v1.xy).xyz;
 
+  // linearize and scale paper white
+  float3 signs = sign(o0.rgb);
+  o0.rgb = abs(o0.rgb);
+  o0.rgb = (injectedData.toneMapGammaCorrection
+                ? pow(o0.rgb, 2.2f)
+                : renodx::color::bt709::from::SRGB(o0.rgb));
+  o0.rgb *= signs;
+  o0.rgb *= injectedData.toneMapGameNits / 80.f;
+
+
+
   // Removed gamma slider as it capped brightness
   // Image is unchanged when set to default 5
 

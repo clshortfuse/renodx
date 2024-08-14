@@ -103,12 +103,25 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapHueCorrection",
         .binding = &shader_injection.toneMapHueCorrection,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1,
+        .default_value = 100.f,
         .can_reset = false,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tooltip = "Emulates hue shifting from the vanilla tonemapper",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapBlend",
+        .binding = &shader_injection.toneMapBlend,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1,
+        .can_reset = false,
+        .label = "Blend with Vanilla",
+        .section = "Tone Mapping",
+        .tooltip = "Blends the user selected tonemapper with vanilla",
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
@@ -118,6 +131,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 20.f,
         .format = "%.2f",
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeHighlights",
@@ -126,6 +140,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -135,6 +150,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -144,6 +160,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -153,16 +170,18 @@ renodx::utils::settings::Settings settings = {
         .label = "Saturation",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeBlowout",
         .binding = &shader_injection.colorGradeBlowout,
-        .default_value = 70.f,
+        .default_value = 65.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 3; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -192,15 +211,6 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
-    new renodx::utils::settings::Setting{
-        .key = "fxFilmGrain",
-        .binding = &shader_injection.fxFilmGrain,
-        .default_value = 0.f,
-        .label = "Film Grain",
-        .section = "Effects",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
-    },
 };
 
 void OnPresetOff() {
@@ -220,19 +230,6 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
   renodx::utils::settings::UpdateSetting("fxDoF", 50.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 0.f);
-}
-
-auto start = std::chrono::steady_clock::now();
-
-void OnPresent(
-    reshade::api::command_queue* queue,
-    reshade::api::swapchain* swapchain,
-    const reshade::api::rect* source_rect,
-    const reshade::api::rect* dest_rect,
-    uint32_t dirty_rect_count,
-    const reshade::api::rect* dirty_rects) {
-  auto end = std::chrono::steady_clock::now();
-  shader_injection.elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 }
 
 }  // namespace
@@ -274,12 +271,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      reshade::register_event<reshade::addon_event::present>(OnPresent);
-
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(h_module);
-      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       break;
   }
 
