@@ -12,6 +12,7 @@
 #include <embed/0xE53D74F1.h> // UI -- Main
 #include <embed/0x5D15CFEE.h> // videos -- pre-renderd movies
 #include <embed/0xA531D673.h> // Tonemap
+#include <embed/0x7894FC68.h> // Cursed effect
 #include <embed/0xBB055A34.h> // Final
 
 
@@ -32,6 +33,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xE53D74F1), // UI -- Main
     CustomShaderEntry(0x5D15CFEE), // videos -- pre-rendered movies
     CustomShaderEntry(0xA531D673), // Tonemap
+    CustomShaderEntry(0x7894FC68), // Cursed effect
     CustomShaderEntry(0xBB055A34), // Final
 	
 
@@ -44,12 +46,12 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 3.f,
         .can_reset = false,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "DICE"},
+        .labels = {"Vanilla", "None", "ACES", "RenoDX"},
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
@@ -82,7 +84,52 @@ renodx::utils::settings::Settings settings = {
         .min = 48.f,
         .max = 500.f,
     },
-    
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeExposure",
+        .binding = &shader_injection.colorGradeExposure,
+        .default_value = 1.f,
+        .label = "Exposure",
+        .section = "Color Grading",
+        .min = 0.01f,
+        .max = 10.f,
+        .format = "%.2f",
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeHighlights",
+        .binding = &shader_injection.colorGradeHighlights,
+        .default_value = 50.f,
+        .label = "Highlights",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeShadows",
+        .binding = &shader_injection.colorGradeShadows,
+        .default_value = 50.f,
+        .label = "Shadows",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeContrast",
+        .binding = &shader_injection.colorGradeContrast,
+        .default_value = 50.f,
+        .label = "Contrast",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeSaturation",
+        .binding = &shader_injection.colorGradeSaturation,
+        .default_value = 50.f,
+        .label = "Saturation",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
 
 
 };
@@ -92,6 +139,11 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
+  renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
+  renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
+  renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
+  renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
+  renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
 
 }
 

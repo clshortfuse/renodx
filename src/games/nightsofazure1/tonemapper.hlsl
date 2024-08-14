@@ -3,28 +3,23 @@
 
 #include "./shared.h"
 
-float3 applyUserTonemap(float3 untonemapped, float3 vanillaColor, float midGray){
+float3 applyUserTonemap(float3 untonemapped){
     float3 outputColor;
     
-    if (injectedData.toneMapType == 0.f)
+    outputColor = untonemapped;
+    
+    if (injectedData.toneMapType == 0.f) //vanilla
     {
-        outputColor = vanillaColor;
-        outputColor = max(0, outputColor); //clamps to 709/no negative colors for the vanilla tonemapper
-    }
-    else
-    {
-        outputColor = untonemapped;
+        saturate(untonemapped);
     }
     
- 
     
-    //float vanillaMidGray = 0.1f; //0.18f old default
-    float vanillaMidGray = midGray; //calculate mid grey from the second hable run
+    
+    float vanillaMidGray = 0.18f;
     float renoDRTContrast = 1.f;
     float renoDRTFlare = 0.f;
     float renoDRTShadows = 1.f;
     //float renoDRTDechroma = 0.8f;
-    float renoDRTDechroma = injectedData.colorGradeBlowout;
     float renoDRTSaturation = 1.f; //
     float renoDRTHighlights = 1.f;
 
@@ -32,7 +27,7 @@ float3 applyUserTonemap(float3 untonemapped, float3 vanillaColor, float midGray)
       injectedData.toneMapType,
       injectedData.toneMapPeakNits,
       injectedData.toneMapGameNits,
-      1,
+      0,
       injectedData.colorGradeExposure,
       injectedData.colorGradeHighlights,
       injectedData.colorGradeShadows,
@@ -44,21 +39,11 @@ float3 applyUserTonemap(float3 untonemapped, float3 vanillaColor, float midGray)
       renoDRTShadows,
       renoDRTContrast,
       renoDRTSaturation,
-      renoDRTDechroma,
       renoDRTFlare);
 
     outputColor = renodx::tonemap::config::Apply(outputColor, config);
     
-    
-    if (injectedData.toneMapType != 0)
-    {
-        
-        if (injectedData.blend) //HDR/SDR blend for color correction
-        {
-            outputColor = lerp(vanillaColor, outputColor, saturate(vanillaColor)); // combine tonemappers 
-        }
-        
-    }
+
     
     return outputColor;
 }

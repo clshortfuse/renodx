@@ -4,6 +4,7 @@
 // With just BGR8_TYPELESS upgraded, the game runs bright, so we'll just add a slider, and hdr done!
 
 #include "./shared.h"
+#include "./tonemapper.hlsl" //our custom tonemapper
 
 SamplerState smplScene_s : register(s0);
 SamplerState smplBlurFront_s : register(s1);
@@ -48,34 +49,17 @@ void main(
   r1.x = 1 / r1.x;
   r1.x = -1 + r1.x;
   r1.x = saturate(0.25 * r1.x);
-  o0.xyzw = r1.xxxx * r2.xyzw + r0.xyzw;
-    //Vanilla shader end
+  o0.xyzw = r1.xxxx * r2.xyzw + r0.xyzw; //vanilla output
     
-    // Start dice (ty Musa for max pain example code)
-    if (injectedData.toneMapType >= 2)
-    {
-       //Converting from gamma space to linear space
-        const float paperWhite = injectedData.toneMapGameNits / 80.f; 
-        float3 linearColor = pow(abs(o0.xyz), 2.2) * sign(o0.xyz);
-        linearColor *= paperWhite;
-
-        const float peakWhite = injectedData.toneMapPeakNits / 80.f; //Getting the peak slider's value
-        const float highlightsShoulderStart = paperWhite; // Don't tonemap the "SDR" range
-        linearColor = renodx::tonemap::dice::BT709(linearColor, peakWhite, highlightsShoulderStart); //Do DICE with inputs
-
-        linearColor /= paperWhite; 
-
-        float3 linearSDR = sign(r0.rgb) * pow(abs(r0.rgb), 2.2f);
-
-
-        o0.xyz = pow(abs(linearColor), 1.0 / 2.2) * sign(linearColor); //Inverse 2.2 gamma as the final output; Final will convert back to linear space
-
-
-    }
-    else if (injectedData.toneMapType == 0) //If tonemapper is vanilla, output is clamped
-    {
-        o0.xyz = saturate(o0.xyz);
-    }
+    float3 untonemapped = o0.rgb;
+    untonemapped = max(0, renodx::color::bt709::from::SRGB(untonemapped)); //linearize untonemapped
     
+    float3 outputColor;
+    outputColor = applyUserTonemap(untonemapped);
+    
+    outputColor = renodx::math::SafePow(outputColor, 1 / 2.2);
+    
+    o0.rgb = outputColor;
+
   return;
 }
