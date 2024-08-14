@@ -44,3 +44,5 @@ RenoDX, short for "Renovation Engine for DirectX Games", is a toolset to mod gam
 * [Atelier Ryza 3](https://marat569.github.io/renodx/renodx-ryza3.addon64)
 
 * [Nights of Azure 1](https://marat569.github.io/renodx/renodx-nightsofazure1.addon64)
+
+* [Nights of Azure 2](https://marat569.github.io/renodx/renodx-nightsofazure2.addon64)
