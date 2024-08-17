@@ -1,5 +1,5 @@
-#ifndef SRC_RYZA3_SHARED_H_
-#define SRC_RYZA3_SHARED_H_
+#ifndef SRC_TEW2_SHARED_H_
+#define SRC_TEW2_SHARED_H_
 
 #ifndef __cplusplus
 #include "../../shaders/renodx.hlsl"
@@ -19,7 +19,6 @@ struct ShaderInjectData {
   float colorGradeSaturation;
   float colorGradeBlowout;
   float toneMapHueCorrection;
-  float blend;
   float bloom;
   float fxBloom;
   float chromaticAberration;
@@ -31,4 +30,4 @@ cbuffer cb13 : register(b13) {
 }
 #endif
 
-#endif  // SRC_RYZA3_SHARED_H_
+#endif  // SRC_TEW2_SHARED_H_

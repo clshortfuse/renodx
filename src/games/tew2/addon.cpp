@@ -9,9 +9,14 @@
 
 //#define DEBUG_LEVEL_1 //added
 
-#include <embed/0xB13F7764.h> //Tonemapper
 
-
+#include <embed/0x15A8E557.h> // UI, Font, weapon menu
+#include <embed/0x6130DB10.h> // UI, Hud, Icons
+#include <embed/0x1B480C7D.h> // UI
+#include <embed/0x623A2690.h> // UI, Save Menu
+#include <embed/0x9FD76798.h> // UI, Crafting 1
+#include <embed/0x742364E2.h> // Videos
+#include <embed/0xB13F7764.h> // Tonemapper
 
 
 
@@ -28,8 +33,14 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
 
-  CustomShaderEntry(0xB13F7764), //Tonemapper
-	
+
+  CustomShaderEntry(0x15A8E557), // UI, Font, weapon menu
+  CustomShaderEntry(0x6130DB10), // UI, Hud, Icons
+  CustomShaderEntry(0x1B480C7D), // UI
+  CustomShaderEntry(0x623A2690), // UI, Save Menu
+  CustomShaderEntry(0x9FD76798), // UI, Crafting 1
+  CustomShaderEntry(0x742364E2), // Videos
+  CustomShaderEntry(0xB13F7764),  // Tonemapper
 
 };
 
@@ -230,7 +241,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           //   .ignore_size = true, //Ignoring size allows you to uncap when the game runs in a sub-native resolution, but tons of artifacts are created
       });
 
-
+      // R11G11B10_Float / FP11
+   //   renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+   //       .old_format = reshade::api::format::r11g11b10_float,
+   //       .new_format = reshade::api::format::r16g16b16a16_float,
+          //   .index = 39, //Maybe find the specific render target that uncaps the game one day, but not right now
+          //   .ignore_size = true, //Ignoring size allows you to uncap when the game runs in a sub-native resolution, but tons of artifacts are created
+   //   });
 
       break;
     case DLL_PROCESS_DETACH:
