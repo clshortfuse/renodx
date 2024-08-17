@@ -15,7 +15,8 @@
 #include <embed/0x1B480C7D.h> // UI
 #include <embed/0x623A2690.h> // UI, Save Menu
 #include <embed/0x9FD76798.h> // UI, Crafting 1
-#include <embed/0x742364E2.h> // Videos
+#include <embed/0x742364E2.h> // Movies -- ingame FMV
+#include <embed/0x698CEF9E.h> // Movies -- Intro movies 1
 #include <embed/0xB13F7764.h> // Tonemapper
 
 
@@ -39,7 +40,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
   CustomShaderEntry(0x1B480C7D), // UI
   CustomShaderEntry(0x623A2690), // UI, Save Menu
   CustomShaderEntry(0x9FD76798), // UI, Crafting 1
-  CustomShaderEntry(0x742364E2), // Videos
+  CustomShaderEntry(0x742364E2), // Movies -- Ingame fmv
+  CustomShaderEntry(0x698CEF9E), // Movies -- Intro Movies 1
   CustomShaderEntry(0xB13F7764),  // Tonemapper
 
 };
@@ -135,55 +137,8 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
 
-     new renodx::utils::settings::Setting{
-        .key = "colorGradeBlowout",
-        .binding = &shader_injection.colorGradeBlowout,
-        .default_value = 50.f,
-        .label = "Blowout",
-        .section = "Color Grading",
-        .tooltip = "Controls highlight desaturation due to overexposure.",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
 
 
-
-
-    new renodx::utils::settings::Setting{
-        .key = "bloom",
-        .binding = &shader_injection.bloom,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1,
-        .can_reset = false,
-        .label = "Bloom + DoF",
-        .section = "Effects",
-        .tooltip = "Enable/Disable Bloom + Depth of Field",
-       
-    },
-
-     new renodx::utils::settings::Setting{
-        .key = "fxBloom",
-        .binding = &shader_injection.fxBloom,
-        .default_value = 50.f,
-        .label = "Bloom Strength",
-        .section = "Effects",
-        .tooltip = "Controls Bloom Strength",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
-    },
-
-
-    new renodx::utils::settings::Setting{
-        .key = "chromaticAberration",
-        .binding = &shader_injection.chromaticAberration,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1,
-        .can_reset = false,
-        .label = "Chromatic Aberration",
-        .section = "Effects",
-        .tooltip = "Enable/Disable chromaticAberration",
-
-    },
 
 };
 
@@ -197,11 +152,8 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeBlowout", 50.f);
   //Start PostProcess effects on/off
-  renodx::utils::settings::UpdateSetting("bloom", 1);
-  renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
-  renodx::utils::settings::UpdateSetting("chromaticAberration", 1);
+
 }
 
 }  // namespace
