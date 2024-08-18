@@ -15,6 +15,7 @@
 #include <embed/0x1B480C7D.h> // UI
 #include <embed/0x623A2690.h> // UI, Save Menu
 #include <embed/0x9FD76798.h> // UI, Crafting 1
+#include <embed/0x39E8661A.h> // UI, Radio Waves
 #include <embed/0x742364E2.h> // Movies -- ingame FMV
 #include <embed/0x698CEF9E.h> // Movies -- Intro movies 1
 #include <embed/0xB13F7764.h> // Tonemapper
@@ -40,6 +41,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
   CustomShaderEntry(0x1B480C7D), // UI
   CustomShaderEntry(0x623A2690), // UI, Save Menu
   CustomShaderEntry(0x9FD76798), // UI, Crafting 1
+  CustomShaderEntry(0x39E8661A), // UI, Radio Waves
   CustomShaderEntry(0x742364E2), // Movies -- Ingame fmv
   CustomShaderEntry(0x698CEF9E), // Movies -- Intro Movies 1
   CustomShaderEntry(0xB13F7764),  // Tonemapper
