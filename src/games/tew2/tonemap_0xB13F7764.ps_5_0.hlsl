@@ -96,11 +96,11 @@ void main(
   r3.xy = r0.xy * bloomnoiseparm.xy + viewrandom.xy;
   r3.xyz = bloomnoisemappbr_samp.SampleLevel(bloomnoisemappbr_samp_state_s, r3.xy, 0).xyz;
   r3.xyz = bloomnoisecolor.xyz * r3.xyz;
-  r0.w = (r0.z);
+  r0.w = saturate(r0.z);
   r0.w = log2(r0.w);
   r0.w = bloomnoiseparm2.y * r0.w;
   r0.w = exp2(r0.w);
-  r0.w = (bloomnoiseparm.z * r0.w);
+  r0.w = saturate(bloomnoiseparm.z * r0.w);
   r0.w = r0.w + -r0.z;
   r0.w = bloomnoiseparm2.x * r0.w + r0.z;
   r2.xyz = r3.xyz * r0.www + r2.xyz;
