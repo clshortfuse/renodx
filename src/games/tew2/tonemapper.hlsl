@@ -10,6 +10,7 @@ float3 applyUserTonemap(float3 untonemapped, float3 vanillaColor, float midGray)
     {
         outputColor = vanillaColor;
         outputColor = max(0, outputColor); //clamps to 709/no negative colors for the vanilla tonemapper
+        outputColor = saturate(outputColor);
     }
     else
     {

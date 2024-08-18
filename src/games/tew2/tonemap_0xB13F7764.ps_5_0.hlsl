@@ -87,8 +87,7 @@ void main(
     float3 vanMidGray = r1.rgb;
  //end second tonemap run   
 
-    r1.rgb = applyUserTonemap(untonemapped, vanillaColor, renodx::color::y::from::BT709(vanMidGray)); //Apply RenoDX
-
+        
   //r1.xyz = max(float3(0,0,0), r1.xyz); //clamp negative colors, we'll do this inside of RenoDX
   
   r2.xyz = bloomtex_samp.SampleLevel(bloomtex_samp_state_s, r0.xy, 0).xyz;
@@ -149,7 +148,16 @@ void main(
   } else {
     r0.xyz = float3(0,0,0);
   }
-  r1.xyz = r2.xyz * cgbloomgain.xyz + r1.xyz;
+
+    //r1.xyz = r2.xyz * cgbloomgain.xyz + r1.xyz; //Add bloom slider [vanilla code]
+    vanillaColor.rgb = r2.xyz * cgbloomgain.xyz * injectedData.fxBloom + vanillaColor; //Add bloom to vanillaColor
+
+    untonemapped.rgb = r2.xyz * cgbloomgain.xyz * injectedData.fxBloom + untonemapped; //We add untonemapped to where bloom gets added to the main render, to fix issues with bloom -- Also add a slider
+
+    r1.rgb = applyUserTonemap(untonemapped, vanillaColor, renodx::color::y::from::BT709(vanMidGray)); //Apply RenoDX
+    
+
+    
   r0.xyz = r1.xyz + r0.xyz;
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.xyz = rsqrt(r0.xyz);
@@ -157,8 +165,8 @@ void main(
   o0.xyz = testvector.zzz * float3(1.20000005,1.20000005,1.20000005) + r0.xyz;
   o0.w = 1;
   
-  // 2.2 gamma
-    o0.rgb = renodx::math::SafePow(o0.rgb, 2.2);
+  
+    o0.rgb = renodx::math::SafePow(o0.rgb, 2.2); // 2.2 gamma
     
     o0.rgb *= injectedData.toneMapGameNits; // Scale by user nits
         
