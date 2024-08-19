@@ -341,7 +341,7 @@ bool OnDrawIndexed(
       read_only_lock.unlock();
       {
         const std::unique_lock lock(data.mutex);
-        device->create_pipeline({0xFFFFFFFFFFFFFFFF}, 1, &subobjects, &data.min_alpha_pipeline);
+        device->create_pipeline(shader_state.pipeline_layout, 1, &subobjects, &data.min_alpha_pipeline);
       }
       read_only_lock.lock();
     }
@@ -360,7 +360,7 @@ bool OnDrawIndexed(
       read_only_lock.unlock();
       {
         const std::unique_lock lock(data.mutex);
-        device->create_pipeline({0xFFFFFFFFFFFFFFFF}, 1, &subobjects, &data.max_alpha_pipeline);
+        device->create_pipeline(shader_state.pipeline_layout, 1, &subobjects, &data.max_alpha_pipeline);
       }
       read_only_lock.lock();
     }
@@ -369,7 +369,7 @@ bool OnDrawIndexed(
       auto& shader_replace_device_data = device->get_private_data<renodx::mods::shader::DeviceData>();
       const std::shared_lock lock(shader_replace_device_data.mutex);
       if (
-          auto pair = shader_replace_device_data.modded_pipeline_layouts.find(0xFFFFFFFFFFFFFFFF);
+          auto pair = shader_replace_device_data.modded_pipeline_layouts.find(shader_state.pipeline_layout.handle);
           pair != shader_replace_device_data.modded_pipeline_layouts.end()) {
         read_only_lock.unlock();
         {
@@ -429,7 +429,7 @@ void OnBindPipeline(
     reshade::api::command_list* cmd_list,
     reshade::api::pipeline_stage stages,
     reshade::api::pipeline pipeline) {
-  if (stages != reshade::api::pipeline_stage::output_merger) return;
+  if ((static_cast<uint32_t>(stages) & static_cast<uint32_t>(reshade::api::pipeline_stage::output_merger)) == 0u) return;
   auto& data = cmd_list->get_private_data<CommandListData>();
   data.last_output_merger = pipeline;
 }
