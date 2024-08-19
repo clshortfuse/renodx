@@ -64,19 +64,18 @@ struct ShaderDetails {
   std::optional<renodx::utils::shader::compiler::DxilProgramVersion> program_version = std::nullopt;
   std::vector<uint8_t> init_shader;
   std::optional<renodx::utils::shader::compiler::watcher::CustomShader> disk_shader = std::nullopt;
+  bool bypass_draw;
 
   enum class ShaderSource : int {
     ORIGINAL_SHADER = 0,
     ADDON_SHADER = 1,
     DISK_SHADER = 2,
-    BYPASS = 3,
   } shader_source = ShaderSource::ORIGINAL_SHADER;
 
   constexpr static const char* SHADER_SOURCE_NAMES[] = {
       "Original",
       "Add-on",
       "File",
-      "Bypass",
   };
 };
 
@@ -454,7 +453,7 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
     if (auto pair = device_data.shader_details.find(hash);
         pair != device_data.shader_details.end()) {
       auto details = pair->second;
-      if (details.shader_source == ShaderDetails::ShaderSource::BYPASS) {
+      if (details.bypass_draw) {
         bypass_draw = true;
         break;
       }
@@ -642,12 +641,11 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
           ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_Resizable | ImGuiTableFlags_Hideable
               | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_ScrollY,
           ImVec2(-4, -4))) {
-    static const float TEXT_BASE_WIDTH = ImGui::CalcTextSize("A").x;
-    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthStretch, TEXT_BASE_WIDTH * 24.0f);
-    ImGui::TableSetupColumn("Ref", ImGuiTableColumnFlags_None, TEXT_BASE_WIDTH * 16.0f);
-    ImGui::TableSetupColumn("Info", ImGuiTableColumnFlags_None, TEXT_BASE_WIDTH * 24.0f);
-    ImGui::TableSetupColumn("Reflection", ImGuiTableColumnFlags_None, TEXT_BASE_WIDTH * 24.0f);
-    ImGui::TableSetupColumn("Draw", ImGuiTableColumnFlags_None, TEXT_BASE_WIDTH * 4.0f);
+    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthStretch, 24.0f);
+    ImGui::TableSetupColumn("Ref", ImGuiTableColumnFlags_None, 16.0f);
+    ImGui::TableSetupColumn("Info", ImGuiTableColumnFlags_None, 24.0f);
+    ImGui::TableSetupColumn("Reflection", ImGuiTableColumnFlags_None, 24.0f);
+    ImGui::TableSetupColumn("Draw", ImGuiTableColumnFlags_None, 4.0f);
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableHeadersRow();
 
@@ -985,14 +983,15 @@ void RenderShadersPane(reshade::api::device* device, DeviceData& data) {
   static ImGuiTreeNodeFlags tree_node_flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_SpanFullWidth;
   if (ImGui::BeginTable(
           "##ShadersPaneTable",
-          4,
+          5,
           ImGuiTableFlags_BordersInner | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY
-              | ImGuiTableFlags_Sortable | ImGuiTableFlags_SortMulti,
+              | ImGuiTableFlags_Sortable | ImGuiTableFlags_SortMulti | ImGuiTableFlags_Hideable,
           ImVec2(0, 0))) {
     ImGui::TableSetupColumn("Hash", ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupColumn("Alias", ImGuiTableColumnFlags_NoHide);
-    ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_DefaultHide);
-    ImGui::TableSetupColumn("Draw", ImGuiTableColumnFlags_DefaultHide);
+    ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_NoHide);
+    ImGui::TableSetupColumn("Draw", ImGuiTableColumnFlags_NoHide);
+    ImGui::TableSetupColumn("Snapshot", ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableHeadersRow();
 
@@ -1009,7 +1008,7 @@ void RenderShadersPane(reshade::api::device* device, DeviceData& data) {
       // Undocumented ImGui Combo height
       const auto combo_height = ImGui::GetTextLineHeightWithSpacing();
       ImGui::TableNextRow(ImGuiTableRowFlags_None, combo_height);
-      if (ImGui::TableSetColumnIndex(0)) {
+      if (ImGui::TableSetColumnIndex(0)) {  // Hash
         ImGui::PushID(cell_index_id++);
 
         // ImGui full size (0,0) applies to text not row
@@ -1030,14 +1029,14 @@ void RenderShadersPane(reshade::api::device* device, DeviceData& data) {
         ImGui::PopID();
       }
 
-      if (ImGui::TableSetColumnIndex(1)) {
+      if (ImGui::TableSetColumnIndex(1)) {  // Alias
         ImGui::PushID(cell_index_id++);
         ImGui::AlignTextToFramePadding();
         RenderFileAlias(shader_details.disk_shader);
         ImGui::PopID();
       }
 
-      if (ImGui::TableSetColumnIndex(2)) {
+      if (ImGui::TableSetColumnIndex(2)) {  // Source
         ImGui::PushID(cell_index_id++);
         ImGui::SetNextItemWidth(ImGui::GetColumnWidth(2));
         if (ImGui::BeginCombo(
@@ -1058,7 +1057,23 @@ void RenderShadersPane(reshade::api::device* device, DeviceData& data) {
         ImGui::PopID();
       }
 
-      if (ImGui::TableSetColumnIndex(3)) {
+      if (ImGui::TableSetColumnIndex(3)) {  // Draw
+        ImGui::PushID(cell_index_id++);
+
+        auto color_vec4 = ImGui::GetStyleColorVec4(ImGuiCol_Button);
+        if (shader_details.bypass_draw) {
+          color_vec4 = {.5, .5, .5, color_vec4.w};
+        }
+        ImGui::PushStyleColor(ImGuiCol_Button, color_vec4);
+
+        if (ImGui::Button(shader_details.bypass_draw ? "Off" : "On", {ImGui::CalcTextSize("A").x * 4, 0})) {
+          shader_details.bypass_draw = !shader_details.bypass_draw;
+        }
+        ImGui::PopStyleColor();
+        ImGui::PopID();
+      }
+
+      if (ImGui::TableSetColumnIndex(4)) {  // Snapshot
         ImGui::PushID(cell_index_id++);
         if (snapshot_index == -1) {
           ImGui::TextUnformatted("");
@@ -1099,7 +1114,6 @@ void RenderShaderDefinesPane(reshade::api::device* device, DeviceData& data) {
               | ImGuiTableFlags_Resizable
               | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_ScrollY,
           ImVec2(-4, -4))) {
-    static const float TEXT_BASE_WIDTH = ImGui::CalcTextSize("A").x;
     ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupColumn("Options", ImGuiTableColumnFlags_NoHide);
