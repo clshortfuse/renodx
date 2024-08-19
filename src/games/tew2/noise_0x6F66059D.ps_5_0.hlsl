@@ -76,15 +76,16 @@ void main(
       r1.xyz = r1.xyz * r0.zzz + r0.xyw;
     }
   }
-  r0.xyz = max(float3(0,0,0), r1.xyz);
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = float3(0.454545468,0.454545468,0.454545468) * r0.xyz;
-  o0.xyz = exp2(r0.xyz);
-  o0.w = 1;
-  
-    o0.rgb = renodx::math::SafePow(o0.rgb, 2.2); // 2.2 gamma
+  //r0.xyz = max(float3(0,0,0), r1.xyz); //709 clamp, renodx handles this
+  //r0.xyz = log2(r0.xyz); // 1/2.2 gamma
+  //r0.xyz = float3(0.454545468,0.454545468,0.454545468) * r0.xyz; // 1/2.2 gamma
+  //o0.xyz = exp2(r0.xyz); // 1/2.2 gamma
     
+    o0.w = 1;
+    o0.rgb = r1.rgb;
+    //o0.rgb = renodx::math::SafePow(o0.rgb, 2.2); // 2.2 gamma
     o0.rgb *= injectedData.toneMapGameNits; // Scale by user nits
+    
         
     o0.rgb /= 80.f;
     
