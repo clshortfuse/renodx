@@ -367,7 +367,6 @@ void OnBindPipeline(
   details.pipeline_binds.push_back(bind_details);
 }
 
-
 void OnPushDescriptors(
     reshade::api::command_list* cmd_list,
     reshade::api::shader_stage stages,
@@ -444,27 +443,40 @@ void OnPushDescriptors(
 }
 
 bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_method) {
-  if (!is_snapshotting) return false;
+  bool bypass_draw = false;
 
-  auto& command_list_data = cmd_list->get_private_data<CommandListData>();
   auto* device = cmd_list->get_device();
   auto& device_data = device->get_private_data<DeviceData>();
-
   std::unique_lock lock(device_data.mutex);
 
-  auto& details = command_list_data.GetCurrentDrawDetails();
-  details.draw_method = draw_method;
-  details.render_targets.clear();
-  for (auto render_target : renodx::utils::swapchain::GetRenderTargets(cmd_list)) {
-    if (render_target.handle == 0u) continue;
-    details.render_targets.push_back(
-        device_data.GetResourceViewDetails(render_target, device));
+  auto& state = renodx::utils::shader::GetCurrentState(cmd_list);
+  for (auto& [stage, hash] : state.current_shaders_hashes) {
+    if (auto pair = device_data.shader_details.find(hash);
+        pair != device_data.shader_details.end()) {
+      auto details = pair->second;
+      if (details.shader_source == ShaderDetails::ShaderSource::BYPASS) {
+        bypass_draw = true;
+        break;
+      }
+    }
   }
 
-  device_data.command_list_data.push_back(command_list_data);
-  command_list_data.draw_details.clear();
+  if (is_snapshotting) {
+    auto& command_list_data = cmd_list->get_private_data<CommandListData>();
+    auto& draw_details = command_list_data.GetCurrentDrawDetails();
+    draw_details.draw_method = draw_method;
+    draw_details.render_targets.clear();
+    for (auto render_target : renodx::utils::swapchain::GetRenderTargets(cmd_list)) {
+      if (render_target.handle == 0u) continue;
+      draw_details.render_targets.push_back(
+          device_data.GetResourceViewDetails(render_target, device));
+    }
 
-  return false;
+    device_data.command_list_data.push_back(command_list_data);
+    command_list_data.draw_details.clear();
+  }
+
+  return bypass_draw;
 }
 
 bool OnDraw(
