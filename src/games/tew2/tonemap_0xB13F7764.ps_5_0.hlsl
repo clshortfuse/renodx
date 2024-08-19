@@ -166,11 +166,12 @@ void main(
   o0.w = 1;
   
   
-    o0.rgb = renodx::math::SafePow(o0.rgb, 2.2); // 2.2 gamma
+    // Moved gamma/paper white to the "noise" shader
+    //o0.rgb = renodx::math::SafePow(o0.rgb, 2.2); // 2.2 gamma
     
-    o0.rgb *= injectedData.toneMapGameNits; // Scale by user nits
+    //o0.rgb *= injectedData.toneMapGameNits; // Scale by user nits
         
-    o0.rgb /= 80.f;
+    //o0.rgb /= 80.f;
   
   return;
 }

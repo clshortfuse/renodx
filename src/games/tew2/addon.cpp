@@ -18,6 +18,7 @@
 #include <embed/0x39E8661A.h> // UI, Radio Waves
 #include <embed/0x742364E2.h> // Movies -- ingame FMV
 #include <embed/0x698CEF9E.h> // Movies -- Intro movies 1
+#include <embed/0x6F66059D.h> // Noise
 #include <embed/0xB13F7764.h> // Tonemapper
 
 
@@ -44,6 +45,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
   CustomShaderEntry(0x39E8661A), // UI, Radio Waves
   CustomShaderEntry(0x742364E2), // Movies -- Ingame fmv
   CustomShaderEntry(0x698CEF9E), // Movies -- Intro Movies 1
+  CustomShaderEntry(0x6F66059D), // Noise
   CustomShaderEntry(0xB13F7764),  // Tonemapper
 
 };
