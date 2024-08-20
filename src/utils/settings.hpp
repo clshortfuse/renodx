@@ -52,7 +52,7 @@ struct Setting {
   std::string group;
   std::string tooltip;
   std::vector<std::string> labels;
-  std::optional<uint32_t> color;  // HEX notation
+  std::optional<uint32_t> tint;  // HEX notation
   float min = 0.f;
   float max = 100.f;
   std::string format = "%.0f";
@@ -229,8 +229,8 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   std::string last_group;
   for (auto* setting : *settings) {
     int styles_pushed = 0;
-    if (setting->color.has_value()) {
-      auto target_rgb = ImVec4FromHex(setting->color.value());
+    if (setting->tint.has_value()) {
+      auto target_rgb = ImVec4FromHex(setting->tint.value());
       float target_hsv[3] = {};
       ImGui::ColorConvertRGBtoHSV(target_rgb.x, target_rgb.y, target_rgb.z, target_hsv[0], target_hsv[1], target_hsv[2]);
 
