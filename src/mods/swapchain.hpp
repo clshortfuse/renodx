@@ -10,16 +10,14 @@
 #include <dxgi.h>
 #include <dxgi1_6.h>
 
-#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <initializer_list>
-#include <optional>
+#include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #include <include/reshade.hpp>
@@ -163,6 +161,7 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   std::unordered_map<uint64_t, SwapChainUpgradeTarget*> resource_upgrade_targets;
 
   std::unordered_map<uint64_t, reshade::api::resource> upgraded_resources;
+  std::unordered_map<uint64_t, reshade::api::format> upgraded_resource_formats;
   // <originalResource.handle, clonedResource.handle>
   std::unordered_map<uint64_t, uint64_t> cloned_resources;
   // <clonedResource.handle>
@@ -183,11 +182,11 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   // <resource.handle, CloneResourceView.handle>
   std::unordered_map<uint64_t, uint64_t> resource_render_target_resource_clones;
   // <resource.handle, CloneResourceView.handle>
-  std::unordered_map<uint64_t, uint64_t> resource_ua_vs;
+  std::unordered_map<uint64_t, uint64_t> resource_uavs;
   // <resource.handle, CloneResourceView.handle>
   std::unordered_map<uint64_t, uint64_t> resource_uav_clones;
   // <resource.handle, CloneResourceView.handle>
-  std::unordered_map<uint64_t, uint64_t> resource_sr_vs;
+  std::unordered_map<uint64_t, uint64_t> resource_srvs;
   // <resource.handle, CloneResourceView.handle>
   std::unordered_map<uint64_t, uint64_t> resource_srv_clones;
 
@@ -600,6 +599,7 @@ static void OnInitResource(
     private_data.applied_target = nullptr;
 
     private_data.upgraded_resources[resource.handle] = private_data.original_resource;
+    private_data.upgraded_resource_formats[resource.handle] = desc.texture.format;
     if (private_data.original_resource.handle != 0u) {
       s << ", fallback: " << reinterpret_cast<void*>(private_data.original_resource.handle);
       private_data.original_resource = {0};
@@ -727,6 +727,7 @@ static void OnDestroyResource(reshade::api::device* device, reshade::api::resour
       pair != data.upgraded_resources.end()) {
     device->destroy_resource(pair->second);
     data.upgraded_resources.erase(resource.handle);
+    data.upgraded_resource_formats.erase(resource.handle);
   }
 
   if (use_resource_cloning) {
@@ -1176,14 +1177,14 @@ static void OnInitResourceView(
     if (usage_type == reshade::api::resource_usage::unordered_access) {
       private_data.uav_resource_view_clones[view.handle] = cloned_resource_view.handle;
       private_data.resource_uav_clones[resource.handle] = cloned_resource_view.handle;
-      private_data.resource_ua_vs[resource.handle] = view.handle;
+      private_data.resource_uavs[resource.handle] = view.handle;
       s << ", type: uav";
     }
 
     if (usage_type == reshade::api::resource_usage::shader_resource) {
       private_data.shader_resource_view_clones[view.handle] = cloned_resource_view.handle;
       private_data.resource_srv_clones[resource.handle] = cloned_resource_view.handle;
-      private_data.resource_sr_vs[resource.handle] = view.handle;
+      private_data.resource_srvs[resource.handle] = view.handle;
       s << ", type: shader_resource";
     }
     renodx::utils::resource::SetResourceFromResourceView(device, cloned_resource_view, cloned_resource_view_resource);
@@ -1443,8 +1444,8 @@ static bool FlushResourceViewInDescriptorTable(
       uav_clone_handles != data.resource_uav_clones.end()) {
     auto uav_clone_handle = uav_clone_handles->second;
     if (
-        auto uav_handles = data.resource_ua_vs.find(resource.handle);
-        uav_handles != data.resource_ua_vs.end()) {
+        auto uav_handles = data.resource_uavs.find(resource.handle);
+        uav_handles != data.resource_uavs.end()) {
       auto uav_handle = uav_handles->second;
       auto& descriptor_table_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
       const std::unique_lock lock(descriptor_table_data.mutex);
@@ -1481,8 +1482,8 @@ static bool FlushResourceViewInDescriptorTable(
       srv_clone_handles != data.resource_srv_clones.end()) {
     auto srv_clone_handle = srv_clone_handles->second;
     if (
-        auto srv_handles = data.resource_sr_vs.find(resource.handle);
-        srv_handles != data.resource_sr_vs.end()) {
+        auto srv_handles = data.resource_srvs.find(resource.handle);
+        srv_handles != data.resource_srvs.end()) {
       auto srv_handle = srv_handles->second;
       auto& descriptor_table_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
       const std::unique_lock lock(descriptor_table_data.mutex);
@@ -2320,6 +2321,46 @@ static bool OnClearUnorderedAccessViewFloat(
   return false;
 }
 
+static bool OnResolveTextureRegion(
+    reshade::api::command_list* cmd_list,
+    reshade::api::resource source,
+    uint32_t source_subresource,
+    const reshade::api::subresource_box* source_box,
+    reshade::api::resource dest,
+    uint32_t dest_subresource,
+    int32_t dest_x,
+    int32_t dest_y,
+    int32_t dest_z,
+    reshade::api::format format) {
+  auto* device = cmd_list->get_device();
+  if (device == nullptr) return false;
+  auto& data = device->get_private_data<DeviceData>();
+  const std::shared_lock lock(data.mutex);
+  auto source_pair = data.upgraded_resource_formats.find(source.handle);
+  if (source_pair == data.upgraded_resource_formats.end()) return false;
+
+  auto destination_pair = data.upgraded_resource_formats.find(dest.handle);
+  if (destination_pair == data.upgraded_resource_formats.end()) return false;
+
+  auto source_format = source_pair->second;
+  auto destination_format = destination_pair->second;
+
+  if (source_format != destination_format) return false;
+
+  auto new_format = source_format;
+  if (source_format == reshade::api::format::r16g16b16a16_typeless) {
+    new_format = reshade::api::format::r16g16b16a16_float;
+  }
+
+  if (format == new_format) return false;
+
+  cmd_list->resolve_texture_region(
+      source, source_subresource, source_box,
+      dest, dest_subresource, dest_x, dest_y, dest_z,
+      new_format);
+  return true;
+}
+
 static void OnBarrier(
     reshade::api::command_list* cmd_list,
     uint32_t count,
@@ -2442,6 +2483,8 @@ static void Use(DWORD fdw_reason) {
       reshade::register_event<reshade::addon_event::destroy_resource_view>(OnDestroyResourceView);
 
       // reshade::register_event<reshade::addon_event::copy_resource>(on_copy_resource);
+
+      reshade::register_event<reshade::addon_event::resolve_texture_region>(OnResolveTextureRegion);
 
       if (use_resource_cloning) {
         reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);

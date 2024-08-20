@@ -2,6 +2,7 @@
 
 #define ImTextureID ImU64
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -15,7 +16,7 @@
 namespace renodx::utils::settings {
 
 static int preset_index = 1;
-static const char* preset_strings[] = {
+static std::vector<std::string> preset_strings = {
     "Off",
     "Preset #1",
     "Preset #2",
@@ -24,25 +25,37 @@ static const char* preset_strings[] = {
 
 static void (*on_preset_off)();
 
+static ImVec4 ImVec4FromHex(uint32_t hex) {
+  return {
+      static_cast<float>((hex >> (8 * 2)) & 0xFF) / 255.f,
+      static_cast<float>((hex >> (8 * 1)) & 0xFF) / 255.f,
+      static_cast<float>((hex >> (8 * 0)) & 0xFF) / 255.f,
+      1.f,
+  };
+};
+
 enum class SettingValueType : uint8_t {
   FLOAT = 0,
   INTEGER = 1,
-  BOOLEAN = 2
+  BOOLEAN = 2,
+  BUTTON = 3,
 };
 
 struct Setting {
-  const char* key;
+  std::string key;
   float* binding;
   SettingValueType value_type = SettingValueType::FLOAT;
   float default_value = 0.f;
   bool can_reset = true;
-  const char* label = key;
-  const char* section = "";
-  const char* tooltip = "";
-  std::vector<const char*> labels;
+  std::string label = key;
+  std::string section;
+  std::string group;
+  std::string tooltip;
+  std::vector<std::string> labels;
+  std::optional<uint32_t> tint;  // HEX notation
   float min = 0.f;
   float max = 100.f;
-  const char* format = "%.0f";
+  std::string format = "%.0f";
   bool (*is_enabled)() = [] {
     return true;
   };
@@ -50,6 +63,8 @@ struct Setting {
   float (*parse)(float value) = [](float value) {
     return value;
   };
+
+  void (*on_change)() = [] {};
 
   [[nodiscard]]
   float GetValue() const {
@@ -74,7 +89,9 @@ struct Setting {
   }
 
   Setting* Write() {
-    *this->binding = this->parse(this->GetValue());
+    if (this->binding != nullptr) {
+      *this->binding = this->parse(this->GetValue());
+    }
     return this;
   }
 
@@ -111,16 +128,16 @@ static Settings* settings = nullptr;
     .format = "%.2f",                    \
   }
 
-static Setting* FindSetting(const char* key) {
+static Setting* FindSetting(const std::string& key) {
   for (auto* setting : *settings) {
-    if (strcmp(setting->key, key) == 0) {
+    if (setting->key == key) {
       return setting;
     }
   }
   return nullptr;
 }
 
-static bool UpdateSetting(const char* key, float value) {
+static bool UpdateSetting(const std::string& key, float value) {
   auto* setting = FindSetting(key);
   if (setting == nullptr) return false;
   setting->Set(value)->Write();
@@ -132,9 +149,8 @@ static void LoadSettings(
     const char* section = "renodx-preset1") {
   for (auto* setting : *settings) {
     switch (setting->value_type) {
-      default:
       case SettingValueType::FLOAT:
-        if (!reshade::get_config_value(runtime, section, setting->key, setting->value)) {
+        if (!reshade::get_config_value(runtime, section, setting->key.c_str(), setting->value)) {
           setting->value = setting->default_value;
         }
         if (setting->value > setting->GetMax()) {
@@ -145,7 +161,7 @@ static void LoadSettings(
         break;
       case SettingValueType::BOOLEAN:
       case SettingValueType::INTEGER:
-        if (!reshade::get_config_value(runtime, section, setting->key, setting->value_as_int)) {
+        if (!reshade::get_config_value(runtime, section, setting->key.c_str(), setting->value_as_int)) {
           setting->value_as_int = static_cast<int>(setting->default_value);
         }
         if (setting->value_as_int > setting->GetMax()) {
@@ -153,6 +169,8 @@ static void LoadSettings(
         } else if (setting->value_as_int < static_cast<int>(setting->min)) {
           setting->value_as_int = static_cast<int>(setting->min);
         }
+        break;
+      default:
         break;
     }
     setting->Write();
@@ -162,13 +180,14 @@ static void LoadSettings(
 static void SaveSettings(reshade::api::effect_runtime* runtime, const char* section = "renodx-preset1") {
   for (auto* setting : *settings) {
     switch (setting->value_type) {
-      default:
       case SettingValueType::FLOAT:
-        reshade::set_config_value(runtime, section, setting->key, setting->value);
+        reshade::set_config_value(runtime, section, setting->key.c_str(), setting->value);
         break;
       case SettingValueType::INTEGER:
       case SettingValueType::BOOLEAN:
-        reshade::set_config_value(runtime, section, setting->key, setting->value_as_int);
+        reshade::set_config_value(runtime, section, setting->key.c_str(), setting->value_as_int);
+        break;
+      default:
         break;
     }
   }
@@ -182,8 +201,8 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       "Preset",
       &preset_index,
       0,
-      (sizeof(preset_strings) / sizeof(char*)) - 1,
-      preset_strings[preset_index],
+      preset_strings.size() - 1,
+      preset_strings[preset_index].c_str(),
       ImGuiSliderFlags_NoInput);
 
   if (changed_preset) {
@@ -207,11 +226,46 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
   bool any_change = false;
   std::string last_section;
+  std::string last_group;
   for (auto* setting : *settings) {
+    int styles_pushed = 0;
+    if (setting->tint.has_value()) {
+      auto target_rgb = ImVec4FromHex(setting->tint.value());
+      float target_hsv[3] = {};
+      ImGui::ColorConvertRGBtoHSV(target_rgb.x, target_rgb.y, target_rgb.z, target_hsv[0], target_hsv[1], target_hsv[2]);
+
+      const auto styles = {
+          ImGuiCol_FrameBg,
+          ImGuiCol_FrameBgHovered,
+          ImGuiCol_FrameBgActive,
+          ImGuiCol_SliderGrab,
+          ImGuiCol_SliderGrabActive,
+          ImGuiCol_Button,
+          ImGuiCol_ButtonActive,
+          ImGuiCol_ButtonHovered,
+          ImGuiCol_TextSelectedBg
+      };
+      for (const auto style : styles) {
+        auto style_rgb = ImGui::GetStyleColorVec4(style);
+        float style_hsv[3] = {};
+        ImGui::ColorConvertRGBtoHSV(style_rgb.x, style_rgb.y, style_rgb.z, style_hsv[0], style_hsv[1], style_hsv[2]);
+
+        ImGui::ColorConvertHSVtoRGB(target_hsv[0], style_hsv[1], style_hsv[2], style_rgb.x, style_rgb.y, style_rgb.z);
+        ImGui::PushStyleColor(style, style_rgb);
+      }
+      styles_pushed = styles.size();
+    }
+
     if (last_section != setting->section) {
-      ImGui::SeparatorText(setting->section);
+      ImGui::SeparatorText(setting->section.c_str());
       last_section.assign(setting->section);
     }
+
+    if (!last_group.empty() && !setting->group.empty() && last_group == setting->group) {
+      ImGui::SameLine();
+    }
+    last_group = setting->group;
+
     const bool is_disabled = preset_index == 0
                              || (setting->is_enabled != nullptr
                                  && !setting->is_enabled());
@@ -219,41 +273,52 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       ImGui::BeginDisabled();
     }
     bool changed = false;
+
     switch (setting->value_type) {
       case SettingValueType::FLOAT:
         changed |= ImGui::SliderFloat(
-            setting->label,
+            setting->label.c_str(),
             &setting->value,
             setting->min,
             setting->max,
-            setting->format);
+            setting->format.c_str());
         break;
       case SettingValueType::INTEGER:
         changed |= ImGui::SliderInt(
-            setting->label,
+            setting->label.c_str(),
             &setting->value_as_int,
             setting->min,
             setting->GetMax(),
-            setting->labels.empty() ? setting->format : setting->labels.at(setting->value_as_int),
+            setting->labels.empty()
+                ? setting->format.c_str()
+                : setting->labels.at(setting->value_as_int).c_str(),
             ImGuiSliderFlags_NoInput);
         break;
       case SettingValueType::BOOLEAN:
         changed |= ImGui::SliderInt(
-            setting->label,
+            setting->label.c_str(),
             &setting->value_as_int,
             0,
             1,
             setting->labels.empty()
                 ? ((setting->value_as_int == 0) ? "Off" : "On")  // NOLINT(readability-avoid-nested-conditional-operator)
-                : setting->labels.at(setting->value_as_int),
+                : setting->labels.at(setting->value_as_int).c_str(),
             ImGuiSliderFlags_NoInput);
         break;
+      case SettingValueType::BUTTON: {
+        changed |= ImGui::Button(setting->label.c_str());
+      }
     }
-    if (strlen(setting->tooltip) != 0) {
-      ImGui::SetItemTooltip(setting->tooltip);  // NOLINT(clang-diagnostic-format-security)
+    if (changed) {
+      setting->on_change();
+    }
+    if (!setting->tooltip.empty()) {
+      ImGui::SetItemTooltip("%s", setting->tooltip.c_str());
     }
 
-    if (preset_index != 0 && setting->can_reset) {
+    if (preset_index != 0
+        && setting->can_reset
+        && setting->value_type != SettingValueType::BUTTON) {
       ImGui::SameLine();
       const bool is_using_default = (setting->GetValue() == setting->default_value);
       ImGui::BeginDisabled(is_using_default);
@@ -298,6 +363,8 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
     if (is_disabled) {
       ImGui::EndDisabled();
     }
+
+    ImGui::PopStyleColor(styles_pushed);
   }
   if (!changed_preset && any_change) {
     switch (preset_index) {
