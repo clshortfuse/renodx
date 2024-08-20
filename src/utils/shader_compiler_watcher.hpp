@@ -57,7 +57,7 @@ struct CustomShader {
 
 namespace internal {
 
-static std::atomic_bool shared_watcher_enabled = true;
+static std::atomic_bool shared_watcher_enabled = false;
 static std::atomic_bool shared_watcher_running = false;
 static std::atomic_bool shared_shaders_changed = false;
 static std::atomic_bool shared_compile_pending = false;
@@ -358,6 +358,10 @@ static void Stop() {
   internal::shared_watcher_enabled = false;
   internal::worker_thread->join();
   internal::worker_thread.reset();
+}
+
+static bool IsEnabled() {
+  return internal::shared_watcher_enabled;
 }
 
 // Retrieves and consumes all compiled shareds
