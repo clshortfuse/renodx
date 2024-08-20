@@ -546,6 +546,7 @@ void LoadDiskShaders(reshade::api::device* device, DeviceData& data, bool activa
   }
   auto new_shaders = renodx::utils::shader::compiler::watcher::FlushCompiledShaders();
   for (auto& [shader_hash, custom_shader] : new_shaders) {
+    reshade::log_message(reshade::log_level::debug, "new shaders");
     auto& details = data.GetShaderDetails(shader_hash);
     details.disk_shader = custom_shader;
 
@@ -1456,10 +1457,17 @@ void OnPresent(
   }
 
   if (setting_live_reload) {
+    if (!renodx::utils::shader::compiler::watcher::IsEnabled()) {
+      renodx::utils::shader::compiler::watcher::Start();
+    }
     auto* device = swapchain->get_device();
     auto& data = device->get_private_data<DeviceData>();
     std::unique_lock lock(data.mutex);
     LoadDiskShaders(device, data, true);
+  } else {
+    if (renodx::utils::shader::compiler::watcher::IsEnabled()) {
+      renodx::utils::shader::compiler::watcher::Stop();
+    }
   }
 
   if (setting_auto_dump) {
