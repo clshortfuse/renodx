@@ -10,11 +10,14 @@
 #include <charconv>
 #include <cstdlib>
 #include <format>
+#include <functional>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <ostream>
 #include <print>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -80,6 +83,7 @@ enum class TokenizerState : uint32_t {
   TYPE_DEFINITION,
   FUNCTION_DESCRIPTION,
   FUNCTION_DECLARE,
+  FUNCTION_ATTRIBUTES,
   CODE_DEFINE,
   CODE_BLOCK,
   CODE_ASSIGN,
@@ -90,6 +94,7 @@ enum class TokenizerState : uint32_t {
   CODE_BRANCH_START,
   CODE_BRANCH_BLOCK,
   CODE_END,
+  GLOBAL_VARIABLE,
   COMPLETE
 };
 
@@ -159,6 +164,10 @@ inline std::ostream& operator<<(std::ostream& os, const TokenizerState& state) {
     case TokenizerState::CODE_BRANCH_BLOCK:                              return os << "code_branch_block";
     case TokenizerState::CODE_END:                                       return os << "code_end";
     case TokenizerState::COMPLETE:                                       return os << "complete";
+    case TokenizerState::FUNCTION_DECLARE:                               return os << "function_declare";
+    case TokenizerState::FUNCTION_DESCRIPTION:                           return os << "function_description";
+    case TokenizerState::FUNCTION_ATTRIBUTES:                            return os << "function_attributes";
+    case TokenizerState::GLOBAL_VARIABLE:                                return os << "global_variable";
     default:                                                             return os << "unknown";
   }
 }
@@ -580,9 +589,8 @@ class Decompiler {
 
   struct CodeBranch {
     std::string branch_condition;
-    int branch_condition_true;
-    int branch_condition_false;
-    int branch_unconditional;
+    int branch_condition_true = -1;
+    int branch_condition_false = -1;
   };
 
   struct CodeBlock {
@@ -594,7 +602,7 @@ class Decompiler {
     std::string_view name;
     std::string_view return_type;
     std::vector<std::string_view> parameters;
-    std::unordered_map<int, CodeBlock> code_blocks;
+    std::map<int, CodeBlock> code_blocks;
     std::vector<std::string_view> lines;
     CodeBlock current_code_block;
     int current_code_block_number = 0;
@@ -886,24 +894,20 @@ class Decompiler {
       } else if (instruction == "phi") {
         // phi float [ 0x3FF61108E0000000, %0 ], [ 0x3FF069AC80000000, %21 ], [ 0x3FE6412500000000, %23 ], [ %27, %25 ]
         auto [type, arguments] = StringViewMatch<2>(assignment, std::regex{R"(phi (\S+) (.+))"});
-        std::cout << "// phi type: " << type << std::endl;
         // Declare variable
         auto declaration_line = std::format("{} _{};", type, variable);
         this->code_blocks[0].hlsl_lines.push_back(declaration_line);
 
-        std::cout << "// phi arguments: " << arguments << std::endl;
         auto pairs = StringViewSplitAll(arguments, std::regex{R"((\[ (\S+), %(\S+) \]),?)"}, {2, 3});
-        std::cout << "// declared in 0: " << declaration_line << std::endl;
         for (const auto& [value, function_number] : pairs) {
           int function_int;
           std::from_chars(function_number.data(), function_number.data() + function_number.size(), function_int);
           auto assignment_line = std::format("_{} = {};", variable, ParseFloat(value));
           this->code_blocks[function_int].hlsl_lines.push_back(assignment_line);
-          std::cout << "// added to " << function_int << ": " << assignment_line << std::endl;
         }
       } else if (instruction == "load") {
         // load float, float* %1681, align 4, !tbaa !26
-        auto [source] = StringViewMatch<1>(assignment, std::regex{R"(load \S+, \S+ %(\S+),.+)"});
+        auto [source] = StringViewMatch<1>(assignment, std::regex{R"(load \S+, \S+ %(\S+),.*)"});
         decompiled = std::format("_{} = {};", variable, stored_pointers[source]);
       } else if (instruction == "bitcast") {
         // noop
@@ -914,47 +918,35 @@ class Decompiler {
         // %1369 = getelementptr inbounds [6 x float], [6 x float]* %10, i32 0, i32 0
         const auto pointer_value = std::format("_{}[{}]", source, ParseInt(index));
         stored_pointers[variable] = pointer_value;
-        decompiled = std::format("// stored_pointers[{}] = {}", variable, pointer_value);
-
       } else {
         throw std::invalid_argument("Unrecognized code assignment");
       }
-      std::cout << "// " << line << std::endl;
-      std::cout << decompiled << std::endl;
 
-      this->current_code_block.hlsl_lines.push_back(decompiled);
+      if (!decompiled.empty()) {
+        this->current_code_block.hlsl_lines.push_back(decompiled);
+      }
     }
 
     void CloseBranch() {
       this->code_blocks[this->current_code_block_number] = this->current_code_block;
+      this->current_code_block_number = -1;
       this->current_code_block = {};
     }
 
     void AddCodeBranch(std::string_view line) {
       // br i1 <cond>, label <iftrue>, label <iffalse>
       // br label <dest>          ; Unconditional branch
-      static auto conditional_branch_regex = std::regex{R"(^  br i1 (\S+), label %(\S+), label %(\S+).+)"};
+      static auto conditional_branch_regex = std::regex{R"(^  br i1 (\S+), label %(\S+), label %(\S+).*)"};
 
       const auto [condition, if_true, if_false] = StringViewMatch<3>(line, conditional_branch_regex);
       if (!condition.empty()) {
         this->current_code_block.branch.branch_condition = ParseInt(condition);
         std::from_chars(if_true.data(), if_true.data() + if_true.size(), this->current_code_block.branch.branch_condition_true);
         std::from_chars(if_false.data(), if_false.data() + if_false.size(), this->current_code_block.branch.branch_condition_false);
-        std::cout << "// " << line << std::endl;
-        std::cout << std::format(
-            "// if ({}) goto <label>:{}; else goto <label>:{};",
-            this->current_code_block.branch.branch_condition,
-            this->current_code_block.branch.branch_condition_true,
-            this->current_code_block.branch.branch_condition_false)
-                  << std::endl;
-
       } else {
-        static auto unconditional_branch_regex = std::regex{R"(^  br label %(\S+))"};
+        static auto unconditional_branch_regex = std::regex{R"(^  br label %(\S+).*)"};
         const auto [unconditional] = StringViewMatch<1>(line, unconditional_branch_regex);
-        if (unconditional.empty()) {
-          throw std::invalid_argument("Could not parse code branch");
-        }
-        std::from_chars(unconditional.data(), unconditional.data() + unconditional.size(), this->current_code_block.branch.branch_unconditional);
+        std::from_chars(unconditional.data(), unconditional.data() + unconditional.size(), this->current_code_block.branch.branch_condition_true);
       }
       this->CloseBranch();
     }
@@ -975,12 +967,9 @@ class Decompiler {
         throw std::invalid_argument("Unknown function name");
       }
 
-      std::cout << "// " << line << std::endl;
-      std::cout << decompiled << std::endl;
-      this->current_code_block.hlsl_lines.push_back(decompiled);
-
-      // decompiled = std::format("// {} _{} = {}({})", type, variable, functionName, functionParams);
-      // decompiled = "// " + std::string{comment};
+      if (!decompiled.empty()) {
+        this->current_code_block.hlsl_lines.push_back(decompiled);
+      }
     }
 
     void AddCodeStore(std::string_view line) {
@@ -988,33 +977,41 @@ class Decompiler {
       static auto regex = std::regex{R"(^  store \S+ ([%A-Za-z0-9]+), [%A-Za-z0-9]+\* %([A-Za-z0-9]+),?.*)"};
       auto [value, pointer] = StringViewMatch<2>(line, regex);
 
-      std::cout << "// value: " << value << std::endl;
-      std::cout << "// pointer: " << pointer << std::endl;
-
       std::string decompiled = std::format("{} = {};", stored_pointers[pointer], ParseFloat(value));
 
-      // auto paramMatches = string_view_split_all(functionParamsString, paramRegex, {1, 2});
-
-      std::cout << "// " << line << std::endl;
-      std::cout << decompiled << std::endl;
       this->current_code_block.hlsl_lines.push_back(decompiled);
-
-      // decompiled = std::format("// {} _{} = {}({})", type, variable, functionName, functionParams);
-      // decompiled = "// " + std::string{comment};
     }
 
     void ParseBlockDefinition(std::string_view line) {
       // ; <label>:21                                      ; preds = %0
-      static auto block_definition_regex = std::regex{R"(^; <label>:(\S+)\s+; preds = %(\S+))"};
-      auto results = StringViewMatch<2>(line, block_definition_regex);
-      if (results.size() < 1) {
-        throw std::invalid_argument("Could not parse block definition");
-      }
-      const auto line_number = results[0];
+      static auto block_definition_regex = std::regex{R"(^; <label>:(\S+)\s+; preds = (.*))"};
+      auto [line_number, predicates] = StringViewMatch<2>(line, block_definition_regex);
       std::from_chars(line_number.data(), line_number.data() + line_number.size(), this->current_code_block_number);
+    }
 
-      std::cout << "// " << line << std::endl;
-      std::cout << std::format("// <label>:{}", this->current_code_block_number) << std::endl;
+    auto ListConvergences() {
+      std::map<int, std::set<int>> convergences;
+
+      for (const auto& [line_number, code_block] : code_blocks) {
+        if (code_block.branch.branch_condition_true != -1) {
+          convergences[code_block.branch.branch_condition_true].emplace(line_number);
+        }
+        if (code_block.branch.branch_condition_false != -1) {
+          convergences[code_block.branch.branch_condition_false].emplace(line_number);
+        }
+      }
+
+      for (auto& [line_number, convergence_set] : convergences) {
+        const auto temp_convergence_set = convergence_set;
+        for (const auto convergence : temp_convergence_set) {
+          auto other_set = convergences[convergence];
+          for (const auto other_set_item : other_set) {
+            convergence_set.emplace(other_set_item);
+          }
+        }
+      }
+
+      return convergences;
     }
   };
 
@@ -1296,6 +1293,10 @@ class Decompiler {
               state = TokenizerState::FUNCTION_DESCRIPTION;
             } else if (line.starts_with("declare")) {
               state = TokenizerState::FUNCTION_DECLARE;
+            } else if (line.starts_with("attributes #")) {
+              state = TokenizerState::FUNCTION_ATTRIBUTES;
+            } else if (line.starts_with("!")) {
+              state = TokenizerState::GLOBAL_VARIABLE;
             } else {
               throw std::invalid_argument("Unexpected line");
             }
@@ -1309,6 +1310,8 @@ class Decompiler {
             break;
           case TokenizerState::FUNCTION_DESCRIPTION:
           case TokenizerState::FUNCTION_DECLARE:
+          case TokenizerState::FUNCTION_ATTRIBUTES:
+          case TokenizerState::GLOBAL_VARIABLE:
             line_number++;
             state = TokenizerState::WHITESPACE;
             break;
@@ -1359,6 +1362,7 @@ class Decompiler {
             break;
           case TokenizerState::CODE_RETURN:
             line_number++;
+            state = TokenizerState::CODE_BLOCK;
             break;
           case TokenizerState::CODE_BRANCH:
             current_code_function.AddCodeBranch(line);
@@ -1394,9 +1398,112 @@ class Decompiler {
                   << "  >>>" << line << "<<<" << std::endl;
         throw;
       }
+      if (line_number == lines.size()) {
+        state = TokenizerState::COMPLETE;
+      }
     }
 
-    return "foo";
+    std::stringstream string_stream;
+    int line_spacing = 2;
+    std::vector<int> pending_convergences = {};
+    auto convergences = current_code_function.ListConvergences();
+    std::function<void(int line_number)> append_code_block = [&](int line_number) {
+      std::string spacing;
+      spacing.insert(0, line_spacing, ' ');
+
+      auto& code_block = current_code_function.code_blocks[line_number];
+      for (const auto& hlsl_line : code_block.hlsl_lines) {
+        string_stream << spacing << hlsl_line << "\r\n";
+      }
+
+      if (code_block.branch.branch_condition_true <= 0) return;
+
+      int next_convergence = pending_convergences.empty() ? -1 : pending_convergences.rbegin()[0];
+
+      if (code_block.branch.branch_condition.empty()) {
+        if (next_convergence == code_block.branch.branch_condition_true) return;
+        append_code_block(code_block.branch.branch_condition_true);
+        return;
+      }
+
+      if (code_block.branch.branch_condition_true == next_convergence) {
+        string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\r\n";
+        line_spacing += 2;
+        append_code_block(code_block.branch.branch_condition_false);
+        line_spacing -= 2;
+        string_stream << spacing << "}\r\n";
+        return;
+      }
+
+      if (code_block.branch.branch_condition_false == next_convergence) {
+        string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\r\n";
+        line_spacing += 2;
+        append_code_block(code_block.branch.branch_condition_true);
+        line_spacing -= 2;
+        string_stream << spacing << "}\r\n";
+        return;
+      }
+
+      // Find next convergence for these two items
+      int pair_convergence = -1;
+      for (auto& [convergence_line_number, callers] : convergences) {
+        if (
+            (convergence_line_number == code_block.branch.branch_condition_true || callers.contains(code_block.branch.branch_condition_true))
+            && (convergence_line_number == code_block.branch.branch_condition_false || callers.contains(code_block.branch.branch_condition_false))) {
+          if (convergence_line_number == next_convergence) break;
+          pair_convergence = convergence_line_number;
+          pending_convergences.push_back(pair_convergence);
+          break;
+        }
+      }
+
+      if (pair_convergence == code_block.branch.branch_condition_true) {
+        string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\r\n";
+        line_spacing += 2;
+        append_code_block(code_block.branch.branch_condition_false);
+        line_spacing -= 2;
+        string_stream << spacing << "}\r\n";
+        // Only print else
+      } else if (pair_convergence == code_block.branch.branch_condition_false) {
+        string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\r\n";
+        line_spacing += 2;
+        append_code_block(code_block.branch.branch_condition_true);
+        line_spacing -= 2;
+        string_stream << spacing << "}\r\n";
+      } else if (code_block.branch.branch_condition_true < code_block.branch.branch_condition_false) {
+        string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\r\n";
+        line_spacing += 2;
+        append_code_block(code_block.branch.branch_condition_true);
+        line_spacing -= 2;
+        string_stream << spacing << "} else { \r\n";
+        line_spacing += 2;
+        append_code_block(code_block.branch.branch_condition_false);
+        line_spacing -= 2;
+        string_stream << spacing << "}\r\n";
+      } else {
+        string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\r\n";
+        line_spacing += 2;
+        append_code_block(code_block.branch.branch_condition_false);
+        line_spacing -= 2;
+        string_stream << spacing << "} else { \r\n";
+        line_spacing += 2;
+        append_code_block(code_block.branch.branch_condition_true);
+        line_spacing -= 2;
+        string_stream << spacing << "}\r\n";
+      }
+
+      if (pair_convergence != -1) {
+        pending_convergences.pop_back();
+        append_code_block(pair_convergence);
+      };
+    };
+
+    string_stream << "function main() {\r\n";
+
+    append_code_block(0);
+    string_stream << "}\r\n";
+
+    return string_stream.str();
   }
 
 };  // namespace Decompiler
