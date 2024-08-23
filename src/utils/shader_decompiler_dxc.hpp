@@ -9,6 +9,7 @@
 #include <cassert>
 #include <charconv>
 #include <cstdlib>
+#include <exception>
 #include <format>
 #include <functional>
 #include <iostream>
@@ -721,6 +722,34 @@ class Decompiler {
           } else {
             throw std::invalid_argument("Unknown @dx.op.binary.f32");
           }
+        } else if (functionName == "@dx.op.textureLoad.f32") {
+          // %dx.types.ResRet.f32 @dx.op.textureLoad.f32(i32 66, %dx.types.Handle %40, i32 0, i32 %38, i32 %39, i32 undef, i32 undef, i32 undef, i32 undef)  ; TextureLoad(srv,mipLevelOrSampleCount,coord0,coord1,coord2,offset0,offset1,offset2)
+          auto [opNumber, srv, mipLevelOrSampleCount, coord0, coord1, coord2, offset0, offset1, offset2] = StringViewSplit<9>(functionParamsString, param_regex, 2);
+          auto ref_resource = std::string{srv.substr(1)};
+          const bool has_coord_z = coord2 != "undef";
+          const bool has_offset_y = offset1 != "undef";
+          const bool has_offset_z = offset2 != "undef";
+          std::string coords;
+          if (has_coord_z) {
+            coords = std::format("int3({}, {}, {})", ParseInt(coord0), ParseInt(coord1), ParseInt(coord2));
+          } else {
+            coords = std::format("int2({}, {})", ParseInt(coord0), ParseInt(coord1));
+          }
+          std::string offset;
+          if (has_offset_z) {
+            offset = std::format("int3({}, {}, {})", ParseInt(offset0), ParseInt(offset1), ParseInt(offset2));
+          } else if (has_coord_z) {
+            offset = std::format("int2({}, {})", ParseInt(offset0), ParseInt(offset1));
+          } else {
+            offset = std::format("{}", ParseInt(offset0));
+          }
+          // skip mipLevelOrSampleCount
+          if (offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
+            decompiled = std::format("float4 _{} = {}.Load({});", variable, resource_bindings.at(ref_resource), coords);
+          } else {
+            decompiled = std::format("float4 _{} = {}.Load({}, {});", variable, resource_bindings.at(ref_resource), coords, offset);
+          }
+
         } else if (functionName == "@dx.op.sample.f32") {
           auto [opNumber, srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp] = StringViewSplit<11>(functionParamsString, param_regex, 2);
           auto ref_resource = std::string{srv.substr(1)};
@@ -802,7 +831,6 @@ class Decompiler {
         } else {
           throw std::invalid_argument("Unknown function name");
         }
-
         // decompiled = std::format("// {} _{} = {}({})", type, variable, functionName, functionParams);
         // decompiled = "// " + std::string{comment};
       } else if (instruction == "extractvalue") {
@@ -839,8 +867,8 @@ class Decompiler {
         decompiled = std::format("bool _{} = ({} {} {});", variable, ParseInt(a), ParseOperator(op), ParseInt(b));
       } else if (instruction == "add") {
         // add nsw i32 %1678, 1
-        auto [noSignedWrap, a, b] = StringViewMatch<3>(assignment, std::regex{R"(add (nsw )?(?:\S+) (\S+), (\S+))"});
-        if (noSignedWrap.empty()) {
+        auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(add (nuw )?(nsw )?(?:\S+) (\S+), (\S+))"});
+        if (no_signed_wrap.empty()) {
           decompiled = std::format("uint _{} = {} + {};", variable, ParseInt(a), ParseInt(b));
         } else {
           decompiled = std::format("int _{} = {} + {};", variable, ParseInt(a), ParseInt(b));
@@ -914,7 +942,7 @@ class Decompiler {
       } else if (instruction == "getelementptr") {
         auto [source, index] = StringViewMatch<2>(
             assignment,
-            std::regex{R"(getelementptr inbounds \[[^\]]+\], \[[^\]]+\]\* %(\S+), i32 \S+, i32 (\S+))"});
+            std::regex{R"(getelementptr (?:inbounds )?\[[^\]]+\], \[[^\]]+\]\* %(\S+), i32 \S+, i32 (\S+).*)"});
         // %1369 = getelementptr inbounds [6 x float], [6 x float]* %10, i32 0, i32 0
         const auto pointer_value = std::format("_{}[{}]", source, ParseInt(index));
         stored_pointers[variable] = pointer_value;
@@ -974,7 +1002,7 @@ class Decompiler {
 
     void AddCodeStore(std::string_view line) {
       // store float %1358, float* %1369, align 4, !tbaa !26, !alias.scope !30
-      static auto regex = std::regex{R"(^  store \S+ ([%A-Za-z0-9]+), [%A-Za-z0-9]+\* %([A-Za-z0-9]+),?.*)"};
+      static auto regex = std::regex{R"(^  store \S+ ([^,]+), [^*]+\* %([A-Za-z0-9]+),?.*)"};
       auto [value, pointer] = StringViewMatch<2>(line, regex);
 
       std::string decompiled = std::format("{} = {};", stored_pointers[pointer], ParseFloat(value));
@@ -1418,12 +1446,20 @@ class Decompiler {
 
       if (code_block.branch.branch_condition_true <= 0) return;
 
+      if (code_block.branch.branch_condition_true <= line_number) {
+        throw std::exception("Loop detected.");
+      }
+
       int next_convergence = pending_convergences.empty() ? -1 : pending_convergences.rbegin()[0];
 
       if (code_block.branch.branch_condition.empty()) {
         if (next_convergence == code_block.branch.branch_condition_true) return;
         append_code_block(code_block.branch.branch_condition_true);
         return;
+      }
+
+      if (code_block.branch.branch_condition_false <= line_number) {
+        throw std::exception("Loop detected.");
       }
 
       if (code_block.branch.branch_condition_true == next_convergence) {
@@ -1499,7 +1535,6 @@ class Decompiler {
     };
 
     string_stream << "function main() {\r\n";
-
     append_code_block(0);
     string_stream << "}\r\n";
 

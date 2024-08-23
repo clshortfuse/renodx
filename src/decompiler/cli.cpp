@@ -2,6 +2,7 @@
 #include <cstdlib>
 
 #include <cassert>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <ostream>
@@ -44,11 +45,23 @@ int main(int argc, char** argv) {
   std::cout << "Disassembled." << std::endl;
   auto* decompiler = new renodx::utils::shader::decompiler::dxc::Decompiler();
 
-  std::string decompilation = decompiler->Decompile(std::string_view(disassembly));
+  try {
+    std::string decompilation = decompiler->Decompile(std::string_view(disassembly));
+    if (decompilation.empty()) {
+      return EXIT_FAILURE;
+    }
+    fprintf(stdout, "%s", decompilation.c_str());
 
-  if (decompilation.empty()) {
+  } catch (const std::exception& ex) {
+    std::cerr << ex.what() << std::endl;
+    return EXIT_FAILURE;
+  } catch (const std::string& ex) {
+    std::cerr << ex << std::endl;
+    return EXIT_FAILURE;
+  } catch (...) {
+    std::cerr << "Unknown failure" << std::endl;
     return EXIT_FAILURE;
   }
-  fprintf(stdout, "%s", decompilation.c_str());
+
   return EXIT_SUCCESS;
 }
