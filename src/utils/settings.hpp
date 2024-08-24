@@ -227,6 +227,9 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   bool any_change = false;
   std::string last_section;
   std::string last_group;
+  bool open_section = true;
+  bool open_node = false;
+  bool has_indent = false;
   for (auto* setting : *settings) {
     int styles_pushed = 0;
     if (setting->tint.has_value()) {
@@ -243,7 +246,10 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           ImGuiCol_Button,
           ImGuiCol_ButtonActive,
           ImGuiCol_ButtonHovered,
-          ImGuiCol_TextSelectedBg
+          ImGuiCol_TextSelectedBg,
+          ImGuiCol_Header,
+          ImGuiCol_HeaderHovered,
+          ImGuiCol_HeaderActive,
       };
       for (const auto style : styles) {
         auto style_rgb = ImGui::GetStyleColorVec4(style);
@@ -257,115 +263,135 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
     }
 
     if (last_section != setting->section) {
-      ImGui::SeparatorText(setting->section.c_str());
       last_section.assign(setting->section);
-    }
 
-    if (!last_group.empty() && !setting->group.empty() && last_group == setting->group) {
-      ImGui::SameLine();
-    }
-    last_group = setting->group;
-
-    const bool is_disabled = preset_index == 0
-                             || (setting->is_enabled != nullptr
-                                 && !setting->is_enabled());
-    if (is_disabled) {
-      ImGui::BeginDisabled();
-    }
-    bool changed = false;
-
-    switch (setting->value_type) {
-      case SettingValueType::FLOAT:
-        changed |= ImGui::SliderFloat(
-            setting->label.c_str(),
-            &setting->value,
-            setting->min,
-            setting->max,
-            setting->format.c_str());
-        break;
-      case SettingValueType::INTEGER:
-        changed |= ImGui::SliderInt(
-            setting->label.c_str(),
-            &setting->value_as_int,
-            setting->min,
-            setting->GetMax(),
-            setting->labels.empty()
-                ? setting->format.c_str()
-                : setting->labels.at(setting->value_as_int).c_str(),
-            ImGuiSliderFlags_NoInput);
-        break;
-      case SettingValueType::BOOLEAN:
-        changed |= ImGui::SliderInt(
-            setting->label.c_str(),
-            &setting->value_as_int,
-            0,
-            1,
-            setting->labels.empty()
-                ? ((setting->value_as_int == 0) ? "Off" : "On")  // NOLINT(readability-avoid-nested-conditional-operator)
-                : setting->labels.at(setting->value_as_int).c_str(),
-            ImGuiSliderFlags_NoInput);
-        break;
-      case SettingValueType::BUTTON: {
-        changed |= ImGui::Button(setting->label.c_str());
+      if (open_node) {
+        // TreePop will call unindent
+        ImGui::Indent();
+        ImGui::TreePop();
       }
-    }
-    if (changed) {
-      setting->on_change();
-    }
-    if (!setting->tooltip.empty()) {
-      ImGui::SetItemTooltip("%s", setting->tooltip.c_str());
-    }
-
-    if (preset_index != 0
-        && setting->can_reset
-        && setting->value_type != SettingValueType::BUTTON) {
-      ImGui::SameLine();
-      const bool is_using_default = (setting->GetValue() == setting->default_value);
-      ImGui::BeginDisabled(is_using_default);
-      ImGui::PushID(&setting->default_value);
-      if (is_using_default) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(ImColor::HSV(0, 0, 0.6f)));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(ImColor::HSV(0, 0, 0.7f)));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(ImColor::HSV(0, 0, 0.8f)));
-      }
-      auto* font = ImGui::GetFont();
-      auto old_scale = font->Scale;
-      auto previous_font_size = ImGui::GetFontSize();
-      font->Scale *= 0.75f;
-      ImGui::PushFont(font);
-      auto current_font_size = ImGui::GetFontSize();
-
-      ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, current_font_size * 2);
-
-      ImVec2 cursor_pos = ImGui::GetCursorPos();
-      cursor_pos.y += (previous_font_size / 2.f) - (current_font_size / 2.f);
-      ImGui::SetCursorPos(cursor_pos);
-
-      if (ImGui::Button(reinterpret_cast<const char*>(ICON_FK_UNDO))) {
-        setting->Set(setting->default_value);
-        changed = true;
+      open_node = ImGui::TreeNodeEx(
+          setting->section.c_str(),
+          ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth);
+      if (open_node) {
+        ImGui::Unindent();
       }
 
-      if (is_using_default) {
-        ImGui::PopStyleColor(3);
+      open_section = open_node;
+    }
+
+    if (open_section) {
+      if (!last_group.empty() && !setting->group.empty() && last_group == setting->group) {
+        ImGui::SameLine();
       }
-      font->Scale = old_scale;
-      ImGui::PopFont();
-      ImGui::PopStyleVar();
-      ImGui::PopID();
-      ImGui::EndDisabled();
-    }
 
-    if (changed) {
-      setting->Write();
-      any_change = true;
-    }
-    if (is_disabled) {
-      ImGui::EndDisabled();
-    }
+      last_group = setting->group;
 
+      const bool is_disabled = preset_index == 0
+                               || (setting->is_enabled != nullptr
+                                   && !setting->is_enabled());
+      if (is_disabled) {
+        ImGui::BeginDisabled();
+      }
+      bool changed = false;
+
+      switch (setting->value_type) {
+        case SettingValueType::FLOAT:
+          changed |= ImGui::SliderFloat(
+              setting->label.c_str(),
+              &setting->value,
+              setting->min,
+              setting->max,
+              setting->format.c_str());
+          break;
+        case SettingValueType::INTEGER:
+          changed |= ImGui::SliderInt(
+              setting->label.c_str(),
+              &setting->value_as_int,
+              setting->min,
+              setting->GetMax(),
+              setting->labels.empty()
+                  ? setting->format.c_str()
+                  : setting->labels.at(setting->value_as_int).c_str(),
+              ImGuiSliderFlags_NoInput);
+          break;
+        case SettingValueType::BOOLEAN:
+          changed |= ImGui::SliderInt(
+              setting->label.c_str(),
+              &setting->value_as_int,
+              0,
+              1,
+              setting->labels.empty()
+                  ? ((setting->value_as_int == 0) ? "Off" : "On")  // NOLINT(readability-avoid-nested-conditional-operator)
+                  : setting->labels.at(setting->value_as_int).c_str(),
+              ImGuiSliderFlags_NoInput);
+          break;
+        case SettingValueType::BUTTON: {
+          changed |= ImGui::Button(setting->label.c_str());
+        }
+      }
+      if (changed) {
+        setting->on_change();
+      }
+      if (!setting->tooltip.empty()) {
+        ImGui::SetItemTooltip("%s", setting->tooltip.c_str());
+      }
+
+      if (preset_index != 0
+          && setting->can_reset
+          && setting->value_type != SettingValueType::BUTTON) {
+        ImGui::SameLine();
+        const bool is_using_default = (setting->GetValue() == setting->default_value);
+        ImGui::BeginDisabled(is_using_default);
+        ImGui::PushID(&setting->default_value);
+        if (is_using_default) {
+          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(ImColor::HSV(0, 0, 0.6f)));
+          ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(ImColor::HSV(0, 0, 0.7f)));
+          ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(ImColor::HSV(0, 0, 0.8f)));
+        }
+        auto* font = ImGui::GetFont();
+        auto old_scale = font->Scale;
+        auto previous_font_size = ImGui::GetFontSize();
+        font->Scale *= 0.75f;
+        ImGui::PushFont(font);
+        auto current_font_size = ImGui::GetFontSize();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, current_font_size * 2);
+
+        ImVec2 cursor_pos = ImGui::GetCursorPos();
+        cursor_pos.y += (previous_font_size / 2.f) - (current_font_size / 2.f);
+        ImGui::SetCursorPos(cursor_pos);
+
+        if (ImGui::Button(reinterpret_cast<const char*>(ICON_FK_UNDO))) {
+          setting->Set(setting->default_value);
+          changed = true;
+        }
+
+        if (is_using_default) {
+          ImGui::PopStyleColor(3);
+        }
+        font->Scale = old_scale;
+        ImGui::PopFont();
+        ImGui::PopStyleVar();
+        ImGui::PopID();
+        ImGui::EndDisabled();
+      }
+
+      if (changed) {
+        setting->Write();
+        any_change = true;
+      }
+      if (is_disabled) {
+        ImGui::EndDisabled();
+      }
+    }
     ImGui::PopStyleColor(styles_pushed);
   }
+  if (open_node) {
+    ImGui::Indent();
+    ImGui::TreePop();
+  }
+
   if (!changed_preset && any_change) {
     switch (preset_index) {
       case 1:
