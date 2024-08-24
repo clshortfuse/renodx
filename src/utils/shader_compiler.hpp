@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <exception>
+#include <filesystem>
 #include <ios>
 #include <map>
 #include <mutex>
@@ -21,9 +22,11 @@
 #include <shared_mutex>
 #include <span>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <include/reshade.hpp>
+#include "./path.hpp"
 #include "format.hpp"
 
 namespace renodx::utils::shader::compiler {
@@ -34,6 +37,83 @@ static HMODULE fxc_compiler_library = nullptr;
 static HMODULE dxc_compiler_library = nullptr;
 static std::shared_mutex mutex_fxc_compiler;
 static std::shared_mutex mutex_dxc_compiler;
+
+class FxcD3DInclude : public ID3DInclude {
+ public:
+  LPCWSTR initial_file;
+  explicit FxcD3DInclude(LPCWSTR initial_file) {
+    this->initial_file = initial_file;
+  };
+
+  // Don't use map in case file contents are identical
+  std::vector<std::pair<std::string, std::filesystem::path>> file_paths;
+  std::map<std::filesystem::path, std::string> file_contents;
+
+  HRESULT __stdcall Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID* ppData, UINT* pBytes) override {
+    std::filesystem::path new_path;
+    if (pParentData != nullptr) {
+      std::string parent_data = static_cast<const char*>(pParentData);
+      for (auto pair = file_paths.rbegin(); pair != file_paths.rend(); ++pair) {
+        if (pair->first == parent_data) {
+          new_path = pair->second.parent_path();
+          break;
+        }
+      }
+    }
+    if (new_path.empty()) {
+      new_path = initial_file;
+      new_path = new_path.parent_path();
+    }
+
+    new_path /= pFileName;
+    new_path = new_path.lexically_normal();
+
+    *ppData = nullptr;
+    *pBytes = 0;
+
+    try {
+      std::string output;
+      if (auto pair = file_contents.find(new_path); pair != file_contents.end()) {
+        output = pair->second;
+      } else {
+        output = renodx::utils::path::ReadTextFile(new_path);
+      }
+      file_paths.emplace_back(output, new_path);
+
+      *ppData = _strdup(output.c_str());
+      *pBytes = static_cast<UINT>(output.size());
+
+    } catch (...) {
+      {
+        std::stringstream s;
+        s << "FxcD3DInclude::Open(Failed to open";
+        s << pFileName;
+        s << ", type: " << IncludeType;
+        s << ", parent: " << pParentData;
+        s << ")";
+        reshade::log_message(reshade::log_level::error, s.str().c_str());
+      }
+      return -1;
+    }
+
+    return S_OK;
+  }
+
+  HRESULT __stdcall Close(LPCVOID pData) override {
+    if (pData != nullptr) {
+      std::string data = static_cast<const char*>(pData);
+      for (auto pair = file_paths.rbegin(); pair != file_paths.rend(); ++pair) {
+        if (pair->first == data) {
+          file_paths.erase(std::next(pair).base());
+          break;
+        }
+      }
+    }
+
+    free(const_cast<void*>(pData));
+    return S_OK;
+  }
+};
 
 inline HRESULT CreateLibrary(IDxcLibrary** dxc_library) {
   // HMODULE dxil_loader = LoadLibraryW(L"dxil.dll");
@@ -255,12 +335,15 @@ inline std::vector<uint8_t> CompileShaderFromFileFXC(
     throw std::exception("Could not to load D3DCompileFromFile from D3DCompiler_47.dll");
   }
 
+  // Create a new Custom D3DInclude that supports relative imports
+  auto custom_include = FxcD3DInclude(file_path);
+
   std::unique_lock lock(mutex_fxc_compiler);
   CComPtr<ID3DBlob> error_blob;
   if (FAILED(d3d_compilefromfile(
           file_path,
           defines,
-          D3D_COMPILE_STANDARD_FILE_INCLUDE,
+          &custom_include,
           "main",
           shader_target,
           D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY,
