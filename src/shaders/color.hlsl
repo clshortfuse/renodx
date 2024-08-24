@@ -77,7 +77,13 @@ static const float3x3 IDENTITY_MAT = float3x3(
     0.0f, 0.0f, 1.0f);
 
 static const float3x3 BT709_TO_AP0_MAT = mul(XYZ_TO_AP0_MAT, mul(D65_TO_D60_CAT, BT709_TO_XYZ_MAT));
-static const float3x3 BT709_TO_AP1_MAT = mul(XYZ_TO_AP1_MAT, mul(D65_TO_D60_CAT, BT709_TO_XYZ_MAT));
+
+// With Bradford
+static const float3x3 BT709_TO_AP1_MAT = float3x3(
+    0.6130974024, 0.3395231462, 0.0473794514,
+    0.0701937225, 0.9163538791, 0.0134523985,
+    0.0206155929, 0.1095697729, 0.8698146342);
+
 static const float3x3 BT709_TO_BT2020_MAT = mul(XYZ_TO_BT2020_MAT, BT709_TO_XYZ_MAT);
 static const float3x3 BT709_TO_BT709D60_MAT = mul(XYZ_TO_BT709_MAT, mul(D65_TO_D60_CAT, BT709_TO_XYZ_MAT));
 static const float3x3 BT709_TO_BT2020D60_MAT = mul(XYZ_TO_BT2020_MAT, mul(D65_TO_D60_CAT, BT709_TO_XYZ_MAT));
@@ -93,7 +99,13 @@ static const float3x3 DISPLAYP3_TO_BT709_MAT = mul(XYZ_TO_BT709_MAT, DISPLAYP3_T
 static const float3x3 AP0_TO_AP1_MAT = mul(XYZ_TO_AP1_MAT, AP0_TO_XYZ_MAT);
 
 static const float3x3 AP1_TO_AP0_MAT = mul(XYZ_TO_AP0_MAT, AP1_TO_XYZ_MAT);
-static const float3x3 AP1_TO_BT709_MAT = mul(XYZ_TO_BT709_MAT, mul(D60_TO_D65_MAT, AP1_TO_XYZ_MAT));
+
+// With Bradford
+static const float3x3 AP1_TO_BT709_MAT = float3x3(
+    1.7050509927, -0.6217921207, -0.0832588720,
+    -0.1302564175, 1.1408047366, -0.0105483191,
+    -0.0240033568, -0.1289689761, 1.1529723329);
+
 static const float3x3 AP1_TO_BT2020_MAT = mul(XYZ_TO_BT2020_MAT, mul(D60_TO_D65_MAT, AP1_TO_XYZ_MAT));
 
 static const float3x3 AP1_TO_BT709D60_MAT = mul(XYZ_TO_BT709_MAT, AP1_TO_XYZ_MAT);
