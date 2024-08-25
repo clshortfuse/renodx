@@ -189,7 +189,7 @@ static bool HasBackBufferRenderTarget(reshade::api::command_list* cmd_list) {
   bool found_swapchain_rtv = false;
   for (uint32_t i = 0; i < count; i++) {
     const reshade::api::resource_view rtv = cmd_list_data.current_render_targets[i];
-    auto resource = renodx::utils::resource::GetResourceFromResourceView(device, rtv);
+    auto resource = device->get_resource_from_view(rtv);
     if ((resource.handle != 0u) && device_data.back_buffers.contains(resource.handle)) {
       found_swapchain_rtv = true;
       break;
