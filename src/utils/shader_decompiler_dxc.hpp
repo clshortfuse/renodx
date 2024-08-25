@@ -43,6 +43,7 @@ enum class TokenizerState : uint32_t {
   DESCRIPTION_OUTPUT_SIG_TABLE_DIVIDER,
   DESCRIPTION_OUTPUT_SIG_TABLE_ROW,
   DESCRIPTION_OUTPUT_SIG_TABLE_END,
+  DESCRIPTION_SHADER_DEBUG_NAME,
   DESCRIPTION_SHADER_HASH,
   DESCRIPTION_PIPELINE_RUNTIME_TITLE,
   DESCRIPTION_PIPELINE_RUNTIME_WHITESPACE,
@@ -95,6 +96,7 @@ enum class TokenizerState : uint32_t {
   CODE_BRANCH_START,
   CODE_BRANCH_BLOCK,
   CODE_END,
+  PRAGMA_VARIABLE,
   GLOBAL_VARIABLE,
   COMPLETE
 };
@@ -169,6 +171,7 @@ inline std::ostream& operator<<(std::ostream& os, const TokenizerState& state) {
     case TokenizerState::FUNCTION_DESCRIPTION:                           return os << "function_description";
     case TokenizerState::FUNCTION_ATTRIBUTES:                            return os << "function_attributes";
     case TokenizerState::GLOBAL_VARIABLE:                                return os << "global_variable";
+    case TokenizerState::PRAGMA_VARIABLE:                                return os << "pragma_variable";
     default:                                                             return os << "unknown";
   }
 }
@@ -623,7 +626,7 @@ class Decompiler {
       this->parameters = StringViewSplitAll(params, param_split, 1);
     }
 
-    void AddCodeAssign(std::string_view line, std::map<std::string, std::string>& resource_bindings) {
+    void AddCodeAssign(std::string_view line, std::map<std::string, std::string>& resource_bindings, std::map<std::string, std::string>& global_variables) {
       static auto code_assign_regex = std::regex{R"(^  %(\d+) = ([^;\r\n]+)(?:; ([^\r\n]+))?$)"};
 
       auto [variable, assignment, comment] = StringViewMatch<3>(line, code_assign_regex);
@@ -639,27 +642,43 @@ class Decompiler {
         static auto param_regex = std::regex(R"(\s*(\S+) ((?:\d+)|(?:\{[^}]+\})|(?:%\d+)|(?:\S+))(?:(?:, )|(?:\s*$)))");
         auto [type, functionName, functionParamsString] = StringViewMatch<3>(assignment, regex);
         // auto paramMatches = string_view_split_all(functionParamsString, paramRegex, {1, 2});
-        if (functionName == "@dx.op.createHandleFromBinding") {
+        if (functionName == "@dx.op.createHandle") {
+          //   %dx.types.Handle @dx.op.createHandle(i32 57, i8 2, i32 0, i32 0, i1 false)  ; CreateHandle(resourceClass,rangeId,index,nonUniformIndex)
+          auto [opNumber, resource_class, range_id, index, nonUniformIndex] = StringViewSplit<5>(functionParamsString, param_regex, 2);
+          if (resource_class == "0") {
+            decompiled = std::format("// texture _{} = t{};", variable, ParseInt(index));
+            resource_bindings[std::string(variable)] = std::format("t{}", ParseInt(index));
+          } else if (resource_class == "2") {
+            decompiled = std::format("// cbuffer _{} = cb{};", variable, ParseInt(index));
+            resource_bindings[std::string(variable)] = std::format("cb{}", ParseInt(index));
+          } else if (resource_class == "3") {
+            decompiled = std::format("// SamplerState _{} = s{};", variable, ParseInt(index));
+            resource_bindings[std::string(variable)] = std::format("s{}", ParseInt(index));
+          } else {
+            throw std::invalid_argument("Unknown resource type");
+          }
+        } else if (functionName == "@dx.op.createHandleFromBinding") {
+          // %dx.types.Handle @dx.op.createHandleFromBinding(i32 217, %dx.types.ResBind { i32 4, i32 4, i32 9, i8 0 }, i32 4, i1 false)  ; CreateHandleFromBinding(bind,index,nonUniformIndex)
           auto [opNumber, bind, index, nonUniformIndex] = StringViewSplit<4>(functionParamsString, param_regex, 2);
           std::string bind_start = "0";
           std::string bind_end = "0";
           std::string space = "0";
-          std::string resource_type = "0";
+          std::string resource_class = "0";
           if (bind != "zeroinitializer") {
             auto inner_params = StringViewSplit<4>(bind.substr(1, bind.size() - 2), param_regex, 2);
             bind_start = ParseInt(inner_params[0]);
             bind_end = ParseInt(inner_params[1]);
             space = ParseInt(inner_params[2]);
-            resource_type = inner_params[3];
+            resource_class = inner_params[3];
           }
 
-          if (resource_type == "0") {
+          if (resource_class == "0") {
             decompiled = std::format("// texture _{} = t{};", variable, ParseInt(index));
             resource_bindings[std::string(variable)] = std::format("t{}", ParseInt(index));
-          } else if (resource_type == "2") {
+          } else if (resource_class == "2") {
             decompiled = std::format("// cbuffer _{} = cb{};", variable, ParseInt(index));
             resource_bindings[std::string(variable)] = std::format("cb{}", ParseInt(index));
-          } else if (resource_type == "3") {
+          } else if (resource_class == "3") {
             decompiled = std::format("// SamplerState _{} = s{};", variable, ParseInt(index));
             resource_bindings[std::string(variable)] = std::format("s{}", ParseInt(index));
           } else {
@@ -942,9 +961,22 @@ class Decompiler {
       } else if (instruction == "getelementptr") {
         auto [source, index] = StringViewMatch<2>(
             assignment,
-            std::regex{R"(getelementptr (?:inbounds )?\[[^\]]+\], \[[^\]]+\]\* %(\S+), i32 \S+, i32 (\S+).*)"});
+            std::regex{R"(getelementptr (?:inbounds )?\[[^\]]+\], \[[^\]]+\]\* (\S+), i32 \S+, i32 (\S+).*)"});
         // %1369 = getelementptr inbounds [6 x float], [6 x float]* %10, i32 0, i32 0
-        const auto pointer_value = std::format("_{}[{}]", source, ParseInt(index));
+        std::string parsed_source;
+        if (source.starts_with('%')) {
+          parsed_source = std::format("_{}", source.substr(1));
+        } else if (source.starts_with('@')) {
+          if (auto pair = global_variables.find(std::string(source));
+              pair != global_variables.end()) {
+            parsed_source = pair->second;
+          } else {
+            throw std::invalid_argument("Unknown global variable");
+          }
+        } else {
+          throw std::invalid_argument("Unknown pointer source");
+        }
+        const auto pointer_value = std::format("{}[{}]", parsed_source, ParseInt(index));
         stored_pointers[variable] = pointer_value;
       } else {
         throw std::invalid_argument("Unrecognized code assignment");
@@ -1044,7 +1076,9 @@ class Decompiler {
   };
 
   std::map<std::string, std::string> resource_bindings;
-  std::vector<std::string_view> lines;
+  std::map<std::string, std::string> global_variables;
+  std::vector<std::string_view> source_lines;
+  std::vector<std::string_view> output_lines;
   size_t line_number = 0;
   TokenizerState state = TokenizerState::START;
   size_t input_sig_section_count = 0;
@@ -1082,16 +1116,17 @@ class Decompiler {
     this->type_definitions.clear();
     this->code_functions.clear();
     this->current_code_function = {};
+    this->output_lines.clear();
   }
 
  public:
   std::string Decompile(std::string_view disassembly) {
     Init();
-    this->lines = StringViewSplitAll(disassembly, '\n');
+    this->source_lines = StringViewSplitAll(disassembly, '\n');
 
     const std::string_view line;
     while (state != TokenizerState::COMPLETE) {
-      std::string_view line = StringViewTrimEnd(lines.at(line_number));
+      std::string_view line = StringViewTrimEnd(source_lines.at(line_number));
       auto prestate = state;
       try {
         switch (state) {
@@ -1124,6 +1159,8 @@ class Decompiler {
                 state = TokenizerState::DESCRIPTION_OUTPUT_SIG2_TITLE;
               }
             } else if (line.starts_with("; shader hash:")) {
+              state = TokenizerState::DESCRIPTION_SHADER_HASH;
+            } else if (line.starts_with("; shader debug name:")) {
               state = TokenizerState::DESCRIPTION_SHADER_HASH;
             } else if (line == "; Pipeline Runtime Information:") {
               state = TokenizerState::DESCRIPTION_PIPELINE_RUNTIME_TITLE;
@@ -1176,6 +1213,7 @@ class Decompiler {
             state = TokenizerState::DESCRIPTION_WHITESPACE;
             line_number++;
             break;
+          case TokenizerState::DESCRIPTION_SHADER_DEBUG_NAME:
           case TokenizerState::DESCRIPTION_PIPELINE_RUNTIME_TITLE:
           case TokenizerState::DESCRIPTION_PIPELINE_RUNTIME_WHITESPACE:
             state++;
@@ -1323,8 +1361,10 @@ class Decompiler {
               state = TokenizerState::FUNCTION_DECLARE;
             } else if (line.starts_with("attributes #")) {
               state = TokenizerState::FUNCTION_ATTRIBUTES;
-            } else if (line.starts_with("!")) {
+            } else if (line.starts_with("@")) {
               state = TokenizerState::GLOBAL_VARIABLE;
+            } else if (line.starts_with("!")) {
+              state = TokenizerState::PRAGMA_VARIABLE;
             } else {
               throw std::invalid_argument("Unexpected line");
             }
@@ -1339,10 +1379,42 @@ class Decompiler {
           case TokenizerState::FUNCTION_DESCRIPTION:
           case TokenizerState::FUNCTION_DECLARE:
           case TokenizerState::FUNCTION_ATTRIBUTES:
-          case TokenizerState::GLOBAL_VARIABLE:
+          case TokenizerState::PRAGMA_VARIABLE:
             line_number++;
             state = TokenizerState::WHITESPACE;
             break;
+          case TokenizerState::GLOBAL_VARIABLE: {
+            // @C.i.22.i.i.95.i.0.hca = internal unnamed_addr constant [6 x float] [float -4.000000e+00, float -4.000000e+00, float 0xC009424EA0000000, float 0xBFDF0E5600000000, float 0x3FFD904FE0000000, float 0x3FFD904FE0000000]
+            static auto regex = std::regex{R"((\S+) = (?:internal )?(?:unnamed_addr )?constant \[(\S+) x ([^\]]+)\] \[([^\]]+)\])"};
+            auto [variable_name, array_size, array_type, entries] = StringViewMatch<4>(line, regex);
+
+            auto values = StringViewSplitAll(entries, std::regex{R"((\s*(\S+) (\S+)),?)"}, {2, 3});
+
+            std::string output_name = std::format("_global_{}", global_variables.size());
+            std::stringstream decompiled;
+
+            decompiled << "static const ";
+            decompiled << array_type << " ";
+            decompiled << output_name;
+            decompiled << "[" << array_size << "] = { ";
+
+            int array_size_number;
+            std::from_chars(array_size.data(), array_size.data() + array_size.size(), array_size_number);
+            for (int i = 0; i < array_size_number; ++i) {
+              if (array_type == "float") {
+                decompiled << ParseFloat(values[i].second);
+              }
+              if (i != array_size_number - 1) {
+                decompiled << ", ";
+              }
+            }
+            decompiled << " };";
+            std::cout << decompiled.str() << std::endl;
+            global_variables[std::string{variable_name}] = output_name;
+
+            state = TokenizerState::WHITESPACE;
+            line_number++;
+          } break;
           case TokenizerState::CODE_DEFINE:
             current_code_function = CodeFunction(line);
             code_functions.push_back(current_code_function);
@@ -1374,7 +1446,7 @@ class Decompiler {
             }
             break;
           case TokenizerState::CODE_ASSIGN:
-            current_code_function.AddCodeAssign(line, resource_bindings);
+            current_code_function.AddCodeAssign(line, resource_bindings, global_variables);
             state = TokenizerState::CODE_BLOCK;
             line_number++;
             break;
@@ -1426,7 +1498,7 @@ class Decompiler {
                   << "  >>>" << line << "<<<" << std::endl;
         throw;
       }
-      if (line_number == lines.size()) {
+      if (line_number == source_lines.size()) {
         state = TokenizerState::COMPLETE;
       }
     }
