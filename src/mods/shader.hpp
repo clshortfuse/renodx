@@ -46,6 +46,7 @@ using CustomShaders = std::unordered_map<uint32_t, CustomShader>;
 #define CustomShaderEntry(crc32) { crc32, { crc32, std::vector<uint8_t>(_##crc32, _##crc32 + sizeof(_##crc32)) } }
 #define CustomCountedShader(crc32, index) { crc32, { crc32, std::vector<uint8_t>(_##crc32, _##crc32 + sizeof(_##crc32)), ##index} }
 #define CustomSwapchainShader(crc32) { crc32, { crc32, std::vector<uint8_t>(_##crc32, _##crc32 + sizeof(_##crc32)), -1, &renodx::utils::swapchain::HasBackBufferRenderTarget } }
+#define CustomShaderEntryCallback(crc32, callback) { crc32, { crc32, std::vector<uint8_t>(_##crc32, _##crc32 + sizeof(_##crc32)), -1, callback} }
 // clang-format on
 
 static thread_local std::vector<reshade::api::pipeline_layout_param*> created_params;
@@ -593,7 +594,6 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
     if (!is_custom_shader) {
       if (
           device_data.trace_unmodified_shaders
-          && ((stage & reshade::api::pipeline_stage::pixel_shader) != 0u)
           && renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list)
           && !device_data.unmodified_shaders.contains(shader_hash)) {
         std::stringstream s;
@@ -662,8 +662,8 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
       } else {
         // Must be done before draw
         stage = is_dispatch
-                    ? reshade::api::shader_stage::compute
-                    : reshade::api::shader_stage::pixel;
+                    ? reshade::api::shader_stage::all_compute
+                    : reshade::api::shader_stage::all_graphics;
 
         if (
             auto pair = device_data.modded_pipeline_layouts.find(layout.handle);

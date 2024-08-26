@@ -31,9 +31,10 @@ float3 UserColorGrading(
     float shadows,
     float contrast,
     float saturation,
+    float dechroma,
     float hue_correction_strength,
     float3 hue_correction_source) {
-  if (exposure == 1.f && saturation == 1.f && shadows == 1.f && highlights == 1.f && contrast == 1.f && hue_correction_strength == 0.f) {
+  if (exposure == 1.f && saturation == 1.f && dechroma == 0.f && shadows == 1.f && highlights == 1.f && contrast == 1.f && hue_correction_strength == 0.f) {
     return color;
   }
 
@@ -63,7 +64,7 @@ float3 UserColorGrading(
 
   color *= (y > 0 ? (y_final / y) : 0);
 
-  if (saturation != 1.f || hue_correction_strength != 0.f) {
+  if (saturation != 1.f || dechroma != 0.f || hue_correction_strength != 0.f) {
     float3 lab_new = renodx::color::oklab::from::BT709(color);
     float3 lch_new = renodx::color::oklch::from::OkLab(lab_new);
 
@@ -76,6 +77,10 @@ float3 UserColorGrading(
         lch_new = renodx::color::oklch::from::OkLab(lab_new);
         lch_new[1] = old_chroma;  // chroma restore
       }
+    }
+
+    if (dechroma != 0.f) {
+      lch_new[1] = lerp(lch_new[1], 0.f, saturate(pow(y / (10000.f / 100.f), (1.f - dechroma))));
     }
 
     if (saturation != 1.f) {
@@ -97,6 +102,7 @@ float3 UserColorGrading(
     float shadows = 1.f,
     float contrast = 1.f,
     float saturation = 1.f,
+    float dechroma = 0.f,
     float hue_correction_strength = 1.f) {
   return UserColorGrading(
       color,
@@ -105,6 +111,7 @@ float3 UserColorGrading(
       shadows,
       contrast,
       saturation,
+      dechroma,
       hue_correction_strength,
       color);
 }
