@@ -597,7 +597,9 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
           && renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list)
           && !device_data.unmodified_shaders.contains(shader_hash)) {
         std::stringstream s;
-        s << "mods::shader::HandlePreDraw(unmodified shader writing to swapchain: ";
+        s << "mods::shader::HandlePreDraw(unmodified ";
+        s << stage;
+        s << " shader writing to swapchain: ";
         s << PRINT_CRC32(shader_hash);
         s << ")";
         reshade::log_message(reshade::log_level::warning, s.str().c_str());
