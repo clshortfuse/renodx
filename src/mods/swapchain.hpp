@@ -1187,7 +1187,6 @@ static void OnInitResourceView(
       private_data.resource_srvs[resource.handle] = view.handle;
       s << ", type: shader_resource";
     }
-    renodx::utils::resource::SetResourceFromResourceView(device, cloned_resource_view, cloned_resource_view_resource);
 
     s << ")";
 #ifdef DEBUG_LEVEL_1
@@ -1550,7 +1549,7 @@ static void OnPresentForDescriptorReset(
 static bool ActivateCloneHotSwap(
     reshade::api::device* device,
     reshade::api::resource_view resource_view) {
-  auto resource = renodx::utils::resource::GetResourceFromResourceView(device, resource_view);
+  auto resource = device->get_resource_from_view(resource_view);
   if (resource.handle == 0u) {
     std::stringstream s;
     s << "mods::swapchain::ActivateCloneHotSwap(no handle for rsv ";
@@ -1668,7 +1667,7 @@ static bool OnUpdateDescriptorTables(
           }
           if (resource_view.handle == new_resource_view.handle) break;
 
-          auto new_resource = renodx::utils::resource::GetResourceFromResourceView(device, new_resource_view);
+          auto new_resource = device->get_resource_from_view(new_resource_view);
           if (new_resource.handle == 0u) break;
 
 #ifdef DEBUG_LEVEL_1
@@ -1711,7 +1710,8 @@ static bool OnUpdateDescriptorTables(
             break;
           }
           if (resource_view.handle == new_resource_view.handle) break;
-          auto new_resource = renodx::utils::resource::GetResourceFromResourceView(device, new_resource_view);
+          auto resource = device->get_resource_from_view(resource_view);
+          auto new_resource = device->get_resource_from_view(new_resource_view);
           if (new_resource.handle == 0u) break;
 
 #ifdef DEBUG_LEVEL_1
@@ -2067,7 +2067,7 @@ static void OnPushDescriptors(
             resource_view,
             reshade::api::resource_usage::shader_resource);
         if (resource_view.handle == new_resource_view.handle) break;
-        auto new_resource = renodx::utils::resource::GetResourceFromResourceView(device, new_resource_view);
+        auto new_resource = device->get_resource_from_view(new_resource_view);
         if (new_resource.handle == 0u) break;
 
         if (!changed) {
@@ -2103,7 +2103,7 @@ static void OnPushDescriptors(
           break;
         }
         if (resource_view.handle == new_resource_view.handle) break;
-        auto new_resource = renodx::utils::resource::GetResourceFromResourceView(device, new_resource_view);
+        auto new_resource = device->get_resource_from_view(new_resource_view);
         if (new_resource.handle == 0u) break;
 
 #ifdef DEBUG_LEVEL_1
@@ -2185,7 +2185,7 @@ static void RewriteRenderTargets(
         reshade::api::resource_usage::render_target);
 
     if (resource_view.handle == new_resource_view.handle) continue;
-    auto new_resource = renodx::utils::resource::GetResourceFromResourceView(device, new_resource_view);
+    auto new_resource = device->get_resource_from_view(new_resource_view);
     if (new_resource.handle == 0u) continue;
 
     if (
