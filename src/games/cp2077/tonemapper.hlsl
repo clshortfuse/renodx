@@ -400,6 +400,14 @@ float4 tonemap(bool isACESMode = false) {
       outputRGB *= exposure;
     }
 
+    if (injectedData.toneMapHueCorrection == 1.f) {
+      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::Reinhard(outputRGB));
+    } else if (injectedData.toneMapHueCorrection == 2.f) {
+      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::ACESFittedBT709(outputRGB));
+    } else if (injectedData.toneMapHueCorrection == 3.f) {
+      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::ACESFittedAP1(outputRGB));
+    }
+
     if (toneMapperType == TONE_MAPPER_TYPE__VANILLA) {
       outputRGB = renodx::color::grade::UserColorGrading(
           outputRGB,
@@ -536,33 +544,25 @@ float4 tonemap(bool isACESMode = false) {
 
       outputRGB = odtUnknown;
     } else {
-      float vanillaMidGray = 2.3f * (midGrayNits / 100.f);
+      renodx::tonemap::Config config = renodx::tonemap::config::Create();
 
-      float renoDRTHighlights = 1.20f;
-      float renoDRTShadows = 1.0f;
-      float renoDRTContrast = 1.80f;
-      float renoDRTSaturation = 1.40f;
-      float renoDRTDechroma = 0.60f;
-      float renoDRTFlare = 0.f;
-
-      renodx::tonemap::Config config = renodx::tonemap::config::Create(
-          injectedData.toneMapType,
-          injectedData.toneMapPeakNits,
-          (injectedData.toneMapType == 2.f ? (100.f / 203.f) : 1.f) * injectedData.toneMapGameNits,
-          injectedData.toneMapGammaCorrection == 2.f,
-          injectedData.colorGradeExposure,
-          injectedData.colorGradeHighlights,
-          injectedData.colorGradeShadows,
-          injectedData.colorGradeContrast,
-          injectedData.colorGradeSaturation,
-          vanillaMidGray,
-          midGrayNits,
-          renoDRTHighlights,
-          renoDRTShadows,
-          renoDRTContrast,
-          renoDRTSaturation,
-          renoDRTDechroma,
-          renoDRTFlare);
+      config.type = injectedData.toneMapType;
+      config.peak_nits = injectedData.toneMapPeakNits;
+      config.game_nits = (injectedData.toneMapType == 2.f ? (100.f / 203.f) : 1.f) * injectedData.toneMapGameNits;
+      config.gamma_correction = injectedData.toneMapGammaCorrection == 2.f;
+      config.exposure = injectedData.colorGradeExposure;
+      config.highlights = injectedData.colorGradeHighlights;
+      config.shadows = injectedData.colorGradeShadows;
+      config.contrast = injectedData.colorGradeContrast;
+      config.saturation = injectedData.colorGradeSaturation;
+      config.mid_gray_value = 2.3f * (midGrayNits / 100.f);
+      config.mid_gray_nits = midGrayNits;
+      config.reno_drt_highlights = 1.20f;
+      config.reno_drt_shadows = 1.0f;
+      config.reno_drt_contrast = 1.80f;
+      config.reno_drt_saturation = 1.80f;
+      config.reno_drt_dechroma = injectedData.colorGradeBlowout;
+      config.reno_drt_flare = 0.f;
 
       outputRGB = renodx::tonemap::config::Apply(outputRGB, config);
       bool useD60 = (injectedData.colorGradeWhitePoint == -1.0f || (injectedData.colorGradeWhitePoint == 0.f && cb6[28u].z == 0.f));
