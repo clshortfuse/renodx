@@ -39,6 +39,10 @@ enum class SettingValueType : uint8_t {
   INTEGER = 1,
   BOOLEAN = 2,
   BUTTON = 3,
+  LABEL = 4,
+  BULLET = 5,
+  TEXT = 6,
+  TEXT_NOWRAP = 7,
 };
 
 struct Setting {
@@ -326,9 +330,21 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
                   : setting->labels.at(setting->value_as_int).c_str(),
               ImGuiSliderFlags_NoInput);
           break;
-        case SettingValueType::BUTTON: {
+        case SettingValueType::BUTTON:
           changed |= ImGui::Button(setting->label.c_str());
-        }
+          break;
+        case SettingValueType::LABEL:
+          ImGui::LabelText(setting->label.c_str(), "%s", setting->labels[0].c_str());
+          break;
+        case SettingValueType::BULLET:
+          ImGui::BulletText(setting->label.c_str(), "");
+          break;
+        case SettingValueType::TEXT:
+          ImGui::TextWrapped("%s", setting->label.c_str());
+          break;
+        case SettingValueType::TEXT_NOWRAP:
+          ImGui::Text(setting->label.c_str(), "");
+          break;
       }
       if (changed) {
         setting->on_change();
@@ -339,7 +355,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
       if (preset_index != 0
           && setting->can_reset
-          && setting->value_type != SettingValueType::BUTTON) {
+          && setting->value_type < SettingValueType::BUTTON) {
         ImGui::SameLine();
         const bool is_using_default = (setting->GetValue() == setting->default_value);
         ImGui::BeginDisabled(is_using_default);
