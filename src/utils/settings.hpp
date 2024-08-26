@@ -43,6 +43,7 @@ enum class SettingValueType : uint8_t {
   BULLET = 5,
   TEXT = 6,
   TEXT_NOWRAP = 7,
+  CUSTOM = 8,
 };
 
 struct Setting {
@@ -69,6 +70,9 @@ struct Setting {
   };
 
   void (*on_change)() = [] {};
+
+  // Return true if value is changed
+  bool (*on_draw)() = [] { return false; };
 
   [[nodiscard]]
   float GetValue() const {
@@ -344,6 +348,9 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           break;
         case SettingValueType::TEXT_NOWRAP:
           ImGui::Text(setting->label.c_str(), "");
+          break;
+        case SettingValueType::CUSTOM:
+          changed |= setting->on_draw();
           break;
       }
       if (changed) {
