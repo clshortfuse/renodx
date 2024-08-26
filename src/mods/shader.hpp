@@ -778,12 +778,10 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
 
-      if (!trace_unmodified_shaders) {
-        for (const auto& [hash, shader] : (new_custom_shaders)) {
-          if (shader.on_replace != nullptr) using_custom_replace = true;
-          if (shader.code.empty()) using_bypass = true;
-          if (shader.index != -1) using_counted_shaders = true;
-        }
+      for (const auto& [hash, shader] : (new_custom_shaders)) {
+        if (shader.on_replace != nullptr) using_custom_replace = true;
+        if (shader.code.empty()) using_bypass = true;
+        if (shader.index != -1) using_counted_shaders = true;
       }
 
       if (using_counted_shaders) {
