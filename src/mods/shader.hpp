@@ -593,7 +593,8 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
     bool is_custom_shader = custom_shader_info_pair != device_data.custom_shaders.end();
     if (!is_custom_shader) {
       if (
-          device_data.trace_unmodified_shaders
+          !is_dispatch
+          && device_data.trace_unmodified_shaders
           && renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list)
           && !device_data.unmodified_shaders.contains(shader_hash)) {
         std::stringstream s;
@@ -746,7 +747,19 @@ static bool OnDrawOrDispatchIndirect(
     uint64_t offset,
     uint32_t draw_count,
     uint32_t stride) {
-  return HandlePreDraw(cmd_list);
+  switch (type) {
+    case reshade::api::indirect_command::unknown: {
+      auto& shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
+      bool is_dispatch = shader_state.current_shaders_hashes.contains(reshade::api::pipeline_stage::compute_shader);
+      return HandlePreDraw(cmd_list, is_dispatch);
+    }
+    case reshade::api::indirect_command::dispatch:
+    case reshade::api::indirect_command::dispatch_mesh:
+    case reshade::api::indirect_command::dispatch_rays:
+      return HandlePreDraw(cmd_list, true);
+    default:
+      return HandlePreDraw(cmd_list);
+  }
 }
 
 static void OnPresent(
