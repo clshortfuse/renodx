@@ -8,6 +8,7 @@
 #include <array>
 #include <cassert>
 #include <charconv>
+#include <cmath>
 #include <cstdlib>
 #include <exception>
 #include <format>
@@ -19,6 +20,7 @@
 #include <print>
 #include <regex>
 #include <set>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -193,8 +195,8 @@ class Decompiler {
     SV_RENDER_TARGET_ARRAY_INDEX,
     SV_TARGET,
     TEXCOORD,
-    TEXCOOR_D10_CENTROID,
-    TEXCOOR_D11_CENTROID
+    TEXCOORD10_CENTROID,
+    TEXCOORD11_CENTROID
   };
 
   static std::string ParseIndex(std::string_view input) {
@@ -289,9 +291,9 @@ class Decompiler {
       {"18", "cosh"},
       {"19", "sinh"},
       {"20", "tanh"},
-      {"21", "exp"},
+      {"21", "exp2"},
       {"22", "frac"},
-      {"23", "log"},
+      {"23", "log2"},
       {"24", "sqrt"},
       {"25", "rsqrt"},
       {"26", "round"},
@@ -326,12 +328,23 @@ class Decompiler {
     if (input == "SV_RenderTargetArrayIndex") return SignatureName::SV_RENDER_TARGET_ARRAY_INDEX;
     if (input == "SV_Target") return SignatureName::SV_TARGET;
     if (input == "TEXCOORD") return SignatureName::TEXCOORD;
-    if (input == "TEXCOORD10_centroid") return SignatureName::TEXCOOR_D10_CENTROID;
-    if (input == "TEXCOORD11_centroid") return SignatureName::TEXCOOR_D11_CENTROID;
+    if (input == "TEXCOORD10_centroid") return SignatureName::TEXCOORD10_CENTROID;
+    if (input == "TEXCOORD11_centroid") return SignatureName::TEXCOORD11_CENTROID;
     throw std::invalid_argument("Unknown signature name");
   }
 
-  struct Signature1 {
+  static std::string SignatureNameToString(SignatureName name) {
+    if (name == SignatureName::PRIMITIVE_ID) return "PRIMITIVE_ID";
+    if (name == SignatureName::SV_POSITION) return "SV_Position";
+    if (name == SignatureName::SV_RENDER_TARGET_ARRAY_INDEX) return "SV_RenderTargetArrayIndex";
+    if (name == SignatureName::SV_TARGET) return "SV_Target";
+    if (name == SignatureName::TEXCOORD) return "TEXCOORD";
+    if (name == SignatureName::TEXCOORD10_CENTROID) return "TEXCOORD10_centroid";
+    if (name == SignatureName::TEXCOORD11_CENTROID) return "TEXCOORD11_centroid";
+    throw std::invalid_argument("Unknown signature name");
+  }
+
+  struct SignaturePacked {
     SignatureName name;
 
     uint32_t index;
@@ -352,7 +365,7 @@ class Decompiler {
 
     uint32_t used;
 
-    std::string ToString() const {
+    [[nodiscard]] std::string ToString() const {
       std::stringstream s;
       s << "name: " << static_cast<uint32_t>(this->name);
       s << ", index: " << this->index;
@@ -362,6 +375,37 @@ class Decompiler {
       s << ", format: " << static_cast<uint32_t>(this->format);
       s << ", used: " << this->used;
       return s.str();
+    }
+
+    [[nodiscard]] std::string FormatString() const {
+      switch (this->format) {
+        case Format::FLOAT: return "float";
+        case Format::UINT:  return "uint";
+        default:            return "";
+      };
+    }
+
+    [[nodiscard]] std::string MaskString() const {
+      switch (this->mask) {
+        case 0b1000:
+        case 0b0100:
+        case 0b0010:
+        case 0b0001:
+          return "1";
+        case 0b1100:
+        case 0b0110:
+        case 0b0011:
+          return "2";
+        case 0b1110:
+        case 0b0111:
+          return "3";
+        case 0b1111:
+          return "4";
+        case 0b0000:
+          return "4";
+        default:
+          throw std::invalid_argument("Unknown mask");
+      };
     }
 
     static uint32_t FlagsFromCoordinates(std::string_view input) {
@@ -396,7 +440,8 @@ class Decompiler {
       throw std::invalid_argument("Unknown Format");
     }
 
-    explicit Signature1(std::string_view line) {
+    explicit SignaturePacked() = default;
+    explicit SignaturePacked(std::string_view line) {
       /**
        * @example
        * ; TEXCOORD                 0   xy          0     NONE   float   xy
@@ -417,7 +462,7 @@ class Decompiler {
     }
   };
 
-  struct Signature2 {
+  struct SignatureProperty {
     SignatureName name;
 
     uint32_t index;
@@ -455,7 +500,9 @@ class Decompiler {
       return value;
     }
 
-    explicit Signature2(std::string_view line) {
+    SignatureProperty() = default;
+
+    explicit SignatureProperty(std::string_view line) {
       /**
        * @example
        * ; SV_Position              0          noperspective
@@ -469,6 +516,76 @@ class Decompiler {
       std::from_chars(index.data(), index.data() + index.size(), this->index);
       this->interp_mode = InterpModeFromString(StringViewTrim(interpMode));
       this->dyn_index = DynIndexFromString(StringViewTrim(dynIndex));
+    }
+  };
+
+  struct Signature {
+    SignatureName name;
+    SignaturePacked packed;
+    SignatureProperty property;
+    std::string name_string;
+
+    explicit Signature(SignaturePacked packed, SignatureProperty property) {
+      this->name = packed.name;
+      this->packed = packed;
+      this->property = property;
+      this->name_string = SignatureNameToString(this->name);
+    }
+
+    // eg: float; float3; float4
+    [[nodiscard]] std::string FullFormatString() const {
+      std::stringstream string_stream;
+      string_stream << packed.FormatString();
+      auto mask_string = packed.MaskString();
+      if (mask_string != "1") {
+        string_stream << packed.MaskString();
+      }
+      return string_stream.str();
+    }
+
+    // eg: float; float3; float4
+    [[nodiscard]] std::string VariableString() const {
+      if (property.index == 0) return this->name_string;
+
+      std::stringstream string_stream;
+      string_stream << this->name_string;
+      if (property.index != 0) {
+        string_stream << "_" << property.index;
+      }
+      return string_stream.str();
+    }
+
+    [[nodiscard]] std::string SemanticString() const {
+      std::stringstream string_stream;
+      string_stream << SignatureNameToString(property.name);
+      if (property.index != 0) {
+        string_stream << property.index;
+      }
+      return string_stream.str();
+    }
+
+    [[nodiscard]] std::string ToString() const {
+      std::stringstream string_stream;
+      switch (property.interp_mode) {
+        case SignatureProperty::InterpMode::NOINTERPOLATION:
+          string_stream << "nointerpolation ";
+          break;
+        case SignatureProperty::InterpMode::LINEAR:
+          string_stream << "linear ";
+          break;
+        case SignatureProperty::InterpMode::NOPERSPECTIVE:
+          string_stream << "noperspective ";
+          break;
+        case SignatureProperty::InterpMode::NONE:
+        default:
+          break;
+      }
+      string_stream << FullFormatString();
+      string_stream << " ";
+      string_stream << VariableString();
+      string_stream << " : ";
+      string_stream << SemanticString();
+      return string_stream.str();
     }
   };
 
@@ -519,8 +636,8 @@ class Decompiler {
 
     enum class ResourceDimensions {
       NA,
-      DIMENSION2_D,
-      DIMENSION3_D,
+      DIMENSION_2D,
+      DIMENSION_3D,
       BUFFER,
       READ_ONLY,
     } dimensions;
@@ -532,6 +649,19 @@ class Decompiler {
     uint32_t count;
 
     ResourceBinding() = default;
+
+    [[nodiscard]] std::string ResourceTypeString() const {
+      if (this->type == ResourceType::CBUFFER) return "cbuffer";
+      if (this->type == ResourceType::SAMPLER) return "sampler";
+      if (this->type == ResourceType::TEXTURE) return "texture";
+      if (this->type == ResourceType::UAV) return "UAV";
+      throw std::invalid_argument("Unknown ResourceType");
+    }
+
+    [[nodiscard]] std::string NameString() const {
+      if (!this->name.empty()) return std::string(this->name);
+      return std::format("_{}", std::string(this->id));
+    }
 
     static ResourceType ResourceTypeFromString(std::string_view input) {
       if (input == "cbuffer") return ResourceType::CBUFFER;
@@ -551,8 +681,8 @@ class Decompiler {
 
     static ResourceDimensions ResourceDimensionsFromString(std::string_view input) {
       if (input == "NA") return ResourceDimensions::NA;
-      if (input == "2d") return ResourceDimensions::DIMENSION2_D;
-      if (input == "3d") return ResourceDimensions::DIMENSION3_D;
+      if (input == "2d") return ResourceDimensions::DIMENSION_2D;
+      if (input == "3d") return ResourceDimensions::DIMENSION_3D;
       if (input == "buffer") return ResourceDimensions::BUFFER;
       if (input == "r/o") return ResourceDimensions::READ_ONLY;
       throw std::invalid_argument("Unknown ResourceDimensions");
@@ -570,6 +700,14 @@ class Decompiler {
       this->hlsl_binding = hlslBinding;
       std::from_chars(count.data(), count.data() + count.size(), this->count);
     }
+  };
+
+  struct PreprocessState {
+    std::vector<Signature> input_signature;
+    std::vector<Signature> output_signature;
+    std::vector<ResourceBinding> resource_bindings;
+    std::map<std::string, std::string> global_variables;
+    std::map<std::string, std::string> resource_binding_variables;
   };
 
   struct TypeDefinition {
@@ -626,7 +764,7 @@ class Decompiler {
       this->parameters = StringViewSplitAll(params, param_split, 1);
     }
 
-    void AddCodeAssign(std::string_view line, std::map<std::string, std::string>& resource_bindings, std::map<std::string, std::string>& global_variables) {
+    void AddCodeAssign(std::string_view line, PreprocessState& preprocess_state) {
       static auto code_assign_regex = std::regex{R"(^  %(\d+) = ([^;\r\n]+)(?:; ([^\r\n]+))?$)"};
 
       auto [variable, assignment, comment] = StringViewMatch<3>(line, code_assign_regex);
@@ -647,13 +785,13 @@ class Decompiler {
           auto [opNumber, resource_class, range_id, index, nonUniformIndex] = StringViewSplit<5>(functionParamsString, param_regex, 2);
           if (resource_class == "0") {
             decompiled = std::format("// texture _{} = t{};", variable, ParseInt(index));
-            resource_bindings[std::string(variable)] = std::format("t{}", ParseInt(index));
+            preprocess_state.resource_binding_variables[std::string(variable)] = std::format("t{}", ParseInt(index));
           } else if (resource_class == "2") {
             decompiled = std::format("// cbuffer _{} = cb{};", variable, ParseInt(index));
-            resource_bindings[std::string(variable)] = std::format("cb{}", ParseInt(index));
+            preprocess_state.resource_binding_variables[std::string(variable)] = std::format("cb{}", ParseInt(index));
           } else if (resource_class == "3") {
             decompiled = std::format("// SamplerState _{} = s{};", variable, ParseInt(index));
-            resource_bindings[std::string(variable)] = std::format("s{}", ParseInt(index));
+            preprocess_state.resource_binding_variables[std::string(variable)] = std::format("s{}", ParseInt(index));
           } else {
             throw std::invalid_argument("Unknown resource type");
           }
@@ -674,25 +812,35 @@ class Decompiler {
 
           if (resource_class == "0") {
             decompiled = std::format("// texture _{} = t{};", variable, ParseInt(index));
-            resource_bindings[std::string(variable)] = std::format("t{}", ParseInt(index));
+            preprocess_state.resource_binding_variables[std::string(variable)] = std::format("t{}", ParseInt(index));
           } else if (resource_class == "2") {
             decompiled = std::format("// cbuffer _{} = cb{};", variable, ParseInt(index));
-            resource_bindings[std::string(variable)] = std::format("cb{}", ParseInt(index));
+            preprocess_state.resource_binding_variables[std::string(variable)] = std::format("cb{}", ParseInt(index));
           } else if (resource_class == "3") {
             decompiled = std::format("// SamplerState _{} = s{};", variable, ParseInt(index));
-            resource_bindings[std::string(variable)] = std::format("s{}", ParseInt(index));
+            preprocess_state.resource_binding_variables[std::string(variable)] = std::format("s{}", ParseInt(index));
           } else {
             throw std::invalid_argument("Unknown resource type");
           }
         } else if (functionName == "@dx.op.annotateHandle") {
           auto [opNumber, res, props] = StringViewSplit<3>(functionParamsString, param_regex, 2);
           auto ref = std::string{res.substr(1)};
-          resource_bindings[std::string(variable)] = resource_bindings.at(ref);
+          preprocess_state.resource_binding_variables[std::string(variable)] = preprocess_state.resource_binding_variables.at(ref);
           decompiled = std::format("// _{} = _{};", variable, ref);
         } else if (functionName == "@dx.op.loadInput.f32") {
           //   @dx.op.loadInput.f32(i32 4, i32 3, i32 0, i8 0, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
           auto [opNumber, inputSigId, rowIndex, colIndex, gsVertexAxis] = StringViewSplit<5>(functionParamsString, param_regex, 2);
-          decompiled = std::format("float _{} = arg{}.{};", variable, inputSigId, ParseIndex(colIndex));
+          int input_signature_index;
+          std::from_chars(inputSigId.data(), inputSigId.data() + inputSigId.size(), input_signature_index);
+          auto signature = preprocess_state.input_signature[input_signature_index];
+          if (signature.packed.MaskString() == "1") {
+            if (ParseIndex(colIndex) != "x") {
+              throw std::exception("Unexpected index.");
+            }
+            decompiled = std::format("float _{} = {};", variable, signature.VariableString());
+          } else {
+            decompiled = std::format("float _{} = {}.{};", variable, signature.VariableString(), ParseIndex(colIndex));
+          }
         } else if (functionName == "@dx.op.loadInput.i32") {
           //   @dx.op.loadInput.i32(i32 4, i32 2, i32 0, i8 0, i32 undef)  ; LoadInput(inputSigId,rowIndex,colIndex,gsVertexAxis)
           auto [opNumber, inputSigId, rowIndex, colIndex, gsVertexAxis] = StringViewSplit<5>(functionParamsString, param_regex, 2);
@@ -700,11 +848,11 @@ class Decompiler {
         } else if (functionName == "@dx.op.cbufferLoadLegacy.f32") {
           auto [opNumber, handle, regIndex] = StringViewSplit<3>(functionParamsString, param_regex, 2);
           auto ref = std::string{handle.substr(1)};
-          decompiled = std::format("float4 _{} = {}[{}u];", variable, resource_bindings.at(ref), ParseInt(regIndex));
+          decompiled = std::format("float4 _{} = {}[{}u];", variable, preprocess_state.resource_binding_variables.at(ref), ParseInt(regIndex));
         } else if (functionName == "@dx.op.cbufferLoadLegacy.i32") {
           auto [opNumber, handle, regIndex] = StringViewSplit<3>(functionParamsString, param_regex, 2);
           auto ref = std::string{handle.substr(1)};
-          decompiled = std::format("int4 _{} = {}[{}u];", variable, resource_bindings.at(ref), ParseInt(regIndex));
+          decompiled = std::format("int4 _{} = {}[{}u];", variable, preprocess_state.resource_binding_variables.at(ref), ParseInt(regIndex));
         } else if (functionName == "@dx.op.unary.f32") {
           auto [opNumber, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
           if (auto pair = UNARY_FLOAT_OPS.find(std::string(opNumber));
@@ -764,9 +912,9 @@ class Decompiler {
           }
           // skip mipLevelOrSampleCount
           if (offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
-            decompiled = std::format("float4 _{} = {}.Load({});", variable, resource_bindings.at(ref_resource), coords);
+            decompiled = std::format("float4 _{} = {}.Load({});", variable, preprocess_state.resource_binding_variables.at(ref_resource), coords);
           } else {
-            decompiled = std::format("float4 _{} = {}.Load({}, {});", variable, resource_bindings.at(ref_resource), coords, offset);
+            decompiled = std::format("float4 _{} = {}.Load({}, {});", variable, preprocess_state.resource_binding_variables.at(ref_resource), coords, offset);
           }
 
         } else if (functionName == "@dx.op.sample.f32") {
@@ -799,9 +947,9 @@ class Decompiler {
             throw std::invalid_argument("Unknown clamp");
           }
           if (offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
-            decompiled = std::format("float4 _{} = {}.Sample({}, {});", variable, resource_bindings.at(ref_resource), resource_bindings.at(ref_sampler), coords);
+            decompiled = std::format("float4 _{} = {}.Sample({}, {});", variable, preprocess_state.resource_binding_variables.at(ref_resource), preprocess_state.resource_binding_variables.at(ref_sampler), coords);
           } else {
-            decompiled = std::format("float4 _{} = {}.Sample({}, {}, {});", variable, resource_bindings.at(ref_resource), resource_bindings.at(ref_sampler), coords, offset);
+            decompiled = std::format("float4 _{} = {}.Sample({}, {}, {});", variable, preprocess_state.resource_binding_variables.at(ref_resource), preprocess_state.resource_binding_variables.at(ref_sampler), coords, offset);
           }
         } else if (functionName == "@dx.op.sampleLevel.f32") {
           auto [opNumber, srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, LOD] = StringViewSplit<11>(functionParamsString, param_regex, 2);
@@ -829,9 +977,9 @@ class Decompiler {
             offset = std::format("{}", ParseInt(offset0));
           }
           if (offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
-            decompiled = std::format("float4 _{} = {}.SampleLevel({}, {}, {});", variable, resource_bindings.at(ref_resource), resource_bindings.at(ref_sampler), coords, ParseFloat(LOD));
+            decompiled = std::format("float4 _{} = {}.SampleLevel({}, {}, {});", variable, preprocess_state.resource_binding_variables.at(ref_resource), preprocess_state.resource_binding_variables.at(ref_sampler), coords, ParseFloat(LOD));
           } else {
-            decompiled = std::format("float4 _{} = {}.SampleLevel({}, {}, {}, {});", variable, resource_bindings.at(ref_resource), resource_bindings.at(ref_sampler), coords, ParseFloat(LOD), offset);
+            decompiled = std::format("float4 _{} = {}.SampleLevel({}, {}, {}, {});", variable, preprocess_state.resource_binding_variables.at(ref_resource), preprocess_state.resource_binding_variables.at(ref_sampler), coords, ParseFloat(LOD), offset);
           }
         } else if (functionName == "@dx.op.dot2.f32") {
           auto [opNumber, ax, ay, bx, by] = StringViewSplit<5>(functionParamsString, param_regex, 2);
@@ -846,7 +994,7 @@ class Decompiler {
         } else if (functionName == "@dx.op.rawBufferLoad.f32") {
           auto [opNumber, srv, index, elementOffset, mask, alignment] = StringViewSplit<6>(functionParamsString, param_regex, 2);
           auto ref = std::string{srv.substr(1)};
-          decompiled = std::format("float4 _{} = {}.Load({} + ({} / {}));", variable, resource_bindings.at(ref), ParseInt(index), ParseInt(elementOffset), ParseInt(alignment));
+          decompiled = std::format("float4 _{} = {}.Load({} + ({} / {}));", variable, preprocess_state.resource_binding_variables.at(ref), ParseInt(index), ParseInt(elementOffset), ParseInt(alignment));
         } else {
           throw std::invalid_argument("Unknown function name");
         }
@@ -967,8 +1115,8 @@ class Decompiler {
         if (source.starts_with('%')) {
           parsed_source = std::format("_{}", source.substr(1));
         } else if (source.starts_with('@')) {
-          if (auto pair = global_variables.find(std::string(source));
-              pair != global_variables.end()) {
+          if (auto pair = preprocess_state.global_variables.find(std::string(source));
+              pair != preprocess_state.global_variables.end()) {
             parsed_source = pair->second;
           } else {
             throw std::invalid_argument("Unknown global variable");
@@ -1011,7 +1159,7 @@ class Decompiler {
       this->CloseBranch();
     }
 
-    void AddCodeCall(std::string_view line) {
+    void AddCodeCall(std::string_view line, PreprocessState& preprocess_state) {
       static auto regex = std::regex{R"(^  call (\S+) ([^(]+)\(([^)]+)\).*)"};
       static auto param_regex = std::regex(R"(\s*(\S+) ((?:\d+)|(?:\{[^}]+\})|(?:%\d+)|(?:\S+))(?:(?:, )|(?:\s*$)))");
       auto [type, functionName, functionParamsString] = StringViewMatch<3>(line, regex);
@@ -1021,8 +1169,22 @@ class Decompiler {
       } else if (functionName == "@llvm.lifetime.end") {
       } else if (functionName == "@dx.op.storeOutput.f32") {
         // call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %2772)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
-        auto [opNumber, sv_target_index, unknown, index, source] = StringViewSplit<5>(functionParamsString, param_regex, 2);
-        decompiled = std::format("SV_TARGET_{}.{} = {};", sv_target_index, ParseIndex(index), ParseFloat(source));
+        auto [opNumber, outputSigId, rowIndex, colIndex, value] = StringViewSplit<5>(functionParamsString, param_regex, 2);
+        int output_signature_index;
+        std::from_chars(outputSigId.data(), outputSigId.data() + outputSigId.size(), output_signature_index);
+        auto signature = preprocess_state.output_signature[output_signature_index];
+        if (rowIndex != "0") {
+          throw std::exception("Row Index number supported.");
+        }
+        if (signature.packed.MaskString() == "1") {
+          if (ParseIndex(colIndex) != "x") {
+            throw std::exception("Unexpected index.");
+          }
+          decompiled = std::format("{} = {};", signature.VariableString(), ParseFloat(value));
+        } else {
+          decompiled = std::format("{}.{} = {};", signature.VariableString(), ParseIndex(colIndex), ParseFloat(value));
+        }
+
       } else {
         throw std::invalid_argument("Unknown function name");
       }
@@ -1075,18 +1237,18 @@ class Decompiler {
     }
   };
 
-  std::map<std::string, std::string> resource_bindings;
-  std::map<std::string, std::string> global_variables;
+  PreprocessState preprocess_state;
   std::vector<std::string_view> source_lines;
   std::vector<std::string_view> output_lines;
   size_t line_number = 0;
   TokenizerState state = TokenizerState::START;
   size_t input_sig_section_count = 0;
   size_t output_sig_section_count = 0;
-  std::vector<Signature1> input_sigs1;
-  std::vector<Signature1> output_sigs1;
-  std::vector<Signature2> input_sigs2;
-  std::vector<Signature2> output_sigs2;
+  std::vector<SignaturePacked> input_sigs_packed;
+  std::vector<SignaturePacked> output_sigs_packed;
+  std::vector<SignatureProperty> input_sigs_property;
+  std::vector<SignatureProperty> output_sigs_property;
+  bool created_signatures = false;
   std::vector<std::string_view> pipeline_infos;
   std::vector<std::string_view> view_id_state_info;
   std::string_view sha256_hash;
@@ -1097,16 +1259,45 @@ class Decompiler {
   std::vector<CodeFunction> code_functions;
   CodeFunction current_code_function;
 
+  static void CreateSignatures(
+      std::span<SignaturePacked> src_packed,
+      std::span<SignatureProperty> src_property,
+      std::vector<Signature>& destination) {
+    destination.clear();
+    for (const auto property : src_property) {
+      SignaturePacked packed;
+      bool found = false;
+      for (const auto candidate_packed : src_packed) {
+        if (candidate_packed.name != property.name) continue;
+        if (candidate_packed.index != property.index) continue;
+        destination.emplace_back(candidate_packed, property);
+        found = true;
+        break;
+      }
+
+      if (!found) {
+        std::stringstream s;
+        s << "Could not find packed signature: ";
+        s << property.ToString();
+        throw std::exception(s.str().c_str());
+      }
+    }
+  }
+
   void Init() {
     this->line_number = 0;
     this->state = TokenizerState::START;
     this->input_sig_section_count = 0;
     this->output_sig_section_count = 0;
-    this->input_sigs1.clear();
-    this->output_sigs1.clear();
-    this->input_sigs2.clear();
-    this->output_sigs2.clear();
-    this->resource_bindings.clear();
+    this->input_sigs_packed.clear();
+    this->output_sigs_packed.clear();
+    this->input_sigs_property.clear();
+    this->output_sigs_property.clear();
+    this->preprocess_state.input_signature.clear();
+    this->preprocess_state.output_signature.clear();
+    this->preprocess_state.resource_bindings.clear();
+    this->preprocess_state.global_variables.clear();
+    this->preprocess_state.resource_binding_variables.clear();
     this->pipeline_infos.clear();
     this->view_id_state_info.clear();
     this->sha256_hash = "";
@@ -1185,7 +1376,7 @@ class Decompiler {
             if (line == ";") {
               state = TokenizerState::DESCRIPTION_WHITESPACE;
             } else {
-              input_sigs1.emplace_back(line);
+              input_sigs_packed.emplace_back(line);
               line_number++;
             }
             break;
@@ -1202,7 +1393,7 @@ class Decompiler {
             if (line == ";") {
               state = TokenizerState::DESCRIPTION_WHITESPACE;
             } else {
-              output_sigs1.emplace_back(line);
+              output_sigs_packed.emplace_back(line);
               line_number++;
             }
             break;
@@ -1240,7 +1431,7 @@ class Decompiler {
             if (line == ";") {
               state = TokenizerState::DESCRIPTION_WHITESPACE;
             } else {
-              input_sigs2.emplace_back(line);
+              input_sigs_property.emplace_back(line);
               line_number++;
             }
             break;
@@ -1258,7 +1449,7 @@ class Decompiler {
             if (line == ";") {
               state = TokenizerState::DESCRIPTION_WHITESPACE;
             } else {
-              output_sigs2.emplace_back(line);
+              output_sigs_property.emplace_back(line);
               line_number++;
             }
             break;
@@ -1315,7 +1506,7 @@ class Decompiler {
             if (line == ";") {
               state = TokenizerState::DESCRIPTION_WHITESPACE;
             } else {
-              // resource_bindings.push_back(ResourceBinding(line));
+              preprocess_state.resource_bindings.emplace_back(line);
             }
             line_number++;
             break;
@@ -1345,6 +1536,11 @@ class Decompiler {
             line_number++;
             break;
           case TokenizerState::WHITESPACE:
+            if (!created_signatures) {
+              CreateSignatures(input_sigs_packed, input_sigs_property, preprocess_state.input_signature);
+              CreateSignatures(output_sigs_packed, output_sigs_property, preprocess_state.output_signature);
+              created_signatures = true;
+            };
             if (line == "") {
               line_number++;
             } else if (line[0] == '%') {
@@ -1390,7 +1586,7 @@ class Decompiler {
 
             auto values = StringViewSplitAll(entries, std::regex{R"((\s*(\S+) (\S+)),?)"}, {2, 3});
 
-            std::string output_name = std::format("_global_{}", global_variables.size());
+            std::string output_name = std::format("_global_{}", preprocess_state.global_variables.size());
             std::stringstream decompiled;
 
             decompiled << "static const ";
@@ -1410,7 +1606,7 @@ class Decompiler {
             }
             decompiled << " };";
             std::cout << decompiled.str() << std::endl;
-            global_variables[std::string{variable_name}] = output_name;
+            preprocess_state.global_variables[std::string{variable_name}] = output_name;
 
             state = TokenizerState::WHITESPACE;
             line_number++;
@@ -1446,12 +1642,12 @@ class Decompiler {
             }
             break;
           case TokenizerState::CODE_ASSIGN:
-            current_code_function.AddCodeAssign(line, resource_bindings, global_variables);
+            current_code_function.AddCodeAssign(line, preprocess_state);
             state = TokenizerState::CODE_BLOCK;
             line_number++;
             break;
           case TokenizerState::CODE_CALL:
-            current_code_function.AddCodeCall(line);
+            current_code_function.AddCodeCall(line, preprocess_state);
             state = TokenizerState::CODE_BLOCK;
             line_number++;
             break;
@@ -1606,8 +1802,68 @@ class Decompiler {
       };
     };
 
-    string_stream << "function main() {\r\n";
+    for (const auto binding : preprocess_state.resource_bindings) {
+      if (binding.type == ResourceBinding::ResourceType::CBUFFER) {
+        string_stream << "cbuffer " << binding.NameString() << " : ";
+        string_stream << "register(";
+        string_stream << binding.hlsl_binding.substr(1);
+        string_stream << ") {\r\n";
+        
+        string_stream << "};\r\n";
+      }
+    }
+    auto output_signature_count = preprocess_state.output_signature.size();
+
+    if (output_signature_count > 1) {
+      string_stream << "struct OutputSignature {\r\n";
+      for (const auto& signature : preprocess_state.output_signature) {
+        string_stream << "  " << signature.ToString() << ";\r\n";
+      }
+      string_stream << "};\r\n";
+      string_stream << "\r\n";
+      string_stream << "OutputSignature";
+    } else {
+      string_stream << preprocess_state.output_signature[0].FullFormatString();
+    }
+
+    string_stream << " main(\r\n";
+    {
+      auto len = preprocess_state.input_signature.size();
+      for (int i = 0; i < len; ++i) {
+        auto& signature = preprocess_state.input_signature[i];
+        string_stream << "  " << signature.ToString();
+        if (i != len - 1) {
+          string_stream << ",";
+        }
+        string_stream << "\r\n";
+      }
+    }
+    string_stream << ")";
+    if (output_signature_count == 1) {
+      string_stream << " : " << preprocess_state.output_signature[0].SemanticString();
+    }
+    string_stream << " {\r\n";
+
+    for (const auto& signature : preprocess_state.output_signature) {
+      string_stream << "  " << signature.FullFormatString();
+      string_stream << " " << signature.VariableString() << ";\r\n";
+    }
+
     append_code_block(0);
+
+    if (output_signature_count == 1) {
+      string_stream << "  return " << preprocess_state.output_signature[0].VariableString() << ";\r\n";
+    } else {
+      string_stream << "  OutputSignature output_signature = {";
+      for (int i = 0; i < output_signature_count; ++i) {
+        auto& signature = preprocess_state.output_signature[i];
+        string_stream << " " << signature.VariableString();
+        if (i != (output_signature_count - 1)) string_stream << ",";
+      }
+      string_stream << " };\r\n";
+      string_stream << "  return output_signature;\r\n";
+    }
+
     string_stream << "}\r\n";
 
     return string_stream.str();

@@ -109,13 +109,13 @@ inline std::vector<std::string_view> StringViewSplitAll(const std::string_view& 
 
 inline std::string_view StringViewTrimStart(const std::string_view& input) {
   auto pos = input.find_first_not_of("\t\n\v\f\r ");
-  if (pos == std::string_view::npos) return input;
+  if (pos == std::string_view::npos) return {};
   return std::string_view{input.data() + pos, input.data() + input.size()};
 }
 
 inline std::string_view StringViewTrimEnd(const std::string_view& input) {
   auto pos = input.find_last_not_of("\t\n\v\f\r ");
-  if (pos == std::string_view::npos) return input;
+  if (pos == std::string_view::npos) return {};
   return std::string_view{input.data(), input.data() + pos + 1};
 }
 
