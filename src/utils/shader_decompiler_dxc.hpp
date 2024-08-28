@@ -90,13 +90,6 @@ enum class TokenizerState : uint32_t {
   FUNCTION_ATTRIBUTES,
   CODE_DEFINE,
   CODE_BLOCK,
-  CODE_ASSIGN,
-  CODE_CALL,
-  CODE_STORE,
-  CODE_RETURN,
-  CODE_BRANCH,
-  CODE_BRANCH_START,
-  CODE_BRANCH_BLOCK,
   CODE_END,
   PRAGMA_VARIABLE,
   GLOBAL_VARIABLE,
@@ -160,13 +153,6 @@ inline std::ostream& operator<<(std::ostream& os, const TokenizerState& state) {
     case TokenizerState::TYPE_DEFINITION:                                return os << "type_definition";
     case TokenizerState::CODE_DEFINE:                                    return os << "code_define";
     case TokenizerState::CODE_BLOCK:                                     return os << "code_block";
-    case TokenizerState::CODE_ASSIGN:                                    return os << "code_assign";
-    case TokenizerState::CODE_CALL:                                      return os << "code_call";
-    case TokenizerState::CODE_STORE:                                     return os << "code_store";
-    case TokenizerState::CODE_RETURN:                                    return os << "code_return";
-    case TokenizerState::CODE_BRANCH:                                    return os << "code_branch";
-    case TokenizerState::CODE_BRANCH_START:                              return os << "code_branch_start";
-    case TokenizerState::CODE_BRANCH_BLOCK:                              return os << "code_branch_block";
     case TokenizerState::CODE_END:                                       return os << "code_end";
     case TokenizerState::COMPLETE:                                       return os << "complete";
     case TokenizerState::FUNCTION_DECLARE:                               return os << "function_declare";
@@ -707,6 +693,7 @@ class Decompiler {
     std::vector<Signature> output_signature;
     std::vector<ResourceBinding> resource_bindings;
     std::map<std::string, std::string> global_variables;
+    std::map<std::string, std::vector<std::string_view>> pragma_variables;
     std::map<std::string, std::string> resource_binding_variables;
   };
 
@@ -1211,6 +1198,30 @@ class Decompiler {
       std::from_chars(line_number.data(), line_number.data() + line_number.size(), this->current_code_block_number);
     }
 
+    auto DecompileLines(PreprocessState& preprocess_state) {
+      for (auto line : this->lines) {
+        if (line.starts_with("  %")) {
+          this->AddCodeAssign(line, preprocess_state);
+        } else if (line.starts_with("  call ")) {
+          this->AddCodeCall(line, preprocess_state);
+        } else if (line.starts_with("  store ")) {
+          this->AddCodeStore(line);
+        } else if (line.starts_with("  ret ")) {
+          //
+        } else if (line.starts_with("  br ")) {
+          this->AddCodeBranch(line);
+        } else if (line.empty()) {
+          //
+        } else if (line.starts_with("; <label>:")) {
+          this->ParseBlockDefinition(line);
+        } else {
+          std::cerr << line << "\r\n";
+          throw std::invalid_argument("Unexpected code block");
+        }
+      }
+      this->CloseBranch();
+    }
+
     auto ListConvergences() {
       std::map<int, std::set<int>> convergences;
 
@@ -1575,10 +1586,25 @@ class Decompiler {
           case TokenizerState::FUNCTION_DESCRIPTION:
           case TokenizerState::FUNCTION_DECLARE:
           case TokenizerState::FUNCTION_ATTRIBUTES:
-          case TokenizerState::PRAGMA_VARIABLE:
             line_number++;
             state = TokenizerState::WHITESPACE;
             break;
+          case TokenizerState::PRAGMA_VARIABLE: {
+            // !5 = !{i32 0, %"class.Texture2D<vector<float, 4> >"* undef, !"", i32 0, i32 0, i32 1, i32 2, i32 0, !6}
+            static auto regex = std::regex{R"(^!(\S+) = !\{(.*)\}$)"};
+            static auto values_regex = std::regex(R"(\s*((![^,]+)|((i32|float|i1) \S+)|(%\"[^"]*\"\* \S+))(,|$))");
+
+            auto [variable_name, values_packed] = StringViewMatch<2>(line, regex);
+            auto values = StringViewSplitAll(values_packed, values_regex, 1);
+            auto len = values.size();
+            for (int i = 0; i < len; ++i) {
+              values[i] = StringViewTrim(values[i]);
+            }
+            preprocess_state.pragma_variables[std::string{variable_name}] = values;
+
+            line_number++;
+            state = TokenizerState::WHITESPACE;
+          } break;
           case TokenizerState::GLOBAL_VARIABLE: {
             // @C.i.22.i.i.95.i.0.hca = internal unnamed_addr constant [6 x float] [float -4.000000e+00, float -4.000000e+00, float 0xC009424EA0000000, float 0xBFDF0E5600000000, float 0x3FFD904FE0000000, float 0x3FFD904FE0000000]
             static auto regex = std::regex{R"((\S+) = (?:internal )?(?:unnamed_addr )?constant \[(\S+) x ([^\]]+)\] \[([^\]]+)\])"};
@@ -1614,66 +1640,19 @@ class Decompiler {
           case TokenizerState::CODE_DEFINE:
             current_code_function = CodeFunction(line);
             code_functions.push_back(current_code_function);
-            current_code_function.lines.push_back(line);
+            // current_code_function.lines.push_back(line);
             line_number++;
             state++;
             break;
           case TokenizerState::CODE_BLOCK:
-            current_code_function.lines.push_back(line);
             if (line == "}") {
               state = TokenizerState::CODE_END;
-            } else if (line.starts_with("  %")) {
-              state = TokenizerState::CODE_ASSIGN;
-            } else if (line.starts_with("  call ")) {
-              state = TokenizerState::CODE_CALL;
-            } else if (line.starts_with("  store ")) {
-              state = TokenizerState::CODE_STORE;
-            } else if (line.starts_with("  ret ")) {
-              state = TokenizerState::CODE_RETURN;
-            } else if (line.starts_with("  br ")) {
-              state = TokenizerState::CODE_BRANCH;
-            } else if (line.empty()) {
-              state = TokenizerState::CODE_BLOCK;
-              line_number++;
-            } else if (line.starts_with("; <label>:")) {
-              state = TokenizerState::CODE_BRANCH_START;
             } else {
-              throw std::invalid_argument("Unexpected code block");
+              current_code_function.lines.push_back(line);
+              line_number++;
             }
             break;
-          case TokenizerState::CODE_ASSIGN:
-            current_code_function.AddCodeAssign(line, preprocess_state);
-            state = TokenizerState::CODE_BLOCK;
-            line_number++;
-            break;
-          case TokenizerState::CODE_CALL:
-            current_code_function.AddCodeCall(line, preprocess_state);
-            state = TokenizerState::CODE_BLOCK;
-            line_number++;
-            break;
-          case TokenizerState::CODE_STORE:
-            current_code_function.AddCodeStore(line);
-            state = TokenizerState::CODE_BLOCK;
-            line_number++;
-            break;
-          case TokenizerState::CODE_RETURN:
-            line_number++;
-            state = TokenizerState::CODE_BLOCK;
-            break;
-          case TokenizerState::CODE_BRANCH:
-            current_code_function.AddCodeBranch(line);
-            state = TokenizerState::CODE_BLOCK;
-            line_number++;
-            break;
-          case TokenizerState::CODE_BRANCH_START:
-            current_code_function.ParseBlockDefinition(line);
-            state = TokenizerState::CODE_BLOCK;
-            line_number++;
-            break;
-          case TokenizerState::CODE_BRANCH_BLOCK:
-            break;
           case TokenizerState::CODE_END:
-            current_code_function.CloseBranch();
             state = TokenizerState::WHITESPACE;
             line_number++;
             break;
@@ -1702,6 +1681,7 @@ class Decompiler {
     std::stringstream string_stream;
     int line_spacing = 2;
     std::vector<int> pending_convergences = {};
+    current_code_function.DecompileLines(preprocess_state);
     auto convergences = current_code_function.ListConvergences();
     std::function<void(int line_number)> append_code_block = [&](int line_number) {
       std::string spacing;
@@ -1808,7 +1788,6 @@ class Decompiler {
         string_stream << "register(";
         string_stream << binding.hlsl_binding.substr(1);
         string_stream << ") {\r\n";
-        
         string_stream << "};\r\n";
       }
     }
