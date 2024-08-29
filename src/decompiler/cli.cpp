@@ -21,6 +21,21 @@ FILE* OpenOrExit(const char* fname, const char* mode) {
   return f;
 }
 
+const char* GetFileNameFromPath(const char* buffer) {
+  char c;
+  int i;
+  for (i = 0;; ++i) {
+    c = *((char*)buffer + i);
+    if (c == '\\' || c == '/') {
+      return GetFileNameFromPath((char*)buffer + i + 1);
+    }
+    if (c == '\0') {
+      return buffer;
+    }
+  }
+  return "";
+}
+
 int main(int argc, char** argv) {
   if (argc < 3) {
     fprintf(stderr,
@@ -37,12 +52,19 @@ int main(int argc, char** argv) {
   file.seekg(0, std::ios::beg);
   file.read(reinterpret_cast<char*>(code), code_size);
 
+  const char* sym = argv[2];
+
+  char symfile[256];
+  snprintf(symfile, sizeof(symfile), "%s", sym);
+  const auto* symbasename = GetFileNameFromPath(sym);
+
+  FILE* out = OpenOrExit(symfile, "wt");
+
   char* disassembly = ShaderCompilerUtil::disassembleShader(code, code_size);
   if (disassembly == nullptr) {
     fprintf(stderr, "Failed to disassemble shader.");
     return EXIT_FAILURE;
   }
-  std::cout << "Disassembled." << std::endl;
   auto* decompiler = new renodx::utils::shader::decompiler::dxc::Decompiler();
 
   try {
@@ -50,7 +72,9 @@ int main(int argc, char** argv) {
     if (decompilation.empty()) {
       return EXIT_FAILURE;
     }
-    fprintf(stdout, "%s", decompilation.c_str());
+    
+    fprintf(out, "%s", decompilation.c_str());
+    fclose(out);
 
   } catch (const std::exception& ex) {
     std::cerr << ex.what() << std::endl;

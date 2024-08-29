@@ -715,13 +715,12 @@ class Decompiler {
 
     explicit Resource(std::vector<std::string_view>& metadata) : Metadata() {
       // !6 = !{i32 0, %"class.Texture2D<vector<float, 4> >"* undef, !"", i32 0, i32 32, i32 1, i32 2, i32 0, !7}
-      int field_index = 0;
-      FromStringView(ParseKeyValue(metadata[field_index++])[1], this->record_id);
-      this->pointer = ParseKeyValue(metadata[field_index++])[0];
-      this->name = ParseString(metadata[field_index++]);
-      FromStringView(ParseKeyValue(metadata[field_index++])[1], this->space);
-      FromStringView(ParseKeyValue(metadata[field_index++])[1], this->signature_index);
-      FromStringView(ParseKeyValue(metadata[field_index++])[1], this->signature_range);
+      FromStringView(ParseKeyValue(metadata[0])[1], this->record_id);
+      this->pointer = ParseKeyValue(metadata[1])[0];
+      this->name = ParseString(metadata[2]);
+      FromStringView(ParseKeyValue(metadata[3])[1], this->space);
+      FromStringView(ParseKeyValue(metadata[4])[1], this->signature_index);
+      FromStringView(ParseKeyValue(metadata[5])[1], this->signature_range);
     };
 
     void UpdateNameFromDescription(std::span<ResourceDescription> resource_descriptions, std::string prefix) {
@@ -917,6 +916,46 @@ class Decompiler {
     }
   };
 
+  struct UAVResource : Resource {
+    ResourceKind shape;
+    bool is_globally_coherent;
+    bool has_counter;
+    bool is_rasterizer_ordered_view;
+
+    ComponentType element_type;
+    uint32_t stride;
+
+    explicit UAVResource(
+        std::vector<std::string_view>& metadata,
+        std::map<std::string_view, std::vector<std::string_view>>& raw_metadata)
+        : Resource(metadata) {
+      // https://github.com/microsoft/DirectXShaderCompiler/blob/b766b432678cf5f7a93567d253bb5f7fd8a0b2c7/docs/DXIL.rst#L1047
+      uint32_t shape;
+      FromStringView(ParseKeyValue(metadata[6])[1], shape);
+      this->shape = static_cast<ResourceKind>(shape);
+
+      this->is_globally_coherent = (ParseKeyValue(metadata[7])[1] == "true");
+      this->has_counter = (ParseKeyValue(metadata[8])[1] == "true");
+      this->has_counter = (ParseKeyValue(metadata[9])[1] == "true");
+      auto pairs = raw_metadata[metadata[10]];
+
+      int type_value;
+      FromStringView(ParseKeyValue(pairs[0])[1], type_value);
+      if (type_value == 0) {
+        uint32_t element_type;
+        FromStringView(ParseKeyValue(pairs[1])[1], element_type);
+        this->element_type = static_cast<ComponentType>(element_type);
+      } else {
+        this->element_type = Resource::ComponentType::Invalid;
+        FromStringView(ParseKeyValue(pairs[1])[1], this->stride);
+      }
+    }
+
+    void UpdateNameFromDescription(std::span<ResourceDescription> resource_descriptions) {
+      Resource::UpdateNameFromDescription(resource_descriptions, "u");
+    }
+  };
+
   struct CBVResource : Resource {
     uint32_t buffer_size;
     explicit CBVResource(
@@ -931,6 +970,20 @@ class Decompiler {
     }
   };
 
+  struct SamplerResource : Resource {
+    uint32_t buffer_size;
+    explicit SamplerResource(
+        std::vector<std::string_view>& metadata,
+        std::map<std::string_view, std::vector<std::string_view>>& raw_metadata)
+        : Resource(metadata) {
+      FromStringView(ParseKeyValue(metadata[6])[1], buffer_size);
+    }
+
+    void UpdateNameFromDescription(std::span<ResourceDescription> resource_descriptions) {
+      Resource::UpdateNameFromDescription(resource_descriptions, "s");
+    }
+  };
+
   struct PreprocessState {
     std::vector<Signature> input_signature;
     std::vector<Signature> output_signature;
@@ -938,7 +991,9 @@ class Decompiler {
     std::map<std::string, std::string> global_variables;
     std::map<std::string, std::string> resource_binding_variables;
     std::vector<SRVResource> srv_resources;
+    std::vector<UAVResource> uav_resources;
     std::vector<CBVResource> cbv_resources;
+    std::vector<SamplerResource> sampler_resources;
   };
 
   struct TypeDefinition {
@@ -1020,13 +1075,18 @@ class Decompiler {
             auto srv = preprocess_state.srv_resources[index_value];
             decompiled = std::format("// texture _{} = {};", variable, srv.name);
             preprocess_state.resource_binding_variables[std::string(variable)] = srv.name;
+          } else if (resource_class == "1") {
+            auto uav = preprocess_state.uav_resources[index_value];
+            decompiled = std::format("// rwtexture _{} = {};", variable, uav.name);
+            preprocess_state.resource_binding_variables[std::string(variable)] = uav.name;
           } else if (resource_class == "2") {
-            auto srv = preprocess_state.cbv_resources[index_value];
-            decompiled = std::format("// cbuffer _{} = {};", variable, srv.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = srv.name;
+            auto cbv = preprocess_state.cbv_resources[index_value];
+            decompiled = std::format("// cbuffer _{} = {};", variable, cbv.name);
+            preprocess_state.resource_binding_variables[std::string(variable)] = cbv.name;
           } else if (resource_class == "3") {
-            decompiled = std::format("// SamplerState _{} = s{};", variable, ParseInt(index));
-            preprocess_state.resource_binding_variables[std::string(variable)] = std::format("s{}", ParseInt(index));
+            auto sampler = preprocess_state.sampler_resources[index_value];
+            decompiled = std::format("// SamplerState _{} = s{};", variable, sampler.name);
+            preprocess_state.resource_binding_variables[std::string(variable)] = sampler.name;
           } else {
             throw std::invalid_argument("Unknown resource type");
           }
@@ -1973,6 +2033,35 @@ class Decompiler {
     }
 
     // UAV
+    auto uav_list_key = resource_list[1];
+    std::vector<std::string_view> uav_list;
+    if (uav_list_key != "null") {
+      uav_list = named_metadata[uav_list_key];
+    }
+    preprocess_state.uav_resources.reserve(uav_list.size());
+    for (const auto uav_key : uav_list) {
+      // uav_resources.emplace_back(named_metadata[uav_key], named_metadata);
+      auto uav_resource = UAVResource(named_metadata[uav_key], named_metadata);
+      string_stream << UAVResource::ResourceKindString(uav_resource.shape);
+      if (uav_resource.element_type != SRVResource::ComponentType::Invalid) {
+        string_stream << "<" << SRVResource::ComponentTypeString(uav_resource.element_type) << ">";
+      } else {
+        string_stream << "< (" << uav_resource.stride << " bytes) >";
+      }
+
+      uav_resource.UpdateNameFromDescription(preprocess_state.resource_descriptions);
+
+      string_stream << " " << uav_resource.name;
+      string_stream << " : register(u" << uav_resource.signature_index;
+      if (uav_resource.space != 0u) {
+        string_stream << ", space" << uav_resource.space;
+      }
+      string_stream << ");\r\n";
+      preprocess_state.uav_resources.push_back(uav_resource);
+    }
+    if (!uav_list.empty()) {
+      string_stream << "\r\n";
+    }
 
     // CBV
     auto cbv_list_key = resource_list[2];
@@ -1987,7 +2076,7 @@ class Decompiler {
       cbv_resource.UpdateNameFromDescription(preprocess_state.resource_descriptions);
 
       string_stream << "cbuffer _" << cbv_resource.name;
-      string_stream << " : register(cb" << cbv_resource.signature_index;
+      string_stream << " : register(b" << cbv_resource.signature_index;
       if (cbv_resource.space != 0u) {
         string_stream << ", space" << cbv_resource.space;
       }
@@ -1999,6 +2088,33 @@ class Decompiler {
     }
 
     if (!cbv_list.empty()) {
+      string_stream << "\r\n";
+    }
+
+
+
+    // sampler
+    auto sampler_list_key = resource_list[3];
+    std::vector<std::string_view> sampler_list;
+    if (sampler_list_key != "null") {
+      sampler_list = named_metadata[sampler_list_key];
+    }
+    preprocess_state.sampler_resources.reserve(sampler_list.size());
+    for (const auto sampler_key : sampler_list) {
+      // sampler_resources.emplace_back(named_metadata[sampler_key], named_metadata);
+      auto sampler_resource = SamplerResource(named_metadata[sampler_key], named_metadata);
+      sampler_resource.UpdateNameFromDescription(preprocess_state.resource_descriptions);
+
+      string_stream << "SamplerState _" << sampler_resource.name;
+      string_stream << " : register(s" << sampler_resource.signature_index;
+      if (sampler_resource.space != 0u) {
+        string_stream << ", space" << sampler_resource.space;
+      }
+      string_stream << ");\r\n";
+      preprocess_state.sampler_resources.push_back(sampler_resource);
+    }
+
+    if (!sampler_list.empty()) {
       string_stream << "\r\n";
     }
 
