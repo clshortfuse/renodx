@@ -3,6 +3,7 @@
 RenoDX is an engine for modifying DirectX games. Recommended configuration:
 
 * [VSCode](https://code.visualstudio.com/) - Recommended IDE
+* [vs_buildTools.exe](https://aka.ms/vs/17/release/vs_BuildTools.exe) - MSVC 2022 Build Tools
 * [cmake](https://cmake.org/download/) - Build System
 * [llvm](https://github.com/llvm/llvm-project/releases/) - Used for linting and formatting
 * [ninja](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages) - For faster building
