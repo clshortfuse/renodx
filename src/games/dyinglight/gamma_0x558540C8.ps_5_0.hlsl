@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./extendGamut.hlsl"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sat May 25 22:39:10 2024
 Texture2D<float4> t0 : register(t0);
@@ -29,9 +30,6 @@ void main(
   r0.xyzw = t0.SampleLevel(s0_s, v1.xy, 0).xyzw;
   o0.xyzw = r0.xyzw;
 
-  if (injectedData.toneMapType == 0) {  // vanilla tonemap flickers if left unclamped
-    o0.xyz = saturate(o0.xyz);
-  }
 
   if (injectedData.toneMapGammaCorrection) { // fix srgb 2.2 mismatch
     o0.xyz = renodx::color::srgb::from::BT709(o0.xyz);
@@ -40,6 +38,11 @@ void main(
   // apply game gamma adjustment slider
   o0.xyz = sign(o0.xyz) * pow(abs(o0.xyz), cb0[0].xxx);
 
+  if (injectedData.toneMapType == 0) {  // vanilla tonemap flickers if left unclamped
+    o0.xyz = saturate(o0.xyz);
+  } else if (injectedData.toneMapType == 2) {
+    o0.rgb = extendGamut(o0.rgb, injectedData.colorGradeGamutExpansion);
+  }
   o0.xyz *= injectedData.toneMapGameNits/80.f;
   o0.w = saturate(o0.w);
   return;

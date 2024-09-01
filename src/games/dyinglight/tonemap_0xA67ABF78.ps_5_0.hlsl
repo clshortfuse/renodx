@@ -63,6 +63,7 @@ void main(
         1.f,
         1.f,
         1.f,
+        0.f,
         injectedData.toneMapHueCorrection,
         vanillaColor);
     float vanillaLum = renodx::color::y::from::BT709(vanillaColor.rgb);
@@ -73,7 +74,8 @@ void main(
         1.f,
         injectedData.colorGradeShadows,
         injectedData.colorGradeContrast,
-        injectedData.colorGradeSaturation);
+        injectedData.colorGradeSaturation,
+        0.f);
   } else if (injectedData.toneMapType == 1) {
     o0.xyz = untonemapped;
   }
