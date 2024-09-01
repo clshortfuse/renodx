@@ -241,7 +241,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
   float3 hdrColor = dual_tone_map.color_hdr;
   float3 sdrColor = dual_tone_map.color_sdr;
 
-  if (config.type == 0.f) {
+  if (config.type == renodx::tonemap::config::type::VANILLA) {
     // Vanilla
 
     // Use user color graded as input
@@ -370,7 +370,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
       sdrColor = saturate(inputColor);
     }
     hdrColor = sdrColor;
-  } else if (config.type == 1.f) {
+  } else if (config.type == renodx::tonemap::config::type::NONE) {
     sdrColor = saturate(hdrColor);
   }
 
