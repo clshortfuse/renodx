@@ -225,6 +225,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "colorGradeGamutExpansion",
+        .binding = &shader_injection.colorGradeGamutExpansion,
+        .default_value = 0.f,
+        .label = "Gamut Expansion",
+        .section = "Color Grading",
+        .tooltip = "Generates HDR colors (BT.2020) from bright saturated SDR (BT.709) ones.",   // Description taken from pumboautohdr
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 2; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "fxBloom",
         .binding = &shader_injection.fxBloom,
         .default_value = 50.f,
