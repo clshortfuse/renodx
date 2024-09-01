@@ -244,6 +244,9 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
   if (config.type == 0.f) {
     // Vanilla
 
+    // Use user color graded as input
+    inputColor = hdrColor;
+
     if (pushConstants.toneMapType == 0u) {
       // Clip SDR
       sdrColor = saturate(inputColor);
