@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <charconv>
 #include <regex>
 #include <string_view>
 #include <vector>
@@ -25,8 +26,8 @@ inline std::vector<std::string_view> StringViewMatchAll(const std::string_view& 
   return results;
 }
 
-template <size_t N>
-std::array<std::string_view, N> StringViewMatch(const std::string_view& input, const std::regex& regex) {
+template <size_t N = 0>
+inline std::array<std::string_view, N> StringViewMatch(const std::string_view& input, const std::regex& regex) {
   std::array<std::string_view, N> results;
 
   std::cmatch matches;
@@ -36,6 +37,16 @@ std::array<std::string_view, N> StringViewMatch(const std::string_view& input, c
     results[i - 1] = StringViewFromCsubMatch(matches[i]);
   }
   return results;
+}
+
+inline std::string_view StringViewMatch(const std::string_view& input, const std::regex& regex) {
+  std::cmatch matches;
+  std::regex_match(input.data(), input.data() + input.size(), matches, regex);
+  if (matches.empty()) return {};
+  for (size_t i = 1; i < matches.size(); ++i) {
+    return StringViewFromCsubMatch(matches[i]);
+  }
+  return "";
 }
 
 inline std::vector<std::pair<std::string_view, std::string_view>> StringViewSplitAll(const std::string_view& input, const std::regex& separator, const std::vector<int>& submatches) {
@@ -121,4 +132,9 @@ inline std::string_view StringViewTrimEnd(const std::string_view& input) {
 
 inline std::string_view StringViewTrim(std::string_view input) {
   return StringViewTrimStart(StringViewTrimEnd(input));
+}
+
+template <typename T>
+inline void FromStringView(std::string_view s, T& value) {
+  std::from_chars(s.data(), s.data() + s.size(), value);
 }
