@@ -196,7 +196,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 20.f,
         .label = "Gamut Expansion",
         .section = "Color Grading",
-        .tooltip = "Controls the strength of the gamut expansion.",
+        .tooltip = "Generates HDR colors (BT.2020) from bright saturated SDR (BT.709) ones.",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType > 0; },
         .parse = [](float value) { return value * 0.01f; },
@@ -316,7 +316,6 @@ struct __declspec(uuid("1228220F-364A-46A2-BB29-1CCE591A018A")) DeviceData {
   reshade::api::resource_view final_texture_view = {};
   reshade::api::sampler final_texture_sampler = {};
   reshade::api::pipeline_layout final_layout = {};
-  reshade::api::pipeline_layout copy_layout = {};
 };
 
 constexpr reshade::api::pipeline_layout PIPELINE_LAYOUT{ 0 };
@@ -385,15 +384,6 @@ void OnInitDevice(reshade::api::device* device) {
     new_params.push_constants.dx_register_index = 13;
     new_params.push_constants.visibility = reshade::api::shader_stage::vertex | reshade::api::shader_stage::pixel | reshade::api::shader_stage::compute;
     device->create_pipeline_layout(1, &new_params, &data.final_layout);
-  }
-
-  {
-    reshade::api::pipeline_layout_param new_params;
-    new_params.type = reshade::api::pipeline_layout_param_type::push_constants;
-    new_params.push_constants.count = 1;
-    new_params.push_constants.dx_register_index = 12;
-    new_params.push_constants.visibility = reshade::api::shader_stage::vertex | reshade::api::shader_stage::pixel | reshade::api::shader_stage::compute;
-    device->create_pipeline_layout(1, &new_params, &data.copy_layout);
   }
 }
 
