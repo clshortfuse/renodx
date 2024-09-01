@@ -105,12 +105,6 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
 #endif  // USE_BLOOM
 
   float vanillaMidGray = 0.18f;
-  float renoDRTContrast = 1.2f;
-  float renoDRTFlare = 0.01f;
-  float renoDRTShadows = 0.60f;
-  float renoDRTDechroma = 0.50f;
-  float renoDRTSaturation = 1.20f;
-  float renoDRTHighlights = 1.10f;
 
   // float vanillaMidGray = 0.18f;
   // float renoDRTContrast = 1.0f;
@@ -226,24 +220,24 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
     }
   }
 
-  renodx::tonemap::Config config = renodx::tonemap::config::Create(
-      injectedData.toneMapType,
-      injectedData.toneMapPeakNits,
-      injectedData.toneMapGameNits,
-      injectedData.toneMapGammaCorrection,  // -1 == srgb
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeContrast,
-      injectedData.colorGradeSaturation,
-      vanillaMidGray,
-      vanillaMidGray * 100.f,
-      renoDRTHighlights,
-      renoDRTShadows,
-      renoDRTContrast,
-      renoDRTSaturation,
-      renoDRTDechroma,
-      renoDRTFlare);
+  renodx::tonemap::Config config = renodx::tonemap::config::Create();
+  config.type = injectedData.toneMapType;
+  config.peak_nits = injectedData.toneMapPeakNits;
+  config.game_nits = injectedData.toneMapGameNits;
+  config.gamma_correction = injectedData.toneMapGammaCorrection;
+  config.exposure = injectedData.colorGradeExposure;
+  config.highlights = injectedData.colorGradeHighlights;
+  config.shadows = injectedData.colorGradeShadows;
+  config.contrast = injectedData.colorGradeContrast;
+  config.saturation = injectedData.colorGradeSaturation;
+  config.mid_gray_value = vanillaMidGray;
+  config.mid_gray_nits = vanillaMidGray * 100.f;
+
+  config.reno_drt_highlights = 1.1f;
+  config.reno_drt_shadows = 0.6f;
+  config.reno_drt_contrast = 1.2f;
+  config.reno_drt_saturation = 1.2f;
+  config.reno_drt_flare = 0.01f;
 
   if (config.type == 3.f) {
     config.reno_drt_saturation *= config.saturation;

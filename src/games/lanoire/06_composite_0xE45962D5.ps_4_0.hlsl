@@ -218,31 +218,16 @@ float4 main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v
     }
 
   } else {
-    float vanillaMidGray = 0.18f;
-    float renoDRTHighlights = 1.0f;
-    float renoDRTShadows = 1.f;
-    float renoDRTContrast = 1.0f;
-    float renoDRTSaturation = 1.0f;
-    float renoDRTDechroma = 0.5f;
-    float renoDRTFlare = 0.f;
-    renodx::tonemap::Config config = renodx::tonemap::config::Create(
-        injectedData.toneMapType,
-        injectedData.toneMapPeakNits,
-        injectedData.toneMapGameNits,
-        0,  // Gamma Correction not used here
-        injectedData.colorGradeExposure,
-        injectedData.colorGradeHighlights,
-        injectedData.colorGradeShadows,
-        injectedData.colorGradeContrast,
-        injectedData.colorGradeSaturation,
-        vanillaMidGray,
-        vanillaMidGray * 100.f,
-        renoDRTHighlights,
-        renoDRTShadows,
-        renoDRTContrast,
-        renoDRTSaturation,
-        renoDRTDechroma,
-        renoDRTFlare);
+    renodx::tonemap::Config config = renodx::tonemap::config::Create();
+    config.type = injectedData.toneMapType;
+    config.peak_nits = injectedData.toneMapPeakNits;
+    config.game_nits = injectedData.toneMapGameNits;
+    // Gamma Correction not used here
+    config.exposure = injectedData.colorGradeExposure;
+    config.highlights = injectedData.colorGradeHighlights;
+    config.shadows = injectedData.colorGradeShadows;
+    config.contrast = injectedData.colorGradeContrast;
+    config.saturation = injectedData.colorGradeSaturation;
     if (injectedData.colorGradeColorFilter) {
       float3 outputColor = injectedData.toneMapGammaCorrection
                                ? pow(max(0, unfilteredColor), 2.2f)
