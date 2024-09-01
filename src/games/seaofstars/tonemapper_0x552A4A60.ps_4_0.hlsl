@@ -63,31 +63,19 @@ float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
 
   float vanillaMidGray = renodx::tonemap::unity::BT709(0.18f);
 
-  float renoDRTHighlights = 1.f;
-  float renoDRTShadows = 1.f;
-  float renoDRTContrast = 1.f;
-  float renoDRTSaturation = 1.0f;
-  float renoDRTDechroma = 0.0f;
-  float renoDRTFlare = 0.0f;
-
-  renodx::tonemap::Config config = renodx::tonemap::config::Create(
-      injectedData.toneMapType,
-      injectedData.toneMapPeakNits,
-      injectedData.toneMapGameNits,
-      injectedData.toneMapGammaCorrection,
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeContrast,
-      injectedData.colorGradeSaturation,
-      vanillaMidGray,
-      vanillaMidGray * 100.f,
-      renoDRTHighlights,
-      renoDRTShadows,
-      renoDRTContrast,
-      renoDRTSaturation,
-      renoDRTDechroma,
-      renoDRTFlare);
+  renodx::tonemap::Config config = renodx::tonemap::config::Create();
+  config.type = injectedData.toneMapType;
+  config.peak_nits = injectedData.toneMapPeakNits;
+  config.game_nits = injectedData.toneMapGameNits;
+  config.gamma_correction = injectedData.toneMapGammaCorrection;
+  config.exposure = injectedData.colorGradeExposure;
+  config.highlights = injectedData.colorGradeHighlights;
+  config.shadows = injectedData.colorGradeShadows;
+  config.contrast = injectedData.colorGradeContrast;
+  config.saturation = injectedData.colorGradeSaturation;
+  config.mid_gray_value = vanillaMidGray;
+  config.mid_gray_nits = vanillaMidGray * 100.f;
+  config.reno_drt_dechroma = 0;
 
   renodx::lut::Config lut_config = renodx::lut::config::Create(
       s0_s,

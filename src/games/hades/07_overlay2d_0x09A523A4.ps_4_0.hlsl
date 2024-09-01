@@ -18,33 +18,16 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : COLOR0, float2 v2 : TEXCOORD0, o
   r0.xyz = max(0, r0.xyz);
   r0.xyz = pow(r0.xyz, 2.2f);
 
-  float vanillaMidGray = 0.18f;
-
-  float renoDRTContrast = 1.0f;
-  float renoDRTFlare = 0.0f;
-  float renoDRTShadows = 1.0f;
-  float renoDRTDechroma = 0.5f;
-  float renoDRTSaturation = 1.0f;
-  float renoDRTHighlights = 1.0f;
-
-  renodx::tonemap::Config config = renodx::tonemap::config::Create(
-      injectedData.toneMapType,
-      injectedData.toneMapPeakNits,
-      injectedData.toneMapGameNits,
-      injectedData.toneMapGammaCorrection,
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeContrast,
-      injectedData.colorGradeSaturation,
-      vanillaMidGray,
-      vanillaMidGray * 100.f,
-      renoDRTHighlights,
-      renoDRTShadows,
-      renoDRTContrast,
-      renoDRTSaturation,
-      renoDRTDechroma,
-      renoDRTFlare);
+  renodx::tonemap::Config config = renodx::tonemap::config::Create();
+  config.type = injectedData.toneMapType;
+  config.peak_nits = injectedData.toneMapPeakNits;
+  config.game_nits = injectedData.toneMapGameNits;
+  config.gamma_correction = injectedData.toneMapGammaCorrection;
+  config.exposure = injectedData.colorGradeExposure;
+  config.highlights = injectedData.colorGradeHighlights;
+  config.shadows = injectedData.colorGradeShadows;
+  config.contrast = injectedData.colorGradeContrast;
+  config.saturation = injectedData.colorGradeSaturation;
 
   if (injectedData.toneMapType == 0) {
     r0.xyz = saturate(r0.xyz);
