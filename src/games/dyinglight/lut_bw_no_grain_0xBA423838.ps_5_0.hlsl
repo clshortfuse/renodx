@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./DICE.hlsl"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sat May 25 22:39:34 2024
 Texture2D<float4> t2 : register(t2);
@@ -63,13 +64,20 @@ void main(
   float3 hdrColor = outputColor;
   float3 sdrColor = outputColor;
   const float vanillaMidGray = 0.178f;
-  if (injectedData.toneMapType == 2) {
+  if (injectedData.toneMapType == 2) {    
     const float paperWhite = injectedData.toneMapGameNits / renodx::color::srgb::REFERENCE_WHITE;
-    hdrColor = outputColor * paperWhite;
     const float peakWhite = injectedData.toneMapPeakNits / renodx::color::srgb::REFERENCE_WHITE;
     const float highlightsShoulderStart = vanillaMidGray * paperWhite;  // Don't tonemap the blended part of the tonemapper
-    hdrColor = renodx::tonemap::dice::BT709(hdrColor, peakWhite, highlightsShoulderStart);
-    sdrColor = renodx::tonemap::dice::BT709(hdrColor, paperWhite, highlightsShoulderStart);
+
+    DICESettings config = DefaultDICESettings();
+    config.Type = 1;
+    config.ShoulderStart = highlightsShoulderStart;
+
+    hdrColor = outputColor * paperWhite;  // scale paper white for PQ DICE
+    hdrColor = DICETonemap(hdrColor, peakWhite, config);
+    sdrColor = DICETonemap(hdrColor, paperWhite, config);
+
+    // back to 80 nits
     hdrColor /= paperWhite;
     sdrColor /= paperWhite;
   }
