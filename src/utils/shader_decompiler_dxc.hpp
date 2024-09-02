@@ -1705,6 +1705,25 @@ class Decompiler {
 
       return convergences;
     }
+
+    auto ListRecursions() {
+      std::map<int, std::set<int>> recursions;
+
+      for (const auto& [line_number, code_block] : code_blocks) {
+        if (code_block.branch.branch_condition_true != -1) {
+          if (line_number >= code_block.branch.branch_condition_true) {
+            recursions[code_block.branch.branch_condition_true].emplace(line_number);
+          }
+        }
+        if (code_block.branch.branch_condition_false != -1) {
+          if (line_number >= code_block.branch.branch_condition_false) {
+            recursions[code_block.branch.branch_condition_false].emplace(line_number);
+          }
+        }
+      }
+
+      return recursions;
+    }
   };
 
   PreprocessState preprocess_state;
@@ -2303,7 +2322,7 @@ class Decompiler {
       sampler_list = named_metadata[sampler_list_key];
     }
     preprocess_state.sampler_resources.reserve(sampler_list.size());
-    for (const auto sampler_key : sampler_list) {
+    for (const auto& sampler_key : sampler_list) {
       // sampler_resources.emplace_back(named_metadata[sampler_key], named_metadata);
       auto sampler_resource = SamplerResource(named_metadata[sampler_key], named_metadata);
       sampler_resource.UpdateNameFromDescription(preprocess_state.resource_descriptions);
@@ -2334,11 +2353,71 @@ class Decompiler {
     // Parse Lines
     int line_spacing = 2;
     std::vector<int> pending_convergences = {};
+    std::vector<std::set<int>> pending_recursions = {};
+    std::vector<int> current_loops = {};
     current_code_function.DecompileLines(preprocess_state);
+
     auto convergences = current_code_function.ListConvergences();
+    auto recursions = current_code_function.ListRecursions();
+
+#if DECOMPILE_DEBUG
+    for (const auto& [a, b] : convergences) {
+      std::cout << "Convergences " << a << " = ";
+      for (const auto c : b) {
+        std::cout << c << " | ";
+      }
+      std::cout << "\n";
+    }
+
+    for (const auto& [a, b] : recursions) {
+      std::cout << "Recursion " << a << " = ";
+      for (const auto c : b) {
+        std::cout << c << " | ";
+      }
+      std::cout << "\n";
+    }
+
+    for (const auto& [a, b] : recursions) {
+      std::cout << "Recursion " << a << " = ";
+      for (const auto c : b) {
+        std::cout << c << " | ";
+      }
+      std::cout << "\n";
+    }
+#endif
+
     std::function<void(int line_number)> append_code_block = [&](int line_number) {
       std::string spacing;
       spacing.insert(0, line_spacing, ' ');
+      std::set<int> recursion_pops;
+      if (!pending_recursions.empty()) {
+        recursion_pops = pending_recursions.rbegin()[0];
+      }
+      if (recursion_pops.contains(line_number)) {
+        string_stream << spacing << "continue;\n";  // go back
+        return;
+      }
+
+      bool using_recursion = recursions.contains(line_number);
+      if (using_recursion) {
+        pending_recursions.push_back(recursions[line_number]);
+        current_loops.push_back(line_number);
+        string_stream << spacing << "while(true) {\n";
+        line_spacing += 2;
+        spacing.insert(0, 2, ' ');
+        // break at these
+      }
+
+      auto close_if_recursive = [&]() {
+        if (using_recursion) {
+          string_stream << spacing << "break;\n";
+          line_spacing -= 2;
+          spacing = "";
+          spacing.insert(0, line_spacing, ' ');
+          string_stream << spacing << "}\n";
+          pending_recursions.pop_back();
+        }
+      };
 
       auto& code_block = current_code_function.code_blocks[line_number];
       for (const auto& hlsl_line : code_block.hlsl_lines) {
@@ -2347,20 +2426,18 @@ class Decompiler {
 
       if (code_block.branch.branch_condition_true <= 0) return;
 
-      if (code_block.branch.branch_condition_true <= line_number) {
-        throw std::exception("Loop detected.");
-      }
-
       int next_convergence = pending_convergences.empty() ? -1 : pending_convergences.rbegin()[0];
 
       if (code_block.branch.branch_condition.empty()) {
         if (next_convergence == code_block.branch.branch_condition_true) return;
         append_code_block(code_block.branch.branch_condition_true);
+        close_if_recursive();
         return;
       }
 
-      if (code_block.branch.branch_condition_false <= line_number) {
-        throw std::exception("Loop detected.");
+      if (code_block.branch.branch_condition_false <= line_number
+          && code_block.branch.branch_condition_true <= line_number) {
+        throw std::exception("Unsupported loop detected.");
       }
 
       if (code_block.branch.branch_condition_true == next_convergence) {
@@ -2369,6 +2446,7 @@ class Decompiler {
         append_code_block(code_block.branch.branch_condition_false);
         line_spacing -= 2;
         string_stream << spacing << "}\n";
+        close_if_recursive();
         return;
       }
 
@@ -2378,6 +2456,7 @@ class Decompiler {
         append_code_block(code_block.branch.branch_condition_true);
         line_spacing -= 2;
         string_stream << spacing << "}\n";
+        close_if_recursive();
         return;
       }
 
@@ -2433,6 +2512,7 @@ class Decompiler {
         pending_convergences.pop_back();
         append_code_block(pair_convergence);
       };
+      close_if_recursive();
     };
 
     auto output_signature_count = preprocess_state.output_signature.size();
