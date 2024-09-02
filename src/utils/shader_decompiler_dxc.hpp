@@ -1439,8 +1439,8 @@ class Decompiler {
         } else if (functionName == "@dx.op.rawBufferLoad.f32") {
           auto [opNumber, srv, index, elementOffset, mask, alignment] = StringViewSplit<6>(functionParamsString, param_regex, 2);
           auto ref = std::string{srv.substr(1)};
-          auto cbv_resource = preprocess_state.cbv_resources[preprocess_state.resource_binding_variables.at(ref).second];
-          // decompiled = std::format("float4 _{} = {}.Load({} + ({} / {}));", variable, preprocess_state.resource_binding_variables.at(ref), ParseInt(index), ParseInt(elementOffset), ParseInt(alignment));
+          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref).second];
+          decompiled = std::format("float4 _{} = {}.Load({} + ({} / {}));", variable, srv_resource.name, ParseInt(index), ParseInt(elementOffset), ParseInt(alignment));
         } else {
           throw std::invalid_argument("Unknown function name");
         }
