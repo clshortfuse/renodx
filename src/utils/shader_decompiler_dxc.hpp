@@ -1222,9 +1222,16 @@ class Decompiler {
             decompiled = std::format("// rwtexture _{} = {};", variable, uav.name);
             preprocess_state.resource_binding_variables[std::string(variable)] = {uav.name, index_value};
           } else if (resource_class == "2") {
-            auto cbv = preprocess_state.cbv_resources[index_value];
-            decompiled = std::format("// cbuffer _{} = {};", variable, cbv.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {cbv.name, index_value};
+            int space_value;
+            int bind_start_value;
+            FromStringView(space, space_value);
+            FromStringView(bind_start, bind_start_value);
+            auto cbv = std::find_if(preprocess_state.cbv_resources.begin(), preprocess_state.cbv_resources.end(), [&](CBVResource& resource) {
+              return resource.space == space_value && resource.signature_index == bind_start_value;
+            });
+            int real_index = cbv - preprocess_state.cbv_resources.begin();
+            decompiled = std::format("// cbuffer _{} = {}; // index={}", variable, cbv->name, real_index);
+            preprocess_state.resource_binding_variables[std::string(variable)] = {cbv->name, real_index};
           } else if (resource_class == "3") {
             auto sampler = preprocess_state.sampler_resources[index_value];
             decompiled = std::format("// SamplerState _{} = {};", variable, sampler.name);
@@ -1537,7 +1544,7 @@ class Decompiler {
         // phi float [ 0x3FF61108E0000000, %0 ], [ 0x3FF069AC80000000, %21 ], [ 0x3FE6412500000000, %23 ], [ %27, %25 ]
         auto [type, arguments] = StringViewMatch<2>(assignment, std::regex{R"(phi (\S+) (.+))"});
         // Declare variable
-        auto declaration_line = std::format("{} _{};", type, variable);
+        auto declaration_line = std::format("{} _{};", ParseType(type), variable);
         this->code_blocks[0].phi_lines.push_back(declaration_line);
 
         auto pairs = StringViewSplitAll(arguments, std::regex{R"((\[ (\S+), %(\S+) \]),?)"}, {2, 3});
@@ -1552,7 +1559,14 @@ class Decompiler {
         auto [source] = StringViewMatch<1>(assignment, std::regex{R"(load \S+, \S+ %(\S+),.*)"});
         decompiled = std::format("float _{} = {};", variable, stored_pointers[source]);
       } else if (instruction == "bitcast") {
-        // noop
+        // %63 = bitcast i32 %62 to float
+        auto [source_type, source_variable, dest_type] = StringViewMatch<3>(assignment, std::regex{R"(bitcast (\S+) %(\S+) to (\S+))"});
+        if (source_type.empty()) {
+          decompiled = std::format("// {}", line);
+        } else {
+          auto real_type = ParseType(dest_type);
+          decompiled = std::format("{} _{} = ({})_{};", real_type, variable, real_type, source_variable);
+        }
       } else if (instruction == "getelementptr") {
         auto [source, index] = StringViewMatch<2>(
             assignment,
@@ -1578,6 +1592,7 @@ class Decompiler {
       }
 
       if (!decompiled.empty()) {
+        // this->current_code_block.hlsl_lines.push_back(std::format("// {} ", line));
         this->current_code_block.hlsl_lines.push_back(decompiled);
       }
     }
@@ -2170,7 +2185,7 @@ class Decompiler {
     std::stringstream string_stream;
 
     // Type Definitions
-
+#if 0
     bool added_type_definition = false;
     for (const auto& [name, definition] : preprocess_state.type_definitions) {
       // Only add hostlayout to root. The rest are inline.
@@ -2197,6 +2212,7 @@ class Decompiler {
     if (!preprocess_state.type_definitions.empty()) {
       string_stream << "\n";
     }
+#endif
 
     // Resources
 
@@ -2213,15 +2229,21 @@ class Decompiler {
     preprocess_state.srv_resources.reserve(srv_list.size());
     for (const auto srv_key : srv_list) {
       // srv_resources.emplace_back(named_metadata[srv_key], named_metadata);
+
       auto srv_resource = SRVResource(named_metadata[srv_key], named_metadata);
+      srv_resource.UpdateNameFromDescription(preprocess_state.resource_descriptions);
+
+      if (srv_resource.element_type == SRVResource::ComponentType::Invalid) {
+        string_stream << "struct _" << srv_resource.name << " {\n";
+        string_stream << "  float4 data[" << srv_resource.stride << "];\n";
+        string_stream << "};\n";
+      }
       string_stream << SRVResource::ResourceKindString(srv_resource.shape);
       if (srv_resource.element_type != SRVResource::ComponentType::Invalid) {
         string_stream << "<" << SRVResource::ComponentTypeString(srv_resource.element_type) << ">";
       } else {
-        string_stream << "< (" << srv_resource.stride << " bytes) >";
+        string_stream << "<_" << srv_resource.name << ">";
       }
-
-      srv_resource.UpdateNameFromDescription(preprocess_state.resource_descriptions);
 
       string_stream << " " << srv_resource.name;
       string_stream << " : register(t" << srv_resource.signature_index;
