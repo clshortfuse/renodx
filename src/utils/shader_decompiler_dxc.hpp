@@ -1128,6 +1128,7 @@ class Decompiler {
 
   struct CodeBlock {
     std::vector<std::string> hlsl_lines;
+    std::vector<std::string> phi_lines;
     CodeBranch branch;
   };
 
@@ -1537,14 +1538,14 @@ class Decompiler {
         auto [type, arguments] = StringViewMatch<2>(assignment, std::regex{R"(phi (\S+) (.+))"});
         // Declare variable
         auto declaration_line = std::format("{} _{};", type, variable);
-        this->code_blocks[0].hlsl_lines.push_back(declaration_line);
+        this->code_blocks[0].phi_lines.push_back(declaration_line);
 
         auto pairs = StringViewSplitAll(arguments, std::regex{R"((\[ (\S+), %(\S+) \]),?)"}, {2, 3});
         for (const auto& [value, function_number] : pairs) {
           int function_int;
           FromStringView(function_number, function_int);
           auto assignment_line = std::format("_{} = {};", variable, ParseFloat(value));
-          this->code_blocks[function_int].hlsl_lines.push_back(assignment_line);
+          this->code_blocks[function_int].phi_lines.push_back(assignment_line);
         }
       } else if (instruction == "load") {
         // load float, float* %1681, align 4, !tbaa !26
@@ -1582,7 +1583,10 @@ class Decompiler {
     }
 
     void CloseBranch() {
-      this->code_blocks[this->current_code_block_number] = this->current_code_block;
+      // may already exist via phi
+      auto& previous_code_block = this->code_blocks[this->current_code_block_number];
+      previous_code_block.branch = this->current_code_block.branch;
+      previous_code_block.hlsl_lines = this->current_code_block.hlsl_lines;
       this->current_code_block_number = -1;
       this->current_code_block = {};
     }
@@ -2393,10 +2397,6 @@ class Decompiler {
       if (!pending_recursions.empty()) {
         recursion_pops = pending_recursions.rbegin()[0];
       }
-      if (recursion_pops.contains(line_number)) {
-        string_stream << spacing << "continue;\n";  // go back
-        return;
-      }
 
       bool using_recursion = recursions.contains(line_number);
       if (using_recursion) {
@@ -2408,7 +2408,10 @@ class Decompiler {
         // break at these
       }
 
-      auto close_if_recursive = [&]() {
+      auto on_continue = [&]() {
+      };
+
+      auto on_complete = [&]() {
         if (using_recursion) {
           string_stream << spacing << "break;\n";
           line_spacing -= 2;
@@ -2416,6 +2419,7 @@ class Decompiler {
           spacing.insert(0, line_spacing, ' ');
           string_stream << spacing << "}\n";
           pending_recursions.pop_back();
+          current_loops.pop_back();
         }
       };
 
@@ -2423,16 +2427,29 @@ class Decompiler {
       for (const auto& hlsl_line : code_block.hlsl_lines) {
         string_stream << spacing << hlsl_line << "\n";
       }
+      for (const auto& phi_line : code_block.phi_lines) {
+        string_stream << spacing << phi_line << "\n";
+      }
+
+      int current_loop = current_loops.empty() ? -1 : current_loop = current_loops.rbegin()[0];
 
       if (code_block.branch.branch_condition_true <= 0) return;
 
       int next_convergence = pending_convergences.empty() ? -1 : pending_convergences.rbegin()[0];
 
+      auto on_branch = [&](int branch_number) {
+        if (current_loop == code_block.branch.branch_condition_true) {
+          string_stream << spacing << "continue;\n";  // go back
+        } else if (next_convergence == branch_number) {
+          // noop
+        } else {
+          append_code_block(branch_number);
+        }
+      };
+
       if (code_block.branch.branch_condition.empty()) {
-        if (next_convergence == code_block.branch.branch_condition_true) return;
-        append_code_block(code_block.branch.branch_condition_true);
-        close_if_recursive();
-        return;
+        on_branch(code_block.branch.branch_condition_true);
+        return on_complete();
       }
 
       if (code_block.branch.branch_condition_false <= line_number
@@ -2443,21 +2460,19 @@ class Decompiler {
       if (code_block.branch.branch_condition_true == next_convergence) {
         string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\n";
         line_spacing += 2;
-        append_code_block(code_block.branch.branch_condition_false);
+        on_branch(code_block.branch.branch_condition_false);
         line_spacing -= 2;
         string_stream << spacing << "}\n";
-        close_if_recursive();
-        return;
+        return on_complete();
       }
 
       if (code_block.branch.branch_condition_false == next_convergence) {
         string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\n";
         line_spacing += 2;
-        append_code_block(code_block.branch.branch_condition_true);
+        on_branch(code_block.branch.branch_condition_true);
         line_spacing -= 2;
         string_stream << spacing << "}\n";
-        close_if_recursive();
-        return;
+        return on_complete();
       }
 
       // Find next convergence for these two items
@@ -2476,34 +2491,34 @@ class Decompiler {
       if (pair_convergence == code_block.branch.branch_condition_true) {
         string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\n";
         line_spacing += 2;
-        append_code_block(code_block.branch.branch_condition_false);
+        on_branch(code_block.branch.branch_condition_false);
         line_spacing -= 2;
         string_stream << spacing << "}\n";
         // Only print else
       } else if (pair_convergence == code_block.branch.branch_condition_false) {
         string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\n";
         line_spacing += 2;
-        append_code_block(code_block.branch.branch_condition_true);
+        on_branch(code_block.branch.branch_condition_true);
         line_spacing -= 2;
         string_stream << spacing << "}\n";
       } else if (code_block.branch.branch_condition_true < code_block.branch.branch_condition_false) {
         string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\n";
         line_spacing += 2;
-        append_code_block(code_block.branch.branch_condition_true);
+        on_branch(code_block.branch.branch_condition_true);
         line_spacing -= 2;
         string_stream << spacing << "} else { \n";
         line_spacing += 2;
-        append_code_block(code_block.branch.branch_condition_false);
+        on_branch(code_block.branch.branch_condition_false);
         line_spacing -= 2;
         string_stream << spacing << "}\n";
       } else {
         string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\n";
         line_spacing += 2;
-        append_code_block(code_block.branch.branch_condition_false);
+        on_branch(code_block.branch.branch_condition_false);
         line_spacing -= 2;
         string_stream << spacing << "} else { \n";
         line_spacing += 2;
-        append_code_block(code_block.branch.branch_condition_true);
+        on_branch(code_block.branch.branch_condition_true);
         line_spacing -= 2;
         string_stream << spacing << "}\n";
       }
@@ -2512,7 +2527,7 @@ class Decompiler {
         pending_convergences.pop_back();
         append_code_block(pair_convergence);
       };
-      close_if_recursive();
+      on_complete();
     };
 
     auto output_signature_count = preprocess_state.output_signature.size();
