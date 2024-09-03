@@ -845,35 +845,35 @@ class Decompiler {
         case ComponentType::I1:
           return "bool";
         case ComponentType::I16:
-          return "int2";
+          return "short";
         case ComponentType::U16:
-          return "uint2";
+          return "ushort";
         case ComponentType::I32:
-          return "int4";
+          return "int";
         case ComponentType::U32:
-          return "uint4";
+          return "uint";
         case ComponentType::I64:
-          return "int64_t ";
+          return "int64_t";
         case ComponentType::U64:
           return "uint64_t";
         case ComponentType::F16:
-          return "half4";
+          return "half";
         case ComponentType::F32:
-          return "float4";
+          return "float";
         case ComponentType::F64:
-          return "double4";
+          return "double";
         case ComponentType::SNormF16:
-          return "snorm half4";
+          return "snorm half";
         case ComponentType::UNormF16:
-          return "unorm half4";
+          return "unorm half";
         case ComponentType::SNormF32:
-          return "snorm float4";
+          return "snorm float";
         case ComponentType::UNormF32:
-          return "unorm float4";
+          return "unorm float";
         case ComponentType::SNormF64:
-          return "snorm double4";
+          return "snorm double";
         case ComponentType::UNormF64:
-          return "unorm double4";
+          return "unorm double";
         case ComponentType::PackedS8x32:
           return "p32i8";
         case ComponentType::PackedU8x32:
@@ -891,10 +891,15 @@ class Decompiler {
     uint32_t sample_count;
     ComponentType element_type;
     uint32_t stride;
+    std::string data_type;
     explicit SRVResource(
         std::vector<std::string_view>& metadata,
         std::map<std::string_view, std::vector<std::string_view>>& raw_metadata)
         : Resource(metadata) {
+      static auto pointer_regex = std::regex{R"(^%"class\.([^<]+)<(?:vector<)?([^,>]+)(?:, ([^>]+)>)? ?>"\*)"};
+      const auto [class_name, base_type, type_count] = StringViewMatch<3>(this->pointer, pointer_regex);
+      this->data_type = std::format("{}{}", base_type, type_count);
+
       // https://github.com/microsoft/DirectXShaderCompiler/blob/b766b432678cf5f7a93567d253bb5f7fd8a0b2c7/docs/DXIL.rst#L1047
       uint32_t shape;
       FromStringView(ParseKeyValue(metadata[6])[1], shape);
@@ -1346,7 +1351,7 @@ class Decompiler {
           if (has_coord_z) {
             coords = std::format("int3({}, {}, {})", ParseInt(coord0), ParseInt(coord1), ParseInt(coord2));
           } else {
-            coords = std::format("int2({}, {})", ParseInt(coord0), ParseInt(coord1));
+            coords = std::format("int3({}, {}, 0u)", ParseInt(coord0), ParseInt(coord1));
           }
           std::string offset;
           if (has_offset_z) {
@@ -1358,10 +1363,10 @@ class Decompiler {
           }
           // skip mipLevelOrSampleCount
           auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref_resource).second];
-          if (offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
-            decompiled = std::format("float4 _{} = {}.Load({});", variable, srv_resource.name, coords);
+          if (offset == "undef" || offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
+            decompiled = std::format("{} _{} = {}.Load({});", srv_resource.data_type, variable, srv_resource.name, coords);
           } else {
-            decompiled = std::format("float4 _{} = {}.Load({}, {});", variable, srv_resource.name, coords, offset);
+            decompiled = std::format("{} _{} = {}.Load({}, {});", srv_resource.data_type, variable, srv_resource.name, coords, offset);
           }
 
         } else if (functionName == "@dx.op.sample.f32") {
@@ -1386,7 +1391,7 @@ class Decompiler {
           if (has_offset_z) {
             offset = std::format("int3({}, {}, {})", ParseInt(offset0), ParseInt(offset1), ParseInt(offset2));
           } else if (has_coord_z) {
-            offset = std::format("int2({}, {})", ParseInt(offset0), ParseInt(offset1));
+            offset = std::format("int3({}, {}, 0u)", ParseInt(offset0), ParseInt(offset1));
           } else {
             offset = std::format("{}", ParseInt(offset0));
           }
@@ -1397,9 +1402,9 @@ class Decompiler {
           auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref_resource).second];
           auto sampler_resource = preprocess_state.sampler_resources[preprocess_state.resource_binding_variables.at(ref_sampler).second];
           if (offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
-            decompiled = std::format("float4 _{} = {}.Sample({}, {});", variable, srv_resource.name, sampler_resource.name, coords);
+            decompiled = std::format("{} _{} = {}.Sample({}, {});", srv_resource.data_type, variable, srv_resource.name, sampler_resource.name, coords);
           } else {
-            decompiled = std::format("float4 _{} = {}.Sample({}, {}, {});", variable, srv_resource.name, sampler_resource.name, coords, offset);
+            decompiled = std::format("{} _{} = {}.Sample({}, {}, {});", srv_resource.data_type, variable, srv_resource.name, sampler_resource.name, coords, offset);
           }
         } else if (functionName == "@dx.op.sampleLevel.f32") {
           auto [opNumber, srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, LOD] = StringViewSplit<11>(functionParamsString, param_regex, 2);
@@ -1430,9 +1435,9 @@ class Decompiler {
           auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref_resource).second];
           auto sampler_resource = preprocess_state.sampler_resources[preprocess_state.resource_binding_variables.at(ref_sampler).second];
           if (offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
-            decompiled = std::format("float4 _{} = {}.SampleLevel({}, {}, {});", variable, srv_resource.name, sampler_resource.name, coords, ParseFloat(LOD));
+            decompiled = std::format("{} _{} = {}.SampleLevel({}, {}, {});", srv_resource.data_type, variable, srv_resource.name, sampler_resource.name, coords, ParseFloat(LOD));
           } else {
-            decompiled = std::format("float4 _{} = {}.SampleLevel({}, {}, {}, {});", variable, srv_resource.name, sampler_resource.name, coords, ParseFloat(LOD), offset);
+            decompiled = std::format("{} _{} = {}.SampleLevel({}, {}, {}, {});", srv_resource.data_type, variable, srv_resource.name, sampler_resource.name, coords, ParseFloat(LOD), offset);
           }
         } else if (functionName == "@dx.op.dot2.f32") {
           auto [opNumber, ax, ay, bx, by] = StringViewSplit<5>(functionParamsString, param_regex, 2);
@@ -1448,7 +1453,7 @@ class Decompiler {
           auto [opNumber, srv, index, elementOffset, mask, alignment] = StringViewSplit<6>(functionParamsString, param_regex, 2);
           auto ref = std::string{srv.substr(1)};
           auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref).second];
-          decompiled = std::format("float4 _{} = {}.Load({} + ({} / {}));", variable, srv_resource.name, ParseInt(index), ParseInt(elementOffset), ParseInt(alignment));
+          decompiled = std::format("float4 _{} = {}[{}].data[{} / {}];", variable, srv_resource.name, ParseInt(index), ParseInt(elementOffset), ParseInt(alignment));
         } else {
           throw std::invalid_argument("Unknown function name");
         }
@@ -2235,12 +2240,12 @@ class Decompiler {
 
       if (srv_resource.element_type == SRVResource::ComponentType::Invalid) {
         string_stream << "struct _" << srv_resource.name << " {\n";
-        string_stream << "  float4 data[" << srv_resource.stride << "];\n";
+        string_stream << "  float data[" << srv_resource.stride / 4 << "];\n";
         string_stream << "};\n";
       }
       string_stream << SRVResource::ResourceKindString(srv_resource.shape);
       if (srv_resource.element_type != SRVResource::ComponentType::Invalid) {
-        string_stream << "<" << SRVResource::ComponentTypeString(srv_resource.element_type) << ">";
+        string_stream << "<" << srv_resource.data_type << ">";
       } else {
         string_stream << "<_" << srv_resource.name << ">";
       }
