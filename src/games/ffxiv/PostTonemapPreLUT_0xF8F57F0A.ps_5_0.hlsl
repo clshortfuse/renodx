@@ -73,9 +73,6 @@ void main(
        color = RestoreHue(color, sdrColor, injectedData.hueCorrectionStrength);
     }
 
-    // apply game paperwhite brightness with inverse UI brightness (ui brightness is re-applied in the final shader)
-    color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-
     // convert to bt2020 for upscaling pass
     color = mul(renodx::color::BT709_TO_BT2020_MAT, color);
 
