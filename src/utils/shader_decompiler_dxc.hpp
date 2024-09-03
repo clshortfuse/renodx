@@ -179,6 +179,8 @@ class Decompiler {
   enum class SignatureName : uint32_t {
     PRIMITIVE_ID,
     SV_POSITION,
+    COLOR,
+    ORIGINAL_POSITION,
     SV_RENDER_TARGET_ARRAY_INDEX,
     SV_TARGET,
     TEXCOORD,
@@ -260,7 +262,10 @@ class Decompiler {
 
     if (input == "oeq") return "==";
     if (input == "eq") return "==";
+
     if (input == "ne") return "!=";
+    if (input == "une") return "!=";
+
     throw std::invalid_argument("Could not parse code assignment operator");
   }
 
@@ -319,6 +324,8 @@ class Decompiler {
   static SignatureName SignatureNameFromString(std::string_view input) {
     if (input == "PRIMITIVE_ID") return SignatureName::PRIMITIVE_ID;
     if (input == "SV_Position") return SignatureName::SV_POSITION;
+    if (input == "COLOR") return SignatureName::COLOR;
+    if (input == "ORIGINAL_POSITION") return SignatureName::ORIGINAL_POSITION;
     if (input == "SV_RenderTargetArrayIndex") return SignatureName::SV_RENDER_TARGET_ARRAY_INDEX;
     if (input == "SV_Target") return SignatureName::SV_TARGET;
     if (input == "TEXCOORD") return SignatureName::TEXCOORD;
@@ -330,6 +337,8 @@ class Decompiler {
   static std::string SignatureNameToString(SignatureName name) {
     if (name == SignatureName::PRIMITIVE_ID) return "PRIMITIVE_ID";
     if (name == SignatureName::SV_POSITION) return "SV_Position";
+    if (name == SignatureName::COLOR) return "COLOR";
+    if (name == SignatureName::ORIGINAL_POSITION) return "ORIGINAL_POSITION";
     if (name == SignatureName::SV_RENDER_TARGET_ARRAY_INDEX) return "SV_RenderTargetArrayIndex";
     if (name == SignatureName::SV_TARGET) return "SV_Target";
     if (name == SignatureName::TEXCOORD) return "TEXCOORD";
