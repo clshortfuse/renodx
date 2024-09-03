@@ -1,5 +1,5 @@
-#ifndef SRC_ORI2_SHARED_H_
-#define SRC_ORI2_SHARED_H_
+#ifndef SRC_GOW2018_SHARED_H_
+#define SRC_GOW2018_SHARED_H_
 
 #ifndef __cplusplus
 #include "../../shaders/renodx.hlsl"
@@ -28,4 +28,4 @@ cbuffer cb11 : register(b11) {
 }
 #endif
 
-#endif  // SRC_ORI2_SHARED_H_
+#endif  // SRC_GOW2018_SHARED_H_

@@ -183,7 +183,7 @@ void OnPresetOff() {
 // NOLINTBEGIN(readability-identifier-naming)
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Ori and the Will of the Wisps";
+extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for God of War";
 
 // NOLINTEND(readability-identifier-naming)
 
