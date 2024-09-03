@@ -1,7 +1,7 @@
 #include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.3.16 on Mon Sep 02 16:27:23 2024
-RWTexture2D<float4> u9 : register(u9);  // added, was missing before
+RWTexture2D<float4> u9 : register(u9);  // decompiler missed this
 
 Texture2D<float4> t18 : register(t18);
 
@@ -161,29 +161,16 @@ void main(
   r1.xyz = r0.zzz ? float3(0,0,0) : r1.xyz;
 
   if (injectedData.toneMapType) {
-    float3 hue_correction_source = r1.xyz;
-    switch(injectedData.toneMapHueCorrectionSource) {
-        case 0:
-            hue_correction_source = renodx::tonemap::ACESFittedAP1(r1.xyz);
-            break;
-        case 1:
-            hue_correction_source = renodx::tonemap::uncharted2::BT709(r1.xyz);
-            break;
-        default:
-            // Default to one of the methods if an unknown type is passed
-            hue_correction_source = r1.xyz;
-            break;
-    }
     r1.xyz = renodx::color::grade::UserColorGrading(
-    r1.xyz,
-        injectedData.colorGradeExposure,        // exposure
-        injectedData.colorGradeHighlights,      // highlights
-        injectedData.colorGradeShadows,         // shadows
-        injectedData.colorGradeContrast,        // contrast
-        injectedData.colorGradeSaturation,      // saturation
-        injectedData.colorGradeBlowout,         // dechroma
-        injectedData.toneMapHueCorrection,      // hue correction
-        hue_correction_source);
+        r1.xyz,
+        injectedData.colorGradeExposure,              // exposure
+        injectedData.colorGradeHighlights,            // highlights
+        injectedData.colorGradeShadows,               // shadows
+        injectedData.colorGradeContrast,              // contrast
+        injectedData.colorGradeSaturation,            // saturation
+        injectedData.colorGradeBlowout,               // dechroma
+        injectedData.toneMapHueCorrection,            // hue correction
+        renodx::tonemap::uncharted2::BT709(r1.xyz));  // Uncharted2
   }
 
   float3 lutInputColor = r1.xyz;
@@ -235,6 +222,15 @@ void main(
   o0.xyz = r1.xyz;  // o0.xyz = max(float3(0,0,0), r1.xyz);
   if (injectedData.toneMapType == 0) {
     o0.xyz = max(0, o0.xyz);
+  } else {
+    o0.rgb = renodx::color::grade::UserColorGrading(  // apply saturation adjustment after LUT
+        o0.rgb,
+        1.f,                                // exposure
+        1.f,                                // highlights
+        1.f,                                // shadows
+        1.f,                                // contrast
+        injectedData.colorGradeSaturation,  // saturation
+        injectedData.colorGradeBlowout);     // dechroma
   }
   r0.z = saturate(r1.w * 4 + -1);
   r0.z = -cb0[29].w * r0.z;

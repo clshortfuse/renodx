@@ -26,20 +26,20 @@ void main
   
   SV_TARGET0 = float4(pow(inputColor.rgb, resourceTables__passData.gamma), inputColor.a);
   
-  if (injectedData.toneMapType) {
+  if (injectedData.toneMapType) { // Not Vanilla
     // PQ to BT.2020 for paper white scaling 
     SV_TARGET0.rgb = renodx::color::bt2020::from::PQ(SV_TARGET0.rgb);
-    SV_TARGET0.rgb *= injectedData.toneMapGameNits/310.f;
+    SV_TARGET0.rgb *= injectedData.toneMapUINits/310.f;
 
-    // tonemap
-    SV_TARGET0.rgb = renodx::color::bt709::from::BT2020(SV_TARGET0.rgb * 10000.f);
-    float3 untonemapped = SV_TARGET0.rgb;
-    DICESettings config = DefaultDICESettings();
-    config.Type = 3u;
-    config.ShoulderStart = 0.5f;
-    SV_TARGET0.rgb = DICETonemap(SV_TARGET0.rgb, injectedData.toneMapPeakNits, config);
-    SV_TARGET0.rgb = renodx::color::bt2020::from::BT709(SV_TARGET0.rgb / 10000.f);
-    // end tonemap
+    if (injectedData.toneMapType > 1) { // DICE
+      SV_TARGET0.rgb = renodx::color::bt709::from::BT2020(SV_TARGET0.rgb * 10000.f);
+      float3 untonemapped = SV_TARGET0.rgb;
+      DICESettings config = DefaultDICESettings();
+      config.Type = 3u;
+      config.ShoulderStart = 0.5f;
+      SV_TARGET0.rgb = DICETonemap(SV_TARGET0.rgb, injectedData.toneMapPeakNits, config);
+      SV_TARGET0.rgb = renodx::color::bt2020::from::BT709(SV_TARGET0.rgb / 10000.f);
+    }
 
     SV_TARGET0.rgb = renodx::color::pq::from::BT2020(SV_TARGET0.rgb);
   }

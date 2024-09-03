@@ -42,7 +42,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "DICE (By Channel)"},
+        .labels = {"Vanilla (Use In-Game Sliders)", "None", "DICE (By Channel)"},
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
@@ -69,15 +69,15 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.toneMapType != 0; },
     },
     new renodx::utils::settings::Setting{
-        .key = "toneMapHueCorrectionSource",
-        .binding = &shader_injection.toneMapHueCorrectionSource,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .key = "toneMapUINits",
+        .binding = &shader_injection.toneMapUINits,
+        .default_value = 203.f,
         .can_reset = false,
-        .label = "Hue Emulation Source",
+        .label = "UI Brightness",
         .section = "Tone Mapping",
-        .tooltip = "Selects the tonemapper used for hue shift emulation",
-        .labels = {"ACES AP1", "Uncharted 2"},
+        .tooltip = "Sets the brightness of UI and HUD elements in nits",
+        .min = 48.f,
+        .max = 500.f,
         .is_enabled = []() { return shader_injection.toneMapType != 0; },
     },
     new renodx::utils::settings::Setting{
@@ -85,9 +85,9 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.toneMapHueCorrection,
         .default_value = 50.f,
         .can_reset = false,
-        .label = "Hue Emulation",
+        .label = "SDR Hue Emulation",
         .section = "Tone Mapping",
-        .tooltip = "Emulates hue shifting from alternative tonemappers",
+        .tooltip = "Emulates hue shifting from SDR tonemapping",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType != 0; },
         .parse = [](float value) { return value * 0.01f; },
@@ -168,6 +168,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapType", 0);
   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 1000.f);
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
+  renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
