@@ -210,7 +210,11 @@ inline HRESULT CompileFromBlob(
     }
 
     std::vector<LPCWSTR> arguments;
-    if ((flags1 & D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY) != 0) arguments.push_back(L"/Gec");
+    if (((flags1 & D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY) != 0)) {
+      if (target[3] <= '4' || (target[3] == '5' && target[5] == '0')) {
+        arguments.push_back(L"/Gec");
+      }
+    }
     // /Ges Not implemented:
     // if(flags1 & D3DCOMPILE_ENABLE_STRICTNESS) arguments.push_back(L"/Ges");
     if ((flags1 & D3DCOMPILE_IEEE_STRICTNESS) != 0) arguments.push_back(L"/Gis");
