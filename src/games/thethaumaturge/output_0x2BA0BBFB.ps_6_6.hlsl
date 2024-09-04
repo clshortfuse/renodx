@@ -183,7 +183,9 @@ float4 main(
   float _145 = _142 * _140;
   float4 _146 = cb0[43u];
   float _147 = _146.y;
-  float _148 = dot(float3(_143, _144, _145), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f));
+  float _148 = dot(
+      float3(_143, _144, _145),
+      float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f));
   float4 _149 = cb0[9u];
   float _150 = _149.x;
   float _151 = _149.y;
@@ -244,8 +246,12 @@ float4 main(
   float _206 = _203 * _142;
   float _207 = _204 * _142;
   float _208 = _205 * _142;
-  float _209 = dot(float3(_184, _185, _186), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f));
-  float _210 = dot(float3(_206, _207, _208), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f));
+  float _209 = dot(
+      float3(_184, _185, _186),
+      float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f));
+  float _210 = dot(
+      float3(_206, _207, _208),
+      float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f));
   float _211 = ddx_fine(_143);
   float _212 = _211 * _161;
   float _213 = ddx_fine(_144);
@@ -399,7 +405,9 @@ float4 main(
   float _361 = _360.x;
   float _362 = _360.y;
   float _363 = _360.z;
-  float _364 = dot(float3(_356, _357, _358), float3(0.04055619612336159f, 0.7329681515693665f, -0.031567368656396866f));
+  float _364 = dot(float3(_356, _357, _358),
+                   float3(0.04055619612336159f, 0.7329681515693665f,
+                          -0.031567368656396866f));
   float4 _365 = cb0[2u];
   float _366 = _365.z;
   float _367 = _364 / _366;
@@ -461,7 +469,9 @@ float4 main(
   float _423 = _420 * _357;
   float _424 = _421 * _358;
 
-#if 0 // Vanilla sampling
+  float3 untonemapped = float3(_422, _423, _424);
+
+#if 0  // Vanilla sampling
   float _425 = _422 + 0.002667719265446067f;
   float _426 = _423 + 0.002667719265446067f;
   float _427 = _424 + 0.002667719265446067f;
@@ -494,13 +504,18 @@ float4 main(
   float _453 = _450 * 1.0499999523162842f;
   float _454 = _451 * 1.0499999523162842f;
 #else
-  float3 lut_input = renodx::color::pq::from::BT2020(float3(_422, _423, _424));
-  
-  float3 sampled = renodx::lut::Sample(t6, s4, 1.f, 32.f);
+
+  float3 lut_input = renodx::color::pq::from::BT2020(untonemapped, 100.f);
+  float3 sampled = renodx::lut::Sample(t6, s4, lut_input);
+  sampled = renodx::color::bt2020::from::PQ(sampled, 100.f);
+
   float _452 = sampled.r;
   float _453 = sampled.g;
   float _454 = sampled.b;
+
 #endif
+
+  float3 post_lut = float3(_452, _453, _454);
 
   float _455 = _20 * 543.3099975585938f;
   float _456 = _455 + _19;
@@ -522,8 +537,8 @@ float4 main(
   _539 = _463;
   float _540;
   _540 = _464;
-  
-  _467 = true; // disable custom pq/srgb
+
+  _467 = true;  // disable custom pq/srgb
 
   if (!_467) {
     float _469 = log2(_462);
@@ -603,18 +618,11 @@ float4 main(
   SV_Target.z = _540;
   SV_Target.w = 0.0f;
 
-  float3 untonemapped = float3(_422, _423, _424);
-  // float3 other = float3(_425, _426, _427);
-  // float3 grained = float3(_434, _435, _436);
-  float3 post_lut = float3(_452, _453, _454);
-  
+  // Custom logic
   SV_Target.rgb = post_lut;
-  renodx::tonemap::Config config = renodx::tonemap::config::Create();
-  config.type = 2.f;
-  config.peak_nits = 1000.f;
-  // SV_Target.rgb = renodx::tonemap::config::Apply(untonemapped, config);
-
   SV_Target.rgb = renodx::color::bt2020::from::BT709(SV_Target.rgb);
-  SV_Target.rgb = renodx::color::pq::from::BT2020(SV_Target.rgb * (203.f / 10000.f));
+  SV_Target.rgb *= 203.f;
+  SV_Target.rgb /= 10000.f;
+  SV_Target.rgb = renodx::color::pq::from::BT2020(SV_Target.rgb);
   return SV_Target;
 }
