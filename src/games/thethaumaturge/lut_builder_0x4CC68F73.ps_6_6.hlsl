@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./shared.h";
 
 Texture2D<float4> t0 : register(t0);
 
@@ -119,6 +119,7 @@ float4 main(
       _47 = 1.0015007257461548f;
       if (!_26) {
         bool _28 = (_21 == 4);
+        // AP1_2_sRGB (4) : Identity (5)
         float _29 = _28 ? 1.0f : 1.7050515413284302f;
         float _30 = _28 ? 0.0f : -0.6217905879020691f;
         float _31 = _28 ? 0.0f : -0.0832584798336029f;
@@ -228,6 +229,9 @@ float4 main(
   float _126 = _117 * _105;
   float _127 = mad(_118, _106, _126);
   float _128 = mad(_119, _107, _127);
+
+  // Gamut Expansion
+  // AP1_RGB2Y
   float _129 = dot(float3(_122, _125, _128), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
   float _130 = _122 / _129;
   float _131 = _125 / _129;
@@ -247,6 +251,7 @@ float4 main(
   float _145 = exp2(_144);
   float _146 = 1.0f - _145;
   float _147 = _146 * _139;
+
   float _148 = _122 * 1.370412826538086f;
   float _149 = mad(-0.32929131388664246f, _125, _148);
   float _150 = mad(-0.06368283927440643f, _128, _149);
@@ -256,6 +261,7 @@ float4 main(
   float _154 = _122 * -0.02579325996339321f;
   float _155 = mad(-0.09862564504146576f, _125, _154);
   float _156 = mad(1.203694462776184f, _128, _155);
+
   float _157 = _150 - _122;
   float _158 = _153 - _125;
   float _159 = _156 - _128;
@@ -265,6 +271,10 @@ float4 main(
   float _163 = _160 + _122;
   float _164 = _161 + _125;
   float _165 = _162 + _128;
+
+
+  
+  // AP1_RGB2Y
   float _166 = dot(float3(_163, _164, _165), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
   float4 _167 = cb0[24u];
   float _168 = _167.x;
@@ -656,7 +666,9 @@ float4 main(
   float _554 = _545 * _531;
   float _555 = mad(_546, _533, _554);
   float _556 = mad(_547, _535, _555);
-  float _557 = _140.y;
+  
+  float _557 = _140.y; // BlueCorrect
+
   float _558 = _531 * 0.9386394023895264f;
   float _559 = mad(-4.540197551250458e-09f, _533, _558);
   float _560 = mad(0.061360642313957214f, _535, _559);
@@ -673,6 +685,15 @@ float4 main(
   float _571 = _568 + _531;
   float _572 = _569 + _533;
   float _573 = _570 + _535;
+
+
+
+  float3 ap1_graded_color = float3(_571, _572, _573);
+  // Finished grading in AP1
+
+  // start of FilmToneMap
+
+  // AP1 => AP0
   float _574 = _571 * 0.6954522132873535f;
   float _575 = mad(0.14067868888378143f, _572, _574);
   float _576 = mad(0.16386905312538147f, _573, _575);
@@ -682,6 +703,10 @@ float4 main(
   float _580 = _571 * -0.005525882821530104f;
   float _581 = mad(0.004025210160762072f, _572, _580);
   float _582 = mad(1.0015007257461548f, _573, _581);
+
+  // start aces::aces_rrt
+
+  // aces::rgb_2_saturation
   float _583 = min(_576, _579);
   float _584 = min(_583, _582);
   float _585 = max(_576, _579);
@@ -691,6 +716,8 @@ float4 main(
   float _589 = _587 - _588;
   float _590 = max(_586, 0.009999999776482582f);
   float _591 = _589 / _590;
+
+  // aces::rgb_2_yc
   float _592 = _582 - _579;
   float _593 = _592 * _582;
   float _594 = _579 - _576;
@@ -705,6 +732,8 @@ float4 main(
   float _603 = _602 + _582;
   float _604 = _603 + _601;
   float _605 = _604 * 0.3333333432674408f;
+
+  // aces:sigmoid_shaper
   float _606 = _591 + -0.4000000059604645f;
   float _607 = _606 * 5.0f;
   float _608 = _606 * 2.5f;
@@ -722,6 +751,8 @@ float4 main(
   float _620 = _617 * _619;
   float _621 = _620 + 1.0f;
   float _622 = _621 * 0.02500000037252903f;
+
+  // aces:glow_fwd
   bool _623 = (_605 > 0.0533333346247673f);
   _631 = _622;
   if (_623) {
@@ -734,10 +765,15 @@ float4 main(
       _631 = _629;
     }
   }
+
+  // aces::added_glow
   float _632 = _631 + 1.0f;
+
   float _633 = _632 * _576;
   float _634 = _632 * _579;
   float _635 = _632 * _582;
+
+  // aces::rgb_2_hue
   bool _636 = (_633 == _634);
   bool _637 = (_634 == _635);
   bool _638 = _636 & _637;
@@ -775,6 +811,8 @@ float4 main(
   }
   float _668 = max(_667, 0.0f);
   float _669 = min(_668, 360.0f);
+
+  // aces::center_hue
   bool _670 = (_669 < -180.0f);
   if (_670) {
     float _672 = _669 + 360.0f;
@@ -787,20 +825,29 @@ float4 main(
       _678 = _676;
     }
   }
+
+  // aces::smoothstep (with smoothstep)
   float _679 = _678 * 0.014814814552664757f;
   float _680 = abs(_679);
   float _681 = 1.0f - _680;
   float _682 = saturate(_681);
   float _683 = _682 * 2.0f;
   float _684 = 3.0f - _683;
+
   float _685 = _682 * _682;
   float _686 = _685 * _684;
+
+  // RRT_RED_PIVOT
   float _687 = 0.029999999329447746f - _633;
+
+  // 1 - RRT_RED_SCALE
   float _688 = _591 * 0.18000000715255737f;
   float _689 = _688 * _687;
   float _690 = _686 * _686;
   float _691 = _690 * _689;
   float _692 = _691 + _633;
+
+  // AP0 => AP1
   float _693 = _692 * 1.4514392614364624f;
   float _694 = mad(-0.2365107536315918f, _634, _693);
   float _695 = mad(-0.21492856740951538f, _635, _694);
@@ -810,19 +857,28 @@ float4 main(
   float _699 = _692 * 0.008316148072481155f;
   float _700 = mad(-0.006032449658960104f, _634, _699);
   float _701 = mad(0.9977163076400757f, _635, _700);
+
+
   float _702 = max(0.0f, _695);
   float _703 = max(0.0f, _698);
   float _704 = max(0.0f, _701);
+  
+  // AP1_RGB2Y
   float _705 = dot(float3(_702, _703, _704), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
   float _706 = _702 - _705;
   float _707 = _703 - _705;
   float _708 = _704 - _705;
+  // RRT_SAT_FACTOR (0.96)
   float _709 = _706 * 0.9599999785423279f;
   float _710 = _707 * 0.9599999785423279f;
   float _711 = _708 * 0.9599999785423279f;
   float _712 = _709 + _705;
   float _713 = _710 + _705;
   float _714 = _711 + _705;
+  // end of aces_rrt
+
+
+  // 
   float4 _715 = cb0[37u];
   float _716 = _715.w;
   float _717 = _716 + 1.0f;
@@ -833,6 +889,8 @@ float4 main(
   float _722 = _721 + 1.0f;
   float _723 = _715.z;
   float _724 = _722 - _723;
+
+  // Film Toe > 0.8
   bool _725 = (_718 > 0.800000011920929f);
   float _726 = _715.x;
   if (_725) {
@@ -852,6 +910,8 @@ float4 main(
     float _740 = -0.7447274923324585f - _739;
     _742 = _740;
   }
+
+
   float _743 = 1.0f - _718;
   float _744 = _743 / _726;
   float _745 = _744 - _742;
@@ -964,6 +1024,7 @@ float4 main(
   float _852 = _845 + _811;
   float _853 = _848 + _812;
   float _854 = _851 + _813;
+  // AP1_RGB2Y
   float _855 = dot(float3(_852, _853, _854), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
   float _856 = _852 - _855;
   float _857 = _853 - _855;
@@ -977,7 +1038,11 @@ float4 main(
   float _865 = max(0.0f, _862);
   float _866 = max(0.0f, _863);
   float _867 = max(0.0f, _864);
-  float _868 = _140.w;
+
+  // end of FilmToneMap
+
+  // lerp with ToneCurveAmount
+  float _868 = _140.w; // ToneCurveAmount
   float _869 = _865 - _571;
   float _870 = _866 - _572;
   float _871 = _867 - _573;
@@ -987,6 +1052,8 @@ float4 main(
   float _875 = _872 + _571;
   float _876 = _873 + _572;
   float _877 = _874 + _573;
+
+  // BlueBlueCorrectInv
   float _878 = _875 * 1.065374732017517f;
   float _879 = mad(1.451815478503704e-06f, _876, _878);
   float _880 = mad(-0.06537103652954102f, _877, _879);
@@ -996,6 +1063,8 @@ float4 main(
   float _884 = _875 * 1.862645149230957e-08f;
   float _885 = mad(2.0954757928848267e-08f, _876, _884);
   float _886 = mad(0.9999996423721313f, _877, _885);
+
+  // lerp with BlueCorrection
   float _887 = _880 - _875;
   float _888 = _883 - _876;
   float _889 = _886 - _877;
@@ -1006,6 +1075,8 @@ float4 main(
   float _894 = _891 + _876;
   float _895 = _892 + _877;
   float _896 = _537 * _893;
+
+  // Convert to Target Colorspace
   float _897 = mad(_538, _894, _896);
   float _898 = mad(_539, _895, _897);
   float _899 = _541 * _893;
@@ -1017,9 +1088,15 @@ float4 main(
   float _905 = max(0.0f, _898);
   float _906 = max(0.0f, _901);
   float _907 = max(0.0f, _904);
+
+
+  // Clip color to target
   float _908 = saturate(_905);
   float _909 = saturate(_906);
   float _910 = saturate(_907);
+
+
+  // BT709 to SRGB
   bool _911 = (_908 < 0.0031306699384003878f);
   if (_911) {
     float _913 = _908 * 12.920000076293945f;
@@ -1056,6 +1133,8 @@ float4 main(
     float _941 = _940 + -0.054999999701976776f;
     _943 = _941;
   }
+
+  // 16x16x16 LUT Sample
   float _944 = _921 * 0.9375f;
   float _945 = _932 * 0.9375f;
   float _946 = _944 + 0.03125f;
@@ -1102,6 +1181,8 @@ float4 main(
   float _987 = max(6.103519990574569e-05f, _984);
   float _988 = max(6.103519990574569e-05f, _985);
   float _989 = max(6.103519990574569e-05f, _986);
+
+  // SRGB => BT709
   float _990 = _987 * 0.07739938050508499f;
   float _991 = _988 * 0.07739938050508499f;
   float _992 = _989 * 0.07739938050508499f;
@@ -1126,6 +1207,9 @@ float4 main(
   float _1011 = _1008 ? _1005 : _990;
   float _1012 = _1009 ? _1006 : _991;
   float _1013 = _1010 ? _1007 : _992;
+
+
+  // FilmToneMap Gamma Curve adjustment
   float4 _1014 = cb0[39u];
   float _1015 = _1014.x;
   float _1016 = _1015 * _1011;
@@ -1189,8 +1273,11 @@ float4 main(
   float _1074 = exp2(_1071);
   float _1075 = exp2(_1072);
   float _1076 = exp2(_1073);
+
+  // Start output
   int4 _1077 = cb0[40u];
   int _1078 = _1077.w;
+
   bool _1079 = (_1078 == 0);
   if (_1079) {
     int4 _1081 = cb1[20u];
@@ -1199,6 +1286,7 @@ float4 main(
     _1116 = _1074;
     _1117 = _1075;
     _1118 = _1076;
+    // CustomOutputMatrix?
     if (_1083) {
       float4 _1085 = cb1[8u];
       float _1086 = _1085.x;
@@ -1234,6 +1322,8 @@ float4 main(
       _1117 = _1111;
       _1118 = _1114;
     }
+
+    // Linear=>SRGB
     bool _1119 = (_1116 < 0.0031306699384003878f);
     if (_1119) {
       float _1121 = _1116 * 12.920000076293945f;
@@ -5144,6 +5234,7 @@ float4 main(
   SV_Target.g = _2501;
   SV_Target.b = _2502;
 
-  SV_Target.rgb = input_coords;
+  // SV_Target.rgb = renodx::color::bt2020::from::PQ(input_coords) * 10000.f;
+  // SV_Target.rgb = input_color;
   return SV_Target;
 }
