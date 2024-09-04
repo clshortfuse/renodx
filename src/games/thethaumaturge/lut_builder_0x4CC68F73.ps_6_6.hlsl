@@ -2,20 +2,16 @@
 
 Texture2D<float4> t0 : register(t0);
 
-cbuffer _cb0 : register(b0) {
-  float4 cb0[42] : packoffset(c0);
-};
-cbuffer _cb1 : register(b1) {
-  float4 cb1[21] : packoffset(c0);
-};
+cbuffer _cb0 : register(b0) { float4 cb0[42] : packoffset(c0); };
+cbuffer _cb1 : register(b1) { float4 cb1[21] : packoffset(c0); };
 
 SamplerState s0 : register(s0);
 
 float4 main(
   noperspective float2 TEXCOORD : TEXCOORD,
   noperspective float4 SV_Position : SV_Position,
-  nointerpolation uint SV_RenderTargetArrayIndex : SV_RenderTargetArrayIndex
-) : SV_Target {
+  nointerpolation uint SV_RenderTargetArrayIndex : SV_RenderTargetArrayIndex)
+    : SV_Target {
   float4 SV_Target;
   // texture _1 = t0;
   // SamplerState _2 = s0;
@@ -30,12 +26,12 @@ float4 main(
   float _11[6];
   float _12[6];
   float _13[6];
-  float _14 = _8 + -0.015625f;            // 0.5/32
-  float _15 = _9 + -0.015625f;            // 0.5/32
+  float _14 = _8 + -0.015625f;  // 0.5/32
+  float _15 = _9 + -0.015625f;  // 0.5/32
   float _16 = _14 * 1.0322580337524414f;  // 32 / (32 - 1)
   float _17 = _15 * 1.0322580337524414f;  // 32 / (32 - 1)
   float _18 = float(_7);
-  float _19 = _18 * 0.032258063554763794f;  // 1/(32-1)
+  float _19 = _18 * 0.032258063554763794f; // 1/(32-1)
   int4 _20 = cb0[41u];
   int _21 = _20.x;
   bool _22 = (_21 == 1);
@@ -145,7 +141,7 @@ float4 main(
   int _49 = _48.w;
   bool _50 = (_49 > 2);
 
-  _50 = true;  // USE PQ
+  _50 = true; // USE PQ
 
   if (_50) {
     float _52 = log2(_16);
@@ -214,7 +210,7 @@ float4 main(
   // float2 UV = TEXCOORD.xy - float2(0.5f / 32.f, 0.5f / 32.f);
   // float3 UVW = float3(UV * 32.f / (32.f - 1.f), SV_RenderTargetArrayIndex / (32.f - 1.f));
   // input_color = renodx::color::bt2020::from::PQ(UVW) * 10000.f / 100.f;
-
+  
   float4 _108 = cb1[8u];
   float _109 = _108.x;
   float _110 = _108.y;
@@ -5346,13 +5342,13 @@ float4 main(
 
   // Custom logic
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
-  config.type = 2.f;  // ACES
+  config.type = 2.f; // ACES
   config.peak_nits = 1000.f;
   config.game_nits = 203.f;
   renodx::lut::Config lut_config = renodx::lut::config::Create(
       s0,
-      0.f,  // strength;
-      0.f,  // scaling
+      1.f, // strength;
+      1.f, // scaling
       renodx::lut::config::type::SRGB,
       renodx::lut::config::type::SRGB,
       16);

@@ -471,7 +471,6 @@ float4 main(
 
   float3 untonemapped = float3(_422, _423, _424);
 
-#if 0  // Vanilla sampling
   float _425 = _422 + 0.002667719265446067f;
   float _426 = _423 + 0.002667719265446067f;
   float _427 = _424 + 0.002667719265446067f;
@@ -503,19 +502,13 @@ float4 main(
   float _452 = _449 * 1.0499999523162842f;
   float _453 = _450 * 1.0499999523162842f;
   float _454 = _451 * 1.0499999523162842f;
-#else
-
-  float3 lut_input = renodx::color::pq::from::BT2020(untonemapped, 100.f);
-  float3 sampled = renodx::lut::Sample(t6, s4, lut_input);
-  sampled = renodx::color::bt2020::from::PQ(sampled, 100.f);
-
-  float _452 = sampled.r;
-  float _453 = sampled.g;
-  float _454 = sampled.b;
-
-#endif
 
   float3 post_lut = float3(_452, _453, _454);
+
+  // Custom
+  float3 lut_input = renodx::color::pq::from::BT2020(untonemapped, 100.f);
+  float3 sampled = renodx::lut::Sample(t6, s4, lut_input);
+  post_lut = renodx::color::bt2020::from::PQ(sampled, 100.f);
 
   float _455 = _20 * 543.3099975585938f;
   float _456 = _455 + _19;
