@@ -30,6 +30,8 @@
 
 #include "../utils/string_view.hpp"
 
+#define DECOMPILER_DXC_DEBUG 0
+
 namespace renodx::utils::shader::decompiler::dxc {
 enum class TokenizerState : uint32_t {
   START,
@@ -176,18 +178,6 @@ inline TokenizerState& operator++(TokenizerState& state, int) {
 }
 
 class Decompiler {
-  enum class SignatureName : uint32_t {
-    PRIMITIVE_ID,
-    SV_POSITION,
-    COLOR,
-    ORIGINAL_POSITION,
-    SV_RENDER_TARGET_ARRAY_INDEX,
-    SV_TARGET,
-    TEXCOORD,
-    TEXCOORD10_CENTROID,
-    TEXCOORD11_CENTROID
-  };
-
   static std::string ParseIndex(std::string_view input) {
     if (input == "0") return "x";
     if (input == "1") return "y";
@@ -250,15 +240,19 @@ class Decompiler {
   static std::string ParseOperator(std::string_view input) {
     if (input == "ogt") return ">";
     if (input == "ugt") return ">";
+    if (input == "sgt") return ">";
 
     if (input == "olt") return "<";
     if (input == "ult") return "<";
+    if (input == "slt") return "<";
 
     if (input == "ole") return "<=";
     if (input == "ule") return "<=";
+    if (input == "sle") return "<=";
 
     if (input == "oge") return ">=";
     if (input == "uge") return ">=";
+    if (input == "sge") return ">=";
 
     if (input == "oeq") return "==";
     if (input == "eq") return "==";
@@ -266,6 +260,7 @@ class Decompiler {
     if (input == "ne") return "!=";
     if (input == "une") return "!=";
 
+    std::cerr << input << "\n";
     throw std::invalid_argument("Could not parse code assignment operator");
   }
 
@@ -321,45 +316,21 @@ class Decompiler {
       {"36", "min"},
   };
 
-  static SignatureName SignatureNameFromString(std::string_view input) {
-    if (input == "PRIMITIVE_ID") return SignatureName::PRIMITIVE_ID;
-    if (input == "SV_Position") return SignatureName::SV_POSITION;
-    if (input == "COLOR") return SignatureName::COLOR;
-    if (input == "ORIGINAL_POSITION") return SignatureName::ORIGINAL_POSITION;
-    if (input == "SV_RenderTargetArrayIndex") return SignatureName::SV_RENDER_TARGET_ARRAY_INDEX;
-    if (input == "SV_Target") return SignatureName::SV_TARGET;
-    if (input == "TEXCOORD") return SignatureName::TEXCOORD;
-    if (input == "TEXCOORD10_centroid") return SignatureName::TEXCOORD10_CENTROID;
-    if (input == "TEXCOORD11_centroid") return SignatureName::TEXCOORD11_CENTROID;
-    throw std::invalid_argument("Unknown signature name");
-  }
-
-  static std::string SignatureNameToString(SignatureName name) {
-    if (name == SignatureName::PRIMITIVE_ID) return "PRIMITIVE_ID";
-    if (name == SignatureName::SV_POSITION) return "SV_Position";
-    if (name == SignatureName::COLOR) return "COLOR";
-    if (name == SignatureName::ORIGINAL_POSITION) return "ORIGINAL_POSITION";
-    if (name == SignatureName::SV_RENDER_TARGET_ARRAY_INDEX) return "SV_RenderTargetArrayIndex";
-    if (name == SignatureName::SV_TARGET) return "SV_Target";
-    if (name == SignatureName::TEXCOORD) return "TEXCOORD";
-    if (name == SignatureName::TEXCOORD10_CENTROID) return "TEXCOORD10_centroid";
-    if (name == SignatureName::TEXCOORD11_CENTROID) return "TEXCOORD11_centroid";
-    throw std::invalid_argument("Unknown signature name");
-  }
+  inline static const std::map<std::string, std::string> BINARY_INT32_OPS = {
+      {"37", "max"},  // imax
+      {"38", "min"},  // imin
+      {"39", "max"},  // umax
+      {"40", "min"},  // umin
+  };
 
   struct SignaturePacked {
-    SignatureName name;
+    std::string_view name;
 
     uint32_t index;
     uint32_t mask;  // Bitwise 1010
     uint32_t dxregister;
 
-    enum class SysValue {
-      NONE,
-      POS,
-      RTINDEX,
-      TARGET
-    } sys_value;
+    std::string_view sys_value;
 
     enum class Format {
       FLOAT,
@@ -370,11 +341,11 @@ class Decompiler {
 
     [[nodiscard]] std::string ToString() const {
       std::stringstream s;
-      s << "name: " << static_cast<uint32_t>(this->name);
+      s << "name: " << this->name;
       s << ", index: " << this->index;
       s << ", mask: " << this->mask;
       s << ", register: " << this->dxregister;
-      s << ", sysValue: " << static_cast<uint32_t>(this->sys_value);
+      s << ", sysValue: " << sys_value;
       s << ", format: " << static_cast<uint32_t>(this->format);
       s << ", used: " << this->used;
       return s.str();
@@ -429,14 +400,6 @@ class Decompiler {
       return flags;
     }
 
-    static SysValue SysValueFromString(std::string_view input) {
-      if (input == "NONE") return SysValue::NONE;
-      if (input == "POS") return SysValue::POS;
-      if (input == "RTINDEX") return SysValue::RTINDEX;
-      if (input == "TARGET") return SysValue::TARGET;
-      throw std::invalid_argument("Unknown SysValue");
-    }
-
     static Format FormatFromString(std::string_view input) {
       if (input == "float") return Format::FLOAT;
       if (input == "uint") return Format::UINT;
@@ -455,18 +418,18 @@ class Decompiler {
       static auto regex = std::regex{R"(; (\S+)\s+(\S+)\s+((?:x| )(?:y| )(?:z| )(?:w| ))\s+(\S+)\s+(\S+)\s+(\S+)\s*([xyzw ]*))"};
       auto [name, index, mask, dxregister, sysValue, format, used] = StringViewMatch<7>(line, regex);
 
-      this->name = SignatureNameFromString(name);
+      this->name = name;
       FromStringView(index, this->index);
       this->mask = FlagsFromCoordinates(mask);
       FromStringView(dxregister, this->dxregister);
-      this->sys_value = SysValueFromString(sysValue);
+      this->sys_value = sysValue;
       this->format = FormatFromString(format);
       this->used = FlagsFromCoordinates(used);
     }
   };
 
   struct SignatureProperty {
-    SignatureName name;
+    std::string_view name;
 
     uint32_t index;
 
@@ -481,7 +444,7 @@ class Decompiler {
 
     [[nodiscard]] std::string ToString() const {
       std::stringstream s;
-      s << "name: " << static_cast<uint32_t>(this->name);
+      s << "name: " << this->name;
       s << ", index: " << this->index;
       s << ", interpMode: " << static_cast<uint32_t>(this->interp_mode);
       s << ", dynIndex: " << this->dyn_index;
@@ -515,7 +478,7 @@ class Decompiler {
       static auto regex = std::regex{R"(; (\S+)\s+(\S+)(?:$|(?:(.{23})\s*(\S+)?)))"};
       auto [name, index, interpMode, dynIndex] = StringViewMatch<4>(line, regex);
 
-      this->name = SignatureNameFromString(name);
+      this->name = name;
       FromStringView(index, this->index);
       this->interp_mode = InterpModeFromString(StringViewTrim(interpMode));
       this->dyn_index = DynIndexFromString(StringViewTrim(dynIndex));
@@ -523,16 +486,14 @@ class Decompiler {
   };
 
   struct Signature {
-    SignatureName name;
+    std::string_view name;
     SignaturePacked packed;
     SignatureProperty property;
-    std::string name_string;
 
     explicit Signature(SignaturePacked packed, SignatureProperty property) {
       this->name = packed.name;
       this->packed = packed;
       this->property = property;
-      this->name_string = SignatureNameToString(this->name);
     }
 
     // eg: float; float3; float4
@@ -548,10 +509,10 @@ class Decompiler {
 
     // eg: float; float3; float4
     [[nodiscard]] std::string VariableString() const {
-      if (property.index == 0) return this->name_string;
+      if (property.index == 0) return std::string{this->name};
 
       std::stringstream string_stream;
-      string_stream << this->name_string;
+      string_stream << this->name;
       if (property.index != 0) {
         string_stream << "_" << property.index;
       }
@@ -560,7 +521,7 @@ class Decompiler {
 
     [[nodiscard]] std::string SemanticString() const {
       std::stringstream string_stream;
-      string_stream << SignatureNameToString(property.name);
+      string_stream << property.name;
       if (property.index != 0) {
         string_stream << property.index;
       }
@@ -646,6 +607,7 @@ class Decompiler {
       NA,
       F32,
       I32,
+      U32,
       STRUCTURE,
     } format;
 
@@ -690,6 +652,7 @@ class Decompiler {
       if (input == "NA") return ResourceFormat::NA;
       if (input == "f32") return ResourceFormat::F32;
       if (input == "i32") return ResourceFormat::I32;
+      if (input == "u32") return ResourceFormat::U32;
       if (input == "struct") return ResourceFormat::STRUCTURE;
       throw std::invalid_argument("Unknown ResourceFormat");
     }
@@ -698,7 +661,7 @@ class Decompiler {
       if (input == "NA") return ResourceDimensions::NA;
       if (input == "2d") return ResourceDimensions::DIMENSION_2D;
       if (input == "3d") return ResourceDimensions::DIMENSION_3D;
-      if (input == "buffer") return ResourceDimensions::BUFFER;
+      if (input == "buf") return ResourceDimensions::BUFFER;
       if (input == "r/o") return ResourceDimensions::READ_ONLY;
       throw std::invalid_argument("Unknown ResourceDimensions");
     }
@@ -1178,11 +1141,14 @@ class Decompiler {
         throw std::invalid_argument("Could not parse code assignment");
       }
       std::string decompiled;
+#if DECOMPILER_DXC_DEBUG > 0
+      std::cout << "// " << line << "\n";
+#endif
 
       // std::cout << "parsing: " << this->assignment << std::endl;
       auto instruction = StringViewSplitAll(assignment, ' ').at(0);
       if (instruction == "call") {
-        static auto regex = std::regex{R"(call (\S+) ([^(]+)\(([^)]+)\)\s*)"};
+        static auto regex = std::regex{R"(call (\S+) ([^(]+)\(([^)]+)\),?.*)"};
         static auto param_regex = std::regex(R"(\s*(\S+) ((?:\d+)|(?:\{[^}]+\})|(?:%\d+)|(?:\S+))(?:(?:, )|(?:\s*$)))");
         auto [type, functionName, functionParamsString] = StringViewMatch<3>(assignment, regex);
         // auto paramMatches = string_view_split_all(functionParamsString, paramRegex, {1, 2});
@@ -1349,6 +1315,14 @@ class Decompiler {
           } else {
             throw std::invalid_argument("Unknown @dx.op.binary.f32");
           }
+        } else if (functionName == "@dx.op.binary.i32") {
+          auto [opNumber, a, b] = StringViewSplit<3>(functionParamsString, param_regex, 2);
+          if (auto pair = BINARY_INT32_OPS.find(std::string(opNumber));
+              pair != UNARY_BITS_OPS.end()) {
+            decompiled = std::format("{} _{} = {}({}, {});", ParseType(type), variable, pair->second, ParseInt(a), ParseInt(b));
+          } else {
+            throw std::invalid_argument("Unknown @dx.op.binary.f32");
+          }
         } else if (functionName == "@dx.op.textureLoad.f32") {
           // %dx.types.ResRet.f32 @dx.op.textureLoad.f32(i32 66, %dx.types.Handle %40, i32 0, i32 %38, i32 %39, i32 undef, i32 undef, i32 undef, i32 undef)  ; TextureLoad(srv,mipLevelOrSampleCount,coord0,coord1,coord2,offset0,offset1,offset2)
           auto [opNumber, srv, mipLevelOrSampleCount, coord0, coord1, coord2, offset0, offset1, offset2] = StringViewSplit<9>(functionParamsString, param_regex, 2);
@@ -1454,6 +1428,13 @@ class Decompiler {
         } else if (functionName == "@dx.op.dot3.f32") {
           auto [opNumber, ax, ay, az, bx, by, bz] = StringViewSplit<7>(functionParamsString, param_regex, 2);
           decompiled = std::format("float _{} = dot(float3({}, {}, {}), float3({}, {}, {}));", variable, ParseFloat(ax), ParseFloat(ay), ParseFloat(az), ParseFloat(bx), ParseFloat(by), ParseFloat(bz));
+        } else if (functionName == "@dx.op.dot4.f32") {
+          // call float @dx.op.dot4.f32(i32 56, float %73, float %74, float %75, float %76, float %1366, float %1367, float %1368, float 1.000000e+00)  ; Dot4(ax,ay,az,aw,bx,by,bz,bw)
+          auto [opNumber, ax, ay, az, aw, bx, by, bz, bw] = StringViewSplit<9>(functionParamsString, param_regex, 2);
+          decompiled = std::format("float _{} = dot(float4({}, {}, {}, {}), float4({}, {}, {}, {}));",
+                                   variable,
+                                   ParseFloat(ax), ParseFloat(ay), ParseFloat(az), ParseFloat(aw),
+                                   ParseFloat(bx), ParseFloat(by), ParseFloat(bz), ParseFloat(bw));
         } else if (functionName == "@dx.op.tertiary.f32") {
           // call float @dx.op.tertiary.f32(i32 46, float 0xBFC4A8C160000000, float %210, float %217)  ; FMad(a,b,c)
           auto [opNumber, a, b, c] = StringViewSplit<4>(functionParamsString, param_regex, 2);
@@ -1463,7 +1444,32 @@ class Decompiler {
           auto ref = std::string{srv.substr(1)};
           auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref).second];
           decompiled = std::format("float4 _{} = {}[{}].data[{} / {}];", variable, srv_resource.name, ParseInt(index), ParseInt(elementOffset), ParseInt(alignment));
+        } else if (functionName == "@dx.op.rawBufferLoad.i32") {
+          auto [opNumber, srv, index, elementOffset, mask, alignment] = StringViewSplit<6>(functionParamsString, param_regex, 2);
+          auto ref = std::string{srv.substr(1)};
+          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref).second];
+          decompiled = std::format("int4 _{} = {}[{}].data[{} / {}];", variable, srv_resource.name, ParseInt(index), ParseInt(elementOffset), ParseInt(alignment));
+        } else if (functionName == "@dx.op.bufferLoad.i32") {
+          // call %dx.types.ResRet.i32 @dx.op.bufferLoad.i32(i32 68, %dx.types.Handle %31, i32 %28, i32 undef)  ; BufferLoad(srv,index,wot)
+          auto [opNumber, srv, index, wot] = StringViewSplit<4>(functionParamsString, param_regex, 2);
+          auto ref = std::string{srv.substr(1)};
+          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref).second];
+          if (wot != "undef") {
+            decompiled = std::format("{} _{} = {}[{}];", srv_resource.data_type, variable, srv_resource.name, ParseInt(index));
+          }
+        } else if (functionName == "@dx.op.bufferLoad.f32") {
+          // call %dx.types.ResRet.i32 @dx.op.bufferLoad.i32(i32 68, %dx.types.Handle %31, i32 %28, i32 undef)  ; BufferLoad(srv,index,wot)
+          auto [opNumber, srv, index, wot] = StringViewSplit<4>(functionParamsString, param_regex, 2);
+          auto ref = std::string{srv.substr(1)};
+          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref).second];
+          if (wot != "undef") {
+            decompiled = std::format("{} _{} = {}[{}];", srv_resource.data_type, variable, srv_resource.name, ParseInt(index));
+          }
+        } else if (functionName == "@dx.op.threadId.i32") {
+        } else if (functionName == "@dx.op.threadIdInGroup.i32") {
         } else {
+          std::cerr << line << "\n";
+          std::cerr << "Function name: " << functionName << "\n";
           throw std::invalid_argument("Unknown function name");
         }
         // decompiled = std::format("// {} _{} = {}({})", type, variable, functionName, functionParams);
@@ -1480,14 +1486,42 @@ class Decompiler {
         } else {
           throw std::invalid_argument("Unknown extractvalue type");
         }
+      } else if (instruction == "shl") {
+        auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(shl (nuw )?(nsw )?(?:i32) (\S+), (\S+))"});
+        if (no_signed_wrap.empty()) {
+          decompiled = std::format("uint _{} = {} << {};", variable, ParseInt(a), ParseInt(b));
+        } else {
+          decompiled = std::format("int _{} = {} << {};", variable, ParseInt(a), ParseInt(b));
+        }
+      } else if (instruction == "lshr") {
+        auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(lshr (nuw )?(nsw )?(?:i32) (\S+), (\S+))"});
+        if (no_signed_wrap.empty()) {
+          decompiled = std::format("uint _{} = {} >> {};", variable, ParseInt(a), ParseInt(b));
+        } else {
+          decompiled = std::format("int _{} = {} >> {};", variable, ParseInt(a), ParseInt(b));
+        }
+      } else if (instruction == "xor") {
+        auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(xor (nuw )?(nsw )?(?:i32) (\S+), (\S+))"});
+        if (no_signed_wrap.empty()) {
+          decompiled = std::format("uint _{} = {} ^ {};", variable, ParseInt(a), ParseInt(b));
+        } else {
+          decompiled = std::format("int _{} = {} ^ {};", variable, ParseInt(a), ParseInt(b));
+        }
+      } else if (instruction == "mul") {
+        auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(mul (nuw )?(nsw )?(?:i32) (\S+), (\S+))"});
+        if (no_signed_wrap.empty()) {
+          decompiled = std::format("uint _{} = {} * {};", variable, ParseInt(a), ParseInt(b));
+        } else {
+          decompiled = std::format("int _{} = {} * {};", variable, ParseInt(a), ParseInt(b));
+        }
       } else if (instruction == "fmul") {
-        auto [a, b] = StringViewMatch<2>(assignment, std::regex{"fmul (?:fast )?(?:float) (\\S+), (\\S+)"});
+        auto [a, b] = StringViewMatch<2>(assignment, std::regex{R"(fmul (?:fast )?(?:float) (\S+), (\S+))"});
         decompiled = std::format("float _{} = {} * {};", variable, ParseFloat(a), ParseFloat(b));
       } else if (instruction == "fdiv") {
-        auto [a, b] = StringViewMatch<2>(assignment, std::regex{"fdiv (?:fast )?(?:float) (\\S+), (\\S+)"});
+        auto [a, b] = StringViewMatch<2>(assignment, std::regex{R"(fdiv (?:fast )?(?:float) (\S+), (\S+))"});
         decompiled = std::format("float _{} = {} / {};", variable, ParseFloat(a), ParseFloat(b));
       } else if (instruction == "fadd") {
-        auto [a, b] = StringViewMatch<2>(assignment, std::regex{"fadd (?:fast )?(?:float) (\\S+), (\\S+)"});
+        auto [a, b] = StringViewMatch<2>(assignment, std::regex{R"(fadd (?:fast )?(?:float) (\S+), (\S+))"});
         decompiled = std::format("float _{} = {} + {};", variable, ParseFloat(a), ParseFloat(b));
       } else if (instruction == "fsub") {
         auto [a, b] = StringViewMatch<2>(assignment, std::regex{"fsub (?:fast )?(?:float) (\\S+), (\\S+)"});
@@ -1551,7 +1585,10 @@ class Decompiler {
           decompiled = std::format("float _{} = {} ? {} : {};", variable, ParseInt(condition), ParseFloat(value_a), ParseFloat(value_b));
         } else if (type_a == "int" && type_b == "int") {
           decompiled = std::format("int _{} = {} ? {} : {};", variable, ParseInt(condition), ParseInt(value_a), ParseInt(value_b));
+        } else if (type_a == "i32" && type_b == "i32") {
+          decompiled = std::format("int _{} = {} ? {} : {};", variable, ParseInt(condition), ParseInt(value_a), ParseInt(value_b));
         } else {
+          std::cerr << line << "\n";
           throw std::invalid_argument("Unrecognized code assignment");
         }
       } else if (instruction == "phi") {
@@ -1602,10 +1639,14 @@ class Decompiler {
         const auto pointer_value = std::format("{}[{}]", parsed_source, ParseInt(index));
         stored_pointers[variable] = pointer_value;
       } else {
+        std::cerr << line << "\n";
         throw std::invalid_argument("Unrecognized code assignment");
       }
 
       if (!decompiled.empty()) {
+#if DECOMPILER_DXC_DEBUG > 0
+        std::cout << decompiled << "\n";
+#endif
         // this->current_code_block.hlsl_lines.push_back(std::format("// {} ", line));
         this->current_code_block.hlsl_lines.push_back(decompiled);
       }
@@ -1665,6 +1706,8 @@ class Decompiler {
         }
 
       } else {
+        std::cerr << line << "\n";
+        std::cerr << "Function name: " << functionName << "\n";
         throw std::invalid_argument("Unknown function name");
       }
 
@@ -1899,7 +1942,9 @@ class Decompiler {
             if (line == ";") {
               state = TokenizerState::DESCRIPTION_WHITESPACE;
             } else {
-              input_sigs_packed.emplace_back(line);
+              if (line != "; no parameters") {
+                input_sigs_packed.emplace_back(line);
+              }
               line_number++;
             }
             break;
@@ -1915,6 +1960,9 @@ class Decompiler {
           case TokenizerState::DESCRIPTION_OUTPUT_SIG_TABLE_ROW:
             if (line == ";") {
               state = TokenizerState::DESCRIPTION_WHITESPACE;
+            } else if (line == "; no parameters") {
+              state = TokenizerState::DESCRIPTION_WHITESPACE;
+              line_number++;
             } else {
               output_sigs_packed.emplace_back(line);
               line_number++;
@@ -2196,7 +2244,11 @@ class Decompiler {
 
     // Generate output
 
+#if DECOMPILER_DXC_DEBUG > 0
+    auto& string_stream = std::cout;
+#else
     std::stringstream string_stream;
+#endif
 
     // Type Definitions
 #if 0
@@ -2542,7 +2594,7 @@ class Decompiler {
         line_spacing += 2;
         on_branch(code_block.branch.branch_condition_true);
         line_spacing -= 2;
-        string_stream << spacing << "} else { \n";
+        string_stream << spacing << "} else {\n";
         line_spacing += 2;
         on_branch(code_block.branch.branch_condition_false);
         line_spacing -= 2;
@@ -2552,7 +2604,7 @@ class Decompiler {
         line_spacing += 2;
         on_branch(code_block.branch.branch_condition_false);
         line_spacing -= 2;
-        string_stream << spacing << "} else { \n";
+        string_stream << spacing << "} else {\n";
         line_spacing += 2;
         on_branch(code_block.branch.branch_condition_true);
         line_spacing -= 2;
@@ -2619,8 +2671,9 @@ class Decompiler {
     }
 
     string_stream << "}\n";
-
+#if DECOMPILER_DXC_DEBUG <= 0
     return string_stream.str();
+#endif
   }
 };  // namespace Decompiler
 
