@@ -2199,7 +2199,7 @@ class Decompiler {
               CreateSignatures(output_sigs_packed, output_sigs_property, preprocess_state.output_signature);
               created_signatures = true;
             };
-            if (line == "") {
+            if (line.empty() || line[0] == '\0') {
               line_number++;
             } else if (line[0] == '%') {
               state = TokenizerState::TYPE_DEFINITION;
