@@ -1252,10 +1252,7 @@ class Decompiler {
           FromStringView(regIndex, cbv_variable_index);
           auto name = preprocess_state.CBVVariableNameAtIndex(cbv_resource, cbv_variable_index);
 
-          // decompiled = std::format("// float4 _{} = {}.{};", variable, cbv_resource.name, cbv_variable_index);
-          // decompiled = std::format("float4 _{} = {}.;", variable, binding_name, cbv_index);
-          // decompiled = std::format("float4 _{} = {}_value{:02};", variable, cbv_resource.name, cbv_variable_index);
-          decompiled = std::format("// float4 _{} = {}[{}u];", variable, cbv_resource.name, cbv_variable_index);
+          // decompiled = std::format("// float4 _{} = {}[{}u];", variable, cbv_resource.name, cbv_variable_index);
           preprocess_state.cbv_binding_variables[variable] = {&cbv_resource, cbv_variable_index};
 
         } else if (functionName == "@dx.op.cbufferLoadLegacy.i32") {
@@ -1268,9 +1265,7 @@ class Decompiler {
           FromStringView(regIndex, cbv_variable_index);
           auto name = preprocess_state.CBVVariableNameAtIndex(cbv_resource, cbv_variable_index);
 
-          // preprocess_state.cbv_resources[index_value];
-          // decompiled = std::format("int4 _{} = {}[{}u];", variable, cbv_name, ParseInt(regIndex));
-          decompiled = std::format("// int4 _{} = {}[{}u];", variable, cbv_resource.name, cbv_variable_index);
+          // decompiled = std::format("// int4 _{} = {}[{}u];", variable, cbv_resource.name, cbv_variable_index);
           preprocess_state.cbv_binding_variables[variable] = {&cbv_resource, cbv_variable_index};
         } else if (functionName == "@dx.op.unary.f32") {
           auto [opNumber, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
@@ -1540,7 +1535,9 @@ class Decompiler {
         decompiled = std::format("float _{} = {} - {};", variable, ParseFloat(a), ParseFloat(b));
       } else if (instruction == "fcmp") {
         // %39 = fcmp fast ogt float %37, 0.000000e+00
-        auto [op, type, a, b] = StringViewMatch<4>(assignment, std::regex{R"(fcmp (?:fast )?(\S+) (\S+) (\S+), (\S+))"});
+        auto [fast, op, type, a, b] = StringViewMatch<5>(assignment, std::regex{R"(fcmp (fast )?(\S+) (\S+) (\S+), (\S+))"});
+
+        // Missing fast support
 
         if (op == "false") {
           decompiled = std::format("bool _{} = false;", variable);
@@ -2525,7 +2522,6 @@ class Decompiler {
     // }
 
     // Parse Lines
-    int line_spacing = 2;
     std::vector<int> pending_convergences = {};
     std::vector<std::set<int>> pending_recursions = {};
     std::vector<int> current_loops = {};
@@ -2559,9 +2555,20 @@ class Decompiler {
     }
 #endif
 
-    std::function<void(int line_number)> append_code_block = [&](int line_number) {
-      std::string spacing;
+    int line_spacing = 0;
+    std::string spacing;
+    auto indent_spacing = [&]() {
+      line_spacing += 2;
+      spacing = "";
       spacing.insert(0, line_spacing, ' ');
+    };
+    auto unindent_spacing = [&]() {
+      line_spacing -= 2;
+      spacing = "";
+      spacing.insert(0, line_spacing, ' ');
+    };
+
+    std::function<void(int line_number)> append_code_block = [&](int line_number) {
       std::set<int> recursion_pops;
       if (!pending_recursions.empty()) {
         recursion_pops = pending_recursions.rbegin()[0];
@@ -2572,17 +2579,14 @@ class Decompiler {
         pending_recursions.push_back(recursions[line_number]);
         current_loops.push_back(line_number);
         string_stream << spacing << "while(true) {\n";
-        line_spacing += 2;
-        spacing.insert(0, 2, ' ');
+        indent_spacing();
         // break at these
       }
 
       auto on_complete = [&]() {
         if (using_recursion) {
           string_stream << spacing << "break;\n";
-          line_spacing -= 2;
-          spacing = "";
-          spacing.insert(0, line_spacing, ' ');
+          unindent_spacing();
           string_stream << spacing << "}\n";
           pending_recursions.pop_back();
           current_loops.pop_back();
@@ -2590,7 +2594,7 @@ class Decompiler {
       };
 
       auto& code_block = current_code_function.code_blocks[line_number];
-#if DECOMPILER_DXC_DEBUG > 1
+#if DECOMPILER_DXC_DEBUG >= 1
       string_stream << spacing << "// fn:start " << line_number << "\n";
       if (!pending_convergences.empty()) {
         string_stream << spacing << "// fn:pending ";
@@ -2642,18 +2646,18 @@ class Decompiler {
 
       if (code_block.branch.branch_condition_true == next_convergence) {
         string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\n";
-        line_spacing += 2;
+        indent_spacing();
         on_branch(code_block.branch.branch_condition_false);
-        line_spacing -= 2;
+        unindent_spacing();
         string_stream << spacing << "}\n";
         return on_complete();
       }
 
       if (code_block.branch.branch_condition_false == next_convergence) {
         string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\n";
-        line_spacing += 2;
+        indent_spacing();
         on_branch(code_block.branch.branch_condition_true);
-        line_spacing -= 2;
+        unindent_spacing();
         string_stream << spacing << "}\n";
         return on_complete();
       }
@@ -2669,6 +2673,7 @@ class Decompiler {
           if (!pending_convergences.empty()) {
             // Need to possible break
             string_stream << spacing << "do {\n";
+            indent_spacing();
           }
           pending_convergences.push_back(pair_convergence);
           break;
@@ -2677,36 +2682,36 @@ class Decompiler {
 
       if (pair_convergence == code_block.branch.branch_condition_true) {
         string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\n";
-        line_spacing += 2;
+        indent_spacing();
         on_branch(code_block.branch.branch_condition_false);
-        line_spacing -= 2;
+        unindent_spacing();
         string_stream << spacing << "}\n";
         // Only print else
       } else if (pair_convergence == code_block.branch.branch_condition_false) {
         string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\n";
-        line_spacing += 2;
+        indent_spacing();
         on_branch(code_block.branch.branch_condition_true);
-        line_spacing -= 2;
+        unindent_spacing();
         string_stream << spacing << "}\n";
       } else if (code_block.branch.branch_condition_true < code_block.branch.branch_condition_false) {
         string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\n";
-        line_spacing += 2;
+        indent_spacing();
         on_branch(code_block.branch.branch_condition_true);
-        line_spacing -= 2;
+        unindent_spacing();
         string_stream << spacing << "} else {\n";
-        line_spacing += 2;
+        indent_spacing();
         on_branch(code_block.branch.branch_condition_false);
-        line_spacing -= 2;
+        unindent_spacing();
         string_stream << spacing << "}\n";
       } else {
         string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\n";
-        line_spacing += 2;
+        indent_spacing();
         on_branch(code_block.branch.branch_condition_false);
-        line_spacing -= 2;
+        unindent_spacing();
         string_stream << spacing << "} else {\n";
-        line_spacing += 2;
+        indent_spacing();
         on_branch(code_block.branch.branch_condition_true);
-        line_spacing -= 2;
+        unindent_spacing();
         string_stream << spacing << "}\n";
       }
 
@@ -2715,6 +2720,7 @@ class Decompiler {
         bool is_empty = pending_convergences.empty();
         on_branch(pair_convergence);
         if (!is_empty) {
+          unindent_spacing();
           string_stream << spacing << "} while (false);\n";
         }
       };
@@ -2758,7 +2764,9 @@ class Decompiler {
       string_stream << " " << signature.VariableString() << ";\n";
     }
 
+    indent_spacing();
     append_code_block(0);
+    unindent_spacing();
 
     if (output_signature_count == 1) {
       string_stream << "  return " << preprocess_state.output_signature[0].VariableString() << ";\n";
