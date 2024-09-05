@@ -1541,11 +1541,71 @@ class Decompiler {
       } else if (instruction == "fcmp") {
         // %39 = fcmp fast ogt float %37, 0.000000e+00
         auto [op, type, a, b] = StringViewMatch<4>(assignment, std::regex{R"(fcmp (?:fast )?(\S+) (\S+) (\S+), (\S+))"});
-        decompiled = std::format("bool _{} = ({} {} {});", variable, ParseFloat(a), ParseOperator(op), ParseFloat(b));
+
+        if (op == "false") {
+          decompiled = std::format("bool _{} = false;", variable);
+        } else if (op == "oeq") {
+          decompiled = std::format("bool _{} = ({} == {});", variable, ParseFloat(a), ParseFloat(b));
+        } else if (op == "ogt") {
+          decompiled = std::format("bool _{} = ({} > {});", variable, ParseFloat(a), ParseFloat(b));
+        } else if (op == "oge") {
+          decompiled = std::format("bool _{} = ({} >= {});", variable, ParseFloat(a), ParseFloat(b));
+        } else if (op == "olt") {
+          decompiled = std::format("bool _{} = ({} < {});", variable, ParseFloat(a), ParseFloat(b));
+        } else if (op == "ole") {
+          decompiled = std::format("bool _{} = ({} <= {});", variable, ParseFloat(a), ParseFloat(b));
+        } else if (op == "one") {
+          decompiled = std::format("bool _{} = ({} != {});", variable, ParseFloat(a), ParseFloat(b));
+        } else if (op == "ord") {
+          decompiled = std::format("bool _{} = (!isnan({}) && !isnan({}));", variable, ParseFloat(a), ParseFloat(b));
+        } else if (op == "ueq") {
+          decompiled = std::format("bool _{} = !({} != {});", variable, ParseFloat(a), ParseFloat(b));
+        } else if (op == "ugt") {
+          decompiled = std::format("bool _{} = !({} <= {});", variable, ParseFloat(a), ParseFloat(b));
+        } else if (op == "uge") {
+          decompiled = std::format("bool _{} = !({} > {});", variable, ParseFloat(a), ParseFloat(b));
+        } else if (op == "ult") {
+          decompiled = std::format("bool _{} = !({} >= {});", variable, ParseFloat(a), ParseFloat(b));
+        } else if (op == "ule") {
+          decompiled = std::format("bool _{} = !({} > {});", variable, ParseFloat(a), ParseFloat(b));
+        } else if (op == "une") {
+          decompiled = std::format("bool _{} = !({} == {});", variable, ParseFloat(a), ParseFloat(b));
+        } else if (op == "uno") {
+          decompiled = std::format("bool _{} = (isnan({}) || isnan({}));", variable, ParseFloat(a), ParseFloat(b));
+        } else {
+          std::cerr << op << "\n";
+          throw std::invalid_argument("Could not parse code assignment operator");
+        }
+
       } else if (instruction == "icmp") {
         // %39 = fcmp fast ogt float %37, 0.000000e+00
-        auto [op, type, a, b] = StringViewMatch<4>(assignment, std::regex{R"(icmp (?:fast )?(\S+) (\S+) (\S+), (\S+))"});
-        decompiled = std::format("bool _{} = ({} {} {});", variable, ParseInt(a), ParseOperator(op), ParseInt(b));
+        auto [fast, op, type, a, b] = StringViewMatch<5>(assignment, std::regex{R"(icmp (fast )?(\S+) (\S+) (\S+), (\S+))"});
+        std::string cast;
+        if (!fast.empty()) {
+          if (op.starts_with("u")) {
+            cast = "(uint)";
+          } else if (op.starts_with("s")) {
+            cast = "(int)";
+          }
+        }
+        if (op == "false") {
+          decompiled = std::format("bool _{} = false;", variable);
+        } else if (op == "eq") {
+          decompiled = std::format("bool _{} = ({} == {});", variable, ParseInt(a), ParseInt(b));
+        } else if (op == "ne") {
+          decompiled = std::format("bool _{} = ({} != {});", variable, ParseInt(a), ParseInt(b));
+        } else if (op == "ugt" || op == "sgt") {
+          decompiled = std::format("bool _{} = ({}{} > {}{});", variable, cast, ParseInt(a), cast, ParseInt(b));
+        } else if (op == "uge" || op == "sge") {
+          decompiled = std::format("bool _{} = ({}{} >= {}{});", variable, cast, ParseInt(a), cast, ParseInt(b));
+        } else if (op == "ult" || op == "slt") {
+          decompiled = std::format("bool _{} = ({}{} < {}{});", variable, cast, ParseInt(a), cast, ParseInt(b));
+        } else if (op == "ule" || op == "sle") {
+          decompiled = std::format("bool _{} = ({}{} <= {}{});", variable, cast, ParseInt(a), cast, ParseInt(b));
+        } else {
+          std::cerr << op << "\n";
+          throw std::invalid_argument("Could not parse code assignment operator");
+        }
       } else if (instruction == "add") {
         // add nsw i32 %1678, 1
         auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(add (nuw )?(nsw )?(?:\S+) (\S+), (\S+))"});
@@ -1582,10 +1642,18 @@ class Decompiler {
         decompiled = std::format("int _{} = int({});", variable, ParseFloat(a));
       } else if (instruction == "and") {
         auto [type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(and (\S+) (\S+), (\S+))"});
-        decompiled = std::format("{} _{} = {} & {};", ParseType(type), variable, ParseInt(a), ParseInt(b));
+        if (type == "i1") {
+          decompiled = std::format("bool _{} = {} && {};", variable, ParseInt(a), ParseInt(b));
+        } else {
+          decompiled = std::format("{} _{} = {} & {};", ParseType(type), variable, ParseInt(a), ParseInt(b));
+        }
       } else if (instruction == "or") {
         auto [type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(or (\S+) (\S+), (\S+))"});
-        decompiled = std::format("{} _{} = {} | {};", ParseType(type), variable, ParseInt(a), ParseInt(b));
+        if (type == "i1") {
+          decompiled = std::format("bool _{} = {} || {};", variable, ParseInt(a), ParseInt(b));
+        } else {
+          decompiled = std::format("{} _{} = {} | {};", ParseType(type), variable, ParseInt(a), ParseInt(b));
+        }
       } else if (instruction == "alloca") {
         // alloca [6 x float], align 4
         auto [size, type, align] = StringViewMatch<3>(assignment, std::regex{R"(alloca \[(\S+) x (\S+)\], align (\S+))"});
