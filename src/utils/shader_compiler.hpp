@@ -350,7 +350,9 @@ inline std::vector<uint8_t> CompileShaderFromFileFXC(
           &custom_include,
           "main",
           shader_target,
-          D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY,
+          (shader_target[3] <= '4' || (shader_target[3] == '5' && shader_target[5] == '0'))
+              ? D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY
+              : 0,
           0,
           &out_blob,
           &error_blob))) {
