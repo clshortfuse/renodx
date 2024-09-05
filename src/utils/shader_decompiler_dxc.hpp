@@ -178,6 +178,8 @@ inline TokenizerState& operator++(TokenizerState& state, int) {
 }
 
 class Decompiler {
+  constexpr static const auto VECTOR_INDEXES = "xyzw";
+
   static std::string ParseIndex(std::string_view input) {
     if (input == "0") return "x";
     if (input == "1") return "y";
@@ -687,7 +689,10 @@ class Decompiler {
     uint32_t signature_index;
     uint32_t signature_range;
 
-    explicit Resource(std::vector<std::string_view>& metadata) : Metadata() {
+    explicit Resource(
+        std::vector<std::string_view>& metadata,
+        std::span<ResourceDescription> resource_descriptions,
+        std::string prefix) : Metadata() {
       // !6 = !{i32 0, %"class.Texture2D<vector<float, 4> >"* undef, !"", i32 0, i32 32, i32 1, i32 2, i32 0, !7}
       FromStringView(ParseKeyValue(metadata[0])[1], this->record_id);
       this->pointer = ParseKeyValue(metadata[1])[0];
@@ -695,31 +700,26 @@ class Decompiler {
       FromStringView(ParseKeyValue(metadata[3])[1], this->space);
       FromStringView(ParseKeyValue(metadata[4])[1], this->signature_index);
       FromStringView(ParseKeyValue(metadata[5])[1], this->signature_range);
-    };
 
-    void UpdateNameFromDescription(std::span<ResourceDescription> resource_descriptions, std::string prefix) {
-      if (!name.empty()) return;
-      std::string hlsl_bind;
-      if (space != 0u) {
-        hlsl_bind = std::format("{}{},space{}", prefix, signature_index, space);
-      } else {
-        hlsl_bind = std::format("{}{}", prefix, signature_index);
-      }
-      bool found = false;
-      for (const auto& description : resource_descriptions) {
-        if (description.hlsl_binding == hlsl_bind) {
-          if (description.name.empty()) {
-            name = description.id;
-            std::transform(name.begin(), name.end(), name.begin(),
-                           [](unsigned char c) { return std::tolower(c); });
+      if (this->name.empty()) {
+        std::string hlsl_bind = (space == 0u)
+                                    ? std::format("{}{}", prefix, signature_index)
+                                    : std::format("{}{},space{}", prefix, signature_index, space);
 
-          } else {
-            name = description.name;
+        for (const auto& description : resource_descriptions) {
+          if (description.hlsl_binding == hlsl_bind) {
+            if (description.name.empty()) {
+              this->name = description.id;
+              std::transform(this->name.begin(), this->name.end(), this->name.begin(),
+                             [](unsigned char c) { return std::tolower(c); });
+            } else {
+              this->name = description.name;
+            }
+            break;
           }
-          break;
         }
       }
-    }
+    };
 
     enum class ResourceKind : unsigned {
       Invalid = 0,
@@ -744,7 +744,7 @@ class Decompiler {
       NumEntries,
     };
 
-    static std::string ResourceKindString(ResourceKind& kind) {
+    static std::string ResourceKindString(const ResourceKind& kind) {
       switch (kind) {
         case ResourceKind::Texture1D:
           return "Texture1D";
@@ -812,7 +812,7 @@ class Decompiler {
       LastEntry
     };
 
-    static std::string ComponentTypeString(ComponentType& component_type) {
+    static std::string ComponentTypeString(const ComponentType& component_type) {
       switch (component_type) {
         case ComponentType::I1:
           return "bool";
@@ -866,8 +866,9 @@ class Decompiler {
     std::string data_type;
     explicit SRVResource(
         std::vector<std::string_view>& metadata,
+        std::span<ResourceDescription> resource_descriptions,
         std::map<std::string_view, std::vector<std::string_view>>& raw_metadata)
-        : Resource(metadata) {
+        : Resource(metadata, resource_descriptions, "t") {
       static auto pointer_regex = std::regex{R"(^%"class\.([^<]+)<(?:vector<)?([^,>]+)(?:, ([^>]+)>)? ?>"\*)"};
       const auto [class_name, base_type, type_count] = StringViewMatch<3>(this->pointer, pointer_regex);
       this->data_type = std::format("{}{}", base_type, type_count);
@@ -889,10 +890,6 @@ class Decompiler {
         FromStringView(ParseKeyValue(pairs[1])[1], this->stride);
       }
     }
-
-    void UpdateNameFromDescription(std::span<ResourceDescription> resource_descriptions) {
-      Resource::UpdateNameFromDescription(resource_descriptions, "t");
-    }
   };
 
   struct UAVResource : Resource {
@@ -906,8 +903,9 @@ class Decompiler {
 
     explicit UAVResource(
         std::vector<std::string_view>& metadata,
+        std::span<ResourceDescription> resource_descriptions,
         std::map<std::string_view, std::vector<std::string_view>>& raw_metadata)
-        : Resource(metadata) {
+        : Resource(metadata, resource_descriptions, "u") {
       // https://github.com/microsoft/DirectXShaderCompiler/blob/b766b432678cf5f7a93567d253bb5f7fd8a0b2c7/docs/DXIL.rst#L1047
       uint32_t shape;
       FromStringView(ParseKeyValue(metadata[6])[1], shape);
@@ -929,23 +927,17 @@ class Decompiler {
         FromStringView(ParseKeyValue(pairs[1])[1], this->stride);
       }
     }
-
-    void UpdateNameFromDescription(std::span<ResourceDescription> resource_descriptions) {
-      Resource::UpdateNameFromDescription(resource_descriptions, "u");
-    }
   };
 
   struct CBVResource : Resource {
     uint32_t buffer_size;
+    std::map<std::string, std::string_view> data_types;
     explicit CBVResource(
         std::vector<std::string_view>& metadata,
+        std::span<ResourceDescription> resource_descriptions,
         std::map<std::string_view, std::vector<std::string_view>>& raw_metadata)
-        : Resource(metadata) {
+        : Resource(metadata, resource_descriptions, "cb") {
       FromStringView(ParseKeyValue(metadata[6])[1], buffer_size);
-    }
-
-    void UpdateNameFromDescription(std::span<ResourceDescription> resource_descriptions) {
-      Resource::UpdateNameFromDescription(resource_descriptions, "cb");
     }
   };
 
@@ -953,13 +945,10 @@ class Decompiler {
     uint32_t buffer_size;
     explicit SamplerResource(
         std::vector<std::string_view>& metadata,
+        std::span<ResourceDescription> resource_descriptions,
         std::map<std::string_view, std::vector<std::string_view>>& raw_metadata)
-        : Resource(metadata) {
+        : Resource(metadata, resource_descriptions, "s") {
       FromStringView(ParseKeyValue(metadata[6])[1], buffer_size);
-    }
-
-    void UpdateNameFromDescription(std::span<ResourceDescription> resource_descriptions) {
-      Resource::UpdateNameFromDescription(resource_descriptions, "s");
     }
   };
 
@@ -1024,6 +1013,7 @@ class Decompiler {
     std::vector<CBVResource> cbv_resources;
     std::vector<SamplerResource> sampler_resources;
     std::map<std::string_view, TypeDefinition> type_definitions;
+    std::map<std::string_view, std::pair<CBVResource*, uint32_t>> cbv_binding_variables;
 
     size_t GetTypeSize(const std::string& name) {
       uint32_t data_type_size;
@@ -1141,7 +1131,7 @@ class Decompiler {
         throw std::invalid_argument("Could not parse code assignment");
       }
       std::string decompiled;
-#if DECOMPILER_DXC_DEBUG > 0
+#if DECOMPILER_DXC_DEBUG > 2
       std::cout << "// " << line << "\n";
 #endif
 
@@ -1249,14 +1239,14 @@ class Decompiler {
             if (ParseIndex(colIndex) != "x") {
               throw std::exception("Unexpected index.");
             }
-            decompiled = std::format("int _{} = {};", variable, signature.VariableString());
+            decompiled = std::format("uint _{} = {};", variable, signature.VariableString());
           } else {
-            decompiled = std::format("int _{} = {}.{};", variable, signature.VariableString(), ParseIndex(colIndex));
+            decompiled = std::format("uint _{} = {}.{};", variable, signature.VariableString(), ParseIndex(colIndex));
           }
         } else if (functionName == "@dx.op.cbufferLoadLegacy.f32") {
           auto [opNumber, handle, regIndex] = StringViewSplit<3>(functionParamsString, param_regex, 2);
           auto ref = std::string{handle.substr(1)};
-          auto cbv_resource = preprocess_state.cbv_resources[preprocess_state.resource_binding_variables.at(ref).second];
+          auto& cbv_resource = preprocess_state.cbv_resources[preprocess_state.resource_binding_variables.at(ref).second];
 
           uint32_t cbv_variable_index;
           FromStringView(regIndex, cbv_variable_index);
@@ -1264,13 +1254,15 @@ class Decompiler {
 
           // decompiled = std::format("// float4 _{} = {}.{};", variable, cbv_resource.name, cbv_variable_index);
           // decompiled = std::format("float4 _{} = {}.;", variable, binding_name, cbv_index);
-          decompiled = std::format("float4 _{} = {}[{}u];", variable, cbv_resource.name, cbv_variable_index);
+          // decompiled = std::format("float4 _{} = {}_value{:02};", variable, cbv_resource.name, cbv_variable_index);
+          decompiled = std::format("// float4 _{} = {}[{}u];", variable, cbv_resource.name, cbv_variable_index);
+          preprocess_state.cbv_binding_variables[variable] = {&cbv_resource, cbv_variable_index};
 
         } else if (functionName == "@dx.op.cbufferLoadLegacy.i32") {
           // %18 = call %dx.types.CBufRet.i32 @dx.op.cbufferLoadLegacy.i32(i32 59, %dx.types.Handle %4, i32 40)  ; CBufferLoadLegacy(handle,regIndex)
           auto [opNumber, handle, regIndex] = StringViewSplit<3>(functionParamsString, param_regex, 2);
           auto ref = std::string{handle.substr(1)};
-          auto cbv_resource = preprocess_state.cbv_resources[preprocess_state.resource_binding_variables.at(ref).second];
+          auto& cbv_resource = preprocess_state.cbv_resources[preprocess_state.resource_binding_variables.at(ref).second];
 
           uint32_t cbv_variable_index;
           FromStringView(regIndex, cbv_variable_index);
@@ -1278,7 +1270,8 @@ class Decompiler {
 
           // preprocess_state.cbv_resources[index_value];
           // decompiled = std::format("int4 _{} = {}[{}u];", variable, cbv_name, ParseInt(regIndex));
-          decompiled = std::format("int4 _{} = {}[{}u];", variable, cbv_resource.name, cbv_variable_index);
+          decompiled = std::format("// int4 _{} = {}[{}u];", variable, cbv_resource.name, cbv_variable_index);
+          preprocess_state.cbv_binding_variables[variable] = {&cbv_resource, cbv_variable_index};
         } else if (functionName == "@dx.op.unary.f32") {
           auto [opNumber, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
           if (auto pair = UNARY_FLOAT_OPS.find(std::string(opNumber));
@@ -1476,12 +1469,31 @@ class Decompiler {
         // decompiled = "// " + std::string{comment};
       } else if (instruction == "extractvalue") {
         // extractvalue %dx.types.ResRet.f32 %448, 0
+        // extractvalue %dx.types.CBufRet.i32 %19, 0
         auto [type, input, index] = StringViewMatch<3>(assignment, std::regex{R"(extractvalue (\S+) (\S+), (\S+))"});
-        if (type == R"(%dx.types.CBufRet.f32)" || type == R"(%dx.types.ResRet.f32)") {
-          // float4 value
+        if (type == R"(%dx.types.CBufRet.f32)") {
+          const auto& [cbv_resource, cbv_variable_index] = preprocess_state.cbv_binding_variables[ParseVariable(input).substr(1)];
+          int literal_index;
+          FromStringView(index, literal_index);
+
+          int real_index = cbv_variable_index;
+          char sub_index = VECTOR_INDEXES[literal_index];
+          std::string suffix = std::format("{:02}{}", real_index, sub_index);
+          decompiled = std::format("float _{} = {}_{};", variable, cbv_resource->name, suffix);
+          cbv_resource->data_types[suffix] = "float";
+        } else if (type == R"(%dx.types.CBufRet.i32)") {
+          const auto& [cbv_resource, cbv_variable_index] = preprocess_state.cbv_binding_variables[ParseVariable(input).substr(1)];
+          int literal_index;
+          FromStringView(index, literal_index);
+
+          int real_index = cbv_variable_index;
+          char sub_index = VECTOR_INDEXES[literal_index];
+          std::string suffix = std::format("{:02}{}", real_index, sub_index);
+          decompiled = std::format("uint _{} = {}_{};", variable, cbv_resource->name, suffix);
+          cbv_resource->data_types[suffix] = "uint";
+        } else if (type == R"(%dx.types.ResRet.f32)") {
           decompiled = std::format("float _{} = {}.{};", variable, ParseVariable(input), ParseIndex(index));
-        } else if (type == R"(%dx.types.CBufRet.i32)" || type == R"(%dx.types.ResRet.i32)") {
-          // int4 value
+        } else if (type == R"(%dx.types.ResRet.i32)") {
           decompiled = std::format("int _{} = {}.{};", variable, ParseVariable(input), ParseIndex(index));
         } else {
           throw std::invalid_argument("Unknown extractvalue type");
@@ -1595,15 +1607,23 @@ class Decompiler {
         // phi float [ 0x3FF61108E0000000, %0 ], [ 0x3FF069AC80000000, %21 ], [ 0x3FE6412500000000, %23 ], [ %27, %25 ]
         auto [type, arguments] = StringViewMatch<2>(assignment, std::regex{R"(phi (\S+) (.+))"});
         // Declare variable
-        auto declaration_line = std::format("{} _{};", ParseType(type), variable);
-        this->code_blocks[0].phi_lines.push_back(declaration_line);
-
+        bool declared = false;
         auto pairs = StringViewSplitAll(arguments, std::regex{R"((\[ (\S+), %(\S+) \]),?)"}, {2, 3});
         for (const auto& [value, function_number] : pairs) {
           int function_int;
           FromStringView(function_number, function_int);
-          auto assignment_line = std::format("_{} = {};", variable, ParseFloat(value));
-          this->code_blocks[function_int].phi_lines.push_back(assignment_line);
+          if (function_int == 0) {
+            this->code_blocks[function_int].phi_lines.push_back(
+                std::format("{} _{} = {};", ParseType(type), variable, ParseFloat(value)));
+            declared = true;
+          } else {
+            auto assignment_line = std::format("_{} = {};", variable, ParseFloat(value));
+            this->code_blocks[function_int].phi_lines.push_back(assignment_line);
+          }
+        }
+        if (!declared) {
+          this->code_blocks[0].phi_lines.push_back(
+              std::format("{} _{};", ParseType(type), variable));
         }
       } else if (instruction == "load") {
         // load float, float* %1681, align 4, !tbaa !26
@@ -1644,10 +1664,12 @@ class Decompiler {
       }
 
       if (!decompiled.empty()) {
-#if DECOMPILER_DXC_DEBUG > 0
+#if DECOMPILER_DXC_DEBUG >= 2
         std::cout << decompiled << "\n";
 #endif
-        // this->current_code_block.hlsl_lines.push_back(std::format("// {} ", line));
+#if DECOMPILER_DXC_DEBUG >= 1
+        this->current_code_block.hlsl_lines.push_back(std::format("// {} ", line));
+#endif
         this->current_code_block.hlsl_lines.push_back(decompiled);
       }
     }
@@ -2242,9 +2264,59 @@ class Decompiler {
       }
     }
 
+    // Resources
+
+    auto resource_list_reference = named_metadata["!dx.resources"][0];
+    auto resource_list_key = resource_list_reference;
+    auto resource_list = named_metadata[resource_list_key];
+
+    auto srv_list_key = resource_list[0];
+    auto uav_list_key = resource_list[1];
+    auto cbv_list_key = resource_list[2];
+    auto sampler_list_key = resource_list[3];
+
+    if (srv_list_key != "null") {
+      auto srv_list = named_metadata[srv_list_key];
+      preprocess_state.srv_resources.reserve(srv_list.size());
+      for (const auto srv_key : srv_list) {
+        preprocess_state.srv_resources.emplace_back(
+            named_metadata[srv_key], preprocess_state.resource_descriptions, named_metadata);
+      }
+    }
+
+    if (uav_list_key != "null") {
+      auto uav_list = named_metadata[uav_list_key];
+      preprocess_state.uav_resources.reserve(uav_list.size());
+      for (const auto uav_key : uav_list) {
+        preprocess_state.uav_resources.emplace_back(
+            named_metadata[uav_key], preprocess_state.resource_descriptions, named_metadata);
+      }
+    }
+
+    if (cbv_list_key != "null") {
+      auto cbv_list = named_metadata[cbv_list_key];
+      preprocess_state.cbv_resources.reserve(cbv_list.size());
+      for (const auto cbv_key : cbv_list) {
+        preprocess_state.cbv_resources.emplace_back(
+            named_metadata[cbv_key], preprocess_state.resource_descriptions, named_metadata);
+      }
+    }
+
+    if (sampler_list_key != "null") {
+      auto sampler_list = named_metadata[sampler_list_key];
+      preprocess_state.sampler_resources.reserve(sampler_list.size());
+      for (const auto& sampler_key : sampler_list) {
+        preprocess_state.sampler_resources.emplace_back(
+            named_metadata[sampler_key], preprocess_state.resource_descriptions, named_metadata);
+      }
+    }
+
+    // Decompilation also notes
+    current_code_function.DecompileLines(preprocess_state);
+
     // Generate output
 
-#if DECOMPILER_DXC_DEBUG > 0
+#if DECOMPILER_DXC_DEBUG > 2
     auto& string_stream = std::cout;
 #else
     std::stringstream string_stream;
@@ -2280,25 +2352,7 @@ class Decompiler {
     }
 #endif
 
-    // Resources
-
-    auto resource_list_reference = named_metadata["!dx.resources"][0];
-    auto resource_list_key = resource_list_reference;
-    auto resource_list = named_metadata[resource_list_key];
-
-    // SRV
-    auto srv_list_key = resource_list[0];
-    std::vector<std::string_view> srv_list;
-    if (srv_list_key != "null") {
-      srv_list = named_metadata[srv_list_key];
-    }
-    preprocess_state.srv_resources.reserve(srv_list.size());
-    for (const auto srv_key : srv_list) {
-      // srv_resources.emplace_back(named_metadata[srv_key], named_metadata);
-
-      auto srv_resource = SRVResource(named_metadata[srv_key], named_metadata);
-      srv_resource.UpdateNameFromDescription(preprocess_state.resource_descriptions);
-
+    for (const auto& srv_resource : preprocess_state.srv_resources) {
       if (srv_resource.element_type == SRVResource::ComponentType::Invalid) {
         string_stream << "struct _" << srv_resource.name << " {\n";
         string_stream << "  float data[" << srv_resource.stride / 4 << "];\n";
@@ -2316,23 +2370,12 @@ class Decompiler {
       if (srv_resource.space != 0u) {
         string_stream << ", space" << srv_resource.space;
       }
-      string_stream << ");\n";
-      preprocess_state.srv_resources.push_back(srv_resource);
-    }
-    if (!srv_list.empty()) {
-      string_stream << "\n";
+      string_stream << ");\n\n";
     }
 
     // UAV
-    auto uav_list_key = resource_list[1];
-    std::vector<std::string_view> uav_list;
-    if (uav_list_key != "null") {
-      uav_list = named_metadata[uav_list_key];
-    }
-    preprocess_state.uav_resources.reserve(uav_list.size());
-    for (const auto uav_key : uav_list) {
-      // uav_resources.emplace_back(named_metadata[uav_key], named_metadata);
-      auto uav_resource = UAVResource(named_metadata[uav_key], named_metadata);
+
+    for (const auto& uav_resource : preprocess_state.uav_resources) {
       string_stream << UAVResource::ResourceKindString(uav_resource.shape);
       if (uav_resource.element_type != SRVResource::ComponentType::Invalid) {
         string_stream << "<" << SRVResource::ComponentTypeString(uav_resource.element_type) << ">";
@@ -2340,33 +2383,18 @@ class Decompiler {
         string_stream << "< (" << uav_resource.stride << " bytes) >";
       }
 
-      uav_resource.UpdateNameFromDescription(preprocess_state.resource_descriptions);
-
       string_stream << " " << uav_resource.name;
       string_stream << " : register(u" << uav_resource.signature_index;
       if (uav_resource.space != 0u) {
         string_stream << ", space" << uav_resource.space;
       }
-      string_stream << ");\n";
-      preprocess_state.uav_resources.push_back(uav_resource);
-    }
-    if (!uav_list.empty()) {
-      string_stream << "\n";
+      string_stream << ");\n\n";
     }
 
     // CBV
-    auto cbv_list_key = resource_list[2];
-    std::vector<std::string_view> cbv_list;
-    if (cbv_list_key != "null") {
-      cbv_list = named_metadata[cbv_list_key];
-    }
-    preprocess_state.cbv_resources.reserve(cbv_list.size());
-    for (const auto cbv_key : cbv_list) {
-      // cbv_resources.emplace_back(named_metadata[cbv_key], named_metadata);
-      auto cbv_resource = CBVResource(named_metadata[cbv_key], named_metadata);
-      cbv_resource.UpdateNameFromDescription(preprocess_state.resource_descriptions);
 
-      string_stream << "cbuffer _" << cbv_resource.name;
+    for (const auto& cbv_resource : preprocess_state.cbv_resources) {
+      string_stream << "cbuffer " << cbv_resource.name;
       string_stream << " : register(b" << cbv_resource.signature_index;
       if (cbv_resource.space != 0u) {
         string_stream << ", space" << cbv_resource.space;
@@ -2394,42 +2422,28 @@ class Decompiler {
         string_stream << "\n";
       }
       string_stream << "  } " << cbv_resource.name << " : packoffset(c0);\n";
-#else
+#elif 0
       string_stream << "  float4 " << cbv_resource.name;
       string_stream << "[" << ceil(static_cast<float>(cbv_resource.buffer_size) / 16.f) << "] : packoffset(c0);\n";
+#else
+      for (const auto& [suffix, type] : cbv_resource.data_types) {
+        string_stream << "  " << type << " " << cbv_resource.name << "_" << suffix;
+        auto marker = suffix.length() - 1;
+        string_stream << " : packoffset(c" << std::format("{}.{}", suffix.substr(0, marker), suffix.substr(marker)) << ");\n";
+      }
 #endif
 
-      string_stream << "};\n";
-      preprocess_state.cbv_resources.push_back(cbv_resource);
-    }
-
-    if (!cbv_list.empty()) {
-      string_stream << "\n";
+      string_stream << "};\n\n";
     }
 
     // sampler
-    auto sampler_list_key = resource_list[3];
-    std::vector<std::string_view> sampler_list;
-    if (sampler_list_key != "null") {
-      sampler_list = named_metadata[sampler_list_key];
-    }
-    preprocess_state.sampler_resources.reserve(sampler_list.size());
-    for (const auto& sampler_key : sampler_list) {
-      // sampler_resources.emplace_back(named_metadata[sampler_key], named_metadata);
-      auto sampler_resource = SamplerResource(named_metadata[sampler_key], named_metadata);
-      sampler_resource.UpdateNameFromDescription(preprocess_state.resource_descriptions);
-
+    for (const auto& sampler_resource : preprocess_state.sampler_resources) {
       string_stream << "SamplerState " << sampler_resource.name;
       string_stream << " : register(s" << sampler_resource.signature_index;
       if (sampler_resource.space != 0u) {
         string_stream << ", space" << sampler_resource.space;
       }
-      string_stream << ");\n";
-      preprocess_state.sampler_resources.push_back(sampler_resource);
-    }
-
-    if (!sampler_list.empty()) {
-      string_stream << "\n";
+      string_stream << ");\n\n";
     }
 
     // for (const auto binding : preprocess_state.resource_bindings) {
@@ -2447,7 +2461,6 @@ class Decompiler {
     std::vector<int> pending_convergences = {};
     std::vector<std::set<int>> pending_recursions = {};
     std::vector<int> current_loops = {};
-    current_code_function.DecompileLines(preprocess_state);
 
     auto convergences = current_code_function.ListConvergences();
     auto recursions = current_code_function.ListRecursions();
@@ -2671,7 +2684,7 @@ class Decompiler {
     }
 
     string_stream << "}\n";
-#if DECOMPILER_DXC_DEBUG <= 0
+#if DECOMPILER_DXC_DEBUG <= 2
     return string_stream.str();
 #endif
   }
