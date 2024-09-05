@@ -2619,12 +2619,12 @@ class Decompiler {
         if (current_loop == code_block.branch.branch_condition_true) {
           string_stream << spacing << "continue;\n";  // go back
         } else if (next_convergence == branch_number) {
-#if DECOMPILER_DXC_DEBUG > 1
+#if DECOMPILER_DXC_DEBUG >= 1
           string_stream << spacing << "// fn:converge " << line_number << " => " << next_convergence << "\n";
 #endif
           // noop
         } else if (std::find(pending_convergences.begin(), pending_convergences.end(), branch_number) != pending_convergences.end()) {
-          string_stream << spacing << "// Warning: needs break " << line_number << " => " << code_block.branch.branch_condition_true << "\n";
+          string_stream << spacing << "break;\n";
         } else {
           append_code_block(branch_number);
         }
@@ -2666,6 +2666,10 @@ class Decompiler {
             && (convergence_line_number == code_block.branch.branch_condition_false || callers.contains(code_block.branch.branch_condition_false))) {
           if (convergence_line_number == next_convergence) break;
           pair_convergence = convergence_line_number;
+          if (!pending_convergences.empty()) {
+            // Need to possible break
+            string_stream << spacing << "do {\n";
+          }
           pending_convergences.push_back(pair_convergence);
           break;
         }
@@ -2708,7 +2712,11 @@ class Decompiler {
 
       if (pair_convergence != -1) {
         pending_convergences.pop_back();
+        bool is_empty = pending_convergences.empty();
         on_branch(pair_convergence);
+        if (!is_empty) {
+          string_stream << spacing << "} while (false);\n";
+        }
       };
       on_complete();
     };
