@@ -1458,7 +1458,7 @@ class Decompiler {
         } else {
           std::cerr << line << "\n";
           std::cerr << "Function name: " << functionName << "\n";
-          throw std::invalid_argument("Unknown function name");
+          throw std::invalid_argument("Unknown assign function name");
         }
         // decompiled = std::format("// {} _{} = {}({})", type, variable, functionName, functionParams);
         // decompiled = "// " + std::string{comment};
@@ -1644,6 +1644,14 @@ class Decompiler {
         } else {
           decompiled = std::format("{} _{} = {} & {};", ParseType(type), variable, ParseInt(a), ParseInt(b));
         }
+      } else if (instruction == "urem") {
+        //   %100 = urem i32 %99, 5
+        auto [type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(urem (\S+) (\S+), (\S+))"});
+        decompiled = std::format("uint _{} = {} % {};", variable, ParseInt(a), ParseInt(b));
+      } else if (instruction == "srem") {
+        //   %100 = urem i32 %99, 5
+        auto [type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(srem (\S+) (\S+), (\S+))"});
+        decompiled = std::format("int _{} = {} % {};", variable, ParseInt(a), ParseInt(b));
       } else if (instruction == "or") {
         auto [type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(or (\S+) (\S+), (\S+))"});
         if (type == "i1") {
@@ -1774,6 +1782,10 @@ class Decompiler {
       // auto paramMatches = string_view_split_all(functionParamsString, paramRegex, {1, 2});
       if (functionName == "@llvm.lifetime.start") {
       } else if (functionName == "@llvm.lifetime.end") {
+      } else if (functionName == "@dx.op.discard") {
+        // call void @dx.op.discard(i32 82, i1 true)  ; Discard(condition)
+        auto [opNumber, condition] = StringViewSplit<2>(functionParamsString, param_regex, 2);
+        decompiled = std::format("discard({})", ParseBool(condition));
       } else if (functionName == "@dx.op.storeOutput.f32") {
         // call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %2772)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
         auto [opNumber, outputSigId, rowIndex, colIndex, value] = StringViewSplit<5>(functionParamsString, param_regex, 2);
@@ -1781,7 +1793,7 @@ class Decompiler {
         FromStringView(outputSigId, output_signature_index);
         auto signature = preprocess_state.output_signature[output_signature_index];
         if (rowIndex != "0") {
-          throw std::exception("Row Index number supported.");
+          throw std::exception("Row index not supported.");
         }
         if (signature.packed.MaskString() == "1") {
           if (ParseIndex(colIndex) != "x") {
@@ -1795,7 +1807,7 @@ class Decompiler {
       } else {
         std::cerr << line << "\n";
         std::cerr << "Function name: " << functionName << "\n";
-        throw std::invalid_argument("Unknown function name");
+        throw std::invalid_argument("Unknown call function name");
       }
 
       if (!decompiled.empty()) {
