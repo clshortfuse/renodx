@@ -1736,7 +1736,7 @@ class Decompiler {
         std::cout << decompiled << "\n";
 #endif
 #if DECOMPILER_DXC_DEBUG >= 1
-        this->current_code_block.hlsl_lines.push_back(std::format("// {} ", line));
+        this->current_code_block.hlsl_lines.push_back(std::format("// {}", StringViewTrim(line)));
 #endif
         this->current_code_block.hlsl_lines.push_back(decompiled);
       }
@@ -2533,7 +2533,7 @@ class Decompiler {
     auto convergences = current_code_function.ListConvergences();
     auto recursions = current_code_function.ListRecursions();
 
-#if DECOMPILE_DEBUG
+#if DECOMPILER_DXC_DEBUG > 0
     for (const auto& [a, b] : convergences) {
       std::cout << "Convergences " << a << " = ";
       for (const auto c : b) {
@@ -2577,9 +2577,6 @@ class Decompiler {
         // break at these
       }
 
-      auto on_continue = [&]() {
-      };
-
       auto on_complete = [&]() {
         if (using_recursion) {
           string_stream << spacing << "break;\n";
@@ -2593,6 +2590,18 @@ class Decompiler {
       };
 
       auto& code_block = current_code_function.code_blocks[line_number];
+#if DECOMPILER_DXC_DEBUG > 1
+      string_stream << spacing << "// fn:start " << line_number << "\n";
+      if (!pending_convergences.empty()) {
+        string_stream << spacing << "// fn:pending ";
+        int len = pending_convergences.size();
+        for (int i = 0; i < len; ++i) {
+          string_stream << pending_convergences[i];
+          if (i != len - 1) string_stream << ", ";
+        }
+        string_stream << "\n";
+      }
+#endif
       for (const auto& hlsl_line : code_block.hlsl_lines) {
         string_stream << spacing << hlsl_line << "\n";
       }
@@ -2610,7 +2619,12 @@ class Decompiler {
         if (current_loop == code_block.branch.branch_condition_true) {
           string_stream << spacing << "continue;\n";  // go back
         } else if (next_convergence == branch_number) {
+#if DECOMPILER_DXC_DEBUG > 1
+          string_stream << spacing << "// fn:converge " << line_number << " => " << next_convergence << "\n";
+#endif
           // noop
+        } else if (std::find(pending_convergences.begin(), pending_convergences.end(), branch_number) != pending_convergences.end()) {
+          string_stream << spacing << "// Warning: needs break " << line_number << " => " << code_block.branch.branch_condition_true << "\n";
         } else {
           append_code_block(branch_number);
         }
@@ -2694,7 +2708,7 @@ class Decompiler {
 
       if (pair_convergence != -1) {
         pending_convergences.pop_back();
-        append_code_block(pair_convergence);
+        on_branch(pair_convergence);
       };
       on_complete();
     };
