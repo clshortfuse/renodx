@@ -25,9 +25,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <include/reshade.hpp>
 #include "./path.hpp"
-#include "format.hpp"
 
 namespace renodx::utils::shader::compiler {
 
@@ -91,7 +89,7 @@ class FxcD3DInclude : public ID3DInclude {
         s << ", type: " << IncludeType;
         s << ", parent: " << pParentData;
         s << ")";
-        reshade::log_message(reshade::log_level::error, s.str().c_str());
+        // reshade::log_message(reshade::log_level::error, s.str().c_str());
       }
       return -1;
     }
@@ -210,7 +208,11 @@ inline HRESULT CompileFromBlob(
     }
 
     std::vector<LPCWSTR> arguments;
-    if ((flags1 & D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY) != 0) arguments.push_back(L"/Gec");
+    if (((flags1 & D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY) != 0)) {
+      if (target[3] <= '4' || (target[3] == '5' && target[5] == '0')) {
+        arguments.push_back(L"/Gec");
+      }
+    }
     // /Ges Not implemented:
     // if(flags1 & D3DCOMPILE_ENABLE_STRICTNESS) arguments.push_back(L"/Ges");
     if ((flags1 & D3DCOMPILE_IEEE_STRICTNESS) != 0) arguments.push_back(L"/Gis");
@@ -314,7 +316,7 @@ inline std::vector<uint8_t> CompileShaderFromFileFXC(
   if (fxc_compiler_library == nullptr) {
     std::stringstream s;
     s << "CompileShaderFromFileFXC(Loading D3DCompiler_47.dll)";
-    reshade::log_message(reshade::log_level::debug, s.str().c_str());
+    // reshade::log_message(reshade::log_level::debug, s.str().c_str());
     fxc_compiler_library = LoadLibraryW(L"D3DCompiler_47.dll");
   }
   if (fxc_compiler_library == nullptr) {
@@ -327,7 +329,7 @@ inline std::vector<uint8_t> CompileShaderFromFileFXC(
   {
     std::stringstream s;
     s << "CompileShaderFromFileFXC(GetProcAddress)";
-    reshade::log_message(reshade::log_level::debug, s.str().c_str());
+    // reshade::log_message(reshade::log_level::debug, s.str().c_str());
   }
   // NOLINTNEXTLINE(google-readability-casting)
   auto d3d_compilefromfile = pD3DCompileFromFile(GetProcAddress(fxc_compiler_library, "D3DCompileFromFile"));
@@ -346,7 +348,9 @@ inline std::vector<uint8_t> CompileShaderFromFileFXC(
           &custom_include,
           "main",
           shader_target,
-          D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY,
+          (shader_target[3] <= '4' || (shader_target[3] == '5' && shader_target[5] == '0'))
+              ? D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY
+              : 0,
           0,
           &out_blob,
           &error_blob))) {

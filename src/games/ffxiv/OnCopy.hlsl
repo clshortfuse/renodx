@@ -45,6 +45,9 @@ void OnCopy(inout float3 col)
       col = extendGamut(col, injectedData.gamutExpansion);
     }
 
+    // apply game paperwhite brightness with inverse UI brightness (ui brightness is re-applied in the final shader)
+    col *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+
     // back to gamma space
     col = renodx::math::SafePow(col, 1.f / 2.2f);
   }
