@@ -997,7 +997,7 @@ class Decompiler {
       auto type_strings = StringViewSplitAll(types, type_split, 1);
       int value = 0;
       for (const auto type : type_strings) {
-        this->types.emplace_back(std::format("value{:02}", value++), type);
+        this->types.emplace_back(std::format("value{:03}", value++), type);
       }
     }
   };
@@ -1145,24 +1145,49 @@ class Decompiler {
         if (functionName == "@dx.op.createHandle") {
           //   %dx.types.Handle @dx.op.createHandle(i32 57, i8 2, i32 0, i32 0, i1 false)  ; CreateHandle(resourceClass,rangeId,index,nonUniformIndex)
           auto [opNumber, resource_class, range_id, index, nonUniformIndex] = StringViewSplit<5>(functionParamsString, param_regex, 2);
-          int index_value;
+          uint32_t index_value;
           FromStringView(index, index_value);
           if (resource_class == "0") {
-            auto srv = preprocess_state.srv_resources[index_value];
-            decompiled = std::format("// texture _{} = {};", variable, srv.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {srv.name, index_value};
+            auto srv = std::find_if(
+                preprocess_state.srv_resources.begin(),
+                preprocess_state.srv_resources.end(),
+                [&](auto resource) { return resource.signature_index == index_value; });
+            if (srv == preprocess_state.srv_resources.end()) {
+              std::cerr << "Could not find T" << index_value;
+            }
+            auto resource_index = srv - preprocess_state.srv_resources.begin();
+            decompiled = std::format("// texture _{} = {};", variable, srv->name);
+            preprocess_state.resource_binding_variables[std::string(variable)] = {srv->name, resource_index};
           } else if (resource_class == "1") {
-            auto uav = preprocess_state.uav_resources[index_value];
-            decompiled = std::format("// rwtexture _{} = {};", variable, uav.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {uav.name, index_value};
+            auto uav = std::find_if(
+                preprocess_state.uav_resources.begin(),
+                preprocess_state.uav_resources.end(),
+                [&](auto resource) { return resource.signature_index == index_value; });
+            auto resource_index = uav - preprocess_state.uav_resources.begin();
+            decompiled = std::format("// rwtexture _{} = {};", variable, uav->name);
+            preprocess_state.resource_binding_variables[std::string(variable)] = {uav->name, resource_index};
           } else if (resource_class == "2") {
-            auto cbv = preprocess_state.cbv_resources[index_value];
-            decompiled = std::format("// cbuffer _{} = {};", variable, cbv.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {cbv.name, index_value};
+            auto cbv = std::find_if(
+                preprocess_state.cbv_resources.begin(),
+                preprocess_state.cbv_resources.end(),
+                [&](auto resource) { return resource.signature_index == index_value; });
+            if (cbv == preprocess_state.cbv_resources.end()) {
+              std::cerr << "Could not find cb" << index_value;
+            }
+            auto resource_index = cbv - preprocess_state.cbv_resources.begin();
+            decompiled = std::format("// cbuffer _{} = {};", variable, cbv->name);
+            preprocess_state.resource_binding_variables[std::string(variable)] = {cbv->name, resource_index};
           } else if (resource_class == "3") {
-            auto sampler = preprocess_state.sampler_resources[index_value];
-            decompiled = std::format("// SamplerState _{} = {};", variable, sampler.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {sampler.name, index_value};
+            auto sampler = std::find_if(
+                preprocess_state.sampler_resources.begin(),
+                preprocess_state.sampler_resources.end(),
+                [&](auto resource) { return resource.signature_index == index_value; });
+            if (sampler == preprocess_state.sampler_resources.end()) {
+              std::cerr << "Could not find S" << index_value;
+            }
+            auto resource_index = sampler - preprocess_state.sampler_resources.begin();
+            decompiled = std::format("// SamplerState _{} = {};", variable, sampler->name);
+            preprocess_state.resource_binding_variables[std::string(variable)] = {sampler->name, resource_index};
           } else {
             throw std::invalid_argument("Unknown resource type");
           }
@@ -1341,6 +1366,7 @@ class Decompiler {
           }
 
         } else if (functionName == "@dx.op.sample.f32") {
+          //  call %dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, %dx.types.Handle %1, %dx.types.Handle %2, float %4, float %5, float undef, float undef, i32 0, i32 0, i32 undef, float undef)  ; Sample(srv,sampler,coord0,coord1,coord2,coord3,offset0,offset1,offset2,clamp)
           auto [opNumber, srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp] = StringViewSplit<11>(functionParamsString, param_regex, 2);
           auto ref_resource = std::string{srv.substr(1)};
           auto ref_sampler = std::string{sampler.substr(1)};
@@ -1370,8 +1396,8 @@ class Decompiler {
             throw std::invalid_argument("Unknown clamp");
           }
 
-          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref_resource).second];
-          auto sampler_resource = preprocess_state.sampler_resources[preprocess_state.resource_binding_variables.at(ref_sampler).second];
+          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables[ref_resource].second];
+          auto sampler_resource = preprocess_state.sampler_resources[preprocess_state.resource_binding_variables[ref_sampler].second];
           if (offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
             decompiled = std::format("{} _{} = {}.Sample({}, {});", srv_resource.data_type, variable, srv_resource.name, sampler_resource.name, coords);
           } else {
@@ -1473,7 +1499,7 @@ class Decompiler {
 
           int real_index = cbv_variable_index;
           char sub_index = VECTOR_INDEXES[literal_index];
-          std::string suffix = std::format("{:02}{}", real_index, sub_index);
+          std::string suffix = std::format("{:03}{}", real_index, sub_index);
           decompiled = std::format("float _{} = {}_{};", variable, cbv_resource->name, suffix);
           cbv_resource->data_types[suffix] = "float";
         } else if (type == R"(%dx.types.CBufRet.i32)") {
@@ -1483,7 +1509,7 @@ class Decompiler {
 
           int real_index = cbv_variable_index;
           char sub_index = VECTOR_INDEXES[literal_index];
-          std::string suffix = std::format("{:02}{}", real_index, sub_index);
+          std::string suffix = std::format("{:03}{}", real_index, sub_index);
           decompiled = std::format("uint _{} = {}_{};", variable, cbv_resource->name, suffix);
           cbv_resource->data_types[suffix] = "uint";
         } else if (type == R"(%dx.types.ResRet.f32)") {
@@ -2322,7 +2348,9 @@ class Decompiler {
           default:
             break;
         }
-        // std::cout << prestate << ": " << line << std::endl;
+#if DECOMPILER_DXC_DEBUG >= 2
+        std::cout << prestate << ": " << line << std::endl;
+#endif
       } catch (const std::invalid_argument& ex) {
         std::cerr << ex.what() << " at line: " << line_number + 1 << std::endl
                   << "  >>>" << line << "<<<" << std::endl;
