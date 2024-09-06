@@ -25,10 +25,10 @@ int main(int argc, char** argv) {
     std::cerr << "Failed to disassemble shader.\n";
     return EXIT_FAILURE;
   }
-  auto* decompiler = new renodx::utils::shader::decompiler::dxc::Decompiler();
+  auto decompiler = renodx::utils::shader::decompiler::dxc::Decompiler();
 
   try {
-    std::string decompilation = decompiler->Decompile(disassembly);
+    std::string decompilation = decompiler.Decompile(disassembly);
 
     if (decompilation.empty()) {
       return EXIT_FAILURE;
@@ -48,15 +48,16 @@ int main(int argc, char** argv) {
     }
 
     renodx::utils::path::WriteTextFile(output, decompilation);
+    std::cout << '"' << argv[1] << '"' << " => " << output << std::endl;
 
   } catch (const std::exception& ex) {
-    std::cerr << ex.what() << std::endl;
+    std::cerr << '"' << argv[1] << '"' << ": " << ex.what() << std::endl;
     return EXIT_FAILURE;
   } catch (const std::string& ex) {
-    std::cerr << ex << std::endl;
+    std::cerr << '"' << argv[1] << '"' << ": " << ex << std::endl;
     return EXIT_FAILURE;
   } catch (...) {
-    std::cerr << "Unknown failure" << std::endl;
+    std::cerr << '"' << argv[1] << '"' << ": Unknown failure" << std::endl;
     return EXIT_FAILURE;
   }
 
