@@ -45,17 +45,6 @@ void main(
   float4 inputColor = sInputT.Sample(sInputS_s, v1.xy);
   outputColor = inputColor;
   
-  if (injectedData.toneMapType > 0) {
-    // linearize
-    inputColor.rgb = renodx::math::SafePow(inputColor.rgb, 2.2f);
-    
-    // convert back to bt709
-    inputColor.rgb = mul(renodx::color::BT2020_TO_BT709_MAT, inputColor.rgb);
-    
-    // back to gamma space
-    inputColor.rgb = renodx::math::SafePow(inputColor.rgb, 1.f / 2.2f);
-  }
-
   float4 filterR = cFilter._m00_m01_m02_m03;
   float4 filterG = cFilter._m10_m11_m12_m13;
   float4 filterB = cFilter._m20_m21_m22_m23;
@@ -73,12 +62,12 @@ void main(
     colorAfterLut.x = SampleLUT(inputColor.r);
     colorAfterLut.y = SampleLUT(inputColor.g);
     colorAfterLut.z = SampleLUT(inputColor.b);
-
-    // fix raised black floor
-    filterR.a = filterR.a > 0.f ? max(0.f, filterR.a + injectedData.blackFloorOffset) : filterR.a;
-    filterG.a = filterG.a > 0.f ? max(0.f, filterG.a + injectedData.blackFloorOffset) : filterG.a;
-    filterB.a = filterB.a > 0.f ? max(0.f, filterB.a + injectedData.blackFloorOffset) : filterB.a;
   }
+
+  // fix raised black floor
+  filterR.a = filterR.a > 0.f ? max(0.f, filterR.a + injectedData.blackFloorOffset) : filterR.a;
+  filterG.a = filterG.a > 0.f ? max(0.f, filterG.a + injectedData.blackFloorOffset) : filterG.a;
+  filterB.a = filterB.a > 0.f ? max(0.f, filterB.a + injectedData.blackFloorOffset) : filterB.a;
 
   colorAfterLut.w = 1;
 
@@ -115,21 +104,8 @@ void main(
   filterForDarkColor.b = dot(cFilterForDark._m20_m21_m22_m23, preFilterForDarkColor.rgba);
   outputColor.rgb = lerp(someColor.rgb, filterForDarkColor.rgb, filterForDarkIntensity);
 
+  outputColor.rgb = injectedData.toneMapType == 0 ? saturate(outputColor.rgb) : max(outputColor.rgb, 0);
   outputColor.a = saturate(outputColor.a);
-  if (injectedData.toneMapType == 0) {
-    outputColor.rgb = saturate(outputColor.rgb);
-  } else {
-    // linearize
-    outputColor.rgb = renodx::math::SafePow(outputColor.rgb, 2.2f);
-    
-    // convert back to bt2020
-    outputColor.rgb = mul(renodx::color::BT709_TO_BT2020_MAT, outputColor.rgb);
-
-    outputColor.rgb = max(0, outputColor.rgb);
-    
-    // back to gamma space
-    outputColor.rgb = renodx::math::SafePow(outputColor.rgb, 1.f / 2.2f);
-  }
 
   return;
 }

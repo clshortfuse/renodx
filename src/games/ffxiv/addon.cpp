@@ -67,12 +67,13 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 4.f,
+        .default_value = 2.f,
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "ACES", "RenoDRT", "DICE"},
+        .labels = {"Vanilla", "None", "DICE"},
+        .parse = [](float value) { return std::fmin(std::fmax(value, 0.f), 2.f); },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
@@ -105,7 +106,6 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
         .min = 48.f,
         .max = 500.f,
-        .is_enabled = []() { return shader_injection.toneMapType > 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "diceShoulderStart",
@@ -116,7 +116,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Determines where the highlights curve (shoulder) starts in the DICE tonemapper.",
         .max = 1.f,
         .format = "%.2f",
-        .is_enabled = []() { return shader_injection.toneMapType == 4; },
+        .is_enabled = []() { return shader_injection.toneMapType == 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
@@ -198,7 +198,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Generates HDR colors (BT.2020) from bright saturated SDR (BT.709) ones.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType > 0; },
+        .is_enabled = []() { return shader_injection.toneMapType > 1; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -211,7 +211,6 @@ renodx::utils::settings::Settings settings = {
         .min = -0.1f,
         .max = 0.f,
         .format = "%.3f",
-        .is_enabled = []() { return shader_injection.toneMapType > 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "bloomRadiusMult",
