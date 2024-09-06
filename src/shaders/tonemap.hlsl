@@ -259,7 +259,7 @@ float3 ApplyACES(float3 color, Config config, bool sdr = false) {
   float aces_min = (0.0001f) / reference_white;
   float aces_max = (sdr ? 1.f : config.peak_nits) / reference_white;
 
-  if (!sdr && config.gamma_correction == 0.f) {
+  if (!sdr && config.gamma_correction != 0.f) {
     aces_max = renodx::color::correct::Gamma(aces_max, config.gamma_correction == 1.f);
     aces_min = renodx::color::correct::Gamma(aces_min, config.gamma_correction == 1.f);
   }

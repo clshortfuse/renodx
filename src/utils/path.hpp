@@ -46,4 +46,9 @@ static void WriteBinaryFile(const std::filesystem::path& path, std::span<uint8_t
   file.write(reinterpret_cast<const char*>(data.data()), data.size());
 }
 
+static void WriteTextFile(const std::filesystem::path& path, std::string& string) {
+  std::ofstream file(path);
+  file << string;
+}
+
 }  // namespace renodx::utils::path

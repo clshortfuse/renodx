@@ -59,6 +59,9 @@ jobs:
 
     - name: Copy Binaries (x32)
       run: copy build32\Release\*.addon32 www\
+    
+    - name: Copy Binaries (Tools)
+      run: copy build32\Release\*.exe www\
 
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v1
