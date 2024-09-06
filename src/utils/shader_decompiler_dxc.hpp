@@ -188,6 +188,20 @@ class Decompiler {
     throw std::invalid_argument("Could not parse index");
   }
 
+  static uint32_t IndexFromChar(const char input) {
+    switch (input) {
+      case 'r':
+      case 'x': return 0;
+      case 'g':
+      case 'y': return 1;
+      case 'b':
+      case 'z': return 2;
+      case 'a':
+      case 'w': return 3;
+      default:  return -1;
+    }
+  }
+
   static std::string ParseBool(std::string_view input) {
     if (input.at(0) == '%') {
       return std::format("_{}", input.substr(1));
@@ -653,7 +667,6 @@ class Decompiler {
       throw std::invalid_argument("Unknown ResourceFormat");
     }
 
-
     explicit ResourceDescription(std::string_view line) {
       // ; _31_33                            cbuffer      NA          NA     CB0            cb0     1
       static auto regex = std::regex{R"(; (.{30}\S*)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*)"};
@@ -917,7 +930,7 @@ class Decompiler {
 
   struct CBVResource : Resource {
     uint32_t buffer_size;
-    std::map<std::string, std::string_view> data_types;
+    std::unordered_map<std::string, std::string_view> data_types;
     explicit CBVResource(
         std::vector<std::string_view>& metadata,
         std::span<ResourceDescription> resource_descriptions,
@@ -2517,7 +2530,20 @@ class Decompiler {
       string_stream << "  float4 " << cbv_resource.name;
       string_stream << "[" << ceil(static_cast<float>(cbv_resource.buffer_size) / 16.f) << "] : packoffset(c0);\n";
 #else
-      for (const auto& [suffix, type] : cbv_resource.data_types) {
+      std::vector<std::pair<std::string, std::string_view>> sorted(cbv_resource.data_types.begin(), cbv_resource.data_types.end());
+      std::sort(sorted.begin(), sorted.end(), [](auto a, auto b) {
+        auto& [a_suffix, a_type] = a;
+        auto& [b_suffix, b_type] = b;
+        auto a_marker = a_suffix.length() - 1;
+        auto b_marker = b_suffix.length() - 1;
+        auto a_index1 = a_suffix.substr(0, a_marker);
+        auto b_index1 = b_suffix.substr(0, b_marker);
+        auto a_index2 = IndexFromChar(a_suffix[a_marker]);
+        auto b_index2 = IndexFromChar(b_suffix[b_marker]);
+        return (std::strcmp(a_index1.c_str(), b_index1.c_str())) || (a_index2 < b_index2);
+      });
+
+      for (const auto& [suffix, type] : sorted) {
         string_stream << "  " << type << " " << cbv_resource.name << "_" << suffix;
         auto marker = suffix.length() - 1;
         string_stream << " : packoffset(c" << std::format("{}.{}", suffix.substr(0, marker), suffix.substr(marker)) << ");\n";
