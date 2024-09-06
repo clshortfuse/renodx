@@ -193,7 +193,7 @@ float4 main(
   // TONEMAPPER_GAMUT_Rec2020_D65 2
   // TONEMAPPER_GAMUT_ACES_D60 3
   // TONEMAPPER_GAMUT_ACEScg_D60 4
-  
+
   bool _22 = (_21 == 1);
   float _39 = 1.379158854484558f;
   float _40 = -0.3088507056236267f;
@@ -291,8 +291,6 @@ float4 main(
   uint _49 = cb0_40w;
   bool _50 = (_49 > 2);
 
-  _50 = true; // USE PQ
-
   if (_50) {
     float _52 = log2(_16);
     float _53 = log2(_17);
@@ -355,10 +353,6 @@ float4 main(
   }
 
   float3 input_color = float3(_105, _106, _107);
-
-  // float2 UV = TEXCOORD.xy - float2(0.5f / 32.f, 0.5f / 32.f);
-  // float3 UVW = float3(UV * 32.f / (32.f - 1.f), SV_RenderTargetArrayIndex / (32.f - 1.f));
-  // input_color = renodx::color::bt2020::from::PQ(UVW) * 10000.f / 100.f;
 
   float _109 = cb1_08x;
   float _110 = cb1_08y;
@@ -791,7 +785,7 @@ float4 main(
   float _555 = mad(_546, _533, _554);
   float _556 = mad(_547, _535, _555);
 
-  float _557 = cb0_36y; // BlueCorrect
+  float _557 = cb0_36y;  // BlueCorrect
 
   float _558 = _531 * 0.9386394023895264f;
   float _559 = mad(-4.540197551250458e-09f, _533, _558);
@@ -816,217 +810,220 @@ float4 main(
   // Early out with cbuffer
   // (Unreal runs the entire SDR process even if discarding)
   uint output_type = cb0_40w;
-  bool is_aces = (output_type >= 3u && output_type <= 6u);
-  if (is_aces) {
-    bool is_2000_nits = (output_type == 3u || output_type == 5u);
-    bool is_pq = (output_type == 3u || output_type == 4u);
+
+  float3 sdr_color;
+  float3 hdr_color;
+  float3 sdr_ap1_color;
+
+  bool is_hdr = (output_type >= 3u && output_type <= 6u);
+  if (is_hdr) {
+    bool is_2000_nits = (output_type == 4u || output_type == 6u);
 
     renodx::tonemap::Config config = renodx::tonemap::config::Create();
-    config.type = 2.f; // ACES
+    config.type = 2.f;  // ACES
     config.peak_nits = is_2000_nits ? 2000.f : 1000.f;
     config.game_nits = 203.f;
-    renodx::lut::Config lut_config = renodx::lut::config::Create(
-        s0,
-        1.f, // strength;
-        1.f, // scaling
-        renodx::lut::config::type::SRGB,
-        renodx::lut::config::type::SRGB,
-        16);
+    config.contrast = 0.75f;
+    config.saturation = 0.75f;
+    config.exposure = 1.5f;
 
     float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
-    float3 output_color = renodx::tonemap::config::Apply(config_color, config, lut_config, t0);
-    if (is_pq) {
-      output_color = renodx::color::bt2020::from::BT709(output_color);
-      output_color = renodx::color::pq::from::BT2020(output_color, 100.f);
-    }
-    
-    return float4(output_color * 0.9523810148239136f, 0);
-  }
 
-  // start of FilmToneMap
-
-  // AP1 => AP0
-  float _574 = _571 * 0.6954522132873535f;
-  float _575 = mad(0.14067868888378143f, _572, _574);
-  float _576 = mad(0.16386905312538147f, _573, _575);
-  float _577 = _571 * 0.044794581830501556f;
-  float _578 = mad(0.8596711158752441f, _572, _577);
-  float _579 = mad(0.0955343246459961f, _573, _578);
-  float _580 = _571 * -0.005525882821530104f;
-  float _581 = mad(0.004025210160762072f, _572, _580);
-  float _582 = mad(1.0015007257461548f, _573, _581);
-
-  // start aces::aces_rrt
-
-  // aces::rgb_2_saturation
-  float _583 = min(_576, _579);
-  float _584 = min(_583, _582);
-  float _585 = max(_576, _579);
-  float _586 = max(_585, _582);
-  float _587 = max(_586, 1.000000013351432e-10f);
-  float _588 = max(_584, 1.000000013351432e-10f);
-  float _589 = _587 - _588;
-  float _590 = max(_586, 0.009999999776482582f);
-  float _591 = _589 / _590;
-
-  // aces::rgb_2_yc
-  float _592 = _582 - _579;
-  float _593 = _592 * _582;
-  float _594 = _579 - _576;
-  float _595 = _594 * _579;
-  float _596 = _593 + _595;
-  float _597 = _576 - _582;
-  float _598 = _597 * _576;
-  float _599 = _596 + _598;
-  float _600 = sqrt(_599);
-  float _601 = _600 * 1.75f;
-  float _602 = _579 + _576;
-  float _603 = _602 + _582;
-  float _604 = _603 + _601;
-  float _605 = _604 * 0.3333333432674408f;
-  float _606 = _591 + -0.4000000059604645f;
-
-  // aces:sigmoid_shaper
-  float _607 = _606 * 5.0f;
-  float _608 = _606 * 2.5f;
-  float _609 = abs(_608);
-  float _610 = 1.0f - _609;
-  float _611 = max(_610, 0.0f);
-  bool _612 = (_607 > 0.0f);
-  bool _613 = (_607 < 0.0f);
-  int _614 = int(_612);
-  int _615 = int(_613);
-  int _616 = _614 - _615;
-  float _617 = float(_616);
-  float _618 = _611 * _611;
-  float _619 = 1.0f - _618;
-  float _620 = _617 * _619;
-  float _621 = _620 + 1.0f;
-  float _622 = _621 * 0.02500000037252903f;
-  bool _623 = !(_605 <= 0.0533333346247673f);
-  _631 = _622;
-  if (_623) {
-    bool _625 = !(_605 >= 0.1599999964237213f);
-    _631 = 0.0f;
-    if (_625) {
-      float _627 = 0.23999999463558197f / _604;
-      float _628 = _627 + -0.5f;
-      float _629 = _628 * _622;
-      _631 = _629;
-    }
-  }
-
-  // aces::added_glow
-  float _632 = _631 + 1.0f;
-
-  float _633 = _632 * _576;
-  float _634 = _632 * _579;
-  float _635 = _632 * _582;
-
-  // aces::rgb_2_hue
-  bool _636 = (_633 == _634);
-  bool _637 = (_634 == _635);
-  bool _638 = _636 && _637;
-  _667 = 0.0f;
-  if (!_638) {
-    float _640 = _633 * 2.0f;
-    float _641 = _640 - _634;
-    float _642 = _641 - _635;
-    float _643 = _579 - _582;
-    float _644 = _643 * 1.7320507764816284f;
-    float _645 = _644 * _632;
-    float _646 = _645 / _642;
-    float _647 = atan(_646);
-    float _648 = _647 + 3.1415927410125732f;
-    float _649 = _647 + -3.1415927410125732f;
-    bool _650 = (_642 < 0.0f);
-    bool _651 = (_642 == 0.0f);
-    bool _652 = (_645 >= 0.0f);
-    bool _653 = (_645 < 0.0f);
-    bool _654 = _652 && _650;
-    float _655 = _654 ? _648 : _647;
-    bool _656 = _653 && _650;
-    float _657 = _656 ? _649 : _655;
-    bool _658 = _653 && _651;
-    bool _659 = _652 && _651;
-    float _660 = _657 * 57.2957763671875f;
-    float _661 = _658 ? -90.0f : _660;
-    float _662 = _659 ? 90.0f : _661;
-    bool _663 = (_662 < 0.0f);
-    _667 = _662;
-    if (_663) {
-      float _665 = _662 + 360.0f;
-      _667 = _665;
-    }
-  }
-  float _668 = max(_667, 0.0f);
-  float _669 = min(_668, 360.0f);
-
-  // aces::center_hue
-  bool _670 = (_669 < -180.0f);
-  if (_670) {
-    float _672 = _669 + 360.0f;
-    _678 = _672;
+    renodx::tonemap::config::DualToneMap dual_tone_map =
+        renodx::tonemap::config::ApplyToneMaps(config_color, config);
+    hdr_color = dual_tone_map.color_hdr;
+    sdr_color = dual_tone_map.color_sdr;
+    sdr_ap1_color = renodx::color::ap1::from::BT709(sdr_color);
   } else {
-    bool _674 = (_669 > 180.0f);
-    _678 = _669;
-    if (_674) {
-      float _676 = _669 + -360.0f;
-      _678 = _676;
+    // start of FilmToneMap
+
+    // AP1 => AP0
+    float _574 = _571 * 0.6954522132873535f;
+    float _575 = mad(0.14067868888378143f, _572, _574);
+    float _576 = mad(0.16386905312538147f, _573, _575);
+    float _577 = _571 * 0.044794581830501556f;
+    float _578 = mad(0.8596711158752441f, _572, _577);
+    float _579 = mad(0.0955343246459961f, _573, _578);
+    float _580 = _571 * -0.005525882821530104f;
+    float _581 = mad(0.004025210160762072f, _572, _580);
+    float _582 = mad(1.0015007257461548f, _573, _581);
+
+    // start aces::aces_rrt
+
+    // aces::rgb_2_saturation
+    float _583 = min(_576, _579);
+    float _584 = min(_583, _582);
+    float _585 = max(_576, _579);
+    float _586 = max(_585, _582);
+    float _587 = max(_586, 1.000000013351432e-10f);
+    float _588 = max(_584, 1.000000013351432e-10f);
+    float _589 = _587 - _588;
+    float _590 = max(_586, 0.009999999776482582f);
+    float _591 = _589 / _590;
+
+    // aces::rgb_2_yc
+    float _592 = _582 - _579;
+    float _593 = _592 * _582;
+    float _594 = _579 - _576;
+    float _595 = _594 * _579;
+    float _596 = _593 + _595;
+    float _597 = _576 - _582;
+    float _598 = _597 * _576;
+    float _599 = _596 + _598;
+    float _600 = sqrt(_599);
+    float _601 = _600 * 1.75f;
+    float _602 = _579 + _576;
+    float _603 = _602 + _582;
+    float _604 = _603 + _601;
+    float _605 = _604 * 0.3333333432674408f;
+    float _606 = _591 + -0.4000000059604645f;
+
+    // aces:sigmoid_shaper
+    float _607 = _606 * 5.0f;
+    float _608 = _606 * 2.5f;
+    float _609 = abs(_608);
+    float _610 = 1.0f - _609;
+    float _611 = max(_610, 0.0f);
+    bool _612 = (_607 > 0.0f);
+    bool _613 = (_607 < 0.0f);
+    int _614 = int(_612);
+    int _615 = int(_613);
+    int _616 = _614 - _615;
+    float _617 = float(_616);
+    float _618 = _611 * _611;
+    float _619 = 1.0f - _618;
+    float _620 = _617 * _619;
+    float _621 = _620 + 1.0f;
+    float _622 = _621 * 0.02500000037252903f;
+    bool _623 = !(_605 <= 0.0533333346247673f);
+    _631 = _622;
+    if (_623) {
+      bool _625 = !(_605 >= 0.1599999964237213f);
+      _631 = 0.0f;
+      if (_625) {
+        float _627 = 0.23999999463558197f / _604;
+        float _628 = _627 + -0.5f;
+        float _629 = _628 * _622;
+        _631 = _629;
+      }
     }
+
+    // aces::added_glow
+    float _632 = _631 + 1.0f;
+
+    float _633 = _632 * _576;
+    float _634 = _632 * _579;
+    float _635 = _632 * _582;
+
+    // aces::rgb_2_hue
+    bool _636 = (_633 == _634);
+    bool _637 = (_634 == _635);
+    bool _638 = _636 && _637;
+    _667 = 0.0f;
+    if (!_638) {
+      float _640 = _633 * 2.0f;
+      float _641 = _640 - _634;
+      float _642 = _641 - _635;
+      float _643 = _579 - _582;
+      float _644 = _643 * 1.7320507764816284f;
+      float _645 = _644 * _632;
+      float _646 = _645 / _642;
+      float _647 = atan(_646);
+      float _648 = _647 + 3.1415927410125732f;
+      float _649 = _647 + -3.1415927410125732f;
+      bool _650 = (_642 < 0.0f);
+      bool _651 = (_642 == 0.0f);
+      bool _652 = (_645 >= 0.0f);
+      bool _653 = (_645 < 0.0f);
+      bool _654 = _652 && _650;
+      float _655 = _654 ? _648 : _647;
+      bool _656 = _653 && _650;
+      float _657 = _656 ? _649 : _655;
+      bool _658 = _653 && _651;
+      bool _659 = _652 && _651;
+      float _660 = _657 * 57.2957763671875f;
+      float _661 = _658 ? -90.0f : _660;
+      float _662 = _659 ? 90.0f : _661;
+      bool _663 = (_662 < 0.0f);
+      _667 = _662;
+      if (_663) {
+        float _665 = _662 + 360.0f;
+        _667 = _665;
+      }
+    }
+    float _668 = max(_667, 0.0f);
+    float _669 = min(_668, 360.0f);
+
+    // aces::center_hue
+    bool _670 = (_669 < -180.0f);
+    if (_670) {
+      float _672 = _669 + 360.0f;
+      _678 = _672;
+    } else {
+      bool _674 = (_669 > 180.0f);
+      _678 = _669;
+      if (_674) {
+        float _676 = _669 + -360.0f;
+        _678 = _676;
+      }
+    }
+
+    // aces::hueweight (with smoothstep)
+    float _679 = _678 * 0.014814814552664757f;
+    float _680 = abs(_679);
+    float _681 = 1.0f - _680;
+    float _682 = saturate(_681);
+    float _683 = _682 * 2.0f;
+    float _684 = 3.0f - _683;
+    float _685 = _682 * _682;
+
+    float _686 = _685 * _684;
+
+    // RRT_RED_PIVOT
+    float _687 = 0.029999999329447746f - _633;
+
+    // 1 - RRT_RED_SCALE
+    float _688 = _591 * 0.18000000715255737f;
+    float _689 = _688 * _687;
+    float _690 = _686 * _686;
+    float _691 = _690 * _689;
+    float _692 = _691 + _633;
+
+    // AP0 => AP1
+    float _693 = _692 * 1.4514392614364624f;
+    float _694 = mad(-0.2365107536315918f, _634, _693);
+    float _695 = mad(-0.21492856740951538f, _635, _694);
+    float _696 = _692 * -0.07655377686023712f;
+    float _697 = mad(1.17622971534729f, _634, _696);
+    float _698 = mad(-0.09967592358589172f, _635, _697);
+    float _699 = _692 * 0.008316148072481155f;
+    float _700 = mad(-0.006032449658960104f, _634, _699);
+    float _701 = mad(0.9977163076400757f, _635, _700);
+    float _702 = max(0.0f, _695);
+    float _703 = max(0.0f, _698);
+    float _704 = max(0.0f, _701);
+
+    // AP1_RGB2Y
+    float _705 = dot(float3(_702, _703, _704),
+                     float3(0.2722287178039551f, 0.6740817427635193f,
+                            0.053689517080783844f));
+    float _706 = _702 - _705;
+    float _707 = _703 - _705;
+    float _708 = _704 - _705;
+    // RRT_SAT_FACTOR (0.96)
+    float _709 = _706 * 0.9599999785423279f;
+    float _710 = _707 * 0.9599999785423279f;
+    float _711 = _708 * 0.9599999785423279f;
+    float _712 = _709 + _705;
+    float _713 = _710 + _705;
+    float _714 = _711 + _705;
+    // end of aces_rrt
+
+    // Custom
+    sdr_ap1_color = float3(_712, _713, _714);
   }
 
-  // aces::hueweight (with smoothstep)
-  float _679 = _678 * 0.014814814552664757f;
-  float _680 = abs(_679);
-  float _681 = 1.0f - _680;
-  float _682 = saturate(_681);
-  float _683 = _682 * 2.0f;
-  float _684 = 3.0f - _683;
-  float _685 = _682 * _682;
-
-  float _686 = _685 * _684;
-
-  // RRT_RED_PIVOT
-  float _687 = 0.029999999329447746f - _633;
-  
-  // 1 - RRT_RED_SCALE
-  float _688 = _591 * 0.18000000715255737f;
-  float _689 = _688 * _687;
-  float _690 = _686 * _686;
-  float _691 = _690 * _689;
-  float _692 = _691 + _633;
-
-  // AP0 => AP1
-  float _693 = _692 * 1.4514392614364624f;
-  float _694 = mad(-0.2365107536315918f, _634, _693);
-  float _695 = mad(-0.21492856740951538f, _635, _694);
-  float _696 = _692 * -0.07655377686023712f;
-  float _697 = mad(1.17622971534729f, _634, _696);
-  float _698 = mad(-0.09967592358589172f, _635, _697);
-  float _699 = _692 * 0.008316148072481155f;
-  float _700 = mad(-0.006032449658960104f, _634, _699);
-  float _701 = mad(0.9977163076400757f, _635, _700);
-  float _702 = max(0.0f, _695);
-  float _703 = max(0.0f, _698);
-  float _704 = max(0.0f, _701);
-
-  // AP1_RGB2Y
-  float _705 = dot(
-      float3(_702, _703, _704),
-      float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
-  float _706 = _702 - _705;
-  float _707 = _703 - _705;
-  float _708 = _704 - _705;
-  // RRT_SAT_FACTOR (0.96)
-  float _709 = _706 * 0.9599999785423279f;
-  float _710 = _707 * 0.9599999785423279f;
-  float _711 = _708 * 0.9599999785423279f;
-  float _712 = _709 + _705;
-  float _713 = _710 + _705;
-  float _714 = _711 + _705;
-  // end of aces_rrt
-
+  // lerp SDR colors
   float _716 = cb0_37w;
   float _717 = _716 + 1.0f;
   float _718 = cb0_37y;
@@ -1062,9 +1059,13 @@ float4 main(
   float _745 = _744 - _742;
   float _746 = _723 / _726;
   float _747 = _746 - _745;
-  float _748 = log2(_712);
-  float _749 = log2(_713);
-  float _750 = log2(_714);
+  // float _748 = log2(_712);
+  // float _749 = log2(_713);
+  // float _750 = log2(_714);
+  float _748 = log2(sdr_ap1_color.r);
+  float _749 = log2(sdr_ap1_color.g);
+  float _750 = log2(sdr_ap1_color.b);
+
   float _751 = _748 * 0.3010300099849701f;
   float _752 = _749 * 0.3010300099849701f;
   float _753 = _750 * 0.3010300099849701f;
@@ -1169,7 +1170,7 @@ float4 main(
   float _852 = _845 + _811;
   float _853 = _848 + _812;
   float _854 = _851 + _813;
-    // AP1_RGB2Y
+  // AP1_RGB2Y
   float _855 = dot(
       float3(_852, _853, _854),
       float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
@@ -1411,8 +1412,22 @@ float4 main(
   float _1074 = exp2(_1071);
   float _1075 = exp2(_1072);
   float _1076 = exp2(_1073);
-  
+
   float3 film_graded_color = float3(_1074, _1075, _1076);
+
+  if (is_hdr) {
+    float3 post_process_color = saturate(film_graded_color);
+
+    float3 final_color = renodx::tonemap::UpgradeToneMap(
+        hdr_color, sdr_color, post_process_color, 1.f);
+    bool is_pq = (output_type == 3u || output_type == 4u);
+    if (is_pq) {
+      final_color = renodx::color::bt2020::from::BT709(final_color);
+      final_color = renodx::color::pq::from::BT2020(final_color, 100.f);
+    }
+
+    return float4(final_color * 0.9523810148239136f, 0);
+  }
 
   // Start Output
   // TONEMAPPER_OUTPUT_sRGB 0
@@ -1812,7 +1827,10 @@ float4 main(
                 float _1432 = min(_1429, 65504.0f);
                 float _1433 = min(_1430, 65504.0f);
                 float _1434 = min(_1431, 65504.0f);
-                float _1435 = dot(float3(_1432, _1433, _1434), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+                float _1435 =
+                    dot(float3(_1432, _1433, _1434),
+                        float3(0.2722287178039551f, 0.6740817427635193f,
+                               0.053689517080783844f));
                 float _1436 = _1432 - _1435;
                 float _1437 = _1433 - _1435;
                 float _1438 = _1434 - _1435;
@@ -1859,7 +1877,8 @@ float4 main(
                       float _1480 = mad(_1476, 0.5f, _1479);
                       float _1481 = _1473 - _1470;
                       float _1482 = mad(_1473, 0.5f, _1478);
-                      float _1483 = dot(float3(_1477, _1468, 1.0f), float3(_1480, _1481, _1482));
+                      float _1483 = dot(float3(_1477, _1468, 1.0f),
+                                        float3(_1480, _1481, _1482));
                       _1518 = _1483;
                     } else {
                       bool _1485 = !(_1447 >= _1457);
@@ -1888,7 +1907,8 @@ float4 main(
                             float _1510 = mad(_1506, 0.5f, _1509);
                             float _1511 = _1503 - _1500;
                             float _1512 = mad(_1503, 0.5f, _1508);
-                            float _1513 = dot(float3(_1507, _1498, 1.0f), float3(_1510, _1511, _1512));
+                            float _1513 = dot(float3(_1507, _1498, 1.0f),
+                                              float3(_1510, _1511, _1512));
                             _1518 = _1513;
                             break;
                           }
@@ -1936,7 +1956,8 @@ float4 main(
                         float _1554 = mad(_1550, 0.5f, _1553);
                         float _1555 = _1547 - _1544;
                         float _1556 = mad(_1547, 0.5f, _1552);
-                        float _1557 = dot(float3(_1551, _1542, 1.0f), float3(_1554, _1555, _1556));
+                        float _1557 = dot(float3(_1551, _1542, 1.0f),
+                                          float3(_1554, _1555, _1556));
                         _1592 = _1557;
                       } else {
                         bool _1559 = !(_1523 >= _1531);
@@ -1965,7 +1986,8 @@ float4 main(
                               float _1584 = mad(_1580, 0.5f, _1583);
                               float _1585 = _1577 - _1574;
                               float _1586 = mad(_1577, 0.5f, _1582);
-                              float _1587 = dot(float3(_1581, _1572, 1.0f), float3(_1584, _1585, _1586));
+                              float _1587 = dot(float3(_1581, _1572, 1.0f),
+                                                float3(_1584, _1585, _1586));
                               _1592 = _1587;
                               break;
                             }
@@ -2013,7 +2035,8 @@ float4 main(
                           float _1628 = mad(_1624, 0.5f, _1627);
                           float _1629 = _1621 - _1618;
                           float _1630 = mad(_1621, 0.5f, _1626);
-                          float _1631 = dot(float3(_1625, _1616, 1.0f), float3(_1628, _1629, _1630));
+                          float _1631 = dot(float3(_1625, _1616, 1.0f),
+                                            float3(_1628, _1629, _1630));
                           _1666 = _1631;
                         } else {
                           bool _1633 = !(_1597 >= _1605);
@@ -2042,7 +2065,8 @@ float4 main(
                                 float _1658 = mad(_1654, 0.5f, _1657);
                                 float _1659 = _1651 - _1648;
                                 float _1660 = mad(_1651, 0.5f, _1656);
-                                float _1661 = dot(float3(_1655, _1646, 1.0f), float3(_1658, _1659, _1660));
+                                float _1661 = dot(float3(_1655, _1646, 1.0f),
+                                                  float3(_1658, _1659, _1660));
                                 _1666 = _1661;
                                 break;
                               }
@@ -2191,7 +2215,8 @@ float4 main(
       } else {
         int _1788 = _1078 & -3;
         bool _1789 = (_1788 == 4);
-        if (_1789) { // TONEMAPPER_OUTPUT_ACES2000nitST2084 | TONEMAPPER_OUTPUT_ACES2000nitScRGB
+        if (_1789) {  // TONEMAPPER_OUTPUT_ACES2000nitST2084 |
+                      // TONEMAPPER_OUTPUT_ACES2000nitScRGB
           //   %1791 = bitcast [6 x float]* %10 to i8*
           //   %1792 = bitcast [6 x float]* %11 to i8*
           float _1794 = cb0_12z;
@@ -2424,7 +2449,10 @@ float4 main(
                   float _2008 = min(_2005, 65504.0f);
                   float _2009 = min(_2006, 65504.0f);
                   float _2010 = min(_2007, 65504.0f);
-                  float _2011 = dot(float3(_2008, _2009, _2010), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+                  float _2011 =
+                      dot(float3(_2008, _2009, _2010),
+                          float3(0.2722287178039551f, 0.6740817427635193f,
+                                 0.053689517080783844f));
                   float _2012 = _2008 - _2011;
                   float _2013 = _2009 - _2011;
                   float _2014 = _2010 - _2011;
@@ -2471,7 +2499,8 @@ float4 main(
                         float _2056 = mad(_2052, 0.5f, _2055);
                         float _2057 = _2049 - _2046;
                         float _2058 = mad(_2049, 0.5f, _2054);
-                        float _2059 = dot(float3(_2053, _2044, 1.0f), float3(_2056, _2057, _2058));
+                        float _2059 = dot(float3(_2053, _2044, 1.0f),
+                                          float3(_2056, _2057, _2058));
                         _2094 = _2059;
                       } else {
                         bool _2061 = !(_2023 >= _2033);
@@ -2500,7 +2529,8 @@ float4 main(
                               float _2086 = mad(_2082, 0.5f, _2085);
                               float _2087 = _2079 - _2076;
                               float _2088 = mad(_2079, 0.5f, _2084);
-                              float _2089 = dot(float3(_2083, _2074, 1.0f), float3(_2086, _2087, _2088));
+                              float _2089 = dot(float3(_2083, _2074, 1.0f),
+                                                float3(_2086, _2087, _2088));
                               _2094 = _2089;
                               break;
                             }
@@ -2548,7 +2578,8 @@ float4 main(
                           float _2130 = mad(_2126, 0.5f, _2129);
                           float _2131 = _2123 - _2120;
                           float _2132 = mad(_2123, 0.5f, _2128);
-                          float _2133 = dot(float3(_2127, _2118, 1.0f), float3(_2130, _2131, _2132));
+                          float _2133 = dot(float3(_2127, _2118, 1.0f),
+                                            float3(_2130, _2131, _2132));
                           _2168 = _2133;
                         } else {
                           bool _2135 = !(_2099 >= _2107);
@@ -2577,7 +2608,8 @@ float4 main(
                                 float _2160 = mad(_2156, 0.5f, _2159);
                                 float _2161 = _2153 - _2150;
                                 float _2162 = mad(_2153, 0.5f, _2158);
-                                float _2163 = dot(float3(_2157, _2148, 1.0f), float3(_2160, _2161, _2162));
+                                float _2163 = dot(float3(_2157, _2148, 1.0f),
+                                                  float3(_2160, _2161, _2162));
                                 _2168 = _2163;
                                 break;
                               }
@@ -2625,7 +2657,8 @@ float4 main(
                             float _2204 = mad(_2200, 0.5f, _2203);
                             float _2205 = _2197 - _2194;
                             float _2206 = mad(_2197, 0.5f, _2202);
-                            float _2207 = dot(float3(_2201, _2192, 1.0f), float3(_2204, _2205, _2206));
+                            float _2207 = dot(float3(_2201, _2192, 1.0f),
+                                              float3(_2204, _2205, _2206));
                             _2242 = _2207;
                           } else {
                             bool _2209 = !(_2173 >= _2181);
@@ -2654,7 +2687,9 @@ float4 main(
                                   float _2234 = mad(_2230, 0.5f, _2233);
                                   float _2235 = _2227 - _2224;
                                   float _2236 = mad(_2227, 0.5f, _2232);
-                                  float _2237 = dot(float3(_2231, _2222, 1.0f), float3(_2234, _2235, _2236));
+                                  float _2237 =
+                                      dot(float3(_2231, _2222, 1.0f),
+                                          float3(_2234, _2235, _2236));
                                   _2242 = _2237;
                                   break;
                                 }
@@ -2873,12 +2908,12 @@ float4 main(
             _2501 = _2433;
             _2502 = _2434;
           } else {
-            bool _2436 = (_1078 == 8); // TONEMAPPER_OUTPUT_NoToneCurve
+            bool _2436 = (_1078 == 8);  // TONEMAPPER_OUTPUT_NoToneCurve
             _2500 = _1060;
             _2501 = _1061;
             _2502 = _1062;
             if (!_2436) {
-              bool _2438 = (_1078 == 9);  // TONEMAPPER_OUTPUT_WithToneCurve 
+              bool _2438 = (_1078 == 9);  // TONEMAPPER_OUTPUT_WithToneCurve
               float _2440 = cb1_08x;
               float _2441 = cb1_08y;
               float _2442 = cb1_08z;
