@@ -613,13 +613,7 @@ class Decompiler {
       STRUCTURE,
     } format;
 
-    enum class ResourceDimensions {
-      NA,
-      DIMENSION_2D,
-      DIMENSION_3D,
-      BUFFER,
-      READ_ONLY,
-    } dimensions;
+    std::string_view dimensions;
 
     std::string_view id;
 
@@ -659,23 +653,15 @@ class Decompiler {
       throw std::invalid_argument("Unknown ResourceFormat");
     }
 
-    static ResourceDimensions ResourceDimensionsFromString(std::string_view input) {
-      if (input == "NA") return ResourceDimensions::NA;
-      if (input == "2d") return ResourceDimensions::DIMENSION_2D;
-      if (input == "3d") return ResourceDimensions::DIMENSION_3D;
-      if (input == "buf") return ResourceDimensions::BUFFER;
-      if (input == "r/o") return ResourceDimensions::READ_ONLY;
-      throw std::invalid_argument("Unknown ResourceDimensions");
-    }
 
     explicit ResourceDescription(std::string_view line) {
       // ; _31_33                            cbuffer      NA          NA     CB0            cb0     1
-      static auto regex = std::regex{R"(; (.{30})\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*)"};
+      static auto regex = std::regex{R"(; (.{30}\S*)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*)"};
       auto [name, type, format, dimensions, id, hlslBinding, count] = StringViewMatch<7>(line, regex);
       this->name = StringViewTrim(name);
       this->type = ResourceTypeFromString(type);
       this->format = ResourceFormatFromString(format);
-      this->dimensions = ResourceDimensionsFromString(dimensions);
+      this->dimensions = dimensions;
       this->id = id;
       this->hlsl_binding = hlslBinding;
       FromStringView(count, this->count);
