@@ -162,9 +162,10 @@ cbuffer cb1 : register(b1) {
 SamplerState s0 : register(s0);
 
 float4 main(
-    noperspective float2 TEXCOORD : TEXCOORD,
-                                    noperspective float4 SV_Position : SV_Position,
-                                                                       nointerpolation uint SV_RenderTargetArrayIndex : SV_RenderTargetArrayIndex) : SV_Target {
+  noperspective float2 TEXCOORD : TEXCOORD,
+  noperspective float4 SV_Position : SV_Position,
+  nointerpolation uint SV_RenderTargetArrayIndex : SV_RenderTargetArrayIndex
+) : SV_Target {
   float4 SV_Target;
   // texture _1 = t0;
   // SamplerState _2 = s0;
@@ -818,8 +819,10 @@ float4 main(
   if (injectedData.toneMapType != 0.f && is_hdr) {
     // bool is_2000_nits = (output_type == 4u || output_type == 6u);
 
+    // cb0_36w is lerp between Neutral/ACES
+
     renodx::tonemap::Config config = renodx::tonemap::config::Create();
-    config.type = injectedData.toneMapType;  // ACES
+    config.type = injectedData.toneMapType;
     config.peak_nits = injectedData.toneMapPeakNits;
     config.game_nits = injectedData.toneMapGameNits;
     config.exposure = injectedData.colorGradeExposure;
@@ -827,12 +830,6 @@ float4 main(
     config.shadows = injectedData.colorGradeShadows;
     config.contrast = injectedData.colorGradeContrast;
     config.saturation = injectedData.colorGradeSaturation;
-
-    config.reno_drt_highlights = 1.0f;
-    config.reno_drt_shadows = 1.0f;
-    config.reno_drt_contrast = 1.0f;
-    config.reno_drt_saturation = 1.0f;
-    config.reno_drt_flare = 0.01f;
 
     float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
 
