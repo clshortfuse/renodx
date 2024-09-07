@@ -11,22 +11,22 @@ namespace frostbite {
 // https://www.ea.com/frostbite/news/high-dynamic-range-color-grading-and-display-in-frostbite
 
 // Aplies exponential ("Photographic") luma compression
-float rangeCompress(float x) {
+float RangeCompress(float x) {
   return 1.0 - exp(-x);
 }
 
-float rangeCompress(float val, float threshold, float max_value = 1.f) {
+float RangeCompress(float val, float threshold, float max_value = 1.f) {
   if (val < threshold) return val;
   if (max_value <= threshold) return threshold;
   float range = max_value - threshold;
-  return threshold + range * rangeCompress((val - threshold) / range);
+  return threshold + range * RangeCompress((val - threshold) / range);
 }
 
-float3 rangeCompress(float3 val, float threshold, float max_value = 1.f) {
+float3 RangeCompress(float3 val, float threshold, float max_value = 1.f) {
   return float3(
-      rangeCompress(val.x, threshold, max_value),
-      rangeCompress(val.y, threshold, max_value),
-      rangeCompress(val.z, threshold, max_value));
+      RangeCompress(val.x, threshold, max_value),
+      RangeCompress(val.y, threshold, max_value),
+      RangeCompress(val.z, threshold, max_value));
 }
 
 float3 BT709(float3 col, float max_value) {
@@ -42,11 +42,11 @@ float3 BT709(float3 col, float max_value) {
 
   // Hue-preserving mapping
   float maxCol = max(col.x, max(col.y, col.z));
-  float mappedMax = rangeCompress(maxCol, linearSegmentEnd, max_value);
+  float mappedMax = RangeCompress(maxCol, linearSegmentEnd, max_value);
   float3 compressedHuePreserving = col * mappedMax / maxCol;
 
   // Non-hue preserving mapping
-  float3 perChannelCompressed = rangeCompress(col, linearSegmentEnd, max_value);
+  float3 perChannelCompressed = RangeCompress(col, linearSegmentEnd, max_value);
 
   // Combine hue-preserving and non-hue-preserving colors. Absolute hue preservation looks unnatural, as bright colors *appear* to have been hue shifted.
   // Actually doing some amount of hue shifting looks more pleasing
