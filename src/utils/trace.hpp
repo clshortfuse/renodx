@@ -134,7 +134,7 @@ static void OnInitDevice(reshade::api::device* device) {
   s << reinterpret_cast<void*>(device);
   s << ", api: " << device->get_api();
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 
   auto& data = device->create_private_data<DeviceData>();
   data.device_api = device->get_api();
@@ -145,7 +145,7 @@ static void OnDestroyDevice(reshade::api::device* device) {
   s << "destroy_device(";
   s << reinterpret_cast<void*>(device);
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
   device->destroy_private_data<DeviceData>();
 }
 
@@ -159,14 +159,14 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
     s << "init_swapchain(";
     s << "buffer:" << reinterpret_cast<void*>(buffer.handle);
     s << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
 
   std::stringstream s;
   s << "init_swapchain";
   s << "(colorspace: " << swapchain->get_color_space();
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
 static bool OnCreatePipelineLayout(
@@ -227,7 +227,7 @@ static void LogLayout(
           s << ", visibility: " << range.visibility;
           s << ")";
           s << " [" << range_index << "/" << param.descriptor_table.count << "]";
-          reshade::log_message(reshade::log_level::info, s.str().c_str());
+          reshade::log::message(reshade::log::level::info, s.str().c_str());
         }
         break;
       case reshade::api::pipeline_layout_param_type::push_constants: {
@@ -241,7 +241,7 @@ static void LogLayout(
         s << ", space: " << param.push_constants.dx_register_space;
         s << ", visibility " << param.push_constants.visibility;
         s << ")";
-        reshade::log_message(reshade::log_level::info, s.str().c_str());
+        reshade::log::message(reshade::log::level::info, s.str().c_str());
         break;
       }
       case reshade::api::pipeline_layout_param_type::push_descriptors: {
@@ -257,7 +257,7 @@ static void LogLayout(
         s << ", type: " << param.push_descriptors.type;
         s << ", visibility " << param.push_descriptors.visibility;
         s << ")";
-        reshade::log_message(reshade::log_level::info, s.str().c_str());
+        reshade::log::message(reshade::log::level::info, s.str().c_str());
         break;
       }
       case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges: {
@@ -266,7 +266,7 @@ static void LogLayout(
         s << reinterpret_cast<void*>(layout.handle) << "[" << param_index << "]";
         s << " | PDR?? | ";
         s << ")";
-        reshade::log_message(reshade::log_level::info, s.str().c_str());
+        reshade::log::message(reshade::log::level::info, s.str().c_str());
         break;
       }
 #if RESHADE_API_VERSION >= 13
@@ -293,7 +293,7 @@ static void LogLayout(
             s << ", min_lod: " << range.static_samplers->min_lod;
             s << ", max_lod: " << range.static_samplers->max_lod;
           }
-          reshade::log_message(reshade::log_level::info, s.str().c_str());
+          reshade::log::message(reshade::log::level::info, s.str().c_str());
         }
         break;
       case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers:
@@ -321,7 +321,7 @@ static void LogLayout(
           }
           s << ")";
           s << " [" << range_index << "/" << param.descriptor_table.count << "]";
-          reshade::log_message(reshade::log_level::info, s.str().c_str());
+          reshade::log::message(reshade::log::level::info, s.str().c_str());
         }
         break;
 #endif
@@ -332,7 +332,7 @@ static void LogLayout(
         s << " | ??? (0x" << std::hex << static_cast<uint32_t>(param.type) << std::dec << ")";
         s << " | " << param.type;
         s << ")";
-        reshade::log_message(reshade::log_level::info, s.str().c_str());
+        reshade::log::message(reshade::log::level::info, s.str().c_str());
       }
     }
   }
@@ -382,7 +382,7 @@ static void OnInitPipelineLayout(
   s << reinterpret_cast<void*>(layout.handle);
   s << " , max injections: " << (max_count);
   s << " )";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
 // After CreatePipelineState
@@ -399,7 +399,7 @@ void OnInitPipeline(
     s << ", layout:" << reinterpret_cast<void*>(layout.handle);
     s << ", subobjects: " << (subobject_count);
     s << " )";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
     return;
   }
 
@@ -451,7 +451,7 @@ void OnInitPipeline(
 
       s << " )";
 
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
+      reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
   }
 }
@@ -463,7 +463,7 @@ static void OnDestroyPipeline(
   s << "on_destroy_pipeline(";
   s << reinterpret_cast<void*>(pipeline.handle);
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
 static void OnPushConstants(
@@ -486,7 +486,7 @@ static void OnPushConstants(
   }
   s << " })";
 
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
 // AfterSetPipelineState
@@ -508,7 +508,7 @@ static void OnBindPipeline(
   }
   s << ", stages: " << stages << " (" << std::hex << static_cast<uint32_t>(stages) << std::dec << ")";
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
 static bool OnDraw(
@@ -525,7 +525,7 @@ static bool OnDraw(
     s << ", " << first_vertex;
     s << ", " << first_instance;
     s << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
   return false;
 }
@@ -538,7 +538,7 @@ static bool OnDispatch(reshade::api::command_list* cmd_list, uint32_t group_coun
     s << ", " << group_count_y;
     s << ", " << group_count_z;
     s << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
     // InstructionState state = instructions.at(instructions.size() - 1);
     // state.action = reshade::addon_event::dispatch;
     // resetInstructionState();
@@ -562,7 +562,7 @@ static bool OnDrawIndexed(
     s << ", " << vertex_offset;
     s << ", " << first_instance;
     s << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
     // InstructionState state = instructions.at(instructions.size() - 1);
     // state.action = reshade::addon_event::draw_indexed;
     // resetInstructionState();
@@ -585,7 +585,7 @@ static bool OnDrawOrDispatchIndirect(
     s << ", " << draw_count;
     s << ", " << stride;
     s << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
     // InstructionState state = instructions.at(instructions.size() - 1);
     // state.action = reshade::addon_event::draw_or_dispatch_indirect;
     // resetInstructionState();
@@ -610,7 +610,7 @@ static bool OnCopyTextureRegion(
   s << ", " << reinterpret_cast<void*>(dest.handle);
   s << ", " << static_cast<uint32_t>(filter);
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 
   return false;
 }
@@ -634,7 +634,7 @@ static bool OnCopyTextureToBuffer(
   s << " => " << reinterpret_cast<void*>(dest.handle);
   s << "[" << dest_offset << "]";
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 
   return false;
 }
@@ -659,7 +659,7 @@ static bool OnCopyBufferToTexture(
     s << "(" << dest_box->top << ", " << dest_box->left << ", " << dest_box->front << ")";
   }
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 
   return false;
 }
@@ -684,7 +684,7 @@ static bool OnResolveTextureRegion(
   s << ": " << (dest_subresource);
   s << ", (" << dest_x << ", " << dest_y << ", " << dest_z << ") ";
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
   return false;
 }
 
@@ -698,7 +698,7 @@ static bool OnCopyResource(
   s << "(" << reinterpret_cast<void*>(source.handle);
   s << " => " << reinterpret_cast<void*>(dest.handle);
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
   return false;
 }
 
@@ -715,7 +715,7 @@ static void OnBarrier(
     s << ", " << std::hex << static_cast<uint32_t>(old_states[i]) << std::dec << " (" << old_states[i] << ")";
     s << " => " << std::hex << static_cast<uint32_t>(new_states[i]) << std::dec << " (" << new_states[i] << ")";
     s << ") [" << i << "]";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
 }
 
@@ -744,7 +744,7 @@ static void OnBindRenderTargetsAndDepthStencil(
       s << ", name: " << GetResourceNameByViewHandle(data, rtv.handle);
       s << ")";
       s << "[" << i << "]";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
+      reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
   }
   if (dsv.handle != 0) {
@@ -752,7 +752,7 @@ static void OnBindRenderTargetsAndDepthStencil(
     s << "on_bind_depth_stencil(";
     s << reinterpret_cast<void*>(dsv.handle);
     s << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
 }
 
@@ -800,10 +800,10 @@ static void OnInitResource(
   }
 
   s << ")";
-  reshade::log_message(
+  reshade::log::message(
       warn
-          ? reshade::log_level::warning
-          : reshade::log_level::info,
+          ? reshade::log::level::warning
+          : reshade::log::level::info,
       s.str().c_str());
 }
 
@@ -817,7 +817,7 @@ static void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   s << "on_destroy_resource(";
   s << reinterpret_cast<void*>(resource.handle);
   s << ")";
-  reshade::log_message(reshade::log_level::debug, s.str().c_str());
+  reshade::log::message(reshade::log::level::debug, s.str().c_str());
 }
 
 static void OnInitResourceView(
@@ -834,7 +834,7 @@ static void OnInitResourceView(
       s << "init_resource_view(reused view: ";
       s << reinterpret_cast<void*>(view.handle);
       s << ")";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
+      reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
     if (resource.handle == 0) {
       data.resource_views.erase(view.handle);
@@ -883,7 +883,7 @@ static void OnInitResourceView(
     }
   }
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
 static void OnDestroyResourceView(reshade::api::device* device, reshade::api::resource_view view) {
@@ -891,7 +891,7 @@ static void OnDestroyResourceView(reshade::api::device* device, reshade::api::re
   s << "on_destroy_resource_view(";
   s << reinterpret_cast<void*>(view.handle);
   s << ")";
-  reshade::log_message(reshade::log_level::debug, s.str().c_str());
+  reshade::log::message(reshade::log::level::debug, s.str().c_str());
 
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
@@ -979,7 +979,7 @@ static void OnPushDescriptors(
 
     s << ")";
     s << "[" << update.binding + i << " / " << update.count << "]";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
 }
 
@@ -1021,7 +1021,7 @@ static void OnBindDescriptorTables(
     }
 
     s << ") [" << i << "]";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
 }
 
@@ -1068,7 +1068,7 @@ static bool OnCopyDescriptorTables(
       }
 
       s << ")";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
+      reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
   }
 
@@ -1167,7 +1167,7 @@ static bool OnUpdateDescriptorTables(
           break;
       }
       s << ") [" << i << "]";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
+      reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
   }
   return false;
@@ -1185,7 +1185,7 @@ static bool OnClearRenderTargetView(
   s << reinterpret_cast<void*>(rtv.handle);
   s << ")";
 
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
   return false;
 }
 
@@ -1201,7 +1201,7 @@ static bool OnClearUnorderedAccessViewUint(
   s << reinterpret_cast<void*>(uav.handle);
   s << ")";
 
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
   return false;
 }
 
@@ -1218,7 +1218,7 @@ static void OnMapBufferRegion(
   s << reinterpret_cast<void*>(resource.handle);
   s << ")";
 
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
 static void OnMapTextureRegion(
@@ -1235,7 +1235,7 @@ static void OnMapTextureRegion(
   s << "[" << subresource << "]";
   s << ")";
 
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
 static void OnBindPipelineStates(
@@ -1251,7 +1251,7 @@ static void OnBindPipelineStates(
     s << "(" << states[i];
     s << ", " << values[i];
     s << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
 }
 
@@ -1263,13 +1263,13 @@ static void OnPresent(
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
   if (trace_running) {
-    reshade::log_message(reshade::log_level::info, "present()");
-    reshade::log_message(reshade::log_level::info, "--- End Frame ---");
+    reshade::log::message(reshade::log::level::info, "present()");
+    reshade::log::message(reshade::log::level::info, "--- End Frame ---");
     trace_running = false;
   } else if (trace_scheduled) {
     trace_scheduled = false;
     trace_running = true;
-    reshade::log_message(reshade::log_level::info, "--- Frame ---");
+    reshade::log::message(reshade::log::level::info, "--- Frame ---");
   }
   if (present_count <= MAX_PRESENT_COUNT) {
     present_count++;

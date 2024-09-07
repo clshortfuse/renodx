@@ -405,7 +405,7 @@ void OnPushDescriptors(
 
     auto pair = device_data.pipeline_layout_params.find(layout.handle);
     if (pair == device_data.pipeline_layout_params.end()) {
-      reshade::log_message(reshade::log_level::error, "Could not find handle.");
+      reshade::log::message(reshade::log::level::error, "Could not find handle.");
       // add warning
       return;
     }
@@ -415,7 +415,7 @@ void OnPushDescriptors(
     switch (param.type) {
       case reshade::api::pipeline_layout_param_type::descriptor_table: {
         if (param.descriptor_table.count != 1) {
-          reshade::log_message(reshade::log_level::error, "Wrong count.");
+          reshade::log::message(reshade::log::level::error, "Wrong count.");
           // add warning
           return;
         }
@@ -426,7 +426,7 @@ void OnPushDescriptors(
         starting_index = param.push_descriptors.dx_register_index;
         break;
       default:
-        reshade::log_message(reshade::log_level::error, "Not descriptor table.");
+        reshade::log::message(reshade::log::level::error, "Not descriptor table.");
         return;
     }
     auto srv_index = index + starting_index;
@@ -546,7 +546,7 @@ void LoadDiskShaders(reshade::api::device* device, DeviceData& data, bool activa
   }
   auto new_shaders = renodx::utils::shader::compiler::watcher::FlushCompiledShaders();
   for (auto& [shader_hash, custom_shader] : new_shaders) {
-    reshade::log_message(reshade::log_level::debug, "new shaders");
+    reshade::log::message(reshade::log::level::debug, "new shaders");
     auto& details = data.GetShaderDetails(shader_hash);
     details.disk_shader = custom_shader;
 
@@ -741,7 +741,7 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
                 try {
                   shader_details.program_version = renodx::utils::shader::compiler::DecodeShaderVersion(shader_details.shader_data);
                 } catch (const std::exception& e) {
-                  reshade::log_message(reshade::log_level::error, e.what());
+                  reshade::log::message(reshade::log::level::error, e.what());
                 }
               }
               // Fallback to subobject

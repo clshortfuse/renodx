@@ -123,7 +123,7 @@ static bool CompileCustomShaders() {
         s << "CompileCustomShaders(Invalid cso file format: ";
         s << basename;
         s << ")";
-        reshade::log_message(reshade::log_level::warning, s.str().c_str());
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
         continue;
       }
       hash_string = basename.substr(2, 8);
@@ -139,7 +139,7 @@ static bool CompileCustomShaders() {
       s << hash_string;
       s << ", at " << entry_path;
       s << ")";
-      reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
       continue;
     }
 
@@ -149,7 +149,7 @@ static bool CompileCustomShaders() {
       s << PRINT_CRC32(shader_hash);
       s << ", at " << entry_path;
       s << ")";
-      reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
       continue;
     }
 
@@ -168,7 +168,7 @@ static bool CompileCustomShaders() {
         s << ", hash: " << PRINT_CRC32(shader_hash);
         s << ", target: " << shader_target;
         s << ")";
-        reshade::log_message(reshade::log_level::debug, s.str().c_str());
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
       }
 
       try {
@@ -186,7 +186,7 @@ static bool CompileCustomShaders() {
         s << entry_path.string();
         s << ", " << custom_shader.GetCompilationException().what();
         s << ")";
-        reshade::log_message(reshade::log_level::warning, s.str().c_str());
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
       }
 
     } else if (is_cso) {
@@ -256,7 +256,7 @@ static bool EnableLiveWatcher() {
     std::filesystem::create_directory(directory);
   }
 
-  reshade::log_message(reshade::log_level::info, "Watching live.");
+  reshade::log::message(reshade::log::level::info, "Watching live.");
 
   m_target_dir_handle = CreateFileW(
       directory.c_str(),
@@ -268,7 +268,7 @@ static bool EnableLiveWatcher() {
       NULL  // NOLINT
   );
   if (m_target_dir_handle == INVALID_HANDLE_VALUE) {
-    reshade::log_message(reshade::log_level::error, "ToggleLiveWatching(targetHandle: invalid)");
+    reshade::log::message(reshade::log::level::error, "ToggleLiveWatching(targetHandle: invalid)");
     return false;
   }
   {
@@ -276,7 +276,7 @@ static bool EnableLiveWatcher() {
     s << "ToggleLiveWatching(targetHandle: ";
     s << reinterpret_cast<void*>(m_target_dir_handle);
     s << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
 
   memset(&watch_buffer, 0, sizeof(watch_buffer));
@@ -305,15 +305,15 @@ static bool EnableLiveWatcher() {
     s << "ToggleLiveWatching(ReadDirectoryChangesExW: Failed: ";
     s << GetLastError();
     s << ")";
-    reshade::log_message(reshade::log_level::error, s.str().c_str());
+    reshade::log::message(reshade::log::level::error, s.str().c_str());
     return false;
   }
-  reshade::log_message(reshade::log_level::info, "ToggleLiveWatching(ReadDirectoryChangesExW: Listening.)");
+  reshade::log::message(reshade::log::level::info, "ToggleLiveWatching(ReadDirectoryChangesExW: Listening.)");
   return true;
 }
 
 static void DisableLiveWatcher() {
-  reshade::log_message(reshade::log_level::info, "Cancelling live.");
+  reshade::log::message(reshade::log::level::info, "Cancelling live.");
   CancelIoEx(m_target_dir_handle, &overlapped);
   CloseHandle(m_target_dir_handle);
 }

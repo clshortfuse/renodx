@@ -85,7 +85,7 @@ static void Use(DWORD fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (attached) return;
       attached = true;
-      reshade::log_message(reshade::log_level::info, "ResourceUtil attached.");
+      reshade::log::message(reshade::log::level::info, "ResourceUtil attached.");
 
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
