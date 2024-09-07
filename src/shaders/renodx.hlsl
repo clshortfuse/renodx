@@ -12,5 +12,6 @@
 #include "./tonemap.hlsl"
 #include "./DICE.hlsl"
 #include "./math.hlsl"
+#include "./frostbite.hlsl"
 
 #endif  // SRC_SHADERS_RENODX_HLSL_
