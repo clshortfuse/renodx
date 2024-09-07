@@ -5,126 +5,126 @@ Texture2D<float4> t0 : register(t0);
 cbuffer cb0 : register(b0) {
   float cb0_05x : packoffset(c05.x);
   float cb0_05y : packoffset(c05.y);
-  float cb0_08w : packoffset(c08.w);
   float cb0_08x : packoffset(c08.x);
+  float cb0_08w : packoffset(c08.w);
   float cb0_08y : packoffset(c08.y);
   float cb0_08z : packoffset(c08.z);
   float cb0_09x : packoffset(c09.x);
-  float cb0_10w : packoffset(c10.w);
   float cb0_10x : packoffset(c10.x);
   float cb0_10y : packoffset(c10.y);
   float cb0_10z : packoffset(c10.z);
-  float cb0_11w : packoffset(c11.w);
+  float cb0_10w : packoffset(c10.w);
   float cb0_11x : packoffset(c11.x);
   float cb0_11y : packoffset(c11.y);
   float cb0_11z : packoffset(c11.z);
+  float cb0_11w : packoffset(c11.w);
   float cb0_12x : packoffset(c12.x);
   float cb0_12y : packoffset(c12.y);
   float cb0_12z : packoffset(c12.z);
-  float cb0_13w : packoffset(c13.w);
   float cb0_13x : packoffset(c13.x);
   float cb0_13y : packoffset(c13.y);
   float cb0_13z : packoffset(c13.z);
+  float cb0_13w : packoffset(c13.w);
   float cb0_14x : packoffset(c14.x);
   float cb0_14y : packoffset(c14.y);
   float cb0_14z : packoffset(c14.z);
-  float cb0_15w : packoffset(c15.w);
   float cb0_15x : packoffset(c15.x);
   float cb0_15y : packoffset(c15.y);
   float cb0_15z : packoffset(c15.z);
-  float cb0_16w : packoffset(c16.w);
+  float cb0_15w : packoffset(c15.w);
   float cb0_16x : packoffset(c16.x);
   float cb0_16y : packoffset(c16.y);
   float cb0_16z : packoffset(c16.z);
-  float cb0_17w : packoffset(c17.w);
+  float cb0_16w : packoffset(c16.w);
   float cb0_17x : packoffset(c17.x);
   float cb0_17y : packoffset(c17.y);
   float cb0_17z : packoffset(c17.z);
-  float cb0_18w : packoffset(c18.w);
+  float cb0_17w : packoffset(c17.w);
   float cb0_18x : packoffset(c18.x);
   float cb0_18y : packoffset(c18.y);
   float cb0_18z : packoffset(c18.z);
-  float cb0_19w : packoffset(c19.w);
+  float cb0_18w : packoffset(c18.w);
   float cb0_19x : packoffset(c19.x);
   float cb0_19y : packoffset(c19.y);
   float cb0_19z : packoffset(c19.z);
-  float cb0_20w : packoffset(c20.w);
+  float cb0_19w : packoffset(c19.w);
   float cb0_20x : packoffset(c20.x);
   float cb0_20y : packoffset(c20.y);
   float cb0_20z : packoffset(c20.z);
-  float cb0_21w : packoffset(c21.w);
+  float cb0_20w : packoffset(c20.w);
   float cb0_21x : packoffset(c21.x);
   float cb0_21y : packoffset(c21.y);
   float cb0_21z : packoffset(c21.z);
-  float cb0_22w : packoffset(c22.w);
+  float cb0_21w : packoffset(c21.w);
   float cb0_22x : packoffset(c22.x);
   float cb0_22y : packoffset(c22.y);
   float cb0_22z : packoffset(c22.z);
-  float cb0_23w : packoffset(c23.w);
+  float cb0_22w : packoffset(c22.w);
   float cb0_23x : packoffset(c23.x);
   float cb0_23y : packoffset(c23.y);
   float cb0_23z : packoffset(c23.z);
-  float cb0_24w : packoffset(c24.w);
+  float cb0_23w : packoffset(c23.w);
   float cb0_24x : packoffset(c24.x);
   float cb0_24y : packoffset(c24.y);
   float cb0_24z : packoffset(c24.z);
-  float cb0_25w : packoffset(c25.w);
+  float cb0_24w : packoffset(c24.w);
   float cb0_25x : packoffset(c25.x);
   float cb0_25y : packoffset(c25.y);
   float cb0_25z : packoffset(c25.z);
-  float cb0_26w : packoffset(c26.w);
+  float cb0_25w : packoffset(c25.w);
   float cb0_26x : packoffset(c26.x);
   float cb0_26y : packoffset(c26.y);
   float cb0_26z : packoffset(c26.z);
-  float cb0_27w : packoffset(c27.w);
+  float cb0_26w : packoffset(c26.w);
   float cb0_27x : packoffset(c27.x);
   float cb0_27y : packoffset(c27.y);
   float cb0_27z : packoffset(c27.z);
-  float cb0_28w : packoffset(c28.w);
+  float cb0_27w : packoffset(c27.w);
   float cb0_28x : packoffset(c28.x);
   float cb0_28y : packoffset(c28.y);
   float cb0_28z : packoffset(c28.z);
-  float cb0_29w : packoffset(c29.w);
+  float cb0_28w : packoffset(c28.w);
   float cb0_29x : packoffset(c29.x);
   float cb0_29y : packoffset(c29.y);
   float cb0_29z : packoffset(c29.z);
-  float cb0_30w : packoffset(c30.w);
+  float cb0_29w : packoffset(c29.w);
   float cb0_30x : packoffset(c30.x);
   float cb0_30y : packoffset(c30.y);
   float cb0_30z : packoffset(c30.z);
-  float cb0_31w : packoffset(c31.w);
+  float cb0_30w : packoffset(c30.w);
   float cb0_31x : packoffset(c31.x);
   float cb0_31y : packoffset(c31.y);
   float cb0_31z : packoffset(c31.z);
-  float cb0_32w : packoffset(c32.w);
+  float cb0_31w : packoffset(c31.w);
   float cb0_32x : packoffset(c32.x);
   float cb0_32y : packoffset(c32.y);
   float cb0_32z : packoffset(c32.z);
-  float cb0_33w : packoffset(c33.w);
+  float cb0_32w : packoffset(c32.w);
   float cb0_33x : packoffset(c33.x);
   float cb0_33y : packoffset(c33.y);
   float cb0_33z : packoffset(c33.z);
-  float cb0_34w : packoffset(c34.w);
+  float cb0_33w : packoffset(c33.w);
   float cb0_34x : packoffset(c34.x);
   float cb0_34y : packoffset(c34.y);
   float cb0_34z : packoffset(c34.z);
-  float cb0_35w : packoffset(c35.w);
+  float cb0_34w : packoffset(c34.w);
   float cb0_35z : packoffset(c35.z);
-  float cb0_36w : packoffset(c36.w);
+  float cb0_35w : packoffset(c35.w);
   float cb0_36x : packoffset(c36.x);
   float cb0_36y : packoffset(c36.y);
   float cb0_36z : packoffset(c36.z);
-  float cb0_37w : packoffset(c37.w);
+  float cb0_36w : packoffset(c36.w);
   float cb0_37x : packoffset(c37.x);
   float cb0_37y : packoffset(c37.y);
   float cb0_37z : packoffset(c37.z);
+  float cb0_37w : packoffset(c37.w);
   float cb0_38x : packoffset(c38.x);
   float cb0_39x : packoffset(c39.x);
   float cb0_39y : packoffset(c39.y);
   float cb0_39z : packoffset(c39.z);
-  uint cb0_40w : packoffset(c40.w);
   float cb0_40y : packoffset(c40.y);
   float cb0_40z : packoffset(c40.z);
+  uint cb0_40w : packoffset(c40.w);
   uint cb0_41x : packoffset(c41.x);
 };
 
@@ -162,10 +162,9 @@ cbuffer cb1 : register(b1) {
 SamplerState s0 : register(s0);
 
 float4 main(
-  noperspective float2 TEXCOORD : TEXCOORD,
-  noperspective float4 SV_Position : SV_Position,
-  nointerpolation uint SV_RenderTargetArrayIndex : SV_RenderTargetArrayIndex
-) : SV_Target {
+    noperspective float2 TEXCOORD : TEXCOORD,
+                                    noperspective float4 SV_Position : SV_Position,
+                                                                       nointerpolation uint SV_RenderTargetArrayIndex : SV_RenderTargetArrayIndex) : SV_Target {
   float4 SV_Target;
   // texture _1 = t0;
   // SamplerState _2 = s0;
@@ -816,16 +815,24 @@ float4 main(
   float3 sdr_ap1_color;
 
   bool is_hdr = (output_type >= 3u && output_type <= 6u);
-  if (is_hdr) {
-    bool is_2000_nits = (output_type == 4u || output_type == 6u);
+  if (injectedData.toneMapType != 0.f && is_hdr) {
+    // bool is_2000_nits = (output_type == 4u || output_type == 6u);
 
     renodx::tonemap::Config config = renodx::tonemap::config::Create();
-    config.type = 2.f;  // ACES
-    config.peak_nits = is_2000_nits ? 2000.f : 1000.f;
-    config.game_nits = 203.f;
-    config.contrast = 0.75f;
-    config.saturation = 0.75f;
-    config.exposure = 1.5f;
+    config.type = injectedData.toneMapType;  // ACES
+    config.peak_nits = injectedData.toneMapPeakNits;
+    config.game_nits = injectedData.toneMapGameNits;
+    config.exposure = injectedData.colorGradeExposure;
+    config.highlights = injectedData.colorGradeHighlights;
+    config.shadows = injectedData.colorGradeShadows;
+    config.contrast = injectedData.colorGradeContrast;
+    config.saturation = injectedData.colorGradeSaturation;
+
+    config.reno_drt_highlights = 1.0f;
+    config.reno_drt_shadows = 1.0f;
+    config.reno_drt_contrast = 1.0f;
+    config.reno_drt_saturation = 1.0f;
+    config.reno_drt_flare = 0.01f;
 
     float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
 
@@ -1416,10 +1423,10 @@ float4 main(
   float3 film_graded_color = float3(_1074, _1075, _1076);
 
   if (is_hdr) {
-    float3 post_process_color = saturate(film_graded_color);
-
-    float3 final_color = renodx::tonemap::UpgradeToneMap(
-        hdr_color, sdr_color, post_process_color, 1.f);
+    float3 final_color = saturate(film_graded_color);
+    if (injectedData.toneMapType != 0.f) {
+      final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
+    }
     bool is_pq = (output_type == 3u || output_type == 4u);
     if (is_pq) {
       final_color = renodx::color::bt2020::from::BT709(final_color);
