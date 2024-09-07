@@ -60,7 +60,8 @@ static bool allow_multiple_push_constants = false;
 static float* resource_tag_float = nullptr;
 static int32_t expected_constant_buffer_index = -1;
 static uint32_t expected_constant_buffer_space = 0;
-static bool (*on_create_pipeline_layout)(reshade::api::device*, std::span<reshade::api::pipeline_layout_param> params) = nullptr;
+static bool (*on_create_pipeline_layout)(reshade::api::device*, std::span<reshade::api::pipeline_layout_param>) = nullptr;
+static bool (*on_init_pipeline_layout)(reshade::api::device*, reshade::api::pipeline_layout, std::span<const reshade::api::pipeline_layout_param>) = nullptr;
 
 static CustomShaders custom_shaders;
 
@@ -253,6 +254,9 @@ static void OnInitPipelineLayout(
     const uint32_t param_count,
     const reshade::api::pipeline_layout_param* params,
     reshade::api::pipeline_layout layout) {
+  if (on_init_pipeline_layout != nullptr) {
+    if (!on_init_pipeline_layout(device, layout, {params, param_count})) return;
+  }
   int32_t injection_index = -1;
   auto device_api = device->get_api();
   auto& data = device->get_private_data<DeviceData>();
