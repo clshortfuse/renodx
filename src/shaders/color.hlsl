@@ -49,6 +49,11 @@ static const float3x3 XYZ_TO_LMS_MAT = float3x3(
     -0.1920808463704993f, 1.1004767970374321f, 0.0753748658519118f,
     0.0070797844607479f, 0.0748396662186362f, 0.8433265453898765f);
 
+static const float3x3 LMS_TO_XYZ_MAT = float3x3(
+    2.07018005669561320, -1.32645687610302100, 0.206616006847855170,
+    0.36498825003265756, 0.68046736285223520, -0.045421753075853236,
+    -0.04959554223893212, -0.04942116118675749, 1.187995941732803400);
+
 static const float3x3 DISPLAYP3_TO_XYZ_MAT = float3x3(
     0.4865709486f, 0.2656676932f, 0.1982172852f,
     0.2289745641f, 0.6917385218f, 0.0792869141f,
@@ -198,6 +203,24 @@ float3 BT2020(float3 bt2020_color, float scaling = 10000.f) {
 }
 }  // namespace from
 }  // namespace pq
+
+namespace ictcp {
+namespace from {
+float3 BT709(float3 bt709_color) {
+  float3 xyz_color = mul(BT709_TO_XYZ_MAT, bt709_color);
+  float3 lms_color = mul(XYZ_TO_LMS_MAT, xyz_color);
+
+  float3 pq = pq::from::BT2020(lms_color, 100.0f);
+
+  float3x3 mat = float3x3(
+      0.5000, 0.5000, 0.0000,
+      1.6137, -3.3234, 1.7097,
+      4.3780, -4.2455, -0.1325);
+
+  return mul(mat, pq);
+}
+}  // namespace from
+}  // namespace ictcp
 
 namespace srgb {
 static const float REFERENCE_WHITE = 80.f;
@@ -354,6 +377,19 @@ namespace from {
 float3 OkLCh(float3 oklch) {
   float3 ok_lab = renodx::color::oklab::from::OkLCh(oklch);
   return OkLab(ok_lab);
+}
+
+float3 ICtCp(float3 col) {
+  float3x3 mat = float3x3(
+      1.0, 0.00860514569398152, 0.11103560447547328,
+      1.0, -0.00860514569398152, -0.11103560447547328,
+      1.0, 0.56004885956263900, -0.32063747023212210);
+  col = mul(mat, col);
+
+  // 1.0f = 100 nits, 100.0f = 10k nits
+  col = bt2020::from::PQ(col, 100.f);
+  col = mul(LMS_TO_XYZ_MAT, col);
+  return mul(XYZ_TO_BT709_MAT, col);
 }
 
 }  // namespace from
