@@ -9,6 +9,7 @@
 
 #include <deps/imgui/imgui.h>
 #include <embed/0x4CC68F73.h>
+#include <embed/0x394B5831.h>
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
@@ -19,6 +20,7 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x4CC68F73),
+    CustomShaderEntry(0x394B5831),
 };
 
 ShaderInjectData shader_injection;
@@ -163,10 +165,14 @@ void OnPresetOff() {
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX - The Thaumaturge";
 
+
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
+      renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
+        return device->get_api() == reshade::api::device_api::d3d12;
+      };
       renodx::mods::shader::expected_constant_buffer_space = 50;
       break;
     case DLL_PROCESS_DETACH:
