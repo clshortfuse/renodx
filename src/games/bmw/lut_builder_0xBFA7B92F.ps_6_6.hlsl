@@ -1020,6 +1020,7 @@ float4 main(
         config.type = injectedData.toneMapType; // ACES
         config.peak_nits = injectedData.toneMapPeakNits;
         config.game_nits = injectedData.toneMapGameNits;
+        config.gamma_correction = injectedData.toneMapGammaCorrection;
         config.exposure = injectedData.colorGradeExposure;
         config.highlights = injectedData.colorGradeHighlights;
         config.shadows = injectedData.colorGradeShadows;
@@ -1596,12 +1597,16 @@ float4 main(
     if (is_hdr)
     {
         float3 final_color = saturate(film_graded_color);
+        
         if (injectedData.toneMapType != 0.f)
         {
             final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, injectedData.colorGradeLUTStrength);
         }
-		
-        //final_color *= injectedData.toneMapGameNits / 80.f; // game brightness
+        
+        if (injectedData.toneMapGammaCorrection == 1.f)
+        {
+            final_color = renodx::color::correct::GammaSafe(final_color);
+        }
         
         bool is_pq = (output_type == 3u || output_type == 4u);
         if (is_pq)
