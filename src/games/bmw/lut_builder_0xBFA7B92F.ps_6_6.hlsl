@@ -1030,7 +1030,7 @@ float4 main(
         config.reno_drt_shadows = 1.0f;
         config.reno_drt_contrast = 1.0f;
         config.reno_drt_saturation = 1.0f;
-        config.reno_drt_flare = 0.01f;
+        //config.reno_drt_flare = 0.01f;
         
         // good settings
         //config.type = 2.f; // ACES
@@ -1595,17 +1595,19 @@ float4 main(
 
     if (is_hdr)
     {
-        float3 post_process_color = saturate(film_graded_color);
-
-        float3 final_color = renodx::tonemap::UpgradeToneMap(
-        hdr_color, sdr_color, post_process_color, 1.f);
+        float3 final_color = saturate(film_graded_color);
+        if (injectedData.toneMapType != 0.f)
+        {
+            final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, injectedData.colorGradeLUTStrength);
+        }
 		
-        final_color *= injectedData.toneMapGameNits / 80.f; // game brightness
+        //final_color *= injectedData.toneMapGameNits / 80.f; // game brightness
+        
         bool is_pq = (output_type == 3u || output_type == 4u);
         if (is_pq)
         {
             final_color = renodx::color::bt2020::from::BT709(final_color);
-            final_color = renodx::color::pq::from::BT2020(final_color, 100.f);
+            final_color = renodx::color::pq::from::BT2020(final_color, injectedData.toneMapGameNits);
         }
 	
         return float4(final_color * 0.9523810148239136f, 0);
