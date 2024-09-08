@@ -825,6 +825,7 @@ float4 main(
     config.type = injectedData.toneMapType;
     config.peak_nits = injectedData.toneMapPeakNits;
     config.game_nits = injectedData.toneMapGameNits;
+    config.gamma_correction = injectedData.toneMapGammaCorrection;
     config.exposure = injectedData.colorGradeExposure;
     config.highlights = injectedData.colorGradeHighlights;
     config.shadows = injectedData.colorGradeShadows;
@@ -1445,6 +1446,9 @@ float4 main(
     float3 final_color = saturate(film_graded_color);
     if (injectedData.toneMapType != 0.f) {
       final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
+    }
+    if (injectedData.toneMapGammaCorrection == 1.f) {
+      final_color = renodx::color::correct::GammaSafe(final_color);
     }
     bool is_pq = (output_type == 3u || output_type == 4u);
     if (is_pq) {
