@@ -39,14 +39,26 @@ float3 GammaSafe(float3 color, bool pow2srgb = false) {
   return color;
 }
 
-float3 Hue(float3 incorrect_color, float3 correct_color) {
-  float3 correct_lch = renodx::color::oklch::from::BT709(correct_color);
-  float3 incorrect_lch = renodx::color::oklch::from::BT709(incorrect_color);
-  incorrect_lch[2] = correct_lch[2];
+float3 Hue(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
+  if (strength == 0.f) return incorrect_color;
+
+  float3 correct_lab = renodx::color::oklab::from::BT709(correct_color);
+  float3 correct_lch = renodx::color::oklch::from::OkLab(correct_lab);
+
+  float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
+  float3 incorrect_lch = renodx::color::oklch::from::OkLab(incorrect_lab);
+  if (strength == 1.f) {
+    incorrect_lch[2] = correct_lch[2];
+  } else {
+    float old_chroma = incorrect_lch[1];
+
+    incorrect_lab.yz = lerp(incorrect_lab.yz, correct_lab.yz, strength);
+    incorrect_lch = renodx::color::oklch::from::OkLab(incorrect_lab);
+    incorrect_lch[1] = old_chroma;
+  }
+
   float3 color = renodx::color::bt709::from::OkLCh(incorrect_lch);
-  color = mul(BT709_TO_AP1_MAT, color);  // Convert to AP1
-  color = max(0, color);                 // Clamp to AP1
-  color = mul(AP1_TO_BT709_MAT, color);  // Convert BT709
+  color = renodx::color::bt709::clamp::AP1(color);
   return color;
 }
 
