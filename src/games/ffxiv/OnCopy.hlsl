@@ -58,10 +58,10 @@ void OnCopy(inout float3 color)
     // linearize
     color = renodx::math::SafePow(color, 2.2f);
 
-    if (injectedData.toneMapType > 0) {
-      float3 sdrColor = saturate(color);
-      
+    if (injectedData.toneMapType > 0) {      
       if (injectedData.toneMapType > 1) {
+        float3 untonemapped = color;
+
         // color grading
         color = renodx::color::grade::UserColorGrading(color, injectedData.colorGradeExposure, injectedData.colorGradeHighlights, injectedData.colorGradeShadows, injectedData.colorGradeContrast, injectedData.colorGradeSaturation, injectedData.colorGradeBlowout, 0.f);
       
@@ -73,8 +73,8 @@ void OnCopy(inout float3 color)
         float dicePaperWhite = injectedData.toneMapGameNits / 80.f;
         float dicePeakWhite = injectedData.toneMapPeakNits / 80.f;
         color.rgb = DICETonemap(color.rgb * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
-      
-        color = RestoreHue(color, sdrColor, injectedData.hueCorrectionStrength);
+        
+        color = RestoreHue(color, renodx::tonemap::uncharted2::BT709(untonemapped), injectedData.hueCorrectionStrength);
       
         color = extendGamut(color, injectedData.gamutExpansion);
       }
