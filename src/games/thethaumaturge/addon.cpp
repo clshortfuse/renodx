@@ -8,8 +8,8 @@
 #define DEBUG_LEVEL_0
 
 #include <deps/imgui/imgui.h>
-#include <embed/0x4CC68F73.h>
 #include <embed/0x394B5831.h>
+#include <embed/0x4CC68F73.h>
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
@@ -125,6 +125,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "colorGradeBlowout",
+        .binding = &shader_injection.colorGradeBlowout,
+        .default_value = 70.f,
+        .label = "Blowout",
+        .section = "Color Grading",
+        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "colorGradeLUTStrength",
         .binding = &shader_injection.colorGradeLUTStrength,
         .default_value = 100.f,
@@ -164,7 +175,6 @@ void OnPresetOff() {
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX - The Thaumaturge";
-
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {

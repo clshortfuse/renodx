@@ -1013,10 +1013,6 @@ float4 main(
 
   bool is_hdr = (output_type >= 3u && output_type <= 6u);
   if (injectedData.toneMapType != 0.f && is_hdr) {
-    // bool is_2000_nits = (output_type == 4u || output_type == 6u);
-
-    // cb0_36w is lerp between Neutral/ACES
-    // Should read
 
     renodx::tonemap::Config config = renodx::tonemap::config::Create();
     config.type = injectedData.toneMapType;
@@ -1032,8 +1028,8 @@ float4 main(
     config.reno_drt_highlights = 1.20f;
     config.reno_drt_shadows = 1.0f;
     config.reno_drt_contrast = 1.80f;
-    config.reno_drt_saturation = 1.40f;
-    config.reno_drt_dechroma = 0.60f;
+    config.reno_drt_saturation = 1.80f;
+    config.reno_drt_dechroma = injectedData.colorGradeBlowout;
     config.reno_drt_flare = 0.f;
 
     float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
