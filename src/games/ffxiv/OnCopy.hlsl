@@ -74,7 +74,7 @@ void OnCopy(inout float3 color)
         float dicePeakWhite = injectedData.toneMapPeakNits / 80.f;
         color.rgb = DICETonemap(color.rgb * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
         
-        color = lerp(color, renodx::color::correct::Hue(color, renodx::tonemap::uncharted2::BT709(untonemapped)), injectedData.hueCorrectionStrength);
+        color = RestoreHue(color, renodx::tonemap::uncharted2::BT709(untonemapped), injectedData.hueCorrectionStrength);
       
         color = extendGamut(color, injectedData.gamutExpansion);
       }
