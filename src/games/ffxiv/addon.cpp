@@ -22,6 +22,7 @@
 #include <embed/0xCDC56365.h>  // Vignette
 #include <embed/0x6CFFD968.h>  // Copy
 #include <embed/0xB0CE42B9.h>  // Copy
+#include <embed/0xF6E81A1B.h>  // FullscreenGammaCorrection
 #include <embed/0xFFFFFFFD.h>  // final vertex shader
 #include <embed/0xFFFFFFFE.h>  // final pixel shader
 
@@ -43,8 +44,7 @@ bool copy_on_replace(reshade::api::command_list* cmd_list) {
   if (track_next_copy) {
     ++shader_injection.copyTracker;
   }
-
-  return renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list);
+  return true;
 }
 
 namespace {
@@ -59,7 +59,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     //CustomShaderEntry(0x5E42F039),
     CustomShaderEntry(0xCDC56365),
     CustomShaderEntryCallback(0x6CFFD968, &copy_on_replace),
-    CustomShaderEntryCallback(0xB0CE42B9, &copy_on_replace)
+    CustomShaderEntryCallback(0xB0CE42B9, &copy_on_replace),
+    CustomShaderEntry(0xF6E81A1B)
 };
 
 renodx::utils::settings::Settings settings = {
