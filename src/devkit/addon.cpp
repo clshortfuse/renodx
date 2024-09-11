@@ -137,6 +137,7 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
   std::unordered_map<uint64_t, ResourceViewDetails> resource_view_details;
   std::vector<CommandListData> command_list_data;
   std::unordered_map<uint64_t, std::vector<reshade::api::pipeline_layout_param>> pipeline_layout_params;
+  reshade::api::effect_runtime* runtime = nullptr;
 
   void StartSnapshot() {
     this->command_list_data.clear();
@@ -199,7 +200,8 @@ const uint32_t SETTING_NAV_RAIL_SIZE = 48;
 const std::vector<std::pair<const char*, const char*>> SETTING_NAV_TITLES = {
     {"Snapshot", ICON_FK_SEARCH},
     {"Shaders", ICON_FK_FLOPPY},
-    {"Defines", ICON_FK_PENCIL},
+    {"Defines", ICON_FK_PLUS},
+    {"Settings", ICON_FK_PENCIL},
 };
 
 bool setting_auto_dump = false;
@@ -1242,6 +1244,21 @@ void RenderShaderDefinesPane(reshade::api::device* device, DeviceData& data) {
   }  // ShaderDefinesTable
 }
 
+void RenderSettingsPane(reshade::api::device* device, DeviceData& data) {
+  char temp[256] = "";
+  renodx::utils::shader::compiler::watcher::GetLivePath().copy(temp, 256);
+  if (ImGui::InputText("Live Path", temp, 256)) {
+    std::string temp_string = temp;
+    auto pos = temp_string.find_last_not_of("\t\n\v\f\r ");
+    if (pos != std::string_view::npos) {
+      temp_string = {temp_string.data(), temp_string.data() + pos + 1};
+    }
+
+    renodx::utils::shader::compiler::watcher::SetLivePath(temp_string);
+    reshade::set_config_value(data.runtime, "renodx-dev", "LivePath", temp_string.c_str());
+  }
+}
+
 void RenderShaderViewDisassembly(reshade::api::device* device, DeviceData& data, ShaderDetails& shader_details) {
   std::string disassembly_string;
   bool failed = false;
@@ -1374,6 +1391,19 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   auto* device = runtime->get_device();
   auto& data = device->get_private_data<DeviceData>();
   std::unique_lock lock(data.mutex);  // Probably not needed
+  if (data.runtime == nullptr) {
+    data.runtime = runtime;
+    char temp[256] = "";
+    size_t size = 256;
+    if (reshade::get_config_value(data.runtime, "renodx-dev", "LivePath", temp, &size)) {
+      std::string temp_string = std::string(temp);
+      auto pos = temp_string.find_last_not_of("\t\n\v\f\r ");
+      if (pos != std::string_view::npos) {
+        temp_string = {temp_string.data(), temp_string.data() + pos + 1};
+      }
+      renodx::utils::shader::compiler::watcher::SetLivePath(temp_string);
+    }
+  }
   static auto setting_window_size = 0;
   static auto setting_side_sheet_width = 0;
 
@@ -1401,6 +1431,10 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           break;
         case 2:
           RenderShaderDefinesPane(device, data);
+          break;
+        case 3:
+          RenderSettingsPane(device, data);
+          break;
         default:
           break;
       }
@@ -1434,7 +1468,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         }
       }
 
-      setting_side_sheet_width = ImGui::CalcItemWidth();
+      setting_side_sheet_width = 96;
       ImGui::EndChild();
     }
   }

@@ -69,6 +69,7 @@ const bool PRECOMPILE_CUSTOM_SHADERS = true;
 static std::shared_mutex mutex;
 static std::unordered_map<uint32_t, CustomShader> custom_shaders_cache;
 static std::vector<std::pair<std::string, std::string>> shared_shader_defines;
+static std::string live_path;
 
 static OVERLAPPED overlapped;
 static HANDLE m_target_dir_handle = INVALID_HANDLE_VALUE;
@@ -77,149 +78,157 @@ static std::aligned_storage_t<1U << 18, std::max<size_t>(alignof(FILE_NOTIFY_EXT
 static bool CompileCustomShaders() {
   const std::unique_lock lock(mutex);
 
-  auto directory = renodx::utils::path::GetOutputPath();
-  if (!std::filesystem::exists(directory)) {
-    std::filesystem::create_directory(directory);
-    return false;
+  std::filesystem::path directory;
+  if (live_path.empty()) {
+    directory = renodx::utils::path::GetOutputPath();
+    if (!std::filesystem::exists(directory)) {
+      std::filesystem::create_directory(directory);
+      return false;
+    }
+    directory /= "live";
+  } else {
+    directory = live_path;
   }
-
-  directory /= "live";
-
-  if (!std::filesystem::exists(directory)) {
-    std::filesystem::create_directory(directory);
-    return false;
-  }
-
   std::unordered_set<uint32_t> shader_hashes_processed = {};
   std::unordered_set<uint32_t> shader_hashes_failed = {};
   std::unordered_set<uint32_t> shader_hashes_updated = {};
+  try {
+    if (!std::filesystem::exists(directory)) {
+      std::filesystem::create_directory(directory);
+      return false;
+    }
 
-  for (const auto& entry : std::filesystem::directory_iterator(directory)) {
-    if (!entry.is_regular_file()) continue;
+    for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+      if (!entry.is_regular_file()) continue;
 
-    const auto& entry_path = entry.path();
-    if (!entry_path.has_stem() || !entry_path.has_extension()) continue;
+      const auto& entry_path = entry.path();
 
-    const bool is_hlsl = entry_path.extension().compare(".hlsl") == 0;
-    const bool is_cso = entry_path.extension().compare(".cso") == 0;
-    if (!is_hlsl && !is_cso) continue;
+      if (!entry_path.has_stem() || !entry_path.has_extension()) continue;
 
-    auto basename = entry_path.stem().string();
-    std::string hash_string;
-    std::string shader_target;
+      const bool is_hlsl = entry_path.extension().compare(".hlsl") == 0;
+      const bool is_cso = entry_path.extension().compare(".cso") == 0;
+      if (!is_hlsl && !is_cso) continue;
 
-    if (is_hlsl) {
-      auto length = basename.length();
-      if (length < strlen("0x12345678.xx_x_x")) continue;
-      shader_target = basename.substr(length - strlen("xx_x_x"), strlen("xx_x_x"));
-      if (shader_target[2] != '_') continue;
-      if (shader_target[4] != '_') continue;
-      // uint32_t versionMajor = shader_target[3] - '0';
-      hash_string = basename.substr(length - strlen("12345678.xx_x_x"), 8);
-    } else if (is_cso) {
-      // As long as cso starts from "0x12345678", it's good, they don't need the shader type specified
-      if (basename.size() < 10) {
+      auto basename = entry_path.stem().string();
+      std::string hash_string;
+      std::string shader_target;
+
+      if (is_hlsl) {
+        auto length = basename.length();
+        if (length < strlen("0x12345678.xx_x_x")) continue;
+        shader_target = basename.substr(length - strlen("xx_x_x"), strlen("xx_x_x"));
+        if (shader_target[2] != '_') continue;
+        if (shader_target[4] != '_') continue;
+        // uint32_t versionMajor = shader_target[3] - '0';
+        hash_string = basename.substr(length - strlen("12345678.xx_x_x"), 8);
+      } else if (is_cso) {
+        // As long as cso starts from "0x12345678", it's good, they don't need the shader type specified
+        if (basename.size() < 10) {
+          std::stringstream s;
+          s << "CompileCustomShaders(Invalid cso file format: ";
+          s << basename;
+          s << ")";
+          reshade::log::message(reshade::log::level::warning, s.str().c_str());
+          continue;
+        }
+        hash_string = basename.substr(2, 8);
+      }
+      // Any other case (non hlsl non cso) is already earlied out above
+
+      uint32_t shader_hash;
+      try {
+        shader_hash = std::stoul(hash_string, nullptr, 16);
+      } catch (std::exception& e) {
         std::stringstream s;
-        s << "CompileCustomShaders(Invalid cso file format: ";
-        s << basename;
+        s << "CompileCustomShaders(Invalid shader hash: ";
+        s << hash_string;
+        s << ", at " << entry_path;
         s << ")";
         reshade::log::message(reshade::log::level::warning, s.str().c_str());
         continue;
       }
-      hash_string = basename.substr(2, 8);
-    }
-    // Any other case (non hlsl non cso) is already earlied out above
 
-    uint32_t shader_hash;
-    try {
-      shader_hash = std::stoul(hash_string, nullptr, 16);
-    } catch (std::exception& e) {
-      std::stringstream s;
-      s << "CompileCustomShaders(Invalid shader hash: ";
-      s << hash_string;
-      s << ", at " << entry_path;
-      s << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
-      continue;
-    }
-
-    if (shader_hashes_processed.contains(shader_hash)) {
-      std::stringstream s;
-      s << "CompileCustomShaders(Ignoring duplicate shader: ";
-      s << PRINT_CRC32(shader_hash);
-      s << ", at " << entry_path;
-      s << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
-      continue;
-    }
-
-    // Prepare new custom shader entry but hold off unless it actually compiles ()
-
-    CustomShader custom_shader = {
-        .is_hlsl = is_hlsl,
-        .file_path = entry_path,
-    };
-
-    if (is_hlsl) {
-      {
+      if (shader_hashes_processed.contains(shader_hash)) {
         std::stringstream s;
-        s << "loadCustomShaders(Compiling file: ";
-        s << entry_path.string();
-        s << ", hash: " << PRINT_CRC32(shader_hash);
-        s << ", target: " << shader_target;
-        s << ")";
-        reshade::log::message(reshade::log::level::debug, s.str().c_str());
-      }
-
-      try {
-        custom_shader.compilation = renodx::utils::shader::compiler::CompileShaderFromFile(
-            entry_path.c_str(),
-            shader_target.c_str(),
-            shared_shader_defines);
-        shader_hashes_processed.emplace(shader_hash);
-        shader_hashes_failed.erase(shader_hash);
-      } catch (std::exception& e) {
-        shader_hashes_failed.emplace(shader_hash);
-        custom_shader.compilation = e;
-        std::stringstream s;
-        s << "loadCustomShaders(Compilation failed: ";
-        s << entry_path.string();
-        s << ", " << custom_shader.GetCompilationException().what();
+        s << "CompileCustomShaders(Ignoring duplicate shader: ";
+        s << PRINT_CRC32(shader_hash);
+        s << ", at " << entry_path;
         s << ")";
         reshade::log::message(reshade::log::level::warning, s.str().c_str());
-      }
-
-    } else if (is_cso) {
-      try {
-        custom_shader.compilation = utils::path::ReadBinaryFile(entry_path);
-        shader_hashes_processed.emplace(shader_hash);
-        shader_hashes_failed.erase(shader_hash);
-      } catch (std::exception& e) {
-        custom_shader.compilation = e;
-        shader_hashes_failed.emplace(shader_hash);
         continue;
       }
-    }
 
-    // Find previous entry
-    bool insert_or_replace = true;
-    if (auto previous_pair = custom_shaders_cache.find(shader_hash);
-        previous_pair != custom_shaders_cache.end()) {
-      auto& previous_custom_shader = previous_pair->second;
-      if (custom_shader.IsCompilationOK()
-          && previous_custom_shader.IsCompilationOK()
-          && custom_shader.GetCompilationData() == previous_custom_shader.GetCompilationData()) {
-        // Same data, update source
-        previous_custom_shader.is_hlsl = is_hlsl,
-        previous_custom_shader.file_path = entry_path,
-        insert_or_replace = false;
+      // Prepare new custom shader entry but hold off unless it actually compiles ()
+
+      CustomShader custom_shader = {
+          .is_hlsl = is_hlsl,
+          .file_path = entry_path,
+      };
+
+      if (is_hlsl) {
+        {
+          std::stringstream s;
+          s << "loadCustomShaders(Compiling file: ";
+          s << entry_path.string();
+          s << ", hash: " << PRINT_CRC32(shader_hash);
+          s << ", target: " << shader_target;
+          s << ")";
+          reshade::log::message(reshade::log::level::debug, s.str().c_str());
+        }
+
+        try {
+          custom_shader.compilation = renodx::utils::shader::compiler::CompileShaderFromFile(
+              entry_path.c_str(),
+              shader_target.c_str(),
+              shared_shader_defines);
+          shader_hashes_processed.emplace(shader_hash);
+          shader_hashes_failed.erase(shader_hash);
+        } catch (std::exception& e) {
+          shader_hashes_failed.emplace(shader_hash);
+          custom_shader.compilation = e;
+          std::stringstream s;
+          s << "loadCustomShaders(Compilation failed: ";
+          s << entry_path.string();
+          s << ", " << custom_shader.GetCompilationException().what();
+          s << ")";
+          reshade::log::message(reshade::log::level::warning, s.str().c_str());
+        }
+
+      } else if (is_cso) {
+        try {
+          custom_shader.compilation = utils::path::ReadBinaryFile(entry_path);
+          shader_hashes_processed.emplace(shader_hash);
+          shader_hashes_failed.erase(shader_hash);
+        } catch (std::exception& e) {
+          custom_shader.compilation = e;
+          shader_hashes_failed.emplace(shader_hash);
+          continue;
+        }
+      }
+
+      // Find previous entry
+      bool insert_or_replace = true;
+      if (auto previous_pair = custom_shaders_cache.find(shader_hash);
+          previous_pair != custom_shaders_cache.end()) {
+        auto& previous_custom_shader = previous_pair->second;
+        if (custom_shader.IsCompilationOK()
+            && previous_custom_shader.IsCompilationOK()
+            && custom_shader.GetCompilationData() == previous_custom_shader.GetCompilationData()) {
+          // Same data, update source
+          previous_custom_shader.is_hlsl = is_hlsl,
+          previous_custom_shader.file_path = entry_path,
+          insert_or_replace = false;
+        }
+      }
+      if (insert_or_replace) {
+        // New entry
+        custom_shaders_cache[shader_hash] = custom_shader;
+        shader_hashes_updated.emplace(shader_hash);
       }
     }
-    if (insert_or_replace) {
-      // New entry
-      custom_shaders_cache[shader_hash] = custom_shader;
-      shader_hashes_updated.emplace(shader_hash);
-    }
+  } catch (std::exception& ex) {
+    reshade::log::message(reshade::log::level::error, ex.what());
+    return false;
   }
 
   for (auto& [shader_hash, custom_shader] : custom_shaders_cache) {
@@ -394,6 +403,16 @@ static void SetShaderDefines(T& defines) {
 static void SetShaderDefines(std::vector<std::pair<std::string, std::string>>& defines) {
   const std::unique_lock lock(internal::mutex);
   internal::shared_shader_defines = defines;
+}
+
+static std::string GetLivePath() {
+  const std::shared_lock lock(internal::mutex);
+  return internal::live_path;
+}
+
+static void SetLivePath(const std::string& live_path) {
+  const std::unique_lock lock(internal::mutex);
+  internal::live_path.assign(live_path);
 }
 
 static void RequestCompile() {
