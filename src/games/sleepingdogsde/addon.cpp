@@ -14,11 +14,14 @@
 #include "../../mods/swapchain.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
+#include "embed/0x7DF69EF0.h"
+#include "embed/0x67843125.h"
 
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-
+  CustomShaderEntry(0x7DF69EF0),
+  CustomShaderEntry(0x67843125)
 };
 
 ShaderInjectData shader_injection;
@@ -175,7 +178,9 @@ bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = fals
   auto vertex_shader_hash = shader_state.GetCurrentVertexShaderHash();
   if (
       !is_dispatch
-      && (pixel_shader_hash == 0x91a46134 && vertex_shader_hash == 0x389b7b3d)) {
+      && (pixel_shader_hash == 0x91a46134
+          //      && vertex_shader_hash == 0x389b7b3d
+          )) {
     auto& swapchain_state = cmd_list->get_private_data<renodx::utils::swapchain::CommandListData>();
 
     bool changed = false;
@@ -298,7 +303,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::mods::swapchain::Use(fdw_reason);
 
-  renodx::mods::shader::Use(fdw_reason, custom_shaders);
+  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
 }

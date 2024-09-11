@@ -1,4 +1,4 @@
-// ---- Created with 3Dmigoto v1.3.16 on Mon Sep  9 19:11:17 2024
+#include "./shared.h"
 
 cbuffer cbShaderParams : register(b0)
 {
@@ -36,7 +36,8 @@ void main(
 
   r0.xyzw = texDiffuse.Sample(_texDiffuse_s, v1.xy).xyzw;
   o0.xyzw = cbShaderParams.Value0.xxxx + r0.xyzw;
+
   o0.rgb = pow(abs(o0.rgb), 2.2f);
-  o0.rgb *= 203.f/ 80.f;
+  o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
 }
