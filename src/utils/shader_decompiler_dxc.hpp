@@ -1184,20 +1184,28 @@ class Decompiler {
           }
 
           int index_value;
+          int space_value;
+          int bind_start_value;
           FromStringView(index, index_value);
+          FromStringView(space, space_value);
+          FromStringView(bind_start, bind_start_value);
+
           if (resource_class == "0") {
-            auto srv = preprocess_state.srv_resources[index_value];
-            decompiled = std::format("// texture _{} = {};", variable, srv.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {srv.name, index_value};
+            auto srv = std::find_if(preprocess_state.srv_resources.begin(), preprocess_state.srv_resources.end(), [&](SRVResource& resource) {
+              return resource.space == space_value && resource.signature_index == bind_start_value;
+            });
+            int real_index = srv - preprocess_state.srv_resources.begin();
+
+            decompiled = std::format("// texture _{} = {};", variable, srv->name);
+            preprocess_state.resource_binding_variables[std::string(variable)] = {srv->name, real_index};
           } else if (resource_class == "1") {
-            auto uav = preprocess_state.uav_resources[index_value];
-            decompiled = std::format("// rwtexture _{} = {};", variable, uav.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {uav.name, index_value};
+            auto uav = std::find_if(preprocess_state.uav_resources.begin(), preprocess_state.uav_resources.end(), [&](UAVResource& resource) {
+              return resource.space == space_value && resource.signature_index == bind_start_value;
+            });
+            int real_index = uav - preprocess_state.uav_resources.begin();
+            decompiled = std::format("// rwtexture _{} = {};", variable, uav->name);
+            preprocess_state.resource_binding_variables[std::string(variable)] = {uav->name, real_index};
           } else if (resource_class == "2") {
-            int space_value;
-            int bind_start_value;
-            FromStringView(space, space_value);
-            FromStringView(bind_start, bind_start_value);
             auto cbv = std::find_if(preprocess_state.cbv_resources.begin(), preprocess_state.cbv_resources.end(), [&](CBVResource& resource) {
               return resource.space == space_value && resource.signature_index == bind_start_value;
             });
@@ -1205,9 +1213,13 @@ class Decompiler {
             decompiled = std::format("// cbuffer _{} = {}; // index={}", variable, cbv->name, real_index);
             preprocess_state.resource_binding_variables[std::string(variable)] = {cbv->name, real_index};
           } else if (resource_class == "3") {
-            auto sampler = preprocess_state.sampler_resources[index_value];
-            decompiled = std::format("// SamplerState _{} = {};", variable, sampler.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {sampler.name, index_value};
+            auto sampler = std::find_if(preprocess_state.sampler_resources.begin(), preprocess_state.sampler_resources.end(), [&](SamplerResource& resource) {
+              return resource.space == space_value && resource.signature_index == bind_start_value;
+            });
+            int real_index = sampler - preprocess_state.sampler_resources.begin();
+
+            decompiled = std::format("// SamplerState _{} = {};", variable, sampler->name);
+            preprocess_state.resource_binding_variables[std::string(variable)] = {sampler->name, real_index};
           } else {
             throw std::invalid_argument("Unknown resource type");
           }
