@@ -60,6 +60,8 @@ static bool allow_multiple_push_constants = false;
 static float* resource_tag_float = nullptr;
 static int32_t expected_constant_buffer_index = -1;
 static uint32_t expected_constant_buffer_space = 0;
+static bool (*on_create_pipeline_layout)(reshade::api::device*, std::span<reshade::api::pipeline_layout_param>) = nullptr;
+static bool (*on_init_pipeline_layout)(reshade::api::device*, reshade::api::pipeline_layout, std::span<const reshade::api::pipeline_layout_param>) = nullptr;
 
 static CustomShaders custom_shaders;
 
@@ -90,7 +92,7 @@ static void OnInitDevice(reshade::api::device* device) {
   s << "mods::shader::OnInitDevice(";
   s << reinterpret_cast<void*>(device);
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 
   auto& data = device->create_private_data<DeviceData>();
   data.use_pipeline_layout_cloning = use_pipeline_layout_cloning;
@@ -105,7 +107,7 @@ static void OnDestroyDevice(reshade::api::device* device) {
   s << "mods::shader::OnDestroyDevice(";
   s << reinterpret_cast<void*>(device);
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
   device->destroy_private_data<DeviceData>();
 }
 
@@ -121,8 +123,12 @@ static bool OnCreatePipelineLayout(
     s << "mods::shader::OnCreatePipelineLayout(";
     s << "Wrong param count: " << param_count;
     s << ")";
-    reshade::log_message(reshade::log_level::debug, s.str().c_str());
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
     return false;
+  }
+
+  if (on_create_pipeline_layout != nullptr) {
+    if (!on_create_pipeline_layout(device, {params, param_count})) return false;
   }
 
   auto& data = device->get_private_data<DeviceData>();
@@ -180,7 +186,7 @@ static bool OnCreatePipelineLayout(
     s << "Pipeline layout index mismatch, actual: " << cbv_index;
     s << ", expected: " << data.expected_constant_buffer_index;
     s << ")";
-    reshade::log_message(reshade::log_level::debug, s.str().c_str());
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
     return false;
   }
 
@@ -190,7 +196,7 @@ static bool OnCreatePipelineLayout(
     s << "Pipeline layout already has push constants: " << pc_count;
     s << " with cbvIndex: " << cbv_index;
     s << ")";
-    reshade::log_message(reshade::log_level::warning, s.str().c_str());
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
     return false;
   }
 
@@ -226,7 +232,7 @@ static bool OnCreatePipelineLayout(
     s << "shader injection oversized: ";
     s << slots << "/" << max_count;
     s << " )";
-    reshade::log_message(reshade::log_level::warning, s.str().c_str());
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
   }
 
   std::stringstream s;
@@ -237,7 +243,7 @@ static bool OnCreatePipelineLayout(
   s << " creating new size of " << (old_count + 1u + slots);
   s << ", newParams: " << reinterpret_cast<void*>(new_params);
   s << " )";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 
   return true;
 }
@@ -248,6 +254,9 @@ static void OnInitPipelineLayout(
     const uint32_t param_count,
     const reshade::api::pipeline_layout_param* params,
     reshade::api::pipeline_layout layout) {
+  if (on_init_pipeline_layout != nullptr) {
+    if (!on_init_pipeline_layout(device, layout, {params, param_count})) return;
+  }
   int32_t injection_index = -1;
   auto device_api = device->get_api();
   auto& data = device->get_private_data<DeviceData>();
@@ -331,7 +340,7 @@ static void OnInitPipelineLayout(
           s << "shader injection oversized: ";
           s << slots << "/" << max_count;
           s << " )";
-          reshade::log_message(reshade::log_level::warning, s.str().c_str());
+          reshade::log::message(reshade::log::level::warning, s.str().c_str());
           free(new_params);
           new_params = nullptr;
           return;
@@ -355,7 +364,7 @@ static void OnInitPipelineLayout(
       s << ", slots : " << shader_injection_size;
       s << ": " << (result ? "OK" : "FAILED");
       s << ")";
-      reshade::log_message(result ? reshade::log_level::info : reshade::log_level::error, s.str().c_str());
+      reshade::log::message(result ? reshade::log::level::info : reshade::log::level::error, s.str().c_str());
       data.modded_pipeline_layouts[layout.handle] = new_layout;
     } else {
       if (created_params.empty()) {
@@ -365,7 +374,7 @@ static void OnInitPipelineLayout(
         s << "Params not created for: ";
         s << reinterpret_cast<void*>(layout.handle);
         s << ")";
-        reshade::log_message(reshade::log_level::warning, s.str().c_str());
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
         return;
       };
 
@@ -386,7 +395,7 @@ static void OnInitPipelineLayout(
         s << "Injection index not found for ";
         s << reinterpret_cast<void*>(layout.handle);
         s << " )";
-        reshade::log_message(reshade::log_level::warning, s.str().c_str());
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
         return;
       }
     }
@@ -399,7 +408,7 @@ static void OnInitPipelineLayout(
       s << reinterpret_cast<void*>(layout.handle);
       s << ": " << cbv_index;
       s << " )";
-      reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
       cbv_index = data.expected_constant_buffer_index;
     }
     if (cbv_index == 14) {
@@ -410,7 +419,7 @@ static void OnInitPipelineLayout(
       s << reinterpret_cast<void*>(layout.handle);
       s << ": " << cbv_index;
       s << " )";
-      reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
     }
 
     // device->create_pipeline_layout(1)
@@ -431,7 +440,7 @@ static void OnInitPipelineLayout(
     s << reinterpret_cast<void*>(new_layout.handle);
     s << ": " << result;
     s << " )";
-    reshade::log_message(reshade::log_level::warning, s.str().c_str());
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
     data.modded_pipeline_layouts[layout.handle] = new_layout;
     injection_index = cbv_index;
   }
@@ -445,7 +454,7 @@ static void OnInitPipelineLayout(
   s << ": " << injection_index;
   s << ", cbvIndex:" << cbv_index;
   s << " )";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
 static void OnDestroyPipelineLayout(
@@ -461,7 +470,7 @@ static void OnDestroyPipelineLayout(
   s << "mods::shader::OnDestroyPipelineLayout(";
   s << reinterpret_cast<void*>(layout.handle);
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
 inline void OnPushConstants(
@@ -487,7 +496,7 @@ inline void OnPushConstants(
   s << ", first: " << first;
   s << ", count: " << count;
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 #endif
 
   cmd_list->push_constants(stages, cloned_layout, layout_param, first, count, values);
@@ -528,7 +537,7 @@ inline void OnPushDescriptors(
       break;
   }
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 #endif
   cmd_list->push_descriptors(stages, cloned_layout, layout_param, update);
 }
@@ -554,7 +563,7 @@ inline void OnBindDescriptorTables(
     s << ", param: " << first + i;
     s << ", table: " << reinterpret_cast<void*>(tables[i].handle);
     s << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
 #endif
     cmd_list->bind_descriptor_table(stages, cloned_layout, (first + i), tables[i]);
   }
@@ -603,7 +612,7 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
         s << " shader writing to swapchain: ";
         s << PRINT_CRC32(shader_hash);
         s << ")";
-        reshade::log_message(reshade::log_level::warning, s.str().c_str());
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
         device_data.unmodified_shaders.emplace(shader_hash);
       }
 
@@ -617,7 +626,7 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
     s << "mods::shader::HandlePreDraw(found shader: ";
     s << PRINT_CRC32(shader_hash);
     s << ")";
-    reshade::log_message(reshade::log_level::debug, s.str().c_str());
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
 
     if (custom_shader_info.on_replace != nullptr) {
@@ -658,7 +667,7 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
           s << "mods::shader::HandlePreDraw(did not find modded pipeline root index";
           s << ", pipeline: " << reinterpret_cast<void*>(shader_state.pipeline_layout.handle);
           s << ")";
-          reshade::log_message(reshade::log_level::warning, s.str().c_str());
+          reshade::log::message(reshade::log::level::warning, s.str().c_str());
           return false;
         }
 
@@ -677,7 +686,7 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
           s << "mods::shader::HandlePreDraw(did not find modded pipeline layout";
           s << ", pipeline: " << reinterpret_cast<void*>(shader_state.pipeline_layout.handle);
           s << ")";
-          reshade::log_message(reshade::log_level::warning, s.str().c_str());
+          reshade::log::message(reshade::log::level::warning, s.str().c_str());
           return false;
         }
       }
@@ -689,7 +698,7 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
       s << ", stage: " << stage;
       s << ", resource_tag: " << resource_tag;
       s << ")";
-      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
 
       if (resource_tag_float != nullptr) {
@@ -786,7 +795,7 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
     case DLL_PROCESS_ATTACH:
       if (attached) return;
       attached = true;
-      reshade::log_message(reshade::log_level::info, "mods::shader attached.");
+      reshade::log::message(reshade::log::level::info, "mods::shader attached.");
 
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
@@ -831,7 +840,7 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
         s << " from " << reinterpret_cast<void*>(&new_custom_shaders);
         s << " to " << reinterpret_cast<void*>(&custom_shaders);
         s << ")";
-        reshade::log_message(reshade::log_level::info, s.str().c_str());
+        reshade::log::message(reshade::log::level::info, s.str().c_str());
       }
 
       if (mods::shader::use_pipeline_layout_cloning || (new_injections != nullptr)) {
@@ -857,7 +866,7 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
         s << "mods::shader(Attached Injections: " << shader_injection_size;
         s << " at " << reinterpret_cast<void*>(shader_injection);
         s << ")";
-        reshade::log_message(reshade::log_level::info, s.str().c_str());
+        reshade::log::message(reshade::log::level::info, s.str().c_str());
       }
 
       break;

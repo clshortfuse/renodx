@@ -1006,6 +1006,7 @@ class Decompiler {
     std::vector<Signature> output_signature;
     std::vector<ResourceDescription> resource_descriptions;
     std::map<std::string, std::string> global_variables;
+    std::vector<std::string> global_variables_decompiled;
     std::map<std::string, std::pair<std::string, uint32_t>> resource_binding_variables;
     std::vector<SRVResource> srv_resources;
     std::vector<UAVResource> uav_resources;
@@ -1130,7 +1131,7 @@ class Decompiler {
         throw std::invalid_argument("Could not parse code assignment");
       }
       std::string decompiled;
-#if DECOMPILER_DXC_DEBUG > 2
+#if DECOMPILER_DXC_DEBUG >= 3
       std::cout << "// " << line << "\n";
 #endif
 
@@ -1184,20 +1185,28 @@ class Decompiler {
           }
 
           int index_value;
+          int space_value;
+          int bind_start_value;
           FromStringView(index, index_value);
+          FromStringView(space, space_value);
+          FromStringView(bind_start, bind_start_value);
+
           if (resource_class == "0") {
-            auto srv = preprocess_state.srv_resources[index_value];
-            decompiled = std::format("// texture _{} = {};", variable, srv.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {srv.name, index_value};
+            auto srv = std::find_if(preprocess_state.srv_resources.begin(), preprocess_state.srv_resources.end(), [&](SRVResource& resource) {
+              return resource.space == space_value && resource.signature_index == bind_start_value;
+            });
+            int real_index = srv - preprocess_state.srv_resources.begin();
+
+            decompiled = std::format("// texture _{} = {};", variable, srv->name);
+            preprocess_state.resource_binding_variables[std::string(variable)] = {srv->name, real_index};
           } else if (resource_class == "1") {
-            auto uav = preprocess_state.uav_resources[index_value];
-            decompiled = std::format("// rwtexture _{} = {};", variable, uav.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {uav.name, index_value};
+            auto uav = std::find_if(preprocess_state.uav_resources.begin(), preprocess_state.uav_resources.end(), [&](UAVResource& resource) {
+              return resource.space == space_value && resource.signature_index == bind_start_value;
+            });
+            int real_index = uav - preprocess_state.uav_resources.begin();
+            decompiled = std::format("// rwtexture _{} = {};", variable, uav->name);
+            preprocess_state.resource_binding_variables[std::string(variable)] = {uav->name, real_index};
           } else if (resource_class == "2") {
-            int space_value;
-            int bind_start_value;
-            FromStringView(space, space_value);
-            FromStringView(bind_start, bind_start_value);
             auto cbv = std::find_if(preprocess_state.cbv_resources.begin(), preprocess_state.cbv_resources.end(), [&](CBVResource& resource) {
               return resource.space == space_value && resource.signature_index == bind_start_value;
             });
@@ -1205,9 +1214,13 @@ class Decompiler {
             decompiled = std::format("// cbuffer _{} = {}; // index={}", variable, cbv->name, real_index);
             preprocess_state.resource_binding_variables[std::string(variable)] = {cbv->name, real_index};
           } else if (resource_class == "3") {
-            auto sampler = preprocess_state.sampler_resources[index_value];
-            decompiled = std::format("// SamplerState _{} = {};", variable, sampler.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {sampler.name, index_value};
+            auto sampler = std::find_if(preprocess_state.sampler_resources.begin(), preprocess_state.sampler_resources.end(), [&](SamplerResource& resource) {
+              return resource.space == space_value && resource.signature_index == bind_start_value;
+            });
+            int real_index = sampler - preprocess_state.sampler_resources.begin();
+
+            decompiled = std::format("// SamplerState _{} = {};", variable, sampler->name);
+            preprocess_state.resource_binding_variables[std::string(variable)] = {sampler->name, real_index};
           } else {
             throw std::invalid_argument("Unknown resource type");
           }
@@ -1357,7 +1370,6 @@ class Decompiler {
           } else {
             decompiled = std::format("{} _{} = {}.Load({}, {});", srv_resource.data_type, variable, srv_resource.name, coords, offset);
           }
-
         } else if (functionName == "@dx.op.sample.f32") {
           //  call %dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, %dx.types.Handle %1, %dx.types.Handle %2, float %4, float %5, float undef, float undef, i32 0, i32 0, i32 undef, float undef)  ; Sample(srv,sampler,coord0,coord1,coord2,coord3,offset0,offset1,offset2,clamp)
           auto [opNumber, srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp] = StringViewSplit<11>(functionParamsString, param_regex, 2);
@@ -1795,7 +1807,8 @@ class Decompiler {
         }
       } else if (instruction == "load") {
         // load float, float* %1681, align 4, !tbaa !26
-        auto [source] = StringViewMatch<1>(assignment, std::regex{R"(load \S+, \S+ %(\S+),.*)"});
+        // load float, float addrspace(3)* %64, align 4, !tbaa !27
+        auto [source] = StringViewMatch<1>(assignment, std::regex{R"(load \S+, [^*]+\* %(\S+),.*)"});
         decompiled = std::format("float _{} = {};", variable, stored_pointers[source]);
       } else if (instruction == "bitcast") {
         // %63 = bitcast i32 %62 to float
@@ -1809,8 +1822,9 @@ class Decompiler {
       } else if (instruction == "getelementptr") {
         auto [source, index] = StringViewMatch<2>(
             assignment,
-            std::regex{R"(getelementptr (?:inbounds )?\[[^\]]+\], \[[^\]]+\]\* (\S+), i32 \S+, i32 (\S+).*)"});
+            std::regex{R"(getelementptr (?:inbounds )?\[[^\]]+\], \[[^\]]+\](?: addrspace\(\d+\))?\* (\S+), i32 \S+, i32 (\S+).*)"});
         // %1369 = getelementptr inbounds [6 x float], [6 x float]* %10, i32 0, i32 0
+        // %58 = getelementptr [128 x float], [128 x float] addrspace(3)* @"\01?g_ToneMapRadianceSamples@@3PAMA", i32 0, i32 %57
         std::string parsed_source;
         if (source.starts_with('%')) {
           parsed_source = std::format("_{}", source.substr(1));
@@ -1832,7 +1846,7 @@ class Decompiler {
       }
 
       if (!decompiled.empty()) {
-#if DECOMPILER_DXC_DEBUG >= 2
+#if DECOMPILER_DXC_DEBUG >= 3
         std::cout << decompiled << "\n";
 #endif
 #if DECOMPILER_DXC_DEBUG >= 1
@@ -1881,6 +1895,15 @@ class Decompiler {
         // call void @dx.op.discard(i32 82, i1 true)  ; Discard(condition)
         auto [opNumber, condition] = StringViewSplit<2>(functionParamsString, param_regex, 2);
         decompiled = std::format("discard({})", ParseBool(condition));
+      } else if (functionName == "@dx.op.barrier") {
+        // @dx.op.barrier(i32 80, i32 9)  ; Barrier(barrierMode)
+        auto [opNumber, barrierMode] = StringViewSplit<2>(functionParamsString, param_regex, 2);
+        if (barrierMode == "9") {
+          decompiled = "GroupMemoryBarrierWithGroupSync();";
+        } else {
+          throw std::exception("Unknown barrier mode.");
+        }
+
       } else if (functionName == "@dx.op.storeOutput.f32") {
         // call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %2772)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
         auto [opNumber, outputSigId, rowIndex, colIndex, value] = StringViewSplit<5>(functionParamsString, param_regex, 2);
@@ -1898,6 +1921,36 @@ class Decompiler {
         } else {
           decompiled = std::format("{}.{} = {};", signature.VariableString(), ParseIndex(colIndex), ParseFloat(value));
         }
+      } else if (functionName == "@dx.op.textureStore.f32") {
+        //   call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %558, i32 %16, i32 %17, i32 undef, float %555, float %556, float %557, float 1.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)
+        auto [opNumber, uav, coord0, coord1, coord2, value0, value1, value2, value3, mask] = StringViewSplit<10>(functionParamsString, param_regex, 2);
+        auto ref_resource = std::string{uav.substr(1)};
+        const bool has_coord_y = coord1 != "undef";
+        const bool has_coord_z = coord2 != "undef";
+        std::string coords;
+        auto uav_resource = preprocess_state.uav_resources[preprocess_state.resource_binding_variables.at(ref_resource).second];
+        if (has_coord_z) {
+          coords = std::format("int3({}, {}, {})", ParseInt(coord0), ParseInt(coord1), ParseInt(coord2));
+        } else if (has_coord_y) {
+          coords = std::format("int2({}, {})", ParseInt(coord0), ParseInt(coord1));
+        } else {
+          coords = std::format("{}", ParseInt(coord0));
+        }
+        const bool has_value_y = value1 != "undef";
+        const bool has_value_z = value2 != "undef";
+        const bool has_value_w = value3 != "undef";
+        std::string value;
+        if (has_value_w) {
+          value = std::format("float4({}, {}, {}, {})", ParseFloat(value0), ParseFloat(value1), ParseFloat(value2), ParseFloat(value3));
+        } else if (has_coord_z) {
+          value = std::format("float3({}, {}, {})", ParseFloat(value0), ParseFloat(value1), ParseFloat(value2));
+        } else if (has_coord_y) {
+          value = std::format("float2({}, {})", ParseFloat(value0), ParseFloat(value1));
+        } else {
+          value = std::format("{}", ParseFloat(value0));
+        }
+
+        decompiled = std::format("{}[{}] = {};", uav_resource.name, coords, value);
 
       } else {
         std::cerr << line << "\n";
@@ -1906,6 +1959,12 @@ class Decompiler {
       }
 
       if (!decompiled.empty()) {
+#if DECOMPILER_DXC_DEBUG >= 3
+        std::cout << decompiled << "\n";
+#endif
+#if DECOMPILER_DXC_DEBUG >= 1
+        this->current_code_block.hlsl_lines.push_back(std::format("// {}", StringViewTrim(line)));
+#endif
         this->current_code_block.hlsl_lines.push_back(decompiled);
       }
     }
@@ -1917,6 +1976,12 @@ class Decompiler {
 
       std::string decompiled = std::format("{} = {};", stored_pointers[pointer], ParseFloat(value));
 
+#if DECOMPILER_DXC_DEBUG >= 3
+      std::cout << decompiled << "\n";
+#endif
+#if DECOMPILER_DXC_DEBUG >= 1
+      this->current_code_block.hlsl_lines.push_back(std::format("// {}", StringViewTrim(line)));
+#endif
       this->current_code_block.hlsl_lines.push_back(decompiled);
     }
 
@@ -2369,32 +2434,44 @@ class Decompiler {
           } break;
           case TokenizerState::GLOBAL_VARIABLE: {
             // @C.i.22.i.i.95.i.0.hca = internal unnamed_addr constant [6 x float] [float -4.000000e+00, float -4.000000e+00, float 0xC009424EA0000000, float 0xBFDF0E5600000000, float 0x3FFD904FE0000000, float 0x3FFD904FE0000000]
-            static auto regex = std::regex{R"((\S+) = (?:internal )?(?:unnamed_addr )?constant \[(\S+) x ([^\]]+)\] \[([^\]]+)\])"};
-            auto [variable_name, array_size, array_type, entries] = StringViewMatch<4>(line, regex);
-
-            auto values = StringViewSplitAll(entries, std::regex{R"((\s*(\S+) (\S+)),?)"}, {2, 3});
+            // @"\01?g_ToneMapRadianceSamples@@3PAMA" = external addrspace(3) global [128 x float], align 4
+            static auto regex = std::regex{R"(^(\S+) = (\S+) ([A-Za-z()0-9_]+) (\S+) \[(\S+) x ([^\]]+)\](?:,|(?: \[([^\]]+)\])).*)"};
+            auto [variable_name, scope, addr, qualifier, array_size, array_type, entries] = StringViewMatch<7>(line, regex);
 
             std::string output_name = std::format("_global_{}", preprocess_state.global_variables.size());
+
             std::stringstream decompiled;
 
-            decompiled << "static const ";
+            if (scope == "internal") {
+              decompiled << "static const ";
+            } else if (scope == "external") {
+              decompiled << "groupshared ";
+            } else {
+              throw std::exception("Unknown global variable scope.");
+            }
             decompiled << array_type << " ";
             decompiled << output_name;
-            decompiled << "[" << array_size << "] = { ";
+            decompiled << "[" << array_size << "]";
+            if (entries.empty()) {
+              decompiled << ";";
+            } else {
+              auto values = StringViewSplitAll(entries, std::regex{R"((\s*(\S+) (\S+)),?)"}, {2, 3});
+              decompiled << " = { ";
 
-            int array_size_number;
-            FromStringView(array_size, array_size_number);
-            for (int i = 0; i < array_size_number; ++i) {
-              if (array_type == "float") {
-                decompiled << ParseFloat(values[i].second);
+              int array_size_number;
+              FromStringView(array_size, array_size_number);
+              for (int i = 0; i < array_size_number; ++i) {
+                if (array_type == "float") {
+                  decompiled << ParseFloat(values[i].second);
+                }
+                if (i != array_size_number - 1) {
+                  decompiled << ", ";
+                }
               }
-              if (i != array_size_number - 1) {
-                decompiled << ", ";
-              }
+              decompiled << " };";
             }
-            decompiled << " };";
-            // std::cout << decompiled.str() << std::endl;
             preprocess_state.global_variables[std::string{variable_name}] = output_name;
+            preprocess_state.global_variables_decompiled.push_back(decompiled.str());
 
             state = TokenizerState::WHITESPACE;
             line_number++;
@@ -2494,7 +2571,7 @@ class Decompiler {
 
     // Generate output
 
-#if DECOMPILER_DXC_DEBUG > 2
+#if DECOMPILER_DXC_DEBUG >= 3
     auto& string_stream = std::cout;
 #else
     std::stringstream string_stream;
@@ -2554,7 +2631,7 @@ class Decompiler {
     // UAV
 
     for (const auto& uav_resource : preprocess_state.uav_resources) {
-      string_stream << UAVResource::ResourceKindString(uav_resource.shape);
+      string_stream << "RW" << UAVResource::ResourceKindString(uav_resource.shape);
       if (uav_resource.element_type != SRVResource::ComponentType::Invalid) {
         string_stream << "<" << SRVResource::ComponentTypeString(uav_resource.element_type) << ">";
       } else {
@@ -2856,9 +2933,20 @@ class Decompiler {
       on_complete();
     };
 
+    for (const auto& decompiled : preprocess_state.global_variables_decompiled) {
+      string_stream << decompiled << "\n";
+    }
+    if (!preprocess_state.global_variables_decompiled.empty()) {
+      string_stream << "\n";
+    }
+
     auto output_signature_count = preprocess_state.output_signature.size();
 
-    if (output_signature_count > 1) {
+    if (output_signature_count == 0) {
+      string_stream << "void";
+    } else if (output_signature_count == 1) {
+      string_stream << preprocess_state.output_signature[0].FullFormatString();
+    } else {
       string_stream << "struct OutputSignature {\n";
       for (const auto& signature : preprocess_state.output_signature) {
         string_stream << "  " << signature.ToString() << ";\n";
@@ -2866,13 +2954,12 @@ class Decompiler {
       string_stream << "};\n";
       string_stream << "\n";
       string_stream << "OutputSignature";
-    } else {
-      string_stream << preprocess_state.output_signature[0].FullFormatString();
     }
 
-    string_stream << " main(\n";
+    string_stream << " main(";
     {
       auto len = preprocess_state.input_signature.size();
+      if (len > 0) string_stream << "\n";
       for (int i = 0; i < len; ++i) {
         auto& signature = preprocess_state.input_signature[i];
         string_stream << "  " << signature.ToString();
@@ -2897,7 +2984,8 @@ class Decompiler {
     append_code_block(0);
     unindent_spacing();
 
-    if (output_signature_count == 1) {
+    if (output_signature_count == 0) {
+    } else if (output_signature_count == 1) {
       string_stream << "  return " << preprocess_state.output_signature[0].VariableString() << ";\n";
     } else {
       string_stream << "  OutputSignature output_signature = {";

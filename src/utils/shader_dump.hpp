@@ -61,7 +61,7 @@ static void OnInitPipeline(
       s << "utils::shader::dump(Failed to retreive shader data: ";
       s << PRINT_CRC32(shader_hash);
       s << ")";
-      reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
       continue;
     }
     try {
@@ -75,7 +75,7 @@ static void OnInitPipeline(
       s << "utils::shader::dump(Failed to decode shader data: ";
       s << PRINT_CRC32(shader_hash);
       s << ")";
-      reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
       continue;
     }
     std::stringstream s;
@@ -83,7 +83,7 @@ static void OnInitPipeline(
     s << PRINT_CRC32(shader_hash);
     s << ", size: " << shader_data->size();
     s << ")";
-    reshade::log_message(reshade::log_level::warning, s.str().c_str());
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
 
     shaders_pending[shader_hash] = shader_data.value();
   }
@@ -128,7 +128,7 @@ static void CheckShadersOnDisk() {
       s << " at ";
       s << entry_path;
       s << ")";
-      reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
       continue;
     }
     auto [iterator, new_insert] = shader_hashes_found.insert(shader_hash);
@@ -139,7 +139,7 @@ static void CheckShadersOnDisk() {
       s << " at ";
       s << entry_path;
       s << ")";
-      reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
     } else {
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
@@ -148,7 +148,7 @@ static void CheckShadersOnDisk() {
       s << " at ";
       s << entry_path;
       s << ")";
-      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
     }
   }
@@ -181,7 +181,7 @@ static bool DumpShader(uint32_t shader_hash, std::span<uint8_t> shader_data) {
     s << PRINT_CRC32(shader_hash);
     s << ": " << shader_data.size();
     s << ")";
-    reshade::log_message(reshade::log_level::error, s.str().c_str());
+    reshade::log::message(reshade::log::level::error, s.str().c_str());
     shader_version = renodx::utils::shader::compiler::DecodeShaderVersion(shader_data);
   } catch (std::exception& e) {
     std::stringstream s;
@@ -189,7 +189,7 @@ static bool DumpShader(uint32_t shader_hash, std::span<uint8_t> shader_data) {
     s << PRINT_CRC32(shader_hash);
     s << ": " << e.what();
     s << ")";
-    reshade::log_message(reshade::log_level::error, s.str().c_str());
+    reshade::log::message(reshade::log::level::error, s.str().c_str());
   }
 
   std::string kind = shader_version.GetKindAbbr();
@@ -206,7 +206,7 @@ static bool DumpShader(uint32_t shader_hash, std::span<uint8_t> shader_data) {
     s << PRINT_CRC32(shader_hash);
     s << ", type: " << shader_version.GetKind();
     s << ")";
-    reshade::log_message(reshade::log_level::warning, s.str().c_str());
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
   }
 
   dump_path += L".cso";
@@ -216,7 +216,7 @@ static bool DumpShader(uint32_t shader_hash, std::span<uint8_t> shader_data) {
   s << PRINT_CRC32(shader_hash);
   s << " => " << dump_path.string();
   s << ")";
-  reshade::log_message(reshade::log_level::debug, s.str().c_str());
+  reshade::log::message(reshade::log::level::debug, s.str().c_str());
 
   renodx::utils::path::WriteBinaryFile(dump_path, shader_data);
   return true;
@@ -229,7 +229,7 @@ static void DumpAllPending() {
     s << "utils::shader::dump(Starting dump: ";
     s << PRINT_CRC32(shader_hash);
     s << ")";
-    reshade::log_message(reshade::log_level::debug, s.str().c_str());
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
 
     DumpShader(shader_hash, shader_data);
   }
@@ -243,7 +243,7 @@ static void Use(DWORD fdw_reason) {
       if (internal::attached) return;
       internal::attached = true;
       internal::CheckShadersOnDisk();
-      reshade::log_message(reshade::log_level::info, "ShaderDump attached.");
+      reshade::log::message(reshade::log::level::info, "ShaderDump attached.");
       reshade::register_event<reshade::addon_event::init_pipeline>(internal::OnInitPipeline);
       reshade::register_event<reshade::addon_event::present>(internal::OnPresent);
 

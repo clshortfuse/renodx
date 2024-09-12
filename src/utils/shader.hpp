@@ -118,7 +118,7 @@ struct PipelineShaderDetails {
         s << "=>";
         s << PRINT_CRC32(pair->second);
         s << ")";
-        reshade::log_message(reshade::log_level::debug, s.str().c_str());
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
         shader_hash = pair->second;
         replaced_shader_hashes.emplace(shader_hash);
@@ -137,7 +137,7 @@ struct PipelineShaderDetails {
       s << ", type: " << subobject.type;
       s << ", stage: " << stage;
       s << ")";
-      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
     }
     this->subobjects = std::vector<reshade::api::pipeline_subobject>(subobjects, subobjects + subobject_count);
@@ -183,7 +183,7 @@ struct __declspec(uuid("8707f724-c7e5-420e-89d6-cc032c732d2d")) CommandListData 
       s << stage;
       s << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle);
       s << ")";
-      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
       cmd_list->bind_pipeline(stage, pipeline);
     }
@@ -210,7 +210,7 @@ static bool BuildReplacementPipeline(reshade::api::device* device, DeviceData& d
       s << "utils::shader::BuildReplacementPipeline(Bypassing ";
       s << PRINT_CRC32(shader_hash);
       s << ")";
-      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
       continue;
     }
@@ -219,7 +219,7 @@ static bool BuildReplacementPipeline(reshade::api::device* device, DeviceData& d
     s << "utils::shader::BuildReplacementPipeline(Checking ";
     s << PRINT_CRC32(shader_hash);
     s << ")";
-    reshade::log_message(reshade::log_level::debug, s.str().c_str());
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
     if (auto new_shader_pair = data.runtime_replacements.find(shader_hash);
         new_shader_pair != data.runtime_replacements.end()) {
@@ -246,7 +246,7 @@ static bool BuildReplacementPipeline(reshade::api::device* device, DeviceData& d
       s << "utils::shader::BuildReplacementPipeline(Replacing ";
       s << PRINT_CRC32(shader_hash);
       s << ")";
-      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
 
       if (auto pair = COMPATIBLE_SUBOBJECT_TYPE_TO_STAGE.find(subobject.type);
@@ -364,7 +364,7 @@ static void OnDestroyDevice(reshade::api::device* device) {
   s << "utils::shader::OnDestroyDevice(";
   s << reinterpret_cast<void*>(device);
   s << ")";
-  reshade::log_message(reshade::log_level::info, s.str().c_str());
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
   device->destroy_private_data<DeviceData>();
 }
 
@@ -423,7 +423,7 @@ static bool OnCreatePipeline(
       s << " with " << new_size << " bytes ";
       s << " at " << const_cast<void*>(desc->code);
       s << ")";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
+      reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
   }
   return changed;
@@ -540,7 +540,7 @@ static void OnBindPipeline(
     s << "utils::shader::OnBindPipeline(NeedsReplacementPipeline: ";
     s << (void*)pipeline.handle;
     s << ")";
-    reshade::log_message(reshade::log_level::debug, s.str().c_str());
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
     read_lock.unlock();
     {
@@ -567,7 +567,7 @@ static void OnBindPipeline(
         s << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle);
         s << " => " << reinterpret_cast<void*>(replacement_pipeline.handle);
         s << ")";
-        reshade::log_message(reshade::log_level::debug, s.str().c_str());
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
         cmd_list->bind_pipeline(compatible_stage, replacement_pipeline);
       } else {
@@ -579,7 +579,7 @@ static void OnBindPipeline(
         s << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle);
         s << " => " << reinterpret_cast<void*>(replacement_pipeline.handle);
         s << ")";
-        reshade::log_message(reshade::log_level::debug, s.str().c_str());
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
         cmd_list_data.pending_replacements[compatible_stage] = replacement_pipeline;
       }
@@ -590,7 +590,7 @@ static void OnBindPipeline(
   s << "utils::shader::OnBindPipeline(Done";
   s << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle);
   s << ")";
-  reshade::log_message(reshade::log_level::debug, s.str().c_str());
+  reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
 }
 
@@ -602,13 +602,13 @@ static void OnInitDevice(reshade::api::device* device) {
     s << "utils::shader::OnInitDevice(Hooking device: ";
     s << reinterpret_cast<void*>(device);
     s << ")";
-    reshade::log_message(reshade::log_level::debug, s.str().c_str());
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
   } else {
     std::stringstream s;
     s << "utils::shader::OnInitDevice(Attaching to hook: ";
     s << reinterpret_cast<void*>(device);
     s << ")";
-    reshade::log_message(reshade::log_level::debug, s.str().c_str());
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
     reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
     reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitCommandList);
     reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
@@ -633,13 +633,13 @@ static void OnInitDevice(reshade::api::device* device) {
       s << "utils::shader::OnInitDevice(Overwriting compile-time replacement:";
       s << PRINT_CRC32(shader_hash);
       s << ")";
-      reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
     } else {
       std::stringstream s;
       s << "utils::shader::OnInitDevice(Registered compile-time replacement: ";
       s << PRINT_CRC32(shader_hash);
       s << ")";
-      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
     }
   }
 
@@ -650,13 +650,13 @@ static void OnInitDevice(reshade::api::device* device) {
       s << "utils::shader::OnInitDevice(Overwriting runtime replacement: ";
       s << PRINT_CRC32(shader_hash);
       s << ")";
-      reshade::log_message(reshade::log_level::warning, s.str().c_str());
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
     } else {
       std::stringstream s;
       s << "utils::shader::OnInitDevice(Registered runtime replacement: ";
       s << PRINT_CRC32(shader_hash);
       s << ")";
-      reshade::log_message(reshade::log_level::debug, s.str().c_str());
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
     }
   }
   runtime_replacement_count = data->runtime_replacements.size();
@@ -673,7 +673,7 @@ static void Use(DWORD fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (attached) return;
       attached = true;
-      reshade::log_message(reshade::log_level::info, "ShaderUtil attached.");
+      reshade::log::message(reshade::log::level::info, "ShaderUtil attached.");
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
