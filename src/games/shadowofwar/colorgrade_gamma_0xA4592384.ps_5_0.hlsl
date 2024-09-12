@@ -63,7 +63,9 @@ void main(
   r0.xyz = r0.xyz / cb3[1].xxx;
   r0.xyz = sign(r0.xyz) * pow(abs(r0.xyz), cb3[1].yyy);
   o0.xyz = cb3[1].xxx * r0.xyz;
-  o0.xyz = renodx::color::correct::GammaSafe(o0.xyz);
+  if (injectedData.toneMapGammaCorrection) {
+    o0.xyz = renodx::color::correct::GammaSafe(o0.xyz);
+  }
     
   o0.xyz = renodx::color::grade::UserColorGrading(
         o0.xyz,
