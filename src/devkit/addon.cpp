@@ -29,6 +29,7 @@
 #include <include/reshade.hpp>
 
 #include <crc32_hash.hpp>
+#include "../mods/swapchain.hpp"
 #include "../utils/descriptor.hpp"
 #include "../utils/shader.hpp"
 #include "../utils/shader_compiler.hpp"
@@ -87,6 +88,22 @@ struct ResourceViewDetails {
   std::string resource_tag;
   std::string resource_view_tag;
   bool is_swapchain;
+  bool is_rtv_upgraded;
+  bool is_res_upgraded;
+  bool is_rtv_cloned;
+  bool is_res_cloned;
+
+  bool UpdateSwapchainModState(reshade::api::device* device) {
+    auto* swapchain_mod_data = &device->get_private_data<renodx::mods::swapchain::DeviceData>();
+    if (swapchain_mod_data == nullptr) return false;
+    const std::shared_lock lock(swapchain_mod_data->mutex);
+    this->is_rtv_upgraded = swapchain_mod_data->upgraded_resource_views.contains(resource_view.handle);
+    this->is_rtv_cloned = swapchain_mod_data->resource_views_cloned.contains(resource_view.handle);
+
+    this->is_res_upgraded = this->resource.handle != 0u && swapchain_mod_data->upgraded_resources.contains(this->resource.handle);
+    this->is_res_cloned = this->resource.handle != 0u && swapchain_mod_data->cloned_resources.contains(this->resource.handle);
+    return true;
+  }
 };
 
 struct PipelineBindDetails {
@@ -137,6 +154,7 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
   std::unordered_map<uint64_t, ResourceViewDetails> resource_view_details;
   std::vector<CommandListData> command_list_data;
   std::unordered_map<uint64_t, std::vector<reshade::api::pipeline_layout_param>> pipeline_layout_params;
+  std::shared_mutex mutex;
   reshade::api::effect_runtime* runtime = nullptr;
 
   void StartSnapshot() {
@@ -186,11 +204,11 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
       }
     }
 
+    details.UpdateSwapchainModState(device);
+
     auto [iterator, is_new] = resource_view_details.emplace(resource_view.handle, details);
     return iterator->second;
   }
-
-  std::shared_mutex mutex;
 };
 
 // Settings
@@ -800,6 +818,10 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             s << resource_view_details.resource_view_desc.format;
             if (resource_view_details.is_swapchain) {
               ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
+            } else if (resource_view_details.is_rtv_upgraded) {
+              ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
+            } else if (resource_view_details.is_rtv_cloned) {
+              ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
             } else {
               ImGui::TextUnformatted(s.str().c_str());
             }
@@ -839,6 +861,10 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
 
             if (resource_view_details.is_swapchain) {
               ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
+            } else if (resource_view_details.is_res_upgraded) {
+              ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
+            } else if (resource_view_details.is_res_cloned) {
+              ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
             } else {
               ImGui::TextUnformatted(s.str().c_str());
             }
@@ -873,6 +899,10 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             s << resource_view_details.resource_view_desc.format;
             if (resource_view_details.is_swapchain) {
               ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
+            } else if (resource_view_details.is_rtv_upgraded) {
+              ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
+            } else if (resource_view_details.is_rtv_cloned) {
+              ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
             } else {
               ImGui::TextUnformatted(s.str().c_str());
             }
@@ -912,6 +942,10 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
 
             if (resource_view_details.is_swapchain) {
               ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
+            } else if (resource_view_details.is_res_upgraded) {
+              ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
+            } else if (resource_view_details.is_res_cloned) {
+              ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
             } else {
               ImGui::TextUnformatted(s.str().c_str());
             }
@@ -947,6 +981,10 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             s << render_target.resource_view_desc.format;
             if (render_target.is_swapchain) {
               ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
+            } else if (render_target.is_rtv_upgraded) {
+              ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
+            } else if (render_target.is_rtv_cloned) {
+              ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
             } else {
               ImGui::TextUnformatted(s.str().c_str());
             }
@@ -986,6 +1024,10 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
 
             if (render_target.is_swapchain) {
               ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
+            } else if (render_target.is_res_upgraded) {
+              ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
+            } else if (render_target.is_res_cloned) {
+              ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
             } else {
               ImGui::TextUnformatted(s.str().c_str());
             }
