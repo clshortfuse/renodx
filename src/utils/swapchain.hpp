@@ -95,10 +95,10 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
 static void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
   std::unique_lock lock(internal::mutex);
   internal::current_effect_runtime = runtime;
-  reshade::log_message(reshade::log_level::info, "Effect runtime created.");
+  reshade::log::message(reshade::log::level::info, "Effect runtime created.");
   if (internal::current_color_space != reshade::api::color_space::unknown) {
     runtime->set_color_space(internal::current_color_space);
-    reshade::log_message(reshade::log_level::info, "Effect runtime colorspace updated.");
+    reshade::log::message(reshade::log::level::info, "Effect runtime colorspace updated.");
   }
 }
 
@@ -241,7 +241,7 @@ static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::c
   IDXGISwapChain4* swapchain4;
 
   if (!SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
-    reshade::log_message(reshade::log_level::error, "changeColorSpace(Failed to get native swap chain)");
+    reshade::log::message(reshade::log::level::error, "changeColorSpace(Failed to get native swap chain)");
     return false;
   }
 
@@ -271,7 +271,7 @@ static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::c
   if (internal::current_effect_runtime != nullptr) {
     internal::current_effect_runtime->set_color_space(internal::current_color_space);
   } else {
-    reshade::log_message(reshade::log_level::warning, "renodx::utils::swapchain::ChangeColorSpace(effectRuntimeNotSet)");
+    reshade::log::message(reshade::log::level::warning, "renodx::utils::swapchain::ChangeColorSpace(effectRuntimeNotSet)");
   }
 
   return true;
@@ -287,13 +287,13 @@ static void ResizeBuffer(
   IDXGISwapChain4* swapchain4;
 
   if (FAILED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
-    reshade::log_message(reshade::log_level::error, "resize_buffer(Failed to get native swap chain)");
+    reshade::log::message(reshade::log::level::error, "resize_buffer(Failed to get native swap chain)");
     return;
   }
 
   DXGI_SWAP_CHAIN_DESC1 desc;
   if (FAILED(swapchain4->GetDesc1(&desc))) {
-    reshade::log_message(reshade::log_level::error, "resize_buffer(Failed to get desc)");
+    reshade::log::message(reshade::log::level::error, "resize_buffer(Failed to get desc)");
     swapchain4->Release();
     swapchain4 = nullptr;
     return;
@@ -303,12 +303,12 @@ static void ResizeBuffer(
   auto new_format = static_cast<DXGI_FORMAT>(format);
 
   if (desc.Format == new_format) {
-    reshade::log_message(reshade::log_level::debug, "resize_buffer(Format OK)");
+    reshade::log::message(reshade::log::level::debug, "resize_buffer(Format OK)");
     swapchain4->Release();
     swapchain4 = nullptr;
     return;
   }
-  reshade::log_message(reshade::log_level::debug, "resize_buffer(Resizing...)");
+  reshade::log::message(reshade::log::level::debug, "resize_buffer(Resizing...)");
 
   const HRESULT hr = swapchain4->ResizeBuffers(
       desc.BufferCount == 1 ? 2 : 0,
@@ -329,7 +329,7 @@ static void ResizeBuffer(
     s << ", Format = " << desc.Format;
     s << ", Flags = 0x" << std::hex << desc.Flags << std::dec;
     s << ')';
-    reshade::log_message(reshade::log_level::error, s.str().c_str());
+    reshade::log::message(reshade::log::level::error, s.str().c_str());
     return;
   }
   {
@@ -337,16 +337,16 @@ static void ResizeBuffer(
     s << "mods::swapchain::ResizeBuffer(";
     s << "resize: " << hr;
     s << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
 
   // Reshade doesn't actually inspect colorspace
   // auto colorspace = swapchain->get_color_space();
   if (color_space != reshade::api::color_space::unknown) {
     if (ChangeColorSpace(swapchain, color_space)) {
-      reshade::log_message(reshade::log_level::info, "resize_buffer(Color Space: OK)");
+      reshade::log::message(reshade::log::level::info, "resize_buffer(Color Space: OK)");
     } else {
-      reshade::log_message(reshade::log_level::error, "resize_buffer(Color Space: Failed.)");
+      reshade::log::message(reshade::log::level::error, "resize_buffer(Color Space: Failed.)");
     }
   }
 }

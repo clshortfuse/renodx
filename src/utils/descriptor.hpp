@@ -113,7 +113,7 @@ static bool LogDescriptorTableResourceView(
         << "[" << index << "]"
         << ", view " << reinterpret_cast<void*>(view.handle)
         << ")";
-      reshade::log_message(reshade::log_level::info, s.str().c_str());
+      reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
 #endif
     auto shrunk_update = ShrinkDescriptorUpdateWithResourceView(update, index);
@@ -137,7 +137,7 @@ static bool LogDescriptorTableResourceView(
           << " replace shrunk view: "
           << shrunk_update.type
           << ")";
-        reshade::log_message(reshade::log_level::info, s.str().c_str());
+        reshade::log::message(reshade::log::level::info, s.str().c_str());
       }
 #endif
 
@@ -153,7 +153,7 @@ static bool LogDescriptorTableResourceView(
           << " insert shrunk view: "
           << shrunk_update.type
           << ")";
-        reshade::log_message(reshade::log_level::info, s.str().c_str());
+        reshade::log::message(reshade::log::level::info, s.str().c_str());
       }
 #endif
     }
@@ -169,7 +169,7 @@ static bool LogDescriptorTableResourceView(
         s << "utils::descriptor::LogDescriptorTableResourceView(updating index "
           << reinterpret_cast<void*>(view.handle)
           << ")";
-        reshade::log_message(reshade::log_level::info, s.str().c_str());
+        reshade::log::message(reshade::log::level::info, s.str().c_str());
       }
 #endif
       index_record->second->emplace(primary_key);
@@ -181,7 +181,7 @@ static bool LogDescriptorTableResourceView(
         s << "utils::descriptor::LogDescriptorTableResourceView(creating index "
           << reinterpret_cast<void*>(view.handle)
           << ")";
-        reshade::log_message(reshade::log_level::info, s.str().c_str());
+        reshade::log::message(reshade::log::level::info, s.str().c_str());
       }
 #endif
       data.resource_view_table_description_locations.insert({view.handle, new std::unordered_set<std::pair<uint64_t, uint32_t>, hash::HashPair>{primary_key}});
@@ -196,7 +196,7 @@ static bool LogDescriptorTableResourceView(
       << reinterpret_cast<void*>(table.handle)
       << "[" << index << "]"
       << ")";
-    reshade::log_message(reshade::log_level::info, s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
 #endif
 
@@ -239,7 +239,7 @@ static bool OnUpdateDescriptorTables(
     const auto& update = updates[i];
     for (uint32_t j = 0; j < update.count; j++) {
       if (update.table.handle == 0) {
-        // reshade::log_message(reshade::log_level::warning, "renodx::utils::descriptor::on_update_descriptor_tables(empty table).");
+        // reshade::log::message(reshade::log::level::warning, "renodx::utils::descriptor::on_update_descriptor_tables(empty table).");
         continue;
       }
       auto& data = device->get_private_data<DeviceData>();
@@ -277,7 +277,7 @@ static bool OnCopyDescriptorTables(
           << reinterpret_cast<void*>(GetResourceViewFromDescriptorUpdate(update).handle)
           << ", type: " << update.type
           << ")";
-        reshade::log_message(reshade::log_level::debug, s.str().c_str());
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
 
         if (copy.dest_table.handle == 0) {
@@ -309,7 +309,7 @@ static void OnPushDescriptors(
 
   for (uint32_t i = 0; i < update.count; i++) {
     if (update.table.handle == 0) {
-      // reshade::log_message(reshade::log_level::warning, "renodx::utils::descriptor::on_push_descriptors(empty table).");
+      // reshade::log::message(reshade::log::level::warning, "renodx::utils::descriptor::on_push_descriptors(empty table).");
       continue;
     }
     LogDescriptorTableResourceView(data, update.table, update.binding + i, update);
@@ -361,7 +361,7 @@ static void Use(DWORD fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (attached) return;
       attached = true;
-      reshade::log_message(reshade::log_level::info, "DescriptorTableUtil attached.");
+      reshade::log::message(reshade::log::level::info, "DescriptorTableUtil attached.");
 
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);

@@ -18,13 +18,8 @@ void main(
     color.rgb = sign(color.rgb) * pow(abs(color.rgb), 2.2f);
     color.a = saturate(color.a);
 
-    if (injectedData.toneMapType == 0) {
-      // apply game brightness (no split between game and UI brightness in vanilla mode)
-      color.rgb *= injectedData.toneMapGameNits / 80.f;
-    } else {
-      // apply ui brightness
-      color.rgb *= injectedData.toneMapUINits / 80.f;
-    }
+    // apply ui brightness
+    color.rgb *= injectedData.toneMapUINits / 80.f;
 
     output.rgba = color;
 }

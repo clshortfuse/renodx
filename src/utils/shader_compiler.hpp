@@ -89,7 +89,7 @@ class FxcD3DInclude : public ID3DInclude {
         s << ", type: " << IncludeType;
         s << ", parent: " << pParentData;
         s << ")";
-        // reshade::log_message(reshade::log_level::error, s.str().c_str());
+        // reshade::log::message(reshade::log::level::error, s.str().c_str());
       }
       return -1;
     }
@@ -316,7 +316,7 @@ inline std::vector<uint8_t> CompileShaderFromFileFXC(
   if (fxc_compiler_library == nullptr) {
     std::stringstream s;
     s << "CompileShaderFromFileFXC(Loading D3DCompiler_47.dll)";
-    // reshade::log_message(reshade::log_level::debug, s.str().c_str());
+    // reshade::log::message(reshade::log::level::debug, s.str().c_str());
     fxc_compiler_library = LoadLibraryW(L"D3DCompiler_47.dll");
   }
   if (fxc_compiler_library == nullptr) {
@@ -329,7 +329,7 @@ inline std::vector<uint8_t> CompileShaderFromFileFXC(
   {
     std::stringstream s;
     s << "CompileShaderFromFileFXC(GetProcAddress)";
-    // reshade::log_message(reshade::log_level::debug, s.str().c_str());
+    // reshade::log::message(reshade::log::level::debug, s.str().c_str());
   }
   // NOLINTNEXTLINE(google-readability-casting)
   auto d3d_compilefromfile = pD3DCompileFromFile(GetProcAddress(fxc_compiler_library, "D3DCompileFromFile"));

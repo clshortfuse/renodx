@@ -1,5 +1,5 @@
-#ifndef SRC_GAMES_THETHAUMATURGE_SHARED_H_
-#define SRC_GAMES_THETHAUMATURGE_SHARED_H_
+#ifndef SRC_SLEEPINGDOGS_SHARED_H_
+#define SRC_SLEEPINGDOGS_SHARED_H_
 
 #ifndef __cplusplus
 #include "../../shaders/renodx.hlsl"
@@ -12,7 +12,7 @@ struct ShaderInjectData {
   float toneMapPeakNits;
   float toneMapGameNits;
   float toneMapUINits;
-  float toneMapGammaCorrection;
+  float toneMapHueCorrection;
   float colorGradeExposure;
   float colorGradeHighlights;
   float colorGradeShadows;
@@ -21,12 +21,14 @@ struct ShaderInjectData {
   float colorGradeBlowout;
   float colorGradeLUTStrength;
   float colorGradeLUTScaling;
+  float fxNoise;
+  float fxScreenGlow;
 };
 
 #ifndef __cplusplus
-cbuffer injectedBuffer : register(b0, space50) {
+cbuffer cb13 : register(b13) {
   ShaderInjectData injectedData : packoffset(c0);
 }
 #endif
 
-#endif  // SRC_GAMES_THETHAUMATURGE_SHARED_H_
+#endif  // SRC_SLEEPINGDOGS_SHARED_H_

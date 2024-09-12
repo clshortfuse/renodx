@@ -5,126 +5,126 @@ Texture2D<float4> t0 : register(t0);
 cbuffer cb0 : register(b0) {
   float cb0_05x : packoffset(c05.x);
   float cb0_05y : packoffset(c05.y);
-  float cb0_08w : packoffset(c08.w);
   float cb0_08x : packoffset(c08.x);
+  float cb0_08w : packoffset(c08.w);
   float cb0_08y : packoffset(c08.y);
   float cb0_08z : packoffset(c08.z);
   float cb0_09x : packoffset(c09.x);
-  float cb0_10w : packoffset(c10.w);
   float cb0_10x : packoffset(c10.x);
   float cb0_10y : packoffset(c10.y);
   float cb0_10z : packoffset(c10.z);
-  float cb0_11w : packoffset(c11.w);
+  float cb0_10w : packoffset(c10.w);
   float cb0_11x : packoffset(c11.x);
   float cb0_11y : packoffset(c11.y);
   float cb0_11z : packoffset(c11.z);
+  float cb0_11w : packoffset(c11.w);
   float cb0_12x : packoffset(c12.x);
   float cb0_12y : packoffset(c12.y);
   float cb0_12z : packoffset(c12.z);
-  float cb0_13w : packoffset(c13.w);
   float cb0_13x : packoffset(c13.x);
   float cb0_13y : packoffset(c13.y);
   float cb0_13z : packoffset(c13.z);
+  float cb0_13w : packoffset(c13.w);
   float cb0_14x : packoffset(c14.x);
   float cb0_14y : packoffset(c14.y);
   float cb0_14z : packoffset(c14.z);
-  float cb0_15w : packoffset(c15.w);
   float cb0_15x : packoffset(c15.x);
   float cb0_15y : packoffset(c15.y);
   float cb0_15z : packoffset(c15.z);
-  float cb0_16w : packoffset(c16.w);
+  float cb0_15w : packoffset(c15.w);
   float cb0_16x : packoffset(c16.x);
   float cb0_16y : packoffset(c16.y);
   float cb0_16z : packoffset(c16.z);
-  float cb0_17w : packoffset(c17.w);
+  float cb0_16w : packoffset(c16.w);
   float cb0_17x : packoffset(c17.x);
   float cb0_17y : packoffset(c17.y);
   float cb0_17z : packoffset(c17.z);
-  float cb0_18w : packoffset(c18.w);
+  float cb0_17w : packoffset(c17.w);
   float cb0_18x : packoffset(c18.x);
   float cb0_18y : packoffset(c18.y);
   float cb0_18z : packoffset(c18.z);
-  float cb0_19w : packoffset(c19.w);
+  float cb0_18w : packoffset(c18.w);
   float cb0_19x : packoffset(c19.x);
   float cb0_19y : packoffset(c19.y);
   float cb0_19z : packoffset(c19.z);
-  float cb0_20w : packoffset(c20.w);
+  float cb0_19w : packoffset(c19.w);
   float cb0_20x : packoffset(c20.x);
   float cb0_20y : packoffset(c20.y);
   float cb0_20z : packoffset(c20.z);
-  float cb0_21w : packoffset(c21.w);
+  float cb0_20w : packoffset(c20.w);
   float cb0_21x : packoffset(c21.x);
   float cb0_21y : packoffset(c21.y);
   float cb0_21z : packoffset(c21.z);
-  float cb0_22w : packoffset(c22.w);
+  float cb0_21w : packoffset(c21.w);
   float cb0_22x : packoffset(c22.x);
   float cb0_22y : packoffset(c22.y);
   float cb0_22z : packoffset(c22.z);
-  float cb0_23w : packoffset(c23.w);
+  float cb0_22w : packoffset(c22.w);
   float cb0_23x : packoffset(c23.x);
   float cb0_23y : packoffset(c23.y);
   float cb0_23z : packoffset(c23.z);
-  float cb0_24w : packoffset(c24.w);
+  float cb0_23w : packoffset(c23.w);
   float cb0_24x : packoffset(c24.x);
   float cb0_24y : packoffset(c24.y);
   float cb0_24z : packoffset(c24.z);
-  float cb0_25w : packoffset(c25.w);
+  float cb0_24w : packoffset(c24.w);
   float cb0_25x : packoffset(c25.x);
   float cb0_25y : packoffset(c25.y);
   float cb0_25z : packoffset(c25.z);
-  float cb0_26w : packoffset(c26.w);
+  float cb0_25w : packoffset(c25.w);
   float cb0_26x : packoffset(c26.x);
   float cb0_26y : packoffset(c26.y);
   float cb0_26z : packoffset(c26.z);
-  float cb0_27w : packoffset(c27.w);
+  float cb0_26w : packoffset(c26.w);
   float cb0_27x : packoffset(c27.x);
   float cb0_27y : packoffset(c27.y);
   float cb0_27z : packoffset(c27.z);
-  float cb0_28w : packoffset(c28.w);
+  float cb0_27w : packoffset(c27.w);
   float cb0_28x : packoffset(c28.x);
   float cb0_28y : packoffset(c28.y);
   float cb0_28z : packoffset(c28.z);
-  float cb0_29w : packoffset(c29.w);
+  float cb0_28w : packoffset(c28.w);
   float cb0_29x : packoffset(c29.x);
   float cb0_29y : packoffset(c29.y);
   float cb0_29z : packoffset(c29.z);
-  float cb0_30w : packoffset(c30.w);
+  float cb0_29w : packoffset(c29.w);
   float cb0_30x : packoffset(c30.x);
   float cb0_30y : packoffset(c30.y);
   float cb0_30z : packoffset(c30.z);
-  float cb0_31w : packoffset(c31.w);
+  float cb0_30w : packoffset(c30.w);
   float cb0_31x : packoffset(c31.x);
   float cb0_31y : packoffset(c31.y);
   float cb0_31z : packoffset(c31.z);
-  float cb0_32w : packoffset(c32.w);
+  float cb0_31w : packoffset(c31.w);
   float cb0_32x : packoffset(c32.x);
   float cb0_32y : packoffset(c32.y);
   float cb0_32z : packoffset(c32.z);
-  float cb0_33w : packoffset(c33.w);
+  float cb0_32w : packoffset(c32.w);
   float cb0_33x : packoffset(c33.x);
   float cb0_33y : packoffset(c33.y);
   float cb0_33z : packoffset(c33.z);
-  float cb0_34w : packoffset(c34.w);
+  float cb0_33w : packoffset(c33.w);
   float cb0_34x : packoffset(c34.x);
   float cb0_34y : packoffset(c34.y);
   float cb0_34z : packoffset(c34.z);
-  float cb0_35w : packoffset(c35.w);
+  float cb0_34w : packoffset(c34.w);
   float cb0_35z : packoffset(c35.z);
-  float cb0_36w : packoffset(c36.w);
+  float cb0_35w : packoffset(c35.w);
   float cb0_36x : packoffset(c36.x);
   float cb0_36y : packoffset(c36.y);
   float cb0_36z : packoffset(c36.z);
-  float cb0_37w : packoffset(c37.w);
+  float cb0_36w : packoffset(c36.w);
   float cb0_37x : packoffset(c37.x);
   float cb0_37y : packoffset(c37.y);
   float cb0_37z : packoffset(c37.z);
+  float cb0_37w : packoffset(c37.w);
   float cb0_38x : packoffset(c38.x);
   float cb0_39x : packoffset(c39.x);
   float cb0_39y : packoffset(c39.y);
   float cb0_39z : packoffset(c39.z);
-  uint cb0_40w : packoffset(c40.w);
   float cb0_40y : packoffset(c40.y);
   float cb0_40z : packoffset(c40.z);
+  uint cb0_40w : packoffset(c40.w);
   uint cb0_41x : packoffset(c41.x);
 };
 
@@ -193,7 +193,7 @@ float4 main(
   // TONEMAPPER_GAMUT_Rec2020_D65 2
   // TONEMAPPER_GAMUT_ACES_D60 3
   // TONEMAPPER_GAMUT_ACEScg_D60 4
-  
+
   bool _22 = (_21 == 1);
   float _39 = 1.379158854484558f;
   float _40 = -0.3088507056236267f;
@@ -291,8 +291,6 @@ float4 main(
   uint _49 = cb0_40w;
   bool _50 = (_49 > 2);
 
-  _50 = true; // USE PQ
-
   if (_50) {
     float _52 = log2(_16);
     float _53 = log2(_17);
@@ -356,10 +354,6 @@ float4 main(
 
   float3 input_color = float3(_105, _106, _107);
 
-  // float2 UV = TEXCOORD.xy - float2(0.5f / 32.f, 0.5f / 32.f);
-  // float3 UVW = float3(UV * 32.f / (32.f - 1.f), SV_RenderTargetArrayIndex / (32.f - 1.f));
-  // input_color = renodx::color::bt2020::from::PQ(UVW) * 10000.f / 100.f;
-
   float _109 = cb1_08x;
   float _110 = cb1_08y;
   float _111 = cb1_08z;
@@ -381,9 +375,7 @@ float4 main(
 
   // Gamut Expansion
   // AP1_RGB2Y
-  float _129 = dot(
-      float3(_122, _125, _128),
-      float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+  float _129 = dot(float3(_122, _125, _128), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
   float _130 = _122 / _129;
   float _131 = _125 / _129;
   float _132 = _128 / _129;
@@ -421,9 +413,7 @@ float4 main(
   float _165 = _162 + _128;
 
   // AP1_RGB2Y
-  float _166 = dot(
-      float3(_163, _164, _165),
-      float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+  float _166 = dot(float3(_163, _164, _165), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
   float _168 = cb0_24x;
   float _169 = cb0_24y;
   float _170 = cb0_24z;
@@ -791,7 +781,7 @@ float4 main(
   float _555 = mad(_546, _533, _554);
   float _556 = mad(_547, _535, _555);
 
-  float _557 = cb0_36y; // BlueCorrect
+  float _557 = cb0_36y;  // BlueCorrect
 
   float _558 = _531 * 0.9386394023895264f;
   float _559 = mad(-4.540197551250458e-09f, _533, _558);
@@ -813,37 +803,9 @@ float4 main(
   float3 ap1_graded_color = float3(_571, _572, _573);
   // Finished grading in AP1
 
-  // Early out with cbuffer
-  // (Unreal runs the entire SDR process even if discarding)
-  uint output_type = cb0_40w;
-  bool is_aces = (output_type >= 3u && output_type <= 6u);
-  if (is_aces) {
-    bool is_2000_nits = (output_type == 3u || output_type == 5u);
-    bool is_pq = (output_type == 3u || output_type == 4u);
-
-    renodx::tonemap::Config config = renodx::tonemap::config::Create();
-    config.type = 2.f; // ACES
-    config.peak_nits = is_2000_nits ? 2000.f : 1000.f;
-    config.game_nits = 203.f;
-    renodx::lut::Config lut_config = renodx::lut::config::Create(
-        s0,
-        1.f, // strength;
-        1.f, // scaling
-        renodx::lut::config::type::SRGB,
-        renodx::lut::config::type::SRGB,
-        16);
-
-    float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
-    float3 output_color = renodx::tonemap::config::Apply(config_color, config, lut_config, t0);
-    if (is_pq) {
-      output_color = renodx::color::bt2020::from::BT709(output_color);
-      output_color = renodx::color::pq::from::BT2020(output_color, 100.f);
-    }
-    
-    return float4(output_color * 0.9523810148239136f, 0);
-  }
-
   // start of FilmToneMap
+
+  // Start (ACES::RRT)
 
   // AP1 => AP0
   float _574 = _571 * 0.6954522132873535f;
@@ -855,8 +817,6 @@ float4 main(
   float _580 = _571 * -0.005525882821530104f;
   float _581 = mad(0.004025210160762072f, _572, _580);
   float _582 = mad(1.0015007257461548f, _573, _581);
-
-  // start aces::aces_rrt
 
   // aces::rgb_2_saturation
   float _583 = min(_576, _579);
@@ -989,7 +949,7 @@ float4 main(
 
   // RRT_RED_PIVOT
   float _687 = 0.029999999329447746f - _633;
-  
+
   // 1 - RRT_RED_SCALE
   float _688 = _591 * 0.18000000715255737f;
   float _689 = _688 * _687;
@@ -1007,14 +967,15 @@ float4 main(
   float _699 = _692 * 0.008316148072481155f;
   float _700 = mad(-0.006032449658960104f, _634, _699);
   float _701 = mad(0.9977163076400757f, _635, _700);
+
+  // Clamp to AP1
   float _702 = max(0.0f, _695);
   float _703 = max(0.0f, _698);
   float _704 = max(0.0f, _701);
 
   // AP1_RGB2Y
-  float _705 = dot(
-      float3(_702, _703, _704),
-      float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+  // Desaturate
+  float _705 = dot(float3(_702, _703, _704), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
   float _706 = _702 - _705;
   float _707 = _703 - _705;
   float _708 = _704 - _705;
@@ -1025,173 +986,220 @@ float4 main(
   float _712 = _709 + _705;
   float _713 = _710 + _705;
   float _714 = _711 + _705;
-  // end of aces_rrt
 
-  float _716 = cb0_37w;
-  float _717 = _716 + 1.0f;
-  float _718 = cb0_37y;
-  float _719 = _717 - _718;
-  float _721 = cb0_38x;
-  float _722 = _721 + 1.0f;
-  float _723 = cb0_37z;
-  float _724 = _722 - _723;
+  // End ACES::RRT
 
-  // Film Toe > 0.8
-  bool _725 = (_718 > 0.800000011920929f);
-  float _726 = cb0_37x;
-  if (_725) {
-    float _728 = 0.8199999928474426f - _718;
-    float _729 = _728 / _726;
-    float _730 = _729 + -0.7447274923324585f;
-    _742 = _730;
+  // Custom
+  float3 ap1_aces_colored = float3(_712, _713, _714);
+
+  // Now SDR Tonemapping/Split
+
+  // Early out with cbuffer
+  // (Unreal runs the entire SDR process even if discarding)
+  uint output_type = cb0_40w;
+
+  float3 sdr_color;
+  float3 hdr_color;
+  float3 sdr_ap1_color;
+
+  float _716 = cb0_37w;      // FilmBlackClip
+  float _717 = _716 + 1.0f;  // 1 + FilmBlackClip
+  float _718 = cb0_37y;      // FilmToe
+  float _719 = _717 - _718;  // ToeScale
+  float _721 = cb0_38x;      // FilmWhiteClip
+  float _722 = _721 + 1.0f;  // 1 + FilmWhiteClip
+  float _723 = cb0_37z;      // FilmShoulder
+  float _724 = _722 - _723;  // ShoulderScale
+
+  bool is_hdr = (output_type >= 3u && output_type <= 6u);
+  if (injectedData.toneMapType != 0.f && is_hdr) {
+
+    renodx::tonemap::Config config = renodx::tonemap::config::Create();
+    config.type = injectedData.toneMapType;
+    config.peak_nits = injectedData.toneMapPeakNits;
+    config.game_nits = injectedData.toneMapGameNits;
+    config.gamma_correction = injectedData.toneMapGammaCorrection;
+    config.exposure = injectedData.colorGradeExposure;
+    config.highlights = injectedData.colorGradeHighlights;
+    config.shadows = injectedData.colorGradeShadows;
+    config.contrast = injectedData.colorGradeContrast;
+    config.saturation = injectedData.colorGradeSaturation;
+    config.hue_correction_color = ap1_aces_colored;
+    config.reno_drt_highlights = 1.20f;
+    config.reno_drt_shadows = 1.0f;
+    config.reno_drt_contrast = 1.80f;
+    config.reno_drt_saturation = 1.80f;
+    config.reno_drt_dechroma = injectedData.colorGradeBlowout;
+    config.reno_drt_flare = 0.f;
+
+    float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
+
+    renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(config_color, config);
+    hdr_color = dual_tone_map.color_hdr;
+    sdr_color = dual_tone_map.color_sdr;
+    sdr_ap1_color = renodx::color::ap1::from::BT709(sdr_color);
   } else {
-    float _732 = _716 + 0.18000000715255737f;
-    float _733 = _732 / _719;
-    float _734 = 2.0f - _733;
-    float _735 = _733 / _734;
-    float _736 = log2(_735);
-    float _737 = _736 * 0.3465735912322998f;
-    float _738 = _719 / _726;
-    float _739 = _737 * _738;
-    float _740 = -0.7447274923324585f - _739;
-    _742 = _740;
+    // Film Toe > 0.8
+    bool _725 = (_718 > 0.800000011920929f);
+    float _726 = cb0_37x;  // FilmSlope
+    if (_725) {
+      float _728 = 0.8199999928474426f - _718;
+      float _729 = _728 / _726;
+      float _730 = _729 + -0.7447274923324585f;
+      _742 = _730;
+    } else {
+      float _732 = _716 + 0.18000000715255737f;
+      float _733 = _732 / _719;
+      float _734 = 2.0f - _733;
+      float _735 = _733 / _734;
+      float _736 = log2(_735);
+      float _737 = _736 * 0.3465735912322998f;
+      float _738 = _719 / _726;
+      float _739 = _737 * _738;
+      float _740 = -0.7447274923324585f - _739;
+      _742 = _740;
+    }
+
+    float _743 = 1.0f - _718;
+    float _744 = _743 / _726;
+    float _745 = _744 - _742;
+    float _746 = _723 / _726;
+    float _747 = _746 - _745;
+    float _748 = log2(_712);
+    float _749 = log2(_713);
+    float _750 = log2(_714);
+
+    float _751 = _748 * 0.3010300099849701f;
+    float _752 = _749 * 0.3010300099849701f;
+    float _753 = _750 * 0.3010300099849701f;
+    float _754 = _751 + _745;
+    float _755 = _752 + _745;
+    float _756 = _753 + _745;
+    float _757 = _726 * _754;
+    float _758 = _726 * _755;
+    float _759 = _726 * _756;
+    float _760 = _719 * 2.0f;
+    float _761 = _726 * -2.0f;
+    float _762 = _761 / _719;
+    float _763 = _751 - _742;
+    float _764 = _752 - _742;
+    float _765 = _753 - _742;
+    float _766 = _763 * 1.4426950216293335f;
+    float _767 = _766 * _762;
+    float _768 = _764 * 1.4426950216293335f;
+    float _769 = _768 * _762;
+    float _770 = _765 * 1.4426950216293335f;
+    float _771 = _770 * _762;
+    float _772 = exp2(_767);
+    float _773 = exp2(_769);
+    float _774 = exp2(_771);
+    float _775 = _772 + 1.0f;
+    float _776 = _773 + 1.0f;
+    float _777 = _774 + 1.0f;
+    float _778 = _760 / _775;
+    float _779 = _760 / _776;
+    float _780 = _760 / _777;
+    float _781 = _778 - _716;
+    float _782 = _779 - _716;
+    float _783 = _780 - _716;
+    float _784 = _724 * 2.0f;
+    float _785 = _726 * 2.0f;
+    float _786 = _785 / _724;
+    float _787 = _751 - _747;
+    float _788 = _752 - _747;
+    float _789 = _753 - _747;
+    float _790 = _787 * 1.4426950216293335f;
+    float _791 = _790 * _786;
+    float _792 = _788 * 1.4426950216293335f;
+    float _793 = _792 * _786;
+    float _794 = _789 * 1.4426950216293335f;
+    float _795 = _794 * _786;
+    float _796 = exp2(_791);
+    float _797 = exp2(_793);
+    float _798 = exp2(_795);
+    float _799 = _796 + 1.0f;
+    float _800 = _797 + 1.0f;
+    float _801 = _798 + 1.0f;
+    float _802 = _784 / _799;
+    float _803 = _784 / _800;
+    float _804 = _784 / _801;
+    float _805 = _722 - _802;
+    float _806 = _722 - _803;
+    float _807 = _722 - _804;
+    bool _808 = (_751 < _742);
+    bool _809 = (_752 < _742);
+    bool _810 = (_753 < _742);
+    float _811 = _808 ? _781 : _757;
+    float _812 = _809 ? _782 : _758;
+    float _813 = _810 ? _783 : _759;
+    bool _814 = (_751 > _747);
+    bool _815 = (_752 > _747);
+    bool _816 = (_753 > _747);
+    float _817 = _814 ? _805 : _757;
+    float _818 = _815 ? _806 : _758;
+    float _819 = _816 ? _807 : _759;
+    float _820 = _747 - _742;
+    float _821 = _763 / _820;
+    float _822 = _764 / _820;
+    float _823 = _765 / _820;
+    float _824 = saturate(_821);
+    float _825 = saturate(_822);
+    float _826 = saturate(_823);
+    bool _827 = (_747 < _742);
+    float _828 = 1.0f - _824;
+    float _829 = 1.0f - _825;
+    float _830 = 1.0f - _826;
+    float _831 = _827 ? _828 : _824;
+    float _832 = _827 ? _829 : _825;
+    float _833 = _827 ? _830 : _826;
+    float _834 = _831 * 2.0f;
+    float _835 = _832 * 2.0f;
+    float _836 = _833 * 2.0f;
+    float _837 = 3.0f - _834;
+    float _838 = 3.0f - _835;
+    float _839 = 3.0f - _836;
+    float _840 = _817 - _811;
+    float _841 = _818 - _812;
+    float _842 = _819 - _813;
+    float _843 = _831 * _831;
+    float _844 = _843 * _840;
+    float _845 = _844 * _837;
+    float _846 = _832 * _832;
+    float _847 = _846 * _841;
+    float _848 = _847 * _838;
+    float _849 = _833 * _833;
+    float _850 = _849 * _842;
+    float _851 = _850 * _839;
+    float _852 = _845 + _811;
+    float _853 = _848 + _812;
+    float _854 = _851 + _813;
+    // AP1_RGB2Y
+    float _855 = dot(float3(_852, _853, _854), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+    float _856 = _852 - _855;
+    float _857 = _853 - _855;
+    float _858 = _854 - _855;
+    float _859 = _856 * 0.9300000071525574f;
+    float _860 = _857 * 0.9300000071525574f;
+    float _861 = _858 * 0.9300000071525574f;
+    float _862 = _859 + _855;
+    float _863 = _860 + _855;
+    float _864 = _861 + _855;
+    float _865 = max(0.0f, _862);
+    float _866 = max(0.0f, _863);
+    float _867 = max(0.0f, _864);
+
+    sdr_ap1_color = float3(_865, _866, _867);
+    // end of FilmToneMap
   }
 
-  float _743 = 1.0f - _718;
-  float _744 = _743 / _726;
-  float _745 = _744 - _742;
-  float _746 = _723 / _726;
-  float _747 = _746 - _745;
-  float _748 = log2(_712);
-  float _749 = log2(_713);
-  float _750 = log2(_714);
-  float _751 = _748 * 0.3010300099849701f;
-  float _752 = _749 * 0.3010300099849701f;
-  float _753 = _750 * 0.3010300099849701f;
-  float _754 = _751 + _745;
-  float _755 = _752 + _745;
-  float _756 = _753 + _745;
-  float _757 = _726 * _754;
-  float _758 = _726 * _755;
-  float _759 = _726 * _756;
-  float _760 = _719 * 2.0f;
-  float _761 = _726 * -2.0f;
-  float _762 = _761 / _719;
-  float _763 = _751 - _742;
-  float _764 = _752 - _742;
-  float _765 = _753 - _742;
-  float _766 = _763 * 1.4426950216293335f;
-  float _767 = _766 * _762;
-  float _768 = _764 * 1.4426950216293335f;
-  float _769 = _768 * _762;
-  float _770 = _765 * 1.4426950216293335f;
-  float _771 = _770 * _762;
-  float _772 = exp2(_767);
-  float _773 = exp2(_769);
-  float _774 = exp2(_771);
-  float _775 = _772 + 1.0f;
-  float _776 = _773 + 1.0f;
-  float _777 = _774 + 1.0f;
-  float _778 = _760 / _775;
-  float _779 = _760 / _776;
-  float _780 = _760 / _777;
-  float _781 = _778 - _716;
-  float _782 = _779 - _716;
-  float _783 = _780 - _716;
-  float _784 = _724 * 2.0f;
-  float _785 = _726 * 2.0f;
-  float _786 = _785 / _724;
-  float _787 = _751 - _747;
-  float _788 = _752 - _747;
-  float _789 = _753 - _747;
-  float _790 = _787 * 1.4426950216293335f;
-  float _791 = _790 * _786;
-  float _792 = _788 * 1.4426950216293335f;
-  float _793 = _792 * _786;
-  float _794 = _789 * 1.4426950216293335f;
-  float _795 = _794 * _786;
-  float _796 = exp2(_791);
-  float _797 = exp2(_793);
-  float _798 = exp2(_795);
-  float _799 = _796 + 1.0f;
-  float _800 = _797 + 1.0f;
-  float _801 = _798 + 1.0f;
-  float _802 = _784 / _799;
-  float _803 = _784 / _800;
-  float _804 = _784 / _801;
-  float _805 = _722 - _802;
-  float _806 = _722 - _803;
-  float _807 = _722 - _804;
-  bool _808 = (_751 < _742);
-  bool _809 = (_752 < _742);
-  bool _810 = (_753 < _742);
-  float _811 = _808 ? _781 : _757;
-  float _812 = _809 ? _782 : _758;
-  float _813 = _810 ? _783 : _759;
-  bool _814 = (_751 > _747);
-  bool _815 = (_752 > _747);
-  bool _816 = (_753 > _747);
-  float _817 = _814 ? _805 : _757;
-  float _818 = _815 ? _806 : _758;
-  float _819 = _816 ? _807 : _759;
-  float _820 = _747 - _742;
-  float _821 = _763 / _820;
-  float _822 = _764 / _820;
-  float _823 = _765 / _820;
-  float _824 = saturate(_821);
-  float _825 = saturate(_822);
-  float _826 = saturate(_823);
-  bool _827 = (_747 < _742);
-  float _828 = 1.0f - _824;
-  float _829 = 1.0f - _825;
-  float _830 = 1.0f - _826;
-  float _831 = _827 ? _828 : _824;
-  float _832 = _827 ? _829 : _825;
-  float _833 = _827 ? _830 : _826;
-  float _834 = _831 * 2.0f;
-  float _835 = _832 * 2.0f;
-  float _836 = _833 * 2.0f;
-  float _837 = 3.0f - _834;
-  float _838 = 3.0f - _835;
-  float _839 = 3.0f - _836;
-  float _840 = _817 - _811;
-  float _841 = _818 - _812;
-  float _842 = _819 - _813;
-  float _843 = _831 * _831;
-  float _844 = _843 * _840;
-  float _845 = _844 * _837;
-  float _846 = _832 * _832;
-  float _847 = _846 * _841;
-  float _848 = _847 * _838;
-  float _849 = _833 * _833;
-  float _850 = _849 * _842;
-  float _851 = _850 * _839;
-  float _852 = _845 + _811;
-  float _853 = _848 + _812;
-  float _854 = _851 + _813;
-    // AP1_RGB2Y
-  float _855 = dot(
-      float3(_852, _853, _854),
-      float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
-  float _856 = _852 - _855;
-  float _857 = _853 - _855;
-  float _858 = _854 - _855;
-  float _859 = _856 * 0.9300000071525574f;
-  float _860 = _857 * 0.9300000071525574f;
-  float _861 = _858 * 0.9300000071525574f;
-  float _862 = _859 + _855;
-  float _863 = _860 + _855;
-  float _864 = _861 + _855;
-  float _865 = max(0.0f, _862);
-  float _866 = max(0.0f, _863);
-  float _867 = max(0.0f, _864);
-  // end of FilmToneMap
-
-  // lerp with ToneCurveAmount
+  // lerp untonemapped/tonemapped via ToneCurveAmount
   float _868 = cb0_36w;
-  float _869 = _865 - _571;
-  float _870 = _866 - _572;
-  float _871 = _867 - _573;
+  // float _869 = _865 - _571;
+  // float _870 = _866 - _572;
+  // float _871 = _867 - _573;
+  float _869 = sdr_ap1_color.r - _571;
+  float _870 = sdr_ap1_color.g - _572;
+  float _871 = sdr_ap1_color.b - _573;
   float _872 = _868 * _869;
   float _873 = _868 * _870;
   float _874 = _868 * _871;
@@ -1235,121 +1243,143 @@ float4 main(
   float _906 = max(0.0f, _901);
   float _907 = max(0.0f, _904);
 
-  // Clip color to target
-  float _908 = saturate(_905);
-  float _909 = saturate(_906);
-  float _910 = saturate(_907);
+  float3 lut_input_color = float3(_905, _906, _907);
 
-  // BT709 to SRGB
-  bool _911 = (_908 < 0.0031306699384003878f);
-  if (_911) {
-    float _913 = _908 * 12.920000076293945f;
-    _921 = _913;
-  } else {
-    float _915 = log2(_908);
-    float _916 = _915 * 0.4166666567325592f;
-    float _917 = exp2(_916);
-    float _918 = _917 * 1.0549999475479126f;
-    float _919 = _918 + -0.054999999701976776f;
-    _921 = _919;
-  }
-  bool _922 = (_909 < 0.0031306699384003878f);
-  if (_922) {
-    float _924 = _909 * 12.920000076293945f;
-    _932 = _924;
-  } else {
-    float _926 = log2(_909);
-    float _927 = _926 * 0.4166666567325592f;
-    float _928 = exp2(_927);
-    float _929 = _928 * 1.0549999475479126f;
-    float _930 = _929 + -0.054999999701976776f;
-    _932 = _930;
-  }
-  bool _933 = (_910 < 0.0031306699384003878f);
-  if (_933) {
-    float _935 = _910 * 12.920000076293945f;
-    _943 = _935;
-  } else {
-    float _937 = log2(_910);
-    float _938 = _937 * 0.4166666567325592f;
-    float _939 = exp2(_938);
-    float _940 = _939 * 1.0549999475479126f;
-    float _941 = _940 + -0.054999999701976776f;
-    _943 = _941;
-  }
+  float _1011;  // custom branch
+  float _1012;  // custom branch
+  float _1013;  // custom branch
 
-  // 16x16x16 LUT Sample
-  float _944 = _921 * 0.9375f;
-  float _945 = _932 * 0.9375f;
-  float _946 = _944 + 0.03125f;
-  float _947 = _945 + 0.03125f;
-  float _949 = cb0_05x;
-  float _950 = _949 * _921;
-  float _951 = _949 * _932;
-  float _952 = _949 * _943;
-  float _953 = cb0_05y;
-  float _954 = _943 * 15.0f;
-  float _955 = floor(_954);
-  float _956 = _954 - _955;
-  float _957 = _946 + _955;
-  float _958 = _957 * 0.0625f;
-  // _959 = _1;
-  // _960 = _2;
-  float4 _961 = t0.Sample(s0, float2(_958, _947));
-  float _962 = _961.x;
-  float _963 = _961.y;
-  float _964 = _961.z;
-  float _965 = _958 + 0.0625f;
-  // _966 = _1;
-  // _967 = _2;
-  float4 _968 = t0.Sample(s0, float2(_965, _947));
-  float _969 = _968.x;
-  float _970 = _968.y;
-  float _971 = _968.z;
-  float _972 = _969 - _962;
-  float _973 = _970 - _963;
-  float _974 = _971 - _964;
-  float _975 = _972 * _956;
-  float _976 = _973 * _956;
-  float _977 = _974 * _956;
-  float _978 = _975 + _962;
-  float _979 = _976 + _963;
-  float _980 = _977 + _964;
-  float _981 = _978 * _953;
-  float _982 = _979 * _953;
-  float _983 = _980 * _953;
-  float _984 = _981 + _950;
-  float _985 = _982 + _951;
-  float _986 = _983 + _952;
-  float _987 = max(6.103519990574569e-05f, _984);
-  float _988 = max(6.103519990574569e-05f, _985);
-  float _989 = max(6.103519990574569e-05f, _986);
+  if (injectedData.colorGradeLUTStrength != 1.f || injectedData.colorGradeLUTScaling != 0.f) {
+    renodx::lut::Config lut_config = renodx::lut::config::Create(
+        s0,
+        injectedData.colorGradeLUTStrength,  // not used here
+        injectedData.colorGradeLUTScaling, renodx::lut::config::type::SRGB, renodx::lut::config::type::SRGB, 16);
 
-  // SRGB => BT709
-  float _990 = _987 * 0.07739938050508499f;
-  float _991 = _988 * 0.07739938050508499f;
-  float _992 = _989 * 0.07739938050508499f;
-  float _993 = _987 * 0.9478672742843628f;
-  float _994 = _988 * 0.9478672742843628f;
-  float _995 = _989 * 0.9478672742843628f;
-  float _996 = _993 + 0.05213269963860512f;
-  float _997 = _994 + 0.05213269963860512f;
-  float _998 = _995 + 0.05213269963860512f;
-  float _999 = log2(_996);
-  float _1000 = log2(_997);
-  float _1001 = log2(_998);
-  float _1002 = _999 * 2.4000000953674316f;
-  float _1003 = _1000 * 2.4000000953674316f;
-  float _1004 = _1001 * 2.4000000953674316f;
-  float _1005 = exp2(_1002);
-  float _1006 = exp2(_1003);
-  float _1007 = exp2(_1004);
-  bool _1008 = (_987 > 0.040449999272823334f);
-  bool _1009 = (_988 > 0.040449999272823334f);
-  bool _1010 = (_989 > 0.040449999272823334f);
-  float _1011 = _1008 ? _1005 : _990;
-  float _1012 = _1009 ? _1006 : _991;
-  float _1013 = _1010 ? _1007 : _992;
+    float3 post_lut_color = renodx::lut::Sample(t0, lut_config, lut_input_color);
+    post_lut_color = lerp(lut_input_color, post_lut_color, injectedData.colorGradeLUTStrength);
+    _1011 = post_lut_color.r;
+    _1012 = post_lut_color.g;
+    _1013 = post_lut_color.b;
+  } else {
+    // Clip color to target
+    float _908 = saturate(_905);
+    float _909 = saturate(_906);
+    float _910 = saturate(_907);
+
+    // BT709 to SRGB
+    bool _911 = (_908 < 0.0031306699384003878f);
+    if (_911) {
+      float _913 = _908 * 12.920000076293945f;
+      _921 = _913;
+    } else {
+      float _915 = log2(_908);
+      float _916 = _915 * 0.4166666567325592f;
+      float _917 = exp2(_916);
+      float _918 = _917 * 1.0549999475479126f;
+      float _919 = _918 + -0.054999999701976776f;
+      _921 = _919;
+    }
+    bool _922 = (_909 < 0.0031306699384003878f);
+    if (_922) {
+      float _924 = _909 * 12.920000076293945f;
+      _932 = _924;
+    } else {
+      float _926 = log2(_909);
+      float _927 = _926 * 0.4166666567325592f;
+      float _928 = exp2(_927);
+      float _929 = _928 * 1.0549999475479126f;
+      float _930 = _929 + -0.054999999701976776f;
+      _932 = _930;
+    }
+    bool _933 = (_910 < 0.0031306699384003878f);
+    if (_933) {
+      float _935 = _910 * 12.920000076293945f;
+      _943 = _935;
+    } else {
+      float _937 = log2(_910);
+      float _938 = _937 * 0.4166666567325592f;
+      float _939 = exp2(_938);
+      float _940 = _939 * 1.0549999475479126f;
+      float _941 = _940 + -0.054999999701976776f;
+      _943 = _941;
+    }
+
+    // 16x16x16 LUT Sample
+    float _944 = _921 * 0.9375f;
+    float _945 = _932 * 0.9375f;
+    float _946 = _944 + 0.03125f;
+    float _947 = _945 + 0.03125f;
+    float _949 = cb0_05x;
+    float _950 = _949 * _921;
+    float _951 = _949 * _932;
+    float _952 = _949 * _943;
+    float _953 = cb0_05y;
+    float _954 = _943 * 15.0f;
+    float _955 = floor(_954);
+    float _956 = _954 - _955;
+    float _957 = _946 + _955;
+    float _958 = _957 * 0.0625f;
+    // _959 = _1;
+    // _960 = _2;
+    float4 _961 = t0.Sample(s0, float2(_958, _947));
+    float _962 = _961.x;
+    float _963 = _961.y;
+    float _964 = _961.z;
+    float _965 = _958 + 0.0625f;
+    // _966 = _1;
+    // _967 = _2;
+    float4 _968 = t0.Sample(s0, float2(_965, _947));
+    float _969 = _968.x;
+    float _970 = _968.y;
+    float _971 = _968.z;
+    float _972 = _969 - _962;
+    float _973 = _970 - _963;
+    float _974 = _971 - _964;
+    float _975 = _972 * _956;
+    float _976 = _973 * _956;
+    float _977 = _974 * _956;
+    float _978 = _975 + _962;
+    float _979 = _976 + _963;
+    float _980 = _977 + _964;
+    float _981 = _978 * _953;
+    float _982 = _979 * _953;
+    float _983 = _980 * _953;
+    float _984 = _981 + _950;
+    float _985 = _982 + _951;
+    float _986 = _983 + _952;
+    float _987 = max(6.103519990574569e-05f, _984);
+    float _988 = max(6.103519990574569e-05f, _985);
+    float _989 = max(6.103519990574569e-05f, _986);
+
+    // SRGB => BT709
+    float _990 = _987 * 0.07739938050508499f;
+    float _991 = _988 * 0.07739938050508499f;
+    float _992 = _989 * 0.07739938050508499f;
+    float _993 = _987 * 0.9478672742843628f;
+    float _994 = _988 * 0.9478672742843628f;
+    float _995 = _989 * 0.9478672742843628f;
+    float _996 = _993 + 0.05213269963860512f;
+    float _997 = _994 + 0.05213269963860512f;
+    float _998 = _995 + 0.05213269963860512f;
+    float _999 = log2(_996);
+    float _1000 = log2(_997);
+    float _1001 = log2(_998);
+    float _1002 = _999 * 2.4000000953674316f;
+    float _1003 = _1000 * 2.4000000953674316f;
+    float _1004 = _1001 * 2.4000000953674316f;
+    float _1005 = exp2(_1002);
+    float _1006 = exp2(_1003);
+    float _1007 = exp2(_1004);
+    bool _1008 = (_987 > 0.040449999272823334f);
+    bool _1009 = (_988 > 0.040449999272823334f);
+    bool _1010 = (_989 > 0.040449999272823334f);
+    // float _1011 = _1008 ? _1005 : _990;
+    // float _1012 = _1009 ? _1006 : _991;
+    // float _1013 = _1010 ? _1007 : _992;
+    _1011 = _1008 ? _1005 : _990;
+    _1012 = _1009 ? _1006 : _991;
+    _1013 = _1010 ? _1007 : _992;
+  }
 
   // FilmToneMap Gamma Curve adjustment
   float _1015 = cb0_39x;
@@ -1398,7 +1428,7 @@ float4 main(
   float _1060 = _1057 + _1051;
   float _1061 = _1058 + _1052;
   float _1062 = _1059 + _1053;
-  float _1064 = cb0_40y;
+  float _1064 = cb0_40y;  // custom gamma (contrast)
   float _1065 = max(0.0f, _1048);
   float _1066 = max(0.0f, _1049);
   float _1067 = max(0.0f, _1050);
@@ -1411,8 +1441,25 @@ float4 main(
   float _1074 = exp2(_1071);
   float _1075 = exp2(_1072);
   float _1076 = exp2(_1073);
-  
+
   float3 film_graded_color = float3(_1074, _1075, _1076);
+
+  if (is_hdr) {
+    float3 final_color = saturate(film_graded_color);
+    if (injectedData.toneMapType != 0.f) {
+      final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
+    }
+    if (injectedData.toneMapGammaCorrection == 1.f) {
+      final_color = renodx::color::correct::GammaSafe(final_color);
+    }
+    bool is_pq = (output_type == 3u || output_type == 4u);
+    if (is_pq) {
+      final_color = renodx::color::bt2020::from::BT709(final_color);
+      final_color = renodx::color::pq::from::BT2020(final_color, injectedData.toneMapGameNits);
+    }
+
+    return float4(final_color * 0.9523810148239136f, 0);
+  }
 
   // Start Output
   // TONEMAPPER_OUTPUT_sRGB 0
@@ -1812,7 +1859,8 @@ float4 main(
                 float _1432 = min(_1429, 65504.0f);
                 float _1433 = min(_1430, 65504.0f);
                 float _1434 = min(_1431, 65504.0f);
-                float _1435 = dot(float3(_1432, _1433, _1434), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+                float _1435 = dot(float3(_1432, _1433, _1434),
+                                  float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
                 float _1436 = _1432 - _1435;
                 float _1437 = _1433 - _1435;
                 float _1438 = _1434 - _1435;
@@ -2191,7 +2239,8 @@ float4 main(
       } else {
         int _1788 = _1078 & -3;
         bool _1789 = (_1788 == 4);
-        if (_1789) { // TONEMAPPER_OUTPUT_ACES2000nitST2084 | TONEMAPPER_OUTPUT_ACES2000nitScRGB
+        if (_1789) {  // TONEMAPPER_OUTPUT_ACES2000nitST2084 |
+                      // TONEMAPPER_OUTPUT_ACES2000nitScRGB
           //   %1791 = bitcast [6 x float]* %10 to i8*
           //   %1792 = bitcast [6 x float]* %11 to i8*
           float _1794 = cb0_12z;
@@ -2424,7 +2473,8 @@ float4 main(
                   float _2008 = min(_2005, 65504.0f);
                   float _2009 = min(_2006, 65504.0f);
                   float _2010 = min(_2007, 65504.0f);
-                  float _2011 = dot(float3(_2008, _2009, _2010), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+                  float _2011 = dot(float3(_2008, _2009, _2010),
+                                    float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
                   float _2012 = _2008 - _2011;
                   float _2013 = _2009 - _2011;
                   float _2014 = _2010 - _2011;
@@ -2873,12 +2923,12 @@ float4 main(
             _2501 = _2433;
             _2502 = _2434;
           } else {
-            bool _2436 = (_1078 == 8); // TONEMAPPER_OUTPUT_NoToneCurve
+            bool _2436 = (_1078 == 8);  // TONEMAPPER_OUTPUT_NoToneCurve
             _2500 = _1060;
             _2501 = _1061;
             _2502 = _1062;
             if (!_2436) {
-              bool _2438 = (_1078 == 9);  // TONEMAPPER_OUTPUT_WithToneCurve 
+              bool _2438 = (_1078 == 9);  // TONEMAPPER_OUTPUT_WithToneCurve
               float _2440 = cb1_08x;
               float _2441 = cb1_08y;
               float _2442 = cb1_08z;
