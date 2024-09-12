@@ -76,6 +76,16 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
+        .key = "toneMapGammaCorrection",
+        .binding = &shader_injection.toneMapGammaCorrection,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .can_reset = false,
+        .label = "Gamma Correction",
+        .section = "Tone Mapping",
+        .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
+    },
+    new renodx::utils::settings::Setting{
         .key = "toneMapHueCorrection",
         .binding = &shader_injection.toneMapHueCorrection,
         .default_value = 0.f,
@@ -84,7 +94,6 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Emulates hue shifting from sdr tonemapping",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
