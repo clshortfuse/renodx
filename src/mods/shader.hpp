@@ -29,6 +29,11 @@
 #include "../utils/swapchain.hpp"
 
 namespace renodx::mods::shader {
+
+namespace internal {
+inline bool OnBypassShaderDraw(reshade::api::command_list* cmd_list) { return false; };
+}  // namespace internal
+
 struct CustomShader {
   uint32_t crc32;
   std::vector<uint8_t> code;
@@ -37,12 +42,14 @@ struct CustomShader {
   bool (*on_replace)(reshade::api::command_list* cmd_list) = nullptr;
   // return false to abort
   bool (*on_inject)(reshade::api::command_list* cmd_list) = nullptr;
+  // return false to abort
+  bool (*on_draw)(reshade::api::command_list* cmd_list) = nullptr;
 };
 
 using CustomShaders = std::unordered_map<uint32_t, CustomShader>;
 
 // clang-format off
-#define BypassShaderEntry(crc32) { crc32, { crc32, std::vector<uint8_t>(0) } }
+#define BypassShaderEntry(__crc32__) { __crc32__, { .crc32 = __crc32__, .on_draw = &renodx::mods::shader::internal::OnBypassShaderDraw } }
 #define CustomShaderEntry(crc32) { crc32, { crc32, std::vector<uint8_t>(_##crc32, _##crc32 + sizeof(_##crc32)) } }
 #define CustomCountedShader(crc32, index) { crc32, { crc32, std::vector<uint8_t>(_##crc32, _##crc32 + sizeof(_##crc32)), ##index} }
 #define CustomSwapchainShader(crc32) { crc32, { crc32, std::vector<uint8_t>(_##crc32, _##crc32 + sizeof(_##crc32)), -1, &renodx::utils::swapchain::HasBackBufferRenderTarget } }
@@ -67,7 +74,6 @@ static CustomShaders custom_shaders;
 
 static bool using_custom_replace = false;
 static bool using_custom_inject = false;
-static bool using_bypass = false;
 static bool using_counted_shaders = false;
 
 struct __declspec(uuid("018e7b9c-23fd-7863-baf8-a8dad2a6db9d")) DeviceData {
@@ -629,6 +635,11 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
 
+    if (custom_shader_info.on_draw != nullptr) {
+      bool should_draw = custom_shader_info.on_draw(cmd_list);
+      if (!should_draw) return true;  // bypass draw
+    }
+
     if (custom_shader_info.on_replace != nullptr) {
       bool should_replace = custom_shader_info.on_replace(cmd_list);
       if (!should_replace) {
@@ -802,7 +813,6 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
 
       for (const auto& [hash, shader] : (new_custom_shaders)) {
         if (shader.on_replace != nullptr) using_custom_replace = true;
-        if (shader.code.empty()) using_bypass = true;
         if (shader.index != -1) using_counted_shaders = true;
       }
 
@@ -816,11 +826,13 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
 
       if (force_pipeline_cloning || use_pipeline_layout_cloning) {
         for (const auto& [hash, shader] : (new_custom_shaders)) {
+          if (shader.code.empty()) continue;
           renodx::utils::shader::QueueRuntimeReplacement(hash, shader.code);
         }
       } else {
         for (const auto& [hash, shader] : (new_custom_shaders)) {
-          if (shader.on_replace != nullptr && !shader.code.empty() && shader.index == -1) {
+          if (shader.code.empty()) continue;
+          if (shader.on_replace == nullptr && shader.index == -1) {
             renodx::utils::shader::QueueCompileTimeReplacement(hash, shader.code);
           }
           // Use Runtime as fallback
