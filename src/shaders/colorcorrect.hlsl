@@ -28,6 +28,10 @@ float3 Gamma(float3 color, bool pow_to_srgb = false) {
       Gamma(color.b, pow_to_srgb));
 }
 
+float4 Gamma(float4 color, bool pow2srgb = false) {
+  return float4(Gamma(color.rgb, pow2srgb), color.a);
+}
+
 float3 GammaSafe(float3 color, bool pow2srgb = false) {
   float3 signs = sign(color);
   color = abs(color);
@@ -37,6 +41,10 @@ float3 GammaSafe(float3 color, bool pow2srgb = false) {
       Gamma(color.b, pow2srgb));
   color *= signs;
   return color;
+}
+
+float4 GammaSafe(float4 color, bool pow2srgb = false) {
+  return float4(GammaSafe(color.rgb, pow2srgb), color.a);
 }
 
 float3 Hue(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
