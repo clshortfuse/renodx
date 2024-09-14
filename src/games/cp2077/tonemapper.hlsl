@@ -226,7 +226,7 @@ float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
 
         // Only applies on LUTs that are clamped (all?)
         if (lutMinY > 0) {
-          color = renodx::lut::CorrectBlack(inputColor, color, lutMinY, injectedData.processingLUTCorrection);
+          color = renodx::lut::CorrectBlack(inputColor, color, lutMinY, min(injectedData.processingLUTCorrection * 2.f, 1.f));
         }
 
         // Only scale up HDR LUTs
@@ -281,7 +281,7 @@ float4 tonemap(bool isACESMode = false) {
 
   float3 outputRGB = inputColor;
 
-  if (injectedData.colorGradeSceneGrading) {
+  if (injectedData.sceneGradingStrength) {
     float3 color = inputColor;
     float fogRangeMin = cb6[5u].w;  // 0.0001
     float fogRangeMax = cb6[6u].w;  // 0.0045
@@ -303,13 +303,13 @@ float4 tonemap(bool isACESMode = false) {
     float _195 = ((((_119 * (cb6[5u].g + 1.0f)) + fogRangeMin) * float((color.g >= fogRangeMin) && (color.g <= fogRangeMax))) + ((float(color.g < fogRangeMin) * fogRangeMin) * (((1.0f - cb6[4u].y) * (color.g / fogRangeMin)) + cb6[4u].y))) + (((_137 * (cb6[6u].y + 1.0f)) + fogRangeMax) * float(color.g > fogRangeMax));
     float _196 = ((((_120 * (cb6[5u].b + 1.0f)) + fogRangeMin) * float((color.b >= fogRangeMin) && (color.b <= fogRangeMax))) + ((float(color.b < fogRangeMin) * fogRangeMin) * (((1.0f - cb6[4u].z) * (color.b / fogRangeMin)) + cb6[4u].z))) + (((_138 * (cb6[6u].z + 1.0f)) + fogRangeMax) * float(color.b > fogRangeMax));
 
-    color = float3(_194, _195, _196);  // outside | inside
-    float3 fillWhite = cb6[0u].rgb;    // 0,0,0   | 0.00, 0.00, 0.00
-    float3 sceneGamma = cb6[1u].rgb;   // 1,1,1   | 1.00, 1.15, 1.05
-    float3 sceneGain = cb6[2u].rgb;    // 1,1,1   | 1.00, 1.18, 1.00
-    float3 sceneLift = cb6[3u].rgb;    // 0,0,0   | 0.00, 0.00, 0.00
-    float blackFloor = cb6[4u].w;      // 0       | 0.112
-    float brightness = cb6[7u].x;      // 1       | 1.000
+    color = float3(_194, _195, _196);                                            // outside | inside
+    float3 fillWhite = cb6[0u].rgb * injectedData.sceneGradingWhite;             // 0,0,0   | 0.00, 0.00, 0.00
+    float3 sceneGamma = lerp(1.f, cb6[1u].rgb, injectedData.sceneGradingGamma);  // 1,1,1   | 1.00, 1.15, 1.05
+    float3 sceneGain = lerp(1.f, cb6[2u].rgb, injectedData.sceneGradingGain);    // 1,1,1   | 1.00, 1.18, 1.00
+    float3 sceneLift = cb6[3u].rgb * injectedData.sceneGradingLift;              // 0,0,0   | 0.00, 0.00, 0.00
+    float blackFloor = cb6[4u].w * injectedData.sceneGradingBlack;               // 0       | 0.112
+    float brightness = lerp(cb6[7u].x, 1.f, injectedData.sceneGradingClip);      // 1       | 1.000
 
     float3 adjustedColor = color;
     adjustedColor = lerp(adjustedColor, 1.f, fillWhite);
@@ -376,7 +376,7 @@ float4 tonemap(bool isACESMode = false) {
       float _357 = cb6[3u].w + mad(_258, mad(_309, _320, mad(_307, _315, _340)), mad(_257, mad(_300, _320, mad(_298, _315, _332)), mad(_289, _320, mad(_286, _315, _324)) * _256));
       adjustedColor = float3(_355, _356, _357);
     }
-    outputRGB = lerp(inputColor, adjustedColor, injectedData.colorGradeSceneGrading);
+    outputRGB = lerp(inputColor, adjustedColor, injectedData.sceneGradingStrength);
   }
 
   outputRGB = max(0, outputRGB);

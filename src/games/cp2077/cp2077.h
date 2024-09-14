@@ -20,9 +20,17 @@ struct ShaderInjectData {
   float colorGradeContrast;
   float colorGradeSaturation;
   float colorGradeBlowout;
+  float colorGradeFlare;
   float colorGradeWhitePoint;
   float colorGradeLUTStrength;
-  float colorGradeSceneGrading;
+
+  float sceneGradingLift;
+  float sceneGradingGamma;
+  float sceneGradingGain;
+  float sceneGradingWhite;
+  float sceneGradingBlack;
+  float sceneGradingClip;
+  float sceneGradingStrength;
 
   float fxBloom;
   float fxVignette;
@@ -30,7 +38,11 @@ struct ShaderInjectData {
 
   float processingLUTCorrection;
   float processingLUTOrder;
+  float processingGlobalGain;
+  float processingGlobalLift;
   float processingInternalSampling;
+
+  float debugDrawGraph;
 };
 
 #define TONE_MAPPER_TYPE__VANILLA 0.f

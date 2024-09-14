@@ -15,7 +15,7 @@ cbuffer _41_43 : register(b6, space0) {
 }
 
 cbuffer _37_39 : register(b12, space0) {
-  float4 _39_m0[99] : packoffset(c0);
+  float4 cb12[99] : packoffset(c0);
 }
 
 Texture2D<float4> textureUI : register(t0, space0);
@@ -200,7 +200,7 @@ void comp_main() {
       float _585 = _583.y;
       float _893;
       if (hasUiOutline) {
-        uint _812 = 1u << (_12.Load(int3(uint2(uint(_39_m0[79u].x * float(_581)), uint(_39_m0[79u].y * float(_582))), 0u)).y & 31u);
+        uint _812 = 1u << (_12.Load(int3(uint2(uint(cb12[79u].x * float(_581)), uint(cb12[79u].y * float(_582))), 0u)).y & 31u);
         float4 noisePixel = textureNoise.Load(int3(uint2(_581 & 255u, _582 & 255u), 0u));
         float avg = (noisePixel.x + noisePixel.y + noisePixel.z) / 3.f;
         float _823 = uiOutline * _585;
@@ -241,6 +241,7 @@ void comp_main() {
       float frontier_phi_14_12_ladder_4;
       if (hasUiOutline) {
         float4 _1254 = textureNoise.Load(int3(uint2(_937 & 255u, _938 & 255u), 0u));
+        // Custom: Replace Film Grain
         if (injectedData.fxFilmGrain) {
           float3 grainedColor = renodx::effects::ApplyFilmGrain(
               float3(_941, _942, _943),
@@ -254,7 +255,7 @@ void comp_main() {
           frontier_phi_14_12_ladder_3 = grainedColor.g;
           frontier_phi_14_12_ladder_4 = grainedColor.b;
         } else {
-          uint _1251 = 1u << (_12.Load(int3(uint2(uint(_39_m0[79u].x * float(_937)), uint(_39_m0[79u].y * float(_938))), 0u)).y & 31u);
+          uint _1251 = 1u << (_12.Load(int3(uint2(uint(cb12[79u].x * float(_937)), uint(cb12[79u].y * float(_938))), 0u)).y & 31u);
           float _1256 = _1254.x;
           float _1257 = _1254.y;
           float _1258 = _1254.z;
@@ -304,6 +305,7 @@ void comp_main() {
       float frontier_phi_14_6_ladder_4;
       if (hasUiOutline) {
         float4 _959 = textureNoise.Load(int3(uint2(_85 & 255u, _86 & 255u), 0u));
+        // Custom: Add Film Grain
         if (injectedData.fxFilmGrain) {
           float3 grainedColor = renodx::effects::ApplyFilmGrain(
               float3(_588, _589, _590),
@@ -316,7 +318,7 @@ void comp_main() {
           frontier_phi_14_6_ladder_3 = grainedColor.g;
           frontier_phi_14_6_ladder_4 = grainedColor.b;
         } else {
-          uint _956 = 1u << (_12.Load(int3(uint2(uint(_39_m0[79u].x * _87), uint(_39_m0[79u].y * _88)), 0u)).y & 31u);
+          uint _956 = 1u << (_12.Load(int3(uint2(uint(cb12[79u].x * _87), uint(cb12[79u].y * _88)), 0u)).y & 31u);
           float _961 = _959.x;
           float _962 = _959.y;
           float _963 = _959.z;
@@ -619,6 +621,7 @@ void comp_main() {
     float _797;
     if (uiOutline > 0.0f) {
       float4 _636 = textureNoise.Load(int3(uint2(_85 & 255u, _86 & 255u), 0u));
+      // Custom replace film grain
       if (injectedData.fxFilmGrain) {
         float3 grainedColor = renodx::effects::ApplyFilmGrain(
             float3(_326, _327, _328),
@@ -630,7 +633,7 @@ void comp_main() {
         _796 = grainedColor.g;
         _797 = grainedColor.b;
       } else {
-        uint _632 = 1u << (_12.Load(int3(uint2(uint(_39_m0[79u].x * _87), uint(_39_m0[79u].y * _88)), 0u)).y & 31u);
+        uint _632 = 1u << (_12.Load(int3(uint2(uint(cb12[79u].x * _87), uint(cb12[79u].y * _88)), 0u)).y & 31u);
         float _638 = _636.x;
         float _639 = _636.y;
         float _640 = _636.z;

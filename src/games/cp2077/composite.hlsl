@@ -53,8 +53,8 @@ float3 composite(bool useTexArray = false) {
   float bloomSize = dot(float2(bloomWidth, bloomHeight), float2(bloomWidth, bloomHeight));
   float3 bloomStrength = cb6[0u].rgb * injectedData.fxBloom;
   float inputGain = cb6[0u].w;
-  float postBloomGain = cb6[11u].w;
-  float3 postBloomLift = cb6[11u].rgb;
+  float postBloomGain = lerp(1.f, cb6[11u].w, injectedData.processingGlobalGain);
+  float3 postBloomLift = cb6[11u].rgb * injectedData.processingGlobalLift;
   float3 inputColor;
   float3 bloomColor;
   if (useTexArray) {
@@ -104,7 +104,7 @@ float3 composite(bool useTexArray = false) {
   }
 
 #if DRAW_TONEMAPPER
-  renodx::debug::graph::Config graph_config = DrawStart(gl_FragCoord.xy, outputColor, textureUntonemapped, injectedData.toneMapPeakNits, 100.f);
+  renodx::debug::graph::Config graph_config = renodx::debug::graph::DrawStart(gl_FragCoord.xy, outputColor, textureUntonemapped, injectedData.toneMapPeakNits, 100.f);
   outputColor = graph_config.color;
 #endif
 
