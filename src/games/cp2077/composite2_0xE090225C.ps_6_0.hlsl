@@ -1,9 +1,13 @@
-static float _831;
-static float _832;
-static float _833;
-static float _835;
-static float _836;
-static float _837;
+#include "./composite2.hlsl"
+#include "./cp2077.h"
+#include "./injectedBuffer.hlsl"
+
+static float _851;
+static float _852;
+static float _853;
+static float _855;
+static float _856;
+static float _857;
 
 cbuffer _25_27 : register(b0, space0) {
   float4 _27_m0[30] : packoffset(c0);
@@ -17,11 +21,11 @@ cbuffer _35_37 : register(b6, space0) {
   float4 _37_m0[15] : packoffset(c0);
 };
 
-Texture2D<uint4> _8 : register(t51, space0);
-Texture2DArray<float4> _12 : register(t67, space0);
-Texture2D<float4> _15 : register(t0, space0);
-Texture2D<float4> _16 : register(t1, space0);
-Texture3D<float4> _21[3] : register(t4, space0);
+Texture2D<uint2> _8 : register(t51, space0);
+Texture2DArray<float3> _12 : register(t67, space0);
+Texture2D<float3> _15 : register(t0, space0);
+Texture2D<float3> _16 : register(t1, space0);
+Texture3D<float3> _21[3] : register(t4, space0);
 SamplerState _40 : register(s11, space0);
 
 static float4 gl_FragCoord;
@@ -30,8 +34,8 @@ static float4 SV_Target;
 static float4 SV_Target_1;
 
 struct SPIRV_Cross_Input {
-  nointerpolation float2 SYS_TEXCOORD : TEXCOORD1;
   float4 gl_FragCoord : SV_Position;
+  nointerpolation float2 SYS_TEXCOORD : SYS_TEXCOORD;
 };
 
 struct SPIRV_Cross_Output {
@@ -53,23 +57,31 @@ void frag_main() {
   float _108 = exp2(log2(max(dot(float2(_91, _93), float2(_91, _93)) - _37_m0[7u].w, 0.0f)) * _37_m0[7u].z);
   float _113 = (_108 * _91) * _37_m0[7u].x;
   float _114 = (_108 * _93) * _37_m0[7u].y;
-  float4 _125 = _12.Load(int4(uint3(_63 & 63u, _64 & 63u, asuint(_27_m0[28u]).y & 63u), 0u));
+  float3 _125 = _12.Load(int4(uint3(_63 & 63u, _64 & 63u, asuint(_27_m0[28u]).y & 63u), 0u));
   float _128 = _125.x;
   float _132 = _77 - (_128 * _114);
   float _139 = (_76 - (_128 * _113)) - (_37_m0[8u].w * 2.5f);
-  float4 _146 = _16.Sample(_40, float2(_76 - (_113 * 2.5f), _77 - (_114 * 2.5f)));
+  float3 _146 = _16.Sample(_40, float2(_76 - (_113 * 2.5f), _77 - (_114 * 2.5f)));
   float _158 = _132 - _114;
   float _162 = _37_m0[8u].w + (_139 - _113);
-  float4 _163 = _15.Sample(_40, float2(_162, _158));
+  float3 _163 = _15.Sample(_40, float2(_162, _158));
   float _176 = _158 - _114;
   float _177 = _37_m0[8u].w + (_162 - _113);
-  float4 _178 = _15.Sample(_40, float2(_177, _176));
+  float3 _178 = _15.Sample(_40, float2(_177, _176));
   float _190 = _176 - _114;
   float _191 = _37_m0[8u].w + (_177 - _113);
-  float4 _192 = _15.Sample(_40, float2(_191, _190));
-  float _241 = ((((_37_m0[0u].w * 0.625f) * ((((_178.x * 0.300000011920928955078125f) + (_163.x * 0.100000001490116119384765625f)) + (_192.x * 0.4000000059604644775390625f)) + (_15.Sample(_40, float2((_191 - _113) + _37_m0[8u].w, _190 - _114)).x * 0.800000011920928955078125f))) + (_37_m0[0u].x * _146.x)) * _37_m0[11u].w) + _37_m0[11u].x;
-  float _242 = (((_37_m0[0u].y * _146.y) + (((((_178.y * 0.5f) + (_163.y * 0.4000000059604644775390625f)) + (_192.y * 0.20000000298023223876953125f)) * 0.90909087657928466796875f) * _37_m0[0u].w)) * _37_m0[11u].w) + _37_m0[11u].y;
-  float _243 = (((_37_m0[0u].z * _146.z) + (((((_163.z * 0.300000011920928955078125f) + (_15.Sample(_40, float2(_139, _132)).z * 0.89999997615814208984375f)) + (_178.z * 0.100000001490116119384765625f)) * 0.76923072338104248046875f) * _37_m0[0u].w)) * _37_m0[11u].w) + _37_m0[11u].z;
+  float3 _192 = _15.Sample(_40, float2(_191, _190));
+  // float _241 = ((((_37_m0[0u].w * 0.625f) * ((((_178.x * 0.300000011920928955078125f) + (_163.x * 0.100000001490116119384765625f)) + (_192.x * 0.4000000059604644775390625f)) + (_15.Sample(_40, float2((_191 - _113) + _37_m0[8u].w, _190 - _114)).x * 0.800000011920928955078125f))) + (_37_m0[0u].x * _146.x)) * _37_m0[11u].w) + _37_m0[11u].x;
+  // float _242 = (((_37_m0[0u].y * _146.y) + (((((_178.y * 0.5f) + (_163.y * 0.4000000059604644775390625f)) + (_192.y * 0.20000000298023223876953125f)) * 0.90909087657928466796875f) * _37_m0[0u].w)) * _37_m0[11u].w) + _37_m0[11u].y;
+  // float _243 = (((_37_m0[0u].z * _146.z) + (((((_163.z * 0.300000011920928955078125f) + (_15.Sample(_40, float2(_139, _132)).z * 0.89999997615814208984375f)) + (_178.z * 0.100000001490116119384765625f)) * 0.76923072338104248046875f) * _37_m0[0u].w)) * _37_m0[11u].w) + _37_m0[11u].z;
+
+  float _241 = ((((_37_m0[0u].w * 0.625f) * ((((_178.x * 0.300000011920928955078125f) + (_163.x * 0.100000001490116119384765625f)) + (_192.x * 0.4000000059604644775390625f)) + (_15.Sample(_40, float2((_191 - _113) + _37_m0[8u].w, _190 - _114)).x * 0.800000011920928955078125f))) + (_37_m0[0u].x * injectedData.fxBloom * _146.x)));
+  float _242 = (((_37_m0[0u].y * injectedData.fxBloom * _146.y) + (((((_178.y * 0.5f) + (_163.y * 0.4000000059604644775390625f)) + (_192.y * 0.20000000298023223876953125f)) * 0.90909087657928466796875f) * _37_m0[0u].w)));
+  float _243 = (((_37_m0[0u].z * injectedData.fxBloom * _146.z) + (((((_163.z * 0.300000011920928955078125f) + (_15.Sample(_40, float2(_139, _132)).z * 0.89999997615814208984375f)) + (_178.z * 0.100000001490116119384765625f)) * 0.76923072338104248046875f) * _37_m0[0u].w)));
+
+  // Custom: global_gain and global_lift
+  composite2_global(_37_m0[11u], _241, _242, _243);
+
   float _260 = (_37_m0[14u].x * _37_m0[10u].x) * (((_67 * 2.0f) * _37_m0[10u].z) + (-1.0f));
   float _262 = (_37_m0[14u].x * _37_m0[10u].y) * (((_69 * 2.0f) * _37_m0[10u].w) + (-1.0f));
   float _294;
@@ -85,6 +97,10 @@ void frag_main() {
     _295 = _242;
     _296 = _243;
   }
+
+  // Custom: Lerp vignette
+  composite2_vignette(_241, _242, _243, _294, _295, _296);
+
   float _526;
   float _527;
   float _528;
@@ -126,10 +142,17 @@ void frag_main() {
     _447 = (((((_294 * SYS_TEXCOORD.x) * _37_m0[1u].y) * (((_37_m0[2u].x * _355) * _375) + 1.0f)) * (((_37_m0[3u].x * _355) * _396) + 1.0f)) * (((_37_m0[4u].x * _355) * _418) + 1.0f)) * (((_37_m0[5u].x * _355) * _440) + 1.0f);
     _448 = (((((_295 * SYS_TEXCOORD.x) * _37_m0[1u].y) * (((_37_m0[2u].y * _357) * _375) + 1.0f)) * (((_37_m0[3u].y * _357) * _396) + 1.0f)) * (((_37_m0[4u].y * _357) * _418) + 1.0f)) * (((_37_m0[5u].y * _357) * _440) + 1.0f);
     _449 = (((((_296 * SYS_TEXCOORD.x) * _37_m0[1u].y) * (((_37_m0[2u].z * _358) * _375) + 1.0f)) * (((_37_m0[3u].z * _358) * _396) + 1.0f)) * (((_37_m0[4u].z * _358) * _418) + 1.0f)) * (((_37_m0[5u].z * _358) * _440) + 1.0f);
+
+    composite2_sample(_21, _40,
+                      _37_m0[6u], _37_m0[12u], _321,
+                      _447, _448, _449,
+                      _526, _527, _528);
+    // Custom: PQ Sampling
+    /*
     _461 = (_37_m0[6u].x * log2(_447)) + _37_m0[6u].y;
     _462 = (_37_m0[6u].x * log2(_448)) + _37_m0[6u].y;
     _463 = (_37_m0[6u].x * log2(_449)) + _37_m0[6u].y;
-    float4 _469 = _21[4u].SampleLevel(_40, float3(_461, _462, _463), 0.0f);
+    float3 _469 = _21[4u].SampleLevel(_40, float3(_461, _462, _463), 0.0f);
     _471 = _469.x;
     _472 = _469.y;
     _473 = _469.z;
@@ -140,14 +163,14 @@ void frag_main() {
     float _501;
     float _503;
     if (_481) {
-      float4 _485 = _21[5u].SampleLevel(_40, float3(_461, _462, _463), 0.0f);
+      float3 _485 = _21[5u].SampleLevel(_40, float3(_461, _462, _463), 0.0f);
       uint _495 = min((asuint(_37_m0[12u]).y & _321), 1u);
       uint frontier_phi_4_3_ladder;
       float frontier_phi_4_3_ladder_1;
       float frontier_phi_4_3_ladder_2;
       float frontier_phi_4_3_ladder_3;
       if (_495 == 0u) {
-        float4 _518 = _21[6u].SampleLevel(_40, float3(_461, _462, _463), 0.0f);
+        float3 _518 = _21[6u].SampleLevel(_40, float3(_461, _462, _463), 0.0f);
         uint _498 = min((asuint(_37_m0[12u]).z & _321), 1u);
         if (_498 == 0u) {
           _526 = _447;
@@ -179,6 +202,7 @@ void frag_main() {
     _526 = ((_503 - _447) * _505) + _447;
     _527 = ((_501 - _448) * _505) + _448;
     _528 = ((_499 - _449) * _505) + _449;
+    */
     break;
   }
   float _761;
@@ -222,10 +246,18 @@ void frag_main() {
     _688 = ((((_37_m0[1u].y * _241) * (((_37_m0[2u].x * _601) * _618) + 1.0f)) * (((_37_m0[3u].x * _601) * _639) + 1.0f)) * (((_37_m0[4u].x * _601) * _660) + 1.0f)) * (((_37_m0[5u].x * _601) * _681) + 1.0f);
     _689 = ((((_37_m0[1u].y * _242) * (((_37_m0[2u].y * _602) * _618) + 1.0f)) * (((_37_m0[3u].y * _602) * _639) + 1.0f)) * (((_37_m0[4u].y * _602) * _660) + 1.0f)) * (((_37_m0[5u].y * _602) * _681) + 1.0f);
     _690 = ((((_37_m0[1u].y * _243) * (((_37_m0[2u].z * _603) * _618) + 1.0f)) * (((_37_m0[3u].z * _603) * _639) + 1.0f)) * (((_37_m0[4u].z * _603) * _660) + 1.0f)) * (((_37_m0[5u].z * _603) * _681) + 1.0f);
+
+    composite2_sample(_21, _40,
+                      _37_m0[6u], _37_m0[12u], _578,
+                      _688, _689, _690,
+                      _761, _762, _763);
+    // Custom
+    /*
     _701 = (_37_m0[6u].x * log2(_688)) + _37_m0[6u].y;
     _702 = (_37_m0[6u].x * log2(_689)) + _37_m0[6u].y;
     _703 = (_37_m0[6u].x * log2(_690)) + _37_m0[6u].y;
-    float4 _705 = _21[4u].SampleLevel(_40, float3(_701, _702, _703), 0.0f);
+
+    float3 _705 = _21[4u].SampleLevel(_40, float3(_701, _702, _703), 0.0f);
     _707 = _705.x;
     _708 = _705.y;
     _709 = _705.z;
@@ -236,14 +268,14 @@ void frag_main() {
     float _736;
     float _738;
     if (_716) {
-      float4 _720 = _21[5u].SampleLevel(_40, float3(_701, _702, _703), 0.0f);
+      float3 _720 = _21[5u].SampleLevel(_40, float3(_701, _702, _703), 0.0f);
       uint _730 = min((asuint(_37_m0[12u]).y & _578), 1u);
       uint frontier_phi_8_7_ladder;
       float frontier_phi_8_7_ladder_1;
       float frontier_phi_8_7_ladder_2;
       float frontier_phi_8_7_ladder_3;
       if (_730 == 0u) {
-        float4 _753 = _21[6u].SampleLevel(_40, float3(_701, _702, _703), 0.0f);
+        float3 _753 = _21[6u].SampleLevel(_40, float3(_701, _702, _703), 0.0f);
         uint _733 = min((asuint(_37_m0[12u]).z & _578), 1u);
         if (_733 == 0u) {
           _761 = _688;
@@ -275,6 +307,7 @@ void frag_main() {
     _761 = ((_738 - _688) * _740) + _688;
     _762 = ((_736 - _689) * _740) + _689;
     _763 = ((_734 - _690) * _740) + _690;
+    */
     break;
   }
   float _764 = dot(float3(_761, _762, _763), float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f));
@@ -282,13 +315,13 @@ void frag_main() {
   float _790 = ((_37_m0[1u].w * (((_764 * _688) / _773) - _761)) + _761) * _37_m0[1u].z;
   float _791 = ((_37_m0[1u].w * (((_764 * _689) / _773) - _762)) + _762) * _37_m0[1u].z;
   float _792 = ((_37_m0[1u].w * (((_764 * _690) / _773) - _763)) + _763) * _37_m0[1u].z;
-  SV_Target.x = _790;
-  SV_Target.y = _791;
-  SV_Target.z = _792;
+  SV_Target.x = asfloat(asuint(_790) + 65536u);
+  SV_Target.y = asfloat(asuint(_791) + 65536u);
+  SV_Target.z = asfloat(asuint(_792) + 131072u);
   SV_Target.w = 1.0f;
-  SV_Target_1.x = _790 - _559;
-  SV_Target_1.y = _791 - _560;
-  SV_Target_1.z = _792 - _561;
+  SV_Target_1.x = asfloat(asuint(_790 - _559) + 65536u);
+  SV_Target_1.y = asfloat(asuint(_791 - _560) + 65536u);
+  SV_Target_1.z = asfloat(asuint(_792 - _561) + 131072u);
   SV_Target_1.w = 1.0f;
 }
 
