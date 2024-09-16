@@ -54,11 +54,12 @@ void comp_main() {
 
   // Custom: Add back film grain
   if (cb6[12u].x > 0.0f) {
+    float3 grainColor = t1.Load(int3(uint2(_71 & 255u, _72 & 255u), 0u)).rgb;
     if (injectedData.fxFilmGrain) {
       // float3 grainColor = _13.Load(int3(uint2(_82 & 255u, _83 & 255u), 0u)).rgb;
       float3 grainedColor = renodx::effects::ApplyFilmGrain(
           _73.rgb,
-          float2(_71, _72),
+          grainColor.xy,
           frac(cb0[0u].x / 1000.f),
           injectedData.fxFilmGrain * 0.03f,
           (cb6[12u].y == 1.f) ? 1.f : (203.f / 100.f)
@@ -71,8 +72,6 @@ void comp_main() {
       // Add back Vanilla
       uint _113 = 1u << (t51.Load(int3(uint2(uint(cb12[79u].x * _79), uint(cb12[79u].y * _80)), 0u)).y & 31u);
       float3 grainStrengthAdjusted = _73.rgb * cb6[12u].x;
-
-      float3 grainColor = t1.Load(int3(uint2(_71 & 255u, _72 & 255u), 0u)).rgb;
 
       float averageChannel = (grainColor.r + grainColor.g + grainColor.z) / 3.f;
       float3 distanceFromAverage = grainColor - averageChannel;

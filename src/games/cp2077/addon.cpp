@@ -10,9 +10,13 @@
 
 #include <deps/imgui/imgui.h>
 
+#include <embed/0x04D8EA44.h>
 #include <embed/0x18CFEFF4.h>
+#include <embed/0x21C2AF18.h>
 #include <embed/0x298A6BB0.h>
 #include <embed/0x341CEB87.h>
+#include <embed/0x4A2023A1.h>
+#include <embed/0x4E63FBE2.h>
 #include <embed/0x5DF649A9.h>
 #include <embed/0x61DBBA5C.h>
 #include <embed/0x71F27445.h>
@@ -27,9 +31,9 @@
 #include <embed/0xC83E64DF.h>
 #include <embed/0xCBFFC2A3.h>
 #include <embed/0xDE517511.h>
+#include <embed/0xED7139C7.h>
 #include <embed/0xFBFF99B4.h>
-#include <embed/0x21C2AF18.h>
-#include <embed/0x04D8EA44.h>
+
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
@@ -56,9 +60,12 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x18CFEFF4),  // new_menu_renderless
     CustomShaderEntry(0xFBFF99B4),  // new_hud
     CustomShaderEntry(0x80CEFAE4),  // film_grain_new
-    CustomShaderEntry(0xA8520658),  // composite2_multisample
-    CustomShaderEntry(0x21C2AF18),  // composite2_singlesample
-    CustomShaderEntry(0x04D8EA44),  // composite2_multisample_dualout_lutblend
+    CustomShaderEntry(0x21C2AF18),  // composite2
+    CustomShaderEntry(0xA8520658),  // composite2_array_multisample
+    CustomShaderEntry(0x04D8EA44),  // composite2_array_multisample_blend_rtv1
+    CustomShaderEntry(0x4A2023A1),  // composite2_blend_rtv1
+    CustomShaderEntry(0x4E63FBE2),  // composite2_multisample
+    CustomShaderEntry(0xED7139C7),  // composite2_multisample_blend_rtv1
 
 };
 
