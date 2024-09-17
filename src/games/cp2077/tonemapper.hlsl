@@ -303,7 +303,7 @@ float4 tonemap(bool isACESMode = false) {
     float _196 = ((((_120 * (cb6[5u].b + 1.0f)) + fogRangeMin) * float((color.b >= fogRangeMin) && (color.b <= fogRangeMax))) + ((float(color.b < fogRangeMin) * fogRangeMin) * (((1.0f - cb6[4u].z) * (color.b / fogRangeMin)) + cb6[4u].z))) + (((_138 * (cb6[6u].z + 1.0f)) + fogRangeMax) * float(color.b > fogRangeMax));
 
     color = float3(_194, _195, _196);                                            // outside | inside
-    float3 fillWhite = cb6[0u].rgb * injectedData.sceneGradingWhite;             // 0,0,0   | 0.00, 0.00, 0.00
+    float3 fillColor = cb6[0u].rgb * injectedData.sceneGradingColor;             // 0,0,0   | 0.00, 0.00, 0.00
     float3 sceneGamma = lerp(1.f, cb6[1u].rgb, injectedData.sceneGradingGamma);  // 1,1,1   | 1.00, 1.15, 1.05
     float3 sceneGain = lerp(1.f, cb6[2u].rgb, injectedData.sceneGradingGain);    // 1,1,1   | 1.00, 1.18, 1.00
     float3 sceneLift = cb6[3u].rgb * injectedData.sceneGradingLift;              // 0,0,0   | 0.00, 0.00, 0.00
@@ -311,7 +311,7 @@ float4 tonemap(bool isACESMode = false) {
     float brightness = lerp(cb6[7u].x, 1.f, injectedData.sceneGradingClip);      // 1       | 1.000
 
     float3 adjustedColor = color;
-    adjustedColor = lerp(adjustedColor, 1.f, fillWhite);
+    adjustedColor = lerp(adjustedColor, 1.f, fillColor);
     adjustedColor *= sceneGain;
     adjustedColor += sceneLift;
     if (sceneGamma.r != 1.f || sceneGamma.g != 1.f || sceneGamma.b != 1.f) {
@@ -405,6 +405,8 @@ float4 tonemap(bool isACESMode = false) {
       outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::ACESFittedBT709(outputRGB));
     } else if (injectedData.toneMapHueCorrection == 3.f) {
       outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::ACESFittedAP1(outputRGB));
+    } else if (injectedData.toneMapHueCorrection == 4.f) {
+      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::uncharted2::BT709(outputRGB));
     }
 
     if (toneMapperType == TONE_MAPPER_TYPE__VANILLA) {
@@ -557,11 +559,11 @@ float4 tonemap(bool isACESMode = false) {
       config.mid_gray_value = 2.3f * (midGrayNits / 100.f);
       config.mid_gray_nits = midGrayNits;
       config.reno_drt_highlights = 1.20f;
-      config.reno_drt_shadows = 1.0f;
-      config.reno_drt_contrast = 1.80f;
-      config.reno_drt_saturation = 1.80f;
+      config.reno_drt_shadows = 1.20f;
+      config.reno_drt_contrast = 1.20f;
+      config.reno_drt_saturation = 1.20f;
       config.reno_drt_dechroma = injectedData.colorGradeBlowout;
-      config.reno_drt_flare = 0.f;
+      config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
 
       outputRGB = renodx::tonemap::config::Apply(outputRGB, config);
       bool useD60 = (injectedData.colorGradeWhitePoint == -1.0f || (injectedData.colorGradeWhitePoint == 0.f && cb6[28u].z == 0.f));
