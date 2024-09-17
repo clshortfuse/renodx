@@ -29,7 +29,7 @@ void main
   if (injectedData.toneMapType) { // Not Vanilla
     // PQ to BT.2020 for paper white scaling 
     SV_TARGET0.rgb = renodx::color::bt2020::from::PQ(SV_TARGET0.rgb);
-    SV_TARGET0.rgb *= injectedData.toneMapUINits/310.f;
+    SV_TARGET0.rgb *= injectedData.toneMapUINits/308.f;
 
     if (injectedData.toneMapType > 1) { // DICE
       SV_TARGET0.rgb = renodx::color::bt709::from::BT2020(SV_TARGET0.rgb * 10000.f);
