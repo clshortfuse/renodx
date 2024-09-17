@@ -1252,11 +1252,10 @@ float4 main(
   if (injectedData.colorGradeLUTStrength != 1.f || injectedData.colorGradeLUTScaling != 0.f) {
     renodx::lut::Config lut_config = renodx::lut::config::Create(
         s0,
-        injectedData.colorGradeLUTStrength,  // not used here
+        injectedData.colorGradeLUTStrength,
         injectedData.colorGradeLUTScaling, renodx::lut::config::type::SRGB, renodx::lut::config::type::SRGB, 16);
 
     float3 post_lut_color = renodx::lut::Sample(t0, lut_config, lut_input_color);
-    post_lut_color = lerp(lut_input_color, post_lut_color, injectedData.colorGradeLUTStrength);
     _1011 = post_lut_color.r;
     _1012 = post_lut_color.g;
     _1013 = post_lut_color.b;

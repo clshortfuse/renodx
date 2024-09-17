@@ -350,6 +350,8 @@ DualToneMap ApplyToneMaps(float3 color_input, Config config) {
     float3 color_hdr = tone_maps.color_hdr;                                                                  \
     float3 color_sdr = tone_maps.color_sdr;                                                                  \
                                                                                                              \
+    uint previous_lut_config_strength = lut_config.strength;                                                 \
+    lut_config.strength = 1.f;                                                                               \
     float3 color_lut;                                                                                        \
     if (                                                                                                     \
         lut_config.type_input == lut::config::type::SRGB                                                     \
@@ -362,9 +364,9 @@ DualToneMap ApplyToneMaps(float3 color_input, Config config) {
     }                                                                                                        \
                                                                                                              \
     if (config.type == config::type::VANILLA) {                                                              \
-      color_output = lerp(color_output, color_lut, lut_config.strength);                                     \
+      color_output = lerp(color_output, color_lut, previous_lut_config_strength);                            \
     } else {                                                                                                 \
-      color_output = UpgradeToneMap(color_hdr, color_sdr, color_lut, lut_config.strength);                   \
+      color_output = UpgradeToneMap(color_hdr, color_sdr, color_lut, previous_lut_config_strength);          \
     }                                                                                                        \
     return color_output;                                                                                     \
   }

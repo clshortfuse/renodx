@@ -403,7 +403,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
 
   renodx::lut::Config lut_config = renodx::lut::config::Create(
       _36,
-      injectedData.colorGradeLUTStrength,
+      1.f,
       injectedData.colorGradeLUTScaling,
       renodx::lut::config::type::SRGB,
       renodx::lut::config::type::SRGB,
@@ -447,9 +447,9 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
 
   float3 outputColor;
   if (injectedData.toneMapType == 0.f) {
-    outputColor = lerp(sceneGradedColor, lutColor, lut_config.strength);
+    outputColor = lerp(sceneGradedColor, lutColor, injectedData.colorGradeLUTStrength);
   } else {
-    outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, lutColor, lut_config.strength);
+    outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, lutColor, injectedData.colorGradeLUTStrength);
   }
   outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
 
