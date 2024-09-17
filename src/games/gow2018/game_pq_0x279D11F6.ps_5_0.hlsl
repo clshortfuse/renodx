@@ -76,7 +76,6 @@ void main(
   r1.x = t16.SampleLevel(s2_s, r1.xy, 0).x;
   r1.x = r1.x * 2 + -1;
   r0.xyz = r1.xxx * r0.www + r0.xyz;
-  r0.xyz = saturate(r0.xyz);
 
   if (injectedData.toneMapType != 0) {
     r0.xyz = renodx::color::correct::GammaSafe(r0.xyz);     // linearize with 2.2 instead of srgb
