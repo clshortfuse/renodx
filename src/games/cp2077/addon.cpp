@@ -10,19 +10,30 @@
 
 #include <deps/imgui/imgui.h>
 
+#include <embed/0x04D8EA44.h>
+#include <embed/0x18CFEFF4.h>
+#include <embed/0x21C2AF18.h>
 #include <embed/0x298A6BB0.h>
 #include <embed/0x341CEB87.h>
+#include <embed/0x4A2023A1.h>
+#include <embed/0x4E63FBE2.h>
 #include <embed/0x5DF649A9.h>
 #include <embed/0x61DBBA5C.h>
 #include <embed/0x71F27445.h>
 #include <embed/0x745E34E1.h>
+#include <embed/0x80CEFAE4.h>
+#include <embed/0x89C4A7A4.h>
 #include <embed/0x97CA5A85.h>
 #include <embed/0xA61F2FEE.h>
+#include <embed/0xA8520658.h>
 #include <embed/0xBF8489D2.h>
 #include <embed/0xC783FBA1.h>
 #include <embed/0xC83E64DF.h>
 #include <embed/0xCBFFC2A3.h>
 #include <embed/0xDE517511.h>
+#include <embed/0xED7139C7.h>
+#include <embed/0xFBFF99B4.h>
+
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
@@ -45,6 +56,17 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xC783FBA1),  // film grain overlay
     CustomShaderEntry(0xC83E64DF),  // hud
     CustomShaderEntry(0xDE517511),  // menu
+    CustomShaderEntry(0x89C4A7A4),  // new_menu
+    CustomShaderEntry(0x18CFEFF4),  // new_menu_renderless
+    CustomShaderEntry(0xFBFF99B4),  // new_hud
+    CustomShaderEntry(0x80CEFAE4),  // film_grain_new
+    CustomShaderEntry(0x21C2AF18),  // composite2
+    CustomShaderEntry(0xA8520658),  // composite2_array_multisample
+    CustomShaderEntry(0x04D8EA44),  // composite2_array_multisample_blend_rtv1
+    CustomShaderEntry(0x4A2023A1),  // composite2_blend_rtv1
+    CustomShaderEntry(0x4E63FBE2),  // composite2_multisample
+    CustomShaderEntry(0xED7139C7),  // composite2_multisample_blend_rtv1
+
 };
 
 ShaderInjectData shader_injection;
@@ -98,12 +120,12 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapHueCorrection",
         .binding = &shader_injection.toneMapHueCorrection,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 3.f,
+        .default_value = 4.f,
         .can_reset = false,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tooltip = "Applies hue shift emulation before tonemapping",
-        .labels = {"None", "Reinhard", "ACES BT709", "ACES AP1"},
+        .labels = {"None", "Reinhard", "ACES BT709", "ACES AP1", "Filmic"},
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
@@ -153,13 +175,24 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeBlowout",
         .binding = &shader_injection.colorGradeBlowout,
-        .default_value = 70.f,
+        .default_value = 50.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType == 3; },
         .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeFlare",
+        .binding = &shader_injection.colorGradeFlare,
+        .default_value = 50.f,
+        .label = "Flare",
+        .section = "Color Grading",
+        .tooltip = "Flare/Glare",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeWhitePoint",
@@ -182,14 +215,68 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeSceneGrading",
-        .binding = &shader_injection.colorGradeSceneGrading,
-        .default_value = 100.f,
-        .label = "Scene Grading",
-        .section = "Color Grading",
+        .key = "sceneGradingLift",
+        .binding = &shader_injection.sceneGradingLift,
+        .default_value = 50.f,
+        .label = "Lift",
+        .section = "Scene Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "sceneGradingGamma",
+        .binding = &shader_injection.sceneGradingGamma,
+        .default_value = 50.f,
+        .label = "Gamma",
+        .section = "Scene Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "sceneGradingGain",
+        .binding = &shader_injection.sceneGradingGain,
+        .default_value = 50.f,
+        .label = "Gain",
+        .section = "Scene Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "sceneGradingBlack",
+        .binding = &shader_injection.sceneGradingBlack,
+        .default_value = 50.f,
+        .label = "Black Floor",
+        .section = "Scene Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "sceneGradingColor",
+        .binding = &shader_injection.sceneGradingColor,
+        .default_value = 50.f,
+        .label = "Color Fill",
+        .section = "Scene Grading", 
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "sceneGradingClip",
+        .binding = &shader_injection.sceneGradingClip,
+        .default_value = 50.f,
+        .label = "White Clip",
+        .section = "Scene Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "sceneGradingStrength",
+        .binding = &shader_injection.sceneGradingStrength,
+        .default_value = 50.f,
+        .label = "Strength",
+        .section = "Scene Grading",
         .tooltip = "Selects the strength of the game's custom scene grading.",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
+        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "fxBloom",
@@ -241,6 +328,24 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value - 1.f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "processingGlobalGain",
+        .binding = &shader_injection.processingGlobalGain,
+        .default_value = 50.f,
+        .label = "Global Gain",
+        .section = "Processing",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "processingGlobalLift",
+        .binding = &shader_injection.processingGlobalLift,
+        .default_value = 0.f,
+        .label = "Global Lift",
+        .section = "Processing",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "processingInternalSampling",
         .binding = &shader_injection.processingInternalSampling,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -250,6 +355,16 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Selects whether to use the vanilla sampling or PQ for the game's internal rendering LUT.",
         .labels = {"Vanilla", "PQ"},
     },
+    // new renodx::utils::settings::Setting{
+    //     .key = "debugDrawGraph",
+    //     .binding = &shader_injection.debugDrawGraph,
+    //     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+    //     .default_value = 0.f,
+    //     .label = "Draw Graph",
+    //     .section = "Debug",
+    //     .tooltip = "Draws graph showing how input/output process",
+    //     .labels = {"Off", "On"},
+    // },
 };
 
 void OnPresetOff() {
@@ -266,13 +381,24 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeWhitePoint", 1);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("colorGradeSceneGrading", 100.f);
+
+  renodx::utils::settings::UpdateSetting("sceneGradingLift", 50.f);
+  renodx::utils::settings::UpdateSetting("sceneGradingGamma", 50.f);
+  renodx::utils::settings::UpdateSetting("sceneGradingGain", 50.f);
+  renodx::utils::settings::UpdateSetting("sceneGradingBlack", 50.f);
+  renodx::utils::settings::UpdateSetting("sceneGradingWhite", 50.f);
+  renodx::utils::settings::UpdateSetting("sceneGradingClip", 50.f);
+  renodx::utils::settings::UpdateSetting("sceneGradingStrength", 50.f);
+
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
   renodx::utils::settings::UpdateSetting("fxVignette", 50.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 0.f);
+
   renodx::utils::settings::UpdateSetting("processingLUTCorrection", 0.f);
   renodx::utils::settings::UpdateSetting("processingLUTOrder", 1.f);
   renodx::utils::settings::UpdateSetting("processingInternalSampling", 0.f);
+  renodx::utils::settings::UpdateSetting("processingGlobalGain", 50.f);
+  renodx::utils::settings::UpdateSetting("processingGlobalLift", 50.f);
 }
 
 }  // namespace

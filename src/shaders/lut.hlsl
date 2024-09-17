@@ -334,6 +334,9 @@ float3 RestoreSaturationLoss(float3 color_input, float3 color_output, Config con
       color_output = lerp(color_output, recolored, config.scaling);                                \
     }                                                                                              \
     color_output = RestoreSaturationLoss(color_input, color_output, config);                       \
+    if (config.strength != 1.f) {                                                                  \
+      color_output = lerp(color_input, color_output, config.strength);                             \
+    }                                                                                              \
     return color_output;                                                                           \
   }
 

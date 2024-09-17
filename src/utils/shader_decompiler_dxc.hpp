@@ -1326,7 +1326,7 @@ class Decompiler {
           } else {
             throw std::invalid_argument("Unknown @dx.op.binary.f32");
           }
-        } else if (functionName == "@dx.op.textureLoad.f32") {
+        } else if (functionName == "@dx.op.textureLoad.f32" || functionName == "@dx.op.textureLoad.i32") {
           // %dx.types.ResRet.f32 @dx.op.textureLoad.f32(i32 66, %dx.types.Handle %40, i32 0, i32 %38, i32 %39, i32 undef, i32 undef, i32 undef, i32 undef)  ; TextureLoad(srv,mipLevelOrSampleCount,coord0,coord1,coord2,offset0,offset1,offset2)
           auto [opNumber, srv, mipLevelOrSampleCount, coord0, coord1, coord2, offset0, offset1, offset2] = StringViewSplit<9>(functionParamsString, param_regex, 2);
           auto ref_resource = std::string{srv.substr(1)};
@@ -1726,6 +1726,10 @@ class Decompiler {
         } else {
           decompiled = std::format("int _{} = {} - {};", variable, ParseInt(a), ParseInt(b));
         }
+      } else if (instruction == "sext") {
+        // %43 = sext i1 %324 to i32
+        auto [a] = StringViewMatch<1>(assignment, std::regex{R"(sext (?:fast )?(?:\S+) (\S+) to (?:\S+))"});
+        decompiled = std::format("int _{} = int({});", variable, ParseInt(a));
       } else if (instruction == "zext") {
         // %43 = zext i1 %39 to i32
         auto [a] = StringViewMatch<1>(assignment, std::regex{R"(zext (?:fast )?(?:\S+) (\S+) to (?:\S+))"});

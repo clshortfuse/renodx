@@ -53,8 +53,8 @@ float3 composite(bool useTexArray = false) {
   float bloomSize = dot(float2(bloomWidth, bloomHeight), float2(bloomWidth, bloomHeight));
   float3 bloomStrength = cb6[0u].rgb * injectedData.fxBloom;
   float inputGain = cb6[0u].w;
-  float postBloomGain = cb6[11u].w;
-  float3 postBloomLift = cb6[11u].rgb;
+  float postBloomGain = lerp(1.f, cb6[11u].w, injectedData.processingGlobalGain);
+  float3 postBloomLift = cb6[11u].rgb * injectedData.processingGlobalLift;
   float3 inputColor;
   float3 bloomColor;
   if (useTexArray) {
@@ -104,7 +104,7 @@ float3 composite(bool useTexArray = false) {
   }
 
 #if DRAW_TONEMAPPER
-  renodx::debug::graph::Config graph_config = DrawStart(gl_FragCoord.xy, outputColor, textureUntonemapped, injectedData.toneMapPeakNits, 100.f);
+  renodx::debug::graph::Config graph_config = renodx::debug::graph::DrawStart(gl_FragCoord.xy, outputColor, textureUntonemapped, injectedData.toneMapPeakNits, 100.f);
   outputColor = graph_config.color;
 #endif
 
@@ -178,8 +178,7 @@ float3 composite(bool useTexArray = false) {
   }
   if (useLUT) {
     if (injectedData.processingInternalSampling == 1.f) {
-      float3 rec2020 = renodx::color::bt2020::from::BT709(fallbackColor);
-      float3 pqColor = renodx::color::pq::from::BT2020((rec2020 * 100.f) / 10000.f);  // reset scale to 0-1 for 0-10000 nits
+      float3 pqColor = renodx::color::pq::from::BT2020(fallbackColor, 100.f);  // reset scale to 0-1 for 0-10000 nits
 
       lutColor = renodx::lut::Sample(textureLUT[lutIndex], sampler0, pqColor).rgb;
     } else {

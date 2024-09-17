@@ -7,6 +7,9 @@
 
 // Must be 32bit aligned
 // Should be 4x32
+// 27 max for pixel/vertex
+// 49 max for 49
+
 struct ShaderInjectData {
   float toneMapType;
   float toneMapPeakNits;
@@ -14,23 +17,33 @@ struct ShaderInjectData {
   float toneMapGammaCorrection;
   float toneMapHueCorrection;
 
-  float colorGradeExposure;
-  float colorGradeHighlights;
-  float colorGradeShadows;
-  float colorGradeContrast;
-  float colorGradeSaturation;
-  float colorGradeBlowout;
-  float colorGradeWhitePoint;
-  float colorGradeLUTStrength;
-  float colorGradeSceneGrading;
-
   float fxBloom;
   float fxVignette;
   float fxFilmGrain;
 
   float processingLUTCorrection;
   float processingLUTOrder;
+  float processingGlobalGain;
+  float processingGlobalLift;
   float processingInternalSampling;
+
+  float colorGradeExposure;
+  float colorGradeHighlights;
+  float colorGradeShadows;
+  float colorGradeContrast;
+  float colorGradeSaturation;
+  float colorGradeBlowout;
+  float colorGradeFlare;
+  float colorGradeWhitePoint;
+  float colorGradeLUTStrength;
+
+  float sceneGradingLift;
+  float sceneGradingGamma;
+  float sceneGradingGain;
+  float sceneGradingColor;
+  float sceneGradingBlack;
+  float sceneGradingClip;
+  float sceneGradingStrength;
 };
 
 #define TONE_MAPPER_TYPE__VANILLA 0.f

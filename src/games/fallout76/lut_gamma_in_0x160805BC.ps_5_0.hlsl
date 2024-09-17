@@ -54,7 +54,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
 
   renodx::lut::Config lut_config = renodx::lut::config::Create(
       s3_s,
-      injectedData.colorGradeLUTStrength,
+      1.f,
       injectedData.colorGradeLUTScaling,  // Cleans up raised black floor
       renodx::lut::config::type::GAMMA_2_2,
       renodx::lut::config::type::GAMMA_2_2,
@@ -126,9 +126,9 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     float3 postProcessColor = r1.xyz * cb2[0].www + r0.xyz;
 
     if (config.type == 0.f) {
-      outputColor = lerp(outputColor, postProcessColor, lut_config.strength);
+      outputColor = lerp(outputColor, postProcessColor, injectedData.colorGradeLUTStrength);
     } else {
-      outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, postProcessColor, lut_config.strength);
+      outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, postProcessColor, injectedData.colorGradeLUTStrength);
     }
   }
   o0.rgb = outputColor;
