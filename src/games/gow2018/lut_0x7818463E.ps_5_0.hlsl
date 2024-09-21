@@ -252,8 +252,7 @@ void main(
         injectedData.colorGradeSaturation,              // saturation
         injectedData.colorGradeBlowout,                 // dechroma
         injectedData.toneMapHueCorrection,              // hue correction
-        renodx::tonemap::uncharted2::BT709(lutInputColor));
-
+        renodx::tonemap::uncharted2::BT709(o0.rgb));
   }
   r0.z = saturate(r1.w * 4 + -1);
   r0.z = -cb0[29].w * r0.z;
