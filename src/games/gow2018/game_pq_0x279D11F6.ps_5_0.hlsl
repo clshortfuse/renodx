@@ -81,7 +81,7 @@ void main(
     r0.xyz = renodx::color::correct::GammaSafe(r0.xyz);     // linearize with 2.2 instead of srgb
     r0.xyz = renodx::color::bt2020::from::BT709(r0.xyz);    // Convert to BT.2020
     r0.xyz *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    o0.xyz = renodx::color::pq::from::BT2020(r0.xyz, 308.f);  // Set paper white to match UI
+    o0.xyz = renodx::color::pq::from::BT2020(r0.xyz, 306.f);  // Set paper white to match UI
   } else {  //  original BT.2020 + PQ code
     r0.xyz = max(float3(0,0,0), r0.xyz);
     // BT.2020

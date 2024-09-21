@@ -29,7 +29,7 @@ void main
   SV_TARGET0.rgb = renodx::color::bt2020::from::PQ(inputColor);
   SV_TARGET0.rgb = renodx::color::bt709::from::BT2020(SV_TARGET0.rgb/80.f) * 10000.f;
   if (injectedData.toneMapType) {
-    SV_TARGET0.rgb *= injectedData.toneMapUINits/308.f;
+    SV_TARGET0.rgb *= injectedData.toneMapUINits/306.f;
     if (injectedData.toneMapType > 1) { // DICE tonemap
       DICESettings config = DefaultDICESettings();
       config.Type = 3u;
