@@ -270,8 +270,7 @@ float3 Encode(float3 color, float cut = 0.010591f) {
   return float3(Encode(color.r, cut), Encode(color.g, cut), Encode(color.b, cut));
 }
 
-float Decode(float t) {
-  const float cut = 0.010591f;
+float Decode(float t, float cut = 0.010591f) {
   const float a = 5.555556f;
   const float b = 0.052272f;
   const float c = 0.247190f;
@@ -284,8 +283,8 @@ float Decode(float t) {
              : (t - f) / e;
 }
 
-float3 Decode(float3 color) {
-  return float3(Decode(color.r), Decode(color.g), Decode(color.b));
+float3 Decode(float3 color, float cut = 0.010591f) {
+  return float3(Decode(color.r, cut), Decode(color.g, cut), Decode(color.b, cut));
 }
 }  // namespace c800
 
@@ -304,6 +303,23 @@ float Encode(float x, float cut = 0.011361f) {
 
 float3 Encode(float3 color, float cut = 0.011361f) {
   return float3(Encode(color.r, cut), Encode(color.g, cut), Encode(color.b, cut));
+}
+
+float Decode(float t, float cut = 0.011361f) {
+  const float a = 5.555556f;
+  const float b = 0.047996f;
+  const float c = 0.244161f;
+  const float d = 0.386036f;
+  const float e = 5.301883f;
+  const float f = 0.092814f;
+
+  return (t > e * cut + f)
+             ? (pow(10, (t - d) / c) - b) / a
+             : (t - f) / e;
+}
+
+float3 Decode(float3 color, float cut = 0.011361f) {
+  return float3(Decode(color.r, cut), Decode(color.g, cut), Decode(color.b, cut));
 }
 }  // namespace c1000
 }  // namespace logc

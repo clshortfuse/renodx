@@ -252,6 +252,14 @@ float3 LinearOutput(float3 color, Config config) {
     color = sign(color) * pow(abs(color), 2.2f);
   } else if (config.type_output == config::type::GAMMA_2_0) {
     color = sign(color) * color * color;
+  } else if (config.type_input == config::type::ARRI_C800) {
+    color = sign(color) * renodx::color::arri::logc::c800::Decode(abs(color));
+  // } else if (config.type_input == config::type::ARRI_C1000) {
+  //   color = sign(color) * renodx::color::arri::logc::c1000::Decode(abs(color));
+  // } else if (config.type_input == config::type::ARRI_C800_NO_CUT) {
+  //   color = sign(color) * renodx::color::arri::logc::c800::Decode(abs(color), 0);
+  // } else if (config.type_input == config::type::ARRI_C1000_NO_CUT) {
+    // color = sign(color) * renodx::color::arri::logc::c1000::Decode(abs(color), 0);
   }
   return color;
 }

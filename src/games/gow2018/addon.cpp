@@ -10,7 +10,7 @@
 #define DEBUG_SLIDERS_OFF
 
 #include <deps/imgui/imgui.h>
-
+#include <include/reshade.hpp>
 
 #include <embed/0x7818463E.h>   // LUT
 #include <embed/0x279D11F6.h>   // Game BT.2020 Conversion + PQ Encoding
@@ -18,6 +18,7 @@
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
+#include "../../mods/swapchain.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
@@ -162,6 +163,17 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeLUTScaling",
+        .binding = &shader_injection.colorGradeLUTScaling,
+        .default_value = 0.f,
+        .label = "LUT Scaling",
+        .section = "Color Grading",
+        .tooltip = "Scales the color grade LUT to full range when size is clamped.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
 };
 
 void OnPresetOff() {
@@ -194,6 +206,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::shader::expected_constant_buffer_index = 11;
 
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r10g10b10a2_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .index = 0
+      });
+
       if (!reshade::register_addon(h_module)) return FALSE;
 
       break;
@@ -203,7 +221,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-
+  renodx::mods::swapchain::Use(fdw_reason); // scRGB swapchain
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
