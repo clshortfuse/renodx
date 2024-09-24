@@ -19,6 +19,7 @@
 #include <embed/0x335B9229.h> // HUD - health bar 
 
 #include <embed/0xA6B73F9E.h> // UI - digital flashes when searching container, startup video with autodesk logo
+#include <embed/0xE7CF0218.h> // UI - transparent element under health bar
 
 // left unchanged, still including so it's marked in devkit
 #include <embed/0xF42FA869.h> // UI - red text background when searching container
@@ -50,6 +51,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 
     CustomSwapchainShader(0xA6B73F9E),  // UI - digital flashes when searching container, startup video with autodesk logo
+    CustomSwapchainShader(0xE7CF0218),  // UI - transparent element under health bar
+
     CustomSwapchainShader(0xF42FA869),  // UI - red text background when searching container, not used
     CustomSwapchainShader(0xB95A4E01),  // UI - cxmul red text background when searching container, not used
 };
