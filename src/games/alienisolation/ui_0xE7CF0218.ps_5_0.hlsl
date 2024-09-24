@@ -1,4 +1,4 @@
-#include "C:\Users\Musa\Documents\Programming Projects\renodx\src\shaders\renodx.hlsl"
+#include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sun Sep 22 01:43:39 2024
 
@@ -28,10 +28,8 @@ void main(
   o0.xyzw = v0.xyzw * r0.wwww + r0.xyzw;
 
   o0.rgb = saturate(o0.rgb);
-  o0.rgb = (injectedData.toneMapGammaCorrection
-                ? pow(o0.rgb, 2.2f)
-                : renodx::color::bt709::from::SRGB(o0.rgb));
-  float3 colorBT2020 = renodx::color::bt2020::from::BT709(o0.rgb);
-  o0.rgb = renodx::color::pq::from::BT2020(colorBT2020, injectedData.toneMapUINits);
+  o0.rgb = pow(o0.rgb, 2.2f);
+  o0.rgb = renodx::color::bt2020::from::BT709(o0.rgb);
+  o0.rgb = renodx::color::pq::from::BT2020(o0.rgb, injectedData.toneMapUINits);
   return;
 }

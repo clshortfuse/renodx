@@ -35,10 +35,8 @@ void main(
   o0.w = v0.w;
 
   o0.rgb = saturate(o0.rgb);
-  o0.rgb = injectedData.toneMapGammaCorrection
-               ? pow(o0.rgb, 2.2f)
-               : renodx::color::bt709::from::SRGB(o0.rgb);
-  float3 colorBT2020 = renodx::color::bt2020::from::BT709(o0.rgb);
-  o0.rgb = renodx::color::pq::from::BT2020(colorBT2020, injectedData.toneMapGameNits);
+  o0.rgb = pow(o0.rgb, 2.2f);
+  o0.rgb = renodx::color::bt2020::from::BT709(o0.rgb);
+  o0.rgb = renodx::color::pq::from::BT2020(o0.rgb, injectedData.toneMapUINits);
   return;
 }
