@@ -30,20 +30,20 @@ void main(
   r0.xyzw = t0.SampleLevel(s0_s, v1.xy, 0).xyzw;
   o0.xyzw = r0.xyzw;
 
-
-  if (injectedData.toneMapGammaCorrection) { // fix srgb 2.2 mismatch
-    o0.xyz = renodx::color::srgb::from::BT709(o0.xyz);
-    o0.xyz = sign(o0.xyz) * pow(abs(o0.xyz), 2.2f);
-  }
-  // apply game gamma adjustment slider
-  o0.xyz = sign(o0.xyz) * pow(abs(o0.xyz), cb0[0].xxx);
+  // o0.xyz = sign(o0.xyz) * pow(abs(o0.xyz), cb0[0].xxx);  // disable in game gamma slider
 
   if (injectedData.toneMapType == 0) {  // vanilla tonemap flickers if left unclamped
     o0.xyz = saturate(o0.xyz);
   } else if (injectedData.toneMapType == 2) {
     o0.rgb = extendGamut(o0.rgb, injectedData.colorGradeGamutExpansion);
   }
-  o0.xyz *= injectedData.toneMapGameNits/80.f;
+  if (injectedData.toneMapGammaCorrection) { // fix srgb 2.2 mismatch
+    o0.xyz = renodx::color::correct::GammaSafe(o0.xyz);
+    o0.xyz *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+    o0.xyz = renodx::color::correct::GammaSafe(o0.xyz, true);
+  } else {
+    o0.xyz *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+  }
   o0.w = saturate(o0.w);
   return;
 }

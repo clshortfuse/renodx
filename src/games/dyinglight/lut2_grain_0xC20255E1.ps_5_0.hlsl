@@ -91,7 +91,7 @@ void main(
   if (injectedData.toneMapType == 2) {    
     const float paperWhite = injectedData.toneMapGameNits / renodx::color::srgb::REFERENCE_WHITE;
     const float peakWhite = injectedData.toneMapPeakNits / renodx::color::srgb::REFERENCE_WHITE;
-    const float highlightsShoulderStart = vanillaMidGray * paperWhite;  // Don't tonemap the blended part of the tonemapper
+    const float highlightsShoulderStart = min(0.5, vanillaMidGray * paperWhite);  // Don't tonemap the blended part of the tonemapper
 
     DICESettings config = DefaultDICESettings();
     config.Type = 1;
