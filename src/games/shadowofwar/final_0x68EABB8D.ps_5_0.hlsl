@@ -44,10 +44,12 @@ void main(
 
   r0.xyz *= injectedData.toneMapGameNits / 80.f;
 
-  DICESettings config = DefaultDICESettings();
-  config.Type = 3u;
-  // config.ShoulderStart = 0.5f;
-  r0.rgb = DICETonemap(r0.rgb, injectedData.toneMapPeakNits/80.f, config);
+  if (injectedData.toneMapType) {
+    DICESettings config = DefaultDICESettings();
+    config.Type = 3u;
+    config.ShoulderStart = 0.5f;
+    r0.rgb = DICETonemap(r0.rgb, injectedData.toneMapPeakNits/80.f, config);
+  }
 
   r1.xyzw = uiTexture.SampleLevel(TextureSampler_s, v1.xy, 0).xyzw;
   r0.w = 1 + -r1.w;
