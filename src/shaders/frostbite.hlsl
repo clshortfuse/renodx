@@ -1,6 +1,7 @@
 #ifndef SRC_SHADERS_FROSTBITE_HLSL_
 #define SRC_SHADERS_FROSTBITE_HLSL_
 
+#include "./color.hlsl"
 #include "./math.hlsl"
 
 namespace renodx {

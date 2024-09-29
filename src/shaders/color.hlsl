@@ -125,20 +125,26 @@ static const float3 BOURGIN_D65_Y = float3(0.222015, 0.706655, 0.071330);
 namespace bt709 {
 static const float REFERENCE_WHITE = 100.f;
 namespace from {
-float3 AP1(float3 ap1) { return mul(AP1_TO_BT709_MAT, ap1); }
+float3 AP1(float3 ap1) {
+  return mul(AP1_TO_BT709_MAT, ap1);
+}
 
-float3 BT2020(float3 bt2020) { return mul(BT2020_TO_BT709_MAT, bt2020); }
+float3 BT2020(float3 bt2020) {
+  return mul(BT2020_TO_BT709_MAT, bt2020);
+}
 
 float3 OkLab(float3 oklab) {
   static const float3x3 OKLAB_2_OKLABLMS = {
-      1.f, 0.3963377774f, 0.2158037573f,
-      1.f, -0.1055613458f, -0.0638541728f,
-      1.f, -0.0894841775f, -1.2914855480f};
+    1.f, 0.3963377774f, 0.2158037573f,
+    1.f, -0.1055613458f, -0.0638541728f,
+    1.f, -0.0894841775f, -1.2914855480f
+  };
 
   static const float3x3 OKLABLMS_2_BT709 = {
-      4.0767416621f, -3.3077115913f, 0.2309699292f,
-      -1.2684380046f, 2.6097574011f, -0.3413193965f,
-      -0.0041960863f, -0.7034186147f, 1.7076147010f};
+    4.0767416621f, -3.3077115913f, 0.2309699292f,
+    -1.2684380046f, 2.6097574011f, -0.3413193965f,
+    -0.0041960863f, -0.7034186147f, 1.7076147010f
+  };
 
   float3 lms = mul(OKLAB_2_OKLABLMS, oklab);
 
@@ -170,21 +176,31 @@ float4 SRGBA(float4 color) {
 
 namespace bt2020 {
 namespace from {
-float3 BT709(float3 bt709) { return mul(BT709_TO_BT2020_MAT, bt709); }
+float3 BT709(float3 bt709) {
+  return mul(BT709_TO_BT2020_MAT, bt709);
+}
 }  // namespace from
 }  // namespace bt2020
 
 namespace ap1 {
 namespace from {
-float3 BT709(float3 bt709) { return mul(BT709_TO_AP1_MAT, bt709); }
+float3 BT709(float3 bt709) {
+  return mul(BT709_TO_AP1_MAT, bt709);
+}
 }  // namespace from
 }  // namespace ap1
 
 namespace y {
 namespace from {
-float BT601(float3 bt601) { return dot(bt601, BT601_Y); }
-float BT709(float3 bt709) { return dot(bt709, BT709_TO_XYZ_MAT[1].rgb); }
-float BT2020(float3 bt2020) { return dot(bt2020, BT2020_TO_XYZ_MAT[1].rgb); }
+float BT601(float3 bt601) {
+  return dot(bt601, BT601_Y);
+}
+float BT709(float3 bt709) {
+  return dot(bt709, BT709_TO_XYZ_MAT[1].rgb);
+}
+float BT2020(float3 bt2020) {
+  return dot(bt2020, BT2020_TO_XYZ_MAT[1].rgb);
+}
 }  // namespace from
 }  // namespace y
 
@@ -329,13 +345,15 @@ namespace oklab {
 namespace from {
 float3 BT709(float3 bt709) {
   static const float3x3 BT709_2_OKLABLMS = {
-      0.4122214708f, 0.5363325363f, 0.0514459929f,
-      0.2119034982f, 0.6806995451f, 0.1073969566f,
-      0.0883024619f, 0.2817188376f, 0.6299787005f};
+    0.4122214708f, 0.5363325363f, 0.0514459929f,
+    0.2119034982f, 0.6806995451f, 0.1073969566f,
+    0.0883024619f, 0.2817188376f, 0.6299787005f
+  };
   static const float3x3 OKLABLMS_2_OKLAB = {
-      0.2104542553f, 0.7936177850f, -0.0040720468f,
-      1.9779984951f, -2.4285922050f, 0.4505937099f,
-      0.0259040371f, 0.7827717662f, -0.8086757660f};
+    0.2104542553f, 0.7936177850f, -0.0040720468f,
+    1.9779984951f, -2.4285922050f, 0.4505937099f,
+    0.0259040371f, 0.7827717662f, -0.8086757660f
+  };
 
   float3 lms = mul(BT709_2_OKLABLMS, bt709);
 
@@ -395,7 +413,9 @@ float3 ICtCp(float3 col) {
 }  // namespace from
 
 namespace clamp {
-float3 BT709(float3 bt709) { return max(0, bt709); }
+float3 BT709(float3 bt709) {
+  return max(0, bt709);
+}
 float3 BT2020(float3 bt709) {
   float3 bt2020 = renodx::color::bt2020::from::BT709(bt709);
   bt2020 = max(0, bt2020);

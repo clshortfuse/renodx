@@ -1,5 +1,5 @@
-#ifndef SRC_SHADERS_COLOR_CORRECT_HLSL_
-#define SRC_SHADERS_COLOR_CORRECT_HLSL_
+#ifndef SRC_SHADERS_COLORCORRECT_HLSL_
+#define SRC_SHADERS_COLORCORRECT_HLSL_
 
 #include "./color.hlsl"
 
@@ -73,4 +73,5 @@ float3 Hue(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
 }  // namespace correct
 }  // namespace color
 }  // namespace renodx
-#endif  // SRC_SHADERS_COLOR_CORRECT_HLSL_
+
+#endif  // SRC_SHADERS_COLORCORRECT_HLSL_

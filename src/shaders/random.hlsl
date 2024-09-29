@@ -1,5 +1,5 @@
-#ifndef SRC_SHADERS_UTILS_RANDOM_HLSL_
-#define SRC_SHADERS_UTILS_RANDOM_HLSL_
+#ifndef SRC_SHADERS_RANDOM_HLSL_
+#define SRC_SHADERS_RANDOM_HLSL_
 
 namespace renodx {
 namespace random {
@@ -24,7 +24,6 @@ float4 Hash41(float p) {
   p4 += dot(p4, p4.wzxy + 33.33);
   return frac((p4.xxyz + p4.yzzw) * p4.zywx);
 }
-
 
 }  // namespace random
 }  // namespace renodx

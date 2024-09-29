@@ -1,6 +1,7 @@
 #ifndef SRC_SHADERS_DICE_HLSL_
 #define SRC_SHADERS_DICE_HLSL_
 
+#include "./color.hlsl"
 #include "./math.hlsl"
 
 namespace renodx {
@@ -75,4 +76,4 @@ float3 BT709(float3 color, float output_luminance_max, float highlights_shoulder
 }  // namespace tonemap
 }  // namespace renodx
 
-#endif // SRC_SHADERS_DICE_HLSL_
+#endif  // SRC_SHADERS_DICE_HLSL_

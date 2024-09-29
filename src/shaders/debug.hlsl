@@ -1,3 +1,6 @@
+#ifndef SRC_SHADERS_DEBUG_HLSL_
+#define SRC_SHADERS_DEBUG_HLSL_
+
 #include "./color.hlsl"
 
 namespace renodx {
@@ -17,10 +20,10 @@ struct Config {
 };
 
 Config DrawStart(float2 position, float3 color_input, float width, float height, float peak_nits, float scale = 80.f) {
-  Config config = {false, 0, 0, color_input, peak_nits, scale};
+  Config config = { false, 0, 0, color_input, peak_nits, scale };
   uint2 offset = uint2(
       position.x - (width - SIZE),
-      (SIZE)-position.y);
+      SIZE - position.y);
   if (offset.x >= 0 && offset.y >= 0) {
     config.color = float3(0.15f, 0.15f, 0.15f);
     if (
@@ -90,3 +93,5 @@ float3 DrawEnd(float3 color_input, inout Config config) {
 }  // namespace graph
 }  // namespace debug
 }  // namespace renodx
+
+#endif  // SRC_SHADERS_DEBUG_HLSL_
