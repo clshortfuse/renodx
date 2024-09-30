@@ -11,14 +11,14 @@ static const float FLT11_MAX = 65024.f;
 static const float FLT16_MAX = 65504.f;
 
 float Sign(float x) {
-#if __SHADER_TARGET_MINOR >= 6
+#if __SHADER_TARGET_MAJOR >= 6
   return sign(x);
 #endif
   return saturate(x * FLT_MAX + 0.5f) * 2.f - 1.f;
 }
 
 float3 Sign(float3 color) {
-#if __SHADER_TARGET_MINOR >= 6
+#if __SHADER_TARGET_MAJOR >= 6
   return sign(color);
 #endif
   return saturate(color * FLT_MAX + 0.5f) * 2.f - 1.f;
