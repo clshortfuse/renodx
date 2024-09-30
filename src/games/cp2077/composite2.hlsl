@@ -8,7 +8,6 @@ void composite2_vignette(in float in_r, in float in_g, in float in_b,
 }
 
 void composite2_draw_graph_start() {
-  
 }
 
 void composite2_sample(Texture3D<float3> textureLUT[3], SamplerState sampler0,
@@ -40,7 +39,7 @@ void composite2_sample(Texture3D<float3> textureLUT[3], SamplerState sampler0,
     float3 lut_color;
 
     if (injectedData.processingInternalSampling == 1.f) {
-      float3 pqColor = renodx::color::pq::from::BT2020(color, 100.f);  // reset scale to 0-1 for 0-10000 nits
+      float3 pqColor = renodx::color::pq::Encode(color, 100.f);  // reset scale to 0-1 for 0-10000 nits
       lut_color = renodx::lut::Sample(textureLUT[lutIndex], sampler0, pqColor).rgb;
     } else {
       // cb6[6u].x 0.05888671

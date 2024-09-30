@@ -733,7 +733,7 @@ void frag_main() {
       // _8
   );
   testColor = renodx::color::bt2020::from::BT709(testColor);
-  testColor = renodx::color::pq::from::BT2020(testColor * injectedData.toneMapGameNits / 10000.f);
+  testColor = renodx::color::pq::Encode(testColor, injectedData.toneMapGameNits);
   // if (injectedData.toneMapType == 0.f) {
   //   // testColor = untonemapped;
   //   testColor = renodx::color::bt2020::from::BT709(testColor);

@@ -140,7 +140,7 @@ float4 main(
   //   SV_Target.rgb = float3(_450, _451, _452) * 3.f;
   //   SV_Target.rgb = renodx::color::bt2020::from::BT709(SV_Target.rgb);
   //   // SV_Target.rgb = renodx::color::bt2020::from::BT2020(SV_Target.rgb);
-  //   SV_Target.rgb = renodx::color::pq::from::BT2020(SV_Target.rgb * 203 / 10000.f);
+  //   SV_Target.rgb = renodx::color::pq::Encode(SV_Target.rgb, 203.f);
   // }
   // SV_Target.rgb = renodx::color::ap1::from::BT709(SV_Target.rgb);
 

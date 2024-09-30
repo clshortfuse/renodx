@@ -231,7 +231,7 @@ float3 ConvertInput(float3 color, Config lut_config) {
     color = renodx::color::arri::logc::c1000::Encode(max(0, color), 0);
   } else if (lut_config.type_input == config::type::PQ) {
     float3 bt2020 = renodx::color::bt2020::from::BT709(color);
-    color = renodx::color::pq::from::BT2020((bt2020 * 100.f) / 10000.f);
+    color = renodx::color::pq::Encode((bt2020 * 100.f) / 10000.f);
   }
   return color;
 }

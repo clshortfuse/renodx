@@ -178,7 +178,7 @@ float3 composite(bool useTexArray = false) {
   }
   if (useLUT) {
     if (injectedData.processingInternalSampling == 1.f) {
-      float3 pqColor = renodx::color::pq::from::BT2020(fallbackColor, 100.f);  // reset scale to 0-1 for 0-10000 nits
+      float3 pqColor = renodx::color::pq::Encode(fallbackColor, 100.f);  // reset scale to 0-1 for 0-10000 nits
 
       lutColor = renodx::lut::Sample(textureLUT[lutIndex], sampler0, pqColor).rgb;
     } else {

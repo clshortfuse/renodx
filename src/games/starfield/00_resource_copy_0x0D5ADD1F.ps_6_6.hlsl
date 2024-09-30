@@ -70,7 +70,7 @@ void frag_main() {
     SV_Target.rgb = renodx::color::bt2020::from::BT709(SV_Target.rgb);  // use bt2020
     SV_Target.rgb /= 10000.f;                                           // Scale for PQ
     SV_Target.rgb = max(0, SV_Target.rgb);                              // clamp out of gamut
-    SV_Target.rgb = renodx::color::pq::from::BT2020(SV_Target.rgb);     // convert to PQ
+    SV_Target.rgb = renodx::color::pq::Encode(SV_Target.rgb);           // convert to PQ
     SV_Target.rgb = min(1.f, SV_Target.rgb);                            // clamp PQ (10K nits)
   } else {
     SV_Target.rgb /= 80.f;

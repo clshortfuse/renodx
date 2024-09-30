@@ -156,7 +156,7 @@ PS_OUTPUT main(PS_INPUT psInput) {
     r6.rgb = pow(r6.rgb, 2.2f);                                // 2.2 Gamma
     r7.rgb = mul(renodx::color::BT709_TO_BT2020_MAT, r6.rgb);  // PQ color space
     r6.rgb = r7.rgb * 600 / 10000.f;                           // Stretch to 600 nits
-    r6.rgb = renodx::color::pq::from::BT2020(r6.rgb);          // PQ
+    r6.rgb = renodx::color::pq::Encode(r6.rgb);                // PQ
     r3.rgb = min(r6.rgb, 1.f);                                 // Clamp (again?)
   } else {
     r0.x = cmp(asint(cb0[37].y) == 5);  // type == 5
@@ -216,7 +216,7 @@ PS_OUTPUT main(PS_INPUT psInput) {
       r4.rgb = finalGain * r0.rgb;
 #endif
     }
-    r3.rgb = renodx::color::pq::from::BT2020(r4.rgb);
+    r3.rgb = renodx::color::pq::Encode(r4.rgb);
     r3.rgb = min(r3.rgb, 1.f);
   }
 
@@ -228,7 +228,7 @@ PS_OUTPUT main(PS_INPUT psInput) {
   testColor *= 80;
   testColor /= 10000.f;  // Scale for PQ
   testColor = max(0, testColor);
-  testColor = renodx::color::pq::from::BT2020(testColor);
+  testColor = renodx::color::pq::Encode(testColor);
   // psOutput.o0.rgb = testColor.rgb;
 
   return psOutput;

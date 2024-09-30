@@ -205,17 +205,28 @@ float BT2020(float3 bt2020) {
 }  // namespace y
 
 namespace pq {
-namespace from {
-float3 BT2020(float3 bt2020_color, float scaling = 10000.f) {
-  static const float M1 = 2610.f / 16384.f;           // 0.1593017578125f;
-  static const float M2 = 128.f * (2523.f / 4096.f);  // 78.84375f;
-  static const float C1 = 3424.f / 4096.f;            // 0.8359375f;
-  static const float C2 = 32.f * (2413.f / 4096.f);   // 18.8515625f;
-  static const float C3 = 32.f * (2392.f / 4096.f);   // 18.6875f;
+static const float M1 = 2610.f / 16384.f;           // 0.1593017578125f;
+static const float M2 = 128.f * (2523.f / 4096.f);  // 78.84375f;
+static const float C1 = 3424.f / 4096.f;            // 0.8359375f;
+static const float C2 = 32.f * (2413.f / 4096.f);   // 18.8515625f;
+static const float C3 = 32.f * (2392.f / 4096.f);   // 18.6875f;
 
-  bt2020_color *= (scaling / 10000.f);
-  float3 y_m1 = pow(bt2020_color, M1);
+float3 Encode(float3 color, float scaling = 10000.f) {
+  color *= (scaling / 10000.f);
+  float3 y_m1 = pow(color, M1);
   return pow((C1 + C2 * y_m1) / (1.f + C3 * y_m1), M2);
+}
+
+float3 Decode(float3 in_color, float scaling = 10000.f) {
+  float3 e_m12 = pow(in_color, 1.f / M2);
+  float3 out_color = pow(max(e_m12 - C1, 0) / (C2 - C3 * e_m12), 1.f / M1);
+  return out_color * (10000.f / scaling);
+}
+
+namespace from {
+/// @deprecated - Use pq::Encode
+float3 BT2020(float3 bt2020_color, float scaling = 10000.f) {
+  return Encode(bt2020_color, scaling);
 }
 }  // namespace from
 }  // namespace pq
@@ -343,16 +354,9 @@ float3 Decode(float3 color, float cut = 0.011361f) {
 
 namespace bt2020 {
 namespace from {
+/// @deprecated - Use pq::Decode
 float3 PQ(float3 pq_color, float scaling = 10000.f) {
-  static const float M1 = 2610.f / 16384.f;           // 0.1593017578125f;
-  static const float M2 = 128.f * (2523.f / 4096.f);  // 78.84375f;
-  static const float C1 = 3424.f / 4096.f;            // 0.8359375f;
-  static const float C2 = 32.f * (2413.f / 4096.f);   // 18.8515625f;
-  static const float C3 = 32.f * (2392.f / 4096.f);   // 18.6875f;
-
-  float3 e_m12 = pow(pq_color, 1.f / M2);
-  float3 bt2020 = pow(max(e_m12 - C1, 0) / (C2 - C3 * e_m12), 1.f / M1);
-  return bt2020 * (10000.f / scaling);
+  return pq::Decode(pq_color, scaling);
 }
 }  // namespace from
 }  // namespace bt2020

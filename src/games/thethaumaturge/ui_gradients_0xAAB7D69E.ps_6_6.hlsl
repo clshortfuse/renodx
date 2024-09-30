@@ -190,6 +190,6 @@ float4 main(
   SV_Target.w = _73;
 
   SV_Target.rgb = renodx::color::bt2020::from::BT709(SV_Target.rgb);
-  SV_Target.rgb = renodx::color::pq::from::BT2020(SV_Target.rgb, 203.f);
+  SV_Target.rgb = renodx::color::pq::Encode(SV_Target.rgb, 203.f);
   return SV_Target;
 }

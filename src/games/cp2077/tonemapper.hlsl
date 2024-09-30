@@ -273,7 +273,7 @@ float4 tonemap(bool isACESMode = false) {
   const float3 position = float3(gl_GlobalInvocationID.xyz) / (float(lutSize) - 1.f);
   float3 inputColor;
   if (injectedData.processingInternalSampling == 1.f) {
-    inputColor = renodx::color::bt2020::from::PQ(position, 100.f);
+    inputColor = renodx::color::pq::Decode(position, 100.f);
   } else {
     inputColor = exp2((position - cb6[41u].w) / cb6[41u].z);
   }

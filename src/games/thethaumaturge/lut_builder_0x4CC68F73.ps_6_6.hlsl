@@ -162,10 +162,10 @@ cbuffer cb1 : register(b1) {
 SamplerState s0 : register(s0);
 
 float4 main(
-  noperspective float2 TEXCOORD : TEXCOORD,
-  noperspective float4 SV_Position : SV_Position,
-  nointerpolation uint SV_RenderTargetArrayIndex : SV_RenderTargetArrayIndex
-) : SV_Target {
+    noperspective float2 TEXCOORD: TEXCOORD,
+    noperspective float4 SV_Position: SV_Position,
+    nointerpolation uint SV_RenderTargetArrayIndex: SV_RenderTargetArrayIndex)
+    : SV_Target {
   float4 SV_Target;
   // texture _1 = t0;
   // SamplerState _2 = s0;
@@ -1013,7 +1013,6 @@ float4 main(
 
   bool is_hdr = (output_type >= 3u && output_type <= 6u);
   if (injectedData.toneMapType != 0.f && is_hdr) {
-
     renodx::tonemap::Config config = renodx::tonemap::config::Create();
     config.type = injectedData.toneMapType;
     config.peak_nits = injectedData.toneMapPeakNits;
@@ -1454,7 +1453,7 @@ float4 main(
     bool is_pq = (output_type == 3u || output_type == 4u);
     if (is_pq) {
       final_color = renodx::color::bt2020::from::BT709(final_color);
-      final_color = renodx::color::pq::from::BT2020(final_color, injectedData.toneMapGameNits);
+      final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
     }
 
     return float4(final_color * 0.9523810148239136f, 0);

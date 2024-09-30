@@ -506,9 +506,9 @@ float4 main(
   float3 post_lut = float3(_452, _453, _454);
 
   // Custom
-  float3 lut_input = renodx::color::pq::from::BT2020(untonemapped, 100.f);
+  float3 lut_input = renodx::color::pq::Encode(untonemapped, 100.f);
   float3 sampled = renodx::lut::Sample(t6, s4, lut_input);
-  post_lut = renodx::color::bt2020::from::PQ(sampled, 100.f);
+  post_lut = renodx::color::pq::Decode(sampled, 100.f);
 
   float _455 = _20 * 543.3099975585938f;
   float _456 = _455 + _19;
@@ -616,6 +616,6 @@ float4 main(
   SV_Target.rgb = renodx::color::bt2020::from::BT709(SV_Target.rgb);
   SV_Target.rgb *= 203.f;
   SV_Target.rgb /= 10000.f;
-  SV_Target.rgb = renodx::color::pq::from::BT2020(SV_Target.rgb);
+  SV_Target.rgb = renodx::color::pq::Encode(SV_Target.rgb);
   return SV_Target;
 }
