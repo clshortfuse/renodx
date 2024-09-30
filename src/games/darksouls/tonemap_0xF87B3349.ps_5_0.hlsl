@@ -1,6 +1,7 @@
+#include "./DICE.hlsl"
 #include "./shared.h"
 
-// ---- Created with 3Dmigoto v1.3.16 on Tue Jun 04 23:18:36 2024
+// ---- Created with 3Dmigoto v1.3.16 on Sat Sep 28 17:20:55 2024
 
 cbuffer _Globals : register(b0) {
   float4 DL_FREG_007 : packoffset(c7);
@@ -86,52 +87,35 @@ Texture2D<float4> gSMP_5 : register(t5);
 // 3Dmigoto declarations
 #define cmp -
 
-void main(float4 v0
-          : SV_Position0, float4 v1
-          : TEXCOORD1, out float4 o0
-          : SV_Target0) {
+/// Adjusts exposure by sampling a texture.
+///
+/// @param untonemapped - The HDR color before applying auto-exposure.
+/// @return The HDR color with auto-exposure applied.
+float3 applyAutoExposure(float3 untonemapped) {
+  float4 r0;
+
+  r0.w = gSMP_5.Sample(gSMP_5Sampler_s, float2(0.5, 0.5)).x;
+  r0.w = max(DL_FREG_056.z, r0.w);
+  r0.w = min(DL_FREG_056.w, r0.w);
+  r0.w = 9.99999975e-005 + r0.w;
+  r0.w = DL_FREG_054.x / r0.w;
+
+  return untonemapped * r0.w;
+}
+
+/// Applies the vanilla tonemapper to the untonemapped HDR color.
+/// Also applies `renodx::color::grade::UserColorGrading()` when
+/// using DICE to allow sliders to work properly when blending.
+///
+/// @param untonemapped - The HDR color before applying the vanilla tonemapper.
+/// @return The color processed through the vanilla tonemapper.
+float3 applyVanillaTM(float3 untonemapped) {
   float4 r0, r1, r2, r3, r4, r5;
-  uint4 bitmask, uiDest;
-  float4 fDest;
 
-  // Initial tonemapper settings, used in case 0
-  float vanillaMidGray = DL_FREG_054.z / DL_FREG_054.w;
-  float renoDRTContrast = 1.2f;
-  float renoDRTFlare = 0.f;
-  float renoDRTShadows = 1.f;
-  float renoDRTSaturation = 1.3f;
-  float renoDRTHighlights = 1.f;
-  float3 vanillaColor;
-
-  r0.xyz = gSMP_0.Sample(gSMP_0Sampler_s, v1.xy).xyz;
-  r1.xyzw = gSMP_1.Sample(gSMP_1Sampler_s, v1.xy).wxyz;
-  if (injectedData.toneMapType == 0) {  // Clamp vanilla tonemapper to BT709
-    r0.xyz = max(0, r0.xyz);
-    r1.yzw = max(0, r1.yzw);
-  }
-  r1.x = saturate(r1.x);
-  r2.xyz = gSMP_3.Sample(gSMP_3Sampler_s, v1.xy).xyz;
-  r0.w = DL_FREG_071.y + -DL_FREG_056.x;
-  r0.w = r1.x * r0.w + DL_FREG_056.x;
-  r0.xyz = r0.www * r1.yzw + r0.xyz;
-  r0.xyz = DL_FREG_056.yyy * r2.xyz + r0.xyz;
-  r0.w = (uint)DL_FREG_057.x;
-
-  float3 untonemapped = r0.xyz;
-
-  // switch case with multiple tonemappers, not sure when alternative tonemappers enable
-  switch (r0.w) {
-    case 0:  // Vanilla tonemapper 0
-      r0.w = gSMP_5.Sample(gSMP_5Sampler_s, float2(0.5, 0.5)).x;
-      r0.w = max(DL_FREG_056.z, r0.w);
-      r0.w = min(DL_FREG_056.w, r0.w);
-      r0.w = 9.99999975e-005 + r0.w;
-      r0.w = DL_FREG_054.x / r0.w;
-      r2.xyz = r0.xyz * r0.www; // exposure adjustment
-      if (injectedData.toneMapType != 0) {  // untonemapped
-        untonemapped = r2.xyz;
-      }
-      r0.w = DL_FREG_055.z * DL_FREG_055.y;  // Start of tonemap 0
+  switch ((uint)DL_FREG_057.x) {
+    case 0:
+      r2.xyz = untonemapped;
+      r0.w = DL_FREG_055.z * DL_FREG_055.y;
       r3.xyz = DL_FREG_055.xxx * r2.xyz + r0.www;
       r4.xy = DL_FREG_055.ww * DL_FREG_054.zw;
       r3.xyz = r2.xyz * r3.xyz + r4.xxx;
@@ -148,50 +132,18 @@ void main(float4 v0
       r0.w = r0.w + -r1.w;
       r1.xyz = r2.xyz / r0.www;
       break;
-
-    case 1:  // Vanilla tonemapper 1
-      r0.w = gSMP_5.Sample(gSMP_5Sampler_s, float2(0.5, 0.5)).x;
-      r0.w = max(DL_FREG_056.z, r0.w);
-      r0.w = min(DL_FREG_056.w, r0.w);
-      r0.w = 9.99999975e-005 + r0.w;
-      r0.w = DL_FREG_054.x / r0.w;
-      r2.xyz = r0.xyz * r0.www; // exposure adjustment
-      if (injectedData.toneMapType != 0) {  // RenoDRT parameters + untonemapped
-        vanillaMidGray = .15f;
-        renoDRTContrast = 0.92f;
-        renoDRTFlare = 0.f;
-        renoDRTShadows = 1.f;
-        renoDRTSaturation = 1.3f;
-        renoDRTHighlights = 1.f;
-        untonemapped = r2.xyz;
-      }
-      r0.w = dot(r2.xyz, float3(0.212672904, 0.715152204,
-                                0.0721750036));  // Start of tonemap 1
+    case 1:
+      r2.xyz = untonemapped;
+      r0.w = dot(r2.xyz, float3(0.212672904, 0.715152204, 0.0721750036));
       r0.w = max(9.99999975e-005, r0.w);
       r1.w = 1 + r0.w;
       r1.w = r0.w / r1.w;
       r2.xyz = r1.www * r2.xyz;
       r1.xyz = r2.xyz / r0.www;
       break;
-
-    case 2:  // Vanilla tonemapper 2
-      r0.w = gSMP_5.Sample(gSMP_5Sampler_s, float2(0.5, 0.5)).x;
-      r0.w = max(DL_FREG_056.z, r0.w);
-      r0.w = min(DL_FREG_056.w, r0.w);
-      r0.w = 9.99999975e-005 + r0.w;
-      r0.w = DL_FREG_054.x / r0.w;
-      r0.xyz = r0.xyz * r0.www; // exposure adjustment
-      if (injectedData.toneMapType != 0) {  // RenoDRT parameters + untonemapped
-        vanillaMidGray = .151f;
-        renoDRTContrast = 0.94f;
-        renoDRTFlare = 0.f;
-        renoDRTShadows = 1.f;
-        renoDRTSaturation = 1.3f;
-        renoDRTHighlights = 1.f;
-        untonemapped = r0.xyz;
-      }
-      r0.w = dot(r0.xyz, float3(0.212672904, 0.715152204,
-                                0.0721750036));  // Start of tonemap 2
+    case 2:
+      r0.xyz = untonemapped;
+      r0.w = dot(r0.xyz, float3(0.212672904, 0.715152204, 0.0721750036));
       r0.w = max(9.99999975e-005, r0.w);
       r1.w = DL_FREG_054.y * DL_FREG_054.y;
       r1.w = r0.w / r1.w;
@@ -202,92 +154,44 @@ void main(float4 v0
       r0.xyz = r1.www * r0.xyz;
       r1.xyz = r0.xyz / r0.www;
       break;
-
-    default:  // Debug?
+    default:
       r1.xyz = float3(1, 0, 1);
       break;
   }
 
-  float3 hdrColor;
-  float3 sdrColor;
-  if (injectedData.toneMapType != 0) {
+  float3 outputColor = r1.xyz;
 
-    vanillaColor = r1.xyz;  // vanilla tonemap, used for hue correction
-
-    renodx::tonemap::Config hdrConfig = renodx::tonemap::config::Create();
-    hdrConfig.type = injectedData.toneMapType;
-    hdrConfig.peak_nits = injectedData.toneMapPeakNits;
-    hdrConfig.game_nits = injectedData.toneMapGameNits;
-    hdrConfig.gamma_correction = injectedData.toneMapGammaCorrection - 1;
-    hdrConfig.exposure = injectedData.colorGradeExposure;
-    hdrConfig.highlights = injectedData.colorGradeHighlights;
-    hdrConfig.shadows = injectedData.colorGradeShadows;
-    hdrConfig.contrast = injectedData.colorGradeContrast;
-    hdrConfig.saturation = injectedData.colorGradeSaturation;
-    hdrConfig.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
-    hdrConfig.hue_correction_color = vanillaColor,
-    hdrConfig.hue_correction_strength = injectedData.toneMapHueCorrection;
-    hdrConfig.reno_drt_highlights = renoDRTHighlights;
-    hdrConfig.reno_drt_shadows = renoDRTShadows;
-    hdrConfig.reno_drt_contrast = renoDRTContrast;
-    hdrConfig.reno_drt_saturation = renoDRTSaturation;
-    hdrConfig.reno_drt_dechroma = injectedData.colorGradeBlowout;
-    hdrConfig.mid_gray_value = vanillaMidGray;
-    hdrConfig.mid_gray_nits = vanillaMidGray * 100.f;
-    hdrConfig.reno_drt_flare = renoDRTFlare;
-
-    // don't allow for double adjustment of color grading when blending is on
-    if (injectedData.toneMapBlend) {
-      hdrConfig.exposure = 1.f;
-      hdrConfig.shadows = 1.f;
-      hdrConfig.contrast = 1.f;
-      hdrConfig.saturation = 1.f;
-    }
-
-    renodx::tonemap::Config sdrConfig = hdrConfig;
-    sdrConfig.peak_nits = injectedData.toneMapGameNits;
-
-    hdrColor = renodx::tonemap::config::Apply(untonemapped, hdrConfig);
-    sdrColor = renodx::tonemap::config::Apply(untonemapped, sdrConfig);
-
-    // blend custom tonemapper with vanilla by channel
-    if (injectedData.toneMapBlend) {
-      float3 negHDR = min(0, hdrColor);
-      sdrColor = lerp(saturate(vanillaColor), max(0, sdrColor), saturate(vanillaColor));
-      hdrColor += negHDR;
-
-      negHDR = min(0, hdrColor);
-      hdrColor = lerp(saturate(vanillaColor), max(0, hdrColor), saturate(vanillaColor));
-      hdrColor += negHDR;
-
-      // apply color grading post-blend
-      sdrColor = renodx::color::grade::UserColorGrading(
-          sdrColor,
-          injectedData.colorGradeExposure,
-          1.f,
-          injectedData.colorGradeShadows,
-          injectedData.colorGradeContrast,
-          injectedData.colorGradeSaturation);
-      hdrColor = renodx::color::grade::UserColorGrading(
-          hdrColor,
-          injectedData.colorGradeExposure,
-          1.f,
-          injectedData.colorGradeShadows,
-          injectedData.colorGradeContrast,
-          injectedData.colorGradeSaturation);
-
-    }
-    r1.xyz = sdrColor;
-
-    sdrColor = sign(sdrColor) * pow(abs(sdrColor), 1.f / 2.2f);
-    hdrColor = sign(hdrColor) * pow(abs(hdrColor), 1.f / 2.2f);
+  if (injectedData.toneMapType == 2) {  // apply sliders to SDR and HDR when blending
+    outputColor = renodx::color::grade::UserColorGrading(
+        outputColor,
+        injectedData.colorGradeExposure,  // exposure
+        1.f,                              // only take highlights from HDR color when blending
+        injectedData.colorGradeShadows,   // shadows
+        injectedData.colorGradeContrast,  // contrast
+        1.f,                              // apply saturation adjustment at end
+        0.f);                             // apply dechroma adjustment at end
   }
 
-  r0.xyz = sign(r1.xyz) * pow(abs(r1.xyz), 1.f / 2.2f);  // color grade in gamma space
+  return outputColor;
+}
 
-  const float3 colorGradeInput = r0.xyz;
+/// Samples a texture to apply a color filter to the input color.
+/// Adjusts the strength based on `injectedData.colorGradeLUTStrength`.
+///
+/// @param colorGradeInput - The input color before applying the color filter.
+/// @param v1 - Texture coordinates used for sampling the color grading texture.
+/// @return The color with the filter applied.
+float3 applyColorFilter(float3 colorGradeInput, float4 v1) {
+  if (injectedData.colorGradeLUTStrength == 0) {
+    return colorGradeInput;
+  }
 
+  float4 r0;
+  float3 r1, r2, r3, r4;
+
+  r0.xyz = colorGradeInput;
   r0.w = 1;
+
   r1.x = dot(r0.xyzw, DL_FREG_062._m00_m10_m20_m30);
   r1.y = dot(r0.xyzw, DL_FREG_062._m01_m11_m21_m31);
   r1.z = dot(r0.xyzw, DL_FREG_062._m02_m12_m22_m32);
@@ -306,16 +210,140 @@ void main(float4 v0
   r0.xyz = r0.xyz + -r1.xyz;
   r0.xyz = DL_FREG_068.xxx * r0.xyz + r1.xyz;
 
-  if (injectedData.toneMapType == 0) {    
-    r0.xyz = lerp(colorGradeInput, r0.xyz, injectedData.colorGradeLUTStrength);
-    r0.xyz = clamp(r0.xyz, 0, injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-  } else {
-    // apply color grade to SDR tonemapped image and apply difference to HDR
-    // color filter will now respect peak brightness
-    r0.xyz = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, r0.xyz, injectedData.colorGradeLUTStrength);
+  return lerp(colorGradeInput, r0.xyz, injectedData.colorGradeLUTStrength);
+}
+
+/// Applies `renodx::color::grade::UserColorGrading()` with custom settings based
+/// on whether `injectedData.toneMapType` is set to "None" or "DICE".
+///
+/// @param untonemapped - The HDR color before grading.
+/// @param vanillaTM - The vanilla tonemapped color to be blended.
+/// @return The HDR color after grading adjustments.
+float3 applyConditionalHDRColorGrade(float3 untonemapped, float3 vanillaTM) {
+  // calculate midgray for vanilla tonemapper to line up tonemappers
+  float vanillaMidGray = renodx::color::y::from::BT709(applyVanillaTM(float3(0.18, 0.18, 0.18)));
+
+  float DICEHighlights = 1.f;
+  float DICEContrast = 1.f;
+  float DICESaturation = 1.f;
+  float DICEBlowout = 0.f;
+
+  // apply custom deafults when using DICE
+  // only tonemap 1 from the switch case needs custom grading, others are neutral
+  if (injectedData.toneMapType == 2 && (uint)DL_FREG_057.x == 0u) {
+    DICEContrast = 1.16f;
+    DICESaturation = 1.18f;
+    DICEHighlights = 0.9f;
+    DICEBlowout = 0.5f;
+  }
+  float3 hdrColor = renodx::color::grade::UserColorGrading(
+      untonemapped,
+      injectedData.colorGradeExposure,                     // exposure
+      injectedData.colorGradeHighlights * DICEHighlights,  // highlights
+      injectedData.colorGradeShadows,                      // shadows
+      injectedData.colorGradeContrast * DICEContrast,      // contrast
+      DICESaturation,                                      // saturation
+      DICEBlowout,                                         // dechroma
+      injectedData.toneMapHueCorrection,                   // hue correction
+      vanillaTM);
+  hdrColor *= vanillaMidGray / 0.18f;  // match vanilla midgray
+
+  return hdrColor;
+}
+
+/// Applies DICE tonemapper to the untonemapped HDR color.
+///
+/// @param untonemapped - The untonemapped color.
+/// @return The HDR color tonemapped with DICE.
+float3 applyDICE(float3 untonemapped) {
+  // Declare DICE parameters
+  DICESettings config = DefaultDICESettings();
+  config.Type = 3;
+  config.ShoulderStart = 0.5f;
+  const float dicePaperWhite = injectedData.toneMapGameNits / renodx::color::srgb::REFERENCE_WHITE;
+  const float dicePeakWhite = injectedData.toneMapPeakNits / renodx::color::srgb::REFERENCE_WHITE;
+
+  // multiply paper white in for tonemapping and out for output
+  return DICETonemap(untonemapped * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
+}
+
+/// Blends HDR and SDR tonemapped colors after color grading and filtering.
+/// Blends HDR color, processed with UserColorGrading and the game's color filter, with the SDR tonemapped color.
+///
+/// @param hdrUntonemapped - The untonemapped HDR color after `applyConditionalHDRColorGrade()` and `applyColorFilter()`.
+/// @param sdrTonemapped - The vanilla color after `applyConditionalHDRColorGrade()` and `applyColorFilter()`.
+/// @return The blended color in gamma space.
+float3 blendTonemaps(float3 hdrUntonemapped, float3 sdrTonemapped) {
+  hdrUntonemapped = renodx::math::SafePow(hdrUntonemapped, 2.2f);  // linearize HDR
+  float3 hdrTonemapped = applyDICE(hdrUntonemapped);               // tonemap HDR
+
+  sdrTonemapped = renodx::math::SafePow(sdrTonemapped, 2.2f);  // linearize SDR
+  float3 negHDR = min(0, hdrTonemapped);                       // save WCG
+  float3 blendedColor = lerp(saturate(sdrTonemapped), max(0, hdrTonemapped), saturate(sdrTonemapped));
+  blendedColor += negHDR;  // add back WCG
+
+  return renodx::math::SafePow(blendedColor, 1.f / 2.2f);  // back to gamma space
+}
+
+void main(
+    float4 v0: SV_Position0,
+    float4 v1: TEXCOORD1,
+    out float4 o0: SV_Target0) {
+  float4 r0, r1, r2, r3, r4, r5;
+  float3 outputColor;
+
+  r0.xyz = gSMP_0.Sample(gSMP_0Sampler_s, v1.xy).xyz;
+  r0.xyz = max(float3(9.99999997e-007, 9.99999997e-007, 9.99999997e-007), r0.xyz);
+  r1.xyzw = gSMP_1.Sample(gSMP_1Sampler_s, v1.xy).wxyz;
+  r1.yzw = max(float3(9.99999997e-007, 9.99999997e-007, 9.99999997e-007), r1.yzw);
+  r1.x = saturate(r1.x);
+  r2.xyz = gSMP_3.Sample(gSMP_3Sampler_s, v1.xy).xyz;
+  r0.w = DL_FREG_071.y + -DL_FREG_056.x;
+  r0.w = r1.x * r0.w + DL_FREG_056.x;
+  r0.xyz = r0.www * r1.yzw + r0.xyz;
+  r0.xyz = DL_FREG_056.yyy * r2.xyz + r0.xyz;
+  r0.xyz = applyAutoExposure(r0.xyz);
+
+  const float3 untonemapped = r0.xyz;
+
+  r1.xyz = applyVanillaTM(r0.xyz);
+  const float3 vanillaTM = r1.xyz;  // vanilla tonemapped color, used for hue correction
+  r0.xyz = renodx::math::SafePow(r1.xyz, 1.f / 2.2f);
+  r0.xyz = applyColorFilter(r0.xyz, v1);
+  const float3 sdrColor = r0.xyz;  // final vanilla color
+
+  // DICE and None
+  if (injectedData.toneMapType != 0) {
+    float3 hdrColor = applyConditionalHDRColorGrade(untonemapped, vanillaTM);
+    hdrColor = renodx::math::SafePow(hdrColor, 1.f / 2.2f);
+    hdrColor = applyColorFilter(hdrColor, v1);
+
+    if (injectedData.toneMapType == 2) {  // DICE + Blend
+      outputColor = blendTonemaps(hdrColor, sdrColor);
+    } else {  // None
+      outputColor = hdrColor;
+    }
+  } else {  // clamp vanilla tonemap to peak nits
+    outputColor = min(max(0, sdrColor), max(injectedData.toneMapPeakNits / injectedData.toneMapGameNits, 1.f));
   }
 
-  o0.w = dot(r0.xyz, float3(0.298999995, 0.587000012, 0.114));
-  o0.xyz = r0.xyz;
+  o0.w = dot(max(0, outputColor), float3(0.298999995, 0.587000012, 0.114));
+  o0.xyz = outputColor;
+
+  o0.xyz = renodx::math::SafePow(o0.xyz, 2.2f);                         // linearize
+  o0.xyz *= injectedData.toneMapGameNits / injectedData.toneMapUINits;  // scale paper white
+  // apply saturation and dechroma at the end
+  if (injectedData.toneMapType != 0) {
+    o0.xyz = renodx::color::grade::UserColorGrading(
+        o0.xyz,
+        1.f,                                // exposure
+        1.f,                                // highlights
+        1.f,                                // shadows
+        1.f,                                // contrast
+        injectedData.colorGradeSaturation,  // saturation
+        injectedData.colorGradeBlowout);    // dechroma
+  }
+  o0.xyz = renodx::color::bt709::clamp::AP1(o0.xyz);   // clamp to AP1
+  o0.xyz = renodx::math::SafePow(o0.xyz, 1.f / 2.2f);  // back to gamma
   return;
 }
