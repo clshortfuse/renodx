@@ -253,13 +253,13 @@ float3 LinearOutput(float3 color, Config lut_config) {
     color = renodx::math::SafePow(color, 2.2f);
   } else if (lut_config.type_output == config::type::GAMMA_2_0) {
     color = renodx::math::Sign(color) * color * color;
-  } else if (lut_config.type_input == config::type::ARRI_C800) {
+  } else if (lut_config.type_output == config::type::ARRI_C800) {
     color = renodx::math::Sign(color) * renodx::color::arri::logc::c800::Decode(abs(color));
-  } else if (lut_config.type_input == config::type::ARRI_C1000) {
+  } else if (lut_config.type_output == config::type::ARRI_C1000) {
     color = renodx::math::Sign(color) * renodx::color::arri::logc::c1000::Decode(abs(color));
-  } else if (lut_config.type_input == config::type::ARRI_C800_NO_CUT) {
+  } else if (lut_config.type_output == config::type::ARRI_C800_NO_CUT) {
     color = renodx::math::Sign(color) * renodx::color::arri::logc::c800::Decode(abs(color), false);
-  } else if (lut_config.type_input == config::type::ARRI_C1000_NO_CUT) {
+  } else if (lut_config.type_output == config::type::ARRI_C1000_NO_CUT) {
     color = renodx::math::Sign(color) * renodx::color::arri::logc::c1000::Decode(abs(color), false);
   }
   return color;
