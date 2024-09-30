@@ -1,8 +1,6 @@
 # Google C/C++ Code Style settings
 # https://clang.llvm.org/docs/ClangFormatStyleOptions.html
 
-# Use for HLSL
-
 BasedOnStyle: Google
 
 AlignConsecutiveMacros: Consecutive
@@ -26,3 +24,9 @@ QualifierOrder: [inline, static, volatile, const, type]
 SortIncludes: CaseInsensitive
 
 Standard: c++20
+
+# Needed for HLSL
+
+NamespaceIndentation: None
+AllowShortIfStatementsOnASingleLine: WithoutElse
+# AlignEscapedNewlines: LeftWithLastLine # clang 19

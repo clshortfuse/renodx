@@ -30,13 +30,13 @@ static const uint PQ = 9u;
 }  // namespace type
 
 Config Create(SamplerState lut_sampler, float strength, float scaling, uint type_input, uint type_output, float size = 0) {
-  Config config = {lut_sampler, strength, scaling, type_input, type_output, size, float3(0, 0, 0)};
-  return config;
+  Config lut_config = { lut_sampler, strength, scaling, type_input, type_output, size, float3(0, 0, 0) };
+  return lut_config;
 }
 
 Config Create(SamplerState lut_sampler, float strength, float scaling, uint type_input, uint type_output, float3 precompute) {
-  Config config = {lut_sampler, strength, scaling, type_input, type_output, 0, precompute};
-  return config;
+  Config lut_config = { lut_sampler, strength, scaling, type_input, type_output, 0, precompute };
+  return lut_config;
 }
 }  // namespace config
 
@@ -102,17 +102,17 @@ float3 CenterTexel(float3 color, float size) {
     return Sample(lut, state, color, float3(texel_size, slice, max_index));          \
   }
 
-#define SAMPLE_COLOR_3D_FUNCTION_GENERATOR(TextureType)                      \
-  float3 SampleColor(float3 color, Config config, TextureType lut_texture) { \
-    return Sample(lut_texture, config.lut_sampler, color.rgb, config.size);  \
+#define SAMPLE_COLOR_3D_FUNCTION_GENERATOR(TextureType)                             \
+  float3 SampleColor(float3 color, Config lut_config, TextureType lut_texture) {    \
+    return Sample(lut_texture, lut_config.lut_sampler, color.rgb, lut_config.size); \
   }
 
-#define SAMPLE_COLOR_2D_FUNCTION_GENERATOR(TextureType)                                 \
-  float3 SampleColor(float3 color, Config config, TextureType lut_texture) {            \
-    if (config.precompute.x) {                                                          \
-      return Sample(lut_texture, config.lut_sampler, color.rgb, config.precompute.xyz); \
-    }                                                                                   \
-    return Sample(lut_texture, config.lut_sampler, color.rgb, config.size);             \
+#define SAMPLE_COLOR_2D_FUNCTION_GENERATOR(TextureType)                                         \
+  float3 SampleColor(float3 color, Config lut_config, TextureType lut_texture) {                \
+    if (lut_config.precompute.x != 0) {                                                         \
+      return Sample(lut_texture, lut_config.lut_sampler, color.rgb, lut_config.precompute.xyz); \
+    }                                                                                           \
+    return Sample(lut_texture, lut_config.lut_sampler, color.rgb, lut_config.size);             \
   }
 
 SAMPLE_TEXTURE_3D_FUNCTION_GENERATOR(Texture3D<float4>);
@@ -144,7 +144,7 @@ float3 SampleUnreal(Texture2D lut, SamplerState state, float3 color, float size 
 
   float z_position = color.z * size - 0.5;
   float z_integer = floor(z_position);
-  half fraction = z_position - z_integer;
+  float fraction = z_position - z_integer;
 
   float2 uv = float2((color.r + z_integer) * slice, color.g);
 
@@ -212,65 +212,73 @@ float3 RecolorUnclamped(float3 original_linear, float3 unclamped_linear) {
   return retinted_linear;
 }
 
-float3 ConvertInput(float3 color, Config config) {
-  if (config.type_input == config::type::SRGB) {
+float3 ConvertInput(float3 color, Config lut_config) {
+  if (lut_config.type_input == config::type::SRGB) {
     color = renodx::color::srgb::from::BT709(saturate(color));
-  } else if (config.type_input == config::type::GAMMA_2_4) {
+  } else if (lut_config.type_input == config::type::GAMMA_2_4) {
     color = pow(saturate(color), 1.f / 2.4f);
-  } else if (config.type_input == config::type::GAMMA_2_2) {
+  } else if (lut_config.type_input == config::type::GAMMA_2_2) {
     color = pow(saturate(color), 1.f / 2.2f);
-  } else if (config.type_input == config::type::GAMMA_2_0) {
+  } else if (lut_config.type_input == config::type::GAMMA_2_0) {
     color = sqrt(saturate(color));
-  } else if (config.type_input == config::type::ARRI_C800) {
+  } else if (lut_config.type_input == config::type::ARRI_C800) {
     color = renodx::color::arri::logc::c800::Encode(max(0, color));
-  } else if (config.type_input == config::type::ARRI_C1000) {
+  } else if (lut_config.type_input == config::type::ARRI_C1000) {
     color = renodx::color::arri::logc::c1000::Encode(max(0, color));
-  } else if (config.type_input == config::type::ARRI_C800_NO_CUT) {
+  } else if (lut_config.type_input == config::type::ARRI_C800_NO_CUT) {
     color = renodx::color::arri::logc::c800::Encode(max(0, color), 0);
-  } else if (config.type_input == config::type::ARRI_C1000_NO_CUT) {
+  } else if (lut_config.type_input == config::type::ARRI_C1000_NO_CUT) {
     color = renodx::color::arri::logc::c1000::Encode(max(0, color), 0);
-  } else if (config.type_input == config::type::PQ) {
+  } else if (lut_config.type_input == config::type::PQ) {
     float3 bt2020 = renodx::color::bt2020::from::BT709(color);
     color = renodx::color::pq::from::BT2020((bt2020 * 100.f) / 10000.f);
   }
   return color;
 }
 
-float3 GammaOutput(float3 color, Config config) {
-  if (config.type_output == config::type::LINEAR) {
+float3 GammaOutput(float3 color, Config lut_config) {
+  if (lut_config.type_output == config::type::LINEAR) {
     color = renodx::color::srgb::from::BT709(max(0, color));
   }
   return color;
 }
 
-float3 LinearOutput(float3 color, Config config) {
-  if (config.type_output == config::type::SRGB) {
+float3 LinearOutput(float3 color, Config lut_config) {
+  if (lut_config.type_output == config::type::SRGB) {
     color = sign(color) * renodx::color::bt709::from::SRGB(abs(color));
-  } else if (config.type_output == config::type::GAMMA_2_4) {
+  } else if (lut_config.type_output == config::type::GAMMA_2_4) {
     color = sign(color) * pow(abs(color), 2.4f);
-  } else if (config.type_output == config::type::GAMMA_2_2) {
+  } else if (lut_config.type_output == config::type::GAMMA_2_2) {
     color = sign(color) * pow(abs(color), 2.2f);
-  } else if (config.type_output == config::type::GAMMA_2_0) {
+  } else if (lut_config.type_output == config::type::GAMMA_2_0) {
     color = sign(color) * color * color;
+  } else if (lut_config.type_input == config::type::ARRI_C800) {
+    color = sign(color) * renodx::color::arri::logc::c800::Decode(abs(color));
+  } else if (lut_config.type_input == config::type::ARRI_C1000) {
+    color = sign(color) * renodx::color::arri::logc::c1000::Decode(abs(color));
+  } else if (lut_config.type_input == config::type::ARRI_C800_NO_CUT) {
+    color = sign(color) * renodx::color::arri::logc::c800::Decode(abs(color), 0);
+  } else if (lut_config.type_input == config::type::ARRI_C1000_NO_CUT) {
+    color = sign(color) * renodx::color::arri::logc::c1000::Decode(abs(color), 0);
   }
   return color;
 }
 
-float3 GammaInput(float3 color_input, float3 color_input_converted, Config config) {
+float3 GammaInput(float3 color_input, float3 color_input_converted, Config lut_config) {
   if (
-      config.type_input == config::type::SRGB
-      || config.type_input == config::type::GAMMA_2_4
-      || config.type_input == config::type::GAMMA_2_2
-      || config.type_input == config::type::GAMMA_2_0) {
+      lut_config.type_input == config::type::SRGB
+      || lut_config.type_input == config::type::GAMMA_2_4
+      || lut_config.type_input == config::type::GAMMA_2_2
+      || lut_config.type_input == config::type::GAMMA_2_0) {
     return color_input_converted;
   }
   return renodx::color::srgb::from::BT709(max(0, color_input));
 }
 
-float3 LinearUnclampedOutput(float3 color, Config config) {
-  if (config.type_output == config::type::GAMMA_2_4) {
+float3 LinearUnclampedOutput(float3 color, Config lut_config) {
+  if (lut_config.type_output == config::type::GAMMA_2_4) {
     color = sign(color) * pow(abs(color), 2.4f);
-  } else if (config.type_output == config::type::GAMMA_2_2) {
+  } else if (lut_config.type_output == config::type::GAMMA_2_2) {
     color = sign(color) * pow(abs(color), 2.2f);
   } else {
     color = sign(color) * renodx::color::bt709::from::SRGB(abs(color));
@@ -278,29 +286,29 @@ float3 LinearUnclampedOutput(float3 color, Config config) {
   return color;
 }
 
-float3 RestoreSaturationLoss(float3 color_input, float3 color_output, Config config) {
+float3 RestoreSaturationLoss(float3 color_input, float3 color_output, Config lut_config) {
   // Saturation (distance from grayscale)
   float y_in = renodx::color::y::from::BT709(abs(color_input));
   float3 sat_in = color_input - y_in;
 
   float3 clamped = color_input;
-  if (config.type_input == config::type::SRGB) {
+  if (lut_config.type_input == config::type::SRGB) {
     clamped = saturate(clamped);
-  } else if (config.type_input == config::type::GAMMA_2_4) {
+  } else if (lut_config.type_input == config::type::GAMMA_2_4) {
     clamped = saturate(clamped);
-  } else if (config.type_input == config::type::GAMMA_2_2) {
+  } else if (lut_config.type_input == config::type::GAMMA_2_2) {
     clamped = saturate(clamped);
-  } else if (config.type_input == config::type::GAMMA_2_0) {
+  } else if (lut_config.type_input == config::type::GAMMA_2_0) {
     clamped = saturate(clamped);
-  } else if (config.type_input == config::type::ARRI_C800) {
+  } else if (lut_config.type_input == config::type::ARRI_C800) {
     clamped = max(0, clamped);
-  } else if (config.type_input == config::type::ARRI_C1000) {
+  } else if (lut_config.type_input == config::type::ARRI_C1000) {
     clamped = max(0, clamped);
-  } else if (config.type_input == config::type::ARRI_C800_NO_CUT) {
+  } else if (lut_config.type_input == config::type::ARRI_C800_NO_CUT) {
     clamped = max(0, clamped);
-  } else if (config.type_input == config::type::ARRI_C1000_NO_CUT) {
+  } else if (lut_config.type_input == config::type::ARRI_C1000_NO_CUT) {
     clamped = max(0, clamped);
-  } else if (config.type_input == config::type::PQ) {
+  } else if (lut_config.type_input == config::type::PQ) {
     clamped = max(0, renodx::color::bt709::from::BT2020(clamped));
   }
 
@@ -309,35 +317,35 @@ float3 RestoreSaturationLoss(float3 color_input, float3 color_output, Config con
   float y_out = renodx::color::y::from::BT709(abs(color_output));
   float3 sat_out = color_output - y_out;
   float3 sat_new = float3(
-      sat_out.r * (sat_clamped.r ? (sat_in.r / sat_clamped.r) : 1.f),
-      sat_out.g * (sat_clamped.g ? (sat_in.g / sat_clamped.g) : 1.f),
-      sat_out.b * (sat_clamped.b ? (sat_in.b / sat_clamped.b) : 1.f));
+      sat_out.r * (sat_clamped.r != 0 ? (sat_in.r / sat_clamped.r) : 1.f),
+      sat_out.g * (sat_clamped.g != 0 ? (sat_in.g / sat_clamped.g) : 1.f),
+      sat_out.b * (sat_clamped.b != 0 ? (sat_in.b / sat_clamped.b) : 1.f));
   return (y_out + sat_new);
 }
 
-#define SAMPLE_FUNCTION_GENERATOR(textureType)                                                     \
-  float3 Sample(textureType lut_texture, Config config, float3 color_input) {                      \
-    float3 lutInputColor = ConvertInput(color_input, config);                                      \
-    float3 lutOutputColor = SampleColor(lutInputColor, config, lut_texture);                       \
-    float3 color_output = LinearOutput(lutOutputColor, config);                                    \
-    if (config.scaling) {                                                                          \
-      float3 lutBlack = SampleColor(ConvertInput(0, config), config, lut_texture);                 \
-      float3 lutMid = SampleColor(ConvertInput(0.18f, config), config, lut_texture);               \
-      float3 lutWhite = SampleColor(ConvertInput(1.f, config), config, lut_texture);               \
-      float3 unclamped = Unclamp(                                                                  \
-          GammaOutput(lutOutputColor, config),                                                     \
-          GammaOutput(lutBlack, config),                                                           \
-          GammaOutput(lutMid, config),                                                             \
-          GammaOutput(lutWhite, config),                                                           \
-          GammaInput(color_input, lutInputColor, config));                                         \
-      float3 recolored = RecolorUnclamped(color_output, LinearUnclampedOutput(unclamped, config)); \
-      color_output = lerp(color_output, recolored, config.scaling);                                \
-    }                                                                                              \
-    color_output = RestoreSaturationLoss(color_input, color_output, config);                       \
-    if (config.strength != 1.f) {                                                                  \
-      color_output = lerp(color_input, color_output, config.strength);                             \
-    }                                                                                              \
-    return color_output;                                                                           \
+#define SAMPLE_FUNCTION_GENERATOR(textureType)                                                         \
+  float3 Sample(textureType lut_texture, Config lut_config, float3 color_input) {                      \
+    float3 lutInputColor = ConvertInput(color_input, lut_config);                                      \
+    float3 lutOutputColor = SampleColor(lutInputColor, lut_config, lut_texture);                       \
+    float3 color_output = LinearOutput(lutOutputColor, lut_config);                                    \
+    if (lut_config.scaling != 0) {                                                                     \
+      float3 lutBlack = SampleColor(ConvertInput(0, lut_config), lut_config, lut_texture);             \
+      float3 lutMid = SampleColor(ConvertInput(0.18f, lut_config), lut_config, lut_texture);           \
+      float3 lutWhite = SampleColor(ConvertInput(1.f, lut_config), lut_config, lut_texture);           \
+      float3 unclamped = Unclamp(                                                                      \
+          GammaOutput(lutOutputColor, lut_config),                                                     \
+          GammaOutput(lutBlack, lut_config),                                                           \
+          GammaOutput(lutMid, lut_config),                                                             \
+          GammaOutput(lutWhite, lut_config),                                                           \
+          GammaInput(color_input, lutInputColor, lut_config));                                         \
+      float3 recolored = RecolorUnclamped(color_output, LinearUnclampedOutput(unclamped, lut_config)); \
+      color_output = lerp(color_output, recolored, lut_config.scaling);                                \
+    }                                                                                                  \
+    color_output = RestoreSaturationLoss(color_input, color_output, lut_config);                       \
+    if (lut_config.strength != 1.f) {                                                                  \
+      color_output = lerp(color_input, color_output, lut_config.strength);                             \
+    }                                                                                                  \
+    return color_output;                                                                               \
   }
 
 SAMPLE_FUNCTION_GENERATOR(Texture3D<float4>);
@@ -348,9 +356,9 @@ SAMPLE_FUNCTION_GENERATOR(Texture2D<float3>);
 #undef SAMPLE_FUNCTION_GENERATOR
 
 // Deprecated
-#define SAMPLE_DEPRECATED_FUNCTION_GENERATOR(textureType)                     \
-  float3 Sample(float3 color_input, Config config, textureType lut_texture) { \
-    return Sample(lut_texture, config, color_input);                          \
+#define SAMPLE_DEPRECATED_FUNCTION_GENERATOR(textureType)                         \
+  float3 Sample(float3 color_input, Config lut_config, textureType lut_texture) { \
+    return Sample(lut_texture, lut_config, color_input);                          \
   }
 
 SAMPLE_DEPRECATED_FUNCTION_GENERATOR(Texture3D<float4>);

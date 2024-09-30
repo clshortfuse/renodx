@@ -1,5 +1,5 @@
-#ifndef SRC_COMMON_RENODRT_HLSL_
-#define SRC_COMMON_RENODRT_HLSL_
+#ifndef SRC_SHADERS_RENODRT_HLSL_
+#define SRC_SHADERS_RENODRT_HLSL_
 
 #include "./color.hlsl"
 
@@ -103,7 +103,7 @@ float3 BT709(
         float old_chroma = lch_new[1];  // Store old chroma
         lab_new.yz = lerp(lab_new.yz, restore_lab.yz, hue_correction_strength);
         lch_new = renodx::color::oklch::from::OkLab(lab_new);
-        lch_new[1] = old_chroma; // chroma restore
+        lch_new[1] = old_chroma;  // chroma restore
       }
     }
 
@@ -153,4 +153,4 @@ float3 BT709(
 }  // namespace tonemap
 }  // namespace renodx
 
-#endif  // SRC_COMMON_RENODRT_HLSL_
+#endif  // SRC_SHADERS_RENODRT_HLSL_

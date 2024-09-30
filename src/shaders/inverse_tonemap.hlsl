@@ -1,3 +1,6 @@
+#ifndef SRC_SHADERS_INVERSE_TONEMAP_HLSL_
+#define SRC_SHADERS_INVERSE_TONEMAP_HLSL_
+
 #include "./color.hlsl"
 
 namespace renodx {
@@ -116,3 +119,5 @@ float3 BT709(float3 bt709, float sdr_nits, float target_nits) {
 }  // namespace inverse
 }  // namespace tonemap
 }  // namespace renodx
+
+#endif  // SRC_SHADERS_INVERSE_TONEMAP_HLSL_

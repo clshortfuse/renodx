@@ -53,15 +53,17 @@ float3 ACESFittedBT709(float3 color) {
 float3 ACESFittedAP1(float3 color) {
   // sRGB => XYZ => D65_2_D60 => AP1 => RRT_SAT
   const float3x3 ACESInputMat = {
-      {0.59719, 0.35458, 0.04823},
-      {0.07600, 0.90834, 0.01566},
-      {0.02840, 0.13383, 0.83777}};
+    { 0.59719, 0.35458, 0.04823 },
+    { 0.07600, 0.90834, 0.01566 },
+    { 0.02840, 0.13383, 0.83777 }
+  };
 
   // ODT_SAT => XYZ => D60_2_D65 => sRGB
   const float3x3 ACESOutputMat = {
-      {1.60475, -0.53108, -0.07367},
-      {-0.10208, 1.10813, -0.00605},
-      {-0.00327, -0.07276, 1.07602}};
+    { 1.60475, -0.53108, -0.07367 },
+    { -0.10208, 1.10813, -0.00605 },
+    { -0.00327, -0.07276, 1.07602 }
+  };
 
   color = mul(ACESInputMat, color);
 
@@ -203,65 +205,66 @@ Config Create(
     float hue_correction_type = config::hue_correction_type::INPUT,
     float hue_correction_strength = 1.f,
     float3 hue_correction_color = 0) {
-  const Config config = {
-      type,
-      peak_nits,
-      game_nits,
-      gamma_correction,
-      exposure,
-      highlights,
-      shadows,
-      contrast,
-      saturation,
-      mid_gray_value,
-      mid_gray_nits,
-      reno_drt_highlights,
-      reno_drt_shadows,
-      reno_drt_contrast,
-      reno_drt_saturation,
-      reno_drt_dechroma,
-      reno_drt_flare,
-      hue_correction_type,
-      hue_correction_strength,
-      hue_correction_color};
-  return config;
+  const Config tm_config = {
+    type,
+    peak_nits,
+    game_nits,
+    gamma_correction,
+    exposure,
+    highlights,
+    shadows,
+    contrast,
+    saturation,
+    mid_gray_value,
+    mid_gray_nits,
+    reno_drt_highlights,
+    reno_drt_shadows,
+    reno_drt_contrast,
+    reno_drt_saturation,
+    reno_drt_dechroma,
+    reno_drt_flare,
+    hue_correction_type,
+    hue_correction_strength,
+    hue_correction_color
+  };
+  return tm_config;
 }
 
-float3 ApplyRenoDRT(float3 color, Config config, bool sdr = false) {
-  float reno_drt_max = sdr ? 1.f : (config.peak_nits / config.game_nits);
-  if (!sdr && config.gamma_correction != 0) {
-    reno_drt_max = renodx::color::correct::Gamma(reno_drt_max, config.gamma_correction == 1.f);
+float3 ApplyRenoDRT(float3 color, Config tm_config, bool sdr = false) {
+  float reno_drt_max = sdr ? 1.f : (tm_config.peak_nits / tm_config.game_nits);
+  if (!sdr && tm_config.gamma_correction != 0) {
+    reno_drt_max = renodx::color::correct::Gamma(reno_drt_max, tm_config.gamma_correction == 1.f);
   }
 
   return renodx::tonemap::renodrt::BT709(
       color,
       reno_drt_max * 100.f,
       0.18f,
-      config.mid_gray_nits,
-      config.exposure,
-      config.reno_drt_highlights,
-      config.reno_drt_shadows,
-      config.reno_drt_contrast,
-      config.reno_drt_saturation,
-      config.reno_drt_dechroma,
-      config.reno_drt_flare,
-      config.hue_correction_strength,
-      (config.hue_correction_type == config::hue_correction_type::CUSTOM)    ? config.hue_correction_color
-      : (config.hue_correction_type == config::hue_correction_type::CLAMPED) ? clamp(color, 0, 1)
-                                                                             : color);
+      tm_config.mid_gray_nits,
+      tm_config.exposure,
+      tm_config.reno_drt_highlights,
+      tm_config.reno_drt_shadows,
+      tm_config.reno_drt_contrast,
+      tm_config.reno_drt_saturation,
+      tm_config.reno_drt_dechroma,
+      tm_config.reno_drt_flare,
+      tm_config.hue_correction_strength,
+      (tm_config.hue_correction_type == config::hue_correction_type::CUSTOM)    ? tm_config.hue_correction_color
+      : (tm_config.hue_correction_type == config::hue_correction_type::CLAMPED) ? clamp(color, 0, 1)
+                                                                                : color);
 }
 
-float3 ApplyACES(float3 color, Config config, bool sdr = false) {
+float3 ApplyACES(float3 color, Config tm_config, bool sdr = false) {
   static const float ACES_MID_GRAY = 0.10f;
-  const float mid_gray_scale = (config.mid_gray_value / ACES_MID_GRAY);
-  const float reference_white = (sdr ? 1.f : config.game_nits);
+  const float mid_gray_scale = (tm_config.mid_gray_value / ACES_MID_GRAY);
+  const float reference_white = (sdr ? 1.f : tm_config.game_nits);
 
   float aces_min = (0.0001f) / reference_white;
-  float aces_max = (sdr ? 1.f : config.peak_nits) / reference_white;
+  float aces_max = (sdr ? 1.f : tm_config.peak_nits) / reference_white;
 
-  if (!sdr && config.gamma_correction != 0.f) {
-    aces_max = renodx::color::correct::Gamma(aces_max, config.gamma_correction == 1.f);
-    aces_min = renodx::color::correct::Gamma(aces_min, config.gamma_correction == 1.f);
+  if (!sdr && tm_config.gamma_correction != 0.f) {
+    aces_max = renodx::color::correct::Gamma(aces_max, tm_config.gamma_correction == 1.f);
+    aces_min = renodx::color::correct::Gamma(aces_min, tm_config.gamma_correction == 1.f);
   }
   aces_max /= mid_gray_scale;
   aces_min /= mid_gray_scale;
@@ -273,26 +276,26 @@ float3 ApplyACES(float3 color, Config config, bool sdr = false) {
   return color;
 }
 
-float3 Apply(float3 untonemapped, Config config) {
+float3 Apply(float3 untonemapped, Config tm_config) {
   float3 color = untonemapped;
 
-  if (config.type == config::type::RENODRT) {
-    config.reno_drt_highlights *= config.highlights;
-    config.reno_drt_shadows *= config.shadows;
-    config.reno_drt_contrast *= config.contrast;
-    config.reno_drt_saturation *= config.saturation;
-    // config.reno_drt_dechroma *= config.dechroma;
-    color = ApplyRenoDRT(color, config);
+  if (tm_config.type == config::type::RENODRT) {
+    tm_config.reno_drt_highlights *= tm_config.highlights;
+    tm_config.reno_drt_shadows *= tm_config.shadows;
+    tm_config.reno_drt_contrast *= tm_config.contrast;
+    tm_config.reno_drt_saturation *= tm_config.saturation;
+    // tm_config.reno_drt_dechroma *= tm_config.dechroma;
+    color = ApplyRenoDRT(color, tm_config);
   } else {
     color = renodx::color::grade::UserColorGrading(
         color,
-        config.exposure,
-        config.highlights,
-        config.shadows,
-        config.contrast,
-        config.saturation);
-    if (config.type == config::type::ACES) {
-      color = ApplyACES(color, config);
+        tm_config.exposure,
+        tm_config.highlights,
+        tm_config.shadows,
+        tm_config.contrast,
+        tm_config.saturation);
+    if (tm_config.type == config::type::ACES) {
+      color = ApplyACES(color, tm_config);
     }
   }
   return color;
@@ -303,32 +306,32 @@ struct DualToneMap {
   float3 color_sdr;
 };
 
-DualToneMap ApplyToneMaps(float3 color_input, Config config) {
+DualToneMap ApplyToneMaps(float3 color_input, Config tm_config) {
   DualToneMap dual_tone_map;
   float3 color_hdr;
   float3 color_sdr;
-  if (config.type == config::type::RENODRT) {
-    config.reno_drt_saturation *= config.saturation;
+  if (tm_config.type == config::type::RENODRT) {
+    tm_config.reno_drt_saturation *= tm_config.saturation;
 
-    color_sdr = ApplyRenoDRT(color_input, config, true);
+    color_sdr = ApplyRenoDRT(color_input, tm_config, true);
 
-    config.reno_drt_highlights *= config.highlights;
-    config.reno_drt_shadows *= config.shadows;
-    config.reno_drt_contrast *= config.contrast;
-    uint previous_hue_correction_type = config.hue_correction_type;
-    config.hue_correction_type = config::hue_correction_type::INPUT;
+    tm_config.reno_drt_highlights *= tm_config.highlights;
+    tm_config.reno_drt_shadows *= tm_config.shadows;
+    tm_config.reno_drt_contrast *= tm_config.contrast;
+    float previous_hue_correction_type = tm_config.hue_correction_type;
+    tm_config.hue_correction_type = config::hue_correction_type::INPUT;
 
-    color_hdr = ApplyRenoDRT(color_input, config);
+    color_hdr = ApplyRenoDRT(color_input, tm_config);
 
-    config.hue_correction_type = previous_hue_correction_type;
+    tm_config.hue_correction_type = previous_hue_correction_type;
 
   } else {
     color_input = renodx::color::grade::UserColorGrading(
-        color_input, config.exposure, config.highlights, config.shadows, config.contrast, config.saturation);
+        color_input, tm_config.exposure, tm_config.highlights, tm_config.shadows, tm_config.contrast, tm_config.saturation);
 
-    if (config.type == config::type::ACES) {
-      color_hdr = ApplyACES(color_input, config);
-      color_sdr = ApplyACES(color_input, config, true);
+    if (tm_config.type == config::type::ACES) {
+      color_hdr = ApplyACES(color_input, tm_config);
+      color_sdr = ApplyACES(color_input, tm_config, true);
     } else {
       color_hdr = color_input;
       color_sdr = color_input;
@@ -339,36 +342,36 @@ DualToneMap ApplyToneMaps(float3 color_input, Config config) {
   return dual_tone_map;
 }
 
-#define TONE_MAP_FUNCTION_GENERATOR(textureType)                                                             \
-  float3 Apply(float3 color_input, Config config, renodx::lut::Config lut_config, textureType lut_texture) { \
-    if (lut_config.strength == 0.f || config.type == 1.f) {                                                  \
-      return Apply(color_input, config);                                                                     \
-    }                                                                                                        \
-    float3 color_output = color_input;                                                                       \
-                                                                                                             \
-    DualToneMap tone_maps = ApplyToneMaps(color_input, config);                                              \
-    float3 color_hdr = tone_maps.color_hdr;                                                                  \
-    float3 color_sdr = tone_maps.color_sdr;                                                                  \
-                                                                                                             \
-    uint previous_lut_config_strength = lut_config.strength;                                                 \
-    lut_config.strength = 1.f;                                                                               \
-    float3 color_lut;                                                                                        \
-    if (                                                                                                     \
-        lut_config.type_input == lut::config::type::SRGB                                                     \
-        || lut_config.type_input == lut::config::type::GAMMA_2_4                                             \
-        || lut_config.type_input == lut::config::type::GAMMA_2_2                                             \
-        || lut_config.type_input == lut::config::type::GAMMA_2_0) {                                          \
-      color_lut = renodx::lut::Sample(lut_texture, lut_config, color_sdr);                                   \
-    } else {                                                                                                 \
-      color_lut = min(1.f, renodx::lut::Sample(lut_texture, lut_config, color_hdr));                         \
-    }                                                                                                        \
-                                                                                                             \
-    if (config.type == config::type::VANILLA) {                                                              \
-      color_output = lerp(color_output, color_lut, previous_lut_config_strength);                            \
-    } else {                                                                                                 \
-      color_output = UpgradeToneMap(color_hdr, color_sdr, color_lut, previous_lut_config_strength);          \
-    }                                                                                                        \
-    return color_output;                                                                                     \
+#define TONE_MAP_FUNCTION_GENERATOR(textureType)                                                                \
+  float3 Apply(float3 color_input, Config tm_config, renodx::lut::Config lut_config, textureType lut_texture) { \
+    if (lut_config.strength == 0.f || tm_config.type == 1.f) {                                                  \
+      return Apply(color_input, tm_config);                                                                     \
+    }                                                                                                           \
+    float3 color_output = color_input;                                                                          \
+                                                                                                                \
+    DualToneMap tone_maps = ApplyToneMaps(color_input, tm_config);                                              \
+    float3 color_hdr = tone_maps.color_hdr;                                                                     \
+    float3 color_sdr = tone_maps.color_sdr;                                                                     \
+                                                                                                                \
+    float previous_lut_config_strength = lut_config.strength;                                                   \
+    lut_config.strength = 1.f;                                                                                  \
+    float3 color_lut;                                                                                           \
+    if (                                                                                                        \
+        lut_config.type_input == lut::config::type::SRGB                                                        \
+        || lut_config.type_input == lut::config::type::GAMMA_2_4                                                \
+        || lut_config.type_input == lut::config::type::GAMMA_2_2                                                \
+        || lut_config.type_input == lut::config::type::GAMMA_2_0) {                                             \
+      color_lut = renodx::lut::Sample(lut_texture, lut_config, color_sdr);                                      \
+    } else {                                                                                                    \
+      color_lut = min(1.f, renodx::lut::Sample(lut_texture, lut_config, color_hdr));                            \
+    }                                                                                                           \
+                                                                                                                \
+    if (tm_config.type == config::type::VANILLA) {                                                              \
+      color_output = lerp(color_output, color_lut, previous_lut_config_strength);                               \
+    } else {                                                                                                    \
+      color_output = UpgradeToneMap(color_hdr, color_sdr, color_lut, previous_lut_config_strength);             \
+    }                                                                                                           \
+    return color_output;                                                                                        \
   }
 
 TONE_MAP_FUNCTION_GENERATOR(Texture2D<float4>);

@@ -108,12 +108,12 @@ float3 YToLinCV(float3 y, float y_max, float y_min) {
 }
 
 float3 XYZToXyY(half3 xyz) {
-  half divisor = max(dot(xyz, (1.0).xxx), 1e-4);
+  float divisor = max(dot(xyz, (1.0).xxx), 1e-4);
   return float3(xyz.xy / divisor, xyz.y);
 }
 
 float3 XyYToXYZ(half3 xy_y) {
-  half m = xy_y.z / max(xy_y.y, 1e-4);
+  float m = xy_y.z / max(xy_y.y, 1e-4);
   float3 xyz = float3(xy_y.xz, (1.0 - xy_y.x - xy_y.y));
   xyz.xz *= m;
   return xyz;

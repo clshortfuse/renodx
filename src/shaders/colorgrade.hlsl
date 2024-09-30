@@ -1,5 +1,5 @@
-#ifndef SRC_SHADERS_COLOR_GRADE_HLSL_
-#define SRC_SHADERS_COLOR_GRADE_HLSL_
+#ifndef SRC_SHADERS_COLORGRADE_HLSL_
+#define SRC_SHADERS_COLORGRADE_HLSL_
 
 #include "./color.hlsl"
 
@@ -119,4 +119,4 @@ float3 UserColorGrading(
 }  // namespace color
 }  // namespace renodx
 
-#endif  // SRC_SHADERS_COLOR_GRADE_HLSL_
+#endif  // SRC_SHADERS_COLORGRADE_HLSL_
