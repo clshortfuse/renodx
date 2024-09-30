@@ -308,7 +308,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_TA
   o0.rgb *= injectedData.toneMapGameNits;
 #ifdef HDR10
   o0.rgb /= 10000.f;
-  o0.rgb = renodx::color::pq::from::BT2020(o0.rgb);
+  o0.rgb = renodx::color::pq::Encode(o0.rgb);
 #else
   o0.rgb /= 80.f;
 #endif

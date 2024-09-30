@@ -76,7 +76,7 @@ void main(
     }
     r0.xyz = Hue(r0.xyz, injectedData.toneMapHueCorrection);
     r0.xyz = renodx::color::bt2020::from::BT709(r0.xyz);
-    r0.xyz = renodx::color::pq::from::BT2020((r0.xyz * injectedData.toneMapGameNits) / 10000.f);
+    r0.xyz = renodx::color::pq::Encode(r0.xyz, injectedData.toneMapGameNits);
   }
   o0.xyz = r0.xyz;
   return;

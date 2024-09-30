@@ -70,7 +70,7 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : COLOR0, float4 v2 : ORIGINAL_POS
   // o0.rgb = mul(BT709_TO_BT2020_MAT, o0.rgb);  // use bt2020
   // o0.rgb /= 10000.f;                         // Scale for PQ
   // o0.rgb = max(0, o0.rgb);                   // clamp out of gamut
-  // o0.rgb = renodx::color::pq::from::BT2020(o0.rgb);             // convert to PQ
+  // o0.rgb = renodx::color::pq::Encode(o0.rgb);             // convert to PQ
   // o0.rgb = min(1.f, o0.rgb);                 // clamp PQ (10K nits)
 
   o0.rgb /= 80.f;

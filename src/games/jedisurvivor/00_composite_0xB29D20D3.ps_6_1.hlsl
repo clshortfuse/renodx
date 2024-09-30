@@ -62,7 +62,7 @@ void frag_main() {
   SV_Target.y = exp2(log2((1.0f / ((_217 * 18.6875f) + 1.0f)) * ((_217 * 18.8515625f) + 0.8359375f)) * 78.84375f);
   SV_Target.z = exp2(log2((1.0f / ((_218 * 18.6875f) + 1.0f)) * ((_218 * 18.8515625f) + 0.8359375f)) * 78.84375f);
   SV_Target.w = 1.0f;
-  // SV_Target.rgb = renodx::color::pq::from::BT2020(float3(_119, _121, _122).rgb / 10000.f);
+  // SV_Target.rgb = renodx::color::pq::Encode(float3(_119, _121, _122).rgb / 10000.f);
   // SV_Target.rgb = _55.rgb;
 }
 

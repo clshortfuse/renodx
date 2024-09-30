@@ -2,6 +2,7 @@
 #define SRC_SHADERS_COLORCORRECT_HLSL_
 
 #include "./color.hlsl"
+#include "./math.hlsl"
 
 namespace renodx {
 namespace color {
@@ -16,9 +17,9 @@ float Gamma(float x, bool pow_to_srgb = false) {
 
 float GammaSafe(float x, bool pow_to_srgb = false) {
   if (pow_to_srgb) {
-    return sign(x) * renodx::color::bt709::from::SRGB(pow(abs(x), 1.f / 2.2f));
+    return renodx::math::Sign(x) * renodx::color::bt709::from::SRGB(pow(abs(x), 1.f / 2.2f));
   }
-  return sign(x) * pow(renodx::color::srgb::from::BT709(abs(x)), 2.2f);
+  return renodx::math::Sign(x) * pow(renodx::color::srgb::from::BT709(abs(x)), 2.2f);
 }
 
 float3 Gamma(float3 color, bool pow_to_srgb = false) {
@@ -33,7 +34,7 @@ float4 Gamma(float4 color, bool pow2srgb = false) {
 }
 
 float3 GammaSafe(float3 color, bool pow2srgb = false) {
-  float3 signs = sign(color);
+  float3 signs = renodx::math::Sign(color);
   color = abs(color);
   color = float3(
       Gamma(color.r, pow2srgb),

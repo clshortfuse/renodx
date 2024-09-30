@@ -63,7 +63,7 @@ float3 convertColor(float3 inputColor, ConvertColorParams params) {
       float3 grayscale = renodx::color::y::from::BT2020(rec2020);
       float3 newShiftedColor = lerp(grayscale, rec2020, 1.f + (params.pqSaturation * 0.25f));
       float3 scaledShifted = newShiftedColor * params.paperWhiteScaling;
-      float3 pqColor = renodx::color::pq::from::BT2020(scaledShifted);
+      float3 pqColor = renodx::color::pq::Encode(scaledShifted);
       outputColor = pqColor;
       break;
     }

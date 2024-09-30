@@ -2,13 +2,14 @@
 #define SRC_SHADERS_COLORGRADE_HLSL_
 
 #include "./color.hlsl"
+#include "./math.hlsl"
 
 namespace renodx {
 namespace color {
 namespace grade {
 
 float3 Contrast(float3 color, float contrast, float mid_gray = 0.18f, float3x3 color_space = renodx::color::BT709_TO_XYZ_MAT) {
-  float3 signs = sign(color);
+  float3 signs = renodx::math::Sign(color);
   color = abs(color);
   float3 working_color = pow(color / mid_gray, contrast) * mid_gray;
   float working_y = dot(working_color, float3(color_space[1].r, color_space[1].g, color_space[1].b));

@@ -33,7 +33,7 @@ void main(float2 v0 : TEXCOORD0, float4 v1 : SV_POSITION0, out float4 uiOutput :
     outputRGB *= uiPaperWhiteNits;  // Scale peak to 200
     outputRGB /= 10000.f;           // Scale for PQ
     outputRGB = max(0, outputRGB);
-    outputRGB = renodx::color::pq::from::BT2020(outputRGB);
+    outputRGB = renodx::color::pq::Encode(outputRGB);
 
     outputRGB = min(1.f, outputRGB);  // clamp PQ (10K nits)
 

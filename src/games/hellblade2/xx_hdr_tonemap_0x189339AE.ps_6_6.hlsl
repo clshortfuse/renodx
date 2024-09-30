@@ -744,7 +744,7 @@ SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {
 
   float3 untonemapped = ColorTexture.Sample(ColorSampler, TEXCOORD.xy, 0);
   float3 outputColor = bOutputInHDR;
-  SV_Target.rgb = renodx::color::pq::from::BT2020(outputColor * 100.f / 10000.f);
+  SV_Target.rgb = renodx::color::pq::Encode(outputColor, 100.f);
   SPIRV_Cross_Output stage_output;
   stage_output.SV_Target = SV_Target;
   stage_output.SV_Target_1 = SV_Target_1;
