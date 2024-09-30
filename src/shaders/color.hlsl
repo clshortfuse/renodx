@@ -1,6 +1,8 @@
 #ifndef SRC_SHADERS_COLOR_HLSL_
 #define SRC_SHADERS_COLOR_HLSL_
 
+#include "./math.hlsl"
+
 namespace renodx {
 namespace color {
 
@@ -389,7 +391,7 @@ float3 BT709(float3 bt709) {
 
   float3 lms = mul(BT709_2_OKLABLMS, bt709);
 
-  lms = sign(lms) * pow(abs(lms), 1.f / 3.f);
+  lms = renodx::math::SafePow(lms, 1.f / 3.f);
 
   return mul(OKLABLMS_2_OKLAB, lms);
 }
