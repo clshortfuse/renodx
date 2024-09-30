@@ -109,6 +109,7 @@ void main(
     r2.xyz = r0.xyz * r2.xyz + float3(10668.4043,10668.4043,10668.4043);
     r0.xyz = r0.xyz * r2.xyz + float3(1,1,1);
     o0.xyz = r1.xyz / r0.xyz;
+    o0.xyz = saturate(o0.xyz);  // previously clamped by unorm 
   }
   o0.w = 1;
   return;
