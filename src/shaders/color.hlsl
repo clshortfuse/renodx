@@ -280,75 +280,87 @@ float4 BT709(float4 color) {
 
 namespace arri {
 namespace logc {
+
+struct EncodingParams {
+  float a;
+  float b;
+  float c;
+  float d;
+  float e;
+  float f;
+  float cut;
+};
+
+float Encode(float x, EncodingParams params, bool use_cut = true) {
+  return (!use_cut || (x > params.cut))
+             ? (params.c * log10((params.a * x) + params.b) + params.d)
+             : (params.e * x + params.f);
+}
+
+float3 Encode(float3 color, EncodingParams params, bool use_cut = true) {
+  return float3(Encode(color.r, params, use_cut), Encode(color.g, params, use_cut), Encode(color.b, params, use_cut));
+}
+
+float Decode(float t, EncodingParams params, bool use_cut = true) {
+  return (t > (use_cut ? (params.e * params.cut + params.f) : params.f))
+             ? (pow(10.f, (t - params.d) / params.c) - params.b) / params.a
+             : (t - params.f) / params.e;
+}
+
+float3 Decode(float3 color, EncodingParams params, bool use_cut = true) {
+  return float3(Decode(color.r, params, use_cut), Decode(color.g, params, use_cut), Decode(color.b, params, use_cut));
+}
+
+#define GENERATE_ARRI_LOGC_FUNCTIONS                 \
+  float Encode(float x, bool use_cut = true) {       \
+    return logc::Encode(x, PARAMS, use_cut);         \
+  }                                                  \
+                                                     \
+  float3 Encode(float3 color, bool use_cut = true) { \
+    return logc::Encode(color, PARAMS, use_cut);     \
+  }                                                  \
+                                                     \
+  float Decode(float t, bool use_cut = true) {       \
+    return logc::Decode(t, PARAMS, use_cut);         \
+  }                                                  \
+                                                     \
+  float3 Decode(float3 color, bool use_cut = true) { \
+    return logc::Decode(color, PARAMS, use_cut);     \
+  }
+
 namespace c800 {
-float Encode(float x, float cut = 0.010591f) {
-  const float a = 5.555556f;
-  const float b = 0.052272f;
-  const float c = 0.247190f;
-  const float d = 0.385537f;
-  const float e = 5.367655f;
-  const float f = 0.092809f;
-  return ((cut == 0.0f) || x > cut)
-             ? (c * log10((a * x) + b) + d)
-             : (e * x + f);
-}
+static const EncodingParams PARAMS = {
+  5.555556f,
+  0.052272f,
+  0.247190f,
+  0.385537f,
+  5.367655f,
+  0.092809f,
+  0.010591f,
+};
 
-float3 Encode(float3 color, float cut = 0.010591f) {
-  return float3(Encode(color.r, cut), Encode(color.g, cut), Encode(color.b, cut));
-}
+GENERATE_ARRI_LOGC_FUNCTIONS;
 
-float Decode(float t, float cut = 0.010591f) {
-  const float a = 5.555556f;
-  const float b = 0.052272f;
-  const float c = 0.247190f;
-  const float d = 0.385537f;
-  const float e = 5.367655f;
-  const float f = 0.092809f;
-
-  return (t > e * cut + f)
-             ? (pow(10, (t - d) / c) - b) / a
-             : (t - f) / e;
-}
-
-float3 Decode(float3 color, float cut = 0.010591f) {
-  return float3(Decode(color.r, cut), Decode(color.g, cut), Decode(color.b, cut));
-}
 }  // namespace c800
 
 namespace c1000 {
-float Encode(float x, float cut = 0.011361f) {
-  const float a = 5.555556f;
-  const float b = 0.047996f;
-  const float c = 0.244161f;
-  const float d = 0.386036f;
-  const float e = 5.301883f;
-  const float f = 0.092814f;
-  return ((cut == 0.0f) || x > cut)
-             ? (c * log10((a * x) + b) + d)
-             : (e * x + f);
-}
 
-float3 Encode(float3 color, float cut = 0.011361f) {
-  return float3(Encode(color.r, cut), Encode(color.g, cut), Encode(color.b, cut));
-}
+static const EncodingParams PARAMS = {
+  5.555556f,
+  0.047996f,
+  0.244161f,
+  0.386036f,
+  5.301883f,
+  0.092814f,
+  0.011361f
+};
 
-float Decode(float t, float cut = 0.011361f) {
-  const float a = 5.555556f;
-  const float b = 0.047996f;
-  const float c = 0.244161f;
-  const float d = 0.386036f;
-  const float e = 5.301883f;
-  const float f = 0.092814f;
+GENERATE_ARRI_LOGC_FUNCTIONS;
 
-  return (t > e * cut + f)
-             ? (pow(10, (t - d) / c) - b) / a
-             : (t - f) / e;
-}
-
-float3 Decode(float3 color, float cut = 0.011361f) {
-  return float3(Decode(color.r, cut), Decode(color.g, cut), Decode(color.b, cut));
-}
 }  // namespace c1000
+
+#undef GENERATE_ARRI_LOGC_FUNCTIONS
+
 }  // namespace logc
 }  // namespace arri
 
