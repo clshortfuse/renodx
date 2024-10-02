@@ -84,7 +84,7 @@ void main(float4 v0 : SV_Position0, float4 v1 : CLIP_SPACE_POSITION0, float4 v2 
   o0 = saturate(o0);
   o0 = injectedData.toneMapGammaCorrection
            ? pow(o0, 2.2f)
-           : renodx::color::bt709::from::SRGBA(o0);
+           : renodx::color::srgba::Decode(o0);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;
 }

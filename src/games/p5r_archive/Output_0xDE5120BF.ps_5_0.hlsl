@@ -299,7 +299,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_TA
     o0.rgb = max(0, o0.rgb);
   }
 
-  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : renodx::color::bt709::from::SRGB(o0.rgb);
+  o0.rgb = injectedData.toneMapGammaCorrection ? pow(o0.rgb, 2.2f) : renodx::color::srgb::Decode(o0.rgb);
 
 #ifdef HDR10
   o0.rgb = mul(BT709_TO_BT2020_MAT, o0.rgb);

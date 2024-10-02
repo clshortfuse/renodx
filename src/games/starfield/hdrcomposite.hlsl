@@ -439,7 +439,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
 
     float3 contrastedColor2 = pow(scaledColor, frameData.lutScalingPow);
     float3 lutScaled = (frameData.fBrightnessHDR * (((contrastedColor2 * unknownScaling) - lutColorInGamma) + ((1.0f - contrastedColor2) * scaledColor))) + lutColorInGamma;
-    lutColor = renodx::color::bt709::from::SRGB(saturate(lutColorInGamma));
+    lutColor = renodx::color::srgb::Decode(saturate(lutColorInGamma));
   }
 
   // undo gamma
@@ -455,7 +455,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
 
   float3 outputSigns = sign(outputColor);
   outputColor = abs(outputColor);
-  outputColor = renodx::color::srgb::from::BT709(outputColor);
+  outputColor = renodx::color::srgb::Encode(outputColor);
 
   outputColor *= outputSigns;
 

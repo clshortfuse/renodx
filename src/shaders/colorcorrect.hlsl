@@ -10,16 +10,17 @@ namespace correct {
 
 float Gamma(float x, bool pow_to_srgb = false) {
   if (pow_to_srgb) {
-    return renodx::color::bt709::from::SRGB(pow(x, 1.f / 2.2f));
-  }  // srgb2pow
-  return pow(renodx::color::srgb::from::BT709(x), 2.2f);
+    return srgb::Decode(gamma::Encode(x));
+  }
+  // srgb2pow
+  return gamma::Decode(srgb::Encode(x));
 }
 
 float GammaSafe(float x, bool pow_to_srgb = false) {
   if (pow_to_srgb) {
-    return renodx::math::Sign(x) * renodx::color::bt709::from::SRGB(pow(abs(x), 1.f / 2.2f));
+    return renodx::math::Sign(x) * srgb::Decode(gamma::Encode(abs(x)));
   }
-  return renodx::math::Sign(x) * pow(renodx::color::srgb::from::BT709(abs(x)), 2.2f);
+  return renodx::math::Sign(x) * gamma::Decode(srgb::Encode(abs(x)));
 }
 
 float3 Gamma(float3 color, bool pow_to_srgb = false) {

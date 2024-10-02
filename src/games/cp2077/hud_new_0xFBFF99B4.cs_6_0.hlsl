@@ -393,7 +393,7 @@ void comp_main() {
 
       // Custom
       if (injectedData.toneMapGammaCorrection == 1.f) {
-        _1625 = pow(renodx::color::srgb::from::BT709(max(0, _1625)), 2.2f);
+        _1625 = pow(renodx::color::srgb::Encode(max(0, _1625)), 2.2f);
       }
       _1636 = (cb6[2u].x * _1625.x) + _1443;
       _1637 = (cb6[2u].x * _1625.y) + _1445;
@@ -435,12 +435,12 @@ void comp_main() {
 
       // Custom
       if (injectedData.toneMapGammaCorrection == 1.f) {
-        _1900 = pow(renodx::color::srgb::from::BT709(max(0, _1900)), 2.2f);
-        _1904 = pow(renodx::color::srgb::from::BT709(max(0, _1904)), 2.2f);
-        _1911 = pow(renodx::color::srgb::from::BT709(max(0, _1911)), 2.2f);
-        _1926 = pow(renodx::color::srgb::from::BT709(max(0, _1926)), 2.2f);
-        _1937 = pow(renodx::color::srgb::from::BT709(max(0, _1937)), 2.2f);
-        _1952 = pow(renodx::color::srgb::from::BT709(max(0, _1952)), 2.2f);
+        _1900 = pow(renodx::color::srgb::Encode(max(0, _1900)), 2.2f);
+        _1904 = pow(renodx::color::srgb::Encode(max(0, _1904)), 2.2f);
+        _1911 = pow(renodx::color::srgb::Encode(max(0, _1911)), 2.2f);
+        _1926 = pow(renodx::color::srgb::Encode(max(0, _1926)), 2.2f);
+        _1937 = pow(renodx::color::srgb::Encode(max(0, _1937)), 2.2f);
+        _1952 = pow(renodx::color::srgb::Encode(max(0, _1952)), 2.2f);
       }
 
       float _1984 = 1.0f - (((_1904.w + _1900.w) + _1911.w) * 0.3333333432674407958984375f);

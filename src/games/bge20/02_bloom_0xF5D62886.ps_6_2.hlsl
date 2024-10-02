@@ -65,7 +65,7 @@ void frag_main() {
   SV_Target.z = _190 ? (_153 * 0.5f) : _183;
 
   // SV_Target.rgb = max(0, SV_Target.rgb);
-  // SV_Target.rgb = injectedData.toneMapGammaCorrection ? pow(SV_Target.rgb, 2.2f) : renodx::color::bt709::from::SRGB(SV_Target.rgb);
+  // SV_Target.rgb = injectedData.toneMapGammaCorrection ? pow(SV_Target.rgb, 2.2f) : renodx::color::srgb::Decode(SV_Target.rgb);
   // SV_Target.rgb *= injectedData.toneMapGameNits / 80.f;
   SV_Target.w = 1.0f;
 }

@@ -23,7 +23,7 @@ void main(float4 v0
   o0.w = 1;
   o0.xyz = g_Texture.Sample(g_TextureSampler_s, v1.xy).xyz;
 
-  o0.rgb = renodx::math::SafePow(o0.rgb, 2.2f);
+  o0.rgb = renodx::math::PowSafe(o0.rgb, 2.2f);
   o0.rgb *= injectedData.toneMapUINits / 80.f;
 
   // Removed gamma slider as it capped brightness

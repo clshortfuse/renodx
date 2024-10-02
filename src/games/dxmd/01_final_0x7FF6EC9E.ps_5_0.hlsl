@@ -23,7 +23,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_TA
   o0.rgb = r0.rgb;
   o0.rgb = injectedData.toneMapGammaCorrection
                ? pow(o0.rgb, 2.2f)
-               : renodx::color::bt709::from::SRGB(o0.rgb);
+               : renodx::color::srgb::Decode(o0.rgb);
   o0.rgb *= signs;
 
   o0.rgb *= injectedData.toneMapUINits / 80.f;

@@ -31,7 +31,7 @@ void frag_main() {
   SV_Target.xyz = abs(SV_Target.xyz);
   SV_Target.xyz = injectedData.toneMapGammaCorrection
                       ? pow(SV_Target.xyz, 2.2f)
-                      : renodx::color::bt709::from::SRGB(SV_Target.xyz);
+                      : renodx::color::srgb::Decode(SV_Target.xyz);
   SV_Target.xyz *= signs;
   SV_Target.xyz *= injectedData.toneMapUINits / 80.f;
 }

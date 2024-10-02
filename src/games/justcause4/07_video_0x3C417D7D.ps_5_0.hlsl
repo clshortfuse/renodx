@@ -28,7 +28,7 @@ void main(float4 v0 : SV_Position0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   o0.rgb = saturate(o0.rgb);
   o0.rgb = injectedData.toneMapGammaCorrection
                ? pow(o0.rgb, 2.2f)
-               : renodx::color::bt709::from::SRGB(o0.rgb);
+               : renodx::color::srgb::Decode(o0.rgb);
   float videoPeak = injectedData.toneMapPeakNits / (injectedData.toneMapGameNits / 203.f);
   o0.rgb = renodx::tonemap::inverse::bt2446a::BT709(o0.rgb, 100.f, videoPeak);
   o0.rgb *= injectedData.toneMapPeakNits / videoPeak;

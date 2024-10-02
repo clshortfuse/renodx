@@ -63,13 +63,13 @@ void main(
   o0 = max(0, o0);
   o0 = injectedData.toneMapGammaCorrection
            ? pow(o0, 2.2f)
-           : renodx::color::bt709::from::SRGBA(o0);
+           : renodx::color::srgba::Decode(o0);
   o0.rgb = renodx::tonemap::config::Apply(o0.rgb, config);
   o0 = max(0, o0);
   o0.rgb *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
   o0 = injectedData.toneMapGammaCorrection
            ? pow(o0, 1.f / 2.2f)
-           : renodx::color::srgba::from::BT709(o0);
+           : renodx::color::srgba::Encode(o0);
 
   return;
 }

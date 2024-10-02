@@ -178,7 +178,7 @@ float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
     }
 
     if (_504 == 1u) {
-      color = renodx::color::srgb::from::BT709(color);
+      color = renodx::color::srgb::Encode(color);
     } else if (_504 == 2u) {
       color = renodx::color::arri::logc::c800::Encode(color);
     }
@@ -195,7 +195,7 @@ float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
     float3 lutOutputColor = color;
 
     if ((_503 & 240u) == 16u) {
-      color = renodx::color::bt709::from::SRGB(color);
+      color = renodx::color::srgb::Decode(color);
     }
 
     float3 lutOutputLinear = color;
@@ -217,7 +217,7 @@ float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
 
         float3 recolored = renodx::lut::RecolorUnclamped(
             lutOutputLinear,
-            renodx::color::bt709::from::SRGB(unclamped));
+            renodx::color::srgb::Decode(unclamped));
         color = lerp(color, recolored, min(injectedData.processingLUTCorrection * 2.f, 1.f));
       } else {
         const float lutMinY = renodx::color::y::from::BT709(minBlack);

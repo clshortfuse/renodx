@@ -13,5 +13,6 @@
 #include "./math.hlsl"
 #include "./random.hlsl"
 #include "./tonemap.hlsl"
+#include "./deprecated.hlsl"
 
 #endif  // SRC_SHADERS_RENODX_HLSL_

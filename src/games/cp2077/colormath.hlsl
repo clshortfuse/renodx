@@ -48,7 +48,7 @@ float3 convertColor(float3 inputColor, ConvertColorParams params) {
     case OUTPUT_TYPE_SRGB8: {
       outputColor = max(0, outputColor);  // clamp to BT709
       outputColor = applyUserBrightness(outputColor, params.gammaCorrection);
-      outputColor = renodx::color::srgb::from::BT709(outputColor);
+      outputColor = renodx::color::srgb::Encode(outputColor);
       outputColor = randomDither(outputColor.rgb, params.random3, 8.f);
       break;
     }
@@ -77,7 +77,7 @@ float3 convertColor(float3 inputColor, ConvertColorParams params) {
         outputColor = applyUserBrightness(outputColor, params.gammaCorrection);
         outputColor = mul(outputColor, params.colorMatrix);
         outputColor *= params.paperWhiteScaling;
-        outputColor = renodx::color::srgb::from::BT709(outputColor);
+        outputColor = renodx::color::srgb::Encode(outputColor);
         outputColor = randomDither(outputColor, params.random3, 10.f);
       }
       break;

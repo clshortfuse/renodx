@@ -292,7 +292,7 @@ void main(
   o0.rgb = abs(o0.rgb);
   o0.rgb = (injectedData.toneMapGammaCorrection
                 ? pow(o0.rgb, 2.2f)
-                : renodx::color::bt709::from::SRGB(o0.rgb));
+                : renodx::color::srgb::Decode(o0.rgb));
   o0.rgb *= signs;
   o0.rgb *= injectedData.toneMapUINits / 80.f;
   return;

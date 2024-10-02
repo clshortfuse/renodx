@@ -36,9 +36,9 @@ void main(float4 v0 : COLOR0, float2 v1 : TEXCOORD0, float2 w1 : TEXCOORD1, out 
   r1.yzw = float3(-0.5, -0.5, -0.5) + r0.xyz;
   r1.yzw = uRGBcol.xyz * r1.yzw;
   r1.yzw = r1.yzw * float3(1.10000002, 1.10000002, 1.10000002) + float3(0.5, 0.5, 0.5);
-  r1.yzw = renodx::color::bt709::from::SRGB(r1.yzw);                    // added
+  r1.yzw = renodx::color::srgb::Decode(r1.yzw);                    // added
   r1.yzw *= injectedData.toneMapUINits / injectedData.toneMapGameNits;  // added
-  r1.yzw = renodx::color::srgb::from::BT709(r1.yzw);                    // added
+  r1.yzw = renodx::color::srgb::Encode(r1.yzw);                    // added
   r0.xyz = r1.xxx ? r1.yzw : r0.xyz;
   o0.xyzw = r0.xyzw;
 

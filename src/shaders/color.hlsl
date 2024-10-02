@@ -154,25 +154,6 @@ float3 OkLab(float3 oklab) {
 
   return mul(OKLABLMS_2_BT709, lms);
 }
-
-float SRGB(float channel) {
-  return (channel <= 0.04045f)
-             ? (channel / 12.92f)
-             : pow((channel + 0.055f) / 1.055f, 2.4f);
-}
-
-float3 SRGB(float3 color) {
-  return float3(SRGB(color.r), SRGB(color.g), SRGB(color.b));
-}
-
-float4 SRGB(float4 color) {
-  return float4(SRGB(color.r), SRGB(color.g), SRGB(color.b), color.a);
-}
-
-float4 SRGBA(float4 color) {
-  return float4(SRGB(color.r), SRGB(color.g), SRGB(color.b), SRGB(color.a));
-}
-
 }  // namespace from
 }  // namespace bt709
 
@@ -253,32 +234,134 @@ float3 BT709(float3 bt709_color) {
 
 namespace srgb {
 static const float REFERENCE_WHITE = 80.f;
-namespace from {
-float BT709(float channel) {
+
+float Encode(float channel) {
   return (channel <= 0.0031308f)
              ? (channel * 12.92f)
              : (1.055f * pow(channel, 1.f / 2.4f) - 0.055f);
 }
-float3 BT709(float3 color) {
-  return float3(BT709(color.r), BT709(color.g), BT709(color.b));
+
+float EncodeSafe(float channel) {
+  return (channel <= 0.0031308f)
+             ? (channel * 12.92f)
+             : (1.055f * renodx::math::PowSafe(channel, 1.f / 2.4f) - 0.055f);
 }
-float4 BT709(float4 color) {
-  return float4(BT709(color.r), BT709(color.g), BT709(color.b), color.a);
+
+float3 Encode(float3 color) {
+  return float3(
+      Encode(color.r),
+      Encode(color.g),
+      Encode(color.b));
 }
-}  // namespace from
+
+float3 EncodeSafe(float3 color) {
+  return renodx::math::Sign(color) * Encode(abs(color));
+}
+
+float4 Encode(float4 color) {
+  return float4(Encode(color.rgb), color.a);
+}
+
+float4 EncodeSafe(float4 color) {
+  return float4(EncodeSafe(color.rgb), color.a);
+}
+
+float Decode(float channel) {
+  return (channel <= 0.04045f)
+             ? (channel / 12.92f)
+             : pow((channel + 0.055f) / 1.055f, 2.4f);
+}
+
+float DecodeSafe(float channel) {
+  return (channel <= 0.04045f)
+             ? (channel / 12.92f)
+             : renodx::math::PowSafe((channel + 0.055f) / 1.055f, 2.4f);
+}
+
+float3 Decode(float3 color) {
+  return float3(
+      Decode(color.r),
+      Decode(color.g),
+      Decode(color.b));
+}
+
+float3 DecodeSafe(float3 color) {
+  return renodx::math::Sign(color) * Decode(abs(color));
+}
+
+float4 Decode(float4 color) {
+  return float4(Decode(color.rgb), color.a);
+}
+
+float4 DecodeSafe(float4 color) {
+  return float4(DecodeSafe(color.rgb), color.a);
+}
+
 }  // namespace srgb
 
 namespace srgba {
-namespace from {
-float4 BT709(float4 color) {
+
+float4 Encode(float4 color) {
   return float4(
-      srgb::from::BT709(color.r),
-      srgb::from::BT709(color.g),
-      srgb::from::BT709(color.b),
-      srgb::from::BT709(color.a));
+      srgb::Encode(color.r),
+      srgb::Encode(color.g),
+      srgb::Encode(color.b),
+      srgb::Encode(color.a));
 }
-}  // namespace from
+
+float4 EncodeSafe(float4 color) {
+  return renodx::math::Sign(color) * Encode(abs(color));
+}
+
+float4 Decode(float4 color) {
+  return float4(
+      srgb::Decode(color.r),
+      srgb::Decode(color.g),
+      srgb::Decode(color.b),
+      srgb::Decode(color.a));
+}
+
+float4 DecodeSafe(float4 color) {
+  return renodx::math::Sign(color) * Decode(abs(color));
+}
+
 }  // namespace srgba
+
+namespace gamma {
+
+float Encode(float color, float gamma = 2.2f) {
+  return pow(color, 1.f / gamma);
+}
+
+float3 Encode(float3 color, float gamma = 2.2f) {
+  return pow(color, 1.f / gamma);
+}
+
+float EncodeSafe(float color, float gamma = 2.2f) {
+  return renodx::math::PowSafe(color, 1.f / gamma);
+}
+
+float3 EncodeSafe(float3 color, float gamma = 2.2f) {
+  return renodx::math::PowSafe(color, 1.f / gamma);
+}
+
+float Decode(float color, float gamma = 2.2f) {
+  return pow(color, gamma);
+}
+
+float3 Decode(float3 color, float gamma = 2.2f) {
+  return pow(color, gamma);
+}
+
+float DecodeSafe(float color, float gamma = 2.2f) {
+  return renodx::math::PowSafe(color, gamma);
+}
+
+float3 DecodeSafe(float3 color, float gamma = 2.2f) {
+  return renodx::math::PowSafe(color, gamma);
+}
+
+}  // namespace gamma
 
 namespace arri {
 namespace logc {
@@ -391,7 +474,7 @@ float3 BT709(float3 bt709) {
 
   float3 lms = mul(BT709_2_OKLABLMS, bt709);
 
-  lms = renodx::math::SafePow(lms, 1.f / 3.f);
+  lms = renodx::math::PowSafe(lms, 1.f / 3.f);
 
   return mul(OKLABLMS_2_OKLAB, lms);
 }

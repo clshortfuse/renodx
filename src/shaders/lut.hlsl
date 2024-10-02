@@ -215,11 +215,11 @@ float3 RecolorUnclamped(float3 original_linear, float3 unclamped_linear) {
 
 float3 ConvertInput(float3 color, Config lut_config) {
   if (lut_config.type_input == config::type::SRGB) {
-    color = renodx::color::srgb::from::BT709(saturate(color));
+    color = renodx::color::srgb::Encode(saturate(color));
   } else if (lut_config.type_input == config::type::GAMMA_2_4) {
-    color = pow(saturate(color), 1.f / 2.4f);
+    color = renodx::color::gamma::Encode(saturate(color), 2.4f);
   } else if (lut_config.type_input == config::type::GAMMA_2_2) {
-    color = pow(saturate(color), 1.f / 2.2f);
+    color = renodx::color::gamma::Encode(saturate(color));
   } else if (lut_config.type_input == config::type::GAMMA_2_0) {
     color = sqrt(saturate(color));
   } else if (lut_config.type_input == config::type::ARRI_C800) {
@@ -239,18 +239,18 @@ float3 ConvertInput(float3 color, Config lut_config) {
 
 float3 GammaOutput(float3 color, Config lut_config) {
   if (lut_config.type_output == config::type::LINEAR) {
-    color = renodx::color::srgb::from::BT709(max(0, color));
+    color = renodx::color::srgb::Encode(max(0, color));
   }
   return color;
 }
 
 float3 LinearOutput(float3 color, Config lut_config) {
   if (lut_config.type_output == config::type::SRGB) {
-    color = renodx::math::Sign(color) * renodx::color::bt709::from::SRGB(abs(color));
+    color = renodx::color::srgb::DecodeSafe(color);
   } else if (lut_config.type_output == config::type::GAMMA_2_4) {
-    color = renodx::math::SafePow(color, 2.4f);
+    color = renodx::color::gamma::DecodeSafe(color, 2.4f);
   } else if (lut_config.type_output == config::type::GAMMA_2_2) {
-    color = renodx::math::SafePow(color, 2.2f);
+    color = renodx::color::gamma::DecodeSafe(color);
   } else if (lut_config.type_output == config::type::GAMMA_2_0) {
     color = renodx::math::Sign(color) * color * color;
   } else if (lut_config.type_output == config::type::ARRI_C800) {
@@ -273,16 +273,16 @@ float3 GammaInput(float3 color_input, float3 color_input_converted, Config lut_c
       || lut_config.type_input == config::type::GAMMA_2_0) {
     return color_input_converted;
   }
-  return renodx::color::srgb::from::BT709(max(0, color_input));
+  return renodx::color::srgb::Encode(max(0, color_input));
 }
 
 float3 LinearUnclampedOutput(float3 color, Config lut_config) {
   if (lut_config.type_output == config::type::GAMMA_2_4) {
-    color = renodx::math::SafePow(color, 2.4f);
+    color = renodx::color::gamma::DecodeSafe(color, 2.4f);
   } else if (lut_config.type_output == config::type::GAMMA_2_2) {
-    color = renodx::math::SafePow(color, 2.2f);
+    color = renodx::color::gamma::DecodeSafe(color);
   } else {
-    color = renodx::math::Sign(color) * renodx::color::bt709::from::SRGB(abs(color));
+    color = renodx::math::Sign(color) * renodx::color::srgb::Decode(abs(color));
   }
   return color;
 }

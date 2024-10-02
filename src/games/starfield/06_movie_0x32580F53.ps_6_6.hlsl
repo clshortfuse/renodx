@@ -45,12 +45,12 @@ void frag_main() {
   float3 outputColor = SV_Target.rgb;
   float3 signs = sign(outputColor.rgb);
   outputColor = abs(outputColor);
-  outputColor = renodx::color::bt709::from::SRGB(outputColor);
+  outputColor = renodx::color::srgb::Decode(outputColor);
   float videoPeak = injectedData.toneMapPeakNits / 100.f * (injectedData.toneMapGameNits / 203.f);
   outputColor.rgb = renodx::tonemap::inverse::bt2446a::BT709(outputColor, 100.f, videoPeak);
   outputColor.rgb /= videoPeak;  // 1.0 = Video Peak
   outputColor.rgb *= injectedData.toneMapPeakNits / injectedData.toneMapUINits;
-  outputColor = renodx::color::srgb::from::BT709(outputColor);
+  outputColor = renodx::color::srgb::Encode(outputColor);
   outputColor *= signs;
 
   SV_Target.rgb = outputColor;

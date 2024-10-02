@@ -10,31 +10,35 @@ static const float FLT10_MAX = 64512.f;
 static const float FLT11_MAX = 65024.f;
 static const float FLT16_MAX = 65504.f;
 
-float Sign(float x) {
-#if __SHADER_TARGET_MAJOR >= 6
-  return sign(x);
+#if __SHADER_TARGET_MINOR >= 5
+#define SIGN_FUNCTION_GENERATOR(struct)                     \
+  struct Sign(struct x) {                                   \
+    return mad(saturate(mad(x, FLT_MAX, 0.5f)), 2.f, -1.f); \
+  }
+#else
+#define SIGN_FUNCTION_GENERATOR(struct)              \
+  struct Sign(struct x) {                            \
+    return saturate(x * FLT_MAX + 0.5f) * 2.f - 1.f; \
+  }
 #endif
-  return saturate(x * FLT_MAX + 0.5f) * 2.f - 1.f;
-}
 
-float3 Sign(float3 color) {
-#if __SHADER_TARGET_MAJOR >= 6
-  return sign(color);
-#endif
-  return saturate(color * FLT_MAX + 0.5f) * 2.f - 1.f;
-}
+SIGN_FUNCTION_GENERATOR(float);
+SIGN_FUNCTION_GENERATOR(float2);
+SIGN_FUNCTION_GENERATOR(float3);
+SIGN_FUNCTION_GENERATOR(float4);
 
-float3 SafePow(float3 color, float exponent) {
-  return Sign(color) * pow(abs(color), exponent);
-}
+#undef SIGN_FUNCTION_GENERATOR
 
-float1 SafePow(float color, float exponent) {
-  return Sign(color) * pow(abs(color), exponent);
-}
+#define POWSAFE_FUNCTION_GENERATOR(struct)   \
+  struct PowSafe(struct x, float exponent) { \
+    return Sign(x) * pow(abs(x), exponent);  \
+  }
 
-float3 Pow(float3 color, float exponent) {
-  return pow(color, exponent);
-}
+POWSAFE_FUNCTION_GENERATOR(float);
+POWSAFE_FUNCTION_GENERATOR(float2);
+POWSAFE_FUNCTION_GENERATOR(float3);
+POWSAFE_FUNCTION_GENERATOR(float4);
+#undef POWSAFE_FUNCTION_GENERATOR
 
 float Average(float3 color) {
   return (color.x + color.y + color.z) / 3.f;

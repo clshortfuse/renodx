@@ -28,7 +28,7 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1
   r0.xyz = cb0[6].yyy * r0.xyz;  // scale
   float3 untonemapped = r0.rgb;
 
-  untonemapped = max(0, renodx::color::bt709::from::SRGB(untonemapped));
+  untonemapped = max(0, renodx::color::srgb::Decode(untonemapped));
 
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
 

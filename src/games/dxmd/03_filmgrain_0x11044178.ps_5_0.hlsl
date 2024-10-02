@@ -52,7 +52,7 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : COLOR0, o
 
   float3 signs = sign(r0.xyz);
   r0.xyz = max(0, cb11[95].xyz * v2.www + abs(r0.xyz));
-  r0.rgb = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : renodx::color::bt709::from::SRGB(r0.rgb);
+  r0.rgb = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : renodx::color::srgb::Decode(r0.rgb);
   r0.rgb *= signs;
 
   if (injectedData.toneMapType == 0.f) {
@@ -95,7 +95,7 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : COLOR0, o
   o0.rgb = abs(o0.rgb);
   o0.rgb = injectedData.toneMapGammaCorrection
                ? pow(o0.rgb, 1.f / 2.2f)
-               : renodx::color::srgb::from::BT709(o0.rgb);
+               : renodx::color::srgb::Encode(o0.rgb);
   o0.rgb *= signs;
 
   o0.w = r0.w;
