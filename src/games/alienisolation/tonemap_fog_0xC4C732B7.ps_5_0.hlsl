@@ -347,6 +347,11 @@ void main(
     outputColor = dualTonemap(untonemapped, v2, v1, untonemappedLum);
   }
 
+  // only new code not present in default tonemap shader
+  // related to fog?
+  float3x4 fogMatrix = float3x4(rp_parameter_ps[4].xyzw, rp_parameter_ps[5].xyzw, rp_parameter_ps[6].xyzw);
+  outputColor = mul(float4(outputColor, 1.0), transpose(fogMatrix));
+
   // ignore user gamma, force 2.2
   r0.xyz = renodx::math::SafePow(outputColor, 1.f / 2.2f);  //  r0.xyz = pow(r0.xyz, OutputGamma.xxx);
 
