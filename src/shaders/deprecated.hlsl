@@ -61,7 +61,7 @@ float3 SafePow(float3 color, float exponent) {
 }
 
 /// @deprecated
-float1 SafePow(float color, float exponent) {
+float SafePow(float color, float exponent) {
   return PowSafe(color, exponent);
 }
 }
