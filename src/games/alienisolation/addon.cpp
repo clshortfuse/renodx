@@ -9,6 +9,7 @@
 #define DEBUG_LEVEL_0
 
 #include <embed/0x8AFBFA0F.h> // Tonemap
+#include <embed/0xC4C732B7.h> // Tonemap - Fog
 // #include <embed/0x007F7E1C.h> // SMAA
 #include <embed/0x043049C7.h> // Video
 #include <embed/0xCC0C2DF3.h> // UI - gamma adjust slider notch, line above settings explanations
@@ -38,6 +39,7 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x8AFBFA0F),      // tonemap
+    CustomShaderEntry(0xC4C732B7),      // tonemap - fog
     // CustomSwapchainShader(0xB95A4E01),  // Copy
     // CustomShaderEntry(0x007F7E1C),   // SMAA?
 
