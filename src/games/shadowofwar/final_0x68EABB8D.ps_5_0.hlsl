@@ -43,6 +43,7 @@ void main(
       0.f);
 
 
+
   r0.xyz *= injectedData.toneMapGameNits / 80.f;
 
   
