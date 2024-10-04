@@ -1,8 +1,9 @@
 #include "./shared.h"
 
-// ---- Created with 3Dmigoto v1.3.16 on Sun Sep 22 01:43:22 2024
+// ---- Created with 3Dmigoto v1.3.16 on Sun Sep 22 01:43:19 2024
 
-cbuffer cbDefaultXSC : register(b0) {
+cbuffer cbDefaultXSC : register(b0)
+{
   float4x4 ViewProj : packoffset(c0);
   float4x4 ViewMatrix : packoffset(c4);
   float4x4 SecondaryProj : packoffset(c8);
@@ -26,7 +27,8 @@ cbuffer cbDefaultXSC : register(b0) {
   float4 SMAA_RTMetrics : packoffset(c35);
 }
 
-cbuffer cbDefaultPSC : register(b2) {
+cbuffer cbDefaultPSC : register(b2)
+{
   float4x4 AlphaLight_WorldtoClipMatrix : packoffset(c0);
   float4x4 AlphaLight_CliptoWorldMatrix : packoffset(c4);
   float4x4 ProjectorMatrix : packoffset(c8);
@@ -76,7 +78,8 @@ cbuffer cbDefaultPSC : register(b2) {
   float4 SMAA_SubsampleIndices : packoffset(c82);
 }
 
-cbuffer cbUbershaderXSC : register(b5) {
+cbuffer cbUbershaderXSC : register(b5)
+{
   float4 rp_parameter_vs[32] : packoffset(c0);
   float4 rp_parameter_ps[32] : packoffset(c32);
 }
@@ -88,6 +91,7 @@ SamplerState SamplerQuarterSizeBlur_SMP_s : register(s9);
 SamplerState SamplerColourLUT_SMP_s : register(s10);
 SamplerState SamplerNoise_SMP_s : register(s12);
 SamplerState SamplerToneMapCurve_SMP_s : register(s14);
+SamplerState SamplerOverlay_SMP_s : register(s15);
 Texture2D<float4> SamplerFrameBuffer_TEX : register(t6);
 Texture2D<float4> SamplerDistortion_TEX : register(t7);
 Texture2D<float4> SamplerBloomMap0_TEX : register(t8);
@@ -95,6 +99,7 @@ Texture2D<float4> SamplerQuarterSizeBlur_TEX : register(t9);
 Texture3D<float4> SamplerColourLUT_TEX : register(t10);
 Texture2D<float4> SamplerNoise_TEX : register(t12);
 Texture2D<float4> SamplerToneMapCurve_TEX : register(t14);
+Texture2D<float4> SamplerOverlay_TEX : register(t15);
 
 // 3Dmigoto declarations
 #define cmp -
@@ -231,6 +236,28 @@ float3 dualTonemap(float3 inputColor, float4 sv_position, float4 texcoord, float
   return tonemapped;
 }
 
+float3 applyBloodOverlay(float3 inputColor, float4 v0) {
+  float4 r1;
+  float4 r0;
+  r0.rgb = inputColor;
+
+  r1.xyzw = SamplerOverlay_TEX.Sample(SamplerOverlay_SMP_s, v0.xy).xyzw;
+  r0.w = rp_parameter_ps[10].x + -rp_parameter_ps[9].w;
+  r0.w = rp_parameter_ps[9].z * r0.w + rp_parameter_ps[9].w;
+  r0.w = r1.w + -r0.w;
+  r1.w = 1 / rp_parameter_ps[10].y;
+  r0.w = saturate(r1.w * r0.w);
+  r1.w = r0.w * -2 + 3;
+  r0.w = r0.w * r0.w;
+  r0.w = r1.w * r0.w;
+  r0.w = min(1, r0.w);
+  r0.w = rp_parameter_ps[10].z * r0.w;
+  r1.xyz = r1.xyz + -r0.xyz;
+  r0.xyz = r0.www * r1.xyz + r0.xyz;
+
+  return r0.xyz;
+}
+
 void main(
     float4 v0: TEXCOORD0,
     float4 v1: TEXCOORD1,
@@ -347,7 +374,7 @@ void main(
     outputColor = dualTonemap(untonemapped, v2, v1, untonemappedLum);
   }
 
-  // only new code not present in default tonemap shader
+  // not present in default tonemap shader
   // related to fog?
   float3x4 fogMatrix = float3x4(rp_parameter_ps[4].xyzw, rp_parameter_ps[5].xyzw, rp_parameter_ps[6].xyzw);
   outputColor = mul(float4(outputColor, 1.0), transpose(fogMatrix));
@@ -370,10 +397,13 @@ void main(
     r2.xyw = r1.xyz * r2.xxx + r3.xyz;
     r1.xyz = r1.xyz * r2.zzz + r2.xyw;
     r0.xyz = r1.xyz + r0.xyz;
-    r0.xyz = (r0.xyz * rp_parameter_ps[0].xxx + rp_parameter_ps[0].yyy);  // r0.xyz = saturate(r0.xyz * rp_parameter_ps[0].xxx + rp_parameter_ps[0].yyy);
 
     r0.xyz = lerp(grainInputColor, r0.xyz, injectedData.fxFilmGrain);
   }
+
+  r0.xyz = applyBloodOverlay(r0.xyz, v0);
+
+  r0.xyz = (r0.xyz * rp_parameter_ps[0].xxx + rp_parameter_ps[0].yyy);  // r0.xyz = saturate(r0.xyz * rp_parameter_ps[0].xxx + rp_parameter_ps[0].yyy);
   o0.w = dot(r0.xyz, float3(0.298999995, 0.587000012, 0.114));
   o0.xyz = r0.xyz;
 

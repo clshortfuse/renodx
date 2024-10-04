@@ -10,6 +10,12 @@
 
 #include <embed/0x8AFBFA0F.h> // Tonemap
 #include <embed/0xC4C732B7.h> // Tonemap - Fog
+#include <embed/0x793F6207.h> // Tonemap - Desaturation + Blood
+#include <embed/0x0646427B.h> // Tonemap - Dizzy
+#include <embed/0x746E4324.h> // Tonemap - Dizzy + Desaturation + Blood
+
+#include <embed/0xA090F460.h> // Terminal
+
 // #include <embed/0x007F7E1C.h> // SMAA
 #include <embed/0x043049C7.h> // Video
 #include <embed/0xCC0C2DF3.h> // UI - gamma adjust slider notch, line above settings explanations
@@ -17,14 +23,21 @@
 #include <embed/0xD98FBA78.h> // UI - button prompts
 #include <embed/0xC38B68F9.h> // UI - most text
 #include <embed/0xF1A79FBF.h> // UI - nav elements, pause menu blur
+#include <embed/0xD7880DBE.h> // UI - working joe attack QTE
 #include <embed/0x335B9229.h> // HUD - health bar 
 
+#include <embed/0xA0A0F573.h> // UI - possibly unecessary, selected item in journal 
+#include <embed/0xF7F77ABD.h> // UI - overlay when quitting game from main menus 
+
 #include <embed/0xA6B73F9E.h> // UI - digital flashes when searching container, startup video with autodesk logo
+#include <embed/0x46CDBB69.h> // UI - digital flashes in item select
 #include <embed/0xE7CF0218.h> // UI - transparent element under health bar
 
 // left unchanged, still including so it's marked in devkit
 #include <embed/0xF42FA869.h> // UI - red text background when searching container
 #include <embed/0xB95A4E01.h> // UI - cxmul red text background when searching container
+#include <embed/0xECFC10A2.h> // UI - not sure
+#include <embed/0x7560E408.h> // UI - Map menu top bar navigation
 
 
 #include <deps/imgui/imgui.h>
@@ -39,7 +52,13 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x8AFBFA0F),      // tonemap
-    CustomShaderEntry(0xC4C732B7),      // tonemap - fog
+    CustomShaderEntry(0xC4C732B7),      // tonemap - desaturation
+    CustomShaderEntry(0x793F6207),      // tonemap - desaturation + blood
+    CustomShaderEntry(0x0646427B),      // tonemap - blood
+    CustomShaderEntry(0x746E4324),      // tonemap - dizzy + desaturation + blood 
+
+    CustomShaderEntry(0xA090F460),      // terminal 
+
     // CustomSwapchainShader(0xB95A4E01),  // Copy
     // CustomShaderEntry(0x007F7E1C),   // SMAA?
 
@@ -50,13 +69,19 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomSwapchainShader(0xF1A79FBF),  // UI - nav elements, pause menu blur
     CustomSwapchainShader(0x335B9229),  // HUD - health bar, interact prompts
     CustomSwapchainShader(0xC38B68F9),  // UI - most text
+    CustomSwapchainShader(0xD7880DBE),  // UI - working joe attack qte
+    CustomSwapchainShader(0x7560E408),  // UI - Map menu top bar navigation
+    CustomSwapchainShader(0xA0A0F573),  // UI - possibly unecessary, selected item in journal
+    CustomSwapchainShader(0xF7F77ABD),  // UI - overlay when quitting game from main menus
 
 
     CustomSwapchainShader(0xA6B73F9E),  // UI - digital flashes when searching container, startup video with autodesk logo
+    CustomSwapchainShader(0x46CDBB69),  // UI - digital flashes in item select
     CustomSwapchainShader(0xE7CF0218),  // UI - transparent element under health bar
 
-    CustomSwapchainShader(0xF42FA869),  // UI - red text background when searching container, not used
-    CustomSwapchainShader(0xB95A4E01),  // UI - cxmul red text background when searching container, not used
+    CustomSwapchainShader(0xF42FA869),  // UI - red text background when searching container
+    CustomSwapchainShader(0xB95A4E01),  // UI - can't see difference? cxmul red text background when searching container
+    CustomSwapchainShader(0xECFC10A2),  // UI - maybe
 };
 
 ShaderInjectData shader_injection;
@@ -206,6 +231,34 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "clampAlpha",
+        .binding = &shader_injection.clampAlpha,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .can_reset = false,
+        .label = "Clamp UI Alpha",
+        .section = "Test",
+        .tooltip = "Clamp Alpha on UI Shaders",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Discord",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          system("start https://discord.gg/5WZXDpmbpP");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Github",
+        .section = "Links",
+        .group = "button-line-1",
+        .on_change = []() {
+          system("start https://github.com/mqhaji/renodx");
+        },
     },
 };
 

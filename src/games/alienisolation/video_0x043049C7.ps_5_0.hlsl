@@ -34,9 +34,11 @@ void main(
   o0.xyz = r0.www * float3(0,-0.39199999,2.01699996) + r0.xyz;
   o0.w = v0.w;
 
+  if (injectedData.clampAlpha == 1.f) o0.a = saturate(o0.a);
+
   o0.rgb = saturate(o0.rgb);
   o0.rgb = pow(o0.rgb, 2.2f);
   o0.rgb = renodx::color::bt2020::from::BT709(o0.rgb);
-  o0.rgb = renodx::color::pq::from::BT2020(o0.rgb, injectedData.toneMapUINits);
+  o0.rgb = renodx::color::pq::from::BT2020(o0.rgb, injectedData.toneMapGameNits);
   return;
 }

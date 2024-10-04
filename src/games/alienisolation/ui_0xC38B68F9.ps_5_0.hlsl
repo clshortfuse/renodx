@@ -20,12 +20,14 @@ void main(
   float4 fDest;
 
   r0.x = tex.Sample(sampler_tex_s, v0.xy).x;
-  o0.w = saturate(v1.w * r0.x);
-  o0.xyz = saturate(v1.xyz);
+  o0.w = v1.w * r0.x;
+  o0.xyz = v1.xyz;
 
+  if (injectedData.clampAlpha == 1.f) o0.a = saturate(o0.a);
+
+  o0.rgb = saturate(o0.rgb);
   o0.rgb = pow(o0.rgb, 2.2f);
   o0.rgb = renodx::color::bt2020::from::BT709(o0.rgb);
   o0.rgb = renodx::color::pq::from::BT2020(o0.rgb, injectedData.toneMapUINits);
-
   return;
 }
