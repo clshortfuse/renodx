@@ -12,7 +12,7 @@
 #include <deps/imgui/imgui.h>
 
 #include <embed/0xA35C971A.h>   // Bloom
-#include <embed/0xA4592384.h>   // Game gamma / color grading
+#include <embed/0xA4592384.h>   // Color Grading
 #include <embed/0x68EABB8D.h>   // Final - DICE + UI/Game Blend
 
 #include <include/reshade.hpp>
@@ -24,7 +24,7 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xA35C971A),  // Bloom
-    CustomShaderEntry(0xA4592384),  // Game gamma / color grading
+    CustomShaderEntry(0xA4592384),  // Color Grading
     CustomShaderEntry(0x68EABB8D),  // Final - DICE + UI/Game Blend
 };
 
@@ -74,16 +74,6 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
         .min = 48.f,
         .max = 500.f,
-    },
-    new renodx::utils::settings::Setting{
-        .key = "toneMapGammaCorrection",
-        .binding = &shader_injection.toneMapGammaCorrection,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1.f,
-        .can_reset = false,
-        .label = "Gamma Correction",
-        .section = "Tone Mapping",
-        .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapHueCorrection",
