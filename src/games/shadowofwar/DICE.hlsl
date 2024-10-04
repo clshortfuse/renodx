@@ -1,3 +1,5 @@
+#include "./shared.h"
+
 float max3(float a, float b, float c)
 {
   return max(a, max(b, c));
@@ -75,7 +77,7 @@ float3 PQ_to_Linear(float3 ST2084Color, int clampType = 0)
 // Aplies exponential ("Photographic") luminance/luma compression.
 // The pow can modulate the curve without changing the values around the edges.
 // The max is the max possible range to compress from, to not lose any output range if the input range was limited.
-float rangeCompress(float X, float Max = asfloat(0x7F7FFFFF))
+float rangeCompress(float X, float Max = 10000.f/80.f)
 {
   // Branches are for static parameters optimizations
   if (Max == renodx::math::FLT_MAX) {
@@ -90,11 +92,11 @@ float rangeCompress(float X, float Max = asfloat(0x7F7FFFFF))
 // Refurbished DICE HDR tonemapper (per channel or luminance).
 // Expects "InValue" to be >= "ShoulderStart" and "OutMaxValue" to be > "ShoulderStart".
 float luminanceCompress(
-  float InValue,
-  float OutMaxValue,
-  float ShoulderStart = 0.f,
-  bool considerMaxValue = false,
-  float InMaxValue = asfloat(0x7F7FFFFF))
+    float InValue,
+    float OutMaxValue,
+    float ShoulderStart = 0.f,
+    bool considerMaxValue = false,
+    float InMaxValue = 10000.f / 80.f)
 {
   const float compressableValue = InValue - ShoulderStart;
   const float compressableRange = InMaxValue - ShoulderStart;

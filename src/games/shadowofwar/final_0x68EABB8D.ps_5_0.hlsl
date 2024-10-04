@@ -1,4 +1,3 @@
-#include "./shared.h"
 #include "./DICE.hlsl"
 // ---- Created with 3Dmigoto v1.3.16 on Thu Sep 05 23:49:36 2024
 
@@ -31,7 +30,7 @@ void main(
   r0.xy = min(MaxTexCoord0.xy, r0.xy);
 
   r0.xyz = gameTexture.SampleLevel(TextureSampler_s, r0.xy, 0).xyz;
-  r0.xyz *= 80.f / 300.f;
+  r0.xyz *= 80.f / 500.f;
 
   r0.xyz = renodx::color::grade::UserColorGrading(
         r0.xyz,
@@ -42,9 +41,12 @@ void main(
         injectedData.colorGradeSaturation,
         injectedData.colorGradeBlowout);
 
+
   r0.xyz *= injectedData.toneMapGameNits / 80.f;
 
-  if (injectedData.toneMapType) {
+  
+  if (injectedData.toneMapType == 1) {
+    r0.xyz = min(r0.xyz, 10000.f / 80.f); // fixes artifacts on certain highlights that go 9999+
     DICESettings config = DefaultDICESettings();
     config.Type = 3u;
     config.ShoulderStart = 0.5f;
@@ -53,7 +55,7 @@ void main(
 
   r1.xyzw = uiTexture.SampleLevel(TextureSampler_s, v1.xy, 0).xyzw;
   r0.w = 1 + -r1.w;
-  // r1.xyz = pow(r1.xyz, Gamma.xxx);    // Gamma on scaled up linearized texture, covering up mismatch?
+  // r1.xyz = pow(r1.xyz, Gamma.xxx);    // Gamma on already linearized texture, covering up mismatch?
   // r1.xyz = Gamma.yyy * r1.xyz;        // Paper White
   r1.xyz = renodx::color::correct::GammaSafe(r1.xyz);
   r1.xyz *= injectedData.toneMapUINits/80.f;
