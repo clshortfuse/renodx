@@ -64,13 +64,11 @@ void main(
   r0.xyzw = v1.wwww * r0.xyzw;
   o0.xyzw = v0.xyzw * r0.wwww + r0.xyzw;
 
-  // o0.rgb = saturate(o0.rgb);
-  // o0.rgb = (1.f
-  //               ? pow(o0.rgb, 2.2f)
-  //               : renodx::color::bt709::from::SRGB(o0.rgb));
-  // float3 colorBT2020 = renodx::color::bt2020::from::BT709(o0.rgb);
-  // o0.rgb = renodx::color::pq::from::BT2020(colorBT2020, 203.f);
+  if (injectedData.clampAlpha == 1.f) o0.a = saturate(o0.a);
 
-//  looks bad when I change it
+  o0.rgb = saturate(o0.rgb);
+  o0.rgb = pow(o0.rgb, 2.2f);
+  o0.rgb = renodx::color::bt2020::from::BT709(o0.rgb);
+  o0.rgb = renodx::color::pq::from::BT2020(o0.rgb, injectedData.toneMapUINits);
   return;
 }
