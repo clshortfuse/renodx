@@ -74,8 +74,7 @@ void main(
         injectedData.colorGradeContrast,
         1.f,
         0.f,
-        injectedData.toneMapHueCorrection,
-        renodx::tonemap::uncharted2::BT709(o0.xyz));
+        0.f);
 
   return;
 }
