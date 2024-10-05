@@ -33,14 +33,14 @@ void main(
   r0.xyz *= 80.f / 500.f;
 
   r0.xyz = renodx::color::grade::UserColorGrading(
-        r0.xyz,
-        1.f,
-        1.f,
-        1.f,
-        1.f,
-        injectedData.colorGradeSaturation,
-        injectedData.colorGradeBlowout);
-
+      r0.xyz,
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      injectedData.colorGradeSaturation,
+      injectedData.colorGradeBlowout,
+      0.f);
 
   r0.xyz *= injectedData.toneMapGameNits / 80.f;
 
