@@ -13,7 +13,10 @@
 
 #include <embed/0xA35C971A.h>   // Bloom
 #include <embed/0xA4592384.h>   // Color Grading
+#include <embed/0xC2665219.h>   // Photo Mode
 #include <embed/0x68EABB8D.h>   // Final - DICE + UI/Game Blend
+
+
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
@@ -25,6 +28,7 @@ namespace {
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xA35C971A),  // Bloom
     CustomShaderEntry(0xA4592384),  // Color Grading
+    CustomShaderEntry(0xC2665219),  // Photo Mode
     CustomShaderEntry(0x68EABB8D),  // Final - DICE + UI/Game Blend
 };
 
