@@ -80,6 +80,13 @@ float3 ACESFittedAP1(float3 color) {
 // https://www.slideshare.net/ozlael/hable-john-uncharted2-hdr-lighting
 // http://filmicworlds.com/blog/filmic-tonemapping-operators/
 
+// Hejl & Burgess-Dawson Filmic
+float3 HejlDawson(float3 color){
+  color = max(0, color - 0.004f);
+  color = (color * (6.2f * color + 0.5f)) / (color * (6.2f * color + 1.7f) + 0.06f);
+  return pow(color, 2.2f);
+}
+
 namespace uncharted2 {
 static const float A = 0.22;  // Shoulder Strength
 static const float B = 0.30;  // Linear Strength
