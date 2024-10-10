@@ -39,8 +39,8 @@ function(inspect_hlsl_imports FILE VARIABLE)
 endfunction()
 
 function(build_shader_target ADDON ADDON_PATH)
-  file(GLOB SHADER_FILES ${ADDON_PATH}/*.hlsl)
-  foreach(FILE ${SHADER_FILES})
+  file(GLOB SHADER_SOURCES ${ADDON_PATH}/*.hlsl)
+  foreach(FILE ${SHADER_SOURCES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)
     string(REGEX MATCH "(0x[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F])\\.([pcv]s_[0-9]_[0-9])\\.hlsl$" _ ${FILENAME} )
@@ -81,6 +81,26 @@ function(build_shader_target ADDON ADDON_PATH)
       list(APPEND SHADER_HEADER_FILES ${EMBED_FOLDER}/${SHADER_HASH}.h)
     endif()
   endforeach()
+  
+  
+  file(GLOB SHADER_BINARIES ${ADDON_PATH}/*.cso)
+  foreach(FILE ${SHADER_BINARIES})
+    cmake_path(GET FILE FILENAME FILENAME)
+    cmake_path(GET FILE PARENT_PATH TARGET_PATH)
+    string(REGEX MATCH "(0x[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F])(\\.[pcv]s_[0-9]_[0-9])?\\.cso$" _ ${FILENAME} )
+    set(SHADER_HASH ${CMAKE_MATCH_1})
+    SET(EMBED_FOLDER ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include/embed)
+
+    if (SHADER_HASH)
+      add_custom_command(
+        OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.h
+        COMMAND embedfile ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}
+        DEPENDS ${FILE}
+      )
+      list(APPEND SHADER_HEADER_FILES ${EMBED_FOLDER}/${SHADER_HASH}.h)
+    endif()
+  endforeach()
+  
   LIST(JOIN SHADER_HEADER_FILES " " SHADER_HEADER_FILE_ITEMS)
   add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES})
 endfunction()
