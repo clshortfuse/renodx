@@ -180,7 +180,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeSaturation",
         .binding = &shader_injection.colorGradeSaturation,
-        .default_value = 70.f,
+        .default_value = 50.f,
         .label = "Saturation",
         .section = "Color Grading",
         .max = 100.f,
@@ -237,7 +237,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeSaturation", 70.f);
+  renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
   //renodx::utils::settings::UpdateSetting("colorGradeBlowout", 50.f);
   //renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 50.f);
 }
