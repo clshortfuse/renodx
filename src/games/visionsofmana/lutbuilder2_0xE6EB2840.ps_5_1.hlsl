@@ -451,6 +451,8 @@ void main(
             r3.xyz = r3.xyz * float3(0.930000007, 0.930000007, 0.930000007) + r0.www;
             r3.xyz = max(float3(0, 0, 0), r3.xyz);
             sdr_ap1_color = r3.xyz;
+        } //added
+        r3.xyz = sdr_ap1_color;
             r3.xyz = r3.xyz + -r0.xyz;
             r0.xyz = cb0[66].zzz * r3.xyz + r0.xyz;
             r3.x = dot(float3(1.06537485, 1.44678506e-06, -0.0653710067), r0.xyz);
@@ -464,7 +466,7 @@ void main(
             r2.xyz = max(float3(0, 0, 0), r3.xyz);
             
         }
-        r2.xyz = sdr_ap1_color;
+        
         
         r2.xyz = saturate(r2.xyz);
         r0.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r2.xyz;
@@ -1572,4 +1574,3 @@ void main(
         o0.w = 0;
         return;
     }
-}
