@@ -90,14 +90,15 @@ void main(
   r1.xyzw = t3.Sample(s3_s, v3.xy).xyzw;
   r2.xyz = cb1[143].zzz * r1.xyz;
   
-  
+    
+    
   r2.w = cmp(r1.w < 1);
-  if (r2.w != 0) {
-    r2.w = 1 + -r1.w;
-    r3.xyz = r2.www * r0.yzw;
-    r1.xyz = r1.xyz * cb1[143].zzz + -r3.xyz;
-    r2.xyz = cb0[59].zzz * r1.xyz + r3.xyz;
-  }
+    if (r2.w != 0) {
+        r2.w = 1 + -r1.w;
+        r3.xyz = r2.www * r0.yzw;
+        r1.xyz = r1.xyz * cb1[143].zzz + -r3.xyz;
+        r2.xyz = cb0[59].zzz * r1.xyz + r3.xyz;
+    }
   r0.yzw = r0.yzw * r1.www + r2.xyz;
   r0.yzw = v1.xxx * r0.yzw;
   r1.xy = cb0[62].xx * v1.yz;
@@ -105,6 +106,8 @@ void main(
   r1.x = 1 + r1.x;
   r1.x = rcp(r1.x);
   r1.x = r1.x * r1.x;
+    
+    
   
   r1.yzw = r1.xxx * r0.yzw;
 
@@ -115,7 +118,7 @@ void main(
   //r0.yzw = t5.Sample(s5_s, r0.yzw).xyz;
   //r0.yzw = float3(1.04999995,1.04999995,1.04999995) * r0.yzw;
   
-    float3 untonemapped = r1.yzw * r1.x;
+    float3 untonemapped = r0.yzw * r1.x;
     float3 lut_input = renodx::color::pq::from::BT2020(untonemapped, 100.f);
     float3 sampled = renodx::lut::Sample(t5, s5_s, lut_input);
     float3 post_lut = renodx::color::bt2020::from::PQ(sampled, 100.f);

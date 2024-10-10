@@ -361,19 +361,23 @@ void main(
             const float ACES_SHADOWS = 1.12f;
             const float ACES_CONTRAST = 1.2f;
             const float ACES_FLARE = 0.1355f;
+            
+            if (injectedData.toneMapType == 2.f) { //ACES unique configs
+                config.saturation += 0.5f;
+            }
 
             config.reno_drt_highlights = 0.96f;
             config.reno_drt_shadows = 1.12f;
             config.reno_drt_contrast = 1.2f;
-            config.reno_drt_saturation = 1.80f;
+            config.reno_drt_saturation = 1.80f; //1.80f
             config.reno_drt_dechroma = 0.80f; // 0.80f
             config.reno_drt_flare = 0.1355f;
 
             float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
             
-            if (injectedData.toneMapType == 3.f){ //Only apply hue correction if RenoDRT is selected
-                config_color = renodx::color::correct::Hue(config_color, renodx::tonemap::ACESFittedAP1(config_color));
-            }
+            //if (injectedData.toneMapType == 3.f){ //Only apply hue correction if RenoDRT is selected
+            //    config_color = renodx::color::correct::Hue(config_color, renodx::tonemap::ACESFittedAP1(config_color));
+            //}
 
             renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(config_color, config);
             hdr_color = dual_tone_map.color_hdr;
@@ -446,6 +450,7 @@ void main(
             r3.xyz = r3.xyz + -r0.www;
             r3.xyz = r3.xyz * float3(0.930000007, 0.930000007, 0.930000007) + r0.www;
             r3.xyz = max(float3(0, 0, 0), r3.xyz);
+            sdr_ap1_color = r3.xyz;
             r3.xyz = r3.xyz + -r0.xyz;
             r0.xyz = cb0[66].zzz * r3.xyz + r0.xyz;
             r3.x = dot(float3(1.06537485, 1.44678506e-06, -0.0653710067), r0.xyz);
@@ -457,7 +462,7 @@ void main(
             r3.y = dot(float3(-0.130257145, 1.14080286, -0.0105485283), r0.xyz);
             r3.z = dot(float3(-0.0240032747, -0.128968775, 1.15297174), r0.xyz);
             r2.xyz = max(float3(0, 0, 0), r3.xyz);
-            sdr_ap1_color = r2.xyz;
+            
         }
         r2.xyz = sdr_ap1_color;
         
