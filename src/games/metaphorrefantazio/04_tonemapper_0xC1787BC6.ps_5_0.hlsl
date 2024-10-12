@@ -243,21 +243,14 @@ void main(float4 v0
     // End of ACES SDR tonemapper
   }
 
-  // Adjust colors if tonemapper is renoDRT
-  if (injectedData.toneMapType == 3.f) {
+  if (injectedData.toneMapType == 0.f) {
+    outputColor.rgb = vanilla;
+  } else if (injectedData.toneMapType == 3.f) {  // Adjust colors if tonemapper is renoDRT
     outputColor.rgb = renodx::color::correct::Hue(
         untonemapped, renodx::tonemap::ACESFittedAP1(untonemapped));
   } else {
     outputColor.rgb = untonemapped;
   }
-
-  /* r1.xyz = starScale * r1.xyz + r2.xyz;
-  o0.xyz = r0.xyz * r0.www + r1.xyz; */
-
-  // Add bloom/stars
-  // We add it to vanilla cause devs add linear bloom/stars to tonemapped image
-  vanilla = starScale * r1.xyz + vanilla.rgb;
-  vanilla = r0.xyz * r0.www + vanilla.rgb;
 
   outputColor = applyUserTonemap(outputColor);
 
@@ -267,9 +260,15 @@ void main(float4 v0
     float3 negHDR = min(0, outputColor);  // save WCG
     outputColor = lerp(saturate(vanilla), max(0, outputColor), saturate(vanilla));
     outputColor += negHDR;  // add back WCG
-  } else {
-    outputColor = vanilla;
   }
+
+  /* r1.xyz = starScale * r1.xyz + r2.xyz;
+  o0.xyz = r0.xyz * r0.www + r1.xyz; */
+
+  // Add bloom/stars
+  // We add it to output cause devs add linear bloom/stars to tonemapped image
+  outputColor = starScale * r1.xyz + outputColor.rgb;
+  outputColor = r0.xyz * r0.www + outputColor.rgb;
 
   o0.xyz = outputColor.rgb;
   o0.w = 1;
