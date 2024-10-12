@@ -51,11 +51,11 @@ void main(float4 v0
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9;
   uint4 bitmask, uiDest;
   float4 fDest;
-  float3 ap1_aces_colored, vanilla, outputColor;
+  float3 untonemapped, vanilla, outputColor;
 
   r0.xyzw = bloomTexture.Sample(bloomSampler_s, v1.xy).xyzw;
   r1.xyz = opaueTexture.Sample(opaueSampler_s, v1.xy).xyz;
-  ap1_aces_colored.rgb = r1.rgb;
+  untonemapped.rgb = r1.rgb;
   vanilla.rgb = r1.rgb;
 
   r2.xy = resolution.xy * v1.xy;
@@ -81,8 +81,9 @@ void main(float4 v0
     r1.w = -adaptedLum + r1.w;
     r1.w = adaptedLumAdjust * r1.w + adaptedLum;
     r2.xyz = r2.yzw / r1.www;
-    ap1_aces_colored = r2.rgb;
+    untonemapped = r2.rgb;
 
+    // Can we extract more colors by using AP0 below?
     r1.w = dot(float3(0.439700812, 0.382978052, 0.1773348), r2.xyz);
     r3.y = dot(float3(0.0897923037, 0.813423157, 0.096761629), r2.xyz);
     r3.z = dot(float3(0.0175439864, 0.111544058, 0.870704114), r2.xyz);
@@ -220,19 +221,29 @@ void main(float4 v0
     vanilla = r1.rgb;
   }
 
-  if (injectedData.toneMapType == 0.f) {
-    outputColor.rgb = vanilla;
-  } else if (injectedData.toneMapType == 3.f) {
+  if (injectedData.toneMapType == 3.f) {
     outputColor.rgb = renodx::color::correct::Hue(
-        ap1_aces_colored, renodx::tonemap::ACESFittedAP1(ap1_aces_colored));
+        untonemapped, renodx::tonemap::ACESFittedAP1(untonemapped));
   } else {
-    outputColor.rgb = ap1_aces_colored;
+    outputColor.rgb = untonemapped;
   }
 
+  // Add bloom
+  // We add it to vanilla cause devs add linear bloom to tonemapped image
   // o0.xyz = r0.xyz * r0.www + r1.xyz;
-  outputColor.rgb = r0.xyz * r0.www + outputColor.rgb;
+  vanilla = r0.xyz * r0.www + vanilla.rgb;
+
   outputColor = applyUserTonemap(outputColor);
-  // outputColor = scaleLuminance(outputColor);
+
+  if (injectedData.toneMapType > 1) {
+    // We don't get a lot of WCG colors but might as well ig
+    // blend HDR with SDR
+    float3 negHDR = min(0, outputColor);  // save WCG
+    outputColor = lerp(saturate(vanilla), max(0, outputColor), saturate(vanilla));
+    outputColor += negHDR;  // add back WCG
+  } else {
+    outputColor = vanilla;
+  }
 
   o0.xyz = outputColor.rgb;
   o0.w = 1;

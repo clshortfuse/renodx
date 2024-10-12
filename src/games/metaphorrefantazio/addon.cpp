@@ -12,7 +12,6 @@
 #include <embed/0x1F993880.h>  // Final
 #include <embed/0x70C6A8D7.h>  // Light Rays
 #include <embed/0x7EB16138.h>  // Persona selection background
-#include <embed/0x9FA3FE1B.h>  // Particles
 #include <embed/0xA177E041.h>  // Glow
 #include <embed/0xA3109C78.h>  // Bloom
 #include <embed/0xA5D96315.h>  // Glow
@@ -34,7 +33,6 @@ namespace {
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xD8196629),  // LUT
     CustomShaderEntry(0x70C6A8D7),  // Light Rays
-    CustomShaderEntry(0x9FA3FE1B),  // Particles
     CustomShaderEntry(0xA177E041),  // Glow
     CustomShaderEntry(0xA3109C78),  // Bloom
     CustomShaderEntry(0xA5D96315),  // Glow
@@ -73,7 +71,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapGameNits",
         .binding = &shader_injection.toneMapGameNits,
-        .default_value = 100.f,
+        .default_value = 120.f,
         .label = "Game Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of 100% white in nits",
@@ -103,13 +101,14 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapHueCorrection",
         .binding = &shader_injection.toneMapHueCorrection,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 4.f,
-        .can_reset = false,
+        .default_value = 50.f,
+        .can_reset = true,
         .label = "Hue Correction",
         .section = "Tone Mapping",
-        .tooltip = "Applies hue shift emulation before tonemapping",
-        .labels = {"None", "Reinhard", "ACES BT709", "ACES AP1", "Filmic"},
+        .tooltip = "Emulates hue shifting from the vanilla tonemapper",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType > 1; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
@@ -174,7 +173,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeBlowout",
         .binding = &shader_injection.colorGradeBlowout,
-        .default_value = 50.f,
+        .default_value = 0.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
