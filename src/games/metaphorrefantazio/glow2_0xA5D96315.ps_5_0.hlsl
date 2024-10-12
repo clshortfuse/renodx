@@ -54,7 +54,7 @@ void main(
   /* r0.yzw = float3(2.20000005,2.20000005,2.20000005) * r0.yzw;
   r0.yzw = exp2(r0.yzw); */
 
-  r0.yzw = renodx::color::gamma::DecodeSafe(r1.rgb);
+  r0.yzw = renodx::color::gamma::Decode(r1.rgb);
 
   r1.xyz = v2.xyz + r0.yzw;
   r1.xyzw = v3.xyzw * r1.xyzw;
