@@ -449,7 +449,7 @@ void OnPushDescriptors(
         reshade::log::message(reshade::log::level::error, "Not descriptor table.");
         return;
     }
-    auto srv_index = index + starting_index;
+    auto srv_index = update.binding + index + starting_index;
     destination[srv_index] = (device_data.GetResourceViewDetails(view, device));
   };
   for (uint32_t i = 0; i < update.count; i++) {
