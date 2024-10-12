@@ -11,7 +11,7 @@
 
 #include <embed/0x1F993880.h>  // Final
 #include <embed/0x70C6A8D7.h>  // Light Rays
-#include <embed/0x7EB16138.h>  // Persona selection background
+#include <embed/0x7EB16138.h>  // Overlays (PG background, boss fights UI)
 #include <embed/0xA177E041.h>  // Glow
 #include <embed/0xA3109C78.h>  // Bloom
 #include <embed/0xA5D96315.h>  // Glow
@@ -39,7 +39,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xA7108284),  // Tonemapper
     CustomShaderEntry(0xAC103037),  // Output
     CustomShaderEntry(0xC1787BC6),  // Tonemapper
-    CustomShaderEntry(0x7EB16138),  // Persona selection background
+    CustomShaderEntry(0x7EB16138),  // Overlays
     CustomShaderEntry(0x1F993880),  // Final
 };
 
