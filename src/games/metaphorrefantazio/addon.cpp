@@ -183,7 +183,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Special thanks to Marat & shortfuse for the support! Join the HDR Den discord for help!",
+        .label = "Special thanks to Shortfuse & the folks at HDR Den for their support! Join the HDR Den discord for help!",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
