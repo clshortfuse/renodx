@@ -221,17 +221,14 @@ void main(float4 v0
     vanilla = r1.rgb;
   }
 
-  if (injectedData.toneMapType == 3.f) {
+  if (injectedData.toneMapType == 0.f) {
+    outputColor.rgb = vanilla;
+  } else if (injectedData.toneMapType == 3.f) {  // Adjust colors if tonemapper is renoDRT
     outputColor.rgb = renodx::color::correct::Hue(
         untonemapped, renodx::tonemap::ACESFittedAP1(untonemapped));
   } else {
     outputColor.rgb = untonemapped;
   }
-
-  // Add bloom
-  // We add it to vanilla cause devs add linear bloom to tonemapped image
-  // o0.xyz = r0.xyz * r0.www + r1.xyz;
-  vanilla = r0.xyz * r0.www + vanilla.rgb;
 
   outputColor = applyUserTonemap(outputColor);
 
@@ -241,9 +238,12 @@ void main(float4 v0
     float3 negHDR = min(0, outputColor);  // save WCG
     outputColor = lerp(saturate(vanilla), max(0, outputColor), saturate(vanilla));
     outputColor += negHDR;  // add back WCG
-  } else {
-    outputColor = vanilla;
   }
+
+  // Add bloom
+  // We add it to outputColor cause devs add linear bloom to tonemapped image
+  // o0.xyz = r0.xyz * r0.www + r1.xyz;
+  outputColor = r0.xyz * r0.www + outputColor.rgb;
 
   o0.xyz = outputColor.rgb;
   o0.w = 1;
