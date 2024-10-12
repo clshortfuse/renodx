@@ -42,7 +42,6 @@ void main(
       injectedData.colorGradeBlowout,
       0.f);
 
-
   r0.xyz *= injectedData.toneMapGameNits / 80.f;
 
   
