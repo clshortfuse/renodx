@@ -97,13 +97,13 @@ void main(float4 v0
     outputColor = tonemapped;
   }
   // o0.xyzw = r0.xyzw;
+  o0.w = r0.w;
 
   outputColor.rgb =
       outputColor.rgb * float3(1.04999995, 1.04999995, 1.04999995) + -untonemapped.xyz;
   outputColor.rgb = weight * outputColor.xyz + untonemapped.xyz;
 
   o0.rgb = outputColor.rgb;
-  o0.w = 1;
 
   return;
 }

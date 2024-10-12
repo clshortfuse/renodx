@@ -20,11 +20,13 @@ float3 applyUserTonemap(float3 untonemapped) {
   config.shadows = injectedData.colorGradeShadows;
   config.contrast = injectedData.colorGradeContrast;
 
-  config.hue_correction_type =
-      renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_color =
-      lerp(outputColor, renodx::tonemap::Reinhard(outputColor),
-           injectedData.toneMapHueCorrection);
+  if (injectedData.toneMapType > 1.f) {
+    config.hue_correction_type =
+        renodx::tonemap::config::hue_correction_type::CUSTOM;
+    config.hue_correction_color =
+        lerp(outputColor, renodx::tonemap::Reinhard(outputColor),
+             injectedData.toneMapHueCorrection);
+  }
 
   outputColor = renodx::tonemap::config::Apply(outputColor, config);
 
@@ -49,7 +51,7 @@ float3 scaleLuminance(float3 color) {
 }
 
 float3 restoreLuminance(float3 color) {
-  color /= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+  color *= injectedData.toneMapUINits / injectedData.toneMapGameNits;
 
   return color;
 }

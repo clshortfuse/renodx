@@ -23,15 +23,15 @@ cbuffer GFD_PSCONST_SYSTEM : register(b0) {
 
 // Values are probably scene specific, just for reference
 cbuffer GFD_PSCONST_HDR : register(b11) {
-  float middleGray : packoffset(c0);   // Around 10
-  float adaptedLum : packoffset(c0.y); // Less than 1
+  float middleGray : packoffset(c0);    // Around 10
+  float adaptedLum : packoffset(c0.y);  // Less than 1
   float bloomScale : packoffset(c0.z);
   float starScale : packoffset(c0.w);
-  float elapsedTime : packoffset(c1);        // Controls animations maybe?
-  float toonBloomScale : packoffset(c1.y);   // more than 1
-  float adaptedLumAdjust : packoffset(c1.z); // Less than 1
-  float adaptedLumLimit : packoffset(c1.w);  // 0
-  float pbrIntensity : packoffset(c2);       // more than 1
+  float elapsedTime : packoffset(c1);         // Controls animations maybe?
+  float toonBloomScale : packoffset(c1.y);    // more than 1
+  float adaptedLumAdjust : packoffset(c1.z);  // Less than 1
+  float adaptedLumLimit : packoffset(c1.w);   // 0
+  float pbrIntensity : packoffset(c2);        // more than 1
 }
 
 SamplerState opaueSampler_s : register(s0);
@@ -54,13 +54,13 @@ void main(float4 v0
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9;
   uint4 bitmask, uiDest;
   float4 fDest;
-  float3 ap1_aces_colored, vanilla, outputColor;
+  float3 untonemapped, vanilla, outputColor;
 
-  r0.xyzw = bloomTexture.Sample(bloomSampler_s, v1.xy).xyzw; // 1/4th of res
-  r1.xyz = starTexture.Sample(starSampler_s, v1.xy).xyz;     // 1/4th of res
+  r0.xyzw = bloomTexture.Sample(bloomSampler_s, v1.xy).xyzw;  // 1/4th of res
+  r1.xyz = starTexture.Sample(starSampler_s, v1.xy).xyz;      // 1/4th of res
   r2.xyz =
-      opaueTexture.Sample(opaueSampler_s, v1.xy).xyz; // Underexposed background
-  ap1_aces_colored.rgb = r2.rgb;
+      opaueTexture.Sample(opaueSampler_s, v1.xy).xyz;  // Underexposed background
+  untonemapped.rgb = r2.rgb;
   vanilla.rgb = r2.rgb;
 
   r3.xy = resolution.xy * v1.xy;
@@ -89,7 +89,7 @@ void main(float4 v0
     // Adjusting Luminance? Lerps at the end I think
     r3.xyz = r2.xyz * r1.www;
     r3.xyz = adaptedLum * r3.xyz;
-    r1.w = max(adaptedLumLimit, r2.w); // minimal limit? Why max?
+    r1.w = max(adaptedLumLimit, r2.w);  // minimal limit? Why max?
     r1.w = 9.99999975e-05 + r1.w;
     r1.w = -adaptedLum + r1.w;
     r1.w = adaptedLumAdjust * r1.w + adaptedLum;
@@ -98,7 +98,7 @@ void main(float4 v0
      * technically a multiplication. Vanilla causes brightness to shoot up, but
      * renodx produces more reasonable results (Wrong midgray in renodx?) */
     r3.xyz = r3.xyz / r1.www;
-    ap1_aces_colored = r3.rgb;
+    untonemapped = r3.rgb;
 
     /* ACES RRT? (RRT = Reference Rendering Transform)
     Produce the reference (source with sweeteners transformed to something ODT
@@ -106,6 +106,7 @@ void main(float4 v0
     r1.w = dot(float3(0.439700812, 0.382978052, 0.1773348), r3.xyz);
     r4.y = dot(float3(0.0897923037, 0.813423157, 0.096761629), r3.xyz);
     r4.z = dot(float3(0.0175439864, 0.111544058, 0.870704114), r3.xyz);
+
     r2.w = min(r4.y, r1.w);
     r2.w = min(r2.w, r4.z);
     r3.w = max(r4.y, r1.w);
@@ -244,21 +245,30 @@ void main(float4 v0
 
   if (injectedData.toneMapType == 0.f) {
     outputColor.rgb = vanilla;
-  } else if (injectedData.toneMapType == 3.f) {
+  } else if (injectedData.toneMapType == 3.f) {  // Adjust colors if tonemapper is renoDRT
     outputColor.rgb = renodx::color::correct::Hue(
-        ap1_aces_colored, renodx::tonemap::ACESFittedAP1(ap1_aces_colored));
+        untonemapped, renodx::tonemap::ACESFittedAP1(untonemapped));
   } else {
-    outputColor.rgb = ap1_aces_colored;
+    outputColor.rgb = untonemapped;
   }
 
-  // Add bloom
+  outputColor = applyUserTonemap(outputColor);
+
+  if (injectedData.toneMapType > 1) {
+    // We don't get a lot of WCG colors but might as well ig
+    // blend HDR with SDR
+    float3 negHDR = min(0, outputColor);  // save WCG
+    outputColor = lerp(saturate(vanilla), max(0, outputColor), saturate(vanilla));
+    outputColor += negHDR;  // add back WCG
+  }
+
   /* r1.xyz = starScale * r1.xyz + r2.xyz;
   o0.xyz = r0.xyz * r0.www + r1.xyz; */
-  outputColor.rgb = starScale * r1.xyz + outputColor.rgb;
-  outputColor.rgb = r0.xyz * r0.www + outputColor.rgb;
 
-  outputColor = applyUserTonemap(outputColor);
-  // outputColor = scaleLuminance(outputColor);
+  // Add bloom/stars
+  // We add it to output cause devs add linear bloom/stars to tonemapped image
+  outputColor = starScale * r1.xyz + outputColor.rgb;
+  outputColor = r0.xyz * r0.www + outputColor.rgb;
 
   o0.xyz = outputColor.rgb;
   o0.w = 1;
