@@ -11,12 +11,10 @@
 
 #include <deps/imgui/imgui.h>
 
-#include <embed/0xA35C971A.h>   // Bloom
-#include <embed/0xA4592384.h>   // Color Grading
-#include <embed/0xC2665219.h>   // Photo Mode
-#include <embed/0x68EABB8D.h>   // Final - DICE + UI/Game Blend
-
-
+#include <embed/0x68EABB8D.h>  // Final - DICE + UI/Game Blend
+#include <embed/0xA35C971A.h>  // Bloom
+#include <embed/0xA4592384.h>  // Color Grading
+#include <embed/0xC2665219.h>  // Photo Mode
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
@@ -176,7 +174,6 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
-
 }
 
 }  // namespace
