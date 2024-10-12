@@ -53,10 +53,14 @@ void main(
   r0.xyz = r0.xyz * r0.www;
   if (injectedData.toneMapType == 0) {
     r0.xyz = max(float3(0, 0, 0), r0.xyz);  // clamp to bt.709
-    r0.xyz = min(cb3[1].xxx, r0.xyz);       // cap luminance
+    r0.xyz = min(cb3[1].xxx, r0.xyz);       // cap luminance to 125. maybe dynamic value?
   }
-  r0.xyz = r0.xyz / cb3[1].xxx;
-  r0.xyz = sign(r0.xyz) * pow(abs(r0.xyz), cb3[1].yyy);
-  o0.xyz = cb3[1].xxx * r0.xyz;
+
+  // disable gamma slider
+  // r0.xyz = r0.xyz / cb3[1].xxx;
+  // r0.xyz = sign(r0.xyz) * pow(abs(r0.xyz), cb3[1].yyy);
+  // o0.xyz = cb3[1].xxx * r0.xyz;
+
+  o0.xyz = r0.xyz;
   return;
 }
