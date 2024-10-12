@@ -8,6 +8,7 @@
 #include <dxgi1_6.h>
 #include <ios>
 #include <mutex>
+#include <optional>
 #include <unordered_set>
 #include <vector>
 
@@ -222,6 +223,65 @@ static bool IsDirectX(reshade::api::swapchain* swapchain) {
     default:
       return false;
   }
+}
+
+static std::optional<float> GetPeakNits(reshade::api::swapchain* swapchain) {
+  if (!IsDirectX(swapchain)) return std::nullopt;
+
+  auto* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
+
+  IDXGISwapChain4* swapchain4;
+
+  if (!SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
+    reshade::log::message(reshade::log::level::error, "GetPeakNits(Failed to get native swap chain)");
+    return std::nullopt;
+  }
+
+  DXGI_COLOR_SPACE_TYPE dx_color_space;
+
+  IDXGIOutput* output;
+  HRESULT hr = swapchain4->GetContainingOutput(&output);
+
+  swapchain4->Release();
+  swapchain4 = nullptr;
+
+  if (!SUCCEEDED(hr)) {
+    reshade::log::message(reshade::log::level::error, "GetPeakNits(Failed to get containing output)");
+    return std::nullopt;
+  }
+
+  IDXGIOutput6* output6;
+  hr = output->QueryInterface(&output6);
+
+  output->Release();
+  output = nullptr;
+
+  if (!SUCCEEDED(hr)) {
+    reshade::log::message(reshade::log::level::error, "GetPeakNits(Failed to query output6)");
+    return std::nullopt;
+  }
+
+  // https://learn.microsoft.com/en-us/windows/win32/direct3darticles/high-dynamic-range#idxgioutput6
+  DXGI_OUTPUT_DESC1 output_desc;
+
+  hr = output6->GetDesc1(&output_desc);
+
+  output6->Release();
+  output6 = nullptr;
+
+  if (!SUCCEEDED(hr)) {
+    reshade::log::message(reshade::log::level::error, "GetPeakNits(Failed to get output desc)");
+    return std::nullopt;
+  }
+
+  // Current display colorspace (not swapchain)
+  if (output_desc.ColorSpace != DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
+      && output_desc.ColorSpace != DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709) {
+    // Not WCG/HDR
+    return std::nullopt;
+  }
+
+  return output_desc.MaxLuminance;
 }
 
 static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::color_space color_space) {
