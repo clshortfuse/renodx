@@ -4,8 +4,7 @@
 cbuffer ConstBuf__passData : register(b0) {
   struct GammaAdjustPassData {
     float gamma;
-  }
-  resourceTables__passData;
+  } resourceTables__passData;
 }
 
 Texture2D<float4> inputTexture : register(t0);
@@ -23,6 +22,8 @@ void main(
 
   SV_TARGET0.rgb = renodx::color::bt2020::from::PQ(inputColor.rgb);
   SV_TARGET0.rgb = renodx::color::bt709::from::BT2020(SV_TARGET0.rgb / 80.f) * 10000.f;
+  SV_TARGET0.rgb = renodx::color::bt709::clamp::AP1(SV_TARGET0.rgb);
+
   if (injectedData.toneMapType != 0) {
     SV_TARGET0.rgb *= injectedData.toneMapUINits / 306.f;
     if (injectedData.toneMapType > 1) {  // DICE tonemap
