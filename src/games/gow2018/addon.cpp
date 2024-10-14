@@ -170,7 +170,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeLUTScaling",
         .binding = &shader_injection.colorGradeLUTScaling,
-        .default_value = 100.f,
+        .default_value = 75.f,
         .label = "LUT Scaling",
         .section = "Color Grading",
         .tooltip = "Scales the color grade LUT to full range when size is clamped.",
