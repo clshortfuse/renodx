@@ -12,9 +12,11 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-#include <embed/0x7818463E.h>   // LUT
-#include <embed/0x279D11F6.h>   // Game BT.2020 Conversion + PQ Encoding
-#include <embed/0xB59D6558.h>   // Gamma Slider + Paper White + Tonemap
+#include <embed/0x279D11F6.h>  // Game BT.2020 Conversion + PQ Encoding w/ DLSS/FSR
+#include <embed/0x6FE3FEEA.h>  // LUT w/ TAA
+#include <embed/0x7818463E.h>  // LUT w/ DLSS/FSR
+#include <embed/0xB59D6558.h>  // Gamma Slider + Paper White + Tonemap
+#include <embed/0xF4EFA04D.h>  // Game BT.2020 Conversion + PQ Encoding w/ TAA
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
@@ -26,8 +28,10 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
 
-    CustomShaderEntry(0x7818463E),  // LUT
-    CustomShaderEntry(0x279D11F6),  // Game BT.2020 Conversion + PQ Encoding
+    CustomShaderEntry(0x7818463E),  // LUT w/ DLSS/FSR
+    CustomShaderEntry(0x6FE3FEEA),  // LUT w/ TAA
+    CustomShaderEntry(0x279D11F6),  // Game BT.2020 Conversion + PQ Encoding w/ DLSS/FSR
+    CustomShaderEntry(0xF4EFA04D),  // Game BT.2020 Conversion + PQ Encoding w/ TAA
     CustomShaderEntry(0xB59D6558),  // Gamma Slider + Paper White + Tonemap
 };
 
@@ -166,7 +170,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeLUTScaling",
         .binding = &shader_injection.colorGradeLUTScaling,
-        .default_value = 0.f,
+        .default_value = 100.f,
         .label = "LUT Scaling",
         .section = "Color Grading",
         .tooltip = "Scales the color grade LUT to full range when size is clamped.",
@@ -206,11 +210,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::shader::expected_constant_buffer_index = 11;
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r10g10b10a2_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .index = 0
-      });
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r10g10b10a2_unorm,
+                                                                     .new_format = reshade::api::format::r16g16b16a16_float,
+                                                                     .index = 0});
 
       if (!reshade::register_addon(h_module)) return FALSE;
 
@@ -221,7 +223,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  renodx::mods::swapchain::Use(fdw_reason); // scRGB swapchain
+  renodx::mods::swapchain::Use(fdw_reason);  // scRGB swapchain
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
