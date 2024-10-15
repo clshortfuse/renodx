@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./tonemapper.hlsl"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sun Oct 13 15:49:48 2024
 Texture2D<float4> t16 : register(t16);
@@ -106,12 +107,16 @@ void main(
         injectedData.toneMapHueCorrection,  // hue correction
         renodx::tonemap::uncharted2::BT709(r0.rgb));
 
-    r0.xyz = renodx::color::correct::GammaSafe(r0.xyz);   // linearize with 2.2 instead of srgb
+    r0.xyz = renodx::color::correct::GammaSafe(r0.xyz);  // linearize with 2.2 instead of srgb
+
+    if (injectedData.toneMapType == 2) {  // DICE tonemap
+      r0.rgb = applyDICE(r0.rgb);
+    }
+
     r0.xyz = renodx::color::bt2020::from::BT709(r0.xyz);  // Convert to BT.2020
     r0.xyz = max(0, r0.xyz);                              // Clamp needed to prevent artifacts
-    r0.xyz *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    o0.xyz = renodx::color::pq::Encode(r0.xyz, 306.f);  // Set paper white to match UI
-  } else {                                              //  Original BT.2020 + PQ code
+    o0.xyz = renodx::color::pq::Encode(r0.xyz, injectedData.toneMapGameNits);
+  } else {  //  Original BT.2020 + PQ code
     r0.xyz = max(float3(0, 0, 0), r0.xyz);
     r0.w = dot(float3(0.627403915, 0.329283029, 0.0433130674), r0.xyz);
     r1.x = dot(float3(0.069097288, 0.919540405, 0.0113623161), r0.xyz);

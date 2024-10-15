@@ -155,71 +155,62 @@ void main(
   r0.z = cmp(0 != cb0[0].w);
   r1.xyz = r0.zzz ? float3(0, 0, 0) : r1.xyz;
 
-  float3 lutInputColor = r1.xyz;
-  if (injectedData.toneMapType == 0) {
-    // convert arri logc800
-    r2.xyz = cmp(float3(0.0105910003, 0.0105910003, 0.0105910003) < r1.xyz);
-    r3.xyzw = r1.xxyy * float4(5.55555582, 5.3676548, 5.55555582, 5.3676548) + float4(0.0522719994, 0.0928089991, 0.0522719994, 0.0928089991);
-    r1.xy = log2(r3.xz);
-    r1.xy = r1.xy * float2(0.0744116008, 0.0744116008) + float2(0.385536999, 0.385536999);
-    r3.xy = r2.xy ? r1.xy : r3.yw;
-    r1.xy = r1.zz * float2(5.55555582, 5.3676548) + float2(0.0522719994, 0.0928089991);
-    r0.z = log2(r1.x);
-    r0.z = r0.z * 0.0744116008 + 0.385536999;
-    r3.z = r2.z ? r0.z : r1.y;
-    // Sample 64x64x64 LUT
-    r1.xyz = r3.xyz * float3(0.984375, 0.984375, 0.984375) + float3(0.0078125, 0.0078125, 0.0078125);
-    r1.xyz = t0.SampleLevel(s1_s, r1.xyz, 0).xyz;
-    // back to linear
-    r2.xyz = cmp(float3(0.149658203, 0.149658203, 0.149658203) < r1.xyz);
-    r3.xyzw = float4(-0.385536999, -0.0928089991, -0.385536999, -0.0928089991) + r1.xxyy;
-    r3.xyzw = float4(13.4387865, 0.186301097, 13.4387865, 0.186301097) * r3.xyzw;
-    r1.xy = exp2(r3.xz);
-    r1.xy = float2(-0.0522719994, -0.0522719994) + r1.xy;
-    r1.xy = float2(0.179999992, 0.179999992) * r1.xy;
-    r3.xy = r2.xy ? r1.xy : r3.yw;
-    r1.xy = float2(-0.385536999, -0.0928089991) + r1.zz;
-    r1.xy = float2(13.4387865, 0.186301097) * r1.xy;
-    r0.z = exp2(r1.x);
-    r0.z = -0.0522719994 + r0.z;
-    r0.z = 0.179999992 * r0.z;
-    r3.z = r2.z ? r0.z : r1.y;
-
-    r3.xyz = lerp(lutInputColor, r3.xyz, injectedData.colorGradeLUTStrength);  // LUT Strength
-    r1.xyz = max(0, r3.xyz);
-  } else {
-    lutInputColor = renodx::color::grade::UserColorGrading(
-        lutInputColor,
+  if (injectedData.toneMapType != 0) {
+    r1.xyz = renodx::color::grade::UserColorGrading(
+        r1.xyz,
         injectedData.colorGradeExposure,    // exposure
         injectedData.colorGradeHighlights,  // highlights
         injectedData.colorGradeShadows,     // shadows
         injectedData.colorGradeContrast,    // contrast
         1.f,                                // saturation, applied later
-        0.f);                               // dechroma, applied later
-
-    renodx::lut::Config lut_config = renodx::lut::config::Create(
-        s1_s,
-        1.f,  // do LUT strength after
-        0.f,  // do LUT scaling after
-        renodx::lut::config::type::ARRI_C800,
-        renodx::lut::config::type::ARRI_C800,
-        64);
-    float3 lutOutputColor = renodx::lut::Sample(t0, lut_config, lutInputColor);
-
-    // Cleans up raised black floor
-    if (injectedData.colorGradeLUTScaling && injectedData.colorGradeLUTStrength) {
-      float3 minBlack = renodx::color::arri::logc::c800::Decode(t0.SampleLevel(s1_s, renodx::color::arri::logc::c800::Encode((0.f).xxx), 0.0f).rgb);
-      const float lutMinY = renodx::color::y::from::BT709(max(0, minBlack));
-      if (lutMinY > 0) {
-        float3 correctedBlack = renodx::lut::CorrectBlack(lutInputColor, lutOutputColor, lutMinY, 0.f);
-        lutOutputColor = lerp(lutOutputColor, correctedBlack, injectedData.colorGradeLUTScaling);
-      }
-    }
-
-    r1.xyz = lerp(lutInputColor, lutOutputColor, injectedData.colorGradeLUTStrength);
-
-    r1.xyz = max(0, r1.xyz);  // DLSS/FSR clamps to BT.709
+        0.f,                                // dechroma, applied later
+        0.f);                               // hue correction, applied later
   }
+  float3 lutInputColor = r1.xyz;
+
+  // convert arri logc800
+  r2.xyz = cmp(float3(0.0105910003, 0.0105910003, 0.0105910003) < r1.xyz);
+  r3.xyzw = r1.xxyy * float4(5.55555582, 5.3676548, 5.55555582, 5.3676548) + float4(0.0522719994, 0.0928089991, 0.0522719994, 0.0928089991);
+  r1.xy = log2(r3.xz);
+  r1.xy = r1.xy * float2(0.0744116008, 0.0744116008) + float2(0.385536999, 0.385536999);
+  r3.xy = r2.xy ? r1.xy : r3.yw;
+  r1.xy = r1.zz * float2(5.55555582, 5.3676548) + float2(0.0522719994, 0.0928089991);
+  r0.z = log2(r1.x);
+  r0.z = r0.z * 0.0744116008 + 0.385536999;
+  r3.z = r2.z ? r0.z : r1.y;
+  // Sample 64x64x64 LUT
+  r1.xyz = r3.xyz * float3(0.984375, 0.984375, 0.984375) + float3(0.0078125, 0.0078125, 0.0078125);
+  r1.xyz = t0.SampleLevel(s1_s, r1.xyz, 0).xyz;
+  // back to linear
+  r2.xyz = cmp(float3(0.149658203, 0.149658203, 0.149658203) < r1.xyz);
+  r3.xyzw = float4(-0.385536999, -0.0928089991, -0.385536999, -0.0928089991) + r1.xxyy;
+  r3.xyzw = float4(13.4387865, 0.186301097, 13.4387865, 0.186301097) * r3.xyzw;
+  r1.xy = exp2(r3.xz);
+  r1.xy = float2(-0.0522719994, -0.0522719994) + r1.xy;
+  r1.xy = float2(0.179999992, 0.179999992) * r1.xy;
+  r3.xy = r2.xy ? r1.xy : r3.yw;
+  r1.xy = float2(-0.385536999, -0.0928089991) + r1.zz;
+  r1.xy = float2(13.4387865, 0.186301097) * r1.xy;
+  r0.z = exp2(r1.x);
+  r0.z = -0.0522719994 + r0.z;
+  r0.z = 0.179999992 * r0.z;
+  r3.z = r2.z ? r0.z : r1.y;
+
+  r1.xyz = max(0, r3.xyz);
+
+  float3 lutOutputColor = r1.xyz;
+
+  if (injectedData.toneMapType != 0 && injectedData.colorGradeLUTScaling > 0 && injectedData.colorGradeLUTStrength > 0) {
+    float3 minBlack = renodx::color::arri::logc::c800::Decode(t0.SampleLevel(s1_s, renodx::color::arri::logc::c800::Encode((0.f).xxx), 0.0f).rgb);
+
+    float lutMinY = renodx::color::y::from::BT709(max(0, minBlack));
+    if (lutMinY > 0) {
+      float3 correctedBlack = renodx::lut::CorrectBlack(lutInputColor, lutOutputColor, lutMinY, 0.f);
+      lutOutputColor = lerp(lutOutputColor, correctedBlack, injectedData.colorGradeLUTScaling);
+    }
+  }
+  r1.xyz = lerp(lutInputColor.rgb, lutOutputColor, injectedData.colorGradeLUTStrength);  // LUT Strength
+  r1.xyz = max(0, r1.xyz);                                                               // DLSS/FSR clamps to BT.709 anyway
 
   r0.z = max(r1.y, r1.z);
   r0.z = max(r1.x, r0.z);
