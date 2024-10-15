@@ -40,6 +40,17 @@ POWSAFE_FUNCTION_GENERATOR(float3);
 POWSAFE_FUNCTION_GENERATOR(float4);
 #undef POWSAFE_FUNCTION_GENERATOR
 
+#define SQRTSAFE_FUNCTION_GENERATOR(struct) \
+  struct SqrtSafe(struct x) {               \
+    return Sign(x) * sqrt(abs(x));          \
+  }
+
+SQRTSAFE_FUNCTION_GENERATOR(float);
+SQRTSAFE_FUNCTION_GENERATOR(float2);
+SQRTSAFE_FUNCTION_GENERATOR(float3);
+SQRTSAFE_FUNCTION_GENERATOR(float4);
+#undef SQRTSAFE_FUNCTION_GENERATOR
+
 float Average(float3 color) {
   return (color.x + color.y + color.z) / 3.f;
 }
