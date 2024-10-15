@@ -27,7 +27,7 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x9D6291BC),  // Color grading LUT + fog + fade
-    CustomShaderEntry(0xB103EAA6),  // User gamma adjustment (defaulted to 1)
+    CustomShaderEntry(0xB103EAA6),  // Post process and user gamma adjustment (defaulted to 1)
     CustomShaderEntry(0xE61B6A3B),  // Overlay effect in main menu
 };
 

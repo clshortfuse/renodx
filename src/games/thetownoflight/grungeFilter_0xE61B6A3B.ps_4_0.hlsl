@@ -21,7 +21,7 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
 
-  // normalize paper white to 80 nits to apply SDR based overlay
+  // normalize white level to the same range as SDR (theoretically 80 nits)
   r0.rgb = renodx::color::gamma::DecodeSafe(r0.rgb, 2.2f);
   r0.rgb /= injectedData.toneMapGameNits / injectedData.toneMapUINits;
   r0.rgb = renodx::color::gamma::EncodeSafe(r0.rgb, 2.2f);
