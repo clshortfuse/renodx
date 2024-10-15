@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./tonemapper.hlsl"
 
 // ---- Created with 3Dmigoto v1.3.16 on Fri Aug 30 19:53:29 2024
 Texture2D<float4> t16 : register(t16);
@@ -13,21 +14,6 @@ cbuffer cb0 : register(b0) {
 
 // 3Dmigoto declarations
 #define cmp -
-
-float ColorGradeSmoothClamp(float x) {
-  const float u = 0.525;
-
-  float q = (2.0 - u - 1.0 / u + x * (2.0 + 2.0 / u - x / u)) / 4.0;
-
-  return (abs(1.0 - x) < u) ? q : saturate(x);
-}
-float3 ColorGradeSmoothClamp(float3 color) {
-  float3 outputColor;
-  outputColor.r = ColorGradeSmoothClamp(color.r);
-  outputColor.g = ColorGradeSmoothClamp(color.g);
-  outputColor.b = ColorGradeSmoothClamp(color.b);
-  return outputColor;
-}
 
 void main(
     float4 v0: SV_POSITION0,
@@ -83,10 +69,14 @@ void main(
         renodx::tonemap::uncharted2::BT709(r0.rgb));
 
     r0.xyz = renodx::color::correct::GammaSafe(r0.xyz);   // linearize with 2.2 instead of srgb
+
+    if (injectedData.toneMapType == 2) {  // DICE tonemap
+      r0.rgb = applyDICE(r0.rgb);
+    }
+
     r0.xyz = renodx::color::bt2020::from::BT709(r0.xyz);  // Convert to BT.2020
     r0.xyz = max(0, r0.xyz);                              // Clamp needed to prevent artifacts
-    r0.xyz *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    o0.xyz = renodx::color::pq::Encode(r0.xyz, 306.f);  // Set paper white to match UI
+    o0.xyz = renodx::color::pq::Encode(r0.xyz, injectedData.toneMapGameNits);
   } else {                                              //  Original BT.2020 + PQ code
     r0.xyz = max(float3(0, 0, 0), r0.xyz);
     // BT.2020
@@ -114,7 +104,6 @@ void main(
     r2.xyz = r0.xyz * r2.xyz + float3(10668.4043, 10668.4043, 10668.4043);
     r0.xyz = r0.xyz * r2.xyz + float3(1, 1, 1);
     o0.xyz = r1.xyz / r0.xyz;
-    o0.xyz = saturate(o0.xyz);  // previously clamped by unorm
   }
   o0.w = 1;
   return;
