@@ -28,6 +28,16 @@
 #include <embed/0x9EB78561.h>
 #include <embed/0xC496B5C3.h>
 #include <embed/0x39235257.h>
+
+#include <embed/0x1BC9EFE2.h>
+#include <embed/0x3CB03848.h>
+#include <embed/0x4B7B660D.h>
+#include <embed/0x82F211C7.h>
+#include <embed/0x95CC270F.h>
+#include <embed/0x394B5831.h>
+#include <embed/0x43713652.h>
+#include <embed/0xBF32ABFA.h>
+
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
@@ -58,6 +68,15 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x9EB78561),
     CustomShaderEntry(0xC496B5C3),
     CustomShaderEntry(0x39235257),
+
+    CustomShaderEntry(0x1BC9EFE2),
+    CustomShaderEntry(0x3CB03848),
+    CustomShaderEntry(0x4B7B660D),
+    CustomShaderEntry(0x82F211C7),
+    CustomShaderEntry(0x95CC270F),
+    CustomShaderEntry(0x394B5831),
+    CustomShaderEntry(0x43713652),
+    CustomShaderEntry(0xBF32ABFA),
 };
 
 ShaderInjectData shader_injection;
@@ -139,9 +158,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       };
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::shader::expected_constant_buffer_space = 50;
-      //renodx::mods::swapchain::force_borderless = true;
-      //renodx::mods::swapchain::prevent_full_screen = true;
-      //renodx::mods::swapchain::SetUseHDR10(true);
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(h_module);
@@ -149,7 +165,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
-  //renodx::mods::swapchain::Use(fdw_reason);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
 
   return TRUE;
