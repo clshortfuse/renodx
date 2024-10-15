@@ -167,7 +167,7 @@ void main(
         0.f);                               // hue correction, applied later
   }
   float3 lutInputColor = r1.xyz;
-  
+
   // convert arri logc800
   r2.xyz = cmp(float3(0.0105910003, 0.0105910003, 0.0105910003) < r1.xyz);
   r3.xyzw = r1.xxyy * float4(5.55555582, 5.3676548, 5.55555582, 5.3676548) + float4(0.0522719994, 0.0928089991, 0.0522719994, 0.0928089991);

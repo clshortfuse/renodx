@@ -12,10 +12,11 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-#include <embed/0xF4EFA04D.h>  // Tonemap + PQ w/ TAA
 #include <embed/0x279D11F6.h>  // Tonemap + PQ w/ DLSS/FSR
 #include <embed/0x6FE3FEEA.h>  // LUT w/ TAA
 #include <embed/0x7818463E.h>  // LUT w/ DLSS/FSR
+#include <embed/0xF4EFA04D.h>  // Tonemap + PQ w/ TAA
+
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
