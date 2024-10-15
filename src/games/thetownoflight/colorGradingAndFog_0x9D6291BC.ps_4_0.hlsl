@@ -93,8 +93,6 @@ float4 sampleLUTWithExtrapolation(Texture2D<float4> lut, SamplerState samplerSta
   return clampedSample;
 }
 
-static bool TonemapHDR = true;
-
 void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, float2 w1: TEXCOORD1, out float4 outColor: SV_Target0) {
   const bool vanilla = false;  // Turn on for vanilla behaviour
   const bool extrapolateLUTsMethod = vanilla ? -1 : 1;
@@ -155,7 +153,7 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, float2 w1: TEXCOORD1, o
   outColor.w = sceneColor.w;
 
   // Tonemapping might also help to fix some scenes that end burning through the UI, possibly because the scene (background) had extremely high values
-  if (TonemapHDR) {
+  if (injectedData.outputMode == 1) { // HDR Mode
     const float paperWhite = injectedData.toneMapGameNits / renodx::color::srgb::REFERENCE_WHITE;
     float3 linearColor = renodx::color::gamma::DecodeSafe(outColor.rgb, 2.2);
     linearColor *= paperWhite;
@@ -170,6 +168,11 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, float2 w1: TEXCOORD1, o
     linearColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
 
     outColor.rgb = renodx::color::gamma::EncodeSafe(linearColor, 2.2);
+  } else {  // SDR Mode
+    outColor.rgb = saturate(outColor.rgb);
+    outColor.rgb = renodx::color::gamma::DecodeSafe(outColor.rgb, 2.2);
+    outColor.rgb *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+    outColor.rgb = renodx::color::gamma::EncodeSafe(outColor.rgb, 2.2);
   }
   // Leave output in gamma space and with a paper white of 80 nits even for HDR so we can blend in the UI just like in SDR (in gamma space) and linearize with an extra pass added at the end.
 

@@ -42,6 +42,10 @@ void main(
   o0.rgba = float4(r0.rgb, saturate(r0.a));
 #endif
 
+if (injectedData.outputMode == 0.f) { // SDR Mode
+  o0.rgb = saturate(o0.rgb);
+}
+
   o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb, 2.2f);
   o0.rgb *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
   o0.rgb = renodx::color::gamma::EncodeSafe(o0.rgb, 2.2f);

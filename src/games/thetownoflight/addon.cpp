@@ -35,21 +35,30 @@ ShaderInjectData shader_injection;
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
+        .key = "outputMode",
+        .binding = &shader_injection.outputMode,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.0f,
+        .label = "Output Mode",
+        .section = "Tone Mapping",
+        .tooltip = "Select SDR or HDR Output",
+        .labels = {"SDR", "HDR"},
+    },
+    new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
         .binding = &shader_injection.toneMapPeakNits,
         .default_value = 1000.f,
-        .can_reset = false,
         .label = "Peak Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of peak white in nits",
         .min = 48.f,
-        .max = 4000.f,
+        .max = 10000.f,
+        .is_enabled = []() { return shader_injection.outputMode == 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapGameNits",
         .binding = &shader_injection.toneMapGameNits,
         .default_value = 203.f,
-        .can_reset = false,
         .label = "Game Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of 100% white in nits",
@@ -60,7 +69,6 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapUINits",
         .binding = &shader_injection.toneMapUINits,
         .default_value = 203.f,
-        .can_reset = false,
         .label = "UI Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
@@ -99,6 +107,7 @@ renodx::utils::settings::Settings settings = {
 };
 
 void OnPresetOff() {
+  renodx::utils::settings::UpdateSetting("outputMode", 0.f);
   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
