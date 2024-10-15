@@ -12,27 +12,25 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-#include <embed/0x279D11F6.h>  // Game BT.2020 Conversion + PQ Encoding w/ DLSS/FSR
+#include <embed/0x279D11F6.h>  // Tonemap + PQ w/ DLSS/FSR
 #include <embed/0x6FE3FEEA.h>  // LUT w/ TAA
 #include <embed/0x7818463E.h>  // LUT w/ DLSS/FSR
-#include <embed/0xB59D6558.h>  // Gamma Slider + Paper White + Tonemap
-#include <embed/0xF4EFA04D.h>  // Game BT.2020 Conversion + PQ Encoding w/ TAA
+#include <embed/0xF4EFA04D.h>  // Tonemap + PQ w/ TAA
+
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
-#include "../../mods/swapchain.hpp"
+// #include "../../mods/swapchain.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-
-    CustomShaderEntry(0x7818463E),  // LUT w/ DLSS/FSR
     CustomShaderEntry(0x6FE3FEEA),  // LUT w/ TAA
-    CustomShaderEntry(0x279D11F6),  // Game BT.2020 Conversion + PQ Encoding w/ DLSS/FSR
-    CustomShaderEntry(0xF4EFA04D),  // Game BT.2020 Conversion + PQ Encoding w/ TAA
-    CustomShaderEntry(0xB59D6558),  // Gamma Slider + Paper White + Tonemap
+    CustomShaderEntry(0x7818463E),  // LUT w/ DLSS/FSR
+    CustomShaderEntry(0xF4EFA04D),  // Tonemap + PQ w/ TAA
+    CustomShaderEntry(0x279D11F6),  // Tonemap + PQ w/ DLSS/FSR
 };
 
 ShaderInjectData shader_injection;
@@ -69,18 +67,6 @@ renodx::utils::settings::Settings settings = {
         .label = "Game Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of 100% white in nits",
-        .min = 48.f,
-        .max = 500.f,
-        .is_enabled = []() { return shader_injection.toneMapType != 0; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "toneMapUINits",
-        .binding = &shader_injection.toneMapUINits,
-        .default_value = 203.f,
-        .can_reset = false,
-        .label = "UI Brightness",
-        .section = "Tone Mapping",
-        .tooltip = "Sets the brightness of UI and HUD elements in nits",
         .min = 48.f,
         .max = 500.f,
         .is_enabled = []() { return shader_injection.toneMapType != 0; },
@@ -170,7 +156,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeLUTScaling",
         .binding = &shader_injection.colorGradeLUTScaling,
-        .default_value = 100.f,
+        .default_value = 75.f,
         .label = "LUT Scaling",
         .section = "Color Grading",
         .tooltip = "Scales the color grade LUT to full range when size is clamped.",
@@ -184,7 +170,6 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapType", 0);
   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 1000.f);
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
@@ -210,10 +195,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::shader::expected_constant_buffer_index = 11;
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r10g10b10a2_unorm,
-                                                                     .new_format = reshade::api::format::r16g16b16a16_float,
-                                                                     .index = 0});
-
       if (!reshade::register_addon(h_module)) return FALSE;
 
       break;
@@ -223,7 +204,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  renodx::mods::swapchain::Use(fdw_reason);  // scRGB swapchain
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
