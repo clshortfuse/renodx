@@ -18,26 +18,25 @@ float3 ColorCorrectAll( float3 WorkingColor )
 
 	// Shadow CC
 +	float4 ShadowOffset = ColorOffsetShadows+ColorOffset;
-+	float4 GammaOffset = 0;
-+	float4 ContrastOffset = 0;
++	float4 ShadowGammaOffset = 0;
++	float4 ShadowContrastOffset = 0;
 +	if (injectedData.type > 0) {
 +		if (any(saturate(ShadowOffset))) 
 +		{
-+			ShadowOffset.xyz *= pow(saturate(WorkingColor.xyz), 1.f / 2.2f);
-+			ShadowOffset.w *= pow(saturate(Luma), 1.f / 2.2f);
-+			float4 OtherOffset = saturate((ColorOffsetShadows - ShadowOffset) * injectedData.magicNumber);
++			float4 OtherOffset = saturate((ShadowOffset) * injectedData.magicNumber);
++			ShadowOffset = 0;
 +			if (injectedData.type == 2) {
-+				GammaOffset = OtherOffset;
++				ShadowGammaOffset = OtherOffset;
 +			} else if (injectedData.type == 3) {
-+				ContrastOffset = -OtherOffset;
++				ShadowContrastOffset = -OtherOffset;
 +			}
 +		}
 +	}
 +	
 	float3 CCColorShadows = ColorCorrect(WorkingColor, 
 		ColorSaturationShadows*ColorSaturation, 
-		ColorContrastShadows*ColorContrast + ContrastOffset, 
-		ColorGammaShadows*ColorGamma + GammaOffset, 
+		ColorContrastShadows*ColorContrast + ShadowContrastOffset, 
+		ColorGammaShadows*ColorGamma + ShadowGammaOffset, 
 		ColorGainShadows*ColorGain, 
 -       ColorOffsetShadows - ShadowOffset);
 +		ShadowOffset);
