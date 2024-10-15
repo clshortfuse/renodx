@@ -11,7 +11,13 @@ cbuffer cb0 : register(b0) {
 // 3Dmigoto declarations
 #define cmp -
 
-// Final shader before UI draws in when user brightness slider, or other post process parameter driven by the game, are not neutral
+// Final shader before UI draws in when user brightness slider, or other post
+// process parameter driven by the game, are not neutral.
+
+// Unfortunately this runs after tonemapping because this shader doesn't always
+// run, and determining when and when it would not run in earlier passes is
+// hard, so the color peak could go beyond the peak display brightness,
+// but ultimately it doesn't really matter
 void main(
     float4 v0: SV_POSITION0,
     float2 v1: TEXCOORD0,
