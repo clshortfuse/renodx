@@ -480,6 +480,7 @@ void main(
       final_color = renodx::color::correct::GammaSafe(final_color);
     }
     // bool is_pq = (output_type == 3u || output_type == 4u);
+    final_color = renodx::color::bt2020::from::BT709(final_color);
     final_color = renodx::color::pq::from::BT2020(final_color, injectedData.toneMapGameNits);
 
     o0.rgba = float4(final_color * 0.952381015, 0);

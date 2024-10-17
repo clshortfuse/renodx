@@ -460,7 +460,6 @@ void main(
   float3 film_graded_color = r5.rgb;
 
   // Add upgrade tonemap here
-
   if (is_hdr) {
     float3 final_color = saturate(film_graded_color);
     if (injectedData.toneMapType != 0.f) {
@@ -470,7 +469,7 @@ void main(
       final_color = renodx::color::correct::GammaSafe(final_color);
     }
     // bool is_pq = (output_type == 3u || output_type == 4u);
-    // final_color = renodx::color::bt2020::from::BT709(final_color);
+    final_color = renodx::color::bt2020::from::BT709(final_color);
     final_color = renodx::color::pq::from::BT2020(final_color, injectedData.toneMapGameNits);
 
     o0.rgba = float4(final_color * 0.952381015, 0);
@@ -1445,6 +1444,7 @@ void main(
       }
     }
   }
+ 
   o0.xyz = float3(0.952381015, 0.952381015, 0.952381015) * r6.xyz;
   o0.w = 0;
   return;
