@@ -87,8 +87,14 @@ void main(
   r0.xyz = exp2(r0.xyz);
   r0.xyz = r0.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
   r0.xyz = t4.Sample(s3_s, r0.xyz).xyz;  // LUT
-
   post_lut = r0.xyz;
+
+  renodx::lut::Config lut_config = renodx::lut::config::Create(
+      s3_s,
+      1.f,
+      0.f, renodx::lut::config::type::LINEAR, renodx::lut::config::type::PQ, 32.f);
+
+  float3 lut_output = renodx::lut::Sample(t4, lut_config, untonemapped);
 
   r0.w = v2.w * 543.309998 + v2.z;
   r0.w = sin(r0.w);
