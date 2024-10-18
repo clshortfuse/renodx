@@ -1,4 +1,6 @@
 // ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:19 2024
+#include "./shared.h"
+
 cbuffer cb0 : register(b0) {
   float4 cb0[8];
 }
@@ -43,9 +45,73 @@ void main(
   r0.xyz = log2(r0.xyz);
   r0.xyz = float3(6.27739477, 6.27739477, 6.27739477) * r0.xyz;
   r0.xyz = exp2(r0.xyz);
-  r0.xyz = float3(10000, 10000, 10000) * r0.xyz;
+  // r0.xyz = float3(10000, 10000, 10000) * r0.xyz;
+  r0.rgb = float3(100, 100, 100) * r0.rgb;
+
+  // They stop before converting to AP1
+  float3 input_color = r0.rgb;
+
+  // uint output_type = cb0[40].w;
+  float3 sdr_color;
+  float3 hdr_color;
+  float3 sdr_ap1_color;
+
+  bool is_hdr = true;
+
   r5.xy = cmp(asint(cb0[2].xx) == int2(3, 5));
   r0.w = (int)r5.y | (int)r5.x;
+
+  if (injectedData.toneMapType != 0.f && is_hdr) {
+    float vanillaMidGray = 0.18f;  // calculate mid grey from the second hable run
+    float renoDRTContrast = 1.f;
+    float renoDRTFlare = 0.f;
+    float renoDRTShadows = 1.f;
+    float renoDRTDechroma = injectedData.colorGradeBlowout;
+    float renoDRTSaturation = 1.f;  //
+    float renoDRTHighlights = 1.f;
+
+    float3 config_color = renodx::color::bt709::from::BT2020(input_color);
+
+    renodx::tonemap::Config config = renodx::tonemap::config::Create();
+    config.type = injectedData.toneMapType;
+    config.peak_nits = injectedData.toneMapPeakNits;
+    config.game_nits = injectedData.toneMapGameNits;
+    config.gamma_correction = injectedData.toneMapGammaCorrection;
+    config.exposure = injectedData.colorGradeExposure;
+    config.highlights = injectedData.colorGradeHighlights;
+    config.shadows = injectedData.colorGradeShadows;
+    config.contrast = injectedData.colorGradeContrast;
+    config.saturation = injectedData.colorGradeSaturation;
+
+    config.reno_drt_highlights = renoDRTHighlights;
+    config.reno_drt_shadows = renoDRTShadows;
+    config.reno_drt_contrast = renoDRTContrast;
+    config.reno_drt_saturation = renoDRTSaturation;
+    config.reno_drt_dechroma = renoDRTDechroma;
+    config.mid_gray_value = vanillaMidGray;
+    config.mid_gray_nits = vanillaMidGray * 100.f;
+    config.reno_drt_flare = renoDRTFlare;
+
+    renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(config_color, config);
+    hdr_color = dual_tone_map.color_hdr;
+    sdr_color = dual_tone_map.color_sdr;
+
+    float3 final_color = saturate(input_color);
+    if (injectedData.toneMapType != 0.f) {
+      final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
+    }
+    if (injectedData.toneMapGammaCorrection == 1.f) {
+      final_color = renodx::color::correct::GammaSafe(final_color);
+    }
+
+    // bool is_pq = (output_type == 3u || output_type == 4u);
+    final_color = renodx::color::bt2020::from::BT709(final_color);
+    final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
+
+    o0.rgba = float4(final_color, 0);
+  }
+  // Nothing to upgrade since ACES SDR adjustments are removed
+
   if (r0.w != 0) {
     r5.y = dot(float3(0.439700812, 0.382978052, 0.1773348), r0.xyz);
     r5.z = dot(float3(0.0897923037, 0.813423157, 0.096761629), r0.xyz);

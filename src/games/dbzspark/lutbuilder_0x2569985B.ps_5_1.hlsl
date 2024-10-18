@@ -1,13 +1,6 @@
-// ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:09 2024
+// ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:08 2024
+
 #include "./shared.h"
-
-Texture2D<float4> t1 : register(t1);
-
-Texture2D<float4> t0 : register(t0);
-
-SamplerState s1_s : register(s1);
-
-SamplerState s0_s : register(s0);
 
 cbuffer cb1 : register(b1) {
   float4 cb1[21];
@@ -419,42 +412,10 @@ void main(
   r5.z = dot(float3(1.9865448e-08, 2.12079581e-08, 0.999999583), r1.xyz);
   r5.xyz = r5.xyz + -r1.xyz;
   r1.xyz = cb0[36].yyy * r5.xyz + r1.xyz;
-  r5.x = saturate(dot(cb1[12].xyz, r1.xyz));
-  r5.y = saturate(dot(cb1[13].xyz, r1.xyz));
-  r5.z = saturate(dot(cb1[14].xyz, r1.xyz));
-  r1.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r5.xyz;
-  r6.xyz = cmp(r5.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
-  r5.xyz = log2(r5.xyz);
-  r5.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r5.xyz;
-  r5.xyz = exp2(r5.xyz);
-  r5.xyz = r5.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
-  r1.xyz = r6.xyz ? r5.xyz : r1.xyz;
-  r5.yzw = r1.xyz * float3(0.9375, 0.9375, 0.9375) + float3(0.03125, 0.03125, 0.03125);
-  r0.w = r5.w * 16 + -0.5;
-  r1.w = floor(r0.w);
-  r0.w = -r1.w + r0.w;
-  r1.w = r5.y + r1.w;
-  r5.x = 0.0625 * r1.w;
-  r6.xyz = t0.Sample(s0_s, r5.xz).xyz;
-  r5.yw = float2(0.0625, 0) + r5.xz;
-  r7.xyz = t0.Sample(s0_s, r5.yw).xyz;
-  r7.xyz = r7.xyz + -r6.xyz;
-  r6.xyz = r0.www * r7.xyz + r6.xyz;
-  r6.xyz = cb0[5].yyy * r6.xyz;
-  r1.xyz = cb0[5].xxx * r1.xyz + r6.xyz;
-  r6.xyz = t1.Sample(s1_s, r5.xz).xyz;
-  r5.xyz = t1.Sample(s1_s, r5.yw).xyz;
-  r5.xyz = r5.xyz + -r6.xyz;
-  r5.xyz = r0.www * r5.xyz + r6.xyz;
-  r1.xyz = cb0[5].zzz * r5.xyz + r1.xyz;
-  r1.xyz = max(float3(6.10351999e-05, 6.10351999e-05, 6.10351999e-05), r1.xyz);
-  r5.xyz = cmp(float3(0.0404499993, 0.0404499993, 0.0404499993) < r1.xyz);
-  r6.xyz = r1.xyz * float3(0.947867274, 0.947867274, 0.947867274) + float3(0.0521326996, 0.0521326996, 0.0521326996);
-  r6.xyz = log2(r6.xyz);
-  r6.xyz = float3(2.4000001, 2.4000001, 2.4000001) * r6.xyz;
-  r6.xyz = exp2(r6.xyz);
-  r1.xyz = float3(0.0773993805, 0.0773993805, 0.0773993805) * r1.xyz;
-  r1.xyz = r5.xyz ? r6.xyz : r1.xyz;
+  r5.x = dot(cb1[12].xyz, r1.xyz);
+  r5.y = dot(cb1[13].xyz, r1.xyz);
+  r5.z = dot(cb1[14].xyz, r1.xyz);
+  r1.xyz = max(float3(0, 0, 0), r5.xyz);
   r5.xyz = r1.xyz * r1.xyz;
   r1.xyz = cb0[39].yyy * r1.xyz;
   r1.xyz = cb0[39].xxx * r5.xyz + r1.xyz;
@@ -470,8 +431,7 @@ void main(
   float3 film_graded_color = r5.rgb;
 
   // Add upgrade tonemap here
-
-  if (is_hdr) {
+  if (injectedData.toneMapType != 0.f && is_hdr) {
     float3 final_color = saturate(film_graded_color);
     if (injectedData.toneMapType != 0.f) {
       final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
@@ -483,7 +443,7 @@ void main(
     final_color = renodx::color::bt2020::from::BT709(final_color);
     final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
 
-    o0.rgba = float4(final_color * 0.952381015, 0);
+    o0.rgba = float4(final_color, 0);
     return;
   }
 

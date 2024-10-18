@@ -1,4 +1,14 @@
-// ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:08 2024
+// ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:09 2024
+#include "./shared.h"
+
+Texture2D<float4> t1 : register(t1);
+
+Texture2D<float4> t0 : register(t0);
+
+SamplerState s1_s : register(s1);
+
+SamplerState s0_s : register(s0);
+
 cbuffer cb1 : register(b1) {
   float4 cb1[21];
 }
@@ -160,11 +170,36 @@ void main(
   r0.xyz = r0.xyz * r0.www;
   r0.xyz = r1.xyz * r1.www + r0.xyz;
   r0.xyz = r5.xyz * r4.www + r0.xyz;
+
+  // End of Color Correct
+  float3 ap1_graded_color = r0.rgb;
+  float3 ap1_aces_colored = ap1_graded_color;
+
+  // uint output_type = cb0[40].w;
+
+  float3 sdr_color;
+  float3 hdr_color;
+  float3 sdr_ap1_color;
+
+  float FilmBlackClip = cb0[37].w;
+  float FilmToe = cb0[37].y;
+  float FilmWhiteClip = cb0[38].x;
+  float FilmShoulder = cb0[37].z;
+
+  bool is_hdr = true;
+
+  // Blue correct    -- r0 is still ap1, r1 is sRGB
   r1.x = dot(float3(0.938639402, 1.02359565e-10, 0.0613606237), r0.xyz);
   r1.y = dot(float3(8.36008554e-11, 0.830794156, 0.169205874), r0.xyz);
   r1.z = dot(float3(2.13187367e-12, -5.63307213e-12, 1), r0.xyz);
   r1.xyz = r1.xyz + -r0.xyz;
   r1.xyz = cb0[36].yyy * r1.xyz + r0.xyz;
+
+  ap1_graded_color = r1.xyz;
+
+  // start of film tonemap
+  // AP1 => AP0
+
   r5.y = dot(float3(0.695452213, 0.140678704, 0.163869068), r1.xyz);
   r5.z = dot(float3(0.0447945632, 0.859671116, 0.0955343172), r1.xyz);
   r5.w = dot(float3(-0.00552588236, 0.00402521016, 1.00150073), r1.xyz);
@@ -243,6 +278,7 @@ void main(
   r2.w = min(360, r2.w);
   r3.w = cmp(180 < r2.w);
   r4.w = -360 + r2.w;
+  // aces::hueweight (with smoothstep)
   r2.w = r3.w ? r4.w : r2.w;
   r2.w = 0.0148148146 * r2.w;
   r2.w = 1 + -abs(r2.w);
@@ -255,86 +291,170 @@ void main(
   r1.w = -r5.y * r1.w + 0.0299999993;
   r0.w = r1.w * r0.w;
   r6.x = r0.w * 0.180000007 + r6.y;
+  // AP0 => AP1
   r5.x = dot(float3(1.45143926, -0.236510754, -0.214928567), r6.xzw);
   r5.y = dot(float3(-0.0765537769, 1.17622972, -0.0996759236), r6.xzw);
   r5.z = dot(float3(0.00831614807, -0.00603244966, 0.997716308), r6.xzw);
   r5.xyz = max(float3(0, 0, 0), r5.xyz);
+  // AP1_RGB2Y
   r0.w = dot(r5.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
   r5.xyz = r5.xyz + -r0.www;
-  r5.xyz = r5.xyz * float3(0.959999979, 0.959999979, 0.959999979) + r0.www;
-  r6.xy = cb0[37].ww + float2(1, 0.180000007);
-  r0.w = -cb0[37].y + r6.x;
-  r1.w = cb0[38].x + 1;
-  r2.w = -cb0[37].z + r1.w;
-  r3.w = cmp(0.800000012 < cb0[37].y);
-  r6.xz = -cb0[37].yy + float2(0.819999993, 1);
-  r6.xz = r6.xz / cb0[37].xx;
-  r4.w = -0.744727492 + r6.x;
-  r5.w = r6.y / r0.w;
-  r6.x = -1 + r5.w;
-  r6.x = 1 + -r6.x;
-  r5.w = r5.w / r6.x;
-  r5.w = log2(r5.w);
-  r5.w = 0.346573591 * r5.w;
-  r6.x = r0.w / cb0[37].x;
-  r5.w = -r5.w * r6.x + -0.744727492;
-  r3.w = r3.w ? r4.w : r5.w;
-  r4.w = r6.z + -r3.w;
-  r5.w = cb0[37].z / cb0[37].x;
-  r5.w = r5.w + -r4.w;
-  r5.xyz = log2(r5.xyz);
-  r6.xyz = float3(0.30103001, 0.30103001, 0.30103001) * r5.xyz;
-  r7.xyz = r5.xyz * float3(0.30103001, 0.30103001, 0.30103001) + r4.www;
-  r7.xyz = cb0[37].xxx * r7.xyz;
-  r4.w = r0.w + r0.w;
-  r6.w = cb0[37].x * -2;
-  r0.w = r6.w / r0.w;
-  r8.xyz = r5.xyz * float3(0.30103001, 0.30103001, 0.30103001) + -r3.www;
-  r9.xyz = r8.xyz * r0.www;
-  r9.xyz = float3(1.44269502, 1.44269502, 1.44269502) * r9.xyz;
-  r9.xyz = exp2(r9.xyz);
-  r9.xyz = float3(1, 1, 1) + r9.xyz;
-  r9.xyz = r4.www / r9.xyz;
-  r9.xyz = -cb0[37].www + r9.xyz;
-  r0.w = r2.w + r2.w;
-  r4.w = cb0[37].x + cb0[37].x;
-  r2.w = r4.w / r2.w;
-  r5.xyz = r5.xyz * float3(0.30103001, 0.30103001, 0.30103001) + -r5.www;
-  r5.xyz = r5.xyz * r2.www;
-  r5.xyz = float3(1.44269502, 1.44269502, 1.44269502) * r5.xyz;
-  r5.xyz = exp2(r5.xyz);
-  r5.xyz = float3(1, 1, 1) + r5.xyz;
-  r5.xyz = r0.www / r5.xyz;
-  r5.xyz = -r5.xyz + r1.www;
-  r10.xyz = cmp(r6.xyz < r3.www);
-  r9.xyz = r10.xyz ? r9.xyz : r7.xyz;
-  r6.xyz = cmp(r5.www < r6.xyz);
-  r5.xyz = r6.xyz ? r5.xyz : r7.xyz;
-  r0.w = r5.w + -r3.w;
-  r6.xyz = saturate(r8.xyz / r0.www);
-  r0.w = cmp(r5.w < r3.w);
-  r7.xyz = float3(1, 1, 1) + -r6.xyz;
-  r6.xyz = r0.www ? r7.xyz : r6.xyz;
-  r7.xyz = -r6.xyz * float3(2, 2, 2) + float3(3, 3, 3);
-  r6.xyz = r6.xyz * r6.xyz;
-  r6.xyz = r6.xyz * r7.xyz;
-  r5.xyz = r5.xyz + -r9.xyz;
-  r5.xyz = r6.xyz * r5.xyz + r9.xyz;
-  r0.w = dot(r5.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
-  r5.xyz = r5.xyz + -r0.www;
-  r5.xyz = r5.xyz * float3(0.930000007, 0.930000007, 0.930000007) + r0.www;
-  r5.xyz = max(float3(0, 0, 0), r5.xyz);
+  r5.xyz = r5.xyz * float3(0.959999979, 0.959999979, 0.959999979) + r0.www;  // End of ACES:RRT
+
+  ap1_aces_colored = r5.xyz;
+
+  // If statement with first dual tonemap would go here
+
+  if (injectedData.toneMapType != 0.f && is_hdr) {
+    float vanillaMidGray = 0.18f;  // calculate mid grey from the second hable run
+    float renoDRTContrast = 1.f;
+    float renoDRTFlare = 0.f;
+    float renoDRTShadows = 1.f;
+    float renoDRTDechroma = injectedData.colorGradeBlowout;
+    float renoDRTSaturation = 1.f;  //
+    float renoDRTHighlights = 1.f;
+
+    float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
+
+    renodx::tonemap::Config config = renodx::tonemap::config::Create();
+    config.type = injectedData.toneMapType;
+    config.peak_nits = injectedData.toneMapPeakNits;
+    config.game_nits = injectedData.toneMapGameNits;
+    config.gamma_correction = injectedData.toneMapGammaCorrection;
+    config.exposure = injectedData.colorGradeExposure;
+    config.highlights = injectedData.colorGradeHighlights;
+    config.shadows = injectedData.colorGradeShadows;
+    config.contrast = injectedData.colorGradeContrast;
+    config.saturation = injectedData.colorGradeSaturation;
+
+    config.reno_drt_highlights = renoDRTHighlights;
+    config.reno_drt_shadows = renoDRTShadows;
+    config.reno_drt_contrast = renoDRTContrast;
+    config.reno_drt_saturation = renoDRTSaturation;
+    config.reno_drt_dechroma = renoDRTDechroma;
+    config.mid_gray_value = vanillaMidGray;
+    config.mid_gray_nits = vanillaMidGray * 100.f;
+    config.reno_drt_flare = renoDRTFlare;
+
+    renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(config_color, config);
+    hdr_color = dual_tone_map.color_hdr;
+    sdr_color = dual_tone_map.color_sdr;
+    sdr_ap1_color = renodx::color::ap1::from::BT709(sdr_color);
+  } else {
+    // Film Toe > 0.8
+    r6.xy = cb0[37].ww + float2(1, 0.180000007);
+    r0.w = -cb0[37].y + r6.x;
+    r1.w = cb0[38].x + 1;
+    r2.w = -cb0[37].z + r1.w;
+    r3.w = cmp(0.800000012 < cb0[37].y);
+    r6.xz = -cb0[37].yy + float2(0.819999993, 1);
+    r6.xz = r6.xz / cb0[37].xx;
+    r4.w = -0.744727492 + r6.x;
+    r5.w = r6.y / r0.w;
+    r6.x = -1 + r5.w;
+    r6.x = 1 + -r6.x;
+    r5.w = r5.w / r6.x;
+    r5.w = log2(r5.w);
+    r5.w = 0.346573591 * r5.w;
+    r6.x = r0.w / cb0[37].x;
+    r5.w = -r5.w * r6.x + -0.744727492;
+    r3.w = r3.w ? r4.w : r5.w;
+    r4.w = r6.z + -r3.w;
+    r5.w = cb0[37].z / cb0[37].x;
+    r5.w = r5.w + -r4.w;
+    r5.xyz = log2(r5.xyz);
+    r6.xyz = float3(0.30103001, 0.30103001, 0.30103001) * r5.xyz;
+    r7.xyz = r5.xyz * float3(0.30103001, 0.30103001, 0.30103001) + r4.www;
+    r7.xyz = cb0[37].xxx * r7.xyz;
+    r4.w = r0.w + r0.w;
+    r6.w = cb0[37].x * -2;
+    r0.w = r6.w / r0.w;
+    r8.xyz = r5.xyz * float3(0.30103001, 0.30103001, 0.30103001) + -r3.www;
+    r9.xyz = r8.xyz * r0.www;
+    r9.xyz = float3(1.44269502, 1.44269502, 1.44269502) * r9.xyz;
+    r9.xyz = exp2(r9.xyz);
+    r9.xyz = float3(1, 1, 1) + r9.xyz;
+    r9.xyz = r4.www / r9.xyz;
+    r9.xyz = -cb0[37].www + r9.xyz;
+    r0.w = r2.w + r2.w;
+    r4.w = cb0[37].x + cb0[37].x;
+    r2.w = r4.w / r2.w;
+    r5.xyz = r5.xyz * float3(0.30103001, 0.30103001, 0.30103001) + -r5.www;
+    r5.xyz = r5.xyz * r2.www;
+    r5.xyz = float3(1.44269502, 1.44269502, 1.44269502) * r5.xyz;
+    r5.xyz = exp2(r5.xyz);
+    r5.xyz = float3(1, 1, 1) + r5.xyz;
+    r5.xyz = r0.www / r5.xyz;
+    r5.xyz = -r5.xyz + r1.www;
+    r10.xyz = cmp(r6.xyz < r3.www);
+    r9.xyz = r10.xyz ? r9.xyz : r7.xyz;
+    r6.xyz = cmp(r5.www < r6.xyz);
+    r5.xyz = r6.xyz ? r5.xyz : r7.xyz;
+    r0.w = r5.w + -r3.w;
+    r6.xyz = saturate(r8.xyz / r0.www);
+    r0.w = cmp(r5.w < r3.w);
+    r7.xyz = float3(1, 1, 1) + -r6.xyz;
+    r6.xyz = r0.www ? r7.xyz : r6.xyz;
+    r7.xyz = -r6.xyz * float3(2, 2, 2) + float3(3, 3, 3);
+    r6.xyz = r6.xyz * r6.xyz;
+    r6.xyz = r6.xyz * r7.xyz;
+    r5.xyz = r5.xyz + -r9.xyz;
+    r5.xyz = r6.xyz * r5.xyz + r9.xyz;
+    // AP1_RGB2Y
+    r0.w = dot(r5.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
+    r5.xyz = r5.xyz + -r0.www;
+    r5.xyz = r5.xyz * float3(0.930000007, 0.930000007, 0.930000007) + r0.www;
+    r5.xyz = max(float3(0, 0, 0), r5.xyz);
+    sdr_ap1_color = r5.xyz;
+  }  // The } from the dualtonemap if statement would go here
+
+  r5.xyz = sdr_ap1_color;
+
   r5.xyz = r5.xyz + -r1.xyz;
   r1.xyz = cb0[36].www * r5.xyz + r1.xyz;
+
+  // BlueBlueCorrectInv
   r5.x = dot(float3(1.06537485, 1.44678506e-06, -0.0653710067), r1.xyz);
   r5.y = dot(float3(-3.45525592e-07, 1.20366347, -0.203667715), r1.xyz);
   r5.z = dot(float3(1.9865448e-08, 2.12079581e-08, 0.999999583), r1.xyz);
   r5.xyz = r5.xyz + -r1.xyz;
   r1.xyz = cb0[36].yyy * r5.xyz + r1.xyz;
-  r5.x = dot(cb1[12].xyz, r1.xyz);
-  r5.y = dot(cb1[13].xyz, r1.xyz);
-  r5.z = dot(cb1[14].xyz, r1.xyz);
-  r1.xyz = max(float3(0, 0, 0), r5.xyz);
+  r5.x = saturate(dot(cb1[12].xyz, r1.xyz));
+  r5.y = saturate(dot(cb1[13].xyz, r1.xyz));
+  r5.z = saturate(dot(cb1[14].xyz, r1.xyz));
+  r1.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r5.xyz;
+  r6.xyz = cmp(r5.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
+  r5.xyz = log2(r5.xyz);
+  r5.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r5.xyz;
+  r5.xyz = exp2(r5.xyz);
+  r5.xyz = r5.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
+  r1.xyz = r6.xyz ? r5.xyz : r1.xyz;
+  r5.yzw = r1.xyz * float3(0.9375, 0.9375, 0.9375) + float3(0.03125, 0.03125, 0.03125);
+  r0.w = r5.w * 16 + -0.5;
+  r1.w = floor(r0.w);
+  r0.w = -r1.w + r0.w;
+  r1.w = r5.y + r1.w;
+  r5.x = 0.0625 * r1.w;
+  r6.xyz = t0.Sample(s0_s, r5.xz).xyz;
+  r5.yw = float2(0.0625, 0) + r5.xz;
+  r7.xyz = t0.Sample(s0_s, r5.yw).xyz;
+  r7.xyz = r7.xyz + -r6.xyz;
+  r6.xyz = r0.www * r7.xyz + r6.xyz;
+  r6.xyz = cb0[5].yyy * r6.xyz;
+  r1.xyz = cb0[5].xxx * r1.xyz + r6.xyz;
+  r6.xyz = t1.Sample(s1_s, r5.xz).xyz;
+  r5.xyz = t1.Sample(s1_s, r5.yw).xyz;
+  r5.xyz = r5.xyz + -r6.xyz;
+  r5.xyz = r0.www * r5.xyz + r6.xyz;
+  r1.xyz = cb0[5].zzz * r5.xyz + r1.xyz;
+  r1.xyz = max(float3(6.10351999e-05, 6.10351999e-05, 6.10351999e-05), r1.xyz);
+  r5.xyz = cmp(float3(0.0404499993, 0.0404499993, 0.0404499993) < r1.xyz);
+  r6.xyz = r1.xyz * float3(0.947867274, 0.947867274, 0.947867274) + float3(0.0521326996, 0.0521326996, 0.0521326996);
+  r6.xyz = log2(r6.xyz);
+  r6.xyz = float3(2.4000001, 2.4000001, 2.4000001) * r6.xyz;
+  r6.xyz = exp2(r6.xyz);
+  r1.xyz = float3(0.0773993805, 0.0773993805, 0.0773993805) * r1.xyz;
+  r1.xyz = r5.xyz ? r6.xyz : r1.xyz;
   r5.xyz = r1.xyz * r1.xyz;
   r1.xyz = cb0[39].yyy * r1.xyz;
   r1.xyz = cb0[39].xxx * r5.xyz + r1.xyz;
@@ -346,7 +466,27 @@ void main(
   r5.xyz = log2(r5.xyz);
   r5.xyz = cb0[40].yyy * r5.xyz;
   r5.xyz = exp2(r5.xyz);
-  if (cb0[40].w == 0) {
+
+  float3 film_graded_color = r5.rgb;
+
+  // Add upgrade tonemap here
+
+  if (injectedData.toneMapType != 0.f && is_hdr) {
+    float3 final_color = saturate(film_graded_color);
+    if (injectedData.toneMapType != 0.f) {
+      final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
+    }
+    if (injectedData.toneMapGammaCorrection == 1.f) {
+      final_color = renodx::color::correct::GammaSafe(final_color);
+    }
+    // bool is_pq = (output_type == 3u || output_type == 4u);
+    final_color = renodx::color::bt2020::from::BT709(final_color);
+    final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
+    o0.rgba = float4(final_color, 0);
+    return;
+  }
+
+  if (cb0[40].w == 0) {  // cb[40].w = output device
     r6.x = dot(cb1[8].xyz, r5.xyz);
     r6.y = dot(cb1[9].xyz, r5.xyz);
     r6.z = dot(cb1[10].xyz, r5.xyz);

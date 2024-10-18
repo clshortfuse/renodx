@@ -17,9 +17,30 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
+#include <embed/0x2569985B.h>  // LUT
+#include <embed/0x31FE4421.h>  // LUT
+#include <embed/0x36E3A438.h>  // LUT
+#include <embed/0x4156562D.h>  // Final
+#include <embed/0x4F06C1AD.h>  // Output
+#include <embed/0x8C20620E.h>  // Output
+#include <embed/0x9A3DADB2.h>  // Output
+#include <embed/0xC2A711CC.h>  // LUT
+#include <embed/0xE2C936EB.h>  // LUT
+#include <embed/0xF554DE7A.h>  // Output
+
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
+    CustomShaderEntry(0x2569985B),
+    CustomShaderEntry(0x31FE4421),
+    CustomShaderEntry(0x36E3A438),
+    CustomShaderEntry(0x4156562D),
+    CustomShaderEntry(0x4F06C1AD),
+    CustomShaderEntry(0x8C20620E),
+    CustomShaderEntry(0x9A3DADB2),
+    CustomShaderEntry(0xC2A711CC),
+    CustomShaderEntry(0xE2C936EB),
+    CustomShaderEntry(0xF554DE7A),
 };
 
 ShaderInjectData shader_injection;
@@ -251,7 +272,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
 
-  renodx::mods::swapchain::Use(fdw_reason);
+  // renodx::mods::swapchain::Use(fdw_reason);
 
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 

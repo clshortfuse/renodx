@@ -460,7 +460,7 @@ void main(
   float3 film_graded_color = r5.rgb;
 
   // Add upgrade tonemap here
-  if (is_hdr) {
+  if (injectedData.toneMapType != 0.f && is_hdr) {
     float3 final_color = saturate(film_graded_color);
     if (injectedData.toneMapType != 0.f) {
       final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
@@ -472,7 +472,7 @@ void main(
     final_color = renodx::color::bt2020::from::BT709(final_color);
     final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
 
-    o0.rgba = float4(final_color * 0.952381015, 0);
+    o0.rgba = float4(final_color, 0);
     return;
   }
 
@@ -1444,7 +1444,7 @@ void main(
       }
     }
   }
- 
+
   o0.xyz = float3(0.952381015, 0.952381015, 0.952381015) * r6.xyz;
   o0.w = 0;
   return;

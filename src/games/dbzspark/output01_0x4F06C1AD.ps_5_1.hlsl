@@ -1,4 +1,5 @@
-// ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:14 2024
+// ---- Created with 3Dmigoto v1.3.16 on Fri Oct 18 16:48:29 2024
+
 #include "./shared.h"
 
 Texture3D<float4> t4 : register(t4);
@@ -73,36 +74,25 @@ void main(
   r0.w = r0.w * r0.w;
   untonemapped = r0.xyz;
 
-  r0.xyz = r0.xyz * r0.www;
-  r0.xyz = float3(0.00999999978, 0.00999999978, 0.00999999978) * r0.xyz;
+  // They forgot to decode PQ?
+  r0.xyz = r0.xyz * r0.www + float3(0.00266771927, 0.00266771927, 0.00266771927);
   r0.xyz = log2(r0.xyz);
-  r0.xyz = float3(0.159301758, 0.159301758, 0.159301758) * r0.xyz;
-  r0.xyz = exp2(r0.xyz);
-  r1.xyz = r0.xyz * float3(18.8515625, 18.8515625, 18.8515625) + float3(0.8359375, 0.8359375, 0.8359375);
-  r0.xyz = r0.xyz * float3(18.6875, 18.6875, 18.6875) + float3(1, 1, 1);
-  r0.xyz = rcp(r0.xyz);
-  r0.xyz = r1.xyz * r0.xyz;
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = float3(78.84375, 78.84375, 78.84375) * r0.xyz;
-  r0.xyz = exp2(r0.xyz);
+  r0.xyz = saturate(r0.xyz * float3(0.0714285746, 0.0714285746, 0.0714285746) + float3(0.610726953, 0.610726953, 0.610726953));
+
   r0.xyz = r0.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
-  r0.xyz = t4.Sample(s3_s, r0.xyz).xyz;  // LUT
+  r0.xyz = t4.Sample(s3_s, r0.xyz).xyz;
+
   post_lut = r0.xyz;
 
-  renodx::lut::Config lut_config = renodx::lut::config::Create(
-      s3_s,
-      1.f,
-      0.f, renodx::lut::config::type::LINEAR, renodx::lut::config::type::PQ, 32.f);
-
-  float3 lut_output = renodx::lut::Sample(t4, lut_config, untonemapped);
+  float3 lut_input = untonemapped; // Already PQ
+  post_lut = renodx::lut::Sample(t4, s3_s, lut_input);
 
   r0.w = v2.w * 543.309998 + v2.z;
   r0.w = sin(r0.w);
   r0.w = 493013 * r0.w;
   r0.w = frac(r0.w);
   r0.w = r0.w * 0.00390625 + -0.001953125;
-  r0.xyz = r0.xyz * float3(1.25, 1.25, 1.25) + r0.www;
-
+  r0.xyz = r0.xyz * float3(1.04999995, 1.04999995, 1.04999995) + r0.www;
   if (cb0[46].z != 0) {
     r1.xyz = log2(r0.xyz);
     r1.xyz = float3(0.0126833133, 0.0126833133, 0.0126833133) * r1.xyz;
@@ -125,9 +115,8 @@ void main(
     r1.xyz = r1.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
     r0.xyz = min(r2.xyz, r1.xyz);
   }
-  o0.xyz = r0.xyz;
-  o0.rgb = post_lut;
-
+  // o0.xyz = r0.xyz;
+  o0.xyz = post_lut;
   o0.w = 0;
   return;
 }
