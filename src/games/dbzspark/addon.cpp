@@ -24,9 +24,11 @@
 #include <embed/0x4F06C1AD.h>  // Output
 #include <embed/0x8C20620E.h>  // Output
 #include <embed/0x9A3DADB2.h>  // Output
+#include <embed/0xAB3F1A02.h>  // ColorCorrect?
 #include <embed/0xC2A711CC.h>  // LUT
 #include <embed/0xE2C936EB.h>  // LUT
 #include <embed/0xF554DE7A.h>  // Output
+
 
 namespace {
 
@@ -41,6 +43,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xC2A711CC),
     CustomShaderEntry(0xE2C936EB),
     CustomShaderEntry(0xF554DE7A),
+    CustomShaderEntry(0xAB3F1A02),
 };
 
 ShaderInjectData shader_injection;

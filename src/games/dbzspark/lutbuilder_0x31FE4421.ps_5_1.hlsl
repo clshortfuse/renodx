@@ -1,5 +1,7 @@
 // ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:17 2024
 #include "./shared.h"
+#include "./tonemapper.hlsl"
+
 Texture2D<float4> t0 : register(t0);
 
 SamplerState s0_s : register(s0);
@@ -413,35 +415,9 @@ void main(
   // If statement with first dual tonemap would go here
 
   if (injectedData.toneMapType != 0.f && is_hdr) {
-    float vanillaMidGray = 0.18f;  // calculate mid grey from the second hable run
-    float renoDRTContrast = 1.f;
-    float renoDRTFlare = 0.f;
-    float renoDRTShadows = 1.f;
-    float renoDRTDechroma = injectedData.colorGradeBlowout;
-    float renoDRTSaturation = 1.f;  //
-    float renoDRTHighlights = 1.f;
+    renodx::tonemap::Config config = getCommonConfig();
 
     float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
-
-    renodx::tonemap::Config config = renodx::tonemap::config::Create();
-    config.type = injectedData.toneMapType;
-    config.peak_nits = injectedData.toneMapPeakNits;
-    config.game_nits = injectedData.toneMapGameNits;
-    config.gamma_correction = injectedData.toneMapGammaCorrection;
-    config.exposure = injectedData.colorGradeExposure;
-    config.highlights = injectedData.colorGradeHighlights;
-    config.shadows = injectedData.colorGradeShadows;
-    config.contrast = injectedData.colorGradeContrast;
-    config.saturation = injectedData.colorGradeSaturation;
-
-    config.reno_drt_highlights = renoDRTHighlights;
-    config.reno_drt_shadows = renoDRTShadows;
-    config.reno_drt_contrast = renoDRTContrast;
-    config.reno_drt_saturation = renoDRTSaturation;
-    config.reno_drt_dechroma = renoDRTDechroma;
-    config.mid_gray_value = vanillaMidGray;
-    config.mid_gray_nits = vanillaMidGray * 100.f;
-    config.reno_drt_flare = renoDRTFlare;
 
     renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(config_color, config);
     hdr_color = dual_tone_map.color_hdr;

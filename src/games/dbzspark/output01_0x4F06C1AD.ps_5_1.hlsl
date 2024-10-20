@@ -85,7 +85,7 @@ void main(
   post_lut = r0.xyz;
 
   float3 lut_input = untonemapped; // Already PQ
-  post_lut = renodx::lut::Sample(t4, s3_s, lut_input);
+  post_lut = renodx::lut::Sample(t4, s3_s, lut_input, 32.f);
 
   r0.w = v2.w * 543.309998 + v2.z;
   r0.w = sin(r0.w);
