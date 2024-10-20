@@ -25,10 +25,10 @@ struct ShaderInjectData {
 
 #ifndef __cplusplus
 static const ShaderInjectData injectedData = {
-    3.f,    // toneMapType
+    2.f,    // toneMapType
     800.f,  // toneMapPeakNits
-    203.f,  // toneMapGameNits
-    100.f,   // toneMapUINits
+    150.f,  // toneMapGameNits
+    203.f,   // toneMapUINits
     1.f,    // toneMapGammaCorrection
     1.f,    // toneMapHueCorrection
     1.f,    // colorGradeExposure

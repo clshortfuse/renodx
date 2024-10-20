@@ -73,8 +73,7 @@ void main(
   r0.w = r0.w * r0.w;
   untonemapped = r0.xyz;
 
-  r0.xyz = r0.xyz * r0.www;  // Paper white?
-
+  /* r0.xyz = r0.xyz * r0.www;  // Paper white?
   r0.xyz = float3(0.00999999978, 0.00999999978, 0.00999999978) * r0.xyz;
   r0.xyz = log2(r0.xyz);
   r0.xyz = float3(0.159301758, 0.159301758, 0.159301758) * r0.xyz;
@@ -88,7 +87,7 @@ void main(
   r0.xyz = exp2(r0.xyz);
   r0.xyz = r0.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
   r0.xyz = t4.Sample(s3_s, r0.xyz).xyz;  // LUT
-  post_lut = r0.xyz;
+  post_lut = r0.xyz; */
 
   float3 lut_input = renodx::color::pq::Encode(untonemapped, 100.f);
   post_lut = renodx::lut::Sample(t4, s3_s, lut_input, 32.f);
@@ -100,6 +99,7 @@ void main(
   r0.w = r0.w * 0.00390625 + -0.001953125;
   r0.xyz = r0.xyz * float3(1.25, 1.25, 1.25) + r0.www;
 
+  // Unused
   if (cb0[46].z != 0) {
     r1.xyz = log2(r0.xyz);
     r1.xyz = float3(0.0126833133, 0.0126833133, 0.0126833133) * r1.xyz;
