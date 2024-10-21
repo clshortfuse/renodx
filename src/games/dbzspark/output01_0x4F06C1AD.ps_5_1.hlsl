@@ -1,6 +1,7 @@
 // ---- Created with 3Dmigoto v1.3.16 on Fri Oct 18 16:48:29 2024
 
 #include "./shared.h"
+#include "./tonemapper.hlsl"
 
 Texture3D<float4> t4 : register(t4);
 

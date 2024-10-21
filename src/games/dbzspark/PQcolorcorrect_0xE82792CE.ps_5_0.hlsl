@@ -1,4 +1,7 @@
 // ---- Created with 3Dmigoto v1.3.16 on Fri Oct 18 20:10:00 2024
+#include "./shared.h"
+#include "./tonemapper.hlsl"
+
 Texture2D<float4> t1 : register(t1);
 
 Texture2D<float4> t0 : register(t0);
@@ -19,10 +22,9 @@ void main(
   float4 r0, r1, r2;
   uint4 bitmask, uiDest;
   float4 fDest;
-  float3 untonemapped;
+  float3 tonemappedPQ, input_srgb, post_srgb, output;
 
   r0.xyzw = t0.Sample(s0_s, v0.xy).xyzw;
-  untonemapped = r0.rgb;
 
   r0.xyz = max(float3(6.10351999e-05, 6.10351999e-05, 6.10351999e-05), r0.xyz);
   r1.xyz = cmp(float3(0.0404499993, 0.0404499993, 0.0404499993) < r0.xyz);
@@ -65,7 +67,6 @@ void main(
   r0.xyz = r1.xyz * r0.www + r0.xyz;
   o0.xyz = float3(0.0125000002, 0.0125000002, 0.0125000002) * r0.xyz;
   o0.w = 1;
-
-  o0.rgb = untonemapped;
+  
   return;
 }

@@ -28,6 +28,11 @@
 #include <embed/0xE2C936EB.h>  // LUT
 #include <embed/0xF554DE7A.h>  // Output
 
+#include <embed/0x753DE2A9.h>  // ColorCorrect we bypass
+#include <embed/0x5975CAFA.h>  // ColorCorrect we bypass
+#include <embed/0xAB3F1A02.h>  // ColorCorrect we bypass
+#include <embed/0xD80F99B3.h>  // ColorCorrect we bypass
+#include <embed/0xE82792CE.h>  // ColorCorrect we bypass
 
 namespace {
 
@@ -41,7 +46,15 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x9A3DADB2),
     CustomShaderEntry(0xC2A711CC),
     CustomShaderEntry(0xE2C936EB),
-    CustomShaderEntry(0xF554DE7A)
+    CustomShaderEntry(0xF554DE7A),
+
+
+    // test bypass
+    /* CustomShaderEntry(0x753DE2A9),
+    CustomShaderEntry(0x5975CAFA),
+    CustomShaderEntry(0xAB3F1A02),
+    CustomShaderEntry(0xD80F99B3),
+    CustomShaderEntry(0xE82792CE), */
 };
 
 ShaderInjectData shader_injection;

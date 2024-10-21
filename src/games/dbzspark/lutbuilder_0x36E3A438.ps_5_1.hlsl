@@ -462,6 +462,7 @@ void main(
   }
 
   if (cb0[40].w == 0) {  // cb[40].w = output device
+                         // SDR path
     r6.x = dot(cb1[8].xyz, r5.xyz);
     r6.y = dot(cb1[9].xyz, r5.xyz);
     r6.z = dot(cb1[10].xyz, r5.xyz);

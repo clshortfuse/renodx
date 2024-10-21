@@ -23,7 +23,6 @@ void main(
   float4 r0, r1, r2;
   uint4 bitmask, uiDest;
   float4 fDest;
-  float3 untonemapped, output, test;
 
   r0.xyzw = t0.Sample(s0_s, v0.xy).xyzw;  // UI bt2020
 
@@ -51,7 +50,8 @@ void main(
 
   r1.xyz = t1.Sample(s1_s, v0.xy).xyz;  // Game
 
-  // pow(in_color, 1.f / M2)
+
+  /* // pow(in_color, 1.f / M2)
   r1.xyz = log2(r1.xyz);
   r1.xyz = float3(0.0126833133, 0.0126833133, 0.0126833133) * r1.xyz;
   r1.xyz = exp2(r1.xyz);
@@ -60,8 +60,8 @@ void main(
   r2.xyz = max(float3(0, 0, 0), r2.xyz);
   // (C2 - C3 * e_m12)
   r1.xyz = -r1.xyz * float3(18.6875, 18.6875, 18.6875) + float3(18.8515625, 18.8515625, 18.8515625);
-  /* r2 is max(e_m12 - C1, 0)
-  r1 is (C2 - C3 * e_m12) */
+  // r2 is max(e_m12 - C1, 0)
+  // r1 is (C2 - C3 * e_m12)
   r1.xyz = r2.xyz / r1.xyz;
   // pow(result, 1.f / M1)
   r1.xyz = log2(r1.xyz);
@@ -69,7 +69,8 @@ void main(
   r1.xyz = exp2(r1.xyz);
   // out_color * (10000.f / scaling)
   r1.xyz = float3(10000, 10000, 10000) * r1.xyz;  // No scaling used, notice it's full 10k
-  // We use 1.f so it Decodes using the full 10k
+  // We use 1.f so it Decodes using the full 10k */
+  r1.rgb = renodx::color::pq::Decode(r1.rgb, 1.f);
 
   r1.w = cmp(0 < r0.w);
   r2.x = cmp(r0.w < 1);
@@ -87,8 +88,8 @@ void main(
   r0.xyz = cb0[7].zzz * r0.xyz;
   r0.xyz = r1.xyz * r0.www + r0.xyz;  // Blending UI with game
 
-  /* 0.00009999999975 ~= 0.00001 * Bt2020 color
-  This is basically (scaling / 10000.f) where scaling is 1.f */
+  /* // 0.00009999999975 ~= 0.00001 * Bt2020 color
+  // This is basically (scaling / 10000.f) where scaling is 1.f
   r0.xyz = float3(9.99999975e-05, 9.99999975e-05, 9.99999975e-05) * r0.xyz;
   // pow(color, M1)
   r0.xyz = log2(r0.xyz);
@@ -98,17 +99,18 @@ void main(
   r1.xyz = r0.xyz * float3(18.8515625, 18.8515625, 18.8515625) + float3(0.8359375, 0.8359375, 0.8359375);
   // (1.f + C3 * y_m1)
   r0.xyz = r0.xyz * float3(18.6875, 18.6875, 18.6875) + float3(1, 1, 1);
-  /* ((C1 + C2 * y_m1) / (1.f + C3 * y_m1))
-    r1 = (C1 + C2 * y_m1)
-    r0 = (1.f + C3 * y_m1)
-  */
+  // ((C1 + C2 * y_m1) / (1.f + C3 * y_m1))
+  // r1 = (C1 + C2 * y_m1)
+  // r0 = (1.f + C3 * y_m1)
   r0.xyz = rcp(r0.xyz);
   r0.xyz = r1.xyz * r0.xyz;
   // pow(result, M2)
   r0.xyz = log2(r0.xyz);
   r0.xyz = float3(78.84375, 78.84375, 78.84375) * r0.xyz;
-  o0.xyz = exp2(r0.xyz);
+  o0.xyz = exp2(r0.xyz); */
+  // We don't need WCG UI
 
+  o0.rgb = renodx::color::pq::Encode(r0.rgb, 1.f);
   o0.w = 1;
 
   return;
