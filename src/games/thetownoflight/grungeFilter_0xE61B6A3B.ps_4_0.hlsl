@@ -21,10 +21,12 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
 
-  // normalize white level to the same range as SDR (theoretically 80 nits)
-  r0.rgb = renodx::color::gamma::DecodeSafe(r0.rgb, 2.2f);
-  r0.rgb /= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-  r0.rgb = renodx::color::gamma::EncodeSafe(r0.rgb, 2.2f);
+  if (injectedData.outputMode == 1) { // HDR Output
+    // normalize white level to the same range as SDR (theoretically 80 nits)
+    r0.rgb = renodx::color::gamma::DecodeSafe(r0.rgb, 2.2f);
+    r0.rgb /= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+    r0.rgb = renodx::color::gamma::EncodeSafe(r0.rgb, 2.2f);
+  }
 
 #if 0  // remove unecessary saturate()
     r0.xyzw = saturate(r0.xyzw);
@@ -46,13 +48,13 @@ void main(
   r0.xyz = r0.xyz ? float3(1, 1, 1) : 0;
   o0.xyz = r0.xyz * r1.xyz + r2.xyz;
 
-  if (injectedData.outputMode == 0.f) {  // SDR Mode
+  if (injectedData.toneMapType == 0.f) {  // Vanilla Tonemap
     o0.rgb = saturate(o0.rgb);
   }
-
-  o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb, 2.2f);
-  o0.rgb *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-  o0.rgb = renodx::color::gamma::EncodeSafe(o0.rgb, 2.2f);
-
+  if (injectedData.outputMode == 1) {  // HDR Output
+    o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb, 2.2f);
+    o0.rgb *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+    o0.rgb = renodx::color::gamma::EncodeSafe(o0.rgb, 2.2f);
+  }
   return;
 }
