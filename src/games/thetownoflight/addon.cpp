@@ -206,25 +206,6 @@ void OnInitDevice(reshade::api::device* device) {
 
     device->create_pipeline(PIPELINE_LAYOUT, static_cast<uint32_t>(subobjects.size()), subobjects.data(), &data.final_pipeline);
   }
-
-  // create layout
-  {
-    reshade::api::pipeline_layout_param new_params;
-    new_params.type = reshade::api::pipeline_layout_param_type::push_constants;
-    new_params.push_constants.count = 1;
-    new_params.push_constants.dx_register_index = 13;
-    new_params.push_constants.visibility = reshade::api::shader_stage::vertex | reshade::api::shader_stage::pixel | reshade::api::shader_stage::compute;
-    device->create_pipeline_layout(1, &new_params, &data.final_layout);
-  }
-
-  {
-    reshade::api::pipeline_layout_param new_params;
-    new_params.type = reshade::api::pipeline_layout_param_type::push_constants;
-    new_params.push_constants.count = 1;
-    new_params.push_constants.dx_register_index = 12;
-    new_params.push_constants.visibility = reshade::api::shader_stage::vertex | reshade::api::shader_stage::pixel | reshade::api::shader_stage::compute;
-    device->create_pipeline_layout(1, &new_params, &data.copy_layout);
-  }
 }
 
 void OnDestroyDevice(reshade::api::device* device) {
