@@ -8,10 +8,11 @@
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
+  float outputMode;
+  float toneMapType;
   float toneMapPeakNits;
   float toneMapGameNits;
   float toneMapUINits;
-  float outputMode;
 };
 
 #ifndef __cplusplus

@@ -45,6 +45,17 @@ renodx::utils::settings::Settings settings = {
         .labels = {"SDR", "HDR"},
     },
     new renodx::utils::settings::Setting{
+        .key = "toneMapType",
+        .binding = &shader_injection.toneMapType,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 2.f,
+        .can_reset = false,
+        .label = "Tone Mapper",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the tone mapper type",
+        .labels = {"Vanilla", "DICE"},
+    },
+    new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
         .binding = &shader_injection.toneMapPeakNits,
         .default_value = 1000.f,
@@ -53,7 +64,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of peak white in nits",
         .min = 48.f,
         .max = 10000.f,
-        .is_enabled = []() { return shader_injection.outputMode == 1; },
+        .is_enabled = []() { return (shader_injection.outputMode == 1 && shader_injection.toneMapType == 1); },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapGameNits",
@@ -64,6 +75,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of 100% white in nits",
         .min = 48.f,
         .max = 500.f,
+        .is_enabled = []() { return shader_injection.outputMode == 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapUINits",
@@ -74,6 +86,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
         .min = 48.f,
         .max = 500.f,
+        .is_enabled = []() { return shader_injection.outputMode == 1; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -108,6 +121,7 @@ renodx::utils::settings::Settings settings = {
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("outputMode", 0.f);
+  renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
