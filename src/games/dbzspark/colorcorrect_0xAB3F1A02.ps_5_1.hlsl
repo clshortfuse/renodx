@@ -17,13 +17,15 @@ cbuffer cb0 : register(b0) {
 // 3Dmigoto declarations
 #define cmp -
 
+// Increasess brightness and messes up colors
+// THIS IS FOR SHOP, it expects aces SDR output
 void main(
     float4 v0 : SV_POSITION0,
                 out float4 o0 : SV_Target0) {
   float4 r0, r1;
   uint4 bitmask, uiDest;
   float4 fDest;
-  float3 tonemappedPQ, post_srgb, output;
+  float3 tonemappedPQ, post_srgb;
 
   r0.xy = asuint(cb0[37].xy);
   r0.xy = v0.xy + -r0.xy;
@@ -36,18 +38,21 @@ void main(
 
   r1.xyz = cb1[2].xxx + -cb1[2].yzw;
   r1.xyz = r0.xyz * r1.xyz + cb1[2].yzw;
+
   r1.xyz = max(float3(0, 0, 0), r1.xyz);
   r1.xyz = min(float3(100, 100, 100), r1.xyz);
+
   r1.xyz = r1.xyz + -r0.xyz;
   r0.xyz = r1.xyz * float3(0.5, 0.5, 0.5) + r0.xyz;
+
   r1.xyz = cb1[3].yzw + -r0.xyz;
   r0.xyz = cb1[3].xxx * r1.xyz + r0.xyz;
   o0.xyz = max(float3(0, 0, 0), r0.xyz);
+
   post_srgb = o0.rgb;
 
   o0.rgb = upgradeSRGBtoPQ(tonemappedPQ, post_srgb);
   // o0.rgb = tonemappedPQ;
-
   o0.w = 0;
   return;
 }

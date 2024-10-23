@@ -32,6 +32,21 @@ renodx::tonemap::Config getCommonConfig() {
   return config;
 }
 
+float3 pqTosRGB(float3 input_pq, bool limitRange = false) {
+  renodx::tonemap::Config config = getCommonConfig();
+  float3 srgb_color;
+  srgb_color = renodx::color::pq::Decode(input_pq, 100.f);
+  srgb_color = renodx::color::bt709::from::BT2020(srgb_color);
+
+  srgb_color = renodx::color::srgb::Encode(srgb_color);
+
+  if (limitRange) {
+    srgb_color = saturate(srgb_color);
+  }
+
+  return srgb_color;
+}
+
 float3 upgradeSRGBtoPQ(float3 tonemappedPQ, float3 post_srgb) {
   float3 hdr, sdr, post, output;
   hdr = renodx::color::pq::Decode(tonemappedPQ, 100.f);
@@ -44,14 +59,4 @@ float3 upgradeSRGBtoPQ(float3 tonemappedPQ, float3 post_srgb) {
   output = renodx::color::pq::Encode(output, 100.f);
 
   return output;
-}
-
-float3 pqTosRGB(float3 input_pq) {
-  float3 srgb_color;
-  srgb_color = renodx::color::pq::Decode(input_pq, 100.f);
-  srgb_color = renodx::color::bt709::from::BT2020(srgb_color);
-  srgb_color = renodx::color::bt709::clamp::BT709(srgb_color);
-  srgb_color = renodx::color::srgb::Encode(srgb_color);
-
-  return srgb_color;
 }

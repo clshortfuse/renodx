@@ -28,8 +28,8 @@
 #include <embed/0xE2C936EB.h>  // LUT
 #include <embed/0xF554DE7A.h>  // Output
 
-#include <embed/0x753DE2A9.h>  // ColorCorrect we bypass
 #include <embed/0x5975CAFA.h>  // ColorCorrect we bypass
+#include <embed/0x753DE2A9.h>  // ColorCorrect we bypass
 #include <embed/0xAB3F1A02.h>  // ColorCorrect we bypass
 #include <embed/0xD80F99B3.h>  // ColorCorrect we bypass
 #include <embed/0xE82792CE.h>  // ColorCorrect we bypass
@@ -47,7 +47,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xC2A711CC),
     CustomShaderEntry(0xE2C936EB),
     CustomShaderEntry(0xF554DE7A),
-
 
     // test bypass
     /* CustomShaderEntry(0x753DE2A9),
@@ -241,7 +240,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
+      renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
+        return device->get_api() == reshade::api::device_api::d3d12;
+      };
       renodx::mods::shader::force_pipeline_cloning = true;  // So the mod works with the toolkit
+      renodx::mods::shader::expected_constant_buffer_space = 50;
 
       // RGBA8_unorm
       /* renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({

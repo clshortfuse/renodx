@@ -35,6 +35,7 @@ cbuffer cb0 : register(b0) {
 // 3Dmigoto declarations
 #define cmp -
 
+// Adjusts colors
 void main(
     float4 v0 : SV_POSITION0,
                 out float4 o0 : SV_Target0) {

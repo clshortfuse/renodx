@@ -35,13 +35,16 @@ cbuffer cb0 : register(b0) {
 // 3Dmigoto declarations
 #define cmp -
 
+// Adjusts colors
+// THIS IS ALSO CALLED FOR SHOP
+// There's also light shafts getting called so maybe
 void main(
     float4 v0 : SV_POSITION0,
                 out float4 o0 : SV_Target0) {
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10;
   uint4 bitmask, uiDest;
   float4 fDest;
-  float3 tonemappedPQ, post_srgb, output;
+  float3 tonemappedPQ, post_srgb;
 
   r0.xy = asuint(cb0[37].xy);
   r0.xy = v0.xy + -r0.xy;
@@ -50,11 +53,6 @@ void main(
   r1.xyz = t5.Sample(s2_s, r0.zw).xyz;
 
   tonemappedPQ = r1.rgb;
-  /* float3 input_srgb = renodx::color::pq::Decode(tonemappedPQ, 100.f);
-  input_srgb = renodx::color::bt709::from::BT2020(input_srgb);
-  input_srgb = renodx::color::bt709::clamp::BT709(input_srgb);
-  input_srgb = saturate(input_srgb);
-  input_srgb = renodx::color::srgb::Encode(input_srgb); */
 
   r1.rgb = pqTosRGB(tonemappedPQ);
 
@@ -173,19 +171,26 @@ void main(
                           r3.xyz = min(r2.xyz, r1.xyz);
                           r0.w = cmp(cb2[5].y == 13.000000);
                           r4.xyz = r0.www ? r3.xyz : r4.xyz;
+
                           if (r0.w == 0) {
+                            // Main Menu stops here
                             r3.xyz = cmp(r1.xyz < float3(0.5, 0.5, 0.5));
                             r5.xyz = r2.xyz * r1.xyz;
                             r7.xyz = r5.xyz + r5.xyz;
                             r6.xyz = -r6.xyz * float3(2, 2, 2) + float3(1, 1, 1);
                             r3.xyz = r3.xyz ? r7.xyz : r6.xyz;
+
                             r0.w = cmp(cb2[5].y == 14.000000);
                             r4.xyz = r0.www ? r3.xyz : r4.xyz;
+                            // r4.rgb = float3(1, 0, 0.5);
+
                             if (r0.w == 0) {
                               r0.w = cmp(cb2[5].y == 15.000000);
                               r4.xyz = r0.www ? r5.xyz : r4.xyz;
+
                               if (r0.w == 0) {
                                 r0.w = cmp(cb2[5].y != 16.000000);
+
                                 if (r0.w != 0) {
                                   r3.xyzw = cmp(cb2[5].yyyy == float4(17, 18, 19, 20));
                                   r0.w = (int)r3.y | (int)r3.x;
@@ -198,6 +203,7 @@ void main(
                                   r2.xyz = r3.zzz ? r6.xyz : r2.xyz;
                                   r2.xyz = r3.yyy ? r5.xyz : r2.xyz;
                                   r4.xyz = r3.xxx ? float3(0, 0, 0) : r2.xyz;
+
                                 } else {
                                   r4.xyz = float3(0, 0, 0);
                                 }
@@ -216,6 +222,7 @@ void main(
       }
     }
   }
+  // r4 here has invalid colors
   r2.xyz = r4.xyz + -r1.xyz;
   r2.xyz = cb2[5].zzz * r2.xyz;
   r0.xy = r0.xy * cb2[7].xy + float2(0.5, 0.5);
@@ -242,6 +249,6 @@ void main(
   o0.w = 0;
 
   o0.rgb = upgradeSRGBtoPQ(tonemappedPQ, post_srgb);
-  // o0.rgb = tonemappedPQ;
+
   return;
 }
