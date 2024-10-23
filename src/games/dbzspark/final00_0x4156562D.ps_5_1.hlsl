@@ -1,4 +1,5 @@
 // ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:09 2024
+#include "./DICE.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t1 : register(t1);
@@ -42,11 +43,32 @@ void main(
   // We don't need WCG UI
   r0.rgb = renodx::color::bt709::from::BT2020(r0.rgb);
   r0.rgb = max(0, r0.rgb);
+  if (injectedData.toneMapGammaCorrection == 1.f) {
+    r0.rgb = renodx::color::correct::GammaSafe(r0.rgb);
+  }
   r0.rgb = renodx::color::bt2020::from::BT709(r0.rgb);
   r0.rgb *= injectedData.toneMapUINits / 203.f;  // Value found so it matches tonemapUINits
 
   r1.xyz = t1.Sample(s1_s, v0.xy).xyz;  // Game
-  r1.rgb = renodx::color::pq::Decode(r1.rgb, 1.f);
+  r1.rgb = renodx::color::pq::Decode(r1.rgb, 80.f);
+
+  r1.rgb = renodx::color::bt709::from::BT2020(r1.rgb);
+  // Tonemap adjustments from color correctors
+  if (injectedData.toneMapDice) {
+    DICESettings config = DefaultDICESettings();
+    config.Type = 1;
+
+    float dicePaperWhite = injectedData.toneMapGameNits / 80.f;
+    float dicePeakWhite = injectedData.toneMapPeakNits / 80.f;
+    r1.rgb = DICETonemap(r1.rgb * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
+  }
+  // Lowers peak with DICE, not sure why
+  if (injectedData.toneMapGammaCorrection == 1.f) {
+    r1.rgb = renodx::color::correct::GammaSafe(r1.rgb);
+  }
+  r1.rgb = renodx::color::bt2020::from::BT709(r1.rgb);
+  r1.rgb = renodx::color::pq::Encode(r1.rgb, 80.f);
+  r1.rgb = renodx::color::pq::Decode(r1.rgb, 1.f);  // We need it to merge with UI
 
   /* // pow(in_color, 1.f / M2)
   r1.xyz = log2(r1.xyz);
@@ -83,11 +105,6 @@ void main(
   r0.w = 1 + -r0.w;
   r0.xyz = cb0[7].zzz * r0.xyz;
   r0.xyz = r1.xyz * r0.www + r0.xyz;  // Blending UI with game
-  r0.rgb = renodx::color::bt709::from::BT2020(r0.rgb);
-  if (injectedData.toneMapGammaCorrection == 1.f) {
-    r0.rgb = renodx::color::correct::GammaSafe(r0.rgb);
-  }
-  r0.rgb = renodx::color::bt2020::from::BT709(r0.rgb);
 
   /* // 0.00009999999975 ~= 0.00001 * Bt2020 color
   // This is basically (scaling / 10000.f) where scaling is 1.f

@@ -28,11 +28,10 @@
 #include <embed/0xE2C936EB.h>  // LUT
 #include <embed/0xF554DE7A.h>  // Output
 
-#include <embed/0x5975CAFA.h>  // ColorCorrect we bypass
-#include <embed/0x753DE2A9.h>  // ColorCorrect we bypass
-#include <embed/0xAB3F1A02.h>  // ColorCorrect we bypass
-#include <embed/0xD80F99B3.h>  // ColorCorrect we bypass
-#include <embed/0xE82792CE.h>  // ColorCorrect we bypass
+#include <embed/0x5975CAFA.h>  // ColorCorrect
+#include <embed/0x753DE2A9.h>  // ColorCorrect
+#include <embed/0xAB3F1A02.h>  // ColorCorrect
+#include <embed/0xD80F99B3.h>  // ColorCorrect
 
 namespace {
 
@@ -48,12 +47,11 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xE2C936EB),
     CustomShaderEntry(0xF554DE7A),
 
-    // test bypass
-    /* CustomShaderEntry(0x753DE2A9),
+    // Color correctors
+    CustomShaderEntry(0x753DE2A9),
     CustomShaderEntry(0x5975CAFA),
     CustomShaderEntry(0xAB3F1A02),
     CustomShaderEntry(0xD80F99B3),
-    CustomShaderEntry(0xE82792CE), */
 };
 
 ShaderInjectData shader_injection;
@@ -63,7 +61,7 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 3.f,
         .can_reset = false,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
@@ -123,6 +121,15 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.toneMapType > 1; },
         .parse = [](float value) { return value * 0.01f; },
     },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapDice",
+        .binding = &shader_injection.toneMapDice,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .can_reset = false,
+        .label = "Apply DICE",
+        .section = "Tone Mapping",
+        .tooltip = "Applies DICE to clamp highlights"},
     new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
         .binding = &shader_injection.colorGradeExposure,
@@ -217,6 +224,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 150.f);
   renodx::utils::settings::UpdateSetting("toneMapUINits", 120.f);
   renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 1.f);
+  renodx::utils::settings::UpdateSetting("toneMapDice", 1.f);
   renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 1.f);
   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);

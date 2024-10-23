@@ -37,7 +37,7 @@ cbuffer cb0 : register(b0) {
 
 // Adjusts colors
 // THIS IS ALSO CALLED FOR SHOP
-// There's also light shafts getting called so maybe
+// There's also light shafts shader getting called later
 void main(
     float4 v0 : SV_POSITION0,
                 out float4 o0 : SV_Target0) {
@@ -54,7 +54,7 @@ void main(
 
   tonemappedPQ = r1.rgb;
 
-  r1.rgb = pqTosRGB(tonemappedPQ);
+  r1.rgb = pqTosRGB(tonemappedPQ, true);
 
   r0.zw = r0.xy * cb1[129].xy + cb1[128].xy;
   r0.zw = cb1[132].zw * r0.zw;
@@ -249,6 +249,7 @@ void main(
   o0.w = 0;
 
   o0.rgb = upgradeSRGBtoPQ(tonemappedPQ, post_srgb);
+  // o0.rgb = tonemappedPQ;
 
   return;
 }

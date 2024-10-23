@@ -32,27 +32,33 @@ renodx::tonemap::Config getCommonConfig() {
   return config;
 }
 
-float3 pqTosRGB(float3 input_pq, bool limitRange = false) {
+// Here so we have a central function once we figure out a better way
+float3 clampForSRGB(float3 color) {
+  // clamp so colors don't go NaN, and didn't want to clamp to 1
+  // value derived from testing main menu
+  return min(float3(1.f, 1.f, 1.f) * 3.15f, color);
+}
+
+float3 pqTosRGB(float3 input_pq, bool clamp = false) {
   renodx::tonemap::Config config = getCommonConfig();
   float3 srgb_color;
   srgb_color = renodx::color::pq::Decode(input_pq, 100.f);
-  srgb_color = renodx::color::bt709::from::BT2020(srgb_color);
-
-  srgb_color = renodx::color::srgb::Encode(srgb_color);
-
-  if (limitRange) {
-    srgb_color = saturate(srgb_color);
+  if (clamp) {
+    srgb_color = clampForSRGB(srgb_color);
   }
+  srgb_color = renodx::color::bt709::from::BT2020(srgb_color);
+  srgb_color = renodx::color::srgb::EncodeSafe(srgb_color);
 
   return srgb_color;
 }
 
 float3 upgradeSRGBtoPQ(float3 tonemappedPQ, float3 post_srgb) {
-  float3 hdr, sdr, post, output;
+  float3 hdr, post, output;
   hdr = renodx::color::pq::Decode(tonemappedPQ, 100.f);
   hdr = renodx::color::bt709::from::BT2020(hdr);
 
-  post = renodx::color::srgb::Decode(post_srgb);
+  post = renodx::color::srgb::DecodeSafe(post_srgb);
+  post = clampForSRGB(post);
 
   output = renodx::tonemap::UpgradeToneMap(hdr, saturate(hdr), post, injectedData.colorGradeLUTStrength);
   output = renodx::color::bt2020::from::BT709(output);
