@@ -136,7 +136,6 @@ extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for The Town 
 
 // NOLINTEND(readability-identifier-naming)
 
-// Final shader [ty Ersh/FF14]
 struct __declspec(uuid("1228220F-364A-46A2-BB29-1CCE591A018A")) DeviceData {
   reshade::api::effect_runtime* main_runtime = nullptr;
   std::atomic_bool rendered_effects = false;
@@ -146,7 +145,6 @@ struct __declspec(uuid("1228220F-364A-46A2-BB29-1CCE591A018A")) DeviceData {
   reshade::api::resource_view final_texture_view = {};
   reshade::api::sampler final_texture_sampler = {};
   reshade::api::pipeline_layout final_layout = {};
-  reshade::api::pipeline_layout copy_layout = {};
 };
 
 constexpr reshade::api::pipeline_layout PIPELINE_LAYOUT{0};
@@ -325,10 +323,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::shader::expected_constant_buffer_index = 13;
 
-    //   renodx::mods::shader::force_pipeline_cloning = true;
-    //   renodx::mods::shader::trace_unmodified_shaders = true;
+      // renodx::mods::shader::force_pipeline_cloning = true;
+      // renodx::mods::shader::trace_unmodified_shaders = true;
       renodx::mods::swapchain::force_borderless = false;
-    //   renodx::mods::swapchain::prevent_full_screen = true;
+      // renodx::mods::swapchain::prevent_full_screen = true;
 
       // Final shader
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
