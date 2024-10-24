@@ -28,22 +28,6 @@ struct ShaderInjectData {
 cbuffer injectedBuffer : register(b0, space50) {
   ShaderInjectData injectedData : packoffset(c0);
 }
-/* static const ShaderInjectData injectedData = {
-    3.f,    // toneMapType
-    800.f,  // toneMapPeakNits
-    80.f,  // toneMapGameNits
-    100.f,   // toneMapUINits
-    1.f,    // toneMapGammaCorrection
-    1.f,    // toneMapHueCorrection
-    1.f,    // toneMapDice
-    1.f,    // colorGradeExposure
-    1.f,    // colorGradeHighlights
-    1.f,    // colorGradeShadows
-    1.f,    // colorGradeContrast
-    1.f,    // colorGradeSaturation
-    1.f,    // colorGradeLUTStrength
-    0.f,    // colorGradeBlowout
-}; */
 #endif
 
 #endif  // SRC_DBZSPARK_SHARED_H_

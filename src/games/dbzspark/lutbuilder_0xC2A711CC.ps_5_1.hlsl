@@ -183,8 +183,6 @@ void main(
   float FilmWhiteClip = cb0[38].x;
   float FilmShoulder = cb0[37].z;
 
-  bool is_hdr = true;
-
   // Blue correct    -- r0 is still ap1, r1 is sRGB
   r1.x = dot(float3(0.938639402, 1.02359565e-10, 0.0613606237), r0.xyz);
   r1.y = dot(float3(8.36008554e-11, 0.830794156, 0.169205874), r0.xyz);
@@ -302,7 +300,7 @@ void main(
 
   // If statement with first dual tonemap would go here
 
-  if (injectedData.toneMapType != 0.f && is_hdr) {
+  if (injectedData.toneMapType != 0.f) {
     renodx::tonemap::Config config = getCommonConfig();
 
     float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
@@ -436,17 +434,18 @@ void main(
   float3 film_graded_color = r5.rgb;
 
   // Add upgrade tonemap here
-  if (injectedData.toneMapType != 0.f && is_hdr) {
+  if (injectedData.toneMapType != 0.f) {
     float3 final_color = saturate(film_graded_color);
-    if (injectedData.toneMapType != 0.f) {
+
+    if (injectedData.toneMapType != 1.f) {
       final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
+    } else {
+      final_color = hdr_color;
     }
-    /* if (injectedData.toneMapGammaCorrection == 1.f) {
-      final_color = renodx::color::correct::GammaSafe(final_color);
-    } */
-    // bool is_pq = (output_type == 3u || output_type == 4u);
+
     final_color = renodx::color::bt2020::from::BT709(final_color);
-    final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
+    float encodeRate = injectedData.toneMapType > 1.f ? injectedData.toneMapGameNits : 100.f;
+    final_color = renodx::color::pq::Encode(final_color, encodeRate);
 
     o0.rgba = float4(final_color, 0);
     return;

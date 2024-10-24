@@ -68,23 +68,25 @@ void main(
   r0.xyz = v1.xxx * r0.xyz;
   untonemapped = r0.xyz;
 
-  r0.xyz = float3(0.00999999978, 0.00999999978, 0.00999999978) * r0.xyz;
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = float3(0.159301758, 0.159301758, 0.159301758) * r0.xyz;
-  r0.xyz = exp2(r0.xyz);
-  r1.xyz = r0.xyz * float3(18.8515625, 18.8515625, 18.8515625) + float3(0.8359375, 0.8359375, 0.8359375);
-  r0.xyz = r0.xyz * float3(18.6875, 18.6875, 18.6875) + float3(1, 1, 1);
-  r0.xyz = rcp(r0.xyz);
-  r0.xyz = r1.xyz * r0.xyz;
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = float3(78.84375, 78.84375, 78.84375) * r0.xyz;
-  r0.xyz = exp2(r0.xyz);
-  r0.xyz = r0.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
-  r0.xyz = t4.Sample(s3_s, r0.xyz).xyz;
-  post_lut = r0.rgb;
+  if (injectedData.toneMapType != 0.f) {
+    float3 lut_input = renodx::color::pq::Encode(untonemapped, 100.f);
+    post_lut = renodx::lut::Sample(t4, s3_s, lut_input, 32.f);
+  } else {
+    r0.xyz = float3(0.00999999978, 0.00999999978, 0.00999999978) * r0.xyz;
+    r0.xyz = log2(r0.xyz);
+    r0.xyz = float3(0.159301758, 0.159301758, 0.159301758) * r0.xyz;
+    r0.xyz = exp2(r0.xyz);
+    r1.xyz = r0.xyz * float3(18.8515625, 18.8515625, 18.8515625) + float3(0.8359375, 0.8359375, 0.8359375);
+    r0.xyz = r0.xyz * float3(18.6875, 18.6875, 18.6875) + float3(1, 1, 1);
+    r0.xyz = rcp(r0.xyz);
+    r0.xyz = r1.xyz * r0.xyz;
+    r0.xyz = log2(r0.xyz);
+    r0.xyz = float3(78.84375, 78.84375, 78.84375) * r0.xyz;
+    r0.xyz = exp2(r0.xyz);
+    r0.xyz = r0.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
+    r0.xyz = t4.Sample(s3_s, r0.xyz).xyz;
+  }
 
-  float3 lut_input = renodx::color::pq::Encode(untonemapped, 100.f);
-  post_lut = renodx::lut::Sample(t4, s3_s, lut_input, 32.f);
   r0.w = v2.w * 543.309998 + v2.z;
   r0.w = sin(r0.w);
   r0.w = 493013 * r0.w;
@@ -113,8 +115,11 @@ void main(
     r1.xyz = r1.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
     r0.xyz = min(r2.xyz, r1.xyz);
   }
-  o0.xyz = r0.xyz;
-  o0.rgb = post_lut;
+  if (injectedData.toneMapType != 0.f) {
+    o0.xyz = post_lut;
+  } else {
+    o0.xyz = r0.xyz;
+  }
 
   o0.w = 0;
   return;

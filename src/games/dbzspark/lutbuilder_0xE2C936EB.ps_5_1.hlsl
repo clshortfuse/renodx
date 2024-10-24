@@ -57,12 +57,10 @@ void main(
   float3 hdr_color;
   float3 sdr_ap1_color;
 
-  bool is_hdr = true;
-
   r5.xy = cmp(asint(cb0[2].xx) == int2(3, 5));
   r0.w = (int)r5.y | (int)r5.x;
 
-  if (injectedData.toneMapType != 0.f && is_hdr) {
+  if (injectedData.toneMapType != 0.f) {
     renodx::tonemap::Config config = getCommonConfig();
 
     float3 config_color = renodx::color::bt709::from::BT2020(input_color);
@@ -72,18 +70,19 @@ void main(
     sdr_color = dual_tone_map.color_sdr;
 
     float3 final_color = saturate(input_color);
-    if (injectedData.toneMapType != 0.f) {
-      final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
-    }
-    /* if (injectedData.toneMapGammaCorrection == 1.f) {
-      final_color = renodx::color::correct::GammaSafe(final_color);
-    } */
 
-    // bool is_pq = (output_type == 3u || output_type == 4u);
+    if (injectedData.toneMapType != 1.f) {
+      final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
+    } else {
+      final_color = hdr_color;
+    }
+
     final_color = renodx::color::bt2020::from::BT709(final_color);
-    final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
+    float encodeRate = injectedData.toneMapType > 1.f ? injectedData.toneMapGameNits : 100.f;
+    final_color = renodx::color::pq::Encode(final_color, encodeRate);
 
     o0.rgba = float4(final_color, 0);
+    return;
   }
   // Nothing to upgrade since ACES SDR adjustments are removed
 

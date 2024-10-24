@@ -75,18 +75,18 @@ void main(
   r0.w = r0.w * r0.w;
   untonemapped = r0.xyz;
 
-  // They forgot to decode PQ?
-  r0.xyz = r0.xyz * r0.www + float3(0.00266771927, 0.00266771927, 0.00266771927);
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = saturate(r0.xyz * float3(0.0714285746, 0.0714285746, 0.0714285746) + float3(0.610726953, 0.610726953, 0.610726953));
+  if (injectedData.toneMapType != 0.f) {
+    float3 lut_input = untonemapped;  // Already PQ
+    post_lut = renodx::lut::Sample(t4, s3_s, lut_input, 32.f);
+  } else {
+    // They forgot to decode PQ?
+    r0.xyz = r0.xyz * r0.www + float3(0.00266771927, 0.00266771927, 0.00266771927);
+    r0.xyz = log2(r0.xyz);
+    r0.xyz = saturate(r0.xyz * float3(0.0714285746, 0.0714285746, 0.0714285746) + float3(0.610726953, 0.610726953, 0.610726953));
 
-  r0.xyz = r0.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
-  r0.xyz = t4.Sample(s3_s, r0.xyz).xyz;
-
-  post_lut = r0.xyz;
-
-  float3 lut_input = untonemapped; // Already PQ
-  post_lut = renodx::lut::Sample(t4, s3_s, lut_input, 32.f);
+    r0.xyz = r0.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
+    r0.xyz = t4.Sample(s3_s, r0.xyz).xyz;
+  }
 
   r0.w = v2.w * 543.309998 + v2.z;
   r0.w = sin(r0.w);
@@ -116,8 +116,11 @@ void main(
     r1.xyz = r1.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
     r0.xyz = min(r2.xyz, r1.xyz);
   }
-  // o0.xyz = r0.xyz;
-  o0.xyz = post_lut;
+  if (injectedData.toneMapType != 0.f) {
+    o0.xyz = post_lut;
+  } else {
+    o0.xyz = r0.xyz;
+  }
   o0.w = 0;
   return;
 }
