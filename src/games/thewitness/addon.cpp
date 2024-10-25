@@ -127,6 +127,28 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "colorGradeBlowout",
+        .binding = &shader_injection.colorGradeBlowout,
+        .default_value = 0.f,
+        .label = "Blowout",
+        .section = "Color Grading",
+        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeFlare",
+        .binding = &shader_injection.colorGradeFlare,
+        .default_value = 0.f,
+        .label = "Flare",
+        .section = "Color Grading",
+        .tooltip = "Flare/Glare",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "colorGradeLUTStrength",
         .binding = &shader_injection.colorGradeLUTStrength,
         .default_value = 100.f,
@@ -145,6 +167,25 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
+    new renodx::utils::settings::Setting{
+        .key = "fxAutoExposure",
+        .binding = &shader_injection.fxAutoExposure,
+        .default_value = 100.f,
+        .label = "Auto Exposure",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "fxBloom",
+        .binding = &shader_injection.fxBloom,
+        .default_value = 50.f,
+        .label = "Bloom",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+
 };
 
 void OnPresetOff() {
@@ -160,6 +201,8 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
+  renodx::utils::settings::UpdateSetting("fxAutoExposure", 100.f);
+  renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
 }
 
 }  // namespace
