@@ -38,6 +38,19 @@ float3 ReinhardExtended(float3 color, float max_white = 1000.f / 203.f) {
          / (1.0f + color);
 }
 
+float ReinhardScalable(float x, float x_max = 1.f, float x_min = 0.f, float gray_in = 0.18f, float gray_out = 0.18f) {
+    float exposure = (x_max * (x_min * gray_out + x_min - gray_out))
+      / (gray_in * (gray_out - x_max));
+    return mad(x, exposure, x_min) / mad(x, exposure / x_max, 1.f - x_min);
+}
+
+// https://www.desmos.com/calculator/8msg0yhgfp
+float3 ReinhardScalable(float3 color, float channel_max = 1.f, float channel_min = 0.f, float gray_in = 0.18f, float gray_out = 0.18f) {
+    float exposure = (channel_max * (channel_min * gray_out + channel_min - gray_out))
+      / (gray_in * (gray_out - channel_max));
+    return mad(color, exposure, channel_min) / mad(color, exposure / channel_max, 1.f - channel_min);
+}
+
 // Narkowicz
 float3 ACESFittedBT709(float3 color) {
   color *= 0.6f;
