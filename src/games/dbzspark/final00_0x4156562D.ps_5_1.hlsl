@@ -56,6 +56,14 @@ void main(
     r1.rgb = renodx::color::pq::Decode(r1.rgb, 80.f);
 
     r1.rgb = renodx::color::bt709::from::BT2020(r1.rgb);
+    r1.rgb = renodx::color::grade::UserColorGrading(
+        r1.rgb,
+        injectedData.colorGradeExposure,
+        injectedData.colorGradeHighlights,
+        injectedData.colorGradeShadows,
+        injectedData.colorGradeContrast,
+        injectedData.colorGradeSaturation);
+
     // Tonemap adjustments from color correctors
     if (injectedData.toneMapDice) {
       const float dicePaperWhite = injectedData.toneMapGameNits / 80.f;
@@ -73,7 +81,7 @@ void main(
       r1.rgb = renodx::color::correct::GammaSafe(r1.rgb);
     }
     r1.rgb = renodx::color::bt2020::from::BT709(r1.rgb);
-
+    r1.rgb = max(0, r1.rgb);
     r1.rgb = renodx::color::pq::Encode(r1.rgb, 80.f);
   }
 
@@ -135,7 +143,6 @@ void main(
   r0.xyz = log2(r0.xyz);
   r0.xyz = float3(78.84375, 78.84375, 78.84375) * r0.xyz;
   o0.xyz = exp2(r0.xyz); */
-  // We don't need WCG UI
 
   o0.rgb = renodx::color::pq::Encode(r0.rgb, 1.f);
   o0.w = 1;
