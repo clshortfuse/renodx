@@ -1,26 +1,19 @@
-// ---- Created with 3Dmigoto v1.3.16 on Sat May  4 23:53:53 2024
+#include "./shared.h"
+
 Texture2D<float4> t0 : register(t0);
 
 SamplerState s0_s : register(s0);
 
-cbuffer cb0 : register(b0)
-{
-  float4 cb0[4];
-}
-
-
-
+cbuffer cb0 : register(b0) { float4 cb0[4]; }
 
 // 3Dmigoto declarations
 #define cmp -
 
-
-void main(
-  float4 v0 : TEXCOORD0,
-  float4 v1 : TEXCOORD1,
-  out float4 o0 : SV_Target0)
-{
-  float4 r0,r1,r2,r3,r4,r5,r6,r7,r8;
+void main(float4 v0
+          : TEXCOORD0, float4 v1
+          : TEXCOORD1, out float4 o0
+          : SV_Target0) {
+  float4 r0, r1, r2, r3, r4, r5, r6, r7, r8;
   uint4 bitmask, uiDest;
   float4 fDest;
 
@@ -82,7 +75,7 @@ void main(
     r1.x = saturate(abs(r1.z) * r1.x);
     r1.z = r1.y ? cb0[0].x : 0;
     r2.w = r1.y ? 0 : cb0[0].y;
-    r3.yz = r2.yy * float2(0.5,0.5) + v0.xy;
+    r3.yz = r2.yy * float2(0.5, 0.5) + v0.xy;
     r3.y = r1.y ? v0.x : r3.y;
     r3.z = r1.y ? r3.z : v0.y;
     r4.x = r3.y + -r1.z;
@@ -190,7 +183,7 @@ void main(
     r1.z = r1.y ? r1.z : r2.x;
     r2.x = -v0.y + r6.y;
     r1.w = r1.y ? r1.w : r2.x;
-    r2.xw = cmp(r3.yx < float2(0,0));
+    r2.xw = cmp(r3.yx < float2(0, 0));
     r3.x = r1.w + r1.z;
     r2.xz = cmp((int2)r2.zz != (int2)r2.xw);
     r2.w = 1 / r3.x;
@@ -210,6 +203,11 @@ void main(
   }
   o0.xyzw = r0.xyzw;
   o0.rgb = inputColor;
-  o0.rgb *= 203.f/80.f;
+
+  if (injectedData.toneMapGammaCorrection) {
+    o0.rgb = renodx::color::correct::GammaSafe(o0.rgb);
+  }
+
+  o0.rgb *= injectedData.toneMapGameNits / 80.f;
   return;
 }
