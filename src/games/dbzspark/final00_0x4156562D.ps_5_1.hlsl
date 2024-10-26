@@ -62,24 +62,38 @@ void main(
         injectedData.colorGradeHighlights,
         injectedData.colorGradeShadows,
         injectedData.colorGradeContrast,
-        injectedData.colorGradeSaturation);
+        1.f);  // We'll do saturation post tonemap
+
+    const float dicePaperWhite = injectedData.toneMapGameNits / 80.f;
+    const float dicePeakWhite = injectedData.toneMapPeakNits / 80.f;
+    const float highlightsShoulderStart = 0.3;  // Random value honestly
+    const float frostReinPeak = injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
 
     // Tonemap adjustments from color correctors
-    if (injectedData.toneMapDice) {
-      const float dicePaperWhite = injectedData.toneMapGameNits / 80.f;
-      const float dicePeakWhite = injectedData.toneMapPeakNits / 80.f;
-      const float highlightsShoulderStart = dicePaperWhite;
-
+    if (injectedData.toneMapDisplay == 1.f) {
       DICESettings config = DefaultDICESettings();
       config.Type = 1;
       config.ShoulderStart = highlightsShoulderStart;
 
       r1.rgb = DICETonemap(r1.rgb * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
+    } else if (injectedData.toneMapDisplay == 2.f) {
+      r1.rgb = renodx::tonemap::frostbite::BT709(r1.rgb, frostReinPeak);
+    } else if (injectedData.toneMapDisplay == 3.f) {
+      r1.rgb = renodx::tonemap::ReinhardScalable(r1.rgb, frostReinPeak);
     }
+
+    r1.rgb = renodx::color::grade::UserColorGrading(
+        r1.rgb,
+        1.f,
+        1.f,
+        1.f,
+        1.f,
+        injectedData.colorGradeSaturation);
 
     if (injectedData.toneMapGammaCorrection == 1.f) {
       r1.rgb = renodx::color::correct::GammaSafe(r1.rgb);
     }
+
     r1.rgb = renodx::color::bt2020::from::BT709(r1.rgb);
     r1.rgb = max(0, r1.rgb);
     r1.rgb = renodx::color::pq::Encode(r1.rgb, 80.f);

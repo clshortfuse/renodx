@@ -69,6 +69,17 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Vanilla", "None", "ACES", "RenoDX"},
     },
     new renodx::utils::settings::Setting{
+        .key = "toneMapDisplay",
+        .binding = &shader_injection.toneMapDisplay,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .can_reset = false,
+        .label = "Display Tone Mapper",
+        .section = "Tone Mapping",
+        .tooltip = "Sets an additional tonemapper run to map to peak",
+        .labels = {"Off", "DICE", "Reinhard", "Frostbite"},
+    },
+    new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
         .binding = &shader_injection.toneMapPeakNits,
         .default_value = 1000.f,
@@ -121,15 +132,6 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.toneMapType > 1; },
         .parse = [](float value) { return value * 0.01f; },
     },
-    new renodx::utils::settings::Setting{
-        .key = "toneMapDice",
-        .binding = &shader_injection.toneMapDice,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1.f,
-        .can_reset = false,
-        .label = "Apply DICE",
-        .section = "Tone Mapping",
-        .tooltip = "Applies DICE to clamp highlights"},
     new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
         .binding = &shader_injection.colorGradeExposure,
@@ -220,6 +222,7 @@ renodx::utils::settings::Settings settings = {
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
+  renodx::utils::settings::UpdateSetting("toneMapDisplay", 0.f);
   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 150.f);
   renodx::utils::settings::UpdateSetting("toneMapUINits", 120.f);
