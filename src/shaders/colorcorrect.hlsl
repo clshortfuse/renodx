@@ -53,21 +53,20 @@ float3 Hue(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
   if (strength == 0.f) return incorrect_color;
 
   float3 correct_lab = renodx::color::oklab::from::BT709(correct_color);
-  float3 correct_lch = renodx::color::oklch::from::OkLab(correct_lab);
 
   float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
-  float3 incorrect_lch = renodx::color::oklch::from::OkLab(incorrect_lab);
-  if (strength == 1.f) {
-    incorrect_lch[2] = correct_lch[2];
-  } else {
-    float old_chroma = incorrect_lch[1];
 
-    incorrect_lab.yz = lerp(incorrect_lab.yz, correct_lab.yz, strength);
-    incorrect_lch = renodx::color::oklch::from::OkLab(incorrect_lab);
-    incorrect_lch[1] = old_chroma;
+  float chrominance_pre_adjust = distance(incorrect_lab.yz, 0);
+
+  incorrect_lab.yz = lerp(incorrect_lab.yz, correct_lab.yz, strength);
+
+  float chrominance_post_adjust = distance(incorrect_lab.yz, 0);
+
+  if (chrominance_post_adjust != 0.f) {
+    incorrect_lab.yz *= chrominance_pre_adjust / chrominance_post_adjust;
   }
 
-  float3 color = renodx::color::bt709::from::OkLCh(incorrect_lch);
+  float3 color = renodx::color::bt709::from::OkLab(incorrect_lab);
   color = renodx::color::bt709::clamp::AP1(color);
   return color;
 }
