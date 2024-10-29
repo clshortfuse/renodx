@@ -122,7 +122,7 @@ void main(
     float3 lut_input = renodx::color::pq::from::BT2020(untonemapped, 100.f);
     float3 sampled = renodx::lut::Sample(t5, s5_s, lut_input);
     float3 post_lut = renodx::color::bt2020::from::PQ(sampled, 100.f);
-    r0.yzw = post_lut;
+    //r0.yzw = post_lut;
   
   
   r1.x = t0.Sample(s0_s, v0.xy).x;
@@ -158,7 +158,7 @@ void main(
     o0.xyz = r0.xyz;
   }
   
-  //o0.rgb = post_lut.rgb;
+  o0.rgb = post_lut.rgb;
   //o0.w = 1.f;
   return;
 }
