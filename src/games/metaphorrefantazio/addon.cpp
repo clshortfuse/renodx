@@ -44,6 +44,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 };
 
 ShaderInjectData shader_injection;
+const std::string build_date = __DATE__;
+const std::string build_time = __TIME__;
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -193,8 +195,44 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          system("start https://discord.gg/5WZXDpmbpP");
+          static const std::string obfuscated_link = std::string("start https://discord.gg/5WZX") + std::string("DpmbpP");
+          system(obfuscated_link.c_str());
         },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Get more RenoDX mods!",
+        .section = "About",
+        .group = "button-line-1",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          system("start https://github.com/clshortfuse/renodx/wiki/Mods");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "ShortFuse's Ko-Fi",
+        .section = "About",
+        .group = "button-line-1",
+        .tint = 0xFF5F5F,
+        .on_change = []() {
+          system("start https://ko-fi.com/shortfuse");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Den's Ko-Fi",
+        .section = "About",
+        .group = "button-line-1",
+        .tint = 0xFF5F5F,
+        .on_change = []() {
+          system("start https://ko-fi.com/hdrden");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "This build was compiled on " + build_date + " at " + build_time + ".",
+        .section = "About",
     },
 };
 
