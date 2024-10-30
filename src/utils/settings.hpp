@@ -10,6 +10,7 @@
 #include <include/reshade.hpp>
 
 #include "./mutex.hpp"
+#include "./date.hpp"
 
 #define ICON_FK_UNDO u8"\uf0e2"
 
