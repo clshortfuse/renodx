@@ -9,17 +9,6 @@
 
 #define DEBUG_LEVEL_0
 
-#include <embed/0x1F993880.h>  // Final
-#include <embed/0x70C6A8D7.h>  // Light Rays
-#include <embed/0x7EB16138.h>  // Overlays (PG background, boss fights UI)
-#include <embed/0xA177E041.h>  // Glow
-#include <embed/0xA3109C78.h>  // Bloom
-#include <embed/0xA5D96315.h>  // Glow
-#include <embed/0xA7108284.h>  // Tonemapper
-#include <embed/0xAC103037.h>  // Output
-#include <embed/0xC1787BC6.h>  // Tonemapper
-#include <embed/0xD8196629.h>  // LUT
-
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
@@ -28,19 +17,41 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
+#include <embed/0x2569985B.h>  // LUT
+#include <embed/0x31FE4421.h>  // LUT
+#include <embed/0x36E3A438.h>  // LUT
+#include <embed/0x4156562D.h>  // Final
+#include <embed/0x4F06C1AD.h>  // Output
+#include <embed/0x8C20620E.h>  // Output
+#include <embed/0x9A3DADB2.h>  // Output
+#include <embed/0xC2A711CC.h>  // LUT
+#include <embed/0xE2C936EB.h>  // LUT
+#include <embed/0xF554DE7A.h>  // Output
+
+#include <embed/0x5975CAFA.h>  // ColorCorrect
+#include <embed/0x753DE2A9.h>  // ColorCorrect
+#include <embed/0xAB3F1A02.h>  // ColorCorrect
+#include <embed/0xD80F99B3.h>  // ColorCorrect
+
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xD8196629),  // LUT
-    CustomShaderEntry(0x70C6A8D7),  // Light Rays
-    CustomShaderEntry(0xA177E041),  // Glow
-    CustomShaderEntry(0xA3109C78),  // Bloom
-    CustomShaderEntry(0xA5D96315),  // Glow
-    CustomShaderEntry(0xA7108284),  // Tonemapper
-    CustomShaderEntry(0xAC103037),  // Output
-    CustomShaderEntry(0xC1787BC6),  // Tonemapper
-    CustomShaderEntry(0x7EB16138),  // Overlays
-    CustomShaderEntry(0x1F993880),  // Final
+    CustomShaderEntry(0x2569985B),
+    CustomShaderEntry(0x31FE4421),
+    CustomShaderEntry(0x36E3A438),
+    CustomShaderEntry(0x4156562D),
+    CustomShaderEntry(0x4F06C1AD),
+    CustomShaderEntry(0x8C20620E),
+    CustomShaderEntry(0x9A3DADB2),
+    CustomShaderEntry(0xC2A711CC),
+    CustomShaderEntry(0xE2C936EB),
+    CustomShaderEntry(0xF554DE7A),
+
+    // Color correctors
+    CustomShaderEntry(0x753DE2A9),
+    CustomShaderEntry(0x5975CAFA),
+    CustomShaderEntry(0xAB3F1A02),
+    CustomShaderEntry(0xD80F99B3),
 };
 
 ShaderInjectData shader_injection;
@@ -52,12 +63,23 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 3.f,
         .can_reset = false,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
         .labels = {"Vanilla", "None", "ACES", "RenoDX"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapDisplay",
+        .binding = &shader_injection.toneMapDisplay,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .can_reset = false,
+        .label = "Display Tone Mapper",
+        .section = "Tone Mapping",
+        .tooltip = "Sets an additional tonemapper run to map to peak",
+        .labels = {"Off", "DICE", "Reinhard", "Frostbite"},
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
@@ -73,7 +95,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapGameNits",
         .binding = &shader_injection.toneMapGameNits,
-        .default_value = 130.f,
+        .default_value = 80.f,
         .label = "Game Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of 100% white in nits",
@@ -83,7 +105,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapUINits",
         .binding = &shader_injection.toneMapUINits,
-        .default_value = 100.f,
+        .default_value = 120.f,
         .label = "UI Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
@@ -185,6 +207,11 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = " - Please enable Native HDR in game!",
+        .section = "Instructions",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Special thanks to Shortfuse & the folks at HDR Den for their support! Join the HDR Den discord for help!",
         .section = "About",
     },
@@ -238,10 +265,12 @@ renodx::utils::settings::Settings settings = {
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
+  renodx::utils::settings::UpdateSetting("toneMapDisplay", 0.f);
   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 150.f);
   renodx::utils::settings::UpdateSetting("toneMapUINits", 120.f);
   renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 1.f);
+  renodx::utils::settings::UpdateSetting("toneMapDice", 1.f);
   renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 1.f);
   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
@@ -256,8 +285,8 @@ void OnPresetOff() {
 
 // NOLINTBEGIN(readability-identifier-naming)
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX Metaphor";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX Metaphor";
+extern "C" __declspec(dllexport) const char* NAME = "RenoDX DBZSPARK";
+extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX DBZSPARK";
 
 // NOLINTEND(readability-identifier-naming)
 
@@ -265,7 +294,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
+      renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
+        return device->get_api() == reshade::api::device_api::d3d12;
+      };
       renodx::mods::shader::force_pipeline_cloning = true;  // So the mod works with the toolkit
+      renodx::mods::shader::expected_constant_buffer_space = 50;
 
       // RGBA8_unorm
       /* renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
@@ -273,10 +306,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .new_format = reshade::api::format::r16g16b16a16_float,
       }); */
       // RGBA8_unorm_srgb
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      /* renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm_srgb,
           .new_format = reshade::api::format::r16g16b16a16_float,
-      });
+      }); */
 
       // RGB10A2_unorm
       /* renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
@@ -310,7 +343,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
 
-  renodx::mods::swapchain::Use(fdw_reason);
+  // renodx::mods::swapchain::Use(fdw_reason);
 
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
