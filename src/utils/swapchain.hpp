@@ -16,6 +16,7 @@
 #include <include/reshade.hpp>
 
 #include "./resource.hpp"
+#include "./device.hpp"
 
 namespace renodx::utils::swapchain {
 
@@ -214,15 +215,8 @@ static reshade::api::resource_view& GetDepthStencil(reshade::api::command_list* 
 
 static bool IsDirectX(reshade::api::swapchain* swapchain) {
   auto* device = swapchain->get_device();
-  switch (device->get_api()) {
-    case reshade::api::device_api::d3d9:
-    case reshade::api::device_api::d3d10:
-    case reshade::api::device_api::d3d11:
-    case reshade::api::device_api::d3d12:
-      return true;
-    default:
-      return false;
-  }
+  return device::IsDirectX(device);
+  
 }
 
 static std::optional<float> GetPeakNits(reshade::api::swapchain* swapchain) {

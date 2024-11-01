@@ -9,7 +9,6 @@
 #include <atomic>
 #include <mutex>
 #include <optional>
-#include <ratio>
 #include <shared_mutex>
 #include <thread>
 #include <unordered_map>
@@ -107,11 +106,13 @@ static bool CompileCustomShaders() {
 
       const bool is_hlsl = entry_path.extension().compare(".hlsl") == 0;
       const bool is_cso = entry_path.extension().compare(".cso") == 0;
-      if (!is_hlsl && !is_cso) continue;
+      const bool is_spv = entry_path.extension().compare(".spv") == 0;
+      if (!is_hlsl && !is_cso && !is_spv) continue;
 
       auto basename = entry_path.stem().string();
       std::string hash_string;
       std::string shader_target;
+      std::string shader_stage;
 
       if (is_hlsl) {
         auto length = basename.length();
@@ -121,11 +122,11 @@ static bool CompileCustomShaders() {
         if (shader_target[4] != '_') continue;
         // uint32_t versionMajor = shader_target[3] - '0';
         hash_string = basename.substr(length - strlen("12345678.xx_x_x"), 8);
-      } else if (is_cso) {
-        // As long as cso starts from "0x12345678", it's good, they don't need the shader type specified
+      } else if (is_cso || is_spv) {
+        // Binaries files must start with 0x12345678. The rest of the basename is ignored.
         if (basename.size() < 10) {
           std::stringstream s;
-          s << "CompileCustomShaders(Invalid cso file format: ";
+          s << "CompileCustomShaders(Invalid file format: ";
           s << basename;
           s << ")";
           reshade::log::message(reshade::log::level::warning, s.str().c_str());
@@ -133,7 +134,6 @@ static bool CompileCustomShaders() {
         }
         hash_string = basename.substr(2, 8);
       }
-      // Any other case (non hlsl non cso) is already earlied out above
 
       uint32_t shader_hash;
       try {
@@ -194,7 +194,7 @@ static bool CompileCustomShaders() {
           reshade::log::message(reshade::log::level::warning, s.str().c_str());
         }
 
-      } else if (is_cso) {
+      } else if (is_cso || is_spv) {
         try {
           custom_shader.compilation = utils::path::ReadBinaryFile(entry_path);
           shader_hashes_processed.emplace(shader_hash);
