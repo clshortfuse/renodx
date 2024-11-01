@@ -163,6 +163,7 @@ struct Config {
   float hue_correction_type;
   float hue_correction_strength;
   float3 hue_correction_color;
+  renodrt::Config reno_drt_config;
 };
 
 float3 UpgradeToneMap(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength) {
@@ -245,7 +246,8 @@ Config Create(
     reno_drt_flare,
     hue_correction_type,
     hue_correction_strength,
-    hue_correction_color
+    hue_correction_color,
+    renodrt::config::Create(),
   };
   return tm_config;
 }
