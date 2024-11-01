@@ -184,6 +184,9 @@ float BT709(float3 bt709) {
 float BT2020(float3 bt2020) {
   return dot(bt2020, BT2020_TO_XYZ_MAT[1].rgb);
 }
+float AP1(float3 ap1) {
+  return dot(ap1, AP1_TO_XYZ_MAT[1].rgb);
+}
 }  // namespace from
 }  // namespace y
 
@@ -206,12 +209,6 @@ float3 Decode(float3 in_color, float scaling = 10000.f) {
   return out_color * (10000.f / scaling);
 }
 
-namespace from {
-/// @deprecated - Use pq::Encode
-float3 BT2020(float3 bt2020_color, float scaling = 10000.f) {
-  return Encode(bt2020_color, scaling);
-}
-}  // namespace from
 }  // namespace pq
 
 namespace ictcp {
@@ -220,14 +217,12 @@ float3 BT709(float3 bt709_color) {
   float3 xyz_color = mul(BT709_TO_XYZ_MAT, bt709_color);
   float3 lms_color = mul(XYZ_TO_LMS_MAT, xyz_color);
 
-  float3 pq = pq::from::BT2020(lms_color, 100.0f);
-
   float3x3 mat = float3x3(
       0.5000, 0.5000, 0.0000,
       1.6137, -3.3234, 1.7097,
       4.3780, -4.2455, -0.1325);
 
-  return mul(mat, pq);
+  return mul(mat, pq::Encode(lms_color, 100.0f));
 }
 }  // namespace from
 }  // namespace ictcp

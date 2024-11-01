@@ -52,6 +52,16 @@ float4 BT709(float4 color) {
 }
 }  // namespace from
 }  // namespace srgba
+
+namespace pq {
+namespace from {
+/// @deprecated - Use pq::Encode
+float3 BT2020(float3 bt2020_color, float scaling = 10000.f) {
+  return Encode(bt2020_color, scaling);
+}
+}  // namespace from
+}  // namespace pq
+
 }  // namespace color
 
 namespace math {
@@ -64,8 +74,8 @@ float3 SafePow(float3 color, float exponent) {
 float SafePow(float color, float exponent) {
   return PowSafe(color, exponent);
 }
-}
 
+}  // namespace math
 }  // namespace renodx
 
 #endif  // SRC_SHADERS_DEPRECATED_HLSL_
