@@ -100,6 +100,24 @@ function(build_shader_target ADDON ADDON_PATH)
       list(APPEND SHADER_HEADER_FILES ${EMBED_FOLDER}/${SHADER_HASH}.h)
     endif()
   endforeach()
+
+  file(GLOB SHADER_BINARIES ${ADDON_PATH}/*.spv)
+  foreach(FILE ${SHADER_BINARIES})
+    cmake_path(GET FILE FILENAME FILENAME)
+    cmake_path(GET FILE PARENT_PATH TARGET_PATH)
+    string(REGEX MATCH "(0x[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F])(\\.(frag|vert))?\\.spv$" _ ${FILENAME} )
+    set(SHADER_HASH ${CMAKE_MATCH_1})
+    SET(EMBED_FOLDER ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include/embed)
+
+    if (SHADER_HASH)
+      add_custom_command(
+        OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.h
+        COMMAND embedfile ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}
+        DEPENDS ${FILE}
+      )
+      list(APPEND SHADER_HEADER_FILES ${EMBED_FOLDER}/${SHADER_HASH}.h)
+    endif()
+  endforeach()
   
   LIST(JOIN SHADER_HEADER_FILES " " SHADER_HEADER_FILE_ITEMS)
   add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES})
