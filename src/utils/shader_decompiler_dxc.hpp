@@ -50,6 +50,7 @@ enum class TokenizerState : uint32_t {
   DESCRIPTION_OUTPUT_SIG_TABLE_END,
   DESCRIPTION_SHADER_DEBUG_NAME,
   DESCRIPTION_SHADER_HASH,
+  DESCRIPTION_FUNCTIONALITY_NOTE,
   DESCRIPTION_PIPELINE_RUNTIME_TITLE,
   DESCRIPTION_PIPELINE_RUNTIME_WHITESPACE,
   DESCRIPTION_PIPELINE_RUNTIME_INFO,
@@ -238,7 +239,9 @@ class Decompiler {
       FromStringView(input, value);
     }
     output = std::format("{}", value);
-    if (output.find('.') == std::string::npos) {
+    bool has_dot = output.find('.') != std::string::npos;
+    bool has_plus = output.find('+') != std::string::npos;
+    if (!has_dot && !has_plus) {
       output += ".0f";
     } else {
       output += "f";
@@ -310,8 +313,8 @@ class Decompiler {
       {"27", "floor"},
       {"28", "ceil"},
       {"29", "trunc"},
-      {"83", "ddx_course"},
-      {"84", "ddy_course"},
+      {"83", "ddx_coarse"},
+      {"84", "ddy_coarse"},
       {"85", "ddx_fine"},
       {"86", "ddy_fine"},
   };
@@ -454,6 +457,7 @@ class Decompiler {
       NOINTERPOLATION,
       NOPERSPECTIVE,
       LINEAR,
+      CENTROID,
     } interp_mode;
 
     int32_t dyn_index = -1;
@@ -472,6 +476,7 @@ class Decompiler {
       if (input == "nointerpolation") return InterpMode::NOINTERPOLATION;
       if (input == "noperspective") return InterpMode::NOPERSPECTIVE;
       if (input == "linear") return InterpMode::LINEAR;
+      if (input == "centroid") return InterpMode::CENTROID;
       throw std::invalid_argument("Unknown InterpMode");
     }
 
@@ -590,7 +595,7 @@ class Decompiler {
     }
 
     explicit BufferDefinition(std::string_view line) {
-      static auto regex = std::regex{R"(; ((?:cbuffer)|(?:Resource bind info for))(\s*\w*))"};
+      static auto regex = std::regex{R"(; ((?:cbuffer)|(?:Resource bind info for))\s*(.*))"};
       auto [bufferType, name] = StringViewMatch<2>(line, regex);
       this->buffer_type = BufferTypeFromString(bufferType);
       this->name = name;
@@ -669,15 +674,20 @@ class Decompiler {
 
     explicit ResourceDescription(std::string_view line) {
       // ; _31_33                            cbuffer      NA          NA     CB0            cb0     1
-      static auto regex = std::regex{R"(; (.{30}\S*)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*)"};
+      static auto regex = std::regex{R"(; (.{30}\S*)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+) (.{14})(.*))"};
       auto [name, type, format, dimensions, id, hlslBinding, count] = StringViewMatch<7>(line, regex);
       this->name = StringViewTrim(name);
       this->type = ResourceTypeFromString(type);
       this->format = ResourceFormatFromString(format);
       this->dimensions = dimensions;
       this->id = id;
-      this->hlsl_binding = hlslBinding;
-      FromStringView(count, this->count);
+      this->hlsl_binding = StringViewTrim(hlslBinding);
+      auto count_trimmed = StringViewTrim(count);
+      if (count_trimmed == "unbounded") {
+        this->count = 0;
+      } else {
+        FromStringView(count_trimmed, this->count);
+      }
     }
   };
   struct Resource : Metadata {
@@ -687,14 +697,25 @@ class Decompiler {
     uint32_t space;
     uint32_t signature_index;
     uint32_t signature_range;
+    std::optional<uint32_t> array_size;
 
     explicit Resource(
         std::vector<std::string_view>& metadata,
         std::span<ResourceDescription> resource_descriptions,
         std::string prefix) : Metadata() {
       // !6 = !{i32 0, %"class.Texture2D<vector<float, 4> >"* undef, !"", i32 0, i32 32, i32 1, i32 2, i32 0, !7}
+      // !6 = !{i32 0, [32768 x %"class.Texture2D<vector<float, 4> >"]* undef, !"", i32 1, i32 0, i32 32768, i32 2, i32 0, !7}
+      // !11 = !{i32 0, [0 x %struct.SamplerState]* undef, !"", i32 1, i32 0, i32 -1, i32 0, null}
       FromStringView(ParseKeyValue(metadata[0])[1], this->record_id);
       this->pointer = ParseKeyValue(metadata[1])[0];
+      static auto array_regex = std::regex{R"(^(?:\[(\S+) x ).*)"};
+      const auto [array_size] = StringViewMatch<1>(this->pointer, array_regex);
+      if (!array_size.empty()) {
+        uint32_t value;
+        FromStringView(array_size, value);
+        this->array_size = value;
+      }
+
       this->name = ParseString(metadata[2]);
       FromStringView(ParseKeyValue(metadata[3])[1], this->space);
       FromStringView(ParseKeyValue(metadata[4])[1], this->signature_index);
@@ -868,9 +889,11 @@ class Decompiler {
         std::span<ResourceDescription> resource_descriptions,
         std::map<std::string_view, std::vector<std::string_view>>& raw_metadata)
         : Resource(metadata, resource_descriptions, "t") {
-      static auto pointer_regex = std::regex{R"(^%"class\.([^<]+)<(?:vector<)?([^,>]+)(?:, ([^>]+)>)? ?>"\*)"};
-      const auto [class_name, base_type, type_count] = StringViewMatch<3>(this->pointer, pointer_regex);
-      this->data_type = std::format("{}{}", base_type, type_count);
+      static auto pointer_regex = std::regex{R"(^(?:\[(\S+) x )?%"class\.([^<]+)<(?:vector<)?([^,>]+)(?:, ([^>]+)>)? ?>"\]?\*)"};
+      const auto [array_size, class_name, base_type, type_count] = StringViewMatch<4>(this->pointer, pointer_regex);
+
+      auto base_type_fixed = DataType::FixBaseType(base_type);
+      this->data_type = std::format("{}{}", base_type_fixed, type_count);
 
       // https://github.com/microsoft/DirectXShaderCompiler/blob/b766b432678cf5f7a93567d253bb5f7fd8a0b2c7/docs/DXIL.rst#L1047
       uint32_t shape;
@@ -956,6 +979,12 @@ class Decompiler {
     size_t vector_size;
     std::string data_type;
 
+    static std::string FixBaseType(std::string_view data_type) {
+      if (data_type == "i32") return "int";
+      if (data_type == "unsigned int") return "uint";
+      return std::string(data_type);
+    }
+
     explicit DataType(std::string_view line) {
       static auto regex = std::regex{R"(^(?:\[(\S+) x )?(?:<(\S+) x )?(\w+)(\*)?>?\]?$)"};
       const auto [array_size, vector_size, data_type, is_pointer] = StringViewMatch<4>(line, regex);
@@ -969,11 +998,7 @@ class Decompiler {
       } else {
         FromStringView(vector_size, this->vector_size);
       }
-      if (data_type == "i32") {
-        this->data_type = "int";
-      } else {
-        this->data_type = data_type;
-      }
+      this->data_type = FixBaseType(data_type);
     }
   };
 
@@ -1001,13 +1026,18 @@ class Decompiler {
     }
   };
 
+  struct ResourceBindingVariable {
+    std::string name;
+    uint32_t range_index;
+  };
+
   struct PreprocessState {
     std::vector<Signature> input_signature;
     std::vector<Signature> output_signature;
     std::vector<ResourceDescription> resource_descriptions;
     std::map<std::string, std::string> global_variables;
     std::vector<std::string> global_variables_decompiled;
-    std::map<std::string, std::pair<std::string, uint32_t>> resource_binding_variables;
+    std::map<std::string, ResourceBindingVariable> resource_binding_variables;
     std::vector<SRVResource> srv_resources;
     std::vector<UAVResource> uav_resources;
     std::vector<CBVResource> cbv_resources;
@@ -1145,30 +1175,39 @@ class Decompiler {
         if (functionName == "@dx.op.createHandle") {
           //   %dx.types.Handle @dx.op.createHandle(i32 57, i8 2, i32 0, i32 0, i1 false)  ; CreateHandle(resourceClass,rangeId,index,nonUniformIndex)
           auto [opNumber, resource_class, range_id, index, nonUniformIndex] = StringViewSplit<5>(functionParamsString, param_regex, 2);
-          uint32_t index_value = std::stoi(std::string(index));
+          // uint32_t index_value = std::stoi(std::string(index));
           uint32_t range_id_value = std::stoi(std::string(range_id));
           uint32_t range_count = 0;
-          auto check_resource = [&](const Resource& resource) {
-            return (resource.signature_index == index_value) && (range_id_value == range_count++);
-          };
+          // auto check_resource = [&](const Resource& resource) {
+          //   return (resource.signature_index == index_value) && (range_id_value == range_count++);
+          // };
+          std::string hint;
+          Resource* resource;
           if (resource_class == "0") {
-            auto srv = preprocess_state.srv_resources[range_id_value];
-            decompiled = std::format("// texture _{} = {};", variable, srv.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {srv.name, range_id_value};
+            resource = &preprocess_state.srv_resources[range_id_value];
+            hint = "texture";
           } else if (resource_class == "1") {
-            auto uav = preprocess_state.srv_resources[range_id_value];
-            preprocess_state.resource_binding_variables[std::string(variable)] = {uav.name, range_id_value};
+            resource = &preprocess_state.srv_resources[range_id_value];
+            hint = "rwtexture";
           } else if (resource_class == "2") {
-            auto cbv = preprocess_state.cbv_resources[range_id_value];
-            decompiled = std::format("// cbuffer _{} = {};", variable, cbv.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {cbv.name, range_id_value};
+            resource = &preprocess_state.cbv_resources[range_id_value];
+            hint = "cbuffer";
           } else if (resource_class == "3") {
-            auto sampler = preprocess_state.sampler_resources[range_id_value];
-            decompiled = std::format("// SamplerState _{} = {};", variable, sampler.name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {sampler.name, range_id_value};
+            resource = &preprocess_state.sampler_resources[range_id_value];
+            hint = "SamplerState";
           } else {
             throw std::invalid_argument("Unknown resource type");
           }
+          std::string name = resource->name;
+          if (resource->array_size.has_value()) {
+            name = std::format("{}[{}]", name, ParseInt(index));
+          }
+          preprocess_state.resource_binding_variables[std::string(variable)] = {
+              .name = name,
+              .range_index = range_id_value,
+          };
+          decompiled = std::format("// {} _{} = {};", hint, variable, name);
+
         } else if (functionName == "@dx.op.createHandleFromBinding") {
           // %dx.types.Handle @dx.op.createHandleFromBinding(i32 217, %dx.types.ResBind { i32 4, i32 4, i32 9, i8 0 }, i32 4, i1 false)  ; CreateHandleFromBinding(bind,index,nonUniformIndex)
           auto [opNumber, bind, index, nonUniformIndex] = StringViewSplit<4>(functionParamsString, param_regex, 2);
@@ -1184,46 +1223,62 @@ class Decompiler {
             resource_class = inner_params[3];
           }
 
-          int index_value;
           int space_value;
           int bind_start_value;
-          FromStringView(index, index_value);
           FromStringView(space, space_value);
           FromStringView(bind_start, bind_start_value);
-
+          std::string name;
+          uint32_t range_index;
+          std::string hint;
           if (resource_class == "0") {
             auto srv = std::find_if(preprocess_state.srv_resources.begin(), preprocess_state.srv_resources.end(), [&](SRVResource& resource) {
               return resource.space == space_value && resource.signature_index == bind_start_value;
             });
-            int real_index = srv - preprocess_state.srv_resources.begin();
-
-            decompiled = std::format("// texture _{} = {};", variable, srv->name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {srv->name, real_index};
+            range_index = srv - preprocess_state.srv_resources.begin();
+            name = srv->name;
+            if (srv->array_size.has_value()) {
+              name = std::format("{}[{}]", name, ParseInt(index));
+            }
+            hint = "texture";
           } else if (resource_class == "1") {
             auto uav = std::find_if(preprocess_state.uav_resources.begin(), preprocess_state.uav_resources.end(), [&](UAVResource& resource) {
               return resource.space == space_value && resource.signature_index == bind_start_value;
             });
-            int real_index = uav - preprocess_state.uav_resources.begin();
-            decompiled = std::format("// rwtexture _{} = {};", variable, uav->name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {uav->name, real_index};
+            range_index = uav - preprocess_state.uav_resources.begin();
+            name = uav->name;
+            if (uav->array_size.has_value()) {
+              name = std::format("{}[{}]", name, ParseInt(index));
+            }
+            hint = "rwtexture";
           } else if (resource_class == "2") {
             auto cbv = std::find_if(preprocess_state.cbv_resources.begin(), preprocess_state.cbv_resources.end(), [&](CBVResource& resource) {
               return resource.space == space_value && resource.signature_index == bind_start_value;
             });
-            int real_index = cbv - preprocess_state.cbv_resources.begin();
-            decompiled = std::format("// cbuffer _{} = {}; // index={}", variable, cbv->name, real_index);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {cbv->name, real_index};
+            range_index = cbv - preprocess_state.cbv_resources.begin();
+            name = cbv->name;
+            if (cbv->array_size.has_value()) {
+              name = std::format("{}[{}]", name, ParseInt(index));
+            }
+            hint = "cbuffer";
           } else if (resource_class == "3") {
             auto sampler = std::find_if(preprocess_state.sampler_resources.begin(), preprocess_state.sampler_resources.end(), [&](SamplerResource& resource) {
               return resource.space == space_value && resource.signature_index == bind_start_value;
             });
-            int real_index = sampler - preprocess_state.sampler_resources.begin();
-
-            decompiled = std::format("// SamplerState _{} = {};", variable, sampler->name);
-            preprocess_state.resource_binding_variables[std::string(variable)] = {sampler->name, real_index};
+            range_index = sampler - preprocess_state.sampler_resources.begin();
+            name = sampler->name;
+            if (sampler->array_size.has_value()) {
+              name = std::format("{}[{}]", name, ParseInt(index));
+            }
+            hint = "SamplerState";
           } else {
             throw std::invalid_argument("Unknown resource type");
           }
+
+          preprocess_state.resource_binding_variables[std::string(variable)] = {
+              .name = name,
+              .range_index = range_index,
+          };
+          decompiled = std::format("// {} _{} = {};", hint, variable, name);
         } else if (functionName == "@dx.op.annotateHandle") {
           // %4 = call %dx.types.Handle @dx.op.annotateHandle(i32 216, %dx.types.Handle %3, %dx.types.ResourceProperties { i32 13, i32 644 })  ; AnnotateHandle(res,props)  resource: CBuffer
           auto [opNumber, res, props] = StringViewSplit<3>(functionParamsString, param_regex, 2);
@@ -1261,7 +1316,8 @@ class Decompiler {
         } else if (functionName == "@dx.op.cbufferLoadLegacy.f32") {
           auto [opNumber, handle, regIndex] = StringViewSplit<3>(functionParamsString, param_regex, 2);
           auto ref = std::string{handle.substr(1)};
-          auto& cbv_resource = preprocess_state.cbv_resources[preprocess_state.resource_binding_variables.at(ref).second];
+          auto [binding_name, range_index] = preprocess_state.resource_binding_variables.at(ref);
+          auto& cbv_resource = preprocess_state.cbv_resources[range_index];
 
           uint32_t cbv_variable_index;
           FromStringView(regIndex, cbv_variable_index);
@@ -1274,7 +1330,8 @@ class Decompiler {
           // %18 = call %dx.types.CBufRet.i32 @dx.op.cbufferLoadLegacy.i32(i32 59, %dx.types.Handle %4, i32 40)  ; CBufferLoadLegacy(handle,regIndex)
           auto [opNumber, handle, regIndex] = StringViewSplit<3>(functionParamsString, param_regex, 2);
           auto ref = std::string{handle.substr(1)};
-          auto& cbv_resource = preprocess_state.cbv_resources[preprocess_state.resource_binding_variables.at(ref).second];
+          auto [binding_name, range_index] = preprocess_state.resource_binding_variables.at(ref);
+          auto& cbv_resource = preprocess_state.cbv_resources[range_index];
 
           uint32_t cbv_variable_index;
           FromStringView(regIndex, cbv_variable_index);
@@ -1313,7 +1370,7 @@ class Decompiler {
         } else if (functionName == "@dx.op.binary.f32") {
           auto [opNumber, a, b] = StringViewSplit<3>(functionParamsString, param_regex, 2);
           if (auto pair = BINARY_FLOAT_OPS.find(std::string(opNumber));
-              pair != UNARY_BITS_OPS.end()) {
+              pair != BINARY_FLOAT_OPS.end()) {
             decompiled = std::format("{} _{} = {}({}, {});", ParseType(type), variable, pair->second, ParseFloat(a), ParseFloat(b));
           } else {
             throw std::invalid_argument("Unknown @dx.op.binary.f32");
@@ -1321,7 +1378,7 @@ class Decompiler {
         } else if (functionName == "@dx.op.binary.i32") {
           auto [opNumber, a, b] = StringViewSplit<3>(functionParamsString, param_regex, 2);
           if (auto pair = BINARY_INT32_OPS.find(std::string(opNumber));
-              pair != UNARY_BITS_OPS.end()) {
+              pair != BINARY_INT32_OPS.end()) {
             decompiled = std::format("{} _{} = {}({}, {});", ParseType(type), variable, pair->second, ParseInt(a), ParseInt(b));
           } else {
             throw std::invalid_argument("Unknown @dx.op.binary.f32");
@@ -1334,7 +1391,8 @@ class Decompiler {
           const bool has_offset_y = offset1 != "undef";
           const bool has_offset_z = offset2 != "undef";
           std::string coords;
-          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref_resource).second];
+          auto [binding_name, range_index] = preprocess_state.resource_binding_variables.at(ref_resource);
+          auto srv_resource = preprocess_state.srv_resources[range_index];
           switch (srv_resource.shape) {
             case Resource::ResourceKind::Texture1D:
               coords = std::format("int2({}, {})", ParseInt(coord0), ParseInt(mipLevelOrSampleCount));
@@ -1366,9 +1424,9 @@ class Decompiler {
             offset = std::format("{}", ParseInt(offset0));
           }
           if (offset == "undef" || offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
-            decompiled = std::format("{} _{} = {}.Load({});", srv_resource.data_type, variable, srv_resource.name, coords);
+            decompiled = std::format("{} _{} = {}.Load({});", srv_resource.data_type, variable, binding_name, coords);
           } else {
-            decompiled = std::format("{} _{} = {}.Load({}, {});", srv_resource.data_type, variable, srv_resource.name, coords, offset);
+            decompiled = std::format("{} _{} = {}.Load({}, {});", srv_resource.data_type, variable, binding_name, coords, offset);
           }
         } else if (functionName == "@dx.op.sample.f32") {
           //  call %dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, %dx.types.Handle %1, %dx.types.Handle %2, float %4, float %5, float undef, float undef, i32 0, i32 0, i32 undef, float undef)  ; Sample(srv,sampler,coord0,coord1,coord2,coord3,offset0,offset1,offset2,clamp)
@@ -1401,12 +1459,14 @@ class Decompiler {
             throw std::invalid_argument("Unknown clamp");
           }
 
-          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables[ref_resource].second];
-          auto sampler_resource = preprocess_state.sampler_resources[preprocess_state.resource_binding_variables[ref_sampler].second];
+          auto [srv_name, srv_range_index] = preprocess_state.resource_binding_variables.at(ref_resource);
+          auto srv_resource = preprocess_state.srv_resources[srv_range_index];
+          auto [sampler_name, sampler_range_index] = preprocess_state.resource_binding_variables.at(ref_sampler);
+          auto sampler_resource = preprocess_state.sampler_resources[sampler_range_index];
           if (offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
-            decompiled = std::format("{} _{} = {}.Sample({}, {});", srv_resource.data_type, variable, srv_resource.name, sampler_resource.name, coords);
+            decompiled = std::format("{} _{} = {}.Sample({}, {});", srv_resource.data_type, variable, srv_name, sampler_name, coords);
           } else {
-            decompiled = std::format("{} _{} = {}.Sample({}, {}, {});", srv_resource.data_type, variable, srv_resource.name, sampler_resource.name, coords, offset);
+            decompiled = std::format("{} _{} = {}.Sample({}, {}, {});", srv_resource.data_type, variable, srv_name, sampler_name, coords, offset);
           }
         } else if (functionName == "@dx.op.sampleLevel.f32") {
           auto [opNumber, srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, LOD] = StringViewSplit<11>(functionParamsString, param_regex, 2);
@@ -1434,12 +1494,14 @@ class Decompiler {
             offset = std::format("{}", ParseInt(offset0));
           }
 
-          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref_resource).second];
-          auto sampler_resource = preprocess_state.sampler_resources[preprocess_state.resource_binding_variables.at(ref_sampler).second];
+          auto [srv_name, srv_range_index] = preprocess_state.resource_binding_variables.at(ref_resource);
+          auto srv_resource = preprocess_state.srv_resources[srv_range_index];
+          auto [sampler_name, sampler_range_index] = preprocess_state.resource_binding_variables.at(ref_sampler);
+          auto sampler_resource = preprocess_state.sampler_resources[sampler_range_index];
           if (offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
-            decompiled = std::format("{} _{} = {}.SampleLevel({}, {}, {});", srv_resource.data_type, variable, srv_resource.name, sampler_resource.name, coords, ParseFloat(LOD));
+            decompiled = std::format("{} _{} = {}.SampleLevel({}, {}, {});", srv_resource.data_type, variable, srv_name, sampler_name, coords, ParseFloat(LOD));
           } else {
-            decompiled = std::format("{} _{} = {}.SampleLevel({}, {}, {}, {});", srv_resource.data_type, variable, srv_resource.name, sampler_resource.name, coords, ParseFloat(LOD), offset);
+            decompiled = std::format("{} _{} = {}.SampleLevel({}, {}, {}, {});", srv_resource.data_type, variable, srv_name, sampler_name, coords, ParseFloat(LOD), offset);
           }
         } else if (functionName == "@dx.op.dot2.f32") {
           auto [opNumber, ax, ay, bx, by] = StringViewSplit<5>(functionParamsString, param_regex, 2);
@@ -1461,28 +1523,31 @@ class Decompiler {
         } else if (functionName == "@dx.op.rawBufferLoad.f32") {
           auto [opNumber, srv, index, elementOffset, mask, alignment] = StringViewSplit<6>(functionParamsString, param_regex, 2);
           auto ref = std::string{srv.substr(1)};
-          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref).second];
-          decompiled = std::format("float4 _{} = {}[{}].data[{} / {}];", variable, srv_resource.name, ParseInt(index), ParseInt(elementOffset), ParseInt(alignment));
+
+          auto [srv_name, srv_range_index] = preprocess_state.resource_binding_variables.at(ref);
+          decompiled = std::format("float4 _{} = {}[{}].data[{} / {}];", variable, srv_name, ParseInt(index), ParseInt(elementOffset), ParseInt(alignment));
         } else if (functionName == "@dx.op.rawBufferLoad.i32") {
           auto [opNumber, srv, index, elementOffset, mask, alignment] = StringViewSplit<6>(functionParamsString, param_regex, 2);
           auto ref = std::string{srv.substr(1)};
-          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref).second];
-          decompiled = std::format("int4 _{} = {}[{}].data[{} / {}];", variable, srv_resource.name, ParseInt(index), ParseInt(elementOffset), ParseInt(alignment));
+          auto [srv_name, srv_range_index] = preprocess_state.resource_binding_variables.at(ref);
+          decompiled = std::format("int4 _{} = {}[{}].data[{} / {}];", variable, srv_name, ParseInt(index), ParseInt(elementOffset), ParseInt(alignment));
         } else if (functionName == "@dx.op.bufferLoad.i32") {
           // call %dx.types.ResRet.i32 @dx.op.bufferLoad.i32(i32 68, %dx.types.Handle %31, i32 %28, i32 undef)  ; BufferLoad(srv,index,wot)
           auto [opNumber, srv, index, wot] = StringViewSplit<4>(functionParamsString, param_regex, 2);
           auto ref = std::string{srv.substr(1)};
-          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref).second];
+          auto [srv_name, srv_range_index] = preprocess_state.resource_binding_variables.at(ref);
+          auto srv_resource = preprocess_state.srv_resources[srv_range_index];
           if (wot != "undef") {
-            decompiled = std::format("{} _{} = {}[{}];", srv_resource.data_type, variable, srv_resource.name, ParseInt(index));
+            decompiled = std::format("{} _{} = {}[{}];", srv_resource.data_type, variable, srv_name, ParseInt(index));
           }
         } else if (functionName == "@dx.op.bufferLoad.f32") {
           // call %dx.types.ResRet.i32 @dx.op.bufferLoad.i32(i32 68, %dx.types.Handle %31, i32 %28, i32 undef)  ; BufferLoad(srv,index,wot)
           auto [opNumber, srv, index, wot] = StringViewSplit<4>(functionParamsString, param_regex, 2);
           auto ref = std::string{srv.substr(1)};
-          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref).second];
+          auto [srv_name, srv_range_index] = preprocess_state.resource_binding_variables.at(ref);
+          auto srv_resource = preprocess_state.srv_resources[srv_range_index];
           if (wot != "undef") {
-            decompiled = std::format("{} _{} = {}[{}];", srv_resource.data_type, variable, srv_resource.name, ParseInt(index));
+            decompiled = std::format("{} _{} = {}[{}];", srv_resource.data_type, variable, srv_name, ParseInt(index));
           }
         } else if (functionName == "@dx.op.threadId.i32") {
         } else if (functionName == "@dx.op.threadIdInGroup.i32") {
@@ -1495,7 +1560,8 @@ class Decompiler {
           auto [opNumber, handle, mip_level] = StringViewSplit<3>(functionParamsString, param_regex, 2);
 
           auto ref_resource = std::string{handle.substr(1)};
-          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables.at(ref_resource).second];
+          auto [srv_name, srv_range_index] = preprocess_state.resource_binding_variables.at(ref_resource);
+          auto srv_resource = preprocess_state.srv_resources[srv_range_index];
           if (mip_level != "0") {
             std::cerr << "Unexpected mipLevel: " << mip_level << "\n";
             throw std::invalid_argument("Unexpected mipLevel");
@@ -1503,14 +1569,14 @@ class Decompiler {
           switch (srv_resource.shape) {
             case SRVResource::ResourceKind::Texture1D:
 
-              decompiled = std::format("uint _{}; {}.GetDimensions(_{});", variable, srv_resource.name, variable);
+              decompiled = std::format("uint _{}; {}.GetDimensions(_{});", variable, srv_name, variable);
               break;
             case SRVResource::ResourceKind::Texture2D:
-              decompiled = std::format("uint2 _{}; {}.GetDimensions(_{}.x, _{}.y);", variable, srv_resource.name, variable, variable);
+              decompiled = std::format("uint2 _{}; {}.GetDimensions(_{}.x, _{}.y);", variable, srv_name, variable, variable);
               break;
             case SRVResource::ResourceKind::Texture2DArray:
             case SRVResource::ResourceKind::Texture3D:
-              decompiled = std::format("uint3 _{}; {}.GetDimensions(_{}.x, _{}.y, _{}.z);", variable, srv_resource.name, variable, variable, variable);
+              decompiled = std::format("uint3 _{}; {}.GetDimensions(_{}.x, _{}.y, _{}.z);", variable, srv_name, variable, variable, variable);
               break;
             default:
               std::cerr << "Unexpected shape: " << Resource::ResourceKindString(srv_resource.shape) << "\n";
@@ -1546,11 +1612,61 @@ class Decompiler {
             offset = std::format("{}", ParseInt(offset0));
           }
 
-          auto srv_resource = preprocess_state.srv_resources[preprocess_state.resource_binding_variables[ref_resource].second];
-          auto sampler_resource = preprocess_state.sampler_resources[preprocess_state.resource_binding_variables[ref_sampler].second];
+          auto [srv_name, srv_range_index] = preprocess_state.resource_binding_variables.at(ref_resource);
+          auto srv_resource = preprocess_state.srv_resources[srv_range_index];
+          auto [sampler_name, sampler_range_index] = preprocess_state.resource_binding_variables.at(ref_sampler);
+          auto sampler_resource = preprocess_state.sampler_resources[sampler_range_index];
 
-          decompiled = std::format("{} _{} = {}.SampleCmpLevelZero({}, {}, {});", srv_resource.data_type, variable, srv_resource.name, sampler_resource.name, coords, ParseFloat(compareValue));
+          decompiled = std::format("{} _{} = {}.SampleCmpLevelZero({}, {}, {});", srv_resource.data_type, variable, srv_name, sampler_name, coords, ParseFloat(compareValue));
+        } else if (functionName == "@dx.op.textureGather.i32" || functionName == "@dx.op.textureGather.f32") {
+          // %67 = call %dx.types.ResRet.i32 @dx.op.textureGather.i32(i32 73, %dx.types.Handle %3, %dx.types.Handle %11, float %53, float %54, float undef, float undef, i32 0, i32 0, i32 0)  ; TextureGather(srv,sampler,coord0,coord1,coord2,coord3,offset0,offset1,channel)
+          auto [op, srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, channel] = StringViewSplit<10>(functionParamsString, param_regex, 2);
+          auto ref_resource = std::string{srv.substr(1)};
+          auto ref_sampler = std::string{sampler.substr(1)};
 
+          const bool has_coord_z = coord2 != "undef";
+          const bool has_coord_w = coord3 != "undef";
+          const bool has_offset_y = offset1 != "undef";
+          std::string coords;
+          if (has_coord_w) {
+            coords = std::format("float4({}, {}, {}, {})", ParseFloat(coord0), ParseFloat(coord1), ParseFloat(coord2), ParseFloat(coord3));
+          } else if (has_coord_z) {
+            coords = std::format("float3({}, {}, {})", ParseFloat(coord0), ParseFloat(coord1), ParseFloat(coord2));
+          } else {
+            coords = std::format("float2({}, {})", ParseFloat(coord0), ParseFloat(coord1));
+          }
+          std::string offset;
+          if (has_offset_y) {
+            offset = std::format("int2({}, {})", ParseInt(offset0), ParseInt(offset1));
+          } else {
+            offset = std::format("{}", ParseInt(offset0));
+          }
+
+          auto [srv_name, srv_range_index] = preprocess_state.resource_binding_variables.at(ref_resource);
+          auto srv_resource = preprocess_state.srv_resources[srv_range_index];
+          auto [sampler_name, sampler_range_index] = preprocess_state.resource_binding_variables.at(ref_sampler);
+          auto sampler_resource = preprocess_state.sampler_resources[sampler_range_index];
+          std::string channel_string;
+          if (channel == "0") {
+            channel_string = "Red";
+          } else if (channel == "1") {
+            channel_string = "Green";
+          } else if (channel == "2") {
+            channel_string = "Blue";
+          } else if (channel == "3") {
+            channel_string = "Alpha";
+          } else {
+            throw std::exception("Unknown Gather channel.");
+          }
+          if (functionName == "@dx.op.textureGather.i32") {
+            decompiled = std::format("int4 _{} = {}.Gather{}({}, {});", variable, srv_name, channel_string, sampler_name, coords);
+          } else {
+            decompiled = std::format("float4 _{} = {}.Gather{}({}, {});", variable, srv_name, channel_string, sampler_name, coords);
+          }
+        } else if (functionName == "@dx.op.waveReadLaneFirst.f32") {
+          // %504 = call float @dx.op.waveReadLaneFirst.f32(i32 118, float %503)  ; WaveReadLaneFirst(value)
+          auto [op, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
+          decompiled = std::format("float _{} = WaveReadLaneFirst({});", variable, ParseFloat(value));
         } else {
           std::cerr << line << "\n";
           std::cerr << "Function name: " << functionName << "\n";
@@ -1898,7 +2014,7 @@ class Decompiler {
       } else if (functionName == "@dx.op.discard") {
         // call void @dx.op.discard(i32 82, i1 true)  ; Discard(condition)
         auto [opNumber, condition] = StringViewSplit<2>(functionParamsString, param_regex, 2);
-        decompiled = std::format("discard({})", ParseBool(condition));
+        decompiled = std::format("if ({}) discard;", ParseBool(condition));
       } else if (functionName == "@dx.op.barrier") {
         // @dx.op.barrier(i32 80, i32 9)  ; Barrier(barrierMode)
         auto [opNumber, barrierMode] = StringViewSplit<2>(functionParamsString, param_regex, 2);
@@ -1932,7 +2048,8 @@ class Decompiler {
         const bool has_coord_y = coord1 != "undef";
         const bool has_coord_z = coord2 != "undef";
         std::string coords;
-        auto uav_resource = preprocess_state.uav_resources[preprocess_state.resource_binding_variables.at(ref_resource).second];
+        auto [uav_name, uav_range_index] = preprocess_state.resource_binding_variables.at(ref_resource);
+        auto uav_resource = preprocess_state.uav_resources[uav_range_index];
         if (has_coord_z) {
           coords = std::format("int3({}, {}, {})", ParseInt(coord0), ParseInt(coord1), ParseInt(coord2));
         } else if (has_coord_y) {
@@ -1954,7 +2071,7 @@ class Decompiler {
           value = std::format("{}", ParseFloat(value0));
         }
 
-        decompiled = std::format("{}[{}] = {};", uav_resource.name, coords, value);
+        decompiled = std::format("{}[{}] = {};", uav_name, coords, value);
 
       } else {
         std::cerr << line << "\n";
@@ -2190,6 +2307,8 @@ class Decompiler {
               state = TokenizerState::DESCRIPTION_RESOURCE_BINDINGS_TITLE;
             } else if (line == "; ViewId state:") {
               state = TokenizerState::DESCRIPTION_VIEW_ID_STATE_TITLE;
+            } else if (line == "; Note: shader requires additional functionality:") {
+              state = TokenizerState::DESCRIPTION_FUNCTIONALITY_NOTE;
             } else {
               throw std::invalid_argument("Unexpected description entry");
             }
@@ -2199,6 +2318,12 @@ class Decompiler {
           case TokenizerState::DESCRIPTION_INPUT_SIG_TABLE_HEADER:
           case TokenizerState::DESCRIPTION_INPUT_SIG_TABLE_DIVIDER:
             state++;
+            line_number++;
+            break;
+          case TokenizerState::DESCRIPTION_FUNCTIONALITY_NOTE:
+            if (line == ";") {
+              state = TokenizerState::DESCRIPTION_WHITESPACE;
+            }
             line_number++;
             break;
           case TokenizerState::DESCRIPTION_INPUT_SIG_TABLE_ROW:
@@ -2625,6 +2750,13 @@ class Decompiler {
       }
 
       string_stream << " " << srv_resource.name;
+      if (srv_resource.array_size.has_value()) {
+        string_stream << "[";
+        if (srv_resource.array_size != 0) {
+          string_stream << srv_resource.array_size.value();
+        }
+        string_stream << "]";
+      }
       string_stream << " : register(t" << srv_resource.signature_index;
       if (srv_resource.space != 0u) {
         string_stream << ", space" << srv_resource.space;
@@ -2643,6 +2775,13 @@ class Decompiler {
       }
 
       string_stream << " " << uav_resource.name;
+      if (uav_resource.array_size.has_value()) {
+        string_stream << "[";
+        if (uav_resource.array_size != 0) {
+          string_stream << uav_resource.array_size.value();
+        }
+        string_stream << "]";
+      }
       string_stream << " : register(u" << uav_resource.signature_index;
       if (uav_resource.space != 0u) {
         string_stream << ", space" << uav_resource.space;
@@ -2654,6 +2793,13 @@ class Decompiler {
 
     for (const auto& cbv_resource : preprocess_state.cbv_resources) {
       string_stream << "cbuffer " << cbv_resource.name;
+      if (cbv_resource.array_size.has_value()) {
+        string_stream << "[";
+        if (cbv_resource.array_size != 0) {
+          string_stream << cbv_resource.array_size.value();
+        }
+        string_stream << "]";
+      }
       string_stream << " : register(b" << cbv_resource.signature_index;
       if (cbv_resource.space != 0u) {
         string_stream << ", space" << cbv_resource.space;
@@ -2712,8 +2858,15 @@ class Decompiler {
 
     // sampler
     for (const auto& sampler_resource : preprocess_state.sampler_resources) {
-      string_stream << StringViewMatch(sampler_resource.pointer, std::regex(R"(.*struct\.([^*"]+).*)"));
+      string_stream << StringViewMatch(sampler_resource.pointer, std::regex(R"(.*struct\.([^*"\]]+).*)"));
       string_stream << " " << sampler_resource.name;
+      if (sampler_resource.array_size.has_value()) {
+        string_stream << "[";
+        if (sampler_resource.array_size != 0) {
+          string_stream << sampler_resource.array_size.value();
+        }
+        string_stream << "]";
+      }
       string_stream << " : register(s" << sampler_resource.signature_index;
       if (sampler_resource.space != 0u) {
         string_stream << ", space" << sampler_resource.space;
