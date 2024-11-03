@@ -16,8 +16,6 @@ void main(
     float2 v1: TEXCOORD0,
     out float4 o0: SV_Target0) {
   float4 r0, r1, r2;
-  uint4 bitmask, uiDest;
-  float4 fDest;
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
 
@@ -27,7 +25,7 @@ void main(
   r0.rgb = renodx::color::gamma::EncodeSafe(r0.rgb, 2.2f);
 
 #if 0  // remove unecessary saturate()
-    r0.xyzw = saturate(r0.xyzw);
+  r0.xyzw = saturate(r0.xyzw);
 #endif
   r1.xyz = float3(1, 1, 1) + -r0.xyz;
 
