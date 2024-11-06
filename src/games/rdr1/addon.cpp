@@ -19,6 +19,7 @@
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
+#include "../../mods/swapchain.hpp"
 
 namespace {
 
