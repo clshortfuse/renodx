@@ -157,8 +157,8 @@ float3 SampleUnreal(Texture2D lut, SamplerState state, float3 color, float size 
 }
 
 float3 CorrectBlack(float3 color_input, float3 lut_color, float lut_black_y, float strength) {
-  const float input_y = renodx::color::y::from::BT709(color_input);
-  const float color_y = renodx::color::y::from::BT709(lut_color);
+  const float input_y = renodx::color::y::from::BT709(abs(color_input));
+  const float color_y = renodx::color::y::from::BT709(abs(lut_color));
   const float a = lut_black_y;
   const float b = lerp(0, lut_black_y, strength);
   const float g = input_y;
@@ -169,8 +169,8 @@ float3 CorrectBlack(float3 color_input, float3 lut_color, float lut_black_y, flo
 }
 
 float3 CorrectWhite(float3 color_input, float3 lut_color, float lut_white_y, float target_white_y, float strength) {
-  const float input_y = min(target_white_y, renodx::color::y::from::BT709(color_input));
-  const float color_y = renodx::color::y::from::BT709(lut_color);
+  const float input_y = min(target_white_y, renodx::color::y::from::BT709(abs(color_input)));
+  const float color_y = renodx::color::y::from::BT709(abs(lut_color));
   const float a = lut_white_y / target_white_y;
   const float b = lerp(1.f, 0.f, strength);
   const float g = input_y;
