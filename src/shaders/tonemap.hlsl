@@ -163,7 +163,8 @@ struct Config {
   float hue_correction_type;
   float hue_correction_strength;
   float3 hue_correction_color;
-  renodrt::Config reno_drt_config;
+  uint reno_drt_hue_correction_method;
+  uint reno_drt_tone_map_method;
 };
 
 float3 UpgradeToneMap(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength) {
@@ -225,7 +226,9 @@ Config Create(
     float reno_drt_flare = 0.f,
     float hue_correction_type = config::hue_correction_type::INPUT,
     float hue_correction_strength = 1.f,
-    float3 hue_correction_color = 0) {
+    float3 hue_correction_color = 0,
+    uint reno_drt_hue_correction_method = renodrt::config::hue_correction_method::OKLAB,
+    uint reno_drt_tone_map_method = renodrt::config::tone_map_method::DANIELE) {
   const Config tm_config = {
     type,
     peak_nits,
@@ -247,7 +250,8 @@ Config Create(
     hue_correction_type,
     hue_correction_strength,
     hue_correction_color,
-    renodrt::config::Create(),
+    reno_drt_hue_correction_method,
+    reno_drt_tone_map_method
   };
   return tm_config;
 }
@@ -258,22 +262,30 @@ float3 ApplyRenoDRT(float3 color, Config tm_config, bool sdr = false) {
     reno_drt_max = renodx::color::correct::Gamma(reno_drt_max, tm_config.gamma_correction == 1.f);
   }
 
-  return renodx::tonemap::renodrt::BT709(
-      color,
-      reno_drt_max * 100.f,
-      0.18f,
-      tm_config.mid_gray_nits,
-      tm_config.exposure,
-      tm_config.reno_drt_highlights,
-      tm_config.reno_drt_shadows,
-      tm_config.reno_drt_contrast,
-      tm_config.reno_drt_saturation,
-      tm_config.reno_drt_dechroma,
-      tm_config.reno_drt_flare,
-      tm_config.hue_correction_strength,
-      (tm_config.hue_correction_type == config::hue_correction_type::CUSTOM)    ? tm_config.hue_correction_color
-      : (tm_config.hue_correction_type == config::hue_correction_type::CLAMPED) ? clamp(color, 0, 1)
-                                                                                : color);
+  renodrt::Config reno_drt_config = renodrt::config::Create();
+  reno_drt_config.nits_peak = reno_drt_max * 100.f;
+  reno_drt_config.mid_gray_value = 0.18f;
+  reno_drt_config.mid_gray_nits = tm_config.mid_gray_nits;
+  reno_drt_config.exposure = tm_config.exposure;
+  reno_drt_config.highlights = tm_config.reno_drt_highlights;
+  reno_drt_config.shadows = tm_config.reno_drt_shadows;
+  reno_drt_config.contrast = tm_config.reno_drt_contrast;
+  reno_drt_config.saturation = tm_config.reno_drt_saturation;
+  reno_drt_config.dechroma = tm_config.reno_drt_dechroma;
+  reno_drt_config.flare = tm_config.reno_drt_flare;
+  reno_drt_config.hue_correction_strength = tm_config.hue_correction_strength;
+  reno_drt_config.hue_correction_type = renodrt::config::hue_correction_type::CUSTOM;
+  if (tm_config.hue_correction_type == config::hue_correction_type::CUSTOM) {
+    reno_drt_config.hue_correction_source = tm_config.hue_correction_color;
+  } else if (tm_config.hue_correction_type == config::hue_correction_type::CLAMPED) {
+    reno_drt_config.hue_correction_source = tm_config.hue_correction_color;
+  } else {
+    reno_drt_config.hue_correction_source = color;
+  }
+  reno_drt_config.hue_correction_method = tm_config.reno_drt_hue_correction_method;
+  reno_drt_config.tone_map_method = tm_config.reno_drt_tone_map_method;
+
+  return renodrt::BT709(color, reno_drt_config);
 }
 
 float3 ApplyACES(float3 color, Config tm_config, bool sdr = false) {
@@ -308,6 +320,10 @@ float3 Apply(float3 untonemapped, Config tm_config) {
     tm_config.reno_drt_saturation *= tm_config.saturation;
     // tm_config.reno_drt_dechroma *= tm_config.dechroma;
     color = ApplyRenoDRT(color, tm_config);
+    tm_config.reno_drt_highlights /= tm_config.highlights;
+    tm_config.reno_drt_shadows /= tm_config.shadows;
+    tm_config.reno_drt_contrast /= tm_config.contrast;
+    tm_config.reno_drt_saturation /= tm_config.saturation;
   } else {
     color = renodx::color::grade::UserColorGrading(
         color,
@@ -346,6 +362,10 @@ DualToneMap ApplyToneMaps(float3 color_input, Config tm_config) {
     color_hdr = ApplyRenoDRT(color_input, tm_config);
 
     tm_config.hue_correction_type = previous_hue_correction_type;
+    tm_config.reno_drt_saturation /= tm_config.saturation;
+    tm_config.reno_drt_highlights /= tm_config.highlights;
+    tm_config.reno_drt_shadows /= tm_config.shadows;
+    tm_config.reno_drt_contrast /= tm_config.contrast;
 
   } else {
     color_input = renodx::color::grade::UserColorGrading(
