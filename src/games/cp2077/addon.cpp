@@ -128,6 +128,17 @@ renodx::utils::settings::Settings settings = {
         .labels = {"None", "Reinhard", "ACES BT709", "ACES AP1", "Filmic"},
     },
     new renodx::utils::settings::Setting{
+        .key = "toneMapHueProcessor",
+        .binding = &shader_injection.toneMapHueProcessor,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .can_reset = false,
+        .label = "Hue Processor",
+        .section = "Tone Mapping",
+        .tooltip = "Selects hue processor",
+        .labels = {"OKLab", "ICtCp" },
+    },
+    new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
         .binding = &shader_injection.colorGradeExposure,
         .default_value = 1.f,

@@ -8,7 +8,7 @@
 // Must be 32bit aligned
 // Should be 4x32
 // 27 max for pixel/vertex
-// 49 max for 49
+// 49 max for compute
 
 struct ShaderInjectData {
   float toneMapType;
@@ -16,6 +16,7 @@ struct ShaderInjectData {
   float toneMapGameNits;
   float toneMapGammaCorrection;
   float toneMapHueCorrection;
+  float toneMapHueProcessor;
 
   float fxBloom;
   float fxVignette;
