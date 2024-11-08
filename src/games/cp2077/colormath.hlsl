@@ -84,7 +84,7 @@ float3 convertColor(float3 inputColor, ConvertColorParams params) {
     default:
       // Unknown default case
       outputColor *= params.paperWhiteScaling;
-      outputColor += params.blackFloorAdjust;
+      // outputColor += params.blackFloorAdjust;
   }
   return outputColor.rgb;
 }

@@ -399,22 +399,14 @@ float4 tonemap(bool isACESMode = false) {
       outputRGB *= exposure;
     }
 
-    float3 correction_source;
-    bool skip_correction = false;
     if (injectedData.toneMapHueCorrection == 1.f) {
-      correction_source = renodx::tonemap::Reinhard(outputRGB);
+      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::Reinhard(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
     } else if (injectedData.toneMapHueCorrection == 2.f) {
-      correction_source = renodx::tonemap::ACESFittedBT709(outputRGB);
+      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::ACESFittedBT709(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
     } else if (injectedData.toneMapHueCorrection == 3.f) {
-      correction_source = renodx::tonemap::ACESFittedAP1(outputRGB);
+      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::ACESFittedAP1(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
     } else if (injectedData.toneMapHueCorrection == 4.f) {
-      correction_source = renodx::tonemap::uncharted2::BT709(outputRGB);
-    } else {
-      skip_correction = true;
-    }
-
-    if (!skip_correction) {
-      outputRGB = renodx::color::correct::Hue(outputRGB, correction_source, 1.f, (uint)injectedData.toneMapHueProcessor);
+      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::uncharted2::BT709(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
     }
 
     if (toneMapperType == TONE_MAPPER_TYPE__VANILLA) {
@@ -568,10 +560,10 @@ float4 tonemap(bool isACESMode = false) {
       config.mid_gray_nits = midGrayNits;
       config.reno_drt_highlights = 1.20f;
       config.reno_drt_shadows = 1.20f;
-      config.reno_drt_contrast = 1.20f;
+      config.reno_drt_contrast = 1.3f;
       config.reno_drt_saturation = 1.20f;
       config.reno_drt_dechroma = injectedData.colorGradeBlowout;
-      config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
+      config.reno_drt_flare = 0.005 * injectedData.colorGradeFlare;
       config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
 
       outputRGB = renodx::tonemap::config::Apply(outputRGB, config);
