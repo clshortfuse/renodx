@@ -5,15 +5,15 @@
 #include "./injectedBuffer.hlsl"
 
 static const float HEATMAP_COLORS[27] = {
-    0.0f, 0.0f, 0.0f,  // Black
-    0.0f, 0.0f, 1.0f,  // Blue
-    0.0f, 1.0f, 1.0f,  // Cyan
-    0.0f, 1.0f, 0.0f,  // Green
-    1.0f, 1.0f, 0.0f,  // Yellow
-    1.0f, 0.0f, 0.0f,  // Red
-    1.0f, 0.0f, 1.0f,  // Magenta
-    1.0f, 1.0f, 1.0f,  // White
-    1.0f, 1.0f, 1.0f,  // White
+  0.0f, 0.0f, 0.0f,  // Black
+  0.0f, 0.0f, 1.0f,  // Blue
+  0.0f, 1.0f, 1.0f,  // Cyan
+  0.0f, 1.0f, 0.0f,  // Green
+  1.0f, 1.0f, 0.0f,  // Yellow
+  1.0f, 0.0f, 0.0f,  // Red
+  1.0f, 0.0f, 1.0f,  // Magenta
+  1.0f, 1.0f, 1.0f,  // White
+  1.0f, 1.0f, 1.0f,  // White
 };
 
 static const float SQRT_HALF = sqrt(1.f / 2.f);   // 0.7071067811865476
@@ -220,8 +220,8 @@ float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
             renodx::color::srgb::Decode(unclamped));
         color = lerp(color, recolored, min(injectedData.processingLUTCorrection * 2.f, 1.f));
       } else {
-        const float lutMinY = renodx::color::y::from::BT709(minBlack);
-        const float lutPeakY = renodx::color::y::from::BT709(peakWhite);
+        const float lutMinY = renodx::color::y::from::BT709(abs(minBlack));
+        const float lutPeakY = renodx::color::y::from::BT709(abs(peakWhite));
         const float targetPeakY = 100.f / max(lutSettings.z, 1.f);
 
         // Only applies on LUTs that are clamped (all?)
@@ -325,7 +325,7 @@ float4 tonemap(bool isACESMode = false) {
 
     const float hueShift = cb6[7u].z;
     // Add branch to skip if not hue shifting
-    if (hueShift) {
+    if (hueShift != 0.f) {
       float _260 = sin(hueShift);  // sin(0)
       float _261 = cos(hueShift);  // cos(0)
       float _262 = (-0.0f) - _260;
@@ -400,13 +400,13 @@ float4 tonemap(bool isACESMode = false) {
     }
 
     if (injectedData.toneMapHueCorrection == 1.f) {
-      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::Reinhard(outputRGB));
+      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::Reinhard(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
     } else if (injectedData.toneMapHueCorrection == 2.f) {
-      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::ACESFittedBT709(outputRGB));
+      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::ACESFittedBT709(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
     } else if (injectedData.toneMapHueCorrection == 3.f) {
-      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::ACESFittedAP1(outputRGB));
+      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::ACESFittedAP1(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
     } else if (injectedData.toneMapHueCorrection == 4.f) {
-      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::uncharted2::BT709(outputRGB));
+      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::uncharted2::BT709(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
     }
 
     if (toneMapperType == TONE_MAPPER_TYPE__VANILLA) {
@@ -439,13 +439,13 @@ float4 tonemap(bool isACESMode = false) {
       // Scales with paperwhite, which can be reversed
 
       const SegmentedSplineParams_c9 ODT_CONFIG = {
-          {cb6[8u].x, cb6[9u].x, cb6[10u].x, cb6[11u].x, cb6[12u].x, cb6[13u].x, cb6[14u].x, cb6[15u].x, cb6[16u].x, cb6[17u].x},  // coefsLow[10]
-          {cb6[8u].y, cb6[9u].y, cb6[10u].y, cb6[11u].y, cb6[12u].y, cb6[13u].y, cb6[14u].y, cb6[15u].y, cb6[16u].y, cb6[17u].y},  // coefsHigh[10]
-          {cb6[18u].x, cb6[18u].y},                                                                                                // minPoint
-          {cb6[18u].z, midGrayNits},                                                                                               // midPoint
-          {cb6[19u].x, cb6[19u].y},                                                                                                // maxPoint - doesn't always match peak nits?
-          cb6[19u].z,                                                                                                              // slopeLow
-          cb6[19u].w                                                                                                               // slopeHigh
+        { cb6[8u].x, cb6[9u].x, cb6[10u].x, cb6[11u].x, cb6[12u].x, cb6[13u].x, cb6[14u].x, cb6[15u].x, cb6[16u].x, cb6[17u].x },  // coefsLow[10]
+        { cb6[8u].y, cb6[9u].y, cb6[10u].y, cb6[11u].y, cb6[12u].y, cb6[13u].y, cb6[14u].y, cb6[15u].y, cb6[16u].y, cb6[17u].y },  // coefsHigh[10]
+        { cb6[18u].x, cb6[18u].y },                                                                                                // minPoint
+        { cb6[18u].z, midGrayNits },                                                                                               // midPoint
+        { cb6[19u].x, cb6[19u].y },                                                                                                // maxPoint - doesn't always match peak nits?
+        cb6[19u].z,                                                                                                                // slopeLow
+        cb6[19u].w                                                                                                                 // slopeHigh
       };
 
       float yRange = peakNits - minNits;
@@ -550,7 +550,7 @@ float4 tonemap(bool isACESMode = false) {
       config.type = injectedData.toneMapType;
       config.peak_nits = injectedData.toneMapPeakNits;
       config.game_nits = (injectedData.toneMapType == 2.f ? (100.f / 203.f) : 1.f) * injectedData.toneMapGameNits;
-      config.gamma_correction = injectedData.toneMapGammaCorrection == 2.f;
+      config.gamma_correction = (injectedData.toneMapGammaCorrection == 2.f) ? 1.f : 0.f;
       config.exposure = injectedData.colorGradeExposure;
       config.highlights = injectedData.colorGradeHighlights;
       config.shadows = injectedData.colorGradeShadows;
@@ -560,10 +560,11 @@ float4 tonemap(bool isACESMode = false) {
       config.mid_gray_nits = midGrayNits;
       config.reno_drt_highlights = 1.20f;
       config.reno_drt_shadows = 1.20f;
-      config.reno_drt_contrast = 1.20f;
+      config.reno_drt_contrast = 1.3f;
       config.reno_drt_saturation = 1.20f;
       config.reno_drt_dechroma = injectedData.colorGradeBlowout;
-      config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
+      config.reno_drt_flare = 0.005 * injectedData.colorGradeFlare;
+      config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
 
       outputRGB = renodx::tonemap::config::Apply(outputRGB, config);
       bool useD60 = (injectedData.colorGradeWhitePoint == -1.0f || (injectedData.colorGradeWhitePoint == 0.f && cb6[28u].z == 0.f));

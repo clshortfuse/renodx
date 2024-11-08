@@ -23,8 +23,15 @@ struct Config {
   float3 hue_correction_source;
   uint hue_correction_method;
   uint tone_map_method;
+  uint hue_correction_type;
 };
 namespace config {
+
+namespace hue_correction_type {
+static const uint INPUT = 0u;
+static const uint CUSTOM = 1u;
+}
+
 namespace hue_correction_method {
 static const uint OKLAB = 0u;
 static const uint ICTCP = 1u;
@@ -49,7 +56,8 @@ Config Create(
     float hue_correction_strength = 1.f,
     float3 hue_correction_source = 0,
     uint hue_correction_method = config::hue_correction_method::OKLAB,
-    uint tone_map_method = config::tone_map_method::DANIELE) {
+    uint tone_map_method = config::tone_map_method::DANIELE,
+    uint hue_correction_type = config::hue_correction_type::INPUT) {
   const Config renodrt_config = {
     nits_peak,
     mid_gray_value,
@@ -64,7 +72,8 @@ Config Create(
     hue_correction_strength,
     hue_correction_source,
     hue_correction_method,
-    tone_map_method
+    tone_map_method,
+    hue_correction_type
   };
   return renodrt_config;
 }
@@ -98,18 +107,17 @@ float3 BT709(float3 bt709, Config current_config) {
   n = current_config.nits_peak;
   t_1 = current_config.flare;
 
-  float3 signs = renodx::math::Sign(bt709);
-
-  bt709 = abs(bt709);
-
-  float y_original = renodx::color::y::from::BT709(bt709);
+  float y_original = renodx::color::y::from::BT709(abs(bt709));
 
   float3 perceptual_old;
   if (current_config.hue_correction_strength != 0) {
+    float3 source = (current_config.hue_correction_type == config::hue_correction_type::INPUT)
+                        ? bt709
+                        : current_config.hue_correction_source;
     if (current_config.hue_correction_method == config::hue_correction_method::OKLAB) {
-      perceptual_old = renodx::color::oklab::from::BT709(current_config.hue_correction_source);
+      perceptual_old = renodx::color::oklab::from::BT709(source);
     } else if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
-      perceptual_old = renodx::color::ictcp::from::BT709(current_config.hue_correction_source);
+      perceptual_old = renodx::color::ictcp::from::BT709(source);
     }
   }
 
@@ -162,7 +170,7 @@ float3 BT709(float3 bt709, Config current_config) {
 
   float y_new = clamp(flared, 0, m_0);
 
-  float3 color_output = signs * bt709 * (y_original > 0 ? (y_new / y_original) : 0);
+  float3 color_output = bt709 * (y_original > 0 ? (y_new / y_original) : 0);
   float3 color = color_output;
 
   if (current_config.dechroma != 0.f || current_config.saturation != 1.f || current_config.hue_correction_strength != 0.f) {
@@ -232,6 +240,7 @@ float3 BT709(
   config.flare = flare;
   config.hue_correction_strength = hue_correction_strength;
   config.hue_correction_source = hue_correction_source;
+  config.hue_correction_type = renodrt::config::hue_correction_type::CUSTOM;
   return BT709(bt709, config);
 }
 float3 BT709(
