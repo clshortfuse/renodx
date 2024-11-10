@@ -21,7 +21,7 @@
 #include "./format.hpp"
 #include "./path.hpp"
 #include "./shader.hpp"
-#include "./shader_compiler.hpp"
+#include "./shader_compiler_directx.hpp"
 #include "./device.hpp"
 
 namespace renodx::utils::shader::dump {
@@ -143,7 +143,7 @@ static void OnInitPipeline(
 
     if (device::IsDirectX(device)) {
       try {
-        auto shader_version = renodx::utils::shader::compiler::DecodeShaderVersion(shader_data.value());
+        auto shader_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data.value());
         if (shader_version.GetMajor() == 0) {
           // No shader information found
           continue;
@@ -208,7 +208,7 @@ static bool DumpShader(
   dump_path /= hash_string;
 
   if (device::IsDirectX(internal::device_api)) {
-    renodx::utils::shader::compiler::DxilProgramVersion shader_version;
+    renodx::utils::shader::compiler::directx::DxilProgramVersion shader_version;
     try {
       std::stringstream s;
       s << "utils::shader::dump(Decoding shader_data: ";
@@ -216,7 +216,7 @@ static bool DumpShader(
       s << ": " << shader_data.size();
       s << ")";
       reshade::log::message(reshade::log::level::error, s.str().c_str());
-      shader_version = renodx::utils::shader::compiler::DecodeShaderVersion(shader_data);
+      shader_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data);
     } catch (std::exception& e) {
       std::stringstream s;
       s << "utils::shader::dump(Failed to parse ";

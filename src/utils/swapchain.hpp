@@ -15,8 +15,8 @@
 #include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
-#include "./resource.hpp"
 #include "./device.hpp"
+#include "./resource.hpp"
 
 namespace renodx::utils::swapchain {
 
@@ -216,7 +216,6 @@ static reshade::api::resource_view& GetDepthStencil(reshade::api::command_list* 
 static bool IsDirectX(reshade::api::swapchain* swapchain) {
   auto* device = swapchain->get_device();
   return device::IsDirectX(device);
-  
 }
 
 static std::optional<float> GetPeakNits(reshade::api::swapchain* swapchain) {
@@ -279,44 +278,46 @@ static std::optional<float> GetPeakNits(reshade::api::swapchain* swapchain) {
 }
 
 static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::color_space color_space) {
-  if (!IsDirectX(swapchain)) return false;
+  if (IsDirectX(swapchain)) {
+    DXGI_COLOR_SPACE_TYPE dx_color_space = DXGI_COLOR_SPACE_CUSTOM;
+    switch (color_space) {
+      case reshade::api::color_space::srgb_nonlinear:       dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709; break;
+      case reshade::api::color_space::extended_srgb_linear: dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709; break;
+      case reshade::api::color_space::hdr10_st2084:         dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020; break;
+      case reshade::api::color_space::hdr10_hlg:            dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P2020; break;
+      default:                                              return false;
+    }
 
-  DXGI_COLOR_SPACE_TYPE dx_color_space = DXGI_COLOR_SPACE_CUSTOM;
-  switch (color_space) {
-    case reshade::api::color_space::srgb_nonlinear:       dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709; break;
-    case reshade::api::color_space::extended_srgb_linear: dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709; break;
-    case reshade::api::color_space::hdr10_st2084:         dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020; break;
-    case reshade::api::color_space::hdr10_hlg:            dx_color_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P2020; break;
-    default:                                              return false;
-  }
+    auto* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
 
-  auto* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
+    IDXGISwapChain4* swapchain4;
 
-  IDXGISwapChain4* swapchain4;
+    if (!SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
+      reshade::log::message(reshade::log::level::error, "changeColorSpace(Failed to get native swap chain)");
+      return false;
+    }
 
-  if (!SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
-    reshade::log::message(reshade::log::level::error, "changeColorSpace(Failed to get native swap chain)");
-    return false;
-  }
+    const HRESULT hr = swapchain4->SetColorSpace1(dx_color_space);
 
-  const HRESULT hr = swapchain4->SetColorSpace1(dx_color_space);
+    {
+      // Notify SpecialK of color space change
+      // {018B57E4-1493-4953-ADF2-DE6D99CC05E5}
+      static constexpr GUID SKID_SWAP_CHAIN_COLOR_SPACE =
+          {0x18b57e4, 0x1493, 0x4953, {0xad, 0xf2, 0xde, 0x6d, 0x99, 0xcc, 0x5, 0xe5}};
 
-  {
-    // Notify SpecialK of color space change
-    // {018B57E4-1493-4953-ADF2-DE6D99CC05E5}
-    static constexpr GUID SKID_SWAP_CHAIN_COLOR_SPACE =
-        {0x18b57e4, 0x1493, 0x4953, {0xad, 0xf2, 0xde, 0x6d, 0x99, 0xcc, 0x5, 0xe5}};
+      swapchain4->SetPrivateData(
+          SKID_SWAP_CHAIN_COLOR_SPACE,
+          sizeof(DXGI_COLOR_SPACE_TYPE),
+          &dx_color_space);
+    }
 
-    swapchain4->SetPrivateData(
-        SKID_SWAP_CHAIN_COLOR_SPACE,
-        sizeof(DXGI_COLOR_SPACE_TYPE),
-        &dx_color_space);
-  }
-
-  swapchain4->Release();
-  swapchain4 = nullptr;
-  if (!SUCCEEDED(hr)) {
-    return false;
+    swapchain4->Release();
+    swapchain4 = nullptr;
+    if (!SUCCEEDED(hr)) {
+      return false;
+    }
+  } else {
+    // Vulkan ???
   }
 
   std::unique_lock lock(internal::mutex);
