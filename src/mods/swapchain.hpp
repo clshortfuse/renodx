@@ -61,8 +61,8 @@ struct SwapChainUpgradeTarget {
     int16_t height = ANY;
     int16_t depth = ANY;
   };
-  Dimensions dimensions = {BACK_BUFFER, BACK_BUFFER, BACK_BUFFER};
-  Dimensions new_dimensions = {ANY, ANY, ANY};
+  Dimensions dimensions = {.width = BACK_BUFFER, .height = BACK_BUFFER, .depth = BACK_BUFFER};
+  Dimensions new_dimensions = {.width = ANY, .height = ANY, .depth = ANY};
 
   [[nodiscard]] bool CheckResourceDesc(
       reshade::api::resource_desc desc,
@@ -78,12 +78,14 @@ struct SwapChainUpgradeTarget {
     if (!this->ignore_size) {
       if (this->aspect_ratio == ANY) {
         if (dimensions.width == BACK_BUFFER) {
+          if (back_buffer_desc.type == reshade::api::resource_type::unknown) return false;
           if (desc.texture.width != back_buffer_desc.texture.width) return false;
         } else if (dimensions.width > 0) {
           if (desc.texture.width != dimensions.width) return false;
         }
 
         if (dimensions.height == BACK_BUFFER) {
+          if (back_buffer_desc.type == reshade::api::resource_type::unknown) return false;
           if (desc.texture.height != back_buffer_desc.texture.height) return false;
         } else if (dimensions.height > 0) {
           if (desc.texture.height != dimensions.height) return false;
@@ -96,6 +98,7 @@ struct SwapChainUpgradeTarget {
         const float view_ratio = static_cast<float>(desc.texture.width) / static_cast<float>(desc.texture.height);
         float target_ratio;
         if (this->aspect_ratio == BACK_BUFFER) {
+          if (back_buffer_desc.type == reshade::api::resource_type::unknown) return false;
           target_ratio = back_buffer_desc.texture.width / back_buffer_desc.texture.height;
         } else {
           target_ratio = this->aspect_ratio;
@@ -125,6 +128,7 @@ static bool upgrade_unknown_resource_views = false;
 static bool upgrade_resource_views = true;
 static bool prevent_full_screen = true;
 static bool force_borderless = true;
+static bool is_vulkan = false;
 
 struct BoundDescriptorInfo {
   reshade::api::shader_stage stages;
@@ -226,6 +230,10 @@ static void OnInitDevice(reshade::api::device* device) {
   reshade::log::message(reshade::log::level::info, s.str().c_str());
   auto& data = device->create_private_data<DeviceData>();
   data.prevent_full_screen = prevent_full_screen;
+
+  if (device->get_api() == reshade::api::device_api::vulkan) {
+    is_vulkan = true;
+  }
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
@@ -282,20 +290,22 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
     }
   }
 
-  switch (desc.present_mode) {
-    case static_cast<uint32_t>(DXGI_SWAP_EFFECT_SEQUENTIAL):
-      desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL);
-      break;
-    case static_cast<uint32_t>(DXGI_SWAP_EFFECT_DISCARD):
-      desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD);
-      break;
-  }
-
-  if (!use_resize_buffer) {
-    if (prevent_full_screen) {
-      desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+  if (!is_vulkan) {
+    switch (desc.present_mode) {
+      case static_cast<uint32_t>(DXGI_SWAP_EFFECT_SEQUENTIAL):
+        desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL);
+        break;
+      case static_cast<uint32_t>(DXGI_SWAP_EFFECT_DISCARD):
+        desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD);
+        break;
     }
-    desc.present_flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+
+    if (!use_resize_buffer) {
+      if (prevent_full_screen) {
+        desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+      }
+      desc.present_flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+    }
   }
 
   std::stringstream s;
@@ -331,17 +341,19 @@ static void CheckSwapchainSize(
     return;
   }
 
-  auto* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
+  if (utils::swapchain::IsDirectX(swapchain)) {
+    auto* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
 
-  if (prevent_full_screen) {
-    IDXGIFactory* factory;
-    if (SUCCEEDED(native_swapchain->GetParent(IID_PPV_ARGS(&factory)))) {
-      factory->MakeWindowAssociation(output_window, DXGI_MWA_NO_WINDOW_CHANGES);
-      reshade::log::message(reshade::log::level::debug, "checkSwapchainSize(set DXGI_MWA_NO_WINDOW_CHANGES)");
-      factory->Release();
-      factory = nullptr;
-    } else {
-      reshade::log::message(reshade::log::level::error, "checkSwapchainSize(could not find DXGI factory)");
+    if (prevent_full_screen) {
+      IDXGIFactory* factory;
+      if (SUCCEEDED(native_swapchain->GetParent(IID_PPV_ARGS(&factory)))) {
+        factory->MakeWindowAssociation(output_window, DXGI_MWA_NO_WINDOW_CHANGES);
+        reshade::log::message(reshade::log::level::debug, "checkSwapchainSize(set DXGI_MWA_NO_WINDOW_CHANGES)");
+        factory->Release();
+        factory = nullptr;
+      } else {
+        reshade::log::message(reshade::log::level::error, "checkSwapchainSize(could not find DXGI factory)");
+      }
     }
   }
 
