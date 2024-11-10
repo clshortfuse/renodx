@@ -32,7 +32,7 @@
 #include "../mods/swapchain.hpp"
 #include "../utils/descriptor.hpp"
 #include "../utils/shader.hpp"
-#include "../utils/shader_compiler.hpp"
+#include "../utils/shader_compiler_directx.hpp"
 #include "../utils/shader_compiler_watcher.hpp"
 #include "../utils/shader_dump.hpp"
 #include "../utils/swapchain.hpp"
@@ -62,7 +62,7 @@ struct ShaderDetails {
   uint32_t shader_hash;
   std::vector<uint8_t> shader_data;
   std::variant<std::nullopt_t, std::exception, std::string> disassembly = std::nullopt;
-  std::optional<renodx::utils::shader::compiler::DxilProgramVersion> program_version = std::nullopt;
+  std::optional<renodx::utils::shader::compiler::directx::DxilProgramVersion> program_version = std::nullopt;
   std::vector<uint8_t> addon_shader;
   std::optional<renodx::utils::shader::compiler::watcher::CustomShader> disk_shader = std::nullopt;
   bool bypass_draw;
@@ -758,10 +758,12 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
                   if (!shader_data.has_value()) throw std::exception("Failed to get shader data");
                   shader_details.shader_data = shader_data.value();
                 }
-                try {
-                  shader_details.program_version = renodx::utils::shader::compiler::DecodeShaderVersion(shader_details.shader_data);
-                } catch (const std::exception& e) {
-                  reshade::log::message(reshade::log::level::error, e.what());
+                if (renodx::utils::device::IsDirectX(device)) {
+                  try {
+                    shader_details.program_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_details.shader_data);
+                  } catch (const std::exception& e) {
+                    reshade::log::message(reshade::log::level::error, e.what());
+                  }
                 }
               }
               // Fallback to subobject
@@ -1327,7 +1329,9 @@ void RenderShaderViewDisassembly(reshade::api::device* device, DeviceData& data,
         if (!shader_data.has_value()) throw std::exception("Invalid shader selection");
         shader_details.shader_data = shader_data.value();
       }
-      shader_details.disassembly = renodx::utils::shader::compiler::DisassembleShader(shader_details.shader_data);
+      if (renodx::utils::device::IsDirectX(device)) {
+        shader_details.disassembly = renodx::utils::shader::compiler::directx::DisassembleShader(shader_details.shader_data);
+      }
     } catch (std::exception& e) {
       shader_details.disassembly = e;
     }

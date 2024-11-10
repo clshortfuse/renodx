@@ -17,7 +17,7 @@
 #include <vector>
 #include "./format.hpp"
 #include "./path.hpp"
-#include "./shader_compiler.hpp"
+#include "./shader_compiler_directx.hpp"
 
 namespace renodx::utils::shader::compiler::watcher {
 
@@ -177,7 +177,7 @@ static bool CompileCustomShaders() {
         }
 
         try {
-          custom_shader.compilation = renodx::utils::shader::compiler::CompileShaderFromFile(
+          custom_shader.compilation = renodx::utils::shader::compiler::directx::CompileShaderFromFile(
               entry_path.c_str(),
               shader_target.c_str(),
               shared_shader_defines);

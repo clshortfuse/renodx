@@ -27,7 +27,7 @@
 
 #include "./path.hpp"
 
-namespace renodx::utils::shader::compiler {
+namespace renodx::utils::shader::compiler::directx {
 
 namespace internal {
 
@@ -534,11 +534,11 @@ inline std::vector<uint8_t> CompileShaderFromFile(
   std::vector<D3D_SHADER_MACRO> local_defines;
   for (const auto& [key, value] : defines) {
     if (!key.empty() && !value.empty()) {
-      local_defines.push_back({key.c_str(), value.c_str()});
+      local_defines.push_back({.Name = key.c_str(), .Definition = value.c_str()});
     }
   }
   if (!local_defines.empty()) {
-    local_defines.push_back({nullptr, nullptr});
+    local_defines.push_back({.Name = nullptr, .Definition = nullptr});
   }
 
   if (shader_target[3] < '6') {
@@ -547,4 +547,4 @@ inline std::vector<uint8_t> CompileShaderFromFile(
   return internal::CompileShaderFromFileDXC(file_path, shader_target, local_defines.empty() ? nullptr : local_defines.data());
 }
 
-}  // namespace renodx::utils::shader::compiler
+}  // namespace renodx::utils::shader::compiler::directx
