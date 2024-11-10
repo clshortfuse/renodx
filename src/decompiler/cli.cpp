@@ -8,7 +8,7 @@
 #include <string>
 
 #include "../utils/path.hpp"
-#include "../utils/shader_compiler.hpp"
+#include "../utils/shader_compiler_directx.hpp"
 #include "../utils/shader_decompiler_dxc.hpp"
 
 int main(int argc, char** argv) {
@@ -20,7 +20,7 @@ int main(int argc, char** argv) {
 
   auto code = renodx::utils::path::ReadBinaryFile(argv[1]);
 
-  auto disassembly = renodx::utils::shader::compiler::DisassembleShader(code);
+  auto disassembly = renodx::utils::shader::compiler::directx::DisassembleShader(code);
   if (disassembly.empty()) {
     std::cerr << "Failed to disassemble shader.\n";
     return EXIT_FAILURE;
