@@ -38,7 +38,13 @@ inline std::optional<std::string> GetD3DNameW(T* obj) {
   if (obj->GetPrivateData(WKPDID_D3DDebugObjectNameW, &size, w_name) == S_OK) {
     if (size > 0) {
       auto wstring = std::wstring(reinterpret_cast<wchar_t*>(w_name), reinterpret_cast<wchar_t*>(w_name) + size);
-      return std::string(wstring.begin(), wstring.end());
+      char c_name[128] = {};
+      size_t out_size;
+      // wide-character-string-to-multibyte-string
+      auto ret = wcstombs_s(&out_size, c_name, size, wstring.data(), wstring.size());
+      if (ret == S_OK && out_size > 0) {
+        return std::string(c_name, c_name + out_size);
+      }
     }
   }
   return GetD3DName(obj);
