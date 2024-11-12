@@ -16,15 +16,15 @@ namespace renodx::utils::trace {
 
 static bool trace_scheduled = false;
 static bool trace_running = false;
-template <class T>
 
+template <class T>
 inline std::optional<std::string> GetD3DName(T* obj) {
   if (obj == nullptr) return std::nullopt;
 
-  char c_name[128] = {};
-  UINT size = sizeof(c_name);
-  if (obj->GetPrivateData(WKPDID_D3DDebugObjectName, &size, c_name) == S_OK) {
-    if (size > 0) return std::string{c_name, c_name + size};
+  byte data[128] = {};
+  UINT size = sizeof(data);
+  if (obj->GetPrivateData(WKPDID_D3DDebugObjectName, &size, data) == S_OK) {
+    if (size > 0) return std::string{data, data + size};
   }
   return std::nullopt;
 }
@@ -33,15 +33,14 @@ template <class T>
 inline std::optional<std::string> GetD3DNameW(T* obj) {
   if (obj == nullptr) return std::nullopt;
 
-  LPCWSTR w_name[128] = {};
-  UINT size = sizeof(w_name);
-  if (obj->GetPrivateData(WKPDID_D3DDebugObjectNameW, &size, w_name) == S_OK) {
+  byte data[128] = {};
+  UINT size = sizeof(data);
+  if (obj->GetPrivateData(WKPDID_D3DDebugObjectNameW, &size, data) == S_OK) {
     if (size > 0) {
-      auto wstring = std::wstring(reinterpret_cast<wchar_t*>(w_name), reinterpret_cast<wchar_t*>(w_name) + size);
       char c_name[128] = {};
       size_t out_size;
-      // wide-character-string-to-multibyte-string
-      auto ret = wcstombs_s(&out_size, c_name, size, wstring.data(), wstring.size());
+      // wide-character-string-to-multibyte-string_safe
+      auto ret = wcstombs_s(&out_size, c_name, sizeof(c_name), reinterpret_cast<wchar_t*>(data), size);
       if (ret == S_OK && out_size > 0) {
         return std::string(c_name, c_name + out_size);
       }
