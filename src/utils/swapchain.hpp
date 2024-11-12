@@ -16,6 +16,7 @@
 #include <include/reshade.hpp>
 
 #include "./device.hpp"
+#include "./platform.hpp"
 #include "./resource.hpp"
 
 namespace renodx::utils::swapchain {
@@ -218,15 +219,13 @@ static bool IsDirectX(reshade::api::swapchain* swapchain) {
   return device::IsDirectX(device);
 }
 
-static std::optional<float> GetPeakNits(reshade::api::swapchain* swapchain) {
-  if (!IsDirectX(swapchain)) return std::nullopt;
-
+static std::optional<DXGI_OUTPUT_DESC1> GetDirectXOutputDesc1(reshade::api::swapchain* swapchain) {
   auto* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
 
   IDXGISwapChain4* swapchain4;
 
   if (!SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
-    reshade::log::message(reshade::log::level::error, "GetPeakNits(Failed to get native swap chain)");
+    reshade::log::message(reshade::log::level::error, "GetDirectXOutputDesc1(Failed to get native swap chain)");
     return std::nullopt;
   }
 
@@ -239,7 +238,7 @@ static std::optional<float> GetPeakNits(reshade::api::swapchain* swapchain) {
   swapchain4 = nullptr;
 
   if (!SUCCEEDED(hr)) {
-    reshade::log::message(reshade::log::level::error, "GetPeakNits(Failed to get containing output)");
+    reshade::log::message(reshade::log::level::error, "GetDirectXOutputDesc1(Failed to get containing output)");
     return std::nullopt;
   }
 
@@ -250,7 +249,7 @@ static std::optional<float> GetPeakNits(reshade::api::swapchain* swapchain) {
   output = nullptr;
 
   if (!SUCCEEDED(hr)) {
-    reshade::log::message(reshade::log::level::error, "GetPeakNits(Failed to query output6)");
+    reshade::log::message(reshade::log::level::error, "GetDirectXOutputDesc1(Failed to query output6)");
     return std::nullopt;
   }
 
@@ -263,18 +262,48 @@ static std::optional<float> GetPeakNits(reshade::api::swapchain* swapchain) {
   output6 = nullptr;
 
   if (!SUCCEEDED(hr)) {
-    reshade::log::message(reshade::log::level::error, "GetPeakNits(Failed to get output desc)");
+    reshade::log::message(reshade::log::level::error, "GetDirectXOutputDesc1(Failed to get output desc)");
     return std::nullopt;
   }
+  return output_desc;
+}
+
+static std::optional<float> GetPeakNits(reshade::api::swapchain* swapchain) {
+  if (!IsDirectX(swapchain)) return std::nullopt;
+
+  auto output_desc = GetDirectXOutputDesc1(swapchain);
+  if (!output_desc.has_value()) return std::nullopt;
 
   // Current display colorspace (not swapchain)
-  if (output_desc.ColorSpace != DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
-      && output_desc.ColorSpace != DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709) {
+  if (output_desc->ColorSpace != DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
+      && output_desc->ColorSpace != DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709) {
+    reshade::log::message(reshade::log::level::warning, "GetPeakNits(Not HDR)");
     // Not WCG/HDR
     return std::nullopt;
   }
 
-  return output_desc.MaxLuminance;
+  return output_desc->MaxLuminance;
+}
+
+static std::optional<float> GetSDRWhiteNits(reshade::api::swapchain* swapchain) {
+  if (!IsDirectX(swapchain)) return std::nullopt;
+
+  auto output_desc = GetDirectXOutputDesc1(swapchain);
+  if (!output_desc.has_value()) return std::nullopt;
+
+  auto path = renodx::utils::platform::GetPathInfo(output_desc->Monitor);
+  if (!path.has_value()) return std::nullopt;
+
+  DISPLAYCONFIG_SDR_WHITE_LEVEL white_level = {};
+  white_level.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
+  white_level.header.size = sizeof(white_level);
+  white_level.header.adapterId = path->targetInfo.adapterId;
+  white_level.header.id = path->targetInfo.id;
+  if (DisplayConfigGetDeviceInfo(&white_level.header) == ERROR_SUCCESS) {
+    return static_cast<float>(white_level.SDRWhiteLevel) / 1000 * 80;  // From wingdi.h.
+  }
+
+  return std::nullopt;
 }
 
 static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::color_space color_space) {
