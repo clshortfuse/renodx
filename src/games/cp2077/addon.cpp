@@ -293,7 +293,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "sceneGradingHue",
+        .key = "sceneGradingSaturation",
         .binding = &shader_injection.sceneGradingSaturation,
         .default_value = 50.f,
         .label = "Saturation",
@@ -421,6 +421,8 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("sceneGradingBlack", 50.f);
   renodx::utils::settings::UpdateSetting("sceneGradingWhite", 50.f);
   renodx::utils::settings::UpdateSetting("sceneGradingClip", 50.f);
+  renodx::utils::settings::UpdateSetting("sceneGradingHue", 50.f);
+  renodx::utils::settings::UpdateSetting("sceneGradingSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("sceneGradingStrength", 50.f);
 
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
