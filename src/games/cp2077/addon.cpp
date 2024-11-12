@@ -71,6 +71,12 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 ShaderInjectData shader_injection;
 
+auto last_is_hdr = false;
+
+float ComputeReferenceWhite(float peak_nits) {
+  return min(max(100.f, round(pow(10.f, 0.03460730900256f + (0.757737096673107f * log10(peak_nits))))), 203.f);
+}
+
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapType",
@@ -100,9 +106,8 @@ renodx::utils::settings::Settings settings = {
         .default_value = 203.f,
         .label = "Game Brightness",
         .section = "Tone Mapping",
-        .tooltip =
-            "Sets the value of 100% white in nits."
-            "\nDefault: Windows SDR Level or 203",
+        .tooltip = "Sets the value of 100% white in nits."
+                   "\nDefault: Reference white value for Windows HDR Peak",
         .min = 48.f,
         .max = 1000.f,
     },
@@ -113,9 +118,8 @@ renodx::utils::settings::Settings settings = {
         .default_value = 2.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
-        .tooltip =
-            "Emulates a 2.2 EOTF"
-            "Default: On with HDR",
+        .tooltip = "Emulates a 2.2 EOTF"
+                   "Default: On with HDR",
         .labels = {"Off", "UI/Menu Only", "On"},
     },
     new renodx::utils::settings::Setting{
@@ -431,48 +435,25 @@ void OnPresetOff() {
 }
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain) {
-  auto color_space = swapchain->get_color_space();
-  switch (color_space) {
-    case reshade::api::color_space::hdr10_st2084:
-    case reshade::api::color_space::extended_srgb_linear:
-      settings[3]->default_value = 2.f;
-      break;
-    default:
-      settings[1]->default_value = 80.f;
-      settings[2]->default_value = 80.f;
-      settings[3]->default_value = 0.f;
-      return;
+  last_is_hdr = renodx::utils::swapchain::IsHDRColorSpace(swapchain);
+  if (!last_is_hdr) {
+    settings[1]->default_value = 80.f;
+    settings[2]->default_value = 80.f;
+    settings[3]->default_value = 0.f;
+    return;
   }
 
+  settings[3]->default_value = 2.f;
+
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+  auto white_level = 203.f;
   if (peak.has_value()) {
     settings[1]->default_value = peak.value();
   } else {
     settings[1]->default_value = 1000.f;
   }
 
-  auto white_level = renodx::utils::swapchain::GetSDRWhiteNits(swapchain);
-  if (white_level.has_value()) {
-    settings[2]->default_value = white_level.value();
-  } else {
-    settings[2]->default_value = 203.f;
-  }
-
-  std::stringstream s;
-  s << "init_swapchain(";
-  s << "color_space: " << color_space;
-  if (peak.has_value()) {
-    s << ", peak: " << peak.value();
-  } else {
-    s << ", peak: unknown";
-  }
-  if (white_level.has_value()) {
-    s << ", sdr: " << white_level.value();
-  } else {
-    s << ", sdr: unknown";
-  }
-  s << ")";
-  reshade::log::message(reshade::log::level::info, s.str().c_str());
+  settings[2]->default_value = ComputeReferenceWhite(settings[1]->default_value);
 }
 
 }  // namespace
