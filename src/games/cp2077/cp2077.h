@@ -44,6 +44,8 @@ struct ShaderInjectData {
   float sceneGradingColor;
   float sceneGradingBlack;
   float sceneGradingClip;
+  float sceneGradingHue;
+  float sceneGradingSaturation;
   float sceneGradingStrength;
 };
 

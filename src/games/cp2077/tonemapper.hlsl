@@ -161,7 +161,7 @@ struct SPIRV_Cross_Input {
   uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
 };
 
-float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex) {
+float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex, bool force_sdr = false) {
   float3 color = inputColor;
   if (lutSettings.x > 0.0f) {           // LUT Strength
     uint _503 = asuint(lutSettings).w;  // lut Type
@@ -230,7 +230,7 @@ float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
         }
 
         // Only scale up HDR LUTs
-        if (lutPeakY > 1.f && lutPeakY < targetPeakY) {
+        if (!force_sdr && lutPeakY > 1.01f && lutPeakY < targetPeakY) {
           color = renodx::lut::CorrectWhite(inputColor, color, lutPeakY, targetPeakY, injectedData.processingLUTCorrection);
         }
       }
@@ -240,7 +240,7 @@ float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
   return color;
 }
 
-float3 sampleAllLUTs(const float3 color) {
+float3 sampleAllLUTs(const float3 color, bool force_sdr = false) {
   uint textureCount = asuint(cb6[41u]).x;
 
   float3 compositedColor = 0;
@@ -248,7 +248,7 @@ float3 sampleAllLUTs(const float3 color) {
   if (injectedData.colorGradeLUTStrength) {  // 0 speed-hack
     for (uint i = 0; i < textureCount; i++) {
       float4 lutSettings = cb6[33u + i];
-      compositedColor += SampleLUT(lutSettings, color, i);
+      compositedColor += SampleLUT(lutSettings, color, i, force_sdr);
     }
     compositedColor = lerp(color, compositedColor, injectedData.colorGradeLUTStrength);
   } else {
@@ -323,58 +323,58 @@ float4 tonemap(bool isACESMode = false) {
     float _257 = adjustedColor.g;
     float _258 = adjustedColor.b;
 
-    const float hueShift = cb6[7u].z;
-    // Add branch to skip if not hue shifting
-    if (hueShift != 0.f) {
-      float _260 = sin(hueShift);  // sin(0)
-      float _261 = cos(hueShift);  // cos(0)
-      float _262 = (-0.0f) - _260;
-      float _264 = _260 * 0.8164966106414794921875f;
-      float _266 = _261 * (-0.40824830532073974609375f);
-      float _268 = mad(SQRT_HALF, _262, _266);
-      float _270 = _260 * (-0.40824830532073974609375f);
-      float _271 = mad(SQRT_HALF, _261, _270);
-      float _272 = mad(-SQRT_HALF, _262, _266);
-      float _274 = mad(-SQRT_HALF, _261, _270);
-      float _279 = mad(0.5352036952972412109375f, SQRT_THIRD, mad(_264, -0.3726499974727630615234375f, _261 * 0.69100105762481689453125f));
-      float _282 = _261 * (-0.3089949786663055419921875f);
-      float _286 = mad(0.5352036952972412109375f, SQRT_THIRD, mad(_264, 0.3344599902629852294921875f, _282));
-      float _289 = mad(0.5352036952972412109375f, SQRT_THIRD, mad(_264, -1.07974994182586669921875f, _282));
-      float _293 = mad(1.05481898784637451171875f, SQRT_THIRD, mad(_271, -0.3726499974727630615234375f, _268 * 0.84630000591278076171875f));
-      float _295 = _268 * (-0.3784399926662445068359375f);
-      float _298 = mad(1.05481898784637451171875f, SQRT_THIRD, mad(_271, 0.3344599902629852294921875f, _295));
-      float _300 = mad(1.05481898784637451171875f, SQRT_THIRD, mad(_271, -1.07974994182586669921875f, _295));
-      float _303 = mad(0.1420280933380126953125f, SQRT_THIRD, mad(_274, -0.3726499974727630615234375f, _272 * 0.84630000591278076171875f));
-      float _305 = _272 * (-0.3784399926662445068359375f);
-      float _307 = mad(0.1420280933380126953125f, SQRT_THIRD, mad(_274, 0.3344599902629852294921875f, _305));
-      float _309 = mad(0.1420280933380126953125f, SQRT_THIRD, mad(_274, -1.07974994182586669921875f, _305));
+    const float hueShift = cb6[7u].z * injectedData.sceneGradingHue;
+    float _260 = sin(hueShift);  // sin(0)
+    float _261 = cos(hueShift);  // cos(0)
+    float _262 = (-0.0f) - _260;
+    float _264 = _260 * 0.8164966106414794921875f;
+    float _266 = _261 * (-0.40824830532073974609375f);
+    float _268 = mad(SQRT_HALF, _262, _266);
+    float _270 = _260 * (-0.40824830532073974609375f);
+    float _271 = mad(SQRT_HALF, _261, _270);
+    float _272 = mad(-SQRT_HALF, _262, _266);
+    float _274 = mad(-SQRT_HALF, _261, _270);
+    float _279 = mad(0.5352036952972412109375f, SQRT_THIRD, mad(_264, -0.3726499974727630615234375f, _261 * 0.69100105762481689453125f));
+    float _282 = _261 * (-0.3089949786663055419921875f);
+    float _286 = mad(0.5352036952972412109375f, SQRT_THIRD, mad(_264, 0.3344599902629852294921875f, _282));
+    float _289 = mad(0.5352036952972412109375f, SQRT_THIRD, mad(_264, -1.07974994182586669921875f, _282));
+    float _293 = mad(1.05481898784637451171875f, SQRT_THIRD, mad(_271, -0.3726499974727630615234375f, _268 * 0.84630000591278076171875f));
+    float _295 = _268 * (-0.3784399926662445068359375f);
+    float _298 = mad(1.05481898784637451171875f, SQRT_THIRD, mad(_271, 0.3344599902629852294921875f, _295));
+    float _300 = mad(1.05481898784637451171875f, SQRT_THIRD, mad(_271, -1.07974994182586669921875f, _295));
+    float _303 = mad(0.1420280933380126953125f, SQRT_THIRD, mad(_274, -0.3726499974727630615234375f, _272 * 0.84630000591278076171875f));
+    float _305 = _272 * (-0.3784399926662445068359375f);
+    float _307 = mad(0.1420280933380126953125f, SQRT_THIRD, mad(_274, 0.3344599902629852294921875f, _305));
+    float _309 = mad(0.1420280933380126953125f, SQRT_THIRD, mad(_274, -1.07974994182586669921875f, _305));
 
-      float bt601Strength = cb6[7u].y;  // 1
-      float inverseBt601Strength = 1.0f - bt601Strength;
+    // float _311 = 1.0f - cb6[7u].y;
+    // float _312 = _311 * 0.2989999949932098388671875f;
+    // float _314 = _312 + cb6[7u].y;
+    // float _315 = _311 * 0.58700001239776611328125f;
+    // float _317 = _315 + cb6[7u].y;
+    // float _318 = _311 * 0.114000000059604644775390625f;
+    // float _320 = _318 + cb6[7u].y;
 
-      float _311 = 1.0f - cb6[7u].y;
+    // Correct to BT709
+    float customSaturation = lerp(1.f, cb6[7u].y, injectedData.sceneGradingSaturation);
+    float inverseSaturation = 1.0f - customSaturation;
+    float _311 = inverseSaturation;
+    float _312 = _311 * renodx::color::BT709_TO_XYZ_MAT[1].r;
+    float _314 = _312 + customSaturation;
+    float _315 = _311 * renodx::color::BT709_TO_XYZ_MAT[1].g;
+    float _317 = _315 + customSaturation;
+    float _318 = _311 * renodx::color::BT709_TO_XYZ_MAT[1].b;
+    float _320 = _318 + customSaturation;
 
-      float _312 = _311 * 0.2989999949932098388671875f;
-      float _314 = _312 + cb6[7u].y;
+    float _324 = _312 * _279;
+    float _332 = _312 * _293;
+    float _340 = _312 * _303;
 
-      float _315 = _311 * 0.58700001239776611328125f;
-      float _317 = _315 + cb6[7u].y;
-      float _318 = _311 * 0.114000000059604644775390625f;
-      float _320 = _318 + cb6[7u].y;
+    float _355 = (cb6[3u].w * injectedData.sceneGradingBlack) + mad(_258, mad(_309, _318, mad(_307, _315, _314 * _303)), mad(_257, mad(_300, _318, mad(_298, _315, _314 * _293)), mad(_289, _318, mad(_286, _315, _314 * _279)) * _256));
+    float _356 = (cb6[3u].w * injectedData.sceneGradingBlack) + mad(_258, mad(_309, _318, mad(_307, _317, _340)), mad(_257, mad(_300, _318, mad(_298, _317, _332)), mad(_289, _318, mad(_286, _317, _324)) * _256));
+    float _357 = (cb6[3u].w * injectedData.sceneGradingBlack) + mad(_258, mad(_309, _320, mad(_307, _315, _340)), mad(_257, mad(_300, _320, mad(_298, _315, _332)), mad(_289, _320, mad(_286, _315, _324)) * _256));
+    adjustedColor = float3(_355, _356, _357);
 
-      // _314 = lerp(cb6[7u].y, 1.f, 0.299f)
-      // _317 = lerp(cb6[7u].y, 1.f, 0.587f)
-      // _320 = lerp(cb6[7u].y, 1.f, 0.114f)
-
-      float _324 = _312 * _279;
-      float _332 = _312 * _293;
-      float _340 = _312 * _303;
-
-      float _355 = cb6[3u].w + mad(_258, mad(_309, _318, mad(_307, _315, _314 * _303)), mad(_257, mad(_300, _318, mad(_298, _315, _314 * _293)), mad(_289, _318, mad(_286, _315, _314 * _279)) * _256));
-      float _356 = cb6[3u].w + mad(_258, mad(_309, _318, mad(_307, _317, _340)), mad(_257, mad(_300, _318, mad(_298, _317, _332)), mad(_289, _318, mad(_286, _317, _324)) * _256));
-      float _357 = cb6[3u].w + mad(_258, mad(_309, _320, mad(_307, _315, _340)), mad(_257, mad(_300, _320, mad(_298, _315, _332)), mad(_289, _320, mad(_286, _315, _324)) * _256));
-      adjustedColor = float3(_355, _356, _357);
-    }
     outputRGB = lerp(inputColor, adjustedColor, injectedData.sceneGradingStrength);
   }
 
@@ -591,7 +591,7 @@ float4 tonemap(bool isACESMode = false) {
         injectedData.colorGradeSaturation);
     outputRGB = max(0, outputRGB);
     if ((injectedData.processingLUTOrder == -1.f || asuint(cb6[42u]).y == 1u) && (_69.x != 0u)) {
-      outputRGB = sampleAllLUTs(outputRGB);
+      outputRGB = sampleAllLUTs(outputRGB, true);
     }
     outputRGB *= exposure;
   }

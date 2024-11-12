@@ -8,6 +8,8 @@
 #define DEBUG_LEVEL_0
 #define DEBUG_SLIDERS_OFF
 
+#include <algorithm>
+
 #include <deps/imgui/imgui.h>
 
 #include <embed/0x04D8EA44.h>
@@ -36,6 +38,7 @@
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
+#include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
 #include "./cp2077.h"
@@ -71,6 +74,12 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 ShaderInjectData shader_injection;
 
+auto last_is_hdr = false;
+
+float ComputeReferenceWhite(float peak_nits) {
+  return std::clamp(round(pow(10.f, 0.03460730900256f + (0.757737096673107f * log10(peak_nits)))), 100.f, 203.f);
+}
+
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapType",
@@ -100,9 +109,8 @@ renodx::utils::settings::Settings settings = {
         .default_value = 203.f,
         .label = "Game Brightness",
         .section = "Tone Mapping",
-        .tooltip =
-            "Sets the value of 100% white in nits."
-            "\nDefault: Windows SDR Level or 203",
+        .tooltip = "Sets the value of 100% white in nits."
+                   "\nDefault: Reference white value for Windows HDR Peak",
         .min = 48.f,
         .max = 1000.f,
     },
@@ -113,9 +121,8 @@ renodx::utils::settings::Settings settings = {
         .default_value = 2.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
-        .tooltip =
-            "Emulates a 2.2 EOTF"
-            "Default: On with HDR",
+        .tooltip = "Emulates a 2.2 EOTF"
+                   "Default: On with HDR",
         .labels = {"Off", "UI/Menu Only", "On"},
     },
     new renodx::utils::settings::Setting{
@@ -280,6 +287,24 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "sceneGradingHue",
+        .binding = &shader_injection.sceneGradingHue,
+        .default_value = 50.f,
+        .label = "Hue",
+        .section = "Scene Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "sceneGradingSaturation",
+        .binding = &shader_injection.sceneGradingSaturation,
+        .default_value = 50.f,
+        .label = "Saturation",
+        .section = "Scene Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "sceneGradingStrength",
         .binding = &shader_injection.sceneGradingStrength,
         .default_value = 50.f,
@@ -366,6 +391,11 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Selects whether to use the vanilla sampling or PQ for the game's internal rendering LUT.",
         .labels = {"Vanilla", "PQ"},
     },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+        .section = "About",
+    },
     // new renodx::utils::settings::Setting{
     //     .key = "debugDrawGraph",
     //     .binding = &shader_injection.debugDrawGraph,
@@ -399,6 +429,8 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("sceneGradingBlack", 50.f);
   renodx::utils::settings::UpdateSetting("sceneGradingWhite", 50.f);
   renodx::utils::settings::UpdateSetting("sceneGradingClip", 50.f);
+  renodx::utils::settings::UpdateSetting("sceneGradingHue", 50.f);
+  renodx::utils::settings::UpdateSetting("sceneGradingSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("sceneGradingStrength", 50.f);
 
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
@@ -413,48 +445,25 @@ void OnPresetOff() {
 }
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain) {
-  auto color_space = swapchain->get_color_space();
-  switch (color_space) {
-    case reshade::api::color_space::hdr10_st2084:
-    case reshade::api::color_space::extended_srgb_linear:
-      settings[3]->default_value = 2.f;
-      break;
-    default:
-      settings[1]->default_value = 80.f;
-      settings[2]->default_value = 80.f;
-      settings[3]->default_value = 0.f;
-      return;
+  last_is_hdr = renodx::utils::swapchain::IsHDRColorSpace(swapchain);
+  if (!last_is_hdr) {
+    settings[1]->default_value = 80.f;
+    settings[2]->default_value = 80.f;
+    settings[3]->default_value = 0.f;
+    return;
   }
 
+  settings[3]->default_value = 2.f;
+
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+  auto white_level = 203.f;
   if (peak.has_value()) {
     settings[1]->default_value = peak.value();
   } else {
     settings[1]->default_value = 1000.f;
   }
 
-  auto white_level = renodx::utils::swapchain::GetSDRWhiteNits(swapchain);
-  if (white_level.has_value()) {
-    settings[2]->default_value = white_level.value();
-  } else {
-    settings[2]->default_value = 203.f;
-  }
-
-  std::stringstream s;
-  s << "init_swapchain(";
-  s << "color_space: " << color_space;
-  if (peak.has_value()) {
-    s << ", peak: " << peak.value();
-  } else {
-    s << ", peak: unknown";
-  }
-  if (white_level.has_value()) {
-    s << ", sdr: " << white_level.value();
-  } else {
-    s << ", sdr: unknown";
-  }
-  s << ")";
-  reshade::log::message(reshade::log::level::info, s.str().c_str());
+  settings[2]->default_value = ComputeReferenceWhite(settings[1]->default_value);
 }
 
 }  // namespace

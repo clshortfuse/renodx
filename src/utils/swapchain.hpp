@@ -285,6 +285,17 @@ static std::optional<float> GetPeakNits(reshade::api::swapchain* swapchain) {
   return output_desc->MaxLuminance;
 }
 
+static bool IsHDRColorSpace(reshade::api::swapchain* swapchain) {
+  switch (swapchain->get_color_space()) {
+    case reshade::api::color_space::extended_srgb_linear:
+    case reshade::api::color_space::hdr10_hlg:
+    case reshade::api::color_space::hdr10_st2084:
+      return true;
+    default:
+      return false;
+  }
+}
+
 static std::optional<float> GetSDRWhiteNits(reshade::api::swapchain* swapchain) {
   if (!IsDirectX(swapchain)) return std::nullopt;
 
