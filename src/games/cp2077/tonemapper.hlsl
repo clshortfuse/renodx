@@ -161,7 +161,7 @@ struct SPIRV_Cross_Input {
   uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
 };
 
-float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex) {
+float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex, bool force_sdr = false) {
   float3 color = inputColor;
   if (lutSettings.x > 0.0f) {           // LUT Strength
     uint _503 = asuint(lutSettings).w;  // lut Type
@@ -230,7 +230,7 @@ float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
         }
 
         // Only scale up HDR LUTs
-        if (lutPeakY > 1.f && lutPeakY < targetPeakY) {
+        if (!force_sdr && lutPeakY > 1.01f && lutPeakY < targetPeakY) {
           color = renodx::lut::CorrectWhite(inputColor, color, lutPeakY, targetPeakY, injectedData.processingLUTCorrection);
         }
       }
@@ -240,7 +240,7 @@ float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex)
   return color;
 }
 
-float3 sampleAllLUTs(const float3 color) {
+float3 sampleAllLUTs(const float3 color, bool force_sdr = false) {
   uint textureCount = asuint(cb6[41u]).x;
 
   float3 compositedColor = 0;
@@ -248,7 +248,7 @@ float3 sampleAllLUTs(const float3 color) {
   if (injectedData.colorGradeLUTStrength) {  // 0 speed-hack
     for (uint i = 0; i < textureCount; i++) {
       float4 lutSettings = cb6[33u + i];
-      compositedColor += SampleLUT(lutSettings, color, i);
+      compositedColor += SampleLUT(lutSettings, color, i, force_sdr);
     }
     compositedColor = lerp(color, compositedColor, injectedData.colorGradeLUTStrength);
   } else {
@@ -591,7 +591,7 @@ float4 tonemap(bool isACESMode = false) {
         injectedData.colorGradeSaturation);
     outputRGB = max(0, outputRGB);
     if ((injectedData.processingLUTOrder == -1.f || asuint(cb6[42u]).y == 1u) && (_69.x != 0u)) {
-      outputRGB = sampleAllLUTs(outputRGB);
+      outputRGB = sampleAllLUTs(outputRGB, true);
     }
     outputRGB *= exposure;
   }
