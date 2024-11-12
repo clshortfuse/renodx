@@ -8,6 +8,8 @@
 #define DEBUG_LEVEL_0
 #define DEBUG_SLIDERS_OFF
 
+#include <algorithm>
+
 #include <deps/imgui/imgui.h>
 
 #include <embed/0x04D8EA44.h>
@@ -36,6 +38,7 @@
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
+#include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
 #include "./cp2077.h"
@@ -74,7 +77,7 @@ ShaderInjectData shader_injection;
 auto last_is_hdr = false;
 
 float ComputeReferenceWhite(float peak_nits) {
-  return min(max(100.f, round(pow(10.f, 0.03460730900256f + (0.757737096673107f * log10(peak_nits))))), 203.f);
+  return std::clamp(round(pow(10.f, 0.03460730900256f + (0.757737096673107f * log10(peak_nits)))), 100.f, 203.f);
 }
 
 renodx::utils::settings::Settings settings = {
@@ -387,6 +390,11 @@ renodx::utils::settings::Settings settings = {
         .section = "Processing",
         .tooltip = "Selects whether to use the vanilla sampling or PQ for the game's internal rendering LUT.",
         .labels = {"Vanilla", "PQ"},
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+        .section = "About",
     },
     // new renodx::utils::settings::Setting{
     //     .key = "debugDrawGraph",

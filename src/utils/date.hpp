@@ -20,6 +20,7 @@ constexpr unsigned int COMPILE_MONTH = (__DATE__[0] == 'J')   ? ((__DATE__[1] ==
                                        : (__DATE__[0] == 'N') ? 11                                                           // Nov
                                        : (__DATE__[0] == 'D') ? 12                                                           // Dec
                                                               : 0;
+
 constexpr unsigned int COMPILE_DAY = (__DATE__[4] == ' ')
                                          ? (__DATE__[5] - '0')
                                          : ((__DATE__[4] - '0') * 10) + (__DATE__[5] - '0');
@@ -28,5 +29,16 @@ constexpr char ISO_DATE[] = {(COMPILE_YEAR / 1000) + '0', ((COMPILE_YEAR % 1000)
                              '-', (COMPILE_MONTH / 10) + '0', (COMPILE_MONTH % 10) + '0',
                              '-', (COMPILE_DAY / 10) + '0', (COMPILE_DAY % 10) + '0',
                              0};
+
+constexpr char ISO_DATE_TIME[] = {(COMPILE_YEAR / 1000) + '0', ((COMPILE_YEAR % 1000) / 100) + '0', ((COMPILE_YEAR % 100) / 10) + '0', (COMPILE_YEAR % 10) + '0',
+                                  '-', (COMPILE_MONTH / 10) + '0', (COMPILE_MONTH % 10) + '0',
+                                  '-', (COMPILE_DAY / 10) + '0', (COMPILE_DAY % 10) + '0',
+                                  'T',
+                                  __TIME__[0], __TIME__[1],  // HH
+                                  __TIME__[2],               // :
+                                  __TIME__[3], __TIME__[4],  // mm
+                                  __TIME__[5],               // :
+                                  __TIME__[6], __TIME__[7],  // SS
+                                  0};
 
 }  // namespace renodx::utils::date
