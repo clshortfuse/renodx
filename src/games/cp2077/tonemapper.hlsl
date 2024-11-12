@@ -356,7 +356,7 @@ float4 tonemap(bool isACESMode = false) {
     // float _320 = _318 + cb6[7u].y;
 
     // Correct to BT709
-    float customSaturation = lerp(cb6[7u].y, 1.f, injectedData.sceneGradingSaturation);
+    float customSaturation = lerp(1.f, cb6[7u].y, injectedData.sceneGradingSaturation);
     float inverseSaturation = 1.0f - customSaturation;
     float _311 = inverseSaturation;
     float _312 = _311 * renodx::color::BT709_TO_XYZ_MAT[1].r;
