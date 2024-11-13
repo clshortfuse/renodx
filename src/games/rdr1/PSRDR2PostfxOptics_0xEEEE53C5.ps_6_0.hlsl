@@ -1,3 +1,5 @@
+#include "./shared.h"
+
 Texture2D<float4> g_textures2D[] : register(t0, space2);
 
 cbuffer Globals : register(b0) {
@@ -249,16 +251,20 @@ float4 main(
   float _213 = _208 * 2.0f;
   float _214 = _213 * _204;
 
-  // float _215 = saturate(_210);
-  // float _216 = saturate(_212);
-  // float _217 = saturate(_214);
-  float _215 = max(0, _210);
-  float _216 = max(0, _212);
-  float _217 = max(0, _214);
+  float3 hdrColor = float3(_210, _212, _214);
 
-  float _219 = Globals_009x;
-  float _220 = Globals_009y;
-  float _221 = Globals_009z;
+  // removing these saturates causes weird colors
+  float _215 = saturate(_210);
+  float _216 = saturate(_212);
+  float _217 = saturate(_214);
+
+  // float _215 = max(0, _210);
+  // float _216 = max(0, _212);
+  // float _217 = max(0, _214);
+
+  float _219 = Globals_009x;  // LUMINANCE.x
+  float _220 = Globals_009y;  // LUMINANCE.y
+  float _221 = Globals_009z;  // LUMINANCE.z
   float _222 = dot(float3(_215, _216, _217), float3(_219, _220, _221));
   float _223 = Globals_009w;
   float _224 = _215 - _222;
@@ -289,6 +295,11 @@ float4 main(
   float _250 = _230 - _243;
   float _251 = _231 - _246;
   float _252 = _232 - _249;
+
+  float3 upgradedColor = renodx::tonemap::UpgradeToneMap(hdrColor, saturate(hdrColor), float3(_250, _251, _252), 1.f);
+  _250 = upgradedColor.r;
+  _251 = upgradedColor.g;
+  _252 = upgradedColor.b;
 
   // float _253 = saturate(_250);
   // float _254 = saturate(_251);
