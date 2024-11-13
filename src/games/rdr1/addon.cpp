@@ -4,16 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <embed/0xEEEE53C5.h>  // Color Grade
+#include <embed/0x4EAF2BC7.h>  // PostFX
+#include <embed/0xEEEE53C5.h>  // PostFX + Optics
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
-#include "../../mods/swapchain.hpp"
 
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xEEEE53C5),  // Color Grade
+    CustomShaderEntry(0x4EAF2BC7),  // PostFX
+    CustomShaderEntry(0xEEEE53C5),  // PostFX + Optics
 };
 
 }  // namespace
