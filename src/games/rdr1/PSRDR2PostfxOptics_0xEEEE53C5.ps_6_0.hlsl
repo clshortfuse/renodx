@@ -258,10 +258,6 @@ float4 main(
   float _216 = saturate(_212);
   float _217 = saturate(_214);
 
-  // float _215 = max(0, _210);
-  // float _216 = max(0, _212);
-  // float _217 = max(0, _214);
-
   float _219 = Globals_009x;  // LUMINANCE.x
   float _220 = Globals_009y;  // LUMINANCE.y
   float _221 = Globals_009z;  // LUMINANCE.z
@@ -276,7 +272,7 @@ float4 main(
   float _230 = _227 + _222;
   float _231 = _228 + _222;
   float _232 = _229 + _222;
-  float _234 = Globals_012x;
+  float _234 = Globals_012x;  // deSat
   float _235 = _230 + -1.0f;
   float _236 = _231 + -1.0f;
   float _237 = _232 + -1.0f;
@@ -296,18 +292,17 @@ float4 main(
   float _251 = _231 - _246;
   float _252 = _232 - _249;
 
+#if 1  // use upgradetonemap() to recover highlight detail
   float3 upgradedColor = renodx::tonemap::UpgradeToneMap(hdrColor, saturate(hdrColor), float3(_250, _251, _252), 1.f);
   _250 = upgradedColor.r;
   _251 = upgradedColor.g;
   _252 = upgradedColor.b;
+#endif
 
-  // float _253 = saturate(_250);
-  // float _254 = saturate(_251);
-  // float _255 = saturate(_252);
-  float _253 = max(0, _250);
-  float _254 = max(0, _251);
-  float _255 = max(0, _252);
-  
+  float _253 = max(0, _250);  // float _253 = saturate(_250);
+  float _254 = max(0, _251);  // float _254 = saturate(_251);
+  float _255 = max(0, _252);  // float _255 = saturate(_252);
+
   float _256 = abs(_253);
   float _257 = abs(_254);
   float _258 = abs(_255);
