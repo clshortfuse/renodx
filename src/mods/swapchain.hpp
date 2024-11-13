@@ -64,6 +64,9 @@ struct SwapChainUpgradeTarget {
   Dimensions dimensions = {.width = BACK_BUFFER, .height = BACK_BUFFER, .depth = BACK_BUFFER};
   Dimensions new_dimensions = {.width = ANY, .height = ANY, .depth = ANY};
 
+  reshade::api::resource_usage usage_include = reshade::api::resource_usage::undefined;
+  reshade::api::resource_usage usage_exclude = reshade::api::resource_usage::undefined;
+
   [[nodiscard]] bool CheckResourceDesc(
       reshade::api::resource_desc desc,
       reshade::api::resource_desc back_buffer_desc,
@@ -72,6 +75,10 @@ struct SwapChainUpgradeTarget {
     if (this->usage != reshade::api::resource_usage::undefined) {
       if (this->usage != desc.usage) return false;
     }
+
+    if (this->usage_include != 0 && (desc.usage & this->usage_include) == 0) return false;
+    if (this->usage_exclude != 0 && (desc.usage & this->usage_exclude) != 0) return false;
+
     if (this->state != reshade::api::resource_usage::undefined) {
       if (this->state != state) return false;
     }
