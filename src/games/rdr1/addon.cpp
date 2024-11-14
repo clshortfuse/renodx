@@ -31,23 +31,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //     .old_format = reshade::api::format::r8g8b8a8_unorm_srgb,
-      //     .new_format = reshade::api::format::r16g16b16a16_float,
-      // });
-      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //     .old_format = reshade::api::format::r8g8b8a8_unorm,
-      //     .new_format = reshade::api::format::r16g16b16a16_float,
-      // });
-      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //     .old_format = reshade::api::format::r8g8b8a8_typeless,
-      //     .new_format = reshade::api::format::r16g16b16a16_float,
-      // });
-      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //     .old_format = reshade::api::format::b8g8r8a8_unorm,
-      //     .new_format = reshade::api::format::r16g16b16a16_float,
-      // });
-
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(h_module);
