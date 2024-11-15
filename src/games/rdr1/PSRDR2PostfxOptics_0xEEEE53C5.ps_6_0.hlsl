@@ -2,322 +2,328 @@
 
 Texture2D<float4> g_textures2D[] : register(t0, space2);
 
-cbuffer Globals : register(b0) {
-  float Globals_006z : packoffset(c006.z);
-  float Globals_007x : packoffset(c007.x);
-  float Globals_007y : packoffset(c007.y);
-  float Globals_009x : packoffset(c009.x);
-  float Globals_009y : packoffset(c009.y);
-  float Globals_009z : packoffset(c009.z);
-  float Globals_009w : packoffset(c009.w);
-  float Globals_010x : packoffset(c010.x);
-  float Globals_010y : packoffset(c010.y);
-  float Globals_010z : packoffset(c010.z);
-  float Globals_011x : packoffset(c011.x);
-  float Globals_011y : packoffset(c011.y);
-  float Globals_011z : packoffset(c011.z);
-  float Globals_012x : packoffset(c012.x);
-  float Globals_013x : packoffset(c013.x);
-  float Globals_013y : packoffset(c013.y);
-  float Globals_013z : packoffset(c013.z);
-  float Globals_014x : packoffset(c014.x);
-  float Globals_014z : packoffset(c014.z);
-  float Globals_020y : packoffset(c020.y);
-  float Globals_020z : packoffset(c020.z);
-  uint Globals_025y : packoffset(c025.y);
-  uint Globals_025z : packoffset(c025.z);
-  uint Globals_026w : packoffset(c026.w);
-  uint Globals_027x : packoffset(c027.x);
-  uint Globals_027y : packoffset(c027.y);
-  uint Globals_027z : packoffset(c027.z);
-  uint Globals_027w : packoffset(c027.w);
-  uint Globals_028x : packoffset(c028.x);
-  uint Globals_028w : packoffset(c028.w);
-  uint Globals_029x : packoffset(c029.x);
-  uint Globals_065x : packoffset(c065.x);
-  uint Globals_065y : packoffset(c065.y);
-  uint Globals_065z : packoffset(c065.z);
-  uint Globals_065w : packoffset(c065.w);
-  float Globals_066y : packoffset(c066.y);
-  float Globals_066z : packoffset(c066.z);
-  float Globals_067x : packoffset(c067.x);
-  float Globals_067y : packoffset(c067.y);
-  float Globals_067z : packoffset(c067.z);
-  float Globals_068x : packoffset(c068.x);
-  float Globals_068y : packoffset(c068.y);
-  float Globals_068z : packoffset(c068.z);
+cbuffer Globals : register(b0, space0) {
+  float gMotionBlurScalar;
+  float UsingHDR10;
+  float HDRPeakNits;
+  float SDRPaperWhiteNits;
+  float physicsmaterial;
+  float4 TexelSize;
+  float4 BlueShiftColor;
+  float4 BlueShiftParams;
+  float ElapsedTime;
+  float Frames;
+  float Lambda;
+  float4 BrightPassValues;
+  float White;
+  float IntensityBloom;
+  float4 brightPassParams;
+  float3 LUMINANCE;
+  float deSat;
+  float4 ConstAdd;
+  float4 ColorCorrect;
+  float Contrast;
+  float4 DofParams;
+  float3 NearFarClipPlaneQ;
+  float2 NearFarClipPaneScaleAndBias;
+  float4x4 gViewProjInverse;
+  float Gamma;
+  float LowerLimitAdaption;
+  float HigherLimitAdaption;
+  float distortionFreq;
+  float distortionScale;
+  float distortionRoll;
+  float4 SSAOProjectionParams;
+  float4 SSAOTweakParams;
+  float4 gScreenSize;
+  float ParticleHeatShimmerSeed;
+  int FullResMapSampler;
+  int FullResMapSamplerSS;
+  int RenderMapSampler;
+  int RenderMapSamplerSS;
+  int RenderMapPointSampler;
+  int RenderMapPointSamplerSS;
+  int RenderMapBilinearSampler;
+  int RenderMapBilinearSamplerSS;
+  int RenderMapAnisoSampler;
+  int RenderMapAnisoSamplerSS;
+  int DepthMapSampler;
+  int DepthMapSamplerSS;
+  int ToneMapSampler;
+  int ToneMapSamplerSS;
+  int AdaptedLuminanceMapSampler;
+  int AdaptedLuminanceMapSamplerSS;
+  int LightGlowTexSampler;
+  int LightGlowTexSamplerSS;
+  float AdaptedLuminance;
+  float2 horzTapOffs[7];
+  float2 vertTapOffs[7];
+  float4 TexelWeight[16];
+  float3 Scale;
+  float DustOverlayStrength;
+  float SoftDofFalloffPower;
+  float SoftDofStrength;
+  float DofBackendPull;
+  float TotalTime;
+  float4 HeatShimmerParams;
+  float4 ColorScalar;
+  int DOFHelperSampler;
+  int DOFHelperSamplerSS;
+  int ParticleCompositeSampler;
+  int ParticleCompositeSamplerSS;
+  int GlowSampler;
+  int GlowSamplerSS;
+  int GlowSampler2;
+  int GlowSampler2SS;
+  float DisableVignette;
+  float AdditiveReducer;
+  float AdditiveReducer2;
+  float4 GlowColor2;
+  float4 GlowColor;
+  float FlareSize;
+  int DeathSampler;
+  int DeathSamplerSS;
+  float DeathMag;
+  float DeathDrip;
+  float DeathBlood;
+  float4 DeathColor;
+  float3 DeathEffect;
+  float4 InjuryDirections;
+  float4 InjuryTimes;
+  float4x4 WorldViewProjInverse;
+  float AverageHeight;
+  float4 LightStreakDirection;
+  float4 streakWeights;
+  float4 StreakParams;
+  float4 DuelColorCorrect;
+  float4 DuelConstAdd;
+  float DuelEnemyU;
+  float DuelEnemyWidth;
+  float DueldeSat;
+  float DuelContrast;
 };
 
 SamplerState g_samplers[] : register(s0, space1);
 
 float4 main(
     noperspective float4 SV_Position: SV_Position,
-    linear float4 TEXCOORD: TEXCOORD,
-    linear float4 TEXCOORD_1: TEXCOORD1,
-    linear float4 TEXCOORD_2: TEXCOORD2)
+    linear float4 TEXCOORD0: TEXCOORD,
+    linear float4 TEXCOORD1: TEXCOORD1,
+    linear float4 TEXCOORD2: TEXCOORD2)
     : SV_Target {
-  float4 SV_Target;
-  // cbuffer _1 = Globals;
-  float _2 = TEXCOORD_2.x;
-  float _3 = TEXCOORD_2.y;
-  float _4 = TEXCOORD_2.z;
-  float _5 = TEXCOORD_2.w;
-  float _6 = TEXCOORD.x;
-  float _7 = TEXCOORD.y;
-  uint _9 = Globals_027w;
-  uint _11 = Globals_028x;
-  uint _12 = _9 + 0;
-  // texture _13 = g_textures2D[_12];
-  uint _14 = _11 + 0;
-  // SamplerState _15 = g_samplers[_14];
-  float4 _16 = g_textures2D[_12].Sample(g_samplers[_14], float2(_6, _7));
-  float _17 = _16.x;
-  float _19 = Globals_014x;
-  float _20 = Globals_014z;
-  float _21 = _19 * _20;
-  float _22 = -0.0f - _21;
-  float _23 = _17 - _20;
-  float _24 = _22 / _23;
-  uint _26 = Globals_025y;
-  uint _27 = Globals_025z;
-  uint _28 = _26 + 0;
-  // texture _29 = g_textures2D[_28];
-  uint _30 = _27 + 0;
-  // SamplerState _31 = g_samplers[_30];
-  float4 _32 = g_textures2D[_28].Sample(g_samplers[_30], float2(_6, _7));
-  float _33 = _32.x;
-  float _34 = _32.y;
-  float _35 = _32.z;
-  uint _37 = Globals_027y;
-  uint _38 = Globals_027z;
-  uint _39 = _37 + 0;
-  // texture _40 = g_textures2D[_39];
-  uint _41 = _38 + 0;
-  // SamplerState _42 = g_samplers[_41];
-  float4 _43 = g_textures2D[_39].Sample(g_samplers[_41], float2(_6, _7));
-  float _44 = _43.x;
-  float _45 = _43.y;
-  float _46 = _43.z;
-  float _47 = _43.w;
+  float _1 = TEXCOORD2.x;
+  float _2 = TEXCOORD2.y;
+  float _3 = TEXCOORD2.z;
+  float _4 = TEXCOORD2.w;
+  float _5 = TEXCOORD0.x;
+  float _6 = TEXCOORD0.y;
+
+  float _16 = g_textures2D[DepthMapSampler].Sample(g_samplers[DepthMapSamplerSS], float2(TEXCOORD0.x, TEXCOORD0.y)).x;  // fix
+
+  float _18 = NearFarClipPlaneQ.x;
+  float _19 = NearFarClipPlaneQ.z;
+  float _20 = _18 * _19;
+  float _21 = -_20;
+  float _22 = _16 - _19;
+  float _23 = _21 / _22;
+
+  float4 fullResMap = g_textures2D[FullResMapSampler].Sample(g_samplers[FullResMapSamplerSS], float2(TEXCOORD0.x, TEXCOORD0.y));  // fix
+
+  float _32 = fullResMap.x;
+  float _33 = fullResMap.y;
+  float _34 = fullResMap.z;
+
+  float4 _42 = g_textures2D[RenderMapAnisoSampler].Sample(g_samplers[RenderMapAnisoSamplerSS], float2(TEXCOORD0.x, TEXCOORD0.y));  // fix
+  float _43 = _42.x;
+  float _44 = _42.y;
+  float _45 = _42.z;
+  float _46 = _42.w;
+
+  float _47 = _43 * _43;
   float _48 = _44 * _44;
   float _49 = _45 * _45;
-  float _50 = _46 * _46;
-  float _52 = Globals_007y;
-  float _53 = _48 * _52;
-  float _54 = _49 * _52;
-  float _55 = _50 * _52;
-  float _56 = saturate(_47);
-  uint _58 = Globals_026w;
-  uint _60 = Globals_027x;
-  uint _61 = _58 + 0;
-  // texture _62 = g_textures2D[_61];
-  uint _63 = _60 + 0;
-  // SamplerState _64 = g_samplers[_63];
-  float4 _65 = g_textures2D[_61].Sample(g_samplers[_63], float2(_6, _7));
-  float _66 = _65.x;
-  float _67 = _65.y;
-  float _68 = _65.z;
-  float _70 = Globals_013x;
-  float _71 = Globals_013y;
-  float _72 = _24 - _71;
-  float _73 = _72 * _70;
-  float _74 = saturate(_73);
-  float _75 = Globals_013z;
-  bool _76 = (_24 < _75);
-  float _77 = float(_76);
-  float _78 = _77 * _74;
-  float _79 = max(_78, _56);
-  uint _81 = Globals_028w;
-  uint _83 = Globals_029x;
-  uint _84 = _81 + 0;
-  // texture _85 = g_textures2D[_84];
-  uint _86 = _83 + 0;
-  // SamplerState _87 = g_samplers[_86];
-  float4 _88 = g_textures2D[_84].Sample(g_samplers[_86], float2(0.0f, 0.0f));
-  float _89 = _88.x;
-  float _91 = Globals_020z;
-  float _92 = Globals_020y;
-  float _93 = max(_89, _92);
-  float _94 = min(_93, _91);
+  float _51 = IntensityBloom;
+  float _52 = _47 * _51;
+  float _53 = _48 * _51;
+  float _54 = _49 * _51;
+  float _55 = saturate(_46);
+
+  float4 _64 = g_textures2D[RenderMapBilinearSampler].Sample(g_samplers[RenderMapBilinearSamplerSS], float2(TEXCOORD0.x, TEXCOORD0.y));  // fix
+  float _65 = _64.x;
+  float _66 = _64.y;
+  float _67 = _64.z;
+
+  float _69 = DofParams.x;
+  float _70 = DofParams.y;
+  float _71 = _23 - _70;
+  float _72 = _71 * _69;
+  float _73 = saturate(_72);
+  bool _75 = (_23 < DofParams.z);
+  float _76 = _75 ? 1.0 : 0.0;
+  float _77 = max(_76 * _73, _55);
+
+  float _78 = max(_77, _55);
+
+  //--------------------------------------------------------
+  // did by hand, not sure if I'm understanding it right
+  float AdaptedLuminance = g_textures2D[AdaptedLuminanceMapSampler].Sample(g_samplers[AdaptedLuminanceMapSamplerSS], float2(0.0, 0.0)).x;
+  float ClampedLuminance = clamp(AdaptedLuminance, LowerLimitAdaption, HigherLimitAdaption);
+
+  float _93 = ClampedLuminance;  // used later
+
+  //---------------------------------------------------------
+
+  float _94 = _65 - _32;
   float _95 = _66 - _33;
   float _96 = _67 - _34;
-  float _97 = _68 - _35;
-  float _98 = _79 * _95;
-  float _99 = _79 * _96;
-  float _100 = _79 * _97;
+
+  float _97 = _78 * _94;
+  float _98 = _78 * _95;
+  float _99 = _78 * _96;
+  float _100 = _97 + _32;
   float _101 = _98 + _33;
   float _102 = _99 + _34;
-  float _103 = _100 + _35;
-  uint _105 = Globals_065x;
-  uint _106 = Globals_065y;
-  uint _107 = _105 + 0;
-  // texture _108 = g_textures2D[_107];
-  uint _109 = _106 + 0;
-  // SamplerState _110 = g_samplers[_109];
-  float4 _111 = g_textures2D[_107].Sample(g_samplers[_109], float2(_2, _3));
-  float _112 = _111.x;
-  float _113 = _111.y;
-  float _114 = _111.z;
-  float _115 = _111.w;
-  uint _117 = Globals_065z;
-  uint _118 = Globals_065w;
-  uint _119 = _117 + 0;
-  // texture _120 = g_textures2D[_119];
-  uint _121 = _118 + 0;
-  // SamplerState _122 = g_samplers[_121];
-  float4 _123 = g_textures2D[_119].Sample(g_samplers[_121], float2(_4, _5));
-  float _124 = _123.x;
-  float _125 = _123.y;
-  float _126 = _123.z;
-  float _127 = _123.w;
-  float _129 = Globals_067x;
-  float _130 = Globals_067y;
-  float _131 = Globals_067z;
-  float _133 = Globals_068x;
-  float _134 = Globals_068y;
-  float _135 = Globals_068z;
-  float _136 = dot(float3(_101, _102, _103), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
-  float _137 = 1.0099999904632568f - _136;
-  float _139 = Globals_066y;
-  float _140 = Globals_066z;
-  float _141 = abs(_137);
-  float _142 = log2(_141);
-  float _143 = _142 * _139;
-  float _144 = _142 * _140;
+
+  float4 _110 = g_textures2D[GlowSampler].Sample(g_samplers[GlowSamplerSS], float2(TEXCOORD2.x, TEXCOORD2.y));  // fix
+  float _111 = _110.x;
+  float _112 = _110.y;
+  float _113 = _110.z;
+  float _114 = _110.w;
+
+  float4 _122 = g_textures2D[GlowSampler2].Sample(g_samplers[GlowSampler2SS], float2(TEXCOORD2.z, TEXCOORD2.w));  // fix
+  float _123 = _122.x;
+  float _124 = _122.y;
+  float _125 = _122.z;
+  float _126 = _122.w;
+  float _136 = 1.010 - renodx::color::y::from::BT601(float3(_100, _101, _102));
+  float _141 = log2(abs(_136));
+  float _142 = _141 * AdditiveReducer;
+  float _143 = _141 * AdditiveReducer2;
+  float _144 = exp2(_142);
   float _145 = exp2(_143);
-  float _146 = exp2(_144);
-  float _147 = _115 * _112;
-  float _148 = _147 * _133;
-  float _149 = _148 * _145;
-  float _150 = _115 * _113;
-  float _151 = _150 * _134;
-  float _152 = _151 * _145;
-  float _153 = _115 * _114;
-  float _154 = _153 * _135;
-  float _155 = _154 * _145;
-  float _156 = _149 + _101;
-  float _157 = _152 + _102;
-  float _158 = _155 + _103;
-  float _159 = _127 * _124;
-  float _160 = _159 * _129;
-  float _161 = _160 * _146;
-  float _162 = _127 * _125;
-  float _163 = _162 * _130;
-  float _164 = _163 * _146;
-  float _165 = _127 * _126;
-  float _166 = _165 * _131;
-  float _167 = _166 * _146;
-  float _168 = _156 + _161;
-  float _169 = _157 + _164;
-  float _170 = _158 + _167;
-  float _172 = Globals_006z;
-  float _173 = _94 + 0.0010000000474974513f;
-  float _174 = _172 / _173;
-  float _175 = _168 * _174;
-  float _176 = _174 * _169;
-  float _177 = _174 * _170;
-  float _179 = Globals_007x;
-  float _180 = _175 / _179;
-  float _181 = _176 / _179;
-  float _182 = _177 / _179;
-  float _183 = _180 + 1.0f;
-  float _184 = _181 + 1.0f;
-  float _185 = _182 + 1.0f;
+
+  float _146 = _114 * _111;
+  float _147 = _146 * GlowColor.x;
+  float _148 = _147 * _144;
+  float _149 = _114 * _112;
+  float _150 = _149 * GlowColor.y;
+  float _151 = _150 * _144;
+  float _152 = _114 * _113;
+  float _153 = _152 * GlowColor.z;
+  float _154 = _153 * _144;
+
+  float _155 = _148 + _100;
+  float _156 = _151 + _101;
+  float _157 = _154 + _102;
+
+  float _158 = _126 * _123;
+  float _159 = _158 * GlowColor2.x;
+  float _160 = _159 * _145;
+  float _161 = _126 * _124;
+  float _162 = _161 * GlowColor2.y;
+  float _163 = _162 * _145;
+  float _164 = _126 * _125;
+  float _165 = _164 * GlowColor2.z;
+  float _166 = _165 * _145;
+
+  float _167 = _155 + _160;
+  float _168 = _156 + _163;
+  float _169 = _157 + _166;
+
+  float _171 = BrightPassValues.z;
+  float _172 = _93 + 0.001;
+  float _173 = _171 / _172;
+
+  float _174 = _167 * _173;
+  float _175 = _168 * _173;
+  float _176 = _169 * _173;
+
+  float _178 = White;
+  float _179 = _174 / _178;
+  float _180 = _175 / _178;
+  float _181 = _176 / _178;
+
+  float _182 = _179 + 1.000;
+  float _183 = _180 + 1.000;
+  float _184 = _181 + 1.000;
+
+  float _185 = _182 * _174;
   float _186 = _183 * _175;
   float _187 = _184 * _176;
-  float _188 = _185 * _177;
-  float _189 = _175 + 1.0f;
-  float _190 = _176 + 1.0f;
-  float _191 = _177 + 1.0f;
+
+  float _188 = _174 + 1.000;
+  float _189 = _175 + 1.000;
+  float _190 = _176 + 1.000;
+
+  float _191 = _185 / _188;
   float _192 = _186 / _189;
   float _193 = _187 / _190;
-  float _194 = _188 / _191;
+
+  float _194 = _191 + _52;
   float _195 = _192 + _53;
   float _196 = _193 + _54;
-  float _197 = _194 + _55;
-  float _199 = Globals_010x;
-  float _200 = Globals_010y;
-  float _201 = Globals_010z;
+
+  float _198 = ConstAdd.x;
+  float _199 = ConstAdd.y;
+  float _200 = ConstAdd.z;
+
+  float _201 = _194 + _198;
   float _202 = _195 + _199;
   float _203 = _196 + _200;
-  float _204 = _197 + _201;
-  float _206 = Globals_011x;
-  float _207 = Globals_011y;
-  float _208 = Globals_011z;
-  float _209 = _206 * 2.0f;
-  float _210 = _209 * _202;
-  float _211 = _207 * 2.0f;
-  float _212 = _211 * _203;
-  float _213 = _208 * 2.0f;
-  float _214 = _213 * _204;
 
-  float3 hdrColor = float3(_210, _212, _214);
+  float _205 = ColorCorrect.x * 2.000;
+  float _206 = ColorCorrect.y * 2.000;
+  float _207 = ColorCorrect.z * 2.000;
 
-  // removing these saturates causes weird colors
-  float _215 = saturate(_210);
-  float _216 = saturate(_212);
-  float _217 = saturate(_214);
+  float _209 = _205 * _201;
+  float _210 = _206 * _202;
+  float _211 = _207 * _203;
 
-  float _219 = Globals_009x;  // LUMINANCE.x
-  float _220 = Globals_009y;  // LUMINANCE.y
-  float _221 = Globals_009z;  // LUMINANCE.z
-  float _222 = dot(float3(_215, _216, _217), float3(_219, _220, _221));
-  float _223 = Globals_009w;
-  float _224 = _215 - _222;
-  float _225 = _216 - _222;
-  float _226 = _217 - _222;
-  float _227 = _223 * _224;
-  float _228 = _223 * _225;
-  float _229 = _223 * _226;
-  float _230 = _227 + _222;
-  float _231 = _228 + _222;
-  float _232 = _229 + _222;
-  float _234 = Globals_012x;  // deSat
-  float _235 = _230 + -1.0f;
-  float _236 = _231 + -1.0f;
-  float _237 = _232 + -1.0f;
-  float _238 = _230 + -0.5f;
-  float _239 = _231 + -0.5f;
-  float _240 = _232 + -0.5f;
-  float _241 = _230 * _234;
-  float _242 = _241 * _235;
-  float _243 = _242 * _238;
-  float _244 = _231 * _234;
-  float _245 = _244 * _236;
-  float _246 = _245 * _239;
-  float _247 = _232 * _234;
-  float _248 = _247 * _237;
-  float _249 = _248 * _240;
-  float _250 = _230 - _243;
-  float _251 = _231 - _246;
-  float _252 = _232 - _249;
+  float3 colorCorrected = float3(_209, _210, _211);
 
-#if 1  // use upgradetonemap() to recover highlight detail
-  float3 upgradedColor = renodx::tonemap::UpgradeToneMap(hdrColor, saturate(hdrColor), float3(_250, _251, _252), 1.f);
-  _250 = upgradedColor.r;
-  _251 = upgradedColor.g;
-  _252 = upgradedColor.b;
+  // Apply Desaturation - lerp to luminance
+  float blackAndWhite = dot(colorCorrected, float3(LUMINANCE.x, LUMINANCE.y, LUMINANCE.z));
+  float3 desaturatedColorHDR = lerp(blackAndWhite, colorCorrected, deSat);
+
+  // Apply Contrast - done in SDR
+  // float _234 = desaturatedColorHDR.r + -1.000;
+  // float _235 = desaturatedColorHDR.g + -1.000;
+  // float _236 = desaturatedColorHDR.b + -1.000;
+
+  // float _237 = desaturatedColorHDR.r + -0.500;
+  // float _238 = desaturatedColorHDR.g + -0.500;
+  // float _239 = desaturatedColorHDR.b + -0.500;
+
+  // float _240 = desaturatedColorHDR.r * Contrast;
+  // float _241 = _240 * _234;
+  // float _242 = _241 * _237;
+  // float _243 = desaturatedColorHDR.g * Contrast;
+  // float _244 = _243 * _235;
+  // float _245 = _244 * _238;
+  // float _246 = desaturatedColorHDR.b * Contrast;
+  // float _247 = _246 * _236;
+  // float _248 = _247 * _239;
+
+  // float _249 = desaturatedColorHDR.r - _242;
+  // float _250 = desaturatedColorHDR.g - _245;
+  // float _251 = desaturatedColorHDR.b - _248;
+
+  // float3 outputColor = float3(_249, _250, _251);
+  float3 desaturatedColorSDR = saturate(renodx::tonemap::dice::BT709(desaturatedColorHDR, 1.0, 0.5));
+  float3 contrastedColor = desaturatedColorSDR - (((desaturatedColorSDR * Contrast) * (desaturatedColorSDR - 1.0)) * (desaturatedColorSDR - 0.5));
+
+  float3 outputColor = contrastedColor;
+
+#if 1  // use upgradetonemap() to apply SDR contrast to HDR
+  float3 upgradedColor = renodx::tonemap::UpgradeToneMap(desaturatedColorHDR, desaturatedColorSDR, outputColor, 1.f);
+
+  // blend vanillaColor back in to fix differences in contrast
+  float3 vanillaDesaturatedColor = saturate(desaturatedColorHDR);
+  float3 vanillaContrastedColor = vanillaDesaturatedColor - (((vanillaDesaturatedColor * Contrast) * (vanillaDesaturatedColor - 1.0)) * (vanillaDesaturatedColor - 0.5));
+  outputColor = lerp(saturate(vanillaContrastedColor), upgradedColor, saturate(vanillaContrastedColor));
 #endif
 
-  float _253 = max(0, _250);  // float _253 = saturate(_250);
-  float _254 = max(0, _251);  // float _254 = saturate(_251);
-  float _255 = max(0, _252);  // float _255 = saturate(_252);
+  float3 gammaEncodedColor = renodx::color::gamma::Encode(max(0, outputColor), 2.2f);
 
-  float _256 = abs(_253);
-  float _257 = abs(_254);
-  float _258 = abs(_255);
-  float _259 = log2(_256);
-  float _260 = log2(_257);
-  float _261 = log2(_258);
-  float _262 = _259 * 0.45454543828964233f;
-  float _263 = _260 * 0.45454543828964233f;
-  float _264 = _261 * 0.45454543828964233f;
-  float _265 = exp2(_262);
-  float _266 = exp2(_263);
-  float _267 = exp2(_264);
-  SV_Target.x = _265;
-  SV_Target.y = _266;
-  SV_Target.z = _267;
-  SV_Target.w = 1.0f;
-  return SV_Target;
+  return float4(gammaEncodedColor, 1.0);
 }
