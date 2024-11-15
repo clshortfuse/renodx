@@ -5,7 +5,12 @@
  */
 
 #include <embed/0x4EAF2BC7.h>  // PostFX
-#include <embed/0xEEEE53C5.h>  // PostFX + Optics
+#include <embed/0xEEEE53C5.h>  // PostFX - Optics
+
+#include <embed/0xCCC43328.h>  // PostFX - Aiming
+#include <embed/0xE93AD74D.h>  // PostFX - Aiming + Optics
+
+#include <embed/0xE033AAAD.h>  // Mini Eye Adaptation
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
@@ -14,7 +19,12 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x4EAF2BC7),  // PostFX
-    CustomShaderEntry(0xEEEE53C5),  // PostFX + Optics
+    CustomShaderEntry(0xEEEE53C5),  // PostFX - Optics
+
+    CustomShaderEntry(0xCCC43328),  // PostFX - Aiming
+    CustomShaderEntry(0xE93AD74D),  // PostFX - Aiming + Optics
+
+    CustomShaderEntry(0xE033AAAD),  // Mini Eye Adaptation
 };
 
 }  // namespace
