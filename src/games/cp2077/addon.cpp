@@ -77,7 +77,7 @@ ShaderInjectData shader_injection;
 auto last_is_hdr = false;
 
 float ComputeReferenceWhite(float peak_nits) {
-  return std::clamp(round(pow(10.f, 0.03460730900256f + (0.757737096673107f * log10(peak_nits)))), 100.f, 203.f);
+  return std::clamp(roundf(powf(10.f, 0.03460730900256f + (0.757737096673107f * log10f(peak_nits)))), 100.f, 203.f);
 }
 
 renodx::utils::settings::Settings settings = {
@@ -122,7 +122,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Gamma Correction",
         .section = "Tone Mapping",
         .tooltip = "Emulates a 2.2 EOTF"
-                   "Default: On with HDR",
+                   "\nDefault: On with HDR",
         .labels = {"Off", "UI/Menu Only", "On"},
     },
     new renodx::utils::settings::Setting{
