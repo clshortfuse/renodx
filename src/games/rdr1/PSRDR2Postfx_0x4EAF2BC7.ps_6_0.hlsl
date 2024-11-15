@@ -147,24 +147,28 @@ float4 main(float4 SV_Position: SV_POSITION,
   // Apply Color Correction
   // desaturation and contrast need to be done in SDR
   // causes broken colors on highlights otherwise
-  float3 colorCorrectedHDR = (ColorCorrect.rgb * 2.0) * (bloomedColor + ConstAdd.xyz);
-  float3 colorCorrectedSDR = saturate(colorCorrectedHDR);
+  float3 colorCorrected = (ColorCorrect.rgb * 2.0) * (bloomedColor + ConstAdd.xyz);
 
-  // Apply Desaturation - luminance based, done in SDR
-  float luminance = dot(colorCorrectedSDR, LUMINANCE.xyz);
-  float3 desaturatedColor = (deSat * (colorCorrectedSDR - luminance)) + luminance;
+  // Apply Desaturation - lerp to luminance
+  float blackAndWhite = dot(colorCorrected, LUMINANCE.xyz);
+  float3 desaturatedColorHDR = lerp(blackAndWhite, colorCorrected, deSat);
 
   // Apply Contrast - done in SDR
-  float3 contrastedColor = desaturatedColor - (((desaturatedColor * Contrast) * (desaturatedColor - 1.0)) * (desaturatedColor - 0.5));
+  float3 desaturatedColorSDR = saturate(renodx::tonemap::dice::BT709(desaturatedColorHDR, 1.0, 0.5));
+  float3 contrastedColor = desaturatedColorSDR - (((desaturatedColorSDR * Contrast) * (desaturatedColorSDR - 1.0)) * (desaturatedColorSDR - 0.5));
 
-  // removing max(0, color) adds no wcg while causing artifacts in pause menu
-  float3 outputColor = max(0, contrastedColor);
+  float3 outputColor = contrastedColor;
 
-#if 1  // use upgradetonemap() to recover highlight detail
-  float3 upgradedColor = renodx::tonemap::UpgradeToneMap(colorCorrectedHDR, colorCorrectedSDR, outputColor, 1.f);
-  outputColor = upgradedColor;
+#if 1  // use upgradetonemap() to apply SDR contrast to HDR
+  float3 upgradedColor = renodx::tonemap::UpgradeToneMap(desaturatedColorHDR, desaturatedColorSDR, outputColor, 1.f);
+
+  // blend vanillaColor back in to fix differences in contrast
+  float3 vanillaDesaturatedColor = saturate(desaturatedColorHDR);
+  float3 vanillaContrastedColor = vanillaDesaturatedColor - (((vanillaDesaturatedColor * Contrast) * (vanillaDesaturatedColor - 1.0)) * (vanillaDesaturatedColor - 0.5));
+  outputColor = lerp(saturate(vanillaContrastedColor), upgradedColor, saturate(vanillaContrastedColor));
 #endif
 
+  // allowing negatives adds no wcg while causing artifacts in pause menu
   float3 gammaEncodedColor = renodx::color::gamma::Encode(max(0, outputColor), 2.2f);
 
   return float4(gammaEncodedColor, 1.0);
