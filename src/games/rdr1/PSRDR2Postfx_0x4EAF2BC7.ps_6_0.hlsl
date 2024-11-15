@@ -112,14 +112,14 @@ float4 main(float4 SV_Position: SV_POSITION,
             float4 TEXCOORD2: TEXCOORD2)
     : SV_Target {
   // Anisotropic Sampler - DoF & Bloom
-  float4 anisotropicSampler = g_textures2D[RenderMapAnisoSampler].Sample(g_samplers[RenderMapAnisoSamplerSS], float2(TEXCOORD0.x, TEXCOORD0.y));
+  float4 anisotropicSampler = g_textures2D[RenderMapAnisoSampler].Sample(g_samplers[RenderMapAnisoSamplerSS], TEXCOORD0.xy);
 
   // Full Res Map Sampler - Scene Texture
-  float3 fullResMap = g_textures2D[FullResMapSampler].Sample(g_samplers[FullResMapSamplerSS], float2(TEXCOORD0.x, TEXCOORD0.y)).rgb;
+  float3 fullResMap = g_textures2D[FullResMapSampler].Sample(g_samplers[FullResMapSamplerSS], TEXCOORD0.xy).rgb;
 
   // Depth of Field (DoF) - Combines DoFMap and fullResMap
-  float3 DoFMap = g_textures2D[RenderMapBilinearSampler].Sample(g_samplers[RenderMapBilinearSamplerSS], float2(TEXCOORD0.x, TEXCOORD0.y)).rgb;
-  float depthMap = g_textures2D[DepthMapSampler].Sample(g_samplers[DepthMapSamplerSS], float2(TEXCOORD0.x, TEXCOORD0.y)).x;
+  float3 DoFMap = g_textures2D[RenderMapBilinearSampler].Sample(g_samplers[RenderMapBilinearSamplerSS], TEXCOORD0.xy).rgb;
+  float depthMap = g_textures2D[DepthMapSampler].Sample(g_samplers[DepthMapSamplerSS], TEXCOORD0.xy).x;
   float nearFarClipPlane = (-(NearFarClipPlaneQ.x * NearFarClipPlaneQ.z)) / (depthMap - NearFarClipPlaneQ.z);
   float dofDepthDiff = nearFarClipPlane - DofParams.y;
   float dofFocusFactor = saturate(dofDepthDiff * DofParams.x);
@@ -145,15 +145,14 @@ float4 main(float4 SV_Position: SV_POSITION,
   float3 bloomedColor = tonemappedColor + scaledBloom;
 
   // Apply Color Correction
-  // desaturation and contrast need to be done in SDR
-  // causes broken colors on highlights otherwise
   float3 colorCorrected = (ColorCorrect.rgb * 2.0) * (bloomedColor + ConstAdd.xyz);
 
   // Apply Desaturation - lerp to luminance
   float blackAndWhite = dot(colorCorrected, LUMINANCE.xyz);
   float3 desaturatedColorHDR = lerp(blackAndWhite, colorCorrected, deSat);
 
-  // Apply Contrast - done in SDR
+  // Apply Contrast
+  // done in SDR, causes broken colors on highlights otherwise
   float3 desaturatedColorSDR = saturate(renodx::tonemap::dice::BT709(desaturatedColorHDR, 1.0, 0.5));
   float3 contrastedColor = desaturatedColorSDR - (((desaturatedColorSDR * Contrast) * (desaturatedColorSDR - 1.0)) * (desaturatedColorSDR - 0.5));
 

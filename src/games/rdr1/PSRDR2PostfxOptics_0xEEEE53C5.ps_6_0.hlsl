@@ -118,7 +118,7 @@ float4 main(
   float _5 = TEXCOORD0.x;
   float _6 = TEXCOORD0.y;
 
-  float _16 = g_textures2D[DepthMapSampler].Sample(g_samplers[DepthMapSamplerSS], float2(TEXCOORD0.x, TEXCOORD0.y)).x;  // fix
+  float _16 = g_textures2D[DepthMapSampler].Sample(g_samplers[DepthMapSamplerSS], TEXCOORD0.xy).x;  // fix
 
   float _18 = NearFarClipPlaneQ.x;
   float _19 = NearFarClipPlaneQ.z;
@@ -127,13 +127,13 @@ float4 main(
   float _22 = _16 - _19;
   float _23 = _21 / _22;
 
-  float4 fullResMap = g_textures2D[FullResMapSampler].Sample(g_samplers[FullResMapSamplerSS], float2(TEXCOORD0.x, TEXCOORD0.y));  // fix
+  float4 fullResMap = g_textures2D[FullResMapSampler].Sample(g_samplers[FullResMapSamplerSS], TEXCOORD0.xy);  // fix
 
   float _32 = fullResMap.x;
   float _33 = fullResMap.y;
   float _34 = fullResMap.z;
 
-  float4 _42 = g_textures2D[RenderMapAnisoSampler].Sample(g_samplers[RenderMapAnisoSamplerSS], float2(TEXCOORD0.x, TEXCOORD0.y));  // fix
+  float4 _42 = g_textures2D[RenderMapAnisoSampler].Sample(g_samplers[RenderMapAnisoSamplerSS], TEXCOORD0.xy);  // fix
   float _43 = _42.x;
   float _44 = _42.y;
   float _45 = _42.z;
@@ -148,7 +148,7 @@ float4 main(
   float _54 = _49 * _51;
   float _55 = saturate(_46);
 
-  float4 _64 = g_textures2D[RenderMapBilinearSampler].Sample(g_samplers[RenderMapBilinearSamplerSS], float2(TEXCOORD0.x, TEXCOORD0.y));  // fix
+  float4 _64 = g_textures2D[RenderMapBilinearSampler].Sample(g_samplers[RenderMapBilinearSamplerSS], TEXCOORD0.xy);  // fix
   float _65 = _64.x;
   float _66 = _64.y;
   float _67 = _64.z;
@@ -164,14 +164,8 @@ float4 main(
 
   float _78 = max(_77, _55);
 
-  //--------------------------------------------------------
-  // did by hand, not sure if I'm understanding it right
-  float AdaptedLuminance = g_textures2D[AdaptedLuminanceMapSampler].Sample(g_samplers[AdaptedLuminanceMapSamplerSS], float2(0.0, 0.0)).x;
+  float AdaptedLuminance = g_textures2D[AdaptedLuminanceMapSampler].Sample(g_samplers[AdaptedLuminanceMapSamplerSS], float2(0, 0)).x;
   float ClampedLuminance = clamp(AdaptedLuminance, LowerLimitAdaption, HigherLimitAdaption);
-
-  float _93 = ClampedLuminance;  // used later
-
-  //---------------------------------------------------------
 
   float _94 = _65 - _32;
   float _95 = _66 - _33;
@@ -184,13 +178,13 @@ float4 main(
   float _101 = _98 + _33;
   float _102 = _99 + _34;
 
-  float4 _110 = g_textures2D[GlowSampler].Sample(g_samplers[GlowSamplerSS], float2(TEXCOORD2.x, TEXCOORD2.y));  // fix
+  float4 _110 = g_textures2D[GlowSampler].Sample(g_samplers[GlowSamplerSS], TEXCOORD2.xy);  // fix
   float _111 = _110.x;
   float _112 = _110.y;
   float _113 = _110.z;
   float _114 = _110.w;
 
-  float4 _122 = g_textures2D[GlowSampler2].Sample(g_samplers[GlowSampler2SS], float2(TEXCOORD2.z, TEXCOORD2.w));  // fix
+  float4 _122 = g_textures2D[GlowSampler2].Sample(g_samplers[GlowSampler2SS], TEXCOORD2.zw);  // fix
   float _123 = _122.x;
   float _124 = _122.y;
   float _125 = _122.z;
@@ -231,7 +225,7 @@ float4 main(
   float _169 = _157 + _166;
 
   float _171 = BrightPassValues.z;
-  float _172 = _93 + 0.001;
+  float _172 = ClampedLuminance + 0.001;
   float _173 = _171 / _172;
 
   float _174 = _167 * _173;
@@ -282,33 +276,11 @@ float4 main(
   float3 colorCorrected = float3(_209, _210, _211);
 
   // Apply Desaturation - lerp to luminance
-  float blackAndWhite = dot(colorCorrected, float3(LUMINANCE.x, LUMINANCE.y, LUMINANCE.z));
+  float blackAndWhite = dot(colorCorrected, LUMINANCE.xyz);
   float3 desaturatedColorHDR = lerp(blackAndWhite, colorCorrected, deSat);
 
-  // Apply Contrast - done in SDR
-  // float _234 = desaturatedColorHDR.r + -1.000;
-  // float _235 = desaturatedColorHDR.g + -1.000;
-  // float _236 = desaturatedColorHDR.b + -1.000;
-
-  // float _237 = desaturatedColorHDR.r + -0.500;
-  // float _238 = desaturatedColorHDR.g + -0.500;
-  // float _239 = desaturatedColorHDR.b + -0.500;
-
-  // float _240 = desaturatedColorHDR.r * Contrast;
-  // float _241 = _240 * _234;
-  // float _242 = _241 * _237;
-  // float _243 = desaturatedColorHDR.g * Contrast;
-  // float _244 = _243 * _235;
-  // float _245 = _244 * _238;
-  // float _246 = desaturatedColorHDR.b * Contrast;
-  // float _247 = _246 * _236;
-  // float _248 = _247 * _239;
-
-  // float _249 = desaturatedColorHDR.r - _242;
-  // float _250 = desaturatedColorHDR.g - _245;
-  // float _251 = desaturatedColorHDR.b - _248;
-
-  // float3 outputColor = float3(_249, _250, _251);
+  // Apply Contrast
+  // done in SDR, causes broken colors on highlights otherwise
   float3 desaturatedColorSDR = saturate(renodx::tonemap::dice::BT709(desaturatedColorHDR, 1.0, 0.5));
   float3 contrastedColor = desaturatedColorSDR - (((desaturatedColorSDR * Contrast) * (desaturatedColorSDR - 1.0)) * (desaturatedColorSDR - 0.5));
 
