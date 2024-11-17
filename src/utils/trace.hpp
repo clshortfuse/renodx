@@ -18,7 +18,7 @@ static bool trace_scheduled = false;
 static bool trace_running = false;
 
 template <class T>
-inline std::optional<std::string> GetD3DName(T* obj) {
+std::optional<std::string> GetD3DName(T* obj) {
   if (obj == nullptr) return std::nullopt;
 
   byte data[128] = {};
@@ -30,7 +30,7 @@ inline std::optional<std::string> GetD3DName(T* obj) {
 }
 
 template <class T>
-inline std::optional<std::string> GetD3DNameW(T* obj) {
+std::optional<std::string> GetD3DNameW(T* obj) {
   if (obj == nullptr) return std::nullopt;
 
   byte data[128] = {};
@@ -52,24 +52,25 @@ inline std::optional<std::string> GetD3DNameW(T* obj) {
 inline std::optional<std::string> GetDebugName(reshade::api::device_api device_api, reshade::api::resource_view resource_view) {
   if (device_api == reshade::api::device_api::d3d11) {
     auto* native_resource = reinterpret_cast<ID3D11DeviceChild*>(resource_view.handle);
-    return renodx::utils::trace::GetD3DName(native_resource);
+    return GetD3DName(native_resource);
   }
   return std::nullopt;
 }
+
 inline std::optional<std::string> GetDebugName(reshade::api::device_api device_api, uint64_t handle) {
   if (device_api == reshade::api::device_api::d3d11) {
     auto* native_resource = reinterpret_cast<ID3D11DeviceChild*>(handle);
-    return renodx::utils::trace::GetD3DName(native_resource);
+    return GetD3DName(native_resource);
   }
   if (device_api == reshade::api::device_api::d3d12) {
     auto* native_resource = reinterpret_cast<ID3D12DeviceChild*>(handle);
-    return renodx::utils::trace::GetD3DNameW(native_resource);
+    return GetD3DNameW(native_resource);
   }
   return std::nullopt;
 }
 
 template <typename T>
-inline std::optional<std::string> GetDebugName(reshade::api::device_api device_api, T object) {
+std::optional<std::string> GetDebugName(reshade::api::device_api device_api, T object) {
   return GetDebugName(device_api, object.handle);
 }
 
@@ -239,8 +240,8 @@ static void LogLayout(
         std::stringstream s;
         s << "logPipelineLayout(";
         s << reinterpret_cast<void*>(layout.handle) << "[" << param_index << "]";
-        s << " | PC";
-        s << ", binding: " << param.push_constants.binding;
+        s << " | PC | ";
+        s << "binding: " << param.push_constants.binding;
         s << ", count " << param.push_constants.count;
         s << ", register: " << param.push_constants.dx_register_index;
         s << ", space: " << param.push_constants.dx_register_space;
@@ -253,8 +254,8 @@ static void LogLayout(
         std::stringstream s;
         s << "logPipelineLayout(";
         s << reinterpret_cast<void*>(layout.handle) << "[" << param_index << "]";
-        s << " | PD |";
-        s << " array_size: " << param.push_descriptors.array_size;
+        s << " | PD | ";
+        s << "array_size: " << param.push_descriptors.array_size;
         s << ", binding: " << param.push_descriptors.binding;
         s << ", count " << param.push_descriptors.count;
         s << ", register: " << param.push_descriptors.dx_register_index;
@@ -269,7 +270,14 @@ static void LogLayout(
         std::stringstream s;
         s << "logPipelineLayout(";
         s << reinterpret_cast<void*>(layout.handle) << "[" << param_index << "]";
-        s << " | PDR?? | ";
+        s << " | PDR | ";
+        s << " array_size: " << param.push_descriptors.array_size;
+        s << ", binding: " << param.push_descriptors.binding;
+        s << ", count " << param.push_descriptors.count;
+        s << ", register: " << param.push_descriptors.dx_register_index;
+        s << ", space: " << param.push_descriptors.dx_register_space;
+        s << ", type: " << param.push_descriptors.type;
+        s << ", visibility " << param.push_descriptors.visibility;
         s << ")";
         reshade::log::message(reshade::log::level::info, s.str().c_str());
         break;
@@ -608,11 +616,17 @@ static bool OnCopyTextureRegion(
     const reshade::api::subresource_box* dest_box,
     reshade::api::filter_mode filter) {
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
+  auto* device = cmd_list->get_device();
+  const auto source_desc = device->get_resource_desc(source);
+  const auto dest_desc = device->get_resource_desc(dest);
   std::stringstream s;
-  s << "on_copy_texture_region";
+  s << "OnCopyTextureRegion";
   s << "(" << reinterpret_cast<void*>(source.handle);
+  s << ", " << (source_desc.texture.format);
   s << ", " << (source_subresource);
-  s << ", " << reinterpret_cast<void*>(dest.handle);
+  s << " => " << reinterpret_cast<void*>(dest.handle);
+  s << ", " << (dest_desc.texture.format);
+  s << ", " << (dest_subresource);
   s << ", " << static_cast<uint32_t>(filter);
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
@@ -631,7 +645,7 @@ static bool OnCopyTextureToBuffer(
     uint32_t slice_height) {
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
   std::stringstream s;
-  s << "on_copy_texture_region(" << reinterpret_cast<void*>(source.handle);
+  s << "OnCopyTextureToBuffer(" << reinterpret_cast<void*>(source.handle);
   s << "[" << source_subresource << "]";
   if (source_box != nullptr) {
     s << "(" << source_box->top << ", " << source_box->left << ", " << source_box->front << ")";
@@ -655,7 +669,7 @@ static bool OnCopyBufferToTexture(
     const reshade::api::subresource_box* dest_box) {
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
   std::stringstream s;
-  s << "on_copy_texture_region";
+  s << "OnCopyBufferToTexture";
   s << "(" << reinterpret_cast<void*>(source.handle);
   s << "[" << source_offset << "]";
   s << " => " << reinterpret_cast<void*>(dest.handle);
@@ -758,6 +772,9 @@ static void OnBindRenderTargetsAndDepthStencil(
     s << reinterpret_cast<void*>(dsv.handle);
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
+  }
+  if (count == 0 && dsv.handle == 0) {
+    reshade::log::message(reshade::log::level::info, "on_bind_depth_stencil(???)");
   }
 }
 
@@ -997,36 +1014,104 @@ static void OnBindDescriptorTables(
     const reshade::api::descriptor_table* tables) {
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return;
   auto* device = cmd_list->get_device();
-  for (uint32_t i = 0; i < count; ++i) {
-    std::stringstream s;
-    s << "bind_descriptor_table(" << reinterpret_cast<void*>(layout.handle);
-    s << "[" << (first + i) << "]";
-    s << ", stages: " << stages << "(" << std::hex << static_cast<uint32_t>(stages) << std::dec << ")";
-    s << ", table: " << reinterpret_cast<void*>(tables[i].handle);
-    uint32_t base_offset = 0;
-    reshade::api::descriptor_heap heap = {0};
-    device->get_descriptor_heap_offset(tables[i], 0, 0, &heap, &base_offset);
-    s << ", heap: " << reinterpret_cast<void*>(heap.handle) << "[" << base_offset << "]";
 
-    auto& descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
-    const std::shared_lock decriptor_lock(descriptor_data.mutex);
-    for (uint32_t j = 0; j < 13; ++j) {
-      auto origin_primary_key = std::pair<uint64_t, uint32_t>(tables[i].handle, j);
-      if (auto pair = descriptor_data.table_descriptor_resource_views.find(origin_primary_key);
-          pair != descriptor_data.table_descriptor_resource_views.end()) {
-        auto update = pair->second;
-        auto view = renodx::utils::descriptor::GetResourceViewFromDescriptorUpdate(update);
-        if (view.handle != 0) {
-          auto& data = device->get_private_data<DeviceData>();
-          const std::shared_lock lock(data.mutex);
-          s << ", rsv[" << j << "]: " << reinterpret_cast<void*>(view.handle);
-          s << ", res[" << j << "]: " << reinterpret_cast<void*>(GetResourceByViewHandle(data, view.handle));
+  auto& layout_data = device->get_private_data<renodx::utils::pipeline_layout::DeviceData>();
+  const std::shared_lock layout_lock(layout_data.mutex);
+  auto& descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
+
+  for (uint32_t i = 0; i < count; ++i) {
+    {
+      std::stringstream s;
+      s << "bind_descriptor_table(" << reinterpret_cast<void*>(layout.handle);
+      s << "[" << (first + i) << "]";
+      s << ", stages: " << stages << "(" << std::hex << static_cast<uint32_t>(stages) << std::dec << ")";
+      s << ", table: " << reinterpret_cast<void*>(tables[i].handle);
+      uint32_t base_offset = 0;
+      reshade::api::descriptor_heap heap = {0};
+      device->get_descriptor_heap_offset(tables[i], 0, 0, &heap, &base_offset);
+      s << ", heap: " << reinterpret_cast<void*>(heap.handle) << "[" << base_offset << "]";
+
+      const std::shared_lock decriptor_lock(descriptor_data.mutex);
+      for (uint32_t j = 0; j < 13; ++j) {
+        auto origin_primary_key = std::pair<uint64_t, uint32_t>(tables[i].handle, j);
+        if (auto pair = descriptor_data.table_descriptor_resource_views.find(origin_primary_key);
+            pair != descriptor_data.table_descriptor_resource_views.end()) {
+          auto update = pair->second;
+          auto view = renodx::utils::descriptor::GetResourceViewFromDescriptorUpdate(update);
+          if (view.handle != 0) {
+            auto& data = device->get_private_data<DeviceData>();
+            const std::shared_lock lock(data.mutex);
+            s << ", rsv[" << j << "]: " << reinterpret_cast<void*>(view.handle);
+            s << ", res[" << j << "]: " << reinterpret_cast<void*>(GetResourceByViewHandle(data, view.handle));
+          }
+        }
+      }
+
+      s << ") [" << i << "]";
+      reshade::log::message(reshade::log::level::info, s.str().c_str());
+    }
+
+    const auto& info = layout_data.pipeline_layout_data[layout.handle];
+    const auto& param = info.params.at(first + i);
+
+    for (uint32_t k = 0; k < param.descriptor_table.count; ++k) {
+      const auto& range = param.descriptor_table.ranges[k];
+
+      // Skip unbounded ranges
+      if (range.count == UINT32_MAX) continue;
+
+      if (range.type != reshade::api::descriptor_type::shader_resource_view
+          && range.type != reshade::api::descriptor_type::sampler_with_resource_view) {
+        continue;
+      }
+
+      uint32_t base_offset = 0;
+      reshade::api::descriptor_heap heap = {0};
+      device->get_descriptor_heap_offset(tables[i], range.binding, 0, &heap, &base_offset);
+      const std::shared_lock descriptor_lock(descriptor_data.mutex);
+
+      for (uint32_t j = 0; j < range.count; ++j) {
+        const auto& heap_data = descriptor_data.heaps[heap.handle];
+        auto offset = base_offset + j;
+        if (offset >= heap_data.size()) continue;
+        const auto& [descriptor_type, descriptor_data] = heap_data[offset];
+        reshade::api::resource_view resource_view = {0};
+        bool is_uav = false;
+        switch (descriptor_type) {
+          case reshade::api::descriptor_type::sampler_with_resource_view:
+            resource_view = std::get<reshade::api::sampler_with_resource_view>(descriptor_data).view;
+            break;
+          case reshade::api::descriptor_type::buffer_unordered_access_view:
+          case reshade::api::descriptor_type::texture_unordered_access_view:
+            is_uav = true;
+            // fallthrough
+          case reshade::api::descriptor_type::buffer_shader_resource_view:
+          case reshade::api::descriptor_type::texture_shader_resource_view:
+            resource_view = std::get<reshade::api::resource_view>(descriptor_data);
+            break;
+          case reshade::api::descriptor_type::constant_buffer:
+          case reshade::api::descriptor_type::shader_storage_buffer:
+          case reshade::api::descriptor_type::acceleration_structure:
+            break;
+          default:
+            break;
+        }
+        // if (resource_view.handle == 0u) continue;
+        {
+          std::stringstream s;
+          s << "bind_descriptor_table(" << reinterpret_cast<void*>(layout.handle);
+          s << "[" << (first + i) << "]";
+          s << ", rsv: " << reinterpret_cast<void*>(resource_view.handle);
+          s << ", param: " << param.type;
+          s << ", binding: " << range.binding;
+          s << ", dx_index: " << range.dx_register_index;
+          s << ", dx_space: " << range.dx_register_space;
+          s << ", j: " << j;
+          s << ")";
+          reshade::log::message(reshade::log::level::info, s.str().c_str());
         }
       }
     }
-
-    s << ") [" << i << "]";
-    reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
 }
 
@@ -1178,6 +1263,23 @@ static bool OnUpdateDescriptorTables(
   return false;
 }
 
+static bool OnClearDepthStencilView(
+    reshade::api::command_list* cmd_list,
+    reshade::api::resource_view dsv,
+    const float* depth,
+    const uint8_t* stencil,
+    uint32_t rect_count,
+    const reshade::api::rect* rects) {
+  if (!trace_running) return false;
+  std::stringstream s;
+  s << "OnClearDepthStencilView(";
+  s << reinterpret_cast<void*>(dsv.handle);
+  s << ")";
+
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
+  return false;
+}
+
 static bool OnClearRenderTargetView(
     reshade::api::command_list* cmd_list,
     reshade::api::resource_view rtv,
@@ -1186,7 +1288,7 @@ static bool OnClearRenderTargetView(
     const reshade::api::rect* rects) {
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
   std::stringstream s;
-  s << "on_clear_render_target_view(";
+  s << "OnClearRenderTargetView(";
   s << reinterpret_cast<void*>(rtv.handle);
   s << ")";
 
@@ -1243,6 +1345,35 @@ static void OnMapTextureRegion(
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
+static bool OnUpdateBufferRegion(
+    reshade::api::device* device,
+    const void* data, reshade::api::resource resource,
+    uint64_t offset, uint64_t size) {
+  if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
+  std::stringstream s;
+  s << "OnUpdateBufferRegion(";
+  s << reinterpret_cast<void*>(resource.handle);
+  s << ", offset: " << offset;
+  s << ", size: " << offset;
+  s << ")";
+  return false;
+}
+
+static bool OnUpdateTextureRegion(
+    reshade::api::device* device,
+    const reshade::api::subresource_data& data,
+    reshade::api::resource resource,
+    uint32_t subresource,
+    const reshade::api::subresource_box* box) {
+  if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
+  std::stringstream s;
+  s << "OnUpdateTextureRegion(";
+  s << reinterpret_cast<void*>(resource.handle);
+  s << ", subresource: " << subresource;
+  s << ")";
+  return false;
+}
+
 static void OnBindPipelineStates(
     reshade::api::command_list* cmd_list,
     uint32_t count,
@@ -1255,6 +1386,40 @@ static void OnBindPipelineStates(
     s << "bind_pipeline_state";
     s << "(" << states[i];
     s << ", " << values[i];
+    s << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+  }
+}
+
+static void OnBindViewports(reshade::api::command_list* cmd_list, uint32_t first, uint32_t count, const reshade::api::viewport* viewports) {
+  if (!trace_running) return;
+
+  for (uint32_t i = 0; i < count; i++) {
+    auto viewport = viewports[first + i];
+    std::stringstream s;
+    s << "OnBindViewports";
+    s << "(" << viewport.x;
+    s << ", " << viewport.y;
+    s << ", " << viewport.width;
+    s << ", " << viewport.height;
+    s << ", depth: [" << viewport.min_depth;
+    s << ", " << viewport.max_depth;
+    s << "])";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+  }
+}
+
+static void OnBindScissorRects(reshade::api::command_list* cmd_list, uint32_t first, uint32_t count, const reshade::api::rect* rects) {
+  if (!trace_running) return;
+
+  for (uint32_t i = 0; i < count; i++) {
+    auto rect = rects[first + i];
+    std::stringstream s;
+    s << "OnBindScissorRects";
+    s << "(" << rect.top;
+    s << ", " << rect.right;
+    s << ", " << rect.bottom;
+    s << ", " << rect.left;
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
@@ -1292,100 +1457,168 @@ inline void Use(DWORD fdw_reason) {
       internal::attached = true;
       reshade::register_event<reshade::addon_event::init_device>(internal::OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(internal::OnDestroyDevice);
+      // init_command_list
+      // destroy_command_list
+      // init_command_queue
+      // destroy_command_queue
       reshade::register_event<reshade::addon_event::init_swapchain>(internal::OnInitSwapchain);
-
-      reshade::register_event<reshade::addon_event::create_pipeline_layout>(internal::OnCreatePipelineLayout);
-      reshade::register_event<reshade::addon_event::init_pipeline_layout>(internal::OnInitPipelineLayout);
-
-      reshade::register_event<reshade::addon_event::init_pipeline>(internal::OnInitPipeline);
-      reshade::register_event<reshade::addon_event::destroy_pipeline>(internal::OnDestroyPipeline);
-
-      reshade::register_event<reshade::addon_event::bind_pipeline>(internal::OnBindPipeline);
-      reshade::register_event<reshade::addon_event::bind_pipeline_states>(internal::OnBindPipelineStates);
-
+      // create_swapchain
+      // destroy_swapchain
+      // init_effect_runtime
+      // destroy_effect_runtime
+      // init_sampler
+      // create_sampler
+      // destroy_sampler
       reshade::register_event<reshade::addon_event::init_resource>(internal::OnInitResource);
+      // create_resource
       reshade::register_event<reshade::addon_event::destroy_resource>(internal::OnDestroyResource);
       reshade::register_event<reshade::addon_event::init_resource_view>(internal::OnInitResourceView);
+      // create_resource_view
       reshade::register_event<reshade::addon_event::destroy_resource_view>(internal::OnDestroyResourceView);
-
-      reshade::register_event<reshade::addon_event::push_descriptors>(internal::OnPushDescriptors);
-      reshade::register_event<reshade::addon_event::bind_descriptor_tables>(internal::OnBindDescriptorTables);
+      reshade::register_event<reshade::addon_event::map_buffer_region>(internal::OnMapBufferRegion);
+      // unmap_buffer_region
+      reshade::register_event<reshade::addon_event::map_texture_region>(internal::OnMapTextureRegion);
+      // unmap_texture_region
+      reshade::register_event<reshade::addon_event::update_buffer_region>(internal::OnUpdateBufferRegion);
+      reshade::register_event<reshade::addon_event::update_texture_region>(internal::OnUpdateTextureRegion);
+      reshade::register_event<reshade::addon_event::init_pipeline>(internal::OnInitPipeline);
+      // create_pipeline
+      reshade::register_event<reshade::addon_event::destroy_pipeline>(internal::OnDestroyPipeline);
+      reshade::register_event<reshade::addon_event::init_pipeline_layout>(internal::OnInitPipelineLayout);
+      reshade::register_event<reshade::addon_event::create_pipeline_layout>(internal::OnCreatePipelineLayout);
+      // destroy_pipeline_layout
       reshade::register_event<reshade::addon_event::copy_descriptor_tables>(internal::OnCopyDescriptorTables);
       reshade::register_event<reshade::addon_event::update_descriptor_tables>(internal::OnUpdateDescriptorTables);
-      reshade::register_event<reshade::addon_event::push_constants>(internal::OnPushConstants);
-
-      reshade::register_event<reshade::addon_event::clear_render_target_view>(internal::OnClearRenderTargetView);
-      reshade::register_event<reshade::addon_event::clear_unordered_access_view_uint>(internal::OnClearUnorderedAccessViewUint);
-
-      reshade::register_event<reshade::addon_event::map_buffer_region>(internal::OnMapBufferRegion);
-      reshade::register_event<reshade::addon_event::map_texture_region>(internal::OnMapTextureRegion);
-
-      reshade::register_event<reshade::addon_event::draw>(internal::OnDraw);
-      reshade::register_event<reshade::addon_event::dispatch>(internal::OnDispatch);
-      reshade::register_event<reshade::addon_event::draw_indexed>(internal::OnDrawIndexed);
-      reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(internal::OnDrawOrDispatchIndirect);
+      // init_query_heap
+      // create_query_heap
+      // destroy_query_heap
+      // get_query_heap_results
+      reshade::register_event<reshade::addon_event::barrier>(internal::OnBarrier);
+      // begin_render_pass
+      // end_render_pass
       reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(internal::OnBindRenderTargetsAndDepthStencil);
-
+      reshade::register_event<reshade::addon_event::bind_pipeline>(internal::OnBindPipeline);
+      reshade::register_event<reshade::addon_event::bind_pipeline_states>(internal::OnBindPipelineStates);
+      reshade::register_event<reshade::addon_event::bind_viewports>(internal::OnBindViewports);
+      reshade::register_event<reshade::addon_event::bind_scissor_rects>(internal::OnBindScissorRects);
+      reshade::register_event<reshade::addon_event::push_constants>(internal::OnPushConstants);
+      reshade::register_event<reshade::addon_event::push_descriptors>(internal::OnPushDescriptors);
+      reshade::register_event<reshade::addon_event::bind_descriptor_tables>(internal::OnBindDescriptorTables);
+      // bind_index_buffer
+      // bind_vertex_buffers
+      // bind_stream_output_buffers
+      reshade::register_event<reshade::addon_event::draw>(internal::OnDraw);
+      reshade::register_event<reshade::addon_event::draw_indexed>(internal::OnDrawIndexed);
+      reshade::register_event<reshade::addon_event::dispatch>(internal::OnDispatch);
+      // dispatch_mesh
+      // dispatch_rays
+      reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(internal::OnDrawOrDispatchIndirect);
+      reshade::register_event<reshade::addon_event::copy_resource>(internal::OnCopyResource);
+      // copy_buffer_region
+      reshade::register_event<reshade::addon_event::copy_buffer_to_texture>(internal::OnCopyBufferToTexture);
       reshade::register_event<reshade::addon_event::copy_texture_region>(internal::OnCopyTextureRegion);
       reshade::register_event<reshade::addon_event::copy_texture_to_buffer>(internal::OnCopyTextureToBuffer);
-      reshade::register_event<reshade::addon_event::copy_buffer_to_texture>(internal::OnCopyBufferToTexture);
       reshade::register_event<reshade::addon_event::resolve_texture_region>(internal::OnResolveTextureRegion);
-
-      reshade::register_event<reshade::addon_event::copy_resource>(internal::OnCopyResource);
-
-      reshade::register_event<reshade::addon_event::barrier>(internal::OnBarrier);
-
+      reshade::register_event<reshade::addon_event::clear_depth_stencil_view>(internal::OnClearDepthStencilView);
+      reshade::register_event<reshade::addon_event::clear_render_target_view>(internal::OnClearRenderTargetView);
+      reshade::register_event<reshade::addon_event::clear_unordered_access_view_uint>(internal::OnClearUnorderedAccessViewUint);
+      // clear_unordered_access_view_float
+      // generate_mipmaps
+      // begin_query
+      // end_query
+      // copy_query_heap_results
+      // copy_acceleration_structure
+      // build_acceleration_structure
+      // reset_command_list
+      // close_command_list
+      // execute_command_list
+      // execute_command_list
       reshade::register_event<reshade::addon_event::present>(internal::OnPresent);
+      // set_fullscreen_state
 
       break;
     case DLL_PROCESS_DETACH:
 
       reshade::unregister_event<reshade::addon_event::init_device>(internal::OnInitDevice);
       reshade::unregister_event<reshade::addon_event::destroy_device>(internal::OnDestroyDevice);
+      // init_command_list
+      // destroy_command_list
+      // init_command_queue
+      // destroy_command_queue
       reshade::unregister_event<reshade::addon_event::init_swapchain>(internal::OnInitSwapchain);
-
-      reshade::unregister_event<reshade::addon_event::create_pipeline_layout>(internal::OnCreatePipelineLayout);
-      reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(internal::OnInitPipelineLayout);
-
-      reshade::unregister_event<reshade::addon_event::init_pipeline>(internal::OnInitPipeline);
-      reshade::unregister_event<reshade::addon_event::destroy_pipeline>(internal::OnDestroyPipeline);
-
-      reshade::unregister_event<reshade::addon_event::bind_pipeline>(internal::OnBindPipeline);
-      reshade::unregister_event<reshade::addon_event::bind_pipeline_states>(internal::OnBindPipelineStates);
-
+      // create_swapchain
+      // destroy_swapchain
+      // init_effect_runtime
+      // destroy_effect_runtime
+      // init_sampler
+      // create_sampler
+      // destroy_sampler
       reshade::unregister_event<reshade::addon_event::init_resource>(internal::OnInitResource);
+      // create_resource
       reshade::unregister_event<reshade::addon_event::destroy_resource>(internal::OnDestroyResource);
       reshade::unregister_event<reshade::addon_event::init_resource_view>(internal::OnInitResourceView);
+      // create_resource_view
       reshade::unregister_event<reshade::addon_event::destroy_resource_view>(internal::OnDestroyResourceView);
-
-      reshade::unregister_event<reshade::addon_event::push_descriptors>(internal::OnPushDescriptors);
-      reshade::unregister_event<reshade::addon_event::bind_descriptor_tables>(internal::OnBindDescriptorTables);
+      reshade::unregister_event<reshade::addon_event::map_buffer_region>(internal::OnMapBufferRegion);
+      // unmap_buffer_region
+      reshade::unregister_event<reshade::addon_event::map_texture_region>(internal::OnMapTextureRegion);
+      // unmap_texture_region
+      reshade::unregister_event<reshade::addon_event::update_buffer_region>(internal::OnUpdateBufferRegion);
+      reshade::unregister_event<reshade::addon_event::update_texture_region>(internal::OnUpdateTextureRegion);
+      reshade::unregister_event<reshade::addon_event::init_pipeline>(internal::OnInitPipeline);
+      // create_pipeline
+      reshade::unregister_event<reshade::addon_event::destroy_pipeline>(internal::OnDestroyPipeline);
+      reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(internal::OnInitPipelineLayout);
+      reshade::unregister_event<reshade::addon_event::create_pipeline_layout>(internal::OnCreatePipelineLayout);
+      // destroy_pipeline_layout
       reshade::unregister_event<reshade::addon_event::copy_descriptor_tables>(internal::OnCopyDescriptorTables);
       reshade::unregister_event<reshade::addon_event::update_descriptor_tables>(internal::OnUpdateDescriptorTables);
-      reshade::unregister_event<reshade::addon_event::push_constants>(internal::OnPushConstants);
-
-      reshade::unregister_event<reshade::addon_event::clear_render_target_view>(internal::OnClearRenderTargetView);
-      reshade::unregister_event<reshade::addon_event::clear_unordered_access_view_uint>(internal::OnClearUnorderedAccessViewUint);
-
-      reshade::unregister_event<reshade::addon_event::map_buffer_region>(internal::OnMapBufferRegion);
-      reshade::unregister_event<reshade::addon_event::map_texture_region>(internal::OnMapTextureRegion);
-
-      reshade::unregister_event<reshade::addon_event::draw>(internal::OnDraw);
-      reshade::unregister_event<reshade::addon_event::dispatch>(internal::OnDispatch);
-      reshade::unregister_event<reshade::addon_event::draw_indexed>(internal::OnDrawIndexed);
-      reshade::unregister_event<reshade::addon_event::draw_or_dispatch_indirect>(internal::OnDrawOrDispatchIndirect);
+      // init_query_heap
+      // create_query_heap
+      // destroy_query_heap
+      // get_query_heap_results
+      reshade::unregister_event<reshade::addon_event::barrier>(internal::OnBarrier);
+      // begin_render_pass
+      // end_render_pass
       reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(internal::OnBindRenderTargetsAndDepthStencil);
-
+      reshade::unregister_event<reshade::addon_event::bind_pipeline>(internal::OnBindPipeline);
+      reshade::unregister_event<reshade::addon_event::bind_pipeline_states>(internal::OnBindPipelineStates);
+      reshade::unregister_event<reshade::addon_event::bind_viewports>(internal::OnBindViewports);
+      reshade::unregister_event<reshade::addon_event::bind_scissor_rects>(internal::OnBindScissorRects);
+      reshade::unregister_event<reshade::addon_event::push_constants>(internal::OnPushConstants);
+      reshade::unregister_event<reshade::addon_event::push_descriptors>(internal::OnPushDescriptors);
+      reshade::unregister_event<reshade::addon_event::bind_descriptor_tables>(internal::OnBindDescriptorTables);
+      // bind_index_buffer
+      // bind_vertex_buffers
+      // bind_stream_output_buffers
+      reshade::unregister_event<reshade::addon_event::draw>(internal::OnDraw);
+      reshade::unregister_event<reshade::addon_event::draw_indexed>(internal::OnDrawIndexed);
+      reshade::unregister_event<reshade::addon_event::dispatch>(internal::OnDispatch);
+      // dispatch_mesh
+      // dispatch_rays
+      reshade::unregister_event<reshade::addon_event::draw_or_dispatch_indirect>(internal::OnDrawOrDispatchIndirect);
+      reshade::unregister_event<reshade::addon_event::copy_resource>(internal::OnCopyResource);
+      // copy_buffer_region
+      reshade::unregister_event<reshade::addon_event::copy_buffer_to_texture>(internal::OnCopyBufferToTexture);
       reshade::unregister_event<reshade::addon_event::copy_texture_region>(internal::OnCopyTextureRegion);
       reshade::unregister_event<reshade::addon_event::copy_texture_to_buffer>(internal::OnCopyTextureToBuffer);
-      reshade::unregister_event<reshade::addon_event::copy_buffer_to_texture>(internal::OnCopyBufferToTexture);
       reshade::unregister_event<reshade::addon_event::resolve_texture_region>(internal::OnResolveTextureRegion);
-
-      reshade::unregister_event<reshade::addon_event::copy_resource>(internal::OnCopyResource);
-
-      reshade::unregister_event<reshade::addon_event::barrier>(internal::OnBarrier);
-
+      reshade::unregister_event<reshade::addon_event::clear_depth_stencil_view>(internal::OnClearDepthStencilView);
+      reshade::unregister_event<reshade::addon_event::clear_render_target_view>(internal::OnClearRenderTargetView);
+      reshade::unregister_event<reshade::addon_event::clear_unordered_access_view_uint>(internal::OnClearUnorderedAccessViewUint);
+      // clear_unordered_access_view_float
+      // generate_mipmaps
+      // begin_queryla
+      // end_query
+      // copy_query_heap_results
+      // copy_acceleration_structure
+      // build_acceleration_structure
+      // reset_command_list
+      // close_command_list
+      // execute_command_list
+      // execute_command_list
       reshade::unregister_event<reshade::addon_event::present>(internal::OnPresent);
+      // set_fullscreen_state
       break;
   }
 }
