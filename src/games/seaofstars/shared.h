@@ -23,6 +23,7 @@ struct ShaderInjectData {
   float fxBloom;
   float fxVignette;
   float fxHeroLight;
+  float processingInternalSampling;
 };
 
 #ifndef __cplusplus

@@ -16,7 +16,8 @@ cbuffer cb0 : register(b0) {
 // 3Dmigoto declarations
 #define cmp -
 
-float4 main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0) : SV_Target0 {
+float4 main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0)
+    : SV_Target0 {
   float4 r0, r1, r2, r3, r4, r5;
 
   const float4 inputColor = t0.Sample(s0_s, v1.xy).xyzw;

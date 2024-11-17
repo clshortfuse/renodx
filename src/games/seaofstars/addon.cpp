@@ -10,6 +10,8 @@
 #include <embed/0x552A4A60.h>
 #include <embed/0x67758842.h>
 #include <embed/0x72B31CDE.h>
+#include <embed/0x77850945.h>
+#include <embed/0xB646820B.h>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -25,6 +27,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x552A4A60),
     CustomShaderEntry(0x72B31CDE),
     CustomShaderEntry(0x67758842),
+    CustomShaderEntry(0x77850945),
+    CustomShaderEntry(0xB646820B),
 };
 
 ShaderInjectData shader_injection;
@@ -174,6 +178,16 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
+    new renodx::utils::settings::Setting{
+        .key = "processingInternalSampling",
+        .binding = &shader_injection.processingInternalSampling,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Internal Sampling",
+        .section = "Processing",
+        .tooltip = "Selects whether to use the vanilla sampling or PQ for the game's internal rendering LUT.",
+        .labels = {"Vanilla", "PQ"},
+    },
 };
 
 void OnPresetOff() {
@@ -190,6 +204,9 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
+  renodx::utils::settings::UpdateSetting("fxHeroLight", 100.f);
+  renodx::utils::settings::UpdateSetting("processingInternalSampling", 0.f);
+  
 }
 
 }  // namespace
@@ -200,9 +217,12 @@ extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
-
-      renodx::mods::shader::force_pipeline_cloning = true;
       if (!reshade::register_addon(h_module)) return FALSE;
+
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+      });
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(h_module);
