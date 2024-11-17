@@ -32,14 +32,18 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
   r0.x = frac(r1.x);
   r1.x = r0.x / cb0[129].x;
   r0.w = -r1.x + r0.y;
-  // r0.xyz = r0.xzw * cb0[129].www + float3(-0.386036009, -0.386036009, -0.386036009);
-  r0.xyz = r0.xzw * cb0[129].www;
 
-  r0.xyz += float3(-0.386036009, -0.386036009, -0.386036009);
-  r0.xyz = float3(13.6054821, 13.6054821, 13.6054821) * r0.xyz;
-  r0.xyz = exp2(r0.xyz);
-  r0.xyz = float3(-0.0479959995, -0.0479959995, -0.0479959995) + r0.xyz;
-  r0.xyz = float3(0.179999992, 0.179999992, 0.179999992) * r0.xyz;
+  if (injectedData.processingInternalSampling == 1.f) {
+    r0.xyz = renodx::color::pq::Decode(r0.xzw, 100.f);
+  } else {
+    r0.xyz = r0.xzw * cb0[129].www;
+    r0.xyz += float3(-0.386036009, -0.386036009, -0.386036009);
+    r0.xyz = float3(13.6054821, 13.6054821, 13.6054821) * r0.xyz;
+    r0.xyz = exp2(r0.xyz);
+    r0.xyz = float3(-0.0479959995, -0.0479959995, -0.0479959995) + r0.xyz;
+    r0.xyz = float3(0.179999992, 0.179999992, 0.179999992) * r0.xyz;
+  }
+
   // float3 colorLMS = LinearToLMS(colorLinear);
   r1.x = dot(float3(0.390404999, 0.549941003, 0.00892631989), r0.xyz);
   r1.y = dot(float3(0.070841603, 0.963172019, 0.00135775004), r0.xyz);

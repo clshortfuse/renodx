@@ -57,28 +57,32 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
     r0.xyz = r1.xyz * r0.xyz;
   }
 
-  float3 untonemapped = r0.rgb * cb0[190].www;
+  float3 untonemapped = r0.rgb;
 
-  r1.xyz = cb0[190].www * r0.zxy;
-
-  // Sample as 2D - ARRI C3 800 LUT (internal)
-  r1.xyz = r1.xyz * float3(5.55555582, 5.55555582, 5.55555582) + float3(0.0479959995, 0.0479959995, 0.0479959995);
-  r1.xyz = max(float3(0, 0, 0), r1.xyz);
-  r1.xyz = log2(r1.xyz);
-  r1.xyz = saturate(r1.xyz * float3(0.0734997839, 0.0734997839, 0.0734997839) + float3(0.386036009, 0.386036009, 0.386036009));
-  r1.yzw = cb0[190].zzz * r1.xyz;
-  r0.w = floor(r1.y);
-  r2.xy = float2(0.5, 0.5) * cb0[190].xy;
-  r2.yz = r1.zw * cb0[190].xy + r2.xy;
-  r2.x = r0.w * cb0[190].y + r2.y;
-  r3.xyzw = t3.SampleLevel(s0_s, r2.xz, 0).xyzw;
-  r4.x = cb0[190].y;
-  r4.y = 0;
-  r1.yz = r4.xy + r2.xz;
-  r2.xyzw = t3.SampleLevel(s0_s, r1.yz, 0).xyzw;
-  r0.w = r1.x * cb0[190].z + -r0.w;
-  r1.xyz = r2.xyz + -r3.xyz;
-  r1.xyz = r0.www * r1.xyz + r3.xyz;
+  if (injectedData.processingInternalSampling == 1.f) {
+    float3 lut_input = renodx::color::pq::Encode(untonemapped, 100.f);
+    r1.xyz = renodx::lut::Sample(t3, s0_s, lut_input, cb0[190].xyz);
+  } else {
+    // Sample as 2D - ARRI C3 800 LUT (internal)
+    r1.xyz = cb0[190].www * r0.zxy;
+    r1.xyz = r1.xyz * float3(5.55555582, 5.55555582, 5.55555582) + float3(0.0479959995, 0.0479959995, 0.0479959995);
+    r1.xyz = max(float3(0, 0, 0), r1.xyz);
+    r1.xyz = log2(r1.xyz);
+    r1.xyz = saturate(r1.xyz * float3(0.0734997839, 0.0734997839, 0.0734997839) + float3(0.386036009, 0.386036009, 0.386036009));
+    r1.yzw = cb0[190].zzz * r1.xyz;
+    r0.w = floor(r1.y);
+    r2.xy = float2(0.5, 0.5) * cb0[190].xy;
+    r2.yz = r1.zw * cb0[190].xy + r2.xy;
+    r2.x = r0.w * cb0[190].y + r2.y;
+    r3.xyzw = t3.SampleLevel(s0_s, r2.xz, 0).xyzw;
+    r4.x = cb0[190].y;
+    r4.y = 0;
+    r1.yz = r4.xy + r2.xz;
+    r2.xyzw = t3.SampleLevel(s0_s, r1.yz, 0).xyzw;
+    r0.w = r1.x * cb0[190].z + -r0.w;
+    r1.xyz = r2.xyz + -r3.xyz;
+    r1.xyz = r0.www * r1.xyz + r3.xyz;
+  }
 
   float3 lut_result = r1.xyz;
 

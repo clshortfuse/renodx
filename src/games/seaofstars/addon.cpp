@@ -178,6 +178,25 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
+    new renodx::utils::settings::Setting{
+        .key = "fxHeroLight",
+        .binding = &shader_injection.fxHeroLight,
+        .default_value = 100.f,
+        .label = "Hero Light",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "processingInternalSampling",
+        .binding = &shader_injection.processingInternalSampling,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Internal Sampling",
+        .section = "Processing",
+        .tooltip = "Selects whether to use the vanilla sampling or PQ for the game's internal rendering LUT.",
+        .labels = {"Vanilla", "PQ"},
+    },
 };
 
 void OnPresetOff() {
@@ -194,6 +213,9 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
+  renodx::utils::settings::UpdateSetting("fxHeroLight", 100.f);
+  renodx::utils::settings::UpdateSetting("processingInternalSampling", 0.f);
+  
 }
 
 }  // namespace
