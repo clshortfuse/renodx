@@ -31,6 +31,7 @@
 #include <crc32_hash.hpp>
 #include "../mods/swapchain.hpp"
 #include "../utils/descriptor.hpp"
+#include "../utils/pipeline_layout.hpp"
 #include "../utils/shader.hpp"
 #include "../utils/shader_compiler_directx.hpp"
 #include "../utils/shader_compiler_watcher.hpp"
@@ -81,9 +82,9 @@ struct ShaderDetails {
 };
 
 struct ResourceViewDetails {
-  reshade::api::resource_view resource_view;
+  reshade::api::resource_view resource_view = {0};
   reshade::api::resource_view_desc resource_view_desc;
-  reshade::api::resource resource;
+  reshade::api::resource resource = {0};
   reshade::api::resource_desc resource_desc;
   std::string resource_tag;
   std::string resource_view_tag;
@@ -98,10 +99,10 @@ struct ResourceViewDetails {
     if (swapchain_mod_data == nullptr) return false;
     const std::shared_lock lock(swapchain_mod_data->mutex);
     this->is_rtv_upgraded = swapchain_mod_data->upgraded_resource_views.contains(resource_view.handle);
-    this->is_rtv_cloned = swapchain_mod_data->resource_views_cloned.contains(resource_view.handle);
+    this->is_rtv_cloned = swapchain_mod_data->resource_clones.contains(resource_view.handle);
 
     this->is_res_upgraded = this->resource.handle != 0u && swapchain_mod_data->upgraded_resources.contains(this->resource.handle);
-    this->is_res_cloned = this->resource.handle != 0u && swapchain_mod_data->cloned_resources.contains(this->resource.handle);
+    this->is_res_cloned = this->resource.handle != 0u && swapchain_mod_data->resource_clones.contains(this->resource.handle);
     return true;
   }
 };
@@ -452,6 +453,7 @@ void OnPushDescriptors(
     auto srv_index = update.binding + index + starting_index;
     destination[srv_index] = (device_data.GetResourceViewDetails(view, device));
   };
+
   for (uint32_t i = 0; i < update.count; i++) {
     switch (update.type) {
       case reshade::api::descriptor_type::sampler:
@@ -476,6 +478,85 @@ void OnPushDescriptors(
       case reshade::api::descriptor_type::constant_buffer:
       default:
         break;
+    }
+  }
+}
+
+void OnBindDescriptorTables(
+    reshade::api::command_list* cmd_list,
+    reshade::api::shader_stage stages,
+    reshade::api::pipeline_layout layout,
+    uint32_t first,
+    uint32_t count,
+    const reshade::api::descriptor_table* tables) {
+  if (!is_snapshotting) return;
+  auto& data = cmd_list->get_private_data<CommandListData>();
+  auto& details = data.GetCurrentDrawDetails();
+
+  auto* device = cmd_list->get_device();
+  auto& device_data = device->get_private_data<DeviceData>();
+
+  auto& layout_data = device->get_private_data<renodx::utils::pipeline_layout::DeviceData>();
+  const std::shared_lock layout_lock(layout_data.mutex);
+
+  auto& descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
+
+  for (uint32_t i = 0; i < count; ++i) {
+    const auto& info = layout_data.pipeline_layout_data[layout.handle];
+    const auto& param = info.params.at(first + i);
+
+    for (uint32_t k = 0; k < param.descriptor_table.count; ++k) {
+      const auto& range = param.descriptor_table.ranges[k];
+
+      // Skip unbounded ranges
+      if (range.count == UINT32_MAX) continue;
+
+      if (range.type != reshade::api::descriptor_type::shader_resource_view
+          && range.type != reshade::api::descriptor_type::sampler_with_resource_view) {
+        continue;
+      }
+
+      uint32_t base_offset = 0;
+      reshade::api::descriptor_heap heap = {0};
+      device->get_descriptor_heap_offset(tables[i], range.binding, 0, &heap, &base_offset);
+
+      const std::shared_lock descriptor_lock(descriptor_data.mutex);
+
+      for (uint32_t j = 0; j < range.count; ++j) {
+        const auto& heap_data = descriptor_data.heaps[heap.handle];
+        auto offset = base_offset + j;
+        if (offset >= heap_data.size()) continue;
+        const auto& [descriptor_type, descriptor_data] = heap_data[offset];
+        reshade::api::resource_view resource_view = {0};
+        bool is_uav = false;
+        switch (descriptor_type) {
+          case reshade::api::descriptor_type::sampler_with_resource_view:
+            resource_view = std::get<reshade::api::sampler_with_resource_view>(descriptor_data).view;
+            break;
+          case reshade::api::descriptor_type::buffer_unordered_access_view:
+          case reshade::api::descriptor_type::texture_unordered_access_view:
+            is_uav = true;
+            // fallthrough
+          case reshade::api::descriptor_type::buffer_shader_resource_view:
+          case reshade::api::descriptor_type::texture_shader_resource_view:
+            resource_view = std::get<reshade::api::resource_view>(descriptor_data);
+            break;
+          case reshade::api::descriptor_type::constant_buffer:
+          case reshade::api::descriptor_type::shader_storage_buffer:
+          case reshade::api::descriptor_type::acceleration_structure:
+            break;
+          default:
+            break;
+        }
+        if (resource_view.handle == 0u) continue;
+        uint32_t texture_index = range.dx_register_index + j;
+        const std::unique_lock lock(device_data.mutex);
+        if (is_uav) {
+          details.uav_binds[texture_index] = (device_data.GetResourceViewDetails(resource_view, device));
+        } else {
+          details.srv_binds[texture_index] = (device_data.GetResourceViewDetails(resource_view, device));
+        }
+      }
     }
   }
 }
@@ -1583,6 +1664,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::init_pipeline>(OnInitPipelineTrackAddons);
       reshade::register_event<reshade::addon_event::bind_pipeline>(OnBindPipeline);
       reshade::register_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
+      reshade::register_event<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables);
       reshade::register_event<reshade::addon_event::draw>(OnDraw);
       reshade::register_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
       reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
@@ -1595,6 +1677,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_DETACH:
 
       renodx::utils::descriptor::Use(fdw_reason);
+      renodx::utils::shader::Use(fdw_reason);
+      renodx::utils::shader::dump::Use(fdw_reason);
+      renodx::utils::trace::Use(fdw_reason);
+      renodx::utils::swapchain::Use(fdw_reason);
 
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
