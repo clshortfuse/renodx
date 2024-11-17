@@ -63,7 +63,7 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
     float3 lut_input = renodx::color::pq::Encode(untonemapped, 100.f);
     r1.xyz = renodx::lut::Sample(t3, s0_s, lut_input, cb0[190].xyz);
   } else {
-    // Sample as 2D - ARRI C3 800 LUT (internal)
+    // Sample as 2D - ARRI C3 1000 LUT (internal)
     r1.xyz = cb0[190].www * r0.zxy;
     r1.xyz = r1.xyz * float3(5.55555582, 5.55555582, 5.55555582) + float3(0.0479959995, 0.0479959995, 0.0479959995);
     r1.xyz = max(float3(0, 0, 0), r1.xyz);
@@ -84,8 +84,8 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
     r1.xyz = r0.www * r1.xyz + r3.xyz;
   }
 
-  float3 lut_result = r1.xyz;
-
+  
+  // SDR LUT which seems like dead code
   r0.w = cmp(cb0[205].y == 0.000000);
   if (r0.w != 0) {
     r0.w = cmp(0 < cb0[191].w);
@@ -123,6 +123,8 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
       r1.xyz = r2.xyz ? r3.xyz : r4.xyz;
     }
   }
+
+  float3 unlit_color = r1.xyz;
   r0.w = cmp(cb0[205].x < 1);
   if (r0.w != 0) {
     r2.xyzw = t1.SampleLevel(s1_s, v1.xy, 0).xyzw;
@@ -138,10 +140,11 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
     r0.xyz = float3(1, 1, 1) + -r0.xyz;
     r2.xyz = r1.xyz + -r0.xyz;
     r1.xyz = r0.www * r2.xyz + r0.xyz;
+
+    r1.xyz = lerp(unlit_color.xyz, r1.xyz, injectedData.fxHeroLight);
   }
   o0.xyz = r1.xyz;
   o0.w = 1;
 
-  o0.rgb = lut_result.rgb;
   return;
 }
