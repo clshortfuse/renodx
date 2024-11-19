@@ -1975,58 +1975,24 @@ static bool OnResolveTextureRegion(
   const bool source_upgraded = source_pair != data.upgraded_resource_formats.end();
 
   auto destination_pair = data.upgraded_resource_formats.find(dest.handle);
-  const bool dest_upgraded = destination_pair != data.upgraded_resource_formats.end();
+  if (destination_pair == data.upgraded_resource_formats.end()) return false;
 
-  const auto source_clone = GetResourceClone(device, &data, source);
-  const auto dest_clone = GetResourceClone(device, &data, source);
+  auto source_format = source_pair->second;
+  auto destination_format = destination_pair->second;
 
-  if (!source_upgraded && !dest_upgraded
-      && (source_clone.handle == 0u) && (dest_clone.handle == 0u)) return false;
+  if (source_format != destination_format) return false;
 
-  auto source_new = source;
-  auto source_format = reshade::api::format::unknown;
-  auto dest_new = dest;
-  auto dest_format = reshade::api::format::unknown;
-
-  if (source_clone.handle != 0) {
-    source_new = source_clone;
-    source_format = data.resource_clone_targets[source.handle]->new_format;
-
-  } else if (source_upgraded) {
-    source_format = source_pair->second;
+  auto new_format = source_format;
+  if (source_format == reshade::api::format::r16g16b16a16_typeless) {
+    new_format = reshade::api::format::r16g16b16a16_float;
   }
 
-  if (dest_new.handle != 0) {
-    dest_new = dest_clone;
-    dest_format = data.resource_clone_targets[dest.handle]->new_format;
-  } else if (dest_upgraded) {
-    dest_format = destination_pair->second;
-  }
+  if (format == new_format) return false;
 
-  if (source_format == dest_format) {
-    if ((source.handle == source_new.handle) && (dest.handle == dest_new.handle)) return false;
-    cmd_list->resolve_texture_region(source_new, source_subresource, source_box, dest_new, dest_subresource, dest_x, dest_y, dest_z, dest_format);
-    return true;
-  }
-
-  std::stringstream s;
-  s << "OnResolveTextureRegion";
-  s << "(mismatched: ";
-  s << "format: " << format;
-  s << ", " << reinterpret_cast<void*>(source.handle);
-  s << "[" << source_subresource << "]";
-  if (source_box != nullptr) {
-    s << "(" << source_box->top << ", " << source_box->left << ", " << source_box->front << ")";
-  }
-  s << " (" << source_format << ")";
-  s << " => " << reinterpret_cast<void*>(dest.handle);
-  s << "[" << dest_subresource << "]";
-  s << " (" << dest_format << ")";
-  s << ", (" << dest_x << ", " << dest_y << ", " << dest_z << ") ";
-  s << ")";
-
-  cmd_list->resolve_texture_region(source_new, source_subresource, source_box, dest_new, dest_subresource, dest_x, dest_y, dest_z, dest_format);
-
+  cmd_list->resolve_texture_region(
+      source, source_subresource, source_box,
+      dest, dest_subresource, dest_x, dest_y, dest_z,
+      new_format);
   return true;
 }
 
