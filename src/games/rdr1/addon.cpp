@@ -10,6 +10,8 @@
 #include <embed/0xCCC43328.h>  // PostFX - Aiming
 #include <embed/0xE93AD74D.h>  // PostFX - Aiming + Optics
 
+#include <embed/0x9761FB07.h>  // PostFX - Cutscene DoF
+
 #include <embed/0xE033AAAD.h>  // Mini Eye Adaptation
 
 // #include <embed/0x56F79BAD.h>  // PQ Encoding
@@ -25,6 +27,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
     CustomShaderEntry(0xCCC43328),  // PostFX - Aiming
     CustomShaderEntry(0xE93AD74D),  // PostFX - Aiming + Optics
+
+    CustomShaderEntry(0x9761FB07),  // PostFX - Cutscene DoF
 
     CustomShaderEntry(0xE033AAAD),  // Mini Eye Adaptation
 
