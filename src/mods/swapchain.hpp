@@ -2248,7 +2248,7 @@ static void Use(DWORD fdw_reason) {
       }
       reshade::register_event<reshade::addon_event::copy_buffer_to_texture>(OnCopyBufferToTexture);
 
-      // reshade::register_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
+      reshade::register_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
 
       break;
     case DLL_PROCESS_DETACH:
