@@ -987,7 +987,7 @@ static bool OnCopyBufferToTexture(
   const bool dest_upgraded = destination_pair != data.upgraded_resource_formats.end();
 
   const auto source_clone = GetResourceClone(device, &data, source);
-  const auto dest_clone = GetResourceClone(device, &data, source);
+  const auto dest_clone = GetResourceClone(device, &data, dest);
 
   if (!source_upgraded && !dest_upgraded
       && (source_clone.handle == 0u) && (dest_clone.handle == 0u)) return false;
@@ -1228,7 +1228,7 @@ static bool OnCopyResource(
   const bool dest_upgraded = destination_pair != data.upgraded_resource_formats.end();
 
   const auto source_clone = GetResourceClone(device, &data, source);
-  const auto dest_clone = GetResourceClone(device, &data, source);
+  const auto dest_clone = GetResourceClone(device, &data, dest);
 
   if (!source_upgraded && !dest_upgraded
       && (source_clone.handle == 0u) && (dest_clone.handle == 0u)) return false;
@@ -1969,10 +1969,9 @@ static bool OnResolveTextureRegion(
     reshade::api::format format) {
   auto* device = cmd_list->get_device();
   auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
-
+  const std::shared_lock lock(data.mutex);
   auto source_pair = data.upgraded_resource_formats.find(source.handle);
-  const bool source_upgraded = source_pair != data.upgraded_resource_formats.end();
+  if (source_pair == data.upgraded_resource_formats.end()) return false;
 
   auto destination_pair = data.upgraded_resource_formats.find(dest.handle);
   if (destination_pair == data.upgraded_resource_formats.end()) return false;
@@ -2049,7 +2048,7 @@ static bool OnCopyTextureRegion(
   const bool dest_upgraded = destination_pair != data.upgraded_resource_formats.end();
 
   const auto source_clone = GetResourceClone(device, &data, source);
-  const auto dest_clone = GetResourceClone(device, &data, source);
+  const auto dest_clone = GetResourceClone(device, &data, dest);
 
   if (!source_upgraded && !dest_upgraded
       && (source_clone.handle == 0u) && (dest_clone.handle == 0u)) return false;
