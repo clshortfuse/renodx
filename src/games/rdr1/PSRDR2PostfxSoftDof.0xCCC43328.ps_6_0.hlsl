@@ -204,7 +204,7 @@ float4 main(float4 SV_Position: SV_POSITION,
   float3 desaturatedColorHDR = lerp(blackAndWhite, colorCorrected, deSat);
 
   // Apply Contrast - done in SDR
-  float3 desaturatedColorSDR = saturate(renodx::tonemap::dice::BT709(desaturatedColorHDR, 1.0, 0.5));
+  float3 desaturatedColorSDR = saturate(renodx::tonemap::dice::BT709(desaturatedColorHDR, 1.0));
   float3 contrastedColor = desaturatedColorSDR - (((desaturatedColorSDR * Contrast) * (desaturatedColorSDR - 1.0)) * (desaturatedColorSDR - 0.5));
 
   float3 outputColor = contrastedColor;
