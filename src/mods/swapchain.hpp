@@ -2245,8 +2245,8 @@ static void Use(DWORD fdw_reason) {
 
         reshade::register_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
         // reshade::register_event<reshade::addon_event::barrier>(OnBarrier);
+        reshade::register_event<reshade::addon_event::copy_buffer_to_texture>(OnCopyBufferToTexture);
       }
-      reshade::register_event<reshade::addon_event::copy_buffer_to_texture>(OnCopyBufferToTexture);
 
       reshade::register_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
 
