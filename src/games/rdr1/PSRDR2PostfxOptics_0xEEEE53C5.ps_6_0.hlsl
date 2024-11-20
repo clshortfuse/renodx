@@ -263,7 +263,7 @@ float4 main(
   float midGrayScale = RDR1ReinhardMidgrayScale(White);
   float3 untonemapped_scaled = color_scaled * midGrayScale;
 
-  float3 blendedColor = lerp(saturate(vanillaColor), untonemapped_scaled, saturate(vanillaColor));
+  float3 blendedColor = lerp(vanillaColor, lerp(vanillaColor, untonemapped_scaled, 0.5), saturate(vanillaColor));
 
   _191 = blendedColor.r;
   _192 = blendedColor.g;
