@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./tonemaphelper.hlsl"
 
 Texture2D<float4> g_textures2D[] : register(t0, space2);
 
@@ -116,12 +117,19 @@ float4 main(
   float _14 = _12.g;
   float _15 = _12.b;
 
-  float _17 = BrightPassValues.z;
-  float _18 = TEXCOORD1.x + 0.00100000;  // texcoord = adaptedLuminance
-  float _19 = _17 / _18;
-  float _20 = _19 * _13;
-  float _21 = _19 * _14;
-  float _22 = _19 * _15;
+  float clampedAdaptedLuminance = TEXCOORD1.x;
+
+  // float _17 = BrightPassValues.z;
+  // float _18 = clampedAdaptedLuminance + 0.001;
+  // float _19 = _17 / _18;
+
+  float scale = BrightPassValues.z / (clampedAdaptedLuminance + 0.001);
+
+  float _20 = scale * _13;
+  float _21 = scale * _14;
+  float _22 = scale * _15;
+
+  float3 color_scaled = float3(_20, _21, _22);
 
   float _24 = White;
   float _25 = _20 / _24;
@@ -139,6 +147,19 @@ float4 main(
   float _37 = _31 / _34;
   float _38 = _32 / _35;
   float _39 = _33 / _36;
+
+#if 1  // blended reinhard with untonemapped
+  float3 vanillaColor = float3(_37, _38, _39);
+
+  float midGrayScale = RDR1ReinhardMidgrayScale(White);
+  float3 untonemapped_scaled = color_scaled * midGrayScale;
+
+  float3 blendedColor = lerp(saturate(vanillaColor), untonemapped_scaled, saturate(vanillaColor));
+
+  _37 = blendedColor.r;
+  _38 = blendedColor.g;
+  _39 = blendedColor.b;
+#endif
 
   // Apply Color Correction
   float _41 = ConstAdd.x;

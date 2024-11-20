@@ -1,6 +1,7 @@
 // shader hash : e7d616a26f49bfe3b3f320ee074c357e
 
 #include "./shared.h"
+#include "./tonemaphelper.hlsl"
 
 Texture2D<float4> g_textures2D[] : register(t0, space2);
 
@@ -192,6 +193,7 @@ float4 main(float4 SV_Position: SV_POSITION,
   float _107 = LowerLimitAdaption;
   float _108 = max(_104, _107);
   float _109 = min(_108, _106);
+  float clampedAdaptedLuminance = _109;
   float _110 = _62 - _28;
   float _111 = _63 - _29;
   float _112 = _64 - _30;
@@ -202,14 +204,16 @@ float4 main(float4 SV_Position: SV_POSITION,
   float _117 = _114 + _29;
   float _118 = _115 + _30;
 
-  // _dx.types.CBufRet.f32 _119 = { _0.BrightPassValues.x, _0.BrightPassValues.y, _0.BrightPassValues.z, _0.BrightPassValues.w };  //  cbuffer = $Globals, byte_offset = 96
-  float _120 = BrightPassValues.z;
-  float _121 = _109 + 0.00100000;
-  float _122 = _120 / _121;
-  float _123 = _122 * _116;
-  float _124 = _122 * _117;
-  float _125 = _122 * _118;
-  // _dx.types.CBufRet.f32 _126 = { _0.White, _0.IntensityBloom, <padding>, <padding> };  //  cbuffer = $Globals, byte_offset = 112
+  // apply adaptation
+  // float _120 = BrightPassValues.z;
+  // float _121 = _109 + 0.001;
+  // float _122 = _120 / _121;
+  float scale = BrightPassValues.z / (clampedAdaptedLuminance + 0.001);
+  float _123 = scale * _116;
+  float _124 = scale * _117;
+  float _125 = scale * _118;
+  float3 color_scaled = float3(_123, _124, _125);
+
   float _127 = White;
   float _128 = _123 / _127;
   float _129 = _124 / _127;
@@ -226,6 +230,21 @@ float4 main(float4 SV_Position: SV_POSITION,
   float _140 = _134 / _137;
   float _141 = _135 / _138;
   float _142 = _136 / _139;
+
+#if 1  // blended reinhard with untonemapped
+  float3 vanillaColor = float3(_140, _141, _142);
+
+  float midGrayScale = RDR1ReinhardMidgrayScale(White);
+  float3 untonemapped_scaled = color_scaled * midGrayScale;
+
+  float3 blendedColor = lerp(saturate(vanillaColor), untonemapped_scaled, saturate(vanillaColor));
+
+  _140 = blendedColor.r;
+  _141 = blendedColor.g;
+  _142 = blendedColor.b;
+#endif
+
+  // Apply Bloom
   float _143 = _140 + _49;
   float _144 = _141 + _50;
   float _145 = _142 + _51;
