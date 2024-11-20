@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./tonemaphelper.hlsl"
 
 Texture2D<float4> g_textures2D[] : register(t0, space2);
 
@@ -142,6 +143,7 @@ float4 main(float4 SV_Position: SV_POSITION,
   float _60 = LowerLimitAdaption;
   float _61 = max(_57, _60);
   float _62 = min(_61, _59);
+  float clampedAdaptedLuminance = _62;
   float _63 = _45 - _11;
   float _64 = _46 - _12;
   float _65 = _47 - _13;
@@ -152,12 +154,15 @@ float4 main(float4 SV_Position: SV_POSITION,
   float _70 = _67 + _12;
   float _71 = _68 + _13;
 
-  float _73 = BrightPassValues.z;
-  float _74 = _62 + 0.00100000;
-  float _75 = _73 / _74;
-  float _76 = _75 * _69;
-  float _77 = _75 * _70;
-  float _78 = _75 * _71;
+  // float _73 = BrightPassValues.z;
+  // float _74 = _62 + 0.001;
+  // float _75 = _73 / _74;
+  float scale = BrightPassValues.z / (clampedAdaptedLuminance + 0.001);
+  float _76 = scale * _69;
+  float _77 = scale * _70;
+  float _78 = scale * _71;
+  float3 color_scaled = float3(_76, _77, _78);
+
   float _80 = White;
   float _81 = _76 / _80;
   float _82 = _77 / _80;
@@ -174,6 +179,21 @@ float4 main(float4 SV_Position: SV_POSITION,
   float _93 = _87 / _90;
   float _94 = _88 / _91;
   float _95 = _89 / _92;
+
+#if 1  // blended reinhard with untonemapped
+  float3 vanillaColor = float3(_93, _94, _95);
+
+  float midGrayScale = RDR1ReinhardMidgrayScale(White);
+  float3 untonemapped_scaled = color_scaled * midGrayScale;
+
+  float3 blendedColor = lerp(saturate(vanillaColor), untonemapped_scaled, saturate(vanillaColor));
+
+  _93 = blendedColor.r;
+  _94 = blendedColor.g;
+  _95 = blendedColor.b;
+#endif
+
+  // Apply Bloom
   float _96 = _93 + _32;
   float _97 = _94 + _33;
   float _98 = _95 + _34;

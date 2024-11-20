@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./tonemaphelper.hlsl"
 
 Texture2D<float4> g_textures2D[] : register(t0, space2);
 
@@ -135,8 +136,15 @@ float4 main(float4 SV_Position: SV_POSITION,
   float3 color_scaled_over_white_plus_one = (color_scaled / White) + 1;
   float3 tonemappedColor = (color_scaled_over_white_plus_one * color_scaled) / (color_scaled + 1);
 
-#if 0  // skip tonemapper
-  tonemappedColor = color_scaled;
+#if 1  // blended reinhard with untonemapped
+  float3 vanillaColor = tonemappedColor;
+
+  float midGrayScale = RDR1ReinhardMidgrayScale(White);
+  float3 untonemapped_scaled = color_scaled * midGrayScale;
+
+  float3 blendedColor = lerp(saturate(vanillaColor), untonemapped_scaled, saturate(vanillaColor));
+
+  tonemappedColor = blendedColor;
 #endif
 
   // Apply Bloom
