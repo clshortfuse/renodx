@@ -20,6 +20,7 @@ jobs:
     - name: Configure CMake (x64)
       run: >
         cmake
+        -DCMAKE_SYSTEM_VERSION=10.0.26100.0
         -B build
         -S .
         -G "Visual Studio 17 2022" -T host=x86 -A x64
@@ -34,6 +35,7 @@ jobs:
     - name: Configure CMake (x32)
       run: >
         cmake
+        -DCMAKE_SYSTEM_VERSION=10.0.26100.0
         -B build32
         -S .
         -G "Visual Studio 17 2022" -T host=x86 -A Win32
