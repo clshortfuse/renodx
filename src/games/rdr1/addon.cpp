@@ -15,7 +15,7 @@
 
 #include <embed/0xE033AAAD.h>  // Mini Eye Adaptation
 
-// #include <embed/0x56F79BAD.h>  // PQ Encoding
+#include <embed/0x56F79BAD.h>  // PQ Encoding
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
@@ -34,7 +34,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
     CustomShaderEntry(0xE033AAAD),  // Mini Eye Adaptation
 
-    // CustomShaderEntry(0x56F79BAD),  // PQ Encoding
+    CustomShaderEntry(0x56F79BAD),  // PQ Encoding
 };
 
 }  // namespace
