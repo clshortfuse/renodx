@@ -114,8 +114,8 @@ struct PipelineBindDetails {
 };
 
 struct DrawDetails {
-  std::unordered_map<uint32_t, ResourceViewDetails> srv_binds;
-  std::unordered_map<uint32_t, ResourceViewDetails> uav_binds;
+  std::map<uint32_t, ResourceViewDetails> srv_binds;
+  std::map<uint32_t, ResourceViewDetails> uav_binds;
   std::vector<PipelineBindDetails> pipeline_binds;
   enum class DrawMethods {
     PRESENT,
@@ -124,7 +124,7 @@ struct DrawDetails {
     DRAW_INDEXED_OR_INDIRECT,
     DISPATCH
   } draw_method;
-  std::vector<ResourceViewDetails> render_targets;
+  std::map<uint32_t, ResourceViewDetails> render_targets;
 
   [[nodiscard]] std::string DrawMethodString() const {
     switch (draw_method) {
@@ -421,7 +421,7 @@ void OnPushDescriptors(
 
   auto log_resource_view = [&](uint32_t index,
                                reshade::api::resource_view view,
-                               std::unordered_map<uint32_t, ResourceViewDetails>& destination) {
+                               std::map<uint32_t, ResourceViewDetails>& destination) {
     if (view.handle == 0) return;
 
     auto pair = device_data.pipeline_layout_params.find(layout.handle);
@@ -585,10 +585,13 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
     auto& draw_details = command_list_data.GetCurrentDrawDetails();
     draw_details.draw_method = draw_method;
     draw_details.render_targets.clear();
+
+    uint32_t rtv_index = 0u;
     for (auto render_target : renodx::utils::swapchain::GetRenderTargets(cmd_list)) {
-      if (render_target.handle == 0u) continue;
-      draw_details.render_targets.push_back(
-          device_data.GetResourceViewDetails(render_target, device));
+      if (render_target.handle != 0u) {
+        draw_details.render_targets[rtv_index] = device_data.GetResourceViewDetails(render_target, device);
+      }
+      ++rtv_index;
     }
 
     device_data.command_list_data.push_back(command_list_data);
@@ -1045,15 +1048,14 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
           }
         }
 
-        int render_target_index = 0;
-        for (auto& render_target : draw_details.render_targets) {
+        for (auto& [rtv_index, render_target] : draw_details.render_targets) {
           ++row_index;
           bool rtv_node_open = false;
           if (draw_node_open) {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
             ImGui::PushID(row_index);
-            rtv_node_open = ImGui::TreeNodeEx("", tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen, "RTV%d", render_target_index++);
+            rtv_node_open = ImGui::TreeNodeEx("", tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen, "RTV%d", rtv_index);
             ImGui::PopID();
 
             ImGui::TableNextColumn();
