@@ -2571,5 +2571,10 @@ float4 main(
   SV_Target.y = _1926;
   SV_Target.z = _1927;
   SV_Target.w = 0.0f;
+
+#if 1 // Take only hues and saturation from gamma correction
+  float3 gammaCorrectedColor = renodx::color::correct::GammaSafe(SV_Target.rgb);
+  SV_Target.rgb = HueSatCorrection(SV_Target.rgb, gammaCorrectedColor);
+#endif
   return SV_Target;
 }

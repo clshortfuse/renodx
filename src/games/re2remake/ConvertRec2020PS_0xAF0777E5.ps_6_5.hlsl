@@ -37,7 +37,9 @@ float4 main(noperspective float4 SV_Position: SV_Position,
     : SV_Target {
   float4 bt709Color = tLinearImage.SampleLevel(PointBorder, TEXCOORD.xy, 0.0f);
 
-  bt709Color = renodx::color::correct::GammaSafe(bt709Color);
+#if 0  // Gamma Correction
+  bt709Color.rgb = renodx::color::correct::GammaSafe(bt709Color.rgb);
+#endif
 
   float3 bt2020Color =
       renodx::color::bt2020::from::BT709(bt709Color.rgb);
