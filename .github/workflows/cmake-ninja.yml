@@ -16,9 +16,6 @@ jobs:
     - uses: actions/checkout@v4.1.7
       with:
         submodules: recursive
-    - uses: GuillaumeFalourd/setup-windows10-sdk-action@v2
-      with:
-        sdk-version: 22621
 
     - name: Install ninja-build tool
       uses: seanmiddleditch/gha-setup-ninja@v5
