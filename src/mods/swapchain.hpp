@@ -1828,18 +1828,14 @@ static void RewriteRenderTargets(
 
   auto* device = cmd_list->get_device();
 
-  size_t last_non_null = -1;
+  reshade::api::resource_view* new_rtvs = nullptr;
 
-  const size_t size = count * sizeof(reshade::api::resource_view);
-  auto* new_rtvs = static_cast<reshade::api::resource_view*>(malloc(size));
-  memcpy(new_rtvs, rtvs, count);
   bool changed = false;
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
-  for (uint32_t i = 0; i < count; i++) {
+  for (uint32_t i = 0; i < count; ++i) {
     const reshade::api::resource_view resource_view = rtvs[i];
     if (resource_view.handle == 0u) continue;
-    last_non_null = i;
 
     auto new_resource_view = GetResourceViewClone(device, &data, resource_view);
 
@@ -1854,11 +1850,18 @@ static void RewriteRenderTargets(
     s << ") [" << i << "]";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-    changed = true;
+    if (!changed) {
+      const size_t size = count * sizeof(reshade::api::resource_view);
+      new_rtvs = static_cast<reshade::api::resource_view*>(malloc(size));
+      memcpy(new_rtvs, rtvs, size);
+      changed = true;
+    }
     new_rtvs[i] = new_resource_view;
   }
   if (!changed) return;
-  cmd_list->bind_render_targets_and_depth_stencil(last_non_null + 1, new_rtvs, dsv);
+
+  cmd_list->bind_render_targets_and_depth_stencil(count, new_rtvs, dsv);
+  free(new_rtvs);
 }
 
 static void DiscardDescriptors(reshade::api::command_list* cmd_list) {
