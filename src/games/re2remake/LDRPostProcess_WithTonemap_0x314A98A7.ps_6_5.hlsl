@@ -267,7 +267,6 @@ cbuffer CameraKerare : register(b1) {
 
 //   struct TonemapParam
 //   {
-
 //       float contrast;                               ; Offset:    0
 //       float linearBegin;                            ; Offset:    4
 //       float linearLength;                           ; Offset:    8
@@ -279,14 +278,13 @@ cbuffer CameraKerare : register(b1) {
 //       float mulLinearStartContrastFactor;           ; Offset:   32
 //       float invLinearBegin;                         ; Offset:   36
 //       float madLinearStartContrastFactor;           ; Offset:   40
-
 //   } TonemapParam;                                   ; Offset:    0 Size:    44
 cbuffer TonemapParam : register(b2) {
   float TonemapParam_000x : packoffset(c000.x);
   float TonemapParam_000y : packoffset(c000.y);
   float TonemapParam_000w : packoffset(c000.w);
-  float maxNit : packoffset(c001.x);  // float maxNit
-  float TonemapParam_001y : packoffset(c001.y);
+  float maxNit : packoffset(c001.x);                   // float TonemapParam_001x
+  float linearStart : packoffset(c001.y);              // TonemapParam_001y
   float TonemapParam_001z : packoffset(c001.z);
   float TonemapParam_001w : packoffset(c001.w);
   float TonemapParam_002x : packoffset(c002.x);
@@ -390,7 +388,8 @@ float4 main(
     linear float4 Kerare: Kerare,
     linear float Exposure: Exposure
 ) : SV_Target {
-  float TonemapParam_001x = maxNit;
+  float TonemapParam_001x = 125;
+  float TonemapParam_001y = 125;
 
 
   // custom code
@@ -2498,5 +2497,6 @@ float4 main(
   SV_Target.rgb = AdjustGammaOnLuminance(SV_Target.rgb, 1.15);
 
 #endif
+
   return SV_Target;
 }
