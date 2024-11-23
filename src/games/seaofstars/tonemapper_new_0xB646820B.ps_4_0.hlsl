@@ -32,13 +32,10 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
     r1.xyz = float3(8, 8, 8) * r2.xyz;
   }
   r1.xyz = cb0[192].xxx * r1.xyz;
-  r0.xyz = r1.xyz * cb0[192].yzw + r0.xyz;
 
-  float3 scaledBloom = r0.xyz;
+  // r0.xyz = r1.xyz * cb0[192].yzw + r0.xyz;
 
-  if (injectedData.fxBloom) {
-    r0.rgb = inputColor.rgb + scaledBloom * pow(injectedData.fxBloom, injectedData.fxBloom);
-  }
+  r0.rgb = r1.xyz * cb0[192].yzw * injectedData.fxBloom + r0.xyz;
 
   // possibly vignette
   r0.w = cmp(0 < cb0[200].z);
@@ -84,7 +81,6 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
     r1.xyz = r0.www * r1.xyz + r3.xyz;
   }
 
-  
   // SDR LUT which seems like dead code
   r0.w = cmp(cb0[205].y == 0.000000);
   if (r0.w != 0) {
@@ -145,6 +141,8 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
   }
   o0.xyz = r1.xyz;
   o0.w = 1;
+
+  o0.rgb *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
 
   return;
 }
