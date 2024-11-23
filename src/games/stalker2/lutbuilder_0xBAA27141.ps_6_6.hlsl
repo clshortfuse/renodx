@@ -167,8 +167,6 @@ float4 main(
   // cbuffer _2 = _RootShaderParameters;
   // _3 = _1;
   // _4 = _2;
-  SV_Target = float4(100.f, 100.f, 100.f, 1.f);
-  return SV_Target;
   uint _5 = SV_RenderTargetArrayIndex;
   float _6 = TEXCOORD.x;
   float _7 = TEXCOORD.y;
@@ -1215,7 +1213,7 @@ float4 main(
   // CustomEdit
   float3 film_graded_color = float3(_966, _967, _968);
 
-  if (true) {
+  if (is_hdr) {
     float3 final_color = saturate(film_graded_color);
     if (injectedData.toneMapType != 0.f) {
       final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
@@ -1229,7 +1227,7 @@ float4 main(
       final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
     }
 
-    return float4(100,100,100, 0);
+    return float4(final_color * 0.9523810148239136f, 0);
   }
 
   uint _970 = _RootShaderParameters_040w;
@@ -2755,9 +2753,9 @@ float4 main(
   float _2395 = _2392 * 0.9523810148239136f;
   float _2396 = _2393 * 0.9523810148239136f;
   float _2397 = _2394 * 0.9523810148239136f;
-  SV_Target.x = _2395 * 100;
-  SV_Target.y = _2396 * 100;
-  SV_Target.z = _2397 * 100;
+  SV_Target.x = _2395;
+  SV_Target.y = _2396;
+  SV_Target.z = _2397;
   SV_Target.w = 0.0f;
   return SV_Target;
 }
