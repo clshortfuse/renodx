@@ -2181,30 +2181,11 @@ float4 main(
             float _1679 = _1676 + _1641;
             float _1680 = _1677 + _1641;
             float _1681 = _1678 + _1641;
+
+#if 0
             float4 _1682 = tTextureMap0.SampleLevel(TrilinearClamp, float3(_1679, _1680, _1681), 0.0f);
-
-            // custom code
-#if 1
-            _1682.rgb = LUTBlackCorrection(float3(_1638, _1639, _1640), _1682.rgb, tTextureMap0, lut_config);
-
 #else
-            float3 lutVanilla = _1682.rgb;
-            
-            float3 lutInputColor = float3(_1638, _1639, _1640);
-            renodx::lut::Config lut_config = renodx::lut::config::Create(
-                TrilinearClamp,
-                1.f,
-                1.f,
-                renodx::lut::config::type::SRGB,
-                renodx::lut::config::type::LINEAR,
-                1 / ColorCorrectTexture_000w);
-            float3 lutCorrectedBlack = renodx::lut::Sample(tTextureMap0, lut_config, lutInputColor);
-
-            // blend with vanilla
-            // needed to prevent crushing with srgb -> 2.2 conversion later
-            float RestorationScale = 1.0f;
-            float RestorationPower = 0.25f;
-            _1682.rgb = lerp(lutCorrectedBlack, max(lutVanilla, 0), pow(saturate(lutCorrectedBlack / RestorationScale), RestorationPower));
+            float3 _1682 = LUTBlackCorrection(float3(_1638, _1639, _1640), tTextureMap0, lut_config);
 #endif
 
             float _1683 = _1682.x;
@@ -2213,29 +2194,11 @@ float4 main(
             bool _1686 = (_1611 > 0.0f);
             do {
               if (_1686) {
+#if 0
                 float4 _1688 = tTextureMap1.SampleLevel(TrilinearClamp, float3(_1679, _1680, _1681), 0.0f);
                 
-                // custom code
-#if 1
-                _1688.rgb = LUTBlackCorrection(float3(_1638, _1639, _1640), _1688.rgb, tTextureMap1, lut_config);
 #else
-                float3 lutVanilla = _1688.rgb;
-
-                float3 lutInputColor = float3(_1638, _1639, _1640);
-                renodx::lut::Config lut_config = renodx::lut::config::Create(
-                    TrilinearClamp,
-                    1.f,
-                    1.f,
-                    renodx::lut::config::type::SRGB,
-                    renodx::lut::config::type::LINEAR,
-                    1 / ColorCorrectTexture_000w);
-                float3 lutCorrectedBlack = renodx::lut::Sample(tTextureMap1, lut_config, float3(_1638, _1639, _1640));
-
-                // blend with vanilla
-                // needed to prevent crushing with srgb -> 2.2 conversion later
-                float RestorationScale = 1.0f;
-                float RestorationPower = 0.25f;
-                _1688.rgb = lerp(lutCorrectedBlack, max(lutVanilla, 0), pow(saturate(lutCorrectedBlack / RestorationScale), RestorationPower));
+                float3 _1688 = LUTBlackCorrection(float3(_1638, _1639, _1640), tTextureMap1, lut_config);
 #endif
 
 
@@ -2295,37 +2258,12 @@ float4 main(
                           float _1733 = _1732 + -0.054999999701976776f;
                           _1735 = _1733;
                         }
-                        // // custom code
-                        // float3 sRGBColor = renodx::color::srgb::Encode(max(0, float3(_1698, _1699, _1700)));
-                        // _1713 = sRGBColor.r;
-                        // _1724 = sRGBColor.g;
-                        // _1735 = sRGBColor.b;
-
-                        
-                        
                         // custom code
+#if 0
                         float4 _1736 = tTextureMap2.SampleLevel(TrilinearClamp, float3(_1713, _1724, _1735), 0.0f);
 
-#if 1
-                        _1736.rgb = LUTBlackCorrection(float3(_1698, _1699, _1700), _1736.rgb, tTextureMap2, lut_config);
 #else
-                        float3 lutVanilla = _1736.rgb;
-
-                        float3 lutInputColor = float3(_1698, _1699, _1700);
-                        renodx::lut::Config lut_config = renodx::lut::config::Create(
-                            TrilinearClamp,
-                            1.f,
-                            1.f,
-                            renodx::lut::config::type::SRGB,
-                            renodx::lut::config::type::LINEAR,
-                            1 / ColorCorrectTexture_000w);
-                        float3 lutCorrectedBlack = renodx::lut::Sample(tTextureMap2, lut_config, lutInputColor);
-
-                        // blend with vanilla
-                        // needed to prevent crushing with srgb -> 2.2 conversion later
-                        float RestorationScale = 1.0f;
-                        float RestorationPower = 0.25f;
-                        _1736.rgb = lerp(lutCorrectedBlack, max(lutVanilla, 0), pow(saturate(lutCorrectedBlack / RestorationScale), RestorationPower));
+                        float3 _1736 = LUTBlackCorrection(float3(_1698, _1699, _1700), tTextureMap2, lut_config);
 #endif
 
                         float _1737 = _1736.x;
@@ -2387,28 +2325,11 @@ float4 main(
                         float _1780 = _1779 + -0.054999999701976776f;
                         _1782 = _1780;
                       }
+#if 0
                       float4 _1783 = tTextureMap2.SampleLevel(TrilinearClamp, float3(_1760, _1771, _1782), 0.0f);
 
-#if 1
-                      _1783.rgb = LUTBlackCorrection(float3(_1683, _1684, _1685), _1783.rgb, tTextureMap2, lut_config);
 #else
-                      float3 lutVanilla = _1783.rgb;
-
-                      float3 lutInputColor = float3(_1683, _1684, _1685);
-                      renodx::lut::Config lut_config = renodx::lut::config::Create(
-                          TrilinearClamp,
-                          1.f,
-                          1.f,
-                          renodx::lut::config::type::SRGB,
-                          renodx::lut::config::type::LINEAR,
-                          1 / ColorCorrectTexture_000w);
-                      float3 lutCorrectedBlack = renodx::lut::Sample(tTextureMap2, lut_config, lutInputColor);
-
-                      // blend with vanilla
-                      // needed to prevent crushing with srgb -> 2.2 conversion later
-                      float RestorationScale = 1.0f;
-                      float RestorationPower = 0.25f;
-                      _1783.rgb = lerp(lutCorrectedBlack, max(lutVanilla, 0), pow(saturate(lutCorrectedBlack / RestorationScale), RestorationPower));
+                      float3 _1783 = LUTBlackCorrection(float3(_1683, _1684, _1685), tTextureMap2, lut_config);
 #endif
 
                       float _1784 = _1783.x;
@@ -2572,9 +2493,10 @@ float4 main(
   SV_Target.z = _1927;
   SV_Target.w = 0.0f;
 
-#if 1 // Take only hues and saturation from gamma correction
-  float3 gammaCorrectedColor = renodx::color::correct::GammaSafe(SV_Target.rgb);
-  SV_Target.rgb = HueSatCorrection(SV_Target.rgb, gammaCorrectedColor);
+#if 0 // HDR Gamma boost
+
+  SV_Target.rgb = AdjustGammaOnLuminance(SV_Target.rgb, 1.15);
+
 #endif
   return SV_Target;
 }
