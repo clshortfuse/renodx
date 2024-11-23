@@ -161,14 +161,6 @@ static void OnBindRenderTargetsAndDepthStencil(
   const bool found_swapchain_rtv = false;
   cmd_list_data.current_render_targets.assign(rtvs, rtvs + count);
   cmd_list_data.current_depth_stencil = dsv;
-  uint32_t counted = 0;
-  for (uint32_t i = 0; i < count; i++) {
-    const reshade::api::resource_view rtv = rtvs[i];
-    if (rtv.handle != 0u) {
-      counted++;
-    }
-  }
-  cmd_list_data.current_render_targets.resize(counted);
   cmd_list_data.has_swapchain_render_target_dirty = true;
 }
 
