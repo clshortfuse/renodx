@@ -566,16 +566,18 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
 
   auto* device = cmd_list->get_device();
   auto& device_data = device->get_private_data<DeviceData>();
-  std::unique_lock lock(device_data.mutex);
 
-  auto& state = renodx::utils::shader::GetCurrentState(cmd_list);
-  for (auto& [stage, hash] : state.current_shaders_hashes) {
-    if (auto pair = device_data.shader_details.find(hash);
-        pair != device_data.shader_details.end()) {
-      auto details = pair->second;
-      if (details.bypass_draw) {
-        bypass_draw = true;
-        break;
+  {
+    auto& state = renodx::utils::shader::GetCurrentState(cmd_list);
+    std::shared_lock lock(device_data.mutex);
+    for (auto& [stage, hash] : state.current_shaders_hashes) {
+      if (auto pair = device_data.shader_details.find(hash);
+          pair != device_data.shader_details.end()) {
+        auto details = pair->second;
+        if (details.bypass_draw) {
+          bypass_draw = true;
+          break;
+        }
       }
     }
   }
@@ -586,6 +588,7 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
     draw_details.draw_method = draw_method;
     draw_details.render_targets.clear();
 
+    std::unique_lock lock(device_data.mutex);
     uint32_t rtv_index = 0u;
     for (auto render_target : renodx::utils::swapchain::GetRenderTargets(cmd_list)) {
       if (render_target.handle != 0u) {
@@ -1611,8 +1614,6 @@ void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-  auto* device = swapchain->get_device();
-
   if (setting_shader_defines_changed) {
     renodx::utils::shader::compiler::watcher::SetShaderDefines(setting_shader_defines);
     renodx::utils::shader::compiler::watcher::RequestCompile();
