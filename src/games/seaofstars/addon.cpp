@@ -7,6 +7,8 @@
 
 #define DEBUG_LEVEL_0
 
+#include <algorithm>
+
 #include <embed/0x552A4A60.h>
 #include <embed/0x67758842.h>
 #include <embed/0x72B31CDE.h>
@@ -39,7 +41,6 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 3.f,
-        .can_reset = false,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
@@ -49,43 +50,58 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapPeakNits",
         .binding = &shader_injection.toneMapPeakNits,
         .default_value = 1000.f,
-        .can_reset = false,
         .label = "Peak Brightness",
         .section = "Tone Mapping",
-        .tooltip = "Sets the value of peak white in nits",
-        .min = 48.f,
+        .tooltip =
+            "Sets the value of peak white in nits."
+            "\nDefault: Display peak brightness",
+        .min = 80.f,
         .max = 4000.f,
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapGameNits",
         .binding = &shader_injection.toneMapGameNits,
         .default_value = 203.f,
-        .can_reset = false,
         .label = "Game Brightness",
         .section = "Tone Mapping",
-        .tooltip = "Sets the value of 100% white in nits",
-        .min = 48.f,
+        .tooltip = "Sets the value of 100% white in nits."
+                   "\nDefault: Reference white value for display peak brightness",
+        .min = 80.f,
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapUINits",
         .binding = &shader_injection.toneMapUINits,
         .default_value = 203.f,
-        .can_reset = false,
         .label = "UI Brightness",
         .section = "Tone Mapping",
-        .tooltip = "Sets the brightness of UI and HUD elements in nits",
-        .min = 48.f,
+        .tooltip =
+            "Sets the brightness of UI and HUD elements in nits."
+            "\nDefault: Windows SDR content brightness",
+        .min = 80.f,
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapGammaCorrection",
         .binding = &shader_injection.toneMapGammaCorrection,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .can_reset = false,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
-        .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
+        .tooltip = "Emulates a 2.2 EOTF"
+                   "\nDefault: On with HDR",
+        .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapHueCorrection",
+        .binding = &shader_injection.toneMapHueCorrection,
+        .default_value = 50.f,
+        .label = "Hue Correction",
+        .section = "Tone Mapping",
+        .tooltip = "Emulates Vanilla hue shifts.",
+        .min = 0.f,
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
@@ -130,6 +146,28 @@ renodx::utils::settings::Settings settings = {
         .label = "Saturation",
         .section = "Color Grading",
         .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeBlowout",
+        .binding = &shader_injection.colorGradeBlowout,
+        .default_value = 0.f,
+        .label = "Blowout",
+        .section = "Color Grading",
+        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeFlare",
+        .binding = &shader_injection.colorGradeFlare,
+        .default_value = 0.f,
+        .label = "Flare",
+        .section = "Color Grading",
+        .tooltip = "Flare/Glare Compensation",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 3; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -204,11 +242,45 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
+  renodx::utils::settings::UpdateSetting("fxVignette", 50.f);
   renodx::utils::settings::UpdateSetting("fxHeroLight", 100.f);
   renodx::utils::settings::UpdateSetting("processingInternalSampling", 0.f);
-  
 }
 
+auto last_is_hdr = false;
+
+float ComputeReferenceWhite(float peak_nits) {
+  return std::clamp(roundf(powf(10.f, 0.03460730900256f + (0.757737096673107f * log10f(peak_nits)))), 100.f, 300.f);
+}
+
+void OnInitSwapchain(reshade::api::swapchain* swapchain) {
+  last_is_hdr = renodx::utils::swapchain::IsHDRColorSpace(swapchain);
+  if (!last_is_hdr) {
+    settings[1]->default_value = 80.f;
+    settings[2]->default_value = 80.f;
+    settings[3]->default_value = 80.f;
+    settings[4]->default_value = 0.f;
+    return;
+  }
+
+  auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+  if (peak.has_value()) {
+    settings[1]->default_value = roundf(peak.value());
+  } else {
+    settings[1]->default_value = 1000.f;
+  }
+
+  settings[2]->default_value = ComputeReferenceWhite(settings[1]->default_value);
+
+  auto white_level = renodx::utils::swapchain::GetSDRWhiteNits(swapchain);
+  if (white_level.has_value()) {
+    settings[3]->default_value = roundf(white_level.value());
+  } else {
+    settings[3]->default_value = 203.f;
+  }
+
+  settings[4]->default_value = 1.f;
+}
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -223,8 +295,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_float,
       });
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_addon(h_module);
       break;
   }

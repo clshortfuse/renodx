@@ -288,7 +288,7 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
     r0.xyz = renodx::tonemap::unity::BT709(r0.xyz);
 
     if (useSDRLut) {
-      r0.xyz = lerp(r0.xyz, renodx::lut::Sample(t8, lut_config, r0.xyz), lut_config.strength);
+      r0.xyz = lerp(r0.xyz, renodx::lut::Sample(t8, lut_config, saturate(r0.xyz)), lut_config.strength);
     }
   } else {
     float vanillaMidGray = renodx::tonemap::unity::BT709(0.18f);
@@ -297,7 +297,7 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
     config.type = injectedData.toneMapType;
     config.peak_nits = injectedData.toneMapPeakNits;
     config.game_nits = injectedData.toneMapGameNits;
-    config.gamma_correction = injectedData.toneMapGammaCorrection - 1;
+    config.gamma_correction = injectedData.toneMapGammaCorrection;
     config.exposure = injectedData.colorGradeExposure;
     config.highlights = injectedData.colorGradeHighlights;
     config.shadows = injectedData.colorGradeShadows;
@@ -305,7 +305,14 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
     config.saturation = injectedData.colorGradeSaturation;
     config.mid_gray_value = vanillaMidGray;
     config.mid_gray_nits = vanillaMidGray * 100.f;
-    config.reno_drt_dechroma = 0;
+    config.reno_drt_dechroma = injectedData.colorGradeBlowout;
+    config.reno_drt_flare = injectedData.colorGradeFlare;
+
+    config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
+    config.hue_correction_color = lerp(
+        untonemapped,
+        saturate(renodx::tonemap::unity::BT709(untonemapped)),
+        injectedData.toneMapHueCorrection);
 
     r0.xyz = renodx::tonemap::config::Apply(r0.xyz, config, lut_config, t8);
   }
