@@ -93,9 +93,34 @@ float3 HueICtCp(float3 incorrect_color, float3 correct_color, float strength = 1
   return color;
 }
 
+float3 HuedtUCSUV(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
+  if (strength == 0.f) return incorrect_color;
+
+  float3 correct_perceptual = renodx::color::dtucs_uvY::from::BT709(correct_color);
+
+  float3 incorrect_perceptual = renodx::color::dtucs_uvY::from::BT709(incorrect_color);
+
+  float chrominance_pre_adjust = distance(incorrect_perceptual.yz, 0);
+
+  incorrect_perceptual.yz = lerp(incorrect_perceptual.yz, correct_perceptual.yz, strength);
+
+  float chrominance_post_adjust = distance(incorrect_perceptual.yz, 0);
+
+  if (chrominance_post_adjust != 0.f) {
+    incorrect_perceptual.yz *= chrominance_pre_adjust / chrominance_post_adjust;
+  }
+
+  float3 color = renodx::color::bt709::from::dtucs_uvY(incorrect_perceptual);
+  color = renodx::color::bt709::clamp::AP1(color);
+  return color;
+}
+
 float3 Hue(float3 incorrect_color, float3 correct_color, float strength = 1.f, uint method = 0u) {
   if (method == 1u) {
     return HueICtCp(incorrect_color, correct_color, strength);
+  }
+  else if (method == 2u) {
+    return HuedtUCSUV(incorrect_color, correct_color, strength);
   }
   return HueOKLab(incorrect_color, correct_color, strength);
 }
