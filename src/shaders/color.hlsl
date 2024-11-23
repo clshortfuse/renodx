@@ -124,6 +124,60 @@ static const float3 BT601_Y = float3(0.299, 0.587, 0.114);
 // https://www.ilkeratalay.com/colorspacesfaq.php
 static const float3 BOURGIN_D65_Y = float3(0.222015, 0.706655, 0.071330);
 
+namespace XYZ {
+namespace from {
+float3 xyY(float3 xyY) {
+  float3 XYZ;
+
+  XYZ.xz = float2(xyY.x, (1.f - xyY.xy.x - xyY.xy.y)) / xyY.y * xyY[2];
+
+  XYZ.y = xyY[2];
+
+  return XYZ;
+}
+
+float3 BT709(float3 bt709) {
+  return mul(BT709_TO_XYZ_MAT, bt709);
+}
+}  // namespace from
+}  // namespace XYZ
+
+namespace xyY {
+namespace from {
+float3 XYZ(float3 XYZ) {
+  float xyz = XYZ.x + XYZ.y + XYZ.z;
+
+  float3 xyY;
+
+  xyY.xy = XYZ.xy / xyz;
+
+  xyY[2] = XYZ.y;
+
+  return xyY;
+}
+
+float3 BT709(float3 bt709) {
+  float3 XYZ = XYZ::from::BT709(bt709);
+
+  return xyY::from::XYZ(XYZ);
+}
+}  // namespace from
+}  // namespace xyY
+
+namespace bt709 {
+namespace from {
+float3 XYZ(float3 XYZ) {
+  return mul(XYZ_TO_BT709_MAT, XYZ);
+}
+
+float3 xyY(float3 xyY) {
+  float3 XYZ = XYZ::from::xyY(xyY);
+
+  return bt709::from::XYZ(XYZ);
+}
+}  // namespace from
+}  // namespace bt709
+
 namespace bt709 {
 static const float REFERENCE_WHITE = 100.f;
 namespace from {
@@ -482,6 +536,73 @@ float3 OkLCh(float3 oklch) {
 }
 }  // namespace from
 }  // namespace oklab
+
+//  Copyright 2022 - Aurélien PIERRE / darktable project
+//  URL: https://eng.aurelienpierre.com/2022/02/color-saturation-control-for-the-21th-century/
+//  The following source code is released under the MIT license
+//  (https://opensource.org/licenses/MIT) with the following addenda:
+//  * Any reuse of this code shall include the names of the author and of the project, as well as the source URL,
+//  * Any implementation of this colour space MUST call it "darktable Uniform Color Space" or
+//    "darktable UCS" in the end - user interface of the software.
+namespace dtucs_uvY {
+namespace from {
+static const float3x3 xyToUVD = {
+  -0.783941002840055f, 0.277512987809202f, 0.153836578598858f,
+  0.745273540913283f, -0.205375866083878f, -0.165478376301988f,
+  0.318707282433486f, 2.16743692732158f, 0.291320554395942f
+};
+
+static const float2x2 UVStarToUVStarPrime = {
+  -1.124983854323892f, -0.980483721769325f,
+  1.86323315098672f, 1.971853092390862f
+};
+
+float3 BT709(float3 bt709) {
+  float3 xyY = xyY::from::BT709(bt709);
+
+  float3 UVD = mul(xyToUVD, float3(xyY.xy, 1.f));
+
+  float2 UV = UVD.xy /= UVD.z;
+
+  float2 UVStar = float2(1.39656225667f, 1.4513954287f) * UV / (abs(UV) + float2(1.49217352929f, 1.52488637914f));
+
+  float2 UVStarPrime = mul(UVStarToUVStarPrime, UVStar);
+
+  return float3(UVStarPrime, xyY[2]);
+}
+}  // namespace from
+}  // namespace dtucs_uvY
+
+namespace bt709 {
+namespace from {
+static const float2x2 UVStarPrimeToUVStar = {
+  -5.037522385190711f, -2.504856328185843f,
+   4.760029407436461f, 2.874012963239247f
+};
+
+static const float3x3 UVToxyD = {
+  0.167171472114775f, 0.141299802443708f, -0.00801531300850582f,
+  -0.150959086409163f, -0.155185060382272f, -0.00843312433578007f,
+  0.940254742367256f, 1.f, -0.0256325967652889f
+};
+
+float3 dtucs_uvY(float3 uvY) {
+  float2 UVStar = mul(UVStarPrimeToUVStar, uvY.xy);
+
+  float2 UV = float2(-1.49217352929f, -1.52488637914f) * UVStar / (abs(UVStar) - float2(1.39656225667f, 1.4513954287f));
+
+  float3 xyD = mul(UVToxyD, float3(UV, 1.f));
+
+  float3 xyY;
+
+  xyY.xy = xyD.xy / xyD.z;
+
+  xyY[2] = uvY[2];
+
+  return bt709::from::xyY(xyY);
+}
+}  // namespace from
+}  // namespace bt709
 
 namespace bt2408 {
 static const float REFERENCE_WHITE = 203.f;
