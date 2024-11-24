@@ -2494,7 +2494,7 @@ float4 main(
 
 #if 0 // HDR Gamma boost
 
-  SV_Target.rgb = AdjustGammaOnLuminance(SV_Target.rgb, 1.15);
+  SV_Target.rgb = AdjustGammaOnLuminance(SV_Target.rgb, 1.1);
 
 #endif
 
