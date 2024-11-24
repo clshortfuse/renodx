@@ -2262,7 +2262,7 @@ float4 main(
                         float4 _1736 = tTextureMap2.SampleLevel(TrilinearClamp, float3(_1713, _1724, _1735), 0.0f);
 
 #else
-                        float3 _1736 = LUTBlackCorrection(float3(_1698, _1699, _1700), tTextureMap2, lut_config);
+                        float3 _1736 = LUTBlackCorrection(float3(_1797, _1798, _1799), tTextureMap2, lut_config);
 #endif
 
                         float _1737 = _1736.x;
