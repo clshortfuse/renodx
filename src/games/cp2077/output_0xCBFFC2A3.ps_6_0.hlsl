@@ -99,18 +99,24 @@ float4 main(PSSceneIn input) : SV_TARGET {
   const float4 inputColor = textureRender.Load(int3(uint2(uint(gl_FragCoord.x), uint(gl_FragCoord.y)), 0u));
 
   ConvertColorParams params = {
-      pixConsts.outputTypeEnum,
-      pixConsts.paperWhiteScaling,
-      pixConsts.blackFloorAdjust,
-      pixConsts.gammaCorrection,
-      pixConsts.pqSaturation,
-      float3x3(
-          pixConsts.pqMatrix[0].x, pixConsts.pqMatrix[0].y, pixConsts.pqMatrix[0].z,
-          pixConsts.pqMatrix[1].x, pixConsts.pqMatrix[1].y, pixConsts.pqMatrix[1].z,
-          pixConsts.pqMatrix[2].x, pixConsts.pqMatrix[2].y, pixConsts.pqMatrix[2].z),
-      float3(TEXCOORD.x, TEXCOORD.y, shaderConsts.const00.x)};
+    pixConsts.outputTypeEnum,
+    pixConsts.paperWhiteScaling,
+    pixConsts.blackFloorAdjust,
+    pixConsts.gammaCorrection,
+    pixConsts.pqSaturation,
+    float3x3(
+        pixConsts.pqMatrix[0].x, pixConsts.pqMatrix[0].y, pixConsts.pqMatrix[0].z,
+        pixConsts.pqMatrix[1].x, pixConsts.pqMatrix[1].y, pixConsts.pqMatrix[1].z,
+        pixConsts.pqMatrix[2].x, pixConsts.pqMatrix[2].y, pixConsts.pqMatrix[2].z),
+    float3(TEXCOORD.x, TEXCOORD.y, shaderConsts.const00.x)
+  };
 
-  float3 outputColor = convertColor(inputColor.rgb, params);
+  float3 outputColor = inputColor.rgb;
+  if (injectedData.toneMapGammaCorrection == 2.f) {
+    outputColor = renodx::color::correct::GammaSafe(inputColor.rgb);
+  }
+  outputColor = convertColor(outputColor.rgb, params);
+  
 #if 0
   // if (TEXCOORD.x > 0.75f) {
   //          if (TEXCOORD.y < 0.1f) outputColor.rgb = (100.f / 80.f) * shaderConsts.const00.x;
