@@ -127,6 +127,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "colorGradeBlowout",
+        .binding = &shader_injection.colorGradeBlowout,
+        .default_value = 70.f,
+        .label = "Blowout",
+        .section = "Color Grading",
+        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "colorGradeLUTStrength",
         .binding = &shader_injection.colorGradeLUTStrength,
         .default_value = 100.f,
@@ -177,6 +188,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
+  renodx::utils::settings::UpdateSetting("colorGradeBlowout", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
 }
