@@ -94,14 +94,14 @@ float3 HuedtUCSUV(float3 incorrect_color, float3 correct_color, float strength =
 
   float3 incorrect_perceptual = renodx::color::dtucs_uvY::from::BT709(incorrect_color);
 
-  float chrominance_pre_adjust = distance(incorrect_perceptual.yz, 0);
+  float chrominance_pre_adjust = distance(incorrect_perceptual.xy, 0);
 
-  incorrect_perceptual.yz = lerp(incorrect_perceptual.yz, correct_perceptual.yz, strength);
+  incorrect_perceptual.xy = lerp(incorrect_perceptual.xy, correct_perceptual.xy, strength);
 
-  float chrominance_post_adjust = distance(incorrect_perceptual.yz, 0);
+  float chrominance_post_adjust = distance(incorrect_perceptual.xy, 0);
 
   if (chrominance_post_adjust != 0.f) {
-    incorrect_perceptual.yz *= chrominance_pre_adjust / chrominance_post_adjust;
+    incorrect_perceptual.xy *= chrominance_pre_adjust / chrominance_post_adjust;
   }
 
   float3 color = renodx::color::bt709::from::dtucs_uvY(incorrect_perceptual);
