@@ -7,8 +7,10 @@
 
 #define DEBUG_LEVEL_0
 
-#include <embed/0xBAA27141.h>  // LUT Builder
-
+#include <embed/0x5590F787.h>  // Radiation overlay
+#include <embed/0x6CFBD4C0.h>  // LUT Builder
+#include <embed/0xA7EFB8C2.h>  // Final
+#include <embed/0xB6CA5FD9.h>  // LUT Builder
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -21,7 +23,10 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xBAA27141),  // Final
+    CustomShaderEntry(0xB6CA5FD9),
+    CustomShaderEntry(0xA7EFB8C2),
+    CustomShaderEntry(0x6CFBD4C0),
+    CustomShaderEntry(0x5590F787),
 };
 
 ShaderInjectData shader_injection;
@@ -130,7 +135,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeBlowout",
         .binding = &shader_injection.colorGradeBlowout,
-        .default_value = 70.f,
+        .default_value = 50.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
@@ -145,16 +150,18 @@ renodx::utils::settings::Settings settings = {
         .label = "LUT Strength",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return false; },  // Disable LUT sampling
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeLUTScaling",
         .binding = &shader_injection.colorGradeLUTScaling,
-        .default_value = 100.f,
+        .default_value = 0.f,
         .label = "LUT Scaling",
         .section = "Color Grading",
         .tooltip = "Scales the color grade LUT to full range when size is clamped.",
         .max = 100.f,
+        .is_enabled = []() { return false; },  // Disable LUT sampling
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{

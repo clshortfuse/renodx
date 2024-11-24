@@ -1,7 +1,7 @@
 #include "./shared.h"
 
 renodx::tonemap::Config getCommonConfig() {
-  float vanillaMidGray = 0.18f;  // calculate mid grey from the second hable run
+  float vanillaMidGray = 0.30f;  // UUU shows game is using 30.f for mid gray
   float renoDRTContrast = 1.f;
   float renoDRTFlare = 0.f;
   float renoDRTShadows = 1.f;
@@ -27,7 +27,7 @@ renodx::tonemap::Config getCommonConfig() {
   config.reno_drt_saturation = renoDRTSaturation;
   config.reno_drt_dechroma = renoDRTDechroma;
   config.mid_gray_value = vanillaMidGray;
-  config.mid_gray_nits = vanillaMidGray * 100.f; // Should be 30 according to UUU?
+  config.mid_gray_nits = vanillaMidGray * 100.f;
   config.reno_drt_flare = renoDRTFlare;
 
   return config;

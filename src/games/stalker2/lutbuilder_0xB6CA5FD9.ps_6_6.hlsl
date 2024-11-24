@@ -634,6 +634,8 @@ float4 main(
   float _380 = _371 * _355;
   float _381 = mad(_372, _358, _380);
   float _382 = mad(_373, _361, _381);
+
+  // Gamut Expansion
   float _383 = dot(float3(_376, _379, _382), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
   float _384 = _376 / _383;
   float _385 = _379 / _383;
@@ -670,7 +672,9 @@ float4 main(
   float _417 = _414 + _376;
   float _418 = _415 + _379;
   float _419 = _416 + _382;
-  float _420 = dot(float3(_417, _418, _419), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+
+  // AP1_RGB2Y
+  float _420 = dot(float3(_376, _379, _382), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
   float _422 = _RootShaderParameters_024x;
   float _423 = _RootShaderParameters_024y;
   float _424 = _RootShaderParameters_024z;
@@ -1437,7 +1441,8 @@ float4 main(
   float _1265;  // custom branch
   float _1266;  // custom branch
   float _1267;  // custom branch
-  if (injectedData.colorGradeLUTStrength != 1.f || injectedData.colorGradeLUTScaling != 0.f) {
+  // we always skip this, since game doesn't have SDR LUTs
+  if (false /* injectedData.colorGradeLUTStrength != 1.f || injectedData.colorGradeLUTScaling != 0.f */) {
     renodx::lut::Config lut_config = renodx::lut::config::Create(
         Samplers_1,
         injectedData.colorGradeLUTStrength,
@@ -1567,6 +1572,7 @@ float4 main(
   float _1271 = _1269 * _1266;
   float _1272 = _1269 * _1267;
   float _1273 = _RootShaderParameters_039y;
+  // _1273 = 2.f; // CustomEdit
   float _1274 = _RootShaderParameters_039z;
   float _1275 = _1273 + _1270;
   float _1276 = _1275 * _1265;
@@ -1631,6 +1637,7 @@ float4 main(
     if (injectedData.toneMapType != 0.f) {
       final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
     }
+
     if (injectedData.toneMapGammaCorrection == 1.f) {
       final_color = renodx::color::correct::GammaSafe(final_color);
     }
@@ -1638,7 +1645,7 @@ float4 main(
 
     if (is_pq) {
       final_color = renodx::color::bt2020::from::BT709(final_color);
-      final_color = renodx::color::pq::Encode(final_color, 100.f);
+      final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
     }
 
     return float4(final_color * 0.9523810148239136f, 0);

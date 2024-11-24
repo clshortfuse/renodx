@@ -14,10 +14,11 @@ SamplerState UISampler : register(s0);
 SamplerState SceneSampler : register(s1);
 
 float4 main(
-  noperspective float2 TEXCOORD : TEXCOORD,
-  noperspective float4 SV_Position : SV_Position
-) : SV_Target {
+    noperspective float2 TEXCOORD: TEXCOORD,
+    noperspective float4 SV_Position: SV_Position)
+    : SV_Target {
   float4 SV_Target;
+
   // texture _1 = SceneTexture;
   // texture _2 = UITexture;
   // SamplerState _3 = SceneSampler;
@@ -70,9 +71,26 @@ float4 main(
   float _50 = mad(0.08802297711372375f, _41, _49);
   float _51 = mad(0.8954997062683105f, _42, _50);
   float _53 = $Globals_007w;
+  // _53 = injectedData.toneMapUINits;
+  _53 = 300.f;
+
   float _54 = _53 * _45;
   float _55 = _53 * _48;
   float _56 = _53 * _51;
+
+  float3 uiTexture = float3(_54, _55, _56);
+
+  uiTexture.rgb = renodx::color::bt709::from::BT2020(uiTexture.rgb);
+  if (injectedData.toneMapGammaCorrection == 1.f) {
+    uiTexture.rgb = renodx::color::correct::GammaSafe(uiTexture.rgb);
+  }
+  uiTexture.rgb = renodx::color::bt2020::from::BT709(uiTexture.rgb);
+  uiTexture.rgb *= injectedData.toneMapUINits / 203.f;  // Value found so it matches tonemapUINits
+
+  _54 = uiTexture.r;
+  _55 = uiTexture.g;
+  _56 = uiTexture.b;
+
   // _57 = _1;
   // _58 = _3;
   float4 _59 = SceneTexture.Sample(SceneSampler, float2(_7, _8));
@@ -116,6 +134,7 @@ float4 main(
   float _97 = _94 * 10000.0f;
   float _98 = _95 * 10000.0f;
   float _99 = $Globals_007z;
+  _99 = 1.f;  // Disable game's UI level setting
   bool _100 = (_15 > 0.0f);
   bool _101 = (_15 < 1.0f);
   bool _102 = _100 && _101;
