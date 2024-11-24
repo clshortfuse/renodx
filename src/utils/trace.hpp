@@ -1012,7 +1012,7 @@ static void OnBindDescriptorTables(
     uint32_t first,
     uint32_t count,
     const reshade::api::descriptor_table* tables) {
-  if (!trace_running && present_count >= MAX_PRESENT_COUNT) return;
+  if (!trace_running) return;
   auto* device = cmd_list->get_device();
 
   auto& layout_data = device->get_private_data<renodx::utils::pipeline_layout::DeviceData>();
@@ -1020,10 +1020,11 @@ static void OnBindDescriptorTables(
   auto& descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
 
   for (uint32_t i = 0; i < count; ++i) {
+    auto layout_index = first + i;
     {
       std::stringstream s;
       s << "bind_descriptor_table(" << reinterpret_cast<void*>(layout.handle);
-      s << "[" << (first + i) << "]";
+      s << "[" << layout_index << "]";
       s << ", stages: " << stages << "(" << std::hex << static_cast<uint32_t>(stages) << std::dec << ")";
       s << ", table: " << reinterpret_cast<void*>(tables[i].handle);
       uint32_t base_offset = 0;
@@ -1031,28 +1032,15 @@ static void OnBindDescriptorTables(
       device->get_descriptor_heap_offset(tables[i], 0, 0, &heap, &base_offset);
       s << ", heap: " << reinterpret_cast<void*>(heap.handle) << "[" << base_offset << "]";
 
-      const std::shared_lock decriptor_lock(descriptor_data.mutex);
-      for (uint32_t j = 0; j < 13; ++j) {
-        auto origin_primary_key = std::pair<uint64_t, uint32_t>(tables[i].handle, j);
-        if (auto pair = descriptor_data.table_descriptor_resource_views.find(origin_primary_key);
-            pair != descriptor_data.table_descriptor_resource_views.end()) {
-          auto update = pair->second;
-          auto view = renodx::utils::descriptor::GetResourceViewFromDescriptorUpdate(update);
-          if (view.handle != 0) {
-            auto& data = device->get_private_data<DeviceData>();
-            const std::shared_lock lock(data.mutex);
-            s << ", rsv[" << j << "]: " << reinterpret_cast<void*>(view.handle);
-            s << ", res[" << j << "]: " << reinterpret_cast<void*>(GetResourceByViewHandle(data, view.handle));
-          }
-        }
-      }
-
       s << ") [" << i << "]";
       reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
 
-    const auto& info = layout_data.pipeline_layout_data[layout.handle];
-    const auto& param = info.params.at(first + i);
+    auto pipeline_data_pair = layout_data.pipeline_layout_data.find(layout.handle);
+    if (pipeline_data_pair == layout_data.pipeline_layout_data.end()) continue;
+    const auto& info = pipeline_data_pair->second;
+    if (layout_index > info.params.size()) continue;
+    const auto& param = info.params.at(layout_index);
 
     for (uint32_t k = 0; k < param.descriptor_table.count; ++k) {
       const auto& range = param.descriptor_table.ranges[k];
@@ -1060,18 +1048,26 @@ static void OnBindDescriptorTables(
       // Skip unbounded ranges
       if (range.count == UINT32_MAX) continue;
 
-      if (range.type != reshade::api::descriptor_type::shader_resource_view
-          && range.type != reshade::api::descriptor_type::sampler_with_resource_view) {
-        continue;
+      switch (range.type) {
+        case reshade::api::descriptor_type::shader_resource_view:
+        case reshade::api::descriptor_type::sampler_with_resource_view:
+        case reshade::api::descriptor_type::buffer_shader_resource_view:
+        case reshade::api::descriptor_type::unordered_access_view:
+          break;
+        default:
+          continue;
       }
 
       uint32_t base_offset = 0;
       reshade::api::descriptor_heap heap = {0};
       device->get_descriptor_heap_offset(tables[i], range.binding, 0, &heap, &base_offset);
+
       const std::shared_lock descriptor_lock(descriptor_data.mutex);
 
       for (uint32_t j = 0; j < range.count; ++j) {
-        const auto& heap_data = descriptor_data.heaps[heap.handle];
+        auto heap_pair = descriptor_data.heaps.find(heap.handle);
+        if (heap_pair == descriptor_data.heaps.end()) continue;
+        const auto& heap_data = heap_pair->second;
         auto offset = base_offset + j;
         if (offset >= heap_data.size()) continue;
         const auto& [descriptor_type, descriptor_data] = heap_data[offset];
@@ -1100,7 +1096,7 @@ static void OnBindDescriptorTables(
         {
           std::stringstream s;
           s << "bind_descriptor_table(" << reinterpret_cast<void*>(layout.handle);
-          s << "[" << (first + i) << "]";
+          s << "[" << (layout_index) << "]";
           s << ", rsv: " << reinterpret_cast<void*>(resource_view.handle);
           s << ", param: " << param.type;
           s << ", binding: " << range.binding;
