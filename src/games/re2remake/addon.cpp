@@ -5,6 +5,7 @@
  */
 
 #include <embed/0x314A98A7.h>  // Tonemap + Postfx
+#include <embed/0x30D8372F.h>  // Tonemap + Postfx - Vignette off
 #include <embed/0xAF0777E5.h>  // BT.2020 + PQ Encoding
 
 #include <include/reshade.hpp>
@@ -14,6 +15,7 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x314A98A7),  // Tonemap + Postfx
+    CustomShaderEntry(0x30D8372F),  // Tonemap + Postfx - Vignette off
     CustomShaderEntry(0xAF0777E5),  // BT.2020 + PQ Encoding
 };
 
