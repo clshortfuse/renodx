@@ -114,8 +114,8 @@ struct PipelineBindDetails {
 };
 
 struct DrawDetails {
-  std::map<uint32_t, ResourceViewDetails> srv_binds;
-  std::map<uint32_t, ResourceViewDetails> uav_binds;
+  std::map<std::pair<uint32_t, uint32_t>, ResourceViewDetails> srv_binds;
+  std::map<std::pair<uint32_t, uint32_t>, ResourceViewDetails> uav_binds;
   std::vector<PipelineBindDetails> pipeline_binds;
   enum class DrawMethods {
     PRESENT,
@@ -177,38 +177,35 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
     return iterator->second;
   }
 
-  ResourceViewDetails& GetResourceViewDetails(reshade::api::resource_view resource_view, reshade::api::device* device) {
+  ResourceViewDetails GetResourceViewDetails(reshade::api::resource_view resource_view, reshade::api::device* device) {
+    ResourceViewDetails details;
     if (auto pair = resource_view_details.find(resource_view.handle);
         pair != resource_view_details.end()) {
-      return pair->second;
-    }
+      details = pair->second;
+      auto device_api = device->get_api();
+      if (device_api == reshade::api::device_api::d3d11) {
+        auto resource_view_tag = renodx::utils::trace::GetDebugName(device_api, resource_view);
+        if (resource_view_tag.has_value()) {
+          details.resource_view_tag = resource_view_tag.value();
+        }
 
-    ResourceViewDetails details = {
-        .resource_view = resource_view,
-        .resource_view_desc = device->get_resource_view_desc(resource_view),
-        .resource = device->get_resource_from_view(resource_view),
-    };
-    auto device_api = device->get_api();
-    if (device_api == reshade::api::device_api::d3d11) {
-      auto resource_view_tag = renodx::utils::trace::GetDebugName(device->get_api(), resource_view);
-      if (resource_view_tag.has_value()) {
-        details.resource_view_tag = resource_view_tag.value();
+        if (details.resource_desc.type != reshade::api::resource_type::unknown) {
+          auto resource_tag = renodx::utils::trace::GetDebugName(device_api, details.resource);
+          if (resource_tag.has_value()) {
+            details.resource_tag = resource_tag.value();
+          }
+        }
       }
+
+      details.UpdateSwapchainModState(device);
+
+    } else {
+      details = {
+          .resource_view = resource_view,
+      };
     }
 
-    if (details.resource.handle != 0u) {
-      details.resource_desc = device->get_resource_desc(details.resource);
-      details.is_swapchain = renodx::utils::swapchain::IsBackBuffer(device, details.resource);
-      auto resource_tag = renodx::utils::trace::GetDebugName(device->get_api(), details.resource);
-      if (resource_tag.has_value()) {
-        details.resource_tag = resource_tag.value();
-      }
-    }
-
-    details.UpdateSwapchainModState(device);
-
-    auto [iterator, is_new] = resource_view_details.emplace(resource_view.handle, details);
-    return iterator->second;
+    return details;
   }
 };
 
@@ -421,9 +418,7 @@ void OnPushDescriptors(
 
   auto log_resource_view = [&](uint32_t index,
                                reshade::api::resource_view view,
-                               std::map<uint32_t, ResourceViewDetails>& destination) {
-    if (view.handle == 0) return;
-
+                               std::map<std::pair<uint32_t, uint32_t>, ResourceViewDetails>& destination) {
     auto pair = device_data.pipeline_layout_params.find(layout.handle);
     if (pair == device_data.pipeline_layout_params.end()) {
       reshade::log::message(reshade::log::level::error, "Could not find handle.");
@@ -432,7 +427,8 @@ void OnPushDescriptors(
     }
     auto layout_params = pair->second;
     auto param = layout_params[layout_param];
-    auto starting_index = -1;
+    uint32_t dx_register_index;
+    uint32_t dx_register_space;
     switch (param.type) {
       case reshade::api::pipeline_layout_param_type::descriptor_table: {
         if (param.descriptor_table.count != 1) {
@@ -440,18 +436,31 @@ void OnPushDescriptors(
           // add warning
           return;
         }
-        starting_index = param.descriptor_table.ranges[0].dx_register_index;
+        dx_register_index = param.descriptor_table.ranges[0].dx_register_index;
+        dx_register_space = param.descriptor_table.ranges[0].dx_register_space;
         break;
       }
       case reshade::api::pipeline_layout_param_type::push_descriptors:
-        starting_index = param.push_descriptors.dx_register_index;
+        dx_register_index = param.push_descriptors.dx_register_index;
+        dx_register_space = param.push_descriptors.dx_register_space;
         break;
       default:
         reshade::log::message(reshade::log::level::error, "Not descriptor table.");
         return;
     }
-    auto srv_index = update.binding + index + starting_index;
-    destination[srv_index] = (device_data.GetResourceViewDetails(view, device));
+
+    auto slot = std::pair<uint32_t, uint32_t>(dx_register_index + update.binding + index, dx_register_space);
+
+    if (view.handle == 0u) {
+      destination.erase(slot);
+    } else {
+      auto detail_item = (device_data.GetResourceViewDetails(view, device));
+      if (detail_item.resource_desc.type == reshade::api::resource_type::unknown) {
+        destination.erase(slot);
+      } else {
+        destination[slot] = detail_item;
+      }
+    }
   };
 
   for (uint32_t i = 0; i < update.count; i++) {
@@ -490,6 +499,7 @@ void OnBindDescriptorTables(
     uint32_t count,
     const reshade::api::descriptor_table* tables) {
   if (!is_snapshotting) return;
+  reshade::log::message(reshade::log::level::debug, "start");
   auto& data = cmd_list->get_private_data<CommandListData>();
   auto& details = data.GetCurrentDrawDetails();
 
@@ -502,8 +512,14 @@ void OnBindDescriptorTables(
   auto& descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
 
   for (uint32_t i = 0; i < count; ++i) {
-    const auto& info = layout_data.pipeline_layout_data[layout.handle];
-    const auto& param = info.params.at(first + i);
+    auto layout_index = first + i;
+
+    auto layout_data_pair = layout_data.pipeline_layout_data.find(layout.handle);
+    if (layout_data_pair == layout_data.pipeline_layout_data.end()) continue;
+
+    const auto& info = layout_data_pair->second;
+    if (layout_index > info.params.size()) continue;
+    const auto& param = info.params.at(layout_index);
 
     for (uint32_t k = 0; k < param.descriptor_table.count; ++k) {
       const auto& range = param.descriptor_table.ranges[k];
@@ -511,9 +527,14 @@ void OnBindDescriptorTables(
       // Skip unbounded ranges
       if (range.count == UINT32_MAX) continue;
 
-      if (range.type != reshade::api::descriptor_type::shader_resource_view
-          && range.type != reshade::api::descriptor_type::sampler_with_resource_view) {
-        continue;
+      switch (range.type) {
+        case reshade::api::descriptor_type::shader_resource_view:
+        case reshade::api::descriptor_type::sampler_with_resource_view:
+        case reshade::api::descriptor_type::buffer_shader_resource_view:
+        case reshade::api::descriptor_type::unordered_access_view:
+          break;
+        default:
+          continue;
       }
 
       uint32_t base_offset = 0;
@@ -523,7 +544,9 @@ void OnBindDescriptorTables(
       const std::shared_lock descriptor_lock(descriptor_data.mutex);
 
       for (uint32_t j = 0; j < range.count; ++j) {
-        const auto& heap_data = descriptor_data.heaps[heap.handle];
+        auto heap_pair = descriptor_data.heaps.find(heap.handle);
+        if (heap_pair == descriptor_data.heaps.end()) continue;
+        const auto& heap_data = heap_pair->second;
         auto offset = base_offset + j;
         if (offset >= heap_data.size()) continue;
         const auto& [descriptor_type, descriptor_data] = heap_data[offset];
@@ -548,13 +571,32 @@ void OnBindDescriptorTables(
           default:
             break;
         }
-        if (resource_view.handle == 0u) continue;
-        uint32_t texture_index = range.dx_register_index + j;
+
+        auto slot = std::pair<uint32_t, uint32_t>(range.dx_register_index + j, range.dx_register_space);
+
         const std::unique_lock lock(device_data.mutex);
         if (is_uav) {
-          details.uav_binds[texture_index] = (device_data.GetResourceViewDetails(resource_view, device));
+          if (resource_view.handle == 0u) {
+            details.uav_binds.erase(slot);
+          } else {
+            auto detail_item = (device_data.GetResourceViewDetails(resource_view, device));
+            if (detail_item.resource_desc.type == reshade::api::resource_type::unknown) {
+              details.uav_binds.erase(slot);
+            } else {
+              details.uav_binds[slot] = detail_item;
+            }
+          }
         } else {
-          details.srv_binds[texture_index] = (device_data.GetResourceViewDetails(resource_view, device));
+          if (resource_view.handle == 0u) {
+            details.srv_binds.erase(slot);
+          } else {
+            auto detail_item = (device_data.GetResourceViewDetails(resource_view, device));
+            if (detail_item.resource_desc.type == reshade::api::resource_type::unknown) {
+              details.srv_binds.erase(slot);
+            } else {
+              details.srv_binds[slot] = detail_item;
+            }
+          }
         }
       }
     }
@@ -566,16 +608,18 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
 
   auto* device = cmd_list->get_device();
   auto& device_data = device->get_private_data<DeviceData>();
-  std::unique_lock lock(device_data.mutex);
 
-  auto& state = renodx::utils::shader::GetCurrentState(cmd_list);
-  for (auto& [stage, hash] : state.current_shaders_hashes) {
-    if (auto pair = device_data.shader_details.find(hash);
-        pair != device_data.shader_details.end()) {
-      auto details = pair->second;
-      if (details.bypass_draw) {
-        bypass_draw = true;
-        break;
+  {
+    auto& state = renodx::utils::shader::GetCurrentState(cmd_list);
+    std::shared_lock lock(device_data.mutex);
+    for (auto& [stage, hash] : state.current_shaders_hashes) {
+      if (auto pair = device_data.shader_details.find(hash);
+          pair != device_data.shader_details.end()) {
+        auto details = pair->second;
+        if (details.bypass_draw) {
+          bypass_draw = true;
+          break;
+        }
       }
     }
   }
@@ -586,6 +630,7 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
     draw_details.draw_method = draw_method;
     draw_details.render_targets.clear();
 
+    std::unique_lock lock(device_data.mutex);
     uint32_t rtv_index = 0u;
     for (auto render_target : renodx::utils::swapchain::GetRenderTargets(cmd_list)) {
       if (render_target.handle != 0u) {
@@ -632,6 +677,40 @@ bool OnDrawOrDispatchIndirect(
     uint32_t draw_count,
     uint32_t stride) {
   return OnDraw(cmd_list, DrawDetails::DrawMethods::DRAW_INDEXED_OR_INDIRECT);
+}
+
+void OnInitResourceView(
+    reshade::api::device* device,
+    reshade::api::resource resource,
+    reshade::api::resource_usage usage_type,
+    const reshade::api::resource_view_desc& desc,
+    reshade::api::resource_view view) {
+  auto& data = device->get_private_data<DeviceData>();
+  const std::unique_lock lock(data.mutex);
+  data.resource_view_details.erase(view.handle);
+  ResourceViewDetails details = {
+      .resource_view = view,
+      .resource_view_desc = desc,
+      .resource = resource,
+  };
+
+  auto resource_view_tag = renodx::utils::trace::GetDebugName(device->get_api(), view);
+  if (resource_view_tag.has_value()) {
+    details.resource_view_tag = resource_view_tag.value();
+  }
+
+  if (resource.handle != 0u) {
+    details.resource_desc = device->get_resource_desc(details.resource);
+    details.is_swapchain = renodx::utils::swapchain::IsBackBuffer(device, details.resource);
+  }
+
+  data.resource_view_details[view.handle] = details;
+}
+
+void OnDestroyResourceView(reshade::api::device* device, reshade::api::resource_view view) {
+  auto& data = device->get_private_data<DeviceData>();
+  const std::unique_lock lock(data.mutex);
+  data.resource_view_details.erase(view.handle);
 }
 
 void DeactivateShader(reshade::api::device* device, uint32_t shader_hash) {
@@ -886,14 +965,19 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
           }
         }
 
-        for (auto& [srv_index, resource_view_details] : draw_details.srv_binds) {
+        for (auto& [slot, resource_view_details] : draw_details.srv_binds) {
           ++row_index;
           bool rtv_node_open = false;
           if (draw_node_open) {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
             ImGui::PushID(row_index);
-            rtv_node_open = ImGui::TreeNodeEx("", tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen, "SRV%d", srv_index);
+
+            rtv_node_open = ImGui::TreeNodeEx(
+                "",
+                tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen,
+                (slot.second == 0) ? "SRV%d" : "SRV%d,space%d", slot.first, slot.second);
+
             ImGui::PopID();
 
             ImGui::TableNextColumn();
@@ -967,14 +1051,19 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
           }
         }
 
-        for (auto& [uav_index, resource_view_details] : draw_details.uav_binds) {
+        for (auto& [slot, resource_view_details] : draw_details.uav_binds) {
           ++row_index;
           bool rtv_node_open = false;
           if (draw_node_open) {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
             ImGui::PushID(row_index);
-            rtv_node_open = ImGui::TreeNodeEx("", tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen, "UAV%d", uav_index);
+
+            rtv_node_open = ImGui::TreeNodeEx(
+                "",
+                tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen,
+                (slot.second == 0) ? "UAV%d" : "UAV%d,space%d", slot.first, slot.second);
+
             ImGui::PopID();
 
             ImGui::TableNextColumn();
@@ -1611,8 +1700,6 @@ void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-  auto* device = swapchain->get_device();
-
   if (setting_shader_defines_changed) {
     renodx::utils::shader::compiler::watcher::SetShaderDefines(setting_shader_defines);
     renodx::utils::shader::compiler::watcher::RequestCompile();
@@ -1672,6 +1759,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
       reshade::register_event<reshade::addon_event::dispatch>(OnDispatch);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
+      reshade::register_event<reshade::addon_event::init_resource_view>(OnInitResourceView);
+      reshade::register_event<reshade::addon_event::destroy_resource_view>(OnDestroyResourceView);
 
       reshade::register_overlay("RenoDX DevKit", OnRegisterOverlay);
 
@@ -1697,6 +1786,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::unregister_event<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
       reshade::unregister_event<reshade::addon_event::dispatch>(OnDispatch);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+      reshade::unregister_event<reshade::addon_event::init_resource_view>(OnInitResourceView);
+      reshade::unregister_event<reshade::addon_event::destroy_resource_view>(OnDestroyResourceView);
 
       reshade::unregister_overlay("RenoDX DevKit", OnRegisterOverlay);
 

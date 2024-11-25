@@ -43,9 +43,9 @@ struct __declspec(uuid("4721e307-0cf3-4293-b4a5-40d0a4e62544")) DeviceData {
 
 struct __declspec(uuid("3cf9a628-8518-4509-84c3-9fbe9a295212")) CommandListData {
   std::vector<reshade::api::resource_view> current_render_targets;
-  reshade::api::resource_view current_depth_stencil;
+  reshade::api::resource_view current_depth_stencil = {0};
   bool has_swapchain_render_target_dirty = true;
-  bool has_swapchain_render_target;
+  bool has_swapchain_render_target = false;
 };
 
 static std::shared_mutex mutex;
@@ -182,13 +182,13 @@ static bool HasBackBufferRenderTarget(reshade::api::command_list* cmd_list) {
   const std::shared_lock device_lock(device_data.mutex);
 
   bool found_swapchain_rtv = false;
-  for (uint32_t i = 0; i < count; i++) {
-    const reshade::api::resource_view rtv = cmd_list_data.current_render_targets[i];
-    auto resource = device->get_resource_from_view(rtv);
-    if ((resource.handle != 0u) && device_data.back_buffers.contains(resource.handle)) {
-      found_swapchain_rtv = true;
-      break;
-    }
+  for (const auto& rtv : cmd_list_data.current_render_targets) {
+    if (rtv.handle == 0u) continue;
+    const auto& resource = device->get_resource_from_view(rtv);
+    if (resource.handle == 0u) continue;
+    if (!device_data.back_buffers.contains(resource.handle)) continue;
+    found_swapchain_rtv = true;
+    break;
   }
 
   cmd_list_data.has_swapchain_render_target_dirty = false;

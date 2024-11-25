@@ -8,46 +8,40 @@ namespace renodx {
 namespace color {
 namespace correct {
 
-float Gamma(float x, bool pow_to_srgb = false) {
-  if (pow_to_srgb) {
-    return srgb::Decode(gamma::Encode(x));
+#define GAMMA(T)                             \
+  T Gamma(T c, bool pow_to_srgb = false) {   \
+    if (pow_to_srgb) {                       \
+      return srgb::Decode(gamma::Encode(c)); \
+    }                                        \
+    return gamma::Decode(srgb::Encode(c));   \
   }
-  // srgb2pow
-  return gamma::Decode(srgb::Encode(x));
+
+GAMMA(float)
+GAMMA(float2)
+GAMMA(float3)
+
+float4 Gamma(float4 color, bool pow_to_srgb = false) {
+  return float4(Gamma(color.rgb), color.a);
 }
 
-float GammaSafe(float x, bool pow_to_srgb = false) {
-  if (pow_to_srgb) {
-    return renodx::math::Sign(x) * srgb::Decode(gamma::Encode(abs(x)));
+#define GAMMA_SAFE(T)                                                     \
+  T GammaSafe(T c, bool pow_to_srgb = false) {                            \
+    if (pow_to_srgb) {                                                    \
+      return renodx::math::Sign(c) * srgb::Decode(gamma::Encode(abs(c))); \
+    }                                                                     \
+    return renodx::math::Sign(c) * gamma::Decode(srgb::Encode(abs(c)));   \
   }
-  return renodx::math::Sign(x) * gamma::Decode(srgb::Encode(abs(x)));
+
+GAMMA_SAFE(float)
+GAMMA_SAFE(float2)
+GAMMA_SAFE(float3)
+
+float4 GammaSafe(float4 color, bool pow_to_srgb = false) {
+  return float4(Gamma(color.rgb), color.a);
 }
 
-float3 Gamma(float3 color, bool pow_to_srgb = false) {
-  return float3(
-      Gamma(color.r, pow_to_srgb),
-      Gamma(color.g, pow_to_srgb),
-      Gamma(color.b, pow_to_srgb));
-}
-
-float4 Gamma(float4 color, bool pow2srgb = false) {
-  return float4(Gamma(color.rgb, pow2srgb), color.a);
-}
-
-float3 GammaSafe(float3 color, bool pow2srgb = false) {
-  float3 signs = renodx::math::Sign(color);
-  color = abs(color);
-  color = float3(
-      Gamma(color.r, pow2srgb),
-      Gamma(color.g, pow2srgb),
-      Gamma(color.b, pow2srgb));
-  color *= signs;
-  return color;
-}
-
-float4 GammaSafe(float4 color, bool pow2srgb = false) {
-  return float4(GammaSafe(color.rgb, pow2srgb), color.a);
-}
+#undef GAMMA
+#undef GAMMA_SAFE
 
 float3 HueOKLab(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
   if (strength == 0.f) return incorrect_color;
@@ -93,9 +87,34 @@ float3 HueICtCp(float3 incorrect_color, float3 correct_color, float strength = 1
   return color;
 }
 
+float3 HuedtUCSUV(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
+  if (strength == 0.f) return incorrect_color;
+
+  float3 correct_perceptual = renodx::color::dtucs_uvY::from::BT709(correct_color);
+
+  float3 incorrect_perceptual = renodx::color::dtucs_uvY::from::BT709(incorrect_color);
+
+  float chrominance_pre_adjust = distance(incorrect_perceptual.xy, 0);
+
+  incorrect_perceptual.xy = lerp(incorrect_perceptual.xy, correct_perceptual.xy, strength);
+
+  float chrominance_post_adjust = distance(incorrect_perceptual.xy, 0);
+
+  if (chrominance_post_adjust != 0.f) {
+    incorrect_perceptual.xy *= chrominance_pre_adjust / chrominance_post_adjust;
+  }
+
+  float3 color = renodx::color::bt709::from::dtucs_uvY(incorrect_perceptual);
+  color = renodx::color::bt709::clamp::AP1(color);
+  return color;
+}
+
 float3 Hue(float3 incorrect_color, float3 correct_color, float strength = 1.f, uint method = 0u) {
   if (method == 1u) {
     return HueICtCp(incorrect_color, correct_color, strength);
+  }
+  else if (method == 2u) {
+    return HuedtUCSUV(incorrect_color, correct_color, strength);
   }
   return HueOKLab(incorrect_color, correct_color, strength);
 }

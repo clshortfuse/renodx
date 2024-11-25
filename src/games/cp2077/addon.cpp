@@ -77,7 +77,7 @@ ShaderInjectData shader_injection;
 auto last_is_hdr = false;
 
 float ComputeReferenceWhite(float peak_nits) {
-  return std::clamp(roundf(powf(10.f, 0.03460730900256f + (0.757737096673107f * log10f(peak_nits)))), 100.f, 203.f);
+  return std::clamp(roundf(powf(10.f, 0.03460730900256f + (0.757737096673107f * log10f(peak_nits)))), 100.f, 300.f);
 }
 
 renodx::utils::settings::Settings settings = {
@@ -440,8 +440,6 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("processingLUTCorrection", 0.f);
   renodx::utils::settings::UpdateSetting("processingLUTOrder", 1.f);
   renodx::utils::settings::UpdateSetting("processingInternalSampling", 0.f);
-  renodx::utils::settings::UpdateSetting("processingGlobalGain", 50.f);
-  renodx::utils::settings::UpdateSetting("processingGlobalLift", 50.f);
 }
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain) {
@@ -475,7 +473,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
-
+      renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
+        return device->get_api() == reshade::api::device_api::d3d12;
+      };
       renodx::mods::shader::expected_constant_buffer_index = 14;
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
 

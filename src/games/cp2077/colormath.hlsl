@@ -41,9 +41,6 @@ float3 applyUserBrightness(float3 inputColor, float userBrightness = 1.f) {
 
 float3 convertColor(float3 inputColor, ConvertColorParams params) {
   float3 outputColor = inputColor;
-  if (injectedData.toneMapGammaCorrection == 2.f) {
-    outputColor = renodx::color::correct::GammaSafe(outputColor);
-  }
   switch (params.outputTypeEnum) {
     case OUTPUT_TYPE_SRGB8: {
       outputColor = max(0, outputColor);  // clamp to BT709
