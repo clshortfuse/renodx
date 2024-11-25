@@ -62,6 +62,7 @@ float4 main(
     linear float4 TEXCOORD: TEXCOORD)
     : SV_Target {
   float4 SV_Target;
+  float3 tonemappedPQ, post_srgb, output;
   // texture _1 = EyeAdaptationTexture;
   // texture _2 = PostProcessInput_0_Texture;
   // texture _3 = Material_Texture2D_0;
@@ -192,11 +193,11 @@ float4 main(
   float4 _136 = PostProcessInput_0_Texture.Sample(PostProcessInput_0_Sampler, float2(_132, _133));
 
   // We decode before they attempt to blend
-  float3 inputBT709 = renodx::color::pq::Decode(_136.rgb, injectedData.toneMapGameNits);
-  inputBT709 = renodx::color::bt709::from::BT2020(inputBT709.rgb);
+  tonemappedPQ = _136.rgb;
+  float3 srgb_input = pqTosRGB(tonemappedPQ);
 
   if (injectedData.toneMapType > 1.f) {
-    _136.rgb = saturate(inputBT709);
+    _136.rgb = srgb_input;
   }
 
   float _137 = _136.x;
@@ -406,13 +407,10 @@ float4 main(
   float _339 = max(_336, 0.0f);
   float _340 = max(_337, 0.0f);
   float _341 = max(_338, 0.0f);
+  post_srgb = float3(_339, _340, _341);
 
   if (injectedData.toneMapType > 1.f) {
-    float3 overlay = float3(_339, _340, _341);
-    float3 output = renodx::tonemap::UpgradeToneMap(inputBT709, saturate(inputBT709), overlay, 0.15f);
-
-    output = renodx::color::bt2020::from::BT709(output);
-    output = renodx::color::pq::Encode(output, injectedData.toneMapGameNits);
+    output = upgradeSRGBtoPQ(tonemappedPQ, post_srgb);
     return float4(output, 0.f);
   }
 

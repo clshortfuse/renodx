@@ -1446,7 +1446,7 @@ float4 main(
     renodx::lut::Config lut_config = renodx::lut::config::Create(
         Samplers_1,
         injectedData.colorGradeLUTStrength,
-        injectedData.colorGradeLUTScaling, renodx::lut::config::type::SRGB, renodx::lut::config::type::SRGB, 32.f);
+        injectedData.colorGradeLUTScaling, renodx::lut::config::type::SRGB, renodx::lut::config::type::SRGB, 16.f);
 
     float3 post_lut_color = renodx::lut::Sample(Textures_1, lut_config, lut_input_color);
     _1265 = post_lut_color.r;
@@ -1630,7 +1630,6 @@ float4 main(
 
   // CustomEdit
   float3 film_graded_color = float3(_1328, _1329, _1330);
-
   if (is_hdr) {
     float3 final_color = saturate(film_graded_color);
 

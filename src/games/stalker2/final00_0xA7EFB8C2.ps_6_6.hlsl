@@ -85,7 +85,7 @@ float4 main(
   // _58 = _3;
   float4 _59 = SceneTexture.Sample(SceneSampler, float2(_7, _8));
   float3 scene = _59.rgb;
-
+  
   if (injectedData.toneMapType > 1.f) {
     scene = renodx::color::pq::Decode(scene.rgb, injectedData.toneMapGameNits);
     scene = renodx::color::bt709::from::BT2020(scene.rgb);
@@ -152,7 +152,9 @@ float4 main(
   float _98 = _95 * 10000.0f;
 
   float _99 = $Globals_007z;
-  _99 = 1.f;  // Disable game's UI level setting
+  if (injectedData.toneMapType > 1.f) {
+    _99 = 1.f;  // Disable game's UI level setting
+  }
   bool _100 = (_15 > 0.0f);
   bool _101 = (_15 < 1.0f);
   bool _102 = _100 && _101;

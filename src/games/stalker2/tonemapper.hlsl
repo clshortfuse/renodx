@@ -32,3 +32,34 @@ renodx::tonemap::Config getCommonConfig() {
 
   return config;
 }
+
+float3 pqTosRGB(float3 input_pq) {
+  float3 output;
+  if (injectedData.toneMapType > 1.f) {
+    output = renodx::color::pq::Decode(input_pq, injectedData.toneMapGameNits);
+    output = renodx::color::bt709::from::BT2020(output);
+    output = renodx::color::srgb::EncodeSafe(output);
+  } else {
+    output = input_pq;
+  }
+
+  return output;
+}
+
+float3 upgradeSRGBtoPQ(float3 tonemappedPQ, float3 post_srgb) {
+  float3 hdr, post, output;
+  output = post_srgb;
+
+  if (injectedData.toneMapType > 1.f) {
+    hdr = renodx::color::pq::Decode(tonemappedPQ, injectedData.toneMapGameNits);
+    hdr = renodx::color::bt709::from::BT2020(hdr);
+
+    post = renodx::color::srgb::DecodeSafe(post_srgb);
+    
+    output = renodx::tonemap::UpgradeToneMap(hdr, saturate(hdr), saturate(post), injectedData.colorGradeLUTStrength);
+    output = renodx::color::bt2020::from::BT709(output);
+    output = renodx::color::pq::Encode(output, injectedData.toneMapGameNits);
+  }
+
+  return output;
+}

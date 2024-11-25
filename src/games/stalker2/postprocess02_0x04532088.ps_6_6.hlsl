@@ -72,6 +72,8 @@ float4 main(
     linear float4 TEXCOORD: TEXCOORD)
     : SV_Target {
   float4 SV_Target;
+  float3 tonemappedPQ, post_srgb, output;
+
   // texture _1 = PostProcessInput_0_Texture;
   // texture _2 = SceneTexturesStruct_SceneDepthTexture;
   // SamplerState _3 = PostProcessInput_0_Sampler;
@@ -183,11 +185,11 @@ float4 main(
   // _124 = _3;
   float4 _125 = PostProcessInput_0_Texture.Sample(PostProcessInput_0_Sampler, float2(_121, _122));
   // We decode before they attempt to blend
-  float3 inputBT709 = renodx::color::pq::Decode(_125.rgb, injectedData.toneMapGameNits);
-  inputBT709 = renodx::color::bt709::from::BT2020(inputBT709.rgb);
+  tonemappedPQ = _125.rgb;
+  float3 srgb_input = pqTosRGB(tonemappedPQ);
 
   if (injectedData.toneMapType > 1.f) {
-    _125.rgb = saturate(inputBT709);
+    _125.rgb = srgb_input;
   }
 
   float _126 = _125.x;
@@ -272,14 +274,10 @@ float4 main(
   float _209 = max(_206, 0.0f);
   float _210 = max(_207, 0.0f);
 
-  /* I don't know what the shader does (Vignette?)
-  But it should operate in SDR (It increases saturation in PQ) */
-  if (injectedData.toneMapType > 1.f) {
-    float3 overlay = float3(_208, _209, _210);
-    float3 output = renodx::tonemap::UpgradeToneMap(inputBT709, saturate(inputBT709), overlay, 1.f);
+  post_srgb = float3(_208, _209, _210);
 
-    output = renodx::color::bt2020::from::BT709(output);
-    output = renodx::color::pq::Encode(output, injectedData.toneMapGameNits);
+  if (injectedData.toneMapType > 1.f) {
+    output = upgradeSRGBtoPQ(tonemappedPQ, post_srgb);
     return float4(output, 0.f);
   }
 

@@ -7,10 +7,15 @@
 
 #define DEBUG_LEVEL_0
 
-#include <embed/0x5590F787.h>  // Radiation overlay
+#include <embed/0x04532088.h>  // Unknown post process
+#include <embed/0x4D3C673E.h>  // Output
+#include <embed/0x5590F787.h>  // Radiation post process
 #include <embed/0x6CFBD4C0.h>  // LUT Builder
 #include <embed/0xA7EFB8C2.h>  // Final
 #include <embed/0xB6CA5FD9.h>  // LUT Builder
+#include <embed/0xBAA27141.h>  // LUT Builder
+#include <embed/0xECD0D71A.h>  // Output
+#include <embed/0xED411D4E.h>  // Unknown post process 2
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -27,6 +32,12 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xA7EFB8C2),
     CustomShaderEntry(0x6CFBD4C0),
     CustomShaderEntry(0x5590F787),
+    CustomShaderEntry(0x04532088),
+    CustomShaderEntry(0xBAA27141),
+    CustomShaderEntry(0xECD0D71A),
+    CustomShaderEntry(0xED411D4E),
+    CustomShaderEntry(0x4D3C673E),
+
 };
 
 ShaderInjectData shader_injection;
@@ -59,7 +70,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapGameNits",
         .binding = &shader_injection.toneMapGameNits,
-        .default_value = 203.f,
+        .default_value = 120.f,
         .can_reset = false,
         .label = "Game Brightness",
         .section = "Tone Mapping",
@@ -146,14 +157,13 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeLUTStrength",
         .binding = &shader_injection.colorGradeLUTStrength,
-        .default_value = 100.f,
+        .default_value = 50.f,
         .label = "LUT Strength",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return false; },  // Disable LUT sampling
         .parse = [](float value) { return value * 0.01f; },
     },
-    new renodx::utils::settings::Setting{
+    /* new renodx::utils::settings::Setting{
         .key = "colorGradeLUTScaling",
         .binding = &shader_injection.colorGradeLUTScaling,
         .default_value = 0.f,
@@ -163,7 +173,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return false; },  // Disable LUT sampling
         .parse = [](float value) { return value * 0.01f; },
-    },
+    }, */
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Special thanks to Shortfuse & the folks at HDR Den for their support! Join the HDR Den discord for help!",
@@ -219,7 +229,7 @@ renodx::utils::settings::Settings settings = {
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
-  renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
+  renodx::utils::settings::UpdateSetting("toneMapPeakNits", 800.f);
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
@@ -228,7 +238,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
 }
 
