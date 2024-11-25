@@ -1638,9 +1638,6 @@ float4 main(
       final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
     }
 
-    if (injectedData.toneMapGammaCorrection == 1.f) {
-      final_color = renodx::color::correct::GammaSafe(final_color);
-    }
     bool is_pq = (output_type == 3u || output_type == 4u);
 
     if (is_pq) {

@@ -24,14 +24,14 @@ struct ShaderInjectData {
 };
 
 #ifndef __cplusplus
-cbuffer injectedBuffer : register(b0, space50) {
+/* cbuffer injectedBuffer : register(b0, space50) {
   ShaderInjectData injectedData : packoffset(c0);
-}
-/* static const ShaderInjectData injectedData = {
-    3.f,    // toneMapType
-    800.f,  // toneMapPeakNits
-    120.f,  // toneMapGameNits
-    150.f,   // toneMapUINits
+} */
+static const ShaderInjectData injectedData = {
+    1.f,    // toneMapType
+    500.f,  // toneMapPeakNits
+    203.f,  // toneMapGameNits
+    200.f,   // toneMapUINits
     1.f,    // toneMapGammaCorrection
     1.f,    // colorGradeExposure
     1.f,    // colorGradeHighlights
@@ -41,7 +41,7 @@ cbuffer injectedBuffer : register(b0, space50) {
     0.f,    // colorGradeBlowout
     1.f,    // colorGradeLUTStrength
     0.f,    // colorGradeLUTScaling
-}; */
+};
 #endif
 
 #endif  // SRC_STALKER2_SHARED_H_
