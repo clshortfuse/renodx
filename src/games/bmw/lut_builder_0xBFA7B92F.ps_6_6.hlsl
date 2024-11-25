@@ -1204,10 +1204,17 @@ float4 main(
         config.contrast = injectedData.colorGradeContrast;
         config.saturation = injectedData.colorGradeSaturation;
         config.hue_correction_color = ap1_aces_colored;
-        config.reno_drt_highlights = 1.20f;
+        
+        // thaumaturge settings
+        //config.reno_drt_highlights = 1.20f;
+        //config.reno_drt_shadows = 1.0f;
+        //config.reno_drt_contrast = 1.80f;
+        //config.reno_drt_saturation = 1.80f;
+        
+        config.reno_drt_highlights = 1.0f;
         config.reno_drt_shadows = 1.0f;
-        config.reno_drt_contrast = 1.80f;
-        config.reno_drt_saturation = 1.80f;
+        config.reno_drt_contrast = 1.0f;
+        config.reno_drt_saturation = 1.0f;
         config.reno_drt_dechroma = injectedData.colorGradeBlowout;
         config.reno_drt_flare = 0.f;
 
@@ -1528,9 +1535,16 @@ float4 main(
         float _1176 = _1173 + _1142;
         float _1177 = _1174 + _1143;
         float _1178 = _1175 + _1144;
-        float _1179 = max(6.103519990574569e-05f, _1176);
-        float _1180 = max(6.103519990574569e-05f, _1177);
-        float _1181 = max(6.103519990574569e-05f, _1178);
+        
+        // fix elevated blacks
+        //float _1179 = max(6.103519990574569e-05f, _1176);
+        //float _1180 = max(6.103519990574569e-05f, _1177);
+        //float _1181 = max(6.103519990574569e-05f, _1178);
+        
+        float _1179 = _1176;
+        float _1180 = _1177;
+        float _1181 = _1178;
+        
         float _1182 = _1179 * 0.07739938050508499f;
         float _1183 = _1180 * 0.07739938050508499f;
         float _1184 = _1181 * 0.07739938050508499f;

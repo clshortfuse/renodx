@@ -17,11 +17,13 @@
 
 #include <embed/0xBFA7B92F.h>
 #include <embed/0xA6EBE600.h>
+#include <embed/0xA43658B6.h>
 
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xBFA7B92F), // LUT builder
+    CustomShaderEntry(0xA43658B6), // LUT builder 2
     CustomShaderEntry(0xA6EBE600), // final UI shader
 };
 
