@@ -85,10 +85,17 @@ float4 main(
   // _58 = _3;
   float4 _59 = SceneTexture.Sample(SceneSampler, float2(_7, _8));
   float3 scene = _59.rgb;
-  
+
   if (injectedData.toneMapType > 1.f) {
     scene = renodx::color::pq::Decode(scene.rgb, injectedData.toneMapGameNits);
     scene = renodx::color::bt709::from::BT2020(scene.rgb);
+    scene = renodx::color::grade::UserColorGrading(
+        scene,
+        injectedData.colorGradeExposure,
+        injectedData.colorGradeHighlights,
+        injectedData.colorGradeShadows,
+        injectedData.colorGradeContrast,
+        injectedData.colorGradeSaturation);
 
     if (injectedData.toneMapGammaCorrection == 1.f) {
       scene.rgb = renodx::color::correct::GammaSafe(scene.rgb);

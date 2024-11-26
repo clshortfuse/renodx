@@ -1630,7 +1630,7 @@ float4 main(
 
   // CustomEdit
   float3 film_graded_color = float3(_1328, _1329, _1330);
-  if (is_hdr) {
+  if (injectedData.toneMapType != 0.f && is_hdr) {
     float3 final_color = saturate(film_graded_color);
 
     if (injectedData.toneMapType != 0.f) {

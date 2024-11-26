@@ -1361,12 +1361,13 @@ float4 main(
   // CustomEdit
   float3 film_graded_color = float3(_1074, _1075, _1076);
 
-  if (is_hdr) {
+  if (injectedData.toneMapType != 0.f && is_hdr) {
     float3 final_color = saturate(film_graded_color);
 
     if (injectedData.toneMapType != 0.f) {
       final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
     }
+    
     bool is_pq = (output_type == 3u || output_type == 4u);
 
     if (is_pq) {

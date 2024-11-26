@@ -15,11 +15,13 @@ renodx::tonemap::Config getCommonConfig() {
   config.peak_nits = injectedData.toneMapPeakNits;
   config.game_nits = injectedData.toneMapGameNits;
   config.gamma_correction = injectedData.toneMapGammaCorrection;
-  config.exposure = injectedData.colorGradeExposure;
+
+  // We apply these in final shader
+  /* config.exposure = injectedData.colorGradeExposure;
   config.highlights = injectedData.colorGradeHighlights;
   config.shadows = injectedData.colorGradeShadows;
   config.contrast = injectedData.colorGradeContrast;
-  config.saturation = injectedData.colorGradeSaturation;
+  config.saturation = injectedData.colorGradeSaturation; */
 
   config.reno_drt_highlights = renoDRTHighlights;
   config.reno_drt_shadows = renoDRTShadows;
@@ -29,7 +31,6 @@ renodx::tonemap::Config getCommonConfig() {
   config.mid_gray_value = vanillaMidGray;
   config.mid_gray_nits = vanillaMidGray * 100.f;
   config.reno_drt_flare = renoDRTFlare;
-
   return config;
 }
 
