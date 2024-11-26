@@ -215,6 +215,7 @@ class Decompiler {
   static std::string ParseFloatString(std::string_view input) {
     std::string output;
     double_t value;
+    if (input == "0x7FF0000000000000") return "+1.#INF";
     if (input.starts_with("0x")) {
       const std::string string = std::string{input};
       auto unsigned_long = strtoull(string.c_str(), nullptr, 16);
@@ -1210,6 +1211,8 @@ class Decompiler {
     std::string ParseByType(std::string_view input, std::string_view type) {
       if (type == "i1") return ParseBool(input);
       if (type == "i32") return ParseInt(input);
+      if (type == "int") return ParseInt(input);
+      if (type == "uint") return ParseUint(input);
       return ParseFloat(input);
     }
 
@@ -1286,7 +1289,7 @@ class Decompiler {
           }
           std::string name = resource->name;
           if (resource->array_size.has_value()) {
-            name = std::format("{}[{}]", name, ParseInt(index));
+            name = std::format("{}[{}]", name, ParseUint(index));
           }
           preprocess_state.resource_binding_variables[std::string(variable)] = {
               .name = name,
@@ -2034,12 +2037,12 @@ class Decompiler {
         // add nsw i32 %1678, 1
         auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(add (nuw )?(nsw )?(?:\S+) (\S+), (\S+))"});
         assignment_type = (no_signed_wrap.empty()) ? "uint" : "int";
-        assignment_value = std::format("{} + {}", ParseInt(a), ParseInt(b));
+        assignment_value = std::format("{} + {}", ParseByType(a, assignment_type), ParseByType(b, assignment_type));
       } else if (instruction == "sub") {
         // sub nsw i32 %43, %45
         auto [no_signed_wrap, a, b] = StringViewMatch<3>(assignment, std::regex{R"(sub (nsw )?(?:\S+) (\S+), (\S+))"});
         assignment_type = (no_signed_wrap.empty()) ? "uint" : "int";
-        assignment_value = std::format("{} - {}", ParseInt(a), ParseInt(b));
+        assignment_value = std::format("{} - {}", ParseByType(a, assignment_type), ParseByType(b, assignment_type));
       } else if (instruction == "sext") {
         // %43 = sext i1 %324 to i32
         auto [a] = StringViewMatch<1>(assignment, std::regex{R"(sext (?:fast )?(?:\S+) (\S+) to (?:\S+))"});
@@ -2132,20 +2135,6 @@ class Decompiler {
           int function_int;
           FromStringView(function_number, function_int);
           if (function_int == 0) {
-            // parse value to track usage
-
-            // auto phi_assignment_type = ParseType(type);
-            // auto phi_assignment_value = std::format("{}", ParseByType(value, type));
-            // if (is_identity) {
-            //   variable_aliases.emplace(variable, std::pair<std::string, std::string>(phi_assignment_type, phi_assignment_value));
-            // }
-            // std::string assignment_line;
-            // if (use_comment) {
-            //   assignment_line = std::format("// {} _{} = {};", phi_assignment_type, variable, phi_assignment_value);
-            // } else {
-            //   assignment_line = std::format("{} _{} = {};", phi_assignment_type, variable, phi_assignment_value);
-            // }
-
             this->code_blocks[function_int].phi_lines.push_back({
                 .variable = std::string(variable),
                 .value = std::string(value),
@@ -2161,8 +2150,6 @@ class Decompiler {
                 .type = std::string(type),
                 .is_assign = true,
             });
-            // auto assignment_line = std::format("_{} = {};", variable, ParseByType(value, type));
-            // this->code_blocks[function_int].phi_lines.push_back(assignment_line);
           }
         }
         if (!declared) {
@@ -2224,6 +2211,7 @@ class Decompiler {
       if (decompiled.empty() && !assignment_value.empty()) {
         if (is_identity) {
           variable_aliases.emplace(variable, std::pair<std::string, std::string>(assignment_type, assignment_value));
+          use_comment = true;
         }
         if (use_comment) {
 #if DECOMPILER_DXC_DEBUG >= 1
@@ -3322,24 +3310,7 @@ class Decompiler {
           if (is_assign) {
             phi_line = std::format("_{} = {};", variable, assignment_value);
           } else {
-            uint32_t variable_number;
-            FromStringView(variable, variable_number);
-            bool use_comment = false;
-            bool is_identity = false;
-            if (current_code_function.single_use_variables.contains(variable_number)) {
-              is_identity = true;
-              use_comment = true;
-            }
-            if (is_identity) {
-              current_code_function.variable_aliases.emplace(variable, std::pair<std::string, std::string>(assignment_type, assignment_value));
-            }
-            if (use_comment) {
-#if DECOMPILER_DXC_DEBUG >= 1
-              phi_line = std::format("// {} _{} = {};", assignment_type, variable, assignment_value);
-#endif
-            } else {
-              phi_line = std::format("{} _{} = {};", assignment_type, variable, assignment_value);
-            }
+            phi_line = std::format("{} _{} = {};", assignment_type, variable, assignment_value);
           }
         }
         string_stream << spacing << phi_line << "\n";
