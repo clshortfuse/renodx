@@ -66,7 +66,7 @@ struct ShaderDetails {
   std::optional<renodx::utils::shader::compiler::directx::DxilProgramVersion> program_version = std::nullopt;
   std::vector<uint8_t> addon_shader;
   std::optional<renodx::utils::shader::compiler::watcher::CustomShader> disk_shader = std::nullopt;
-  bool bypass_draw;
+  bool bypass_draw = false;
 
   enum class ShaderSource : int {
     ORIGINAL_SHADER = 0,
@@ -88,11 +88,11 @@ struct ResourceViewDetails {
   reshade::api::resource_desc resource_desc;
   std::string resource_tag;
   std::string resource_view_tag;
-  bool is_swapchain;
-  bool is_rtv_upgraded;
-  bool is_res_upgraded;
-  bool is_rtv_cloned;
-  bool is_res_cloned;
+  bool is_swapchain = false;
+  bool is_rtv_upgraded = false;
+  bool is_res_upgraded = false;
+  bool is_rtv_cloned = false;
+  bool is_res_cloned = false;
 
   bool UpdateSwapchainModState(reshade::api::device* device) {
     auto* swapchain_mod_data = &device->get_private_data<renodx::mods::swapchain::DeviceData>();

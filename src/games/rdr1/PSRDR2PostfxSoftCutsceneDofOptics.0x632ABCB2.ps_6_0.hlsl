@@ -294,7 +294,15 @@ float4 main(float4 SV_Position: SV_POSITION,
   float midGrayScale = RDR1ReinhardMidgrayScale(White);
   float3 untonemapped_scaled = color_scaled * midGrayScale;
 
-  float3 blendedColor = lerp(vanillaColor, lerp(vanillaColor, untonemapped_scaled, 0.5), saturate(vanillaColor));
+  float3 untonemappedBlendWeight;
+  if (injectedData.toneMapType == 0) {  // Vanilla
+    untonemappedBlendWeight = 0;
+  } else if (injectedData.toneMapType == 1) {
+    untonemappedBlendWeight = 0.5;
+  } else {
+    untonemappedBlendWeight = 1;  // Vanilla+ Boosted
+  }
+  float3 blendedColor = lerp(vanillaColor, lerp(vanillaColor, untonemapped_scaled, untonemappedBlendWeight), saturate(vanillaColor));
 
   _211 = blendedColor.r;
   _212 = blendedColor.g;
@@ -369,7 +377,12 @@ float4 main(float4 SV_Position: SV_POSITION,
   // float _276 = _256 - _269;
   // float _277 = _257 - _272;
   // float _278 = _258 - _275;
-  float3 desaturatedColorSDR = saturate(renodx::tonemap::dice::BT709(desaturatedColorHDR, 1.0));
+  float3 desaturatedColorSDR;
+  if (injectedData.toneMapType == 0) {
+    desaturatedColorSDR = saturate(desaturatedColorHDR);
+  } else {
+    desaturatedColorSDR = saturate(renodx::tonemap::dice::BT709(desaturatedColorHDR, 1.0));
+  }
   float3 contrastedColor = desaturatedColorSDR - (((desaturatedColorSDR * Contrast) * (desaturatedColorSDR - 1.0)) * (desaturatedColorSDR - 0.5));
 
   float3 outputColor = contrastedColor;

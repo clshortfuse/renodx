@@ -30,6 +30,16 @@ float4 main(
 
   // linearize + convert to BT.2020 PQ
   float3 linearColor = renodx::color::gamma::DecodeSafe(gammaColor, 2.8);
+
+  if (injectedData.toneMapType != 0) {
+    const float paperWhite = gameNits / renodx::color::srgb::REFERENCE_WHITE;
+    linearColor *= paperWhite;
+    const float peakWhite = injectedData.toneMapPeakNits / renodx::color::srgb::REFERENCE_WHITE;
+    const float highlightsShoulderStart = paperWhite;  // Don't tonemap the "SDR" range (in luminance), we want to keep it looking as it used to look in SDR
+    linearColor = renodx::tonemap::dice::BT709(linearColor, peakWhite, highlightsShoulderStart);
+    linearColor /= paperWhite;
+  }
+
   float3 bt2020Color = renodx::color::bt2020::from::BT709(linearColor);
   float3 pqEncodedColor = renodx::color::pq::Encode(bt2020Color, gameNits);
 
