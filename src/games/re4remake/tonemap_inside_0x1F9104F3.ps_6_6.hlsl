@@ -115,7 +115,12 @@ void frag_main()
   TonemapParam_m0[0u] = float4(contrast, linearBegin, linearLength, toe);
   TonemapParam_m0[1u] = float4(maxNit, linearStart, displayMaxNitSubContrastFactor, contrastFactor);
   TonemapParam_m0[2u] = float4(mulLinearStartContrastFactor, invLinearBegin, madLinearStartContrastFactor, 0.0);
-
+  if (injectedData.toneMapType != 0) {
+    TonemapParam_m0[0u].x *= injectedData.colorGradeHighlightContrast;   // contrast
+    TonemapParam_m0[0u].w *= injectedData.colorGradeShadowToe;           // toe
+    TonemapParam_m0[1u].x = 125;                                         // maxNit
+    TonemapParam_m0[1u].y = 125;                                         // linearStart
+  }
   // declare lut config for use with lut black correction
   renodx::lut::Config lut_config = renodx::lut::config::Create(
       TrilinearClamp,
@@ -125,12 +130,7 @@ void frag_main()
       renodx::lut::config::type::LINEAR,
       ColorCorrectTexture_m0[0u].x);
 
-  if (injectedData.toneMapType != 0) {
-    TonemapParam_m0[0u].x *= injectedData.colorGradeHighlightContrast;   // contrast
-    TonemapParam_m0[0u].w *= injectedData.colorGradeShadowToe;           // toe
-    TonemapParam_m0[1u].x = 125;                                         // maxNit
-    TonemapParam_m0[1u].y = 125;                                         // linearStart
-  }    
+      
   uint4 _98 = asuint(CBControl_m0[0u]);
     uint _99 = _98.x;
     bool _102 = (_99 & 1u) != 0u;
