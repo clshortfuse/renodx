@@ -11,10 +11,14 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-// #include <embed/0x973A39FC.h>  // Tonemap + Postfx - main
+#include <embed/0x973A39FC.h>  // Tonemap + Postfx - main
 #include <embed/0x1F9104F3.h>  // Tonemap + Postfx
 // #include <embed/.h>  // Tonemap + Postfx - Vignette
 // #include <embed/.h>  // Tonemap + Postfx - Vignette + Lens Flare
+
+// #include <embed/0xF2F4D148.h>  // Hero Filter
+// #include <embed/0xEDBB2630.h>  // Villain Filter
+
 #include <embed/0x6737588D.h>  // BT.2020 + PQ Encoding
 
 #include "../../mods/shader.hpp"
@@ -24,7 +28,7 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    // CustomShaderEntry(0x973A39FC),  // Tonemap + Postfx - main
+    CustomShaderEntry(0x973A39FC),  // Tonemap + Postfx - main
     CustomShaderEntry(0x1F9104F3),  // Tonemap + Postfx
     // CustomShaderEntry(),  // Tonemap + Postfx - Vignette
     // CustomShaderEntry(),  // Tonemap + Postfx - Vignette + Lens Flare
@@ -88,9 +92,9 @@ renodx::utils::settings::Settings settings = {
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
-  renodx::utils::settings::UpdateSetting("colorGradeShadowToe", 1.f);
-  renodx::utils::settings::UpdateSetting("colorGradeHighlightContrast", 1.f);
-  renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 1.f);
+  renodx::utils::settings::UpdateSetting("colorGradeShadowToe", 50.f);
+  renodx::utils::settings::UpdateSetting("colorGradeHighlightContrast", 50.f);
+  renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
 }
 }  // namespace
