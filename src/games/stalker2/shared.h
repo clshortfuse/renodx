@@ -22,7 +22,6 @@ struct ShaderInjectData {
   float colorGradeLUTStrength;
   float colorGradeLUTScaling;
 };
-
 #ifndef __cplusplus
 cbuffer injectedBuffer : register(b0, space50) {
   ShaderInjectData injectedData : packoffset(c0);
@@ -31,7 +30,7 @@ cbuffer injectedBuffer : register(b0, space50) {
     3.f,    // toneMapType
     800.f,  // toneMapPeakNits
     120.f,  // toneMapGameNits
-    200.f,   // toneMapUINits
+    200.f,  // toneMapUINits
     1.f,    // toneMapGammaCorrection
     1.f,    // colorGradeExposure
     1.f,    // colorGradeHighlights

@@ -668,6 +668,10 @@ float4 main(
   }
   float _572 = _RootShaderParameters_051x;
   float _574 = _RootShaderParameters_050w;
+  if (injectedData.toneMapType > 0.f) {
+    _572 = DEFAULT_CONTRAST;
+    _574 = DEFAULT_BRIGHTNESS;
+  }
   float _575 = _568 + -0.5f;
   float _576 = _575 + _574;
   float _577 = _569 + -0.5f;
@@ -685,7 +689,7 @@ float4 main(
   float _589 = saturate(_586);
 
   post_srgb = float3(_587, _588, _589);
-  
+
   if (injectedData.toneMapType > 1.f) {
     output = upgradeSRGBtoPQ(tonemappedPQ, post_srgb);
     return float4(output, 0.f);

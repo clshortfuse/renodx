@@ -1,5 +1,9 @@
 #include "./shared.h"
 
+static const float DEFAULT_BRIGHTNESS = 0.f;  // 50%
+static const float DEFAULT_CONTRAST = 1.f;    // 50%
+static const float DEFAULT_GAMMA = 1.1f;      // Approximately 44%
+
 renodx::tonemap::Config getCommonConfig() {
   float vanillaMidGray = 0.30f;  // UUU shows game is using 30.f for mid gray
   float renoDRTContrast = 1.f;

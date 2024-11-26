@@ -1572,7 +1572,6 @@ float4 main(
   float _1271 = _1269 * _1266;
   float _1272 = _1269 * _1267;
   float _1273 = _RootShaderParameters_039y;
-  // _1273 = 2.f; // CustomEdit
   float _1274 = _RootShaderParameters_039z;
   float _1275 = _1273 + _1270;
   float _1276 = _1275 * _1265;
@@ -1615,6 +1614,9 @@ float4 main(
   float _1315 = _1312 + _1306;
   float _1316 = _1313 + _1307;
   float _1318 = _RootShaderParameters_040y;
+  if (injectedData.toneMapType > 0.f) {
+    _1318 = DEFAULT_GAMMA;
+  }
   float _1319 = max(0.0f, _1302);
   float _1320 = max(0.0f, _1303);
   float _1321 = max(0.0f, _1304);
@@ -1644,7 +1646,7 @@ float4 main(
       final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
     }
 
-    return float4(final_color * 0.9523810148239136f, 0);
+    return float4(final_color, 0);
   }
 
   uint _1332 = _RootShaderParameters_040w;

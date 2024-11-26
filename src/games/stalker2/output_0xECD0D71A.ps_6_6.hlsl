@@ -93,7 +93,6 @@ float4 main(
     : SV_Target {
   float4 SV_Target;
   float3 tonemappedPQ, post_srgb, output;
-
   // texture _1 = ColorGradingLUT;
   // texture _2 = BloomDirtMaskTexture;
   // texture _3 = BlurredLogLum;
@@ -456,9 +455,9 @@ float4 main(
   float _375 = _372 + 0.015625f;
   // _376 = _1;
   // _377 = _8;
+
   float4 _378 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3(_373, _374, _375));
   tonemappedPQ = _378.rgb;
-
   float3 srgb_input = pqTosRGB(tonemappedPQ);
 
   float _379 = _378.x;
@@ -564,6 +563,10 @@ float4 main(
   /* These apply brightness and contrast, so we skip them */
   float _472 = _RootShaderParameters_051x;
   float _474 = _RootShaderParameters_050w;
+  if (injectedData.toneMapType > 0.f) {
+    _472 = DEFAULT_CONTRAST;
+    _474 = DEFAULT_BRIGHTNESS;
+  }
   float _475 = _468 + -0.5f;
   float _476 = _475 + _474;
   float _477 = _469 + -0.5f;

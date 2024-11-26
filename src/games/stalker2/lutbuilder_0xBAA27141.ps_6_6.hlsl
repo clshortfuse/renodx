@@ -1197,6 +1197,9 @@ float4 main(
   float _953 = _950 + _944;
   float _954 = _951 + _945;
   float _956 = _RootShaderParameters_040y;
+  if (injectedData.toneMapType > 0.f) {
+    _956 = DEFAULT_GAMMA;
+  }
   float _957 = max(0.0f, _940);
   float _958 = max(0.0f, _941);
   float _959 = max(0.0f, _942);
@@ -1224,7 +1227,7 @@ float4 main(
       final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
     }
 
-    return float4(final_color * 0.9523810148239136f, 0);
+    return float4(final_color, 0);
   }
 
   uint _970 = _RootShaderParameters_040w;
