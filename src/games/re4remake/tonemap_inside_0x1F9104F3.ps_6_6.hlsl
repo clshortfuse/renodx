@@ -1163,9 +1163,10 @@ void frag_main()
             _2148 = _1511;
             _2149 = _1513;
             _2150 = _1515;
-        }
-        float _2151 = ColorCorrectTexture_m0[0u].w * 0.5f;
-        float _2992;
+            }
+            float _2151 = ColorCorrectTexture_m0[0u].w * 0.5f;
+            float _2992;
+#if 0
         if (_2148 > 0.003130800090730190277099609375f)
         {
             _2992 = (exp2(log2(_2148) * 0.4166666567325592041015625f) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f);
@@ -1196,7 +1197,6 @@ void frag_main()
         float _3044 = (_2992 * _3040) + _2151;
         float _3045 = (_3031 * _3040) + _2151;
         float _3046 = (_3039 * _3040) + _2151;
-#if 0
         float4 _3050 = tTextureMap0.SampleLevel(TrilinearClamp, float3(_3044, _3045, _3046), 0.0f);
 #else
         float3 _3050 = LUTBlackCorrection(float3(_2148, _2149, _2150), tTextureMap0, lut_config);
@@ -1224,6 +1224,7 @@ void frag_main()
             float frontier_phi_91_88_ladder_2;
             if (_3056)
             {
+#if 0
                 float _3105;
                 if (_3070 > 0.003130800090730190277099609375f)
                 {
@@ -1251,7 +1252,6 @@ void frag_main()
                 {
                     _3137 = _3072 * 12.9200000762939453125f;
                 }
-#if 0
                 float4 _3140 = tTextureMap2.SampleLevel(TrilinearClamp, float3(_3105, _3121, _3137), 0.0f);
 #else
                 float3 _3140 = LUTBlackCorrection(float3(_3070, _3071, _3072), tTextureMap2, lut_config);
@@ -1277,6 +1277,7 @@ void frag_main()
             float frontier_phi_91_89_ladder_2;
             if (_3056)
             {
+#if 0
                 float _3107;
                 if (_3052 > 0.003130800090730190277099609375f)
                 {
@@ -1304,7 +1305,6 @@ void frag_main()
                 {
                     _3151 = _3054 * 12.9200000762939453125f;
                 }
-#if 0
                 float4 _3154 = tTextureMap2.SampleLevel(TrilinearClamp, float3(_3107, _3123, _3151), 0.0f);
 #else
                 float3 _3154 = LUTBlackCorrection(float3(_3052, _3053, _3054), tTextureMap2, lut_config);
