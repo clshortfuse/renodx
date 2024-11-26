@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+#define ImTextureID ImU64
+
+#define DEBUG_LEVEL_0
+
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
