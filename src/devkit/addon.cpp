@@ -35,6 +35,7 @@
 #include "../utils/shader.hpp"
 #include "../utils/shader_compiler_directx.hpp"
 #include "../utils/shader_compiler_watcher.hpp"
+#include "../utils/shader_decompiler_dxc.hpp"
 #include "../utils/shader_dump.hpp"
 #include "../utils/swapchain.hpp"
 #include "../utils/trace.hpp"
@@ -63,6 +64,7 @@ struct ShaderDetails {
   uint32_t shader_hash;
   std::vector<uint8_t> shader_data;
   std::variant<std::nullopt_t, std::exception, std::string> disassembly = std::nullopt;
+  std::variant<std::nullopt_t, std::exception, std::string> decompilation = std::nullopt;
   std::optional<renodx::utils::shader::compiler::directx::DxilProgramVersion> program_version = std::nullopt;
   std::vector<uint8_t> addon_shader;
   std::optional<renodx::utils::shader::compiler::watcher::CustomShader> disk_shader = std::nullopt;
@@ -1558,6 +1560,63 @@ void RenderShaderViewLive(reshade::api::device* device, DeviceData& data, Shader
   }
 }
 
+void RenderShaderViewDecompilation(reshade::api::device* device, DeviceData& data, ShaderDetails& shader_details) {
+  std::string decompilation_string;
+  bool failed = false;
+  if (std::holds_alternative<std::nullopt_t>(shader_details.decompilation)) {
+    // Never disassembled
+    try {
+      if (shader_details.shader_data.empty()) {
+        reshade::api::pipeline pipeline = {0};
+        {
+          // Get pipeline handle
+          auto& shader_device_data = renodx::utils::shader::GetShaderDeviceData(device);
+          std::shared_lock lock(shader_device_data.mutex);
+          auto pair = shader_device_data.shader_pipeline_handles.find(shader_details.shader_hash);
+          if (pair == shader_device_data.shader_pipeline_handles.end()) {
+            throw std::exception("Shader data not found.");
+          }
+          auto& pipeline_handles = pair->second;
+          if (pipeline_handles.empty()) throw std::exception("Shader data not found.");
+          pipeline = {*(pipeline_handles.begin())};
+        }
+        auto pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(device, pipeline);
+        if (!pipeline_details.has_value()) throw std::exception("Shader data not found");
+        auto shader_data = pipeline_details->GetShaderData(shader_details.shader_hash);
+        if (!shader_data.has_value()) throw std::exception("Invalid shader selection");
+        shader_details.shader_data = shader_data.value();
+      }
+      if (renodx::utils::device::IsDirectX(device)) {
+        auto decompiler = renodx::utils::shader::decompiler::dxc::Decompiler();
+        auto disassembly_string = renodx::utils::shader::compiler::directx::DisassembleShader(shader_details.shader_data);
+        shader_details.decompilation = decompiler.Decompile(disassembly_string);
+      }
+    } catch (std::exception& e) {
+      shader_details.decompilation = e;
+    }
+  }
+
+  if (std::holds_alternative<std::exception>(shader_details.decompilation)) {
+    decompilation_string.assign(std::get<std::exception>(shader_details.decompilation).what());
+    failed = true;
+  } else {
+    decompilation_string.assign(std::get<std::string>(shader_details.decompilation));
+  }
+
+  if (failed) {
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(192, 0, 0, 255));
+  }
+  ImGui::InputTextMultiline(
+      "##decompilationCode",
+      const_cast<char*>(decompilation_string.c_str()),
+      decompilation_string.length(),
+      ImVec2(-4, -4),
+      ImGuiInputTextFlags_ReadOnly);
+  if (failed) {
+    ImGui::PopStyleColor();
+  }
+}
+
 // Returns false selection is to be removed
 void RenderShaderView(reshade::api::device* device, DeviceData& data, SettingSelection& selection) {
   ImGui::PushID(std::format("##shader_view_tab_0x{:08x}", selection.shader_hash).c_str());
@@ -1595,6 +1654,8 @@ void RenderShaderView(reshade::api::device* device, DeviceData& data, SettingSel
         case 1:
           RenderShaderViewLive(device, data, shader_details);
           break;
+        case 2:
+          RenderShaderViewDecompilation(device, data, shader_details);
         default:
           break;
       }
@@ -1683,6 +1744,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         if (selection->get().shader_hash != 0u) {
           ImGui::RadioButton("Disassembly", &selection->get().shader_view, 0);
           ImGui::RadioButton("Live Shader", &selection->get().shader_view, 1);
+          ImGui::RadioButton("Decompilation", &selection->get().shader_view, 2);
         }
       }
 
