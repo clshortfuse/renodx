@@ -1165,18 +1165,25 @@ float4 main(
   float _1012;                                        // custom branch
   float _1013;                                        // custom branch
 
-  // we always skip this, since game doesn't have SDR LUTs
-  if (false/* injectedData.colorGradeLUTStrength != 1.f || injectedData.colorGradeLUTScaling != 0.f */) {
+  if (injectedData.toneMapType > 1.f) {
+    // This game does NOT use external SDR LUTs, so Input/Output types are LINEAR
     renodx::lut::Config lut_config = renodx::lut::config::Create(
         Samplers_1,
-        injectedData.colorGradeLUTStrength,
-        injectedData.colorGradeLUTScaling, renodx::lut::config::type::SRGB, renodx::lut::config::type::SRGB, 16);
+        injectedData.toneMapType == 2.f ? 0.f : injectedData.colorGradeLUTStrength,
+        1.f, // We don't need to scale LUTs, but might as well
+        renodx::lut::config::type::LINEAR,
+        renodx::lut::config::type::LINEAR,
+        16.f);
 
     float3 post_lut_color = renodx::lut::Sample(Textures_1, lut_config, lut_input_color);
     _1011 = post_lut_color.r;
     _1012 = post_lut_color.g;
     _1013 = post_lut_color.b;
   } else {
+    /*  Vanilla HDR lut sampler produces a different image than sRGB SDR,
+        so I'm always using RenoDX Sampler.
+        I assume it's because devs have some weird custom tonemapping values. */
+    // Original LUT sampler
     float _908 = saturate(_905);
     float _909 = saturate(_906);
     float _910 = saturate(_907);
@@ -1369,11 +1376,11 @@ float4 main(
     if (injectedData.toneMapType != 0.f) {
       final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
     }
-    
+
     bool is_pq = (output_type == 3u || output_type == 4u);
 
     if (is_pq) {
-        final_color = renodx::color::bt2020::from::BT709(final_color);
+      final_color = renodx::color::bt2020::from::BT709(final_color);
       final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
     }
 

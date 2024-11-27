@@ -71,10 +71,7 @@ float4 main(
   float _50 = mad(0.08802297711372375f, _41, _49);
   float _51 = mad(0.8954997062683105f, _42, _50);
   float _53 = $Globals_007w;
-
-  if (injectedData.toneMapType > 1.f) {
-    _53 = 1.f;  // disable settings UI control
-  }
+  _53 = 1.f;  // disable settings UI control
 
   float _54 = _53 * _45;
   float _55 = _53 * _48;
@@ -159,9 +156,7 @@ float4 main(
   float _98 = _95 * 10000.0f;
 
   float _99 = $Globals_007z;
-  if (injectedData.toneMapType > 1.f) {
-    _99 = 1.f;  // Disable game's UI level setting
-  }
+  _99 = 1.f;  // Disable game's UI level setting
   bool _100 = (_15 > 0.0f);
   bool _101 = (_15 < 1.0f);
   bool _102 = _100 && _101;

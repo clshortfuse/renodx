@@ -90,6 +90,15 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
+        .key = "radiationOverlayStrength",
+        .binding = &shader_injection.radiationOverlayStrength,
+        .default_value = 50.f,
+        .label = "Radiation Strength",
+        .section = "Tone Mapping",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "toneMapGammaCorrection",
         .binding = &shader_injection.toneMapGammaCorrection,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
@@ -157,23 +166,18 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeLUTStrength",
         .binding = &shader_injection.colorGradeLUTStrength,
-        .default_value = 50.f,
+        .default_value = 100.f,
         .label = "LUT Strength",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType != 2; },
         .parse = [](float value) { return value * 0.01f; },
     },
-    /* new renodx::utils::settings::Setting{
-        .key = "colorGradeLUTScaling",
-        .binding = &shader_injection.colorGradeLUTScaling,
-        .default_value = 0.f,
-        .label = "LUT Scaling",
-        .section = "Color Grading",
-        .tooltip = "Scales the color grade LUT to full range when size is clamped.",
-        .max = 100.f,
-        .is_enabled = []() { return false; },  // Disable LUT sampling
-        .parse = [](float value) { return value * 0.01f; },
-    }, */
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = " - Ingame HDR must be turned ON!",
+        .section = "Instructions",
+    },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Special thanks to Shortfuse & the folks at HDR Den for their support! Join the HDR Den discord for help!",
@@ -232,14 +236,14 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 800.f);
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
+  renodx::utils::settings::UpdateSetting("radiationOverlayStrength", 50.f);
   renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
+  renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
 }
 
 }  // namespace

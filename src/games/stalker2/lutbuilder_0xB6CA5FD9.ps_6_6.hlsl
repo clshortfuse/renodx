@@ -1441,18 +1441,37 @@ float4 main(
   float _1265;  // custom branch
   float _1266;  // custom branch
   float _1267;  // custom branch
-  // we always skip this, since game doesn't have SDR LUTs
-  if (false /* injectedData.colorGradeLUTStrength != 1.f || injectedData.colorGradeLUTScaling != 0.f */) {
+
+  /*
+    *The explanation below is only applicable to UE INTERNAL LUT, it doesn't apply to external SDR LUTs*
+
+    RenoDRT tonemapper needs to sample the LUT to mimic ACES's contrast to match game's SDR representation.
+    However RenoDX ACES's sampling the LUT compounds contrast, so we explicitly disable it.
+
+    Shortfuse mentioned Unreal has a semi accurate ACES HDR pipeline (wrong coefficients), 
+    but is using a different tonemapper for the SDR path with custom parameters to replicate ACES. 
+    Maybe the LUT is how they add that contrast, thus it shouldn't be sampled for the HDR path.
+  */
+  if (injectedData.toneMapType > 1.f) {
+    // This game does NOT use external SDR LUTs, so Input/Output types are LINEAR
     renodx::lut::Config lut_config = renodx::lut::config::Create(
         Samplers_1,
-        injectedData.colorGradeLUTStrength,
-        injectedData.colorGradeLUTScaling, renodx::lut::config::type::SRGB, renodx::lut::config::type::SRGB, 16.f);
+        injectedData.toneMapType == 2.f ? 0.f : injectedData.colorGradeLUTStrength,
+        1.f,  // (LUT Scaling) We don't need to scale the LUTs here, but might as well
+        renodx::lut::config::type::LINEAR,
+        renodx::lut::config::type::LINEAR,
+        16.f);
 
     float3 post_lut_color = renodx::lut::Sample(Textures_1, lut_config, lut_input_color);
+
     _1265 = post_lut_color.r;
     _1266 = post_lut_color.g;
     _1267 = post_lut_color.b;
   } else {
+    /*  Vanilla HDR lut sampler produces a different image than sRGB SDR,
+        so I'm always using RenoDX Sampler.
+        I assume it's because devs have some weird custom tonemapping values. */
+    // Original LUT sampler
     float _1162 = saturate(_1159);
     float _1163 = saturate(_1160);
     float _1164 = saturate(_1161);

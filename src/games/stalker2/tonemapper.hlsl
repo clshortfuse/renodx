@@ -5,7 +5,7 @@ static const float DEFAULT_CONTRAST = 1.f;    // 50%
 static const float DEFAULT_GAMMA = 1.1f;      // Approximately 44%
 
 renodx::tonemap::Config getCommonConfig() {
-  float vanillaMidGray = 0.30f;  // UUU shows game is using 30.f for mid gray
+  float vanillaMidGray = 0.18f;
   float renoDRTContrast = 1.f;
   float renoDRTFlare = 0.f;
   float renoDRTShadows = 1.f;
@@ -60,8 +60,8 @@ float3 upgradeSRGBtoPQ(float3 tonemappedPQ, float3 post_srgb) {
     hdr = renodx::color::bt709::from::BT2020(hdr);
 
     post = renodx::color::srgb::DecodeSafe(post_srgb);
-    
-    output = renodx::tonemap::UpgradeToneMap(hdr, saturate(hdr), saturate(post), injectedData.colorGradeLUTStrength);
+
+    output = renodx::tonemap::UpgradeToneMap(hdr, saturate(hdr), saturate(post), injectedData.radiationOverlayStrength);
     output = renodx::color::bt2020::from::BT709(output);
     output = renodx::color::pq::Encode(output, injectedData.toneMapGameNits);
   }
