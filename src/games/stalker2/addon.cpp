@@ -70,7 +70,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapGameNits",
         .binding = &shader_injection.toneMapGameNits,
-        .default_value = 120.f,
+        .default_value = 203.f,
         .can_reset = false,
         .label = "Game Brightness",
         .section = "Tone Mapping",
