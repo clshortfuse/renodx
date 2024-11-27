@@ -1166,13 +1166,12 @@ float4 main(
   float _1013;                                        // custom branch
 
   if (injectedData.toneMapType > 1.f) {
-    // This game does NOT use external SDR LUTs, so Input/Output types are LINEAR
     renodx::lut::Config lut_config = renodx::lut::config::Create(
         Samplers_1,
         injectedData.toneMapType == 2.f ? 0.f : injectedData.colorGradeLUTStrength,
         1.f, // We don't need to scale LUTs, but might as well
-        renodx::lut::config::type::LINEAR,
-        renodx::lut::config::type::LINEAR,
+        renodx::lut::config::type::SRGB,
+        renodx::lut::config::type::SRGB,
         16.f);
 
     float3 post_lut_color = renodx::lut::Sample(Textures_1, lut_config, lut_input_color);
