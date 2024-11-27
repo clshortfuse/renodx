@@ -11,8 +11,9 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-#include <embed/0x973A39FC.h>  // Tonemap + Postfx - main
 #include <embed/0x1F9104F3.h>  // Tonemap + Postfx
+#include <embed/0x973A39FC.h>  // Tonemap + Postfx - main
+
 // #include <embed/.h>  // Tonemap + Postfx - Vignette
 // #include <embed/.h>  // Tonemap + Postfx - Vignette + Lens Flare
 
@@ -50,24 +51,35 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Vanilla", "Vanilla+"},
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeHighlightContrast",
+        .key = "colorGradeHighlightContrastMultiplier",
         .binding = &shader_injection.colorGradeHighlightContrast,
         .default_value = 50.f,
         .label = "Highlight Contrast",
-        .section = "Color Grading",
+        .section = "Tone Mapper Parameters",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "colorGradeToeAdjustmentType",
+        .binding = &shader_injection.colorGradeToeAdjustmentType,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .can_reset = false,
+        .label = "Toe Adjustment Type",
+        .section = "Tone Mapper Parameters",
+        .tooltip = "Sets the style of Toe Adjustment, multiplier multiplies the value set by the game by the slider, while fixed overrides it to the value set by the slider",
+        .labels = {"Multiplier", "Fixed"},
+    },
+    new renodx::utils::settings::Setting{
         .key = "colorGradeShadowToe",
         .binding = &shader_injection.colorGradeShadowToe,
-        .default_value = (1 / 1.1) * 50.f,
+        .default_value = 1.f,
         .label = "Shadow Toe",
-        .section = "Color Grading",
-        .max = 100.f,
+        .section = "Tone Mapper Parameters",
+        .max = 2.f,
+        .format = "%.2f",
         .is_enabled = []() { return shader_injection.toneMapType != 0; },
-        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeLUTStrength",
@@ -88,6 +100,18 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeGammaAdjust",
+        .binding = &shader_injection.colorGradeGammaAdjust,
+        .default_value = 1.f,
+        .label = "Gamma Adjustment (Hue Preserving)",
+        .section = "Color Grading",
+        .tooltip = "Adjusts gamma on luminance, only affects luminance values below 1.",
+        .min = 0.75f,
+        .max = 1.25f,
+        .format = "%.2f",
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
+    },    
 };
 
 void OnPresetOff() {
@@ -96,6 +120,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeHighlightContrast", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
+  renodx::utils::settings::UpdateSetting("colorGradeGammaAdjust", 1.f);
 }
 }  // namespace
 

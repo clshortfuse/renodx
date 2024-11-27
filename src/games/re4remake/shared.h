@@ -10,9 +10,11 @@
 struct ShaderInjectData {
   float toneMapType;
   float colorGradeHighlightContrast;
+  float colorGradeToeAdjustmentType;
   float colorGradeShadowToe;
   float colorGradeLUTStrength;
   float colorGradeLUTScaling;
+  float colorGradeGammaAdjust;
 };
 
 #ifndef __cplusplus

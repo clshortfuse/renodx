@@ -116,8 +116,12 @@ void frag_main()
   TonemapParam_m0[1u] = float4(maxNit, linearStart, displayMaxNitSubContrastFactor, contrastFactor);
   TonemapParam_m0[2u] = float4(mulLinearStartContrastFactor, invLinearBegin, madLinearStartContrastFactor, 0.0);
   if (injectedData.toneMapType != 0) {
+    if (injectedData.colorGradeToeAdjustmentType == 0) {
+      TonemapParam_m0[0u].w *= injectedData.colorGradeShadowToe;  // toe
+    } else {
+        TonemapParam_m0[0u].w = injectedData.colorGradeShadowToe;  // toe
+    }
     TonemapParam_m0[0u].x *= injectedData.colorGradeHighlightContrast;   // contrast
-    TonemapParam_m0[0u].w *= injectedData.colorGradeShadowToe;           // toe
     TonemapParam_m0[1u].x = 125;                                         // maxNit
     TonemapParam_m0[1u].y = 125;                                         // linearStart
   }
@@ -1386,6 +1390,12 @@ void frag_main()
     SV_Target.y = _2632;
     SV_Target.z = _2634;
     SV_Target.w = 0.0f;
+
+#if 1  // HDR Gamma boost
+
+    SV_Target.rgb = AdjustGammaOnLuminance(SV_Target.rgb, injectedData.colorGradeGammaAdjust);
+
+#endif
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)
