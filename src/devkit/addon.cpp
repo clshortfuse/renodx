@@ -3,16 +3,21 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
 #include <initializer_list>
 #include <mutex>
 #include <optional>
 #include <variant>
+
 #define ImTextureID ImU64
 
 #pragma comment(lib, "dxguid.lib")
+
+#define NOMINMAX
 
 #include <d3d11.h>
 #include <d3d12.h>
@@ -1243,7 +1248,7 @@ void RenderShadersPane(reshade::api::device* device, DeviceData& data) {
     ImGui::TableSetupColumn("Hash", ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupColumn("Alias", ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_NoHide);
-    ImGui::TableSetupColumn("Draw", ImGuiTableColumnFlags_NoHide);
+    ImGui::TableSetupColumn("Options", ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupColumn("Snapshot", ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableHeadersRow();
@@ -1328,7 +1333,7 @@ void RenderShadersPane(reshade::api::device* device, DeviceData& data) {
         ImGui::PopID();
       }
 
-      if (ImGui::TableSetColumnIndex(3)) {  // Draw
+      if (ImGui::TableSetColumnIndex(3)) {  // Options
         ImGui::PushID(cell_index_id++);
 
         auto color_vec4 = ImGui::GetStyleColorVec4(ImGuiCol_Button);
@@ -1337,10 +1342,34 @@ void RenderShadersPane(reshade::api::device* device, DeviceData& data) {
         }
         ImGui::PushStyleColor(ImGuiCol_Button, color_vec4);
 
-        if (ImGui::Button(shader_details.bypass_draw ? "Off" : "On", {ImGui::CalcTextSize("A").x * 4, 0})) {
+        float text_size = std::max({
+                              ImGui::CalcTextSize("Draw").x,
+                              ImGui::CalcTextSize("Dump").x,
+                              ImGui::CalcTextSize("Edit").x,
+                          })
+                          + (ImGui::GetStyle().FramePadding.x * 2);
+        if (ImGui::Button("Draw", {text_size, 0})) {
           shader_details.bypass_draw = !shader_details.bypass_draw;
         }
         ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Dump", {text_size, 0})) {
+          renodx::utils::shader::dump::DumpShader(shader_details.shader_hash, shader_details.shader_data);
+        }
+
+        ImGui::BeginDisabled(!shader_details.disk_shader.has_value());
+        ImGui::SameLine();
+        if (ImGui::Button("Edit", {text_size, 0})) {
+          if (shader_details.disk_shader.has_value()) {
+            if (!shader_details.disk_shader->file_path.empty()) {
+              ShellExecute(0, "open", shader_details.disk_shader->file_path.string().c_str(), 0, 0, SW_SHOW);
+            }
+          }
+        }
+        ImGui::EndDisabled();
+
         ImGui::PopID();
       }
 
@@ -1554,7 +1583,8 @@ void RenderShaderViewLive(reshade::api::device* device, DeviceData& data, Shader
       std::format("##shader_view_live_0x{:08x}", shader_details.shader_hash).c_str(),
       const_cast<char*>(live_string.c_str()),
       live_string.length(),
-      ImVec2(-4, -4));
+      ImVec2(-4, -4),
+      ImGuiInputTextFlags_ReadOnly);
   if (failed) {
     ImGui::PopStyleColor();
   }
