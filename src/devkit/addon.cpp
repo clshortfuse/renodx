@@ -3,16 +3,21 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
 #include <initializer_list>
 #include <mutex>
 #include <optional>
 #include <variant>
+
 #define ImTextureID ImU64
 
 #pragma comment(lib, "dxguid.lib")
+
+#define NOMINMAX
 
 #include <d3d11.h>
 #include <d3d12.h>
@@ -35,6 +40,7 @@
 #include "../utils/shader.hpp"
 #include "../utils/shader_compiler_directx.hpp"
 #include "../utils/shader_compiler_watcher.hpp"
+#include "../utils/shader_decompiler_dxc.hpp"
 #include "../utils/shader_dump.hpp"
 #include "../utils/swapchain.hpp"
 #include "../utils/trace.hpp"
@@ -63,6 +69,7 @@ struct ShaderDetails {
   uint32_t shader_hash;
   std::vector<uint8_t> shader_data;
   std::variant<std::nullopt_t, std::exception, std::string> disassembly = std::nullopt;
+  std::variant<std::nullopt_t, std::exception, std::string> decompilation = std::nullopt;
   std::optional<renodx::utils::shader::compiler::directx::DxilProgramVersion> program_version = std::nullopt;
   std::vector<uint8_t> addon_shader;
   std::optional<renodx::utils::shader::compiler::watcher::CustomShader> disk_shader = std::nullopt;
@@ -1241,7 +1248,7 @@ void RenderShadersPane(reshade::api::device* device, DeviceData& data) {
     ImGui::TableSetupColumn("Hash", ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupColumn("Alias", ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_NoHide);
-    ImGui::TableSetupColumn("Draw", ImGuiTableColumnFlags_NoHide);
+    ImGui::TableSetupColumn("Options", ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupColumn("Snapshot", ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableHeadersRow();
@@ -1326,7 +1333,7 @@ void RenderShadersPane(reshade::api::device* device, DeviceData& data) {
         ImGui::PopID();
       }
 
-      if (ImGui::TableSetColumnIndex(3)) {  // Draw
+      if (ImGui::TableSetColumnIndex(3)) {  // Options
         ImGui::PushID(cell_index_id++);
 
         auto color_vec4 = ImGui::GetStyleColorVec4(ImGuiCol_Button);
@@ -1335,10 +1342,34 @@ void RenderShadersPane(reshade::api::device* device, DeviceData& data) {
         }
         ImGui::PushStyleColor(ImGuiCol_Button, color_vec4);
 
-        if (ImGui::Button(shader_details.bypass_draw ? "Off" : "On", {ImGui::CalcTextSize("A").x * 4, 0})) {
+        float text_size = std::max({
+                              ImGui::CalcTextSize("Draw").x,
+                              ImGui::CalcTextSize("Dump").x,
+                              ImGui::CalcTextSize("Edit").x,
+                          })
+                          + (ImGui::GetStyle().FramePadding.x * 2);
+        if (ImGui::Button("Draw", {text_size, 0})) {
           shader_details.bypass_draw = !shader_details.bypass_draw;
         }
         ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Dump", {text_size, 0})) {
+          renodx::utils::shader::dump::DumpShader(shader_details.shader_hash, shader_details.shader_data);
+        }
+
+        ImGui::BeginDisabled(!shader_details.disk_shader.has_value());
+        ImGui::SameLine();
+        if (ImGui::Button("Edit", {text_size, 0})) {
+          if (shader_details.disk_shader.has_value()) {
+            if (!shader_details.disk_shader->file_path.empty()) {
+              ShellExecute(0, "open", shader_details.disk_shader->file_path.string().c_str(), 0, 0, SW_SHOW);
+            }
+          }
+        }
+        ImGui::EndDisabled();
+
         ImGui::PopID();
       }
 
@@ -1552,7 +1583,65 @@ void RenderShaderViewLive(reshade::api::device* device, DeviceData& data, Shader
       std::format("##shader_view_live_0x{:08x}", shader_details.shader_hash).c_str(),
       const_cast<char*>(live_string.c_str()),
       live_string.length(),
-      ImVec2(-4, -4));
+      ImVec2(-4, -4),
+      ImGuiInputTextFlags_ReadOnly);
+  if (failed) {
+    ImGui::PopStyleColor();
+  }
+}
+
+void RenderShaderViewDecompilation(reshade::api::device* device, DeviceData& data, ShaderDetails& shader_details) {
+  std::string decompilation_string;
+  bool failed = false;
+  if (std::holds_alternative<std::nullopt_t>(shader_details.decompilation)) {
+    // Never disassembled
+    try {
+      if (shader_details.shader_data.empty()) {
+        reshade::api::pipeline pipeline = {0};
+        {
+          // Get pipeline handle
+          auto& shader_device_data = renodx::utils::shader::GetShaderDeviceData(device);
+          std::shared_lock lock(shader_device_data.mutex);
+          auto pair = shader_device_data.shader_pipeline_handles.find(shader_details.shader_hash);
+          if (pair == shader_device_data.shader_pipeline_handles.end()) {
+            throw std::exception("Shader data not found.");
+          }
+          auto& pipeline_handles = pair->second;
+          if (pipeline_handles.empty()) throw std::exception("Shader data not found.");
+          pipeline = {*(pipeline_handles.begin())};
+        }
+        auto pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(device, pipeline);
+        if (!pipeline_details.has_value()) throw std::exception("Shader data not found");
+        auto shader_data = pipeline_details->GetShaderData(shader_details.shader_hash);
+        if (!shader_data.has_value()) throw std::exception("Invalid shader selection");
+        shader_details.shader_data = shader_data.value();
+      }
+      if (renodx::utils::device::IsDirectX(device)) {
+        auto decompiler = renodx::utils::shader::decompiler::dxc::Decompiler();
+        auto disassembly_string = renodx::utils::shader::compiler::directx::DisassembleShader(shader_details.shader_data);
+        shader_details.decompilation = decompiler.Decompile(disassembly_string);
+      }
+    } catch (std::exception& e) {
+      shader_details.decompilation = e;
+    }
+  }
+
+  if (std::holds_alternative<std::exception>(shader_details.decompilation)) {
+    decompilation_string.assign(std::get<std::exception>(shader_details.decompilation).what());
+    failed = true;
+  } else {
+    decompilation_string.assign(std::get<std::string>(shader_details.decompilation));
+  }
+
+  if (failed) {
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(192, 0, 0, 255));
+  }
+  ImGui::InputTextMultiline(
+      "##decompilationCode",
+      const_cast<char*>(decompilation_string.c_str()),
+      decompilation_string.length(),
+      ImVec2(-4, -4),
+      ImGuiInputTextFlags_ReadOnly);
   if (failed) {
     ImGui::PopStyleColor();
   }
@@ -1595,6 +1684,8 @@ void RenderShaderView(reshade::api::device* device, DeviceData& data, SettingSel
         case 1:
           RenderShaderViewLive(device, data, shader_details);
           break;
+        case 2:
+          RenderShaderViewDecompilation(device, data, shader_details);
         default:
           break;
       }
@@ -1683,6 +1774,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         if (selection->get().shader_hash != 0u) {
           ImGui::RadioButton("Disassembly", &selection->get().shader_view, 0);
           ImGui::RadioButton("Live Shader", &selection->get().shader_view, 1);
+          ImGui::RadioButton("Decompilation", &selection->get().shader_view, 2);
         }
       }
 
