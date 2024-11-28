@@ -59,14 +59,12 @@ static const float3x3 ICTCP_LMS_TO_XYZ_MAT = float3x3(
 static const float3x3 BT709_TO_ICTCP_LMS_MAT = float3x3(
     0.295764088f, 0.623072445f, 0.0811667516f,
     0.156191974f, 0.727251648f, 0.116557933f,
-    0.0351022854f, 0.156589955f, 0.808302998f
-);
+    0.0351022854f, 0.156589955f, 0.808302998f);
 
 static const float3x3 ICTCP_LMS_TO_BT709_MAT = float3x3(
     6.17353248f, -5.32089900f, 0.147354885f,
     -1.32403194f, 2.56026983f, -0.236238613f,
-    -0.0115983877f, -0.264921456f, 1.27652633f
-);
+    -0.0115983877f, -0.264921456f, 1.27652633f);
 
 static const float3x3 DISPLAYP3_TO_XYZ_MAT = float3x3(
     0.4865709486f, 0.2656676932f, 0.1982172852f,
@@ -282,7 +280,7 @@ namespace from {
 float3 BT709(float3 bt709_color) {
   float3 lms_color = mul(BT709_TO_ICTCP_LMS_MAT, bt709_color);
 
-  //L'M'S' -> ICtCp
+  // L'M'S' -> ICtCp
   float3x3 lms_to_ictcp = {
     0.5f, 0.5f, 0.f,
     1.61370003f, -3.32339620f, 1.70969617f,
@@ -327,9 +325,12 @@ float4 Encode(float4 color) {
                : (1.055f * renodx::math::PowSafe(c, 1.f / 2.4f) - 0.055f); \
   }
 #else
-#define ENCODE_SAFE(T)                                                                                  \
-  T EncodeSafe(T c) {                                                                                   \
-    return select(c <= 0.0031308f, c * 12.92f, 1.055f * renodx::math::PowSafe(c, 1.f / 2.4f) - 0.055f); \
+#define ENCODE_SAFE(T)                                           \
+  T EncodeSafe(T c) {                                            \
+    return select(                                               \
+        c <= 0.0031308f,                                         \
+        c * 12.92f,                                              \
+        1.055f * renodx::math::PowSafe(c, 1.f / 2.4f) - 0.055f); \
   }
 #endif
 
@@ -491,8 +492,7 @@ struct EncodingParams {
   T Encode(T c, EncodingParams params, bool use_cut = true) { \
     if (!use_cut) {                                           \
       return ENCODE_COND_TRUE;                                \
-    }                                                         \
-    else {                                                    \
+    } else {                                                  \
       return ENCODE_CONDS                                     \
                  ? ENCODE_COND_TRUE                           \
                  : ENCODE_COND_FALSE;                         \
@@ -647,7 +647,12 @@ float3 OkLCh(float3 oklch) {
 //  * Any reuse of this code shall include the names of the author and of the project, as well as the source URL,
 //  * Any implementation of this colour space MUST call it "darktable Uniform Color Space" or
 //    "darktable UCS" in the end - user interface of the software.
-namespace dtucs_uvY {
+namespace dtucs {
+const static float L_WHITE_VALUE = 1.f;
+const static float L_WHITE_HAT = pow(L_WHITE_VALUE, 0.631651345306265f);
+const static float L_WHITE = (2.098883786377f * L_WHITE_HAT) / (L_WHITE_HAT + 1.12426773749357f);
+
+namespace uvY {
 namespace from {
 static const float3x3 xyToUVD = {
   -0.783941002840055f, 0.277512987809202f, 0.153836578598858f,
@@ -674,13 +679,34 @@ float3 BT709(float3 bt709) {
   return float3(UVStarPrime, xyY[2]);
 }
 }  // namespace from
-}  // namespace dtucs_uvY
+}  // namespace uvY
+
+namespace jch {
+namespace from {
+float3 BT709(float3 bt709, float cz = 1.f) {
+  float3 uvY = uvY::from::BT709(bt709);
+
+  float L_star_hat = pow(uvY[2], 0.631651345306265f);
+  float L_star = 2.098883786377f * L_star_hat / (L_star_hat + 1.12426773749357f);
+
+  float M2 = dot(uvY.xy, uvY.xy);
+
+  float C = 15.932993652962535 * pow(L_star, 0.6523997524738018) * pow(M2, 0.6007557017508491) / L_WHITE;
+  float J = pow(L_star / L_WHITE, cz);
+  float H = atan2(uvY[1], uvY[0]);
+
+  return float3(J, C, H);
+}
+}  // from
+}  // jch
+}  // namespace dtucs
 
 namespace bt709 {
 namespace from {
+namespace dtucs {
 static const float2x2 UVStarPrimeToUVStar = {
   -5.037522385190711f, -2.504856328185843f,
-   4.760029407436461f, 2.874012963239247f
+  4.760029407436461f, 2.874012963239247f
 };
 
 static const float3x3 UVToxyD = {
@@ -689,7 +715,7 @@ static const float3x3 UVToxyD = {
   0.940254742367256f, 1.f, -0.0256325967652889f
 };
 
-float3 dtucs_uvY(float3 uvY) {
+float3 uvY(float3 uvY) {
   float2 UVStar = mul(UVStarPrimeToUVStar, uvY.xy);
 
   float2 UV = float2(-1.49217352929f, -1.52488637914f) * UVStar / (abs(UVStar) - float2(1.39656225667f, 1.4513954287f));
@@ -704,6 +730,22 @@ float3 dtucs_uvY(float3 uvY) {
 
   return bt709::from::xyY(xyY);
 }
+
+float3 JCH(float3 jch, float cz = 1.f) {
+  float J = jch[0];
+  float C = jch[1];
+  float H = jch[2];
+
+  float L_star = pow(J, (1 / cz)) * color::dtucs::L_WHITE;
+
+  float M = pow(C * color::dtucs::L_WHITE / (15.932993652962535 * pow(L_star, 0.6523997524738018)), 0.8322850678616855);
+
+  float Y = pow(-1.12426773749357f * L_star / (L_star - 2.098883786377), 1.5831518565279648f);
+
+  return uvY(float3(M * cos(H), M * sin(H), Y));
+}
+
+}  // dtucs
 }  // namespace from
 }  // namespace bt709
 
@@ -734,7 +776,7 @@ float3 OkLCh(float3 oklch) {
 }
 
 float3 ICtCp(float3 col) {
-  //ICtCp -> L'M'S'
+  // ICtCp -> L'M'S'
   float3x3 ictcp_to_lms = float3x3(
       1.f, 0.00860647484f, 0.111033529f,
       1.f, -0.00860647484f, -0.111033529f,

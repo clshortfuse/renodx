@@ -35,6 +35,7 @@ static const uint CUSTOM = 1u;
 namespace hue_correction_method {
 static const uint OKLAB = 0u;
 static const uint ICTCP = 1u;
+static const uint DARKTABLE_UCS = 2u;
 }
 
 namespace tone_map_method {
@@ -118,6 +119,8 @@ float3 BT709(float3 bt709, Config current_config) {
       perceptual_old = renodx::color::oklab::from::BT709(source);
     } else if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
       perceptual_old = renodx::color::ictcp::from::BT709(source);
+    } else if (current_config.hue_correction_method == config::hue_correction_method::DARKTABLE_UCS) {
+      perceptual_old = renodx::color::dtucs::uvY::from::BT709(source).zxy;
     }
   }
 
@@ -179,6 +182,8 @@ float3 BT709(float3 bt709, Config current_config) {
       perceptual_new = renodx::color::oklab::from::BT709(color_output);
     } else if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
       perceptual_new = renodx::color::ictcp::from::BT709(color_output);
+    } else if (current_config.hue_correction_method == config::hue_correction_method::DARKTABLE_UCS) {
+      perceptual_new = renodx::color::dtucs::uvY::from::BT709(color_output).zxy;
     }
 
     if (current_config.hue_correction_strength != 0.f) {
@@ -205,6 +210,8 @@ float3 BT709(float3 bt709, Config current_config) {
       color = renodx::color::bt709::from::OkLab(perceptual_new);
     } else if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
       color = renodx::color::bt709::from::ICtCp(perceptual_new);
+    } else if (current_config.hue_correction_method == config::hue_correction_method::DARKTABLE_UCS) {
+      color = renodx::color::bt709::from::dtucs::uvY(perceptual_new.yzx);
     }
 
     color = renodx::color::bt709::clamp::AP1(color);
