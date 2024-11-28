@@ -51,7 +51,7 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Vanilla", "Vanilla+"},
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeHighlightContrastMultiplier",
+        .key = "colorGradeHighlightContrast",
         .binding = &shader_injection.colorGradeHighlightContrast,
         .default_value = 50.f,
         .label = "Highlight Contrast",
@@ -116,7 +116,7 @@ renodx::utils::settings::Settings settings = {
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
-  renodx::utils::settings::UpdateSetting("colorGradeShadowToe", 50.f);
+  renodx::utils::settings::UpdateSetting("colorGradeShadowToe", 1.f);
   renodx::utils::settings::UpdateSetting("colorGradeHighlightContrast", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
