@@ -1391,11 +1391,9 @@ void frag_main()
     SV_Target.z = _2634;
     SV_Target.w = 0.0f;
 
-#if 1  // HDR Gamma boost
-
-    SV_Target.rgb = AdjustGammaOnLuminance(SV_Target.rgb, injectedData.colorGradeGammaAdjust);
-
-#endif
+    if (injectedData.toneMapType != 0) {
+        SV_Target.rgb = AdjustGammaOnLuminance(SV_Target.rgb, injectedData.colorGradeGammaAdjust);
+    }
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)

@@ -1,5 +1,5 @@
-#ifndef SRC_RE2REMAKE_SHARED_H_
-#define SRC_RE2REMAKE_SHARED_H_
+#ifndef SRC_RE4REMAKE_SHARED_H_
+#define SRC_RE4REMAKE_SHARED_H_
 
 #ifndef __cplusplus
 #include "../../shaders/renodx.hlsl"
@@ -23,4 +23,4 @@ cbuffer injectedBuffer : register(b0, space50) {
 }
 #endif
 
-#endif  // SRC_RE2REMAKE_SHARED_H_
+#endif  // SRC_RE4REMAKE_SHARED_H_
