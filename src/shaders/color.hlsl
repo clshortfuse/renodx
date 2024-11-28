@@ -699,6 +699,37 @@ float3 BT709(float3 bt709, float cz = 1.f) {
 }
 }  // from
 }  // jch
+
+namespace hcb {
+namespace from {
+float3 BT709(float3 bt709, float cz = 1.f) {
+  float3 jch = jch::from::BT709(bt709);
+  float J = jch[0];
+  float C = jch[1];
+  float H = jch[2];
+
+  float B = J * (pow(C, 1.33654221029386) + 1.f);
+
+  return float3(H, C, B);
+}
+}  // from
+}  // hcb
+
+namespace hsb {
+namespace from {
+float3 BT709(float3 bt709, float cz = 1.f) {
+  float3 hcb = hcb::from::BT709(bt709);
+  float H = hcb[0];
+  float C = hcb[1];
+  float B = hcb[2];
+
+  float S = C / B;
+
+  return float3(H, S, B);
+}
+}  // from
+}  // hsb
+
 }  // namespace dtucs
 
 namespace bt709 {
@@ -742,7 +773,27 @@ float3 JCH(float3 jch, float cz = 1.f) {
 
   float Y = pow(-1.12426773749357f * L_star / (L_star - 2.098883786377), 1.5831518565279648f);
 
-  return uvY(float3(M * cos(H), M * sin(H), Y));
+  return bt709::from::dtucs::uvY(float3(M * cos(H), M * sin(H), Y));
+}
+
+float3 HCB(float3 hcb, float cz = 1.f) {
+  float H = hcb[0];
+  float C = hcb[1];
+  float B = hcb[2];
+
+  float J = B / (pow(C, 1.33654221029386) + 1.f);
+
+  return bt709::from::dtucs::JCH(float3(J, C, H), cz);
+}
+
+float3 HSB(float3 hsb, float cz = 1.f) {
+  float H = hsb[0];
+  float S = hsb[1];
+  float B = hsb[2];
+
+  float C = S * B;
+
+  return bt709::from::dtucs::HCB(float3(H, C, B), cz);
 }
 
 }  // dtucs
