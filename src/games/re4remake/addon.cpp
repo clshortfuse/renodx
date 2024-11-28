@@ -14,9 +14,6 @@
 #include <embed/0x1F9104F3.h>  // Tonemap + Postfx
 #include <embed/0x973A39FC.h>  // Tonemap + Postfx - main
 
-// #include <embed/.h>  // Tonemap + Postfx - Vignette
-// #include <embed/.h>  // Tonemap + Postfx - Vignette + Lens Flare
-
 // #include <embed/0xF2F4D148.h>  // Hero Filter
 // #include <embed/0xEDBB2630.h>  // Villain Filter
 
@@ -31,12 +28,12 @@ namespace {
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x973A39FC),  // Tonemap + Postfx - main
     CustomShaderEntry(0x1F9104F3),  // Tonemap + Postfx
-    // CustomShaderEntry(),  // Tonemap + Postfx - Vignette
-    // CustomShaderEntry(),  // Tonemap + Postfx - Vignette + Lens Flare
     CustomShaderEntry(0x6737588D),  // BT.2020 + PQ Encoding
 };
 
 ShaderInjectData shader_injection;
+const std::string build_date = __DATE__;
+const std::string build_time = __TIME__;
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -70,6 +67,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapper Parameters",
         .tooltip = "Sets the style of Toe Adjustment, multiplier multiplies the value set by the game by the slider, while fixed overrides it to the value set by the slider",
         .labels = {"Multiplier", "Fixed"},
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeShadowToe",
@@ -111,11 +109,38 @@ renodx::utils::settings::Settings settings = {
         .max = 1.25f,
         .format = "%.2f",
         .is_enabled = []() { return shader_injection.toneMapType != 0; },
-    },    
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Den Discord",
+        .section = "About",
+        .group = "button-line-1",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          static const std::string obfuscated_link = std::string("start https://discord.gg/5WZX") + std::string("DpmbpP");
+          system(obfuscated_link.c_str());
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Get more RenoDX mods!",
+        .section = "About",
+        .group = "button-line-1",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          system("start https://github.com/clshortfuse/renodx/wiki/Mods");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "This build was compiled on " + build_date + " at " + build_time + ".",
+        .section = "About",
+    },
 };
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
+  renodx::utils::settings::UpdateSetting("colorGradeToeAdjustmentType", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeShadowToe", 1.f);
   renodx::utils::settings::UpdateSetting("colorGradeHighlightContrast", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
