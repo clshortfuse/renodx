@@ -120,7 +120,7 @@ float3 BT709(float3 bt709, Config current_config) {
     } else if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
       perceptual_old = renodx::color::ictcp::from::BT709(source);
     } else if (current_config.hue_correction_method == config::hue_correction_method::DARKTABLE_UCS) {
-      perceptual_old = renodx::color::dtucs_uvY::from::BT709(source).zxy;
+      perceptual_old = renodx::color::dtucs::uvY::from::BT709(source).zxy;
     }
   }
 
@@ -183,7 +183,7 @@ float3 BT709(float3 bt709, Config current_config) {
     } else if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
       perceptual_new = renodx::color::ictcp::from::BT709(color_output);
     } else if (current_config.hue_correction_method == config::hue_correction_method::DARKTABLE_UCS) {
-      perceptual_new = renodx::color::dtucs_uvY::from::BT709(color_output).zxy;
+      perceptual_new = renodx::color::dtucs::uvY::from::BT709(color_output).zxy;
     }
 
     if (current_config.hue_correction_strength != 0.f) {
@@ -211,7 +211,7 @@ float3 BT709(float3 bt709, Config current_config) {
     } else if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
       color = renodx::color::bt709::from::ICtCp(perceptual_new);
     } else if (current_config.hue_correction_method == config::hue_correction_method::DARKTABLE_UCS) {
-      color = renodx::color::bt709::from::dtucs_uvY(perceptual_new.yzx);
+      color = renodx::color::bt709::from::dtucs::uvY(perceptual_new.yzx);
     }
 
     color = renodx::color::bt709::clamp::AP1(color);
