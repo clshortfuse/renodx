@@ -1,21 +1,12 @@
 #include "./shared.h"
 
-// take OkLab hues and saturation from Gamma Correction
-float3 HueSatCorrection(float3 incorrect_color, float3 correct_color) {
-  float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
-  float3 correct_lab = renodx::color::oklab::from::BT709(correct_color);
-
-  float3 corrected_lab = float3(incorrect_lab.x, correct_lab.yz);
-  float3 corrected_color = renodx::color::bt709::from::OkLab(corrected_lab);
-
-  return corrected_color;
-}
-
-// Gamma adjustment on luminance
-// BT.2408: 5.1.3.2 - Mapping with OOTF adjustment
-// works well to preserve the appearance of shadows and midtones at 100 cd / m2
-// while scaling the SDR nominal peak white to 203 cd / m2
-// https://www.itu.int/dms_pub/itu-r/opb/rep/R-REP-BT.2408-7-2023-PDF-E.pdf- 5.1.3.2
+/// Adjusts gamma based on luminance using the guidelines from ITU BT.2408.
+/// At `gammaAdjustmentFactor` = 1.15, it works well to preserve the appearance of
+/// shadows and midtones at 100 cd/m2 while scaling the SDR nominal peak white to 203 cd/m2.
+/// See: https://www.itu.int/dms_pub/itu-r/opb/rep/R-REP-BT.2408-7-2023-PDF-E.pdf Section 5.1.3.2
+/// @param linearColor The color to adjust.
+/// @param gammaAdjustmentFactor Factor to adjust the gamma.
+/// @return The color with adjusted gamma.
 float3 AdjustGammaOnLuminance(float3 linearColor, float gammaAdjustmentFactor) {
   if (gammaAdjustmentFactor == 1.f) return linearColor;
   // Calculate the original luminance
@@ -29,6 +20,12 @@ float3 AdjustGammaOnLuminance(float3 linearColor, float gammaAdjustmentFactor) {
   return linearColor * (adjustedLuminance / originalLuminance);
 }
 
+/// Applies a modified `renodx::lut::Sample` that accounts for only black level correction,
+/// leaving peak white untouched as LUTs are already HDR, ensuring no highlight impact.
+/// @param color_input Input color to apply the LUT to.
+/// @param lut_texture The LUT texture.
+/// @param lut_config Configuration for LUT sampling.
+/// @return Color output after applying LUT correction.
 float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut::Config lut_config) {
   float3 lutInputColor = renodx::lut::ConvertInput(color_input, lut_config);
   float3 lutOutputColor = renodx::lut::SampleColor(lutInputColor, lut_config, lut_texture);
