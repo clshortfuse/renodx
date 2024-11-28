@@ -17,6 +17,7 @@ float3 HueSatCorrection(float3 incorrect_color, float3 correct_color) {
 // while scaling the SDR nominal peak white to 203 cd / m2
 // https://www.itu.int/dms_pub/itu-r/opb/rep/R-REP-BT.2408-7-2023-PDF-E.pdf- 5.1.3.2
 float3 AdjustGammaOnLuminance(float3 linearColor, float gammaAdjustmentFactor) {
+  if (gammaAdjustmentFactor == 1.f) return linearColor;
   // Calculate the original luminance
   float originalLuminance = renodx::color::y::from::BT709(abs(linearColor));
 
