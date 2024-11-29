@@ -58,13 +58,14 @@ float3 CenterTexel(float3 color, float size) {
       size = height;                                                                 \
     }                                                                                \
                                                                                      \
-    float3 position = CenterTexel(color, size);                                      \
+    float3 position = CenterTexel(saturate(color), size);                            \
                                                                                      \
     return lut.SampleLevel(state, position, 0.0f).rgb;                               \
   }
 
 #define SAMPLE_TEXTURE_2D_PRECOMPUTED_FUNCTION_GENERATOR(TextureType)                   \
   float3 Sample(TextureType lut, SamplerState state, float3 color, float3 precompute) { \
+    color = saturate(color);                                                            \
     float texel_size = precompute.x;                                                    \
     float slice = precompute.y;                                                         \
     float max_index = precompute.z;                                                     \
