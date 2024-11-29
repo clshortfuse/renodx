@@ -24,7 +24,6 @@
 #include <include/reshade.hpp>
 
 #include "../utils/descriptor.hpp"
-#include "../utils/draw.hpp"
 #include "../utils/format.hpp"
 #include "../utils/hash.hpp"
 #include "../utils/resource.hpp"
@@ -1165,67 +1164,6 @@ static bool OnCopyResource(
     reshade::api::command_list* cmd_list,
     reshade::api::resource source,
     reshade::api::resource dest) {
-  auto* device = cmd_list->get_device();
-  if (device == nullptr) return false;
-  auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
-
-  auto source_pair = data.upgraded_resource_formats.find(source.handle);
-  const bool source_upgraded = source_pair != data.upgraded_resource_formats.end();
-
-  auto destination_pair = data.upgraded_resource_formats.find(dest.handle);
-  const bool dest_upgraded = destination_pair != data.upgraded_resource_formats.end();
-
-  const auto source_clone = GetResourceClone(device, &data, source);
-  const auto dest_clone = GetResourceClone(device, &data, dest);
-
-  if (!source_upgraded && !dest_upgraded
-      && (source_clone.handle == 0u) && (dest_clone.handle == 0u)) return false;
-
-  auto source_new = source;
-  auto source_format = reshade::api::format::unknown;
-  auto dest_new = dest;
-  auto dest_format = reshade::api::format::unknown;
-
-  if (source_clone.handle != 0) {
-    source_new = source_clone;
-    source_format = data.resource_clone_targets[source.handle]->new_format;
-
-  } else if (source_upgraded) {
-    source_format = source_pair->second;
-  }
-
-  if (dest_new.handle != 0) {
-    dest_new = dest_clone;
-    dest_format = data.resource_clone_targets[dest.handle]->new_format;
-  } else if (dest_upgraded) {
-    dest_format = destination_pair->second;
-  }
-
-  if (source_format == reshade::api::format::unknown) {
-    source_format = device->get_resource_desc(source).texture.format;
-  };
-
-  if (dest_format == reshade::api::format::unknown) {
-    dest_format = device->get_resource_desc(dest).texture.format;
-  };
-
-  if (source_format == dest_format) {
-    if ((source.handle == source_new.handle) && (dest.handle == dest_new.handle)) return false;
-    cmd_list->copy_resource(source_new, dest_new);
-    return true;
-  }
-
-  std::stringstream s;
-  s << "OnCopyResource";
-  s << "(mismatched: " << reinterpret_cast<void*>(source.handle);
-  s << " (" << source_format << ")";
-  s << " => " << reinterpret_cast<void*>(dest.handle);
-  s << " (" << dest_format << ")";
-  s << ")";
-  reshade::log::message(reshade::log::level::warning, s.str().c_str());
-  return true;
-
   if (renodx::utils::swapchain::IsBackBuffer(cmd_list, source)) return true;
   if (renodx::utils::swapchain::IsBackBuffer(cmd_list, dest)) return true;
   return false;
@@ -2121,7 +2059,6 @@ static void Use(DWORD fdw_reason) {
   if (use_resource_cloning) {
     renodx::utils::descriptor::Use(fdw_reason);
   }
-  renodx::utils::draw::Use(fdw_reason);
 
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
