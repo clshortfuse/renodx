@@ -1,5 +1,6 @@
 // ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:14 2024
 #include "./shared.h"
+#include "./tonemapper.hlsl"
 
 Texture3D<float4> t4 : register(t4);
 
@@ -34,13 +35,13 @@ cbuffer cb0 : register(b0) {
 #define cmp -
 
 void main(
-    linear noperspective float2 v0 : TEXCOORD0,
-                                     linear noperspective float2 w0 : TEXCOORD3,
-                                                                      linear noperspective float4 v1 : TEXCOORD1,
-                                                                                                       linear noperspective float4 v2 : TEXCOORD2,
-                                                                                                                                        float2 v3 : TEXCOORD4,
-                                                                                                                                                    float4 v4 : SV_POSITION0,
-                                                                                                                                                                out float4 o0 : SV_Target0) {
+    linear noperspective float2 v0: TEXCOORD0,
+    linear noperspective float2 w0: TEXCOORD3,
+    linear noperspective float4 v1: TEXCOORD1,
+    linear noperspective float4 v2: TEXCOORD2,
+    float2 v3: TEXCOORD4,
+    float4 v4: SV_POSITION0,
+    out float4 o0: SV_Target0) {
   float4 r0, r1, r2, r3;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -72,9 +73,8 @@ void main(
   r0.w = rcp(r0.w);
   r0.w = r0.w * r0.w;
   untonemapped = r0.xyz;
-
   if (injectedData.toneMapType != 0.f) {
-    float3 lut_input = renodx::color::pq::Encode(untonemapped, 100.f);
+    float3 lut_input = renodx::color::pq::Encode(untonemapped, DEFAULT_PQ_DECODE);  // Replicating below code
     post_lut = renodx::lut::Sample(t4, s3_s, lut_input, 32.f);
   } else {
     r0.xyz = r0.xyz * r0.www;
@@ -92,7 +92,7 @@ void main(
     r0.xyz = r0.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
     r0.xyz = t4.Sample(s3_s, r0.xyz).xyz;
   }
-  
+
   r0.w = v2.w * 543.309998 + v2.z;
   r0.w = sin(r0.w);
   r0.w = 493013 * r0.w;
@@ -124,10 +124,10 @@ void main(
     r0.xyz = min(r2.xyz, r1.xyz);
   }
   if (injectedData.toneMapType != 0.f) {
-    o0.xyz = post_lut;
-  } else {
-    o0.xyz = r0.xyz;
+    r0.xyz = post_lut;
   }
+  o0.xyz = r0.xyz;
+
   o0.w = 0;
   return;
 }

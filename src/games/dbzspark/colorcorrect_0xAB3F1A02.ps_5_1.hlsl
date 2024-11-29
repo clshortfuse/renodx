@@ -52,7 +52,6 @@ void main(
   post_srgb = o0.rgb;
 
   o0.rgb = upgradeSRGBtoPQ(tonemappedPQ, post_srgb);
-  // o0.rgb = tonemappedPQ;
   o0.w = 0;
   return;
 }
