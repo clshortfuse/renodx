@@ -256,9 +256,9 @@ Config Create(
   return tm_config;
 }
 
-float3 ApplyRenoDRT(float3 color, Config tm_config, bool sdr = false) {
-  float reno_drt_max = sdr ? 1.f : (tm_config.peak_nits / tm_config.game_nits);
-  if (!sdr && tm_config.gamma_correction != 0) {
+float3 ApplyRenoDRT(float3 color, Config tm_config) {
+  float reno_drt_max = (tm_config.peak_nits / tm_config.game_nits);
+  if (tm_config.gamma_correction != 0) {
     reno_drt_max = renodx::color::correct::Gamma(reno_drt_max, tm_config.gamma_correction == 1.f);
   }
 
@@ -288,15 +288,15 @@ float3 ApplyRenoDRT(float3 color, Config tm_config, bool sdr = false) {
   return renodrt::BT709(color, reno_drt_config);
 }
 
-float3 ApplyACES(float3 color, Config tm_config, bool sdr = false) {
+float3 ApplyACES(float3 color, Config tm_config) {
   static const float ACES_MID_GRAY = 0.10f;
+  static const float ACES_MIN = 0.0001f;
   const float mid_gray_scale = (tm_config.mid_gray_value / ACES_MID_GRAY);
-  const float reference_white = (sdr ? 1.f : tm_config.game_nits);
 
-  float aces_min = (0.0001f) / reference_white;
-  float aces_max = (sdr ? 1.f : tm_config.peak_nits) / reference_white;
+  float aces_min = ACES_MIN / tm_config.game_nits;
+  float aces_max = (tm_config.peak_nits / tm_config.game_nits);
 
-  if (!sdr && tm_config.gamma_correction != 0.f) {
+  if (tm_config.gamma_correction != 0.f) {
     aces_max = renodx::color::correct::Gamma(aces_max, tm_config.gamma_correction == 1.f);
     aces_min = renodx::color::correct::Gamma(aces_min, tm_config.gamma_correction == 1.f);
   }
@@ -318,12 +318,7 @@ float3 Apply(float3 untonemapped, Config tm_config) {
     tm_config.reno_drt_shadows *= tm_config.shadows;
     tm_config.reno_drt_contrast *= tm_config.contrast;
     tm_config.reno_drt_saturation *= tm_config.saturation;
-    // tm_config.reno_drt_dechroma *= tm_config.dechroma;
     color = ApplyRenoDRT(color, tm_config);
-    tm_config.reno_drt_highlights /= tm_config.highlights;
-    tm_config.reno_drt_shadows /= tm_config.shadows;
-    tm_config.reno_drt_contrast /= tm_config.contrast;
-    tm_config.reno_drt_saturation /= tm_config.saturation;
   } else {
     color = renodx::color::grade::UserColorGrading(
         color,
@@ -344,44 +339,24 @@ struct DualToneMap {
   float3 color_sdr;
 };
 
-DualToneMap ApplyToneMaps(float3 color_input, Config tm_config) {
+DualToneMap ApplyToneMaps(float3 color_input, Config hdr_config, Config sdr_config) {
   DualToneMap dual_tone_map;
-  float3 color_hdr;
-  float3 color_sdr;
-  if (tm_config.type == config::type::RENODRT) {
-    tm_config.reno_drt_saturation *= tm_config.saturation;
-
-    color_sdr = ApplyRenoDRT(color_input, tm_config, true);
-
-    tm_config.reno_drt_highlights *= tm_config.highlights;
-    tm_config.reno_drt_shadows *= tm_config.shadows;
-    tm_config.reno_drt_contrast *= tm_config.contrast;
-    float previous_hue_correction_type = tm_config.hue_correction_type;
-    tm_config.hue_correction_type = config::hue_correction_type::INPUT;
-
-    color_hdr = ApplyRenoDRT(color_input, tm_config);
-
-    tm_config.hue_correction_type = previous_hue_correction_type;
-    tm_config.reno_drt_saturation /= tm_config.saturation;
-    tm_config.reno_drt_highlights /= tm_config.highlights;
-    tm_config.reno_drt_shadows /= tm_config.shadows;
-    tm_config.reno_drt_contrast /= tm_config.contrast;
-
-  } else {
-    color_input = renodx::color::grade::UserColorGrading(
-        color_input, tm_config.exposure, tm_config.highlights, tm_config.shadows, tm_config.contrast, tm_config.saturation);
-
-    if (tm_config.type == config::type::ACES) {
-      color_hdr = ApplyACES(color_input, tm_config);
-      color_sdr = ApplyACES(color_input, tm_config, true);
-    } else {
-      color_hdr = color_input;
-      color_sdr = color_input;
-    }
-  }
-  dual_tone_map.color_hdr = color_hdr;
-  dual_tone_map.color_sdr = color_sdr;
+  dual_tone_map.color_hdr = Apply(color_input, hdr_config);
+  dual_tone_map.color_sdr = Apply(color_input, sdr_config);
   return dual_tone_map;
+}
+
+DualToneMap ApplyToneMaps(float3 color_input, Config tm_config) {
+  Config sdr_config = tm_config;
+  sdr_config.reno_drt_highlights /= tm_config.highlights;
+  sdr_config.reno_drt_shadows /= tm_config.shadows;
+  sdr_config.reno_drt_contrast /= tm_config.contrast;
+  sdr_config.gamma_correction = 0;
+  sdr_config.peak_nits = 100.f;
+  sdr_config.game_nits = 100.f;
+
+  tm_config.hue_correction_type = config::hue_correction_type::INPUT;
+  return ApplyToneMaps(color_input, tm_config, sdr_config);
 }
 
 #define TONE_MAP_FUNCTION_GENERATOR(textureType)                                                                \

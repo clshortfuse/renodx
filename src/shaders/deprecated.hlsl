@@ -3,6 +3,7 @@
 
 #include "./color.hlsl"
 #include "./math.hlsl"
+#include "./tonemap.hlsl"
 
 namespace renodx {
 namespace color {
@@ -76,6 +77,30 @@ float SafePow(float color, float exponent) {
 }
 
 }  // namespace math
+
+namespace tonemap {
+namespace config {
+
+float3 ApplyRenoDRT(float3 color, Config tm_config, bool is_sdr) {
+  if (is_sdr) {
+    tm_config.gamma_correction = 0;
+    tm_config.peak_nits = 100.f;
+    tm_config.game_nits = 100.f;
+  }
+  return ApplyRenoDRT(color, tm_config);
+}
+
+float3 ApplyACES(float3 color, Config tm_config, bool is_sdr) {
+  if (is_sdr) {
+    tm_config.gamma_correction = 0;
+    tm_config.peak_nits = 100.f;
+    tm_config.game_nits = 100.f;
+  }
+  return ApplyACES(color, tm_config);
+}
+
+}  // namespace config
+}  // namespace tonemap
 }  // namespace renodx
 
 #endif  // SRC_SHADERS_DEPRECATED_HLSL_
