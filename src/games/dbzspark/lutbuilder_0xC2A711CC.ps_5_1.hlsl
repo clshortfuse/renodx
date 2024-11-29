@@ -18,10 +18,10 @@ cbuffer cb0 : register(b0) {
 #define cmp -
 
 void main(
-    linear noperspective float2 v0 : TEXCOORD0,
-                                     float4 v1 : SV_POSITION0,
-                                                 uint v2 : SV_RenderTargetArrayIndex0,
-                                                           out float4 o0 : SV_Target0) {
+    linear noperspective float2 v0: TEXCOORD0,
+    float4 v1: SV_POSITION0,
+    uint v2: SV_RenderTargetArrayIndex0,
+    out float4 o0: SV_Target0) {
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -43,7 +43,20 @@ void main(
   r3.xyz = r2.xxx ? float3(1.37915885, -0.308850735, -0.0703467429) : r3.xyz;
   r4.xyz = r2.xxx ? float3(-0.0693352968, 1.08229232, -0.0129620517) : r4.xyz;
   r2.xyz = r2.xxx ? float3(-0.00215925858, -0.0454653986, 1.04775953) : r2.yzw;
+
+  // CustomEdit
+  uint output_type = OUTPUT_OVERRIDE;
+  bool is_hdr = (output_type >= 3u && output_type <= 6u);
+  bool shouldTonemap = injectedData.toneMapType != 0.f && is_hdr;
+
+  // Vanilla outputType is always 0, might be devkit
   r0.z = cmp(asuint(cb0[40].w) >= 3);
+
+  if (shouldTonemap) {
+    r0.z = cmp(output_type >= 3);
+  }
+
+  // PQ Decode
   r5.xy = log2(r0.xy);
   r5.z = log2(r1.z);
   r0.xyw = float3(0.0126833133, 0.0126833133, 0.0126833133) * r5.xyz;
@@ -168,33 +181,17 @@ void main(
   r0.xyz = r1.xyz * r1.www + r0.xyz;
   r0.xyz = r5.xyz * r4.www + r0.xyz;
 
-  // End of Color Correct
-  float3 ap1_graded_color = r0.rgb;
-  float3 ap1_aces_colored = ap1_graded_color;
-
-  // uint output_type = cb0[40].w;
-
-  float3 sdr_color;
-  float3 hdr_color;
-  float3 sdr_ap1_color;
-
-  float FilmBlackClip = cb0[37].w;
-  float FilmToe = cb0[37].y;
-  float FilmWhiteClip = cb0[38].x;
-  float FilmShoulder = cb0[37].z;
-
-  // Blue correct    -- r0 is still ap1, r1 is sRGB
+  // Blue correct
   r1.x = dot(float3(0.938639402, 1.02359565e-10, 0.0613606237), r0.xyz);
   r1.y = dot(float3(8.36008554e-11, 0.830794156, 0.169205874), r0.xyz);
   r1.z = dot(float3(2.13187367e-12, -5.63307213e-12, 1), r0.xyz);
   r1.xyz = r1.xyz + -r0.xyz;
   r1.xyz = cb0[36].yyy * r1.xyz + r0.xyz;
 
-  ap1_graded_color = r1.xyz;
+  float3 ap1_graded_color = r1.rgb;  // CustomEdit
 
   // start of film tonemap
   // AP1 => AP0
-
   r5.y = dot(float3(0.695452213, 0.140678704, 0.163869068), r1.xyz);
   r5.z = dot(float3(0.0447945632, 0.859671116, 0.0955343172), r1.xyz);
   r5.w = dot(float3(-0.00552588236, 0.00402521016, 1.00150073), r1.xyz);
@@ -296,12 +293,14 @@ void main(
   r5.xyz = r5.xyz + -r0.www;
   r5.xyz = r5.xyz * float3(0.959999979, 0.959999979, 0.959999979) + r0.www;  // End of ACES:RRT
 
-  ap1_aces_colored = r5.xyz;
+  float3 ap1_aces_colored = r5.rgb;  // CustomEdit
 
-  // If statement with first dual tonemap would go here
-
-  if (injectedData.toneMapType != 0.f) {
+  float3 sdr_color;
+  float3 hdr_color;
+  float3 sdr_ap1_color;
+  if (shouldTonemap) {
     renodx::tonemap::Config config = getCommonConfig();
+    config.hue_correction_color = ap1_aces_colored;
 
     float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
 
@@ -375,9 +374,8 @@ void main(
     r5.xyz = r5.xyz * float3(0.930000007, 0.930000007, 0.930000007) + r0.www;
     r5.xyz = max(float3(0, 0, 0), r5.xyz);
     sdr_ap1_color = r5.xyz;
-  }  // The } from the dualtonemap if statement would go here
-
-  r5.xyz = sdr_ap1_color;
+  }
+  r5.rgb = sdr_ap1_color;  // CustomEdit
 
   r5.xyz = r5.xyz + -r1.xyz;
   r1.xyz = cb0[36].www * r5.xyz + r1.xyz;
@@ -388,37 +386,65 @@ void main(
   r5.z = dot(float3(1.9865448e-08, 2.12079581e-08, 0.999999583), r1.xyz);
   r5.xyz = r5.xyz + -r1.xyz;
   r1.xyz = cb0[36].yyy * r5.xyz + r1.xyz;
-  r5.x = saturate(dot(cb1[12].xyz, r1.xyz));
+
+  // Convert to target space but lacks clamp
+  /* r5.x = saturate(dot(cb1[12].xyz, r1.xyz));
   r5.y = saturate(dot(cb1[13].xyz, r1.xyz));
-  r5.z = saturate(dot(cb1[14].xyz, r1.xyz));
-  r1.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r5.xyz;
-  r6.xyz = cmp(r5.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
-  r5.xyz = log2(r5.xyz);
-  r5.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r5.xyz;
-  r5.xyz = exp2(r5.xyz);
-  r5.xyz = r5.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
-  r1.xyz = r6.xyz ? r5.xyz : r1.xyz;
-  r5.yzw = r1.xyz * float3(0.9375, 0.9375, 0.9375) + float3(0.03125, 0.03125, 0.03125);
-  r0.w = r5.w * 16 + -0.5;
-  r1.w = floor(r0.w);
-  r0.w = -r1.w + r0.w;
-  r1.w = r5.y + r1.w;
-  r5.x = 0.0625 * r1.w;
-  r6.xyz = t0.Sample(s0_s, r5.xz).xyz;
-  r5.xy = float2(0.0625, 0) + r5.xz;
-  r5.xyz = t0.Sample(s0_s, r5.xy).xyz;
-  r5.xyz = r5.xyz + -r6.xyz;
-  r5.xyz = r0.www * r5.xyz + r6.xyz;
-  r5.xyz = cb0[5].yyy * r5.xyz;
-  r1.xyz = cb0[5].xxx * r1.xyz + r5.xyz;
-  r1.xyz = max(float3(6.10351999e-05, 6.10351999e-05, 6.10351999e-05), r1.xyz);
-  r5.xyz = cmp(float3(0.0404499993, 0.0404499993, 0.0404499993) < r1.xyz);
-  r6.xyz = r1.xyz * float3(0.947867274, 0.947867274, 0.947867274) + float3(0.0521326996, 0.0521326996, 0.0521326996);
-  r6.xyz = log2(r6.xyz);
-  r6.xyz = float3(2.4000001, 2.4000001, 2.4000001) * r6.xyz;
-  r6.xyz = exp2(r6.xyz);
-  r1.xyz = float3(0.0773993805, 0.0773993805, 0.0773993805) * r1.xyz;
-  r1.xyz = r5.xyz ? r6.xyz : r1.xyz;
+  r5.z = saturate(dot(cb1[14].xyz, r1.xyz)); */
+  r5.x = dot(cb1[12].xyz, r1.xyz);  // CustomEdit
+  r5.y = dot(cb1[13].xyz, r1.xyz);
+  r5.z = dot(cb1[14].xyz, r1.xyz);
+  r5.rgb = max(0, r5.rgb);
+
+  float3 lut_input_color = r5.rgb;
+  float3 post_lut_color;
+
+  // Vanilla sampler looks better
+  if (false) {
+    renodx::lut::Config lut_config = renodx::lut::config::Create(
+        s0_s,
+        1.f,
+        0.f,  // Hue shifts too much if enabled
+        renodx::lut::config::type::SRGB,
+        renodx::lut::config::type::SRGB,
+        16.f);
+
+    post_lut_color = renodx::lut::Sample(t0, lut_config, lut_input_color);
+  } else {
+    r5.rgb = saturate(r5.rgb);  // Better picture
+    r1.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r5.xyz;
+    r6.xyz = cmp(r5.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
+    r5.xyz = log2(r5.xyz);
+    r5.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r5.xyz;
+    r5.xyz = exp2(r5.xyz);
+    r5.xyz = r5.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
+    r1.xyz = r6.xyz ? r5.xyz : r1.xyz;
+    r5.yzw = r1.xyz * float3(0.9375, 0.9375, 0.9375) + float3(0.03125, 0.03125, 0.03125);
+    r0.w = r5.w * 16 + -0.5;
+    r1.w = floor(r0.w);
+    r0.w = -r1.w + r0.w;
+    r1.w = r5.y + r1.w;
+    r5.x = 0.0625 * r1.w;
+    r6.xyz = t0.Sample(s0_s, r5.xz).xyz;
+    r5.xy = float2(0.0625, 0) + r5.xz;
+    r5.xyz = t0.Sample(s0_s, r5.xy).xyz;
+    r5.xyz = r5.xyz + -r6.xyz;
+    r5.xyz = r0.www * r5.xyz + r6.xyz;
+    r5.xyz = cb0[5].yyy * r5.xyz;
+    r1.xyz = cb0[5].xxx * r1.xyz + r5.xyz;
+    r1.xyz = max(float3(6.10351999e-05, 6.10351999e-05, 6.10351999e-05), r1.xyz);
+    r5.xyz = cmp(float3(0.0404499993, 0.0404499993, 0.0404499993) < r1.xyz);
+    r6.xyz = r1.xyz * float3(0.947867274, 0.947867274, 0.947867274) + float3(0.0521326996, 0.0521326996, 0.0521326996);
+    r6.xyz = log2(r6.xyz);
+    r6.xyz = float3(2.4000001, 2.4000001, 2.4000001) * r6.xyz;
+    r6.xyz = exp2(r6.xyz);
+    r1.xyz = float3(0.0773993805, 0.0773993805, 0.0773993805) * r1.xyz;
+    r1.xyz = r5.xyz ? r6.xyz : r1.xyz;
+    post_lut_color = r1.rgb;
+  }  // CustomEdit
+  r1.rgb = post_lut_color;
+  r1.rgb = renodx::tonemap::UpgradeToneMap(lut_input_color, saturate(lut_input_color), r1.rgb, 1.f);
+
   r5.xyz = r1.xyz * r1.xyz;
   r1.xyz = cb0[39].yyy * r1.xyz;
   r1.xyz = cb0[39].xxx * r5.xyz + r1.xyz;
@@ -428,13 +454,21 @@ void main(
   r1.xyz = cb0[13].www * r1.xyz + r5.xyz;
   r5.xyz = max(float3(0, 0, 0), r1.xyz);
   r5.xyz = log2(r5.xyz);
-  r5.xyz = cb0[40].yyy * r5.xyz;
+  // CustomEdit
+  // We're color correcting with the SDR render so we make sure user hasn't adjusted SDR settings
+  float gamma = cb0[40].y;
+  if (shouldTonemap) {
+    gamma = DEFAULT_GAMMA;
+  }
+  r5.xyz = gamma * r5.xyz;
+  // r5.xyz = cb0[40].yyy * r5.xyz;
   r5.xyz = exp2(r5.xyz);
 
   float3 film_graded_color = r5.rgb;
 
+  // CustomEdit
   // Add upgrade tonemap here
-  if (injectedData.toneMapType != 0.f) {
+  if (shouldTonemap) {
     float3 final_color = saturate(film_graded_color);
 
     if (injectedData.toneMapType != 1.f) {
@@ -443,12 +477,10 @@ void main(
       final_color = hdr_color;
     }
 
-    final_color = renodx::color::bt2020::from::BT709(final_color);
-    float encodeRate = injectedData.toneMapType > 1.f ? injectedData.toneMapGameNits : 100.f;
-    final_color = renodx::color::pq::Encode(final_color, encodeRate);
-
+    // We PQ encode at the end
     o0.rgba = float4(final_color, 0);
-    return;
+  } else {
+    o0.rgba = float4(film_graded_color, 0);
   }
 
   if (cb0[40].w == 0) {  // cb[40].w = output device
@@ -1420,7 +1452,12 @@ void main(
     }
   }
 
-  o0.xyz = float3(0.952381015, 0.952381015, 0.952381015) * r6.xyz;
+  // CustomEdit
+  float3 output = o0.rgb;
+  output = renodx::color::bt2020::from::BT709(output);
+  output = renodx::color::pq::Encode(output, injectedData.toneMapGameNits);
+  o0.rgb = output;
   o0.w = 0;
+
   return;
 }
