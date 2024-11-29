@@ -69,7 +69,7 @@ function(build_shader_target ADDON ADDON_PATH)
       list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
       add_custom_command(
         OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.cso
-        COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}.cso
+        COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}.cso
         DEPENDS ${HLSL_DEPENDENCIES}
       )
       add_custom_command(
