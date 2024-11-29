@@ -294,6 +294,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_float,
+          .index = 0,
+          .aspect_ratio = 16.f / 9.f,
+      });
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r11g11b10_float,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .dimensions = {.width = 640, .height = 360},
       });
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       break;
