@@ -9,7 +9,7 @@ include(CTest)
 enable_testing()
 
 # Use executable to convert resources to .h files for embedding
-add_executable(embedfile embedfile.c)
+add_executable(embedfile embedfile.cpp)
 add_executable(decomp ./src/decompiler/cli.cpp)
 
 if(NOT CMAKE_WINDOWS_KITS_10_DIR)
@@ -74,7 +74,7 @@ function(build_shader_target ADDON ADDON_PATH)
       )
       add_custom_command(
         OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.h
-        COMMAND embedfile ${EMBED_FOLDER}/${SHADER_HASH}.cso ${EMBED_FOLDER}/${SHADER_HASH}
+        COMMAND embedfile ${EMBED_FOLDER}/${SHADER_HASH}.cso ${EMBED_FOLDER}/${SHADER_HASH}.h
         DEPENDS ${EMBED_FOLDER}/${SHADER_HASH}.cso
       )
 
