@@ -51,80 +51,28 @@ struct SwapChainUpgradeTarget {
 
   bool ignore_reset = false;
 
+#define SwapChainViewUpgrade(usage, source, destination) {{reshade::api::resource_usage::usage, reshade::api::format::source}, reshade::api::format::destination}
+#define SwapChainViewUpgradeAll(source, destination)               \
+  SwapChainViewUpgrade(shader_resource, source, destination),      \
+      SwapChainViewUpgrade(unordered_access, source, destination), \
+      SwapChainViewUpgrade(render_target, source, destination)
+
   const std::unordered_map<
       std::pair<reshade::api::resource_usage, reshade::api::format>,
       reshade::api::format, utils::hash::HashPair>
       VIEW_UPGRADES_RGBA16F = {
-          {{reshade::api::resource_usage::shader_resource, reshade::api::format::r16g16b16a16_typeless},
-           reshade::api::format::r16g16b16a16_typeless},
-          {{reshade::api::resource_usage::shader_resource, reshade::api::format::r8g8b8a8_typeless},
-           reshade::api::format::r16g16b16a16_typeless},
-          {{reshade::api::resource_usage::shader_resource, reshade::api::format::b8g8r8a8_typeless},
-           reshade::api::format::r16g16b16a16_typeless},
-          {{reshade::api::resource_usage::shader_resource, reshade::api::format::r10g10b10a2_typeless},
-           reshade::api::format::r16g16b16a16_typeless},
-          {{reshade::api::resource_usage::shader_resource, reshade::api::format::r16g16b16a16_float},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::shader_resource, reshade::api::format::r8g8b8a8_unorm},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::shader_resource, reshade::api::format::b8g8r8a8_unorm},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::shader_resource, reshade::api::format::r8g8b8a8_snorm},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::shader_resource, reshade::api::format::r8g8b8a8_unorm_srgb},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::shader_resource, reshade::api::format::b8g8r8a8_unorm_srgb},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::shader_resource, reshade::api::format::b10g10r10a2_unorm},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::shader_resource, reshade::api::format::r10g10b10a2_unorm},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::unordered_access, reshade::api::format::r16g16b16a16_typeless},
-           reshade::api::format::r16g16b16a16_typeless},
-          {{reshade::api::resource_usage::unordered_access, reshade::api::format::r8g8b8a8_typeless},
-           reshade::api::format::r16g16b16a16_typeless},
-          {{reshade::api::resource_usage::unordered_access, reshade::api::format::b8g8r8a8_typeless},
-           reshade::api::format::r16g16b16a16_typeless},
-          {{reshade::api::resource_usage::unordered_access, reshade::api::format::r10g10b10a2_typeless},
-           reshade::api::format::r16g16b16a16_typeless},
-          {{reshade::api::resource_usage::unordered_access, reshade::api::format::r8g8b8a8_unorm},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::unordered_access, reshade::api::format::b8g8r8a8_unorm},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::unordered_access, reshade::api::format::r8g8b8a8_snorm},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::unordered_access, reshade::api::format::r8g8b8a8_unorm_srgb},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::unordered_access, reshade::api::format::b8g8r8a8_unorm_srgb},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::unordered_access, reshade::api::format::b10g10r10a2_unorm},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::unordered_access, reshade::api::format::r10g10b10a2_unorm},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::render_target, reshade::api::format::r16g16b16a16_typeless},
-           reshade::api::format::r16g16b16a16_typeless},
-          {{reshade::api::resource_usage::render_target, reshade::api::format::r8g8b8a8_typeless},
-           reshade::api::format::r16g16b16a16_typeless},
-          {{reshade::api::resource_usage::render_target, reshade::api::format::b8g8r8a8_typeless},
-           reshade::api::format::r16g16b16a16_typeless},
-          {{reshade::api::resource_usage::render_target, reshade::api::format::r10g10b10a2_typeless},
-           reshade::api::format::r16g16b16a16_typeless},
-          {{reshade::api::resource_usage::render_target, reshade::api::format::r16g16b16a16_float},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::render_target, reshade::api::format::r8g8b8a8_unorm},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::render_target, reshade::api::format::b8g8r8a8_unorm},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::render_target, reshade::api::format::r8g8b8a8_snorm},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::render_target, reshade::api::format::r8g8b8a8_unorm_srgb},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::render_target, reshade::api::format::b8g8r8a8_unorm_srgb},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::render_target, reshade::api::format::b10g10r10a2_unorm},
-           reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::render_target, reshade::api::format::r10g10b10a2_unorm},
-           reshade::api::format::r16g16b16a16_float},
+          SwapChainViewUpgradeAll(r16g16b16a16_typeless, r16g16b16a16_typeless),
+          SwapChainViewUpgradeAll(r8g8b8a8_typeless, r16g16b16a16_typeless),
+          SwapChainViewUpgradeAll(r10g10b10a2_typeless, r16g16b16a16_typeless),
+          SwapChainViewUpgradeAll(r16g16b16a16_float, r16g16b16a16_float),
+          SwapChainViewUpgradeAll(r8g8b8a8_unorm, r16g16b16a16_float),
+          SwapChainViewUpgradeAll(b8g8r8a8_unorm, r16g16b16a16_float),
+          SwapChainViewUpgradeAll(r8g8b8a8_snorm, r16g16b16a16_float),
+          SwapChainViewUpgradeAll(r8g8b8a8_unorm_srgb, r16g16b16a16_float),
+          SwapChainViewUpgradeAll(b8g8r8a8_unorm_srgb, r16g16b16a16_float),
+          SwapChainViewUpgradeAll(b10g10r10a2_unorm, r16g16b16a16_float),
+          SwapChainViewUpgradeAll(r10g10b10a2_unorm, r16g16b16a16_float),
+          SwapChainViewUpgradeAll(r11g11b10_float, r16g16b16a16_float),
   };
 
   std::unordered_map<
@@ -1216,67 +1164,6 @@ static bool OnCopyResource(
     reshade::api::command_list* cmd_list,
     reshade::api::resource source,
     reshade::api::resource dest) {
-  auto* device = cmd_list->get_device();
-  if (device == nullptr) return false;
-  auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
-
-  auto source_pair = data.upgraded_resource_formats.find(source.handle);
-  const bool source_upgraded = source_pair != data.upgraded_resource_formats.end();
-
-  auto destination_pair = data.upgraded_resource_formats.find(dest.handle);
-  const bool dest_upgraded = destination_pair != data.upgraded_resource_formats.end();
-
-  const auto source_clone = GetResourceClone(device, &data, source);
-  const auto dest_clone = GetResourceClone(device, &data, dest);
-
-  if (!source_upgraded && !dest_upgraded
-      && (source_clone.handle == 0u) && (dest_clone.handle == 0u)) return false;
-
-  auto source_new = source;
-  auto source_format = reshade::api::format::unknown;
-  auto dest_new = dest;
-  auto dest_format = reshade::api::format::unknown;
-
-  if (source_clone.handle != 0) {
-    source_new = source_clone;
-    source_format = data.resource_clone_targets[source.handle]->new_format;
-
-  } else if (source_upgraded) {
-    source_format = source_pair->second;
-  }
-
-  if (dest_new.handle != 0) {
-    dest_new = dest_clone;
-    dest_format = data.resource_clone_targets[dest.handle]->new_format;
-  } else if (dest_upgraded) {
-    dest_format = destination_pair->second;
-  }
-
-  if (source_format == reshade::api::format::unknown) {
-    source_format = device->get_resource_desc(source).texture.format;
-  };
-
-  if (dest_format == reshade::api::format::unknown) {
-    dest_format = device->get_resource_desc(dest).texture.format;
-  };
-
-  if (source_format == dest_format) {
-    if ((source.handle == source_new.handle) && (dest.handle == dest_new.handle)) return false;
-    cmd_list->copy_resource(source_new, dest_new);
-    return true;
-  }
-
-  std::stringstream s;
-  s << "OnCopyResource";
-  s << "(mismatched: " << reinterpret_cast<void*>(source.handle);
-  s << " (" << source_format << ")";
-  s << " => " << reinterpret_cast<void*>(dest.handle);
-  s << " (" << dest_format << ")";
-  s << ")";
-  reshade::log::message(reshade::log::level::warning, s.str().c_str());
-  return true;
-
   if (renodx::utils::swapchain::IsBackBuffer(cmd_list, source)) return true;
   if (renodx::utils::swapchain::IsBackBuffer(cmd_list, dest)) return true;
   return false;

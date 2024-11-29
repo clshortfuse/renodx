@@ -58,7 +58,7 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
 
   if (injectedData.processingInternalSampling == 1.f) {
     float3 lut_input = renodx::color::pq::Encode(untonemapped, 100.f);
-    r1.xyz = renodx::lut::Sample(t3, s0_s, lut_input, cb0[190].xyz);
+    r1.xyz = renodx::lut::Sample(t3, s0_s, saturate(lut_input), cb0[190].xyz);
   } else {
     // Sample as 2D - ARRI C3 1000 LUT (internal)
     r1.xyz = cb0[190].www * r0.zxy;
