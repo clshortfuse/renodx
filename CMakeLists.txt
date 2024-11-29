@@ -94,7 +94,7 @@ function(build_shader_target ADDON ADDON_PATH)
     if (SHADER_HASH)
       add_custom_command(
         OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.h
-        COMMAND embedfile ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}
+        COMMAND embedfile ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}.h
         DEPENDS ${FILE}
       )
       list(APPEND SHADER_HEADER_FILES ${EMBED_FOLDER}/${SHADER_HASH}.h)
@@ -112,7 +112,7 @@ function(build_shader_target ADDON ADDON_PATH)
     if (SHADER_HASH)
       add_custom_command(
         OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.h
-        COMMAND embedfile ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}
+        COMMAND embedfile ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}.h
         DEPENDS ${FILE}
       )
       list(APPEND SHADER_HEADER_FILES ${EMBED_FOLDER}/${SHADER_HASH}.h)
