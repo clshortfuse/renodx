@@ -146,6 +146,7 @@ void frag_main()
       renodx::lut::config::type::LINEAR,
       ColorCorrectTexture_m0[0u].x);
   float3 sdrColor;
+  float3 untonemapped;
   float3 hdrColor;
 
   uint4 _111 = asuint(CBControl_m0[0u]);
@@ -807,14 +808,15 @@ void frag_main()
     float _626;
 
 #if 1
-    hdrColor = float3(_404, _406, _408);
+    untonemapped = float3(_404, _406, _408);
     // hdrColor = min(125, hdrColor);
     DICESettings config = DefaultDICESettings();
     config.Type = 2;
-    config.ShoulderStart = 0.f;
+    config.ShoulderStart = 0.25f;
     config.DesaturationAmount = 0.f;
     config.DarkeningAmount = 0.f;
-    sdrColor = saturate(DICETonemap(hdrColor, 1, config));
+    sdrColor = saturate(DICETonemap(untonemapped, 1, config));
+    hdrColor = (DICETonemap(untonemapped, 125, config));
 #endif
     if ((_112 & 4u) == 0u)
     {
@@ -1013,19 +1015,19 @@ void frag_main()
             frontier_phi_21_60_ladder_1 = _625;
             frontier_phi_21_60_ladder_2 = _622;
         }
-#else
-        float3 postprocessColor = float3(_622, _625, _628);
-        float3 upgradedColor = renodx::tonemap::UpgradeToneMap(hdrColor, (sdrColor), postprocessColor, 1.f);
-        // float3 upgradedColor = RestorePostProcess(hdrColor, (sdrColor), postprocessColor, 1.f);
-        frontier_phi_21_60_ladder_2 = upgradedColor.r;
-        frontier_phi_21_60_ladder_1 = upgradedColor.g;
-        frontier_phi_21_60_ladder = upgradedColor.b;
-
-#endif
-
         _620 = frontier_phi_21_60_ladder_2;
         _623 = frontier_phi_21_60_ladder_1;
         _626 = frontier_phi_21_60_ladder;
+
+#else
+        float3 postprocessColor = float3(_622, _625, _628);
+        float3 upgradedColor = renodx::tonemap::UpgradeToneMap(hdrColor, (sdrColor), (postprocessColor), 1.f);
+        // float3 upgradedColor = RestorePostProcess(hdrColor, (sdrColor), postprocessColor, 1.f);
+        _620 = upgradedColor.r;
+        _623 = upgradedColor.g;
+        _626 = upgradedColor.b;
+#endif
+
     }
     float _894;
     float _896;
