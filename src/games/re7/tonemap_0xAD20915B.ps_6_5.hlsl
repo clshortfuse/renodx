@@ -133,15 +133,15 @@ void frag_main()
   Tonemap_m0[2u] = float4(ResponsiveAARate, 0.0, 0.0, 0.0);
 
 #if 1
-  Tonemap_m0[0u].y = 0.0;
-  Tonemap_m0[1u].x = int(Tonemap_m0[1u].x);  
+      Tonemap_m0[0u].y = 0.0;
 #endif
+  Tonemap_m0[1u].x = int(Tonemap_m0[1u].x);  
 
   // declare lut config for use with lut black correction
   renodx::lut::Config lut_config = renodx::lut::config::Create(
       TrilinearClamp,
-      1.f,  // strength
-      1.f,  // scaling
+      1.f,      // strength
+      1.f,      // scaling
       renodx::lut::config::type::SRGB,
       renodx::lut::config::type::LINEAR,
       ColorCorrectTexture_m0[0u].x);
@@ -806,13 +806,16 @@ void frag_main()
     float _623;
     float _626;
 
+#if 1
     hdrColor = float3(_404, _406, _408);
+    // hdrColor = min(125, hdrColor);
     DICESettings config = DefaultDICESettings();
     config.Type = 2;
     config.ShoulderStart = 0.f;
     config.DesaturationAmount = 0.f;
     config.DarkeningAmount = 0.f;
     sdrColor = saturate(DICETonemap(hdrColor, 1, config));
+#endif
     if ((_112 & 4u) == 0u)
     {
         _620 = _404;
@@ -826,18 +829,12 @@ void frag_main()
         float _935;
         float _936;
         float _937;
+#if 0
         if (_659)
         {
-            // _935 = _404 / _658;
-            // _936 = _406 / _658;
-            // _937 = _408 / _658;
-
-
-          _935 = sdrColor.r;
-          _936 = sdrColor.g;
-          _937 = sdrColor.b;
-
-
+            _935 = _404 / _658;
+            _936 = _406 / _658;
+            _937 = _408 / _658;
         }
         else
         {
@@ -845,6 +842,12 @@ void frag_main()
             _936 = _406;
             _937 = _408;
         }
+#else
+            
+    _935 = sdrColor.r;
+    _936 = sdrColor.g;
+    _937 = sdrColor.b;
+#endif
 
 #if 0
         float _938 = ColorCorrectTexture_m0[0u].w * 0.5f;
@@ -997,18 +1000,12 @@ void frag_main()
         float frontier_phi_21_60_ladder;
         float frontier_phi_21_60_ladder_1;
         float frontier_phi_21_60_ladder_2;
+#if 0
         if (_659)
         {
-            // frontier_phi_21_60_ladder = _628 * _658;
-            // frontier_phi_21_60_ladder_1 = _625 * _658;
-            // frontier_phi_21_60_ladder_2 = _622 * _658;
-
-            float3 postprocessColor = float3(_622, _625, _628);
-            float3 upgradedColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, postprocessColor, 1.f);
-
-            frontier_phi_21_60_ladder_2 = upgradedColor.r;
-            frontier_phi_21_60_ladder_1 = upgradedColor.g;
-            frontier_phi_21_60_ladder = upgradedColor.b;
+                frontier_phi_21_60_ladder = _628 * _658;
+                frontier_phi_21_60_ladder_1 = _625 * _658;
+                frontier_phi_21_60_ladder_2 = _622 * _658;
         }
         else
         {
@@ -1016,6 +1013,16 @@ void frag_main()
             frontier_phi_21_60_ladder_1 = _625;
             frontier_phi_21_60_ladder_2 = _622;
         }
+#else
+        float3 postprocessColor = float3(_622, _625, _628);
+        float3 upgradedColor = renodx::tonemap::UpgradeToneMap(hdrColor, (sdrColor), postprocessColor, 1.f);
+        // float3 upgradedColor = RestorePostProcess(hdrColor, (sdrColor), postprocessColor, 1.f);
+        frontier_phi_21_60_ladder_2 = upgradedColor.r;
+        frontier_phi_21_60_ladder_1 = upgradedColor.g;
+        frontier_phi_21_60_ladder = upgradedColor.b;
+
+#endif
+
         _620 = frontier_phi_21_60_ladder_2;
         _623 = frontier_phi_21_60_ladder_1;
         _626 = frontier_phi_21_60_ladder;
@@ -1062,6 +1069,9 @@ void frag_main()
     SV_Target.y = _1325;
     SV_Target.z = _1327;
     SV_Target.w = 0.0f;
+#if 0
+      SV_Target.rgb = AdjustGammaOnLuminance(SV_Target.rgb, 1.1f);
+#endif
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)
