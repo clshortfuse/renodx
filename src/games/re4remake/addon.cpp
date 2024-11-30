@@ -111,6 +111,16 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.toneMapType != 0; },
     },
     new renodx::utils::settings::Setting{
+        .key = "processingInternalSampling",
+        .binding = &shader_injection.processingInternalSampling,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "Internal Sampling",
+        .section = "Processing",
+        .tooltip = "Selects whether to use the broken vanilla sampling or enhanced for the game's LUT.",
+        .labels = {"Vanilla", "Enhanced"},
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "HDR Den Discord",
         .section = "About",
@@ -146,6 +156,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeGammaAdjust", 1.f);
+  renodx::utils::settings::UpdateSetting("processingInternalSampling", 0.f);
 }
 }  // namespace
 

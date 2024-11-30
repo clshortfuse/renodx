@@ -1,3 +1,4 @@
+#include "./DICE.hlsl"
 #include "./LUTBlackCorrection.hlsl"
 #include "./shared.h"
 
@@ -133,8 +134,10 @@ void frag_main()
       renodx::lut::config::type::SRGB,
       renodx::lut::config::type::LINEAR,
       ColorCorrectTexture_m0[0u].x);
+  float3 sdrColor;
+  float3 untonemapped;
+  float3 hdrColor;
 
-      
   uint4 _98 = asuint(CBControl_m0[0u]);
     uint _99 = _98.x;
     bool _102 = (_99 & 1u) != 0u;
@@ -1156,18 +1159,34 @@ void frag_main()
         float _2148;
         float _2149;
         float _2150;
-        if (_1828)
-        {
-            _2148 = _1511 / _1827;
-            _2149 = _1513 / _1827;
-            _2150 = _1515 / _1827;
-        }
-        else
-        {
-            _2148 = _1511;
-            _2149 = _1513;
-            _2150 = _1515;
+#if 1
+        untonemapped = float3(_1511, _1513, _1515);
+        DICESettings config = DefaultDICESettings();
+        config.Type = 2;
+        config.ShoulderStart = 0.25f;
+        config.DesaturationAmount = 0.f;
+        config.DarkeningAmount = 0.f;
+        sdrColor = saturate(DICETonemap(untonemapped, 1, config));
+        hdrColor = DICETonemap(untonemapped, 125, config);
+#endif
+        if (injectedData.processingInternalSampling == 0) {
+            if (_1828)
+            {
+                _2148 = _1511 / _1827;
+                _2149 = _1513 / _1827;
+                _2150 = _1515 / _1827;
             }
+            else
+            {
+                _2148 = _1511;
+                _2149 = _1513;
+                _2150 = _1515;
+            }
+        } else {
+            _2148 = sdrColor.r;
+            _2149 = sdrColor.g;
+            _2150 = sdrColor.b;
+        }
 #if 0
             float _2151 = ColorCorrectTexture_m0[0u].w * 0.5f;
             float _2992;
@@ -1333,21 +1352,31 @@ void frag_main()
         float frontier_phi_43_91_ladder;
         float frontier_phi_43_91_ladder_1;
         float frontier_phi_43_91_ladder_2;
-        if (_1828)
-        {
-            frontier_phi_43_91_ladder = _1798 * _1827;
-            frontier_phi_43_91_ladder_1 = _1795 * _1827;
-            frontier_phi_43_91_ladder_2 = _1792 * _1827;
+        if (injectedData.processingInternalSampling == 0) {
+            if (_1828)
+            {
+                frontier_phi_43_91_ladder = _1798 * _1827;
+                frontier_phi_43_91_ladder_1 = _1795 * _1827;
+                frontier_phi_43_91_ladder_2 = _1792 * _1827;
+            }
+            else
+            {
+                frontier_phi_43_91_ladder = _1798;
+                frontier_phi_43_91_ladder_1 = _1795;
+                frontier_phi_43_91_ladder_2 = _1792;
+            }
+            _1790 = frontier_phi_43_91_ladder_2;
+            _1793 = frontier_phi_43_91_ladder_1;
+            _1796 = frontier_phi_43_91_ladder;
+        } else {
+            float3 postprocessColor = float3(_1792, _1795, _1798);
+            float3 upgradedColor = renodx::tonemap::UpgradeToneMap(hdrColor, (sdrColor), (postprocessColor), 1.f);
+            // float3 upgradedColor = RestorePostProcess(hdrColor, (sdrColor), postprocessColor, 1.f);
+            _1790 = upgradedColor.r;
+            _1793 = upgradedColor.g;
+            _1796 = upgradedColor.b;
         }
-        else
-        {
-            frontier_phi_43_91_ladder = _1798;
-            frontier_phi_43_91_ladder_1 = _1795;
-            frontier_phi_43_91_ladder_2 = _1792;
-        }
-        _1790 = frontier_phi_43_91_ladder_2;
-        _1793 = frontier_phi_43_91_ladder_1;
-        _1796 = frontier_phi_43_91_ladder;
+
     }
     float _2107;
     float _2109;
