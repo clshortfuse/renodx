@@ -637,12 +637,29 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
 
     if (custom_shader_info.on_draw != nullptr) {
       bool should_draw = custom_shader_info.on_draw(cmd_list);
-      if (!should_draw) return true;  // bypass draw
+      if (!should_draw) {
+#ifdef DEBUG_LEVEL_1
+        std::stringstream s;
+        s << "mods::shader::HandlePreDraw(bypass draw: ";
+        s << PRINT_CRC32(shader_hash);
+        s << ")";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
+        return true;  // bypass draw
+      }
     }
 
     if (custom_shader_info.on_replace != nullptr) {
       bool should_replace = custom_shader_info.on_replace(cmd_list);
       if (!should_replace) {
+#ifdef DEBUG_LEVEL_1
+        std::stringstream s;
+        s << "mods::shader::HandlePreDraw(Not replacing: ";
+        s << PRINT_CRC32(shader_hash);
+        s << ", stage:" << stage;
+        s << ")";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
         shader_state.pending_replacements.erase(stage);
         continue;
       }
