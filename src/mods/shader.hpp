@@ -727,8 +727,24 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
           shader_injection);
     }
   }
-
-  shader_state.ApplyReplacements(cmd_list);
+  if (is_dispatch) {
+    shader_state.ApplyDispatchReplacements(cmd_list);
+  } else {
+    shader_state.ApplyDrawReplacements(cmd_list);
+  }
+  for (const auto [stage, pipeline] : shader_state.pending_replacements) {
+    if (stage == reshade::api::pipeline_stage::compute_shader) {
+      if (!is_dispatch) continue;
+    } else {
+      if (is_dispatch) continue;
+    }
+    std::stringstream s;
+    s << "utils::shader::ApplyReplacements(Orphaned replacement: ";
+    s << stage;
+    s << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle);
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+  }
 
   return false;
 }
