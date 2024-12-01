@@ -283,7 +283,7 @@ float3 LinearUnclampedOutput(float3 color, Config lut_config) {
   } else if (lut_config.type_output == config::type::GAMMA_2_2) {
     color = renodx::color::gamma::DecodeSafe(color);
   } else {
-    color = renodx::math::Sign(color) * renodx::color::srgb::Decode(abs(color));
+    color = renodx::color::srgb::DecodeSafe(color);
   }
   return color;
 }
