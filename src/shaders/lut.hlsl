@@ -314,7 +314,8 @@ float3 RestoreSaturationLoss(float3 color_input, float3 color_output, Config lut
     clamped = max(0, renodx::color::bt709::from::BT2020(clamped));
   }
 
-  float3 sat_clamped = clamped - y_in;
+  float y_clamped = renodx::color::y::from::BT709(abs(clamped));
+  float3 sat_clamped = clamped - y_clamped;
 
   float y_out = renodx::color::y::from::BT709(abs(color_output));
   float3 sat_out = color_output - y_out;
