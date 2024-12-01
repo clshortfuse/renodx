@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+#define ImTextureID ImU64
+
+#define DEBUG_LEVEL_0
+
 #include <embed/0x314A98A7.h>  // Tonemap + Postfx
 #include <embed/0x30D8372F.h>  // Tonemap + Postfx - Vignette off
 #include <embed/0xAF0777E5.h>  // BT.2020 + PQ Encoding
