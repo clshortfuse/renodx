@@ -55,30 +55,50 @@ float Average(float3 color) {
   return (color.x + color.y + color.z) / 3.f;
 }
 
-// Returns 1 or FLT_MAX if "dividend" is 0
-float SafeDivision(float quotient, float dividend) {
-  return (dividend == 0.f)
-             ? FLT_MAX * Sign(quotient)
-             : (quotient / dividend);
+#if __SHADER_TARGET_MAJOR >= 6
+template <typename T>
+T DivideSafe(T dividend, T divisor) {
+  return select(divisor == 0.f, FLT_MAX * Sign(dividend), dividend / divisor);
+}
+template <typename T>
+T DivideSafe(T dividend, T divisor, T fallback) {
+  return select(divisor == 0.f, fallback, dividend / divisor);
+}
+#else
+float DivideSafe(float dividend, float divisor) {
+  return (divisor == 0.f)
+             ? FLT_MAX * Sign(dividend)
+             : (dividend / divisor);
 }
 
-float SafeDivision(float quotient, float dividend, float fallback) {
-  return (dividend == 0.f)
+float DivideSafe(float dividend, float divisor, float fallback) {
+  return (divisor == 0.f)
              ? fallback
-             : (quotient / dividend);
+             : (dividend / divisor);
 }
 
-float3 SafeDivision(float3 quotient, float3 dividend) {
-  return float3(SafeDivision(quotient.x, dividend.x, FLT_MAX * Sign(quotient.x)),
-                SafeDivision(quotient.y, dividend.y, FLT_MAX * Sign(quotient.y)),
-                SafeDivision(quotient.z, dividend.z, FLT_MAX * Sign(quotient.z)));
+float2 DivideSafe(float2 dividend, float2 divisor) {
+  return float2(DivideSafe(dividend.x, divisor.x, FLT_MAX * Sign(dividend.x)),
+                DivideSafe(dividend.y, divisor.y, FLT_MAX * Sign(dividend.y)));
 }
 
-float3 SafeDivision(float3 quotient, float3 dividend, float3 fallback) {
-  return float3(SafeDivision(quotient.x, dividend.x, fallback.x),
-                SafeDivision(quotient.y, dividend.y, fallback.y),
-                SafeDivision(quotient.z, dividend.z, fallback.z));
+float2 DivideSafe(float2 dividend, float2 divisor, float2 fallback) {
+  return float2(DivideSafe(dividend.x, divisor.x, fallback.x),
+                DivideSafe(dividend.y, divisor.y, fallback.y));
 }
+
+float3 DivideSafe(float3 dividend, float3 divisor) {
+  return float3(DivideSafe(dividend.x, divisor.x, FLT_MAX * Sign(dividend.x)),
+                DivideSafe(dividend.y, divisor.y, FLT_MAX * Sign(dividend.y)),
+                DivideSafe(dividend.z, divisor.z, FLT_MAX * Sign(dividend.z)));
+}
+
+float3 DivideSafe(float3 dividend, float3 divisor, float3 fallback) {
+  return float3(DivideSafe(dividend.x, divisor.x, fallback.x),
+                DivideSafe(dividend.y, divisor.y, fallback.y),
+                DivideSafe(dividend.z, divisor.z, fallback.z));
+}
+#endif
 
 }  // namespace math
 }  // namespace renodx

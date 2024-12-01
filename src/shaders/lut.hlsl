@@ -283,16 +283,12 @@ float3 LinearUnclampedOutput(float3 color, Config lut_config) {
   } else if (lut_config.type_output == config::type::GAMMA_2_2) {
     color = renodx::color::gamma::DecodeSafe(color);
   } else {
-    color = renodx::math::Sign(color) * renodx::color::srgb::Decode(abs(color));
+    color = renodx::color::srgb::DecodeSafe(color);
   }
   return color;
 }
 
 float3 RestoreSaturationLoss(float3 color_input, float3 color_output, Config lut_config) {
-  // Saturation (distance from grayscale)
-  float y_in = renodx::color::y::from::BT709(abs(color_input));
-  float3 sat_in = color_input - y_in;
-
   float3 clamped = color_input;
   if (lut_config.type_input == config::type::SRGB) {
     clamped = saturate(clamped);
@@ -314,15 +310,19 @@ float3 RestoreSaturationLoss(float3 color_input, float3 color_output, Config lut
     clamped = max(0, renodx::color::bt709::from::BT2020(clamped));
   }
 
-  float3 sat_clamped = clamped - y_in;
+  float3 perceptual_in = renodx::color::oklab::from::BT709(color_input);
+  float3 perceptual_clamped = renodx::color::oklab::from::BT709(clamped);
+  float3 perceptual_out = renodx::color::oklab::from::BT709(color_output);
 
-  float y_out = renodx::color::y::from::BT709(abs(color_output));
-  float3 sat_out = color_output - y_out;
-  float3 sat_new = float3(
-      sat_out.r * (sat_clamped.r != 0 ? (sat_in.r / sat_clamped.r) : 1.f),
-      sat_out.g * (sat_clamped.g != 0 ? (sat_in.g / sat_clamped.g) : 1.f),
-      sat_out.b * (sat_clamped.b != 0 ? (sat_in.b / sat_clamped.b) : 1.f));
-  return (y_out + sat_new);
+  float chroma_in = distance(perceptual_in.yz, 0);
+  float chroma_clamped = distance(perceptual_clamped.yz, 0);
+  float chroma_out = distance(perceptual_out.yz, 0);
+  float chroma_loss = (chroma_in / chroma_clamped);
+  float chroma_new = chroma_out * chroma_loss;
+
+  perceptual_out.yz *= renodx::math::DivideSafe(chroma_new, chroma_out, 1.f);
+
+  return renodx::color::bt709::from::OkLab(perceptual_out);
 }
 
 #define SAMPLE_FUNCTION_GENERATOR(textureType)                                                         \

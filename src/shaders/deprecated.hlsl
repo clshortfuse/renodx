@@ -76,6 +76,34 @@ float SafePow(float color, float exponent) {
   return PowSafe(color, exponent);
 }
 
+/// @deprecated - DivideSafe
+float SafeDivision(float quotient, float dividend) {
+  return (dividend == 0.f)
+             ? FLT_MAX * Sign(quotient)
+             : (quotient / dividend);
+}
+
+/// @deprecated - Use DivideSafe
+float SafeDivision(float quotient, float dividend, float fallback) {
+  return (dividend == 0.f)
+             ? fallback
+             : (quotient / dividend);
+}
+
+/// @deprecated - Use DivideSafe
+float3 SafeDivision(float3 quotient, float3 dividend) {
+  return float3(SafeDivision(quotient.x, dividend.x, FLT_MAX * Sign(quotient.x)),
+                SafeDivision(quotient.y, dividend.y, FLT_MAX * Sign(quotient.y)),
+                SafeDivision(quotient.z, dividend.z, FLT_MAX * Sign(quotient.z)));
+}
+
+/// @deprecated - Use DivideSafe
+float3 SafeDivision(float3 quotient, float3 dividend, float3 fallback) {
+  return float3(SafeDivision(quotient.x, dividend.x, fallback.x),
+                SafeDivision(quotient.y, dividend.y, fallback.y),
+                SafeDivision(quotient.z, dividend.z, fallback.z));
+}
+
 }  // namespace math
 
 namespace tonemap {
