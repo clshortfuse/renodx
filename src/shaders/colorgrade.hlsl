@@ -18,15 +18,15 @@ float3 Contrast(float3 color, float contrast, float mid_gray = 0.18f, float3x3 c
 }
 
 float3 Saturation(float3 bt709, float saturation = 1.f) {
-  float3 lch = renodx::color::oklch::from::BT709(bt709);
-  lch[1] *= saturation;
-  float3 color = renodx::color::bt709::from::OkLCh(lch);
+  float3 perceptual = renodx::color::oklab::from::BT709(bt709);
+  perceptual.yz *= saturation;
+  float3 color = renodx::color::bt709::from::OkLab(perceptual);
   color = renodx::color::bt709::clamp::AP1(color);
   return color;
 }
 
 float3 UserColorGrading(
-    float3 color,
+    float3 bt709,
     float exposure,
     float highlights,
     float shadows,
@@ -36,17 +36,10 @@ float3 UserColorGrading(
     float hue_correction_strength,
     float3 hue_correction_source) {
   if (exposure == 1.f && saturation == 1.f && dechroma == 0.f && shadows == 1.f && highlights == 1.f && contrast == 1.f && hue_correction_strength == 0.f) {
-    return color;
+    return bt709;
   }
 
-  // Store original color
-
-  float3 restore_lab = (hue_correction_strength == 0)
-                           ? 0
-                           : renodx::color::oklab::from::BT709(hue_correction_source);
-  float3 restore_lch = (hue_correction_strength == 0)
-                           ? 0
-                           : renodx::color::oklch::from::OkLab(restore_lab);
+  float3 color = bt709;
 
   color *= exposure;
 
@@ -66,29 +59,29 @@ float3 UserColorGrading(
   color *= (y > 0 ? (y_final / y) : 0);
 
   if (saturation != 1.f || dechroma != 0.f || hue_correction_strength != 0.f) {
-    float3 lab_new = renodx::color::oklab::from::BT709(color);
-    float3 lch_new = renodx::color::oklch::from::OkLab(lab_new);
+    float3 perceptual_new = renodx::color::oklab::from::BT709(color);
 
     if (hue_correction_strength != 0.f) {
-      if (hue_correction_strength == 1.f) {
-        lch_new[2] = restore_lch[2];  // Full hue override
-      } else {
-        float old_chroma = lch_new[1];  // Store old chroma
-        lab_new.yz = lerp(lab_new.yz, restore_lab.yz, hue_correction_strength);
-        lch_new = renodx::color::oklch::from::OkLab(lab_new);
-        lch_new[1] = old_chroma;  // chroma restore
-      }
+      float3 perceptual_old = renodx::color::oklab::from::BT709(hue_correction_source);
+
+      // Save chrominance to apply black
+      float chrominance_pre_adjust = distance(perceptual_new.yz, 0);
+
+      perceptual_new.yz = lerp(perceptual_new.yz, perceptual_old.yz, hue_correction_strength);
+
+      float chrominance_post_adjust = distance(perceptual_new.yz, 0);
+
+      // Apply back previous chrominance
+      perceptual_new.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
     }
 
     if (dechroma != 0.f) {
-      lch_new[1] = lerp(lch_new[1], 0.f, saturate(pow(y / (10000.f / 100.f), (1.f - dechroma))));
+      perceptual_new.yz *= lerp(1.f, 0.f, saturate(pow(y / (10000.f / 100.f), (1.f - dechroma))));
     }
 
-    if (saturation != 1.f) {
-      lch_new[1] *= saturation;
-    }
+    perceptual_new.yz *= saturation;
 
-    color = renodx::color::bt709::from::OkLCh(lch_new);
+    color = renodx::color::bt709::from::OkLab(perceptual_new);
 
     color = renodx::color::bt709::clamp::AP1(color);
   }
