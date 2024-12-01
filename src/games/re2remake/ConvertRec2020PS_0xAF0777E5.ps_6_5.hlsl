@@ -39,14 +39,10 @@ float4 main(noperspective float4 SV_Position: SV_Position,
     : SV_Target {
   float4 bt709Color = tLinearImage.SampleLevel(PointBorder, TEXCOORD.xy, 0.0f);
 
-#if 0  // Gamma Correction
-  bt709Color.rgb = renodx::color::correct::GammaSafe(bt709Color.rgb);
-#endif
-
 #if 1
   DICESettings config = DefaultDICESettings();
   config.Type = 3;
-  config.ShoulderStart = 0.5f;
+  config.ShoulderStart = 0.46f;
   const float dicePaperWhite = whitePaperNits / renodx::color::srgb::REFERENCE_WHITE;
   const float dicePeakWhite = max(displayMaxNits, whitePaperNits) / renodx::color::srgb::REFERENCE_WHITE;
   bt709Color.rgb = DICETonemap(bt709Color.rgb * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
