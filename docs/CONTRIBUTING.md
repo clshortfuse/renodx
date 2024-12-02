@@ -25,7 +25,7 @@ Update the submodules
 
 * `git submodule update --init --recursive`
 
-Configure project to use compile to the `./build` directory.
+Configure the project
 
 * `cmake --preset vs-x64`
 
