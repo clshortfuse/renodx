@@ -48,7 +48,10 @@
       "description": "Generates Visual Studio solution and project files. Slower build than ninja.",
       "inherits": "x64",
       "generator": "Visual Studio 17 2022",
-      "binaryDir": "build"
+      "binaryDir": "build",
+      "cacheVariables": {
+        "CMAKE_SYSTEM_VERSION": "10.0.26100.0"
+      }
     }
   ],
   "buildPresets": [

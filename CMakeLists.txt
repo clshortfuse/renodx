@@ -3,6 +3,20 @@ cmake_minimum_required(VERSION 3.17.2)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(NOT CMAKE_WINDOWS_KITS_10_DIR)
+  set(CMAKE_WINDOWS_KITS_10_DIR "C:/Program Files (x86)/Windows Kits/10")
+endif()
+
+find_program(FXC_BIN fxc.exe
+  HINTS ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_SYSTEM_VERSION}/x64/
+  REQUIRED)
+message("FXC_BIN: " ${FXC_BIN})
+
+find_program(DXC_BIN dxc.exe
+  HINTS ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_SYSTEM_VERSION}/x64/
+  REQUIRED)
+message("DXC_BIN: " ${DXC_BIN})
+
 project(renodx VERSION 0.1.0 LANGUAGES C CXX)
 
 include(CTest)
@@ -11,20 +25,6 @@ enable_testing()
 # Use executable to convert resources to .h files for embedding
 add_executable(embedfile embedfile.cpp)
 add_executable(decomp ./src/decompiler/cli.cpp)
-
-if(NOT CMAKE_WINDOWS_KITS_10_DIR)
-  set(CMAKE_WINDOWS_KITS_10_DIR "C:/Program Files (x86)/Windows Kits/10")
-endif()
-
-find_program(FXC_BIN fxc.exe
-  HINTS ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x64/
-  REQUIRED)
-message("FXC_BIN: " ${FXC_BIN})
-
-find_program(DXC_BIN dxc.exe
-  HINTS ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x64/
-  REQUIRED)
-message("DXC_BIN: " ${DXC_BIN})
 
 function(inspect_hlsl_imports FILE VARIABLE)
   file(STRINGS ${FILE} HLSL_IMPORTS REGEX "^#include \"([^\"]+)\"")
