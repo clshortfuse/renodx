@@ -21,7 +21,7 @@ float4 main(noperspective float4 SV_Position: SV_Position,
 #if 1
   DICESettings config = DefaultDICESettings();
   config.Type = 3;
-  config.ShoulderStart = 0.46f;
+  config.ShoulderStart = 0.4f;
   const float dicePaperWhite = whitePaperNits / renodx::color::srgb::REFERENCE_WHITE;
   const float dicePeakWhite = max(displayMaxNits, whitePaperNits) / renodx::color::srgb::REFERENCE_WHITE;
   bt709Color.rgb = DICETonemap(bt709Color.rgb * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
