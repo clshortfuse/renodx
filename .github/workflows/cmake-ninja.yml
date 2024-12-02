@@ -1,30 +1,70 @@
-# This starter workflow is for a CMake project running on multiple platforms. There is a different starter workflow if you just want a single platform.
-# See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-single-platform.yml
 name: CMake (Ninja)
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4.1.7
-      with:
-        submodules: recursive
+      - uses: actions/checkout@v4.1.7
+        with:
+          submodules: recursive
 
-    - name: Install ninja-build tool
-      uses: seanmiddleditch/gha-setup-ninja@v5
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@v5
 
-    - name: Setup VS Dev Environment
-      uses: seanmiddleditch/gha-setup-vsdevenv@v4
+      - name: Setup VS Dev Environment
+        uses: seanmiddleditch/gha-setup-vsdevenv@v4
 
-    - name: Configure CMake (x64)
-      run: cmake --preset ninja-x64
+      - name: Configure CMake (x64)
+        run: cmake --preset ninja-x64
 
-    - name: Build (x64)
-      run: cmake --build --preset ninja-x64-release --verbose
+      - name: Build (x64)
+        run: cmake --build --preset ninja-x64-release --verbose
+
+      - name: Configure CMake (x32)
+        run: cmake --preset ninja-x32
+
+      - name: Build (x32)
+        run: cmake --build --preset ninja-x32-release --verbose
+
+      - name: Prepare Web Listing
+        run: md www
+
+      - name: Copy Binaries (x64)
+        run: copy build.ninja\Release\*.addon64 www\
+
+      - name: Copy Binaries (x32)
+        run: copy build32.ninja\Release\*.addon32 www\
+
+      - name: Copy Binaries (Tools)
+        run: copy build.ninja\Release\*.exe www\
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: "www"
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    permissions:
+      pages: write # to deploy to Pages
+      id-token: write # to verify the deployment originates from an appropriate source
+
+    # Deploy to the github-pages environment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    # Specify runner + deployment step
+    runs-on: windows-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1

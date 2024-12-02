@@ -1,5 +1,3 @@
-# This starter workflow is for a CMake project running on multiple platforms. There is a different starter workflow if you just want a single platform.
-# See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-single-platform.yml
 name: CMake (Visual Studio)
 
 on:
@@ -28,39 +26,3 @@ jobs:
 
       - name: Build (x32)
         run: cmake --build --preset vs-x32-release --verbose
-
-      - name: Prepare Web Listing
-        run: md www
-
-      - name: Copy Binaries (x64)
-        run: copy build\Release\*.addon64 www\
-
-      - name: Copy Binaries (x32)
-        run: copy build32\Release\*.addon32 www\
-
-      - name: Copy Binaries (Tools)
-        run: copy build32\Release\*.exe www\
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
-        with:
-          path: "www"
-
-  deploy:
-    if: github.ref == 'refs/heads/main'
-    needs: build
-    permissions:
-      pages: write # to deploy to Pages
-      id-token: write # to verify the deployment originates from an appropriate source
-
-    # Deploy to the github-pages environment
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    # Specify runner + deployment step
-    runs-on: windows-latest
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v1
