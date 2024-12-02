@@ -24,13 +24,7 @@ jobs:
       uses: seanmiddleditch/gha-setup-vsdevenv@v4
 
     - name: Configure CMake (x64)
-      run: >
-        cmake
-        --preset ninja-x64
+      run: cmake --preset ninja-x64
 
     - name: Build (x64)
-      run: >
-        cmake
-        --build
-        --preset ninja-x64-release
-        --verbose
+      run: cmake --build --preset ninja-x64-release --verbose

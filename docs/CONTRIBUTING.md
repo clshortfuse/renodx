@@ -27,18 +27,18 @@ Update the submodules
 
 Configure project to use compile to the `./build` directory.
 
-* `cmake -B build -S . -G "Visual Studio 17 2022" -T host=x86 -A x64`
+* `cmake --preset vs-x64`
 
 Build the project
 
-* `cmake --build build --config Release --target ALL_BUILD -j 18`
+* `cmake --build --preset vs-x64-release`
 
 ----------------
 
 *Note: for 32bit binaries use:*
 
-* `cmake -B build32 -S . -G "Visual Studio 17 2022" -T host=x86 -A Win32`
-* `cmake --build build32 --config Release --target ALL_BUILD -j 18`
+* `cmake --preset vs-x32`
+* `cmake --build --preset vs-x32-release`
 
 
 ### Automated configuration

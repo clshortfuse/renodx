@@ -4,72 +4,54 @@ name: CMake (Visual Studio)
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4.1.7
-      with:
-        submodules: recursive
+      - uses: actions/checkout@v4.1.7
+        with:
+          submodules: recursive
 
-    - name: Configure CMake (x64)
-      run: >
-        cmake
-        -DCMAKE_SYSTEM_VERSION=10.0.26100.0
-        -B build
-        -S .
-        -G "Visual Studio 17 2022" -T host=x86 -A x64
+      - name: Configure CMake (x64)
+        run: cmake --preset vs-x64
 
-    - name: Build (x64)
-      run: >
-        cmake
-        --build build
-        --config Release
-        --verbose
+      - name: Build (x64)
+        run: cmake --build --preset vs-x64-release --verbose
 
-    - name: Configure CMake (x32)
-      run: >
-        cmake
-        -DCMAKE_SYSTEM_VERSION=10.0.26100.0
-        -B build32
-        -S .
-        -G "Visual Studio 17 2022" -T host=x86 -A Win32
+      - name: Configure CMake (x32)
+        run: cmake --preset vs-x32
 
-    - name: Build (x32)
-      run: >
-        cmake
-        --build build32
-        --config Release
-        --verbose
+      - name: Build (x32)
+        run: cmake --build --preset vs-x32-release --verbose
 
-    - name: Prepare Web Listing
-      run: md www
+      - name: Prepare Web Listing
+        run: md www
 
-    - name: Copy Binaries (x64)
-      run: copy build\Release\*.addon64 www\
+      - name: Copy Binaries (x64)
+        run: copy build\Release\*.addon64 www\
 
-    - name: Copy Binaries (x32)
-      run: copy build32\Release\*.addon32 www\
-    
-    - name: Copy Binaries (Tools)
-      run: copy build32\Release\*.exe www\
+      - name: Copy Binaries (x32)
+        run: copy build32\Release\*.addon32 www\
 
-    - name: Upload artifact
-      uses: actions/upload-pages-artifact@v1
-      with:
-        path: 'www'
+      - name: Copy Binaries (Tools)
+        run: copy build32\Release\*.exe www\
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: "www"
 
   deploy:
     if: github.ref == 'refs/heads/main'
     needs: build
     permissions:
-      pages: write      # to deploy to Pages
-      id-token: write   # to verify the deployment originates from an appropriate source
+      pages: write # to deploy to Pages
+      id-token: write # to verify the deployment originates from an appropriate source
 
     # Deploy to the github-pages environment
     environment:
@@ -82,5 +64,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v1
-      
-        

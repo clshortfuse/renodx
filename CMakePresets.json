@@ -29,6 +29,19 @@
       }
     },
     {
+      "name": "x32",
+      "inherits": "x64",
+      "hidden": true,
+      "architecture": {
+        "value": "Win32",
+        "strategy": "external"
+      },
+      "toolset": {
+        "value": "v143,host=x86",
+        "strategy": "external"
+      }
+    },
+    {
       "name": "ninja-x64",
       "inherits": "x64",
       "displayName": "Ninja x64",
@@ -43,6 +56,12 @@
       "binaryDir": "build.ninja"
     },
     {
+      "name": "ninja-x32",
+      "inherits": "ninja-x64",
+      "displayName": "Ninja x32",
+      "binaryDir": "build32.ninja"
+    },
+    {
       "name": "vs-x64",
       "displayName": "Visual Studio x64",
       "description": "Generates Visual Studio solution and project files. Slower build than ninja.",
@@ -52,6 +71,12 @@
       "cacheVariables": {
         "CMAKE_SYSTEM_VERSION": "10.0.26100.0"
       }
+    },
+    {
+      "name": "vs-x32",
+      "inherits": "vs-x64",
+      "displayName": "Visual Studio x32",
+      "binaryDir": "build32"
     }
   ],
   "buildPresets": [
@@ -88,6 +113,42 @@
     {
       "name": "vs-x64-RelWithDebInfo",
       "displayName": "Visual Studio x64 RelWithDebInfo",
+      "configurePreset": "vs-x64",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "ninja-x32-debug",
+      "displayName": "Ninja x32 Debug",
+      "configurePreset": "ninja-x32",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ninja-x32-release",
+      "displayName": "Ninja x32 Release",
+      "configurePreset": "ninja-x32",
+      "configuration": "Release"
+    },
+    {
+      "name": "ninja-x32-RelWithDebInfo",
+      "displayName": "Ninja x32 RelWithDebInfo",
+      "configurePreset": "ninja-x32",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "vs-x32-debug",
+      "displayName": "Visual Studio x32 Debug",
+      "configurePreset": "vs-x32",
+      "configuration": "Debug"
+    },
+    {
+      "name": "vs-x32-release",
+      "displayName": "Visual Studio x32 Release",
+      "configurePreset": "vs-x32",
+      "configuration": "Release"
+    },
+    {
+      "name": "vs-x32-RelWithDebInfo",
+      "displayName": "Visual Studio x32 RelWithDebInfo",
       "configurePreset": "vs-x64",
       "configuration": "RelWithDebInfo"
     }
