@@ -48,16 +48,21 @@ float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut
   return color_output;
 }
 
-float3 renoDRTSmoothClamp(float3 lutInputColor) {
+/// Applies a customized version of RenoDRT tonemapper that tonemaps down to 1.0.
+/// This function is used to compress HDR color to SDR range for use alongside `UpgradeToneMap`.
+///
+/// @param lutInputColor The color input that needs to be tonemapped.
+/// @return The tonemapped color compressed to the SDR range, ensuring that it can be applied to SDR color grading with `UpgradeToneMap`.
+float3 renoDRTSmoothClamp(float3 untonemapped) {
   renodx::tonemap::renodrt::Config renodrt_config = renodx::tonemap::renodrt::config::Create();
   renodrt_config.nits_peak = 100.f;
-  renodrt_config.mid_gray_value = 0.195f;
+  renodrt_config.mid_gray_value = 0.18f;
   renodrt_config.mid_gray_nits = 18.f;
   renodrt_config.exposure = 1.f;
   renodrt_config.highlights = 1.f;
   renodrt_config.shadows = 1.f;
-  renodrt_config.contrast = 1.042f;
-  renodrt_config.saturation = 1.05f;
+  renodrt_config.contrast = 1.05f;
+  renodrt_config.saturation = 1.04f;
   renodrt_config.dechroma = 0.f;
   renodrt_config.flare = 0.f;
   renodrt_config.hue_correction_strength = 0.f;
@@ -68,5 +73,8 @@ float3 renoDRTSmoothClamp(float3 lutInputColor) {
   renodrt_config.working_color_space = 2u;
   renodrt_config.per_channel = false;
 
-  return saturate(renodx::tonemap::renodrt::BT709(lutInputColor, renodrt_config));
+  float3 renoDRTColor = renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
+  renoDRTColor = lerp(untonemapped, renoDRTColor, saturate(renodx::color::y::from::BT709(untonemapped) / renodrt_config.mid_gray_value));
+
+  return renoDRTColor;
 }
