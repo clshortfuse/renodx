@@ -118,7 +118,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Internal Sampling",
         .section = "Processing",
         .tooltip = "Selects whether to use the broken vanilla sampling or enhanced for the game's LUT.",
-        .labels = {"Vanilla", "Enhanced", "Enhanced+"},
+        .labels = {"Vanilla", "Enhanced"},
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,

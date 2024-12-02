@@ -1192,17 +1192,9 @@ void frag_main()
 
 #if 1
         untonemapped = float3(_1547, _1549, _1551);
-        if (injectedData.processingInternalSampling == 1) {
-            DICESettings config = DefaultDICESettings();
-            config.Type = 2;
-            config.ShoulderStart = 0.25f;
-            config.DesaturationAmount = 0.f;
-            config.DarkeningAmount = 0.f;
-            sdrColor = saturate(DICETonemap(untonemapped, 1, config));
-        } else {
-            sdrColor = renoDRTSmoothClamp(untonemapped);  // use neutral RenoDRT as a smoothclamp
-        }
         hdrColor = untonemapped;
+          
+        sdrColor = renoDRTSmoothClamp(untonemapped);  // use neutral RenoDRT as a smoothclamp
 #endif
         if (injectedData.processingInternalSampling == 0) {
             if (_1865)
