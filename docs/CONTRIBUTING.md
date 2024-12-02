@@ -27,18 +27,25 @@ Update the submodules
 
 Configure the project
 
-* `cmake --preset vs-x64`
+* `cmake --preset ninja-x64`
 
 Build the project
 
-* `cmake --build --preset vs-x64-release`
+* `cmake --build --preset ninja-x64-release`
 
 ----------------
 
 *Note: for 32bit binaries use:*
 
-* `cmake --preset vs-x32`
-* `cmake --build --preset vs-x32-release`
+* `cmake --preset ninja-x32`
+* `cmake --build --preset ninja-x32-release`
+
+----------------
+
+*Note: for Visual Studio use:*
+
+* `cmake --preset vs-x64`
+* `cmake --build --preset vs-x64-release`
 
 
 ### Automated configuration

@@ -37,13 +37,13 @@ jobs:
         run: md www
 
       - name: Copy Binaries (x64)
-        run: copy build.ninja\Release\*.addon64 www\
+        run: copy build\Release\*.addon64 www\
 
       - name: Copy Binaries (x32)
-        run: copy build32.ninja\Release\*.addon32 www\
+        run: copy build32\Release\*.addon32 www\
 
       - name: Copy Binaries (Tools)
-        run: copy build.ninja\Release\*.exe www\
+        run: copy build\Release\*.exe www\
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1

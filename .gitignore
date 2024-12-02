@@ -32,8 +32,12 @@
 *.app
 
 build/**
-build.ninja/**
 build32/**
+build.ninja/**
+build32.ninja/**
+build.vs/**
+build32.vs/**
+
 
 **/.vshistory/
 .cache/**
