@@ -17,10 +17,14 @@ float RangeCompress(float x) {
 }
 
 float RangeCompress(float val, float threshold, float max_value = 1.f) {
-  if (val < threshold) return val;
-  if (max_value <= threshold) return threshold;
-  float range = max_value - threshold;
-  return threshold + range * RangeCompress((val - threshold) / range);
+  if (val < threshold) {
+    return val;
+  } else if (max_value <= threshold) {
+    return threshold;
+  } else {
+    float range = max_value - threshold;
+    return threshold + range * RangeCompress((val - threshold) / range);
+  }
 }
 
 float3 RangeCompress(float3 val, float threshold, float max_value = 1.f) {

@@ -1,24 +1,3 @@
-// cbuffer HDRMapping
-// {
-
-//   struct HDRMapping
-//   {
-
-//       float whitePaperNits;                         ; Offset:    0
-//       float configImageAlphaScale;                  ; Offset:    4
-//       float displayMaxNits;                         ; Offset:    8
-//       float displayMinNits;                         ; Offset:   12
-//       float4 displayMaxNitsRect;                    ; Offset:   16
-//       float4 standardMaxNitsRect;                   ; Offset:   32
-//       float4 mdrOutRangeRect;                       ; Offset:   48
-//       uint drawMode;                                ; Offset:   64
-//       float gammaForHDR;                            ; Offset:   68
-//       float2 configDrawRectSize;                    ; Offset:   72
-
-//   } HDRMapping;                                     ; Offset:    0 Size:    80
-
-// }
-
 #include "./DICE.hlsl"
 #include "./shared.h"
 

@@ -53,13 +53,13 @@
         "CMAKE_C_COMPILER": "cl.exe",
         "CMAKE_CXX_COMPILER": "cl.exe"
       },
-      "binaryDir": "build.ninja"
+      "binaryDir": "build"
     },
     {
       "name": "ninja-x32",
       "inherits": "ninja-x64",
       "displayName": "Ninja x32",
-      "binaryDir": "build32.ninja"
+      "binaryDir": "build32"
     },
     {
       "name": "vs-x64",
@@ -67,7 +67,7 @@
       "description": "Generates Visual Studio solution and project files. Slower build than ninja.",
       "inherits": "x64",
       "generator": "Visual Studio 17 2022",
-      "binaryDir": "build",
+      "binaryDir": "build.vs",
       "cacheVariables": {
         "CMAKE_SYSTEM_VERSION": "10.0.26100.0"
       }
@@ -76,7 +76,7 @@
       "name": "vs-x32",
       "inherits": "vs-x64",
       "displayName": "Visual Studio x32",
-      "binaryDir": "build32"
+      "binaryDir": "build32.vs"
     }
   ],
   "buildPresets": [
@@ -99,24 +99,6 @@
       "configuration": "RelWithDebInfo"
     },
     {
-      "name": "vs-x64-debug",
-      "displayName": "Visual Studio x64 Debug",
-      "configurePreset": "vs-x64",
-      "configuration": "Debug"
-    },
-    {
-      "name": "vs-x64-release",
-      "displayName": "Visual Studio x64 Release",
-      "configurePreset": "vs-x64",
-      "configuration": "Release"
-    },
-    {
-      "name": "vs-x64-RelWithDebInfo",
-      "displayName": "Visual Studio x64 RelWithDebInfo",
-      "configurePreset": "vs-x64",
-      "configuration": "RelWithDebInfo"
-    },
-    {
       "name": "ninja-x32-debug",
       "displayName": "Ninja x32 Debug",
       "configurePreset": "ninja-x32",
@@ -132,6 +114,24 @@
       "name": "ninja-x32-RelWithDebInfo",
       "displayName": "Ninja x32 RelWithDebInfo",
       "configurePreset": "ninja-x32",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "vs-x64-debug",
+      "displayName": "Visual Studio x64 Debug",
+      "configurePreset": "vs-x64",
+      "configuration": "Debug"
+    },
+    {
+      "name": "vs-x64-release",
+      "displayName": "Visual Studio x64 Release",
+      "configurePreset": "vs-x64",
+      "configuration": "Release"
+    },
+    {
+      "name": "vs-x64-RelWithDebInfo",
+      "displayName": "Visual Studio x64 RelWithDebInfo",
+      "configurePreset": "vs-x64",
       "configuration": "RelWithDebInfo"
     },
     {

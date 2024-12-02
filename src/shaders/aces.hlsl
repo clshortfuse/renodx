@@ -171,11 +171,15 @@ float3 XyYToXYZ(float3 xy_y) {
 }
 
 float Interpolate1D(float2x2 table, float p) {
-  if (p < table[0].x) return table[0].y;
-  if (p >= table[1].x) return table[1].y;
-  // p = clamp(p, table[0].x, table[1].x);
-  float s = (p - table[0].x) / (table[1].x - table[0].x);
-  return table[0].y * (1 - s) + table[1].y * s;
+  if (p < table[0].x) {
+    return table[0].y;
+  } else if (p >= table[1].x) {
+    return table[1].y;
+  } else {
+    // p = clamp(p, table[0].x, table[1].x);
+    float s = (p - table[0].x) / (table[1].x - table[0].x);
+    return table[0].y * (1 - s) + table[1].y * s;
+  }
 }
 
 float3 LinCv2Y(float3 lin_cv, float y_max, float y_min) {

@@ -7,8 +7,7 @@ RenoDX is an engine for modifying DirectX games. Recommended configuration:
 * [cmake](https://cmake.org/download/) - Build System
 * [llvm](https://github.com/llvm/llvm-project/releases/) - Used for linting and formatting
 * [ninja](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages) - For faster building
-* [dxc.exe](https://github.com/microsoft/DirectXShaderCompiler/releases) - Compiles Shader Model 6.0+
-* [fxc.exe](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/) - Compiles Shader Model 3.0 - 5.x
+* [Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/) - Used to build addons and compile HLSL
 * [cmd_decompiler.exe](https://github.com/bo3b/3Dmigoto/releases/tag/1.3.16) - Decompiles upto Shader Model 5.0 to HLSL
 * [dxil-spirv.exe](https://github.com/HansKristian-Work/dxil-spirv) - Converts Shader Model 6.0 to SPIR-V
 * [spirv-cross.exe](https://github.com/KhronosGroup/SPIRV-Cross) - Converts SPIR-V to HLSL
@@ -27,18 +26,25 @@ Update the submodules
 
 Configure the project
 
-* `cmake --preset vs-x64`
+* `cmake --preset ninja-x64`
 
 Build the project
 
-* `cmake --build --preset vs-x64-release`
+* `cmake --build --preset ninja-x64-release`
 
 ----------------
 
 *Note: for 32bit binaries use:*
 
-* `cmake --preset vs-x32`
-* `cmake --build --preset vs-x32-release`
+* `cmake --preset ninja-x32`
+* `cmake --build --preset ninja-x32-release`
+
+----------------
+
+*Note: for Visual Studio use:*
+
+* `cmake --preset vs-x64`
+* `cmake --build --preset vs-x64-release`
 
 
 ### Automated configuration

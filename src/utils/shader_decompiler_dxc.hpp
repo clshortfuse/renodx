@@ -19,7 +19,6 @@
 #include <map>
 #include <optional>
 #include <ostream>
-#include <print>
 #include <regex>
 #include <set>
 #include <span>
@@ -1059,9 +1058,9 @@ class Decompiler {
       return GetTypeDefinitionSize(definition);
     }
 
-    size_t GetTypeDefinitionSize(TypeDefinition& type_definition) {
+    uint32_t GetTypeDefinitionSize(TypeDefinition& type_definition) {
       if (type_definition.size.has_value()) return type_definition.size.value();
-      size_t size = 0;
+      uint32_t size = 0;
       for (auto& [name, type] : type_definition.types) {
         uint32_t data_type_size = GetTypeSize(type.data_type);
         if (type.vector_size > 1) {

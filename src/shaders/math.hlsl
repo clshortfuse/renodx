@@ -55,7 +55,7 @@ float Average(float3 color) {
   return (color.x + color.y + color.z) / 3.f;
 }
 
-#if __SHADER_TARGET_MAJOR >= 6
+#if __HLSL_VERSION >= 2021
 template <typename T>
 T DivideSafe(T dividend, T divisor) {
   return select(divisor == 0.f, FLT_MAX * Sign(dividend), dividend / divisor);
