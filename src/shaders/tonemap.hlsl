@@ -258,8 +258,11 @@ Config Create(
 
 float3 ApplyRenoDRT(float3 color, Config tm_config) {
   float reno_drt_max = (tm_config.peak_nits / tm_config.game_nits);
+  [branch]
   if (tm_config.gamma_correction != 0) {
     reno_drt_max = renodx::color::correct::Gamma(reno_drt_max, tm_config.gamma_correction == 1.f);
+  } else {
+    // noop
   }
 
   renodrt::Config reno_drt_config = renodrt::config::Create();
@@ -296,9 +299,12 @@ float3 ApplyACES(float3 color, Config tm_config) {
   float aces_min = ACES_MIN / tm_config.game_nits;
   float aces_max = (tm_config.peak_nits / tm_config.game_nits);
 
+  [branch]
   if (tm_config.gamma_correction != 0.f) {
     aces_max = renodx::color::correct::Gamma(aces_max, tm_config.gamma_correction == 1.f);
     aces_min = renodx::color::correct::Gamma(aces_min, tm_config.gamma_correction == 1.f);
+  } else {
+    // noop
   }
   aces_max /= mid_gray_scale;
   aces_min /= mid_gray_scale;
@@ -313,6 +319,7 @@ float3 ApplyACES(float3 color, Config tm_config) {
 float3 Apply(float3 untonemapped, Config tm_config) {
   float3 color = untonemapped;
 
+  [branch]
   if (tm_config.type == config::type::RENODRT) {
     tm_config.reno_drt_highlights *= tm_config.highlights;
     tm_config.reno_drt_shadows *= tm_config.shadows;
@@ -327,8 +334,10 @@ float3 Apply(float3 untonemapped, Config tm_config) {
         tm_config.shadows,
         tm_config.contrast,
         tm_config.saturation);
+    [branch]
     if (tm_config.type == config::type::ACES) {
       color = ApplyACES(color, tm_config);
+    } else {
     }
   }
   return color;
@@ -361,6 +370,7 @@ DualToneMap ApplyToneMaps(float3 color_input, Config tm_config) {
 
 #define TONE_MAP_FUNCTION_GENERATOR(textureType)                                                                \
   float3 Apply(float3 color_input, Config tm_config, renodx::lut::Config lut_config, textureType lut_texture) { \
+    [branch]                                                                                                    \
     if (lut_config.strength == 0.f || tm_config.type == 1.f) {                                                  \
       return Apply(color_input, tm_config);                                                                     \
     } else {                                                                                                    \
@@ -381,6 +391,7 @@ DualToneMap ApplyToneMaps(float3 color_input, Config tm_config) {
         color_lut = min(1.f, renodx::lut::Sample(lut_texture, lut_config, color_hdr));                          \
       }                                                                                                         \
                                                                                                                 \
+      [branch]                                                                                                  \
       if (tm_config.type == config::type::VANILLA) {                                                            \
         return lerp(color_input, color_lut, previous_lut_config_strength);                                      \
       } else {                                                                                                  \

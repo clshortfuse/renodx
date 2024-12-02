@@ -241,9 +241,10 @@ float3 ConvertInput(float3 color, Config lut_config) {
 
 float3 GammaOutput(float3 color, Config lut_config) {
   if (lut_config.type_output == config::type::LINEAR) {
-    color = renodx::color::srgb::Encode(max(0, color));
+    return renodx::color::srgb::Encode(max(0, color));
+  } else {
+    return color;
   }
-  return color;
 }
 
 float3 LinearOutput(float3 color, Config lut_config) {
@@ -274,8 +275,9 @@ float3 GammaInput(float3 color_input, float3 color_input_converted, Config lut_c
       || lut_config.type_input == config::type::GAMMA_2_2
       || lut_config.type_input == config::type::GAMMA_2_0) {
     return color_input_converted;
+  } else {
+    return renodx::color::srgb::Encode(max(0, color_input));
   }
-  return renodx::color::srgb::Encode(max(0, color_input));
 }
 
 float3 LinearUnclampedOutput(float3 color, Config lut_config) {
@@ -331,6 +333,7 @@ float3 RestoreSaturationLoss(float3 color_input, float3 color_output, Config lut
     float3 lutInputColor = ConvertInput(color_input, lut_config);                                      \
     float3 lutOutputColor = SampleColor(lutInputColor, lut_config, lut_texture);                       \
     float3 color_output = LinearOutput(lutOutputColor, lut_config);                                    \
+    [branch]                                                                                           \
     if (lut_config.scaling != 0) {                                                                     \
       float3 lutBlack = SampleColor(ConvertInput(0, lut_config), lut_config, lut_texture);             \
       float3 lutMid = SampleColor(ConvertInput(0.18f, lut_config), lut_config, lut_texture);           \
@@ -343,12 +346,11 @@ float3 RestoreSaturationLoss(float3 color_input, float3 color_output, Config lut
           GammaInput(color_input, lutInputColor, lut_config));                                         \
       float3 recolored = RecolorUnclamped(color_output, LinearUnclampedOutput(unclamped, lut_config)); \
       color_output = lerp(color_output, recolored, lut_config.scaling);                                \
+    } else {                                                                                           \
     }                                                                                                  \
     color_output = RestoreSaturationLoss(color_input, color_output, lut_config);                       \
-    if (lut_config.strength != 1.f) {                                                                  \
-      color_output = lerp(color_input, color_output, lut_config.strength);                             \
-    }                                                                                                  \
-    return color_output;                                                                               \
+                                                                                                       \
+    return lerp(color_input, color_output, lut_config.strength);                                       \
   }
 
 SAMPLE_FUNCTION_GENERATOR(Texture3D<float4>);
