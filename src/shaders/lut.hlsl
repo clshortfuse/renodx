@@ -111,10 +111,11 @@ float3 CenterTexel(float3 color, float size) {
 
 #define SAMPLE_COLOR_2D_FUNCTION_GENERATOR(TextureType)                                         \
   float3 SampleColor(float3 color, Config lut_config, TextureType lut_texture) {                \
-    if (lut_config.precompute.x != 0) {                                                         \
+    if (lut_config.precompute.x == 0) {                                                         \
+      return Sample(lut_texture, lut_config.lut_sampler, color.rgb, lut_config.size);           \
+    } else {                                                                                    \
       return Sample(lut_texture, lut_config.lut_sampler, color.rgb, lut_config.precompute.xyz); \
     }                                                                                           \
-    return Sample(lut_texture, lut_config.lut_sampler, color.rgb, lut_config.size);             \
   }
 
 SAMPLE_TEXTURE_3D_FUNCTION_GENERATOR(Texture3D<float4>);

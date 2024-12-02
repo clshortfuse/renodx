@@ -54,7 +54,7 @@ void main(float2 v0
     r0.z = 0.000143612138 * r0.z;
     r0.z = min(16, r0.z);
     r0.xy = r0.xy * r0.zz;
-    r0.xyzw = t0.SampleGrad(s0_s, v0.xy, r0.xyxx, float4(0, 0, 0, 0)).xyzw;
+    r0.xyzw = t0.SampleGrad(s0_s, v0.xy, r0.xy, float2(0, 0)).xyzw;
   } else {
     r0.xyzw = t0.Sample(s0_s, v0.xy).xyzw;
   }

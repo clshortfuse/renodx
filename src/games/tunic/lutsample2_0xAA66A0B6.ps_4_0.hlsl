@@ -29,6 +29,8 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1
   r0.xyz = float3(-0.5, -0.5, -0.5) + r0.xyz;
   r0.xyz = float3(0.00392156886, 0.00392156886, 0.00392156886) * r0.xyz;
   r1.xyzw = t0.Sample(s0_s, v3.xy).xyzw;
+  o0.w = r1.w;
+
   // r0.xyz = saturate(r1.xyz * cb0[6].yyy + r0.xyz);
   r0.xyz = (r1.xyz * cb0[6].yyy + r0.xyz * injectedData.fxNoise);
 

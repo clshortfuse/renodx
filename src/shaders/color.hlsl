@@ -810,7 +810,7 @@ float3 OkLab(float3 oklab) {
   float l = oklab[0];
   float a = oklab[1];
   float b = oklab[2];
-  return float3(l, sqrt((a * a) + (b * b)), atan2(b, a));
+  return float3(l, distance(oklab.yz, 0), atan2(b, a));
 }
 float3 BT709(float3 bt709) {
   float3 ok_lab = renodx::color::oklab::from::BT709(bt709);

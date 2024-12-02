@@ -291,7 +291,7 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
       r0.xyz = lerp(r0.xyz, renodx::lut::Sample(t8, lut_config, saturate(r0.xyz)), lut_config.strength);
     }
   } else {
-    float vanillaMidGray = renodx::tonemap::unity::BT709(0.18f);
+    float vanillaMidGray = renodx::tonemap::unity::BT709(0.18f).x;
 
     renodx::tonemap::Config config = renodx::tonemap::config::Create();
     config.type = injectedData.toneMapType;

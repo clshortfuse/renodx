@@ -12,8 +12,9 @@ namespace correct {
   T Gamma(T c, bool pow_to_srgb = false) {   \
     if (pow_to_srgb) {                       \
       return srgb::Decode(gamma::Encode(c)); \
+    } else {                                 \
+      return gamma::Decode(srgb::Encode(c)); \
     }                                        \
-    return gamma::Decode(srgb::Encode(c));   \
   }
 
 GAMMA(float)
@@ -28,8 +29,9 @@ float4 Gamma(float4 color, bool pow_to_srgb = false) {
   T GammaSafe(T c, bool pow_to_srgb = false) {                            \
     if (pow_to_srgb) {                                                    \
       return renodx::math::Sign(c) * srgb::Decode(gamma::Encode(abs(c))); \
+    } else {                                                              \
+      return renodx::math::Sign(c) * gamma::Decode(srgb::Encode(abs(c))); \
     }                                                                     \
-    return renodx::math::Sign(c) * gamma::Decode(srgb::Encode(abs(c)));   \
   }
 
 GAMMA_SAFE(float)
@@ -56,9 +58,7 @@ float3 HueOKLab(float3 incorrect_color, float3 correct_color, float strength = 1
 
   float chrominance_post_adjust = distance(incorrect_lab.yz, 0);
 
-  if (chrominance_post_adjust != 0.f) {
-    incorrect_lab.yz *= chrominance_pre_adjust / chrominance_post_adjust;
-  }
+  incorrect_lab.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
 
   float3 color = renodx::color::bt709::from::OkLab(incorrect_lab);
   color = renodx::color::bt709::clamp::AP1(color);
@@ -78,9 +78,7 @@ float3 HueICtCp(float3 incorrect_color, float3 correct_color, float strength = 1
 
   float chrominance_post_adjust = distance(incorrect_perceptual.yz, 0);
 
-  if (chrominance_post_adjust != 0.f) {
-    incorrect_perceptual.yz *= chrominance_pre_adjust / chrominance_post_adjust;
-  }
+  incorrect_perceptual.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
 
   float3 color = renodx::color::bt709::from::ICtCp(incorrect_perceptual);
   color = renodx::color::bt709::clamp::AP1(color);
