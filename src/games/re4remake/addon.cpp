@@ -113,12 +113,12 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "processingInternalSampling",
         .binding = &shader_injection.processingInternalSampling,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1.f,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 2.f,
         .label = "Internal Sampling",
         .section = "Processing",
         .tooltip = "Selects whether to use the broken vanilla sampling or enhanced for the game's LUT.",
-        .labels = {"Vanilla", "Enhanced"},
+        .labels = {"Vanilla", "Enhanced", "Enhanced+"},
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
