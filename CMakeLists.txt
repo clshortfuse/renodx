@@ -19,9 +19,12 @@ endif()
 find_program(FXC_BIN fxc.exe
   HINTS ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x64/
   REQUIRED)
+message("FXC_BIN: " ${FXC_BIN})
+
 find_program(DXC_BIN dxc.exe
   HINTS ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x64/
   REQUIRED)
+message("DXC_BIN: " ${DXC_BIN})
 
 function(inspect_hlsl_imports FILE VARIABLE)
   file(STRINGS ${FILE} HLSL_IMPORTS REGEX "^#include \"([^\"]+)\"")
