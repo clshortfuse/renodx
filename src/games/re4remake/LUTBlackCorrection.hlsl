@@ -63,7 +63,7 @@ float3 renoDRTSmoothClamp(float3 untonemapped) {
   renodrt_config.highlights = 1.f;
   renodrt_config.shadows = 1.f;
   renodrt_config.contrast = 1.05f;
-  renodrt_config.saturation = 1.04f;
+  renodrt_config.saturation = 1.03f;
   renodrt_config.dechroma = 0.f;
   renodrt_config.flare = 0.f;
   renodrt_config.hue_correction_strength = 0.f;
