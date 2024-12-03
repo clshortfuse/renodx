@@ -8,38 +8,38 @@ namespace renodx {
 namespace color {
 namespace correct {
 
-#define GAMMA(T)                             \
-  T Gamma(T c, bool pow_to_srgb = false) {   \
-    if (pow_to_srgb) {                       \
-      return srgb::Decode(gamma::Encode(c)); \
-    } else {                                 \
-      return gamma::Decode(srgb::Encode(c)); \
-    }                                        \
+#define GAMMA(T)                                               \
+  T Gamma(T c, bool pow_to_srgb = false, float gamma = 2.2f) { \
+    if (pow_to_srgb) {                                         \
+      return srgb::Decode(gamma::Encode(c, gamma));            \
+    } else {                                                   \
+      return gamma::Decode(srgb::Encode(c), gamma);            \
+    }                                                          \
   }
 
 GAMMA(float)
 GAMMA(float2)
 GAMMA(float3)
 
-float4 Gamma(float4 color, bool pow_to_srgb = false) {
-  return float4(Gamma(color.rgb), color.a);
+float4 Gamma(float4 color, bool pow_to_srgb = false, float gamma = 2.2f) {
+  return float4(Gamma(color.rgb, gamma), color.a);
 }
 
-#define GAMMA_SAFE(T)                                                     \
-  T GammaSafe(T c, bool pow_to_srgb = false) {                            \
-    if (pow_to_srgb) {                                                    \
-      return renodx::math::Sign(c) * srgb::Decode(gamma::Encode(abs(c))); \
-    } else {                                                              \
-      return renodx::math::Sign(c) * gamma::Decode(srgb::Encode(abs(c))); \
-    }                                                                     \
+#define GAMMA_SAFE(T)                                                            \
+  T GammaSafe(T c, bool pow_to_srgb = false, float gamma = 2.2f) {               \
+    if (pow_to_srgb) {                                                           \
+      return renodx::math::Sign(c) * srgb::Decode(gamma::Encode(abs(c), gamma)); \
+    } else {                                                                     \
+      return renodx::math::Sign(c) * gamma::Decode(srgb::Encode(abs(c)), gamma); \
+    }                                                                            \
   }
 
 GAMMA_SAFE(float)
 GAMMA_SAFE(float2)
 GAMMA_SAFE(float3)
 
-float4 GammaSafe(float4 color, bool pow_to_srgb = false) {
-  return float4(Gamma(color.rgb), color.a);
+float4 GammaSafe(float4 color, bool pow_to_srgb = false, float gamma = 2.2f) {
+  return float4(Gamma(color.rgb, gamma), color.a);
 }
 
 #undef GAMMA
