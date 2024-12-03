@@ -30,6 +30,12 @@ jobs:
       - name: Configure CMake (x86)
         run: cmake --preset ninja-x86
 
+      - name: Setup VS Dev Environment (x86)
+        uses: seanmiddleditch/gha-setup-vsdevenv@v4
+        with:
+          arch: x86
+          host_arch: x86
+
       - name: Build (x86)
         run: cmake --build --preset ninja-x86-release --verbose
 

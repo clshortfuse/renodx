@@ -19,9 +19,53 @@
       }
     },
     {
-      "name": "x64",
+      "name": "ninja-x64",
       "inherits": "base",
-      "hidden": true,
+      "displayName": "Ninja x64",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "build",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "toolset": {
+        "value": "v143,host=x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "MSVC": "true",
+        "CMAKE_CXX_COMPILER": "cl.exe",
+        "MSVC_TOOLSET_VERSION": "143"
+      }
+    },
+    {
+      "name": "ninja-x86",
+      "inherits": "base",
+      "displayName": "Ninja x86",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "build32",
+      "architecture": {
+        "value": "Win32",
+        "strategy": "external"
+      },
+      "toolset": {
+        "value": "v143,host=x86",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "MSVC": "true",
+        "CMAKE_CXX_COMPILER": "cl.exe",
+        "MSVC_TOOLSET_VERSION": "143",
+        "CMAKE_EXE_LINKER_FLAGS": "/machine:X86",
+        "CMAKE_MODULE_LINKER_FLAGS": "/machine:X86"
+      }
+    },
+    {
+      "name": "vs-x64",
+      "displayName": "Visual Studio x64",
+      "inherits": "base",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "build.vs",
       "architecture": {
         "value": "x64",
         "strategy": "set"
@@ -32,9 +76,11 @@
       }
     },
     {
-      "name": "x86",
+      "name": "vs-x86",
       "inherits": "base",
-      "hidden": true,
+      "generator": "Visual Studio 17 2022",
+      "displayName": "Visual Studio x86",
+      "binaryDir": "build32.vs",
       "architecture": {
         "value": "Win32",
         "strategy": "set"
@@ -43,33 +89,6 @@
         "value": "v143,host=x86",
         "strategy": "set"
       }
-    },
-    {
-      "name": "ninja-x64",
-      "inherits": "x64",
-      "displayName": "Ninja x64",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "build"
-    },
-    {
-      "name": "ninja-x86",
-      "inherits": "x86",
-      "displayName": "Ninja x86",
-      "binaryDir": "build32"
-    },
-    {
-      "name": "vs-x64",
-      "displayName": "Visual Studio x64",
-      "inherits": "x64",
-      "generator": "Visual Studio 17 2022",
-      "binaryDir": "build.vs"
-    },
-    {
-      "name": "vs-x86",
-      "inherits": "x86",
-      "generator": "Visual Studio 17 2022",
-      "displayName": "Visual Studio x86",
-      "binaryDir": "build32.vs"
     }
   ],
   "buildPresets": [
