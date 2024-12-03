@@ -7,38 +7,41 @@
   },
   "configurePresets": [
     {
-      "name": "x64",
+      "name": "base",
       "hidden": true,
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
         "rhs": "Windows"
       },
-      "architecture": {
-        "value": "x64",
-        "strategy": "external"
-      },
-      "toolset": {
-        "value": "v143,host=x64",
-        "strategy": "external"
-      },
       "cacheVariables": {
-        "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /GR /EHsc",
-        "CMAKE_CXX_STANDARD_LIBRARIES": "kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib",
-        "CMAKE_C_FLAGS": "/DWIN32 /D_WINDOWS"
+        "CMAKE_SYSTEM_VERSION": "10.0.26100.0"
       }
     },
     {
-      "name": "x32",
-      "inherits": "x64",
+      "name": "x64",
+      "inherits": "common",
+      "hidden": true,
+      "architecture": {
+        "value": "x64",
+        "strategy": "set"
+      },
+      "toolset": {
+        "value": "v143,host=x64",
+        "strategy": "set"
+      }
+    },
+    {
+      "name": "x86",
+      "inherits": "common",
       "hidden": true,
       "architecture": {
         "value": "Win32",
-        "strategy": "external"
+        "strategy": "set"
       },
       "toolset": {
         "value": "v143,host=x86",
-        "strategy": "external"
+        "strategy": "set"
       }
     },
     {
@@ -46,36 +49,26 @@
       "inherits": "x64",
       "displayName": "Ninja x64",
       "generator": "Ninja Multi-Config",
-      "environment": {
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      },
-      "cacheVariables": {
-        "CMAKE_C_COMPILER": "cl.exe",
-        "CMAKE_CXX_COMPILER": "cl.exe"
-      },
       "binaryDir": "build"
     },
     {
-      "name": "ninja-x32",
-      "inherits": "ninja-x64",
-      "displayName": "Ninja x32",
+      "name": "ninja-x86",
+      "inherits": "x86",
+      "displayName": "Ninja x86",
       "binaryDir": "build32"
     },
     {
       "name": "vs-x64",
       "displayName": "Visual Studio x64",
-      "description": "Generates Visual Studio solution and project files. Slower build than ninja.",
       "inherits": "x64",
       "generator": "Visual Studio 17 2022",
-      "binaryDir": "build.vs",
-      "cacheVariables": {
-        "CMAKE_SYSTEM_VERSION": "10.0.26100.0"
-      }
+      "binaryDir": "build.vs"
     },
     {
-      "name": "vs-x32",
-      "inherits": "vs-x64",
-      "displayName": "Visual Studio x32",
+      "name": "vs-x86",
+      "inherits": "x86",
+      "generator": "Visual Studio 17 2022",
+      "displayName": "Visual Studio x86",
       "binaryDir": "build32.vs"
     }
   ],
@@ -99,21 +92,21 @@
       "configuration": "RelWithDebInfo"
     },
     {
-      "name": "ninja-x32-debug",
-      "displayName": "Ninja x32 Debug",
-      "configurePreset": "ninja-x32",
+      "name": "ninja-x86-debug",
+      "displayName": "Ninja x86 Debug",
+      "configurePreset": "ninja-x86",
       "configuration": "Debug"
     },
     {
-      "name": "ninja-x32-release",
-      "displayName": "Ninja x32 Release",
-      "configurePreset": "ninja-x32",
+      "name": "ninja-x86-release",
+      "displayName": "Ninja x86 Release",
+      "configurePreset": "ninja-x86",
       "configuration": "Release"
     },
     {
-      "name": "ninja-x32-RelWithDebInfo",
-      "displayName": "Ninja x32 RelWithDebInfo",
-      "configurePreset": "ninja-x32",
+      "name": "ninja-x86-RelWithDebInfo",
+      "displayName": "Ninja x86 RelWithDebInfo",
+      "configurePreset": "ninja-x86",
       "configuration": "RelWithDebInfo"
     },
     {
@@ -135,20 +128,20 @@
       "configuration": "RelWithDebInfo"
     },
     {
-      "name": "vs-x32-debug",
-      "displayName": "Visual Studio x32 Debug",
-      "configurePreset": "vs-x32",
+      "name": "vs-x86-debug",
+      "displayName": "Visual Studio x86 Debug",
+      "configurePreset": "vs-x86",
       "configuration": "Debug"
     },
     {
-      "name": "vs-x32-release",
-      "displayName": "Visual Studio x32 Release",
-      "configurePreset": "vs-x32",
+      "name": "vs-x86-release",
+      "displayName": "Visual Studio x86 Release",
+      "configurePreset": "vs-x86",
       "configuration": "Release"
     },
     {
-      "name": "vs-x32-RelWithDebInfo",
-      "displayName": "Visual Studio x32 RelWithDebInfo",
+      "name": "vs-x86-RelWithDebInfo",
+      "displayName": "Visual Studio x86 RelWithDebInfo",
       "configurePreset": "vs-x64",
       "configuration": "RelWithDebInfo"
     }
