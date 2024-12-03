@@ -18,8 +18,10 @@ jobs:
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@v5
 
-      - name: Setup VS Dev Environment
-        uses: seanmiddleditch/gha-setup-vsdevenv@v4
+      - name: Configure build for amd64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
 
       - name: Configure CMake (x64)
         run: cmake --preset ninja-x64
@@ -27,11 +29,10 @@ jobs:
       - name: Build (x64)
         run: cmake --build --preset ninja-x64-release --verbose
 
-      - name: Setup VS Dev Environment (x86)
-        uses: seanmiddleditch/gha-setup-vsdevenv@v4
+      - name: Configure build for x86
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: x86
-          host_arch: x86
+          arch: amd64_x86
 
       - name: Configure CMake (x86)
         run: cmake --preset ninja-x86
