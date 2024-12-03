@@ -126,7 +126,7 @@ function(build_shader_target ADDON ADDON_PATH)
   add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES})
 endfunction()
 
-if(CMAKE_GENERATOR_PLATFORM STREQUAL "Win32")
+if(CMAKE_GENERATOR_PLATFORM STREQUAL "Win32" OR CMAKE_EXE_LINKER_FLAGS MATCHES "/machine:X86")
   set(TARGET_SUFFIX ".addon32")
 else()
   set(TARGET_SUFFIX ".addon64")
