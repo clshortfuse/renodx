@@ -152,6 +152,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of peak white in nits",
         .min = 48.f,
         .max = 4000.f,
+        .is_enabled = []() { return shader_injection.toneMapType >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapGameNits",
@@ -163,6 +164,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of 100% white in nits",
         .min = 48.f,
         .max = 500.f,
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
     },
       new renodx::utils::settings::Setting{
         .key = "toneMapHDRBlendFactor",
