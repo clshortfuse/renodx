@@ -140,7 +140,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla (Fake HDR)", "None", "DICE"},
+        .labels = {"Vanilla (Fake HDR)", "None", "DICE", "DICE Boosted"},
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",

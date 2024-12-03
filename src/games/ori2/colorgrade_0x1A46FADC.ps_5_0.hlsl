@@ -77,8 +77,12 @@ void main(
   r0.x = r0.x * 7 + 1;
   r0.xyzw = r2.xyzw * r0.xxxx;
 r2.xyz = cb0[17].xyz * r0.xyz;  //    r2.xyz = saturate(cb0[17].xyz * r0.xyz);
-float3 hdrColor = r2.xyz;
-r2.xyz = saturate(r2.xyz);
+  float3 hdrColor = r2.xyz;
+  float3 sdrColor = r2.xyz;
+  if (injectedData.toneMapType == 3) {
+    sdrColor = renoDRTSmoothClamp(sdrColor);
+  }
+  r2.xyz = saturate(sdrColor);
 
   r3.xyz = r2.xyz * r2.xyz;
   r4.xyz = r3.xyz * r2.xyz;
