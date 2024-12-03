@@ -13,7 +13,6 @@
 #include <embed/0x4DC74060.h>
 #include <embed/0x6DCD7321.h>
 #include <embed/0x90C53F9F.h>
-#include <embed/0x9F5327AD.h>
 #include <embed/0xA3657554.h>
 #include <embed/0xB8F57CD5.h>
 #include <embed/0xC605FBD5.h>
@@ -29,7 +28,6 @@ namespace {
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomSwapchainShader(0x6DCD7321),
     CustomSwapchainShader(0x04FDEDF9),
-    CustomShaderEntry(0x9F5327AD),
     CustomShaderEntry(0xB8F57CD5),
     CustomShaderEntry(0x4DC74060),
     CustomShaderEntry(0xA3657554),
