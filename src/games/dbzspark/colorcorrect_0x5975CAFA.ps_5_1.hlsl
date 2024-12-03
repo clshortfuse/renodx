@@ -54,7 +54,7 @@ void main(
 
   tonemappedPQ = r1.rgb;
   // Hacky fix for shop
-  float customDecode = 203.f;
+  float customDecode = 0.f;
   r1.rgb = pqTosRGB(tonemappedPQ, customDecode, true);
 
   r0.zw = r0.xy * cb1[129].xy + cb1[128].xy;
@@ -249,7 +249,7 @@ void main(
   post_srgb = o0.rgb;
   o0.w = 0;
 
-  o0.rgb = upgradeSRGBtoPQ(tonemappedPQ, post_srgb, customDecode, 1.f);
+  o0.rgb = upgradeSRGBtoPQ(tonemappedPQ, post_srgb, customDecode);
 
   return;
 }
