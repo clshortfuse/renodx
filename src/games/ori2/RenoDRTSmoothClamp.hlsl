@@ -14,7 +14,7 @@ float3 renoDRTSmoothClamp(float3 untonemapped) {
   renodrt_config.highlights = 1.f;
   renodrt_config.shadows = 1.f;
   renodrt_config.contrast = 1.05f;
-  renodrt_config.saturation = 1.04f;
+  renodrt_config.saturation = 1.025f;
   renodrt_config.dechroma = 0.f;
   renodrt_config.flare = 0.f;
   renodrt_config.hue_correction_strength = 0.f;
@@ -26,7 +26,9 @@ float3 renoDRTSmoothClamp(float3 untonemapped) {
   renodrt_config.per_channel = false;
 
   float3 renoDRTColor = renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
-  renoDRTColor = lerp(untonemapped, renoDRTColor, saturate(renodx::color::y::from::BT709(untonemapped) / renodrt_config.mid_gray_value));
+
+  float HDRBlendFactor = lerp(1.f, renodrt_config.mid_gray_value, saturate(injectedData.toneMapHDRBlendFactor));
+  renoDRTColor = lerp(min(1.f, untonemapped), renoDRTColor, saturate(untonemapped / HDRBlendFactor));
 
   return renoDRTColor;
 }

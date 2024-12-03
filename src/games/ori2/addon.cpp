@@ -135,12 +135,12 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 3.f,
         .can_reset = false,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla (Fake HDR)", "None", "DICE", "DICE Boosted"},
+        .labels = {"Vanilla (Fake HDR)", "SDR Unclamped", "SDR Unclamped + DICE", "DICE Boosted (Real HDR)"},
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
@@ -163,6 +163,16 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of 100% white in nits",
         .min = 48.f,
         .max = 500.f,
+    },
+      new renodx::utils::settings::Setting{
+        .key = "toneMapHDRBlendFactor",
+        .binding = &shader_injection.toneMapHDRBlendFactor,
+        .default_value = 100.f,
+        .label = "HDR Vibrance",
+        .section = "Tone Mapping",
+        .tooltip = "Controls how closely the original SDR color grading should be matched. Raise for greater HDR effect.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapHueCorrection",
@@ -191,12 +201,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapType", 0);
   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 1000.f);
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 1.f);
-  renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
-  renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
+  renodx::utils::settings::UpdateSetting("toneMapHDRBlendFactor", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeStrength", 100.f);
 }
 
