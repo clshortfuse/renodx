@@ -1,3 +1,4 @@
+#include "./RenoDRTSmoothClamp.hlsl" 
 #include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.3.16 on Thu Aug 15 21:15:57 2024
