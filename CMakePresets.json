@@ -20,7 +20,7 @@
     },
     {
       "name": "x64",
-      "inherits": "common",
+      "inherits": "base",
       "hidden": true,
       "architecture": {
         "value": "x64",
@@ -33,7 +33,7 @@
     },
     {
       "name": "x86",
-      "inherits": "common",
+      "inherits": "base",
       "hidden": true,
       "architecture": {
         "value": "Win32",
