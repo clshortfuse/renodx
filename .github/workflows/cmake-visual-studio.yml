@@ -21,8 +21,8 @@ jobs:
       - name: Build (x64)
         run: cmake --build --preset vs-x64-release --verbose
 
-      - name: Configure CMake (x32)
-        run: cmake --preset vs-x32
+      - name: Configure CMake (x86)
+        run: cmake --preset vs-x86
 
-      - name: Build (x32)
-        run: cmake --build --preset vs-x32-release --verbose
+      - name: Build (x86)
+        run: cmake --build --preset vs-x86-release --verbose
