@@ -63,8 +63,8 @@ void main(
     r0.xyz = r1.xyz / r0.xyz;
     r0.xyz = pow(r0.xyz, 78.84375f);
   } else {
-    r0.xyz = Hue(r0.xyz, injectedData.toneMapHueCorrection);
-    if (injectedData.toneMapType == 2 || injectedData.toneMapType == 3) {
+    if (injectedData.toneMapType >= 2.f) {
+      r0.xyz = Hue(r0.xyz, injectedData.toneMapHueCorrection);
       // Declare DICE parameters
       DICESettings config = DefaultDICESettings();
       config.Type = 3;
@@ -74,7 +74,6 @@ void main(
 
       // multiply paper white in for tonemapping and out for output
       r0.xyz = DICETonemap(r0.xyz * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
-    } else {
     }
     r0.xyz = renodx::color::bt2020::from::BT709(r0.xyz);
     r0.xyz = renodx::color::pq::Encode(r0.xyz, injectedData.toneMapGameNits);
