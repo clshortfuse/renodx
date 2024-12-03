@@ -19,7 +19,6 @@ struct ShaderInjectData {
   float colorGradeShadows;
   float colorGradeContrast;
   float colorGradeSaturation;
-  float colorGradeBlowout;
 };
 
 #ifndef __cplusplus
@@ -27,10 +26,10 @@ cbuffer injectedBuffer : register(b0, space50) {
   ShaderInjectData injectedData : packoffset(c0);
 }
 /* static const ShaderInjectData injectedData = {
-    0.f,    // toneMapType
+    3.f,    // toneMapType
     1.f,    // toneMapDisplay
-    300.f,  // toneMapPeakNits
-    60.f,  // toneMapGameNits
+    500.f,  // toneMapPeakNits
+    150.f,  // toneMapGameNits
     120.f,  // toneMapUINits
     1.f,    // toneMapGammaCorrection
     1.f,    // colorGradeExposure
@@ -38,7 +37,6 @@ cbuffer injectedBuffer : register(b0, space50) {
     1.f,    // colorGradeShadows
     1.f,    // colorGradeContrast
     1.f,    // colorGradeSaturation
-    0.f,    // colorGradeBlowout
 }; */
 #endif
 

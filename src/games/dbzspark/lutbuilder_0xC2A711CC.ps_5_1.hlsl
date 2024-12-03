@@ -397,6 +397,8 @@ void main(
   r5.rgb = max(0, r5.rgb);
 
   float3 lut_input_color = r5.rgb;
+  float3 lut_input_color_sdr = saturate(renoDRTSmoothClamp(r5.rgb));
+
   float3 post_lut_color;
 
   // Vanilla sampler looks better
@@ -409,9 +411,10 @@ void main(
         renodx::lut::config::type::SRGB,
         16.f);
 
-    post_lut_color = renodx::lut::Sample(t0, lut_config, lut_input_color);
+    post_lut_color = renodx::lut::Sample(t0, lut_config, lut_input_color_sdr);
   } else {
-    r5.rgb = saturate(r5.rgb);  // Better picture
+    r5.rgb = lut_input_color_sdr;
+    // r5.rgb = saturate(r5.rgb);  // Better picture
     r1.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r5.xyz;
     r6.xyz = cmp(r5.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
     r5.xyz = log2(r5.xyz);
@@ -443,7 +446,7 @@ void main(
     post_lut_color = r1.rgb;
   }  // CustomEdit
   r1.rgb = post_lut_color;
-  r1.rgb = renodx::tonemap::UpgradeToneMap(lut_input_color, saturate(lut_input_color), r1.rgb, 1.f);
+  r1.rgb = renodx::tonemap::UpgradeToneMap(lut_input_color, lut_input_color_sdr, r1.rgb, 1.f);
 
   r5.xyz = r1.xyz * r1.xyz;
   r1.xyz = cb0[39].yyy * r1.xyz;

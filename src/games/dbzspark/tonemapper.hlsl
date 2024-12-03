@@ -13,7 +13,6 @@ renodx::tonemap::Config getCommonConfig() {
   float renoDRTContrast = 1.f;
   float renoDRTFlare = 0.f;
   float renoDRTShadows = 1.f;
-  float renoDRTDechroma = injectedData.colorGradeBlowout;
   float renoDRTSaturation = 1.f;
   float renoDRTHighlights = 1.f;
 
@@ -22,12 +21,11 @@ renodx::tonemap::Config getCommonConfig() {
   config.peak_nits = injectedData.toneMapPeakNits;
   config.game_nits = injectedData.toneMapGameNits;
   config.gamma_correction = injectedData.toneMapGammaCorrection;
+  config.saturation = renoDRTSaturation;
+  config.highlights = renoDRTHighlights;
+  config.shadows = renoDRTShadows;
+  config.contrast = renoDRTContrast;
 
-  config.reno_drt_highlights = renoDRTHighlights;
-  config.reno_drt_shadows = renoDRTShadows;
-  config.reno_drt_contrast = renoDRTContrast;
-  config.reno_drt_saturation = renoDRTSaturation;
-  config.reno_drt_dechroma = renoDRTDechroma;
   config.mid_gray_value = vanillaMidGray;
   config.mid_gray_nits = vanillaMidGray * 100.f;
   config.reno_drt_flare = renoDRTFlare;
@@ -35,11 +33,44 @@ renodx::tonemap::Config getCommonConfig() {
   return config;
 }
 
+/// Applies a customized version of RenoDRT tonemapper that tonemaps down to 1.0.
+/// This function is used to compress HDR color to SDR range for use alongside `UpgradeToneMap`.
+///
+/// @param lutInputColor The color input that needs to be tonemapped.
+/// @return The tonemapped color compressed to the SDR range, ensuring that it can be applied to SDR color grading with `UpgradeToneMap`.
+float3 renoDRTSmoothClamp(float3 untonemapped) {
+  renodx::tonemap::renodrt::Config renodrt_config = renodx::tonemap::renodrt::config::Create();
+  renodrt_config.nits_peak = 100.f;
+  renodrt_config.mid_gray_value = 0.18f;
+  renodrt_config.mid_gray_nits = 18.f;
+  renodrt_config.exposure = 1.f;
+  renodrt_config.highlights = 1.f;
+  renodrt_config.shadows = 1.f;
+  renodrt_config.contrast = 1.f;
+  renodrt_config.saturation = 1.04f;
+  renodrt_config.dechroma = 0.f;
+  renodrt_config.flare = 0.f;
+  // renodrt_config.hue_correction_strength = 1.f;
+  renodrt_config.hue_correction_source = renodx::tonemap::uncharted2::BT709(untonemapped);
+  renodrt_config.hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::OKLAB;
+  renodrt_config.tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
+  renodrt_config.hue_correction_type = renodx::tonemap::renodrt::config::hue_correction_type::INPUT;
+  renodrt_config.per_channel = false;
+
+  float3 renoDRTColor = renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
+  renoDRTColor = lerp(untonemapped, renoDRTColor, saturate(renodx::color::y::from::BT709(untonemapped) / renodrt_config.mid_gray_value));
+  // renoDRTColor = renodx::tonemap::UpgradeToneMap(untonemapped, saturate(untonemapped), renoDRTColor, saturate(renodx::color::y::from::BT709(untonemapped) / renodrt_config.mid_gray_value));
+  // renoDRTColor = renodx::tonemap::UpgradeToneMap(untonemapped, saturate(untonemapped), renoDRTColor, 1.f);
+
+  return renoDRTColor;
+}
+
 // Here so we have a central function once we figure out a better way
 float3 clampForSRGB(float3 color) {
   // clamp so colors don't go NaN, and didn't want to clamp to 1
   // value derived from testing main menu
-  return min(float3(1.f, 1.f, 1.f) * 10.f, color);
+  // return min(float3(1.f, 1.f, 1.f) * 10.f, color);
+  return renoDRTSmoothClamp(color);
 }
 
 // input is always PQ, even for vanilla+
@@ -73,7 +104,7 @@ float3 upgradeSRGBtoPQ(float3 tonemapped, float3 post_srgb, float customDecode =
     post = renodx::color::srgb::Decode(post);
 
     output = renodx::tonemap::UpgradeToneMap(hdr, saturate(hdr), post, strength);
-    output = renodx::color::bt2020::from::BT709(output);  // Maybe change this to post
+    output = renodx::color::bt2020::from::BT709(output);
     output = renodx::color::pq::Encode(output, customDecode != 0.f ? customDecode : injectedData.toneMapGameNits);
   }
 
