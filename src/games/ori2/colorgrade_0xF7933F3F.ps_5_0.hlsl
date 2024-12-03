@@ -118,7 +118,7 @@ r2.xyz = saturate(r2.xyz);
   o0.xyzw = cb0[12].yyyy * r0.xyzw + r2.xyzw;
 if (injectedData.toneMapType != 0) {
     // preserve SDR color grading
-    o0.xyz = renodx::tonemap::UpgradeToneMap(hdrColor, saturate(hdrColor), o0.xyz, injectedData.colorGradeStrength);
+    o0.xyz = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, o0.xyz, injectedData.colorGradeStrength);
 }
   return;
 }
