@@ -11,7 +11,6 @@
 #include <embed/0x6DCD7321.h>
 #include <include/reshade.hpp>
 
-
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../utils/settings.hpp"
@@ -82,6 +81,16 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Off", "LCD", "CRT"},
     },
     new renodx::utils::settings::Setting{
+        .key = "toneMapHueCorrectionMethod",
+        .binding = &shader_injection.toneMapHueCorrectionMethod,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Hue Correction Method",
+        .section = "Tone Mapping",
+        .tooltip = "Applies hue shift emulation before tonemapping",
+        .labels = {"None", "SDR Clip", "Filmic", "RenoDRT"},
+    },
+    new renodx::utils::settings::Setting{
         .key = "toneMapHueCorrection",
         .binding = &shader_injection.toneMapHueCorrection,
         .default_value = 100.f,
@@ -90,6 +99,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Emulates Vanilla hue shifts.",
         .min = 0.f,
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapHueCorrectionMethod != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -148,51 +158,13 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeLUTStrength",
-        .binding = &shader_injection.colorGradeLUTStrength,
-        .default_value = 100.f,
-        .label = "LUT Strength",
-        .section = "Color Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "colorGradeLUTScaling",
-        .binding = &shader_injection.colorGradeLUTScaling,
-        .default_value = 100.f,
-        .label = "LUT Scaling",
-        .section = "Color Grading",
-        .tooltip = "Scales the color grade LUT to full range when size is clamped.",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "fxNoise",
-        .binding = &shader_injection.fxNoise,
-        .default_value = 50.f,
-        .label = "Noise",
-        .section = "Effects",
-        .tooltip = "Noise pattern added to game in some areas.",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "fxScreenGlow",
-        .binding = &shader_injection.fxScreenGlow,
-        .default_value = 100.f,
-        .label = "Screen Glow",
-        .section = "Effects",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
         .section = "Links",
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          system("start https://discord.gg/5WZXDpmbpP");
+          ShellExecute(0, "open", "https://discord.gg/5WZXDpmbpP", 0, 0, SW_SHOW);
         },
     },
     new renodx::utils::settings::Setting{
@@ -201,7 +173,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Links",
         .group = "button-line-1",
         .on_change = []() {
-          system("start https://github.com/clshortfuse/renodx");
+          ShellExecute(0, "open", "https://github.com/clshortfuse/renodx", 0, 0, SW_SHOW);
         },
     },
 };
@@ -221,8 +193,6 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
-  renodx::utils::settings::UpdateSetting("fxNoise", 50.f);
-  renodx::utils::settings::UpdateSetting("fxScreenGlow", 100.f);
 }
 
 bool fired_on_init_swapchain = false;
