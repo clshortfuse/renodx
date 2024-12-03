@@ -135,12 +135,12 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 3.f,
+        .default_value = 2.f,
         .can_reset = false,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla (Fake HDR)", "SDR Unclamped", "SDR Unclamped + DICE", "DICE Boosted (Real HDR)"},
+        .labels = {"Vanilla (Fake HDR)", "SDR Unclamped", "DICE (Real HDR)"},
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
@@ -183,7 +183,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Emulates hue shifting from the vanilla tonemapper",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType != 0; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 2; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -193,6 +193,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Color Grade Strength",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType >= 2; },
         .parse = [](float value) { return value * 0.01f; },
     },
 };

@@ -56,7 +56,7 @@ void main(
   r1.xyz = cb0[17].xyz * r0.xyz;  //  r1.xyz = saturate(cb0[17].xyz * r0.xyz);
   float3 hdrColor = r1.xyz;
   float3 sdrColor = r1.xyz;
-  if (injectedData.toneMapType == 3) {
+  if (injectedData.toneMapType >= 2.f) {
     sdrColor = renoDRTSmoothClamp(sdrColor);
   }
   r1.xyz = saturate(sdrColor);
@@ -104,7 +104,7 @@ void main(
 
 
   o0.xyzw = cb0[12].yyyy * r0.xyzw + r1.xyzw;
-  if (injectedData.toneMapType != 0) {
+  if (injectedData.toneMapType >= 2.f) {
     // preserve SDR color grading
     o0.xyz = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, o0.xyz, injectedData.colorGradeStrength);
   }
