@@ -36,8 +36,8 @@ Build the project
 
 *Note: for 32bit binaries use:*
 
-* `cmake --preset ninja-x32`
-* `cmake --build --preset ninja-x32-release`
+* `cmake --preset ninja-x86`
+* `cmake --build --preset ninja-x86-release`
 
 ----------------
 

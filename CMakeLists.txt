@@ -17,7 +17,7 @@ find_program(DXC_BIN dxc.exe
   REQUIRED)
 message("DXC_BIN: " ${DXC_BIN})
 
-project(renodx VERSION 0.1.0 LANGUAGES C CXX)
+project(renodx VERSION 0.1.0 LANGUAGES CXX)
 
 include(CTest)
 enable_testing()
@@ -126,9 +126,10 @@ function(build_shader_target ADDON ADDON_PATH)
   add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES})
 endfunction()
 
-set(TARGET_SUFFIX ".addon64")
 if(CMAKE_GENERATOR_PLATFORM STREQUAL "Win32")
   set(TARGET_SUFFIX ".addon32")
+else()
+  set(TARGET_SUFFIX ".addon64")
 endif()
 
 file(GLOB ADDON_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/games/**/addon.cpp)
