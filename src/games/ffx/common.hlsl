@@ -28,8 +28,28 @@ float3 FinalizeOutput(float3 color) {
   }
   color *= injectedData.toneMapUINits;
   color = min(color, injectedData.toneMapPeakNits);  // Clamp UI or Videos
-  
-  color /= 80.f; // or PQ
+
+  if (injectedData.colorGradeColorSpace == 3.f) {
+    color = mul(float3x3(
+                    0.742944359f, -0.243619307f, -0.0135331172f,
+                    0.0414674095f, 1.06642627f, 0.00159343972f,
+                    0.00323979160f, 0.0367207527f, 1.47409546f),
+                color);
+  } else if (injectedData.colorGradeColorSpace == 2.f) {
+    color = mul(float3x3(
+                    0.871554791f, -0.161164566f, -0.0151899587f,
+                    0.0417598634f, 0.980491757f, -0.00258531118f,
+                    0.00544220115f, 0.0462860465f, 1.73763155f),
+                color);
+  } else if (injectedData.colorGradeColorSpace == 1.f) {
+    color = mul(float3x3(
+                    0.939542055f, 0.0501813553f, 0.0102765792f,
+                    0.0177722238f, 0.965792834f, 0.0164349135f,
+                    -0.00162159989f, -0.00436974968f, 1.00599133f),
+                color);
+  }
+
+  color /= 80.f;  // or PQ
   return color;
 }
 
@@ -96,8 +116,8 @@ float3 ToneMap(float3 color) {
   }
 
   color = renodx::tonemap::config::Apply(color, config);
-  
-  color = renodx::color::bt709::clamp::BT709(color); // Needed for later blending
+
+  color = renodx::color::bt709::clamp::BT709(color);  // Needed for later blending
   return color;
 }
 

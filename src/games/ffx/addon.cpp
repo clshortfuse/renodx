@@ -172,6 +172,22 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "colorColorSpace",
+        .binding = &shader_injection.colorGradeColorSpace,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Color Space",
+        .section = "Color Grading",
+        .tooltip = "Selects output color space"
+                   "\nModern for BT.709."
+                   "\nUS CRT for BT.601 (NTSC-U)."
+                   "\nJPN CRT for BT.601 ARIB-TR-B09 D93 (NTSC-J)."
+                   "\nJPN Conusmer CRT for ARIB-TR-B09 9300K 27 MPCD (NTSC-J)."
+                   "\nDefault: US CRT",
+        .labels = {"Modern", "US CRT", "JPN CRT", "JPN Consumer CRT "},
+
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
         .section = "Links",
