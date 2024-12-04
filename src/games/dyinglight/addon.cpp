@@ -160,7 +160,6 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapHueCorrection",
         .binding = &shader_injection.toneMapHueCorrection,
         .default_value = 50.f,
-        .can_reset = false,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tooltip = "Emulates hue shifting from the vanilla tonemapper",
