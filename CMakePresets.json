@@ -34,9 +34,10 @@
       },
       "cacheVariables": {
         "MSVC": "true",
+        "MSVC_TOOLSET_VERSION": "143",
         "CMAKE_CXX_COMPILER": "cl.exe",
         "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc",
-        "MSVC_TOOLSET_VERSION": "143"
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
     },
     {
@@ -55,10 +56,11 @@
       },
       "cacheVariables": {
         "MSVC": "true",
+        "MSVC_TOOLSET_VERSION": "143",
         "CMAKE_CXX_COMPILER": "cl.exe",
         "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc",
-        "MSVC_TOOLSET_VERSION": "143",
         "CMAKE_EXE_LINKER_FLAGS": "/machine:X86",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_MODULE_LINKER_FLAGS": "/machine:X86"
       }
     },

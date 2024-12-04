@@ -8,7 +8,14 @@
 #define DEBUG_LEVEL_0
 
 #include <deps/imgui/imgui.h>
+#include <embed/0x04FDEDF9.h>
+#include <embed/0x2BBD74AD.h>
+#include <embed/0x4DC74060.h>
 #include <embed/0x6DCD7321.h>
+#include <embed/0x90C53F9F.h>
+#include <embed/0xA3657554.h>
+#include <embed/0xB8F57CD5.h>
+#include <embed/0xC605FBD5.h>
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
@@ -20,6 +27,13 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomSwapchainShader(0x6DCD7321),
+    CustomSwapchainShader(0x04FDEDF9),
+    CustomShaderEntry(0xB8F57CD5),
+    CustomShaderEntry(0x4DC74060),
+    CustomShaderEntry(0xA3657554),
+    CustomShaderEntry(0x2BBD74AD),
+    CustomShaderEntry(0xC605FBD5),
+    CustomShaderEntry(0x90C53F9F),
 };
 
 ShaderInjectData shader_injection;
@@ -156,6 +170,22 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorColorSpace",
+        .binding = &shader_injection.colorGradeColorSpace,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Color Space",
+        .section = "Color Grading",
+        .tooltip = "Selects output color space"
+                   "\nModern for BT.709."
+                   "\nUS CRT for BT.601 (NTSC-U)."
+                   "\nJPN CRT for BT.601 ARIB-TR-B09 D93 (NTSC-J)."
+                   "\nJPN Conusmer CRT for ARIB-TR-B09 9300K 27 MPCD (NTSC-J)."
+                   "\nDefault: US CRT",
+        .labels = {"Modern", "US CRT", "JPN CRT", "JPN Consumer CRT "},
+
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
