@@ -39,7 +39,7 @@
         "MSVC": "true",
         "MSVC_TOOLSET_VERSION": "143",
         "CMAKE_CXX_COMPILER": "cl.exe",
-        "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc",
+        "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc"
       }
     },
     {
