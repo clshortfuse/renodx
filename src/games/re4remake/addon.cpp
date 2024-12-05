@@ -55,7 +55,7 @@ renodx::utils::settings::Settings settings = {
         .can_reset = false,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
-        .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
+        .tooltip = "Emulates a 2.2 EOTF, this is likely what the developers tried to approximate with the vanilla gamma adjustment",
         .is_enabled = []() { return shader_injection.toneMapType != 0; },
     },
     new renodx::utils::settings::Setting{
