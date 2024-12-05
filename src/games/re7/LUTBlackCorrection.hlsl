@@ -30,22 +30,23 @@ float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut
   float3 lutInputColor = renodx::lut::ConvertInput(color_input, lut_config);
   float3 lutOutputColor = renodx::lut::SampleColor(lutInputColor, lut_config, lut_texture);
   float3 color_output = renodx::lut::LinearOutput(lutOutputColor, lut_config);
+
+  float3 original_output = color_output;
+
   if (lut_config.scaling != 0) {
     float3 lutBlack = renodx::lut::SampleColor(renodx::lut::ConvertInput(0, lut_config), lut_config, lut_texture);
     float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(0.18f, lut_config), lut_config, lut_texture);
-    float3 lutWhite = renodx::lut::SampleColor(renodx::lut::ConvertInput(1.f, lut_config), lut_config, lut_texture);
     float3 unclamped = renodx::lut::Unclamp(
         renodx::lut::GammaOutput(lutOutputColor, lut_config),
         renodx::lut::GammaOutput(lutBlack, lut_config),
         renodx::lut::GammaOutput(lutMid, lut_config),
-#if 1
         1.f,  // set peak to 1 so it doesn't touch highlights
-#else
-        renodx::lut::GammaOutput(lutWhite, lut_config),
-#endif
         renodx::lut::GammaInput(color_input, lutInputColor, lut_config));
     float3 recolored = renodx::lut::RecolorUnclamped(color_output, renodx::lut::LinearUnclampedOutput(unclamped, lut_config));
     color_output = lerp(color_output, recolored, lut_config.scaling);
+#if 1  // fixes crushed blacks with 2.2 gamma correction
+    color_output = lerp(color_output, original_output, saturate(pow(color_output, lutMid)));
+#endif
   }
   color_output = renodx::lut::RestoreSaturationLoss(color_input, color_output, lut_config);
   if (lut_config.strength != 1.f) {
@@ -54,42 +55,33 @@ float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut
   return color_output;
 }
 
-// Returns 0, 1 or FLT_MAX if "dividend" is 0
-float safeDivision(float quotient, float dividend, int fallbackMode = 0) {
-  if (dividend == 0.f) {
-    if (fallbackMode == 0)
-      return 0;
-    if (fallbackMode == 1)
-      return sign(quotient);
-    return renodx::math::FLT16_MAX * sign(quotient);
-  }
-  return quotient / dividend;
-}
+/// Applies a customized version of RenoDRT tonemapper that tonemaps down to 1.0.
+/// This function is used to compress HDR color to SDR range for use alongside `UpgradeToneMap`.
+///
+/// @param lutInputColor The color input that needs to be tonemapped.
+/// @return The tonemapped color compressed to the SDR range, ensuring that it can be applied to SDR color grading with `UpgradeToneMap`.
+float3 renoDRTSmoothClamp(float3 untonemapped) {
+  renodx::tonemap::renodrt::Config renodrt_config = renodx::tonemap::renodrt::config::Create();
+  renodrt_config.nits_peak = 100.f;
+  renodrt_config.mid_gray_value = 0.18f;
+  renodrt_config.mid_gray_nits = 18.f;
+  renodrt_config.exposure = 1.f;
+  renodrt_config.highlights = 1.f;
+  renodrt_config.shadows = 1.f;
+  renodrt_config.contrast = 1.05f;
+  renodrt_config.saturation = 1.03f;
+  renodrt_config.dechroma = 0.f;
+  renodrt_config.flare = 0.f;
+  renodrt_config.hue_correction_strength = 0.f;
+  // renodrt_config.hue_correction_source = renodx::tonemap::uncharted2::BT709(untonemapped);
+  renodrt_config.hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::OKLAB;
+  renodrt_config.tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
+  renodrt_config.hue_correction_type = renodx::tonemap::renodrt::config::hue_correction_type::INPUT;
+  renodrt_config.working_color_space = 2u;
+  renodrt_config.per_channel = false;
 
-// Returns 0, 1 or FLT_MAX if "dividend" is 0
-float3 safeDivision(float3 quotient, float3 dividend, int fallbackMode = 0) {
-  return float3(safeDivision(quotient.x, dividend.x, fallbackMode), safeDivision(quotient.y, dividend.y, fallbackMode), safeDivision(quotient.z, dividend.z, fallbackMode));
-}
+  float3 renoDRTColor = renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
+  renoDRTColor = lerp(untonemapped, renoDRTColor, saturate(renodx::color::y::from::BT709(untonemapped) / renodrt_config.mid_gray_value));
 
-// Takes any original color (before some post process is applied to it) and re-applies the same transformation the post process had applied to it on a different (but similar) color.
-// The images are expected to have roughly the same mid gray.
-// It can be used for example to apply any SDR LUT or SDR color correction on an HDR color.
-float3 RestorePostProcess(const float3 nonPostProcessedTargetColor, const float3 nonPostProcessedSourceColor, const float3 postProcessedSourceColor, float hueRestoration = 0) {
-  static const float MaxShadowsColor = pow(1.f / 3.f, 2.2f);  // The lower this value, the more "accurate" is the restoration (math wise), but also more error prone (e.g. division by zero)
-
-  const float3 postProcessColorRatio = safeDivision(postProcessedSourceColor, nonPostProcessedSourceColor, 1);
-  const float3 postProcessColorOffset = postProcessedSourceColor - nonPostProcessedSourceColor;
-  const float3 postProcessedRatioColor = nonPostProcessedTargetColor * postProcessColorRatio;
-  const float3 postProcessedOffsetColor = nonPostProcessedTargetColor + postProcessColorOffset;
-  // Near black, we prefer using the "offset" (sum) pp restoration method, as otherwise any raised black would not work,
-  // for example if any zero was shifted to a more raised color, "postProcessColorRatio" would not be able to replicate that shift due to a division by zero.
-  float3 newPostProcessedColor = lerp(postProcessedOffsetColor, postProcessedRatioColor, max(saturate(abs(nonPostProcessedTargetColor / MaxShadowsColor)), saturate(abs(nonPostProcessedSourceColor / MaxShadowsColor))));
-
-  // Force keep the original post processed color hue.
-  // This often ends up shifting the hue too much, either looking too desaturated or too saturated, mostly because in SDR highlights are all burned to white by LUTs, and by the Vanilla SDR tonemappers.
-  if (hueRestoration > 0) {
-    newPostProcessedColor = renodx::color::correct::Hue(newPostProcessedColor, postProcessedSourceColor, hueRestoration);
-  }
-
-  return newPostProcessedColor;
+  return renoDRTColor;
 }
