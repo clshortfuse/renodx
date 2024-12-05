@@ -38,9 +38,9 @@ renodx::tonemap::Config getCommonConfig() {
 ///
 /// @param lutInputColor The color input that needs to be tonemapped.
 /// @return The tonemapped color compressed to the SDR range, ensuring that it can be applied to SDR color grading with `UpgradeToneMap`.
-float3 renoDRTSmoothClamp(float3 untonemapped) {
+float3 renoDRTSmoothClamp(float3 untonemapped, bool sdr = true) {
   renodx::tonemap::renodrt::Config renodrt_config = renodx::tonemap::renodrt::config::Create();
-  renodrt_config.nits_peak = 100.f;
+  renodrt_config.nits_peak = sdr ? 100.f : injectedData.toneMapPeakNits;
   renodrt_config.mid_gray_value = 0.18f;
   renodrt_config.mid_gray_nits = 18.f;
   renodrt_config.exposure = 1.f;
@@ -59,8 +59,6 @@ float3 renoDRTSmoothClamp(float3 untonemapped) {
 
   float3 renoDRTColor = renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
   renoDRTColor = lerp(untonemapped, renoDRTColor, saturate(renodx::color::y::from::BT709(untonemapped) / renodrt_config.mid_gray_value));
-  // renoDRTColor = renodx::tonemap::UpgradeToneMap(untonemapped, saturate(untonemapped), renoDRTColor, saturate(renodx::color::y::from::BT709(untonemapped) / renodrt_config.mid_gray_value));
-  // renoDRTColor = renodx::tonemap::UpgradeToneMap(untonemapped, saturate(untonemapped), renoDRTColor, 1.f);
 
   return renoDRTColor;
 }
@@ -118,7 +116,7 @@ float3 displayTonemap(float3 color) {
   Not sure if that's correct though */
   const float dicePaperWhite = injectedData.toneMapGameNits;
   const float dicePeakWhite = peak;
-  const float highlightsShoulderStart = 0.25;  // Low shoulders cuz game is too bright overall, with sharp highlights
+  const float highlightsShoulderStart = 0.05;  // Low shoulders cuz game is too bright overall, with sharp highlights
   const float frostReinPeak = peak / injectedData.toneMapGameNits;
 
   // Tonemap adjustments from color correctors
@@ -129,9 +127,11 @@ float3 displayTonemap(float3 color) {
 
     color.rgb = DICETonemap(color.rgb * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
   } else if (tonemapper == 2.f) {
-    color.rgb = renodx::tonemap::ReinhardScalable(color.rgb, frostReinPeak);
+    color.rgb = renoDRTSmoothClamp(color, false);
   } else if (tonemapper == 3.f) {
     color.rgb = renodx::tonemap::frostbite::BT709(color.rgb, frostReinPeak);
+  } else if (tonemapper == 4.f) {
+    color.rgb = renodx::tonemap::ReinhardScalable(color.rgb, frostReinPeak);
   }
 
   return color;

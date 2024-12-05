@@ -17,21 +17,7 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
-#include <embed/0x2569985B.h>  // LUT
-#include <embed/0x31FE4421.h>  // LUT
-#include <embed/0x36E3A438.h>  // LUT
-#include <embed/0x4156562D.h>  // Final
-#include <embed/0x4F06C1AD.h>  // Output
-#include <embed/0x8C20620E.h>  // Output
-#include <embed/0x9A3DADB2.h>  // Output
-#include <embed/0xC2A711CC.h>  // LUT
-#include <embed/0xE2C936EB.h>  // LUT
-#include <embed/0xF554DE7A.h>  // Output
-
-#include <embed/0x5975CAFA.h>  // ColorCorrect
-#include <embed/0x753DE2A9.h>  // ColorCorrect
-#include <embed/0xAB3F1A02.h>  // ColorCorrect
-#include <embed/0xD80F99B3.h>  // ColorCorrect
+#include <embed/shaders.h>
 
 namespace {
 
@@ -79,7 +65,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Display Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets an additional tonemapper run to map to peak",
-        .labels = {"Off", "DICE", "Reinhard"},
+        .labels = {"Off", "DICE", "renoDRT"},
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",

@@ -26,10 +26,10 @@ cbuffer injectedBuffer : register(b0, space50) {
   ShaderInjectData injectedData : packoffset(c0);
 }
 /* static const ShaderInjectData injectedData = {
-    3.f,    // toneMapType
-    1.f,    // toneMapDisplay
-    500.f,  // toneMapPeakNits
-    150.f,  // toneMapGameNits
+    2.f,    // toneMapType
+    2.f,    // toneMapDisplay
+    800.f,  // toneMapPeakNits
+    160.f,  // toneMapGameNits
     120.f,  // toneMapUINits
     1.f,    // toneMapGammaCorrection
     1.f,    // colorGradeExposure
