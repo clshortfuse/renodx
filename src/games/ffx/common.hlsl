@@ -30,22 +30,25 @@ float3 FinalizeOutput(float3 color) {
   color = min(color, injectedData.toneMapPeakNits);  // Clamp UI or Videos
 
   if (injectedData.colorGradeColorSpace == 3.f) {
-    color = mul(float3x3(
-                    0.742944359f, -0.243619307f, -0.0135331172f,
-                    0.0414674095f, 1.06642627f, 0.00159343972f,
-                    0.00323979160f, 0.0367207527f, 1.47409546f),
-                color);
-  } else if (injectedData.colorGradeColorSpace == 2.f) {
+    // BT.709 D65 => ARIB-TR-B09 D93 (NTSC-J)
     color = mul(float3x3(
                     0.871554791f, -0.161164566f, -0.0151899587f,
                     0.0417598634f, 0.980491757f, -0.00258531118f,
                     0.00544220115f, 0.0462860465f, 1.73763155f),
                 color);
-  } else if (injectedData.colorGradeColorSpace == 1.f) {
+  } else if (injectedData.colorGradeColorSpace == 2.f) {
+    // BT.709 D65 => BT.601 (NTSC-U)
     color = mul(float3x3(
                     0.939542055f, 0.0501813553f, 0.0102765792f,
                     0.0177722238f, 0.965792834f, 0.0164349135f,
                     -0.00162159989f, -0.00436974968f, 1.00599133f),
+                color);
+  } else if (injectedData.colorGradeColorSpace == 1.f) {
+    // BT709 D65 => BT709 D93
+    color = mul(float3x3(
+                    0.941922724f, -0.0795196890f, -0.0160709824f,
+                    0.00374091602f, 1.01361334f, -0.00624059885f,
+                    0.00760519271f, 0.0278747007f, 1.30704438f),
                 color);
   }
 
@@ -66,17 +69,10 @@ float3 RenoDRTSmoothClamp(float3 untonemapped) {
   renodrt_config.dechroma = 0.f;
   renodrt_config.flare = 0.f;
   renodrt_config.hue_correction_strength = 0.f;
-  // renodrt_config.hue_correction_source = renodx::tonemap::uncharted2::BT709(untonemapped);
-  renodrt_config.hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::OKLAB;
   renodrt_config.tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  renodrt_config.hue_correction_type = renodx::tonemap::renodrt::config::hue_correction_type::INPUT;
   renodrt_config.working_color_space = 2u;
-  renodrt_config.per_channel = false;
 
-  float3 renoDRTColor = renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
-  // renoDRTColor = lerp(untonemapped, renoDRTColor, saturate(renodx::color::y::from::BT709(untonemapped) / renodrt_config.mid_gray_value));
-
-  return renoDRTColor;
+  return renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
 }
 
 float3 ToneMap(float3 color) {
