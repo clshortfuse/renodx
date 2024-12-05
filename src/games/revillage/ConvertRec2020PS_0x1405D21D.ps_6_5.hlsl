@@ -18,15 +18,18 @@ float4 main(
     linear float2 TEXCOORD: TEXCOORD)
     : SV_Target {
 #if 1
-  float4 bt709Color = tLinearImage.SampleLevel(PointBorder, TEXCOORD.xy, 0.0f);
+  float3 bt709Color = tLinearImage.SampleLevel(PointBorder, TEXCOORD.xy, 0.0f).rgb;
+#if 1
+  bt709Color = renodx::color::correct::GammaSafe(bt709Color);
+#endif
 
 #if 1
-    DICESettings config = DefaultDICESettings();
-    config.Type = 3;
-    config.ShoulderStart = 0.46;
-    const float dicePaperWhite = whitePaperNits / renodx::color::srgb::REFERENCE_WHITE;
-    const float dicePeakWhite = max(displayMaxNits, whitePaperNits) / renodx::color::srgb::REFERENCE_WHITE;
-    bt709Color.rgb = DICETonemap(bt709Color.rgb * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
+  DICESettings config = DefaultDICESettings();
+  config.Type = 3;
+  config.ShoulderStart = 0.5;
+  const float dicePaperWhite = whitePaperNits / renodx::color::srgb::REFERENCE_WHITE;
+  const float dicePeakWhite = max(displayMaxNits, whitePaperNits) / renodx::color::srgb::REFERENCE_WHITE;
+  bt709Color.rgb = DICETonemap(bt709Color.rgb * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
 #endif
 
   float3 bt2020Color = renodx::color::bt2020::from::BT709(bt709Color.rgb);
