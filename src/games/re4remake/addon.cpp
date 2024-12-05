@@ -48,6 +48,29 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Vanilla", "Vanilla+"},
     },
     new renodx::utils::settings::Setting{
+        .key = "toneMapGammaCorrection",
+        .binding = &shader_injection.toneMapGammaCorrection,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .can_reset = false,
+        .label = "Gamma Correction",
+        .section = "Tone Mapping",
+        .tooltip = "Emulates a 2.2 EOTF, this is likely what the developers tried to approximate with the vanilla gamma adjustment",
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapGammaAdjust",
+        .binding = &shader_injection.toneMapGammaAdjust,
+        .default_value = 1.f,
+        .label = "Gamma Adjustment",
+        .section = "Tone Mapping",
+        .tooltip = "Adjusts gamma",
+        .min = 0.75f,
+        .max = 1.25f,
+        .format = "%.2f",
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "colorGradeHighlightContrast",
         .binding = &shader_injection.colorGradeHighlightContrast,
         .default_value = 50.f,
@@ -99,18 +122,6 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeGammaAdjust",
-        .binding = &shader_injection.colorGradeGammaAdjust,
-        .default_value = 1.f,
-        .label = "Gamma Adjustment (Hue Preserving)",
-        .section = "Color Grading",
-        .tooltip = "Adjusts gamma on luminance, only affects luminance values below 1.",
-        .min = 0.75f,
-        .max = 1.25f,
-        .format = "%.2f",
-        .is_enabled = []() { return shader_injection.toneMapType != 0; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "processingInternalSampling",
         .binding = &shader_injection.processingInternalSampling,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -150,6 +161,7 @@ renodx::utils::settings::Settings settings = {
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
+  renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeToeAdjustmentType", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeShadowToe", 1.f);
   renodx::utils::settings::UpdateSetting("colorGradeHighlightContrast", 50.f);
