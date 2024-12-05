@@ -15,6 +15,7 @@ struct ShaderInjectData {
   float colorGradeLUTStrength;
   float colorGradeLUTScaling;
   float colorGradeGammaAdjust;
+  float processingInternalSampling;
 };
 
 #ifndef __cplusplus

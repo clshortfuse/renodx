@@ -37,12 +37,16 @@ SamplerState PointBorder : register(s2, space32);
 float4 main(noperspective float4 SV_Position: SV_Position,
             linear float2 TEXCOORD: TEXCOORD)
     : SV_Target {
-  float4 bt709Color = tLinearImage.SampleLevel(PointBorder, TEXCOORD.xy, 0.0f);
+  float3 bt709Color = tLinearImage.SampleLevel(PointBorder, TEXCOORD.xy, 0.0f).rgb;
+
+#if 1
+  bt709Color = renodx::color::correct::GammaSafe(bt709Color);
+#endif
 
 #if 1
   DICESettings config = DefaultDICESettings();
   config.Type = 3;
-  config.ShoulderStart = 0.4f;
+  config.ShoulderStart = 0.5f;
   const float dicePaperWhite = whitePaperNits / renodx::color::srgb::REFERENCE_WHITE;
   const float dicePeakWhite = max(displayMaxNits, whitePaperNits) / renodx::color::srgb::REFERENCE_WHITE;
   bt709Color.rgb = DICETonemap(bt709Color.rgb * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;

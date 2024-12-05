@@ -140,7 +140,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla (Fake HDR)", "None", "DICE"},
+        .labels = {"Vanilla (Fake HDR)", "SDR Unclamped", "DICE (Real HDR)"},
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
@@ -152,6 +152,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of peak white in nits",
         .min = 48.f,
         .max = 4000.f,
+        .is_enabled = []() { return shader_injection.toneMapType >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapGameNits",
@@ -163,17 +164,29 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of 100% white in nits",
         .min = 48.f,
         .max = 500.f,
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
+    },
+      new renodx::utils::settings::Setting{
+        .key = "toneMapHDRBlendFactor",
+        .binding = &shader_injection.toneMapHDRBlendFactor,
+        .default_value = 100.f,
+        .label = "HDR Vibrance",
+        .section = "Tone Mapping",
+        .tooltip = "Controls how closely the original SDR color grading should be matched. Raise for greater HDR effect.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType >= 2; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapHueCorrection",
         .binding = &shader_injection.toneMapHueCorrection,
         .default_value = 50.f,
-        .can_reset = false,
+        .can_reset = true,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tooltip = "Emulates hue shifting from the vanilla tonemapper",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType != 0; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 2; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -183,6 +196,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Color Grade Strength",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType >= 2; },
         .parse = [](float value) { return value * 0.01f; },
     },
 };
@@ -191,12 +205,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapType", 0);
   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 1000.f);
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 1.f);
-  renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
-  renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
+  renodx::utils::settings::UpdateSetting("toneMapHDRBlendFactor", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeStrength", 100.f);
 }
 

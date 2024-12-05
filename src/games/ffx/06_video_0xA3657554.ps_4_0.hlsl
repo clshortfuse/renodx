@@ -11,10 +11,8 @@ Texture2D<float4> VChannel : register(t2);
 // 3Dmigoto declarations
 #define cmp -
 
-void main(
-    float4 v0: SV_POSITION0,
-    float2 v1: TEXCOORD0,
-    out float4 o0: SV_TARGET0) {
+void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0,
+          out float4 o0 : SV_TARGET0) {
   float4 r0, r1, r2;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -27,22 +25,21 @@ void main(
   r1.x = r0.x;
   r1.y = r2.x;
   r1.w = 1;
-  o0.y = saturate(dot(float4(1, -0.344000012, -0.713999987, 0.528999984), r1.xyzw));
+  o0.y = saturate(
+      dot(float4(1, -0.344000012, -0.713999987, 0.528999984), r1.xyzw));
   o0.x = saturate(dot(float3(1, 1.40199995, -0.700999975), r1.xzw));
   o0.z = saturate(dot(float3(1, 1.77199996, -0.885999978), r1.xyw));
 
-  if (injectedData.toneMapType == 0.f) return;
-  o0.rgb = renodx::color::srgb::Decode(o0.rgb);
-
-  float videoPeak = injectedData.toneMapPeakNits / (injectedData.toneMapGameNits / 203.f);
-  o0.rgb = renodx::tonemap::inverse::bt2446a::BT709(o0.rgb, 100.f, videoPeak);
-  o0.rgb /= videoPeak;  // Normalize to 1.0f = peak;
-
-  // o0.rgb = 1.f;
-
-  o0.rgb *= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
-
-  o0.rgb = PostToneMapScale(o0.rgb);
+  if (injectedData.toneMapType != 0.f) {
+    float videoPeak =
+        injectedData.toneMapPeakNits / (injectedData.toneMapGameNits / 203.f);
+    o0.rgb = renodx::color::gamma::Decode(o0.rgb, 2.4f);  // 2.4 for BT2446a
+    o0.rgb = renodx::tonemap::inverse::bt2446a::BT709(o0.rgb, 100.f, videoPeak);
+    o0.rgb /= videoPeak;  // Normalize to 1.0f = peak;
+    o0.rgb *= injectedData.toneMapPeakNits /
+              injectedData.toneMapGameNits;  // 1.f = game nits
+  }
+  o0.rgb = PostToneMapScale(o0.rgb);  // Gamma Correct
 
   return;
 }

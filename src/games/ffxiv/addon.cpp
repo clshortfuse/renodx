@@ -7,24 +7,10 @@
 
 #define DEBUG_LEVEL_0
 
- #include <map>
-
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-#include <embed/0x27EBC404.h>
-#include <embed/0xF8F57F0A.h>
-#include <embed/0x85E777EF.h>
-#include <embed/0xFE5B6B3E.h>  // BloomPass1 vs
-//#include <embed/0xBF06786C.h>  // BloomPass1 ps
-#include <embed/0x9B242D09.h>  // BloomPass2 vs
-//#include <embed/0x5E42F039.h>  // BloomPass2 ps
-#include <embed/0xCDC56365.h>  // Vignette
-#include <embed/0x6CFFD968.h>  // Copy
-#include <embed/0xB0CE42B9.h>  // Copy
-#include <embed/0xF6E81A1B.h>  // FullscreenGammaCorrection
-#include <embed/0xFFFFFFFD.h>  // final vertex shader
-#include <embed/0xFFFFFFFE.h>  // final pixel shader
+#include <embed/shaders.h>
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
@@ -53,15 +39,14 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x27EBC404),
     CustomShaderEntryCallback(0xF8F57F0A, &saturate_on_replace),
     CustomShaderEntry(0x85E777EF),
-    CustomShaderEntry(0xFE5B6B3E),
-    //CustomShaderEntry(0xBF06786C),
-    CustomShaderEntry(0x9B242D09),
-    //CustomShaderEntry(0x5E42F039),
-    CustomShaderEntry(0xCDC56365),
-    CustomShaderEntryCallback(0x6CFFD968, &copy_on_replace),
-    CustomShaderEntryCallback(0xB0CE42B9, &copy_on_replace),
-    CustomShaderEntry(0xF6E81A1B)
-};
+    CustomShaderEntry(0xFE5B6B3E),  // BloomPass1 vs
+    // CustomShaderEntry(0xBF06786C), // BloomPass1 ps
+    CustomShaderEntry(0x9B242D09),  // BloomPass2 vs
+    // CustomShaderEntry(0x5E42F039), // BloomPass2 ps
+    CustomShaderEntry(0xCDC56365),                            // Vignette
+    CustomShaderEntryCallback(0x6CFFD968, &copy_on_replace),  // Copy
+    CustomShaderEntryCallback(0xB0CE42B9, &copy_on_replace),  // Copy
+    CustomShaderEntry(0xF6E81A1B)};                           // FullscreenGammaCorrection
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -318,7 +303,7 @@ struct __declspec(uuid("1228220F-364A-46A2-BB29-1CCE591A018A")) DeviceData {
   reshade::api::pipeline_layout final_layout = {};
 };
 
-constexpr reshade::api::pipeline_layout PIPELINE_LAYOUT{ 0 };
+constexpr reshade::api::pipeline_layout PIPELINE_LAYOUT{0};
 
 void OnInitDevice(reshade::api::device* device) {
   auto& data = device->create_private_data<DeviceData>();
@@ -328,13 +313,13 @@ void OnInitDevice(reshade::api::device* device) {
     std::vector<reshade::api::pipeline_subobject> subobjects;
 
     reshade::api::shader_desc vs_desc = {};
-    vs_desc.code = _0xFFFFFFFD;
-    vs_desc.code_size = sizeof(_0xFFFFFFFD);
+    vs_desc.code = _final_vertex_shader;
+    vs_desc.code_size = sizeof(_final_vertex_shader);
     subobjects.push_back({reshade::api::pipeline_subobject_type::vertex_shader, 1, &vs_desc});
 
     reshade::api::shader_desc ps_desc = {};
-    ps_desc.code = _0xFFFFFFFE;
-    ps_desc.code_size = sizeof(_0xFFFFFFFE);
+    ps_desc.code = _final_pixel_shader;
+    ps_desc.code_size = sizeof(_final_pixel_shader);
     subobjects.push_back({reshade::api::pipeline_subobject_type::pixel_shader, 1, &ps_desc});
 
     reshade::api::format format = reshade::api::format::r16g16b16a16_float;
@@ -457,9 +442,9 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
 
   // copy backbuffer
   {
-    const reshade::api::resource resources[2] = { back_buffer_resource, data.final_texture };
-    const reshade::api::resource_usage state_old[2] = { reshade::api::resource_usage::render_target, reshade::api::resource_usage::shader_resource };
-    const reshade::api::resource_usage state_new[2] = { reshade::api::resource_usage::copy_source, reshade::api::resource_usage::copy_dest };
+    const reshade::api::resource resources[2] = {back_buffer_resource, data.final_texture};
+    const reshade::api::resource_usage state_old[2] = {reshade::api::resource_usage::render_target, reshade::api::resource_usage::shader_resource};
+    const reshade::api::resource_usage state_new[2] = {reshade::api::resource_usage::copy_source, reshade::api::resource_usage::copy_dest};
 
     cmd_list->barrier(2, resources, state_old, state_new);
     cmd_list->copy_texture_region(back_buffer_resource, 0, nullptr, data.final_texture, 0, nullptr);
@@ -507,7 +492,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
       renodx::mods::swapchain::Use(fdw_reason);
       renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
-      
+
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,

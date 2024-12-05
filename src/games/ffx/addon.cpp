@@ -8,14 +8,7 @@
 #define DEBUG_LEVEL_0
 
 #include <deps/imgui/imgui.h>
-#include <embed/0x04FDEDF9.h>
-#include <embed/0x2BBD74AD.h>
-#include <embed/0x4DC74060.h>
-#include <embed/0x6DCD7321.h>
-#include <embed/0x90C53F9F.h>
-#include <embed/0xA3657554.h>
-#include <embed/0xB8F57CD5.h>
-#include <embed/0xC605FBD5.h>
+#include <embed/shaders.h>
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
@@ -34,6 +27,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x2BBD74AD),
     CustomShaderEntry(0xC605FBD5),
     CustomShaderEntry(0x90C53F9F),
+    CustomShaderEntry(0x77AB75A9),
 };
 
 ShaderInjectData shader_injection;
@@ -172,19 +166,24 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorColorSpace",
+        .key = "colorGradeColorSpace",
         .binding = &shader_injection.colorGradeColorSpace,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
         .label = "Color Space",
         .section = "Color Grading",
         .tooltip = "Selects output color space"
-                   "\nModern for BT.709."
+                   "\nUS Modern for BT.709 D65."
+                   "\nJPN Modern for BT.709 D93."
                    "\nUS CRT for BT.601 (NTSC-U)."
                    "\nJPN CRT for BT.601 ARIB-TR-B09 D93 (NTSC-J)."
-                   "\nJPN Conusmer CRT for ARIB-TR-B09 9300K 27 MPCD (NTSC-J)."
                    "\nDefault: US CRT",
-        .labels = {"Modern", "US CRT", "JPN CRT", "JPN Consumer CRT "},
+        .labels = {
+            "US Modern",
+            "JPN Modern",
+            "US CRT",
+            "JPN CRT",
+        },
 
     },
     new renodx::utils::settings::Setting{
@@ -223,6 +222,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
+  renodx::utils::settings::UpdateSetting("colorGradeColorSpace", 0.f);
 }
 
 bool fired_on_init_swapchain = false;
