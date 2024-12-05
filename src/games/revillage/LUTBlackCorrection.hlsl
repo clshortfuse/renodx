@@ -8,6 +8,7 @@
 /// @param gammaAdjustmentFactor Factor to adjust the gamma.
 /// @return The color with adjusted gamma.
 float3 AdjustGammaOnLuminance(float3 linearColor, float gammaAdjustmentFactor) {
+  if (gammaAdjustmentFactor == 1.f) return linearColor;
   // Calculate the original luminance
   float originalLuminance = renodx::color::y::from::BT709(abs(linearColor));
 
@@ -29,6 +30,9 @@ float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut
   float3 lutInputColor = renodx::lut::ConvertInput(color_input, lut_config);
   float3 lutOutputColor = renodx::lut::SampleColor(lutInputColor, lut_config, lut_texture);
   float3 color_output = renodx::lut::LinearOutput(lutOutputColor, lut_config);
+
+  float3 original_output = color_output;
+
   if (lut_config.scaling != 0) {
     float3 lutBlack = renodx::lut::SampleColor(renodx::lut::ConvertInput(0, lut_config), lut_config, lut_texture);
     float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(0.18f, lut_config), lut_config, lut_texture);
@@ -40,6 +44,9 @@ float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut
         renodx::lut::GammaInput(color_input, lutInputColor, lut_config));
     float3 recolored = renodx::lut::RecolorUnclamped(color_output, renodx::lut::LinearUnclampedOutput(unclamped, lut_config));
     color_output = lerp(color_output, recolored, lut_config.scaling);
+#if 1  // fixes crushed blacks with 2.2 gamma correction
+    color_output = lerp(color_output, original_output, saturate(pow(color_output, lutMid)));
+#endif
   }
   color_output = renodx::lut::RestoreSaturationLoss(color_input, color_output, lut_config);
   if (lut_config.strength != 1.f) {
