@@ -807,16 +807,11 @@ void frag_main()
     float _623;
     float _626;
 
-#if 1
+#if 1  // use UpgradeToneMap() for LUT sampling
     untonemapped = float3(_404, _406, _408);
-    // hdrColor = min(125, hdrColor);
-    DICESettings config = DefaultDICESettings();
-    config.Type = 2;
-    config.ShoulderStart = 0.25f;
-    config.DesaturationAmount = 0.f;
-    config.DarkeningAmount = 0.f;
-    sdrColor = saturate(DICETonemap(untonemapped, 1, config));
-    hdrColor = (DICETonemap(untonemapped, 125, config));
+    hdrColor = untonemapped;
+
+    sdrColor = renoDRTSmoothClamp(untonemapped);  // use neutral RenoDRT as a smoothclamp
 #endif
     if ((_112 & 4u) == 0u)
     {
