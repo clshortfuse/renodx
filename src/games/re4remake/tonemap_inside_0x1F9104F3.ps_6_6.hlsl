@@ -1416,7 +1416,7 @@ void frag_main()
     SV_Target.w = 0.0f;
 
     if (injectedData.toneMapType != 0) {
-        SV_Target.rgb = AdjustGammaOnLuminance(SV_Target.rgb, injectedData.colorGradeGammaAdjust);
+      SV_Target.rgb = AdjustGammaByChannel(SV_Target.rgb, injectedData.toneMapGammaAdjust);
     }
 }
 
