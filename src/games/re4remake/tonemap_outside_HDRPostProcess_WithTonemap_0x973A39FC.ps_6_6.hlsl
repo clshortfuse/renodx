@@ -156,6 +156,9 @@ void frag_main()
       renodx::lut::config::type::SRGB,
       renodx::lut::config::type::LINEAR,
       ColorCorrectTexture_m0[0u].x);
+  float3 sdrColor;
+  float3 untonemapped;
+  float3 hdrColor;
 
   uint4 _110 = asuint(CBControl_m0[0u]);
     uint _111 = _110.x;
@@ -1185,17 +1188,30 @@ void frag_main()
         float _2185;
         float _2186;
         float _2187;
-        if (_1865)
-        {
-            _2185 = _1547 / _1864;
-            _2186 = _1549 / _1864;
-            _2187 = _1551 / _1864;
-        }
-        else
-        {
-            _2185 = _1547;
-            _2186 = _1549;
-            _2187 = _1551;
+
+#if 1
+        untonemapped = float3(_1547, _1549, _1551);
+        hdrColor = untonemapped;
+          
+        sdrColor = renoDRTSmoothClamp(untonemapped);  // use neutral RenoDRT as a smoothclamp
+#endif
+        if (injectedData.processingInternalSampling == 0) {
+            if (_1865)
+            {
+                _2185 = _1547 / _1864;
+                _2186 = _1549 / _1864;
+                _2187 = _1551 / _1864;
+            }
+            else
+            {
+                _2185 = _1547;
+                _2186 = _1549;
+                _2187 = _1551;
+            }
+        } else {
+            _2185 = sdrColor.r;
+            _2186 = sdrColor.g;
+            _2187 = sdrColor.b;
         }
 #if 0
         float _2188 = ColorCorrectTexture_m0[0u].w * 0.5f;
@@ -1362,21 +1378,31 @@ void frag_main()
         float frontier_phi_43_91_ladder;
         float frontier_phi_43_91_ladder_1;
         float frontier_phi_43_91_ladder_2;
-        if (_1865)
-        {
-            frontier_phi_43_91_ladder = _1835 * _1864;
-            frontier_phi_43_91_ladder_1 = _1832 * _1864;
-            frontier_phi_43_91_ladder_2 = _1829 * _1864;
+
+        if (injectedData.processingInternalSampling == 0) {
+            if (_1865)
+            {
+                frontier_phi_43_91_ladder = _1835 * _1864;
+                frontier_phi_43_91_ladder_1 = _1832 * _1864;
+                frontier_phi_43_91_ladder_2 = _1829 * _1864;
+            }
+            else
+            {
+                frontier_phi_43_91_ladder = _1835;
+                frontier_phi_43_91_ladder_1 = _1832;
+                frontier_phi_43_91_ladder_2 = _1829;
+            }
+            _1827 = frontier_phi_43_91_ladder_2;
+            _1830 = frontier_phi_43_91_ladder_1;
+            _1833 = frontier_phi_43_91_ladder;
+        } else {
+          float3 postprocessColor = float3(_1829, _1832, _1835);
+          float3 upgradedColor = renodx::tonemap::UpgradeToneMap(hdrColor, (sdrColor), (postprocessColor), 1.f);
+          // float3 upgradedColor = RestorePostProcess(hdrColor, (sdrColor), postprocessColor, 1.f);
+          _1827 = upgradedColor.r;
+          _1830 = upgradedColor.g;
+          _1833 = upgradedColor.b;
         }
-        else
-        {
-            frontier_phi_43_91_ladder = _1835;
-            frontier_phi_43_91_ladder_1 = _1832;
-            frontier_phi_43_91_ladder_2 = _1829;
-        }
-        _1827 = frontier_phi_43_91_ladder_2;
-        _1830 = frontier_phi_43_91_ladder_1;
-        _1833 = frontier_phi_43_91_ladder;
     }
     float _2144;
     float _2146;
