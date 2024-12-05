@@ -262,7 +262,7 @@ float3 ApplyRenoDRT(float3 color, Config tm_config) {
   if (tm_config.gamma_correction != 0) {
     reno_drt_max = renodx::color::correct::Gamma(
         reno_drt_max,
-        tm_config.gamma_correction != 0.f,
+        tm_config.gamma_correction > 0.f,
         abs(tm_config.gamma_correction) == 1.f ? 2.2f : 2.4f);
   } else {
     // noop
@@ -306,11 +306,11 @@ float3 ApplyACES(float3 color, Config tm_config) {
   if (tm_config.gamma_correction != 0.f) {
     aces_max = renodx::color::correct::Gamma(
         aces_max,
-        tm_config.gamma_correction != 0.f,
+        tm_config.gamma_correction > 0.f,
         abs(tm_config.gamma_correction) == 1.f ? 2.2f : 2.4f);
     aces_min = renodx::color::correct::Gamma(
-        aces_max,
-        tm_config.gamma_correction != 0.f,
+        aces_min,
+        tm_config.gamma_correction > 0.f,
         abs(tm_config.gamma_correction) == 1.f ? 2.2f : 2.4f);
   } else {
     // noop

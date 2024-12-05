@@ -59,12 +59,12 @@ void main(
     untonemapped = renodx::color::grade::UserColorGrading(
         untonemapped,
         1.f,
-        1.04 * injectedData.colorGradeHighlights,
+        1.f * injectedData.colorGradeHighlights,
         1.f,
         1.f,
         1.f,
         0.f,
-        injectedData.toneMapHueCorrection,
+        0.f,  // hue correction strength
         vanillaColor);
     float vanillaLum = renodx::color::y::from::BT709(vanillaColor.rgb);
     o0.xyz = lerp(vanillaColor.rgb, untonemapped, saturate(vanillaLum / vanillaMidGray));  // combine tonemappers

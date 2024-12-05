@@ -11,9 +11,9 @@ namespace correct {
 #define GAMMA(T)                                               \
   T Gamma(T c, bool pow_to_srgb = false, float gamma = 2.2f) { \
     if (pow_to_srgb) {                                         \
-      return srgb::Decode(gamma::Encode(c, gamma));            \
+      return srgb::Decode(color::gamma::Encode(c, gamma));     \
     } else {                                                   \
-      return gamma::Decode(srgb::Encode(c), gamma);            \
+      return color::gamma::Decode(srgb::Encode(c), gamma);     \
     }                                                          \
   }
 
@@ -22,16 +22,16 @@ GAMMA(float2)
 GAMMA(float3)
 
 float4 Gamma(float4 color, bool pow_to_srgb = false, float gamma = 2.2f) {
-  return float4(Gamma(color.rgb, gamma), color.a);
+  return float4(Gamma(color.rgb, pow_to_srgb, gamma), color.a);
 }
 
-#define GAMMA_SAFE(T)                                                            \
-  T GammaSafe(T c, bool pow_to_srgb = false, float gamma = 2.2f) {               \
-    if (pow_to_srgb) {                                                           \
-      return renodx::math::Sign(c) * srgb::Decode(gamma::Encode(abs(c), gamma)); \
-    } else {                                                                     \
-      return renodx::math::Sign(c) * gamma::Decode(srgb::Encode(abs(c)), gamma); \
-    }                                                                            \
+#define GAMMA_SAFE(T)                                                                   \
+  T GammaSafe(T c, bool pow_to_srgb = false, float gamma = 2.2f) {                      \
+    if (pow_to_srgb) {                                                                  \
+      return renodx::math::Sign(c) * srgb::Decode(color::gamma::Encode(abs(c), gamma)); \
+    } else {                                                                            \
+      return renodx::math::Sign(c) * color::gamma::Decode(srgb::Encode(abs(c)), gamma); \
+    }                                                                                   \
   }
 
 GAMMA_SAFE(float)
@@ -39,7 +39,7 @@ GAMMA_SAFE(float2)
 GAMMA_SAFE(float3)
 
 float4 GammaSafe(float4 color, bool pow_to_srgb = false, float gamma = 2.2f) {
-  return float4(Gamma(color.rgb, gamma), color.a);
+  return float4(Gamma(color.rgb, pow_to_srgb, gamma), color.a);
 }
 
 #undef GAMMA
