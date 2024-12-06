@@ -39,8 +39,8 @@ cbuffer cb0 : register(b0) {
 // THIS IS ALSO CALLED FOR SHOP
 // There's also light shafts shader getting called later
 void main(
-    float4 v0 : SV_POSITION0,
-                out float4 o0 : SV_Target0) {
+    float4 v0: SV_POSITION0,
+    out float4 o0: SV_Target0) {
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -53,8 +53,9 @@ void main(
   r1.xyz = t5.Sample(s2_s, r0.zw).xyz;
 
   tonemappedPQ = r1.rgb;
-
-  r1.rgb = pqTosRGB(tonemappedPQ, true);
+  // Hacky fix for shop
+  float customDecode = 0.f;
+  r1.rgb = pqTosRGB(tonemappedPQ, customDecode, true);
 
   r0.zw = r0.xy * cb1[129].xy + cb1[128].xy;
   r0.zw = cb1[132].zw * r0.zw;
@@ -248,8 +249,7 @@ void main(
   post_srgb = o0.rgb;
   o0.w = 0;
 
-  o0.rgb = upgradeSRGBtoPQ(tonemappedPQ, post_srgb);
-  // o0.rgb = tonemappedPQ;
+  o0.rgb = upgradeSRGBtoPQ(tonemappedPQ, post_srgb, customDecode);
 
   return;
 }

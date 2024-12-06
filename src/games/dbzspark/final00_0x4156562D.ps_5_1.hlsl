@@ -1,6 +1,6 @@
 // ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:09 2024
-#include "./DICE.hlsl"
 #include "./shared.h"
+#include "./tonemapper.hlsl"
 
 Texture2D<float4> t1 : register(t1);
 
@@ -18,9 +18,9 @@ cbuffer cb0 : register(b0) {
 #define cmp -
 
 void main(
-    linear noperspective float2 v0 : TEXCOORD0,
-                                     float4 v1 : SV_POSITION0,
-                                                 out float4 o0 : SV_Target0) {
+    linear noperspective float2 v0: TEXCOORD0,
+    float4 v1: SV_POSITION0,
+    out float4 o0: SV_Target0) {
   float4 r0, r1, r2;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -40,64 +40,41 @@ void main(
   r1.z = dot(float3(0.0163962338, 0.0880229846, 0.895499706), r0.xyz);
   r0.xyz = cb0[7].www * r1.xyz;
 
-  // We don't need WCG UI
-  r0.rgb = renodx::color::bt709::from::BT2020(r0.rgb);
-  if (injectedData.toneMapType > 1.f) {
-    r0.rgb = max(0, r0.rgb);
-  }
+  r1.xyz = t1.Sample(s1_s, v0.xy).xyz;  // Game in PQ
+  r1.rgb = renodx::color::pq::Decode(r1.rgb, injectedData.toneMapGameNits);
+
+  r1.rgb = renodx::color::bt709::from::BT2020(r1.rgb);
+  r1.rgb = renodx::color::grade::UserColorGrading(
+      r1.rgb,
+      injectedData.colorGradeExposure,
+      injectedData.colorGradeHighlights,
+      injectedData.colorGradeShadows,
+      injectedData.colorGradeContrast,
+      1.f);  // We'll do saturation post tonemap
+
   if (injectedData.toneMapGammaCorrection == 1.f) {
     r0.rgb = renodx::color::correct::GammaSafe(r0.rgb);
+    r1.rgb = renodx::color::correct::GammaSafe(r1.rgb);
   }
-  r0.rgb = renodx::color::bt2020::from::BT709(r0.rgb);
+
   r0.rgb *= injectedData.toneMapUINits / 203.f;  // Value found so it matches tonemapUINits
 
-  r1.xyz = t1.Sample(s1_s, v0.xy).xyz;  // Game in PQ
-  if (injectedData.toneMapType > 1.f) {
-    r1.rgb = renodx::color::pq::Decode(r1.rgb, 80.f);
+  r1.rgb = renodx::color::grade::UserColorGrading(
+      r1.rgb,
+      1.f,
+      1.f,
+      1.f,
+      1.f,
+      injectedData.colorGradeSaturation);
 
-    r1.rgb = renodx::color::bt709::from::BT2020(r1.rgb);
-    r1.rgb = renodx::color::grade::UserColorGrading(
-        r1.rgb,
-        injectedData.colorGradeExposure,
-        injectedData.colorGradeHighlights,
-        injectedData.colorGradeShadows,
-        injectedData.colorGradeContrast,
-        1.f);  // We'll do saturation post tonemap
+  // Fix NaN
+  r1.rgb = renodx::color::bt709::clamp::BT709(r1.rgb);
+  r0.rgb = renodx::color::bt709::clamp::BT709(r0.rgb);
 
-    const float dicePaperWhite = injectedData.toneMapGameNits / 80.f;
-    const float dicePeakWhite = injectedData.toneMapPeakNits / 80.f;
-    const float highlightsShoulderStart = 0.3;  // Random value honestly
-    const float frostReinPeak = injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
+  r1.rgb = displayTonemap(r1.rgb);
 
-    // Tonemap adjustments from color correctors
-    if (injectedData.toneMapDisplay == 1.f) {
-      DICESettings config = DefaultDICESettings();
-      config.Type = 1;
-      config.ShoulderStart = highlightsShoulderStart;
-
-      r1.rgb = DICETonemap(r1.rgb * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
-    } else if (injectedData.toneMapDisplay == 2.f) {
-      r1.rgb = renodx::tonemap::frostbite::BT709(r1.rgb, frostReinPeak);
-    } else if (injectedData.toneMapDisplay == 3.f) {
-      r1.rgb = renodx::tonemap::ReinhardScalable(r1.rgb, frostReinPeak);
-    }
-
-    r1.rgb = renodx::color::grade::UserColorGrading(
-        r1.rgb,
-        1.f,
-        1.f,
-        1.f,
-        1.f,
-        injectedData.colorGradeSaturation);
-
-    if (injectedData.toneMapGammaCorrection == 1.f) {
-      r1.rgb = renodx::color::correct::GammaSafe(r1.rgb);
-    }
-
-    r1.rgb = renodx::color::bt2020::from::BT709(r1.rgb);
-    r1.rgb = max(0, r1.rgb);
-    r1.rgb = renodx::color::pq::Encode(r1.rgb, 80.f);
-  }
+  r1.rgb = renodx::color::bt2020::from::BT709(r1.rgb);
+  r1.rgb = renodx::color::pq::Encode(r1.rgb, injectedData.toneMapGameNits);
 
   r1.rgb = renodx::color::pq::Decode(r1.rgb, 1.f);  // We need it to merge with UI
 

@@ -9,12 +9,13 @@
 // Should be 4x32
 struct ShaderInjectData {
   float toneMapType;
+  float toneMapGammaCorrection;
+  float toneMapGammaAdjust;
   float colorGradeHighlightContrast;
   float colorGradeToeAdjustmentType;
   float colorGradeShadowToe;
   float colorGradeLUTStrength;
   float colorGradeLUTScaling;
-  float colorGradeGammaAdjust;
   float processingInternalSampling;
 };
 

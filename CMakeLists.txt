@@ -27,18 +27,49 @@ add_executable(embedfile embedfile.cpp)
 add_executable(decomp ./src/decompiler/cli.cpp)
 
 function(inspect_hlsl_imports FILE VARIABLE)
-  file(STRINGS ${FILE} HLSL_IMPORTS REGEX "^#include \"([^\"]+)\"")
-  foreach(IMPORT_LINE ${HLSL_IMPORTS})
-    string(REGEX MATCH "^#include \"([^\"]+)\"" _ ${IMPORT_LINE})
-    cmake_path(GET FILE PARENT_PATH FILE_DIRECTORY)
-    cmake_path(ABSOLUTE_PATH CMAKE_MATCH_1 BASE_DIRECTORY ${FILE_DIRECTORY} OUTPUT_VARIABLE HLSL_PATH)
-    cmake_path(NORMAL_PATH HLSL_PATH)
-    list(APPEND LIST ${HLSL_PATH})
-    # recursive
-    inspect_hlsl_imports(${HLSL_PATH} LIST)
-  endforeach()
+  unset(CACHE_ENTRY)
+  set(HLSL_CACHE_VAR HLSL_CACHE_${FILE})
+  get_property(CACHE_ENTRY GLOBAL PROPERTY ${HLSL_CACHE_VAR})
+  # message(${FILE} " - Preparing " ${VARIABLE})
+  if(CACHE_ENTRY)
+    # message(${FILE} " - Using cache")
+  else()
+    # message(${FILE} " - Check known zero-dependency " HLSL_CACHE_EMPTY_${FILE})
+    get_property(EMPTY_CACHE_ENTRY GLOBAL PROPERTY HLSL_CACHE_EMPTY_${FILE})
+    unset(CACHE_ENTRY)
+    if(EMPTY_CACHE_ENTRY)
+      # message(${FILE} " - Is zero dependency file")
+    else()
+      # message(${FILE} " - EMPTY_CACHE_ENTRY Result: " ${EMPTY_CACHE_ENTRY})
+      file(STRINGS ${FILE} HLSL_IMPORTS REGEX "^#include \"([^\"]+)\"")
+      foreach(IMPORT_LINE ${HLSL_IMPORTS})
+        string(REGEX MATCH "^#include \"([^\"]+)\"" _ ${IMPORT_LINE})
+        cmake_path(GET FILE PARENT_PATH FILE_DIRECTORY)
+        cmake_path(ABSOLUTE_PATH CMAKE_MATCH_1 BASE_DIRECTORY ${FILE_DIRECTORY} OUTPUT_VARIABLE HLSL_PATH)
+        cmake_path(NORMAL_PATH HLSL_PATH)
+        # message(${FILE} " - Direct dependency: " ${HLSL_PATH})
+        list(APPEND CACHE_ENTRY ${HLSL_PATH})
+        #message(${FILE} " - Added: " ${HLSL_PATH})
+        # message(${FILE} " - List: " ${CACHE_ENTRY})
+        # recursive
+        inspect_hlsl_imports(${HLSL_PATH} CHILD_DEPENDENCIES)
+        # message(${FILE} " - Adding children from " ${HLSL_PATH} ": " ${TEMP_CACHE_ENTRY})
+        list(APPEND CACHE_ENTRY ${CHILD_DEPENDENCIES})
+        # message(${FILE} " - Added children from " ${HLSL_PATH} ": " ${CACHE_ENTRY})
+      endforeach()
+      if(CACHE_ENTRY)
+        set_property(GLOBAL PROPERTY ${HLSL_CACHE_VAR} ${CACHE_ENTRY})
+        # message(${FILE} " - Caching " ${CACHE_ENTRY})
+      else()
+        set_property(GLOBAL PROPERTY HLSL_CACHE_EMPTY_${FILE} "TRUE")
+        # message(${FILE} " -Marking zero dependency")
+      endif()
+    endif()
+  endif()
+
   # update in parent scope
-  set(${VARIABLE} ${LIST} PARENT_SCOPE)
+  set(${VARIABLE} ${CACHE_ENTRY} PARENT_SCOPE)
+
 endfunction()
 
 function(build_shader_target ADDON ADDON_PATH)
@@ -56,7 +87,7 @@ function(build_shader_target ADDON ADDON_PATH)
       string(REGEX MATCH "(0x[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F])$" _ ${SHADER_NAME})
       set(SHADER_HASH ${CMAKE_MATCH_1})
     endif()
-    
+
 
     if(SHADER_TARGET AND (SHADER_HASH OR SHADER_NAME))
       string(SUBSTRING ${SHADER_TARGET} 3 1 SHADER_TARGET_MAJOR)
@@ -72,12 +103,14 @@ function(build_shader_target ADDON ADDON_PATH)
         set(SHADER_FLAGS "/Gec") # Compatibility mode
       endif()
 
-      set(HLSL_DEPENDENCIES "")
-      set(HLSL_CHILD_DEPENDENCIES "")
+      unset(HLSL_DEPENDENCIES)
+      unset(HLSL_CHILD_DEPENDENCIES)
       list(APPEND HLSL_DEPENDENCIES ${FILE})
+      # message("Building HLSL dependencies for " ${FILE})
       inspect_hlsl_imports(${FILE} HLSL_CHILD_DEPENDENCIES)
       list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
       if(SHADER_HASH)
+        # message("Registering: " ${FILE} " => " ${EMBED_FOLDER}/${SHADER_HASH}.cso)
         add_custom_command(
           OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.cso
           COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}.cso
@@ -92,9 +125,6 @@ function(build_shader_target ADDON ADDON_PATH)
         )
         list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}.cso)
       endif()
-
-
-
     endif()
   endforeach()
 
@@ -152,9 +182,9 @@ function(build_shader_target ADDON ADDON_PATH)
   endforeach()
 
 
-  LIST(JOIN SHADER_HEADER_FILES " " SHADER_HEADER_FILE_ITEMS)
+  list(JOIN SHADER_HEADER_FILES " " SHADER_HEADER_FILE_ITEMS)
   add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES})
-  
+
   if(SHADER_HEADER_FILES)
     add_custom_target(${ADDON}-shaders-packed DEPENDS ${EMBED_FOLDER}/shaders.h)
     add_custom_command(

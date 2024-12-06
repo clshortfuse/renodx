@@ -10,10 +10,10 @@ cbuffer cb0 : register(b0) {
 #define cmp -
 
 void main(
-    linear noperspective float2 v0 : TEXCOORD0,
-                                     float4 v1 : SV_POSITION0,
-                                                 uint v2 : SV_RenderTargetArrayIndex0,
-                                                           out float4 o0 : SV_Target0) {
+    linear noperspective float2 v0: TEXCOORD0,
+    float4 v1: SV_POSITION0,
+    uint v2: SV_RenderTargetArrayIndex0,
+    out float4 o0: SV_Target0) {
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -35,6 +35,12 @@ void main(
   r3.xyz = r2.xxx ? float3(1.37915885, -0.308850735, -0.0703467429) : r3.xyz;
   r4.xyz = r2.xxx ? float3(-0.0693352968, 1.08229232, -0.0129620517) : r4.xyz;
   r2.xyz = r2.xxx ? float3(-0.00215925858, -0.0454653986, 1.04775953) : r2.yzw;
+
+  // CustomEdit
+  uint output_type = OUTPUT_OVERRIDE;
+  bool is_hdr = (output_type >= 3u && output_type <= 6u);
+  bool shouldTonemap = injectedData.toneMapType != 0.f && is_hdr;
+
   r0.xy = log2(r0.xy);
   r0.z = log2(r1.z);
   r0.xyz = float3(0.0126833133, 0.0126833133, 0.0126833133) * r0.xyz;
@@ -60,29 +66,20 @@ void main(
   r5.xy = cmp(asint(cb0[2].xx) == int2(3, 5));
   r0.w = (int)r5.y | (int)r5.x;
 
-  if (injectedData.toneMapType != 0.f) {
+  // CustomEdit
+  // Add upgrade tonemap here
+  if (shouldTonemap) {
     renodx::tonemap::Config config = getCommonConfig();
-
-    float3 config_color = renodx::color::bt709::from::BT2020(input_color);
-
-    renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(config_color, config);
-    hdr_color = dual_tone_map.color_hdr;
-    sdr_color = dual_tone_map.color_sdr;
-
-    float3 final_color = saturate(input_color);
+    float3 final_color = input_color;
 
     if (injectedData.toneMapType != 1.f) {
-      final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
-    } else {
-      final_color = hdr_color;
+      final_color = renodx::tonemap::config::Apply(final_color, config);
     }
 
-    final_color = renodx::color::bt2020::from::BT709(final_color);
-    float encodeRate = injectedData.toneMapType > 1.f ? injectedData.toneMapGameNits : 100.f;
-    final_color = renodx::color::pq::Encode(final_color, encodeRate);
-
+    // We PQ encode at the end
     o0.rgba = float4(final_color, 0);
-    return;
+  } else {
+    o0.rgba = float4(input_color, 0);
   }
   // Nothing to upgrade since ACES SDR adjustments are removed
 
@@ -967,7 +964,13 @@ void main(
       r1.xy = v0.xy * float2(1.03225803, 1.03225803) + float2(-0.0161290318, -0.0161290318);
     }
   }
-  o0.xyz = float3(0.952381015, 0.952381015, 0.952381015) * r1.xyz;
+
+  // CustomEdit
+  float3 output = o0.rgb;
+  output = renodx::color::bt2020::from::BT709(output);
+  output = renodx::color::pq::Encode(output, injectedData.toneMapGameNits);
+  o0.rgb = output;
   o0.w = 0;
+
   return;
 }
