@@ -19,7 +19,6 @@ renodx::tonemap::Config getCommonConfig() {
   config.peak_nits = injectedData.toneMapPeakNits;
   config.game_nits = injectedData.toneMapGameNits;
   config.gamma_correction = injectedData.toneMapGammaCorrection;
-
   // We apply these in final shader
   /* config.exposure = injectedData.colorGradeExposure;
   config.highlights = injectedData.colorGradeHighlights;
@@ -39,31 +38,21 @@ renodx::tonemap::Config getCommonConfig() {
 }
 
 float3 pqTosRGB(float3 input_pq) {
-  float3 output;
+  float3 output = input_pq;
   if (injectedData.toneMapType > 1.f) {
     output = renodx::color::pq::Decode(input_pq, injectedData.toneMapGameNits);
-    output = renodx::color::bt709::from::BT2020(output);
-    output = renodx::color::srgb::EncodeSafe(output);
-  } else {
-    output = input_pq;
   }
 
   return output;
 }
 
-float3 upgradeSRGBtoPQ(float3 tonemappedPQ, float3 post_srgb) {
-  float3 hdr, post, output;
-  output = post_srgb;
-
+float3 upgradePostProcess(float3 tonemappedRender, float3 post_processed) {
+  float3 output = post_processed;
   if (injectedData.toneMapType > 1.f) {
-    hdr = renodx::color::pq::Decode(tonemappedPQ, injectedData.toneMapGameNits);
-    hdr = renodx::color::bt709::from::BT2020(hdr);
-
-    post = renodx::color::srgb::DecodeSafe(post_srgb);
-
-    output = renodx::tonemap::UpgradeToneMap(hdr, saturate(hdr), saturate(post), injectedData.radiationOverlayStrength);
-    output = renodx::color::bt2020::from::BT709(output);
+    output = renodx::tonemap::UpgradeToneMap(tonemappedRender, saturate(tonemappedRender), saturate(post_processed), injectedData.radiationOverlayStrength);
     output = renodx::color::pq::Encode(output, injectedData.toneMapGameNits);
+  } else if (injectedData.toneMapType == 1.f) {
+    output = tonemappedRender;
   }
 
   return output;
