@@ -7,15 +7,7 @@
 
 #define DEBUG_LEVEL_0
 
-#include <embed/0x04532088.h>  // Unknown post process
-#include <embed/0x4D3C673E.h>  // Output
-#include <embed/0x5590F787.h>  // Radiation post process
-#include <embed/0x6CFBD4C0.h>  // LUT Builder
-#include <embed/0xA7EFB8C2.h>  // Final
-#include <embed/0xB6CA5FD9.h>  // LUT Builder
-#include <embed/0xBAA27141.h>  // LUT Builder
-#include <embed/0xECD0D71A.h>  // Output
-#include <embed/0xED411D4E.h>  // Unknown post process 2
+#include <embed/shaders.h>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -37,6 +29,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xECD0D71A),
     CustomShaderEntry(0xED411D4E),
     CustomShaderEntry(0x4D3C673E),
+    CustomShaderEntry(0x2DAD4682),
 
 };
 
@@ -171,7 +164,7 @@ renodx::utils::settings::Settings settings = {
         .label = "LUT Strength",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType != 2; },
+        .is_enabled = []() { return shader_injection.toneMapType > 1.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -263,7 +256,19 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
         return device->get_api() == reshade::api::device_api::d3d12;
       };
+      // renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::shader::expected_constant_buffer_space = 50;
+
+      /* renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+      }); */
+
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r10g10b10a2_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+      });
+
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(h_module);

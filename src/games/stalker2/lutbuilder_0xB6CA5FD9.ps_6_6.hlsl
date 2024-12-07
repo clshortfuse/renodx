@@ -195,7 +195,10 @@ float4 main(
   // cbuffer _4 = _RootShaderParameters;
   // _5 = _3;
   // _6 = _4;
-
+  // CustomEdit
+  uint output_type = _RootShaderParameters_040w;
+  bool is_hdr = (output_type >= 3u && output_type <= 6u);
+  bool shouldTonemap = injectedData.toneMapType != 0.f && is_hdr;
   uint _7 = SV_RenderTargetArrayIndex;
   float _8 = TEXCOORD.x;
   float _9 = TEXCOORD.y;
@@ -1216,8 +1219,6 @@ float4 main(
   // Now SDR Tonemapping/Split
   // Early out with cbuffer
   // (Unreal runs the entire SDR process even if discarding)
-  uint output_type = _RootShaderParameters_040w;
-
   float3 sdr_color;
   float3 hdr_color;
   float3 sdr_ap1_color;
@@ -1230,8 +1231,7 @@ float4 main(
   float _976 = _975 + 1.0f;
   float _977 = _RootShaderParameters_037z;
   float _978 = _976 - _977;
-  bool is_hdr = (output_type >= 3u && output_type <= 6u);
-  if (injectedData.toneMapType != 0.f && is_hdr) {
+  if (shouldTonemap) {
     renodx::tonemap::Config config = getCommonConfig();
     config.hue_correction_color = ap1_aces_colored;
 
@@ -1641,21 +1641,19 @@ float4 main(
 
   // CustomEdit
   float3 film_graded_color = float3(_1328, _1329, _1330);
-  if (injectedData.toneMapType != 0.f && is_hdr) {
-    float3 final_color = saturate(film_graded_color);
+  float3 final_color = film_graded_color;
+  // We return sRGB bt709 color
+  if (shouldTonemap) {
+    final_color = saturate(film_graded_color);
 
-    if (injectedData.toneMapType != 0.f) {
+    if (injectedData.toneMapType != 1.f) {
       final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
+    } else {
+      final_color = hdr_color;
     }
-
-    bool is_pq = (output_type == 3u || output_type == 4u);
-
-    if (is_pq) {
-      final_color = renodx::color::bt2020::from::BT709(final_color);
-      final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
-    }
-
-    return float4(final_color, 0);
+    final_color = renodx::color::srgb::Encode(final_color);
+    final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
+    return float4(final_color, 0.f);
   }
 
   uint _1332 = _RootShaderParameters_040w;
