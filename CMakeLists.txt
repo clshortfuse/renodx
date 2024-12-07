@@ -190,7 +190,7 @@ function(build_shader_target ADDON ADDON_PATH)
     add_custom_command(
       OUTPUT ${EMBED_FOLDER}/shaders.h
       COMMAND ${CMAKE_COMMAND} -E cat ${SHADER_HEADER_FILES} > ${EMBED_FOLDER}/shaders.h
-      DEPENDS ${ADDON}-shaders
+      DEPENDS ${SHADER_HEADER_FILES}
     )
   else()
     add_custom_target(${ADDON}-shaders-packed)
