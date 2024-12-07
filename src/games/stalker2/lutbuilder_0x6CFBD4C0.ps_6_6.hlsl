@@ -1166,7 +1166,7 @@ float4 main(
   float _1012;                                        // custom branch
   float _1013;                                        // custom branch
 
-  if (injectedData.toneMapType > 1.f) {
+  if (shouldTonemap) {
     renodx::lut::Config lut_config = renodx::lut::config::Create(
         Samplers_1,
         injectedData.toneMapType == 2.f ? 0.f : injectedData.colorGradeLUTStrength,
@@ -1378,7 +1378,9 @@ float4 main(
     } else {
       final_color = hdr_color;
     }
-    final_color = renodx::color::srgb::Encode(final_color);
+    if (injectedData.toneMapGammaCorrection == 1.f) {
+      final_color = renodx::color::correct::GammaSafe(final_color);
+    }
     final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
     return float4(final_color, 0.f);
   }

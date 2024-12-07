@@ -20,11 +20,11 @@ renodx::tonemap::Config getCommonConfig() {
   config.game_nits = injectedData.toneMapGameNits;
   config.gamma_correction = injectedData.toneMapGammaCorrection;
   // We apply these in final shader
-  /* config.exposure = injectedData.colorGradeExposure;
+  config.exposure = injectedData.colorGradeExposure;
   config.highlights = injectedData.colorGradeHighlights;
   config.shadows = injectedData.colorGradeShadows;
   config.contrast = injectedData.colorGradeContrast;
-  config.saturation = injectedData.colorGradeSaturation; */
+  config.saturation = injectedData.colorGradeSaturation;
 
   config.reno_drt_highlights = renoDRTHighlights;
   config.reno_drt_shadows = renoDRTShadows;

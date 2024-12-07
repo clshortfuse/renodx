@@ -84,24 +84,11 @@ float4 main(
   float4 _59 = SceneTexture.Sample(SceneSampler, float2(_7, _8));
   float3 scene = _59.rgb;
   scene = renodx::color::pq::Decode(scene.rgb, injectedData.toneMapGameNits);
-  if (injectedData.toneMapType != 0.f) {
-    scene = renodx::color::srgb::Decode(scene.rgb);
-    // return float4(scene, 1.f);
-    scene = renodx::color::grade::UserColorGrading(
-        scene,
-        injectedData.colorGradeExposure,
-        injectedData.colorGradeHighlights,
-        injectedData.colorGradeShadows,
-        injectedData.colorGradeContrast,
-        injectedData.colorGradeSaturation);
-    scene = renodx::color::bt2020::from::BT709(scene.rgb);
-  }
+  scene = renodx::color::bt2020::from::BT709(scene.rgb);
   if (injectedData.toneMapGammaCorrection == 1.f) {
-    scene.rgb = renodx::color::correct::GammaSafe(scene.rgb);
     uiTexture.rgb = renodx::color::correct::GammaSafe(uiTexture.rgb);
   }
 
-  // uiTexture = renodx::color::bt2020::from::BT709(uiTexture.rgb);
   // Multiple by games because we're encoding PQ later
   uiTexture.rgb = uiTexture.rgb * injectedData.toneMapUINits / injectedData.toneMapGameNits;
 

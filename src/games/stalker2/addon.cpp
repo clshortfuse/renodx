@@ -30,7 +30,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xED411D4E),
     CustomShaderEntry(0x4D3C673E),
     CustomShaderEntry(0x2DAD4682),
-
+    CustomShaderEntry(0x39EF727B),
 };
 
 ShaderInjectData shader_injection;
@@ -85,7 +85,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "radiationOverlayStrength",
         .binding = &shader_injection.radiationOverlayStrength,
-        .default_value = 50.f,
+        .default_value = 30.f,
         .label = "Radiation Strength",
         .section = "Tone Mapping",
         .max = 100.f,
@@ -256,18 +256,22 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
         return device->get_api() == reshade::api::device_api::d3d12;
       };
-      // renodx::mods::shader::force_pipeline_cloning = true;
+      renodx::mods::swapchain::SetUseHDR10(true);
+      renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::shader::expected_constant_buffer_space = 50;
+      renodx::mods::swapchain::use_resize_buffer = true;
+      renodx::mods::swapchain::use_resize_buffer_on_demand = true;
+      renodx::mods::swapchain::force_borderless = false;
+      renodx::mods::swapchain::prevent_full_screen = false;
 
       /* renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
       }); */
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r10g10b10a2_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-      });
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r10g10b10a2_unorm,
+                                                                     .new_format = reshade::api::format::r16g16b16a16_float,
+                                                                     .dimensions = {32, 32, 32}});
 
       break;
     case DLL_PROCESS_DETACH:
@@ -276,6 +280,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
+  // renodx::mods::swapchain::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
