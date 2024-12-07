@@ -23,15 +23,23 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
+
+
 namespace {
 
+ShaderInjectData shader_injection;
+
+bool IsTonemapped(reshade::api::command_list* cmd_list) {
+  shader_injection.isTonemapped = 1.f;
+  return true;
+}
+
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x9D6291BC),  // Color grading LUT + fog + fade
-    CustomShaderEntry(0xB103EAA6),  // Post process and user gamma adjustment (defaulted to 1)
+    CustomShaderEntryCallback(0x9D6291BC, &IsTonemapped),  // Color grading LUT + fog + fade
+    CustomShaderEntryCallback(0xB103EAA6, &IsTonemapped),  // Post process and user gamma adjustment (defaulted to 1)
     CustomShaderEntry(0xE61B6A3B),  // Overlay effect in main menu
 };
 
-ShaderInjectData shader_injection;
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -266,6 +274,9 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
 
 // more or less the same as what reshade does to render its techniques
 void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain, const reshade::api::rect* source_rect, const reshade::api::rect* dest_rect, uint32_t dirty_rect_count, const reshade::api::rect* dirty_rects) {
+  
+  shader_injection.isTonemapped = 0.f;
+  
   auto device = queue->get_device();
   auto cmd_list = queue->get_immediate_command_list();
 
