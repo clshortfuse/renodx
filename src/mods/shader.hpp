@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <cstdio>
 
+#include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -64,6 +65,7 @@ static bool use_pipeline_layout_cloning = false;
 static bool force_pipeline_cloning = false;
 static bool trace_unmodified_shaders = false;
 static bool allow_multiple_push_constants = false;
+static bool push_injections_on_present = false;
 static float* resource_tag_float = nullptr;
 static int32_t expected_constant_buffer_index = -1;
 static uint32_t expected_constant_buffer_space = 0;
@@ -575,6 +577,80 @@ inline void OnBindDescriptorTables(
   }
 }
 
+static bool PushShaderInjections(
+    reshade::api::command_list* cmd_list,
+    DeviceData* device_data,
+    renodx::utils::shader::CommandListData* shader_state,
+    bool is_dispatch = false,
+    float resource_tag = 0.f) {
+  const reshade::api::pipeline_layout layout = shader_state->pipeline_layout;
+  auto injection_layout = layout;
+  auto device_api = cmd_list->get_device()->get_api();
+  reshade::api::shader_stage stage = reshade::api::shader_stage::all_graphics;
+  uint32_t param_index = 0;
+  if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
+    if (
+        auto pair = device_data->modded_pipeline_root_indexes.find(layout.handle);
+        pair != device_data->modded_pipeline_root_indexes.end()) {
+      param_index = pair->second;
+      stage = is_dispatch
+                  ? reshade::api::shader_stage::all_compute
+                  : reshade::api::shader_stage::all_graphics;
+    } else {
+      std::stringstream s;
+      s << "mods::shader::PushShaderInjections(did not find modded pipeline root index";
+      s << ", pipeline: " << reinterpret_cast<void*>(shader_state->pipeline_layout.handle);
+      s << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+      return false;
+    }
+
+  } else {
+    // Must be done before draw
+    stage = is_dispatch
+                ? reshade::api::shader_stage::all_compute
+                : reshade::api::shader_stage::all_graphics;
+
+    if (
+        auto pair = device_data->modded_pipeline_layouts.find(layout.handle);
+        pair != device_data->modded_pipeline_layouts.end()) {
+      injection_layout = pair->second;
+    } else {
+      std::stringstream s;
+      s << "mods::shader::PushShaderInjections(did not find modded pipeline layout";
+      s << ", pipeline: " << reinterpret_cast<void*>(shader_state->pipeline_layout.handle);
+      s << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+      return false;
+    }
+  }
+
+#ifdef DEBUG_LEVEL_1
+  std::stringstream s;
+  s << "mods::shader::HandlePreDraw(pushing constants: ";
+  s << ", layout: " << reinterpret_cast<void*>(injection_layout.handle) << "[" << param_index << "]";
+  s << ", stage: " << stage;
+  s << ", resource_tag: " << resource_tag;
+  s << ")";
+  reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
+
+  if (resource_tag_float != nullptr) {
+    const std::unique_lock lock(renodx::utils::mutex::global_mutex);
+    *resource_tag_float = resource_tag;
+  }
+
+  const std::shared_lock lock(renodx::utils::mutex::global_mutex);
+  cmd_list->push_constants(
+      stage,  // Used by reshade to specify graphics or compute
+      injection_layout,
+      param_index,
+      0,
+      shader_injection_size,
+      shader_injection);
+  return true;
+}
+
 static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = false) {
   auto* device = cmd_list->get_device();
   auto& device_data = device->get_private_data<DeviceData>();
@@ -677,71 +753,11 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
 
   if (found_custom_shader) {
     if (should_inject_cbuffer && shader_injection_size != 0 && shader_state.pipeline_layout.handle != 0u) {
-      const reshade::api::pipeline_layout layout = shader_state.pipeline_layout;
-      auto injection_layout = layout;
-      auto device_api = device->get_api();
-      reshade::api::shader_stage stage = reshade::api::shader_stage::all_graphics;
-      uint32_t param_index = 0;
-      if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
-        if (
-            auto pair = device_data.modded_pipeline_root_indexes.find(layout.handle);
-            pair != device_data.modded_pipeline_root_indexes.end()) {
-          param_index = pair->second;
-          stage = is_dispatch
-                      ? reshade::api::shader_stage::all_compute
-                      : reshade::api::shader_stage::all_graphics;
-        } else {
-          std::stringstream s;
-          s << "mods::shader::HandlePreDraw(did not find modded pipeline root index";
-          s << ", pipeline: " << reinterpret_cast<void*>(shader_state.pipeline_layout.handle);
-          s << ")";
-          reshade::log::message(reshade::log::level::warning, s.str().c_str());
-          return false;
-        }
-
-      } else {
-        // Must be done before draw
-        stage = is_dispatch
-                    ? reshade::api::shader_stage::all_compute
-                    : reshade::api::shader_stage::all_graphics;
-
-        if (
-            auto pair = device_data.modded_pipeline_layouts.find(layout.handle);
-            pair != device_data.modded_pipeline_layouts.end()) {
-          injection_layout = pair->second;
-        } else {
-          std::stringstream s;
-          s << "mods::shader::HandlePreDraw(did not find modded pipeline layout";
-          s << ", pipeline: " << reinterpret_cast<void*>(shader_state.pipeline_layout.handle);
-          s << ")";
-          reshade::log::message(reshade::log::level::warning, s.str().c_str());
-          return false;
-        }
-      }
-
-#ifdef DEBUG_LEVEL_1
-      std::stringstream s;
-      s << "mods::shader::HandlePreDraw(pushing constants: ";
-      s << ", layout: " << reinterpret_cast<void*>(injection_layout.handle) << "[" << param_index << "]";
-      s << ", stage: " << stage;
-      s << ", resource_tag: " << resource_tag;
-      s << ")";
-      reshade::log::message(reshade::log::level::debug, s.str().c_str());
-#endif
-
-      if (resource_tag_float != nullptr) {
-        const std::unique_lock lock(renodx::utils::mutex::global_mutex);
-        *resource_tag_float = resource_tag;
-      }
-
-      const std::shared_lock lock(renodx::utils::mutex::global_mutex);
-      cmd_list->push_constants(
-          stage,  // Used by reshade to specify graphics or compute
-          injection_layout,
-          param_index,
-          0,
-          shader_injection_size,
-          shader_injection);
+      PushShaderInjections(cmd_list,
+                           &device_data,
+                           &shader_state,
+                           is_dispatch,
+                           resource_tag);
     }
   }
   if (is_dispatch) {
@@ -823,8 +839,18 @@ static void OnPresent(
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
   auto& data = swapchain->get_device()->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
-  data.counted_shaders.clear();
+  if (using_counted_shaders) {
+    const std::unique_lock lock(data.mutex);
+    data.counted_shaders.clear();
+  }
+  if (push_injections_on_present) {
+    const std::shared_lock lock(data.mutex);
+    data.counted_shaders.clear();
+    auto* cmd_list = queue->get_immediate_command_list();
+    PushShaderInjections(cmd_list,
+                         &data,
+                         &renodx::utils::shader::GetCurrentState(cmd_list));
+  }
 }
 
 static bool attached = false;
@@ -849,7 +875,7 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
         if (shader.index != -1) using_counted_shaders = true;
       }
 
-      if (using_counted_shaders) {
+      if (using_counted_shaders || push_injections_on_present) {
         reshade::register_event<reshade::addon_event::present>(OnPresent);
       }
 
