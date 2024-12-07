@@ -26,6 +26,8 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
+
+
 namespace {
 
 ShaderInjectData shader_injection;
