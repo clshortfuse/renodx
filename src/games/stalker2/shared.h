@@ -27,10 +27,10 @@ cbuffer injectedBuffer : register(b0, space50) {
   ShaderInjectData injectedData : packoffset(c0);
 }
 /* static const ShaderInjectData injectedData = {
-    3.f,    // toneMapType
+    0.f,    // toneMapType
     800.f,  // toneMapPeakNits
-    180.f,  // toneMapGameNits
-    200.f,  // toneMapUINits
+    200.f,  // toneMapGameNits
+    150.f,  // toneMapUINits
     0.5f,    // radiationOverlayStrength
     1.f,    // toneMapGammaCorrection
     1.f,    // colorGradeExposure
@@ -38,7 +38,7 @@ cbuffer injectedBuffer : register(b0, space50) {
     1.f,    // colorGradeShadows
     1.f,    // colorGradeContrast
     1.f,    // colorGradeSaturation
-    0.f,    // colorGradeBlowout
+    0.5f,    // colorGradeBlowout
     1.f,    // colorGradeLUTStrength
 }; */
 #endif

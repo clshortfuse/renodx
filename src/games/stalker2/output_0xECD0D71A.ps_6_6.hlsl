@@ -92,7 +92,7 @@ float4 main(
     noperspective float4 SV_Position: SV_Position)
     : SV_Target {
   float4 SV_Target;
-  float3 tonemappedPQ, post_srgb, output;
+  float3 post_lut;
   // texture _1 = ColorGradingLUT;
   // texture _2 = BloomDirtMaskTexture;
   // texture _3 = BlurredLogLum;
@@ -457,17 +457,12 @@ float4 main(
   // _377 = _8;
 
   float4 _378 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3(_373, _374, _375));
-  tonemappedPQ = _378.rgb;
-  float3 srgb_input = pqTosRGB(tonemappedPQ);
+  post_lut = _378.rgb; // PQ encoded sRGB bt709
+  return float4(post_lut, 0.f);
 
   float _379 = _378.x;
   float _380 = _378.y;
   float _381 = _378.z;
-  if (injectedData.toneMapType > 1.f) {
-    _379 = srgb_input.r;
-    _380 = srgb_input.g;
-    _381 = srgb_input.b;
-  }
 
   float _382 = _379 * 1.0499999523162842f;
   float _383 = _380 * 1.0499999523162842f;
@@ -582,12 +577,6 @@ float4 main(
   float _487 = saturate(_484);
   float _488 = saturate(_485);
   float _489 = saturate(_486);
-  post_srgb = float3(_487, _488, _489);
-
-  if (injectedData.toneMapType > 1.f) {
-    output = upgradeSRGBtoPQ(tonemappedPQ, post_srgb);
-    return float4(output, 0.f);
-  }
 
   SV_Target.x = _487;
   SV_Target.y = _488;
