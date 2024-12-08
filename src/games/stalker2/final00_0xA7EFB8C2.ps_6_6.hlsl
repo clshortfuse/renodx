@@ -84,7 +84,6 @@ float4 main(
   float4 _59 = SceneTexture.Sample(SceneSampler, float2(_7, _8));
   float3 scene = _59.rgb;
   scene = renodx::color::pq::Decode(scene.rgb, injectedData.toneMapGameNits);
-  scene = renodx::color::bt2020::from::BT709(scene.rgb);
   if (injectedData.toneMapGammaCorrection == 1.f) {
     uiTexture.rgb = renodx::color::correct::GammaSafe(uiTexture.rgb);
   }
