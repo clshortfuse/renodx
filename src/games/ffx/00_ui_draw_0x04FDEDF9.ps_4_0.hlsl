@@ -39,6 +39,6 @@ void main(
   r1.xyzw = tex1.Sample(s_tex1_s, r1.xy).xyzw;
   o0.xyzw = r1.xyzw * r0.xyzw;
 
-  o0.rgb = FinalizeOutput(saturate(o0.rgb));
+  o0.rgb = saturate(o0.rgb);
   return;
 }

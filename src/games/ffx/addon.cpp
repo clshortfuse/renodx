@@ -19,8 +19,7 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomSwapchainShader(0x6DCD7321),
-    CustomSwapchainShader(0x04FDEDF9),
+    CustomShaderEntry(0x04FDEDF9),
     CustomShaderEntry(0xB8F57CD5),
     CustomShaderEntry(0x4DC74060),
     CustomShaderEntry(0xA3657554),
@@ -169,7 +168,7 @@ renodx::utils::settings::Settings settings = {
         .key = "colorGradeColorSpace",
         .binding = &shader_injection.colorGradeColorSpace,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 3.f,
         .label = "Color Space",
         .section = "Color Grading",
         .tooltip = "Selects output color space"
@@ -247,6 +246,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
+      renodx::mods::swapchain::use_resource_cloning = true;
+      renodx::mods::swapchain::swapchain_proxy_vertex_shader = std::vector<uint8_t>(
+          _final_vertex_shader, _final_vertex_shader + sizeof(_final_vertex_shader));
+      renodx::mods::swapchain::swapchain_proxy_pixel_shader = std::vector<uint8_t>(
+          _final_pixel_shader, _final_pixel_shader + sizeof(_final_pixel_shader));
+
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
@@ -262,10 +267,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-
-  renodx::mods::swapchain::Use(fdw_reason);
-
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
 
   return TRUE;
 }

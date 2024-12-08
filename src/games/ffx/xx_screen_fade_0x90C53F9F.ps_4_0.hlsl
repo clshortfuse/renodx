@@ -19,6 +19,5 @@ void main(
 {
   o0.xyzw = ScreenFadeColor.xyzw;
   o0.xyz *= injectedData.toneMapGameNits / injectedData.toneMapPeakNits;
-  // o0.w = saturate(o0.w);
   return;
 }
