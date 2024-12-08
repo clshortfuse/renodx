@@ -1378,6 +1378,7 @@ float4 main(
     } else {
       final_color = hdr_color;
     }
+    final_color = renodx::color::bt2020::from::BT709(final_color);
     if (injectedData.toneMapGammaCorrection == 1.f) {
       final_color = renodx::color::correct::GammaSafe(final_color);
     }
