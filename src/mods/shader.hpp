@@ -586,16 +586,12 @@ static bool PushShaderInjections(
   const reshade::api::pipeline_layout layout = shader_state->pipeline_layout;
   auto injection_layout = layout;
   auto device_api = cmd_list->get_device()->get_api();
-  reshade::api::shader_stage stage = reshade::api::shader_stage::all_graphics;
   uint32_t param_index = 0;
   if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
     if (
         auto pair = device_data->modded_pipeline_root_indexes.find(layout.handle);
         pair != device_data->modded_pipeline_root_indexes.end()) {
       param_index = pair->second;
-      stage = is_dispatch
-                  ? reshade::api::shader_stage::all_compute
-                  : reshade::api::shader_stage::all_graphics;
     } else {
       std::stringstream s;
       s << "mods::shader::PushShaderInjections(did not find modded pipeline root index";
@@ -607,9 +603,6 @@ static bool PushShaderInjections(
 
   } else {
     // Must be done before draw
-    stage = is_dispatch
-                ? reshade::api::shader_stage::all_compute
-                : reshade::api::shader_stage::all_graphics;
 
     if (
         auto pair = device_data->modded_pipeline_layouts.find(layout.handle);
@@ -629,7 +622,7 @@ static bool PushShaderInjections(
   std::stringstream s;
   s << "mods::shader::HandlePreDraw(pushing constants: ";
   s << ", layout: " << reinterpret_cast<void*>(injection_layout.handle) << "[" << param_index << "]";
-  s << ", stage: " << stage;
+  s << ", dispatch: " << (is_dispatch ? "true" : "false");
   s << ", resource_tag: " << resource_tag;
   s << ")";
   reshade::log::message(reshade::log::level::debug, s.str().c_str());
@@ -642,7 +635,7 @@ static bool PushShaderInjections(
 
   const std::shared_lock lock(renodx::utils::mutex::global_mutex);
   cmd_list->push_constants(
-      stage,  // Used by reshade to specify graphics or compute
+      is_dispatch ? reshade::api::shader_stage::all_compute : reshade::api::shader_stage::all_graphics,
       injection_layout,
       param_index,
       0,
