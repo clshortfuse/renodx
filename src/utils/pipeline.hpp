@@ -7,6 +7,8 @@
 
 #include <include/reshade.hpp>
 #include <span>
+#include <unordered_map>
+#include <vector>
 #include "./format.hpp"
 
 namespace renodx::utils::pipeline {
@@ -192,4 +194,40 @@ static bool HasSDRAlphaBlend(std::span<const reshade::api::pipeline_subobject> s
   return false;
 }
 
+static reshade::api::pipeline CreateRenderPipeline(
+    reshade::api::device* device,
+    const reshade::api::pipeline_layout layout,
+    const std::unordered_map<reshade::api::pipeline_subobject_type, std::vector<std::uint8_t>>& shaders,
+    const reshade::api::format render_target_format = reshade::api::format::r16g16b16a16_float) {
+  auto format = render_target_format;
+  uint32_t num_vertices = 3;
+  auto topology = reshade::api::primitive_topology::triangle_list;
+  reshade::api::blend_desc blend_state = {};
+  reshade::api::rasterizer_desc rasterizer_state = {.cull_mode = reshade::api::cull_mode::none};
+  reshade::api::depth_stencil_desc depth_stencil_state = {.depth_enable = false};
+
+  std::vector<reshade::api::pipeline_subobject> subobjects = {
+      {.type = reshade::api::pipeline_subobject_type::render_target_formats, .count = 1, .data = &format},
+      {.type = reshade::api::pipeline_subobject_type::max_vertex_count, .count = 1, .data = &num_vertices},
+      {.type = reshade::api::pipeline_subobject_type::primitive_topology, .count = 1, .data = &topology},
+      {.type = reshade::api::pipeline_subobject_type::blend_state, .count = 1, .data = &blend_state},
+      {.type = reshade::api::pipeline_subobject_type::rasterizer_state, .count = 1, .data = &rasterizer_state},
+      {.type = reshade::api::pipeline_subobject_type::depth_stencil_state, .count = 1, .data = &depth_stencil_state},
+  };
+
+  std::vector<reshade::api::shader_desc> shader_descriptions;
+  for (const auto& [type, shader] : shaders) {
+    shader_descriptions.push_back({
+        .code = shader.data(),
+        .code_size = shader.size(),
+    });
+    subobjects.push_back({.type = type, .count = 1, .data = &shader_descriptions.back()});
+  }
+
+  reshade::api::pipeline pipeline;
+  if (device->create_pipeline(layout, static_cast<uint32_t>(subobjects.size()), subobjects.data(), &pipeline)) {
+    return pipeline;
+  }
+  return {0};
+}
 }  // namespace renodx::utils::pipeline

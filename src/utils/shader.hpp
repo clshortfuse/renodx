@@ -180,7 +180,7 @@ struct __declspec(uuid("8707f724-c7e5-420e-89d6-cc032c732d2d")) CommandListData 
 #ifdef DEBUG_LEVEL_2
     std::stringstream s;
     s << "utils::shader::ApplyReplacements(Applying replacement ";
-    s << pair;
+    s << stage;
     s << ", pipeline: " << reinterpret_cast<void*>(pair->second.handle);
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
