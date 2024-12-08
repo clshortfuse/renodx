@@ -377,11 +377,11 @@ static void OnDestroyDevice(reshade::api::device* device) {
 }
 
 static void OnInitCommandList(reshade::api::command_list* cmd_list) {
-  auto& data = cmd_list->create_private_data<CommandListData>();
+  cmd_list->create_private_data<CommandListData>();
 }
 
 static void OnResetCommandList(reshade::api::command_list* cmd_list) {
-  auto& data = cmd_list->create_private_data<CommandListData>();
+  auto& data = cmd_list->get_private_data<CommandListData>();
   data.current_shaders_hashes.clear();
   data.pending_replacements.clear();
 }
