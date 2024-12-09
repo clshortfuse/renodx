@@ -2288,17 +2288,7 @@ static void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-  reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent()");
-
   auto current_back_buffer = swapchain->get_current_back_buffer();
-
-  {
-    std::stringstream s;
-    s << "mods::swapchain::OnPresent(Back buffer: ";
-    s << reinterpret_cast<void*>(current_back_buffer.handle);
-    s << ")";
-    reshade::log::message(reshade::log::level::debug, s.str().c_str());
-  }
 
   auto* device = swapchain->get_device();
   auto& data = device->get_private_data<DeviceData>();
@@ -2310,13 +2300,7 @@ static void OnPresent(
 
   reshade::api::resource swapchain_clone = {clone_pair->second};
 
-  {
-    std::stringstream s;
-    s << "mods::swapchain::OnPresent(Clone: ";
-    s << reinterpret_cast<void*>(swapchain_clone.handle);
-    s << ")";
-    reshade::log::message(reshade::log::level::debug, s.str().c_str());
-  }
+
 
   std::stringstream s;
   s << "mods::swapchain::OnPresent(";
