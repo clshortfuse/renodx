@@ -755,16 +755,21 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
       }
 
       device->destroy_resource({clone_handle});
+      data.resource_clones.erase(buffer.handle);
     }
     if (auto rtv_pair = data.swapchain_proxy_rtvs.find(buffer.handle);
         rtv_pair != data.swapchain_proxy_rtvs.end()) {
       device->destroy_resource_view({rtv_pair->second});
+      data.swapchain_proxy_rtvs.erase(buffer.handle);
     }
   }
 
   device->destroy_sampler(data.swapchain_proxy_sampler);
   device->destroy_pipeline_layout(data.swapchain_proxy_layout);
   device->destroy_pipeline(data.swapchain_proxy_pipeline);
+  data.swapchain_proxy_sampler = {0};
+  data.swapchain_proxy_layout = {0};
+  data.swapchain_proxy_pipeline = {0};
 }
 
 static bool OnCreateResource(
