@@ -179,8 +179,8 @@ static bool upgrade_resource_views = true;
 static bool prevent_full_screen = true;
 static bool force_borderless = true;
 static bool is_vulkan = false;
-static std::vector<std::uint8_t> swapchain_proxy_vertex_shader;
-static std::vector<std::uint8_t> swapchain_proxy_pixel_shader;
+static std::vector<std::uint8_t> swapchain_proxy_vertex_shader = {};
+static std::vector<std::uint8_t> swapchain_proxy_pixel_shader = {};
 static int32_t expected_constant_buffer_index = -1;
 static uint32_t expected_constant_buffer_space = 0;
 static float* shader_injection = nullptr;
@@ -235,7 +235,7 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   // <resource_original.handle, resource_clone.handle>
   std::unordered_map<uint64_t, uint64_t> resource_clones;
   // <resource_view_original.handle, resource_view_clone.handle>
-  std::unordered_map<uint64_t, uint64_t> resource_view_clones;
+  std::unordered_map<uint64_t, reshade::api::resource_view> resource_view_clones;
 
   std::unordered_map<uint64_t, reshade::api::resource> upgraded_resources;
   std::unordered_map<uint64_t, reshade::api::format> upgraded_resource_formats;
@@ -253,6 +253,7 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   std::unordered_set<uint64_t> active_descriptor_table_clones;
 
   reshade::api::pipeline_layout swapchain_proxy_fallback_layout = {0};
+  reshade::api::pipeline swapchain_proxy_fallback_pipeline = {0};
   std::unordered_map<uint64_t, reshade::api::pipeline> pipeline_layout_to_swap_chain_proxy_pipeline;
   std::unordered_map<uint64_t, reshade::api::descriptor_table> pipeline_layout_sampler_table;
   std::unordered_map<uint64_t, reshade::api::descriptor_table> pipeline_layout_srv_table;
@@ -383,12 +384,26 @@ static reshade::api::resource GetResourceClone(
   return {handle};
 }
 
-static reshade::api::resource_view GetResourceViewClone(
+static reshade::api::resource GetResourceClone(
+    reshade::api::device* device,
+    const DeviceData* private_data,
+    const reshade::api::resource resource) {
+  if (!private_data->resource_clone_enabled.contains(resource.handle)) return {0};
+  auto pair = private_data->resource_clones.find(resource.handle);
+  if (pair != private_data->resource_clones.end()) {
+    return {pair->second};
+  }
+  return {0};
+}
+
+static const reshade::api::resource_view NULL_RESOURCE_VIEW = {0};
+
+static const reshade::api::resource_view& GetResourceViewClone(
     reshade::api::device* device,
     DeviceData* private_data,
     const reshade::api::resource_view resource_view) {
   auto target_pair = private_data->resource_view_clone_targets.find(resource_view.handle);
-  if (target_pair == private_data->resource_view_clone_targets.end()) return {0};
+  if (target_pair == private_data->resource_view_clone_targets.end()) return NULL_RESOURCE_VIEW;
 
   const auto resource = device->get_resource_from_view(resource_view);
   if (resource.handle == 0) {
@@ -400,13 +415,13 @@ static reshade::api::resource_view GetResourceViewClone(
     s << ")";
     reshade::log::message(reshade::log::level::warning, s.str().c_str());
 #endif
-    return {0};
+    return NULL_RESOURCE_VIEW;
   }
 
-  if (!private_data->resource_clone_enabled.contains(resource.handle)) return {0};
+  if (!private_data->resource_clone_enabled.contains(resource.handle)) return NULL_RESOURCE_VIEW;
 
-  auto& view_handle = private_data->resource_view_clones[resource_view.handle];
-  if (view_handle == 0) {
+  auto& resource_view_clone = private_data->resource_view_clones[resource_view.handle];
+  if (resource_view_clone.handle == 0) {
 #ifdef DEBUG_LEVEL_1
     {
       std::stringstream s;
@@ -449,13 +464,11 @@ static reshade::api::resource_view GetResourceViewClone(
 #endif
     }
 
-    reshade::api::resource_view resource_view_clone = {0};
     device->create_resource_view(
         {resource_handle},
         usage,
         new_desc,
         &resource_view_clone);
-    view_handle = resource_view_clone.handle;
 
 #ifdef DEBUG_LEVEL_1
     {
@@ -468,10 +481,10 @@ static reshade::api::resource_view GetResourceViewClone(
     }
 #endif
   }
-  return {view_handle};
+  return resource_view_clone;
 }
 
-static reshade::api::resource_view GetResourceViewClone(
+static const reshade::api::resource_view& GetResourceViewClone(
     reshade::api::device* device,
     const reshade::api::resource_view resource_view) {
   auto& data = device->get_private_data<DeviceData>();
@@ -479,7 +492,7 @@ static reshade::api::resource_view GetResourceViewClone(
   return GetResourceViewClone(device, &data, resource_view);
 }
 
-static reshade::api::resource_view GetResourceViewClone(
+static const reshade::api::resource_view& GetResourceViewClone(
     reshade::api::command_list* cmd_list,
     const reshade::api::resource_view resource_view) {
   return GetResourceViewClone(cmd_list->get_device(), resource_view);
@@ -612,11 +625,82 @@ static void OnPresentForResizeBuffer(
 
 static SwapChainUpgradeTarget swapchain_proxy_upgrade_target = {
     .new_format = target_format,
-    .usage_set = static_cast<uint32_t>(
-        reshade::api::resource_usage::shader_resource
-        | reshade::api::resource_usage::render_target),
+    .usage_set = static_cast<uint32_t>(reshade::api::resource_usage::shader_resource | reshade::api::resource_usage::render_target),
     .use_resource_view_cloning_and_upgrade = true,
 };
+
+static void SetupSwapchainProxy(
+    reshade::api::swapchain* swapchain,
+    reshade::api::device* device,
+    DeviceData* data) {
+  const size_t back_buffer_count = swapchain->get_back_buffer_count();
+  for (uint32_t index = 0; index < back_buffer_count; ++index) {
+    swapchain_proxy_upgrade_target.new_format = target_format;
+    if (target_format == reshade::api::format::r10g10b10a2_unorm) {
+      swapchain_proxy_upgrade_target.view_upgrades = swapchain_proxy_upgrade_target.VIEW_UPGRADES_R10G10B10A2_UNORM;
+    }
+    auto buffer = swapchain->get_back_buffer(index);
+    data->resource_clone_enabled.emplace(buffer.handle);
+    data->resource_clone_targets[buffer.handle] = &swapchain_proxy_upgrade_target;
+    data->resource_initial_state[buffer.handle] = reshade::api::resource_usage::general;
+
+    auto swapchain_clone = GetResourceClone(device, data, buffer);
+
+    auto& srv = data->swapchain_proxy_srvs[swapchain_clone.handle];
+    device->create_resource_view(
+        swapchain_clone,
+        reshade::api::resource_usage::shader_resource,
+        reshade::api::resource_view_desc(target_format),
+        &srv);
+  }
+
+  reshade::api::pipeline_layout_param param_sampler;
+  param_sampler.type = reshade::api::pipeline_layout_param_type::push_descriptors;
+  param_sampler.push_descriptors.count = 1;
+  param_sampler.push_descriptors.type = reshade::api::descriptor_type::sampler;
+
+  reshade::api::pipeline_layout_param param_srv;
+  param_srv.type = reshade::api::pipeline_layout_param_type::push_descriptors;
+  param_srv.push_descriptors.count = 1;
+  param_srv.push_descriptors.type = reshade::api::descriptor_type::texture_shader_resource_view;
+
+  reshade::api::pipeline_layout_param param_constants;
+  param_constants.type = reshade::api::pipeline_layout_param_type::push_constants;
+  param_constants.push_constants.count = 1;
+
+  if (device->get_api() == reshade::api::device_api::d3d12 || device->get_api() == reshade::api::device_api::vulkan) {
+    param_constants.push_constants.count = shader_injection_size;
+  } else {
+    param_constants.push_constants.count = 1;
+  }
+  if (expected_constant_buffer_index == -1) {
+    if (device->get_api() == reshade::api::device_api::d3d12 || device->get_api() == reshade::api::device_api::vulkan) {
+      param_constants.push_constants.dx_register_index = 0;
+    } else {
+      param_constants.push_constants.dx_register_index = 13;
+    }
+  } else {
+    param_constants.push_constants.dx_register_index = expected_constant_buffer_index;
+  }
+  param_constants.push_constants.dx_register_space = expected_constant_buffer_space;
+
+  std::vector<reshade::api::pipeline_layout_param> new_layout_params = {param_sampler, param_srv, param_constants};
+
+  reshade::log::message(reshade::log::level::debug, "mods::swapchain::SetupSwapchainProxy(Creating fallback pipeline layout)");
+
+  device->create_pipeline_layout(new_layout_params.size(), new_layout_params.data(), &data->swapchain_proxy_fallback_layout);
+
+  data->swapchain_proxy_fallback_pipeline = renodx::utils::pipeline::CreateRenderPipeline(
+      device,
+      data->swapchain_proxy_fallback_layout,
+      {
+          {reshade::api::pipeline_subobject_type::vertex_shader, swapchain_proxy_vertex_shader},
+          {reshade::api::pipeline_subobject_type::pixel_shader, swapchain_proxy_pixel_shader},
+      },
+      target_format);
+
+  device->create_sampler({}, &data->swapchain_proxy_sampler);
+}
 
 static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   auto* device = swapchain->get_device();
@@ -638,18 +722,8 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   auto device_back_buffer_desc = renodx::utils::swapchain::GetBackBufferDesc(device);
   CheckSwapchainSize(swapchain, device_back_buffer_desc);
 
-  if (!swapchain_proxy_pixel_shader.empty()) {
-    const size_t back_buffer_count = swapchain->get_back_buffer_count();
-    for (uint32_t index = 0; index < back_buffer_count; ++index) {
-      swapchain_proxy_upgrade_target.new_format = target_format;
-      if (target_format == reshade::api::format::r10g10b10a2_unorm) {
-        swapchain_proxy_upgrade_target.view_upgrades = swapchain_proxy_upgrade_target.VIEW_UPGRADES_R10G10B10A2_UNORM;
-      }
-      auto buffer = swapchain->get_back_buffer(index);
-      data.resource_clone_enabled.emplace(buffer.handle);
-      data.resource_clone_targets[buffer.handle] = &swapchain_proxy_upgrade_target;
-      data.resource_initial_state[buffer.handle] = reshade::api::resource_usage::general;
-    }
+  if (use_resource_cloning && !swapchain_proxy_pixel_shader.empty()) {
+    SetupSwapchainProxy(swapchain, device, &data);
   }
 
   if (use_resize_buffer && device_back_buffer_desc.texture.format != target_format) {
@@ -1230,7 +1304,6 @@ static void ReleaseResourceView(
     data.resource_view_clones.erase(view.handle);
   }
   data.resource_view_clone_targets.erase(view.handle);
-  data.resource_view_clone_targets.erase(view.handle);
 }
 
 static void OnInitResourceView(
@@ -1763,6 +1836,11 @@ static void OnPushDescriptors(
   if (update.count == 0u) return;
 
   reshade::api::descriptor_table_update new_update;
+
+#ifdef DEBUG_LEVEL_2
+  reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnPushDescriptors()");
+#endif
+
   bool changed = false;
   bool active = false;
 
@@ -2175,14 +2253,35 @@ static void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-  auto* device = swapchain->get_device();
-  auto& data = device->get_private_data<DeviceData>();
-
-  const std::unique_lock data_lock(data.mutex);
+  reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent()");
 
   auto current_back_buffer = swapchain->get_current_back_buffer();
 
-  auto swapchain_clone = GetResourceClone(device, &data, current_back_buffer);
+  {
+    std::stringstream s;
+    s << "mods::swapchain::OnPresent(Back buffer: ";
+    s << reinterpret_cast<void*>(current_back_buffer.handle);
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+  }
+
+  auto* device = swapchain->get_device();
+  auto& data = device->get_private_data<DeviceData>();
+
+  // std::shared_lock data_lock(data.mutex);
+
+  auto clone_pair = data.resource_clones.find(current_back_buffer.handle);
+  if (clone_pair == data.resource_clones.end()) return;
+
+  reshade::api::resource swapchain_clone = {clone_pair->second};
+
+  {
+    std::stringstream s;
+    s << "mods::swapchain::OnPresent(Clone: ";
+    s << reinterpret_cast<void*>(swapchain_clone.handle);
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+  }
 
   std::stringstream s;
   s << "mods::swapchain::OnPresent(";
@@ -2191,323 +2290,85 @@ static void OnPresent(
 
   auto* cmd_list = queue->get_immediate_command_list();
 
-  // cmd_list->copy_resource(swapchain_clone, current_back_buffer);
-  // return;
-
-  reshade::api::pipeline_layout pipeline_layout = data.swapchain_proxy_fallback_layout;
-  // auto& shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
-  // if (&shader_state == nullptr) {
-  //   // DX12 doesn't have and initialized command list
-  //   pipeline_layout = data.swapchain_proxy_fallback_layout;
-  // } else {
-  //   pipeline_layout = shader_state.pipeline_layout;
-  // }
-  if (pipeline_layout.handle == 0u) {
-    // Create new pipeline layout
-    reshade::api::pipeline_layout_param param_sampler;
-    param_sampler.type = reshade::api::pipeline_layout_param_type::push_descriptors;
-    param_sampler.push_descriptors.count = 1;
-    param_sampler.push_descriptors.type = reshade::api::descriptor_type::sampler;
-
-    reshade::api::pipeline_layout_param param_srv;
-    param_srv.type = reshade::api::pipeline_layout_param_type::push_descriptors;
-    param_srv.push_descriptors.count = 1;
-    param_srv.push_descriptors.type = reshade::api::descriptor_type::texture_shader_resource_view;
-
-    reshade::api::pipeline_layout_param param_constants;
-    param_constants.type = reshade::api::pipeline_layout_param_type::push_constants;
-    param_constants.push_constants.count = 1;
-
-    if (device->get_api() == reshade::api::device_api::d3d12 || device->get_api() == reshade::api::device_api::vulkan) {
-      param_constants.push_constants.count = shader_injection_size;
-    } else {
-      param_constants.push_constants.count = 1;
-    }
-    if (expected_constant_buffer_index == -1) {
-      if (device->get_api() == reshade::api::device_api::d3d12 || device->get_api() == reshade::api::device_api::vulkan) {
-        param_constants.push_constants.dx_register_index = 0;
-      } else {
-        param_constants.push_constants.dx_register_index = 13;
-      }
-    } else {
-      param_constants.push_constants.dx_register_index = expected_constant_buffer_index;
-    }
-    param_constants.push_constants.dx_register_space = expected_constant_buffer_space;
-
-    std::vector<reshade::api::pipeline_layout_param> new_layout_params = {param_sampler, param_srv, param_constants};
-
-    reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnPresent(Creating fallback pipeline layout)");
-
-    device->create_pipeline_layout(new_layout_params.size(), new_layout_params.data(), &data.swapchain_proxy_fallback_layout);
-
-    // DX12 doesn't have a defualt pipeline layout
-    pipeline_layout = data.swapchain_proxy_fallback_layout;
+  if (data.swapchain_proxy_fallback_layout.handle == 0u) {
+    reshade::log::message(reshade::log::level::warning, "No pipeline layout handle.");
+    cmd_list->copy_resource(swapchain_clone, current_back_buffer);
+    return;
   }
+  s << ", layout: " << reinterpret_cast<void*>(data.swapchain_proxy_fallback_layout.handle);
 
-  // if (pipeline_layout.handle == 0u) {
-  //   reshade::log::message(reshade::log::level::warning, "No pipeline layout handle.");
-  //   cmd_list->barrier(current_back_buffer, reshade::api::resource_usage::general, reshade::api::resource_usage::copy_dest);
-  //   // Fall back to copy
-  //   cmd_list->copy_resource(swapchain_clone, current_back_buffer);
-  //   cmd_list->barrier(current_back_buffer, reshade::api::resource_usage::copy_dest, reshade::api::resource_usage::general);
-  //   return;
-  // }
-  auto& pipeline = data.pipeline_layout_to_swap_chain_proxy_pipeline[pipeline_layout.handle];
-  s << ", pipeline: ";
-  if (pipeline.handle == 0) {
-    reshade::log::message(reshade::log::level::info, "OnPresent create pipeline");
-    pipeline.handle = renodx::utils::pipeline::CreateRenderPipeline(
-                          device,
-                          pipeline_layout,
-                          {
-                              {reshade::api::pipeline_subobject_type::vertex_shader, swapchain_proxy_vertex_shader},
-                              {reshade::api::pipeline_subobject_type::pixel_shader, swapchain_proxy_pixel_shader},
-                          },
-                          target_format)
-                          .handle;
-    s << reinterpret_cast<void*>(pipeline.handle);
-    s << " (created)";
-  } else {
-    s << reinterpret_cast<void*>(pipeline.handle);
+  if (data.swapchain_proxy_fallback_pipeline.handle == 0) {
+    reshade::log::message(reshade::log::level::warning, "No pipeline handle.");
+    cmd_list->copy_resource(swapchain_clone, current_back_buffer);
+    return;
   }
-  s << ", layout: " << reinterpret_cast<void*>(pipeline_layout.handle);
+  s << ", pipeline: " << reinterpret_cast<void*>(data.swapchain_proxy_fallback_pipeline.handle);
 
   // Bind sampler and SRV
 
-  std::vector<reshade::api::descriptor_table_update> descriptor_writes;
-  std::vector<reshade::api::sampler_with_resource_view> sampler_descriptors;
-
-  if (data.swapchain_proxy_sampler.handle == 0u) {
-    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent(Creating sampler)");
-    device->create_sampler({}, &data.swapchain_proxy_sampler);
+  auto srv_pair = data.swapchain_proxy_srvs.find(swapchain_clone.handle);
+  if (srv_pair == data.swapchain_proxy_srvs.end()) {
+    reshade::log::message(reshade::log::level::warning, "No SRV.");
+    cmd_list->copy_resource(swapchain_clone, current_back_buffer);
+    return;
   }
+  auto srv = srv_pair->second;
+  s << ", srv: " << reinterpret_cast<void*>(srv.handle);
 
-  auto clone_desc = device->get_resource_desc(swapchain_clone);
-  auto& srv = data.swapchain_proxy_srvs[swapchain_clone.handle];
-  if (srv.handle == 0u) {
-    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent(Creating SRV)");
-    device->create_resource_view(
-        swapchain_clone,
-        reshade::api::resource_usage::shader_resource,
-        reshade::api::resource_view_desc(clone_desc.texture.format),
-        &srv);
-  };
-
-  auto& rtv = data.swapchain_proxy_rtvs[current_back_buffer.handle];
-  if (rtv.handle == 0u) {
-    auto buffer_desc = device->get_resource_desc(current_back_buffer);
-    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent(Creating RTV)");
-    device->create_resource_view(
-        current_back_buffer,
-        reshade::api::resource_usage::render_target,
-        reshade::api::resource_view_desc(buffer_desc.texture.format),
-        &rtv);
-  }
-
-  reshade::api::render_pass_render_target_desc render_target_desc = {.view = rtv};
+  // Create RTV on the fly (reusing existing may cause conflicts)
+  reshade::api::resource_view rtv;
+  auto buffer_desc = device->get_resource_desc(current_back_buffer);
+  device->create_resource_view(
+      current_back_buffer,
+      reshade::api::resource_usage::render_target,
+      reshade::api::resource_view_desc(buffer_desc.texture.format),
+      &rtv);
 
   s << ", rtv: " << reinterpret_cast<void*>(rtv.handle);
 
+  reshade::api::render_pass_render_target_desc render_target_desc = {.view = rtv};
+  cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_graphics, data.swapchain_proxy_fallback_pipeline);
   cmd_list->begin_render_pass(1, &render_target_desc, nullptr);
   size_t param_index = -1;
 
   // cmd_list->barrier(swapchain_clone, reshade::api::resource_usage::general, reshade::api::resource_usage::shader_resource);
-  cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_graphics, pipeline);
-  if (pipeline_layout.handle == data.swapchain_proxy_fallback_layout.handle) {
-    cmd_list->push_descriptors(
-        reshade::api::shader_stage::all_graphics,
-        pipeline_layout,
+
+  cmd_list->push_descriptors(
+      reshade::api::shader_stage::all_graphics,
+      data.swapchain_proxy_fallback_layout,
+      0,
+      {
+          .table = {},
+          .binding = 0,
+          .array_offset = 0,
+          .count = 1,
+          .type = reshade::api::descriptor_type::sampler,
+          .descriptors = &data.swapchain_proxy_sampler,
+      });
+  cmd_list->push_descriptors(
+      reshade::api::shader_stage::all_graphics,
+      data.swapchain_proxy_fallback_layout,
+      1,
+      {
+          .table = {},
+          .binding = 0,
+          .array_offset = 0,
+          .count = 1,
+          .type = reshade::api::descriptor_type::texture_shader_resource_view,
+          .descriptors = &srv,
+      });
+  if (shader_injection_size != 0u) {
+    const std::shared_lock lock(renodx::utils::mutex::global_mutex);
+    cmd_list->push_constants(
+        reshade::api::shader_stage::all_graphics,  // Used by reshade to specify graphics or compute
+        data.swapchain_proxy_fallback_layout,
+        2,
         0,
-        {
-            .table = {},
-            .binding = 0,
-            .array_offset = 0,
-            .count = 1,
-            .type = reshade::api::descriptor_type::sampler,
-            .descriptors = &data.swapchain_proxy_sampler,
-        });
-    cmd_list->push_descriptors(
-        reshade::api::shader_stage::all_graphics,
-        pipeline_layout,
-        1,
-        {
-            .table = {},
-            .binding = 0,
-            .array_offset = 0,
-            .count = 1,
-            .type = reshade::api::descriptor_type::texture_shader_resource_view,
-            .descriptors = &srv,
-        });
-    if (shader_injection_size != 0u) {
-      const std::shared_lock lock(renodx::utils::mutex::global_mutex);
-      cmd_list->push_constants(
-          reshade::api::shader_stage::all_graphics,  // Used by reshade to specify graphics or compute
-          pipeline_layout,
-          2,
-          0,
-          shader_injection_size,
-          shader_injection);
-    }
-  } else {
-    // Unreachable
-    auto& pipeline_layout_data = device->get_private_data<renodx::utils::pipeline_layout::DeviceData>();
-    const std::shared_lock pipeline_layout_lock(pipeline_layout_data.mutex);
-
-    auto& layout_data = pipeline_layout_data.pipeline_layout_data[pipeline_layout.handle];
-
-    for (const auto param : layout_data.params) {
-      param_index++;
-      switch (param.type) {
-        case reshade::api::pipeline_layout_param_type::descriptor_table:
-          for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
-            auto range = param.descriptor_table.ranges[range_index];
-            switch (range.type) {
-              case reshade::api::descriptor_type::sampler:
-                if (range.dx_register_space == 0 && range.dx_register_index == 0) {
-                  auto& sampler_table = data.pipeline_layout_sampler_table[pipeline_layout.handle];
-                  if (sampler_table.handle == 0u) {
-                    device->allocate_descriptor_table(pipeline_layout, 1, &sampler_table);
-                    reshade::api::descriptor_table_update update = {
-                        .table = sampler_table,
-                        .binding = range.binding,
-                        .count = 1,
-                        .type = range.type,
-                        .descriptors = &data.swapchain_proxy_sampler,
-                    };
-                    device->update_descriptors(update);
-                  };
-                  cmd_list->bind_descriptor_table(
-                      reshade::api::shader_stage::all_graphics,
-                      pipeline_layout,
-                      param_index,
-                      sampler_table);
-                }
-                break;
-              case reshade::api::descriptor_type::sampler_with_resource_view:
-                if (range.dx_register_space == 0 && range.dx_register_index == 0) {
-                  auto& sampler_srv_table = data.pipeline_layout_sampler_srv_table[pipeline_layout.handle];
-                  if (sampler_srv_table.handle == 0u) {
-                    device->allocate_descriptor_table(pipeline_layout, 1, &sampler_srv_table);
-                    reshade::api::sampler_with_resource_view item = {
-                        .sampler = data.swapchain_proxy_sampler,
-                        .view = srv,
-                    };
-                    reshade::api::descriptor_table_update update = {
-                        .table = sampler_srv_table,
-                        .binding = range.binding,
-                        .count = 1,
-                        .type = range.type,
-                        .descriptors = &item,
-                    };
-                    device->update_descriptors(update);
-                  };
-                  cmd_list->bind_descriptor_table(
-                      reshade::api::shader_stage::all_graphics,
-                      pipeline_layout,
-                      param_index,
-                      sampler_srv_table);
-                }
-                break;
-              case reshade::api::descriptor_type::texture_shader_resource_view:
-                if (range.dx_register_space == 0 && range.dx_register_index == 0) {
-                  auto& srv_table = data.pipeline_layout_srv_table[pipeline_layout.handle];
-                  if (srv_table.handle == 0u) {
-                    reshade::log::message(reshade::log::level::info, "Make srv table");
-                    device->allocate_descriptor_table(pipeline_layout, 1, &srv_table);
-                    srv_table.handle = srv_table.handle;
-                    reshade::api::descriptor_table_update update = {
-                        .table = srv_table,
-                        .binding = range.binding,
-                        .count = 1,
-                        .type = range.type,
-                        .descriptors = &srv,
-                    };
-                    device->update_descriptors(update);
-                  };
-                  cmd_list->bind_descriptor_table(
-                      reshade::api::shader_stage::all_graphics,
-                      pipeline_layout,
-                      param_index,
-                      srv_table);
-                }
-                break;
-
-              case reshade::api::descriptor_type::buffer_shader_resource_view:
-              case reshade::api::descriptor_type::buffer_unordered_access_view:
-              case reshade::api::descriptor_type::texture_unordered_access_view:
-              case reshade::api::descriptor_type::constant_buffer:
-              case reshade::api::descriptor_type::shader_storage_buffer:
-              case reshade::api::descriptor_type::acceleration_structure:
-                break;
-            }
-          }
-        case reshade::api::pipeline_layout_param_type::push_descriptors:
-          if (param.push_descriptors.dx_register_index == 0u && param.push_descriptors.dx_register_space == 0u) {
-            switch (param.push_descriptors.type) {
-              case reshade::api::descriptor_type::sampler:
-                s << ", sampler: " << reinterpret_cast<void*>(data.swapchain_proxy_sampler.handle) << " (" << param_index << ")";
-                cmd_list->push_descriptors(
-                    reshade::api::shader_stage::all_graphics,
-                    pipeline_layout,
-                    param_index,
-                    {.table = {},
-                     .binding = param.push_descriptors.binding,
-                     .array_offset = 0,
-                     .count = 1,
-                     .type = param.push_descriptors.type,
-                     .descriptors = &data.swapchain_proxy_sampler});
-                break;
-              case reshade::api::descriptor_type::texture_shader_resource_view:
-                s << ", srv: " << reinterpret_cast<void*>(srv.handle) << " (" << param_index << ")";
-                cmd_list->push_descriptors(
-                    reshade::api::shader_stage::all_graphics,
-                    pipeline_layout,
-                    param_index,
-                    {.table = {},
-                     .binding = 0,
-                     .array_offset = 0,
-                     .count = 1,
-                     .type = param.push_descriptors.type,
-                     .descriptors = &srv});
-                break;
-              case reshade::api::descriptor_type::sampler_with_resource_view:
-                s << ", srv: " << reinterpret_cast<void*>(srv.handle) << " (" << param_index << ")";
-                {
-                  reshade::api::sampler_with_resource_view item = {
-                      .sampler = data.swapchain_proxy_sampler,
-                      .view = srv,
-                  };
-                  cmd_list->push_descriptors(
-                      reshade::api::shader_stage::all_graphics,
-                      pipeline_layout,
-                      param_index,
-                      {.table = {},
-                       .binding = 0,
-                       .array_offset = 0,
-                       .count = 1,
-                       .type = param.push_descriptors.type,
-                       .descriptors = &item});
-                }
-                break;
-              case reshade::api::descriptor_type::buffer_shader_resource_view:
-              case reshade::api::descriptor_type::buffer_unordered_access_view:
-              case reshade::api::descriptor_type::texture_unordered_access_view:
-              case reshade::api::descriptor_type::constant_buffer:
-              case reshade::api::descriptor_type::shader_storage_buffer:
-              case reshade::api::descriptor_type::acceleration_structure:
-                break;
-            }
-          }
-
-        case reshade::api::pipeline_layout_param_type::push_constants:
-        case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
-          //
-        case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges:
-        case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers:
-          break;
-      }
-    }
+        shader_injection_size,
+        shader_injection);
   }
+
+  auto clone_desc = device->get_resource_desc(swapchain_clone);
   const reshade::api::viewport viewport = {
       .x = 0.0f,
       .y = 0.0f,
@@ -2528,12 +2389,12 @@ static void OnPresent(
   cmd_list->draw(3, 1, 0, 0);
   cmd_list->end_render_pass();
 
-  cmd_list->barrier(
-      swapchain_clone,
-      reshade::api::resource_usage::shader_resource,
-      reshade::api::resource_usage::general | reshade::api::resource_usage::render_target);
+  if (!data.resource_view_clones.contains(rtv.handle)) {
+    // RTV may not actually be new, but reference to previous one
+    device->destroy_resource_view(rtv);
+  }
 
-#if DEBUG_LEVEL_2
+#ifdef DEBUG_LEVEL_2
   reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
 }
@@ -2603,14 +2464,14 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
         reshade::register_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
         // reshade::register_event<reshade::addon_event::barrier>(OnBarrier);
         reshade::register_event<reshade::addon_event::copy_buffer_to_texture>(OnCopyBufferToTexture);
-      }
 
-      if (!swapchain_proxy_pixel_shader.empty()) {
-        // Create swapchain proxy
-        reshade::register_event<reshade::addon_event::present>(OnPresent);
-        if (new_injections != nullptr) {
-          shader_injection_size = sizeof(T) / sizeof(uint32_t);
-          shader_injection = reinterpret_cast<float*>(new_injections);
+        if (!swapchain_proxy_pixel_shader.empty()) {
+          // Create swapchain proxy
+          reshade::register_event<reshade::addon_event::present>(OnPresent);
+          if (new_injections != nullptr) {
+            shader_injection_size = sizeof(T) / sizeof(uint32_t);
+            shader_injection = reinterpret_cast<float*>(new_injections);
+          }
         }
       }
 
