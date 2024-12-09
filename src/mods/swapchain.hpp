@@ -734,7 +734,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   renodx::utils::swapchain::ChangeColorSpace(swapchain, target_color_space);
 }
 
-void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
+static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
   auto* device = swapchain->get_device();
   auto& data = device->get_private_data<DeviceData>();
 
@@ -742,7 +742,7 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
   for (uint32_t index = 0; index < back_buffer_count; ++index) {
     auto buffer = swapchain->get_back_buffer(index);
 
-    data.resource_clone_enabled.emplace(buffer.handle);
+    data.resource_clone_enabled.erase(buffer.handle);
     data.resource_clone_targets.erase(buffer.handle);
     data.resource_initial_state.erase(buffer.handle);
     if (auto pair = data.resource_clones.find(buffer.handle);
