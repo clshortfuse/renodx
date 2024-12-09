@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./tonemapper.hlsl"
 
 Texture2D<float4> UITexture : register(t0);
 
@@ -84,9 +85,7 @@ float4 main(
   float4 _59 = SceneTexture.Sample(SceneSampler, float2(_7, _8));
   float3 scene = _59.rgb;
   scene = renodx::color::pq::Decode(scene.rgb, injectedData.toneMapGameNits);
-  if (injectedData.toneMapGammaCorrection == 1.f) {
-    uiTexture.rgb = renodx::color::correct::GammaSafe(uiTexture.rgb);
-  }
+  uiTexture.rgb = correctGamma(uiTexture.rgb);
 
   // Multiple by games because we're encoding PQ later
   uiTexture.rgb = uiTexture.rgb * injectedData.toneMapUINits / injectedData.toneMapGameNits;

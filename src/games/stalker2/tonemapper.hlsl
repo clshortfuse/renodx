@@ -37,7 +37,23 @@ renodx::tonemap::Config getCommonConfig() {
   return config;
 }
 
-float3 pqTosRGB(float3 input_pq) {
+float3 correctGamma(float3 color) {
+  if (injectedData.toneMapGammaCorrection == 1.f) {
+    float correctionStrength = injectedData.toneMapGammaCorrectionStrength == 1.f ? 2.2f : 2.0f;
+    color = renodx::color::correct::GammaSafe(color, false, correctionStrength);
+  }
+  return color;
+}
+
+float3 decodedTosRGB(float3 input_linear) {
+  if (injectedData.toneMapType > 1.f) {
+    input_linear = renodx::color::srgb::EncodeSafe(saturate(input_linear));
+    input_linear = saturate(input_linear);
+  }
+  return input_linear;
+}
+
+float3 pqToDecoded(float3 input_pq) {
   float3 output = input_pq;
   if (injectedData.toneMapType > 1.f) {
     output = renodx::color::pq::Decode(input_pq, injectedData.toneMapGameNits);
@@ -46,13 +62,18 @@ float3 pqTosRGB(float3 input_pq) {
   return output;
 }
 
-float3 upgradePostProcess(float3 tonemappedRender, float3 post_processed) {
+float3 upgradePostProcess(float3 tonemappedRender, float3 post_processed, float lerpValue = 1.f) {
   float3 output = post_processed;
-  if (injectedData.toneMapType > 1.f) {
-    output = renodx::tonemap::UpgradeToneMap(tonemappedRender, saturate(tonemappedRender), saturate(post_processed), injectedData.radiationOverlayStrength);
-    output = renodx::color::pq::Encode(output, injectedData.toneMapGameNits);
-  } else if (injectedData.toneMapType == 1.f) {
+  if (injectedData.toneMapType == 1.f) {
     output = tonemappedRender;
+  } else if (injectedData.toneMapType > 1.f) {
+    if (lerpValue == 0.f) {
+      output = renodx::color::pq::Encode(tonemappedRender, injectedData.toneMapGameNits);
+    } else {
+      post_processed = renodx::color::srgb::DecodeSafe(post_processed);
+      output = renodx::tonemap::UpgradeToneMap(tonemappedRender, saturate(tonemappedRender), saturate(post_processed), lerpValue);
+      output = renodx::color::pq::Encode(output, injectedData.toneMapGameNits);
+    }
   }
 
   return output;

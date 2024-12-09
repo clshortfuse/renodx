@@ -450,8 +450,8 @@ float4 main(
     // We decode before they attempt to blend
     if (injectedData.toneMapType > 0.f) {
       // We decode before they attempt to blend
-      tonemappedRender = pqTosRGB(_351.rgb);
-      srgb_input = saturate(tonemappedRender);
+      tonemappedRender = pqToDecoded(_351.rgb);
+      srgb_input = decodedTosRGB(tonemappedRender);
       _351.rgb = srgb_input;
     }
 
