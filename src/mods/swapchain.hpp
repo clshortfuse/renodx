@@ -2321,9 +2321,20 @@ static void OnPresent(
   s << ", layout: " << reinterpret_cast<void*>(data.swapchain_proxy_layout.handle);
 
   if (data.swapchain_proxy_pipeline.handle == 0) {
-    reshade::log::message(reshade::log::level::warning, "No pipeline handle.");
-    cmd_list->copy_resource(swapchain_clone, current_back_buffer);
-    return;
+    reshade::log::message(reshade::log::level::warning, "No pipeline handle. Creating...");
+    data.swapchain_proxy_pipeline = renodx::utils::pipeline::CreateRenderPipeline(
+        device,
+        data.swapchain_proxy_layout,
+        {
+            {reshade::api::pipeline_subobject_type::vertex_shader, swapchain_proxy_vertex_shader},
+            {reshade::api::pipeline_subobject_type::pixel_shader, swapchain_proxy_pixel_shader},
+        },
+        target_format);
+    if (data.swapchain_proxy_pipeline == 0u) {
+      reshade::log::message(reshade::log::level::error, "No pipeline handle. Creating failed.");
+      cmd_list->copy_resource(swapchain_clone, current_back_buffer);
+      return;
+    }
   }
   s << ", pipeline: " << reinterpret_cast<void*>(data.swapchain_proxy_pipeline.handle);
 
