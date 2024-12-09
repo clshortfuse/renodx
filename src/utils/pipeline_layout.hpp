@@ -40,15 +40,15 @@ static void OnInitPipelineLayout(
 
   PipelineLayoutData& layout_data = data.pipeline_layout_data[layout.handle];
   layout_data.params.assign(params, params + param_count);
-  layout_data.ranges.resize(param_count);
 
   for (uint32_t i = 0; i < param_count; ++i) {
     const auto& param = params[i];
     if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
-      layout_data.ranges[i].assign(
+      auto& range = layout_data.ranges.emplace_back(
           param.descriptor_table.ranges,
           param.descriptor_table.ranges + param.descriptor_table.count);
-      layout_data.params[i].descriptor_table.ranges = layout_data.ranges[i].data();
+      layout_data.params[i] = param;
+      layout_data.params[i].descriptor_table.ranges = range.data();
     }
   }
 }
