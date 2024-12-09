@@ -13,7 +13,9 @@ struct ShaderInjectData {
   float toneMapGameNits;
   float toneMapUINits;
   float radiationOverlayStrength;
+  float vignetteStrength;
   float toneMapGammaCorrection;
+  float toneMapGammaCorrectionStrength;
   float colorGradeExposure;
   float colorGradeHighlights;
   float colorGradeShadows;
@@ -27,18 +29,20 @@ cbuffer injectedBuffer : register(b0, space50) {
   ShaderInjectData injectedData : packoffset(c0);
 }
 /* static const ShaderInjectData injectedData = {
-    0.f,    // toneMapType
+    2.f,    // toneMapType
     800.f,  // toneMapPeakNits
     200.f,  // toneMapGameNits
     150.f,  // toneMapUINits
-    0.5f,    // radiationOverlayStrength
+    1.f,    // radiationOverlayStrength
+    1.f,    // vignette
     1.f,    // toneMapGammaCorrection
+    0.f,    // toneMapGammaCorrectionStrength
     1.f,    // colorGradeExposure
     1.f,    // colorGradeHighlights
     1.f,    // colorGradeShadows
     1.f,    // colorGradeContrast
     1.f,    // colorGradeSaturation
-    0.5f,    // colorGradeBlowout
+    0.5f,   // colorGradeBlowout
     1.f,    // colorGradeLUTStrength
 }; */
 #endif

@@ -193,8 +193,8 @@ float4 main(
   float4 _136 = PostProcessInput_0_Texture.Sample(PostProcessInput_0_Sampler, float2(_132, _133));
   if (injectedData.toneMapType > 0.f) {
     // We decode before they attempt to blend
-    tonemappedRender = pqTosRGB(_136.rgb);
-    srgb_input = saturate(tonemappedRender);
+    tonemappedRender = pqToDecoded(_136.rgb);
+    srgb_input = decodedTosRGB(tonemappedRender);
     _136.rgb = srgb_input;
   }
 
@@ -407,7 +407,7 @@ float4 main(
   float _341 = max(_338, 0.0f);
   post_srgb = float3(_339, _340, _341);
   if (injectedData.toneMapType > 0.f) {
-    output = upgradePostProcess(tonemappedRender, post_srgb);
+    output = upgradePostProcess(tonemappedRender, post_srgb, injectedData.radiationOverlayStrength);
     return float4(output, 0.f);
   }
 
