@@ -2198,6 +2198,8 @@ static bool OnCopyTextureRegion(
     auto source_clone = GetResourceClone(device, &data, source);
     auto dest_clone = GetResourceClone(device, &data, dest);
 
+    if (source_clone.handle == 0u && dest_clone.handle == 0u) return false;
+
     if (source_clone.handle != 0u) {
       source_desc = device->get_resource_desc(source_clone);
 
