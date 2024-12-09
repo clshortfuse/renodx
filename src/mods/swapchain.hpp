@@ -12,7 +12,6 @@
 
 #include <cstdint>
 #include <cstdio>
-#include <include/reshade_api_resource.hpp>
 #include <initializer_list>
 #include <mutex>
 #include <shared_mutex>
@@ -642,14 +641,14 @@ static void SetupSwapchainProxy(
     data->resource_clone_targets[buffer.handle] = &swapchain_proxy_upgrade_target;
     data->resource_initial_state[buffer.handle] = reshade::api::resource_usage::general;
 
-    // auto swapchain_clone = GetResourceClone(device, data, buffer);
+    auto swapchain_clone = GetResourceClone(device, data, buffer);
 
-    // auto& srv = data->swapchain_proxy_srvs[swapchain_clone.handle];
-    // device->create_resource_view(
-    //     swapchain_clone,
-    //     reshade::api::resource_usage::shader_resource,
-    //     reshade::api::resource_view_desc(target_format),
-    //     &srv);
+    auto& srv = data->swapchain_proxy_srvs[swapchain_clone.handle];
+    device->create_resource_view(
+        swapchain_clone,
+        reshade::api::resource_usage::shader_resource,
+        reshade::api::resource_view_desc(target_format),
+        &srv);
   }
 
   reshade::api::pipeline_layout_param param_sampler;
@@ -2303,15 +2302,14 @@ static void OnPresent(
 
   reshade::api::resource swapchain_clone = {clone_pair->second};
 
+
+
   std::stringstream s;
   s << "mods::swapchain::OnPresent(";
   s << reinterpret_cast<void*>(swapchain_clone.handle);
   s << " => " << reinterpret_cast<void*>(current_back_buffer.handle);
 
   auto* cmd_list = queue->get_immediate_command_list();
-
-  cmd_list->copy_resource(swapchain_clone, current_back_buffer);
-  return;
 
   if (data.swapchain_proxy_layout.handle == 0u) {
     reshade::log::message(reshade::log::level::warning, "No pipeline layout handle.");
