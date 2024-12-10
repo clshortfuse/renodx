@@ -214,8 +214,10 @@ static reshade::api::pipeline CreateRenderPipeline(
       {.type = reshade::api::pipeline_subobject_type::rasterizer_state, .count = 1, .data = &rasterizer_state},
       {.type = reshade::api::pipeline_subobject_type::depth_stencil_state, .count = 1, .data = &depth_stencil_state},
   };
+  subobjects.reserve(6 + shaders.size());
 
   std::vector<reshade::api::shader_desc> shader_descriptions;
+  shader_descriptions.reserve(shaders.size());
   for (const auto& [type, shader] : shaders) {
     shader_descriptions.push_back({
         .code = shader.data(),
