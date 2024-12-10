@@ -93,6 +93,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
       device_data.back_buffers.erase(handle);
     }
   }
+  swapchain->destroy_private_data<SwapchainData>();
 }
 
 static void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
