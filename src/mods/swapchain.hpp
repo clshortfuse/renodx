@@ -239,18 +239,12 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
 
   std::unordered_map<uint64_t, reshade::api::resource> upgraded_resources;
   std::unordered_map<uint64_t, reshade::api::format> upgraded_resource_formats;
-
   std::unordered_map<uint64_t, reshade::api::resource_view> upgraded_resource_views;
 
-  // <resource.handle, resourceClone.handle>
-  std::unordered_map<uint64_t, uint32_t> pipeline_to_shader_hash_map;
   std::shared_mutex mutex;
 
   // <descriptor_heap.handle, std::map<base_offset, descriptor_table>>
   std::unordered_map<uint64_t, std::unordered_map<uint32_t, HeapDescriptorInfo*>> heap_descriptor_infos;
-
-  std::unordered_map<uint64_t, uint64_t> descriptor_table_clones;
-  std::unordered_set<uint64_t> active_descriptor_table_clones;
 
   reshade::api::pipeline_layout swapchain_proxy_layout = {0};
   reshade::api::pipeline swapchain_proxy_pipeline = {0};
@@ -802,6 +796,7 @@ static bool OnCreateResource(
     return false;
   }
   switch (desc.type) {
+    case reshade::api::resource_type::texture_3d:
     case reshade::api::resource_type::texture_2d:
     case reshade::api::resource_type::surface:
       break;
@@ -948,6 +943,7 @@ static void OnInitResource(
   const std::unique_lock lock(private_data.mutex);
 
   switch (desc.type) {
+    case reshade::api::resource_type::texture_3d:
     case reshade::api::resource_type::texture_2d:
     case reshade::api::resource_type::surface:
       break;
@@ -1093,7 +1089,7 @@ static void OnDestroyResource(reshade::api::device* device, reshade::api::resour
       auto pair = data.upgraded_resources.find(resource.handle);
       pair != data.upgraded_resources.end()) {
     device->destroy_resource(pair->second);
-    data.upgraded_resources.erase(resource.handle);
+    data.upgraded_resources.erase(pair);
     data.upgraded_resource_formats.erase(resource.handle);
   }
 
@@ -1413,7 +1409,8 @@ static bool OnCopyResource(
   auto* device = cmd_list->get_device();
   auto source_desc = device->get_resource_desc(source);
   auto dest_desc = device->get_resource_desc(dest);
-  if (source_desc.type == reshade::api::resource_type::texture_2d) {
+  if (source_desc.type == reshade::api::resource_type::texture_2d
+      || source_desc.type == reshade::api::resource_type::texture_3d) {
     if (dest_desc.type == source_desc.type) {
       if (use_resource_cloning) {
         auto& data = device->get_private_data<DeviceData>();
@@ -2212,7 +2209,8 @@ static bool OnCopyTextureRegion(
   auto* device = cmd_list->get_device();
   auto source_desc = device->get_resource_desc(source);
   auto dest_desc = device->get_resource_desc(dest);
-  if (source_desc.type != reshade::api::resource_type::texture_2d) return false;
+  if (source_desc.type != reshade::api::resource_type::texture_2d
+      && source_desc.type != reshade::api::resource_type::texture_3d) return false;
   if (dest_desc.type != source_desc.type) return false;
   if (use_resource_cloning) {
     auto& data = device->get_private_data<DeviceData>();
