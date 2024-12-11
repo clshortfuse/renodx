@@ -29,6 +29,8 @@
 
 namespace renodx::utils::descriptor {
 
+static bool is_primary_hook = false;
+
 struct __declspec(uuid("018fa2c9-7a8b-76dc-bc84-87c53574223f")) DeviceData {
   // <descriptor_table.handle[index], <resourceView.handle>>
   std::unordered_map<std::pair<uint64_t, uint32_t>, reshade::api::descriptor_table_update, hash::HashPair> table_descriptor_resource_views;
@@ -71,10 +73,16 @@ static reshade::api::resource_view GetResourceViewFromDescriptorUpdate(
 }
 
 static void OnInitDevice(reshade::api::device* device) {
-  device->create_private_data<DeviceData>();
+  auto* data = &device->get_private_data<DeviceData>();
+  if (data != nullptr) return;
+
+  data = &device->create_private_data<DeviceData>();
+
+  is_primary_hook = true;
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
+  if (!is_primary_hook) return;
   device->destroy_private_data<DeviceData>();
 }
 
@@ -83,6 +91,7 @@ static bool OnUpdateDescriptorTables(
     reshade::api::device* device,
     uint32_t count,
     const reshade::api::descriptor_table_update* updates) {
+  if (!is_primary_hook) return false;
   if (count == 0u) return false;
 
   auto& data = device->get_private_data<DeviceData>();
@@ -162,6 +171,7 @@ static bool OnCopyDescriptorTables(
     reshade::api::device* device,
     uint32_t count,
     const reshade::api::descriptor_table_copy* copies) {
+  if (!is_primary_hook) return false;
   if (count == 0u) return false;
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);

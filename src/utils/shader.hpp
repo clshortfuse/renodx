@@ -367,7 +367,74 @@ static CommandListData& GetCurrentState(reshade::api::command_list* cmd_list) {
   return cmd_list->get_private_data<CommandListData>();
 }
 
+static bool is_primary_hook = false;
+
+static void OnInitDevice(reshade::api::device* device) {
+  DeviceData* data = &device->get_private_data<DeviceData>();
+  if (data == nullptr) {
+    data = &device->create_private_data<DeviceData>();
+    std::stringstream s;
+    s << "utils::shader::OnInitDevice(Hooking device: ";
+    s << reinterpret_cast<void*>(device);
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+
+    is_primary_hook = true;
+
+  } else {
+    std::stringstream s;
+    s << "utils::shader::OnInitDevice(Attaching to hook: ";
+    s << reinterpret_cast<void*>(device);
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+  }
+
+  if (!use_replace_on_bind) {
+    data->use_replace_on_bind = false;
+  }
+  if (use_replace_async) {
+    data->use_replace_async = true;
+  }
+
+  std::unique_lock internal_lock(internal::mutex);
+  for (auto& [shader_hash, replacement] : internal::compile_time_replacements) {
+    auto [iterator, is_new] = data->compile_time_replacements.emplace(shader_hash, replacement);
+    if (!is_new) {
+      std::stringstream s;
+      s << "utils::shader::OnInitDevice(Overwriting compile-time replacement:";
+      s << PRINT_CRC32(shader_hash);
+      s << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+    } else {
+      std::stringstream s;
+      s << "utils::shader::OnInitDevice(Registered compile-time replacement: ";
+      s << PRINT_CRC32(shader_hash);
+      s << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    }
+  }
+
+  for (auto& [shader_hash, replacement] : internal::initial_runtime_replacements) {
+    auto [iterator, is_new] = data->runtime_replacements.emplace(shader_hash, replacement);
+    if (!is_new) {
+      std::stringstream s;
+      s << "utils::shader::OnInitDevice(Overwriting runtime replacement: ";
+      s << PRINT_CRC32(shader_hash);
+      s << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+    } else {
+      std::stringstream s;
+      s << "utils::shader::OnInitDevice(Registered runtime replacement: ";
+      s << PRINT_CRC32(shader_hash);
+      s << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    }
+  }
+  runtime_replacement_count = data->runtime_replacements.size();
+};
+
 static void OnDestroyDevice(reshade::api::device* device) {
+  if (!is_primary_hook) return;
   std::stringstream s;
   s << "utils::shader::OnDestroyDevice(";
   s << reinterpret_cast<void*>(device);
@@ -377,16 +444,19 @@ static void OnDestroyDevice(reshade::api::device* device) {
 }
 
 static void OnInitCommandList(reshade::api::command_list* cmd_list) {
+  if (!is_primary_hook) return;
   cmd_list->create_private_data<CommandListData>();
 }
 
 static void OnResetCommandList(reshade::api::command_list* cmd_list) {
+  if (!is_primary_hook) return;
   auto& data = cmd_list->get_private_data<CommandListData>();
   data.current_shaders_hashes.clear();
   data.pending_replacements.clear();
 }
 
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
+  if (!is_primary_hook) return;
   cmd_list->destroy_private_data<CommandListData>();
 }
 
@@ -395,6 +465,7 @@ static bool OnCreatePipeline(
     reshade::api::pipeline_layout layout,
     uint32_t subobject_count,
     const reshade::api::pipeline_subobject* subobjects) {
+  if (!is_primary_hook) return false;
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   if (data.use_replace_async) return false;
@@ -449,6 +520,7 @@ static void OnInitPipeline(
     uint32_t subobject_count,
     const reshade::api::pipeline_subobject* subobjects,
     reshade::api::pipeline pipeline) {
+  if (!is_primary_hook) return;
   if (pipeline.handle == 0u) return;
 
   auto& data = device->get_private_data<DeviceData>();
@@ -480,6 +552,7 @@ static void OnInitPipeline(
 static void OnDestroyPipeline(
     reshade::api::device* device,
     reshade::api::pipeline pipeline) {
+  if (!is_primary_hook) return;
   auto& data = device->get_private_data<DeviceData>();
 
   const std::unique_lock lock(data.mutex);
@@ -514,6 +587,7 @@ static void OnBindPipeline(
     reshade::api::command_list* cmd_list,
     reshade::api::pipeline_stage stage,
     reshade::api::pipeline pipeline) {
+  if (!is_primary_hook) return;
   auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
 
   bool found_compatible = false;
@@ -622,74 +696,6 @@ static void OnBindPipeline(
 #endif
 }
 
-static void OnInitDevice(reshade::api::device* device) {
-  DeviceData* data = &device->get_private_data<DeviceData>();
-  if (data == nullptr) {
-    data = &device->create_private_data<DeviceData>();
-    std::stringstream s;
-    s << "utils::shader::OnInitDevice(Hooking device: ";
-    s << reinterpret_cast<void*>(device);
-    s << ")";
-    reshade::log::message(reshade::log::level::debug, s.str().c_str());
-  } else {
-    std::stringstream s;
-    s << "utils::shader::OnInitDevice(Attaching to hook: ";
-    s << reinterpret_cast<void*>(device);
-    s << ")";
-    reshade::log::message(reshade::log::level::debug, s.str().c_str());
-    reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-    reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitCommandList);
-    reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
-    reshade::unregister_event<reshade::addon_event::create_pipeline>(OnCreatePipeline);
-    reshade::unregister_event<reshade::addon_event::init_pipeline>(OnInitPipeline);
-    reshade::unregister_event<reshade::addon_event::bind_pipeline>(OnBindPipeline);
-    reshade::unregister_event<reshade::addon_event::destroy_pipeline>(OnDestroyPipeline);
-  }
-
-  if (!use_replace_on_bind) {
-    data->use_replace_on_bind = false;
-  }
-  if (use_replace_async) {
-    data->use_replace_async = true;
-  }
-
-  std::unique_lock internal_lock(internal::mutex);
-  for (auto& [shader_hash, replacement] : internal::compile_time_replacements) {
-    auto [iterator, is_new] = data->compile_time_replacements.emplace(shader_hash, replacement);
-    if (!is_new) {
-      std::stringstream s;
-      s << "utils::shader::OnInitDevice(Overwriting compile-time replacement:";
-      s << PRINT_CRC32(shader_hash);
-      s << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
-    } else {
-      std::stringstream s;
-      s << "utils::shader::OnInitDevice(Registered compile-time replacement: ";
-      s << PRINT_CRC32(shader_hash);
-      s << ")";
-      reshade::log::message(reshade::log::level::debug, s.str().c_str());
-    }
-  }
-
-  for (auto& [shader_hash, replacement] : internal::initial_runtime_replacements) {
-    auto [iterator, is_new] = data->runtime_replacements.emplace(shader_hash, replacement);
-    if (!is_new) {
-      std::stringstream s;
-      s << "utils::shader::OnInitDevice(Overwriting runtime replacement: ";
-      s << PRINT_CRC32(shader_hash);
-      s << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
-    } else {
-      std::stringstream s;
-      s << "utils::shader::OnInitDevice(Registered runtime replacement: ";
-      s << PRINT_CRC32(shader_hash);
-      s << ")";
-      reshade::log::message(reshade::log::level::debug, s.str().c_str());
-    }
-  }
-  runtime_replacement_count = data->runtime_replacements.size();
-};
-
 inline DeviceData& GetShaderDeviceData(reshade::api::device* device) {
   return device->get_private_data<DeviceData>();
 }
@@ -701,7 +707,7 @@ static void Use(DWORD fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (attached) return;
       attached = true;
-      reshade::log::message(reshade::log::level::info, "ShaderUtil attached.");
+      reshade::log::message(reshade::log::level::info, "utils::shader attached.");
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);

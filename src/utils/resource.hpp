@@ -13,6 +13,8 @@
 
 namespace renodx::utils::resource {
 
+static bool is_primary_hook = false;
+
 struct __declspec(uuid("3ca7d390-8d24-4491-a15f-1d558542ab2c")) DeviceData {
   std::unordered_map<uint64_t, float> resource_tags;
   std::unordered_set<uint64_t> resources;
@@ -20,10 +22,16 @@ struct __declspec(uuid("3ca7d390-8d24-4491-a15f-1d558542ab2c")) DeviceData {
 };
 
 static void OnInitDevice(reshade::api::device* device) {
-  device->create_private_data<DeviceData>();
+  auto* data = &device->get_private_data<DeviceData>();
+  if (data != nullptr) return;
+
+  data = &device->create_private_data<DeviceData>();
+
+  is_primary_hook = true;
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
+  if (!is_primary_hook) return;
   device->destroy_private_data<DeviceData>();
 }
 
@@ -33,6 +41,7 @@ static void OnInitResource(
     const reshade::api::subresource_data* initial_data,
     reshade::api::resource_usage initial_state,
     reshade::api::resource resource) {
+  if (!is_primary_hook) return;
   if (resource.handle == 0) return;
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
@@ -40,12 +49,12 @@ static void OnInitResource(
 }
 
 static void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
+  if (!is_primary_hook) return;
   if (resource.handle == 0) return;
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   data.resources.erase(resource.handle);
 }
-
 
 static float GetResourceTag(reshade::api::device* device, reshade::api::resource resource) {
   auto& data = device->get_private_data<DeviceData>();
