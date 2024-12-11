@@ -247,10 +247,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!reshade::register_addon(h_module)) return FALSE;
 
       renodx::mods::swapchain::use_resource_cloning = true;
-      renodx::mods::swapchain::swapchain_proxy_vertex_shader = std::vector<uint8_t>(
-          _final_vertex_shader, _final_vertex_shader + sizeof(_final_vertex_shader));
-      renodx::mods::swapchain::swapchain_proxy_pixel_shader = std::vector<uint8_t>(
-          _final_pixel_shader, _final_pixel_shader + sizeof(_final_pixel_shader));
+      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = {
+          _swap_chain_proxy_vertex_shader,
+          _swap_chain_proxy_vertex_shader + sizeof(_swap_chain_proxy_vertex_shader),
+      };
+      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = {
+          _swap_chain_proxy_pixel_shader,
+          _swap_chain_proxy_pixel_shader + sizeof(_swap_chain_proxy_pixel_shader),
+      };
 
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,

@@ -179,8 +179,8 @@ static bool upgrade_resource_views = true;
 static bool prevent_full_screen = true;
 static bool force_borderless = true;
 static bool is_vulkan = false;
-static std::vector<std::uint8_t> swapchain_proxy_vertex_shader = {};
-static std::vector<std::uint8_t> swapchain_proxy_pixel_shader = {};
+static std::vector<std::uint8_t> swap_chain_proxy_vertex_shader = {};
+static std::vector<std::uint8_t> swap_chain_proxy_pixel_shader = {};
 static int32_t expected_constant_buffer_index = -1;
 static uint32_t expected_constant_buffer_space = 0;
 static float* shader_injection = nullptr;
@@ -246,14 +246,14 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   // <descriptor_heap.handle, std::map<base_offset, descriptor_table>>
   std::unordered_map<uint64_t, std::unordered_map<uint32_t, HeapDescriptorInfo*>> heap_descriptor_infos;
 
-  reshade::api::pipeline_layout swapchain_proxy_layout = {0};
-  reshade::api::pipeline swapchain_proxy_pipeline = {0};
-  reshade::api::sampler swapchain_proxy_sampler = {0};
+  reshade::api::pipeline_layout swap_chain_proxy_layout = {0};
+  reshade::api::pipeline swap_chain_proxy_pipeline = {0};
+  reshade::api::sampler swap_chain_proxy_sampler = {0};
   // Clone => SRV
-  std::unordered_map<uint64_t, reshade::api::resource_view> swapchain_proxy_srvs;
+  std::unordered_map<uint64_t, reshade::api::resource_view> swap_chain_proxy_srvs;
   // Buffer => RTV
-  std::unordered_map<uint64_t, reshade::api::resource_view> swapchain_proxy_rtvs;
-  std::unordered_map<uint64_t, reshade::api::resource_view> swapchain_rtvs;
+  std::unordered_map<uint64_t, reshade::api::resource_view> swap_chain_proxy_rtvs;
+  std::unordered_map<uint64_t, reshade::api::resource_view> swap_chain_rtvs;
 };
 
 struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData {
@@ -288,8 +288,8 @@ static void OnDestroyDevice(reshade::api::device* device) {
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 
   auto& data = device->get_private_data<DeviceData>();
-  if (data.swapchain_proxy_sampler.handle != 0u) {
-    device->destroy_sampler(data.swapchain_proxy_sampler);
+  if (data.swap_chain_proxy_sampler.handle != 0u) {
+    device->destroy_sampler(data.swap_chain_proxy_sampler);
   }
   device->destroy_private_data<DeviceData>();
 }
@@ -630,7 +630,7 @@ static void OnPresentForResizeBuffer(
   renodx::utils::swapchain::ResizeBuffer(swapchain, target_format, target_color_space);
 }
 
-static SwapChainUpgradeTarget swapchain_proxy_upgrade_target = {
+static SwapChainUpgradeTarget swap_chain_proxy_upgrade_target = {
     .new_format = target_format,
     .usage_set =
         static_cast<uint32_t>(
@@ -676,7 +676,7 @@ static void SetupSwapchainProxyLayout(reshade::api::device* device, DeviceData* 
 
   reshade::log::message(reshade::log::level::debug, "mods::swapchain::SetupSwapchainProxy(Creating pipeline layout)");
 
-  device->create_pipeline_layout(new_layout_params.size(), new_layout_params.data(), &data->swapchain_proxy_layout);
+  device->create_pipeline_layout(new_layout_params.size(), new_layout_params.data(), &data->swap_chain_proxy_layout);
 }
 
 static void SetupSwapchainProxy(
@@ -685,29 +685,29 @@ static void SetupSwapchainProxy(
     DeviceData* data) {
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
   for (uint32_t index = 0; index < back_buffer_count; ++index) {
-    swapchain_proxy_upgrade_target.new_format = target_format;
+    swap_chain_proxy_upgrade_target.new_format = target_format;
     if (target_format == reshade::api::format::r10g10b10a2_unorm) {
-      swapchain_proxy_upgrade_target.view_upgrades = swapchain_proxy_upgrade_target.VIEW_UPGRADES_R10G10B10A2_UNORM;
+      swap_chain_proxy_upgrade_target.view_upgrades = swap_chain_proxy_upgrade_target.VIEW_UPGRADES_R10G10B10A2_UNORM;
     }
     auto buffer = swapchain->get_back_buffer(index);
     data->resource_clone_enabled.emplace(buffer.handle);
-    data->resource_clone_targets[buffer.handle] = &swapchain_proxy_upgrade_target;
+    data->resource_clone_targets[buffer.handle] = &swap_chain_proxy_upgrade_target;
     data->resource_initial_state[buffer.handle] = reshade::api::resource_usage::general;
   }
 
   SetupSwapchainProxyLayout(device, data);
-  if (data->swapchain_proxy_layout != 0u) {
-    data->swapchain_proxy_pipeline = renodx::utils::pipeline::CreateRenderPipeline(
+  if (data->swap_chain_proxy_layout != 0u) {
+    data->swap_chain_proxy_pipeline = renodx::utils::pipeline::CreateRenderPipeline(
         device,
-        data->swapchain_proxy_layout,
+        data->swap_chain_proxy_layout,
         {
-            {reshade::api::pipeline_subobject_type::vertex_shader, swapchain_proxy_vertex_shader},
-            {reshade::api::pipeline_subobject_type::pixel_shader, swapchain_proxy_pixel_shader},
+            {reshade::api::pipeline_subobject_type::vertex_shader, swap_chain_proxy_vertex_shader},
+            {reshade::api::pipeline_subobject_type::pixel_shader, swap_chain_proxy_pixel_shader},
         },
         target_format);
   }
 
-  device->create_sampler({}, &data->swapchain_proxy_sampler);
+  device->create_sampler({}, &data->swap_chain_proxy_sampler);
 }
 
 static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
@@ -730,7 +730,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   auto device_back_buffer_desc = renodx::utils::swapchain::GetBackBufferDesc(device);
   CheckSwapchainSize(swapchain, device_back_buffer_desc);
 
-  if (use_resource_cloning && !swapchain_proxy_pixel_shader.empty()) {
+  if (use_resource_cloning && !swap_chain_proxy_pixel_shader.empty()) {
     SetupSwapchainProxy(swapchain, device, &data);
   }
 
@@ -760,28 +760,28 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
         pair != data.resource_clones.end()) {
       auto clone_handle = pair->second;
 
-      if (auto srv_pair = data.swapchain_proxy_srvs.find(clone_handle);
-          srv_pair != data.swapchain_proxy_srvs.end()) {
+      if (auto srv_pair = data.swap_chain_proxy_srvs.find(clone_handle);
+          srv_pair != data.swap_chain_proxy_srvs.end()) {
         device->destroy_resource_view({srv_pair->second});
-        data.swapchain_proxy_srvs.erase(srv_pair);
+        data.swap_chain_proxy_srvs.erase(srv_pair);
       }
 
       device->destroy_resource({clone_handle});
       data.resource_clones.erase(pair);
     }
-    if (auto rtv_pair = data.swapchain_proxy_rtvs.find(buffer.handle);
-        rtv_pair != data.swapchain_proxy_rtvs.end()) {
+    if (auto rtv_pair = data.swap_chain_proxy_rtvs.find(buffer.handle);
+        rtv_pair != data.swap_chain_proxy_rtvs.end()) {
       device->destroy_resource_view({rtv_pair->second});
-      data.swapchain_proxy_rtvs.erase(rtv_pair);
+      data.swap_chain_proxy_rtvs.erase(rtv_pair);
     }
   }
 
-  device->destroy_sampler(data.swapchain_proxy_sampler);
-  device->destroy_pipeline_layout(data.swapchain_proxy_layout);
-  device->destroy_pipeline(data.swapchain_proxy_pipeline);
-  data.swapchain_proxy_sampler = {0};
-  data.swapchain_proxy_layout = {0};
-  data.swapchain_proxy_pipeline = {0};
+  device->destroy_sampler(data.swap_chain_proxy_sampler);
+  device->destroy_pipeline_layout(data.swap_chain_proxy_layout);
+  device->destroy_pipeline(data.swap_chain_proxy_pipeline);
+  data.swap_chain_proxy_sampler = {0};
+  data.swap_chain_proxy_layout = {0};
+  data.swap_chain_proxy_pipeline = {0};
 }
 
 static bool OnCreateResource(
@@ -1353,7 +1353,7 @@ static void ReleaseResourceView(
     data.resource_view_clones.erase(pair);
   }
   data.resource_view_clone_targets.erase(view.handle);
-  data.swapchain_rtvs.erase(view.handle);
+  data.swap_chain_rtvs.erase(view.handle);
 }
 
 static void OnInitResourceView(
@@ -1380,7 +1380,7 @@ static void OnInitResourceView(
 
   if (utils::swapchain::IsBackBuffer(device, resource)) {
     if ((usage_type & reshade::api::resource_usage::render_target) != 0u) {
-      private_data.swapchain_rtvs[resource.handle] = view;
+      private_data.swap_chain_rtvs[resource.handle] = view;
     }
   }
 
@@ -2332,10 +2332,10 @@ static void OnPresent(
 
   auto* cmd_list = queue->get_immediate_command_list();
 
-  if (data.swapchain_proxy_layout.handle == 0u) {
+  if (data.swap_chain_proxy_layout.handle == 0u) {
     reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(No pipeline layout handle. Creating...)");
     SetupSwapchainProxyLayout(device, &data);
-    if (data.swapchain_proxy_layout.handle == 0u) {
+    if (data.swap_chain_proxy_layout.handle == 0u) {
       reshade::log::message(reshade::log::level::warning, "No pipeline layout handle.");
       cmd_list->copy_resource(swapchain_clone, current_back_buffer);
       return;
@@ -2343,16 +2343,16 @@ static void OnPresent(
     {
       std::stringstream s;
       s << "mods::swapchain::OnPresent(Pipeline layout:";
-      s << reinterpret_cast<void*>(data.swapchain_proxy_layout.handle);
+      s << reinterpret_cast<void*>(data.swap_chain_proxy_layout.handle);
       s << ")";
       reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
   }
-  s << ", layout: " << reinterpret_cast<void*>(data.swapchain_proxy_layout.handle);
+  s << ", layout: " << reinterpret_cast<void*>(data.swap_chain_proxy_layout.handle);
 
   // Bind sampler and SRV
 
-  auto& srv = data.swapchain_proxy_srvs[swapchain_clone.handle];
+  auto& srv = data.swap_chain_proxy_srvs[swapchain_clone.handle];
   if (srv.handle == 0u) {
     reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(No SRV. Creating...)");
     device->create_resource_view(
@@ -2371,7 +2371,7 @@ static void OnPresent(
 
   // Create RTV on the fly (reusing existing may cause conflicts)
 
-  auto& rtv = data.swapchain_proxy_rtvs[current_back_buffer.handle];
+  auto& rtv = data.swap_chain_proxy_rtvs[current_back_buffer.handle];
   if (rtv.handle == 0u) {
     auto buffer_desc = device->get_resource_desc(current_back_buffer);
     device->create_resource_view(
@@ -2392,31 +2392,31 @@ static void OnPresent(
   reshade::api::render_pass_render_target_desc render_target_desc = {.view = rtv};
   cmd_list->begin_render_pass(1, &render_target_desc, nullptr);
 
-  if (data.swapchain_proxy_pipeline.handle == 0) {
+  if (data.swap_chain_proxy_pipeline.handle == 0) {
     reshade::log::message(reshade::log::level::warning, "No pipeline handle. Creating...");
-    data.swapchain_proxy_pipeline = renodx::utils::pipeline::CreateRenderPipeline(
+    data.swap_chain_proxy_pipeline = renodx::utils::pipeline::CreateRenderPipeline(
         device,
-        data.swapchain_proxy_layout,
+        data.swap_chain_proxy_layout,
         {
-            {reshade::api::pipeline_subobject_type::vertex_shader, swapchain_proxy_vertex_shader},
-            {reshade::api::pipeline_subobject_type::pixel_shader, swapchain_proxy_pixel_shader},
+            {reshade::api::pipeline_subobject_type::vertex_shader, swap_chain_proxy_vertex_shader},
+            {reshade::api::pipeline_subobject_type::pixel_shader, swap_chain_proxy_pixel_shader},
         },
         target_format);
-    if (data.swapchain_proxy_pipeline == 0u) {
+    if (data.swap_chain_proxy_pipeline == 0u) {
       reshade::log::message(reshade::log::level::error, "No pipeline handle. Creating failed.");
       cmd_list->copy_resource(swapchain_clone, current_back_buffer);
       return;
     }
   }
-  s << ", pipeline: " << reinterpret_cast<void*>(data.swapchain_proxy_pipeline.handle);
-  cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_graphics, data.swapchain_proxy_pipeline);
+  s << ", pipeline: " << reinterpret_cast<void*>(data.swap_chain_proxy_pipeline.handle);
+  cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_graphics, data.swap_chain_proxy_pipeline);
   size_t param_index = -1;
 
   // cmd_list->barrier(swapchain_clone, reshade::api::resource_usage::general, reshade::api::resource_usage::shader_resource);
 
   cmd_list->push_descriptors(
       reshade::api::shader_stage::all_graphics,
-      data.swapchain_proxy_layout,
+      data.swap_chain_proxy_layout,
       0,
       {
           .table = {},
@@ -2424,11 +2424,11 @@ static void OnPresent(
           .array_offset = 0,
           .count = 1,
           .type = reshade::api::descriptor_type::sampler,
-          .descriptors = &data.swapchain_proxy_sampler,
+          .descriptors = &data.swap_chain_proxy_sampler,
       });
   cmd_list->push_descriptors(
       reshade::api::shader_stage::all_graphics,
-      data.swapchain_proxy_layout,
+      data.swap_chain_proxy_layout,
       1,
       {
           .table = {},
@@ -2442,7 +2442,7 @@ static void OnPresent(
     const std::shared_lock lock(renodx::utils::mutex::global_mutex);
     cmd_list->push_constants(
         reshade::api::shader_stage::all_graphics,  // Used by reshade to specify graphics or compute
-        data.swapchain_proxy_layout,
+        data.swap_chain_proxy_layout,
         2,
         0,
         shader_injection_size,
@@ -2469,10 +2469,10 @@ static void OnPresent(
   cmd_list->bind_scissor_rects(0, 1, &scissor_rect);
   cmd_list->draw(3, 1, 0, 0);
   cmd_list->end_render_pass();
-  if (data.swapchain_rtvs.empty()) {
+  if (data.swap_chain_rtvs.empty()) {
     // RTV may not actually be new, but reference to previous one
     device->destroy_resource_view(rtv);
-    data.swapchain_proxy_rtvs.erase(current_back_buffer.handle);
+    data.swap_chain_proxy_rtvs.erase(current_back_buffer.handle);
   }
 
 #ifdef DEBUG_LEVEL_2
@@ -2547,7 +2547,7 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
         // reshade::register_event<reshade::addon_event::barrier>(OnBarrier);
         reshade::register_event<reshade::addon_event::copy_buffer_to_texture>(OnCopyBufferToTexture);
 
-        if (!swapchain_proxy_pixel_shader.empty()) {
+        if (!swap_chain_proxy_pixel_shader.empty()) {
           // Create swapchain proxy
           reshade::register_event<reshade::addon_event::present>(OnPresent);
           if (new_injections != nullptr) {
