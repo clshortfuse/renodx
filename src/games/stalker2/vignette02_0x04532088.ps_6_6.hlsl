@@ -115,6 +115,7 @@ float4 main(
   // _46 = _2;
   // _47 = _4;
   float4 _48 = SceneTexturesStruct_SceneDepthTexture.SampleLevel(SceneTexturesStruct_PointClampSampler, float2(_44, _45), 0.0f);
+  
   float _49 = _48.x;
   float _50 = max(_49, 1.000000045813705e-18f);
   float _52 = UniformBufferConstants_View_052x;
@@ -276,7 +277,7 @@ float4 main(
   post_srgb = float3(_208, _209, _210);
 
   if (injectedData.toneMapType > 0.f) {
-    output = upgradePostProcess(tonemappedRender, post_srgb);
+    output = upgradePostProcess(tonemappedRender, post_srgb, injectedData.vignetteStrength);
     return float4(output, 0.f);
   }
 
