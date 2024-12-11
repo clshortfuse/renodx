@@ -891,9 +891,8 @@ void RenderNavRail(reshade::api::device* device, DeviceData& data) {
 
       ImGui::SetItemTooltip("%s", SETTING_NAV_TITLES[i].first);
     }
-
-    ImGui::EndChild();
   }
+  ImGui::EndChild();
 }
 
 void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
@@ -1738,8 +1737,8 @@ void RenderShaderView(reshade::api::device* device, DeviceData& data, SettingSel
         default:
           break;
       }
-      ImGui::EndChild();
     }
+    ImGui::EndChild();
     ImGui::EndTabItem();
   }
 }
@@ -1797,9 +1796,8 @@ void RenderResourceViewView(reshade::api::device* device, DeviceData& data, Sett
           ImGui::Image(selection.resource_view_handle, output_size, ImVec2(0, 0), ImVec2(1, 1), ImColor(1.0f, 1.0f, 1.0f), ImColor(0.0f, 0.0f, 0.0f, 0.0f));
         }
       }
-
-      ImGui::EndChild();
     }
+    ImGui::EndChild();
     ImGui::EndTabItem();
   }
 }
@@ -1856,8 +1854,8 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         default:
           break;
       }
-      ImGui::EndChild();
     }
+    ImGui::EndChild();
 
     ImGui::SameLine();
 
@@ -1876,8 +1874,8 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           ImGui::EndTabBar();
         }
       }
-      ImGui::EndChild();
     }
+    ImGui::EndChild();
     ImGui::SameLine();
     if (ImGui::BeginChild("##SideSheet", {0, 0}, ImGuiChildFlags_AutoResizeX)) {
       auto selection = GetCurrentSelection();
@@ -1890,10 +1888,10 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       }
 
       setting_side_sheet_width = 96;
-      ImGui::EndChild();
     }
     ImGui::EndChild();
   }
+  ImGui::EndChild();
 }
 
 void OnPresent(
