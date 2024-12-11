@@ -386,17 +386,17 @@ static void OnInitPipelineLayout(
         return;
       };
 
-      for (reshade::api::pipeline_layout_param* injected_params : created_params) {
-        free(injected_params);
-      }
-
-      created_params.clear();
-
       if (param_count > 0) {
         if (params[param_count - 1].type == reshade::api::pipeline_layout_param_type::push_constants) {
           injection_index = param_count - 1;
         }
       }
+
+      for (reshade::api::pipeline_layout_param* injected_params : created_params) {
+        free(injected_params);
+      }
+      created_params.clear();
+
       if (injection_index == -1) {
         std::stringstream s;
         s << "mods::shader::OnInitPipelineLayout(";
