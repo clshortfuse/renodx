@@ -174,19 +174,25 @@ struct __declspec(uuid("8707f724-c7e5-420e-89d6-cc032c732d2d")) CommandListData 
   [[nodiscard]] uint32_t GetCurrentPixelShaderHash() const { return GetCurrentShaderHash(reshade::api::pipeline_stage::pixel_shader); }
   [[nodiscard]] uint32_t GetCurrentComputeShaderHash() const { return GetCurrentShaderHash(reshade::api::pipeline_stage::compute_shader); }
 
-  void ApplyReplacement(reshade::api::command_list* cmd_list, reshade::api::pipeline_stage stage) {
-    auto pair = pending_replacements.find(stage);
-    if (pair == pending_replacements.end()) return;
+  void ApplyReplacement(reshade::api::command_list* cmd_list, reshade::api::pipeline_stage replacement_stage) {
+    std::vector<reshade::api::pipeline_stage> applied_stages;
+    for (const auto& [stage, pipeline] : pending_replacements) {
 #ifdef DEBUG_LEVEL_2
-    std::stringstream s;
-    s << "utils::shader::ApplyReplacements(Applying replacement ";
-    s << stage;
-    s << ", pipeline: " << reinterpret_cast<void*>(pair->second.handle);
-    s << ")";
-    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+      std::stringstream s;
+      s << "utils::shader::ApplyReplacements(Applying replacement ";
+      s << stage;
+      s << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle);
+      s << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-    cmd_list->bind_pipeline(stage, pair->second);
-    pending_replacements.erase(pair);
+      if ((stage & replacement_stage) != 0u) {
+        cmd_list->bind_pipeline(stage, pipeline);
+        applied_stages.push_back(stage);
+      }
+    }
+    for (const auto stage : applied_stages) {
+      pending_replacements.erase(stage);
+    }
   }
 
   void ApplyDispatchReplacements(reshade::api::command_list* cmd_list) {
@@ -592,7 +598,7 @@ static void OnBindPipeline(
 
   bool found_compatible = false;
   for (auto compatible_stage : COMPATIBLE_STAGES) {
-    if ((stage & compatible_stage) == compatible_stage) {
+    if (stage == reshade::api::pipeline_stage::all || (stage & compatible_stage) == compatible_stage) {
       found_compatible = true;
       if (pipeline.handle == 0u) {
         cmd_list_data.current_shaders_hashes.erase(compatible_stage);
@@ -659,7 +665,7 @@ static void OnBindPipeline(
         s << ")";
         reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-        cmd_list->bind_pipeline(compatible_stage, replacement_pipeline);
+        cmd_list->bind_pipeline(stage, replacement_pipeline);
       } else {
 #ifdef DEBUG_LEVEL_2
         std::stringstream s;
@@ -671,7 +677,7 @@ static void OnBindPipeline(
         s << ")";
         reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-        cmd_list_data.pending_replacements[compatible_stage] = replacement_pipeline;
+        cmd_list_data.pending_replacements[stage] = replacement_pipeline;
       }
     } else {
       if (!device_data.use_replace_on_bind) {
