@@ -1892,8 +1892,8 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       setting_side_sheet_width = 96;
       ImGui::EndChild();
     }
+    ImGui::EndChild();
   }
-  ImGui::EndChild();
 }
 
 void OnPresent(
