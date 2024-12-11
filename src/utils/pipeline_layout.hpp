@@ -9,6 +9,7 @@
 #include <include/reshade_api_pipeline.hpp>
 #include <shared_mutex>
 #include <unordered_map>
+#include <vector>
 
 namespace renodx::utils::pipeline_layout {
 
@@ -43,20 +44,23 @@ static void OnInitPipelineLayout(
     const uint32_t param_count,
     const reshade::api::pipeline_layout_param* params,
     reshade::api::pipeline_layout layout) {
+  if (!is_primary_hook) return;
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
 
   PipelineLayoutData& layout_data = data.pipeline_layout_data[layout.handle];
   layout_data.params.assign(params, params + param_count);
+  layout_data.ranges.resize(param_count);
 
   for (uint32_t i = 0; i < param_count; ++i) {
     const auto& param = params[i];
     if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
-      auto& range = layout_data.ranges.emplace_back(
+      auto& ranges = layout_data.ranges[i];
+      ranges.assign(
           param.descriptor_table.ranges,
           param.descriptor_table.ranges + param.descriptor_table.count);
       layout_data.params[i] = param;
-      layout_data.params[i].descriptor_table.ranges = range.data();
+      layout_data.params[i].descriptor_table.ranges = ranges.data();
     }
   }
 }
