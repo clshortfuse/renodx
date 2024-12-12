@@ -133,6 +133,8 @@ struct DrawDetails {
   } draw_method;
   std::map<uint32_t, ResourceViewDetails> render_targets;
 
+  std::string blend_state; // TODO: move to "ResourceViewDetails" and convert to a struct with all the information about the blend mode in each RT slot
+
   [[nodiscard]] std::string DrawMethodString() const {
     switch (draw_method) {
       case DrawMethods::PRESENT:                  return "Present";
@@ -657,6 +659,45 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
       ++rtv_index;
     }
 
+    // Hacky code as ReShade doesn't seem to have a generic way to retrieve the blend mode
+    //
+    // This uses a pre-configured list of commonly used blend modes for simplicity, and only the first render target.
+    // 0 No alpha blend (or other unknown blend types that we can ignore)
+    // 1 Straight alpha blend: "result = (source.RGB * source.A) + (dest.RGB * (1 - source.A))" or "result = lerp(dest.RGB, source.RGB, source.A)"
+    // 2 Pre-multiplied alpha blend (alpha is also pre-multiplied, not just rgb): "result = source.RGB + (dest.RGB * (1 - source.A))"
+    // 3 Additive alpha blend (source is "Straight alpha" while destination is retained at 100%): "result = (source.RGB * source.A) + dest.RGB"
+    // 4 Additive blend (source and destination are simply summed up, ignoring the alpha): result = source.RGB + dest.RGB
+    if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d11) {
+      ID3D11DeviceContext* native_device_context = (ID3D11DeviceContext*)(cmd_list->get_native());
+      ID3D11BlendState* blend_state = nullptr;
+      native_device_context->OMGetBlendState(&blend_state, nullptr, nullptr);
+      if (blend_state) {
+        D3D11_BLEND_DESC blend_desc;
+        blend_state->GetDesc(&blend_desc);
+        if (blend_desc.RenderTarget[0].BlendEnable) {
+          if (blend_desc.RenderTarget[0].BlendOp == D3D11_BLEND_OP::D3D11_BLEND_OP_ADD) {
+            if (blend_desc.RenderTarget[0].SrcBlend == D3D11_BLEND::D3D11_BLEND_ONE && blend_desc.RenderTarget[0].DestBlend == D3D11_BLEND::D3D11_BLEND_ONE) {
+              draw_details.blend_state = "Additive Color";
+            } else if (blend_desc.RenderTarget[0].SrcBlend == D3D11_BLEND::D3D11_BLEND_SRC_ALPHA && blend_desc.RenderTarget[0].DestBlend == D3D11_BLEND::D3D11_BLEND_ONE) {
+              draw_details.blend_state = "Additive Alpha";
+            } else if (blend_desc.RenderTarget[0].SrcBlend == D3D11_BLEND::D3D11_BLEND_ONE && blend_desc.RenderTarget[0].DestBlend == D3D11_BLEND::D3D11_BLEND_INV_SRC_ALPHA) {
+              draw_details.blend_state = "Premultiplied Alpha";
+            } else if (blend_desc.RenderTarget[0].SrcBlend == D3D11_BLEND::D3D11_BLEND_SRC_ALPHA && blend_desc.RenderTarget[0].DestBlend == D3D11_BLEND::D3D11_BLEND_INV_SRC_ALPHA) {
+              draw_details.blend_state = "Straight Alpha";
+            }
+          }
+          if (draw_details.blend_state.empty()) {
+            draw_details.blend_state = "Unknown";
+          }
+        }
+        if (draw_details.blend_state.empty()) {
+          draw_details.blend_state = "Disabled";
+        }
+        blend_state->Release();
+        blend_state = nullptr;
+      }
+    }
+
     device_data.command_list_data.push_back(command_list_data);
     command_list_data.draw_details.clear();
   }
@@ -836,7 +877,7 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
   static ImGuiTreeNodeFlags tree_node_flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_SpanFullWidth;
   if (ImGui::BeginTable(
           "##SnapshotTree",
-          5,
+          7, // Match this to the number of columns you use below
           ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_Resizable | ImGuiTableFlags_Hideable
               | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_ScrollY,
           ImVec2(-4, -4))) {
@@ -844,6 +885,8 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
     ImGui::TableSetupColumn("Ref", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 16.0f);
     ImGui::TableSetupColumn("Info", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 24.0f);
     ImGui::TableSetupColumn("Reflection", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 24.0f);
+    ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 16.0f);
+    ImGui::TableSetupColumn("Blend Mode", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 16.0f);
     ImGui::TableSetupColumn("Draw", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 4.0f);
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableHeadersRow();
@@ -864,7 +907,10 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
 
         ImGui::TableNextColumn();  // Tag
 
-        ImGui::TableNextColumn();
+        ImGui::TableNextColumn();  // Size
+        ImGui::TableNextColumn();  // Blend Mode
+
+        ImGui::TableNextColumn();  // Index
         ImGui::Text("%03d", draw_index);
 
         for (const auto& pipeline_bind : draw_details.pipeline_binds) {
@@ -948,6 +994,9 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
                 ImGui::TextUnformatted(pipeline_details.tag->c_str());
               }
 
+              ImGui::TableNextColumn();  // Size
+              ImGui::TableNextColumn();  // Blend Mode
+
               ImGui::TableNextColumn();  // Index
               ImGui::Text("%03d", draw_index);
             }
@@ -989,6 +1038,13 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             if (!resource_view_details.resource_view_tag.empty()) {
               ImGui::TextUnformatted(resource_view_details.resource_view_tag.c_str());
             }
+
+            ImGui::TableNextColumn();  // Size
+            if (resource_view_details.resource_desc.type == reshade::api::resource_type::texture_1d || resource_view_details.resource_desc.type == reshade::api::resource_type::texture_2d || resource_view_details.resource_desc.type == reshade::api::resource_type::texture_3d) {
+              ImGui::Text("%ux%ux%u", resource_view_details.resource_desc.texture.width, resource_view_details.resource_desc.texture.height, resource_view_details.resource_desc.texture.depth_or_layers);
+            }
+
+            ImGui::TableNextColumn();  // Blend Mode
 
             ImGui::TableNextColumn();  // Index
             ImGui::Text("%03d", draw_index);
@@ -1036,6 +1092,11 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
               ImGui::TextUnformatted(resource_view_details.resource_tag.c_str());
             }
 
+            ImGui::TableNextColumn();  // Size
+            ImGui::Text("%ux%ux%u", resource_view_details.resource_desc.texture.width, resource_view_details.resource_desc.texture.height, resource_view_details.resource_desc.texture.depth_or_layers);
+
+            ImGui::TableNextColumn();  // Blend Mode
+
             ImGui::TableNextColumn();  // Index
             ImGui::Text("%03d", draw_index);
 
@@ -1078,6 +1139,13 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             if (!resource_view_details.resource_view_tag.empty()) {
               ImGui::TextUnformatted(resource_view_details.resource_view_tag.c_str());
             }
+
+            ImGui::TableNextColumn();  // Size
+            if (resource_view_details.resource_desc.type == reshade::api::resource_type::texture_1d || resource_view_details.resource_desc.type == reshade::api::resource_type::texture_2d || resource_view_details.resource_desc.type == reshade::api::resource_type::texture_3d) {
+              ImGui::Text("%ux%ux%u", resource_view_details.resource_desc.texture.width, resource_view_details.resource_desc.texture.height, resource_view_details.resource_desc.texture.depth_or_layers);
+            }
+
+            ImGui::TableNextColumn();  // Blend Mode
 
             ImGui::TableNextColumn();  // Index
             ImGui::Text("%03d", draw_index);
@@ -1122,6 +1190,11 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
               ImGui::TextUnformatted(resource_view_details.resource_tag.c_str());
             }
 
+            ImGui::TableNextColumn();  // Size
+            ImGui::Text("%ux%ux%u", resource_view_details.resource_desc.texture.width, resource_view_details.resource_desc.texture.height, resource_view_details.resource_desc.texture.depth_or_layers);
+
+            ImGui::TableNextColumn();  // Blend Mode
+
             ImGui::TableNextColumn();  // Index
             ImGui::Text("%03d", draw_index);
 
@@ -1158,6 +1231,16 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             ImGui::TableNextColumn();
             if (!render_target.resource_view_tag.empty()) {
               ImGui::TextUnformatted(render_target.resource_view_tag.c_str());
+            }
+
+            ImGui::TableNextColumn();  // Size
+            if (render_target.resource_desc.type == reshade::api::resource_type::texture_1d || render_target.resource_desc.type == reshade::api::resource_type::texture_2d || render_target.resource_desc.type == reshade::api::resource_type::texture_3d) {
+              ImGui::Text("%ux%ux%u", render_target.resource_desc.texture.width, render_target.resource_desc.texture.height, render_target.resource_desc.texture.depth_or_layers);
+            }
+
+            ImGui::TableNextColumn();  // Blend Mode
+            if (rtv_index == 0) {
+              ImGui::Text(draw_details.blend_state.c_str());
             }
 
             ImGui::TableNextColumn();  // Index
@@ -1201,6 +1284,14 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             ImGui::TableNextColumn();
             if (!render_target.resource_tag.empty()) {
               ImGui::TextUnformatted(render_target.resource_tag.c_str());
+            }
+
+            ImGui::TableNextColumn();  // Size
+            ImGui::Text("%ux%ux%u", render_target.resource_desc.texture.width, render_target.resource_desc.texture.height, render_target.resource_desc.texture.depth_or_layers);
+
+            ImGui::TableNextColumn();  // Blend Mode
+            if (rtv_index == 0) {
+              ImGui::Text(draw_details.blend_state.c_str());
             }
 
             ImGui::TableNextColumn();  // Index
