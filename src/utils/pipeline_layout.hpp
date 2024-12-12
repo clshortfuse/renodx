@@ -18,6 +18,8 @@ static bool is_primary_hook = false;
 struct PipelineLayoutData {
   std::vector<reshade::api::pipeline_layout_param> params;
   std::vector<std::vector<reshade::api::descriptor_range>> ranges;
+  std::vector<reshade::api::descriptor_table> tables;
+
 };
 struct __declspec(uuid("96f1f53b-90cb-4929-92d7-9a7a1a5c2493")) DeviceData {
   std::unordered_map<uint64_t, PipelineLayoutData> pipeline_layout_data;
@@ -51,14 +53,17 @@ static void OnInitPipelineLayout(
   PipelineLayoutData& layout_data = data.pipeline_layout_data[layout.handle];
   layout_data.params.assign(params, params + param_count);
   layout_data.ranges.resize(param_count);
+  layout_data.tables.resize(param_count);
 
   for (uint32_t i = 0; i < param_count; ++i) {
     const auto& param = params[i];
     if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
       auto& ranges = layout_data.ranges[i];
-      ranges.assign(
-          param.descriptor_table.ranges,
-          param.descriptor_table.ranges + param.descriptor_table.count);
+      if (param.descriptor_table.ranges->count != UINT32_MAX) {
+        ranges.assign(
+            param.descriptor_table.ranges,
+            param.descriptor_table.ranges + param.descriptor_table.count);
+      }
       layout_data.params[i] = param;
       layout_data.params[i].descriptor_table.ranges = ranges.data();
     }
