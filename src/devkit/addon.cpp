@@ -1471,7 +1471,7 @@ void RenderShaderDefinesPane(reshade::api::device* device, DeviceData& data) {
     ImGui::TableNextColumn();
     ImGui::PushID(cell_index_id++);
     ImGui::SetNextItemWidth(-FLT_MIN);
-    char temp_key[128];
+    char temp_key[128] = "";
     ImGui::InputText("", temp_key, 128, ImGuiInputTextFlags_CharsNoBlank);
     ImGui::PopID();
 
