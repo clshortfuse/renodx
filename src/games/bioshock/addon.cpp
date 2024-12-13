@@ -32,8 +32,19 @@ ShaderInjectData shader_injection;
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
-        .key = "PaperWhiteNits",
-        .binding = &shader_injection.PaperWhiteNits,
+        .key = "peakWhiteNits",
+        .binding = &shader_injection.peakWhiteNits,
+        .default_value = 1000.f,
+        .can_reset = false,
+        .label = "Peak Brightness",
+        .section = "Display Mapping",
+        .tooltip = "Sets the value of peak white in nits (match it to your display's peak white)",
+        .min = 400.f,
+        .max = 10000.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "paperWhiteNits",
+        .binding = &shader_injection.paperWhiteNits,
         .default_value = 203.f,
         .can_reset = true,
         .label = "Paper White Brightness",
@@ -173,9 +184,20 @@ void OnDestroyDevice(reshade::api::device* device) {
   device->destroy_private_data<DeviceData>();
 }
 
+bool fired_on_init_swapchain = false;
+
 void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   auto device = swapchain->get_device();
   auto& data = device->get_private_data<DeviceData>();
+
+  if (!fired_on_init_swapchain) {
+    fired_on_init_swapchain = true;
+    auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+    if (peak.has_value()) {
+      settings[0]->default_value = peak.value();
+      settings[0]->can_reset = true;
+    }
+  }
 
   for (int i = 0; i < swapchain->get_back_buffer_count(); ++i) {
     auto back_buffer_resource = swapchain->get_back_buffer(i);
@@ -278,6 +300,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::expected_constant_buffer_index = 13;
 
       renodx::mods::swapchain::force_borderless = false;
+
+      renodx::utils::settings::use_presets = false;
 
       // Final shader
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);

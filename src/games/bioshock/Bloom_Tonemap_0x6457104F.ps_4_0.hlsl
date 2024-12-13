@@ -1,3 +1,5 @@
+#include "./shared.h"
+
 cbuffer _Globals : register(b0)
 {
   float ImageSpace_hlsl_ToneMapPixelShader011_4bits : packoffset(c0) = {0};
@@ -36,6 +38,11 @@ void main(
   bloomColor *= bloomAlpha; // Scale down (or up) the bloom intensity
   sceneColor.rgb += bloomColor; // Bloom is 100% additive here
   sceneColor.rgb *= sceneBias; // Exposure?
-  //TODO: add dice tonemap here, the game had none (it's not particularly needed either given it was heavily clipped)
+  
+  const float paperWhite = injectedData.paperWhiteNits / renodx::color::srgb::REFERENCE_WHITE;
+  const float peakWhite = injectedData.peakWhiteNits / renodx::color::srgb::REFERENCE_WHITE;
+  const float highlightsShoulderStart = paperWhite;  // Don't tonemap the "SDR" range (in luminance), we want to keep it looking as it used to look in SDR
+  sceneColor.rgb = renodx::tonemap::dice::BT709(sceneColor.rgb * paperWhite, peakWhite, highlightsShoulderStart) / paperWhite;
+  
   outColor = float4(pow(abs(sceneColor.rgb), 1.0 / 2.2) * sign(sceneColor.rgb), sceneColor.a); // Gamma 2.2
 }
