@@ -16,6 +16,7 @@ namespace renodx::utils::trace {
 
 static bool trace_scheduled = false;
 static bool trace_running = false;
+static std::atomic_bool trace_pipeline_creation = false;
 
 template <class T>
 std::optional<std::string> GetD3DName(T* obj) {
@@ -35,17 +36,19 @@ std::optional<std::string> GetD3DNameW(T* obj) {
 
   byte data[128] = {};
   UINT size = sizeof(data);
-  if (obj->GetPrivateData(WKPDID_D3DDebugObjectNameW, &size, data) == S_OK) {
-    if (size > 0) {
-      char c_name[128] = {};
-      size_t out_size;
-      // wide-character-string-to-multibyte-string_safe
-      auto ret = wcstombs_s(&out_size, c_name, sizeof(c_name), reinterpret_cast<wchar_t*>(data), size);
-      if (ret == S_OK && out_size > 0) {
-        return std::string(c_name, c_name + out_size);
+  try {
+    if (obj->GetPrivateData(WKPDID_D3DDebugObjectNameW, &size, data) == S_OK) {
+      if (size > 0) {
+        char c_name[128] = {};
+        size_t out_size;
+        // wide-character-string-to-multibyte-string_safe
+        auto ret = wcstombs_s(&out_size, c_name, sizeof(c_name), reinterpret_cast<wchar_t*>(data), size);
+        if (ret == S_OK && out_size > 0) {
+          return std::string(c_name, c_name + out_size);
+        }
       }
     }
-  }
+  } catch(...) {}
   return GetD3DName(obj);
 }
 
@@ -54,6 +57,7 @@ inline std::optional<std::string> GetDebugName(reshade::api::device_api device_a
     auto* native_resource = reinterpret_cast<ID3D11DeviceChild*>(resource_view.handle);
     return GetD3DName(native_resource);
   }
+  // D3D12 ResourceView are DescriptorHandles, not objects
   return std::nullopt;
 }
 
@@ -116,12 +120,6 @@ inline std::string GetResourceNameByViewHandle(DeviceData& data, uint64_t handle
   if (data.device_api == reshade::api::device_api::d3d11) {
     auto* native_resource = reinterpret_cast<ID3D11DeviceChild*>(resource_handle);
     auto result = GetD3DName(native_resource);
-    if (result.has_value()) {
-      name.assign(result.value());
-    }
-  } else if (data.device_api == reshade::api::device_api::d3d12) {
-    auto* native_resource = reinterpret_cast<ID3D12Resource*>(resource_handle);
-    auto result = GetD3DNameW(native_resource);
     if (result.has_value()) {
       name.assign(result.value());
     }
@@ -416,6 +414,7 @@ static void OnInitPipeline(
     const reshade::api::pipeline_subobject* subobjects,
     reshade::api::pipeline pipeline) {
   if (!is_primary_hook) return;
+  if (!trace_running && !trace_pipeline_creation) return;
   if (subobject_count == 0) {
     std::stringstream s;
     s << "on_init_pipeline(";
@@ -484,6 +483,7 @@ static void OnDestroyPipeline(
     reshade::api::device* device,
     reshade::api::pipeline pipeline) {
   if (!is_primary_hook) return;
+  if (!trace_running) return;
   std::stringstream s;
   s << "on_destroy_pipeline(";
   s << reinterpret_cast<void*>(pipeline.handle);
@@ -843,6 +843,7 @@ static void OnInitResource(
     case reshade::api::resource_type::surface:
       s << ", width: " << desc.texture.width;
       s << ", height: " << desc.texture.height;
+      s << ", depth/layers: " << desc.texture.depth_or_layers;
       s << ", levels: " << desc.texture.levels;
       s << ", format: " << desc.texture.format;
       if (desc.texture.format == reshade::api::format::unknown) {
