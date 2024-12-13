@@ -15,6 +15,7 @@
 
 namespace renodx::utils::settings {
 
+static bool use_presets = true;
 static int preset_index = 1;
 static std::vector<std::string> preset_strings = {
     "Off",
@@ -205,13 +206,17 @@ static void SaveSettings(reshade::api::effect_runtime* runtime, const char* sect
 // https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   const std::unique_lock lock(renodx::utils::mutex::global_mutex);
-  const bool changed_preset = ImGui::SliderInt(
-      "Preset",
-      &preset_index,
-      0,
-      preset_strings.size() - 1,
-      preset_strings[preset_index].c_str(),
-      ImGuiSliderFlags_NoInput);
+
+  bool changed_preset = false;
+  if (use_presets) {
+    changed_preset = ImGui::SliderInt(
+        "Preset",
+        &preset_index,
+        0,
+        preset_strings.size() - 1,
+        preset_strings[preset_index].c_str(),
+        ImGuiSliderFlags_NoInput);
+  }
 
   if (changed_preset) {
     switch (preset_index) {
