@@ -6,12 +6,9 @@
 #endif
 
 // Must be 32bit aligned
-// Should be 4x32
 struct ShaderInjectData {
-  float PaperWhiteNits;
-  float Padding01;
-  float Padding02;
-  float Padding03;
+  float peakWhiteNits;
+  float paperWhiteNits;
 };
 
 #ifndef __cplusplus
