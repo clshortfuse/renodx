@@ -16,6 +16,7 @@ namespace renodx::utils::trace {
 
 static bool trace_scheduled = false;
 static bool trace_running = false;
+static std::atomic_bool trace_pipeline_creation = false;
 
 template <class T>
 std::optional<std::string> GetD3DName(T* obj) {
@@ -35,17 +36,19 @@ std::optional<std::string> GetD3DNameW(T* obj) {
 
   byte data[128] = {};
   UINT size = sizeof(data);
-  if (obj->GetPrivateData(WKPDID_D3DDebugObjectNameW, &size, data) == S_OK) {
-    if (size > 0) {
-      char c_name[128] = {};
-      size_t out_size;
-      // wide-character-string-to-multibyte-string_safe
-      auto ret = wcstombs_s(&out_size, c_name, sizeof(c_name), reinterpret_cast<wchar_t*>(data), size);
-      if (ret == S_OK && out_size > 0) {
-        return std::string(c_name, c_name + out_size);
+  try {
+    if (obj->GetPrivateData(WKPDID_D3DDebugObjectNameW, &size, data) == S_OK) {
+      if (size > 0) {
+        char c_name[128] = {};
+        size_t out_size;
+        // wide-character-string-to-multibyte-string_safe
+        auto ret = wcstombs_s(&out_size, c_name, sizeof(c_name), reinterpret_cast<wchar_t*>(data), size);
+        if (ret == S_OK && out_size > 0) {
+          return std::string(c_name, c_name + out_size);
+        }
       }
     }
-  }
+  } catch(...) {}
   return GetD3DName(obj);
 }
 
@@ -54,6 +57,7 @@ inline std::optional<std::string> GetDebugName(reshade::api::device_api device_a
     auto* native_resource = reinterpret_cast<ID3D11DeviceChild*>(resource_view.handle);
     return GetD3DName(native_resource);
   }
+  // D3D12 ResourceView are DescriptorHandles, not objects
   return std::nullopt;
 }
 
@@ -119,12 +123,6 @@ inline std::string GetResourceNameByViewHandle(DeviceData& data, uint64_t handle
     if (result.has_value()) {
       name.assign(result.value());
     }
-  } else if (data.device_api == reshade::api::device_api::d3d12) {
-    auto* native_resource = reinterpret_cast<ID3D12Resource*>(resource_handle);
-    auto result = GetD3DNameW(native_resource);
-    if (result.has_value()) {
-      name.assign(result.value());
-    }
   } else {
     name = "?";
   }
@@ -134,6 +132,7 @@ inline std::string GetResourceNameByViewHandle(DeviceData& data, uint64_t handle
   return name;
 }
 
+static bool is_primary_hook = false;
 static void OnInitDevice(reshade::api::device* device) {
   std::stringstream s;
   s << "init_device(";
@@ -142,11 +141,17 @@ static void OnInitDevice(reshade::api::device* device) {
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 
-  auto& data = device->create_private_data<DeviceData>();
-  data.device_api = device->get_api();
+  auto* data = &device->get_private_data<DeviceData>();
+  if (data != nullptr) return;
+
+  data = &device->create_private_data<DeviceData>();
+  data->device_api = device->get_api();
+
+  is_primary_hook = true;
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
+  if (!is_primary_hook) return;
   std::stringstream s;
   s << "destroy_device(";
   s << reinterpret_cast<void*>(device);
@@ -156,6 +161,7 @@ static void OnDestroyDevice(reshade::api::device* device) {
 }
 
 static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
+  if (!is_primary_hook) return;
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
 
   for (uint32_t index = 0; index < back_buffer_count; index++) {
@@ -179,6 +185,7 @@ static bool OnCreatePipelineLayout(
     reshade::api::device* device,
     uint32_t& param_count,
     reshade::api::pipeline_layout_param*& params) {
+  if (!is_primary_hook) return false;
   // noop
   return false;
 }
@@ -357,6 +364,7 @@ static void OnInitPipelineLayout(
     const uint32_t param_count,
     const reshade::api::pipeline_layout_param* params,
     reshade::api::pipeline_layout layout) {
+  if (!is_primary_hook) return;
   LogLayout(param_count, params, layout);
 
   const bool found_visiblity = false;
@@ -399,12 +407,14 @@ static void OnInitPipelineLayout(
 }
 
 // After CreatePipelineState
-void OnInitPipeline(
+static void OnInitPipeline(
     reshade::api::device* device,
     reshade::api::pipeline_layout layout,
     uint32_t subobject_count,
     const reshade::api::pipeline_subobject* subobjects,
     reshade::api::pipeline pipeline) {
+  if (!is_primary_hook) return;
+  if (!trace_running && !trace_pipeline_creation) return;
   if (subobject_count == 0) {
     std::stringstream s;
     s << "on_init_pipeline(";
@@ -472,6 +482,8 @@ void OnInitPipeline(
 static void OnDestroyPipeline(
     reshade::api::device* device,
     reshade::api::pipeline pipeline) {
+  if (!is_primary_hook) return;
+  if (!trace_running) return;
   std::stringstream s;
   s << "on_destroy_pipeline(";
   s << reinterpret_cast<void*>(pipeline.handle);
@@ -487,6 +499,7 @@ static void OnPushConstants(
     uint32_t first,
     uint32_t count,
     const void* values) {
+  if (!is_primary_hook) return;
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return;
   std::stringstream s;
   s << "push_constants(" << reinterpret_cast<void*>(layout.handle);
@@ -507,6 +520,7 @@ static void OnBindPipeline(
     reshade::api::command_list* cmd_list,
     reshade::api::pipeline_stage stages,
     reshade::api::pipeline pipeline) {
+  if (!is_primary_hook) return;
   if (!trace_running) return;
 
   std::stringstream s;
@@ -514,7 +528,7 @@ static void OnBindPipeline(
   s << (void*)pipeline.handle;
   auto details = renodx::utils::shader::GetPipelineShaderDetails(cmd_list->get_device(), pipeline);
   if (details.has_value()) {
-    s << ", layout" << reinterpret_cast<void*>(details->layout.handle);
+    s << ", layout: " << reinterpret_cast<void*>(details->layout.handle);
     for (auto& [type, shader_hash] : details->shader_hashes_by_type) {
       s << ", " << type << ": " << PRINT_CRC32(shader_hash);
     }
@@ -530,6 +544,7 @@ static bool OnDraw(
     uint32_t instance_count,
     uint32_t first_vertex,
     uint32_t first_instance) {
+  if (!is_primary_hook) return false;
   if (trace_running) {
     std::stringstream s;
     s << "on_draw";
@@ -544,6 +559,7 @@ static bool OnDraw(
 }
 
 static bool OnDispatch(reshade::api::command_list* cmd_list, uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z) {
+  if (!is_primary_hook) return false;
   if (trace_running) {
     std::stringstream s;
     s << "on_dispatch";
@@ -566,6 +582,8 @@ static bool OnDrawIndexed(
     uint32_t first_index,
     int32_t vertex_offset,
     uint32_t first_instance) {
+  if (!is_primary_hook) return false;
+
   if (trace_running) {
     std::stringstream s;
     s << "on_draw_indexed";
@@ -590,6 +608,8 @@ static bool OnDrawOrDispatchIndirect(
     uint64_t offset,
     uint32_t draw_count,
     uint32_t stride) {
+  if (!is_primary_hook) return false;
+
   if (trace_running) {
     std::stringstream s;
     s << "on_draw_or_dispatch_indirect(" << type;
@@ -615,6 +635,8 @@ static bool OnCopyTextureRegion(
     uint32_t dest_subresource,
     const reshade::api::subresource_box* dest_box,
     reshade::api::filter_mode filter) {
+  if (!is_primary_hook) return false;
+
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
   auto* device = cmd_list->get_device();
   const auto source_desc = device->get_resource_desc(source);
@@ -643,6 +665,8 @@ static bool OnCopyTextureToBuffer(
     uint64_t dest_offset,
     uint32_t row_length,
     uint32_t slice_height) {
+  if (!is_primary_hook) return false;
+
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
   std::stringstream s;
   s << "OnCopyTextureToBuffer(" << reinterpret_cast<void*>(source.handle);
@@ -667,6 +691,8 @@ static bool OnCopyBufferToTexture(
     reshade::api::resource dest,
     uint32_t dest_subresource,
     const reshade::api::subresource_box* dest_box) {
+  if (!is_primary_hook) return false;
+
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
   std::stringstream s;
   s << "OnCopyBufferToTexture";
@@ -694,6 +720,8 @@ static bool OnResolveTextureRegion(
     int32_t dest_y,
     int32_t dest_z,
     reshade::api::format format) {
+  if (!is_primary_hook) return false;
+
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
   std::stringstream s;
   s << "on_resolve_texture_region";
@@ -711,6 +739,8 @@ static bool OnCopyResource(
     reshade::api::command_list* cmd_list,
     reshade::api::resource source,
     reshade::api::resource dest) {
+  if (!is_primary_hook) return false;
+
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
   std::stringstream s;
   s << "on_copy_resource";
@@ -727,6 +757,7 @@ static void OnBarrier(
     const reshade::api::resource* resources,
     const reshade::api::resource_usage* old_states,
     const reshade::api::resource_usage* new_states) {
+  if (!is_primary_hook) return;
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return;
   for (uint32_t i = 0; i < count; i++) {
     std::stringstream s;
@@ -743,6 +774,7 @@ static void OnBindRenderTargetsAndDepthStencil(
     uint32_t count,
     const reshade::api::resource_view* rtvs,
     reshade::api::resource_view dsv) {
+  if (!is_primary_hook) return;
   if (!trace_running) return;
 
   if (count != 0) {
@@ -784,6 +816,7 @@ static void OnInitResource(
     const reshade::api::subresource_data* initial_data,
     reshade::api::resource_usage initial_state,
     reshade::api::resource resource) {
+  if (!is_primary_hook) return;
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   data.resources.emplace(resource.handle);
@@ -810,6 +843,7 @@ static void OnInitResource(
     case reshade::api::resource_type::surface:
       s << ", width: " << desc.texture.width;
       s << ", height: " << desc.texture.height;
+      s << ", depth/layers: " << desc.texture.depth_or_layers;
       s << ", levels: " << desc.texture.levels;
       s << ", format: " << desc.texture.format;
       if (desc.texture.format == reshade::api::format::unknown) {
@@ -830,6 +864,7 @@ static void OnInitResource(
 }
 
 static void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
+  if (!is_primary_hook) return;
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   data.resources.erase(resource.handle);
@@ -848,6 +883,7 @@ static void OnInitResourceView(
     reshade::api::resource_usage usage_type,
     const reshade::api::resource_view_desc& desc,
     reshade::api::resource_view view) {
+  if (!is_primary_hook) return;
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   if (data.resource_views.contains(view.handle)) {
@@ -909,6 +945,7 @@ static void OnInitResourceView(
 }
 
 static void OnDestroyResourceView(reshade::api::device* device, reshade::api::resource_view view) {
+  if (!is_primary_hook) return;
   std::stringstream s;
   s << "on_destroy_resource_view(";
   s << reinterpret_cast<void*>(view.handle);
@@ -926,6 +963,7 @@ static void OnPushDescriptors(
     reshade::api::pipeline_layout layout,
     uint32_t layout_param,
     const reshade::api::descriptor_table_update& update) {
+  if (!is_primary_hook) return;
   if (!trace_running) return;
   auto* device = cmd_list->get_device();
   auto& data = device->get_private_data<DeviceData>();
@@ -1012,6 +1050,7 @@ static void OnBindDescriptorTables(
     uint32_t first,
     uint32_t count,
     const reshade::api::descriptor_table* tables) {
+  if (!is_primary_hook) return;
   if (!trace_running) return;
   auto* device = cmd_list->get_device();
 
@@ -1115,6 +1154,7 @@ static bool OnCopyDescriptorTables(
     reshade::api::device* device,
     uint32_t count,
     const reshade::api::descriptor_table_copy* copies) {
+  if (!is_primary_hook) return false;
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
 
   for (uint32_t i = 0; i < count; i++) {
@@ -1165,6 +1205,8 @@ static bool OnUpdateDescriptorTables(
     reshade::api::device* device,
     uint32_t count,
     const reshade::api::descriptor_table_update* updates) {
+  if (!is_primary_hook) return false;
+
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
 
   for (uint32_t i = 0; i < count; i++) {
@@ -1266,6 +1308,8 @@ static bool OnClearDepthStencilView(
     const uint8_t* stencil,
     uint32_t rect_count,
     const reshade::api::rect* rects) {
+  if (!is_primary_hook) return false;
+
   if (!trace_running) return false;
   std::stringstream s;
   s << "OnClearDepthStencilView(";
@@ -1282,6 +1326,8 @@ static bool OnClearRenderTargetView(
     const float color[4],
     uint32_t rect_count,
     const reshade::api::rect* rects) {
+  if (!is_primary_hook) return false;
+
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
   std::stringstream s;
   s << "OnClearRenderTargetView(";
@@ -1298,6 +1344,8 @@ static bool OnClearUnorderedAccessViewUint(
     const uint32_t values[4],
     uint32_t rect_count,
     const reshade::api::rect* rects) {
+  if (!is_primary_hook) return false;
+
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
   std::stringstream s;
   s << "on_clear_unordered_access_view_uint(";
@@ -1315,6 +1363,7 @@ static void OnMapBufferRegion(
     uint64_t size,
     reshade::api::map_access access,
     void** data) {
+  if (!is_primary_hook) return;
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return;
   std::stringstream s;
   s << "map_buffer_region(";
@@ -1331,6 +1380,7 @@ static void OnMapTextureRegion(
     const reshade::api::subresource_box* box,
     reshade::api::map_access access,
     reshade::api::subresource_data* data) {
+  if (!is_primary_hook) return;
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return;
   std::stringstream s;
   s << "map_texture_region(";
@@ -1345,6 +1395,7 @@ static bool OnUpdateBufferRegion(
     reshade::api::device* device,
     const void* data, reshade::api::resource resource,
     uint64_t offset, uint64_t size) {
+  if (!is_primary_hook) return false;
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
   std::stringstream s;
   s << "OnUpdateBufferRegion(";
@@ -1361,6 +1412,7 @@ static bool OnUpdateTextureRegion(
     reshade::api::resource resource,
     uint32_t subresource,
     const reshade::api::subresource_box* box) {
+  if (!is_primary_hook) return false;
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return false;
   std::stringstream s;
   s << "OnUpdateTextureRegion(";
@@ -1375,6 +1427,7 @@ static void OnBindPipelineStates(
     uint32_t count,
     const reshade::api::dynamic_state* states,
     const uint32_t* values) {
+  if (!is_primary_hook) return;
   if (!trace_running) return;
 
   for (uint32_t i = 0; i < count; i++) {
@@ -1388,6 +1441,7 @@ static void OnBindPipelineStates(
 }
 
 static void OnBindViewports(reshade::api::command_list* cmd_list, uint32_t first, uint32_t count, const reshade::api::viewport* viewports) {
+  if (!is_primary_hook) return;
   if (!trace_running) return;
 
   for (uint32_t i = 0; i < count; i++) {
@@ -1406,6 +1460,7 @@ static void OnBindViewports(reshade::api::command_list* cmd_list, uint32_t first
 }
 
 static void OnBindScissorRects(reshade::api::command_list* cmd_list, uint32_t first, uint32_t count, const reshade::api::rect* rects) {
+  if (!is_primary_hook) return;
   if (!trace_running) return;
 
   for (uint32_t i = 0; i < count; i++) {
@@ -1428,6 +1483,7 @@ static void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
+  if (!is_primary_hook) return;
   if (trace_running) {
     reshade::log::message(reshade::log::level::info, "present()");
     reshade::log::message(reshade::log::level::info, "--- End Frame ---");

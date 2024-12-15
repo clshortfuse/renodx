@@ -111,7 +111,7 @@ float4 main(
     linear float4 TEXCOORD: TEXCOORD)
     : SV_Target {
   float4 SV_Target;
-  float3 tonemappedPQ, post_srgb, output;
+  float3 tonemappedRender, post_srgb, output, srgb_input;
   // texture _1 = PostProcessInput_7_Texture;
   // texture _2 = PostProcessInput_0_Texture;
   // texture _3 = Material_Texture2D_2;
@@ -448,10 +448,10 @@ float4 main(
     // _350 = _8;
     float4 _351 = PostProcessInput_0_Texture.Sample(PostProcessInput_0_Sampler, float2(_347, _348));  // This is in PQ
     // We decode before they attempt to blend
-    tonemappedPQ = _351.rgb;
-    float3 srgb_input = pqTosRGB(tonemappedPQ);
-
-    if (injectedData.toneMapType > 1.f) {
+    if (injectedData.toneMapType > 0.f) {
+      // We decode before they attempt to blend
+      tonemappedRender = pqToDecoded(_351.rgb);
+      srgb_input = decodedTosRGB(tonemappedRender);
       _351.rgb = srgb_input;
     }
 
@@ -481,8 +481,8 @@ float4 main(
 
   post_srgb = float3(_373, _374, _375);
 
-  if (injectedData.toneMapType > 1.f) {
-    output = upgradeSRGBtoPQ(tonemappedPQ, post_srgb);
+  if (injectedData.toneMapType > 0.f) {
+    output = upgradePostProcess(tonemappedRender, post_srgb);
     return float4(output, 0.f);
   }
 

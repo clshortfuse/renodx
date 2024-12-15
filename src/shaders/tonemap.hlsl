@@ -51,6 +51,14 @@ float3 ReinhardScalable(float3 color, float channel_max = 1.f, float channel_min
   return mad(color, exposure, channel_min) / mad(color, exposure / channel_max, 1.f - channel_min);
 }
 
+float ExponentialRollOff(float input, float start = 0.20f, float target = 1.f) {
+  float rolloff_size = target - start;
+  float overage = -max(0, input - start);
+  float rolloff_value = 1.f - exp(overage / rolloff_size);
+  float new_overage = mad(rolloff_size, rolloff_value, overage);
+  return input + overage;
+}
+
 // Narkowicz
 float3 ACESFittedBT709(float3 color) {
   color *= 0.6f;

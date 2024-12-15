@@ -9,11 +9,11 @@
 #include <d3d12.h>
 #include <dxgi.h>
 #include <dxgi1_6.h>
+#include <cassert>
 #include <cstdio>
 
 #include <shared_mutex>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <variant>
 
@@ -22,18 +22,17 @@
 
 #include "./hash.hpp"
 #include "./pipeline_layout.hpp"
-
-#ifdef DEBUG_LEVEL_1
+#if defined(DEBUG_LEVEL_1) || defined(DEBUG_LEVEL_2)
 #include "./format.hpp"
 #endif
 
 namespace renodx::utils::descriptor {
 
+static bool is_primary_hook = false;
+
 struct __declspec(uuid("018fa2c9-7a8b-76dc-bc84-87c53574223f")) DeviceData {
   // <descriptor_table.handle[index], <resourceView.handle>>
   std::unordered_map<std::pair<uint64_t, uint32_t>, reshade::api::descriptor_table_update, hash::HashPair> table_descriptor_resource_views;
-  // Index of table_descriptor_resource_views
-  std::unordered_map<uint64_t, std::unordered_set<std::pair<uint64_t, uint32_t>, hash::HashPair>*> resource_view_table_description_locations;
   std::unordered_map<
       uint64_t,
       std::vector<
@@ -72,170 +71,17 @@ static reshade::api::resource_view GetResourceViewFromDescriptorUpdate(
   return reshade::api::resource_view{0};
 }
 
-static reshade::api::descriptor_table_update ShrinkDescriptorUpdateWithResourceView(
-    const reshade::api::descriptor_table_update update,
-    uint32_t index = 0) {
-  switch (update.type) {
-    case reshade::api::descriptor_type::sampler_with_resource_view: {
-      auto item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[index];
-      return reshade::api::descriptor_table_update{
-          .table = update.table,
-          .binding = update.binding + index,
-          .count = 1,
-          .type = update.type,
-          .descriptors = new reshade::api::sampler_with_resource_view{item.sampler, item.view}};
-    }
-    case reshade::api::descriptor_type::buffer_shader_resource_view:
-    case reshade::api::descriptor_type::buffer_unordered_access_view:
-    case reshade::api::descriptor_type::shader_resource_view:
-    case reshade::api::descriptor_type::unordered_access_view:        {
-      auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[index];
-      return reshade::api::descriptor_table_update{
-          .table = update.table,
-          .binding = update.binding + index,
-          .count = 1,
-          .type = update.type,
-          .descriptors = new reshade::api::resource_view{item.handle}};
-    }
-    default:
-      break;
-  }
-  return reshade::api::descriptor_table_update{};
-}
-
-// Returns true if changed
-static bool LogDescriptorTableResourceView(
-    DeviceData& data,  // Should be mutex locked
-    const reshade::api::descriptor_table table,
-    const uint32_t index,
-    const reshade::api::descriptor_table_update update = {}) {
-  if (table.handle == 0) return false;
-
-  auto primary_key = std::pair<uint64_t, uint32_t>(table.handle, index);
-
-  auto view = GetResourceViewFromDescriptorUpdate(update, index);
-
-  if (view.handle != 0) {
-#ifdef DEBUG_LEVEL_1
-    {
-      std::stringstream s;
-      s << "utils::descriptor::LogDescriptorTableResourceView("
-        << reinterpret_cast<void*>(table.handle)
-        << "[" << index << "]"
-        << ", view " << reinterpret_cast<void*>(view.handle)
-        << ")";
-      reshade::log::message(reshade::log::level::info, s.str().c_str());
-    }
-#endif
-    auto shrunk_update = ShrinkDescriptorUpdateWithResourceView(update, index);
-    if (
-        auto record = data.table_descriptor_resource_views.find(primary_key);
-        record != data.table_descriptor_resource_views.end()) {
-      auto old_update = record->second;
-
-      if (
-          auto old_index_record = data.resource_view_table_description_locations.find(view.handle);
-          old_index_record != data.resource_view_table_description_locations.end()) {
-        auto* set = old_index_record->second;
-        set->erase(primary_key);
-      }
-#ifdef DEBUG_LEVEL_1
-      {
-        std::stringstream s;
-        s << "utils::descriptor::LogDescriptorTableResourceView("
-          << reinterpret_cast<void*>(table.handle)
-          << "[" << index << "]"
-          << " replace shrunk view: "
-          << shrunk_update.type
-          << ")";
-        reshade::log::message(reshade::log::level::info, s.str().c_str());
-      }
-#endif
-
-    } else {
-      // Insert new record
-
-#ifdef DEBUG_LEVEL_1
-      {
-        std::stringstream s;
-        s << "utils::descriptor::LogDescriptorTableResourceView("
-          << reinterpret_cast<void*>(table.handle)
-          << "[" << index << "]"
-          << " insert shrunk view: "
-          << shrunk_update.type
-          << ")";
-        reshade::log::message(reshade::log::level::info, s.str().c_str());
-      }
-#endif
-    }
-    data.table_descriptor_resource_views[primary_key] = shrunk_update;
-
-    if (
-        auto index_record = data.resource_view_table_description_locations.find(view.handle);
-        index_record != data.resource_view_table_description_locations.end()) {
-// Add entry to set
-#ifdef DEBUG_LEVEL_1
-      {
-        std::stringstream s;
-        s << "utils::descriptor::LogDescriptorTableResourceView(updating index "
-          << reinterpret_cast<void*>(view.handle)
-          << ")";
-        reshade::log::message(reshade::log::level::info, s.str().c_str());
-      }
-#endif
-      index_record->second->emplace(primary_key);
-    } else {
-// Create new set with entry
-#ifdef DEBUG_LEVEL_1
-      {
-        std::stringstream s;
-        s << "utils::descriptor::LogDescriptorTableResourceView(creating index "
-          << reinterpret_cast<void*>(view.handle)
-          << ")";
-        reshade::log::message(reshade::log::level::info, s.str().c_str());
-      }
-#endif
-      data.resource_view_table_description_locations.insert({view.handle, new std::unordered_set<std::pair<uint64_t, uint32_t>, hash::HashPair>{primary_key}});
-    }
-    return true;
-  }
-
-#ifdef DEBUG_LEVEL_1
-  {
-    std::stringstream s;
-    s << "utils::descriptor::LogDescriptorTableResourceView(remove entry"
-      << reinterpret_cast<void*>(table.handle)
-      << "[" << index << "]"
-      << ")";
-    reshade::log::message(reshade::log::level::info, s.str().c_str());
-  }
-#endif
-
-  // Blank view (remove)
-  if (
-      auto record = data.table_descriptor_resource_views.find(primary_key);
-      record != data.table_descriptor_resource_views.end()) {
-    auto old_update = record->second;
-    auto old_view = GetResourceViewFromDescriptorUpdate(old_update);
-    if (old_view.handle != 0) {
-      if (
-          auto old_index_record = data.resource_view_table_description_locations.find(old_view.handle);
-          old_index_record != data.resource_view_table_description_locations.end()) {
-        auto* set = old_index_record->second;
-        set->erase(primary_key);
-      }
-    }
-    data.table_descriptor_resource_views.erase(record);
-  }
-
-  return false;
-}
-
 static void OnInitDevice(reshade::api::device* device) {
-  device->create_private_data<DeviceData>();
+  auto* data = &device->get_private_data<DeviceData>();
+  if (data != nullptr) return;
+
+  data = &device->create_private_data<DeviceData>();
+
+  is_primary_hook = true;
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
+  if (!is_primary_hook) return;
   device->destroy_private_data<DeviceData>();
 }
 
@@ -244,6 +90,7 @@ static bool OnUpdateDescriptorTables(
     reshade::api::device* device,
     uint32_t count,
     const reshade::api::descriptor_table_update* updates) {
+  if (!is_primary_hook) return false;
   if (count == 0u) return false;
 
   auto& data = device->get_private_data<DeviceData>();
@@ -252,29 +99,73 @@ static bool OnUpdateDescriptorTables(
   for (uint32_t i = 0; i < count; ++i) {
     const auto& update = updates[i];
 
+#ifdef DEBUG_LEVEL_2
+    {
+      std::stringstream s;
+      s << "utils::descriptor::OnUpdateDescriptorTables(Getting heap: "
+        << reinterpret_cast<void*>(update.table.handle)
+        << "[" << update.binding << "] + " << update.array_offset
+        << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    }
+#endif
+
     uint32_t offset;
     reshade::api::descriptor_heap heap;
     device->get_descriptor_heap_offset(update.table, update.binding, update.array_offset, &heap, &offset);
 
+#ifdef DEBUG_LEVEL_2
+    {
+      std::stringstream s;
+      s << "utils::descriptor::OnUpdateDescriptorTables(Got heap: "
+        << reinterpret_cast<void*>(update.table.handle)
+        << "[" << update.binding << "] + " << update.array_offset
+        << " = " << reinterpret_cast<void*>(heap.handle)
+        << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    }
+#endif
+
     auto& heap_data = data.heaps[heap.handle];
 
-    if (offset + update.count > heap_data.size()) {
-      heap_data.resize(offset + update.count);
+    auto total_size = offset + update.count;
+    if (total_size > heap_data.size()) {
+#ifdef DEBUG_LEVEL_2
+      std::stringstream s;
+      s << "utils::descriptor::OnUpdateDescriptorTables(Heap ";
+      s << reinterpret_cast<void*>(heap.handle);
+      s << " resized ";
+      s << heap_data.size() << " => " << total_size;
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
+      heap_data.resize(total_size);
     }
 
     for (uint32_t k = 0; k < update.count; ++k) {
       auto& descriptor = heap_data[offset + k];
 
       descriptor.first = update.type;
-      reshade::api::resource_view rsv = {0};
+
+#ifdef DEBUG_LEVEL_2
+
+      std::stringstream s;
+      s << "utils::descriptor::OnUpdateDescriptorTables(Log heap: ";
+      s << reinterpret_cast<void*>(heap.handle);
+      s << "[" << offset + k << "]:";
+#endif
 
       switch (update.type) {
         case reshade::api::descriptor_type::sampler:
           descriptor.second = static_cast<const reshade::api::sampler*>(update.descriptors)[k];
+#ifdef DEBUG_LEVEL_2
+          s << reinterpret_cast<void*>(static_cast<const reshade::api::sampler*>(update.descriptors)[k].handle);
+#endif
           break;
         case reshade::api::descriptor_type::sampler_with_resource_view:
           descriptor.second = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[k];
-          rsv = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[k].view;
+#ifdef DEBUG_LEVEL_2
+          s << reinterpret_cast<void*>(static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[k].view.handle);
+#endif
           break;
         case reshade::api::descriptor_type::buffer_shader_resource_view:
         case reshade::api::descriptor_type::buffer_unordered_access_view:
@@ -283,7 +174,9 @@ static bool OnUpdateDescriptorTables(
           // case reshade::api::descriptor_type::shader_resource_view:
           // case reshade::api::descriptor_type::unordered_access_view:
           descriptor.second = static_cast<const reshade::api::resource_view*>(update.descriptors)[k];
-          rsv = static_cast<const reshade::api::resource_view*>(update.descriptors)[k];
+#ifdef DEBUG_LEVEL_2
+          s << reinterpret_cast<void*>(static_cast<const reshade::api::resource_view*>(update.descriptors)[k].handle);
+#endif
           break;
         case reshade::api::descriptor_type::constant_buffer:
         case reshade::api::descriptor_type::acceleration_structure:
@@ -293,6 +186,10 @@ static bool OnUpdateDescriptorTables(
         default:
           break;
       }
+#ifdef DEBUG_LEVEL_2
+      s << " (" << update.type << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
     }
   }
   return false;
@@ -302,12 +199,27 @@ static bool OnCopyDescriptorTables(
     reshade::api::device* device,
     uint32_t count,
     const reshade::api::descriptor_table_copy* copies) {
+  if (!is_primary_hook) return false;
   if (count == 0u) return false;
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
 
   for (uint32_t i = 0; i < count; ++i) {
     const reshade::api::descriptor_table_copy& copy = copies[i];
+
+#ifdef DEBUG_LEVEL_2
+    {
+      std::stringstream s;
+      s << "utils::descriptor::OnCopyDescriptorTables(Getting heap: "
+        << reinterpret_cast<void*>(copy.source_table.handle)
+        << "[" << copy.source_binding << "] + " << copy.source_array_offset
+        << " => "
+        << reinterpret_cast<void*>(copy.dest_table.handle)
+        << "[" << copy.dest_binding << "] + " << copy.dest_array_offset
+        << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    }
+#endif
 
     uint32_t src_offset;
     reshade::api::descriptor_heap src_heap;
@@ -332,8 +244,8 @@ static bool OnCopyDescriptorTables(
       << " => "
       << reinterpret_cast<void*>(copy.dest_table.handle)
       << "[" << copy.dest_binding << "] + " << copy.dest_array_offset
-      << ", src_heap: " << src_heap.handle << "[" << src_offset << "]"
-      << ", dest_heap: " << dst_heap.handle << "[" << dst_offset << "]"
+      << ", src_heap: " << reinterpret_cast<void*>(src_heap.handle) << "[" << src_offset << "]"
+      << ", dest_heap: " << reinterpret_cast<void*>(dst_heap.handle) << "[" << dst_offset << "]"
       << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
@@ -341,8 +253,20 @@ static bool OnCopyDescriptorTables(
     auto& src_pool_data = data.heaps[src_heap.handle];
     auto& dst_pool_data = data.heaps[dst_heap.handle];
 
-    if (dst_offset + copy.count > dst_pool_data.size()) {
-      dst_pool_data.resize(dst_offset + copy.count);
+    auto min_source_size = src_offset + copy.count;
+    assert(min_source_size <= src_pool_data.size());
+
+    auto total_size = dst_offset + copy.count;
+    if (total_size > dst_pool_data.size()) {
+#ifdef DEBUG_LEVEL_2
+      std::stringstream s;
+      s << "utils::descriptor::OnCopyDescriptorTables(Destination Heap ";
+      s << reinterpret_cast<void*>(dst_heap.handle);
+      s << " resized ";
+      s << dst_pool_data.size() << " => " << total_size;
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
+      dst_pool_data.resize(total_size);
     }
 
     for (uint32_t k = 0; k < copy.count; ++k) {
@@ -350,6 +274,35 @@ static bool OnCopyDescriptorTables(
     }
   }
   return false;
+}
+
+void OnBindDescriptorTables(
+    reshade::api::command_list* cmd_list,
+    reshade::api::shader_stage stages,
+    reshade::api::pipeline_layout layout,
+    uint32_t first,
+    uint32_t count,
+    const reshade::api::descriptor_table* tables) {
+  auto* device = cmd_list->get_device();
+  auto& layout_data = device->get_private_data<renodx::utils::pipeline_layout::DeviceData>();
+  const std::shared_lock layout_lock(layout_data.mutex);
+
+  /// auto& descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
+
+  for (uint32_t i = 0; i < count; ++i) {
+    const auto layout_index = first + i;
+
+    auto layout_data_pair = layout_data.pipeline_layout_data.find(layout.handle);
+    assert(layout_data_pair != layout_data.pipeline_layout_data.end());
+
+    auto& info = layout_data_pair->second;
+    assert(layout_index < info.params.size());
+    const auto& param = info.params.at(layout_index);
+    assert(param.type == reshade::api::pipeline_layout_param_type::descriptor_table
+           || param.type == reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers);
+
+    info.tables[layout_index] = tables[i];
+  }
 }
 
 static reshade::api::descriptor_table_update* CloneDescriptorTableUpdates(
@@ -404,6 +357,7 @@ static void Use(DWORD fdw_reason) {
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::register_event<reshade::addon_event::update_descriptor_tables>(OnUpdateDescriptorTables);
       reshade::register_event<reshade::addon_event::copy_descriptor_tables>(OnCopyDescriptorTables);
+      reshade::register_event<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables);
 
       break;
     case DLL_PROCESS_DETACH:
@@ -411,6 +365,7 @@ static void Use(DWORD fdw_reason) {
       reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::unregister_event<reshade::addon_event::update_descriptor_tables>(OnUpdateDescriptorTables);
       reshade::unregister_event<reshade::addon_event::copy_descriptor_tables>(OnCopyDescriptorTables);
+      reshade::unregister_event<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables);
 
       break;
   }

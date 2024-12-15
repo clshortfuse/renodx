@@ -21,23 +21,21 @@
 
 namespace renodx::utils::swapchain {
 
-namespace internal {
-static std::shared_mutex mutex;
-static reshade::api::effect_runtime* current_effect_runtime = nullptr;
-static reshade::api::color_space current_color_space = reshade::api::color_space::unknown;
-}  // namespace internal
+struct __declspec(uuid("4721e307-0cf3-4293-b4a5-40d0a4e62544")) DeviceData {
+  reshade::api::effect_runtime* current_effect_runtime = nullptr;
+  reshade::api::color_space current_color_space = reshade::api::color_space::unknown;
+
+  std::unordered_set<reshade::api::swapchain*> swapchains;
+  std::unordered_set<uint64_t> back_buffers;
+  reshade::api::resource_desc back_buffer_desc;
+
+  std::shared_mutex mutex;
+};
 
 struct __declspec(uuid("25b7ec11-a51f-4884-a6f7-f381d198b9af")) SwapchainData {
   reshade::api::swapchain_desc original_descc;
   reshade::api::swapchain_desc current_desc;
   std::unordered_set<uint64_t> back_buffers;
-  std::shared_mutex mutex;
-};
-
-struct __declspec(uuid("4721e307-0cf3-4293-b4a5-40d0a4e62544")) DeviceData {
-  std::unordered_set<reshade::api::swapchain*> swapchains;
-  std::unordered_set<uint64_t> back_buffers;
-  reshade::api::resource_desc back_buffer_desc;
   std::shared_mutex mutex;
 };
 
@@ -48,17 +46,23 @@ struct __declspec(uuid("3cf9a628-8518-4509-84c3-9fbe9a295212")) CommandListData 
   bool has_swapchain_render_target = false;
 };
 
-static std::shared_mutex mutex;
-
+static bool is_primary_hook = false;
 static void OnInitDevice(reshade::api::device* device) {
-  auto& data = device->create_private_data<DeviceData>();
+  auto* data = &device->get_private_data<DeviceData>();
+  if (data != nullptr) return;
+
+  data = &device->create_private_data<DeviceData>();
+
+  is_primary_hook = true;
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
+  if (!is_primary_hook) return;
   device->destroy_private_data<DeviceData>();
 }
 
 static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
+  if (!is_primary_hook) return;
   auto& swapchain_data = swapchain->create_private_data<SwapchainData>();
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
   for (uint32_t index = 0; index < back_buffer_count; index++) {
@@ -83,6 +87,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
 }
 
 static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
+  if (!is_primary_hook) return;
   auto& swapchain_data = swapchain->get_private_data<SwapchainData>();
   auto* device = swapchain->get_device();
   if (device != nullptr) {
@@ -93,30 +98,39 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
       device_data.back_buffers.erase(handle);
     }
   }
+  swapchain->destroy_private_data<SwapchainData>();
 }
 
 static void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
-  std::unique_lock lock(internal::mutex);
-  internal::current_effect_runtime = runtime;
+  if (!is_primary_hook) return;
+  auto* device = runtime->get_device();
+  auto& data = device->get_private_data<DeviceData>();
+  const std::unique_lock lock(data.mutex);
+  data.current_effect_runtime = runtime;
   reshade::log::message(reshade::log::level::info, "Effect runtime created.");
-  if (internal::current_color_space != reshade::api::color_space::unknown) {
-    runtime->set_color_space(internal::current_color_space);
+  if (data.current_color_space != reshade::api::color_space::unknown) {
+    runtime->set_color_space(data.current_color_space);
     reshade::log::message(reshade::log::level::info, "Effect runtime colorspace updated.");
   }
 }
 
 static void OnDestroyEffectRuntime(reshade::api::effect_runtime* runtime) {
-  std::unique_lock lock(internal::mutex);
-  if (internal::current_effect_runtime == runtime) {
-    internal::current_effect_runtime = nullptr;
+  if (!is_primary_hook) return;
+  auto* device = runtime->get_device();
+  auto& data = device->get_private_data<DeviceData>();
+  const std::unique_lock lock(data.mutex);
+  if (data.current_effect_runtime == runtime) {
+    data.current_effect_runtime = nullptr;
   }
 }
 
 static void OnInitCommandList(reshade::api::command_list* cmd_list) {
+  if (!is_primary_hook) return;
   auto& data = cmd_list->create_private_data<CommandListData>();
 }
 
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
+  if (!is_primary_hook) return;
   cmd_list->destroy_private_data<CommandListData>();
 }
 
@@ -157,6 +171,7 @@ static void OnBindRenderTargetsAndDepthStencil(
     uint32_t count,
     const reshade::api::resource_view* rtvs,
     reshade::api::resource_view dsv) {
+  if (!is_primary_hook) return;
   auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
   const bool found_swapchain_rtv = false;
   cmd_list_data.current_render_targets.assign(rtvs, rtvs + count);
@@ -352,11 +367,13 @@ static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::c
     // Vulkan ???
   }
 
-  std::unique_lock lock(internal::mutex);
-  internal::current_color_space = color_space;
+  auto* device = swapchain->get_device();
+  auto& data = device->get_private_data<DeviceData>();
+  std::unique_lock lock(data.mutex);
+  data.current_color_space = color_space;
 
-  if (internal::current_effect_runtime != nullptr) {
-    internal::current_effect_runtime->set_color_space(internal::current_color_space);
+  if (data.current_effect_runtime != nullptr) {
+    data.current_effect_runtime->set_color_space(data.current_color_space);
   } else {
     reshade::log::message(reshade::log::level::warning, "renodx::utils::swapchain::ChangeColorSpace(effectRuntimeNotSet)");
   }
@@ -446,6 +463,9 @@ inline void Use(DWORD fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (attached) return;
       attached = true;
+
+      reshade::log::message(reshade::log::level::info, "utils::swapchain attached.");
+
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);

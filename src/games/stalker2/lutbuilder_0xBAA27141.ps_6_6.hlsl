@@ -167,6 +167,9 @@ float4 main(
   // cbuffer _2 = _RootShaderParameters;
   // _3 = _1;
   // _4 = _2;
+  uint output_type = _RootShaderParameters_040w;
+  bool is_hdr = (output_type >= 3u && output_type <= 6u);
+  bool shouldTonemap = injectedData.toneMapType != 0.f && is_hdr;
   uint _5 = SV_RenderTargetArrayIndex;
   float _6 = TEXCOORD.x;
   float _7 = TEXCOORD.y;
@@ -931,7 +934,6 @@ float4 main(
   // Now SDR Tonemapping/Split
   // Early out with cbuffer
   // (Unreal runs the entire SDR process even if discarding)
-  uint output_type = _RootShaderParameters_040w;
 
   float3 sdr_color;
   float3 hdr_color;
@@ -945,9 +947,7 @@ float4 main(
   float _720 = _719 + 1.0f;
   float _721 = _RootShaderParameters_037z;
   float _722 = _720 - _721;
-
-  bool is_hdr = (output_type >= 3u && output_type <= 6u);
-  if (injectedData.toneMapType != 0.f && is_hdr) {
+  if (shouldTonemap) {
     renodx::tonemap::Config config = getCommonConfig();
 
     float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
@@ -1215,19 +1215,20 @@ float4 main(
 
   // CustomEdit
   float3 film_graded_color = float3(_966, _967, _968);
+  float3 final_color = film_graded_color;
+  // We return sRGB bt709 color
+  if (shouldTonemap) {
+    final_color = saturate(film_graded_color);
 
-  if (is_hdr) {
-    float3 final_color = saturate(film_graded_color);
-    if (injectedData.toneMapType != 0.f) {
+    if (injectedData.toneMapType != 1.f) {
       final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
+    } else {
+      final_color = hdr_color;
     }
-    bool is_pq = (output_type == 3u || output_type == 4u);
-    if (is_pq) {
-      final_color = renodx::color::bt2020::from::BT709(final_color);
-      final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
-    }
-
-    return float4(final_color, 0);
+    final_color = renodx::color::bt2020::from::BT709(final_color);
+    final_color = correctGamma(final_color);
+    final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
+    return float4(final_color, 0.f);
   }
 
   uint _970 = _RootShaderParameters_040w;
