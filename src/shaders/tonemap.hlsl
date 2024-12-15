@@ -52,23 +52,14 @@ float3 ReinhardScalable(float3 color, float channel_max = 1.f, float channel_min
 }
 
 /// Smoothly compresses values above a certain start threshold down to a target value.
-/// Used for compressing highlights in HDR to fit within a display's peak brightness
-/// while leaving values below the `start` threshold unaffected.
-///
-/// Inspired by: "High Dynamic Range Color Grading and Display in Frostbite"
 /// https://www.ea.com/frostbite/news/high-dynamic-range-color-grading-and-display-in-frostbite
-///
-/// @param input   The input value(s) to process.
-/// @param start   The threshold above which compression begins (default: 0.20).
-/// @param target  The target value to which highlights should be compressed (default: 1.0).
-/// @return        The processed input value(s) after highlight compression.
-#define EXPONENTIALROLLOFF_GENERATOR(T)                                   \
-  T ExponentialRollOff(T input, T start = (T)0.20f, T target = (T)1.0f) { \
-    T rolloff_size = target - start;                                      \
-    T overage = -max((T)0, input - start);                                \
-    T rolloff_value = (T)1.0f - exp(overage / rolloff_size);              \
-    T new_overage = mad(rolloff_size, rolloff_value, overage);            \
-    return input + new_overage;                                           \
+#define EXPONENTIALROLLOFF_GENERATOR(T)                                               \
+  T ExponentialRollOff(T input, T rolloff_start = (T)0.20f, T output_max = (T)1.0f) { \
+    T rolloff_size = output_max - rolloff_start;                                      \
+    T overage = -max((T)0, input - rolloff_start);                                    \
+    T rolloff_value = (T)1.0f - exp(overage / rolloff_size);                          \
+    T new_overage = mad(rolloff_size, rolloff_value, overage);                        \
+    return input + new_overage;                                                       \
   }
 
 EXPONENTIALROLLOFF_GENERATOR(float)
