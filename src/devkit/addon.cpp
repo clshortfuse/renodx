@@ -679,6 +679,9 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
               && !renodx::utils::bitwise::HasFlag(range.visibility, reshade::api::shader_stage::compute)) {
             continue;
           }
+          if (!renodx::utils::bitwise::HasFlag(range.visibility, reshade::api::shader_stage::pixel)) {
+            continue;
+          }
 
           uint32_t base_offset = 0;
           reshade::api::descriptor_heap heap = {0};
@@ -719,7 +722,7 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
 
             auto slot = std::pair<uint32_t, uint32_t>(range.dx_register_index + k, range.dx_register_space);
 
-            if (is_uav) {
+            if (is_uav || range.type == reshade::api::descriptor_type::unordered_access_view) {
               if (resource_view.handle == 0u) {
                 draw_details.uav_binds.erase(slot);
               } else {
