@@ -115,10 +115,12 @@ float3 applyUserTonemap(float3 untonemapped) {
   if (injectedData.toneMapType >= 3.f) {
     outputColor = renodx::color::correct::Hue(outputColor, hueCorrectionColor, injectedData.toneMapHueCorrection);
   }
-  if (injectedData.toneMapType == 4.f) {  // Reinhard+
-    config.highlights *= 1.1f;
-    config.shadows *= 1.05f;
-    config.contrast *= 1.4f;
+  if (injectedData.toneMapType == 4.f) {
+    // Reinhard+
+    // We trust in Voosh defaults
+    config.highlights *= 1.05f;
+    config.shadows *= 1.1f;
+    config.contrast *= 1.35f;
     config.saturation *= 1.25f;
     outputColor = applyReinhardPlus(outputColor, config);
   } else {
