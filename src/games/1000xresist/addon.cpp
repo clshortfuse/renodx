@@ -196,6 +196,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "fxLensFlare",
+        .binding = &shader_injection.fxLensFlare,
+        .default_value = 50.f,
+        .label = "Lens Flare",
+        .section = "Effects",
+        .tint = 0xB88151,
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "fxFilmGrain",
         .binding = &shader_injection.fxFilmGrain,
         .default_value = 50.f,

@@ -27,8 +27,8 @@ void main(
 
   r0.xyzw = t1.Sample(s1_s, v1.xy).xyzw;
   r1.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
-  o0.xyz = r0.xyz * cb0[13].xxx + r1.xyz;
-  // o0.rgb = r1.rgb;  // We override for now
+  float lensFlareMul = injectedData.fxLensFlare / 2;  // It's too high by default, so we increase granularity
+  o0.xyz = (r0.xyz * cb0[13].xxx * lensFlareMul) + r1.xyz;
   o0.w = r1.w;
   return;
 }
