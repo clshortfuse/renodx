@@ -179,6 +179,7 @@ static bool upgrade_resource_views = true;
 static bool prevent_full_screen = true;
 static bool force_borderless = true;
 static bool is_vulkan = false;
+static bool swapchain_proxy_compatibility_mode = true;
 static std::vector<std::uint8_t> swap_chain_proxy_vertex_shader = {};
 static std::vector<std::uint8_t> swap_chain_proxy_pixel_shader = {};
 static int32_t expected_constant_buffer_index = -1;
@@ -690,7 +691,9 @@ static void SetupSwapchainProxy(
       swap_chain_proxy_upgrade_target.view_upgrades = swap_chain_proxy_upgrade_target.VIEW_UPGRADES_R10G10B10A2_UNORM;
     }
     auto buffer = swapchain->get_back_buffer(index);
-    data->resource_clone_enabled.emplace(buffer.handle);
+    if (!swapchain_proxy_compatibility_mode) {
+      data->resource_clone_enabled.emplace(buffer.handle);
+    }
     data->resource_clone_targets[buffer.handle] = &swap_chain_proxy_upgrade_target;
     data->resource_initial_state[buffer.handle] = reshade::api::resource_usage::general;
   }
@@ -730,7 +733,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   auto device_back_buffer_desc = renodx::utils::swapchain::GetBackBufferDesc(device);
   CheckSwapchainSize(swapchain, device_back_buffer_desc);
 
-  if (use_resource_cloning && !swap_chain_proxy_pixel_shader.empty()) {
+  if (!swap_chain_proxy_pixel_shader.empty()) {
     SetupSwapchainProxy(swapchain, device, &data);
   }
 
@@ -2318,19 +2321,33 @@ static void OnPresent(
   auto* device = swapchain->get_device();
   auto& data = device->get_private_data<DeviceData>();
 
+  auto* cmd_list = queue->get_immediate_command_list();
+
   // std::shared_lock data_lock(data.mutex);
 
-  auto clone_pair = data.resource_clones.find(current_back_buffer.handle);
-  if (clone_pair == data.resource_clones.end()) return;
+  reshade::api::resource swapchain_clone;
 
-  reshade::api::resource swapchain_clone = {clone_pair->second};
+  if (swapchain_proxy_compatibility_mode) {
+    auto& handle = data.resource_clones[current_back_buffer.handle];
+    if (handle == 0) {
+      handle = CloneResource(device, &data, current_back_buffer).handle;
+    }
+    if (handle == 0u) return;
+    swapchain_clone = {handle};
+
+    // Copy current swapchain to clone
+    cmd_list->copy_resource(current_back_buffer, swapchain_clone);
+  } else {
+    auto clone_pair = data.resource_clones.find(current_back_buffer.handle);
+    if (clone_pair == data.resource_clones.end()) return;
+
+    swapchain_clone = {clone_pair->second};
+  }
 
   std::stringstream s;
   s << "mods::swapchain::OnPresent(";
   s << reinterpret_cast<void*>(swapchain_clone.handle);
   s << " => " << reinterpret_cast<void*>(current_back_buffer.handle);
-
-  auto* cmd_list = queue->get_immediate_command_list();
 
   if (data.swap_chain_proxy_layout.handle == 0u) {
     reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(No pipeline layout handle. Creating...)");
