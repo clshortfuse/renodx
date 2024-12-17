@@ -51,13 +51,20 @@ float3 ReinhardScalable(float3 color, float channel_max = 1.f, float channel_min
   return mad(color, exposure, channel_min) / mad(color, exposure / channel_max, 1.f - channel_min);
 }
 
-float ExponentialRollOff(float input, float start = 0.20f, float target = 1.f) {
-  float rolloff_size = target - start;
-  float overage = -max(0, input - start);
-  float rolloff_value = 1.f - exp(overage / rolloff_size);
-  float new_overage = mad(rolloff_size, rolloff_value, overage);
-  return input + overage;
-}
+/// Piecewise linear + exponential compression to a target value starting from a specified number.
+/// https://www.ea.com/frostbite/news/high-dynamic-range-color-grading-and-display-in-frostbite
+#define EXPONENTIALROLLOFF_GENERATOR(T)                                                 \
+  T ExponentialRollOff(T input, float rolloff_start = 0.20f, float output_max = 1.0f) { \
+    T rolloff_size = output_max - rolloff_start;                                        \
+    T overage = -max((T)0, input - rolloff_start);                                      \
+    T rolloff_value = (T)1.0f - exp(overage / rolloff_size);                            \
+    T new_overage = mad(rolloff_size, rolloff_value, overage);                          \
+    return input + new_overage;                                                         \
+  }
+
+EXPONENTIALROLLOFF_GENERATOR(float)
+EXPONENTIALROLLOFF_GENERATOR(float3)
+#undef EXPONENTIALROLLOFF_GENERATOR
 
 // Narkowicz
 float3 ACESFittedBT709(float3 color) {
