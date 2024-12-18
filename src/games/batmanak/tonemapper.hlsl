@@ -81,13 +81,9 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lut_texture, SamplerState
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
 
   // hue correction requires per channel tonemap or highlights will have artifacts
-  // per channel tonemap is also more saturated in midtones and shadows 
-  if (injectedData.toneMapPerChannel == 1.f || injectedData.toneMapType == 2) {
-    config.reno_drt_per_channel = true;
-    config.hue_correction_strength = injectedData.toneMapHueCorrection;
-  } else {
-    config.hue_correction_strength = 0.f;
-  }
+  config.reno_drt_per_channel = injectedData.toneMapPerChannel;
+  config.hue_correction_strength = injectedData.toneMapHueCorrection * injectedData.toneMapPerChannel;
+
   config.type = injectedData.toneMapType;
   config.peak_nits = injectedData.toneMapPeakNits;
   config.game_nits = injectedData.toneMapGameNits;
