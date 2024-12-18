@@ -23,6 +23,44 @@ float3 ACES_Inv(float3 x) {
   return (sqrt(-10127. * x * x + 13702. * x + 9.) + 59. * x - 3.) / (502. - 486. * x);  // thanks to https://www.wolframalpha.com/input?i=2.51y%5E2%2B.03y%3Dx%282.43y%5E2%2B.59y%2B.14%29+solve+for+y
 }
 
+float3 ACESFittedBT709(float3 color) {
+  color *= 0.6f;
+  const float a = 2.51f;
+  const float b = 0.03f;
+  const float c = 2.43f;
+  const float d = 0.59f;
+  const float e = 0.14f;
+  return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0f, 1.0f);
+}
+
+float3 ACESFilmRec2020(float3 x) {
+  x *= 0.6;
+  float a = 15.8f;
+  float b = 2.12f;
+  float c = 1.2f;
+  float d = 5.92f;
+  float e = 1.9f;
+  return (x * (a * x + b)) / (x * (c * x + d) + e);
+}
+
+float3 InverseACESFilmRec2020(float3 x) {
+  return (sqrt(16204.f * x * x + 59362.f * x + 2809.f) + 148.f * x - 53.f)
+         / (709.f - 60.f * x);
+}
+
+float3 RgbAcesHdrSrgb(float3 x) {
+  x = (x * (x * (x * (x * 2708.7142 + 6801.1525) + 1079.5474) + 1.1614649) - 0.00004139375) / (x * (x * (x * (x * 983.38937 + 4132.0662) + 2881.6522) + 128.35911) + 1.0);
+  return max(x, 0.0);
+}
+
+float3 InverseRgbAcesHdrSrgb(float3 x) {
+  return ((x * (x * (x * (x * 656274802933915927445504.f + 1647802125695286694117376.f)) + 261555743752080263741440.f)
+           + 281402943271815151616.f)
+          - 10028992768578456.f)
+         / (x * (x * (x * (x * 238258309054553447727104.f + 1001128480485277385621504.f) + 698174702107400110866432.f) + 31099201835329399029760.f)
+            + 242282778646014296064.f);
+}
+
 // 3Dmigoto declarations
 #define cmp -
 
@@ -47,6 +85,38 @@ float3 RenoDRTSmoothClamp(float3 untonemapped) {
   return renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
 }
 
+float UpgradeToneMapRatio(float ap1_color_hdr, float ap1_color_sdr, float ap1_post_process_color) {
+  if (ap1_color_hdr < ap1_color_sdr) {
+    // If substracting (user contrast or paperwhite) scale down instead
+    // Should only apply on mismatched HDR
+    return ap1_color_hdr / ap1_color_sdr;
+  } else {
+    float ap1_delta = ap1_color_hdr - ap1_color_sdr;
+    ap1_delta = max(0, ap1_delta);  // Cleans up NaN
+    const float ap1_new = ap1_post_process_color + ap1_delta;
+
+    const bool ap1_valid = (ap1_post_process_color > 0);  // Cleans up NaN and ignore black
+    return ap1_valid ? (ap1_new / ap1_post_process_color) : 0;
+  }
+}
+float3 UpgradeToneMapPerChannel(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength) {
+  // float ratio = 1.f;
+
+  float3 ap1_hdr = max(0, renodx::color::ap1::from::BT709(color_hdr));
+  float3 ap1_sdr = max(0, renodx::color::ap1::from::BT709(color_sdr));
+  float3 ap1_post_process = max(0, renodx::color::ap1::from::BT709(post_process_color));
+
+  float3 ratio = float3(
+      UpgradeToneMapRatio(ap1_hdr.r, ap1_sdr.r, ap1_post_process.r),
+      UpgradeToneMapRatio(ap1_hdr.g, ap1_sdr.g, ap1_post_process.g),
+      UpgradeToneMapRatio(ap1_hdr.b, ap1_sdr.b, ap1_post_process.b));
+
+  float3 color_scaled = ap1_post_process * ratio;
+  color_scaled = renodx::color::bt709::from::AP1(color_scaled);
+  // color_scaled = renodx::color::correct::Hue(color_scaled, post_process_color);
+  return lerp(color_hdr, color_scaled, post_process_strength);
+}
+
 float3 ToneMap(float3 color) {
   color *= 1.5f;
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
@@ -62,14 +132,13 @@ float3 ToneMap(float3 color) {
 
   config.reno_drt_highlights = 1.00f;
   config.reno_drt_shadows = 1.0f;
-  config.reno_drt_contrast = 1.7f;
-  config.reno_drt_saturation = 1.7f;
-  config.reno_drt_dechroma = 0.8f * 2.0f * injectedData.colorGradeBlowout;
+  config.reno_drt_contrast = 2.0f;
+  config.reno_drt_saturation = 3.0f * .73 * 2.f;
+  config.reno_drt_dechroma = 2.f * 0.472f * 2.f * injectedData.colorGradeBlowout;
   config.reno_drt_flare = 0.f;
-  
+
   config.reno_drt_hue_correction_method =
-      renodx::tonemap::renodrt::config::hue_correction_method::OKLAB;
-      
+      renodx::tonemap::renodrt::config::hue_correction_method::ICTCP;
 
   config.hue_correction_type =
       renodx::tonemap::config::hue_correction_type::CUSTOM;
@@ -85,13 +154,6 @@ float3 ToneMap(float3 color) {
     config.hue_correction_type =
         renodx::tonemap::config::hue_correction_type::INPUT;
   }
-
-  // config.reno_drt_hue_correction_method =
-  //     renodx::tonemap::renodrt::config::hue_correction_method::ICTCP;
-  // config.hue_correction_type =
-  //     renodx::tonemap::config::hue_correction_type::CUSTOM;
-  // config.hue_correction_strength = 0.80f;
-  // config.hue_correction_color = RenoDRTSmoothClamp(color);
 
   color = renodx::tonemap::config::Apply(color, config);
 
@@ -190,8 +252,6 @@ void main(
     r3.xyz = r4.xyz * r0.www + r3.yyy;  // Texel Centering
     r3.xyz = t2.SampleLevel(s1_s, r3.xyz, 0).xyz;
 
-    
-
     float3 t2Sample = r3.xyz;
 
     // Clip input to SDR
@@ -218,9 +278,7 @@ void main(
     float3 clippedSDR = r2.xyz;
     float3 lut1Output = r3.xyz;
 
-
-
-    // choose PQ LUT output or SDR, clipped, shadowed 2.2 based on cb[38].x
+    // choose SDR, clipped, shadowed 2.2 based on cb[38].x OR PQ LUT output
     r2.xyz = r0.www ? r2.xyz : r3.xyz;
     // Unknown use of GetDimensions for resinfo_ from missing reflection info, need manual fix.
     //   resinfo_indexable(texture3d)(float,float,float,float)_uint r3.xyz, l(0), t3.xyzw
@@ -280,15 +338,30 @@ void main(
     float4 t4sample = r1.xyzw;
 
     if (injectedData.toneMapType != 0) {
-      // float3 peak = t3.SampleLevel(s1_s, 1.f, 0).xyz;
-      // float sdr_peak = renodx::color::pq::Decode(renodx::color::y::from::BT2020(peak)) * 10000.f;
-      float sdr_peak = 256.f;
-      color = renodx::color::pq::Decode(t3Sample, sdr_peak);
-      color = renodx::color::bt709::from::BT2020(color);
-      color = ACES_Inv(saturate(color));
-      // color = renodx::color::bt2020::from::BT709(color);
+      float3 color = t1Sample;
+      renodx::tonemap::Config aces_config = renodx::tonemap::config::Create();
+      aces_config.peak_nits = 1000.f;
+      aces_config.game_nits = 100.f;
+      aces_config.mid_gray_nits = 18.f;
+      aces_config.gamma_correction = 0;
+
+      // float3 reference_aces = renodx::color::srgb::DecodeSafe(RgbAcesHdrSrgb(color));
+      float3 reference_aces = renodx::tonemap::config::ApplyACES(t1Sample * 1.5f, aces_config);
+
+      if (injectedData.colorGradeLUTStrength) {
+        float3 graded_aces = renodx::color::bt709::from::BT2020(renodx::color::pq::Decode(t2Sample, 100.f));
+
+        float3 color_graded = UpgradeToneMapPerChannel(t1Sample, reference_aces, graded_aces * 100.f / 256.f, 1);
+
+        float3 lut_color = color_graded;
+        // lut_color = corrected;
+
+        color = lerp(color, lut_color, injectedData.colorGradeLUTStrength);
+      }
       color = ToneMap(color);
+
       color = renodx::color::bt2020::from::BT709(color);
+      color = max(0, color);
 
       r2.xyz = color * injectedData.toneMapGameNits;
     }
@@ -422,19 +495,8 @@ void main(
     r0.x = r0.x * 0.000977517106 + r0.w;
     o0.z = saturate(r0.y ? r0.x : r0.w);
 
-    
-
     o0.w = 1;
 
-    // o0.rgb = t2Sample;
-    // o0.rgb = renodx::tonemap::(t2Sample.rgb, 100.f);
-    // color = t1Sample.rgb * 1.5f;
-    // color = ToneMap(color);
-
-    // float3 peak = t3.SampleLevel(s1_s, 2.f, 0).xyz;
-    // o0.rgb = peak;
-
-    // o0.a = 0;
   } else {
     o0.xyzw = float4(0, 0, 0, 0);
   }

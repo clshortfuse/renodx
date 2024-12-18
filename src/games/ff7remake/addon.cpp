@@ -178,6 +178,15 @@ renodx::utils::settings::Settings settings = {
         },
     },
     new renodx::utils::settings::Setting{
+        .key = "colorGradeLUTStrength",
+        .binding = &shader_injection.colorGradeLUTStrength,
+        .default_value = 100.f,
+        .label = "LUT Strength",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
         .section = "Links",
