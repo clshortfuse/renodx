@@ -56,6 +56,8 @@ cbuffer cb0 : register(b0) {
   r0.w = cos(r0.w);
   r3.xyzw = r0.wwww * r3.xyzw;
   r3.xyzw = frac(r3.xyzw);
+  float3 randomnessFactor = r3.xyz;
+
   if (r0.z != 0) {
     r5.xyz = t1.Load(r2.xyw).xyz;
     r0.w = dot(r5.xy, r5.xy);
@@ -172,7 +174,7 @@ cbuffer cb0 : register(b0) {
 
     r0.xyzw = lerp(lutInputColor, r0, injectedData.colorGradeLUTStrength);
 #if DRAW_TONEMAPPER
-    if (graph_config.draw)
+    if (!graph_config.draw)
 #endif
       if (injectedData.fxFilmGrain) {
         r1.xyzw = float4(1, 1, 1, 1) + -r0.wyzw;
@@ -192,12 +194,24 @@ cbuffer cb0 : register(b0) {
     if (!graph_config.draw)
 #endif
       if (injectedData.fxFilmGrain) {
-        float3 grainedColor = renodx::effects::ApplyFilmGrain(
-            outputColor,
-            screenXY,
-            frac(r3.x),
-            cb0[11].z ? injectedData.fxFilmGrain * 0.03f : 0,
-            1.f);
+        float3 grainedColor;
+        if (injectedData.fxFilmGrainType == 0) {
+          float3 grainInputColor = renodx::color::gamma::EncodeSafe(outputColor, 2.2f);
+          float3 invertedColor = 1.f - saturate(grainInputColor);                            //  r1.xyz = 1.f - saturate(r0.xyz);
+          float3 clampedColor = min(1.f, invertedColor * invertedColor);                     //  r1.xyz = min(1.f, r1.xyz * r1.xyz);  // clamp
+          float3 modulatedStrength = clampedColor * cb0[11].zzz * injectedData.fxFilmGrain;  //  r1.xyz = cb0[11].zzz * r1.xyz * injectedData.fxFilmGrain;
+          float3 grainEffect = mad(modulatedStrength, (randomnessFactor - 0.334f), 1.f);  //  r1.xyz = r1.xyz * (r3.xyz - 0.334f) + 1.f;
+
+          grainedColor = grainEffect * grainInputColor;  //  r0.xyz = r1.xyz * r0.xyz;
+          grainedColor = renodx::color::gamma::DecodeSafe(grainedColor, 2.2f);
+        } else {
+          grainedColor = renodx::effects::ApplyFilmGrain(
+              outputColor,
+              screenXY,
+              frac(r3.x),
+              cb0[11].z ? injectedData.fxFilmGrain * 0.03f : 0,
+              1.f);
+        }
         outputColor = grainedColor;
       }
   }
