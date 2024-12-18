@@ -75,7 +75,7 @@ cbuffer cb0 : register(b0) {
 
   const float3 untonemapped = r1.zwy;
 
-  float3 outputColor = r3.xyz;
+  float3 outputColor = untonemapped;
   if (injectedData.toneMapType == 0) {
     r3.xyzw = r1.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
     r3.xyzw = r1.yyzw * r3.xyzw + float4(0.00200000009, 0.00200000009, 0.00200000009, 0.00200000009);
@@ -102,6 +102,7 @@ cbuffer cb0 : register(b0) {
     r1.xyzw = r0.zzzz * r1.xyzw + r3.xyzx;
 
     r3.xyzw = lerp(lutInputColor, r3.xyzw, injectedData.colorGradeLUTStrength);
+    outputColor = r3.rgb;
 #if DRAW_TONEMAPPER
     if (!graph_config.draw)
 #endif
@@ -117,22 +118,44 @@ cbuffer cb0 : register(b0) {
         r2.xyzw = float4(-0.333999991, -0.333999991, -0.333999991, -0.333999991) + r2.xyzw;
         r2.xyzw = r3.xyzw * r2.xyzw + float4(1, 1, 1, 1);
         r1.xyzw = r2.xyzw * r1.xyzw;
+        outputColor = r1.rgb;
       }
-    r0.rgb = max(0, r0.rgb);
+    outputColor = max(0, outputColor);
 
-    outputColor = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : renodx::color::srgb::Decode(r0.rgb);
+    outputColor = injectedData.toneMapGammaCorrection ? pow(outputColor, 2.2f) : renodx::color::srgb::Decode(outputColor);
   } else {
     outputColor = applyUserToneMap(untonemapped.rgb, t2, s0_s);
 #if DRAW_TONEMAPPER
     if (!graph_config.draw)
 #endif
       if (injectedData.fxFilmGrain) {
-        float3 grainedColor = renodx::effects::ApplyFilmGrain(
-            outputColor,
-            screenXY,
-            frac(r3.x),
-            cb0[11].z ? injectedData.fxFilmGrain * 0.03f : 0,
-            1.f);
+        float3 grainedColor;
+        if (injectedData.fxFilmGrainType == 0) {
+          float3 grainInputColor = renodx::color::gamma::EncodeSafe(outputColor, 2.2f);
+          float3 invertedColor = 1.f - saturate(grainInputColor);                            //  r1.xyz = 1.f - saturate(r0.xyz);
+          float3 clampedColor = min(1.f, invertedColor * invertedColor);                     //  r1.xyz = min(1.f, r1.xyz * r1.xyz);  // clamp
+          float3 modulatedStrength = clampedColor * cb0[11].zzz * injectedData.fxFilmGrain;  //  r1.xyz = cb0[11].zzz * r1.xyz * injectedData.fxFilmGrain;
+
+          r1.z = dot(r2.wyz, float3(
+                                 renodx::random::GELFOND_CONSTANT,
+                                 renodx::random::GELFOND_SCHNEIDER_CONSTANT,
+                                 9.19949627));
+          r1.z = cos(r1.z);
+          r2.xyz = r1.zzz * r2.xyz;
+          float3 randomnessFactor = frac(r2.xyz);
+
+          float3 grainEffect = mad(modulatedStrength, (randomnessFactor - 0.334f), 1.f);  //  r1.xyz = r1.xyz * (r3.xyz - 0.334f) + 1.f;
+
+          grainedColor = grainEffect * grainInputColor;  //  r0.xyz = r1.xyz * r0.xyz;
+          grainedColor = renodx::color::gamma::DecodeSafe(grainedColor, 2.2f);
+        } else {
+          grainedColor = renodx::effects::ApplyFilmGrain(
+              outputColor,
+              screenXY,
+              frac(r3.x),
+              cb0[11].z ? injectedData.fxFilmGrain * 0.03f : 0,
+              1.f);
+        }
         outputColor = grainedColor;
       }
   }
