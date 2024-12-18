@@ -287,7 +287,7 @@ float3 BT709(float3 bt709_color) {
     4.37806224f, -4.24553966f, -0.132522642f
   };
 
-  return mul(lms_to_ictcp, pq::Encode(lms_color, 100.0f));
+  return mul(lms_to_ictcp, pq::Encode(max(0, lms_color), 100.0f));
 }
 }  // namespace from
 }  // namespace ictcp
@@ -836,7 +836,7 @@ float3 ICtCp(float3 col) {
   col = mul(ictcp_to_lms, col);
 
   // 1.0f = 100 nits, 100.0f = 10k nits
-  col = pq::Decode(col, 100.f);
+  col = pq::Decode(max(0, col), 100.f);
   return mul(ICTCP_LMS_TO_BT709_MAT, col);
 }
 
