@@ -116,6 +116,12 @@ float4 main(
   float4 _178 = BloomDirtMaskTexture.Sample(BloomDirtMaskSampler, float2((((((cb0_048z) * (TEXCOORD_3.x)) + (cb0_048x)) * 0.5f) + 0.5f), (0.5f - ((((cb0_048w) * (TEXCOORD_3.y)) + (cb0_048y)) * 0.5f))));
   float _200 = (cb0_047x) * (TEXCOORD_1.z);
   float _201 = (cb0_047x) * (TEXCOORD_1.w);
+  // These two control vingette
+  if (injectedData.toneMapType != 0.f) {
+    _200 *= injectedData.vignetteStrength;
+    _201 *= injectedData.vignetteStrength;
+  }
+
   float _204 = 1.0f / ((dot(float2(_200, _201), float2(_200, _201))) + 1.0f);
   float _207 = ((TEXCOORD_1.x) * 0.009999999776482582f) * (_204 * _204);
   float _217 = exp2(((log2((_207 * ((((UniformBufferConstants_View_140w) * (_154.x)) * (((cb0_045x) * (_178.x)) + 1.0f)) + (((_115 * _47) * (cb0_044x)) * (_127.x)))))) * 0.1593017578125f));

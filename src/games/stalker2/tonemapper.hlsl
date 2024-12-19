@@ -18,7 +18,7 @@ renodx::tonemap::Config getCommonConfig() {
   config.type = injectedData.toneMapType;
   config.peak_nits = injectedData.toneMapPeakNits;
   config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = injectedData.toneMapGammaCorrection;
+  config.gamma_correction = 1.f;
   // We apply these in final shader
   config.exposure = injectedData.colorGradeExposure;
   config.highlights = injectedData.colorGradeHighlights;
@@ -38,10 +38,7 @@ renodx::tonemap::Config getCommonConfig() {
 }
 
 float3 correctGamma(float3 color) {
-  if (injectedData.toneMapGammaCorrection == 1.f) {
-    float correctionStrength = injectedData.toneMapGammaCorrectionStrength == 1.f ? 2.2f : 2.0f;
-    color = renodx::color::correct::GammaSafe(color, false, correctionStrength);
-  }
+  color = renodx::color::correct::GammaSafe(color);
   return color;
 }
 

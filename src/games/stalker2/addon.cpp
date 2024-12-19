@@ -32,6 +32,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x2DAD4682),
     CustomShaderEntry(0x39EF727B),
     CustomShaderEntry(0xFAD704A3),
+    CustomShaderEntry(0x20685247),
 };
 
 ShaderInjectData shader_injection;
@@ -102,28 +103,6 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "toneMapGammaCorrection",
-        .binding = &shader_injection.toneMapGammaCorrection,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1.f,
-        .can_reset = true,
-        .label = "Gamma Correction",
-        .section = "Tone Mapping",
-        .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
-    },
-    new renodx::utils::settings::Setting{
-        .key = "toneMapGammaCorrectionStrength",
-        .binding = &shader_injection.toneMapGammaCorrectionStrength,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .can_reset = true,
-        .label = "Gamma Correction value",
-        .section = "Tone Mapping",
-        .tooltip = "Adjusts the gamma correction's strength",
-        .labels = {"2.0 Gamma", "2.2 Gamma"},
-        .is_enabled = []() { return shader_injection.toneMapGammaCorrection == 1.f; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
         .binding = &shader_injection.colorGradeExposure,
         .default_value = 1.f,
@@ -191,7 +170,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = " - Ingame HDR must be turned ON! \r\n - (Optional) Disable reshade's default add ons (Generic depth & Effect runtime sync) to restore lost performance",
+        .label = " - Ingame HDR must be turned ON! \r\n - Lower contrast if game's too dark. \r\n - (Optional) Disable reshade's default add ons (Generic depth & Effect runtime sync) to restore lost performance",
         .section = "Instructions",
     },
     new renodx::utils::settings::Setting{
@@ -254,8 +233,6 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
   renodx::utils::settings::UpdateSetting("radiationOverlayStrength", 100.f);
   renodx::utils::settings::UpdateSetting("vignetteStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
-  renodx::utils::settings::UpdateSetting("toneMapGammaCorrectionStrength", 1.f);
   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);

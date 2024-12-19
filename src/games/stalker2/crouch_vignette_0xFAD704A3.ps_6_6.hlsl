@@ -62,7 +62,7 @@ float4 main(
   post_srgb = SV_Target.rgb;
 
   if (injectedData.toneMapType > 0.f) {
-    output = upgradePostProcess(tonemappedRender, post_srgb, injectedData.vignetteStrength);
+    output = upgradePostProcess(tonemappedRender, post_srgb);
     return float4(output, 0.f);
   }
   SV_Target.w = 0.0f;
