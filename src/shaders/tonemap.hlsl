@@ -11,11 +11,15 @@ namespace renodx {
 namespace tonemap {
 
 float ApplyCurve(float x, float a, float b, float c, float d, float e, float f) {
-  return ((x * (a * x + c * b) + d * e) / (x * (a * x + b) + d * f)) - e / f;
+  float numerator = mad(x, mad(a, x, c * b), d * e);  // x * (a * x + c * b) + d * e
+  float denominator = mad(x, mad(a, x, b), d * f);    // x * (a * x + b) + d * f
+  return (numerator / denominator) - (e / f);
 }
 
 float3 ApplyCurve(float3 x, float a, float b, float c, float d, float e, float f) {
-  return ((x * (a * x + c * b) + d * e) / (x * (a * x + b) + d * f)) - e / f;
+  float3 numerator = mad(x, mad(a, x, c * b), d * e);  // x * (a * x + c * b) + d * e
+  float3 denominator = mad(x, mad(a, x, b), d * f);    // x * (a * x + b) + d * f
+  return (numerator / denominator) - (e / f);
 }
 
 // https://www.glowybits.com/blog/2016/12/21/ifl_iss_hdr_1/
