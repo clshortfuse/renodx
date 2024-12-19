@@ -31,19 +31,23 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   float vanillaMidGray = (0.18 / Uncharted2Inverse(0.18f)) * 0.18;
   float3 vanillaColor = renodx::tonemap::uncharted2::BT709(untonemapped, 2.2f);
 
+  renodx::tonemap::Config config = renodx::tonemap::config::Create();
+
   float renoDRTContrast = 1.12f;
   float renoDRTFlare = lerp(0, 0.10, pow(injectedData.colorGradeFlare, 10.f));
   float renoDRTShadows = 1.f;
   float renoDRTDechroma = injectedData.colorGradeBlowout;
-  float renoDRTSaturation = injectedData.toneMapPerChannel ? 1.14 : 1.05f;
+  float renoDRTSaturation;
   float renoDRTHighlights = 1.2f;
-
-  renodx::tonemap::Config config = renodx::tonemap::config::Create();
-
-  // hue correction requires per channel tonemap or highlights will have artifacts
-  config.reno_drt_per_channel = injectedData.toneMapPerChannel;
-  config.hue_correction_strength = injectedData.toneMapHueCorrection * injectedData.toneMapPerChannel;
-
+  if (injectedData.toneMapPerChannel == 1.f) {
+    renoDRTSaturation = 1.14f;
+    // hue correction requires per channel display mapping or highlights will have artifacts
+    config.hue_correction_strength = injectedData.toneMapHueCorrection;
+    config.reno_drt_per_channel = true;
+  } else {
+    renoDRTSaturation = 1.05f;
+    config.hue_correction_strength = 0.f;
+  }
   config.type = injectedData.toneMapType;
   config.peak_nits = injectedData.toneMapPeakNits;
   config.game_nits = injectedData.toneMapGameNits;
@@ -79,12 +83,19 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
           16.f),
       lutTexture);
 
-  if (injectedData.toneMapBlend == 1.f) {
+  if (injectedData.toneMapBlend == 1.f && injectedData.toneMapType != 1.f) {
     float3 vanillaLUTInputColor = min(1.f, pow(vanillaColor, 1.f / 2.2f));
     float3 vanillaLUT = renodx::lut::Sample(lutTexture, lutSampler, vanillaLUTInputColor).rgb;
     vanillaLUT = pow(vanillaLUT, 2.2f);
 
     vanillaColor = lerp(vanillaColor, vanillaLUT, injectedData.colorGradeLUTStrength);
+    vanillaColor = renodx::color::grade::UserColorGrading(
+        vanillaColor,
+        injectedData.colorGradeExposure,
+        1.f,
+        injectedData.colorGradeShadows,
+        injectedData.colorGradeContrast,
+        injectedData.colorGradeSaturation);
 
     outputColor = lerp(vanillaColor, outputColor, saturate(vanillaColor));
   }
