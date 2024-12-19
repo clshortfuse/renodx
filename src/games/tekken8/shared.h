@@ -21,22 +21,22 @@ struct ShaderInjectData {
   float colorGradeLUTStrength;
 };
 #ifndef __cplusplus
-/* cbuffer injectedBuffer : register(b0, space50) {
+cbuffer injectedBuffer : register(b0, space50) {
   ShaderInjectData injectedData : packoffset(c0);
-} */
-static const ShaderInjectData injectedData = {
+}
+/* static const ShaderInjectData injectedData = {
     3.f,    // toneMapType
     800.f,  // toneMapPeakNits
     100.f,  // toneMapGameNits
     300.f,  // toneMapUINits
-    1.f,    // colorGradeExposure
+    2.f,    // colorGradeExposure
     1.f,    // colorGradeHighlights
     1.f,    // colorGradeShadows
     1.f,    // colorGradeContrast
     1.f,    // colorGradeSaturation
     0.5f,   // colorGradeBlowout
     1.f,    // colorGradeLUTStrength
-};
+}; */
 #endif
 
 #endif  // SRC_TEKKEN8_SHARED_H_
