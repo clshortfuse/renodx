@@ -37,7 +37,7 @@ renodx::tonemap::Config getCommonConfig() {
 }
 
 float3 correctGamma(float3 color) {
-  // color = renodx::color::correct::GammaSafe(color);
+  color = renodx::color::correct::GammaSafe(color);
   return color;
 }
 
