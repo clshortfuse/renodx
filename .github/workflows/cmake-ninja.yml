@@ -29,6 +29,9 @@ jobs:
       - name: Build (x64)
         run: cmake --build --preset ninja-x64-release --verbose
 
+      - name: Build RelWithDebInfo (x64)
+        run: cmake --build --preset ninja-x64-relwithdebinfo --verbose
+
       - name: Configure build for x86
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -39,6 +42,9 @@ jobs:
 
       - name: Build (x86)
         run: cmake --build --preset ninja-x86-release --verbose
+
+      - name: Build RelWithDebInfo (x86)
+        run: cmake --build --preset ninja-x86-relwithdebinfo --verbose
 
       - name: Prepare Web Listing
         run: md www
@@ -51,6 +57,15 @@ jobs:
 
       - name: Copy Binaries (Tools)
         run: copy build\Release\*.exe www\
+
+      - name: Prepare Debug Web Listing
+        run: md www\debug
+
+      - name: Copy RelWithDebInfo Binaries (x64)
+        run: copy build\RelWithDebInfo\*.addon64 www\debug\
+
+      - name: Copy RelWithDebInfo Binaries (x86)
+        run: copy build32\RelWithDebInfo\*.addon32 www\debug\
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
