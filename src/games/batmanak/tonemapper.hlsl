@@ -37,17 +37,11 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   float renoDRTFlare = lerp(0, 0.10, pow(injectedData.colorGradeFlare, 10.f));
   float renoDRTShadows = 1.f;
   float renoDRTDechroma = injectedData.colorGradeBlowout;
-  float renoDRTSaturation;
+  float renoDRTSaturation = 1.05f;
   float renoDRTHighlights = 1.2f;
-  if (injectedData.toneMapPerChannel == 1.f) {
-    renoDRTSaturation = 1.14f;
-    // hue correction requires per channel display mapping or highlights will have artifacts
-    config.hue_correction_strength = injectedData.toneMapHueCorrection;
-    config.reno_drt_per_channel = true;
-  } else {
-    renoDRTSaturation = 1.05f;
-    config.hue_correction_strength = 0.f;
-  }
+
+  config.hue_correction_strength = injectedData.toneMapHueCorrection * injectedData.toneMapPerChannel;
+  config.reno_drt_per_channel = injectedData.toneMapPerChannel;
   config.type = injectedData.toneMapType;
   config.peak_nits = injectedData.toneMapPeakNits;
   config.game_nits = injectedData.toneMapGameNits;
@@ -83,7 +77,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lutTexture, SamplerState 
           16.f),
       lutTexture);
 
-  if (injectedData.toneMapBlend == 1.f && injectedData.toneMapType != 1.f) {
+  if (injectedData.toneMapBlend > 0.f && injectedData.toneMapType != 1.f) {
     float3 vanillaLUTInputColor = min(1.f, pow(vanillaColor, 1.f / 2.2f));
     float3 vanillaLUT = renodx::lut::Sample(lutTexture, lutSampler, vanillaLUTInputColor).rgb;
     vanillaLUT = pow(vanillaLUT, 2.2f);
