@@ -77,15 +77,9 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lut_texture, SamplerState
     renoDRTSaturation = 1.f;
   }
   float renoDRTHighlights = 1.2f;
-  if (injectedData.toneMapPerChannel == 1.f) {
-    renoDRTSaturation = 1.14f;
-    // hue correction requires per channel display mapping or highlights will have artifacts
-    config.hue_correction_strength = injectedData.toneMapHueCorrection;
-    config.reno_drt_per_channel = true;
-  } else {
-    renoDRTSaturation = 1.05f;
-    config.hue_correction_strength = 0.f;
-  }
+
+  config.hue_correction_strength = injectedData.toneMapHueCorrection * injectedData.toneMapPerChannel;
+  config.reno_drt_per_channel = injectedData.toneMapPerChannel;
   config.type = injectedData.toneMapType;
   config.peak_nits = injectedData.toneMapPeakNits;
   config.game_nits = injectedData.toneMapGameNits;
