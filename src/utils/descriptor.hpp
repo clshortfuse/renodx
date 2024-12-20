@@ -14,6 +14,7 @@
 
 #include <shared_mutex>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 
@@ -44,6 +45,7 @@ struct __declspec(uuid("018fa2c9-7a8b-76dc-bc84-87c53574223f")) DeviceData {
                   reshade::api::resource_view,
                   reshade::api::buffer_range>>>>
       heaps;
+  std::unordered_map<uint64_t, std::unordered_set<uint32_t>> resource_view_heap_locations;
 
   std::shared_mutex mutex;
 };
@@ -127,6 +129,7 @@ static bool OnUpdateDescriptorTables(
 #endif
 
     auto& heap_data = data.heaps[heap.handle];
+    auto& heap_set = data.resource_view_heap_locations[heap.handle];
 
     auto total_size = offset + update.count;
     if (total_size > heap_data.size()) {
@@ -163,6 +166,7 @@ static bool OnUpdateDescriptorTables(
           break;
         case reshade::api::descriptor_type::sampler_with_resource_view:
           descriptor.second = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[k];
+
 #ifdef DEBUG_LEVEL_2
           s << reinterpret_cast<void*>(static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[k].view.handle);
 #endif
@@ -174,6 +178,7 @@ static bool OnUpdateDescriptorTables(
           // case reshade::api::descriptor_type::shader_resource_view:
           // case reshade::api::descriptor_type::unordered_access_view:
           descriptor.second = static_cast<const reshade::api::resource_view*>(update.descriptors)[k];
+          heap_set.emplace(offset + k);
 #ifdef DEBUG_LEVEL_2
           s << reinterpret_cast<void*>(static_cast<const reshade::api::resource_view*>(update.descriptors)[k].handle);
 #endif
@@ -251,7 +256,9 @@ static bool OnCopyDescriptorTables(
 #endif
 
     auto& src_pool_data = data.heaps[src_heap.handle];
+    auto& src_known = data.resource_view_heap_locations[src_heap.handle];
     auto& dst_pool_data = data.heaps[dst_heap.handle];
+    auto& dest_known = data.resource_view_heap_locations[dst_heap.handle];
 
     auto min_source_size = src_offset + copy.count;
     assert(min_source_size <= src_pool_data.size());
@@ -271,12 +278,15 @@ static bool OnCopyDescriptorTables(
 
     for (uint32_t k = 0; k < copy.count; ++k) {
       dst_pool_data[dst_offset + k] = src_pool_data[src_offset + k];
+      if (src_known.contains(src_offset + k)) {
+        dest_known.emplace(dst_offset + k);
+      }
     }
   }
   return false;
 }
 
-void OnBindDescriptorTables(
+static void OnBindDescriptorTables(
     reshade::api::command_list* cmd_list,
     reshade::api::shader_stage stages,
     reshade::api::pipeline_layout layout,
@@ -289,13 +299,13 @@ void OnBindDescriptorTables(
 
   /// auto& descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
 
+  auto layout_data_pair = layout_data.pipeline_layout_data.find(layout.handle);
+  assert(layout_data_pair != layout_data.pipeline_layout_data.end());
+
+  auto& info = layout_data_pair->second;
   for (uint32_t i = 0; i < count; ++i) {
     const auto layout_index = first + i;
 
-    auto layout_data_pair = layout_data.pipeline_layout_data.find(layout.handle);
-    assert(layout_data_pair != layout_data.pipeline_layout_data.end());
-
-    auto& info = layout_data_pair->second;
     assert(layout_index < info.params.size());
     const auto& param = info.params.at(layout_index);
     assert(param.type == reshade::api::pipeline_layout_param_type::descriptor_table

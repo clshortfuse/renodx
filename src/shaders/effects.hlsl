@@ -32,6 +32,15 @@ float ComputeFilmGraininess(float density) {
   float bof_d_over_c = 0.880f - (0.736f * density) - (0.003f * pow(density, 7.6f));
   return pow(10.f, bof_d_over_c);
 }
+
+// Bartleson
+// https://www.imaging.org/common/uploaded%20files/pdfs/Papers/2003/PICS-0-287/8583.pdf
+float3 ComputeFilmGraininess(float3 density) {
+  density = max(0, density);
+  float3 bof_d_over_c = 0.880f - (0.736f * density) - (0.003f * pow(density, 7.6f));
+  return pow(10.f, bof_d_over_c);
+}
+
 }  // namespace internal
 
 float3 ApplyFilmGrain(float3 color, float2 xy, float seed, float strength, float reference_white = 1.f, bool debug = false) {
@@ -68,6 +77,54 @@ float3 ApplyFilmGrain(float3 color, float2 xy, float seed, float strength, float
     // Output Visualization
     output_color = abs(y_change);
   }
+
+  return output_color;
+}
+
+float3 ApplyFilmGrainColored(float3 color, float2 xy, float3 seed, float strength, float reference_white = 1.f, bool debug = false) {
+  const float3 random_numbers = float3(
+    renodx::random::Generate(xy + seed.r),
+    renodx::random::Generate(xy + seed.g),
+    renodx::random::Generate(xy + seed.b)
+  );
+
+  // Film grain is based on film density
+  // Film works in negative, meaning black has no density
+  // The greater the film density (lighter), more perceived grain
+  // Simplified, grain scales with Y
+
+  // Scaling is not not linear
+
+  float3 ap1_color = renodx::color::ap1::from::BT709(color);
+  ap1_color = max(0, ap1_color);
+  
+  // float color_y = renodx::color::y::from::AP1(color);
+
+  const float3 adjusted_color = ap1_color * (1.f / reference_white);
+
+  // Emulate density from a chosen film stock (Removed)
+  // float density = computeFilmDensity(adjustedColorY);
+
+  // Ideal film density matches 0-3. Skip emulating film stock
+  // https://www.mr-alvandi.com/technique/measuring-film-speed.html
+  const float3 density = adjusted_color * 3.f;
+
+
+  float3 graininess = internal::ComputeFilmGraininess(density);
+  // Graininess of all 3 layers (CMY)
+
+  float3 random_factor = (random_numbers * 2.f) - 1.f;
+  float boost = 1.667f;  // Boost max to 0.05
+
+  float3 change = random_factor * graininess * strength * boost;
+  float3 output_color = ap1_color * (1.f + change);
+
+  if (debug) {
+    // Output Visualization
+    output_color = abs(change);
+  }
+
+  output_color = renodx::color::bt709::from::AP1(output_color);
 
   return output_color;
 }

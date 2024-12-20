@@ -1,5 +1,6 @@
-
+#include "./common.hlsl"
 #include "./shared.h"
+
 
 Texture3D<float4> t0 : register(t0);
 Texture2D<float4> t1 : register(t1);
@@ -19,104 +20,8 @@ cbuffer cb1 : register(b1) {
   float4 cb1[140];
 }
 
-float3 ACES_Inv(float3 x) {
-  return (sqrt(-10127. * x * x + 13702. * x + 9.) + 59. * x - 3.) / (502. - 486. * x);  // thanks to https://www.wolframalpha.com/input?i=2.51y%5E2%2B.03y%3Dx%282.43y%5E2%2B.59y%2B.14%29+solve+for+y
-}
-
 // 3Dmigoto declarations
 #define cmp -
-
-float3 RenoDRTSmoothClamp(float3 untonemapped) {
-  renodx::tonemap::renodrt::Config renodrt_config =
-      renodx::tonemap::renodrt::config::Create();
-  renodrt_config.nits_peak = 100.f;
-  renodrt_config.mid_gray_value = 0.18f;
-  renodrt_config.mid_gray_nits = 18.f;
-  renodrt_config.exposure = 1.f;
-  renodrt_config.highlights = 1.f;
-  renodrt_config.shadows = 1.f;
-  renodrt_config.contrast = 1.05f;
-  renodrt_config.saturation = 1.05f;
-  renodrt_config.dechroma = 0.f;
-  renodrt_config.flare = 0.f;
-  renodrt_config.hue_correction_strength = 0.f;
-  renodrt_config.tone_map_method =
-      renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  renodrt_config.working_color_space = 2u;
-
-  return renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
-}
-
-float3 ToneMap(float3 color) {
-  color *= 1.5f;
-  renodx::tonemap::Config config = renodx::tonemap::config::Create();
-  config.type = injectedData.toneMapType;
-  config.peak_nits = injectedData.toneMapPeakNits;
-  config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = 0;
-  config.exposure = injectedData.colorGradeExposure;
-  config.highlights = injectedData.colorGradeHighlights;
-  config.shadows = injectedData.colorGradeShadows;
-  config.contrast = injectedData.colorGradeContrast;
-  config.saturation = injectedData.colorGradeSaturation;
-
-  config.reno_drt_highlights = 1.00f;
-  config.reno_drt_shadows = 1.0f;
-  config.reno_drt_contrast = 1.7f;
-  config.reno_drt_saturation = 1.7f;
-  config.reno_drt_dechroma = 0.8f * 2.0f * injectedData.colorGradeBlowout;
-  config.reno_drt_flare = 0.f;
-  
-  config.reno_drt_hue_correction_method =
-      renodx::tonemap::renodrt::config::hue_correction_method::OKLAB;
-      
-
-  config.hue_correction_type =
-      renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_strength = injectedData.toneMapHueCorrection;
-  config.hue_correction_color = color;
-  if (injectedData.toneMapHueCorrectionMethod == 1.f) {
-    config.hue_correction_color = saturate(color);
-  } else if (injectedData.toneMapHueCorrectionMethod == 2.f) {
-    config.hue_correction_color = renodx::tonemap::uncharted2::BT709(color * 2.f);
-  } else if (injectedData.toneMapHueCorrectionMethod == 3.f) {
-    config.hue_correction_color = RenoDRTSmoothClamp(color);
-  } else {
-    config.hue_correction_type =
-        renodx::tonemap::config::hue_correction_type::INPUT;
-  }
-
-  // config.reno_drt_hue_correction_method =
-  //     renodx::tonemap::renodrt::config::hue_correction_method::ICTCP;
-  // config.hue_correction_type =
-  //     renodx::tonemap::config::hue_correction_type::CUSTOM;
-  // config.hue_correction_strength = 0.80f;
-  // config.hue_correction_color = RenoDRTSmoothClamp(color);
-
-  color = renodx::tonemap::config::Apply(color, config);
-
-  if (injectedData.colorGradeColorSpace == 1.f) {
-    // BT709 D65 => BT709 D93
-    color = mul(float3x3(0.941922724f, -0.0795196890f, -0.0160709824f,
-                         0.00374091602f, 1.01361334f, -0.00624059885f,
-                         0.00760519271f, 0.0278747007f, 1.30704438f),
-                color);
-  } else if (injectedData.colorGradeColorSpace == 2.f) {
-    // BT.709 D65 => BT.601 (NTSC-U)
-    color = mul(float3x3(0.939542055f, 0.0501813553f, 0.0102765792f,
-                         0.0177722238f, 0.965792834f, 0.0164349135f,
-                         -0.00162159989f, -0.00436974968f, 1.00599133f),
-                color);
-  } else if (injectedData.colorGradeColorSpace == 3.f) {
-    // BT.709 D65 => ARIB-TR-B09 D93 (NTSC-J)
-    color = mul(float3x3(0.871554791f, -0.161164566f, -0.0151899587f,
-                         0.0417598634f, 0.980491757f, -0.00258531118f,
-                         0.00544220115f, 0.0462860465f, 1.73763155f),
-                color);
-  }
-
-  return color;
-}
 
 void main(
     float4 v0: SV_POSITION0,
@@ -190,8 +95,6 @@ void main(
     r3.xyz = r4.xyz * r0.www + r3.yyy;  // Texel Centering
     r3.xyz = t2.SampleLevel(s1_s, r3.xyz, 0).xyz;
 
-    
-
     float3 t2Sample = r3.xyz;
 
     // Clip input to SDR
@@ -218,9 +121,7 @@ void main(
     float3 clippedSDR = r2.xyz;
     float3 lut1Output = r3.xyz;
 
-
-
-    // choose PQ LUT output or SDR, clipped, shadowed 2.2 based on cb[38].x
+    // choose SDR, clipped, shadowed 2.2 based on cb[38].x OR PQ LUT output
     r2.xyz = r0.www ? r2.xyz : r3.xyz;
     // Unknown use of GetDimensions for resinfo_ from missing reflection info, need manual fix.
     //   resinfo_indexable(texture3d)(float,float,float,float)_uint r3.xyz, l(0), t3.xyzw
@@ -243,6 +144,7 @@ void main(
 
     // LUT2 PQ output => Linear
     r3.xyz = saturate(r3.xyz);
+
     r3.xyz = log2(r3.xyz);
     r3.xyz = float3(0.0126833133, 0.0126833133, 0.0126833133) * r3.xyz;
     r3.xyz = exp2(r3.xyz);
@@ -276,23 +178,37 @@ void main(
     // cb0[26].z = HDR Luminance / 10
 
     r2.xyz = cb0[26].zzz * r2.xyz + r3.xyz;
-    r1.xyzw = t4.SampleLevel(s2_s, r1.xy, 0).xyzw;
-    float4 t4sample = r1.xyzw;
 
-    if (injectedData.toneMapType != 0) {
-      // float3 peak = t3.SampleLevel(s1_s, 1.f, 0).xyz;
-      // float sdr_peak = renodx::color::pq::Decode(renodx::color::y::from::BT2020(peak)) * 10000.f;
-      float sdr_peak = 256.f;
-      color = renodx::color::pq::Decode(t3Sample, sdr_peak);
-      color = renodx::color::bt709::from::BT2020(color);
-      color = ACES_Inv(saturate(color));
-      // color = renodx::color::bt2020::from::BT709(color);
-      color = ToneMap(color);
-      color = renodx::color::bt2020::from::BT709(color);
+    float3 graded_aces = r2.xyz;
 
-      r2.xyz = color * injectedData.toneMapGameNits;
+    if (injectedData.tone_map_type != 0) {
+      float3 color = t1Sample * 1.5f;
+
+      if (injectedData.color_grade_lut_strength != 0) {
+        renodx::tonemap::Config aces_config = renodx::tonemap::config::Create();
+        aces_config.peak_nits = 1000.f;
+        aces_config.game_nits = 100.f;
+        aces_config.mid_gray_nits = 18.f;
+        aces_config.gamma_correction = 0;
+        // float3 reference_aces = renodx::color::srgb::DecodeSafe(RgbAcesHdrSrgb(color));
+        float3 reference_aces = renodx::tonemap::config::ApplyACES(color, aces_config);
+
+        graded_aces = renodx::color::bt709::from::BT2020(r2.xyz / (250.f));
+
+        float3 color_graded = UpgradeToneMapPerChannel(color, reference_aces, graded_aces, 1);
+
+        float3 lut_color = color_graded;
+        // lut_color = corrected;
+
+        color = lerp(color, lut_color, injectedData.color_grade_lut_strength);
+      }
+      color = ToneMap(color, v0.xy / cb0[34].zw);
+
+      r2.xyz = color;
     }
 
+    r1.xyzw = t4.SampleLevel(s2_s, r1.xy, 0).xyzw;
+    float4 t4sample = r1.xyzw;
     // BT2020 Y
     r0.w = dot(r2.xyz, float3(0.262699991, 0.677999973, 0.0593000017));
 
@@ -302,18 +218,27 @@ void main(
       r2.rgb = lerp(r0.w, r2.rgb, cb0[25].x);  // blend to grayscale
     }
 
-    // cb0[26].w = HDR Brightness
-    r3.xyz = cb0[26].www * r2.xyz;
+    {
+      // cb0[26].w = HDR Brightness
+      // Force to 1.f
+      // r3.xyz = cb0[26].www * r2.xyz;
+      r3.xyz = 1.f * r2.xyz;
+    }
+
     r3.xyz = cmp(float3(0, 0, 0) < r3.xyz);
     r3.xyz = r3.xyz ? cb0[26].xxx : 0;
 
-    // scale up by cb0[26].www
-    // if not 0, add cb0[26].xxx (black floor?)
-    r2.xyz = r2.xyz * cb0[26].www + r3.xyz;
+    {
+      // scale up by cb0[26].www
+      // if not 0, add cb0[26].xxx (black floor?)
+      // r2.xyz = r2.xyz * cb0[26].www + r3.xyz;
+      r2.xyz = r2.xyz * cb0[26].www + 0;
+    }
 
     r0.w = cb0[25].y * r1.w;  // multiply UI alpha
 
-    r1.w = rcp(cb0[26].y);  // relative to ?
+    // r1.w = rcp(cb0[26].y);
+    r1.w = rcp(injectedData.tone_map_ui_nits);
 
     r3.xyz = r2.xyz * r1.www + float3(1, 1, 1);
 
@@ -351,90 +276,88 @@ void main(
     r3.z = dot(float3(0.0163914002, 0.0880132988, 0.895595312), r1.xyz);
 
     // Invert back
-    r1.xyz = cb0[26].yyy * r3.xyz;
+    // r1.xyz = cb0[26].yyy * r3.xyz;
+    r1.xyz = injectedData.tone_map_ui_nits * r3.xyz;
     r1.xyz = r2.xyz * r0.www + r1.xyz;
 
     // Encode to PQ
-    r1.xyz = float3(9.99999975e-05, 9.99999975e-05, 9.99999975e-05) * r1.xyz;
-    r1.xyz = max(float3(0, 0, 0), r1.xyz);
-    r1.xyz = log2(r1.xyz);
-    r1.xyz = float3(0.159301758, 0.159301758, 0.159301758) * r1.xyz;
-    r1.xyz = exp2(r1.xyz);
-    r2.xyzw = r1.xxyy * float4(18.8515625, 18.6875, 18.8515625, 18.6875) + float4(0.8359375, 1, 0.8359375, 1);
-    r1.xy = rcp(r2.yw);
-    r1.xy = r2.xz * r1.xy;
-    r1.xy = log2(r1.xy);
-    r1.xy = float2(78.84375, 78.84375) * r1.xy;
-    r1.xy = exp2(r1.xy);
-    r1.xy = min(float2(1, 1), r1.xy);
+    if (false) {
+      r1.xyz = float3(9.99999975e-05, 9.99999975e-05, 9.99999975e-05) * r1.xyz;
+      r1.xyz = max(float3(0, 0, 0), r1.xyz);
+      r1.xyz = log2(r1.xyz);
+      r1.xyz = float3(0.159301758, 0.159301758, 0.159301758) * r1.xyz;
+      r1.xyz = exp2(r1.xyz);
+      r2.xyzw = r1.xxyy * float4(18.8515625, 18.6875, 18.8515625, 18.6875) + float4(0.8359375, 1, 0.8359375, 1);
+      r1.xy = rcp(r2.yw);
+      r1.xy = r2.xz * r1.xy;
+      r1.xy = log2(r1.xy);
+      r1.xy = float2(78.84375, 78.84375) * r1.xy;
+      r1.xy = exp2(r1.xy);
+      r1.xy = min(float2(1, 1), r1.xy);
 
-    r1.zw = r1.zz * float2(18.8515625, 18.6875) + float2(0.8359375, 1);
-    r0.w = rcp(r1.w);
-    r0.w = r1.z * r0.w;
-    r0.w = log2(r0.w);
-    r0.w = 78.84375 * r0.w;
-    r0.w = exp2(r0.w);
-    r0.w = min(1, r0.w);
+      r1.zw = r1.zz * float2(18.8515625, 18.6875) + float2(0.8359375, 1);
+      r0.w = rcp(r1.w);
+      r0.w = r1.z * r0.w;
+      r0.w = log2(r0.w);
+      r0.w = 78.84375 * r0.w;
+      r0.w = exp2(r0.w);
+      r0.w = min(1, r0.w);
+    }
 
-    color = float3(r1.x, r1.y, r0.w);
+    float3 encoded_color = renodx::color::pq::Encode(r1.xyz, 1.f);
 
-    // add grain/noise
-    r0.z = asuint(cb1[139].z) << 3;
-    r2.xyz = (int3)r0.xyz & int3(63, 63, 63);
-    r2.w = 0;
-    r0.x = t0.Load(r2.xyzw).x;
-    float t0Sample = r0.x;
-    r0.x = r0.x * 2 + -1;
+    r1.xy = encoded_color.rg;
+    r0.w = encoded_color.b;
 
-    // r0.x = r0.x * 2 + -1;
-    // r0.y = cmp(0 < r0.x);
-    // r0.z = cmp(r0.x < 0);
-    // r0.y = (int)-r0.y + (int)r0.z;
-    // r0.y = (int)r0.y;
-    // r0.x = 1 + -abs(r0.x);
+    if (injectedData.fx_film_grain != 0) {
+      o0.rgb = float3(r1.xy, r0.w);
+    } else {
+      r0.z = asuint(cb1[139].z) << 3;
+      r2.xyz = (int3)r0.xyz & int3(63, 63, 63);
+      r2.w = 0;
+      r0.x = t0.Load(r2.xyzw).x;
+      float t0Sample = r0.x;
+      r0.x = r0.x * 2 + -1;
 
-    // Perform the initial comparisons
-    bool condition1 = (0.0 < r0.x);  // lt r0.y, l(0.000000), r0.x
-    bool condition2 = (r0.x < 0.0);  // lt r0.z, r0.x, l(0.000000)
+      // r0.x = r0.x * 2 + -1;
+      // r0.y = cmp(0 < r0.x);
+      // r0.z = cmp(r0.x < 0);
+      // r0.y = (int)-r0.y + (int)r0.z;
+      // r0.y = (int)r0.y;
+      // r0.x = 1 + -abs(r0.x);
 
-    // Calculate y based on the conditions
-    int y = (condition1 ? 1 : 0) - (condition2 ? 1 : 0);  // iadd r0.y, -r0.y, r0.z
+      // Perform the initial comparisons
+      bool condition1 = (0.0 < r0.x);  // lt r0.y, l(0.000000), r0.x
+      bool condition2 = (r0.x < 0.0);  // lt r0.z, r0.x, l(0.000000)
 
-    // Convert y to a float
-    float result = float(y);  // itof r0.y, r0.y
+      // Calculate y based on the conditions
+      int y = (condition1 ? 1 : 0) - (condition2 ? 1 : 0);  // iadd r0.y, -r0.y, r0.z
 
-    r0.y = result;
+      // Convert y to a float
+      float result = float(y);  // itof r0.y, r0.y
 
-    r0.x = 1 + -abs(r0.x);
-    r0.x = sqrt(r0.x);
-    r0.x = 1 + -r0.x;
-    r0.x = r0.y * r0.x;
+      r0.y = result;
 
-    r0.yz = r1.xy * float2(2, 2) + float2(-1, -1);
-    r0.yz = float2(-0.998044968, -0.998044968) + abs(r0.yz);
-    r0.yz = cmp(r0.yz < float2(0, 0));
-    r1.zw = r0.xx * float2(0.000977517106, 0.000977517106) + r1.xy;
-    o0.xy = saturate(r0.yz ? r1.zw : r1.xy);
+      r0.x = 1 + -abs(r0.x);
+      r0.x = sqrt(r0.x);
+      r0.x = 1 + -r0.x;
+      r0.x = r0.y * r0.x;
 
-    r0.y = r0.w * 2 + -1;
-    r0.y = -0.998044968 + abs(r0.y);
-    r0.y = cmp(r0.y < 0);
-    r0.x = r0.x * 0.000977517106 + r0.w;
-    o0.z = saturate(r0.y ? r0.x : r0.w);
+      r0.yz = r1.xy * float2(2, 2) + float2(-1, -1);
+      r0.yz = float2(-0.998044968, -0.998044968) + abs(r0.yz);
+      r0.yz = cmp(r0.yz < float2(0, 0));
+      r1.zw = r0.xx * float2(0.000977517106, 0.000977517106) + r1.xy;
+      o0.xy = saturate(r0.yz ? r1.zw : r1.xy);
 
-    
+      r0.y = r0.w * 2 + -1;
+      r0.y = -0.998044968 + abs(r0.y);
+      r0.y = cmp(r0.y < 0);
+      r0.x = r0.x * 0.000977517106 + r0.w;
+      o0.z = saturate(r0.y ? r0.x : r0.w);
+    }
 
     o0.w = 1;
 
-    // o0.rgb = t2Sample;
-    // o0.rgb = renodx::tonemap::(t2Sample.rgb, 100.f);
-    // color = t1Sample.rgb * 1.5f;
-    // color = ToneMap(color);
-
-    // float3 peak = t3.SampleLevel(s1_s, 2.f, 0).xyz;
-    // o0.rgb = peak;
-
-    // o0.a = 0;
   } else {
     o0.xyzw = float4(0, 0, 0, 0);
   }

@@ -26,6 +26,7 @@ struct Config {
   uint hue_correction_type;
   uint working_color_space;
   bool per_channel;
+  float blowout;
 };
 namespace config {
 
@@ -62,7 +63,8 @@ Config Create(
     uint tone_map_method = config::tone_map_method::DANIELE,
     uint hue_correction_type = config::hue_correction_type::INPUT,
     uint working_color_space = 0u,
-    bool per_channel = false) {
+    bool per_channel = false,
+    float blowout = 0) {
   const Config renodrt_config = {
     nits_peak,
     mid_gray_value,
@@ -80,7 +82,8 @@ Config Create(
     tone_map_method,
     hue_correction_type,
     working_color_space,
-    per_channel
+    per_channel,
+    blowout
   };
   return renodrt_config;
 }
@@ -138,7 +141,7 @@ float3 BT709(float3 bt709, Config current_config) {
   float y_highlighted = pow(y_normalized, current_config.highlights);
   y_highlighted = lerp(y_normalized, y_highlighted, saturate(y_normalized));
 
-  float y_shadowed = pow(y_highlighted, -1.f * (current_config.shadows - 2.f));
+  float y_shadowed = pow(y_highlighted, 2.f - current_config.shadows);
   y_shadowed = lerp(y_shadowed, y_highlighted, saturate(y_highlighted));
   y_shadowed *= 0.18f;
   y = y_shadowed;
@@ -150,6 +153,7 @@ float3 BT709(float3 bt709, Config current_config) {
   float m_0 = (n / n_r);
   float ts;
   float3 ts3;
+  [branch]
   if (current_config.tone_map_method == config::tone_map_method::DANIELE) {
     float m_1 = 0.5 * (m_0 + sqrt(m_0 * (m_0 + (4.0 * t_1))));
     float r_hit = r_hit_min + ((r_hit_max - r_hit_min) * (log(m_0) / log(10000.0 / 100.0)));
@@ -165,6 +169,7 @@ float3 BT709(float3 bt709, Config current_config) {
     float u_2 = pow((r_hit / m_1) / ((r_hit / m_1) + w_2), g);
     float m_2 = m_1 / u_2;
 
+    [branch]
     if (current_config.per_channel) {
       ts3 = pow(max(0, per_channel_color) / (per_channel_color + s_2), g) * m_2;
     } else {
@@ -177,6 +182,7 @@ float3 BT709(float3 bt709, Config current_config) {
     float gray_out = current_config.mid_gray_nits / 100.f;
     float reinard_exposure = (x_max * (x_min * gray_out + x_min - gray_out))
                              / (gray_in * (gray_out - x_max));
+    [branch]
     if (current_config.per_channel) {
       ts3 = mad(per_channel_color, reinard_exposure, x_min) / mad(per_channel_color, reinard_exposure / x_max, 1.f - x_min);
     } else {
@@ -204,7 +210,10 @@ float3 BT709(float3 bt709, Config current_config) {
     color_output = renodx::color::bt709::from::BT2020(color_output);
   }
 
-  if (current_config.dechroma != 0.f || current_config.saturation != 1.f || current_config.hue_correction_strength != 0.f) {
+  if (current_config.dechroma != 0.f
+      || current_config.saturation != 1.f
+      || current_config.hue_correction_strength != 0.f
+      || current_config.blowout != 0.f) {
     float3 perceptual_new;
 
     if (current_config.hue_correction_strength != 0.f) {
@@ -212,15 +221,20 @@ float3 BT709(float3 bt709, Config current_config) {
       float3 source = (current_config.hue_correction_type == config::hue_correction_type::INPUT)
                           ? bt709
                           : current_config.hue_correction_source;
-      if (current_config.hue_correction_method == config::hue_correction_method::OKLAB) {
-        perceptual_new = renodx::color::oklab::from::BT709(color_output);
-        perceptual_old = renodx::color::oklab::from::BT709(source);
-      } else if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
-        perceptual_new = renodx::color::ictcp::from::BT709(color_output);
-        perceptual_old = renodx::color::ictcp::from::BT709(source);
-      } else if (current_config.hue_correction_method == config::hue_correction_method::DARKTABLE_UCS) {
-        perceptual_new = renodx::color::dtucs::uvY::from::BT709(color_output).zxy;
-        perceptual_old = renodx::color::dtucs::uvY::from::BT709(source).zxy;
+      switch (current_config.hue_correction_method) {
+        case config::hue_correction_method::OKLAB:
+        default:
+          perceptual_new = renodx::color::oklab::from::BT709(color_output);
+          perceptual_old = renodx::color::oklab::from::BT709(source);
+          break;
+        case config::hue_correction_method::ICTCP:
+          perceptual_new = renodx::color::ictcp::from::BT709(color_output);
+          perceptual_old = renodx::color::ictcp::from::BT709(source);
+          break;
+        case config::hue_correction_method::DARKTABLE_UCS:
+          perceptual_new = renodx::color::dtucs::uvY::from::BT709(color_output).zxy;
+          perceptual_old = renodx::color::dtucs::uvY::from::BT709(source).zxy;
+          break;
       }
 
       // Save chrominance to apply black
@@ -234,17 +248,34 @@ float3 BT709(float3 bt709, Config current_config) {
 
       perceptual_new.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
     } else {
-      if (current_config.hue_correction_method == config::hue_correction_method::OKLAB) {
-        perceptual_new = renodx::color::oklab::from::BT709(color_output);
-      } else if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
-        perceptual_new = renodx::color::ictcp::from::BT709(color_output);
-      } else if (current_config.hue_correction_method == config::hue_correction_method::DARKTABLE_UCS) {
-        perceptual_new = renodx::color::dtucs::uvY::from::BT709(color_output).zxy;
+      switch (current_config.hue_correction_method) {
+        default:
+        case config::hue_correction_method::OKLAB:
+          perceptual_new = renodx::color::oklab::from::BT709(color_output);
+          break;
+        case config::hue_correction_method::ICTCP:
+          perceptual_new = renodx::color::ictcp::from::BT709(color_output);
+          break;
+        case config::hue_correction_method::DARKTABLE_UCS:
+          perceptual_new = renodx::color::dtucs::uvY::from::BT709(color_output).zxy;
+          break;
       }
     }
 
     if (current_config.dechroma != 0.f) {
       perceptual_new.yz *= lerp(1.f, 0.f, saturate(pow(y_original / (10000.f / 100.f), (1.f - current_config.dechroma))));
+    }
+
+    if (current_config.blowout != 0.f) {
+      float percent_max = saturate(y_original * 100.f / 10000.f);
+      // positive = 1 to 0, negative = 1 to 2
+      float blowout_strength = 100.f;
+      float blowout_change = pow(1.f - percent_max, blowout_strength * abs(current_config.blowout));
+      if (current_config.blowout < 0) {
+        blowout_change = (2.f - blowout_change);
+      }
+
+      perceptual_new.yz *= blowout_change;
     }
 
     perceptual_new.yz *= current_config.saturation;

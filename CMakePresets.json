@@ -115,7 +115,7 @@
       "configuration": "Release"
     },
     {
-      "name": "ninja-x64-RelWithDebInfo",
+      "name": "ninja-x64-relwithdebinfo",
       "displayName": "Ninja x64 RelWithDebInfo",
       "configurePreset": "ninja-x64",
       "configuration": "RelWithDebInfo"
@@ -133,7 +133,7 @@
       "configuration": "Release"
     },
     {
-      "name": "ninja-x86-RelWithDebInfo",
+      "name": "ninja-x86-relwithdebinfo",
       "displayName": "Ninja x86 RelWithDebInfo",
       "configurePreset": "ninja-x86",
       "configuration": "RelWithDebInfo"
@@ -151,7 +151,7 @@
       "configuration": "Release"
     },
     {
-      "name": "vs-x64-RelWithDebInfo",
+      "name": "vs-x64-relwithdebinfo",
       "displayName": "Visual Studio x64 RelWithDebInfo",
       "configurePreset": "vs-x64",
       "configuration": "RelWithDebInfo"
@@ -169,7 +169,7 @@
       "configuration": "Release"
     },
     {
-      "name": "vs-x86-RelWithDebInfo",
+      "name": "vs-x86-relwithdebinfo",
       "displayName": "Visual Studio x86 RelWithDebInfo",
       "configurePreset": "vs-x64",
       "configuration": "RelWithDebInfo"

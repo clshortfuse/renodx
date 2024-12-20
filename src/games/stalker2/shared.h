@@ -14,8 +14,6 @@ struct ShaderInjectData {
   float toneMapUINits;
   float radiationOverlayStrength;
   float vignetteStrength;
-  float toneMapGammaCorrection;
-  float toneMapGammaCorrectionStrength;
   float colorGradeExposure;
   float colorGradeHighlights;
   float colorGradeShadows;
@@ -35,8 +33,6 @@ cbuffer injectedBuffer : register(b0, space50) {
     150.f,  // toneMapUINits
     1.f,    // radiationOverlayStrength
     1.f,    // vignette
-    1.f,    // toneMapGammaCorrection
-    0.f,    // toneMapGammaCorrectionStrength
     1.f,    // colorGradeExposure
     1.f,    // colorGradeHighlights
     1.f,    // colorGradeShadows
