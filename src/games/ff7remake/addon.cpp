@@ -6,7 +6,6 @@
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
-
 #define NOMINMAX
 
 #include <chrono>
@@ -26,6 +25,7 @@ namespace {
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x922A71D1),
     CustomShaderEntry(0x4D6F937E),
+    CustomShaderEntry(0xD950DA01),
 };
 
 ShaderInjectData shader_injection;
@@ -99,7 +99,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapHueCorrectionMethod",
         .binding = &shader_injection.tone_map_hue_correction_method,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 3.f,
+        .default_value = 0.f,
         .label = "Hue Correction Method",
         .section = "Tone Mapping",
         .tooltip = "Applies hue shift emulation before tonemapping",
@@ -110,7 +110,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueCorrection",
         .binding = &shader_injection.tone_map_hue_correction,
-        .default_value = 100.f,
+        .default_value = 0.f,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tooltip = "Hue shifts emulation strength.",
@@ -131,7 +131,6 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Off", "On"},
         .is_enabled = []() { return shader_injection.tone_map_type == 3; },
     },
-
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
         .binding = &shader_injection.color_grade_exposure,
@@ -186,7 +185,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type == 3; },
-        .parse = [](float value) { return value * 0.01f; },
+        .parse = [](float value) { return value * 0.02f - 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
@@ -206,17 +205,12 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .label = "Color Space",
         .section = "Color Grading",
-        .tooltip = "Selects output color space"
+        .tooltip = "Selects grading color space"
                    "\nUS Modern for BT.709 D65."
-                   "\nJPN Modern for BT.709 D93."
-                   "\nUS CRT for BT.601 (NTSC-U)."
-                   "\nJPN CRT for BT.601 ARIB-TR-B09 D93 (NTSC-J)."
-                   "\nDefault: US CRT",
+                   "\nJPN Modern for BT.709 D93.",
         .labels = {
             "US Modern",
             "JPN Modern",
-            "US CRT",
-            "JPN CRT",
         },
     },
     new renodx::utils::settings::Setting{
@@ -256,6 +250,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FXHDRVideos",
+        .binding = &shader_injection.fx_hdr_videos,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "HDR Videos",
+        .section = "Effects",
+        .tooltip = "Uses modified BT.2446a to inverse tonemap SDR videos",
+        .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
         .section = "Links",
@@ -286,18 +290,19 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ToneMapHueCorrectionMethod", 0.f);
   renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 0.f);
   renodx::utils::settings::UpdateSetting("ToneMapPerChannel", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 1.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 1.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 1.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 1.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeColorSpace", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeColorSpace", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeLutStrength", 100.f);
   renodx::utils::settings::UpdateSetting("FXBloom", 50.f);
   renodx::utils::settings::UpdateSetting("FXVignette", 50.f);
   renodx::utils::settings::UpdateSetting("FXFilmGrain", 0.f);
+  renodx::utils::settings::UpdateSetting("FXHDRVideos", 0.f);
 }
 
 bool fired_on_init_swapchain = false;

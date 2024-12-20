@@ -1,5 +1,5 @@
-#ifndef SRC_TEMPLATE_SHARED_H_
-#define SRC_TEMPLATE_SHARED_H_
+#ifndef SRC_FF7REMAKE_SHARED_H_
+#define SRC_FF7REMAKE_SHARED_H_
 
 #ifndef __cplusplus
 #include "../../shaders/renodx.hlsl"
@@ -29,6 +29,7 @@ struct ShaderInjectData {
   float fx_bloom;
   float fx_vignette;
   float fx_film_grain;
+  float fx_hdr_videos;
   float random_1;
   float random_2;
   float random_3;
@@ -40,4 +41,4 @@ cbuffer injectedBuffer : register(b0,space50) {
 }
 #endif
 
-#endif  // SRC_TEMPLATE_SHARED_H_
+#endif  // SRC_FF7REMAKE_SHARED_H_
