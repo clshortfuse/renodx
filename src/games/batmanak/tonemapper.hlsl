@@ -78,30 +78,29 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lut_texture, SamplerState
   }
   float renoDRTHighlights = 1.2f;
 
-  config.hue_correction_strength = injectedData.toneMapHueCorrection * injectedData.toneMapPerChannel;
-  config.reno_drt_per_channel = injectedData.toneMapPerChannel;
-  config.type = injectedData.toneMapType;
-  config.peak_nits = injectedData.toneMapPeakNits;
-  config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = injectedData.toneMapGammaCorrection - 1;
-  config.exposure = injectedData.colorGradeExposure;
-  config.highlights = injectedData.colorGradeHighlights;
-  config.shadows = injectedData.colorGradeShadows;
-  config.contrast = injectedData.colorGradeContrast;
-  config.saturation = injectedData.colorGradeSaturation;
-  config.reno_drt_highlights = renoDRTHighlights;
-  config.reno_drt_shadows = renoDRTShadows;
-  config.reno_drt_contrast = renoDRTContrast;
-  config.reno_drt_saturation = renoDRTSaturation;
-  config.reno_drt_dechroma = renoDRTDechroma;
-  config.mid_gray_value = vanillaMidGray;
-  config.mid_gray_nits = vanillaMidGray * 100.f;
-  config.reno_drt_flare = renoDRTFlare;
-  config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_color = vanillaColor;
-  config.reno_drt_hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::DARKTABLE_UCS;
-  config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  config.reno_drt_working_color_space = 2u;
+  tm_config.hue_correction_strength = injectedData.toneMapHueCorrection * injectedData.toneMapPerChannel;
+  tm_config.reno_drt_per_channel = injectedData.toneMapPerChannel;
+  tm_config.type = injectedData.toneMapType;
+  tm_config.peak_nits = injectedData.toneMapPeakNits;
+  tm_config.game_nits = injectedData.toneMapGameNits;
+  tm_config.gamma_correction = injectedData.toneMapGammaCorrection - 1;
+  tm_config.exposure = injectedData.colorGradeExposure;
+  tm_config.highlights = injectedData.colorGradeHighlights;
+  tm_config.shadows = injectedData.colorGradeShadows;
+  tm_config.contrast = injectedData.colorGradeContrast;
+  tm_config.saturation = injectedData.colorGradeSaturation;
+  tm_config.reno_drt_highlights = renoDRTHighlights;
+  tm_config.reno_drt_shadows = renoDRTShadows;
+  tm_config.reno_drt_contrast = renoDRTContrast;
+  tm_config.reno_drt_saturation = renoDRTSaturation;
+  tm_config.reno_drt_dechroma = renoDRTDechroma;
+  tm_config.mid_gray_value = vanillaMidGray;
+  tm_config.mid_gray_nits = vanillaMidGray * 100.f;
+  tm_config.reno_drt_flare = renoDRTFlare;
+  tm_config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
+  tm_config.hue_correction_color = vanillaColor;
+  tm_config.reno_drt_hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::DARKTABLE_UCS;
+  tm_config.reno_drt_working_color_space = 2u;
 
 
   tm_config.hue_correction_strength = injectedData.toneMapHueCorrection * injectedData.toneMapPerChannel;
