@@ -94,7 +94,8 @@ float3 ToneMap(float3 color) {
   config.reno_drt_contrast = 1.04f;
   config.reno_drt_saturation = 1.05f;
   config.mid_gray_nits = 19.f;
-  config.reno_drt_dechroma = injectedData.colorGradeBlowout;
+  config.reno_drt_dechroma = 0;
+  config.reno_drt_blowout = injectedData.colorGradeBlowout;
   config.reno_drt_hue_correction_method =
       renodx::tonemap::renodrt::config::hue_correction_method::ICTCP;
 

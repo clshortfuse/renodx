@@ -371,25 +371,19 @@ void main(
       config.saturation = injectedData.colorGradeSaturation;
       config.hue_correction_color = ap1_aces_colored;
 
-      const float ACES_HIGHLIGHTS = 0.96f;
-      const float ACES_SHADOWS = 1.12f;
-      const float ACES_CONTRAST = 1.2f;
-      const float ACES_FLARE = 0.1355f;
 
-      config.reno_drt_highlights = 0.96f;
-      config.reno_drt_shadows = 1.12f;
-      config.reno_drt_contrast = 1.2f;
-      config.reno_drt_saturation = 1.80f;
-      config.reno_drt_dechroma = injectedData.colorGradeBlowout; // 0.80f;  // 0.80f
-      config.reno_drt_flare = 0.1355f;
+      config.reno_drt_highlights = 1.0f;
+      config.reno_drt_shadows = 1.0f;
+      config.reno_drt_contrast = 1.1f;
+      config.reno_drt_saturation = 1.1f;
+      config.reno_drt_dechroma = 0;
+      config.reno_drt_blowout = injectedData.colorGradeBlowout;
+      config.reno_drt_flare = 0.05f;
+      config.reno_drt_per_channel = true;
 
       float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
 
-      if (injectedData.toneMapType == 3.f) {  // Only apply hue correction if RenoDRT is selected
-        config_color = renodx::color::correct::Hue(config_color, renodx::tonemap::ACESFittedAP1(config_color));
-        config.hue_correction_color = renodx::tonemap::ACESFittedAP1(config_color);
-        config.hue_correction_strength = injectedData.toneMapHueCorrection;
-      }
+      config.hue_correction_strength = injectedData.toneMapHueCorrection;
 
       renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(config_color, config);
       hdr_color = dual_tone_map.color_hdr;
@@ -498,7 +492,7 @@ void main(
 
   float3 film_graded_color = r3.rgb;
 
-  if (is_hdr) {
+  {
     float3 final_color = saturate(film_graded_color);
     if (injectedData.toneMapType != 0.f) {
       final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
