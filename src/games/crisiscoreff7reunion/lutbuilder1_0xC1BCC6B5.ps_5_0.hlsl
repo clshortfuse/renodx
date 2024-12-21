@@ -65,7 +65,8 @@ void main(
   float3 log_input_color = r1.rgb;
 
   r0.xyz = r0.zzz ? r0.xyw : r1.xyz;
-  r0.rgb = pq_input_color;
+
+  // r0.rgb = pq_input_color; use log2lin
 
   float3 lut_input_color = r0.rgb;
 
@@ -240,14 +241,14 @@ void main(
     r2.xyz = float3(-0.00200000009, -0.00200000009, -0.00200000009) + r2.xyz;
 
   } else {
+    ap1_graded_color = r0.xyz;
+
     // Blue correct    -- r0 is still ap1, r1 is sRGB
     r3.x = dot(float3(0.938639402, 1.02359565e-10, 0.0613606237), r0.xyz);
     r3.y = dot(float3(8.36008554e-11, 0.830794156, 0.169205874), r0.xyz);
     r3.z = dot(float3(2.13187367e-12, -5.63307213e-12, 1), r0.xyz);
     r3.xyz = r3.xyz + -r0.xyz;
     r0.xyz = cb0[66].xxx * r3.xyz + r0.xyz;
-
-    ap1_graded_color = r0.xyz;
 
     // start of film tonemap
     // AP1 => AP0
@@ -369,8 +370,6 @@ void main(
       config.shadows = injectedData.colorGradeShadows;
       config.contrast = injectedData.colorGradeContrast;
       config.saturation = injectedData.colorGradeSaturation;
-      config.hue_correction_color = ap1_aces_colored;
-
 
       config.reno_drt_highlights = 1.0f;
       config.reno_drt_shadows = 1.0f;
@@ -380,12 +379,17 @@ void main(
       config.reno_drt_blowout = injectedData.colorGradeBlowout;
       config.reno_drt_flare = 0.05f;
       config.reno_drt_per_channel = true;
+      config.reno_drt_working_color_space = 2u;
+      config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
 
-      float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
+      config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
+
+      float3 bt709_graded_color = renodx::color::bt709::from::AP1(ap1_graded_color);
+      float3 bt709_aces_color = renodx::color::bt709::from::AP1(ap1_aces_colored);
 
       config.hue_correction_strength = injectedData.toneMapHueCorrection;
 
-      renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(config_color, config);
+      renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(bt709_graded_color, config);
       hdr_color = dual_tone_map.color_hdr;
       sdr_color = dual_tone_map.color_sdr;
       sdr_ap1_color = renodx::color::ap1::from::BT709(sdr_color);
@@ -497,6 +501,27 @@ void main(
     if (injectedData.toneMapType != 0.f) {
       final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
     }
+
+    // Scale for final shader gamma fix
+
+    if (injectedData.toneMapGammaCorrection == 2.f) {
+      final_color = renodx::color::srgb::EncodeSafe(final_color);
+      final_color = renodx::color::gamma::DecodeSafe(final_color, 2.4f);
+      final_color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+      final_color = renodx::color::gamma::EncodeSafe(final_color, 2.4f);
+    } else if (injectedData.toneMapGammaCorrection == 1.f) {
+      final_color = renodx::color::srgb::EncodeSafe(final_color);
+      final_color = renodx::color::gamma::DecodeSafe(final_color, 2.2f);
+      final_color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+      final_color = renodx::color::gamma::EncodeSafe(final_color, 2.2f);
+    } else {
+      final_color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+      final_color = renodx::color::srgb::EncodeSafe(final_color);
+    }
+
+    // Scale for UE decoding
+    final_color *= 1.f / 1.05f;
+
     o0.rgba = float4(final_color.rgb, 0);
     return;
   }
