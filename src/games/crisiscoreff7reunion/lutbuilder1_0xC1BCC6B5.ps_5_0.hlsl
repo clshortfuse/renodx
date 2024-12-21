@@ -1,6 +1,7 @@
 // ---- Created with 3Dmigoto v1.3.16 on Thu Sep  5 00:04:50 2024
 // ACES Lutbuilder
 
+#include "./common.hlsl"
 #include "./shared.h"
 
 cbuffer cb0 : register(b0) {
@@ -358,110 +359,73 @@ void main(
 
     ap1_aces_colored = r3.xyz;
 
-    if (injectedData.toneMapType != 0.f) {
-      renodx::tonemap::Config config = renodx::tonemap::config::Create();
-      config.type = injectedData.toneMapType;
-      config.peak_nits = injectedData.toneMapPeakNits;
-      // config.peak_nits = 10000.f;
-      config.game_nits = injectedData.toneMapGameNits;
-      config.gamma_correction = injectedData.toneMapGammaCorrection;
-      config.exposure = injectedData.colorGradeExposure;
-      config.highlights = injectedData.colorGradeHighlights;
-      config.shadows = injectedData.colorGradeShadows;
-      config.contrast = injectedData.colorGradeContrast;
-      config.saturation = injectedData.colorGradeSaturation;
+    r4.xy = float2(1, 0.180000007) + cb0[36].ww;
+    r0.w = -cb0[36].y + r4.x;
+    r1.w = 1 + cb0[37].x;
+    r2.w = -cb0[36].z + r1.w;
 
-      config.reno_drt_highlights = 1.0f;
-      config.reno_drt_shadows = 1.0f;
-      config.reno_drt_contrast = 1.1f;
-      config.reno_drt_saturation = 1.1f;
-      config.reno_drt_dechroma = 0;
-      config.reno_drt_blowout = injectedData.colorGradeBlowout;
-      config.reno_drt_flare = 0.05f;
-      config.reno_drt_per_channel = true;
-      config.reno_drt_working_color_space = 2u;
-      config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
+    // Film Toe > 0.8
 
-      config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
+    r3.w = cmp(0.800000012 < cb0[36].y);
+    r4.xz = float2(0.819999993, 1) + -cb0[36].yy;
+    r4.xz = r4.xz / cb0[36].xx;
+    r4.y = r4.y / r0.w;
+    r4.xw = float2(-0.744727492, -1) + r4.xy;
+    r4.w = 1 + -r4.w;
+    r4.y = r4.y / r4.w;
+    r4.y = log2(r4.y);
+    r4.y = 0.346573591 * r4.y;
+    r4.w = r0.w / cb0[36].x;
+    r4.y = -r4.y * r4.w + -0.744727492;
+    r3.w = r3.w ? r4.x : r4.y;
+    r4.x = r4.z + -r3.w;
+    r4.y = cb0[36].z / cb0[36].x;
+    r4.y = r4.y + -r4.x;
+    r3.xyz = log2(r3.xyz);
+    r5.xyz = float3(0.30103001, 0.30103001, 0.30103001) * r3.xyz;
+    r4.xzw = r3.xyz * float3(0.30103001, 0.30103001, 0.30103001) + r4.xxx;
+    r4.xzw = cb0[36].xxx * r4.xzw;
+    r5.w = r0.w + r0.w;
+    r6.x = -2 * cb0[36].x;
+    r0.w = r6.x / r0.w;
+    r6.xyz = r3.xyz * float3(0.30103001, 0.30103001, 0.30103001) + -r3.www;
+    r7.xyz = r6.xyz * r0.www;
+    r7.xyz = float3(1.44269502, 1.44269502, 1.44269502) * r7.xyz;
+    r7.xyz = exp2(r7.xyz);
+    r7.xyz = float3(1, 1, 1) + r7.xyz;
+    r7.xyz = r5.www / r7.xyz;
+    r7.xyz = -cb0[36].www + r7.xyz;
+    r0.w = r2.w + r2.w;
+    r5.w = cb0[36].x + cb0[36].x;
+    r2.w = r5.w / r2.w;
+    r3.xyz = r3.xyz * float3(0.30103001, 0.30103001, 0.30103001) + -r4.yyy;
+    r3.xyz = r3.xyz * r2.www;
+    r3.xyz = float3(1.44269502, 1.44269502, 1.44269502) * r3.xyz;
+    r3.xyz = exp2(r3.xyz);
+    r3.xyz = float3(1, 1, 1) + r3.xyz;
+    r3.xyz = r0.www / r3.xyz;
+    r3.xyz = -r3.xyz + r1.www;
+    r8.xyz = cmp(r5.xyz < r3.www);
+    r7.xyz = r8.xyz ? r7.xyz : r4.xzw;
+    r5.xyz = cmp(r4.yyy < r5.xyz);
+    r3.xyz = r5.xyz ? r3.xyz : r4.xzw;
+    r0.w = r4.y + -r3.w;
+    r4.xzw = saturate(r6.xyz / r0.www);
+    r0.w = cmp(r4.y < r3.w);
+    r5.xyz = float3(1, 1, 1) + -r4.xzw;
+    r4.xyz = r0.www ? r5.xyz : r4.xzw;
+    r5.xyz = -r4.xyz * float3(2, 2, 2) + float3(3, 3, 3);
+    r4.xyz = r4.xyz * r4.xyz;
+    r4.xyz = r4.xyz * r5.xyz;
+    r3.xyz = r3.xyz + -r7.xyz;
+    r3.xyz = r4.xyz * r3.xyz + r7.xyz;
+    // AP1_RGB2Y
+    r0.w = dot(r3.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
+    r3.xyz = r3.xyz + -r0.www;
 
-      float3 bt709_graded_color = renodx::color::bt709::from::AP1(ap1_graded_color);
-      float3 bt709_aces_color = renodx::color::bt709::from::AP1(ap1_aces_colored);
-
-      config.hue_correction_strength = injectedData.toneMapHueCorrection;
-
-      renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(bt709_graded_color, config);
-      hdr_color = dual_tone_map.color_hdr;
-      sdr_color = dual_tone_map.color_sdr;
-      sdr_ap1_color = renodx::color::ap1::from::BT709(sdr_color);
-    } else {  // Added else
-      r4.xy = float2(1, 0.180000007) + cb0[36].ww;
-      r0.w = -cb0[36].y + r4.x;
-      r1.w = 1 + cb0[37].x;
-      r2.w = -cb0[36].z + r1.w;
-
-      // Film Toe > 0.8
-
-      r3.w = cmp(0.800000012 < cb0[36].y);
-      r4.xz = float2(0.819999993, 1) + -cb0[36].yy;
-      r4.xz = r4.xz / cb0[36].xx;
-      r4.y = r4.y / r0.w;
-      r4.xw = float2(-0.744727492, -1) + r4.xy;
-      r4.w = 1 + -r4.w;
-      r4.y = r4.y / r4.w;
-      r4.y = log2(r4.y);
-      r4.y = 0.346573591 * r4.y;
-      r4.w = r0.w / cb0[36].x;
-      r4.y = -r4.y * r4.w + -0.744727492;
-      r3.w = r3.w ? r4.x : r4.y;
-      r4.x = r4.z + -r3.w;
-      r4.y = cb0[36].z / cb0[36].x;
-      r4.y = r4.y + -r4.x;
-      r3.xyz = log2(r3.xyz);
-      r5.xyz = float3(0.30103001, 0.30103001, 0.30103001) * r3.xyz;
-      r4.xzw = r3.xyz * float3(0.30103001, 0.30103001, 0.30103001) + r4.xxx;
-      r4.xzw = cb0[36].xxx * r4.xzw;
-      r5.w = r0.w + r0.w;
-      r6.x = -2 * cb0[36].x;
-      r0.w = r6.x / r0.w;
-      r6.xyz = r3.xyz * float3(0.30103001, 0.30103001, 0.30103001) + -r3.www;
-      r7.xyz = r6.xyz * r0.www;
-      r7.xyz = float3(1.44269502, 1.44269502, 1.44269502) * r7.xyz;
-      r7.xyz = exp2(r7.xyz);
-      r7.xyz = float3(1, 1, 1) + r7.xyz;
-      r7.xyz = r5.www / r7.xyz;
-      r7.xyz = -cb0[36].www + r7.xyz;
-      r0.w = r2.w + r2.w;
-      r5.w = cb0[36].x + cb0[36].x;
-      r2.w = r5.w / r2.w;
-      r3.xyz = r3.xyz * float3(0.30103001, 0.30103001, 0.30103001) + -r4.yyy;
-      r3.xyz = r3.xyz * r2.www;
-      r3.xyz = float3(1.44269502, 1.44269502, 1.44269502) * r3.xyz;
-      r3.xyz = exp2(r3.xyz);
-      r3.xyz = float3(1, 1, 1) + r3.xyz;
-      r3.xyz = r0.www / r3.xyz;
-      r3.xyz = -r3.xyz + r1.www;
-      r8.xyz = cmp(r5.xyz < r3.www);
-      r7.xyz = r8.xyz ? r7.xyz : r4.xzw;
-      r5.xyz = cmp(r4.yyy < r5.xyz);
-      r3.xyz = r5.xyz ? r3.xyz : r4.xzw;
-      r0.w = r4.y + -r3.w;
-      r4.xzw = saturate(r6.xyz / r0.www);
-      r0.w = cmp(r4.y < r3.w);
-      r5.xyz = float3(1, 1, 1) + -r4.xzw;
-      r4.xyz = r0.www ? r5.xyz : r4.xzw;
-      r5.xyz = -r4.xyz * float3(2, 2, 2) + float3(3, 3, 3);
-      r4.xyz = r4.xyz * r4.xyz;
-      r4.xyz = r4.xyz * r5.xyz;
-      r3.xyz = r3.xyz + -r7.xyz;
-      r3.xyz = r4.xyz * r3.xyz + r7.xyz;
-      // AP1_RGB2Y
-      r0.w = dot(r3.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
-      r3.xyz = r3.xyz + -r0.www;
-
-      r3.xyz = r3.xyz * float3(0.930000007, 0.930000007, 0.930000007) + r0.www;
-      r3.xyz = max(float3(0, 0, 0), r3.xyz);
-      sdr_ap1_color = r3.xyz;
-    }  // Added brace
+    r3.xyz = r3.xyz * float3(0.930000007, 0.930000007, 0.930000007) + r0.www;
+    r3.xyz = max(float3(0, 0, 0), r3.xyz);
+    sdr_ap1_color = r3.xyz;
 
     r3.xyz = sdr_ap1_color;
 
@@ -496,13 +460,42 @@ void main(
 
   float3 film_graded_color = r3.rgb;
 
-  {
-    float3 final_color = saturate(film_graded_color);
-    if (injectedData.toneMapType != 0.f) {
-      final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
-    }
+  if (injectedData.toneMapType != 0.f) {
+    float3 bt709_graded_color = renodx::color::bt709::from::AP1(ap1_graded_color);
+    float3 bt709_aces_color = renodx::color::bt709::from::AP1(ap1_aces_colored);
 
-    // Scale for final shader gamma fix
+    float3 neutral_sdr_color = RenoDRTSmoothClamp(bt709_graded_color);
+
+    float3 color_graded = UpgradeToneMapPerChannel(bt709_graded_color, neutral_sdr_color, film_graded_color, 1);
+
+    renodx::tonemap::Config config = renodx::tonemap::config::Create();
+    config.type = injectedData.toneMapType;
+    config.peak_nits = injectedData.toneMapPeakNits;
+    // config.peak_nits = 10000.f;
+    config.game_nits = injectedData.toneMapGameNits;
+    config.gamma_correction = injectedData.toneMapGammaCorrection;
+    config.exposure = injectedData.colorGradeExposure;
+    config.highlights = injectedData.colorGradeHighlights;
+    config.shadows = injectedData.colorGradeShadows;
+    config.contrast = injectedData.colorGradeContrast;
+    config.saturation = injectedData.colorGradeSaturation;
+
+    // Default inverts smooth clamp
+    config.reno_drt_highlights = 1.0f;
+    config.reno_drt_shadows = 1.0f;
+    config.reno_drt_contrast = 1.05f;
+    config.reno_drt_saturation = 1.05f;
+    config.reno_drt_dechroma = 0;
+    config.reno_drt_blowout = injectedData.colorGradeBlowout;
+    config.reno_drt_flare =   injectedData.colorGradeFlare;
+    config.reno_drt_working_color_space = 2u;
+    config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
+
+    config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
+
+    config.hue_correction_strength = injectedData.toneMapHueCorrection;
+
+    float3 final_color = renodx::tonemap::config::Apply(color_graded, config);
 
     if (injectedData.toneMapGammaCorrection == 2.f) {
       final_color = renodx::color::srgb::EncodeSafe(final_color);
