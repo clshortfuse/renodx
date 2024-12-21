@@ -1,5 +1,5 @@
 #include "./shared.h"
-#include "./tonemapper.hlsl"
+#include "./common.hlsl"
 
 Texture2D<float4> PostProcessInput_0_Texture : register(t0);
 
@@ -45,8 +45,8 @@ float4 main(
   float4 _35 = PostProcessInput_0_Texture.Sample(PostProcessInput_0_Sampler, float2(((_21 * ($Globals_005x)) + ($Globals_004x)), ((_22 * ($Globals_005y)) + ($Globals_004y))));
   if (injectedData.toneMapType > 0.f) {
     // We decode before they attempt to blend
-    tonemappedRender = pqToDecoded(_35.rgb);
-    srgb_input = decodedTosRGB(tonemappedRender);
+    tonemappedRender = PQToDecoded(_35.rgb);
+    srgb_input = DecodedTosRGB(tonemappedRender);
     _35.rgb = srgb_input;
   }
   float _45 = (abs(((UniformBufferConstants_Material_001y) * (_21 + -0.5f)))) * 2.0f;
@@ -62,7 +62,7 @@ float4 main(
   post_srgb = SV_Target.rgb;
 
   if (injectedData.toneMapType > 0.f) {
-    output = upgradePostProcess(tonemappedRender, post_srgb);
+    output = UpgradePostProcess(tonemappedRender, post_srgb);
     return float4(output, 0.f);
   }
   SV_Target.w = 0.0f;
