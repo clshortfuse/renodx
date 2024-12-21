@@ -1,6 +1,7 @@
 
+#include "./common.hlsl"
 #include "./shared.h"
-#include "./tonemapper.hlsl"
+
 
 cbuffer _RootShaderParameters : register(b0) {
   float _RootShaderParameters_008x : packoffset(c008.x);
@@ -168,8 +169,7 @@ float4 main(
   // _3 = _1;
   // _4 = _2;
   uint output_type = _RootShaderParameters_040w;
-  bool is_hdr = (output_type >= 3u && output_type <= 6u);
-  bool shouldTonemap = injectedData.toneMapType != 0.f && is_hdr;
+  bool shouldTonemap = TonemapConditon(output_type);
   uint _5 = SV_RenderTargetArrayIndex;
   float _6 = TEXCOORD.x;
   float _7 = TEXCOORD.y;
@@ -948,14 +948,7 @@ float4 main(
   float _721 = _RootShaderParameters_037z;
   float _722 = _720 - _721;
   if (shouldTonemap) {
-    renodx::tonemap::Config config = getCommonConfig();
-
-    float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
-
-    renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(config_color, config);
-    hdr_color = dual_tone_map.color_hdr;
-    sdr_color = dual_tone_map.color_sdr;
-    sdr_ap1_color = renodx::color::ap1::from::BT709(sdr_color);
+    Tonemap(ap1_graded_color, ap1_aces_colored, hdr_color, sdr_color, sdr_ap1_color);
   } else {
     bool _723 = (_716 > 0.800000011920929f);
     float _724 = _RootShaderParameters_037x;
@@ -1218,16 +1211,7 @@ float4 main(
   float3 final_color = film_graded_color;
   // We return sRGB bt709 color
   if (shouldTonemap) {
-    final_color = saturate(film_graded_color);
-
-    if (injectedData.toneMapType != 1.f) {
-      final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
-    } else {
-      final_color = hdr_color;
-    }
-    final_color = renodx::color::bt2020::from::BT709(final_color);
-    final_color = correctGamma(final_color);
-    final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
+    FinalizeTonemap(final_color, film_graded_color, hdr_color, sdr_ap1_color);
     return float4(final_color, 0.f);
   }
 

@@ -1,5 +1,6 @@
+#include "./common.hlsl"
 #include "./shared.h"
-#include "./tonemapper.hlsl"
+
 
 Texture2D<float4> Textures_1 : register(t0);
 
@@ -197,8 +198,7 @@ float4 main(
   // _6 = _4;
   // CustomEdit
   uint output_type = _RootShaderParameters_040w;
-  bool is_hdr = (output_type >= 3u && output_type <= 6u);
-  bool shouldTonemap = injectedData.toneMapType != 0.f && is_hdr;
+  bool shouldTonemap = TonemapConditon(output_type);
   uint _7 = SV_RenderTargetArrayIndex;
   float _8 = TEXCOORD.x;
   float _9 = TEXCOORD.y;
@@ -1232,15 +1232,7 @@ float4 main(
   float _977 = _RootShaderParameters_037z;
   float _978 = _976 - _977;
   if (shouldTonemap) {
-    renodx::tonemap::Config config = getCommonConfig();
-    config.hue_correction_color = ap1_aces_colored;
-
-    float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
-
-    renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(config_color, config);
-    hdr_color = dual_tone_map.color_hdr;
-    sdr_color = dual_tone_map.color_sdr;
-    sdr_ap1_color = renodx::color::ap1::from::BT709(sdr_color);
+    Tonemap(ap1_graded_color, ap1_aces_colored, hdr_color, sdr_color, sdr_ap1_color);
   } else {
     bool _979 = (_972 > 0.800000011920929f);
     float _980 = _RootShaderParameters_037x;
@@ -1444,15 +1436,7 @@ float4 main(
 
   // We skip ACES cuz the LUT exasexacerbates the contrast
   if (injectedData.toneMapType > 1.f) {
-    renodx::lut::Config lut_config = renodx::lut::config::Create(
-        Samplers_1,
-        injectedData.toneMapType == 2.f ? 0.f : injectedData.colorGradeLUTStrength,
-        1.f,  // (LUT Scaling) We don't need to scale the LUTs here, but might as well
-        renodx::lut::config::type::SRGB,
-        renodx::lut::config::type::SRGB,
-        16.f);
-
-    float3 post_lut_color = renodx::lut::Sample(Textures_1, lut_config, lut_input_color);
+    float3 post_lut_color = ProcessLUT(Samplers_1, Textures_1, lut_input_color);
 
     _1265 = post_lut_color.r;
     _1266 = post_lut_color.g;
@@ -1644,16 +1628,7 @@ float4 main(
   float3 final_color = film_graded_color;
   // We return sRGB bt709 color
   if (shouldTonemap) {
-    final_color = saturate(film_graded_color);
-
-    if (injectedData.toneMapType != 1.f) {
-      final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
-    } else {
-      final_color = hdr_color;
-    }
-    final_color = renodx::color::bt2020::from::BT709(final_color);
-    final_color = correctGamma(final_color);
-    final_color = renodx::color::pq::Encode(final_color, injectedData.toneMapGameNits);
+    FinalizeTonemap(final_color, film_graded_color, hdr_color, sdr_ap1_color);
     return float4(final_color, 0.f);
   }
 

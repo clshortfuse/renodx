@@ -1,5 +1,5 @@
 #include "./shared.h"
-#include "./tonemapper.hlsl"
+#include "./common.hlsl"
 
 Texture2D<float4> SceneTexturesStruct_SceneDepthTexture : register(t0);
 
@@ -187,8 +187,8 @@ float4 main(
   float4 _125 = PostProcessInput_0_Texture.Sample(PostProcessInput_0_Sampler, float2(_121, _122));
   if (injectedData.toneMapType > 0.f) {
     // We decode before they attempt to blend
-    tonemappedRender = pqToDecoded(_125.rgb);
-    srgb_input = decodedTosRGB(tonemappedRender);
+    tonemappedRender = PQToDecoded(_125.rgb);
+    srgb_input = DecodedTosRGB(tonemappedRender);
     _125.rgb = srgb_input;
   }
 
@@ -277,7 +277,7 @@ float4 main(
   post_srgb = float3(_208, _209, _210);
 
   if (injectedData.toneMapType > 0.f) {
-    output = upgradePostProcess(tonemappedRender, post_srgb, injectedData.vignetteStrength);
+    output = UpgradePostProcess(tonemappedRender, post_srgb, injectedData.vignetteStrength);
     return float4(output, 0.f);
   }
 
