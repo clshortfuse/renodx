@@ -1,6 +1,7 @@
 // ---- Created with 3Dmigoto v1.3.16 on Thu Sep  5 00:04:50 2024
 // ACES Lutbuilder
 
+#include "./common.hlsl"
 #include "./shared.h"
 
 cbuffer cb0 : register(b0) {
@@ -11,29 +12,28 @@ cbuffer cb0 : register(b0) {
 #define cmp -
 
 void main(
-    linear noperspective float2 v0: TEXCOORD0,
-    float4 v1: SV_POSITION0,
-    uint v2: SV_RenderTargetArrayIndex0,
-    out float4 o0: SV_Target0) {
+    linear noperspective float2 v0 : TEXCOORD0,
+    float4 v1 : SV_POSITION0,
+    uint v2 : SV_RenderTargetArrayIndex0,
+    out float4 o0 : SV_Target0) {
   const float4 icb[] =
       {
-        { -4.000000, -0.718548, -4.970622, 0.808913 },
-        { -4.000000, 2.081031, -3.029378, 1.191087 },
-        { -3.157377, 3.668124, -2.126200, 1.568300 },
-        { -0.485250, 4.000000, -1.510500, 1.948300 },
-        { 1.847732, 4.000000, -1.057800, 2.308300 },
-        { 1.847732, 4.000000, -0.466800, 2.638400 },
-        { -2.301030, 0.801995, 0.119380, 2.859500 },
-        { -2.301030, 1.198005, 0.708813, 2.987261 },
-        { -1.931200, 1.594300, 1.291187, 3.012739 },
-        { -1.520500, 1.997300, 1.291187, 3.012739 },
-        { -1.057800, 2.378300, 0, 0 },
-        { -0.466800, 2.768400, 0, 0 },
-        { 0.119380, 3.051500, 0, 0 },
-        { 0.708813, 3.274629, 0, 0 },
-        { 1.291187, 3.327431, 0, 0 },
-        { 1.291187, 3.327431, 0, 0 }
-      };
+          {-4.000000, -0.718548, -4.970622, 0.808913},
+          {-4.000000, 2.081031, -3.029378, 1.191087},
+          {-3.157377, 3.668124, -2.126200, 1.568300},
+          {-0.485250, 4.000000, -1.510500, 1.948300},
+          {1.847732, 4.000000, -1.057800, 2.308300},
+          {1.847732, 4.000000, -0.466800, 2.638400},
+          {-2.301030, 0.801995, 0.119380, 2.859500},
+          {-2.301030, 1.198005, 0.708813, 2.987261},
+          {-1.931200, 1.594300, 1.291187, 3.012739},
+          {-1.520500, 1.997300, 1.291187, 3.012739},
+          {-1.057800, 2.378300, 0, 0},
+          {-0.466800, 2.768400, 0, 0},
+          {0.119380, 3.051500, 0, 0},
+          {0.708813, 3.274629, 0, 0},
+          {1.291187, 3.327431, 0, 0},
+          {1.291187, 3.327431, 0, 0}};
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -357,42 +357,10 @@ void main(
 
     ap1_aces_colored = r3.xyz;
 
-    if (injectedData.toneMapType != 0.f && is_hdr) {
-      renodx::tonemap::Config config = renodx::tonemap::config::Create();
-      config.type = injectedData.toneMapType;
-      config.peak_nits = injectedData.toneMapPeakNits;
-      // config.peak_nits = 10000.f;
-      config.game_nits = injectedData.toneMapGameNits;
-      config.gamma_correction = 1;
-      config.exposure = injectedData.colorGradeExposure;
-      config.highlights = injectedData.colorGradeHighlights;
-      config.shadows = injectedData.colorGradeShadows;
-      config.contrast = injectedData.colorGradeContrast;
-      config.saturation = injectedData.colorGradeSaturation;
-      config.hue_correction_color = ap1_aces_colored;
-      const float ACES_HIGHLIGHTS = 0.96f;
-      const float ACES_SHADOWS = 1.12f;
-      const float ACES_CONTRAST = 1.2f;
-      const float ACES_FLARE = 0.1355f;
+    if (is_hdr) {
+      tonemap(ap1_graded_color, ap1_aces_colored, hdr_color, sdr_color, sdr_ap1_color);
 
-      config.reno_drt_highlights = 0.96f;
-      config.reno_drt_shadows = 1.12f;
-      config.reno_drt_contrast = 1.2f;
-      config.reno_drt_saturation = 1.80f;
-      config.reno_drt_dechroma = 0.80f;  // 0.80f
-      config.reno_drt_flare = 0.1355f;
-
-      float3 config_color = renodx::color::bt709::from::AP1(ap1_graded_color);
-
-      if (injectedData.toneMapType == 3.f) {  // Only apply hue correction if RenoDRT is selected
-        config_color = renodx::color::correct::Hue(config_color, renodx::tonemap::ACESFittedAP1(config_color));
-      }
-
-      renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(config_color, config);
-      hdr_color = dual_tone_map.color_hdr;
-      sdr_color = dual_tone_map.color_sdr;
-      sdr_ap1_color = renodx::color::ap1::from::BT709(sdr_color);
-    } else {
+    } else {  // Added else
       r4.xy = float2(1, 0.180000007) + cb0[36].ww;
       r0.w = -cb0[36].y + r4.x;
       r1.w = 1 + cb0[37].x;
@@ -460,7 +428,7 @@ void main(
       r3.xyz = r3.xyz * float3(0.930000007, 0.930000007, 0.930000007) + r0.www;
       r3.xyz = max(float3(0, 0, 0), r3.xyz);
       sdr_ap1_color = r3.xyz;
-    }  // added the brace
+    }  // Added brace
 
     r3.xyz = sdr_ap1_color;
 
@@ -497,18 +465,7 @@ void main(
 
   if (is_hdr) {
     float3 final_color = saturate(film_graded_color);
-    if (injectedData.toneMapType != 0.f) {
-      final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
-    }
-    // if (injectedData.toneMapGammaCorrection == 1.f) {
-    final_color = renodx::color::correct::GammaSafe(final_color);
-    //}
-    // bool is_pq = (output_type == 3u || output_type == 4u);
-    bool is_pq = true;
-    if (is_pq) {
-      // final_color = renodx::color::bt2020::from::BT709(final_color);
-      final_color = renodx::color::pq::from::BT2020(final_color, injectedData.toneMapGameNits);
-    }
+    final_color = renodx::tonemap::UpgradeToneMap(hdr_color, sdr_color, final_color, 1.f);
     o0.rgba = float4(final_color.rgb, 0);
     return;
   }

@@ -1,6 +1,7 @@
 // ---- Created with 3Dmigoto v1.3.16 on Sat Oct 12 04:28:27 2024
 // Sandland part 1 sample
 
+#include "./common.hlsl"
 #include "./shared.h"
 
 Texture3D<float4> t3 : register(t3);
@@ -31,13 +32,13 @@ cbuffer cb0 : register(b0) {
 #define cmp -
 
 void main(
-    linear noperspective float2 v0: TEXCOORD0,
-    linear noperspective float2 w0: TEXCOORD3,
-    linear noperspective float3 v1: TEXCOORD1,
-    linear noperspective float4 v2: TEXCOORD2,
-    float2 v3: TEXCOORD4,
-    float4 v4: SV_POSITION0,
-    out float4 o0: SV_Target0) {
+    linear noperspective float2 v0 : TEXCOORD0,
+    linear noperspective float2 w0 : TEXCOORD3,
+    linear noperspective float3 v1 : TEXCOORD1,
+    linear noperspective float4 v2 : TEXCOORD2,
+    float2 v3 : TEXCOORD4,
+    float4 v4 : SV_POSITION0,
+    out float4 o0 : SV_Target0) {
   float4 r0, r1, r2, r3, r4, r5, r6;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -110,10 +111,22 @@ void main(
   // r1.xyz = float3(1.04999995, 1.04999995, 1.04999995) * r0.yzw;
 
   float3 untonemapped = r0.yzw * r1.x;
-  float3 lut_input = renodx::color::pq::from::BT2020(untonemapped, 100.f);
+  // o0.rgb = untonemapped.rgb;
+  // o0.w = 1.f;
+  // return;
+  float3 lut_input = renodx::color::pq::Encode(max(0, untonemapped), 100.f);
   float3 sampled = renodx::lut::Sample(t3, s3_s, lut_input);
-  float3 post_lut = renodx::color::bt2020::from::PQ(sampled, 100.f);
+  // float3 post_lut = renodx::color::bt2020::from::PQ(sampled, 100.f);
+  float3 post_lut = sampled;
+
+  // float3 lut_input = renodx::color::pq::Encode(max(0, untonemapped), 100.f);
+  // float3 sampled = renodx::lut::Sample(t3, s3_s, lut_input);
+  // float3 post_lut = renodx::color::pq::Decode(sampled, 100.f);
   r0.yzw = post_lut;
+
+  // float3 lut_input = renodx::color::pq::Encode(untonemapped, 100.f);
+  // float3 sampled = renodx::lut::Sample(t3, s3_s, lut_input);
+  // float3 post_lut = renodx::color::pq::Decode(sampled, 100.f);
 
   o0.w = saturate(dot(r1.xyz, float3(0.298999995, 0.587000012, 0.114)));
   r0.x = r0.x * 0.00390625 + -0.001953125;
@@ -143,5 +156,9 @@ void main(
   } else {
     o0.xyz = r0.xyz;
   }
-  return;
+
+  o0.rgb = post_lut.rgb;
+  o0.w = 1.f;
+
+  o0.rgb = scalePaperWhite(o0.rgb);
 }

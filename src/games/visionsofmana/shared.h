@@ -1,5 +1,5 @@
-#ifndef SRC_SMT5V_SHARED_H_
-#define SRC_SMT5V_SHARED_H_
+#ifndef SRC_MANA_SHARED_H_
+#define SRC_MANA_SHARED_H_
 
 #ifndef __cplusplus
 #include "../../shaders/renodx.hlsl"
@@ -21,15 +21,18 @@ struct ShaderInjectData {
   float toneMapHueCorrection;
   float clipPeak;
   float vignette;
+  float toneMapPerChannel;
+  float ToneMapHueProcessor;
+  float toneMapHueCorrectionMethod;
 };
 
 #ifndef __cplusplus
 cbuffer injectedBuffer : register(b0, space50) {
   ShaderInjectData injectedData : packoffset(c0);
 }
-//cbuffer cb1 : register(b1) {
-//  ShaderInjectData injectedData : packoffset(c0);  //
-//}
+// cbuffer cb1 : register(b1) {
+//   ShaderInjectData injectedData : packoffset(c0);  //
+// }
 #endif
 
-#endif  // SRC_SMT5V_SHARED_H_
+#endif  // SRC_MANA_SHARED_H_

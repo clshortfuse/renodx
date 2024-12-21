@@ -9,40 +9,7 @@
 
 // #define DEBUG_LEVEL_1 //added
 
-#include <embed/0x039B084D.h>  // ui -- "take her hand"
-#include <embed/0x099B9006.h>  //ui -- Party's faces
-#include <embed/0x12E3927E.h>  //ui -- dialog box
-#include <embed/0x23729AED.h>  //ui -- main menu
-#include <embed/0x27A2F211.h>  //ui -- The background in the pause/load menus
-#include <embed/0x29A889E6.h>  //ui
-#include <embed/0x2FA199F2.h>  //ui
-#include <embed/0x2FB8A3BC.h>  //ui
-#include <embed/0x3884890C.h>  //ui -- Pause menu skills/items/essence/etc text
-#include <embed/0x4ADD8064.h>  //UI
-#include <embed/0x6D432834.h>  //ui
-#include <embed/0x76B068AD.h>  //ui
-#include <embed/0x8EC8EF33.h>  //ui
-#include <embed/0x94614EA1.h>  //ui
-#include <embed/0xA42D4BBE.h>  //ui
-#include <embed/0xA6BF5D3C.h>  // ui -- World map
-#include <embed/0xB86F8772.h>  //UI -- Speach bubbles above npc's heads
-#include <embed/0xC3126A03.h>  //ui
-#include <embed/0xC3979EE8.h>  //ui
-#include <embed/0xC6FA129B.h>  //ui
-#include <embed/0xC90A6F07.h>  //ui
-#include <embed/0xEAADB3AA.h>  //ui
-////
-#include <embed/0x82F9B4AC.h>  // Movies, Intro
-////
-
-#include <embed/0x60E37F45.h>  // Sample 2 [Cutscenes?]
-#include <embed/0x61C2EA30.h>  // Lutbuilder3 [Menu]
-#include <embed/0x6BC6B830.h>  // Sample 3 [Stats UI]
-#include <embed/0xB7F426D8.h>  // Sample 4
-#include <embed/0xBBA0606A.h>  // Sample1
-#include <embed/0xC1BCC6B5.h>  // Lutbuilder1 [Game world]
-#include <embed/0xD102F1EB.h>  // Sample 5
-#include <embed/0xE6EB2840.h>  // Lutbuilder 2 [Tokyo]
+#include <embed/shaders.h>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -56,30 +23,7 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
 
-    CustomShaderEntry(0x94614EA1),  // UI
-    CustomShaderEntry(0xC6FA129B),  // UI
-    CustomShaderEntry(0xC90A6F07),  // UI
-    CustomShaderEntry(0xEAADB3AA),  // UI
-    CustomShaderEntry(0x099B9006),  // UI -- Party's Faces
-    CustomShaderEntry(0xC3979EE8),  // UI
-    CustomShaderEntry(0x29A889E6),  // UI
-    CustomShaderEntry(0x2FB8A3BC),  // UI
-    CustomShaderEntry(0x6D432834),  // UI
-    CustomShaderEntry(0x8EC8EF33),  // UI
-    CustomShaderEntry(0xC3126A03),  // UI
-    CustomShaderEntry(0x2FA199F2),  // UI
-    CustomShaderEntry(0x76B068AD),  // UI
-    CustomShaderEntry(0x3884890C),  // UI -- Pause menu skills/items/essence/etc text
-    CustomShaderEntry(0x27A2F211),  // UI -- The background in the pause/load menus
-    CustomShaderEntry(0xB86F8772),  // UI -- Speach bubbles above npc's heads
-    CustomShaderEntry(0x12E3927E),  // UI -- Dialog box
-    CustomShaderEntry(0xA42D4BBE),  // UI
-    CustomShaderEntry(0x4ADD8064),  // UI
-    CustomShaderEntry(0x23729AED),  // UI -- Main Menu
-    CustomShaderEntry(0xA6BF5D3C),  // UI -- World Map
-    CustomShaderEntry(0x039B084D),  // UI -- "Take Her Hand"
-    ////
-    CustomShaderEntry(0x82F9B4AC),  // Movies, Intro
+    // CustomShaderEntry(0x82F9B4AC),  // Movies, Intro
     ////
     CustomShaderEntry(0xC1BCC6B5),  // Lutbuilder1 [Game world]
     CustomShaderEntry(0xBBA0606A),  // Sample1
@@ -89,6 +33,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x61C2EA30),  // Lutbuilder3 [Menu]
     CustomShaderEntry(0xB7F426D8),  // Sample 4
     CustomShaderEntry(0xD102F1EB),  // Sample 5
+    CustomShaderEntry(0x3FA88630),  // Sandland Sample 1
 
 };
 
@@ -104,8 +49,8 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "ACES"},
-        .is_enabled = []() { return shader_injection.toneMapType != 2; },
+        .labels = {"Vanilla", "None", "ACES", "RenoDRT"},
+        //.is_enabled = []() { return shader_injection.toneMapType != 2; },
     },
 
     new renodx::utils::settings::Setting{
@@ -185,27 +130,30 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
 
-    // new renodx::utils::settings::Setting{
-    //     .key = "colorGradeBlowout",
-    //     .binding = &shader_injection.colorGradeBlowout,
-    //     .default_value = 50.f,
-    //     .label = "Blowout",
-    //     .section = "Color Grading",
-    //     .tooltip = "Controls highlight desaturation due to overexposure.",
-    //     .max = 100.f,
-    //     .parse = [](float value) { return value * 0.01f; },
-    // },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeBlowout",
+        .binding = &shader_injection.colorGradeBlowout,
+        .default_value = 50.f,
+        .label = "Blowout",
+        .section = "Color Grading",
+        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+        .parse = [](float value) { return value * 0.02f - 1.f; },
+    },
 
-    // new renodx::utils::settings::Setting{
-    //     .key = "toneMapHueCorrection",
-    //     .binding = &shader_injection.toneMapHueCorrection,
-    //     .default_value = 50.f,
-    //     .label = "Hue Correction",
-    //     .section = "Color Grading",
-    //     .tooltip = "Emulates hue shifting from the vanilla tonemapper",
-    //     .max = 100.f,
-    //     .parse = [](float value) { return value * 0.01f; },
-    // },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapHueCorrection",
+        .binding = &shader_injection.toneMapHueCorrection,
+        .default_value = 100.f,
+        .label = "Hue Correction",
+        .section = "Tone Mapping",
+        .tooltip = "Emulates Vanilla hue shifts.",
+        .min = 0.f,
+        .max = 100.f,
+        //.is_enabled = []() { return shader_injection.toneMapHueCorrectionMethod != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
 
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
@@ -234,6 +182,44 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           system("start https://github.com/clshortfuse/renodx/wiki/Mods");
         },
+    },
+
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapPerChannel",
+        .binding = &shader_injection.toneMapPerChannel,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Per Channel",
+        .section = "Tone Mapping",
+        .tooltip = "Applies tonemapping per-channel instead of by luminance",
+        .labels = {"Off", "On"},
+        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+    },
+
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapHueProcessor",
+        .binding = &shader_injection.ToneMapHueProcessor,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Hue Processor",
+        .section = "Tone Mapping",
+        .tooltip = "Selects hue processor",
+        .labels = {"OKLab", "ICtCp", "darkTable UCS"},
+        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+
+    },
+
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapHueCorrectionMethod",
+        .binding = &shader_injection.toneMapHueCorrectionMethod,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Hue Correction Method",
+        .section = "Tone Mapping",
+        .tooltip = "Applies hue shift emulation before tonemapping",
+        .labels = {"Default", "ACES AP1", "Filmic", "SDR Grade"},
+        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+
     },
 
 };
@@ -268,65 +254,53 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
         return device->get_api() == reshade::api::device_api::d3d12;  // So overlays dont kill the game
       };
-      renodx::mods::shader::expected_constant_buffer_space = 50;  // Cbuffer slot 50
+      renodx::mods::shader::expected_constant_buffer_space = 50;  // cbuffer slot 50
+      //renodx::mods::shader::allow_multiple_push_constants = true;
+      renodx::mods::swapchain::expected_constant_buffer_space = 50;
 
       renodx::mods::shader::force_pipeline_cloning = true;   // So the mod works with the toolkit
+      renodx::mods::swapchain::use_resource_cloning = true;  //
+      renodx::mods::swapchain::swapchain_proxy_compatibility_mode = true;
+
+      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = {
+          _swap_chain_proxy_vertex_shader,
+          _swap_chain_proxy_vertex_shader + sizeof(_swap_chain_proxy_vertex_shader),
+      };
+      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = {
+          _swap_chain_proxy_pixel_shader,
+          _swap_chain_proxy_pixel_shader + sizeof(_swap_chain_proxy_pixel_shader),
+      };
+
       renodx::mods::swapchain::force_borderless = false;     // needed for stability
       renodx::mods::swapchain::prevent_full_screen = false;  // needed for stability
 
-      //// BGRA8_TYPELESS
-      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //   .old_format = reshade::api::format::b8g8r8a8_typeless,
-      //   .new_format = reshade::api::format::r16g16b16a16_float,
-      //   //.aspect_ratio = 16.f / 9.f,
-      //   //.index = 1,
+      //   //// RGB10_A2 32x32x32 lutbuilder
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r10g10b10a2_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .ignore_size = true,
+          .dimensions = {.width = 32, .height = 32, .depth = 32},
+      });
 
-      //});
+      //   renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      //       .old_format = reshade::api::format::r8g8b8a8_unorm,
+      //       .new_format = reshade::api::format::r16g16b16a16_float,
+      //   });
 
-      // BGRA8_TYPELSS LOOP -- Unclamp Supers
-      // for (auto index : {0, 1, 2 ,3 ,4 ,5, 6, 7, 8, 9, 11, 12, 13, 14}) {
-      //   if (index != 10) {
+      //   renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      //       .old_format = reshade::api::format::b8g8r8a8_unorm,
+      //       .new_format = reshade::api::format::r16g16b16a16_float,
+      //   });
+
+      //   renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      //       .old_format = reshade::api::format::r8g8b8a8_typeless,
+      //       .new_format = reshade::api::format::r16g16b16a16_float,
+      //   });
+
       //   renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
       //       .old_format = reshade::api::format::b8g8r8a8_typeless,
       //       .new_format = reshade::api::format::r16g16b16a16_float,
-      //       .index = index,
-      //       //.aspect_ratio = 16.f / 9.f,
-      //       //.ignore_size = true,
-      //       .resource_tag = static_cast<float>(index),
       //   });
-      // }
-      //   }
-
-      //// BGRA8_UNORM
-      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //     .old_format = reshade::api::format::b8g8r8a8_unorm,
-      //     .new_format = reshade::api::format::r16g16b16a16_float,
-      //     .aspect_ratio = 16.f / 9.f,
-
-      //});
-
-      //// RGB10A2_UNORM
-      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //     .old_format = reshade::api::format::b10g10r10a2_unorm,
-      //     .new_format = reshade::api::format::r16g16b16a16_float,
-
-      //});
-
-      //// BGRA8_TYPELESS 16:9
-      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //     .old_format = reshade::api::format::b8g8r8a8_typeless,
-      //     .new_format = reshade::api::format::r16g16b16a16_float,
-      //     .aspect_ratio = 16.f/9.f,
-
-      //});
-
-      //// BGRA8_UNORM 16:9
-      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //     .old_format = reshade::api::format::b8g8r8a8_unorm,
-      //     .new_format = reshade::api::format::r16g16b16a16_float,
-      //     .aspect_ratio = 16.f/9.f,
-
-      //});
 
       break;
     case DLL_PROCESS_DETACH:
@@ -336,7 +310,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
 
-  renodx::mods::swapchain::Use(fdw_reason);
+  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
 
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
