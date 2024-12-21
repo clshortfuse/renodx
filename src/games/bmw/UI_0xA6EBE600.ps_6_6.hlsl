@@ -205,6 +205,9 @@ float4 main(
     SV_Target.x = _167;
     SV_Target.y = _168;
     SV_Target.z = _169;
-    SV_Target.w = 1.0f;
+
+    // SV_Target.w = 1.0f;
+    SV_Target.w = _11.w; // fix DLSS FG in HDR
+
     return SV_Target;
 }
