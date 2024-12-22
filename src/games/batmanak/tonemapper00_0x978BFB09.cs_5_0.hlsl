@@ -216,10 +216,10 @@ cbuffer cb0 : register(b0) {
           grainedColor = grainEffect * grainInputColor;
           grainedColor = renodx::color::gamma::DecodeSafe(grainedColor, 2.2f);
         } else {
-          grainedColor = renodx::effects::ApplyFilmGrain(
+          grainedColor = renodx::effects::ApplyFilmGrainColored(
               outputColor,
               screenXY.xy,
-              frac(r3.x),
+              randomnessFactor,
               cb0[11].z ? injectedData.fxFilmGrain * 0.03f : 0,
               1.f);
         }
