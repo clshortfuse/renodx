@@ -1,8 +1,9 @@
-// ---- Created with 3Dmigoto v1.3.16 on Thu Sep  5 00:04:50 2024
-// ACES Lutbuilder
-
 #include "./common.hlsl"
 #include "./shared.h"
+
+Texture2D<float4> t0 : register(t0);
+
+SamplerState s0_s : register(s0);
 
 cbuffer cb0 : register(b0) {
   float4 cb0[67];
@@ -16,25 +17,22 @@ void main(
     float4 v1: SV_POSITION0,
     uint v2: SV_RenderTargetArrayIndex0,
     out float4 o0: SV_Target0) {
-  const float4 icb[] =
-      {
-        { -4.000000, -0.718548, -4.970622, 0.808913 },
-        { -4.000000, 2.081031, -3.029378, 1.191087 },
-        { -3.157377, 3.668124, -2.126200, 1.568300 },
-        { -0.485250, 4.000000, -1.510500, 1.948300 },
-        { 1.847732, 4.000000, -1.057800, 2.308300 },
-        { 1.847732, 4.000000, -0.466800, 2.638400 },
-        { -2.301030, 0.801995, 0.119380, 2.859500 },
-        { -2.301030, 1.198005, 0.708813, 2.987261 },
-        { -1.931200, 1.594300, 1.291187, 3.012739 },
-        { -1.520500, 1.997300, 1.291187, 3.012739 },
-        { -1.057800, 2.378300, 0, 0 },
-        { -0.466800, 2.768400, 0, 0 },
-        { 0.119380, 3.051500, 0, 0 },
-        { 0.708813, 3.274629, 0, 0 },
-        { 1.291187, 3.327431, 0, 0 },
-        { 1.291187, 3.327431, 0, 0 }
-      };
+  const float4 icb[] = { { -4.000000, -0.718548, -4.970622, 0.808913 },
+                         { -4.000000, 2.081031, -3.029378, 1.191087 },
+                         { -3.157377, 3.668124, -2.126200, 1.568300 },
+                         { -0.485250, 4.000000, -1.510500, 1.948300 },
+                         { 1.847732, 4.000000, -1.057800, 2.308300 },
+                         { 1.847732, 4.000000, -0.466800, 2.638400 },
+                         { -2.301030, 0.801995, 0.119380, 2.859500 },
+                         { -2.301030, 1.198005, 0.708813, 2.987261 },
+                         { -1.931200, 1.594300, 1.291187, 3.012739 },
+                         { -1.520500, 1.997300, 1.291187, 3.012739 },
+                         { -1.057800, 2.378300, 0, 0 },
+                         { -0.466800, 2.768400, 0, 0 },
+                         { 0.119380, 3.051500, 0, 0 },
+                         { 0.708813, 3.274629, 0, 0 },
+                         { 1.291187, 3.327431, 0, 0 },
+                         { 1.291187, 3.327431, 0, 0 } };
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -43,14 +41,14 @@ void main(
   r0.xy = float2(1.03225803, 1.03225803) * r0.xy;
   r0.z = (uint)v2.x;
   r1.z = 0.0322580636 * r0.z;
-  r0.z = cmp(asuint(cb0[65].z) >= 3);  // checks if output device is under 3 (SDR)
+  r0.z = cmp(asuint(cb0[65].z) >= 3);
   r2.xy = log2(r0.xy);
   r2.z = log2(r1.z);
   r0.xyw = float3(0.0126833133, 0.0126833133, 0.0126833133) * r2.xyz;
   r0.xyw = exp2(r0.xyw);
   r2.xyz = float3(-0.8359375, -0.8359375, -0.8359375) + r0.xyw;
   r2.xyz = max(float3(0, 0, 0), r2.xyz);
-  r0.xyw = -r0.xyw * float3(18.6875, 18.6875, 18.6875) + float3(18.8515625, 18.8515625, 18.8515625);  // PQ
+  r0.xyw = -r0.xyw * float3(18.6875, 18.6875, 18.6875) + float3(18.8515625, 18.8515625, 18.8515625);
   r0.xyw = r2.xyz / r0.xyw;
   r0.xyw = log2(r0.xyw);
   r0.xyw = float3(6.27739477, 6.27739477, 6.27739477) * r0.xyw;
@@ -61,29 +59,15 @@ void main(
   r1.xyz = float3(14, 14, 14) * r1.xyz;
   r1.xyz = exp2(r1.xyz);
   r1.xyz = r1.xyz * float3(0.180000007, 0.180000007, 0.180000007) + float3(-0.00266771927, -0.00266771927, -0.00266771927);
-
-  float3 pq_input_color = r0.xyw;
-  float3 log_input_color = r1.rgb;
-
   r0.xyz = r0.zzz ? r0.xyw : r1.xyz;
-
-  // r0.rgb = pq_input_color; use log2lin
-
-  float3 lut_input_color = r0.rgb;
-
-  // 709_TO_AP1_MAT
   r1.x = dot(float3(0.613191485, 0.33951208, 0.0473663323), r0.xyz);
   r1.y = dot(float3(0.0702069029, 0.916335821, 0.0134500116), r0.xyz);
   r1.z = dot(float3(0.0206188709, 0.109567292, 0.869606733), r0.xyz);
-  // r1.xyz = ap1 pre gamut expansion
-
-  // Gamut Expansion
-  // AP1_RGB2Y
-  r0.x = dot(r1.xyz, float3(0.272228718, 0.674081743, 0.0536895171));  // AP1 pre-gamut expansion
+  r0.x = dot(r1.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
   r0.yzw = r1.xyz / r0.xxx;
   r0.yzw = float3(-1, -1, -1) + r0.yzw;
   r0.y = dot(r0.yzw, r0.yzw);
-  r0.y = -4 * r0.y;  // Gamut expansion has a 4 in it ?
+  r0.y = -4 * r0.y;
   r0.y = exp2(r0.y);
   r0.x = r0.x * r0.x;
   r0.x = cb0[66].y * r0.x;
@@ -91,17 +75,12 @@ void main(
   r0.x = exp2(r0.x);
   r0.xy = float2(1, 1) + -r0.xy;
   r0.x = r0.y * r0.x;
-  // float3x3 Wide_2_XYZ_MAT
   r2.x = dot(float3(1.37041271, -0.329291314, -0.0636827648), r1.xyz);
   r2.y = dot(float3(-0.0834341869, 1.09709096, -0.0108615728), r1.xyz);
   r2.z = dot(float3(-0.0257932581, -0.0986256376, 1.20369434), r1.xyz);
   r0.yzw = r2.xyz + -r1.xyz;
   r0.xyz = r0.xxx * r0.yzw + r1.xyz;
   r0.xyz = cb0[44].yyy ? r1.xyz : r0.xyz;
-
-  // start of nuke color correct
-  //  //ColorCorrectAll
-  //  AP1_RGB2Y
   r0.w = dot(r0.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
   r1.xyzw = cb0[50].xyzw * cb0[45].xyzw;
   r2.xyzw = cb0[51].xyzw * cb0[46].xyzw;
@@ -188,34 +167,12 @@ void main(
   r0.xyz = r1.xyz * r1.www + r0.xyz;
   r0.xyz = r2.xyz * r3.yyy + r0.xyz;
 
-  // End of Color Correct
-  float3 ap1_graded_color = r0.rgb;
-  float3 ap1_aces_colored = ap1_graded_color;
+  float3 untonemapped_ap1 = r1.xyz;
 
-  // Try throwing renodx on r0 here?
-
-  // uint output_type = cb0[65].z;
-
-  // uint output_type = cb0[65].z;
-  uint output_type = 3u;
-
-  float3 sdr_color;
-  float3 hdr_color;
-  float3 sdr_ap1_color;
-
-  float FilmBlackClip = cb0[36].w;
-  float FilmToe = cb0[36].y;
-  float FilmWhiteClip = cb0[37].x;
-  float FilmShoulder = cb0[36].z;
-
-  // bool is_hdr = (output_type >= 3u && output_type <= 6u);
-  bool is_hdr = true;
-
-  // AP1_2_sRGB (4) : Identity (5)
   r1.x = dot(float3(1.70505154, -0.621790707, -0.0832583979), r0.xyz);
   r1.y = dot(float3(-0.130257145, 1.14080286, -0.0105485283), r0.xyz);
   r1.z = dot(float3(-0.0240032747, -0.128968775, 1.15297174), r0.xyz);
-  if (cb0[44].y != 0) {  // if (bUseMobileTonemapper)
+  if (cb0[44].y != 0) {
     r2.x = dot(r1.xyz, cb0[28].xyz);
     r2.y = dot(r1.xyz, cb0[29].xyz);
     r2.z = dot(r1.xyz, cb0[30].xyz);
@@ -240,20 +197,12 @@ void main(
     r2.xyz = r2.xyz * cb0[30].www + r3.xyz;
     r2.xyz = r5.xyz * r4.xyz + r2.xyz;
     r2.xyz = float3(-0.00200000009, -0.00200000009, -0.00200000009) + r2.xyz;
-
   } else {
-    ap1_graded_color = r0.xyz;
-
-    // Blue correct    -- r0 is still ap1, r1 is sRGB
     r3.x = dot(float3(0.938639402, 1.02359565e-10, 0.0613606237), r0.xyz);
     r3.y = dot(float3(8.36008554e-11, 0.830794156, 0.169205874), r0.xyz);
     r3.z = dot(float3(2.13187367e-12, -5.63307213e-12, 1), r0.xyz);
     r3.xyz = r3.xyz + -r0.xyz;
     r0.xyz = cb0[66].xxx * r3.xyz + r0.xyz;
-
-    // start of film tonemap
-    // AP1 => AP0
-    //  start working here
     r3.y = dot(float3(0.695452213, 0.140678704, 0.163869068), r0.xyz);
     r3.z = dot(float3(0.0447945632, 0.859671116, 0.0955343172), r0.xyz);
     r3.w = dot(float3(-0.00552588236, 0.00402521016, 1.00150073), r0.xyz);
@@ -333,7 +282,6 @@ void main(
     r3.x = cmp(180 < r2.w);
     r3.z = -360 + r2.w;
     r2.w = r3.x ? r3.z : r2.w;
-    // aces::hueweight (with smoothstep)
     r2.w = 0.0148148146 * r2.w;
     r2.w = 1 + -abs(r2.w);
     r2.w = max(0, r2.w);
@@ -342,30 +290,20 @@ void main(
     r2.w = r3.x * r2.w;
     r2.w = r2.w * r2.w;
     r0.w = r2.w * r0.w;
-
     r1.w = -r3.y * r1.w + 0.0299999993;
     r0.w = r1.w * r0.w;
     r4.x = r0.w * 0.180000007 + r4.y;
-    // AP0 => AP1
     r3.x = dot(float3(1.45143926, -0.236510754, -0.214928567), r4.xzw);
     r3.y = dot(float3(-0.0765537769, 1.17622972, -0.0996759236), r4.xzw);
     r3.z = dot(float3(0.00831614807, -0.00603244966, 0.997716308), r4.xzw);
     r3.xyz = max(float3(0, 0, 0), r3.xyz);
-    // AP1_RGB2Y
     r0.w = dot(r3.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
     r3.xyz = r3.xyz + -r0.www;
-
-    r3.xyz = r3.xyz * float3(0.959999979, 0.959999979, 0.959999979) + r0.www;  // End of ACES:RRT
-
-    ap1_aces_colored = r3.xyz;
-
+    r3.xyz = r3.xyz * float3(0.959999979, 0.959999979, 0.959999979) + r0.www;
     r4.xy = float2(1, 0.180000007) + cb0[36].ww;
     r0.w = -cb0[36].y + r4.x;
     r1.w = 1 + cb0[37].x;
     r2.w = -cb0[36].z + r1.w;
-
-    // Film Toe > 0.8
-
     r3.w = cmp(0.800000012 < cb0[36].y);
     r4.xz = float2(0.819999993, 1) + -cb0[36].yy;
     r4.xz = r4.xz / cb0[36].xx;
@@ -419,20 +357,12 @@ void main(
     r4.xyz = r4.xyz * r5.xyz;
     r3.xyz = r3.xyz + -r7.xyz;
     r3.xyz = r4.xyz * r3.xyz + r7.xyz;
-    // AP1_RGB2Y
     r0.w = dot(r3.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
     r3.xyz = r3.xyz + -r0.www;
-
     r3.xyz = r3.xyz * float3(0.930000007, 0.930000007, 0.930000007) + r0.www;
     r3.xyz = max(float3(0, 0, 0), r3.xyz);
-    sdr_ap1_color = r3.xyz;
-
-    r3.xyz = sdr_ap1_color;
-
-    // lerp untonemapped/tonemapped via ToneCurveAmount
     r3.xyz = r3.xyz + -r0.xyz;
     r0.xyz = cb0[66].zzz * r3.xyz + r0.xyz;
-    // BlueBlueCorrectInv
     r3.x = dot(float3(1.06537485, 1.44678506e-06, -0.0653710067), r0.xyz);
     r3.y = dot(float3(-3.45525592e-07, 1.20366347, -0.203667715), r0.xyz);
     r3.z = dot(float3(1.9865448e-08, 2.12079581e-08, 0.999999583), r0.xyz);
@@ -441,14 +371,40 @@ void main(
     r3.x = dot(float3(1.70505154, -0.621790707, -0.0832583979), r0.xyz);
     r3.y = dot(float3(-0.130257145, 1.14080286, -0.0105485283), r0.xyz);
     r3.z = dot(float3(-0.0240032747, -0.128968775, 1.15297174), r0.xyz);
-    r2.xyz = max(float3(0, 0, 0), r3.xyz);  // Convert to Target Colorspace ?
+    r2.xyz = max(float3(0, 0, 0), r3.xyz);
   }
-
-  // float3 lut_input_color = r2.xyz; (no lut)
-
-  r0.xyz = r2.xyz * r2.xyz;
-  r2.xyz = cb0[26].yyy * r2.xyz;
-  r0.xyz = cb0[26].xxx * r0.xyz + r2.xyz;
+  r2.xyz = saturate(r2.xyz);
+  r0.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r2.xyz;
+  r3.xyz = cmp(r2.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
+  r2.xyz = log2(r2.xyz);
+  r2.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r2.xyz;
+  r2.xyz = exp2(r2.xyz);
+  r2.xyz = r2.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
+  r0.xyz = r3.xyz ? r2.xyz : r0.xyz;
+  r2.yzw = r0.xyz * float3(0.9375, 0.9375, 0.9375) + float3(0.03125, 0.03125, 0.03125);
+  r0.w = r2.w * 16 + -0.5;
+  r1.w = floor(r0.w);
+  r0.w = -r1.w + r0.w;
+  r1.w = r2.y + r1.w;
+  r2.x = 0.0625 * r1.w;
+  r3.xyz = t0.Sample(s0_s, r2.xz).xyz;
+  r2.xy = float2(0.0625, 0) + r2.xz;
+  r2.xyz = t0.Sample(s0_s, r2.xy).xyz;
+  r2.xyz = r2.xyz + -r3.xyz;
+  r2.xyz = r0.www * r2.xyz + r3.xyz;
+  r2.xyz = cb0[39].xxx * r2.xyz;
+  r0.xyz = cb0[38].xxx * r0.xyz + r2.xyz;
+  r0.xyz = max(float3(6.10351999e-05, 6.10351999e-05, 6.10351999e-05), r0.xyz);
+  r2.xyz = cmp(float3(0.0404499993, 0.0404499993, 0.0404499993) < r0.xyz);
+  r3.xyz = r0.xyz * float3(0.947867274, 0.947867274, 0.947867274) + float3(0.0521326996, 0.0521326996, 0.0521326996);
+  r3.xyz = log2(r3.xyz);
+  r3.xyz = float3(2.4000001, 2.4000001, 2.4000001) * r3.xyz;
+  r3.xyz = exp2(r3.xyz);
+  r0.xyz = float3(0.0773993805, 0.0773993805, 0.0773993805) * r0.xyz;
+  r0.xyz = r2.xyz ? r3.xyz : r0.xyz;
+  r2.xyz = r0.xyz * r0.xyz;
+  r0.xyz = cb0[26].yyy * r0.xyz;
+  r0.xyz = cb0[26].xxx * r2.xyz + r0.xyz;
   r0.xyz = cb0[26].zzz + r0.xyz;
   r2.xyz = cb0[42].yzw * r0.xyz;
   r0.xyz = -r0.xyz * cb0[42].yzw + cb0[43].xyz;
@@ -458,75 +414,18 @@ void main(
   r2.xyz = cb0[27].yyy * r2.xyz;
   r3.xyz = exp2(r2.xyz);
 
-  float3 film_graded_color = r3.rgb;
-
-  if (injectedData.toneMapType != 0.f) {
-    float3 bt709_graded_color = renodx::color::bt709::from::AP1(ap1_graded_color);
-    float3 bt709_aces_color = renodx::color::bt709::from::AP1(ap1_aces_colored);
-
-    float3 neutral_sdr_color = RenoDRTSmoothClamp(bt709_graded_color);
-
-    float3 color_graded = UpgradeToneMapPerChannel(bt709_graded_color, neutral_sdr_color, film_graded_color, 1);
-
-    renodx::tonemap::Config config = renodx::tonemap::config::Create();
-    config.type = injectedData.toneMapType;
-    config.peak_nits = injectedData.toneMapPeakNits;
-    // config.peak_nits = 10000.f;
-    config.game_nits = injectedData.toneMapGameNits;
-    config.gamma_correction = injectedData.toneMapGammaCorrection;
-    config.exposure = injectedData.colorGradeExposure;
-    config.highlights = injectedData.colorGradeHighlights;
-    config.shadows = injectedData.colorGradeShadows;
-    config.contrast = injectedData.colorGradeContrast;
-    config.saturation = injectedData.colorGradeSaturation;
-
-    // Default inverts smooth clamp
-    config.reno_drt_highlights = 1.0f;
-    config.reno_drt_shadows = 1.0f;
-    config.reno_drt_contrast = 1.05f;
-    config.reno_drt_saturation = 1.05f;
-    config.reno_drt_dechroma = 0;
-    config.reno_drt_blowout = injectedData.colorGradeBlowout;
-    config.reno_drt_flare =   injectedData.colorGradeFlare;
-    config.reno_drt_working_color_space = 2u;
-    config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
-
-    config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
-
-    config.hue_correction_strength = injectedData.toneMapHueCorrection;
-
-    float3 final_color = renodx::tonemap::config::Apply(color_graded, config);
-
-    if (injectedData.toneMapGammaCorrection == 2.f) {
-      final_color = renodx::color::srgb::EncodeSafe(final_color);
-      final_color = renodx::color::gamma::DecodeSafe(final_color, 2.4f);
-      final_color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-      final_color = renodx::color::gamma::EncodeSafe(final_color, 2.4f);
-    } else if (injectedData.toneMapGammaCorrection == 1.f) {
-      final_color = renodx::color::srgb::EncodeSafe(final_color);
-      final_color = renodx::color::gamma::DecodeSafe(final_color, 2.2f);
-      final_color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-      final_color = renodx::color::gamma::EncodeSafe(final_color, 2.2f);
-    } else {
-      final_color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-      final_color = renodx::color::srgb::EncodeSafe(final_color);
-    }
-
-    // Scale for UE decoding
-    final_color *= 1.f / 1.05f;
-
-    o0.rgba = float4(final_color.rgb, 0);
+  if (injectedData.toneMapType != 0) {
+    o0 = LutBuilderToneMap(untonemapped_ap1, r3.xyz);
     return;
   }
 
-  if (cb0[65].z == 0) {                                                           // cb0[65].z = output device
-    r4.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r3.xyz;                 // BT709 to SRGB
-    r5.xyz = cmp(r3.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));  // Linear=>SRGB
-    r2.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r2.xyz;              // 1/2.4
+  if (cb0[65].z == 0) {
+    r4.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r3.xyz;
+    r5.xyz = cmp(r3.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
+    r2.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r2.xyz;
     r2.xyz = exp2(r2.xyz);
-    r2.xyz = r2.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);  // sRGB
+    r2.xyz = r2.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
     r2.xyz = r5.xyz ? r2.xyz : r4.xyz;
-
   } else {
     r4.xyzw = cmp(asint(cb0[65].wwww) == int4(1, 2, 3, 4));
     r5.xyz = r4.www ? float3(1, 0, 0) : float3(1.70505154, -0.621790707, -0.0832583979);
@@ -542,7 +441,7 @@ void main(
     r6.xyz = r4.xxx ? float3(-0.0693352968, 1.08229232, -0.0129620517) : r6.xyz;
     r4.xyz = r4.xxx ? float3(-0.00215925858, -0.0454653986, 1.04775953) : r4.yzw;
     r0.w = cmp(asint(cb0[65].z) == 1);
-    if (r0.w != 0) {  // lut sample somewhere here? || tonemap output?
+    if (r0.w != 0) {
       r7.x = dot(float3(0.613191485, 0.33951208, 0.0473663323), r3.xyz);
       r7.y = dot(float3(0.0702069029, 0.916335821, 0.0134500116), r3.xyz);
       r7.z = dot(float3(0.0206188709, 0.109567292, 0.869606733), r3.xyz);
@@ -656,7 +555,7 @@ void main(
           r3.w = r2.w * r2.w;
           r5.w = r3.w * r2.w;
           r8.xzw = float3(-0.166666672, -0.5, 0.166666672) * r5.www;
-          r8.xz = r3.ww * float2(0.5, 0.5) + r8.xz;  // float2 UV = InUV - float2(0.5f / LUTSize, 0.5f / LUTSize);
+          r8.xz = r3.ww * float2(0.5, 0.5) + r8.xz;
           r8.xz = r2.ww * float2(-0.5, 0.5) + r8.xz;
           r2.w = r5.w * 0.5 + -r3.w;
           r2.w = 0.666666687 + r2.w;
@@ -681,10 +580,8 @@ void main(
         r8.z = dot(float3(0.00831614807, -0.00603244966, 0.997716308), r7.xyz);
         r7.xyz = max(float3(0, 0, 0), r8.xyz);
         r7.xyz = min(float3(65535, 65535, 65535), r7.xyz);
-        // AP1_RGB2Y
         r0.w = dot(r7.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
         r7.xyz = r7.xyz + -r0.www;
-        // RRT_SAT_FACTOR (0.96)
         r7.xyz = r7.xyz * float3(0.959999979, 0.959999979, 0.959999979) + r0.www;
         r8.xyz = cmp(float3(0, 0, 0) >= r7.xyz);
         r7.xyz = log2(r7.xyz);
@@ -1017,7 +914,6 @@ void main(
         r7.xyz = log2(r7.xyz);
         r7.xyz = float3(78.84375, 78.84375, 78.84375) * r7.xyz;
         r2.xyz = exp2(r7.xyz);
-
       } else {
         r7.xy = cmp(asint(cb0[65].zz) == int2(4, 6));
         r0.w = (int)r7.y | (int)r7.x;
@@ -1139,8 +1035,7 @@ void main(
           r8.z = dot(float3(0.00831614807, -0.00603244966, 0.997716308), r7.xyz);
           r7.xyz = max(float3(0, 0, 0), r8.xyz);
           r7.xyz = min(float3(65535, 65535, 65535), r7.xyz);
-          // AP1_RGB2Y
-          r0.w = dot(r7.xyz, float3(0.93008718, 0.674081743, 0.0536895171));
+          r0.w = dot(r7.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
           r7.xyz = r7.xyz + -r0.www;
           r7.xyz = r7.xyz * float3(0.959999979, 0.959999979, 0.959999979) + r0.www;
           r8.xyz = cmp(float3(0, 0, 0) >= r7.xyz);
@@ -1473,7 +1368,6 @@ void main(
           r7.xyz = log2(r7.xyz);
           r7.xyz = float3(78.84375, 78.84375, 78.84375) * r7.xyz;
           r2.xyz = exp2(r7.xyz);
-
         } else {
           r0.w = cmp(asint(cb0[65].z) == 7);
           if (r0.w != 0) {
@@ -1494,7 +1388,6 @@ void main(
             r7.xyz = log2(r7.xyz);
             r7.xyz = float3(78.84375, 78.84375, 78.84375) * r7.xyz;
             r2.xyz = exp2(r7.xyz);
-
           } else {
             r7.xy = cmp(asint(cb0[65].zz) == int2(8, 9));
             r8.x = dot(float3(0.613191485, 0.33951208, 0.0473663323), r0.xyz);
@@ -1523,6 +1416,5 @@ void main(
   }
   o0.xyz = float3(0.952381015, 0.952381015, 0.952381015) * r2.xyz;
   o0.w = 0;
-
   return;
 }

@@ -20,9 +20,10 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomSwapchainShader(0xAC791084),  // fmv
-    CustomShaderEntry(0xC1BCC6B5), // lutbuilder1
-    CustomShaderEntry(0xE6EB2840), // lutbuilder2
-    CustomShaderEntry(0x61C2EA30), // lutbuilder3
+    CustomShaderEntry(0x61C2EA30),      // lutbuilder
+    CustomShaderEntry(0xC1BCC6B5),      // lutbuilder
+    CustomShaderEntry(0xE6EB2840),      // lutbuilder
+    CustomShaderEntry(0xD4A45A02),      // lutbuilder
 };
 
 ShaderInjectData shader_injection;
@@ -32,12 +33,12 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 3.f,
+        .default_value = 1.f,
         .can_reset = false,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "ACES", "RenoDRT"},
+        .labels = {"Vanilla", "RenoDRT"},
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
@@ -92,19 +93,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Selects hue processor",
         .labels = {"OKLab", "ICtCp", "darkTable UCS"},
-        .is_enabled = []() { return shader_injection.toneMapType == 3; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapHueCorrection",
-        .binding = &shader_injection.toneMapHueCorrection,
-        .default_value = 0.f,
-        .label = "Hue Correction",
-        .section = "Tone Mapping",
-        .tooltip = "Corrects Vanilla hue shifts.",
-        .min = 0.f,
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 3; },
-        .parse = [](float value) { return value * 0.01f; },
+        .is_enabled = []() { return shader_injection.toneMapType == 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPerChannel",
@@ -115,7 +104,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Applies tonemapping per-channel instead of by luminance",
         .labels = {"Off", "On"},
-        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+        .is_enabled = []() { return shader_injection.toneMapType == 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
@@ -123,7 +112,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Exposure",
         .section = "Color Grading",
-        .max = 10.f,
+        .max = 2.f,
         .format = "%.2f",
     },
     new renodx::utils::settings::Setting{
@@ -170,7 +159,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+        .is_enabled = []() { return shader_injection.toneMapType == 1; },
         .parse = [](float value) { return value * 0.02f - 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -181,7 +170,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Flare/Glare",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+        .is_enabled = []() { return shader_injection.toneMapType == 1; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -203,7 +192,6 @@ renodx::utils::settings::Settings settings = {
             "US CRT",
             "JPN CRT",
         },
-
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
