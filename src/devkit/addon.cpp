@@ -765,7 +765,10 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
 
           for (uint32_t k = 0; k < range.count; ++k) {
             auto heap_pair = descriptor_data.heaps.find(heap.handle);
-            assert(heap_pair != descriptor_data.heaps.end());
+            if (heap_pair == descriptor_data.heaps.end()) {
+              // Unknown heap?
+              continue;
+            }
             const auto& heap_data = heap_pair->second;
             auto offset = base_offset + k;
             if (offset >= heap_data.size()) {
@@ -1048,7 +1051,11 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
         ImGui::PushID(row_index);
         bool draw_node_open = false;
         if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
-          draw_node_open = ImGui::TreeNodeEx("", tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen, "%s", draw_details.DrawMethodString().c_str());
+          auto flags = tree_node_flags;
+          if (device->get_api() != reshade::api::device_api::d3d12) {
+            flags |= ImGuiTreeNodeFlags_DefaultOpen;
+          }
+          draw_node_open = ImGui::TreeNodeEx("", flags, "%s", draw_details.DrawMethodString().c_str());
         }
         // Ref
         // Info
@@ -1835,7 +1842,7 @@ void RenderShaderViewDisassembly(reshade::api::device* device, DeviceData& data,
   if (std::holds_alternative<std::exception>(shader_details.disassembly)) {
     disassembly_string.assign(std::get<std::exception>(shader_details.disassembly).what());
     failed = true;
-  } else {
+  } else if (std::holds_alternative<std::string>(shader_details.disassembly)) {
     disassembly_string.assign(std::get<std::string>(shader_details.disassembly));
   }
 
@@ -1921,7 +1928,7 @@ void RenderShaderViewDecompilation(reshade::api::device* device, DeviceData& dat
   if (std::holds_alternative<std::exception>(shader_details.decompilation)) {
     decompilation_string.assign(std::get<std::exception>(shader_details.decompilation).what());
     failed = true;
-  } else {
+  } else if (std::holds_alternative<std::string>(shader_details.decompilation)) {
     decompilation_string.assign(std::get<std::string>(shader_details.decompilation));
   }
 

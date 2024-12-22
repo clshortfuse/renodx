@@ -58,6 +58,7 @@ using CustomShaders = std::unordered_map<uint32_t, CustomShader>;
 // clang-format on
 
 static thread_local std::vector<reshade::api::pipeline_layout_param*> created_params;
+static thread_local std::unordered_map<uint32_t, reshade::api::pipeline_layout_param*> rebuilt_params;
 
 static float* shader_injection = nullptr;
 static size_t shader_injection_size = 0;
@@ -392,10 +393,9 @@ static void OnInitPipelineLayout(
         }
       }
 
-      for (reshade::api::pipeline_layout_param* injected_params : created_params) {
-        free(injected_params);
-      }
-      created_params.clear();
+      // Releasing params will break other addons that listen for init_pipeline_layout (eg: devkit)
+      rebuilt_params[layout.handle] = created_params.back();
+      created_params.pop_back();
 
       if (injection_index == -1) {
         std::stringstream s;
@@ -472,6 +472,15 @@ static void OnDestroyPipelineLayout(
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   changed |= data.modded_pipeline_root_indexes.erase(layout.handle);
+  if (auto pair = rebuilt_params.find(layout.handle);
+      pair != rebuilt_params.end()) {
+    changed = static_cast<uint32_t>(true);
+    auto& created_params = pair->second;
+    // Possible risk of access violation on next event listener
+    free(created_params);
+    rebuilt_params.erase(pair);
+  }
+
   if (changed == 0u) return;
 
   std::stringstream s;

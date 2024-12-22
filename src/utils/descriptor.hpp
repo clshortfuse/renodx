@@ -293,6 +293,7 @@ static void OnBindDescriptorTables(
     uint32_t first,
     uint32_t count,
     const reshade::api::descriptor_table* tables) {
+  if (!is_primary_hook) return;
   auto* device = cmd_list->get_device();
   auto& layout_data = device->get_private_data<renodx::utils::pipeline_layout::DeviceData>();
   const std::shared_lock layout_lock(layout_data.mutex);

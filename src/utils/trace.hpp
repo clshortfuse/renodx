@@ -976,6 +976,7 @@ static void OnPushDescriptors(
     s << ", type: " << update.type;
 
     auto log_heap = [=]() {
+      if (update.table.handle == 0u) return std::string("");
       std::stringstream s2;
       uint32_t base_offset = 0;
       reshade::api::descriptor_heap heap = {0};
@@ -1160,23 +1161,28 @@ static bool OnCopyDescriptorTables(
   for (uint32_t i = 0; i < count; i++) {
     const auto& copy = copies[i];
 
+    uint32_t src_offset = 0;
+    reshade::api::descriptor_heap src_heap = {0};
+    device->get_descriptor_heap_offset(
+        copy.source_table, copy.source_binding, copy.source_array_offset, &src_heap, &src_offset);
+    uint32_t dest_offset = 0;
+    reshade::api::descriptor_heap dest_heap = {0};
+    device->get_descriptor_heap_offset(
+        copy.dest_table, copy.dest_binding, copy.dest_array_offset, &dest_heap, &dest_offset);
+
     for (uint32_t j = 0; j < copy.count; j++) {
       std::stringstream s;
       s << "copy_descriptor_tables(";
       s << reinterpret_cast<void*>(copy.source_table.handle);
-      s << "[" << copy.source_binding + j << "]";
+      s << "[" << copy.source_binding << "]";
+      s << "[" << copy.source_array_offset << "]";
       s << " => ";
       s << reinterpret_cast<void*>(copy.dest_table.handle);
-      s << "[" << copy.dest_binding + j << "]";
+      s << "[" << copy.dest_binding << "]";
+      s << "[" << copy.dest_array_offset << "]";
 
-      uint32_t base_offset = 0;
-      reshade::api::descriptor_heap heap = {0};
-      device->get_descriptor_heap_offset(
-          copy.source_table, copy.source_binding + j, copy.source_array_offset, &heap, &base_offset);
-      s << ", heap: " << reinterpret_cast<void*>(heap.handle) << "[" << base_offset << "]";
-      device->get_descriptor_heap_offset(
-          copy.dest_table, copy.dest_binding + j, copy.dest_array_offset, &heap, &base_offset);
-      s << " => " << reinterpret_cast<void*>(heap.handle) << "[" << base_offset << "]";
+      s << ", heap: " << reinterpret_cast<void*>(src_heap.handle) << "[" << src_offset + j << "]";
+      s << " => " << reinterpret_cast<void*>(dest_heap.handle) << "[" << dest_offset + j << "]";
 
       auto& descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
       const std::shared_lock decriptor_lock(descriptor_data.mutex);

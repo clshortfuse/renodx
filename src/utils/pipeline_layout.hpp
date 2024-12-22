@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cassert>
 #include <include/reshade.hpp>
 #include <include/reshade_api_pipeline.hpp>
 #include <shared_mutex>
@@ -19,7 +20,6 @@ struct PipelineLayoutData {
   std::vector<reshade::api::pipeline_layout_param> params;
   std::vector<std::vector<reshade::api::descriptor_range>> ranges;
   std::vector<reshade::api::descriptor_table> tables;
-
 };
 struct __declspec(uuid("96f1f53b-90cb-4929-92d7-9a7a1a5c2493")) DeviceData {
   std::unordered_map<uint64_t, PipelineLayoutData> pipeline_layout_data;
@@ -57,15 +57,33 @@ static void OnInitPipelineLayout(
 
   for (uint32_t i = 0; i < param_count; ++i) {
     const auto& param = params[i];
-    if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
-      auto& ranges = layout_data.ranges[i];
-      if (param.descriptor_table.ranges->count != UINT32_MAX) {
-        ranges.assign(
-            param.descriptor_table.ranges,
-            param.descriptor_table.ranges + param.descriptor_table.count);
-      }
-      layout_data.params[i] = param;
-      layout_data.params[i].descriptor_table.ranges = ranges.data();
+    switch (param.type) {
+      case reshade::api::pipeline_layout_param_type::descriptor_table:
+        if (param.descriptor_table.count == 0u) continue;
+        {
+          auto& ranges = layout_data.ranges[i];
+          if (param.descriptor_table.ranges->count != UINT32_MAX) {
+            ranges.assign(
+                param.descriptor_table.ranges,
+                param.descriptor_table.ranges + param.descriptor_table.count);
+          } else {
+            ranges.assign(
+                param.descriptor_table.ranges,
+                param.descriptor_table.ranges + 1);
+          }
+          layout_data.params[i] = param;
+          layout_data.params[i].descriptor_table.ranges = ranges.data();
+        }
+        break;
+      case reshade::api::pipeline_layout_param_type::push_constants:
+      case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
+      case reshade::api::pipeline_layout_param_type::push_descriptors:
+      case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges:
+      case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers:
+        break;
+      default:
+        // No other known types
+        assert(false);
     }
   }
 }
