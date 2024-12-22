@@ -92,7 +92,6 @@ float4 main(
     noperspective float4 SV_Position: SV_Position)
     : SV_Target {
   float4 SV_Target;
-  float3 post_lut;
   // texture _1 = ColorGradingLUT;
   // texture _2 = BloomDirtMaskTexture;
   // texture _3 = BlurredLogLum;
@@ -457,9 +456,6 @@ float4 main(
   // _377 = _8;
 
   float4 _378 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3(_373, _374, _375));
-  post_lut = _378.rgb; // PQ encoded sRGB bt709
-  return float4(post_lut, 0.f);
-
   float _379 = _378.x;
   float _380 = _378.y;
   float _381 = _378.z;

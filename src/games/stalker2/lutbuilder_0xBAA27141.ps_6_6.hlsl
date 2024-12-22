@@ -169,7 +169,7 @@ float4 main(
   // _3 = _1;
   // _4 = _2;
   uint output_type = _RootShaderParameters_040w;
-  bool shouldTonemap = TonemapConditon(output_type);
+  bool shouldTonemap = ShouldTonemap(output_type);
   uint _5 = SV_RenderTargetArrayIndex;
   float _6 = TEXCOORD.x;
   float _7 = TEXCOORD.y;
@@ -336,7 +336,6 @@ float4 main(
     _104 = _100;
     _105 = _101;
   }
-  float3 input_color = float3(_103, _104, _105);  // CustomEdit
 
   float _107 = UniformBufferConstants_WorkingColorSpace_008x;
   float _108 = UniformBufferConstants_WorkingColorSpace_008y;
@@ -776,7 +775,7 @@ float4 main(
   float _569 = _566 + _529;
   float _570 = _567 + _531;
   float _571 = _568 + _533;
-  float3 ap1_graded_color = float3(_569, _570, _571);  // CustomEdit
+  float3 untonmapped_ap1 = float3(_569, _570, _571);  // CustomEdit
 
   float _572 = _569 * 0.6954522132873535f;
   float _573 = mad(0.14067868888378143f, _570, _572);
@@ -929,16 +928,6 @@ float4 main(
   float _711 = _708 + _703;
   float _712 = _709 + _703;
 
-  float3 ap1_aces_colored = float3(_710, _711, _712);  // CustomEdit
-
-  // Now SDR Tonemapping/Split
-  // Early out with cbuffer
-  // (Unreal runs the entire SDR process even if discarding)
-
-  float3 sdr_color;
-  float3 hdr_color;
-  float3 sdr_ap1_color;
-
   float _714 = _RootShaderParameters_037w;
   float _715 = _714 + 1.0f;
   float _716 = _RootShaderParameters_037y;
@@ -947,9 +936,7 @@ float4 main(
   float _720 = _719 + 1.0f;
   float _721 = _RootShaderParameters_037z;
   float _722 = _720 - _721;
-  if (shouldTonemap) {
-    Tonemap(ap1_graded_color, ap1_aces_colored, hdr_color, sdr_color, sdr_ap1_color);
-  } else {
+
     bool _723 = (_716 > 0.800000011920929f);
     float _724 = _RootShaderParameters_037x;
     if (_723) {
@@ -1094,18 +1081,12 @@ float4 main(
     float _863 = max(0.0f, _860);
     float _864 = max(0.0f, _861);
     float _865 = max(0.0f, _862);
-    sdr_ap1_color = float3(_863, _864, _865);
-    // end of FilmToneMap
-  }
+
 
   float _866 = _RootShaderParameters_036w;
-  /* float _867 = _863 - _569;
+  float _867 = _863 - _569;
   float _868 = _864 - _570;
-  float _869 = _865 - _571; */
-  float _867 = sdr_ap1_color.r - _569;
-  float _868 = sdr_ap1_color.g - _570;
-  float _869 = sdr_ap1_color.b - _571;
-  // CustomEdit
+  float _869 = _865 - _571;
 
   float _870 = _866 * _867;
   float _871 = _866 * _868;
@@ -1208,11 +1189,8 @@ float4 main(
 
   // CustomEdit
   float3 film_graded_color = float3(_966, _967, _968);
-  float3 final_color = film_graded_color;
-  // We return sRGB bt709 color
   if (shouldTonemap) {
-    FinalizeTonemap(final_color, film_graded_color, hdr_color, sdr_ap1_color);
-    return float4(final_color, 0.f);
+    return LutBuilderToneMap(untonmapped_ap1, film_graded_color);
   }
 
   uint _970 = _RootShaderParameters_040w;

@@ -1,5 +1,6 @@
-#include "./shared.h"
 #include "./common.hlsl"
+#include "./shared.h"
+
 
 Texture2D<float4> ColorTexture : register(t0);
 
@@ -87,7 +88,6 @@ float4 main(
     noperspective float4 SV_Position: SV_Position)
     : SV_Target {
   float4 SV_Target;
-  float3 post_lut;
 
   float4 _41 = ColorTexture.Sample(ColorSampler, float2((min((max((TEXCOORD.x), (cb0_015x))), (cb0_015z))), (min((max((TEXCOORD.y), (cb0_015y))), (cb0_015w)))));
   float _47 = (UniformBufferConstants_View_140w) * (_41.x);
@@ -128,11 +128,6 @@ float4 main(
   float _218 = exp2(((log2((_207 * ((((UniformBufferConstants_View_140w) * (_154.y)) * (((cb0_045y) * (_178.y)) + 1.0f)) + (((_115 * _48) * (cb0_044y)) * (_127.y)))))) * 0.1593017578125f));
   float _219 = exp2(((log2((_207 * ((((UniformBufferConstants_View_140w) * (_154.z)) * (((cb0_045z) * (_178.z)) + 1.0f)) + (((_115 * _49) * (cb0_044z)) * (_127.z)))))) * 0.1593017578125f));
   float4 _255 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3((((exp2(((log2(((1.0f / ((_217 * 18.6875f) + 1.0f)) * ((_217 * 18.8515625f) + 0.8359375f)))) * 78.84375f))) * 0.96875f) + 0.015625f), (((exp2(((log2(((1.0f / ((_218 * 18.6875f) + 1.0f)) * ((_218 * 18.8515625f) + 0.8359375f)))) * 78.84375f))) * 0.96875f) + 0.015625f), (((exp2(((log2(((1.0f / ((_219 * 18.6875f) + 1.0f)) * ((_219 * 18.8515625f) + 0.8359375f)))) * 78.84375f))) * 0.96875f) + 0.015625f)));
-  post_lut = _255.rgb;
-  // Code after sampling
-  if (injectedData.toneMapType != 0.f) {
-    return float4(post_lut, 0.f);
-  }
   float _268 = ((frac(((sin((((TEXCOORD_2.w) * 543.3099975585938f) + (TEXCOORD_2.z)))) * 493013.0f))) * 0.00390625f) + -0.001953125f;
   float _269 = _268 + ((_255.x) * 1.0499999523162842f);
   float _270 = _268 + ((_255.y) * 1.0499999523162842f);

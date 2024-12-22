@@ -21,7 +21,6 @@ struct ShaderInjectData {
   float colorGradeContrast;
   float colorGradeSaturation;
   float colorGradeBlowout;
-  float colorGradeLUTStrength;
 };
 #ifndef __cplusplus
 cbuffer injectedBuffer : register(b0, space50) {
@@ -40,7 +39,6 @@ cbuffer injectedBuffer : register(b0, space50) {
     1.f,    // colorGradeContrast
     1.f,    // colorGradeSaturation
     0.5f,   // colorGradeBlowout
-    1.f,    // colorGradeLUTStrength
 }; */
 #endif
 

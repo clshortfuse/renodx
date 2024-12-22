@@ -86,7 +86,6 @@ float4 main(
     noperspective float4 SV_Position: SV_Position)
     : SV_Target {
   float4 SV_Target;
-  float3 post_lut;
 
   float4 _39 = ColorTexture.Sample(ColorSampler, float2((min((max((TEXCOORD.x), (cb0_015x))), (cb0_015z))), (min((max((TEXCOORD.y), (cb0_015y))), (cb0_015w)))));
   float _45 = (UniformBufferConstants_View_140w) * (_39.x);
@@ -118,11 +117,6 @@ float4 main(
   float _207 = exp2(((log2((_196 * ((((UniformBufferConstants_View_140w) * (_152.y)) * (((cb0_045y) * (_176.y)) + 1.0f)) + (((_113 * _46) * (cb0_044y)) * (_125.y)))))) * 0.1593017578125f));
   float _208 = exp2(((log2((_196 * ((((UniformBufferConstants_View_140w) * (_152.z)) * (((cb0_045z) * (_176.z)) + 1.0f)) + (((_113 * _47) * (cb0_044z)) * (_125.z)))))) * 0.1593017578125f));
   float4 _244 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3((((exp2(((log2(((1.0f / ((_206 * 18.6875f) + 1.0f)) * ((_206 * 18.8515625f) + 0.8359375f)))) * 78.84375f))) * 0.96875f) + 0.015625f), (((exp2(((log2(((1.0f / ((_207 * 18.6875f) + 1.0f)) * ((_207 * 18.8515625f) + 0.8359375f)))) * 78.84375f))) * 0.96875f) + 0.015625f), (((exp2(((log2(((1.0f / ((_208 * 18.6875f) + 1.0f)) * ((_208 * 18.8515625f) + 0.8359375f)))) * 78.84375f))) * 0.96875f) + 0.015625f)));
-  post_lut = _244.rgb;
-  // Code after sampling
-  if (injectedData.toneMapType != 0.f) {
-    return float4(post_lut, 0.f);
-  }
   float _257 = ((frac(((sin((((TEXCOORD_2.w) * 543.3099975585938f) + (TEXCOORD_2.z)))) * 493013.0f))) * 0.00390625f) + -0.001953125f;
   float _258 = _257 + ((_244.x) * 1.0499999523162842f);
   float _259 = _257 + ((_244.y) * 1.0499999523162842f);
