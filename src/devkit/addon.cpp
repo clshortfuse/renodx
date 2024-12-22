@@ -175,6 +175,7 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
   std::unordered_set<uint64_t> live_pipelines;
   std::shared_mutex mutex;
   std::unordered_map<uint64_t, reshade::api::resource> resource_view_resources;
+  std::unordered_set<uint64_t> empty_resource_views;
   std::unordered_map<uint64_t, std::unordered_set<uint64_t>> resource_resource_views;
 
   reshade::api::effect_runtime* runtime = nullptr;
@@ -203,7 +204,7 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
     ResourceViewDetails details = {
         .resource_view = resource_view,
         .resource_view_desc = device->get_resource_view_desc(resource_view),
-        .resource = device->get_resource_from_view(resource_view),
+        // .resource = device->get_resource_from_view(resource_view),
     };
 
     auto device_api = device->get_api();
@@ -215,7 +216,7 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
 
     if (auto pair = resource_view_resources.find(resource_view.handle);
         pair != resource_view_resources.end()) {
-      details.resource = device->get_resource_from_view(resource_view);
+      details.resource = pair->second;  // device->get_resource_from_view(resource_view);
 
       if (details.resource.handle != 0u) {
         details.resource_desc = device->get_resource_desc(details.resource);
@@ -569,10 +570,15 @@ void OnInitResourceView(
   if (view.handle == 0u) return;
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
+
   auto& tracked_resource = data.resource_view_resources[view.handle];
   // bool reused_handle = tracked_resource.handle != 0u && tracked_resource.handle != resource.handle;
 
-  if (resource.handle == 0u) return;
+  if (resource.handle == 0u) {
+    data.empty_resource_views.emplace(view.handle);
+    return;
+  }
+  data.empty_resource_views.erase(view.handle);
   tracked_resource.handle = resource.handle;
 
   auto& view_set = data.resource_resource_views[resource.handle];
@@ -813,15 +819,22 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
                 draw_details.uav_binds.erase(slot);
               } else {
                 auto detail_item = (device_data.GetResourceViewDetails(resource_view, device));
-                draw_details.uav_binds[slot] = detail_item;
+                if (detail_item.resource.handle == 0u && device_data.empty_resource_views.contains(resource_view.handle)) {
+                  draw_details.uav_binds.erase(slot);
+                } else {
+                  draw_details.uav_binds[slot] = detail_item;
+                }
               }
             } else {
               if (resource_view.handle == 0u) {
                 draw_details.srv_binds.erase(slot);
               } else {
                 auto detail_item = (device_data.GetResourceViewDetails(resource_view, device));
-
-                draw_details.srv_binds[slot] = detail_item;
+                if (detail_item.resource.handle == 0u && device_data.empty_resource_views.contains(resource_view.handle)) {
+                  draw_details.srv_binds.erase(slot);
+                } else {
+                  draw_details.srv_binds[slot] = detail_item;
+                }
               }
             }
           }
@@ -2207,6 +2220,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
+
+      // while (IsDebuggerPresent() == 0) {
+      //   Sleep(100);
+      // }
 
       renodx::utils::descriptor::Use(fdw_reason);
       renodx::utils::shader::Use(fdw_reason);
