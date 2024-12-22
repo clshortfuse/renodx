@@ -44,12 +44,14 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 3.f,
+        .default_value = 2.f,
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "ACES", "RenoDRT"},
+        .labels = {"Vanilla", "None", "RenoDRT"},
+        .parse = [](float value) { return value == 2.f ? 3.f : value; },  // Override ACES
+
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
@@ -88,7 +90,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapPerChannel",
         .binding = &shader_injection.toneMapPerChannel,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .label = "Per Channel",
         .section = "Tone Mapping",
         .tooltip = "Applies tonemapping per-channel instead of by luminance (More accurate to SDR but less saturated)",
@@ -170,18 +172,8 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f - 1.f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeLUTStrength",
-        .binding = &shader_injection.colorGradeLUTStrength,
-        .default_value = 100.f,
-        .label = "LUT Strength",
-        .section = "Color Grading",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType > 1.f; },
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = " - Ingame HDR must be turned ON! \r\n - Lower contrast if game's too dark. \r\n - Game's Gamma option still affects UI!. \r\n - (Optional) Disable reshade's default add ons (Generic depth & Effect runtime sync) to restore lost performance",
+        .label = " - Ingame HDR must be turned ON! \r\n - Game's Gamma option still affects UI!. \r\n - (Optional) Disable reshade's default add ons (Generic depth & Effect runtime sync) to restore lost performance",
         .section = "Instructions",
     },
     new renodx::utils::settings::Setting{
@@ -249,7 +241,6 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeBlowout", 0.f);
 }
 

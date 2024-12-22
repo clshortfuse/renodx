@@ -100,7 +100,6 @@ float4 main(
     noperspective float4 SV_Position: SV_Position)
     : SV_Target {
   float4 SV_Target;
-  float3 post_lut;
 
   float _41 = ((cb0_048z) * (TEXCOORD_3.x)) + (cb0_048x);
   float _42 = ((cb0_048w) * (TEXCOORD_3.y)) + (cb0_048y);
@@ -146,11 +145,6 @@ float4 main(
   float _318 = exp2(((log2((_307 * ((((UniformBufferConstants_View_140w) * (_254.y)) * (((cb0_045y) * (_278.y)) + 1.0f)) + (((_215 * _148) * (cb0_044y)) * (_227.y)))))) * 0.1593017578125f));
   float _319 = exp2(((log2((_307 * ((((UniformBufferConstants_View_140w) * (_254.z)) * (((cb0_045z) * (_278.z)) + 1.0f)) + (((_215 * _149) * (cb0_044z)) * (_227.z)))))) * 0.1593017578125f));
   float4 _355 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3((((exp2(((log2(((1.0f / ((_317 * 18.6875f) + 1.0f)) * ((_317 * 18.8515625f) + 0.8359375f)))) * 78.84375f))) * 0.96875f) + 0.015625f), (((exp2(((log2(((1.0f / ((_318 * 18.6875f) + 1.0f)) * ((_318 * 18.8515625f) + 0.8359375f)))) * 78.84375f))) * 0.96875f) + 0.015625f), (((exp2(((log2(((1.0f / ((_319 * 18.6875f) + 1.0f)) * ((_319 * 18.8515625f) + 0.8359375f)))) * 78.84375f))) * 0.96875f) + 0.015625f)));
-  post_lut = _355.rgb;
-  // Code after sampling
-  if (injectedData.toneMapType != 0.f) {
-    return float4(post_lut, 0.f);
-  }
   float _368 = ((frac(((sin((((TEXCOORD_2.w) * 543.3099975585938f) + (TEXCOORD_2.z)))) * 493013.0f))) * 0.00390625f) + -0.001953125f;
   float _369 = _368 + ((_355.x) * 1.0499999523162842f);
   float _370 = _368 + ((_355.y) * 1.0499999523162842f);
