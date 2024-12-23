@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <initializer_list>
+#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <sstream>
@@ -715,8 +716,8 @@ static void SetupSwapchainProxy(
 
 static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   auto* device = swapchain->get_device();
-  if (device == nullptr) return;
   auto& data = device->get_private_data<DeviceData>();
+  if (std::addressof(data) == nullptr) return;
   const std::unique_lock lock(data.mutex);
 
   reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnInitSwapchain(reset resource upgrade)");
@@ -751,6 +752,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
 static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
   auto* device = swapchain->get_device();
   auto& data = device->get_private_data<DeviceData>();
+  if (std::addressof(data) == nullptr) return;
 
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
   for (uint32_t index = 0; index < back_buffer_count; ++index) {

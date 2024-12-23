@@ -64,41 +64,43 @@ static void OnDestroyDevice(reshade::api::device* device) {
 
 static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   if (!is_primary_hook) return;
+  auto* device = swapchain->get_device();
+  auto& device_data = device->get_private_data<DeviceData>();
+  if (std::addressof(device_data) == nullptr) return;
+
   auto& swapchain_data = swapchain->create_private_data<SwapchainData>();
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
   for (uint32_t index = 0; index < back_buffer_count; index++) {
     auto buffer = swapchain->get_back_buffer(index);
     swapchain_data.back_buffers.emplace(buffer.handle);
   }
-  auto* device = swapchain->get_device();
-  if (device != nullptr) {
-    auto& device_data = device->get_private_data<DeviceData>();
-    const std::unique_lock lock(device_data.mutex);
-    device_data.swapchains.emplace(swapchain);
+  const std::unique_lock lock(device_data.mutex);
+  device_data.swapchains.emplace(swapchain);
 
-    for (uint32_t index = 0; index < back_buffer_count; index++) {
-      auto buffer = swapchain->get_back_buffer(index);
-      device_data.back_buffers.emplace(buffer.handle);
-      if (index == 0) {
-        auto desc = device->get_resource_desc(buffer);
-        device_data.back_buffer_desc = desc;
-      }
+  for (uint32_t index = 0; index < back_buffer_count; index++) {
+    auto buffer = swapchain->get_back_buffer(index);
+    device_data.back_buffers.emplace(buffer.handle);
+    if (index == 0) {
+      auto desc = device->get_resource_desc(buffer);
+      device_data.back_buffer_desc = desc;
     }
   }
 }
 
 static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
   if (!is_primary_hook) return;
-  auto& swapchain_data = swapchain->get_private_data<SwapchainData>();
   auto* device = swapchain->get_device();
-  if (device != nullptr) {
-    auto& device_data = device->get_private_data<DeviceData>();
-    const std::unique_lock lock(device_data.mutex);
-    device_data.swapchains.erase(swapchain);
-    for (const uint64_t handle : swapchain_data.back_buffers) {
-      device_data.back_buffers.erase(handle);
-    }
+
+  auto& device_data = device->get_private_data<DeviceData>();
+  if (std::addressof(device_data) == nullptr) return;
+  const std::unique_lock lock(device_data.mutex);
+
+  auto& swapchain_data = swapchain->get_private_data<SwapchainData>();
+  device_data.swapchains.erase(swapchain);
+  for (const uint64_t handle : swapchain_data.back_buffers) {
+    device_data.back_buffers.erase(handle);
   }
+
   swapchain->destroy_private_data<SwapchainData>();
 }
 
