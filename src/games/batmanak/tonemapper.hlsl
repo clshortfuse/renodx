@@ -143,39 +143,9 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lut_texture, SamplerState
   float renoDRTHighlights = 1.02f;
   float RenoDRTSaturation = 1.1f;
 
-  tm_config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  if (injectedData.toneMapPerChannel) {
-    renoDRTSaturation = 1.f;
-  }
-  float renoDRTHighlights = 1.2f;
-
-  tm_config.hue_correction_strength = injectedData.toneMapHueCorrection * injectedData.toneMapPerChannel;
-  tm_config.reno_drt_per_channel = injectedData.toneMapPerChannel;
-  tm_config.type = injectedData.toneMapType;
-  tm_config.peak_nits = injectedData.toneMapPeakNits;
-  tm_config.game_nits = injectedData.toneMapGameNits;
-  tm_config.gamma_correction = injectedData.toneMapGammaCorrection - 1;
-  tm_config.exposure = injectedData.colorGradeExposure;
-  tm_config.highlights = injectedData.colorGradeHighlights;
-  tm_config.shadows = injectedData.colorGradeShadows;
-  tm_config.contrast = injectedData.colorGradeContrast;
-  tm_config.saturation = injectedData.colorGradeSaturation;
-  tm_config.reno_drt_highlights = renoDRTHighlights;
-  tm_config.reno_drt_shadows = renoDRTShadows;
-  tm_config.reno_drt_contrast = renoDRTContrast;
-  tm_config.reno_drt_saturation = renoDRTSaturation;
-  tm_config.reno_drt_dechroma = renoDRTDechroma;
-  tm_config.mid_gray_value = vanillaMidGray;
-  tm_config.mid_gray_nits = vanillaMidGray * 100.f;
-  tm_config.reno_drt_flare = renoDRTFlare;
-  tm_config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
-  tm_config.hue_correction_color = vanillaColor;
-  tm_config.reno_drt_hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::DARKTABLE_UCS;
-  tm_config.reno_drt_working_color_space = 2u;
-
-
-  tm_config.hue_correction_strength = injectedData.toneMapHueCorrection * injectedData.toneMapPerChannel;
-  tm_config.reno_drt_per_channel = injectedData.toneMapPerChannel;
+  tm_config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
+  tm_config.hue_correction_strength = injectedData.toneMapHueCorrection;
+  tm_config.reno_drt_per_channel = true;
   tm_config.type = injectedData.toneMapType;
   tm_config.peak_nits = injectedData.toneMapPeakNits;
   tm_config.game_nits = injectedData.toneMapGameNits;
@@ -229,40 +199,6 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lut_texture, SamplerState
 
     float3 negHDR = min(0, outputColor);
     outputColor = lerp(vanillaColor, max(0, outputColor), saturate(vanillaColor)) + negHDR;
-  }
-
-  if (injectedData.toneMapBlend == 1.f) {
-    float3 vanillaLUTInputColor = min(1.f, pow(vanillaColor, 1.f / 2.2f));
-    float3 vanillaLUT = renodx::lut::Sample(lutTexture, lutSampler, vanillaLUTInputColor).rgb;
-    vanillaLUT = pow(vanillaLUT, 2.2f);
-
-    vanillaColor = lerp(vanillaColor, vanillaLUT, injectedData.colorGradeLUTStrength);
-    vanillaColor = renodx::color::grade::UserColorGrading(
-        vanillaColor,
-        injectedData.colorGradeExposure,
-        1.f,
-        injectedData.colorGradeShadows,
-        injectedData.colorGradeContrast,
-        injectedData.colorGradeSaturation);
-
-    outputColor = lerp(vanillaColor, outputColor, saturate(vanillaColor));
-  }
-
-  if (injectedData.toneMapBlend == 1.f) {
-    float3 vanillaLUTInputColor = min(1.f, pow(vanillaColor, 1.f / 2.2f));
-    float3 vanillaLUT = renodx::lut::Sample(lutTexture, lutSampler, vanillaLUTInputColor).rgb;
-    vanillaLUT = pow(vanillaLUT, 2.2f);
-
-    vanillaColor = lerp(vanillaColor, vanillaLUT, injectedData.colorGradeLUTStrength);
-    vanillaColor = renodx::color::grade::UserColorGrading(
-        vanillaColor,
-        injectedData.colorGradeExposure,
-        1.f,
-        injectedData.colorGradeShadows,
-        injectedData.colorGradeContrast,
-        injectedData.colorGradeSaturation);
-
-    outputColor = lerp(vanillaColor, outputColor, saturate(vanillaColor));
   }
 
   if (injectedData.toneMapGammaCorrection == 0.f) {
