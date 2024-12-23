@@ -1,5 +1,3 @@
-#include "./shared.h"
-#include "./tonemapper.hlsl"
 
 struct _EyeAdaptationBuffer {
   float data[4];
@@ -75,7 +73,6 @@ OutputSignature main(
   noperspective float4 SV_Position : SV_Position
 ) {
   float4 SV_Target;
-  float3 post_lut;
 
   float SV_Target_1;
   // texture _1 = ColorGradingLUT;
@@ -231,7 +228,6 @@ OutputSignature main(
   // _161 = _1;
   // _162 = _7;
   float4 _163 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3(_158, _159, _160));
-  post_lut = _163.rgb;
 
   float _164 = _163.x;
   float _165 = _163.y;
@@ -330,9 +326,7 @@ OutputSignature main(
   SV_Target.x = _254;
   SV_Target.y = _255;
   SV_Target.z = _256;
-  if (injectedData.toneMapType != 0.f) {
-    SV_Target.rgb = post_lut;
-  }
+
   SV_Target.w = 0.0f;
   SV_Target_1 = _170;
   OutputSignature output_signature = { SV_Target, SV_Target_1 };

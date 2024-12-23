@@ -1,5 +1,3 @@
-#include "./shared.h"
-#include "./tonemapper.hlsl"
 
 struct _EyeAdaptationBuffer {
   float data[4];
@@ -74,7 +72,6 @@ OutputSignature main(
     noperspective float2 TEXCOORD_4: TEXCOORD4,
     noperspective float4 SV_Position: SV_Position) {
   float4 SV_Target;
-  float3 post_lut;
 
   float SV_Target_1;
   float4 _34 = ColorTexture.Sample(ColorSampler, float2((min((max((TEXCOORD.x), (cb0_015x))), (cb0_015z))), (min((max((TEXCOORD.y), (cb0_015y))), (cb0_015w)))));
@@ -89,7 +86,6 @@ OutputSignature main(
   float _145 = exp2(((log2((_134 * ((((UniformBufferConstants_View_136z) * (_81.y)) * (((cb0_042y) * (_105.y)) + 1.0f)) + ((((UniformBufferConstants_View_136z) * (_34.y)) * (cb0_041y)) * (_54.y)))))) * 0.1593017578125f));
   float _146 = exp2(((log2((_134 * ((((UniformBufferConstants_View_136z) * (_81.z)) * (((cb0_042z) * (_105.z)) + 1.0f)) + ((((UniformBufferConstants_View_136z) * (_34.z)) * (cb0_041z)) * (_54.z)))))) * 0.1593017578125f));
   float4 _185 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3((((cb0_047z) * (exp2(((log2(((1.0f / ((_144 * 18.6875f) + 1.0f)) * ((_144 * 18.8515625f) + 0.8359375f)))) * 78.84375f)))) + (cb0_047w)), (((cb0_047z) * (exp2(((log2(((1.0f / ((_145 * 18.6875f) + 1.0f)) * ((_145 * 18.8515625f) + 0.8359375f)))) * 78.84375f)))) + (cb0_047w)), (((cb0_047z) * (exp2(((log2(((1.0f / ((_146 * 18.6875f) + 1.0f)) * ((_146 * 18.8515625f) + 0.8359375f)))) * 78.84375f)))) + (cb0_047w))));
-  post_lut = _185.rgb;
 
   float _189 = (_185.x) * 1.0499999523162842f;
   float _190 = (_185.y) * 1.0499999523162842f;
@@ -116,9 +112,7 @@ OutputSignature main(
   SV_Target.y = _277;
   SV_Target.z = _278;
   SV_Target.w = 0.0f;
-  if (injectedData.toneMapType != 0.f) {
-    SV_Target.rgb = post_lut;
-  }
+
   // Depth buffer
   SV_Target_1 = (dot(float3(_189, _190, _191), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f)));
   OutputSignature output_signature = { SV_Target, SV_Target_1 };
