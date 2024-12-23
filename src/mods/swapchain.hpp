@@ -1097,6 +1097,7 @@ static void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   }
 
   if (use_resource_cloning) {
+    data.resource_clone_enabled.erase(resource.handle);
     data.resource_clone_targets.erase(resource.handle);
     if (
         auto pair = data.resource_clones.find(resource.handle);
@@ -1527,7 +1528,7 @@ static bool ActivateCloneHotSwap(
 
   clone_resource = reshade::api::resource{cloned_resource_pair->second};
 
-  if (data.resource_clone_enabled.contains(clone_resource.handle)) {
+  if (data.resource_clone_enabled.contains(resource.handle)) {
     // Already activated
     return false;
   }
@@ -1545,7 +1546,7 @@ static bool ActivateCloneHotSwap(
 
 #endif
 
-  data.resource_clone_enabled.insert(clone_resource.handle);
+  data.resource_clone_enabled.insert(resource.handle);
   return true;
 }
 
