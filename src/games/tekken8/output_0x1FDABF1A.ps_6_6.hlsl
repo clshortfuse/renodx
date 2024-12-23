@@ -1,5 +1,3 @@
-#include "./shared.h"
-#include "./tonemapper.hlsl"
 
 struct _EyeAdaptationBuffer {
   float data[4];
@@ -87,7 +85,6 @@ OutputSignature main(
     noperspective float2 TEXCOORD_4: TEXCOORD4,
     noperspective float4 SV_Position: SV_Position) {
   float4 SV_Target;
-  float3 post_lut;
 
   float SV_Target_1;
   float _34 = ((cb0_045z) * (TEXCOORD_3.x)) + (cb0_045x);
@@ -107,7 +104,6 @@ OutputSignature main(
   float _245 = exp2(((log2((_234 * ((((UniformBufferConstants_View_136z) * (_181.y)) * (((cb0_042y) * (_205.y)) + 1.0f)) + ((((UniformBufferConstants_View_136z) * (((float4)(ColorTexture.Sample(ColorSampler, float2((min((max(((((cb0_010x) * (((_34 - ((_52 * (cb0_043y)) * _46)) * (cb0_046z)) + (cb0_046x))) + (cb0_010z)) * (cb0_009z)), (cb0_015x))), (cb0_015z))), (min((max(((((cb0_010y) * (((_35 - ((_53 * (cb0_043y)) * _47)) * (cb0_046w)) + (cb0_046y))) + (cb0_010w)) * (cb0_009w)), (cb0_015y))), (cb0_015w))))))).y)) * (cb0_041y)) * (_154.y)))))) * 0.1593017578125f));
   float _246 = exp2(((log2((_234 * ((((UniformBufferConstants_View_136z) * (_181.z)) * (((cb0_042z) * (_205.z)) + 1.0f)) + ((((UniformBufferConstants_View_136z) * (((float4)(ColorTexture.Sample(ColorSampler, float2((min((max((TEXCOORD.x), (cb0_015x))), (cb0_015z))), (min((max((TEXCOORD.y), (cb0_015y))), (cb0_015w))))))).z)) * (cb0_041z)) * (_154.z)))))) * 0.1593017578125f));
   float4 _285 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3((((cb0_047z) * (exp2(((log2(((1.0f / ((_244 * 18.6875f) + 1.0f)) * ((_244 * 18.8515625f) + 0.8359375f)))) * 78.84375f)))) + (cb0_047w)), (((cb0_047z) * (exp2(((log2(((1.0f / ((_245 * 18.6875f) + 1.0f)) * ((_245 * 18.8515625f) + 0.8359375f)))) * 78.84375f)))) + (cb0_047w)), (((cb0_047z) * (exp2(((log2(((1.0f / ((_246 * 18.6875f) + 1.0f)) * ((_246 * 18.8515625f) + 0.8359375f)))) * 78.84375f)))) + (cb0_047w))));
-  post_lut = _285.rgb;
   float _289 = (_285.x) * 1.0499999523162842f;
   float _290 = (_285.y) * 1.0499999523162842f;
   float _291 = (_285.z) * 1.0499999523162842f;
@@ -133,9 +129,7 @@ OutputSignature main(
   SV_Target.y = _377;
   SV_Target.z = _378;
   SV_Target.w = 0.0f;
-  if (injectedData.toneMapType != 0.f) {
-    SV_Target.rgb = post_lut;
-  }
+
   // Depth buffer
   SV_Target_1 = (dot(float3(_289, _290, _291), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f)));
   OutputSignature output_signature = { SV_Target, SV_Target_1 };
