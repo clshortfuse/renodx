@@ -1936,9 +1936,10 @@ class Decompiler {
         assignment_type = (no_signed_wrap.empty()) ? "uint" : "int";
         assignment_value = std::format("{} >> {}", ParseInt(a), ParseInt(b));
       } else if (instruction == "xor") {
-        auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(xor (nuw )?(nsw )?(?:i32) (\S+), (\S+))"});
-        assignment_type = (no_signed_wrap.empty()) ? "uint" : "int";
-        assignment_value = std::format("{} ^ {}", variable, ParseInt(a), ParseInt(b));
+        // %173 = xor i1 %100, true
+        // %347 = xor i32 %344, %339
+        auto [xor_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(xor (\S+) (\S+), (\S+))"});
+        assignment_value = std::format("{} ^ {}", variable, ParseByType(a, xor_type), ParseByType(b, xor_type));
       } else if (instruction == "mul") {
         auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(mul (nuw )?(nsw )?(?:i32) (\S+), (\S+))"});
         assignment_type = (no_signed_wrap.empty()) ? "uint" : "int";
@@ -2919,49 +2920,52 @@ class Decompiler {
     }
 
     // Resources
+    auto resource_list_metadata = named_metadata["!dx.resources"];
+    if (!resource_list_metadata.empty()) {
 
-    auto resource_list_reference = named_metadata["!dx.resources"][0];
-    auto resource_list_key = resource_list_reference;
-    auto resource_list = named_metadata[resource_list_key];
+      auto resource_list_reference = resource_list_metadata[0];
+      auto resource_list_key = resource_list_reference;
+      auto resource_list = named_metadata[resource_list_key];
 
-    auto srv_list_key = resource_list[0];
-    auto uav_list_key = resource_list[1];
-    auto cbv_list_key = resource_list[2];
-    auto sampler_list_key = resource_list[3];
+      auto srv_list_key = resource_list[0];
+      auto uav_list_key = resource_list[1];
+      auto cbv_list_key = resource_list[2];
+      auto sampler_list_key = resource_list[3];
 
-    if (srv_list_key != "null") {
-      auto srv_list = named_metadata[srv_list_key];
-      preprocess_state.srv_resources.reserve(srv_list.size());
-      for (const auto srv_key : srv_list) {
-        preprocess_state.srv_resources.emplace_back(
-            named_metadata[srv_key], preprocess_state.resource_descriptions, named_metadata);
+      if (srv_list_key != "null") {
+        auto srv_list = named_metadata[srv_list_key];
+        preprocess_state.srv_resources.reserve(srv_list.size());
+        for (const auto srv_key : srv_list) {
+          preprocess_state.srv_resources.emplace_back(
+              named_metadata[srv_key], preprocess_state.resource_descriptions, named_metadata);
+        }
       }
-    }
 
-    if (uav_list_key != "null") {
-      auto uav_list = named_metadata[uav_list_key];
-      preprocess_state.uav_resources.reserve(uav_list.size());
-      for (const auto uav_key : uav_list) {
-        preprocess_state.uav_resources.emplace_back(
-            named_metadata[uav_key], preprocess_state.resource_descriptions, named_metadata);
+      if (uav_list_key != "null") {
+        auto uav_list = named_metadata[uav_list_key];
+        preprocess_state.uav_resources.reserve(uav_list.size());
+        for (const auto uav_key : uav_list) {
+          preprocess_state.uav_resources.emplace_back(
+              named_metadata[uav_key], preprocess_state.resource_descriptions, named_metadata);
+        }
       }
-    }
 
-    if (cbv_list_key != "null") {
-      auto cbv_list = named_metadata[cbv_list_key];
-      preprocess_state.cbv_resources.reserve(cbv_list.size());
-      for (const auto cbv_key : cbv_list) {
-        preprocess_state.cbv_resources.emplace_back(
-            named_metadata[cbv_key], preprocess_state.resource_descriptions, named_metadata);
+      if (cbv_list_key != "null") {
+        auto cbv_list = named_metadata[cbv_list_key];
+        preprocess_state.cbv_resources.reserve(cbv_list.size());
+        for (const auto cbv_key : cbv_list) {
+          preprocess_state.cbv_resources.emplace_back(
+              named_metadata[cbv_key], preprocess_state.resource_descriptions, named_metadata);
+        }
       }
-    }
 
-    if (sampler_list_key != "null") {
-      auto sampler_list = named_metadata[sampler_list_key];
-      preprocess_state.sampler_resources.reserve(sampler_list.size());
-      for (const auto& sampler_key : sampler_list) {
-        preprocess_state.sampler_resources.emplace_back(
-            named_metadata[sampler_key], preprocess_state.resource_descriptions, named_metadata);
+      if (sampler_list_key != "null") {
+        auto sampler_list = named_metadata[sampler_list_key];
+        preprocess_state.sampler_resources.reserve(sampler_list.size());
+        for (const auto& sampler_key : sampler_list) {
+          preprocess_state.sampler_resources.emplace_back(
+              named_metadata[sampler_key], preprocess_state.resource_descriptions, named_metadata);
+        }
       }
     }
 
