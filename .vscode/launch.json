@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "(msvc) Attach",
+      "type": "cppvsdbg",
+      "request": "attach",
+      "processId": "${command:pickProcess}"
+    },
+  ],
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "launchExecutable",
+      "description": "Select executable to launch"
+    }
+  ]
+}
