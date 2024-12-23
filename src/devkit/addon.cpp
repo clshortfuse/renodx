@@ -9,6 +9,7 @@
 #include <exception>
 #include <filesystem>
 #include <initializer_list>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <variant>
@@ -2098,6 +2099,10 @@ void InitializeUserSettings(reshade::api::effect_runtime* runtime) {
 void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   auto* device = runtime->get_device();
   auto& data = device->get_private_data<DeviceData>();
+
+  // Runtime may be on a separate device
+  if (std::addressof(data) == nullptr) return;
+
   std::unique_lock lock(data.mutex);  // Probably not needed
   if (data.runtime == nullptr) {
     data.runtime = runtime;

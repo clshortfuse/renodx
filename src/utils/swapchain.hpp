@@ -7,6 +7,7 @@
 
 #include <dxgi1_6.h>
 #include <ios>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <unordered_set>
@@ -105,6 +106,10 @@ static void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
   if (!is_primary_hook) return;
   auto* device = runtime->get_device();
   auto& data = device->get_private_data<DeviceData>();
+
+  // Runtime may be on a separate device
+  if (std::addressof(data) == nullptr) return;
+
   const std::unique_lock lock(data.mutex);
   data.current_effect_runtime = runtime;
   reshade::log::message(reshade::log::level::info, "Effect runtime created.");
@@ -118,6 +123,10 @@ static void OnDestroyEffectRuntime(reshade::api::effect_runtime* runtime) {
   if (!is_primary_hook) return;
   auto* device = runtime->get_device();
   auto& data = device->get_private_data<DeviceData>();
+
+  // Runtime may be on a separate device
+  if (std::addressof(data) == nullptr) return;
+
   const std::unique_lock lock(data.mutex);
   if (data.current_effect_runtime == runtime) {
     data.current_effect_runtime = nullptr;
