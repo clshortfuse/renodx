@@ -1,4 +1,3 @@
-#include "./shared.h"
 #include "./common.hlsl"
 
 Texture2D<float4> PostProcessInput_0_Texture : register(t0);

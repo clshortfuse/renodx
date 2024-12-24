@@ -1,7 +1,5 @@
 
 #include "./common.hlsl"
-#include "./shared.h"
-
 
 cbuffer _RootShaderParameters : register(b0) {
   float _RootShaderParameters_008x : packoffset(c008.x);

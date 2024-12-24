@@ -1,4 +1,3 @@
-#include "./shared.h"
 #include "./common.hlsl"
 
 Texture2D<float4> Material_Texture2D_0 : register(t0);
