@@ -944,6 +944,8 @@ static void OnInitResource(
     return;
   }
 
+  if (initial_data != nullptr) return;
+
   auto& private_data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(private_data.mutex);
 
