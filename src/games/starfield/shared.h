@@ -13,22 +13,30 @@ struct ShaderInjectData {
   float toneMapGameNits;
   float toneMapUINits;
   float toneMapGammaCorrection;
+  float toneMapHueCorrectionMethod;
+  float toneMapHueCorrection;
+  float toneMapPerChannel;
+  float toneMapHueProcessor;
   float colorGradeExposure;
   float colorGradeHighlights;
   float colorGradeShadows;
   float colorGradeContrast;
   float colorGradeSaturation;
+  float colorGradeBlowout;
+  float colorGradeFlare;
+  float colorGradeColorSpace;
   float colorGradeLUTStrength;
   float colorGradeLUTScaling;
   float colorGradeSceneGrading;
   float fxBloom;
   float fxFilmGrain;
-  float elapsedTime;
-  float resource_tag;
+  float random_1;
+  float random_2;
+  float random_3;
 };
 
 #ifndef __cplusplus
-cbuffer injectedBuffer : register(b0, space9) {
+cbuffer injectedBuffer : register(b0, space50) {
   ShaderInjectData injectedData : packoffset(c0);
 }
 #endif

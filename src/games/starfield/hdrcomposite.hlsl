@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./common.hlsl"
 
 struct FrameDebug {
   uint2 value00;  // _23_m0[3u].xy
@@ -116,7 +117,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
 
   float customACESParam;
   if (pushConstants.toneMapType == 2u) {
-    customACESParam = ((0.56f / _28_m0[3262u].x) + 2.43f) + (_28_m0[3262u].y / (_28_m0[3262u].x * _28_m0[3262u].x));
+    customACESParam = ((0.56f / _28_m0[3259u].x) + 2.43f) + (_28_m0[3259u].y / (_28_m0[3259u].x * _28_m0[3259u].x));
   }
   // Sample midgray for vanilla
   if (injectedData.toneMapType != 0.f) {
@@ -126,17 +127,17 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
       vanillaMidGray = saturate((((0.18f * 2.51f) + 0.03f) * 0.18f) / ((((0.18f * 2.43f) + 0.59f) * 0.18f) + 0.14f));
     } else if (pushConstants.toneMapType == 2u) {
       // Custom ACES SDR
-      vanillaMidGray = saturate((((customACESParam * 0.18f) + 0.03f) * 0.18f) / (_28_m0[3262u].y + (((0.18f * 2.43f) + 0.59f) * 0.18f)));
+      vanillaMidGray = saturate((((customACESParam * 0.18f) + 0.03f) * 0.18f) / (_28_m0[3259u].y + (((0.18f * 2.43f) + 0.59f) * 0.18f)));
     } else if (pushConstants.toneMapType == 3u) {
       // Custom Hable SDR
 
-      float _520 = pow(saturate(_28_m0[3262u].w), 2.2f);
-      float _522a = saturate(_28_m0[3262u].z);
-      float _525a = saturate(_28_m0[3263u].y);
+      float _520 = pow(saturate(_28_m0[3259u].w), 2.2f);
+      float _522a = saturate(_28_m0[3259u].z);
+      float _525a = saturate(_28_m0[3260u].y);
       float _525b = clamp(_525a, 1.1920928955078125e-07f, 0.999989986419677734375f);
 
-      float _517 = max(0.0f, _28_m0[3263u].x);
-      float _519 = saturate(_28_m0[3263u].z);
+      float _517 = max(0.0f, _28_m0[3260u].x);
+      float _519 = saturate(_28_m0[3260u].z);
 
       float _522 = _520 * 0.5f * (1.0f - _522a);
       float _523 = 1.0f - _522;
@@ -255,7 +256,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
       sdrColor = saturate((((inputColor * 2.51f) + 0.03f) * inputColor) / ((((inputColor * 2.43f) + 0.59f) * inputColor) + 0.14f));
     } else if (pushConstants.toneMapType == 2u) {
       // Custom ACES SDR
-      sdrColor = saturate((((customACESParam * inputColor) + 0.03f) * inputColor) / (_28_m0[3262u].y + (((inputColor * 2.43f) + 0.59f) * inputColor)));
+      sdrColor = saturate((((customACESParam * inputColor) + 0.03f) * inputColor) / (_28_m0[3259u].y + (((inputColor * 2.43f) + 0.59f) * inputColor)));
     } else if (pushConstants.toneMapType == 3u) {
       // Custom Hable SDR
       float _159 = inputColor.r;
@@ -266,13 +267,13 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
       _57[0u] = _159;
       _57[1u] = _160;
       _57[2u] = _161;
-      float _520 = pow(saturate(_28_m0[3262u].w), 2.2f);
-      float _522a = saturate(_28_m0[3262u].z);
-      float _525a = saturate(_28_m0[3263u].y);
+      float _520 = pow(saturate(_28_m0[3259u].w), 2.2f);
+      float _522a = saturate(_28_m0[3259u].z);
+      float _525a = saturate(_28_m0[3260u].y);
       float _525b = clamp(_525a, 1.1920928955078125e-07f, 0.999989986419677734375f);
 
-      float _517 = max(0.0f, _28_m0[3263u].x);
-      float _519 = saturate(_28_m0[3263u].z);
+      float _517 = max(0.0f, _28_m0[3260u].x);
+      float _519 = saturate(_28_m0[3260u].z);
 
       float _522 = _520 * 0.5f * (1.0f - _522a);
       float _523 = 1.0f - _522;
@@ -451,13 +452,10 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
   } else {
     outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, lutColor, injectedData.colorGradeLUTStrength);
   }
-  outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
 
-  float3 outputSigns = sign(outputColor);
-  outputColor = abs(outputColor);
-  outputColor = renodx::color::srgb::Encode(outputColor);
-
-  outputColor *= outputSigns;
+  outputColor = renodx::color::bt709::clamp::BT2020(outputColor);
+  outputColor = PostToneMapScale(outputColor);
+  
 
   return float4(outputColor, 1.0f);
 }

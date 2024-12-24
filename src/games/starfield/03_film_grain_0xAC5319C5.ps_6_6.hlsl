@@ -40,7 +40,7 @@ void frag_main() {
     outputColor = renodx::effects::ApplyFilmGrain(
         outputColor,
         TEXCOORD.xy,
-        frac(injectedData.elapsedTime / 1000.f),
+        injectedData.random_1,
         _34.z ? injectedData.fxFilmGrain * 0.03f : 0,
         1.f);
     outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;

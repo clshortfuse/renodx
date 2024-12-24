@@ -1,65 +1,48 @@
 #include "./shared.h"
+#include "./common.hlsl"
 
-cbuffer _15_17 : register(b0, space0) {
-  float4 _17_m0[1] : packoffset(c0);
-}
+Texture2D<float> t0 : register(t0, space8);
 
-Texture2D<float4> _8 : register(t0, space8);
-Texture2D<float4> _9 : register(t1, space8);
-Texture2D<float4> _10 : register(t2, space8);
-SamplerState _20 : register(s0, space8);
+Texture2D<float> t1 : register(t1, space8);
 
-static float2 TEXCOORD;
-static float4 SV_Target;
+Texture2D<float> t2 : register(t2, space8);
 
-struct SPIRV_Cross_Input {
-  float4 gl_FragCoord : SV_Position;
-  float2 TEXCOORD : TEXCOORD0;
+cbuffer cb0 : register(b0) {
+  uint cb0_000x : packoffset(c000.x);
+  uint cb0_000y : packoffset(c000.y);
 };
 
-struct SPIRV_Cross_Output {
-  float4 SV_Target : SV_Target0;
-};
+SamplerState s0 : register(s0, space8);
 
-void frag_main() {
-  float4 _44 = _9.Sample(_20, float2(TEXCOORD.x, TEXCOORD.y));
-  float _46 = _44.x;
-  float4 _49 = _10.Sample(_20, float2(TEXCOORD.x, TEXCOORD.y));
-  float _51 = _49.x;
-  float _52 = _8.Sample(_20, float2(TEXCOORD.x, TEXCOORD.y)).x * 1.16412353515625f;
-  float _66 = (_52 + (-0.870655059814453125f)) + (_46 * 1.595794677734375f);
-  float _67 = ((_52 - (_46 * 0.8134765625f)) - (_51 * 0.391448974609375f)) + 0.529705047607421875f;
-  float _71 = (_52 + (-1.081668853759765625f)) + (_51 * 2.017822265625f);
-  uint4 _121 = asuint(_17_m0[0u]);
-  float _124 = max(asfloat(_121.y), 0.001000000047497451305389404296875f);
-  float _137 = (((min(1.0f, _66 * 99999.9921875f) * 2.0f) * ((((((((((_66 * 0.078460276126861572265625f) + (-0.2889308035373687744140625f)) * _66) + 0.655828952789306640625f) * _66) + 0.52069270610809326171875f) * _66) + 0.0332120954990386962890625f) * _66) + 0.0008656803402118384838104248046875f)) + (-1.0f)) * _124;
-  float _138 = (((min(1.0f, _67 * 99999.9921875f) * 2.0f) * ((((((((((_67 * 0.078460276126861572265625f) + (-0.2889308035373687744140625f)) * _67) + 0.655828952789306640625f) * _67) + 0.52069270610809326171875f) * _67) + 0.0332120954990386962890625f) * _67) + 0.0008656803402118384838104248046875f)) + (-1.0f)) * _124;
-  float _139 = (((min(1.0f, _71 * 99999.9921875f) * 2.0f) * ((((((((((_71 * 0.078460276126861572265625f) + (-0.2889308035373687744140625f)) * _71) + 0.655828952789306640625f) * _71) + 0.52069270610809326171875f) * _71) + 0.0332120954990386962890625f) * _71) + 0.0008656803402118384838104248046875f)) + (-1.0f)) * _124;
-  float _144 = (_124 / sqrt((_124 * _124) + 1.0f)) * 2.0f;
-  float _167 = 1.0f / max(asfloat(_121.x), 0.001000000047497451305389404296875f);
-  SV_Target.x = max((exp2(log2((_137 / (sqrt((_137 * _137) + 1.0f) * _144)) + 0.5f) * _167) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f), 0.0f);
-  SV_Target.y = max((exp2(log2((_138 / (sqrt((_138 * _138) + 1.0f) * _144)) + 0.5f) * _167) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f), 0.0f);
-  SV_Target.z = max((exp2(log2((_139 / (sqrt((_139 * _139) + 1.0f) * _144)) + 0.5f) * _167) * 1.05499994754791259765625f) + (-0.054999999701976776123046875f), 0.0f);
+float4 main(
+    noperspective float4 SV_Position: SV_Position,
+    linear float2 TEXCOORD: TEXCOORD)
+    : SV_Target {
+  float4 SV_Target;
+  float _19 = ((t0.Sample(s0, float2((TEXCOORD.x), (TEXCOORD.y)))).x) * 1.16412353515625f;
+  float _27 = (_19 + -0.8706550598144531f) + (((t1.Sample(s0, float2((TEXCOORD.x), (TEXCOORD.y)))).x) * 1.595794677734375f);
+  float _28 = ((_19 - (((t1.Sample(s0, float2((TEXCOORD.x), (TEXCOORD.y)))).x) * 0.8134765625f)) - (((t2.Sample(s0, float2((TEXCOORD.x), (TEXCOORD.y)))).x) * 0.391448974609375f)) + 0.5297050476074219f;
+  float _30 = (_19 + -1.0816688537597656f) + (((t2.Sample(s0, float2((TEXCOORD.x), (TEXCOORD.y)))).x) * 2.017822265625f);
+  float _70 = max((asfloat(((uint)(cb0_000y)))), 0.0010000000474974513f);
+  float _80 = ((((min(1.0f, (_27 * 99999.9921875f))) * 2.0f) * ((((((((((_27 * 0.07846027612686157f) + -0.2889308035373688f) * _27) + 0.6558289527893066f) * _27) + 0.5206927061080933f) * _27) + 0.033212095499038696f) * _27) + 0.0008656803402118385f)) + -1.0f) * _70;
+  float _81 = ((((min(1.0f, (_28 * 99999.9921875f))) * 2.0f) * ((((((((((_28 * 0.07846027612686157f) + -0.2889308035373688f) * _28) + 0.6558289527893066f) * _28) + 0.5206927061080933f) * _28) + 0.033212095499038696f) * _28) + 0.0008656803402118385f)) + -1.0f) * _70;
+  float _82 = ((((min(1.0f, (_30 * 99999.9921875f))) * 2.0f) * ((((((((((_30 * 0.07846027612686157f) + -0.2889308035373688f) * _30) + 0.6558289527893066f) * _30) + 0.5206927061080933f) * _30) + 0.033212095499038696f) * _30) + 0.0008656803402118385f)) + -1.0f) * _70;
+  float _87 = (_70 / (sqrt(((_70 * _70) + 1.0f)))) * 2.0f;
+  float _109 = 1.0f / (max((asfloat(((uint)(cb0_000x)))), 0.0010000000474974513f));
+
+  SV_Target.x = (max((((exp2(((log2(((_80 / ((sqrt(((_80 * _80) + 1.0f))) * _87)) + 0.5f))) * _109))) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f));
+  SV_Target.y = (max((((exp2(((log2(((_81 / ((sqrt(((_81 * _81) + 1.0f))) * _87)) + 0.5f))) * _109))) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f));
+  SV_Target.z = (max((((exp2(((log2(((_82 / ((sqrt(((_82 * _82) + 1.0f))) * _87)) + 0.5f))) * _109))) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f));
   SV_Target.w = 1.0f;
 
-  float3 outputColor = SV_Target.rgb;
-  float3 signs = sign(outputColor.rgb);
-  outputColor = abs(outputColor);
-  outputColor = renodx::color::srgb::Decode(outputColor);
-  float videoPeak = injectedData.toneMapPeakNits / 100.f * (injectedData.toneMapGameNits / 203.f);
-  outputColor.rgb = renodx::tonemap::inverse::bt2446a::BT709(outputColor, 100.f, videoPeak);
-  outputColor.rgb /= videoPeak;  // 1.0 = Video Peak
-  outputColor.rgb *= injectedData.toneMapPeakNits / injectedData.toneMapUINits;
-  outputColor = renodx::color::srgb::Encode(outputColor);
-  outputColor *= signs;
-
-  SV_Target.rgb = outputColor;
-}
-
-SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {
-  TEXCOORD = stage_input.TEXCOORD;
-  frag_main();
-  SPIRV_Cross_Output stage_output;
-  stage_output.SV_Target = SV_Target;
-  return stage_output;
+  if (injectedData.toneMapType != 0.f) {
+    float videoPeak =
+        injectedData.toneMapPeakNits / (injectedData.toneMapGameNits / 203.f);
+    SV_Target.rgb = renodx::color::gamma::Decode(SV_Target.rgb, 2.4f);  // 2.4 for BT2446a
+    SV_Target.rgb = renodx::tonemap::inverse::bt2446a::BT709(SV_Target.rgb, 100.f, videoPeak);
+    SV_Target.rgb /= videoPeak;                                                    // Normalize to 1.0f = peak;
+    SV_Target.rgb *= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;  // 1.f = game nits
+    SV_Target.rgb = PostToneMapScale(SV_Target.rgb);                               // Gamma Correct
+  }
+  return SV_Target;
 }

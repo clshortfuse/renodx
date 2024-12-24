@@ -9,18 +9,10 @@
 // #define DEBUG_LEVEL_1
 // #define DEBUG_LEVEL_2
 
-#include <embed/0x054D0CB8.h>
-#include <embed/0x0A152BB1.h>
-#include <embed/0x0D5ADD1F.h>
-#include <embed/0x17FAB08F.h>
-#include <embed/0x1C18052A.h>
-#include <embed/0x32580F53.h>
-#include <embed/0x3B344832.h>
-#include <embed/0x4348FFAE.h>
-#include <embed/0x58E74610.h>
-#include <embed/0xAC5319C5.h>
-#include <embed/0xE9D9E225.h>
-#include <embed/0xEED8A831.h>
+#include <embed/shaders.h>
+#include <chrono>
+#include <random>
+#define NOMINMAX
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -35,18 +27,19 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomSwapchainShader(0x0D5ADD1F),  // output
-    CustomShaderEntry(0xAC5319C5),      // film grain
-    CustomShaderEntry(0x0A152BB1),      // HDRComposite
-    CustomShaderEntry(0x054D0CB8),      // HDRComposite (no bloom)
-    CustomShaderEntry(0x3B344832),      // HDRComposite (lut only)
-    CustomShaderEntry(0x17FAB08F),      // PostSharpen
-    CustomShaderEntry(0x1C18052A),      // CAS1
-    CustomShaderEntry(0x58E74610),      // CAS2
-    CustomShaderEntry(0x4348FFAE),      // CAS3
-    CustomShaderEntry(0xEED8A831),      // CAS4
-    // CustomShaderEntry(0xE9D9E225),   // ui
+    // CustomSwapchainShader(0x0D5ADD1F),  // output
+    CustomShaderEntry(0xAC5319C5),  // film grain
+    // CustomShaderEntry(0x0A152BB1),      // HDRComposite
+    // CustomShaderEntry(0x054D0CB8),      // HDRComposite (no bloom)
+    // CustomShaderEntry(0x3B344832),      // HDRComposite (lut only)
+    // CustomShaderEntry(0x17FAB08F),      // PostSharpen
+    // CustomShaderEntry(0x1C18052A),      // CAS1
+    // CustomShaderEntry(0x58E74610),      // CAS2
+    // CustomShaderEntry(0x4348FFAE),      // CAS3
+    // CustomShaderEntry(0xEED8A831),      // CAS4
+    // // CustomShaderEntry(0xE9D9E225),   // ui
     CustomShaderEntry(0x32580F53),  // movie
+    CustomShaderEntry(0xD546E059),  // tonemapper
 };
 
 ShaderInjectData shader_injection;
@@ -282,7 +275,8 @@ bool OnDispatch(reshade::api::command_list* cmd_list,
   return HandlePreDraw(cmd_list, true);
 }
 
-auto timestamp_start = std::chrono::steady_clock::now();
+static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
+static float random_range = (random_generator.max() - random_generator.min());
 
 void OnPresent(
     reshade::api::command_queue* queue,
@@ -291,9 +285,9 @@ void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-  auto timestamp_end = std::chrono::steady_clock::now();
-  auto delta = timestamp_end - timestamp_start;
-  shader_injection.elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
+  shader_injection.random_1 = (float)(random_generator() + random_generator.min()) / random_range;
+  shader_injection.random_2 = (float)(random_generator() + random_generator.min()) / random_range;
+  shader_injection.random_3 = (float)(random_generator() + random_generator.min()) / random_range;
 }
 
 }  // namespace
@@ -302,57 +296,62 @@ extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Starfield";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
-  if (fdw_reason == DLL_PROCESS_ATTACH && !reshade::register_addon(h_module)) return FALSE;
-
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
+      if (!reshade::register_addon(h_module)) return FALSE;
+
+      renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
+        return device->get_api() == reshade::api::device_api::d3d12;
+      };
+
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::shader::allow_multiple_push_constants = true;
-      // renodx::mods::shader::expected_constant_buffer_index = 3;
-      renodx::mods::shader::expected_constant_buffer_space = 9;
+
+      renodx::mods::shader::expected_constant_buffer_space = 50;
+
       renodx::mods::swapchain::use_resource_cloning = true;
-      // renodx::mods::swapchain::use_resize_buffer = true;
-      // renodx::mods::swapchain::use_resize_bufferOnSetFullScreen = true;
-      renodx::mods::swapchain::prevent_full_screen = true;
+      renodx::mods::swapchain::expected_constant_buffer_space = 50;
 
-      // RGBA8 Resource pool
+      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = {
+          _swap_chain_proxy_vertex_shader,
+          _swap_chain_proxy_vertex_shader + sizeof(_swap_chain_proxy_vertex_shader),
+      };
+      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = {
+          _swap_chain_proxy_pixel_shader,
+          _swap_chain_proxy_pixel_shader + sizeof(_swap_chain_proxy_pixel_shader),
+      };
+
+      // // RGBA8 Resource pool
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .index = 0,
+          .new_format = reshade::api::format::r16g16b16a16_typeless,
           .use_resource_view_cloning = true,
-          .use_resource_view_hot_swap = false,
       });
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_typeless,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          // .ignore_size = true,
-          .use_resource_view_cloning = true,
-          .use_resource_view_hot_swap = true,
-      });
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r16g16b16a16_typeless,
           .new_format = reshade::api::format::r16g16b16a16_float,
-          .ignore_size = true,
+          .use_resource_view_cloning = true,
       });
+
+      reshade::register_event<reshade::addon_event::present>(OnPresent);
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  renodx::mods::swapchain::Use(fdw_reason);
+  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
-  renodx::utils::shader::Use(fdw_reason);
+  // renodx::utils::shader::Use(fdw_reason);
   if (fdw_reason == DLL_PROCESS_ATTACH) {
-    reshade::register_event<reshade::addon_event::draw>(OnDraw);
-    reshade::register_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
-    reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
-    reshade::register_event<reshade::addon_event::dispatch>(OnDispatch);
-    reshade::register_event<reshade::addon_event::present>(OnPresent);
+    // reshade::register_event<reshade::addon_event::draw>(OnDraw);
+    // reshade::register_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
+    // reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
+    // reshade::register_event<reshade::addon_event::dispatch>(OnDispatch);
   }
 
   return TRUE;
