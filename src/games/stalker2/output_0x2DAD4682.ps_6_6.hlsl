@@ -1,6 +1,4 @@
 #include "./common.hlsl"
-#include "./shared.h"
-
 
 Texture2D<float4> ColorTexture : register(t0);
 

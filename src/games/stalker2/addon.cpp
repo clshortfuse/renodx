@@ -86,7 +86,7 @@ renodx::utils::settings::Settings settings = {
         .min = 48.f,
         .max = 500.f,
     },
-    new renodx::utils::settings::Setting{
+    /* new renodx::utils::settings::Setting{
         .key = "ToneMapPerChannel",
         .binding = &shader_injection.toneMapPerChannel,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -96,7 +96,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Applies tonemapping per-channel instead of by luminance (More accurate to SDR but less saturated)",
         .labels = {"Off", "On"},
         .is_enabled = []() { return shader_injection.toneMapType == 3; },
-    },
+    }, */
     new renodx::utils::settings::Setting{
         .key = "radiationOverlayStrength",
         .binding = &shader_injection.radiationOverlayStrength,
@@ -161,7 +161,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeBlowout",
+        .key = "colorGradeBlowout",
         .binding = &shader_injection.colorGradeBlowout,
         .default_value = 50.f,
         .label = "Blowout",

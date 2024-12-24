@@ -2,7 +2,7 @@
 
 static const float DEFAULT_BRIGHTNESS = 0.f;  // 50%
 static const float DEFAULT_CONTRAST = 1.f;    // 50%
-static const float DEFAULT_GAMMA = 1.f;       // Approximately 44%
+static const float DEFAULT_GAMMA = 1.f;
 
 float3 CorrectGamma(float3 color) {
   color = renodx::color::correct::GammaSafe(color);
@@ -42,7 +42,7 @@ float3 RenoDRTSmoothClamp(float3 untonemapped) {
   renodrt_config.hue_correction_strength = 0.f;
   renodrt_config.tone_map_method =
       renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  renodrt_config.working_color_space = 2u;
+  renodrt_config.working_color_space = 1u;
 
   return renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
 }
@@ -89,7 +89,7 @@ float3 UpgradePostProcess(float3 tonemappedRender, float3 post_processed, float 
       output = renodx::color::pq::Encode(tonemappedRender, injectedData.toneMapGameNits);
     } else {
       post_processed = renodx::color::srgb::DecodeSafe(post_processed);
-      output = renodx::tonemap::UpgradeToneMap(tonemappedRender, saturate(tonemappedRender), saturate(post_processed), lerpValue);
+      output = UpgradeToneMapPerChannel(tonemappedRender, saturate(tonemappedRender), saturate(post_processed), lerpValue);
       output = renodx::color::pq::Encode(output, injectedData.toneMapGameNits);
     }
   }
@@ -129,20 +129,41 @@ float3 ToneMap(float3 bt709) {
   // Default inverts smooth clamp
   config.reno_drt_highlights = 1.0f;
   config.reno_drt_shadows = 1.0f;
-  config.reno_drt_contrast = 1.f;
-  // config.reno_drt_saturation = 1.05f;
-  // 1.1f better matches ACES
-  config.reno_drt_saturation = 1.1f;
+  config.reno_drt_contrast = 1.05f;
+  config.reno_drt_saturation = 1.05f;
   config.reno_drt_dechroma = 0;
   config.reno_drt_blowout = injectedData.colorGradeBlowout;
   // Flare darkens too much (stalker2)
   // config.reno_drt_flare = 0.10f * injectedData.colorGradeFlare;
-  config.reno_drt_working_color_space = 2u;
-  config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
+  config.reno_drt_working_color_space = 1u;
+  config.reno_drt_per_channel = true;
 
   float3 output_color = renodx::tonemap::config::Apply(bt709, config);
 
   return output_color;
+}
+
+float4 FinalizeUEOutput(float4 scene, float4 ui, bool is_hdr10 = true, bool only_correct_ui = false) {
+  scene.rgb = renodx::color::pq::Decode(scene.rgb, injectedData.toneMapGameNits);
+
+  ui.rgb = renodx::color::srgb::Decode(ui.rgb);
+  ui.rgb = renodx::color::bt2020::from::BT709(ui.rgb);
+  if (only_correct_ui) {
+    ui.rgb = CorrectGamma(ui.rgb);
+  }
+  ui.rgb = ui.rgb * injectedData.toneMapUINits / injectedData.toneMapGameNits;
+
+  if (is_hdr10) {
+    scene.rgb = lerp(scene.rgb, ui.rgb, ui.a);
+    if (!only_correct_ui) {
+      scene.rgb = CorrectGamma(scene.rgb);
+    }
+    scene.rgb = renodx::color::pq::Encode(scene.rgb, injectedData.toneMapGameNits);
+
+    return float4(scene.rgb, ui.a);
+  } else {
+    return scene;
+  }
 }
 
 float3 FinalizeTonemap(float3 color, bool is_hdr10 = true) {

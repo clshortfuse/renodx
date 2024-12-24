@@ -1,5 +1,4 @@
 #include "./common.hlsl"
-#include "./shared.h"
 
 Texture2D<float4> Textures_1 : register(t0);
 

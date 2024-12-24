@@ -1,4 +1,3 @@
-#include "./shared.h"
 #include "./common.hlsl"
 
 Texture2D<float4> UITexture : register(t0);
@@ -77,32 +76,18 @@ float4 main(
   float _54 = _53 * _45;
   float _55 = _53 * _48;
   float _56 = _53 * _51;
-  float3 uiTexture = float3(_54, _55, _56);
 
   // _57 = _1;
   // _58 = _3;
   // We don't use finalize here because it messes up with FSR3 FG
   float4 _59 = SceneTexture.Sample(SceneSampler, float2(_7, _8));
-  float3 scene = _59.rgb;
-  scene = renodx::color::pq::Decode(scene.rgb, injectedData.toneMapGameNits);
-  uiTexture.rgb = CorrectGamma(uiTexture.rgb);
-
-  // Multiply by game's because we're encoding PQ later
-  uiTexture.rgb = uiTexture.rgb * injectedData.toneMapUINits / injectedData.toneMapGameNits;
-
-  _54 = uiTexture.r;
-  _55 = uiTexture.g;
-  _56 = uiTexture.b;
+  return FinalizeUEOutput(_59, _11, true, true);
 
   float _60 = _59.x;
   float _61 = _59.y;
   float _62 = _59.z;
 
-  _60 = scene.r;
-  _61 = scene.g;
-  _62 = scene.b;
-
-  /* float _63 = log2(_60);
+  float _63 = log2(_60);
   float _64 = log2(_61);
   float _65 = log2(_62);
   float _66 = _63 * 0.012683313339948654f;
@@ -137,26 +122,20 @@ float4 main(
   float _95 = exp2(_92);
   float _96 = _93 * 10000.0f;
   float _97 = _94 * 10000.0f;
-  float _98 = _95 * 10000.0f; */
+  float _98 = _95 * 10000.0f;
 
   float _99 = $Globals_007z;
   _99 = 1.f;  // Disable game's UI level setting
   bool _100 = (_15 > 0.0f);
   bool _101 = (_15 < 1.0f);
   bool _102 = _100 && _101;
-  /* float _119 = _96;
+  float _119 = _96;
   float _120 = _97;
-  float _121 = _98; */
-  float _119 = scene.r;
-  float _120 = scene.g;
-  float _121 = scene.b;
+  float _121 = _98;
   if (_102) {
-    /* float _104 = max(_96, 0.0f);
+    float _104 = max(_96, 0.0f);
     float _105 = max(_97, 0.0f);
-    float _106 = max(_98, 0.0f); */
-    float _104 = max(scene.r, 0.0f);
-    float _105 = max(scene.g, 0.0f);
-    float _106 = max(scene.b, 0.0f);
+    float _106 = max(_98, 0.0f);
     float _107 = dot(float3(_104, _105, _106), float3(0.26269999146461487f, 0.6779999732971191f, 0.059300001710653305f));
     float _108 = _107 / _99;
     float _109 = _108 + 1.0f;
@@ -184,9 +163,6 @@ float4 main(
   float _129 = _123 + _126;
   float _130 = _124 + _127;
   float _131 = _125 + _128;
-  float3 output = float3(_129, _130, _131);
-  output = renodx::color::pq::Encode(output.rgb, injectedData.toneMapGameNits);
-  return float4(output, _15);
 
   float _132 = _129 * 9.999999747378752e-05f;
   float _133 = _130 * 9.999999747378752e-05f;
