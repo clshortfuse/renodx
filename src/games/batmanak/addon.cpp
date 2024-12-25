@@ -78,6 +78,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 };
 
 ShaderInjectData shader_injection;
+const std::string build_date = __DATE__;
+const std::string build_time = __TIME__;
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -379,6 +381,11 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           ShellExecute(0, "open", (std::string("https://ko-fi.com/") + "shortfuse").c_str(), 0, 0, SW_SHOW);
         },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "This build was compiled on " + build_date + " at " + build_time + ".",
+        .section = "About",
     },
 };
 
