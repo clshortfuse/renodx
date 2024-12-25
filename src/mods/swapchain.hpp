@@ -2279,8 +2279,9 @@ static bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullsc
     renodx::utils::swapchain::ResizeBuffer(swapchain, target_format, target_color_space);
   }
   auto* device = swapchain->get_device();
-  if (device == nullptr) return false;
   auto& private_data = device->get_private_data<DeviceData>();
+  if (std::addressof(private_data) == nullptr) return false;
+
   const std::unique_lock lock(private_data.mutex);
   reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnSetFullscreenState(reset resource upgrade)");
   private_data.resource_upgrade_finished = false;
@@ -2326,7 +2327,7 @@ static void OnPresent(
   auto* device = swapchain->get_device();
   auto& data = device->get_private_data<DeviceData>();
 
-  auto* cmd_list = queue->get_immediate_command_list();
+  if (std::addressof(data) == nullptr) return;
 
   // std::shared_lock data_lock(data.mutex);
 

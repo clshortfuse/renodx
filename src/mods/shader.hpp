@@ -841,6 +841,8 @@ static void OnPresent(
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
   auto& data = swapchain->get_device()->get_private_data<DeviceData>();
+  if (std::addressof(data) == nullptr) return;
+
   if (using_counted_shaders) {
     const std::unique_lock lock(data.mutex);
     data.counted_shaders.clear();
