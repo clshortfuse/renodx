@@ -2315,15 +2315,9 @@ static bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullsc
   return false;
 }
 
-static void OnPresent(
-    reshade::api::command_queue* queue,
-    reshade::api::swapchain* swapchain,
-    const reshade::api::rect* source_rect,
-    const reshade::api::rect* dest_rect,
-    uint32_t dirty_rect_count,
-    const reshade::api::rect* dirty_rects) {
+static void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api::command_queue* queue) {
+  auto* cmd_list = queue->get_immediate_command_list();
   auto current_back_buffer = swapchain->get_current_back_buffer();
-
   auto* device = swapchain->get_device();
   auto& data = device->get_private_data<DeviceData>();
 
@@ -2497,10 +2491,21 @@ static void OnPresent(
     device->destroy_resource_view(rtv);
     data.swap_chain_proxy_rtvs.erase(current_back_buffer.handle);
   }
+  queue->flush_immediate_command_list();
 
 #ifdef DEBUG_LEVEL_2
   reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
+}
+
+static void OnPresent(
+    reshade::api::command_queue* queue,
+    reshade::api::swapchain* swapchain,
+    const reshade::api::rect* source_rect,
+    const reshade::api::rect* dest_rect,
+    uint32_t dirty_rect_count,
+    const reshade::api::rect* dirty_rects) {
+  DrawSwapChainProxy(swapchain, queue);
 }
 
 static void SetUseHDR10(bool value = true) {
