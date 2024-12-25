@@ -359,6 +359,7 @@ renodx::utils::settings::Settings settings = {
         .label = "More Mods",
         .section = "Links",
         .group = "button-line-1",
+        .tint = 0x2B3137,
         .on_change = []() {
           ShellExecute(0, "open", (std::string("https://github.com/") + "clshortfuse/renodx/wiki/Mods").c_str(), 0, 0, SW_SHOW);
         },
@@ -368,6 +369,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Github",
         .section = "Links",
         .group = "button-line-1",
+        .tint = 0x2B3137,
         .on_change = []() {
           ShellExecute(0, "open", (std::string("https://github.com/") + "clshortfuse/renodx").c_str(), 0, 0, SW_SHOW);
         },
@@ -377,7 +379,7 @@ renodx::utils::settings::Settings settings = {
         .label = "ShortFuse's Ko-Fi",
         .section = "Links",
         .group = "button-line-1",
-        .tint = 0xFF5F5F,
+        .tint = 0xFF5A16,
         .on_change = []() {
           ShellExecute(0, "open", (std::string("https://ko-fi.com/") + "shortfuse").c_str(), 0, 0, SW_SHOW);
         },
