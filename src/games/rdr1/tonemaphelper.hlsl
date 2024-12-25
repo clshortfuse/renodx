@@ -58,16 +58,19 @@ float3 renoDRTSmoothClamp(float3 untonemapped) {
   renodrt_config.highlights = 1.f;
   renodrt_config.shadows = 1.f;
   renodrt_config.contrast = 1.05f;
-  renodrt_config.saturation = 1.f;
-  renodrt_config.dechroma = 0.05f;
+  renodrt_config.saturation = 1.03f;
+  renodrt_config.dechroma = 0.f;
   renodrt_config.flare = 0.f;
+  renodrt_config.blowout = -1.f;
   renodrt_config.hue_correction_strength = 0.f;
-  renodrt_config.hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::OKLAB;
+  renodrt_config.hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::ICTCP;
   renodrt_config.tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   renodrt_config.hue_correction_type = renodx::tonemap::renodrt::config::hue_correction_type::INPUT;
-  renodrt_config.working_color_space = 2u;
+  renodrt_config.working_color_space = 0u;
+  renodrt_config.per_channel = true;
 
   float3 renoDRTColor = renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
+  renoDRTColor = lerp(untonemapped, renoDRTColor, saturate(renodx::color::y::from::BT709(untonemapped)));
 
   return saturate(renoDRTColor);
 }
