@@ -1,3 +1,4 @@
+#include "./hueHelper.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> g_textures2D[] : register(t0, space2);
@@ -32,6 +33,8 @@ float4 main(
   float3 linearColor = renodx::color::gamma::DecodeSafe(gammaColor, 2.8);
 
   if (injectedData.toneMapType != 0) {
+    linearColor = clampedHueOKLab(linearColor, injectedData.toneMapHueCorrection);
+
     const float paperWhite = gameNits / renodx::color::srgb::REFERENCE_WHITE;
     linearColor *= paperWhite;
     const float peakWhite = injectedData.toneMapPeakNits / renodx::color::srgb::REFERENCE_WHITE;

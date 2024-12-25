@@ -10,6 +10,7 @@
 struct ShaderInjectData {
   float toneMapType;
   float toneMapPeakNits;
+  float toneMapHueCorrection;
 };
 
 #ifndef __cplusplus
