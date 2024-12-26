@@ -1,3 +1,5 @@
+#pragma once
+
 namespace renodx::utils::bitwise {
 template <typename T = int>
 static bool HasFlag(const T a, T b) {
