@@ -82,7 +82,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
-        .tooltip = "Emulates a display EOTF."
+        .tooltip = "Emulates a display EOTF.",
         .labels = {"Off", "2.2", "BT.1886"},
     },
     new renodx::utils::settings::Setting{

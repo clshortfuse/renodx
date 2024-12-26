@@ -18,7 +18,6 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
-
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
