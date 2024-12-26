@@ -179,6 +179,7 @@ function(build_shader_target ADDON ADDON_PATH)
     endif()
   endforeach()
 
+  unset(SHADERS_H_OUTPUT)
   foreach(FILE ${SHADER_BINARIES})
     cmake_path(GET FILE STEM LAST_ONLY FILENAME)
     add_custom_command(
@@ -187,21 +188,16 @@ function(build_shader_target ADDON ADDON_PATH)
       DEPENDS ${FILE}
     )
     list(APPEND SHADER_HEADER_FILES ${EMBED_FOLDER}/${FILENAME}.h)
+    string(APPEND SHADERS_H_OUTPUT "#include \"./${FILENAME}.h\"\n")
   endforeach()
 
 
   list(JOIN SHADER_HEADER_FILES " " SHADER_HEADER_FILE_ITEMS)
   add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES})
 
-  if(SHADER_HEADER_FILES)
-    add_custom_target(${ADDON}-shaders-packed DEPENDS ${EMBED_FOLDER}/shaders.h)
-    add_custom_command(
-      OUTPUT ${EMBED_FOLDER}/shaders.h
-      COMMAND ${CMAKE_COMMAND} -E cat ${SHADER_HEADER_FILES} > ${EMBED_FOLDER}/shaders.h
-      DEPENDS ${SHADER_HEADER_FILES}
-    )
-  else()
-    add_custom_target(${ADDON}-shaders-packed)
+  
+  if(SHADERS_H_OUTPUT)
+    file(GENERATE OUTPUT ${EMBED_FOLDER}/shaders.h CONTENT "${SHADERS_H_OUTPUT}")
   endif()
 endfunction()
 
@@ -220,7 +216,6 @@ foreach(FILE ${ADDON_FILES})
   add_library(${ADDON} MODULE ${FILE})
   build_shader_target(${ADDON} ${CMAKE_CURRENT_SOURCE_DIR}/src/games/${ADDON})
   add_dependencies(${ADDON} ${ADDON}-shaders)
-  add_dependencies(${ADDON} ${ADDON}-shaders-packed)
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/reshade)
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include)
