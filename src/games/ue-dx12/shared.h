@@ -1,5 +1,5 @@
-#ifndef SRC_FFX_SHARED_H_
-#define SRC_FFX_SHARED_H_
+#ifndef SRC_UE_DX12_SHARED_H_
+#define SRC_UE_DX12_SHARED_H_
 
 #ifndef __cplusplus
 #include "../../shaders/renodx.hlsl"
@@ -33,4 +33,4 @@ cbuffer injectedBuffer : register(b13, space50) {
 }
 #endif
 
-#endif  // SRC_FFX_SHARED_H_
+#endif  // SRC_UE_DX12_SHARED_H_

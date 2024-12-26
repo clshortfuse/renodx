@@ -82,8 +82,7 @@ float3 FinalizeOutput(float3 color) {
 
   color *= injectedData.toneMapUINits;
   color = min(color, injectedData.toneMapPeakNits);  // Clamp UI or Videos
-  
-  
+
   color = renodx::color::bt709::clamp::BT2020(color);
 
   color /= 80.f;
@@ -157,8 +156,8 @@ float4 LutBuilderToneMap(float3 untonemapped_ap1, float3 tonemapped_bt709) {
 
   float3 color = ToneMap(untonemapped_graded);
 
-  color = renodx::color::bt709::clamp::BT2020(color);
   color = PostToneMapScale(color);
   color *= 1.f / 1.05f;
+  color = renodx::color::bt709::clamp::BT2020(color);
   return float4(color, 1);
 }
