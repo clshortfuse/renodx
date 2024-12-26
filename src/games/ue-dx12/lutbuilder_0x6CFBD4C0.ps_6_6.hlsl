@@ -767,6 +767,9 @@ float4 main(
   float _555 = mad(_546, _533, _554);
   float _556 = mad(_547, _535, _555);
   float _557 = _RootShaderParameters_036y;
+
+  float3 untonemapped_ap1 = float3(_531, _533, _535);  // CustomEdit
+
   float _558 = _531 * 0.9386394023895264f;
   float _559 = mad(-4.540197551250458e-09f, _533, _558);
   float _560 = mad(0.061360642313957214f, _535, _559);
@@ -783,8 +786,6 @@ float4 main(
   float _571 = _568 + _531;
   float _572 = _569 + _533;
   float _573 = _570 + _535;
-
-  float3 untonemapped_ap1 = float3(_571, _572, _573);  // CustomEdit
 
   float _574 = _571 * 0.6954522132873535f;
   float _575 = mad(0.14067868888378143f, _572, _574);
@@ -1309,7 +1310,7 @@ float4 main(
 
   // CustomEdit
   if (injectedData.toneMapType != 0) {
-    return float4(LutBuilderToneMap(untonemapped_ap1, float3(_1074, _1075, _1076)).rgb, 0);
+    return LutBuilderToneMap(untonemapped_ap1, float3(_1074, _1075, _1076));
   }
 
   uint _1078 = _RootShaderParameters_040w;
