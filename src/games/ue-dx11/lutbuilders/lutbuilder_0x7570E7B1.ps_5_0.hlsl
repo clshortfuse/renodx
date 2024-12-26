@@ -1,12 +1,7 @@
-#include "./common.hlsl"
-#include "./shared.h"
+#include "../common.hlsl"
 
-// ---- Created with 3Dmigoto v1.4.1 on Thu Dec 26 02:03:14 2024
-Texture2D<float4> t1 : register(t1);
-
+// ---- Created with 3Dmigoto v1.4.1 on Thu Dec 26 02:00:30 2024
 Texture2D<float4> t0 : register(t0);
-
-SamplerState s1_s : register(s1);
 
 SamplerState s0_s : register(s0);
 
@@ -334,17 +329,12 @@ void main(
   r1.y = r1.y + r1.w;
   r1.x = 0.0625 * r1.y;
   r1.yw = float2(0.0625, 0) + r1.xz;
-  r2.xyz = t0.Sample(s0_s, r1.yw).xyz;
-  r3.xyz = t1.Sample(s1_s, r1.yw).xyz;
-  r4.xyz = t0.Sample(s0_s, r1.xz).xyz;
-  r1.xyz = t1.Sample(s1_s, r1.xz).xyz;
-  r2.xyz = -r4.xyz + r2.xyz;
-  r2.xyz = r0.www * r2.xyz + r4.xyz;
-  r2.xyz = cb0[5].yyy * r2.xyz;
-  r0.xyz = cb0[5].xxx * r0.xyz + r2.xyz;
-  r2.xyz = r3.xyz + -r1.xyz;
-  r1.xyz = r0.www * r2.xyz + r1.xyz;
-  r0.xyz = cb0[5].zzz * r1.xyz + r0.xyz;
+  r2.xyz = t0.Sample(s0_s, r1.xz).xyz;
+  r1.xyz = t0.Sample(s0_s, r1.yw).xyz;
+  r1.xyz = r1.xyz + -r2.xyz;
+  r1.xyz = r0.www * r1.xyz + r2.xyz;
+  r1.xyz = cb0[5].yyy * r1.xyz;
+  r0.xyz = cb0[5].xxx * r0.xyz + r1.xyz;
   r0.xyz = max(float3(6.10351999e-05, 6.10351999e-05, 6.10351999e-05), r0.xyz);
   r1.xyz = r0.xyz * float3(0.947867274, 0.947867274, 0.947867274) + float3(0.0521326996, 0.0521326996, 0.0521326996);
   r1.xyz = log2(r1.xyz);

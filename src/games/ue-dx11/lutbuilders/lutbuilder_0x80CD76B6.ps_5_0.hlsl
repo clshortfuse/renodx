@@ -1,11 +1,6 @@
-#include "./common.hlsl"
-#include "./shared.h"
+#include "../common.hlsl"
 
-// ---- Created with 3Dmigoto v1.4.1 on Thu Dec 26 02:00:30 2024
-Texture2D<float4> t0 : register(t0);
-
-SamplerState s0_s : register(s0);
-
+// ---- Created with 3Dmigoto v1.4.1 on Thu Dec 26 02:00:59 2024
 cbuffer cb1 : register(b1) {
   float4 cb1[21];
 }
@@ -313,37 +308,10 @@ void main(
   r1.z = dot(float3(1.9865448e-08, 2.12079581e-08, 0.999999583), r0.xyz);
   r1.xyz = r1.xyz + -r0.xyz;
   r0.xyz = cb0[36].zzz * r1.xyz + r0.xyz;
-  r1.x = saturate(dot(cb1[12].xyz, r0.xyz));
-  r1.y = saturate(dot(cb1[13].xyz, r0.xyz));
-  r1.z = saturate(dot(cb1[14].xyz, r0.xyz));
-  r0.xyz = log2(r1.xyz);
-  r0.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r0.xyz;
-  r0.xyz = exp2(r0.xyz);
-  r0.xyz = r0.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
-  r2.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r1.xyz;
-  r1.xyz = cmp(r1.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
-  r0.xyz = r1.xyz ? r0.xyz : r2.xyz;
-  r1.yzw = r0.xyz * float3(0.9375, 0.9375, 0.9375) + float3(0.03125, 0.03125, 0.03125);
-  r0.w = r1.w * 16 + -0.5;
-  r1.w = floor(r0.w);
-  r0.w = -r1.w + r0.w;
-  r1.y = r1.y + r1.w;
-  r1.x = 0.0625 * r1.y;
-  r1.yw = float2(0.0625, 0) + r1.xz;
-  r2.xyz = t0.Sample(s0_s, r1.xz).xyz;
-  r1.xyz = t0.Sample(s0_s, r1.yw).xyz;
-  r1.xyz = r1.xyz + -r2.xyz;
-  r1.xyz = r0.www * r1.xyz + r2.xyz;
-  r1.xyz = cb0[5].yyy * r1.xyz;
-  r0.xyz = cb0[5].xxx * r0.xyz + r1.xyz;
-  r0.xyz = max(float3(6.10351999e-05, 6.10351999e-05, 6.10351999e-05), r0.xyz);
-  r1.xyz = r0.xyz * float3(0.947867274, 0.947867274, 0.947867274) + float3(0.0521326996, 0.0521326996, 0.0521326996);
-  r1.xyz = log2(r1.xyz);
-  r1.xyz = float3(2.4000001, 2.4000001, 2.4000001) * r1.xyz;
-  r1.xyz = exp2(r1.xyz);
-  r2.xyz = cmp(float3(0.0404499993, 0.0404499993, 0.0404499993) < r0.xyz);
-  r0.xyz = float3(0.0773993805, 0.0773993805, 0.0773993805) * r0.xyz;
-  r0.xyz = r2.xyz ? r1.xyz : r0.xyz;
+  r1.x = dot(cb1[12].xyz, r0.xyz);
+  r1.y = dot(cb1[13].xyz, r0.xyz);
+  r1.z = dot(cb1[14].xyz, r0.xyz);
+  r0.xyz = max(float3(0, 0, 0), r1.xyz);
   r1.xyz = r0.xyz * r0.xyz;
   r0.xyz = cb0[39].yyy * r0.xyz;
   r0.xyz = cb0[39].xxx * r1.xyz + r0.xyz;
@@ -381,13 +349,13 @@ void main(
   r2.xyz = r2.xxx ? float3(-0.00215900945, -0.0454593264, 1.04761839) : r2.yzw;
   r3.z = dot(r2.xyz, r1.xyz);
   r0.xyz = cb1[20].xxx ? r0.xyz : r3.xyz;
-  r1.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r0.xyz;
-  r2.xyz = cmp(r0.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r0.xyz;
-  r0.xyz = exp2(r0.xyz);
-  r0.xyz = r0.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
-  r0.xyz = r2.xyz ? r0.xyz : r1.xyz;
+  r1.xyz = log2(r0.xyz);
+  r1.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r1.xyz;
+  r1.xyz = exp2(r1.xyz);
+  r2.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r0.xyz;
+  r0.xyz = cmp(r0.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
+  r1.xyz = r1.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
+  r0.xyz = r0.xyz ? r1.xyz : r2.xyz;
   o0.xyz = float3(0.952381015, 0.952381015, 0.952381015) * r0.xyz;
   o0.w = 0;
   return;

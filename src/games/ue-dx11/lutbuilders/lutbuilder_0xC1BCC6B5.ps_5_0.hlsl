@@ -1,9 +1,8 @@
-#include "./common.hlsl"
-#include "./shared.h"
+#include "../common.hlsl"
 
-// ---- Created with 3Dmigoto v1.3.16 on Sat Dec 21 22:55:08 2024
+// ---- Created with 3Dmigoto v1.3.16 on Wed Dec 18 01:13:05 2024
 cbuffer cb0 : register(b0) {
-  float4 cb0[68];
+  float4 cb0[67];
 }
 
 // 3Dmigoto declarations
@@ -169,31 +168,31 @@ void main(
   r1.x = dot(float3(1.70505154, -0.621790707, -0.0832583979), r0.xyz);
   r1.y = dot(float3(-0.130257145, 1.14080286, -0.0105485283), r0.xyz);
   r1.z = dot(float3(-0.0240032747, -0.128968775, 1.15297174), r0.xyz);
-  r0.w = cmp(cb0[35].w == 0.000000);
-  if (r0.w != 0) {
-    r0.w = dot(r1.xyz, float3(0.212599993, 0.715200007, 0.0722000003));
-    r1.w = cmp(cb0[67].y < r0.w);
-    r2.x = -cb0[67].y + r0.w;
-    r2.x = -cb0[67].z * r2.x;
-    r2.x = r2.x / cb0[67].x;
-    r2.y = cb0[67].x + -cb0[67].y;
-    r2.x = 1.44269502 * r2.x;
-    r2.x = exp2(r2.x);
-    r2.x = -r2.y * r2.x + cb0[67].x;
-    r2.xzw = r2.xxx * r1.xyz;
-    r2.xzw = r2.xzw / r0.www;
-    r2.xzw = r1.www ? r2.xzw : r1.xyz;
-    r3.xyz = cmp(cb0[67].yyy < r1.xyz);
-    r4.xyz = -cb0[67].yyy + r1.xyz;
-    r4.xyz = -cb0[67].zzz * r4.xyz;
-    r4.xyz = r4.xyz / cb0[67].xxx;
-    r4.xyz = float3(1.44269502, 1.44269502, 1.44269502) * r4.xyz;
-    r4.xyz = exp2(r4.xyz);
-    r4.xyz = -r2.yyy * r4.xyz + cb0[67].xxx;
-    r3.xyz = r3.xyz ? r4.xyz : r1.xyz;
-    r2.xyz = -r3.xyz + r2.xzw;
-    r2.xyz = cb0[67].www * r2.xyz + r3.xyz;
-    r1.xyz = r2.xyz;
+  if (cb0[44].y != 0) {
+    r2.x = dot(r1.xyz, cb0[28].xyz);
+    r2.y = dot(r1.xyz, cb0[29].xyz);
+    r2.z = dot(r1.xyz, cb0[30].xyz);
+    r0.w = dot(r1.xyz, cb0[33].xyz);
+    r0.w = 1 + r0.w;
+    r0.w = rcp(r0.w);
+    r3.xyz = cb0[35].xyz * r0.www + cb0[34].xyz;
+    r2.xyz = r3.xyz * r2.xyz;
+    r2.xyz = max(float3(0, 0, 0), r2.xyz);
+    r3.xyz = cb0[31].xxx + -r2.xyz;
+    r3.xyz = max(float3(0, 0, 0), r3.xyz);
+    r4.xyz = max(cb0[31].zzz, r2.xyz);
+    r2.xyz = max(cb0[31].xxx, r2.xyz);
+    r2.xyz = min(cb0[31].zzz, r2.xyz);
+    r5.xyz = r4.xyz * cb0[32].xxx + cb0[32].yyy;
+    r4.xyz = cb0[31].www + r4.xyz;
+    r4.xyz = rcp(r4.xyz);
+    r6.xyz = cb0[28].www * r3.xyz;
+    r3.xyz = cb0[31].yyy + r3.xyz;
+    r3.xyz = rcp(r3.xyz);
+    r3.xyz = r6.xyz * r3.xyz + cb0[29].www;
+    r2.xyz = r2.xyz * cb0[30].www + r3.xyz;
+    r2.xyz = r5.xyz * r4.xyz + r2.xyz;
+    r2.xyz = float3(-0.00200000009, -0.00200000009, -0.00200000009) + r2.xyz;
   } else {
     r3.x = dot(float3(0.938639402, 1.02359565e-10, 0.0613606237), r0.xyz);
     r3.y = dot(float3(8.36008554e-11, 0.830794156, 0.169205874), r0.xyz);
@@ -868,9 +867,6 @@ void main(
         r0.w = 3.32192802 * r1.w;
         r7.z = exp2(r0.w);
         r7.xyz = float3(-3.50738446e-05, -3.50738446e-05, -3.50738446e-05) + r7.xyz;
-        r8.xyz = cb0[42].yzw * r7.xyz;
-        r7.xyz = -r7.xyz * cb0[42].yzw + cb0[43].xyz;
-        r7.xyz = cb0[43].www * r7.xyz + r8.xyz;
         r8.x = dot(r5.xyz, r7.xyz);
         r8.y = dot(r6.xyz, r7.xyz);
         r8.z = dot(r4.xyz, r7.xyz);
@@ -1325,9 +1321,6 @@ void main(
           }
           r0.w = 3.32192802 * r1.w;
           r7.z = exp2(r0.w);
-          r8.xyz = cb0[42].yzw * r7.xyz;
-          r7.xyz = -r7.xyz * cb0[42].yzw + cb0[43].xyz;
-          r7.xyz = cb0[43].www * r7.xyz + r8.xyz;
           r8.x = dot(r5.xyz, r7.xyz);
           r8.y = dot(r6.xyz, r7.xyz);
           r8.z = dot(r4.xyz, r7.xyz);

@@ -1,5 +1,4 @@
-#include "./common.hlsl"
-#include "./shared.h"
+#include "../common.hlsl"
 
 // ---- Created with 3Dmigoto v1.4.1 on Thu Dec 26 02:03:00 2024
 cbuffer cb1 : register(b1) {

@@ -22,7 +22,10 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomSwapchainShader(0xAC791084),  // fmv
-    // CustomShaderEntry(0x4CC68F73),  SM6
+
+    CustomShaderEntry(0x2569985B),
+    CustomShaderEntry(0x31FE4421),
+    CustomShaderEntry(0x36E3A438),
     CustomShaderEntry(0x5CAE0013),
     CustomShaderEntry(0x61C2EA30),
     CustomShaderEntry(0x73B2BA54),
@@ -33,11 +36,13 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xBEB7EB31),
     CustomShaderEntry(0xC130BE2D),
     CustomShaderEntry(0xC1BCC6B5),
+    CustomShaderEntry(0xC2A711CC),
     CustomShaderEntry(0xCA383248),
     CustomShaderEntry(0xCC8FD0FF),
     CustomShaderEntry(0xD4A45A02),
     CustomShaderEntry(0xE6EB2840),
     CustomShaderEntry(0xF6AA7756),
+
 };
 
 ShaderInjectData shader_injection;
