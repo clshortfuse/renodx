@@ -291,7 +291,7 @@ void CreateCustomShaders(reshade::api::device* device) {
   auto& data = device->get_private_data<DeviceData>();
 
   CreateCustomShader(
-      device, _0xFFFFFFFF, sizeof(_0xFFFFFFFF),
+      device, __0xFFFFFFFF.data(), __0xFFFFFFFF.size(),
       reshade::api::pipeline_subobject_type::compute_shader, data.clamp_alpha_compute_pipeline);
 }
 

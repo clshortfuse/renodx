@@ -312,14 +312,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::expected_constant_buffer_space = 50;
 
-      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = {
-          _swap_chain_proxy_vertex_shader,
-          _swap_chain_proxy_vertex_shader + sizeof(_swap_chain_proxy_vertex_shader),
-      };
-      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = {
-          _swap_chain_proxy_pixel_shader,
-          _swap_chain_proxy_pixel_shader + sizeof(_swap_chain_proxy_pixel_shader),
-      };
+      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
+      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
 
       // // RGBA8 Resource pool
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({

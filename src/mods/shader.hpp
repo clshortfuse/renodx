@@ -51,10 +51,10 @@ using CustomShaders = std::unordered_map<uint32_t, CustomShader>;
 
 // clang-format off
 #define BypassShaderEntry(__crc32__) { __crc32__, { .crc32 = __crc32__, .on_draw = &renodx::mods::shader::internal::OnBypassShaderDraw } }
-#define CustomShaderEntry(crc32) { crc32, { crc32, std::vector<uint8_t>(_##crc32, _##crc32 + sizeof(_##crc32)) } }
-#define CustomCountedShader(crc32, index) { crc32, { crc32, std::vector<uint8_t>(_##crc32, _##crc32 + sizeof(_##crc32)), ##index} }
-#define CustomSwapchainShader(crc32) { crc32, { crc32, std::vector<uint8_t>(_##crc32, _##crc32 + sizeof(_##crc32)), -1, &renodx::utils::swapchain::HasBackBufferRenderTarget } }
-#define CustomShaderEntryCallback(crc32, callback) { crc32, { crc32, std::vector<uint8_t>(_##crc32, _##crc32 + sizeof(_##crc32)), -1, callback} }
+#define CustomShaderEntry(crc32) { crc32, { crc32, __##crc32 } }
+#define CustomCountedShader(crc32, index) { crc32, { crc32, __##crc32, ##index} }
+#define CustomSwapchainShader(crc32) { crc32, { crc32, __##crc32, -1, &renodx::utils::swapchain::HasBackBufferRenderTarget } }
+#define CustomShaderEntryCallback(crc32, callback) { crc32, { crc32, __##crc32, -1, callback} }
 // clang-format on
 
 static thread_local std::vector<reshade::api::pipeline_layout_param*> created_params;
