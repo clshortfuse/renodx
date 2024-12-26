@@ -21,7 +21,7 @@ struct ShaderInjectData {
   float colorGradeSaturation;
 };
 #ifndef __cplusplus
-cbuffer injectedBuffer : register(b0, space50) {
+cbuffer injectedBuffer : register(b13, space50) {
   ShaderInjectData injectedData : packoffset(c0);
 }
 #endif
