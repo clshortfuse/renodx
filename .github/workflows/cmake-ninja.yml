@@ -3,8 +3,16 @@ name: CMake (Ninja)
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.json"
+      - "docs/**"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.json"
+      - "docs/**"
 
 jobs:
   build:
@@ -26,9 +34,6 @@ jobs:
       - name: Configure CMake (x64)
         run: cmake --preset ninja-x64
 
-      - name: Build (x64)
-        run: cmake --build --preset ninja-x64-release --verbose
-
       - name: Build RelWithDebInfo (x64)
         run: cmake --build --preset ninja-x64-relwithdebinfo --verbose
 
@@ -40,9 +45,6 @@ jobs:
       - name: Configure CMake (x86)
         run: cmake --preset ninja-x86
 
-      - name: Build (x86)
-        run: cmake --build --preset ninja-x86-release --verbose
-
       - name: Build RelWithDebInfo (x86)
         run: cmake --build --preset ninja-x86-relwithdebinfo --verbose
 
@@ -50,22 +52,13 @@ jobs:
         run: md www
 
       - name: Copy Binaries (x64)
-        run: copy build\Release\*.addon64 www\
+        run: copy build\RelWithDebInfo\*.addon64 www\
 
       - name: Copy Binaries (x86)
-        run: copy build32\Release\*.addon32 www\
+        run: copy build32\RelWithDebInfo\*.addon32 www\
 
       - name: Copy Binaries (Tools)
-        run: copy build\Release\*.exe www\
-
-      - name: Prepare Debug Web Listing
-        run: md www\debug
-
-      - name: Copy RelWithDebInfo Binaries (x64)
-        run: copy build\RelWithDebInfo\*.addon64 www\debug\
-
-      - name: Copy RelWithDebInfo Binaries (x86)
-        run: copy build32\RelWithDebInfo\*.addon32 www\debug\
+        run: copy build\RelWithDebInfo\*.exe www\
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
