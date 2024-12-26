@@ -2594,12 +2594,39 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
 
       reshade::unregister_event<reshade::addon_event::create_swapchain>(OnCreateSwapchain);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+
+      // reshade::register_event<reshade::addon_event::create_pipeline>(on_create_pipeline);
 
       reshade::unregister_event<reshade::addon_event::init_resource>(OnInitResource);
       reshade::unregister_event<reshade::addon_event::create_resource>(OnCreateResource);
+      reshade::unregister_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
 
       reshade::unregister_event<reshade::addon_event::create_resource_view>(OnCreateResourceView);
       reshade::unregister_event<reshade::addon_event::init_resource_view>(OnInitResourceView);
+      reshade::unregister_event<reshade::addon_event::destroy_resource_view>(OnDestroyResourceView);
+
+      reshade::unregister_event<reshade::addon_event::copy_resource>(OnCopyResource);
+
+      reshade::unregister_event<reshade::addon_event::resolve_texture_region>(OnResolveTextureRegion);
+
+      reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitCommandList);
+      reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
+
+      reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
+      reshade::unregister_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
+      reshade::unregister_event<reshade::addon_event::update_descriptor_tables>(OnUpdateDescriptorTables);
+      // reshade::register_event<reshade::addon_event::copy_descriptor_tables>(OnCopyDescriptorTables);
+      // reshade::register_event<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables);
+      reshade::unregister_event<reshade::addon_event::clear_render_target_view>(OnClearRenderTargetView);
+      reshade::unregister_event<reshade::addon_event::clear_unordered_access_view_uint>(OnClearUnorderedAccessViewUint);
+      reshade::unregister_event<reshade::addon_event::clear_unordered_access_view_float>(OnClearUnorderedAccessViewFloat);
+
+      reshade::unregister_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
+      // reshade::register_event<reshade::addon_event::barrier>(OnBarrier);
+      reshade::unregister_event<reshade::addon_event::copy_buffer_to_texture>(OnCopyBufferToTexture);
+
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
 
       reshade::unregister_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
 
