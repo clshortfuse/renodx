@@ -298,6 +298,22 @@ static void QueueCompileTimeReplacement(
   internal::compile_time_replacements[shader_hash] = shader_data;
 }
 
+static void UpdateReplacements(
+    const std::unordered_map<uint32_t, std::vector<uint8_t>>& replacements,
+    bool compile_time = true,
+    bool initial_runtime = true) {
+  if (!compile_time && !initial_runtime) return;
+  const std::unique_lock lock(internal::mutex);
+  for (const auto& [shader_hash, shader_data] : replacements) {
+    if (compile_time) {
+      internal::compile_time_replacements[shader_hash] = shader_data;
+    }
+    if (initial_runtime) {
+      internal::initial_runtime_replacements[shader_hash] = shader_data;
+    }
+  }
+}
+
 static void UnqueueCompileTimeReplacement(
     uint32_t shader_hash) {
   const std::unique_lock lock(internal::mutex);
