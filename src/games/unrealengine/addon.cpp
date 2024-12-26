@@ -366,10 +366,11 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   }
 }
 
-void AddUpgrade(reshade::api::format old_format) {
+void AddUpgrade(reshade::api::format old_format, bool ignore_size = true) {
   renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
       .old_format = old_format,
       .new_format = reshade::api::format::r16g16b16a16_float,
+      .ignore_size = ignore_size,
       .usage_include = reshade::api::resource_usage::render_target,
   });
 }
@@ -411,15 +412,16 @@ void AddGamePatches() {
   try {
     auto process_path = renodx::utils::platform::GetCurrentProcessPath();
     auto filename = process_path.filename().string();
-    if (filename == "Psychonauts2-WinGDK-Shipping.exe") {
-      AddPsychonauts2Patches();
-    } else if (filename == "Hi-Fi-RUSH.exe") {
+    if (filename == "Hi-Fi-RUSH.exe") {
       AddHifiRushPatches();
-    } else if (filename == "TheThaumaturge-Win64-Shipping.exe") {
-      AddUpgrade(reshade::api::format::r10g10b10a2_unorm);
-    } else if (filename == "SystemReShock-Win64-Shipping.exe") {
-      AddUpgrade(reshade::api::format::b8g8r8a8_typeless);
     } else {
+      AddUpgrade(reshade::api::format::r11g11b10_float, true);
+      AddUpgrade(reshade::api::format::r10g10b10a2_unorm, true);
+      AddUpgrade(reshade::api::format::r8g8b8a8_typeless, true);
+      AddUpgrade(reshade::api::format::r8g8b8a8_unorm, true);
+      AddUpgrade(reshade::api::format::b8g8r8a8_typeless, true);
+      AddUpgrade(reshade::api::format::b8g8r8a8_unorm, true);
+      reshade::log::message(reshade::log::level::info, std::format("Applied generic resource upgrades for {}.", filename).c_str());
       return;
     }
     reshade::log::message(reshade::log::level::info, std::format("Applied patches for {}.", filename).c_str());

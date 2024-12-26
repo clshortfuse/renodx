@@ -160,8 +160,8 @@ float3 UpgradeToneMapAP1(float3 untonemapped_ap1, float3 tonemapped_bt709) {
 float4 LutBuilderToneMap(float3 untonemapped_ap1, float3 tonemapped_bt709) {
   float3 color = UpgradeToneMapAP1(untonemapped_ap1, tonemapped_bt709);
 
+  color = renodx::color::bt709::clamp::BT2020(color);
   color = PostToneMapScale(color);
   color *= 1.f / 1.05f;
-  color = renodx::color::bt709::clamp::BT2020(color);
   return float4(color, 1);
 }
