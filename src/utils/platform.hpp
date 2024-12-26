@@ -1,6 +1,9 @@
+#pragma once
 
 #include <dxgi1_6.h>
+#include <filesystem>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace renodx::utils::platform {
@@ -52,6 +55,23 @@ std::optional<DISPLAYCONFIG_PATH_INFO> GetPathInfo(HMONITOR monitor) {
     return info;
   }
   return std::nullopt;
+}
+
+inline void Launch(const std::string& location) {
+#if WIN32
+  ShellExecute(nullptr, "open", location.c_str(), nullptr, nullptr, SW_SHOW);
+#else
+  std::system(location);
+#endif
+}
+
+inline std::filesystem::path GetCurrentProcessPath() {
+  TCHAR file_name[MAX_PATH + 1];
+  DWORD chars_written = GetModuleFileName(nullptr, file_name, MAX_PATH + 1);
+  if (chars_written != 0) {
+    return file_name;
+  }
+  return "";
 }
 
 }  // namespace renodx::utils::platform
