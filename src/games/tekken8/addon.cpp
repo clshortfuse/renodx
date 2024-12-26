@@ -216,12 +216,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         return device->get_api() == reshade::api::device_api::d3d12;
       };
       renodx::mods::swapchain::SetUseHDR10(true);
-      renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::shader::expected_constant_buffer_space = 50;
+      renodx::mods::shader::expected_constant_buffer_index = 13;
+      // renodx::mods::shader::allow_multiple_push_constants = true;
       /* renodx::mods::swapchain::use_resize_buffer = true;
-      renodx::mods::swapchain::use_resize_buffer_on_demand = true;
-      renodx::mods::swapchain::force_borderless = false;
-      renodx::mods::swapchain::prevent_full_screen = false; */
+      renodx::mods::swapchain::use_resize_buffer_on_demand = true; */
+      renodx::mods::swapchain::force_borderless = true;
+      renodx::mods::swapchain::prevent_full_screen = true;
 
       /* renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
