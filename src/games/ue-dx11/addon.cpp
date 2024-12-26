@@ -81,11 +81,8 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
-        .tooltip = "Emulates a display EOTF."
-                   "\nLCD for 2.2 Gamma."
-                   "\nCRT for 2.4/BT.1886 Gamma."
-                   "\nDefault: CRT with HDR",
-        .labels = {"Off", "LCD", "CRT"},
+        .tooltip = "Emulates a display EOTF.",
+        .labels = {"Off", "2.2", "BT.1886"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueProcessor",
