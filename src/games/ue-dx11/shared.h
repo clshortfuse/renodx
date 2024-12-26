@@ -27,8 +27,13 @@ struct ShaderInjectData {
   float colorGradeColorSpace;
 };
 
+
 #ifndef __cplusplus
-cbuffer cb13 : register(b13) {
+#if (__SHADER_TARGET_MAJOR < 5) || ((__SHADER_TARGET_MAJOR == 5) && (__SHADER_TARGET_MINOR < 1))
+cbuffer injectedcbuffer : register(b13) {
+#else
+cbuffer injectedcbuffer : register(b13, space50) {
+#endif
   ShaderInjectData injectedData : packoffset(c0);
 }
 #endif
