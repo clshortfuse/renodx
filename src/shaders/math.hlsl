@@ -10,15 +10,15 @@ static const float FLT10_MAX = 64512.f;
 static const float FLT11_MAX = 65024.f;
 static const float FLT16_MAX = 65504.f;
 
-#if __SHADER_TARGET_MAJOR >= 6
-#define SIGN_FUNCTION_GENERATOR(T) \
-  T Sign(T x) {                    \
-    return sign(x);                \
-  }
-#else
+#if __SHADER_TARGET_MAJOR <= 5
 #define SIGN_FUNCTION_GENERATOR(T)                          \
   T Sign(T x) {                                             \
     return mad(saturate(mad(x, FLT_MAX, 0.5f)), 2.f, -1.f); \
+  }
+#else
+#define SIGN_FUNCTION_GENERATOR(T) \
+  T Sign(T x) {                    \
+    return sign(x);                \
   }
 #endif
 
