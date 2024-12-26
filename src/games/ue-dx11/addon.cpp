@@ -22,10 +22,22 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomSwapchainShader(0xAC791084),  // fmv
-    CustomShaderEntry(0x61C2EA30),      // lutbuilder
-    CustomShaderEntry(0xC1BCC6B5),      // lutbuilder
-    CustomShaderEntry(0xE6EB2840),      // lutbuilder
-    CustomShaderEntry(0xD4A45A02),      // lutbuilder
+    // CustomShaderEntry(0x4CC68F73),  SM6
+    CustomShaderEntry(0x5CAE0013),
+    CustomShaderEntry(0x61C2EA30),
+    CustomShaderEntry(0x73B2BA54),
+    CustomShaderEntry(0x7570E7B1),
+    CustomShaderEntry(0x80CD76B6),
+    CustomShaderEntry(0xA918F0C8),
+    CustomShaderEntry(0xB1614732),
+    CustomShaderEntry(0xBEB7EB31),
+    CustomShaderEntry(0xC130BE2D),
+    CustomShaderEntry(0xC1BCC6B5),
+    CustomShaderEntry(0xCA383248),
+    CustomShaderEntry(0xCC8FD0FF),
+    CustomShaderEntry(0xD4A45A02),
+    CustomShaderEntry(0xE6EB2840),
+    CustomShaderEntry(0xF6AA7756),
 };
 
 ShaderInjectData shader_injection;
@@ -113,6 +125,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 2.f,
         .format = "%.2f",
+        .is_enabled = []() { return shader_injection.toneMapType == 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeHighlights",
@@ -121,6 +134,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 1; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -130,6 +144,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 1; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -139,6 +154,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 1; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -148,6 +164,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Saturation",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 1; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -167,7 +184,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .label = "Flare",
         .section = "Color Grading",
-        .tooltip = "Flare/Glare",
+        .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType == 1; },
         .parse = [](float value) { return value * 0.02f; },
