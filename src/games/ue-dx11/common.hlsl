@@ -143,7 +143,7 @@ float3 ToneMap(float3 bt709) {
   return output_color;
 }
 
-float4 LutBuilderToneMap(float3 untonemapped_ap1, float3 tonemapped_bt709) {
+float3 UpgradeToneMapAP1(float3 untonemapped_ap1, float3 tonemapped_bt709) {
   float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
 
   float3 neutral_sdr_color = RenoDRTSmoothClamp(untonemapped_bt709);
@@ -154,7 +154,11 @@ float4 LutBuilderToneMap(float3 untonemapped_ap1, float3 tonemapped_bt709) {
       tonemapped_bt709,
       1);
 
-  float3 color = ToneMap(untonemapped_graded);
+  return ToneMap(untonemapped_graded);
+}
+
+float4 LutBuilderToneMap(float3 untonemapped_ap1, float3 tonemapped_bt709) {
+  float3 color = UpgradeToneMapAP1(untonemapped_ap1, tonemapped_bt709);
 
   color = PostToneMapScale(color);
   color *= 1.f / 1.05f;

@@ -1,5 +1,5 @@
-// ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:09 2024
 #include "../../common.hlsl"
+// ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:09 2024
 
 Texture2D<float4> t1 : register(t1);
 

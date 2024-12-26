@@ -1,5 +1,6 @@
-// ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:17 2024
 #include "../../common.hlsl"
+
+// ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:17 2024
 
 Texture2D<float4> t0 : register(t0);
 
@@ -282,19 +283,13 @@ void main(
   r0.xyz = r1.xyz * r1.www + r0.xyz;
   r0.xyz = r5.xyz * r4.www + r0.xyz;
 
-  // CustomEdit
   float3 untonemapped_ap1 = r0.xyz;
 
-  // Blue correct
   r1.x = dot(float3(0.938639402, 1.02359565e-10, 0.0613606237), r0.xyz);
   r1.y = dot(float3(8.36008554e-11, 0.830794156, 0.169205874), r0.xyz);
   r1.z = dot(float3(2.13187367e-12, -5.63307213e-12, 1), r0.xyz);
   r1.xyz = r1.xyz + -r0.xyz;
   r1.xyz = cb0[36].yyy * r1.xyz + r0.xyz;
-
-  // start of film tonemap
-  // AP1 => AP0
-
   r5.y = dot(float3(0.695452213, 0.140678704, 0.163869068), r1.xyz);
   r5.z = dot(float3(0.0447945632, 0.859671116, 0.0955343172), r1.xyz);
   r5.w = dot(float3(-0.00552588236, 0.00402521016, 1.00150073), r1.xyz);
@@ -520,7 +515,6 @@ void main(
   r5.xyz = cb0[40].yyy * r5.xyz;
   r5.xyz = exp2(r5.xyz);
 
-  // CustomEdit
   if (injectedData.toneMapType != 0) {
     o0 = LutBuilderToneMap(untonemapped_ap1, r5.xyz);
     return;
