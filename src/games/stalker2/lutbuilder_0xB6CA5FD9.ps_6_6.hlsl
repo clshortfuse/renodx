@@ -1,4 +1,5 @@
 #include "./common.hlsl"
+#include "./shared.h"
 
 Texture2D<float4> Textures_1 : register(t0);
 
@@ -194,9 +195,6 @@ float4 main(
   // cbuffer _4 = _RootShaderParameters;
   // _5 = _3;
   // _6 = _4;
-  // CustomEdit
-  uint output_type = _RootShaderParameters_040w;
-  bool shouldTonemap = ShouldTonemap(output_type);
   uint _7 = SV_RenderTargetArrayIndex;
   float _8 = TEXCOORD.x;
   float _9 = TEXCOORD.y;
@@ -1042,6 +1040,9 @@ float4 main(
   float _809 = mad(_800, _787, _808);
   float _810 = mad(_801, _789, _809);
   float _811 = _RootShaderParameters_036y;
+
+  float3 untonemapped_ap1 = float3(_785, _787, _789);  // CustomEdit
+
   float _812 = _785 * 0.9386394023895264f;
   float _813 = mad(-4.540197551250458e-09f, _787, _812);
   float _814 = mad(0.061360642313957214f, _789, _813);
@@ -1058,7 +1059,6 @@ float4 main(
   float _825 = _822 + _785;
   float _826 = _823 + _787;
   float _827 = _824 + _789;
-  float3 untonmapped_ap1 = float3(_825, _826, _827);  // CustomEdit
 
   float _828 = _825 * 0.6954522132873535f;
   float _829 = mad(0.14067868888378143f, _826, _828);
@@ -1579,9 +1579,8 @@ float4 main(
   float _1330 = exp2(_1327);
 
   // CustomEdit
-  float3 film_graded_color = float3(_1328, _1329, _1330);
-  if (shouldTonemap) {
-    return LutBuilderToneMap(untonmapped_ap1, film_graded_color);
+  if (injectedData.toneMapType != 0) {
+    return LutBuilderToneMap(untonemapped_ap1, float3(_1328, _1329, _1330));
   }
 
   uint _1332 = _RootShaderParameters_040w;
