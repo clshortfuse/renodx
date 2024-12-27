@@ -16,6 +16,7 @@
 namespace renodx::utils::settings {
 
 static bool use_presets = true;
+static std::string global_name = "renodx";
 static int preset_index = 1;
 static std::vector<std::string> preset_strings = {
     "Off",
@@ -121,6 +122,11 @@ struct Setting {
         return this->max;
     }
   }
+
+  bool is_global = false;
+  bool (*is_visible)() = [] {
+    return true;
+  };
 };
 
 using Settings = std::vector<Setting*>;
@@ -153,13 +159,12 @@ static bool UpdateSetting(const std::string& key, float value) {
   return true;
 }
 
-static void LoadSettings(
-    reshade::api::effect_runtime* runtime = nullptr,
-    const char* section = "renodx-preset1") {
+static void LoadSettings(reshade::api::effect_runtime* runtime, const std::string& section) {
   for (auto* setting : *settings) {
+    if (setting->is_global) continue;
     switch (setting->value_type) {
       case SettingValueType::FLOAT:
-        if (!reshade::get_config_value(runtime, section, setting->key.c_str(), setting->value)) {
+        if (!reshade::get_config_value(runtime, section.c_str(), setting->key.c_str(), setting->value)) {
           setting->value = setting->default_value;
         }
         if (setting->value > setting->GetMax()) {
@@ -170,7 +175,7 @@ static void LoadSettings(
         break;
       case SettingValueType::BOOLEAN:
       case SettingValueType::INTEGER:
-        if (!reshade::get_config_value(runtime, section, setting->key.c_str(), setting->value_as_int)) {
+        if (!reshade::get_config_value(runtime, section.c_str(), setting->key.c_str(), setting->value_as_int)) {
           setting->value_as_int = static_cast<int>(setting->default_value);
         }
         if (setting->value_as_int > setting->GetMax()) {
@@ -186,15 +191,67 @@ static void LoadSettings(
   }
 }
 
-static void SaveSettings(reshade::api::effect_runtime* runtime, const char* section = "renodx-preset1") {
+static void LoadGlobalSettings(reshade::api::effect_runtime* runtime = nullptr) {
   for (auto* setting : *settings) {
     switch (setting->value_type) {
+      if (!setting->is_global) continue;
       case SettingValueType::FLOAT:
-        reshade::set_config_value(runtime, section, setting->key.c_str(), setting->value);
+        if (!reshade::get_config_value(runtime, global_name.c_str(), setting->key.c_str(), setting->value)) {
+          setting->value = setting->default_value;
+        }
+        if (setting->value > setting->GetMax()) {
+          setting->value = setting->GetMax();
+        } else if (setting->value < setting->min) {
+          setting->value = setting->min;
+        }
+        break;
+      case SettingValueType::BOOLEAN:
+      case SettingValueType::INTEGER:
+        if (!reshade::get_config_value(runtime, global_name.c_str(), setting->key.c_str(), setting->value_as_int)) {
+          setting->value_as_int = static_cast<int>(setting->default_value);
+        }
+        if (setting->value_as_int > setting->GetMax()) {
+          setting->value_as_int = setting->GetMax();
+        } else if (setting->value_as_int < static_cast<int>(setting->min)) {
+          setting->value_as_int = static_cast<int>(setting->min);
+        }
+        break;
+      default:
+        break;
+    }
+    setting->Write();
+  }
+}
+
+static void SaveSettings(reshade::api::effect_runtime* runtime, const std::string& section) {
+  for (auto* setting : *settings) {
+    if (setting->key.empty()) continue;
+    if (setting->is_global) continue;
+    switch (setting->value_type) {
+      case SettingValueType::FLOAT:
+        reshade::set_config_value(runtime, section.c_str(), setting->key.c_str(), setting->value);
         break;
       case SettingValueType::INTEGER:
       case SettingValueType::BOOLEAN:
-        reshade::set_config_value(runtime, section, setting->key.c_str(), setting->value_as_int);
+        reshade::set_config_value(runtime, section.c_str(), setting->key.c_str(), setting->value_as_int);
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+static void SaveGlobalSettings(reshade::api::effect_runtime* runtime) {
+  for (auto* setting : *settings) {
+    if (setting->key.empty()) continue;
+    if (!setting->is_global) continue;
+    switch (setting->value_type) {
+      case SettingValueType::FLOAT:
+        reshade::set_config_value(runtime, global_name.c_str(), setting->key.c_str(), setting->value);
+        break;
+      case SettingValueType::INTEGER:
+      case SettingValueType::BOOLEAN:
+        reshade::set_config_value(runtime, global_name.c_str(), setting->key.c_str(), setting->value_as_int);
         break;
       default:
         break;
@@ -226,13 +283,13 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         }
         break;
       case 1:
-        LoadSettings(runtime);
+        LoadSettings(runtime, global_name + "-preset1");
         break;
       case 2:
-        LoadSettings(runtime, "renodx-preset2");
+        LoadSettings(runtime, global_name + "-preset2");
         break;
       case 3:
-        LoadSettings(runtime, "renodx-preset3");
+        LoadSettings(runtime, global_name + "-preset3");
         break;
     }
   }
@@ -244,6 +301,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   bool open_node = false;
   bool has_indent = false;
   for (auto* setting : *settings) {
+    if (setting->is_visible != nullptr && !setting->is_visible()) continue;
     int styles_pushed = 0;
     if (setting->tint.has_value()) {
       auto target_rgb = ImVec4FromHex(setting->tint.value());
@@ -423,15 +481,16 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   if (!changed_preset && any_change) {
     switch (preset_index) {
       case 1:
-        SaveSettings(runtime, "renodx-preset1");
+        SaveSettings(runtime, global_name + "-preset1");
         break;
       case 2:
-        SaveSettings(runtime, "renodx-preset2");
+        SaveSettings(runtime, global_name + "-preset2");
         break;
       case 3:
-        SaveSettings(runtime, "renodx-preset3");
+        SaveSettings(runtime, global_name + "-preset3");
         break;
     }
+    SaveGlobalSettings(runtime);
   }
 }
 
@@ -445,7 +504,8 @@ static void Use(DWORD fdw_reason, Settings* new_settings, void (*new_on_preset_o
 
       settings = new_settings;
       on_preset_off = new_on_preset_off;
-      LoadSettings();
+      LoadGlobalSettings();
+      LoadSettings(nullptr, global_name + "-preset1");
       reshade::register_overlay("RenoDX", OnRegisterOverlay);
 
       break;
