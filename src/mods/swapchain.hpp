@@ -54,7 +54,8 @@ struct SwapChainUpgradeTarget {
 
   bool ignore_reset = false;
 
-#define SwapChainViewUpgrade(usage, source, destination) {{reshade::api::resource_usage::usage, reshade::api::format::source}, reshade::api::format::destination}
+#define SwapChainViewUpgrade(usage, source, destination) \
+  { {reshade::api::resource_usage::usage, reshade::api::format::source}, reshade::api::format::destination }
 #define SwapChainViewUpgradeAll(source, destination)               \
   SwapChainViewUpgrade(shader_resource, source, destination),      \
       SwapChainViewUpgrade(unordered_access, source, destination), \
@@ -693,6 +694,13 @@ static void SetupSwapchainProxy(
     }
     auto buffer = swapchain->get_back_buffer(index);
     if (!swapchain_proxy_compatibility_mode) {
+      {
+        std::stringstream s;
+        s << "mods::swapchain::SetupSwapchainProxy(Marking swapchain buffer for cloning: ";
+        s << reinterpret_cast<void*>(buffer.handle);
+        s << ")";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
+      }
       data->resource_clone_enabled.emplace(buffer.handle);
     }
     data->resource_clone_targets[buffer.handle] = &swap_chain_proxy_upgrade_target;
@@ -1057,6 +1065,13 @@ static void OnInitResource(
     }
     if (!found_target->use_resource_view_hot_swap) {
       private_data.resource_clone_enabled.insert(resource.handle);
+      {
+        std::stringstream s;
+        s << "mods::swapchain::OnInitResource(Marking resource for cloning: ";
+        s << reinterpret_cast<void*>(resource.handle);
+        s << ")";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
+      }
     }
     s << ", flagged: true";
   } else {
@@ -1159,7 +1174,7 @@ static bool OnCopyBufferToTexture(
     s << ", resource: " << reinterpret_cast<void*>(source.handle);
     s << ")";
     reshade::log::message(reshade::log::level::warning, s.str().c_str());
-    return false;
+    return true;
   }
 
   if (original_dest_desc.type != reshade::api::resource_type::texture_2d && original_dest_desc.type != reshade::api::resource_type::texture_3d) {
@@ -1169,16 +1184,16 @@ static bool OnCopyBufferToTexture(
     s << ", resource: " << reinterpret_cast<void*>(dest.handle);
     s << ")";
     reshade::log::message(reshade::log::level::warning, s.str().c_str());
-    return false;
+    return true;
   }
 
-  if (source_clone.handle != 0u) {
+  if (source_clone.handle == 0u) {
     std::stringstream s;
     s << "mods::swapchain::OnCopyBufferToTexture(Unexpected source clone: ";
     s << reinterpret_cast<void*>(dest.handle);
     s << ")";
     reshade::log::message(reshade::log::level::warning, s.str().c_str());
-    return false;
+    return true;
   }
 
   if (dest_clone.handle == 0u) {
