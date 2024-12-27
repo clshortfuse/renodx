@@ -40,11 +40,12 @@ int main(int argc, char** argv) {
 
   auto output_basename = output_path.stem().string();
 
-  stream << "#ifndef _" << output_basename << "__EMBED_FILE\n";
-  stream << "#define _" << output_basename << "__EMBED_FILE\n";
+  stream << "#pragma once\n";
+  stream << "#ifndef __" << output_basename << "_EMBED_FILE\n";
+  stream << "#define __" << output_basename << "_EMBED_FILE\n";
   stream << "#include <cstdint>\n";
-  stream << "#include <vector>\n";
-  stream << "const std::vector<std::uint8_t> __" << output_basename << " = {\n";
+  stream << "#include <initializer_list>\n";
+  stream << "const std::initializer_list<uint8_t> __" << output_basename << " = {\n";
   size_t current_line_bytes = 0;
   for (uint8_t byte : binary_data) {
     if (current_line_bytes == 0) {
