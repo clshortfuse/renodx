@@ -63,14 +63,22 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xB530B36A),
     CustomShaderEntry(0xB6CA5FD9),
     CustomShaderEntry(0xBAA27141),
-
 };
 
 ShaderInjectData shader_injection;
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
-        .key = "toneMapType",
+        .key = "SettingsMode",
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .can_reset = false,
+        .label = "Settings Mode",
+        .labels = {"Beginner", "Intermediate", "Advanced"},
+        .is_global = true,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
@@ -79,9 +87,12 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
         .labels = {"Vanilla", "RenoDRT"},
+        .is_visible = []() {
+          return settings[0]->GetValue() >= 1;
+        },
     },
     new renodx::utils::settings::Setting{
-        .key = "toneMapPeakNits",
+        .key = "ToneMapPeakNits",
         .binding = &shader_injection.toneMapPeakNits,
         .default_value = 1000.f,
         .can_reset = false,
@@ -90,9 +101,10 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of peak white in nits",
         .min = 48.f,
         .max = 4000.f,
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
-        .key = "toneMapGameNits",
+        .key = "ToneMapGameNits",
         .binding = &shader_injection.toneMapGameNits,
         .default_value = 203.f,
         .label = "Game Brightness",
@@ -102,7 +114,7 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
-        .key = "toneMapUINits",
+        .key = "ToneMapUINits",
         .binding = &shader_injection.toneMapUINits,
         .default_value = 203.f,
         .label = "UI Brightness",
@@ -112,7 +124,7 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
-        .key = "toneMapGammaCorrection",
+        .key = "ToneMapGammaCorrection",
         .binding = &shader_injection.toneMapGammaCorrection,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
@@ -120,6 +132,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Emulates a display EOTF.",
         .labels = {"Off", "2.2", "BT.1886"},
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueProcessor",
@@ -131,6 +144,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Selects hue processor",
         .labels = {"OKLab", "ICtCp", "darkTable UCS"},
         .is_enabled = []() { return shader_injection.toneMapType == 1; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPerChannel",
@@ -142,9 +156,10 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Applies tonemapping per-channel instead of by luminance",
         .labels = {"Off", "On"},
         .is_enabled = []() { return shader_injection.toneMapType == 1; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeExposure",
+        .key = "ColorGradeExposure",
         .binding = &shader_injection.colorGradeExposure,
         .default_value = 1.f,
         .label = "Exposure",
@@ -152,9 +167,10 @@ renodx::utils::settings::Settings settings = {
         .max = 2.f,
         .format = "%.2f",
         .is_enabled = []() { return shader_injection.toneMapType == 1; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeHighlights",
+        .key = "ColorGradeHighlights",
         .binding = &shader_injection.colorGradeHighlights,
         .default_value = 50.f,
         .label = "Highlights",
@@ -162,9 +178,10 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType == 1; },
         .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeShadows",
+        .key = "ColorGradeShadows",
         .binding = &shader_injection.colorGradeShadows,
         .default_value = 50.f,
         .label = "Shadows",
@@ -172,9 +189,10 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType == 1; },
         .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeContrast",
+        .key = "ColorGradeContrast",
         .binding = &shader_injection.colorGradeContrast,
         .default_value = 50.f,
         .label = "Contrast",
@@ -184,7 +202,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeSaturation",
+        .key = "ColorGradeSaturation",
         .binding = &shader_injection.colorGradeSaturation,
         .default_value = 50.f,
         .label = "Saturation",
@@ -203,6 +221,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType == 1; },
         .parse = [](float value) { return (value * 0.02f) - 1.f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
@@ -216,7 +235,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeColorSpace",
+        .key = "ColorGradeColorSpace",
         .binding = &shader_injection.colorGradeColorSpace,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
@@ -234,7 +253,26 @@ renodx::utils::settings::Settings settings = {
             "US CRT",
             "JPN CRT",
         },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
+};
+
+const std::unordered_map<std::string, reshade::api::format> UPGRADE_TARGETS = {
+    {"R8G8B8A8_TYPELESS", reshade::api::format::r8g8b8a8_typeless},
+    {"B8G8R8A8_TYPELESS", reshade::api::format::b8g8r8a8_typeless},
+    {"R8G8B8A8_UNORM", reshade::api::format::r8g8b8a8_unorm},
+    {"B8G8R8A8_UNORM", reshade::api::format::b8g8r8a8_unorm},
+    {"R8G8B8A8_SNORM", reshade::api::format::r8g8b8a8_snorm},
+    {"R8G8B8A8_UNORM_SRGB", reshade::api::format::r8g8b8a8_unorm_srgb},
+    {"B8G8R8A8_UNORM_SRGB", reshade::api::format::b8g8r8a8_unorm_srgb},
+    {"R10G10B10A2_TYPELESS", reshade::api::format::r10g10b10a2_typeless},
+    {"R10G10B10A2_UNORM", reshade::api::format::r10g10b10a2_unorm},
+    {"B10G10R10A2_UNORM", reshade::api::format::b10g10r10a2_unorm},
+    {"R11G11B10_FLOAT", reshade::api::format::r11g11b10_float},
+    {"R16G16B16A16_TYPELESS", reshade::api::format::r16g16b16a16_typeless},
+};
+
+renodx::utils::settings::Settings info_settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
@@ -361,8 +399,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
-    settings[1]->default_value = peak.value();
-    settings[1]->can_reset = true;
+    settings[2]->default_value = peak.value();
+    settings[2]->can_reset = true;
   }
 }
 
@@ -415,14 +453,30 @@ void AddGamePatches() {
     if (filename == "Hi-Fi-RUSH.exe") {
       AddHifiRushPatches();
     } else {
-      AddUpgrade(reshade::api::format::r11g11b10_float, true);
-      AddUpgrade(reshade::api::format::r10g10b10a2_unorm, true);
-      AddUpgrade(reshade::api::format::r8g8b8a8_typeless, true);
-      AddUpgrade(reshade::api::format::r8g8b8a8_unorm, true);
-      AddUpgrade(reshade::api::format::b8g8r8a8_typeless, true);
-      AddUpgrade(reshade::api::format::b8g8r8a8_unorm, true);
-      reshade::log::message(reshade::log::level::info, std::format("Applied generic resource upgrades for {}.", filename).c_str());
-      return;
+      for (const auto& [key, format] : UPGRADE_TARGETS) {
+        uint32_t value;
+
+        if (!reshade::get_config_value(
+                nullptr,
+                renodx::utils::settings::global_name.c_str(),
+                ("Upgrade_" + key).c_str(),
+                value)) return;
+        if (value > 0) {
+          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+              .old_format = format,
+              .new_format = reshade::api::format::r16g16b16a16_float,
+              .ignore_size = (value == 3u),
+              .aspect_ratio = static_cast<float>((value == 2u)
+                                                     ? renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER
+                                                     : renodx::mods::swapchain::SwapChainUpgradeTarget::ANY),
+              .usage_include = reshade::api::resource_usage::render_target,
+          });
+          std::stringstream s;
+          s << "Applying user resource upgrade for ";
+          s << format << ": " << value;
+          reshade::log::message(reshade::log::level::info, s.str().c_str());
+        }
+      }
     }
     reshade::log::message(reshade::log::level::info, std::format("Applied patches for {}.", filename).c_str());
   } catch (...) {
@@ -440,12 +494,60 @@ extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
-
       if (!reshade::register_addon(h_module)) return FALSE;
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
 
       if (!initialized) {
+        AddGamePatches();
+
+        for (const auto& [key, format] : UPGRADE_TARGETS) {
+          auto* new_setting = new renodx::utils::settings::Setting{
+              .key = "Upgrade_" + key,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 0.f,
+              .label = key,
+              .section = "Resource Upgrades",
+              .labels = {
+                  "Off",
+                  "Output size",
+                  "Output ratio",
+                  "Any size",
+              },
+              .is_global = true,
+              .is_visible = []() { return settings[0]->GetValue() >= 2; },
+          };
+          reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), ("Upgrade_" + key).c_str(), new_setting->value);
+          settings.push_back(new_setting);
+        }
+        auto* new_setting = new renodx::utils::settings::Setting{
+            .key = "Upgrade_SwapChainCompatibility",
+            .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+            .default_value = 0.f,
+            .label = "Swap Chain Compatibility Mode",
+            .section = "Resource Upgrades",
+            .tooltip = "Enhances support for third-party addons to read the swap chain.",
+            .labels = {
+                "Off",
+                "On",
+            },
+            .is_global = true,
+            .is_visible = []() { return settings[0]->GetValue() >= 2; },
+        };
+        reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "Upgrade_SwapChainCompatibility", new_setting->value);
+        renodx::mods::swapchain::swapchain_proxy_compatibility_mode = new_setting->value != 0;
+        settings.push_back(new_setting);
+
+        settings.push_back({new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::TEXT,
+            .label = "The application must be restarted for upgrades to take effect.",
+            .section = "Resource Upgrades",
+            .is_visible = []() { return settings[0]->GetValue() >= 2; },
+        }});
+        for (auto* new_setting : info_settings) {
+          settings.push_back(new_setting);
+        }
+
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::allow_multiple_push_constants = true;
 
@@ -461,7 +563,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .dimensions = {.width = 32, .height = 32, .depth = 32},
         });
 
-        AddGamePatches();
         initialized = true;
       }
 
