@@ -366,6 +366,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       }
       bool changed = false;
 
+      ImGui::PushID(("##Key" + (setting->key.empty() ? setting->label : setting->key)).c_str());
       switch (setting->value_type) {
         case SettingValueType::FLOAT:
           changed |= ImGui::SliderFloat(
@@ -416,6 +417,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           changed |= setting->on_draw();
           break;
       }
+      ImGui::PopID();
       if (changed) {
         setting->on_change();
       }
@@ -429,7 +431,6 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         ImGui::SameLine();
         const bool is_using_default = (setting->GetValue() == setting->default_value);
         ImGui::BeginDisabled(is_using_default);
-        ImGui::PushID(&setting->default_value);
         if (is_using_default) {
           ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(ImColor::HSV(0, 0, 0.6f)));
           ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(ImColor::HSV(0, 0, 0.7f)));
@@ -448,10 +449,12 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         cursor_pos.y += (previous_font_size / 2.f) - (current_font_size / 2.f);
         ImGui::SetCursorPos(cursor_pos);
 
+        ImGui::PushID(("##Reset" + setting->label).c_str());
         if (ImGui::Button(reinterpret_cast<const char*>(ICON_FK_UNDO))) {
           setting->Set(setting->default_value);
           changed = true;
         }
+        ImGui::PopID();
 
         if (is_using_default) {
           ImGui::PopStyleColor(3);
@@ -459,7 +462,6 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         font->Scale = old_scale;
         ImGui::PopFont();
         ImGui::PopStyleVar();
-        ImGui::PopID();
         ImGui::EndDisabled();
       }
 
