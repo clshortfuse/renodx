@@ -43,11 +43,11 @@ float3 applyToneMap(float3 untonemapped) {
     } else {
       float paperWhite = injectedData.toneMapGameNits / 80.f;
       float peakWhite = injectedData.toneMapPeakNits / 80.f;
-      float highlightsShoulderStart = paperWhite;
-      linearColor = renodx::tonemap::ExponentialRollOff(linearColor * paperWhite, paperWhite, peakWhite) / paperWhite;
+      float rolloff_start = paperWhite;
+      linearColor = renodx::tonemap::ExponentialRollOff(linearColor * paperWhite, rolloff_start, peakWhite) / paperWhite;
       if (injectedData.testInverse) {
-        linearColor = ExponentialRollOffInverse(linearColor * paperWhite, paperWhite, peakWhite) / paperWhite;
-        linearColor = renodx::tonemap::ExponentialRollOff(linearColor * paperWhite, paperWhite, peakWhite) / paperWhite;
+        linearColor = ExponentialRollOffInverse(linearColor * paperWhite, rolloff_start, peakWhite) / paperWhite;
+        linearColor = renodx::tonemap::ExponentialRollOff(linearColor * paperWhite, rolloff_start, peakWhite) / paperWhite;
       }
     }
   } else {  // SDR Output
@@ -62,4 +62,23 @@ float3 applyToneMap(float3 untonemapped) {
 
   return outColor;
   // Leave output in gamma space and with a paper white of 80 nits even for HDR so we can blend in the UI just like in SDR (in gamma space) and linearize with an extra pass added at the end.
+}
+
+float3 InverseToneMap(float3 tonemapped) {
+  float3 linearColor = renodx::color::gamma::DecodeSafe(tonemapped, 2.2);  // tonemap in linear space
+
+  float3 outputColor = linearColor;
+  if (injectedData.outputMode == 1) {  // HDR Output
+    if (injectedData.toneMapPeakNits / injectedData.toneMapGameNits <= 1.f) return tonemapped;
+
+    float paperWhite = injectedData.toneMapGameNits / 80.f;
+    float peakWhite = injectedData.toneMapPeakNits / 80.f;
+    float rolloff_start = paperWhite;
+
+    outputColor = ExponentialRollOffInverse(linearColor * paperWhite, rolloff_start, peakWhite) / paperWhite;
+  } else {
+    outputColor = ExponentialRollOffInverse(linearColor, 0.2f, 1.f);
+  }
+
+  return renodx::color::gamma::EncodeSafe(outputColor, 2.2);
 }
