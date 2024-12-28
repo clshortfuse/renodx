@@ -20,49 +20,65 @@
 
 namespace {
 
+std::unordered_set<std::uint32_t> drawn_shaders;
+
+#define TracedShaderEntry(value) {                                               \
+    value,                                                                       \
+    {                                                                            \
+        .crc32 = value,                                                          \
+        .code = __##value,                                                       \
+        .on_drawn = [](auto cmd_list) {                                          \
+          if (drawn_shaders.contains(##value)) return;                           \
+          drawn_shaders.emplace(##value);                                        \
+          reshade::log::message(reshade::log::level::debug, "Replaced " #value); \
+        },                                                                       \
+    },                                                                           \
+}
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     // Crisis Core FF7 Reunion
-    CustomShaderEntry(0xAC791084),  // fmv
+    TracedShaderEntry(0xAC791084),  // fmv
 
     // Kingdom Hearts 3
-    CustomShaderEntry(0x00E9C5FE),
-    CustomShaderEntry(0xE9343033),
+    TracedShaderEntry(0x00E9C5FE),
+    TracedShaderEntry(0xE9343033),
 
     // SM5 LUT Builder
-    CustomShaderEntry(0x2569985B),
-    CustomShaderEntry(0x31FE4421),
-    CustomShaderEntry(0x36E3A438),
-    CustomShaderEntry(0x5CAE0013),
-    CustomShaderEntry(0x61C2EA30),
-    CustomShaderEntry(0x73B2BA54),
-    CustomShaderEntry(0x7570E7B1),
-    CustomShaderEntry(0x80CD76B6),
-    CustomShaderEntry(0xA918F0C8),
-    CustomShaderEntry(0xB1614732),
-    CustomShaderEntry(0xBEB7EB31),
-    CustomShaderEntry(0xC130BE2D),
-    CustomShaderEntry(0xC1BCC6B5),
-    CustomShaderEntry(0xC2A711CC),
-    CustomShaderEntry(0xCA383248),
-    CustomShaderEntry(0xCC8FD0FF),
-    CustomShaderEntry(0xD4A45A02),
-    CustomShaderEntry(0xE6EB2840),
-    CustomShaderEntry(0xF6AA7756),
+    TracedShaderEntry(0x2569985B),
+    TracedShaderEntry(0x31FE4421),
+    TracedShaderEntry(0x36E3A438),
+    TracedShaderEntry(0x5CAE0013),
+    TracedShaderEntry(0x61C2EA30),
+    TracedShaderEntry(0x73B2BA54),
+    TracedShaderEntry(0x7570E7B1),
+    TracedShaderEntry(0x80CD76B6),
+    TracedShaderEntry(0xA918F0C8),
+    TracedShaderEntry(0xB1614732),
+    TracedShaderEntry(0xBEB7EB31),
+    TracedShaderEntry(0xC130BE2D),
+    TracedShaderEntry(0xC1BCC6B5),
+    TracedShaderEntry(0xC2A711CC),
+    TracedShaderEntry(0xCA383248),
+    TracedShaderEntry(0xCC8FD0FF),
+    TracedShaderEntry(0xCC8FD0FF),
+    TracedShaderEntry(0xD4A45A02),
+    TracedShaderEntry(0xE6EB2840),
+    TracedShaderEntry(0xF6AA7756),
 
     // SM6 LUT Builder
 
-    CustomShaderEntry(0x269E94C1),
-    CustomShaderEntry(0x3028EBE7),
-    CustomShaderEntry(0x33247499),
-    CustomShaderEntry(0x4CC68F73),
-    CustomShaderEntry(0x4F3FCE76),
-    CustomShaderEntry(0x5D760393),
-    CustomShaderEntry(0x6CFBD4C0),
-    CustomShaderEntry(0x90BBE81C),
-    CustomShaderEntry(0x94D26E3A),
-    CustomShaderEntry(0xB530B36A),
-    CustomShaderEntry(0xB6CA5FD9),
-    CustomShaderEntry(0xBAA27141),
+    TracedShaderEntry(0x269E94C1),
+    TracedShaderEntry(0x3028EBE7),
+    TracedShaderEntry(0x33247499),
+    TracedShaderEntry(0x4CC68F73),
+    TracedShaderEntry(0x4F3FCE76),
+    TracedShaderEntry(0x5D760393),
+    TracedShaderEntry(0x6CFBD4C0),
+    TracedShaderEntry(0x90BBE81C),
+    TracedShaderEntry(0x94D26E3A),
+    TracedShaderEntry(0xB530B36A),
+    TracedShaderEntry(0xB6CA5FD9),
+    TracedShaderEntry(0xBAA27141),
 };
 
 ShaderInjectData shader_injection;
