@@ -24,13 +24,13 @@ void main(
 #endif
   r1.xyz = float3(1, 1, 1) + -r0.xyz;
 
-  r1.xyz = renodx::math::SafePow(r1.xyz, cb0[6].x);  // fix to allow negative scRGB values
+  r1.xyz = renodx::math::PowSafe(r1.xyz, cb0[6].x);  // fix to allow negative scRGB values
 
   r1.w = exp2(cb0[6].x);
   r1.w = 0.5 * r1.w;
   r1.xyz = -r1.xyz * r1.www + float3(1, 1, 1);
 
-  r2.xyz = renodx::math::SafePow(r0.xyz, cb0[6].x);  // fix to allow negative scRGB values
+  r2.xyz = renodx::math::PowSafe(r0.xyz, cb0[6].x);  // fix to allow negative scRGB values
 
   r1.xyz = -r2.xyz * r1.www + r1.xyz;
   r2.xyz = r2.xyz * r1.www;
