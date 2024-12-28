@@ -27,6 +27,10 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
 
+  if (injectedData.isTonemapped == 1.f && injectedData.toneMapType == 1) {
+    r0.rgb = InverseToneMap(r0.rgb);
+  }
+
   r1.xyz = cb0[7].xyz;
   r1.w = r0.w;
   r0.xyzw = r0.xyzw * cb0[6].xxxx + -r1.xyzw;
