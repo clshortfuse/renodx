@@ -38,9 +38,9 @@ void main(
   o0.rgba = float4(r0.rgb, saturate(r0.a));
 #endif
 
-  if (injectedData.toneMapType == 1.f) {  // Vanilla Tonemap
+  if (injectedData.toneMapType == 1.f) {  // Exponential Rolloff
     o0.rgb = applyToneMap(o0.rgb);
-  } else {
+  } else {  // Vanilla, no tonemap, just clipping
     o0.rgb = saturate(o0.rgb);
   }
 
