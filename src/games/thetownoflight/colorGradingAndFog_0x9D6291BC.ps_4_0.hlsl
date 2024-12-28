@@ -154,7 +154,7 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, float2 w1: TEXCOORD1, o
   outColor.w = sceneColor.w;
 
   // Tonemapping might also help to fix some scenes that end burning through the UI, possibly because the scene (background) had extremely high values
-  if (injectedData.toneMapType == 1) {  // DICE
+  if (injectedData.toneMapType == 1) {  // Exponential Rolloff
     outColor.rgb = applyToneMap(outColor.rgb);
   } else {  // Vanilla, no tonemap, just clipping
     outColor.rgb = saturate(outColor.rgb);
