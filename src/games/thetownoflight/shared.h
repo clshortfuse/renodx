@@ -14,6 +14,8 @@ struct ShaderInjectData {
   float toneMapGameNits;
   float toneMapUINits;
 
+  float testInverse;
+
   float isTonemapped;
 };
 
