@@ -1,3 +1,4 @@
+#include "./common.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t4 : register(t4);
@@ -93,27 +94,6 @@ float4 sampleLUTWithExtrapolation(Texture2D<float4> lut, SamplerState samplerSta
   return clampedSample;
 }
 
-/// Applies DICE tonemapper to the untonemapped HDR color.
-///
-/// @param untonemapped - The untonemapped color.
-/// @param paperWhite - 100% white level used by DICE
-/// @param peakWhite - The maximum output luminance
-/// @param highlightsShoulderStart - Determines where the highlights curve (shoulder) starts
-/// @return The HDR color tonemapped with DICE.
-float3 applyDICETonemap(float3 linearColor, float paperWhite, float peakWhite, float highlightsShoulderStart) {
-  // scale parameters based on 1.0 = 80 nits (sRGB reference white)
-  paperWhite /= renodx::color::srgb::REFERENCE_WHITE;
-  peakWhite /= renodx::color::srgb::REFERENCE_WHITE;
-  highlightsShoulderStart /= renodx::color::srgb::REFERENCE_WHITE;
-
-  // multiply paper white in and out for tonemap
-  linearColor *= paperWhite;
-  linearColor = renodx::tonemap::dice::BT709(linearColor, peakWhite, highlightsShoulderStart);
-  linearColor /= paperWhite;
-
-  return linearColor;
-}
-
 void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, float2 w1: TEXCOORD1, out float4 outColor: SV_Target0) {
   const bool vanilla = false;  // Turn on for vanilla behaviour
   const bool extrapolateLUTsMethod = vanilla ? -1 : 1;
@@ -174,27 +154,10 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, float2 w1: TEXCOORD1, o
   outColor.w = sceneColor.w;
 
   // Tonemapping might also help to fix some scenes that end burning through the UI, possibly because the scene (background) had extremely high values
-  if (injectedData.toneMapType == 1) { // DICE
-    float3 linearColor = renodx::color::gamma::DecodeSafe(outColor.rgb, 2.2); // tonemap in linear
-
-    if (injectedData.outputMode == 1) { // HDR Output
-      // highlightsShoulderStart = paper white
-      // Don't tonemap the "SDR" range (in luminance), we want to keep it looking as it used to look in SDR
-      linearColor = applyDICETonemap(linearColor, injectedData.toneMapGameNits, injectedData.toneMapPeakNits, injectedData.toneMapGameNits);
-      linearColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    } else {  // SDR
-      // lower highlightsShoulderStart and set peak and paper white equal for SDR
-      // Use BT.2408 Reference White as general SDR paper white value
-      // https://www.itu.int/dms_pub/itu-r/opb/rep/R-REP-BT.2408-7-2023-PDF-E.pdf
-      linearColor = applyDICETonemap(linearColor, 203.f, 203.f, 203.f * 0.5f);
-    }
-
-    outColor.rgb = renodx::color::gamma::EncodeSafe(linearColor, 2.2);  // back to gamma
+  if (injectedData.toneMapType == 1) {  // DICE
+    outColor.rgb = applyToneMap(outColor.rgb);
   } else {  // Vanilla, no tonemap, just clipping
     outColor.rgb = saturate(outColor.rgb);
-    outColor.rgb = renodx::color::gamma::DecodeSafe(outColor.rgb, 2.2);
-    outColor.rgb *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    outColor.rgb = renodx::color::gamma::EncodeSafe(outColor.rgb, 2.2);
   }
   // Leave output in gamma space and with a paper white of 80 nits even for HDR so we can blend in the UI just like in SDR (in gamma space) and linearize with an extra pass added at the end.
 
