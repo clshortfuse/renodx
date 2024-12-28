@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <cstdio>
 
+#include <functional>
 #include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
@@ -36,15 +37,16 @@ inline bool OnBypassShaderDraw(reshade::api::command_list* cmd_list) { return fa
 }  // namespace internal
 
 struct CustomShader {
-  uint32_t crc32;
+  std::uint32_t crc32;
   std::vector<uint8_t> code;
   int32_t index = -1;
   // return false to abort
-  bool (*on_replace)(reshade::api::command_list* cmd_list) = nullptr;
+  std::function<bool(reshade::api::command_list*)> on_replace = nullptr;
   // return false to abort
-  bool (*on_inject)(reshade::api::command_list* cmd_list) = nullptr;
+  std::function<bool(reshade::api::command_list*)> on_inject = nullptr;
   // return false to abort
-  bool (*on_draw)(reshade::api::command_list* cmd_list) = nullptr;
+  std::function<bool(reshade::api::command_list*)> on_draw = nullptr;
+  std::function<void(reshade::api::command_list*)> on_drawn = nullptr;
 };
 
 using CustomShaders = std::unordered_map<uint32_t, CustomShader>;
@@ -668,7 +670,10 @@ static bool PushShaderInjections(
   return true;
 }
 
-static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = false) {
+static bool HandlePreDraw(
+    reshade::api::command_list* cmd_list,
+    bool is_dispatch,
+    std::function<void(reshade::api::command_list*)>& on_drawn) {
   auto* device = cmd_list->get_device();
   auto& device_data = device->get_private_data<DeviceData>();
   const std::unique_lock local_device_lock(device_data.mutex);
@@ -718,7 +723,7 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
       continue;  // move to next shader
     }
 
-    auto custom_shader_info = custom_shader_info_pair->second;
+    auto& custom_shader_info = custom_shader_info_pair->second;
 
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
@@ -765,7 +770,12 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
       }
     }
 
+    if (custom_shader_info.on_drawn != nullptr) {
+      on_drawn = custom_shader_info.on_drawn;
+    }
+
     found_custom_shader = true;
+    break;
   }
 
   if (found_custom_shader) {
@@ -789,7 +799,7 @@ static bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch
       if (is_dispatch) continue;
     }
     std::stringstream s;
-    s << "utils::shader::ApplyReplacements(Orphaned replacement: ";
+    s << "mods::shader::ApplyReplacements(Orphaned replacement: ";
     s << stage;
     s << ", pipeline: " << reinterpret_cast<void*>(pipeline.handle);
     s << ")";
@@ -805,7 +815,12 @@ static bool OnDraw(
     uint32_t instance_count,
     uint32_t first_vertex,
     uint32_t first_instance) {
-  return HandlePreDraw(cmd_list);
+  std::function<void(reshade::api::command_list*)> on_drawn = nullptr;
+  if (HandlePreDraw(cmd_list, false, on_drawn)) return true;
+  if (on_drawn == nullptr) return false;
+  cmd_list->draw(vertex_count, instance_count, first_vertex, first_instance);
+  on_drawn(cmd_list);
+  return true;
 }
 
 static bool OnDispatch(
@@ -813,7 +828,12 @@ static bool OnDispatch(
     uint32_t group_count_x,
     uint32_t group_count_y,
     uint32_t group_count_z) {
-  return HandlePreDraw(cmd_list, true);
+  std::function<void(reshade::api::command_list*)> on_drawn = nullptr;
+  if (HandlePreDraw(cmd_list, true, on_drawn)) return true;
+  if (on_drawn == nullptr) return false;
+  cmd_list->dispatch(group_count_x, group_count_y, group_count_z);
+  on_drawn(cmd_list);
+  return true;
 }
 
 static bool OnDrawIndexed(
@@ -823,7 +843,14 @@ static bool OnDrawIndexed(
     uint32_t first_index,
     int32_t vertex_offset,
     uint32_t first_instance) {
-  return HandlePreDraw(cmd_list);
+  std::function<void(reshade::api::command_list*)> on_drawn = nullptr;
+  if (HandlePreDraw(cmd_list, false, on_drawn)) return true;
+  if (on_drawn == nullptr) return false;
+  reshade::log::message(reshade::log::level::debug, "mods::shader::OnDrawIndexed(invoking callback)");
+  cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
+  on_drawn(cmd_list);
+
+  return true;
 }
 
 static bool OnDrawOrDispatchIndirect(
@@ -833,19 +860,28 @@ static bool OnDrawOrDispatchIndirect(
     uint64_t offset,
     uint32_t draw_count,
     uint32_t stride) {
+  bool is_dispatch = false;
   switch (type) {
     case reshade::api::indirect_command::unknown: {
-      auto& shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
-      bool is_dispatch = shader_state.current_shaders_hashes.contains(reshade::api::pipeline_stage::compute_shader);
-      return HandlePreDraw(cmd_list, is_dispatch);
+      is_dispatch = renodx::utils::shader::GetCurrentState(cmd_list)
+                        .current_shaders_hashes.contains(reshade::api::pipeline_stage::compute_shader);
+      break;
     }
     case reshade::api::indirect_command::dispatch:
     case reshade::api::indirect_command::dispatch_mesh:
     case reshade::api::indirect_command::dispatch_rays:
-      return HandlePreDraw(cmd_list, true);
+      is_dispatch = true;
+      break;
     default:
-      return HandlePreDraw(cmd_list);
+      break;
   }
+  std::function<void(reshade::api::command_list*)> on_drawn = nullptr;
+  if (HandlePreDraw(cmd_list, is_dispatch, on_drawn)) return true;
+  if (on_drawn == nullptr) return false;
+  cmd_list->draw_or_dispatch_indirect(type, buffer, offset, draw_count, stride);
+  on_drawn(cmd_list);
+
+  return true;
 }
 
 static void OnPresent(
