@@ -94,27 +94,6 @@ float4 sampleLUTWithExtrapolation(Texture2D<float4> lut, SamplerState samplerSta
   return clampedSample;
 }
 
-/// Applies DICE tonemapper to the untonemapped HDR color.
-///
-/// @param untonemapped - The untonemapped color.
-/// @param paperWhite - 100% white level used by DICE
-/// @param peakWhite - The maximum output luminance
-/// @param highlightsShoulderStart - Determines where the highlights curve (shoulder) starts
-/// @return The HDR color tonemapped with DICE.
-float3 applyDICETonemap(float3 linearColor, float paperWhite, float peakWhite, float highlightsShoulderStart) {
-  // scale parameters based on 1.0 = 80 nits (sRGB reference white)
-  paperWhite /= renodx::color::srgb::REFERENCE_WHITE;
-  peakWhite /= renodx::color::srgb::REFERENCE_WHITE;
-  highlightsShoulderStart /= renodx::color::srgb::REFERENCE_WHITE;
-
-  // multiply paper white in and out for tonemap
-  linearColor *= paperWhite;
-  linearColor = renodx::tonemap::dice::BT709(linearColor, peakWhite, highlightsShoulderStart);
-  linearColor /= paperWhite;
-
-  return linearColor;
-}
-
 void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, float2 w1: TEXCOORD1, out float4 outColor: SV_Target0) {
   const bool vanilla = false;  // Turn on for vanilla behaviour
   const bool extrapolateLUTsMethod = vanilla ? -1 : 1;
