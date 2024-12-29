@@ -105,8 +105,8 @@ struct ResourceViewDetails {
   reshade::api::resource_view_desc resource_view_desc;
   reshade::api::resource resource = {0};
   reshade::api::resource_desc resource_desc;
-  std::string resource_tag;
-  std::string resource_view_tag;
+  std::string resource_reflection;
+  std::string resource_view_reflection;
   bool is_swapchain = false;
   bool is_rtv_upgraded = false;
   bool is_res_upgraded = false;
@@ -210,9 +210,9 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
 
     auto device_api = device->get_api();
 
-    auto resource_view_tag = renodx::utils::trace::GetDebugName(device_api, resource_view);
-    if (resource_view_tag.has_value()) {
-      details.resource_view_tag = resource_view_tag.value();
+    auto resource_view_reflection = renodx::utils::trace::GetDebugName(device_api, resource_view);
+    if (resource_view_reflection.has_value()) {
+      details.resource_view_reflection = resource_view_reflection.value();
     }
 
     if (auto pair = resource_view_resources.find(resource_view.handle);
@@ -222,9 +222,9 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
       if (details.resource.handle != 0u) {
         details.resource_desc = device->get_resource_desc(details.resource);
 
-        auto resource_tag = renodx::utils::trace::GetDebugName(device_api, details.resource);
-        if (resource_tag.has_value()) {
-          details.resource_tag = resource_tag.value();
+        auto resource_reflection = renodx::utils::trace::GetDebugName(device_api, details.resource);
+        if (resource_reflection.has_value()) {
+          details.resource_reflection = resource_reflection.value();
         }
       }
     }
@@ -1200,8 +1200,8 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             }
 
             if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REFLECTION))) {
-              if (!resource_view_details.resource_view_tag.empty()) {
-                ImGui::TextUnformatted(resource_view_details.resource_view_tag.c_str());
+              if (!resource_view_details.resource_view_reflection.empty()) {
+                ImGui::TextUnformatted(resource_view_details.resource_view_reflection.c_str());
               }
             }
 
@@ -1253,8 +1253,8 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             }
 
             if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REFLECTION))) {
-              if (!resource_view_details.resource_tag.empty()) {
-                ImGui::TextUnformatted(resource_view_details.resource_tag.c_str());
+              if (!resource_view_details.resource_reflection.empty()) {
+                ImGui::TextUnformatted(resource_view_details.resource_reflection.c_str());
               }
             }
 
@@ -1328,8 +1328,8 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             }
 
             ImGui::TableNextColumn();
-            if (!resource_view_details.resource_view_tag.empty()) {
-              ImGui::TextUnformatted(resource_view_details.resource_view_tag.c_str());
+            if (!resource_view_details.resource_view_reflection.empty()) {
+              ImGui::TextUnformatted(resource_view_details.resource_view_reflection.c_str());
             }
 
             ImGui::TableNextColumn();  // Index
@@ -1371,8 +1371,8 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             }
 
             ImGui::TableNextColumn();
-            if (!resource_view_details.resource_tag.empty()) {
-              ImGui::TextUnformatted(resource_view_details.resource_tag.c_str());
+            if (!resource_view_details.resource_reflection.empty()) {
+              ImGui::TextUnformatted(resource_view_details.resource_reflection.c_str());
             }
 
             ImGui::TableNextColumn();  // Index
@@ -1409,8 +1409,8 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             }
 
             ImGui::TableNextColumn();
-            if (!render_target.resource_view_tag.empty()) {
-              ImGui::TextUnformatted(render_target.resource_view_tag.c_str());
+            if (!render_target.resource_view_reflection.empty()) {
+              ImGui::TextUnformatted(render_target.resource_view_reflection.c_str());
             }
 
             ImGui::TableNextColumn();  // Index
@@ -1452,8 +1452,8 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             }
 
             ImGui::TableNextColumn();
-            if (!render_target.resource_tag.empty()) {
-              ImGui::TextUnformatted(render_target.resource_tag.c_str());
+            if (!render_target.resource_reflection.empty()) {
+              ImGui::TextUnformatted(render_target.resource_reflection.c_str());
             }
 
             ImGui::TableNextColumn();  // Index
