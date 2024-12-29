@@ -90,7 +90,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .can_reset = false,
         .label = "Settings Mode",
-        .labels = {"Beginner", "Intermediate", "Advanced"},
+        .labels = {"Simple", "Intermediate", "Advanced"},
         .is_global = true,
     },
     new renodx::utils::settings::Setting{
@@ -161,6 +161,32 @@ renodx::utils::settings::Settings settings = {
         .labels = {"OKLab", "ICtCp", "darkTable UCS"},
         .is_enabled = []() { return shader_injection.toneMapType == 1; },
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapHueCorrectionMethod",
+        .binding = &shader_injection.toneMapHueCorrectionMethod,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Hue Correction Method",
+        .section = "Tone Mapping",
+        .tooltip = "Applies hue shift emulation before tonemapping",
+        .labels = {"Default", "ACES AP1", "Filmic", "SDR Grade"},
+        .is_enabled = []() { return shader_injection.toneMapType == 1; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapHueCorrection",
+        .binding = &shader_injection.toneMapHueCorrection,
+        .default_value = 0.f,
+        .label = "Hue Correction",
+        .section = "Tone Mapping",
+        .tooltip = "Hue-shift emulation strength.",
+        .min = 0.f,
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 1; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
+
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPerChannel",
@@ -340,21 +366,21 @@ renodx::utils::settings::Settings info_settings = {
 };
 
 void OnPresetOff() {
-  renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
-  renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0.f);
-  renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 0.f);
-  renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
-  renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeBlowout", 0.f);
-  renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
-  renodx::utils::settings::UpdateSetting("colorGradeColorSpace", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 203.f);
+  renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
+  renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
+  renodx::utils::settings::UpdateSetting("ToneMapGammaCorrection", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeLUTScaling", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeColorSpace", 0.f);
 }
 
 bool applied_dx12 = false;
@@ -577,6 +603,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .old_format = reshade::api::format::r10g10b10a2_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
             .dimensions = {.width = 32, .height = 32, .depth = 32},
+            .resource_tag = 0x01,
         });
 
         initialized = true;
