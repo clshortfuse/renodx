@@ -22,18 +22,19 @@ namespace {
 
 std::unordered_set<std::uint32_t> drawn_shaders;
 
-#define TracedShaderEntry(value) {                                               \
-    value,                                                                       \
-    {                                                                            \
-        .crc32 = value,                                                          \
-        .code = __##value,                                                       \
-        .on_drawn = [](auto cmd_list) {                                          \
-          if (drawn_shaders.contains(##value)) return;                           \
-          drawn_shaders.emplace(##value);                                        \
-          reshade::log::message(reshade::log::level::debug, "Replaced " #value); \
-        },                                                                       \
-    },                                                                           \
-}
+#define TracedShaderEntry(value)                                                     \
+  {                                                                                  \
+    value,                                                                           \
+        {                                                                            \
+            .crc32 = value,                                                          \
+            .code = __##value,                                                       \
+            .on_drawn = [](auto cmd_list) {                                          \
+              if (drawn_shaders.contains(##value)) return;                           \
+              drawn_shaders.emplace(##value);                                        \
+              reshade::log::message(reshade::log::level::debug, "Replaced " #value); \
+            },                                                                       \
+        },                                                                           \
+  }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     // Crisis Core FF7 Reunion
@@ -42,6 +43,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // Kingdom Hearts 3
     TracedShaderEntry(0x00E9C5FE),
     TracedShaderEntry(0xE9343033),
+
+    // Wuthering Waves
+    TracedShaderEntry(0xBB770F1A), // Nothing edited, but required for mod to work
 
     // SM5 LUT Builder
     TracedShaderEntry(0x2569985B),
@@ -64,6 +68,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedShaderEntry(0xD4A45A02),
     TracedShaderEntry(0xE6EB2840),
     TracedShaderEntry(0xF6AA7756),
+    TracedShaderEntry(0x20EAC9B6),
+    TracedShaderEntry(0x3040FD90),
+    TracedShaderEntry(0xB972BF8F),
 
     // SM6 LUT Builder
 
