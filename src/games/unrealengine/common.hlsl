@@ -16,11 +16,6 @@ float3 PostToneMapScale(float3 color) {
     color = renodx::color::srgb::EncodeSafe(color);
   }
 
-  // bg-sRGB should be clamped between -0.53f and 1.68f
-  // https://www.itu.int/dms_pub/itu-r/opb/rep/R-REP-BT.2380-2-2018-PDF-E.pdf
-  // Just clamp negative or else peak is limited
-  color = max(-0.53f, color);
-
   return color;
 }
 
@@ -111,6 +106,8 @@ float3 RenoDRTSmoothClamp(float3 untonemapped) {
   renodrt_config.hue_correction_strength = 0.f;
   renodrt_config.working_color_space = 0u;
 
+  // renodrt_config.tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
+
   return renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
 }
 
@@ -134,7 +131,7 @@ float3 ToneMap(float3 bt709) {
   config.reno_drt_saturation = 1.05f;
   config.reno_drt_dechroma = 0;
   config.reno_drt_blowout = injectedData.colorGradeBlowout;
-  config.reno_drt_flare = 0.10f * injectedData.colorGradeFlare;
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.reno_drt_working_color_space = 2u;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
 

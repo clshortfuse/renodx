@@ -952,8 +952,6 @@ static void OnInitResource(
     return;
   }
 
-  if (initial_data != nullptr) return;
-
   auto& private_data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(private_data.mutex);
 
@@ -972,6 +970,7 @@ static void OnInitResource(
       return;
   }
 
+  bool changed = false;
   std::stringstream s;
   s << "mods::swapchain::OnInitResource(tracking ";
   s << reinterpret_cast<void*>(resource.handle);
@@ -979,8 +978,10 @@ static void OnInitResource(
   s << ", state: " << std::hex << static_cast<uint32_t>(initial_state) << std::dec;
   s << ", width: " << desc.texture.width;
   s << ", height: " << desc.texture.height;
+  s << ", initial_data: " << (initial_data == nullptr ? "false" : "true");
   s << ", format: " << desc.texture.format;
   if (private_data.applied_target != nullptr) {
+    changed = true;
     if (private_data.applied_target->resource_tag != -1) {
       renodx::utils::resource::SetResourceTag(device, resource, private_data.applied_target->resource_tag);
     }
@@ -1073,6 +1074,7 @@ static void OnInitResource(
         reshade::log::message(reshade::log::level::debug, s.str().c_str());
       }
     }
+    changed = true;
     s << ", flagged: true";
   } else {
     // Nothing to do
@@ -1082,12 +1084,16 @@ static void OnInitResource(
   s << ")";
 
 #ifdef DEBUG_LEVEL_1
-  reshade::log::message(
-      desc.texture.format == reshade::api::format::unknown
-          ? reshade::log::level::warning
-          : reshade::log::level::info,
-      s.str().c_str());
+  changed = true;
 #endif
+
+  if (changed) {
+    reshade::log::message(
+        desc.texture.format == reshade::api::format::unknown
+            ? reshade::log::level::warning
+            : reshade::log::level::info,
+        s.str().c_str());
+  }
 }
 
 static void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
