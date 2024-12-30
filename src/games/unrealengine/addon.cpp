@@ -45,7 +45,13 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedShaderEntry(0xE9343033),
 
     // Wuthering Waves
-    TracedShaderEntry(0xBB770F1A), // Nothing edited, but required for mod to work
+    TracedShaderEntry(0xBB770F1A),  // Nothing edited, but required for mod to work
+    TracedShaderEntry(0xA287384D),  // Nothing edited, but required for mod to work
+    TracedShaderEntry(0x01E35FE7),  // Nothing edited, but required for mod to work
+    TracedShaderEntry(0x922B810A),  // Nothing edited, but required for mod to work
+    TracedShaderEntry(0xA39A5DD1),  // Nothing edited, but required for mod to work
+    TracedShaderEntry(0xB03F8C1E),  // Nothing edited, but required for mod to work
+    TracedShaderEntry(0x2B0E4A6A),  // Nothing edited, but required for mod to work
 
     // SM5 LUT Builder
     TracedShaderEntry(0x2569985B),
