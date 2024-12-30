@@ -295,7 +295,7 @@ float3 BT709(float3 bt709_color) {
 namespace srgb {
 static const float REFERENCE_WHITE = 80.f;
 
-#if __SHADER_TARGET_MAJOR <= 5
+#if (!defined(__SHADER_TARGET_MAJOR) || __SHADER_TARGET_MAJOR <= 5)
 #define ENCODE(T)                                        \
   T Encode(T c) {                                        \
     return (c <= 0.0031308f)                             \
@@ -317,22 +317,10 @@ float4 Encode(float4 color) {
   return float4(Encode(color.rgb), color.a);
 }
 
-#if __SHADER_TARGET_MAJOR <= 5
-#define ENCODE_SAFE(T)                                                     \
-  T EncodeSafe(T c) {                                                      \
-    return (c <= 0.0031308f)                                               \
-               ? (c * 12.92f)                                              \
-               : (1.055f * renodx::math::PowSafe(c, 1.f / 2.4f) - 0.055f); \
+#define ENCODE_SAFE(T)                             \
+  T EncodeSafe(T c) {                              \
+    return renodx::math::Sign(c) * Encode(abs(c)); \
   }
-#else
-#define ENCODE_SAFE(T)                                           \
-  T EncodeSafe(T c) {                                            \
-    return select(                                               \
-        c <= 0.0031308f,                                         \
-        c * 12.92f,                                              \
-        1.055f * renodx::math::PowSafe(c, 1.f / 2.4f) - 0.055f); \
-  }
-#endif
 
 ENCODE_SAFE(float)
 ENCODE_SAFE(float2)
@@ -342,12 +330,12 @@ float4 EncodeSafe(float4 color) {
   return float4(EncodeSafe(color.rgb), color.a);
 }
 
-#if __SHADER_TARGET_MAJOR <= 5
-#define DECODE(T)                                  \
-  T Decode(T c) {                                  \
-    return (c <= 0.04045f)                         \
-               ? (c / 12.92f)                      \
-               : pow((c + 0.055f) / 1.055f, 2.4f); \
+#if (!defined(__SHADER_TARGET_MAJOR) || __SHADER_TARGET_MAJOR <= 5)
+#define DECODE(T)                                    \
+  T Decode(T c) {                                    \
+    return (c <= 0.04045f)                           \
+               ? (c / 12.92f)                        \
+               : (pow((c + 0.055f) / 1.055f, 2.4f)); \
   }
 #else
 #define DECODE(T)                                                               \
@@ -364,19 +352,10 @@ float4 Decode(float4 color) {
   return float4(Decode(color.rgb), color.a);
 }
 
-#if __SHADER_TARGET_MAJOR <= 5
-#define DECODE_SAFE(T)                                               \
-  T DecodeSafe(T c) {                                                \
-    return (c <= 0.04045f)                                           \
-               ? (c / 12.92f)                                        \
-               : renodx::math::PowSafe((c + 0.055f) / 1.055f, 2.4f); \
+#define DECODE_SAFE(T)                             \
+  T DecodeSafe(T c) {                              \
+    return renodx::math::Sign(c) * Decode(abs(c)); \
   }
-#else
-#define DECODE_SAFE(T)                                                                            \
-  T DecodeSafe(T c) {                                                                             \
-    return select(c <= 0.04045f, c / 12.92f, renodx::math::PowSafe((c + 0.055f) / 1.055f, 2.4f)); \
-  }
-#endif
 
 DECODE_SAFE(float)
 DECODE_SAFE(float2)
@@ -396,7 +375,7 @@ float4 DecodeSafe(float4 color) {
 namespace srgba {
 
 float4 Encode(float4 color) {
-#if __SHADER_TARGET_MAJOR <= 5
+#if (!defined(__SHADER_TARGET_MAJOR) || __SHADER_TARGET_MAJOR <= 5)
   return (color <= 0.0031308f)
              ? (color * 12.92f)
              : (1.055f * pow(color, 1.f / 2.4f) - 0.055f);
@@ -410,7 +389,7 @@ float4 EncodeSafe(float4 color) {
 }
 
 float4 Decode(float4 color) {
-#if __SHADER_TARGET_MAJOR <= 5
+#if (!defined(__SHADER_TARGET_MAJOR) || __SHADER_TARGET_MAJOR <= 5)
   return (color <= 0.04045f)
              ? (color / 12.92f)
              : pow((color + 0.055f) / 1.055f, 2.4f);
@@ -487,7 +466,7 @@ struct EncodingParams {
 #define ENCODE_COND_TRUE  (params.c * log10((params.a * c) + params.b) + params.d)
 #define ENCODE_COND_FALSE (params.e * c + params.f)
 
-#if __SHADER_TARGET_MAJOR <= 5
+#if (!defined(__SHADER_TARGET_MAJOR) || __SHADER_TARGET_MAJOR <= 5)
 #define ENCODE(T)                                             \
   T Encode(T c, EncodingParams params, bool use_cut = true) { \
     if (!use_cut) {                                           \
@@ -517,7 +496,7 @@ ENCODE(float3)
 #define DECODE_COND_TRUE    ((pow(10.f, (c - params.d) / params.c) - params.b) / params.a)
 #define DECODE_COND_FALSE   ((c - params.f) / params.e)
 
-#if __SHADER_TARGET_MAJOR <= 5
+#if (!defined(__SHADER_TARGET_MAJOR) || __SHADER_TARGET_MAJOR <= 5)
 #define DECODE(T)                                             \
   T Decode(T c, EncodingParams params, bool use_cut = true) { \
     if (use_cut) {                                            \
