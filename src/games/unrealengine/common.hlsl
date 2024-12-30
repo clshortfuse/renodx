@@ -136,7 +136,20 @@ float3 ToneMap(float3 bt709) {
 
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
 
+  config.hue_correction_type =
+      renodx::tonemap::config::hue_correction_type::CUSTOM;
   config.hue_correction_strength = injectedData.toneMapHueCorrection;
+  config.hue_correction_color = bt709;
+  if (injectedData.toneMapHueCorrectionMethod == 1.f) {
+    config.hue_correction_color = saturate(bt709);
+  } else if (injectedData.toneMapHueCorrectionMethod == 2.f) {
+    config.hue_correction_color = renodx::tonemap::uncharted2::BT709(bt709);
+  } else if (injectedData.toneMapHueCorrectionMethod == 3.f) {
+    config.hue_correction_color = RenoDRTSmoothClamp(bt709);
+  } else {
+    config.hue_correction_type =
+        renodx::tonemap::config::hue_correction_type::INPUT;
+  }
 
   float3 output_color = renodx::tonemap::config::Apply(bt709, config);
 
