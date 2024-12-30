@@ -15,6 +15,12 @@ float3 PostToneMapScale(float3 color) {
     color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
     color = renodx::color::srgb::EncodeSafe(color);
   }
+
+  // bg-sRGB should be clamped between -0.53f and 1.68f
+  // https://www.itu.int/dms_pub/itu-r/opb/rep/R-REP-BT.2380-2-2018-PDF-E.pdf
+  // Just clamp negative or else peak is limited
+  color = max(-0.53f, color);
+
   return color;
 }
 
@@ -103,9 +109,7 @@ float3 RenoDRTSmoothClamp(float3 untonemapped) {
   renodrt_config.dechroma = 0.f;
   renodrt_config.flare = 0.f;
   renodrt_config.hue_correction_strength = 0.f;
-  renodrt_config.tone_map_method =
-      renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  renodrt_config.working_color_space = 2u;
+  renodrt_config.working_color_space = 0u;
 
   return renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
 }
@@ -136,19 +140,11 @@ float3 ToneMap(float3 bt709) {
 
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
 
-  config.hue_correction_type =
-      renodx::tonemap::config::hue_correction_type::CUSTOM;
   config.hue_correction_strength = injectedData.toneMapHueCorrection;
-  config.hue_correction_color = bt709;
   if (injectedData.toneMapHueCorrectionMethod == 1.f) {
-    config.hue_correction_color = saturate(bt709);
-  } else if (injectedData.toneMapHueCorrectionMethod == 2.f) {
-    config.hue_correction_color = renodx::tonemap::uncharted2::BT709(bt709);
-  } else if (injectedData.toneMapHueCorrectionMethod == 3.f) {
-    config.hue_correction_color = RenoDRTSmoothClamp(bt709);
-  } else {
     config.hue_correction_type =
-        renodx::tonemap::config::hue_correction_type::INPUT;
+        renodx::tonemap::config::hue_correction_type::CUSTOM;
+    config.hue_correction_color = RenoDRTSmoothClamp(bt709);
   }
 
   float3 output_color = renodx::tonemap::config::Apply(bt709, config);
