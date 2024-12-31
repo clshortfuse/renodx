@@ -37,7 +37,7 @@ std::unordered_set<std::uint32_t> drawn_shaders;
               drawn_shaders.emplace(value);                        \
               reshade::log::message(                               \
                   reshade::log::level::debug,                      \
-                  std::format("Replaced 0x{:08}", value).c_str()); \
+                  std::format("Replaced 0x{:08x}", value).c_str()); \
             },                                                     \
         },                                                         \
   }
