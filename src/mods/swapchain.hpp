@@ -289,6 +289,10 @@ static bool UsingSwapchainProxy() {
   return !swap_chain_proxy_pixel_shader.empty();
 }
 
+static bool UsingSwapchainCompatibilityMode() {
+  return swapchain_proxy_compatibility_mode && (target_format == swap_chain_proxy_format);
+}
+
 static void CheckSwapchainSize(
     reshade::api::swapchain* swapchain,
     reshade::api::resource_desc buffer_desc) {
@@ -563,7 +567,7 @@ static void SetupSwapchainProxy(
       swap_chain_proxy_upgrade_target.view_upgrades = swap_chain_proxy_upgrade_target.VIEW_UPGRADES_R10G10B10A2_UNORM;
     }
     auto buffer = swapchain->get_back_buffer(index);
-    if (!swapchain_proxy_compatibility_mode) {
+    if (!UsingSwapchainCompatibilityMode()) {
       {
         std::stringstream s;
         s << "mods::swapchain::SetupSwapchainProxy(Marking swapchain buffer for cloning: ";
@@ -827,7 +831,7 @@ static void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
 
   reshade::api::resource swapchain_clone;
 
-  if (swapchain_proxy_compatibility_mode) {
+  if (UsingSwapchainCompatibilityMode()) {
     auto& handle = data.resource_clones[current_back_buffer.handle];
     if (handle == 0) {
       handle = CloneResource(device, &data, current_back_buffer).handle;
