@@ -266,6 +266,7 @@ static bool prevent_full_screen = true;
 static bool force_borderless = true;
 static bool is_vulkan = false;
 static bool swapchain_proxy_compatibility_mode = true;
+static reshade::api::format swap_chain_proxy_format = reshade::api::format::r16g16b16a16_float;
 static std::vector<std::uint8_t> swap_chain_proxy_vertex_shader = {};
 static std::vector<std::uint8_t> swap_chain_proxy_pixel_shader = {};
 static int32_t expected_constant_buffer_index = -1;
@@ -557,8 +558,8 @@ static void SetupSwapchainProxy(
     DeviceData* data) {
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
   for (uint32_t index = 0; index < back_buffer_count; ++index) {
-    swap_chain_proxy_upgrade_target.new_format = target_format;
-    if (target_format == reshade::api::format::r10g10b10a2_unorm) {
+    swap_chain_proxy_upgrade_target.new_format = swap_chain_proxy_format;
+    if (swap_chain_proxy_format == reshade::api::format::r10g10b10a2_unorm) {
       swap_chain_proxy_upgrade_target.view_upgrades = swap_chain_proxy_upgrade_target.VIEW_UPGRADES_R10G10B10A2_UNORM;
     }
     auto buffer = swapchain->get_back_buffer(index);
@@ -874,7 +875,7 @@ static void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
     device->create_resource_view(
         swapchain_clone,
         reshade::api::resource_usage::shader_resource,
-        reshade::api::resource_view_desc(target_format),
+        reshade::api::resource_view_desc(swap_chain_proxy_format),
         &srv);
 
     if (srv.handle == 0u) {
@@ -1665,11 +1666,13 @@ static bool OnCreateResourceView(
   reshade::api::resource_view_desc new_desc = desc;
   const reshade::api::resource_desc resource_desc = device->get_resource_desc(resource);
   if (upgrade_resource_views && renodx::utils::swapchain::IsBackBuffer(device, resource)) {
-    if (resource_desc.texture.format != reshade::api::format::r32_typeless) {
+    if (UsingSwapchainProxy()) {
+      new_desc.format = swap_chain_proxy_format;
+    } else {
       new_desc.format = target_format;
-      expected = true;
-      found_upgrade = true;
     }
+    expected = true;
+    found_upgrade = true;
   } else if (auto pair = private_data.resource_upgrade_targets.find(resource.handle);
              pair != private_data.resource_upgrade_targets.end()) {
     auto* target = pair->second;
