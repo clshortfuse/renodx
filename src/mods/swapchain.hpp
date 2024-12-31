@@ -1669,12 +1669,9 @@ static bool OnCreateResourceView(
   }
   reshade::api::resource_view_desc new_desc = desc;
   const reshade::api::resource_desc resource_desc = device->get_resource_desc(resource);
-  if (upgrade_resource_views && renodx::utils::swapchain::IsBackBuffer(device, resource)) {
-    if (UsingSwapchainProxy()) {
-      new_desc.format = swap_chain_proxy_format;
-    } else {
-      new_desc.format = target_format;
-    }
+  bool is_back_buffer = renodx::utils::swapchain::IsBackBuffer(device, resource);
+  if (upgrade_resource_views && is_back_buffer) {
+    new_desc.format = target_format;
     expected = true;
     found_upgrade = true;
   } else if (auto pair = private_data.resource_upgrade_targets.find(resource.handle);
@@ -1751,7 +1748,10 @@ static bool OnCreateResourceView(
             : reshade::log::level::info,
         s.str().c_str());
 #endif
-    return false;
+    if (!is_back_buffer) return false;
+    if (!UsingSwapchainProxy()) return false;
+    if (swap_chain_proxy_format == target_format) return false;
+    // Continue to creating a resource clone
   }
 
   if (use_resource_cloning) {
@@ -1765,6 +1765,7 @@ static bool OnCreateResourceView(
       // Cloning with upgrade
     }
   }
+  if (!changed) return false;
 
   reshade::log::message(
       desc.format == reshade::api::format::unknown
