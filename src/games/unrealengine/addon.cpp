@@ -635,7 +635,7 @@ void AddAdvancedSettings() {
         .is_global = true,
         .is_visible = []() { return settings[0]->GetValue() >= 2; },
     };
-    reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), ("Upgrade_" + key).c_str(), new_setting->value);
+    reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), ("Upgrade_" + key).c_str(), new_setting->value_as_int);
     settings.push_back(new_setting);
   }
 
@@ -653,9 +653,29 @@ void AddAdvancedSettings() {
       .is_global = true,
       .is_visible = []() { return settings[0]->GetValue() >= 2; },
   };
-  reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "Upgrade_SwapChainCompatibility", swapchain_setting->value);
+  reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "Upgrade_SwapChainCompatibility", swapchain_setting->value_as_int);
   renodx::mods::swapchain::swapchain_proxy_compatibility_mode = swapchain_setting->GetValue() != 0;
   settings.push_back(swapchain_setting);
+
+  auto* scrgb_setting = new renodx::utils::settings::Setting{
+      .key = "Upgrade_UseSCRGB",
+      .binding = &shader_injection.processingUseSCRGB,
+      .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+      .default_value = 0.f,
+      .label = "Swap Chain Format",
+      .section = "Resource Upgrades",
+      .tooltip = "Selects use of HDR10 or scRGB swapchain.",
+      .labels = {
+          "HDR10",
+          "scRGB",
+      },
+      .is_global = true,
+      .is_visible = []() { return settings[0]->GetValue() >= 2; },
+  };
+  reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "Upgrade_UseSCRGB", scrgb_setting->value_as_int);
+  shader_injection.processingUseSCRGB = scrgb_setting->GetValue();
+  renodx::mods::swapchain::SetUseHDR10(scrgb_setting->GetValue() == 0);
+  settings.push_back(scrgb_setting);
 
   auto* lut_dump_setting = new renodx::utils::settings::Setting{
       .key = "DumpLUTShaders",
@@ -672,7 +692,7 @@ void AddAdvancedSettings() {
       .is_global = true,
       .is_visible = []() { return settings[0]->GetValue() >= 2; },
   };
-  reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "DumpLUTShaders", lut_dump_setting->value);
+  reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "DumpLUTShaders", lut_dump_setting->value_as_int);
   g_dump_shaders = lut_dump_setting->GetValue();
   settings.push_back(lut_dump_setting);
 
