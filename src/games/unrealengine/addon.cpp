@@ -14,26 +14,33 @@
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/path.hpp"
 #include "../../utils/platform.hpp"
 #include "../../utils/settings.hpp"
+#include "../../utils/shader.hpp"
+#include "../../utils/shader_dump.hpp"
+#include "../../utils/swapchain.hpp"
 #include "./shared.h"
 
 namespace {
 
 std::unordered_set<std::uint32_t> drawn_shaders;
 
-#define TracedShaderEntry(value) {                                               \
-    value,                                                                       \
-    {                                                                            \
-        .crc32 = value,                                                          \
-        .code = __##value,                                                       \
-        .on_drawn = [](auto cmd_list) {                                          \
-          if (drawn_shaders.contains(##value)) return;                           \
-          drawn_shaders.emplace(##value);                                        \
-          reshade::log::message(reshade::log::level::debug, "Replaced " #value); \
-        },                                                                       \
-    },                                                                           \
-}
+#define TracedShaderEntry(value)                                   \
+  {                                                                \
+    value,                                                         \
+        {                                                          \
+            .crc32 = value,                                        \
+            .code = __##value,                                     \
+            .on_drawn = [](auto cmd_list) {                        \
+              if (drawn_shaders.contains(value)) return;           \
+              drawn_shaders.emplace(value);                        \
+              reshade::log::message(                               \
+                  reshade::log::level::debug,                      \
+                  std::format("Replaced 0x{:08}", value).c_str()); \
+            },                                                     \
+        },                                                         \
+  }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     // Crisis Core FF7 Reunion
@@ -526,6 +533,157 @@ void AddGamePatches() {
   }
 }
 
+float g_dump_shaders = 0;
+std::unordered_set<uint32_t> g_dumped_shaders = {};
+
+bool OnDrawForLUTDump(
+    reshade::api::command_list* cmd_list,
+    uint32_t vertex_count,
+    uint32_t instance_count,
+    uint32_t first_vertex,
+    uint32_t first_instance) {
+  if (g_dump_shaders == 0) return false;
+
+  auto shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
+  auto pixel_shader_hash = shader_state.GetCurrentPixelShaderHash();
+  if (pixel_shader_hash == 0u) return false;
+
+  auto& swapchain_state = cmd_list->get_private_data<renodx::utils::swapchain::CommandListData>();
+  bool found_lut_render_target = false;
+
+  auto* device = cmd_list->get_device();
+  for (auto render_target : swapchain_state.current_render_targets) {
+    auto resource_tag = renodx::utils::resource::GetResourceTag(device, render_target);
+    if (resource_tag == 1.f) {
+      found_lut_render_target = true;
+      break;
+    }
+  }
+  if (!found_lut_render_target) return false;
+
+  if (custom_shaders.contains(pixel_shader_hash)) return false;
+
+  if (g_dumped_shaders.contains(pixel_shader_hash)) return false;
+
+  reshade::log::message(
+      reshade::log::level::debug,
+      std::format("Dumping lutbuiler: 0x{:08x}", pixel_shader_hash).c_str());
+
+  g_dumped_shaders.emplace(pixel_shader_hash);
+
+  renodx::utils::path::default_output_folder = "renodx";
+  renodx::utils::shader::dump::default_dump_folder = ".";
+  bool found = false;
+  try {
+    auto pair = shader_state.current_shader_pipelines.find(reshade::api::pipeline_stage::pixel_shader);
+    if (pair == shader_state.current_shader_pipelines.end()) return false;
+
+    auto pipeline = pair->second;
+    auto details = renodx::utils::shader::GetPipelineShaderDetails(device, pipeline);
+    for (const auto& [subobject_index, shader_hash] : details->shader_hashes_by_index) {
+      // Store immediately in case pipeline destroyed before present
+      if (shader_hash != pixel_shader_hash) continue;
+      found = true;
+      auto shader_data = details->GetShaderData(shader_hash, subobject_index);
+      if (!shader_data.has_value()) {
+        std::stringstream s;
+        s << "utils::shader::dump(Failed to retreive shader data: ";
+        s << PRINT_CRC32(shader_hash);
+        s << ")";
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
+        return false;
+      }
+
+      auto shader_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data.value());
+      if (shader_version.GetMajor() == 0) {
+        // No shader information found
+        return false;
+      }
+
+      renodx::utils::shader::dump::DumpShader(
+          shader_hash,
+          shader_data.value(),
+          reshade::api::pipeline_subobject_type::pixel_shader,
+          "lutbuilder_");
+    }
+    if (!found) throw std::exception("Pipeline not found");
+  } catch (...) {
+    std::stringstream s;
+    s << "utils::shader::dump(Failed to decode shader data: ";
+    s << PRINT_CRC32(pixel_shader_hash);
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+  }
+
+  return false;
+}
+
+void AddAdvancedSettings() {
+  for (const auto& [key, format] : UPGRADE_TARGETS) {
+    auto* new_setting = new renodx::utils::settings::Setting{
+        .key = "Upgrade_" + key,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = key,
+        .section = "Resource Upgrades",
+        .labels = {
+            "Off",
+            "Output size",
+            "Output ratio",
+            "Any size",
+        },
+        .is_global = true,
+        .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    };
+    reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), ("Upgrade_" + key).c_str(), new_setting->value);
+    settings.push_back(new_setting);
+  }
+
+  auto* swapchain_setting = new renodx::utils::settings::Setting{
+      .key = "Upgrade_SwapChainCompatibility",
+      .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+      .default_value = 0.f,
+      .label = "Swap Chain Compatibility Mode",
+      .section = "Resource Upgrades",
+      .tooltip = "Enhances support for third-party addons to read the swap chain.",
+      .labels = {
+          "Off",
+          "On",
+      },
+      .is_global = true,
+      .is_visible = []() { return settings[0]->GetValue() >= 2; },
+  };
+  reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "Upgrade_SwapChainCompatibility", swapchain_setting->value);
+  renodx::mods::swapchain::swapchain_proxy_compatibility_mode = swapchain_setting->GetValue() != 0;
+  settings.push_back(swapchain_setting);
+
+  auto* lut_dump_setting = new renodx::utils::settings::Setting{
+      .key = "DumpLUTShaders",
+      .binding = &g_dump_shaders,
+      .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+      .default_value = 0.f,
+      .label = "Dump LUT Shaders",
+      .section = "Resource Upgrades",
+      .tooltip = "Traces and dumps LUT shaders.",
+      .labels = {
+          "Off",
+          "On",
+      },
+      .is_global = true,
+      .is_visible = []() { return settings[0]->GetValue() >= 2; },
+  };
+  reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "DumpLUTShaders", lut_dump_setting->value);
+  g_dump_shaders = lut_dump_setting->GetValue();
+  settings.push_back(lut_dump_setting);
+
+  settings.push_back({new renodx::utils::settings::Setting{
+      .value_type = renodx::utils::settings::SettingValueType::TEXT,
+      .label = "The application must be restarted for upgrades to take effect.",
+      .section = "Resource Upgrades",
+      .is_visible = []() { return settings[0]->GetValue() >= 2; },
+  }});
+}
+
 bool initialized = false;
 
 }  // namespace
@@ -539,53 +697,15 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!reshade::register_addon(h_module)) return FALSE;
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      renodx::utils::shader::Use(fdw_reason);
+      renodx::utils::swapchain::Use(fdw_reason);
+      renodx::utils::resource::Use(fdw_reason);
 
       if (!initialized) {
         AddGamePatches();
 
-        for (const auto& [key, format] : UPGRADE_TARGETS) {
-          auto* new_setting = new renodx::utils::settings::Setting{
-              .key = "Upgrade_" + key,
-              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 0.f,
-              .label = key,
-              .section = "Resource Upgrades",
-              .labels = {
-                  "Off",
-                  "Output size",
-                  "Output ratio",
-                  "Any size",
-              },
-              .is_global = true,
-              .is_visible = []() { return settings[0]->GetValue() >= 2; },
-          };
-          reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), ("Upgrade_" + key).c_str(), new_setting->value);
-          settings.push_back(new_setting);
-        }
-        auto* new_setting = new renodx::utils::settings::Setting{
-            .key = "Upgrade_SwapChainCompatibility",
-            .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-            .default_value = 0.f,
-            .label = "Swap Chain Compatibility Mode",
-            .section = "Resource Upgrades",
-            .tooltip = "Enhances support for third-party addons to read the swap chain.",
-            .labels = {
-                "Off",
-                "On",
-            },
-            .is_global = true,
-            .is_visible = []() { return settings[0]->GetValue() >= 2; },
-        };
-        reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "Upgrade_SwapChainCompatibility", new_setting->value);
-        renodx::mods::swapchain::swapchain_proxy_compatibility_mode = new_setting->value != 0;
-        settings.push_back(new_setting);
+        AddAdvancedSettings();
 
-        settings.push_back({new renodx::utils::settings::Setting{
-            .value_type = renodx::utils::settings::SettingValueType::TEXT,
-            .label = "The application must be restarted for upgrades to take effect.",
-            .section = "Resource Upgrades",
-            .is_visible = []() { return settings[0]->GetValue() >= 2; },
-        }});
         for (auto* new_setting : info_settings) {
           settings.push_back(new_setting);
         }
@@ -603,14 +723,19 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .old_format = reshade::api::format::r10g10b10a2_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
             .dimensions = {.width = 32, .height = 32, .depth = 32},
-            .resource_tag = 0x01,
+            .resource_tag = 1.f,
         });
 
         initialized = true;
       }
 
+      reshade::register_event<reshade::addon_event::draw>(OnDrawForLUTDump);
+
       break;
     case DLL_PROCESS_DETACH:
+      renodx::utils::shader::Use(fdw_reason);
+      renodx::utils::swapchain::Use(fdw_reason);
+      renodx::utils::resource::Use(fdw_reason);
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_addon(h_module);

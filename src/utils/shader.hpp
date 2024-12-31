@@ -163,6 +163,7 @@ struct __declspec(uuid("8707f724-c7e5-420e-89d6-cc032c732d2d")) CommandListData 
   reshade::api::pipeline_layout pipeline_layout = {0};
   std::unordered_map<reshade::api::pipeline_stage, reshade::api::pipeline> pending_replacements;
   std::unordered_map<reshade::api::pipeline_stage, uint32_t> current_shaders_hashes;
+  std::unordered_map<reshade::api::pipeline_stage, reshade::api::pipeline> current_shader_pipelines;
 
   [[nodiscard]] uint32_t GetCurrentShaderHash(reshade::api::pipeline_stage stage) const {
     auto pair = current_shaders_hashes.find(stage);
@@ -618,6 +619,7 @@ static void OnBindPipeline(
       found_compatible = true;
       if (pipeline.handle == 0u) {
         cmd_list_data.current_shaders_hashes.erase(compatible_stage);
+        cmd_list_data.current_shader_pipelines.erase(compatible_stage);
         cmd_list_data.pending_replacements.erase(compatible_stage);
       } else {
         break;
@@ -667,6 +669,7 @@ static void OnBindPipeline(
     if (auto pair = details.shader_hashes_by_stage.find(compatible_stage);
         pair != details.shader_hashes_by_stage.end()) {
       cmd_list_data.current_shaders_hashes[compatible_stage] = pair->second;
+      cmd_list_data.current_shader_pipelines[compatible_stage] = pipeline;
     }
     if (details.HasReplacementPipeline() && ((details.replacement_stages & compatible_stage) == compatible_stage)) {
       auto& replacement_pipeline = details.replacement_pipeline.value();

@@ -13,6 +13,8 @@
 
 namespace renodx::utils::path {
 
+static std::string default_output_folder = "renodx-dev";
+
 static std::filesystem::path GetOutputPath() {
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   wchar_t file_prefix[MAX_PATH] = L"";
@@ -20,7 +22,7 @@ static std::filesystem::path GetOutputPath() {
 
   std::filesystem::path dump_path = file_prefix;
   dump_path = dump_path.parent_path();
-  dump_path /= "renodx-dev";
+  dump_path /= default_output_folder;
   return dump_path;
 }
 

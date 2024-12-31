@@ -983,6 +983,7 @@ static void OnInitResource(
   if (private_data.applied_target != nullptr) {
     changed = true;
     if (private_data.applied_target->resource_tag != -1) {
+      s << ", tag: " << private_data.applied_target->resource_tag;
       renodx::utils::resource::SetResourceTag(device, resource, private_data.applied_target->resource_tag);
     }
     private_data.resource_upgrade_targets[resource.handle] = private_data.applied_target;
@@ -2593,7 +2594,7 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
         reshade::register_event<reshade::addon_event::clear_unordered_access_view_float>(OnClearUnorderedAccessViewFloat);
 
         reshade::register_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
-        // reshade::register_event<reshade::addon_event::barrier>(OnBarrier);
+        reshade::register_event<reshade::addon_event::barrier>(OnBarrier);
         reshade::register_event<reshade::addon_event::copy_buffer_to_texture>(OnCopyBufferToTexture);
 
         if (!swap_chain_proxy_pixel_shader.empty()) {
