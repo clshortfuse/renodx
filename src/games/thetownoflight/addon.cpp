@@ -28,18 +28,35 @@
 
 namespace {
 
+// Tracks executed post-process shaders
 ShaderInjectData shader_injection;
+int executed_shader_count = 0;  // Counter for executed post-process shaders
 
-bool IsTonemapped(reshade::api::command_list* cmd_list) {
-  shader_injection.isTonemapped = 1.f;
-  return true;
+bool UpdateTonemappedState(reshade::api::command_list* cmd_list) {
+  ++executed_shader_count;
+
+  // Value updates before shader is run,
+  // so set `isTonemapped` to 1.f only after the second shader is found
+  if (executed_shader_count >= 2) {
+    shader_injection.isTonemapped = 1.f;
+  }
+  return true;  // Allow the shader to execute
+}
+
+void ResetShaderCount() {
+  executed_shader_count = 0;            // Reset the counter
+  shader_injection.isTonemapped = 0.f;  // Reset tonemapped state
 }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntryCallback(0x9D6291BC, &IsTonemapped),  // Color grading LUT + fog + fade
-    CustomShaderEntryCallback(0xB103EAA6, &IsTonemapped),  // Post process and user gamma adjustment (defaulted to 1)
-    CustomShaderEntry(0xE61B6A3B),                         // Overlay effect in main menu
-    CustomShaderEntry(0x1FB08827),                         // UI
+    CustomShaderEntryCallback(0x9D6291BC, &UpdateTonemappedState),  // Color grading LUT + fog + fade
+    CustomShaderEntryCallback(0x7455FB8A, &UpdateTonemappedState),  // Vignette
+    CustomShaderEntryCallback(0xB103EAA6, &UpdateTonemappedState),  // Post process and gamma adjustment
+    CustomShaderEntryCallback(0xE61B6A3B, &UpdateTonemappedState),  // Grunge filter
+    CustomShaderEntryCallback(0x3F4881E9, &UpdateTonemappedState),  // Sepia filter
+    CustomShaderEntryCallback(0x08C91A0A, &UpdateTonemappedState),  // Fade shader
+
+    CustomShaderEntry(0x1FB08827),  // UI Shader
 };
 
 renodx::utils::settings::Settings settings = {
@@ -166,12 +183,10 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   }
 }
 
-void OnPresent(reshade::api::command_queue* queue,
-               reshade::api::swapchain* swapchain,
-               const reshade::api::rect* source_rect,
-               const reshade::api::rect* dest_rect, uint32_t dirty_rect_count,
-               const reshade::api::rect* dirty_rects) {
-  shader_injection.isTonemapped = 0.f;
+void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain,
+               const reshade::api::rect* source_rect, const reshade::api::rect* dest_rect,
+               uint32_t dirty_rect_count, const reshade::api::rect* dirty_rects) {
+  ResetShaderCount();  // Reset executed shaders and tonemapped state at the start of each frame
 }
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {

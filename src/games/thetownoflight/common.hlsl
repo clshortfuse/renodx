@@ -51,10 +51,7 @@ float3 applyToneMap(float3 untonemapped) {
       }
     }
   } else {  // SDR Output
-    // lower highlightsShoulderStart and set peak and paper white equal for SDR
-    // Use BT.2408 Reference White as general SDR paper white value
-    // https://www.itu.int/dms_pub/itu-r/opb/rep/R-REP-BT.2408-7-2023-PDF-E.pdf
-    // linearColor = applyDICETonemap(linearColor, 203.f, 203.f, 203.f * 0.5f);
+    linearColor = max(0, linearColor);
     linearColor = renodx::tonemap::ExponentialRollOff(linearColor, 0.2f, 1.f);
   }
 
@@ -76,7 +73,8 @@ float3 InverseToneMap(float3 tonemapped) {
     float rolloff_start = paperWhite;
 
     outputColor = ExponentialRollOffInverse(linearColor * paperWhite, rolloff_start, peakWhite) / paperWhite;
-  } else {
+  } else {  // SDR Output
+    linearColor = max(0, linearColor);
     outputColor = ExponentialRollOffInverse(linearColor, 0.2f, 1.f);
   }
 
