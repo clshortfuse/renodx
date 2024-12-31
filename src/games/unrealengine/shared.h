@@ -29,6 +29,7 @@ struct ShaderInjectData {
   float colorGradeBlowout;
   float colorGradeFlare;
   float colorGradeColorSpace;
+  float processingUseSCRGB;
 };
 
 

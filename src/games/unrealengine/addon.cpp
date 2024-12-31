@@ -52,7 +52,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
     // SM5 LUT Builder
     TracedShaderEntry(0x1DF6036B),
+    TracedShaderEntry(0x20EAC9B6),
     TracedShaderEntry(0x2569985B),
+    TracedShaderEntry(0x3040FD90),
     TracedShaderEntry(0x31FE4421),
     TracedShaderEntry(0x36E3A438),
     TracedShaderEntry(0x5CAE0013),
@@ -67,12 +69,12 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedShaderEntry(0xB1614732),
     TracedShaderEntry(0xB4F3140C),
     TracedShaderEntry(0xBEB7EB31),
+    TracedShaderEntry(0xB972BF8F),
     TracedShaderEntry(0xC130BE2D),
     TracedShaderEntry(0xC1BCC6B5),
     TracedShaderEntry(0xC2A711CC),
     TracedShaderEntry(0xC32C8BEA),
     TracedShaderEntry(0xCA383248),
-    TracedShaderEntry(0xCC8FD0FF),
     TracedShaderEntry(0xCC8FD0FF),
     TracedShaderEntry(0xD2748E73),
     TracedShaderEntry(0xD4A45A02),
@@ -424,7 +426,9 @@ void OnInitDevice(reshade::api::device* device) {
       {0xE9343033, __lutbuilder_0xE9343033_dx12},
       // SM5 LUT Builder
       {0x1DF6036B, __lutbuilder_0x1DF6036B_dx12},
+      {0x20EAC9B6, __lutbuilder_0x20EAC9B6_dx12},
       {0x2569985B, __lutbuilder_0x2569985B_dx12},
+      {0x3040FD90, __lutbuilder_0x3040FD90_dx12},
       {0x31FE4421, __lutbuilder_0x31FE4421_dx12},
       {0x36E3A438, __lutbuilder_0x36E3A438_dx12},
       {0x5CAE0013, __lutbuilder_0x5CAE0013_dx12},
@@ -439,6 +443,7 @@ void OnInitDevice(reshade::api::device* device) {
       {0xB1614732, __lutbuilder_0xB1614732_dx12},
       {0xB4F3140C, __lutbuilder_0xB4F3140C_dx12},
       {0xBEB7EB31, __lutbuilder_0xBEB7EB31_dx12},
+      {0xB972BF8F, __lutbuilder_0xB972BF8F_dx12},
       {0xC130BE2D, __lutbuilder_0xC130BE2D_dx12},
       {0xC1BCC6B5, __lutbuilder_0xC1BCC6B5_dx12},
       {0xC2A711CC, __lutbuilder_0xC2A711CC_dx12},
@@ -651,7 +656,7 @@ void AddAdvancedSettings() {
         .is_global = true,
         .is_visible = []() { return settings[0]->GetValue() >= 2; },
     };
-    reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), ("Upgrade_" + key).c_str(), new_setting->value);
+    reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), ("Upgrade_" + key).c_str(), new_setting->value_as_int);
     settings.push_back(new_setting);
   }
 
@@ -669,9 +674,29 @@ void AddAdvancedSettings() {
       .is_global = true,
       .is_visible = []() { return settings[0]->GetValue() >= 2; },
   };
-  reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "Upgrade_SwapChainCompatibility", swapchain_setting->value);
+  reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "Upgrade_SwapChainCompatibility", swapchain_setting->value_as_int);
   renodx::mods::swapchain::swapchain_proxy_compatibility_mode = swapchain_setting->GetValue() != 0;
   settings.push_back(swapchain_setting);
+
+  auto* scrgb_setting = new renodx::utils::settings::Setting{
+      .key = "Upgrade_UseSCRGB",
+      .binding = &shader_injection.processingUseSCRGB,
+      .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+      .default_value = 0.f,
+      .label = "Swap Chain Format",
+      .section = "Resource Upgrades",
+      .tooltip = "Selects use of HDR10 or scRGB swapchain.",
+      .labels = {
+          "HDR10",
+          "scRGB",
+      },
+      .is_global = true,
+      .is_visible = []() { return settings[0]->GetValue() >= 2; },
+  };
+  reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "Upgrade_UseSCRGB", scrgb_setting->value_as_int);
+  shader_injection.processingUseSCRGB = scrgb_setting->GetValue();
+  renodx::mods::swapchain::SetUseHDR10(scrgb_setting->GetValue() == 0);
+  settings.push_back(scrgb_setting);
 
   auto* lut_dump_setting = new renodx::utils::settings::Setting{
       .key = "DumpLUTShaders",
@@ -688,7 +713,7 @@ void AddAdvancedSettings() {
       .is_global = true,
       .is_visible = []() { return settings[0]->GetValue() >= 2; },
   };
-  reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "DumpLUTShaders", lut_dump_setting->value);
+  reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "DumpLUTShaders", lut_dump_setting->value_as_int);
   g_dump_shaders = lut_dump_setting->GetValue();
   settings.push_back(lut_dump_setting);
 

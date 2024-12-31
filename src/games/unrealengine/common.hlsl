@@ -84,9 +84,17 @@ float3 FinalizeOutput(float3 color) {
   color *= injectedData.toneMapUINits;
   color = min(color, injectedData.toneMapPeakNits);  // Clamp UI or Videos
 
-  color = renodx::color::bt709::clamp::BT2020(color);
+  // Always clamp to BT2020
+  color = renodx::color::bt2020::from::BT709(color);
+  color = max(0, color);
 
-  color /= 80.f;
+  if (injectedData.processingUseSCRGB == 1.f) {
+    color = renodx::color::bt709::from::BT2020(color);
+    color = color / 80.f;
+  } else {
+    color = renodx::color::pq::Encode(color, 1.f);
+  }
+
   return color;
 }
 
