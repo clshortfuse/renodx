@@ -26,20 +26,20 @@ namespace {
 
 std::unordered_set<std::uint32_t> drawn_shaders;
 
-#define TracedShaderEntry(value)                                   \
-  {                                                                \
-    value,                                                         \
-        {                                                          \
-            .crc32 = value,                                        \
-            .code = __##value,                                     \
-            .on_drawn = [](auto cmd_list) {                        \
-              if (drawn_shaders.contains(value)) return;           \
-              drawn_shaders.emplace(value);                        \
-              reshade::log::message(                               \
-                  reshade::log::level::debug,                      \
+#define TracedShaderEntry(value)                                    \
+  {                                                                 \
+    value,                                                          \
+        {                                                           \
+            .crc32 = value,                                         \
+            .code = __##value,                                      \
+            .on_drawn = [](auto cmd_list) {                         \
+              if (drawn_shaders.contains(value)) return;            \
+              drawn_shaders.emplace(value);                         \
+              reshade::log::message(                                \
+                  reshade::log::level::debug,                       \
                   std::format("Replaced 0x{:08x}", value).c_str()); \
-            },                                                     \
-        },                                                         \
+            },                                                      \
+        },                                                          \
   }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
@@ -499,55 +499,36 @@ void AddPsychonauts2Patches() {
   });
 }
 
-void AddHifiRushPatches() {
-  // for (auto index : {1}) {
-  //   renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-  //       .old_format = reshade::api::format::b8g8r8a8_typeless,
-  //       .new_format = reshade::api::format::b8g8r8a8_typeless,
-  //       .index = index,
-  //       .view_upgrades = {},
-  //       .usage_include = reshade::api::resource_usage::render_target,
-  //   });
-  // }
-  // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-  //     .old_format = reshade::api::format::b8g8r8a8_typeless,
-  //     .new_format = reshade::api::format::r16g16b16a16_typeless,
-  //     .usage_include = reshade::api::resource_usage::render_target,
-  // });
-}
-
 void AddGamePatches() {
   try {
     auto process_path = renodx::utils::platform::GetCurrentProcessPath();
     auto filename = process_path.filename().string();
-    if (filename == "Hi-Fi-RUSH.exe") {
-      AddHifiRushPatches();
-    } else {
-      for (const auto& [key, format] : UPGRADE_TARGETS) {
-        uint32_t value;
 
-        if (!reshade::get_config_value(
-                nullptr,
-                renodx::utils::settings::global_name.c_str(),
-                ("Upgrade_" + key).c_str(),
-                value)) return;
-        if (value > 0) {
-          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-              .old_format = format,
-              .new_format = reshade::api::format::r16g16b16a16_float,
-              .ignore_size = (value == 3u),
-              .aspect_ratio = static_cast<float>((value == 2u)
-                                                     ? renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER
-                                                     : renodx::mods::swapchain::SwapChainUpgradeTarget::ANY),
-              .usage_include = reshade::api::resource_usage::render_target,
-          });
-          std::stringstream s;
-          s << "Applying user resource upgrade for ";
-          s << format << ": " << value;
-          reshade::log::message(reshade::log::level::info, s.str().c_str());
-        }
+    for (const auto& [key, format] : UPGRADE_TARGETS) {
+      uint32_t value;
+
+      if (!reshade::get_config_value(
+              nullptr,
+              renodx::utils::settings::global_name.c_str(),
+              ("Upgrade_" + key).c_str(),
+              value)) return;
+      if (value > 0) {
+        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            .old_format = format,
+            .new_format = reshade::api::format::r16g16b16a16_float,
+            .ignore_size = (value == 3u),
+            .aspect_ratio = static_cast<float>((value == 2u)
+                                                   ? renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER
+                                                   : renodx::mods::swapchain::SwapChainUpgradeTarget::ANY),
+            .usage_include = reshade::api::resource_usage::render_target,
+        });
+        std::stringstream s;
+        s << "Applying user resource upgrade for ";
+        s << format << ": " << value;
+        reshade::log::message(reshade::log::level::info, s.str().c_str());
       }
     }
+
     reshade::log::message(reshade::log::level::info, std::format("Applied patches for {}.", filename).c_str());
   } catch (...) {
     reshade::log::message(reshade::log::level::error, "Could not read process path");
@@ -741,6 +722,15 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::shader::Use(fdw_reason);
       renodx::utils::swapchain::Use(fdw_reason);
       renodx::utils::resource::Use(fdw_reason);
+
+      renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
+        // UE DX12 has a 4 param root sig that crashes if modified. Track for now
+        return std::ranges::any_of(params, [](auto param) {
+          return (param.type == reshade::api::pipeline_layout_param_type::descriptor_table);
+        });
+      };
+
+      // while (IsDebuggerPresent() == 0) Sleep(100);
 
       if (!initialized) {
         AddGamePatches();
