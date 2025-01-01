@@ -239,6 +239,11 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   // Buffer => RTV
   std::unordered_map<uint64_t, reshade::api::resource_view> swap_chain_proxy_rtvs;
   std::unordered_map<uint64_t, reshade::api::resource_view> swap_chain_rtvs;
+
+  std::vector<std::uint8_t> swap_chain_proxy_vertex_shader;
+  std::vector<std::uint8_t> swap_chain_proxy_pixel_shader;
+  int32_t expected_constant_buffer_index = -1;
+  uint32_t expected_constant_buffer_space = 0;
 };
 
 struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData {
@@ -538,16 +543,16 @@ static void SetupSwapchainProxyLayout(reshade::api::device* device, DeviceData* 
     } else {
       param_constants.push_constants.count = 1;
     }
-    if (expected_constant_buffer_index == -1) {
+    if (data->expected_constant_buffer_index == -1) {
       if (device->get_api() == reshade::api::device_api::d3d12 || device->get_api() == reshade::api::device_api::vulkan) {
         param_constants.push_constants.dx_register_index = 0;
       } else {
         param_constants.push_constants.dx_register_index = 13;
       }
     } else {
-      param_constants.push_constants.dx_register_index = expected_constant_buffer_index;
+      param_constants.push_constants.dx_register_index = data->expected_constant_buffer_index;
     }
-    param_constants.push_constants.dx_register_space = expected_constant_buffer_space;
+    param_constants.push_constants.dx_register_space = data->expected_constant_buffer_space;
     new_layout_params.push_back(param_constants);
   }
 
@@ -587,8 +592,8 @@ static void SetupSwapchainProxy(
         device,
         data->swap_chain_proxy_layout,
         {
-            {reshade::api::pipeline_subobject_type::vertex_shader, swap_chain_proxy_vertex_shader},
-            {reshade::api::pipeline_subobject_type::pixel_shader, swap_chain_proxy_pixel_shader},
+            {reshade::api::pipeline_subobject_type::vertex_shader, data->swap_chain_proxy_vertex_shader},
+            {reshade::api::pipeline_subobject_type::pixel_shader, data->swap_chain_proxy_pixel_shader},
         },
         target_format);
   }
@@ -919,8 +924,8 @@ static void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
         device,
         data.swap_chain_proxy_layout,
         {
-            {reshade::api::pipeline_subobject_type::vertex_shader, swap_chain_proxy_vertex_shader},
-            {reshade::api::pipeline_subobject_type::pixel_shader, swap_chain_proxy_pixel_shader},
+            {reshade::api::pipeline_subobject_type::vertex_shader, data.swap_chain_proxy_vertex_shader},
+            {reshade::api::pipeline_subobject_type::pixel_shader, data.swap_chain_proxy_pixel_shader},
         },
         target_format);
     if (data.swap_chain_proxy_pipeline == 0u) {
@@ -1026,6 +1031,10 @@ static void OnInitDevice(reshade::api::device* device) {
   reshade::log::message(reshade::log::level::info, s.str().c_str());
   auto& data = device->create_private_data<DeviceData>();
   data.prevent_full_screen = prevent_full_screen;
+  data.swap_chain_proxy_vertex_shader = swap_chain_proxy_vertex_shader;
+  data.swap_chain_proxy_pixel_shader = swap_chain_proxy_pixel_shader;
+  data.expected_constant_buffer_index = expected_constant_buffer_index;
+  data.expected_constant_buffer_space = expected_constant_buffer_space;
 
   if (device->get_api() == reshade::api::device_api::vulkan) {
     is_vulkan = true;

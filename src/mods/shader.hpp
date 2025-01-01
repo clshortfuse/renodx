@@ -65,6 +65,7 @@ static thread_local std::unordered_map<uint32_t, reshade::api::pipeline_layout_p
 static float* shader_injection = nullptr;
 static size_t shader_injection_size = 0;
 static bool use_pipeline_layout_cloning = false;
+static bool manual_shader_scheduling = false;
 static bool force_pipeline_cloning = false;
 static bool trace_unmodified_shaders = false;
 static bool allow_multiple_push_constants = false;
@@ -938,19 +939,21 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
         renodx::utils::shader::use_replace_on_bind = false;
       }
 
-      if (force_pipeline_cloning || use_pipeline_layout_cloning) {
-        for (const auto& [hash, shader] : (new_custom_shaders)) {
-          if (shader.code.empty()) continue;
-          renodx::utils::shader::QueueRuntimeReplacement(hash, shader.code);
-        }
-      } else {
-        for (const auto& [hash, shader] : (new_custom_shaders)) {
-          if (shader.code.empty()) continue;
-          if (shader.on_replace == nullptr && shader.index == -1) {
-            renodx::utils::shader::QueueCompileTimeReplacement(hash, shader.code);
+      if (!manual_shader_scheduling) {
+        if (force_pipeline_cloning || use_pipeline_layout_cloning) {
+          for (const auto& [hash, shader] : (new_custom_shaders)) {
+            if (shader.code.empty()) continue;
+            renodx::utils::shader::QueueRuntimeReplacement(hash, shader.code);
           }
-          // Use Runtime as fallback
-          renodx::utils::shader::QueueRuntimeReplacement(hash, shader.code);
+        } else {
+          for (const auto& [hash, shader] : (new_custom_shaders)) {
+            if (shader.code.empty()) continue;
+            if (shader.on_replace == nullptr && shader.index == -1) {
+              renodx::utils::shader::QueueCompileTimeReplacement(hash, shader.code);
+            }
+            // Use Runtime as fallback
+            renodx::utils::shader::QueueRuntimeReplacement(hash, shader.code);
+          }
         }
       }
 

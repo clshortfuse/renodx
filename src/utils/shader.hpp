@@ -16,6 +16,7 @@
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
+#include <span>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -211,6 +212,10 @@ namespace internal {
 static std::shared_mutex mutex;
 static std::unordered_map<uint32_t, std::vector<uint8_t>> compile_time_replacements;
 static std::unordered_map<uint32_t, std::vector<uint8_t>> initial_runtime_replacements;
+static std::unordered_map<reshade::api::device_api, std::unordered_map<uint32_t, std::vector<uint8_t>>>
+    device_based_compile_time_replacements;
+static std::unordered_map<reshade::api::device_api, std::unordered_map<uint32_t, std::vector<uint8_t>>>
+    device_based_initial_runtime_replacements;
 }  // namespace internal
 
 static bool BuildReplacementPipeline(reshade::api::device* device, DeviceData& data, PipelineShaderDetails& details) {
@@ -302,15 +307,28 @@ static void QueueCompileTimeReplacement(
 static void UpdateReplacements(
     const std::unordered_map<uint32_t, std::vector<uint8_t>>& replacements,
     bool compile_time = true,
-    bool initial_runtime = true) {
+    bool initial_runtime = true,
+    const std::unordered_set<reshade::api::device_api>& devices = {}) {
   if (!compile_time && !initial_runtime) return;
   const std::unique_lock lock(internal::mutex);
-  for (const auto& [shader_hash, shader_data] : replacements) {
-    if (compile_time) {
-      internal::compile_time_replacements[shader_hash] = shader_data;
+
+  auto update = [&](auto& compile_list, auto& runtime_list) {
+    for (const auto& [shader_hash, shader_data] : replacements) {
+      if (compile_time) {
+        compile_list[shader_hash] = shader_data;
+      }
+      if (initial_runtime) {
+        runtime_list[shader_hash] = shader_data;
+      }
     }
-    if (initial_runtime) {
-      internal::initial_runtime_replacements[shader_hash] = shader_data;
+  };
+  if (devices.empty()) {
+    update(internal::compile_time_replacements, internal::initial_runtime_replacements);
+  } else {
+    for (const auto& device : devices) {
+      auto& compile = internal::device_based_compile_time_replacements[device];
+      auto& runtime = internal::device_based_compile_time_replacements[device];
+      update(compile, runtime);
     }
   }
 }
@@ -399,6 +417,7 @@ static void OnInitDevice(reshade::api::device* device) {
     std::stringstream s;
     s << "utils::shader::OnInitDevice(Hooking device: ";
     s << reinterpret_cast<void*>(device);
+    s << ", api: " << device->get_api();
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 
@@ -408,6 +427,7 @@ static void OnInitDevice(reshade::api::device* device) {
     std::stringstream s;
     s << "utils::shader::OnInitDevice(Attaching to hook: ";
     s << reinterpret_cast<void*>(device);
+    s << ", api: " << device->get_api();
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
   }
@@ -419,40 +439,38 @@ static void OnInitDevice(reshade::api::device* device) {
     data->use_replace_async = true;
   }
 
-  std::unique_lock internal_lock(internal::mutex);
-  for (auto& [shader_hash, replacement] : internal::compile_time_replacements) {
-    auto [iterator, is_new] = data->compile_time_replacements.emplace(shader_hash, replacement);
-    if (!is_new) {
+  auto insert_shaders = [](
+                            const std::unordered_map<uint32_t, std::vector<uint8_t>>& source,
+                            std::unordered_map<uint32_t, std::vector<uint8_t>>& dest,
+                            const std::string& type = "") {
+    for (const auto& [shader_hash, replacement] : source) {
+      auto [iterator, is_new] = dest.emplace(shader_hash, replacement);
       std::stringstream s;
-      s << "utils::shader::OnInitDevice(Overwriting compile-time replacement:";
+      s << "utils::shader::OnInitDevice(";
+      if (is_new) {
+        s << "Registered ";
+      } else {
+        s << "Ovewriting ";
+      }
+      s << type;
+      s << " replacement: ";
       s << PRINT_CRC32(shader_hash);
       s << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
-    } else {
-      std::stringstream s;
-      s << "utils::shader::OnInitDevice(Registered compile-time replacement: ";
-      s << PRINT_CRC32(shader_hash);
-      s << ")";
-      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+      if (is_new) {
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
+      } else {
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
+      }
     }
-  }
+  };
 
-  for (auto& [shader_hash, replacement] : internal::initial_runtime_replacements) {
-    auto [iterator, is_new] = data->runtime_replacements.emplace(shader_hash, replacement);
-    if (!is_new) {
-      std::stringstream s;
-      s << "utils::shader::OnInitDevice(Overwriting runtime replacement: ";
-      s << PRINT_CRC32(shader_hash);
-      s << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
-    } else {
-      std::stringstream s;
-      s << "utils::shader::OnInitDevice(Registered runtime replacement: ";
-      s << PRINT_CRC32(shader_hash);
-      s << ")";
-      reshade::log::message(reshade::log::level::debug, s.str().c_str());
-    }
-  }
+  std::shared_lock lock(internal::mutex);
+  insert_shaders(internal::compile_time_replacements, data->compile_time_replacements, "compile-time");
+  insert_shaders(internal::device_based_compile_time_replacements[device->get_api()], data->compile_time_replacements, "API-based compile-time");
+
+  insert_shaders(internal::initial_runtime_replacements, data->runtime_replacements, "runtime");
+  insert_shaders(internal::device_based_initial_runtime_replacements[device->get_api()], data->runtime_replacements, "API-based runtime");
+
   runtime_replacement_count = data->runtime_replacements.size();
 };
 
@@ -504,10 +522,8 @@ static bool OnCreatePipeline(
         static_cast<const uint8_t*>(desc->code),
         desc->code_size);
 
-    const std::shared_lock lock(internal::mutex);
-
-    if (auto pair = internal::compile_time_replacements.find(shader_hash);
-        pair != internal::compile_time_replacements.end()) {
+    if (auto pair = data.compile_time_replacements.find(shader_hash);
+        pair != data.compile_time_replacements.end()) {
       changed = true;
       const auto& replacement = pair->second;
       auto new_size = replacement.size();

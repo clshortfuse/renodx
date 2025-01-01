@@ -23,7 +23,7 @@
 namespace renodx::utils::swapchain {
 
 struct __declspec(uuid("4721e307-0cf3-4293-b4a5-40d0a4e62544")) DeviceData {
-  reshade::api::effect_runtime* current_effect_runtime = nullptr;
+  std::unordered_set<reshade::api::effect_runtime*> effect_runtimes;
   reshade::api::color_space current_color_space = reshade::api::color_space::unknown;
 
   std::unordered_set<reshade::api::swapchain*> swapchains;
@@ -113,11 +113,13 @@ static void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
   if (std::addressof(data) == nullptr) return;
 
   const std::unique_lock lock(data.mutex);
-  data.current_effect_runtime = runtime;
+  data.effect_runtimes.emplace(runtime);
   reshade::log::message(reshade::log::level::info, "Effect runtime created.");
   if (data.current_color_space != reshade::api::color_space::unknown) {
     runtime->set_color_space(data.current_color_space);
     reshade::log::message(reshade::log::level::info, "Effect runtime colorspace updated.");
+  } else {
+    reshade::log::message(reshade::log::level::warning, "Unknown colorspace.");
   }
 }
 
@@ -130,9 +132,7 @@ static void OnDestroyEffectRuntime(reshade::api::effect_runtime* runtime) {
   if (std::addressof(data) == nullptr) return;
 
   const std::unique_lock lock(data.mutex);
-  if (data.current_effect_runtime == runtime) {
-    data.current_effect_runtime = nullptr;
-  }
+  data.effect_runtimes.erase(runtime);
 }
 
 static void OnInitCommandList(reshade::api::command_list* cmd_list) {
@@ -372,6 +372,7 @@ static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::c
     swapchain4->Release();
     swapchain4 = nullptr;
     if (!SUCCEEDED(hr)) {
+      reshade::log::message(reshade::log::level::warning, "renodx::utils::swapchain::ChangeColorSpace(Failed to set DirectX color space)");
       return false;
     }
   } else {
@@ -383,10 +384,9 @@ static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::c
   std::unique_lock lock(data.mutex);
   data.current_color_space = color_space;
 
-  if (data.current_effect_runtime != nullptr) {
-    data.current_effect_runtime->set_color_space(data.current_color_space);
-  } else {
-    reshade::log::message(reshade::log::level::warning, "renodx::utils::swapchain::ChangeColorSpace(effectRuntimeNotSet)");
+  for (auto* runtime : data.effect_runtimes) {
+    runtime->set_color_space(color_space);
+    reshade::log::message(reshade::log::level::debug, "renodx::utils::swapchain::ChangeColorSpace(Updated runtime)");
   }
 
   return true;
