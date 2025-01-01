@@ -485,18 +485,8 @@ void AddUpgrade(reshade::api::format old_format, bool ignore_size = true) {
 
 void AddPsychonauts2Patches() {
   renodx::mods::swapchain::force_borderless = false;
-  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      .old_format = reshade::api::format::r10g10b10a2_unorm,
-      .new_format = reshade::api::format::r16g16b16a16_float,
-      .ignore_size = true,
-      .usage_include = reshade::api::resource_usage::render_target,
-  });
-  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      .old_format = reshade::api::format::r11g11b10_float,
-      .new_format = reshade::api::format::r16g16b16a16_float,
-      .ignore_size = true,
-      .usage_include = reshade::api::resource_usage::render_target,
-  });
+  reshade::set_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "Upgrade_UseSCRGB", 1);
+  reshade::set_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "Upgrade_R10G10B10A2_UNORM", 3);
 }
 
 void AddGamePatches() {
@@ -504,6 +494,9 @@ void AddGamePatches() {
     auto process_path = renodx::utils::platform::GetCurrentProcessPath();
     auto filename = process_path.filename().string();
 
+    if (filename == "Psychonauts2-WinGDK-Shipping.exe") {
+      AddPsychonauts2Patches();
+    }
     for (const auto& [key, format] : UPGRADE_TARGETS) {
       uint32_t value;
 
@@ -734,7 +727,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       if (!initialized) {
         AddGamePatches();
-
         AddAdvancedSettings();
 
         for (auto* new_setting : info_settings) {
@@ -769,6 +761,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::resource::Use(fdw_reason);
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::unregister_event<reshade::addon_event::draw>(OnDrawForLUTDump);
       reshade::unregister_addon(h_module);
       break;
   }
