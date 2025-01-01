@@ -13,10 +13,6 @@ struct ShaderInjectData {
   float toneMapPeakNits;
   float toneMapGameNits;
   float toneMapUINits;
-
-  float testInverse;
-
-  float isTonemapped;
 };
 
 #ifndef __cplusplus

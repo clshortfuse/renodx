@@ -19,11 +19,6 @@ void main(
   float4 r0, r1, r2, r3, r4;
 
   r0.xyzw = t1.Sample(s0_s, v1.xy).xyzw;  // The backbuffer color texture
-
-  if (injectedData.isTonemapped == 1.f && injectedData.toneMapType == 1) {
-    r0.rgb = InverseToneMap(r0.rgb);
-  }
-
   r3.xyzw = t0.Sample(s1_s, v1.xy).xyzw;  // This is a fullscreen (stretched) filter texture. It affects contrast/brightness and color, like a sepia effect.
 
   bool4 isHighlight = r0.xyzw >= float4(0.5, 0.5, 0.5, 0.5);
@@ -39,10 +34,6 @@ void main(
   r1.xyzw = r1.xyzw * r3.xyzw + r2.xyzw;
   r1.xyzw = r1.xyzw + -r0.xyzw;
   o0.xyzw = cb0[6].xxxx * r1.xyzw + r0.xyzw;
-
-  if (injectedData.toneMapType == 1) {  // Exponential Rolloff
-    o0.rgb = applyToneMap(o0.rgb);
-  }
 
   return;
 }

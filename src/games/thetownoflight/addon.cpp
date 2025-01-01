@@ -28,33 +28,17 @@
 
 namespace {
 
-// Tracks executed post-process shaders
 ShaderInjectData shader_injection;
-int executed_shader_count = 0;  // Counter for executed post-process shaders
-
-bool UpdateTonemappedState(reshade::api::command_list* cmd_list) {
-  ++executed_shader_count;
-
-  // Value updates before shader is run,
-  // so set `isTonemapped` to 1.f only after the second shader is found
-  if (executed_shader_count >= 2) {
-    shader_injection.isTonemapped = 1.f;
-  }
-  return true;  // Allow the shader to execute
-}
-
-void ResetShaderCount() {
-  executed_shader_count = 0;            // Reset the counter
-  shader_injection.isTonemapped = 0.f;  // Reset tonemapped state
-}
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntryCallback(0x9D6291BC, &UpdateTonemappedState),  // Color grading LUT + fog + fade
-    CustomShaderEntryCallback(0x7455FB8A, &UpdateTonemappedState),  // Vignette
-    CustomShaderEntryCallback(0xB103EAA6, &UpdateTonemappedState),  // Post process and gamma adjustment
-    CustomShaderEntryCallback(0xE61B6A3B, &UpdateTonemappedState),  // Grunge filter
-    CustomShaderEntryCallback(0x3F4881E9, &UpdateTonemappedState),  // Sepia filter
-    CustomShaderEntryCallback(0x08C91A0A, &UpdateTonemappedState),  // Fade shader
+    CustomShaderEntry(0x9D6291BC),  // Color grading LUT + fog + fade
+    CustomShaderEntry(0x7455FB8A),  // Vignette
+    CustomShaderEntry(0xB103EAA6),  // Post process and gamma adjustment
+    CustomShaderEntry(0xE61B6A3B),  // Grunge filter
+    CustomShaderEntry(0x3F4881E9),  // Sepia filter
+    CustomShaderEntry(0x08C91A0A),  // Fade shader
+
+    CustomShaderEntry(0xA02CE990),  // Final Scene Output
 
     CustomShaderEntry(0x1FB08827),  // UI Shader
 };
@@ -75,7 +59,7 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 2.f,
-        .can_reset = false,
+        .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type. The game did not have a tonemapper so highlights were heavily clipped.",
@@ -113,15 +97,6 @@ renodx::utils::settings::Settings settings = {
         .min = 80.f,
         .max = 500.f,
         .is_enabled = []() { return shader_injection.outputMode == 1; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "testInverse",
-        .binding = &shader_injection.testInverse,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 0.f,
-        .label = "testInverse",
-        .section = "Test",
-        .tooltip = "test if inverse tonemapping is working",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -183,12 +158,6 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   }
 }
 
-void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain,
-               const reshade::api::rect* source_rect, const reshade::api::rect* dest_rect,
-               uint32_t dirty_rect_count, const reshade::api::rect* dirty_rects) {
-  ResetShaderCount();  // Reset executed shaders and tonemapped state at the start of each frame
-}
-
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
@@ -241,7 +210,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 #endif
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::register_event<reshade::addon_event::present>(OnPresent);
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(h_module);

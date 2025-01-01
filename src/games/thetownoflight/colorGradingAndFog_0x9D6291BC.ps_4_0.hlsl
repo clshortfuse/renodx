@@ -1,4 +1,3 @@
-#include "./common.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t4 : register(t4);
@@ -153,13 +152,10 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, float2 w1: TEXCOORD1, o
   outColor.xyz = lerp(someFogVar2.xxx, fogColorLutted, cb0[9].xxx);  // Fade to (or away from) color
   outColor.w = sceneColor.w;
 
-  // Tonemapping might also help to fix some scenes that end burning through the UI, possibly because the scene (background) had extremely high values
-  if (injectedData.toneMapType == 1) {  // Exponential Rolloff
-    outColor.rgb = applyToneMap(outColor.rgb);
-  } else {  // Vanilla, no tonemap, just clipping
+  // Leave output in gamma space and with a paper white of 80 nits even for HDR so we can blend in the UI just like in SDR (in gamma space) and linearize with an extra pass added at the end.
+  if (injectedData.toneMapType == 0) {
     outColor.rgb = saturate(outColor.rgb);
   }
-  // Leave output in gamma space and with a paper white of 80 nits even for HDR so we can blend in the UI just like in SDR (in gamma space) and linearize with an extra pass added at the end.
 
   return;
 }

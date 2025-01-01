@@ -1,4 +1,3 @@
-#include "./common.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -20,13 +19,11 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
 
-  if (injectedData.isTonemapped == 1.f && injectedData.toneMapType == 1) {
-    r0.rgb = InverseToneMap(r0.rgb);
+  if (injectedData.toneMapType == 0) {  // remove unecessary saturate()
+    r0.xyz = saturate(r0.xyz);
   }
+  r0.w = saturate(r0.w);
 
-#if 0  // remove unecessary saturate()
-  r0.xyzw = saturate(r0.xyzw);
-#endif
   r1.xyz = float3(1, 1, 1) + -r0.xyz;
 
   r1.xyz = renodx::math::PowSafe(r1.xyz, cb0[6].x);  // fix to allow negative scRGB values
@@ -44,10 +41,5 @@ void main(
   r0.xyz = r0.xyz ? float3(1, 1, 1) : 0;
   o0.xyz = r0.xyz * r1.xyz + r2.xyz;
 
-  if (injectedData.toneMapType == 1) {  // Exponential Rolloff
-    o0.rgb = applyToneMap(o0.rgb);
-  } else {  // Vanilla, no tonemap, just clipping
-    o0.rgb = saturate(o0.rgb);
-  }
   return;
 }

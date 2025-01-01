@@ -1,4 +1,3 @@
-#include "./common.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -27,26 +26,20 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
 
-  if (injectedData.isTonemapped == 1.f && injectedData.toneMapType == 1) {
-    r0.rgb = InverseToneMap(r0.rgb);
-  }
-
   r1.xyz = cb0[7].xyz;
   r1.w = r0.w;
   r0.xyzw = r0.xyzw * cb0[6].xxxx + -r1.xyzw;
   r0.xyzw = r0.xyzw * cb0[6].yyyy + r1.xyzw;  //  remove unecessary saturate()
+
+  if (injectedData.toneMapType == 0) {
+    r0.xyz = saturate(r0.xyz);
+  }
 
 #if 0  // Gamma slider (applies in gamma space) (defaults to 1) (fixed to allow negative scRGB values just in case)
   o0.xyzw = float4(renodx::math::SafePow(r0.xyz, cb0[6].zzz), saturate(r0.w));
 #else
   o0.rgba = float4(r0.rgb, saturate(r0.a));
 #endif
-
-  if (injectedData.toneMapType == 1.f) {  // Exponential Rolloff
-    o0.rgb = applyToneMap(o0.rgb);
-  } else {  // Vanilla, no tonemap, just clipping
-    o0.rgb = saturate(o0.rgb);
-  }
 
   return;
 }
