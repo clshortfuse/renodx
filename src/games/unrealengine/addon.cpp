@@ -81,6 +81,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedShaderEntry(0xE6EB2840),
     TracedShaderEntry(0xF6AA7756),
     TracedShaderEntry(0xFBB78F9F),
+    TracedShaderEntry(0x6E6FC244),
+    TracedShaderEntry(0x8D3D2FA0),
+    TracedShaderEntry(0x97BAC8AF),
 
     // SM6 LUT Builder
 
@@ -442,6 +445,10 @@ void OnInitDevice(reshade::api::device* device) {
     renodx::mods::shader::expected_constant_buffer_space = 50;
     renodx::mods::swapchain::expected_constant_buffer_space = 50;
 
+    renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
+      return device->get_api() == reshade::api::device_api::d3d12;
+    };
+
     renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader_dx12;
     renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx12;
     // renodx::mods::shader::custom_shaders doesn't use the shader data, just hashes
@@ -779,6 +786,9 @@ void AddShaders() {
           {0xB530B36A, __0xB530B36A},
           {0xB6CA5FD9, __0xB6CA5FD9},
           {0xBAA27141, __0xBAA27141},
+          {0x6E6FC244, __0x6E6FC244},
+          {0x8D3D2FA0, __0x8D3D2FA0},
+          {0x97BAC8AF, __0x97BAC8AF},
       },
       true, true, {reshade::api::device_api::d3d12});
 }
