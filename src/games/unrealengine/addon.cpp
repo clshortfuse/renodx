@@ -81,6 +81,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedShaderEntry(0xE6EB2840),
     TracedShaderEntry(0xF6AA7756),
     TracedShaderEntry(0xFBB78F9F),
+    TracedShaderEntry(0x6E6FC244),
+    TracedShaderEntry(0x8D3D2FA0),
+    TracedShaderEntry(0x97BAC8AF),
 
     // SM6 LUT Builder
 
@@ -455,6 +458,10 @@ void OnInitDevice(reshade::api::device* device) {
       {0xE6EB2840, __lutbuilder_0xE6EB2840_dx12},
       {0xF6AA7756, __lutbuilder_0xF6AA7756_dx12},
       {0xFBB78F9F, __lutbuilder_0xFBB78F9F_dx12},
+      {0x6E6FC244, __lutbuilder_0x6E6FC244_dx12},
+      {0x8D3D2FA0, __lutbuilder_0x8D3D2FA0_dx12},
+      {0x97BAC8AF, __lutbuilder_0x97BAC8AF_dx12},
+
   });
 
   reshade::log::message(reshade::log::level::info, "Added replacements.");
