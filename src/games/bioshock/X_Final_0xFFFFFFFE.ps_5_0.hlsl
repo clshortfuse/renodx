@@ -13,5 +13,5 @@ void main(
   float3 linearizedColor = renodx::color::gamma::DecodeSafe(color.rgb, 2.2);
   linearizedColor *= injectedData.paperWhiteNits / renodx::color::srgb::REFERENCE_WHITE;
 
-  output.rgba = float4(color.rgb, color.a);
+  output.rgba = float4(linearizedColor, color.a);
 }
