@@ -1,3 +1,4 @@
+#include "./common.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -26,6 +27,10 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
 
+  if (injectedData.isTonemapped == 1.f && injectedData.toneMapType == 1.f) {
+    r0.rgb = InverseExponentialToneMap(r0.rgb);
+  }
+
   r1.xyz = cb0[7].xyz;
   r1.w = r0.w;
   r0.xyzw = r0.xyzw * cb0[6].xxxx + -r1.xyzw;
@@ -40,6 +45,10 @@ void main(
 #else
   o0.rgba = float4(r0.rgb, saturate(r0.a));
 #endif
+
+  if (injectedData.toneMapType == 1) {  // Exponential Rolloff
+    o0.rgb = applyExponentialToneMap(o0.rgb);
+  }
 
   return;
 }

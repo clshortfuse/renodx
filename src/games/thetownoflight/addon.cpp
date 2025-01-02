@@ -29,16 +29,36 @@
 namespace {
 
 ShaderInjectData shader_injection;
+int executed_shader_count = 0;  // Counter for executed post-process shaders
+
+bool UpdateTonemappedState(reshade::api::command_list* cmd_list) {
+  ++executed_shader_count;
+
+  // Value updates before shader is run,
+  // so set `isTonemapped` to 1.f only after the second shader is found
+  if (executed_shader_count >= 2) {
+    shader_injection.isTonemapped = 1.f;
+  }
+  return true;  // Allow the shader to execute
+}
+
+void ResetShaderCount() {
+  executed_shader_count = 0;            // Reset the counter
+  shader_injection.isTonemapped = 0.f;  // Reset tonemapped state
+}
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x9D6291BC),  // Color grading LUT + fog + fade
-    CustomShaderEntry(0x7455FB8A),  // Vignette
-    CustomShaderEntry(0xB103EAA6),  // Post process and gamma adjustment
-    CustomShaderEntry(0xE61B6A3B),  // Grunge filter
-    CustomShaderEntry(0x3F4881E9),  // Sepia filter
-    CustomShaderEntry(0x08C91A0A),  // Fade shader
+    CustomShaderEntryCallback(0x9D6291BC, &UpdateTonemappedState),  // Color grading LUT + fog + fade
 
-    CustomShaderEntry(0xA02CE990),  // Final Scene Output
+    CustomShaderEntryCallback(0x08C91A0A, &UpdateTonemappedState),  // Fade shader
+    CustomShaderEntryCallback(0x3F4881E9, &UpdateTonemappedState),  // Sepia filter
+    CustomShaderEntryCallback(0xB103EAA6, &UpdateTonemappedState),  // Post process and gamma adjustment
+    CustomShaderEntryCallback(0x7455FB8A, &UpdateTonemappedState),  // Vignette
+
+
+    CustomShaderEntry(0xE61B6A3B),  // Grunge filter
+
+    // CustomShaderEntry(0xA02CE990),  // SMAA
 
     CustomShaderEntry(0x1FB08827),  // UI Shader
 };
@@ -145,18 +165,6 @@ extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for The Town of Light";
 
 // NOLINTEND(readability-identifier-naming)
-
-// bool fired_on_init_swapchain = false;
-// void OnInitSwapchain(reshade::api::swapchain* swapchain) {
-//   if (!fired_on_init_swapchain) {
-//     fired_on_init_swapchain = true;
-//     auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
-//     if (peak.has_value()) {
-//       settings[2]->default_value = peak.value();
-//       settings[2]->can_reset = true;
-//     }
-//   }
-// }
 
 // Final shader [ty Ersh/FF14]
 struct __declspec(uuid("1228220F-364A-46A2-BB29-1CCE591A018A")) DeviceData {
@@ -310,6 +318,8 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
 
 // more or less the same as what reshade does to render its techniques
 void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain, const reshade::api::rect* source_rect, const reshade::api::rect* dest_rect, uint32_t dirty_rect_count, const reshade::api::rect* dirty_rects) {
+  ResetShaderCount();  // Reset executed shaders and tonemapped with each new frame
+
   auto device = queue->get_device();
   auto cmd_list = queue->get_immediate_command_list();
 
@@ -356,8 +366,6 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
   cmd_list->barrier(back_buffer_resource, reshade::api::resource_usage::render_target, reshade::api::resource_usage::shader_resource);
 }
 
-const float SCREEN_WIDTH = GetSystemMetrics(SM_CXSCREEN);
-const float SCREEN_HEIGHT = GetSystemMetrics(SM_CYSCREEN);
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
@@ -371,10 +379,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::force_borderless = true;
       // renodx::mods::swapchain::prevent_full_screen = true;
 
-      // renodx::mods::swapchain::swapchain_proxy_compatibility_mode = true;
-      // renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
-      // renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-
       // Final shader
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
@@ -382,13 +386,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          // .use_resource_view_cloning = true,
-          // .use_resource_view_hot_swap = true,
-          .aspect_ratio = SCREEN_WIDTH / SCREEN_HEIGHT,
-      });
+      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      //     .old_format = reshade::api::format::r8g8b8a8_unorm,
+      //     .new_format = reshade::api::format::r16g16b16a16_float,
+      //     // .use_resource_view_cloning = true,
+      //     // .use_resource_view_hot_swap = true,
+      // });
 #if 0  // NOLINT Seemingly unused (they might be used for copies of the scene buffer used as UI background)
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,

@@ -53,8 +53,5 @@ void main(
     o0.xyzw = r0.xxxx * r2.xyzw + r1.xyzw;
   }
 
-  if (injectedData.toneMapType == 1) {  // DICE Tonemap
-    o0.rgb = applyToneMap(o0.rgb);
-  }
   return;
 }
