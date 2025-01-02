@@ -55,7 +55,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntryCallback(0xB103EAA6, &UpdateTonemappedState),  // Post process and gamma adjustment
     CustomShaderEntryCallback(0x7455FB8A, &UpdateTonemappedState),  // Vignette
 
-
     CustomShaderEntry(0xE61B6A3B),  // Grunge filter
 
     // CustomShaderEntry(0xA02CE990),  // SMAA
@@ -125,7 +124,17 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          system("start https://discord.gg/5WZXDpmbpP");
+          ShellExecute(0, "open", (std::string("https://discord.gg/") + "5WZXDpmbpP").c_str(), 0, 0, SW_SHOW);
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "More Mods",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0x2B3137,
+        .on_change = []() {
+          ShellExecute(0, "open", (std::string("https://github.com/") + "clshortfuse/renodx/wiki/Mods").c_str(), 0, 0, SW_SHOW);
         },
     },
     new renodx::utils::settings::Setting{
@@ -133,18 +142,30 @@ renodx::utils::settings::Settings settings = {
         .label = "Github",
         .section = "Links",
         .group = "button-line-1",
+        .tint = 0x2B3137,
         .on_change = []() {
-          system("start https://github.com/clshortfuse/renodx");
+          ShellExecute(0, "open", (std::string("https://github.com/") + "clshortfuse/renodx").c_str(), 0, 0, SW_SHOW);
         },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Buy Pumbo a Coffee",
         .section = "Links",
-        .group = "button-line-1",
-        .tint = 0xFF5F5F,
+        .group = "button-line-2",
+        .tint = 0xFFDD00,
         .on_change = []() {
-          system("start https://buymeacoffee.com/realfiloppi");
+          ShellExecute(0, "open", (std::string("https://buymeacoffee.com/") + "realfiloppi").c_str(), 0, 0, SW_SHOW);
+        },
+
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Musa's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-2",
+        .tint = 0xFF5A16,
+        .on_change = []() {
+          ShellExecute(0, "open", (std::string("https://ko-fi.com/") + "musaqh").c_str(), 0, 0, SW_SHOW);
         },
     },
 };
