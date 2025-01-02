@@ -35,6 +35,8 @@ void main(
 
   if (injectedData.toneMapType == 1.f) {  // Exponential Rolloff
     o0.rgb = applyExponentialToneMap(o0.rgb);
+  } else {  // add saturate as vanilla is sometimes completely unclamped
+    o0.rgb = saturate(o0.rgb);
   }
 
   o0.w = sceneColor.a;

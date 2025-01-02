@@ -9,10 +9,6 @@ void main(
     out float4 output: SV_Target0) {
   float4 color = sourceTexture.Sample(sourceSampler_s, texcoord.xy);
 
-  if (injectedData.toneMapType == 0) {
-    color.rgb = min(1, color.rgb);  // in some cases the image is not clamped by previous shaders
-  }
-
   if (injectedData.outputMode == 1) {
     // Linearize with 2.2 Gamma and scale paper white for HDR
     color.rgb = renodx::color::gamma::DecodeSafe(color.rgb, 2.2);
