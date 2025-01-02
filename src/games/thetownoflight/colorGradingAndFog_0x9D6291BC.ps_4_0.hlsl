@@ -1,3 +1,4 @@
+#include "./common.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t4 : register(t4);
@@ -93,14 +94,12 @@ float4 sampleLUTWithExtrapolation(Texture2D<float4> lut, SamplerState samplerSta
   return clampedSample;
 }
 
-static bool TonemapHDR = true;
-
 void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, float2 w1: TEXCOORD1, out float4 outColor: SV_Target0) {
   const bool vanilla = false;  // Turn on for vanilla behaviour
   const bool extrapolateLUTsMethod = vanilla ? -1 : 1;
 
   const float4 sceneColor = t0.Sample(s0_s, v1.xy).xyzw;
-
+  
   float lutWidth;
   float lutHeight;
   t4.GetDimensions(lutWidth, lutHeight);
@@ -155,21 +154,10 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, float2 w1: TEXCOORD1, o
   outColor.w = sceneColor.w;
 
   // Tonemapping might also help to fix some scenes that end burning through the UI, possibly because the scene (background) had extremely high values
-  if (TonemapHDR) {
-    const float paperWhite = injectedData.toneMapGameNits / renodx::color::srgb::REFERENCE_WHITE;
-    float3 linearColor = renodx::color::gamma::DecodeSafe(outColor.rgb, 2.2);
-    linearColor *= paperWhite;
-
-    const float peakWhite = injectedData.toneMapPeakNits / renodx::color::srgb::REFERENCE_WHITE;
-    const float highlightsShoulderStart = paperWhite;  // Don't tonemap the "SDR" range (in luminance), we want to keep it looking as it used to look in SDR
-    linearColor = renodx::tonemap::dice::BT709(linearColor, peakWhite, highlightsShoulderStart);
-
-    linearColor /= paperWhite;
-
-    // Scale game paper white by ratio of UI paper white to allow for separate sliders
-    linearColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-
-    outColor.rgb = renodx::color::gamma::EncodeSafe(linearColor, 2.2);
+  if (injectedData.toneMapType == 1) {  // Exponential Rolloff
+    outColor.rgb = applyExponentialToneMap(outColor.rgb);
+  } else {  // Vanilla, no tonemap, just clipping
+    outColor.rgb = saturate(outColor.rgb);
   }
   // Leave output in gamma space and with a paper white of 80 nits even for HDR so we can blend in the UI just like in SDR (in gamma space) and linearize with an extra pass added at the end.
 

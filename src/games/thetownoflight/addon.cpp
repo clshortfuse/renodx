@@ -8,12 +8,15 @@
 
 #define DEBUG_LEVEL_0
 
-#include <embed/0x9D6291BC.h>
-#include <embed/0xB103EAA6.h>
-#include <embed/0xE61B6A3B.h>
+// #include <embed/0x1FB08827.h>
+// #include <embed/0x9D6291BC.h>
+// #include <embed/0xB103EAA6.h>
+// #include <embed/0xE61B6A3B.h>
 
-#include <embed/0xFFFFFFFD.h>  // Custom final VS
-#include <embed/0xFFFFFFFE.h>  // Custom final PS
+// #include <embed/0xFFFFFFFD.h>  // Custom final VS
+// #include <embed/0xFFFFFFFE.h>  // Custom final PS
+
+#include <embed/shaders.h>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -25,47 +28,94 @@
 
 namespace {
 
+ShaderInjectData shader_injection;
+int executed_shader_count = 0;  // Counter for executed post-process shaders
+
+bool UpdateTonemappedState(reshade::api::command_list* cmd_list) {
+  ++executed_shader_count;
+
+  // Value updates before shader is run,
+  // so set `isTonemapped` to 1.f only after the second shader is found
+  if (executed_shader_count >= 2) {
+    shader_injection.isTonemapped = 1.f;
+  }
+  return true;  // Allow the shader to execute
+}
+
+void ResetShaderCount() {
+  executed_shader_count = 0;            // Reset the counter
+  shader_injection.isTonemapped = 0.f;  // Reset tonemapped state
+}
+
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x9D6291BC),  // Color grading LUT + fog + fade
-    CustomShaderEntry(0xB103EAA6),  // Post process and user gamma adjustment (defaulted to 1)
-    CustomShaderEntry(0xE61B6A3B),  // Overlay effect in main menu
+    CustomShaderEntryCallback(0x9D6291BC, &UpdateTonemappedState),  // Color grading LUT + fog + fade
+
+    CustomShaderEntryCallback(0x08C91A0A, &UpdateTonemappedState),  // Fade shader
+    CustomShaderEntryCallback(0x3F4881E9, &UpdateTonemappedState),  // Sepia filter
+    CustomShaderEntryCallback(0xB103EAA6, &UpdateTonemappedState),  // Post process and gamma adjustment
+    CustomShaderEntryCallback(0x7455FB8A, &UpdateTonemappedState),  // Vignette
+
+    CustomShaderEntry(0xE61B6A3B),  // Grunge filter
+
+    // CustomShaderEntry(0xA02CE990),  // SMAA
+
+    CustomShaderEntry(0x1FB08827),  // UI Shader
 };
 
-ShaderInjectData shader_injection;
-
 renodx::utils::settings::Settings settings = {
+    new renodx::utils::settings::Setting{
+        .key = "outputMode",
+        .binding = &shader_injection.outputMode,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.0f,
+        .label = "Output Mode",
+        .section = "Tone Mapping",
+        .tooltip = "Select SDR or HDR game output. Make sure to match that with your current display mode, SDR for SDR and HDR for HDR.",
+        .labels = {"SDR", "HDR"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapType",
+        .binding = &shader_injection.toneMapType,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 2.f,
+        .can_reset = true,
+        .label = "Tone Mapper",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the tone mapper type. The game did not have a tonemapper so highlights were heavily clipped.",
+        .labels = {"Vanilla", "DICE"},
+    },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
         .binding = &shader_injection.toneMapPeakNits,
         .default_value = 1000.f,
-        .can_reset = false,
         .label = "Peak Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of peak white in nits",
-        .min = 48.f,
-        .max = 4000.f,
+        .min = 400.f,
+        .max = 10000.f,
+        .is_enabled = []() { return (shader_injection.outputMode == 1 && shader_injection.toneMapType == 1); },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapGameNits",
         .binding = &shader_injection.toneMapGameNits,
         .default_value = 203.f,
-        .can_reset = false,
         .label = "Game Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of 100% white in nits",
-        .min = 48.f,
+        .min = 80.f,
         .max = 500.f,
+        .is_enabled = []() { return shader_injection.outputMode == 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapUINits",
         .binding = &shader_injection.toneMapUINits,
         .default_value = 203.f,
-        .can_reset = false,
         .label = "UI Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
-        .min = 48.f,
+        .min = 80.f,
         .max = 500.f,
+        .is_enabled = []() { return shader_injection.outputMode == 1; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -74,7 +124,17 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          system("start https://discord.gg/5WZXDpmbpP");
+          ShellExecute(0, "open", (std::string("https://discord.gg/") + "5WZXDpmbpP").c_str(), 0, 0, SW_SHOW);
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "More Mods",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0x2B3137,
+        .on_change = []() {
+          ShellExecute(0, "open", (std::string("https://github.com/") + "clshortfuse/renodx/wiki/Mods").c_str(), 0, 0, SW_SHOW);
         },
     },
     new renodx::utils::settings::Setting{
@@ -82,23 +142,37 @@ renodx::utils::settings::Settings settings = {
         .label = "Github",
         .section = "Links",
         .group = "button-line-1",
+        .tint = 0x2B3137,
         .on_change = []() {
-          system("start https://github.com/clshortfuse/renodx");
+          ShellExecute(0, "open", (std::string("https://github.com/") + "clshortfuse/renodx").c_str(), 0, 0, SW_SHOW);
         },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Buy Pumbo a Coffee",
         .section = "Links",
-        .group = "button-line-1",
-        .tint = 0xFF5F5F,
+        .group = "button-line-2",
+        .tint = 0xFFDD00,
         .on_change = []() {
-          system("start https://buymeacoffee.com/realfiloppi");
+          ShellExecute(0, "open", (std::string("https://buymeacoffee.com/") + "realfiloppi").c_str(), 0, 0, SW_SHOW);
+        },
+
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Musa's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-2",
+        .tint = 0xFF5A16,
+        .on_change = []() {
+          ShellExecute(0, "open", (std::string("https://ko-fi.com/") + "musaqh").c_str(), 0, 0, SW_SHOW);
         },
     },
 };
 
 void OnPresetOff() {
+  renodx::utils::settings::UpdateSetting("outputMode", 0.f);
+  renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
@@ -123,7 +197,6 @@ struct __declspec(uuid("1228220F-364A-46A2-BB29-1CCE591A018A")) DeviceData {
   reshade::api::resource_view final_texture_view = {};
   reshade::api::sampler final_texture_sampler = {};
   reshade::api::pipeline_layout final_layout = {};
-  reshade::api::pipeline_layout copy_layout = {};
 };
 
 constexpr reshade::api::pipeline_layout PIPELINE_LAYOUT{0};
@@ -193,15 +266,6 @@ void OnInitDevice(reshade::api::device* device) {
     new_params.push_constants.visibility = reshade::api::shader_stage::vertex | reshade::api::shader_stage::pixel | reshade::api::shader_stage::compute;
     device->create_pipeline_layout(1, &new_params, &data.final_layout);
   }
-
-  {
-    reshade::api::pipeline_layout_param new_params;
-    new_params.type = reshade::api::pipeline_layout_param_type::push_constants;
-    new_params.push_constants.count = 1;
-    new_params.push_constants.dx_register_index = 12;
-    new_params.push_constants.visibility = reshade::api::shader_stage::vertex | reshade::api::shader_stage::pixel | reshade::api::shader_stage::compute;
-    device->create_pipeline_layout(1, &new_params, &data.copy_layout);
-  }
 }
 
 void OnDestroyDevice(reshade::api::device* device) {
@@ -213,9 +277,20 @@ void OnDestroyDevice(reshade::api::device* device) {
   device->destroy_private_data<DeviceData>();
 }
 
+bool fired_on_init_swapchain = false;
+
 void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   auto device = swapchain->get_device();
   auto& data = device->get_private_data<DeviceData>();
+
+  if (!fired_on_init_swapchain) {
+    fired_on_init_swapchain = true;
+    auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+    if (peak.has_value()) {
+      settings[2]->default_value = peak.value();
+      settings[2]->can_reset = true;
+    }
+  }
 
   for (int i = 0; i < swapchain->get_back_buffer_count(); ++i) {
     auto back_buffer_resource = swapchain->get_back_buffer(i);
@@ -264,6 +339,8 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
 
 // more or less the same as what reshade does to render its techniques
 void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain, const reshade::api::rect* source_rect, const reshade::api::rect* dest_rect, uint32_t dirty_rect_count, const reshade::api::rect* dirty_rects) {
+  ResetShaderCount();  // Reset executed shaders and tonemapped with each new frame
+
   auto device = queue->get_device();
   auto cmd_list = queue->get_immediate_command_list();
 
@@ -308,10 +385,6 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
   cmd_list->end_render_pass();
 
   cmd_list->barrier(back_buffer_resource, reshade::api::resource_usage::render_target, reshade::api::resource_usage::shader_resource);
-
-  // reset the copy tracker, entirely unrelated to the final shader above
-  // track_next_copy = false; // We dont need this, just pasted from FF14 code
-  // shader_injection.copyTracker = 0; // We dont need this, just pasted from FF14 code
 }
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
@@ -321,10 +394,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::shader::expected_constant_buffer_index = 13;
 
-    //   renodx::mods::shader::force_pipeline_cloning = true;
-    //   renodx::mods::shader::trace_unmodified_shaders = true;
-      renodx::mods::swapchain::force_borderless = false;
-    //   renodx::mods::swapchain::prevent_full_screen = true;
+      // renodx::mods::shader::force_pipeline_cloning = true;
+      // renodx::mods::swapchain::use_resource_cloning = true;
+      // renodx::mods::shader::trace_unmodified_shaders = true;
+      renodx::mods::swapchain::force_borderless = true;
+      // renodx::mods::swapchain::prevent_full_screen = true;
 
       // Final shader
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
@@ -333,11 +407,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
 
+// TODO(Musa): figure out why upgrades break when lowering resolution
+#if 0  // NOLINT main textures
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
       });
-#if 1  // NOLINT Seemingly unused (they might be used for copies of the scene buffer used as UI background)
+#endif
+#if 0  // NOLINT Seemingly unused (they might be used for copies of the scene buffer used as UI background)
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_float,
@@ -358,19 +435,25 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::b8g8r8a8_unorm_srgb,
           .new_format = reshade::api::format::r16g16b16a16_float,
       });
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r11g11b10_float,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+      });
 #endif
 
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
+      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-
   renodx::mods::swapchain::Use(fdw_reason);
-
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
-
   return TRUE;
 }

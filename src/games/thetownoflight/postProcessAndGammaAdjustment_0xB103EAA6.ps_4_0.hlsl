@@ -1,3 +1,4 @@
+#include "./common.hlsl"
 #include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
@@ -26,15 +27,18 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
 
-  // normalize white level to the same range as SDR (theoretically 80 nits)
-  r0.rgb = renodx::color::gamma::DecodeSafe(r0.rgb, 2.2f);
-  r0.rgb /= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-  r0.rgb = renodx::color::gamma::EncodeSafe(r0.rgb, 2.2f);
+  if (injectedData.isTonemapped == 1.f && injectedData.toneMapType == 1.f) {
+    r0.rgb = InverseExponentialToneMap(r0.rgb);
+  }
 
   r1.xyz = cb0[7].xyz;
   r1.w = r0.w;
   r0.xyzw = r0.xyzw * cb0[6].xxxx + -r1.xyzw;
   r0.xyzw = r0.xyzw * cb0[6].yyyy + r1.xyzw;  //  remove unecessary saturate()
+
+  if (injectedData.toneMapType == 0) {
+    r0.xyz = saturate(r0.xyz);
+  }
 
 #if 0  // Gamma slider (applies in gamma space) (defaults to 1) (fixed to allow negative scRGB values just in case)
   o0.xyzw = float4(renodx::math::SafePow(r0.xyz, cb0[6].zzz), saturate(r0.w));
@@ -42,9 +46,9 @@ void main(
   o0.rgba = float4(r0.rgb, saturate(r0.a));
 #endif
 
-  o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb, 2.2f);
-  o0.rgb *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-  o0.rgb = renodx::color::gamma::EncodeSafe(o0.rgb, 2.2f);
+  if (injectedData.toneMapType == 1) {  // Exponential Rolloff
+    o0.rgb = applyExponentialToneMap(o0.rgb);
+  }
 
   return;
 }
