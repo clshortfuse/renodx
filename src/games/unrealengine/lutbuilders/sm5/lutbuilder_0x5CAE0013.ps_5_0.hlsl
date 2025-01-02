@@ -167,11 +167,13 @@ void main(
 
   float3 untonemapped_ap1 = r1.xyz;
 
+  // Lerp Blue Correct
   r4.x = dot(float3(0.938639402, 1.02359565e-10, 0.0613606237), r1.xyz);
   r4.y = dot(float3(8.36008554e-11, 0.830794156, 0.169205874), r1.xyz);
   r4.z = dot(float3(2.13187367e-12, -5.63307213e-12, 1), r1.xyz);
   r4.xyz = r4.xyz + -r1.xyz;
   r4.xyz = cb0[36].zzz * r4.xyz + r1.xyz;
+  // AP1 => AP0
   r5.y = dot(float3(0.695452213, 0.140678704, 0.163869068), r4.xyz);
   r5.z = dot(float3(0.0447945632, 0.859671116, 0.0955343172), r4.xyz);
   r5.w = dot(float3(-0.00552588236, 0.00402521016, 1.00150073), r4.xyz);

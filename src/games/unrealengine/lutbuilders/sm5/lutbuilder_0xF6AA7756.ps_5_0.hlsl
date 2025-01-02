@@ -169,7 +169,7 @@ void main(
   r1.xyz = r4.xyz * r1.www + r1.xyz;
   r1.xyz = r5.xyz * r4.www + r1.xyz;
 
-  float3 untonemapped_ap1 = r0.xyz;
+  float3 untonemapped_ap1 = r1.xyz;
 
   r4.x = dot(float3(0.938639402, 1.02359565e-10, 0.0613606237), r1.xyz);
   r4.y = dot(float3(8.36008554e-11, 0.830794156, 0.169205874), r1.xyz);
