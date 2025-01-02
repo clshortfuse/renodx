@@ -20,20 +20,21 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
 
+  r0.xyz = max(0, r0.xyz);
   if (injectedData.toneMapType == 0) {  // remove unecessary saturate()
-    r0.xyz = saturate(r0.xyz);
+    r0.xyz = min(1, r0.xyz);
   }
   r0.w = saturate(r0.w);
 
   r1.xyz = float3(1, 1, 1) + -r0.xyz;
 
-  r1.xyz = renodx::math::PowSafe(r1.xyz, cb0[6].x);  // fix to allow negative scRGB values
+  r1.xyz = pow(r1.xyz, cb0[6].x);
 
   r1.w = exp2(cb0[6].x);
   r1.w = 0.5 * r1.w;
   r1.xyz = -r1.xyz * r1.www + float3(1, 1, 1);
 
-  r2.xyz = renodx::math::PowSafe(r0.xyz, cb0[6].x);  // fix to allow negative scRGB values
+  r2.xyz = pow(r0.xyz, cb0[6].x);
 
   r1.xyz = -r2.xyz * r1.www + r1.xyz;
   r2.xyz = r2.xyz * r1.www;
