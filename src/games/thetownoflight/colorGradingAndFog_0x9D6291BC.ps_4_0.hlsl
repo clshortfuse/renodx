@@ -55,7 +55,10 @@ float4 sampleLUTWithExtrapolation(Texture2D<float4> lut, SamplerState samplerSta
 
   // Remap the input coords to also include the last half texels at the edges, essentually working in full 0-1 range,
   // we will re-map them out when sampling, this is essential for proper extrapolation math.
-  unclampedUV = (unclampedUV - uvOffset) / uvScale;
+  if (lutMax.x != 0)
+    unclampedUV.x = (unclampedUV.x - uvOffset.x) / uvScale.x;
+  if (lutMax.y != 0)
+    unclampedUV.y = (unclampedUV.y - uvOffset.y) / uvScale.y;
 
   const float2 clampedUV = saturate(unclampedUV);
   const float distanceFromUnclampedToClamped = length(unclampedUV - clampedUV);
