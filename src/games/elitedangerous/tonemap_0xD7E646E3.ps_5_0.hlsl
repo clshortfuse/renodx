@@ -123,39 +123,45 @@ void main(
     sdrColor = r1.rgb;
   } else {
     untonemapped *= cb2[6].yyy;
-    float3 vanillaColor = pow(applyVanillaTonemap(untonemapped), 2.2f);
-    float3 vanillaMidGray = pow(applyVanillaTonemap(float3(0.18, 0.18, 0.18)), 2.2f);
-    float vanillaMidGrayRatio = renodx::color::y::from::BT709(vanillaMidGray) / 0.18f;
+    float3 vanillaColor = pow(applyVanillaTonemap(untonemapped), 2.2f);  // linearized
+    float vanillaMidGray = renodx::color::y::from::BT709(pow(applyVanillaTonemap(float3(0.18, 0.18, 0.18)), 2.2f));
 
     r1.xyz = untonemapped;
-    r1.xyz *= vanillaMidGrayRatio;
-    r1.xyz = renodx::color::grade::UserColorGrading(
-        r1.xyz,
-        1.f,                                // exposure
-        injectedData.colorGradeHighlights,  // highlights, apply before blending
-        1.f,                                // shadows
-        1.f,                                // contrast
-        1.f,                                // saturation
-        0.f,                                // dechroma
-        0.f);                               // hue correction
+    if (injectedData.toneMapType == 4.f) {
+      r1.xyz = renodx::color::grade::UserColorGrading(
+          r1.xyz,
+          1.f,                                // exposure
+          injectedData.colorGradeHighlights,  // highlights, apply before blending
+          1.f,                                // shadows
+          1.f,                                // contrast
+          1.f,                                // saturation
+          injectedData.colorGradeBlowout,     // dechroma
+          0.f);                               // hue correction
+      r1.xyz *= vanillaMidGray / 0.18f;       // mid gray
 
-    r1.xyz = lerp(vanillaColor, r1.xyz, saturate(vanillaColor));
+      r1.xyz = lerp(vanillaColor, r1.xyz, saturate(vanillaColor));  // combine tonemap
 
-    r1.xyz = renodx::color::grade::UserColorGrading(
-        r1.xyz,
-        injectedData.colorGradeExposure,    // exposure
-        1.f,                                // highlights
-        injectedData.colorGradeShadows,     // shadows
-        injectedData.colorGradeContrast,    // contrast
-        injectedData.colorGradeSaturation,  // saturation
-        injectedData.colorGradeBlowout,     // dechroma
-        injectedData.toneMapHueCorrection,  // hue correction
-        vanillaColor);                      // hue correction source
+      r1.xyz = renodx::color::grade::UserColorGrading(
+          r1.xyz,
+          injectedData.colorGradeExposure,    // exposure
+          1.f,                                // highlights
+          injectedData.colorGradeShadows,     // shadows
+          injectedData.colorGradeContrast,    // contrast
+          injectedData.colorGradeSaturation,  // saturation
+          0.f,                                // blowout
+          injectedData.toneMapHueCorrection,  // hue correction
+          vanillaColor);                      // hue correction source
 
-    hdrColor = r1.rgb;
-    sdrColor = RenoDRTSmoothClamp(r1.rgb);
-    r1.rgb = sdrColor;
-    r1.xyz = pow(r1.xyz, 1.f / 2.2f);  // output in gamma space
+      hdrColor = r1.rgb;
+      sdrColor = RenoDRTSmoothClamp(r1.rgb);
+      r1.rgb = sdrColor;
+    } else {
+      renodx::tonemap::config::DualToneMap dual_tone_map = ToneMap(r1.rgb, vanillaColor, vanillaMidGray);
+      hdrColor = dual_tone_map.color_hdr;
+      sdrColor = dual_tone_map.color_sdr;
+      r1.rgb = sdrColor;
+    }
+    r1.xyz = renodx::color::gamma::Encode(max(0, r1.xyz), 2.2f);  // output in gamma space
   }
 
   r1.xyz = log2(r1.xyz);
@@ -163,17 +169,16 @@ void main(
   r1.xyz = float3(2.20000005, 2.20000005, 2.20000005) * r1.xyz;
   r1.xyz = exp2(r1.xyz);
 
-  // center texel
-  r1.w = 1 + -cb2[0].x;
-  r2.x = 0.5 * cb2[0].x;
-  r2.xyz = r1.xyz * r1.www + r2.xxx;
-  r2.xyz = t0.Sample(s0_s, r2.xyz).xyz;  // LUT
-  r2.xyz = r2.xyz + -r1.xyz;
-  r1.xyz = cb2[11].xxx * r2.xyz + r1.xyz;
+  float InvLUTSize = cb2[0].x;    // 1 / LUT_SIZE
+  float scale = 1 + -InvLUTSize;  // Makes no sense, this should be "(LUTSize - 1.0) / LUTSize;"
+  float bias = 0.5 * InvLUTSize;
+  r2.rgb = t0.Sample(s0_s, r1.xyz * scale + bias).rgb;  // LUT
+  r1.rgb = lerp(r1.xyz, r2.xyz, cb2[11].x);             // Blend in LUT as a percentage
 
-  if (injectedData.toneMapType == 1) {  // UpgradeToneMap when using Vanilla+
-    r1.rgb = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, pow(r1.rgb, 2.2f), injectedData.colorGradeLUTStrength);
-    r1.rgb = pow(r1.rgb, 1 / 2.2f);
+  if (injectedData.toneMapType > 0) {  // UpgradeToneMap when using Vanilla+
+    // r1.rgb = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, renodx::color::gamma::DecodeSafe(r1.rgb, 2.2f), injectedData.colorGradeLUTStrength);
+    r1.rgb = UpgradeToneMapPerChannel(hdrColor, sdrColor, renodx::color::gamma::DecodeSafe(r1.rgb, 2.2f), injectedData.colorGradeLUTStrength);
+    r1.rgb = renodx::color::gamma::EncodeSafe(r1.rgb, 2.2f);
   } else {
     float3 lutInputColor = sdrColor;
     r1.rgb = lerp(lutInputColor, r1.rgb, injectedData.colorGradeLUTStrength);
