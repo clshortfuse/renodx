@@ -53,7 +53,7 @@ SIGNSQRT_FUNCTION_GENERATOR(float4);
 
 #define CBRT_FUNCTION_GENERATOR(struct) \
   struct Cbrt(struct x) {               \
-    return SignPow(x, 1.f / 3.f)        \
+    return SignPow(x, 1.f / 3.f);       \
   }
 
 CBRT_FUNCTION_GENERATOR(float);
