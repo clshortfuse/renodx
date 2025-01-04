@@ -417,7 +417,7 @@ ENCODE(float3)
 
 #define ENCODE_SAFE(T)                            \
   T EncodeSafe(T c, float gamma = 2.2f) {         \
-    return renodx::math::PowSafe(c, 1.f / gamma); \
+    return renodx::math::SignPow(c, 1.f / gamma); \
   }
 
 ENCODE_SAFE(float)
@@ -435,7 +435,7 @@ DECODE(float3)
 
 #define DECODE_SAFE(T)                      \
   T DecodeSafe(T c, float gamma = 2.2f) {   \
-    return renodx::math::PowSafe(c, gamma); \
+    return renodx::math::SignPow(c, gamma); \
   }
 
 DECODE_SAFE(float)
@@ -605,7 +605,7 @@ float3 BT709(float3 bt709) {
 
   float3 lms = mul(BT709_2_OKLABLMS, bt709);
 
-  lms = renodx::math::PowSafe(lms, 1.f / 3.f);
+  lms = renodx::math::Cbrt(lms);
 
   return mul(OKLABLMS_2_OKLAB, lms);
 }
