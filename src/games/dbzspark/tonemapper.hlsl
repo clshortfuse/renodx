@@ -78,7 +78,7 @@ float3 pqTosRGB(float3 input, float customDecode = 0.f, bool clamp = false) {
   if (injectedData.toneMapType == 1.f) {
     output = input;
   } else {
-    output = renodx::color::pq::Decode(input, customDecode != 0.f ? customDecode : injectedData.toneMapGameNits);
+    output = renodx::color::pq::DecodeSafe(input, customDecode != 0.f ? customDecode : injectedData.toneMapGameNits);
     if (clamp) {
       output = clampForSRGB(output);
     }
@@ -95,7 +95,7 @@ float3 upgradeSRGBtoPQ(float3 tonemapped, float3 post_srgb, float customDecode =
   if (injectedData.toneMapType == 1.f) {
     output = tonemapped;
   } else {
-    hdr = renodx::color::pq::Decode(tonemapped, customDecode != 0.f ? customDecode : injectedData.toneMapGameNits);
+    hdr = renodx::color::pq::DecodeSafe(tonemapped, customDecode != 0.f ? customDecode : injectedData.toneMapGameNits);
     hdr = renodx::color::bt709::from::BT2020(hdr);
 
     post = post_srgb;

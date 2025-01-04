@@ -269,7 +269,21 @@ float3 Encode(float3 color, float scaling = 10000.f) {
 
 float3 Decode(float3 in_color, float scaling = 10000.f) {
   float3 e_m12 = pow(in_color, 1.f / M2);
-  float3 out_color = pow(max(e_m12 - C1, 0) / (C2 - C3 * e_m12), 1.f / M1);
+  float3 out_color = pow(e_m12 - C1 / (C2 - C3 * e_m12), 1.f / M1);
+  return out_color * (10000.f / scaling);
+}
+
+float3 EncodeSafe(float3 color, float scaling = 10000.f) {
+  color *= (scaling / 10000.f);
+  color = max(0, color);
+  float3 y_m1 = pow(color, M1);
+  return pow((C1 + C2 * y_m1) / (1.f + C3 * y_m1), M2);
+}
+
+float3 DecodeSafe(float3 in_color, float scaling = 10000.f) {
+  in_color = max(0, in_color);
+  float3 e_m12 = pow(in_color, 1.f / M2);
+  float3 out_color = pow((e_m12 - C1) / (C2 - C3 * e_m12), 1.f / M1);
   return out_color * (10000.f / scaling);
 }
 
@@ -584,7 +598,7 @@ namespace bt2020 {
 namespace from {
 /// @deprecated - Use pq::Decode
 float3 PQ(float3 pq_color, float scaling = 10000.f) {
-  return pq::Decode(pq_color, scaling);
+  return pq::DecodeSafe(pq_color, scaling);
 }
 }  // namespace from
 }  // namespace bt2020
@@ -815,7 +829,7 @@ float3 ICtCp(float3 col) {
   col = mul(ictcp_to_lms, col);
 
   // 1.0f = 100 nits, 100.0f = 10k nits
-  col = pq::Decode(max(0, col), 100.f);
+  col = pq::DecodeSafe(col, 100.f);
   return mul(ICTCP_LMS_TO_BT709_MAT, col);
 }
 
