@@ -120,6 +120,7 @@ float3 FinalizeOutput(float3 color) {
   } else {
     color = renodx::color::srgb::DecodeSafe(color);
   }
+  color = renodx::color::bt709::clamp::AP1(color);
   color *= injectedData.toneMapUINits;
 
   color /= 80.f;  // or PQ
