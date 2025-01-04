@@ -17,7 +17,7 @@ float UpgradeToneMapRatio(float color_hdr, float color_sdr, float post_process_c
   }
 }
 
-float3 UpgradeToneMapPerChannel(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength, uint working_color_space = 1u, uint hue_processor = 1u) {
+float3 UpgradeToneMapPerChannel(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength, uint working_color_space = 1u, uint hue_processor = 0u) {
   // float ratio = 1.f;
 
   float3 working_hdr, working_sdr, working_post_process;
@@ -182,7 +182,7 @@ renodx::tonemap::config::DualToneMap ToneMap(float3 color, float3 vanillaColor, 
   config.reno_drt_blowout = injectedData.colorGradeBlowout;
   config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_hue_correction_method =
-      renodx::tonemap::renodrt::config::hue_correction_method::ICTCP;
+      renodx::tonemap::renodrt::config::hue_correction_method::OKLAB;
   config.hue_correction_type =
       renodx::tonemap::config::hue_correction_type::CUSTOM;
   config.hue_correction_strength = injectedData.toneMapHueCorrection;
