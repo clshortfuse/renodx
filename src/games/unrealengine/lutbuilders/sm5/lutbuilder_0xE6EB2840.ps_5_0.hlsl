@@ -227,10 +227,13 @@ void main(
     r4.x = 2.5 * r3.x;
     r4.x = 1 + -abs(r4.x);
     r4.x = max(0, r4.x);
-    r4.y = cmp(0 < r3.x);
-    r3.x = cmp(r3.x < 0);
-    r3.x = (int)-r4.y + (int)r3.x;
-    r3.x = (int)r3.x;
+    // r4.y = cmp(0 < r3.x);
+    // r3.x = cmp(r3.x < 0);
+    // r3.x = (int)-r4.y + (int)r3.x;
+    // r3.x = (int)r3.x;
+
+    r3.x = sign(r3.x);
+
     r4.x = -r4.x * r4.x + 1;
     r3.x = r3.x * r4.x + 1;
     r3.x = 0.0250000004 * r3.x;
@@ -270,7 +273,10 @@ void main(
     r3.x = max(r3.x, r3.z);
     r3.z = cmp(r5.x < -r5.x);
     r3.x = cmp(r3.x >= -r3.x);
-    r3.x = r3.x ? r3.z : 0;
+
+    // r3.x = r3.x ? r3.z : 0;
+    r3.x = (r3.z) && (r3.x);
+
     r3.x = r3.x ? -r3.w : r3.w;
     r3.x = 57.2957802 * r3.x;
     r2.w = r2.w ? 0 : r3.x;
