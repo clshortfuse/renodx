@@ -13,6 +13,7 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
+#include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
@@ -210,6 +211,11 @@ renodx::utils::settings::Settings settings = {
           ShellExecute(0, "open", (std::string("https://ko-fi.com/") + "musaqh").c_str(), 0, 0, SW_SHOW);
         },
     },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+        .section = "About",
+    },
 };
 
 void OnPresetOff() {
@@ -245,6 +251,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain) {
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Elite Dangerous";
 
+const float SCREEN_WIDTH = static_cast<float>(GetSystemMetrics(SM_CXSCREEN));
+const float SCREEN_HEIGHT = static_cast<float>(GetSystemMetrics(SM_CYSCREEN));
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
@@ -258,11 +266,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
+          .aspect_ratio = SCREEN_WIDTH / SCREEN_HEIGHT,
       });
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_float,
+          .aspect_ratio = SCREEN_WIDTH / SCREEN_HEIGHT,
       });
+
 #endif
 #if 0  // NOLINT Seemingly unused (they might be used for copies of the scene buffer used as UI background)
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
