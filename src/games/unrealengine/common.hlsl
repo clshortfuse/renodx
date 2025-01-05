@@ -66,8 +66,7 @@ float3 UpgradeToneMapByLuminance(float3 color_hdr, float3 color_sdr, float3 post
 
   float3 color_scaled = max(0, bt2020_post_process * ratio);
   color_scaled = renodx::color::bt709::from::BT2020(color_scaled);
-  float peak_correction = saturate(1.f - renodx::color::y::from::BT2020(bt2020_post_process));
-  color_scaled = renodx::color::correct::Hue(color_scaled, post_process_color, peak_correction);
+  color_scaled = renodx::color::correct::Hue(color_scaled, post_process_color);
   return lerp(color_hdr, color_scaled, post_process_strength);
 }
 
