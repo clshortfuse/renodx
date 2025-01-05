@@ -31,7 +31,7 @@ float3 FinalizeOutput(float3 color) {
 }
 
 float3 lutShaper(float3 color, bool builder = false) {
-  color = builder ? renodx::color::pq::DecodeSafe(color, 100.f)
+  color = builder ? renodx::color::pq::Decode(color, 100.f)
                   : renodx::color::pq::Encode(color, 100.f);
 
   return color;

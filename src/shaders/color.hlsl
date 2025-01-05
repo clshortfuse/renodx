@@ -267,24 +267,18 @@ float3 Encode(float3 color, float scaling = 10000.f) {
   return pow((C1 + C2 * y_m1) / (1.f + C3 * y_m1), M2);
 }
 
-float3 Decode(float3 in_color, float scaling = 10000.f) {
-  float3 e_m12 = pow(in_color, 1.f / M2);
-  float3 out_color = pow(e_m12 - C1 / (C2 - C3 * e_m12), 1.f / M1);
+float3 Decode(float3 color, float scaling = 10000.f) {
+  float3 e_m12 = pow(color, 1.f / M2);
+  float3 out_color = pow(max(0, e_m12 - C1) / (C2 - C3 * e_m12), 1.f / M1);
   return out_color * (10000.f / scaling);
 }
 
 float3 EncodeSafe(float3 color, float scaling = 10000.f) {
-  color *= (scaling / 10000.f);
-  color = max(0, color);
-  float3 y_m1 = pow(color, M1);
-  return pow((C1 + C2 * y_m1) / (1.f + C3 * y_m1), M2);
+  return Encode(max(0, color), scaling);
 }
 
-float3 DecodeSafe(float3 in_color, float scaling = 10000.f) {
-  in_color = max(0, in_color);
-  float3 e_m12 = pow(in_color, 1.f / M2);
-  float3 out_color = pow((e_m12 - C1) / (C2 - C3 * e_m12), 1.f / M1);
-  return out_color * (10000.f / scaling);
+float3 DecodeSafe(float3 color, float scaling = 10000.f) {
+  return Decode(max(0, color), scaling);
 }
 
 }  // namespace pq
@@ -598,7 +592,7 @@ namespace bt2020 {
 namespace from {
 /// @deprecated - Use pq::Decode
 float3 PQ(float3 pq_color, float scaling = 10000.f) {
-  return pq::DecodeSafe(pq_color, scaling);
+  return pq::Decode(pq_color, scaling);
 }
 }  // namespace from
 }  // namespace bt2020

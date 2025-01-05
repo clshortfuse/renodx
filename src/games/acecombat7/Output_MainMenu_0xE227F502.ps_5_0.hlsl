@@ -99,7 +99,7 @@ void main(
 
   float3 lut_input = renodx::color::pq::Encode(untonemapped, 100.f);
   float3 sampled = renodx::lut::Sample(t3, s3_s, lut_input);
-  float3 post_lut = renodx::color::pq::DecodeSafe(sampled, 100.f);
+  float3 post_lut = renodx::color::pq::Decode(sampled, 100.f);
   r1.xyz = post_lut;
 
   o0.w = saturate(dot(r1.xyz, float3(0.298999995,0.587000012,0.114)));

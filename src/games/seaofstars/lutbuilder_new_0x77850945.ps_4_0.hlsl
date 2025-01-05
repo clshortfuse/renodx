@@ -34,7 +34,7 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
   r0.w = -r1.x + r0.y;
 
   if (injectedData.processingInternalSampling == 1.f) {
-    r0.xyz = renodx::color::pq::DecodeSafe(r0.xzw, 100.f);
+    r0.xyz = renodx::color::pq::Decode(r0.xzw, 100.f);
   } else {
     r0.xyz = r0.xzw * cb0[129].www;
     r0.xyz += float3(-0.386036009, -0.386036009, -0.386036009);

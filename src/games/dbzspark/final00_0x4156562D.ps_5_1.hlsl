@@ -41,7 +41,7 @@ void main(
   r0.xyz = cb0[7].www * r1.xyz;
 
   r1.xyz = t1.Sample(s1_s, v0.xy).xyz;  // Game in PQ
-  r1.rgb = renodx::color::pq::DecodeSafe(r1.rgb, injectedData.toneMapGameNits);
+  r1.rgb = renodx::color::pq::Decode(r1.rgb, injectedData.toneMapGameNits);
 
   r1.rgb = renodx::color::bt709::from::BT2020(r1.rgb);
   r1.rgb = renodx::color::grade::UserColorGrading(
@@ -76,7 +76,7 @@ void main(
   r1.rgb = renodx::color::bt2020::from::BT709(r1.rgb);
   r1.rgb = renodx::color::pq::Encode(r1.rgb, injectedData.toneMapGameNits);
 
-  r1.rgb = renodx::color::pq::DecodeSafe(r1.rgb, 1.f);  // We need it to merge with UI
+  r1.rgb = renodx::color::pq::Decode(r1.rgb, 1.f);  // We need it to merge with UI
 
   /* // pow(in_color, 1.f / M2)
   r1.xyz = log2(r1.xyz);

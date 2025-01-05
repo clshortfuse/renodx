@@ -84,7 +84,7 @@ float4 main(
   // Scene will always be PQ sRGB bt709
   float4 _59 = SceneTexture.Sample(SceneSampler, float2(_7, _8));
   float3 scene = _59.rgb;
-  scene = renodx::color::pq::DecodeSafe(scene.rgb, injectedData.toneMapGameNits);
+  scene = renodx::color::pq::Decode(scene.rgb, injectedData.toneMapGameNits);
   uiTexture.rgb = correctGamma(uiTexture.rgb);
 
   // Multiple by games because we're encoding PQ later

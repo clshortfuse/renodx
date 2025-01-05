@@ -53,7 +53,7 @@ float3 decodedTosRGB(float3 input_linear) {
 float3 pqToDecoded(float3 input_pq) {
   float3 output = input_pq;
   if (injectedData.toneMapType > 1.f) {
-    output = renodx::color::pq::DecodeSafe(input_pq, injectedData.toneMapGameNits);
+    output = renodx::color::pq::Decode(input_pq, injectedData.toneMapGameNits);
   }
 
   return output;
