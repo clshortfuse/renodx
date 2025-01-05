@@ -110,7 +110,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueCorrection",
         .binding = &shader_injection.tone_map_hue_correction,
-        .default_value = 0.f,
+        .default_value = 100.f,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tooltip = "Hue shifts emulation strength.",
@@ -124,7 +124,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapPerChannel",
         .binding = &shader_injection.tone_map_per_channel,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 0.f,
         .label = "Per Channel",
         .section = "Tone Mapping",
         .tooltip = "Applies tonemapping per-channel instead of by luminance",
@@ -290,7 +290,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ToneMapHueCorrectionMethod", 0.f);
   renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 0.f);
   renodx::utils::settings::UpdateSetting("ToneMapPerChannel", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);

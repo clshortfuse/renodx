@@ -194,7 +194,12 @@ void main(
 
         graded_aces = renodx::color::bt709::from::BT2020(r2.xyz / (250.f));
 
-        float3 color_graded = UpgradeToneMapPerChannel(color, reference_aces, graded_aces, 1);
+        float3 color_graded;
+        if (injectedData.tone_map_per_channel == 1.f) {
+          color_graded = UpgradeToneMapPerChannel(color, reference_aces, graded_aces, 1);
+        } else {
+          color_graded = UpgradeToneMapByLuminance(color, reference_aces, graded_aces, 1);
+        }
 
         float3 lut_color = color_graded;
         // lut_color = corrected;

@@ -57,6 +57,24 @@ float3 UpgradeToneMapPerChannel(float3 color_hdr, float3 color_sdr, float3 post_
   return lerp(color_hdr, color_scaled, post_process_strength);
 }
 
+float3 UpgradeToneMapByLuminance(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength) {
+  // float ratio = 1.f;
+
+  float3 bt2020_hdr = max(0, renodx::color::bt2020::from::BT709(color_hdr));
+  float3 bt2020_sdr = max(0, renodx::color::bt2020::from::BT709(color_sdr));
+  float3 bt2020_post_process = max(0, renodx::color::bt2020::from::BT709(post_process_color));
+
+  float ratio = UpgradeToneMapRatio(
+      renodx::color::y::from::BT2020(bt2020_hdr),
+      renodx::color::y::from::BT2020(bt2020_sdr),
+      renodx::color::y::from::BT2020(bt2020_post_process));
+
+  float3 color_scaled = max(0, bt2020_post_process * ratio);
+  color_scaled = renodx::color::bt709::from::BT2020(color_scaled);
+  color_scaled = renodx::color::correct::Hue(color_scaled, post_process_color);
+  return lerp(color_hdr, color_scaled, post_process_strength);
+}
+
 float3 ToneMap(float3 color, float2 position) {
   color *= 1.0f;
 
