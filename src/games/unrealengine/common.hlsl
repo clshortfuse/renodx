@@ -154,8 +154,8 @@ float3 ToneMap(float3 bt709) {
   config.reno_drt_highlights = 1.0f;
   config.reno_drt_shadows = 1.0f;
   config.reno_drt_contrast = 1.0f;
-  config.reno_drt_saturation = 1.05f;
-  config.reno_drt_dechroma = 0;
+  config.reno_drt_saturation = 1.0f;
+  config.reno_drt_dechroma = injectedData.colorGradeDechroma;
   config.reno_drt_blowout = injectedData.colorGradeBlowout;
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.reno_drt_working_color_space = 2u;
@@ -178,21 +178,24 @@ float3 ToneMap(float3 bt709) {
 float3 UpgradeToneMapAP1(float3 untonemapped_ap1, float3 tonemapped_bt709) {
   float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
 
-  float3 neutral_sdr_color = RenoDRTSmoothClamp(untonemapped_bt709);
+  float3 untonemapped_graded = untonemapped_bt709;
+  if (injectedData.colorGradeStrength != 0) {
+    float3 neutral_sdr_color = RenoDRTSmoothClamp(untonemapped_bt709);
 
-  float3 untonemapped_graded;
-  if (injectedData.toneMapPerChannel == 1) {
-    untonemapped_graded = UpgradeToneMapPerChannel(
-        untonemapped_bt709,
-        neutral_sdr_color,
-        tonemapped_bt709,
-        1);
-  } else {
-    untonemapped_graded = UpgradeToneMapByLuminance(
-        untonemapped_bt709,
-        neutral_sdr_color,
-        tonemapped_bt709,
-        1);
+    if (injectedData.colorGradeRestorationMethod == 1) {
+      untonemapped_graded = UpgradeToneMapPerChannel(
+          untonemapped_bt709,
+          neutral_sdr_color,
+          tonemapped_bt709,
+          1);
+    } else {
+      untonemapped_graded = UpgradeToneMapByLuminance(
+          untonemapped_bt709,
+          neutral_sdr_color,
+          tonemapped_bt709,
+          1);
+    }
+    untonemapped_graded = lerp(untonemapped_bt709, untonemapped_graded, injectedData.colorGradeStrength);
   }
   return ToneMap(untonemapped_graded);
 }
