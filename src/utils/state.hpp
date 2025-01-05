@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <algorithm>
 #include <include/reshade.hpp>
 #include <memory>
 #include <optional>
@@ -29,17 +28,10 @@ struct CommandListState {
 
   void Apply(reshade::api::command_list* cmd_list) const {
     if (!render_targets.empty() || depth_stencil != 0) {
-      bool has_rtv = std::ranges::any_of(render_targets, [](auto rtv) {
-        return rtv.handle != 0u;
-      });
-      if (has_rtv) {
-        cmd_list->bind_render_targets_and_depth_stencil(
-            static_cast<uint32_t>(render_targets.size()),
-            render_targets.data(),
-            depth_stencil);
-      } else if (depth_stencil != 0) {
-        cmd_list->bind_render_targets_and_depth_stencil(0, nullptr, depth_stencil);
-      }
+      cmd_list->bind_render_targets_and_depth_stencil(
+          static_cast<uint32_t>(render_targets.size()),
+          render_targets.data(),
+          depth_stencil);
     }
 
     for (const auto& [stages, pipeline] : pipelines) {

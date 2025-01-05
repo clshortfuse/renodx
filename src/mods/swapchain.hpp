@@ -1006,6 +1006,8 @@ static void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
   queue->flush_immediate_command_list();
 
   if (previous_state.has_value()) {
+    // Don't restore RTVs for now (crashes DX11)
+    previous_state->render_targets.clear();
     previous_state->Apply(cmd_list);
   }
 
