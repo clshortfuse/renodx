@@ -30,6 +30,7 @@
 #include "../utils/mutex.hpp"
 #include "../utils/pipeline.hpp"
 #include "../utils/resource.hpp"
+#include "../utils/state.hpp"
 #include "../utils/swapchain.hpp"
 
 namespace renodx::mods::swapchain {
@@ -830,6 +831,8 @@ static void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
   auto* device = swapchain->get_device();
   auto& data = device->get_private_data<DeviceData>();
 
+  auto previous_state = renodx::utils::state::GetCurrentState(cmd_list);
+
   if (std::addressof(data) == nullptr) return;
 
   // std::shared_lock data_lock(data.mutex);
@@ -1001,6 +1004,10 @@ static void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
     data.swap_chain_proxy_rtvs.erase(current_back_buffer.handle);
   }
   queue->flush_immediate_command_list();
+
+  if (previous_state.has_value()) {
+    previous_state->Apply(cmd_list);
+  }
 
 #ifdef DEBUG_LEVEL_2
   reshade::log::message(reshade::log::level::debug, s.str().c_str());
@@ -2575,6 +2582,7 @@ template <typename T = float*>
 static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
   renodx::utils::resource::Use(fdw_reason);
   renodx::utils::swapchain::Use(fdw_reason);
+  renodx::utils::state::Use(fdw_reason);
   if (use_resource_cloning) {
     renodx::utils::descriptor::Use(fdw_reason);
   }

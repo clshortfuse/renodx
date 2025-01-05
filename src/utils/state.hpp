@@ -6,6 +6,8 @@
 #pragma once
 
 #include <include/reshade.hpp>
+#include <memory>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -239,12 +241,14 @@ static void OnBindDescriptorTables(reshade::api::command_list* cmd_list,
 
 static void OnResetCommandList(reshade::api::command_list* cmd_list) {
   auto& data = cmd_list->get_private_data<CommandListData>();
+  if (std::addressof(data) == nullptr) return;
   auto& state = data.current_state;
   state.Clear();
 }
 
-static CommandListState GetCurrentState(reshade::api::command_list* cmd_list) {
+static std::optional<CommandListState> GetCurrentState(reshade::api::command_list* cmd_list) {
   auto& data = cmd_list->get_private_data<CommandListData>();
+  if (std::addressof(data) == nullptr) return std::nullopt;
   return data.current_state;
 }
 

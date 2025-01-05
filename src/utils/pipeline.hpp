@@ -205,15 +205,18 @@ static reshade::api::pipeline CreateRenderPipeline(
   reshade::api::blend_desc blend_state = {};
   reshade::api::rasterizer_desc rasterizer_state = {.cull_mode = reshade::api::cull_mode::none};
   reshade::api::depth_stencil_desc depth_stencil_state = {.depth_enable = false};
+  std::vector<reshade::api::input_element> input_layout;
 
   std::vector<reshade::api::pipeline_subobject> subobjects = {
-      {.type = reshade::api::pipeline_subobject_type::render_target_formats, .count = 1, .data = &format},
-      {.type = reshade::api::pipeline_subobject_type::max_vertex_count, .count = 1, .data = &num_vertices},
-      {.type = reshade::api::pipeline_subobject_type::primitive_topology, .count = 1, .data = &topology},
-      {.type = reshade::api::pipeline_subobject_type::blend_state, .count = 1, .data = &blend_state},
-      {.type = reshade::api::pipeline_subobject_type::rasterizer_state, .count = 1, .data = &rasterizer_state},
-      {.type = reshade::api::pipeline_subobject_type::depth_stencil_state, .count = 1, .data = &depth_stencil_state},
+      {reshade::api::pipeline_subobject_type::render_target_formats, 1, &format},
+      {reshade::api::pipeline_subobject_type::max_vertex_count, 1, &num_vertices},
+      {reshade::api::pipeline_subobject_type::primitive_topology, 1, &topology},
+      {reshade::api::pipeline_subobject_type::blend_state, 1, &blend_state},
+      {reshade::api::pipeline_subobject_type::rasterizer_state, 1, &rasterizer_state},
+      {reshade::api::pipeline_subobject_type::depth_stencil_state, 1, &depth_stencil_state},
+      {reshade::api::pipeline_subobject_type::input_layout, static_cast<uint32_t>(input_layout.size()), input_layout.data()},
   };
+
   subobjects.reserve(6 + shaders.size());
 
   std::vector<reshade::api::shader_desc> shader_descriptions;
