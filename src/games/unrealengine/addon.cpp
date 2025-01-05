@@ -280,11 +280,11 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType == 1; },
-        .parse = [](float value) { return (value * 0.02f) - 1.f; },
+        .parse = [](float value) { return (value * -0.02f) + 1.f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeBlowout",
+        .key = "ColorGradeDechroma",
         .binding = &shader_injection.colorGradeDechroma,
         .default_value = 0.f,
         .label = "Blowout",
