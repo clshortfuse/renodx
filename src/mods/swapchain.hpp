@@ -937,9 +937,6 @@ static void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
       return;
     }
   }
-  s << ", pipeline: " << reinterpret_cast<void*>(data.swap_chain_proxy_pipeline.handle);
-  cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_graphics, data.swap_chain_proxy_pipeline);
-  size_t param_index = -1;
 
   // cmd_list->barrier(swapchain_clone, reshade::api::resource_usage::general, reshade::api::resource_usage::shader_resource);
 
@@ -977,6 +974,10 @@ static void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
         shader_injection_size,
         shader_injection);
   }
+
+  s << ", pipeline: " << reinterpret_cast<void*>(data.swap_chain_proxy_pipeline.handle);
+  cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_graphics, data.swap_chain_proxy_pipeline);
+  size_t param_index = -1;
 
   auto clone_desc = device->get_resource_desc(swapchain_clone);
   const reshade::api::viewport viewport = {
