@@ -480,6 +480,7 @@ void AddUpgrade(reshade::api::format old_format, bool ignore_size = true) {
       .old_format = old_format,
       .new_format = reshade::api::format::r16g16b16a16_float,
       .ignore_size = ignore_size,
+      .use_resource_view_cloning = true,
       .usage_include = reshade::api::resource_usage::render_target,
   });
 }
