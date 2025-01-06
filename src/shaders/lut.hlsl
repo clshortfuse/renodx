@@ -202,7 +202,7 @@ float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma,
   return unclamped_gamma;
 }
 
-float3 RecolorUnclamped(float3 original_linear, float3 unclamped_linear, float strength) {
+float3 RecolorUnclamped(float3 original_linear, float3 unclamped_linear, float strength = 1.f) {
   const float3 original_perceptual = renodx::color::oklab::from::BT709(original_linear);
 
   // Hue correction
