@@ -76,17 +76,50 @@ static const float3x3 XYZ_TO_DISPLAYP3_MAT = float3x3(
     -0.8294889696f, 1.7626640603f, 0.0236246858f,
     0.0358458302f, -0.0761723893f, 0.9568845240);
 
-// With Bradford
-static const float3x3 D65_TO_D60_CAT = float3x3(
-    1.01303, 0.00610531, -0.014971,
-    0.00769823, 0.998165, -0.00503203,
-    -0.00284131, 0.00468516, 0.924507);
+static const float3x3 BT470_PAL_TO_BT709_MAT = float3x3(
+    1.04404318f, -0.0440432094f, 0.f,
+    0.f, 1.f, 0.f,
+    0.f, 0.0117933787f, 0.988206624f);
 
-// With Bradford
+static const float3x3 BT601_NTSC_U_TO_BT709_MAT = float3x3(
+    0.939542055f, 0.0501813553f, 0.0102765792f,
+    0.0177722238f, 0.965792834f, 0.0164349135f,
+    -0.00162159989f, -0.00436974968f, 1.00599133f);
+
+// chromatic adaptation method: vK20
+// chromatic adaptation transform: CAT02
+static const float3x3 ARIB_TR_B09_D93_TO_BT709_D65_MAT = float3x3(
+    0.897676467f, -0.129552796f, 0.00210331683f,
+    0.0400346256f, 0.970825016f, 0.00575808621f,
+    0.00136304146f, 0.0323694758f, 1.48031127f);
+
+// chromatic adaptation method: vK20
+// chromatic adaptation transform: CAT02
+static const float3x3 ARIB_TR_B09_9300K_27_MPCD_TO_BT709_D65_MAT = float3x3(
+    0.783664464f, -0.178418442f, 0.00223907502f,
+    0.0380520112f, 1.03919935f, 0.00543892197f,
+    0.000365949701f, 0.0269012674f, 1.31387364f);
+
+// chromatic adaptation method: vK20
+// chromatic adaptation transform: CAT02
+static const float3x3 BT709_D93_TO_BT709_D65_MAT = float3x3(
+    0.968665063f, -0.0445920750f, -0.00335013796f,
+    0.00231231073f, 1.00339293f, 0.0000867190974f,
+    0.00326244067f, 0.0161521788f, 1.11353743f);
+
+// chromatic adaptation method: von Kries
+// chromatic adaptation transform: Bradford
+static const float3x3 D65_TO_D60_CAT = float3x3(
+    1.01303493f, 0.00610525766f, -0.0149709433f,
+    0.00769822997f, 0.998163342f, -0.00503203831f,
+    -0.00284131732f, 0.00468515651f, 0.924506127f);
+
+// chromatic adaptation method: von Kries
+// chromatic adaptation transform: Bradford
 static const float3x3 D60_TO_D65_MAT = float3x3(
-    0.98722400, -0.00611327, 0.0159533,
-    -0.00759836, 1.00186000, 0.0053302,
-    0.00307257, -0.00509595, 1.0816800);
+    0.987223982f, -0.00611322838f, 0.0159532874f,
+    -0.00759837171f, 1.00186145f, 0.00533003592f,
+    0.00307257706f, -0.00509596150f, 1.08168065f);
 
 static const float3x3 IDENTITY_MAT = float3x3(
     1.0f, 0.0f, 0.0f,
