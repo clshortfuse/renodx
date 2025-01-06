@@ -120,7 +120,7 @@ PS_OUTPUT main(PS_INPUT psInput) {
 
   if (cb0[37].y != 0) {  // Tonemap by luminance?
     float inputLuminance = renodx::color::y::from::BT601(bloomedColor);
-    r1.w = renodx::color::y::from::BT601(bloomedColor);
+    r1.w = renodx::color::luma::from::BT601(bloomedColor);
 
     float3 logColor = LinToLog(bloomedColor);
     r4.rgb = LinToLog(bloomedColor);
@@ -130,7 +130,7 @@ PS_OUTPUT main(PS_INPUT psInput) {
 
     r4.rgb = pow(r4.rgb, 2.2f);
 
-    r2.w = renodx::color::y::from::BT601(r4.xyz);
+    r2.w = renodx::color::luma::from::BT601(r4.xyz);
     r3.w = cmp(r2.w < 9.99999975e-05);
     r1.w = inputLuminance / r2.w;
     r1.w = -1 + r1.w;
@@ -138,7 +138,7 @@ PS_OUTPUT main(PS_INPUT psInput) {
     r1.w = r3.w ? 1 : r1.w;
     r4.rgb = r4.rgb * r1.www;
   }
-  r3.w = renodx::color::y::from::BT601(colorGradedColor);
+  r3.w = renodx::color::luma::from::BT601(colorGradedColor);
 
   float3 grainedColor = colorGradedColor + grain;
 

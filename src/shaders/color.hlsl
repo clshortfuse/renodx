@@ -86,16 +86,21 @@ static const float3x3 BT601_NTSC_U_TO_BT709_MAT = float3x3(
     0.0177722238f, 0.965792834f, 0.0164349135f,
     -0.00162159989f, -0.00436974968f, 1.00599133f);
 
+static const float3x3 NTSC_U_1953_TO_XYZ_MAT = float3x3(
+    0.6068638093f, 0.1735072810f, 0.2003348814f,
+    0.2989030703f, 0.5866198547f, 0.1144770751f,
+    -0.0000000000f, 0.0660980118f, 1.1161514821f);
+
 // chromatic adaptation method: vK20
 // chromatic adaptation transform: CAT02
-static const float3x3 ARIB_TR_B09_D93_TO_BT709_D65_MAT = float3x3(
+static const float3x3 ARIB_TR_B9_D93_TO_BT709_D65_MAT = float3x3(
     0.897676467f, -0.129552796f, 0.00210331683f,
     0.0400346256f, 0.970825016f, 0.00575808621f,
     0.00136304146f, 0.0323694758f, 1.48031127f);
 
 // chromatic adaptation method: vK20
 // chromatic adaptation transform: CAT02
-static const float3x3 ARIB_TR_B09_9300K_27_MPCD_TO_BT709_D65_MAT = float3x3(
+static const float3x3 ARIB_TR_B9_9300K_27_MPCD_TO_BT709_D65_MAT = float3x3(
     0.783664464f, -0.178418442f, 0.00223907502f,
     0.0380520112f, 1.03919935f, 0.00543892197f,
     0.000365949701f, 0.0269012674f, 1.31387364f);
@@ -162,8 +167,6 @@ static const float3x3 AP1_TO_BT709D60_MAT = mul(XYZ_TO_BT709_MAT, AP1_TO_XYZ_MAT
 static const float3x3 AP1_TO_BT2020D60_MAT = mul(XYZ_TO_BT2020_MAT, AP1_TO_XYZ_MAT);
 static const float3x3 AP1_TO_AP1D65_MAT = mul(XYZ_TO_AP1_MAT, mul(D60_TO_D65_MAT, AP1_TO_XYZ_MAT));
 
-static const float3 BT601_Y = float3(0.299, 0.587, 0.114);
-
 // https://www.ilkeratalay.com/colorspacesfaq.php
 static const float3 BOURGIN_D65_Y = float3(0.222015, 0.706655, 0.071330);
 
@@ -208,6 +211,8 @@ float3 BT709(float3 bt709) {
 }  // namespace xyY
 
 namespace bt709 {
+static const float REFERENCE_WHITE = 100.f;
+
 namespace from {
 float3 XYZ(float3 XYZ) {
   return mul(XYZ_TO_BT709_MAT, XYZ);
@@ -218,18 +223,29 @@ float3 xyY(float3 xyY) {
 
   return bt709::from::XYZ(XYZ);
 }
-}  // namespace from
-}  // namespace bt709
 
-namespace bt709 {
-static const float REFERENCE_WHITE = 100.f;
-namespace from {
 float3 AP1(float3 ap1) {
   return mul(AP1_TO_BT709_MAT, ap1);
 }
 
 float3 BT2020(float3 bt2020) {
   return mul(BT2020_TO_BT709_MAT, bt2020);
+}
+
+float3 BT601NTSCU(float3 bt601) {
+  return mul(BT601_NTSC_U_TO_BT709_MAT, bt601);
+}
+
+float3 ARIBTRB9(float3 aribtrb9) {
+  return mul(ARIB_TR_B9_D93_TO_BT709_D65_MAT, aribtrb9);
+}
+
+float3 ARIBTRB927MPCD(float3 aribtrb9) {
+  return mul(ARIB_TR_B9_9300K_27_MPCD_TO_BT709_D65_MAT, aribtrb9);
+}
+
+float3 BT709D93(float3 bt709d93) {
+  return mul(BT709_D93_TO_BT709_D65_MAT, bt709d93);
 }
 
 float3 OkLab(float3 oklab) {
@@ -272,9 +288,10 @@ float3 BT709(float3 bt709) {
 
 namespace y {
 namespace from {
-float BT601(float3 bt601) {
-  return dot(bt601, BT601_Y);
+float NTSC1953(float3 ntsc) {
+  return dot(ntsc, NTSC_U_1953_TO_XYZ_MAT[1].rgb);
 }
+
 float BT709(float3 bt709) {
   return dot(bt709, BT709_TO_XYZ_MAT[1].rgb);
 }
@@ -286,6 +303,14 @@ float AP1(float3 ap1) {
 }
 }  // namespace from
 }  // namespace y
+
+namespace luma {
+namespace from {
+float BT601(float3 bt601) {
+  return y::from::NTSC1953(bt601);
+}
+}  // namespace from
+}  // namespace luma
 
 namespace pq {
 static const float M1 = 2610.f / 16384.f;           // 0.1593017578125f;

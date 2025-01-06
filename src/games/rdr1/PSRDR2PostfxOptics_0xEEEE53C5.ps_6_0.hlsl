@@ -190,7 +190,7 @@ float4 main(
   float _124 = _122.y;
   float _125 = _122.z;
   float _126 = _122.w;
-  float _136 = 1.010 - renodx::color::y::from::BT601(float3(_100, _101, _102));
+  float _136 = 1.010 - renodx::color::luma::from::BT601(float3(_100, _101, _102));
   float _141 = log2(abs(_136));
   float _142 = _141 * AdditiveReducer;
   float _143 = _141 * AdditiveReducer2;

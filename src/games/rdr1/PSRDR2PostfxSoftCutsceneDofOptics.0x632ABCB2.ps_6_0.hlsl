@@ -226,7 +226,7 @@ float4 main(float4 SV_Position: SV_POSITION,
   float _152 = GlowColor.x;
   float _153 = GlowColor.y;
   float _154 = GlowColor.z;
-  float _155 = renodx::color::y::from::BT601(float3(_120, _121, _122));
+  float _155 = renodx::color::luma::from::BT601(float3(_120, _121, _122));
   float _156 = 1.00000 - _155;
   float _158 = AdditiveReducer;
   float _159 = AdditiveReducer2;

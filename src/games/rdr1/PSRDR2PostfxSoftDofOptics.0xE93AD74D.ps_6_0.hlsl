@@ -179,7 +179,7 @@ float4 main(
   float _105 = GlowColor.x;
   float _106 = GlowColor.y;
   float _107 = GlowColor.z;
-  float _108 = renodx::color::y::from::BT601(float3(_73, _74, _75));  // float _108 = dot( { _73, _74, _75 }, { 0.299000, 0.587000, 0.114000 });
+  float _108 = renodx::color::luma::from::BT601(float3(_73, _74, _75));  // float _108 = dot( { _73, _74, _75 }, { 0.299000, 0.587000, 0.114000 });
   float _109 = 1.00000 - _108;
 
   float _111 = AdditiveReducer;
