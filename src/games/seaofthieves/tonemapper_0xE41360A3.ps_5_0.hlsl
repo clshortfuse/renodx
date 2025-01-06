@@ -119,7 +119,7 @@ PS_OUTPUT main(PS_INPUT psInput) {
   const float3 colorGradedColor = lutColor.rgb * 1.05f;
 
   if (cb0[37].y != 0) {  // Tonemap by luminance?
-    float inputLuminance = renodx::color::y::from::BT601(bloomedColor);
+    float inputLuminance = renodx::color::luma::from::BT601(bloomedColor);
     r1.w = renodx::color::luma::from::BT601(bloomedColor);
 
     float3 logColor = LinToLog(bloomedColor);
