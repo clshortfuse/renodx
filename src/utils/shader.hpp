@@ -327,7 +327,7 @@ static void UpdateReplacements(
   } else {
     for (const auto& device : devices) {
       auto& compile = internal::device_based_compile_time_replacements[device];
-      auto& runtime = internal::device_based_compile_time_replacements[device];
+      auto& runtime = internal::device_based_initial_runtime_replacements[device];
       update(compile, runtime);
     }
   }
@@ -466,9 +466,9 @@ static void OnInitDevice(reshade::api::device* device) {
 
   std::shared_lock lock(internal::mutex);
   insert_shaders(internal::compile_time_replacements, data->compile_time_replacements, "compile-time");
-  insert_shaders(internal::device_based_compile_time_replacements[device->get_api()], data->compile_time_replacements, "API-based compile-time");
-
   insert_shaders(internal::initial_runtime_replacements, data->runtime_replacements, "runtime");
+
+  insert_shaders(internal::device_based_compile_time_replacements[device->get_api()], data->compile_time_replacements, "API-based compile-time");
   insert_shaders(internal::device_based_initial_runtime_replacements[device->get_api()], data->runtime_replacements, "API-based runtime");
 
   runtime_replacement_count = data->runtime_replacements.size();
