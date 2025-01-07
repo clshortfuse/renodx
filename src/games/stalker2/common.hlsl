@@ -40,25 +40,23 @@ float3 RenoDRTSmoothClamp(float3 untonemapped) {
   renodrt_config.dechroma = 0.f;
   renodrt_config.flare = 0.f;
   renodrt_config.hue_correction_strength = 0.f;
-  renodrt_config.tone_map_method =
-      renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  renodrt_config.working_color_space = 1u;
+  renodrt_config.working_color_space = 0u;
 
   return renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
 }
 
-float UpgradeToneMapRatio(float ap1_color_hdr, float ap1_color_sdr, float ap1_post_process_color) {
-  if (ap1_color_hdr < ap1_color_sdr) {
+float UpgradeToneMapRatio(float color_hdr, float color_sdr, float post_process_color) {
+  if (color_hdr < color_sdr) {
     // If substracting (user contrast or paperwhite) scale down instead
     // Should only apply on mismatched HDR
-    return ap1_color_hdr / ap1_color_sdr;
+    return color_hdr / color_sdr;
   } else {
-    float ap1_delta = ap1_color_hdr - ap1_color_sdr;
-    ap1_delta = max(0, ap1_delta);  // Cleans up NaN
-    const float ap1_new = ap1_post_process_color + ap1_delta;
+    float delta = color_hdr - color_sdr;
+    delta = max(0, delta);  // Cleans up NaN
+    const float new_value = post_process_color + delta;
 
-    const bool ap1_valid = (ap1_post_process_color > 0);  // Cleans up NaN and ignore black
-    return ap1_valid ? (ap1_new / ap1_post_process_color) : 0;
+    const bool valid = (post_process_color > 0);  // Cleans up NaN and ignore black
+    return valid ? (new_value / post_process_color) : 0;
   }
 }
 float3 UpgradeToneMapPerChannel(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength) {
@@ -77,6 +75,24 @@ float3 UpgradeToneMapPerChannel(float3 color_hdr, float3 color_sdr, float3 post_
   color_scaled = renodx::color::bt709::from::BT2020(color_scaled);
   float peak_correction = saturate(1.f - renodx::color::y::from::BT2020(bt2020_post_process));
   color_scaled = renodx::color::correct::Hue(color_scaled, post_process_color, peak_correction);
+  return lerp(color_hdr, color_scaled, post_process_strength);
+}
+
+float3 UpgradeToneMapByLuminance(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength) {
+  // float ratio = 1.f;
+
+  float3 bt2020_hdr = max(0, renodx::color::bt2020::from::BT709(color_hdr));
+  float3 bt2020_sdr = max(0, renodx::color::bt2020::from::BT709(color_sdr));
+  float3 bt2020_post_process = max(0, renodx::color::bt2020::from::BT709(post_process_color));
+
+  float ratio = UpgradeToneMapRatio(
+      renodx::color::y::from::BT2020(bt2020_hdr),
+      renodx::color::y::from::BT2020(bt2020_sdr),
+      renodx::color::y::from::BT2020(bt2020_post_process));
+
+  float3 color_scaled = max(0, bt2020_post_process * ratio);
+  color_scaled = renodx::color::bt709::from::BT2020(color_scaled);
+  color_scaled = renodx::color::correct::Hue(color_scaled, post_process_color);
   return lerp(color_hdr, color_scaled, post_process_strength);
 }
 
@@ -135,8 +151,8 @@ float3 ToneMap(float3 bt709) {
   config.reno_drt_blowout = injectedData.colorGradeBlowout;
   // Flare darkens too much (stalker2)
   // config.reno_drt_flare = 0.10f * injectedData.colorGradeFlare;
-  config.reno_drt_working_color_space = 1u;
-  config.reno_drt_per_channel = true;
+  config.reno_drt_working_color_space = 2u;
+  config.reno_drt_per_channel = false;
 
   float3 output_color = renodx::tonemap::config::Apply(bt709, config);
 
@@ -176,20 +192,27 @@ float3 FinalizeTonemap(float3 color, bool is_hdr10 = true) {
   return color;
 }
 
-float4 LutBuilderToneMap(float3 untonemapped_ap1, float3 tonemapped_bt709) {
+float3 UpgradeToneMapAP1(float3 untonemapped_ap1, float3 tonemapped_bt709) {
   float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
 
   float3 neutral_sdr_color = RenoDRTSmoothClamp(untonemapped_bt709);
 
-  float3 untonemapped_graded = UpgradeToneMapPerChannel(
+  float3 untonemapped_graded;
+
+  untonemapped_graded = UpgradeToneMapByLuminance(
       untonemapped_bt709,
       neutral_sdr_color,
       tonemapped_bt709,
       1);
 
-  float3 color = ToneMap(untonemapped_graded);
+  return ToneMap(untonemapped_graded);
+}
+
+float4 LutBuilderToneMap(float3 untonemapped_ap1, float3 tonemapped_bt709) {
+  float3 color = UpgradeToneMapAP1(untonemapped_ap1, tonemapped_bt709);
 
   // Correct gamma in final shader causes issues with FSR3 FG
+  color = renodx::color::bt709::clamp::BT2020(color);
   color = renodx::color::bt2020::from::BT709(color);
   color = CorrectGamma(color);
   color = renodx::color::pq::Encode(color, injectedData.toneMapGameNits);
