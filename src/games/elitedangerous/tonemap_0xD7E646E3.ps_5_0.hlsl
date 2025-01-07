@@ -176,8 +176,7 @@ void main(
   r1.rgb = lerp(r1.xyz, r2.xyz, cb2[11].x);             // Blend in LUT as a percentage
 
   if (injectedData.toneMapType > 0) {  // UpgradeToneMap when using Vanilla+
-    // r1.rgb = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, renodx::color::gamma::DecodeSafe(r1.rgb, 2.2f), injectedData.colorGradeLUTStrength);
-    r1.rgb = UpgradeToneMapPerChannel(hdrColor, sdrColor, renodx::color::gamma::DecodeSafe(r1.rgb, 2.2f), injectedData.colorGradeLUTStrength, 1u, 0u);
+    r1.rgb = UpgradeToneMap(hdrColor, sdrColor, renodx::color::gamma::DecodeSafe(r1.rgb, 2.2f), injectedData.colorGradeLUTStrength);
     r1.rgb = renodx::color::gamma::EncodeSafe(r1.rgb, 2.2f);
   } else {
     float3 lutInputColor = sdrColor;
