@@ -866,6 +866,7 @@ static void OnInitResource(
 static void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
   if (!is_primary_hook) return;
   auto& data = device->get_private_data<DeviceData>();
+  if (std::addressof(data) == nullptr) return;
   const std::unique_lock lock(data.mutex);
   data.resources.erase(resource.handle);
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return;
@@ -953,6 +954,7 @@ static void OnDestroyResourceView(reshade::api::device* device, reshade::api::re
   reshade::log::message(reshade::log::level::debug, s.str().c_str());
 
   auto& data = device->get_private_data<DeviceData>();
+  if (std::addressof(data) == nullptr) return;
   const std::unique_lock lock(data.mutex);
   data.resource_views.erase(view.handle);
 }

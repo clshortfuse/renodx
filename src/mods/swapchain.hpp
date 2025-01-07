@@ -1522,6 +1522,7 @@ static void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   renodx::utils::resource::RemoveResourceTag(device, resource);
 
   auto& data = device->get_private_data<DeviceData>();
+  if (std::addressof(data) == nullptr) return;
   const std::unique_lock lock(data.mutex);
 #ifdef DEBUG_LEVEL_1
   {
