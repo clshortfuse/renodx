@@ -82,7 +82,7 @@ POWSAFE_FUNCTION_GENERATOR(float4);
 
 #define SQRTSAFE_FUNCTION_GENERATOR(struct) \
   struct SqrtSafe(struct x) {               \
-    return SignSqrt(abs(x));                \
+    return SignSqrt(x);                     \
   }
 
 SQRTSAFE_FUNCTION_GENERATOR(float);
