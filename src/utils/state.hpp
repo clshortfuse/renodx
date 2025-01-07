@@ -11,7 +11,13 @@
 #include <unordered_map>
 #include <vector>
 
+#include "./resource.hpp"
+
 namespace renodx::utils::state {
+
+struct __declspec(uuid("01943e81-4c29-720a-8eff-0de3060b910f")) DeviceData {
+  std::shared_mutex mutex;
+};
 
 struct CommandListState {
   std::vector<reshade::api::resource_view> render_targets;
@@ -28,9 +34,19 @@ struct CommandListState {
 
   void Apply(reshade::api::command_list* cmd_list) const {
     if (!render_targets.empty() || depth_stencil != 0) {
+      // Destroyed RTVs are not removed
+      std::vector<reshade::api::resource_view> new_rtvs = render_targets;
+      size_t len = render_targets.size();
+      auto* device = cmd_list->get_device();
+      for (size_t i = 0; i < len; ++i) {
+        const auto& rtv = render_targets[i];
+        if (!renodx::utils::resource::IsKnownResourceView(cmd_list->get_device(), rtv)) {
+          new_rtvs[i] = {0};
+        }
+      }
       cmd_list->bind_render_targets_and_depth_stencil(
-          static_cast<uint32_t>(render_targets.size()),
-          render_targets.data(),
+          static_cast<uint32_t>(new_rtvs.size()),
+          new_rtvs.data(),
           depth_stencil);
     }
 
