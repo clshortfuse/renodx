@@ -79,6 +79,31 @@ float3 UpgradeToneMapPerChannel(float3 color_hdr, float3 color_sdr, float3 post_
   return lerp(color_hdr, color_scaled, post_process_strength);
 }
 
+float3 UpgradeToneMapByLuminance(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength) {
+  // float ratio = 1.f;
+
+  float3 bt2020_hdr = max(0, renodx::color::bt2020::from::BT709(color_hdr));
+  float3 bt2020_sdr = max(0, renodx::color::bt2020::from::BT709(color_sdr));
+  float3 bt2020_post_process = max(0, renodx::color::bt2020::from::BT709(post_process_color));
+
+  float ratio = UpgradeToneMapRatio(
+      renodx::color::y::from::BT2020(bt2020_hdr),
+      renodx::color::y::from::BT2020(bt2020_sdr),
+      renodx::color::y::from::BT2020(bt2020_post_process));
+
+  float3 color_scaled = max(0, bt2020_post_process * ratio);
+  color_scaled = renodx::color::bt709::from::BT2020(color_scaled);
+  color_scaled = renodx::color::correct::Hue(color_scaled, post_process_color);
+  return lerp(color_hdr, color_scaled, post_process_strength);
+}
+
+float3 UpgradeToneMap(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength) {
+  if (injectedData.colorGradeRestorationMethod == 1.f) {
+    return UpgradeToneMapPerChannel(color_hdr, color_sdr, post_process_color, post_process_strength);
+  }
+  return UpgradeToneMapByLuminance(color_hdr, color_sdr, post_process_color, post_process_strength);
+}
+
 /// Applies DICE tonemapper to the untonemapped HDR color.
 ///
 /// @param untonemapped - The untonemapped color.
@@ -173,7 +198,7 @@ renodx::tonemap::config::DualToneMap ToneMap(float3 color, float3 vanillaColor, 
   config.saturation = injectedData.colorGradeSaturation;
 
   // RenoDRT Settings
-  config.reno_drt_per_channel = true;
+  config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
   config.reno_drt_contrast = 1.f;
   config.reno_drt_saturation = 1.f;
   config.reno_drt_flare = lerp(0, 0.5f, pow(injectedData.colorGradeFlare, 10.f));
