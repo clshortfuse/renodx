@@ -750,6 +750,14 @@ static void ReleaseResourceView(
   }
   data.resource_view_clone_targets.erase(view.handle);
   data.swap_chain_rtvs.erase(view.handle);
+  
+  // Iterate to see if was a swap_chain_proxy_rtvs
+  for (auto pair : data.swap_chain_proxy_rtvs) {
+    if (pair.second.handle == view.handle) {
+      data.swap_chain_proxy_rtvs.erase(pair.first);
+      break;
+    }
+  }
 }
 
 static void RewriteRenderTargets(
@@ -999,16 +1007,9 @@ static void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
   cmd_list->bind_scissor_rects(0, 1, &scissor_rect);
   cmd_list->draw(3, 1, 0, 0);
   cmd_list->end_render_pass();
-  if (data.swap_chain_rtvs.empty()) {
-    // RTV may not actually be new, but reference to previous one
-    device->destroy_resource_view(rtv);
-    data.swap_chain_proxy_rtvs.erase(current_back_buffer.handle);
-  }
   queue->flush_immediate_command_list();
 
   if (previous_state.has_value()) {
-    // Don't restore RTVs for now (crashes DX11)
-    previous_state->render_targets.clear();
     previous_state->Apply(cmd_list);
   }
 
