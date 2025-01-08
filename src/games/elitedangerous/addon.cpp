@@ -80,7 +80,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapHueCorrection",
         .binding = &shader_injection.toneMapHueCorrection,
-        .default_value = 0.f,
+        .default_value = 75.f,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tooltip = "Emulates Vanilla hue shifts.",
@@ -93,7 +93,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapScaling",
         .binding = &shader_injection.toneMapPerChannel,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .label = "Scaling",
         .section = "Tone Mapping",
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
@@ -154,7 +154,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeBlowout",
         .binding = &shader_injection.colorGradeBlowout,
-        .default_value = 0.f,
+        .default_value = 25.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
@@ -177,7 +177,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ColorGradeRestorationMethod",
         .binding = &shader_injection.colorGradeRestorationMethod,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .label = "Grading Application",
         .section = "Color Grading",
         .tooltip = "Chooses method to apply grading for HDR.",
@@ -192,6 +192,54 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Defaults",
+        .section = "Color Grading Templates",
+        .group = "Templates",
+        .tooltip = "Reset to defaults",
+        .on_change = []() {
+          renodx::utils::settings::UpdateSetting("toneMapType", 3.f);
+          renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
+          renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
+          renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 1.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 75.f);
+          renodx::utils::settings::UpdateSetting("ToneMapScaling", 1.f);
+          renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
+          renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
+          renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
+          renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
+          renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
+          renodx::utils::settings::UpdateSetting("ColorGradeRestorationMethod", 1.f);
+          renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeBlowout", 25.f);
+          renodx::utils::settings::UpdateSetting("colorGradeFlare", 50.f);
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Recommended Settings",
+        .section = "Color Grading Templates",
+        .group = "Templates",
+        .tooltip = "Match the original art direction as closely as possible",
+        .on_change = []() {
+          renodx::utils::settings::UpdateSetting("toneMapType", 3.f);
+          renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
+          renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
+          renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 1.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 75.f);
+          renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
+          renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
+          renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
+          renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
+          renodx::utils::settings::UpdateSetting("colorGradeContrast", 31.f);
+          renodx::utils::settings::UpdateSetting("colorGradeSaturation", 60.f);
+          renodx::utils::settings::UpdateSetting("ColorGradeRestorationMethod", 0.f);
+          renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeBlowout", 0.f);
+          renodx::utils::settings::UpdateSetting("colorGradeFlare", 75.f);
+        },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
