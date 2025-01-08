@@ -152,15 +152,15 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeBlowout",
+        .key = "ColorGradeHighlightSaturation",
         .binding = &shader_injection.colorGradeBlowout,
-        .default_value = 25.f,
-        .label = "Blowout",
+        .default_value = 50.f,
+        .label = "Highlight Saturation",
         .section = "Color Grading",
-        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
-        .parse = [](float value) { return value * 0.01f; },
+        .is_enabled = []() { return shader_injection.toneMapType > 0; },
+        .parse = [](float value) { return (value * -0.02f) + 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeFlare",
@@ -213,7 +213,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
           renodx::utils::settings::UpdateSetting("ColorGradeRestorationMethod", 1.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-          renodx::utils::settings::UpdateSetting("colorGradeBlowout", 25.f);
+          renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
           renodx::utils::settings::UpdateSetting("colorGradeFlare", 50.f);
         },
     },
@@ -237,7 +237,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeSaturation", 60.f);
           renodx::utils::settings::UpdateSetting("ColorGradeRestorationMethod", 0.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-          renodx::utils::settings::UpdateSetting("colorGradeBlowout", 0.f);
+          renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 47.f);
           renodx::utils::settings::UpdateSetting("colorGradeFlare", 75.f);
         },
     },
