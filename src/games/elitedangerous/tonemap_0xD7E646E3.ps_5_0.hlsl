@@ -112,7 +112,7 @@ void main(
   }
   float3 untonemapped = r2.yzw;
 
-  float3 hdrColor, sdrColor;
+  float3 hdrColor, sdrColor, vanillaColor;
   if (injectedData.toneMapType == 0) {  // vanilla tonemap, tonemaps directly into gamma
 
     r1.yzw = max(float3(0, 0, 0), r2.yzw);
@@ -123,7 +123,7 @@ void main(
     sdrColor = r1.rgb;
   } else {
     untonemapped *= cb2[6].yyy;
-    float3 vanillaColor = pow(applyVanillaTonemap(untonemapped), 2.2f);  // linearized
+    vanillaColor = pow(applyVanillaTonemap(untonemapped), 2.2f);  // linearized
     float vanillaMidGray = renodx::color::y::from::BT709(pow(applyVanillaTonemap(float3(0.18, 0.18, 0.18)), 2.2f));
 
     r1.xyz = untonemapped;
@@ -177,6 +177,7 @@ void main(
 
   if (injectedData.toneMapType > 0) {  // UpgradeToneMap when using Vanilla+
     r1.rgb = UpgradeToneMap(hdrColor, sdrColor, renodx::color::gamma::DecodeSafe(r1.rgb, 2.2f), injectedData.colorGradeLUTStrength);
+    r1.rgb = renodx::color::correct::Hue(r1.rgb, vanillaColor, injectedData.toneMapHueCorrection);
     r1.rgb = renodx::color::gamma::EncodeSafe(r1.rgb, 2.2f);
   } else {
     float3 lutInputColor = sdrColor;
