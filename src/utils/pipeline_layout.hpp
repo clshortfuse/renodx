@@ -8,6 +8,7 @@
 #include <cassert>
 #include <include/reshade.hpp>
 #include <include/reshade_api_pipeline.hpp>
+#include <memory>
 #include <shared_mutex>
 #include <unordered_map>
 #include <vector>
@@ -20,7 +21,9 @@ struct PipelineLayoutData {
   std::vector<reshade::api::pipeline_layout_param> params;
   std::vector<std::vector<reshade::api::descriptor_range>> ranges;
   std::vector<reshade::api::descriptor_table> tables;
+  reshade::api::pipeline_layout replacement_layout;
 };
+
 struct __declspec(uuid("96f1f53b-90cb-4929-92d7-9a7a1a5c2493")) DeviceData {
   std::unordered_map<uint64_t, PipelineLayoutData> pipeline_layout_data;
 
@@ -95,6 +98,28 @@ static void OnDestroyPipelineLayout(
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
   data.pipeline_layout_data.erase(layout.handle);
+}
+
+static void RegisterPipelineLayoutClone(
+    reshade::api::device* device,
+    reshade::api::pipeline_layout layout_original,
+    reshade::api::pipeline_layout layout_clone) {
+  auto& data = device->get_private_data<DeviceData>();
+  if (std::addressof(data) == nullptr) return;
+  const std::unique_lock lock(data.mutex);
+  auto& entry = data.pipeline_layout_data[layout_original.handle];
+  entry.replacement_layout = layout_clone;
+}
+
+static reshade::api::pipeline_layout GetPipelineLayoutClone(
+    reshade::api::device* device,
+    reshade::api::pipeline_layout layout_original) {
+  auto& data = device->get_private_data<DeviceData>();
+  if (std::addressof(data) == nullptr) return {0};
+  const std::shared_lock lock(data.mutex);
+  auto pair = data.pipeline_layout_data.find(layout_original.handle);
+  if (pair == data.pipeline_layout_data.end()) return {0};
+  return pair->second.replacement_layout;
 }
 
 static bool attached = false;

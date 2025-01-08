@@ -27,6 +27,7 @@
 
 #include "./format.hpp"
 #include "./pipeline.hpp"
+#include "./pipeline_layout.hpp"
 
 namespace renodx::utils::shader {
 
@@ -283,8 +284,13 @@ static bool BuildReplacementPipeline(reshade::api::device* device, DeviceData& d
   }
 
   reshade::api::pipeline new_pipeline;
+  auto layout = renodx::utils::pipeline_layout::GetPipelineLayoutClone(device, details.layout);
+  if (layout.handle == 0u) {
+    layout = details.layout;
+  }
+
   const bool built_pipeline_ok = device->create_pipeline(
-      details.layout,
+      layout,
       subobject_count,
       replacement_subobjects,
       &new_pipeline);
@@ -744,6 +750,7 @@ inline DeviceData& GetShaderDeviceData(reshade::api::device* device) {
 static bool attached = false;
 
 static void Use(DWORD fdw_reason) {
+  renodx::utils::pipeline_layout::Use(fdw_reason);
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (attached) return;
