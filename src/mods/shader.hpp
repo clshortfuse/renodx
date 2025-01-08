@@ -15,6 +15,7 @@
 #include <cstdio>
 
 #include <functional>
+#include <memory>
 #include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
@@ -83,6 +84,8 @@ static bool using_custom_inject = false;
 static bool using_counted_shaders = false;
 
 struct __declspec(uuid("018e7b9c-23fd-7863-baf8-a8dad2a6db9d")) DeviceData {
+  std::shared_mutex mutex;
+
   std::unordered_map<uint64_t, int32_t> modded_pipeline_root_indexes;
   std::unordered_map<uint64_t, reshade::api::pipeline_layout> modded_pipeline_layouts;
   std::unordered_set<uint32_t> unmodified_shaders;
@@ -94,8 +97,12 @@ struct __declspec(uuid("018e7b9c-23fd-7863-baf8-a8dad2a6db9d")) DeviceData {
   bool trace_unmodified_shaders = false;
   int32_t expected_constant_buffer_index = -1;
   uint32_t expected_constant_buffer_space = 0;
-  std::shared_mutex mutex;
 
+  CustomShaders custom_shaders;
+};
+
+struct __declspec(uuid("1640985b-42c7-4e93-bd27-fc13cade5982")) CommandListData {
+  bool trace_unmodified_shaders = false;
   CustomShaders custom_shaders;
 };
 
@@ -121,6 +128,20 @@ static void OnDestroyDevice(reshade::api::device* device) {
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
   device->destroy_private_data<DeviceData>();
+}
+
+static void OnInitCommandList(reshade::api::command_list* cmd_list) {
+  auto& data = cmd_list->create_private_data<CommandListData>();
+  auto* device = cmd_list->get_device();
+  auto& device_data = device->get_private_data<DeviceData>();
+  if (std::addressof(device_data) == nullptr) return;
+  std::shared_lock local_device_lock(device_data.mutex);
+  data.custom_shaders = device_data.custom_shaders;
+  data.trace_unmodified_shaders = device_data.trace_unmodified_shaders;
+}
+
+static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
+  cmd_list->destroy_private_data<CommandListData>();
 }
 
 // Shader Injection
@@ -614,6 +635,9 @@ static bool PushShaderInjections(
   auto injection_layout = layout;
   auto device_api = cmd_list->get_device()->get_api();
   uint32_t param_index = 0;
+
+  bool use_root_constants = (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan);
+
   if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
     if (
         auto pair = device_data->modded_pipeline_root_indexes.find(layout.handle);
@@ -627,10 +651,8 @@ static bool PushShaderInjections(
       reshade::log::message(reshade::log::level::warning, s.str().c_str());
       return false;
     }
-
-  } else {
-    // Must be done before draw
-
+  }
+  if (!use_root_constants || use_pipeline_layout_cloning) {
     if (
         auto pair = device_data->modded_pipeline_layouts.find(layout.handle);
         pair != device_data->modded_pipeline_layouts.end()) {
@@ -675,9 +697,7 @@ static bool HandlePreDraw(
     reshade::api::command_list* cmd_list,
     bool is_dispatch,
     std::function<void(reshade::api::command_list*)>& on_drawn) {
-  auto* device = cmd_list->get_device();
-  auto& device_data = device->get_private_data<DeviceData>();
-  const std::unique_lock local_device_lock(device_data.mutex);
+  auto& data = cmd_list->get_private_data<CommandListData>();
 
   auto& shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
 
@@ -687,7 +707,7 @@ static bool HandlePreDraw(
     auto& swapchain_state = cmd_list->get_private_data<renodx::utils::swapchain::CommandListData>();
     if (!swapchain_state.current_render_targets.empty()) {
       auto rv = swapchain_state.current_render_targets.at(0);
-      resource_tag = renodx::utils::resource::GetResourceTag(device, rv);
+      resource_tag = renodx::utils::resource::GetResourceTag(cmd_list->get_device(), rv);
     }
   }
 
@@ -703,22 +723,31 @@ static bool HandlePreDraw(
         continue;
       }
     }
-    auto custom_shader_info_pair = device_data.custom_shaders.find(shader_hash);
-    bool is_custom_shader = custom_shader_info_pair != device_data.custom_shaders.end();
+    auto custom_shader_info_pair = data.custom_shaders.find(shader_hash);
+    bool is_custom_shader = custom_shader_info_pair != data.custom_shaders.end();
     if (!is_custom_shader) {
       if (
           !is_dispatch
-          && device_data.trace_unmodified_shaders
-          && renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list)
-          && !device_data.unmodified_shaders.contains(shader_hash)) {
-        std::stringstream s;
-        s << "mods::shader::HandlePreDraw(unmodified ";
-        s << stage;
-        s << " shader writing to swapchain: ";
-        s << PRINT_CRC32(shader_hash);
-        s << ")";
-        reshade::log::message(reshade::log::level::warning, s.str().c_str());
-        device_data.unmodified_shaders.emplace(shader_hash);
+          && data.trace_unmodified_shaders
+          && renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list)) {
+        auto* device = cmd_list->get_device();
+        auto& device_data = device->get_private_data<DeviceData>();
+        std::shared_lock local_device_lock(device_data.mutex);
+        if (!device_data.unmodified_shaders.contains(shader_hash)) {
+          std::stringstream s;
+          s << "mods::shader::HandlePreDraw(unmodified ";
+          s << stage;
+          s << " shader writing to swapchain: ";
+          s << PRINT_CRC32(shader_hash);
+          s << ")";
+          reshade::log::message(reshade::log::level::warning, s.str().c_str());
+          local_device_lock.unlock();
+          {
+            std::unique_lock write_lock(device_data.mutex);
+            device_data.unmodified_shaders.emplace(shader_hash);
+          }
+          local_device_lock.lock();
+        }
       }
 
       continue;  // move to next shader
@@ -781,6 +810,8 @@ static bool HandlePreDraw(
 
   if (found_custom_shader) {
     if (should_inject_cbuffer && shader_injection_size != 0 && shader_state.pipeline_layout.handle != 0u) {
+      auto& device_data = cmd_list->get_device()->get_private_data<DeviceData>();
+      std::shared_lock local_device_lock(device_data.mutex);
       PushShaderInjections(cmd_list,
                            &device_data,
                            &shader_state,
@@ -925,6 +956,8 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
 
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+      reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
+      reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
 
       for (const auto& [hash, shader] : (new_custom_shaders)) {
         if (shader.on_replace != nullptr) using_custom_replace = true;
@@ -1003,6 +1036,8 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
 
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+      reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitCommandList);
+      reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
 
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
 

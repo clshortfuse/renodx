@@ -3,6 +3,7 @@
 #define ImTextureID ImU64
 
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <vector>
 
@@ -262,8 +263,6 @@ static void SaveGlobalSettings(reshade::api::effect_runtime* runtime) {
 // Runs first
 // https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
-  const std::unique_lock lock(renodx::utils::mutex::global_mutex);
-
   bool changed_preset = false;
   if (use_presets) {
     changed_preset = ImGui::SliderInt(
@@ -466,6 +465,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       }
 
       if (changed) {
+        const std::unique_lock lock(renodx::utils::mutex::global_mutex);
         setting->Write();
         any_change = true;
       }
