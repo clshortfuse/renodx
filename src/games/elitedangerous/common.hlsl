@@ -199,19 +199,18 @@ renodx::tonemap::config::DualToneMap ToneMap(float3 color, float3 vanillaColor, 
 
   // RenoDRT Settings
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
-  config.reno_drt_contrast = 1.f;
-  config.reno_drt_saturation = 1.f;
-  config.reno_drt_flare = lerp(0, 0.5f, pow(injectedData.colorGradeFlare, 10.f));
+  config.reno_drt_highlights = 0.84f;
+  config.reno_drt_contrast = 1.64f;
+  config.reno_drt_saturation = 1.04f;
+  config.reno_drt_flare = lerp(0, 0.008f, pow(injectedData.colorGradeFlare, 10.f));
   config.reno_drt_shadows = 1.f;
   config.reno_drt_working_color_space = 1u;
   config.reno_drt_blowout = injectedData.colorGradeBlowout;
   config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  config.reno_drt_hue_correction_method =
-      renodx::tonemap::renodrt::config::hue_correction_method::OKLAB;
-  config.hue_correction_type =
-      renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_strength = injectedData.toneMapHueCorrection;
-  config.hue_correction_color = vanillaColor;
+  config.reno_drt_hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::OKLAB;
+  // config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
+  config.hue_correction_strength = 0.f;
+  // config.hue_correction_color = vanillaColor;
 
   renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(color, config);
 
