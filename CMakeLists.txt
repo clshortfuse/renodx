@@ -52,7 +52,7 @@ function(inspect_hlsl_imports FILE VARIABLE REQUESTING_FILE)
         #message(${FILE} " - Added: " ${HLSL_PATH})
         # message(${FILE} " - List: " ${CACHE_ENTRY})
         # recursive
-        inspect_hlsl_imports(${HLSL_PATH} CHILD_DEPENDENCIES, ${FILE})
+        inspect_hlsl_imports(${HLSL_PATH} CHILD_DEPENDENCIES ${FILE})
         # message(${FILE} " - Adding children from " ${HLSL_PATH} ": " ${TEMP_CACHE_ENTRY})
         list(APPEND CACHE_ENTRY ${CHILD_DEPENDENCIES})
         # message(${FILE} " - Added children from " ${HLSL_PATH} ": " ${CACHE_ENTRY})
