@@ -143,8 +143,8 @@ float3 ToneMap(float3 bt709) {
   config.reno_drt_shadows = 1.0f;
   config.reno_drt_contrast = 1.0f;
   config.reno_drt_saturation = 1.0f;
-  config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_blowout = injectedData.colorGradeBlowout;
+  config.reno_drt_dechroma = injectedData.colorGradeBlowout;
+  config.reno_drt_blowout = -1.f * (injectedData.colorGradeHighlightSaturation - 1.f);
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.reno_drt_working_color_space = 2u;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
@@ -152,11 +152,11 @@ float3 ToneMap(float3 bt709) {
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
 
   config.hue_correction_strength = injectedData.toneMapHueCorrection;
-  if (injectedData.toneMapHueCorrectionMethod == 1.f) {
-    config.hue_correction_type =
-        renodx::tonemap::config::hue_correction_type::CUSTOM;
-    config.hue_correction_color = RenoDRTSmoothClamp(bt709);
-  }
+  // if (injectedData.toneMapHueCorrectionMethod == 1.f) {
+  // config.hue_correction_type =
+  // renodx::tonemap::config::hue_correction_type::CUSTOM;
+  // config.hue_correction_color = RenoDRTSmoothClamp(bt709);
+  // }
 
   float3 output_color = renodx::tonemap::config::Apply(bt709, config);
 
@@ -165,6 +165,7 @@ float3 ToneMap(float3 bt709) {
 
 float3 UpgradeToneMapAP1(float3 untonemapped_ap1, float3 tonemapped_bt709) {
   float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
+  return renodx::draw::ToneMapPass(untonemapped_bt709, tonemapped_bt709);
 
   float3 untonemapped_graded = untonemapped_bt709;
   if (injectedData.colorGradeStrength != 0) {
@@ -192,7 +193,7 @@ float4 LutBuilderToneMap(float3 untonemapped_ap1, float3 tonemapped_bt709) {
   float3 color = UpgradeToneMapAP1(untonemapped_ap1, tonemapped_bt709);
 
   color = renodx::color::bt709::clamp::BT2020(color);
-  color = PostToneMapScale(color);
+  color = renodx::draw::RenderIntermediatePass(color);
   color *= 1.f / 1.05f;
   return float4(color, 1);
 }

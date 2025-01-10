@@ -414,7 +414,7 @@ void main(
 
     if (injectedData.toneMapType != 0) {
       float3 color = UpgradeToneMapAP1(untonemapped_ap1, r1.xyz);
-      color = PostToneMapScale(color);
+      color = renodx::draw::RenderIntermediatePass(color);
       color = cb0[37].www * -cb0[37].xyz + color;  // lerp to 0
       color *= 1.f / 1.05f;
       color = renodx::color::bt709::clamp::BT2020(color);

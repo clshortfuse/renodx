@@ -107,7 +107,8 @@ void main(
     o0.rgb /= videoPeak;                                                    // Normalize to 1.0f = peak;
     o0.rgb *= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;  // 1.f = game nits
   }
-  o0.rgb = PostToneMapScale(o0.rgb);  // Gamma Correct
+
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);  // Gamma Correct
 
   // r2.xzw = r2.xzw * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
   // r3.xyz = float3(12.9200001,12.9200001,12.9200001) * r1.xyz;
