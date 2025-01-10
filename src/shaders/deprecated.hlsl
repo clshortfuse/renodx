@@ -63,6 +63,15 @@ float3 BT2020(float3 bt2020_color, float scaling = 10000.f) {
 }  // namespace from
 }  // namespace pq
 
+namespace bt2020 {
+namespace from {
+/// @deprecated - Use pq::Decode
+float3 PQ(float3 pq_color, float scaling = 10000.f) {
+  return pq::Decode(pq_color, scaling);
+}
+}  // namespace from
+}  // namespace bt2020
+
 }  // namespace color
 
 namespace math {

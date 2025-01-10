@@ -139,6 +139,12 @@ static const float3x3 BT709_TO_AP1_MAT = float3x3(
     0.0701937225, 0.9163538791, 0.0134523985,
     0.0206155929, 0.1095697729, 0.8698146342);
 
+// With Bradford
+static const float3x3 BT2020_TO_AP1_MAT = float3x3(
+    0.9748949779f, 0.0195991086f, 0.0055059134f,
+    0.0021795628f, 0.9955354689f, 0.0022849683f,
+    0.0047972397f, 0.0245320166f, 0.9706707437f);
+
 static const float3x3 BT709_TO_BT2020_MAT = mul(XYZ_TO_BT2020_MAT, BT709_TO_XYZ_MAT);
 static const float3x3 BT709_TO_BT709D60_MAT = mul(XYZ_TO_BT709_MAT, mul(D65_TO_D60_CAT, BT709_TO_XYZ_MAT));
 static const float3x3 BT709_TO_BT2020D60_MAT = mul(XYZ_TO_BT2020_MAT, mul(D65_TO_D60_CAT, BT709_TO_XYZ_MAT));
@@ -161,7 +167,11 @@ static const float3x3 AP1_TO_BT709_MAT = float3x3(
     -0.1302564175, 1.1408047366, -0.0105483191,
     -0.0240033568, -0.1289689761, 1.1529723329);
 
-static const float3x3 AP1_TO_BT2020_MAT = mul(XYZ_TO_BT2020_MAT, mul(D60_TO_D65_MAT, AP1_TO_XYZ_MAT));
+// With Bradford
+static const float3x3 AP1_TO_BT2020_MAT = float3x3(
+    1.0258247477f, -0.0200531908f, -0.0057715568f,
+    -0.0022343695f, 1.0045865019f, -0.0023521324f,
+    -0.0050133515f, -0.0252900718f, 1.0303034233f);
 
 static const float3x3 AP1_TO_BT709D60_MAT = mul(XYZ_TO_BT709_MAT, AP1_TO_XYZ_MAT);
 static const float3x3 AP1_TO_BT2020D60_MAT = mul(XYZ_TO_BT2020_MAT, AP1_TO_XYZ_MAT);
@@ -275,6 +285,11 @@ namespace from {
 float3 BT709(float3 bt709) {
   return mul(BT709_TO_BT2020_MAT, bt709);
 }
+
+float3 AP1(float3 ap1) {
+  return mul(AP1_TO_BT2020_MAT, ap1);
+}
+
 }  // namespace from
 }  // namespace bt2020
 
@@ -282,6 +297,10 @@ namespace ap1 {
 namespace from {
 float3 BT709(float3 bt709) {
   return mul(BT709_TO_AP1_MAT, bt709);
+}
+
+float3 BT2020(float3 bt2020) {
+  return mul(BT2020_TO_AP1_MAT, bt2020);
 }
 }  // namespace from
 }  // namespace ap1
@@ -646,15 +665,6 @@ GENERATE_ARRI_LOGC_FUNCTIONS(float3)
 }  // namespace logc
 }  // namespace arri
 
-namespace bt2020 {
-namespace from {
-/// @deprecated - Use pq::Decode
-float3 PQ(float3 pq_color, float scaling = 10000.f) {
-  return pq::Decode(pq_color, scaling);
-}
-}  // namespace from
-}  // namespace bt2020
-
 namespace oklab {
 namespace from {
 float3 BT709(float3 bt709) {
@@ -847,6 +857,7 @@ float3 HSB(float3 hsb, float cz = 1.f) {
 
 namespace bt2408 {
 static const float REFERENCE_WHITE = 203.f;
+static const float GRAPHICS_WHITE = 203.f;
 }  // namespace bt2408
 
 namespace oklch {
