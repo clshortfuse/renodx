@@ -9,6 +9,7 @@
 #include "./colorgrade.hlsl"
 #include "./debug.hlsl"
 #include "./DICE.hlsl"
+#include "./draw.hlsl"
 #include "./effects.hlsl"
 #include "./frostbite.hlsl"
 #include "./inverse_tonemap.hlsl"
