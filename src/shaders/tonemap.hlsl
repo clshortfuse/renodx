@@ -5,7 +5,7 @@
 #include "./colorcorrect.hlsl"
 #include "./colorgrade.hlsl"
 #include "./lut.hlsl"
-#include "./renodrt.hlsl"
+#include "./reno_drt.hlsl"
 
 namespace renodx {
 namespace tonemap {

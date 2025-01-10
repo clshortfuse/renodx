@@ -1,5 +1,5 @@
-#ifndef SRC_SHADERS_RENODRT_HLSL_
-#define SRC_SHADERS_RENODRT_HLSL_
+#ifndef SRC_SHADERS_RENO_DRT_HLSL_
+#define SRC_SHADERS_RENO_DRT_HLSL_
 
 #include "./color.hlsl"
 #include "./math.hlsl"
@@ -387,4 +387,4 @@ float3 NeutralSDR(float3 bt709) {
 }  // namespace tonemap
 }  // namespace renodx
 
-#endif  // SRC_SHADERS_RENODRT_HLSL_
+#endif  // SRC_SHADERS_RENO_DRT_HLSL_
