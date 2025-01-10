@@ -445,7 +445,7 @@ float3 ToneMapPass(float3 color, Config draw_config) {
   if (draw_config.tone_map_hue_shift != 0) {
     output_color = renodx::color::correct::Hue(
         output_color,
-        renodx::color::bt709::clamp::BT709(output_color),
+        renodx::tonemap::renodrt::NeutralSDR(output_color),
         draw_config.tone_map_hue_shift);
   }
 
