@@ -186,7 +186,9 @@ void main(
 
   r1.xyz = (r1.xyz * cb2[10].yyy + cb2[9].yyy);  // r1.xyz = saturate(r1.xyz * cb2[10].yyy + cb2[9].yyy);
 
-  r1.w = dot(max(0, r1.xyz), float3(0.308600008, 0.609399974, 0.0820000023));
+  // fix luminance calculation
+  r1.w = renodx::color::y::from::BT709(max(0, r1.rgb));  // r1.w = dot(max(0, r1.xyz), float3(0.308600008, 0.609399974, 0.0820000023));
+
   r1.xyz = r1.xyz + -r1.www;
   r1.xyz = cb2[10].zzz * r1.xyz + r1.www;
   r0.xyz = cb2[10].xxx * r1.xyz;
