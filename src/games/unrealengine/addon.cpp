@@ -50,6 +50,10 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedShaderEntry(0x00E9C5FE),
     TracedShaderEntry(0xE9343033),
 
+    // Persona 3 Reload
+    TracedShaderEntry(0xCB9976C8),
+    TracedShaderEntry(0xBFE48347),
+
     // SM5 LUT Builder
     TracedShaderEntry(0x1DF6036B),
     TracedShaderEntry(0x20EAC9B6),
@@ -99,6 +103,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedShaderEntry(0xB530B36A),
     TracedShaderEntry(0xB6CA5FD9),
     TracedShaderEntry(0xBAA27141),
+    TracedShaderEntry(0xEBB3E98C),
 };
 
 ShaderInjectData shader_injection;
@@ -445,10 +450,6 @@ void OnInitDevice(reshade::api::device* device) {
     renodx::mods::shader::expected_constant_buffer_space = 50;
     renodx::mods::swapchain::expected_constant_buffer_space = 50;
 
-    renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
-      return device->get_api() == reshade::api::device_api::d3d12;
-    };
-
     renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader_dx12;
     renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx12;
     // renodx::mods::shader::custom_shaders doesn't use the shader data, just hashes
@@ -734,6 +735,9 @@ void AddShaders() {
           {0xE6EB2840, __0xE6EB2840},
           {0xF6AA7756, __0xF6AA7756},
           {0xFBB78F9F, __0xFBB78F9F},
+          {0x6E6FC244, __0x6E6FC244},
+          {0x8D3D2FA0, __0x8D3D2FA0},
+          {0x97BAC8AF, __0x97BAC8AF},
       },
       true, true, {reshade::api::device_api::d3d11});
 
@@ -773,6 +777,9 @@ void AddShaders() {
           {0xE6EB2840, __lutbuilder_0xE6EB2840_dx12},
           {0xF6AA7756, __lutbuilder_0xF6AA7756_dx12},
           {0xFBB78F9F, __lutbuilder_0xFBB78F9F_dx12},
+          {0x6E6FC244, __lutbuilder_0x6E6FC244_dx12},
+          {0x8D3D2FA0, __lutbuilder_0x8D3D2FA0_dx12},
+          {0x97BAC8AF, __lutbuilder_0x97BAC8AF_dx12},
 
           {0x269E94C1, __0x269E94C1},
           {0x3028EBE7, __0x3028EBE7},
@@ -786,9 +793,11 @@ void AddShaders() {
           {0xB530B36A, __0xB530B36A},
           {0xB6CA5FD9, __0xB6CA5FD9},
           {0xBAA27141, __0xBAA27141},
-          {0x6E6FC244, __0x6E6FC244},
-          {0x8D3D2FA0, __0x8D3D2FA0},
-          {0x97BAC8AF, __0x97BAC8AF},
+          {0xEBB3E98C, __0xEBB3E98C},
+
+          // P3 Reload
+          {0xCB9976C8, __0xCB9976C8},
+          {0xBFE48347, __0xBFE48347},
       },
       true, true, {reshade::api::device_api::d3d12});
 }
