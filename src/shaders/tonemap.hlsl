@@ -187,6 +187,7 @@ struct Config {
   uint reno_drt_working_color_space;
   bool reno_drt_per_channel;
   float reno_drt_blowout;
+  float reno_drt_clamp_color_space;
 };
 
 float3 UpgradeToneMap(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength) {
@@ -253,7 +254,8 @@ Config Create(
     uint reno_drt_tone_map_method = renodrt::config::tone_map_method::DANIELE,
     uint reno_drt_working_color_space = 0u,
     bool reno_drt_per_channel = false,
-    float reno_drt_blowout = 0) {
+    float reno_drt_blowout = 0,
+    float reno_drt_clamp_color_space = 2.f) {
   const Config tm_config = {
     type,
     peak_nits,
@@ -279,7 +281,8 @@ Config Create(
     reno_drt_tone_map_method,
     reno_drt_working_color_space,
     reno_drt_per_channel,
-    reno_drt_blowout
+    reno_drt_blowout,
+    reno_drt_clamp_color_space
   };
   return tm_config;
 }
@@ -321,6 +324,7 @@ float3 ApplyRenoDRT(float3 color, Config tm_config) {
   reno_drt_config.working_color_space = tm_config.reno_drt_working_color_space;
   reno_drt_config.per_channel = tm_config.reno_drt_per_channel;
   reno_drt_config.blowout = tm_config.reno_drt_blowout;
+  reno_drt_config.clamp_color_space = tm_config.reno_drt_clamp_color_space;
 
   return renodrt::BT709(color, reno_drt_config);
 }
