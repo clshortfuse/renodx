@@ -5,6 +5,7 @@
 
 #include "./aces.hlsl"
 #include "./color.hlsl"
+#include "./color_convert.hlsl"
 #include "./colorcorrect.hlsl"
 #include "./colorgrade.hlsl"
 #include "./debug.hlsl"
