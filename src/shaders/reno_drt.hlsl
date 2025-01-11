@@ -364,7 +364,7 @@ float3 BT709(
       bt709);
 }
 
-float3 NeutralSDR(float3 bt709) {
+float3 NeutralSDR(float3 bt709, bool per_channel = false) {
   Config renodrt_config = config::Create();
   renodrt_config.nits_peak = 100.f;
   renodrt_config.mid_gray_value = 0.18f;
@@ -376,6 +376,7 @@ float3 NeutralSDR(float3 bt709) {
   renodrt_config.saturation = 1.f;
   renodrt_config.dechroma = 0.f;
   renodrt_config.flare = 0.f;
+  renodrt_config.per_channel = per_channel;
   renodrt_config.hue_correction_strength = 0.f;
   renodrt_config.working_color_space = 0u;
   renodrt_config.clamp_color_space = 0u;
