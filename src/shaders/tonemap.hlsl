@@ -109,6 +109,41 @@ float3 ACESFittedAP1(float3 color) {
   return color;
 }
 
+// Uchimura 2018, "Practical HDR and Wide Color Techniques in Gran Turismo SPORT"
+// https://www.desmos.com/calculator/gslcdxvipg
+// http://cdn2.gran-turismo.com/data/www/pdi_publications/PracticalHDRandWCGinGTS.pdf
+#define GTTONEMAP_GENERATOR(T)                \
+  T GTTonemap(T x,                            \
+              float P = 1.f,                  \
+              float a = 1.f,                  \
+              float m = 0.22f,                \
+              float l = 0.4f,                 \
+              float c = 1.33f,                \
+              float b = 0.f) {                \
+    float l0 = ((P - m) * l) / a;             \
+    float L0 = m - (m / a);                   \
+    float L1 = m + (1.0f - m) / a;            \
+                                              \
+    T S0 = m + l0;                            \
+    T S1 = m + a * l0;                        \
+    T C2 = (a * P) / (P - S1);                \
+    T CP = -C2 / P;                           \
+                                              \
+    T w0 = 1.0f - smoothstep(0.0f, m, x);     \
+    T w2 = step(m + l0, x);                   \
+    T w1 = 1.0f - w0 - w2;                    \
+                                              \
+    T T_ = m * pow(x / m, c) + b;             \
+    T S_ = P - (P - S1) * exp(CP * (x - S0)); \
+    T L_ = m + a * (x - m);                   \
+                                              \
+    return T_ * w0 + L_ * w1 + S_ * w2;       \
+  }
+
+GTTONEMAP_GENERATOR(float)
+GTTONEMAP_GENERATOR(float3)
+#undef GTTONEMAP_GENERATOR
+
 // https://www.slideshare.net/ozlael/hable-john-uncharted2-hdr-lighting
 // http://filmicworlds.com/blog/filmic-tonemapping-operators/
 
