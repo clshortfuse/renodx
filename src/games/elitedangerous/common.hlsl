@@ -1,4 +1,3 @@
-#include "./DICE.hlsl"
 #include "./shared.h"
 
 float UpgradeToneMapRatio(float color_hdr, float color_sdr, float post_process_color) {
@@ -104,36 +103,15 @@ float3 UpgradeToneMap(float3 color_hdr, float3 color_sdr, float3 post_process_co
   return UpgradeToneMapByLuminance(color_hdr, color_sdr, post_process_color, post_process_strength);
 }
 
-/// Applies DICE tonemapper to the untonemapped HDR color.
-///
-/// @param untonemapped - The untonemapped color.
-/// @return The HDR color tonemapped with DICE.
-float3 applyDICE(float3 untonemapped, float peakWhite, float paperWhite) {
-  // Declare DICE parameters
-  DICESettings config = DefaultDICESettings();
-  config.Type = 3;
-  config.ShoulderStart = 0.35f;
-  const float dicePaperWhite = paperWhite / renodx::color::srgb::REFERENCE_WHITE;
-  const float dicePeakWhite = peakWhite / renodx::color::srgb::REFERENCE_WHITE;
-
-  // multiply paper white in for tonemapping and out for output
-  return DICETonemap(untonemapped * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
-}
-
 float3 DisplayMapAndScale(float3 color) {
   color = renodx::color::gamma::DecodeSafe(color);
   if (RENODX_GAMMA_CORRECTION == 1.f) {
     color = renodx::color::srgb::EncodeSafe(color);
     color = renodx::color::gamma::DecodeSafe(color, 2.2f);
-    if (RENODX_TONE_MAP_TYPE == 4) {
-      color = applyDICE(color, RENODX_PEAK_WHITE_NITS, RENODX_DIFFUSE_WHITE_NITS);
-    }
+
     color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
     color = renodx::color::gamma::EncodeSafe(color, 2.2f);
   } else {
-    if (RENODX_TONE_MAP_TYPE == 4) {
-      color = applyDICE(color, RENODX_PEAK_WHITE_NITS, RENODX_DIFFUSE_WHITE_NITS);
-    }
     color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
     color = renodx::color::srgb::EncodeSafe(color);
   }
@@ -215,6 +193,7 @@ renodx::tonemap::config::DualToneMap ToneMap(float3 color, float3 vanillaColor, 
   // config.hue_correction_color = vanillaColor;
 
   renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(color, config);
+  dual_tone_map.color_sdr = saturate(dual_tone_map.color_sdr);
 
   return dual_tone_map;
 }
