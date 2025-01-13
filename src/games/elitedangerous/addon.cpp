@@ -261,7 +261,9 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          ShellExecute(0, "open", (std::string("https://discord.gg/") + "5WZXDpmbpP").c_str(), 0, 0, SW_SHOW);
+          renodx::utils::platform::Launch(
+              "https://discord.gg/"
+              "5WZXDpmbpP");
         },
     },
     new renodx::utils::settings::Setting{
@@ -271,7 +273,9 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x2B3137,
         .on_change = []() {
-          ShellExecute(0, "open", (std::string("https://github.com/") + "clshortfuse/renodx/wiki/Mods").c_str(), 0, 0, SW_SHOW);
+          renodx::utils::platform::Launch(
+              "https://github.com/"
+              "clshortfuse/renodx/wiki/Mods");
         },
     },
     new renodx::utils::settings::Setting{
@@ -281,7 +285,9 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x2B3137,
         .on_change = []() {
-          ShellExecute(0, "open", (std::string("https://github.com/") + "clshortfuse/renodx").c_str(), 0, 0, SW_SHOW);
+          renodx::utils::platform::Launch(
+              "https://github.com/"
+              "clshortfuse/renodx/");
         },
     },
     new renodx::utils::settings::Setting{
@@ -291,7 +297,9 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-2",
         .tint = 0xFF5A16,
         .on_change = []() {
-          ShellExecute(0, "open", (std::string("https://ko-fi.com/") + "musaqh").c_str(), 0, 0, SW_SHOW);
+          renodx::utils::platform::Launch(
+              "https://ko-fi.com/"
+              "musaqh/");
         },
     },
     new renodx::utils::settings::Setting{
