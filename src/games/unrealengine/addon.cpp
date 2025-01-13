@@ -88,6 +88,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedShaderEntry(0x6E6FC244),
     TracedShaderEntry(0x8D3D2FA0),
     TracedShaderEntry(0x97BAC8AF),
+    TracedShaderEntry(0x2F460105),
+    TracedShaderEntry(0x5BD6A5C2),
 
     // SM6 LUT Builder
 
@@ -738,6 +740,8 @@ void AddShaders() {
           {0x6E6FC244, __0x6E6FC244},
           {0x8D3D2FA0, __0x8D3D2FA0},
           {0x97BAC8AF, __0x97BAC8AF},
+          {0x2F460105, __0x2F460105},
+          {0x5BD6A5C2, __0x5BD6A5C2},
       },
       true, true, {reshade::api::device_api::d3d11});
 
@@ -780,6 +784,8 @@ void AddShaders() {
           {0x6E6FC244, __lutbuilder_0x6E6FC244_dx12},
           {0x8D3D2FA0, __lutbuilder_0x8D3D2FA0_dx12},
           {0x97BAC8AF, __lutbuilder_0x97BAC8AF_dx12},
+          {0x2F460105, __lutbuilder_0x2F460105_dx12},
+          {0x5BD6A5C2, __lutbuilder_0x5BD6A5C2_dx12},
 
           {0x269E94C1, __0x269E94C1},
           {0x3028EBE7, __0x3028EBE7},
