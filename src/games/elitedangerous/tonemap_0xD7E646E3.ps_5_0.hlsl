@@ -113,7 +113,7 @@ void main(
   float3 untonemapped = r2.yzw;
 
   float3 hdrColor, sdrColor, vanillaColor;
-  if (injectedData.toneMapType == 0) {  // vanilla tonemap, tonemaps directly into gamma
+  if (RENODX_TONE_MAP_TYPE == 0) {  // vanilla tonemap, tonemaps directly into gamma
 
     r1.yzw = max(float3(0, 0, 0), r2.yzw);
     r1.xyz = min(r1.yzw, r1.xxx);
@@ -127,30 +127,30 @@ void main(
     float vanillaMidGray = renodx::color::y::from::BT709(pow(applyVanillaTonemap(float3(0.18, 0.18, 0.18)), 2.2f));
 
     r1.xyz = untonemapped;
-    if (injectedData.toneMapType == 4.f) {
+    if (RENODX_TONE_MAP_TYPE == 4.f) {
       r1.xyz = renodx::color::grade::UserColorGrading(
           r1.xyz,
-          1.f,                                // exposure
-          injectedData.colorGradeHighlights,  // highlights, apply before blending
-          1.f,                                // shadows
-          1.f,                                // contrast
-          1.f,                                // saturation
-          injectedData.colorGradeBlowout,     // dechroma
-          0.f);                               // hue correction
-      r1.xyz *= vanillaMidGray / 0.18f;       // mid gray
+          1.f,                                   // exposure
+          RENODX_TONE_MAP_HIGHLIGHTS,            // highlights, apply before blending
+          1.f,                                   // shadows
+          1.f,                                   // contrast
+          1.f,                                   // saturation
+          RENODX_TONE_MAP_HIGHLIGHT_SATURATION,  // dechroma
+          0.f);                                  // hue correction
+      r1.xyz *= vanillaMidGray / 0.18f;          // mid gray
 
       r1.xyz = lerp(vanillaColor, r1.xyz, saturate(vanillaColor));  // combine tonemap
 
       r1.xyz = renodx::color::grade::UserColorGrading(
           r1.xyz,
-          injectedData.colorGradeExposure,    // exposure
-          1.f,                                // highlights
-          injectedData.colorGradeShadows,     // shadows
-          injectedData.colorGradeContrast,    // contrast
-          injectedData.colorGradeSaturation,  // saturation
-          0.f,                                // blowout
-          injectedData.toneMapHueCorrection,  // hue correction
-          vanillaColor);                      // hue correction source
+          RENODX_TONE_MAP_EXPOSURE,        // exposure
+          1.f,                             // highlights
+          RENODX_TONE_MAP_SHADOWS,         // shadows
+          RENODX_TONE_MAP_CONTRAST,        // contrast
+          RENODX_TONE_MAP_SATURATION,      // saturation
+          0.f,                             // blowout
+          RENODX_TONE_MAP_HUE_CORRECTION,  // hue correction
+          vanillaColor);                   // hue correction source
 
       hdrColor = r1.rgb;
       sdrColor = RenoDRTSmoothClamp(r1.rgb);
@@ -175,13 +175,13 @@ void main(
   r2.rgb = t0.Sample(s0_s, r1.xyz * scale + bias).rgb;  // LUT
   r1.rgb = lerp(r1.xyz, r2.xyz, cb2[11].x);             // Blend in LUT as a percentage
 
-  if (injectedData.toneMapType > 0) {  // UpgradeToneMap when using Vanilla+
-    r1.rgb = UpgradeToneMap(hdrColor, sdrColor, renodx::color::gamma::DecodeSafe(r1.rgb, 2.2f), injectedData.colorGradeLUTStrength);
-    r1.rgb = renodx::color::correct::Hue(r1.rgb, vanillaColor, injectedData.toneMapHueCorrection);
+  if (RENODX_TONE_MAP_TYPE > 0) {  // UpgradeToneMap when using Vanilla+
+    r1.rgb = UpgradeToneMap(hdrColor, sdrColor, renodx::color::gamma::DecodeSafe(r1.rgb, 2.2f), CUSTOM_LUT_STRENGTH);
+    r1.rgb = renodx::color::correct::Hue(r1.rgb, vanillaColor, RENODX_TONE_MAP_HUE_CORRECTION);
     r1.rgb = renodx::color::gamma::EncodeSafe(r1.rgb, 2.2f);
   } else {
     float3 lutInputColor = sdrColor;
-    r1.rgb = lerp(lutInputColor, r1.rgb, injectedData.colorGradeLUTStrength);
+    r1.rgb = lerp(lutInputColor, r1.rgb, CUSTOM_LUT_STRENGTH);
   }
 
   r1.xyz = (r1.xyz * cb2[10].yyy + cb2[9].yyy);  // r1.xyz = saturate(r1.xyz * cb2[10].yyy + cb2[9].yyy);
