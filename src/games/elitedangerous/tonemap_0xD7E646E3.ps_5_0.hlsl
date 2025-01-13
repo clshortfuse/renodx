@@ -127,40 +127,10 @@ void main(
     float vanillaMidGray = renodx::color::y::from::BT709(pow(applyVanillaTonemap(float3(0.18, 0.18, 0.18)), 2.2f));
 
     r1.xyz = untonemapped;
-    if (RENODX_TONE_MAP_TYPE == 4.f) {
-      r1.xyz = renodx::color::grade::UserColorGrading(
-          r1.xyz,
-          1.f,                                   // exposure
-          RENODX_TONE_MAP_HIGHLIGHTS,            // highlights, apply before blending
-          1.f,                                   // shadows
-          1.f,                                   // contrast
-          1.f,                                   // saturation
-          RENODX_TONE_MAP_HIGHLIGHT_SATURATION,  // dechroma
-          0.f);                                  // hue correction
-      r1.xyz *= vanillaMidGray / 0.18f;          // mid gray
-
-      r1.xyz = lerp(vanillaColor, r1.xyz, saturate(vanillaColor));  // combine tonemap
-
-      r1.xyz = renodx::color::grade::UserColorGrading(
-          r1.xyz,
-          RENODX_TONE_MAP_EXPOSURE,        // exposure
-          1.f,                             // highlights
-          RENODX_TONE_MAP_SHADOWS,         // shadows
-          RENODX_TONE_MAP_CONTRAST,        // contrast
-          RENODX_TONE_MAP_SATURATION,      // saturation
-          0.f,                             // blowout
-          RENODX_TONE_MAP_HUE_CORRECTION,  // hue correction
-          vanillaColor);                   // hue correction source
-
-      hdrColor = r1.rgb;
-      sdrColor = RenoDRTSmoothClamp(r1.rgb);
-      r1.rgb = sdrColor;
-    } else {
-      renodx::tonemap::config::DualToneMap dual_tone_map = ToneMap(r1.rgb, vanillaColor, vanillaMidGray);
-      hdrColor = dual_tone_map.color_hdr;
-      sdrColor = dual_tone_map.color_sdr;
-      r1.rgb = sdrColor;
-    }
+    renodx::tonemap::config::DualToneMap dual_tone_map = ToneMap(r1.rgb, vanillaColor, vanillaMidGray);
+    hdrColor = dual_tone_map.color_hdr;
+    sdrColor = dual_tone_map.color_sdr;
+    r1.rgb = sdrColor;
     r1.xyz = renodx::color::gamma::Encode(max(0, r1.xyz), 2.2f);  // output in gamma space
   }
 
