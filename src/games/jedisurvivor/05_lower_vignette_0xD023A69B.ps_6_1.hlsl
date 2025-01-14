@@ -17,7 +17,7 @@ float4 main(float4 gl_FragCoord : SV_Position, float4 TEXCOORD : TEXCOORD0) : SV
                   min(max((_56 * _15_m0[5u].y) + _15_m0[4u].y, _15_m0[6u].y),
                       _15_m0[6u].w)));
 
-  if (injectedData.fxVignette == 0.f) {
+  if (CUSTOM_VIGNETTE == 0.f) {
     return float4(_86.rgb, 1.f);
   }
 
@@ -48,7 +48,7 @@ float4 main(float4 gl_FragCoord : SV_Position, float4 TEXCOORD : TEXCOORD0) : SV
   SV_Target.z = max(((_20_m0[2u].z - _176) * _20_m0[6u].x) + _176, 0.0f);
   SV_Target.w = 1.0f;
 
-  SV_Target.rgb = lerp(_86.rgb, SV_Target.rgb, injectedData.fxVignette);
+  SV_Target.rgb = lerp(_86.rgb, SV_Target.rgb, CUSTOM_VIGNETTE);
 
   return SV_Target;
 }

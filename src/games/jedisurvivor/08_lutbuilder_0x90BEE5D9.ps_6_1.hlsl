@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./common.hlsl"
 
 static const float _35[6] = {-4.0f, -4.0f, -3.1573765277862548828125f, -0.485249996185302734375f, 1.84773242473602294921875f, 1.84773242473602294921875f};
 static const float _42[6] = {-0.718548238277435302734375f, 2.0810306072235107421875f, 3.66812419891357421875f, 4.0f, 4.0f, 4.0f};
@@ -692,64 +693,18 @@ void frag_main() {
   float _2241;
 
   testColor = float3(_1750, _1751, _1752);
-  // testColor = untonemapped;
+  
+  float exposureScale = 1.f;
+  float vanillaMidGray = 0.18 * exposureScale;
 
-  float renoDRTHighlights = 1.20f;
-  float renoDRTShadows = 1.0f;
-  float renoDRTContrast = 1.80f;
-  float renoDRTSaturation = 1.40f;
-  float renoDRTDechroma = 0.60f;
-  float renoDRTFlare = 0.f;
+  // custom tonemap
+  testColor = applyUserToneMap(testColor, vanillaMidGray);  
 
-  float vanillaMidGray = 0.18 * 1.5f;
-
-  testColor = renodx::tonemap::config::Apply(
-      testColor,
-      renodx::tonemap::config::Create(
-          injectedData.toneMapType,
-          injectedData.toneMapPeakNits,
-          injectedData.toneMapGameNits,
-          injectedData.toneMapGammaCorrection,
-          injectedData.colorGradeExposure,
-          injectedData.colorGradeHighlights,
-          injectedData.colorGradeShadows,
-          injectedData.colorGradeContrast,
-          injectedData.colorGradeSaturation,
-          vanillaMidGray,
-          vanillaMidGray * 100.f,
-          renoDRTHighlights,
-          renoDRTShadows,
-          renoDRTContrast,
-          renoDRTSaturation,
-          renoDRTDechroma,
-          renoDRTFlare)
-      // renodx::lut::config::Create(
-      //     _19,
-      //     injectedData.colorGradeLUTStrength,
-      //     injectedData.colorGradeLUTScaling,
-      //     renodx::lut::config::type::ARRI_C800,
-      //     renodx::lut::config::type::ARRI_C800,
-      //     _16_m0[67u].y),
-      // _8
-  );
   testColor = renodx::color::bt2020::from::BT709(testColor);
-  testColor = renodx::color::pq::Encode(testColor, injectedData.toneMapGameNits);
-  // if (injectedData.toneMapType == 0.f) {
-  //   // testColor = untonemapped;
-  //   testColor = renodx::color::bt2020::from::BT709(testColor);
-  // } else if (injectedData.toneMapType == 2.f) {
-  //   float hdrScale = (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-  //   testColor = renodx::tonemap::aces::RGCAndRRTAndODT(
-  //                   testColor,
-  //                   0.0001f / (injectedData.toneMapGameNits / 48.f),
-  //                   48.f * hdrScale,
-  //                   renodx::color::AP1_TO_BT2020_MAT)
-  //               / 48.f;
-  //   // testColor = renodx::color::bt2020::from::BT709(testColor);
-  // }
+  testColor = renodx::color::pq::Encode(testColor, RENODX_DIFFUSE_WHITE_NITS);
 
   // _16_m0[41u].y = 1u
-  if (injectedData.toneMapType == 1.f) {
+  if (RENODX_TONE_MAP_TYPE == 1.f) {
     if (_1772 == 0u) {  // TONEMAPPER_OUTPUT_sRGB
       float _1854;
       float _1856;
