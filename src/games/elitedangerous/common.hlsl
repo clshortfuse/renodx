@@ -104,14 +104,12 @@ float3 UpgradeToneMap(float3 color_hdr, float3 color_sdr, float3 post_process_co
 }
 
 float3 DisplayMapAndScale(float3 color) {
-  color = renodx::color::gamma::DecodeSafe(color);
   if (RENODX_GAMMA_CORRECTION == 1.f) {
-    color = renodx::color::srgb::EncodeSafe(color);
     color = renodx::color::gamma::DecodeSafe(color, 2.2f);
-
     color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
     color = renodx::color::gamma::EncodeSafe(color, 2.2f);
   } else {
+    color = renodx::color::srgb::DecodeSafe(color);
     color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
     color = renodx::color::srgb::EncodeSafe(color);
   }
@@ -167,7 +165,7 @@ renodx::tonemap::config::DualToneMap ToneMap(float3 color, float3 vanillaColor, 
   config.type = RENODX_TONE_MAP_TYPE;
   config.peak_nits = RENODX_PEAK_WHITE_NITS;
   config.game_nits = RENODX_DIFFUSE_WHITE_NITS;
-  config.gamma_correction = RENODX_GAMMA_CORRECTION;
+  config.gamma_correction = RENODX_GAMMA_CORRECTION - 1;
   config.mid_gray_value = vanillaMidGray;
   config.mid_gray_nits = vanillaMidGray * 100.f;
   config.exposure = RENODX_TONE_MAP_EXPOSURE;
