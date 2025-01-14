@@ -8,6 +8,7 @@
 #define RENODX_PEAK_WHITE_NITS     shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS  shader_injection.diffuse_white_nits
 #define RENODX_TONE_MAP_TYPE       shader_injection.tone_map_type
+#define RENODX_TONE_MAP_SONAR      shader_injection.tone_map_sonar
 #define RENODX_TONE_MAP_EXPOSURE   shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS    shader_injection.tone_map_shadows
@@ -24,6 +25,7 @@ struct ShaderInjectData {
   float peak_white_nits;
   float diffuse_white_nits;
   float tone_map_type;
+  float tone_map_sonar;
   float tone_map_exposure;
   float tone_map_highlights;
   float tone_map_shadows;

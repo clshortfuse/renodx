@@ -23,7 +23,9 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xB615F379),  // Lens Flare
-    CustomShaderEntry(0x03DBB3FD),  // Tonemap
+    CustomShaderEntry(0x03DBB3FD),  // Color Grade
+    // CustomShaderEntry(0xBDDAFA0C),  // Sonar1
+    CustomShaderEntry(0x81A1C030),  // Sonar2
     CustomShaderEntry(0x1E767A42),  // Final
 };
 
@@ -61,6 +63,18 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of 100% white in nits",
         .min = 48.f,
         .max = 500.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapSonar",
+        .binding = &RENODX_TONE_MAP_SONAR,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .can_reset = true,
+        .label = "Tone Map Sonar",
+        .section = "Tone Mapping",
+        .tooltip = "Tone Map or clamp the sonar goggles",
+        .labels = {"Clamp", "Tonemap"},
+        .is_enabled = []() { return settings[0]->GetValue() == 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
@@ -222,6 +236,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
+  renodx::utils::settings::UpdateSetting("ToneMapSonar", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
@@ -263,9 +278,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::expected_constant_buffer_index = 10;
       // renodx::mods::shader::trace_unmodified_shaders = true;
 
-      // FXAA, SSAA = 0;
-      // MSAA, TXAA = 1;
-      for (auto index : {0, 1}) {
+      for (auto index : {
+               0,  // FXAA & SSAA & NO AA = 0
+               1,  // MSAA & TXAA = 1
+               2,  // Sonar - SSAA 0xBDDAFA0C
+               3,  // Sonar - FXAA & NO AA: 0xBDDAFA0C
+               4,  // Sonar - Moving - MSAA & TXAA: 0xBDDAFA0C SRV0
+               7,  // Sonar - Not Moving - MSAA & TXAA: 0xBDDAFA0C SRV1
+           }) {
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r8g8b8a8_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
