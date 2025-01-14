@@ -21,7 +21,7 @@ float4 main(float4 gl_FragCoord : SV_Position) : SV_Target {
                       _16_m0[6u].z),
                   min(max((_66 * _16_m0[5u].y) + _16_m0[4u].y, _16_m0[6u].y),
                       _16_m0[6u].w)));
-  if (injectedData.fxFishEye == 0.f) {
+  if (CUSTOM_FISHEYE == 0.f) {
     return float4(_96.rgb, 1.f);
   }
   float _99 = _96.x;
@@ -157,7 +157,7 @@ float4 main(float4 gl_FragCoord : SV_Position) : SV_Target {
   SV_Target.z = max(((_26_m0[1u].z - _317) * _26_m0[7u].x) + _317, 0.0f);
   SV_Target.w = 1.0f;
 
-  SV_Target.rgb = lerp(_96.rgb, SV_Target.rgb, injectedData.fxFishEye);
+  SV_Target.rgb = lerp(_96.rgb, SV_Target.rgb, CUSTOM_FISHEYE);
 
   return SV_Target;
 }
