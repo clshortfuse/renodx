@@ -108,8 +108,9 @@ static bool CompileCustomShaders() {
 
       const bool is_hlsl = entry_path.extension().compare(".hlsl") == 0;
       const bool is_cso = entry_path.extension().compare(".cso") == 0;
+      const bool is_glsl = entry_path.extension().compare(".glsl") == 0;
       const bool is_spv = entry_path.extension().compare(".spv") == 0;
-      if (!is_hlsl && !is_cso && !is_spv) continue;
+      if (!is_hlsl && !is_cso && !is_spv && !is_glsl) continue;
 
       auto basename = entry_path.stem().string();
       std::string hash_string;
@@ -124,7 +125,7 @@ static bool CompileCustomShaders() {
         if (shader_target[4] != '_') continue;
         // uint32_t versionMajor = shader_target[3] - '0';
         hash_string = basename.substr(length - strlen("12345678.xx_x_x"), 8);
-      } else if (is_cso || is_spv) {
+      } else if (is_cso || is_spv || is_glsl) {
         // Binaries files must start with 0x12345678. The rest of the basename is ignored.
         if (basename.size() < 10) {
           std::stringstream s;
@@ -196,7 +197,7 @@ static bool CompileCustomShaders() {
           reshade::log::message(reshade::log::level::warning, s.str().c_str());
         }
 
-      } else if (is_cso || is_spv) {
+      } else if (is_cso || is_spv || is_glsl) {
         try {
           custom_shader.compilation = utils::path::ReadBinaryFile(entry_path);
           shader_hashes_processed.emplace(shader_hash);

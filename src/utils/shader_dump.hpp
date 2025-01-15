@@ -215,6 +215,8 @@ static bool DumpShader(
     dump_path += hash_string;
   }
 
+  bool is_binary = true;
+
   if (device::IsDirectX(internal::device_api)) {
     renodx::utils::shader::compiler::directx::DxilProgramVersion shader_version;
     try {
@@ -264,6 +266,10 @@ static bool DumpShader(
         dump_path += L".comp";
         break;
     }
+
+    if (internal::device_api == reshade::api::device_api::opengl) {
+      is_binary = false;
+    }
     // Use type
   }
 
@@ -276,7 +282,12 @@ static bool DumpShader(
   s << ")";
   reshade::log::message(reshade::log::level::debug, s.str().c_str());
 
-  renodx::utils::path::WriteBinaryFile(dump_path, shader_data);
+  if (is_binary) {
+    renodx::utils::path::WriteBinaryFile(dump_path, shader_data);
+  } else {
+    // trim null
+    renodx::utils::path::WriteBinaryFile(dump_path, shader_data.subspan(0, shader_data.size() - 1));
+  }
   return true;
 }
 
