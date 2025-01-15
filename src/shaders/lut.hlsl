@@ -36,6 +36,11 @@ Config Create(SamplerState lut_sampler, float strength, float scaling, uint type
   return lut_config;
 }
 
+Config Create(SamplerState lut_sampler, float strength, float scaling, uint type_input, uint type_output, float size) {
+  Config lut_config = { lut_sampler, strength, scaling, type_input, type_output, (uint)size, float3(0, 0, 0), false };
+  return lut_config;
+}
+
 Config Create(SamplerState lut_sampler, float strength, float scaling, uint type_input, uint type_output, float3 precompute) {
   Config lut_config = { lut_sampler, strength, scaling, type_input, type_output, 0, precompute, false };
   return lut_config;
