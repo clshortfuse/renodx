@@ -34,7 +34,7 @@ float3 RangeCompress(float3 val, float threshold, float max_value = 1.f) {
       RangeCompress(val.z, threshold, max_value));
 }
 
-float3 BT709(float3 col, float max_value) {
+float3 BT709(float3 col, float max_value = 1.f, float rolloff_start = 0.25f, float saturation_boost_amount = 0.3f, float hue_correct_amount = 0.6f) {
   float3 ictcp = renodx::color::ictcp::from::BT709(col);
 
   // Hue-preserving range compression requires desaturation in order to achieve a natural look. We adaptively desaturate the input based on its luminance.
@@ -43,7 +43,7 @@ float3 BT709(float3 col, float max_value) {
   col = renodx::color::bt709::from::ICtCp(ictcp * float3(1, saturationAmount.xx));
 
   // Only compress luminance starting at a certain point. Dimmer inputs are passed through without modification.
-  float linearSegmentEnd = 0.25;
+  float linearSegmentEnd = rolloff_start;
 
   // Hue-preserving mapping
   float maxCol = max(col.x, max(col.y, col.z));
@@ -55,12 +55,12 @@ float3 BT709(float3 col, float max_value) {
 
   // Combine hue-preserving and non-hue-preserving colors. Absolute hue preservation looks unnatural, as bright colors *appear* to have been hue shifted.
   // Actually doing some amount of hue shifting looks more pleasing
-  col = lerp(perChannelCompressed, compressedHuePreserving, 0.6);
+  col = lerp(perChannelCompressed, compressedHuePreserving, hue_correct_amount);
 
   float3 ictcpMapped = renodx::color::ictcp::from::BT709(col);
 
   // Smoothly ramp off saturation as brightness increases, but keep some even for very bright input
-  float postCompressionSaturationBoost = 0.3 * smoothstep(1.0, 0.5, ictcp.x);
+  float postCompressionSaturationBoost = saturation_boost_amount * smoothstep(1.0, 0.5, ictcp.x);
 
   // Re-introduce some hue from the pre-compression color. Something similar could be accomplished by delaying the luma-dependent desaturation before range compression.
   // Doing it here however does a better job of preserving perceptual luminance of highly saturated colors. Because in the hue-preserving path we only range-compress the max channel,
