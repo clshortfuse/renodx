@@ -254,6 +254,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeLUTSampling",
+        .binding = &CUSTOM_LUT_TETRAHEDRAL,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "LUT Sampling",
+        .section = "Color Grading",
+        .labels = {"Trilinear", "Tetrahedral"},
+        .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxNoise",
         .binding = &CUSTOM_NOISE,
         .default_value = 50.f,
@@ -356,6 +366,7 @@ void OnPresetOff() {
   // renodx::utils::settings::UpdateSetting("ColorGradeFlare", 1.f);
   renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("ColorGradeLUTScaling", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeLUTSampling", 0.f);
   renodx::utils::settings::UpdateSetting("FxNoise", 50.f);
   renodx::utils::settings::UpdateSetting("FxScreenGlow", 100.f);
   renodx::utils::settings::UpdateSetting("FxMotionBlur", 100.f);

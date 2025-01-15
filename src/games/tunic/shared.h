@@ -21,6 +21,7 @@
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
 #define CUSTOM_LUT_STRENGTH                  shader_injection.custom_lut_strength
 #define CUSTOM_LUT_SCALING                   shader_injection.custom_lut_scaling
+#define CUSTOM_LUT_TETRAHEDRAL               shader_injection.custom_lut_tetrahedral
 #define CUSTOM_NOISE                         shader_injection.custom_noise
 #define CUSTOM_SCREEN_GLOW                   shader_injection.custom_screen_glow
 #define CUSTOM_MOTION_BLUR                   shader_injection.custom_motion_blur
@@ -48,6 +49,7 @@ struct ShaderInjectData {
   float gamma_correction;
   float custom_lut_scaling;
   float custom_lut_strength;
+  float custom_lut_tetrahedral;
   float custom_noise;
   float custom_screen_glow;
   float custom_motion_blur;

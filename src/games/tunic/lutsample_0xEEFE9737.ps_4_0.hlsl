@@ -31,13 +31,12 @@ void main(float4 v0: SV_POSITION0, float4 v1: TEXCOORD0, float4 v2: TEXCOORD1, f
 
   float3 untonemapped = renodx::color::srgb::Decode(gamma_input);
 
-  renodx::lut::Config lut_config = renodx::lut::config::Create(
-      s1_s,
-      CUSTOM_LUT_STRENGTH,
-      CUSTOM_LUT_SCALING,
-      renodx::lut::config::type::SRGB,
-      renodx::lut::config::type::SRGB,
-      32.f);
+  renodx::lut::Config lut_config = renodx::lut::config::Create();
+  lut_config.lut_sampler = s1_s;
+  lut_config.strength = CUSTOM_LUT_STRENGTH;
+  lut_config.scaling = CUSTOM_LUT_SCALING;
+  lut_config.size = 32u;
+  lut_config.tetrahedral = CUSTOM_LUT_TETRAHEDRAL == 1.f;
 
   float3 outputColor;
   if (RENODX_TONE_MAP_TYPE == 0.f) {
