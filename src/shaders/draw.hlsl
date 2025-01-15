@@ -4,6 +4,7 @@
 #include "./color.hlsl"
 #include "./color_convert.hlsl"
 #include "./colorcorrect.hlsl"
+#include "./inverse_tonemap.hlsl"
 #include "./math.hlsl"
 #include "./tonemap.hlsl"
 
@@ -396,6 +397,35 @@ float3 SwapChainPass(float3 color, Config config) {
   return color;
 }
 
+/* Input should be in Gamma */
+float3 UpscaleVideoPass(float3 color, Config config) {
+  color = renodx::color::gamma::Decode(color, 2.4f);  // 2.4 for BT2446a
+
+  float scaling = config.peak_white_nits / config.diffuse_white_nits;
+  float videoPeak = config.peak_white_nits / (config.diffuse_white_nits / renodx::color::bt2408::REFERENCE_WHITE);
+  videoPeak = renodx::color::correct::Gamma(videoPeak, false, 2.4f);
+  scaling = renodx::color::correct::Gamma(scaling, false, 2.4f);
+
+  [branch]
+  if (config.gamma_correction == ENCODING_GAMMA_2_2) {
+    videoPeak = renodx::color::correct::Gamma(videoPeak, true, 2.2f);
+    scaling = renodx::color::correct::Gamma(scaling, true, 2.2f);
+  } else if (config.gamma_correction == ENCODING_GAMMA_2_4) {
+    videoPeak = renodx::color::correct::Gamma(videoPeak, true, 2.4f);
+    scaling = renodx::color::correct::Gamma(scaling, true, 2.4f);
+  }
+
+  color = renodx::tonemap::inverse::bt2446a::BT709(
+      color,
+      renodx::color::bt709::REFERENCE_WHITE,
+      videoPeak);
+  color /= videoPeak;  // Normalize to 1.0f = peak;
+  color *= scaling;
+
+  color = renodx::color::gamma::EncodeSafe(color, 2.4f);
+  return color;
+}
+
 float3 ToneMapPass(float3 color, Config draw_config) {
   renodx::tonemap::Config tone_map_config = renodx::tonemap::config::Create();
   tone_map_config.peak_nits = draw_config.peak_white_nits;
@@ -495,6 +525,10 @@ float4 ToneMapPass(float4 untonemapped, float4 graded_sdr_color) {
 
 float4 ToneMapPass(float4 untonemapped) {
   return ToneMapPass(untonemapped, BuildConfig());
+}
+
+float3 UpscaleVideoPass(float3 untonemapped) {
+  return UpscaleVideoPass(untonemapped, BuildConfig());
 }
 
 }  // draw
