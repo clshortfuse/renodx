@@ -840,7 +840,8 @@ static bool HandlePreDraw(
     }
 
     found_custom_shader = true;
-    break;
+
+    // Keep looping to ensure pending listeners are still fired
   }
 
   if (found_custom_shader) {
