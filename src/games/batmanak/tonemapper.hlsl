@@ -124,6 +124,9 @@ float3 Apply(float3 color_input, renodx::tonemap::Config tm_config, renodx::lut:
 
   float3 color_lut = renodx::lut::Sample(lut_texture, lut_config, color_sdr);
 
+  color_lut = renodx::color::gamma::EncodeSafe(color_lut, 2.2f);  // Back to LUT output
+  color_lut = renodx::color::srgb::DecodeSafe(color_lut);         // Delinearize as vanilla HDR
+
   return UpgradeToneMapPerChannel(color_hdr, color_sdr, color_lut, previous_lut_config_strength, 1u, 1u);
 }
 
@@ -137,24 +140,24 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lut_texture, SamplerState
   renodx::tonemap::Config tm_config = renodx::tonemap::config::Create();
 
   float renoDRTContrast = 1.12f;
-  float renoDRTFlare = lerp(0, 0.10, pow(injectedData.colorGradeFlare, 10.f));
+  float renoDRTFlare = lerp(0, 0.10, pow(RENODX_TONE_MAP_FLARE, 10.f));
   float renoDRTShadows = 1.f;
-  float renoDRTBlowout = injectedData.colorGradeBlowout;
+  float renoDRTBlowout = RENODX_TONE_MAP_BLOWOUT;
   float renoDRTHighlights = 1.02f;
   float RenoDRTSaturation = 1.1f;
 
   tm_config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
-  tm_config.hue_correction_strength = injectedData.toneMapHueCorrection;
+  tm_config.hue_correction_strength = RENODX_TONE_MAP_HUE_CORRECTION;
   tm_config.reno_drt_per_channel = true;
-  tm_config.type = injectedData.toneMapType;
-  tm_config.peak_nits = injectedData.toneMapPeakNits;
-  tm_config.game_nits = injectedData.toneMapGameNits;
-  tm_config.gamma_correction = injectedData.toneMapGammaCorrection - 1;
-  tm_config.exposure = injectedData.colorGradeExposure;
-  tm_config.highlights = injectedData.colorGradeHighlights;
-  tm_config.shadows = injectedData.colorGradeShadows;
-  tm_config.contrast = injectedData.colorGradeContrast;
-  tm_config.saturation = injectedData.colorGradeSaturation;
+  tm_config.type = RENODX_TONE_MAP_TYPE;
+  tm_config.peak_nits = RENODX_PEAK_WHITE_NITS;
+  tm_config.game_nits = RENODX_DIFFUSE_WHITE_NITS;
+  tm_config.gamma_correction = RENODX_GAMMA_CORRECTION;
+  tm_config.exposure = RENODX_TONE_MAP_EXPOSURE;
+  tm_config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
+  tm_config.shadows = RENODX_TONE_MAP_SHADOWS;
+  tm_config.contrast = RENODX_TONE_MAP_CONTRAST;
+  tm_config.saturation = RENODX_TONE_MAP_SATURATION;
   tm_config.reno_drt_highlights = renoDRTHighlights;
   tm_config.reno_drt_shadows = renoDRTShadows;
   tm_config.reno_drt_contrast = renoDRTContrast;
@@ -169,20 +172,28 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lut_texture, SamplerState
   tm_config.reno_drt_hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::OKLAB;
   tm_config.reno_drt_working_color_space = 0u;
 
-  if (injectedData.toneMapBlend > 0.f && injectedData.toneMapType != 1.f) {
+  if (CUSTOM_TONE_MAP_STRATEGY == 1.f && RENODX_TONE_MAP_TYPE != 1.f) {
     tm_config.exposure = 1.f;
     tm_config.shadows = 1.f;
     tm_config.contrast = 1.f;
     tm_config.saturation = 1.f;
     tm_config.reno_drt_flare = 0.f;
   }
-  renodx::lut::Config lut_config = renodx::lut::config::Create(
-      lut_sampler,
-      injectedData.colorGradeLUTStrength,
-      0.f,  // Lut scaling not needed
-      renodx::lut::config::type::GAMMA_2_2,
-      renodx::lut::config::type::GAMMA_2_2,
-      16.f);
+  renodx::lut::Config lut_config = renodx::lut::config::Create();
+  lut_config.lut_sampler = lut_sampler;
+  lut_config.strength = CUSTOM_LUT_STRENGTH;
+  lut_config.scaling = CUSTOM_LUT_SCALING;
+  lut_config.type_input = renodx::lut::config::type::GAMMA_2_2;
+  lut_config.type_output = renodx::lut::config::type::GAMMA_2_2;
+  lut_config.size = 16;
+  lut_config.tetrahedral = CUSTOM_LUT_TETRAHEDRAL == 1.f;
+
+  if (CUSTOM_TONE_MAP_STRATEGY == 2.f && RENODX_TONE_MAP_TYPE == 3.f) {
+    float3 true_vanilla = renodx::lut::Sample(vanillaColor, lut_config, lut_texture);
+    true_vanilla = renodx::color::gamma::EncodeSafe(true_vanilla, 2.2f);  // Back to LUT output
+    true_vanilla = renodx::color::srgb::DecodeSafe(true_vanilla);         // Delinearize as vanilla HDR
+    return renodx::draw::ToneMapPass(untonemapped, true_vanilla);
+  }
 
   outputColor = Apply(
       untonemapped,
@@ -190,19 +201,15 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lut_texture, SamplerState
       lut_config,
       lut_texture);
 
-  if (injectedData.toneMapBlend > 0.f && injectedData.toneMapType != 1.f) {
+  if (CUSTOM_TONE_MAP_STRATEGY == 1.f && RENODX_TONE_MAP_TYPE != 1.f) {
     float3 vanillaLUTInputColor = min(1.f, pow(vanillaColor, 1.f / 2.2f));
     float3 vanillaLUT = renodx::lut::Sample(lut_texture, lut_sampler, vanillaLUTInputColor).rgb;
     vanillaLUT = pow(vanillaLUT, 2.2f);
 
-    vanillaColor = lerp(vanillaColor, vanillaLUT, injectedData.colorGradeLUTStrength);
+    vanillaColor = lerp(vanillaColor, vanillaLUT, CUSTOM_LUT_STRENGTH);
 
     float3 negHDR = min(0, outputColor);
     outputColor = lerp(vanillaColor, max(0, outputColor), saturate(vanillaColor)) + negHDR;
-  }
-
-  if (injectedData.toneMapGammaCorrection == 0.f) {
-    outputColor = renodx::color::correct::GammaSafe(outputColor, true);
   }
 
   return outputColor;

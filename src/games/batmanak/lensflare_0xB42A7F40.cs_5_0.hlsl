@@ -110,7 +110,7 @@ RWTexture2D<float4> u0 : register(u0);
   r2.xyzw = cb0[9].xxxx * r2.xyzw;  // Actual lens flare
   r1.xyzw = r1.xyzw * float4(2.75, 2.75, 2.75, 2.75) + r2.xyzw;
   r2.xyz = t1.SampleLevel(s0_s, r0.xy, 0).xyz;
-  r1.xyzw = r1.xyzw * cb0[8].xxxx * injectedData.fxLensFlare + r2.xyzx * injectedData.fxBloom;  // Blurred Lens Flare + Bloom
+  r1.xyzw = r1.xyzw * cb0[8].xxxx * CUSTOM_LENS_FLARE + r2.xyzx * CUSTOM_BLOOM;  // Blurred Lens Flare + Bloom
   r2.xy = -r0.zw * float2(1, 0) + r0.xy;
   r2.xyz = t1.SampleLevel(s0_s, r2.xy, 0).xyz;
   r2.x = dot(r2.xyz, float3(1, 1, 1));
@@ -142,7 +142,7 @@ RWTexture2D<float4> u0 : register(u0);
   r2.xy = vThreadID.xy;
   r2.zw = float2(0, 0);
   r2.xyz = t2.Load(r2.xyz).xyz;  // Cross Lens Flare
-  r0.xyzw = r1.xyzw * r0.xyzw + r2.xyzx * injectedData.fxLensFlare;
+  r0.xyzw = r1.xyzw * r0.xyzw + r2.xyzx * CUSTOM_LENS_FLARE;
   // No code for instruction (needs manual fix):
   // store_uav_typed u0.xyzw, vThreadID.xyyy, r0.xyzw
   u0[vThreadID.xy] = r0.xyzw;

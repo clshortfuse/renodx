@@ -66,17 +66,17 @@ cbuffer cb0 : register(b0) {
   r0.w = t4.SampleLevel(s0_s, float2(0.5, 0.5), 0).x;
   // r1.xyzw = r1.xyzw / r0.wwww;
   // r1.xyzw = r1.xyzw * r0.zzzz;
-  r1 = lerp(r1, r1 / r0.w * r0.z, injectedData.fxVignette);
+  r1 = lerp(r1, r1 / r0.w * r0.z, CUSTOM_VIGNETTE);
 
 #if DRAW_TONEMAPPER
-  DrawToneMapperParams graph_config = renodx::debug::DrawToneMapperStart(r0.xy, r1.zwy, t0, injectedData.toneMapPeakNits, injectedData.toneMapGameNits);
+  DrawToneMapperParams graph_config = renodx::debug::DrawToneMapperStart(r0.xy, r1.zwy, t0, RENODX_PEAK_WHITE_NITS, RENODX_DIFFUSE_WHITE_NITS);
   r1.zwy = graph_config.color;
 #endif
 
   const float3 untonemapped = r1.zwy;
 
   float3 outputColor = untonemapped;
-  if (injectedData.toneMapType == 0) {
+  if (RENODX_TONE_MAP_TYPE == 0) {
     r3.xyzw = r1.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
     r3.xyzw = r1.yyzw * r3.xyzw + float4(0.00200000009, 0.00200000009, 0.00200000009, 0.00200000009);
     r4.xyzw = r1.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.300000012, 0.300000012, 0.300000012, 0.300000012);
@@ -101,16 +101,16 @@ cbuffer cb0 : register(b0) {
     r1.xyzw = -r3.xyzx + r1.xyzx;
     r1.xyzw = r0.zzzz * r1.xyzw + r3.xyzx;
 
-    r3.xyzw = lerp(lutInputColor, r3.xyzw, injectedData.colorGradeLUTStrength);
+    r3.xyzw = lerp(lutInputColor, r3.xyzw, CUSTOM_LUT_STRENGTH);
     outputColor = r3.rgb;
 #if DRAW_TONEMAPPER
     if (!graph_config.draw)
 #endif
-      if (injectedData.fxFilmGrain) {
+      if (CUSTOM_FILM_GRAIN_STRENGTH) {
         r3.xyzw = float4(1, 1, 1, 1) + -r1.wyzw;
         r3.xyzw = r3.xyzw * r3.xyzw;
         r3.xyzw = min(float4(1, 1, 1, 1), r3.xyzw);
-        r3.xyzw = cb0[11].zzzz * r3.xyzw * injectedData.fxFilmGrain;
+        r3.xyzw = cb0[11].zzzz * r3.xyzw * CUSTOM_FILM_GRAIN_STRENGTH;
         r0.z = dot(r2.wyz, float3(23.1406918, 2.66514421, 9.19949627));
         r0.z = cos(r0.z);
         r2.xyzw = r0.zzzz * r2.xyzw;
@@ -122,13 +122,13 @@ cbuffer cb0 : register(b0) {
       }
     outputColor = max(0, outputColor);
 
-    outputColor = injectedData.toneMapGammaCorrection ? pow(outputColor, 2.2f) : renodx::color::srgb::Decode(outputColor);
+    outputColor = RENODX_GAMMA_CORRECTION ? pow(outputColor, 2.2f) : renodx::color::srgb::Decode(outputColor);
   } else {
     outputColor = applyUserToneMap(untonemapped.rgb, t2, s0_s);
 #if DRAW_TONEMAPPER
     if (!graph_config.draw)
 #endif
-      if (injectedData.fxFilmGrain) {
+      if (CUSTOM_FILM_GRAIN_STRENGTH) {
         float3 grainedColor;
 
         r1.z = dot(r2.wyz, float3(
@@ -138,11 +138,11 @@ cbuffer cb0 : register(b0) {
         r1.z = cos(r1.z);
         r2.xyz = r1.zzz * r2.xyz;
         float3 randomnessFactor = frac(r2.xyz);
-        if (injectedData.fxFilmGrainType == 0) {
+        if (CUSTOM_FILM_GRAIN_TYPE == 0) {
           float3 grainInputColor = renodx::color::gamma::EncodeSafe(outputColor, 2.2f);
           float3 invertedColor = 1.f - saturate(grainInputColor);
           float3 clampedColor = min(1.f, invertedColor * invertedColor);
-          float3 modulatedStrength = clampedColor * cb0[11].zzz * injectedData.fxFilmGrain;
+          float3 modulatedStrength = clampedColor * cb0[11].zzz * CUSTOM_FILM_GRAIN_STRENGTH;
 
 
           float3 grainEffect = mad(modulatedStrength, (randomnessFactor - 0.334f), 1.f);  //  r1.xyz = r1.xyz * (r3.xyz - 0.334f) + 1.f;
@@ -154,7 +154,7 @@ cbuffer cb0 : register(b0) {
               outputColor,
               screenXY,
               randomnessFactor,
-              cb0[11].z ? injectedData.fxFilmGrain * 0.03f : 0,
+              cb0[11].z ? CUSTOM_FILM_GRAIN_STRENGTH * 0.03f : 0,
               1.f);
         }
         outputColor = grainedColor;
@@ -165,7 +165,7 @@ cbuffer cb0 : register(b0) {
   if (graph_config.draw) outputColor = renodx::debug::renodx::debug::graph::DrawEnd(outputColor, graph_config);
 #endif
 
-  outputColor *= injectedData.toneMapGameNits / 80.f;
+  outputColor *= RENODX_DIFFUSE_WHITE_NITS / 80.f;
 
   u0[uint2(r0.x, r0.y)] = outputColor.xyzx;
 

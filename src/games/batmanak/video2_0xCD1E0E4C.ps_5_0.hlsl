@@ -19,7 +19,7 @@ cbuffer cb0 : register(b0) {
 // 3Dmigoto declarations
 #define cmp -
 
-void main(float4 v0 : COLOR0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1, float2 v3 : TEXCOORD2, out float4 o0 : SV_TARGET0) {
+void main(float4 v0: COLOR0, float4 v1: TEXCOORD0, float4 v2: TEXCOORD1, float2 v3: TEXCOORD2, out float4 o0: SV_TARGET0) {
   float4 r0;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -41,13 +41,12 @@ void main(float4 v0 : COLOR0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1, floa
   r0.xyz = cb0[5].www * r0.xyz;
   o0.xyz = exp2(r0.xyz);
 
-  o0.rgb = saturate(o0.rgb);
-  o0.rgb = injectedData.toneMapGammaCorrection
-               ? pow(o0.rgb, 2.2f)
-               : renodx::color::srgb::Decode(o0.rgb);
-  float videoPeak = injectedData.toneMapPeakNits / (injectedData.toneMapGameNits / 203.f);
-  o0.rgb = renodx::tonemap::inverse::bt2446a::BT709(o0.rgb, 100.f, videoPeak);
-  o0.rgb *= injectedData.toneMapPeakNits / videoPeak;
-  o0.rgb /= 80.f;
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    o0.rgb = renodx::draw::UpscaleVideoPass(o0.rgb);
+  }
+
+  o0.rgb = renodx::color::srgb::Decode(o0.rgb);
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
+
   return;
 }

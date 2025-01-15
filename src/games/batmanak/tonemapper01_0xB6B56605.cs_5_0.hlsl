@@ -68,16 +68,16 @@ cbuffer cb0 : register(b0) {
   r0.y = t3.SampleLevel(s0_s, float2(0.5, 0.5), 0).x;
   // r3.xyzw = r3.xyzw / r0.yyyy;
   // r0.xyzw = r3.xyzw * r0.xxxx;
-  r0.xyzw = lerp(r3, r3 / r0.y * r0.x, injectedData.fxVignette);
+  r0.xyzw = lerp(r3, r3 / r0.y * r0.x, CUSTOM_VIGNETTE);
 #if DRAW_TONEMAPPER
-  renodx::debug::graph::Config graph_config = DrawStart(r1.xy, r0.zwy, t0, injectedData.toneMapPeakNits, injectedData.toneMapGameNits);
+  renodx::debug::graph::Config graph_config = DrawStart(r1.xy, r0.zwy, t0, RENODX_PEAK_WHITE_NITS, RENODX_DIFFUSE_WHITE_NITS);
   r0.zwy = graph_config.color;
 #endif
 
   float3 untonemapped = r0.zwy;
 
   float3 outputColor = untonemapped;
-  if (injectedData.toneMapType == 0) {
+  if (RENODX_TONE_MAP_TYPE == 0) {
     r3.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.0299999993, 0.0299999993, 0.0299999993, 0.0299999993);
     r3.xyzw = r0.yyzw * r3.xyzw + float4(0.00200000009, 0.00200000009, 0.00200000009, 0.00200000009);
     r4.xyzw = r0.yyzw * float4(0.219999999, 0.219999999, 0.219999999, 0.219999999) + float4(0.300000012, 0.300000012, 0.300000012, 0.300000012);
@@ -102,15 +102,15 @@ cbuffer cb0 : register(b0) {
     r4.xyzw = -r3.xyzx + r0.yzwy;
     r0.xyzw = r0.xxxx * r4.xyzw + r3.xyzx;
 
-    r0.xyzw = lerp(lutInputColor, r0.xyzw, injectedData.colorGradeLUTStrength);
+    r0.xyzw = lerp(lutInputColor, r0.xyzw, CUSTOM_LUT_STRENGTH);
 #if DRAW_TONEMAPPER
     if (!graph_config.draw)
 #endif
-      if (injectedData.fxFilmGrain) {
+      if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
         r3.xyzw = float4(1, 1, 1, 1) + -r0.wyzw;
         r3.xyzw = r3.xyzw * r3.xyzw;
         r3.xyzw = min(float4(1, 1, 1, 1), r3.xyzw);
-        r3.xyzw = cb0[11].zzzz * r3.xyzw * injectedData.fxFilmGrain;
+        r3.xyzw = cb0[11].zzzz * r3.xyzw * CUSTOM_FILM_GRAIN_STRENGTH;
         r1.z = dot(r2.wyz, float3(
                                renodx::random::GELFOND_CONSTANT,
                                renodx::random::GELFOND_SCHNEIDER_CONSTANT,
@@ -122,13 +122,15 @@ cbuffer cb0 : register(b0) {
         r2.xyzw = r3.xyzw * r2.xyzw + float4(1, 1, 1, 1);
         r0.xyzw = r2.xyzw * r0.xyzw;
       }
-    outputColor = injectedData.toneMapGammaCorrection ? pow(r0.rgb, 2.2f) : renodx::color::srgb::Decode(r0.rgb);
+    outputColor = renodx::color::srgb::Decode(r0.rgb);
+
+    // outputColor = RENODX_GAMMA_CORRECTION ? pow(r0.rgb, 2.2f) : renodx::color::srgb::Decode(r0.rgb);
   } else {
     outputColor = applyUserToneMap(untonemapped.rgb, t1, s0_s);
 #if DRAW_TONEMAPPER
     if (!graph_config.draw)
 #endif
-      if (injectedData.fxFilmGrain) {
+      if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
         float3 grainedColor;
         r1.z = dot(r2.wyz, float3(
                                renodx::random::GELFOND_CONSTANT,
@@ -137,11 +139,11 @@ cbuffer cb0 : register(b0) {
         r1.z = cos(r1.z);
         r2.xyz = r1.zzz * r2.xyz;
         float3 randomnessFactor = frac(r2.xyz);
-        if (injectedData.fxFilmGrainType == 0) {
+        if (CUSTOM_FILM_GRAIN_TYPE == 0) {
           float3 grainInputColor = renodx::color::gamma::EncodeSafe(outputColor, 2.2f);
           float3 invertedColor = 1.f - saturate(grainInputColor);
           float3 clampedColor = min(1.f, invertedColor * invertedColor);
-          float3 modulatedStrength = clampedColor * cb0[11].zzz * injectedData.fxFilmGrain;
+          float3 modulatedStrength = clampedColor * cb0[11].zzz * CUSTOM_FILM_GRAIN_STRENGTH;
           float3 grainEffect = mad(modulatedStrength, (randomnessFactor - 0.334f), 1.f);
           grainedColor = grainEffect * grainInputColor;
           grainedColor = renodx::color::gamma::DecodeSafe(grainedColor, 2.2f);
@@ -150,7 +152,7 @@ cbuffer cb0 : register(b0) {
               outputColor,
               screenXY,
               randomnessFactor,
-              cb0[11].z ? injectedData.fxFilmGrain * 0.03f : 0,
+              cb0[11].z ? CUSTOM_FILM_GRAIN_STRENGTH * 0.03f : 0,
               1.f);
         }
         outputColor = grainedColor;
@@ -161,7 +163,7 @@ cbuffer cb0 : register(b0) {
   if (graph_config.draw) outputColor = renodx::debug::graph::DrawEnd(outputColor, graph_config);
 #endif
 
-  outputColor *= injectedData.toneMapGameNits / 80.f;
+  outputColor = renodx::draw::RenderIntermediatePass(outputColor);
 
   u0[uint2(r1.x, r1.y)] = outputColor.xyzx;
 
