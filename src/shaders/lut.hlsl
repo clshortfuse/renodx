@@ -107,7 +107,8 @@ float3 CenterTexel(float3 color, float size) {
 
 #define SAMPLE_TEXTURE_TETRAHEDRAL_FUNCTION_GENERATOR(TextureType)          \
   float3 SampleTetrahedral(TextureType lut, float3 color, float size = 0) { \
-    if (size == 0) { /* Removed by compiler if specified */                 \
+    /* Removed by compiler if specified */                                  \
+    if (size == 0) {                                                        \
       size = GetLutSize(lut);                                               \
     }                                                                       \
                                                                             \
@@ -120,54 +121,57 @@ float3 CenterTexel(float3 color, float size) {
     /* Fractional number */                                                 \
     float3 fraction = frac(coordinates);                                    \
                                                                             \
+    /* Will correct to highest channel */                                   \
     int3 offset2 = int3(0, 0, 0);                                           \
+    /* Will correct to medium channel */                                    \
     int3 offset3 = int3(1, 1, 1);                                           \
+    /* Opposite from origin */                                              \
     int3 offset4 = int3(1, 1, 1);                                           \
                                                                             \
-    float3 ranked;                                                          \
+    /* Sorted texel channel values */                                       \
+    float3 sorted;                                                          \
                                                                             \
     if (fraction.r > fraction.g) {                                          \
       if (fraction.g > fraction.b) {                                        \
         offset2.r = 1;                                                      \
         offset3.b = 0;                                                      \
-        ranked = fraction.rgb;                                              \
+        sorted = fraction.rgb;                                              \
       } else if (fraction.r > fraction.b) {                                 \
         offset2.r = 1;                                                      \
         offset3.g = 0;                                                      \
-        ranked = fraction.rbg;                                              \
+        sorted = fraction.rbg;                                              \
       } else {                                                              \
         offset2.b = 1;                                                      \
         offset3.g = 0;                                                      \
-        ranked = fraction.brg;                                              \
+        sorted = fraction.brg;                                              \
       }                                                                     \
     } else {                                                                \
       if (fraction.g <= fraction.b) {                                       \
         offset2.b = 1;                                                      \
         offset3.r = 0;                                                      \
-        ranked = fraction.bgr;                                              \
+        sorted = fraction.bgr;                                              \
       } else if (fraction.r >= fraction.b) {                                \
         offset2.g = 1;                                                      \
         offset3.b = 0;                                                      \
-        ranked = fraction.grb;                                              \
+        sorted = fraction.grb;                                              \
       } else {                                                              \
         offset2.g = 1;                                                      \
         offset3.r = 0;                                                      \
-        ranked = fraction.gbr;                                              \
+        sorted = fraction.gbr;                                              \
       }                                                                     \
     }                                                                       \
-    /* Compute offset from first point */                                   \
                                                                             \
+    /* Sample 4 points */                                                   \
     float3 texel1 = LoadTexel(lut, point1, size);                           \
     float3 texel2 = LoadTexel(lut, point1 + offset2, size);                 \
     float3 texel3 = LoadTexel(lut, point1 + offset3, size);                 \
     float3 texel4 = LoadTexel(lut, point1 + offset4, size);                 \
                                                                             \
-    /* Use dot to pick values */                                            \
-                                                                            \
-    float ratio1 = 1.f - ranked.x;                                          \
-    float ratio2 = ranked.x - ranked.y;                                     \
-    float ratio3 = ranked.y - ranked.z;                                     \
-    float ratio4 = ranked.z;                                                \
+    /* Compute interpolation ratios */                                      \
+    float ratio1 = 1.f - sorted.x;                                          \
+    float ratio2 = sorted.x - ranked.y;                                     \
+    float ratio3 = sorted.y - ranked.z;                                     \
+    float ratio4 = sorted.z;                                                \
                                                                             \
     float3 value1 = texel1 * ratio1;                                        \
     float3 value2 = texel2 * ratio2;                                        \
