@@ -169,8 +169,8 @@ float3 CenterTexel(float3 color, float size) {
                                                                             \
     /* Compute interpolation ratios */                                      \
     float ratio1 = 1.f - sorted.x;                                          \
-    float ratio2 = sorted.x - ranked.y;                                     \
-    float ratio3 = sorted.y - ranked.z;                                     \
+    float ratio2 = sorted.x - sorted.y;                                     \
+    float ratio3 = sorted.y - sorted.z;                                     \
     float ratio4 = sorted.z;                                                \
                                                                             \
     float3 value1 = texel1 * ratio1;                                        \
