@@ -76,9 +76,9 @@ float3 CenterTexel(float3 color, float size) {
   return mad(color, scale, offset);
 }
 
-#define LOAD_TEXEL_3D_FUNCTION_GENERATOR(TextureType)            \
-  float3 LoadTexel(TextureType lut, uint3 position, uint size) { \
-    return lut.Load(uint4(position.rgb, 0)).rgb;                 \
+#define LOAD_TEXEL_3D_FUNCTION_GENERATOR(TextureType)           \
+  float3 LoadTexel(TextureType lut, int3 position, uint size) { \
+    return lut.Load(uint4(position.rgb, 0)).rgb;                \
   }
 
 #define LOAD_TEXEL_2D_FUNCTION_GENERATOR(TextureType)       \
@@ -105,54 +105,76 @@ float3 CenterTexel(float3 color, float size) {
     return height;                                      \
   }
 
-#define SAMPLE_TEXTURE_TETRAHEDRAL_FUNCTION_GENERATOR(TextureType)         \
-  float3 SampleTetrahedral(TextureType lut, float3 color, uint size = 0) { \
-    if (size == 0) { /* Removed by compiler if specified */                \
-      size = GetLutSize(lut);                                              \
-    }                                                                      \
-                                                                           \
-    /* Convert color to coordinates */                                     \
-    float3 coordinates = color.rgb * (size - 1);                           \
-                                                                           \
-    /* Truncate to texel closest to origin */                              \
-    uint3 point1 = (uint3)coordinates;                                     \
-                                                                           \
-    /* Fractional number */                                                \
-    float3 fraction = frac(coordinates);                                   \
-                                                                           \
-    /* Forced 3 comparisons to avoid branching */                          \
-    bool rg = (fraction.r >= fraction.g);                                  \
-    bool rb = (fraction.r >= fraction.b);                                  \
-    bool gb = (fraction.g >= fraction.b);                                  \
-                                                                           \
-    bool red_greatest = rg && rb;                                          \
-    bool green_greatest = !red_greatest && (gb);                           \
-    bool blue_greatest = !red_greatest && !green_greatest;                 \
-                                                                           \
-    bool red_lowest = !red_greatest && !rb && !rg;                         \
-    bool green_lowest = !green_greatest && !red_lowest && (!gb);           \
-    bool blue_lowest = !red_lowest && !green_lowest;                       \
-                                                                           \
-    /* Compute offset from first point */                                  \
-    uint3 offset2 = uint3(red_greatest, green_greatest, blue_greatest);    \
-    uint3 offset3 = uint3(!red_lowest, !green_lowest, !blue_lowest);       \
-    uint3 offset4 = uint3(1, 1, 1);                                        \
-                                                                           \
-    float ratio_highest = dot(fraction, offset2);                          \
-    float ratio_mid = dot(fraction, offset2 ^ offset3);                    \
-    float ratio_lowest = dot(fraction, !offset3);                          \
-                                                                           \
-    float ratio1 = 1.f - ratio_highest;                                    \
-    float ratio2 = ratio_highest - ratio_mid;                              \
-    float ratio3 = ratio_mid - ratio_lowest;                               \
-    float ratio4 = ratio_lowest;                                           \
-                                                                           \
-    float3 value1 = ratio1 * LoadTexel(lut, point1, size);                 \
-    float3 value2 = ratio2 * LoadTexel(lut, point1 + offset2, size);       \
-    float3 value3 = ratio3 * LoadTexel(lut, point1 + offset3, size);       \
-    float3 value4 = ratio4 * LoadTexel(lut, point1 + offset4, size);       \
-                                                                           \
-    return value1 + value2 + value3 + value4;                              \
+#define SAMPLE_TEXTURE_TETRAHEDRAL_FUNCTION_GENERATOR(TextureType)          \
+  float3 SampleTetrahedral(TextureType lut, float3 color, float size = 0) { \
+    if (size == 0) { /* Removed by compiler if specified */                 \
+      size = GetLutSize(lut);                                               \
+    }                                                                       \
+                                                                            \
+    /* Convert color to coordinates */                                      \
+    float3 coordinates = saturate(color.rgb) * (size - 1);                  \
+                                                                            \
+    /* Truncate to texel closest to origin */                               \
+    int3 point1 = (int3)(coordinates);                                      \
+                                                                            \
+    /* Fractional number */                                                 \
+    float3 fraction = frac(coordinates);                                    \
+                                                                            \
+    int3 offset2 = int3(0, 0, 0);                                           \
+    int3 offset3 = int3(1, 1, 1);                                           \
+    int3 offset4 = int3(1, 1, 1);                                           \
+                                                                            \
+    float3 ranked;                                                          \
+                                                                            \
+    if (fraction.r > fraction.g) {                                          \
+      if (fraction.g > fraction.b) {                                        \
+        offset2.r = 1;                                                      \
+        offset3.b = 0;                                                      \
+        ranked = fraction.rgb;                                              \
+      } else if (fraction.r > fraction.b) {                                 \
+        offset2.r = 1;                                                      \
+        offset3.g = 0;                                                      \
+        ranked = fraction.rbg;                                              \
+      } else {                                                              \
+        offset2.b = 1;                                                      \
+        offset3.g = 0;                                                      \
+        ranked = fraction.brg;                                              \
+      }                                                                     \
+    } else {                                                                \
+      if (fraction.g <= fraction.b) {                                       \
+        offset2.b = 1;                                                      \
+        offset3.r = 0;                                                      \
+        ranked = fraction.bgr;                                              \
+      } else if (fraction.r >= fraction.b) {                                \
+        offset2.g = 1;                                                      \
+        offset3.b = 0;                                                      \
+        ranked = fraction.grb;                                              \
+      } else {                                                              \
+        offset2.g = 1;                                                      \
+        offset3.r = 0;                                                      \
+        ranked = fraction.gbr;                                              \
+      }                                                                     \
+    }                                                                       \
+    /* Compute offset from first point */                                   \
+                                                                            \
+    float3 texel1 = LoadTexel(lut, point1, size);                           \
+    float3 texel2 = LoadTexel(lut, point1 + offset2, size);                 \
+    float3 texel3 = LoadTexel(lut, point1 + offset3, size);                 \
+    float3 texel4 = LoadTexel(lut, point1 + offset4, size);                 \
+                                                                            \
+    /* Use dot to pick values */                                            \
+                                                                            \
+    float ratio1 = 1.f - ranked.x;                                          \
+    float ratio2 = ranked.x - ranked.y;                                     \
+    float ratio3 = ranked.y - ranked.z;                                     \
+    float ratio4 = ranked.z;                                                \
+                                                                            \
+    float3 value1 = texel1 * ratio1;                                        \
+    float3 value2 = texel2 * ratio2;                                        \
+    float3 value3 = texel3 * ratio3;                                        \
+    float3 value4 = texel4 * ratio4;                                        \
+                                                                            \
+    return value1 + value2 + value3 + value4;                               \
   }
 
 #define SAMPLE_TEXTURE_3D_FUNCTION_GENERATOR(TextureType)                            \
