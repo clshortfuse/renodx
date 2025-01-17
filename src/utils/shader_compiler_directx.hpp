@@ -538,21 +538,17 @@ inline std::vector<uint8_t> CompileShaderFromFile(
     }
   }
 
-  bool is_fxc = shader_target[3] < '6';
-
-  if (is_fxc) {
+  if (shader_target[3] < '6') {
     const char major_version[2] = {shader_target[3], '\0'};
     const char minor_version[2] = {shader_target[5], '\0'};
     local_defines.push_back({.Name = "__SHADER_TARGET_MAJOR", .Definition = major_version});
     local_defines.push_back({.Name = "__SHADER_TARGET_MINOR", .Definition = minor_version});
+    local_defines.push_back({.Name = nullptr, .Definition = nullptr});
+    return internal::CompileShaderFromFileFXC(file_path, shader_target, local_defines.empty() ? nullptr : local_defines.data());
   }
 
   if (!local_defines.empty()) {
     local_defines.push_back({.Name = nullptr, .Definition = nullptr});
-  }
-
-  if (is_fxc) {
-    return internal::CompileShaderFromFileFXC(file_path, shader_target, local_defines.empty() ? nullptr : local_defines.data());
   }
   return internal::CompileShaderFromFileDXC(file_path, shader_target, local_defines.empty() ? nullptr : local_defines.data());
 }
