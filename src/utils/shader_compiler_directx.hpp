@@ -544,13 +544,15 @@ inline std::vector<uint8_t> CompileShaderFromFile(
     local_defines.push_back({.Name = "__SHADER_TARGET_MAJOR", .Definition = major_version});
     local_defines.push_back({.Name = "__SHADER_TARGET_MINOR", .Definition = minor_version});
     local_defines.push_back({.Name = nullptr, .Definition = nullptr});
-    return internal::CompileShaderFromFileFXC(file_path, shader_target, local_defines.empty() ? nullptr : local_defines.data());
+    return internal::CompileShaderFromFileFXC(file_path, shader_target, local_defines.data());
   }
 
-  if (!local_defines.empty()) {
-    local_defines.push_back({.Name = nullptr, .Definition = nullptr});
+  if (local_defines.empty()) {
+    return internal::CompileShaderFromFileDXC(file_path, shader_target);
   }
-  return internal::CompileShaderFromFileDXC(file_path, shader_target, local_defines.empty() ? nullptr : local_defines.data());
+
+  local_defines.push_back({.Name = nullptr, .Definition = nullptr});
+  return internal::CompileShaderFromFileDXC(file_path, shader_target, local_defines.data());
 }
 
 }  // namespace renodx::utils::shader::compiler::directx
