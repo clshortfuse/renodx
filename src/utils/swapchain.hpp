@@ -402,7 +402,7 @@ static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::c
 
   std::unordered_set<reshade::api::effect_runtime*> runtimes;
   auto& data = device->get_private_data<DeviceData>();
-  if (std::addressof(data) == nullptr) {
+  if (std::addressof(data) != nullptr) {
     std::unique_lock lock(data.mutex);
 
     data.current_color_space = color_space;
