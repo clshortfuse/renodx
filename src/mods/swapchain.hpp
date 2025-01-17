@@ -154,7 +154,7 @@ struct SwapChainUpgradeTarget {
         float target_ratio;
         if (this->aspect_ratio == BACK_BUFFER) {
           if (back_buffer_desc.type == reshade::api::resource_type::unknown) return false;
-          target_ratio = back_buffer_desc.texture.width / back_buffer_desc.texture.height;
+          target_ratio = static_cast<float>(back_buffer_desc.texture.width) / static_cast<float>(back_buffer_desc.texture.height);
         } else {
           target_ratio = this->aspect_ratio;
         }
