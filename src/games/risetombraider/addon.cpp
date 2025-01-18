@@ -79,10 +79,12 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomDirectXShaders(0xEC7D28FE),  // motion blur
     CustomDirectXShaders(0xC0935428),  // scanlines
     CustomDirectXShaders(0xFCAB6FA9),  // scanlines2
-    CustomDirectXShaders(0x6402D0CC),  // tonemap
-    CustomDirectXShaders(0x7D540A59),  // tonemap-no-grain-no-vignette
-    CustomDirectXShaders(0xB74D6870),  // tonemap-no-vignette
-    CustomDirectXShaders(0xDCF3B2C0),  // tonemap-no-grain
+    CustomDirectXShaders(0x0971078C),  // bloom
+    CustomDirectXShaders(0x4CC2B543),  // 1000nit-tonemap
+    CustomDirectXShaders(0x6402D0CC),  // sdr-clip-tonemap
+    CustomDirectXShaders(0x7D540A59),  // sdr-clip-tonemap-no-grain-no-vignette
+    CustomDirectXShaders(0xB74D6870),  // sdr-clip-tonemap-no-vignette
+    CustomDirectXShaders(0xDCF3B2C0),  // sdr-clip-tonemap-no-grain
 };
 
 renodx::utils::settings::Settings settings = {
@@ -301,6 +303,15 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxBloom",
+        .binding = &CUSTOM_BLOOM,
+        .default_value = 50.f,
+        .label = "Bloom",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxLensFlare",
         .binding = &CUSTOM_LENS_FLARE,
         .default_value = 50.f,
@@ -378,6 +389,10 @@ renodx::utils::settings::Settings settings = {
             if (!setting->can_reset) continue;
             if (setting->key == "ColorGradeSaturation" || setting->key == "ColorGradeContrast" || setting->key == "ColorGradeBlowout") {
               renodx::utils::settings::UpdateSetting(setting->key, 80.f);
+            } else if (setting->key == "ColorGradeShadows" || setting->key == "ColorGradeHighlightSaturation") {
+              renodx::utils::settings::UpdateSetting(setting->key, 60.f);
+            } else if (setting->key == "FxBloom") {
+              renodx::utils::settings::UpdateSetting(setting->key, 10.f);
             } else {
               renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
             }
@@ -427,6 +442,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
   renodx::utils::settings::UpdateSetting("FxVignette", 50.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrainType", 0.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrainStrength", 50.f);
@@ -499,12 +515,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         initialized = true;
       }
 
-      //   renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //       .old_format = reshade::api::format::r11g11b10_float,
-      //       .new_format = reshade::api::format::r16g16b16a16_float,
-      //       .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
-      //       .usage_include = reshade::api::resource_usage::render_target,
-      //   });
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r11g11b10_float,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
+          .usage_include = reshade::api::resource_usage::render_target,
+      });
 
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::present>(OnPresent);

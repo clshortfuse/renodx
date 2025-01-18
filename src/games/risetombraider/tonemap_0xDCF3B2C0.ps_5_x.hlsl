@@ -106,7 +106,6 @@ void main(
 
   if (RENODX_TONE_MAP_TYPE != 0) {
     o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
-    o0.rgb = max(0, o0.rgb);
   }
   o0.rgb *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
 

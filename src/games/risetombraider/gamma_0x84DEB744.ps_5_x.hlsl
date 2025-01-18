@@ -30,7 +30,7 @@ void main(
   o0.w = 1;
 
   if (CUSTOM_IS_SWAPCHAIN_WRITE) {
-    o0.rgb = renodx::draw::SwapChainPass(r0.rgb);
+    o0.rgb = renodx::draw::SwapChainPass(o0.rgb);
   }
   return;
 }

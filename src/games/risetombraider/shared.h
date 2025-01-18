@@ -27,6 +27,7 @@
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define CUSTOM_LENS_FLARE                      shader_injection.custom_lens_flare
 #define CUSTOM_MOTION_BLUR                     shader_injection.custom_motion_blur
+#define CUSTOM_BLOOM                           shader_injection.custom_bloom
 #define CUSTOM_IS_SWAPCHAIN_WRITE              shader_injection.custom_is_swapchain_write
 #define RENODX_SWAP_CHAIN_DECODING             0
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION     RENODX_GAMMA_CORRECTION
@@ -62,6 +63,7 @@ struct ShaderInjectData {
   float custom_random;
   float custom_lens_flare;
   float custom_motion_blur;
+  float custom_bloom;
   float custom_is_swapchain_write;
 };
 
