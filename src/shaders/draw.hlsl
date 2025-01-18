@@ -469,14 +469,16 @@ float3 ToneMapPass(float3 color, Config draw_config) {
 
   tone_map_config.hue_correction_strength = draw_config.tone_map_hue_correction;
 
-  float3 output_color = renodx::tonemap::config::Apply(color, tone_map_config);
-
   if (draw_config.tone_map_hue_shift != 0) {
-    output_color = renodx::color::correct::Hue(
-        output_color,
-        renodx::tonemap::renodrt::NeutralSDR(output_color, true),
+    tone_map_config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
+
+    tone_map_config.hue_correction_color = lerp(
+        color,
+        saturate(color),
         draw_config.tone_map_hue_shift);
   }
+
+  float3 output_color = renodx::tonemap::config::Apply(color, tone_map_config);
 
   return output_color;
 }
