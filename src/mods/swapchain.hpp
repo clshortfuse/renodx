@@ -245,6 +245,7 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   std::vector<std::uint8_t> swap_chain_proxy_pixel_shader;
   int32_t expected_constant_buffer_index = -1;
   uint32_t expected_constant_buffer_space = 0;
+  bool swapchain_proxy_revert_state;
 };
 
 struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData {
@@ -272,6 +273,7 @@ static bool prevent_full_screen = true;
 static bool force_borderless = true;
 static bool is_vulkan = false;
 static bool swapchain_proxy_compatibility_mode = true;
+static bool swapchain_proxy_revert_state = false;
 static reshade::api::format swap_chain_proxy_format = reshade::api::format::r16g16b16a16_float;
 static std::vector<std::uint8_t> swap_chain_proxy_vertex_shader = {};
 static std::vector<std::uint8_t> swap_chain_proxy_pixel_shader = {};
@@ -1009,7 +1011,7 @@ static void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
   cmd_list->end_render_pass();
   queue->flush_immediate_command_list();
 
-  if (previous_state.has_value()) {
+  if (data.swapchain_proxy_revert_state && previous_state.has_value()) {
     previous_state->Apply(cmd_list);
   }
 
@@ -1044,6 +1046,7 @@ static void OnInitDevice(reshade::api::device* device) {
   data.prevent_full_screen = prevent_full_screen;
   data.swap_chain_proxy_vertex_shader = swap_chain_proxy_vertex_shader;
   data.swap_chain_proxy_pixel_shader = swap_chain_proxy_pixel_shader;
+  data.swapchain_proxy_revert_state = swapchain_proxy_revert_state;
   data.expected_constant_buffer_index = expected_constant_buffer_index;
   data.expected_constant_buffer_space = expected_constant_buffer_space;
 
