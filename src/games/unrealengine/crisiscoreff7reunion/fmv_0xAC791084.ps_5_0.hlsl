@@ -91,29 +91,24 @@ void main(
   r1.xyz = saturate(r1.xyz * cb0[2].www + float3(0.25, 0.25, 0.25));
   r2.xy = cmp(cb0[2].wy != float2(1, 1));
   r0.xyz = r2.xxx ? r1.xyz : r0.xyz;
-  // r1.xyz = log2(r0.xyz);
-  // r1.xyz = cb0[2].xxx * r1.xyz;
-  // r2.xzw = float3(0.416666657, 0.416666657, 0.416666657) * r1.xyz;
-  // r1.xyz = exp2(r1.xyz);
-  // r2.xzw = exp2(r2.xzw);
-  o0.rgb = r0.xyz;
+  r1.xyz = log2(r0.xyz);
+  r1.xyz = cb0[2].xxx * r1.xyz;
+  r2.xzw = float3(0.416666657, 0.416666657, 0.416666657) * r1.xyz;
+  r1.xyz = exp2(r1.xyz);
+  r2.xzw = exp2(r2.xzw);
+  r2.xzw = r2.xzw * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
+  r3.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r1.xyz;
+  r1.xyz = cmp(r1.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
+  r1.xyz = r1.xyz ? r2.xzw : r3.xyz;
+  o0.xyz = r2.yyy ? r1.xyz : r0.xyz;
 
   if (injectedData.toneMapType != 0.f) {
-    float videoPeak =
-        injectedData.toneMapPeakNits / (injectedData.toneMapGameNits / 203.f);
-
-    // o0.rgb = renodx::color::gamma::Decode(o0.rgb, 2.4f);  // 2.4 for BT2446a
-    o0.rgb = renodx::tonemap::inverse::bt2446a::BT709(o0.rgb, 100.f, videoPeak);
-    o0.rgb /= videoPeak;                                                    // Normalize to 1.0f = peak;
-    o0.rgb *= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;  // 1.f = game nits
+    o0.rgb = renodx::draw::UpscaleVideoPass(o0.rgb);
   }
 
-  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);  // Gamma Correct
+  o0.rgb = renodx::color::srgb::DecodeSafe(o0.rgb);
 
-  // r2.xzw = r2.xzw * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
-  // r3.xyz = float3(12.9200001,12.9200001,12.9200001) * r1.xyz;
-  // r1.xyz = cmp(r1.xyz >= float3(0.00313066994,0.00313066994,0.00313066994));
-  // r1.xyz = r1.xyz ? r2.xzw : r3.xyz;
-  // o0.xyz = r2.yyy ? r1.xyz : r0.xyz;
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
+
   return;
 }
