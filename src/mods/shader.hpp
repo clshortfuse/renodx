@@ -48,17 +48,29 @@ struct CustomShader {
   // return false to abort
   std::function<bool(reshade::api::command_list*)> on_draw = nullptr;
   std::function<void(reshade::api::command_list*)> on_drawn = nullptr;
+  std::unordered_map<reshade::api::device_api, std::vector<uint8_t>> code_by_device;
 };
 
 using CustomShaders = std::unordered_map<uint32_t, CustomShader>;
 
 // clang-format off
-#define BypassShaderEntry(__crc32__) { __crc32__, { .crc32 = __crc32__, .on_draw = &renodx::mods::shader::internal::OnBypassShaderDraw } }
-#define CustomShaderEntry(crc32) { crc32, { crc32, __##crc32 } }
-#define CustomCountedShader(crc32, index) { crc32, { crc32, __##crc32, ##index} }
-#define CustomSwapchainShader(crc32) { crc32, { crc32, __##crc32, -1, &renodx::utils::swapchain::HasBackBufferRenderTarget } }
-#define CustomShaderEntryCallback(crc32, callback) { crc32, { crc32, __##crc32, -1, callback} }
+#define BypassShaderEntry(__crc32__)               {__crc32__, {.crc32 = __crc32__, .on_draw = &renodx::mods::shader::internal::OnBypassShaderDraw}}
+#define CustomShaderEntry(crc32)                   {crc32, {crc32, __##crc32}}
+#define CustomCountedShader(crc32, index)          {crc32, {crc32, __##crc32, ##index}}
+#define CustomSwapchainShader(crc32)               {crc32, {crc32, __##crc32, -1, &renodx::utils::swapchain::HasBackBufferRenderTarget}}
+#define CustomShaderEntryCallback(crc32, callback) {crc32, {crc32, __##crc32, -1, callback}}
 // clang-format on
+#define RENODX_JOIN_MACRO(x, y) x##y
+#define CustomDirectXShaders(__crc32__)                                               \
+  {                                                                                   \
+    __crc32__, {                                                                      \
+      .crc32 = __crc32__,                                                             \
+      .code_by_device = {                                                             \
+          {reshade::api::device_api::d3d11, RENODX_JOIN_MACRO(__##__crc32__, _dx11)}, \
+          {reshade::api::device_api::d3d12, RENODX_JOIN_MACRO(__##__crc32__, _dx12)}, \
+      },                                                                              \
+    }                                                                                 \
+  }
 
 static thread_local std::vector<reshade::api::pipeline_layout_param*> created_params;
 static thread_local std::unordered_map<uint32_t, reshade::api::pipeline_layout_param*> rebuilt_params;
@@ -980,9 +992,9 @@ static bool attached = false;
 
 template <typename T = float*>
 static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injections = nullptr) {
+  renodx::utils::resource::Use(fdw_reason);
   renodx::utils::shader::Use(fdw_reason);
   renodx::utils::swapchain::Use(fdw_reason);
-  renodx::utils::resource::Use(fdw_reason);
 
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
@@ -1011,17 +1023,27 @@ static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injec
       if (!manual_shader_scheduling) {
         if (force_pipeline_cloning || use_pipeline_layout_cloning) {
           for (const auto& [hash, shader] : (new_custom_shaders)) {
-            if (shader.code.empty()) continue;
-            renodx::utils::shader::QueueRuntimeReplacement(hash, shader.code);
+            for (const auto& [device, code] : shader.code_by_device) {
+              renodx::utils::shader::UpdateReplacements({{hash, code}}, false, true, {device});
+            }
+            if (!shader.code.empty()) {
+              renodx::utils::shader::QueueRuntimeReplacement(hash, shader.code);
+            }
           }
         } else {
           for (const auto& [hash, shader] : (new_custom_shaders)) {
-            if (shader.code.empty()) continue;
-            if (shader.on_replace == nullptr && shader.index == -1) {
-              renodx::utils::shader::QueueCompileTimeReplacement(hash, shader.code);
+            bool compile_supported = shader.on_replace == nullptr && shader.index == -1;
+            for (const auto& [device, code] : shader.code_by_device) {
+              renodx::utils::shader::UpdateReplacements({{hash, code}}, compile_supported, true, {device});
             }
-            // Use Runtime as fallback
-            renodx::utils::shader::QueueRuntimeReplacement(hash, shader.code);
+
+            if (!shader.code.empty()) {
+              if (compile_supported) {
+                renodx::utils::shader::QueueCompileTimeReplacement(hash, shader.code);
+              }
+              // Use Runtime as fallback
+              renodx::utils::shader::QueueRuntimeReplacement(hash, shader.code);
+            }
           }
         }
       }

@@ -82,7 +82,7 @@ function(build_shader_target ADDON ADDON_PATH)
   foreach(FILE ${SHADER_SOURCES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)
-    string(REGEX MATCH "(.*)\\.([pcv]s_[0-9]_[0-9])\\.hlsl$" _ ${FILENAME})
+    string(REGEX MATCH "(.*)\\.([pcv]s_[0-9]_[0-9x])\\.hlsl$" _ ${FILENAME})
     set(SHADER_NAME ${CMAKE_MATCH_1})
     set(SHADER_TARGET ${CMAKE_MATCH_2})
     if(SHADER_NAME)
@@ -94,44 +94,101 @@ function(build_shader_target ADDON ADDON_PATH)
     if(SHADER_TARGET AND (SHADER_HASH OR SHADER_NAME))
       string(SUBSTRING ${SHADER_TARGET} 3 1 SHADER_TARGET_MAJOR)
       string(SUBSTRING ${SHADER_TARGET} 5 1 SHADER_TARGET_MINOR)
-      set(SHADER_COMPILER ${FXC_BIN})
-      unset(SHADER_FLAGS)
-      if(SHADER_TARGET_MAJOR GREATER_EQUAL "6")
-        set(SHADER_COMPILER ${DXC_BIN})
-        set(SHADER_FLAGS "/HV 2021") # Ovewrite flags
-      else()
+      if(SHADER_TARGET_MAJOR STREQUAL "5" AND SHADER_TARGET_MINOR STREQUAL "x")
+
+        string(SUBSTRING ${SHADER_TARGET} 0 2 SHADER_TARGET_TYPE)
+
+        # Add dependencies
+        unset(HLSL_DEPENDENCIES)
+        unset(HLSL_CHILD_DEPENDENCIES)
+        list(APPEND HLSL_DEPENDENCIES ${FILE})
+        inspect_hlsl_imports(${FILE} HLSL_CHILD_DEPENDENCIES ".")
+        list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
+
+        #DX11
+        set(SHADER_COMPILER ${FXC_BIN})
+        unset(SHADER_FLAGS)
         set(SHADER_FLAGS ${SHADER_FLAGS} /D __SHADER_TARGET_MAJOR=${SHADER_TARGET_MAJOR})
-        set(SHADER_FLAGS ${SHADER_FLAGS} /D __SHADER_TARGET_MINOR=${SHADER_TARGET_MINOR})
-        if(SHADER_TARGET_MAJOR EQUAL "5")
-          if(SHADER_TARGET_MINOR EQUAL "0")
+        set(SHADER_FLAGS ${SHADER_FLAGS} /D __SHADER_TARGET_MINOR=0)
+        set(SHADER_FLAGS ${SHADER_FLAGS} /Gec)
+
+        if(SHADER_HASH)
+          add_custom_command(
+            OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso
+            COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET_TYPE}_5_0 ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso
+            DEPENDS ${HLSL_DEPENDENCIES}
+          )
+          list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso)
+        else()
+          add_custom_command(
+            OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso
+            COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET_TYPE}_5_0 ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso
+            DEPENDS ${HLSL_DEPENDENCIES}
+          )
+          list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso)
+        endif()
+
+        #DX12
+        unset(SHADER_FLAGS)
+        set(SHADER_FLAGS ${SHADER_FLAGS} /D __SHADER_TARGET_MAJOR=${SHADER_TARGET_MAJOR})
+        set(SHADER_FLAGS ${SHADER_FLAGS} /D __SHADER_TARGET_MINOR=1)
+
+        if(SHADER_HASH)
+          add_custom_command(
+            OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso
+            COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET_TYPE}_5_1 ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso
+            DEPENDS ${HLSL_DEPENDENCIES}
+          )
+          list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso)
+        else()
+          add_custom_command(
+            OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso
+            COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET_TYPE}_5_1 ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso
+            DEPENDS ${HLSL_DEPENDENCIES}
+          )
+          list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso)
+        endif()
+
+      else()
+        set(SHADER_COMPILER ${FXC_BIN})
+        unset(SHADER_FLAGS)
+        if(SHADER_TARGET_MAJOR GREATER_EQUAL "6")
+          set(SHADER_COMPILER ${DXC_BIN})
+          set(SHADER_FLAGS "/HV 2021") # Ovewrite flags
+        else()
+          set(SHADER_FLAGS ${SHADER_FLAGS} /D __SHADER_TARGET_MAJOR=${SHADER_TARGET_MAJOR})
+          set(SHADER_FLAGS ${SHADER_FLAGS} /D __SHADER_TARGET_MINOR=${SHADER_TARGET_MINOR})
+          if(SHADER_TARGET_MAJOR EQUAL "5")
+            if(SHADER_TARGET_MINOR EQUAL "0")
+              set(SHADER_FLAGS ${SHADER_FLAGS} /Gec)
+            endif()
+          else()
             set(SHADER_FLAGS ${SHADER_FLAGS} /Gec)
           endif()
-        else()
-          set(SHADER_FLAGS ${SHADER_FLAGS} /Gec)
         endif()
-      endif()
 
-      unset(HLSL_DEPENDENCIES)
-      unset(HLSL_CHILD_DEPENDENCIES)
-      list(APPEND HLSL_DEPENDENCIES ${FILE})
-      # message("Building HLSL dependencies for " ${FILE})
-      inspect_hlsl_imports(${FILE} HLSL_CHILD_DEPENDENCIES ".")
-      list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
-      if(SHADER_HASH)
-        # message("Registering: " ${FILE} " => " ${EMBED_FOLDER}/${SHADER_HASH}.cso)
-        add_custom_command(
-          OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.cso
-          COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}.cso
-          DEPENDS ${HLSL_DEPENDENCIES}
-        )
-        list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}.cso)
-      else()
-        add_custom_command(
-          OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.cso
-          COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_NAME}.cso
-          DEPENDS ${HLSL_DEPENDENCIES}
-        )
-        list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}.cso)
+        unset(HLSL_DEPENDENCIES)
+        unset(HLSL_CHILD_DEPENDENCIES)
+        list(APPEND HLSL_DEPENDENCIES ${FILE})
+        # message("Building HLSL dependencies for " ${FILE})
+        inspect_hlsl_imports(${FILE} HLSL_CHILD_DEPENDENCIES ".")
+        list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
+        if(SHADER_HASH)
+          # message("Registering: " ${FILE} " => " ${EMBED_FOLDER}/${SHADER_HASH}.cso)
+          add_custom_command(
+            OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.cso
+            COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}.cso
+            DEPENDS ${HLSL_DEPENDENCIES}
+          )
+          list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}.cso)
+        else()
+          add_custom_command(
+            OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.cso
+            COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_NAME}.cso
+            DEPENDS ${HLSL_DEPENDENCIES}
+          )
+          list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}.cso)
+        endif()
       endif()
     endif()
   endforeach()
@@ -195,7 +252,6 @@ function(build_shader_target ADDON ADDON_PATH)
   list(JOIN SHADER_HEADER_FILES " " SHADER_HEADER_FILE_ITEMS)
   add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES})
 
-  
   if(SHADERS_H_OUTPUT)
     file(GENERATE OUTPUT ${EMBED_FOLDER}/shaders.h CONTENT "${SHADERS_H_OUTPUT}")
   endif()
