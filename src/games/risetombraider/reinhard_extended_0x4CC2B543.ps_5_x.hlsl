@@ -57,6 +57,10 @@ void main(
   r0.x = -1 + r0.x;
   r0.x = adaptationPerc * r0.x + 1;
   r1.xyzw = frameBufferCopy.SampleLevel(SamplerGenericPointClamp_s, v1.xy, 0).xyzw;
+  
+  // Custom: Support RGBA16F upgrade
+  r1.xyz = max(0, r1.xyz);
+
   r0.yzw = g_fExposure_pre * r1.xyz;
   o0.w = r1.w;
   r0.xyz = r0.yzw * r0.xxx;
