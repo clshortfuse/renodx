@@ -38,6 +38,7 @@ struct Config {
   float intermediate_color_space;         // 0 = d65, 1 = bt2020, 2 = ap1
   float swap_chain_decoding;              // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
   float swap_chain_decoding_color_space;  // 0 = d65, 1 = bt2020, 2 = ap1
+  float swap_chain_gamma_correction;      // 0 = srgb/none, 1 = 2.2, 2 = 2.4
   float swap_chain_custom_color_space;    // 0 = d65, 1 = d93, 2 = ntsc-u, 3 = ntsc-j
   float swap_chain_scaling_nits;          // generally ui nits
   float swap_chain_clamp_nits;            // generally peak nits
@@ -212,6 +213,11 @@ Config BuildConfig() {
 #endif
   config.swap_chain_decoding_color_space = RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE;
 
+#if !defined(RENODX_SWAP_CHAIN_GAMMA_CORRECTION)
+#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION GAMMA_CORRECTION_NONE
+#endif
+  config.swap_chain_gamma_correction = RENODX_SWAP_CHAIN_GAMMA_CORRECTION;
+
 #if !defined(RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE)
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE COLOR_SPACE_CUSTOM_BT709D65
 #endif
@@ -356,6 +362,16 @@ float3 InvertIntermediatePass(float3 color, Config config) {
 
 float3 SwapChainPass(float3 color, Config config) {
   color = DecodeColor(color, config.swap_chain_decoding);
+
+  if (config.swap_chain_gamma_correction == GAMMA_CORRECTION_GAMMA_2_2) {
+    color = color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, color::convert::COLOR_SPACE_BT709);
+    config.swap_chain_decoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
+    color = renodx::color::correct::GammaSafe(color, false, 2.2f);
+  } else if (config.swap_chain_gamma_correction == GAMMA_CORRECTION_GAMMA_2_4) {
+    color = color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, color::convert::COLOR_SPACE_BT709);
+    config.swap_chain_decoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
+    color = renodx::color::correct::GammaSafe(color, false, 2.4f);
+  }
 
   [branch]
   if (config.swap_chain_custom_color_space == COLOR_SPACE_CUSTOM_BT709D93) {
