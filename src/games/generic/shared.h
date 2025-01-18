@@ -55,7 +55,9 @@
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
-// #define RENODX_SWAP_CHAIN_DECODING             shader_injection.swap_chain_decoding
+#define RENODX_INTERMEDIATE_ENCODING         (RENODX_GAMMA_CORRECTION + 1.f)
+#define RENODX_SWAP_CHAIN_DECODING           shader_injection.swap_chain_decoding
+#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION   shader_injection.swap_chain_gamma_correction
 // #define RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE shader_injection.swap_chain_decoding_color_space
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE shader_injection.swap_chain_custom_color_space
 // #define RENODX_SWAP_CHAIN_SCALING_NITS         shader_injection.swap_chain_scaling_nits
@@ -91,7 +93,8 @@ struct ShaderInjectData {
   float intermediate_scaling;
   float intermediate_encoding;
   float intermediate_color_space;
-  //  float swap_chain_decoding;
+  float swap_chain_decoding;
+  float swap_chain_gamma_correction;
   //  float swap_chain_decoding_color_space;
   float swap_chain_custom_color_space;
   // float swap_chain_scaling_nits;

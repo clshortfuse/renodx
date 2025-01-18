@@ -284,6 +284,31 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
+        .key = "SwapChainDecoding",
+        .binding = &RENODX_SWAP_CHAIN_DECODING,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Decoding",
+        .section = "Swap Chain",
+        .labels = {"Auto", "None", "SRGB", "2.2", "2.4"},
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .parse = [](float value) {
+            if (value == 0) return RENODX_INTERMEDIATE_ENCODING;
+            return value - 1.f; },
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "SwapChainGammaCorrection",
+        .binding = &RENODX_SWAP_CHAIN_GAMMA_CORRECTION,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Gamma Correction",
+        .section = "Swap Chain",
+        .labels = {"None", "2.2", "2.4"},
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "SwapChainClampColorSpace",
         .binding = &RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -299,12 +324,14 @@ renodx::utils::settings::Settings settings = {
         .key = "SwapChainEncoding",
         .binding = &RENODX_SWAP_CHAIN_ENCODING,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 2.f,
         .label = "Encoding",
         .section = "Swap Chain",
-        .labels = {"HDR10", "scRGB"},
+        .labels = {"Default", "HDR10", "scRGB"},
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
-        .parse = [](float value) { return value + 4.f; },
+        .parse = [](float value) {
+            if (value == 0) return 0.f;
+            return value + 3.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
@@ -322,34 +349,77 @@ renodx::utils::settings::Settings settings = {
 };
 
 void OnPresetOff() {
-//   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
-//   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
-//   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-//   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
-//   renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
-//   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
-//   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-//   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
-//   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-//   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-//   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-//   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
+  //   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
+  //   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
+  //   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
+  //   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
+  //   renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
+  //   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
+  //   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
+  //   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
+  //   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
+  //   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
+  //   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
+  //   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
 }
+
+void OnInitDevice(reshade::api::device* device) {
+  if (device->get_api() == reshade::api::device_api::d3d11) {
+    renodx::mods::shader::expected_constant_buffer_space = 0;
+    renodx::mods::swapchain::expected_constant_buffer_space = 0;
+
+    if (RENODX_SWAP_CHAIN_ENCODING != 0) {
+      reshade::log::message(reshade::log::level::info, "Activating DX11 swap chain proxy...");
+      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader_dx11;
+      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx11;
+    }
+    return;
+  }
+
+  if (device->get_api() == reshade::api::device_api::d3d12) {
+    reshade::log::message(reshade::log::level::info, "Activating DX12 swap chain proxy...");
+    // Switch over to DX12
+    renodx::mods::shader::expected_constant_buffer_space = 50;
+    renodx::mods::swapchain::expected_constant_buffer_space = 50;
+
+    if (RENODX_SWAP_CHAIN_ENCODING != 0) {
+      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader_dx12;
+      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx12;
+    }
+  }
+}
+
+bool initialized = false;
 
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for {Game}";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX (Generic)";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
-
-      renodx::mods::shader::force_pipeline_cloning = true;
       if (!reshade::register_addon(h_module)) return FALSE;
+
+      if (!initialized) {
+        renodx::mods::shader::force_pipeline_cloning = true;
+        renodx::mods::shader::expected_constant_buffer_space = 50;
+        renodx::mods::shader::expected_constant_buffer_index = 13;
+        renodx::mods::shader::manual_shader_scheduling = true;
+        renodx::mods::shader::allow_multiple_push_constants = true;
+
+        renodx::mods::swapchain::expected_constant_buffer_index = 13;
+        renodx::mods::swapchain::use_resource_cloning = true;
+        renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader_dx11;
+        renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx11;
+        initialized = true;
+      }
+
+      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(h_module);
+      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
       break;
   }
 
