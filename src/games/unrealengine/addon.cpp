@@ -26,20 +26,39 @@ namespace {
 
 std::unordered_set<std::uint32_t> drawn_shaders;
 
-#define TracedShaderEntry(value)                                    \
-  {                                                                 \
-    value,                                                          \
-        {                                                           \
-            .crc32 = value,                                         \
-            .code = __##value,                                      \
-            .on_drawn = [](auto cmd_list) {                         \
-              if (drawn_shaders.contains(value)) return;            \
-              drawn_shaders.emplace(value);                         \
-              reshade::log::message(                                \
-                  reshade::log::level::debug,                       \
-                  std::format("Replaced 0x{:08x}", value).c_str()); \
-            },                                                      \
-        },                                                          \
+#define TracedShaderEntry(value)                                  \
+  {                                                               \
+      value,                                                      \
+      {                                                           \
+          .crc32 = value,                                         \
+          .code = __##value,                                      \
+          .on_drawn = [](auto cmd_list) {                         \
+            if (drawn_shaders.contains(value)) return;            \
+            drawn_shaders.emplace(value);                         \
+            reshade::log::message(                                \
+                reshade::log::level::debug,                       \
+                std::format("Replaced 0x{:08x}", value).c_str()); \
+          },                                                      \
+      },                                                          \
+  }
+
+#define TracedDualShaderEntry(value)                                                  \
+  {                                                                                   \
+      value,                                                                          \
+      {                                                                               \
+          .crc32 = value,                                                             \
+          .on_drawn = [](auto cmd_list) {                                             \
+            if (drawn_shaders.contains(value)) return;                                \
+            drawn_shaders.emplace(value);                                             \
+            reshade::log::message(                                                    \
+                reshade::log::level::debug,                                           \
+                std::format("Replaced 0x{:08x}", value).c_str());                     \
+          },                                                                          \
+          .code_by_device = {                                                         \
+              {reshade::api::device_api::d3d11, RENODX_JOIN_MACRO(__##value, _dx11)}, \
+              {reshade::api::device_api::d3d12, RENODX_JOIN_MACRO(__##value, _dx12)}, \
+          },                                                                          \
+      },                                                                              \
   }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
@@ -47,49 +66,49 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedShaderEntry(0xAC791084),  // fmv
 
     // Kingdom Hearts 3
-    TracedShaderEntry(0x00E9C5FE),
-    TracedShaderEntry(0xE9343033),
+    TracedDualShaderEntry(0x00E9C5FE),
+    TracedDualShaderEntry(0xE9343033),
 
     // Persona 3 Reload
     TracedShaderEntry(0xCB9976C8),
     TracedShaderEntry(0xBFE48347),
 
     // SM5 LUT Builder
-    TracedShaderEntry(0x1DF6036B),
-    TracedShaderEntry(0x20EAC9B6),
-    TracedShaderEntry(0x2569985B),
-    TracedShaderEntry(0x3040FD90),
-    TracedShaderEntry(0x31FE4421),
-    TracedShaderEntry(0x36E3A438),
-    TracedShaderEntry(0x5CAE0013),
-    TracedShaderEntry(0x61C2EA30),
-    TracedShaderEntry(0x6CA6068F),
-    TracedShaderEntry(0x73B2BA54),
-    TracedShaderEntry(0x7570E7B1),
-    TracedShaderEntry(0x80CD76B6),
-    TracedShaderEntry(0x876F0F03),
-    TracedShaderEntry(0x8CD01256),
-    TracedShaderEntry(0xA918F0C8),
-    TracedShaderEntry(0xB1614732),
-    TracedShaderEntry(0xB4F3140C),
-    TracedShaderEntry(0xBEB7EB31),
-    TracedShaderEntry(0xB972BF8F),
-    TracedShaderEntry(0xC130BE2D),
-    TracedShaderEntry(0xC1BCC6B5),
-    TracedShaderEntry(0xC2A711CC),
-    TracedShaderEntry(0xC32C8BEA),
-    TracedShaderEntry(0xCA383248),
-    TracedShaderEntry(0xCC8FD0FF),
-    TracedShaderEntry(0xD2748E73),
-    TracedShaderEntry(0xD4A45A02),
-    TracedShaderEntry(0xE6EB2840),
-    TracedShaderEntry(0xF6AA7756),
-    TracedShaderEntry(0xFBB78F9F),
-    TracedShaderEntry(0x6E6FC244),
-    TracedShaderEntry(0x8D3D2FA0),
-    TracedShaderEntry(0x97BAC8AF),
-    TracedShaderEntry(0x2F460105),
-    TracedShaderEntry(0x5BD6A5C2),
+    TracedDualShaderEntry(0x1DF6036B),
+    TracedDualShaderEntry(0x20EAC9B6),
+    TracedDualShaderEntry(0x2569985B),
+    TracedDualShaderEntry(0x3040FD90),
+    TracedDualShaderEntry(0x31FE4421),
+    TracedDualShaderEntry(0x36E3A438),
+    TracedDualShaderEntry(0x5CAE0013),
+    TracedDualShaderEntry(0x61C2EA30),
+    TracedDualShaderEntry(0x6CA6068F),
+    TracedDualShaderEntry(0x73B2BA54),
+    TracedDualShaderEntry(0x7570E7B1),
+    TracedDualShaderEntry(0x80CD76B6),
+    TracedDualShaderEntry(0x876F0F03),
+    TracedDualShaderEntry(0x8CD01256),
+    TracedDualShaderEntry(0xA918F0C8),
+    TracedDualShaderEntry(0xB1614732),
+    TracedDualShaderEntry(0xB4F3140C),
+    TracedDualShaderEntry(0xBEB7EB31),
+    TracedDualShaderEntry(0xB972BF8F),
+    TracedDualShaderEntry(0xC130BE2D),
+    TracedDualShaderEntry(0xC1BCC6B5),
+    TracedDualShaderEntry(0xC2A711CC),
+    TracedDualShaderEntry(0xC32C8BEA),
+    TracedDualShaderEntry(0xCA383248),
+    TracedDualShaderEntry(0xCC8FD0FF),
+    TracedDualShaderEntry(0xD2748E73),
+    TracedDualShaderEntry(0xD4A45A02),
+    TracedDualShaderEntry(0xE6EB2840),
+    TracedDualShaderEntry(0xF6AA7756),
+    TracedDualShaderEntry(0xFBB78F9F),
+    TracedDualShaderEntry(0x6E6FC244),
+    TracedDualShaderEntry(0x8D3D2FA0),
+    TracedDualShaderEntry(0x97BAC8AF),
+    TracedDualShaderEntry(0x2F460105),
+    TracedDualShaderEntry(0x5BD6A5C2),
 
     // SM6 LUT Builder
 
@@ -441,8 +460,8 @@ void OnInitDevice(reshade::api::device* device) {
     renodx::mods::shader::expected_constant_buffer_space = 0;
     renodx::mods::swapchain::expected_constant_buffer_space = 0;
 
-    renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
-    renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+    renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader_dx11;
+    renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx11;
     return;
   }
 
@@ -698,116 +717,6 @@ void AddAdvancedSettings() {
   }});
 }
 
-void AddShaders() {
-  // DX11+DX12
-
-  renodx::utils::shader::UpdateReplacements(
-      {
-          {0xAC791084, __0xAC791084},
-
-          {0x00E9C5FE, __0x00E9C5FE},
-          {0xE9343033, __0xE9343033},
-          {0x1DF6036B, __0x1DF6036B},
-          {0x20EAC9B6, __0x20EAC9B6},
-          {0x2569985B, __0x2569985B},
-          {0x3040FD90, __0x3040FD90},
-          {0x31FE4421, __0x31FE4421},
-          {0x36E3A438, __0x36E3A438},
-          {0x5CAE0013, __0x5CAE0013},
-          {0x61C2EA30, __0x61C2EA30},
-          {0x6CA6068F, __0x6CA6068F},
-          {0x73B2BA54, __0x73B2BA54},
-          {0x7570E7B1, __0x7570E7B1},
-          {0x80CD76B6, __0x80CD76B6},
-          {0x876F0F03, __0x876F0F03},
-          {0x8CD01256, __0x8CD01256},
-          {0xA918F0C8, __0xA918F0C8},
-          {0xB1614732, __0xB1614732},
-          {0xB4F3140C, __0xB4F3140C},
-          {0xBEB7EB31, __0xBEB7EB31},
-          {0xB972BF8F, __0xB972BF8F},
-          {0xC130BE2D, __0xC130BE2D},
-          {0xC1BCC6B5, __0xC1BCC6B5},
-          {0xC2A711CC, __0xC2A711CC},
-          {0xC32C8BEA, __0xC32C8BEA},
-          {0xCA383248, __0xCA383248},
-          {0xCC8FD0FF, __0xCC8FD0FF},
-          {0xD2748E73, __0xD2748E73},
-          {0xD4A45A02, __0xD4A45A02},
-          {0xE6EB2840, __0xE6EB2840},
-          {0xF6AA7756, __0xF6AA7756},
-          {0xFBB78F9F, __0xFBB78F9F},
-          {0x6E6FC244, __0x6E6FC244},
-          {0x8D3D2FA0, __0x8D3D2FA0},
-          {0x97BAC8AF, __0x97BAC8AF},
-          {0x2F460105, __0x2F460105},
-          {0x5BD6A5C2, __0x5BD6A5C2},
-      },
-      true, true, {reshade::api::device_api::d3d11});
-
-  renodx::utils::shader::UpdateReplacements(
-      {
-          // {0xAC791084, __lutbuilder_0xAC791084_dx12},
-
-          {0x00E9C5FE, __lutbuilder_0x00E9C5FE_dx12},
-          {0xE9343033, __lutbuilder_0xE9343033_dx12},
-          {0x1DF6036B, __lutbuilder_0x1DF6036B_dx12},
-          {0x20EAC9B6, __lutbuilder_0x20EAC9B6_dx12},
-          {0x2569985B, __lutbuilder_0x2569985B_dx12},
-          {0x3040FD90, __lutbuilder_0x3040FD90_dx12},
-          {0x31FE4421, __lutbuilder_0x31FE4421_dx12},
-          {0x36E3A438, __lutbuilder_0x36E3A438_dx12},
-          {0x5CAE0013, __lutbuilder_0x5CAE0013_dx12},
-          {0x61C2EA30, __lutbuilder_0x61C2EA30_dx12},
-          {0x6CA6068F, __lutbuilder_0x6CA6068F_dx12},
-          {0x73B2BA54, __lutbuilder_0x73B2BA54_dx12},
-          {0x7570E7B1, __lutbuilder_0x7570E7B1_dx12},
-          {0x80CD76B6, __lutbuilder_0x80CD76B6_dx12},
-          {0x876F0F03, __lutbuilder_0x876F0F03_dx12},
-          {0x8CD01256, __lutbuilder_0x8CD01256_dx12},
-          {0xA918F0C8, __lutbuilder_0xA918F0C8_dx12},
-          {0xB1614732, __lutbuilder_0xB1614732_dx12},
-          {0xB4F3140C, __lutbuilder_0xB4F3140C_dx12},
-          {0xBEB7EB31, __lutbuilder_0xBEB7EB31_dx12},
-          {0xB972BF8F, __lutbuilder_0xB972BF8F_dx12},
-          {0xC130BE2D, __lutbuilder_0xC130BE2D_dx12},
-          {0xC1BCC6B5, __lutbuilder_0xC1BCC6B5_dx12},
-          {0xC2A711CC, __lutbuilder_0xC2A711CC_dx12},
-          {0xC32C8BEA, __lutbuilder_0xC32C8BEA_dx12},
-          {0xCA383248, __lutbuilder_0xCA383248_dx12},
-          {0xCC8FD0FF, __lutbuilder_0xCC8FD0FF_dx12},
-          {0xD2748E73, __lutbuilder_0xD2748E73_dx12},
-          {0xD4A45A02, __lutbuilder_0xD4A45A02_dx12},
-          {0xE6EB2840, __lutbuilder_0xE6EB2840_dx12},
-          {0xF6AA7756, __lutbuilder_0xF6AA7756_dx12},
-          {0xFBB78F9F, __lutbuilder_0xFBB78F9F_dx12},
-          {0x6E6FC244, __lutbuilder_0x6E6FC244_dx12},
-          {0x8D3D2FA0, __lutbuilder_0x8D3D2FA0_dx12},
-          {0x97BAC8AF, __lutbuilder_0x97BAC8AF_dx12},
-          {0x2F460105, __lutbuilder_0x2F460105_dx12},
-          {0x5BD6A5C2, __lutbuilder_0x5BD6A5C2_dx12},
-
-          {0x269E94C1, __0x269E94C1},
-          {0x3028EBE7, __0x3028EBE7},
-          {0x33247499, __0x33247499},
-          {0x4CC68F73, __0x4CC68F73},
-          {0x4F3FCE76, __0x4F3FCE76},
-          {0x5D760393, __0x5D760393},
-          {0x6CFBD4C0, __0x6CFBD4C0},
-          {0x90BBE81C, __0x90BBE81C},
-          {0x94D26E3A, __0x94D26E3A},
-          {0xB530B36A, __0xB530B36A},
-          {0xB6CA5FD9, __0xB6CA5FD9},
-          {0xBAA27141, __0xBAA27141},
-          {0xEBB3E98C, __0xEBB3E98C},
-
-          // P3 Reload
-          {0xCB9976C8, __0xCB9976C8},
-          {0xBFE48347, __0xBFE48347},
-      },
-      true, true, {reshade::api::device_api::d3d12});
-}
-
 bool initialized = false;
 
 }  // namespace
@@ -836,7 +745,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       // while (IsDebuggerPresent() == 0) Sleep(100);
 
       if (!initialized) {
-        AddShaders();
         AddGamePatches();
         AddAdvancedSettings();
 
@@ -844,15 +752,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           settings.push_back(new_setting);
         }
 
-        renodx::mods::shader::manual_shader_scheduling = true;
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::allow_multiple_push_constants = true;
 
         renodx::mods::swapchain::expected_constant_buffer_index = 13;
 
         renodx::mods::swapchain::use_resource_cloning = true;
-        renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
-        renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+        renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader_dx11;
+        renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx11;
 
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r10g10b10a2_unorm,
