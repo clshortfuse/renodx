@@ -175,9 +175,6 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
   std::unordered_map<uint64_t, std::vector<reshade::api::pipeline_layout_param>> pipeline_layout_params;
   std::unordered_set<uint64_t> live_pipelines;
   std::shared_mutex mutex;
-  std::unordered_map<uint64_t, reshade::api::resource> resource_view_resources;
-  std::unordered_set<uint64_t> empty_resource_views;
-  std::unordered_map<uint64_t, std::unordered_set<uint64_t>> resource_resource_views;
 
   reshade::api::effect_runtime* runtime = nullptr;
 
@@ -215,17 +212,14 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
       details.resource_view_reflection = resource_view_reflection.value();
     }
 
-    if (auto pair = resource_view_resources.find(resource_view.handle);
-        pair != resource_view_resources.end()) {
-      details.resource = pair->second;  // device->get_resource_from_view(resource_view);
+    auto resource = renodx::utils::resource::GetResourceFromView(device, resource_view);
+    details.resource = resource;
+    if (resource.handle != 0u) {
+      details.resource_desc = device->get_resource_desc(details.resource);
 
-      if (details.resource.handle != 0u) {
-        details.resource_desc = device->get_resource_desc(details.resource);
-
-        auto resource_reflection = renodx::utils::trace::GetDebugName(device_api, details.resource);
-        if (resource_reflection.has_value()) {
-          details.resource_reflection = resource_reflection.value();
-        }
+      auto resource_reflection = renodx::utils::trace::GetDebugName(device_api, details.resource);
+      if (resource_reflection.has_value()) {
+        details.resource_reflection = resource_reflection.value();
       }
     }
 
@@ -250,8 +244,6 @@ const std::vector<std::pair<const char*, const char*>> SETTING_NAV_TITLES = {
 
 bool setting_auto_dump = false;
 bool setting_live_reload = false;
-bool setting_unique_shaders_only = false;
-bool setting_show_vertex_shaders = false;
 uint32_t setting_nav_item = 0;
 
 struct SettingSelection {
@@ -537,55 +529,6 @@ void OnBindPipeline(
   }
 }
 
-void OnInitResource(
-    reshade::api::device* device,
-    const reshade::api::resource_desc& desc,
-    const reshade::api::subresource_data* initial_data,
-    reshade::api::resource_usage initial_state,
-    reshade::api::resource resource) {
-  if (resource.handle == 0) return;
-  auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
-  auto& view_set = data.resource_resource_views[resource.handle];
-  for (const auto view_handle : view_set) {
-    data.resource_view_resources.erase(view_handle);
-  }
-}
-
-void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
-  if (resource.handle == 0) return;
-  auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
-  auto& view_set = data.resource_resource_views[resource.handle];
-  for (const auto view_handle : view_set) {
-    data.resource_view_resources.erase(view_handle);
-  }
-}
-
-void OnInitResourceView(
-    reshade::api::device* device,
-    reshade::api::resource resource,
-    reshade::api::resource_usage usage_type,
-    const reshade::api::resource_view_desc& desc,
-    reshade::api::resource_view view) {
-  if (view.handle == 0u) return;
-  auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
-
-  auto& tracked_resource = data.resource_view_resources[view.handle];
-  // bool reused_handle = tracked_resource.handle != 0u && tracked_resource.handle != resource.handle;
-
-  if (resource.handle == 0u) {
-    data.empty_resource_views.emplace(view.handle);
-    return;
-  }
-  data.empty_resource_views.erase(view.handle);
-  tracked_resource.handle = resource.handle;
-
-  auto& view_set = data.resource_resource_views[resource.handle];
-  view_set.emplace(view.handle);
-}
-
 void OnPushDescriptors(
     reshade::api::command_list* cmd_list,
     reshade::api::shader_stage stages,
@@ -820,7 +763,7 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
                 draw_details.uav_binds.erase(slot);
               } else {
                 auto detail_item = (device_data.GetResourceViewDetails(resource_view, device));
-                if (detail_item.resource.handle == 0u && device_data.empty_resource_views.contains(resource_view.handle)) {
+                if (detail_item.resource.handle == 0u && renodx::utils::resource::IsResourceViewEmpty(device, resource_view)) {
                   draw_details.uav_binds.erase(slot);
                 } else {
                   draw_details.uav_binds[slot] = detail_item;
@@ -831,7 +774,7 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
                 draw_details.srv_binds.erase(slot);
               } else {
                 auto detail_item = (device_data.GetResourceViewDetails(resource_view, device));
-                if (detail_item.resource.handle == 0u && device_data.empty_resource_views.contains(resource_view.handle)) {
+                if (detail_item.resource.handle == 0u && renodx::utils::resource::IsResourceViewEmpty(device, resource_view)) {
                   draw_details.srv_binds.erase(slot);
                 } else {
                   draw_details.srv_binds[slot] = detail_item;
@@ -2244,9 +2187,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
       reshade::register_event<reshade::addon_event::init_pipeline_layout>(OnInitPipelineLayout);
       reshade::register_event<reshade::addon_event::init_pipeline>(OnInitPipelineTrackAddons);
-      reshade::register_event<reshade::addon_event::init_resource_view>(OnInitResourceView);
-      reshade::register_event<reshade::addon_event::init_resource>(OnInitResource);
-      reshade::register_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
 
       reshade::register_event<reshade::addon_event::init_pipeline>(OnInitPipeline);
       reshade::register_event<reshade::addon_event::bind_pipeline>(OnBindPipeline);
@@ -2292,6 +2232,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       break;
   }
+
+  renodx::utils::resource::Use(fdw_reason);
 
   // ResourceWatcher::Use(fdwReason);
 
