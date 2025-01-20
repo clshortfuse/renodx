@@ -1,7 +1,6 @@
 #include "./shared.h"
 
-cbuffer SceneBuffer : register(b2)
-{
+cbuffer SceneBuffer : register(b2) {
   row_major float4x4 View : packoffset(c0);
   row_major float4x4 ScreenMatrix : packoffset(c4);
   float2 DepthExportScale : packoffset(c8);
@@ -44,15 +43,13 @@ cbuffer SceneBuffer : register(b2)
   float4 StereoOffset : packoffset(c84);
 }
 
-cbuffer InstanceBuffer : register(b5)
-{
-
+cbuffer InstanceBuffer : register(b5) {
   struct
   {
     float4 InstanceParams[8];
     float4 ExtendedInstanceParams[16];
-  } InstanceParameters[12] : packoffset(c0);
-
+  }
+  InstanceParameters[12] : packoffset(c0);
 }
 
 SamplerState p_default_Material_2E2B083C22834586_cp1_BackBufferTexture_sampler_s : register(s0);
@@ -60,21 +57,18 @@ SamplerState p_default_Material_2E2AB03422834586_cp3_Param_sampler_s : register(
 Texture2D<float4> p_default_Material_2E2B083C22834586_cp1_BackBufferTexture_texture : register(t0);
 Texture2D<float4> p_default_Material_2E2AB03422834586_cp3_Param_texture : register(t1);
 
-
 // 3Dmigoto declarations
 #define cmp -
 
-
 void main(
-  nointerpolation uint4 v0 : PSIZE0,
-  float4 v1 : SV_POSITION0,
-  out float4 o0 : SV_Target0)
-{
-  float4 r0,r1,r2;
+    nointerpolation uint4 v0: PSIZE0,
+    float4 v1: SV_POSITION0,
+    out float4 o0: SV_Target0) {
+  float4 r0, r1, r2;
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyzw = p_default_Material_2E2AB03422834586_cp3_Param_texture.Sample(p_default_Material_2E2AB03422834586_cp3_Param_sampler_s, float2(0.5,0.5)).xyzw;
+  r0.xyzw = p_default_Material_2E2AB03422834586_cp3_Param_texture.Sample(p_default_Material_2E2AB03422834586_cp3_Param_sampler_s, float2(0.5, 0.5)).xyzw;
   r0.x = 0.00100000005 + r0.x;
   r0.y = (int)v0.x * 24;
   r0.zw = v1.xy * ScreenExtents.zw + ScreenExtents.xy;

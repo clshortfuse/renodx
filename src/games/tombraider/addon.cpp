@@ -36,9 +36,11 @@ renodx::mods::shader::CustomShaders custom_shaders = {
             },
         },
     },
-    CustomShaderEntry(0xB5841644),
-    CustomShaderEntry(0x8B7F1649),
-    CustomShaderEntry(0x17AC3D94),
+    CustomShaderEntry(0x36211827),  // bloom
+    CustomShaderEntry(0x3F2C7CB9),  // lens flare
+    CustomShaderEntry(0xB5841644),  // reinhard
+    CustomShaderEntry(0x8B7F1649),  // upscaler
+    CustomShaderEntry(0x48648857),  // vignette/noise
 };
 
 renodx::utils::settings::Settings settings = {
@@ -246,15 +248,6 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeLUTStrength",
-        .binding = &CUSTOM_LUT_STRENGTH,
-        .default_value = 100.f,
-        .label = "LUT Strength",
-        .section = "Color Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "FxBloom",
         .binding = &CUSTOM_BLOOM,
         .default_value = 50.f,
@@ -290,14 +283,15 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
+
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrainType",
         .binding = &CUSTOM_FILM_GRAIN_TYPE,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 1.f,
         .label = "Film Grain Type",
         .section = "Effects",
-        .labels = {"Vanilla", "Perceptual", "Perceptual (DLSS)"},
+        .labels = {"Vanilla", "Perceptual"},
     },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrainStrength",
@@ -307,6 +301,15 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxFXAA",
+        .binding = &CUSTOM_FXAA,
+        .default_value = 100.f,
+        .label = "FXAA",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxScanLines",
@@ -339,7 +342,9 @@ renodx::utils::settings::Settings settings = {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
             if (!setting->can_reset) continue;
-            if (setting->key == "ColorGradeSaturation" || setting->key == "ColorGradeContrast" || setting->key == "ColorGradeBlowout") {
+            if (setting->key == "ColorGradeHighlights") {
+              renodx::utils::settings::UpdateSetting(setting->key, 70.f);
+            } else if (setting->key == "ColorGradeSaturation" || setting->key == "ColorGradeContrast" || setting->key == "ColorGradeBlowout") {
               renodx::utils::settings::UpdateSetting(setting->key, 80.f);
             } else if (setting->key == "ColorGradeShadows" || setting->key == "ColorGradeHighlightSaturation") {
               renodx::utils::settings::UpdateSetting(setting->key, 60.f);
@@ -393,9 +398,9 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
   renodx::utils::settings::UpdateSetting("FxVignette", 50.f);
+  renodx::utils::settings::UpdateSetting("FxFXAA", 100.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrainType", 0.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrainStrength", 50.f);
   renodx::utils::settings::UpdateSetting("FxScanLines", 100.f);
@@ -470,17 +475,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r16g16b16a16_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
-          // .ignore_size = true,
-          // .use_resource_view_cloning = true,
-          // .usage_include = reshade::api::resource_usage::render_target | reshade::api::resource_usage::unordered_access,
       });
 
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
-          // .ignore_size = true,
-          // .use_resource_view_cloning = true,
-          // .usage_include = reshade::api::resource_usage::render_target | reshade::api::resource_usage::unordered_access,
       });
 
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);

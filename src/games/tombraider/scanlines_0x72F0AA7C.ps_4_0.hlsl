@@ -60,6 +60,7 @@ void main(
 
   if (CUSTOM_IS_SWAPCHAIN_WRITE) {
     o0.rgb = renodx::draw::SwapChainPass(o0.rgb);
+    //  o0.rgb = original.rgb;
   }
   // o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb, 2.2f) * 203.f / 80.f;
 

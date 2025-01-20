@@ -1,5 +1,12 @@
 #include "./shared.h"
 
+cbuffer DrawableBuffer : register(b1) {
+  float4 FogColor : packoffset(c0);
+  float4 DebugColor : packoffset(c1);
+  float AlphaThreshold : packoffset(c2);
+  float4 __InstancedMaterialOpacity[12] : packoffset(c3);
+}
+
 cbuffer SceneBuffer : register(b2) {
   row_major float4x4 View : packoffset(c0);
   row_major float4x4 ScreenMatrix : packoffset(c4);
@@ -43,21 +50,44 @@ cbuffer SceneBuffer : register(b2) {
   float4 StereoOffset : packoffset(c84);
 }
 
-SamplerState Sampler0_s : register(s0);
-Texture2D<float4> InstanceTexture0 : register(t0);
+cbuffer InstanceBuffer : register(b5) {
+  struct
+  {
+    float4 InstanceParams[8];
+    float4 ExtendedInstanceParams[16];
+  }
+  InstanceParameters[12] : packoffset(c0);
+}
+
+SamplerState p_default_Material_02507D44234140_Param_sampler_s : register(s0);
+SamplerState p_default_Material_15527DCC2149906_Param_sampler_s : register(s2);
+SamplerState p_default_Material_0250670415711109_Param_sampler_s : register(s3);
+Texture2D<float4> p_default_Material_02507D44234140_Param_texture : register(t0);
+Texture2D<float4> p_default_Material_15527DCC2149906_Param_texture : register(t2);
+Texture2D<float4> p_default_Material_0250670415711109_Param_texture : register(t3);
 
 // 3Dmigoto declarations
 #define cmp -
 
 void main(
-    float4 v0: SV_POSITION0,
+    nointerpolation uint4 v0: PSIZE0,
+    float4 v1: SV_POSITION0,
     out float4 o0: SV_Target0) {
-  float4 r0;
+  float4 r0, r1, r2;
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xy = v0.xy * ScreenExtents.zw + ScreenExtents.xy;
-  o0.xyzw = InstanceTexture0.Sample(Sampler0_s, r0.xy).xyzw;
-
+  r0.xy = v1.xy * ScreenExtents.zw + ScreenExtents.xy;
+  r1.xyzw = p_default_Material_0250670415711109_Param_texture.Sample(p_default_Material_0250670415711109_Param_sampler_s, r0.xy).xyzw;
+  r2.xyzw = p_default_Material_02507D44234140_Param_texture.Sample(p_default_Material_02507D44234140_Param_sampler_s, r0.xy).xyzw;
+  r0.xyzw = p_default_Material_15527DCC2149906_Param_texture.Sample(p_default_Material_15527DCC2149906_Param_sampler_s, r0.xy).xyzw;
+  r0.w = (int)v0.x * 24;
+  r2.xyz = InstanceParameters[r0.w].InstanceParams[0].yyy * r2.xyz;
+  r1.xyz = r1.xyz * InstanceParameters[r0.w].InstanceParams[0].xxx + r2.xyz;
+  r0.xyz = r1.xyz + r0.xyz;
+  o0.xyz = InstanceParameters[r0.w].InstanceParams[2].xxx * r0.xyz;
+  r0.x = v0.x;
+  o0.w = __InstancedMaterialOpacity[r0.x].x;
+  o0 *= CUSTOM_BLOOM;
   return;
 }

@@ -130,6 +130,28 @@ void main(
   r0.w = (int)r0.w | (int)r1.x;
   o0.xyz = r0.www ? r0.xyz : r2.xyz;
 
-  o0.rgb = untonemapped.rgb;
+  o0.rgb = lerp(untonemapped.rgb, o0.rgb, CUSTOM_FXAA);
+  o0.rgb = max(0, o0.rgb);
+  o0.rgb = renodx::color::srgb::Decode(o0.rgb);
+  if (RENODX_TONE_MAP_TYPE == 0) {
+    o0.rgb = saturate(o0.rgb);
+  } else {
+    
+    o0.rgb = renodx::draw::ToneMapPass(o0.rgb);
+  }
+
+  if (CUSTOM_FILM_GRAIN_TYPE == 1.f && CUSTOM_FILM_GRAIN_STRENGTH != 0) {
+    o0.rgb = renodx::effects::ApplyFilmGrain(
+        o0.rgb,
+        v1.xy * ScreenExtents.zw + ScreenExtents.xy,
+        CUSTOM_RANDOM,
+        CUSTOM_FILM_GRAIN_STRENGTH * 0.03f);
+  }
+
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
+
+  // Needs to be 1.f or else it tries to overlay/blend ???
+  o0.w = renodx::color::luma::from::BT601(o0.rgb);
+
   return;
 }

@@ -28,9 +28,8 @@
 #define CUSTOM_LENS_FLARE                      shader_injection.custom_lens_flare
 #define CUSTOM_MOTION_BLUR                     shader_injection.custom_motion_blur
 #define CUSTOM_BLOOM                           shader_injection.custom_bloom
+#define CUSTOM_FXAA                            shader_injection.custom_fxaa
 #define CUSTOM_IS_SWAPCHAIN_WRITE              shader_injection.custom_is_swapchain_write
-// #define RENODX_SWAP_CHAIN_DECODING             0
-// #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION     RENODX_GAMMA_CORRECTION
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT709
 #define RENODX_SWAP_CHAIN_ENCODING             ENCODING_SCRGB
 
@@ -65,6 +64,7 @@ struct ShaderInjectData {
   float custom_motion_blur;
   float custom_bloom;
   float custom_is_swapchain_write;
+  float custom_fxaa;
 };
 
 #ifndef __cplusplus
