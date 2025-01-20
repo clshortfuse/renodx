@@ -20,13 +20,13 @@
 #define RENODX_TONE_MAP_PER_CHANNEL            shader_injection.tone_map_per_channel
 #define RENODX_GAMMA_CORRECTION                shader_injection.gamma_correction
 #define CUSTOM_SCAN_LINES                      shader_injection.custom_scan_lines
-#define CUSTOM_LUT_STRENGTH                    shader_injection.custom_lut_strength
+#define CUSTOM_DOF                             shader_injection.custom_dof
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain_strength
 #define CUSTOM_FILM_GRAIN_TYPE                 shader_injection.custom_film_grain_type
 #define CUSTOM_VIGNETTE                        shader_injection.custom_vignette
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define CUSTOM_LENS_FLARE                      shader_injection.custom_lens_flare
-#define CUSTOM_MOTION_BLUR                     shader_injection.custom_motion_blur
+#define CUSTOM_HDR_VIDEOS                      shader_injection.custom_hdr_videos
 #define CUSTOM_BLOOM                           shader_injection.custom_bloom
 #define CUSTOM_FXAA                            shader_injection.custom_fxaa
 #define CUSTOM_IS_SWAPCHAIN_WRITE              shader_injection.custom_is_swapchain_write
@@ -55,13 +55,13 @@ struct ShaderInjectData {
   float tone_map_per_channel;
   float gamma_correction;
   float custom_scan_lines;
-  float custom_lut_strength;
+  float custom_dof;
   float custom_vignette;
   float custom_film_grain_type;
   float custom_film_grain_strength;
   float custom_random;
   float custom_lens_flare;
-  float custom_motion_blur;
+  float custom_hdr_videos;
   float custom_bloom;
   float custom_is_swapchain_write;
   float custom_fxaa;

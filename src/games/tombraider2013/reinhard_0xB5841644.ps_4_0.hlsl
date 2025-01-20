@@ -78,7 +78,7 @@ void main(
   // r2.xyz = float3(1,1,1) + r0.xyz;
   // r0.xyz = r0.xyz / r2.xyz;
   // o0.xyz = r1.xyz + r0.xyz;
-  o0.rgb = r1.rgb;
+  o0.rgb = max(0, r1.rgb);
   o0.w = r1.w;
   return;
 }

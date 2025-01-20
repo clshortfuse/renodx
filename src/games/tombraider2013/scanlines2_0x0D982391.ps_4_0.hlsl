@@ -4,7 +4,7 @@ cbuffer GammaBuffer : register(b7) {
   float4 gammaValue : packoffset(c0);
 }
 
-SamplerState Sampler0_s : register(s0);
+SamplerState BilinearSampler_s : register(s1);
 Texture2D<float4> InstanceTexture0 : register(t0);
 
 // 3Dmigoto declarations
@@ -41,12 +41,11 @@ void main(
   r0.x = (int)r0.x | (int)r0.y;
   r0.x = icb[r0.x + 0].x + 0.5;
   r0.x = r0.x * 0.0625 + -0.5;
-  r1.xyzw = InstanceTexture0.Sample(Sampler0_s, v2.xy).xyzw;
+  r1.xyzw = InstanceTexture0.Sample(BilinearSampler_s, v2.xy).xyzw;
   float3 original = r1.rgb;
   o0.rgb = original;
 
   o0.w = r1.w;
-
   if (CUSTOM_SCAN_LINES != 0) {
     // r0.yzw = log2(r1.xyz);
     // r0.yzw = gammaValue.xxx * r0.yzw;
