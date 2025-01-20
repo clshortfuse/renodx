@@ -102,7 +102,7 @@ void main(
   }
   untonemapped = r0.rgb;
 
-  r0.rgb = saturate(r0.rgb); // We add it back before lut sampling
+  r0.rgb = saturate(r0.rgb);  // We add it back before lut sampling
   if (false) {
     r0.xyw = cb0[132].zzz * r0.xyz;
     r0.w = floor(r0.w);
@@ -138,14 +138,14 @@ void main(
   float3 outputColor = untonemapped;
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     outputColor = renodx::lut::Sample(
-        saturate(untonemapped),
+        saturate(outputColor),
         lut_config,
         t2);
   } else {
     outputColor = renodx::draw::ToneMapPass(
-        untonemapped,
+        outputColor,
         renodx::lut::Sample(
-            renodx::tonemap::renodrt::NeutralSDR(untonemapped),
+            renodx::tonemap::renodrt::NeutralSDR(outputColor),
             lut_config,
             t2));
   }
