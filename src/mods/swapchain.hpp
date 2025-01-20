@@ -57,7 +57,7 @@ struct SwapChainUpgradeTarget {
   bool ignore_reset = false;
 
 #define SwapChainViewUpgrade(usage, source, destination) \
-  { {reshade::api::resource_usage::usage, reshade::api::format::source}, reshade::api::format::destination }
+  {{reshade::api::resource_usage::usage, reshade::api::format::source}, reshade::api::format::destination}
 #define SwapChainViewUpgradeAll(source, destination)               \
   SwapChainViewUpgrade(shader_resource, source, destination),      \
       SwapChainViewUpgrade(unordered_access, source, destination), \
@@ -71,6 +71,8 @@ struct SwapChainUpgradeTarget {
           SwapChainViewUpgradeAll(r10g10b10a2_typeless, r16g16b16a16_typeless),
           SwapChainViewUpgradeAll(r8g8b8a8_typeless, r16g16b16a16_typeless),
           SwapChainViewUpgradeAll(r16g16b16a16_float, r16g16b16a16_float),
+          SwapChainViewUpgradeAll(r16g16b16a16_unorm, r16g16b16a16_float),
+          SwapChainViewUpgradeAll(r16g16b16a16_snorm, r16g16b16a16_float),
           SwapChainViewUpgradeAll(r10g10b10a2_unorm, r16g16b16a16_float),
           SwapChainViewUpgradeAll(b10g10r10a2_unorm, r16g16b16a16_float),
           SwapChainViewUpgradeAll(r8g8b8a8_unorm, r16g16b16a16_float),
