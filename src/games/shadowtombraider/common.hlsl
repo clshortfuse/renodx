@@ -8,8 +8,8 @@ float3 applyUserToneMap(float3 untonemapped) {
   // RENOCES
   float renoDRTHighlights = 0.95f;
   float renoDRTShadows = 1.f;
-  float renoDRTContrast = 1.54f;
-  float renoDRTSaturation = 2.625f;
+  float renoDRTContrast = 1.725f;
+  float renoDRTSaturation = 3.65f;
   // float renoDRTDechroma = 0.8f;
 
   if (RENODX_TONE_MAP_TYPE != 2) {
