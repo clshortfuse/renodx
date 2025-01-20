@@ -753,15 +753,6 @@ static void ReleaseResourceView(
     data.resource_view_clones.erase(pair);
   }
   data.resource_view_clone_targets.erase(view.handle);
-  data.swap_chain_rtvs.erase(view.handle);
-  
-  // Iterate to see if was a swap_chain_proxy_rtvs
-  for (auto pair : data.swap_chain_proxy_rtvs) {
-    if (pair.second.handle == view.handle) {
-      data.swap_chain_proxy_rtvs.erase(pair.first);
-      break;
-    }
-  }
 }
 
 static void RewriteRenderTargets(
