@@ -1,4 +1,11 @@
-#include "./shared.h"
+// ---- Created with 3Dmigoto v1.4.1 on Mon Jan 20 18:02:41 2025
+
+cbuffer DrawableBuffer : register(b1) {
+  float4 FogColor : packoffset(c0);
+  float4 DebugColor : packoffset(c1);
+  float AlphaThreshold : packoffset(c2);
+  float4 __InstancedMaterialOpacity[12] : packoffset(c3);
+}
 
 cbuffer SceneBuffer : register(b2) {
   row_major float4x4 View : packoffset(c0);
@@ -43,25 +50,38 @@ cbuffer SceneBuffer : register(b2) {
   float4 StereoOffset : packoffset(c84);
 }
 
-SamplerState Sampler0_s : register(s0);
-Texture2D<float4> InstanceTexture0 : register(t0);
+cbuffer InstanceBuffer : register(b5) {
+  struct
+  {
+    float4 InstanceParams[8];
+    float4 ExtendedInstanceParams[16];
+  }
+  InstanceParameters[12] : packoffset(c0);
+}
+
+SamplerState p_default_Material_0250795C126219_Param_sampler_s : register(s0);
+Texture2D<float4> p_default_Material_0250795C126219_Param_texture : register(t0);
 
 // 3Dmigoto declarations
 #define cmp -
 
 void main(
-    float4 v0: SV_POSITION0,
+    nointerpolation uint4 v0: PSIZE0,
+    float4 v1: SV_POSITION0,
     out float4 o0: SV_Target0) {
-  float4 r0;
+  float4 r0, r1;
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xy = v0.xy * ScreenExtents.zw + ScreenExtents.xy;
-  o0.xyzw = InstanceTexture0.Sample(Sampler0_s, r0.xy).xyzw;
+  r0.x = (int)v0.x * 24;
+  r0.yz = v1.xy * ScreenExtents.zw + ScreenExtents.xy;
+  r1.xyzw = p_default_Material_0250795C126219_Param_texture.Sample(p_default_Material_0250795C126219_Param_sampler_s, r0.yz).xyzw;
 
-  if (RENODX_TONE_MAP_TYPE == 0) {
-    o0 = saturate(o0);
-  }
+  r1 = max(0, r1);
+
+  o0.xyz = InstanceParameters[r0.x].InstanceParams[1].xxx * r1.xyz;
+  r0.x = v0.x;
+  o0.w = __InstancedMaterialOpacity[r0.x].x * r1.w;
 
   return;
 }

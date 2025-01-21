@@ -70,18 +70,32 @@ void main(
   r0.yz = v1.xy * ScreenExtents.zw + ScreenExtents.xy;
 
   float4 untonemapped = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r0.yz, 0).xyzw;
+  untonemapped = max(0, untonemapped);
+
   r1.xy = -InstanceParameters[r0.x].InstanceParams[0].xy * float2(0.25, 0.25) + r0.yz;
   r1.zw = InstanceParameters[r0.x].InstanceParams[0].xy * float2(1, 0) + r1.xy;
   r2.xyzw = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r1.zw, 0).xyzw;
+  
+  r2 = max(0, r2);
+
   r0.w = dot(r2.xyz, float3(0.298999995, 0.587000012, 0.114));
   r1.zw = InstanceParameters[r0.x].InstanceParams[0].xy + r1.xy;
   r2.xyzw = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r1.zw, 0).xyzw;
+  
+  r2 = max(0, r2);
+
   r1.z = dot(r2.xyz, float3(0.298999995, 0.587000012, 0.114));
   r1.w = r1.z + r0.w;
   r2.xy = InstanceParameters[r0.x].InstanceParams[0].xy * float2(0, 1) + r1.xy;
   r3.xyzw = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r1.xy, 0).xyzw;
+
+  r3 = max(0, r3);
+
   r1.x = dot(r3.xyz, float3(0.298999995, 0.587000012, 0.114));
   r2.xyzw = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r2.xy, 0).xyzw;
+
+  r2 = max(0, r2);
+
   r1.y = dot(r2.xyz, float3(0.298999995, 0.587000012, 0.114));
   r2.x = r1.x + r1.y;
   r2.yw = r2.xx + -r1.ww;
@@ -102,15 +116,30 @@ void main(
   r2.xyzw = InstanceParameters[r0.x].InstanceParams[0].xyxy * r2.xyzw;
   r2.xy = r2.xy * float2(-0.5, -0.5) + r0.yz;
   r3.xyzw = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r2.xy, 0).xyzw;
+
+  r3 = max(0, r3);
+
   r2.xy = r2.zw * float2(0.5, 0.5) + r0.yz;
   r4.xyzw = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r2.xy, 0).xyzw;
+
+  r4 = max(0, r4);
+
   r3.xyz = r4.xyz + r3.xyz;
   r3.xyz = float3(0.25, 0.25, 0.25) * r3.xyz;
   r2.xy = r2.zw * float2(-0.166666672, -0.166666672) + r0.yz;
   r2.zw = r2.zw * float2(0.166666672, 0.166666672) + r0.yz;
   r4.xyzw = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r0.yz, 0).xyzw;
+
+  r4 = max(0, r4);
+
   r5.xyzw = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r2.zw, 0).xyzw;
+
+  r5 = max(0, r5);
+
   r2.xyzw = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r2.xy, 0).xyzw;
+
+  r2 = max(0, r2);
+
   r0.xyz = r2.xyz + r5.xyz;
   r2.xyz = r0.xyz * float3(0.25, 0.25, 0.25) + r3.xyz;
   r0.xyz = float3(0.5, 0.5, 0.5) * r0.xyz;
@@ -136,7 +165,6 @@ void main(
   if (RENODX_TONE_MAP_TYPE == 0) {
     o0.rgb = saturate(o0.rgb);
   } else {
-    
     o0.rgb = renodx::draw::ToneMapPass(o0.rgb);
   }
 

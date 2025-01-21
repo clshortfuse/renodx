@@ -1,15 +1,13 @@
 #include "./shared.h"
 
-cbuffer DrawableBuffer : register(b1)
-{
+cbuffer DrawableBuffer : register(b1) {
   float4 FogColor : packoffset(c0);
   float4 DebugColor : packoffset(c1);
   float AlphaThreshold : packoffset(c2);
   float4 __InstancedMaterialOpacity[12] : packoffset(c3);
 }
 
-cbuffer SceneBuffer : register(b2)
-{
+cbuffer SceneBuffer : register(b2) {
   row_major float4x4 View : packoffset(c0);
   row_major float4x4 ScreenMatrix : packoffset(c4);
   float2 DepthExportScale : packoffset(c8);
@@ -52,15 +50,13 @@ cbuffer SceneBuffer : register(b2)
   float4 StereoOffset : packoffset(c84);
 }
 
-cbuffer InstanceBuffer : register(b5)
-{
-
+cbuffer InstanceBuffer : register(b5) {
   struct
   {
     float4 InstanceParams[8];
     float4 ExtendedInstanceParams[16];
-  } InstanceParameters[12] : packoffset(c0);
-
+  }
+  InstanceParameters[12] : packoffset(c0);
 }
 
 SamplerState p_default_Material_13BF791C3310755_Param_sampler_s : register(s0);
@@ -70,23 +66,23 @@ Texture2D<float4> p_default_Material_13BF791C3310755_Param_texture : register(t0
 Texture2D<float4> p_default_Material_17689BDC15180309_BackBufferTexture_texture : register(t1);
 Texture2D<float4> p_default_Material_12826FC4256659_DepthBufferTexture_texture : register(t2);
 
-
 // 3Dmigoto declarations
 #define cmp -
 
-
 void main(
-  nointerpolation uint4 v0 : PSIZE0,
-  float4 v1 : SV_POSITION0,
-  out float4 o0 : SV_Target0)
-{
-  float4 r0,r1,r2,r3;
+    nointerpolation uint4 v0: PSIZE0,
+    float4 v1: SV_POSITION0,
+    out float4 o0: SV_Target0) {
+  float4 r0, r1, r2, r3;
   uint4 bitmask, uiDest;
   float4 fDest;
 
   r0.z = 1;
   r1.xy = v1.xy * ScreenExtents.zw + ScreenExtents.xy;
   r2.xyzw = p_default_Material_12826FC4256659_DepthBufferTexture_texture.SampleLevel(p_default_Material_12826FC4256659_DepthBufferTexture_sampler_s, r1.xy, 0).xyzw;
+
+  r2 = max(0, r2);
+
   r0.w = r2.x * DepthToW.x + DepthToW.y;
   r0.w = max(9.99999997e-07, r0.w);
   r0.w = 1 / r0.w;
@@ -101,11 +97,18 @@ void main(
   r0.x = InstanceParameters[r0.y].InstanceParams[1].z * r0.x;
   r0.z = saturate(InstanceParameters[r0.y].InstanceParams[2].y * r0.z);
   r0.z = InstanceParameters[r0.y].InstanceParams[2].z * r0.z;
+
+  r0.x = saturate(r0.x);  // fix NaN
+  r0.z = saturate(r0.z);  // fix NaN
+
   r0.w = sqrt(r0.z);
   r1.z = sqrt(r0.x);
   r0.w = -r1.z + r0.w;
-  r1.zw = float2(-0.5,-0.5) + r1.xy;
+  r1.zw = float2(-0.5, -0.5) + r1.xy;
   r1.z = dot(r1.zw, r1.zw);
+
+  r1.z = saturate(r1.z);  // fix NaN
+
   r1.z = sqrt(r1.z);
   r1.z = -InstanceParameters[r0.y].InstanceParams[3].x + r1.z;
   r1.z = saturate(InstanceParameters[r0.y].InstanceParams[3].y * r1.z);
@@ -119,15 +122,13 @@ void main(
   r0.w = r0.w * r1.z;
   r1.z = saturate(100 * r0.w);
   r2.xyzw = p_default_Material_13BF791C3310755_Param_texture.Sample(p_default_Material_13BF791C3310755_Param_sampler_s, r1.xy).xyzw;
+
+  r2 = max(0, r2);
+
   r3.xyzw = p_default_Material_17689BDC15180309_BackBufferTexture_texture.Sample(p_default_Material_17689BDC15180309_BackBufferTexture_sampler_s, r1.xy).xyzw;
 
-  // fix luminance of dof
-  r2.xyz = max(0, r2.xyz);
-  r3.xyz = max(0, r3.xyz);
-  float new_y = renodx::color::y::from::BT709(r3.xyz);
-  float old_y = renodx::color::y::from::BT709(r2.xyz);
-  // r2.xyz *= renodx::math::SafeDivision(new_y / old_y, 1);
-  
+  r3 = max(0, r3);
+
   r1.x = r2.w * 2 + -1;
   r1.y = saturate(-100 * r1.x);
   r1.y = r1.z + r1.y;
@@ -140,7 +141,7 @@ void main(
   r1.x = r0.x * r0.x;
   r1.y = -r0.x * r0.x + 1;
   r0.x = r0.x * r1.y + r1.x;
-  r0.xz = saturate(float2(-0.0500000007,-0.0500000007) + r0.xz);
+  r0.xz = saturate(float2(-0.0500000007, -0.0500000007) + r0.xz);
   r0.x = 5 * r0.x;
   r0.x = max(r2.w, r0.x);
   r0.x = r0.z * 5 + r0.x;

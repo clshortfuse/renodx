@@ -1,4 +1,4 @@
-#include "./shared.h"
+// ---- Created with 3Dmigoto v1.4.1 on Mon Jan 20 18:03:23 2025
 
 cbuffer SceneBuffer : register(b2) {
   row_major float4x4 View : packoffset(c0);
@@ -43,25 +43,60 @@ cbuffer SceneBuffer : register(b2) {
   float4 StereoOffset : packoffset(c84);
 }
 
-SamplerState Sampler0_s : register(s0);
-Texture2D<float4> InstanceTexture0 : register(t0);
+cbuffer InstanceBuffer : register(b5) {
+  struct
+  {
+    float4 InstanceParams[8];
+    float4 ExtendedInstanceParams[16];
+  }
+  InstanceParameters[12] : packoffset(c0);
+}
+
+SamplerState p_default_Material_1C2A169420489744_Param_sampler_s : register(s0);
+Texture2D<float4> p_default_Material_1C2A169420489744_Param_texture : register(t0);
 
 // 3Dmigoto declarations
 #define cmp -
 
 void main(
-    float4 v0: SV_POSITION0,
+    nointerpolation uint4 v0: PSIZE0,
+    float4 v1: SV_POSITION0,
     out float4 o0: SV_Target0) {
-  float4 r0;
+  const float4 icb[] = { { -1.500000, -1.500000, 0, 0 },
+                         { -1.500000, -0.500000, 0, 0 },
+                         { -1.500000, 0.500000, 0, 0 },
+                         { -1.500000, 1.500000, 0, 0 },
+                         { -0.500000, -1.500000, 0, 0 },
+                         { -0.500000, -0.500000, 0, 0 },
+                         { -0.500000, 0.500000, 0, 0 },
+                         { -0.500000, 1.500000, 0, 0 },
+                         { 0.500000, -1.500000, 0, 0 },
+                         { 0.500000, -0.500000, 0, 0 },
+                         { 0.500000, 0.500000, 0, 0 },
+                         { 0.500000, 1.500000, 0, 0 },
+                         { 1.500000, -1.500000, 0, 0 },
+                         { 1.500000, -0.500000, 0, 0 },
+                         { 1.500000, 0.500000, 0, 0 },
+                         { 1.500000, 1.500000, 0, 0 } };
+  float4 r0, r1, r2;
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xy = v0.xy * ScreenExtents.zw + ScreenExtents.xy;
-  o0.xyzw = InstanceTexture0.Sample(Sampler0_s, r0.xy).xyzw;
+  r0.xy = v1.xy * ScreenExtents.zw + ScreenExtents.xy;
+  r0.z = (int)v0.x * 24;
+  r1.xyzw = float4(0, 0, 0, 0);
+  r0.w = 0;
+  while (true) {
+    r2.x = cmp((int)r0.w >= 16);
+    if (r2.x != 0) break;
+    r2.xy = icb[r0.w + 0].xy * InstanceParameters[r0.z].InstanceParams[0].xy + r0.xy;
+    r2.xyzw = p_default_Material_1C2A169420489744_Param_texture.Sample(p_default_Material_1C2A169420489744_Param_sampler_s, r2.xy).xyzw;
 
-  if (RENODX_TONE_MAP_TYPE == 0) {
-    o0 = saturate(o0);
+    r2 = max(0, r2);
+
+    r1.xyzw = r2.xyzw + r1.xyzw;
+    r0.w = (int)r0.w + 1;
   }
-
+  o0.xyzw = float4(0.0625, 0.0625, 0.0625, 0.0625) * r1.xyzw;
   return;
 }
