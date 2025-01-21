@@ -1782,11 +1782,13 @@ static bool OnCreateResourceView(
   }
   if (!changed) return false;
 
+#ifdef DEBUG_LEVEL_1
   reshade::log::message(
       desc.format == reshade::api::format::unknown
           ? reshade::log::level::warning
           : reshade::log::level::info,
       s.str().c_str());
+#endif
   desc.format = new_desc.format;
   private_data.upgraded_resource_view = true;
   return true;
