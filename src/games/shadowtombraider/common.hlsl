@@ -12,9 +12,13 @@ float3 applyUserToneMap(float3 untonemapped) {
   float renoDRTSaturation = 3.65f;
   // float renoDRTDechroma = 0.8f;
 
-  if (RENODX_TONE_MAP_TYPE != 2) {
+  if (RENODX_TONE_MAP_TYPE != 2) {  // AP1 highlight hue correction
+    float3 incorrect_hue_ap1 = renodx::color::ap1::from::BT709(untonemapped * 0.1f / 0.18f);
+    float3 correct_hue = renodx::color::bt709::from::AP1(
+        renodx::tonemap::ExponentialRollOff(incorrect_hue_ap1, vanillaMidGray, 2.f));
+
     tm_config.hue_correction_type = renodx::tonemap::renodrt::config::hue_correction_type::CUSTOM;
-    tm_config.hue_correction_color = renodx::tonemap::ACESFittedAP1(untonemapped);
+    tm_config.hue_correction_color = correct_hue;
     tm_config.hue_correction_strength = RENODX_TONE_MAP_HUE_SHIFT;
     tm_config.reno_drt_hue_correction_method = RENODX_TONE_MAP_HUE_PROCESSOR;
   } else {  // No hue correction if using ACES
