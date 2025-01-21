@@ -1,32 +1,8 @@
 #ifndef SRC_SHADOWTOMBRAIDER_SHARED_H_
 #define SRC_SHADOWTOMBRAIDER_SHARED_H_
 
-// #define RENODX_PEAK_WHITE_NITS               1000
-// #define RENODX_DIFFUSE_WHITE_NITS            203
-// #define RENODX_GRAPHICS_WHITE_NITS           203
-// #define RENODX_TONE_MAP_TYPE                 3
-// #define RENODX_TONE_MAP_EXPOSURE             1
-// #define RENODX_TONE_MAP_HIGHLIGHTS           1
-// #define RENODX_TONE_MAP_SHADOWS              1
-// #define RENODX_TONE_MAP_CONTRAST             1
-// #define RENODX_TONE_MAP_SATURATION           1
-// #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION 0.1
-// #define RENODX_TONE_MAP_BLOWOUT              0.8
-// #define RENODX_TONE_MAP_FLARE                0
-// #define RENODX_TONE_MAP_HUE_SHIFT            0.25
-// #define RENODX_TONE_MAP_WORKING_COLOR_SPACE  2
-// #define RENODX_TONE_MAP_HUE_PROCESSOR        0
-// #define RENODX_TONE_MAP_PER_CHANNEL          0
-// #define RENODX_GAMMA_CORRECTION              0
-// #define CUSTOM_LUT_STRENGTH                  1
-// #define CUSTOM_VIGNETTE                      1
-// #define CUSTOM_LENS_FLARE                    1
-// #define CUSTOM_MOTION_BLUR                   1
-// #define CUSTOM_BLOOM                         1
-
 #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
-#define RENODX_GRAPHICS_WHITE_NITS           shader_injection.graphics_white_nits
 #define RENODX_TONE_MAP_TYPE                 shader_injection.tone_map_type
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
@@ -46,7 +22,6 @@
 struct ShaderInjectData {
   float peak_white_nits;
   float diffuse_white_nits;
-  float graphics_white_nits;
   float tone_map_type;
   float tone_map_exposure;
   float tone_map_highlights;

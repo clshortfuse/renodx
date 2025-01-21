@@ -19,10 +19,10 @@ void main(
   float4 r0;
 
   r0.xyz = g_InputTexture.Sample(g_Sampler_s, v1.xy).xyz;
-  if (RENODX_TONE_MAP_TYPE == 0) {
+#if 0
     r0.rgb = renodx::math::SignPow(r0.rgb, gamma.y);  // in game brightness slider
     r0.xyz = gamma.xxx * r0.xyz;                      // doesn't seem to apply in HDR
-  }
+#endif
 
   o0.rgb = r0.rgb;
   o0.w = 1;
