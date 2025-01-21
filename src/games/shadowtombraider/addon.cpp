@@ -25,7 +25,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // CustomShaderEntry(0x2F759B36) // ACES LUT - generated on changing HDR settings
     // CustomShaderEntry(0x90C37605) // Color Grading LUT
     CustomDirectXShaders(0x0FBDBDA4),  // Tonemap
-    CustomShaderEntry(0x5D10D1A2),     // HDR Gamma
+    // CustomShaderEntry(0x5D10D1A2),     // HDR Gamma
 };
 
 ShaderInjectData shader_injection;
@@ -370,7 +370,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
