@@ -52,8 +52,7 @@ void main(
 
     inputColor = applyUserToneMap(inputColor);
 
-    float paperWhite = RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
-    r0.rgb = renodx::color::bt2020::from::BT709(inputColor) * paperWhite;
+    r0.rgb = renodx::color::bt2020::from::BT709(inputColor);
 
     r1.xyzw = uiTexture.SampleLevel(UISampler_s, v2.xy, 0).xyzw;
     r0.w = 1 + -r1.w;
@@ -61,7 +60,7 @@ void main(
 
     r0.xyz = r0.xyz * r0.w + r1.xyz;  // combine UI and Scene
 
-    r0.rgb *= RENODX_GRAPHICS_WHITE_NITS;
+    r0.rgb *= RENODX_DIFFUSE_WHITE_NITS;
   } else {  // Vanilla
 
     r0.xyz = saturate(0.00100000005 * r0.xyz);

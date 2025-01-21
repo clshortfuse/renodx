@@ -25,7 +25,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // CustomShaderEntry(0x2F759B36) // ACES LUT - generated on changing HDR settings
     // CustomShaderEntry(0x90C37605) // Color Grading LUT
     CustomDirectXShaders(0x0FBDBDA4),  // Tonemap
-    // CustomShaderEntry(0x5D10D1A2),     // HDR Gamma
+    CustomShaderEntry(0x5D10D1A2),     // HDR Gamma
 };
 
 ShaderInjectData shader_injection;
@@ -69,17 +69,6 @@ renodx::utils::settings::Settings settings = {
         .label = "Game Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of 100% white in nits",
-        .min = 48.f,
-        .max = 500.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapUINits",
-        .binding = &RENODX_GRAPHICS_WHITE_NITS,
-        .default_value = 203.f,
-        .label = "UI Brightness",
-        .section = "Tone Mapping",
-        .tooltip = "Sets the brightness of UI and HUD elements in nits",
         .min = 48.f,
         .max = 500.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
@@ -284,11 +273,9 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
   renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 203.f);
   renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
-  renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
   renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 0.f);
   renodx::utils::settings::UpdateSetting("ToneMapHueShift", 100.f);
   renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
-  renodx::utils::settings::UpdateSetting("GammaCorrection", 0.f);
   renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
@@ -298,11 +285,6 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
-  renodx::utils::settings::UpdateSetting("FxVignette", 50.f);
-  renodx::utils::settings::UpdateSetting("FxFilmGrainType", 0.f);
-  renodx::utils::settings::UpdateSetting("FxFilmGrainStrength", 50.f);
 }
 
 void OnInitDevice(reshade::api::device* device) {
