@@ -82,11 +82,22 @@ void main(
 
   r0.xy = v1.xy * ScreenExtents.zw + ScreenExtents.xy;
   r1.xyz = p_default_Material_024C0294226623_BackBufferTexture_texture.Sample(p_default_Material_024C0294226623_BackBufferTexture_sampler_s, r0.xy).xyz;
+  
   r1.rgb = max(0, r1.rgb);
+
   float3 original = r1.rgb;
   r2.xyz = p_default_Material_15527DCC2149906_Param_texture.Sample(p_default_Material_15527DCC2149906_Param_sampler_s, r0.xy).xyz;
+
+  r2.xyz = max(0, r2.xyz);
+
   r3.xyz = p_default_Material_0250670415711109_Param_texture.Sample(p_default_Material_0250670415711109_Param_sampler_s, r0.xy).xyz;
+  
+  r3.xyz = max(0, r3.xyz);
+
   r0.xyz = p_default_Material_02507D44234140_Param_texture.Sample(p_default_Material_02507D44234140_Param_sampler_s, r0.xy).xyz;
+  
+  r0.xyz = max(0, r0.xyz);
+
   r0.w = (int)v0.x * 24;
   r0.xyz = InstanceParameters[r0.w].InstanceParams[0].yyy * r0.xyz;
   r0.xyz = r3.xyz * InstanceParameters[r0.w].InstanceParams[0].xxx + r0.xyz;
@@ -107,7 +118,6 @@ void main(
 
   o0.xyz = r0.xyz * InstanceParameters[r0.w].InstanceParams[1].zzz + r1.xyz;
 
-  o0.w = saturate(o0.w);
   o0.rgb = lerp(original, o0.xyz, CUSTOM_BLOOM);
 
   return;

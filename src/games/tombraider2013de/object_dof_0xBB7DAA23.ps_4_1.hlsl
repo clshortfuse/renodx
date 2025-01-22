@@ -81,6 +81,9 @@ void main(
   r0.z = 1;
   r1.xy = v1.xy * ScreenExtents.zw + ScreenExtents.xy;
   r0.w = p_default_Material_12826FC4256659_DepthBufferTexture_texture.SampleLevel(p_default_Material_12826FC4256659_DepthBufferTexture_sampler_s, r1.xy, 0).x;
+
+  r0.w = max(0, r0.w);
+
   r0.w = r0.w * DepthToW.x + DepthToW.y;
   r0.w = max(9.99999997e-07, r0.w);
   r0.w = 1 / r0.w;
@@ -95,11 +98,18 @@ void main(
   r0.x = InstanceParameters[r0.y].InstanceParams[1].z * r0.x;
   r0.z = saturate(InstanceParameters[r0.y].InstanceParams[2].y * r0.z);
   r0.z = InstanceParameters[r0.y].InstanceParams[2].z * r0.z;
+
+  r0.x = saturate(r0.x);  // fix NaN
+  r0.z = saturate(r0.z);  // fix NaN
+
   r0.w = sqrt(r0.z);
   r1.z = sqrt(r0.x);
   r0.w = -r1.z + r0.w;
   r1.zw = float2(-0.5, -0.5) + r1.xy;
   r1.z = dot(r1.zw, r1.zw);
+
+  r1.z = saturate(r1.z);  // fix NaN
+
   r1.z = sqrt(r1.z);
   r1.z = -InstanceParameters[r0.y].InstanceParams[3].x + r1.z;
   r1.z = saturate(InstanceParameters[r0.y].InstanceParams[3].y * r1.z);
@@ -113,11 +123,12 @@ void main(
   r0.w = r0.w * r1.z;
   r1.z = saturate(100 * r0.w);
   r2.xyzw = p_default_Material_13BF791C3310755_Param_texture.Sample(p_default_Material_13BF791C3310755_Param_sampler_s, r1.xy).xyzw;
+
+  r2 = max(0, r2);
+
   r3.xyzw = p_default_Material_17689BDC15180309_BackBufferTexture_texture.Sample(p_default_Material_17689BDC15180309_BackBufferTexture_sampler_s, r1.xy).xyzw;
 
-  // fix luminance of dof
-  r2.xyz = max(0, r2.xyz);
-  r3.xyz = max(0, r3.xyz);
+  r3 = max(0, r3);
 
   r1.x = r2.w * 2 + -1;
   r1.y = saturate(-100 * r1.x);

@@ -106,12 +106,18 @@ void main(
   r0.x = dot(r1.xyz, r0.xyz);
   r0.y = FogParams2.z;
   r0.x = AttenuationSampler_texture.SampleLevel(AttenuationSampler_sampler_s, r0.xy, 0).z;
+
+  r0.x = max(0, r0.x);
+
   r0.yzw = GlobalParams[8].xyz + -FogColor.xyz;
   r0.xyz = r0.xxx * r0.yzw + FogColor.xyz;
   r0.w = dot(v6.xyz, v6.xyz);
   r0.w = rsqrt(r0.w);
   r1.xyz = v6.xyz * r0.www;
   r2.xyz = p_default_Setup_1966A6EC30019627_Texture_texture.Sample(p_default_Setup_1966A6EC30019627_Texture_sampler_s, v4.xy).xyw;
+
+  r2.xyz = max(0, r2.xyz);
+
   r2.y = r2.y * r2.z;
   r2.xy = r2.xy * float2(2, 2) + float2(-1, -1);
   r0.w = dot(r2.xy, r2.xy);
@@ -149,6 +155,9 @@ void main(
   r3.x = v9.w;
   r3.yw = FogParams2.zz;
   r0.w = AttenuationSampler_texture.SampleLevel(AttenuationSampler_sampler_s, r3.xy, 0).x;
+
+  r0.w = max(0, r0.w);
+
   r0.xyz = r0.www * r0.xyz + r1.xyz;
   r0.w = cmp(FogColor.w == 0.000000);
   r1.xyz = r0.www ? FogColor.xyz : GlobalParams[7].xyz;
@@ -158,12 +167,18 @@ void main(
   r0.xyz = r0.www * r1.xyz + r0.xyz;
   r0.xyz = GlobalParams[1].www * r0.xyz + float3(-0.5, -0.5, -0.5);
   r1.xyz = p_default_Material_1376C724912777_0BF50A1C106154_Texture_texture.Sample(p_default_Material_1376C724912777_0BF50A1C106154_Texture_sampler_s, v4.xy).xyz;
+
+  r1.xyz = max(0, r1.xyz);
+
   r0.w = dot(r1.xyz, float3(0.298999995, 0.587000012, 0.114));
   r0.w = v3.w * r0.w;
   r1.x = MaterialParams[1].y * r0.w;
   r1.yz = v1.xy * ScreenExtents.zw + ScreenExtents.xy;
   r1.xy = r1.xx * r2.xy + r1.yz;
   r1.xyz = p_default_Material_123DFEB42371716_193DEBA41903451_BackBufferTexture_texture.Sample(p_default_Material_123DFEB42371716_193DEBA41903451_BackBufferTexture_sampler_s, r1.xy).xyz;
+
+  r1.xyz = max(0, r1.xyz);
+
   r2.xyz = float3(-0.5, -0.5, -0.5) + r1.xyz;
   r2.xyz = float3(0.5, 0.5, 0.5) + -abs(r2.xyz);
   r2.xyz = MaterialParams[1].zzz * r2.xyz;

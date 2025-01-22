@@ -95,6 +95,6 @@ void main(
   o0.xyz = float3(0, 0, 0);
 
   // Disable (clips)
-  o0.w *= 0;
+  // o0.w *= 0;
   return;
 }

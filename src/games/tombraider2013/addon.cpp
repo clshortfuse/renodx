@@ -38,7 +38,7 @@ ShaderInjectData shader_injection;
             }                                                                                         \
             if (changed) {                                                                            \
               renodx::mods::swapchain::FlushDescriptors(cmd_list);                                    \
-              renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});        \
+              renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0}); \
             }                                                                                         \
             return true; }, \
       },                                     \
@@ -86,35 +86,34 @@ renodx::mods::shader::CustomShaders custom_shaders = {
             },
         },
     },
-    CustomShaderEntry(0x36211827),  // bloom
-    CustomShaderEntry(0xD598975C),  // fmv
-    CustomShaderEntry(0x3F2C7CB9),  // lens flare
-    CustomShaderEntry(0xC8BBED05),  // object dof
-    CustomShaderEntry(0xB5841644),  // reinhard
-    CustomShaderEntry(0xBB85386D),  // survival instinct
-    CustomShaderEntry(0x8B7F1649),  // upscaler
-    CustomShaderEntry(0x48648857),  // vignette/noise
-    CustomShaderEntry(0x19369325),  // surface reflections
-
-    UpgradeRTVReplaceShader(0x100EC9DC),
-    CustomShaderEntry(0xEA376B10),
-    CustomShaderEntry(0x36C11C54),
-    CustomShaderEntry(0x4B8C2D9F),
-    CustomShaderEntry(0x55A5D3AF),
-    CustomShaderEntry(0xA5E5BCB4),
-    CustomShaderEntry(0xB4B7BCEB),
-    CustomShaderEntry(0xB6DD6E36),
-    UpgradeRTVReplaceShader(0xCDD02564),
-    CustomShaderEntry(0xDA1F0E89),
-    CustomShaderEntry(0xE3C8625C),
+    CustomShaderEntry(0x36211827),        // bloom
+    CustomShaderEntry(0xD598975C),        // fmv
+    CustomShaderEntry(0x3F2C7CB9),        // lens flare
+    CustomShaderEntry(0xC8BBED05),        // object dof
+    CustomShaderEntry(0xB5841644),        // reinhard
+    CustomShaderEntry(0xBB85386D),        // survival instinct
+    CustomShaderEntry(0x8B7F1649),        // upscaler
+    CustomShaderEntry(0x48648857),        // vignette/noise
+    CustomShaderEntry(0x19369325),        // surface reflections
+    UpgradeRTVReplaceShader(0x100EC9DC),  // a0
+    CustomShaderEntry(0xEA376B10),        // a10
+    CustomShaderEntry(0x36C11C54),        // a1
+    CustomShaderEntry(0x4B8C2D9F),        // a2
+    CustomShaderEntry(0x55A5D3AF),        // a3
+    CustomShaderEntry(0xA5E5BCB4),        // a4
+    CustomShaderEntry(0xB4B7BCEB),        // a5
+    CustomShaderEntry(0xB6DD6E36),        // a6
+    UpgradeRTVReplaceShader(0xCDD02564),  // a7
+    CustomShaderEntry(0xDA1F0E89),        // a8
+    CustomShaderEntry(0xE3C8625C),        // a9
     // CustomShaderEntry(0x88472F82),
-    UpgradeRTVReplaceShader(0x3B23A71A),
-    UpgradeRTVReplaceShader(0x48180F61),
-    UpgradeRTVReplaceShader(0xA8D8F5E7),
+    UpgradeRTVReplaceShader(0xA8D8F5E7),  // downsample1
+    UpgradeRTVReplaceShader(0x3B23A71A),  // downsample2
+    UpgradeRTVReplaceShader(0x48180F61),  // downsample3
     // CustomShaderEntry(0x4E5704D4),
-    UpgradeRTVReplaceShader(0xF31E4052),
-    UpgradeRTVReplaceShader(0x17AC3D94),
-    // CustomShaderEntry(0x32CB17F7),
+    UpgradeRTVReplaceShader(0xF31E4052),  // sampling
+    UpgradeRTVReplaceShader(0x17AC3D94),  // upscale
+                                          // CustomShaderEntry(0x32CB17F7),
 };
 
 const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
@@ -342,19 +341,19 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Off", "On"},
     },
     new renodx::utils::settings::Setting{
-        .key = "FxBloom",
-        .binding = &CUSTOM_BLOOM,
+        .key = "FxLensFlare",
+        .binding = &CUSTOM_LENS_FLARE,
         .default_value = 50.f,
-        .label = "Bloom",
+        .label = "Lens Flare",
         .section = "Effects",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "FxLensFlare",
-        .binding = &CUSTOM_LENS_FLARE,
+        .key = "FxBloom",
+        .binding = &CUSTOM_BLOOM,
         .default_value = 50.f,
-        .label = "Lens Flare",
+        .label = "Bloom",
         .section = "Effects",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
@@ -545,13 +544,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::r16g16b16a16_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
       });
-
-      //   renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //       .old_format = reshade::api::format::r8g8b8a8_unorm,
-      //       .new_format = reshade::api::format::r16g16b16a16_float,
-      //       // .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
-      //       .usage_include = reshade::api::resource_usage::render_target,
-      //   });
 
       // On Demand upgrades
       renodx::mods::swapchain::use_resource_cloning = true;

@@ -75,13 +75,13 @@ void main(
   r1.xy = -InstanceParameters[r0.x].InstanceParams[0].xy * float2(0.25, 0.25) + r0.yz;
   r1.zw = InstanceParameters[r0.x].InstanceParams[0].xy * float2(1, 0) + r1.xy;
   r2.xyzw = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r1.zw, 0).xyzw;
-  
+
   r2 = max(0, r2);
 
   r0.w = dot(r2.xyz, float3(0.298999995, 0.587000012, 0.114));
   r1.zw = InstanceParameters[r0.x].InstanceParams[0].xy + r1.xy;
   r2.xyzw = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r1.zw, 0).xyzw;
-  
+
   r2 = max(0, r2);
 
   r1.z = dot(r2.xyz, float3(0.298999995, 0.587000012, 0.114));

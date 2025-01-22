@@ -1,13 +1,15 @@
-#include "./shared.h"
+// ---- Created with 3Dmigoto v1.4.1 on Mon Jan 20 16:57:48 2025
 
-cbuffer DrawableBuffer : register(b1) {
+cbuffer DrawableBuffer : register(b1)
+{
   float4 FogColor : packoffset(c0);
   float4 DebugColor : packoffset(c1);
   float AlphaThreshold : packoffset(c2);
   float4 __InstancedMaterialOpacity[12] : packoffset(c3);
 }
 
-cbuffer SceneBuffer : register(b2) {
+cbuffer SceneBuffer : register(b2)
+{
   row_major float4x4 View : packoffset(c0);
   row_major float4x4 ScreenMatrix : packoffset(c4);
   float2 DepthExportScale : packoffset(c8);
@@ -50,53 +52,73 @@ cbuffer SceneBuffer : register(b2) {
   float4 StereoOffset : packoffset(c84);
 }
 
-cbuffer InstanceBuffer : register(b5) {
+cbuffer InstanceBuffer : register(b5)
+{
+
   struct
   {
     float4 InstanceParams[8];
     float4 ExtendedInstanceParams[16];
-  }
-  InstanceParameters[12] : packoffset(c0);
+  } InstanceParameters[12] : packoffset(c0);
+
 }
 
-SamplerState p_default_Material_02507D44234140_Param_sampler_s : register(s0);
-SamplerState p_default_Material_15527DCC2149906_Param_sampler_s : register(s2);
-SamplerState p_default_Material_0250670415711109_Param_sampler_s : register(s3);
-Texture2D<float4> p_default_Material_02507D44234140_Param_texture : register(t0);
-Texture2D<float4> p_default_Material_15527DCC2149906_Param_texture : register(t2);
-Texture2D<float4> p_default_Material_0250670415711109_Param_texture : register(t3);
+SamplerState p_default_Material_174AE90C611136_Param_sampler_s : register(s0);
+SamplerState p_default_Material_174AE844680151_BackBufferTexture_sampler_s : register(s1);
+Texture2D<float4> p_default_Material_174AE90C611136_Param_texture : register(t0);
+Texture2D<float4> p_default_Material_174AE844680151_BackBufferTexture_texture : register(t1);
+
 
 // 3Dmigoto declarations
 #define cmp -
 
+
 void main(
-    nointerpolation uint4 v0: PSIZE0,
-    float4 v1: SV_POSITION0,
-    out float4 o0: SV_Target0) {
-  float4 r0, r1, r2;
+  nointerpolation uint4 v0 : PSIZE0,
+  float4 v1 : SV_POSITION0,
+  float v2 : SV_ClipDistance0,
+  out float4 o0 : SV_Target0)
+{
+  float4 r0,r1,r2;
   uint4 bitmask, uiDest;
   float4 fDest;
 
   r0.xy = v1.xy * ScreenExtents.zw + ScreenExtents.xy;
-  r1.xyzw = p_default_Material_0250670415711109_Param_texture.Sample(p_default_Material_0250670415711109_Param_sampler_s, r0.xy).xyzw;
+  r0.z = (int)v0.x * 24;
+  r1.xyzw = InstanceParameters[r0.z].InstanceParams[1].xyzy + r0.xyxy;
+  r0.w = p_default_Material_174AE90C611136_Param_texture.Sample(p_default_Material_174AE90C611136_Param_sampler_s, r1.xy).z;
+  
+  r0.w = max(0, r0.w);
 
-  r1 = max(0, r1);
+  r1.x = p_default_Material_174AE90C611136_Param_texture.Sample(p_default_Material_174AE90C611136_Param_sampler_s, r1.zw).z;
+  
+  r1.x = max(0, r1.x);
 
-  r2.xyzw = p_default_Material_02507D44234140_Param_texture.Sample(p_default_Material_02507D44234140_Param_sampler_s, r0.xy).xyzw;
+  r0.w = min(r1.x, r0.w);
+  r1.xyzw = InstanceParameters[r0.z].InstanceParams[1].xwzw + r0.xyxy;
+  
+  r2.xyz = p_default_Material_174AE844680151_BackBufferTexture_texture.Sample(p_default_Material_174AE844680151_BackBufferTexture_sampler_s, r0.xy).xyz;
 
-  r2 = max(0, r2);
+  r2.xyz = max(0, r2.xyz);
 
-  r0.xyzw = p_default_Material_15527DCC2149906_Param_texture.Sample(p_default_Material_15527DCC2149906_Param_sampler_s, r0.xy).xyzw;
+  o0.xyz = r2.xyz;
+  r0.x = p_default_Material_174AE90C611136_Param_texture.Sample(p_default_Material_174AE90C611136_Param_sampler_s, r1.xy).z;
 
-  r0 = max(0, r0);
+  r0.x = max(0, r0.x);
 
-  r0.w = (int)v0.x * 24;
-  r2.xyz = InstanceParameters[r0.w].InstanceParams[0].yyy * r2.xyz;
-  r1.xyz = r1.xyz * InstanceParameters[r0.w].InstanceParams[0].xxx + r2.xyz;
-  r0.xyz = r1.xyz + r0.xyz;
-  o0.xyz = InstanceParameters[r0.w].InstanceParams[2].xxx * r0.xyz;
-  r0.x = v0.x;
-  o0.w = __InstancedMaterialOpacity[r0.x].x;
-  o0 *= CUSTOM_BLOOM;
+  r0.y = p_default_Material_174AE90C611136_Param_texture.Sample(p_default_Material_174AE90C611136_Param_sampler_s, r1.zw).z;
+
+  r0.y = max(0, r0.y);
+
+  r0.x = min(r0.w, r0.x);
+  r0.x = min(r0.x, r0.y);
+  r0.x = -InstanceParameters[r0.z].InstanceParams[0].x + r0.x;
+  r0.x = max(0, r0.x);
+  r0.x = min(InstanceParameters[r0.z].InstanceParams[0].y, r0.x);
+  r0.x = InstanceParameters[r0.z].InstanceParams[0].z * r0.x;
+  r0.x = 1.5 * r0.x;
+  r0.y = v0.x;
+  o0.w = __InstancedMaterialOpacity[r0.y].x * r0.x;
+
   return;
 }

@@ -348,6 +348,9 @@ void main(
       r6.zw = r6.zw / r2.xy;
       r6.zw = v2.xy + r6.zw;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r6.zw, 0).xyzw;
+
+      r7 = max(0, r7);
+
       r5.w = icb[r4.w + 256].z * r0.z;
       r5.w = cmp(abs(r7.w) >= r5.w);
       r5.w = r5.w ? 1.000000 : 0;
@@ -394,10 +397,14 @@ void main(
     r1.w = 1;
     r0.xyzw = r0.xxxx ? r1.xyzw : r2.xyzw;
     o0.xyz = r0.xyz / r0.www;
+
+    o0 = max(0, o0);
     return;
   } else {
     o0.xyz = r1.xyz;
     o0.w = 0;
+
+    o0 = max(0, o0);
     return;
   }
   return;

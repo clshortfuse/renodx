@@ -353,10 +353,13 @@ void main(
   r0.xy = (uint2)v0.xy;
   r0.zw = float2(0, 0);
   r1.xyzw = mapInputTexture0L.Load(r0.xyw).xyzw;
+  r1 = max(0, r1);
+
+  r1 = max(0, r1);
+
   r2.xyzw = mapInputTexture1P.Load(r0.xyz).xyzw;
 
-  // Fix unorm => float
-  r1 = max(0, r1);
+  r2 = max(0, r2);
 
   r0.z = max(r2.x, abs(r1.w));
   r0.w = cmp(0 < r0.z);
@@ -383,24 +386,36 @@ void main(
     r2.xy = r2.xy / r3.xy;
     r2.xy = v2.xy + r2.xy;
     r4.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r2.xy, 0).xyzw;
+
+    r4 = max(0, r4);
+
     r2.x = dot(float2(0.370510012, -0.787050009), icb[r0.x + 0].xy);
     r2.y = dot(float2(-0.787050009, 0.370510012), r2.zw);
     r2.xy = r2.xy * r0.zz;
     r2.xy = r2.xy / r3.xy;
     r2.xy = v2.xy + r2.xy;
     r5.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r2.xy, 0).xyzw;
+
+    r5 = max(0, r5);
+
     r2.x = dot(float2(-0.227909997, 0.414400011), icb[r0.x + 0].xy);
     r2.y = dot(float2(0.414400011, -0.227909997), r2.zw);
     r2.xy = r2.xy * r0.zz;
     r2.xy = r2.xy / r3.xy;
     r2.xy = v2.xy + r2.xy;
     r6.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r2.xy, 0).xyzw;
+
+    r6 = max(0, r6);
+
     r2.x = dot(float2(-0.511720002, -0.418540001), icb[r0.x + 0].xy);
     r2.y = dot(float2(-0.418540001, -0.511720002), r2.zw);
     r2.xy = r2.xy * r0.zz;
     r2.xy = r2.xy / r3.xy;
     r2.xy = v2.xy + r2.xy;
     r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r2.xy, 0).xyzw;
+
+    r7 = max(0, r7);
+
     r8.xyzw = float4(0.850899994, 0.869910002, 0.472939998, 0.661090016) * r0.zzzz;
     r0.w = cmp(abs(r4.w) >= r8.x);
     r9.z = r0.w ? 1.000000 : 0;
@@ -470,24 +485,36 @@ void main(
       r3.zw = r3.zw / r3.xy;
       r3.zw = v2.xy + r3.zw;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r3.zw, 0).xyzw;
+
+      r7 = max(0, r7);
+
       r9.x = dot(float2(0.454730004, -0.209769994), icb[r0.x + 0].xy);
       r9.y = dot(float2(-0.209769994, 0.454730004), r2.zw);
       r3.zw = r9.xy * r0.zz;
       r3.zw = r3.zw / r3.xy;
       r3.zw = v2.xy + r3.zw;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r3.zw, 0).xyzw;
+
+      r9 = max(0, r9);
+
       r10.x = dot(float2(0.602150023, -0.49101001), icb[r0.x + 0].xy);
       r10.y = dot(float2(-0.49101001, 0.602150023), r2.zw);
       r3.zw = r10.xy * r0.zz;
       r3.zw = r3.zw / r3.xy;
       r3.zw = v2.xy + r3.zw;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r3.zw, 0).xyzw;
+
+      r10 = max(0, r10);
+
       r11.x = dot(float2(-0.0454600006, 0.660520017), icb[r0.x + 0].xy);
       r11.y = dot(float2(0.660520017, -0.0454600006), r2.zw);
       r3.zw = r11.xy * r0.zz;
       r3.zw = r3.zw / r3.xy;
       r3.zw = v2.xy + r3.zw;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r3.zw, 0).xyzw;
+
+      r11 = max(0, r11);
+
       r0.w = 0.15862 * r0.z;
       r0.w = cmp(abs(r7.w) >= r0.w);
       r0.w = r0.w ? 1.000000 : 0;
@@ -577,24 +604,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+
+      r7 = max(0, r7);
+
       r9.x = dot(float2(0.738560021, 0.102949999), icb[r0.x + 0].xy);
       r9.y = dot(float2(0.102949999, 0.738560021), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+
+      r9 = max(0, r9);
+
       r10.x = dot(float2(0.449539989, 0.146430001), icb[r0.x + 0].xy);
       r10.y = dot(float2(0.146430001, 0.449539989), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+
+      r10 = max(0, r10);
+
       r11.x = dot(float2(0.55448997, -0.785640001), icb[r0.x + 0].xy);
       r11.y = dot(float2(-0.785640001, 0.55448997), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.576009989 * r0.z;
@@ -687,24 +726,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+
+      r7 = max(0, r7);
+
       r9.x = dot(float2(0.922049999, -0.191080004), icb[r0.x + 0].xy);
       r9.y = dot(float2(-0.191080004, 0.922049999), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+
+      r9 = max(0, r9);
+
       r10.x = dot(float2(-0.236589998, -0.56348002), icb[r0.x + 0].xy);
       r10.y = dot(float2(-0.56348002, -0.236589998), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+
+      r10 = max(0, r10);
+
       r11.x = dot(float2(0.0269600004, -0.442270011), icb[r0.x + 0].xy);
       r11.y = dot(float2(-0.442270011, 0.0269600004), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.354259998 * r0.z;
@@ -797,24 +848,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+
+      r7 = max(0, r7);
+
       r9.x = dot(float2(-0.707700014, -0.302109987), icb[r0.x + 0].xy);
       r9.y = dot(float2(-0.302109987, -0.707700014), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+
+      r9 = max(0, r9);
+
       r10.x = dot(float2(-0.675279975, -0.496289998), icb[r0.x + 0].xy);
       r10.y = dot(float2(-0.496289998, -0.675279975), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+
+      r10 = max(0, r10);
+
       r11.x = dot(float2(0.82002002, -0.422899991), icb[r0.x + 0].xy);
       r11.y = dot(float2(-0.422899991, 0.82002002), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.763109982 * r0.z;
@@ -907,24 +970,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+
+      r7 = max(0, r7);
+
       r9.x = dot(float2(-0.21401, -0.0287299994), icb[r0.x + 0].xy);
       r9.y = dot(float2(-0.0287299994, -0.21401), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+
+      r9 = max(0, r9);
+
       r10.x = dot(float2(0.133680001, -0.725239992), icb[r0.x + 0].xy);
       r10.y = dot(float2(-0.725239992, 0.133680001), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+
+      r10 = max(0, r10);
+
       r11.x = dot(float2(-0.477050006, 0.409680009), icb[r0.x + 0].xy);
       r11.y = dot(float2(0.409680009, -0.477050006), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.862569988 * r0.z;
@@ -1017,24 +1092,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+
+      r7 = max(0, r7);
+
       r9.x = dot(float2(-0.142729998, 0.176339999), icb[r0.x + 0].xy);
       r9.y = dot(float2(0.176339999, -0.142729998), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+
+      r9 = max(0, r9);
+
       r10.x = dot(float2(-0.996819973, -0.0663200021), icb[r0.x + 0].xy);
       r10.y = dot(float2(-0.0663200021, -0.996819973), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+
+      r10 = max(0, r10);
+
       r11.x = dot(float2(-0.409770012, 0.577459991), icb[r0.x + 0].xy);
       r11.y = dot(float2(0.577459991, -0.409770012), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.763920009 * r0.z;
@@ -1127,24 +1214,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+
+      r7 = max(0, r7);
+
       r9.x = dot(float2(0.783630013, 0.285459995), icb[r0.x + 0].xy);
       r9.y = dot(float2(0.285459995, 0.783630013), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+
+      r9 = max(0, r9);
+
       r10.x = dot(float2(0.108390003, 0.953450024), icb[r0.x + 0].xy);
       r10.y = dot(float2(0.953450024, 0.108390003), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+
+      r10 = max(0, r10);
+
       r11.x = dot(float2(-0.135890007, -0.912039995), icb[r0.x + 0].xy);
       r11.y = dot(float2(-0.912039995, -0.135890007), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.858619988 * r0.z;
@@ -1237,24 +1336,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+
+      r7 = max(0, r7);
+
       r9.x = dot(float2(-0.90407002, -0.222289994), icb[r0.x + 0].xy);
       r9.y = dot(float2(-0.222289994, -0.90407002), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+
+      r9 = max(0, r9);
+
       r10.x = dot(float2(0.439150006, 0.331220001), icb[r0.x + 0].xy);
       r10.y = dot(float2(0.331220001, 0.439150006), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+
+      r10 = max(0, r10);
+
       r11.x = dot(float2(-0.715810001, 0.582350016), icb[r0.x + 0].xy);
       r11.y = dot(float2(0.582350016, -0.715810001), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.381060004 * r0.z;
@@ -1347,24 +1458,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+
+      r7 = max(0, r7);
+
       r9.x = dot(float2(0.0510899983, 0.232999995), icb[r0.x + 0].xy);
       r9.y = dot(float2(0.232999995, 0.0510899983), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+
+      r9 = max(0, r9);
+
       r10.x = dot(float2(-0.855480015, 0.0689999983), icb[r0.x + 0].xy);
       r10.y = dot(float2(0.0689999983, -0.855480015), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+
+      r10 = max(0, r10);
+
       r11.x = dot(float2(-0.0022799999, -0.204769999), icb[r0.x + 0].xy);
       r11.y = dot(float2(-0.204769999, -0.0022799999), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.509940028 * r0.z;
@@ -1457,24 +1580,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+
+      r7 = max(0, r7);
+
       r9.x = dot(float2(-0.300209999, -0.830060005), icb[r0.x + 0].xy);
       r9.y = dot(float2(-0.830060005, -0.300209999), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+
+      r9 = max(0, r9);
+
       r10.x = dot(float2(0.655550003, -0.105250001), icb[r0.x + 0].xy);
       r10.y = dot(float2(-0.105250001, 0.655550003), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+
+      r10 = max(0, r10);
+
       r11.x = dot(float2(0.11902, 0.558539987), icb[r0.x + 0].xy);
       r11.y = dot(float2(0.558539987, 0.11902), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.577960014 * r0.z;
@@ -1567,24 +1702,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+
+      r7 = max(0, r7);
+
       r9.x = dot(float2(-0.100709997, -0.708220005), icb[r0.x + 0].xy);
       r9.y = dot(float2(-0.708220005, -0.100709997), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+
+      r9 = max(0, r9);
+
       r10.x = dot(float2(0.190009996, -0.907999992), icb[r0.x + 0].xy);
       r10.y = dot(float2(-0.907999992, 0.190009996), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+
+      r10 = max(0, r10);
+
       r11.x = dot(float2(-0.937709987, 0.23105), icb[r0.x + 0].xy);
       r11.y = dot(float2(0.23105, -0.937709987), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.413720012 * r0.z;
@@ -1677,24 +1824,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+
+      r7 = max(0, r7);
+
       r9.x = dot(float2(0.725139976, 0.471969992), icb[r0.x + 0].xy);
       r9.y = dot(float2(0.471969992, 0.725139976), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+
+      r9 = max(0, r9);
+
       r10.x = dot(float2(0.948620021, 0.212960005), icb[r0.x + 0].xy);
       r10.y = dot(float2(0.212960005, 0.948620021), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+
+      r10 = max(0, r10);
+
       r11.x = dot(float2(0.323909998, 0.884739995), icb[r0.x + 0].xy);
       r11.y = dot(float2(0.884739995, 0.323909998), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+      
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.982200027 * r0.z;
@@ -1787,24 +1946,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+      
+      r7 = max(0, r7);
+
       r9.x = dot(float2(0.917429984, 0.00478000008), icb[r0.x + 0].xy);
       r9.y = dot(float2(0.00478000008, 0.917429984), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+      
+      r9 = max(0, r9);
+
       r10.x = dot(float2(-0.53846997, 0.837339997), icb[r0.x + 0].xy);
       r10.y = dot(float2(0.837339997, -0.53846997), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+      
+      r10 = max(0, r10);
+
       r11.x = dot(float2(0.358850002, -0.0244100001), icb[r0.x + 0].xy);
       r11.y = dot(float2(-0.0244100001, 0.358850002), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+      
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.365689993 * r0.z;
@@ -1897,24 +2068,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+      
+      r7 = max(0, r7);
+
       r9.x = dot(float2(-0.396690011, -0.229599997), icb[r0.x + 0].xy);
       r9.y = dot(float2(-0.229599997, -0.396690011), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+      
+      r9 = max(0, r9);
+
       r10.x = dot(float2(-0.715799987, -0.674510002), icb[r0.x + 0].xy);
       r10.y = dot(float2(-0.674510002, -0.715799987), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+      
+      r10 = max(0, r10);
+
       r11.x = dot(float2(-0.0307999998, -0.00800999999), icb[r0.x + 0].xy);
       r11.y = dot(float2(-0.00800999999, -0.0307999998), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+      
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.963500023 * r0.z;
@@ -2007,24 +2190,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+      
+      r7 = max(0, r7);
+
       r9.x = dot(float2(0.162479997, 0.740679979), icb[r0.x + 0].xy);
       r9.y = dot(float2(0.740679979, 0.162479997), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+      
+      r9 = max(0, r9);
+
       r10.x = dot(float2(-0.878729999, -0.436569989), icb[r0.x + 0].xy);
       r10.y = dot(float2(-0.436569989, -0.878729999), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+      
+      r10 = max(0, r10);
+
       r11.x = dot(float2(-0.873529971, 0.479809999), icb[r0.x + 0].xy);
       r11.y = dot(float2(0.479809999, -0.873529971), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+      
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.440200001 * r0.z;
@@ -2117,24 +2312,36 @@ void main(
       r7.xy = r7.xy / r3.xy;
       r7.xy = v2.xy + r7.xy;
       r7.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r7.xy, 0).xyzw;
+      
+      r7 = max(0, r7);
+
       r9.x = dot(float2(-0.709819973, 0.401349992), icb[r0.x + 0].xy);
       r9.y = dot(float2(0.401349992, -0.709819973), r2.zw);
       r9.xy = r9.xy * r0.zz;
       r9.xy = r9.xy / r3.xy;
       r9.xy = v2.xy + r9.xy;
       r9.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r9.xy, 0).xyzw;
+      
+      r9 = max(0, r9);
+
       r10.x = dot(float2(0.267930001, -0.595489979), icb[r0.x + 0].xy);
       r10.y = dot(float2(-0.595489979, 0.267930001), r2.zw);
       r10.xy = r10.xy * r0.zz;
       r10.xy = r10.xy / r3.xy;
       r10.xy = v2.xy + r10.xy;
       r10.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r10.xy, 0).xyzw;
+      
+      r10 = max(0, r10);
+
       r11.x = dot(float2(0.545130014, 0.833570004), icb[r0.x + 0].xy);
       r11.y = dot(float2(0.833570004, 0.545130014), r2.zw);
       r11.xy = r11.xy * r0.zz;
       r11.xy = r11.xy / r3.xy;
       r11.xy = v2.xy + r11.xy;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r11.xy, 0).xyzw;
+      
+      r11 = max(0, r11);
+
       r3.w = (int)r2.x | 1;
       if (r3.z != 0) {
         r3.z = 0.581879973 * r0.z;
@@ -2235,6 +2442,9 @@ void main(
       r8.yw = r8.yw / r3.xy;
       r8.yw = v2.xy + r8.yw;
       r11.xyzw = mapInputTexture0L.SampleLevel(samplerInputTexture0L_s, r8.yw, 0).xyzw;
+      
+      r11 = max(0, r11);
+
       r6.w = icb[r5.w + 256].z * r0.z;
       r6.w = cmp(abs(r11.w) >= r6.w);
       r6.w = r6.w ? 1.000000 : 0;

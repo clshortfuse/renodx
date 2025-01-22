@@ -75,15 +75,27 @@ void main(
   r0.yz = -InstanceParameters[r0.x].InstanceParams[0].xy * float2(0.25, 0.25) + r1.zw;
   r2.xy = InstanceParameters[r0.x].InstanceParams[0].xy * float2(1, 0) + r0.yz;
   r2.xyz = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r2.xy, 0).xyz;
+
+  r2.xyz = max(0, r2.xyz);
+
   r0.w = dot(r2.xyz, float3(0.298999995, 0.587000012, 0.114));
   r2.xy = InstanceParameters[r0.x].InstanceParams[0].xy + r0.yz;
   r2.xyz = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r2.xy, 0).xyz;
+
+  r2.xyz = max(0, r2.xyz);
+
   r2.x = dot(r2.xyz, float3(0.298999995, 0.587000012, 0.114));
   r2.y = r2.x + r0.w;
   r2.zw = InstanceParameters[r0.x].InstanceParams[0].xy * float2(0, 1) + r0.yz;
   r3.xyz = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r0.yz, 0).xyz;
+
+  r3.xyz = max(0, r3.xyz);
+
   r0.y = dot(r3.xyz, float3(0.298999995, 0.587000012, 0.114));
   r3.xyz = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r2.zw, 0).xyz;
+
+  r3.xyz = max(0, r3.xyz);
+
   r0.z = dot(r3.xyz, float3(0.298999995, 0.587000012, 0.114));
   r2.z = r0.y + r0.z;
   r3.yw = r2.zz + -r2.yy;
@@ -105,12 +117,27 @@ void main(
   r4.xyzw = r3.xyzw * float4(-0.5, -0.5, 0.5, 0.5) + r1.xyzw;
   r3.xyzw = r3.zwzw * float4(-0.166666672, -0.166666672, 0.166666672, 0.166666672) + r1.zwzw;
   r1.xyzw = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r1.zw, 0).xyzw;
+
+  r1 = max(0, r1);
+
   r2.yzw = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r4.xy, 0).xyz;
+
+  r2.yzw = max(0, r2.yzw);
+
   r4.xyz = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r4.zw, 0).xyz;
+
+  r4.xyz = max(0, r4.xyz);
+
   r2.yzw = r4.xyz + r2.yzw;
   r2.yzw = float3(0.25, 0.25, 0.25) * r2.yzw;
   r4.xyz = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r3.xy, 0).xyz;
+
+  r4.xyz = max(0, r4.xyz);
+
   r3.xyz = p_default_Material_2622C6A465163452_Param_texture.SampleLevel(p_default_Material_2622C6A465163452_Param_sampler_s, r3.zw, 0).xyz;
+
+  r3.xyz = max(0, r3.xyz);
+
   r3.xyz = r4.xyz + r3.xyz;
   r2.yzw = r3.xyz * float3(0.25, 0.25, 0.25) + r2.yzw;
   r3.xyz = float3(0.5, 0.5, 0.5) * r3.xyz;
@@ -151,5 +178,6 @@ void main(
 
   // Needs to be 1.f or else it tries to overlay/blend ???
   o0.w = renodx::color::luma::from::BT601(o0.rgb);
+
   return;
 }
