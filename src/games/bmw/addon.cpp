@@ -7,6 +7,8 @@
 
 #define DEBUG_LEVEL_0
 
+#include <embed/shaders.h>
+
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
@@ -15,39 +17,41 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
-#include <embed/0xBFA7B92F.h>
-#include <embed/0xA6EBE600.h>
-#include <embed/0xA43658B6.h>
-#include <embed/0xE1970A14.h>
-
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xBFA7B92F), // LUT builder
-    CustomShaderEntry(0xA43658B6), // LUT builder 2
-    CustomShaderEntry(0xE1970A14), // LUT builder 3
+    CustomShaderEntry(0xBFA7B92F), // lutbuilder
+    CustomShaderEntry(0xA43658B6), // lutbuilder 2
+    CustomShaderEntry(0xE1970A14), // lutbuilder 3
+    CustomShaderEntry(0x22FF7D28), // lutbuilder 4
+    CustomShaderEntry(0x2136F151), // lutbuilder 5
     CustomShaderEntry(0xA6EBE600), // final UI shader
 };
 
 ShaderInjectData shader_injection;
+
+const std::string build_date = __DATE__;
+const std::string build_time = __TIME__;
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 3.f,
-        .can_reset = false,
+        .default_value = 2.f,
+        .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "ACES", "RenoDRT"},
+        .labels = {"Vanilla", "None", "RenoDRT"},
+        .parse = [](float value) { return value == 2.f ? 3.f : value; },  // Override ACES
+
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
         .binding = &shader_injection.toneMapPeakNits,
         .default_value = 1000.f,
-        .can_reset = false,
+        .can_reset = true,
         .label = "Peak Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of peak white in nits",
@@ -58,10 +62,10 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapGameNits",
         .binding = &shader_injection.toneMapGameNits,
         .default_value = 203.f,
-        .can_reset = false,
+        .can_reset = true,
         .label = "Game Brightness",
         .section = "Tone Mapping",
-        .tooltip = "Sets the value of 100%% white in nits",
+        .tooltip = "Sets the value of 100% white in nits",
         .min = 48.f,
         .max = 500.f,
     },
@@ -69,7 +73,7 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapUINits",
         .binding = &shader_injection.toneMapUINits,
         .default_value = 203.f,
-        .can_reset = false,
+        .can_reset = true,
         .label = "UI Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
@@ -77,14 +81,27 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
-        .key = "toneMapGammaCorrection",
+        .key = "ToneMapGammaCorrection",
         .binding = &shader_injection.toneMapGammaCorrection,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .can_reset = false,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
-        .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
+        .tooltip = "Emulates a display EOTF.",
+        .labels = {"Off", "2.2"},
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
+    /* new renodx::utils::settings::Setting{
+        .key = "ToneMapPerChannel",
+        .binding = &shader_injection.toneMapPerChannel,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Per Channel",
+        .section = "Tone Mapping",
+        .tooltip = "Applies tonemapping per-channel instead of by luminance (More accurate to SDR but less saturated)",
+        .labels = {"Off", "On"},
+        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+    }, */
     new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
         .binding = &shader_injection.colorGradeExposure,
@@ -133,51 +150,69 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeBlowout",
         .binding = &shader_injection.colorGradeBlowout,
-        .default_value = 70.f,
-        .label = "Blowout",
+        .default_value = 50.f,
+        .label = "Highlight saturation",
         .section = "Color Grading",
-        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .tooltip = "Controls highlight saturation due to overexposure.",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType == 3; },
-        .parse = [](float value) { return value * 0.01f; },
+        .parse = [](float value) { return (value * -0.02f) + 1.f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeLUTStrength",
-        .binding = &shader_injection.colorGradeLUTStrength,
-        .default_value = 100.f,
-        .label = "LUT Strength",
-        .section = "Color Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = " - Use the Engine.ini HDR tweaks! \r\n - Use default in-game gamma and brightness! \r\n - (Optional) Disable the default add-ons (Generic depth & Effect runtime sync) to gain performance",
+        .section = "Instructions",
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeLUTScaling",
-        .binding = &shader_injection.colorGradeLUTScaling,
-        .default_value = 100.f,
-        .label = "LUT Scaling",
-        .section = "Color Grading",
-        .tooltip = "Scales the color grade LUT to full range when size is clamped.",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Special thanks to ShortFuse & the folks at HDR Den for their support! Join the HDR Den Discord for help!",
+        .section = "About",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Discord",
-        .section = "Links",
+        .label = "HDR Den Discord",
+        .section = "About",
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          system("start https://discord.gg/5WZXDpmbpP");
+          static const std::string obfuscated_link = std::string("start https://discord.gg/5WZX") + std::string("DpmbpP");
+          system(obfuscated_link.c_str());
         },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Github",
-        .section = "Links",
+        .label = "Get more RenoDX mods!",
+        .section = "About",
         .group = "button-line-1",
+        .tint = 0x5865F2,
         .on_change = []() {
-          system("start https://github.com/clshortfuse/renodx");
+          system("start https://github.com/clshortfuse/renodx/wiki/Mods");
         },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "ShortFuse's Ko-Fi",
+        .section = "About",
+        .group = "button-line-1",
+        .tint = 0xFF5F5F,
+        .on_change = []() {
+          system("start https://ko-fi.com/shortfuse");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Den's Ko-Fi",
+        .section = "About",
+        .group = "button-line-1",
+        .tint = 0xFF5F5F,
+        .on_change = []() {
+          system("start https://ko-fi.com/hdrden");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "This build was compiled on " + build_date + " at " + build_time + ".",
+        .section = "About",
     },
 };
 
@@ -186,7 +221,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
+  renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
@@ -197,10 +232,23 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
 }
 
+
+bool fired_on_init_swapchain = false;
+
+void OnInitSwapchain(reshade::api::swapchain* swapchain) {
+  if (fired_on_init_swapchain) return;
+  fired_on_init_swapchain = true;
+  auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+  if (peak.has_value()) {
+    settings[1]->default_value = peak.value();
+    settings[1]->can_reset = true;
+  }
+}
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX - Black Myth Wukong";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX - Black Myth: Wukong";
 
 bool g_should_replace = true;
 
