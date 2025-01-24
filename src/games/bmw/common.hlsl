@@ -130,12 +130,11 @@ float3 ToneMap(float3 bt709) {
   // Default inverts smooth clamp
   config.reno_drt_highlights = 1.0f;
   config.reno_drt_shadows = 1.0f;
-  config.reno_drt_contrast = 1.05f;
-  config.reno_drt_saturation = 1.05f;
+  config.reno_drt_contrast = 1.0f;
+  config.reno_drt_saturation = 1.0f;
   config.reno_drt_dechroma = 0;
   config.reno_drt_blowout = injectedData.colorGradeBlowout;
-  // Flare darkens too much (stalker2)
-  // config.reno_drt_flare = 0.10f * injectedData.colorGradeFlare;
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.reno_drt_working_color_space = 2u;
   config.reno_drt_per_channel = false;
 
@@ -149,14 +148,14 @@ float4 FinalizeUEOutput(float4 scene, float4 ui, bool is_hdr10 = true, bool only
 
   ui.rgb = renodx::color::srgb::Decode(ui.rgb);
   ui.rgb = renodx::color::bt2020::from::BT709(ui.rgb);
-  if (only_correct_ui) {
+  if (only_correct_ui && injectedData.toneMapGammaCorrection == 1.f) {
     ui.rgb = CorrectGamma(ui.rgb);
   }
   ui.rgb = ui.rgb * injectedData.toneMapUINits / injectedData.toneMapGameNits;
 
   if (is_hdr10) {
     scene.rgb = lerp(scene.rgb, ui.rgb, ui.a);
-    if (!only_correct_ui) {
+    if (!only_correct_ui && injectedData.toneMapGammaCorrection == 1.f) {
       scene.rgb = CorrectGamma(scene.rgb);
     }
     scene.rgb = renodx::color::pq::Encode(scene.rgb, injectedData.toneMapGameNits);
@@ -180,21 +179,35 @@ float3 FinalizeTonemap(float3 color, bool is_hdr10 = true) {
 float3 UpgradeToneMapAP1(float3 untonemapped_ap1, float3 tonemapped_bt709) {
   float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
 
-  float3 neutral_sdr_color = RenoDRTSmoothClamp(untonemapped_bt709);
+  float3 untonemapped_graded = untonemapped_bt709;
+  if (injectedData.colorGradeStrength != 0) {
+    float3 neutral_sdr_color = RenoDRTSmoothClamp(untonemapped_bt709);
 
-  float3 untonemapped_graded;
-
-  untonemapped_graded = UpgradeToneMapByLuminance(
-      untonemapped_bt709,
-      neutral_sdr_color,
-      tonemapped_bt709,
-      1);
+    if (false) { // injectedData.colorGradeRestorationMethod == 1
+      untonemapped_graded = UpgradeToneMapPerChannel(
+          untonemapped_bt709,
+          neutral_sdr_color,
+          tonemapped_bt709,
+          1);
+    } else {
+      untonemapped_graded = UpgradeToneMapByLuminance(
+          untonemapped_bt709,
+          neutral_sdr_color,
+          tonemapped_bt709,
+          1);
+    }
+    untonemapped_graded = lerp(untonemapped_bt709, untonemapped_graded, injectedData.colorGradeStrength);
+  }
 
   return ToneMap(untonemapped_graded);
 }
 
 float4 LutBuilderToneMap(float3 untonemapped_ap1, float3 tonemapped_bt709) {
-  float3 color = UpgradeToneMapAP1(untonemapped_ap1, tonemapped_bt709);
+  // return SDR with HDR cvars
+  float3 color = tonemapped_bt709;
+  if (injectedData.toneMapType != 0.f) {
+    color = UpgradeToneMapAP1(untonemapped_ap1, tonemapped_bt709);
+  }
 
   // Correct gamma in final shader causes issues with FSR3 FG
   color = renodx::color::bt709::clamp::BT2020(color);
