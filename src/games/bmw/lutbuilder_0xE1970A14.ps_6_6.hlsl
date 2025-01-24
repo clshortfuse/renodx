@@ -433,9 +433,7 @@ float4 main(
   float _1028 = exp2(((log2((max(0.0f, _1014)))) * (cb0_039y)));
   float _1029 = exp2(((log2((max(0.0f, _1015)))) * (cb0_039y)));
 
-  if (injectedData.toneMapType != 0) {
-    return LutBuilderToneMap(untonemapped_ap1, float3(_1027, _1028, _1029));
-  }
+  return LutBuilderToneMap(untonemapped_ap1, float3(_1027, _1028, _1029));
 
   if (((((uint)(cb0_039w)) == 0))) {
     do {
