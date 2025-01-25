@@ -285,10 +285,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       };
       renodx::mods::shader::expected_constant_buffer_space = 50;
 
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+
       //renodx::mods::shader::force_pipeline_cloning = false; 
 
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_addon(h_module);
       break;
   }
