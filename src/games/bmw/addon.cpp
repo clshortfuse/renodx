@@ -209,6 +209,7 @@ renodx::utils::settings::Settings settings = {
         .label = "HDR Look",
         .section = "Options",
         .group = "button-line-1",
+        .tint = 0xFF5F5F,
         .on_change = []() {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
@@ -224,7 +225,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = " - IMPORTANT: follow the installation instructions closely (UE HDR cvars) \r\n - Use default in-game gamma and brightness! \r\n - (Optional) Disable the default add-ons (Generic depth & Effect runtime sync) to gain performance",
+        .label = " - IMPORTANT: Follow the installation instructions closely! The mod needs UE HDR cvars \r\n - Use default in-game gamma and brightness! \r\n - (Optional) Disable the default add-ons (Generic depth & Effect runtime sync) to gain performance",
         .section = "Instructions",
     },
     new renodx::utils::settings::Setting{
