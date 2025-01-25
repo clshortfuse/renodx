@@ -33,6 +33,19 @@ ShaderInjectData shader_injection;
 const std::string build_date = __DATE__;
 const std::string build_time = __TIME__;
 
+const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
+    {"toneMapType", 2.f},
+    {"toneMapGammaCorrection", 1.f},
+    {"colorGradeExposure", 1.f},
+    {"colorGradeHighlights", 50.f},
+    {"colorGradeShadows", 55.f},
+    {"colorGradeContrast", 60.f},
+    {"colorGradeSaturation", 60.f},
+    {"colorGradeBlowout", 60.f},
+    {"colorGradeStrength", 90.f},
+    {"colorGradeFlare", 30.f},
+};
+
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapType",
@@ -81,7 +94,7 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapGammaCorrection",
+        .key = "toneMapGammaCorrection",
         .binding = &shader_injection.toneMapGammaCorrection,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
@@ -158,7 +171,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return (value * -0.02f) + 1.f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeFlare",
+        .key = "colorGradeFlare",
         .binding = &shader_injection.colorGradeFlare,
         .default_value = 0.f,
         .label = "Flare",
@@ -168,7 +181,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeStrength",
+        .key = "colorGradeStrength",
         .binding = &shader_injection.colorGradeStrength,
         .value_type = renodx::utils::settings::SettingValueType::FLOAT,
         .default_value = 100.f,
@@ -179,8 +192,39 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Reset All",
+        .section = "Options",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+          }
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Look",
+        .section = "Options",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+
+            if (HDR_LOOK_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, HDR_LOOK_VALUES.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
+          }
+        },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = " - Use the Engine.ini HDR tweaks! \r\n - Use default in-game gamma and brightness! \r\n - (Optional) Disable the default add-ons (Generic depth & Effect runtime sync) to gain performance",
+        .label = " - IMPORTANT: follow the installation instructions closely (UE HDR cvars) \r\n - Use default in-game gamma and brightness! \r\n - (Optional) Disable the default add-ons (Generic depth & Effect runtime sync) to gain performance",
         .section = "Instructions",
     },
     new renodx::utils::settings::Setting{
@@ -251,7 +295,6 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
 }
-
 
 bool fired_on_init_swapchain = false;
 
