@@ -32,11 +32,20 @@ void main(
   r0.xy = cWaveClamp.zw * r0.zw + r0.xy;
   o0.xyzw = sSceneTexPoint.Sample(sSceneTexPoint_s, r0.xy).xyzw;
 
-  if (RENODX_TONE_MAP_SONAR && RENODX_TONE_MAP_TYPE == 2.f) {
-    o0.rgb = renodx::tonemap::frostbite::BT709(o0.rgb, 1.f);
-  } else if (RENODX_TONE_MAP_TYPE == 0.f) {
-    o0.rgb = saturate(o0.rgb);
+  // Tonemap Sonar:
+  // Exponential rolloff - allow user to decide off, clamp, or tonemap
+  // None - off
+  // Vanilla - clamp
+  if (RENODX_TONE_MAP_TYPE == 2.f) {     // Exponential Rolloff
+    if (RENODX_TONE_MAP_SONAR == 2.f) {  // tonemap
+      o0.rgb = renodx::tonemap::frostbite::BT709(o0.rgb, 1.f, 0.5f);
+    } else if (RENODX_TONE_MAP_SONAR == 1.f) {  // clamp
+      o0.rgb = saturate(o0.rgb);
+    }
+  } else {
+    if (RENODX_TONE_MAP_TYPE == 0.f) {  // Vanilla
+      o0.rgb = saturate(o0.rgb);        // clamp
+    }
   }
-
   return;
 }
