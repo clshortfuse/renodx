@@ -1,3 +1,7 @@
+#define SHADER_HASH_0xC9686A2D
+
+#include "./common.hlsl"
+
 Texture3D<float4> View_SpatiotemporalBlueNoiseVolumeTexture : register(t0);
 
 Texture2D<float4> ColorTexture : register(t1);
@@ -132,10 +136,10 @@ cbuffer View : register(b1) {
 SamplerState View_SharedBilinearClampedSampler : register(s0);
 
 float4 main(
-  noperspective float2 TEXCOORD : TEXCOORD,
-  noperspective float4 TEXCOORD_1 : TEXCOORD1,
-  noperspective float4 SV_Position : SV_Position
-) : SV_Target {
+    noperspective float2 TEXCOORD: TEXCOORD,
+    noperspective float4 TEXCOORD_1: TEXCOORD1,
+    noperspective float4 SV_Position: SV_Position)
+    : SV_Target {
   float4 SV_Target;
   bool _19 = !((Globals_054z) == 0.0f);
   float _35 = (SV_Position.x) - (float((uint)(Globals_043x)));
@@ -144,18 +148,21 @@ float4 main(
   float _43 = saturate((_36 * (Globals_044w)));
   float _56 = (_19 ? (saturate(((Globals_044z) * (((floor((_35 * 0.5f))) * 2.0f) + 1.0f)))) : _42);
   float _57 = (_19 ? (saturate(((((floor((_36 * 0.5f))) * 2.0f) + 1.0f) * (Globals_044w)))) : _43);
-  float _118 = min((((Globals_044w) * (Globals_044x)) * 0.5625f), 1.0f);
-  float _119 = min((((Globals_044z) * (Globals_044y)) * 1.7777777910232544f), 1.0f);
-  float4 _126 = ColorTexture.SampleLevel(View_SharedBilinearClampedSampler, float2((min((max(((((Globals_030x) * _56) + (float((uint)(Globals_029x)))) * (Globals_027z)), (Globals_033x))), (Globals_033z))), (min((max(((((Globals_030y) * _57) + (float((uint)(Globals_029y)))) * (Globals_027w)), (Globals_033y))), (Globals_033w)))), 0.0f);
+
+  // moved down
+  // float _118 = min((((Globals_044w) * (Globals_044x)) * 0.5625f), 1.0f);
+  // float _119 = min((((Globals_044z) * (Globals_044y)) * 1.7777777910232544f), 1.0f);
+
+  float4 _126 = ColorTexture.SampleLevel(View_SharedBilinearClampedSampler, float2((min((max(((((Globals_030x)*_56) + (float((uint)(Globals_029x)))) * (Globals_027z)), (Globals_033x))), (Globals_033z))), (min((max(((((Globals_030y)*_57) + (float((uint)(Globals_029y)))) * (Globals_027w)), (Globals_033y))), (Globals_033w)))), 0.0f);
   float _138 = (1.0f / (max(0.0010000000474974513f, (Globals_048y)))) * (TEXCOORD_1.z);
   float _143 = (_138 * _138) * (1.0f / (max(9.999999747378752e-06f, (dot(float3((TEXCOORD_1.x), (TEXCOORD_1.y), _138), float3((TEXCOORD_1.x), (TEXCOORD_1.y), _138))))));
   float _147 = (((_143 * _143) + -1.0f) * (Globals_048x)) + 1.0f;
   float _148 = _147 * (min((_126.x), 65504.0f));
   float _149 = _147 * (min((_126.y), 65504.0f));
   float _150 = _147 * (min((_126.z), 65504.0f));
-  float4 _152 = GlareTexture.SampleLevel(View_SharedBilinearClampedSampler, float2((min((max(((((Globals_037x) * _56) + (float((uint)(Globals_036x)))) * (Globals_034z)), (Globals_040x))), (Globals_040z))), (min((max(((((Globals_037y) * _57) + (float((uint)(Globals_036y)))) * (Globals_034w)), (Globals_040y))), (Globals_040w)))), 0.0f);
-  float _181 = exp2(((log2((saturate(((((Globals_049x) * (((min((_152.x), 65504.0f)) - _148) + (_148 * (_152.w)))) + _148) * 0.009999999776482582f))))) * 0.1593017578125f));
-  float _197 = exp2(((log2((saturate(((((Globals_049x) * (((min((_152.y), 65504.0f)) - _149) + (_149 * (_152.w)))) + _149) * 0.009999999776482582f))))) * 0.1593017578125f));
+  float4 _152 = GlareTexture.SampleLevel(View_SharedBilinearClampedSampler, float2((min((max(((((Globals_037x)*_56) + (float((uint)(Globals_036x)))) * (Globals_034z)), (Globals_040x))), (Globals_040z))), (min((max(((((Globals_037y)*_57) + (float((uint)(Globals_036y)))) * (Globals_034w)), (Globals_040y))), (Globals_040w)))), 0.0f);
+  float _181 = exp2(((log2((saturate(((((Globals_049x) * (((min((_152.x), 65504.0f))-_148) + (_148 * (_152.w)))) + _148) * 0.009999999776482582f))))) * 0.1593017578125f));
+  float _197 = exp2(((log2((saturate(((((Globals_049x) * (((min((_152.y), 65504.0f))-_149) + (_149 * (_152.w)))) + _149) * 0.009999999776482582f))))) * 0.1593017578125f));
   float _213 = exp2(((log2((saturate(((((Globals_049x) * (((_150 * (_152.w)) - _150) + (min((_152.z), 65504.0f)))) + _150) * 0.009999999776482582f))))) * 0.1593017578125f));
   float4 _232 = BT709PQToBT2020PQLUT.SampleLevel(View_SharedBilinearClampedSampler, float3((((saturate((exp2(((log2((max(0.0f, (((_181 * 18.8515625f) + 0.8359375f) * (1.0f / ((_181 * 18.6875f) + 1.0f))))))) * 78.84375f))))) * 0.96875f) + 0.015625f), (((saturate((exp2(((log2((max(0.0f, (((_197 * 18.8515625f) + 0.8359375f) * (1.0f / ((_197 * 18.6875f) + 1.0f))))))) * 78.84375f))))) * 0.96875f) + 0.015625f), (((saturate((exp2(((log2((max(0.0f, (((_213 * 18.8515625f) + 0.8359375f) * (1.0f / ((_213 * 18.6875f) + 1.0f))))))) * 78.84375f))))) * 0.96875f) + 0.015625f)), 0.0f);
   float _239 = exp2(((log2((saturate((_232.x))))) * 0.012683313339948654f));
@@ -170,39 +177,24 @@ float4 main(
   float _366;
   float _377;
   float _388;
+
+  // fmv
+  float _118 = min((((Globals_044w) * (Globals_044x)) * 0.5625f), 1.0f);
+  float _119 = min((((Globals_044z) * (Globals_044y)) * 1.7777777910232544f), 1.0f);
   if ((!((Globals_053x) == 0.0f))) {
-    float4 _292 = CompositeSurfaceTexture.SampleLevel(View_SharedBilinearClampedSampler, float2(((_118 * (_56 + -0.5f)) + 0.5f), ((_119 * (_57 + -0.5f)) + 0.5f)), 0.0f);
-    _346 = (_292.x);
-    _347 = (_292.y);
-    _348 = (_292.z);
+    float3 video = CompositeSurfaceTexture.SampleLevel(View_SharedBilinearClampedSampler, float2(((_118 * (_56 + -0.5f)) + 0.5f), ((_119 * (_57 + -0.5f)) + 0.5f)), 0.0f).rgb;
+    _346 = (video.x);
+    _347 = (video.y);
+    _348 = (video.z);
     if (!(!((Globals_053y) == 0.0f))) {
-      do {
-        if ((((_292.x) < 0.0031308000907301903f))) {
-          _307 = ((_292.x) * 12.920000076293945f);
-        } else {
-          _307 = (((exp2(((log2((_292.x))) * 0.4166666567325592f))) * 1.0549999475479126f) + -0.054999999701976776f);
-        }
-        do {
-          if ((((_292.y) < 0.0031308000907301903f))) {
-            _318 = ((_292.y) * 12.920000076293945f);
-          } else {
-            _318 = (((exp2(((log2((_292.y))) * 0.4166666567325592f))) * 1.0549999475479126f) + -0.054999999701976776f);
-          }
-          do {
-            if ((((_292.z) < 0.0031308000907301903f))) {
-              _329 = ((_292.z) * 12.920000076293945f);
-            } else {
-              _329 = (((exp2(((log2((_292.z))) * 0.4166666567325592f))) * 1.0549999475479126f) + -0.054999999701976776f);
-            }
-            float _336 = exp2(((log2(_307)) * 2.200000047683716f));
-            float _337 = exp2(((log2(_318)) * 2.200000047683716f));
-            float _338 = exp2(((log2(_329)) * 2.200000047683716f));
-            _346 = ((dot(float3(0.6274039149284363f, 0.3292829990386963f, 0.043313100934028625f), float3(_336, _337, _338))) * 250.0f);
-            _347 = ((dot(float3(0.06909730285406113f, 0.9195405840873718f, 0.011362300254404545f), float3(_336, _337, _338))) * 250.0f);
-            _348 = ((dot(float3(0.01639140024781227f, 0.08801329880952835f, 0.8955953121185303f), float3(_336, _337, _338))) * 250.0f);
-          } while (false);
-        } while (false);
-      } while (false);
+      video = renodx::color::correct::GammaSafe(float3(_346, _347, _348));
+      video = convertColorSpace(video);
+      video = renodx::color::bt2020::from::BT709(video);
+      if (CUSTOM_HDR_VIDEOS) video = PumboAutoHDR(video, 7.5f);
+      video *= RENODX_DIFFUSE_WHITE_NITS;
+      _346 = video.r;
+      _347 = video.g;
+      _348 = video.b;
     }
   }
   float4 _351 = CompositeSDRTexture.SampleLevel(View_SharedBilinearClampedSampler, float2(((_118 * (_42 + -0.5f)) + 0.5f), ((_119 * (_43 + -0.5f)) + 0.5f)), 0.0f);
