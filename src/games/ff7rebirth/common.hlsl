@@ -3,6 +3,25 @@
 
 #include "./shared.h"
 
+// AdvancedAutoHDR pass to generate some HDR brightess out of an SDR signal.
+// This is hue conserving and only really affects highlights.
+// "sdr_color" is meant to be in "SDR range", as in, a value of 1 matching SDR white (something between 80, 100, 203, 300 nits, or whatever else)
+// https://github.com/Filoppi/PumboAutoHDR
+float3 PumboAutoHDR(float3 sdr_color, float shoulder_pow = 2.75f) {
+  const float SDRRatio = max(renodx::color::y::from::BT2020(sdr_color), 0.f);
+
+  // Limit AutoHDR brightness, it won't look good beyond a certain level.
+  // The paper white multiplier is applied later so we account for that.
+  float target_max_luminance = min(RENODX_PEAK_WHITE_NITS, pow(10.f, ((log10(RENODX_DIFFUSE_WHITE_NITS) - 0.03460730900256) / 0.757737096673107)));
+  target_max_luminance = lerp(1.f, target_max_luminance, .5f);
+
+  const float auto_HDR_max_white = max(target_max_luminance / RENODX_DIFFUSE_WHITE_NITS, 1.f);
+  const float auto_HDR_shoulder_ratio = 1.f - max(1.f - SDRRatio, 0.f);
+  const float auto_HDR_extra_ratio = pow(max(auto_HDR_shoulder_ratio, 0.f), shoulder_pow) * (auto_HDR_max_white - 1.f);
+  const float auto_HDR_total_ratio = SDRRatio + auto_HDR_extra_ratio;
+  return sdr_color * renodx::math::SafeDivision(auto_HDR_total_ratio, SDRRatio, 1);  // Fallback on a value of 1 in case of division by 0
+}
+
 float3 applyHueSat(float3 input_color, float3 correct_hue_sat, float strength = 1.f) {
   float3 input_color_oklab = renodx::color::oklab::from::BT709(input_color);
   float3 correct_hue_sat_oklab = renodx::color::oklab::from::BT709(correct_hue_sat);
@@ -98,7 +117,7 @@ float3 ToneMap(float3 color, float3 vanillaColor, float midGray) {
   config.type = 3u;
   config.peak_nits = RENODX_PEAK_WHITE_NITS;
   config.game_nits = RENODX_DIFFUSE_WHITE_NITS;
-  config.gamma_correction = RENODX_GAMMA_CORRECTION;
+  config.gamma_correction = 0.f;
   config.exposure = RENODX_TONE_MAP_EXPOSURE;
   config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
   config.shadows = RENODX_TONE_MAP_SHADOWS;
@@ -115,7 +134,7 @@ float3 ToneMap(float3 color, float3 vanillaColor, float midGray) {
   config.reno_drt_highlights = 1.f;
   config.reno_drt_shadows = 1.f;
   config.reno_drt_contrast = 1.f;
-  config.reno_drt_saturation = 1.f;
+  config.reno_drt_saturation = 1.04f;
 
   config.reno_drt_working_color_space = 2u;
   config.reno_drt_per_channel = RENODX_TONE_MAP_PER_CHANNEL != 0;
@@ -125,13 +144,10 @@ float3 ToneMap(float3 color, float3 vanillaColor, float midGray) {
   // hue shifting
   if (!RENODX_TONE_MAP_PER_CHANNEL) {
     config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
-    if (RENODX_TONE_MAP_HUE_SHIFT_METHOD == 1) {  // neutral AP1
-      float3 incorrect_hue_ap1 = renodx::color::ap1::from::BT709(color * midGray / 0.18f);
-      config.hue_correction_color = renodx::color::bt709::from::AP1(
-          renodx::tonemap::ExponentialRollOff(incorrect_hue_ap1, midGray, 2.f));
-    } else {  // vanilla tonemap
-      config.hue_correction_color = vanillaColor;
-    }
+
+    float3 incorrect_hue_ap1 = renodx::color::ap1::from::BT709(color * midGray / 0.18f);
+    config.hue_correction_color = renodx::color::bt709::from::AP1(renodx::tonemap::ExponentialRollOff(incorrect_hue_ap1, midGray, 2.f));
+
     config.hue_correction_type = renodx::tonemap::renodrt::config::hue_correction_type::CUSTOM;
     config.hue_correction_strength = RENODX_TONE_MAP_HUE_SHIFT;
   } else {
@@ -143,15 +159,10 @@ float3 ToneMap(float3 color, float3 vanillaColor, float midGray) {
   return color;
 }
 
-float3 applyACES(float3 untonemapped, float midGray = 0.1f, bool isReference = false) {
+float3 applyACES(float3 untonemapped, float midGray = 0.1f, float peak_nits = 1000.f, float game_nits = 250.f) {
   renodx::tonemap::Config aces_config = renodx::tonemap::config::Create();
-  if (isReference) {
-    aces_config.peak_nits = 1000.f;
-    aces_config.game_nits = 250.f;
-  } else {
-    aces_config.peak_nits = RENODX_PEAK_WHITE_NITS;
-    aces_config.game_nits = RENODX_DIFFUSE_WHITE_NITS;
-  }
+  aces_config.peak_nits = peak_nits;
+  aces_config.game_nits = game_nits;
   aces_config.type = 2u;
   aces_config.mid_gray_value = midGray;
   aces_config.mid_gray_nits = midGray * 100.f;
@@ -160,7 +171,7 @@ float3 applyACES(float3 untonemapped, float midGray = 0.1f, bool isReference = f
 }
 
 float3 applyReferenceACES(float3 untonemapped, float midGray = 0.1f) {
-  return applyACES(untonemapped, midGray, true);
+  return applyACES(untonemapped, midGray, 1000.f, 250.f);
 }
 
 float3 extractColorGradeAndApplyTonemap(float3 ungraded_bt709, float3 lutOutputColor_bt2020, float midGray) {
@@ -171,14 +182,20 @@ float3 extractColorGradeAndApplyTonemap(float3 ungraded_bt709, float3 lutOutputC
   if (RENODX_TONE_MAP_TYPE != 0) {
     // separate the display mapping from the color grading/tone mapping
     float3 reference_tonemap_bt709 = renodx::tonemap::ReinhardScalable(ungraded_bt709, 1000.f / 250.f, 0.f, 0.18f, midGray);
-    float3 graded_untonemapped_bt709 = UpgradeToneMapPerChannel(ungraded_bt709, reference_tonemap_bt709, graded_aces_bt709, CUSTOM_LUT_STRENGTH);
+    float3 graded_untonemapped_bt709 = UpgradeToneMapPerChannel(ungraded_bt709, reference_tonemap_bt709, graded_aces_bt709, 1.f);
 
     tonemapped_bt709 = ToneMap(graded_untonemapped_bt709, graded_aces_bt709, midGray);
+
+    if (CUSTOM_LUT_STRENGTH != 1.f) {
+      float3 ungraded_tonemapped_bt709 = ToneMap(ungraded_bt709, graded_aces_bt709, midGray);
+
+      tonemapped_bt709 = lerp(ungraded_tonemapped_bt709, tonemapped_bt709, CUSTOM_LUT_STRENGTH);
+    }
   } else {
     // using custom_aces as hdr_color allows us to extend (or compress) the dynamic range
     // in a way that looks natural and perfectly preserves the original look
     float3 reference_tonemap_bt709 = applyReferenceACES(ungraded_bt709, midGray);
-    float3 custom_aces = applyACES(ungraded_bt709, midGray);
+    float3 custom_aces = applyACES(ungraded_bt709, midGray, RENODX_PEAK_WHITE_NITS, RENODX_DIFFUSE_WHITE_NITS);
     tonemapped_bt709 = UpgradeToneMapByLuminance(custom_aces, reference_tonemap_bt709, graded_aces_bt709, CUSTOM_LUT_STRENGTH);
 
     // clean up slight overshoot with very low peak values
