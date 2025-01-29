@@ -26,39 +26,39 @@ namespace {
 
 std::unordered_set<std::uint32_t> drawn_shaders;
 
-#define TracedShaderEntry(value)                                  \
-  {                                                               \
-      value,                                                      \
-      {                                                           \
-          .crc32 = value,                                         \
-          .code = __##value,                                      \
-          .on_drawn = [](auto cmd_list) {                         \
-            if (drawn_shaders.contains(value)) return;            \
-            drawn_shaders.emplace(value);                         \
-            reshade::log::message(                                \
-                reshade::log::level::debug,                       \
-                std::format("Replaced 0x{:08x}", value).c_str()); \
-          },                                                      \
-      },                                                          \
+#define TracedShaderEntry(value)                                    \
+  {                                                                 \
+    value,                                                          \
+        {                                                           \
+            .crc32 = value,                                         \
+            .code = __##value,                                      \
+            .on_drawn = [](auto cmd_list) {                         \
+              if (drawn_shaders.contains(value)) return;            \
+              drawn_shaders.emplace(value);                         \
+              reshade::log::message(                                \
+                  reshade::log::level::debug,                       \
+                  std::format("Replaced 0x{:08x}", value).c_str()); \
+            },                                                      \
+        },                                                          \
   }
 
-#define TracedDualShaderEntry(value)                                                  \
-  {                                                                                   \
-      value,                                                                          \
-      {                                                                               \
-          .crc32 = value,                                                             \
-          .on_drawn = [](auto cmd_list) {                                             \
-            if (drawn_shaders.contains(value)) return;                                \
-            drawn_shaders.emplace(value);                                             \
-            reshade::log::message(                                                    \
-                reshade::log::level::debug,                                           \
-                std::format("Replaced 0x{:08x}", value).c_str());                     \
-          },                                                                          \
-          .code_by_device = {                                                         \
-              {reshade::api::device_api::d3d11, RENODX_JOIN_MACRO(__##value, _dx11)}, \
-              {reshade::api::device_api::d3d12, RENODX_JOIN_MACRO(__##value, _dx12)}, \
-          },                                                                          \
-      },                                                                              \
+#define TracedDualShaderEntry(value)                                                    \
+  {                                                                                     \
+    value,                                                                              \
+        {                                                                               \
+            .crc32 = value,                                                             \
+            .on_drawn = [](auto cmd_list) {                                             \
+              if (drawn_shaders.contains(value)) return;                                \
+              drawn_shaders.emplace(value);                                             \
+              reshade::log::message(                                                    \
+                  reshade::log::level::debug,                                           \
+                  std::format("Replaced 0x{:08x}", value).c_str());                     \
+            },                                                                          \
+            .code_by_device = {                                                         \
+                {reshade::api::device_api::d3d11, RENODX_JOIN_MACRO(__##value, _dx11)}, \
+                {reshade::api::device_api::d3d12, RENODX_JOIN_MACRO(__##value, _dx12)}, \
+            },                                                                          \
+        },                                                                              \
   }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
@@ -127,6 +127,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedShaderEntry(0xEBB3E98C),
     TracedShaderEntry(0x50F22BD6),
     TracedShaderEntry(0x8119F75A),
+    TracedShaderEntry(0xE3BB0C03),
+    TracedShaderEntry(0x95B1E481),
 };
 
 ShaderInjectData shader_injection;
