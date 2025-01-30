@@ -156,6 +156,7 @@ static Setting* FindSetting(const std::string& key) {
 static bool UpdateSetting(const std::string& key, float value) {
   auto* setting = FindSetting(key);
   if (setting == nullptr) return false;
+  const std::unique_lock lock(renodx::utils::mutex::global_mutex);
   setting->Set(value)->Write();
   return true;
 }
@@ -188,6 +189,7 @@ static void LoadSettings(reshade::api::effect_runtime* runtime, const std::strin
       default:
         break;
     }
+    const std::unique_lock lock(renodx::utils::mutex::global_mutex);
     setting->Write();
   }
 }
