@@ -12,29 +12,7 @@
 
 #include <deps/imgui/imgui.h>
 
-#include <embed/0x04D8EA44.h>
-#include <embed/0x18CFEFF4.h>
-#include <embed/0x21C2AF18.h>
-#include <embed/0x298A6BB0.h>
-#include <embed/0x341CEB87.h>
-#include <embed/0x4A2023A1.h>
-#include <embed/0x4E63FBE2.h>
-#include <embed/0x5DF649A9.h>
-#include <embed/0x61DBBA5C.h>
-#include <embed/0x71F27445.h>
-#include <embed/0x745E34E1.h>
-#include <embed/0x80CEFAE4.h>
-#include <embed/0x89C4A7A4.h>
-#include <embed/0x97CA5A85.h>
-#include <embed/0xA61F2FEE.h>
-#include <embed/0xA8520658.h>
-#include <embed/0xBF8489D2.h>
-#include <embed/0xC783FBA1.h>
-#include <embed/0xC83E64DF.h>
-#include <embed/0xCBFFC2A3.h>
-#include <embed/0xDE517511.h>
-#include <embed/0xED7139C7.h>
-#include <embed/0xFBFF99B4.h>
+#include <embed/shaders.h>
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
@@ -58,11 +36,14 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x745E34E1),  // tonemapper sdr lowbit
     CustomShaderEntry(0xC783FBA1),  // film grain overlay
     CustomShaderEntry(0xC83E64DF),  // hud
+    CustomShaderEntry(0x11C9D257),  // hud_221
     CustomShaderEntry(0xDE517511),  // menu
     CustomShaderEntry(0x89C4A7A4),  // new_menu
     CustomShaderEntry(0x18CFEFF4),  // new_menu_renderless
+    CustomShaderEntry(0xD46D9215),  // menu_221
     CustomShaderEntry(0xFBFF99B4),  // new_hud
     CustomShaderEntry(0x80CEFAE4),  // film_grain_new
+    CustomShaderEntry(0xE87F9B2E),  // film_grain_221
     CustomShaderEntry(0x21C2AF18),  // composite2
     CustomShaderEntry(0xA8520658),  // composite2_array_multisample
     CustomShaderEntry(0x04D8EA44),  // composite2_array_multisample_blend_rtv1
