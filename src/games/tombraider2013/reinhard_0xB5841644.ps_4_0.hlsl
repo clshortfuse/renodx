@@ -69,16 +69,24 @@ void main(
   float4 fDest;
 
   r0.xyzw = p_default_Material_2E2AB03422834586_cp3_Param_texture.Sample(p_default_Material_2E2AB03422834586_cp3_Param_sampler_s, float2(0.5, 0.5)).xyzw;
+
+  r0 = max(0, r0);
+
   r0.x = 0.00100000005 + r0.x;
   r0.y = (int)v0.x * 24;
   r0.zw = v1.xy * ScreenExtents.zw + ScreenExtents.xy;
   r1.xyzw = p_default_Material_2E2B083C22834586_cp1_BackBufferTexture_texture.Sample(p_default_Material_2E2B083C22834586_cp1_BackBufferTexture_sampler_s, r0.zw).xyzw;
+
+  r1 = max(0, r1);
+
   r0.yzw = InstanceParameters[r0.y].InstanceParams[0].xxx * r1.xyz;
-  // r0.xyz = r0.yzw / r0.xxx;
-  // r2.xyz = float3(1,1,1) + r0.xyz;
+  r0.xyz = r0.yzw / r0.xxx;
+
+  // Reinhard (x / (x + 1))
+  // r2.xyz = float3(1, 1, 1) + r0.xyz;
   // r0.xyz = r0.xyz / r2.xyz;
-  // o0.xyz = r1.xyz + r0.xyz;
-  o0.rgb = max(0, r1.rgb);
+
+  o0.xyz = r1.xyz + r0.xyz;
   o0.w = r1.w;
   return;
 }
