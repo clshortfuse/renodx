@@ -1,17 +1,17 @@
 #include "./common.hlsl"
 #include "./shared.h"
 
+// Dynamic Res
+
 Texture3D<float4> t0 : register(t0);
 Texture2D<float4> t1 : register(t1);
 Texture3D<float4> t2 : register(t2);
 Texture3D<float4> t3 : register(t3);
 Texture2D<float4> t4 : register(t4);
-Texture2D<float4> t5 : register(t5);
 
 SamplerState s0_s : register(s0);
 SamplerState s1_s : register(s1);
 SamplerState s2_s : register(s2);
-SamplerState s3_s : register(s3);
 
 cbuffer cb0 : register(b0) {
   float4 cb0[39];
@@ -29,6 +29,7 @@ void main(
     out float4 o0: SV_Target0) {
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11;
   uint4 bitmask, uiDest;
+  uint levels;
   float4 fDest;
 
   // r0.xy = cmp(cb0[34].xy < v0.xy);
@@ -40,19 +41,109 @@ void main(
     int2 v0xy = asint(v0.xy);
     int2 cb034xy = asint(cb0[34].xy);
     r0.xy = (int2)v0.xy;
-    r1.xy = asint(cb0[34].xy);
-    r1.xy = (int2)(r0.xy) + -r1.xy;
-    r1.xy = (int2)r1.xy;
-    r1.xy = float2(0.5, 0.5) + int2(v0.xy - cb034xy);
-    r1.zw = cb0[35].zw * r1.xy;
+    // r1.xy = (int2)cb0[34].xy;
+    // r1.xy = (int2)r0.xy + (int2)-r1.xy;
+    // r1.xy = (int2)r1.xy;
+    int2 r1xy = int2(v0.xy - cb034xy);
+    // r1.zw = float2(0.5, 0.5) + r1.xy;
+    r1.zw = float2(0.5, 0.5) + r1xy;
     r2.xy = cb0[35].xy * cb0[35].wz;
-    r1.xy = r1.xy * cb0[35].zw + float2(-0.5, -0.5);
+    r1.zw = r1.zw * cb0[35].zw + float2(-0.5, -0.5);
     r2.xy = float2(0.5625, 1.77777779) * r2.xy;
     r2.xy = min(float2(1, 1), r2.xy);
-    r1.xy = r1.xy * r2.xy + float2(0.5, 0.5);
-    r1.zw = r1.zw * cb0[31].xy + cb0[30].xy;
-    r1.zw = cb0[0].zw * r1.zw;
-    r2.xyz = t1.SampleLevel(s0_s, r1.zw, 0).xyz;
+    r1.zw = r1.zw * r2.xy + float2(0.5, 0.5);
+    r2.xy = float2(-1, -1) + cb0[31].xy;
+    r2.xy = max(float2(1, 1), r2.xy);
+    r2.zw = rcp(r2.xy);
+    r3.xyzw = cb0[35].zwzw * cb0[31].xyxy;
+    r0.w = r3.z * r3.w;
+    r0.w = rcp(r0.w);
+    // r3.zw = r3.xy * r1.xy;
+    r3.zw = r3.xy * r1xy;
+    r3.zw = trunc(r3.zw);
+    // r1.xy = r1.xy * r3.xy + -r3.zw;
+    r1.xy = r1xy * r3.xy + -r3.zw;
+    r4.xyzw = cb0[31].xyxy * cb0[35].zwzw + r1.xyxy;
+    r5.xyzw = min(float4(1, 1, 2, 2), r4.zwzw);
+    r1.xy = max(float2(0, 0), r1.xy);
+    r1.xy = r5.xy + -r1.xy;
+    r6.xy = max(float2(0, 0), r1.xy);
+    r1.xy = float2(-1, -1) + r5.zw;
+    r5.xy = max(float2(0, 0), r1.xy);
+    r4.xyzw = min(float4(4, 4, 3, 3), r4.xyzw);
+    r4.xyzw = float4(-3, -3, -2, -2) + r4.xyzw;
+    r4.xyzw = max(float4(0, 0, 0, 0), r4.xyzw);
+    r7.xy = r6.xy + r5.xy;
+    r1.xy = max(float2(9.99999975e-05, 9.99999975e-05), r7.xy);
+    r1.xy = rcp(r1.xy);
+    r1.xy = r5.xy * r1.xy + r3.zw;
+    r1.xy = r2.zw * r1.xy;
+    r1.xy = float2(0.5, 0.5) * r1.xy;
+    r1.xy = frac(r1.xy);
+    r1.xy = r1.xy * float2(2, 2) + float2(-1, -1);
+    r1.xy = float2(1, 1) + -abs(r1.xy);
+    r1.xy = r1.xy * r2.xy + cb0[30].xy;
+    r1.xy = float2(0.5, 0.5) + r1.xy;
+    r1.xy = cb0[0].zw * r1.xy;
+    r8.xyz = t1.SampleLevel(s0_s, r1.xy, 0).xyz;
+    r8.xyz = r8.xyz * r7.xxx;
+    r8.xyz = r8.xyz * r7.yyy;
+    r9.xyzw = r4.zwzw + r4.xyzw;
+    r1.x = 2 * r4.z;
+    r1.y = 0;
+    r5.zw = r4.xy;
+    r3.xy = float2(1, 3) * r5.xw;
+    r1.xy = r5.zy * float2(3, 1) + r1.xy;
+    r7.zw = r9.xy;
+    r5.xyzw = max(float4(9.99999975e-05, 9.99999975e-05, 9.99999975e-05, 9.99999975e-05), r7.zyxw);
+    r5.xyzw = rcp(r5.xyzw);
+    r1.xy = r1.xy * r5.xy + r3.zw;
+    r1.xy = r2.zw * r1.xy;
+    r1.xy = float2(0.5, 0.5) * r1.xy;
+    r1.xy = frac(r1.xy);
+    r1.xy = r1.xy * float2(2, 2) + float2(-1, -1);
+    r1.xy = float2(1, 1) + -abs(r1.xy);
+    r1.xy = r1.xy * r2.xy + cb0[30].xy;
+    r1.xy = float2(0.5, 0.5) + r1.xy;
+    r1.xy = cb0[0].zw * r1.xy;
+
+    r10.xyz = t1.SampleLevel(s0_s, r1.xy, 0).xyz;
+    r10.xyz = r10.xyz * r9.xxx;
+    r7.yzw = r10.xyz * r7.yyy;
+    r7.yzw = r7.yzw * r0.www;
+    r7.yzw = r8.xyz * r0.www + r7.yzw;
+    r6.z = r4.w;
+    r1.xy = r6.xz * float2(0, 2) + r3.xy;
+    r1.xy = r1.xy * r5.zw + r3.zw;
+    r1.xy = r2.zw * r1.xy;
+    r1.xy = float2(0.5, 0.5) * r1.xy;
+    r1.xy = frac(r1.xy);
+    r1.xy = r1.xy * float2(2, 2) + float2(-1, -1);
+    r1.xy = float2(1, 1) + -abs(r1.xy);
+    r1.xy = r1.xy * r2.xy + cb0[30].xy;
+    r1.xy = float2(0.5, 0.5) + r1.xy;
+    r1.xy = cb0[0].zw * r1.xy;
+    r5.xyz = t1.SampleLevel(s0_s, r1.xy, 0).xyz;
+    r5.xyz = r5.xyz * r7.xxx;
+    r5.xyz = r5.xyz * r9.yyy;
+    r5.xyz = r5.xyz * r0.www + r7.yzw;
+    r1.xy = r4.xy * float2(3, 3) + r9.zw;
+    r3.xy = max(float2(9.99999975e-05, 9.99999975e-05), r9.xy);
+    r3.xy = rcp(r3.xy);
+    r1.xy = r1.xy * r3.xy + r3.zw;
+    r1.xy = r2.zw * r1.xy;
+    r1.xy = float2(0.5, 0.5) * r1.xy;
+    r1.xy = frac(r1.xy);
+    r1.xy = r1.xy * float2(2, 2) + float2(-1, -1);
+    r1.xy = float2(1, 1) + -abs(r1.xy);
+    r1.xy = r1.xy * r2.xy + cb0[30].xy;
+    r1.xy = float2(0.5, 0.5) + r1.xy;
+    r1.xy = cb0[0].zw * r1.xy;
+    r2.xyz = t1.SampleLevel(s0_s, r1.xy, 0).xyz;
+    r2.xyz = r2.xyz * r9.xxx;
+    r2.xyz = r2.xyz * r9.yyy;
+    r2.xyz = r2.xyz * r0.www + r5.xyz;
+
     float3 t1Sample = r2.xyz;
 
     // PQ to 100
@@ -64,15 +155,15 @@ void main(
       r3.xyz = float3(0.159301758, 0.159301758, 0.159301758) * r3.xyz;
       r3.xyz = exp2(r3.xyz);
       r4.xyzw = r3.xxyy * float4(18.8515625, 18.6875, 18.8515625, 18.6875) + float4(0.8359375, 1, 0.8359375, 1);
-      r1.zw = rcp(r4.yw);
-      r1.zw = r4.xz * r1.zw;
-      r1.zw = log2(r1.zw);
-      r1.zw = float2(78.84375, 78.84375) * r1.zw;
-      r1.zw = exp2(r1.zw);
-      r4.xy = min(float2(1, 1), r1.zw);
-      r1.zw = r3.zz * float2(18.8515625, 18.6875) + float2(0.8359375, 1);
-      r0.w = rcp(r1.w);
-      r0.w = r1.z * r0.w;
+      r1.xy = rcp(r4.yw);
+      r1.xy = r4.xz * r1.xy;
+      r1.xy = log2(r1.xy);
+      r1.xy = float2(78.84375, 78.84375) * r1.xy;
+      r1.xy = exp2(r1.xy);
+      r4.xy = min(float2(1, 1), r1.xy);
+      r1.xy = r3.zz * float2(18.8515625, 18.6875) + float2(0.8359375, 1);
+      r0.w = rcp(r1.y);
+      r0.w = r1.x * r0.w;
       r0.w = log2(r0.w);
       r0.w = 78.84375 * r0.w;
       r0.w = exp2(r0.w);
@@ -83,16 +174,25 @@ void main(
 
     uint w, h, d;
     t2.GetDimensions(w, h, d);
-    // r3.xyz = cmp((uint3)r3.xyz == uint3(32, 32, 32));
+
+    // r3.xyz = uiDest.xyz;
+    // Unknown use of GetDimensions for resinfo_ from missing reflection info, need manual fix.
+    //   resinfo_indexable(texture3d)(float,float,float,float)_uint r3.xyz, l(0), t2.xyzw
+    // Example for texture2d type, uint return:
+    // tx.GetDimensions(0, uiDest.x, uiDest.y, uiDest.z);
+    // rx = uiDest;
+    // state = 0, constZero.eType = 4, returnType = 2, texture.eType = 7, afImmediates[0] = 0.000000 r3.xyz = cmp((int3)r3.xyz == int3(32, 32, 32));
+
     // r0.w = r3.y ? r3.x : 0;
     // r0.w = r3.z ? r0.w : 0;
     r0.w = (w == 32 && h == 32 && d == 32) ? 32 : 0;
-    r1.z = r0.w ? 31 : 0;
+    // r1.x = (int)r0.w & 0x41f80000;
+    r1.x = r0.w ? 31 : 0;
+
     r3.xy = r0.ww ? float2(0.03125, 0.015625) : float2(1, 0.5);
-    r0.w = r3.x * r1.z;
+    r0.w = r3.x * r1.x;
     r3.xyz = r4.xyz * r0.www + r3.yyy;  // Texel Centering
     r3.xyz = t2.SampleLevel(s1_s, r3.xyz, 0).xyz;
-
     float3 t2Sample = r3.xyz;
 
     // Clip input to SDR
@@ -121,43 +221,46 @@ void main(
 
     // choose SDR, clipped, shadowed 2.2 based on cb[38].x OR PQ LUT output
     r2.xyz = r0.www ? r2.xyz : r3.xyz;
-    r3.xyz = uiDest.xyz;
+
+    t3.GetDimensions(w, h, d);
+    // r3.xyz = uiDest.xyz;
     // Unknown use of GetDimensions for resinfo_ from missing reflection info, need manual fix.
     //   resinfo_indexable(texture3d)(float,float,float,float)_uint r3.xyz, l(0), t3.xyzw
     // Example for texture2d type, uint return:
-    t3.GetDimensions(w, h, d);
-    // r3.xyz = uiDest.xyz;
-    // state = 0, constZero.eType = 4, returnType = 2, texture.eType = 7, afImmediates[0] = 0.000000
-    // r3.xyz = cmp((uint3)r3.xyz == uint3(32, 32, 32));
+    // tx.GetDimensions(0, uiDest.x, uiDest.y, uiDest.z);
+    // rx = uiDest;
+    // state = 0, constZero.eType = 4, returnType = 2, texture.eType = 7, afImmediates[0] = 0.000000 r3.xyz = cmp((int3)r3.xyz == int3(32, 32, 32));
+
     // r0.w = r3.y ? r3.x : 0;
     // r0.w = r3.z ? r0.w : 0;
     r0.w = (w == 32 && h == 32 && d == 32) ? 32 : 0;
-    r1.z = r0.w ? 31.000000 : 0;
-    r3.xy = r0.ww ? float2(0.03125, 0.015625) : float2(1, 0.5);
-    r0.w = r3.x * r1.z;
 
-    r3.xzw = r2.xyz * r0.www + r3.yyy;  // Texel Centering
+    r1.x = r0.w ? 31.000000 : 0;
+    r3.xy = r0.ww ? float2(0.03125, 0.015625) : float2(1, 0.5);
+    r0.w = r3.x * r1.x;
+    r3.xyz = r2.xyz * r0.www + r3.yyy;  // Texel Centering
 
     // Sample LUT2 with selected output from before
-    r3.xzw = t3.SampleLevel(s1_s, r3.xzw, 0).xyz;
-    float3 t3Sample = r3.xzw;
+    r3.xyz = t3.SampleLevel(s1_s, r3.xyz, 0).xyz;
+    float3 t3Sample = r3.xyz;
 
     // LUT2 PQ output => Linear
-    r3.xzw = saturate(r3.xzw);
-    r3.xzw = log2(r3.xzw);
-    r3.xzw = float3(0.0126833133, 0.0126833133, 0.0126833133) * r3.xzw;
-    r3.xzw = exp2(r3.xzw);
-    r4.xyz = float3(-0.8359375, -0.8359375, -0.8359375) + r3.xzw;
-    r3.xzw = -r3.xzw * float3(18.6875, 18.6875, 18.6875) + float3(18.8515625, 18.8515625, 18.8515625);
-    r3.xzw = rcp(r3.xzw);
-    r3.xzw = r4.xyz * r3.xzw;
-    r3.xzw = max(float3(0, 0, 0), r3.xzw);
-    r3.xzw = log2(r3.xzw);
-    r3.xzw = float3(6.27739477, 6.27739477, 6.27739477) * r3.xzw;
-    r3.xzw = exp2(r3.xzw);
-    r3.xzw = float3(10000, 10000, 10000) * r3.xzw;
+    r3.xyz = saturate(r3.xyz);
 
-    float3 lut2output = r3.xzw;
+    r3.xyz = log2(r3.xyz);
+    r3.xyz = float3(0.0126833133, 0.0126833133, 0.0126833133) * r3.xyz;
+    r3.xyz = exp2(r3.xyz);
+    r4.xyz = float3(-0.8359375, -0.8359375, -0.8359375) + r3.xyz;
+    r3.xyz = -r3.xyz * float3(18.6875, 18.6875, 18.6875) + float3(18.8515625, 18.8515625, 18.8515625);
+    r3.xyz = rcp(r3.xyz);
+    r3.xyz = r4.xyz * r3.xyz;
+    r3.xyz = max(float3(0, 0, 0), r3.xyz);
+    r3.xyz = log2(r3.xyz);
+    r3.xyz = float3(6.27739477, 6.27739477, 6.27739477) * r3.xyz;
+    r3.xyz = exp2(r3.xyz);
+    r3.xyz = float3(10000, 10000, 10000) * r3.xyz;
+
+    float3 lut2output = r3.xyz;
 
     // LUT1 PQ output => Linear
     r2.xyz = saturate(r2.xyz);
@@ -172,18 +275,18 @@ void main(
     r2.xyz = log2(r2.xyz);
     r2.xyz = float3(6.27739477, 6.27739477, 6.27739477) * r2.xyz;
     r2.xyz = exp2(r2.xyz);
-    r2.xyz = r2.xyz * float3(10000, 10000, 10000) + -r3.xzw;
+    r2.xyz = r2.xyz * float3(10000, 10000, 10000) + -r3.xyz;
 
     // cb0[26].z = HDR Luminance / 10
 
-    r2.xyz = cb0[26].zzz * r2.xyz + r3.xzw;
+    r2.xyz = cb0[26].zzz * r2.xyz + r3.xyz;
 
     float3 graded_aces = r2.xyz;
 
-    if (injectedData.tone_map_type != 0) {
+    if (RENODX_TONE_MAP_TYPE != 0) {
       float3 color = t1Sample * 1.5f;
 
-      if (injectedData.color_grade_lut_strength != 0) {
+      if (CUSTOM_LUT_STRENGTH != 0) {
         renodx::tonemap::Config aces_config = renodx::tonemap::config::Create();
         aces_config.peak_nits = 1000.f;
         aces_config.game_nits = 100.f;
@@ -195,7 +298,7 @@ void main(
         graded_aces = renodx::color::bt709::from::BT2020(r2.xyz / (250.f));
 
         float3 color_graded;
-        if (injectedData.tone_map_per_channel == 1.f) {
+        if (RENODX_TONE_MAP_PER_CHANNEL == 1.f) {
           color_graded = UpgradeToneMapPerChannel(color, reference_aces, graded_aces, 1);
         } else {
           color_graded = UpgradeToneMapByLuminance(color, reference_aces, graded_aces, 1);
@@ -204,117 +307,64 @@ void main(
         float3 lut_color = color_graded;
         // lut_color = corrected;
 
-        color = lerp(color, lut_color, injectedData.color_grade_lut_strength);
+        color = lerp(color, lut_color, CUSTOM_LUT_STRENGTH);
       }
       color = ToneMap(color, v0.xy / cb0[34].zw);
 
       r2.xyz = color;
     }
 
-    // Video
+    r1.xyzw = t4.SampleLevel(s2_s, r1.zw, 0).xyzw;
 
-    r1.z = cmp(cb0[24].y != 0.000000);
-    r3.xz = saturate(cb0[24].xz);
-    r4.xyz = t5.SampleLevel(s3_s, r1.xy, 0).xyz;
-    r4.xyz = r4.xyz * r3.zzz;
-    if (r1.z != 0) {
-      r1.z = 0.00999999978 * r4.x;
-      r1.z = max(0, r1.z);
-      r1.z = log2(r1.z);
-      r1.z = 0.159301758 * r1.z;
-      r1.z = exp2(r1.z);
-      r1.zw = r1.zz * float2(18.8515625, 18.6875) + float2(0.8359375, 1);
-      r1.w = rcp(r1.w);
-      r1.z = r1.z * r1.w;
-      r1.z = log2(r1.z);
-      r1.z = 78.84375 * r1.z;
-      r1.z = exp2(r1.z);
-      r5.x = min(1, r1.z);
-      r6.xyzw = float4(0.00999999978, 0.00999999978, 0.00999999978, 0.00999999978) * r4.yyzz;
-      r6.xyzw = max(float4(0, 0, 0, 0), r6.xyzw);
-      r6.xyzw = log2(r6.xyzw);
-      r6.xyzw = float4(0.159301758, 0.159301758, 0.159301758, 0.159301758) * r6.xyzw;
-      r6.xyzw = exp2(r6.xyzw);
-      r6.xyzw = r6.xyzw * float4(18.8515625, 18.6875, 18.8515625, 18.6875) + float4(0.8359375, 1, 0.8359375, 1);
-      r1.zw = rcp(r6.yw);
-      r1.zw = r6.xz * r1.zw;
-      r1.zw = log2(r1.zw);
-      r1.zw = float2(78.84375, 78.84375) * r1.zw;
-      r1.zw = exp2(r1.zw);
-      r5.yz = min(float2(1, 1), r1.zw);
-      r3.yzw = r5.xyz * r0.www + r3.yyy;
-      r3.yzw = t3.SampleLevel(s1_s, r3.yzw, 0).xyz;
-      r3.yzw = saturate(r3.yzw);
-      r3.yzw = log2(r3.yzw);
-      r3.yzw = float3(0.0126833133, 0.0126833133, 0.0126833133) * r3.yzw;
-      r3.yzw = exp2(r3.yzw);
-      r5.xyz = float3(-0.8359375, -0.8359375, -0.8359375) + r3.yzw;
-      r3.yzw = -r3.yzw * float3(18.6875, 18.6875, 18.6875) + float3(18.8515625, 18.8515625, 18.8515625);
-      r3.yzw = rcp(r3.yzw);
-      r3.yzw = r5.xyz * r3.yzw;
-      r3.yzw = max(float3(0, 0, 0), r3.yzw);
-      r3.yzw = log2(r3.yzw);
-      r3.yzw = float3(6.27739477, 6.27739477, 6.27739477) * r3.yzw;
-      r3.yzw = exp2(r3.yzw);
-      r3.yzw = float3(10000, 10000, 10000) * r3.yzw;
-      r5.xyz = r4.xyz * float3(100, 100, 100) + -r3.yzw;
-      r3.yzw = cb0[26].zzz * r5.xyz + r3.yzw;
-    } else {
-      r5.xyz = cmp(r4.xyz < float3(0.00313080009, 0.00313080009, 0.00313080009));
-      r6.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r4.xyz;
-      r4.xyz = log2(r4.xyz);
-      r4.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r4.xyz;
-      r4.xyz = exp2(r4.xyz);
-      r4.xyz = r4.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
-      r4.xyz = r5.xyz ? r6.xyz : r4.xyz;
-      r4.xyz = log2(r4.xyz);
-      r4.xyz = float3(2.20000005, 2.20000005, 2.20000005) * r4.xyz;
-      r4.xyz = exp2(r4.xyz);
-      r5.x = dot(float3(0.627403915, 0.329282999, 0.0433131009), r4.xyz);
-      r5.y = dot(float3(0.0690973029, 0.919540584, 0.0113623003), r4.xyz);
-      r5.z = dot(float3(0.0163914002, 0.0880132988, 0.895595312), r4.xyz);
-
-      if (injectedData.fx_hdr_videos != 0) {
-        float videoPeak = injectedData.tone_map_peak_nits / (injectedData.tone_map_game_nits / 203.f);
-        r5.xyz = renodx::tonemap::inverse::bt2446a::BT709(r5.xyz, 100.f, videoPeak);
-        r5.xyz /= videoPeak;                                                          // Normalize to 1.0f = peak;
-        r5.xyz *= injectedData.tone_map_peak_nits / injectedData.tone_map_game_nits;  // 1.f = game nits
-      }
-      r3.yzw = float3(250, 250, 250) * r5.xyz;
-      r3.yzw = injectedData.tone_map_game_nits * r5.xyz;
-    }
-
-    // T5 = video
-
-    // lerp with something from t5?
-    r3.yzw = r3.yzw + -r2.xyz;
-    r2.xyz = r3.xxx * r3.yzw + r2.xyz;
-
-    r1.xyzw = t4.SampleLevel(s2_s, r1.xy, 0).xyzw;
     float4 t4sample = r1.xyzw;
     // BT2020 Y
     r0.w = dot(r2.xyz, float3(0.262699991, 0.677999973, 0.0593000017));
-    r2.xyz = r2.xyz + -r0.www;
-    r2.xyz = cb0[25].xxx * r2.xyz + r0.www;
-    r3.xyz = cb0[26].www * r2.xyz;
+
+    {
+      // r2.xyz = r2.xyz + -r0.www;
+      // r2.xyz = cb0[25].xxx * r2.xyz + r0.www;
+      r2.rgb = lerp(r0.w, r2.rgb, cb0[25].x);  // blend to grayscale
+    }
+
+    {
+      // cb0[26].w = HDR Brightness
+      // Force to 1.f
+      // r3.xyz = cb0[26].www * r2.xyz;
+      r3.xyz = 1.f * r2.xyz;
+    }
+
     r3.xyz = cmp(float3(0, 0, 0) < r3.xyz);
     r3.xyz = r3.xyz ? cb0[26].xxx : 0;
 
-    // cb0[26].xxx = black floor ?
+    {
+      // scale up by cb0[26].www
+      // if not 0, add cb0[26].xxx (black floor?)
+      // r2.xyz = r2.xyz * cb0[26].www + r3.xyz;
+      r2.xyz = r2.xyz * cb0[26].www + 0;
+    }
 
-    // r2.xyz = r2.xyz * cb0[26].www + r3.xyz;
-    r2.xyz = r2.xyz * cb0[26].www + r3.xyz;
-
-    r0.w = cb0[25].y * r1.w;
+    r0.w = cb0[25].y * r1.w;  // multiply UI alpha
 
     // r1.w = rcp(cb0[26].y);
-    r1.w = rcp(injectedData.tone_map_ui_nits);
+    r1.w = rcp(RENODX_GRAPHICS_WHITE_NITS);
+
     r3.xyz = r2.xyz * r1.www + float3(1, 1, 1);
+
     r3.xyz = rcp(r3.xyz);
+    // Reinhard (Render * inverse)
+
     r1.w = r0.w * r0.w;
-    r4.xyz = float3(1, 1, 1) + -r3.xyz;
-    r3.xyz = r1.www * r4.xyz + r3.xyz;
+
+    {
+      // r4.xyz = float3(1, 1, 1) + -r3.xyz;
+      // r3.xyz = r1.www * r4.xyz + r3.xyz;
+      r3.xyz = lerp(r3.xyz, 1.f, r1.w);
+      // Lerp to 1.f based on alpha^2?
+    }
+
     r2.xyz = r3.xyz * r2.xyz;
+
+    // Encode UI as SRGB
     r3.xyz = cmp(r1.xyz < float3(0.00313080009, 0.00313080009, 0.00313080009));
     r4.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r1.xyz;
     r1.xyz = log2(r1.xyz);
@@ -322,16 +372,27 @@ void main(
     r1.xyz = exp2(r1.xyz);
     r1.xyz = r1.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
     r1.xyz = r3.xyz ? r4.xyz : r1.xyz;
+
+    // Decode UI as 2.2
     r1.xyz = log2(r1.xyz);
     r1.xyz = float3(2.20000005, 2.20000005, 2.20000005) * r1.xyz;
     r1.xyz = exp2(r1.xyz);
+
+    if (RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE == renodx::draw::COLOR_SPACE_CUSTOM_BT709D93) {
+      r1.xyz = renodx::color::bt709::from::BT709D93(r1.xyz);
+    }
+
+    // BT709 => BT2020
     r3.x = dot(float3(0.627403915, 0.329282999, 0.0433131009), r1.xyz);
     r3.y = dot(float3(0.0690973029, 0.919540584, 0.0113623003), r1.xyz);
     r3.z = dot(float3(0.0163914002, 0.0880132988, 0.895595312), r1.xyz);
-    // r1.xyz = cb0[26].yyy * r3.xyz;
-    r1.xyz = injectedData.tone_map_ui_nits * r3.xyz;
 
+    // Invert back
+    // r1.xyz = cb0[26].yyy * r3.xyz;
+    r1.xyz = RENODX_GRAPHICS_WHITE_NITS * r3.xyz;
     r1.xyz = r2.xyz * r0.www + r1.xyz;
+
+    // Encode to PQ
     if (false) {
       r1.xyz = float3(9.99999975e-05, 9.99999975e-05, 9.99999975e-05) * r1.xyz;
       r1.xyz = max(float3(0, 0, 0), r1.xyz);
@@ -360,7 +421,7 @@ void main(
     r1.xy = encoded_color.rg;
     r0.w = encoded_color.b;
 
-    if (injectedData.fx_film_grain != 0) {
+    if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
       o0.rgb = float3(r1.xy, r0.w);
     } else {
       r0.z = asuint(cb1[139].z) << 3;
@@ -406,7 +467,9 @@ void main(
       r0.x = r0.x * 0.000977517106 + r0.w;
       o0.z = saturate(r0.y ? r0.x : r0.w);
     }
+
     o0.w = 1;
+
   } else {
     o0.xyzw = float4(0, 0, 0, 0);
   }

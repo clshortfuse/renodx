@@ -10,6 +10,7 @@
 
 #include <chrono>
 #include <random>
+#include <unordered_set>
 
 #include <deps/imgui/imgui.h>
 #include <embed/shaders.h>
@@ -17,7 +18,13 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
+#include "../../utils/date.hpp"
+#include "../../utils/path.hpp"
+#include "../../utils/platform.hpp"
 #include "../../utils/settings.hpp"
+#include "../../utils/shader.hpp"
+#include "../../utils/shader_dump.hpp"
+#include "../../utils/swapchain.hpp"
 #include "./shared.h"
 
 namespace {
@@ -26,6 +33,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x922A71D1),
     CustomShaderEntry(0x4D6F937E),
     CustomShaderEntry(0xD950DA01),
+    CustomShaderEntry(0xE87D13A1),
+    {0xF68D39B5, {}}  // SDR
 };
 
 ShaderInjectData shader_injection;
@@ -33,7 +42,7 @@ ShaderInjectData shader_injection;
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapType",
-        .binding = &shader_injection.tone_map_type,
+        .binding = &RENODX_TONE_MAP_TYPE,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 3.f,
         .can_reset = false,
@@ -44,7 +53,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
-        .binding = &shader_injection.tone_map_peak_nits,
+        .binding = &RENODX_PEAK_WHITE_NITS,
         .default_value = 1000.f,
         .can_reset = false,
         .label = "Peak Brightness",
@@ -55,7 +64,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
-        .binding = &shader_injection.tone_map_game_nits,
+        .binding = &RENODX_DIFFUSE_WHITE_NITS,
         .default_value = 203.f,
         .label = "Game Brightness",
         .section = "Tone Mapping",
@@ -65,7 +74,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
-        .binding = &shader_injection.tone_map_ui_nits,
+        .binding = &RENODX_GRAPHICS_WHITE_NITS,
         .default_value = 203.f,
         .label = "UI Brightness",
         .section = "Tone Mapping",
@@ -75,7 +84,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGammaCorrection",
-        .binding = &shader_injection.tone_map_gamma_correction,
+        .binding = &RENODX_GAMMA_CORRECTION,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
         .label = "Gamma Correction",
@@ -85,7 +94,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueProcessor",
-        .binding = &shader_injection.tone_map_hue_processor,
+        .binding = &RENODX_TONE_MAP_HUE_PROCESSOR,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
         .label = "Hue Processor",
@@ -97,7 +106,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueCorrectionMethod",
-        .binding = &shader_injection.tone_map_hue_correction_method,
+        .binding = &CUSTOM_HUE_CORRECTION_METHOD,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
         .label = "Hue Correction Method",
@@ -109,7 +118,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueCorrection",
-        .binding = &shader_injection.tone_map_hue_correction,
+        .binding = &RENODX_TONE_MAP_HUE_CORRECTION,
         .default_value = 100.f,
         .label = "Hue Correction",
         .section = "Tone Mapping",
@@ -122,7 +131,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPerChannel",
-        .binding = &shader_injection.tone_map_per_channel,
+        .binding = &RENODX_TONE_MAP_PER_CHANNEL,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
         .label = "Per Channel",
@@ -133,7 +142,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
-        .binding = &shader_injection.color_grade_exposure,
+        .binding = &RENODX_TONE_MAP_EXPOSURE,
         .default_value = 1.f,
         .label = "Exposure",
         .section = "Color Grading",
@@ -142,7 +151,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
-        .binding = &shader_injection.color_grade_highlights,
+        .binding = &RENODX_TONE_MAP_HIGHLIGHTS,
         .default_value = 50.f,
         .label = "Highlights",
         .section = "Color Grading",
@@ -151,7 +160,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
-        .binding = &shader_injection.color_grade_shadows,
+        .binding = &RENODX_TONE_MAP_SHADOWS,
         .default_value = 50.f,
         .label = "Shadows",
         .section = "Color Grading",
@@ -160,7 +169,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
-        .binding = &shader_injection.color_grade_contrast,
+        .binding = &RENODX_TONE_MAP_CONTRAST,
         .default_value = 50.f,
         .label = "Contrast",
         .section = "Color Grading",
@@ -169,7 +178,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSaturation",
-        .binding = &shader_injection.color_grade_saturation,
+        .binding = &RENODX_TONE_MAP_SATURATION,
         .default_value = 50.f,
         .label = "Saturation",
         .section = "Color Grading",
@@ -178,7 +187,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
-        .binding = &shader_injection.color_grade_blowout,
+        .binding = &RENODX_TONE_MAP_BLOWOUT,
         .default_value = 50.f,
         .label = "Blowout",
         .section = "Color Grading",
@@ -189,7 +198,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
-        .binding = &shader_injection.color_grade_flare,
+        .binding = &RENODX_TONE_MAP_FLARE,
         .default_value = 50.f,
         .label = "Flare",
         .section = "Color Grading",
@@ -200,7 +209,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeColorSpace",
-        .binding = &shader_injection.color_grade_color_space,
+        .binding = &RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
         .label = "Color Space",
@@ -215,7 +224,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeLUTStrength",
-        .binding = &shader_injection.color_grade_lut_strength,
+        .binding = &CUSTOM_LUT_STRENGTH,
         .default_value = 100.f,
         .label = "LUT Strength",
         .section = "Color Grading",
@@ -224,7 +233,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "FXBloom",
-        .binding = &shader_injection.fx_bloom,
+        .binding = &CUSTOM_BLOOM,
         .default_value = 50.f,
         .label = "Bloom",
         .section = "Effects",
@@ -233,7 +242,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "FXVignette",
-        .binding = &shader_injection.fx_vignette,
+        .binding = &CUSTOM_VIGNETTE,
         .default_value = 50.f,
         .label = "Vignette",
         .section = "Effects",
@@ -242,7 +251,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "FXFilmGrain",
-        .binding = &shader_injection.fx_film_grain,
+        .binding = &CUSTOM_FILM_GRAIN_STRENGTH,
         .default_value = 50.f,
         .label = "Film Grain",
         .section = "Effects",
@@ -251,7 +260,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "FXHDRVideos",
-        .binding = &shader_injection.fx_hdr_videos,
+        .binding = &CUSTOM_HDR_VIDEOS,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
         .label = "HDR Videos",
@@ -317,8 +326,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   }
 }
 
-static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
-static float random_range = (random_generator.max() - random_generator.min());
+std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
+float random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
 
 void OnPresent(
     reshade::api::command_queue* queue,
@@ -327,9 +336,76 @@ void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-  shader_injection.random_1 = (float)(random_generator() + random_generator.min()) / random_range;
-  shader_injection.random_2 = (float)(random_generator() + random_generator.min()) / random_range;
-  shader_injection.random_3 = (float)(random_generator() + random_generator.min()) / random_range;
+  CUSTOM_RANDOM = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
+}
+
+std::unordered_set<uint32_t> g_dumped_shaders = {};
+
+bool OnDrawIndexedForMissingShaders(
+    reshade::api::command_list* cmd_list,
+    uint32_t index_count, uint32_t instance_count,
+    uint32_t first_index, int32_t vertex_offset, uint32_t first_instance) {
+  auto shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
+  auto pixel_shader_hash = shader_state.GetCurrentPixelShaderHash();
+  if (pixel_shader_hash == 0u) return false;
+
+  if (!renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list)) return false;
+
+  if (custom_shaders.contains(pixel_shader_hash)) return false;
+
+  if (g_dumped_shaders.contains(pixel_shader_hash)) return false;
+
+  reshade::log::message(
+      reshade::log::level::debug,
+      std::format("Dumping output shader: 0x{:08x}", pixel_shader_hash).c_str());
+
+  g_dumped_shaders.emplace(pixel_shader_hash);
+
+  renodx::utils::path::default_output_folder = "renodx";
+  renodx::utils::shader::dump::default_dump_folder = ".";
+  bool found = false;
+  try {
+    auto pair = shader_state.current_shader_pipelines.find(reshade::api::pipeline_stage::pixel_shader);
+    if (pair == shader_state.current_shader_pipelines.end()) return false;
+
+    auto pipeline = pair->second;
+    auto details = renodx::utils::shader::GetPipelineShaderDetails(cmd_list->get_device(), pipeline);
+    for (const auto& [subobject_index, shader_hash] : details->shader_hashes_by_index) {
+      // Store immediately in case pipeline destroyed before present
+      if (shader_hash != pixel_shader_hash) continue;
+      found = true;
+      auto shader_data = details->GetShaderData(shader_hash, subobject_index);
+      if (!shader_data.has_value()) {
+        std::stringstream s;
+        s << "utils::shader::dump(Failed to retreive shader data: ";
+        s << PRINT_CRC32(shader_hash);
+        s << ")";
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
+        return false;
+      }
+
+      auto shader_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data.value());
+      if (shader_version.GetMajor() == 0) {
+        // No shader information found
+        return false;
+      }
+
+      renodx::utils::shader::dump::DumpShader(
+          shader_hash,
+          shader_data.value(),
+          reshade::api::pipeline_subobject_type::pixel_shader,
+          "output_");
+    }
+    if (!found) throw std::exception("Pipeline not found");
+  } catch (...) {
+    std::stringstream s;
+    s << "utils::shader::dump(Failed to decode shader data: ";
+    s << PRINT_CRC32(pixel_shader_hash);
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+  }
+
+  return false;
 }
 
 }  // namespace
@@ -338,24 +414,31 @@ extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Final Fantasy 7 REMAKE INTEGRADE";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
+  if (fdw_reason == DLL_PROCESS_ATTACH && !reshade::register_addon(h_module)) return FALSE;
+
+  renodx::utils::shader::Use(fdw_reason);
+  renodx::utils::swapchain::Use(fdw_reason);
+
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
-      if (!reshade::register_addon(h_module)) return FALSE;
 
       renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
         return device->get_api() == reshade::api::device_api::d3d12;
       };
 
       renodx::mods::shader::allow_multiple_push_constants = true;
+      renodx::mods::shader::expected_constant_buffer_index = 13;
       renodx::mods::shader::expected_constant_buffer_space = 50;
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
+      reshade::register_event<reshade::addon_event::draw_indexed>(OnDrawIndexedForMissingShaders);
 
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+      reshade::unregister_event<reshade::addon_event::draw_indexed>(OnDrawIndexedForMissingShaders);
       reshade::unregister_addon(h_module);
       break;
   }
