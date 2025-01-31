@@ -2,10 +2,30 @@
 #define SRC_SHADERS_INVERSE_TONEMAP_HLSL_
 
 #include "./color.hlsl"
+#include "./math.hlsl"
 
 namespace renodx {
 namespace tonemap {
 namespace inverse {
+
+float3 ReinhardScalable(float3 color, float channel_max = 1.f, float channel_min = 0.f, float gray_in = 0.18f, float gray_out = 0.18f) {
+  float exposure = (channel_max * (channel_min * gray_out + channel_min - gray_out))
+                   / (gray_in * (gray_out - channel_max));
+
+  float3 numerator = -channel_max * (channel_min * color + channel_min - color);
+  float3 denominator = (exposure * (channel_max - color));
+  return renodx::math::DivideSafe(numerator, denominator, renodx::math::FLT16_MAX);
+}
+
+float ReinhardScalable(float color, float channel_max = 1.f, float channel_min = 0.f, float gray_in = 0.18f, float gray_out = 0.18f) {
+  float exposure = (channel_max * (channel_min * gray_out + channel_min - gray_out))
+                   / (gray_in * (gray_out - channel_max));
+
+  float numerator = -channel_max * (channel_min * color + channel_min - color);
+  float denominator = (exposure * (channel_max - color));
+  return renodx::math::DivideSafe(numerator, denominator, renodx::math::FLT16_MAX);
+}
+
 namespace bt2446a {
 // BT2446A method
 // Input color should be SDR at 100 nits in BT.1886 (2.4)
