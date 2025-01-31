@@ -127,26 +127,13 @@ static void OnBindPipeline(
     reshade::api::pipeline pipeline) {
   auto& data = cmd_list->get_private_data<CommandListData>();
   auto& state = data.current_state;
-  for (auto stage : {
-           reshade::api::pipeline_stage::vertex_shader,
-           reshade::api::pipeline_stage::hull_shader,
-           reshade::api::pipeline_stage::domain_shader,
-           reshade::api::pipeline_stage::geometry_shader,
-           reshade::api::pipeline_stage::pixel_shader,
-           reshade::api::pipeline_stage::compute_shader,
-           reshade::api::pipeline_stage::amplification_shader,
-           reshade::api::pipeline_stage::mesh_shader,
-           reshade::api::pipeline_stage::ray_tracing_shader,
-           reshade::api::pipeline_stage::input_assembler,
-           reshade::api::pipeline_stage::stream_output,
-           reshade::api::pipeline_stage::rasterizer,
-           reshade::api::pipeline_stage::depth_stencil,
-           reshade::api::pipeline_stage::output_merger,
-       }) {
-    if (renodx::utils::bitwise::HasFlag(stages, stage)) {
-      state.pipelines[stages] = pipeline;
-    }
+
+  if (stages == reshade::api::pipeline_stage::all) {
+    state.pipelines.clear();
+    if (pipeline.handle == 0u) return;
   }
+
+  state.pipelines[stages] = pipeline;
 }
 
 static void OnBindPipelineStates(
