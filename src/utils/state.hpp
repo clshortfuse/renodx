@@ -144,11 +144,7 @@ static void OnBindPipeline(
            reshade::api::pipeline_stage::output_merger,
        }) {
     if (renodx::utils::bitwise::HasFlag(stages, stage)) {
-      if (pipeline.handle == 0u) {
-        state.pipelines.erase(stage);
-      } else {
-        state.pipelines[stages] = pipeline;
-      }
+      state.pipelines[stages] = pipeline;
     }
   }
 }
