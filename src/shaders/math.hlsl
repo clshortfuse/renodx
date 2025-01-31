@@ -104,6 +104,12 @@ float3 DivideSafe(float3 dividend, float3 divisor) {
                 DivideSafe(dividend.z, divisor.z, FLT_MAX * Sign(dividend.z)));
 }
 
+float3 DivideSafe(float3 dividend, float3 divisor, float fallback) {
+  return float3(DivideSafe(dividend.x, divisor.x, fallback),
+                DivideSafe(dividend.y, divisor.y, fallback),
+                DivideSafe(dividend.z, divisor.z, fallback));
+}
+
 float3 DivideSafe(float3 dividend, float3 divisor, float3 fallback) {
   return float3(DivideSafe(dividend.x, divisor.x, fallback.x),
                 DivideSafe(dividend.y, divisor.y, fallback.y),
