@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "./bitwise.hpp"
 #include "./resource.hpp"
 
 namespace renodx::utils::state {
@@ -126,7 +127,30 @@ static void OnBindPipeline(
     reshade::api::pipeline pipeline) {
   auto& data = cmd_list->get_private_data<CommandListData>();
   auto& state = data.current_state;
-  state.pipelines[stages] = pipeline;
+  for (auto stage : {
+           reshade::api::pipeline_stage::vertex_shader,
+           reshade::api::pipeline_stage::hull_shader,
+           reshade::api::pipeline_stage::domain_shader,
+           reshade::api::pipeline_stage::geometry_shader,
+           reshade::api::pipeline_stage::pixel_shader,
+           reshade::api::pipeline_stage::compute_shader,
+           reshade::api::pipeline_stage::amplification_shader,
+           reshade::api::pipeline_stage::mesh_shader,
+           reshade::api::pipeline_stage::ray_tracing_shader,
+           reshade::api::pipeline_stage::input_assembler,
+           reshade::api::pipeline_stage::stream_output,
+           reshade::api::pipeline_stage::rasterizer,
+           reshade::api::pipeline_stage::depth_stencil,
+           reshade::api::pipeline_stage::output_merger,
+       }) {
+    if (renodx::utils::bitwise::HasFlag(stages, stage)) {
+      if (pipeline.handle == 0u) {
+        state.pipelines.erase(stage);
+      } else {
+        state.pipelines[stages] = pipeline;
+      }
+    }
+  }
 }
 
 static void OnBindPipelineStates(
