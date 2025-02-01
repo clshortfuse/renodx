@@ -93,9 +93,9 @@ float3 ToneMap(float3 color, float2 position) {
   config.reno_drt_shadows = 1.0f;
   config.reno_drt_contrast = 1.1f;
   config.reno_drt_saturation = 1.0f;
-  config.reno_drt_dechroma = 0;  // 0.80f;  // 0.80f
-  config.reno_drt_blowout = RENODX_TONE_MAP_BLOWOUT;
-  config.reno_drt_flare = 0.10 * RENODX_TONE_MAP_FLARE;
+  config.reno_drt_blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
+  config.reno_drt_dechroma = RENODX_TONE_MAP_BLOWOUT;
+  config.reno_drt_flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
   config.reno_drt_working_color_space = 2u;
   config.reno_drt_per_channel = RENODX_TONE_MAP_PER_CHANNEL != 0;
 

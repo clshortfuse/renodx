@@ -276,15 +276,46 @@ void main(
         r4.xyz = renodx::color::gamma::Encode(r4.xyz);
         r4.xyz = renodx::draw::UpscaleVideoPass(r4.xyz);
         r4.xyz = renodx::color::gamma::DecodeSafe(r4.xyz);
+      } else if (CUSTOM_HDR_VIDEOS == 2.f) {
+        float y = renodx::color::y::from::BT709(r4.xyz);
+        float untonemapped_y = renodx::tonemap::inverse::Reinhard(y);
+        float3 untonemapped = r4.xyz * renodx::math::DivideSafe(untonemapped_y, y, 0);
+        renodx::tonemap::renodrt::Config hdr_video_config = renodx::tonemap::renodrt::config::Create();
+        float peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+        hdr_video_config.nits_peak = peak * 100.f;
+        hdr_video_config.mid_gray_value = 0.18f;
+        hdr_video_config.mid_gray_nits = 18.f;
+        hdr_video_config.exposure = 1.0f;
+        hdr_video_config.contrast = 1.0f;
+        hdr_video_config.saturation = 1.1f;
+        hdr_video_config.highlights = 1.0f;
+        hdr_video_config.shadows = 1.0f;
+
+        hdr_video_config.blowout = -0.01f;
+        hdr_video_config.dechroma = 0;
+        hdr_video_config.flare = 0;
+
+        hdr_video_config.tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
+        hdr_video_config.hue_correction_type = renodx::tonemap::renodrt::config::hue_correction_type::CUSTOM;
+        hdr_video_config.hue_correction_source = r4.xyz;
+        hdr_video_config.per_channel = false;
+        hdr_video_config.working_color_space = 2u;
+        hdr_video_config.clamp_peak = 2u;
+        hdr_video_config.clamp_color_space = -1.f;
+        r4.xyz = renodx::tonemap::renodrt::BT709(untonemapped, hdr_video_config);
+      }
+
+      if (RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE == renodx::draw::COLOR_SPACE_CUSTOM_BT709D93) {
+        r4.xyz = renodx::color::bt709::from::BT709D93(r4.xyz);
       }
 
       r5.x = dot(float3(0.627403915, 0.329282999, 0.0433131009), r4.xyz);
       r5.y = dot(float3(0.0690973029, 0.919540584, 0.0113623003), r4.xyz);
       r5.z = dot(float3(0.0163914002, 0.0880132988, 0.895595312), r4.xyz);
 
-      r3.yzw = float3(250, 250, 250) * r5.xyz;
+      // r3.yzw = float3(250, 250, 250) * r5.xyz;
 
-      r3.yzw = RENODX_GRAPHICS_WHITE_NITS * r5.xyz;
+      r3.yzw = RENODX_DIFFUSE_WHITE_NITS * r5.xyz;
     }
 
     // T5 = video
