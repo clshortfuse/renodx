@@ -66,16 +66,6 @@ float Average(float3 color) {
   return (color.x + color.y + color.z) / 3.f;
 }
 
-#if __HLSL_VERSION >= 2021
-template <typename T>
-T DivideSafe(T dividend, T divisor) {
-  return select(divisor == 0.f, FLT_MAX * Sign(dividend), dividend / divisor);
-}
-template <typename T>
-T DivideSafe(T dividend, T divisor, T fallback) {
-  return select(divisor == 0.f, fallback, dividend / divisor);
-}
-#else
 float DivideSafe(float dividend, float divisor) {
   return (divisor == 0.f)
              ? FLT_MAX * Sign(dividend)
@@ -104,18 +94,11 @@ float3 DivideSafe(float3 dividend, float3 divisor) {
                 DivideSafe(dividend.z, divisor.z, FLT_MAX * Sign(dividend.z)));
 }
 
-float3 DivideSafe(float3 dividend, float3 divisor, float fallback) {
-  return float3(DivideSafe(dividend.x, divisor.x, fallback),
-                DivideSafe(dividend.y, divisor.y, fallback),
-                DivideSafe(dividend.z, divisor.z, fallback));
-}
-
 float3 DivideSafe(float3 dividend, float3 divisor, float3 fallback) {
   return float3(DivideSafe(dividend.x, divisor.x, fallback.x),
                 DivideSafe(dividend.y, divisor.y, fallback.y),
                 DivideSafe(dividend.z, divisor.z, fallback.z));
 }
-#endif
 
 }  // namespace math
 }  // namespace renodx
