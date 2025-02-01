@@ -112,9 +112,6 @@ float4 main(PSSceneIn input) : SV_TARGET {
   };
 
   float3 outputColor = inputColor.rgb;
-  if (injectedData.toneMapGammaCorrection == 2.f) {
-    outputColor = renodx::color::correct::GammaSafe(inputColor.rgb);
-  }
   outputColor = convertColor(outputColor.rgb, params);
   
 #if 0

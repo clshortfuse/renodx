@@ -384,7 +384,7 @@ void comp_main() {
     if (cb6[2u].x > 0.0f) {
       float4 _1797 = _17.SampleLevel(_46, float2(_1419, 1.0f - _1420), 0.0f);
 
-      if (injectedData.toneMapGammaCorrection == 1.f) {
+      if (injectedData.toneMapGammaCorrection >= 1.f) {
         _1797 = pow(renodx::color::srgb::Encode(max(0, _1797)), 2.2f);
       }
 
@@ -427,7 +427,7 @@ void comp_main() {
       float4 _2124 = _13.SampleLevel(_46, float2((cb6[8u].x * _1423) + _1419, (cb6[8u].y * _1424) + _1420), 4.0f);
 
       // Custom
-      if (injectedData.toneMapGammaCorrection == 1.f) {
+      if (injectedData.toneMapGammaCorrection >= 1.f) {
         _2072 = pow(renodx::color::srgb::Encode(max(0, _2072)), 2.2f);
         _2076 = pow(renodx::color::srgb::Encode(max(0, _2076)), 2.2f);
         _2083 = pow(renodx::color::srgb::Encode(max(0, _2083)), 2.2f);

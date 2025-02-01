@@ -346,7 +346,7 @@ void comp_main() {
       float4 _1610 = _17.SampleLevel(_45, float2(_1232, 1.0f - _1233), 0.0f);
 
       // Custom
-      if (injectedData.toneMapGammaCorrection == 1.f) {
+      if (injectedData.toneMapGammaCorrection >= 1.f) {
         _1610 = renodx::color::correct::GammaSafe(_1610);
       }
 
@@ -389,7 +389,7 @@ void comp_main() {
       float4 _1937 = _13.SampleLevel(_45, float2((cb6[8u].x * _1236) + _1232, (cb6[8u].y * _1237) + _1233), 4.0f);
 
       // Custom
-      if (injectedData.toneMapGammaCorrection == 1.f) {
+      if (injectedData.toneMapGammaCorrection >= 1.f) {
         _1885 = renodx::color::correct::GammaSafe(_1885);
         _1889 = renodx::color::correct::GammaSafe(_1889);
         _1896 = renodx::color::correct::GammaSafe(_1896);
@@ -853,16 +853,16 @@ void comp_main() {
   float3 outputColor1 = float3(_581, _583, _585);
   if (asuint(cb6[13u].y) != 0u) {
     ConvertColorParams params = {
-        outputTypeEnum,  // outputTypeEnum
-        cb6[14u].x,      // paperWhiteScaling
-        cb6[14u].y,      // blackFloorAdjust
-        cb6[14u].z,      // gammaCorrection
-        cb6[16u].x,      // pqSaturation
-        float3x3(
-            cb6[22u].x, cb6[22u].y, cb6[22u].z,
-            cb6[23u].x, cb6[23u].y, cb6[23u].z,
-            cb6[24u].x, cb6[24u].y, cb6[24u].z),                             // pqMatrix
-        float3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, cb0[0u].x)  // random3
+      outputTypeEnum,  // outputTypeEnum
+      cb6[14u].x,      // paperWhiteScaling
+      cb6[14u].y,      // blackFloorAdjust
+      cb6[14u].z,      // gammaCorrection
+      cb6[16u].x,      // pqSaturation
+      float3x3(
+          cb6[22u].x, cb6[22u].y, cb6[22u].z,
+          cb6[23u].x, cb6[23u].y, cb6[23u].z,
+          cb6[24u].x, cb6[24u].y, cb6[24u].z),                             // pqMatrix
+      float3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, cb0[0u].x)  // random3
     };
     outputColor1 = convertColor(outputColor1, params);
   }
@@ -872,16 +872,16 @@ void comp_main() {
   if (asuint(cb6[15u]).x != 0u) {
     float3 outputColor2 = float3(_290, _293, _295);
     ConvertColorParams params = {
-        outputTypeEnum,  // outputTypeEnum
-        cb6[15u].y,      // paperWhiteScaling
-        cb6[15u].z,      // blackFloorAdjust
-        cb6[15u].w,      // gammaCorrection
-        cb6[16u].x,      // pqSaturation
-        float3x3(
-            cb6[26u].x, cb6[26u].y, cb6[26u].z,
-            cb6[27u].x, cb6[27u].y, cb6[27u].z,
-            cb6[28u].x, cb6[28u].y, cb6[28u].z),                             // pqMatrix
-        float3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, cb0[0u].x)  // random3
+      outputTypeEnum,  // outputTypeEnum
+      cb6[15u].y,      // paperWhiteScaling
+      cb6[15u].z,      // blackFloorAdjust
+      cb6[15u].w,      // gammaCorrection
+      cb6[16u].x,      // pqSaturation
+      float3x3(
+          cb6[26u].x, cb6[26u].y, cb6[26u].z,
+          cb6[27u].x, cb6[27u].y, cb6[27u].z,
+          cb6[28u].x, cb6[28u].y, cb6[28u].z),                             // pqMatrix
+      float3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, cb0[0u].x)  // random3
     };
 
     outputColor2 = convertColor(outputColor2, params);
@@ -889,7 +889,8 @@ void comp_main() {
   }
 }
 
-[numthreads(16, 16, 1)] void main(SPIRV_Cross_Input stage_input) {
+[numthreads(16, 16, 1)]
+void main(SPIRV_Cross_Input stage_input) {
   gl_GlobalInvocationID = stage_input.gl_GlobalInvocationID;
   comp_main();
 }

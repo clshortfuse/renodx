@@ -574,11 +574,9 @@ float4 tonemap(bool isACESMode = false) {
 
       if (injectedData.toneMapGammaCorrection == 2.f) {
         outputRGB = renodx::color::correct::GammaSafe(outputRGB);
-        outputRGB *= config.game_nits / 100.f;
-        outputRGB = renodx::color::correct::GammaSafe(outputRGB, true);
-      } else {
-        outputRGB *= config.game_nits / 100.f;
       }
+
+      outputRGB *= config.game_nits / 100.f;
     }
 
   } else {
