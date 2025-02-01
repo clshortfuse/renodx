@@ -92,8 +92,13 @@ void main(
     r1.z = r0.w ? 31 : 0;
     r3.xy = r0.ww ? float2(0.03125, 0.015625) : float2(1, 0.5);
     r0.w = r3.x * r1.z;
-    r3.xyz = r4.xyz * r0.www + r3.yyy;  // Texel Centering
-    r3.xyz = t2.SampleLevel(s1_s, r3.xyz, 0).xyz;
+
+    if (CUSTOM_LUT_TETRAHEDRAL == 1.f) {
+      r3.xyz = renodx::lut::SampleTetrahedral(t2, r4.xyz, 32.f);
+    } else {
+      r3.xyz = r4.xyz * r0.www + r3.yyy;  // Texel Centering
+      r3.xyz = t2.SampleLevel(s1_s, r3.xyz, 0).xyz;
+    }
 
     float3 t2Sample = r3.xyz;
 
@@ -136,10 +141,15 @@ void main(
     r1.z = r0.w ? 31.000000 : 0;
     r3.xy = r0.ww ? float2(0.03125, 0.015625) : float2(1, 0.5);
     r0.w = r3.x * r1.z;
-    r3.xzw = r2.xyz * r0.www + r3.yyy;  // Texel Centering
 
     // Sample LUT2 with selected output from before
-    r3.xzw = t3.SampleLevel(s1_s, r3.xzw, 0).xyz;
+    if (CUSTOM_LUT_TETRAHEDRAL == 1.f) {
+      r3.xyz = renodx::lut::SampleTetrahedral(t2, r2.xyz, 32.f);
+    } else {
+      r3.xzw = r2.xyz * r0.www + r3.yyy;  // Texel Centering
+      r3.xzw = t3.SampleLevel(s1_s, r3.xzw, 0).xyz;
+    }
+
     float3 t3Sample = r3.xzw;
 
     // LUT2 PQ output => Linear
@@ -178,37 +188,8 @@ void main(
 
     r2.xyz = cb0[26].zzz * r2.xyz + r3.xzw;
 
-    float3 graded_aces = r2.xyz;
-
     if (RENODX_TONE_MAP_TYPE != 0) {
-      float3 color = t1Sample * 1.5f;
-
-      if (CUSTOM_LUT_STRENGTH != 0) {
-        renodx::tonemap::Config aces_config = renodx::tonemap::config::Create();
-        aces_config.peak_nits = 1000.f;
-        aces_config.game_nits = 100.f;
-        aces_config.mid_gray_nits = 18.f;
-        aces_config.gamma_correction = 0;
-        // float3 reference_aces = renodx::color::srgb::DecodeSafe(RgbAcesHdrSrgb(color));
-        float3 reference_aces = renodx::tonemap::config::ApplyACES(color, aces_config);
-
-        graded_aces = renodx::color::bt709::from::BT2020(r2.xyz / (250.f));
-
-        float3 color_graded;
-        if (RENODX_TONE_MAP_PER_CHANNEL == 1.f) {
-          color_graded = UpgradeToneMapPerChannel(color, reference_aces, graded_aces, 1);
-        } else {
-          color_graded = UpgradeToneMapByLuminance(color, reference_aces, graded_aces, 1);
-        }
-
-        float3 lut_color = color_graded;
-        // lut_color = corrected;
-
-        color = lerp(color, lut_color, CUSTOM_LUT_STRENGTH);
-      }
-      color = ToneMap(color, v0.xy / cb0[34].zw);
-
-      r2.xyz = color;
+      r2.xyz = ToneMap(t1Sample, r2.xyz, v0.xy / cb0[34].zw);
     }
 
     // Video

@@ -33,11 +33,12 @@
 // #define RENODX_SWAP_CHAIN_ENCODING             shader_injection.swap_chain_encoding
 // #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
 #define CUSTOM_LUT_STRENGTH          shader_injection.custom_lut_strength
+#define CUSTOM_LUT_TETRAHEDRAL       shader_injection.custom_lut_tetrahedral
 #define CUSTOM_HUE_CORRECTION_METHOD shader_injection.custom_hue_correction_method
 #define CUSTOM_FILM_GRAIN_STRENGTH   shader_injection.custom_film_grain_strength
 #define CUSTOM_BLOOM                 shader_injection.custom_bloom
 #define CUSTOM_HDR_VIDEOS            shader_injection.custom_hdr_videos
-#define CUSTOM_LUT_TETRAHEDRAL       shader_injection.custom_lut_tetrahedral
+#define CUSTOM_LUT_EXTRACTION        shader_injection.custom_lut_extraction
 #define CUSTOM_VIGNETTE              shader_injection.custom_vignette
 #define CUSTOM_RANDOM                shader_injection.custom_random
 
@@ -68,6 +69,8 @@ struct ShaderInjectData {
   float swap_chain_custom_color_space;
   float custom_hue_correction_method;
   float custom_lut_strength;
+  float custom_lut_tetrahedral;
+  float custom_lut_extraction;
   float custom_bloom;
   float custom_vignette;
   float custom_film_grain_strength;

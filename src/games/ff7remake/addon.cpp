@@ -195,7 +195,6 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
@@ -210,7 +209,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
         .binding = &RENODX_TONE_MAP_FLARE,
-        .default_value = 50.f,
+        .default_value = 0.f,
         .label = "Flare",
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
@@ -241,6 +240,27 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeLUTSampling",
+        .binding = &CUSTOM_LUT_TETRAHEDRAL,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "LUT Sampling",
+        .section = "Color Grading",
+        .labels = {"Trilinear", "Tetrahedral"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeLUTExtraction",
+        .binding = &CUSTOM_LUT_EXTRACTION,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "LUT Extraction",
+        .section = "Color Grading",
+        .tooltip = "Selects method for applying original LUT."
+                   "\nScale uses the original tonemapping."
+                   "\nReconstruct extracts ACES from the LUT.",
+        .labels = {"Scale", "Reconstruct"},
     },
     new renodx::utils::settings::Setting{
         .key = "FXBloom",
@@ -318,7 +338,8 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeColorSpace", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeLutStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeLUTSampling", 0.f);
   renodx::utils::settings::UpdateSetting("FXBloom", 50.f);
   renodx::utils::settings::UpdateSetting("FXVignette", 50.f);
   renodx::utils::settings::UpdateSetting("FXFilmGrain", 0.f);
