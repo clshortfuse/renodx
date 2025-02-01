@@ -26,6 +26,14 @@ float ReinhardScalable(float color, float channel_max = 1.f, float channel_min =
   return renodx::math::DivideSafe(numerator, denominator, renodx::math::FLT16_MAX);
 }
 
+float3 Reinhard(float3 color) {
+  return renodx::math::DivideSafe(color, (1.f - color), renodx::math::FLT16_MAX);
+}
+
+float Reinhard(float color) {
+  return renodx::math::DivideSafe(color, (1.f - color), renodx::math::FLT16_MAX);
+}
+
 namespace bt2446a {
 // BT2446A method
 // Input color should be SDR at 100 nits in BT.1886 (2.4)
