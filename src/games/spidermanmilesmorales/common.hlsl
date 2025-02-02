@@ -119,8 +119,12 @@ float3 UpgradeToneMap(float3 color_hdr, float3 color_sdr, float3 post_process_co
 }
 
 float OverrideGamma() {
-  if (RENODX_GAMMA_ADJUST_TYPE) return RENODX_GAMMA_ADJUST_VALUE;
-  return ToneMapCBuffer_m0[3u].w * RENODX_GAMMA_ADJUST_VALUE;
+  [branch]
+  if (RENODX_GAMMA_ADJUST_TYPE) {
+    return RENODX_GAMMA_ADJUST_VALUE;
+  } else {
+    return ToneMapCBuffer_m0[3u].w * RENODX_GAMMA_ADJUST_VALUE;
+  }
 }
 
 static float m_HdrGamma = OverrideGamma();
