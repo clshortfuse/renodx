@@ -56,11 +56,11 @@ void composite2_sample(Texture3D<float3> textureLUT[3], SamplerState sampler0,
 
 void composite2_global(in float4 global_values,
                        inout float out_r, inout float out_g, inout float out_b) {
-  out_r *= lerp(1.f, global_values.w, injectedData.processingGlobalGain);
-  out_g *= lerp(1.f, global_values.w, injectedData.processingGlobalGain);
-  out_b *= lerp(1.f, global_values.w, injectedData.processingGlobalGain);
+  // out_r *= lerp(1.f, global_values.w, injectedData.processingGlobalGain);
+  // out_g *= lerp(1.f, global_values.w, injectedData.processingGlobalGain);
+  // out_b *= lerp(1.f, global_values.w, injectedData.processingGlobalGain);
 
-  out_r += global_values.r * injectedData.processingGlobalLift;
-  out_g += global_values.g * injectedData.processingGlobalLift;
-  out_b += global_values.b * injectedData.processingGlobalLift;
+  // out_r += global_values.r * injectedData.processingGlobalLift;
+  // out_g += global_values.g * injectedData.processingGlobalLift;
+  // out_b += global_values.b * injectedData.processingGlobalLift;
 }

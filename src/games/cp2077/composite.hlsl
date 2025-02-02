@@ -53,8 +53,8 @@ float3 composite(bool useTexArray = false) {
   float bloomSize = dot(float2(bloomWidth, bloomHeight), float2(bloomWidth, bloomHeight));
   float3 bloomStrength = cb6[0u].rgb * injectedData.fxBloom;
   float inputGain = cb6[0u].w;
-  float postBloomGain = lerp(1.f, cb6[11u].w, injectedData.processingGlobalGain);
-  float3 postBloomLift = cb6[11u].rgb * injectedData.processingGlobalLift;
+  float postBloomGain = lerp(1.f, cb6[11u].w, 1.f);  // injectedData.processingGlobalGain
+  float3 postBloomLift = cb6[11u].rgb * 1.f;         // injectedData.processingGlobalLift
   float3 inputColor;
   float3 bloomColor;
   if (useTexArray) {
