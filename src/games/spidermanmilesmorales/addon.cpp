@@ -11,7 +11,7 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-#include <embed/0xB5DBD65C.h>  // Tonemap + Postfx
+#include <embed/shaders.h>
 
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
@@ -22,54 +22,59 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xB5DBD65C),  // Tonemap + Postfx
+    CustomShaderEntry(0xECBD5D23),  // Tonemap + Postfx - Chromatic Aberration Off
 };
-
-ShaderInjectData shader_injection;
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
-        .key = "toneMapGammaAdjustType",
-        .binding = &RENODX_GAMMA_ADJUST_TYPE,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1.f,
-        .can_reset = false,
-        .label = "Gamma Adjustment Type",
-        .section = "Tone Mapper Parameters",
-        .tooltip = "Sets the style of Gamma Adjustment, multiplier multiplies the value set by the game by the slider, while fixed overrides it to the value set by the slider",
-        .labels = {"Multiplier", "Fixed"},
-    },
-    new renodx::utils::settings::Setting{
-        .key = "toneMapGammaAdjust",
-        .binding = &RENODX_GAMMA_ADJUST_VALUE,
-        .default_value = 2.2f,
-        .label = "Gamma Adjustment",
-        .section = "Tone Mapping",
-        .tooltip = "Adjusts gamma",
-        .min = 1.f,
-        .max = 3.f,
-        .format = "%.1f",
-    },
-    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Get more RenoDX mods!",
-        .section = "About",
-        .group = "button-line-1",
+        .label = "Discord",
+        .section = "Links",
+        .group = "button-line-2",
         .tint = 0x5865F2,
         .on_change = []() {
-          system("start https://github.com/clshortfuse/renodx/wiki/Mods");
+          renodx::utils::platform::Launch(
+              "https://discord.gg/"
+              "5WZXDpmbpP");
         },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "More Mods",
+        .section = "Links",
+        .group = "button-line-2",
+        .tint = 0x2B3137,
+        .on_change = []() {
+          renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx/wiki/Mods");
+        },
+
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Github",
+        .section = "Links",
+        .group = "button-line-2",
+        .tint = 0x2B3137,
+        .on_change = []() {
+          renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Musa's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-3",
+        .tint = 0xFF5A16,
+        .on_change = []() { renodx::utils::platform::Launch("https://ko-fi.com/musaqh"); },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+        .label = std::string("Adding sliders was causing the game to crash so I hardcoded the fixes."
+                             "\nCheck the mod page for details about the fixes."),
         .section = "About",
     },
 };
 
-void OnPresetOff() {
-  renodx::utils::settings::UpdateSetting("toneMapGammaAdjust", 1.f);
-  renodx::utils::settings::UpdateSetting("toneMapGammaAdjustType", 0.f);
-}
 }  // namespace
 
 // NOLINTBEGIN(readability-identifier-naming)
@@ -83,8 +88,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
 
-    //   renodx::mods::shader::allow_multiple_push_constants = true;
       renodx::mods::shader::expected_constant_buffer_space = 50;
+      renodx::utils::settings::use_presets = false;
 
       if (!reshade::register_addon(h_module)) return FALSE;
       break;
@@ -93,8 +98,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
-  renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx::utils::settings::Use(fdw_reason, &settings);
+  renodx::mods::shader::Use(fdw_reason, custom_shaders);
 
   return TRUE;
 }
