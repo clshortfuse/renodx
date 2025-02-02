@@ -1,0 +1,162 @@
+#include "./common.hlsl"
+
+// https://github.com/Unity-Technologies/Graphics/blob/e42df452b62857a60944aed34f02efa1bda50018/com.unity.postprocessing/PostProcessing/Shaders/Builtins/Lut3DBaker.compute
+// KGenLUT3D_AcesTonemap
+
+Texture2D<float4> t0 : register(t0);
+SamplerState s0_s : register(s0);
+RWTexture3D<float4> u0 : register(u0);
+cbuffer cb0 : register(b0) {
+  float4 cb0[10];
+}
+
+#define cmp -
+
+[numthreads(4, 4, 4)]
+void main(uint3 vThreadID: SV_DispatchThreadID) {
+  float4 r0, r1, r2, r3;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+
+  r0.rgb = (uint3)vThreadID.rgb;
+  r1.rgb = cmp(r0.rgb < cb0[0].rrr);
+  r0.a = r1.g ? r1.r : 0;
+  r0.a = r1.b ? r0.a : 0;
+  if (r0.a != 0) {
+    // (start) ColorGrade
+    r0.rgb = r0.rgb * cb0[0].ggg;
+    r0.rgb = lutShaper(r0.rgb, true);
+    // unity_to_ACES(r0.rgb)
+    r1.r = dot(float3(0.439701, 0.382978, 0.177335), r0.rgb);
+    r1.g = dot(float3(0.0897923, 0.813423, 0.0967616), r0.rgb);
+    r1.b = dot(float3(0.017544, 0.111544, 0.870704), r0.rgb);
+    float3 preCG = r1.rgb;
+    // ACEScc (log) space
+    // ACES_to_ACEScc(r1.rgb)
+    r0.rgb = max(0, r1.rgb);
+    r0.rgb = min(r0.rgb, 65504);
+    r1.rgb = cmp(r0.rgb < float3(0.0000305175708, 0.0000305175708, 0.0000305175708));
+    r2.rgb = r0.rgb * float3(0.5, 0.5, 0.5) + float3(0.0000152587800, 0.0000152587800, 0.0000152587800);
+    r2.rgb = log2(r2.rgb);
+    r2.rgb = r2.rgb + float3(9.72, 9.72, 9.72);
+    r2.rgb = r2.rgb * float3(0.0570776239, 0.0570776239, 0.0570776239);
+    r0.rgb = log2(r0.rgb);
+    r0.rgb = r0.rgb + float3(9.72, 9.72, 9.72);
+    r0.rgb = r0.rgb * float3(0.0570776239, 0.0570776239, 0.0570776239);
+    r0.rgb = r1.rgb ? r2.rgb : r0.rgb;
+    // (start) LogGrade
+    // Contrast(r0.rgb, ACEScc_MIDGRAY, cb0[3].b)
+    r0.rgb = r0.rgb + float3(-0.413588405, -0.413588405, -0.413588405);
+    r0.rgb = r0.rgb * cb0[3].bbb + float3(0.413588405, 0.413588405, 0.413588405);
+    // ACEScc_to_ACES(r0.rgb)
+    r1.rgb = r0.rgb * float3(17.52, 17.52, 17.52) + float3(-9.72, -9.72, -9.72);
+    r1.rgb = exp2(r1.rgb);
+    r2.rgb = r1.rgb + float3(-0.0000152587891, -0.0000152587891, -0.0000152587891);
+    r2.rgb = r2.rgb + r2.rgb;
+    r3.rgba = cmp(r0.rrgg < float4(-0.301369876, 1.46799636, -0.301369876, 1.46799636));
+    r0.rg = r3.ga ? r1.rg : float2(65504, 65504);
+    r3.rg = r3.rb ? r2.rg : r0.rg;
+    r0.rg = cmp(r0.bb < float2(-0.301369876, 1.46799636));
+    r0.g = r0.g ? r1.b : 65504;
+    r3.b = r0.r ? r2.b : r0.g;
+    // ACES_to_ACEScg
+    r0.r = dot(float3(1.4514393161, -0.2365107469, -0.2149285693), r3.rgb);
+    r0.g = dot(float3(-0.0765537734, 1.1762296998, -0.0996759264), r3.rgb);
+    r0.b = dot(float3(0.0083161484, -0.0060324498, 0.9977163014), r3.rgb);
+    // (start) LinearGrade
+    // WhiteBalance(r0.rgb, cb0[1].rgb)
+    r1.r = dot(float3(0.390405, 0.549941, 0.00892632), r0.rgb);
+    r1.g = dot(float3(0.0708416, 0.963172, 0.00135775), r0.rgb);
+    r1.b = dot(float3(0.0231082, 0.128021, 0.936245), r0.rgb);
+    r0.rgb = r1.rgb * cb0[1].rgb;
+    r1.r = dot(float3(2.858470, -1.628790, -0.024891), r0.rgb);
+    r1.g = dot(float3(-0.210182, 1.158200, 0.000324281), r0.rgb);
+    r1.b = dot(float3(-0.041812, -0.118169, 1.068670), r0.rgb);
+    // ColorFilter
+    r0.rgb = r1.rgb * cb0[2].rgb;
+    // ChannelMixer(r0.rgb, cb0[4].rgb, cb0[5].rgb, cb0[6].rgb)
+    r1.r = dot(r0.rgb, cb0[4].rgb);
+    r1.g = dot(r0.rgb, cb0[5].rgb);
+    r1.b = dot(r0.rgb, cb0[6].rgb);
+    // LiftGammaGainHDR(r1.rgb, cb0[7].rgb, cb0[8].rgb, cb0[9].rgb)
+    r0.rgb = r1.rgb * cb0[9].rgb + cb0[7].rgb;
+    r1.rgb = saturate(r1.rgb * renodx::math::FLT_MAX + 0.5) * 2.0 - 1.0;
+    r0.rgb = pow(abs(r0.rgb), cb0[8].rgb);
+    r0.rgb = r0.rgb * r1.rgb;
+    // Do NOT feed negative values to RgbToHsv or they'll wrap around
+    r0.rgb = max(0, r0.rgb);
+    // RgbToHsv
+    r0.a = cmp(r0.g >= r0.b);
+    r0.a = r0.a ? 1.00000 : 0;
+    r1.rg = r0.bg;
+    r1.ba = float2(-1, 0.666666687);
+    r2.rg = r0.gb + -r1.rg;
+    r2.ba = float2(1, -1);
+    r1.rgba = r0.aaaa * r2.rgba + r1.rgba;
+    r0.a = cmp(r0.r >= r1.r);
+    r0.a = r0.a ? 1.00000 : 0;
+    r2.rgb = r1.rga;
+    r2.a = r0.r;
+    r1.rga = r2.agr;
+    r1.rgba = -r2.rgba + r1.rgba;
+    r1.rgba = r0.aaaa * r1.rgba + r2.rgba;
+    r0.a = min(r1.g, r1.a);
+    r0.a = -r0.a + r1.r;
+    r1.g = -r1.g + r1.a;
+    r1.a = r0.a * 6 + 0.0001;
+    r1.g = r1.g / r1.a;
+    r1.g = r1.g + r1.b;
+    r2.r = abs(r1.g);
+    r1.g = r1.r + 0.0001;
+    r2.b = r0.a / r1.g;
+    // Hue Vs Sat
+    r2.ga = float2(0.25, 0.25);
+    r0.a = t0.SampleLevel(s0_s, r2.rg, 0).g;
+    r0.a = saturate(r0.a);
+    r0.a = r0.a + r0.a;
+    // Sat Vs Sat
+    r1.g = t0.SampleLevel(s0_s, r2.ba, 0).b;
+    r1.g = saturate(r1.g);
+    r0.a = dot(r1.gg, r0.aa);
+    // Lum Vs Sat
+    r3.r = dot(r0.rgb, float3(0.2126729, 0.7151522, 0.0721750));
+    r3.ga = float2(0.25, 0.25);
+    r0.r = t0.SampleLevel(s0_s, r3.rg, 0).a;
+    r0.r = saturate(r0.r);
+    r0.r = r0.a * r0.r;
+    // Hue Vs Hue
+    r3.b = r2.r + cb0[3].r;
+    r0.g = t0.SampleLevel(s0_s, r3.ba, 0).r;
+    r0.g = saturate(r0.g);
+    r0.g = r3.b + r0.g;
+    r0.gba = r0.ggg + float3(-0.5, 0.5, -1.5);
+    r1.g = cmp(r0.g < 0);
+    r1.b = cmp(1 < r0.g);
+    r0.g = r1.b ? r0.a : r0.g;
+    r0.g = r1.g ? r0.b : r0.g;
+    // HsvToRgb(r0.gba)
+    r0.gba = r0.ggg + float3(1, 0.666666687, 0.333333343);
+    r0.gba = frac(r0.gba);
+    r0.gba = r0.gba * float3(6, 6, 6) + float3(-3, -3, -3);
+    r0.gba = saturate(abs(r0.gba) + float3(-1, -1, -1));
+    r0.gba = r0.gba + float3(-1, -1, -1);
+    r0.gba = r2.bbb * r0.gba + float3(1, 1, 1);
+    // Saturation(r0.gba, cb0[3].g * r0.r)
+    r1.gba = r0.gba * r1.rrr;
+    r0.r = dot(cb0[3].gg, r0.rr);
+    r1.g = dot(r1.gba, float3(0.2126729, 0.7151522, 0.0721750));
+    r0.gba = r1.rrr * r0.gba + -r1.ggg;
+    r0.rgb = r0.rrr * r0.gba + r1.ggg;
+    // (end) LinearGrade
+    // ACEScg_to_ACES
+    r3.r = dot(float3(0.6954522414, 0.1406786965, 0.1638690622), r0.rgb);
+    r3.g = dot(float3(0.0447945634, 0.8596711185, 0.0955343182), r0.rgb);
+    r3.b = dot(float3(-0.0055258826, 0.0040252103, 1.0015006723), r0.rgb);
+    r0.rgb = lerp(preCG, r3.rgb, injectedData.colorGradeLUTStrength);
+    r3.rgb = mul(ACES_to_SRGB_MAT, r0.rgb);
+    r0.rgb = applyUserTonemap(r3.rgb);
+    r0.a = 1;
+    u0[vThreadID.xyz] = r0.rgba;
+  }
+  return;
+}
