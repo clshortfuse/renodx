@@ -48,29 +48,6 @@ float3 FinalizeOutput(float3 color) {
   return color;
 }
 
-float3 InverseToneMap(float3 color) {
-  if (injectedData.toneMapType != 0.f && injectedData.hasLoadedTitleMenu) {
-	float scaling = injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
-	float videoPeak = scaling * renodx::color::bt2408::REFERENCE_WHITE;
-    videoPeak = renodx::color::correct::Gamma(videoPeak, false, 2.4f);
-    scaling = renodx::color::correct::Gamma(scaling, false, 2.4f);
-      if(injectedData.toneMapGammaCorrection == 2.f){
-    videoPeak = renodx::color::correct::Gamma(videoPeak, true, 2.4f);
-    scaling = renodx::color::correct::Gamma(scaling, true, 2.4f);
-    } else if(injectedData.toneMapGammaCorrection == 1.f){
-    videoPeak = renodx::color::correct::Gamma(videoPeak, true, 2.2f);
-    scaling = renodx::color::correct::Gamma(scaling, true, 2.2f);
-    }
-    color = renodx::color::gamma::Decode(color, 2.4f);
-    color = renodx::tonemap::inverse::bt2446a::BT709(color, renodx::color::bt709::REFERENCE_WHITE, videoPeak);
-	color /= videoPeak;
-	color *= scaling;
-  color = renodx::color::gamma::EncodeSafe(color, 2.4f);
-  } else {}
-  color = renodx::color::srgb::DecodeSafe(color);
-	return color;
-}
-
 //-----TONEMAP-----//
 float3 applyReinhardPlus(float3 color, renodx::tonemap::Config RhConfig, bool sdr = false){
 	float RhPeak = sdr ? 1.f : RhConfig.peak_nits / RhConfig.game_nits;
