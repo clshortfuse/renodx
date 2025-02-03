@@ -169,12 +169,6 @@ void comp_main()
     float _754;
     if (ToneMapCBuffer_m0[3u].w != 0.0f)
     {
-        float m_HdrGamma;
-        if (RENODX_GAMMA_ADJUST_TYPE) {
-            m_HdrGamma = RENODX_GAMMA_ADJUST_VALUE;
-        } else {
-            m_HdrGamma = ToneMapCBuffer_m0[3u].w * RENODX_GAMMA_ADJUST_VALUE;
-        }
 
         float3 scene = float3(_613, _614, _615);
         scene = renodx::math::SignPow(scene, m_HdrGamma);
