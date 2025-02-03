@@ -80,6 +80,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedDualShaderEntry(0x3040FD90),
     TracedDualShaderEntry(0x31FE4421),
     TracedDualShaderEntry(0x36E3A438),
+    TracedDualShaderEntry(0x4E6F963D),
     TracedDualShaderEntry(0x5CAE0013),
     TracedDualShaderEntry(0x61C2EA30),
     TracedDualShaderEntry(0x6CA6068F),
