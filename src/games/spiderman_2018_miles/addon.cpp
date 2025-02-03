@@ -22,7 +22,8 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xB5DBD65C),  // Tonemap + Postfx
-    CustomShaderEntry(0xECBD5D23),  // Tonemap + Postfx - Chromatic Aberration Off
+    CustomShaderEntry(0xECBD5D23),  // Miles - Tonemap + Postfx - cAb Off
+    CustomShaderEntry(0x26B88F98),  // 2018 - Tonemap + Postfx - cAb Off
 };
 
 renodx::utils::settings::Settings settings = {
@@ -80,7 +81,7 @@ renodx::utils::settings::Settings settings = {
 // NOLINTBEGIN(readability-identifier-naming)
 
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Spider-Man: Miles Morales";
+extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Spider-Man: Remastered and Spider-Man: Miles Morales";
 
 // NOLINTEND(readability-identifier-naming)
 
