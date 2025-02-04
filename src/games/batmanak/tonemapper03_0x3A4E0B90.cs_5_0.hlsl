@@ -172,7 +172,7 @@ cbuffer cb0 : register(b0) {
   if (graph_config.draw) outputColor = renodx::debug::renodx::debug::graph::DrawEnd(outputColor, graph_config);
 #endif
 
-  outputColor *= RENODX_DIFFUSE_WHITE_NITS / 80.f;
+  outputColor = renodx::draw::RenderIntermediatePass(outputColor);
 
   u0[uint2(r0.x, r0.y)] = outputColor.xyzx;
 
