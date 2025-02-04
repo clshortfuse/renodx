@@ -218,10 +218,10 @@ void main(uint3 vThreadGroupID: SV_GroupID, uint3 vThreadID: SV_DispatchThreadID
           grainedColor = grainEffect * grainInputColor;
           grainedColor = renodx::color::gamma::DecodeSafe(grainedColor, 2.2f);
         } else {
-          grainedColor = renodx::effects::ApplyFilmGrainColored(
+          grainedColor = renodx::effects::ApplyFilmGrain(
               outputColor,
               screenXY.xy,
-              randomnessFactor,
+              frac(r3.x),
               cb0[11].z ? CUSTOM_FILM_GRAIN_STRENGTH * 0.03f : 0,
               1.f);
         }

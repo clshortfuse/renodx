@@ -144,16 +144,23 @@ cbuffer cb0 : register(b0) {
           float3 clampedColor = min(1.f, invertedColor * invertedColor);
           float3 modulatedStrength = clampedColor * cb0[11].zzz * CUSTOM_FILM_GRAIN_STRENGTH;
 
+          r1.z = dot(r2.wyz, float3(
+                                 renodx::random::GELFOND_CONSTANT,
+                                 renodx::random::GELFOND_SCHNEIDER_CONSTANT,
+                                 9.19949627));
+          r1.z = cos(r1.z);
+          r2.xyz = r1.zzz * r2.xyz;
+          float3 randomnessFactor = frac(r2.xyz);
 
           float3 grainEffect = mad(modulatedStrength, (randomnessFactor - 0.334f), 1.f);  //  r1.xyz = r1.xyz * (r3.xyz - 0.334f) + 1.f;
 
           grainedColor = grainEffect * grainInputColor;  //  r0.xyz = r1.xyz * r0.xyz;
           grainedColor = renodx::color::gamma::DecodeSafe(grainedColor, 2.2f);
         } else {
-          grainedColor = renodx::effects::ApplyFilmGrainColored(
+          grainedColor = renodx::effects::ApplyFilmGrain(
               outputColor,
               screenXY,
-              randomnessFactor,
+              frac(r3.x),
               cb0[11].z ? CUSTOM_FILM_GRAIN_STRENGTH * 0.03f : 0,
               1.f);
         }
