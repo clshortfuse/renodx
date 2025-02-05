@@ -555,7 +555,11 @@ static void SetupSwapchainProxyLayout(reshade::api::device* device, DeviceData* 
     } else {
       param_constants.push_constants.dx_register_index = data->expected_constant_buffer_index;
     }
-    param_constants.push_constants.dx_register_space = data->expected_constant_buffer_space;
+    if (device->get_api() == reshade::api::device_api::d3d12 || device->get_api() == reshade::api::device_api::vulkan) {
+      param_constants.push_constants.dx_register_space = data->expected_constant_buffer_space;
+    } else {
+      param_constants.push_constants.dx_register_space = 0;
+    }
     new_layout_params.push_back(param_constants);
   }
 
