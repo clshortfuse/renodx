@@ -517,7 +517,7 @@ static void OnInitPipelineLayout(
     // newParams.push_constants.binding = 0;
     new_params.push_constants.count = 1;
     new_params.push_constants.dx_register_index = cbv_index;
-    new_params.push_constants.dx_register_space = data.expected_constant_buffer_space;
+    new_params.push_constants.dx_register_space = 0;
     new_params.push_constants.visibility = reshade::api::shader_stage::all;
 
     reshade::api::pipeline_layout new_layout;
