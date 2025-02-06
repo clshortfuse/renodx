@@ -128,13 +128,13 @@ float3 ToneMap(float3 color, float3 vanillaColor, float midGray) {
   config.mid_gray_nits = config.mid_gray_value * 100.f;
 
   config.reno_drt_dechroma = RENODX_TONE_MAP_BLOWOUT;
-  config.reno_drt_blowout = RENODX_TONE_MAP_HIGHLIGHT_SATURATION;
+  config.reno_drt_blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
   config.reno_drt_flare = 0.10f * RENODX_TONE_MAP_FLARE;
 
   config.reno_drt_highlights = 1.f;
   config.reno_drt_shadows = 1.f;
   config.reno_drt_contrast = 1.f;
-  config.reno_drt_saturation = 1.04f;
+  config.reno_drt_saturation = 1.f;
 
   config.reno_drt_working_color_space = 2u;
   config.reno_drt_per_channel = RENODX_TONE_MAP_PER_CHANNEL != 0;

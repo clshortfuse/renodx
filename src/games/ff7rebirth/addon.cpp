@@ -33,6 +33,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x288CF983),  // Final - Menu - Display Mapped
 
     CustomShaderEntry(0xA53093E1),  // Final - Static
+    CustomShaderEntry(0x4041C8C4),  // Final - Static - Display Mapped
 };
 
 // const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
@@ -60,7 +61,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapType",
         .binding = &RENODX_TONE_MAP_TYPE,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 3.f,
+        .default_value = 1.f,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
@@ -190,7 +191,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
         .binding = &RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
-        .default_value = 10.f,
+        .default_value = 50.f,
         .label = "Highlight Saturation",
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
@@ -202,7 +203,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
         .binding = &RENODX_TONE_MAP_BLOWOUT,
-        .default_value = 0.f,
+        .default_value = 25.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
