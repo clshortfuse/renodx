@@ -192,7 +192,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Grading Application",
         .section = "Color Grading",
         .tooltip = "Chooses method to apply grading for HDR.",
-        .labels = {"Luminance", "Per Channel"},
+        .labels = {"Luminance", "Per Channel", "Perceptual"},
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
     },
     new renodx::utils::settings::Setting{
