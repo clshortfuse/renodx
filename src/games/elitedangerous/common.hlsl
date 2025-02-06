@@ -96,11 +96,44 @@ float3 UpgradeToneMapByLuminance(float3 color_hdr, float3 color_sdr, float3 post
   return lerp(color_hdr, color_scaled, post_process_strength);
 }
 
+float3 UpgradeToneMapPerceptual(float3 untonemapped, float3 tonemapped, float3 post_processed, float strength) {
+  float3 lab_untonemapped = renodx::color::ictcp::from::BT709(untonemapped);
+  float3 lab_tonemapped = renodx::color::ictcp::from::BT709(tonemapped);
+  float3 lab_post_processed = renodx::color::ictcp::from::BT709(post_processed);
+
+  float3 lch_untonemapped = renodx::color::oklch::from::OkLab(lab_untonemapped);
+  float3 lch_tonemapped = renodx::color::oklch::from::OkLab(lab_tonemapped);
+  float3 lch_post_processed = renodx::color::oklch::from::OkLab(lab_post_processed);
+
+  float3 lch_upgraded = lch_untonemapped;
+  lch_upgraded.xz *= renodx::math::DivideSafe(lch_post_processed.xz, lch_tonemapped.xz, 0.f);
+
+  float3 lab_upgraded = renodx::color::oklab::from::OkLCh(lch_upgraded);
+
+  float c_untonemapped = length(lab_untonemapped.yz);
+  float c_tonemapped = length(lab_tonemapped.yz);
+  float c_post_processed = length(lab_post_processed.yz);
+
+  if (c_untonemapped > 0) {
+    float new_chrominance = c_untonemapped;
+    new_chrominance = min(max(c_untonemapped, 0.25f), c_untonemapped * (c_post_processed / c_tonemapped));
+    if (new_chrominance > 0) {
+      lab_upgraded.yz *= new_chrominance / c_untonemapped;
+    }
+  }
+
+  float3 upgraded = renodx::color::bt709::from::ICtCp(lab_upgraded);
+  return lerp(untonemapped, upgraded, strength);
+}
+
 float3 UpgradeToneMap(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength) {
   if (RENODX_TONE_MAP_RESTORATION_METHOD == 1.f) {
     return UpgradeToneMapPerChannel(color_hdr, color_sdr, post_process_color, post_process_strength);
+  } else if (RENODX_TONE_MAP_RESTORATION_METHOD == 2.f) {
+    return UpgradeToneMapPerceptual(color_hdr, color_sdr, post_process_color, post_process_strength);
+  } else {
+    return UpgradeToneMapByLuminance(color_hdr, color_sdr, post_process_color, post_process_strength);
   }
-  return UpgradeToneMapByLuminance(color_hdr, color_sdr, post_process_color, post_process_strength);
 }
 
 float3 DisplayMapAndScale(float3 color) {
