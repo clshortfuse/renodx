@@ -19,6 +19,7 @@
 #define RENODX_TONE_MAP_HUE_PROCESSOR        shader_injection.tone_map_hue_processor
 #define RENODX_TONE_MAP_PER_CHANNEL          shader_injection.tone_map_per_channel
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
+#define CUSTOM_BLOOM                         shader_injection.custom_bloom
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -41,6 +42,7 @@ struct ShaderInjectData {
   float tone_map_hue_processor;
   float tone_map_per_channel;
   float gamma_correction;
+  float custom_bloom;
 };
 
 #ifndef __cplusplus
