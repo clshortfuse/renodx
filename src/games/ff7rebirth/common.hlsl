@@ -129,7 +129,7 @@ float3 ToneMap(float3 color, float3 vanillaColor, float midGray) {
 
   config.reno_drt_dechroma = RENODX_TONE_MAP_BLOWOUT;
   config.reno_drt_blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
-  config.reno_drt_flare = 0.10f * RENODX_TONE_MAP_FLARE;
+  config.reno_drt_flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
 
   config.reno_drt_highlights = 1.f;
   config.reno_drt_shadows = 1.f;
