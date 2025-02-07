@@ -26,13 +26,13 @@
 // #define RENODX_PEAK_WHITE_NITS               1000.f
 // #define RENODX_DIFFUSE_WHITE_NITS            250.f
 // #define RENODX_GRAPHICS_WHITE_NITS           250.f
-// #define RENODX_TONE_MAP_TYPE                 0.f  // 0 = ACES, 1 = RenoDRT
+// #define RENODX_TONE_MAP_TYPE                 1.f  // 0 = ACES, 1 = RenoDRT
 // #define RENODX_TONE_MAP_EXPOSURE             1.f
 // #define RENODX_TONE_MAP_HIGHLIGHTS           1.f
 // #define RENODX_TONE_MAP_SHADOWS              1.f
 // #define RENODX_TONE_MAP_CONTRAST             1.f
 // #define RENODX_TONE_MAP_SATURATION           1.f
-// #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION 0.002f
+// #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION 1.f
 // #define RENODX_TONE_MAP_BLOWOUT              0.f
 // #define RENODX_TONE_MAP_FLARE                0.f
 // #define RENODX_TONE_MAP_HUE_SHIFT            0.5f

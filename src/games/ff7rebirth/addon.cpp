@@ -34,6 +34,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
     CustomShaderEntry(0xA53093E1),  // Final - Static
     CustomShaderEntry(0x4041C8C4),  // Final - Static - Display Mapped
+ 
+    CustomShaderEntry(0x6E1106B8),  // Final - Damage
+    CustomShaderEntry(0x05833276),  // Final - Damage - Display Mapped
 };
 
 // const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
