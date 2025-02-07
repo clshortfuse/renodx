@@ -44,24 +44,19 @@ void main(
   
   r1.xyz = g_TextureBloom.Sample(g_TextureBloomSampler_s, v1.xy).xyz;
 
-  //r0.xyz = saturate(r0.xyz * float3(1.37906432, 1.37906432, 1.37906432) + r1.xyz);
-  r0.xyz = (r0.xyz * float3(1.37906432,1.37906432,1.37906432) + r1.xyz);
-
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     // custom
-    r0.rgb /= 1.37906432f;
+    r0.rgb = r0.rgb + r1.rgb * 2.f * CUSTOM_BLOOM;
     o0.rgb = r0.rgb / 203.f * 80.f;
 
     r0.rgb = renodx::draw::ToneMapPass(o0.rgb);
-
     o0.rgb = renodx::draw::RenderIntermediatePass(r0.rgb);
-
     o0.w = 1;
-
+    
     return;
   }
 
-  r0.rgb = saturate(r0.rgb);
+  r0.xyz = saturate(r0.xyz * float3(1.37906432, 1.37906432, 1.37906432) + r1.xyz);
 
   o0.rgb = renodx::draw::RenderIntermediatePass(r0.rgb);
   o0.w = 1;

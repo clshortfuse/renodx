@@ -98,7 +98,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
         .binding = &RENODX_TONE_MAP_HUE_SHIFT,
-        .default_value = 50.f,
+        .default_value = 0.f,
         .label = "Hue Shift",
         .section = "Tone Mapping",
         .tooltip = "Hue-shift emulation strength.",
@@ -122,7 +122,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueCorrection",
         .binding = &RENODX_TONE_MAP_HUE_CORRECTION,
-        .default_value = 100.f,
+        .default_value = 0.f,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tooltip = "Hue retention strength.",
@@ -234,6 +234,15 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxBloom",
+        .binding = &CUSTOM_BLOOM,
+        .default_value = 50.f,
+        .label = "Bloom",
+        .section = "Effects",
+        .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
