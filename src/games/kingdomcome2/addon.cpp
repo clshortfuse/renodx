@@ -23,7 +23,6 @@ namespace {
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xA18EAA6F),
     CustomShaderEntry(0xC04583C6),
-    CustomShaderEntry(0xE3DB9813),
     CustomShaderEntry(0x7D7F957B),
     CustomShaderEntry(0xD9D2ADB8),
 };
@@ -253,6 +252,17 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!reshade::register_addon(h_module)) return FALSE;
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
 
+      // while (IsDebuggerPresent() == 0) Sleep(100);
+
+      renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
+        // We only need output shader since it's the only shader using injected data
+        auto param_count = params.size();
+        if (param_count == 5 && params[0].descriptor_table.count == 6 && params[4].descriptor_table_with_static_samplers.count == 1) {  // output shader
+          return true;
+        }
+
+        return false;
+      };
       // renodx::mods::shader::force_pipeline_cloning = true;
       // renodx::mods::swapchain::force_borderless = true;
       // renodx::mods::swapchain::prevent_full_screen = true;
@@ -270,7 +280,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
 
       // renodx::mods::swapchain::use_resize_buffer = true;
-      renodx::mods::swapchain::use_resize_buffer_on_demand = true;
+      // renodx::mods::swapchain::use_resize_buffer_on_demand = true;
 
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
