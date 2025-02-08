@@ -35,7 +35,7 @@ void main(
 {
   float3 bloomColor = s_bloom.Sample(s_bloom_s, w1.xy).rgb;
   float4 sceneColor = s_framebuffer.Sample(s_framebuffer_s, v1.xy).rgba;
-  bloomColor *= bloomAlpha; // Scale down (or up) the bloom intensity
+  bloomColor *= bloomAlpha * injectedData.BloomAmount; // Scale down (or up) the bloom intensity
   sceneColor.rgb += bloomColor; // Bloom is 100% additive here
   sceneColor.rgb *= sceneBias; // Exposure?
   
