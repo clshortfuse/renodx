@@ -332,7 +332,7 @@ void main(
   r0.xyz = renderPostFX(v0, v1);
 
   float3 untonemapped = r0.xyz;
-  const float untonemappedLum = renodx::color::y::from::BT601(untonemapped);  // save for reuse
+  const float untonemappedLum = renodx::color::luma::from::BT601(untonemapped);  // save for reuse
   float3 outputColor = r0.xyz;
   if (injectedData.toneMapType == 0) {  // tonemap
     r0.xyz = applyVanillaTonemap(untonemapped, untonemappedLum);
