@@ -22,6 +22,8 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xA18EAA6F),
+    CustomShaderEntry(0x4038C56A),
+    CustomShaderEntry(0xFC7BB86E),
     CustomShaderEntry(0xC04583C6),
     CustomShaderEntry(0x7D7F957B),
     CustomShaderEntry(0xD9D2ADB8),

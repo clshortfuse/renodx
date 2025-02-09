@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsl"
 
 Texture2D<float4> shScreenTex : register(t0);
 

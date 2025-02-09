@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsl"
 
 Texture2D<float4> luminanceTex : register(t1);
 
@@ -60,9 +60,7 @@ float4 main(
   float3 userModifications = float3(PER_BATCH_002x, PER_BATCH_002y, PER_BATCH_002z);
   float3 adjustBloom = float3(PER_BATCH_005x, PER_BATCH_005y, PER_BATCH_005z);
 
-  if (RENODX_TONE_MAP_TYPE > 0.f) {
-    userModifications = float3(1, 1, 0);
-  }
+  ModifySettings(userModifications);
 
   float _47 = (8333.3330078125f / (exp2((min((max(((log2(((((float4)(luminanceTex.Load(int3(0, 0, 0)))).y) * 3030.30322265625f))) - (((adjustEyeAdaptation.z) * 0.5f) * ((min((max(((log2((((((float4)(luminanceTex.Load(int3(0, 0, 0)))).y) * 10000.0f) + 1.0f))) * 0.3010300099849701f), 0.10000000149011612f)), 5.199999809265137f)) + -3.0f))), (adjustEyeAdaptation.x))), (adjustEyeAdaptation.y)))))) * (((float4)(vignettingTex.Sample(linearClampSS, float2((TEXCOORD_1.x), (TEXCOORD_1.y))))).x);
   float _64 = (((saturate((adjustBloom.x))) * ((_15.x) - (_23.x))) + (_23.x)) * _47;
@@ -119,14 +117,7 @@ float4 main(
   SV_Target.y = (saturate((((userModifications.y) * (exp2(((log2((((((_207.y) - (_202.y)) * _197) + (_202.y)) + ((((frac((_221 * 38273.5625f))) + -0.5f) + (frac((_231 * 38273.5625f)))) * 0.0019607844296842813f)))) * (userModifications.x))))) + (userModifications.z))));
   SV_Target.z = (saturate((((userModifications.y) * (exp2(((log2((((((_207.z) - (_202.z)) * _197) + (_202.z)) + ((((frac((_221 * 47843.75390625f))) + -0.5f) + (frac((_231 * 47843.75390625f)))) * 0.0019607844296842813f)))) * (userModifications.x))))) + (userModifications.z))));
 
-  float3 outputColor = SV_Target.rgb;
-  if (RENODX_TONE_MAP_TYPE > 0.f) {
-    outputColor = renodx::color::srgb::DecodeSafe(outputColor);
-    outputColor = renodx::draw::ToneMapPass(untonemapped, outputColor);
-    outputColor = renodx::draw::RenderIntermediatePass(outputColor);
-  }
-
-  SV_Target.rgb = outputColor.rgb;
+  SV_Target.rgb = Tonemap(SV_Target.rgb, untonemapped);
   SV_Target.w = 1.0f;
   return SV_Target;
 }
