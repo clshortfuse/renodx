@@ -353,7 +353,7 @@ void main(
   outputColor = mul(float4(outputColor, 1.0), transpose(fogMatrix));
 
   // ignore user gamma, force 2.2
-  r0.xyz = renodx::math::SafePow(outputColor, 1.f / 2.2f);  //  r0.xyz = pow(r0.xyz, OutputGamma.xxx);
+  r0.xyz = renodx::math::SignPow(outputColor, 2.2f);  //  r0.xyz = pow(r0.xyz, OutputGamma.xxx);
 
   // film grain
   if (injectedData.fxFilmGrain) {
@@ -377,8 +377,5 @@ void main(
   o0.w = dot(r0.xyz, float3(0.298999995, 0.587000012, 0.114));
   o0.xyz = r0.xyz;
 
-  o0.xyz = renodx::math::SafePow(o0.xyz, 2.2f);
-  o0.xyz = renodx::color::bt2020::from::BT709(o0.xyz);
-  o0.xyz = renodx::color::pq::from::BT2020(o0.xyz, injectedData.toneMapGameNits);
   return;
 }
