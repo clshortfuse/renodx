@@ -348,12 +348,10 @@ void main(
   }
 
   // ignore user gamma, force 2.2
-  r0.xyz = renodx::math::SignPow(outputColor, OutputGamma.x);  //  r0.xyz = pow(r0.xyz, OutputGamma.xxx);
+  r0.xyz = renodx::color::gamma::EncodeSafe(outputColor, 2.2f);  //  r0.xyz = pow(r0.xyz, OutputGamma.xxx);
 
   // film grain
   if (injectedData.fxFilmGrain) {
-    float3 grainInputColor = r0.xyz;
-
     r1.xyz = SamplerNoise_TEX.Sample(SamplerNoise_SMP_s, v1.xy).xyz;
     r1.xyz = float3(-0.5, -0.5, -0.5) + r1.xyz;
     r0.w = dot(float3(0.298999995, 0.587000012, 0.114), r0.xyz);
@@ -364,11 +362,9 @@ void main(
     r3.xyz = r2.yyy * r1.xyz;
     r2.xyw = r1.xyz * r2.xxx + r3.xyz;
     r1.xyz = r1.xyz * r2.zzz + r2.xyw;
-    r0.xyz = r1.xyz + r0.xyz;
-    r0.xyz = (r0.xyz * rp_parameter_ps[0].xxx + rp_parameter_ps[0].yyy);  // r0.xyz = saturate(r0.xyz * rp_parameter_ps[0].xxx + rp_parameter_ps[0].yyy);
-
-    r0.xyz = lerp(grainInputColor, r0.xyz, injectedData.fxFilmGrain);
+    r0.xyz = injectedData.fxFilmGrain * r1.xyz + r0.xyz;
   }
+  r0.xyz = (r0.xyz * rp_parameter_ps[0].xxx + rp_parameter_ps[0].yyy);  // r0.xyz = saturate(r0.xyz * rp_parameter_ps[0].xxx + rp_parameter_ps[0].yyy);
   o0.w = dot(r0.xyz, float3(0.298999995, 0.587000012, 0.114));
   o0.xyz = r0.xyz;
 
