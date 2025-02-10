@@ -1883,6 +1883,11 @@ static bool OnCopyResource(
   if (source_desc.type == reshade::api::resource_type::texture_2d
       || source_desc.type == reshade::api::resource_type::texture_3d) {
     if (dest_desc.type == source_desc.type) {
+      auto source_new = source;
+      auto dest_new = dest;
+      auto source_desc_new = source_desc;
+      auto dest_desc_new = dest_desc;
+
       if (use_resource_cloning) {
         auto& data = device->get_private_data<DeviceData>();
         const std::unique_lock lock(data.mutex);
@@ -1891,23 +1896,36 @@ static bool OnCopyResource(
         auto dest_clone = GetResourceClone(device, &data, dest);
 
         if (source_clone.handle != 0u) {
-          source_desc = device->get_resource_desc(source_clone);
-          source = source_clone;
+          source_desc_new = device->get_resource_desc(source_clone);
+          source_new = source_clone;
         }
         if (dest_clone.handle != 0u) {
-          dest_desc = device->get_resource_desc(dest_clone);
-          dest = dest_clone;
+          dest_desc_new = device->get_resource_desc(dest_clone);
+          dest_new = dest_clone;
         }
       }
 
-      if (source_desc.texture.format == dest_desc.texture.format) {
-        cmd_list->copy_resource(source, dest);
+      bool can_be_copied = (source_desc_new.texture.format == dest_desc_new.texture.format)
+                           || (reshade::api::format_to_typeless(source_desc_new.texture.format) == reshade::api::format_to_typeless(dest_desc.texture.format));
+
+      if (can_be_copied) {
+        cmd_list->copy_resource(source_new, dest_new);
         return true;
       }
-#ifdef DEBUG_LEVEL_2
-      reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnCopyResource(prevent resource copy)");
-#endif
+
       // Mismatched (don't copy);
+#ifdef DEBUG_LEVEL_2
+      std::stringstream s;
+      s << "mods::swapchain::OnCopyResource(";
+      s << "prevent resource copy: ";
+      s << "format: " << source_desc.texture.format << " => " << dest_desc.texture.format;
+      s << ", type: " << source_desc.type << " => " << dest_desc.type;
+      s << ", clone_format: " << source_desc_new.texture.format << " => " << dest_desc_new.texture.format;
+      s << ", clone_type: " << source_desc_new.type << " => " << dest_desc_new.type;
+      s << ");";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
+
       return true;
     }
   }
