@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsl"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sat Sep 21 23:16:47 2024
 
@@ -64,11 +64,6 @@ void main(
   r0.xyzw = v1.wwww * r0.xyzw;
   o0.xyzw = v0.xyzw * r0.wwww + r0.xyzw;
 
-  if (injectedData.clampAlpha == 1.f) o0.a = saturate(o0.a);
-
-  o0.rgb = saturate(o0.rgb);
-  o0.rgb = pow(o0.rgb, 2.2f);
-  o0.rgb = renodx::color::bt2020::from::BT709(o0.rgb);
-  o0.rgb = renodx::color::pq::from::BT2020(o0.rgb, injectedData.toneMapUINits);
+  o0 = UIScale(o0);
   return;
 }

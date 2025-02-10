@@ -22,8 +22,8 @@ void main(
   r0.x = tex.Sample(sampler_tex_s, v0.xy).x;
   o0.xyzw = v1.wwww * r0.xxxx;
 
-  o0.rgb = pow(o0.rgb, 2.2f);
-  o0.rgb = renodx::color::bt2020::from::BT709(o0.rgb);
-  o0.xyz = renodx::color::pq::from::BT2020(o0.xyz, injectedData.toneMapGameNits);
+  // o0.rgb = pow(o0.rgb, 2.2f);
+  // o0.rgb = renodx::color::bt2020::from::BT709(o0.rgb);
+  // o0.xyz = renodx::color::pq::from::BT2020(o0.xyz, injectedData.toneMapGameNits);
   return;
 }

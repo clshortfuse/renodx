@@ -2,8 +2,7 @@
 
 // ---- Created with 3Dmigoto v1.3.16 on Sun Sep 22 01:43:18 2024
 
-cbuffer cbDefaultXSC : register(b0)
-{
+cbuffer cbDefaultXSC : register(b0) {
   float4x4 ViewProj : packoffset(c0);
   float4x4 ViewMatrix : packoffset(c4);
   float4x4 SecondaryProj : packoffset(c8);
@@ -27,8 +26,7 @@ cbuffer cbDefaultXSC : register(b0)
   float4 SMAA_RTMetrics : packoffset(c35);
 }
 
-cbuffer cbDefaultPSC : register(b2)
-{
+cbuffer cbDefaultPSC : register(b2) {
   float4x4 AlphaLight_WorldtoClipMatrix : packoffset(c0);
   float4x4 AlphaLight_CliptoWorldMatrix : packoffset(c4);
   float4x4 ProjectorMatrix : packoffset(c8);
@@ -78,8 +76,7 @@ cbuffer cbDefaultPSC : register(b2)
   float4 SMAA_SubsampleIndices : packoffset(c82);
 }
 
-cbuffer cbUbershaderXSC : register(b5)
-{
+cbuffer cbUbershaderXSC : register(b5) {
   float4 rp_parameter_vs[32] : packoffset(c0);
   float4 rp_parameter_ps[32] : packoffset(c32);
 }
@@ -397,7 +394,7 @@ void main(
 
   outputColor = applyDesaturation(outputColor);
   // ignore user gamma, force 2.2
-  r0.xyz = renodx::math::SafePow(outputColor, 1.f / 2.2f);  //  r0.xyz = pow(r0.xyz, OutputGamma.xxx);
+  r0.xyz = renodx::math::SignPow(outputColor, 2.2f);  //  r0.xyz = pow(r0.xyz, OutputGamma.xxx);
 
   // film grain
   if (injectedData.fxFilmGrain) {
@@ -424,8 +421,5 @@ void main(
   o0.w = dot(r0.xyz, float3(0.298999995, 0.587000012, 0.114));
   o0.xyz = r0.xyz;
 
-  o0.xyz = renodx::math::SafePow(o0.xyz, 2.2f);
-  o0.xyz = renodx::color::bt2020::from::BT709(o0.xyz);
-  o0.xyz = renodx::color::pq::from::BT2020(o0.xyz, injectedData.toneMapGameNits);
   return;
 }
