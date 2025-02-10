@@ -111,6 +111,8 @@ struct __declspec(uuid("018e7b9c-23fd-7863-baf8-a8dad2a6db9d")) DeviceData {
   uint32_t expected_constant_buffer_space = 0;
 
   CustomShaders custom_shaders;
+
+  std::unordered_set<uint64_t> warned_pipeline_root_indexes;
 };
 
 struct __declspec(uuid("1640985b-42c7-4e93-bd27-fc13cade5982")) CommandListData {
@@ -691,11 +693,14 @@ static bool PushShaderInjections(
         pair != device_data->modded_pipeline_root_indexes.end()) {
       param_index = pair->second;
     } else {
-      std::stringstream s;
-      s << "mods::shader::PushShaderInjections(did not find modded pipeline root index";
-      s << ", layout: " << reinterpret_cast<void*>(shader_state->pipeline_layout.handle);
-      s << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+      if (!device_data->warned_pipeline_root_indexes.contains(shader_state->pipeline_layout.handle)) {
+        std::stringstream s;
+        s << "mods::shader::PushShaderInjections(did not find modded pipeline root index";
+        s << ", layout: " << reinterpret_cast<void*>(shader_state->pipeline_layout.handle);
+        s << ")";
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
+        device_data->warned_pipeline_root_indexes.emplace(shader_state->pipeline_layout.handle);
+      }
       return false;
     }
   }
