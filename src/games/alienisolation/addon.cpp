@@ -54,6 +54,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
     CustomShaderEntry(0x05F61FE8),  // final game shader - SMAA T1x
     CustomShaderEntry(0x2D6BBE3A),  // final game shader - SMAA T2x
+
+    CustomShaderEntry(0x7E16EE16),  // Sharpening - from Alias: Isolation
 };
 
 ShaderInjectData shader_injection;
