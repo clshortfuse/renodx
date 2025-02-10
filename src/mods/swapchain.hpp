@@ -97,6 +97,20 @@ struct SwapChainUpgradeTarget {
           SwapChainViewUpgradeAll(b8g8r8a8_unorm_srgb, r10g10b10a2_unorm),
   };
 
+  const std::unordered_map<
+      std::pair<reshade::api::resource_usage, reshade::api::format>,
+      reshade::api::format, utils::hash::HashPair>
+      VIEW_UPGRADES_R11G11B10_FLOAT = {
+          SwapChainViewUpgradeAll(r10g10b10a2_typeless, r11g11b10_float),
+          SwapChainViewUpgradeAll(r8g8b8a8_typeless, r11g11b10_float),
+          SwapChainViewUpgradeAll(r10g10b10a2_unorm, r11g11b10_float),
+          SwapChainViewUpgradeAll(b10g10r10a2_unorm, r11g11b10_float),
+          SwapChainViewUpgradeAll(r8g8b8a8_unorm, r11g11b10_float),
+          SwapChainViewUpgradeAll(b8g8r8a8_unorm, r11g11b10_float),
+          SwapChainViewUpgradeAll(r8g8b8a8_unorm_srgb, r11g11b10_float),
+          SwapChainViewUpgradeAll(b8g8r8a8_unorm_srgb, r11g11b10_float),
+  };
+
   std::unordered_map<
       std::pair<reshade::api::resource_usage, reshade::api::format>,
       reshade::api::format, utils::hash::HashPair>
@@ -247,7 +261,7 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   std::vector<std::uint8_t> swap_chain_proxy_pixel_shader;
   int32_t expected_constant_buffer_index = -1;
   uint32_t expected_constant_buffer_space = 0;
-  bool swapchain_proxy_revert_state;
+  bool swapchain_proxy_revert_state = false;
 };
 
 struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData {
@@ -458,6 +472,27 @@ static bool ActivateCloneHotSwap(
 
   data.resource_clone_enabled.insert(resource.handle);
   return true;
+}
+
+static bool DeactivateCloneHotSwap(
+    reshade::api::device* device,
+    reshade::api::resource_view resource_view) {
+  auto resource = renodx::utils::resource::GetResourceFromView(device, resource_view);
+  if (resource.handle == 0u) {
+    std::stringstream s;
+    s << "mods::swapchain::ActivateCloneHotSwap(no handle for rsv ";
+    s << reinterpret_cast<void*>(resource_view.handle);
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+    return false;
+  }
+  auto& data = device->get_private_data<DeviceData>();
+  if (std::addressof(data) == nullptr) return false;
+  const std::unique_lock lock(data.mutex);
+
+  reshade::api::resource clone_resource;
+
+  return data.resource_clone_enabled.erase(resource.handle) > 0;
 }
 
 static reshade::api::resource CloneResource(
