@@ -56,16 +56,18 @@ float4 main(
   // float3 _23 = hdrTex.Load(int3((int(21)), (int(22)), 0));
   float3 _23 = hdrTex.Load(int3((int(SV_Position.x)), (int(SV_Position.y)), 0));
 
+  KingdomOptions options;
+  options.gamma = float3(PER_BATCH_002x, PER_BATCH_002y, PER_BATCH_002z);
+  options.bloom = float3(PER_BATCH_005x, PER_BATCH_005y, PER_BATCH_005z);
+
+  ModifyOptions(options);
+
   float3 adjustEyeAdaptation = float3(PER_BATCH_003x, PER_BATCH_003y, PER_BATCH_003z);
-  float3 userModifications = float3(PER_BATCH_002x, PER_BATCH_002y, PER_BATCH_002z);
-  float3 adjustBloom = float3(PER_BATCH_005x, PER_BATCH_005y, PER_BATCH_005z);
 
-  ModifySettings(userModifications);
-
-  float _47 = (8333.3330078125f / (exp2((min((max(((log2(((((float4)(luminanceTex.Load(int3(0, 0, 0)))).y) * 3030.30322265625f))) - (((adjustEyeAdaptation.z) * 0.5f) * ((min((max(((log2((((((float4)(luminanceTex.Load(int3(0, 0, 0)))).y) * 10000.0f) + 1.0f))) * 0.3010300099849701f), 0.10000000149011612f)), 5.199999809265137f)) + -3.0f))), (adjustEyeAdaptation.x))), (adjustEyeAdaptation.y)))))) * (((float4)(vignettingTex.Sample(linearClampSS, float2((TEXCOORD_1.x), (TEXCOORD_1.y))))).x);
-  float _64 = (((saturate((adjustBloom.x))) * ((_15.x) - (_23.x))) + (_23.x)) * _47;
-  float _65 = (((saturate((adjustBloom.y))) * ((_15.y) - (_23.y))) + (_23.y)) * _47;
-  float _66 = (((saturate((adjustBloom.z))) * ((_15.z) - (_23.z))) + (_23.z)) * _47;
+  float _47 = (8333.3330078125f / (exp2((min((max(((log2(((((float4)(luminanceTex.Load(int3(0, 0, 0)))).y) * 3030.30322265625f))) - (((adjustEyeAdaptation.z) * 0.5f) * ((min((max(((log2((((((float4)(luminanceTex.Load(int3(0, 0, 0)))).y) * 10000.0f) + 1.0f))) * 0.3010300099849701f), 0.10000000149011612f)), 5.199999809265137f)) + -3.0f))), (adjustEyeAdaptation.x))), (adjustEyeAdaptation.y)))))) * (((float4)(vignettingTex.Sample(linearClampSS, float2((TEXCOORD_1.x), (TEXCOORD_1.y))))).x * options.vignette);
+  float _64 = (((saturate((options.bloom.x))) * ((_15.x) - (_23.x))) + (_23.x)) * _47;
+  float _65 = (((saturate((options.bloom.y))) * ((_15.y) - (_23.y))) + (_23.y)) * _47;
+  float _66 = (((saturate((options.bloom.z))) * ((_15.z) - (_23.z))) + (_23.z)) * _47;
   // untonemapped = float3(_64, _65, _66);
 
   float _67 = dot(float3(_64, _65, _66), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
@@ -113,9 +115,9 @@ float4 main(
   SV_Target.y = (saturate((((PER_BATCH_002y) * (exp2(((log2((((((_207.y) - (_202.y)) * _197) + (_202.y)) + ((((frac((_221 * 38273.5625f))) + -0.5f) + (frac((_231 * 38273.5625f)))) * 0.0019607844296842813f)))) * (PER_BATCH_002x))))) + (PER_BATCH_002z))));
   SV_Target.z = (saturate((((PER_BATCH_002y) * (exp2(((log2((((((_207.z) - (_202.z)) * _197) + (_202.z)) + ((((frac((_221 * 47843.75390625f))) + -0.5f) + (frac((_231 * 47843.75390625f)))) * 0.0019607844296842813f)))) * (PER_BATCH_002x))))) + (PER_BATCH_002z)))); */
 
-  SV_Target.x = (saturate((((userModifications.y) * (exp2(((log2((((((_207.x) - (_202.x)) * _197) + (_202.x)) + ((((frac((_221 * 29156.4765625f))) + -0.5f) + (frac((_231 * 29156.4765625f)))) * 0.0019607844296842813f)))) * (userModifications.x))))) + (userModifications.z))));
-  SV_Target.y = (saturate((((userModifications.y) * (exp2(((log2((((((_207.y) - (_202.y)) * _197) + (_202.y)) + ((((frac((_221 * 38273.5625f))) + -0.5f) + (frac((_231 * 38273.5625f)))) * 0.0019607844296842813f)))) * (userModifications.x))))) + (userModifications.z))));
-  SV_Target.z = (saturate((((userModifications.y) * (exp2(((log2((((((_207.z) - (_202.z)) * _197) + (_202.z)) + ((((frac((_221 * 47843.75390625f))) + -0.5f) + (frac((_231 * 47843.75390625f)))) * 0.0019607844296842813f)))) * (userModifications.x))))) + (userModifications.z))));
+  SV_Target.x = (saturate((((options.gamma.y) * (exp2(((log2((((((_207.x) - (_202.x)) * _197) + (_202.x)) + ((((frac((_221 * 29156.4765625f))) + -0.5f) + (frac((_231 * 29156.4765625f)))) * 0.0019607844296842813f)))) * (options.gamma.x))))) + (options.gamma.z))));
+  SV_Target.y = (saturate((((options.gamma.y) * (exp2(((log2((((((_207.y) - (_202.y)) * _197) + (_202.y)) + ((((frac((_221 * 38273.5625f))) + -0.5f) + (frac((_231 * 38273.5625f)))) * 0.0019607844296842813f)))) * (options.gamma.x))))) + (options.gamma.z))));
+  SV_Target.z = (saturate((((options.gamma.y) * (exp2(((log2((((((_207.z) - (_202.z)) * _197) + (_202.z)) + ((((frac((_221 * 47843.75390625f))) + -0.5f) + (frac((_231 * 47843.75390625f)))) * 0.0019607844296842813f)))) * (options.gamma.x))))) + (options.gamma.z))));
 
   SV_Target.rgb = Tonemap(SV_Target.rgb, untonemapped);
   SV_Target.w = 1.0f;
