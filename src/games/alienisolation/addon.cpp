@@ -195,6 +195,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "fxFilmGrainType",
+        .binding = &shader_injection.fxFilmGrainType,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .can_reset = true,
+        .label = "Film Grain Type",
+        .section = "Effects",
+        .labels = {"Noise", "Film Grain (B&W)"},
+    },
+    new renodx::utils::settings::Setting{
         .key = "fxFilmGrain",
         .binding = &shader_injection.fxFilmGrain,
         .default_value = 50.f,
@@ -236,6 +246,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
+  renodx::utils::settings::UpdateSetting("fxFilmGrainType", 0.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 50.f);
 }
 
