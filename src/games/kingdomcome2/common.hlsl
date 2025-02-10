@@ -1,5 +1,11 @@
 #include "./shared.h"
 
+struct KingdomOptions {
+  float3 gamma;
+  float vignette;
+  float3 bloom;
+};
+
 // Credits to Pumbo
 float3 RestoreLuminance(float3 targetColor, float sourceColorLuminance, bool safe = false) {
   float targetColorLuminance = renodx::color::y::from::BT709(targetColor);
@@ -11,13 +17,6 @@ float3 RestoreLuminance(float3 targetColor, float sourceColorLuminance, bool saf
 
 float3 Tonemap(float3 sdrColor, float3 untonemapped) {
   float3 outputColor = sdrColor;
-  if (CUSTOM_FAKE_HDR > 0.f) {
-    float normalizationPoint = 1.f;  // Found empyrically
-    float mixedSceneColorLuminance = renodx::color::y::from::BT709(untonemapped) / normalizationPoint;
-    float fakeHDRIntensity = 0.5;
-    mixedSceneColorLuminance = mixedSceneColorLuminance > 1.0 ? pow(mixedSceneColorLuminance, 1.0 + fakeHDRIntensity) : mixedSceneColorLuminance;
-    untonemapped = RestoreLuminance(untonemapped, mixedSceneColorLuminance * normalizationPoint);
-  }
 
   if (RENODX_TONE_MAP_TYPE > 0.f) {
     // This is the SDR color after LUT
@@ -29,9 +28,10 @@ float3 Tonemap(float3 sdrColor, float3 untonemapped) {
   return outputColor;
 }
 
-void ModifySettings(inout float3 gamma) {
+void ModifyOptions(inout KingdomOptions options) {
+  options.vignette = 1.f;
   if (RENODX_TONE_MAP_TYPE > 0.f) {
-    gamma = float3(1, 1, 0);
+    options.gamma = float3(1, 1, 0);
+    options.bloom = options.bloom * CUSTOM_BLOOM;
   }
 }
-  
