@@ -8,9 +8,8 @@
 
 #define DEBUG_LEVEL_0
 
-#include <embed/shaders.h>
-
 #include <deps/imgui/imgui.h>
+#include <embed/shaders.h>
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
@@ -196,12 +195,12 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "fxFilmGrainType",
         .binding = &shader_injection.fxFilmGrainType,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
         .can_reset = true,
         .label = "Film Grain Type",
         .section = "Effects",
-        .labels = {"Noise", "Film Grain (B&W)"},
+        .labels = {"Noise", "Film Grain (B&W)", "Film Grain (Colored)"},
     },
     new renodx::utils::settings::Setting{
         .key = "fxFilmGrain",
