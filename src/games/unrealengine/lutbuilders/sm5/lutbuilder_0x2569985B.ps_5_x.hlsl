@@ -369,7 +369,7 @@ void main(
   r5.xyz = exp2(r5.xyz);
 
   // CustomEdit
-  if (injectedData.toneMapType != 0) {
+  if (RENODX_TONE_MAP_TYPE != 0) {
     o0 = LutBuilderToneMap(untonemapped_ap1, r5.xyz);
     return;
   }

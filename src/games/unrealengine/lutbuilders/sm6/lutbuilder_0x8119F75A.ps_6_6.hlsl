@@ -430,7 +430,7 @@ float4 main(
   float _1155 = exp2(((log2((max(0.0f, ((((cb0_013y) - _1132) * (cb0_013w)) + _1132))))) * (cb0_040y)));
   float _1156 = exp2(((log2((max(0.0f, ((((cb0_013z) - _1133) * (cb0_013w)) + _1133))))) * (cb0_040y)));
 
-  if (injectedData.toneMapType != 0) {
+  if (RENODX_TONE_MAP_TYPE != 0) {
     return LutBuilderToneMap(untonemapped_ap1, float3(_1154, _1155, _1156));
   }
   

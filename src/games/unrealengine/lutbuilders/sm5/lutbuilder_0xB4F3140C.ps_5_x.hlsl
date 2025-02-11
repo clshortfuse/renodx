@@ -480,7 +480,7 @@ void main(
   r2.xyz = cb0[27].yyy * r2.xyz;
   r3.xyz = exp2(r2.xyz);
 
-  if (injectedData.toneMapType != 0) {
+  if (RENODX_TONE_MAP_TYPE != 0) {
     o0 = LutBuilderToneMap(untonemapped_ap1, r3.xyz);
     return;
   }

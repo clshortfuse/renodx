@@ -102,7 +102,7 @@ void main(
   r1.xyz = r1.xyz ? r2.xzw : r3.xyz;
   o0.xyz = r2.yyy ? r1.xyz : r0.xyz;
 
-  if (injectedData.toneMapType != 0.f) {
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
     o0.rgb = renodx::draw::UpscaleVideoPass(o0.rgb);
   }
 

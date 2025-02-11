@@ -383,7 +383,7 @@ RWTexture3D<float4> u0 : register(u0);
   r2.xyz = cb0[27].yyy * r2.xyz;
   r3.xyz = exp2(r2.xyz);
 
-  if (injectedData.toneMapType != 0) {
+  if (RENODX_TONE_MAP_TYPE != 0) {
     u0[vThreadID.xyz] = LutBuilderToneMap(untonemapped_ap1, r3.xyz);
     return;
   }

@@ -412,7 +412,7 @@ void main(
     r0.xyz = cb0[18].yyy * r0.xyz;
     r1.xyz = exp2(r0.xyz);
 
-    if (injectedData.toneMapType != 0) {
+    if (RENODX_TONE_MAP_TYPE != 0) {
       float3 color = UpgradeToneMapAP1(untonemapped_ap1, r1.xyz);
       color = renodx::draw::RenderIntermediatePass(color);
       color = cb0[37].www * -cb0[37].xyz + color;  // lerp to 0

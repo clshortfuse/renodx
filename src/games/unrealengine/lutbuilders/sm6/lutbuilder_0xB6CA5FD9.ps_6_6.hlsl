@@ -1575,7 +1575,7 @@ float4 main(
   float _1330 = exp2(_1327);
 
   // CustomEdit
-  if (injectedData.toneMapType != 0) {
+  if (RENODX_TONE_MAP_TYPE != 0) {
     return LutBuilderToneMap(untonemapped_ap1, float3(_1328, _1329, _1330));
   }
 
