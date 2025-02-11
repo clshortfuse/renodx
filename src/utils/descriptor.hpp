@@ -9,6 +9,7 @@
 #include <d3d12.h>
 #include <dxgi.h>
 #include <dxgi1_6.h>
+#include <atomic>
 #include <cassert>
 #include <cstdio>
 
@@ -30,6 +31,8 @@
 namespace renodx::utils::descriptor {
 
 static bool is_primary_hook = false;
+static std::atomic_bool trace_descriptor_tables = false;
+
 
 struct __declspec(uuid("018fa2c9-7a8b-76dc-bc84-87c53574223f")) DeviceData {
   // <descriptor_table.handle[index], <resourceView.handle>>
@@ -47,10 +50,9 @@ struct __declspec(uuid("018fa2c9-7a8b-76dc-bc84-87c53574223f")) DeviceData {
       heaps;
   std::unordered_map<uint64_t, std::unordered_set<uint32_t>> resource_view_heap_locations;
 
+  bool trace_descriptor_tables = false;
   std::shared_mutex mutex;
 };
-
-static std::shared_mutex mutex;
 
 static reshade::api::resource_view GetResourceViewFromDescriptorUpdate(
     const reshade::api::descriptor_table_update update,
@@ -75,9 +77,13 @@ static reshade::api::resource_view GetResourceViewFromDescriptorUpdate(
 
 static void OnInitDevice(reshade::api::device* device) {
   auto* data = &device->get_private_data<DeviceData>();
-  if (data != nullptr) return;
+  if (data != nullptr) {
+    trace_descriptor_tables = data->trace_descriptor_tables;
+    return;
+  }
 
   data = &device->create_private_data<DeviceData>();
+  data->trace_descriptor_tables = trace_descriptor_tables;
 
   is_primary_hook = true;
 }
@@ -94,9 +100,13 @@ static bool OnUpdateDescriptorTables(
     const reshade::api::descriptor_table_update* updates) {
   if (!is_primary_hook) return false;
   if (count == 0u) return false;
+  if (!trace_descriptor_tables) return false;
 
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
+
+  if (!data.trace_descriptor_tables) return false;
+
 
   for (uint32_t i = 0; i < count; ++i) {
     const auto& update = updates[i];
@@ -206,8 +216,10 @@ static bool OnCopyDescriptorTables(
     const reshade::api::descriptor_table_copy* copies) {
   if (!is_primary_hook) return false;
   if (count == 0u) return false;
+  if (!trace_descriptor_tables) return false;
   auto& data = device->get_private_data<DeviceData>();
   const std::unique_lock lock(data.mutex);
+  if (!data.trace_descriptor_tables) return false;
 
   for (uint32_t i = 0; i < count; ++i) {
     const reshade::api::descriptor_table_copy& copy = copies[i];
@@ -294,6 +306,8 @@ static void OnBindDescriptorTables(
     uint32_t count,
     const reshade::api::descriptor_table* tables) {
   if (!is_primary_hook) return;
+  if (!trace_descriptor_tables) return;
+  if (count == 0u) return;
   auto* device = cmd_list->get_device();
   auto& layout_data = device->get_private_data<renodx::utils::pipeline_layout::DeviceData>();
   const std::shared_lock layout_lock(layout_data.mutex);

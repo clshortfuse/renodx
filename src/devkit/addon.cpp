@@ -418,7 +418,7 @@ void OnInitPipelineTrackAddons(
   }
 }
 
-static void OnInitPipeline(
+void OnInitPipeline(
     reshade::api::device* device,
     reshade::api::pipeline_layout layout,
     uint32_t subobject_count,
@@ -431,7 +431,7 @@ static void OnInitPipeline(
   data.live_pipelines.emplace(pipeline.handle);
 }
 
-static void OnDestroyPipeline(
+void OnDestroyPipeline(
     reshade::api::device* device,
     reshade::api::pipeline pipeline) {
   if (pipeline.handle == 0u) return;
@@ -1759,6 +1759,7 @@ void RenderSettingsPane(reshade::api::device* device, DeviceData& data) {
   {
     ImGui::SeparatorText("Trace");
     DrawSettingBoolCheckbox(data.runtime, "Trace Pipeline Creation", "TracePipelineCreation", &renodx::utils::trace::trace_pipeline_creation);
+    DrawSettingBoolCheckbox(data.runtime, "Trace Descriptor Tables", "TraceDescriptorTables", &renodx::utils::descriptor::trace_descriptor_tables);
   }
 }
 
@@ -2023,6 +2024,7 @@ void InitializeUserSettings(reshade::api::effect_runtime* runtime) {
 
   for (const auto& [key, value] : std::vector<std::pair<const char*, std::atomic_bool*>>({
            {"TracePipelineCreation", &renodx::utils::trace::trace_pipeline_creation},
+           {"TraceDescriptorTables", &renodx::utils::descriptor::trace_descriptor_tables},
            {"SnapshotPaneShowVertexShaders", &snapshot_pane_show_vertex_shaders},
            {"SnapshotPaneShowPixelShaders", &snapshot_pane_show_pixel_shaders},
            {"SnapshotPaneShowComputeShaders", &snapshot_pane_show_compute_shaders},
@@ -2049,7 +2051,6 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   std::unique_lock lock(data.mutex);  // Probably not needed
   if (data.runtime == nullptr) {
     data.runtime = runtime;
-    InitializeUserSettings(runtime);
   }
   static auto setting_window_size = 0;
   static auto setting_side_sheet_width = 0;
@@ -2159,6 +2160,8 @@ void OnPresent(
   DeviceData::StopSnapshot();
 }
 
+bool initialized = false;
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX DevKit";
@@ -2172,6 +2175,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       // while (IsDebuggerPresent() == 0) {
       //   Sleep(100);
       // }
+
+      if (!initialized) {
+        renodx::utils::shader::use_replace_async = true;
+        InitializeUserSettings(nullptr);
+        initialized = true;
+      }
 
       renodx::utils::descriptor::Use(fdw_reason);
       renodx::utils::shader::Use(fdw_reason);
