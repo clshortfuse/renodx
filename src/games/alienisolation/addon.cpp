@@ -21,6 +21,8 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
+    CustomShaderEntry(0x8EA31781),  // Lens Flare
+
     CustomShaderEntry(0x8AFBFA0F),  // tonemap
     CustomShaderEntry(0xC4C732B7),  // tonemap - desaturation
     CustomShaderEntry(0x793F6207),  // tonemap - desaturation + blood
@@ -28,9 +30,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x746E4324),  // tonemap - dizzy + desaturation + blood
 
     CustomShaderEntry(0xA090F460),  // terminal
-
-    // CustomSwapchainShader(0xB95A4E01),  // Copy
-    // CustomShaderEntry(0x007F7E1C),   // SMAA?
 
     CustomSwapchainShader(0x043049C7),  // Video
     CustomSwapchainShader(0xCC0C2DF3),  // UI - gamma adjust slider notch, line above settings explanations
@@ -193,6 +192,15 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "fxLensFlare",
+        .binding = &shader_injection.fxLensFlare,
+        .default_value = 50.f,
+        .label = "Lens Flare",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "fxVignette",
         .binding = &shader_injection.fxVignette,
         .default_value = 50.f,
@@ -341,16 +349,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::b8g8r8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
-          .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
-      });
-
-      // needed for Alias Isolation's Chromatic Aberration
-      renodx::mods::swapchain::use_resource_cloning = true;
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_typeless,
-          .use_resource_view_cloning = true,
-          .use_resource_view_hot_swap = true,
           .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
       });
 
