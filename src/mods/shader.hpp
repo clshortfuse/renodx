@@ -192,6 +192,7 @@ static bool OnCreatePipelineLayout(
   uint32_t cbv_index = 0;
   uint32_t pc_count = 0;
   uint32_t pdss_index = -1;
+  uint32_t dword_count = 0;
   if (param_count == -1) {
     std::stringstream s;
     s << "mods::shader::OnCreatePipelineLayout(";
@@ -211,6 +212,7 @@ static bool OnCreatePipelineLayout(
   for (uint32_t param_index = 0; param_index < param_count; ++param_index) {
     auto param = params[param_index];
     if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
+      dword_count += 1;
       for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
         auto range = param.descriptor_table.ranges[range_index];
         if (range.type == reshade::api::descriptor_type::constant_buffer) {
@@ -222,6 +224,7 @@ static bool OnCreatePipelineLayout(
         }
       }
     } else if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
+      dword_count += 1;
       pc_count++;
       if (
           param.push_constants.dx_register_space == data.expected_constant_buffer_space
@@ -229,6 +232,7 @@ static bool OnCreatePipelineLayout(
         cbv_index = param.push_constants.dx_register_index + param.push_constants.count;
       }
     } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
+      dword_count += 2;
       if (param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer) {
         if (
             param.push_descriptors.dx_register_space == data.expected_constant_buffer_space
@@ -300,7 +304,7 @@ static bool OnCreatePipelineLayout(
 
   // Fill in extra param
   const uint32_t slots = shader_injection_size;
-  const uint32_t max_count = 64u - (old_count + 1u) + 1u;
+  const uint32_t max_count = 64u - dword_count;
 
   new_params[injection_index] = reshade::api::pipeline_layout_param(
       reshade::api::constant_range{
