@@ -2650,7 +2650,7 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
   renodx::utils::swapchain::Use(fdw_reason);
   renodx::utils::state::Use(fdw_reason);
   if (use_resource_cloning) {
-    renodx::utils::descriptor::Use(fdw_reason);
+    // renodx::utils::descriptor::Use(fdw_reason);
   }
 
   switch (fdw_reason) {
