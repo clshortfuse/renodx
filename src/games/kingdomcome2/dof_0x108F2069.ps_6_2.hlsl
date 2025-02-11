@@ -9,14 +9,12 @@ Texture2D<float4> CDOF_STarg : register(t3);
 Texture2D<float4> CDOF_Depth : register(t0);
 
 cbuffer PER_BATCH : register(b0, space1) {
-  float PER_BATCH_000x : packoffset(c000.x);
-  float PER_BATCH_000y : packoffset(c000.y);
-  float PER_BATCH_001w : packoffset(c001.w);
-  float PER_BATCH_002x : packoffset(c002.x);
+  float PER_BATCH_000w : packoffset(c000.w);
+  float PER_BATCH_001x : packoffset(c001.x);
+  float PER_BATCH_001y : packoffset(c001.y);
   float PER_BATCH_002y : packoffset(c002.y);
+  float PER_BATCH_003x : packoffset(c003.x);
   float PER_BATCH_003y : packoffset(c003.y);
-  float PER_BATCH_004x : packoffset(c004.x);
-  float PER_BATCH_004y : packoffset(c004.y);
 };
 
 SamplerState CDOF_PCSamp : register(s4);
@@ -29,8 +27,9 @@ float4 main(
     : SV_Target {
   float4 SV_Target;
   float4 _10 = CDOF_STarg.Sample(CDOF_PCSamp, float2((TEXCOORD.x), (TEXCOORD.y)));
-  float _18 = (PER_BATCH_004x) * 0.5f;
-  float _19 = (PER_BATCH_004y) * 0.5f;
+
+  float _18 = (PER_BATCH_003x) * 0.5f;
+  float _19 = (PER_BATCH_003y) * 0.5f;
   float _22 = (_18 * (TEXCOORD.x)) + 0.5f;
   float _23 = (_19 * (TEXCOORD.y)) + 0.5f;
   float _26 = frac(_22);
@@ -54,8 +53,8 @@ float4 main(
   float4 _116 = CDOF_HDRDoF0.Sample(CDOF_LCSamp, float2(_84, _89));
   float4 _125 = CDOF_HDRDoF0.Sample(CDOF_LCSamp, float2(_87, _89));
   float _145 = ((((_125.w) * _42) + ((_116.w) * _34)) * _77) + ((((_99.w) * _42) + ((_90.w) * _34)) * _66);
-  float _149 = (PER_BATCH_004x) * 0.5f;
-  float _150 = (PER_BATCH_004y) * 0.5f;
+  float _149 = (PER_BATCH_003x) * 0.5f;
+  float _150 = (PER_BATCH_003y) * 0.5f;
   float _153 = (_149 * (TEXCOORD.x)) + 0.5f;
   float _154 = (_150 * (TEXCOORD.y)) + 0.5f;
   float _157 = frac(_153);
@@ -79,32 +78,18 @@ float4 main(
   float4 _247 = CDOF_HDRDoF1.Sample(CDOF_LCSamp, float2(_215, _220));
   float4 _256 = CDOF_HDRDoF1.Sample(CDOF_LCSamp, float2(_218, _220));
   float _276 = ((((_256.w) * _173) + ((_247.w) * _165)) * _208) + ((((_230.w) * _173) + ((_221.w) * _165)) * _197);
-  float4 _282 = CDOF_Depth.GatherRed(CDOF_PCSamp, float2(((TEXCOORD.x) - (PER_BATCH_000x)), ((TEXCOORD.y) - (PER_BATCH_000y))));
-  float _304 = saturate(((((PER_BATCH_003y) * (_282.x)) * (PER_BATCH_002x)) + (PER_BATCH_002y)));
-  float _305 = saturate(((((PER_BATCH_003y) * (_282.y)) * (PER_BATCH_002x)) + (PER_BATCH_002y)));
-  float _306 = saturate(((((PER_BATCH_003y) * (_282.z)) * (PER_BATCH_002x)) + (PER_BATCH_002y)));
-  float _307 = saturate(((((PER_BATCH_003y) * (_282.w)) * (PER_BATCH_002x)) + (PER_BATCH_002y)));
-  float _326 = min((max((max(((_304 * _304) * (PER_BATCH_001w)), 9.999999747378752e-06f)), -4.0f)), 4.0f);
-  float _327 = min((max((max(((_305 * _305) * (PER_BATCH_001w)), 9.999999747378752e-06f)), -4.0f)), 4.0f);
-  float _328 = min((max((max(((_306 * _306) * (PER_BATCH_001w)), 9.999999747378752e-06f)), -4.0f)), 4.0f);
-  float _329 = min((max((max(((_307 * _307) * (PER_BATCH_001w)), 9.999999747378752e-06f)), -4.0f)), 4.0f);
-  float _332 = min((min(_326, _328)), (min(_327, _329)));
-  float _335 = max((max(_326, _328)), (max(_327, _329)));
-  float _339 = saturate(((_276 - _332) / (_335 - _332)));
-  float _343 = (_339 * _339) * (3.0f - (_339 * 2.0f));
-  float _346 = saturate(_332);
-  float _351 = (((bool)((_276 > 0.0f))) ? _276 : 1.0f);
-  float _355 = saturate((((_343 * _343) * ((saturate(_335)) - _346)) + _346));
-  float _364 = (_355 * (((((((_256.x) * _173) + ((_247.x) * _165)) * _208) + ((((_230.x) * _173) + ((_221.x) * _165)) * _197)) / _351) - (_10.x))) + (_10.x);
-  float _365 = (_355 * (((((((_256.y) * _173) + ((_247.y) * _165)) * _208) + ((((_230.y) * _173) + ((_221.y) * _165)) * _197)) / _351) - (_10.y))) + (_10.y);
-  float _366 = (_355 * (((((((_256.z) * _173) + ((_247.z) * _165)) * _208) + ((((_230.z) * _173) + ((_221.z) * _165)) * _197)) / _351) - (_10.z))) + (_10.z);
-  float _367 = ((_355 - (_10.w)) * _355) + (_10.w);
-  float _369 = (((bool)((_145 > 0.0f))) ? _145 : 1.0f);
-  float _373 = saturate(_145);
-  SV_Target.x = ((_373 * (((((((_125.x) * _42) + ((_116.x) * _34)) * _77) + ((((_99.x) * _42) + ((_90.x) * _34)) * _66)) / _369) - _364)) + _364);
-  SV_Target.y = ((_373 * (((((((_125.y) * _42) + ((_116.y) * _34)) * _77) + ((((_99.y) * _42) + ((_90.y) * _34)) * _66)) / _369) - _365)) + _365);
-  SV_Target.z = ((_373 * (((((((_125.z) * _42) + ((_116.z) * _34)) * _77) + ((((_99.z) * _42) + ((_90.z) * _34)) * _66)) / _369) - _366)) + _366);
-  SV_Target.w = (((_373 - _367) * _373) + _367);
-
+  float _287 = saturate(((((PER_BATCH_002y) * (((float4)(CDOF_Depth.Sample(CDOF_PCSamp, float2((TEXCOORD.x), (TEXCOORD.y))))).x)) * (PER_BATCH_001x)) + (PER_BATCH_001y)));
+  float _296 = (((bool)((_276 > 0.0f))) ? _276 : 1.0f);
+  float _300 = saturate((min((max((max(((_287 * _287) * (PER_BATCH_000w)), 9.999999747378752e-06f)), -4.0f)), 4.0f)));
+  float _309 = (_300 * (((((((_256.x) * _173) + ((_247.x) * _165)) * _208) + ((((_230.x) * _173) + ((_221.x) * _165)) * _197)) / _296) - (_10.x))) + (_10.x);
+  float _310 = (_300 * (((((((_256.y) * _173) + ((_247.y) * _165)) * _208) + ((((_230.y) * _173) + ((_221.y) * _165)) * _197)) / _296) - (_10.y))) + (_10.y);
+  float _311 = (_300 * (((((((_256.z) * _173) + ((_247.z) * _165)) * _208) + ((((_230.z) * _173) + ((_221.z) * _165)) * _197)) / _296) - (_10.z))) + (_10.z);
+  float _312 = ((_300 - (_10.w)) * _300) + (_10.w);
+  float _314 = (((bool)((_145 > 0.0f))) ? _145 : 1.0f);
+  float _318 = saturate(_145);
+  SV_Target.x = ((_318 * (((((((_125.x) * _42) + ((_116.x) * _34)) * _77) + ((((_99.x) * _42) + ((_90.x) * _34)) * _66)) / _314) - _309)) + _309);
+  SV_Target.y = ((_318 * (((((((_125.y) * _42) + ((_116.y) * _34)) * _77) + ((((_99.y) * _42) + ((_90.y) * _34)) * _66)) / _314) - _310)) + _310);
+  SV_Target.z = ((_318 * (((((((_125.z) * _42) + ((_116.z) * _34)) * _77) + ((((_99.z) * _42) + ((_90.z) * _34)) * _66)) / _314) - _311)) + _311);
+  SV_Target.w = (((_318 - _312) * _318) + _312);
   return SV_Target;
 }

@@ -1,3 +1,5 @@
+#include "./common.hlsl"
+
 Texture2D<float4> PAAComp_CurTarg : register(t0);
 
 Texture3D<float4> PostAA_Grain : register(t2);
