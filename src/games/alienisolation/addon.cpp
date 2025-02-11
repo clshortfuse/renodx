@@ -193,6 +193,15 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "fxVignette",
+        .binding = &shader_injection.fxVignette,
+        .default_value = 50.f,
+        .label = "Vignette",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "fxFilmGrainType",
         .binding = &shader_injection.fxFilmGrainType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -284,6 +293,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
+  renodx::utils::settings::UpdateSetting("fxVignette", 50.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrainType", 0.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 50.f);
 }
@@ -317,10 +327,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::shader::expected_constant_buffer_index = 11;
       // renodx::mods::shader::trace_unmodified_shaders = true;
-      // renodx::mods::shader::force_pipeline_cloning = true;
+      renodx::mods::shader::force_pipeline_cloning = true;
 
       // Final Shader
-      // renodx::mods::swapchain::use_resource_cloning = true;
       // renodx::mods::swapchain::swapchain_proxy_compatibility_mode = true;
       // renodx::mods::swapchain::swapchain_proxy_revert_state = true;
       // renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
@@ -332,6 +341,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::b8g8r8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
+          .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
+      });
+
+      // needed for Alias Isolation's Chromatic Aberration
+      renodx::mods::swapchain::use_resource_cloning = true;
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_typeless,
+          .use_resource_view_cloning = true,
+          .use_resource_view_hot_swap = true,
           .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
       });
 
