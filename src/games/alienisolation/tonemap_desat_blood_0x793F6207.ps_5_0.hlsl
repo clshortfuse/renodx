@@ -80,7 +80,7 @@ float3 applyVanillaTonemap(float3 untonemapped, float luminance) {
 
 // debug stuff
 // maybe has vignette?
-float3 applyPostTMDebug(float3 tonemapped, float4 sv_position, float4 texcoord, float luminance) {
+float3 applyVignette(float3 tonemapped, float4 sv_position, float4 texcoord, float luminance) {
   float4 r0, r1, r2;
   r0.xyz = tonemapped;
   r0.w = luminance;
@@ -106,7 +106,8 @@ float3 applyPostTMDebug(float3 tonemapped, float4 sv_position, float4 texcoord, 
   r0.xyz = r1.xxx ? r1.yzw : r0.xyz;
   r0.xyz = texcoord.zzz * r0.xyz;  // Use v1 (texcoord) for final adjustment
 
-  return r0.rgb;  // Return the modified tonemapped color
+  r0.rgb = lerp(tonemapped, r0.rgb, injectedData.fxVignette);
+  return r0.rgb;
 }
 
 // Function to apply the LUT based on input color
@@ -131,7 +132,7 @@ float3 applyLUT(float3 lutInputColor, float lutStrength = 1.f) {
 float3 dualTonemap(float3 inputColor, float4 sv_position, float4 texcoord, float luminance) {
   float3 untonemapped = inputColor;
 
-  untonemapped = applyPostTMDebug(untonemapped, sv_position, texcoord, luminance);
+  untonemapped = applyVignette(untonemapped, sv_position, texcoord, luminance);
 
   const float paperWhite = injectedData.toneMapGameNits / renodx::color::srgb::REFERENCE_WHITE;
   const float peakWhite = injectedData.toneMapPeakNits / renodx::color::srgb::REFERENCE_WHITE;
@@ -231,7 +232,7 @@ void main(
   float3 outputColor = r0.xyz;
   if (injectedData.toneMapType == 0) {  // tonemap
     r0.xyz = applyVanillaTonemap(untonemapped, untonemappedLum);
-    r0.xyz = applyPostTMDebug(r0.rgb, v2, v1, untonemappedLum);
+    r0.xyz = applyVignette(r0.rgb, v2, v1, untonemappedLum);
     r0.xyz = applyLUT(r0.rgb, injectedData.colorGradeLUTStrength);
 
     outputColor = r0.xyz;
@@ -239,7 +240,7 @@ void main(
     const float3 vanillaMidGray = applyVanillaTonemap(float3(0.18, 0.18, 0.18), untonemappedLum);
     const float exposureScale = renodx::color::y::from::BT709(vanillaMidGray) / 0.18f;
     const float3 sdrTM = applyVanillaTonemap(untonemapped, untonemappedLum);
-    float3 sdrColor = applyPostTMDebug(sdrTM, v2, v1, untonemappedLum);
+    float3 sdrColor = applyVignette(sdrTM, v2, v1, untonemappedLum);
     sdrColor = applyLUT(sdrColor, injectedData.colorGradeLUTStrength);
     sdrColor = renodx::color::grade::UserColorGrading(
         sdrColor,
