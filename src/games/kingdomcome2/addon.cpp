@@ -25,6 +25,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x4038C56A),
     CustomShaderEntry(0xFC7BB86E),
     CustomShaderEntry(0xC04583C6),
+    CustomShaderEntry(0xDEA0F1F4),
     CustomShaderEntry(0x7D7F957B),
     CustomShaderEntry(0xD9D2ADB8),
 };
@@ -302,6 +303,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+      renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
 
       // renodx::mods::swapchain::use_resize_buffer = true;
       // renodx::mods::swapchain::use_resize_buffer_on_demand = true;
@@ -323,6 +325,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::r11g11b10_float,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
           .use_resource_view_cloning = true,
+          .usage_include = reshade::api::resource_usage::unordered_access
       }); */
 
       break;
