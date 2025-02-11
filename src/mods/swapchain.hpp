@@ -1906,7 +1906,8 @@ static bool OnCopyResource(
       }
 
       bool can_be_copied = (source_desc_new.texture.format == dest_desc_new.texture.format)
-                           || (reshade::api::format_to_typeless(source_desc_new.texture.format) == reshade::api::format_to_typeless(dest_desc.texture.format));
+                           || (reshade::api::format_to_typeless(source_desc_new.texture.format)
+                               == reshade::api::format_to_typeless(dest_desc_new.texture.format));
 
       if (can_be_copied) {
         cmd_list->copy_resource(source_new, dest_new);
@@ -2525,6 +2526,10 @@ static bool OnCopyTextureRegion(
   if (source_desc.type != reshade::api::resource_type::texture_2d
       && source_desc.type != reshade::api::resource_type::texture_3d) return false;
   if (dest_desc.type != source_desc.type) return false;
+  auto source_new = source;
+  auto dest_new = dest;
+  auto source_desc_new = source_desc;
+  auto dest_desc_new = dest_desc;
   if (use_resource_cloning) {
     auto& data = device->get_private_data<DeviceData>();
     const std::unique_lock lock(data.mutex);
@@ -2535,18 +2540,22 @@ static bool OnCopyTextureRegion(
     if (source_clone.handle == 0u && dest_clone.handle == 0u) return false;
 
     if (source_clone.handle != 0u) {
-      source_desc = device->get_resource_desc(source_clone);
+      source_desc_new = device->get_resource_desc(source_clone);
 
-      source = source_clone;
+      source_new = source_clone;
     }
     if (dest_clone.handle != 0u) {
-      dest_desc = device->get_resource_desc(dest_clone);
-      dest = dest_clone;
+      dest_desc_new = device->get_resource_desc(dest_clone);
+      dest_new = dest_clone;
     }
   }
 
-  if (source_desc.texture.format == dest_desc.texture.format) {
-    cmd_list->copy_texture_region(source, source_subresource, source_box, dest, dest_subresource, dest_box, filter);
+  bool can_be_copied = (source_desc_new.texture.format == dest_desc_new.texture.format)
+                       || (reshade::api::format_to_typeless(source_desc_new.texture.format)
+                           == reshade::api::format_to_typeless(dest_desc_new.texture.format));
+
+  if (can_be_copied) {
+    cmd_list->copy_texture_region(source_new, source_subresource, source_box, dest_new, dest_subresource, dest_box, filter);
     return true;
   }
   // Mismatched (don't copy);
