@@ -1,5 +1,5 @@
-#ifndef SRC_UE_DX11_SHARED_H_
-#define SRC_UE_DX11_SHARED_H_
+#ifndef SRC_UNREALENGINE_SHARED_H_
+#define SRC_UNREALENGINE_SHARED_H_
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -30,9 +30,6 @@ struct ShaderInjectData {
   float colorGradeStrength;
 
   float processingUseSCRGB;
-  float padding02;
-  float padding03;
-  float padding04;
 };
 
 #ifndef __cplusplus
@@ -74,4 +71,4 @@ cbuffer injectedBuffer : register(b13) {
 #include "../../shaders/renodx.hlsl"
 #endif
 
-#endif  // SRC_UE_DX11_SHARED_H_
+#endif  // SRC_UNREALENGINE_SHARED_H_
