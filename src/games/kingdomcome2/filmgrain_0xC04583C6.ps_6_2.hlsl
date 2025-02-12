@@ -20,6 +20,7 @@ float4 main(
   float4 SV_Target;
   // float4 _11 = PAAComp_CurTarg.Load(int3((int(9)), (int(10)), 0));
   float4 _11 = PAAComp_CurTarg.Load(int3((int(SV_Position.x)), (int(SV_Position.y)), 0));
+  // _11.rgb = renodx::draw::InvertIntermediatePass(_11.rgb); // OptiScaler?
   float _31 = (PER_BATCH_000w) * ((((float4)(PostAA_Grain.Sample(PostAA_GrainSS, float3((((TEXCOORD.x) * 4.0f) * ((PER_BATCH_001x) / (PER_BATCH_001y))), ((TEXCOORD.y) * 4.0f), ((PER_BATCH_002x) * 3.0f))))).x) + -0.5f);
   float _32 = _31 + 0.5f;
   float _45 = 0.5f - _31;
@@ -32,7 +33,7 @@ float4 main(
   SV_Target.x = (((((1.0f - (((1.0f - (_11.x)) * 2.0f) * _45)) - _53) * ((((bool)(((_11.x) < 0.5f))) ? 0.0f : 1.0f))) + _53));
   SV_Target.y = (((((1.0f - (((1.0f - (_11.y)) * 2.0f) * _45)) - _55) * ((((bool)(((_11.y) < 0.5f))) ? 0.0f : 1.0f))) + _55));
   SV_Target.z = (((((1.0f - (((1.0f - (_11.z)) * 2.0f) * _45)) - _57) * ((((bool)(((_11.z) < 0.5f))) ? 0.0f : 1.0f))) + _57));
-
+  // SV_Target.rgb = renodx::color::srgb::EncodeSafe(SV_Target.rgb);  // OptiScaler?
   SV_Target.w = (saturate((_11.w)));
 
   return SV_Target;

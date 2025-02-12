@@ -15,6 +15,10 @@
 #define RENODX_TONE_MAP_FLARE                shader_injection.colorGradeFlare
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE  2.f
 #define CUSTOM_BLOOM                         shader_injection.fxBloom
+// Optiscaler?
+/* #define RENODX_INTERMEDIATE_ENCODING         4.f
+#define RENODX_SWAP_CHAIN_DECODING           2.f
+#define RENODX_SWAP_CHAIN_ENCODING           5.f */
 
 // Must be 32bit aligned
 // Should be 4x32
