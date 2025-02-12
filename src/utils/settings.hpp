@@ -161,34 +161,38 @@ static bool UpdateSetting(const std::string& key, float value) {
   return true;
 }
 
+static void LoadSetting(reshade::api::effect_runtime* runtime, const std::string& section, Setting* setting) {
+  switch (setting->value_type) {
+    case SettingValueType::FLOAT:
+      if (!reshade::get_config_value(runtime, section.c_str(), setting->key.c_str(), setting->value)) {
+        setting->value = setting->default_value;
+      }
+      if (setting->value > setting->GetMax()) {
+        setting->value = setting->GetMax();
+      } else if (setting->value < setting->min) {
+        setting->value = setting->min;
+      }
+      break;
+    case SettingValueType::BOOLEAN:
+    case SettingValueType::INTEGER:
+      if (!reshade::get_config_value(runtime, section.c_str(), setting->key.c_str(), setting->value_as_int)) {
+        setting->value_as_int = static_cast<int>(setting->default_value);
+      }
+      if (setting->value_as_int > setting->GetMax()) {
+        setting->value_as_int = setting->GetMax();
+      } else if (setting->value_as_int < static_cast<int>(setting->min)) {
+        setting->value_as_int = static_cast<int>(setting->min);
+      }
+      break;
+    default:
+      break;
+  }
+}
+
 static void LoadSettings(reshade::api::effect_runtime* runtime, const std::string& section) {
   for (auto* setting : *settings) {
     if (setting->is_global) continue;
-    switch (setting->value_type) {
-      case SettingValueType::FLOAT:
-        if (!reshade::get_config_value(runtime, section.c_str(), setting->key.c_str(), setting->value)) {
-          setting->value = setting->default_value;
-        }
-        if (setting->value > setting->GetMax()) {
-          setting->value = setting->GetMax();
-        } else if (setting->value < setting->min) {
-          setting->value = setting->min;
-        }
-        break;
-      case SettingValueType::BOOLEAN:
-      case SettingValueType::INTEGER:
-        if (!reshade::get_config_value(runtime, section.c_str(), setting->key.c_str(), setting->value_as_int)) {
-          setting->value_as_int = static_cast<int>(setting->default_value);
-        }
-        if (setting->value_as_int > setting->GetMax()) {
-          setting->value_as_int = setting->GetMax();
-        } else if (setting->value_as_int < static_cast<int>(setting->min)) {
-          setting->value_as_int = static_cast<int>(setting->min);
-        }
-        break;
-      default:
-        break;
-    }
+    LoadSetting(runtime, section, setting);
     const std::unique_lock lock(renodx::utils::mutex::global_mutex);
     setting->Write();
   }
