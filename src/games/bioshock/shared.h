@@ -9,6 +9,8 @@
 struct ShaderInjectData {
   float peakWhiteNits;
   float paperWhiteNits;
+  float BloomAmount;
+  float FogAmount;
 };
 
 #ifndef __cplusplus

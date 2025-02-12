@@ -9,6 +9,12 @@
 
 #include <embed/0xEC834D82.h>
 #include <embed/0x6457104F.h>
+#include <embed/0xDAA8E1E9.h>
+#include <embed/0x0C454543.h>
+#include <embed/0x3F8A5A79.h>
+#include <embed/0x64B4F8D8.h>
+#include <embed/0x21303C74.h>
+#include <embed/0x63693A7F.h>
 
 #include <embed/0xFFFFFFFD.h>  // Custom final VS
 #include <embed/0xFFFFFFFE.h>  // Custom final PS
@@ -26,6 +32,12 @@ namespace {
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xEC834D82),
     CustomShaderEntry(0x6457104F),
+    CustomShaderEntry(0xDAA8E1E9),
+    CustomShaderEntry(0x0C454543),
+    CustomShaderEntry(0x3F8A5A79),
+    CustomShaderEntry(0x64B4F8D8),
+    CustomShaderEntry(0x21303C74),
+    CustomShaderEntry(0x63693A7F),
 };
 
 ShaderInjectData shader_injection;
@@ -52,6 +64,30 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of paper white in nits",
         .min = 80.f,
         .max = 500.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "BloomAmount",
+        .binding = &shader_injection.BloomAmount,
+        .default_value = 1.f,
+        .can_reset = true,
+        .label = "Bloom Amount",
+        .section = "FX",
+        .tooltip = "Game's default bloom shader amount",
+        .min = 0.f,
+        .max = 2.f,
+        .format = "%.2f",
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FogAmount",
+        .binding = &shader_injection.FogAmount,
+        .default_value = 1.f,
+        .can_reset = true,
+        .label = "Fog Amount",
+        .section = "FX",
+        .tooltip = "Game's default fog shader amount",
+        .min = 0.f,
+        .max = 2.f,
+        .format = "%.2f",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
