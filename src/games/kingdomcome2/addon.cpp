@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <include/reshade_api_device.hpp>
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
@@ -262,6 +263,17 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain) {
     settings[2]->can_reset = true;
   }
 }
+
+void OnInitDevice(reshade::api::device* device) {
+  int vendor_id;
+  auto retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
+  if (retrieved && vendor_id == 0x10de) {  // Nvidia vendor ID
+    // Bugs out AMD GPUs
+    renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r11g11b10_float,
+                                                                   .new_format = reshade::api::format::r16g16b16a16_typeless,
+                                                                   .use_resource_view_cloning = true});
+  }
+}
 }  // namespace
 
 // NOLINTBEGIN(readability-identifier-naming)
@@ -308,11 +320,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       // renodx::mods::swapchain::use_resize_buffer = true;
       // renodx::mods::swapchain::use_resize_buffer_on_demand = true;
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      // DLAA issues
+      /* renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
-      });
+      }); */
 
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r10g10b10a2_unorm,
@@ -320,17 +333,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .use_resource_view_cloning = true,
       });
 
-      // Bugs out AMD GPUs
-      /* renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r11g11b10_float,
-          .new_format = reshade::api::format::r16g16b16a16_typeless,
-          .use_resource_view_cloning = true,
-          .usage_include = reshade::api::resource_usage::unordered_access
-      }); */
-
+      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
+      
       reshade::unregister_addon(h_module);
       break;
   }
