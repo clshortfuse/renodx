@@ -509,15 +509,24 @@ const auto UPGRADE_TYPE_OUTPUT_SIZE = 1.f;
 const auto UPGRADE_TYPE_OUTPUT_RATIO = 2.f;
 const auto UPGRADE_TYPE_ANY = 3.f;
 
-const std::unordered_map<std::string, std::unordered_map<std::string, float>> GAME_DEFAULT_SETTINGS = {
-    {
-        "Psychonauts2-WinGDK-Shipping.exe",
+const std::unordered_map<
+    std::string,                             // Filename or ProductName
+    std::unordered_map<std::string, float>>  // {Key, Value}
+    GAME_DEFAULT_SETTINGS = {
         {
-            {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_RATIO},
-            {"Upgrade_R8G8B8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
-            {"ForceBorderless", 0.f},
+            "Psychonauts2-WinGDK-Shipping.exe",
+            {
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_RATIO},
+                {"Upgrade_R8G8B8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
+                {"ForceBorderless", 0.f},
+            },
         },
-    },
+        {
+            "Wuthering Waves",
+            {
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
 };
 
 float g_dump_shaders = 0;
@@ -610,12 +619,39 @@ void AddAdvancedSettings() {
   auto filename = process_path.filename().string();
   auto default_settings = GAME_DEFAULT_SETTINGS.find(filename);
 
+  {
+    std::stringstream s;
+    if (default_settings == GAME_DEFAULT_SETTINGS.end()) {
+      auto product_name = renodx::utils::platform::GetProductName(process_path);
+
+      default_settings = GAME_DEFAULT_SETTINGS.find(product_name);
+
+      if (default_settings == GAME_DEFAULT_SETTINGS.end()) {
+        s << "No default settings for ";
+      } else {
+        s << "Marked default values for ";
+      }
+      s << filename;
+      s << " (" << product_name << ")";
+    } else {
+      s << "Marked default values for ";
+      s << filename;
+    }
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+  }
+
   auto add_setting = [&](auto* setting) {
     if (default_settings != GAME_DEFAULT_SETTINGS.end()) {
       auto values = default_settings->second;
       if (auto values_pair = values.find(setting->key);
           values_pair != values.end()) {
         setting->default_value = static_cast<float>(values_pair->second);
+        std::stringstream s;
+        s << "Default value for ";
+        s << setting->key;
+        s << ": ";
+        s << setting->default_value;
+        reshade::log::message(reshade::log::level::info, s.str().c_str());
       }
     }
     renodx::utils::settings::LoadSetting(nullptr, renodx::utils::settings::global_name, setting);
