@@ -1,6 +1,9 @@
 #pragma once
 
+#pragma comment(lib, "version.lib")
+
 #include <dxgi1_6.h>
+#include <winver.h>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -8,7 +11,7 @@
 
 namespace renodx::utils::platform {
 
-std::vector<DISPLAYCONFIG_PATH_INFO> GetPathInfos() {
+inline std::vector<DISPLAYCONFIG_PATH_INFO> GetPathInfos() {
   for (LONG result = ERROR_INSUFFICIENT_BUFFER;
        result == ERROR_INSUFFICIENT_BUFFER;) {
     uint32_t path_elements;
@@ -31,7 +34,7 @@ std::vector<DISPLAYCONFIG_PATH_INFO> GetPathInfos() {
   return {};
 }
 
-std::optional<DISPLAYCONFIG_PATH_INFO> GetPathInfo(HMONITOR monitor) {
+inline std::optional<DISPLAYCONFIG_PATH_INFO> GetPathInfo(HMONITOR monitor) {
   // Get the monitor name.
   MONITORINFOEX monitor_info = {};
   monitor_info.cbSize = sizeof(monitor_info);
@@ -70,6 +73,52 @@ inline std::filesystem::path GetCurrentProcessPath() {
   DWORD chars_written = GetModuleFileName(nullptr, file_name, MAX_PATH + 1);
   if (chars_written != 0) {
     return file_name;
+  }
+  return "";
+}
+
+inline std::string GetProductName(const std::filesystem::path& path = GetCurrentProcessPath()) {
+  [[maybe_unused]] DWORD dummy{};
+  const auto required_buffer_size{
+      GetFileVersionInfoSizeExW(
+          FILE_VER_GET_NEUTRAL, path.wstring().c_str(), std::addressof(dummy))};
+  if (0 == required_buffer_size) {
+    return "";
+  }
+  const auto p_buffer{
+      std::make_unique<char[]>(
+          static_cast<::std::size_t>(required_buffer_size))};
+  const auto get_version_info_result{
+      GetFileVersionInfoExW(
+          FILE_VER_GET_NEUTRAL, path.wstring().c_str(), DWORD{}, required_buffer_size, static_cast<void*>(p_buffer.get()))};
+  if (FALSE == get_version_info_result) {
+    return "";
+  }
+  LPVOID p_value{};
+  UINT value_length{};
+  const auto query_result{
+      VerQueryValueW(
+          static_cast<void*>(p_buffer.get()),
+          L"\\StringFileInfo"
+          L"\\040904B0"
+          L"\\ProductName",
+          std::addressof(p_value), std::addressof(value_length))};
+  if (
+      (FALSE == query_result)
+      or (nullptr == p_value)
+      or ((required_buffer_size / sizeof(wchar_t)) < value_length)) {
+    return "";
+  }
+
+  const std::wstring product_name{static_cast<const wchar_t*>(p_value), static_cast<::std::size_t>(value_length - 1)};  // subtract 1 to exclude the null terminator
+  size_t output_size = product_name.length() + 1;                                                                       // +1 for null terminator
+  auto output_string = std::make_unique<char[]>(output_size);
+  size_t chars_converted = 0;
+  auto ret = wcstombs_s(&chars_converted, output_string.get(), output_size, product_name.c_str(), product_name.length());
+
+  // wide-character-string-to-multibyte-string_safe
+  if (ret == S_OK && chars_converted > 0) {
+    return std::string(output_string.get());
   }
   return "";
 }
