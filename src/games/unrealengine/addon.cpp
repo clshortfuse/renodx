@@ -702,7 +702,6 @@ void AddAdvancedSettings() {
   {
     auto* force_borderless_setting = new renodx::utils::settings::Setting{
         .key = "ForceBorderless",
-        .binding = &shader_injection.processingUseSCRGB,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
         .label = "Force Borderless",
