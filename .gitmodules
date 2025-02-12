@@ -1,3 +1,7 @@
 [submodule "external/reshade"]
 	path = external/reshade
 	url = https://github.com/crosire/reshade
+
+[submodule "external/Streamline"]
+	path = external/Streamline
+	url = https://github.com/NVIDIAGameWorks/Streamline.git
