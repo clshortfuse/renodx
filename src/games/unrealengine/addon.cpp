@@ -522,6 +522,12 @@ const std::unordered_map<
             },
         },
         {
+            "CRISIS CORE -FINAL FANTASY VII- REUNION",
+            {
+                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
+        {
             "Wuthering Waves",
             {
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
