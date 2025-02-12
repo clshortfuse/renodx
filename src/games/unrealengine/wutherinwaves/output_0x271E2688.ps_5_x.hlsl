@@ -123,6 +123,8 @@ void main(linear noperspective float2 w0: TEXCOORD0,
   r2.xyz = float3(1, 1, 1) + -cb0[72].xyz;
   r2.xyz = r0.www * r2.xyz + cb0[72].xyz;
   r0.xyz = r2.xyz * r0.xyz;
+
+  float3 untonemapped = max(0, r0.xyz);
   [branch]
   if (asint(cb0[86].y) != 0) {
     r2.xyz = r0.xyz * float3(1.36000001, 1.36000001, 1.36000001) + float3(0.0469999984, 0.0469999984, 0.0469999984);
@@ -166,6 +168,15 @@ void main(linear noperspective float2 w0: TEXCOORD0,
       r0.xyz = saturate(r0.xyz);
     }
   }
+
+  if (RENODX_TONE_MAP_TYPE != 0) {
+    r0.xyz = max(0, r0.xyz);
+    r0.xyz = renodx::tonemap::UpgradeToneMap(
+        untonemapped,
+        renodx::tonemap::renodrt::NeutralSDR(r0.xyz),  // Intentional
+        r0.xyz, 1.f);
+  }
+
   r0.xyz = float3(0.00266771927, 0.00266771927, 0.00266771927) + r0.xyz;
   r0.xyz = log2(r0.xyz);
   r0.xyz = saturate(r0.xyz * float3(0.0714285746, 0.0714285746, 0.0714285746) + float3(0.610726953, 0.610726953, 0.610726953));
