@@ -60,8 +60,8 @@ float3 applyVanillaTonemap(float3 untonemapped, float luminance) {
   r0.y = SamplerToneMapCurve_TEX.SampleLevel(SamplerToneMapCurve_SMP_s, r2.yw, 0).x;
   r0.z = SamplerToneMapCurve_TEX.SampleLevel(SamplerToneMapCurve_SMP_s, r2.zw, 0).x;
 
-  // Adjust colors based on luminance
-  r1.w = dot(float3(0.298999995, 0.587000012, 0.114), r0.xyz);
+  // Adjust colors based on incorrect luminance formula (BT.601)
+  r1.w = renodx::color::luma::from::BT601(r0.xyz);
   r1.w = sqrt(r1.w);
   r2.x = cmp(ToneMappingDebugParams.y < r1.w);
   r1.w = cmp(r1.w < ToneMappingDebugParams.x);
@@ -127,30 +127,6 @@ float3 applyLUT(float3 lutInputColor, float lutStrength = 1.f) {
   return lutOutputColor;  // Return the adjusted color
 }
 
-float3 dualTonemap(float3 inputColor, float4 sv_position, float4 texcoord, float luminance) {
-  float3 untonemapped = inputColor;
-
-  untonemapped = applyVignette(untonemapped, sv_position, texcoord, luminance);
-
-  const float paperWhite = injectedData.toneMapGameNits / renodx::color::srgb::REFERENCE_WHITE;
-  const float peakWhite = injectedData.toneMapPeakNits / renodx::color::srgb::REFERENCE_WHITE;
-  const float highlightsShoulderStart = paperWhite;
-
-  float3 hdrTonemap = renodx::tonemap::dice::BT709(untonemapped * paperWhite, peakWhite, highlightsShoulderStart) / paperWhite;
-  float3 sdrTonemap = renodx::tonemap::dice::BT709(untonemapped * paperWhite, paperWhite) / paperWhite;
-
-  float3 sdrLUTOutput = applyLUT(sdrTonemap);
-
-  float3 tonemapped;
-  if (injectedData.toneMapType == 1) {
-    tonemapped = renodx::tonemap::UpgradeToneMap(untonemapped, sdrTonemap, sdrLUTOutput, injectedData.colorGradeLUTStrength);
-  } else {
-    tonemapped = renodx::tonemap::UpgradeToneMap(hdrTonemap, sdrTonemap, sdrLUTOutput, injectedData.colorGradeLUTStrength);
-  }
-
-  return tonemapped;
-}
-
 float3 applyToneMap(float3 untonemapped, float untonemappedLum, float4 v1, float4 v2) {
   float3 r0 = untonemapped;
 
@@ -161,59 +137,27 @@ float3 applyToneMap(float3 untonemapped, float untonemappedLum, float4 v1, float
     r0.xyz = applyLUT(r0.rgb, injectedData.colorGradeLUTStrength);
 
     outputColor = r0.xyz;
-  } else if (injectedData.toneMapType == 2) {
-    const float3 vanillaMidGray = applyVanillaTonemap(float3(0.18, 0.18, 0.18), untonemappedLum);
-    const float exposureScale = renodx::color::y::from::BT709(vanillaMidGray) / 0.18f;
-    const float3 sdrTM = applyVanillaTonemap(untonemapped, untonemappedLum);
-    float3 sdrColor = applyVignette(sdrTM, v2, v1, untonemappedLum);
-    sdrColor = applyLUT(sdrColor, injectedData.colorGradeLUTStrength);
-    sdrColor = renodx::color::grade::UserColorGrading(
-        sdrColor,
-        injectedData.colorGradeExposure,    // Exposure
-        1.f,                                // Highlights, only applies to hdrColor
-        injectedData.colorGradeShadows,     // Shadows
-        injectedData.colorGradeContrast,    // Contrast
-        injectedData.colorGradeSaturation,  // Saturation
-        injectedData.colorGradeBlowout);    // Blowout
+  } else if (injectedData.toneMapType > 1.f) {
+    const float vanilla_mid_gray = renodx::color::y::from::BT709(applyVanillaTonemap(0.18, untonemappedLum));
+    renodx::tonemap::config::DualToneMap dual_tone_map = ToneMap(untonemapped, vanilla_mid_gray);
 
-    float3 hdrColor = renodx::color::grade::UserColorGrading(
-        untonemapped,
-        injectedData.colorGradeExposure,            // Exposure
-        injectedData.colorGradeHighlights * 1.12f,  // Highlights
-        injectedData.colorGradeShadows * 0.4f,      // Shadows
-        injectedData.colorGradeContrast * 0.66f,    // Contrast
-        injectedData.colorGradeSaturation,          // Saturation
-        injectedData.colorGradeBlowout,             // Blowout
-        injectedData.toneMapHueCorrection,          // Hue Correction
-        sdrTM);                                     // Vanilla Tonemapper
-    hdrColor *= exposureScale;                      // Scale Mid-gray
+    float3 vignette_hdr = applyVignette(dual_tone_map.color_hdr, v2, v1, untonemappedLum);
+    float3 vignette_sdr = applyVignette(dual_tone_map.color_sdr, v2, v1, untonemappedLum);
+    float3 lut_output_color = applyLUT(vignette_sdr);
 
-    hdrColor = dualTonemap(hdrColor, v2, v1, untonemappedLum);
+    outputColor = UpgradeToneMap(vignette_hdr, vignette_sdr, lut_output_color, injectedData.colorGradeLUTStrength);
 
-    // blend HDR with SDR
-    float3 negHDR = min(0, hdrColor);  // save WCG
-    float3 blendedColor = lerp(saturate(sdrColor), max(0, hdrColor), saturate(sdrColor));
-    blendedColor += negHDR;  // add back WCG
-
-    outputColor = blendedColor;
-  } else {
-    const float3 vanillaMidGray = applyVanillaTonemap(float3(0.18, 0.18, 0.18), untonemappedLum);
-    const float exposureScale = renodx::color::y::from::BT709(vanillaMidGray) / 0.18f;
-    const float3 sdrTM = applyVanillaTonemap(untonemapped, untonemappedLum);
-
-    untonemapped = renodx::color::grade::UserColorGrading(
-        untonemapped,
-        injectedData.colorGradeExposure,    // Exposure
-        injectedData.colorGradeHighlights,  // Highlights
-        injectedData.colorGradeShadows,     // Shadows
-        injectedData.colorGradeContrast,    // Contrast
-        injectedData.colorGradeSaturation,  // Saturation
-        injectedData.colorGradeBlowout,     // Blowout
-        injectedData.toneMapHueCorrection,  // Hue Correction
-        sdrTM);                             // Vanilla Tonemapper
-    untonemapped *= exposureScale;          // Scale Mid-gray
-
-    outputColor = dualTonemap(untonemapped, v2, v1, untonemappedLum);
+    if (injectedData.toneMapHueShift != 0.f || injectedData.toneMapBlend) {
+      float3 vanilla_color = applyVanillaTonemap(untonemapped, untonemappedLum);
+      vanilla_color = applyVignette(vanilla_color, v2, v1, untonemappedLum);
+      vanilla_color = applyLUT(vanilla_color, injectedData.colorGradeLUTStrength);
+      if (injectedData.toneMapHueShift) {
+        outputColor = renodx::color::correct::Hue(outputColor, vanilla_color, injectedData.toneMapHueShift);
+      }
+      if (injectedData.toneMapBlend) outputColor = ToneMapBlend(outputColor, vanilla_color);
+    } else {
+      outputColor = applyVignette(outputColor, v2, v1, untonemappedLum);
+    }
   }
 
   return outputColor;
@@ -285,9 +229,5 @@ void main(
   r0.xyz = (r0.xyz * rp_parameter_ps[0].xxx + rp_parameter_ps[0].yyy);  // r0.xyz = saturate(r0.xyz * rp_parameter_ps[0].xxx + rp_parameter_ps[0].yyy);
   o0.w = dot(r0.xyz, float3(0.298999995, 0.587000012, 0.114));
   o0.xyz = r0.xyz;
-
-  // o0.xyz = renodx::math::SafePow(o0.xyz, 2.2f);
-  // o0.xyz = renodx::color::bt2020::from::BT709(o0.xyz);
-  // o0.xyz = renodx::color::pq::from::BT2020(o0.xyz, injectedData.toneMapGameNits);
   return;
 }
