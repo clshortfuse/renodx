@@ -231,7 +231,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
-        .parse = [](float value) { return value * 0.02f; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeLUTStrength",

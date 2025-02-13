@@ -329,7 +329,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
-        .parse = [](float value) { return value * 0.02f; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxHDRVideos",
@@ -367,7 +367,6 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
-
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrainType",
         .binding = &CUSTOM_FILM_GRAIN_TYPE,
@@ -484,15 +483,16 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeFlare", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
   renodx::utils::settings::UpdateSetting("FxHDRVideos", 0.f);
+  renodx::utils::settings::UpdateSetting("FxLensFlare", 50.f);
   renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
   renodx::utils::settings::UpdateSetting("FxVignette", 50.f);
-  renodx::utils::settings::UpdateSetting("FxFXAA", 100.f);
-  renodx::utils::settings::UpdateSetting("FxDoF", 100.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrainType", 0.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrainStrength", 50.f);
+  renodx::utils::settings::UpdateSetting("FxFXAA", 100.f);
+  renodx::utils::settings::UpdateSetting("FxDoF", 100.f);
   renodx::utils::settings::UpdateSetting("FxScanLines", 100.f);
 }
 
