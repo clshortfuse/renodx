@@ -127,6 +127,9 @@ float3 BT709(float3 bt709, Config current_config) {
 
   float3 input_color;
   float y_original;
+
+  float current_color_space = current_config.working_color_space;
+
   if (current_config.working_color_space == 2u) {
     input_color = max(0, renodx::color::ap1::from::BT709(bt709));
     y_original = renodx::color::y::from::AP1(input_color);
@@ -140,14 +143,7 @@ float3 BT709(float3 bt709, Config current_config) {
 
   float y = y_original * current_config.exposure;
 
-  float y_normalized;
-  [branch]
-  if (current_config.tone_map_method == config::tone_map_method::REINHARD
-      && current_config.contrast != 1.f) {
-    y_normalized = pow(y / 0.18f, current_config.contrast);
-  } else {
-    y_normalized = y / 0.18f;
-  }
+  float y_normalized = y / 0.18f;
 
   float y_highlighted;
   [branch]
@@ -179,8 +175,8 @@ float3 BT709(float3 bt709, Config current_config) {
   }
 
   float m_0 = (n / n_r);
-  float ts;
-  float3 ts3;
+
+  float3 color_output;
   [branch]
   if (current_config.tone_map_method == config::tone_map_method::DANIELE) {
     float m_1 = 0.5 * (m_0 + sqrt(m_0 * (m_0 + (4.0 * t_1))));
@@ -199,9 +195,17 @@ float3 BT709(float3 bt709, Config current_config) {
 
     [branch]
     if (current_config.per_channel) {
-      ts3 = pow(max(0, per_channel_color) / (per_channel_color + s_2), g) * m_2;
+      float3 ts3 = pow(max(0, per_channel_color) / (per_channel_color + s_2), g) * m_2;
+      float3 flared3 = max(0, (ts3 * ts3) / (ts3 + t_1));
+
+      color_output = clamp(flared3, 0, m_0);
     } else {
-      ts = pow(max(0, y) / (y + s_2), g) * m_2;
+      float ts = pow(max(0, y) / (y + s_2), g) * m_2;
+      float flared = max(0, (ts * ts) / (ts + t_1));
+
+      float y_new = clamp(flared, 0, m_0);
+
+      color_output = input_color * (y_original > 0 ? (y_new / y_original) : 0);
     }
   } else if (current_config.tone_map_method == config::tone_map_method::REINHARD) {
     float x_max = m_0;
@@ -212,39 +216,44 @@ float3 BT709(float3 bt709, Config current_config) {
                              / (gray_in * (gray_out - x_max));
     [branch]
     if (current_config.per_channel) {
-      ts3 = mad(per_channel_color, reinard_exposure, x_min) / mad(per_channel_color, reinard_exposure / x_max, 1.f - x_min);
+      color_output = per_channel_color;
+      color_output /= gray_in;
+      float3 signs = sign(color_output);
+      color_output = abs(color_output);
+
+      // No guard for oversized flare
+      float3 new_flare = math::DivideSafe(color_output + t_1, color_output, 1.f);
+      float3 exponent = current_config.contrast * new_flare;
+
+      color_output = pow(color_output, exponent);
+      color_output *= signs;
+
+      color_output *= gray_in;
+
+      color_output = mad(color_output, reinard_exposure, x_min) / mad(color_output, reinard_exposure / x_max, 1.f - x_min);
+
     } else {
-      ts = mad(y, reinard_exposure, x_min) / mad(y, reinard_exposure / x_max, 1.f - x_min);
+      y /= gray_in;
+
+      // No guard for oversized flare
+      float new_flare = math::DivideSafe(y + t_1, y, 1.f);
+      float exponent = current_config.contrast * new_flare;
+      y = math::SignPow(y, exponent);
+      y *= gray_in;
+
+      float ts = mad(y, reinard_exposure, x_min) / mad(y, reinard_exposure / x_max, 1.f - x_min);
+      float y_new = clamp(ts, 0, m_0);
+      color_output = input_color * (y_original > 0 ? (y_new / y_original) : 0);
     }
   }
 
-  float3 color_output;
-  [branch]
-  if (current_config.per_channel) {
-    float3 flared3 = max(0, (ts3 * ts3) / (ts3 + t_1));
-
-    color_output = clamp(flared3, 0, m_0);
-
-  } else {
-    float flared = max(0, (ts * ts) / (ts + t_1));
-
-    float y_new = clamp(flared, 0, m_0);
-
-    color_output = input_color * (y_original > 0 ? (y_new / y_original) : 0);
-  }
-
-  float current_color_space;
   [branch]
   if (current_config.dechroma != 0.f
       || current_config.saturation != 1.f
       || current_config.hue_correction_strength != 0.f
       || current_config.blowout != 0.f) {
-    [branch]
-    if (current_config.working_color_space == 2u) {
-      color_output = renodx::color::bt709::from::AP1(color_output);
-    } else if (current_config.working_color_space == 1u) {
-      color_output = renodx::color::bt709::from::BT2020(color_output);
-    }
+    color_output = renodx::color::convert::ColorSpaces(color_output, current_color_space, renodx::color::convert::COLOR_SPACE_BT709);
+    current_color_space = renodx::color::convert::COLOR_SPACE_BT709;
 
     float3 perceptual_new;
 
@@ -324,10 +333,8 @@ float3 BT709(float3 bt709, Config current_config) {
       color_output = renodx::color::bt709::from::dtucs::uvY(perceptual_new.yzx);
     }
 
-    current_color_space = renodx::color::convert::COLOR_SPACE_BT709;
   } else {
-    color_output = color_output;
-    current_color_space = current_config.working_color_space;
+    // noop
   }
 
   [branch]
