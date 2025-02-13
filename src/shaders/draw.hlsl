@@ -32,6 +32,8 @@ struct Config {
   float tone_map_clamp_peak;              // -1 = none, bt709, bt2020, ap1
   float tone_map_hue_processor;           // 0.f
   float tone_map_per_channel;             // 0.f
+  float reno_drt_tone_map_method;         // 0.f
+  float reno_drt_white_clip;              // 100.f
   float gamma_correction;                 // 0 = srgb/none, 1 = 2.2, 2 = 2.4
   float intermediate_scaling;             // generally game / ui nits
   float intermediate_encoding;            // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
@@ -182,6 +184,16 @@ Config BuildConfig() {
 #define RENODX_TONE_MAP_PER_CHANNEL 0
 #endif
   config.tone_map_per_channel = RENODX_TONE_MAP_PER_CHANNEL;
+
+#if !defined(RENODX_RENO_DRT_TONE_MAP_METHOD)
+#define RENODX_RENO_DRT_TONE_MAP_METHOD renodx::tonemap::renodrt::config::tone_map_method::DANIELE
+#endif
+  config.reno_drt_tone_map_method = RENODX_RENO_DRT_TONE_MAP_METHOD;
+
+#if !defined(RENODX_RENO_DRT_WHITE_CLIP)
+#define RENODX_RENO_DRT_WHITE_CLIP 100.f
+#endif
+  config.reno_drt_white_clip = RENODX_RENO_DRT_WHITE_CLIP;
 
 #if !defined(RENODX_GAMMA_CORRECTION)
 #define RENODX_GAMMA_CORRECTION GAMMA_CORRECTION_GAMMA_2_2
@@ -466,6 +478,8 @@ float3 ToneMapPass(float3 color, Config draw_config) {
   tone_map_config.reno_drt_hue_correction_method = (uint)draw_config.tone_map_hue_processor;
   tone_map_config.reno_drt_clamp_color_space = draw_config.tone_map_clamp_color_space;
   tone_map_config.reno_drt_clamp_peak = draw_config.tone_map_clamp_peak;
+  tone_map_config.reno_drt_tone_map_method = (uint)draw_config.reno_drt_tone_map_method;
+  tone_map_config.reno_drt_white_clip = draw_config.reno_drt_white_clip;
 
   tone_map_config.hue_correction_strength = draw_config.tone_map_hue_correction;
 

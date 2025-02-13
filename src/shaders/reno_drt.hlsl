@@ -4,6 +4,7 @@
 #include "./color.hlsl"
 #include "./color_convert.hlsl"
 #include "./math.hlsl"
+#include "./reinhard.hlsl"
 
 namespace renodx {
 namespace tonemap {
@@ -30,6 +31,7 @@ struct Config {
   float blowout;
   float clamp_color_space;
   float clamp_peak;
+  float white_clip;
 };
 
 namespace config {
@@ -70,7 +72,8 @@ Config Create(
     bool per_channel = false,
     float blowout = 0,
     float clamp_color_space = 2.f,
-    float clamp_peak = 0.f) {
+    float clamp_peak = 0.f,
+    float white_clip = 100.f) {
   const Config renodrt_config = {
     nits_peak,
     mid_gray_value,
@@ -91,10 +94,37 @@ Config Create(
     per_channel,
     blowout,
     clamp_color_space,
-    clamp_peak
+    clamp_peak,
+    white_clip
   };
   return renodrt_config;
 }
+}
+
+float CustomizeLuminance(float value, float highlights = 1.f, float shadows = 1.f, float contrast = 1.f) {
+  value = value / 0.18f;
+  [branch]
+  if (highlights != 1.f) {
+    value = lerp(
+        value,
+        pow(value, highlights),
+        saturate(value));
+  }
+
+  [branch]
+  if (shadows != 1.f) {
+    value = lerp(
+        pow(value, 2.f - shadows),
+        value,
+        saturate(value));
+  }
+
+  [branch]
+  if (contrast != 1.f) {
+    value = pow(value, contrast);
+  }
+  value *= 0.18f;
+  return value;
 }
 
 float3 BT709(float3 bt709, Config current_config) {
@@ -119,11 +149,14 @@ float3 BT709(float3 bt709, Config current_config) {
   const float r_hit_min = 128;
   const float r_hit_max = 256;
 
+  float white_clip = 100.f;
+
   g = current_config.contrast;
   c = current_config.mid_gray_value;
   c_d = current_config.mid_gray_nits;
   n = current_config.nits_peak;
   t_1 = current_config.flare;
+  white_clip = current_config.white_clip;
 
   float3 input_color;
   float y_original;
@@ -141,30 +174,10 @@ float3 BT709(float3 bt709, Config current_config) {
     y_original = renodx::color::y::from::BT709(abs(bt709));
   }
 
-  float y = y_original * current_config.exposure;
+  float y = y_original;
 
-  float y_normalized = y / 0.18f;
-
-  float y_highlighted;
-  [branch]
-  if (current_config.highlights != 1.f) {
-    y_highlighted = pow(y_normalized, current_config.highlights);
-    y_highlighted = lerp(y_normalized, y_highlighted, saturate(y_normalized));
-  } else {
-    y_highlighted = y_normalized;
-  }
-
-  float y_shadowed;
-  [branch]
-  if (current_config.shadows != 1.f) {
-    y_shadowed = pow(y_highlighted, 2.f - current_config.shadows);
-    y_shadowed = lerp(y_shadowed, y_highlighted, saturate(y_highlighted));
-  } else {
-    y_shadowed = y_highlighted;
-  }
-
-  y_shadowed *= 0.18f;
-  y = y_shadowed;
+  y *= current_config.exposure;
+  y = CustomizeLuminance(y, current_config.highlights, current_config.shadows);
 
   float3 per_channel_color;
   [branch]
@@ -208,41 +221,49 @@ float3 BT709(float3 bt709, Config current_config) {
       color_output = input_color * (y_original > 0 ? (y_new / y_original) : 0);
     }
   } else if (current_config.tone_map_method == config::tone_map_method::REINHARD) {
-    float x_max = m_0;
-    float x_min = 0;
-    float gray_in = 0.18;
-    float gray_out = current_config.mid_gray_nits / 100.f;
-    float reinard_exposure = (x_max * (x_min * gray_out + x_min - gray_out))
-                             / (gray_in * (gray_out - x_max));
+    white_clip = CustomizeLuminance(white_clip, current_config.highlights, current_config.shadows, current_config.contrast);
+
     [branch]
     if (current_config.per_channel) {
       color_output = per_channel_color;
-      color_output /= gray_in;
+      color_output /= 0.18f;
       float3 signs = sign(color_output);
       color_output = abs(color_output);
 
       // No guard for oversized flare
       float3 new_flare = math::DivideSafe(color_output + t_1, color_output, 1.f);
+
       float3 exponent = current_config.contrast * new_flare;
 
       color_output = pow(color_output, exponent);
       color_output *= signs;
 
-      color_output *= gray_in;
+      color_output *= 0.18f;
 
-      color_output = mad(color_output, reinard_exposure, x_min) / mad(color_output, reinard_exposure / x_max, 1.f - x_min);
-
+      color_output = ReinhardScalableExtended(
+          color_output,
+          white_clip,
+          m_0,
+          0,
+          0.18f,
+          current_config.mid_gray_nits / 100.f);
     } else {
-      y /= gray_in;
+      y /= 0.18f;
 
       // No guard for oversized flare
       float new_flare = math::DivideSafe(y + t_1, y, 1.f);
       float exponent = current_config.contrast * new_flare;
       y = math::SignPow(y, exponent);
-      y *= gray_in;
+      y *= 0.18f;
 
-      float ts = mad(y, reinard_exposure, x_min) / mad(y, reinard_exposure / x_max, 1.f - x_min);
-      float y_new = clamp(ts, 0, m_0);
+      float y_new = ReinhardScalableExtended(
+          y,
+          white_clip,
+          m_0,
+          0,
+          0.18f,
+          current_config.mid_gray_nits / 100.f);
+
       color_output = input_color * (y_original > 0 ? (y_new / y_original) : 0);
     }
   }
