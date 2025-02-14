@@ -17,8 +17,10 @@
 #define CUSTOM_BLOOM                         shader_injection.fxBloom
 #define LIGHT_UNIT_SCALE                     10000.0f
 #define LILIUMS_HABLE_INVERSE                0.f
+#define CUSTOM_FAKE_HDR                      0.f
+#define RENODX_TONE_MAP_PER_CHANNEL          0.f
 /* #define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-#define RENODX_RENO_DRT_WHITE_CLIP           5.f */
+#define RENODX_RENO_DRT_WHITE_CLIP           1.f */
 
 // Optiscaler?
 /* #define RENODX_INTERMEDIATE_ENCODING         4.f
