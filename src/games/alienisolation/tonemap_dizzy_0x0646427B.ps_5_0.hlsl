@@ -60,7 +60,7 @@ float3 renderPostFX(float4 v0, float4 v1) {
 
   // bloom
   r2.xyz = SamplerBloomMap0_TEX.Sample(SamplerBloomMap0_SMP_s, r0.xy).xyz;
-  r2.xyz = r2.xyz * r2.xyz;
+  r2.xyz = r2.xyz * r2.xyz * injectedData.fxBloom;
   r1.xyz = r2.xyz * HDR_EncodeScale2.zzz + r1.xyz;
 
   // damage dizzy effect
