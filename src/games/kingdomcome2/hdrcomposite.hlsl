@@ -95,11 +95,12 @@ float4 HDRComposite(noperspective float4 TEXCOORD: TEXCOORD,
                     bool hasBloom = false)
     : SV_Target {
   float4 SV_Target;
-  float3 cColor, cBloom, cScene;
 
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     SV_Target = SDRPath(TEXCOORD, TEXCOORD_1, SV_Position, hasBloom);
   } else {
+    float3 cColor, cBloom, cScene, untonemapped;
+
     if (hasBloom) {
       cBloom = bloomTex.Sample(linearClampSS, float2((TEXCOORD_1.x), (TEXCOORD_1.y)));
     }
@@ -127,7 +128,19 @@ float4 HDRComposite(noperspective float4 TEXCOORD: TEXCOORD,
     } else {
       cColor = (cScene.rgb - saturatedBloomColor) * cScene.rgb;
     }
+
     cColor = vignetting_x_exposure * cColor;
+
+    // Random value because exposure is insane
+    untonemapped = cColor * 0.4f;
+
+    if (CUSTOM_FAKE_HDR == 1.f) {
+      float normalizationPoint = 0.20;  // Found empyrically
+      float mixedSceneColorLuminance = renodx::color::y::from::BT709(untonemapped) / normalizationPoint;
+      float fakeHDRIntensity = 0.85;
+      mixedSceneColorLuminance = mixedSceneColorLuminance > 1.0 ? pow(mixedSceneColorLuminance, 1.0 + fakeHDRIntensity) : mixedSceneColorLuminance;
+      untonemapped = RestoreLuminance(untonemapped, mixedSceneColorLuminance * normalizationPoint);
+    }
 
     // hdr color grading
     float fLuminance = renodx::color::y::from::BT709(cColor.rgb);
@@ -141,7 +154,7 @@ float4 HDRComposite(noperspective float4 TEXCOORD: TEXCOORD,
     lut_config.tetrahedral = true;
     lut_config.type_input = renodx::lut::config::type::SRGB;  // We manually convert
     lut_config.type_output = renodx::lut::config::type::SRGB;
-    lut_config.scaling = 0.f; // Too harsh
+    lut_config.scaling = 0.f;  // Too harsh at 1
 
     // Tonemapping
     //  // Filmic response curve as proposed by J. Hable
@@ -157,8 +170,10 @@ float4 HDRComposite(noperspective float4 TEXCOORD: TEXCOORD,
 
     float4 c = float4(max(cColor.rgb, 0.f), HDRFilmCurve.w);
 
-    const float ShoStren = 0.22f * HDRFilmCurve.x,
-                LinStren = 0.3f * HDRFilmCurve.y,
+    // Adjusting this will restore some saturation and lower highlights
+    const float reduceHighlight = 0.8f;
+    const float ShoStren = (0.22f) * (HDRFilmCurve.x * reduceHighlight),  // vanilla = 0.22f * HDRFilmCurve.x,
+        LinStren = 0.3f * HDRFilmCurve.y,
                 LinAngle = 0.1f,
                 ToeStren = 0.2f,
                 ToeNum = 0.01f * HDRFilmCurve.z,
@@ -217,8 +232,12 @@ float4 HDRComposite(noperspective float4 TEXCOORD: TEXCOORD,
       cColor.rgb = itm * itmFactorY;
     }
 
+    renodx::draw::Config config = renodx::draw::BuildConfig();
+    // Increase saturation a bit
+    config.tone_map_highlight_saturation = RENODX_TONE_MAP_HIGHLIGHT_SATURATION * 1.1f;
+
     // Tonemap pass
-    cColor = renodx::draw::ToneMapPass(cScene, sdrGraded);
+    cColor = renodx::draw::ToneMapPass(untonemapped, sdrGraded, config);
     SV_Target.rgb = cColor;
   }
 
