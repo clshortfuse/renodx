@@ -15,6 +15,7 @@ float3 RestoreLuminance(float3 targetColor, float sourceColorLuminance, bool saf
   return targetColor * renodx::math::SafeDivision(sourceColorLuminance, targetColorLuminance, 1);  // Return one if dividing by zero
 }
 
+// Deprecated
 float3 Tonemap(float3 sdrColor, float3 untonemapped) {
   float3 outputColor = sdrColor;
 

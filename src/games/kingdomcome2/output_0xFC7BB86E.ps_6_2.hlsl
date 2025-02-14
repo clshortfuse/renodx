@@ -1,3 +1,14 @@
+#include "./hdrcomposite.hlsl"
+
+float4 main(
+    noperspective float4 SV_Position: SV_Position,
+    linear float4 TEXCOORD: TEXCOORD,
+    linear float4 TEXCOORD_1: TEXCOORD1)
+    : SV_Target {
+  return HDRComposite(TEXCOORD, TEXCOORD_1, SV_Position);
+}
+
+/* 
 #include "./common.hlsl"
 
 Texture2D<float4> luminanceTex : register(t1);
@@ -9,15 +20,6 @@ Texture2D<float4> vignettingTex : register(t3);
 Texture2D<float4> colorChartTex : register(t4);
 
 Texture2D<float3> hdrTex : register(t0);
-
-/*
-float4 HDRColorBalance;
-float4 SunShafts_SunCol;
-float4 HDRUserModification;
-float4 HDREyeAdaptation;
-float4 HDRFilmCurve;
-float3 HDRBloomColor;
- */
 cbuffer PER_BATCH : register(b0, space3) {
   float PER_BATCH_000x : packoffset(c000.x);
   float PER_BATCH_000y : packoffset(c000.y);
@@ -66,6 +68,9 @@ float4 main(
   float _77 = max(((((PER_BATCH_000w) * (_56 - _59)) + _59) * (PER_BATCH_000x)), 0.0f);
   float _78 = max(((((PER_BATCH_000w) * (_57 - _59)) + _59) * (PER_BATCH_000y)), 0.0f);
   float _79 = max(((((_58 - _59) * (PER_BATCH_000w)) + _59) * (PER_BATCH_000z)), 0.0f);
+
+  untonemapped = float3(_77, _78, _79);
+
   float _83 = (PER_BATCH_004x) * 0.2199999988079071f;
   float _85 = (PER_BATCH_004y) * 0.30000001192092896f;
   float _87 = _83 * _77;
@@ -73,7 +78,6 @@ float4 main(
   float _89 = _83 * _79;
   float _90 = _83 * (PER_BATCH_004w);
 
-  untonemapped = float3(_87, _88, _89);
 
   float _91 = (PER_BATCH_004y) * 0.030000001192092896f;
   float _100 = (PER_BATCH_004z) * 0.0020000000949949026f;
@@ -102,3 +106,4 @@ float4 main(
   SV_Target.w = 1.0f;
   return SV_Target;
 }
+ */
