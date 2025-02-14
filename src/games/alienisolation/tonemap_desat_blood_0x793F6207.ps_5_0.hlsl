@@ -78,49 +78,30 @@ float3 applyVanillaTonemap(float3 untonemapped, float luminance) {
   return r0.xyz;
 }
 
-// Function to apply the LUT based on input color
-float3 applyLUT(float3 lutInputColor, float lutStrength = 1.f) {
-  float4 r0, r1;
-  float3 lutOutputColor;
-
-  // Apply the LUT
-  r1.xyz = sign(lutInputColor) * sqrt(abs(lutInputColor));                   // Take square root of the input color and preserve the sign
-  r1.xyz = rp_parameter_ps[2].zzz + r1.xyz;                                  // Apply an offset from rp_parameter_ps
-  r1.xyz = SamplerColourLUT_TEX.Sample(SamplerColourLUT_SMP_s, r1.xyz).xyz;  // Sample the LUT using the adjusted color
-  r0.w = rp_parameter_ps[2].y * rp_parameter_ps[2].x;                        // Calculate a scaling factor
-
-  // Apply adjustments to the LUT output
-  r1.xyz = r1.xyz * r1.xyz + -lutInputColor;
-  lutOutputColor = r0.w * r1.xyz + lutInputColor;
-
-  lutOutputColor = lerp(lutInputColor, lutOutputColor, lutStrength);
-  return lutOutputColor;  // Return the adjusted color
-}
-
 float3 applyToneMap(float3 untonemapped, float untonemappedLum, float4 v1, float4 v2) {
   float3 r0 = untonemapped;
 
   float3 outputColor = r0.xyz;
   if (injectedData.toneMapType == 0) {  // tonemap
-    r0.xyz = applyVanillaTonemap(untonemapped, untonemappedLum);
+    r0.xyz = ApplyVanillaTonemap(untonemapped, untonemappedLum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
     r0.xyz = applyVignette(r0.rgb, v2, v1, untonemappedLum);
-    r0.xyz = applyLUT(r0.rgb, injectedData.colorGradeLUTStrength);
+    r0.xyz = ApplyLUT(r0.rgb, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
 
     outputColor = r0.xyz;
   } else if (injectedData.toneMapType > 1.f) {
-    const float vanilla_mid_gray = renodx::color::y::from::BT709(applyVanillaTonemap(0.18, untonemappedLum));
+    const float vanilla_mid_gray = renodx::color::y::from::BT709(ApplyVanillaTonemap(0.18, untonemappedLum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s));
     renodx::tonemap::config::DualToneMap dual_tone_map = ToneMap(untonemapped, vanilla_mid_gray);
 
     float3 vignette_hdr = applyVignette(dual_tone_map.color_hdr, v2, v1, untonemappedLum);
     float3 vignette_sdr = applyVignette(dual_tone_map.color_sdr, v2, v1, untonemappedLum);
-    float3 lut_output_color = applyLUT(vignette_sdr);
+    float3 lut_output_color = ApplyLUT(vignette_sdr, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
 
-    outputColor = UpgradeToneMap(vignette_hdr, vignette_sdr, lut_output_color, injectedData.colorGradeLUTStrength);
+    outputColor = UpgradeToneMap(vignette_hdr, vignette_sdr, lut_output_color, 1.f);
 
-    if (injectedData.toneMapHueShift != 0.f || injectedData.toneMapBlend) {
-      float3 vanilla_color = applyVanillaTonemap(untonemapped, untonemappedLum);
+    if (injectedData.toneMapHueShift || injectedData.toneMapBlend) {
+      float3 vanilla_color = ApplyVanillaTonemap(untonemapped, untonemappedLum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
       vanilla_color = applyVignette(vanilla_color, v2, v1, untonemappedLum);
-      vanilla_color = applyLUT(vanilla_color, injectedData.colorGradeLUTStrength);
+      vanilla_color = ApplyLUT(vanilla_color, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
       if (injectedData.toneMapHueShift) {
         outputColor = renodx::color::correct::Hue(outputColor, vanilla_color, injectedData.toneMapHueShift);
       }

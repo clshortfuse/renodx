@@ -18,139 +18,30 @@ Texture2D<float4> SamplerToneMapCurve_TEX : register(t14);
 // 3Dmigoto declarations
 #define cmp -
 
-float3 applyVanillaTonemap(float3 untonemapped, float luminance) {
-  float4 r0, r1, r2, r3, r4;
-
-  // Luminance calculation
-  r0.xyz = untonemapped;
-  r0.w = luminance;
-  r1.x = log2(r0.w);
-  r1.x = r1.x * 0.693147182 + 12;
-  r1.x = saturate(0.0625 * r1.x);
-  r1.y = 0.25;
-
-  // Sample tone map curve
-  r1.x = SamplerToneMapCurve_TEX.SampleLevel(SamplerToneMapCurve_SMP_s, r1.xy, 0).x;
-  r1.y = -r1.x * r1.x + 1;
-  r2.xyz = max(float3(0, 0, 0), r0.xyz);
-  r1.z = max(9.99999975e-005, r0.w);
-  r2.xyz = r2.xyz / r1.zzz;
-  r1.y = max(9.99999975e-006, r1.y);
-  r2.xyz = log2(r2.xyz);
-  r1.yzw = r2.xyz * r1.yyy;
-  r1.yzw = exp2(r1.yzw);
-  r2.xyz = r1.yzw * r1.xxx;
-  r2.w = sqrt(r1.x);
-
-  // Apply tone mapping based on debug parameters
-  r3.x = cmp(ToneMappingDebugParams.y < r2.w);
-  r2.w = cmp(r2.w < ToneMappingDebugParams.x);
-  r4.xyzw = r2.wwww ? float4(0, 0, 1, 1) : 0;
-  r3.xyzw = r3.xxxx ? float4(1, 0, 0, 1) : r4.xyzw;
-  r2.w = ToneMappingDebugParams.z * r3.w;
-  r1.xyz = -r1.yzw * r1.xxx + r3.xyz;
-  r1.xyz = r2.www * r1.xyz + r2.xyz;
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = r0.xyz * float3(0.693147182, 0.693147182, 0.693147182) + float3(12, 12, 12);
-
-  // Saturate and sample the tone map curve for each channel
-  r2.xyz = saturate(float3(0.0625, 0.0625, 0.0625) * r0.xyz);
-  r2.w = 0.25;
-  r0.x = SamplerToneMapCurve_TEX.SampleLevel(SamplerToneMapCurve_SMP_s, r2.xw, 0).x;
-  r0.y = SamplerToneMapCurve_TEX.SampleLevel(SamplerToneMapCurve_SMP_s, r2.yw, 0).x;
-  r0.z = SamplerToneMapCurve_TEX.SampleLevel(SamplerToneMapCurve_SMP_s, r2.zw, 0).x;
-
-  // Adjust colors based on incorrect luminance formula (BT.601)
-  r1.w = renodx::color::luma::from::BT601(r0.xyz);
-  r1.w = sqrt(r1.w);
-  r2.x = cmp(ToneMappingDebugParams.y < r1.w);
-  r1.w = cmp(r1.w < ToneMappingDebugParams.x);
-  r3.xyzw = r1.wwww ? float4(0, 0, 1, 1) : 0;
-  r2.xyzw = r2.xxxx ? float4(1, 0, 0, 1) : r3.xyzw;
-  r1.w = ToneMappingDebugParams.z * r2.w;
-  r2.xyz = r2.xyz + -r0.xyz;
-  r0.xyz = r1.www * r2.xyz + r0.xyz;
-  r0.xyz = r0.xyz + -r1.xyz;
-  r0.xyz = ToneMappingDebugParams.www * r0.xyz + r1.xyz;
-
-  return r0.xyz;
-}
-
-// // debug stuff
-// // maybe has vignette?
-// float3 applyVignette(float3 tonemapped, float4 sv_position, float4 texcoord, float luminance) {
-//   float4 r0, r1, r2;
-//   r0.xyz = tonemapped;
-//   r0.w = luminance;
-
-//   // Light meter debug and vignette processing
-//   r1.xy = (uint2)sv_position.xy;
-//   uint4 uiDest;
-//   uiDest.xy = (uint2)r1.xy / int2(5, 5);  // Compute vignette grid
-//   r1.xy = uiDest.xy;
-//   r1.x = (int)r1.x + (int)r1.y;  // Sum the grid coordinates
-//   r1.x = (int)r1.x & 1;          // Create a checkerboard pattern for the vignette
-
-//   // Apply LightMeterDebugParams threshold checks
-//   r1.y = cmp(LightMeterDebugParams.y < r0.w);        // Check if brightness exceeds the threshold
-//   r0.w = cmp(r0.w < LightMeterDebugParams.x);        // Check if brightness is below a threshold
-//   r2.xyzw = r0.wwww ? float4(0, 0, 1, 1) : 0;        // Set blue if brightness is too low
-//   r2.xyzw = r1.yyyy ? float4(1, 0, 0, 1) : r2.xyzw;  // Set red if brightness is too high
-//   r0.w = LightMeterDebugParams.w * r2.w;             // Apply light meter multiplier
-
-//   // Final color adjustment based on debug/vignette
-//   r1.yzw = r2.xyz + -r0.xyz;
-//   r1.yzw = r0.www * r1.yzw + r0.xyz;
-//   r0.xyz = r1.xxx ? r1.yzw : r0.xyz;
-//   r0.xyz = texcoord.zzz * r0.xyz;  // Use v1 (texcoord) for final adjustment
-
-//   r0.rgb = lerp(tonemapped, r0.rgb, injectedData.fxVignette);
-//   return r0.rgb;
-// }
-
-// Function to apply the LUT based on input color
-float3 applyLUT(float3 lutInputColor, float lutStrength = 1.f) {
-  float4 r0, r1;
-  float3 lutOutputColor;
-
-  // Apply the LUT
-  r1.xyz = sign(lutInputColor) * sqrt(abs(lutInputColor));                   // Take square root of the input color and preserve the sign
-  r1.xyz = rp_parameter_ps[2].zzz + r1.xyz;                                  // Apply an offset from rp_parameter_ps
-  r1.xyz = SamplerColourLUT_TEX.Sample(SamplerColourLUT_SMP_s, r1.xyz).xyz;  // Sample the LUT using the adjusted color
-  r0.w = rp_parameter_ps[2].y * rp_parameter_ps[2].x;                        // Calculate a scaling factor
-
-  // Apply adjustments to the LUT output
-  r1.xyz = r1.xyz * r1.xyz + -lutInputColor;
-  lutOutputColor = r0.w * r1.xyz + lutInputColor;
-
-  lutOutputColor = lerp(lutInputColor, lutOutputColor, lutStrength);
-  return lutOutputColor;  // Return the adjusted color
-}
-
 float3 applyToneMap(float3 untonemapped, float untonemappedLum, float4 v1, float4 v2) {
   float3 r0 = untonemapped;
 
   float3 outputColor = r0.xyz;
   if (injectedData.toneMapType == 0) {  // tonemap
-    r0.xyz = applyVanillaTonemap(untonemapped, untonemappedLum);
+    r0.xyz = ApplyVanillaTonemap(untonemapped, untonemappedLum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
     r0.xyz = applyVignette(r0.rgb, v2, v1, untonemappedLum);
-    r0.xyz = applyLUT(r0.rgb, injectedData.colorGradeLUTStrength);
+    r0.xyz = ApplyLUT(r0.rgb, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
 
     outputColor = r0.xyz;
   } else if (injectedData.toneMapType > 1.f) {
-    const float vanilla_mid_gray = renodx::color::y::from::BT709(applyVanillaTonemap(0.18, untonemappedLum));
+    const float vanilla_mid_gray = renodx::color::y::from::BT709(ApplyVanillaTonemap(0.18, untonemappedLum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s));
     renodx::tonemap::config::DualToneMap dual_tone_map = ToneMap(untonemapped, vanilla_mid_gray);
 
     float3 vignette_hdr = applyVignette(dual_tone_map.color_hdr, v2, v1, untonemappedLum);
     float3 vignette_sdr = applyVignette(dual_tone_map.color_sdr, v2, v1, untonemappedLum);
-    float3 lut_output_color = applyLUT(vignette_sdr);
+    float3 lut_output_color = ApplyLUT(vignette_sdr, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
 
-    outputColor = UpgradeToneMap(vignette_hdr, vignette_sdr, lut_output_color, injectedData.colorGradeLUTStrength);
+    outputColor = UpgradeToneMap(vignette_hdr, vignette_sdr, lut_output_color, 1.f);
 
-    if (injectedData.toneMapHueShift != 0.f || injectedData.toneMapBlend) {
-      float3 vanilla_color = applyVanillaTonemap(untonemapped, untonemappedLum);
+    if (injectedData.toneMapHueShift || injectedData.toneMapBlend) {
+      float3 vanilla_color = ApplyVanillaTonemap(untonemapped, untonemappedLum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
       vanilla_color = applyVignette(vanilla_color, v2, v1, untonemappedLum);
-      vanilla_color = applyLUT(vanilla_color, injectedData.colorGradeLUTStrength);
+      vanilla_color = ApplyLUT(vanilla_color, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
       if (injectedData.toneMapHueShift) {
         outputColor = renodx::color::correct::Hue(outputColor, vanilla_color, injectedData.toneMapHueShift);
       }
