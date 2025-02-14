@@ -75,6 +75,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
     // Wuthering Waves
     TracedDualShaderEntry(0x271E2688),
+    TracedDualShaderEntry(0x11ACA4BD),
+    TracedDualShaderEntry(0x9081A2D8),
+    TracedDualShaderEntry(0xE6B4B2E3),
 
     // SM5 LUT Builder
     TracedDualShaderEntry(0x1DF6036B),
