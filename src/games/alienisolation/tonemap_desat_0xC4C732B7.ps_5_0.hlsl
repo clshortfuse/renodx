@@ -15,43 +15,6 @@ Texture3D<float4> SamplerColourLUT_TEX : register(t10);
 Texture2D<float4> SamplerNoise_TEX : register(t12);
 Texture2D<float4> SamplerToneMapCurve_TEX : register(t14);
 
-// 3Dmigoto declarations
-#define cmp -
-
-float3 applyToneMap(float3 untonemapped, float untonemappedLum, float4 v1, float4 v2) {
-  float3 r0 = untonemapped;
-
-  float3 outputColor = r0.xyz;
-  if (injectedData.toneMapType == 0) {  // tonemap
-    r0.xyz = ApplyVanillaTonemap(untonemapped, untonemappedLum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
-    r0.xyz = applyVignette(r0.rgb, v2, v1, untonemappedLum);
-    r0.xyz = ApplyLUT(r0.rgb, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
-
-    outputColor = r0.xyz;
-  } else if (injectedData.toneMapType > 1.f) {
-    const float vanilla_mid_gray = renodx::color::y::from::BT709(ApplyVanillaTonemap(0.18, untonemappedLum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s));
-    renodx::tonemap::config::DualToneMap dual_tone_map = ToneMap(untonemapped, vanilla_mid_gray);
-
-    float3 vignette_hdr = applyVignette(dual_tone_map.color_hdr, v2, v1, untonemappedLum);
-    float3 vignette_sdr = applyVignette(dual_tone_map.color_sdr, v2, v1, untonemappedLum);
-    float3 lut_output_color = ApplyLUT(vignette_sdr, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
-
-    outputColor = UpgradeToneMap(vignette_hdr, vignette_sdr, lut_output_color, 1.f);
-
-    if (injectedData.toneMapHueShift || injectedData.toneMapBlend) {
-      float3 vanilla_color = ApplyVanillaTonemap(untonemapped, untonemappedLum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
-      vanilla_color = applyVignette(vanilla_color, v2, v1, untonemappedLum);
-      vanilla_color = ApplyLUT(vanilla_color, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
-      if (injectedData.toneMapHueShift) {
-        outputColor = renodx::color::correct::Hue(outputColor, vanilla_color, injectedData.toneMapHueShift);
-      }
-      if (injectedData.toneMapBlend) outputColor = ToneMapBlend(outputColor, vanilla_color);
-    }
-  }
-
-  return outputColor;
-}
-
 void main(
     float4 v0: TEXCOORD0,
     float4 v1: TEXCOORD1,
@@ -104,7 +67,9 @@ void main(
   float3 untonemapped = r0.xyz;
   const float untonemappedLum = renodx::color::luma::from::BT601(untonemapped);  // save for reuse
 
-  float3 outputColor = applyToneMap(untonemapped, untonemappedLum, v1, v2);
+  float3 outputColor = ApplyToneMapVignetteLUT(
+      untonemapped, untonemappedLum, v1, v2, SamplerToneMapCurve_TEX,
+      SamplerToneMapCurve_SMP_s, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
 
   // only new code not present in default tonemap shader
   // related to fog?
