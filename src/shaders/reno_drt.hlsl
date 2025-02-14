@@ -221,6 +221,7 @@ float3 BT709(float3 bt709, Config current_config) {
       color_output = input_color * (y_original > 0 ? (y_new / y_original) : 0);
     }
   } else if (current_config.tone_map_method == config::tone_map_method::REINHARD) {
+    white_clip = max(white_clip, m_0);
     white_clip = CustomizeLuminance(white_clip, current_config.highlights, current_config.shadows, current_config.contrast);
 
     [branch]
