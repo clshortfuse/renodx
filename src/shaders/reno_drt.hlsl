@@ -231,12 +231,11 @@ float3 BT709(float3 bt709, Config current_config) {
       color_output = abs(color_output);
 
       // No guard for oversized flare
-      float3 new_flare = math::DivideSafe(color_output + t_1, color_output, 1.f);
+      float3 new_flare = math::DivideSafe(color_output + current_config.flare, color_output, 1.f);
 
       float3 exponent = current_config.contrast * new_flare;
 
       color_output = pow(color_output, exponent);
-      color_output *= signs;
 
       color_output *= 0.18f;
 
@@ -247,11 +246,14 @@ float3 BT709(float3 bt709, Config current_config) {
           0,
           0.18f,
           current_config.mid_gray_nits / 100.f);
+
+      color_output *= signs;
+
     } else {
       y /= 0.18f;
 
       // No guard for oversized flare
-      float new_flare = math::DivideSafe(y + t_1, y, 1.f);
+      float new_flare = math::DivideSafe(y + current_config.flare, y, 1.f);
       float exponent = current_config.contrast * new_flare;
       y = math::SignPow(y, exponent);
       y *= 0.18f;
