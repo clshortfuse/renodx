@@ -1,6 +1,6 @@
 #include "./common.hlsl"
 
-// ---- Created with 3Dmigoto v1.3.16 on Tue Sep 03 06:54:16 2024
+// ---- Created with 3Dmigoto v1.4.1 on Tue Feb  4 14:47:36 2025
 
 cbuffer GammaBuffer : register(b10) {
   float g_GammaValue : packoffset(c0);
@@ -27,40 +27,38 @@ cbuffer GammaBuffer : register(b10) {
   // clang-format on
 }
 
-RWTexture3D<float4> ACESLut : register(u0);
+SamplerState UISampler_s : register(s1);
+SamplerState SceneColorSampler_s : register(s3);
+Texture2D<float3> colorBuffer : register(t0);
+Texture2D<float4> uiTexture : register(t1);
 
 // 3Dmigoto declarations
 #define cmp -
 
-[numthreads(4, 4, 4)]
-void main(uint3 vThreadID: SV_DispatchThreadID) {
+void main(
+    float4 v0: SV_POSITION0,
+    float4 v1: COLOR0,
+    float2 v2: TEXCOORD0,
+    out float4 o0: SV_TARGET0) {
   const float4 icb[] = { { -4.000000, -0.718548, 0, 0 },
                          { -4.000000, 2.081031, 0, 0 },
                          { -3.157377, 3.668124, 0, 0 },
                          { -0.485250, 4.000000, 0, 0 },
                          { 1.847732, 4.000000, 0, 0 },
                          { 1.847732, 4.000000, 0, 0 } };
-  // Needs manual fix for instruction:
-  // unknown dcl_: dcl_uav_typed_texture3d (float,float,float,float) u0
   float4 r0, r1, r2, r3, r4;
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  // resinfo_indexable(texture3d)(float,float,float,float) r0.xyz, l(0), u0.xyzw
-  ACESLut.GetDimensions(uiDest.x, uiDest.y, uiDest.z);  //   tx.GetDimensions(0, uiDest.x, uiDest.y, uiDest.z);
-  r0.xyz = uiDest.xyz;                                  // rx = uiDest;
-  // state = 0, constZero.eType = 4, returnType = 0, texture.eType = 7, afImmediates[0] = 0.000000
-  r1.xyz = (uint3)vThreadID.xyz;
-  r0.xyz = float3(-1, -1, -1) + r0.xyz;
-  r0.xyz = r1.xyz / r0.xyz;
-  r0.xyz = r0.xyz * r0.xyz;
-  r0.xyz = r0.xyz * r0.xyz;
-  r0.xyz = float3(1000, 1000, 1000) * r0.xyz;
-
+  r0.xyz = colorBuffer.Sample(SceneColorSampler_s, v2.xy).xyz;
+  r0.xyz = g_BrightnessCorrection * r0.xyz;
+  // r0.xyz = 0.18f;
   float3 input_color = r0.xyz;
   float3 ap1_graded_color = renodx::color::ap1::from::BT709(input_color);
 
   if (CUSTOM_ACES_LOOK_STRENGTH != 0) {
+    // Per-Pixel ACES
+
     // BT.709 -> XYZ
     r1.x = dot(float3(0.412390888, 0.357584298, 0.180480838), r0.xyz);
     r1.y = dot(float3(0.212639064, 0.715168595, 0.0721923336), r0.xyz);
@@ -74,15 +72,14 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r0.z = dot(float3(-0.00284131011, 0.00468514999, 0.924506664), r1.xyz);
 
     // XYZ -> AP0
-    r1.y = dot(float2(1.04981101, -9.74799987e-005), r0.xz);
+    r1.y = dot(float2(1.04981101, -9.74799987e-05), r0.xz);
     r1.z = dot(float3(-0.495902956, 1.37331295, 0.0982400328), r0.xyz);
-    r1.w = dot(float2(3.99999998e-008, 0.991252124), r0.xz);
-
+    r1.w = dot(float2(3.99999998e-08, 0.991252124), r0.xz);
     r0.x = min(r1.y, r1.z);
     r0.x = min(r0.x, r1.w);
     r0.y = max(r1.y, r1.z);
     r0.y = max(r0.y, r1.w);
-    r0.xyz = max(float3(1.00000001e-010, 1.00000001e-010, 0.00999999978), r0.xyy);
+    r0.xyz = max(float3(1.00000001e-10, 1.00000001e-10, 0.00999999978), r0.xyy);
     r0.x = r0.y + -r0.x;
     r0.x = r0.x / r0.z;
     r0.yzw = r1.wzy + -r1.zyw;
@@ -354,7 +351,6 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
 
   // Exposure x4 and clip to 1500 nits, change to 10K is retonemapping
   float new_peak = RENODX_TONE_MAP_TYPE == 0.f ? gtParams.P : 10000.f;
-
   // r0.yz = gtParams.P * gtParams.l;
   r0.yz = new_peak * gtParams.l;
 
@@ -425,22 +421,87 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   // r0.y = dot(float3(-0.66668433, 1.61648118, 0.0157685466), r1.xyz);
   // r0.z = dot(float3(0.0176398568, -0.042770613, 0.942103148), r1.xyz);
 
-  r0.xyz = renodx::color::bt2020::from::AP1(r2.xyz);
+  float3 graded_untonemapped = renodx::color::bt709::from::AP1(r2.xyz);
+  graded_untonemapped /= 250.f;  // Normalize
 
-  // Linear -> PQ
-  r0.xyz = saturate(float3(9.99999975e-005, 9.99999975e-005, 9.99999975e-005) * r0.xyz);
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = float3(0.159301758, 0.159301758, 0.159301758) * r0.xyz;
-  r0.xyz = exp2(r0.xyz);
-  r1.xyz = r0.xyz * float3(18.8515625, 18.8515625, 18.8515625) + float3(0.8359375, 0.8359375, 0.8359375);
-  r0.xyz = r0.xyz * float3(18.6875, 18.6875, 18.6875) + float3(1, 1, 1);
-  r0.xyz = r1.xyz / r0.xyz;
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = float3(78.84375, 78.84375, 78.84375) * r0.xyz;
-  r0.xyz = exp2(r0.xyz);
-  r0.w = 1;
-  // No code for instruction (needs manual fix):
-  // store_uav_typed u0.xyzw, vThreadID.xyzz, r0.xyzw
-  ACESLut[vThreadID] = r0;
+  float3 tonemapped = renodx::draw::ToneMapPass(graded_untonemapped);
+
+  if (CUSTOM_FILM_GRAIN_STRENGTH != 0.f) {
+    tonemapped = renodx::effects::ApplyFilmGrain(
+        tonemapped,
+        v2.xy,
+        CUSTOM_RANDOM,
+        CUSTOM_FILM_GRAIN_STRENGTH * 0.03f);
+  }
+
+  r0.xyz = tonemapped;
+
+  // Useless Game to PQ
+  // r0.xyz = saturate(float3(9.99999975e-05, 9.99999975e-05, 9.99999975e-05) * r0.xyz);
+  // r0.xyz = log2(r0.xyz);
+  // r0.xyz = float3(0.159301758, 0.159301758, 0.159301758) * r0.xyz;
+  // r0.xyz = exp2(r0.xyz);
+  // r1.xyz = r0.xyz * float3(18.8515625, 18.8515625, 18.8515625) + float3(0.8359375, 0.8359375, 0.8359375);
+  // r0.xyz = r0.xyz * float3(18.6875, 18.6875, 18.6875) + float3(1, 1, 1);
+  // r0.xyz = r1.xyz / r0.xyz;
+  // r0.xyz = log2(r0.xyz);
+  // r0.xyz = float3(78.84375, 78.84375, 78.84375) * r0.xyz;
+  // r0.xyz = exp2(r0.xyz);
+
+  r1.xyzw = uiTexture.SampleLevel(UISampler_s, v2.xy, 0).xyzw;
+  r1.xyz = g_HdrUiBrightness * r1.xyz;
+
+  r1.xyz /= 250.f;
+
+  // XYZ => BT2020
+  // r2.x = dot(float3(0.412456393, 0.357576102, 0.180437505), r1.xyz);
+  // r2.y = dot(float3(0.212672904, 0.715152204, 0.0721750036), r1.xyz);
+  // r2.z = dot(float3(0.0193339009, 0.119191997, 0.950304091), r1.xyz);
+  // r1.x = dot(float3(1.7166512, -0.35567078, -0.253366292), r2.xyz);
+  // r1.y = dot(float3(-0.66668433, 1.61648118, 0.0157685466), r2.xyz);
+  // r1.z = dot(float3(0.0176398568, -0.042770613, 0.942103148), r2.xyz);
+
+  // Useless Game Render PQDecode
+  // r0.xyz = min(float3(1, 1, 1), r0.xyz);
+  // r0.xyz = log2(r0.xyz);
+  // r0.xyz = float3(0.0126833133, 0.0126833133, 0.0126833133) * r0.xyz;
+  // r0.xyz = exp2(r0.xyz);
+  // r2.xyz = -r0.xyz * float3(18.6875, 18.6875, 18.6875) + float3(18.8515625, 18.8515625, 18.8515625);
+  // r0.xyz = float3(-0.8359375, -0.8359375, -0.8359375) + r0.xyz;
+  // r0.xyz = max(float3(0, 0, 0), r0.xyz);
+  // r0.xyz = r0.xyz / r2.xyz;
+  // r0.xyz = log2(r0.xyz);
+  // r0.xyz = float3(6.27739477, 6.27739477, 6.27739477) * r0.xyz;
+  // r0.xyz = exp2(r0.xyz);
+  // r0.xyz = float3(10000, 10000, 10000) * r0.xyz;
+
+  // Blend UI+Game In Linear
+  r0.w = 1 + -r1.w;
+  r0.xyz = r0.xyz * r0.www + r1.xyz;
+
+  r0.xyz *= RENODX_DIFFUSE_WHITE_NITS;
+
+  // r0.xyz = saturate(float3(9.99999975e-05, 9.99999975e-05, 9.99999975e-05) * r0.xyz);
+  // r0.xyz = log2(r0.xyz);
+  // r0.xyz = float3(0.159301758, 0.159301758, 0.159301758) * r0.xyz;
+  // r0.xyz = exp2(r0.xyz);
+  // r1.xyz = r0.xyz * float3(18.8515625, 18.8515625, 18.8515625) + float3(0.8359375, 0.8359375, 0.8359375);
+  // r0.xyz = r0.xyz * float3(18.6875, 18.6875, 18.6875) + float3(1, 1, 1);
+  // r0.xyz = r1.xyz / r0.xyz;
+  // r0.xyz = log2(r0.xyz);
+  // r0.xyz = float3(78.84375, 78.84375, 78.84375) * r0.xyz;
+  // o0.xyz = exp2(r0.xyz);
+
+  o0.rgb = renodx::color::bt2020::from::BT709(r0.rgb);
+  o0.rgb = max(0, o0.rgb);
+  // o0.rgb *= RENODX_DIFFUSE_WHITE_NITS;
+
+  if (RENODX_TONE_MAP_TYPE == 3.f) {
+    // Clamp to peak in BT2020
+    o0.rgb = min(o0.rgb, RENODX_PEAK_WHITE_NITS);
+  }
+
+  o0.rgb = renodx::color::pq::Encode(o0.rgb, 1.f);
+  o0.w = 0;
   return;
 }

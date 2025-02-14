@@ -1,8 +1,20 @@
-#include "./shared.h"
+#include "../shared.h"
 
-// ---- Created with 3Dmigoto v1.3.16 on Tue Sep 03 06:54:28 2024
+// ---- Created with 3Dmigoto v1.4.1 on Tue Feb  4 18:09:54 2025
 
-cbuffer SceneBuffer : register(b2) {
+cbuffer DrawableBuffer : register(b1)
+{
+  float4 FogColor : packoffset(c0);
+  float4 DebugColor : packoffset(c1);
+  float AlphaThreshold : packoffset(c2);
+  float UseSSR : packoffset(c2.y);
+  uint OcclusionQueryIndex : packoffset(c2.z);
+  uint DrawableFlags : packoffset(c2.w);
+  float4 __InstancedMaterialOpacity[256] : packoffset(c3);
+}
+
+cbuffer SceneBuffer : register(b2)
+{
   row_major float4x4 View : packoffset(c0);
   row_major float4x4 ScreenMatrix : packoffset(c4);
   float4 FogParams : packoffset(c8);
@@ -80,97 +92,36 @@ cbuffer SceneBuffer : register(b2) {
   float Padding[3] : packoffset(c100);
 }
 
-cbuffer ColorGradingCB : register(b0) {
-  float g_lutSize : packoffset(c0);
-  float g_saturation : packoffset(c0.y);
-  float g_pmBrightness : packoffset(c0.z);
-  float g_pmSaturation : packoffset(c0.w);
-  float g_dvBlend : packoffset(c1);
-  float g_dvScale1 : packoffset(c1.y);
-  float g_dvScale2 : packoffset(c1.z);
-  float __colorGrading_pad0 : packoffset(c1.w);
-  float2 g_dvOffset1 : packoffset(c2);
-  float2 g_dvOffset2 : packoffset(c2.z);
-  float2 g_vigParams : packoffset(c3);
-  float2 g_vigCenterPoint : packoffset(c3.z);
-  float4 g_vigColInner : packoffset(c4);
-  float4 g_vigColOuter : packoffset(c5);
+cbuffer CB_Instance : register(b4)
+{
+  float4 InstanceParametersBuffer[4096] : packoffset(c0);
 }
 
-SamplerState SamplerGenericBilinearClamp_s : register(s13);
-Texture3D<float4> lut : register(t1);
-RWTexture2D<float3> colorBuffer : register(u0);
+
 
 // 3Dmigoto declarations
 #define cmp -
 
-float3 LinearToACEScc(float3 value) {
-  const float THRESHOLD = 0.0078125f;
 
-  float3 logRegion = (log2(value) + 9.72f) / 17.52f;
-  float3 linearRegion = 17.52f * value + 0.0729055341958355f;
+void main(
+  float4 v0 : SV_POSITION0,
+  float4 v1 : COLOR0,
+  nointerpolation uint v2 : PSIZE0,
+  uint v3 : SV_SampleIndex0,
+  out float4 o0 : SV_TARGET0)
+{
+  float4 r0;
+  uint4 bitmask, uiDest;
+  float4 fDest;
 
-  return lerp(logRegion, linearRegion, step(value, THRESHOLD));
-}
-
-float3 ACESccToLinear(float3 value) {
-  const float THRESHOLD1 = 0.155251141552511f;
-  const float OFFSET = 0.0729055341958355f;
-  const float SCALE = 10.5402377416545f;
-
-  float3 linearResult = (value - OFFSET) / SCALE;         // For values <= THRESHOLD1
-  linearResult = lerp(pow(2.0f, value * 17.52f - 9.72f),  // For intermediate values
-                      linearResult,
-                      step(value, THRESHOLD1));
-  return min(linearResult, 65504.0f);  // Clamp to max
-}
-
-[numthreads(8, 8, 1)]
-void main(uint3 vThreadID: SV_DispatchThreadID) {
-  float4 r0, r1, r2;
-
-  r0.xy = (uint2)ScreenResolution.xy;
-  r0.xy = cmp((uint2)vThreadID.xy < (uint2)r0.xy);
-  r0.x = r0.y ? r0.x : 0;
-  if (r0.x != 0) {
-    r0.xyz = colorBuffer.Load(int3(vThreadID.xy, 0)).xyz;  // ld_uav_typed_indexable(texture2d)(float, float, float, float)r0.xyz, vThreadID.xyyy, u0.xyzw
-
-    r1.rgb = renodx::color::ap1::from::BT709(r0.rgb);
-
-    // AP1 -> ACEScc? seems to be different
-#if 1
-    r0.xyz = cmp(r1.xyz < 1.52587891e-005);
-    r2.xyz = r1.xyz * 0.5 + 1.52587891e-005;
-    r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
-    r0.xyz = log2(r0.xyz);
-    r0.xyz = 9.72000027 + r0.xyz;
-    r0.xyz = 0.0570776239 * r0.xyz;
-#else
-    r0.rgb = LinearToACEScc(r1.rgb);
-#endif
-
-    // LUT Sample
-    r0.xyz = renodx::lut::Sample(lut, SamplerGenericBilinearClamp_s, r0.rgb, g_lutSize);
-    // clamp?
-    r0.xyz = max(-0.301369876, r0.xyz);
-
-    // ACEScc -> AP1? seems to be different
-#if 1
-    r0.xyz = r0.xyz * 17.5200005 - 9.72000027;
-    r0.xyz = exp2(r0.xyz);
-    r0.xyz = min(65504, r0.xyz);
-#else
-    r0.rgb = ACESccToLinear(r0.rgb);
-#endif
-
-    r1.rgb = renodx::color::bt709::from::AP1(r0.rgb);
-
-    float grayscale = renodx::color::y::from::BT709(r1.xyz);
-    r0.xyz = lerp(grayscale, r1.xyz, g_saturation);
-
-    r0.xyz = g_pmBrightness * r0.xyz;
-
-    colorBuffer[vThreadID.xy] = r0.xyz;  // store_uav_typed u0.xyzw, vThreadID.xyyy, r0.xyzw
-  }
+  r0.xyz = mad((int3)v2.xxx, int3(9,9,9), int3(2,3,4));
+  r0.yz = InstanceParametersBuffer[r0.y].xw * v1.xw + InstanceParametersBuffer[r0.z].xw;
+  r0.y = -1 + r0.y;
+  r0.y = r0.z * r0.y + 1;
+  r0.x = -r0.y * InstanceParametersBuffer[r0.x].x + 1;
+  r0.x = UiAlphaMultiplier * r0.x * RENODX_GRAPHICS_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+  r0.y = v2.x;
+  o0.w = __InstancedMaterialOpacity[r0.y].x * r0.x;
+  o0.xyz = float3(0,0,0);
   return;
 }
