@@ -230,6 +230,15 @@ float3 ToneMapBlend(float3 hdr_color, float3 sdr_color) {
   return blended_color;
 }
 
+float3 ApplyBloom(float3 input_color, float2 in_coords, Texture2D<float4> SamplerBloomMap0_TEX, SamplerState SamplerBloomMap0_SMP_s) {
+  float3 r0, r1 = input_color;
+
+  r0.xyz = SamplerBloomMap0_TEX.Sample(SamplerBloomMap0_SMP_s, in_coords).xyz;
+  r0.xyz = r0.xyz * r0.xyz * injectedData.fxBloom;  // adjust bloom
+  r0.xyz = r0.xyz * HDR_EncodeScale2.zzz + r1.xyz;
+  return r0.rgb;
+}
+
 float3 ApplyVanillaTonemap(float3 untonemapped, float untonemapped_luminance, Texture2D<float4> SamplerToneMapCurve_TEX, SamplerState SamplerToneMapCurve_SMP_s) {
   float4 r0, r1, r2, r3, r4;
 
