@@ -181,10 +181,7 @@ void main(
   r2.xyz = r2.xyz * float3(4, 4, 4) + -r1.xyz;
   r1.xyz = r0.zzz * r2.xyz + r1.xyz;
 
-  // bloom
-  r0.xyz = SamplerBloomMap0_TEX.Sample(SamplerBloomMap0_SMP_s, r0.xy).xyz;
-  r0.xyz = r0.xyz * r0.xyz * injectedData.fxBloom;  // adjust bloom
-  r0.xyz = r0.xyz * HDR_EncodeScale2.zzz + r1.xyz;
+  r0.rgb = ApplyBloom(r1.rgb, r0.xy, SamplerBloomMap0_TEX, SamplerBloomMap0_SMP_s);
 
   float3 untonemapped = r0.xyz;
   const float untonemappedLum = renodx::color::luma::from::BT601(untonemapped);  // save for reuse
