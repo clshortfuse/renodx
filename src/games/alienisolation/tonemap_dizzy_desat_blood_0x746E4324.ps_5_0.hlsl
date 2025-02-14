@@ -134,38 +134,6 @@ float3 applyVanillaTonemap(float3 untonemapped, float luminance) {
   return r0.xyz;
 }
 
-// debug stuff
-// maybe has vignette?
-float3 applyVignette(float3 tonemapped, float4 sv_position, float4 texcoord, float luminance) {
-  float4 r0, r1, r2;
-  r0.xyz = tonemapped;
-  r0.w = luminance;
-
-  // Light meter debug and vignette processing
-  r1.xy = (uint2)sv_position.xy;
-  uint4 uiDest;
-  uiDest.xy = (uint2)r1.xy / int2(5, 5);  // Compute vignette grid
-  r1.xy = uiDest.xy;
-  r1.x = (int)r1.x + (int)r1.y;  // Sum the grid coordinates
-  r1.x = (int)r1.x & 1;          // Create a checkerboard pattern for the vignette
-
-  // Apply LightMeterDebugParams threshold checks
-  r1.y = cmp(LightMeterDebugParams.y < r0.w);        // Check if brightness exceeds the threshold
-  r0.w = cmp(r0.w < LightMeterDebugParams.x);        // Check if brightness is below a threshold
-  r2.xyzw = r0.wwww ? float4(0, 0, 1, 1) : 0;        // Set blue if brightness is too low
-  r2.xyzw = r1.yyyy ? float4(1, 0, 0, 1) : r2.xyzw;  // Set red if brightness is too high
-  r0.w = LightMeterDebugParams.w * r2.w;             // Apply light meter multiplier
-
-  // Final color adjustment based on debug/vignette
-  r1.yzw = r2.xyz + -r0.xyz;
-  r1.yzw = r0.www * r1.yzw + r0.xyz;
-  r0.xyz = r1.xxx ? r1.yzw : r0.xyz;
-  r0.xyz = texcoord.zzz * r0.xyz;  // Use v1 (texcoord) for final adjustment
-
-  r0.rgb = lerp(tonemapped, r0.rgb, injectedData.fxVignette);
-  return r0.rgb;
-}
-
 // Function to apply the LUT based on input color
 float3 applyLUT(float3 lutInputColor, float lutStrength = 1.f) {
   float4 r0, r1;
@@ -213,8 +181,6 @@ float3 applyToneMap(float3 untonemapped, float untonemappedLum, float4 v1, float
         outputColor = renodx::color::correct::Hue(outputColor, vanilla_color, injectedData.toneMapHueShift);
       }
       if (injectedData.toneMapBlend) outputColor = ToneMapBlend(outputColor, vanilla_color);
-    } else {
-      outputColor = applyVignette(outputColor, v2, v1, untonemappedLum);
     }
   }
 
