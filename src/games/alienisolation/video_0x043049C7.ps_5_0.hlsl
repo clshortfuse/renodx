@@ -35,5 +35,6 @@ void main(
   o0.w = v0.w;
 
   o0 = saturate(o0);
+  o0 = GameScale(o0);
   return;
 }
