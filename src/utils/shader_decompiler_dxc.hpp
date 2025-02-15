@@ -2525,10 +2525,10 @@ class Decompiler {
 
  public:
   struct DecompileOptions {
-    bool flatten = true;
+    bool flatten = false;
   };
 
-  std::string Decompile(std::string_view disassembly, const DecompileOptions& decompile_options = {.flatten = true}) {
+  std::string Decompile(std::string_view disassembly, const DecompileOptions& decompile_options = {.flatten = false}) {
     Init();
     this->source_lines = StringViewSplitAll(disassembly, '\n');
 

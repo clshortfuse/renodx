@@ -1876,7 +1876,11 @@ void RenderShaderViewDecompilation(reshade::api::device* device, DeviceData& dat
       if (renodx::utils::device::IsDirectX(device)) {
         auto decompiler = renodx::utils::shader::decompiler::dxc::Decompiler();
         auto disassembly_string = renodx::utils::shader::compiler::directx::DisassembleShader(shader_details.shader_data);
-        shader_details.decompilation = decompiler.Decompile(disassembly_string);
+        shader_details.decompilation = decompiler.Decompile(
+            disassembly_string,
+            {
+                .flatten = true,
+            });
       }
     } catch (std::exception& e) {
       shader_details.decompilation = e;
