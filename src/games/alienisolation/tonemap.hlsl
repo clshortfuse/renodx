@@ -196,7 +196,13 @@ float3 ApplyDesaturation(float3 input_color) {
   return max(0, desaturated_color);  // fixes bad gradients
 }
 
-float3 applyFilmGrain(float3 input_color, Texture2D<float4> SamplerNoise_TEX,
+float3 EncodeGamma(float3 linear_color) {
+  // ignore user gamma, force 2.2
+  // return pow(linear_color, OutputGamma.x);
+  return renodx::color::gamma::EncodeSafe(linear_color, 2.2f);
+}
+
+float3 ApplyFilmGrain(float3 input_color, Texture2D<float4> SamplerNoise_TEX,
                       SamplerState SamplerNoise_SMP_s, float4 v1) {
   float3 grained_color;
   if (injectedData.fxFilmGrainType == 0.f) {  // Noise
@@ -261,6 +267,14 @@ float3 ApplyBloodOverlay(
   r0.xyz = r0.www * r1.xyz + r0.xyz;
 
   return r0.xyz;
+}
+
+float4 FinalizeToneMapOutput(float3 input_color) {
+  float4 output_color;
+
+  output_color.rgb = input_color * rp_parameter_ps[0].x + rp_parameter_ps[0].y;  // remove saturate
+  output_color.w = dot(input_color, float3(0.298999995, 0.587000012, 0.114));
+  return output_color;
 }
 
 // ============================= CUSTOM FUNCTIONS =============================

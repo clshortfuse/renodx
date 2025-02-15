@@ -61,17 +61,13 @@ void main(
       SamplerToneMapCurve_SMP_s, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
 
   outputColor = ApplyDesaturation(outputColor);
-  // ignore user gamma, force 2.2
-  r0.xyz = renodx::color::gamma::EncodeSafe(outputColor, 2.2f);  //  r0.xyz = pow(r0.xyz, OutputGamma.xxx);
 
-  // film grain
-  r0.rgb = applyFilmGrain(r0.rgb, SamplerNoise_TEX, SamplerNoise_SMP_s, v1);
+  r0.xyz = EncodeGamma(outputColor);  //  r0.xyz = pow(r0.xyz, OutputGamma.x);
+
+  r0.rgb = ApplyFilmGrain(r0.rgb, SamplerNoise_TEX, SamplerNoise_SMP_s, v1);
 
   r0.xyz = ApplyBloodOverlay(r0.xyz, v0, SamplerOverlay_TEX, SamplerOverlay_SMP_s);
 
-  r0.xyz = (r0.xyz * rp_parameter_ps[0].xxx + rp_parameter_ps[0].yyy);  // r0.xyz = saturate(r0.xyz * rp_parameter_ps[0].xxx + rp_parameter_ps[0].yyy);
-  o0.w = dot(r0.xyz, float3(0.298999995, 0.587000012, 0.114));
-  o0.xyz = r0.xyz;
-
+  o0 = FinalizeToneMapOutput(r0.rgb);
   return;
 }
