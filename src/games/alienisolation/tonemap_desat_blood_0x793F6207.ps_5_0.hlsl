@@ -106,30 +106,9 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyzw = SamplerDistortion_TEX.Sample(SamplerDistortion_SMP_s, v0.xy).xyzw;
-  r0.xy = r0.xy + -r0.zw;
-  r0.zw = rp_parameter_ps[1].xy * r0.xy;
-  r0.xy = r0.xy * rp_parameter_ps[1].xy + v0.xy;
-  r0.xy = min(ScreenResolution[1].xy, r0.xy);
-  r1.x = rp_parameter_ps[9].y + rp_parameter_ps[0].z;
-  r1.x = cmp(0 < r1.x);
-  if (r1.x != 0) {
-    r1.x = 1 + rp_parameter_ps[0].z;
-    r1.xy = r0.zw * r1.xx + v0.xy;
-    r2.x = 1 + -rp_parameter_ps[0].z;
-    r1.zw = r0.zw * r2.xx + v0.xy;
-    r0.zw = v0.xy * float2(2, 2) + float2(-1, -1);
-    r2.x = dot(r0.zw, r0.zw);
-    r2.x = cmp(9.99999975e-005 < r2.x);
-    r3.xy = r0.zw * rp_parameter_ps[9].yy + r1.xy;
-    r3.zw = -r0.zw * rp_parameter_ps[9].yy + r1.zw;
-    r1.xyzw = r2.xxxx ? r3.xyzw : r1.xyzw;
-    r2.x = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r1.xy, 0).x;
-    r2.y = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r0.xy, 0).y;
-    r2.z = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r1.zw, 0).z;
-  } else {
-    r2.xyz = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r0.xy, 0).xyz;
-  }
+  GetSceneColorAndTexCoord(
+      SamplerDistortion_TEX, SamplerDistortion_SMP_s, SamplerFrameBuffer_TEX,
+      SamplerFrameBuffer_SMP_s, v0, r2.rgb, r0.xy);
 
   // float3 mainTex = r2.xyz;
 
