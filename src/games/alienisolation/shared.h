@@ -1,8 +1,9 @@
 #ifndef SRC_ALIEN_ISOLATION_SHARED_H_
 #define SRC_ALIEN_ISOLATION_SHARED_H_
 
-#define RENODX_RENO_DRT_WHITE_CLIP 200.f
-#define RENODX_TONE_MAP_MID_GRAY   0.035f
+#define RENODX_RENO_DRT_WHITE_CLIP            200.f
+#define RENODX_TONE_MAP_MID_GRAY              0.035f
+#define RENODX_COLOR_GRADE_RESTORATION_METHOD 0u
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -23,7 +24,6 @@ struct ShaderInjectData {
   float colorGradeHighlightSaturation;
   float colorGradeBlowout;
   float colorGradeFlare;
-  float colorGradeRestorationMethod;
   float colorGradeLUTStrength;
   float fxBloom;
   float fxLensFlare;
