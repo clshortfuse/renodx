@@ -22,31 +22,10 @@ Texture2D<float4> SamplerOverlay_TEX : register(t15);
 float3 renderPostFX(float4 v0, float4 v1) {
   float4 r0, r1, r2, r3;
 
-  // motion blur?
-  r0.xyzw = SamplerDistortion_TEX.Sample(SamplerDistortion_SMP_s, v0.xy).xyzw;
-  r0.xy = r0.xy + -r0.zw;
-  r0.zw = rp_parameter_ps[1].xy * r0.xy;
-  r0.xy = r0.xy * rp_parameter_ps[1].xy + v0.xy;
-  r0.xy = min(ScreenResolution[1].xy, r0.xy);
-  r1.x = rp_parameter_ps[9].y + rp_parameter_ps[0].z;
-  r1.x = cmp(0 < r1.x);
-  if (r1.x != 0) {
-    r1.x = 1 + rp_parameter_ps[0].z;
-    r1.xy = r0.zw * r1.xx + v0.xy;
-    r2.x = 1 + -rp_parameter_ps[0].z;
-    r1.zw = r0.zw * r2.xx + v0.xy;
-    r0.zw = v0.xy * float2(2, 2) + float2(-1, -1);
-    r2.x = dot(r0.zw, r0.zw);
-    r2.x = cmp(9.99999975e-005 < r2.x);
-    r3.xy = r0.zw * rp_parameter_ps[9].yy + r1.xy;
-    r3.zw = -r0.zw * rp_parameter_ps[9].yy + r1.zw;
-    r1.xyzw = r2.xxxx ? r3.xyzw : r1.xyzw;
-    r2.x = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r1.xy, 0).x;
-    r2.y = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r0.xy, 0).y;
-    r2.z = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r1.zw, 0).z;
-  } else {
-    r2.xyz = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r0.xy, 0).xyz;
-  }
+  GetSceneColorAndTexCoord(
+      SamplerDistortion_TEX, SamplerDistortion_SMP_s, SamplerFrameBuffer_TEX,
+      SamplerFrameBuffer_SMP_s, v0, r2.rgb, r0.xy);
+
   r1.xyz = HDR_EncodeScale.www * r2.xyz;
   r2.xyzw = SamplerQuarterSizeBlur_TEX.Sample(SamplerQuarterSizeBlur_SMP_s, r0.xy).xyzw;
   r2.xyz = r2.xyz * r2.xyz;
@@ -58,14 +37,7 @@ float3 renderPostFX(float4 v0, float4 v1) {
   r1.xyz = r0.zzz * r2.xyz + r1.xyz;
 
   r1.rgb = ApplyBloom(r1.rgb, r0.xy, SamplerBloomMap0_TEX, SamplerBloomMap0_SMP_s);
-
-  // damage dizzy effect
-  r0.xyzw = SamplerLowResCapture_TEX.Sample(SamplerLowResCapture_SMP_s, r0.xy).xyzw;
-  r0.xyz = r0.xyz * r0.www;
-  r0.xyz = HDR_EncodeScale2.zzz * r0.xyz;
-  r0.xyz = r0.xyz * float3(8, 8, 8) + -r1.xyz;
-  r0.xyz = rp_parameter_ps[10].www * r0.xyz + r1.xyz;
-  // end damage dizzy
+  r0.rgb = ApplyDizzyEffect(r1.rgb, r0.xy, SamplerLowResCapture_TEX, SamplerLowResCapture_SMP_s);
 
   return r0.xyz;
 }

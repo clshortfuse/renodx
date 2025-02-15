@@ -143,15 +143,15 @@ renodx::tonemap::config::DualToneMap ToneMap(float3 color, float vanilla_mid_gra
 
   // RenoDRT Settings
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
-  config.reno_drt_highlights = 1.2f;
-  config.reno_drt_shadows = 0.8f;
-  config.reno_drt_contrast = 0.84f;
+  config.reno_drt_highlights = 1.18f;
+  config.reno_drt_shadows = 1.f;
+  config.reno_drt_contrast = 1.f;
   config.reno_drt_saturation = 1.f;
   config.reno_drt_blowout = -1.f * (injectedData.colorGradeHighlightSaturation - 1.f);
   config.reno_drt_dechroma = injectedData.colorGradeBlowout;
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.reno_drt_working_color_space = 0u;
-  config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
+  config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
   config.reno_drt_hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::OKLAB;
 
   // ToneMap Blend
@@ -187,12 +187,64 @@ float3 ToneMapBlend(float3 hdr_color, float3 sdr_color) {
   return blended_color;
 }
 
-float3 ApplyBloom(float3 input_color, float2 in_coords, Texture2D<float4> SamplerBloomMap0_TEX, SamplerState SamplerBloomMap0_SMP_s) {
+//-----VANILLA FUNCTIONS-----//
+void GetSceneColorAndTexCoord(
+    Texture2D<float4> SamplerDistortion_TEX,
+    SamplerState SamplerDistortion_SMP_s,
+    Texture2D<float4> SamplerFrameBuffer_TEX,
+    SamplerState SamplerFrameBuffer_SMP_s,
+    float4 v0,
+    out float3 scene_color,
+    out float2 tex_coord) {
+  float4 r0, r1, r3;
+  float3 r2;
+
+  r0.xyzw = SamplerDistortion_TEX.Sample(SamplerDistortion_SMP_s, v0.xy).xyzw;
+  r0.xy = r0.xy + -r0.zw;
+  r0.zw = rp_parameter_ps[1].xy * r0.xy;
+  r0.xy = r0.xy * rp_parameter_ps[1].xy + v0.xy;
+  r0.xy = min(ScreenResolution[1].xy, r0.xy);
+  r1.x = rp_parameter_ps[9].y + rp_parameter_ps[0].z;
+  r1.x = cmp(0 < r1.x);
+  if (r1.x != 0) {
+    r1.x = 1 + rp_parameter_ps[0].z;
+    r1.xy = r0.zw * r1.xx + v0.xy;
+    r2.x = 1 + -rp_parameter_ps[0].z;
+    r1.zw = r0.zw * r2.xx + v0.xy;
+    r0.zw = v0.xy * float2(2, 2) + float2(-1, -1);
+    r2.x = dot(r0.zw, r0.zw);
+    r2.x = cmp(9.99999975e-005 < r2.x);
+    r3.xy = r0.zw * rp_parameter_ps[9].yy + r1.xy;
+    r3.zw = -r0.zw * rp_parameter_ps[9].yy + r1.zw;
+    r1.xyzw = r2.xxxx ? r3.xyzw : r1.xyzw;
+    r2.x = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r1.xy, 0).x;
+    r2.y = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r0.xy, 0).y;
+    r2.z = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r1.zw, 0).z;
+  } else {
+    r2.xyz = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r0.xy, 0).xyz;
+  }
+
+  scene_color = r2;
+  tex_coord = r0.xy;
+}
+
+float3 ApplyBloom(float3 input_color, float2 tex_coord, Texture2D<float4> SamplerBloomMap0_TEX, SamplerState SamplerBloomMap0_SMP_s) {
   float3 r0, r1 = input_color;
 
-  r0.xyz = SamplerBloomMap0_TEX.Sample(SamplerBloomMap0_SMP_s, in_coords).xyz;
+  r0.xyz = SamplerBloomMap0_TEX.Sample(SamplerBloomMap0_SMP_s, tex_coord).xyz;
   r0.xyz = r0.xyz * r0.xyz * injectedData.fxBloom;  // adjust bloom
   r0.xyz = r0.xyz * HDR_EncodeScale2.zzz + r1.xyz;
+  return r0.rgb;
+}
+
+float3 ApplyDizzyEffect(float3 input_color, float2 input_coords, Texture2D<float4> SamplerLowResCapture_TEX, SamplerState SamplerLowResCapture_SMP_s) {
+  float3 r1 = input_color;
+
+  float4 r0 = SamplerLowResCapture_TEX.Sample(SamplerLowResCapture_SMP_s, input_coords).xyzw;
+  r0.xyz = r0.xyz * r0.www;
+  r0.xyz = HDR_EncodeScale2.zzz * r0.xyz;
+  r0.xyz = r0.xyz * float3(8, 8, 8) + -r1.xyz;
+  r0.xyz = rp_parameter_ps[10].www * r0.xyz + r1.xyz;
   return r0.rgb;
 }
 
