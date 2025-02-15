@@ -403,15 +403,18 @@ float3 UpgradeToneMap(
   }
 }
 
-renodx::tonemap::config::DualToneMap ToneMap(float3 color, float vanilla_mid_gray) {
-  color *= vanilla_mid_gray / 0.18f;  // high mid gray values break tonemapping
+renodx::tonemap::config::DualToneMap ToneMap(float3 color, float exposure_bias) {
+  color *= exposure_bias / 0.18f;  // high mid gray values break tonemapping
+
+  const float mid_gray = RENODX_TONE_MAP_MID_GRAY;
+  color *= 0.18f / mid_gray;
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = injectedData.toneMapType;
   config.peak_nits = injectedData.toneMapPeakNits;
   config.game_nits = injectedData.toneMapGameNits;
   config.gamma_correction = 0.f;
-  config.mid_gray_value = 0.18f;
-  config.mid_gray_nits = 0.18f * 100.f;
+  config.mid_gray_value = mid_gray;
+  config.mid_gray_nits = config.mid_gray_value * 100.f;
   config.exposure = injectedData.colorGradeExposure;
   config.shadows = injectedData.colorGradeShadows;
   config.contrast = injectedData.colorGradeContrast;
@@ -419,10 +422,11 @@ renodx::tonemap::config::DualToneMap ToneMap(float3 color, float vanilla_mid_gra
   config.saturation = injectedData.colorGradeSaturation;
   config.hue_correction_type = renodx::tonemap::config::hue_correction_type::INPUT;
   config.hue_correction_strength = injectedData.toneMapHueCorrection;
+  config.reno_drt_white_clip = RENODX_RENO_DRT_WHITE_CLIP;
 
   // RenoDRT Settings
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
-  config.reno_drt_highlights = 1.18f;
+  config.reno_drt_highlights = 1.04f;
   config.reno_drt_shadows = 1.f;
   config.reno_drt_contrast = 1.f;
   config.reno_drt_saturation = 1.f;
@@ -481,8 +485,8 @@ float3 ApplyToneMapVignetteLUT(
 
     output_color = r0.xyz;
   } else if (injectedData.toneMapType > 1.f) {
-    const float vanilla_mid_gray = renodx::color::y::from::BT709(ApplyVanillaTonemap(0.18, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s));
-    renodx::tonemap::config::DualToneMap dual_tone_map = ToneMap(untonemapped, vanilla_mid_gray);
+    const float exposure_bias = renodx::color::y::from::BT709(ApplyVanillaTonemap(0.18, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s));
+    renodx::tonemap::config::DualToneMap dual_tone_map = ToneMap(untonemapped, exposure_bias);
 
     float3 vignette_hdr = applyVignette(dual_tone_map.color_hdr, v2, v1, untonemapped_lum);
     float3 vignette_sdr = applyVignette(dual_tone_map.color_sdr, v2, v1, untonemapped_lum);

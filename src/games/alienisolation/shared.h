@@ -1,9 +1,8 @@
 #ifndef SRC_ALIEN_ISOLATION_SHARED_H_
 #define SRC_ALIEN_ISOLATION_SHARED_H_
 
-#ifndef __cplusplus
-#include "../../shaders/renodx.hlsl"
-#endif
+#define RENODX_RENO_DRT_WHITE_CLIP 200.f
+#define RENODX_TONE_MAP_MID_GRAY   0.035f
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -37,6 +36,9 @@ struct ShaderInjectData {
 cbuffer cb11 : register(b11) {
   ShaderInjectData injectedData : packoffset(c0);
 }
+
+#include "../../shaders/renodx.hlsl"
+
 #endif
 
 #endif  // SRC_ALIEN_ISOLATION_SHARED_H_
