@@ -185,9 +185,8 @@ void main(
     r3.z = r1.w * 0.00392156886 + r2.z;
     r1.xyz = r3.xyz * r1.xyz;
   }
-  r0.xyz = r0.xxx * r0.yzw + r1.zxy;
-
-  float3 untonemapped = r0.rgb;
+  
+  float3 untonemapped = r1.rgb;
 
   float3 output = applyUserTonemap(untonemapped);
   renodx::lut::Config lut_config = renodx::lut::config::Create(
@@ -204,7 +203,7 @@ void main(
 
   o0.w = 1;
   return;
-
+  r0.xyz = r0.xxx * r0.yzw + r1.zxy;
   r0.xyz = r0.xyz * float3(5.55555582, 5.55555582, 5.55555582) + float3(0.0479959995, 0.0479959995, 0.0479959995);
   r0.xyz = log2(r0.xyz);
   r0.xyz = saturate(r0.xyz * float3(0.0734997839, 0.0734997839, 0.0734997839) + float3(0.386036009, 0.386036009, 0.386036009));
