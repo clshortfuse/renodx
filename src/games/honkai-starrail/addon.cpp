@@ -23,7 +23,17 @@ namespace {
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x3918E9B9),
     CustomShaderEntry(0x127C5F55),
-    CustomShaderEntry(0x947F3706)
+    CustomShaderEntry(0x947F3706),
+    CustomShaderEntry(0xC279021A),
+    CustomShaderEntry(0x9AC098D0),
+    CustomShaderEntry(0x3C4A9CFA),
+    CustomShaderEntry(0x4BCECE5C),
+    CustomShaderEntry(0x8678E1EF),
+    CustomShaderEntry(0xB1281263),
+    CustomShaderEntry(0xC01EF897),
+    CustomShaderEntry(0xC7B9C6E9),
+    CustomShaderEntry(0xCC049B0B),
+    CustomShaderEntry(0xCD0B5762),
 };
 
 ShaderInjectData shader_injection;
@@ -239,11 +249,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
                                                                      }});
 
       //  RGBA8_typeless
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_typeless,
-          .new_format = reshade::api::format::r16g16b16a16_typeless,
-          .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::ANY
-      });
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r8g8b8a8_typeless,
+                                                                     .new_format = reshade::api::format::r16g16b16a16_typeless,
+                                                                     .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::ANY});
 
       break;
     case DLL_PROCESS_DETACH:
