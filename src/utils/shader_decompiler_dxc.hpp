@@ -1675,7 +1675,7 @@ class Decompiler {
           auto ref = std::string{srv.substr(1)};
           auto [srv_name, srv_range_index] = preprocess_state.resource_binding_variables.at(ref);
           assignment_type = "int4";
-          assignment_value = std::format("{}[{}].data[{} / {}]",
+          assignment_value = std::format("asint({}[{}].data[{} / {}])",
                                          srv_name, ParseInt(index),
                                          ParseInt(elementOffset), ParseInt(alignment));
         } else if (functionName == "@dx.op.bufferLoad.i32") {
@@ -2922,7 +2922,6 @@ class Decompiler {
     // Resources
     auto resource_list_metadata = named_metadata["!dx.resources"];
     if (!resource_list_metadata.empty()) {
-
       auto resource_list_reference = resource_list_metadata[0];
       auto resource_list_key = resource_list_reference;
       auto resource_list = named_metadata[resource_list_key];
