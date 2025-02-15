@@ -394,9 +394,9 @@ float3 UpgradeToneMapPerceptual(
 float3 UpgradeToneMap(
     float3 color_hdr, float3 color_sdr,
     float3 post_process_color, float post_process_strength) {
-  if (injectedData.colorGradeRestorationMethod == 1.f) {
+  if (RENODX_COLOR_GRADE_RESTORATION_METHOD == 1u) {
     return UpgradeToneMapPerChannel(color_hdr, color_sdr, post_process_color, post_process_strength);
-  } else if (injectedData.colorGradeRestorationMethod == 2.f) {
+  } else if (RENODX_COLOR_GRADE_RESTORATION_METHOD == 2u) {
     return UpgradeToneMapPerceptual(color_hdr, color_sdr, post_process_color, post_process_strength);
   } else {
     return renodx::tonemap::UpgradeToneMap(color_hdr, color_sdr, post_process_color, post_process_strength);

@@ -216,7 +216,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType > 1 && shader_injection.toneMapBlend == 0; },
-        .parse = [](float value) { return value * 0.01f; },
+        .parse = [](float value) { return max(value * 0.01f, 0.000001f); },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
@@ -227,18 +227,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType == 3 && shader_injection.toneMapBlend == 0; },
-        .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradeRestorationMethod",
-        .binding = &shader_injection.colorGradeRestorationMethod,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Grading Application",
-        .section = "Color Grading",
-        .tooltip = "Chooses method to apply grading for HDR.",
-        .labels = {"Luminance", "Per Channel", "Perceptual"},
-        .is_enabled = []() { return shader_injection.toneMapType > 1; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeLUTStrength",
