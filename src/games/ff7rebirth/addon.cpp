@@ -26,17 +26,29 @@ ShaderInjectData shader_injection;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xC67C6B5A),  // Final
+    CustomShaderEntry(0xD0981514),  // Final
     CustomShaderEntry(0xD092CC63),  // Final - Display Mapped
+    CustomShaderEntry(0xD7A19FB6),  // Final - Display Mapped
+
     CustomShaderEntry(0xC9686A2D),  // Final - FMV
+    CustomShaderEntry(0x854B9174),  // Final - FMV
     CustomShaderEntry(0xEFDBD563),  // Final - FMV - Display Mapped
+    CustomShaderEntry(0x476D2C8F),  // Final - FMV - Display Mapped
+
     CustomShaderEntry(0xD31CF869),  // Final - Menu
+    CustomShaderEntry(0x15CB9307),  // Final - Menu
     CustomShaderEntry(0x288CF983),  // Final - Menu - Display Mapped
+    CustomShaderEntry(0x97E882E3),  // Final - Menu - Display Mapped
 
     CustomShaderEntry(0xA53093E1),  // Final - Static
+    CustomShaderEntry(0xBDD0F47E),  // Final - Static
     CustomShaderEntry(0x4041C8C4),  // Final - Static - Display Mapped
- 
+    CustomShaderEntry(0x22FDDF03),  // Final - Static - Display Mapped
+
     CustomShaderEntry(0x6E1106B8),  // Final - Damage
+    CustomShaderEntry(0xFF35CB65),  // Final - Damage
     CustomShaderEntry(0x05833276),  // Final - Damage - Display Mapped
+    CustomShaderEntry(0x090DB8BF),  // Final - Damage - Display Mapped
 };
 
 // const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {

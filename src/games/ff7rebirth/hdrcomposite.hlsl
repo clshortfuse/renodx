@@ -114,7 +114,7 @@ float4 HDRComposite(noperspective float2 TEXCOORD: TEXCOORD,
   float _247 = tonemapped.r, _261 = tonemapped.g, _275 = tonemapped.b;
 
   // UI + sRGB -> 2.2  gamma correction
-#if defined(SHADER_HASH_0xD31CF869) || defined(SHADER_HASH_0x288CF983)
+#if defined(SHADER_HASH_0xD31CF869) || defined(SHADER_HASH_0x288CF983) || defined(SHADER_HASH_0x15CB9307) || defined(SHADER_HASH_0x97E882E3)
   // when in the menu the UI includes a foreground and background texture
   float _123 = ((min((((Globals_044x) * 0.5625f) * (Globals_044w)), 1.0f)) * (_41 + -0.5f)) + 0.5f;
   float _124 = ((min((((Globals_044y) * 1.7777777910232544f) * (Globals_044z)), 1.0f)) * (_42 + -0.5f)) + 0.5f;
