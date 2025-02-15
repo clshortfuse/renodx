@@ -42,34 +42,6 @@ float3 renderPostFX(float4 v0, float4 v1) {
   return r0.xyz;
 }
 
-float3 applyDesaturation(float3 inputColor) {
-  float3x4 desatMatrix = float3x4(rp_parameter_ps[4].xyzw, rp_parameter_ps[5].xyzw, rp_parameter_ps[6].xyzw);
-  float3 outputColor = mul(float4(inputColor, 1.0), transpose(desatMatrix));
-  return max(0, outputColor);  // needed to fix bad gradients
-}
-
-float3 applyBloodOverlay(float3 inputColor, float4 v0) {
-  float4 r1;
-  float4 r0;
-  r0.rgb = inputColor;
-
-  r1.xyzw = SamplerOverlay_TEX.Sample(SamplerOverlay_SMP_s, v0.xy).xyzw;
-  r0.w = rp_parameter_ps[10].x + -rp_parameter_ps[9].w;
-  r0.w = rp_parameter_ps[9].z * r0.w + rp_parameter_ps[9].w;
-  r0.w = r1.w + -r0.w;
-  r1.w = 1 / rp_parameter_ps[10].y;
-  r0.w = saturate(r1.w * r0.w);
-  r1.w = r0.w * -2 + 3;
-  r0.w = r0.w * r0.w;
-  r0.w = r1.w * r0.w;
-  r0.w = min(1, r0.w);
-  r0.w = rp_parameter_ps[10].z * r0.w;
-  r1.xyz = r1.xyz + -r0.xyz;
-  r0.xyz = r0.www * r1.xyz + r0.xyz;
-
-  return r0.xyz;
-}
-
 void main(
     float4 v0: TEXCOORD0,
     float4 v1: TEXCOORD1,
@@ -88,14 +60,14 @@ void main(
       untonemapped, untonemappedLum, v1, v2, SamplerToneMapCurve_TEX,
       SamplerToneMapCurve_SMP_s, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
 
-  outputColor = applyDesaturation(outputColor);
+  outputColor = ApplyDesaturation(outputColor);
   // ignore user gamma, force 2.2
   r0.xyz = renodx::color::gamma::EncodeSafe(outputColor, 2.2f);  //  r0.xyz = pow(r0.xyz, OutputGamma.xxx);
 
   // film grain
   r0.rgb = applyFilmGrain(r0.rgb, SamplerNoise_TEX, SamplerNoise_SMP_s, v1);
 
-  r0.xyz = applyBloodOverlay(r0.xyz, v0);
+  r0.xyz = ApplyBloodOverlay(r0.xyz, v0, SamplerOverlay_TEX, SamplerOverlay_SMP_s);
 
   r0.xyz = (r0.xyz * rp_parameter_ps[0].xxx + rp_parameter_ps[0].yyy);  // r0.xyz = saturate(r0.xyz * rp_parameter_ps[0].xxx + rp_parameter_ps[0].yyy);
   o0.w = dot(r0.xyz, float3(0.298999995, 0.587000012, 0.114));
