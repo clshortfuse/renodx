@@ -274,7 +274,7 @@ float4 FinalizeToneMapOutput(float3 input_color) {
 
   output_color.rgb = input_color * rp_parameter_ps[0].x + rp_parameter_ps[0].y;  // remove saturate
   output_color.w = dot(input_color, float3(0.298999995, 0.587000012, 0.114));
-  return output_color;
+  return GameScale(output_color);
 }
 
 // ============================= CUSTOM FUNCTIONS =============================
