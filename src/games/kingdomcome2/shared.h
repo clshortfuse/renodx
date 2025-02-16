@@ -18,14 +18,14 @@
 #define LIGHT_UNIT_SCALE                     10000.0f
 #define LILIUMS_HABLE_INVERSE                0.f
 #define CUSTOM_FAKE_HDR                      0.f
-#define RENODX_TONE_MAP_PER_CHANNEL          0.f
-/* #define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-#define RENODX_RENO_DRT_WHITE_CLIP           1.f */
-
-// Optiscaler?
-/* #define RENODX_INTERMEDIATE_ENCODING         4.f
-#define RENODX_SWAP_CHAIN_DECODING           2.f
-#define RENODX_SWAP_CHAIN_ENCODING           5.f */
+/* #define RENODX_TONE_MAP_PER_CHANNEL          1.f
+#define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_RENO_DRT_WHITE_CLIP           3.f */
+// Test PQ
+/* #define RENODX_INTERMEDIATE_ENCODING           4.f
+#define RENODX_SWAP_CHAIN_DECODING             2.f */
+#define RENODX_SWAP_CHAIN_ENCODING             4.f
+#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE 1.f
 
 // Must be 32bit aligned
 // Should be 4x32

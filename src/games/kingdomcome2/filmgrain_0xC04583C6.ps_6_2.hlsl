@@ -34,6 +34,8 @@ float4 main(
   SV_Target.y = (((((1.0f - (((1.0f - (_11.y)) * 2.0f) * _45)) - _55) * ((((bool)(((_11.y) < 0.5f))) ? 0.0f : 1.0f))) + _55));
   SV_Target.z = (((((1.0f - (((1.0f - (_11.z)) * 2.0f) * _45)) - _57) * ((((bool)(((_11.z) < 0.5f))) ? 0.0f : 1.0f))) + _57));
   // SV_Target.rgb = renodx::color::srgb::EncodeSafe(SV_Target.rgb);  // OptiScaler?
+  // SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
+
   SV_Target.w = (saturate((_11.w)));
 
   return SV_Target;

@@ -234,7 +234,7 @@ float4 HDRComposite(noperspective float4 TEXCOORD: TEXCOORD,
 
     renodx::draw::Config config = renodx::draw::BuildConfig();
     // Increase saturation a bit
-    config.tone_map_highlight_saturation = RENODX_TONE_MAP_HIGHLIGHT_SATURATION * 1.1f;
+    config.tone_map_highlight_saturation = RENODX_TONE_MAP_HIGHLIGHT_SATURATION * 1.25f;
 
     // Tonemap pass
     cColor = renodx::draw::ToneMapPass(untonemapped, sdrGraded, config);
