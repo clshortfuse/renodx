@@ -20,6 +20,47 @@
 
 namespace {
 
+ShaderInjectData shader_injection;
+
+#define UpgradeRTVShader(value)              \
+  {                                          \
+      value,                                 \
+      {                                      \
+          .crc32 = value,                    \
+          .on_draw = [](auto* cmd_list) {                                                           \
+            auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                       \
+            bool changed = false;                                                                   \
+            for (auto rtv : rtvs) {                                                                 \
+              changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv); \
+            }                                                                                       \
+            if (changed) {                                                                          \
+              renodx::mods::swapchain::FlushDescriptors(cmd_list);                                  \
+              renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});      \
+            }                                                                                       \
+            return true; }, \
+      },                                     \
+  }
+
+#define UpgradeRTVReplaceShader(value)       \
+  {                                          \
+      value,                                 \
+      {                                      \
+          .crc32 = value,                    \
+          .code = __##value,                 \
+          .on_draw = [](auto* cmd_list) {                                                             \
+            auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                         \
+            bool changed = false;                                                                     \
+            for (auto rtv : rtvs) {                                                                   \
+              changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv);   \
+            }                                                                                         \
+            if (changed) {                                                                            \
+              renodx::mods::swapchain::FlushDescriptors(cmd_list);                                    \
+              renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0}); \
+            }                                                                                         \
+            return true; }, \
+      },                                     \
+  }
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x8EA31781),  // Lens Flare
 
@@ -54,10 +95,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x05F61FE8),  // final game shader - SMAA T1x
     CustomShaderEntry(0x2D6BBE3A),  // final game shader - SMAA T2x
 
-    CustomShaderEntry(0x7E16EE16),  // Sharpening - from Alias: Isolation
-};
+    UpgradeRTVReplaceShader(0x7E16EE16),  // Sharpening, ChromAb SRV - from Alias: Isolation
 
-ShaderInjectData shader_injection;
+};
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -249,6 +289,15 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "fxBloomBlackFloor",
+        .binding = &shader_injection.fxBloomBlackFloor,
+        .default_value = 50.f,
+        .label = "Bloom Black Floor Scaling",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "fxLensFlare",
         .binding = &shader_injection.fxLensFlare,
         .default_value = 50.f,
@@ -358,6 +407,8 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
+  renodx::utils::settings::UpdateSetting("fxBloomBlackFloor", 0.f);
+  renodx::utils::settings::UpdateSetting("fxLensFlare", 50.f);
   renodx::utils::settings::UpdateSetting("fxVignette", 50.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrainType", 0.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 50.f);
@@ -415,6 +466,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
         });
       }
+
+      // Alias Isolation - Chromatic Aberration
+      renodx::mods::swapchain::use_resource_cloning = true;
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_typeless,
+          .use_resource_view_cloning = true,
+          .use_resource_view_hot_swap = true,
+          .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
+      });
 
       // peak nits
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
