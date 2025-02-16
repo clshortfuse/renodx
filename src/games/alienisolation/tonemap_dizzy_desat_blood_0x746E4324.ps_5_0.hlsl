@@ -19,29 +19,6 @@ Texture2D<float4> SamplerNoise_TEX : register(t12);
 Texture2D<float4> SamplerToneMapCurve_TEX : register(t14);
 Texture2D<float4> SamplerOverlay_TEX : register(t15);
 
-float3 renderPostFX(float4 v0, float4 v1) {
-  float4 r0, r1, r2, r3;
-
-  GetSceneColorAndTexCoord(
-      SamplerDistortion_TEX, SamplerDistortion_SMP_s, SamplerFrameBuffer_TEX,
-      SamplerFrameBuffer_SMP_s, v0, r2.rgb, r0.xy);
-
-  r1.xyz = HDR_EncodeScale.www * r2.xyz;
-  r2.xyzw = SamplerQuarterSizeBlur_TEX.Sample(SamplerQuarterSizeBlur_SMP_s, r0.xy).xyzw;
-  r2.xyz = r2.xyz * r2.xyz;
-  r2.xyz = r2.xyz * r2.xyz;
-  r2.xyz = HDR_EncodeScale2.zzz * r2.xyz;
-  r0.z = sqrt(r2.w);
-  r0.z = rp_parameter_ps[3].x * r0.z;
-  r2.xyz = r2.xyz * float3(4, 4, 4) + -r1.xyz;
-  r1.xyz = r0.zzz * r2.xyz + r1.xyz;
-
-  r1.rgb = ApplyBloom(r1.rgb, r0.xy, SamplerBloomMap0_TEX, SamplerBloomMap0_SMP_s);
-  r0.rgb = ApplyDizzyEffect(r1.rgb, r0.xy, SamplerLowResCapture_TEX, SamplerLowResCapture_SMP_s);
-
-  return r0.xyz;
-}
-
 void main(
     float4 v0: TEXCOORD0,
     float4 v1: TEXCOORD1,
@@ -51,13 +28,22 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyz = renderPostFX(v0, v1);
+  GetSceneColorAndTexCoord(
+      SamplerDistortion_TEX, SamplerDistortion_SMP_s, SamplerFrameBuffer_TEX,
+      SamplerFrameBuffer_SMP_s, v0, r2.rgb, r0.xy);
 
-  float3 untonemapped = r0.xyz;
-  const float untonemappedLum = renodx::color::luma::from::BT601(untonemapped);  // save for reuse
+  r1.rgb = ApplyMotionBlurType1(
+      r2.rgb, r0.xy, SamplerQuarterSizeBlur_TEX,
+      SamplerQuarterSizeBlur_SMP_s);
+
+  r1.rgb = ApplyBloom(r1.rgb, r0.xy, SamplerBloomMap0_TEX, SamplerBloomMap0_SMP_s);
+
+  r0.rgb = ApplyDizzyEffect(r1.rgb, r0.xy, SamplerLowResCapture_TEX, SamplerLowResCapture_SMP_s);
+
+  const float untonemapped_lum = renodx::color::luma::from::BT601(r0.rgb);  // save for reuse
 
   float3 outputColor = ApplyToneMapVignetteLUT(
-      untonemapped, untonemappedLum, v1, v2, SamplerToneMapCurve_TEX,
+      r0.rgb, untonemapped_lum, v1, v2, SamplerToneMapCurve_TEX,
       SamplerToneMapCurve_SMP_s, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
 
   outputColor = ApplyDesaturation(outputColor);

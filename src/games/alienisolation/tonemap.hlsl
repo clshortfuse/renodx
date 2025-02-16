@@ -54,6 +54,28 @@ void GetSceneColorAndTexCoord(
   tex_coord = r0.xy;
 }
 
+// Applies motion blur type 1
+float3 ApplyMotionBlurType1(
+    float3 input_color, float2 input_coords, Texture2D<float4> SamplerQuarterSizeBlur_TEX,
+    SamplerState SamplerQuarterSizeBlur_SMP_s) {
+  float3 r0, r1;
+  float4 r2;
+  r0.xy = input_coords;
+  r2.rgb = input_color;
+
+  r1.xyz = HDR_EncodeScale.www * r2.xyz;
+  r2.xyzw = SamplerQuarterSizeBlur_TEX.Sample(SamplerQuarterSizeBlur_SMP_s, r0.xy).xyzw;
+  r2.xyz = r2.xyz * r2.xyz;
+  r2.xyz = r2.xyz * r2.xyz;
+  r2.xyz = HDR_EncodeScale2.zzz * r2.xyz;
+  r0.z = sqrt(r2.w);
+  r0.z = rp_parameter_ps[3].x * r0.z;
+  r2.xyz = r2.xyz * float3(4, 4, 4) + -r1.xyz;
+  r1.xyz = r0.zzz * r2.xyz + r1.xyz;
+
+  return r1.rgb;
+}
+
 float3 ApplyBloom(
     float3 input_color, float2 tex_coord,
     Texture2D<float4> SamplerBloomMap0_TEX, SamplerState SamplerBloomMap0_SMP_s) {

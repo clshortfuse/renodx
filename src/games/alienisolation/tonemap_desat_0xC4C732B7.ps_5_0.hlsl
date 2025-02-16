@@ -28,31 +28,21 @@ void main(
       SamplerDistortion_TEX, SamplerDistortion_SMP_s, SamplerFrameBuffer_TEX,
       SamplerFrameBuffer_SMP_s, v0, r2.rgb, r0.xy);
 
-  // float3 mainTex = r2.xyz;
-
-  // motion blur
-  r1.xyz = HDR_EncodeScale.www * r2.xyz;
-  r2.xyzw = SamplerQuarterSizeBlur_TEX.Sample(SamplerQuarterSizeBlur_SMP_s, r0.xy).xyzw;
-  r2.xyz = r2.xyz * r2.xyz;
-  r2.xyz = r2.xyz * r2.xyz;
-  r2.xyz = HDR_EncodeScale2.zzz * r2.xyz;
-  r0.z = sqrt(r2.w);
-  r0.z = rp_parameter_ps[3].x * r0.z;
-  r2.xyz = r2.xyz * float3(4, 4, 4) + -r1.xyz;
-  r1.xyz = r0.zzz * r2.xyz + r1.xyz;
+  r1.rgb = ApplyMotionBlurType1(
+      r2.rgb, r0.xy, SamplerQuarterSizeBlur_TEX,
+      SamplerQuarterSizeBlur_SMP_s);
 
   r0.rgb = ApplyBloom(r1.rgb, r0.xy, SamplerBloomMap0_TEX, SamplerBloomMap0_SMP_s);
 
-  float3 untonemapped = r0.xyz;
-  const float untonemappedLum = renodx::color::luma::from::BT601(untonemapped);  // save for reuse
+  const float untonemapped_lum = renodx::color::luma::from::BT601(r0.xyz);  // save for reuse
 
   float3 outputColor = ApplyToneMapVignetteLUT(
-      untonemapped, untonemappedLum, v1, v2, SamplerToneMapCurve_TEX,
+      r0.xyz, untonemapped_lum, v1, v2, SamplerToneMapCurve_TEX,
       SamplerToneMapCurve_SMP_s, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
 
   outputColor = ApplyDesaturation(outputColor);
 
-  r0.xyz = EncodeGamma(outputColor);  //  r0.xyz = pow(r0.xyz, OutputGamma.x);
+  r0.xyz = EncodeGamma(outputColor);
 
   r0.rgb = ApplyFilmGrain(r0.rgb, SamplerNoise_TEX, SamplerNoise_SMP_s, v1);
 
