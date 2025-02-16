@@ -1,6 +1,5 @@
-#include "./tonemap.hlsl"
+#include "../tonemap.hlsl"
 
-SamplerState SamplerLowResCapture_SMP_s : register(s5);
 SamplerState SamplerFrameBuffer_SMP_s : register(s6);
 SamplerState SamplerDistortion_SMP_s : register(s7);
 SamplerState SamplerBloomMap0_SMP_s : register(s8);
@@ -8,7 +7,6 @@ SamplerState SamplerQuarterSizeBlur_SMP_s : register(s9);
 SamplerState SamplerColourLUT_SMP_s : register(s10);
 SamplerState SamplerNoise_SMP_s : register(s12);
 SamplerState SamplerToneMapCurve_SMP_s : register(s14);
-Texture2D<float4> SamplerLowResCapture_TEX : register(t5);
 Texture2D<float4> SamplerFrameBuffer_TEX : register(t6);
 Texture2D<float4> SamplerDistortion_TEX : register(t7);
 Texture2D<float4> SamplerBloomMap0_TEX : register(t8);
@@ -30,20 +28,24 @@ void main(
       SamplerDistortion_TEX, SamplerDistortion_SMP_s, SamplerFrameBuffer_TEX,
       SamplerFrameBuffer_SMP_s, v0, r2.rgb, r0.xy);
 
-  r1.rgb = ApplyMotionBlurType1(r2.rgb, r0.xy, SamplerQuarterSizeBlur_TEX, SamplerQuarterSizeBlur_SMP_s);
+  // float3 mainTex = r2.xyz;
 
-  r1.rgb = ApplyBloom(r1.rgb, r0.xy, SamplerBloomMap0_TEX, SamplerBloomMap0_SMP_s);
+  r1.rgb = ApplyMotionBlurType1(
+      r2.rgb, r0.xy, SamplerQuarterSizeBlur_TEX,
+      SamplerQuarterSizeBlur_SMP_s);
 
-  r0.rgb = ApplyDizzyEffect(r1.rgb, r0.xy, SamplerLowResCapture_TEX, SamplerLowResCapture_SMP_s);
+  r0.rgb = ApplyBloom(r1.rgb, r0.xy, SamplerBloomMap0_TEX, SamplerBloomMap0_SMP_s);
 
-  const float untonemapped_lum = renodx::color::luma::from::BT601(r0.rgb);  // save for reuse
+  const float untonemapped_lum = renodx::color::luma::from::BT601(r0.xyz);
 
   float3 outputColor = ApplyToneMapVignetteLUT(
-      r0.rgb, untonemapped_lum, v1, v2, SamplerToneMapCurve_TEX,
+      r0.xyz, untonemapped_lum, v1, v2, SamplerToneMapCurve_TEX,
       SamplerToneMapCurve_SMP_s, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
 
   r0.xyz = EncodeGamma(outputColor);
+
   r0.rgb = ApplyFilmGrain(r0.rgb, SamplerNoise_TEX, SamplerNoise_SMP_s, v1);
+
   o0 = FinalizeToneMapOutput(r0.rgb);
   return;
 }
