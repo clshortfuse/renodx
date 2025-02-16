@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "../shared.h"
 // from Alias: Isolation by RyanJGray
 // github.com/aliasIsolation/aliasIsolation/blob/master/data/shaders/sharpen_ps.hlsl
 
