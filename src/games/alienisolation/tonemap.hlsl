@@ -6,6 +6,13 @@
 // 3Dmigoto declarations
 #define cmp -
 
+float3 correctLightness(float3 incorrect_color, float3 correct_color) {
+  float3 incorrect_oklab = renodx::color::oklab::from::BT709(incorrect_color);
+  float3 correct_oklab = renodx::color::oklab::from::BT709(correct_color);
+  incorrect_oklab.x = correct_oklab.x;  // Adjust L component
+  return renodx::color::bt709::from::OkLab(incorrect_oklab);
+}
+
 // ============================ VANILLA FUNCTIONS ============================
 void GetSceneColorAndTexCoord(
     Texture2D<float4> SamplerDistortion_TEX,
@@ -50,12 +57,28 @@ void GetSceneColorAndTexCoord(
 float3 ApplyBloom(
     float3 input_color, float2 tex_coord,
     Texture2D<float4> SamplerBloomMap0_TEX, SamplerState SamplerBloomMap0_SMP_s) {
-  float3 r0, r1 = input_color;
+  float3 bloom_sample = SamplerBloomMap0_TEX.Sample(SamplerBloomMap0_SMP_s, tex_coord).xyz;
+  float3 bloom_color = bloom_sample * bloom_sample * HDR_EncodeScale2.z;
+  float3 combined_color = input_color + bloom_color * injectedData.fxBloom;
 
-  r0.xyz = SamplerBloomMap0_TEX.Sample(SamplerBloomMap0_SMP_s, tex_coord).xyz;
-  r0.xyz = r0.xyz * r0.xyz * injectedData.fxBloom;  // adjust bloom
-  r0.xyz = r0.xyz * HDR_EncodeScale2.zzz + r1.xyz;
-  return r0.rgb;
+  // Adjust the combined color's luminance to match the input color
+  float3 lightness_adjusted_color = correctLightness(combined_color, input_color);
+
+  // Calculate luminance of the input and bloom colors
+  float original_luminance = renodx::color::y::from::BT709(input_color);
+  float bloom_luminance = renodx::color::y::from::BT709(bloom_color);
+
+  // Define nonlinear blending factors based on luminance
+  float input_blend_factor = 1.0 - smoothstep(0.0, 0.0025f, original_luminance);
+  // Combine the two factors: Reduce blending where bloom is bright or input is dark
+  float combined_blend_factor = input_blend_factor * (1.0 - bloom_luminance);
+
+  // Blend between the original combined color and the lightness adjusted color
+  float3 adjusted_color = lerp(combined_color, lightness_adjusted_color, combined_blend_factor);
+
+  float3 output_color = lerp(combined_color, adjusted_color, injectedData.fxBloomBlackFloor);
+
+  return output_color;
 }
 
 float3 ApplyDizzyEffect(
