@@ -17,6 +17,8 @@ float4 main(
   uint _41 = uint(int(SV_Position.x));
   uint _42 = uint(int(SV_Position.y));
   float4 _43 = PAAComp_CurTarg.Load(int3(uint2(_41, _42), 0u));
+  /* _43.rgb = renodx::color::pq::DecodeSafe(_43.rgb, RENODX_GAME_NITS) * 5;
+  return _43; */
   float _46 = _43.x;
   float _47 = _43.y;
   float _48 = _43.z;
@@ -57,6 +59,7 @@ float4 main(
   SV_Target.x = (((1.0f - (((1.0f - _125) * 2.0f) * _172)) - _180) * ((_125 < 0.5f) ? 0.0f : 1.0f)) + _180;
   SV_Target.y = (((1.0f - (((1.0f - _126) * 2.0f) * _172)) - _182) * ((_126 < 0.5f) ? 0.0f : 1.0f)) + _182;
   SV_Target.z = (((1.0f - (((1.0f - _127) * 2.0f) * _172)) - _184) * ((_127 < 0.5f) ? 0.0f : 1.0f)) + _184;
+
   SV_Target.w = saturate(_43.w);
 
   return SV_Target;
