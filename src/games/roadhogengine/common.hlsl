@@ -40,13 +40,6 @@ float3 FinalizeOutput(float3 color) {
     color = renodx::color::srgb::DecodeSafe(color);
   }
   color *= injectedData.toneMapUINits;
-  /*if (injectedData.toneMapType != 1.f) {
-    float y_max = injectedData.toneMapPeakNits;
-    float y = renodx::color::y::from::BT709(abs(color));
-    if (y > y_max) {
-      color *= y_max / y;
-    }
-  }*/
   if (injectedData.toneMapType == 0.f) {
     color = renodx::color::bt709::clamp::BT709(color);
   } else {
@@ -177,7 +170,7 @@ float3 applyDICE(float3 input, renodx::tonemap::Config DiceConfig, bool sdr = fa
   return color;
 }
 
-float3 applyUserTonemap(float3 untonemapped, float2 screen) {
+float3 applyUserTonemap(float3 untonemapped, float2 screen, bool grain = true) {
   float3 outputColor = renodx::color::srgb::DecodeSafe(untonemapped);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = injectedData.toneMapType;
@@ -212,7 +205,7 @@ float3 applyUserTonemap(float3 untonemapped, float2 screen) {
   } else {
     outputColor = renodx::tonemap::config::Apply(outputColor, config);
   }
-  if (injectedData.fxFilmGrainType == 1.f) {
+  if (grain && injectedData.fxFilmGrainType == 1.f) {
     outputColor = applyFilmGrain(outputColor, screen);
   }
   return outputColor;
