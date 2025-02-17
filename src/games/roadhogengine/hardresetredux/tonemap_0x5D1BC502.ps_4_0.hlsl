@@ -22,8 +22,7 @@ void main(
   r0.xy = v1.xy * cb1[0].xy + cb1[0].zw;
   r0.xyzw = t12.SampleLevel(s7_s, r0.xy, 0).xyzw;
   r0.xyz = float3(4,4,4) * r0.xyz;
-  //r0.xyz = r0.xyz + r0.xyz;
-  //r0.rgb = 0.53252053f * r0.rgb;
+  r0.rgb = 1.06504106f * r0.rgb;
   if (injectedData.toneMapType == 0.f) {
     r0.rgb = saturate(r0.rgb);
   }
