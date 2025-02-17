@@ -51,6 +51,16 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     is_vignette_used = false;
     return true;
     }),
+    CustomShaderEntryCallback(0xA6B01AE0, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x45405040, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_vignette_used = false;
+    return true;
+    }),
     CustomShaderEntryCallback(0xAD092DF9, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 1;
     is_vignette_used = true;
@@ -61,12 +71,22 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     is_vignette_used = false;
     return true;
     }),
+    CustomShaderEntryCallback(0xE29A7A29, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_vignette_used = false;
+    return true;
+    }),
     CustomShaderEntryCallback(0x5D1BC502, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 0;
     is_vignette_used = true;
     return true;
     }),
     CustomShaderEntryCallback(0x39A21265, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 0;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x79D405C5, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 0;
     is_vignette_used = false;
     return true;
