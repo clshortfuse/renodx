@@ -990,7 +990,9 @@ static bool OnDrawIndexed(
   std::function<void(reshade::api::command_list*)> on_drawn = nullptr;
   if (HandlePreDraw(cmd_list, false, on_drawn)) return true;
   if (on_drawn == nullptr) return false;
+#ifdef DEBUG_LEVEL_1
   reshade::log::message(reshade::log::level::debug, "mods::shader::OnDrawIndexed(invoking callback)");
+#endif
   cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
   on_drawn(cmd_list);
 
