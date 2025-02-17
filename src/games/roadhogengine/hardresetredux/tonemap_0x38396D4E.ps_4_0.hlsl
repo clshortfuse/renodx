@@ -38,8 +38,7 @@ void main(
   r2.xyz = -r2.xyz * cb1[7].xyz * injectedData.fxBloom + float3(1,1,1);
   r1.xyz = -r1.xyz * r2.xyz + float3(1,1,1);
   r0.xyz = max(r1.xyz, r0.xyz);
-  //r0.xyz = r0.xyz + r0.xyz;
-  //r0.rgb = 0.53252053f * r0.rgb;
+  r0.rgb = 1.06504106f * r0.rgb;
   if (injectedData.toneMapType == 0.f) {
     r0.rgb = saturate(r0.rgb);
   }
