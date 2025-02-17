@@ -564,14 +564,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .new_format = reshade::api::format::r16g16b16a16_float,
           .ignore_size = false,
       });
-      //  RGBA8_unorm
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .ignore_size = true,
-          .usage_include = reshade::api::resource_usage::render_target,
-      });
-
+      
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
       break;
