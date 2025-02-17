@@ -28,6 +28,17 @@ struct PSOutput {
   float4 param1 : SV_Target1;
 };
 
+/// Fix up sharpening/blurring when done on HDR images in post processing. In SDR, the source color could only be between 0 and 1,
+/// so the halos (rings) that can appear around rapidly changing colors were limited, but in HDR lights can go much brighter so the halos got noticeable with default settings.
+/// This should work in linear or gamma space.
+float3 FixUpSharpeningOrBlurring(float3 postSharpeningColor, float3 preSharpeningColor) {
+  // Either set it to 0.5, 0.75 or 1 to make results closer to SDR (this makes more sense when done in gamma space, but also works in linear space).
+  // Lower values slightly diminish the effect of sharpening, but further avoid halos issues.
+  static const float sharpeningMaxColorDifference = 0.5;
+  postSharpeningColor.rgb = clamp(postSharpeningColor.rgb, preSharpeningColor - sharpeningMaxColorDifference, preSharpeningColor + sharpeningMaxColorDifference);
+  return postSharpeningColor;
+}
+
 PSOutput main(in PSInput IN) {
   PSOutput OUT = (PSOutput)0;
 
@@ -65,6 +76,9 @@ PSOutput main(in PSInput IN) {
                            + neighbors[3] * -sharpening
                            + center * 5)
                        * 1.0 / (5.0 + sharpening * -4.0);
+
+    sharpened = FixUpSharpeningOrBlurring(sharpened, center);
+    sharpened = min(sharpened, injectedData.toneMapPeakNits / renodx::color::srgb::REFERENCE_WHITE);
 #if GAMMA_ENCODE
     outColor = renodx::color::srgb::EncodeSafe(sharpened);
 #else
