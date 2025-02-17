@@ -62,6 +62,9 @@ ShaderInjectData shader_injection;
   }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
+    // CustomShaderEntry(0x2725E8B6),  // Fog
+
+
     CustomShaderEntry(0x8EA31781),  // Lens Flare
 
     CustomShaderEntry(0x8AFBFA0F),  // tonemap
@@ -70,6 +73,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x0646427B),  // tonemap - blood
     CustomShaderEntry(0x746E4324),  // tonemap - dizzy + desaturation + blood
     CustomShaderEntry(0xEC6C0919),  // tonemap - flashbang
+    CustomShaderEntry(0x3282021C),  // tonemap - no motion blur
 
     CustomShaderEntry(0xA090F460),  // terminal
 
