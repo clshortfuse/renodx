@@ -21,6 +21,8 @@
 namespace {
 
 int postprocessing_level;
+bool is_grain_used;
+bool is_sharpen_used;
 bool is_vignette_used;
 bool lens_effects_active;
 
@@ -29,66 +31,89 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntryCallback(0x2FF3AD78, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 2;
     is_vignette_used = true;
+    is_sharpen_used = true;
+    is_grain_used = true;
     return true;
     }),
     CustomShaderEntryCallback(0xEF480D6C, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 2;
     is_vignette_used = true;
+    is_sharpen_used = true;
+    is_grain_used = true;
     return true;
     }),
     CustomShaderEntryCallback(0xA8F9150B, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 2;
     is_vignette_used = false;
+    is_sharpen_used = true;
+    is_grain_used = true;
     return true;
     }),
     CustomShaderEntryCallback(0x769FB187, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 2;
     is_vignette_used = false;
+    is_sharpen_used = true;
+    is_grain_used = true;
     return true;
     }),
     CustomShaderEntryCallback(0xBA01D096, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 2;
     is_vignette_used = false;
+    is_sharpen_used = true;
+    is_grain_used = true;
     return true;
     }),
     CustomShaderEntryCallback(0xA6B01AE0, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 2;
     is_vignette_used = false;
+    is_sharpen_used = false;
+    is_grain_used = false;
     return true;
     }),
     CustomShaderEntryCallback(0x45405040, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 2;
     is_vignette_used = false;
+    is_sharpen_used = false;
+    is_grain_used = false;
     return true;
     }),
     CustomShaderEntryCallback(0xAD092DF9, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 1;
     is_vignette_used = true;
+    is_sharpen_used = true;
+    is_grain_used = true;
     return true;
     }),
     CustomShaderEntryCallback(0x38396D4E, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 1;
     is_vignette_used = false;
+    is_sharpen_used = true;
+    is_grain_used = true;
     return true;
     }),
     CustomShaderEntryCallback(0xE29A7A29, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 1;
     is_vignette_used = false;
+    is_sharpen_used = false;
+    is_grain_used = false;
     return true;
     }),
     CustomShaderEntryCallback(0x5D1BC502, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 0;
     is_vignette_used = true;
+    is_grain_used = true;
     return true;
     }),
     CustomShaderEntryCallback(0x39A21265, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 0;
     is_vignette_used = false;
+    is_grain_used = true;
     return true;
     }),
     CustomShaderEntryCallback(0x79D405C5, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 0;
     is_vignette_used = false;
+    is_grain_used = false;
     return true;
     }),
     CustomShaderEntry(0x8FACEF64),  // videos
@@ -327,6 +352,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tint = 0x01A8DF,
         .max = 100.f,
+        .is_enabled = []() { return is_sharpen_used; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return postprocessing_level >= 1 && current_settings_mode >= 1; },
     },
@@ -350,6 +376,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tint = 0x01A8DF,
         .max = 100.f,
+        .is_enabled = []() { return is_grain_used; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -361,7 +388,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .labels = {"Vanilla", "Perceptual"},
         .tint = 0x01A8DF,
-        .is_visible = []() { return shader_injection.fxFilmGrain != 0.f; },
+        .is_visible = []() { return shader_injection.fxFilmGrain != 0.f && is_grain_used; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
