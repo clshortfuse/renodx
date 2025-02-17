@@ -77,6 +77,20 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     is_grain_used = false;
     return true;
     }),
+    CustomShaderEntryCallback(0x852CCF05, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_vignette_used = true;
+    is_sharpen_used = false;
+    is_grain_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x4338D617, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_vignette_used = true;
+    is_sharpen_used = false;
+    is_grain_used = false;
+    return true;
+    }),
     CustomShaderEntryCallback(0xAD092DF9, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 1;
     is_vignette_used = true;
@@ -94,6 +108,13 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntryCallback(0xE29A7A29, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 1;
     is_vignette_used = false;
+    is_sharpen_used = false;
+    is_grain_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x6AEB4E45, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_vignette_used = true;
     is_sharpen_used = false;
     is_grain_used = false;
     return true;
@@ -116,7 +137,14 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     is_grain_used = false;
     return true;
     }),
+    CustomShaderEntryCallback(0xE56AC1BF, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 0;
+    is_vignette_used = true;
+    is_grain_used = false;
+    return true;
+    }),
     CustomShaderEntry(0x8FACEF64),  // videos
+    CustomShaderEntry(0x23F2025E),  // RIP (glitched death screen)
     // Shadow Warrior (2013)
     // Shadow Warrior 2, maybe
 };
