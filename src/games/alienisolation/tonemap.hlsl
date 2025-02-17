@@ -506,16 +506,8 @@ renodx::tonemap::config::DualToneMap ToneMap(float3 color, float exposure_bias) 
     config.reno_drt_dechroma = 0.f;
   }
 
-  renodx::tonemap::Config sdr_config = config;
-  sdr_config.reno_drt_highlights /= config.highlights;
-  sdr_config.reno_drt_shadows /= config.shadows;
-  sdr_config.reno_drt_contrast /= config.contrast;
-  sdr_config.gamma_correction = 0;
-  sdr_config.peak_nits = 100.f;
-  sdr_config.game_nits = 100.f;
-
   renodx::tonemap::config::DualToneMap dual_tone_map =
-      renodx::tonemap::config::ApplyToneMaps(color, config, sdr_config);
+      renodx::tonemap::config::ApplyToneMaps(color, config);
   dual_tone_map.color_sdr = dual_tone_map.color_sdr;
 
   return dual_tone_map;
