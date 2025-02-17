@@ -62,7 +62,7 @@ ShaderInjectData shader_injection;
   }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    // CustomShaderEntry(0x2725E8B6),  // Fog
+    // CustomShaderEntry(0x2726E8B6),  // Fog
 
 
     CustomShaderEntry(0x8EA31781),  // Lens Flare
