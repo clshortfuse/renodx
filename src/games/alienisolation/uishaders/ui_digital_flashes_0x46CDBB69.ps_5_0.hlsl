@@ -1,6 +1,6 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
-// ---- Created with 3Dmigoto v1.3.16 on Thu May 30 03:22:39 2024
+// ---- Created with 3Dmigoto v1.3.16 on Sun Sep 22 01:43:10 2024
 
 
 
@@ -20,8 +20,9 @@ void main(
   float4 fDest;
 
   r0.xyzw = v0.xyzw * v3.xyzw + v2.xyzw;
-  o0.w = v1.w * r0.w;
-  o0.xyz = r0.xyz;
+  r0.w = v1.w * r0.w;
+  o0.xyz = r0.xyz * r0.www;
+  o0.w = r0.w;
 
   o0 = UIScale(o0);
   return;

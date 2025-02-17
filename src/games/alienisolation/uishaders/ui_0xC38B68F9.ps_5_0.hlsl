@@ -1,6 +1,6 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
-// ---- Created with 3Dmigoto v1.3.16 on Sat Sep 21 23:16:35 2024
+// ---- Created with 3Dmigoto v1.3.16 on Thu May 30 01:30:32 2024
 
 SamplerState sampler_tex_s : register(s0);
 Texture2D<float4> tex : register(t0);
@@ -11,18 +11,17 @@ Texture2D<float4> tex : register(t0);
 
 
 void main(
-  float4 v0 : COLOR0,
-  float2 v1 : TEXCOORD0,
+  float2 v0 : TEXCOORD0,
+  float4 v1 : COLOR0,
   out float4 o0 : SV_Target0)
 {
   float4 r0;
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyzw = tex.Sample(sampler_tex_s, v1.xy).xyzw;
-  r0.w = v0.w * r0.w;
-  o0.xyz = r0.xyz * r0.www;
-  o0.w = r0.w;
+  r0.x = tex.Sample(sampler_tex_s, v0.xy).x;
+  o0.w = v1.w * r0.x;
+  o0.xyz = v1.xyz;
 
   o0 = UIScale(o0);
   return;
