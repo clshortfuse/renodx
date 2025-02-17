@@ -72,7 +72,7 @@ void main(
   // r2.xyz = SamplerBloomMap0_TEX.Sample(SamplerBloomMap0_SMP_s, r0.xy).xyz;
   // r2.xyz = r2.xyz * r2.xyz;
   // r1.xyz = r2.xyz * HDR_EncodeScale2.zzz + r1.xyz;
-  r0.rgb = ApplyBloom(r1.rgb, r0.xy, SamplerBloomMap0_TEX, SamplerBloomMap0_SMP_s);
+  r1.rgb = ApplyBloom(r1.rgb, r0.xy, SamplerBloomMap0_TEX, SamplerBloomMap0_SMP_s);
 
   // r0.xyzw = SamplerLowResCapture_TEX.Sample(SamplerLowResCapture_SMP_s, r0.xy).xyzw;
   // r0.xyz = r0.xyz * r0.www;
