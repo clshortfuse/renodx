@@ -6,11 +6,31 @@
 // 3Dmigoto declarations
 #define cmp -
 
-float3 correctLightness(float3 incorrect_color, float3 correct_color) {
+float3 CorrectLightness(float3 incorrect_color, float3 correct_color) {
   float3 incorrect_oklab = renodx::color::oklab::from::BT709(incorrect_color);
   float3 correct_oklab = renodx::color::oklab::from::BT709(correct_color);
   incorrect_oklab.x = correct_oklab.x;  // Adjust L component
   return renodx::color::bt709::from::OkLab(incorrect_oklab);
+}
+
+float3 ScaleBloom(float3 original_color, float3 bloom_color, float3 bloomed_color) {
+  if (injectedData.fxBloomBlackFloor == 0.f) return bloomed_color;
+  // Adjust the combined color's luminance to match the input color
+  float3 lightness_adjusted_color = CorrectLightness(bloomed_color, original_color);
+
+  // Calculate luminance of the input and bloom colors
+  float original_luminance = renodx::color::y::from::BT709(original_color);
+  float bloom_luminance = renodx::color::y::from::BT709(bloom_color);
+
+  // Define nonlinear blending factors based on luminance
+  float input_blend_factor = 1.0 - smoothstep(0.0, 0.0025f, original_luminance);
+  // Combine the two factors: Reduce blending where bloom is bright or input is dark
+  float combined_blend_factor = input_blend_factor * (1.0 - bloom_luminance);
+
+  // Blend between the original combined color and the lightness adjusted color
+  float3 adjusted_color = lerp(bloomed_color, lightness_adjusted_color, combined_blend_factor);
+
+  return lerp(bloomed_color, adjusted_color, injectedData.fxBloomBlackFloor);
 }
 
 // ============================ VANILLA FUNCTIONS ============================
@@ -76,31 +96,24 @@ float3 ApplyMotionBlurType1(
   return r1.rgb;
 }
 
-float3 ApplyBloom(
+float3 ApplyBloomType1(
     float3 input_color, float2 tex_coord,
     Texture2D<float4> SamplerBloomMap0_TEX, SamplerState SamplerBloomMap0_SMP_s) {
   float3 bloom_sample = SamplerBloomMap0_TEX.Sample(SamplerBloomMap0_SMP_s, tex_coord).xyz;
   float3 bloom_color = bloom_sample * bloom_sample * HDR_EncodeScale2.z;
   float3 combined_color = input_color + bloom_color * injectedData.fxBloom;
 
-  // Adjust the combined color's luminance to match the input color
-  float3 lightness_adjusted_color = correctLightness(combined_color, input_color);
+  return ScaleBloom(input_color, bloom_color, combined_color);
+}
 
-  // Calculate luminance of the input and bloom colors
-  float original_luminance = renodx::color::y::from::BT709(input_color);
-  float bloom_luminance = renodx::color::y::from::BT709(bloom_color);
+float3 ApplyBloomType2(
+    float3 input_color, float2 tex_coord,
+    Texture2D<float4> SamplerBloomMap0_TEX, SamplerState SamplerBloomMap0_SMP_s) {
+  float3 bloom_sample = SamplerBloomMap0_TEX.Sample(SamplerBloomMap0_SMP_s, tex_coord).xyz;
+  float3 bloom_color = bloom_sample * bloom_sample * HDR_EncodeScale2.z;
+  float3 combined_color = input_color * HDR_EncodeScale.w + bloom_color * injectedData.fxBloom;
 
-  // Define nonlinear blending factors based on luminance
-  float input_blend_factor = 1.0 - smoothstep(0.0, 0.0025f, original_luminance);
-  // Combine the two factors: Reduce blending where bloom is bright or input is dark
-  float combined_blend_factor = input_blend_factor * (1.0 - bloom_luminance);
-
-  // Blend between the original combined color and the lightness adjusted color
-  float3 adjusted_color = lerp(combined_color, lightness_adjusted_color, combined_blend_factor);
-
-  float3 output_color = lerp(combined_color, adjusted_color, injectedData.fxBloomBlackFloor);
-
-  return output_color;
+  return ScaleBloom(input_color * HDR_EncodeScale.w, bloom_color, combined_color);
 }
 
 float3 ApplyDizzyEffect(
@@ -523,7 +536,7 @@ float3 ApplyToneMapVignetteLUT(
   float3 r0 = untonemapped;
 
   float3 output_color = r0.xyz;
-  if (injectedData.toneMapType == 0) {  // tonemap
+  if (injectedData.toneMapType == 0) {  // vanilla tonemap
     r0.xyz = ApplyVanillaTonemap(untonemapped, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
     r0.xyz = applyVignette(r0.rgb, v2, v1, untonemapped_lum);
     r0.xyz = ApplyLUT(r0.rgb, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);

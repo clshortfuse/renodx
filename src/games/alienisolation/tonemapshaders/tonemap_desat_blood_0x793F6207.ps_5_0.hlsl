@@ -34,7 +34,7 @@ void main(
       r2.rgb, r0.xy, SamplerQuarterSizeBlur_TEX,
       SamplerQuarterSizeBlur_SMP_s);
 
-  r0.rgb = ApplyBloom(r1.rgb, r0.xy, SamplerBloomMap0_TEX, SamplerBloomMap0_SMP_s);
+  r0.rgb = ApplyBloomType1(r1.rgb, r0.xy, SamplerBloomMap0_TEX, SamplerBloomMap0_SMP_s);
 
   const float untonemapped_lum = renodx::color::luma::from::BT601(r0.xyz);  // save for reuse
 
@@ -44,7 +44,7 @@ void main(
 
   outputColor = ApplyDesaturation(outputColor);
 
-  r0.xyz = EncodeGamma(outputColor);  //  r0.xyz = pow(r0.xyz, OutputGamma.x);
+  r0.xyz = EncodeGamma(outputColor);
 
   r0.rgb = ApplyFilmGrain(r0.rgb, SamplerNoise_TEX, SamplerNoise_SMP_s, v1);
 

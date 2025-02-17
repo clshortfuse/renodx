@@ -32,7 +32,7 @@ void main(
 
   r1.rgb = ApplyMotionBlurType1(r2.rgb, r0.xy, SamplerQuarterSizeBlur_TEX, SamplerQuarterSizeBlur_SMP_s);
 
-  r1.rgb = ApplyBloom(r1.rgb, r0.xy, SamplerBloomMap0_TEX, SamplerBloomMap0_SMP_s);
+  r1.rgb = ApplyBloomType1(r1.rgb, r0.xy, SamplerBloomMap0_TEX, SamplerBloomMap0_SMP_s);
 
   r0.rgb = ApplyDizzyEffect(r1.rgb, r0.xy, SamplerLowResCapture_TEX, SamplerLowResCapture_SMP_s);
 
