@@ -70,8 +70,10 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x8AFBFA0F),  // tonemap
     CustomShaderEntry(0xC4C732B7),  // tonemap - desaturation
     CustomShaderEntry(0x793F6207),  // tonemap - desaturation + blood
-    CustomShaderEntry(0x0646427B),  // tonemap - blood
+    CustomShaderEntry(0x0646427B),  // tonemap - dizzy
     CustomShaderEntry(0x746E4324),  // tonemap - dizzy + desaturation + blood
+    CustomShaderEntry(0xD29C360E),  // tonemap - dizzy + blood
+    CustomShaderEntry(0x0FE2C69C),  // tonemap - blood
     CustomShaderEntry(0xEC6C0919),  // tonemap - flashbang
     CustomShaderEntry(0x3282021C),  // tonemap - no motion blur
 
