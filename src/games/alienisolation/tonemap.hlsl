@@ -461,7 +461,55 @@ float3 UpgradeToneMap(
   }
 }
 
-renodx::tonemap::config::DualToneMap ToneMap(float3 color, float exposure_bias) {
+float3 ApplySingleToneMap(float3 color, float3 exposure_bias) {
+  color *= exposure_bias / 0.18f;  // high mid gray values break tonemapping
+
+  const float mid_gray = RENODX_TONE_MAP_MID_GRAY;
+  color *= 0.18f / mid_gray;
+  renodx::tonemap::Config config = renodx::tonemap::config::Create();
+  config.type = injectedData.toneMapType;
+  config.peak_nits = injectedData.toneMapPeakNits;
+  config.game_nits = injectedData.toneMapGameNits;
+  config.gamma_correction = 0.f;
+  config.mid_gray_value = mid_gray;
+  config.mid_gray_nits = config.mid_gray_value * 100.f;
+  config.exposure = injectedData.colorGradeExposure;
+  config.shadows = injectedData.colorGradeShadows;
+  config.contrast = injectedData.colorGradeContrast;
+  config.highlights = injectedData.colorGradeHighlights;
+  config.saturation = injectedData.colorGradeSaturation;
+  config.hue_correction_type = renodx::tonemap::config::hue_correction_type::INPUT;
+  config.hue_correction_strength = injectedData.toneMapHueCorrection;
+  config.reno_drt_white_clip = RENODX_RENO_DRT_WHITE_CLIP;
+
+  // RenoDRT Settings
+  config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
+  config.reno_drt_highlights = 1.04f;
+  config.reno_drt_shadows = 1.f;
+  config.reno_drt_contrast = 1.f;
+  config.reno_drt_saturation = 1.f;
+  config.reno_drt_blowout = -1.f * (injectedData.colorGradeHighlightSaturation - 1.f);
+  config.reno_drt_dechroma = injectedData.colorGradeBlowout;
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
+  config.reno_drt_working_color_space = 0u;
+  config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
+  config.reno_drt_hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::OKLAB;
+
+  // ToneMap Blend
+  if (injectedData.toneMapBlend) {
+    config.exposure = 1.f;
+    config.shadows = 1.f;
+    config.contrast = 1.f;
+    config.saturation = 1.f;
+    config.reno_drt_flare = 0.f;
+    config.reno_drt_blowout = -1.f * (injectedData.colorGradeHighlightSaturation - 1.f);
+    config.reno_drt_dechroma = 0.f;
+  }
+
+  return renodx::tonemap::config::Apply(color, config);
+}
+
+renodx::tonemap::config::DualToneMap ApplyDualToneMap(float3 color, float exposure_bias) {
   color *= exposure_bias / 0.18f;  // high mid gray values break tonemapping
 
   const float mid_gray = RENODX_TONE_MAP_MID_GRAY;
@@ -508,7 +556,6 @@ renodx::tonemap::config::DualToneMap ToneMap(float3 color, float exposure_bias) 
 
   renodx::tonemap::config::DualToneMap dual_tone_map =
       renodx::tonemap::config::ApplyToneMaps(color, config);
-  dual_tone_map.color_sdr = dual_tone_map.color_sdr;
 
   return dual_tone_map;
 }
@@ -536,7 +583,7 @@ float3 ApplyToneMapVignetteLUT(
     output_color = r0.xyz;
   } else if (injectedData.toneMapType > 1.f) {
     const float exposure_bias = renodx::color::y::from::BT709(ApplyVanillaTonemap(0.18, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s));
-    renodx::tonemap::config::DualToneMap dual_tone_map = ToneMap(untonemapped, exposure_bias);
+    renodx::tonemap::config::DualToneMap dual_tone_map = ApplyDualToneMap(untonemapped, exposure_bias);
 
     float3 vignette_hdr = applyVignette(dual_tone_map.color_hdr, v2, v1, untonemapped_lum);
     float3 vignette_sdr = applyVignette(dual_tone_map.color_sdr, v2, v1, untonemapped_lum);
@@ -548,6 +595,35 @@ float3 ApplyToneMapVignetteLUT(
       float3 vanilla_color = ApplyVanillaTonemap(untonemapped, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
       vanilla_color = applyVignette(vanilla_color, v2, v1, untonemapped_lum);
       vanilla_color = ApplyLUT(vanilla_color, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
+      if (injectedData.toneMapHueShift) {
+        output_color = renodx::color::correct::Hue(output_color, vanilla_color, injectedData.toneMapHueShift);
+      }
+      if (injectedData.toneMapBlend) output_color = ToneMapBlend(output_color, vanilla_color);
+    }
+  }
+
+  return output_color;
+}
+
+float3 ApplyToneMapVignette(
+    float3 untonemapped, float untonemapped_lum, float4 v1, float4 v2,
+    Texture2D<float4> SamplerToneMapCurve_TEX, SamplerState SamplerToneMapCurve_SMP_s) {
+  float3 r0 = untonemapped;
+
+  float3 output_color = r0.xyz;
+  if (injectedData.toneMapType == 0) {  // vanilla tonemap
+    r0.xyz = ApplyVanillaTonemap(untonemapped, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
+    r0.xyz = applyVignette(r0.rgb, v2, v1, untonemapped_lum);
+
+    output_color = r0.xyz;
+  } else if (injectedData.toneMapType > 1.f) {  // ACES & RenoDRT
+    const float exposure_bias = renodx::color::y::from::BT709(ApplyVanillaTonemap(0.18, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s));
+    float3 tonemapped = ApplySingleToneMap(untonemapped, exposure_bias);
+
+    float3 vignette_hdr = applyVignette(tonemapped, v2, v1, untonemapped_lum);
+    if (injectedData.toneMapHueShift || injectedData.toneMapBlend) {
+      float3 vanilla_color = ApplyVanillaTonemap(untonemapped, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
+      vanilla_color = applyVignette(vanilla_color, v2, v1, untonemapped_lum);
       if (injectedData.toneMapHueShift) {
         output_color = renodx::color::correct::Hue(output_color, vanilla_color, injectedData.toneMapHueShift);
       }
