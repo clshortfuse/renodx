@@ -7,6 +7,7 @@
 
 #include <include/reshade.hpp>
 #include <optional>
+#include <sstream>
 
 #include "./descriptor.hpp"
 #include "./format.hpp"
@@ -34,25 +35,29 @@ template <class T>
 std::optional<std::string> GetD3DNameW(T* obj) {
   if (obj == nullptr) return std::nullopt;
 
-  byte data[128] = {};
+  char data[128] = {};
   UINT size = sizeof(data);
   try {
     if (obj->GetPrivateData(WKPDID_D3DDebugObjectNameW, &size, data) == S_OK) {
       if (size > 0) {
-        char c_name[128] = {};
-        size_t out_size;
+        const std::wstring object_name{reinterpret_cast<wchar_t*>(data), static_cast<::std::size_t>(size - 1)};  // subtract 1 to exclude the null terminator
+        size_t output_size = object_name.length() + 1;                                                           // +1 for null terminator
+        auto output_string = std::make_unique<char[]>(output_size);
+        size_t chars_converted = 0;
+        auto ret = wcstombs_s(&chars_converted, output_string.get(), output_size, object_name.c_str(), object_name.length());
+
         // wide-character-string-to-multibyte-string_safe
-        auto ret = wcstombs_s(&out_size, c_name, sizeof(c_name), reinterpret_cast<wchar_t*>(data), size);
-        if (ret == S_OK && out_size > 0) {
-          return std::string(c_name, c_name + out_size);
+        if (ret == S_OK && chars_converted > 0) {
+          return std::string(output_string.get());
         }
       }
     }
-  } catch(...) {}
+  } catch (...) {
+  }
   return GetD3DName(obj);
 }
 
-inline std::optional<std::string> GetDebugName(reshade::api::device_api device_api, reshade::api::resource_view resource_view) {
+static std::optional<std::string> GetDebugName(reshade::api::device_api device_api, reshade::api::resource_view resource_view) {
   if (device_api == reshade::api::device_api::d3d11) {
     auto* native_resource = reinterpret_cast<ID3D11DeviceChild*>(resource_view.handle);
     return GetD3DName(native_resource);
@@ -61,7 +66,7 @@ inline std::optional<std::string> GetDebugName(reshade::api::device_api device_a
   return std::nullopt;
 }
 
-inline std::optional<std::string> GetDebugName(reshade::api::device_api device_api, uint64_t handle) {
+static std::optional<std::string> GetDebugName(reshade::api::device_api device_api, uint64_t handle) {
   if (device_api == reshade::api::device_api::d3d11) {
     auto* native_resource = reinterpret_cast<ID3D11DeviceChild*>(handle);
     return GetD3DName(native_resource);
@@ -98,7 +103,7 @@ const uint32_t MAX_PRESENT_COUNT = 60;
 
 static bool attached = false;
 
-inline uint64_t GetResourceByViewHandle(DeviceData& data, uint64_t handle) {
+static uint64_t GetResourceByViewHandle(DeviceData& data, uint64_t handle) {
   if (
       auto pair = data.resource_views.find(handle);
       pair != data.resource_views.end()) return pair->second;
@@ -106,7 +111,7 @@ inline uint64_t GetResourceByViewHandle(DeviceData& data, uint64_t handle) {
   return 0;
 }
 
-inline std::string GetResourceNameByViewHandle(DeviceData& data, uint64_t handle) {
+static std::string GetResourceNameByViewHandle(DeviceData& data, uint64_t handle) {
   if (!TRACE_NAMES) return "?";
   auto resource_handle = GetResourceByViewHandle(data, handle);
   if (resource_handle == 0) return "?";
@@ -175,19 +180,34 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   }
 
   std::stringstream s;
-  s << "init_swapchain";
-  s << "(colorspace: " << swapchain->get_color_space();
+  s << "init_swapchain(";
+  s << "device: " << reinterpret_cast<void*>(swapchain->get_device());
+  s << ", colorspace: " << swapchain->get_color_space();
+
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
-static bool OnCreatePipelineLayout(
-    reshade::api::device* device,
-    uint32_t& param_count,
-    reshade::api::pipeline_layout_param*& params) {
-  if (!is_primary_hook) return false;
-  // noop
-  return false;
+static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
+  if (!is_primary_hook) return;
+  const size_t back_buffer_count = swapchain->get_back_buffer_count();
+
+  for (uint32_t index = 0; index < back_buffer_count; index++) {
+    auto buffer = swapchain->get_back_buffer(index);
+
+    std::stringstream s;
+    s << "destroy_swapchain(";
+    s << "buffer:" << reinterpret_cast<void*>(buffer.handle);
+    s << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+  }
+
+  std::stringstream s;
+  s << "destroy_swapchain(";
+  s << "device: " << reinterpret_cast<void*>(swapchain->get_device());
+  s << ", colorspace: " << swapchain->get_color_space();
+  s << ")";
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
 static void LogLayout(
@@ -358,6 +378,17 @@ static void LogLayout(
   }
 }
 
+static bool OnCreatePipelineLayout(
+    reshade::api::device* device,
+    uint32_t& param_count,
+    reshade::api::pipeline_layout_param*& params) {
+  if (!is_primary_hook) return false;
+
+  LogLayout(param_count, params, {0});
+
+  return false;
+}
+
 // AfterCreateRootSignature
 static void OnInitPipelineLayout(
     reshade::api::device* device,
@@ -404,6 +435,75 @@ static void OnInitPipelineLayout(
   s << " , max injections: " << (max_count);
   s << " )";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
+}
+
+static bool OnCreatePipeline(
+    reshade::api::device* device,
+    reshade::api::pipeline_layout layout,
+    uint32_t subobject_count,
+    const reshade::api::pipeline_subobject* subobjects) {
+  if (!is_primary_hook) return false;
+  if (subobject_count == 0) {
+    std::stringstream s;
+    s << "OnCreatePipeline(";
+    s << "layout:" << reinterpret_cast<void*>(layout.handle);
+    s << ", subobjects: " << (subobject_count);
+    s << " )";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+    return false;
+  }
+
+  for (uint32_t i = 0; i < subobject_count; ++i) {
+    const auto& subobject = subobjects[i];
+    for (uint32_t j = 0; j < subobject.count; ++j) {
+      std::stringstream s;
+      s << "OnCreatePipeline(";
+      s << "[" << i << "][" << j << "]";
+      s << ", layout:" << reinterpret_cast<void*>(layout.handle);
+      s << ", type: " << subobject.type;
+      switch (subobject.type) {
+        case reshade::api::pipeline_subobject_type::hull_shader:
+        case reshade::api::pipeline_subobject_type::domain_shader:
+        case reshade::api::pipeline_subobject_type::geometry_shader:
+          // reshade::api::shader_desc &desc = static_cast<reshade::api::shader_desc*>(subobjects[i].data[j]);
+          break;
+        case reshade::api::pipeline_subobject_type::blend_state:
+          break;  // Disabled for now
+          {
+            auto& desc = static_cast<reshade::api::blend_desc*>(subobject.data)[j];
+            s << ", alpha_to_coverage_enable: " << desc.alpha_to_coverage_enable;
+            s << ", source_color_blend_factor: " << desc.source_color_blend_factor[0];
+            s << ", dest_color_blend_factor: " << desc.dest_color_blend_factor[0];
+            s << ", color_blend_op: " << desc.color_blend_op[0];
+            s << ", source_alpha_blend_factor: " << desc.source_alpha_blend_factor[0];
+            s << ", dest_alpha_blend_factor: " << desc.dest_alpha_blend_factor[0];
+            s << ", alpha_blend_op: " << desc.alpha_blend_op[0];
+            s << ", render_target_write_mask: " << std::hex << desc.render_target_write_mask[0] << std::dec;
+          }
+          break;
+        case reshade::api::pipeline_subobject_type::vertex_shader:
+        case reshade::api::pipeline_subobject_type::compute_shader:
+        case reshade::api::pipeline_subobject_type::pixel_shader:   {
+          auto& desc = (static_cast<reshade::api::shader_desc*>(subobject.data))[j];
+          s << ", shader: ";
+          if (desc.code_size == 0) {
+            s << "(empty)";
+          } else {
+            auto shader_hash = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
+            s << PRINT_CRC32(shader_hash);
+          }
+          break;
+        }
+        default:
+          break;
+      }
+
+      s << " )";
+
+      reshade::log::message(reshade::log::level::info, s.str().c_str());
+    }
+  }
+  return false;
 }
 
 // After CreatePipelineState
@@ -1381,6 +1481,20 @@ static void OnMapBufferRegion(
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
+static void OnUnmapBufferRegion(
+    reshade::api::device* device,
+    reshade::api::resource resource) {
+  if (!is_primary_hook) return;
+  if (!trace_running && present_count >= MAX_PRESENT_COUNT) return;
+
+  std::stringstream s;
+  s << "unmap_buffer_region(";
+  s << reinterpret_cast<void*>(resource.handle);
+  s << ")";
+
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
+}
+
 static void OnMapTextureRegion(
     reshade::api::device* device,
     reshade::api::resource resource,
@@ -1493,7 +1607,12 @@ static void OnPresent(
     const reshade::api::rect* dirty_rects) {
   if (!is_primary_hook) return;
   if (trace_running) {
-    reshade::log::message(reshade::log::level::info, "present()");
+    std::stringstream s;
+    s << "present(";
+    s << reinterpret_cast<void*>(swapchain->get_current_back_buffer().handle);
+    s << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+
     reshade::log::message(reshade::log::level::info, "--- End Frame ---");
     trace_running = false;
   } else if (trace_scheduled) {
@@ -1507,7 +1626,7 @@ static void OnPresent(
 }
 }  // namespace internal
 
-inline void Use(DWORD fdw_reason) {
+static void Use(DWORD fdw_reason) {
   renodx::utils::descriptor::Use(fdw_reason);
   renodx::utils::shader::Use(fdw_reason);
 
@@ -1523,7 +1642,7 @@ inline void Use(DWORD fdw_reason) {
       // destroy_command_queue
       reshade::register_event<reshade::addon_event::init_swapchain>(internal::OnInitSwapchain);
       // create_swapchain
-      // destroy_swapchain
+      reshade::register_event<reshade::addon_event::destroy_swapchain>(internal::OnDestroySwapchain);
       // init_effect_runtime
       // destroy_effect_runtime
       // init_sampler
@@ -1536,13 +1655,14 @@ inline void Use(DWORD fdw_reason) {
       // create_resource_view
       reshade::register_event<reshade::addon_event::destroy_resource_view>(internal::OnDestroyResourceView);
       reshade::register_event<reshade::addon_event::map_buffer_region>(internal::OnMapBufferRegion);
-      // unmap_buffer_region
+      reshade::register_event<reshade::addon_event::unmap_buffer_region>(internal::OnUnmapBufferRegion);
+
       reshade::register_event<reshade::addon_event::map_texture_region>(internal::OnMapTextureRegion);
       // unmap_texture_region
       reshade::register_event<reshade::addon_event::update_buffer_region>(internal::OnUpdateBufferRegion);
       reshade::register_event<reshade::addon_event::update_texture_region>(internal::OnUpdateTextureRegion);
-      reshade::register_event<reshade::addon_event::init_pipeline>(internal::OnInitPipeline);
-      // create_pipeline
+      // reshade::register_event<reshade::addon_event::init_pipeline>(internal::OnInitPipeline);
+      reshade::register_event<reshade::addon_event::create_pipeline>(internal::OnCreatePipeline);
       reshade::register_event<reshade::addon_event::destroy_pipeline>(internal::OnDestroyPipeline);
       reshade::register_event<reshade::addon_event::init_pipeline_layout>(internal::OnInitPipelineLayout);
       reshade::register_event<reshade::addon_event::create_pipeline_layout>(internal::OnCreatePipelineLayout);
@@ -1607,7 +1727,7 @@ inline void Use(DWORD fdw_reason) {
       // destroy_command_queue
       reshade::unregister_event<reshade::addon_event::init_swapchain>(internal::OnInitSwapchain);
       // create_swapchain
-      // destroy_swapchain
+      reshade::unregister_event<reshade::addon_event::destroy_swapchain>(internal::OnDestroySwapchain);
       // init_effect_runtime
       // destroy_effect_runtime
       // init_sampler
@@ -1620,13 +1740,13 @@ inline void Use(DWORD fdw_reason) {
       // create_resource_view
       reshade::unregister_event<reshade::addon_event::destroy_resource_view>(internal::OnDestroyResourceView);
       reshade::unregister_event<reshade::addon_event::map_buffer_region>(internal::OnMapBufferRegion);
-      // unmap_buffer_region
+      reshade::unregister_event<reshade::addon_event::unmap_buffer_region>(internal::OnUnmapBufferRegion);
       reshade::unregister_event<reshade::addon_event::map_texture_region>(internal::OnMapTextureRegion);
       // unmap_texture_region
       reshade::unregister_event<reshade::addon_event::update_buffer_region>(internal::OnUpdateBufferRegion);
       reshade::unregister_event<reshade::addon_event::update_texture_region>(internal::OnUpdateTextureRegion);
       reshade::unregister_event<reshade::addon_event::init_pipeline>(internal::OnInitPipeline);
-      // create_pipeline
+      reshade::unregister_event<reshade::addon_event::create_pipeline>(internal::OnCreatePipeline);
       reshade::unregister_event<reshade::addon_event::destroy_pipeline>(internal::OnDestroyPipeline);
       reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(internal::OnInitPipelineLayout);
       reshade::unregister_event<reshade::addon_event::create_pipeline_layout>(internal::OnCreatePipelineLayout);
