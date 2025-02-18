@@ -37,6 +37,7 @@
 #include <crc32_hash.hpp>
 #include "../mods/swapchain.hpp"
 #include "../utils/bitwise.hpp"
+#include "../utils/constants.hpp"
 #include "../utils/descriptor.hpp"
 #include "../utils/pipeline_layout.hpp"
 #include "../utils/shader.hpp"
@@ -135,6 +136,7 @@ struct PipelineBindDetails {
 struct DrawDetails {
   std::map<std::pair<uint32_t, uint32_t>, ResourceViewDetails> srv_binds;
   std::map<std::pair<uint32_t, uint32_t>, ResourceViewDetails> uav_binds;
+  std::map<std::pair<uint32_t, uint32_t>, reshade::api::buffer_range> constants;
   std::vector<PipelineBindDetails> pipeline_binds;
   enum class DrawMethods : std::uint8_t {
     PRESENT,
@@ -250,6 +252,7 @@ struct SettingSelection {
   uint32_t shader_hash = 0;
   uint64_t resource_handle = 0;
   uint64_t resource_view_handle = 0;
+  uint64_t constant_buffer_handle = 0;
   int shader_view = 0;
 
   bool is_pinned = false;
@@ -278,6 +281,10 @@ void MakeSelectionCurrent(SettingSelection selection) {
       marked_current |=
           item.is_current =
               (item.resource_handle == selection.resource_handle);
+    } else if (selection.constant_buffer_handle != 0u) {
+      marked_current |=
+          item.is_current =
+              (item.constant_buffer_handle == selection.constant_buffer_handle);
     } else if (selection.resource_view_handle != 0u) {
       marked_current |=
           item.is_current =
@@ -291,10 +298,12 @@ void MakeSelectionCurrent(SettingSelection selection) {
     if (
         (selection.shader_hash != 0u && item.shader_hash != 0u)
         || (selection.resource_handle != 0u && item.resource_handle != 0u)
-        || (selection.resource_view_handle != 0u && item.resource_view_handle != 0u)) {
+        || (selection.resource_view_handle != 0u && item.resource_view_handle != 0u)
+        || (selection.constant_buffer_handle != 0u && item.constant_buffer_handle != 0u)) {
       item.shader_hash = selection.shader_hash;
       item.resource_handle = selection.resource_handle;
       item.resource_view_handle = selection.resource_view_handle;
+      item.constant_buffer_handle = selection.constant_buffer_handle;
       item.is_current = true;
       return;
     }
@@ -305,20 +314,16 @@ void MakeSelectionCurrent(SettingSelection selection) {
 
 SettingSelection& GetSelection(SettingSelection& selection) {
   for (auto& item : setting_open_tabs) {
-    if (selection.shader_hash != 0u) {
-      if (item.shader_hash == selection.shader_hash) {
-        return item;
-      }
-    }
-    if (selection.resource_handle != 0u) {
-      if (item.resource_handle == selection.resource_handle) {
-        return item;
-      }
-    }
-    if (selection.resource_view_handle != 0u) {
-      if (item.resource_view_handle == selection.resource_view_handle) {
-        return item;
-      }
+    if (std::ranges::any_of(std::vector<std::pair<uint64_t, uint64_t>>({
+                                {item.shader_hash, selection.shader_hash},
+                                {item.resource_handle, selection.resource_handle},
+                                {item.constant_buffer_handle, selection.constant_buffer_handle},
+                                {item.resource_view_handle, selection.resource_view_handle},
+                            }),
+                            [](auto& pair) {
+                              return (pair.second != 0u) && (pair.first == pair.second);
+                            })) {
+      return item;
     }
   }
   return selection;
@@ -334,23 +339,17 @@ std::optional<std::reference_wrapper<SettingSelection>> GetCurrentSelection() {
 void RemoveSelection(SettingSelection& selection) {
   auto iterator = setting_open_tabs.begin();
   while (iterator != setting_open_tabs.end()) {
-    if (selection.shader_hash != 0u) {
-      if (iterator->shader_hash == selection.shader_hash) {
-        setting_open_tabs.erase(iterator);
-        return;
-      }
-    }
-    if (selection.resource_handle != 0u) {
-      if (iterator->resource_handle == selection.resource_handle) {
-        setting_open_tabs.erase(iterator);
-        return;
-      }
-    }
-    if (selection.resource_view_handle != 0u) {
-      if (iterator->resource_view_handle == selection.resource_view_handle) {
-        setting_open_tabs.erase(iterator);
-        return;
-      }
+    if (std::ranges::any_of(std::vector<std::pair<uint64_t, uint64_t>>({
+                                {iterator->shader_hash, selection.shader_hash},
+                                {iterator->resource_handle, selection.resource_handle},
+                                {iterator->constant_buffer_handle, selection.constant_buffer_handle},
+                                {iterator->resource_view_handle, selection.resource_view_handle},
+                            }),
+                            [](auto& pair) {
+                              return (pair.second != 0u) && (pair.first == pair.second);
+                            })) {
+      setting_open_tabs.erase(iterator);
+      return;
     }
 
     ++iterator;
@@ -439,6 +438,7 @@ void OnDestroyPipeline(
   const std::unique_lock lock(data.mutex);
   data.live_pipelines.erase(pipeline.handle);
 }
+
 void OnBindPipeline(
     reshade::api::command_list* cmd_list,
     reshade::api::pipeline_stage stage,
@@ -611,8 +611,27 @@ void OnPushDescriptors(
         log_resource_view(i, item, details.uav_binds);
         break;
       }
-      case reshade::api::descriptor_type::acceleration_structure:
-      case reshade::api::descriptor_type::constant_buffer:
+      case reshade::api::descriptor_type::constant_buffer: {
+        auto pair = device_data.pipeline_layout_params.find(layout.handle);
+        if (pair == device_data.pipeline_layout_params.end()) {
+          reshade::log::message(reshade::log::level::error, "Could not find handle.");
+          // add warning
+          return;
+        }
+        auto layout_params = pair->second;
+        auto param = layout_params[layout_param];
+        assert(param.type == reshade::api::pipeline_layout_param_type::push_descriptors);
+        assert(param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer);
+
+        uint32_t dx_register_index = param.push_constants.dx_register_index;
+        uint32_t dx_register_space = param.push_constants.dx_register_space;
+        auto buffer_range = static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
+
+        auto slot = std::pair<uint32_t, uint32_t>(dx_register_index + update.binding + i, dx_register_space);
+
+        details.constants[slot] = buffer_range;
+
+      } break;
       default:
         break;
     }
@@ -980,7 +999,6 @@ enum CapturePaneColumns {
   CAPTURE_PANE_COLUMN_REF,
   CAPTURE_PANE_COLUMN_INFO,
   CAPTURE_PANE_COLUMN_REFLECTION,
-  CAPTURE_PANE_COLUMN_DRAW,
   //
   CAPTURE_PANE_COLUMN_COUNT
 };
@@ -997,7 +1015,6 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
     ImGui::TableSetupColumn("Ref", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 16.0f);
     ImGui::TableSetupColumn("Info", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 24.0f);
     ImGui::TableSetupColumn("Reflection", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 24.0f);
-    ImGui::TableSetupColumn("Draw", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 4.0f);
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableHeadersRow();
 
@@ -1006,22 +1023,59 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
     for (auto& command_list_data : data.command_list_data) {
       for (auto& draw_details : command_list_data.draw_details) {
         ImGui::TableNextRow();
-        ImGui::PushID(row_index);
         bool draw_node_open = false;
+
         if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
           auto flags = tree_node_flags;
           if (device->get_api() != reshade::api::device_api::d3d12) {
             flags |= ImGuiTreeNodeFlags_DefaultOpen;
           }
+          ImGui::PushID(row_index);
           draw_node_open = ImGui::TreeNodeEx("", flags, "%s", draw_details.DrawMethodString().c_str());
+          ImGui::PopID();
         }
-        // Ref
-        // Info
-        // Tag
-        if (ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_DRAW)) {
+
+        if (ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REF)) {
           ImGui::Text("%03d", draw_index);
         }
-        ImGui::PopID();
+
+        for (const auto& [slot, buffer_range] : draw_details.constants) {
+          ++row_index;
+
+          if (draw_node_open) {
+            ImGui::TableNextRow();
+
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
+              SettingSelection search = {.constant_buffer_handle = buffer_range.buffer.handle};
+              auto& selection = GetSelection(search);
+              auto bullet_flags = tree_node_flags | ImGuiTreeNodeFlags_Leaf
+                                  | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
+                                  | selection.GetTreeNodeFlags();
+
+              ImGui::PushID(row_index);
+              ImGui::TreeNodeEx("", bullet_flags, (slot.second == 0) ? "CB%d" : "CB%d,space%d", slot.first, slot.second);
+              ImGui::PopID();
+              if (ImGui::IsItemClicked()) {
+                MakeSelectionCurrent(selection);
+                ImGui::SetItemDefaultFocus();
+              }
+              if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                selection.is_pinned = true;
+              }
+            }
+
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REF))) {
+              ImGui::Text("0x%016llX", buffer_range.buffer.handle);
+            }
+
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REFLECTION))) {
+              // auto tag = renodx::utils::trace::GetDebugName(device->get_api(), buffer_range.buffer.handle);
+              // if (tag.has_value()) {
+              //   ImGui::TextUnformatted(tag->c_str());
+              // }
+            }
+          }
+        }
 
         for (const auto& pipeline_bind : draw_details.pipeline_binds) {
           auto& shader_device_data = renodx::utils::shader::GetShaderDeviceData(device);
@@ -1059,9 +1113,6 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             ++row_index;  // Count rows regardless of tree node state
             if (draw_node_open) {
               ImGui::TableNextRow();
-              ImGui::PushID(row_index);
-
-              ImGui::TableNextColumn();
 
               SettingSelection search = {.shader_hash = shader_hash};
               auto& selection = GetSelection(search);
@@ -1072,6 +1123,7 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
 
               // Fallback to subobject
               if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
+                ImGui::PushID(row_index);
                 if (shader_details.program_version.has_value()) {
                   ImGui::TreeNodeEx("", bullet_flags, "%s_%d_%d",
                                     shader_details.program_version->GetKindAbbr(),
@@ -1082,6 +1134,7 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
                   s << shader_details.shader_type;
                   ImGui::TreeNodeEx("", bullet_flags, "%s", s.str().c_str());
                 }
+                ImGui::PopID();
                 if (ImGui::IsItemClicked()) {
                   MakeSelectionCurrent(selection);
                   ImGui::SetItemDefaultFocus();
@@ -1103,11 +1156,6 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
                   ImGui::TextUnformatted(pipeline_details.tag->c_str());
                 }
               }
-
-              if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_DRAW))) {
-                ImGui::Text("%03d", draw_index);
-              }
-              ImGui::PopID();
             }
           }
         }
@@ -1117,12 +1165,13 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
           bool srv_node_open = false;
           if (draw_node_open) {
             ImGui::TableNextRow();
-            ImGui::PushID(row_index);
             if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
+              ImGui::PushID(row_index);
               srv_node_open = ImGui::TreeNodeEx(
                   "",
                   tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen,
                   (slot.second == 0) ? "SRV%d" : "SRV%d,space%d", slot.first, slot.second);
+              ImGui::PopID();
             }
 
             if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REF))) {
@@ -1148,11 +1197,6 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
                 ImGui::TextUnformatted(resource_view_details.resource_view_reflection.c_str());
               }
             }
-
-            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_DRAW))) {
-              ImGui::Text("%03d", draw_index);
-            }
-            ImGui::PopID();
           }
 
           ++row_index;
@@ -1164,12 +1208,13 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             auto& selection = GetSelection(search);
 
             ImGui::TableNextRow();
-            ImGui::PushID(row_index);
             if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
               auto bullet_flags = tree_node_flags | ImGuiTreeNodeFlags_Leaf
                                   | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
                                   | selection.GetTreeNodeFlags();
+              ImGui::PushID(row_index);
               ImGui::TreeNodeEx("", bullet_flags, "Resource");
+              ImGui::PopID();
 
               if (ImGui::IsItemClicked()) {
                 MakeSelectionCurrent(selection);
@@ -1202,26 +1247,23 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
               }
             }
 
-            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_DRAW))) {
-              ImGui::Text("%03d", draw_index);
-            }
-            ImGui::PopID();
-
             if (resource_view_details.resource_desc.texture.format != reshade::api::format::unknown) {
               row_index++;
               ImGui::TableNextRow();
-              ImGui::PushID(row_index);
 
               if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
                 auto bullet_flags = tree_node_flags | ImGuiTreeNodeFlags_Leaf
                                     | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
                                     | selection.GetTreeNodeFlags();
+                ImGui::PushID(row_index);
                 ImGui::TreeNodeEx("", bullet_flags, "Dimensions");
+                ImGui::PopID();
                 if (ImGui::IsItemClicked()) {
                   MakeSelectionCurrent(selection);
                   ImGui::SetItemDefaultFocus();
                 }
               }
+
               if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REF))) {
                 ImGui::Text("0x%016llX", resource_view_details.resource.handle);
               }
@@ -1233,7 +1275,6 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
                   ImGui::Text("%dx%d", resource_view_details.resource_desc.texture.width, resource_view_details.resource_desc.texture.height);
                 }
               }
-              ImGui::PopID();
             }
 
             ImGui::TreePop();
@@ -1245,39 +1286,40 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
           bool uav_node_open = false;
           if (draw_node_open) {
             ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::PushID(row_index);
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
+              ImGui::PushID(row_index);
 
-            uav_node_open = ImGui::TreeNodeEx(
-                "",
-                tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen,
-                (slot.second == 0) ? "UAV%d" : "UAV%d,space%d", slot.first, slot.second);
+              uav_node_open = ImGui::TreeNodeEx(
+                  "",
+                  tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen,
+                  (slot.second == 0) ? "UAV%d" : "UAV%d,space%d", slot.first, slot.second);
 
-            ImGui::PopID();
-
-            ImGui::TableNextColumn();
-            ImGui::Text("0x%016llX", resource_view_details.resource_view.handle);
-
-            ImGui::TableNextColumn();
-            std::stringstream s;
-            s << resource_view_details.resource_view_desc.format;
-            if (resource_view_details.is_swapchain) {
-              ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
-            } else if (resource_view_details.is_rtv_upgraded) {
-              ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
-            } else if (resource_view_details.is_rtv_cloned) {
-              ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
-            } else {
-              ImGui::TextUnformatted(s.str().c_str());
+              ImGui::PopID();
             }
 
-            ImGui::TableNextColumn();
-            if (!resource_view_details.resource_view_reflection.empty()) {
-              ImGui::TextUnformatted(resource_view_details.resource_view_reflection.c_str());
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REF))) {
+              ImGui::Text("0x%016llX", resource_view_details.resource_view.handle);
             }
 
-            ImGui::TableNextColumn();  // Index
-            ImGui::Text("%03d", draw_index);
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_INFO))) {
+              std::stringstream s;
+              s << resource_view_details.resource_view_desc.format;
+              if (resource_view_details.is_swapchain) {
+                ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
+              } else if (resource_view_details.is_rtv_upgraded) {
+                ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
+              } else if (resource_view_details.is_rtv_cloned) {
+                ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
+              } else {
+                ImGui::TextUnformatted(s.str().c_str());
+              }
+            }
+
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REFLECTION))) {
+              if (!resource_view_details.resource_view_reflection.empty()) {
+                ImGui::TextUnformatted(resource_view_details.resource_view_reflection.c_str());
+              }
+            }
           }
           ++row_index;
           if (uav_node_open) {
@@ -1285,42 +1327,43 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             auto& selection = GetSelection(search);
 
             ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            auto bullet_flags = tree_node_flags | ImGuiTreeNodeFlags_Leaf
-                                | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
-                                | selection.GetTreeNodeFlags();
-            ImGui::PushID(row_index);
-            ImGui::TreeNodeEx("", bullet_flags, "Resource");
-            ImGui::PopID();
-            if (ImGui::IsItemClicked()) {
-              MakeSelectionCurrent(selection);
-              ImGui::SetItemDefaultFocus();
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
+              auto bullet_flags = tree_node_flags | ImGuiTreeNodeFlags_Leaf
+                                  | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
+                                  | selection.GetTreeNodeFlags();
+              ImGui::PushID(row_index);
+              ImGui::TreeNodeEx("", bullet_flags, "Resource");
+              ImGui::PopID();
+              if (ImGui::IsItemClicked()) {
+                MakeSelectionCurrent(selection);
+                ImGui::SetItemDefaultFocus();
+              }
             }
 
-            ImGui::TableNextColumn();
-            ImGui::Text("0x%016llX", resource_view_details.resource.handle);
-
-            ImGui::TableNextColumn();
-            std::stringstream s;
-            s << resource_view_details.resource_desc.texture.format;
-
-            if (resource_view_details.is_swapchain) {
-              ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
-            } else if (resource_view_details.is_res_upgraded) {
-              ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
-            } else if (resource_view_details.is_res_cloned) {
-              ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
-            } else {
-              ImGui::TextUnformatted(s.str().c_str());
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REF))) {
+              ImGui::Text("0x%016llX", resource_view_details.resource.handle);
             }
 
-            ImGui::TableNextColumn();
-            if (!resource_view_details.resource_reflection.empty()) {
-              ImGui::TextUnformatted(resource_view_details.resource_reflection.c_str());
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_INFO))) {
+              std::stringstream s;
+              s << resource_view_details.resource_desc.texture.format;
+
+              if (resource_view_details.is_swapchain) {
+                ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
+              } else if (resource_view_details.is_res_upgraded) {
+                ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
+              } else if (resource_view_details.is_res_cloned) {
+                ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
+              } else {
+                ImGui::TextUnformatted(s.str().c_str());
+              }
             }
 
-            ImGui::TableNextColumn();  // Index
-            ImGui::Text("%03d", draw_index);
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REFLECTION))) {
+              if (!resource_view_details.resource_reflection.empty()) {
+                ImGui::TextUnformatted(resource_view_details.resource_reflection.c_str());
+              }
+            }
 
             ImGui::TreePop();
           }
@@ -1331,34 +1374,35 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
           bool rtv_node_open = false;
           if (draw_node_open) {
             ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::PushID(row_index);
-            rtv_node_open = ImGui::TreeNodeEx("", tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen, "RTV%d", rtv_index);
-            ImGui::PopID();
-
-            ImGui::TableNextColumn();
-            ImGui::Text("0x%016llX", render_target.resource_view.handle);
-
-            ImGui::TableNextColumn();
-            std::stringstream s;
-            s << render_target.resource_view_desc.format;
-            if (render_target.is_swapchain) {
-              ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
-            } else if (render_target.is_rtv_upgraded) {
-              ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
-            } else if (render_target.is_rtv_cloned) {
-              ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
-            } else {
-              ImGui::TextUnformatted(s.str().c_str());
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
+              ImGui::PushID(row_index);
+              rtv_node_open = ImGui::TreeNodeEx("", tree_node_flags | ImGuiTreeNodeFlags_DefaultOpen, "RTV%d", rtv_index);
+              ImGui::PopID();
             }
 
-            ImGui::TableNextColumn();
-            if (!render_target.resource_view_reflection.empty()) {
-              ImGui::TextUnformatted(render_target.resource_view_reflection.c_str());
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REF))) {
+              ImGui::Text("0x%016llX", render_target.resource_view.handle);
             }
 
-            ImGui::TableNextColumn();  // Index
-            ImGui::Text("%03d", draw_index);
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_INFO))) {
+              std::stringstream s;
+              s << render_target.resource_view_desc.format;
+              if (render_target.is_swapchain) {
+                ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
+              } else if (render_target.is_rtv_upgraded) {
+                ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
+              } else if (render_target.is_rtv_cloned) {
+                ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
+              } else {
+                ImGui::TextUnformatted(s.str().c_str());
+              }
+            }
+
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REFLECTION))) {
+              if (!render_target.resource_view_reflection.empty()) {
+                ImGui::TextUnformatted(render_target.resource_view_reflection.c_str());
+              }
+            }
           }
           ++row_index;
           if (rtv_node_open) {
@@ -1366,42 +1410,43 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
             auto& selection = GetSelection(search);
 
             ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            auto bullet_flags = tree_node_flags | ImGuiTreeNodeFlags_Leaf
-                                | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
-                                | selection.GetTreeNodeFlags();
-            ImGui::PushID(row_index);
-            ImGui::TreeNodeEx("", bullet_flags, "Resource");
-            ImGui::PopID();
-            if (ImGui::IsItemClicked()) {
-              MakeSelectionCurrent(selection);
-              ImGui::SetItemDefaultFocus();
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
+              auto bullet_flags = tree_node_flags | ImGuiTreeNodeFlags_Leaf
+                                  | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
+                                  | selection.GetTreeNodeFlags();
+              ImGui::PushID(row_index);
+              ImGui::TreeNodeEx("", bullet_flags, "Resource");
+              ImGui::PopID();
+              if (ImGui::IsItemClicked()) {
+                MakeSelectionCurrent(selection);
+                ImGui::SetItemDefaultFocus();
+              }
             }
 
-            ImGui::TableNextColumn();
-            ImGui::Text("0x%016llX", render_target.resource.handle);
-
-            ImGui::TableNextColumn();
-            std::stringstream s;
-            s << render_target.resource_desc.texture.format;
-
-            if (render_target.is_swapchain) {
-              ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
-            } else if (render_target.is_res_upgraded) {
-              ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
-            } else if (render_target.is_res_cloned) {
-              ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
-            } else {
-              ImGui::TextUnformatted(s.str().c_str());
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REF))) {
+              ImGui::Text("0x%016llX", render_target.resource.handle);
             }
 
-            ImGui::TableNextColumn();
-            if (!render_target.resource_reflection.empty()) {
-              ImGui::TextUnformatted(render_target.resource_reflection.c_str());
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_INFO))) {
+              std::stringstream s;
+              s << render_target.resource_desc.texture.format;
+
+              if (render_target.is_swapchain) {
+                ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
+              } else if (render_target.is_res_upgraded) {
+                ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
+              } else if (render_target.is_res_cloned) {
+                ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
+              } else {
+                ImGui::TextUnformatted(s.str().c_str());
+              }
             }
 
-            ImGui::TableNextColumn();  // Index
-            ImGui::Text("%03d", draw_index);
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REFLECTION))) {
+              if (!render_target.resource_reflection.empty()) {
+                ImGui::TextUnformatted(render_target.resource_reflection.c_str());
+              }
+            }
 
             ImGui::TreePop();
           }
@@ -1984,7 +2029,9 @@ void RenderResourceViewView(reshade::api::device* device, DeviceData& data, Sett
             std::format("##resource_view_tab_child_0x{:08x}", selection.resource_handle).c_str(),
             ImVec2(0, 0))) {
       auto resource_view_details = data.GetResourceViewDetails({selection.resource_view_handle}, device);
-      if (resource_view_details.resource_desc.type != reshade::api::resource_type::unknown) {
+      bool is_valid = (resource_view_details.resource_desc.type == reshade::api::resource_type::texture_2d
+                       || resource_view_details.resource_desc.type == reshade::api::resource_type::surface);
+      if (is_valid) {
         auto available_size = ImGui::GetContentRegionAvail();
         auto output_size = ImVec2(
             resource_view_details.resource_desc.texture.width,
@@ -2004,6 +2051,115 @@ void RenderResourceViewView(reshade::api::device* device, DeviceData& data, Sett
         output_size.y *= scale;
 
         ImGui::Image(selection.resource_view_handle, output_size, ImVec2(0, 0), ImVec2(1, 1), ImColor(1.0f, 1.0f, 1.0f), ImColor(0.0f, 0.0f, 0.0f, 0.0f));
+      }
+    }
+    ImGui::EndChild();
+    ImGui::EndTabItem();
+  }
+}
+
+void RenderConstantBufferView(reshade::api::device* device, DeviceData& data, SettingSelection& selection) {
+  ImGui::PushID(std::format("##constant_buffer_view_tab_0x{:08x}", selection.constant_buffer_handle).c_str());
+  auto style = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+  if (!selection.is_pinned) {
+    style.w *= 0.5f;
+  } else if (selection.is_current) {
+  }
+  ImGui::PushStyleColor(ImGuiCol_Text, style);
+  bool open = ImGui::BeginTabItem(
+      std::format("0x{:08x}", selection.constant_buffer_handle).c_str(),
+      &selection.is_alive,
+      selection.GetTabItemFlags());
+
+  ImGui::PopStyleColor();
+  ImGui::PopID();
+
+  if (ImGui::IsItemClicked()) {
+    MakeSelectionCurrent(selection);
+  }
+  if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    selection.is_pinned = true;
+  }
+
+  if (open) {
+    if (ImGui::BeginChild(
+            std::format("##constant_buffer_view_tab_child_0x{:08x}", selection.constant_buffer_handle).c_str(),
+            ImVec2(0, 0))) {
+      auto details = device->get_resource_desc({selection.constant_buffer_handle});
+
+      if (details.type == reshade::api::resource_type::buffer) {
+        auto data = renodx::utils::constants::GetResourceCache(device, {selection.constant_buffer_handle});
+        if (data.empty()) {
+          data = renodx::utils::constants::GetResourceHistory(device, {selection.constant_buffer_handle});
+        }
+
+        auto len = data.size() / sizeof(float);
+        std::span<float> float_view = {
+            reinterpret_cast<float*>(data.data()),
+            reinterpret_cast<float*>(data.data()) + len};
+        std::span<uint32_t> uint32_view = {
+            reinterpret_cast<uint32_t*>(data.data()),
+            reinterpret_cast<uint32_t*>(data.data()) + len};
+        std::span<int32_t> int32_view = {
+            reinterpret_cast<int32_t*>(data.data()),
+            reinterpret_cast<int32_t*>(data.data()) + len};
+
+        if (ImGui::BeginTable(
+                std::format("##constant_buffer_view_tab_child_table_0x{:08x}", selection.constant_buffer_handle).c_str(),
+                5,
+                ImGuiTableFlags_BordersInner | ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH
+                    | ImGuiTableFlags_Resizable
+                    | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_ScrollY,
+                ImVec2(-4, -4))) {
+          ImGui::TableSetupColumn("Position", ImGuiTableColumnFlags_NoHide);
+          ImGui::TableSetupColumn("float", ImGuiTableColumnFlags_NoHide);
+          ImGui::TableSetupColumn("uint32", ImGuiTableColumnFlags_NoHide);
+          ImGui::TableSetupColumn("int32", ImGuiTableColumnFlags_NoHide);
+          ImGui::TableSetupColumn("Offset", ImGuiTableColumnFlags_NoHide);
+          ImGui::TableSetupScrollFreeze(0, 1);
+          ImGui::TableHeadersRow();
+
+          int row_index = 0;
+          int cell_index_id = 0x6000;
+
+          for (auto i = 0; i < len; ++i) {
+            ImGui::TableNextRow();
+
+            if (ImGui::TableNextColumn()) {
+              ImGui::PushID(cell_index_id++);
+              ImGui::TextUnformatted(std::format("[{}].{}", i / 4u, "xyzw"[i % 4]).c_str());
+              ImGui::PopID();
+            }
+
+            if (ImGui::TableNextColumn()) {
+              ImGui::TextUnformatted(std::format("{}", float_view[i]).c_str());
+              ImGui::PushID(cell_index_id++);
+              ImGui::PopID();
+            }
+
+            if (ImGui::TableNextColumn()) {
+              ImGui::TextUnformatted(std::format("{}", uint32_view[i]).c_str());
+              ImGui::PushID(cell_index_id++);
+              ImGui::PopID();
+            }
+
+            if (ImGui::TableNextColumn()) {
+              ImGui::PushID(cell_index_id++);
+              ImGui::TextUnformatted(std::format("{}", int32_view[i]).c_str());
+              ImGui::PopID();
+            }
+
+            if (ImGui::TableNextColumn()) {
+              ImGui::PushID(cell_index_id++);
+              ImGui::TextUnformatted(std::format("{}", i).c_str());
+              ImGui::PopID();
+            }
+
+            row_index++;
+          }
+
+          ImGui::EndTable();
+        }
       }
     }
     ImGui::EndChild();
@@ -2103,6 +2259,8 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
               RenderShaderView(device, data, selection);
             } else if (selection.resource_view_handle != 0u) {
               RenderResourceViewView(device, data, selection);
+            } else if (selection.constant_buffer_handle != 0u) {
+              RenderConstantBufferView(device, data, selection);
             }
           }
           RemoveDeadSelections();
@@ -2185,13 +2343,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         initialized = true;
       }
 
+      renodx::utils::constants::Use(fdw_reason);
       renodx::utils::descriptor::Use(fdw_reason);
       renodx::utils::shader::Use(fdw_reason);
       renodx::utils::shader::dump::Use(fdw_reason);
       renodx::utils::trace::Use(fdw_reason);
       renodx::utils::swapchain::Use(fdw_reason);
-
-      renodx::utils::shader::use_replace_async = true;
 
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
@@ -2199,7 +2356,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
       reshade::register_event<reshade::addon_event::init_pipeline_layout>(OnInitPipelineLayout);
       reshade::register_event<reshade::addon_event::init_pipeline>(OnInitPipelineTrackAddons);
-
       reshade::register_event<reshade::addon_event::init_pipeline>(OnInitPipeline);
       reshade::register_event<reshade::addon_event::bind_pipeline>(OnBindPipeline);
       reshade::register_event<reshade::addon_event::destroy_pipeline>(OnDestroyPipeline);
@@ -2216,6 +2372,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
     case DLL_PROCESS_DETACH:
 
+      renodx::utils::constants::Use(fdw_reason);
       renodx::utils::descriptor::Use(fdw_reason);
       renodx::utils::shader::Use(fdw_reason);
       renodx::utils::shader::dump::Use(fdw_reason);
