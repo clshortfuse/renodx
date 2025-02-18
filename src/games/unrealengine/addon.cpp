@@ -814,6 +814,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::resource::Use(fdw_reason);
 
       renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
+        auto process_path = renodx::utils::platform::GetCurrentProcessPath();
+        auto product_name = renodx::utils::platform::GetProductName(process_path);
+        if (product_name == "Wuthering Waves") {
+          if (params.size() == 25) return false;
+        }
         // UE DX12 has a 4 param root sig that crashes if modified. Track for now
         return std::ranges::any_of(params, [](auto param) {
           return (param.type == reshade::api::pipeline_layout_param_type::descriptor_table);
