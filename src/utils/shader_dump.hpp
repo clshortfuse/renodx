@@ -131,7 +131,7 @@ static void OnInitPipeline(
 
     if (shaders_dumped.contains(shader_hash)) continue;
     if (shaders_pending.contains(shader_hash)) continue;
-    auto shader_data = details->GetShaderData(shader_hash, subobject_index);
+    auto shader_data = renodx::utils::shader::GetShaderData(device, pipeline, shader_hash);
     if (!shader_data.has_value()) {
       std::stringstream s;
       s << "utils::shader::dump(Failed to retreive shader data: ";

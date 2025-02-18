@@ -378,7 +378,12 @@ bool OnDrawIndexedForMissingShaders(
     uint32_t index_count, uint32_t instance_count,
     uint32_t first_index, int32_t vertex_offset, uint32_t first_instance) {
   auto shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
-  auto pixel_shader_hash = shader_state.GetCurrentPixelShaderHash();
+
+  auto pair = shader_state.stage_state.find(reshade::api::pipeline_stage::pixel_shader);
+  if (pair == shader_state.stage_state.end()) return false;
+
+  auto stage_state = pair->second;
+  auto pixel_shader_hash = stage_state.shader_hash;
   if (pixel_shader_hash == 0u) return false;
 
   if (!renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list)) return false;
@@ -397,10 +402,7 @@ bool OnDrawIndexedForMissingShaders(
   renodx::utils::shader::dump::default_dump_folder = ".";
   bool found = false;
   try {
-    auto pair = shader_state.current_shader_pipelines.find(reshade::api::pipeline_stage::pixel_shader);
-    if (pair == shader_state.current_shader_pipelines.end()) return false;
-
-    auto pipeline = pair->second;
+    auto pipeline = pair->second.pipeline;
     auto shader_data = renodx::utils::shader::GetShaderData(cmd_list->get_device(), pipeline, pixel_shader_hash);
 
     if (!shader_data.has_value()) {

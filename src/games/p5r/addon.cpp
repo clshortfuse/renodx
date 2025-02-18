@@ -369,8 +369,8 @@ bool OnDrawIndexed(
       auto& shader_replace_device_data = device->get_private_data<renodx::mods::shader::DeviceData>();
       const std::shared_lock lock(shader_replace_device_data.mutex);
       if (
-          auto pair = shader_replace_device_data.shared_command_list_data_state.modded_pipeline_layouts.find(shader_state.pipeline_layout.handle);
-          pair != shader_replace_device_data.shared_command_list_data_state.modded_pipeline_layouts.end()) {
+          auto pair = shader_replace_device_data.modded_pipeline_layouts.find(shader_state.pipeline_layout.handle);
+          pair != shader_replace_device_data.modded_pipeline_layouts.end()) {
         read_only_lock.unlock();
         {
           const std::unique_lock lock(data.mutex);

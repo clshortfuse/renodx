@@ -648,8 +648,8 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
 
   {
     std::shared_lock lock(device_data.mutex);
-    for (auto& [stage, hash] : state.current_shaders_hashes) {
-      if (auto pair = device_data.shader_details.find(hash);
+    for (auto& [stage, state] : state.stage_state) {
+      if (auto pair = device_data.shader_details.find(state.shader_hash);
           pair != device_data.shader_details.end()) {
         auto details = pair->second;
         if (details.bypass_draw) {
