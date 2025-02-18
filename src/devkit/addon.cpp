@@ -471,8 +471,6 @@ void OnBindPipeline(
   if (added_shaders.empty()) return;
 
   auto* device = cmd_list->get_device();
-  auto pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(device, pipeline);
-  if (!pipeline_details.has_value()) return;
 
   auto& device_data = device->get_private_data<DeviceData>();
   std::unique_lock lock(device_data.mutex);
@@ -484,7 +482,10 @@ void OnBindPipeline(
     if (!shader_details.program_version.has_value()) {
       if (shader_details.shader_data.empty()) {
         try {
-          auto shader_data = pipeline_details->GetShaderData(shader_hash);
+          auto pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(device, pipeline);
+          if (!pipeline_details.has_value()) return;
+
+          auto shader_data = renodx::utils::shader::GetShaderData(device, pipeline, shader_hash);
           if (!shader_data.has_value()) {
             throw std::exception("Failed to get shader data");
           }
@@ -1783,9 +1784,8 @@ void RenderShaderViewDisassembly(reshade::api::device* device, DeviceData& data,
           if (pipeline_handles.empty()) throw std::exception("Shader data not found.");
           pipeline = {*(pipeline_handles.begin())};
         }
-        auto pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(device, pipeline);
-        if (!pipeline_details.has_value()) throw std::exception("Shader data not found");
-        auto shader_data = pipeline_details->GetShaderData(shader_details.shader_hash);
+
+        auto shader_data = renodx::utils::shader::GetShaderData(device, pipeline, shader_details.shader_hash);
         if (!shader_data.has_value()) throw std::exception("Invalid shader selection");
         shader_details.shader_data = shader_data.value();
       }
@@ -1867,9 +1867,8 @@ void RenderShaderViewDecompilation(reshade::api::device* device, DeviceData& dat
           if (pipeline_handles.empty()) throw std::exception("Shader data not found.");
           pipeline = {*(pipeline_handles.begin())};
         }
-        auto pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(device, pipeline);
-        if (!pipeline_details.has_value()) throw std::exception("Shader data not found");
-        auto shader_data = pipeline_details->GetShaderData(shader_details.shader_hash);
+
+        auto shader_data = renodx::utils::shader::GetShaderData(device, pipeline, shader_details.shader_hash);
         if (!shader_data.has_value()) throw std::exception("Invalid shader selection");
         shader_details.shader_data = shader_data.value();
       }

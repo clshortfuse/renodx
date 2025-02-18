@@ -401,34 +401,28 @@ bool OnDrawIndexedForMissingShaders(
     if (pair == shader_state.current_shader_pipelines.end()) return false;
 
     auto pipeline = pair->second;
-    auto details = renodx::utils::shader::GetPipelineShaderDetails(cmd_list->get_device(), pipeline);
-    for (const auto& [subobject_index, shader_hash] : details->shader_hashes_by_index) {
-      // Store immediately in case pipeline destroyed before present
-      if (shader_hash != pixel_shader_hash) continue;
-      found = true;
-      auto shader_data = details->GetShaderData(shader_hash, subobject_index);
-      if (!shader_data.has_value()) {
-        std::stringstream s;
-        s << "utils::shader::dump(Failed to retreive shader data: ";
-        s << PRINT_CRC32(shader_hash);
-        s << ")";
-        reshade::log::message(reshade::log::level::warning, s.str().c_str());
-        return false;
-      }
+    auto shader_data = renodx::utils::shader::GetShaderData(cmd_list->get_device(), pipeline, pixel_shader_hash);
 
-      auto shader_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data.value());
-      if (shader_version.GetMajor() == 0) {
-        // No shader information found
-        return false;
-      }
-
-      renodx::utils::shader::dump::DumpShader(
-          shader_hash,
-          shader_data.value(),
-          reshade::api::pipeline_subobject_type::pixel_shader,
-          "output_");
+    if (!shader_data.has_value()) {
+      std::stringstream s;
+      s << "utils::shader::dump(Failed to retreive shader data: ";
+      s << PRINT_CRC32(pixel_shader_hash);
+      s << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+      return false;
     }
-    if (!found) throw std::exception("Pipeline not found");
+
+    auto shader_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data.value());
+    if (shader_version.GetMajor() == 0) {
+      // No shader information found
+      return false;
+    }
+
+    renodx::utils::shader::dump::DumpShader(
+        pixel_shader_hash,
+        shader_data.value(),
+        reshade::api::pipeline_subobject_type::pixel_shader,
+        "output_");
   } catch (...) {
     std::stringstream s;
     s << "utils::shader::dump(Failed to decode shader data: ";
