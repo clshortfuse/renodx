@@ -64,6 +64,7 @@ cbuffer injectedBuffer : register(b13) {
 #define RENODX_TONE_MAP_HUE_CORRECTION         injectedData.toneMapHueCorrection
 #define RENODX_TONE_MAP_HUE_SHIFT              injectedData.toneMapHueShift
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE      color::convert::COLOR_SPACE_BT2020
+#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_GAMMA_CORRECTION                injectedData.toneMapGammaCorrection
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE   injectedData.colorGradeColorSpace
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
