@@ -401,7 +401,7 @@ void OnDestroyDevice(reshade::api::device* device) {
 
 bool fired_on_init_swapchain = false;
 
-void OnInitSwapchain(reshade::api::swapchain* swapchain) {
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   auto device = swapchain->get_device();
   auto& data = device->create_private_data<SwapchainData>();
 
@@ -444,7 +444,7 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   }
 }
 
-void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
+void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   auto device = swapchain->get_device();
   auto& data = device->get_private_data<SwapchainData>();
 

@@ -465,7 +465,7 @@ void OnInitDevice(reshade::api::device* device) {
   }
 }
 
-void OnInitSwapchain(reshade::api::swapchain* swapchain) {
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
   fired_on_init_swapchain = true;
 

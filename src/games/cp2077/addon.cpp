@@ -428,7 +428,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("processingInternalSampling", 0.f);
 }
 
-void OnInitSwapchain(reshade::api::swapchain* swapchain) {
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   last_is_hdr = renodx::utils::swapchain::IsHDRColorSpace(swapchain);
   if (!last_is_hdr) {
     settings[1]->default_value = 80.f;

@@ -253,7 +253,7 @@ float ComputeReferenceWhite(float peak_nits) {
   return std::clamp(roundf(powf(10.f, 0.03460730900256f + (0.757737096673107f * log10f(peak_nits)))), 100.f, 300.f);
 }
 
-void OnInitSwapchain(reshade::api::swapchain* swapchain) {
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   last_is_hdr = renodx::utils::swapchain::IsHDRColorSpace(swapchain);
   if (!last_is_hdr) {
     settings[1]->default_value = 80.f;

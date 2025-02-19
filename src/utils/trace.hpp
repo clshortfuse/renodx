@@ -165,7 +165,7 @@ static void OnDestroyDevice(reshade::api::device* device) {
   device->destroy_private_data<DeviceData>();
 }
 
-static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
+static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (!is_primary_hook) return;
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
 
@@ -188,7 +188,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
-static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
+static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (!is_primary_hook) return;
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
 
@@ -816,9 +816,9 @@ static bool OnResolveTextureRegion(
     const reshade::api::subresource_box* source_box,
     reshade::api::resource dest,
     uint32_t dest_subresource,
-    int32_t dest_x,
-    int32_t dest_y,
-    int32_t dest_z,
+    uint32_t dest_x,
+    uint32_t dest_y,
+    uint32_t dest_z,
     reshade::api::format format) {
   if (!is_primary_hook) return false;
 

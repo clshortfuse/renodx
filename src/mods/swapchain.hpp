@@ -1195,7 +1195,7 @@ static void OnPresentForResizeBuffer(
   renodx::utils::swapchain::ResizeBuffer(swapchain, target_format, target_color_space);
 }
 
-static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
+static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   auto* device = swapchain->get_device();
   auto& data = device->get_private_data<DeviceData>();
   if (std::addressof(data) == nullptr) return;
@@ -1236,7 +1236,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   renodx::utils::swapchain::ChangeColorSpace(swapchain, target_color_space);
 }
 
-static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
+static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   auto* device = swapchain->get_device();
   auto& data = device->get_private_data<DeviceData>();
   if (std::addressof(data) == nullptr) return;
@@ -2477,9 +2477,9 @@ static bool OnResolveTextureRegion(
     const reshade::api::subresource_box* source_box,
     reshade::api::resource dest,
     uint32_t dest_subresource,
-    int32_t dest_x,
-    int32_t dest_y,
-    int32_t dest_z,
+    uint32_t dest_x,
+    uint32_t dest_y,
+    uint32_t dest_z,
     reshade::api::format format) {
   auto* device = cmd_list->get_device();
   auto& data = device->get_private_data<DeviceData>();

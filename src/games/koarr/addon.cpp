@@ -445,7 +445,7 @@ static float random_range = (random_generator.max() - random_generator.min());
 
 bool fired_on_init_swapchain = false;
 
-void OnInitSwapchain(reshade::api::swapchain* swapchain) {
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);

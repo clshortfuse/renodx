@@ -63,7 +63,7 @@ static void OnDestroyDevice(reshade::api::device* device) {
   device->destroy_private_data<DeviceData>();
 }
 
-static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
+static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (!is_primary_hook) return;
   auto* device = swapchain->get_device();
   auto& device_data = device->get_private_data<DeviceData>();
@@ -88,7 +88,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain) {
   }
 }
 
-static void OnDestroySwapchain(reshade::api::swapchain* swapchain) {
+static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (!is_primary_hook) return;
   auto* device = swapchain->get_device();
 
