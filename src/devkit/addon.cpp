@@ -117,12 +117,40 @@ struct ResourceViewDetails {
   bool UpdateSwapchainModState(reshade::api::device* device) {
     auto* swapchain_mod_data = &device->get_private_data<renodx::mods::swapchain::DeviceData>();
     if (swapchain_mod_data == nullptr) return false;
-    const std::shared_lock lock(swapchain_mod_data->mutex);
-    this->is_rtv_upgraded = swapchain_mod_data->upgraded_resource_views.contains(resource_view.handle);
-    this->is_rtv_cloned = swapchain_mod_data->resource_clones.contains(resource_view.handle);
 
-    this->is_res_upgraded = this->resource.handle != 0u && swapchain_mod_data->upgraded_resources.contains(this->resource.handle);
-    this->is_res_cloned = this->resource.handle != 0u && swapchain_mod_data->resource_clones.contains(this->resource.handle);
+    if (auto pair = swapchain_mod_data->upgraded_resource_views.find(resource_view.handle);
+        pair != swapchain_mod_data->upgraded_resource_views.end() && pair->second.handle != 0u) {
+      this->is_rtv_upgraded = true;
+    } else {
+      this->is_rtv_upgraded = false;
+    }
+
+    if (auto pair = swapchain_mod_data->resource_clones.find(resource_view.handle);
+        pair != swapchain_mod_data->resource_clones.end() && pair->second.handle != 0u) {
+      this->is_rtv_cloned = true;
+    } else {
+      this->is_rtv_cloned = false;
+    }
+
+    if (this->resource.handle == 0u) {
+      this->is_res_upgraded = false;
+      this->is_res_cloned = false;
+    } else {
+      if (auto pair = swapchain_mod_data->upgraded_resources.find(this->resource.handle);
+          pair != swapchain_mod_data->upgraded_resources.end() && pair->second.handle != 0u) {
+        this->is_res_upgraded = true;
+      } else {
+        this->is_res_upgraded = false;
+      }
+
+      if (auto pair = swapchain_mod_data->resource_clones.find(this->resource.handle);
+          pair != swapchain_mod_data->resource_clones.end() && pair->second.handle != 0u) {
+        this->is_res_cloned = true;
+      } else {
+        this->is_res_cloned = false;
+      }
+    }
+
     return true;
   }
 };
