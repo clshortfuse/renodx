@@ -269,6 +269,7 @@ list(APPEND ADDON_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/devkit/addon.cpp)
 foreach(FILE ${ADDON_FILES})
   cmake_path(GET FILE PARENT_PATH ADDON_PATH)
   cmake_path(GET ADDON_PATH FILENAME ADDON) # treat as filename
+  add_compile_options(/bigobj)
   add_library(${ADDON} MODULE ${FILE})
   build_shader_target(${ADDON} ${CMAKE_CURRENT_SOURCE_DIR}/src/games/${ADDON})
   add_dependencies(${ADDON} ${ADDON}-shaders)
