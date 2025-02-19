@@ -96,6 +96,20 @@ float3 ApplyMotionBlurType1(
   return r1.rgb;
 }
 
+float3 ApplyMotionBlurType2(
+    float3 input_color, float2 input_coords, Texture2D<float4> SamplerQuarterSizeBlur_TEX,
+    SamplerState SamplerQuarterSizeBlur_SMP_s) {
+  float3 r1, r2 = input_color;
+
+  r1.xyz = HDR_EncodeScale.www * r2.xyz;
+  r2.xyz = SamplerQuarterSizeBlur_TEX.Sample(SamplerQuarterSizeBlur_SMP_s, input_coords).xyz;
+  r2.xyz = r2.xyz * r2.xyz;
+  r2.xyz = r2.xyz * HDR_EncodeScale2.zzz + -r1.xyz;
+  r1.xyz = rp_parameter_ps[0].www * r2.xyz + r1.xyz;
+
+  return r1;
+}
+
 float3 ApplyBloomType1(
     float3 input_color, float2 tex_coord,
     Texture2D<float4> SamplerBloomMap0_TEX, SamplerState SamplerBloomMap0_SMP_s) {
@@ -112,6 +126,19 @@ float3 ApplyBloomType2(
   float3 bloom_sample = SamplerBloomMap0_TEX.Sample(SamplerBloomMap0_SMP_s, tex_coord).xyz;
   float3 bloom_color = bloom_sample * bloom_sample * HDR_EncodeScale2.z;
   float3 combined_color = input_color * HDR_EncodeScale.w + bloom_color * injectedData.fxBloom;
+
+  return ScaleBloom(input_color * HDR_EncodeScale.w, bloom_color, combined_color);
+}
+
+float3 ApplyBloomType3(
+    float3 input_color, float2 tex_coord,
+    Texture2D<float4> SamplerBloomMap0_TEX, SamplerState SamplerBloomMap0_SMP_s) {
+  float3 r1, r2 = input_color;
+
+  r1.xyz = SamplerBloomMap0_TEX.Sample(SamplerBloomMap0_SMP_s, tex_coord).xyz;
+  r1.xyz = r1.xyz * r1.xyz;
+  float3 bloom_color = HDR_EncodeScale2.zzz * r1.xyz;
+  float3 combined_color = r2.xyz * HDR_EncodeScale.www + r1.xyz;
 
   return ScaleBloom(input_color * HDR_EncodeScale.w, bloom_color, combined_color);
 }
@@ -242,6 +269,29 @@ float3 ApplyLUT(
 
   lutOutputColor = lerp(lutInputColor, lutOutputColor, injectedData.colorGradeLUTStrength);
   return lutOutputColor;  // Return the adjusted color
+}
+
+// apply dual LUTs
+float3 applyDualLUT(
+    float3 lut_input_color, Texture3D<float4> SamplerColourLUT_TEX,
+    SamplerState SamplerColourLUT_SMP_s, Texture3D<float4> SamplerTargetColourLUT_TEX,
+    SamplerState SamplerTargetColourLUT_SMP_s, float4 v1) {
+  float3 r0, r2, r3, r1 = lut_input_color;
+
+  r2.xyz = renodx::math::SignSqrt(r1.xyz);
+  r3.xyz = rp_parameter_ps[2].zzz + r2.xyz;
+  r3.xyz = SamplerColourLUT_TEX.Sample(SamplerColourLUT_SMP_s, r3.xyz).xyz;
+  r3.xyz = r3.xyz * r3.xyz;
+  r2.xyz = rp_parameter_ps[2].www + r2.xyz;
+  r2.xyz = SamplerTargetColourLUT_TEX.Sample(SamplerTargetColourLUT_SMP_s, r2.xyz).xyz;
+  r2.xyz = r2.xyz * r2.xyz + -r3.xyz;
+  r2.xyz = rp_parameter_ps[2].yyy * r2.xyz + r3.xyz;
+  r0.xyz = -r0.xyz * v1.zzz + r2.xyz;
+  r0.xyz = rp_parameter_ps[2].xxx * r0.xyz + r1.xyz;
+
+  float3 lut_output_color = lerp(lut_input_color, r0.xyz, injectedData.colorGradeLUTStrength);
+
+  return lut_output_color;
 }
 
 float3 ApplyDesaturation(float3 input_color) {
@@ -595,6 +645,48 @@ float3 ApplyToneMapVignetteLUT(
       float3 vanilla_color = ApplyVanillaTonemap(untonemapped, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
       vanilla_color = applyVignette(vanilla_color, v2, v1, untonemapped_lum);
       vanilla_color = ApplyLUT(vanilla_color, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
+      if (injectedData.toneMapHueShift) {
+        output_color = renodx::color::correct::Hue(output_color, vanilla_color, injectedData.toneMapHueShift);
+      }
+      if (injectedData.toneMapBlend) output_color = ToneMapBlend(output_color, vanilla_color);
+    }
+  }
+
+  return output_color;
+}
+
+float3 ApplyToneMapVignetteDualLUTs(
+    float3 untonemapped, float untonemapped_lum, float4 v1, float4 v2,
+    Texture2D<float4> SamplerToneMapCurve_TEX, SamplerState SamplerToneMapCurve_SMP_s,
+    Texture3D<float4> SamplerColourLUT_TEX, SamplerState SamplerColourLUT_SMP_s,
+    Texture3D<float4> SamplerTargetColourLUT_TEX, SamplerState SamplerTargetColourLUT_SMP_s) {
+  float3 r0 = untonemapped;
+
+  float3 output_color = r0.xyz;
+  if (injectedData.toneMapType == 0) {  // vanilla tonemap
+    r0.xyz = ApplyVanillaTonemap(untonemapped, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
+    r0.xyz = applyVignette(r0.rgb, v2, v1, untonemapped_lum);
+    r0.xyz = ApplyLUT(r0.rgb, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
+
+    output_color = r0.xyz;
+  } else if (injectedData.toneMapType > 1.f) {
+    const float exposure_bias = renodx::color::y::from::BT709(ApplyVanillaTonemap(0.18, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s));
+    renodx::tonemap::config::DualToneMap dual_tone_map = ApplyDualToneMap(untonemapped, exposure_bias);
+
+    float3 vignette_hdr = applyVignette(dual_tone_map.color_hdr, v2, v1, untonemapped_lum);
+    float3 vignette_sdr = applyVignette(dual_tone_map.color_sdr, v2, v1, untonemapped_lum);
+    float3 lut_output_color = applyDualLUT(
+        vignette_sdr, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s,
+        SamplerTargetColourLUT_TEX, SamplerTargetColourLUT_SMP_s, v1);
+
+    output_color = UpgradeToneMap(vignette_hdr, vignette_sdr, lut_output_color, 1.f);
+
+    if (injectedData.toneMapHueShift || injectedData.toneMapBlend) {
+      float3 vanilla_color = ApplyVanillaTonemap(untonemapped, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
+      vanilla_color = applyVignette(vanilla_color, v2, v1, untonemapped_lum);
+      vanilla_color = applyDualLUT(
+          vanilla_color, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s,
+          SamplerTargetColourLUT_TEX, SamplerTargetColourLUT_SMP_s, v1);
       if (injectedData.toneMapHueShift) {
         output_color = renodx::color::correct::Hue(output_color, vanilla_color, injectedData.toneMapHueShift);
       }
