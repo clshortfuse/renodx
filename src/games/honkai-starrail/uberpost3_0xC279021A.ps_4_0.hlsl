@@ -1,8 +1,6 @@
 #include "./common.hlsl"
-//used on the main menu
-// ---- Created with 3Dmigoto v1.4.1 on Tue Jan 14 23:14:35 2025
-Texture2D<float4> t5 : register(t5);
-
+//used in character ults
+// ---- Created with 3Dmigoto v1.3.16 on Thu Feb 13 04:44:16 2025
 Texture2D<float4> t4 : register(t4);
 
 Texture2D<float4> t3 : register(t3);
@@ -38,18 +36,30 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
+  r0.xyzw = v1.xyxy * float4(2,2,2,2) + float4(-1,-1,-1,-1);
+  r1.x = dot(r0.zw, r0.zw);
+  r0.xyzw = r1.xxxx * r0.xyzw;
+  r0.xyzw = cb0[398].zzzz * r0.xyzw;
+  r0.xyzw = r0.xyzw * float4(-0.333333343,-0.333333343,-0.666666687,-0.666666687) + v1.xyxy;
+  r1.xyzw = t0.SampleLevel(s0_s, v1.xy, 0).xyzw;
+  r1.xyz = max(float3(0,0,0), r1.xyz);
+  r2.xyzw = t0.SampleLevel(s0_s, r0.xy, 0).xyzw;
+  r2.xyz = max(float3(0,0,0), r2.xyz);
+  r0.xyzw = t0.SampleLevel(s0_s, r0.zw, 0).xyzw;
   r0.xyz = max(float3(0,0,0), r0.xyz);
-  r1.xyzw = t2.Sample(s0_s, v1.xy).xyzw;
-  r1.xyz = r1.xyz + -r0.xyz;
-  r0.xyz = r1.www * r1.xyz + r0.xyz;
+  r2.xyz = cb0[400].xyz * r2.xyz;
+  r1.xyz = r1.xyz * cb0[399].xyz + r2.xyz;
+  r0.xyz = r0.xyz * cb0[401].xyz + r1.xyz;
+  r1.xyz = cb0[400].xyz + cb0[399].xyz;
+  r1.xyz = cb0[401].xyz + r1.xyz;
+  r0.xyz = r0.xyz / r1.xyz;
   r1.xyzw = t1.SampleLevel(s0_s, v1.xy, 0).xyzw;
   r0.xyz = r1.xyz * cb0[117].xxx + r0.xyz;
-  r1.xyzw = t3.SampleLevel(s1_s, v1.xy, 0).xyzw;
+  r1.xyzw = t2.SampleLevel(s1_s, v1.xy, 0).xyzw;
   r0.xyz = r1.xyz + r0.xyz;
   r0.w = cmp(0 < cb0[110].x);
   if (r0.w != 0) {
-    r1.xyzw = t5.SampleLevel(s0_s, v1.xy, 0).xyzw;
+    r1.xyzw = t4.SampleLevel(s0_s, v1.xy, 0).xyzw;
     r1.xyz = cb0[110].xxx * r1.xyz;
     r0.xyz = max(r1.xyz, r0.xyz);
   }
@@ -101,11 +111,11 @@ void main(
   r1.xy = float2(0.5,0.5) * cb0[42].xy;
   r1.yz = r0.zw * cb0[42].xy + r1.xy;
   r1.x = r0.y * cb0[42].y + r1.y;
-  r2.xyzw = t4.SampleLevel(s0_s, r1.xz, 0).xyzw;
+  r2.xyzw = t3.SampleLevel(s0_s, r1.xz, 0).xyzw;
   r3.x = cb0[42].y;
   r3.y = 0;
   r0.zw = r3.xy + r1.xz;
-  r1.xyzw = t4.SampleLevel(s0_s, r0.zw, 0).xyzw;
+  r1.xyzw = t3.SampleLevel(s0_s, r0.zw, 0).xyzw;
   r0.x = r0.x * cb0[42].z + -r0.y;
   r0.yzw = r1.xyz + -r2.xyz;
   r0.xyz = r0.xxx * r0.yzw + r2.xyz;
