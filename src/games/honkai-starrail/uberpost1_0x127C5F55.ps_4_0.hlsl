@@ -33,7 +33,7 @@ void main(
   float4 fDest;
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
-  // r0.xyz = max(float3(0,0,0), r0.xyz);
+  r0.xyz = max(float3(0,0,0), r0.xyz);
   r1.xy = cb0[391].zw + -v1.xy;
   r1.xy = cb0[391].xx * r1.xy;
   r1.xy = r1.xy * cb0[391].yy + v1.xy;
@@ -100,24 +100,6 @@ void main(
     r2.z = r0.w * 0.00392156886 + r1.z;
     r0.xyz = r2.xyz * r0.xyz;
   }
-
-  float3 untonemapped = r0.rgb;
-
-  float3 output = applyUserTonemap(untonemapped);
-  renodx::lut::Config lut_config = renodx::lut::config::Create(
-      s0_s, 1.f, 0.f,
-      renodx::lut::config::type::ARRI_C1000_NO_CUT,
-      renodx::lut::config::type::LINEAR);
-
-  float3 sampled = renodx::lut::Sample(t3, lut_config, untonemapped);
-  output = renodx::tonemap::UpgradeToneMap(output, saturate(output), sampled, 1.f);
-
-  o0.rgb = output;
-  o0.rgb = renodx::color::bt709::clamp::AP1(o0.rgb);
-  o0.rgb = PostToneMapScale(o0.rgb);
-
-  o0.w = 1;
-  return;
   r0.xyz = r0.zxy * float3(5.55555582, 5.55555582, 5.55555582) + float3(0.0479959995, 0.0479959995, 0.0479959995);
   r0.xyz = log2(r0.xyz);
   r0.xyz = saturate(r0.xyz * float3(0.0734997839, 0.0734997839, 0.0734997839) + float3(0.386036009, 0.386036009, 0.386036009));
@@ -148,5 +130,6 @@ void main(
   r0.xyz = cmp(float3(0.00313080009, 0.00313080009, 0.00313080009) >= abs(r0.xyz));
   r0.xyz = r0.xyz ? r2.xyz : r3.xyz;
   o0.xyz = r1.xyz * r0.xyz;
+  o0.xyz = PostToneMapScale(o0.xyz);
   return;
 }

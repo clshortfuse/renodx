@@ -1,6 +1,6 @@
 #include "./common.hlsl"
-//used on the main menu
-// ---- Created with 3Dmigoto v1.4.1 on Tue Jan 14 23:14:35 2025
+//used in character ults
+// ---- Created with 3Dmigoto v1.4.1 on Thu Feb 13 01:48:54 2025
 Texture2D<float4> t5 : register(t5);
 
 Texture2D<float4> t4 : register(t4);
@@ -34,15 +34,36 @@ void main(
   float2 v1 : TEXCOORD0,
   out float4 o0 : SV_Target0)
 {
-  float4 r0,r1,r2,r3;
+  float4 r0,r1,r2,r3,r4,r5;
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
-  r0.xyz = max(float3(0,0,0), r0.xyz);
-  r1.xyzw = t2.Sample(s0_s, v1.xy).xyzw;
-  r1.xyz = r1.xyz + -r0.xyz;
-  r0.xyz = r1.www * r1.xyz + r0.xyz;
+  r0.xyzw = v1.xyxy * float4(2,2,2,2) + float4(-1,-1,-1,-1);
+  r1.x = dot(r0.zw, r0.zw);
+  r0.xyzw = r1.xxxx * r0.xyzw;
+  r0.xyzw = cb0[398].zzzz * r0.xyzw;
+  r0.xyzw = r0.xyzw * float4(-0.333333343,-0.333333343,-0.666666687,-0.666666687) + v1.xyxy;
+  r1.xyzw = t0.SampleLevel(s0_s, v1.xy, 0).xyzw;
+  r1.xyz = max(float3(0,0,0), r1.xyz);
+  r2.xyzw = t0.SampleLevel(s0_s, r0.xy, 0).xyzw;
+  r2.xyz = max(float3(0,0,0), r2.xyz);
+  r3.xyzw = t0.SampleLevel(s0_s, r0.zw, 0).xyzw;
+  r3.xyz = max(float3(0,0,0), r3.xyz);
+  r4.xyzw = t2.Sample(s0_s, v1.xy).xyzw;
+  r5.xyzw = t2.Sample(s0_s, r0.xy).xyzw;
+  r0.xyzw = t2.Sample(s0_s, r0.zw).xyzw;
+  r4.xyz = r4.xyz + -r1.xyz;
+  r1.xyz = r4.www * r4.xyz + r1.xyz;
+  r4.xyz = r5.xyz + -r2.xyz;
+  r2.xyz = r5.www * r4.xyz + r2.xyz;
+  r0.xyz = r0.xyz + -r3.xyz;
+  r0.xyz = r0.www * r0.xyz + r3.xyz;
+  r2.xyz = cb0[400].xyz * r2.xyz;
+  r1.xyz = r1.xyz * cb0[399].xyz + r2.xyz;
+  r0.xyz = r0.xyz * cb0[401].xyz + r1.xyz;
+  r1.xyz = cb0[400].xyz + cb0[399].xyz;
+  r1.xyz = cb0[401].xyz + r1.xyz;
+  r0.xyz = r0.xyz / r1.xyz;
   r1.xyzw = t1.SampleLevel(s0_s, v1.xy, 0).xyzw;
   r0.xyz = r1.xyz * cb0[117].xxx + r0.xyz;
   r1.xyzw = t3.SampleLevel(s1_s, v1.xy, 0).xyzw;

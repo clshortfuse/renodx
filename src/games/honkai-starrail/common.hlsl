@@ -3,7 +3,6 @@
 
 //-----SCALING-----//
 float3 PostToneMapScale(float3 color) {
-  color = renodx::color::srgb::EncodeSafe(color);
   color = renodx::color::gamma::DecodeSafe(color, 2.2f);
   color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
   color = renodx::color::gamma::EncodeSafe(color, 2.2f);
@@ -15,10 +14,7 @@ float3 FinalizeOutput(float3 color) {
   if (injectedData.toneMapType == 0.f) {
     color = renodx::color::bt709::clamp::BT709(color);
   } else {
-    color = renodx::color::correct::GammaSafe(color);
-
     color = renodx::color::bt709::clamp::BT2020(color);
-
   }
 
   color = renodx::color::gamma::DecodeSafe(color, 2.2f);
@@ -27,13 +23,6 @@ float3 FinalizeOutput(float3 color) {
   color = min(color, injectedData.toneMapPeakNits);  // Clamp UI or Videos
 
   color /= 80.f;
-
-  return color;
-}
-
-float3 lutShaper(float3 color, bool builder = false) {
-  color = builder ? renodx::color::pq::Decode(color, 100.f)
-                  : renodx::color::pq::Encode(color, 100.f);
 
   return color;
 }
@@ -142,9 +131,9 @@ float3 applyDICE(float3 color, renodx::tonemap::Config DiceConfig) {
   return color;
 }
 
-float3 applyUserTonemap(float3 untonemapped) {
+float3 applyUserTonemap(float3 untonemapped, float3 vanilla) {
   float3 outputColor = untonemapped;
-  float3 hueCorrectionColor = RenoDRTSmoothClamp(outputColor);
+  float vanillaMidGray = renodx::tonemap::unity::BT709(0.18f).x;
 
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
 
@@ -157,15 +146,18 @@ float3 applyUserTonemap(float3 untonemapped) {
   config.shadows = injectedData.colorGradeShadows;
   config.contrast = injectedData.colorGradeContrast;
   config.saturation = injectedData.colorGradeSaturation;
-  config.mid_gray_value = 0.19f;
-  config.mid_gray_nits = 19.f;
+  config.mid_gray_value = vanillaMidGray;
+  config.mid_gray_nits = vanillaMidGray * 100.f;
   config.reno_drt_contrast = 1.04f;
   config.reno_drt_saturation = 1.05f;
   config.reno_drt_dechroma = injectedData.colorGradeBlowout;
   config.reno_drt_flare = 0.001 * pow(injectedData.colorGradeFlare, 2.3f);
+  config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
+  config.hue_correction_color = vanilla;
+  config.hue_correction_strength = injectedData.toneMapHueCorrection;
 
   if (injectedData.toneMapType == 0.f) {
-    outputColor = saturate(outputColor);
+    outputColor = vanilla;
   }
   if (injectedData.toneMapType == 2.f) {  // Frostbite
     outputColor = applyFrostbite(outputColor, config);
@@ -175,6 +167,8 @@ float3 applyUserTonemap(float3 untonemapped) {
   } else {
     outputColor = renodx::tonemap::config::Apply(outputColor, config);
   }
+
+  outputColor = renodx::tonemap::UpgradeToneMap(outputColor, saturate(outputColor), vanilla, 1.f);
 
   return outputColor;
 }
