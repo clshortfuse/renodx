@@ -216,6 +216,57 @@ float3 ApplyVanillaTonemap(
   return r0.xyz;
 }
 
+float3 ApplyVanillaToneMapType2(
+    float3 untonemapped, float untonemapped_lum, Texture2D<float4> SamplerToneMapCurve_TEX,
+    SamplerState SamplerToneMapCurve_SMP_s) {
+  float4 r0, r1, r2, r3;
+  r1.rgb = max(0, untonemapped);
+  r0.rgb = untonemapped;
+  r0.w = untonemapped_lum;
+
+  r0.xyz = log2(r0.xyz);
+  r0.xyz = r0.xyz * float3(0.693147182, 0.693147182, 0.693147182) + float3(12, 12, 12);
+  r2.xyz = saturate(float3(0.0625, 0.0625, 0.0625) * r0.xyz);
+  r0.x = max(9.99999975e-005, r0.w);
+  r0.y = log2(r0.w);
+  r0.y = r0.y * 0.693147182 + 12;
+  r3.x = saturate(0.0625 * r0.y);
+  r0.xyz = r1.xyz / r0.xxx;
+  r0.xyz = log2(r0.xyz);
+  r3.y = 0.25;
+  r0.w = SamplerToneMapCurve_TEX.SampleLevel(SamplerToneMapCurve_SMP_s, r3.xy, 0).x;
+  r1.x = -r0.w * r0.w + 1;
+  r1.x = max(9.99999975e-006, r1.x);
+  r0.xyz = r1.xxx * r0.xyz;
+  r0.xyz = exp2(r0.xyz);
+  r1.x = sqrt(r0.w);
+  r1.y = cmp(r1.x < ToneMappingDebugParams.x);
+  r1.x = cmp(ToneMappingDebugParams.y < r1.x);
+  r3.xyzw = r1.yyyy ? float4(0, 0, 1, 1) : 0;
+  r1.xyzw = r1.xxxx ? float4(1, 0, 0, 1) : r3.xyzw;
+  r1.xyz = -r0.xyz * r0.www + r1.xyz;
+  r0.xyz = r0.xyz * r0.www;
+  r0.w = ToneMappingDebugParams.z * r1.w;
+  r0.xyz = r0.www * r1.xyz + r0.xyz;
+  r2.w = 0.25;
+  r1.x = SamplerToneMapCurve_TEX.SampleLevel(SamplerToneMapCurve_SMP_s, r2.xw, 0).x;
+  r1.y = SamplerToneMapCurve_TEX.SampleLevel(SamplerToneMapCurve_SMP_s, r2.yw, 0).x;
+  r1.z = SamplerToneMapCurve_TEX.SampleLevel(SamplerToneMapCurve_SMP_s, r2.zw, 0).x;
+  r0.w = dot(float3(0.298999995, 0.587000012, 0.114), r1.xyz);
+  r0.w = sqrt(r0.w);
+  r1.w = cmp(r0.w < ToneMappingDebugParams.x);
+  r0.w = cmp(ToneMappingDebugParams.y < r0.w);
+  r2.xyzw = r1.wwww ? float4(0, 0, 1, 1) : 0;
+  r2.xyzw = r0.wwww ? float4(1, 0, 0, 1) : r2.xyzw;
+  r2.xyz = r2.xyz + -r1.xyz;
+  r0.w = ToneMappingDebugParams.z * r2.w;
+  r1.xyz = r0.www * r2.xyz + r1.xyz;
+  r1.xyz = r1.xyz + -r0.xyz;
+  r0.xyz = ToneMappingDebugParams.www * r1.xyz + r0.xyz;
+
+  return r0.rgb;
+}
+
 // debug stuff
 // maybe has vignette?
 float3 applyVignette(
@@ -382,7 +433,7 @@ float4 FinalizeToneMapOutput(float3 input_color) {
   float4 output_color;
 
   output_color.rgb = input_color * rp_parameter_ps[0].x + rp_parameter_ps[0].y;  // remove saturate
-  output_color.w = dot(input_color, float3(0.298999995, 0.587000012, 0.114));
+  output_color.w = renodx::color::y::from::BT709(max(0, input_color));
   return GameScale(output_color);
 }
 
