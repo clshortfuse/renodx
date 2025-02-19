@@ -261,7 +261,7 @@ float3 ApplyLUT(
   r1.xyz = sign(lutInputColor) * sqrt(abs(lutInputColor));                   // Take square root of the input color and preserve the sign
   r1.xyz = rp_parameter_ps[2].zzz + r1.xyz;                                  // Apply an offset from rp_parameter_ps
   r1.xyz = SamplerColourLUT_TEX.Sample(SamplerColourLUT_SMP_s, r1.xyz).xyz;  // Sample the LUT using the adjusted color
-  r0.w = rp_parameter_ps[2].y * rp_parameter_ps[2].x;                        // Calculate a scaling factor
+  r0.w = rp_parameter_ps[2].y * rp_parameter_ps[2].x;                        // lerp strength?
 
   // Apply adjustments to the LUT output
   r1.xyz = r1.xyz * r1.xyz + -lutInputColor;
@@ -286,7 +286,8 @@ float3 applyDualLUT(
   r2.xyz = SamplerTargetColourLUT_TEX.Sample(SamplerTargetColourLUT_SMP_s, r2.xyz).xyz;
   r2.xyz = r2.xyz * r2.xyz + -r3.xyz;
   r2.xyz = rp_parameter_ps[2].yyy * r2.xyz + r3.xyz;
-  r0.xyz = -r0.xyz * v1.zzz + r2.xyz;
+  // (-r0.rgb * v1.z) is just -r1.rgb
+  r0.xyz = -r1.rgb + r2.xyz;  // r0.xyz = -r0.xyz * v1.zzz + r2.xyz;
   r0.xyz = rp_parameter_ps[2].xxx * r0.xyz + r1.xyz;
 
   float3 lut_output_color = lerp(lut_input_color, r0.xyz, injectedData.colorGradeLUTStrength);
