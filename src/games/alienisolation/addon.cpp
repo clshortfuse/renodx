@@ -64,7 +64,6 @@ ShaderInjectData shader_injection;
 renodx::mods::shader::CustomShaders custom_shaders = {
     // CustomShaderEntry(0x2726E8B6),  // Fog
 
-
     CustomShaderEntry(0x8EA31781),  // Lens Flare
 
     CustomShaderEntry(0x8AFBFA0F),  // tonemap
@@ -76,6 +75,72 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x0FE2C69C),  // tonemap - blood
     CustomShaderEntry(0xEC6C0919),  // tonemap - flashbang
     CustomShaderEntry(0x3282021C),  // tonemap - no motion blur
+
+    // untested tonemap shaders, done in batch
+    CustomShaderEntry(0x00A4168B),
+    CustomShaderEntry(0x05922218),
+    CustomShaderEntry(0x09C787D1),
+    CustomShaderEntry(0x0B2018BD),
+    CustomShaderEntry(0x13F1B0C2),
+    CustomShaderEntry(0x174A943A),
+    CustomShaderEntry(0x1C6423B6),
+    CustomShaderEntry(0x1FFE87AC),
+    CustomShaderEntry(0x2516994B),
+    CustomShaderEntry(0x2B9AC3F5),
+    CustomShaderEntry(0x2D0A2D3C),
+    CustomShaderEntry(0x2D2FD5CF),
+    CustomShaderEntry(0x32150225),
+    CustomShaderEntry(0x3872E94A),
+    CustomShaderEntry(0x3AD0660C),
+    CustomShaderEntry(0x3B3AEBE9),
+    CustomShaderEntry(0x3B9C6411),
+    CustomShaderEntry(0x4198B9C9),
+    CustomShaderEntry(0x4232CD40),
+    CustomShaderEntry(0x482D27BF),
+    CustomShaderEntry(0x4AF4FBBD),
+    CustomShaderEntry(0x53092D40),
+    CustomShaderEntry(0x57C8C5ED),
+    CustomShaderEntry(0x5C6CBB10),
+    CustomShaderEntry(0x5DA1F07C),
+    CustomShaderEntry(0x63B81F3E),
+    CustomShaderEntry(0x684EFA7F),
+    CustomShaderEntry(0x696EE0C3),
+    CustomShaderEntry(0x6B4D6066),
+    CustomShaderEntry(0x6D197C24),
+    CustomShaderEntry(0x6E6805B3),
+    CustomShaderEntry(0x72824EB3),
+    CustomShaderEntry(0x7AAE5175),
+    CustomShaderEntry(0x8530B19F),
+    CustomShaderEntry(0x882C9228),
+    CustomShaderEntry(0x8AF3B1CF),
+    CustomShaderEntry(0x8D475CF4),
+    CustomShaderEntry(0x8FF33C5A),
+    CustomShaderEntry(0x8FF37B42),
+    CustomShaderEntry(0x916A3EB9),
+    CustomShaderEntry(0x94C8C8AF),
+    CustomShaderEntry(0x992490D5),
+    CustomShaderEntry(0x9B1B7A3B),
+    CustomShaderEntry(0x9CB4B3B3),
+    CustomShaderEntry(0x9F3B0C2E),
+    CustomShaderEntry(0x9F66B097),
+    CustomShaderEntry(0x9FB8F2AF),
+    CustomShaderEntry(0xA12A3A52),
+    CustomShaderEntry(0xA165B1DC),
+    CustomShaderEntry(0xA3A1A206),
+    CustomShaderEntry(0xA42E7789),
+    CustomShaderEntry(0xBA70D4DE),
+    CustomShaderEntry(0xBF47BDEB),
+    CustomShaderEntry(0xC48C6BD8),
+    CustomShaderEntry(0xC5B944C4),
+    CustomShaderEntry(0xC90ABAEC),
+    CustomShaderEntry(0xCAFA3751),
+    CustomShaderEntry(0xCE613E94),
+    CustomShaderEntry(0xD22F7C27),
+    CustomShaderEntry(0xD8CB699A),
+    CustomShaderEntry(0xDB9A3B41),
+    CustomShaderEntry(0xE58DDDD3),
+    CustomShaderEntry(0xEC1225A1),
+    CustomShaderEntry(0xF3C63133),
 
     CustomShaderEntry(0xA090F460),  // terminal
 
