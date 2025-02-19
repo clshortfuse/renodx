@@ -554,7 +554,8 @@ float3 ApplySingleToneMap(float3 color, float3 exposure_bias) {
     config.saturation = 1.f;
     config.reno_drt_flare = 0.f;
     config.reno_drt_blowout = -1.f * (injectedData.colorGradeHighlightSaturation - 1.f);
-    config.reno_drt_dechroma = 0.f;
+    config.reno_drt_dechroma = 0.5f;
+    config.reno_drt_highlights *= 1.04f;
   }
 
   return renodx::tonemap::config::Apply(color, config);
@@ -602,7 +603,8 @@ renodx::tonemap::config::DualToneMap ApplyDualToneMap(float3 color, float exposu
     config.saturation = 1.f;
     config.reno_drt_flare = 0.f;
     config.reno_drt_blowout = -1.f * (injectedData.colorGradeHighlightSaturation - 1.f);
-    config.reno_drt_dechroma = 0.f;
+    config.reno_drt_dechroma = 0.5f;
+    config.reno_drt_highlights *= 1.04f;
   }
 
   renodx::tonemap::config::DualToneMap dual_tone_map =
