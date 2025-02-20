@@ -1,27 +1,33 @@
-#include "./common.hlsl"
+#include "./shared.h"
 
-SamplerState SamplerFlare0_SMP_s : register(s0);
-Texture2D<float4> SamplerFlare0_TEX : register(t0);
+SamplerState g_flare_sampler : register(s0);
+Texture2D<float4> g_flare_texture : register(t0);
 
 void main(
-    float4 v0: TEXCOORD0,
-    float4 v1: TEXCOORD1,
+    float4 tex_coords: TEXCOORD0,
+    float4 flare_intensity: TEXCOORD1,
     float4 v2: SV_Position0,
-    out float4 o0: SV_Target0) {
-  float4 r0, r1;
+    out float4 output_color: SV_Target0) {
+#if CUSTOM_LENS_FLARE  // reduces size of black artifact in center of lens flare
+  flare_intensity = saturate(flare_intensity);
+#endif
 
-  r0.x = dot(v0.zw, v0.zw);
-  r0.x = 0.09 + r0.x;
-  r0.x = 0.09 / r0.x;
-  r0.x = r0.x * r0.x;
-  r0.xyz = v1.xyz * r0.xxx;
-  r1.xyz = SamplerFlare0_TEX.SampleLevel(SamplerFlare0_SMP_s, v0.xy, 0).xyz;
-  o0.xyz = r1.xyz * r0.xyz;
-  o0.w = 1;
+  float falloff;
+  const float base_falloff_offset = 0.09;
 
-  o0.rgb = saturate(o0.rgb);  // draws on swapchain (originally unorm)
-  o0.rgb = pow(o0.rgb, 2.2f);
-  // don't scale with paper white as it makes the lens flare bigger
-  o0.rgb *= injectedData.fxLensFlare;
+  // Calculate the scale factor based on distance from the center of the flare.
+  falloff = dot(tex_coords.zw, tex_coords.zw);
+  falloff = base_falloff_offset / (base_falloff_offset + falloff);
+  falloff *= falloff;
+  float3 scaled_intensity = flare_intensity.xyz * falloff;
+
+  float3 flare_texture = g_flare_texture.SampleLevel(g_flare_sampler, tex_coords.xy, 0).rgb;
+  output_color.rgb = flare_texture * scaled_intensity;
+  output_color.a = 1;
+
+  // we linearize as it draws directly onto the swapchain after tonemapping
+  output_color.rgb = saturate(output_color.rgb);
+  output_color.rgb = renodx::color::gamma::Decode(output_color.rgb, 2.2f);
+  output_color.rgb *= injectedData.fxLensFlare;
   return;
 }

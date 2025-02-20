@@ -4,6 +4,7 @@
 #define RENODX_RENO_DRT_WHITE_CLIP            200.f
 #define RENODX_TONE_MAP_MID_GRAY              0.035f
 #define RENODX_COLOR_GRADE_RESTORATION_METHOD 0u
+#define CUSTOM_LENS_FLARE                     1
 
 // Must be 32bit aligned
 // Should be 4x32
