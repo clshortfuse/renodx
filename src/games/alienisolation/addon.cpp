@@ -385,6 +385,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Vignette",
         .section = "Effects",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType != 1; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
