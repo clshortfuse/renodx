@@ -32,6 +32,7 @@ struct ShaderInjectData {
   float fxVignette;
   float fxFilmGrainType;
   float fxFilmGrain;
+  float fxSharpening;
 };
 
 #ifndef __cplusplus
