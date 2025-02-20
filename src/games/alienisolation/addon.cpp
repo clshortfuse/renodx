@@ -489,7 +489,7 @@ void OnPresetOff() {
 
 bool fired_on_init_swapchain = false;
 
-void OnInitSwapchain(reshade::api::swapchain* swapchain) {
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
   fired_on_init_swapchain = true;
 
