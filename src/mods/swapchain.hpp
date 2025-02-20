@@ -18,6 +18,7 @@
 #include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -2525,24 +2526,36 @@ static void OnBarrier(
   if (device == nullptr) return;
 
   auto& data = device->get_private_data<DeviceData>();
+  if (std::addressof(data) == nullptr) return;
+
+  // Barriers may have duplicates
+  std::unordered_set<uint64_t> applied_barriers;
+
   for (uint32_t i = 0; i < count; i++) {
     const auto& resource = resources[i];
     const auto& old_state = old_states[i];
     const auto& new_state = new_states[i];
+    if (old_state == reshade::api::resource_usage::undefined) {
+      // Invalid Alias state?
+      continue;
+    }
 
     const auto clone = GetResourceClone(device, &data, resource);
     if (clone.handle != 0) {
+      bool inserted = applied_barriers.insert(clone.handle).second;
+      if (inserted) {
 #ifdef DEBUG_LEVEL_1
-      std::stringstream s;
-      s << "mods::swapchain::OnBarrier(apply barrier clone: ";
-      s << reinterpret_cast<void*>(resource.handle);
-      s << " => ";
-      s << reinterpret_cast<void*>(clone.handle);
-      s << ", state: " << old_state << " => " << new_state;
-      s << ")";
-      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+        std::stringstream s;
+        s << "mods::swapchain::OnBarrier(apply barrier clone: ";
+        s << reinterpret_cast<void*>(resource.handle);
+        s << " => ";
+        s << reinterpret_cast<void*>(clone.handle);
+        s << ", state: " << old_state << " => " << new_state;
+        s << ")";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-      cmd_list->barrier(clone, old_state, new_state);
+        cmd_list->barrier(clone, old_state, new_state);
+      }
     }
   }
 }
