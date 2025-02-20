@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsl"
 
 SamplerState SamplerFlare0_SMP_s : register(s0);
 Texture2D<float4> SamplerFlare0_TEX : register(t0);
@@ -20,6 +20,8 @@ void main(
   o0.w = 1;
 
   o0.rgb = saturate(o0.rgb);  // draws on swapchain (originally unorm)
+  o0.rgb = pow(o0.rgb, 2.2f);
+  // don't scale with paper white as it makes the lens flare bigger
   o0.rgb *= injectedData.fxLensFlare;
   return;
 }
