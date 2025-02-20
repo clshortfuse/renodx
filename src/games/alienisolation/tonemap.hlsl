@@ -33,6 +33,60 @@ float3 ScaleBloom(float3 original_color, float3 bloom_color, float3 bloomed_colo
   return lerp(bloomed_color, adjusted_color, injectedData.fxBloomBlackFloor);
 }
 
+/// Fix up sharpening/blurring when done on HDR images in post processing. In SDR, the source color could only be between 0 and 1,
+/// so the halos (rings) that can appear around rapidly changing colors were limited, but in HDR lights can go much brighter so the halos got noticeable with default settings.
+/// This should work in linear or gamma space.
+float3 FixUpSharpeningOrBlurring(float3 postSharpeningColor, float3 preSharpeningColor) {
+  // Either set it to 0.5, 0.75 or 1 to make results closer to SDR (this makes more sense when done in gamma space, but also works in linear space).
+  // Lower values slightly diminish the effect of sharpening, but further avoid halos issues.
+  const float sharpeningMaxColorDifference = 1.f;
+  return clamp(postSharpeningColor, preSharpeningColor - sharpeningMaxColorDifference, preSharpeningColor + sharpeningMaxColorDifference);
+}
+
+// Apply sharpening to the image
+float3 ApplySharpening(
+    float3 center_color, float2 tex_coord,
+    Texture2D<float4> SamplerFrameBuffer_TEX, SamplerState SamplerFrameBuffer_SMP_s) {
+  if (injectedData.fxSharpening == 0) return center_color;  // Skip sharpening if amount is zero
+
+  uint width, height;
+  SamplerFrameBuffer_TEX.GetDimensions(width, height);  // Dynamically get texture dimensions
+  float2 texelSize = 1.0 / float2(width, height);
+
+  // Sampling the neighbors
+  float3 neighbors[4] = {
+    SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(1, 0) * texelSize, 0).xyz,
+    SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(-1, 0) * texelSize, 0).xyz,
+    SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, 1) * texelSize, 0).xyz,
+    SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, -1) * texelSize, 0).xyz
+  };
+
+  float neighbor_diff = 0;
+
+  [unroll]
+  for (uint i = 0; i < 4; ++i) {
+    neighbor_diff +=
+        renodx::color::y::from::BT709(abs(neighbors[i] - center_color));
+  }
+
+  // Calculate sharpening effect based on differences
+  float sharpening = (1 - saturate(2 * neighbor_diff)) * injectedData.fxSharpening;
+
+  // Applying the sharpening formula
+  float3 sharpened = float3(
+                         0.0.xxx
+                         + neighbors[0] * -sharpening
+                         + neighbors[1] * -sharpening
+                         + neighbors[2] * -sharpening
+                         + neighbors[3] * -sharpening
+                         + center_color * 5)
+                     * 1.0 / (5.0 + sharpening * -4.0);
+
+  // Fix up the sharpening to prevent over-sharpening artifacts
+  sharpened = FixUpSharpeningOrBlurring(sharpened, center_color);
+  return sharpened;
+}
+
 // ============================ VANILLA FUNCTIONS ============================
 void GetSceneColorAndTexCoord(
     Texture2D<float4> SamplerDistortion_TEX,
@@ -69,6 +123,7 @@ void GetSceneColorAndTexCoord(
   } else {
     r2.xyz = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r0.xy, 0).xyz;
   }
+  r2.rgb = ApplySharpening(r2.rgb, r0.xy, SamplerFrameBuffer_TEX, SamplerFrameBuffer_SMP_s);
 
   scene_color = r2;
   tex_coord = r0.xy;
