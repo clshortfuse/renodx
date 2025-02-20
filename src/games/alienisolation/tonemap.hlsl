@@ -433,8 +433,9 @@ float4 FinalizeToneMapOutput(float3 input_color) {
   float4 output_color;
 
   output_color.rgb = input_color * rp_parameter_ps[0].x + rp_parameter_ps[0].y;  // remove saturate
-  output_color.w = renodx::color::y::from::BT709(max(0, input_color));
-  return GameScale(output_color);
+  output_color = GameScale(output_color);
+  output_color.w = max(0, renodx::color::y::from::BT709(output_color.rgb));
+  return output_color;
 }
 
 // ============================= CUSTOM FUNCTIONS =============================
