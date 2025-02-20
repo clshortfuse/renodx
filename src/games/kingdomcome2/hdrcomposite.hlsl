@@ -152,7 +152,7 @@ float4 HDRComposite(noperspective float4 TEXCOORD: TEXCOORD,
     lut_config.lut_sampler = linearClampSS;
     lut_config.size = 16u;
     lut_config.tetrahedral = true;
-    lut_config.type_input = renodx::lut::config::type::SRGB;  // We manually convert
+    lut_config.type_input = renodx::lut::config::type::LINEAR;  // We manually convert
     lut_config.type_output = renodx::lut::config::type::SRGB;
     lut_config.scaling = 0.f;  // Too harsh at 1
 
@@ -189,6 +189,8 @@ float4 HDRComposite(noperspective float4 TEXCOORD: TEXCOORD,
     compressedCol.rgb = compressedCol.rgb / compressedCol.w;
 
     compressedCol.rgb = saturate(compressedCol.rgb);
+
+    compressedCol.rgb = renodx::color::srgb::Encode(compressedCol.rgb);
 
     compressedCol.rgb += sunShaftsTex.Sample(linearClampSS, float2((TEXCOORD_1.x), (TEXCOORD_1.y))).rgb
                          * SunShafts_SunCol
