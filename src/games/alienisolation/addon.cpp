@@ -494,6 +494,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("fxVignette", 50.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrainType", 0.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 50.f);
+  renodx::utils::settings::UpdateSetting("fxSharpening", 0.f);
 }
 
 bool fired_on_init_swapchain = false;
