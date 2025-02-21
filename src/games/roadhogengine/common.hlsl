@@ -40,6 +40,13 @@ float3 FinalizeOutput(float3 color) {
     color = renodx::color::srgb::DecodeSafe(color);
   }
   color *= injectedData.toneMapUINits;
+  if (injectedData.toneMapType != 1.f) {    // SW(2013) Lens Dirt/Flare can raise peak
+    float y_max = injectedData.toneMapPeakNits;
+    float y = renodx::color::y::from::BT709(abs(color));
+    if (y > y_max) {
+      color *= y_max / y;
+    }
+  }
   if (injectedData.toneMapType == 0.f) {
     color = renodx::color::bt709::clamp::BT709(color);
   } else {
