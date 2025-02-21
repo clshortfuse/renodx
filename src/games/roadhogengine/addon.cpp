@@ -25,8 +25,11 @@ bool is_grain_used;
 bool is_sharpen_used;
 bool is_vignette_used;
 bool lens_effects_active;
+bool is_sw1;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
+    // common
+    CustomShaderEntry(0x23F2025E),  // RIP (glitched death screen)
     // Hard Reset Redux
     CustomShaderEntryCallback(0x2FF3AD78, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 2;
@@ -144,8 +147,95 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     return true;
     }),
     CustomShaderEntry(0x8FACEF64),  // videos
-    CustomShaderEntry(0x23F2025E),  // RIP (glitched death screen)
     // Shadow Warrior (2013)
+    CustomShaderEntryCallback(0x0DA22B92, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_sw1 = true;
+    lens_effects_active = true;
+    is_grain_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x9AB1D1C6, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_sw1 = true;
+    lens_effects_active = true;
+    is_grain_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x52F84B72, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_sw1 = true;
+    lens_effects_active = true;
+    is_grain_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x6211B8A7, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_sw1 = true;
+    lens_effects_active = true;
+    is_grain_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x0A2E234C, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_sw1 = true;
+    lens_effects_active = false;
+    is_grain_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xCFE2B5D1, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_sw1 = true;
+    lens_effects_active = false;
+    is_grain_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x879096E7, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_sw1 = true;
+    lens_effects_active = true;
+    is_grain_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x856E9973, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_sw1 = true;
+    lens_effects_active = false;
+    is_grain_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xC04679B1, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_sw1 = true;
+    lens_effects_active = true;
+    is_grain_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xD2F1B647, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 0;
+    is_sw1 = true;
+    lens_effects_active = false;
+    is_grain_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xAECCF67D, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 0;
+    is_sw1 = true;
+    lens_effects_active = false;
+    is_grain_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x7353AA61, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 0;
+    is_sw1 = true;
+    lens_effects_active = false;
+    is_grain_used = true;
+    return true;
+    }),
+    CustomShaderEntry(0xA36BCFE2),  // lens dirt
+    CustomShaderEntry(0x3708D87A),  // lens flare
+    CustomShaderEntry(0x48B48F7B),  // videos
+    CustomShaderEntry(0x6720BADB),  // interactable items outline
     // Shadow Warrior 2, maybe
 };
 
@@ -382,7 +472,18 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return is_sharpen_used; },
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return postprocessing_level >= 1 && current_settings_mode >= 1; },
+        .is_visible = []() { return postprocessing_level >= 1 && current_settings_mode >= 1 && !is_sw1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "fxBlur",
+        .binding = &shader_injection.fxBlur,
+        .default_value = 50.f,
+        .label = "Blur",
+        .section = "Effects",
+        .tint = 0x01A8DF,
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return is_sw1 && current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "fxVignette",
@@ -503,6 +604,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
   renodx::utils::settings::UpdateSetting("fxLens", 100.f);
   renodx::utils::settings::UpdateSetting("fxSharpen", 50.f);
+  renodx::utils::settings::UpdateSetting("fxBlur", 50.f);
   renodx::utils::settings::UpdateSetting("fxVignette", 100.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 50.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrainType", 0.f);
@@ -537,7 +639,7 @@ void OnPresent(
 // NOLINTBEGIN(readability-identifier-naming)
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Hard Reset Redux";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Hard Reset Redux | Shadow Warrior (2013)";
 
 // NOLINTEND(readability-identifier-naming)
 
@@ -551,13 +653,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       // renodx::mods::swapchain::swapchain_proxy_compatibility_mode = true;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-      
-      //  RGB10A2_unorm
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r10g10b10a2_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .ignore_size = true,
-      });
+
       //  RGBA8_unorm
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
