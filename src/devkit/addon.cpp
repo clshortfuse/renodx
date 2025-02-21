@@ -118,37 +118,17 @@ struct ResourceViewDetails {
     auto* swapchain_mod_data = &device->get_private_data<renodx::mods::swapchain::DeviceData>();
     if (swapchain_mod_data == nullptr) return false;
 
-    if (auto pair = swapchain_mod_data->upgraded_resource_views.find(resource_view.handle);
-        pair != swapchain_mod_data->upgraded_resource_views.end() && pair->second.handle != 0u) {
-      this->is_rtv_upgraded = true;
-    } else {
-      this->is_rtv_upgraded = false;
-    }
+    auto& resource_view_info = swapchain_mod_data->resource_view_infos[resource_view.handle];
 
-    if (auto pair = swapchain_mod_data->resource_clones.find(resource_view.handle);
-        pair != swapchain_mod_data->resource_clones.end() && pair->second.handle != 0u) {
-      this->is_rtv_cloned = true;
-    } else {
-      this->is_rtv_cloned = false;
-    }
+    this->is_rtv_upgraded = resource_view_info.upgraded;
+    this->is_rtv_cloned = resource_view_info.clone.handle != 0u;
 
-    if (this->resource.handle == 0u) {
+    if (resource_view_info.resource_info != nullptr) {
+      this->is_res_upgraded = resource_view_info.resource_info->upgraded;
+      this->is_rtv_cloned = resource_view_info.resource_info->clone_enabled;
+    } else {
       this->is_res_upgraded = false;
-      this->is_res_cloned = false;
-    } else {
-      if (auto pair = swapchain_mod_data->upgraded_resources.find(this->resource.handle);
-          pair != swapchain_mod_data->upgraded_resources.end() && pair->second.handle != 0u) {
-        this->is_res_upgraded = true;
-      } else {
-        this->is_res_upgraded = false;
-      }
-
-      if (auto pair = swapchain_mod_data->resource_clones.find(this->resource.handle);
-          pair != swapchain_mod_data->resource_clones.end() && pair->second.handle != 0u) {
-        this->is_res_cloned = true;
-      } else {
-        this->is_res_cloned = false;
-      }
+      this->is_rtv_cloned = false;
     }
 
     return true;
