@@ -5,6 +5,7 @@
 #define RENODX_TONE_MAP_MID_GRAY              0.035f
 #define RENODX_COLOR_GRADE_RESTORATION_METHOD 0u
 #define CUSTOM_LENS_FLARE                     1
+#define SHARPENING_NORMALIZATION_POINT        125
 
 // Must be 32bit aligned
 // Should be 4x32
