@@ -33,58 +33,64 @@ float3 ScaleBloom(float3 original_color, float3 bloom_color, float3 bloomed_colo
   return lerp(bloomed_color, adjusted_color, injectedData.fxBloomBlackFloor);
 }
 
-/// Fix up sharpening/blurring when done on HDR images in post processing. In SDR, the source color could only be between 0 and 1,
-/// so the halos (rings) that can appear around rapidly changing colors were limited, but in HDR lights can go much brighter so the halos got noticeable with default settings.
-/// This should work in linear or gamma space.
-float3 FixUpSharpeningOrBlurring(float3 postSharpeningColor, float3 preSharpeningColor) {
-  // Either set it to 0.5, 0.75 or 1 to make results closer to SDR (this makes more sense when done in gamma space, but also works in linear space).
-  // Lower values slightly diminish the effect of sharpening, but further avoid halos issues.
-  const float sharpeningMaxColorDifference = 1.f;
-  return clamp(postSharpeningColor, preSharpeningColor - sharpeningMaxColorDifference, preSharpeningColor + sharpeningMaxColorDifference);
-}
-
-// Apply sharpening to the image
-float3 ApplySharpening(
-    float3 center_color, float2 tex_coord,
+// RCAS - Robust Contrast Adaptive Sharpening
+// https://github.com/RdenBlaauwen/RCAS-for-ReShade/blob/main/RCAS.fx
+float3 ApplyRCAS(
+    float3 e, float2 tex_coord,
     Texture2D<float4> SamplerFrameBuffer_TEX, SamplerState SamplerFrameBuffer_SMP_s) {
-  if (injectedData.fxSharpening == 0) return center_color;  // Skip sharpening if amount is zero
+  if (injectedData.fxSharpening == 0) return e;  // Skip sharpening if amount is zero
 
+  // Get texture dimensions for texel size calculation
   uint width, height;
-  SamplerFrameBuffer_TEX.GetDimensions(width, height);  // Dynamically get texture dimensions
-  float2 texelSize = 1.0 / float2(width, height);
+  SamplerFrameBuffer_TEX.GetDimensions(width, height);
+  float2 texel_size = 1.0 / float2(width, height);
 
-  // Sampling the neighbors
-  float3 neighbors[4] = {
-    SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(1, 0) * texelSize, 0).xyz,
-    SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(-1, 0) * texelSize, 0).xyz,
-    SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, 1) * texelSize, 0).xyz,
-    SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, -1) * texelSize, 0).xyz
-  };
+  // Gather neighbors
+  float3 b =
+      SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, -1) * texel_size, 0).rgb;
+  float3 d =
+      SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(-1, 0) * texel_size, 0).rgb;
+  float3 f =
+      SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(1, 0) * texel_size, 0).rgb;
+  float3 h =
+      SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, 1) * texel_size, 0).rgb;
 
-  float neighbor_diff = 0;
+  // Calculate luma
+  // originally (0.5, 1.0, 0.5) in RCAS, this adds up to 2.0
+  float eL = renodx::color::y::from::BT709(e) * 2.f;
+  float bL = renodx::color::y::from::BT709(b) * 2.f;
+  float dL = renodx::color::y::from::BT709(d) * 2.f;
+  float fL = renodx::color::y::from::BT709(f) * 2.f;
+  float hL = renodx::color::y::from::BT709(h) * 2.f;
 
-  [unroll]
-  for (uint i = 0; i < 4; ++i) {
-    neighbor_diff +=
-        renodx::color::y::from::BT709(abs(neighbors[i] - center_color));
-  }
+  // Noise detection.
+  float nz = (bL + dL + fL + hL) * 0.25 - eL;
+  float range = max(max(max(bL, dL), max(hL, fL)), eL) - min(min(min(bL, dL), min(eL, fL)), hL);
+  nz = saturate(abs(nz) * rcp(range));
+  nz = -0.5 * nz + 1.0;
 
-  // Calculate sharpening effect based on differences
-  float sharpening = (1 - saturate(2 * neighbor_diff)) * injectedData.fxSharpening;
+  // Min and max of ring.
+  float3 minRGB = min(min(b, d), min(f, h));
+  float3 maxRGB = max(max(b, d), max(f, h));
 
-  // Applying the sharpening formula
-  float3 sharpened = float3(
-                         0.0.xxx
-                         + neighbors[0] * -sharpening
-                         + neighbors[1] * -sharpening
-                         + neighbors[2] * -sharpening
-                         + neighbors[3] * -sharpening
-                         + center_color * 5)
-                     * 1.0 / (5.0 + sharpening * -4.0);
+  // Immediate constants for peak range.
+  float2 peakC = float2(1.0, -4.0);
 
-  // Fix up the sharpening to prevent over-sharpening artifacts
-  sharpened = FixUpSharpeningOrBlurring(sharpened, center_color);
-  return sharpened;
+  // Limiters, these need to use high precision reciprocal operations.
+  // Decided to use standard rcp for now in hopes of optimizing it
+  float3 hitMin = minRGB * rcp(4.0 * maxRGB);
+  float3 hitMax = (peakC.xxx - maxRGB) * rcp(4.0 * minRGB + peakC.yyy);
+  float3 lobeRGB = max(-hitMin, hitMax);
+  float lobe = max(-0.1875, min(max(lobeRGB.r, max(lobeRGB.g, lobeRGB.b)), 0.0)) * injectedData.fxSharpening;
+
+  // Apply noise removal.
+  lobe *= nz;
+
+  // Resolve, which needs medium precision rcp approximation to avoid visible tonality changes.
+  float rcpL = rcp(4.0 * lobe + 1.0);
+  float3 output = ((b + d + f + h) * lobe + e) * rcpL;
+
+  return max(0, output);  // no colors outside of BT.709 anyway
 }
 
 // ============================ VANILLA FUNCTIONS ============================
@@ -106,7 +112,7 @@ void GetSceneColorAndTexCoord(
   r0.xy = min(ScreenResolution[1].xy, r0.xy);
   r1.x = rp_parameter_ps[9].y + rp_parameter_ps[0].z;
   r1.x = cmp(0 < r1.x);
-  if (r1.x != 0) {
+  if (r1.x != 0) {  // chromatic aberration on
     r1.x = 1 + rp_parameter_ps[0].z;
     r1.xy = r0.zw * r1.xx + v0.xy;
     r2.x = 1 + -rp_parameter_ps[0].z;
@@ -120,10 +126,10 @@ void GetSceneColorAndTexCoord(
     r2.x = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r1.xy, 0).x;
     r2.y = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r0.xy, 0).y;
     r2.z = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r1.zw, 0).z;
-  } else {
+  } else {  // chromatic aberration off
     r2.xyz = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, r0.xy, 0).xyz;
+    r2.rgb = ApplyRCAS(r2.rgb, r0.xy, SamplerFrameBuffer_TEX, SamplerFrameBuffer_SMP_s);
   }
-  r2.rgb = ApplySharpening(r2.rgb, r0.xy, SamplerFrameBuffer_TEX, SamplerFrameBuffer_SMP_s);
 
   scene_color = r2;
   tex_coord = r0.xy;
