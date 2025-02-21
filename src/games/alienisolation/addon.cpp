@@ -414,7 +414,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Sharpening",
         .section = "Effects",
         .max = 100.f,
-        .parse = [](float value) { return exp2(-(1.f - (value * 0.01f))); },
+        .parse = [](float value) { return value == 0 ? 0.f : exp2(-(1.f - (value * 0.01f))); },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
