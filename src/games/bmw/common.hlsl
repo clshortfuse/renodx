@@ -137,6 +137,7 @@ float3 ToneMap(float3 bt709) {
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.reno_drt_working_color_space = 2u;
   config.reno_drt_per_channel = false;
+  config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
 
   float3 output_color = renodx::tonemap::config::Apply(bt709, config);
 
