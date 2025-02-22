@@ -30,6 +30,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x52743DD3),
     CustomShaderEntry(0x99EEAAEE),
     CustomShaderEntry(0xE67895B2),
+    CustomShaderEntry(0xC3E6BD60),
 };
 
 ShaderInjectData shader_injection;
@@ -266,7 +267,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         auto param_count = params.size();
 
         // Needed to not crash with RT
-        if(param_count <= 20) {
+        if (param_count <= 20) {
           return true;
         }
 
