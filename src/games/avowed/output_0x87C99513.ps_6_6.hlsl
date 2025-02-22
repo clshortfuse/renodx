@@ -1,14 +1,22 @@
 #include "./common.hlsl"
 
 struct _View_PreExposureSceneData {
-  float data[8];
+  float PreExposure;
+  float OneOverPreExposure;
+  float AverageSceneLuminance;
+  uint IsValid;
+  float PrevPreExposure;
+  float PrevOneOverPreExposure;
+  float PreExposureCorrection;
+  uint PrevIsValid;
 };
 StructuredBuffer<_View_PreExposureSceneData> View_PreExposureSceneData : register(t0);
 
 struct _EyeAdaptationBuffer {
   float data[4];
 };
-StructuredBuffer<_EyeAdaptationBuffer> EyeAdaptationBuffer : register(t1);
+StructuredBuffer<float4> EyeAdaptationBuffer : register(t1);
+
 
 Texture2D<float4> ColorTexture : register(t2);
 
@@ -86,13 +94,15 @@ OutputSignature main(
   float4 SV_Target;
   float3 untonemapped;
   float SV_Target_1;
-  int4 _23 = asint(View_PreExposureSceneData[0].data[12 / 4]);
+  /* int4 _23 = asint(View_PreExposureSceneData[0].data[12 / 4]);
   float _25 = float((uint)((int)(_23.x)));
-  float4 _26 = View_PreExposureSceneData[0].data[4 / 4];
-  float _28 = (_26.x) + -1.0f;
+  float4 _26 = View_PreExposureSceneData[0].data[4 / 4]; */
+  float _25 = View_PreExposureSceneData.Load(0u).IsValid;
+  float _26 = View_PreExposureSceneData.Load(0u).OneOverPreExposure;
+  float _28 = (_26) + -1.0f;
   float _29 = _28 * _25;
   float _30 = _29 + 1.0f;
-  float4 _32 = EyeAdaptationBuffer[0].data[0 / 4];
+  float4 _32 = EyeAdaptationBuffer.Load(0u);
   float _43 = (cb0_048z) * (TEXCOORD_3.x);
   float _44 = (cb0_048w) * (TEXCOORD_3.y);
   float _45 = _43 + (cb0_048x);
