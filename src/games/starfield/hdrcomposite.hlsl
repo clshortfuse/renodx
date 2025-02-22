@@ -1,5 +1,5 @@
-#include "./shared.h"
 #include "./common.hlsl"
+#include "./shared.h"
 
 struct FrameDebug {
   uint2 value00;  // _23_m0[3u].xy
@@ -74,7 +74,8 @@ StructuredBuffer<HDRCompositeData> _17 : register(t4, space9);
 #endif
 SamplerState _36 : register(s0, space9);
 
-float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOORD0) : SV_Target {
+float4 HDRComposite(float4 gl_FragCoord: SV_Position, float2 TEXCOORD: TEXCOORD0)
+    : SV_Target {
   float3 _126 = _8.Load(int3(uint2(uint(gl_FragCoord.x), uint(gl_FragCoord.y)), 0u));
   float3 inputColor = _126;
 
@@ -102,7 +103,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
   }
   float3 _146 = _10.SampleLevel(_36, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);  // Bloom
   float _152 = asfloat(pushConstants.value02);
-  inputColor = _126 + (_138 * _146 * _152 * injectedData.fxBloom);
+  inputColor = _126 + (_138 * _146 * _152 * CUSTOM_BLOOM);
 #endif  // USE_BLOOM
 
   float vanillaMidGray = 0.18f;
@@ -379,7 +380,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
 
   float toneMappedY = dot(sdrColor, float3(0.2125000059604644775390625f, 0.7153999805450439453125f, 0.07209999859333038330078125f));
   float3 preGrayScaledColor = lerp(toneMappedY, sdrColor, _111);
-  float3 colorFiltered = lerp(preGrayScaledColor, toneMappedY * colorFilter, colorFilterStrength);
+  float3 colorFiltered = lerp(preGrayScaledColor, toneMappedY * colorFilter.rgb, colorFilterStrength);
   float3 brightendColor = colorFiltered * _116;
   float3 postGrayScaledColor = lerp(constant316, brightendColor, _122);
   float3 colorFiltered2 = lerp(postGrayScaledColor, colorFilter2.rgb, colorFilter2Strength);
@@ -398,17 +399,17 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
 
   float3 contrastedColor = preContrast / (sqrt((preContrast * preContrast) + 1.0f) * _263) + 0.5f;
 
-  float3 sceneGradedColor = lerp(sdrColor, contrastedColor, injectedData.colorGradeSceneGrading);
+  float3 sceneGradedColor = lerp(sdrColor, contrastedColor, CUSTOM_SCENE_STRENGTH);
 
   float lutStrength = _9.Sample(_36, float2(TEXCOORD.x, TEXCOORD.y));
 
-  renodx::lut::Config lut_config = renodx::lut::config::Create(
-      _36,
-      1.f,
-      injectedData.colorGradeLUTScaling,
-      renodx::lut::config::type::SRGB,
-      renodx::lut::config::type::SRGB,
-      16.f);
+  renodx::lut::Config lut_config = renodx::lut::config::Create();
+  lut_config.lut_sampler = _36;
+  lut_config.strength = CUSTOM_LUT_STRENGTH;
+  lut_config.scaling = CUSTOM_LUT_SCALING;
+  lut_config.type_input = renodx::lut::config::type::SRGB;
+  lut_config.type_output = renodx::lut::config::type::SRGB;
+  lut_config.size = 16u;
 
   // float3 gammaColor = pow(contrastedColor, 1.0f / max(frameData.fGamma, 0.001000000047497451305389404296875f));
   // float _305 = gammaColor.r;
@@ -425,7 +426,7 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
   // float3 finalColor;
   if (frameData.supportsHDR == 0u) {
     // finalColor = lutColor;
-  } else if (injectedData.colorGradeLUTScaling == 0.f) {
+  } else if (CUSTOM_LUT_SCALING == 0.f) {
     // Vanilla LUT Scaling
     float3 lutColorInGamma = sign(lutColor) * pow(abs(lutColor), 1.f / 2.4f);
     float3 lutBlack = _13.Sample(_36, 0.03125f.xxx);                   // Sample first texel
@@ -447,15 +448,14 @@ float4 HDRComposite(float4 gl_FragCoord : SV_Position, float2 TEXCOORD : TEXCOOR
   // outputColor = sign(outputColor) * pow(outputColor, 1.f/2.4f);
 
   float3 outputColor;
-  if (injectedData.toneMapType == 0.f) {
-    outputColor = lerp(sceneGradedColor, lutColor, injectedData.colorGradeLUTStrength);
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    outputColor = lutColor;
   } else {
-    outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, lutColor, injectedData.colorGradeLUTStrength);
+    outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, lutColor, 1.f);
   }
 
-  outputColor = renodx::color::bt709::clamp::BT2020(outputColor);
-  outputColor = PostToneMapScale(outputColor);
-  
+  outputColor = max(0, outputColor);  
+  outputColor = renodx::draw::RenderIntermediatePass(outputColor);
 
   return float4(outputColor, 1.0f);
 }

@@ -29,23 +29,18 @@ void frag_main() {
   // SV_Target.y = clamp(_87 + _70.y, 0.0f, 1.0f);
   // SV_Target.z = clamp(_87 + _70.z, 0.0f, 1.0f);
   SV_Target.rgb = _70.rgb;
-  // SV_Target.rgb = 10.f;
 
-  if (injectedData.fxFilmGrain) {
+  if (CUSTOM_FILM_GRAIN) {
     float3 outputColor = SV_Target.rgb;
-    float3 signs = sign(outputColor);
-    outputColor = abs(outputColor);
-    outputColor = renodx::color::srgb::Decode(outputColor);
-    outputColor /= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+    outputColor = renodx::draw::InvertIntermediatePass(outputColor);
     outputColor = renodx::effects::ApplyFilmGrain(
         outputColor,
         TEXCOORD.xy,
-        injectedData.random_1,
-        _34.z ? injectedData.fxFilmGrain * 0.03f : 0,
+        CUSTOM_RANDOM,
+        _34.z ? CUSTOM_FILM_GRAIN * 0.03f : 0,
         1.f);
-    outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    outputColor = renodx::color::srgb::Encode(outputColor);
-    outputColor *= signs;
+
+    outputColor = renodx::draw::RenderIntermediatePass(outputColor);
     SV_Target.rgb = outputColor;
   }
   SV_Target.w = 1.0f;

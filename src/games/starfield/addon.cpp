@@ -5,16 +5,14 @@
 
 #define ImTextureID ImU64
 
-// #define DEBUG_LEVEL_0
-// #define DEBUG_LEVEL_1
-// #define DEBUG_LEVEL_2
+#define DEBUG_LEVEL_0
 
-#include <embed/shaders.h>
 #include <chrono>
 #include <random>
 #define NOMINMAX
 
 #include <deps/imgui/imgui.h>
+#include <embed/shaders.h>
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
@@ -37,7 +35,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // CustomShaderEntry(0x58E74610),      // CAS2
     // CustomShaderEntry(0x4348FFAE),      // CAS3
     // CustomShaderEntry(0xEED8A831),      // CAS4
-    // // CustomShaderEntry(0xE9D9E225),   // ui
+    // CustomShaderEntry(0xE9D9E225),  // ui
     CustomShaderEntry(0x32580F53),  // movie
     CustomShaderEntry(0xD546E059),  // tonemapper
 };
@@ -146,7 +144,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeLUTStrength",
-        .binding = &shader_injection.colorGradeLUTStrength,
+        .binding = &shader_injection.custom_lut_strength,
         .default_value = 100.f,
         .label = "LUT Strength",
         .section = "Color Grading",
@@ -155,7 +153,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeLUTScaling",
-        .binding = &shader_injection.colorGradeLUTScaling,
+        .binding = &shader_injection.custom_lut_scaling,
         .default_value = 100.f,
         .label = "LUT Scaling",
         .section = "Color Grading",
@@ -165,8 +163,8 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeSceneGrading",
-        .binding = &shader_injection.colorGradeSceneGrading,
-        .default_value = 100.f,
+        .binding = &shader_injection.custom_scene_strength,
+        .default_value = 0.f,
         .label = "Scene Grading",
         .section = "Color Grading",
         .tooltip = "Selects the strength of the game's custom scene grading.",
@@ -175,7 +173,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "fxBloom",
-        .binding = &shader_injection.fxBloom,
+        .binding = &shader_injection.custom_bloom,
         .default_value = 50.f,
         .label = "Bloom",
         .section = "Effects",
@@ -184,7 +182,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "fxFilmGrain",
-        .binding = &shader_injection.fxFilmGrain,
+        .binding = &shader_injection.custom_film_grain,
         .default_value = 50.f,
         .label = "FilmGrain",
         .section = "Effects",
@@ -275,9 +273,6 @@ bool OnDispatch(reshade::api::command_list* cmd_list,
   return HandlePreDraw(cmd_list, true);
 }
 
-static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
-static float random_range = (random_generator.max() - random_generator.min());
-
 void OnPresent(
     reshade::api::command_queue* queue,
     reshade::api::swapchain* swapchain,
@@ -285,9 +280,9 @@ void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-  shader_injection.random_1 = (float)(random_generator() + random_generator.min()) / random_range;
-  shader_injection.random_2 = (float)(random_generator() + random_generator.min()) / random_range;
-  shader_injection.random_3 = (float)(random_generator() + random_generator.min()) / random_range;
+  static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
+  static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
+  shader_injection.custom_random = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
 }
 
 }  // namespace
@@ -300,26 +295,54 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
+      // while (IsDebuggerPresent() == 0) Sleep(100);
+
+      renodx::mods::shader::on_create_pipeline_layout = [](reshade::api::device* device, auto params) {
+        if (device->get_api() != reshade::api::device_api::d3d12) return false;
+        bool has_tbl = std::ranges::any_of(params, [](auto param) {
+          return (param.type == reshade::api::pipeline_layout_param_type::descriptor_table);
+        });
+        if (!has_tbl) return false;
+        switch (params.size()) {
+          case 3:  return true;
+          case 15: return true;
+          default:
+            break;
+        }
+        return false;
+      };
+
       renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
         return device->get_api() == reshade::api::device_api::d3d12;
       };
 
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::shader::allow_multiple_push_constants = true;
-
-      renodx::mods::shader::expected_constant_buffer_space = 50;
+      renodx::mods::shader::expected_constant_buffer_index = 13;
+      renodx::mods::shader::expected_constant_buffer_space = 9;
 
       renodx::mods::swapchain::use_resource_cloning = true;
-      renodx::mods::swapchain::expected_constant_buffer_space = 50;
-
+      renodx::mods::swapchain::force_borderless = false;
+      renodx::mods::swapchain::expected_constant_buffer_index = 13;
+      renodx::mods::swapchain::expected_constant_buffer_space = 9;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+      renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
 
-      // // RGBA8 Resource pool
+      // // Frame Gen
+      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      //     .old_format = reshade::api::format::r8g8b8a8_unorm,
+      //     .new_format = reshade::api::format::r16g16b16a16_float,
+      //     .use_resource_view_cloning = true,
+      //     .usage_include = reshade::api::resource_usage::render_target,
+      // });
+
+      // RGBA8 Resource pool
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
-          .new_format = reshade::api::format::r16g16b16a16_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
+          .usage_include = reshade::api::resource_usage::render_target,
       });
 
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
