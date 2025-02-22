@@ -77,7 +77,7 @@ struct PipelineShaderDetails {
       reshade::api::pipeline_layout layout,
       const reshade::api::pipeline_subobject* subobjects,
       uint32_t subobject_count,
-      std::unordered_map<uint32_t, uint32_t> shader_replacements_inverse) {
+      std::unordered_map<uint32_t, uint32_t>& shader_replacements_inverse) {
     this->layout = layout;
     for (uint32_t i = 0; i < subobject_count; ++i) {
       const auto& subobject = subobjects[i];
@@ -106,7 +106,7 @@ struct PipelineShaderDetails {
         reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
         shader_hash = pair->second;
-        replaced_shader_hashes.emplace(shader_hash);
+        this->replaced_shader_hashes.emplace(shader_hash);
       }
 
       this->shader_hashes.emplace(shader_hash);
@@ -432,10 +432,19 @@ static void OnInitDevice(reshade::api::device* device) {
   }
 
   if (!use_replace_on_bind) {
+    // write
     data->use_replace_on_bind = false;
+  } else {
+    // read
+    use_replace_on_bind = data->use_replace_on_bind;
   }
+
   if (use_replace_async) {
+    // write
     data->use_replace_async = true;
+  } else {
+    // read
+    use_replace_async = data->use_replace_async;
   }
 
   auto insert_shaders = [](
@@ -505,11 +514,11 @@ static bool OnCreatePipeline(
     uint32_t subobject_count,
     const reshade::api::pipeline_subobject* subobjects) {
   if (!is_primary_hook) return false;
+  if (use_replace_async) return false;
   auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
-  if (data.use_replace_async) return false;
+  std::shared_lock read_lock(data.mutex);
 
-  bool changed = false;
+  std::vector<std::pair<uint32_t, uint32_t>> hash_changes;
 
   for (uint32_t i = 0; i < subobject_count; ++i) {
     if (!COMPATIBLE_SUBOBJECT_TYPE_TO_STAGE.contains(subobjects[i].type)) continue;
@@ -522,7 +531,6 @@ static bool OnCreatePipeline(
 
     if (auto pair = data.compile_time_replacements.find(shader_hash);
         pair != data.compile_time_replacements.end()) {
-      changed = true;
       const auto& replacement = pair->second;
       auto new_size = replacement.size();
 
@@ -530,14 +538,14 @@ static bool OnCreatePipeline(
 
       if (new_size == 0) {
         desc->code = nullptr;
+        hash_changes.emplace_back(shader_hash, 0);
       } else {
         desc->code = malloc(new_size);
         memcpy(const_cast<void*>(desc->code), replacement.data(), new_size);
         const uint32_t new_hash = compute_crc32(
             replacement.data(),
             new_size);
-        data.shader_replacements[shader_hash] = new_hash;
-        data.shader_replacements_inverse[new_hash] = shader_hash;
+        hash_changes.emplace_back(shader_hash, new_hash);
       }
       std::stringstream s;
       s << "utils::shader::OnCreatePipeline(replacing ";
@@ -548,7 +556,18 @@ static bool OnCreatePipeline(
       reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
   }
-  return changed;
+
+  if (hash_changes.empty()) return false;
+
+  read_lock.unlock();
+  std::unique_lock lock(data.mutex);
+  for (auto& [shader_hash, new_hash] : hash_changes) {
+    data.shader_replacements[shader_hash] = new_hash;
+    if (new_hash != 0u) {
+      data.shader_replacements_inverse[new_hash] = shader_hash;
+    }
+  }
+  return true;
 }
 
 static void OnInitPipeline(
@@ -561,10 +580,21 @@ static void OnInitPipeline(
   if (pipeline.handle == 0u) return;
 
   auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
+  std::shared_lock read_lock(data.mutex);
   auto details = PipelineShaderDetails(layout, subobjects, subobject_count, data.shader_replacements_inverse);
 
-  if (details.shader_hashes.empty()) return;
+  bool has_useful_details = !details.shader_hashes.empty();
+  if (!has_useful_details) return;
+  read_lock.unlock();
+
+  reshade::api::pipeline_subobject* subobjects_clone = renodx::utils::pipeline::ClonePipelineSubObjects(subobjects, subobject_count);
+
+  // Store clone of subobjects
+  details.subobjects = std::vector<reshade::api::pipeline_subobject>(
+      subobjects_clone,
+      subobjects_clone + subobject_count);
+
+  const std::unique_lock lock(data.mutex);
 
   for (const auto shader_hash : details.shader_hashes) {
     if (auto pair = data.shader_pipeline_handles.find(shader_hash);
@@ -575,13 +605,6 @@ static void OnInitPipeline(
       data.shader_pipeline_handles[shader_hash] = {pipeline.handle};
     }
   }
-
-  reshade::api::pipeline_subobject* subobjects_clone = renodx::utils::pipeline::ClonePipelineSubObjects(subobjects, subobject_count);
-
-  // Store clone of subobjects
-  details.subobjects = std::vector<reshade::api::pipeline_subobject>(
-      subobjects_clone,
-      subobjects_clone + subobject_count);
 
   // details.replacement_pipeline = {0u};
   // details.replacement_stages = static_cast<reshade::api::pipeline_stage>(0u),
