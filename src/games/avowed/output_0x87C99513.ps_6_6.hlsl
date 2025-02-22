@@ -237,6 +237,8 @@ OutputSignature main(
   float _261 = _257 + (cb0_050w);
   float _262 = _258 + (cb0_050w);
   float4 _265 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3(_260, _261, _262));
+  return LutToneMap(untonemapped, float3(_260, _261, _262), ColorGradingLUT, ColorGradingLUTSampler);
+
   float _269 = (_265.x) * 1.0499999523162842f;
   float _270 = (_265.y) * 1.0499999523162842f;
   float _271 = (_265.z) * 1.0499999523162842f;
