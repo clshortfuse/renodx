@@ -23,14 +23,14 @@ OutputSignature FinalizeLutTonemap(float3 color) {
 }
 
 OutputSignature LutToneMap(float3 untonemapped, float3 lutInput, Texture3D<float4> lut, SamplerState colorGradingLUTSampler) {
-  lutInput = renodx::color::srgb::DecodeSafe(lutInput);  // unneeded but cleaner code
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.tetrahedral = true;
-  lut_config.type_input = renodx::lut::config::type::SRGB;
+  lut_config.type_input = renodx::lut::config::type::LINEAR;
   lut_config.type_output = renodx::lut::config::type::SRGB;
-  lut_config.scaling = 0.f;
+  lut_config.scaling = 1.f;
   lut_config.lut_sampler = colorGradingLUTSampler;
 
+  // lutInput = renodx::tonemap::renodrt::NeutralSDR(untonemapped);
   float3 final = renodx::lut::Sample(
       lutInput,
       lut_config,
