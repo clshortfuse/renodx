@@ -1120,7 +1120,11 @@ static void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
   cmd_list->bind_scissor_rects(0, 1, &scissor_rect);
   cmd_list->draw(3, 1, 0, 0);
   cmd_list->end_render_pass();
-  queue->flush_immediate_command_list();
+
+  if (device->get_api() != reshade::api::device_api::d3d12) {
+    // Reshade calls this on DX12
+    queue->flush_immediate_command_list();
+  }
 
   if (data.swapchain_proxy_revert_state && previous_state.has_value()) {
     previous_state->Apply(cmd_list);
