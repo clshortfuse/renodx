@@ -395,28 +395,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-
-      //  RG11B10_float (UAV stuff)
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r11g11b10_float,
-        .new_format = reshade::api::format::r16g16b16a16_float,
-        .ignore_size = true,
-        .view_upgrades = {
-            {{reshade::api::resource_usage::shader_resource,
-            reshade::api::format::r11g11b10_float},
-            reshade::api::format::r16g16b16a16_float},
-            {{reshade::api::resource_usage::unordered_access,
-            reshade::api::format::r11g11b10_float},
-            reshade::api::format::r16g16b16a16_float},
-            {{reshade::api::resource_usage::render_target,
-            reshade::api::format::r11g11b10_float},
-            reshade::api::format::r16g16b16a16_float},
-        }});
+      renodx::mods::swapchain::swapchain_proxy_revert_state = true;
 
       //  RGBA8_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
-          .ignore_size = true,
+          //.ignore_size = true,
       });
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
