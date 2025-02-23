@@ -16,6 +16,9 @@
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE      color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_ENCODING             4.f
+#define RENODX_TONE_MAP_PER_CHANNEL            1.f
+#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_RENO_DRT_WHITE_CLIP             5.f
 
 // Must be 32bit aligned
 // Should be 4x32

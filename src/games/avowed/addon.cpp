@@ -131,7 +131,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
         .binding = &RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
-        .default_value = 80.f,
+        .default_value = 60.f,
         .label = "Highlight Saturation",
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
