@@ -131,7 +131,7 @@ float3 ApplyRCAS(
   float rcpL = rcp(4.f * lobe + 1.f);
 
   float pixLum = ((bLum + dLum + hLum + fLum) * lobe + eLum) * rcpL;
-  float3 pix = (pixLum / eLum) * e;
+  float3 pix = clamp((pixLum / eLum), 0.f, 4.f) * e;
 
 #if ENABLE_NORMALIZATION
   pix *= SHARPENING_NORMALIZATION_POINT;
@@ -874,8 +874,9 @@ float3 ApplyToneMapVignette(
   } else if (injectedData.toneMapType > 1.f) {  // ACES & RenoDRT
     const float exposure_bias = renodx::color::y::from::BT709(ApplyVanillaTonemap(0.18, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s));
     float3 tonemapped = ApplySingleToneMap(untonemapped, exposure_bias);
-
     float3 vignette_hdr = applyVignette(tonemapped, v2, v1, untonemapped_lum);
+
+    output_color = vignette_hdr;
     if (injectedData.toneMapHueShift || injectedData.toneMapBlend) {
       float3 vanilla_color = ApplyVanillaTonemap(untonemapped, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
       vanilla_color = applyVignette(vanilla_color, v2, v1, untonemapped_lum);
