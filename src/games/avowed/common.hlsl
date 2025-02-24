@@ -35,6 +35,7 @@ OutputSignature LutToneMap(float3 untonemapped, float3 lutInput, Texture3D<float
       lutInput,
       lut_config,
       lut);
+  final = saturate(final);
 
   if (RENODX_TONE_MAP_TYPE > 0.f) {
     final = renodx::draw::ToneMapPass(untonemapped.rgb, final);
