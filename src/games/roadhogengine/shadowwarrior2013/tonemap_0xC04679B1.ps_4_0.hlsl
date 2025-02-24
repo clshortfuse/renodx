@@ -10,8 +10,6 @@ cbuffer cb1 : register(b1){
   float4 cb1[13];
 }
 
-#define cmp -
-
 void main(
   float4 v0 : SV_Position0,
   float2 v1 : TEXCOORD0,
@@ -28,7 +26,7 @@ void main(
   r1.xyz = float3(4,4,4) * r1.xyz;
   r1.xyz = -r0.xyz * float3(4,4,4) + r1.xyz;
   r0.xyz = float3(4,4,4) * r0.xyz;
-  r0.xyz = cb1[7].www * r1.xyz + r0.xyz;
+  r0.xyz = cb1[7].www * r1.xyz * injectedData.fxSharpen + r0.xyz;
   r1.xyz = float3(1,1,1) + -r0.xyz;
   r2.xy = v1.xy * cb1[1].xy + cb1[1].zw;
   r2.xy = min(cb1[6].xy, r2.xy);

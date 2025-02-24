@@ -15,8 +15,6 @@ cbuffer cb0 : register(b0){
   float4 cb0[19];
 }
 
-#define cmp -
-
 void main(
   float4 v0 : SV_Position0,
   float2 v1 : TEXCOORD0,
@@ -43,7 +41,7 @@ void main(
   r1.xyzw = t12.SampleLevel(s4_s, r1.zw, 0).xyzw;
   r2.xyz = -r1.xyz * float3(4,4,4) + r2.xyz;
   r1.xyz = float3(4,4,4) * r1.xyz;
-  r1.xyz = cb1[7].www * r2.xyz + r1.xyz;
+  r1.xyz = cb1[7].www * r2.xyz * injectedData.fxSharpen + r1.xyz;
   r2.xyz = float3(1,1,1) + -r1.xyz;
   r0.xyz = -r2.xyz * r0.xyz + float3(1,1,1);
   r0.xyz = max(r1.xyz, r0.xyz);
