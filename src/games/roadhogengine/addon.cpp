@@ -21,25 +21,6 @@
 namespace {
 
 ShaderInjectData shader_injection;
-#define UpgradeRTVShader(value)                \
-  {                                            \
-    value,                                     \
-        {                                      \
-            .crc32 = value,                    \
-            .on_draw = [](auto* cmd_list) {                                                           \
-            auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                       \
-            bool changed = false;                                                                   \
-            for (auto rtv : rtvs) {                                                                 \
-              changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv); \
-            }                                                                                       \
-            if (changed) {                                                                          \
-              renodx::mods::swapchain::FlushDescriptors(cmd_list);                                  \
-              renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});      \
-            }                                                                                       \
-            return true; }, \
-        },                                     \
-  }
-
 int postprocessing_level;
 bool is_grain_used;
 bool is_sharpen_used;
@@ -579,10 +560,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x48B48F7B),  // videos
     CustomShaderEntry(0x6720BADB),  // interactable items outline
     CustomShaderEntry(0x4E5E174F),  // something
-    //CustomShaderEntry(0xEBAFB4B9),  // something
-    //UpgradeRTVShader(0x80ACAF89),         // motion blur
-    //UpgradeRTVShader(0x65A63D8A),         // FXAA
-    //UpgradeRTVShader(0xF5BCD3D5),         // motion blur
     // Shadow Warrior 2, maybe
 };
 
