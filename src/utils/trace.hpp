@@ -11,7 +11,9 @@
 
 #include "./descriptor.hpp"
 #include "./format.hpp"
+#include "./pipeline_layout.hpp"
 #include "./shader.hpp"
+
 
 namespace renodx::utils::trace {
 
@@ -626,11 +628,11 @@ static void OnBindPipeline(
   std::stringstream s;
   s << "bind_pipeline(";
   s << (void*)pipeline.handle;
-  auto details = renodx::utils::shader::GetPipelineShaderDetails(cmd_list->get_device(), pipeline);
-  if (details.has_value()) {
+  auto* details = renodx::utils::shader::GetPipelineShaderDetails(pipeline);
+  if (details != nullptr) {
     s << ", layout: " << reinterpret_cast<void*>(details->layout.handle);
-    for (auto& [type, shader_hash] : details->shader_hashes_by_type) {
-      s << ", " << type << ": " << PRINT_CRC32(shader_hash);
+    for (const auto& info : details->subobject_shaders) {
+      s << ", " << info.stage << ": " << PRINT_CRC32(info.shader_hash);
     }
   }
   s << ", stages: " << stages << " (" << std::hex << static_cast<uint32_t>(stages) << std::dec << ")";
@@ -1077,7 +1079,7 @@ static void OnPushDescriptors(
     s << "[" << update.binding + i << "]";
     s << ", type: " << update.type;
 
-    auto log_heap = [=]() {
+    auto log_heap = [&]() {
       if (update.table.handle == 0u) return std::string("");
       std::stringstream s2;
       uint32_t base_offset = 0;
@@ -1157,8 +1159,7 @@ static void OnBindDescriptorTables(
   if (!trace_running) return;
   auto* device = cmd_list->get_device();
 
-  auto& layout_data = device->get_private_data<renodx::utils::pipeline_layout::DeviceData>();
-  const std::shared_lock layout_lock(layout_data.mutex);
+  auto* layout_data = pipeline_layout::GetPipelineLayoutData(layout);
   auto& descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
 
   for (uint32_t i = 0; i < count; ++i) {
@@ -1178,11 +1179,7 @@ static void OnBindDescriptorTables(
       reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
 
-    auto pipeline_data_pair = layout_data.pipeline_layout_data.find(layout.handle);
-    if (pipeline_data_pair == layout_data.pipeline_layout_data.end()) continue;
-    const auto& info = pipeline_data_pair->second;
-    if (layout_index > info.params.size()) continue;
-    const auto& param = info.params.at(layout_index);
+    const auto& param = layout_data->params.at(layout_index);
 
     for (uint32_t k = 0; k < param.descriptor_table.count; ++k) {
       const auto& range = param.descriptor_table.ranges[k];
