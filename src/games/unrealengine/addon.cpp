@@ -551,12 +551,9 @@ bool OnDrawForLUTDump(
 
   auto shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
 
-  auto pair = shader_state.stage_state.find(reshade::api::pipeline_stage::pixel_shader);
-  if (pair == shader_state.stage_state.end()) return false;
+  auto& pixel_state = GetCurrentPixelState(shader_state);
 
-  auto stage_state = pair->second;
-
-  auto pixel_shader_hash = stage_state.shader_hash;
+  auto& pixel_shader_hash = pixel_state.shader_hash;
   if (pixel_shader_hash == 0u) return false;
 
   auto& swapchain_state = cmd_list->get_private_data<renodx::utils::swapchain::CommandListData>();
@@ -564,7 +561,7 @@ bool OnDrawForLUTDump(
 
   auto* device = cmd_list->get_device();
   for (auto render_target : swapchain_state.current_render_targets) {
-    auto resource_tag = renodx::utils::resource::GetResourceTag(device, render_target);
+    auto resource_tag = renodx::utils::resource::GetResourceTag(render_target);
     if (resource_tag == 1.f) {
       found_lut_render_target = true;
       break;
@@ -586,8 +583,7 @@ bool OnDrawForLUTDump(
   renodx::utils::shader::dump::default_dump_folder = ".";
   bool found = false;
   try {
-    auto pipeline = stage_state.pipeline;
-    auto shader_data = renodx::utils::shader::GetShaderData(device, pipeline, pixel_shader_hash);
+    auto shader_data = renodx::utils::shader::GetShaderData(pixel_state);
     if (!shader_data.has_value()) {
       std::stringstream s;
       s << "utils::shader::dump(Failed to retreive shader data: ";
@@ -816,8 +812,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
         auto process_path = renodx::utils::platform::GetCurrentProcessPath();
         auto product_name = renodx::utils::platform::GetProductName(process_path);
-        if (product_name == "Wuthering Waves") {
-          if (params.size() == 25) return false;
+        auto param_count = params.size();
+        if (params.size() >= 20) {
+          return false;
         }
         // UE DX12 has a 4 param root sig that crashes if modified. Track for now
         return std::ranges::any_of(params, [](auto param) {

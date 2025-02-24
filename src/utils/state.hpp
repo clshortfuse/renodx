@@ -16,9 +16,7 @@
 
 namespace renodx::utils::state {
 
-struct __declspec(uuid("01943e81-4c29-720a-8eff-0de3060b910f")) DeviceData {
-  std::shared_mutex mutex;
-};
+struct __declspec(uuid("01943e81-4c29-720a-8eff-0de3060b910f")) DeviceData {};
 
 struct CommandListState {
   std::vector<reshade::api::resource_view> render_targets;
@@ -41,7 +39,7 @@ struct CommandListState {
       auto* device = cmd_list->get_device();
       for (size_t i = 0; i < len; ++i) {
         const auto& rtv = render_targets[i];
-        if (!renodx::utils::resource::IsKnownResourceView(cmd_list->get_device(), rtv)) {
+        if (!renodx::utils::resource::IsKnownResourceView(rtv)) {
           new_rtvs[i] = {0};
         }
       }
@@ -102,11 +100,27 @@ struct __declspec(uuid("019382d7-4364-7f3f-a42c-1a2619748db0")) CommandListData 
   CommandListState current_state;
 };
 
+static bool is_primary_hook = false;
+static void OnInitDevice(reshade::api::device* device) {
+  auto* data = &device->get_private_data<DeviceData>();
+  if (data != nullptr) return;
+
+  data = &device->create_private_data<DeviceData>();
+
+  is_primary_hook = true;
+}
+static void OnDestroyDevice(reshade::api::device* device) {
+  if (!is_primary_hook) return;
+  device->destroy_private_data<DeviceData>();
+}
+
 static void OnInitCommandList(reshade::api::command_list* cmd_list) {
+  if (!is_primary_hook) return;
   cmd_list->create_private_data<CommandListData>();
 }
 
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
+  if (!is_primary_hook) return;
   cmd_list->destroy_private_data<CommandListData>();
 }
 
@@ -115,6 +129,7 @@ static void OnBindRenderTargetsAndDepthStencil(
     uint32_t count,
     const reshade::api::resource_view* rtvs,
     reshade::api::resource_view dsv) {
+  if (!is_primary_hook) return;
   auto& data = cmd_list->get_private_data<CommandListData>();
   auto& state = data.current_state;
   state.render_targets.assign(rtvs, rtvs + count);
@@ -125,6 +140,7 @@ static void OnBindPipeline(
     reshade::api::command_list* cmd_list,
     reshade::api::pipeline_stage stages,
     reshade::api::pipeline pipeline) {
+  if (!is_primary_hook) return;
   auto& data = cmd_list->get_private_data<CommandListData>();
   auto& state = data.current_state;
 
@@ -140,6 +156,7 @@ static void OnBindPipelineStates(
     reshade::api::command_list* cmd_list,
     uint32_t count, const reshade::api::dynamic_state* states,
     const uint32_t* values) {
+  if (!is_primary_hook) return;
   auto& data = cmd_list->get_private_data<CommandListData>();
   auto& state = data.current_state;
 
@@ -213,6 +230,7 @@ static void OnBindViewports(
     reshade::api::command_list* cmd_list,
     uint32_t first, uint32_t count,
     const reshade::api::viewport* viewports) {
+  if (!is_primary_hook) return;
   auto& data = cmd_list->get_private_data<CommandListData>();
   auto& state = data.current_state;
 
@@ -230,6 +248,7 @@ static void OnBindScissorRects(
     reshade::api::command_list* cmd_list,
     uint32_t first, uint32_t count,
     const reshade::api::rect* rects) {
+  if (!is_primary_hook) return;
   auto& data = cmd_list->get_private_data<CommandListData>();
   auto& state = data.current_state;
 
@@ -248,6 +267,7 @@ static void OnBindDescriptorTables(reshade::api::command_list* cmd_list,
                                    reshade::api::pipeline_layout layout,
                                    uint32_t first, uint32_t count,
                                    const reshade::api::descriptor_table* tables) {
+  if (!is_primary_hook) return;
   auto& state = cmd_list->get_private_data<CommandListData>().current_state.descriptor_tables[stages];
 
   if (layout != state.first) {
@@ -266,6 +286,7 @@ static void OnBindDescriptorTables(reshade::api::command_list* cmd_list,
 }
 
 static void OnResetCommandList(reshade::api::command_list* cmd_list) {
+  if (!is_primary_hook) return;
   auto& data = cmd_list->get_private_data<CommandListData>();
   if (std::addressof(data) == nullptr) return;
   auto& state = data.current_state;
@@ -286,6 +307,9 @@ static void Use(DWORD fdw_reason) {
       if (attached) return;
       attached = true;
       reshade::log::message(reshade::log::level::info, "State attached.");
+
+      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
+      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
 
       reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
       reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);

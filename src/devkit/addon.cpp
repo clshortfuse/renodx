@@ -118,17 +118,26 @@ struct ResourceViewDetails {
     auto* swapchain_mod_data = &device->get_private_data<renodx::mods::swapchain::DeviceData>();
     if (swapchain_mod_data == nullptr) return false;
 
-    auto& resource_view_info = swapchain_mod_data->resource_view_infos[resource_view.handle];
-
-    this->is_rtv_upgraded = resource_view_info.upgraded;
-    this->is_rtv_cloned = resource_view_info.clone.handle != 0u;
-
-    if (resource_view_info.resource_info != nullptr) {
-      this->is_res_upgraded = resource_view_info.resource_info->upgraded;
-      this->is_rtv_cloned = resource_view_info.resource_info->clone_enabled;
-    } else {
+    auto* resource_view_info_pointer = renodx::utils::resource::GetResourceViewInfo(resource_view);
+    if (resource_view_info_pointer == nullptr) {
+      this->is_rtv_upgraded = false;
       this->is_res_upgraded = false;
       this->is_rtv_cloned = false;
+      this->is_rtv_cloned = false;
+
+    } else {
+      auto resource_view_info = *resource_view_info_pointer;
+
+      this->is_rtv_upgraded = resource_view_info.upgraded;
+      this->is_rtv_cloned = resource_view_info.clone.handle != 0u;
+
+      if (resource_view_info.resource_info != nullptr) {
+        this->is_res_upgraded = resource_view_info.resource_info->upgraded;
+        this->is_rtv_cloned = resource_view_info.resource_info->clone_enabled;
+      } else {
+        this->is_res_upgraded = false;
+        this->is_rtv_cloned = false;
+      }
     }
 
     return true;
@@ -208,7 +217,7 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
     return iterator->second;
   }
 
-  ResourceViewDetails GetResourceViewDetails(reshade::api::resource_view resource_view, reshade::api::device* device) const {
+  static ResourceViewDetails GetResourceViewDetails(reshade::api::resource_view resource_view, reshade::api::device* device) {
     ResourceViewDetails details = {
         .resource_view = resource_view,
         .resource_view_desc = device->get_resource_view_desc(resource_view),
@@ -222,7 +231,7 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
       details.resource_view_reflection = resource_view_reflection.value();
     }
 
-    auto resource = renodx::utils::resource::GetResourceFromView(device, resource_view);
+    auto resource = renodx::utils::resource::GetResourceFromView(resource_view);
     details.resource = resource;
     if (resource.handle != 0u) {
       details.resource_desc = device->get_resource_desc(details.resource);
@@ -233,7 +242,7 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
       }
     }
 
-    details.is_swapchain = renodx::utils::swapchain::IsBackBuffer(device, details.resource);
+    details.is_swapchain = renodx::utils::swapchain::IsBackBuffer(details.resource);
 
     details.UpdateSwapchainModState(device);
 
@@ -468,7 +477,7 @@ void OnBindPipeline(
       if (pipeline.handle == 0u) {
         bind_details.shader_hashes.push_back(0);
       } else {
-        auto shader_hash = shader_state.GetCurrentShaderHash(compatible_stage);
+        auto shader_hash = GetCurrentShaderHash(shader_state, compatible_stage);
         bind_details.shader_hashes.push_back(shader_hash);
         added_shaders.push_back(shader_hash);
       }
@@ -490,10 +499,10 @@ void OnBindPipeline(
     if (!shader_details.program_version.has_value()) {
       if (shader_details.shader_data.empty()) {
         try {
-          auto pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(device, pipeline);
-          if (!pipeline_details.has_value()) return;
+          auto* pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(pipeline);
+          if (pipeline_details == nullptr) return;
 
-          auto shader_data = renodx::utils::shader::GetShaderData(device, pipeline, shader_hash);
+          auto shader_data = renodx::utils::shader::GetShaderData(pipeline, shader_hash);
           if (!shader_data.has_value()) {
             throw std::exception("Failed to get shader data");
           }
@@ -656,8 +665,9 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
 
   {
     std::shared_lock lock(device_data.mutex);
-    for (auto& [stage, state] : state.stage_state) {
-      if (auto pair = device_data.shader_details.find(state.shader_hash);
+
+    for (auto& stage_state : state.stage_states) {
+      if (auto pair = device_data.shader_details.find(stage_state.shader_hash);
           pair != device_data.shader_details.end()) {
         auto details = pair->second;
         if (details.bypass_draw) {
@@ -676,14 +686,10 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
     std::unique_lock lock(device_data.mutex);
 
     if (state.pipeline_layout.handle != 0u) {
-      auto& layout_data = device->get_private_data<renodx::utils::pipeline_layout::DeviceData>();
-      const std::shared_lock layout_lock(layout_data.mutex);
-      // Check bound descriptor tables
-      auto layout_data_pair = layout_data.pipeline_layout_data.find(state.pipeline_layout.handle);
-      assert(layout_data_pair != layout_data.pipeline_layout_data.end());
-      //  continue;
+      auto* layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(state.pipeline_layout);
+      assert(layout_data != nullptr);
 
-      const auto& info = layout_data_pair->second;
+      const auto& info = *layout_data;
       auto param_count = info.params.size();
       auto& descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
       for (auto param_index = 0; param_index < param_count; ++param_index) {
@@ -1087,10 +1093,11 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
 
         for (const auto& pipeline_bind : draw_details.pipeline_binds) {
           auto& shader_device_data = renodx::utils::shader::GetShaderDeviceData(device);
-          std::unique_lock shader_data_lock(shader_device_data.mutex);
-          auto details_pair = shader_device_data.pipeline_shader_details.find(pipeline_bind.pipeline.handle);
-          if (details_pair == shader_device_data.pipeline_shader_details.end()) continue;
-          auto& pipeline_details = details_pair->second;
+
+          auto* pipeline_details_ptr = renodx::utils::shader::GetPipelineShaderDetails(pipeline_bind.pipeline);
+          if (pipeline_details_ptr == nullptr) continue;
+
+          auto& pipeline_details = *pipeline_details_ptr;
 
           if (!pipeline_details.tag.has_value()) {
             pipeline_details.tag = "";
@@ -1838,7 +1845,7 @@ void RenderShaderViewDisassembly(reshade::api::device* device, DeviceData& data,
           pipeline = {*(pipeline_handles.begin())};
         }
 
-        auto shader_data = renodx::utils::shader::GetShaderData(device, pipeline, shader_details.shader_hash);
+        auto shader_data = renodx::utils::shader::GetShaderData(pipeline, shader_details.shader_hash);
         if (!shader_data.has_value()) throw std::exception("Invalid shader selection");
         shader_details.shader_data = shader_data.value();
       }
@@ -1921,7 +1928,7 @@ void RenderShaderViewDecompilation(reshade::api::device* device, DeviceData& dat
           pipeline = {*(pipeline_handles.begin())};
         }
 
-        auto shader_data = renodx::utils::shader::GetShaderData(device, pipeline, shader_details.shader_hash);
+        auto shader_data = renodx::utils::shader::GetShaderData(pipeline, shader_details.shader_hash);
         if (!shader_data.has_value()) throw std::exception("Invalid shader selection");
         shader_details.shader_data = shader_data.value();
       }

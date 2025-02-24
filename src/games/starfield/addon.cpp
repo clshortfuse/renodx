@@ -208,14 +208,14 @@ void OnPresetOff() {
 }
 
 bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = false) {
-  const auto& shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
+  auto& shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
 
   // flow
   // 0x0a152bb1 (tonemapper) (r11g11b10 => rgb8a_unorm tRender)
   // 0x17FAB08F (sharpen?)   (rgb8a_unorm tRender => rgb8a_unorm tComposite)
   // 0xe9d9e225 (ui)         (rgb8a_unorm tUI => rgb8a_unorm tComposite)
 
-  auto pixel_shader_hash = shader_state.GetCurrentPixelShaderHash();
+  auto pixel_shader_hash = renodx::utils::shader::GetCurrentPixelShaderHash(shader_state);
   if (
       !is_dispatch
       && (pixel_shader_hash == 0x0a152bb1     // tonemapper

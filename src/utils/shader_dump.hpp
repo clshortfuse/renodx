@@ -120,18 +120,19 @@ static void OnInitPipeline(
     reshade::api::pipeline pipeline) {
   if (pipeline.handle == 0u) return;
 
-  auto details = renodx::utils::shader::GetPipelineShaderDetails(device, pipeline);
-  if (!details.has_value()) return;
+  auto *details = renodx::utils::shader::GetPipelineShaderDetails(pipeline);
+  if (details == nullptr) return;
 
   std::unique_lock lock(mutex);
-  for (const auto& [subobject_index, shader_hash] : details->shader_hashes_by_index) {
+  for (const auto& info : details->subobject_shaders) {
     // Store immediately in case pipeline destroyed before present
+    const auto& shader_hash = info.shader_hash;
     if (shaders_seen.contains(shader_hash)) continue;
     shaders_seen.emplace(shader_hash);
 
     if (shaders_dumped.contains(shader_hash)) continue;
     if (shaders_pending.contains(shader_hash)) continue;
-    auto shader_data = renodx::utils::shader::GetShaderData(device, pipeline, shader_hash);
+    auto shader_data = renodx::utils::shader::GetShaderData(*details, info);
     if (!shader_data.has_value()) {
       std::stringstream s;
       s << "utils::shader::dump(Failed to retreive shader data: ";
@@ -168,7 +169,7 @@ static void OnInitPipeline(
 
     shaders_pending[shader_hash] = {
         .data = shader_data.value(),
-        .type = details->subobjects[subobject_index].type,
+        .type = details->subobjects[info.index].type,
     };
   }
 }

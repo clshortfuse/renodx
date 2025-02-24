@@ -131,6 +131,7 @@ static reshade::api::pipeline_subobject* ClonePipelineSubObjects(const reshade::
 
 static void DestroyPipelineSubobjects(std::span<reshade::api::pipeline_subobject> subobjects) {
   for (auto& subobject : subobjects) {
+    if (subobject.data == nullptr) continue;
     switch (subobject.type) {
       case reshade::api::pipeline_subobject_type::vertex_shader:
       case reshade::api::pipeline_subobject_type::compute_shader:

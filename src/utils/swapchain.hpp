@@ -24,21 +24,10 @@
 namespace renodx::utils::swapchain {
 
 struct __declspec(uuid("4721e307-0cf3-4293-b4a5-40d0a4e62544")) DeviceData {
+  std::shared_mutex mutex;
   std::unordered_set<reshade::api::effect_runtime*> effect_runtimes;
-  reshade::api::color_space current_color_space = reshade::api::color_space::unknown;
-
-  std::unordered_set<reshade::api::swapchain*> swapchains;
-  std::unordered_set<uint64_t> back_buffers;
   reshade::api::resource_desc back_buffer_desc;
-
-  std::shared_mutex mutex;
-};
-
-struct __declspec(uuid("25b7ec11-a51f-4884-a6f7-f381d198b9af")) SwapchainData {
-  reshade::api::swapchain_desc original_descc;
-  reshade::api::swapchain_desc current_desc;
-  std::unordered_set<uint64_t> back_buffers;
-  std::shared_mutex mutex;
+  reshade::api::color_space current_color_space = reshade::api::color_space::unknown;
 };
 
 struct __declspec(uuid("3cf9a628-8518-4509-84c3-9fbe9a295212")) CommandListData {
@@ -57,7 +46,6 @@ static void OnInitDevice(reshade::api::device* device) {
 
   is_primary_hook = true;
 }
-
 static void OnDestroyDevice(reshade::api::device* device) {
   if (!is_primary_hook) return;
   device->destroy_private_data<DeviceData>();
@@ -66,43 +54,18 @@ static void OnDestroyDevice(reshade::api::device* device) {
 static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (!is_primary_hook) return;
   auto* device = swapchain->get_device();
-  auto& device_data = device->get_private_data<DeviceData>();
-  if (std::addressof(device_data) == nullptr) return;
+  auto& data = device->get_private_data<DeviceData>();
+  if (std::addressof(data) == nullptr) return;
+  const std::unique_lock lock(data.mutex);
 
-  auto& swapchain_data = swapchain->create_private_data<SwapchainData>();
-  const size_t back_buffer_count = swapchain->get_back_buffer_count();
-  for (uint32_t index = 0; index < back_buffer_count; index++) {
-    auto buffer = swapchain->get_back_buffer(index);
-    swapchain_data.back_buffers.emplace(buffer.handle);
-  }
-  const std::unique_lock lock(device_data.mutex);
-  device_data.swapchains.emplace(swapchain);
-
-  for (uint32_t index = 0; index < back_buffer_count; index++) {
-    auto buffer = swapchain->get_back_buffer(index);
-    device_data.back_buffers.emplace(buffer.handle);
-    if (index == 0) {
-      auto desc = device->get_resource_desc(buffer);
-      device_data.back_buffer_desc = desc;
-    }
-  }
+  data.back_buffer_desc = device->get_resource_desc(swapchain->get_current_back_buffer());
 }
 
 static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (!is_primary_hook) return;
   auto* device = swapchain->get_device();
-
-  auto& device_data = device->get_private_data<DeviceData>();
-  if (std::addressof(device_data) == nullptr) return;
-  const std::unique_lock lock(device_data.mutex);
-
-  auto& swapchain_data = swapchain->get_private_data<SwapchainData>();
-  device_data.swapchains.erase(swapchain);
-  for (const uint64_t handle : swapchain_data.back_buffers) {
-    device_data.back_buffers.erase(handle);
-  }
-
-  swapchain->destroy_private_data<SwapchainData>();
+  auto& data = device->get_private_data<DeviceData>();
+  data.back_buffer_desc = {};
 }
 
 static void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
@@ -164,20 +127,10 @@ static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
   cmd_list->destroy_private_data<CommandListData>();
 }
 
-static bool IsBackBuffer(reshade::api::device* device, reshade::api::resource resource) {
-  bool result = false;
-  {
-    auto& device_data = device->get_private_data<DeviceData>();
-    const std::shared_lock lock(device_data.mutex);
-    result = device_data.back_buffers.contains(resource.handle);
-  }
-  return result;
-}
-
-static bool IsBackBuffer(reshade::api::command_list* cmd_list, reshade::api::resource resource) {
-  auto* device = cmd_list->get_device();
-  if (device == nullptr) return false;
-  return IsBackBuffer(device, resource);
+static bool IsBackBuffer(reshade::api::resource resource) {
+  auto* info = resource::GetResourceInfo(resource);
+  if (info == nullptr) return false;
+  return info->is_swap_chain;
 }
 
 static reshade::api::resource_desc GetBackBufferDesc(reshade::api::device* device) {
@@ -229,9 +182,10 @@ static bool HasBackBufferRenderTarget(reshade::api::command_list* cmd_list) {
   bool found_swapchain_rtv = false;
   for (const auto& rtv : cmd_list_data.current_render_targets) {
     if (rtv.handle == 0u) continue;
-    const auto resource = renodx::utils::resource::GetResourceFromView(device, rtv);
-    if (resource.handle == 0u) continue;
-    if (!device_data.back_buffers.contains(resource.handle)) continue;
+    auto* resource_view_info = resource::GetResourceViewInfo(rtv);
+    if (resource_view_info == nullptr) continue;
+    if (resource_view_info->resource_info == nullptr) continue;
+    if (!resource_view_info->resource_info->is_swap_chain) continue;
     found_swapchain_rtv = true;
     break;
   }

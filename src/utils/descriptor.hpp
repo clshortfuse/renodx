@@ -33,7 +33,6 @@ namespace renodx::utils::descriptor {
 static bool is_primary_hook = false;
 static std::atomic_bool trace_descriptor_tables = false;
 
-
 struct __declspec(uuid("018fa2c9-7a8b-76dc-bc84-87c53574223f")) DeviceData {
   // <descriptor_table.handle[index], <resourceView.handle>>
   std::unordered_map<std::pair<uint64_t, uint32_t>, reshade::api::descriptor_table_update, hash::HashPair> table_descriptor_resource_views;
@@ -106,7 +105,6 @@ static bool OnUpdateDescriptorTables(
   const std::unique_lock lock(data.mutex);
 
   if (!data.trace_descriptor_tables) return false;
-
 
   for (uint32_t i = 0; i < count; ++i) {
     const auto& update = updates[i];
@@ -309,15 +307,13 @@ static void OnBindDescriptorTables(
   if (!trace_descriptor_tables) return;
   if (count == 0u) return;
   auto* device = cmd_list->get_device();
-  auto& layout_data = device->get_private_data<renodx::utils::pipeline_layout::DeviceData>();
-  const std::shared_lock layout_lock(layout_data.mutex);
+  auto* layout_data = pipeline_layout::GetPipelineLayoutData(layout);
 
   /// auto& descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
 
-  auto layout_data_pair = layout_data.pipeline_layout_data.find(layout.handle);
-  assert(layout_data_pair != layout_data.pipeline_layout_data.end());
+  assert(layout_data != nullptr);
 
-  auto& info = layout_data_pair->second;
+  auto& info = *layout_data;
   for (uint32_t i = 0; i < count; ++i) {
     const auto layout_index = first + i;
 

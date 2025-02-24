@@ -172,10 +172,10 @@ void OnPresetOff() {
 }
 
 bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = false) {
-  const auto& shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
+  auto& shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
 
-  auto pixel_shader_hash = shader_state.GetCurrentPixelShaderHash();
-  auto vertex_shader_hash = shader_state.GetCurrentVertexShaderHash();
+  auto pixel_shader_hash = renodx::utils::shader::GetCurrentPixelShaderHash(shader_state);
+  auto vertex_shader_hash = renodx::utils::shader::GetCurrentVertexShaderHash(shader_state);
   if (
       !is_dispatch
       && (pixel_shader_hash == 0x91a46134

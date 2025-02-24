@@ -304,7 +304,7 @@ bool OnDrawIndexed(
 
   auto& shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
 
-  auto pixel_shader_hash = shader_state.GetCurrentPixelShaderHash();
+  auto pixel_shader_hash = renodx::utils::shader::GetCurrentPixelShaderHash(shader_state);
   if (pixel_shader_hash == 0xC6D14699) return false;  // Video
   if (pixel_shader_hash == 0xB6E26AC7) {
     g_completed_render = true;
@@ -320,7 +320,7 @@ bool OnDrawIndexed(
 
   auto* device = cmd_list->get_device();
 
-  auto resource_tag = renodx::utils::resource::GetResourceTag(device, target0);
+  auto resource_tag = renodx::utils::resource::GetResourceTag(target0);
   if (resource_tag != 1.f) return false;
 
   auto& data = device->get_private_data<DeviceData>();
@@ -367,15 +367,9 @@ bool OnDrawIndexed(
 
     if (data.injection_layout.handle == 0) {
       auto& shader_replace_device_data = device->get_private_data<renodx::mods::shader::DeviceData>();
-      if (
-          auto pair = shader_replace_device_data.modded_pipeline_layouts.find(shader_state.pipeline_layout.handle);
-          pair != shader_replace_device_data.modded_pipeline_layouts.end()) {
-        read_only_lock.unlock();
-        {
-          const std::unique_lock lock(data.mutex);
-          data.injection_layout = pair->second;
-        }
-        read_only_lock.lock();
+      auto* layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(shader_state.pipeline_layout);
+      if (layout_data != nullptr) {
+        data.injection_layout = layout_data->replacement_layout;
       } else {
         return false;
       }

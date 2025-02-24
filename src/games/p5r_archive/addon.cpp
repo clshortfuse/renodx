@@ -344,7 +344,7 @@ void OnBindRenderTargetsAndDepthStencil(reshade::api::command_list* cmd_list, ui
 
   if (after_tonemapping) {
     auto& shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
-    const uint32_t shader_hash = shader_state.GetCurrentPixelShaderHash();
+    const uint32_t shader_hash = renodx::utils::shader::GetCurrentPixelShaderHash(shader_state);
     if ((rtvs != nullptr) && rtvs->handle != 0) {
       if (IsUiShader(shader_hash)) {
         auto* device = cmd_list->get_device();
@@ -405,7 +405,7 @@ void OnBindPipeline(reshade::api::command_list* cmd_list, reshade::api::pipeline
   state.pipelines[type] = pipeline;
 
   auto& shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
-  const uint32_t shader_hash = shader_state.GetCurrentPixelShaderHash();
+  const uint32_t shader_hash = renodx::utils::shader::GetCurrentPixelShaderHash(shader_state);
 
   if (after_tonemapping && IsUiShader(shader_hash) && type == reshade::api::pipeline_stage::output_merger) {
     ClampAlpha(cmd_list);
