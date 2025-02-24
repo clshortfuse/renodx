@@ -10,8 +10,6 @@ cbuffer cb1 : register(b1){
   float4 cb1[13];
 }
 
-#define cmp -
-
 void main(
   float4 v0 : SV_Position0,
   float2 v1 : TEXCOORD0,
