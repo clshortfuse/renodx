@@ -1,0 +1,85 @@
+name: CMake (Clang)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.json"
+      - "docs/**"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.json"
+      - "docs/**"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4.1.7
+        with:
+          submodules: recursive
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Configure build for amd64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
+      - name: Configure CMake (x64)
+        run: cmake --preset clang-x64
+
+      - name: Build RelWithDebInfo (x64)
+        run: cmake --build --preset clang-x64-relwithdebinfo --verbose
+
+      - name: Configure build for x86
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64_x86
+
+      - name: Configure CMake (x86)
+        run: cmake --preset clang-x86
+
+      - name: Build RelWithDebInfo (x86)
+        run: cmake --build --preset clang-x86-relwithdebinfo --verbose
+
+      - name: Prepare Web Listing
+        run: md www
+
+      - name: Copy Binaries (x64)
+        run: copy build\RelWithDebInfo\*.addon64 www\
+
+      - name: Copy Binaries (x86)
+        run: copy build32\RelWithDebInfo\*.addon32 www\
+
+      - name: Copy Binaries (Tools)
+        run: copy build\RelWithDebInfo\*.exe www\
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "www"
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    permissions:
+      pages: write # to deploy to Pages
+      id-token: write # to verify the deployment originates from an appropriate source
+
+    # Deploy to the github-pages environment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    # Specify runner + deployment step
+    runs-on: windows-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
