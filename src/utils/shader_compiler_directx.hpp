@@ -15,14 +15,11 @@
 #include <cstdint>
 #include <exception>
 #include <filesystem>
-#include <ios>
 #include <map>
 #include <mutex>
-#include <optional>
 #include <shared_mutex>
 #include <span>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include "./path.hpp"
@@ -47,7 +44,7 @@ class FxcD3DInclude : public ID3DInclude {
   std::vector<std::pair<std::string, std::filesystem::path>> file_paths;
   std::map<std::filesystem::path, std::string> file_contents;
 
-  HRESULT __stdcall Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID* ppData, UINT* pBytes) override {
+  HRESULT __stdcall Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes) noexcept override {
     std::filesystem::path new_path;
     if (pParentData != nullptr) {
       std::string parent_data = static_cast<const char*>(pParentData);
@@ -97,7 +94,7 @@ class FxcD3DInclude : public ID3DInclude {
     return S_OK;
   }
 
-  HRESULT __stdcall Close(LPCVOID pData) override {
+  HRESULT __stdcall Close(LPCVOID pData) noexcept override {
     if (pData != nullptr) {
       std::string data = static_cast<const char*>(pData);
       for (auto pair = file_paths.rbegin(); pair != file_paths.rend(); ++pair) {

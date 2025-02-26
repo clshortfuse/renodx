@@ -38,6 +38,7 @@
 #include "../mods/swapchain.hpp"
 #include "../utils/bitwise.hpp"
 #include "../utils/constants.hpp"
+#include "../utils/data.hpp"
 #include "../utils/descriptor.hpp"
 #include "../utils/pipeline_layout.hpp"
 #include "../utils/shader.hpp"
@@ -115,7 +116,7 @@ struct ResourceViewDetails {
   bool is_res_cloned = false;
 
   bool UpdateSwapchainModState(reshade::api::device* device) {
-    auto* swapchain_mod_data = &device->get_private_data<renodx::mods::swapchain::DeviceData>();
+    auto* swapchain_mod_data = renodx::utils::data::Get<renodx::mods::swapchain::DeviceData>(device);
     if (swapchain_mod_data == nullptr) return false;
 
     auto* resource_view_info_pointer = renodx::utils::resource::GetResourceViewInfo(resource_view);
@@ -406,7 +407,7 @@ void OnInitPipelineLayout(
     const uint32_t param_count,
     const reshade::api::pipeline_layout_param* params,
     reshade::api::pipeline_layout layout) {
-  auto& data = device->get_private_data<DeviceData>();
+  auto& data = *renodx::utils::data::Get<DeviceData>(device);
   const std::unique_lock lock(data.mutex);
   std::vector<reshade::api::pipeline_layout_param> cloned_params = {
       params, params + param_count};
@@ -424,7 +425,7 @@ void OnInitPipelineTrackAddons(
   if (has_fired_on_init_pipeline_track_addons) return;
   has_fired_on_init_pipeline_track_addons = true;
 
-  auto& data = device->get_private_data<DeviceData>();
+  auto& data = *renodx::utils::data::Get<DeviceData>(device);
   auto& shader_device_data = renodx::utils::shader::GetShaderDeviceData(device);
   std::shared_lock shader_data_lock(shader_device_data.mutex);
   for (const auto& [shader_hash, addon_data] : shader_device_data.runtime_replacements) {
@@ -442,7 +443,7 @@ void OnInitPipeline(
     reshade::api::pipeline pipeline) {
   if (pipeline.handle == 0u) return;
 
-  auto& data = device->get_private_data<DeviceData>();
+  auto& data = *renodx::utils::data::Get<DeviceData>(device);
   const std::unique_lock lock(data.mutex);
   data.live_pipelines.emplace(pipeline.handle);
 }
@@ -451,7 +452,7 @@ void OnDestroyPipeline(
     reshade::api::device* device,
     reshade::api::pipeline pipeline) {
   if (pipeline.handle == 0u) return;
-  auto& data = device->get_private_data<DeviceData>();
+  auto& data = *renodx::utils::data::Get<DeviceData>(device);
   const std::unique_lock lock(data.mutex);
   data.live_pipelines.erase(pipeline.handle);
 }
@@ -462,7 +463,7 @@ void OnBindPipeline(
     reshade::api::pipeline pipeline) {
   if (!is_snapshotting) return;
 
-  auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
+  auto& cmd_list_data = *renodx::utils::data::Get<CommandListData>(cmd_list);
   auto& details = cmd_list_data.GetCurrentDrawDetails();
 
   PipelineBindDetails bind_details = {
@@ -471,7 +472,7 @@ void OnBindPipeline(
   };
 
   std::vector<uint32_t> added_shaders;
-  auto shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
+  auto *shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
   for (auto compatible_stage : renodx::utils::shader::COMPATIBLE_STAGES) {
     if (renodx::utils::bitwise::HasFlag(stage, compatible_stage)) {
       if (pipeline.handle == 0u) {
@@ -599,7 +600,7 @@ void OnPushDescriptors(
     if (view.handle == 0u) {
       destination.erase(slot);
     } else {
-      auto detail_item = (device_data.GetResourceViewDetails(view, device));
+      auto detail_item = (DeviceData::GetResourceViewDetails(view, device));
       if (detail_item.resource_desc.type == reshade::api::resource_type::unknown) {
         bool unknown_type = true;
         // destination.erase(slot);
@@ -659,16 +660,19 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
   bool bypass_draw = false;
 
   auto* device = cmd_list->get_device();
-  auto& device_data = device->get_private_data<DeviceData>();
 
-  auto& state = renodx::utils::shader::GetCurrentState(cmd_list);
+  auto* device_data = renodx::utils::data::Get<DeviceData>(device);
+
+  auto* state = renodx::utils::shader::GetCurrentState(cmd_list);
 
   {
-    std::shared_lock lock(device_data.mutex);
+    std::shared_lock lock(device_data->mutex);
 
-    for (auto& stage_state : state.stage_states) {
-      if (auto pair = device_data.shader_details.find(stage_state.shader_hash);
-          pair != device_data.shader_details.end()) {
+    for (auto& stage_state : state->stage_states) {
+      renodx::utils::shader::PopulateStageState(&stage_state);
+      auto shader_hash = renodx::utils::shader::GetCurrentShaderHash(&stage_state);
+      if (auto pair = device_data->shader_details.find(shader_hash);
+          pair != device_data->shader_details.end()) {
         auto details = pair->second;
         if (details.bypass_draw) {
           bypass_draw = true;
@@ -683,10 +687,13 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
     auto& draw_details = command_list_data.GetCurrentDrawDetails();
     draw_details.draw_method = draw_method;
 
-    std::unique_lock lock(device_data.mutex);
+    std::unique_lock lock(device_data->mutex);
 
-    if (state.pipeline_layout.handle != 0u) {
-      auto* layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(state.pipeline_layout);
+    if (state->last_pipeline.handle != 0u) {
+      auto* pipeline_shader_details = renodx::utils::shader::GetPipelineShaderDetails(state->last_pipeline);
+      assert(pipeline_shader_details != nullptr);
+
+      auto* layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(pipeline_shader_details->layout);
       assert(layout_data != nullptr);
 
       const auto& info = *layout_data;
@@ -796,7 +803,7 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
               if (resource_view.handle == 0u) {
                 draw_details.uav_binds.erase(slot);
               } else {
-                auto detail_item = (device_data.GetResourceViewDetails(resource_view, device));
+                auto detail_item = (DeviceData::GetResourceViewDetails(resource_view, device));
                 if (detail_item.resource.handle == 0u && renodx::utils::resource::IsResourceViewEmpty(device, resource_view)) {
                   draw_details.uav_binds.erase(slot);
                 } else {
@@ -807,7 +814,7 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
               if (resource_view.handle == 0u) {
                 draw_details.srv_binds.erase(slot);
               } else {
-                auto detail_item = (device_data.GetResourceViewDetails(resource_view, device));
+                auto detail_item = (DeviceData::GetResourceViewDetails(resource_view, device));
                 if (detail_item.resource.handle == 0u && renodx::utils::resource::IsResourceViewEmpty(device, resource_view)) {
                   draw_details.srv_binds.erase(slot);
                 } else {
@@ -826,13 +833,13 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
       uint32_t rtv_index = 0u;
       for (auto render_target : renodx::utils::swapchain::GetRenderTargets(cmd_list)) {
         if (render_target.handle != 0u) {
-          draw_details.render_targets[rtv_index] = device_data.GetResourceViewDetails(render_target, device);
+          draw_details.render_targets[rtv_index] = DeviceData::GetResourceViewDetails(render_target, device);
         }
         ++rtv_index;
       }
     }
 
-    device_data.command_list_data.push_back(command_list_data);
+    device_data->command_list_data.push_back(command_list_data);
     command_list_data.draw_details.clear();
   }
 
@@ -1008,7 +1015,7 @@ void RenderNavRail(reshade::api::device* device, DeviceData& data) {
   ImGui::EndChild();
 }
 
-enum CapturePaneColumns {
+enum CapturePaneColumns : uint8_t {
   CAPTURE_PANE_COLUMN_TYPE,
   CAPTURE_PANE_COLUMN_REF,
   CAPTURE_PANE_COLUMN_INFO,
@@ -1479,7 +1486,7 @@ void RenderCapturePane(reshade::api::device* device, DeviceData& data) {
   }  // BeginTable
 }
 
-enum ShaderPaneColumns {
+enum ShaderPaneColumns : uint8_t {
   SHADER_PANE_COLUMN_HASH,
   SHADER_PANE_COLUMN_TYPE,
   SHADER_PANE_COLUMN_ALIAS,
@@ -2043,7 +2050,7 @@ void RenderResourceViewView(reshade::api::device* device, DeviceData& data, Sett
     if (ImGui::BeginChild(
             std::format("##resource_view_tab_child_0x{:08x}", selection.resource_handle).c_str(),
             ImVec2(0, 0))) {
-      auto resource_view_details = data.GetResourceViewDetails({selection.resource_view_handle}, device);
+      auto resource_view_details = DeviceData::GetResourceViewDetails({selection.resource_view_handle}, device);
       bool is_valid = (resource_view_details.resource_desc.type == reshade::api::resource_type::texture_2d
                        || resource_view_details.resource_desc.type == reshade::api::resource_type::surface);
       if (is_valid) {
@@ -2217,10 +2224,13 @@ void InitializeUserSettings(reshade::api::effect_runtime* runtime) {
 // @see https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   auto* device = runtime->get_device();
-  auto& data = device->get_private_data<DeviceData>();
+
+  auto* data_ptr = renodx::utils::data::Get<DeviceData>(device);
 
   // Runtime may be on a separate device
-  if (std::addressof(data) == nullptr) return;
+  if (data_ptr == nullptr) return;
+
+  auto& data = *data_ptr;
 
   std::unique_lock lock(data.mutex);  // Probably not needed
   if (data.runtime == nullptr) {

@@ -208,7 +208,7 @@ void OnPresetOff() {
 }
 
 bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = false) {
-  auto& shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
+  auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
 
   // flow
   // 0x0a152bb1 (tonemapper) (r11g11b10 => rgb8a_unorm tRender)
@@ -226,7 +226,7 @@ bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = fals
           || pixel_shader_hash == 0xe9d9e225  // ui
           || pixel_shader_hash == 0x0d5add1f  // copy
           )) {
-    auto& swapchain_state = cmd_list->get_private_data<renodx::utils::swapchain::CommandListData>();
+    auto& swapchain_state = renodx::utils::swapchain::GetCurrentState(cmd_list);
 
     bool changed = false;
     const uint32_t render_target_count = swapchain_state.current_render_targets.size();

@@ -12,7 +12,6 @@
 
 #include <include/reshade_api_device.hpp>
 #include <include/reshade_api_resource.hpp>
-#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <span>
@@ -20,7 +19,7 @@
 #include <vector>
 
 #include "./bitwise.hpp"
-#include "./state.hpp"
+#include "./data.hpp"
 
 namespace renodx::utils::constants {
 
@@ -44,10 +43,9 @@ struct __declspec(uuid("f8805bac-a932-49ef-b0c9-e4db1a8b33fc")) CommandListData 
 };
 
 static void OnInitDevice(reshade::api::device* device) {
-  auto* data = &device->get_private_data<DeviceData>();
-  if (data != nullptr) return;
-
-  data = &device->create_private_data<DeviceData>();
+  DeviceData* data;
+  bool created = renodx::utils::data::CreateOrGet<DeviceData>(device, data);
+  if (!created) return;
 
   internal::is_primary_hook = true;
 }
@@ -83,7 +81,6 @@ static void OnInitResource(
   const std::unique_lock lock(data.mutex);
 
   if (initial_data == nullptr) {
-
     if (desc.buffer.size > 64 * 1024) {
       // Invalid size?
       return;

@@ -120,7 +120,7 @@ static void OnInitPipeline(
     reshade::api::pipeline pipeline) {
   if (pipeline.handle == 0u) return;
 
-  auto *details = renodx::utils::shader::GetPipelineShaderDetails(pipeline);
+  auto* details = renodx::utils::shader::GetPipelineShaderDetails(pipeline);
   if (details == nullptr) return;
 
   std::unique_lock lock(mutex);
@@ -265,6 +265,8 @@ static bool DumpShader(
         break;
       case reshade::api::pipeline_subobject_type::compute_shader:
         dump_path += L".comp";
+        break;
+      default:
         break;
     }
 

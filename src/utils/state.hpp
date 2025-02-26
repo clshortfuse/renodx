@@ -6,12 +6,10 @@
 #pragma once
 
 #include <include/reshade.hpp>
-#include <memory>
-#include <optional>
 #include <unordered_map>
 #include <vector>
 
-#include "./bitwise.hpp"
+#include "./data.hpp"
 #include "./resource.hpp"
 
 namespace renodx::utils::state {
@@ -102,10 +100,9 @@ struct __declspec(uuid("019382d7-4364-7f3f-a42c-1a2619748db0")) CommandListData 
 
 static bool is_primary_hook = false;
 static void OnInitDevice(reshade::api::device* device) {
-  auto* data = &device->get_private_data<DeviceData>();
-  if (data != nullptr) return;
-
-  data = &device->create_private_data<DeviceData>();
+  DeviceData* data;
+  bool created = renodx::utils::data::CreateOrGet<DeviceData>(device, data);
+  if (!created) return;
 
   is_primary_hook = true;
 }
@@ -287,16 +284,16 @@ static void OnBindDescriptorTables(reshade::api::command_list* cmd_list,
 
 static void OnResetCommandList(reshade::api::command_list* cmd_list) {
   if (!is_primary_hook) return;
-  auto& data = cmd_list->get_private_data<CommandListData>();
-  if (std::addressof(data) == nullptr) return;
-  auto& state = data.current_state;
+  auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  if (data == nullptr) return;
+  auto& state = data->current_state;
   state.Clear();
 }
 
-static std::optional<CommandListState> GetCurrentState(reshade::api::command_list* cmd_list) {
-  auto& data = cmd_list->get_private_data<CommandListData>();
-  if (std::addressof(data) == nullptr) return std::nullopt;
-  return data.current_state;
+static CommandListState* GetCurrentState(reshade::api::command_list* cmd_list) {
+  auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  if (data == nullptr) return nullptr;
+  return &data->current_state;
 }
 
 static bool attached = false;

@@ -218,11 +218,11 @@ static std::unordered_map<uint64_t, ResourceInfo> resource_infos;
 static std::shared_mutex resource_view_infos_mutex;
 static std::unordered_map<uint64_t, ResourceViewInfo> resource_view_infos;
 
-static std::vector<std::function<void(ResourceInfo& resource_info)>> on_init_resource_info_callbacks;
-static std::vector<std::function<void(ResourceInfo& resource_info)>> on_destroy_resource_info_callbacks;
+static std::vector<std::function<void(ResourceInfo* resource_info)>> on_init_resource_info_callbacks;
+static std::vector<std::function<void(ResourceInfo* resource_info)>> on_destroy_resource_info_callbacks;
 
-static std::vector<std::function<void(ResourceViewInfo& resource_view_info)>> on_init_resource_view_info_callbacks;
-static std::vector<std::function<void(ResourceViewInfo& resource_view_info)>> on_destroy_resource_view_info_callbacks;
+static std::vector<std::function<void(ResourceViewInfo* resource_view_info)>> on_init_resource_view_info_callbacks;
+static std::vector<std::function<void(ResourceViewInfo* resource_view_info)>> on_destroy_resource_view_info_callbacks;
 
 static ResourceInfo* GetResourceInfo(const reshade::api::resource& resource, const bool& create = false) {
   {
@@ -294,7 +294,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 
   for (auto& resource_info : infos) {
     for (auto& callback : on_init_resource_info_callbacks) {
-      callback(*resource_info);
+      callback(resource_info);
     }
   }
 }
@@ -320,7 +320,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
 
   for (auto& resource_info : infos) {
     for (auto& callback : on_destroy_resource_info_callbacks) {
-      callback(*resource_info);
+      callback(resource_info);
     }
   }
 }
@@ -344,7 +344,7 @@ static void OnInitResource(
       .initial_state = initial_state,
   };
   for (auto& callback : on_init_resource_info_callbacks) {
-    callback(resource_info);
+    callback(&resource_info);
   }
 }
 
@@ -361,7 +361,7 @@ static void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   resource_info.destroyed = true;
 
   for (auto& callback : on_destroy_resource_info_callbacks) {
-    callback(resource_info);
+    callback(&resource_info);
   }
 }
 
@@ -378,7 +378,7 @@ static void OnInitResourceView(
 
   if (resource_view_info.view.handle != 0u && !resource_view_info.destroyed) {
     for (const auto& callback : on_destroy_resource_view_info_callbacks) {
-      callback(resource_view_info);
+      callback(&resource_view_info);
     }
   }
 
@@ -401,7 +401,7 @@ static void OnInitResourceView(
   }
 
   for (const auto& callback : on_init_resource_view_info_callbacks) {
-    callback(resource_view_info);
+    callback(&resource_view_info);
   }
 }
 
@@ -417,7 +417,7 @@ static void OnDestroyResourceView(reshade::api::device* device, reshade::api::re
   resource_view_info.destroyed = true;
   if (resource_view_info.view.handle != 0u) {
     for (auto& callback : on_destroy_resource_view_info_callbacks) {
-      callback(resource_view_info);
+      callback(&resource_view_info);
     }
   }
 }

@@ -15,7 +15,7 @@
 // #include <embed/0xAB16B3F7.h> // fire
 // #include <embed/0xB561688F.h> // distant smoke?
 // #include <embed/0x1FB36E90.h> // screen blood effect
-#include <embed/0X61D242D6.h>    // bloom
+#include <embed/0x61D242D6.h>    // bloom
 // #include <embed/0XBA89E3AC.h> // lens flare - sunstar
 #include <embed/0x3F53E66E.h>    // lens flare - circles and color
 // #include <embed/0x95588EA5.h> // radial dirty lens effect

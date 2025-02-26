@@ -172,7 +172,7 @@ void OnPresetOff() {
 }
 
 bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = false) {
-  auto& shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
+  auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
 
   auto pixel_shader_hash = renodx::utils::shader::GetCurrentPixelShaderHash(shader_state);
   auto vertex_shader_hash = renodx::utils::shader::GetCurrentVertexShaderHash(shader_state);
@@ -191,7 +191,7 @@ bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = fals
       if (renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), render_target)) {
         std::stringstream s;
         s << "Upgrading RTV: ";
-        s << reinterpret_cast<void*>(render_target.handle);
+        s << reinterpret_cast<uintptr_t>(render_target.handle);
         s << ", shader: ";
         s << PRINT_CRC32(pixel_shader_hash);
         s << ")";

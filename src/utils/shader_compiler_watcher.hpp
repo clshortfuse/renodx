@@ -286,7 +286,7 @@ static bool EnableLiveWatcher() {
   {
     std::stringstream s;
     s << "ToggleLiveWatching(targetHandle: ";
-    s << reinterpret_cast<void*>(m_target_dir_handle);
+    s << reinterpret_cast<uintptr_t>(m_target_dir_handle);
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
   }

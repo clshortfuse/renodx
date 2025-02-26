@@ -8,7 +8,6 @@
 #include <cassert>
 #include <include/reshade.hpp>
 #include <include/reshade_api_pipeline.hpp>
-#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
@@ -20,9 +19,10 @@ struct PipelineLayoutData {
   std::vector<reshade::api::pipeline_layout_param> params;
   std::vector<std::vector<reshade::api::descriptor_range>> ranges;
   std::vector<reshade::api::descriptor_table> tables;
-  reshade::api::pipeline_layout replacement_layout;
+  reshade::api::pipeline_layout layout = {0u};
+  reshade::api::pipeline_layout replacement_layout = {0u};
+  reshade::api::pipeline_layout injection_layout = {0u};
   int32_t injection_index = -1;
-  reshade::api::pipeline_layout new_layout = {0u};
   bool failed_injection = false;
 };
 
@@ -39,7 +39,7 @@ static PipelineLayoutData* GetPipelineLayoutData(const reshade::api::pipeline_la
 
   {
     std::unique_lock write_lock(pipeline_layout_data_mutex);
-    auto& info = pipeline_layout_data.insert({layout.handle, PipelineLayoutData({})}).first->second;
+    auto& info = pipeline_layout_data.insert({layout.handle, PipelineLayoutData({.layout = layout})}).first->second;
     return &info;
   }
 }

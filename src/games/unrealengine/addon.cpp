@@ -549,14 +549,14 @@ bool OnDrawForLUTDump(
     uint32_t first_instance) {
   if (g_dump_shaders == 0) return false;
 
-  auto shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
+  auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
 
-  auto& pixel_state = GetCurrentPixelState(shader_state);
+  auto* pixel_state = renodx::utils::shader::GetCurrentPixelState(shader_state);
 
-  auto& pixel_shader_hash = pixel_state.shader_hash;
+  auto pixel_shader_hash = renodx::utils::shader::GetCurrentPixelShaderHash(pixel_state);
   if (pixel_shader_hash == 0u) return false;
 
-  auto& swapchain_state = cmd_list->get_private_data<renodx::utils::swapchain::CommandListData>();
+  auto& swapchain_state = renodx::utils::swapchain::GetCurrentState(cmd_list);
   bool found_lut_render_target = false;
 
   auto* device = cmd_list->get_device();

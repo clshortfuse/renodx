@@ -7,7 +7,6 @@
 
 #include <dxgi1_6.h>
 #include <ios>
-#include <memory>
 #include <mutex>
 #include <optional>
 #include <unordered_set>
@@ -16,6 +15,7 @@
 #include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
+#include "./data.hpp"
 #include "./device.hpp"
 #include "./format.hpp"
 #include "./platform.hpp"
@@ -39,10 +39,9 @@ struct __declspec(uuid("3cf9a628-8518-4509-84c3-9fbe9a295212")) CommandListData 
 
 static bool is_primary_hook = false;
 static void OnInitDevice(reshade::api::device* device) {
-  auto* data = &device->get_private_data<DeviceData>();
-  if (data != nullptr) return;
-
-  data = &device->create_private_data<DeviceData>();
+  DeviceData* data;
+  bool created = renodx::utils::data::CreateOrGet<DeviceData>(device, data);
+  if (!created) return;
 
   is_primary_hook = true;
 }
@@ -54,29 +53,29 @@ static void OnDestroyDevice(reshade::api::device* device) {
 static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (!is_primary_hook) return;
   auto* device = swapchain->get_device();
-  auto& data = device->get_private_data<DeviceData>();
-  if (std::addressof(data) == nullptr) return;
-  const std::unique_lock lock(data.mutex);
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  if (data == nullptr) return;
+  const std::unique_lock lock(data->mutex);
 
-  data.back_buffer_desc = device->get_resource_desc(swapchain->get_current_back_buffer());
+  data->back_buffer_desc = device->get_resource_desc(swapchain->get_current_back_buffer());
 }
 
 static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (!is_primary_hook) return;
   auto* device = swapchain->get_device();
-  auto& data = device->get_private_data<DeviceData>();
-  data.back_buffer_desc = {};
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  data->back_buffer_desc = {};
 }
 
 static void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
   if (!is_primary_hook) return;
   auto* device = runtime->get_device();
-  auto& data = device->get_private_data<DeviceData>();
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
 
   // Runtime may be on a separate device
   std::stringstream s;
-  if (std::addressof(data) == nullptr) {
-    s << "utils::swapchain::OnInitEffectRuntime(No device data: " << reinterpret_cast<void*>(device);
+  if (data == nullptr) {
+    s << "utils::swapchain::OnInitEffectRuntime(No device data: " << reinterpret_cast<uintptr_t>(device);
     s << ")";
     reshade::log::message(reshade::log::level::warning, s.str().c_str());
     return;
@@ -84,13 +83,13 @@ static void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
 
   reshade::api::color_space color_space;
   {
-    const std::unique_lock lock(data.mutex);
-    data.effect_runtimes.emplace(runtime);
-    s << "utils::swapchain::OnInitEffectRuntime(Runtime: " << reinterpret_cast<void*>(device);
-    if (!data.effect_runtimes.contains(runtime)) {
+    const std::unique_lock lock(data->mutex);
+    data->effect_runtimes.emplace(runtime);
+    s << "utils::swapchain::OnInitEffectRuntime(Runtime: " << reinterpret_cast<uintptr_t>(device);
+    if (!data->effect_runtimes.contains(runtime)) {
       s << " (new) ";
     }
-    color_space = data.current_color_space;
+    color_space = data->current_color_space;
   }
   if (color_space != reshade::api::color_space::unknown) {
     runtime->set_color_space(color_space);
@@ -108,23 +107,27 @@ static void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
 static void OnDestroyEffectRuntime(reshade::api::effect_runtime* runtime) {
   if (!is_primary_hook) return;
   auto* device = runtime->get_device();
-  auto& data = device->get_private_data<DeviceData>();
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
 
   // Runtime may be on a separate device
-  if (std::addressof(data) == nullptr) return;
+  if (data == nullptr) return;
 
-  const std::unique_lock lock(data.mutex);
-  data.effect_runtimes.erase(runtime);
+  const std::unique_lock lock(data->mutex);
+  data->effect_runtimes.erase(runtime);
 }
 
 static void OnInitCommandList(reshade::api::command_list* cmd_list) {
   if (!is_primary_hook) return;
-  auto& data = cmd_list->create_private_data<CommandListData>();
+  cmd_list->create_private_data<CommandListData>();
 }
 
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
   if (!is_primary_hook) return;
   cmd_list->destroy_private_data<CommandListData>();
+}
+
+static CommandListData& GetCurrentState(reshade::api::command_list* cmd_list) {
+  return cmd_list->get_private_data<CommandListData>();
 }
 
 static bool IsBackBuffer(reshade::api::resource resource) {
@@ -355,12 +358,13 @@ static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::c
   auto* device = swapchain->get_device();
 
   std::unordered_set<reshade::api::effect_runtime*> runtimes;
-  auto& data = device->get_private_data<DeviceData>();
-  if (std::addressof(data) != nullptr) {
-    std::unique_lock lock(data.mutex);
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
 
-    data.current_color_space = color_space;
-    runtimes = data.effect_runtimes;
+  if (data != nullptr) {
+    std::unique_lock lock(data->mutex);
+
+    data->current_color_space = color_space;
+    runtimes = data->effect_runtimes;
   }
 
   for (auto* runtime : runtimes) {

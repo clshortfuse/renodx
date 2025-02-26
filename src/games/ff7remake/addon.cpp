@@ -380,7 +380,7 @@ bool OnDrawIndexedForMissingShaders(
   auto shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
 
   auto stage_state = renodx::utils::shader::GetCurrentPixelState(shader_state);
-  auto pixel_shader_hash = stage_state.shader_hash;
+  auto pixel_shader_hash = renodx::utils::shader::GetCurrentShaderHash(stage_state);
   if (pixel_shader_hash == 0u) return false;
 
   if (!renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list)) return false;

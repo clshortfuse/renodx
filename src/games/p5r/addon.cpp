@@ -302,8 +302,9 @@ bool OnDrawIndexed(
   auto& command_list_data = cmd_list->get_private_data<CommandListData>();
   if (command_list_data.last_output_merger.handle == 0) return false;
 
-  auto& shader_state = cmd_list->get_private_data<renodx::utils::shader::CommandListData>();
+  auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
 
+  auto* pixel_state = renodx::utils::shader::GetCurrentPixelState(shader_state);
   auto pixel_shader_hash = renodx::utils::shader::GetCurrentPixelShaderHash(shader_state);
   if (pixel_shader_hash == 0xC6D14699) return false;  // Video
   if (pixel_shader_hash == 0xB6E26AC7) {
@@ -313,7 +314,7 @@ bool OnDrawIndexed(
   if (!g_completed_render) return false;
   if (!g_8bit_hashes.contains(pixel_shader_hash)) return false;
 
-  auto& swapchain_state = cmd_list->get_private_data<renodx::utils::swapchain::CommandListData>();
+  auto& swapchain_state = renodx::utils::swapchain::GetCurrentState(cmd_list);
 
   if (swapchain_state.current_render_targets.empty()) return false;
   const auto target0 = swapchain_state.current_render_targets[0];
@@ -341,7 +342,7 @@ bool OnDrawIndexed(
       read_only_lock.unlock();
       {
         const std::unique_lock lock(data.mutex);
-        device->create_pipeline(shader_state.pipeline_layout, 1, &subobjects, &data.min_alpha_pipeline);
+        device->create_pipeline(pixel_state->pipeline_details->layout, 1, &subobjects, &data.min_alpha_pipeline);
       }
       read_only_lock.lock();
     }
@@ -360,14 +361,14 @@ bool OnDrawIndexed(
       read_only_lock.unlock();
       {
         const std::unique_lock lock(data.mutex);
-        device->create_pipeline(shader_state.pipeline_layout, 1, &subobjects, &data.max_alpha_pipeline);
+        device->create_pipeline(pixel_state->pipeline_details->layout, 1, &subobjects, &data.max_alpha_pipeline);
       }
       read_only_lock.lock();
     }
 
     if (data.injection_layout.handle == 0) {
       auto& shader_replace_device_data = device->get_private_data<renodx::mods::shader::DeviceData>();
-      auto* layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(shader_state.pipeline_layout);
+      auto* layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(pixel_state->pipeline_details->layout);
       if (layout_data != nullptr) {
         data.injection_layout = layout_data->replacement_layout;
       } else {
