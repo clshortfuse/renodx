@@ -41,7 +41,8 @@
         "CMAKE_CXX_COMPILER": "clang-cl.exe",
         "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc",
         "CMAKE_EXE_LINKER_FLAGS": "/machine:x64",
-        "CMAKE_MODULE_LINKER_FLAGS": "/machine:x64"
+        "CMAKE_MODULE_LINKER_FLAGS": "/machine:x64",
+        "CMAKE_CXX_COMPILER_TARGET": "x86_64-pc-windows-msvc"
       }
     },
     {
@@ -260,7 +261,7 @@
     {
       "name": "vs-x86-relwithdebinfo",
       "displayName": "Visual Studio x86 RelWithDebInfo",
-      "configurePreset": "vs-x64",
+      "configurePreset": "vs-x86",
       "configuration": "RelWithDebInfo"
     }
   ]
