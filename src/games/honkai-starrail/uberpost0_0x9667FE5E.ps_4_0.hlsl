@@ -1,8 +1,6 @@
 #include "./common.hlsl"
-// used by loading screens/fade out on title screen.
-// ---- Created with 3Dmigoto v1.4.1 on Tue Jan 14 21:48:10 2025
-Texture2D<float4> t5 : register(t5);
-
+// used on the title screen/open-world
+// ---- Created with 3Dmigoto v1.4.1 on Tue Feb 25 20:32:34 2025
 Texture2D<float4> t4 : register(t4);
 
 Texture2D<float4> t3 : register(t3);
@@ -18,7 +16,7 @@ SamplerState s1_s : register(s1);
 SamplerState s0_s : register(s0);
 
 cbuffer cb0 : register(b0) {
-  float4 cb0[407];
+  float4 cb0[404];
 }
 
 // 3Dmigoto declarations
@@ -33,46 +31,30 @@ void main(
   float4 fDest;
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
-  r0.xyz = max(float3(0,0,0), r0.xyz);
-  r1.xy = cb0[391].zw + -v1.xy;
-  r1.xy = cb0[391].xx * r1.xy;
-  r1.xy = r1.xy * cb0[391].yy + v1.xy;
-  r2.xyzw = t5.Sample(s0_s, v1.xy).xyzw;
-  r1.yz = -cb0[391].zw + r1.xy;
-  r1.x = cb0[392].z * r1.y;
-  r0.w = dot(r1.xz, r1.xz);
-  r0.w = sqrt(r0.w);
-  r0.w = -cb0[392].x + r0.w;
-  r1.x = 1 / cb0[392].y;
-  r0.w = saturate(r1.x * r0.w);
-  r1.x = r0.w * -2 + 3;
-  r0.w = r0.w * r0.w;
-  r0.w = r1.x * r0.w;
-  r1.xyz = r2.xyz + -r0.xyz;
-  r0.xyz = r0.www * r1.xyz + r0.xyz;
+  r0.xyz = max(float3(0, 0, 0), r0.xyz);
   r1.xyzw = t1.SampleLevel(s0_s, v1.xy, 0).xyzw;
-  r0.xyz = r1.xyz * cb0[117].xxx + r0.xyz;
+  r0.xyz = r1.xyz * cb0[114].xxx + r0.xyz;
   r1.xyzw = t2.SampleLevel(s1_s, v1.xy, 0).xyzw;
   r0.xyz = r1.xyz + r0.xyz;
-  r0.w = cmp(0 < cb0[110].x);
+  r0.w = cmp(0 < cb0[107].x);
   if (r0.w != 0) {
     r1.xyzw = t4.SampleLevel(s0_s, v1.xy, 0).xyzw;
-    r1.xyz = cb0[110].xxx * r1.xyz;
+    r1.xyz = cb0[107].xxx * r1.xyz;
     r0.xyz = max(r1.xyz, r0.xyz);
   }
-  r0.w = cmp(0 != cb0[32].y);
+  r0.w = cmp(0 != cb0[29].y);
   if (r0.w != 0) {
-    r1.xy = -cb0[406].xy + v1.xy;
-    r1.yz = cb0[406].zz * abs(r1.xy);
-    r1.x = cb0[405].w * r1.y;
+    r1.xy = -cb0[403].xy + v1.xy;
+    r1.yz = cb0[403].zz * abs(r1.xy);
+    r1.x = cb0[402].w * r1.y;
     r0.w = dot(r1.xz, r1.xz);
     r0.w = 1 + -r0.w;
     r0.w = max(0, r0.w);
     r0.w = log2(r0.w);
-    r0.w = cb0[406].w * r0.w;
+    r0.w = cb0[403].w * r0.w;
     r0.w = exp2(r0.w);
-    r1.xyz = float3(1, 1, 1) + -cb0[405].xyz;
-    r1.xyz = r0.www * r1.xyz + cb0[405].xyz;
+    r1.xyz = float3(1, 1, 1) + -cb0[402].xyz;
+    r1.xyz = r0.www * r1.xyz + cb0[402].xyz;
     r0.w = dot(v0.xy, float2(0.0671105608, 0.00583714992));
     r0.w = frac(r0.w);
     r0.w = 52.9829178 * r0.w;
@@ -103,17 +85,17 @@ void main(
   r0.xyz = r0.zxy * float3(5.55555582, 5.55555582, 5.55555582) + float3(0.0479959995, 0.0479959995, 0.0479959995);
   r0.xyz = log2(r0.xyz);
   r0.xyz = saturate(r0.xyz * float3(0.0734997839, 0.0734997839, 0.0734997839) + float3(0.386036009, 0.386036009, 0.386036009));
-  r0.yzw = cb0[42].zzz * r0.xyz;
+  r0.yzw = cb0[39].zzz * r0.xyz;
   r0.y = floor(r0.y);
-  r1.xy = float2(0.5, 0.5) * cb0[42].xy;
-  r1.yz = r0.zw * cb0[42].xy + r1.xy;
-  r1.x = r0.y * cb0[42].y + r1.y;
+  r1.xy = float2(0.5, 0.5) * cb0[39].xy;
+  r1.yz = r0.zw * cb0[39].xy + r1.xy;
+  r1.x = r0.y * cb0[39].y + r1.y;
   r2.xyzw = t3.SampleLevel(s0_s, r1.xz, 0).xyzw;
-  r3.x = cb0[42].y;
+  r3.x = cb0[39].y;
   r3.y = 0;
   r0.zw = r3.xy + r1.xz;
   r1.xyzw = t3.SampleLevel(s0_s, r0.zw, 0).xyzw;
-  r0.x = r0.x * cb0[42].z + -r0.y;
+  r0.x = r0.x * cb0[39].z + -r0.y;
   r0.yzw = r1.xyz + -r2.xyz;
   r0.xyz = r0.xxx * r0.yzw + r2.xyz;
   r1.xyz = saturate(r0.xyz);
