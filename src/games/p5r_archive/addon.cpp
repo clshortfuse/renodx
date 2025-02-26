@@ -288,21 +288,21 @@ void CreateCustomShader(
 }
 
 void CreateCustomShaders(reshade::api::device* device) {
-  auto& data = device->get_private_data<DeviceData>();
+  auto* data = device->get_private_data<DeviceData>();
 
   CreateCustomShader(
       device, __0xFFFFFFFF.begin(), __0xFFFFFFFF.size(),
-      reshade::api::pipeline_subobject_type::compute_shader, data.clamp_alpha_compute_pipeline);
+      reshade::api::pipeline_subobject_type::compute_shader, data->clamp_alpha_compute_pipeline);
 }
 
 void DestroyCustomShaders(reshade::api::device* device) {
-  auto& data = device->get_private_data<DeviceData>();
+  auto* data = device->get_private_data<DeviceData>();
 
-  device->destroy_pipeline(data.clamp_alpha_compute_pipeline);
+  device->destroy_pipeline(data->clamp_alpha_compute_pipeline);
 }
 
 void OnInitDevice(reshade::api::device* device) {
-  auto& data = device->create_private_data<DeviceData>();
+  auto* data = device->create_private_data<DeviceData>();
 
   CreateCustomShaders(device);
 }
@@ -322,11 +322,11 @@ void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
 }
 
 void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
-  auto& data = device->get_private_data<DeviceData>();
+  auto* data = device->get_private_data<DeviceData>();
 
-  if (auto it = data.main_target_uavs.find(resource); it != data.main_target_uavs.end()) {
+  if (auto it = data->main_target_uavs.find(resource); it != data->main_target_uavs.end()) {
     device->destroy_resource_view(it->second);
-    data.main_target_uavs.erase(it);
+    data->main_target_uavs.erase(it);
   }
 }
 
@@ -338,9 +338,9 @@ bool CreateUav(reshade::api::command_list* cmd_list, reshade::api::resource targ
 
 void OnBindRenderTargetsAndDepthStencil(reshade::api::command_list* cmd_list, uint32_t count,
                                         const reshade::api::resource_view* rtvs, reshade::api::resource_view dsv) {
-  auto& state = cmd_list->get_private_data<StateTrackingData>();
-  state.render_targets.assign(rtvs, rtvs + count);
-  state.depth_stencil = dsv;
+  auto* state = cmd_list->get_private_data<StateTrackingData>();
+  state->render_targets.assign(rtvs, rtvs + count);
+  state->depth_stencil = dsv;
 
   if (after_tonemapping) {
     auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
@@ -348,10 +348,10 @@ void OnBindRenderTargetsAndDepthStencil(reshade::api::command_list* cmd_list, ui
     if ((rtvs != nullptr) && rtvs->handle != 0) {
       if (IsUiShader(shader_hash)) {
         auto* device = cmd_list->get_device();
-        auto& data = device->get_private_data<DeviceData>();
+        auto* data = device->get_private_data<DeviceData>();
 
         auto target = device->get_resource_from_view(*rtvs);
-        auto& entry = data.main_target_uavs[target];
+        auto& entry = data->main_target_uavs[target];
 
         if (entry.handle == 0) {
           CreateUav(cmd_list, target, entry);
@@ -362,14 +362,14 @@ void OnBindRenderTargetsAndDepthStencil(reshade::api::command_list* cmd_list, ui
 }
 
 void ClampAlpha(reshade::api::command_list* cmd_list) {
-  const auto& current_state = cmd_list->get_private_data<StateTrackingData>();
+  const auto* current_state = cmd_list->get_private_data<StateTrackingData>();
   auto* device = cmd_list->get_device();
-  auto& data = device->get_private_data<DeviceData>();
+  auto* data = device->get_private_data<DeviceData>();
 
-  if (!current_state.render_targets.empty() && current_state.render_targets[0].handle != 0) {
-    const auto& target = current_state.render_targets[0];
+  if (!current_state->render_targets.empty() && current_state->render_targets[0].handle != 0) {
+    const auto& target = current_state->render_targets[0];
     auto resource = device->get_resource_from_view(target);
-    auto& uav = data.main_target_uavs[resource];
+    auto& uav = data->main_target_uavs[resource];
 
     if (uav.handle == 0) {
       if (!CreateUav(cmd_list, resource, uav)) {
@@ -387,7 +387,7 @@ void ClampAlpha(reshade::api::command_list* cmd_list) {
     auto num_groups_x = (texture_width + thread_group_size_x - 1) / thread_group_size_x;
     auto num_groups_y = (texture_height + thread_group_size_y - 1) / thread_group_size_y;
 
-    cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_compute, data.clamp_alpha_compute_pipeline);
+    cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_compute, data->clamp_alpha_compute_pipeline);
 
     // cmd_list->barrier(resource, reshade::api::resource_usage::render_target, reshade::api::resource_usage::unordered_access);
 
@@ -396,13 +396,13 @@ void ClampAlpha(reshade::api::command_list* cmd_list) {
 
     // cmd_list->barrier(resource, reshade::api::resource_usage::unordered_access, reshade::api::resource_usage::render_target);
 
-    current_state.Apply(cmd_list);
+    current_state->Apply(cmd_list);
   }
 }
 
 void OnBindPipeline(reshade::api::command_list* cmd_list, reshade::api::pipeline_stage type, reshade::api::pipeline pipeline) {
-  auto& state = cmd_list->get_private_data<StateTrackingData>();
-  state.pipelines[type] = pipeline;
+  auto* state = cmd_list->get_private_data<StateTrackingData>();
+  state->pipelines[type] = pipeline;
 
   auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
   const uint32_t shader_hash = renodx::utils::shader::GetCurrentPixelShaderHash(shader_state);
@@ -417,24 +417,24 @@ void OnBindPipeline(reshade::api::command_list* cmd_list, reshade::api::pipeline
 }
 
 void OnBindPipelineStates(reshade::api::command_list* cmd_list, uint32_t count, const reshade::api::dynamic_state* states, const uint32_t* values) {
-  auto& state = cmd_list->get_private_data<StateTrackingData>();
+  auto* state = cmd_list->get_private_data<StateTrackingData>();
 
   for (uint32_t i = 0; i < count; ++i) {
     switch (states[i]) {
       case reshade::api::dynamic_state::primitive_topology:
-        state.primitive_topology = static_cast<reshade::api::primitive_topology>(values[i]);
+        state->primitive_topology = static_cast<reshade::api::primitive_topology>(values[i]);
         break;
       case reshade::api::dynamic_state::blend_constant:
-        state.blend_constant = values[i];
+        state->blend_constant = values[i];
         break;
       case reshade::api::dynamic_state::sample_mask:
-        state.sample_mask = values[i];
+        state->sample_mask = values[i];
         break;
       case reshade::api::dynamic_state::front_stencil_reference_value:
-        state.front_stencil_reference_value = values[i];
+        state->front_stencil_reference_value = values[i];
         break;
       case reshade::api::dynamic_state::back_stencil_reference_value:
-        state.back_stencil_reference_value = values[i];
+        state->back_stencil_reference_value = values[i];
         break;
       default:
         break;
@@ -443,33 +443,33 @@ void OnBindPipelineStates(reshade::api::command_list* cmd_list, uint32_t count, 
 }
 
 void OnBindViewports(reshade::api::command_list* cmd_list, uint32_t first, uint32_t count, const reshade::api::viewport* viewports) {
-  auto& state = cmd_list->get_private_data<StateTrackingData>();
+  auto* state = cmd_list->get_private_data<StateTrackingData>();
 
   const uint32_t total_count = first + count;
-  if (state.viewports.size() < total_count) {
-    state.viewports.resize(total_count);
+  if (state->viewports.size() < total_count) {
+    state->viewports.resize(total_count);
   }
 
   for (uint32_t i = 0; i < count; ++i) {
-    state.viewports[i + first] = viewports[i];
+    state->viewports[i + first] = viewports[i];
   }
 }
 
 void OnBindScissorRects(reshade::api::command_list* cmd_list, uint32_t first, uint32_t count, const reshade::api::rect* rects) {
-  auto& state = cmd_list->get_private_data<StateTrackingData>();
+  auto* state = cmd_list->get_private_data<StateTrackingData>();
 
   const uint32_t total_count = first + count;
-  if (state.scissor_rects.size() < total_count) {
-    state.scissor_rects.resize(total_count);
+  if (state->scissor_rects.size() < total_count) {
+    state->scissor_rects.resize(total_count);
   }
 
   for (uint32_t i = 0; i < count; ++i) {
-    state.scissor_rects[i + first] = rects[i];
+    state->scissor_rects[i + first] = rects[i];
   }
 }
 
 void OnBindDescriptorTables(reshade::api::command_list* cmd_list, reshade::api::shader_stage stages, reshade::api::pipeline_layout layout, uint32_t first, uint32_t count, const reshade::api::descriptor_table* tables) {
-  auto& state = cmd_list->get_private_data<StateTrackingData>().descriptor_tables[stages];
+  auto& state = cmd_list->get_private_data<StateTrackingData>()->descriptor_tables[stages];
 
   if (layout != state.first) {
     state.second.clear();  // Layout changed, which resets all descriptor table bindings
@@ -487,8 +487,8 @@ void OnBindDescriptorTables(reshade::api::command_list* cmd_list, reshade::api::
 }
 
 void OnResetCommandList(reshade::api::command_list* cmd_list) {
-  auto& state = cmd_list->get_private_data<StateTrackingData>();
-  state.Clear();
+  auto* state = cmd_list->get_private_data<StateTrackingData>();
+  state->Clear();
 }
 
 void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain, const reshade::api::rect* source_rect, const reshade::api::rect* dest_rect, uint32_t dirty_rect_count, const reshade::api::rect* dirty_rects) {
