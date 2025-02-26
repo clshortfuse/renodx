@@ -3,8 +3,19 @@ name: CMake (Visual Studio)
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.json"
+      - "docs/**"
+      - "workflow/**"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.json"
+      - "**/*.json"
+      - "docs/**"
+      - "workflow/**"
 
 jobs:
   build:
@@ -19,10 +30,10 @@ jobs:
         run: cmake --preset vs-x64
 
       - name: Build (x64)
-        run: cmake --build --preset vs-x64-release --verbose
+        run: cmake --build --preset vs-x64-relwithdebinfo --verbose
 
       - name: Configure CMake (x86)
         run: cmake --preset vs-x86
 
       - name: Build (x86)
-        run: cmake --build --preset vs-x86-release --verbose
+        run: cmake --build --preset vs-x86-relwithdebinfo --verbose

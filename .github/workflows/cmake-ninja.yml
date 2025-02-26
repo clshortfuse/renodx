@@ -3,8 +3,19 @@ name: CMake (Ninja)
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.json"
+      - "docs/**"
+      - "workflow/**"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.json"
+      - "**/*.json"
+      - "docs/**"
+      - "workflow/**"
 
 jobs:
   build:
@@ -15,14 +26,27 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Configure build for amd64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
       - name: Configure CMake (x64)
         run: cmake --preset ninja-x64
 
-      - name: Build (x64)
-        run: cmake --build --preset ninja-x64-release --verbose
+      - name: Build RelWithDebInfo (x64)
+        run: cmake --build --preset ninja-x64-relwithdebinfo --verbose
+
+      - name: Configure build for x86
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64_x86
 
       - name: Configure CMake (x86)
         run: cmake --preset ninja-x86
 
-      - name: Build (x86)
-        run: cmake --build --preset ninja-x86-release --verbose
+      - name: Build RelWithDebInfo (x86)
+        run: cmake --build --preset ninja-x86-relwithdebinfo --verbose

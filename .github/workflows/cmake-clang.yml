@@ -7,19 +7,21 @@ on:
       - "**/*.md"
       - "**/*.json"
       - "docs/**"
+      - "workflow/**"
   pull_request:
     branches: [main]
     paths-ignore:
       - "**/*.md"
       - "**/*.json"
       - "docs/**"
+      - "workflow/**"
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4.1.7
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -32,11 +34,6 @@ jobs:
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@v5
 
-      - name: Set up Clang
-        uses: egor-tensin/setup-clang@v1
-        with:
-          version: latest
-          platform: x64
 
       - name: Configure build for amd64
         uses: ilammy/msvc-dev-cmd@v1
