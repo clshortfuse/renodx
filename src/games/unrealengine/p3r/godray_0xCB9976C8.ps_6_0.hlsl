@@ -64,6 +64,6 @@ float4 main(
   SV_Target.y = (max(((((cb3_001y)-_82) * (cb3_002x)) + _82), 0.0f));
   SV_Target.z = (max(((((cb3_001z)-_83) * (cb3_002x)) + _83), 0.0f));
   SV_Target.rgb = renodx::draw::UpgradeToneMapByLuminance(tonemapped, renodx::tonemap::renodrt::NeutralSDR(tonemapped), SV_Target.rgb, 1.f);
-
+  SV_Target.a = 1.f;
   return SV_Target;
 }
