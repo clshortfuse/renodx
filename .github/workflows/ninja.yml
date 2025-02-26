@@ -36,8 +36,8 @@ jobs:
       - name: Configure CMake (x64)
         run: cmake --preset ninja-x64
 
-      - name: Build RelWithDebInfo (x64)
-        run: cmake --build --preset ninja-x64-relwithdebinfo --verbose
+      - name: Build (x64)
+        run: cmake --build --preset ninja-x64-release --verbose
 
       - name: Configure build for x86
         uses: ilammy/msvc-dev-cmd@v1
@@ -47,5 +47,5 @@ jobs:
       - name: Configure CMake (x86)
         run: cmake --preset ninja-x86
 
-      - name: Build RelWithDebInfo (x86)
-        run: cmake --build --preset ninja-x86-relwithdebinfo --verbose
+      - name: Build (x86)
+        run: cmake --build --preset ninja-x86-release --verbose
