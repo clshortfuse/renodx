@@ -12,12 +12,10 @@ Checks:
   - readability-*
   - -llvm-header-guard
   - -llvm-include-order
-  - -modernize-avoid-c-arrays
   - -modernize-use-trailing-return-type
-  - -misc-include-cleaner
   - -misc-non-private-member-variables-in-classes
   - -misc-unused-parameters
-  - -performance-no-int-to-ptr
+  - -misc-use-internal-linkage
   - -readability-function-cognitive-complexity
   - -readability-magic-numbers
   - -readability-uppercase-literal-suffix

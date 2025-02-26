@@ -19,6 +19,58 @@
       }
     },
     {
+      "name": "clang-x64",
+      "inherits": "base",
+      "displayName": "Clang x64",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "build",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "toolset": {
+        "value": "v143,host=x64",
+        "strategy": "external"
+      },
+      "environment": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "cacheVariables": {
+        "MSVC": "true",
+        "MSVC_TOOLSET_VERSION": "143",
+        "CMAKE_CXX_COMPILER": "clang-cl.exe",
+        "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc",
+        "CMAKE_EXE_LINKER_FLAGS": "/machine:x64",
+        "CMAKE_MODULE_LINKER_FLAGS": "/machine:x64"
+      }
+    },
+    {
+      "name": "clang-x86",
+      "inherits": "base",
+      "displayName": "Clang x86",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "build32",
+      "architecture": {
+        "value": "x86",
+        "strategy": "external"
+      },
+      "toolset": {
+        "value": "v143,host=x86",
+        "strategy": "external"
+      },
+      "environment": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "cacheVariables": {
+        "MSVC": "true",
+        "MSVC_TOOLSET_VERSION": "143",
+        "CMAKE_CXX_COMPILER": "clang-cl.exe",
+        "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc",
+        "CMAKE_EXE_LINKER_FLAGS": "/machine:X86",
+        "CMAKE_MODULE_LINKER_FLAGS": "/machine:X86"
+      }
+    },
+    {
       "name": "ninja-x64",
       "inherits": "base",
       "displayName": "Ninja x64",
@@ -102,6 +154,42 @@
     }
   ],
   "buildPresets": [
+    {
+      "name": "clang-x64-debug",
+      "displayName": "Clang x64 Debug",
+      "configurePreset": "clang-x64",
+      "configuration": "Debug"
+    },
+    {
+      "name": "clang-x64-release",
+      "displayName": "Clang x64 Release",
+      "configurePreset": "clang-x64",
+      "configuration": "Release"
+    },
+    {
+      "name": "clang-x64-relwithdebinfo",
+      "displayName": "Clang x64 RelWithDebInfo",
+      "configurePreset": "clang-x64",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "clang-x86-debug",
+      "displayName": "Clang x86 Debug",
+      "configurePreset": "ninja-x86",
+      "configuration": "Debug"
+    },
+    {
+      "name": "clang-x86-release",
+      "displayName": "Clang x86 Release",
+      "configurePreset": "ninja-x86",
+      "configuration": "Release"
+    },
+    {
+      "name": "clang-x86-relwithdebinfo",
+      "displayName": "Clang x86 RelWithDebInfo",
+      "configurePreset": "ninja-x86",
+      "configuration": "RelWithDebInfo"
+    },
     {
       "name": "ninja-x64-debug",
       "displayName": "Ninja x64 Debug",

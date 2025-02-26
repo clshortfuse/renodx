@@ -5,7 +5,7 @@ RenoDX is an engine for modifying DirectX games. Recommended configuration:
 * [VSCode](https://code.visualstudio.com/) - Recommended IDE
 * [vs_buildTools.exe](https://aka.ms/vs/17/release/vs_BuildTools.exe) - MSVC 2022 Build Tools
 * [cmake](https://cmake.org/download/) - Build System
-* [llvm](https://github.com/llvm/llvm-project/releases/) - Used for linting and formatting
+* [llvm](https://github.com/llvm/llvm-project/releases/) - Used for compiling, linting and formatting
 * [ninja](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages) - For faster building
 * [Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/) - Used to build addons and compile HLSL
 * [cmd_decompiler.exe](https://github.com/bo3b/3Dmigoto/releases/tag/1.3.16) - Decompiles upto Shader Model 5.0 to HLSL
@@ -26,18 +26,25 @@ Update the submodules
 
 Configure the project
 
-* `cmake --preset ninja-x64`
+* `cmake --preset clang-x64`
 
 Build the project
 
-* `cmake --build --preset ninja-x64-release`
+* `cmake --build --preset clang-x64-release`
 
 ----------------
 
 *Note: for 32bit binaries use:*
 
-* `cmake --preset ninja-x86`
-* `cmake --build --preset ninja-x86-release`
+* `cmake --preset clang-x86`
+* `cmake --build --preset clang-x86-release`
+
+----------------
+
+*Note: for MSVC use:*
+
+* `cmake --preset ninja-x64`
+* `cmake --build --preset ninja-x64-release`
 
 ----------------
 
