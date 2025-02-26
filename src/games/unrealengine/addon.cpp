@@ -497,16 +497,6 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
-void AddUpgrade(reshade::api::format old_format, bool ignore_size = true) {
-  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      .old_format = old_format,
-      .new_format = reshade::api::format::r16g16b16a16_float,
-      .ignore_size = ignore_size,
-      .use_resource_view_cloning = true,
-      .usage_include = reshade::api::resource_usage::render_target,
-  });
-}
-
 const auto UPGRADE_TYPE_NONE = 0.f;
 const auto UPGRADE_TYPE_OUTPUT_SIZE = 1.f;
 const auto UPGRADE_TYPE_OUTPUT_RATIO = 2.f;
@@ -805,10 +795,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
 
-      renodx::utils::shader::Use(fdw_reason);
-      renodx::utils::swapchain::Use(fdw_reason);
-      renodx::utils::resource::Use(fdw_reason);
-
       renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
         auto process_path = renodx::utils::platform::GetCurrentProcessPath();
         auto product_name = renodx::utils::platform::GetProductName(process_path);
@@ -853,7 +839,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         initialized = true;
       }
 
-      reshade::register_event<reshade::addon_event::draw>(OnDrawForLUTDump);
+      if (g_dump_shaders != 0.f) {
+        renodx::utils::swapchain::Use(fdw_reason);
+        renodx::utils::shader::Use(fdw_reason);
+        renodx::utils::resource::Use(fdw_reason);
+        reshade::register_event<reshade::addon_event::draw>(OnDrawForLUTDump);
+      }
 
       break;
     case DLL_PROCESS_DETACH:
