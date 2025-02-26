@@ -133,15 +133,17 @@ struct Setting {
 using Settings = std::vector<Setting*>;
 static Settings* settings = nullptr;
 
-#define AddDebugSetting(injection, name) \
-  new renodx::utils::settings::Setting { \
-    .key = "debug" #name,                \
-    .binding = &##injection.debug##name, \
-    .default_value = 1.f,                \
-    .label = "Debug" #name,              \
-    .section = "Debug",                  \
-    .max = 2.f,                          \
-    .format = "%.2f",                    \
+#define RENODX_JOIN_MACRO(x, y) x##y
+
+#define AddDebugSetting(injection, name)                  \
+  new renodx::utils::settings::Setting {                  \
+    .key = "debug" #name,                                 \
+    .binding = &RENODX_JOIN_MACRO(injection.debug, name), \
+    .default_value = 1.f,                                 \
+    .label = "Debug" #name,                               \
+    .section = "Debug",                                   \
+    .max = 2.f,                                           \
+    .format = "%.2f",                                     \
   }
 
 static Setting* FindSetting(const std::string& key) {
