@@ -1,5 +1,5 @@
 
-#include "./shared.h"
+#include "./common.hlsl"
 
 Texture2D<float4> HDR_TEX1 : register(t0, space2);
 
@@ -75,24 +75,12 @@ float4 main(
     _167 = (1.0f - (saturate(((_154 - (CB_PASS_HDR_007w)) * (CB_PASS_HDR_008x)))));
   }
 
-  renodx::lut::Config lut_config = renodx::lut::config::Create();
-  lut_config.lut_sampler = PS_SAMPLERS[4];
-  lut_config.size = 32u;
-  lut_config.tetrahedral = true;
-  lut_config.type_input = renodx::lut::config::type::PQ;
-  lut_config.type_output = renodx::lut::config::type::SRGB;
-
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
-    _118.rgb = renodx::draw::ToneMapPass(
-        untonemapped,
-        renodx::lut::Sample(
-            renodx::tonemap::renodrt::NeutralSDR(untonemapped),
-            lut_config,
-            HDR_TEX_TONEMAP_LUT));
-  }
+  
   SV_Target.x = (_138 + (_118.x));
   SV_Target.y = (_138 + (_118.y));
   SV_Target.z = (_138 + (_118.z));
+  SV_Target.rgb = LutToneMap(untonemapped, SV_Target.rgb);
+
   SV_Target.w = _167;
   return SV_Target;
 }

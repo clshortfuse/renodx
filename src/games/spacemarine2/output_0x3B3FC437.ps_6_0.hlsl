@@ -1,3 +1,5 @@
+#include "./common.hlsl"
+
 Texture2D<float4> HDR_TEX1 : register(t0, space2);
 
 Texture2D<float4> HDR_TEX2 : register(t1, space2);
@@ -25,7 +27,6 @@ float4 main(
   float4 SV_Target;
   float3 untonemapped;
   float4 _11 = HDR_TEX1.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), (TEXCOORD.y)));
-  untonemapped = _11.rgb;
   float4 _19 = HDR_TEX2.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), (TEXCOORD.y)));
   float4 _27 = HDR_TEX4.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), (TEXCOORD.y)));
   float _50 = (((((CB_PASS_HDR_007y) * ((_27.x) + -1.0f)) + 1.0f) * (min((_19.x), 64512.0f))) + (min((_11.x), 64512.0f))) * (CB_PASS_HDR_004z);
@@ -49,17 +50,20 @@ float4 main(
       _82 = (_75 * _52);
     }
   }
+  untonemapped = float3(_80, _81, _82);
+
   float _90 = max(0.0f, ((exp2((-0.0f - ((CB_PASS_HDR_008w) * (CB_PASS_HDR_008z))))) * 0.18000000715255737f));
   float4 _116 = HDR_TEX_TONEMAP_LUT.Sample(PS_SAMPLERS[4], float3((((saturate(((CB_PASS_HDR_008w) + (((log2((_90 + _80))) + 2.473931074142456f) / (CB_PASS_HDR_008z))))) * 0.96875f) + 0.015625f), (((saturate(((CB_PASS_HDR_008w) + (((log2((_90 + _81))) + 2.473931074142456f) / (CB_PASS_HDR_008z))))) * 0.96875f) + 0.015625f), (((saturate(((CB_PASS_HDR_008w) + (((log2((_90 + _82))) + 2.473931074142456f) / (CB_PASS_HDR_008z))))) * 0.96875f) + 0.015625f)));
   float _126 = ((frac(((sin((((TEXCOORD.y) * 543.3099975585938f) + (TEXCOORD.x)))) * 493013.0f))) * 2.0f) + -1.0f;
   float _129 = min((max((_126 * +1.#INF), -1.0f)), 1.0f);
   float _136 = (_129 - ((sqrt((saturate((1.0f - (abs(_126))))))) * _129)) * 0.003921568859368563f;
+
+
   SV_Target.x = (_136 + (_116.x));
   SV_Target.y = (_136 + (_116.y));
   SV_Target.z = (_136 + (_116.z));
+  SV_Target.rgb = LutToneMap(untonemapped, SV_Target.rgb);
   SV_Target.w = 0.0f;
-
-  SV_Target.rgb = float3(2, 2, 0);
 
   return SV_Target;
 }
