@@ -38,7 +38,7 @@ static std::vector<uint8_t> ReadBinaryFile(const std::filesystem::path& path) {
 }
 
 static std::string ReadTextFile(const std::filesystem::path& path) {
-  auto data = ReadBinaryFile(path);
+  const auto &data = ReadBinaryFile(path);
   if (data.empty()) return "";
   return {reinterpret_cast<const char*>(data.data()), data.size()};
 }

@@ -112,10 +112,10 @@ static void OnInitDevice(reshade::api::device* device) {
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 
-  auto& data = device->create_private_data<DeviceData>();
-  data.use_pipeline_layout_cloning = use_pipeline_layout_cloning;
-  data.expected_constant_buffer_index = expected_constant_buffer_index;
-  data.expected_constant_buffer_space = expected_constant_buffer_space;
+  auto* data = renodx::utils::data::Create<DeviceData>(device);
+  data->use_pipeline_layout_cloning = use_pipeline_layout_cloning;
+  data->expected_constant_buffer_index = expected_constant_buffer_index;
+  data->expected_constant_buffer_space = expected_constant_buffer_space;
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
@@ -149,7 +149,7 @@ static bool OnCreatePipelineLayout(
     if (!on_create_pipeline_layout(device, {params, param_count})) return false;
   }
 
-  auto& data = device->get_private_data<DeviceData>();
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
 
   for (uint32_t param_index = 0; param_index < param_count; ++param_index) {
     auto param = params[param_index];
@@ -159,7 +159,7 @@ static bool OnCreatePipelineLayout(
         auto range = param.descriptor_table.ranges[range_index];
         if (range.type == reshade::api::descriptor_type::constant_buffer) {
           if (
-              range.dx_register_space == data.expected_constant_buffer_space
+              range.dx_register_space == data->expected_constant_buffer_space
               && cbv_index < range.dx_register_index + range.count) {
             cbv_index = range.dx_register_index + range.count;
           }
@@ -169,7 +169,7 @@ static bool OnCreatePipelineLayout(
       dword_count += 1;
       pc_count++;
       if (
-          param.push_constants.dx_register_space == data.expected_constant_buffer_space
+          param.push_constants.dx_register_space == data->expected_constant_buffer_space
           && cbv_index < param.push_constants.dx_register_index + param.push_constants.count) {
         cbv_index = param.push_constants.dx_register_index + param.push_constants.count;
       }
@@ -177,7 +177,7 @@ static bool OnCreatePipelineLayout(
       dword_count += 2;
       if (param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer) {
         if (
-            param.push_descriptors.dx_register_space == data.expected_constant_buffer_space
+            param.push_descriptors.dx_register_space == data->expected_constant_buffer_space
             && cbv_index < param.push_descriptors.dx_register_index + param.push_descriptors.count) {
           cbv_index = param.push_descriptors.dx_register_index + param.push_descriptors.count;
         }
@@ -190,7 +190,7 @@ static bool OnCreatePipelineLayout(
         if (range.static_samplers != nullptr) {
           if (range.type == reshade::api::descriptor_type::constant_buffer) {
             if (
-                range.dx_register_space == data.expected_constant_buffer_space
+                range.dx_register_space == data->expected_constant_buffer_space
                 && cbv_index < range.dx_register_index + range.count) {
               cbv_index = range.dx_register_index + range.count;
             }
@@ -201,18 +201,18 @@ static bool OnCreatePipelineLayout(
     }
   }
 
-  if (data.expected_constant_buffer_index != -1 && cbv_index > data.expected_constant_buffer_index) {
+  if (data->expected_constant_buffer_index != -1 && cbv_index > data->expected_constant_buffer_index) {
     std::stringstream s;
     s << "mods::shader::OnCreatePipelineLayout(";
     s << "Pipeline layout index mismatch, actual: " << cbv_index;
-    s << ", expected: " << data.expected_constant_buffer_index;
+    s << ", expected: " << data->expected_constant_buffer_index;
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
     return false;
   }
 
-  if (data.expected_constant_buffer_index != -1) {
-    cbv_index = data.expected_constant_buffer_index;
+  if (data->expected_constant_buffer_index != -1) {
+    cbv_index = data->expected_constant_buffer_index;
   }
 
   if (pc_count != 0 && !allow_multiple_push_constants) {
@@ -252,7 +252,7 @@ static bool OnCreatePipelineLayout(
       reshade::api::constant_range{
           .binding = 0,
           .dx_register_index = cbv_index,
-          .dx_register_space = data.expected_constant_buffer_space,
+          .dx_register_space = data->expected_constant_buffer_space,
           .count = (slots > max_count) ? max_count : slots,
           .visibility = reshade::api::shader_stage::all,
       });
@@ -293,7 +293,7 @@ static void OnInitPipelineLayout(
   }
   int32_t injection_index = -1;
   auto device_api = device->get_api();
-  auto& data = device->get_private_data<DeviceData>();
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
 
   uint32_t cbv_index = 0;
   uint32_t pc_count = 0;
@@ -306,7 +306,7 @@ static void OnInitPipelineLayout(
         auto range = param.descriptor_table.ranges[range_index];
         if (range.type == reshade::api::descriptor_type::constant_buffer) {
           if (
-              range.dx_register_space == data.expected_constant_buffer_space
+              range.dx_register_space == data->expected_constant_buffer_space
               && cbv_index < range.dx_register_index + range.count) {
             cbv_index = range.dx_register_index + range.count;
           }
@@ -315,14 +315,14 @@ static void OnInitPipelineLayout(
     } else if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
       pc_count++;
       if (
-          param.push_constants.dx_register_space == data.expected_constant_buffer_space
+          param.push_constants.dx_register_space == data->expected_constant_buffer_space
           && cbv_index < param.push_constants.dx_register_index + param.push_constants.count) {
         cbv_index = param.push_constants.dx_register_index + param.push_constants.count;
       }
     } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
       if (param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer) {
         if (
-            param.push_descriptors.dx_register_space == data.expected_constant_buffer_space
+            param.push_descriptors.dx_register_space == data->expected_constant_buffer_space
             && cbv_index < param.push_descriptors.dx_register_index + param.push_descriptors.count) {
           cbv_index = param.push_descriptors.dx_register_index + param.push_descriptors.count;
         }
@@ -335,7 +335,7 @@ static void OnInitPipelineLayout(
         if (range.static_samplers != nullptr) {
           if (range.type == reshade::api::descriptor_type::constant_buffer) {
             if (
-                range.dx_register_space == data.expected_constant_buffer_space
+                range.dx_register_space == data->expected_constant_buffer_space
                 && cbv_index < range.dx_register_index + range.count) {
               cbv_index = range.dx_register_index + range.count;
             }
@@ -349,13 +349,13 @@ static void OnInitPipelineLayout(
   reshade::api::pipeline_layout injection_layout = layout;
 
   if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
-    if (data.use_pipeline_layout_cloning) {
+    if (data->use_pipeline_layout_cloning) {
       const uint32_t old_count = param_count;
       uint32_t new_count = old_count;
       reshade::api::pipeline_layout_param* new_params = nullptr;
       if (shader_injection_size != 0u) {
-        if (data.expected_constant_buffer_index != -1) {
-          cbv_index = data.expected_constant_buffer_index;
+        if (data->expected_constant_buffer_index != -1) {
+          cbv_index = data->expected_constant_buffer_index;
         }
 
         new_count = old_count + 1;
@@ -381,7 +381,7 @@ static void OnInitPipelineLayout(
             reshade::api::constant_range{
                 .binding = 0,
                 .dx_register_index = cbv_index,
-                .dx_register_space = data.expected_constant_buffer_space,
+                .dx_register_space = data->expected_constant_buffer_space,
                 .count = (slots > max_count) ? max_count : slots,
                 .visibility = reshade::api::shader_stage::all,
             });
@@ -419,7 +419,7 @@ static void OnInitPipelineLayout(
       s << static_cast<uintptr_t>(layout.handle);
       s << " => ";
       s << static_cast<uintptr_t>(injection_layout.handle);
-      s << ", b" << cbv_index << ",space" << data.expected_constant_buffer_space;
+      s << ", b" << cbv_index << ",space" << data->expected_constant_buffer_space;
       s << ", param_index: " << injection_index;
       s << ", slots : " << shader_injection_size;
       s << ": " << (result ? "OK" : "FAILED");
@@ -462,7 +462,7 @@ static void OnInitPipelineLayout(
     }
 
   } else {
-    if (data.expected_constant_buffer_index != -1 && cbv_index != data.expected_constant_buffer_index) {
+    if (data->expected_constant_buffer_index != -1 && cbv_index != data->expected_constant_buffer_index) {
       std::stringstream s;
       s << "mods::shader::OnInitPipelineLayout(";
       s << "Forcing cbuffer index ";
@@ -470,7 +470,7 @@ static void OnInitPipelineLayout(
       s << ": " << cbv_index;
       s << " )";
       reshade::log::message(reshade::log::level::warning, s.str().c_str());
-      cbv_index = data.expected_constant_buffer_index;
+      cbv_index = data->expected_constant_buffer_index;
     }
     if (cbv_index == 14) {
       cbv_index = 13;
@@ -814,9 +814,9 @@ static bool HandlePreDraw(
   float resource_tag = -1;
 
   // if (!is_dispatch && resource_tag_float != nullptr) {
-  //   auto& swapchain_state = cmd_list->get_private_data<renodx::utils::swapchain::CommandListData>();
-  //   if (!swapchain_state.current_render_targets.empty()) {
-  //     auto rv = swapchain_state.current_render_targets.at(0);
+  //   auto* swapchain_state = renodx::utils::data::Get<renodx::utils::swapchain::CommandListData>(cmd_list);
+  //   if (!swapchain_state->current_render_targets.empty()) {
+  //     auto rv = swapchain_state->current_render_targets.at(0);
   //     resource_tag = renodx::utils::resource::GetResourceTag(rv);
   //   }
   // }

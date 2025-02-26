@@ -102,10 +102,10 @@ static bool OnUpdateDescriptorTables(
   if (count == 0u) return false;
   if (!trace_descriptor_tables) return false;
 
-  auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  const std::unique_lock lock(data->mutex);
 
-  if (!data.trace_descriptor_tables) return false;
+  if (!data->trace_descriptor_tables) return false;
 
   for (uint32_t i = 0; i < count; ++i) {
     const auto& update = updates[i];
@@ -137,8 +137,8 @@ static bool OnUpdateDescriptorTables(
     }
 #endif
 
-    auto& heap_data = data.heaps[heap.handle];
-    auto& heap_set = data.resource_view_heap_locations[heap.handle];
+    auto& heap_data = data->heaps[heap.handle];
+    auto& heap_set = data->resource_view_heap_locations[heap.handle];
 
     auto total_size = offset + update.count;
     if (total_size > heap_data.size()) {
@@ -216,9 +216,9 @@ static bool OnCopyDescriptorTables(
   if (!is_primary_hook) return false;
   if (count == 0u) return false;
   if (!trace_descriptor_tables) return false;
-  auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
-  if (!data.trace_descriptor_tables) return false;
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  const std::unique_lock lock(data->mutex);
+  if (!data->trace_descriptor_tables) return false;
 
   for (uint32_t i = 0; i < count; ++i) {
     const reshade::api::descriptor_table_copy& copy = copies[i];
@@ -266,10 +266,10 @@ static bool OnCopyDescriptorTables(
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
 
-    auto& src_pool_data = data.heaps[src_heap.handle];
-    auto& src_known = data.resource_view_heap_locations[src_heap.handle];
-    auto& dst_pool_data = data.heaps[dst_heap.handle];
-    auto& dest_known = data.resource_view_heap_locations[dst_heap.handle];
+    auto& src_pool_data = data->heaps[src_heap.handle];
+    auto& src_known = data->resource_view_heap_locations[src_heap.handle];
+    auto& dst_pool_data = data->heaps[dst_heap.handle];
+    auto& dest_known = data->resource_view_heap_locations[dst_heap.handle];
 
     auto min_source_size = src_offset + copy.count;
     assert(min_source_size <= src_pool_data.size());
@@ -309,8 +309,6 @@ static void OnBindDescriptorTables(
   if (count == 0u) return;
   auto* device = cmd_list->get_device();
   auto* layout_data = pipeline_layout::GetPipelineLayoutData(layout);
-
-  /// auto& descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
 
   assert(layout_data != nullptr);
 

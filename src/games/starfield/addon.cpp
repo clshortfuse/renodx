@@ -229,7 +229,7 @@ bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = fals
     auto* swapchain_state = renodx::utils::swapchain::GetCurrentState(cmd_list);
 
     bool changed = false;
-    const uint32_t render_target_count = swapchain_state.current_render_targets.size();
+    const uint32_t render_target_count = swapchain_state->current_render_targets.size();
     for (uint32_t i = 0; i < render_target_count; i++) {
       auto render_target = swapchain_state->current_render_targets[i];
       if (render_target.handle == 0) continue;

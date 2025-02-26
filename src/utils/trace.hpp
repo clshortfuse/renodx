@@ -108,26 +108,26 @@ const uint32_t MAX_PRESENT_COUNT = 60;
 
 static bool attached = false;
 
-static uint64_t GetResourceByViewHandle(DeviceData& data, uint64_t handle) {
+static uint64_t GetResourceByViewHandle(DeviceData* data, uint64_t handle) {
   if (
-      auto pair = data.resource_views.find(handle);
-      pair != data.resource_views.end()) return pair->second;
+      auto pair = data->resource_views.find(handle);
+      pair != data->resource_views.end()) return pair->second;
 
   return 0;
 }
 
-static std::string GetResourceNameByViewHandle(DeviceData& data, uint64_t handle) {
+static std::string GetResourceNameByViewHandle(DeviceData* data, uint64_t handle) {
   if (!TRACE_NAMES) return "?";
   auto resource_handle = GetResourceByViewHandle(data, handle);
   if (resource_handle == 0) return "?";
-  if (!data.resources.contains(resource_handle)) return "?";
+  if (!data->resources.contains(resource_handle)) return "?";
 
   if (
-      auto pair = data.resource_names.find(resource_handle);
-      pair != data.resource_names.end()) return pair->second;
+      auto pair = data->resource_names.find(resource_handle);
+      pair != data->resource_names.end()) return pair->second;
 
   std::string name;
-  if (data.device_api == reshade::api::device_api::d3d11) {
+  if (data->device_api == reshade::api::device_api::d3d11) {
     auto* native_resource = reinterpret_cast<ID3D11DeviceChild*>(resource_handle);
     auto result = GetD3DName(native_resource);
     if (result.has_value()) {
@@ -137,7 +137,7 @@ static std::string GetResourceNameByViewHandle(DeviceData& data, uint64_t handle
     name = "?";
   }
   if (!name.empty()) {
-    data.resource_names[resource_handle] = name;
+    data->resource_names[resource_handle] = name;
   }
   return name;
 }
@@ -151,13 +151,12 @@ static void OnInitDevice(reshade::api::device* device) {
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 
-  auto* data = &device->get_private_data<DeviceData>();
-  if (data != nullptr) return;
-
-  data = &device->create_private_data<DeviceData>();
-  data->device_api = device->get_api();
-
+  DeviceData* data;
+  bool created = renodx::utils::data::CreateOrGet(device, data);
+  if (!created) return;
   is_primary_hook = true;
+
+  data->device_api = device->get_api();
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
@@ -317,7 +316,7 @@ static void LogLayout(
 #if RESHADE_API_VERSION >= 13
       case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
         for (uint32_t range_index = 0; range_index < param.descriptor_table_with_static_samplers.count; ++range_index) {
-          const auto &range = param.descriptor_table_with_static_samplers.ranges[range_index];
+          const auto& range = param.descriptor_table_with_static_samplers.ranges[range_index];
           std::stringstream s;
           s << "logPipelineLayout(";
           s << static_cast<uintptr_t>(layout.handle) << "[" << param_index << "]";
@@ -343,7 +342,7 @@ static void LogLayout(
         break;
       case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers:
         for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
-          const auto &range = param.descriptor_table_with_static_samplers.ranges[range_index];
+          const auto& range = param.descriptor_table_with_static_samplers.ranges[range_index];
           std::stringstream s;
           s << "logPipelineLayout(";
           s << static_cast<uintptr_t>(layout.handle) << "[" << param_index << "]";
@@ -880,8 +879,8 @@ static void OnBindRenderTargetsAndDepthStencil(
     // InstructionState state = instructions.at(instructions.size() - 1);
     // state.renderTargets.clear();
     auto* device = cmd_list->get_device();
-    auto& data = device->get_private_data<DeviceData>();
-    const std::shared_lock lock(data.mutex);
+    auto* data = renodx::utils::data::Get<DeviceData>(device);
+    const std::shared_lock lock(data->mutex);
     for (uint32_t i = 0; i < count; i++) {
       auto rtv = rtvs[i];
       // if (rtv.handle) {
@@ -916,9 +915,9 @@ static void OnInitResource(
     reshade::api::resource_usage initial_state,
     reshade::api::resource resource) {
   if (!is_primary_hook) return;
-  auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
-  data.resources.emplace(resource.handle);
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  const std::unique_lock lock(data->mutex);
+  data->resources.emplace(resource.handle);
 
   if (!FORCE_ALL && !trace_running && present_count >= MAX_PRESENT_COUNT) return;
 
@@ -986,9 +985,9 @@ static void OnInitResourceView(
     const reshade::api::resource_view_desc& desc,
     reshade::api::resource_view view) {
   if (!is_primary_hook) return;
-  auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
-  if (data.resource_views.contains(view.handle)) {
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  const std::unique_lock lock(data->mutex);
+  if (data->resource_views.contains(view.handle)) {
     if (trace_running || present_count < MAX_PRESENT_COUNT) {
       std::stringstream s;
       s << "init_resource_view(reused view: ";
@@ -997,12 +996,12 @@ static void OnInitResourceView(
       reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
     if (resource.handle == 0) {
-      data.resource_views.erase(view.handle);
+      data->resource_views.erase(view.handle);
       return;
     }
   }
   if (resource.handle != 0) {
-    data.resource_views.emplace(view.handle, resource.handle);
+    data->resource_views.emplace(view.handle, resource.handle);
   }
 
   if (!FORCE_ALL && !trace_running && present_count >= MAX_PRESENT_COUNT) return;
@@ -1069,8 +1068,8 @@ static void OnPushDescriptors(
   if (!is_primary_hook) return;
   if (!trace_running) return;
   auto* device = cmd_list->get_device();
-  auto& data = device->get_private_data<DeviceData>();
-  const std::shared_lock lock(data.mutex);
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  const std::shared_lock lock(data->mutex);
   for (uint32_t i = 0; i < update.count; i++) {
     std::stringstream s;
     s << "push_descriptors(" << static_cast<uintptr_t>(layout.handle);
@@ -1159,7 +1158,7 @@ static void OnBindDescriptorTables(
   auto* device = cmd_list->get_device();
 
   auto* layout_data = pipeline_layout::GetPipelineLayoutData(layout);
-  auto& descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
+  auto* descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
 
   for (uint32_t i = 0; i < count; ++i) {
     auto layout_index = first + i;
@@ -1200,11 +1199,11 @@ static void OnBindDescriptorTables(
       reshade::api::descriptor_heap heap = {0};
       device->get_descriptor_heap_offset(tables[i], range.binding, 0, &heap, &base_offset);
 
-      const std::shared_lock descriptor_lock(descriptor_data.mutex);
+      const std::shared_lock descriptor_lock(descriptor_data->mutex);
 
       for (uint32_t j = 0; j < range.count; ++j) {
-        auto heap_pair = descriptor_data.heaps.find(heap.handle);
-        if (heap_pair == descriptor_data.heaps.end()) continue;
+        auto heap_pair = descriptor_data->heaps.find(heap.handle);
+        if (heap_pair == descriptor_data->heaps.end()) continue;
         const auto& heap_data = heap_pair->second;
         auto offset = base_offset + j;
         if (offset >= heap_data.size()) continue;
@@ -1282,16 +1281,16 @@ static bool OnCopyDescriptorTables(
       s << ", heap: " << static_cast<uintptr_t>(src_heap.handle) << "[" << src_offset + j << "]";
       s << " => " << static_cast<uintptr_t>(dest_heap.handle) << "[" << dest_offset + j << "]";
 
-      auto& descriptor_data = device->get_private_data<renodx::utils::descriptor::DeviceData>();
-      const std::shared_lock decriptor_lock(descriptor_data.mutex);
+      auto* descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
+      const std::shared_lock decriptor_lock(descriptor_data->mutex);
       auto origin_primary_key = std::pair<uint64_t, uint32_t>(copy.source_table.handle, copy.source_binding + j);
-      if (auto pair = descriptor_data.table_descriptor_resource_views.find(origin_primary_key);
-          pair != descriptor_data.table_descriptor_resource_views.end()) {
+      if (auto pair = descriptor_data->table_descriptor_resource_views.find(origin_primary_key);
+          pair != descriptor_data->table_descriptor_resource_views.end()) {
         auto update = pair->second;
         auto view = renodx::utils::descriptor::GetResourceViewFromDescriptorUpdate(update);
         if (view.handle != 0) {
-          auto& data = device->get_private_data<DeviceData>();
-          const std::shared_lock lock(data.mutex);
+          auto* data = renodx::utils::data::Get<DeviceData>(device);
+          const std::shared_lock lock(data->mutex);
           s << ", rsv: " << static_cast<uintptr_t>(view.handle);
           s << ", res:" << static_cast<uintptr_t>(GetResourceByViewHandle(data, view.handle));
         }
@@ -1336,8 +1335,8 @@ static bool OnUpdateDescriptorTables(
           auto item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[j];
           s << ", sampler: " << static_cast<uintptr_t>(item.sampler.handle);
           s << ", rsv: " << static_cast<uintptr_t>(item.view.handle);
-          auto& data = device->get_private_data<DeviceData>();
-          const std::shared_lock lock(data.mutex);
+          auto* data = renodx::utils::data::Get<DeviceData>(device);
+          const std::shared_lock lock(data->mutex);
           s << ", res:" << static_cast<uintptr_t>(GetResourceByViewHandle(data, item.view.handle));
           // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
           break;
@@ -1345,8 +1344,8 @@ static bool OnUpdateDescriptorTables(
         case reshade::api::descriptor_type::buffer_shader_resource_view: {
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
           s << ", b-srv: " << static_cast<uintptr_t>(item.handle);
-          auto& data = device->get_private_data<DeviceData>();
-          const std::shared_lock lock(data.mutex);
+          auto* data = renodx::utils::data::Get<DeviceData>(device);
+          const std::shared_lock lock(data->mutex);
           s << ", res:" << static_cast<uintptr_t>(GetResourceByViewHandle(data, item.handle));
           // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
           break;
@@ -1354,8 +1353,8 @@ static bool OnUpdateDescriptorTables(
         case reshade::api::descriptor_type::buffer_unordered_access_view: {
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
           s << ", b-uav: " << static_cast<uintptr_t>(item.handle);
-          auto& data = device->get_private_data<DeviceData>();
-          const std::shared_lock lock(data.mutex);
+          auto* data = renodx::utils::data::Get<DeviceData>(device);
+          const std::shared_lock lock(data->mutex);
           s << ", res:" << static_cast<uintptr_t>(GetResourceByViewHandle(data, item.handle));
           // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
           break;
@@ -1363,8 +1362,8 @@ static bool OnUpdateDescriptorTables(
         case reshade::api::descriptor_type::shader_resource_view: {
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
           s << ", srv: " << static_cast<uintptr_t>(item.handle);
-          auto& data = device->get_private_data<DeviceData>();
-          const std::shared_lock lock(data.mutex);
+          auto* data = renodx::utils::data::Get<DeviceData>(device);
+          const std::shared_lock lock(data->mutex);
           s << ", res:" << static_cast<uintptr_t>(GetResourceByViewHandle(data, item.handle));
           // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
           break;
@@ -1372,8 +1371,8 @@ static bool OnUpdateDescriptorTables(
         case reshade::api::descriptor_type::unordered_access_view: {
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
           s << ", uav: " << static_cast<uintptr_t>(item.handle);
-          auto& data = device->get_private_data<DeviceData>();
-          const std::shared_lock lock(data.mutex);
+          auto* data = renodx::utils::data::Get<DeviceData>(device);
+          const std::shared_lock lock(data->mutex);
           s << ", res: " << static_cast<uintptr_t>(GetResourceByViewHandle(data, item.handle));
           // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
           break;

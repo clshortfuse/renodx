@@ -328,7 +328,7 @@ struct __declspec(uuid("1228110F-324A-46A2-BB29-1BCE591C115B")) SwapchainData {
 constexpr reshade::api::pipeline_layout PIPELINE_LAYOUT{0};
 
 void OnInitDevice(reshade::api::device* device) {
-  auto& data = device->create_private_data<DeviceData>();
+  auto* data = device->create_private_data<DeviceData>();
 
   // create pipeline
   {
@@ -376,7 +376,7 @@ void OnInitDevice(reshade::api::device* device) {
     subobjects.push_back({reshade::api::pipeline_subobject_type::depth_stencil_state, 1, &depth_stencil_state});
 #endif
 
-    device->create_pipeline(PIPELINE_LAYOUT, static_cast<uint32_t>(subobjects.size()), subobjects.data(), &data.final_pipeline);
+    device->create_pipeline(PIPELINE_LAYOUT, static_cast<uint32_t>(subobjects.size()), subobjects.data(), &data->final_pipeline);
   }
 
   // create layout
@@ -386,15 +386,15 @@ void OnInitDevice(reshade::api::device* device) {
     new_params.push_constants.count = 1;
     new_params.push_constants.dx_register_index = 13; // Same as "renodx::mods::shader::expected_constant_buffer_index"
     new_params.push_constants.visibility = reshade::api::shader_stage::vertex | reshade::api::shader_stage::pixel;
-    device->create_pipeline_layout(1, &new_params, &data.final_layout);
+    device->create_pipeline_layout(1, &new_params, &data->final_layout);
   }
 }
 
 void OnDestroyDevice(reshade::api::device* device) {
-  auto& data = device->get_private_data<DeviceData>();
+  auto* data = device->get_private_data<DeviceData>();
 
-  device->destroy_pipeline(data.final_pipeline);
-  device->destroy_pipeline_layout(data.final_layout);
+  device->destroy_pipeline(data->final_pipeline);
+  device->destroy_pipeline_layout(data->final_layout);
 
   device->destroy_private_data<DeviceData>();
 }
@@ -403,7 +403,7 @@ bool fired_on_init_swapchain = false;
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   auto device = swapchain->get_device();
-  auto& data = device->create_private_data<SwapchainData>();
+  auto* data = device->create_private_data<SwapchainData>();
 
   if (!fired_on_init_swapchain) {
     fired_on_init_swapchain = true;
@@ -418,7 +418,7 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     auto back_buffer_resource = swapchain->get_back_buffer(i);
     auto back_buffer_desc = device->get_resource_desc(back_buffer_resource);
     auto desc = reshade::api::resource_view_desc(reshade::api::resource_view_type::texture_2d, reshade::api::format_to_default_typed(back_buffer_desc.texture.format), 0, 1, 0, 1);
-    device->create_resource_view(back_buffer_resource, reshade::api::resource_usage::render_target, desc, &data.swapchain_rtvs.emplace_back());
+    device->create_resource_view(back_buffer_resource, reshade::api::resource_usage::render_target, desc, &data->swapchain_rtvs.emplace_back());
   }
 
   // create copy target
@@ -438,22 +438,22 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     desc.heap = reshade::api::memory_heap::gpu_only;
     desc.usage = reshade::api::resource_usage::copy_dest | reshade::api::resource_usage::shader_resource;
     desc.flags = reshade::api::resource_flags::none;
-    device->create_resource(desc, nullptr, reshade::api::resource_usage::shader_resource, &data.final_texture);
-    device->create_resource_view(data.final_texture, reshade::api::resource_usage::shader_resource, reshade::api::resource_view_desc(reshade::api::format_to_default_typed(desc.texture.format)), &data.final_texture_view);
-    device->create_sampler({}, &data.final_texture_sampler);
+    device->create_resource(desc, nullptr, reshade::api::resource_usage::shader_resource, &data->final_texture);
+    device->create_resource_view(data->final_texture, reshade::api::resource_usage::shader_resource, reshade::api::resource_view_desc(reshade::api::format_to_default_typed(desc.texture.format)), &data->final_texture_view);
+    device->create_sampler({}, &data->final_texture_sampler);
   }
 }
 
 void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   auto device = swapchain->get_device();
-  auto& data = device->get_private_data<SwapchainData>();
+  auto* data = device->get_private_data<SwapchainData>();
 
-  for (const auto& rtv : data.swapchain_rtvs) {
+  for (const auto& rtv : data->swapchain_rtvs) {
     device->destroy_resource_view(rtv);
   }
-  device->destroy_sampler(data.final_texture_sampler);
-  device->destroy_resource_view(data.final_texture_view);
-  device->destroy_resource(data.final_texture);
+  device->destroy_sampler(data->final_texture_sampler);
+  device->destroy_resource_view(data->final_texture_view);
+  device->destroy_resource(data->final_texture);
 
   swapchain->destroy_private_data<SwapchainData>();
 }
@@ -468,8 +468,8 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
   ID3D11Device* native_device = (ID3D11Device*)(queue->get_device()->get_native());
   ID3D11DeviceContext* native_device_context = (ID3D11DeviceContext*)(queue->get_immediate_command_list()->get_native());
 
-  auto& data = device->get_private_data<DeviceData>();
-  auto& swapchain_data = device->get_private_data<SwapchainData>();
+  auto* data = device->get_private_data<DeviceData>();
+  auto* swapchain_data = device->get_private_data<SwapchainData>();
 
   auto back_buffer_resource = swapchain->get_current_back_buffer();
   auto back_buffer_desc = device->get_resource_desc(back_buffer_resource);
@@ -478,19 +478,19 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
   draw_state_stack.Cache(native_device_context);
 
   // copy backbuffer
-  cmd_list->copy_resource(back_buffer_resource, swapchain_data.final_texture);
+  cmd_list->copy_resource(back_buffer_resource, swapchain_data->final_texture);
 
-  cmd_list->bind_pipeline(reshade::api::pipeline_stage::vertex_shader | reshade::api::pipeline_stage::pixel_shader | reshade::api::pipeline_stage::input_assembler | reshade::api::pipeline_stage::output_merger, data.final_pipeline);
+  cmd_list->bind_pipeline(reshade::api::pipeline_stage::vertex_shader | reshade::api::pipeline_stage::pixel_shader | reshade::api::pipeline_stage::input_assembler | reshade::api::pipeline_stage::output_merger, data->final_pipeline);
 
   reshade::api::render_pass_render_target_desc render_target = {};
-  render_target.view = swapchain_data.swapchain_rtvs.at(swapchain->get_current_back_buffer_index());
+  render_target.view = swapchain_data->swapchain_rtvs.at(swapchain->get_current_back_buffer_index());
   cmd_list->begin_render_pass(1, &render_target, nullptr);
 
-  cmd_list->push_descriptors(reshade::api::shader_stage::pixel, PIPELINE_LAYOUT, 0, reshade::api::descriptor_table_update{{}, 0, 0, 1, reshade::api::descriptor_type::texture_shader_resource_view, &swapchain_data.final_texture_view});
-  cmd_list->push_descriptors(reshade::api::shader_stage::pixel, PIPELINE_LAYOUT, 0, reshade::api::descriptor_table_update{{}, 0, 0, 1, reshade::api::descriptor_type::sampler, &swapchain_data.final_texture_sampler});
+  cmd_list->push_descriptors(reshade::api::shader_stage::pixel, PIPELINE_LAYOUT, 0, reshade::api::descriptor_table_update{{}, 0, 0, 1, reshade::api::descriptor_type::texture_shader_resource_view, &swapchain_data->final_texture_view});
+  cmd_list->push_descriptors(reshade::api::shader_stage::pixel, PIPELINE_LAYOUT, 0, reshade::api::descriptor_table_update{{}, 0, 0, 1, reshade::api::descriptor_type::sampler, &swapchain_data->final_texture_sampler});
 
   // push the same usual renodx settings (we use the same data in the final shader)
-  cmd_list->push_constants(reshade::api::shader_stage::pixel, data.final_layout, 0, 0, sizeof(shader_injection) / 4, &shader_injection);
+  cmd_list->push_constants(reshade::api::shader_stage::pixel, data->final_layout, 0, 0, sizeof(shader_injection) / 4, &shader_injection);
 
   const reshade::api::viewport viewport = {
       0.0f, 0.0f,

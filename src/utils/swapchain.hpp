@@ -118,12 +118,12 @@ static void OnDestroyEffectRuntime(reshade::api::effect_runtime* runtime) {
 
 static void OnInitCommandList(reshade::api::command_list* cmd_list) {
   if (!is_primary_hook) return;
-  cmd_list->create_private_data<CommandListData>();
+  renodx::utils::data::Create<CommandListData>(cmd_list);
 }
 
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
   if (!is_primary_hook) return;
-  cmd_list->destroy_private_data<CommandListData>();
+  renodx::utils::data::Delete<CommandListData>(cmd_list);
 }
 
 static CommandListData* GetCurrentState(reshade::api::command_list* cmd_list) {
@@ -158,32 +158,32 @@ static void OnBindRenderTargetsAndDepthStencil(
     const reshade::api::resource_view* rtvs,
     reshade::api::resource_view dsv) {
   if (!is_primary_hook) return;
-  auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
+  auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
   const bool found_swapchain_rtv = false;
-  cmd_list_data.current_render_targets.assign(rtvs, rtvs + count);
-  cmd_list_data.current_depth_stencil = dsv;
-  cmd_list_data.has_swapchain_render_target_dirty = true;
+  cmd_list_data->current_render_targets.assign(rtvs, rtvs + count);
+  cmd_list_data->current_depth_stencil = dsv;
+  cmd_list_data->has_swapchain_render_target_dirty = true;
 }
 
 static bool HasBackBufferRenderTarget(reshade::api::command_list* cmd_list) {
-  auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
+  auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
 
-  if (!cmd_list_data.has_swapchain_render_target_dirty) {
-    return cmd_list_data.has_swapchain_render_target;
+  if (!cmd_list_data->has_swapchain_render_target_dirty) {
+    return cmd_list_data->has_swapchain_render_target;
   }
 
-  const uint32_t count = cmd_list_data.current_render_targets.size();
+  const uint32_t count = cmd_list_data->current_render_targets.size();
   if (count == 0u) {
-    cmd_list_data.has_swapchain_render_target_dirty = false;
-    cmd_list_data.has_swapchain_render_target = false;
+    cmd_list_data->has_swapchain_render_target_dirty = false;
+    cmd_list_data->has_swapchain_render_target = false;
     return false;
   }
   auto* device = cmd_list->get_device();
-  auto& device_data = device->get_private_data<DeviceData>();
-  const std::shared_lock device_lock(device_data.mutex);
+  auto* device_data = renodx::utils::data::Get<DeviceData>(device);
+  const std::shared_lock device_lock(device_data->mutex);
 
   bool found_swapchain_rtv = false;
-  for (const auto& rtv : cmd_list_data.current_render_targets) {
+  for (const auto& rtv : cmd_list_data->current_render_targets) {
     if (rtv.handle == 0u) continue;
     auto* resource_view_info = resource::GetResourceViewInfo(rtv);
     if (resource_view_info == nullptr) continue;
@@ -193,19 +193,19 @@ static bool HasBackBufferRenderTarget(reshade::api::command_list* cmd_list) {
     break;
   }
 
-  cmd_list_data.has_swapchain_render_target_dirty = false;
-  cmd_list_data.has_swapchain_render_target = found_swapchain_rtv;
+  cmd_list_data->has_swapchain_render_target_dirty = false;
+  cmd_list_data->has_swapchain_render_target = found_swapchain_rtv;
   return found_swapchain_rtv;
 }
 
 static std::vector<reshade::api::resource_view>& GetRenderTargets(reshade::api::command_list* cmd_list) {
-  auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
-  return cmd_list_data.current_render_targets;
+  auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  return cmd_list_data->current_render_targets;
 };
 
 static reshade::api::resource_view& GetDepthStencil(reshade::api::command_list* cmd_list) {
-  auto& cmd_list_data = cmd_list->get_private_data<CommandListData>();
-  return cmd_list_data.current_depth_stencil;
+  auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  return cmd_list_data->current_depth_stencil;
 };
 
 static bool IsDirectX(reshade::api::swapchain* swapchain) {

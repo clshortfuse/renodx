@@ -526,18 +526,18 @@ static void AddRuntimeReplacement(
     reshade::api::device* device,
     uint32_t shader_hash,
     const std::vector<uint8_t>& shader_data) {
-  auto& data = device->get_private_data<DeviceData>();
-  data.runtime_replacements[shader_hash] = std::vector<uint8_t>(shader_data);
-  runtime_replacement_count = data.runtime_replacements.size();
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  data->runtime_replacements[shader_hash] = std::vector<uint8_t>(shader_data);
+  runtime_replacement_count = data->runtime_replacements.size();
 }
 
 static void RemoveRuntimeReplacements(reshade::api::device* device, const std::unordered_set<uint32_t>& filter = {}) {
-  auto& data = device->get_private_data<DeviceData>();
-  std::unique_lock device_lock(data.mutex);
-  for (auto& [shader_hash, replacement] : data.runtime_replacements) {
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  std::unique_lock device_lock(data->mutex);
+  for (auto& [shader_hash, replacement] : data->runtime_replacements) {
     if (!filter.empty() && !filter.contains(shader_hash)) continue;
-    if (auto pair = data.shader_pipeline_handles.find(shader_hash);
-        pair != data.shader_pipeline_handles.end()) {
+    if (auto pair = data->shader_pipeline_handles.find(shader_hash);
+        pair != data->shader_pipeline_handles.end()) {
       auto& pipeline_handles = pair->second;
       if (pipeline_handles.empty()) continue;
       std::shared_lock read_lock(pipeline_shader_details_mutex);
@@ -555,13 +555,13 @@ static void RemoveRuntimeReplacements(reshade::api::device* device, const std::u
     }
   }
   if (filter.empty()) {
-    data.runtime_replacements.clear();
+    data->runtime_replacements.clear();
   } else {
     for (auto shader_hash : filter) {
-      data.runtime_replacements.erase(shader_hash);
+      data->runtime_replacements.erase(shader_hash);
     }
   }
-  runtime_replacement_count = data.runtime_replacements.size();
+  runtime_replacement_count = data->runtime_replacements.size();
 }
 
 static CommandListData* GetCurrentState(reshade::api::command_list* cmd_list) {
@@ -665,15 +665,15 @@ inline DeviceData* GetDeviceData(reshade::api::command_list* cmd_list, CommandLi
 
 static void OnResetCommandList(reshade::api::command_list* cmd_list) {
   if (!is_primary_hook) return;
-  auto& data = cmd_list->get_private_data<CommandListData>();
-  data.last_pipeline = {0u};
-  data.stage_states[0].pipeline = {0u};
-  data.stage_states[1].pipeline = {0u};
-  data.stage_states[2].pipeline = {0u};
+  auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  data->last_pipeline = {0u};
+  data->stage_states[0].pipeline = {0u};
+  data->stage_states[1].pipeline = {0u};
+  data->stage_states[2].pipeline = {0u};
 
-  data.stage_states[0].pipeline_details = nullptr;
-  data.stage_states[1].pipeline_details = nullptr;
-  data.stage_states[2].pipeline_details = nullptr;
+  data->stage_states[0].pipeline_details = nullptr;
+  data->stage_states[1].pipeline_details = nullptr;
+  data->stage_states[2].pipeline_details = nullptr;
 }
 
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
@@ -688,11 +688,11 @@ static bool OnCreatePipeline(
     const reshade::api::pipeline_subobject* subobjects) {
   if (!is_primary_hook) return false;
   if (use_replace_async) return false;
-  auto& data = device->get_private_data<DeviceData>();
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
   std::vector<std::pair<uint32_t, uint32_t>> hash_changes;
 
   {
-    std::shared_lock read_lock(data.mutex);
+    std::shared_lock read_lock(data->mutex);
     for (uint32_t i = 0; i < subobject_count; ++i) {
       if (!COMPATIBLE_SUBOBJECT_TYPE_TO_STAGE.contains(subobjects[i].type)) continue;
       auto* desc = static_cast<reshade::api::shader_desc*>(subobjects[i].data);
@@ -702,8 +702,8 @@ static bool OnCreatePipeline(
           static_cast<const uint8_t*>(desc->code),
           desc->code_size);
 
-      if (auto pair = data.compile_time_replacements.find(shader_hash);
-          pair != data.compile_time_replacements.end()) {
+      if (auto pair = data->compile_time_replacements.find(shader_hash);
+          pair != data->compile_time_replacements.end()) {
         const auto& replacement = pair->second;
         auto new_size = replacement.size();
 
@@ -733,11 +733,11 @@ static bool OnCreatePipeline(
 
   if (hash_changes.empty()) return false;
 
-  std::unique_lock lock(data.mutex);
+  std::unique_lock lock(data->mutex);
   for (auto& [shader_hash, new_hash] : hash_changes) {
-    data.shader_replacements[shader_hash] = new_hash;
+    data->shader_replacements[shader_hash] = new_hash;
     if (new_hash != 0u) {
-      data.shader_replacements_inverse[new_hash] = shader_hash;
+      data->shader_replacements_inverse[new_hash] = shader_hash;
     }
   }
   return true;
@@ -752,22 +752,22 @@ static void OnInitPipeline(
   if (!is_primary_hook) return;
   if (pipeline.handle == 0u) return;
 
-  auto& data = device->get_private_data<DeviceData>();
-  bool locking = !data.compile_time_replacements.empty();
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  bool locking = !data->compile_time_replacements.empty();
 
   if (locking) {
-    data.mutex.lock_shared();
+    data->mutex.lock_shared();
   }
   auto details = PipelineShaderDetails(
       device,
       layout,
       subobjects,
       subobject_count,
-      &data.shader_replacements_inverse,
-      &data.runtime_replacements);
+      &data->shader_replacements_inverse,
+      &data->runtime_replacements);
 
   if (locking) {
-    data.mutex.unlock_shared();
+    data->mutex.unlock_shared();
   }
   bool has_useful_details = !details.subobject_shaders.empty();
   if (!has_useful_details) return;
@@ -785,12 +785,12 @@ static void OnInitPipeline(
 
     if (use_replace_async) {
       for (const auto shader_hash : details.shader_hashes) {
-        if (auto pair = data.shader_pipeline_handles.find(shader_hash);
-            pair != data.shader_pipeline_handles.end()) {
+        if (auto pair = data->shader_pipeline_handles.find(shader_hash);
+            pair != data->shader_pipeline_handles.end()) {
           auto& pipeline_handles = pair->second;
           pipeline_handles.emplace(pipeline.handle);
         } else {
-          data.shader_pipeline_handles[shader_hash] = {pipeline.handle};
+          data->shader_pipeline_handles[shader_hash] = {pipeline.handle};
         }
       }
     }

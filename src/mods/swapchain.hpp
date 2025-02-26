@@ -648,16 +648,17 @@ static void RewriteRenderTargets(
 static void DiscardDescriptors(reshade::api::command_list* cmd_list) {
   return;
   // Not implemented
-  auto& cmd_data = cmd_list->get_private_data<CommandListData>();
-  cmd_data.unbound_descriptors.clear();
-  cmd_data.unpushed_updates.clear();
+
+  auto* cmd_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  cmd_data->unbound_descriptors.clear();
+  cmd_data->unpushed_updates.clear();
 }
 
 static void FlushDescriptors(reshade::api::command_list* cmd_list) {
   return;
   // Not implemented
-  auto& cmd_data = cmd_list->get_private_data<CommandListData>();
-  for (auto info : cmd_data.unbound_descriptors) {
+  auto* cmd_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  for (auto info : cmd_data->unbound_descriptors) {
     cmd_list->bind_descriptor_tables(
         info.stages,
         info.layout,
@@ -665,16 +666,16 @@ static void FlushDescriptors(reshade::api::command_list* cmd_list) {
         info.count,
         info.tables.data());
   }
-  cmd_data.unbound_descriptors.clear();
+  cmd_data->unbound_descriptors.clear();
 
-  for (auto info : cmd_data.unpushed_updates) {
+  for (auto info : cmd_data->unpushed_updates) {
     cmd_list->push_descriptors(
         info.stages,
         info.layout,
         info.layout_param,
         info.update);
   }
-  cmd_data.unpushed_updates.clear();
+  cmd_data->unpushed_updates.clear();
 }
 
 static void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api::command_queue* queue) {
@@ -901,14 +902,15 @@ static void OnInitDevice(reshade::api::device* device) {
   s << reinterpret_cast<uintptr_t>(device);
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
-  auto& data = device->create_private_data<DeviceData>();
-  data.swap_chain_upgrade_targets = swap_chain_upgrade_targets;
-  data.prevent_full_screen = prevent_full_screen;
-  data.swap_chain_proxy_vertex_shader = swap_chain_proxy_vertex_shader;
-  data.swap_chain_proxy_pixel_shader = swap_chain_proxy_pixel_shader;
-  data.swapchain_proxy_revert_state = swapchain_proxy_revert_state;
-  data.expected_constant_buffer_index = expected_constant_buffer_index;
-  data.expected_constant_buffer_space = expected_constant_buffer_space;
+  auto* data = renodx::utils::data::Create<DeviceData>(device);
+
+  data->swap_chain_upgrade_targets = swap_chain_upgrade_targets;
+  data->prevent_full_screen = prevent_full_screen;
+  data->swap_chain_proxy_vertex_shader = swap_chain_proxy_vertex_shader;
+  data->swap_chain_proxy_pixel_shader = swap_chain_proxy_pixel_shader;
+  data->swapchain_proxy_revert_state = swapchain_proxy_revert_state;
+  data->expected_constant_buffer_index = expected_constant_buffer_index;
+  data->expected_constant_buffer_space = expected_constant_buffer_space;
 
   if (device->get_api() == reshade::api::device_api::vulkan) {
     is_vulkan = true;
@@ -922,19 +924,19 @@ static void OnDestroyDevice(reshade::api::device* device) {
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 
-  auto& data = device->get_private_data<DeviceData>();
-  if (data.swap_chain_proxy_sampler.handle != 0u) {
-    device->destroy_sampler(data.swap_chain_proxy_sampler);
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  if (data->swap_chain_proxy_sampler.handle != 0u) {
+    device->destroy_sampler(data->swap_chain_proxy_sampler);
   }
-  device->destroy_private_data<DeviceData>();
+  renodx::utils::data::Delete(device, data);
 }
 
 static void OnInitCommandList(reshade::api::command_list* cmd_list) {
-  cmd_list->create_private_data<CommandListData>();
+  renodx::utils::data::Create<CommandListData>(cmd_list);
 }
 
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
-  cmd_list->destroy_private_data<CommandListData>();
+  renodx::utils::data::Delete<CommandListData>(cmd_list);
 }
 
 // Before CreatePipelineState
@@ -1082,11 +1084,11 @@ static bool OnCreateResource(
       return false;
   }
 
-  auto& private_data = device->get_private_data<DeviceData>();
-  if (private_data.resource_upgrade_finished) return false;
+  auto* private_data = renodx::utils::data::Get<DeviceData>(device);
+  if (private_data->resource_upgrade_finished) return false;
   // const std::unique_lock lock(private_data.mutex);
 
-  auto& device_back_buffer_desc = private_data.primary_swapchain_desc;
+  auto& device_back_buffer_desc = private_data->primary_swapchain_desc;
   if (device_back_buffer_desc.type == reshade::api::resource_type::unknown) {
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
@@ -1098,10 +1100,10 @@ static bool OnCreateResource(
     return false;
   }
 
-  const uint32_t len = private_data.swap_chain_upgrade_targets.size();
+  const uint32_t len = private_data->swap_chain_upgrade_targets.size();
 
   // const float resource_tag = -1;
-  auto& swap_chain_upgrade_targets = private_data.swap_chain_upgrade_targets;
+  auto& swap_chain_upgrade_targets = private_data->swap_chain_upgrade_targets;
 
   SwapChainUpgradeTarget* found_target = nullptr;
   bool all_completed = true;
@@ -1143,7 +1145,7 @@ static bool OnCreateResource(
   if (found_target == nullptr) return false;
 
   if (all_completed) {
-    private_data.resource_upgrade_finished = true;
+    private_data->resource_upgrade_finished = true;
   }
 
   std::stringstream s;
@@ -1199,8 +1201,8 @@ static bool OnCreateResource(
       static_cast<uint32_t>(desc.usage)
       | (found_target->usage_set & ~found_target->usage_unset));
 
-  private_data.original_resource = original_resource;
-  private_data.applied_target = found_target;
+  private_data->original_resource = original_resource;
+  private_data->applied_target = found_target;
   return true;
 }
 
@@ -1240,27 +1242,27 @@ static void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
       return;
   }
 
-  auto& private_data = device->get_private_data<DeviceData>();
+  auto* private_data = renodx::utils::data::Get<DeviceData>(device);
   // const std::unique_lock lock(private_data.mutex);
 
   auto& resource = resource_info->resource;
   auto& initial_state = resource_info->initial_state;
   bool changed = false;
 
-  if (private_data.applied_target != nullptr) {
+  if (private_data->applied_target != nullptr) {
     changed = true;
-    if (private_data.applied_target->resource_tag != -1) {
-      resource_info->resource_tag = private_data.applied_target->resource_tag;
+    if (private_data->applied_target->resource_tag != -1) {
+      resource_info->resource_tag = private_data->applied_target->resource_tag;
     }
     resource_info->upgraded = true;
-    resource_info->upgrade_target = private_data.applied_target;
-    private_data.applied_target = nullptr;
+    resource_info->upgrade_target = private_data->applied_target;
+    private_data->applied_target = nullptr;
 
-    resource_info->fallback = private_data.original_resource;
+    resource_info->fallback = private_data->original_resource;
 
   } else if (use_resource_cloning) {
-    if (private_data.resource_upgrade_finished) return;
-    auto& device_back_buffer_desc = private_data.primary_swapchain_desc;
+    if (private_data->resource_upgrade_finished) return;
+    auto& device_back_buffer_desc = private_data->primary_swapchain_desc;
     if (device_back_buffer_desc.type == reshade::api::resource_type::unknown) {
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
@@ -1316,7 +1318,7 @@ static void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
 #ifdef DEBUG_LEVEL_0
       reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnInitResource(All resource cloning completed)");
 #endif
-      private_data.resource_upgrade_finished = true;
+      private_data->resource_upgrade_finished = true;
     }
 
     // On the fly generation
@@ -1652,9 +1654,9 @@ static bool OnCreateResourceView(
   desc.format = new_desc.format;
 #ifdef TRACK_RESOURCE_VIEW_UPGRADERS
   {
-    auto& private_data = device->get_private_data<DeviceData>();
+    auto* private_data = renodx::utils::data::Get<DeviceData>(device);
     // std::unique_lock lock(private_data.mutex);
-    private_data.upgraded_resource_view = true;
+    private_data->upgraded_resource_view = true;
   }
 #endif
   return true;
@@ -1665,14 +1667,14 @@ static void OnInitResourceViewInfo(utils::resource::ResourceViewInfo* resource_v
   reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnInitResourceView()");
 #endif
 #ifdef TRACK_RESOURCE_VIEW_UPGRADERS
-  auto& private_data = resource_view_info->device->get_private_data<DeviceData>();
-  std::unique_lock lock(private_data.mutex);
+  auto* private_data = renodx::utils::data::Get<DeviceData>(resource_view_info->device);
+  // std::unique_lock lock(private_data->mutex);
 
-  if (private_data.upgraded_resource_view) {
-    private_data.upgraded_resource_view = false;
-    if (private_data.original_resource_view.handle != 0u) {
-      resource_view_info->fallback = private_data.original_resource_view;
-      private_data.original_resource_view = {0};
+  if (private_data->upgraded_resource_view) {
+    private_data->upgraded_resource_view = false;
+    if (private_data->original_resource_view.handle != 0u) {
+      resource_view_info->fallback = private_data->original_resource_view;
+      private_data->original_resource_view = {0};
     }
   }
 #endif
@@ -1930,8 +1932,8 @@ static bool OnCopyDescriptorTables(
   for (uint32_t i = 0; i < count; i++) {
     const auto& copy = copies[i];
     for (uint32_t j = 0; j < copy.count; j++) {
-      auto& data = device->get_private_data<DeviceData>();
-      const std::unique_lock lock(data.mutex);
+      auto* data = renodx::utils::data::Get<DeviceData>(device);
+      const std::unique_lock lock(data->mutex);
 
       reshade::api::descriptor_heap source_heap = {0};
       uint32_t source_base_offset = 0;
@@ -1941,17 +1943,17 @@ static bool OnCopyDescriptorTables(
       device->get_descriptor_heap_offset(copy.dest_table, copy.dest_binding + j, copy.dest_array_offset, &dest_heap, &dest_base_offset);
 
       bool erase = false;
-      if (auto pair = data.heap_descriptor_infos.find(source_heap.handle); pair != data.heap_descriptor_infos.end()) {
+      if (auto pair = data->heap_descriptor_infos.find(source_heap.handle); pair != data->heap_descriptor_infos.end()) {
         auto& source_map = pair->second;
         if (auto pair2 = source_map.find(source_base_offset); pair2 != source_map.end()) {
           if (dest_heap.handle == source_heap.handle) {
             source_map[dest_base_offset] = source_map[source_base_offset];
           } else {
-            if (auto pair3 = data.heap_descriptor_infos.find(dest_heap.handle); pair3 != data.heap_descriptor_infos.end()) {
+            if (auto pair3 = data->heap_descriptor_infos.find(dest_heap.handle); pair3 != data->heap_descriptor_infos.end()) {
               auto& dest_map = pair3->second;
               dest_map[dest_base_offset] = source_map[source_base_offset];
             } else {
-              data.heap_descriptor_infos[dest_heap.handle] = {{
+              data->heap_descriptor_infos[dest_heap.handle] = {{
                   dest_base_offset,
                   source_map[source_base_offset],
               }};
@@ -1977,7 +1979,7 @@ static bool OnCopyDescriptorTables(
         erase = true;
       }
       if (erase) {
-        if (auto pair3 = data.heap_descriptor_infos.find(dest_heap.handle); pair3 != data.heap_descriptor_infos.end()) {
+        if (auto pair3 = data->heap_descriptor_infos.find(dest_heap.handle); pair3 != data->heap_descriptor_infos.end()) {
           auto& dest_map = pair3->second;
           dest_map.erase(dest_base_offset);
         }
@@ -2008,8 +2010,8 @@ static void OnBindDescriptorTables(
   bool built_new_tables = false;
   bool active = false;
 
-  auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  const std::unique_lock lock(data->mutex);
   reshade::api::descriptor_heap heap = {0};
   uint32_t base_offset = 0;
   for (uint32_t i = 0; i < count; ++i) {
@@ -2017,7 +2019,7 @@ static void OnBindDescriptorTables(
 
     HeapDescriptorInfo* info = nullptr;
     bool found_info = false;
-    if (auto pair = data.heap_descriptor_infos.find(heap.handle); pair != data.heap_descriptor_infos.end()) {
+    if (auto pair = data->heap_descriptor_infos.find(heap.handle); pair != data->heap_descriptor_infos.end()) {
       auto& map = pair->second;
       if (auto pair2 = map.find(base_offset); pair2 != map.end()) {
         info = pair2->second;
@@ -2140,13 +2142,13 @@ static void OnBindDescriptorTables(
 #endif
     cmd_list->bind_descriptor_tables(stages, layout, first, count, new_tables);
   } else if (built_new_tables) {
-    auto& cmd_data = cmd_list->get_private_data<CommandListData>();
+    auto* cmd_data = renodx::utils::data::Get<CommandListData>(cmd_list);
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
     s << "mods::swapchain::OnBindDescriptorTables(storing unbound descriptor)";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-    cmd_data.unbound_descriptors.push_back({
+    cmd_data->unbound_descriptors.push_back({
         .stages = stages,
         .layout = layout,
         .first = first,
@@ -2243,13 +2245,13 @@ static void OnPushDescriptors(
 #endif
     cmd_list->push_descriptors(stages, layout, layout_param, new_update);
   } else if (changed) {
-    auto& cmd_data = cmd_list->get_private_data<CommandListData>();
+    auto* cmd_data = renodx::utils::data::Get<CommandListData>(cmd_list);
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
     s << "mods::swapchain::OnPushDescriptors(storing unpushed descriptor)";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-    cmd_data.unpushed_updates.push_back({
+    cmd_data->unpushed_updates.push_back({
         .stages = stages,
         .layout = layout,
         .layout_param = layout_param,

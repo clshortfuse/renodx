@@ -235,19 +235,19 @@ struct __declspec(uuid("452ac839-081c-4891-9880-8533c0a63666")) CommandListData 
 };
 
 void OnInitDevice(reshade::api::device* device) {
-  device->create_private_data<DeviceData>();
+  renodx::utils::data::Create<DeviceData>(device);
 }
 
 void OnDestroyDevice(reshade::api::device* device) {
-  device->destroy_private_data<DeviceData>();
+  renodx::utils::data::Delete<DeviceData>(device);
 }
 
 void OnInitCommandList(reshade::api::command_list* cmd_list) {
-  cmd_list->create_private_data<CommandListData>();
+  renodx::utils::data::Create<CommandListData>(cmd_list);
 }
 
 void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
-  cmd_list->destroy_private_data<CommandListData>();
+  renodx::utils::data::Delete<CommandListData>(cmd_list);
 }
 
 bool g_completed_render = false;
@@ -299,8 +299,8 @@ bool OnDrawIndexed(
     int32_t vertex_offset,
     uint32_t first_instance) {
   if (shader_injection.colorGradeLUTScaling == 0.f) return false;
-  auto& command_list_data = cmd_list->get_private_data<CommandListData>();
-  if (command_list_data.last_output_merger.handle == 0) return false;
+  auto* command_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  if (command_list_data->last_output_merger.handle == 0) return false;
 
   auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
 
@@ -324,10 +324,10 @@ bool OnDrawIndexed(
   auto resource_tag = renodx::utils::resource::GetResourceTag(target0);
   if (resource_tag != 1.f) return false;
 
-  auto& data = device->get_private_data<DeviceData>();
-  std::shared_lock read_only_lock(data.mutex);
-  if (data.unsafe_blend_pipelines.contains(command_list_data.last_output_merger.handle)) {
-    if (data.min_alpha_pipeline.handle == 0) {
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  std::shared_lock read_only_lock(data->mutex);
+  if (data->unsafe_blend_pipelines.contains(command_list_data->last_output_merger.handle)) {
+    if (data->min_alpha_pipeline.handle == 0) {
       reshade::api::blend_desc blend_desc = {};
       blend_desc.blend_enable[0] = true;
       blend_desc.alpha_blend_op[0] = reshade::api::blend_op::min;
@@ -341,13 +341,13 @@ bool OnDrawIndexed(
 
       read_only_lock.unlock();
       {
-        const std::unique_lock lock(data.mutex);
-        device->create_pipeline(pixel_state->pipeline_details->layout, 1, &subobjects, &data.min_alpha_pipeline);
+        const std::unique_lock lock(data->mutex);
+        device->create_pipeline(pixel_state->pipeline_details->layout, 1, &subobjects, &data->min_alpha_pipeline);
       }
       read_only_lock.lock();
     }
 
-    if (data.max_alpha_pipeline.handle == 0) {
+    if (data->max_alpha_pipeline.handle == 0) {
       reshade::api::blend_desc blend_desc = {};
       blend_desc.blend_enable[0] = true;
       blend_desc.alpha_blend_op[0] = reshade::api::blend_op::max;
@@ -360,17 +360,16 @@ bool OnDrawIndexed(
 
       read_only_lock.unlock();
       {
-        const std::unique_lock lock(data.mutex);
-        device->create_pipeline(pixel_state->pipeline_details->layout, 1, &subobjects, &data.max_alpha_pipeline);
+        const std::unique_lock lock(data->mutex);
+        device->create_pipeline(pixel_state->pipeline_details->layout, 1, &subobjects, &data->max_alpha_pipeline);
       }
       read_only_lock.lock();
     }
 
-    if (data.injection_layout.handle == 0) {
-      auto& shader_replace_device_data = device->get_private_data<renodx::mods::shader::DeviceData>();
+    if (data->injection_layout.handle == 0) {
       auto* layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(pixel_state->pipeline_details->layout);
       if (layout_data != nullptr) {
-        data.injection_layout = layout_data->replacement_layout;
+        data->injection_layout = layout_data->replacement_layout;
       } else {
         return false;
       }
@@ -382,15 +381,15 @@ bool OnDrawIndexed(
         {0});
 
     shader_injection.clampState = CLAMP_STATE__MIN_ALPHA;
-    PushConstants(cmd_list, data.injection_layout);
-    cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, data.min_alpha_pipeline);
+    PushConstants(cmd_list, data->injection_layout);
+    cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, data->min_alpha_pipeline);
     cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
 
     shader_injection.clampState = CLAMP_STATE__MAX_ALPHA;
-    PushConstants(cmd_list, data.injection_layout);
-    cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, data.max_alpha_pipeline);
+    PushConstants(cmd_list, data->injection_layout);
+    cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, data->max_alpha_pipeline);
     cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
-    cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, command_list_data.last_output_merger);
+    cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, command_list_data->last_output_merger);
     cmd_list->bind_render_targets_and_depth_stencil(
         swapchain_state->current_render_targets.size(),
         swapchain_state->current_render_targets.data(),
@@ -398,7 +397,7 @@ bool OnDrawIndexed(
   }
 
   shader_injection.clampState = CLAMP_STATE__OUTPUT;
-  PushConstants(cmd_list, data.injection_layout);
+  PushConstants(cmd_list, data->injection_layout);
   cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
   shader_injection.clampState = CLAMP_STATE__NONE;
 
@@ -414,9 +413,9 @@ void OnInitPipeline(
     reshade::api::pipeline pipeline) {
   if (!renodx::utils::pipeline::HasSDRAlphaBlend({subobjects, subobject_count})) return;
 
-  auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
-  data.unsafe_blend_pipelines.emplace(pipeline.handle);
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  const std::unique_lock lock(data->mutex);
+  data->unsafe_blend_pipelines.emplace(pipeline.handle);
 }
 
 void OnBindPipeline(
@@ -424,16 +423,16 @@ void OnBindPipeline(
     reshade::api::pipeline_stage stages,
     reshade::api::pipeline pipeline) {
   if ((static_cast<uint32_t>(stages) & static_cast<uint32_t>(reshade::api::pipeline_stage::output_merger)) == 0u) return;
-  auto& data = cmd_list->get_private_data<CommandListData>();
-  data.last_output_merger = pipeline;
+  auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  data->last_output_merger = pipeline;
 }
 
 void OnDestroyPipeline(
     reshade::api::device* device,
     reshade::api::pipeline pipeline) {
-  auto& data = device->get_private_data<DeviceData>();
-  const std::unique_lock lock(data.mutex);
-  data.unsafe_blend_pipelines.erase(pipeline.handle);
+      auto* data = renodx::utils::data::Get<DeviceData>(device);
+  const std::unique_lock lock(data->mutex);
+  data->unsafe_blend_pipelines.erase(pipeline.handle);
 }
 
 }  // namespace

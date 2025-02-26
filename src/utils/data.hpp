@@ -26,16 +26,6 @@ T* Create(reshade::api::api_object* api_object, Args&&... args) {
   return reinterpret_cast<T*>(static_cast<uintptr_t>(res));
 }
 
-template <typename T>
-T& CreateOrGet(reshade::api::api_object* api_object) {
-  uint64_t res;
-  api_object->get_private_data(reinterpret_cast<const uint8_t*>(&__uuidof(T)), &res);
-  if (res == 0) {
-    return api_object->create_private_data<T>();
-  }
-  return *reinterpret_cast<T*>(static_cast<uintptr_t>(res));
-}
-
 template <typename T, typename... Args>
 bool CreateOrGet(reshade::api::api_object* api_object, T*& private_data, Args&&... args) {
   uint64_t res;
@@ -52,10 +42,14 @@ bool CreateOrGet(reshade::api::api_object* api_object, T*& private_data, Args&&.
 }
 
 template <typename T>
-void Delete(reshade::api::api_object* api_object) {
-  uint64_t res;
-  get_private_data(reinterpret_cast<const uint8_t*>(&__uuidof(T)), &res);
-  delete reinterpret_cast<T*>(static_cast<uintptr_t>(res));
-  set_private_data(reinterpret_cast<const uint8_t*>(&__uuidof(T)), 0);
+void Delete(reshade::api::api_object* api_object, T* private_data) {
+  delete private_data;
+  api_object->set_private_data(reinterpret_cast<const uint8_t*>(&__uuidof(T)), 0);
 }
+
+template <typename T>
+void Delete(reshade::api::api_object* api_object) {
+  Delete(api_object, api_object->get_private_data<T>());
+}
+
 }  // namespace renodx::utils::data

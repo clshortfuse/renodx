@@ -49,11 +49,11 @@ static void OnInitPipelineLayout(
     const uint32_t param_count,
     const reshade::api::pipeline_layout_param* params,
     reshade::api::pipeline_layout layout) {
-  auto& layout_data = *GetPipelineLayoutData(layout, true);
+  auto* layout_data = GetPipelineLayoutData(layout, true);
 
-  layout_data.params.assign(params, params + param_count);
-  layout_data.ranges.resize(param_count);
-  layout_data.tables.resize(param_count);
+  layout_data->params.assign(params, params + param_count);
+  layout_data->ranges.resize(param_count);
+  layout_data->tables.resize(param_count);
 
   for (uint32_t i = 0; i < param_count; ++i) {
     const auto& param = params[i];
@@ -61,7 +61,7 @@ static void OnInitPipelineLayout(
       case reshade::api::pipeline_layout_param_type::descriptor_table:
         if (param.descriptor_table.count == 0u) continue;
         {
-          auto& ranges = layout_data.ranges[i];
+          auto& ranges = layout_data->ranges[i];
           if (param.descriptor_table.ranges->count != UINT32_MAX) {
             ranges.assign(
                 param.descriptor_table.ranges,
@@ -71,8 +71,8 @@ static void OnInitPipelineLayout(
                 param.descriptor_table.ranges,
                 param.descriptor_table.ranges + 1);
           }
-          layout_data.params[i] = param;
-          layout_data.params[i].descriptor_table.ranges = ranges.data();
+          layout_data->params[i] = param;
+          layout_data->params[i].descriptor_table.ranges = ranges.data();
         }
         break;
       case reshade::api::pipeline_layout_param_type::push_constants:
@@ -98,8 +98,8 @@ static void OnDestroyPipelineLayout(
 static void RegisterPipelineLayoutClone(
     reshade::api::pipeline_layout layout_original,
     reshade::api::pipeline_layout layout_clone) {
-  auto& layout_data = *GetPipelineLayoutData(layout_original, true);
-  layout_data.replacement_layout = layout_clone;
+  auto *layout_data = GetPipelineLayoutData(layout_original, true);
+  layout_data->replacement_layout = layout_clone;
 }
 
 static reshade::api::pipeline_layout GetPipelineLayoutClone(
