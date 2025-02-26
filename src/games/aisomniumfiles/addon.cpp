@@ -52,6 +52,19 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ToneMapConfiguration",
+        .binding = &CUSTOM_TONE_MAP_CONFIGURATION,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .can_reset = true,
+        .label = "Tonemapping Expansion",
+        .section = "Tone Mapping",
+        .tooltip = "Choose to honor the blownout look of the SDR presentation or to expand the tonemapping range.",
+        .labels = {"Vanilla", "Expanded"},
+        //.is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
+        .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
         .binding = &RENODX_PEAK_WHITE_NITS,
         .default_value = 1000.f,
@@ -146,7 +159,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapScaling",
         .binding = &RENODX_TONE_MAP_PER_CHANNEL,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .label = "Scaling",
         .section = "Tone Mapping",
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
@@ -255,15 +268,16 @@ renodx::utils::settings::Settings settings = {
             renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 0.f);
             renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
             renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
-            renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
+            renodx::utils::settings::UpdateSetting("ToneMapScaling", 1.f);
             renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
             renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 60.f);
-            renodx::utils::settings::UpdateSetting("ColorGradeShadows", 60.f);
+            renodx::utils::settings::UpdateSetting("ColorGradeShadows", 55.f);
             renodx::utils::settings::UpdateSetting("ColorGradeContrast", 60.f);
             renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
             renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 60.f);
             renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
             renodx::utils::settings::UpdateSetting("ColorGradeFlare", 60.f);
+            renodx::utils::settings::UpdateSetting("ToneMapConfiguration", 1.f);
         }
     },
     new renodx::utils::settings::Setting{
@@ -377,8 +391,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
-    settings[2]->default_value = peak.value();
-    settings[2]->can_reset = true;
+    settings[3]->default_value = peak.value();
+    settings[3]->can_reset = true;
   }
 }
 
@@ -396,6 +410,22 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
       renodx::mods::swapchain::swapchain_proxy_revert_state = true;
+
+      //  RG11B10_float (UAV stuff)
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r11g11b10_float,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        //.ignore_size = true,
+        .view_upgrades = {
+          {{reshade::api::resource_usage::shader_resource,
+          reshade::api::format::r11g11b10_float},
+          reshade::api::format::r16g16b16a16_float},
+          {{reshade::api::resource_usage::unordered_access,
+          reshade::api::format::r11g11b10_float},
+          reshade::api::format::r16g16b16a16_float},
+          {{reshade::api::resource_usage::render_target,
+          reshade::api::format::r11g11b10_float},
+          reshade::api::format::r16g16b16a16_float},
+        }});
 
       //  RGBA8_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
