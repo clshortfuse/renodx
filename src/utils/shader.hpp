@@ -432,7 +432,7 @@ static bool ApplyReplacement(reshade::api::command_list* cmd_list, StageState* s
     std::stringstream s;
     s << "utils::shader::ApplyDispatchReplacements(Applying replacement ";
     s << stage_state->stage;
-    s << ", pipeline: " << reinterpret_cast<uintptr_t>(details->replacement_pipeline.handle);
+    s << ", pipeline: " << static_cast<uintptr_t>(details->replacement_pipeline.handle);
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif

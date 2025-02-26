@@ -191,7 +191,7 @@ bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = fals
       if (renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), render_target)) {
         std::stringstream s;
         s << "Upgrading RTV: ";
-        s << reinterpret_cast<uintptr_t>(render_target.handle);
+        s << static_cast<uintptr_t>(render_target.handle);
         s << ", shader: ";
         s << PRINT_CRC32(pixel_shader_hash);
         s << ")";
