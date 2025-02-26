@@ -23,8 +23,20 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+        with:
+          version: latest
+          platform: x64
+
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+        with:
+          version: latest
+          platform: x64
 
       - name: Configure build for amd64
         uses: ilammy/msvc-dev-cmd@v1
@@ -36,6 +48,12 @@ jobs:
 
       - name: Build RelWithDebInfo (x64)
         run: cmake --build --preset clang-x64-relwithdebinfo --verbose
+
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+        with:
+          version: latest
+          platform: x86
 
       - name: Configure build for x86
         uses: ilammy/msvc-dev-cmd@v1
