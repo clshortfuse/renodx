@@ -8,18 +8,19 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
-#include <include/reshade.hpp>
 
-#include <include/reshade_api_device.hpp>
-#include <include/reshade_api_resource.hpp>
 #include <mutex>
 #include <shared_mutex>
 #include <span>
+#include <sstream>
 #include <unordered_map>
 #include <vector>
 
+#include <include/reshade.hpp>
+
 #include "./bitwise.hpp"
 #include "./data.hpp"
+#include "./format.hpp"
 
 namespace renodx::utils::constants {
 
@@ -47,7 +48,22 @@ static void OnInitDevice(reshade::api::device* device) {
   bool created = renodx::utils::data::CreateOrGet<DeviceData>(device, data);
   if (!created) return;
 
-  internal::is_primary_hook = true;
+  if (created) {
+    std::stringstream s;
+    s << "utils::constants::OnInitDevice(Hooking device: ";
+    s << reinterpret_cast<uintptr_t>(device);
+    s << ", api: " << device->get_api();
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    internal::is_primary_hook = true;
+  } else {
+    std::stringstream s;
+    s << "utils::constants::OnInitDevice(Attaching to hook: ";
+    s << reinterpret_cast<uintptr_t>(device);
+    s << ", api: " << device->get_api();
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+  }
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {

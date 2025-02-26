@@ -2551,12 +2551,11 @@ static bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullsc
     // Resize to fullscreen instead
     HWND output_window = static_cast<HWND>(swapchain->get_hwnd());
     if (output_window != nullptr) {
-      auto device_back_buffer_desc = renodx::utils::swapchain::GetBackBufferDesc(device);
       // HMONITOR monitor = (HMONITOR)hmonitor;
       const uint32_t screen_width = GetSystemMetrics(SM_CXSCREEN);
       const uint32_t screen_height = GetSystemMetrics(SM_CYSCREEN);
-      const uint32_t texture_width = device_back_buffer_desc.texture.width;
-      const uint32_t texture_height = device_back_buffer_desc.texture.height;
+      const uint32_t texture_width = private_data->primary_swapchain_desc.texture.width;
+      const uint32_t texture_height = private_data->primary_swapchain_desc.texture.height;
       const uint32_t top = floor((screen_height - texture_height) / 2.f);
       const uint32_t left = floor((screen_width - texture_width) / 2.f);
       SetWindowLongPtr(output_window, GWL_STYLE, WS_VISIBLE | WS_POPUP);

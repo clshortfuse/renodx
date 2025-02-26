@@ -556,11 +556,11 @@ bool OnDrawForLUTDump(
   auto pixel_shader_hash = renodx::utils::shader::GetCurrentPixelShaderHash(pixel_state);
   if (pixel_shader_hash == 0u) return false;
 
-  auto& swapchain_state = renodx::utils::swapchain::GetCurrentState(cmd_list);
+  auto* swapchain_state = renodx::utils::swapchain::GetCurrentState(cmd_list);
   bool found_lut_render_target = false;
 
   auto* device = cmd_list->get_device();
-  for (auto render_target : swapchain_state.current_render_targets) {
+  for (auto render_target : swapchain_state->current_render_targets) {
     auto resource_tag = renodx::utils::resource::GetResourceTag(render_target);
     if (resource_tag == 1.f) {
       found_lut_render_target = true;

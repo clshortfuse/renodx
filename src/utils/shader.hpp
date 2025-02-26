@@ -749,6 +749,7 @@ static void OnInitPipeline(
     uint32_t subobject_count,
     const reshade::api::pipeline_subobject* subobjects,
     reshade::api::pipeline pipeline) {
+  if (!is_primary_hook) return;
   if (pipeline.handle == 0u) return;
 
   auto& data = device->get_private_data<DeviceData>();
@@ -850,8 +851,8 @@ static void OnBindPipeline(
   }
 }
 
-inline DeviceData& GetShaderDeviceData(reshade::api::device* device) {
-  return device->get_private_data<DeviceData>();
+inline DeviceData* GetShaderDeviceData(reshade::api::device* device) {
+  return renodx::utils::data::Get<DeviceData>(device);
 }
 
 inline std::optional<std::vector<uint8_t>> GetShaderData(

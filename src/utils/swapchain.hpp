@@ -126,8 +126,8 @@ static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
   cmd_list->destroy_private_data<CommandListData>();
 }
 
-static CommandListData& GetCurrentState(reshade::api::command_list* cmd_list) {
-  return cmd_list->get_private_data<CommandListData>();
+static CommandListData* GetCurrentState(reshade::api::command_list* cmd_list) {
+  return renodx::utils::data::Get<CommandListData>(cmd_list);
 }
 
 static bool IsBackBuffer(reshade::api::resource resource) {
@@ -139,9 +139,9 @@ static bool IsBackBuffer(reshade::api::resource resource) {
 static reshade::api::resource_desc GetBackBufferDesc(reshade::api::device* device) {
   reshade::api::resource_desc desc = {};
   {
-    auto& device_data = device->get_private_data<DeviceData>();
-    const std::shared_lock lock(device_data.mutex);
-    desc = device_data.back_buffer_desc;
+    auto* device_data = renodx::utils::data::Get<DeviceData>(device);
+    const std::shared_lock lock(device_data->mutex);
+    desc = device_data->back_buffer_desc;
   }
   return desc;
 }

@@ -314,10 +314,10 @@ bool OnDrawIndexed(
   if (!g_completed_render) return false;
   if (!g_8bit_hashes.contains(pixel_shader_hash)) return false;
 
-  auto& swapchain_state = renodx::utils::swapchain::GetCurrentState(cmd_list);
+  auto* swapchain_state = renodx::utils::swapchain::GetCurrentState(cmd_list);
 
-  if (swapchain_state.current_render_targets.empty()) return false;
-  const auto target0 = swapchain_state.current_render_targets[0];
+  if (swapchain_state->current_render_targets.empty()) return false;
+  const auto target0 = swapchain_state->current_render_targets[0];
 
   auto* device = cmd_list->get_device();
 
@@ -377,8 +377,8 @@ bool OnDrawIndexed(
     }
 
     cmd_list->bind_render_targets_and_depth_stencil(
-        swapchain_state.current_render_targets.size(),
-        swapchain_state.current_render_targets.data(),
+        swapchain_state->current_render_targets.size(),
+        swapchain_state->current_render_targets.data(),
         {0});
 
     shader_injection.clampState = CLAMP_STATE__MIN_ALPHA;
@@ -392,9 +392,9 @@ bool OnDrawIndexed(
     cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
     cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, command_list_data.last_output_merger);
     cmd_list->bind_render_targets_and_depth_stencil(
-        swapchain_state.current_render_targets.size(),
-        swapchain_state.current_render_targets.data(),
-        swapchain_state.current_depth_stencil);
+        swapchain_state->current_render_targets.size(),
+        swapchain_state->current_render_targets.data(),
+        swapchain_state->current_depth_stencil);
   }
 
   shader_injection.clampState = CLAMP_STATE__OUTPUT;

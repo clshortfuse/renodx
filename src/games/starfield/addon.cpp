@@ -226,12 +226,12 @@ bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = fals
           || pixel_shader_hash == 0xe9d9e225  // ui
           || pixel_shader_hash == 0x0d5add1f  // copy
           )) {
-    auto& swapchain_state = renodx::utils::swapchain::GetCurrentState(cmd_list);
+    auto* swapchain_state = renodx::utils::swapchain::GetCurrentState(cmd_list);
 
     bool changed = false;
     const uint32_t render_target_count = swapchain_state.current_render_targets.size();
     for (uint32_t i = 0; i < render_target_count; i++) {
-      auto render_target = swapchain_state.current_render_targets[i];
+      auto render_target = swapchain_state->current_render_targets[i];
       if (render_target.handle == 0) continue;
       if (renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), render_target)) {
         changed = true;
@@ -242,8 +242,8 @@ bool HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch = fals
       renodx::mods::swapchain::RewriteRenderTargets(
           cmd_list,
           render_target_count,
-          swapchain_state.current_render_targets.data(),
-          swapchain_state.current_depth_stencil);
+          swapchain_state->current_render_targets.data(),
+          swapchain_state->current_depth_stencil);
       renodx::mods::swapchain::FlushDescriptors(cmd_list);
     }
   } else {

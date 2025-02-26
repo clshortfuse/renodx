@@ -22,6 +22,7 @@
 #include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
+#include "./data.hpp"
 #include "./hash.hpp"
 #include "./pipeline_layout.hpp"
 #if defined(DEBUG_LEVEL_1) || defined(DEBUG_LEVEL_2)
@@ -75,13 +76,13 @@ static reshade::api::resource_view GetResourceViewFromDescriptorUpdate(
 }
 
 static void OnInitDevice(reshade::api::device* device) {
-  auto* data = &device->get_private_data<DeviceData>();
-  if (data != nullptr) {
+  DeviceData* data;
+  bool created = renodx::utils::data::CreateOrGet(device, data);
+  if (!created) {
     trace_descriptor_tables = data->trace_descriptor_tables;
     return;
   }
 
-  data = &device->create_private_data<DeviceData>();
   data->trace_descriptor_tables = trace_descriptor_tables;
 
   is_primary_hook = true;
