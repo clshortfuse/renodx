@@ -79,7 +79,7 @@ void main(
   r0.xyz = r1.xyz * r2.xyz + r0.xyz;
 
   // untonemapped with bloom
-  float3 untonemapped = r0.gbr;
+  //float3 untonemapped = r0.gbr;
 
   r0.w = cb1[6].x / cb1[6].y;
   r0.w = -1 + r0.w;
@@ -101,6 +101,9 @@ void main(
   r1.xyz = r0.www * r1.xyz + cb0[14].zxy;
   r0.xyz = r1.xyz * r0.xyz;
   r0.xyz = cb0[12].www * r0.xyz;
+
+  float3 untonemapped = r0.gbr;
+
   r0.xyz = r0.xyz * float3(5.55555582,5.55555582,5.55555582) + float3(0.0479959995,0.0479959995,0.0479959995);
   r0.xyz = log2(r0.xyz);
   r0.xyz = saturate(r0.xyz * float3(0.0734997839,0.0734997839,0.0734997839) + float3(0.386036009,0.386036009,0.386036009));
@@ -126,8 +129,29 @@ void main(
 
   o0.rgb = renodx::color::srgb::DecodeSafe(o0.rgb);
 
+  renodx::lut::Config lut_config = renodx::lut::config::Create();
+  lut_config.lut_sampler = s3_s;
+  lut_config.strength = 1.f;
+  lut_config.scaling = 0.f;
+  lut_config.precompute = cb0[12].xyz;
+  lut_config.tetrahedral = 1.f;
+  lut_config.type_input = renodx::lut::config::type::ARRI_C1000_NO_CUT;
+  lut_config.type_output = renodx::lut::config::type::LINEAR;
+
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
+    if (CUSTOM_TONE_MAP_CONFIGURATION == 0.f) {
+      o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
+    } else {
+      float3 sdrColor = o0.rgb;
+
+      untonemapped = max(0.00001f, untonemapped); // fixes black squares in somnia
+
+      o0.rgb = renodx::draw::ToneMapPass(
+        untonemapped,
+        renodx::lut::Sample(renodx::tonemap::renodrt::NeutralSDR(untonemapped), lut_config, t3));
+    }
+  } else {
+    o0.rgb = saturate(o0.rgb);
   }
 
   o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
