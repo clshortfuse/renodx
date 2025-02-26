@@ -271,7 +271,7 @@ struct __declspec(uuid("8707f724-c7e5-420e-89d6-cc032c732d2d")) CommandListData 
   DeviceData* device_data = nullptr;
 };
 
-static PipelineShaderDetails* GetPipelineShaderDetails(const reshade::api::pipeline& pipeline) {
+inline PipelineShaderDetails* GetPipelineShaderDetails(const reshade::api::pipeline& pipeline) {
   std::shared_lock read_lock(pipeline_shader_details_mutex);
   if (auto details_pair = pipeline_shader_details.find(pipeline.handle);
       details_pair != pipeline_shader_details.end()) {
@@ -421,7 +421,7 @@ static bool BuildReplacementPipeline(PipelineShaderDetails* details) {
   return false;
 }
 
-static bool ApplyReplacement(reshade::api::command_list* cmd_list, StageState* stage_state) {
+inline bool ApplyReplacement(reshade::api::command_list* cmd_list, StageState* stage_state) {
   PopulateStageState(stage_state);
   if (stage_state->pipeline_details == nullptr) return false;
   auto* details = stage_state->pipeline_details;
@@ -564,7 +564,7 @@ static void RemoveRuntimeReplacements(reshade::api::device* device, const std::u
   runtime_replacement_count = data->runtime_replacements.size();
 }
 
-static CommandListData* GetCurrentState(reshade::api::command_list* cmd_list) {
+inline CommandListData* GetCurrentState(reshade::api::command_list* cmd_list) {
   return renodx::utils::data::Get<CommandListData>(cmd_list);
 }
 
@@ -651,7 +651,7 @@ static void OnDestroyDevice(reshade::api::device* device) {
   device->destroy_private_data<DeviceData>();
 }
 
-static void OnInitCommandList(reshade::api::command_list* cmd_list) {
+inline void OnInitCommandList(reshade::api::command_list* cmd_list) {
   if (!is_primary_hook) return;
   renodx::utils::data::Create<CommandListData>(cmd_list);
 }
@@ -824,28 +824,28 @@ static void OnDestroyPipeline(
 }
 
 // AfterSetPipelineState
-static void OnBindPipeline(
+inline void OnBindPipeline(
     reshade::api::command_list* cmd_list,
     reshade::api::pipeline_stage stage,
     reshade::api::pipeline pipeline) {
   if (!is_primary_hook) return;
-  CommandListData* cmd_list_data_ptr = nullptr;
+  CommandListData* cmd_list_data = nullptr;
   for (int i = 0; i < COMPATIBLE_STAGES_SIZE; ++i) {
     auto compatible_stage = COMPATIBLE_STAGES[i];
     if (stage == reshade::api::pipeline_stage::all
         || renodx::utils::bitwise::HasFlag(stage, compatible_stage)) {
-      if (cmd_list_data_ptr == nullptr) {
-        cmd_list_data_ptr = renodx::utils::data::Get<CommandListData>(cmd_list);
+      if (cmd_list_data == nullptr) {
+        cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
       }
-      cmd_list_data_ptr->last_pipeline = pipeline;
+      cmd_list_data->last_pipeline = pipeline;
 
-      if (cmd_list_data_ptr->stage_states[i].pipeline != pipeline) {
-        cmd_list_data_ptr->stage_states[i].pipeline = pipeline;
-        cmd_list_data_ptr->stage_states[i].pipeline_details = nullptr;
+      if (cmd_list_data->stage_states[i].pipeline != pipeline) {
+        cmd_list_data->stage_states[i].pipeline = pipeline;
+        cmd_list_data->stage_states[i].pipeline_details = nullptr;
       }
-      cmd_list_data_ptr->stage_states[i].applied_stage = stage;
+      cmd_list_data->stage_states[i].applied_stage = stage;
       if (pipeline.handle != 0 && use_replace_on_bind) {
-        ApplyReplacement(cmd_list, &cmd_list_data_ptr->stage_states[i]);
+        ApplyReplacement(cmd_list, &cmd_list_data->stage_states[i]);
       }
     }
   }
@@ -855,7 +855,7 @@ inline DeviceData* GetShaderDeviceData(reshade::api::device* device) {
   return renodx::utils::data::Get<DeviceData>(device);
 }
 
-inline std::optional<std::vector<uint8_t>> GetShaderData(
+static std::optional<std::vector<uint8_t>> GetShaderData(
     const PipelineShaderDetails& details,
     const PipelineSubobjectShaderInfo& info) {
   const auto& subobject = details.subobjects[info.index];
@@ -867,7 +867,7 @@ inline std::optional<std::vector<uint8_t>> GetShaderData(
   });
 }
 
-inline std::optional<std::vector<uint8_t>> GetShaderData(
+static std::optional<std::vector<uint8_t>> GetShaderData(
     const reshade::api::pipeline& pipeline,
     const uint32_t& shader_hash) {
   auto* details = GetPipelineShaderDetails(pipeline);
@@ -880,7 +880,7 @@ inline std::optional<std::vector<uint8_t>> GetShaderData(
   return std::nullopt;
 }
 
-inline std::optional<std::vector<uint8_t>> GetShaderData(
+static std::optional<std::vector<uint8_t>> GetShaderData(
     const reshade::api::pipeline& pipeline,
     const PipelineSubobjectShaderInfo& info) {
   auto* details = GetPipelineShaderDetails(pipeline);
@@ -890,14 +890,14 @@ inline std::optional<std::vector<uint8_t>> GetShaderData(
   return std::nullopt;
 }
 
-inline std::optional<std::vector<uint8_t>> GetShaderData(const StageState* stage_state, const int& index) {
+static std::optional<std::vector<uint8_t>> GetShaderData(const StageState* stage_state, const int& index) {
   if (stage_state->pipeline_details == nullptr) return std::nullopt;
   return GetShaderData(
       *stage_state->pipeline_details,
       stage_state->pipeline_details->compatible_shader_infos[index]);
 }
 
-inline std::optional<std::vector<uint8_t>> GetShaderData(const StageState* stage_state) {
+static std::optional<std::vector<uint8_t>> GetShaderData(const StageState* stage_state) {
   return GetShaderData(stage_state, PIXEL_INDEX);
 }
 

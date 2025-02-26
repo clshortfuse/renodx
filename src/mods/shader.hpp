@@ -653,7 +653,7 @@ inline void OnBindDescriptorTables(
   }
 }
 
-static bool PushShaderInjections(
+inline bool PushShaderInjections(
     reshade::api::command_list* cmd_list,
     reshade::api::pipeline_layout injection_layout,
     uint32_t injection_index = 0,
@@ -688,7 +688,7 @@ static bool PushShaderInjections(
   return true;
 }
 
-static bool HandleStatesAndBypass(
+inline bool HandleStatesAndBypass(
     reshade::api::command_list* cmd_list,
     renodx::utils::shader::CommandListData* shader_state,
     std::function<void(reshade::api::command_list*)>& on_drawn,
@@ -803,7 +803,7 @@ static bool HandleStatesAndBypass(
   return false;
 }
 
-static bool HandlePreDraw(
+inline bool HandlePreDraw(
     reshade::api::command_list* cmd_list,
     bool is_dispatch,
     std::function<void(reshade::api::command_list*)>& on_drawn) {
@@ -832,7 +832,7 @@ static bool HandlePreDraw(
           cmd_list, shader_state, on_drawn, renodx::utils::shader::PIXEL_INDEX, resource_tag));
 }
 
-static bool OnDraw(reshade::api::command_list* cmd_list, uint32_t vertex_count, uint32_t instance_count, uint32_t first_vertex, uint32_t first_instance) {
+inline bool OnDraw(reshade::api::command_list* cmd_list, uint32_t vertex_count, uint32_t instance_count, uint32_t first_vertex, uint32_t first_instance) {
   std::function<void(reshade::api::command_list*)> on_drawn = nullptr;
   if (HandlePreDraw(cmd_list, false, on_drawn)) return true;
   if (on_drawn == nullptr) return false;
@@ -841,7 +841,7 @@ static bool OnDraw(reshade::api::command_list* cmd_list, uint32_t vertex_count, 
   return true;
 }
 
-static bool OnDispatch(
+inline bool OnDispatch(
     reshade::api::command_list* cmd_list,
     uint32_t group_count_x,
     uint32_t group_count_y,
@@ -854,7 +854,7 @@ static bool OnDispatch(
   return true;
 }
 
-static bool OnDrawIndexed(
+inline bool OnDrawIndexed(
     reshade::api::command_list* cmd_list,
     uint32_t index_count,
     uint32_t instance_count,
@@ -873,7 +873,7 @@ static bool OnDrawIndexed(
   return true;
 }
 
-static bool OnDrawOrDispatchIndirect(
+inline bool OnDrawOrDispatchIndirect(
     reshade::api::command_list* cmd_list,
     reshade::api::indirect_command type,
     reshade::api::resource buffer,
@@ -907,7 +907,7 @@ static bool OnDrawOrDispatchIndirect(
   return true;
 }
 
-static void OnPresent(
+inline void OnPresent(
     reshade::api::command_queue* queue,
     reshade::api::swapchain* swapchain,
     const reshade::api::rect* /*source_rect*/,
@@ -944,8 +944,8 @@ static bool attached = false;
 
 template <typename T = float*>
 static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injections = nullptr) {
-  renodx::utils::resource::Use(fdw_reason);
   renodx::utils::shader::Use(fdw_reason);
+  renodx::utils::resource::Use(fdw_reason);
   if (trace_unmodified_shaders) {
     renodx::utils::swapchain::Use(fdw_reason);
   }

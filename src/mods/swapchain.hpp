@@ -241,7 +241,7 @@ static bool FlushResourceViewInDescriptorTable(
   return true;
 }
 
-static bool ActivateCloneHotSwap(
+inline bool ActivateCloneHotSwap(
     reshade::api::device* device,
     const reshade::api::resource_view& resource_view) {
   auto* resource_view_info = utils::resource::GetResourceViewInfo(resource_view);
@@ -297,7 +297,7 @@ static bool ActivateCloneHotSwap(
   return true;
 }
 
-static bool DeactivateCloneHotSwap(
+inline bool DeactivateCloneHotSwap(
     reshade::api::device* device,
     const reshade::api::resource_view& resource_view) {
   auto* resource_view_info = utils::resource::GetResourceViewInfo(resource_view);
@@ -324,7 +324,7 @@ static bool DeactivateCloneHotSwap(
   return true;
 }
 
-static reshade::api::resource CloneResource(utils::resource::ResourceInfo* resource_info) {
+inline reshade::api::resource CloneResource(utils::resource::ResourceInfo* resource_info) {
   if (resource_info == nullptr) return {0u};
 
   auto& desc = resource_info->desc;
@@ -391,7 +391,7 @@ static reshade::api::resource CloneResource(utils::resource::ResourceInfo* resou
   return resource_info->clone;
 }
 
-static reshade::api::resource CloneResource(const reshade::api::resource& resource) {
+inline reshade::api::resource CloneResource(const reshade::api::resource& resource) {
   return CloneResource(utils::resource::GetResourceInfo(resource));
 }
 
@@ -462,7 +462,7 @@ static void SetupSwapchainProxy(
   device->create_sampler({}, &data->swap_chain_proxy_sampler);
 }
 
-static reshade::api::resource GetResourceClone(utils::resource::ResourceInfo* resource_info = nullptr) {
+inline reshade::api::resource GetResourceClone(utils::resource::ResourceInfo* resource_info = nullptr) {
   if (resource_info == nullptr) return {0u};
 
   if (!resource_info->clone_enabled) {
@@ -478,11 +478,11 @@ static reshade::api::resource GetResourceClone(utils::resource::ResourceInfo* re
   return resource_info->clone;
 }
 
-static reshade::api::resource GetResourceClone(const reshade::api::resource& resource) {
+inline reshade::api::resource GetResourceClone(const reshade::api::resource& resource) {
   return GetResourceClone(utils::resource::GetResourceInfo(resource));
 }
 
-static reshade::api::resource_view GetResourceViewClone(
+inline reshade::api::resource_view GetResourceViewClone(
     utils::resource::ResourceViewInfo* resource_view_info = nullptr) {
   if (resource_view_info == nullptr) return {0u};
 
@@ -593,11 +593,11 @@ static reshade::api::resource_view GetResourceViewClone(
   return resource_view_info->clone;
 }
 
-static reshade::api::resource_view GetResourceViewClone(const reshade::api::resource_view& view) {
+inline reshade::api::resource_view GetResourceViewClone(const reshade::api::resource_view& view) {
   return GetResourceViewClone(utils::resource::GetResourceViewInfo(view));
 }
 
-static void RewriteRenderTargets(
+inline void RewriteRenderTargets(
     reshade::api::command_list* cmd_list,
     const uint32_t& count,
     const reshade::api::resource_view* rtvs,
@@ -645,7 +645,7 @@ static void RewriteRenderTargets(
   free(new_rtvs);
 }
 
-static void DiscardDescriptors(reshade::api::command_list* cmd_list) {
+inline void DiscardDescriptors(reshade::api::command_list* cmd_list) {
   return;
   // Not implemented
 
@@ -654,7 +654,7 @@ static void DiscardDescriptors(reshade::api::command_list* cmd_list) {
   cmd_data->unpushed_updates.clear();
 }
 
-static void FlushDescriptors(reshade::api::command_list* cmd_list) {
+inline void FlushDescriptors(reshade::api::command_list* cmd_list) {
   return;
   // Not implemented
   auto* cmd_data = renodx::utils::data::Get<CommandListData>(cmd_list);
@@ -678,7 +678,7 @@ static void FlushDescriptors(reshade::api::command_list* cmd_list) {
   cmd_data->unpushed_updates.clear();
 }
 
-static void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api::command_queue* queue) {
+inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api::command_queue* queue) {
   auto* cmd_list = queue->get_immediate_command_list();
   auto current_back_buffer = swapchain->get_current_back_buffer();
   auto* device = swapchain->get_device();
@@ -931,7 +931,7 @@ static void OnDestroyDevice(reshade::api::device* device) {
   renodx::utils::data::Delete(device, data);
 }
 
-static void OnInitCommandList(reshade::api::command_list* cmd_list) {
+inline void OnInitCommandList(reshade::api::command_list* cmd_list) {
   renodx::utils::data::Create<CommandListData>(cmd_list);
 }
 
@@ -1062,7 +1062,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
   reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnDestroySwapchain()");
 }
 
-static bool OnCreateResource(
+inline bool OnCreateResource(
     reshade::api::device* device,
     reshade::api::resource_desc& desc,
     reshade::api::subresource_data* initial_data,
@@ -1206,7 +1206,7 @@ static bool OnCreateResource(
   return true;
 }
 
-static void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_info) {
+inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_info) {
   if (resource_info->is_swap_chain) {
     if (UsingSwapchainProxy()) {
       if (!UsingSwapchainCompatibilityMode()) {
@@ -1374,7 +1374,7 @@ static void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
   }
 }
 
-static void OnDestroyResourceInfo(utils::resource::ResourceInfo* info) {
+inline void OnDestroyResourceInfo(utils::resource::ResourceInfo* info) {
   auto* device = info->device;
 
   if (info->is_swap_chain) {
@@ -1403,7 +1403,7 @@ static void OnDestroyResourceInfo(utils::resource::ResourceInfo* info) {
   }
 }
 
-static bool OnCopyBufferToTexture(
+inline bool OnCopyBufferToTexture(
     reshade::api::command_list* cmd_list,
     reshade::api::resource source,
     uint64_t source_offset,
@@ -1515,7 +1515,7 @@ static bool OnCopyBufferToTexture(
   return true;
 }
 
-static bool OnCreateResourceView(
+inline bool OnCreateResourceView(
     reshade::api::device* device,
     reshade::api::resource resource,
     reshade::api::resource_usage usage_type,
@@ -1662,7 +1662,7 @@ static bool OnCreateResourceView(
   return true;
 }
 
-static void OnInitResourceViewInfo(utils::resource::ResourceViewInfo* resource_view_info) {
+inline void OnInitResourceViewInfo(utils::resource::ResourceViewInfo* resource_view_info) {
 #ifdef DEBUG_LEVEL_2
   reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnInitResourceView()");
 #endif
@@ -1683,7 +1683,7 @@ static void OnInitResourceViewInfo(utils::resource::ResourceViewInfo* resource_v
 #endif
 }
 
-static void OnDestroyResourceViewInfo(utils::resource::ResourceViewInfo* resource_view_info) {
+inline void OnDestroyResourceViewInfo(utils::resource::ResourceViewInfo* resource_view_info) {
   if (resource_view_info->clone.handle == 0u) {
     resource_view_info->device->destroy_resource_view(resource_view_info->clone);
   }
@@ -1693,7 +1693,7 @@ static void OnDestroyResourceViewInfo(utils::resource::ResourceViewInfo* resourc
   }
 }
 
-static bool OnCopyResource(
+inline bool OnCopyResource(
     reshade::api::command_list* cmd_list,
     reshade::api::resource source,
     reshade::api::resource dest) {
@@ -1794,7 +1794,7 @@ static bool OnCopyResource(
 }
 
 // Create DescriptorTables with RSVs
-static bool OnUpdateDescriptorTables(
+inline bool OnUpdateDescriptorTables(
     reshade::api::device* device,
     uint32_t count,
     const reshade::api::descriptor_table_update* updates) {
@@ -1921,7 +1921,7 @@ static bool OnUpdateDescriptorTables(
   return false;
 }
 
-static bool OnCopyDescriptorTables(
+inline bool OnCopyDescriptorTables(
     reshade::api::device* device,
     uint32_t count,
     const reshade::api::descriptor_table_copy* copies) {
@@ -1994,7 +1994,7 @@ static bool OnCopyDescriptorTables(
   return false;
 }
 
-static void OnBindDescriptorTables(
+inline void OnBindDescriptorTables(
     reshade::api::command_list* cmd_list,
     reshade::api::shader_stage stages,
     reshade::api::pipeline_layout layout,
@@ -2162,7 +2162,7 @@ static void OnBindDescriptorTables(
 }
 
 // Set DescriptorTables RSVs
-static void OnPushDescriptors(
+inline void OnPushDescriptors(
     reshade::api::command_list* cmd_list,
     reshade::api::shader_stage stages,
     reshade::api::pipeline_layout layout,
@@ -2264,7 +2264,7 @@ static void OnPushDescriptors(
 }
 
 // Set render target RSV
-static void OnBindRenderTargetsAndDepthStencil(
+inline void OnBindRenderTargetsAndDepthStencil(
     reshade::api::command_list* cmd_list,
     uint32_t count,
     const reshade::api::resource_view* rtvs,
@@ -2274,7 +2274,7 @@ static void OnBindRenderTargetsAndDepthStencil(
   RewriteRenderTargets(cmd_list, count, rtvs, dsv);
 }
 
-static bool OnClearRenderTargetView(
+inline bool OnClearRenderTargetView(
     reshade::api::command_list* cmd_list,
     reshade::api::resource_view rtv,
     const float color[4],
@@ -2287,7 +2287,7 @@ static bool OnClearRenderTargetView(
   return false;
 }
 
-static bool OnClearUnorderedAccessViewUint(
+inline bool OnClearUnorderedAccessViewUint(
     reshade::api::command_list* cmd_list,
     reshade::api::resource_view uav,
     const uint32_t values[4],
@@ -2317,7 +2317,7 @@ static bool OnClearUnorderedAccessViewUint(
   return false;
 }
 
-static bool OnClearUnorderedAccessViewFloat(
+inline bool OnClearUnorderedAccessViewFloat(
     reshade::api::command_list* cmd_list,
     reshade::api::resource_view uav,
     const float values[4],
@@ -2331,7 +2331,7 @@ static bool OnClearUnorderedAccessViewFloat(
   return false;
 }
 
-static bool OnResolveTextureRegion(
+inline bool OnResolveTextureRegion(
     reshade::api::command_list* cmd_list,
     reshade::api::resource source,
     uint32_t source_subresource,
@@ -2380,7 +2380,7 @@ static bool OnResolveTextureRegion(
   return true;
 }
 
-static void OnBarrier(
+inline void OnBarrier(
     reshade::api::command_list* cmd_list,
     uint32_t count,
     const reshade::api::resource* resources,
@@ -2427,7 +2427,7 @@ static void OnBarrier(
   }
 }
 
-static bool OnCopyTextureRegion(
+inline bool OnCopyTextureRegion(
     reshade::api::command_list* cmd_list,
     reshade::api::resource source,
     uint32_t source_subresource,
@@ -2569,7 +2569,7 @@ static bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullsc
   return false;
 }
 
-static void OnPresent(
+inline void OnPresent(
     reshade::api::command_queue* queue,
     reshade::api::swapchain* swapchain,
     const reshade::api::rect* source_rect,

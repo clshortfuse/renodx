@@ -140,7 +140,7 @@ static reshade::api::resource_desc GetBackBufferDesc(reshade::api::device* devic
   reshade::api::resource_desc desc = {};
   {
     auto* device_data = renodx::utils::data::Get<DeviceData>(device);
-    const std::shared_lock lock(device_data->mutex);
+    // const std::shared_lock lock(device_data->mutex);
     desc = device_data->back_buffer_desc;
   }
   return desc;
@@ -178,9 +178,6 @@ static bool HasBackBufferRenderTarget(reshade::api::command_list* cmd_list) {
     cmd_list_data->has_swapchain_render_target = false;
     return false;
   }
-  auto* device = cmd_list->get_device();
-  auto* device_data = renodx::utils::data::Get<DeviceData>(device);
-  const std::shared_lock device_lock(device_data->mutex);
 
   bool found_swapchain_rtv = false;
   for (const auto& rtv : cmd_list_data->current_render_targets) {
@@ -451,7 +448,7 @@ static void ResizeBuffer(
 
 static bool attached = false;
 
-inline void Use(DWORD fdw_reason) {
+static void Use(DWORD fdw_reason) {
   renodx::utils::resource::Use(fdw_reason);
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
