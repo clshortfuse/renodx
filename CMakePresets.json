@@ -67,7 +67,8 @@
         "CMAKE_CXX_COMPILER": "clang-cl.exe",
         "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc",
         "CMAKE_EXE_LINKER_FLAGS": "/machine:X86",
-        "CMAKE_MODULE_LINKER_FLAGS": "/machine:X86"
+        "CMAKE_MODULE_LINKER_FLAGS": "/machine:X86",
+        "CMAKE_CXX_COMPILER_TARGET": "i686-pc-windows-msvc"
       }
     },
     {
@@ -175,19 +176,19 @@
     {
       "name": "clang-x86-debug",
       "displayName": "Clang x86 Debug",
-      "configurePreset": "ninja-x86",
+      "configurePreset": "clang-x86",
       "configuration": "Debug"
     },
     {
       "name": "clang-x86-release",
       "displayName": "Clang x86 Release",
-      "configurePreset": "ninja-x86",
+      "configurePreset": "clang-x86",
       "configuration": "Release"
     },
     {
       "name": "clang-x86-relwithdebinfo",
       "displayName": "Clang x86 RelWithDebInfo",
-      "configurePreset": "ninja-x86",
+      "configurePreset": "clang-x86",
       "configuration": "RelWithDebInfo"
     },
     {
