@@ -167,24 +167,21 @@ static void CheckSwapchainSize(
   }
 
   if (force_borderless) {
-    RECT window_rect = {};
-    GetClientRect(output_window, &window_rect);
+    HMONITOR monitor = MonitorFromWindow(output_window, 0x0);
+    MONITORINFO monitor_info = {};
+    monitor_info.cbSize = sizeof(MONITORINFO);
 
-    const int screen_width = GetSystemMetrics(SM_CXSCREEN);
-    const int screen_height = GetSystemMetrics(SM_CYSCREEN);
-    const int window_width = window_rect.right - window_rect.left;
-    const int window_height = window_rect.bottom - window_rect.top;
+    GetMonitorInfo(monitor, &monitor_info);
+
+    const int screen_width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
+    const int screen_height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
 
     std::stringstream s;
     s << "mods::swapchain::CheckSwapchainSize(";
-    s << "screenWidth: " << screen_width;
-    s << ", screenHeight: " << screen_height;
-    s << ", bufferWidth: " << buffer_desc.texture.width;
-    s << ", bufferHeight: " << buffer_desc.texture.height;
-    s << ", windowWidth: " << window_width;
-    s << ", windowHeight: " << window_height;
-    s << ", windowTop: " << window_rect.top;
-    s << ", windowLeft: " << window_rect.left;
+    s << "screen_width: " << screen_width;
+    s << ", screen_height: " << screen_height;
+    s << ", buffer_width: " << buffer_desc.texture.width;
+    s << ", buffer_height: " << buffer_desc.texture.height;
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 
@@ -192,7 +189,12 @@ static void CheckSwapchainSize(
     if (screen_height != buffer_desc.texture.height) return;
     // if (window_rect.top == 0 && window_rect.left == 0) return;
     SetWindowLongPtr(output_window, GWL_STYLE, WS_VISIBLE | WS_POPUP);
-    SetWindowPos(output_window, HWND_TOP, 0, 0, screen_width, screen_height, SWP_FRAMECHANGED);
+    SetWindowPos(
+        output_window,
+        HWND_TOP,
+        monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
+        screen_width, screen_height,
+        SWP_FRAMECHANGED);
   }
 }
 
