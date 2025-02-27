@@ -152,7 +152,7 @@ static reshade::api::resource_desc GetBackBufferDesc(reshade::api::command_list*
   return GetBackBufferDesc(device);
 }
 
-static void OnBindRenderTargetsAndDepthStencil(
+inline void OnBindRenderTargetsAndDepthStencil(
     reshade::api::command_list* cmd_list,
     uint32_t count,
     const reshade::api::resource_view* rtvs,
