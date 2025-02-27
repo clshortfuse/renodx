@@ -762,11 +762,9 @@ inline bool HandleStatesAndBypass(
     }
   }
 
+  bool should_inject = true;
   if (custom_shader_info.on_inject != nullptr) {
-    bool should_inject = custom_shader_info.on_inject(cmd_list);
-    if (!should_inject) {
-      // should_inject_cbuffer = false;
-    }
+    should_inject = custom_shader_info.on_inject(cmd_list);
   }
 
   if (custom_shader_info.on_drawn != nullptr) {
@@ -776,7 +774,7 @@ inline bool HandleStatesAndBypass(
   utils::shader::BuildReplacementPipeline(state.pipeline_details);
 
   // Perform Push
-  if (shader_injection_size != 0) {
+  if (shader_injection_size != 0 && should_inject) {
     if (state.pipeline_details->layout_data->injection_index == -1) {
 #ifdef DEBUG_LEVEL_1
       if (!state.pipeline_details->layout_data->failed_injection) {
