@@ -108,12 +108,14 @@ struct PipelineShaderDetails {
   PipelineShaderDetails() = default;
 
   PipelineShaderDetails(
+      reshade::api::pipeline pipeline,
       reshade::api::device* device,
       const reshade::api::pipeline_layout& layout,
       const reshade::api::pipeline_subobject* subobjects,
       const uint32_t& subobject_count,
       const std::unordered_map<uint32_t, uint32_t>* shader_replacements_inverse,
       const std::unordered_map<uint32_t, std::vector<uint8_t>>* runtime_replacements) {
+    this->pipeline = pipeline;
     this->device = device;
     this->layout = layout;
     this->layout_data = pipeline_layout::GetPipelineLayoutData(layout);
@@ -155,6 +157,7 @@ struct PipelineShaderDetails {
         s << PRINT_CRC32(shader_hash);
         s << "=>";
         s << PRINT_CRC32(pair->second);
+        s << ", pipeline: " << static_cast<uintptr_t>(this->pipeline.handle);
         s << ")";
         reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
@@ -429,9 +432,10 @@ inline bool ApplyReplacement(reshade::api::command_list* cmd_list, StageState* s
   if (details->replacement_pipeline.handle != 0u) {
 #ifdef DEBUG_LEVEL_2
     std::stringstream s;
-    s << "utils::shader::ApplyDispatchReplacements(Applying replacement ";
+    s << "utils::shader::ApplyReplacement(Applying replacement ";
     s << stage_state->stage;
     s << ", pipeline: " << static_cast<uintptr_t>(details->replacement_pipeline.handle);
+    s << ", shader: " << PRINT_CRC32(GetCurrentShaderHash(stage_state));
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
@@ -758,6 +762,7 @@ static void OnInitPipeline(
     data->mutex.lock_shared();
   }
   auto details = PipelineShaderDetails(
+      pipeline,
       device,
       layout,
       subobjects,

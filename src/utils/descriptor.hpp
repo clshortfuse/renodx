@@ -170,14 +170,14 @@ static bool OnUpdateDescriptorTables(
         case reshade::api::descriptor_type::sampler:
           descriptor.second = static_cast<const reshade::api::sampler*>(update.descriptors)[k];
 #ifdef DEBUG_LEVEL_2
-          s << reinterpret_cast<uintptr_t>(static_cast<const reshade::api::sampler*>(update.descriptors)[k].handle);
+          s << static_cast<uintptr_t>(static_cast<const reshade::api::sampler*>(update.descriptors)[k].handle);
 #endif
           break;
         case reshade::api::descriptor_type::sampler_with_resource_view:
           descriptor.second = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[k];
 
 #ifdef DEBUG_LEVEL_2
-          s << reinterpret_cast<uintptr_t>(static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[k].view.handle);
+          s << static_cast<uintptr_t>(static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[k].view.handle);
 #endif
           break;
         case reshade::api::descriptor_type::buffer_shader_resource_view:
@@ -189,7 +189,7 @@ static bool OnUpdateDescriptorTables(
           descriptor.second = static_cast<const reshade::api::resource_view*>(update.descriptors)[k];
           heap_set.emplace(offset + k);
 #ifdef DEBUG_LEVEL_2
-          s << reinterpret_cast<uintptr_t>(static_cast<const reshade::api::resource_view*>(update.descriptors)[k].handle);
+          s << static_cast<uintptr_t>(static_cast<const reshade::api::resource_view*>(update.descriptors)[k].handle);
 #endif
           break;
         case reshade::api::descriptor_type::constant_buffer:

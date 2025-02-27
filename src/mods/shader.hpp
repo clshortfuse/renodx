@@ -888,7 +888,7 @@ inline bool OnDrawOrDispatchIndirect(
       {
         auto* cmd_list_data = renodx::utils::shader::GetCurrentState(cmd_list);
         auto shader_hash = renodx::utils::shader::GetCurrentComputeShaderHash(cmd_list_data);
-        is_dispatch = (shader_hash != 0U);
+        is_dispatch = (shader_hash != 0u);
       }
       break;
     }

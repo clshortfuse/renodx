@@ -2076,7 +2076,7 @@ inline void OnBindDescriptorTables(
         s << " via ";
         s << static_cast<uintptr_t>(layout.handle);
         s << "[" << first + i << "]";
-        s << ", updates: " << static_cast<uintptr_t>(&info->updates);
+        s << ", updates: " << reinterpret_cast<uintptr_t>(&info->updates);
         s << " (" << info->updates.size() << ")";
         s << ")";
         reshade::log::message(reshade::log::level::debug, s.str().c_str());
@@ -2091,7 +2091,7 @@ inline void OnBindDescriptorTables(
 #ifdef DEBUG_LEVEL_1
         std::stringstream s2;
         s2 << "mods::swapchain::OnBindDescriptorTables(updated created table: ";
-        s2 << static_cast<uintptr_t>(&info->updates);
+        s2 << reinterpret_cast<uintptr_t>(&info->updates);
         s2 << ", size" << len;
         s2 << ")";
         reshade::log::message(reshade::log::level::debug, s2.str().c_str());
