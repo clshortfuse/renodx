@@ -90,6 +90,7 @@ static void AddShaderReplacement(
 }
 
 struct PipelineShaderDetails {
+  reshade::api::pipeline pipeline = {0u};
   reshade::api::device* device = nullptr;
   reshade::api::pipeline_layout layout = {0};
   std::vector<reshade::api::pipeline_subobject> subobjects;
@@ -144,7 +145,6 @@ struct PipelineShaderDetails {
       // Pipeline has a shader with code. Hash code and check
 
       uint32_t shader_hash = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
-      this->shader_hashes.emplace(shader_hash);
       const auto& stage = COMPATIBLE_STAGES[shader_type_index];
 
       // Shader may have been replaced. Get original hash
@@ -165,8 +165,6 @@ struct PipelineShaderDetails {
         this->initialized_replacement = true;
       } else {
         if (!use_replace_async) {
-          this->initialized_replacement = true;
-
           auto pair = this->runtime_replacements->find(shader_hash);
           if (pair != this->runtime_replacements->end()) {
             const auto& new_shader = pair->second;
@@ -186,6 +184,7 @@ struct PipelineShaderDetails {
           }
         }
       }
+      this->shader_hashes.emplace(shader_hash);
 
       this->subobject_shaders.push_back({
           .index = i,
@@ -205,10 +204,12 @@ struct PipelineShaderDetails {
       reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
     }
+
     if (replacement_subobjects != nullptr) {
       reshade::api::pipeline new_pipeline;
-      auto create_layout = renodx::utils::pipeline_layout::GetPipelineLayoutClone(device, layout);
-      if (create_layout.handle == 0u) {
+
+      auto create_layout = layout;
+      if (this->layout_data != nullptr && this->layout_data->replacement_layout != 0u) {
         create_layout = layout;
       }
 
@@ -220,8 +221,10 @@ struct PipelineShaderDetails {
       renodx::utils::pipeline::DestroyPipelineSubobjects(replacement_subobjects, subobject_count);
 
       if (built_pipeline_ok) {
+        this->initialized_replacement = true;
         this->replacement_pipeline = new_pipeline;
-      };
+        return;
+      }
 
 #ifdef DEBUG_LEVEL_0
       std::stringstream s;
@@ -229,7 +232,6 @@ struct PipelineShaderDetails {
       s << ")";
       reshade::log::message(reshade::log::level::error, s.str().c_str());
 #endif
-      return;
     }
 
     this->replacement_pipeline = {0};
