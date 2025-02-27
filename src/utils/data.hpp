@@ -12,14 +12,14 @@
 namespace renodx::utils::data {
 
 template <typename T>
-T* Get(const reshade::api::api_object* api_object) {
+inline T* Get(const reshade::api::api_object* api_object) {
   uint64_t res;
   api_object->get_private_data(reinterpret_cast<const uint8_t*>(&__uuidof(T)), &res);
   return reinterpret_cast<T*>(static_cast<uintptr_t>(res));
 }
 
 template <typename T, typename... Args>
-T* Create(reshade::api::api_object* api_object, Args&&... args) {
+inline T* Create(reshade::api::api_object* api_object, Args&&... args) {
   uint64_t res;
   res = reinterpret_cast<uintptr_t>(new T(static_cast<Args&&>(args)...));
   api_object->set_private_data(reinterpret_cast<const uint8_t*>(&__uuidof(T)), res);
@@ -27,7 +27,7 @@ T* Create(reshade::api::api_object* api_object, Args&&... args) {
 }
 
 template <typename T, typename... Args>
-bool CreateOrGet(reshade::api::api_object* api_object, T*& private_data, Args&&... args) {
+inline bool CreateOrGet(reshade::api::api_object* api_object, T*& private_data, Args&&... args) {
   uint64_t res;
   api_object->get_private_data(reinterpret_cast<const uint8_t*>(&__uuidof(T)), &res);
   if (res == 0) {
@@ -42,13 +42,13 @@ bool CreateOrGet(reshade::api::api_object* api_object, T*& private_data, Args&&.
 }
 
 template <typename T>
-void Delete(reshade::api::api_object* api_object, T* private_data) {
+inline void Delete(reshade::api::api_object* api_object, T* private_data) {
   delete private_data;
   api_object->set_private_data(reinterpret_cast<const uint8_t*>(&__uuidof(T)), 0);
 }
 
 template <typename T>
-void Delete(reshade::api::api_object* api_object) {
+inline void Delete(reshade::api::api_object* api_object) {
   Delete(api_object, api_object->get_private_data<T>());
 }
 
