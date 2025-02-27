@@ -699,7 +699,7 @@ inline bool HandleStatesAndBypass(
   auto& state = shader_state->stage_states[index];
   if (state.pipeline == 0u) return false;
 
-  const auto& shader_hash = renodx::utils::shader::GetCurrentShaderHash(shader_state, index);
+  const auto& shader_hash = renodx::utils::shader::GetCurrentShaderHash(&state, index);
   if (shader_hash == 0u) return false;
   auto custom_shader_info_pair = custom_shaders.find(shader_hash);
   bool is_custom_shader = custom_shader_info_pair != custom_shaders.end();
