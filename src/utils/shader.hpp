@@ -318,8 +318,7 @@ inline uint32_t GetCurrentShaderHash(StageState* stage_state) {
 }
 
 inline uint32_t GetCurrentShaderHash(CommandListData* cmd_list_data, const int& index) {
-  auto* stage_state = GetCurrentPixelState(cmd_list_data);
-  return GetCurrentShaderHash(stage_state, index);
+  return GetCurrentShaderHash(&cmd_list_data->stage_states[index], index);
 }
 
 inline uint32_t GetCurrentVertexShaderHash(CommandListData* cmd_list_data) {
