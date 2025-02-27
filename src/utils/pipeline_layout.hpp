@@ -95,21 +95,6 @@ static void OnDestroyPipelineLayout(
   pipeline_layout_data.erase(layout.handle);
 }
 
-static void RegisterPipelineLayoutClone(
-    reshade::api::pipeline_layout layout_original,
-    reshade::api::pipeline_layout layout_clone) {
-  auto *layout_data = GetPipelineLayoutData(layout_original, true);
-  layout_data->replacement_layout = layout_clone;
-}
-
-static reshade::api::pipeline_layout GetPipelineLayoutClone(
-    reshade::api::device* device,
-    reshade::api::pipeline_layout layout_original) {
-  auto* layout_data = GetPipelineLayoutData(layout_original, false);
-  if (layout_data == nullptr) return {0};
-  return layout_data->replacement_layout;
-}
-
 static bool attached = false;
 
 static void Use(DWORD fdw_reason) {
