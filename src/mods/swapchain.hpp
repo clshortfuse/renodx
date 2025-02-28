@@ -65,6 +65,7 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   std::vector<SwapChainUpgradeTarget> swap_chain_upgrade_targets;
 
   reshade::api::resource original_resource;
+  reshade::api::resource_desc original_resource_desc;
   reshade::api::resource_view original_resource_view;
   reshade::api::resource_desc primary_swapchain_desc;
 
@@ -385,6 +386,10 @@ inline reshade::api::resource CloneResource(utils::resource::ResourceInfo* resou
           nullptr,  // initial_data
           initial_state,
           &resource_clone)) {
+    auto new_resource_info = utils::resource::CreateResourceInfo(resource_clone);
+    new_resource_info.resource = resource_info->resource;
+    new_resource_info.clone = resource_clone;
+    new_resource_info.is_clone = true;
 #ifdef DEBUG_LEVEL_1
     {
       std::stringstream s;
@@ -1199,6 +1204,7 @@ inline bool OnCreateResource(
           : reshade::log::level::info,
       s.str().c_str());
 
+  const auto original_desc = desc;
   desc.texture.format = found_target->new_format;
 
   if (found_target->new_dimensions.width == SwapChainUpgradeTarget::BACK_BUFFER) {
@@ -1222,6 +1228,7 @@ inline bool OnCreateResource(
       | (found_target->usage_set & ~found_target->usage_unset));
 
   private_data->original_resource = original_resource;
+  private_data->original_resource_desc = original_desc;
   private_data->applied_target = found_target;
   return true;
 }
@@ -1276,9 +1283,10 @@ inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
     }
     resource_info->upgraded = true;
     resource_info->upgrade_target = private_data->applied_target;
-    private_data->applied_target = nullptr;
-
     resource_info->fallback = private_data->original_resource;
+    resource_info->fallback_desc = private_data->original_resource_desc;
+
+    private_data->applied_target = nullptr;
 
   } else if (use_resource_cloning) {
     if (private_data->resource_upgrade_finished) return;

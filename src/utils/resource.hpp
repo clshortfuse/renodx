@@ -10,10 +10,11 @@
 #include <include/reshade_api_device.hpp>
 #include <mutex>
 #include <shared_mutex>
+#include <sstream>
 #include <unordered_map>
+#include <vector>
 
 #include <include/reshade.hpp>
-#include <vector>
 
 #include "../utils/hash.hpp"
 
@@ -179,6 +180,7 @@ struct ResourceInfo {
   reshade::api::device* device;
   reshade::api::resource_desc desc;
   reshade::api::resource_desc clone_desc;
+  reshade::api::resource_desc fallback_desc;
   reshade::api::resource resource = {0u};
   reshade::api::resource clone = {0u};
   reshade::api::resource fallback = {0u};
@@ -186,6 +188,7 @@ struct ResourceInfo {
   bool upgraded = false;
   bool clone_enabled = false;
   bool is_swap_chain = false;
+  bool is_clone = false;
   reshade::api::format format = reshade::api::format::unknown;
   ResourceUpgradeInfo* clone_target = nullptr;
   ResourceUpgradeInfo* upgrade_target = nullptr;
@@ -353,9 +356,35 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
 
   std::shared_lock lock(resource_infos_mutex);
   auto pair = resource_infos.find(resource.handle);
-  if (pair == resource_infos.end()) return;
-  lock.unlock();
+  if (pair == resource_infos.end()) {
+    std::stringstream s;
+    s << "utils::resource::OnDestroyResource(Unknown resource: ";
+    s << static_cast<uintptr_t>(resource.handle);
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+    return;
+  }
   auto& resource_info = pair->second;
+  lock.unlock();
+  if (resource_info.destroyed) {
+    std::stringstream s;
+    s << "utils::resource::OnDestroyResource(Resource already destroyed: ";
+    s << static_cast<uintptr_t>(resource.handle);
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+    return;
+  }
+  if (resource_info.is_clone) {
+    std::stringstream s;
+    s << "utils::resource::OnDestroyResource(Clone destroyed directly: ";
+    s << static_cast<uintptr_t>(resource.handle);
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+    device->destroy_resource(resource_info.resource);
+    // Destroy original and fire that event instead
+    OnDestroyResource(device, resource_info.resource);
+    return;
+  }
 
   resource_info.device = device;
   resource_info.destroyed = true;
