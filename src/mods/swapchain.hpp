@@ -140,6 +140,23 @@ static bool UsingSwapchainCompatibilityMode() {
   return swapchain_proxy_compatibility_mode && (target_format == swap_chain_proxy_format);
 }
 
+static void RemoveWindowBorder(HWND window) {
+  auto current_style = GetWindowLongPtr(window, GWL_STYLE);
+  if (current_style != 0) {
+    auto new_style = current_style & ~WS_BORDER & ~WS_THICKFRAME & ~WS_DLGFRAME;
+    if (new_style != current_style) {
+      SetWindowLongPtr(window, GWL_STYLE, new_style);
+    }
+  }
+  auto current_exstyle = GetWindowLongPtr(window, GWL_EXSTYLE);
+  if (current_exstyle != 0) {
+    auto new_exstyle = current_exstyle & ~WS_EX_CLIENTEDGE & ~WS_EX_WINDOWEDGE;
+    if (new_exstyle != current_exstyle) {
+      SetWindowLongPtr(window, GWL_EXSTYLE, new_exstyle);
+    }
+  }
+}
+
 static void CheckSwapchainSize(
     reshade::api::swapchain* swapchain,
     const reshade::api::resource_desc& buffer_desc) {
@@ -188,7 +205,8 @@ static void CheckSwapchainSize(
     if (screen_width != buffer_desc.texture.width) return;
     if (screen_height != buffer_desc.texture.height) return;
     // if (window_rect.top == 0 && window_rect.left == 0) return;
-    SetWindowLongPtr(output_window, GWL_STYLE, WS_VISIBLE | WS_POPUP);
+
+    RemoveWindowBorder(output_window);
     SetWindowPos(
         output_window,
         HWND_TOP,
@@ -2552,18 +2570,30 @@ static bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullsc
   // renodx::utils::swapchain::FastResizeBuffer(swapchain);
 
   if (private_data->prevent_full_screen) {
-    // Resize to fullscreen instead
     HWND output_window = static_cast<HWND>(swapchain->get_hwnd());
     if (output_window != nullptr) {
-      // HMONITOR monitor = (HMONITOR)hmonitor;
-      const uint32_t screen_width = GetSystemMetrics(SM_CXSCREEN);
-      const uint32_t screen_height = GetSystemMetrics(SM_CYSCREEN);
+      HMONITOR monitor = MonitorFromWindow(output_window, 0x0);
+      MONITORINFO monitor_info = {};
+      monitor_info.cbSize = sizeof(MONITORINFO);
+
+      GetMonitorInfo(monitor, &monitor_info);
+
+      const int screen_width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
+      const int screen_height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
+
       const uint32_t texture_width = private_data->primary_swapchain_desc.texture.width;
       const uint32_t texture_height = private_data->primary_swapchain_desc.texture.height;
-      const uint32_t top = floor((screen_height - texture_height) / 2.f);
-      const uint32_t left = floor((screen_width - texture_width) / 2.f);
-      SetWindowLongPtr(output_window, GWL_STYLE, WS_VISIBLE | WS_POPUP);
-      SetWindowPos(output_window, HWND_TOP, left, top, texture_width, texture_height, SWP_FRAMECHANGED);
+      // Move to center of screen (game may be lower resolution than screen)
+      const uint32_t left = trunc((screen_width - texture_width) / 2.f);
+      const uint32_t top = trunc((screen_height - texture_height) / 2.f);
+
+      RemoveWindowBorder(output_window);
+      SetWindowPos(
+          output_window,
+          HWND_TOP,
+          monitor_info.rcMonitor.left + left, monitor_info.rcMonitor.top + top,
+          screen_width, screen_height,
+          SWP_FRAMECHANGED);
     }
     reshade::log::message(reshade::log::level::info, "Preventing fullscreen");
     return true;
