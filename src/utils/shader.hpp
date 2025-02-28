@@ -636,7 +636,8 @@ static void OnInitDevice(reshade::api::device* device) {
     }
   };
 
-  std::shared_lock lock(internal::mutex);
+  std::shared_lock local_lock(internal::mutex);
+  std::unique_lock device_lock(data->mutex);
   insert_shaders(internal::compile_time_replacements, data->compile_time_replacements, "compile-time");
   insert_shaders(internal::initial_runtime_replacements, data->runtime_replacements, "runtime");
 
