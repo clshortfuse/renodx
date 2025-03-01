@@ -633,12 +633,12 @@ inline void RewriteRenderTargets(
   bool changed = false;
   std::vector<std::pair<int, utils::resource::ResourceViewInfo*>> infos;
 
-  std::shared_lock lock(utils::resource::resource_view_infos_mutex);
+  std::shared_lock lock(utils::resource::store->resource_view_infos_mutex);
   for (uint32_t i = 0; i < count; ++i) {
     const reshade::api::resource_view resource_view = rtvs[i];
     if (resource_view.handle == 0u) continue;
-    auto pair = utils::resource::resource_view_infos.find(resource_view.handle);
-    if (pair != utils::resource::resource_view_infos.end()) {
+    auto pair = utils::resource::store->resource_view_infos.find(resource_view.handle);
+    if (pair != utils::resource::store->resource_view_infos.end()) {
       infos.emplace_back(i, &pair->second);
     }
   }
@@ -1463,16 +1463,16 @@ inline bool OnCopyBufferToTexture(
     return true;
   }
 
-  std::shared_lock lock(utils::resource::resource_infos_mutex);
-  auto source_pair = utils::resource::resource_infos.find(source.handle);
-  if (source_pair == utils::resource::resource_infos.end()) {
-    // assert(source_pair != utils::resource::resource_infos.end());
+  std::shared_lock lock(utils::resource::store->resource_infos_mutex);
+  auto source_pair = utils::resource::store->resource_infos.find(source.handle);
+  if (source_pair == utils::resource::store->resource_infos.end()) {
+    // assert(source_pair != utils::resource::store->resource_infos.end());
     return false;
   }
 
-  auto destination_pair = utils::resource::resource_infos.find(dest.handle);
-  if (destination_pair == utils::resource::resource_infos.end()) {
-    assert(destination_pair != utils::resource::resource_infos.end());
+  auto destination_pair = utils::resource::store->resource_infos.find(dest.handle);
+  if (destination_pair == utils::resource::store->resource_infos.end()) {
+    assert(destination_pair != utils::resource::store->resource_infos.end());
     return false;
   }
 
@@ -1748,17 +1748,17 @@ inline bool OnCopyResource(
   auto dest_desc_new = dest_desc;
 
   if (use_resource_cloning) {
-    std::shared_lock lock(utils::resource::resource_infos_mutex);
+    std::shared_lock lock(utils::resource::store->resource_infos_mutex);
 
-    auto source_pair = utils::resource::resource_infos.find(source.handle);
-    if (source_pair == utils::resource::resource_infos.end()) {
-      assert(source_pair != utils::resource::resource_infos.end());
+    auto source_pair = utils::resource::store->resource_infos.find(source.handle);
+    if (source_pair == utils::resource::store->resource_infos.end()) {
+      assert(source_pair != utils::resource::store->resource_infos.end());
       return false;
     }
 
-    auto destination_pair = utils::resource::resource_infos.find(dest.handle);
-    if (destination_pair == utils::resource::resource_infos.end()) {
-      assert(destination_pair != utils::resource::resource_infos.end());
+    auto destination_pair = utils::resource::store->resource_infos.find(dest.handle);
+    if (destination_pair == utils::resource::store->resource_infos.end()) {
+      assert(destination_pair != utils::resource::store->resource_infos.end());
       return false;
     }
 
@@ -1836,7 +1836,7 @@ inline bool OnUpdateDescriptorTables(
 
   std::vector<std::pair<std::pair<int, int>, utils::resource::ResourceViewInfo*>> infos;
   {
-    std::shared_lock lock(utils::resource::resource_view_infos_mutex);
+    std::shared_lock lock(utils::resource::store->resource_view_infos_mutex);
     for (uint32_t i = 0; i < count; ++i) {
       const auto& update = updates[i];
       if (update.table.handle == 0u) continue;
@@ -1847,8 +1847,8 @@ inline bool OnUpdateDescriptorTables(
             auto resource_view = item.view;
             if (resource_view.handle == 0u) continue;
 
-            auto pair = utils::resource::resource_view_infos.find(resource_view.handle);
-            if (pair != utils::resource::resource_view_infos.end()) {
+            auto pair = utils::resource::store->resource_view_infos.find(resource_view.handle);
+            if (pair != utils::resource::store->resource_view_infos.end()) {
               infos.push_back({{i, j}, &pair->second});
             }
 
@@ -1860,8 +1860,8 @@ inline bool OnUpdateDescriptorTables(
             auto resource_view = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
             if (resource_view.handle == 0u) continue;
 
-            auto pair = utils::resource::resource_view_infos.find(resource_view.handle);
-            if (pair != utils::resource::resource_view_infos.end()) {
+            auto pair = utils::resource::store->resource_view_infos.find(resource_view.handle);
+            if (pair != utils::resource::store->resource_view_infos.end()) {
               infos.push_back({{i, j}, &pair->second});
             }
           } break;
@@ -2370,17 +2370,17 @@ inline bool OnResolveTextureRegion(
     uint32_t dest_y,
     uint32_t dest_z,
     reshade::api::format format) {
-  std::shared_lock lock(utils::resource::resource_infos_mutex);
+  std::shared_lock lock(utils::resource::store->resource_infos_mutex);
 
-  auto source_pair = utils::resource::resource_infos.find(source.handle);
-  if (source_pair == utils::resource::resource_infos.end()) {
-    assert(source_pair != utils::resource::resource_infos.end());
+  auto source_pair = utils::resource::store->resource_infos.find(source.handle);
+  if (source_pair == utils::resource::store->resource_infos.end()) {
+    assert(source_pair != utils::resource::store->resource_infos.end());
     return false;
   }
 
-  auto destination_pair = utils::resource::resource_infos.find(dest.handle);
-  if (destination_pair == utils::resource::resource_infos.end()) {
-    assert(destination_pair != utils::resource::resource_infos.end());
+  auto destination_pair = utils::resource::store->resource_infos.find(dest.handle);
+  if (destination_pair == utils::resource::store->resource_infos.end()) {
+    assert(destination_pair != utils::resource::store->resource_infos.end());
     return false;
   }
 
@@ -2419,15 +2419,15 @@ inline void OnBarrier(
   std::unordered_set<uint64_t> checked_resources;
   std::vector<std::pair<int, utils::resource::ResourceInfo*>> infos;
   {
-    std::shared_lock lock(utils::resource::resource_infos_mutex);
+    std::shared_lock lock(utils::resource::store->resource_infos_mutex);
     for (uint32_t i = 0; i < count; ++i) {
       if (old_states[i] == reshade::api::resource_usage::undefined) continue;
       const auto& resource = resources[i];
       if (resource.handle == 0u) continue;
       bool checked = !checked_resources.insert(resource.handle).second;
       if (checked) continue;
-      auto pair = utils::resource::resource_infos.find(resource.handle);
-      if (pair != utils::resource::resource_infos.end()) {
+      auto pair = utils::resource::store->resource_infos.find(resource.handle);
+      if (pair != utils::resource::store->resource_infos.end()) {
         infos.emplace_back(i, &pair->second);
       }
     }
@@ -2479,16 +2479,16 @@ inline bool OnCopyTextureRegion(
   auto source_desc_new = source_desc;
   auto dest_desc_new = dest_desc;
   if (use_resource_cloning) {
-    std::shared_lock lock(utils::resource::resource_infos_mutex);
-    auto source_pair = utils::resource::resource_infos.find(source.handle);
-    if (source_pair == utils::resource::resource_infos.end()) {
-      assert(source_pair != utils::resource::resource_infos.end());
+    std::shared_lock lock(utils::resource::store->resource_infos_mutex);
+    auto source_pair = utils::resource::store->resource_infos.find(source.handle);
+    if (source_pair == utils::resource::store->resource_infos.end()) {
+      assert(source_pair != utils::resource::store->resource_infos.end());
       return false;
     }
 
-    auto destination_pair = utils::resource::resource_infos.find(dest.handle);
-    if (destination_pair == utils::resource::resource_infos.end()) {
-      assert(destination_pair != utils::resource::resource_infos.end());
+    auto destination_pair = utils::resource::store->resource_infos.find(dest.handle);
+    if (destination_pair == utils::resource::store->resource_infos.end()) {
+      assert(destination_pair != utils::resource::store->resource_infos.end());
       return false;
     }
 
@@ -2646,10 +2646,10 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
       reshade::register_event<reshade::addon_event::create_resource>(OnCreateResource);
       reshade::register_event<reshade::addon_event::create_resource_view>(OnCreateResourceView);
 
-      renodx::utils::resource::on_init_resource_info_callbacks.emplace_back(&OnInitResourceInfo);
-      renodx::utils::resource::on_destroy_resource_info_callbacks.emplace_back(&OnDestroyResourceInfo);
-      renodx::utils::resource::on_init_resource_view_info_callbacks.emplace_back(&OnInitResourceViewInfo);
-      renodx::utils::resource::on_destroy_resource_view_info_callbacks.emplace_back(&OnDestroyResourceViewInfo);
+      renodx::utils::resource::store->on_init_resource_info_callbacks.emplace_back(&OnInitResourceInfo);
+      renodx::utils::resource::store->on_destroy_resource_info_callbacks.emplace_back(&OnDestroyResourceInfo);
+      renodx::utils::resource::store->on_init_resource_view_info_callbacks.emplace_back(&OnInitResourceViewInfo);
+      renodx::utils::resource::store->on_destroy_resource_view_info_callbacks.emplace_back(&OnDestroyResourceViewInfo);
 
       reshade::register_event<reshade::addon_event::copy_resource>(OnCopyResource);
 

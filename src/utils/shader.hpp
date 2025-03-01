@@ -241,12 +241,17 @@ struct PipelineShaderDetails {
   }
 };
 
-static std::shared_mutex pipeline_shader_details_mutex;
-static std::unordered_map<uint64_t, PipelineShaderDetails> pipeline_shader_details;
+static struct Store {
+  std::shared_mutex pipeline_shader_details_mutex;
+  std::unordered_map<uint64_t, PipelineShaderDetails> pipeline_shader_details;
+} local_store;
+
+static Store* store = &local_store;
 
 struct __declspec(uuid("908f0889-64d8-4e22-bd26-ded3dd0cef77")) DeviceData {
   std::shared_mutex mutex;
 
+  Store* store;
   std::unordered_map<uint32_t, std::unordered_set<uint64_t>> shader_pipeline_handles;
   std::unordered_map<uint32_t, std::vector<uint8_t>> compile_time_replacements;
   std::unordered_map<uint32_t, std::vector<uint8_t>> runtime_replacements;
@@ -277,9 +282,9 @@ struct __declspec(uuid("8707f724-c7e5-420e-89d6-cc032c732d2d")) CommandListData 
 };
 
 inline PipelineShaderDetails* GetPipelineShaderDetails(const reshade::api::pipeline& pipeline) {
-  std::shared_lock read_lock(pipeline_shader_details_mutex);
-  if (auto details_pair = pipeline_shader_details.find(pipeline.handle);
-      details_pair != pipeline_shader_details.end()) {
+  std::shared_lock read_lock(store->pipeline_shader_details_mutex);
+  if (auto details_pair = store->pipeline_shader_details.find(pipeline.handle);
+      details_pair != store->pipeline_shader_details.end()) {
     return &details_pair->second;
   }
   return nullptr;
@@ -545,10 +550,10 @@ static void RemoveRuntimeReplacements(reshade::api::device* device, const std::u
         pair != data->shader_pipeline_handles.end()) {
       auto& pipeline_handles = pair->second;
       if (pipeline_handles.empty()) continue;
-      std::shared_lock read_lock(pipeline_shader_details_mutex);
+      std::shared_lock read_lock(store->pipeline_shader_details_mutex);
       for (auto pipeline_handle : pipeline_handles) {
-        if (auto details_pair = pipeline_shader_details.find(pipeline_handle);
-            details_pair != pipeline_shader_details.end()) {
+        if (auto details_pair = store->pipeline_shader_details.find(pipeline_handle);
+            details_pair != store->pipeline_shader_details.end()) {
           auto& details = details_pair->second;
           if (details.replacement_pipeline.handle != 0u) {
             device->destroy_pipeline(details.replacement_pipeline);
@@ -586,6 +591,7 @@ static void OnInitDevice(reshade::api::device* device) {
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 
     is_primary_hook = true;
+    data->store = store;
   } else {
     std::stringstream s;
     s << "utils::shader::OnInitDevice(Attaching to hook: ";
@@ -593,6 +599,7 @@ static void OnInitDevice(reshade::api::device* device) {
     s << ", api: " << device->get_api();
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    store = data->store;
   }
 
   if (!use_replace_on_bind) {
@@ -787,8 +794,8 @@ static void OnInitPipeline(
       subobjects_clone + subobject_count);
 
   {
-    const std::unique_lock write_lock(pipeline_shader_details_mutex);
-    pipeline_shader_details[pipeline.handle] = details;
+    const std::unique_lock write_lock(store->pipeline_shader_details_mutex);
+    store->pipeline_shader_details[pipeline.handle] = details;
 
     if (use_replace_async) {
       for (const auto shader_hash : details.shader_hashes) {

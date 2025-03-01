@@ -16,6 +16,8 @@
 
 #include <include/reshade.hpp>
 
+#include "../utils/data.hpp"
+#include "../utils/format.hpp"
 #include "../utils/hash.hpp"
 
 namespace renodx::utils::resource {
@@ -216,43 +218,48 @@ struct ResourceViewInfo {
   reshade::api::resource_usage usage = reshade::api::resource_usage::undefined;
 };
 
-static std::shared_mutex resource_infos_mutex;
-static std::unordered_map<uint64_t, ResourceInfo> resource_infos;
-static std::shared_mutex resource_view_infos_mutex;
-static std::unordered_map<uint64_t, ResourceViewInfo> resource_view_infos;
+static bool is_primary_hook = false;
 
-static std::vector<std::function<void(ResourceInfo* resource_info)>> on_init_resource_info_callbacks;
-static std::vector<std::function<void(ResourceInfo* resource_info)>> on_destroy_resource_info_callbacks;
+static struct Store {
+  std::shared_mutex resource_infos_mutex;
+  std::unordered_map<uint64_t, ResourceInfo> resource_infos;
+  std::shared_mutex resource_view_infos_mutex;
+  std::unordered_map<uint64_t, ResourceViewInfo> resource_view_infos;
+  std::vector<std::function<void(ResourceInfo* resource_info)>> on_init_resource_info_callbacks;
+  std::vector<std::function<void(ResourceInfo* resource_info)>> on_destroy_resource_info_callbacks;
 
-static std::vector<std::function<void(ResourceViewInfo* resource_view_info)>> on_init_resource_view_info_callbacks;
-static std::vector<std::function<void(ResourceViewInfo* resource_view_info)>> on_destroy_resource_view_info_callbacks;
+  std::vector<std::function<void(ResourceViewInfo* resource_view_info)>> on_init_resource_view_info_callbacks;
+  std::vector<std::function<void(ResourceViewInfo* resource_view_info)>> on_destroy_resource_view_info_callbacks;
+} local_store;
+
+static Store* store = &local_store;
 
 inline ResourceInfo* GetResourceInfo(const reshade::api::resource& resource, const bool& create = false) {
   {
-    std::shared_lock lock(resource_infos_mutex);
-    auto pair = resource_infos.find(resource.handle);
-    if (pair != resource_infos.end()) return &pair->second;
+    std::shared_lock lock(store->resource_infos_mutex);
+    auto pair = store->resource_infos.find(resource.handle);
+    if (pair != store->resource_infos.end()) return &pair->second;
     if (!create) return nullptr;
   }
 
   {
-    std::unique_lock write_lock(resource_infos_mutex);
-    auto& info = resource_infos.insert({resource.handle, ResourceInfo({.resource = resource})}).first->second;
+    std::unique_lock write_lock(store->resource_infos_mutex);
+    auto& info = store->resource_infos.insert({resource.handle, ResourceInfo({.resource = resource})}).first->second;
     return &info;
   }
 }
 
 inline ResourceInfo* GetResourceInfoUnsafe(const reshade::api::resource& resource, const bool& create = false) {
-  auto pair = resource_infos.find(resource.handle);
-  if (pair != resource_infos.end()) return &pair->second;
+  auto pair = store->resource_infos.find(resource.handle);
+  if (pair != store->resource_infos.end()) return &pair->second;
   if (!create) return nullptr;
-  auto& info = resource_infos.insert({resource.handle, ResourceInfo({.resource = resource})}).first->second;
+  auto& info = store->resource_infos.insert({resource.handle, ResourceInfo({.resource = resource})}).first->second;
   return &info;
 }
 
 inline ResourceInfo& CreateResourceInfo(const reshade::api::resource& resource) {
-  std::unique_lock write_lock(resource_infos_mutex);
-  auto& info = resource_infos[resource.handle];
+  std::unique_lock write_lock(store->resource_infos_mutex);
+  auto& info = store->resource_infos[resource.handle];
   info.destroyed = false;
   info.resource = resource;
   return info;
@@ -260,16 +267,67 @@ inline ResourceInfo& CreateResourceInfo(const reshade::api::resource& resource) 
 
 inline ResourceViewInfo* GetResourceViewInfo(const reshade::api::resource_view& view, const bool& create = false) {
   {
-    std::shared_lock lock(resource_view_infos_mutex);
-    auto pair = resource_view_infos.find(view.handle);
-    if (pair != resource_view_infos.end()) return &pair->second;
+    std::shared_lock lock(store->resource_view_infos_mutex);
+    auto pair = store->resource_view_infos.find(view.handle);
+    if (pair != store->resource_view_infos.end()) return &pair->second;
     if (!create) return nullptr;
   }
   {
-    std::unique_lock write_lock(resource_view_infos_mutex);
-    auto& info = resource_view_infos.insert({view.handle, ResourceViewInfo({.view = view})}).first->second;
+    std::unique_lock write_lock(store->resource_view_infos_mutex);
+    auto& info = store->resource_view_infos.insert({view.handle, ResourceViewInfo({.view = view})}).first->second;
     return &info;
   }
+}
+
+struct __declspec(uuid("3c7a0a1f-4bf3-4e7a-ac02-6f63fdc70187")) DeviceData {
+  Store* store;
+};
+
+static void OnInitDevice(reshade::api::device* device) {
+  DeviceData* data;
+  bool created = renodx::utils::data::CreateOrGet(device, data);
+
+  if (created) {
+    std::stringstream s;
+    s << "utils::resource::OnInitDevice(Hooking device: ";
+    s << reinterpret_cast<uintptr_t>(device);
+    s << ", api: " << device->get_api();
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+
+    is_primary_hook = true;
+    data->store = store;
+  } else {
+    std::stringstream s;
+    s << "utils::resource::OnInitDevice(Attaching to hook: ";
+    s << reinterpret_cast<uintptr_t>(device);
+    s << ", api: " << device->get_api();
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    store = data->store;
+    for (auto& callback : local_store.on_init_resource_info_callbacks) {
+      store->on_init_resource_info_callbacks.push_back(callback);
+    }
+    for (auto& callback : local_store.on_destroy_resource_info_callbacks) {
+      store->on_destroy_resource_info_callbacks.push_back(callback);
+    }
+    for (auto& callback : local_store.on_init_resource_view_info_callbacks) {
+      store->on_init_resource_view_info_callbacks.push_back(callback);
+    }
+    for (auto& callback : local_store.on_destroy_resource_view_info_callbacks) {
+      store->on_destroy_resource_view_info_callbacks.push_back(callback);
+    }
+  }
+}
+
+static void OnDestroyDevice(reshade::api::device* device) {
+  if (!is_primary_hook) return;
+  std::stringstream s;
+  s << "utils::resource::OnDestroyDevice(";
+  s << reinterpret_cast<uintptr_t>(device);
+  s << ")";
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
+  device->destroy_private_data<DeviceData>();
 }
 
 static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
@@ -279,10 +337,10 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   std::vector<ResourceInfo*> infos(back_buffer_count);
 
   {
-    std::unique_lock lock(resource_infos_mutex);
+    std::unique_lock lock(store->resource_infos_mutex);
     for (uint32_t index = 0; index < back_buffer_count; ++index) {
       auto buffer = swapchain->get_back_buffer(index);
-      auto& info = resource_infos[buffer.handle];
+      auto& info = store->resource_infos[buffer.handle];
       info = {
           .device = device,
           .desc = device->get_resource_desc(buffer),
@@ -296,7 +354,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 
   for (auto& resource_info : infos) {
-    for (auto& callback : on_init_resource_info_callbacks) {
+    for (auto& callback : store->on_init_resource_info_callbacks) {
       callback(resource_info);
     }
   }
@@ -306,11 +364,11 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
   std::vector<ResourceInfo*> infos;
   {
-    std::unique_lock lock(resource_infos_mutex);
+    std::unique_lock lock(store->resource_infos_mutex);
     for (uint32_t index = 0; index < back_buffer_count; ++index) {
       auto buffer = swapchain->get_back_buffer(index);
-      auto pair = resource_infos.find(buffer.handle);
-      if (pair == resource_infos.end()) {
+      auto pair = store->resource_infos.find(buffer.handle);
+      if (pair == store->resource_infos.end()) {
         assert(false);
         continue;
       }
@@ -322,7 +380,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
   }
 
   for (auto& resource_info : infos) {
-    for (auto& callback : on_destroy_resource_info_callbacks) {
+    for (auto& callback : store->on_destroy_resource_info_callbacks) {
       callback(resource_info);
     }
   }
@@ -337,8 +395,8 @@ inline void OnInitResource(
   if (resource.handle == 0) return;
 
   // assume write new
-  std::unique_lock lock(resource_infos_mutex);
-  auto& resource_info = resource_infos[resource.handle];
+  std::unique_lock lock(store->resource_infos_mutex);
+  auto& resource_info = store->resource_infos[resource.handle];
   lock.unlock();
   resource_info = {
       .device = device,
@@ -346,7 +404,7 @@ inline void OnInitResource(
       .resource = resource,
       .initial_state = initial_state,
   };
-  for (auto& callback : on_init_resource_info_callbacks) {
+  for (auto& callback : store->on_init_resource_info_callbacks) {
     callback(&resource_info);
   }
 }
@@ -354,9 +412,9 @@ inline void OnInitResource(
 inline void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
   if (resource.handle == 0) return;
 
-  std::shared_lock lock(resource_infos_mutex);
-  auto pair = resource_infos.find(resource.handle);
-  if (pair == resource_infos.end()) {
+  std::shared_lock lock(store->resource_infos_mutex);
+  auto pair = store->resource_infos.find(resource.handle);
+  if (pair == store->resource_infos.end()) {
     std::stringstream s;
     s << "utils::resource::OnDestroyResource(Unknown resource: ";
     s << static_cast<uintptr_t>(resource.handle);
@@ -389,7 +447,7 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   resource_info.device = device;
   resource_info.destroyed = true;
 
-  for (auto& callback : on_destroy_resource_info_callbacks) {
+  for (auto& callback : store->on_destroy_resource_info_callbacks) {
     callback(&resource_info);
   }
 }
@@ -401,20 +459,20 @@ inline void OnInitResourceView(
     const reshade::api::resource_view_desc& desc,
     reshade::api::resource_view view) {
   if (view.handle == 0u) return;
-  std::unique_lock lock(resource_view_infos_mutex);
-  auto& resource_view_info = resource_view_infos[view.handle];
+  std::unique_lock lock(store->resource_view_infos_mutex);
+  auto& resource_view_info = store->resource_view_infos[view.handle];
   lock.unlock();
 
   if (resource_view_info.view.handle != 0u && !resource_view_info.destroyed) {
-    for (const auto& callback : on_destroy_resource_view_info_callbacks) {
+    for (const auto& callback : store->on_destroy_resource_view_info_callbacks) {
       callback(&resource_view_info);
     }
   }
 
   ResourceInfo* resource_info = nullptr;
   if (resource.handle != 0u) {
-    std::unique_lock resource_lock(resource_infos_mutex);
-    resource_info = &resource_infos[resource.handle];
+    std::unique_lock resource_lock(store->resource_infos_mutex);
+    resource_info = &store->resource_infos[resource.handle];
   }
 
   resource_view_info = {
@@ -429,7 +487,7 @@ inline void OnInitResourceView(
     resource_view_info.clone_target = resource_view_info.resource_info->clone_target;
   }
 
-  for (const auto& callback : on_init_resource_view_info_callbacks) {
+  for (const auto& callback : store->on_init_resource_view_info_callbacks) {
     callback(&resource_view_info);
   }
 }
@@ -437,15 +495,15 @@ inline void OnInitResourceView(
 inline void OnDestroyResourceView(reshade::api::device* device, reshade::api::resource_view view) {
   if (view.handle == 0u) return;
 
-  std::shared_lock lock(resource_view_infos_mutex);
-  auto pair = resource_view_infos.find(view.handle);
-  if (pair == resource_view_infos.end()) return;
+  std::shared_lock lock(store->resource_view_infos_mutex);
+  auto pair = store->resource_view_infos.find(view.handle);
+  if (pair == store->resource_view_infos.end()) return;
   lock.unlock();
 
   auto& resource_view_info = pair->second;
   resource_view_info.destroyed = true;
   if (resource_view_info.view.handle != 0u) {
-    for (auto& callback : on_destroy_resource_view_info_callbacks) {
+    for (auto& callback : store->on_destroy_resource_view_info_callbacks) {
       callback(&resource_view_info);
     }
   }
@@ -499,6 +557,17 @@ static bool IsResourceViewEmpty(reshade::api::device* device, const reshade::api
   return (resource_view_info->original_resource.handle == 0u);
 }
 
+static uint32_t ComputeTextureSize(
+    const reshade::api::resource_desc& desc,
+    reshade::api::device_api device_api = reshade::api::device_api::d3d12) {
+  auto row_pitch = format_row_pitch(desc.texture.format, desc.texture.width);
+  if (device_api == reshade::api::device_api::d3d12) {
+    row_pitch = (row_pitch + 255) & ~255;
+  }
+  auto size = format_slice_pitch(desc.texture.format, row_pitch, desc.texture.height);
+  return size;
+}
+
 static bool attached = false;
 
 static void Use(DWORD fdw_reason) {
@@ -508,6 +577,8 @@ static void Use(DWORD fdw_reason) {
       attached = true;
       reshade::log::message(reshade::log::level::info, "ResourceUtil attached.");
 
+      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
+      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
       reshade::register_event<reshade::addon_event::init_resource>(OnInitResource);
@@ -517,6 +588,8 @@ static void Use(DWORD fdw_reason) {
       break;
 
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
+      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
       reshade::unregister_event<reshade::addon_event::init_resource>(OnInitResource);
