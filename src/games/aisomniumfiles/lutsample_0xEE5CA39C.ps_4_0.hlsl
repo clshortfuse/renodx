@@ -142,8 +142,6 @@ void main(
     if (CUSTOM_TONE_MAP_CONFIGURATION == 0.f) {
       o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
     } else {
-      float3 sdrColor = o0.rgb;
-
       untonemapped = max(0.00001f, untonemapped); // fixes black squares in somnia
 
       o0.rgb = renodx::draw::ToneMapPass(
