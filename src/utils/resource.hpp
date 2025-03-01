@@ -205,6 +205,7 @@ struct ResourceViewInfo {
 
   reshade::api::resource_view_desc desc;
   reshade::api::resource_view_desc clone_desc;
+  reshade::api::resource_view_desc fallback_desc;
   reshade::api::resource_view view = {0u};
   reshade::api::resource_view clone = {0u};
   reshade::api::resource_view fallback = {0u};

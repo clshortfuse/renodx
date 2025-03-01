@@ -64,12 +64,8 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
 
   std::vector<SwapChainUpgradeTarget> swap_chain_upgrade_targets;
 
-  reshade::api::resource original_resource;
-  reshade::api::resource_desc original_resource_desc;
-  reshade::api::resource_view original_resource_view;
   reshade::api::resource_desc primary_swapchain_desc;
 
-  SwapChainUpgradeTarget* applied_target = nullptr;
   bool upgraded_resource_view = false;
   bool resource_upgrade_finished = false;
   bool prevent_full_screen = false;
@@ -121,6 +117,13 @@ static int32_t expected_constant_buffer_index = -1;
 static uint32_t expected_constant_buffer_space = 0;
 static float* shader_injection = nullptr;
 static size_t shader_injection_size = 0;
+
+static thread_local SwapChainUpgradeTarget* local_applied_target = nullptr;
+static thread_local reshade::api::resource local_original_resource = {0u};
+static thread_local reshade::api::resource_desc local_original_resource_desc = {};
+
+static thread_local bool local_upgraded_resource_view = false;
+static thread_local reshade::api::resource_view_desc local_original_resource_view_desc = {};
 
 static SwapChainUpgradeTarget swap_chain_proxy_upgrade_target = {
     .new_format = target_format,
@@ -1227,9 +1230,9 @@ inline bool OnCreateResource(
       static_cast<uint32_t>(desc.usage)
       | (found_target->usage_set & ~found_target->usage_unset));
 
-  private_data->original_resource = original_resource;
-  private_data->original_resource_desc = original_desc;
-  private_data->applied_target = found_target;
+  local_original_resource = original_resource;
+  local_original_resource_desc = original_desc;
+  local_applied_target = found_target;
   return true;
 }
 
@@ -1269,26 +1272,26 @@ inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
       return;
   }
 
-  auto* private_data = renodx::utils::data::Get<DeviceData>(device);
   // const std::unique_lock lock(private_data.mutex);
 
   auto& resource = resource_info->resource;
   auto& initial_state = resource_info->initial_state;
   bool changed = false;
 
-  if (private_data->applied_target != nullptr) {
+  if (local_applied_target != nullptr) {
     changed = true;
-    if (private_data->applied_target->resource_tag != -1) {
-      resource_info->resource_tag = private_data->applied_target->resource_tag;
+    if (local_applied_target->resource_tag != -1) {
+      resource_info->resource_tag = local_applied_target->resource_tag;
     }
     resource_info->upgraded = true;
-    resource_info->upgrade_target = private_data->applied_target;
-    resource_info->fallback = private_data->original_resource;
-    resource_info->fallback_desc = private_data->original_resource_desc;
+    resource_info->upgrade_target = local_applied_target;
+    resource_info->fallback = local_original_resource;
+    resource_info->fallback_desc = local_original_resource_desc;
 
-    private_data->applied_target = nullptr;
+    local_applied_target = nullptr;
 
   } else if (use_resource_cloning) {
+    auto* private_data = renodx::utils::data::Get<DeviceData>(device);
     if (private_data->resource_upgrade_finished) return;
     auto& device_back_buffer_desc = private_data->primary_swapchain_desc;
     if (device_back_buffer_desc.type == reshade::api::resource_type::unknown) {
@@ -1675,40 +1678,25 @@ inline bool OnCreateResourceView(
       }
       // Upgrade on init instead (allows resource view handle reuse)
       // Cloning with upgrade
+
+      // local_original_resource_view =
     }
   }
   if (!changed) return false;
 
+  local_upgraded_resource_view = true;
+  local_original_resource_view_desc = desc;
+
   desc.format = new_desc.format;
-#ifdef TRACK_RESOURCE_VIEW_UPGRADERS
-  {
-    auto* private_data = renodx::utils::data::Get<DeviceData>(device);
-    // std::unique_lock lock(private_data.mutex);
-    private_data->upgraded_resource_view = true;
-  }
-#endif
+
   return true;
 }
 
 inline void OnInitResourceViewInfo(utils::resource::ResourceViewInfo* resource_view_info) {
-#ifdef DEBUG_LEVEL_2
-  reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnInitResourceView()");
-#endif
-#ifdef TRACK_RESOURCE_VIEW_UPGRADERS
-  auto* private_data = renodx::utils::data::Get<DeviceData>(resource_view_info->device);
-  // std::unique_lock lock(private_data->mutex);
-
-  if (private_data->upgraded_resource_view) {
-    private_data->upgraded_resource_view = false;
-    if (private_data->original_resource_view.handle != 0u) {
-      resource_view_info->fallback = private_data->original_resource_view;
-      private_data->original_resource_view = {0};
-    }
+  if (local_upgraded_resource_view) {
+    local_upgraded_resource_view = false;
+    resource_view_info->fallback_desc = local_original_resource_view_desc;
   }
-#endif
-#ifdef DEBUG_LEVEL_2
-  reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnInitResourceView(done)");
-#endif
 }
 
 inline void OnDestroyResourceViewInfo(utils::resource::ResourceViewInfo* resource_view_info) {
