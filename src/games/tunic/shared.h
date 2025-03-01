@@ -15,6 +15,8 @@
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_TONE_MAP_HUE_CORRECTION       shader_injection.tone_map_hue_correction
 #define RENODX_TONE_MAP_HUE_SHIFT            shader_injection.tone_map_hue_shift
+#define RENODX_TONE_MAP_HUE_SHIFT_METHOD     HUE_SHIFT_METHOD_SDR_MODIFIED
+#define RENODX_TONE_MAP_HUE_SHIFT_MODIFIER   0.5f
 #define RENODX_TONE_MAP_WORKING_COLOR_SPACE  shader_injection.tone_map_working_color_space
 #define RENODX_TONE_MAP_HUE_PROCESSOR        shader_injection.tone_map_hue_processor
 #define RENODX_TONE_MAP_PER_CHANNEL          shader_injection.tone_map_per_channel
