@@ -20,7 +20,11 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xEE5CA39C),  // lutsample
+    CustomShaderEntry(0xEE5CA39C), // lutsample
+    CustomShaderEntry(0x224059A1), // somnia postprocess
+    CustomShaderEntry(0xCE0AF0C9), // output success screen
+    CustomShaderEntry(0xED466B41), // flowchart menu
+    CustomShaderEntry(0xFEB3E510), // UI - menu
 };
 
 ShaderInjectData shader_injection;
@@ -414,6 +418,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       //  RG11B10_float (UAV stuff)
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r11g11b10_float,
         .new_format = reshade::api::format::r16g16b16a16_float,
+        .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
         //.ignore_size = true,
         .view_upgrades = {
           {{reshade::api::resource_usage::shader_resource,
@@ -431,6 +436,15 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
+          .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
+          //.ignore_size = true,
+      });
+
+      //  RGBA8_typeless
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_typeless,
+          .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
           //.ignore_size = true,
       });
 
