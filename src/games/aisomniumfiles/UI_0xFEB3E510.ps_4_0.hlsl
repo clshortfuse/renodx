@@ -1,5 +1,3 @@
-#include "C:\Users\Adrian\Documents\VSrepos\akuru\renodx\src\shaders\renodx.hlsl"
-
 // ---- Created with 3Dmigoto v1.3.16 on Sat Mar  1 01:01:23 2025
 Texture2D<float4> t1 : register(t1);
 
