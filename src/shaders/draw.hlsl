@@ -27,6 +27,8 @@ struct Config {
   float tone_map_flare;                   // 0
   float tone_map_hue_correction;          // 1.f
   float tone_map_hue_shift;               // 0.f
+  float tone_map_hue_shift_method;        // 0.f
+  float tone_map_hue_shift_modifier;      // 0.5f
   float tone_map_working_color_space;     // 0.f
   float tone_map_clamp_color_space;       // -1 = none, bt709, bt2020, ap1
   float tone_map_clamp_peak;              // -1 = none, bt709, bt2020, ap1
@@ -71,6 +73,14 @@ static const float HUE_PROCESSOR_OKLAB = 0;
 static const float HUE_PROCESSOR_ICTCP = 1.f;
 static const float HUE_PROCESSOR_DTUCS = 2.f;
 
+static const float HUE_SHIFT_METHOD_CLIP = 0.f;
+static const float HUE_SHIFT_METHOD_SDR_MODIFIED = 1.f;
+static const float HUE_SHIFT_METHOD_UNCHARTED2 = 2.f;
+static const float HUE_SHIFT_METHOD_ACES_FITTED_BT709 = 3.f;
+static const float HUE_SHIFT_METHOD_ACES_FITTED_AP1 = 4.f;
+
+static const float HUE_SHIFT_METHOD_MODIFIER = 0.f;
+
 static const float TONE_MAP_TYPE_VANILLA = 0;
 static const float TONE_MAP_TYPE_UNTONEMAPPED = 1.f;
 static const float TONE_MAP_TYPE_ACES = 2.f;
@@ -106,7 +116,7 @@ Config BuildConfig() {
   config.color_grade_strength = RENODX_COLOR_GRADE_STRENGTH;
 
 #if !defined(RENODX_TONE_MAP_TYPE)
-#define RENODX_TONE_MAP_TYPE TONE_MAP_TYPE_RENO_DRT
+#define RENODX_TONE_MAP_TYPE renodx::draw::TONE_MAP_TYPE_RENO_DRT
 #endif
   config.tone_map_type = RENODX_TONE_MAP_TYPE;
 
@@ -160,6 +170,16 @@ Config BuildConfig() {
 #endif
   config.tone_map_hue_shift = RENODX_TONE_MAP_HUE_SHIFT;
 
+#if !defined(RENODX_TONE_MAP_HUE_SHIFT_METHOD)
+#define RENODX_TONE_MAP_HUE_SHIFT_METHOD 0
+#endif
+  config.tone_map_hue_shift_method = RENODX_TONE_MAP_HUE_SHIFT_METHOD;
+
+#if !defined(RENODX_TONE_MAP_HUE_SHIFT_MODIFIER)
+#define RENODX_TONE_MAP_HUE_SHIFT_MODIFIER 1.0f
+#endif
+  config.tone_map_hue_shift_modifier = RENODX_TONE_MAP_HUE_SHIFT_MODIFIER;
+
 #if !defined(RENODX_TONE_MAP_WORKING_COLOR_SPACE)
 #define RENODX_TONE_MAP_WORKING_COLOR_SPACE color::convert::COLOR_SPACE_BT709
 #endif
@@ -196,7 +216,7 @@ Config BuildConfig() {
   config.reno_drt_white_clip = RENODX_RENO_DRT_WHITE_CLIP;
 
 #if !defined(RENODX_GAMMA_CORRECTION)
-#define RENODX_GAMMA_CORRECTION GAMMA_CORRECTION_GAMMA_2_2
+#define RENODX_GAMMA_CORRECTION renodx::draw::GAMMA_CORRECTION_GAMMA_2_2
 #endif
   config.gamma_correction = RENODX_GAMMA_CORRECTION;
 
@@ -486,9 +506,38 @@ float3 ToneMapPass(float3 color, Config draw_config) {
   if (draw_config.tone_map_hue_shift != 0) {
     tone_map_config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
 
+    float3 hue_shifted_color;
+    if (draw_config.tone_map_hue_shift_method == HUE_SHIFT_METHOD_CLIP) {
+      hue_shifted_color = saturate(color);
+    } else if (draw_config.tone_map_hue_shift_method == HUE_SHIFT_METHOD_SDR_MODIFIED) {
+      renodx::tonemap::renodrt::Config renodrt_config = renodx::tonemap::renodrt::config::Create();
+      renodrt_config.nits_peak = 100.f;
+      renodrt_config.mid_gray_value = 0.18f;
+      renodrt_config.mid_gray_nits = 18.f;
+      renodrt_config.exposure = 1.f;
+      renodrt_config.highlights = 1.f;
+      renodrt_config.shadows = 1.f;
+      renodrt_config.contrast = 1.0f;
+      renodrt_config.saturation = draw_config.tone_map_hue_shift_modifier;
+      renodrt_config.dechroma = 0.f;
+      renodrt_config.flare = 0.f;
+      renodrt_config.per_channel = false;
+      renodrt_config.tone_map_method = 1u;
+      renodrt_config.white_clip = 1.f;
+      renodrt_config.hue_correction_strength = 0.f;
+      renodrt_config.working_color_space = 0u;
+      renodrt_config.clamp_color_space = 0u;
+      hue_shifted_color = renodx::tonemap::renodrt::BT709(color, renodrt_config);
+    } else if (draw_config.tone_map_hue_shift_method == HUE_SHIFT_METHOD_UNCHARTED2) {
+      hue_shifted_color = renodx::tonemap::uncharted2::BT709(color);
+    } else if (draw_config.tone_map_hue_shift_method == HUE_SHIFT_METHOD_ACES_FITTED_BT709) {
+      hue_shifted_color = renodx::tonemap::ACESFittedBT709(color);
+    } else if (draw_config.tone_map_hue_shift_method == HUE_SHIFT_METHOD_ACES_FITTED_AP1) {
+      hue_shifted_color = renodx::tonemap::ACESFittedAP1(color);
+    }
     tone_map_config.hue_correction_color = lerp(
         color,
-        saturate(color),
+        hue_shifted_color,
         draw_config.tone_map_hue_shift);
   }
 
