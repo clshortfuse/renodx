@@ -7,6 +7,7 @@
 
 #include "dxgiformat.h"
 
+#include <cstdint>
 #include <iomanip>
 #include <ios>
 #include <ostream>
@@ -14,6 +15,7 @@
 #include <include/reshade.hpp>
 
 #define PRINT_CRC32(crc32) "0x" << std::hex << std::setw(8) << std::setfill('0') << crc32 << std::setfill(' ') << std::dec
+#define PRINT_PTR(ptr)    "0x" << std::hex << std::setw(sizeof(uintptr_t) * 2) << std::setfill('0') << static_cast<uintptr_t>(ptr) << std::setfill(' ') << std::dec
 
 inline std::ostream& operator<<(std::ostream& os, const reshade::api::device_api value) {
   switch (value) {
