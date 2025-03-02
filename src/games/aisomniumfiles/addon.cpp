@@ -25,6 +25,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xCE0AF0C9), // output success screen
     CustomShaderEntry(0xED466B41), // flowchart menu
     CustomShaderEntry(0xFEB3E510), // UI - menu
+    CustomShaderEntry(0x8A6BCB4C), // videos
+    CustomShaderEntry(0xEE94CA0F), // overlay, specific somnium scenes
 };
 
 ShaderInjectData shader_injection;
@@ -251,6 +253,26 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
         .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxHDRVideos",
+        .binding = &CUSTOM_HDR_VIDEOS,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "HDR Videos",
+        .section = "Effects",
+        .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxHDRVideosPeakNits",
+        .binding = &CUSTOM_HDR_VIDEOS_PEAK_NITS,
+        .default_value = 400.f,
+        .label = "HDR Videos Peak Brightness",
+        .section = "Effects",
+        .tooltip = "Sets the value of peak white for HDR Videos in nits",
+        .min = 48.f,
+        .max = 1000.f,
+        .is_enabled = []() { return CUSTOM_HDR_VIDEOS != 0; }
     },
     //new renodx::utils::settings::Setting{
     //    .key = "FxBloom",

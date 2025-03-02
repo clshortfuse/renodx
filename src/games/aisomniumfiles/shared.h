@@ -22,6 +22,8 @@
 #define RENODX_TONE_MAP_PER_CHANNEL          shader_injection.tone_map_per_channel
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
 #define CUSTOM_TONE_MAP_CONFIGURATION        shader_injection.custom_tone_map_configuration
+#define CUSTOM_HDR_VIDEOS                    shader_injection.custom_hdr_videos
+#define CUSTOM_HDR_VIDEOS_PEAK_NITS          shader_injection.custom_hdr_videos_peak_nits
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -45,6 +47,8 @@ struct ShaderInjectData {
   float tone_map_per_channel;
   float gamma_correction;
   float custom_tone_map_configuration;
+  float custom_hdr_videos;
+  float custom_hdr_videos_peak_nits;
 };
 
 #ifndef __cplusplus
