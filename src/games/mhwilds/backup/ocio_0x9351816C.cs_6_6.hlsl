@@ -1,4 +1,4 @@
-RWTexture3D<float> OutLUT : register(u0);
+RWTexture3D<float4> OutLUT : register(u0);
 
 cbuffer HDRMapping : register(b0) {
   float HDRMapping_000z : packoffset(c000.z);

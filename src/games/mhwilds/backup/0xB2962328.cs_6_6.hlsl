@@ -1,4 +1,4 @@
-RWTexture3D<float> OutLUT : register(u0);
+RWTexture3D<float4> OutLUT : register(u0);
 
 [numthreads(8, 8, 8)]
 void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {

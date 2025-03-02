@@ -1,7 +1,7 @@
 #ifndef SRC_MHWILDS_SHARED_H_
 #define SRC_MHWILDS_SHARED_H_
 
-#define RENODX_TONE_MAP_TYPE                   shader_injection.toneMapType
+/* #define RENODX_TONE_MAP_TYPE                   shader_injection.toneMapType
 #define RENODX_PEAK_NITS                       shader_injection.toneMapPeakNits
 #define RENODX_GAME_NITS                       shader_injection.toneMapGameNits
 #define RENODX_UI_NITS                         shader_injection.toneMapUINits
@@ -13,19 +13,14 @@
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION   shader_injection.colorGradeHighlightSaturation
 #define RENODX_TONE_MAP_BLOWOUT                shader_injection.colorGradeBlowout
 #define RENODX_TONE_MAP_FLARE                  shader_injection.colorGradeFlare
-#define RENODX_TONE_MAP_CLAMP_COLOR_SPACE      color::convert::COLOR_SPACE_BT2020
-#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT2020
-#define RENODX_SWAP_CHAIN_ENCODING             4.f
-#define RENODX_SWAP_CHAIN_DECODING             0.f
-/* #define RENODX_TONE_MAP_PER_CHANNEL            1.f
-#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-#define RENODX_RENO_DRT_WHITE_CLIP             5.f */
+#define RENODX_TONE_MAP_CLAMP_COLOR_SPACE      color::convert::COLOR_SPACE_BT2020 */
+#define RENODX_TONE_MAP_PER_CHANNEL 0.f
 
 // Debug
-/* #define RENODX_PEAK_NITS                       800.f
-#define RENODX_TONE_MAP_TYPE                   3.f */
-
-
+#define RENODX_PEAK_NITS           800.f
+#define RENODX_TONE_MAP_TYPE       3.f
+#define RENODX_GAME_NITS           100.f
+#define RENODX_TONE_MAP_SATURATION 1.f
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {

@@ -20,7 +20,18 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-  CustomShaderEntry(0xE73DF341),
+    // Output
+    CustomShaderEntry(0xE73DF341),
+
+    // Lutbuilder
+    CustomShaderEntry(0x7B84049A),
+
+    // OCIO
+    /* CustomShaderEntry(0x9BC273E9),
+    CustomShaderEntry(0x9351816C),
+    CustomShaderEntry(0xD714F2C7),
+    CustomShaderEntry(0xDC2925FE), */
+
 };
 
 ShaderInjectData shader_injection;
@@ -121,7 +132,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
         .binding = &RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
-        .default_value = 60.f,
+        .default_value = 50.f,
         .label = "Highlight Saturation",
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
@@ -253,7 +264,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       // while (IsDebuggerPresent() == 0) Sleep(100);
 
-      renodx::mods::swapchain::SetUseHDR10(true);
+      renodx::mods::swapchain::SetUseHDR10(false);
+
+      // We don't upgrade swapchain
+      renodx::mods::swapchain::use_resize_buffer_on_demand = true;
+      renodx::mods::swapchain::use_resize_buffer  = true;
+
       renodx::mods::shader::expected_constant_buffer_space = 50;
       renodx::mods::shader::expected_constant_buffer_index = 13;
       renodx::mods::shader::allow_multiple_push_constants = true;
@@ -263,8 +279,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::expected_constant_buffer_space = 50;
       /* renodx::mods::swapchain::use_resize_buffer = true;
       renodx::mods::swapchain::use_resize_buffer_on_demand = true; */
-      /* renodx::mods::swapchain::force_borderless = true;
-      renodx::mods::swapchain::prevent_full_screen = true; */
+      renodx::mods::swapchain::force_borderless = false;
+      renodx::mods::swapchain::prevent_full_screen = false;
 
       /* renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
