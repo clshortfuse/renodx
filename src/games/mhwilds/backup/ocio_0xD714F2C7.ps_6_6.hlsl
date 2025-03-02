@@ -616,5 +616,6 @@ float4 main(
   SV_Target.y = _614;
   SV_Target.z = _615;
   SV_Target.w = 1.0f;
+  
   return SV_Target;
 }
