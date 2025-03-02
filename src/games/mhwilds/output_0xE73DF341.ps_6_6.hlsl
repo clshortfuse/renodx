@@ -23,8 +23,31 @@ float4 main(
   float _19 = _17 * (_11.y);
   float _20 = _17 * (_11.z);
 
-  float3 outputColor = _11.rgb;
-  outputColor = renodx::draw::ToneMapPass(outputColor);
+  if (RENODX_TONE_MAP_TYPE > 0.f) {
+    float3 untonemapped = _11.rgb;
+
+    renodx::lut::Config lut_config = renodx::lut::config::Create();
+    lut_config.lut_sampler = TrilinearClamp;
+    lut_config.size = 64u;
+    lut_config.tetrahedral = false;
+    lut_config.type_input = renodx::lut::config::type::LINEAR;
+    lut_config.type_output = renodx::lut::config::type::LINEAR;
+    lut_config.scaling = 0.f;
+
+    float3 lutOutput = renodx::color::pq::EncodeSafe(untonemapped, RENODX_GAME_NITS);
+    // Outputs PQ
+    lutOutput = renodx::lut::Sample(
+        SrcLUT,
+        lut_config,
+        lutOutput);
+
+    lutOutput = renodx::color::pq::DecodeSafe(lutOutput, 100.f);  // 100.f because ingame LUT encodes to 100.f
+    lutOutput = renodx::color::bt709::from::BT2020(lutOutput);
+    SV_Target.rgb = renodx::draw::ToneMapPass(untonemapped, renodx::tonemap::renodrt::NeutralSDR(lutOutput));
+    SV_Target = FinalizeOutput(SV_Target.rgb);
+    // SV_Target = float4(lutOutput, 1.f);
+    return SV_Target;
+  }
 
   float _35 = -0.35844698548316956f;
   float _50;
@@ -56,31 +79,11 @@ float4 main(
     }
   }
 
-  /* float4 _74 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_35 * 0.984375f) + 0.0078125f), ((_50 * 0.984375f) + 0.0078125f), ((_65 * 0.984375f) + 0.0078125f)), 0.0f);
-
+  float4 _74 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_35 * 0.984375f) + 0.0078125f), ((_50 * 0.984375f) + 0.0078125f), ((_65 * 0.984375f) + 0.0078125f)), 0.0f);
 
   SV_Target.x = (_74.x);
   SV_Target.y = (_74.y);
-  SV_Target.z = (_74.z); */
-
-  renodx::lut::Config lut_config = renodx::lut::config::Create();
-  lut_config.lut_sampler = TrilinearClamp;
-  lut_config.size = 64u;
-  lut_config.tetrahedral = false;
-  lut_config.type_input = renodx::lut::config::type::LINEAR;
-  lut_config.type_output = renodx::lut::config::type::LINEAR;
-  lut_config.scaling = 0.f;
-
-  // outputColor = float3(_35, _50, _65); // ACEScc
-  /* outputColor = renodx::color::pq::EncodeSafe(outputColor, RENODX_GAME_NITS);
-
-  // Outputs PQ
-  outputColor = renodx::lut::Sample(
-      SrcLUT,
-      lut_config,
-      outputColor); */
-
-  SV_Target.rgb = FinalizeOutput(outputColor);
+  SV_Target.z = (_74.z);
 
   SV_Target.w = 1.0f;
   return SV_Target;
