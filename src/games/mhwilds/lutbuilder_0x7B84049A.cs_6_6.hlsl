@@ -101,6 +101,10 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   float _24 = _21 * 0.01587301678955555f;
 
   lutInput = float3(_22, _23, _24);
+  if (RENODX_TONE_MAP_TYPE > 0.f) {
+    OutLUT[int3(((uint)(SV_DispatchThreadID.x)), ((uint)(SV_DispatchThreadID.y)), ((uint)(SV_DispatchThreadID.z)))] = LutToneMap(lutInput);
+    return;
+  }
 
   float _38;
   float _52;
@@ -153,9 +157,7 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   float _181 = exp2(((log2(((mad(((round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002z), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001z), ((OCIOTransformXYZMatrix_000z) * 0.007000000216066837f))))) * 4096.0f))) * 0.000244140625f), _66, (mad(((round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002y), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001y), ((OCIOTransformXYZMatrix_000y) * 0.007000000216066837f))))) * 4096.0f))) * 0.000244140625f), _52, (_142 * (round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002x), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001x), ((OCIOTransformXYZMatrix_000x) * 0.007000000216066837f))))) * 4096.0f)))))))) * 0.009999999776482582f))) * 0.1593017578125f));
   float _190 = saturate((exp2(((log2((((_181 * 18.8515625f) + 0.8359375f) / ((_181 * 18.6875f) + 1.0f)))) * 78.84375f))));
 
-  // At this point xyz is ictcp LMS PQ encoded
-  // Maybe to go back to ictcp later
-
+  // At this point xyz is ictcp
   float _192 = (_177 + _164) * 0.5f;  // X & Y * 0.5, again now idea why but probably color conversion stuff
 
   float _198 = (HDRMapping_009x) * 0.009999999776482582f;  // toe end
@@ -215,8 +217,8 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   // saturationOnDisplayMapping
   // I believe this is ictcp saturation or something
   // ICTCP -> LMS stuff
-  float _321 = (((dot(float3(_164, _177, _190), float3(6610.0f, -13613.0f, 7003.0f))) * 0.000244140625f) * (HDRMapping_010z * RENODX_TONE_MAP_SATURATION)) * _320;
-  float _322 = (((dot(float3(_164, _177, _190), float3(17933.0f, -17390.0f, -543.0f))) * 0.000244140625f) * (HDRMapping_010z * RENODX_TONE_MAP_SATURATION)) * _320;
+  float _321 = (((dot(float3(_164, _177, _190), float3(6610.0f, -13613.0f, 7003.0f))) * 0.000244140625f) * (HDRMapping_010z)) * _320;
+  float _322 = (((dot(float3(_164, _177, _190), float3(17933.0f, -17390.0f, -543.0f))) * 0.000244140625f) * (HDRMapping_010z)) * _320;
   // _313 is shoulder
 
   // ictcp => LMS
@@ -231,15 +233,12 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   float _372 = mad(-0.04500000178813934f, _366, (mad(0.6809999942779541f, _353, (_340 * 36.5f))));
   float _375 = mad(1.187999963760376f, _366, (mad(-0.05000000074505806f, _353, (_340 * -4.900000095367432f))));
 
-  // This must be XYZ => BT709?
+  // This must be XYZ => AP1
   float _378 = mad((OCIOTransformXYZMatrix_004z), _375, (mad((OCIOTransformXYZMatrix_004y), _372, (_369 * (OCIOTransformXYZMatrix_004x)))));
   float _381 = mad((OCIOTransformXYZMatrix_005z), _375, (mad((OCIOTransformXYZMatrix_005y), _372, (_369 * (OCIOTransformXYZMatrix_005x)))));
   float _384 = mad((OCIOTransformXYZMatrix_006z), _375, (mad((OCIOTransformXYZMatrix_006y), _372, (_369 * (OCIOTransformXYZMatrix_006x)))));
 
-  // At this point it's BT709
-
   // AP1_2_AP0_MAT
-  // Logically it should be BT709 => AP1
   float _387 = mad(_384, 0.1638689935207367f, (mad(_381, 0.1406790018081665f, (_378 * 0.6954519748687744f))));
   float _390 = mad(_384, 0.0955343022942543f, (mad(_381, 0.8596709966659546f, (_378 * 0.04479460045695305f))));
   float _393 = mad(_384, 1.0015000104904175f, (mad(_381, 0.004025210160762072f, (_378 * -0.00552588002756238f))));
@@ -255,7 +254,7 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
     _407 = (_394 * 16777216.0f);
   }
   float _410 = _407 + ((((bool)((_387 > 0.0f))) ? 0.0f : 32768.0f));
-  float _412 = floor((_410 * 0.00024420025874860585f));
+  float _412 = floor((_410 * 0.00024420025874860585f));  // 1 / 4096
 
   // Do stuff on Y
   float _423 = abs(_390);
@@ -289,7 +288,7 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   float _477 = (((float4)(OCIO_lut1d_0.SampleLevel(BilinearClamp, float2((((_410 + 0.5f) - (_412 * 4095.0f)) * 0.000244140625f), ((_412 + 0.5f) * 0.05882352963089943f)), 0.0f))).x) * 64.0f;
   float _478 = (((float4)(OCIO_lut1d_0.SampleLevel(BilinearClamp, float2((((_439 + 0.5f) - (_441 * 4095.0f)) * 0.000244140625f), ((_441 + 0.5f) * 0.05882352963089943f)), 0.0f))).x) * 64.0f;
   float _479 = (((float4)(OCIO_lut1d_0.SampleLevel(BilinearClamp, float2((((_466 + 0.5f) - (_468 * 4095.0f)) * 0.000244140625f), ((_468 + 0.5f) * 0.05882352963089943f)), 0.0f))).x) * 64.0f;
-  
+
   float _480 = floor(_477);
   float _481 = floor(_478);
   float _482 = floor(_479);
@@ -297,7 +296,6 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   float _484 = _478 - _481;
   float _485 = _479 - _482;
 
-  // lutInput = float3(_483, _484, _485);
   // This 0.015384615398943424f is for LUT ssize
   float _489 = (_482 + 0.5f) * 0.015384615398943424f;
   float _490 = (_481 + 0.5f) * 0.015384615398943424f;
@@ -380,10 +378,10 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   }
   // I think this is lerp strength, gonna have to double check
   float _640 = 1.0f - _638;
+
   // lerp LUT samples
   // LUT output is PQ
   OutLUT[int3(((uint)(SV_DispatchThreadID.x)), ((uint)(SV_DispatchThreadID.y)), ((uint)(SV_DispatchThreadID.z)))] = float4((((_640 * (_494.x)) + _635) + (_639 * (_501.x))), (((_640 * (_494.y)) + _636) + (_639 * (_501.y))), (((_640 * (_494.z)) + _637) + (_639 * (_501.z))), 1.0f);
 
-  OutLUT[int3(((uint)(SV_DispatchThreadID.x)), ((uint)(SV_DispatchThreadID.y)), ((uint)(SV_DispatchThreadID.z)))] = LutToneMap(lutInput);
   return;
 }

@@ -22,12 +22,11 @@ float3 VanillaLutTransform(float3 color) {
   float _638;
   float _639;
 
-  // it should be BT709 => AP1
+  color = mul(renodx::color::BT709_TO_AP1_MAT, color);
+  // AP1_2_AP0
   float _387 = mad(color.z, 0.1638689935207367f, (mad(color.y, 0.1406790018081665f, (color.x * 0.6954519748687744f))));
   float _390 = mad(color.z, 0.0955343022942543f, (mad(color.y, 0.8596709966659546f, (color.x * 0.04479460045695305f))));
   float _393 = mad(color.z, 1.0015000104904175f, (mad(color.y, 0.004025210160762072f, (color.x * -0.00552588002756238f))));
-
-  
 
   float _394 = abs(_387);
   if (((_394 > 6.103515625e-05f))) {
@@ -79,6 +78,7 @@ float3 VanillaLutTransform(float3 color) {
   float _483 = _477 - _480;
   float _484 = _478 - _481;
   float _485 = _479 - _482;
+
   // This 0.015384615398943424f is for LUT ssize
   float _489 = (_482 + 0.5f) * 0.015384615398943424f;
   float _490 = (_481 + 0.5f) * 0.015384615398943424f;
@@ -161,20 +161,43 @@ float3 VanillaLutTransform(float3 color) {
   }
   // I think this is lerp strength, gonna have to double check
   float _640 = 1.0f - _638;
-  return float3((((_640 * (_494.x)) + _635) + (_639 * (_501.x))), (((_640 * (_494.y)) + _636) + (_639 * (_501.y))), (((_640 * (_494.z)) + _637) + (_639 * (_501.z))));
+  float3 final = float3((((_640 * (_494.x)) + _635) + (_639 * (_501.x))), (((_640 * (_494.y)) + _636) + (_639 * (_501.y))), (((_640 * (_494.z)) + _637) + (_639 * (_501.z))));
+  /* final = renodx::color::pq::DecodeSafe(final.rgb, 100.f);
+  final = renodx::color::bt709::from::BT2020(final.rgb); */
+  return final;
 }
 
 float3 Lut1DSample(float3 color) {
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = BilinearClamp;
   // lut_config.size = 64u;
-  lut_config.tetrahedral = false;
+  lut_config.tetrahedral = true;
   lut_config.type_input = renodx::lut::config::type::LINEAR;
   lut_config.type_output = renodx::lut::config::type::LINEAR;
   lut_config.scaling = 0.f;
 
+  color = mul(renodx::color::BT709_TO_AP0_MAT, color);
   color = renodx::lut::Sample(
       OCIO_lut1d_0,
+      lut_config,
+      color);
+  color = renodx::color::bt709::from::AP1(color);
+
+  return color;
+}
+
+float3 Lut3DSample(float3 color) {
+  renodx::lut::Config lut_config = renodx::lut::config::Create();
+  lut_config.lut_sampler = TrilinearClamp;
+  // lut_config.size = 64u;
+  lut_config.tetrahedral = true;
+  lut_config.type_input = renodx::lut::config::type::LINEAR;
+  lut_config.type_output = renodx::lut::config::type::LINEAR;
+  lut_config.scaling = 0.f;
+
+  color = mul(renodx::color::BT709_TO_AP1_MAT, color);
+  color = renodx::lut::Sample(
+      OCIO_lut3d_1,
       lut_config,
       color);
 
@@ -183,32 +206,21 @@ float3 Lut1DSample(float3 color) {
 
 float4 LutToneMap(float3 lutInput) {
   float3 output = renodx::color::pq::DecodeSafe(lutInput, RENODX_GAME_NITS);
-  /* output = renodx::color::ap1::from::BT709(lutInput);
-  output = Lut1DSample(output);
-  output = renodx::color::bt709::from::AP1(output); */
-  // output = VanillaLutTransform(output);
+  output = renodx::color::correct::GammaSafe(output);
+  output = VanillaLutTransform(output);  // returns PQ encoded at 100.f
+  // output = renodx::color::pq::EncodeSafe(output, 100.f);
+  // output = Lut3DSample(output);
 
-  /* renodx::lut::Config lut_config = renodx::lut::config::Create();
-  lut_config.lut_sampler = TrilinearClamp;
-  // lut_config.size = 64u;
-  lut_config.tetrahedral = false;
-  lut_config.type_input = renodx::lut::config::type::LINEAR;
-  lut_config.type_output = renodx::lut::config::type::PQ;
-  lut_config.scaling = 0.f;
-
-  output = renodx::lut::Sample(
-      OCIO_lut3d_1,
-      lut_config,
-      output); */
   return float4(output, 1.f);
 }
 
-float3 FinalizeOutput(float3 color) {
+float4 FinalizeOutput(float3 color) {
   color = renodx::color::correct::GammaSafe(color);
-  color = renodx::color::bt2020::from::BT709(color);
+  // bt709 PQ looks closer to vanilla...
+  // color = renodx::color::bt2020::from::BT709(color);
   color = renodx::color::pq::EncodeSafe(color, RENODX_GAME_NITS);
 
-  return color;
+  return float4(color, 1.f);
 }
 
 #endif  // SRC_MHWILDS_COMMON_HLSL_
