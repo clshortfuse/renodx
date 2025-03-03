@@ -8,14 +8,16 @@
 #define NOMINMAX
 
 #include <algorithm>
-#include <include/reshade.hpp>
 #include <optional>
 #include <sstream>
+
+#include <include/reshade.hpp>
 
 #include "./data.hpp"
 #include "./descriptor.hpp"
 #include "./format.hpp"
 #include "./pipeline_layout.hpp"
+#include "./resource.hpp"
 #include "./shader.hpp"
 
 namespace renodx::utils::trace {
@@ -91,11 +93,8 @@ std::optional<std::string> GetDebugName(reshade::api::device_api device_api, T o
 namespace internal {
 struct __declspec(uuid("3b70b2b2-52dc-4637-bd45-c1171c4c322e")) DeviceData {
   // <resource.handle, resource_view.handle>
-  std::unordered_map<uint64_t, uint64_t> resource_views;
-  // <resource.handle, vector<resource_view.handle>>
-  std::unordered_map<uint64_t, std::vector<uint64_t>> resource_views_by_resource;
+
   std::unordered_map<uint64_t, std::string> resource_names;
-  std::unordered_set<uint64_t> resources;
   std::shared_mutex mutex;
   reshade::api::device_api device_api;
 };
@@ -109,18 +108,21 @@ const uint32_t MAX_PRESENT_COUNT = 60;
 static bool attached = false;
 
 static uint64_t GetResourceByViewHandle(DeviceData* data, uint64_t handle) {
-  if (
-      auto pair = data->resource_views.find(handle);
-      pair != data->resource_views.end()) return pair->second;
+  auto* resource_view_info = renodx::utils::resource::GetResourceViewInfo({handle});
+  if (resource_view_info == nullptr) return 0;
+  if (resource_view_info->resource_info == nullptr) return 0;
+  auto resource_handle = resource_view_info->resource_info->resource.handle;
 
-  return 0;
+  return resource_handle;
 }
 
 static std::string GetResourceNameByViewHandle(DeviceData* data, uint64_t handle) {
   if (!TRACE_NAMES) return "?";
-  auto resource_handle = GetResourceByViewHandle(data, handle);
-  if (resource_handle == 0) return "?";
-  if (!data->resources.contains(resource_handle)) return "?";
+  auto* resource_view_info = renodx::utils::resource::GetResourceViewInfo({handle});
+
+  if (resource_view_info == nullptr) return "?";
+  if (resource_view_info->resource_info == nullptr) return "?";
+  auto resource_handle = resource_view_info->resource_info->resource.handle;
 
   if (
       auto pair = data->resource_names.find(resource_handle);
@@ -915,9 +917,6 @@ static void OnInitResource(
     reshade::api::resource_usage initial_state,
     reshade::api::resource resource) {
   if (!is_primary_hook) return;
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  const std::unique_lock lock(data->mutex);
-  data->resources.emplace(resource.handle);
 
   if (!FORCE_ALL && !trace_running && present_count >= MAX_PRESENT_COUNT) return;
 
@@ -968,11 +967,11 @@ static void OnDestroyResource(reshade::api::device* device, reshade::api::resour
 
   if (data == nullptr) return;
   const std::unique_lock lock(data->mutex);
-  data->resources.erase(resource.handle);
+  data->resource_names.erase(resource.handle);
   if (!trace_running && present_count >= MAX_PRESENT_COUNT) return;
 
   std::stringstream s;
-  s << "on_destroy_resource(";
+  s << "utils::trace::on_destroy_resource(";
   s << static_cast<uintptr_t>(resource.handle);
   s << ")";
   reshade::log::message(reshade::log::level::debug, s.str().c_str());
@@ -985,24 +984,6 @@ static void OnInitResourceView(
     const reshade::api::resource_view_desc& desc,
     reshade::api::resource_view view) {
   if (!is_primary_hook) return;
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  const std::unique_lock lock(data->mutex);
-  if (data->resource_views.contains(view.handle)) {
-    if (trace_running || present_count < MAX_PRESENT_COUNT) {
-      std::stringstream s;
-      s << "init_resource_view(reused view: ";
-      s << static_cast<uintptr_t>(view.handle);
-      s << ")";
-      reshade::log::message(reshade::log::level::info, s.str().c_str());
-    }
-    if (resource.handle == 0) {
-      data->resource_views.erase(view.handle);
-      return;
-    }
-  }
-  if (resource.handle != 0) {
-    data->resource_views.emplace(view.handle, resource.handle);
-  }
 
   if (!FORCE_ALL && !trace_running && present_count >= MAX_PRESENT_COUNT) return;
   std::stringstream s;
@@ -1048,15 +1029,10 @@ static void OnInitResourceView(
 static void OnDestroyResourceView(reshade::api::device* device, reshade::api::resource_view view) {
   if (!is_primary_hook) return;
   std::stringstream s;
-  s << "on_destroy_resource_view(";
+  s << "utils::trace::on_destroy_resource_view(";
   s << static_cast<uintptr_t>(view.handle);
   s << ")";
   reshade::log::message(reshade::log::level::debug, s.str().c_str());
-
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  if (data == nullptr) return;
-  const std::unique_lock lock(data->mutex);
-  data->resource_views.erase(view.handle);
 }
 
 static void OnPushDescriptors(
@@ -1624,6 +1600,7 @@ static void OnPresent(
 static void Use(DWORD fdw_reason) {
   renodx::utils::descriptor::Use(fdw_reason);
   renodx::utils::shader::Use(fdw_reason);
+  renodx::utils::resource::Use(fdw_reason);
 
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
