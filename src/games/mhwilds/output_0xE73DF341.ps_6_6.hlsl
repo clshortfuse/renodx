@@ -18,23 +18,22 @@ float4 main(
     : SV_Target {
   float4 SV_Target;
   float4 _11 = SrcTexture.SampleLevel(PointBorder, float2((TEXCOORD.x), (TEXCOORD.y)), 0.0f);
-  float _17 = (HDRMapping_000x) * 0.009999999776482582f;  // overall brightness
+  float _17 = (HDRMapping_000x) * 0.009999999776482582f;  // overall brightness (defaullt 100.f);
+  _17 = 0.35f;                                            // reduce exposure as it's too much
   float _18 = _17 * (_11.x);
   float _19 = _17 * (_11.y);
   float _20 = _17 * (_11.z);
+  float3 untonemapped = float3(_18, _19, _20);
+  float3 lutOutput = renodx::color::pq::EncodeSafe(untonemapped, RENODX_GAME_NITS);
+  renodx::lut::Config lut_config = renodx::lut::config::Create();
+  lut_config.lut_sampler = TrilinearClamp;
+  lut_config.size = 64u;
+  lut_config.tetrahedral = false;
+  lut_config.type_input = renodx::lut::config::type::LINEAR;
+  lut_config.type_output = renodx::lut::config::type::LINEAR;
+  lut_config.scaling = 0.f;
 
   if (RENODX_TONE_MAP_TYPE > 0.f) {
-    float3 untonemapped = _11.rgb;
-
-    renodx::lut::Config lut_config = renodx::lut::config::Create();
-    lut_config.lut_sampler = TrilinearClamp;
-    lut_config.size = 64u;
-    lut_config.tetrahedral = false;
-    lut_config.type_input = renodx::lut::config::type::LINEAR;
-    lut_config.type_output = renodx::lut::config::type::LINEAR;
-    lut_config.scaling = 0.f;
-
-    float3 lutOutput = renodx::color::pq::EncodeSafe(untonemapped, RENODX_GAME_NITS);
     // Outputs PQ
     lutOutput = renodx::lut::Sample(
         SrcLUT,

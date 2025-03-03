@@ -26,11 +26,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // Lutbuilder
     CustomShaderEntry(0x7B84049A),
 
-    // OCIO
-    /* CustomShaderEntry(0x9BC273E9),
-    CustomShaderEntry(0x9351816C),
-    CustomShaderEntry(0xD714F2C7),
-    CustomShaderEntry(0xDC2925FE), */
+    // UI
+    CustomShaderEntry(0x8286B55C),
 
 };
 
@@ -39,7 +36,7 @@ const std::string build_date = __DATE__;
 const std::string build_time = __TIME__;
 
 renodx::utils::settings::Settings settings = {
-    new renodx::utils::settings::Setting{
+    /* new renodx::utils::settings::Setting{
         .key = "toneMapType",
         .binding = &RENODX_TONE_MAP_TYPE,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -50,7 +47,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the tone mapper type",
         .labels = {"Vanilla", "RenoDRT"},
         .parse = [](float value) { return value * 3.f; },
-    },
+    }, */
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
         .binding = &RENODX_PEAK_NITS,
@@ -137,7 +134,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -148,18 +145,18 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adds highlight desaturation due to overexposure.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return fmax(0.00001f, value * 0.01f); },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
         .binding = &RENODX_TONE_MAP_FLARE,
-        .default_value = 0.f,
+        .default_value = 70.f,
         .label = "Flare",
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -243,8 +240,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
-    settings[1]->default_value = peak.value();
-    settings[1]->can_reset = true;
+    settings[0]->default_value = peak.value();
+    settings[0]->can_reset = true;
   }
 }
 
@@ -267,8 +264,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::SetUseHDR10(false);
 
       // We don't upgrade swapchain
-      renodx::mods::swapchain::use_resize_buffer_on_demand = true;
-      renodx::mods::swapchain::use_resize_buffer  = true;
+      /* renodx::mods::swapchain::use_resize_buffer_on_demand = true;
+      renodx::mods::swapchain::use_resize_buffer = true; */
 
       renodx::mods::shader::expected_constant_buffer_space = 50;
       renodx::mods::shader::expected_constant_buffer_index = 13;
@@ -277,8 +274,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::swapchain::expected_constant_buffer_index = 13;
       renodx::mods::swapchain::expected_constant_buffer_space = 50;
-      /* renodx::mods::swapchain::use_resize_buffer = true;
-      renodx::mods::swapchain::use_resize_buffer_on_demand = true; */
+      renodx::mods::swapchain::use_resize_buffer = true;
+      renodx::mods::swapchain::use_resize_buffer_on_demand = true;
       renodx::mods::swapchain::force_borderless = false;
       renodx::mods::swapchain::prevent_full_screen = false;
 
