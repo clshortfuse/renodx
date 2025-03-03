@@ -157,6 +157,14 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   float _181 = exp2(((log2(((mad(((round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002z), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001z), ((OCIOTransformXYZMatrix_000z) * 0.007000000216066837f))))) * 4096.0f))) * 0.000244140625f), _66, (mad(((round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002y), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001y), ((OCIOTransformXYZMatrix_000y) * 0.007000000216066837f))))) * 4096.0f))) * 0.000244140625f), _52, (_142 * (round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002x), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001x), ((OCIOTransformXYZMatrix_000x) * 0.007000000216066837f))))) * 4096.0f)))))))) * 0.009999999776482582f))) * 0.1593017578125f));
   float _190 = saturate((exp2(((log2((((_181 * 18.8515625f) + 0.8359375f) / ((_181 * 18.6875f) + 1.0f)))) * 78.84375f))));
 
+  /* lutInput = renodx::color::pq::DecodeSafe(lutInput, RENODX_GAME_NITS);
+  lutInput = mul(renodx::color::BT709_TO_ICTCP_LMS_MAT, lutInput);
+  lutInput = renodx::color::pq::Encode(max(0, lutInput), 100.0f);
+
+  _164 = lutInput.x;
+  _177 = lutInput.y;
+  _190 = lutInput.z; */
+
   // At this point xyz is ictcp
   float _192 = (_177 + _164) * 0.5f;  // X & Y * 0.5, again now idea why but probably color conversion stuff
 
