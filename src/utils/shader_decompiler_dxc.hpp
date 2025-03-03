@@ -30,7 +30,7 @@
 
 #include "../utils/string_view.hpp"
 
-#define DECOMPILER_DXC_DEBUG 1
+#define DECOMPILER_DXC_DEBUG 0
 
 namespace renodx::utils::shader::decompiler::dxc {
 enum class TokenizerState : uint32_t {
@@ -1128,6 +1128,7 @@ class Decompiler {
     std::string branch_condition;
     int branch_condition_true = -1;
     int branch_condition_false = -1;
+    bool use_hint = false;
   };
 
   struct PhiData {
@@ -1984,7 +1985,11 @@ class Decompiler {
         // %437 = xor i1 %123, true
         auto [xor_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(xor (\S+) (\S+), (\S+))"});
         assignment_type = ParseType(xor_type);
-        assignment_value = std::format("{} ^ {}", ParseByType(a, xor_type), ParseByType(b, xor_type));
+        if (xor_type == "i1" && b == "true") {
+          assignment_value = std::format("!{}", ParseByType(a, xor_type));
+        } else {
+          assignment_value = std::format("{} ^ {}", ParseByType(a, xor_type), ParseByType(b, xor_type));
+        }
       } else if (instruction == "mul") {
         auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(mul (nuw )?(nsw )?(?:i32) (\S+), (\S+))"});
         assignment_type = (no_signed_wrap.empty()) ? "uint" : "int";
@@ -2090,14 +2095,18 @@ class Decompiler {
         assignment_value = std::format("{} - {}", ParseByType(a, assignment_type), ParseByType(b, assignment_type));
       } else if (instruction == "sext") {
         // %43 = sext i1 %324 to i32
-        auto [a, to_type] = StringViewMatch<2>(assignment, std::regex{R"(sext (?:fast )?(?:\S+) (\S+) to (\S+))"});
+        auto [from_type, a, to_type] = StringViewMatch<3>(assignment, std::regex{R"(sext (?:fast )?(\S+) (\S+) to (\S+))"});
         assignment_type = ParseType(to_type);
-        assignment_value = std::format("{}({})", assignment_type, ParseInt(a));
+        assignment_value = std::format("{}(({}){})", assignment_type, ParseUnsignedType(from_type), ParseInt(a));
       } else if (instruction == "zext") {
         // %43 = zext i1 %39 to i32
-        auto [a] = StringViewMatch<1>(assignment, std::regex{R"(zext (?:fast )?(?:\S+) (\S+) to (?:\S+))"});
-        assignment_type = "int";
-        assignment_value = std::format("int({})", ParseInt(a));
+        auto [from_type, a, to_type] = StringViewMatch<3>(assignment, std::regex{R"(zext (?:fast )?(\S+) (\S+) to (\S+))"});
+        assignment_type = ParseType(to_type);
+        if (from_type == "i16") {
+          assignment_value = std::format("(min16uint)({})", ParseInt(a));
+        } else {
+          assignment_value = std::format("(uint)({})", assignment_type, ParseInt(a));
+        }
       } else if (instruction == "sitofp") {
         // sitofp i32 %47 to float
         auto [a] = StringViewMatch<1>(assignment, std::regex{R"(sitofp (?:\S+) (\S+) to (?:\S+))"});
@@ -2301,13 +2310,16 @@ class Decompiler {
     void AddCodeBranch(std::string_view line, PreprocessState& preprocess_state) {
       // br i1 <cond>, label <iftrue>, label <iffalse>
       // br label <dest>          ; Unconditional branch
-      static auto conditional_branch_regex = std::regex{R"(^  br i1 (\S+), label %(\S+), label %(\S+).*)"};
+      static auto conditional_branch_regex = std::regex{R"(^  br i1 (\S+), label %(\S+), label %(\S+),?( !dx\.controlflow\.hints)?.*)"};
 
-      const auto [condition, if_true, if_false] = StringViewMatch<3>(line, conditional_branch_regex);
+      const auto [condition, if_true, if_false, use_hint] = StringViewMatch<4>(line, conditional_branch_regex);
       if (!condition.empty()) {
         this->current_code_block.branch.branch_condition = ParseBool(condition);
         FromStringView(if_true, this->current_code_block.branch.branch_condition_true);
         FromStringView(if_false, this->current_code_block.branch.branch_condition_false);
+        if (!use_hint.empty()) {
+          this->current_code_block.branch.use_hint = true;
+        }
       } else {
         static auto unconditional_branch_regex = std::regex{R"(^  br label %(\S+).*)"};
         const auto [unconditional] = StringViewMatch<1>(line, unconditional_branch_regex);
@@ -3410,6 +3422,9 @@ class Decompiler {
       }
 
       if (code_block.branch.branch_condition_true == next_convergence) {
+        if (code_block.branch.use_hint) {
+          string_stream << spacing << "[branch]\n";
+        }
         string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\n";
         indent_spacing();
         on_branch(code_block.branch.branch_condition_false);
@@ -3420,6 +3435,9 @@ class Decompiler {
       }
 
       if (code_block.branch.branch_condition_false == next_convergence) {
+        if (code_block.branch.use_hint) {
+          string_stream << spacing << "[branch]\n";
+        }
         string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\n";
         indent_spacing();
         on_branch(code_block.branch.branch_condition_true);
@@ -3448,6 +3466,9 @@ class Decompiler {
       }
 
       if (pair_convergence == code_block.branch.branch_condition_true) {
+        if (code_block.branch.use_hint) {
+          string_stream << spacing << "[branch]\n";
+        }
         string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\n";
         indent_spacing();
         on_branch(code_block.branch.branch_condition_false);
@@ -3455,12 +3476,18 @@ class Decompiler {
         string_stream << spacing << "}\n";
         // Only print else
       } else if (pair_convergence == code_block.branch.branch_condition_false) {
+        if (code_block.branch.use_hint) {
+          string_stream << spacing << "[branch]\n";
+        }
         string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\n";
         indent_spacing();
         on_branch(code_block.branch.branch_condition_true);
         unindent_spacing();
         string_stream << spacing << "}\n";
       } else if (code_block.branch.branch_condition_true < code_block.branch.branch_condition_false) {
+        if (code_block.branch.use_hint) {
+          string_stream << spacing << "[branch]\n";
+        }
         string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\n";
         indent_spacing();
         on_branch(code_block.branch.branch_condition_true);
@@ -3471,6 +3498,9 @@ class Decompiler {
         unindent_spacing();
         string_stream << spacing << "}\n";
       } else {
+        if (code_block.branch.use_hint) {
+          string_stream << spacing << "[branch]\n";
+        }
         string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\n";
         indent_spacing();
         on_branch(code_block.branch.branch_condition_false);
