@@ -254,6 +254,13 @@ class Decompiler {
     throw std::invalid_argument("Could not parse trunc");
   }
 
+  static std::string ParseUnsignedType(std::string_view input) {
+    if (input == "i32") return "uint";
+    if (input == "i16") return "min16uint";
+    if (input == "i1") return "bool";
+    throw std::invalid_argument("Could not parse unsigned");
+  }
+
   static std::string ParseOperator(std::string_view input) {
     if (input == "ogt") return ">";
     if (input == "ugt") return ">";
@@ -1949,14 +1956,7 @@ class Decompiler {
         }
       } else if (instruction == "shl") {
         auto [no_unsigned_wrap, no_signed_wrap, variable_type, a, b] = StringViewMatch<5>(assignment, std::regex{R"(shl (nuw )?(nsw )?(\S+) (\S+), (\S+))"});
-        assignment_type = ParseType(variable_type);
-        if (no_signed_wrap.empty()) {
-          if (assignment_type == "int") {
-            assignment_type = "uint";
-          } else if (assignment_type == "min16int") {
-            assignment_type = "min16uint";
-          }
-        }
+        assignment_type = no_signed_wrap.empty() ? ParseUnsignedType(variable_type) : ParseType(variable_type);
         assignment_value = std::format("{} << {}", ParseInt(a), ParseInt(b));
       } else if (instruction == "lshr") {
         // %132 = lshr i32 %131, 16
@@ -1965,11 +1965,18 @@ class Decompiler {
         // assignment_type = (no_signed_wrap.empty()) ? "uint" : "int";
 
         assignment_type = ParseType(variable_type);
-        assignment_value = std::format("(uint)({}) >> {}", ParseUint(a), ParseInt(b));
+        assignment_value = std::format("({})({}) >> {}", ParseUnsignedType(variable_type), ParseUint(a), ParseInt(b));
       } else if (instruction == "ashr") {
         // %95 = ashr i32 %68, 2
-        auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(ashr (nuw )?(nsw )?(?:i32) (\S+), (\S+))"});
-        assignment_type = (no_signed_wrap.empty()) ? "uint" : "int";
+        auto [no_unsigned_wrap, no_signed_wrap, variable_type, a, b] = StringViewMatch<5>(assignment, std::regex{R"(ashr (nuw )?(nsw )?(\S+) (\S+), (\S+))"});
+        assignment_type = ParseType(variable_type);
+        if (no_signed_wrap.empty()) {
+          if (assignment_type == "int") {
+            assignment_type = "uint";
+          } else if (assignment_type == "min16int") {
+            assignment_type = "min16uint";
+          }
+        }
         assignment_value = std::format("{} >> {}", ParseInt(a), ParseInt(b));
       } else if (instruction == "xor") {
         // %173 = xor i1 %100, true
@@ -2083,9 +2090,9 @@ class Decompiler {
         assignment_value = std::format("{} - {}", ParseByType(a, assignment_type), ParseByType(b, assignment_type));
       } else if (instruction == "sext") {
         // %43 = sext i1 %324 to i32
-        auto [a] = StringViewMatch<1>(assignment, std::regex{R"(sext (?:fast )?(?:\S+) (\S+) to (?:\S+))"});
-        assignment_type = "int";
-        assignment_value = std::format("int({})", ParseInt(a));
+        auto [a, to_type] = StringViewMatch<2>(assignment, std::regex{R"(sext (?:fast )?(?:\S+) (\S+) to (\S+))"});
+        assignment_type = ParseType(to_type);
+        assignment_value = std::format("{}({})", assignment_type, ParseInt(a));
       } else if (instruction == "zext") {
         // %43 = zext i1 %39 to i32
         auto [a] = StringViewMatch<1>(assignment, std::regex{R"(zext (?:fast )?(?:\S+) (\S+) to (?:\S+))"});
@@ -2098,9 +2105,10 @@ class Decompiler {
         assignment_value = std::format("float({})", ParseInt(a));
       } else if (instruction == "uitofp") {
         // uitofp i32 %158 to float
-        auto [a] = StringViewMatch<1>(assignment, std::regex{R"(uitofp (?:\S+) (\S+) to (?:\S+))"});
-        assignment_type = "float";
-        assignment_value = std::format("float((uint){})", ParseUint(a));
+        // uitofp i16 %32 to float
+        auto [from_type, a, to_type] = StringViewMatch<3>(assignment, std::regex{R"(uitofp (\S+) (\S+) to (\S+))"});
+        assignment_type = ParseType(to_type);
+        assignment_value = std::format("{}(({}){})", assignment_type, ParseUnsignedType(from_type), ParseUint(a));
       } else if (instruction == "fptoui") {
         auto [a] = StringViewMatch<1>(assignment, std::regex{R"(fptoui (?:\S+) (\S+) to (?:\S+))"});
         assignment_type = "uint";
