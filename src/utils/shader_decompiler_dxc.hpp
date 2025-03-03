@@ -30,7 +30,7 @@
 
 #include "../utils/string_view.hpp"
 
-#define DECOMPILER_DXC_DEBUG 0
+#define DECOMPILER_DXC_DEBUG 1
 
 namespace renodx::utils::shader::decompiler::dxc {
 enum class TokenizerState : uint32_t {
@@ -1977,11 +1977,11 @@ class Decompiler {
         // %437 = xor i1 %123, true
         auto [xor_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(xor (\S+) (\S+), (\S+))"});
         assignment_type = ParseType(xor_type);
-        assignment_value = std::format("{} ^ {}", variable, ParseByType(a, xor_type), ParseByType(b, xor_type));
+        assignment_value = std::format("{} ^ {}", ParseByType(a, xor_type), ParseByType(b, xor_type));
       } else if (instruction == "mul") {
         auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(mul (nuw )?(nsw )?(?:i32) (\S+), (\S+))"});
         assignment_type = (no_signed_wrap.empty()) ? "uint" : "int";
-        assignment_value = std::format("{} * {}", variable, ParseInt(a), ParseInt(b));
+        assignment_value = std::format("{} * {}", ParseInt(a), ParseInt(b));
       } else if (instruction == "fmul") {
         auto [a, b] = StringViewMatch<2>(assignment, std::regex{R"(fmul (?:fast )?(?:float) (\S+), (\S+))"});
         assignment_type = "float";
