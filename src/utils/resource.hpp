@@ -399,10 +399,24 @@ inline void OnInitResource(
   std::unique_lock lock(store->resource_infos_mutex);
   auto& resource_info = store->resource_infos[resource.handle];
   lock.unlock();
+  if (
+      resource_info.resource.handle == resource.handle
+      && !resource_info.destroyed) {
+    std::stringstream s;
+    s << "utils::resource::OnInitResource(Resource reused: ";
+    s << static_cast<uintptr_t>(resource.handle);
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+    for (auto& callback : store->on_destroy_resource_info_callbacks) {
+      callback(&resource_info);
+    }
+  }
+
   resource_info = {
       .device = device,
       .desc = desc,
       .resource = resource,
+      .destroyed = false,
       .initial_state = initial_state,
   };
   for (auto& callback : store->on_init_resource_info_callbacks) {
