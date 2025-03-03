@@ -79,6 +79,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedDualShaderEntry(0x9081A2D8),
     TracedDualShaderEntry(0xE6B4B2E3),
 
+    // GTA: San Andreas
+    TracedDualShaderEntry(0xB864B3B8),
+
     // SM5 LUT Builder
     TracedDualShaderEntry(0x1DF6036B),
     TracedDualShaderEntry(0x20EAC9B6),
