@@ -237,6 +237,7 @@ class Decompiler {
   static std::string ParseType(std::string_view input) {
     if (input == "float") return "float";
     if (input == "i32") return "int";
+    if (input == "i16") return "min16int";
     if (input == "i1") return "bool";
     throw std::invalid_argument("Could not parse code type");
   }
@@ -246,6 +247,11 @@ class Decompiler {
     if (input == "i32") return "asint";
     if (input == "i1") return "bool";
     throw std::invalid_argument("Could not parse bitcast");
+  }
+
+  static std::string ParseTrunc(std::string_view input) {
+    if (input == "i16") return "min16int";
+    throw std::invalid_argument("Could not parse trunc");
   }
 
   static std::string ParseOperator(std::string_view input) {
@@ -1506,11 +1512,14 @@ class Decompiler {
           }
         } else if (functionName == "@dx.op.textureLoad.f32" || functionName == "@dx.op.textureLoad.i32") {
           // %dx.types.ResRet.f32 @dx.op.textureLoad.f32(i32 66, %dx.types.Handle %40, i32 0, i32 %38, i32 %39, i32 undef, i32 undef, i32 undef, i32 undef)  ; TextureLoad(srv,mipLevelOrSampleCount,coord0,coord1,coord2,offset0,offset1,offset2)
+          // %dx.types.ResRet.f32 @dx.op.textureLoad.f32(i32 66, %dx.types.Handle %442, i32 undef, i32 %440, i32 %441, i32 undef, i32 undef, i32 undef, i32 undef)  ; TextureLoad(srv,mipLevelOrSampleCount,coord0,coord1,coord2,offset0,offset1,offset2)
           auto [opNumber, srv, mipLevelOrSampleCount, coord0, coord1, coord2, offset0, offset1, offset2] = StringViewSplit<9>(functionParamsString, param_regex, 2);
           auto ref_resource = std::string{srv.substr(1)};
+          const bool has_coord_y = coord1 != "undef";
           const bool has_coord_z = coord2 != "undef";
           const bool has_offset_y = offset1 != "undef";
           const bool has_offset_z = offset2 != "undef";
+          const bool has_mip_level = mipLevelOrSampleCount != "undef";
           std::string coords;
           auto [binding_name, range_index] = preprocess_state.resource_binding_variables.at(ref_resource);
           auto srv_resource = preprocess_state.srv_resources[range_index];
@@ -1523,14 +1532,22 @@ class Decompiler {
               break;
             case Resource::ResourceKind::Texture1DArray:
             case Resource::ResourceKind::Texture2D:
-              coords = std::format("int3({}, {}, {})", ParseInt(coord0), ParseInt(coord1), ParseInt(mipLevelOrSampleCount));
+              if (has_mip_level) {
+                coords = std::format("int3({}, {}, {})", ParseInt(coord0), ParseInt(coord1), ParseInt(mipLevelOrSampleCount));
+              } else {
+                coords = std::format("int2({}, {})", ParseInt(coord0), ParseInt(coord1));
+              }
               break;
             case Resource::ResourceKind::Texture2DMSArray:
               coords = std::format("int3({}, {}, {})", ParseInt(coord0), ParseInt(coord1), ParseInt(coord2));
               break;
             case Resource::ResourceKind::Texture2DArray:
             case Resource::ResourceKind::Texture3D:
-              coords = std::format("int4({}, {}, {}, {})", ParseInt(coord0), ParseInt(coord1), ParseInt(coord2), ParseInt(mipLevelOrSampleCount));
+              if (has_mip_level) {
+                coords = std::format("int4({}, {}, {}, {})", ParseInt(coord0), ParseInt(coord1), ParseInt(coord2), ParseInt(mipLevelOrSampleCount));
+              } else {
+                coords = std::format("int3({}, {}, {})", ParseInt(coord0), ParseInt(coord1), ParseInt(coord2));
+              }
               break;
             default:
               throw std::exception("Unknown shape");
@@ -1703,7 +1720,17 @@ class Decompiler {
           assignment_value = std::format("SV_DispatchThreadID.{}", ParseIndex(component));
           is_identity = true;
         } else if (functionName == "@dx.op.threadIdInGroup.i32") {
-          // TODO
+          // %14 = call i32 @dx.op.threadIdInGroup.i32(i32 95, i32 0)  ; ThreadIdInGroup(component)
+          auto [opNumber, component] = StringViewSplit<2>(functionParamsString, param_regex, 2);
+          assignment_type = "uint";
+          assignment_value = std::format("SV_GroupThreadID.{}", ParseIndex(component));
+          is_identity = true;
+        } else if (functionName == "@dx.op.groupId.i32") {
+          // %10 = call i32 @dx.op.groupId.i32(i32 94, i32 0)  ; GroupId(component)
+          auto [opNumber, component] = StringViewSplit<2>(functionParamsString, param_regex, 2);
+          assignment_type = "uint";
+          assignment_value = std::format("SV_GroupID.{}", ParseIndex(component));
+          is_identity = true;
         } else if (functionName == "@dx.op.isSpecialFloat.f32") {
           // call i1 @dx.op.isSpecialFloat.f32(i32 8, float %309)  ; IsNaN(value)
           auto [opNumber, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
@@ -1921,14 +1948,23 @@ class Decompiler {
           throw std::invalid_argument("Unknown extractvalue type");
         }
       } else if (instruction == "shl") {
-        auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(shl (nuw )?(nsw )?(?:i32) (\S+), (\S+))"});
-        assignment_type = (no_signed_wrap.empty()) ? "uint" : "int";
+        auto [no_unsigned_wrap, no_signed_wrap, variable_type, a, b] = StringViewMatch<5>(assignment, std::regex{R"(shl (nuw )?(nsw )?(\S+) (\S+), (\S+))"});
+        assignment_type = ParseType(variable_type);
+        if (no_signed_wrap.empty()) {
+          if (assignment_type == "int") {
+            assignment_type = "uint";
+          } else if (assignment_type == "min16int") {
+            assignment_type = "min16uint";
+          }
+        }
         assignment_value = std::format("{} << {}", ParseInt(a), ParseInt(b));
       } else if (instruction == "lshr") {
         // %132 = lshr i32 %131, 16
-        auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(lshr (nuw )?(nsw )?(?:i32) (\S+), (\S+))"});
+        // %17  = lshr i16 %15, 1
+        auto [no_unsigned_wrap, no_signed_wrap, variable_type, a, b] = StringViewMatch<5>(assignment, std::regex{R"(lshr (nuw )?(nsw )?(\S+) (\S+), (\S+))"});
         // assignment_type = (no_signed_wrap.empty()) ? "uint" : "int";
-        assignment_type = "int";
+
+        assignment_type = ParseType(variable_type);
         assignment_value = std::format("(uint)({}) >> {}", ParseUint(a), ParseInt(b));
       } else if (instruction == "ashr") {
         // %95 = ashr i32 %68, 2
@@ -1938,7 +1974,9 @@ class Decompiler {
       } else if (instruction == "xor") {
         // %173 = xor i1 %100, true
         // %347 = xor i32 %344, %339
+        // %437 = xor i1 %123, true
         auto [xor_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(xor (\S+) (\S+), (\S+))"});
+        assignment_type = ParseType(xor_type);
         assignment_value = std::format("{} ^ {}", variable, ParseByType(a, xor_type), ParseByType(b, xor_type));
       } else if (instruction == "mul") {
         auto [no_unsigned_wrap, no_signed_wrap, a, b] = StringViewMatch<4>(assignment, std::regex{R"(mul (nuw )?(nsw )?(?:i32) (\S+), (\S+))"});
@@ -2179,6 +2217,16 @@ class Decompiler {
         } else {
           assignment_type = ParseType(dest_type);
           assignment_value = std::format("{}({})", ParseBitcast(dest_type), ParseVariable(source_variable, ParseType(source_type)));
+          // IncrementVariableCounter(source_variable);
+        }
+      } else if (instruction == "trunc") {
+        // %12 = trunc i32 %10 to i16
+        auto [source_type, source_variable, dest_type] = StringViewMatch<3>(assignment, std::regex{R"(trunc (\S+) (\S+) to (\S+))"});
+        if (source_type.empty()) {
+          // decompiled = std::format("// {}", line);
+        } else {
+          assignment_type = ParseType(dest_type);
+          assignment_value = std::format("{}({})", ParseTrunc(dest_type), ParseVariable(source_variable, ParseType(source_type)));
           // IncrementVariableCounter(source_variable);
         }
       } else if (instruction == "getelementptr") {
@@ -2980,26 +3028,29 @@ class Decompiler {
 
     if (entry_point_capabilities_key != "null") {
       auto capabilities_list = named_metadata[entry_point_capabilities_key];
-      auto capabilities_type = capabilities_list[0];
-      auto capabilities_value = capabilities_list[1];
-      auto [key, value] = Metadata::ParseKeyValue(capabilities_type);
-      if (key == "i32") {
-        switch (value[0]) {
-          case '0':
-          case '1':
-          case '2':
-          case '3':
-          default:
-            break;
-          case '4': {
-            auto compute_shader_values = named_metadata[capabilities_value];
-            current_code_function.threads = {
-                Metadata::ParseKeyValue(compute_shader_values[0])[1],
-                Metadata::ParseKeyValue(compute_shader_values[1])[1],
-                Metadata::ParseKeyValue(compute_shader_values[2])[1],
-            };
+      auto capabilities_count = capabilities_list.size() / 2;
+      for (auto i = 0; i < capabilities_count; ++i) {
+        auto capabilities_type = capabilities_list[i * 2];
+        auto capabilities_value = capabilities_list[(i * 2) + 1];
+        auto [key, value] = Metadata::ParseKeyValue(capabilities_type);
+        if (key == "i32") {
+          switch (value[0]) {
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            default:
+              break;
+            case '4': {
+              // compute shader
+              auto compute_shader_values = named_metadata[capabilities_value];
+              current_code_function.threads = {
+                  Metadata::ParseKeyValue(compute_shader_values[0])[1],
+                  Metadata::ParseKeyValue(compute_shader_values[1])[1],
+                  Metadata::ParseKeyValue(compute_shader_values[2])[1],
+              };
+            }
           }
-            // compute shader
         }
       }
     }
@@ -3519,9 +3570,10 @@ class Decompiler {
     }
 
     string_stream << "}\n";
-#if DECOMPILER_DXC_DEBUG <= 2
-    return string_stream.str();
+#if DECOMPILER_DXC_DEBUG == 3
+    return "";
 #endif
+    return string_stream.str();
   }
 };  // namespace Decompiler
 
