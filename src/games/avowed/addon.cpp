@@ -284,8 +284,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::expected_constant_buffer_space = 50;
       /* renodx::mods::swapchain::use_resize_buffer = true;
       renodx::mods::swapchain::use_resize_buffer_on_demand = true; */
-      /* renodx::mods::swapchain::force_borderless = true;
-      renodx::mods::swapchain::prevent_full_screen = true; */
+      renodx::mods::swapchain::force_borderless = false;
+      renodx::mods::swapchain::prevent_full_screen = false;
 
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
