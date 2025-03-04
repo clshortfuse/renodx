@@ -2,9 +2,9 @@
 
 /* Texture2D<float4> SrcTexture : register(t0);
 
-Texture3D<float4> SrcLUT : register(t1);
+Texture3D<float4> SrcLUT : register(t1); */
 
-cbuffer HDRMapping : register(b0) {
+/* cbuffer HDRMapping : register(b0) {
   float HDRMapping_000x : packoffset(c000.x);
 };
 
@@ -68,6 +68,6 @@ OutputSignature main(
   SV_Target_1.y = (_74.y);
   SV_Target_1.z = (_74.z);
   SV_Target_1.w = 1.0f;
-  /* output_signature = { SV_Target, SV_Target_1 };
+  /* OutputSignature output_signature = { SV_Target, SV_Target_1 };
   return output_signature; */
 }

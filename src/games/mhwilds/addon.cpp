@@ -165,7 +165,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrain",
         .binding = &CUSTOM_FILM_GRAIN_STRENGTH,
-        .default_value = 10.f,
+        .default_value = 50.f,
         .label = "FilmGrain",
         .section = "Effects",
         .tooltip = "Controls new perceptual film grain.",
@@ -289,11 +289,22 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
+      renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
+        // We only need output shader since it's the only shader using injected data
+        auto param_count = params.size();
+
+        // Attempting to fix a visual bug
+        if (param_count <= 20) {
+          return true;
+        }
+
+        return false;
+      };
 
       renodx::mods::shader::expected_constant_buffer_space = 50;
       renodx::mods::shader::expected_constant_buffer_index = 13;
       renodx::mods::shader::allow_multiple_push_constants = true;
-      // renodx::mods::shader::force_pipeline_cloning = true;
+      renodx::mods::shader::force_pipeline_cloning = true;
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
