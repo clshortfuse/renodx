@@ -245,7 +245,7 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
     if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
       output = renodx::effects::ApplyFilmGrain(
           output.rgb,
-          SV_Position.xy,
+          TEXCOORD.xy,
           CUSTOM_RANDOM,
           CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
           1.f);  // if 1.f = SDR range

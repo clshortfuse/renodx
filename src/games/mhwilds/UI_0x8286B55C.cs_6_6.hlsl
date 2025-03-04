@@ -1,8 +1,8 @@
-
 #include "./shared.h"
+
 Texture2D<float4> GUIImage : register(t0);
 
-RWTexture2D<float4> RWResult : register(u0);
+RWTexture2D<float3> RWResult : register(u0);
 
 cbuffer SceneInfo : register(b0) {
   float SceneInfo_023z : packoffset(c023.z);
@@ -146,12 +146,12 @@ void main(
                 if (_124) {
                   _439 = (!_123);
                 }
-                float4 _443 = RWResult.Load(int2(((min16uint)(_32)), ((min16uint)(_37))));
+                float3 _443 = RWResult.Load(int2(((min16uint)(_32)), ((min16uint)(_37))));
                 float _456 = exp2(((log2((saturate((_443.x))))) * 0.012683313339948654f));
                 float _457 = exp2(((log2((saturate((_443.y))))) * 0.012683313339948654f));
                 float _458 = exp2(((log2((saturate((_443.z))))) * 0.012683313339948654f));
                 float _485 = 10000.0f / (HDRMapping_010y);
-                _485 = 10000.0f / RENODX_UI_NITS;
+                _485 = 10000.f / RENODX_UI_NITS;
                 float _486 = _485 * (exp2(((log2(((max(0.0f, (_456 + -0.8359375f))) / (18.8515625f - (_456 * 18.6875f))))) * 6.277394771575928f)));
                 float _487 = _485 * (exp2(((log2(((max(0.0f, (_457 + -0.8359375f))) / (18.8515625f - (_457 * 18.6875f))))) * 6.277394771575928f)));
                 float _488 = _485 * (exp2(((log2(((max(0.0f, (_458 + -0.8359375f))) / (18.8515625f - (_458 * 18.6875f))))) * 6.277394771575928f)));
