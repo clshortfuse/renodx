@@ -691,7 +691,7 @@ static void OnResetCommandList(reshade::api::command_list* cmd_list) {
 
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
   if (!is_primary_hook) return;
-  cmd_list->destroy_private_data<CommandListData>();
+  renodx::utils::data::Delete<CommandListData>(cmd_list);
 }
 
 static bool OnCreatePipeline(
@@ -818,21 +818,25 @@ static void OnDestroyPipeline(
 
   // Prefer read-only and orphaning data
 
-  auto* details = GetPipelineShaderDetails(pipeline);
-
-  if (details == nullptr) {
-    // assert(details_pair != pipeline_shader_details.end());
-    return;
-  }
-
-  // pipeline_shader_details.erase(details_pair);
-  details->destroyed = true;
-
-  if (details->replacement_pipeline.handle != 0u) {
-    device->destroy_pipeline(details->replacement_pipeline);
-    details->replacement_pipeline = {0u};
-  }
-  if (!use_replace_async) {
+  if (use_replace_async) {
+    std::shared_lock read_lock(store->pipeline_shader_details_mutex);
+    auto details_pair = store->pipeline_shader_details.find(pipeline.handle);
+    if (details_pair == store->pipeline_shader_details.end()) return;
+    auto* details = &details_pair->second;
+    details->destroyed = true;
+    if (details->replacement_pipeline.handle != 0u) {
+      device->destroy_pipeline(details->replacement_pipeline);
+      details->replacement_pipeline = {0u};
+    }
+  } else {
+    std::unique_lock write_lock(store->pipeline_shader_details_mutex);
+    auto details_pair = store->pipeline_shader_details.find(pipeline.handle);
+    if (details_pair == store->pipeline_shader_details.end()) return;
+    auto* details = &details_pair->second;
+    store->pipeline_shader_details.erase(details_pair);
+    if (details->replacement_pipeline.handle != 0u) {
+      device->destroy_pipeline(details->replacement_pipeline);
+    }
     renodx::utils::pipeline::DestroyPipelineSubobjects(details->subobjects);
   }
 }
