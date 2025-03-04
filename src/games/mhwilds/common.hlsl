@@ -6,13 +6,6 @@
 #include "./shared.h"
 
 float3 VanillaLutTransform(float3 color) {
-  float _38;
-  float _52;
-  float _66;
-  float _242;
-  float _250;
-  float _295;
-  float _300;
   float _407;
   float _436;
   float _463;
@@ -22,11 +15,16 @@ float3 VanillaLutTransform(float3 color) {
   float _638;
   float _639;
 
-  color = mul(renodx::color::BT709_TO_AP1_MAT, color);
+  color = mul(renodx::color::BT709_TO_AP0_MAT, color);
   // AP1_2_AP0
-  float _387 = mad(color.z, 0.1638689935207367f, (mad(color.y, 0.1406790018081665f, (color.x * 0.6954519748687744f))));
+  /* float _387 = mad(color.z, 0.1638689935207367f, (mad(color.y, 0.1406790018081665f, (color.x * 0.6954519748687744f))));
   float _390 = mad(color.z, 0.0955343022942543f, (mad(color.y, 0.8596709966659546f, (color.x * 0.04479460045695305f))));
   float _393 = mad(color.z, 1.0015000104904175f, (mad(color.y, 0.004025210160762072f, (color.x * -0.00552588002756238f))));
+ */
+
+  float _387 = color.x;
+  float _390 = color.y;
+  float _393 = color.z;
 
   float _394 = abs(_387);
   if (((_394 > 6.103515625e-05f))) {
@@ -90,6 +88,7 @@ float3 VanillaLutTransform(float3 color) {
   float4 _501 = OCIO_lut3d_1.SampleLevel(TrilinearClamp, float3(_498, _499, _500), 0.0f);
 
   // Reminder XYZ is now float3(_483, _484, _485) in X space
+  // Tetrahedral sampling
   if (!(!(_483 >= _484))) {  // g bigger than b? I don't know how LUT sampling works
     if (!(!(_484 >= _485))) {
       float4 _509 = OCIO_lut3d_1.SampleLevel(TrilinearClamp, float3(_489, _490, _500), 0.0f);
@@ -162,62 +161,42 @@ float3 VanillaLutTransform(float3 color) {
   // I think this is lerp strength, gonna have to double check
   float _640 = 1.0f - _638;
   float3 final = float3((((_640 * (_494.x)) + _635) + (_639 * (_501.x))), (((_640 * (_494.y)) + _636) + (_639 * (_501.y))), (((_640 * (_494.z)) + _637) + (_639 * (_501.z))));
-  /* final = renodx::color::pq::DecodeSafe(final.rgb, 100.f);
-  final = renodx::color::bt709::from::BT2020(final.rgb); */
+
   return final;
 }
 
-float3 Lut1DSample(float3 color) {
-  renodx::lut::Config lut_config = renodx::lut::config::Create();
-  lut_config.lut_sampler = BilinearClamp;
-  // lut_config.size = 64u;
-  lut_config.tetrahedral = true;
-  lut_config.type_input = renodx::lut::config::type::LINEAR;
-  lut_config.type_output = renodx::lut::config::type::LINEAR;
-  lut_config.scaling = 0.f;
-
-  color = mul(renodx::color::BT709_TO_AP0_MAT, color);
-  color = renodx::lut::Sample(
-      OCIO_lut1d_0,
-      lut_config,
-      color);
-  color = renodx::color::bt709::from::AP1(color);
-
-  return color;
-}
-
-float3 Lut3DSample(float3 color) {
-  renodx::lut::Config lut_config = renodx::lut::config::Create();
-  lut_config.lut_sampler = TrilinearClamp;
-  // lut_config.size = 64u;
-  lut_config.tetrahedral = true;
-  lut_config.type_input = renodx::lut::config::type::LINEAR;
-  lut_config.type_output = renodx::lut::config::type::LINEAR;
-  lut_config.scaling = 0.f;
-
-  color = mul(renodx::color::BT709_TO_AP1_MAT, color);
-  color = renodx::lut::Sample(
-      OCIO_lut3d_1,
-      lut_config,
-      color);
-
+float3 VanillaLutTransformBT709(float3 color) {
+  color = VanillaLutTransform(color);
+  color = renodx::color::pq::DecodeSafe(color, 100.f);
+  color = renodx::color::bt709::from::BT2020(color);
   return color;
 }
 
 float4 LutToneMap(float3 lutInput) {
-  float3 output = renodx::color::pq::DecodeSafe(lutInput, RENODX_GAME_NITS);
-  output = renodx::color::correct::GammaSafe(output);
-  output = VanillaLutTransform(output);  // returns PQ encoded at 100.f
-  // output = renodx::color::pq::EncodeSafe(output, 100.f);
-  // output = Lut3DSample(output);
+  // Comes as bt709 PQ from output
+  float3 input_color = renodx::color::pq::DecodeSafe(lutInput, RENODX_GAME_NITS);
+  float3 lut_output = VanillaLutTransformBT709(input_color);
+  /* float3 lut_black = VanillaLutTransformBT709(0);
+  float3 lut_midgray = VanillaLutTransformBT709(0.1f);
 
-  return float4(output, 1.f);
+  float3 unclamped = renodx::lut::Unclamp(
+      renodx::color::gamma::Encode(lut_output),
+      renodx::color::gamma::Encode(lut_black),
+      renodx::color::gamma::Encode(lut_midgray),
+      1.f,
+      renodx::color::gamma::Encode(input_color));
+
+  float3 recolored = renodx::lut::RecolorUnclamped(
+      lut_output,
+      renodx::color::gamma::Decode(unclamped)); */
+
+  // 100.f to keep it similar to vanilla lut output
+  return float4(renodx::color::pq::EncodeSafe(lut_output, 100.f), 1.f);
 }
 
 float4 FinalizeOutput(float3 color) {
   color = renodx::color::correct::GammaSafe(color);
-  // bt709 PQ looks closer to vanilla...
-  // color = renodx::color::bt2020::from::BT709(color);
+  color = renodx::color::bt2020::from::BT709(color);
   color = renodx::color::pq::EncodeSafe(color, RENODX_GAME_NITS);
 
   return float4(color, 1.f);
