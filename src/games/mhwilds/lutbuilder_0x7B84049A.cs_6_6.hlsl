@@ -23,7 +23,7 @@ RWTexture3D<float4> OutLUT : register(u0); */
 ; uint drawMode; ; Offset: 112
 ; float gammaForHDR; ; Offset: 116
 ; float displayMaxNitsST2084; ; Offset: 120
-; float displayMinNitsST2084; ; Offset: 124
+; float displayMinNitsST2084; ; Offset: 124 // 7
 ; uint drawModeOnMDRPass; ; Offset: 128
 ; float saturationForHDR; ; Offset: 132
 ; float2 targetInvSize; ; Offset: 136
@@ -61,6 +61,7 @@ RWTexture3D<float4> OutLUT : register(u0); */
 };
 
 cbuffer OCIOTransformXYZMatrix : register(b1) {
+  // AP1 -> XYZ
   float OCIOTransformXYZMatrix_000x : packoffset(c000.x);
   float OCIOTransformXYZMatrix_000y : packoffset(c000.y);
   float OCIOTransformXYZMatrix_000z : packoffset(c000.z);
@@ -70,6 +71,8 @@ cbuffer OCIOTransformXYZMatrix : register(b1) {
   float OCIOTransformXYZMatrix_002x : packoffset(c002.x);
   float OCIOTransformXYZMatrix_002y : packoffset(c002.y);
   float OCIOTransformXYZMatrix_002z : packoffset(c002.z);
+
+  // XYZ -> BT709
   float OCIOTransformXYZMatrix_004x : packoffset(c004.x);
   float OCIOTransformXYZMatrix_004y : packoffset(c004.y);
   float OCIOTransformXYZMatrix_004z : packoffset(c004.z);
@@ -121,6 +124,7 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   float _637;
   float _638;
   float _639;
+  // ACEScc to AP1 linear
   if (!(!(_22 <= -0.3013699948787689f))) {
     _38 = ((exp2(((_19 * 0.2780952751636505f) + -8.720000267028809f))) + -3.0517578125e-05f);
   } else {
@@ -147,7 +151,7 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   }
 
   // Colorspace is now AP1
-  // Some ictcp calcs + PQ conversion
+  // AP1 => XYZ => LMS
   // XYZ are now float3(_38, _52, _66)
   float _142 = _38 * 0.000244140625f;  // Not sure why X is special here, but what do I know
   float _155 = exp2(((log2(((mad(((round(((mad(-0.03579999879002571f, (OCIOTransformXYZMatrix_002z), (mad(0.6976000070571899f, (OCIOTransformXYZMatrix_001z), ((OCIOTransformXYZMatrix_000z) * 0.35920000076293945f))))) * 4096.0f))) * 0.000244140625f), _66, (mad(((round(((mad(-0.03579999879002571f, (OCIOTransformXYZMatrix_002y), (mad(0.6976000070571899f, (OCIOTransformXYZMatrix_001y), ((OCIOTransformXYZMatrix_000y) * 0.35920000076293945f))))) * 4096.0f))) * 0.000244140625f), _52, (_142 * (round(((mad(-0.03579999879002571f, (OCIOTransformXYZMatrix_002x), (mad(0.6976000070571899f, (OCIOTransformXYZMatrix_001x), ((OCIOTransformXYZMatrix_000x) * 0.35920000076293945f))))) * 4096.0f)))))))) * 0.009999999776482582f))) * 0.1593017578125f));
@@ -157,17 +161,12 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   float _181 = exp2(((log2(((mad(((round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002z), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001z), ((OCIOTransformXYZMatrix_000z) * 0.007000000216066837f))))) * 4096.0f))) * 0.000244140625f), _66, (mad(((round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002y), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001y), ((OCIOTransformXYZMatrix_000y) * 0.007000000216066837f))))) * 4096.0f))) * 0.000244140625f), _52, (_142 * (round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002x), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001x), ((OCIOTransformXYZMatrix_000x) * 0.007000000216066837f))))) * 4096.0f)))))))) * 0.009999999776482582f))) * 0.1593017578125f));
   float _190 = saturate((exp2(((log2((((_181 * 18.8515625f) + 0.8359375f) / ((_181 * 18.6875f) + 1.0f)))) * 78.84375f))));
 
-  /* lutInput = renodx::color::pq::DecodeSafe(lutInput, RENODX_GAME_NITS);
-  lutInput = mul(renodx::color::BT709_TO_ICTCP_LMS_MAT, lutInput);
-  lutInput = renodx::color::pq::Encode(max(0, lutInput), 100.0f);
 
-  _164 = lutInput.x;
-  _177 = lutInput.y;
-  _190 = lutInput.z; */
-
-  // At this point xyz is ictcp
+  // ICTCP now? // Lesson learned, read freaking docs
+  // I in ICTCP
   float _192 = (_177 + _164) * 0.5f;  // X & Y * 0.5, again now idea why but probably color conversion stuff
 
+  // omg of course vars are saved in PQ
   float _198 = (HDRMapping_009x) * 0.009999999776482582f;  // toe end
   float _200 = (HDRMapping_009z) * 0.009999999776482582f;  // blackpoint
 
@@ -220,11 +219,10 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   float _304 = exp2(((log2((_300 * 0.009999999776482582f))) * 0.1593017578125f));
   float _313 = saturate((exp2(((log2((((_304 * 18.8515625f) + 0.8359375f) / ((_304 * 18.6875f) + 1.0f)))) * 78.84375f))));
 
-  // Reminder: XYZ are float3(_164, _177, _190) in LMS PQ Encoded
-  float _320 = min((_192 / _313), (_313 / _192));  // _192 is from color conversion (x * y * 0.5f)
+  // Reminder: XYZ are float3(_164, _177, _190) in ictcp
+  float _320 = min((_192 / _313), (_313 / _192));  // _192 is from color conversion (x * y * 0.5f) (L of LMS)
   // saturationOnDisplayMapping
-  // I believe this is ictcp saturation or something
-  // ICTCP -> LMS stuff
+  // Ct & Cp of ICTCP
   float _321 = (((dot(float3(_164, _177, _190), float3(6610.0f, -13613.0f, 7003.0f))) * 0.000244140625f) * (HDRMapping_010z)) * _320;
   float _322 = (((dot(float3(_164, _177, _190), float3(17933.0f, -17390.0f, -543.0f))) * 0.000244140625f) * (HDRMapping_010z)) * _320;
   // _313 is shoulder
@@ -236,6 +234,7 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   float _353 = (exp2(((log2(((max(0.0f, (_344 + -0.8359375f))) / (18.8515625f - (_344 * 18.6875f))))) * 6.277394771575928f))) * 100.0f;
   float _357 = exp2(((log2((saturate((mad(-0.32100000977516174f, _322, (mad(0.5600000023841858f, _321, _313)))))))) * 0.012683313339948654f));
   float _366 = (exp2(((log2(((max(0.0f, (_357 + -0.8359375f))) / (18.8515625f - (_357 * 18.6875f))))) * 6.277394771575928f))) * 100.0f;
+  
   // LMS => XYZ
   float _369 = mad(0.2070000022649765f, _366, (mad(-1.3270000219345093f, _353, (_340 * 207.10000610351562f))));
   float _372 = mad(-0.04500000178813934f, _366, (mad(0.6809999942779541f, _353, (_340 * 36.5f))));
@@ -251,6 +250,7 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   float _390 = mad(_384, 0.0955343022942543f, (mad(_381, 0.8596709966659546f, (_378 * 0.04479460045695305f))));
   float _393 = mad(_384, 1.0015000104904175f, (mad(_381, 0.004025210160762072f, (_378 * -0.00552588002756238f))));
 
+  // Clamping for LUT input, guess 1D luts take AP0
   // Do stuff on X
   float _394 = abs(_387);
   if (((_394 > 6.103515625e-05f))) {
@@ -291,7 +291,7 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   float _468 = floor((_466 * 0.00024420025874860585f));
 
   // Finally lut stuff
-  // Reminder XYZ is now float3(_412, _441, _468) in AP1 linear space I believe
+  // Reminder XYZ is now float3(_412, _441, _468) in AP0 linear space
   // Lut width is 64
   float _477 = (((float4)(OCIO_lut1d_0.SampleLevel(BilinearClamp, float2((((_410 + 0.5f) - (_412 * 4095.0f)) * 0.000244140625f), ((_412 + 0.5f) * 0.05882352963089943f)), 0.0f))).x) * 64.0f;
   float _478 = (((float4)(OCIO_lut1d_0.SampleLevel(BilinearClamp, float2((((_439 + 0.5f) - (_441 * 4095.0f)) * 0.000244140625f), ((_441 + 0.5f) * 0.05882352963089943f)), 0.0f))).x) * 64.0f;
@@ -314,8 +314,8 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID) {
   float _500 = _491 + 0.015384615398943424f;
   float4 _501 = OCIO_lut3d_1.SampleLevel(TrilinearClamp, float3(_498, _499, _500), 0.0f);
 
-  // Reminder XYZ is now float3(_483, _484, _485) in X space
-  if (!(!(_483 >= _484))) {  // g bigger than b? I don't know how LUT sampling works
+  // Tetrahedral LUT sampling
+  if (!(!(_483 >= _484))) { 
     if (!(!(_484 >= _485))) {
       float4 _509 = OCIO_lut3d_1.SampleLevel(TrilinearClamp, float3(_489, _490, _500), 0.0f);
       float4 _513 = OCIO_lut3d_1.SampleLevel(TrilinearClamp, float3(_489, _499, _500), 0.0f);
