@@ -37,6 +37,7 @@ namespace renodx::utils::shader {
 
 static bool use_replace_on_bind = true;
 static bool use_replace_async = false;
+static bool use_shader_cache = false;
 static std::atomic_size_t runtime_replacement_count = 0;
 
 static bool is_primary_hook = false;
@@ -260,6 +261,7 @@ struct __declspec(uuid("908f0889-64d8-4e22-bd26-ded3dd0cef77")) DeviceData {
   std::unordered_map<uint32_t, uint32_t> shader_replacements_inverse;  // New => Old
   bool use_replace_on_bind = true;
   bool use_replace_async = false;
+  bool use_shader_cache = false;
 };
 
 struct StageState {
@@ -618,6 +620,14 @@ static void OnInitDevice(reshade::api::device* device) {
     use_replace_async = data->use_replace_async;
   }
 
+  if (use_shader_cache) {
+    // write
+    data->use_shader_cache = true;
+  } else {
+    // read
+    use_shader_cache = data->use_shader_cache;
+  }
+
   auto insert_shaders = [](
                             const std::unordered_map<uint32_t, std::vector<uint8_t>>& source,
                             std::unordered_map<uint32_t, std::vector<uint8_t>>& dest,
@@ -786,12 +796,16 @@ static void OnInitPipeline(
   bool has_useful_details = !details.subobject_shaders.empty();
   if (!has_useful_details) return;
 
-  reshade::api::pipeline_subobject* subobjects_clone = renodx::utils::pipeline::ClonePipelineSubObjects(subobjects, subobject_count);
+  if (use_replace_async || use_shader_cache) {
+    reshade::api::pipeline_subobject* subobjects_clone = renodx::utils::pipeline::ClonePipelineSubObjects(subobjects, subobject_count);
 
-  // Store clone of subobjects
-  details.subobjects = std::vector<reshade::api::pipeline_subobject>(
-      subobjects_clone,
-      subobjects_clone + subobject_count);
+    // Store clone of subobjects
+    details.subobjects.assign(
+        subobjects_clone,
+        subobjects_clone + subobject_count);
+
+    free(subobjects_clone);
+  }
 
   {
     const std::unique_lock write_lock(store->pipeline_shader_details_mutex);
@@ -818,7 +832,7 @@ static void OnDestroyPipeline(
 
   // Prefer read-only and orphaning data
 
-  if (use_replace_async) {
+  if (use_replace_async || use_shader_cache) {
     std::shared_lock read_lock(store->pipeline_shader_details_mutex);
     auto details_pair = store->pipeline_shader_details.find(pipeline.handle);
     if (details_pair == store->pipeline_shader_details.end()) return;

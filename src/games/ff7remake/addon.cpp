@@ -23,7 +23,6 @@
 #include "../../utils/platform.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/shader.hpp"
-#include "../../utils/shader_dump.hpp"
 #include "../../utils/swapchain.hpp"
 #include "./shared.h"
 
@@ -358,9 +357,6 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
-std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
-float random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
-
 void OnPresent(
     reshade::api::command_queue* queue,
     reshade::api::swapchain* swapchain,
@@ -368,68 +364,9 @@ void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
+  static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
+  static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
   CUSTOM_RANDOM = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
-}
-
-std::unordered_set<uint32_t> g_dumped_shaders = {};
-
-bool OnDrawIndexedForMissingShaders(
-    reshade::api::command_list* cmd_list,
-    uint32_t index_count, uint32_t instance_count,
-    uint32_t first_index, int32_t vertex_offset, uint32_t first_instance) {
-  auto shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
-
-  auto stage_state = renodx::utils::shader::GetCurrentPixelState(shader_state);
-  auto pixel_shader_hash = renodx::utils::shader::GetCurrentShaderHash(stage_state);
-  if (pixel_shader_hash == 0u) return false;
-
-  if (!renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list)) return false;
-
-  if (custom_shaders.contains(pixel_shader_hash)) return false;
-
-  if (g_dumped_shaders.contains(pixel_shader_hash)) return false;
-
-  reshade::log::message(
-      reshade::log::level::debug,
-      std::format("Dumping output shader: 0x{:08x}", pixel_shader_hash).c_str());
-
-  g_dumped_shaders.emplace(pixel_shader_hash);
-
-  renodx::utils::path::default_output_folder = "renodx";
-  renodx::utils::shader::dump::default_dump_folder = ".";
-  bool found = false;
-  try {
-    auto shader_data = renodx::utils::shader::GetShaderData(stage_state);
-
-    if (!shader_data.has_value()) {
-      std::stringstream s;
-      s << "utils::shader::dump(Failed to retreive shader data: ";
-      s << PRINT_CRC32(pixel_shader_hash);
-      s << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
-      return false;
-    }
-
-    auto shader_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data.value());
-    if (shader_version.GetMajor() == 0) {
-      // No shader information found
-      return false;
-    }
-
-    renodx::utils::shader::dump::DumpShader(
-        pixel_shader_hash,
-        shader_data.value(),
-        reshade::api::pipeline_subobject_type::pixel_shader,
-        "output_");
-  } catch (...) {
-    std::stringstream s;
-    s << "utils::shader::dump(Failed to decode shader data: ";
-    s << PRINT_CRC32(pixel_shader_hash);
-    s << ")";
-    reshade::log::message(reshade::log::level::warning, s.str().c_str());
-  }
-
-  return false;
 }
 
 }  // namespace
@@ -456,13 +393,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
-      reshade::register_event<reshade::addon_event::draw_indexed>(OnDrawIndexedForMissingShaders);
 
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
-      reshade::unregister_event<reshade::addon_event::draw_indexed>(OnDrawIndexedForMissingShaders);
       reshade::unregister_addon(h_module);
       break;
   }

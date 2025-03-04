@@ -598,7 +598,6 @@ bool OnDrawForLUTDump(
         reshade::api::pipeline_subobject_type::pixel_shader,
         "lutbuilder_");
 
-    if (!found) throw std::exception("Pipeline not found");
   } catch (...) {
     std::stringstream s;
     s << "utils::shader::dump(Failed to decode shader data: ";
@@ -845,6 +844,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (g_dump_shaders != 0.f) {
         renodx::utils::swapchain::Use(fdw_reason);
         renodx::utils::shader::Use(fdw_reason);
+        renodx::utils::shader::use_shader_cache = true;
         renodx::utils::resource::Use(fdw_reason);
         reshade::register_event<reshade::addon_event::draw>(OnDrawForLUTDump);
       }
