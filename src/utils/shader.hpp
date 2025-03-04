@@ -710,8 +710,16 @@ static bool OnCreatePipeline(
     uint32_t subobject_count,
     const reshade::api::pipeline_subobject* subobjects) {
   if (!is_primary_hook) return false;
-  if (use_replace_async) return false;
+  if (initialized_device) {
+    if (use_replace_async) return false;
+  }
   auto* data = renodx::utils::data::Get<DeviceData>(device);
+
+  if (!initialized_device) {
+    use_replace_async = data->use_replace_async;
+    use_shader_cache = data->use_shader_cache;
+    initialized_device = true;
+  }
   std::vector<std::pair<uint32_t, uint32_t>> hash_changes;
 
   {

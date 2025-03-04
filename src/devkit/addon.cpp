@@ -2374,6 +2374,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::trace::Use(fdw_reason);
       renodx::utils::swapchain::Use(fdw_reason);
 
+      renodx::utils::shader::use_shader_cache = true;
+
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
