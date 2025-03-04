@@ -236,6 +236,7 @@ class Decompiler {
 
   static std::string ParseType(std::string_view input) {
     if (input == "float") return "float";
+    if (input == "half") return "half";
     if (input == "i32") return "int";
     if (input == "i16") return "min16int";
     if (input == "i1") return "bool";
@@ -251,6 +252,7 @@ class Decompiler {
 
   static std::string ParseTrunc(std::string_view input) {
     if (input == "i16") return "min16int";
+    if (input == "half") return "half";
     throw std::invalid_argument("Could not parse trunc");
   }
 
@@ -2035,20 +2037,21 @@ class Decompiler {
         assignment_type = (no_signed_wrap.empty()) ? "uint" : "int";
         assignment_value = std::format("{} * {}", ParseInt(a), ParseInt(b));
       } else if (instruction == "fmul") {
-        auto [a, b] = StringViewMatch<2>(assignment, std::regex{R"(fmul (?:fast )?(?:float) (\S+), (\S+))"});
-        assignment_type = "float";
+        auto [value_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(fmul (?:fast )?(\S+) (\S+), (\S+))"});
+        assignment_type = ParseType(value_type);
         assignment_value = std::format("{} * {}", ParseFloat(a), ParseFloat(b));
       } else if (instruction == "fdiv") {
-        auto [a, b] = StringViewMatch<2>(assignment, std::regex{R"(fdiv (?:fast )?(?:float) (\S+), (\S+))"});
-        assignment_type = "float";
+        auto [value_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(fdiv (?:fast )?(\S+) (\S+), (\S+))"});
+        assignment_type = ParseType(value_type);
         assignment_value = std::format("{} / {}", ParseFloat(a), ParseFloat(b));
       } else if (instruction == "fadd") {
-        auto [a, b] = StringViewMatch<2>(assignment, std::regex{R"(fadd (?:fast )?(?:float) (\S+), (\S+))"});
-        assignment_type = "float";
+        auto [value_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(fadd (?:fast )?(\S+) (\S+), (\S+))"});
+        assignment_type = ParseType(value_type);
         assignment_value = std::format("{} + {}", ParseFloat(a), ParseFloat(b));
       } else if (instruction == "fsub") {
-        auto [a, b] = StringViewMatch<2>(assignment, std::regex{"fsub (?:fast )?(?:float) (\\S+), (\\S+)"});
-        assignment_type = "float";
+        // fsub fast half 0xH3C00, %42
+        auto [value_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(fsub (?:fast )?(\S+) (\S+), (\S+))"});
+        assignment_type = ParseType(value_type);
         assignment_value = std::format("{} - {}", ParseFloat(a), ParseFloat(b));
       } else if (instruction == "fcmp") {
         // %39 = fcmp fast ogt float %37, 0.000000e+00
@@ -2201,6 +2204,7 @@ class Decompiler {
       } else if (instruction == "select") {
         // select i1 %26, float 1.000000e+00, float 0x3FFB47E420000000
         // %88 = select i1 %84, i1 %86, i1 %87
+        // select i1 %44, half %45, half %42
         auto [condition, type_a, value_a, type_b, value_b] = StringViewMatch<5>(assignment, std::regex{R"(select i1 (\S+), (\S+) (\S+), (\S+) (\S+))"});
         if (type_a == "float" && type_b == "float") {
           assignment_type = "float";
@@ -2214,6 +2218,9 @@ class Decompiler {
         } else if (type_a == "i1" && type_b == "i1") {
           assignment_type = "bool";
           assignment_value = std::format("({} ? {} : {})", ParseBool(condition), ParseBool(value_a), ParseBool(value_b));
+        } else if (type_a == "half" && type_b == "half") {
+          assignment_type = "half";
+          assignment_value = std::format("({} ? {} : {})", ParseFloat(condition), ParseFloat(value_a), ParseFloat(value_b));
         } else {
           std::cerr << line << "\n";
           throw std::invalid_argument("Unrecognized code assignment");
@@ -2284,6 +2291,26 @@ class Decompiler {
         } else {
           assignment_type = ParseType(dest_type);
           assignment_value = std::format("{}({})", ParseTrunc(dest_type), ParseVariable(source_variable, ParseType(source_type)));
+          // IncrementVariableCounter(source_variable);
+        }
+      } else if (instruction == "fptrunc") {
+        // %42 = fptrunc float %40 to half
+        auto [source_type, source_variable, dest_type] = StringViewMatch<3>(assignment, std::regex{R"(fptrunc (\S+) (\S+) to (\S+))"});
+        if (source_type.empty()) {
+          // decompiled = std::format("// {}", line);
+        } else {
+          assignment_type = ParseType(dest_type);
+          assignment_value = std::format("{}({})", ParseTrunc(dest_type), ParseVariable(source_variable, ParseType(source_type)));
+          // IncrementVariableCounter(source_variable);
+        }
+      } else if (instruction == "fpext") {
+        // fpext half %46 to float
+        auto [source_type, source_variable, dest_type] = StringViewMatch<3>(assignment, std::regex{R"(fpext (\S+) (\S+) to (\S+))"});
+        if (source_type.empty()) {
+          // decompiled = std::format("// {}", line);
+        } else {
+          assignment_type = ParseType(dest_type);
+          assignment_value = std::format("{}({})", ParseBitcast(dest_type), ParseVariable(source_variable, ParseType(source_type)));
           // IncrementVariableCounter(source_variable);
         }
       } else if (instruction == "getelementptr") {
