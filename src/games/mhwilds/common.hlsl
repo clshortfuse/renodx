@@ -202,4 +202,56 @@ float4 FinalizeOutput(float3 color) {
   return float4(color, 1.f);
 }
 
+float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
+                     linear float2 TEXCOORD: TEXCOORD) {
+  float4 _11 = SrcTexture.SampleLevel(PointBorder, float2((TEXCOORD.x), (TEXCOORD.y)), 0.0f);
+  float _17 = (HDRMapping_000x) * 0.009999999776482582f;  // overall brightness (defaullt 100.f);
+  _17 = 0.5f;                                             // reduce exposure as it's too much
+  float _18 = _17 * (_11.x);
+  float _19 = _17 * (_11.y);
+  float _20 = _17 * (_11.z);
+  float3 output = renodx::color::bt709::from::AP1(float3(_18, _19, _20));
+
+  if (RENODX_TONE_MAP_TYPE > 0.f) {
+    renodx::lut::Config lut_config = renodx::lut::config::Create();
+    lut_config.lut_sampler = TrilinearClamp;
+    lut_config.size = 64u;
+    lut_config.tetrahedral = true;
+    lut_config.type_input = renodx::lut::config::type::LINEAR;  // We manually manage encoding/decoding
+    lut_config.type_output = renodx::lut::config::type::LINEAR;
+    lut_config.scaling = 0.f;
+
+    // LUT reduces peak greatly, so we pass it to tonemap pass instead
+
+    float3 lutOutput = output;
+    // We'll decode immediately so skip bt2020
+    lutOutput = renodx::color::pq::EncodeSafe(lutOutput, RENODX_GAME_NITS);
+
+    // Outputs PQ
+    lutOutput = renodx::lut::Sample(
+        SrcLUT,
+        lut_config,
+        lutOutput);
+
+    // lutOutput = renodx::color::pq::DecodeSafe(lutOutput, 100.f);
+    // 100.f because ingame LUT encodes to 100.f I think? It's what they use everywhere (Confirmed by testing)
+    lutOutput = renodx::color::pq::DecodeSafe(lutOutput, 100.f);
+    // Final is now bt709
+    // lutOutput = renodx::color::bt709::from::BT2020(lutOutput);
+    lutOutput = renodx::tonemap::renodrt::NeutralSDR(lutOutput);
+    // lutOutput = saturate(lutOutput);
+
+    output = renodx::draw::ToneMapPass(output, lutOutput);
+    if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
+      output = renodx::effects::ApplyFilmGrain(
+          output.rgb,
+          SV_Position.xy,
+          CUSTOM_RANDOM,
+          CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
+          1.f);  // if 1.f = SDR range
+    }
+    return FinalizeOutput(output.rgb);
+  }
+}
+
 #endif  // SRC_MHWILDS_COMMON_HLSL_

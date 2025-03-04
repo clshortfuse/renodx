@@ -1,4 +1,6 @@
-Texture2D<float4> SrcTexture : register(t0);
+#include "./common.hlsl"
+
+/* Texture2D<float4> SrcTexture : register(t0);
 
 Texture3D<float4> SrcLUT : register(t1);
 
@@ -8,7 +10,7 @@ cbuffer HDRMapping : register(b0) {
 
 SamplerState PointBorder : register(s2, space32);
 
-SamplerState TrilinearClamp : register(s9, space32);
+SamplerState TrilinearClamp : register(s9, space32); */
 
 struct OutputSignature {
   float4 SV_Target : SV_Target;
@@ -16,11 +18,16 @@ struct OutputSignature {
 };
 
 OutputSignature main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float2 TEXCOORD : TEXCOORD
-) {
+    noperspective float4 SV_Position: SV_Position,
+    linear float2 TEXCOORD: TEXCOORD) {
   float4 SV_Target;
   float4 SV_Target_1;
+  OutputSignature output_signature;
+
+  output_signature.SV_Target = OutputTonemap(SV_Position, TEXCOORD);
+  output_signature.SV_Target_1 = output_signature.SV_Target;
+  return output_signature;
+
   float4 _11 = SrcTexture.SampleLevel(PointBorder, float2((TEXCOORD.x), (TEXCOORD.y)), 0.0f);
   float _17 = (HDRMapping_000x) * 0.009999999776482582f;
   float _18 = _17 * (_11.x);
@@ -61,6 +68,6 @@ OutputSignature main(
   SV_Target_1.y = (_74.y);
   SV_Target_1.z = (_74.z);
   SV_Target_1.w = 1.0f;
-  OutputSignature output_signature = { SV_Target, SV_Target_1 };
-  return output_signature;
+  /* output_signature = { SV_Target, SV_Target_1 };
+  return output_signature; */
 }
