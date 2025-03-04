@@ -2147,8 +2147,10 @@ class Decompiler {
         assignment_type = ParseType(to_type);
         if (from_type == "i16") {
           assignment_value = std::format("(min16uint)({})", ParseInt(a));
-        } else {
-          assignment_value = std::format("(uint)({})", assignment_type, ParseInt(a));
+        } else if (from_type == "i32") {
+          assignment_value = std::format("(uint)({})", ParseInt(a));
+        } else if (from_type == "i1") {
+          assignment_value = std::format("(bool)({})", ParseInt(a));
         }
       } else if (instruction == "sitofp") {
         // sitofp i32 %47 to float
@@ -2310,7 +2312,7 @@ class Decompiler {
           // decompiled = std::format("// {}", line);
         } else {
           assignment_type = ParseType(dest_type);
-          assignment_value = std::format("{}({})", ParseBitcast(dest_type), ParseVariable(source_variable, ParseType(source_type)));
+          assignment_value = std::format("{}({})", ParseType(dest_type), ParseVariable(source_variable, ParseType(source_type)));
           // IncrementVariableCounter(source_variable);
         }
       } else if (instruction == "getelementptr") {
