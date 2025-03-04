@@ -17,6 +17,8 @@
 #define RENODX_TONE_MAP_PER_CHANNEL          1.f
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_RENO_DRT_WHITE_CLIP           10.f
+#define CUSTOM_FILM_GRAIN_STRENGTH           shader_injection.custom_film_grain
+#define CUSTOM_RANDOM                        shader_injection.custom_random
 
 // Debug
 /* #define RENODX_PEAK_NITS           800.f
@@ -43,7 +45,9 @@ struct ShaderInjectData {
   float colorGradeFlare;
   float tone_map_hue_correction;
   float tone_map_hue_processor;
-  float padding03;
+  float custom_film_grain;
+
+  float custom_random;
 };
 
 #ifndef __cplusplus
