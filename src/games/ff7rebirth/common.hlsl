@@ -174,7 +174,7 @@ float3 applyReferenceACES(float3 untonemapped, float midGray = 0.1f) {
   return applyACES(untonemapped, midGray, 1000.f, 250.f);
 }
 
-float3 extractColorGradeAndApplyTonemap(float3 ungraded_bt709, float3 lutOutputColor_bt2020, float midGray) {
+float3 extractColorGradeAndApplyTonemap(float3 ungraded_bt709, float3 lutOutputColor_bt2020, float midGray, float2 position) {
   // normalize LUT output paper white and convert to BT.709
   float3 graded_aces_bt709 = renodx::color::bt709::from::BT2020(lutOutputColor_bt2020 * (10000.f / 250.f));
 
