@@ -19,6 +19,7 @@
 #define RENODX_RENO_DRT_WHITE_CLIP           10.f
 #define CUSTOM_FILM_GRAIN_STRENGTH           shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                        shader_injection.custom_random
+#define CUSTOM_SHARPNESS                     shader_injection.custom_sharpness
 
 // Debug
 /* #define RENODX_PEAK_NITS           800.f
@@ -48,6 +49,7 @@ struct ShaderInjectData {
   float custom_film_grain;
 
   float custom_random;
+  float custom_sharpness;
 };
 
 #ifndef __cplusplus
