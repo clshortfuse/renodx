@@ -218,12 +218,16 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
   }
 
   static ResourceViewDetails GetResourceViewDetails(reshade::api::resource_view resource_view, reshade::api::device* device) {
+    auto* resource_view_info = renodx::utils::resource::GetResourceViewInfo(resource_view);
+
     ResourceViewDetails details = {
         .resource_view = resource_view,
-        .resource_view_desc = device->get_resource_view_desc(resource_view),
+        // .resource_view_desc = device->get_resource_view_desc(resource_view),
         // .resource = device->get_resource_from_view(resource_view),
     };
+    if (resource_view_info == nullptr) return details;
 
+    details.resource_view_desc = resource_view_info->desc;
     auto device_api = device->get_api();
 
     auto resource_view_reflection = renodx::utils::trace::GetDebugName(device_api, resource_view);
@@ -231,10 +235,8 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
       details.resource_view_reflection = resource_view_reflection.value();
     }
 
-    auto resource = renodx::utils::resource::GetResourceFromView(resource_view);
-    details.resource = resource;
-    if (resource.handle != 0u) {
-      details.resource_desc = device->get_resource_desc(details.resource);
+    if (resource_view_info->resource_info != nullptr) {
+      details.resource_desc = resource_view_info->resource_info->desc;
 
       auto resource_reflection = renodx::utils::trace::GetDebugName(device_api, details.resource);
       if (resource_reflection.has_value()) {
@@ -2228,8 +2230,6 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
   // Runtime may be on a separate device
   if (data == nullptr) return;
-
-  
 
   std::unique_lock lock(data->mutex);  // Probably not needed
   if (data->runtime == nullptr) {
