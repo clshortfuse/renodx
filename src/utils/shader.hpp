@@ -856,11 +856,11 @@ static void OnDestroyPipeline(
     auto details_pair = store->pipeline_shader_details.find(pipeline.handle);
     if (details_pair == store->pipeline_shader_details.end()) return;
     auto* details = &details_pair->second;
-    store->pipeline_shader_details.erase(details_pair);
     if (details->replacement_pipeline.handle != 0u) {
       device->destroy_pipeline(details->replacement_pipeline);
     }
     renodx::utils::pipeline::DestroyPipelineSubobjects(details->subobjects);
+    store->pipeline_shader_details.erase(details_pair);
   }
 }
 
