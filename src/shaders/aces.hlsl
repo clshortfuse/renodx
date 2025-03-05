@@ -107,15 +107,25 @@ float3 YToLinCV(float3 y, float y_max, float y_min) {
   return (y - y_min) / (y_max - y_min);
 }
 
-float3 XYZToXyY(half3 xyz) {
-  float divisor = max(dot(xyz, (1.0).xxx), 1e-4);
-  return float3(xyz.xy / divisor, xyz.y);
+// Transformations between CIE XYZ tristimulus values and CIE x,y
+// chromaticity coordinates
+float3 XYZToXyY(float3 xyz) {
+  float3 xy_y;
+  float divisor = (xyz[0] + xyz[1] + xyz[2]);
+  if (divisor == 0.f) divisor = 1e-10f;
+  xy_y[0] = xyz[0] / divisor;
+  xy_y[1] = xyz[1] / divisor;
+  xy_y[2] = xyz[1];
+
+  return xy_y;
 }
 
-float3 XyYToXYZ(half3 xy_y) {
-  float m = xy_y.z / max(xy_y.y, 1e-4);
-  float3 xyz = float3(xy_y.xz, (1.0 - xy_y.x - xy_y.y));
-  xyz.xz *= m;
+float3 XyYToXYZ(float3 xy_y) {
+  float3 xyz;
+  xyz[0] = xy_y[0] * xy_y[2] / max(xy_y[1], 1e-10);
+  xyz[1] = xy_y[2];
+  xyz[2] = (1.0 - xy_y[0] - xy_y[1]) * xy_y[2] / max(xy_y[1], 1e-10);
+
   return xyz;
 }
 
@@ -147,28 +157,6 @@ static const float2x2 MIN_LUM_TABLE = float2x2(
 static const float2x2 MAX_LUM_TABLE = float2x2(
     log10(MAX_LUM_SDR), MAX_STOP_SDR,
     log10(MAX_LUM_RRT), MAX_STOP_RRT);
-
-// Transformations between CIE XYZ tristimulus values and CIE x,y
-// chromaticity coordinates
-float3 XYZToXyY(float3 xyz) {
-  float3 xy_y;
-  float divisor = (xyz[0] + xyz[1] + xyz[2]);
-  if (divisor == 0.) divisor = 1e-10;
-  xy_y[0] = xyz[0] / divisor;
-  xy_y[1] = xyz[1] / divisor;
-  xy_y[2] = xyz[1];
-
-  return xy_y;
-}
-
-float3 XyYToXYZ(float3 xy_y) {
-  float3 xyz;
-  xyz[0] = xy_y[0] * xy_y[2] / max(xy_y[1], 1e-10);
-  xyz[1] = xy_y[2];
-  xyz[2] = (1.0 - xy_y[0] - xy_y[1]) * xy_y[2] / max(xy_y[1], 1e-10);
-
-  return xyz;
-}
 
 float Interpolate1D(float2x2 table, float p) {
   if (p < table[0].x) {
