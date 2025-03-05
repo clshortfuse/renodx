@@ -272,7 +272,17 @@ static bool OnCopyDescriptorTables(
     auto& dest_known = data->resource_view_heap_locations[dst_heap.handle];
 
     auto min_source_size = src_offset + copy.count;
-    assert(min_source_size <= src_pool_data.size());
+    if (min_source_size > src_pool_data.size()) {
+#ifdef DEBUG_LEVEL_1
+      std::stringstream s;
+      s << "utils::descriptor::OnCopyDescriptorTables(Source Heap ";
+      s << static_cast<uintptr_t>(src_heap.handle);
+      s << " undersized ";
+      s << src_pool_data.size() << " => " << min_source_size;
+      reshade::log::message(reshade::log::level::warn, s.str().c_str());
+#endif
+      continue;
+    }
 
     auto total_size = dst_offset + copy.count;
     if (total_size > dst_pool_data.size()) {
