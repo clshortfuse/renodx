@@ -32,6 +32,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
     // UI
     CustomShaderEntry(0x8286B55C),
+
+    // Sharpness
+    CustomShaderEntry(0x243CA65C),
 };
 
 ShaderInjectData shader_injection;
@@ -114,7 +117,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeContrast",
         .binding = &RENODX_TONE_MAP_CONTRAST,
-        .default_value = 65.f,
+        .default_value = 60.f,
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
@@ -169,6 +172,16 @@ renodx::utils::settings::Settings settings = {
         .label = "FilmGrain",
         .section = "Effects",
         .tooltip = "Controls new perceptual film grain.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxSharpness",
+        .binding = &CUSTOM_SHARPNESS,
+        .default_value = 0.f,
+        .label = "Sharpness",
+        .section = "Effects",
+        .tooltip = "Controls sharpness",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
