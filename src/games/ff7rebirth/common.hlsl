@@ -201,6 +201,16 @@ float3 extractColorGradeAndApplyTonemap(float3 ungraded_bt709, float3 lutOutputC
     // clean up slight overshoot with very low peak values
     tonemapped_bt709 = min(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, tonemapped_bt709);
   }
+
+  if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
+    tonemapped_bt709 = renodx::effects::ApplyFilmGrain(
+        tonemapped_bt709.rgb,
+        position.xy,
+        CUSTOM_RANDOM,
+        CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
+        1.f);
+  }
+
   tonemapped_bt709 = convertColorSpace(tonemapped_bt709);
 
   tonemapped_bt709 = renodx::color::bt2020::from::BT709(tonemapped_bt709);

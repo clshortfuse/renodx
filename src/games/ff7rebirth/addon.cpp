@@ -5,9 +5,11 @@
  */
 
 #define ImTextureID ImU64
-#define NOMINMAX
-#define DEBUG_LEVEL_0
 
+#define DEBUG_LEVEL_0
+#define NOMINMAX
+
+#include <chrono>
 #include <random>
 #include <unordered_map>
 
@@ -270,6 +272,15 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FXFilmGrain",
+        .binding = &CUSTOM_FILM_GRAIN_STRENGTH,
+        .default_value = 50.f,
+        .label = "Film Grain",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -342,6 +353,18 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   settings[2]->default_value = peak.value();
 }
 
+void OnPresent(
+    reshade::api::command_queue* queue,
+    reshade::api::swapchain* swapchain,
+    const reshade::api::rect* source_rect,
+    const reshade::api::rect* dest_rect,
+    uint32_t dirty_rect_count,
+    const reshade::api::rect* dirty_rects) {
+  static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
+  static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
+  shader_injection.random_1 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
+}
+
 bool initialized = false;
 
 }  // namespace
@@ -356,10 +379,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::shader::expected_constant_buffer_space = 50;
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::register_event<reshade::addon_event::present>(OnPresent);
+
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(h_module);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       break;
   }
 

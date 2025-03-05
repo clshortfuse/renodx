@@ -104,7 +104,7 @@ void frag_main()
     float3 lutOutputColor_bt2020 = renodx::color::pq::DecodeSafe(lutResult);
     float3 tonemapped = lutOutputColor_bt2020;
 #if 1
-    tonemapped = extractColorGradeAndApplyTonemap(ungraded_bt709, lutOutputColor_bt2020, getMidGray());
+    tonemapped = extractColorGradeAndApplyTonemap(ungraded_bt709, lutOutputColor_bt2020, getMidGray(), gl_FragCoord.xy);
 #endif
     float _509 = tonemapped.r, _524 = tonemapped.g, _538 = tonemapped.b;
 
@@ -153,12 +153,16 @@ void frag_main()
     float _670 = clamp(exp2(log2(max(0.0f, ((_659 * 18.8515625f) + 0.8359375f) * (1.0f / ((_659 * 18.6875f) + 1.0f)))) * 78.84375f), 0.0f, 1.0f);
     float _675 = exp2(log2(clamp(((dot(float3(0.0163914002478122711181640625f, 0.088013298809528350830078125f, 0.8955953121185302734375f), float3(_610, _611, _612)) * RENODX_GRAPHICS_WHITE_NITS) + (((_538 * 10000.0f) * _547) * (((1.0f - _587) * _577) + _587))) * 9.9999997473787516355514526367188e-05f, 0.0f, 1.0f)) * 0.1593017578125f);
     float _686 = clamp(exp2(log2(max(0.0f, ((_675 * 18.8515625f) + 0.8359375f) * (1.0f / ((_675 * 18.6875f) + 1.0f)))) * 78.84375f), 0.0f, 1.0f);
-    float _688 = (View_SpatiotemporalBlueNoiseVolumeTexture.Load(int4(uint3(_68 & 127u, _69 & 127u, asuint(View_m0[175u]).x & 63u), 0u)).x * 2.0f) + (-1.0f);
-    float _706 = ((1.0f - sqrt(1.0f - abs(_688))) * float(int(uint(_688 > 0.0f) - uint(_688 < 0.0f)))) * 0.000977517105638980865478515625f;
-    SV_Target.x = clamp(((abs((_654 * 2.0f) + (-1.0f)) + (-0.9980449676513671875f)) < 0.0f) ? (_706 + _654) : _654, 0.0f, 1.0f);
-    SV_Target.y = clamp(((abs((_670 * 2.0f) + (-1.0f)) + (-0.9980449676513671875f)) < 0.0f) ? (_706 + _670) : _670, 0.0f, 1.0f);
-    SV_Target.z = clamp(((abs((_686 * 2.0f) + (-1.0f)) + (-0.9980449676513671875f)) < 0.0f) ? (_706 + _686) : _686, 0.0f, 1.0f);
-    SV_Target.w = 0.0f;
+    if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
+        SV_Target = float4(_654, _670, _686, 0);
+    } else {
+        float _688 = (View_SpatiotemporalBlueNoiseVolumeTexture.Load(int4(uint3(_68 & 127u, _69 & 127u, asuint(View_m0[175u]).x & 63u), 0u)).x * 2.0f) + (-1.0f);
+        float _706 = ((1.0f - sqrt(1.0f - abs(_688))) * float(int(uint(_688 > 0.0f) - uint(_688 < 0.0f)))) * 0.000977517105638980865478515625f;
+        SV_Target.x = clamp(((abs((_654 * 2.0f) + (-1.0f)) + (-0.9980449676513671875f)) < 0.0f) ? (_706 + _654) : _654, 0.0f, 1.0f);
+        SV_Target.y = clamp(((abs((_670 * 2.0f) + (-1.0f)) + (-0.9980449676513671875f)) < 0.0f) ? (_706 + _670) : _670, 0.0f, 1.0f);
+        SV_Target.z = clamp(((abs((_686 * 2.0f) + (-1.0f)) + (-0.9980449676513671875f)) < 0.0f) ? (_706 + _686) : _686, 0.0f, 1.0f);
+        SV_Target.w = 0.0f;
+    }
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)

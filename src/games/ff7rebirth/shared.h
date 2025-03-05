@@ -59,9 +59,11 @@
 #define RENODX_TONE_MAP_WORKING_COLOR_SPACE  2u
 #define RENODX_TONE_MAP_HUE_PROCESSOR        shader_injection.tone_map_hue_processor
 #define RENODX_TONE_MAP_PER_CHANNEL          shader_injection.tone_map_per_channel
+#define COLOR_GRADE_COLOR_SPACE              shader_injection.color_grade_color_space
 #define CUSTOM_LUT_STRENGTH                  shader_injection.color_grade_lut_strength
 #define CUSTOM_HDR_VIDEOS                    shader_injection.custom_hdr_videos
-#define COLOR_GRADE_COLOR_SPACE              shader_injection.color_grade_color_space
+#define CUSTOM_FILM_GRAIN_STRENGTH           shader_injection.custom_film_grain_strength
+#define CUSTOM_RANDOM                        shader_injection.random_1
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -86,7 +88,7 @@ struct ShaderInjectData {
   float color_grade_lut_strength;
   float custom_bloom;
   float custom_vignette;
-  float custom_film_grain;
+  float custom_film_grain_strength;
   float custom_hdr_videos;
   float random_1;
   float random_2;

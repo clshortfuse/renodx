@@ -95,9 +95,6 @@ float4 HDRComposite(noperspective float2 TEXCOORD: TEXCOORD,
 
 #endif
 
-
-
-
   float3 glareColor = min(glareSample.xyz, 65504.0f);
   float3 ungraded_bt709 = (Globals_049x * ((glareColor - main_color) + main_color * glareSample.w) + main_color);
 
@@ -108,7 +105,7 @@ float4 HDRComposite(noperspective float2 TEXCOORD: TEXCOORD,
   float3 tonemapped = lutOutputColor_bt2020;
 
 #if 1
-  tonemapped = extractColorGradeAndApplyTonemap(ungraded_bt709, lutOutputColor_bt2020, getMidGray());
+  tonemapped = extractColorGradeAndApplyTonemap(ungraded_bt709, lutOutputColor_bt2020, getMidGray(), float2(_41, _42));
 #endif
 
   float _247 = tonemapped.r, _261 = tonemapped.g, _275 = tonemapped.b;
@@ -146,6 +143,10 @@ float4 HDRComposite(noperspective float2 TEXCOORD: TEXCOORD,
   float _390 = saturate((exp2(((log2((max(0.0f, (((_379 * 18.8515625f) + 0.8359375f) * (1.0f / ((_379 * 18.6875f) + 1.0f))))))) * 78.84375f))));
   float _395 = exp2(((log2((saturate(((((dot(float3(0.01639140024781227f, 0.08801329880952835f, 0.8955953121185303f), float3(_347, _348, _349)))*RENODX_GRAPHICS_WHITE_NITS) + (((_275 * 10000.0f) * (UI_Texture.w)) * (((1.0f - _325) * _316) + _325))) * 9.999999747378752e-05f))))) * 0.1593017578125f));
   float _406 = saturate((exp2(((log2((max(0.0f, (((_395 * 18.8515625f) + 0.8359375f) * (1.0f / ((_395 * 18.6875f) + 1.0f))))))) * 78.84375f))));
+
+  if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
+    return float4(_374, _390, _406, 0);
+  }
   float _408 = ((((float4)(View_SpatiotemporalBlueNoiseVolumeTexture.Load(int4(((int(22)) & 127), ((int(23)) & 127), (((uint)(View_175x)) & 63), 0)))).x) * 2.0f) + -1.0f;
   float _425 = ((1.0f - (sqrt((1.0f - (abs(_408)))))) * (float(((int(((bool)((_408 > 0.0f))))) - (int(((bool)((_408 < 0.0f))))))))) * 0.0009775171056389809f;
   SV_Target.x = (saturate(((((bool)((((abs(((_374 * 2.0f) + -1.0f))) + -0.9980449676513672f) < 0.0f))) ? (_425 + _374) : _374))));

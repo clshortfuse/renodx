@@ -226,11 +226,15 @@ float4 main(
   float _463 = saturate((exp2(((log2((max(0.0f, (((_452 * 18.8515625f) + 0.8359375f) * (1.0f / ((_452 * 18.6875f) + 1.0f))))))) * 78.84375f))));
   float _468 = exp2(((log2((saturate(((((dot(float3(0.01639140024781227f, 0.08801329880952835f, 0.8955953121185303f), float3(_420, _421, _422))) * 250.0f) + (((_351.w) * _348) * (((1.0f - _398) * _389) + _398))) * 9.999999747378752e-05f))))) * 0.1593017578125f));
   float _479 = saturate((exp2(((log2((max(0.0f, (((_468 * 18.8515625f) + 0.8359375f) * (1.0f / ((_468 * 18.6875f) + 1.0f))))))) * 78.84375f))));
-  float _481 = ((((float4)(View_SpatiotemporalBlueNoiseVolumeTexture.Load(int4(((int(23)) & 127), ((int(24)) & 127), (((uint)(View_175x)) & 63), 0)))).x) * 2.0f) + -1.0f;
-  float _498 = ((1.0f - (sqrt((1.0f - (abs(_481)))))) * (float(((int(((bool)((_481 > 0.0f))))) - (int(((bool)((_481 < 0.0f))))))))) * 0.0009775171056389809f;
-  SV_Target.x = (saturate(((((bool)((((abs(((_447 * 2.0f) + -1.0f))) + -0.9980449676513672f) < 0.0f))) ? (_498 + _447) : _447))));
-  SV_Target.y = (saturate(((((bool)((((abs(((_463 * 2.0f) + -1.0f))) + -0.9980449676513672f) < 0.0f))) ? (_498 + _463) : _463))));
-  SV_Target.z = (saturate(((((bool)((((abs(((_479 * 2.0f) + -1.0f))) + -0.9980449676513672f) < 0.0f))) ? (_498 + _479) : _479))));
-  SV_Target.w = 0.0f;
+  if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
+    SV_Target = float4(_447, _463, _479, 0);
+  } else {
+    float _481 = ((((float4)(View_SpatiotemporalBlueNoiseVolumeTexture.Load(int4(((int(23)) & 127), ((int(24)) & 127), (((uint)(View_175x)) & 63), 0)))).x) * 2.0f) + -1.0f;
+    float _498 = ((1.0f - (sqrt((1.0f - (abs(_481)))))) * (float(((int(((bool)((_481 > 0.0f))))) - (int(((bool)((_481 < 0.0f))))))))) * 0.0009775171056389809f;
+    SV_Target.x = (saturate(((((bool)((((abs(((_447 * 2.0f) + -1.0f))) + -0.9980449676513672f) < 0.0f))) ? (_498 + _447) : _447))));
+    SV_Target.y = (saturate(((((bool)((((abs(((_463 * 2.0f) + -1.0f))) + -0.9980449676513672f) < 0.0f))) ? (_498 + _463) : _463))));
+    SV_Target.z = (saturate(((((bool)((((abs(((_479 * 2.0f) + -1.0f))) + -0.9980449676513672f) < 0.0f))) ? (_498 + _479) : _479))));
+    SV_Target.w = 0.0f;
+  }
   return SV_Target;
 }

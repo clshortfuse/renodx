@@ -96,7 +96,7 @@ void frag_main()
 
 #endif
 #if 1
-    tonemapped = extractColorGradeAndApplyTonemap(ungraded_bt709, lutOutputColor_bt2020, getMidGray());
+    tonemapped = extractColorGradeAndApplyTonemap(ungraded_bt709, lutOutputColor_bt2020, getMidGray(), gl_FragCoord.xy);
 #endif
     float _360 = tonemapped.r, _375 = tonemapped.g, _389 = tonemapped.b;
     float _361 = tonemapped.r * 10000.f, _376 = tonemapped.g * 10000.f, _390 = tonemapped.b * 10000.f;
@@ -190,12 +190,17 @@ void frag_main()
     float _671 = clamp(exp2(log2(max(0.0f, ((_660 * 18.8515625f) + 0.8359375f) * (1.0f / ((_660 * 18.6875f) + 1.0f)))) * 78.84375f), 0.0f, 1.0f);
     float _676 = exp2(log2(clamp(((dot(float3(0.0163914002478122711181640625f, 0.088013298809528350830078125f, 0.8955953121185302734375f), float3(_612, _613, _614)) * RENODX_GRAPHICS_WHITE_NITS) + ((_549 * _390) * (((1.0f - _589) * _579) + _589))) * 9.9999997473787516355514526367188e-05f, 0.0f, 1.0f)) * 0.1593017578125f);
     float _687 = clamp(exp2(log2(max(0.0f, ((_676 * 18.8515625f) + 0.8359375f) * (1.0f / ((_676 * 18.6875f) + 1.0f)))) * 78.84375f), 0.0f, 1.0f);
-    float _689 = (View_SpatiotemporalBlueNoiseVolumeTexture.Load(int4(uint3(uint(int(gl_FragCoord.x)) & 127u, uint(int(gl_FragCoord.y)) & 127u, asuint(View_m0[175u]).x & 63u), 0u)).x * 2.0f) + (-1.0f);
-    float _707 = ((1.0f - sqrt(1.0f - abs(_689))) * float(int(uint(_689 > 0.0f) - uint(_689 < 0.0f)))) * 0.000977517105638980865478515625f;
-    SV_Target.x = clamp(((abs((_655 * 2.0f) + (-1.0f)) + (-0.9980449676513671875f)) < 0.0f) ? (_707 + _655) : _655, 0.0f, 1.0f);
-    SV_Target.y = clamp(((abs((_671 * 2.0f) + (-1.0f)) + (-0.9980449676513671875f)) < 0.0f) ? (_707 + _671) : _671, 0.0f, 1.0f);
-    SV_Target.z = clamp(((abs((_687 * 2.0f) + (-1.0f)) + (-0.9980449676513671875f)) < 0.0f) ? (_707 + _687) : _687, 0.0f, 1.0f);
-    SV_Target.w = 0.0f;
+
+    if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
+        SV_Target = float4(_655, _671, _687, 0);
+    } else {
+        float _689 = (View_SpatiotemporalBlueNoiseVolumeTexture.Load(int4(uint3(uint(int(gl_FragCoord.x)) & 127u, uint(int(gl_FragCoord.y)) & 127u, asuint(View_m0[175u]).x & 63u), 0u)).x * 2.0f) + (-1.0f);
+        float _707 = ((1.0f - sqrt(1.0f - abs(_689))) * float(int(uint(_689 > 0.0f) - uint(_689 < 0.0f)))) * 0.000977517105638980865478515625f;
+        SV_Target.x = clamp(((abs((_655 * 2.0f) + (-1.0f)) + (-0.9980449676513671875f)) < 0.0f) ? (_707 + _655) : _655, 0.0f, 1.0f);
+        SV_Target.y = clamp(((abs((_671 * 2.0f) + (-1.0f)) + (-0.9980449676513671875f)) < 0.0f) ? (_707 + _671) : _671, 0.0f, 1.0f);
+        SV_Target.z = clamp(((abs((_687 * 2.0f) + (-1.0f)) + (-0.9980449676513671875f)) < 0.0f) ? (_707 + _687) : _687, 0.0f, 1.0f);
+        SV_Target.w = 0.0f;
+    }
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)
