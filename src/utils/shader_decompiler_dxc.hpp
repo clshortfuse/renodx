@@ -2147,10 +2147,8 @@ class Decompiler {
         assignment_type = ParseType(to_type);
         if (from_type == "i16") {
           assignment_value = std::format("(min16uint)({})", ParseInt(a));
-        } else if (from_type == "i32") {
+        } else {
           assignment_value = std::format("(uint)({})", ParseInt(a));
-        } else if (from_type == "i1") {
-          assignment_value = std::format("(bool)({})", ParseInt(a));
         }
       } else if (instruction == "sitofp") {
         // sitofp i32 %47 to float
@@ -2526,7 +2524,7 @@ class Decompiler {
         } else if (line.starts_with("  store ")) {
           this->AddCodeStore(line, preprocess_state);
         } else if (line.starts_with("  ret ")) {
-          //
+          this->CloseBranch();
         } else if (line.starts_with("  br ")) {
           this->AddCodeBranch(line, preprocess_state);
         } else if (line.empty()) {
@@ -2538,7 +2536,6 @@ class Decompiler {
           throw std::invalid_argument("Unexpected code block");
         }
       }
-      this->CloseBranch();
     }
 
     auto ListConvergences() {
@@ -3480,7 +3477,7 @@ class Decompiler {
       int next_convergence = pending_convergences.empty() ? -1 : pending_convergences.rbegin()[0];
 
       auto on_branch = [&](int branch_number) {
-        if (current_loop == code_block.branch.branch_condition_true) {
+        if (current_loop == branch_number) {
           string_stream << spacing << "continue;\n";  // go back
         } else if (next_convergence == branch_number) {
 #if DECOMPILER_DXC_DEBUG >= 1
@@ -3694,8 +3691,9 @@ class Decompiler {
     string_stream << "}\n";
 #if DECOMPILER_DXC_DEBUG == 3
     return "";
-#endif
+#else
     return string_stream.str();
+#endif
   }
 };  // namespace Decompiler
 
