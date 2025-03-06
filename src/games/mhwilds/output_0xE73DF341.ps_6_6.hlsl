@@ -1,10 +1,10 @@
-#include "./common.hlsl"
+#include "./hdrcomposite.hlsl"
 
 /* Texture2D<float4> SrcTexture : register(t0);
 
-Texture3D<float4> SrcLUT : register(t1); */
+Texture3D<float4> SrcLUT : register(t1);
 
-/* cbuffer HDRMapping : register(b0) {
+cbuffer HDRMapping : register(b0) {
   float HDRMapping_000x : packoffset(c000.x);
 };
 
@@ -16,7 +16,9 @@ float4 main(
     noperspective float4 SV_Position: SV_Position,
     linear float2 TEXCOORD: TEXCOORD)
     : SV_Target {
-  return OutputTonemap(SV_Position, TEXCOORD);
+  if (RENODX_TONE_MAP_TYPE > 0.f) {
+    return OutputTonemap(SV_Position, TEXCOORD);
+  }
 
   float4 SV_Target;
   float4 _11 = SrcTexture.SampleLevel(PointBorder, float2((TEXCOORD.x), (TEXCOORD.y)), 0.0f);

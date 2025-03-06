@@ -1,8 +1,44 @@
-#include "./common.hlsl"
+#include "./shared.h"
 
 static const float _28[3] = { 0.0f, 1.384615421295166015625f, 3.23076915740966796875f };
 
 static const float _34[3] = { 0.2270270287990570068359375f, 0.3162162303924560546875f, 0.0702702701091766357421875f };
+
+/* ;   struct Tonemap
+;   {
+;
+;       float exposureAdjustment;                     ; Offset:    0
+;       float tonemapRange;                           ; Offset:    4
+;       float specularSuppression;                    ; Offset:    8
+;       float sharpness;                              ; Offset:   12
+
+;       float preTonemapRange;                        ; Offset:   16
+;       int useAutoExposure;                          ; Offset:   20
+;       float echoBlend;                              ; Offset:   24
+;       float AABlend;                                ; Offset:   28
+
+;       float AASubPixel;                             ; Offset:   32
+;       float ResponsiveAARate;                       ; Offset:   36
+;       float VelocityWeightRate;                     ; Offset:   40
+;       float DepthRejectionRate;                     ; Offset:   44
+
+;       float ContrastTrackingRate;                   ; Offset:   48
+;       float ContrastTrackingThreshold;              ; Offset:   52
+;       float LEHighlightContrast;                    ; Offset:   56
+;       float LEShadowContrast;                       ; Offset:   60
+
+;       float LEDetailStrength;                       ; Offset:   64
+;       float LEMiddleGreyLog;                        ; Offset:   68
+;       float LEBilateralGridScale;                   ; Offset:   72
+;       float LEBilateralGridBias;                    ; Offset:   76
+
+;       float LEPreExposureLog;                       ; Offset:   80
+;       int LEBlurredLogDownsampleMip;                ; Offset:   84
+;       int2 LELuminanceTextureSize;                  ; Offset:   88
+;   
+;   } Tonemap;                                        ; Offset:    0 Size:    96
+;
+; } */
 
 cbuffer TonemapUBO : register(b0, space0) {
   float4 Tonemap_m0[6] : packoffset(c0);
