@@ -36,6 +36,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // Post Process
     CustomShaderEntry(0x243CA65C),
     CustomShaderEntry(0xEE56E73B),
+    CustomShaderEntry(0xE188DA93),
 };
 
 ShaderInjectData shader_injection;
@@ -251,6 +252,21 @@ renodx::utils::settings::Settings settings = {
         .section = "Debug",
         .tooltip = "Which color to output",
         .labels = {"Final tonemap", "Untonemapped", "SDR Output"},
+        .is_visible = []() { return CUSTOM_DEBUG > 0.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxLocalExposure",
+        .binding = &CUSTOM_LOCAL_EXPOSURE,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .can_reset = false,
+        .label = "Local exposure",
+        .section = "Debug",
+        .tooltip = "Post process exposure",
+        .labels = {
+            "Off",
+            "On",
+        },
         .is_visible = []() { return CUSTOM_DEBUG > 0.f; },
     },
     new renodx::utils::settings::Setting{

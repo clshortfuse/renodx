@@ -23,9 +23,10 @@
 #define CUSTOM_SHARPNESS                     shader_injection.custom_sharpness
 
 // Debug
-#define CUSTOM_EXPOSURE shader_injection.custom_exposure
-#define CUSTOM_OUTPUT   shader_injection.custom_output
-#define CUSTOM_DEBUG    0.f
+#define CUSTOM_EXPOSURE       shader_injection.custom_exposure
+#define CUSTOM_OUTPUT         shader_injection.custom_output
+#define CUSTOM_LOCAL_EXPOSURE shader_injection.custom_local_exposure
+#define CUSTOM_DEBUG          0.f
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -58,6 +59,7 @@ struct ShaderInjectData {
   float custom_output;
   float custom_exposure;
   float custom_sdr_tonemapper;
+  float custom_local_exposure;
 };
 
 #ifndef __cplusplus
