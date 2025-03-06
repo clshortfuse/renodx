@@ -75,7 +75,7 @@ static const float HUE_PROCESSOR_DTUCS = 2.f;
 
 static const float HUE_SHIFT_METHOD_CLIP = 0.f;
 static const float HUE_SHIFT_METHOD_SDR_MODIFIED = 1.f;
-static const float HUE_SHIFT_METHOD_UNCHARTED2 = 2.f;
+static const float HUE_SHIFT_METHOD_AP1_ROLL_OFF = 2.f;
 static const float HUE_SHIFT_METHOD_ACES_FITTED_BT709 = 3.f;
 static const float HUE_SHIFT_METHOD_ACES_FITTED_AP1 = 4.f;
 
@@ -528,8 +528,9 @@ float3 ToneMapPass(float3 color, Config draw_config) {
       renodrt_config.working_color_space = 0u;
       renodrt_config.clamp_color_space = 0u;
       hue_shifted_color = renodx::tonemap::renodrt::BT709(color, renodrt_config);
-    } else if (draw_config.tone_map_hue_shift_method == HUE_SHIFT_METHOD_UNCHARTED2) {
-      hue_shifted_color = renodx::tonemap::uncharted2::BT709(color);
+    } else if (draw_config.tone_map_hue_shift_method == HUE_SHIFT_METHOD_AP1_ROLL_OFF) {
+      float3 incorrect_hue_ap1 = renodx::color::ap1::from::BT709(color * tone_map_config.mid_gray_value / 0.18f);
+      hue_shifted_color = renodx::color::bt709::from::AP1(renodx::tonemap::ExponentialRollOff(incorrect_hue_ap1, tone_map_config.mid_gray_value, 2.f));
     } else if (draw_config.tone_map_hue_shift_method == HUE_SHIFT_METHOD_ACES_FITTED_BT709) {
       hue_shifted_color = renodx::tonemap::ACESFittedBT709(color);
     } else if (draw_config.tone_map_hue_shift_method == HUE_SHIFT_METHOD_ACES_FITTED_AP1) {
