@@ -1,12 +1,12 @@
-#include "./common.hlsl"
+#include "./shared.h"
 
-/* Texture2D<float4> OCIO_lut1d_0 : register(t0);
+Texture2D<float4> OCIO_lut1d_0 : register(t0);
 
 Texture3D<float4> OCIO_lut3d_1 : register(t1);
 
-RWTexture3D<float4> OutLUT : register(u0); */
+RWTexture3D<float4> OutLUT : register(u0);
 
-/* cbuffer HDRMapping : register(b0) {
+cbuffer HDRMapping : register(b0) {
   float HDRMapping_000z : packoffset(c000.z);
   float HDRMapping_009x : packoffset(c009.x);
   float HDRMapping_009y : packoffset(c009.y);
@@ -40,7 +40,7 @@ cbuffer OCIOTransformXYZMatrix : register(b1) {
 
 SamplerState BilinearClamp : register(s5, space32);
 
-SamplerState TrilinearClamp : register(s9, space32); */
+SamplerState TrilinearClamp : register(s9, space32);
 
 [numthreads(8, 8, 8)]
 void main(
@@ -58,10 +58,6 @@ void main(
   float _24 = _21 * 0.01587301678955555f;
 
   float3 lutInput = float3(_22, _23, _24);
-  if (RENODX_TONE_MAP_TYPE > 0.f) {
-    OutLUT[int3(((uint)(SV_DispatchThreadID.x)), ((uint)(SV_DispatchThreadID.y)), ((uint)(SV_DispatchThreadID.z)))] = LutToneMap(lutInput);
-    return;
-  }
 
   float _38;
   float _52;
@@ -78,93 +74,113 @@ void main(
   float _637;
   float _638;
   float _639;
-  if (!(!(_22 <= -0.3013699948787689f))) {
-    _38 = ((exp2(((_19 * 0.2780952751636505f) + -8.720000267028809f))) + -3.0517578125e-05f);
-  } else {
-    _38 = 65504.0f;
-    if (((_22 < 1.468000054359436f))) {
-      _38 = (exp2(((_19 * 0.2780952751636505f) + -9.720000267028809f)));
+
+  // ACEScc
+  float3 ap1_color;
+
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    if (!(!(_22 <= -0.3013699948787689f))) {
+      _38 = ((exp2(((_19 * 0.2780952751636505f) + -8.720000267028809f))) + -3.0517578125e-05f);
+    } else {
+      _38 = 65504.0f;
+      if (((_22 < 1.468000054359436f))) {
+        _38 = (exp2(((_19 * 0.2780952751636505f) + -9.720000267028809f)));
+      }
     }
-  }
-  if (!(!(_23 <= -0.3013699948787689f))) {
-    _52 = ((exp2(((_20 * 0.2780952751636505f) + -8.720000267028809f))) + -3.0517578125e-05f);
-  } else {
-    _52 = 65504.0f;
-    if (((_23 < 1.468000054359436f))) {
-      _52 = (exp2(((_20 * 0.2780952751636505f) + -9.720000267028809f)));
+    if (!(!(_23 <= -0.3013699948787689f))) {
+      _52 = ((exp2(((_20 * 0.2780952751636505f) + -8.720000267028809f))) + -3.0517578125e-05f);
+    } else {
+      _52 = 65504.0f;
+      if (((_23 < 1.468000054359436f))) {
+        _52 = (exp2(((_20 * 0.2780952751636505f) + -9.720000267028809f)));
+      }
     }
-  }
-  if (!(!(_24 <= -0.3013699948787689f))) {
-    _66 = ((exp2(((_21 * 0.2780952751636505f) + -8.720000267028809f))) + -3.0517578125e-05f);
-  } else {
-    _66 = 65504.0f;
-    if (((_24 < 1.468000054359436f))) {
-      _66 = (exp2(((_21 * 0.2780952751636505f) + -9.720000267028809f)));
+    if (!(!(_24 <= -0.3013699948787689f))) {
+      _66 = ((exp2(((_21 * 0.2780952751636505f) + -8.720000267028809f))) + -3.0517578125e-05f);
+    } else {
+      _66 = 65504.0f;
+      if (((_24 < 1.468000054359436f))) {
+        _66 = (exp2(((_21 * 0.2780952751636505f) + -9.720000267028809f)));
+      }
     }
-  }
-  float _142 = _38 * 0.000244140625f;
-  float _155 = exp2(((log2(((mad(((round(((mad(-0.03579999879002571f, (OCIOTransformXYZMatrix_002z), (mad(0.6976000070571899f, (OCIOTransformXYZMatrix_001z), ((OCIOTransformXYZMatrix_000z) * 0.35920000076293945f))))) * 4096.0f))) * 0.000244140625f), _66, (mad(((round(((mad(-0.03579999879002571f, (OCIOTransformXYZMatrix_002y), (mad(0.6976000070571899f, (OCIOTransformXYZMatrix_001y), ((OCIOTransformXYZMatrix_000y) * 0.35920000076293945f))))) * 4096.0f))) * 0.000244140625f), _52, (_142 * (round(((mad(-0.03579999879002571f, (OCIOTransformXYZMatrix_002x), (mad(0.6976000070571899f, (OCIOTransformXYZMatrix_001x), ((OCIOTransformXYZMatrix_000x) * 0.35920000076293945f))))) * 4096.0f)))))))) * 0.009999999776482582f))) * 0.1593017578125f));
-  float _164 = saturate((exp2(((log2((((_155 * 18.8515625f) + 0.8359375f) / ((_155 * 18.6875f) + 1.0f)))) * 78.84375f))));
-  float _168 = exp2(((log2(((mad(((round(((mad(0.0754999965429306f, (OCIOTransformXYZMatrix_002z), (mad(1.1003999710083008f, (OCIOTransformXYZMatrix_001z), ((OCIOTransformXYZMatrix_000z) * -0.19220000505447388f))))) * 4096.0f))) * 0.000244140625f), _66, (mad(((round(((mad(0.0754999965429306f, (OCIOTransformXYZMatrix_002y), (mad(1.1003999710083008f, (OCIOTransformXYZMatrix_001y), ((OCIOTransformXYZMatrix_000y) * -0.19220000505447388f))))) * 4096.0f))) * 0.000244140625f), _52, (_142 * (round(((mad(0.0754999965429306f, (OCIOTransformXYZMatrix_002x), (mad(1.1003999710083008f, (OCIOTransformXYZMatrix_001x), ((OCIOTransformXYZMatrix_000x) * -0.19220000505447388f))))) * 4096.0f)))))))) * 0.009999999776482582f))) * 0.1593017578125f));
-  float _177 = saturate((exp2(((log2((((_168 * 18.8515625f) + 0.8359375f) / ((_168 * 18.6875f) + 1.0f)))) * 78.84375f))));
-  float _181 = exp2(((log2(((mad(((round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002z), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001z), ((OCIOTransformXYZMatrix_000z) * 0.007000000216066837f))))) * 4096.0f))) * 0.000244140625f), _66, (mad(((round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002y), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001y), ((OCIOTransformXYZMatrix_000y) * 0.007000000216066837f))))) * 4096.0f))) * 0.000244140625f), _52, (_142 * (round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002x), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001x), ((OCIOTransformXYZMatrix_000x) * 0.007000000216066837f))))) * 4096.0f)))))))) * 0.009999999776482582f))) * 0.1593017578125f));
-  float _190 = saturate((exp2(((log2((((_181 * 18.8515625f) + 0.8359375f) / ((_181 * 18.6875f) + 1.0f)))) * 78.84375f))));
-  float _192 = (_177 + _164) * 0.5f;
-  float _198 = (HDRMapping_009x) * 0.009999999776482582f;
-  float _200 = (HDRMapping_009z) * 0.009999999776482582f;
-  float _205 = exp2(((log2((saturate(_192)))) * 0.012683313339948654f));
-  float _214 = (exp2(((log2(((max(0.0f, (_205 + -0.8359375f))) / (18.8515625f - (_205 * 18.6875f))))) * 6.277394771575928f))) * 100.0f;
-  _250 = _214;
-  if (!((_198 == 0.0f))) {
-    float _217 = max(_200, 0.0f);
-    float _221 = saturate(((_214 - _217) / (_198 - _217)));
-    _242 = 0.0f;
-    do {
-      if ((!(_214 <= _200))) {
-        if (!(!(_200 >= 0.0f))) {
-          float _232 = -1.0f / (_200 + -1.0f);
-          _242 = ((1.0f - _232) + (_232 * _214));
-        } else {
-          _242 = ((-0.0f - _200) - (_214 * (-1.0f - _200)));
+    float _142 = _38 * 0.000244140625f;
+    float _155 = exp2(((log2(((mad(((round(((mad(-0.03579999879002571f, (OCIOTransformXYZMatrix_002z), (mad(0.6976000070571899f, (OCIOTransformXYZMatrix_001z), ((OCIOTransformXYZMatrix_000z) * 0.35920000076293945f))))) * 4096.0f))) * 0.000244140625f), _66, (mad(((round(((mad(-0.03579999879002571f, (OCIOTransformXYZMatrix_002y), (mad(0.6976000070571899f, (OCIOTransformXYZMatrix_001y), ((OCIOTransformXYZMatrix_000y) * 0.35920000076293945f))))) * 4096.0f))) * 0.000244140625f), _52, (_142 * (round(((mad(-0.03579999879002571f, (OCIOTransformXYZMatrix_002x), (mad(0.6976000070571899f, (OCIOTransformXYZMatrix_001x), ((OCIOTransformXYZMatrix_000x) * 0.35920000076293945f))))) * 4096.0f)))))))) * 0.009999999776482582f))) * 0.1593017578125f));
+    float _164 = saturate((exp2(((log2((((_155 * 18.8515625f) + 0.8359375f) / ((_155 * 18.6875f) + 1.0f)))) * 78.84375f))));
+    float _168 = exp2(((log2(((mad(((round(((mad(0.0754999965429306f, (OCIOTransformXYZMatrix_002z), (mad(1.1003999710083008f, (OCIOTransformXYZMatrix_001z), ((OCIOTransformXYZMatrix_000z) * -0.19220000505447388f))))) * 4096.0f))) * 0.000244140625f), _66, (mad(((round(((mad(0.0754999965429306f, (OCIOTransformXYZMatrix_002y), (mad(1.1003999710083008f, (OCIOTransformXYZMatrix_001y), ((OCIOTransformXYZMatrix_000y) * -0.19220000505447388f))))) * 4096.0f))) * 0.000244140625f), _52, (_142 * (round(((mad(0.0754999965429306f, (OCIOTransformXYZMatrix_002x), (mad(1.1003999710083008f, (OCIOTransformXYZMatrix_001x), ((OCIOTransformXYZMatrix_000x) * -0.19220000505447388f))))) * 4096.0f)))))))) * 0.009999999776482582f))) * 0.1593017578125f));
+    float _177 = saturate((exp2(((log2((((_168 * 18.8515625f) + 0.8359375f) / ((_168 * 18.6875f) + 1.0f)))) * 78.84375f))));
+    float _181 = exp2(((log2(((mad(((round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002z), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001z), ((OCIOTransformXYZMatrix_000z) * 0.007000000216066837f))))) * 4096.0f))) * 0.000244140625f), _66, (mad(((round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002y), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001y), ((OCIOTransformXYZMatrix_000y) * 0.007000000216066837f))))) * 4096.0f))) * 0.000244140625f), _52, (_142 * (round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002x), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001x), ((OCIOTransformXYZMatrix_000x) * 0.007000000216066837f))))) * 4096.0f)))))))) * 0.009999999776482582f))) * 0.1593017578125f));
+    float _190 = saturate((exp2(((log2((((_181 * 18.8515625f) + 0.8359375f) / ((_181 * 18.6875f) + 1.0f)))) * 78.84375f))));
+    float _192 = (_177 + _164) * 0.5f;
+    float _198 = (HDRMapping_009x) * 0.009999999776482582f;
+    float _200 = (HDRMapping_009z) * 0.009999999776482582f;
+    float _205 = exp2(((log2((saturate(_192)))) * 0.012683313339948654f));
+    float _214 = (exp2(((log2(((max(0.0f, (_205 + -0.8359375f))) / (18.8515625f - (_205 * 18.6875f))))) * 6.277394771575928f))) * 100.0f;
+    _250 = _214;
+    if (!((_198 == 0.0f))) {
+      float _217 = max(_200, 0.0f);
+      float _221 = saturate(((_214 - _217) / (_198 - _217)));
+      _242 = 0.0f;
+      do {
+        if ((!(_214 <= _200))) {
+          if (!(!(_200 >= 0.0f))) {
+            float _232 = -1.0f / (_200 + -1.0f);
+            _242 = ((1.0f - _232) + (_232 * _214));
+          } else {
+            _242 = ((-0.0f - _200) - (_214 * (-1.0f - _200)));
+          }
         }
-      }
-      _250 = ((((exp2(((log2(_242)) * (HDRMapping_009y)))) - _214) * (1.0f - ((_221 * _221) * (3.0f - (_221 * 2.0f))))) + _214);
-    } while (false);
+        _250 = ((((exp2(((log2(_242)) * (HDRMapping_009y)))) - _214) * (1.0f - ((_221 * _221) * (3.0f - (_221 * 2.0f))))) + _214);
+      } while (false);
+    }
+    _300 = _15;
+    if (!(((bool)((_18 == _15))) && ((bool)((_250 > _15))))) {
+      float _258 = (1.0f - (HDRMapping_009w)) * _15;
+      float _259 = _15 - _258;
+      float _260 = exp2((HDRMapping_010x));
+      float _263 = _259 / _260;
+      float _264 = _15 - _263;
+      float _265 = ((1.0f / _260) * _250) - _15;
+      _295 = -0.0f;
+      do {
+        if (((_265 < -0.0f))) {
+          float _281 = (((((((HDRMapping_014x) + -0.5f) * (min((HDRMapping_010x), 1.0f))) + 0.5f) * 2.0f) * ((((bool)((_263 == 0.0f))) ? 1.0f : (_259 / _263)))) * _264) / _258;
+          _295 = (-0.0f - (exp2(((((((log2((-0.0f - _265))) * _281) + (log2(_258))) * 0.6931471824645996f) + ((_281 * -0.6931471824645996f) * (log2(_264)))) * 1.4426950216293335f))));
+        }
+        _300 = ((((bool)((_250 <= _18))) ? _250 : (_295 + _15)));
+      } while (false);
+    }
+    // PQ Encode 100 nits
+    float _304 = exp2(((log2((_300 * 0.009999999776482582f))) * 0.1593017578125f));
+    float _313 = saturate((exp2(((log2((((_304 * 18.8515625f) + 0.8359375f) / ((_304 * 18.6875f) + 1.0f)))) * 78.84375f))));
+
+    // custom stuff?
+    float _320 = min((_192 / _313), (_313 / _192));
+    float _321 = (((dot(float3(_164, _177, _190), float3(6610.0f, -13613.0f, 7003.0f))) * 0.000244140625f) * (HDRMapping_010z)) * _320;
+    float _322 = (((dot(float3(_164, _177, _190), float3(17933.0f, -17390.0f, -543.0f))) * 0.000244140625f) * (HDRMapping_010z)) * _320;
+
+    // More matrix and encode back to PQ
+    float _332 = exp2(((log2((saturate((mad(0.11100000143051147f, _322, (mad(0.008999999612569809f, _321, _313)))))))) * 0.012683313339948654f));
+    float _340 = exp2(((log2(((max(0.0f, (_332 + -0.8359375f))) / (18.8515625f - (_332 * 18.6875f))))) * 6.277394771575928f));
+    float _344 = exp2(((log2((saturate((mad(-0.11100000143051147f, _322, (mad(-0.008999999612569809f, _321, _313)))))))) * 0.012683313339948654f));
+    float _353 = (exp2(((log2(((max(0.0f, (_344 + -0.8359375f))) / (18.8515625f - (_344 * 18.6875f))))) * 6.277394771575928f))) * 100.0f;
+    float _357 = exp2(((log2((saturate((mad(-0.32100000977516174f, _322, (mad(0.5600000023841858f, _321, _313)))))))) * 0.012683313339948654f));
+    float _366 = (exp2(((log2(((max(0.0f, (_357 + -0.8359375f))) / (18.8515625f - (_357 * 18.6875f))))) * 6.277394771575928f))) * 100.0f;
+    float _369 = mad(0.2070000022649765f, _366, (mad(-1.3270000219345093f, _353, (_340 * 207.10000610351562f))));
+    float _372 = mad(-0.04500000178813934f, _366, (mad(0.6809999942779541f, _353, (_340 * 36.5f))));
+    float _375 = mad(1.187999963760376f, _366, (mad(-0.05000000074505806f, _353, (_340 * -4.900000095367432f))));
+    float _378 = mad((OCIOTransformXYZMatrix_004z), _375, (mad((OCIOTransformXYZMatrix_004y), _372, (_369 * (OCIOTransformXYZMatrix_004x)))));
+    float _381 = mad((OCIOTransformXYZMatrix_005z), _375, (mad((OCIOTransformXYZMatrix_005y), _372, (_369 * (OCIOTransformXYZMatrix_005x)))));
+    float _384 = mad((OCIOTransformXYZMatrix_006z), _375, (mad((OCIOTransformXYZMatrix_006y), _372, (_369 * (OCIOTransformXYZMatrix_006x)))));
+    ap1_color = float3(_378, _381, _384);
+  } else {
+    ap1_color = renodx::color::pq::DecodeSafe(lutInput, 100.f);
   }
-  _300 = _15;
-  if (!(((bool)((_18 == _15))) && ((bool)((_250 > _15))))) {
-    float _258 = (1.0f - (HDRMapping_009w)) * _15;
-    float _259 = _15 - _258;
-    float _260 = exp2((HDRMapping_010x));
-    float _263 = _259 / _260;
-    float _264 = _15 - _263;
-    float _265 = ((1.0f / _260) * _250) - _15;
-    _295 = -0.0f;
-    do {
-      if (((_265 < -0.0f))) {
-        float _281 = (((((((HDRMapping_014x) + -0.5f) * (min((HDRMapping_010x), 1.0f))) + 0.5f) * 2.0f) * ((((bool)((_263 == 0.0f))) ? 1.0f : (_259 / _263)))) * _264) / _258;
-        _295 = (-0.0f - (exp2(((((((log2((-0.0f - _265))) * _281) + (log2(_258))) * 0.6931471824645996f) + ((_281 * -0.6931471824645996f) * (log2(_264)))) * 1.4426950216293335f))));
-      }
-      _300 = ((((bool)((_250 <= _18))) ? _250 : (_295 + _15)));
-    } while (false);
-  }
-  float _304 = exp2(((log2((_300 * 0.009999999776482582f))) * 0.1593017578125f));
-  float _313 = saturate((exp2(((log2((((_304 * 18.8515625f) + 0.8359375f) / ((_304 * 18.6875f) + 1.0f)))) * 78.84375f))));
-  float _320 = min((_192 / _313), (_313 / _192));
-  float _321 = (((dot(float3(_164, _177, _190), float3(6610.0f, -13613.0f, 7003.0f))) * 0.000244140625f) * (HDRMapping_010z)) * _320;
-  float _322 = (((dot(float3(_164, _177, _190), float3(17933.0f, -17390.0f, -543.0f))) * 0.000244140625f) * (HDRMapping_010z)) * _320;
-  float _332 = exp2(((log2((saturate((mad(0.11100000143051147f, _322, (mad(0.008999999612569809f, _321, _313)))))))) * 0.012683313339948654f));
-  float _340 = exp2(((log2(((max(0.0f, (_332 + -0.8359375f))) / (18.8515625f - (_332 * 18.6875f))))) * 6.277394771575928f));
-  float _344 = exp2(((log2((saturate((mad(-0.11100000143051147f, _322, (mad(-0.008999999612569809f, _321, _313)))))))) * 0.012683313339948654f));
-  float _353 = (exp2(((log2(((max(0.0f, (_344 + -0.8359375f))) / (18.8515625f - (_344 * 18.6875f))))) * 6.277394771575928f))) * 100.0f;
-  float _357 = exp2(((log2((saturate((mad(-0.32100000977516174f, _322, (mad(0.5600000023841858f, _321, _313)))))))) * 0.012683313339948654f));
-  float _366 = (exp2(((log2(((max(0.0f, (_357 + -0.8359375f))) / (18.8515625f - (_357 * 18.6875f))))) * 6.277394771575928f))) * 100.0f;
-  float _369 = mad(0.2070000022649765f, _366, (mad(-1.3270000219345093f, _353, (_340 * 207.10000610351562f))));
-  float _372 = mad(-0.04500000178813934f, _366, (mad(0.6809999942779541f, _353, (_340 * 36.5f))));
-  float _375 = mad(1.187999963760376f, _366, (mad(-0.05000000074505806f, _353, (_340 * -4.900000095367432f))));
-  float _378 = mad((OCIOTransformXYZMatrix_004z), _375, (mad((OCIOTransformXYZMatrix_004y), _372, (_369 * (OCIOTransformXYZMatrix_004x)))));
-  float _381 = mad((OCIOTransformXYZMatrix_005z), _375, (mad((OCIOTransformXYZMatrix_005y), _372, (_369 * (OCIOTransformXYZMatrix_005x)))));
-  float _384 = mad((OCIOTransformXYZMatrix_006z), _375, (mad((OCIOTransformXYZMatrix_006y), _372, (_369 * (OCIOTransformXYZMatrix_006x)))));
+
+  float _378 = ap1_color.r;
+  float _381 = ap1_color.g;
+  float _384 = ap1_color.b;
+
+  // AP1_TO_AP0_MAT
   float _387 = mad(_384, 0.1638689935207367f, (mad(_381, 0.1406790018081665f, (_378 * 0.6954519748687744f))));
   float _390 = mad(_384, 0.0955343022942543f, (mad(_381, 0.8596709966659546f, (_378 * 0.04479460045695305f))));
   float _393 = mad(_384, 1.0015000104904175f, (mad(_381, 0.004025210160762072f, (_378 * -0.00552588002756238f))));
@@ -288,5 +304,16 @@ void main(
     }
   }
   float _640 = 1.0f - _638;
-  OutLUT[int3(((uint)(SV_DispatchThreadID.x)), ((uint)(SV_DispatchThreadID.y)), ((uint)(SV_DispatchThreadID.z)))] = float4((((_640 * (_494.x)) + _635) + (_639 * (_501.x))), (((_640 * (_494.y)) + _636) + (_639 * (_501.y))), (((_640 * (_494.z)) + _637) + (_639 * (_501.z))), 1.0f);
+
+  // OutLUT[int3(((uint)(SV_DispatchThreadID.x)), ((uint)(SV_DispatchThreadID.y)), ((uint)(SV_DispatchThreadID.z)))] = float4((((_640 * (_494.x)) + _635) + (_639 * (_501.x))), (((_640 * (_494.y)) + _636) + (_639 * (_501.y))), (((_640 * (_494.z)) + _637) + (_639 * (_501.z))), 1.0f);
+  float3 final_color = float3((((_640 * (_494.x)) + _635) + (_639 * (_501.x))), (((_640 * (_494.y)) + _636) + (_639 * (_501.y))), (((_640 * (_494.z)) + _637) + (_639 * (_501.z))));
+
+  if (RENODX_TONE_MAP_TYPE > 0.f) {
+    // Optimize by converting to BT709 now
+    final_color = renodx::color::pq::DecodeSafe(final_color, 100.f);
+    final_color = renodx::color::bt709::from::BT2020(final_color);
+    final_color = renodx::color::pq::EncodeSafe(final_color, 100.f);
+  }
+
+  OutLUT[int3(((uint)(SV_DispatchThreadID.x)), ((uint)(SV_DispatchThreadID.y)), ((uint)(SV_DispatchThreadID.z)))] = float4(final_color, 1.f);
 }

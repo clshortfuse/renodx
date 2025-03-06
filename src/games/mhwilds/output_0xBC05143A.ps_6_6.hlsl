@@ -1,10 +1,10 @@
-#include "./common.hlsl"
+#include "./hdrcomposite.hlsl"
 
 /* Texture2D<float4> SrcTexture : register(t0);
 
-Texture3D<float4> SrcLUT : register(t1); */
+Texture3D<float4> SrcLUT : register(t1);
 
-/* cbuffer HDRMapping : register(b0) {
+cbuffer HDRMapping : register(b0) {
   float HDRMapping_000x : packoffset(c000.x);
 };
 
@@ -24,9 +24,11 @@ OutputSignature main(
   float4 SV_Target_1;
   OutputSignature output_signature;
 
-  output_signature.SV_Target = OutputTonemap(SV_Position, TEXCOORD);
-  output_signature.SV_Target_1 = output_signature.SV_Target;
-  return output_signature;
+  if (RENODX_TONE_MAP_TYPE > 0.f) {
+    output_signature.SV_Target = OutputTonemap(SV_Position, TEXCOORD);
+    output_signature.SV_Target_1 = output_signature.SV_Target;
+    return output_signature;
+  }
 
   float4 _11 = SrcTexture.SampleLevel(PointBorder, float2((TEXCOORD.x), (TEXCOORD.y)), 0.0f);
   float _17 = (HDRMapping_000x) * 0.009999999776482582f;

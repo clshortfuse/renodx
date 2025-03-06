@@ -33,8 +33,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // UI
     CustomShaderEntry(0x8286B55C),
 
-    // Sharpness
+    // Post Process
     CustomShaderEntry(0x243CA65C),
+    CustomShaderEntry(0xEE56E73B),
 };
 
 ShaderInjectData shader_injection;
@@ -42,6 +43,15 @@ const std::string build_date = __DATE__;
 const std::string build_time = __TIME__;
 
 renodx::utils::settings::Settings settings = {
+    new renodx::utils::settings::Setting{
+        .key = "SettingsMode",
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .can_reset = false,
+        .label = "Settings Mode",
+        .labels = {"Simple", "Advanced"},
+        .is_global = true,
+    },
     /* new renodx::utils::settings::Setting{
         .key = "toneMapType",
         .binding = &RENODX_TONE_MAP_TYPE,
@@ -88,31 +98,46 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
+        .key = "ToneMapScaling",
+        .binding = &RENODX_TONE_MAP_PER_CHANNEL,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Scaling",
+        .section = "Tone Mapping",
+        .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
+        .labels = {"Luminance", "Per Channel"},
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
         .binding = &RENODX_TONE_MAP_EXPOSURE,
-        .default_value = 0.75f,
+        .default_value = 1.f,
         .label = "Exposure",
         .section = "Color Grading",
         .max = 2.f,
         .format = "%.2f",
+        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeHighlights",
         .binding = &RENODX_TONE_MAP_HIGHLIGHTS,
-        .default_value = 50.f,
+        .default_value = 57.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeShadows",
         .binding = &RENODX_TONE_MAP_SHADOWS,
-        .default_value = 55.f,
+        .default_value = 62.f,
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeContrast",
@@ -122,58 +147,77 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeSaturation",
         .binding = &RENODX_TONE_MAP_SATURATION,
-        .default_value = 50.f,
+        .default_value = 56.f,
         .label = "Saturation",
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
         .binding = &RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
-        .default_value = 53.f,
+        .default_value = 56.f,
         .label = "Highlight Saturation",
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
         .binding = &RENODX_TONE_MAP_BLOWOUT,
-        .default_value = 0.f,
+        .default_value = 40.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Adds highlight desaturation due to overexposure.",
         .max = 100.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return fmax(0.00001f, value * 0.01f); },
+        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
         .binding = &RENODX_TONE_MAP_FLARE,
-        .default_value = 60.f,
+        .default_value = 77.f,
         .label = "Flare",
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeStrength",
+        .binding = &RENODX_COLOR_GRADE_STRENGTH,
+        .value_type = renodx::utils::settings::SettingValueType::FLOAT,
+        .default_value = 100.f,
+        .label = "Grading Strength",
+        .section = "Color Grading",
+        .tooltip = "Chooses strength of original color grading.",
+        .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrain",
         .binding = &CUSTOM_FILM_GRAIN_STRENGTH,
-        .default_value = 50.f,
+        .default_value = 30.f,
         .label = "FilmGrain",
         .section = "Effects",
         .tooltip = "Controls new perceptual film grain.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxSharpness",
@@ -184,6 +228,30 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Controls sharpness",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxExposure",
+        .binding = &CUSTOM_EXPOSURE,
+        .default_value = 50.f,
+        .label = "Pre tonemap exposure",
+        .section = "Debug",
+        .tooltip = "Pre tonemapping exposure (Affects SDR too)",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return CUSTOM_DEBUG > 0.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxOutput",
+        .binding = &CUSTOM_OUTPUT,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .can_reset = false,
+        .label = "Output color",
+        .section = "Debug",
+        .tooltip = "Which color to output",
+        .labels = {"Final tonemap", "Untonemapped", "SDR Output"},
+        .is_visible = []() { return CUSTOM_DEBUG > 0.f; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
@@ -197,8 +265,9 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          static const std::string obfuscated_link = std::string("start https://discord.gg/XUhv") + std::string("tR54yc");
-          system(obfuscated_link.c_str());
+          renodx::utils::platform::Launch(
+              "https://discord.gg/"
+              "5WZXDpmbpP");
         },
     },
     new renodx::utils::settings::Setting{
@@ -206,9 +275,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Github",
         .section = "Links",
         .group = "button-line-1",
-        .on_change = []() {
-          ShellExecute(0, "open", "https://github.com/clshortfuse/renodx", 0, 0, SW_SHOW);
-        },
+        .on_change = []() { renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx"); },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -217,7 +284,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0xFF5F5F,
         .on_change = []() {
-          ShellExecute(0, "open", "https://ko-fi.com/ritsucecil", 0, 0, SW_SHOW);
+          renodx::utils::platform::Launch("https://ko-fi.com/ritsucecil");
         },
     },
     new renodx::utils::settings::Setting{
@@ -227,7 +294,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0xFF5F5F,
         .on_change = []() {
-          ShellExecute(0, "open", "https://ko-fi.com/shortfuse", 0, 0, SW_SHOW);
+          renodx::utils::platform::Launch("https://ko-fi.com/shortfuse");
         },
     },
     new renodx::utils::settings::Setting{
@@ -237,7 +304,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0xFF5F5F,
         .on_change = []() {
-          ShellExecute(0, "open", "https://ko-fi.com/hdrden", 0, 0, SW_SHOW);
+          renodx::utils::platform::Launch("https://ko-fi.com/hdrden");
         },
     },
     new renodx::utils::settings::Setting{
@@ -276,8 +343,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
-    settings[0]->default_value = peak.value();
-    settings[0]->can_reset = true;
+    settings[1]->default_value = peak.value();
+    settings[1]->can_reset = true;
   }
 }
 

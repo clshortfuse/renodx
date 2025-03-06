@@ -14,17 +14,19 @@
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.colorGradeBlowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.colorGradeFlare
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
-#define RENODX_TONE_MAP_PER_CHANNEL          1.f
+#define RENODX_TONE_MAP_PER_CHANNEL          shader_injection.toneMapPerChannel
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_RENO_DRT_WHITE_CLIP           10.f
+#define RENODX_COLOR_GRADE_STRENGTH          shader_injection.colorGradeStrength
 #define CUSTOM_FILM_GRAIN_STRENGTH           shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                        shader_injection.custom_random
 #define CUSTOM_SHARPNESS                     shader_injection.custom_sharpness
 
 // Debug
-/* #define RENODX_PEAK_NITS           800.f
-#define RENODX_TONE_MAP_TYPE       0.f
-#define RENODX_GAME_NITS           100.f */
+#define CUSTOM_EXPOSURE shader_injection.custom_exposure
+#define CUSTOM_OUTPUT   shader_injection.custom_output
+#define CUSTOM_DEBUG    0.f
+
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
@@ -44,12 +46,18 @@ struct ShaderInjectData {
   float colorGradeBlowout;
 
   float colorGradeFlare;
+  float colorGradeStrength;
   float tone_map_hue_correction;
   float tone_map_hue_processor;
-  float custom_film_grain;
 
+  float toneMapPerChannel;
+  float custom_film_grain;
   float custom_random;
   float custom_sharpness;
+
+  float custom_output;
+  float custom_exposure;
+  float custom_sdr_tonemapper;
 };
 
 #ifndef __cplusplus
