@@ -191,6 +191,7 @@ struct ResourceInfo {
   bool clone_enabled = false;
   bool is_swap_chain = false;
   bool is_clone = false;
+  uint32_t extra_vram;
   reshade::api::format format = reshade::api::format::unknown;
   ResourceUpgradeInfo* clone_target = nullptr;
   ResourceUpgradeInfo* upgrade_target = nullptr;
@@ -235,19 +236,11 @@ static struct Store {
 
 static Store* store = &local_store;
 
-inline ResourceInfo* GetResourceInfo(const reshade::api::resource& resource, const bool& create = false) {
-  {
-    std::shared_lock lock(store->resource_infos_mutex);
-    auto pair = store->resource_infos.find(resource.handle);
-    if (pair != store->resource_infos.end()) return &pair->second;
-    if (!create) return nullptr;
-  }
-
-  {
-    std::unique_lock write_lock(store->resource_infos_mutex);
-    auto& info = store->resource_infos.insert({resource.handle, ResourceInfo({.resource = resource})}).first->second;
-    return &info;
-  }
+inline ResourceInfo* GetResourceInfo(const reshade::api::resource& resource) {
+  std::shared_lock lock(store->resource_infos_mutex);
+  auto pair = store->resource_infos.find(resource.handle);
+  if (pair != store->resource_infos.end()) return &pair->second;
+  return nullptr;
 }
 
 inline ResourceInfo* GetResourceInfoUnsafe(const reshade::api::resource& resource, const bool& create = false) {
@@ -370,7 +363,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
       auto buffer = swapchain->get_back_buffer(index);
       auto pair = store->resource_infos.find(buffer.handle);
       if (pair == store->resource_infos.end()) {
-        assert(false);
+        assert(pair != store->resource_infos.end());
         continue;
       }
       auto& info = pair->second;
@@ -402,11 +395,13 @@ inline void OnInitResource(
   if (
       resource_info.resource.handle == resource.handle
       && !resource_info.destroyed) {
+#ifdef DEBUG_LEVEL_1
     std::stringstream s;
     s << "utils::resource::OnInitResource(Resource reused: ";
     s << static_cast<uintptr_t>(resource.handle);
     s << ")";
-    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
     for (auto& callback : store->on_destroy_resource_info_callbacks) {
       callback(&resource_info);
     }
@@ -536,17 +531,6 @@ static float GetResourceTag(const reshade::api::resource_view& resource_view) {
   if (resource_view_info->destroyed) return -1;
   if (resource_view_info->resource_info == nullptr) return -1;
   return resource_view_info->resource_info->resource_tag;
-}
-
-static void SetResourceTag(const reshade::api::resource& resource, const float& tag) {
-  auto* resource_info = GetResourceInfo(resource, true);
-  resource_info->resource_tag = tag;
-}
-
-static void RemoveResourceTag(const reshade::api::resource& resource) {
-  auto* resource_info = GetResourceInfo(resource);
-  if (resource_info == nullptr) return;
-  resource_info->resource_tag = -1.f;
 }
 
 static bool IsKnownResourceView(const reshade::api::resource_view& view) {
