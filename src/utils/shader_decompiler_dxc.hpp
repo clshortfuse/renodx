@@ -1816,8 +1816,13 @@ class Decompiler {
         } else if (functionName == "@dx.op.isSpecialFloat.f32") {
           // call i1 @dx.op.isSpecialFloat.f32(i32 8, float %309)  ; IsNaN(value)
           auto [opNumber, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
-          assignment_type = "bool";
-          assignment_value = std::format("isnan({})", ParseFloat(value));
+          if (auto pair = UNARY_FLOAT_OPS.find(std::string(opNumber));
+              pair != UNARY_FLOAT_OPS.end()) {
+            assignment_type = ParseType(type);
+            assignment_value = std::format("{}({})", pair->second, ParseFloat(value));
+          } else {
+            throw std::invalid_argument("Unknown @dx.op.isSpecialFloat.f32");
+          }
         } else if (functionName == "@dx.op.getDimensions") {
           // call %dx.types.Dimensions @dx.op.getDimensions(i32 72, %dx.types.Handle %1, i32 0)  ; GetDimensions(handle,mipLevel)
           auto [opNumber, handle, mip_level] = StringViewSplit<3>(functionParamsString, param_regex, 2);
