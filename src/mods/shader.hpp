@@ -813,13 +813,13 @@ inline bool HandlePreDraw(
 
   float resource_tag = -1;
 
-  // if (!is_dispatch && resource_tag_float != nullptr) {
-  //   auto* swapchain_state = renodx::utils::data::Get<renodx::utils::swapchain::CommandListData>(cmd_list);
-  //   if (!swapchain_state->current_render_targets.empty()) {
-  //     auto rv = swapchain_state->current_render_targets.at(0);
-  //     resource_tag = renodx::utils::resource::GetResourceTag(rv);
-  //   }
-  // }
+  if (!is_dispatch && resource_tag_float != nullptr) {
+    auto* swapchain_state = renodx::utils::data::Get<renodx::utils::swapchain::CommandListData>(cmd_list);
+    if (!swapchain_state->current_render_targets.empty()) {
+      auto rv = swapchain_state->current_render_targets.at(0);
+      resource_tag = renodx::utils::resource::GetResourceTag(rv);
+    }
+  }
 
   if (is_dispatch) {
     return HandleStatesAndBypass(
