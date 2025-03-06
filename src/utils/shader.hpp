@@ -174,13 +174,24 @@ struct PipelineShaderDetails {
               replacement_subobjects = renodx::utils::pipeline::ClonePipelineSubObjects(subobjects, subobject_count);
             }
 #ifdef DEBUG_LEVEL_0
-            std::stringstream s;
-            s << "utils::shader::BuildReplacementPipeline(Replacing ";
-            s << PRINT_CRC32(shader_hash);
-            s << ")";
-            reshade::log::message(reshade::log::level::debug, s.str().c_str());
+            {
+              std::stringstream s;
+              s << "utils::shader::BuildReplacementPipeline(Replacing ";
+              s << PRINT_CRC32(shader_hash);
+              s << ")";
+              reshade::log::message(reshade::log::level::debug, s.str().c_str());
+            }
 #endif
             AddShaderReplacement(&replacement_subobjects[i], new_shader);
+#ifdef DEBUG_LEVEL_0
+            {
+              std::stringstream s;
+              s << "utils::shader::BuildReplacementPipeline(Added replacement ";
+              s << PRINT_CRC32(shader_hash);
+              s << ")";
+              reshade::log::message(reshade::log::level::debug, s.str().c_str());
+            }
+#endif
 
             this->replacement_stages |= stage;
           }
@@ -195,15 +206,17 @@ struct PipelineShaderDetails {
       });
       this->compatible_shader_infos[shader_type_index] = this->subobject_shaders.back();
 
-#ifdef DEBUG_LEVEL_1
-      std::stringstream s;
-      s << "utils::shader::PipelineShaderDetails(Storing ";
-      s << PRINT_CRC32(shader_hash);
-      s << ", index: " << i;
-      s << ", type: " << subobject.type;
-      s << ", stage: " << stage;
-      s << ")";
-      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#ifdef DEBUG_LEVEL_0
+      {
+        std::stringstream s;
+        s << "utils::shader::PipelineShaderDetails(Storing ";
+        s << PRINT_CRC32(shader_hash);
+        s << ", index: " << i;
+        s << ", type: " << subobject.type;
+        s << ", stage: " << stage;
+        s << ")";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
+      }
 #endif
     }
 
@@ -220,6 +233,16 @@ struct PipelineShaderDetails {
           subobject_count,
           replacement_subobjects,
           &new_pipeline);
+
+#ifdef DEBUG_LEVEL_0
+      {
+        std::stringstream s;
+        s << "utils::shader::BuildReplacementPipeline(Added replacement pipeline";
+        s << PRINT_PTR(new_pipeline.handle);
+        s << ")";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
+      }
+#endif
       renodx::utils::pipeline::DestroyPipelineSubobjects(replacement_subobjects, subobject_count);
 
       if (built_pipeline_ok) {
@@ -390,11 +413,13 @@ static bool BuildReplacementPipeline(PipelineShaderDetails* details) {
     }
     auto& subobject = replacement_subobjects[info.index];
 #ifdef DEBUG_LEVEL_0
-    std::stringstream s;
-    s << "utils::shader::BuildReplacementPipeline(Replacing ";
-    s << PRINT_CRC32(info.shader_hash);
-    s << ")";
-    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    {
+      std::stringstream s;
+      s << "utils::shader::BuildReplacementPipeline(Replacing ";
+      s << PRINT_CRC32(info.shader_hash);
+      s << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    }
 #endif
     AddShaderReplacement(&subobject, new_shader);
     details->replacement_stages |= info.stage;
@@ -414,6 +439,17 @@ static bool BuildReplacementPipeline(PipelineShaderDetails* details) {
         subobject_count,
         replacement_subobjects,
         &new_pipeline);
+#ifdef DEBUG_LEVEL_0
+    {
+      std::stringstream s;
+      s << "utils::shader::BuildReplacementPipeline(New pipeline ";
+      s << PRINT_PTR(new_pipeline.handle);
+      s << " on layout ";
+      s << PRINT_PTR(layout.handle);
+      s << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    }
+#endif
     renodx::utils::pipeline::DestroyPipelineSubobjects(replacement_subobjects, subobject_count);
     if (built_pipeline_ok) {
       details->replacement_pipeline = new_pipeline;
