@@ -44,7 +44,7 @@ class FxcD3DInclude : public ID3DInclude {
   std::vector<std::pair<std::string, std::filesystem::path>> file_paths;
   std::map<std::filesystem::path, std::string> file_contents;
 
-  HRESULT __stdcall Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes) noexcept override {
+  HRESULT __stdcall Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID* ppData, UINT* pBytes) noexcept override {
     std::filesystem::path new_path;
     if (pParentData != nullptr) {
       std::string parent_data = static_cast<const char*>(pParentData);
@@ -174,6 +174,7 @@ inline HRESULT CompileFromBlob(
     parsed_target[0] = target[0];
     target = parsed_target;
   }
+  const auto& minor_version = target[5];
 
   try {
     const CA2W entrypoint_wide(entrypoint, CP_UTF8);
@@ -239,6 +240,9 @@ inline HRESULT CompileFromBlob(
     if ((flags1 & D3DCOMPILE_RESOURCES_MAY_ALIAS) != 0) arguments.push_back(L"/res_may_alias");
     arguments.push_back(L"/HV");
     arguments.push_back(L"2021");
+    if (minor_version >= '2') {
+      arguments.push_back(L"/enable-16bit-types");
+    }
 
     IFR(CreateCompiler(&compiler));
     IFR(compiler->Compile(

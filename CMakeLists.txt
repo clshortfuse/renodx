@@ -154,7 +154,10 @@ function(build_shader_target ADDON ADDON_PATH)
         unset(SHADER_FLAGS)
         if(SHADER_TARGET_MAJOR GREATER_EQUAL "6")
           set(SHADER_COMPILER ${DXC_BIN})
-          set(SHADER_FLAGS "/HV 2021") # Ovewrite flags
+          set(SHADER_FLAGS "/HV 2021") # Overwrite flags
+          if(SHADER_TARGET_MINOR GREATER_EQUAL "2")
+            set(SHADER_FLAGS ${SHADER_FLAGS} /enable-16bit-types)
+          endif()
         else()
           set(SHADER_FLAGS ${SHADER_FLAGS} /D __SHADER_TARGET_MAJOR=${SHADER_TARGET_MAJOR})
           set(SHADER_FLAGS ${SHADER_FLAGS} /D __SHADER_TARGET_MINOR=${SHADER_TARGET_MINOR})
