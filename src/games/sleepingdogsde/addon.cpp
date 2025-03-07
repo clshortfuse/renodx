@@ -10,18 +10,18 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
+#include "embed/shaders.h"
+
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
-#include "embed/0x7DF69EF0.h"
-#include "embed/0x67843125.h"
 
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-  CustomShaderEntry(0x7DF69EF0),
-  CustomShaderEntry(0x67843125)
+    CustomShaderEntry(0x7DF69EF0),
+    CustomShaderEntry(0x67843125),
 };
 
 ShaderInjectData shader_injection;
@@ -31,7 +31,7 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 3.f,
+        .default_value = 2.f,
         .can_reset = false,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
@@ -246,8 +246,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      renodx::mods::swapchain::use_resource_cloning = true;
-
       // Copy shader
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
@@ -272,20 +270,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .index = 3,
-      });
-
-      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //     .old_format = reshade::api::format::r8g8b8a8_unorm,
-      //     .new_format = reshade::api::format::r16g16b16a16_float,
-      //     .dimensions = {3840, 2176},
-      // });
-
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .ignore_size = true,
-          .use_resource_view_cloning = true,
-          .use_resource_view_hot_swap = true,
       });
 
       reshade::register_event<reshade::addon_event::draw>(OnDraw);
