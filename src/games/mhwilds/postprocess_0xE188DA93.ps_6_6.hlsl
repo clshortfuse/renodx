@@ -1,3 +1,4 @@
+#include "./postprocess.hlsl"
 #include "./shared.h"
 
 Texture2D<float> ReadonlyDepth : register(t0);
@@ -175,7 +176,7 @@ struct Tonemap
  */
 cbuffer Tonemap : register(b2) {
   float Tonemap_000x : packoffset(c000.x);
-  uint Tonemap_001y : packoffset(c001.y);
+  uint Tonemap_001y : packoffset(c001.y);  // Autoexposure
   float Tonemap_003z : packoffset(c003.z);
   float Tonemap_003w : packoffset(c003.w);
   float Tonemap_004x : packoffset(c004.x);
@@ -212,22 +213,27 @@ struct TonemapParam
 ;       float linearBegin;                            ; Offset:    4
 ;       float linearLength;                           ; Offset:    8
 ;       float toe;                                    ; Offset:   12
+
 ;       float maxNit;                                 ; Offset:   16
 ;       float linearStart;                            ; Offset:   20
 ;       float displayMaxNitSubContrastFactor;         ; Offset:   24
 ;       float contrastFactor;                         ; Offset:   28
+
 ;       float mulLinearStartContrastFactor;           ; Offset:   32
 ;       float invLinearBegin;                         ; Offset:   36
 ;       float madLinearStartContrastFactor;           ; Offset:   40
 ;       float tonemapParam_isHDRMode;                 ; Offset:   44
+
 ;       float useDynamicRangeConversion;              ; Offset:   48
 ;       float useHuePreserve;                         ; Offset:   52
 ;       float exposureScale;                          ; Offset:   56
 ;       float kneeStartNit;                           ; Offset:   60
+
 ;       float knee;                                   ; Offset:   64
 ;       float curve_HDRip;                            ; Offset:   68
 ;       float curve_k2;                               ; Offset:   72
 ;       float curve_k4;                               ; Offset:   76
+
 ;       row_major float4x4 RGBToXYZViaCrosstalkMatrix;; Offset:   80
 ;       row_major float4x4 XYZToRGBViaCrosstalkMatrix;; Offset:  144
 ;       float tonemapGraphScale;                      ; Offset:  208
@@ -235,17 +241,17 @@ struct TonemapParam
 ;   } TonemapParam;
  */
 cbuffer TonemapParam : register(b4) {
-  float TonemapParam_000x : packoffset(c000.x);
-  float TonemapParam_000y : packoffset(c000.y);
-  float TonemapParam_000w : packoffset(c000.w);
-  float TonemapParam_001x : packoffset(c001.x);
-  float TonemapParam_001y : packoffset(c001.y);
+  float TonemapParam_000x : packoffset(c000.x);  // contrast
+  float TonemapParam_000y : packoffset(c000.y);  // linearBegin
+  float TonemapParam_000w : packoffset(c000.w);  // toe
+  float TonemapParam_001x : packoffset(c001.x);  // maxNit
+  float TonemapParam_001y : packoffset(c001.y);  // linearStart
   float TonemapParam_001z : packoffset(c001.z);
   float TonemapParam_001w : packoffset(c001.w);
-  float TonemapParam_002x : packoffset(c002.x);
-  float TonemapParam_002y : packoffset(c002.y);
-  float TonemapParam_002z : packoffset(c002.z);
-  float TonemapParam_002w : packoffset(c002.w);
+  float TonemapParam_002x : packoffset(c002.x);  // mulLinearStartContrastFactor
+  float TonemapParam_002y : packoffset(c002.y);  // invLinearBegin
+  float TonemapParam_002z : packoffset(c002.z);  // madLinearStartContrastFactor
+  float TonemapParam_002w : packoffset(c002.w);  // tonemapParam_isHDRMode
 };
 
 /*
@@ -333,8 +339,8 @@ cbuffer LDRPostProcessParam : register(b5) {
   float LDRPostProcessParam_004z : packoffset(c004.z);
   float LDRPostProcessParam_004w : packoffset(c004.w);
   float LDRPostProcessParam_005x : packoffset(c005.x);
-  uint LDRPostProcessParam_005y : packoffset(c005.y);
-  uint LDRPostProcessParam_005z : packoffset(c005.z);
+  uint LDRPostProcessParam_005y : packoffset(c005.y);  // aberrationEnable
+  uint LDRPostProcessParam_005z : packoffset(c005.z);  // distortionType
   float LDRPostProcessParam_005w : packoffset(c005.w);
   uint LDRPostProcessParam_006x : packoffset(c006.x);
   float LDRPostProcessParam_006y : packoffset(c006.y);
@@ -346,15 +352,15 @@ cbuffer LDRPostProcessParam : register(b5) {
   float LDRPostProcessParam_008y : packoffset(c008.y);
   float LDRPostProcessParam_008z : packoffset(c008.z);
   float LDRPostProcessParam_008w : packoffset(c008.w);
-  float LDRPostProcessParam_009x : packoffset(c009.x);
+  float LDRPostProcessParam_009x : packoffset(c009.x);  // fNoiseDensity
   float LDRPostProcessParam_009y : packoffset(c009.y);
   float LDRPostProcessParam_009z : packoffset(c009.z);
-  float LDRPostProcessParam_009w : packoffset(c009.w);
-  float LDRPostProcessParam_010y : packoffset(c010.y);
+  float LDRPostProcessParam_009w : packoffset(c009.w);  // fReverseNoiseSize
+  float LDRPostProcessParam_010y : packoffset(c010.y);  // fTextureBlendRate
   float LDRPostProcessParam_010z : packoffset(c010.z);
   float LDRPostProcessParam_011x : packoffset(c011.x);
-  float LDRPostProcessParam_011y : packoffset(c011.y);
-  float LDRPostProcessParam_012x : packoffset(c012.x);
+  float LDRPostProcessParam_011y : packoffset(c011.y);  // fOneMinusTextureInverseSize
+  float LDRPostProcessParam_012x : packoffset(c012.x);  // fColorMatrix
   float LDRPostProcessParam_012y : packoffset(c012.y);
   float LDRPostProcessParam_012z : packoffset(c012.z);
   float LDRPostProcessParam_013x : packoffset(c013.x);
@@ -366,16 +372,16 @@ cbuffer LDRPostProcessParam : register(b5) {
   float LDRPostProcessParam_015x : packoffset(c015.x);
   float LDRPostProcessParam_015y : packoffset(c015.y);
   float LDRPostProcessParam_015z : packoffset(c015.z);
-  float LDRPostProcessParam_016x : packoffset(c016.x);
-  float LDRPostProcessParam_016y : packoffset(c016.y);
-  float LDRPostProcessParam_016z : packoffset(c016.z);
+  float LDRPostProcessParam_016x : packoffset(c016.x);  // cvdR
+  float LDRPostProcessParam_016y : packoffset(c016.y);  // cvdG
+  float LDRPostProcessParam_016z : packoffset(c016.z);  // cvdB
   float LDRPostProcessParam_017x : packoffset(c017.x);
   float LDRPostProcessParam_017y : packoffset(c017.y);
   float LDRPostProcessParam_017z : packoffset(c017.z);
   float LDRPostProcessParam_018x : packoffset(c018.x);
   float LDRPostProcessParam_018y : packoffset(c018.y);
   float LDRPostProcessParam_018z : packoffset(c018.z);
-  float LDRPostProcessParam_019x : packoffset(c019.x);
+  float LDRPostProcessParam_019x : packoffset(c019.x);  // ColorParam
   float LDRPostProcessParam_019y : packoffset(c019.y);
   float LDRPostProcessParam_019z : packoffset(c019.z);
   float LDRPostProcessParam_019w : packoffset(c019.w);
@@ -425,8 +431,8 @@ struct CBControl
 ;   } CBControl;
  */
 cbuffer CBControl : register(b6) {
-  uint CBControl_000w : packoffset(c000.w);
-  float CBControl_001x : packoffset(c001.x);
+  uint CBControl_000w : packoffset(c000.w);   // cPassEnabled
+  float CBControl_001x : packoffset(c001.x);  // fOCIOTransformMatrix
   float CBControl_001y : packoffset(c001.y);
   float CBControl_001z : packoffset(c001.z);
   float CBControl_002x : packoffset(c002.x);
@@ -439,7 +445,7 @@ cbuffer CBControl : register(b6) {
   float CBControl_006x : packoffset(c006.x);
   float CBControl_006y : packoffset(c006.y);
   float CBControl_006z : packoffset(c006.z);
-  uint CBControl_006w : packoffset(c006.w);
+  uint CBControl_006w : packoffset(c006.w);  // EnableReferenceGamutCompress
   float CBControl_007x : packoffset(c007.x);
   float CBControl_007y : packoffset(c007.y);
   float CBControl_007z : packoffset(c007.z);
@@ -463,6 +469,7 @@ float4 main(
     : SV_Target {
   float4 SV_Target;
   bool _44 = ((((uint)(CBControl_000w)) & 1) == 0);
+
   bool _50 = false;
   bool _56;
   float _105;
@@ -570,6 +577,7 @@ float4 main(
   float _3042;
   float _3043;
   float _3044;
+
   if (!_44) {
     _50 = ((((uint)(LDRPostProcessParam_005z)) == 0));
   }
@@ -606,7 +614,7 @@ float4 main(
     float _133 = _131 + 0.5f;
     float _134 = _132 + 0.5f;
 
-    if (((((uint)(LDRPostProcessParam_005y)) == 0)) && false) {  // aberrationEnable
+    if (((((uint)(LDRPostProcessParam_005y)) == 0))) {  // aberrationEnable
       // Not here
       _402 = _133;
       _403 = _134;
@@ -681,6 +689,10 @@ float4 main(
             } while (false);
           }
         }
+
+        _402 = lerp(_133, _402, CUSTOM_ABERRATION);
+        _403 = lerp(_134, _403, CUSTOM_ABERRATION);
+
         float4 _406 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2(_402, _403));
         _421 = 1.0f;
         do {
@@ -696,9 +708,7 @@ float4 main(
           float _460 = _456 - (Tonemap_004y);
           float _472 = exp2(((((((((bool)((_460 > 0.0f))) ? (Tonemap_003z) : (Tonemap_003w))) * _460) - _457) + (Tonemap_004y)) + ((Tonemap_004x) * (_457 - _456))));
 
-          if (CUSTOM_LOCAL_EXPOSURE == 0.f || CUSTOM_DEBUG == 0.f) {
-            _472 = 1.f;
-          }
+          _472 = PickExposure(_472, 1.f, Tonemap_000x * (asfloat((((int4)(asint(WhitePtSrv[0 / 4]))).x))), _472);
 
           _1453 = (((_406.x) * _108) * _472);
           _1454 = (((_406.y) * _108) * _472);
@@ -841,7 +851,6 @@ float4 main(
           }
         }
         float4 _956 = RE_POSTPROCESS_Color.Sample(BilinearBorder, float2(_952, _953));
-
         do {
           // Here
           if (!((((uint)(Tonemap_001y)) == 0))) {
@@ -857,9 +866,7 @@ float4 main(
           float _1011 = _1007 - (Tonemap_004y);
           float _1023 = exp2(((((((((bool)((_1011 > 0.0f))) ? (Tonemap_003z) : (Tonemap_003w))) * _1011) - _1008) + (Tonemap_004y)) + ((Tonemap_004x) * (_1008 - _1007))));
 
-          if (CUSTOM_LOCAL_EXPOSURE == 0.f || CUSTOM_DEBUG == 0.f) {
-            _1023 = 1.f;
-          }
+          _1023 = PickExposure(_1023, 1.f, Tonemap_000x * (asfloat((((int4)(asint(WhitePtSrv[0 / 4]))).x))), _1023);
 
           _1453 = (((_956.x) * _108) * _1023);
           _1454 = (((_956.y) * _108) * _1023);
@@ -892,9 +899,8 @@ float4 main(
             float _1090 = _1086 - (Tonemap_004y);
             float _1102 = exp2(((((((((bool)((_1090 > 0.0f))) ? (Tonemap_003z) : (Tonemap_003w))) * _1090) - _1087) + (Tonemap_004y)) + ((Tonemap_004x) * (_1087 - _1086))));
 
-            if (CUSTOM_LOCAL_EXPOSURE == 0.f || CUSTOM_DEBUG == 0.f) {
-              _1102 = 1.f;
-            }
+            _1102 = PickExposure(_1102, 1.f, Tonemap_000x * (asfloat((((int4)(asint(WhitePtSrv[0 / 4]))).x))), _1102);
+
             _1446 = (_1102 * (_1036.x));
             _1447 = (_1102 * (_1036.y));
             _1448 = (_1102 * (_1036.z));
@@ -971,22 +977,27 @@ float4 main(
             float _1371 = _1369 + _1031;
             float _1372 = _1370 + _1032;
             float4 _1375 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2(_1371, _1372));
-            _1390 = 1.0f;
+
+            _1390 = 1.0f;  // Starting exposure, which is similar to shortFuse's Fixed option
             do {
               if (!((((uint)(Tonemap_001y)) == 0))) {
+                // Get exposure from SRV
                 _1390 = (asfloat((((int4)(asint(WhitePtSrv[0 / 4]))).x)));
               }
+              // Multiple SRV exposure with cbuffer <-- This is shortfuse's Auto option
               float _1391 = _1390 * (Tonemap_000x);
+
+              // All steps below to get Local exposure
               float _1402 = log2(((dot(float3(((_1391 * (_1375.x)) * (RangeCompressInfo_000y)), ((_1391 * (_1375.y)) * (RangeCompressInfo_000y)), ((_1391 * (_1375.z)) * (RangeCompressInfo_000y))), float3(0.25f, 0.5f, 0.25f))) + 9.999999747378752e-06f));
               float2 _1411 = BilateralLuminanceSRV.SampleLevel(BilinearClamp, float3(_1371, _1372, (((((Tonemap_004z)*_1402) + (Tonemap_004w)) * 0.984375f) + 0.0078125f)), 0.0f);
               float _1419 = (((bool)(((_1411.y) < 0.0010000000474974513f))) ? ((BlurredLogLumSRV.SampleLevel(BilinearClamp, float2(_1371, _1372), 0.0f)).x) : ((_1411.x) / (_1411.y)));
               float _1425 = ((Tonemap_005x) + _1419) + ((((BlurredLogLumSRV.SampleLevel(BilinearClamp, float2(_1371, _1372), 0.0f)).x) - _1419) * 0.6000000238418579f);
               float _1426 = (Tonemap_005x) + _1402;
               float _1429 = _1425 - (Tonemap_004y);
+              // This is shortfuse's Vanilla/Local exposure options, they're the same
               float _1441 = exp2(((((((((bool)((_1429 > 0.0f))) ? (Tonemap_003z) : (Tonemap_003w))) * _1429) - _1426) + (Tonemap_004y)) + ((Tonemap_004x) * (_1426 - _1425))));
-              if (CUSTOM_LOCAL_EXPOSURE == 0.f || CUSTOM_DEBUG == 0.f) {
-                _1441 = 1.f;
-              }
+
+              _1441 = PickExposure(_1441, 1.f, Tonemap_000x * (asfloat((((int4)(asint(WhitePtSrv[0 / 4]))).x))), _1441);
               _1446 = (_1441 * (_1375.x));
               _1447 = (_1441 * (_1375.y));
               _1448 = (_1441 * (_1375.z));
@@ -1211,6 +1222,7 @@ float4 main(
     }
   }
 
+  // Disabling all color grading skips to this stage
   float _2209 = mad(_2194, (CBControl_003x), (mad(_2193, (CBControl_002x), ((CBControl_001x)*_2192))));
   float _2212 = mad(_2194, (CBControl_003y), (mad(_2193, (CBControl_002y), ((CBControl_001y)*_2192))));
   float _2215 = mad(_2194, (CBControl_003z), (mad(_2193, (CBControl_002z), ((CBControl_001z)*_2192))));
@@ -1254,10 +1266,12 @@ float4 main(
       } while (false);
     }
   }
+
   _2400 = _2301;
   _2401 = _2302;
   _2402 = _2303;
-  if (!(((((uint)(CBControl_000w)) & 2) == 0))) {
+
+  if (!(((((uint)(CBControl_000w)) & 2) == 0))) {  // NOISE
     float _2320 = floor(((LDRPostProcessParam_009w) * ((LDRPostProcessParam_008z) + (SV_Position.x))));
     float _2322 = floor(((LDRPostProcessParam_009w) * ((LDRPostProcessParam_008w) + (SV_Position.y))));
     float _2326 = frac(((frac((dot(float2(_2320, _2322), float2(0.0671105608344078f, 0.005837149918079376f))))) * 52.98291778564453f));
@@ -1295,10 +1309,18 @@ float4 main(
       } while (false);
     } while (false);
   }
+
+  if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
+    _2400 = _2301;
+    _2401 = _2302;
+    _2402 = _2303;
+  }
+
   _2809 = _2400;
   _2810 = _2401;
   _2811 = _2402;
-  if (!(((((uint)(CBControl_000w)) & 4) == 0))) {
+
+  if (!(((((uint)(CBControl_000w)) & 4) == 0))) {  // LUT SAMPLE (ACESCCt)
     bool _2428 = !(_2400 <= 0.0078125f);
     do {
       if (!_2428) {
@@ -1320,7 +1342,10 @@ float4 main(
           } else {
             _2457 = (((log2(_2402)) + 9.720000267028809f) * 0.05707762390375137f);
           }
+
+          // Sample LUT in ACEScc Trilinear
           float4 _2466 = tTextureMap0.SampleLevel(TrilinearClamp, float3(((_2437 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x)), ((_2447 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x)), ((_2457 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x))), 0.0f);
+
           do {
             if ((((_2466.x) < 0.155251145362854f))) {
               _2483 = (((_2466.x) + -0.072905533015728f) * 0.09487452358007431f);
@@ -1348,6 +1373,7 @@ float4 main(
                     _2511 = (exp2((((_2466.z) * 17.520000457763672f) + -9.720000267028809f)));
                   }
                 }
+
                 do {
                   [branch]
                   if ((((LDRPostProcessParam_010y) > 0.0f))) {
@@ -1397,6 +1423,9 @@ float4 main(
                                     _2593 = (exp2((((_2548.z) * 17.520000457763672f) + -9.720000267028809f)));
                                   }
                                 }
+
+                                // Lerp LUTs
+
                                 float _2600 = ((_2565 - _2483) * (LDRPostProcessParam_010y)) + _2483;
                                 float _2601 = ((_2579 - _2497) * (LDRPostProcessParam_010y)) + _2497;
                                 float _2602 = ((_2593 - _2511) * (LDRPostProcessParam_010y)) + _2511;
@@ -1528,9 +1557,32 @@ float4 main(
                       } while (false);
                     }
                   }
+
+                  // Apply custom
                   _2809 = ((mad(_2795, (LDRPostProcessParam_014x), (mad(_2794, (LDRPostProcessParam_013x), (_2793 * (LDRPostProcessParam_012x)))))) + (LDRPostProcessParam_015x));
                   _2810 = ((mad(_2795, (LDRPostProcessParam_014y), (mad(_2794, (LDRPostProcessParam_013y), (_2793 * (LDRPostProcessParam_012y)))))) + (LDRPostProcessParam_015y));
                   _2811 = ((mad(_2795, (LDRPostProcessParam_014z), (mad(_2794, (LDRPostProcessParam_013z), (_2793 * (LDRPostProcessParam_012z)))))) + (LDRPostProcessParam_015z));
+
+                  float3 ap1_input = float3(_2400, _2401, _2402);
+                  float3 ap1_output = float3(_2809, _2810, _2811);
+                  float ap1_input_y = renodx::color::y::from::AP1(ap1_input);
+                  float ap1_output_y = renodx::color::y::from::AP1(ap1_output);
+                  float3 new_color;
+                  new_color = lerp(
+                      ap1_input * (renodx::math::DivideSafe(ap1_output_y, ap1_input_y, 0)),
+                      ap1_output,
+                      CUSTOM_LUT_COLOR_STRENGTH);
+
+                  if (CUSTOM_LUT_EXPOSURE_REVERSE > 0.f) {
+                    new_color = lerp(
+                        ap1_input,
+                        ap1_output * (renodx::math::DivideSafe(ap1_input_y, ap1_output_y, 0)),
+                        CUSTOM_LUT_COLOR_STRENGTH);
+                  }
+
+                  _2809 = new_color.r;
+                  _2810 = new_color.g;
+                  _2811 = new_color.b;
                 } while (false);
               } while (false);
             } while (false);
@@ -1539,14 +1591,22 @@ float4 main(
       } while (false);
     } while (false);
   }
+
+  // with_noise *= 10.f;  // LUT_MID_GRAY_SCALING
+  // _2809 = lerp(_2400 * 10.f, _2809, CUSTOM_LUT_COLOR_STRENGTH);
+  // _2810 = lerp(_2401 * 10.f, _2810, CUSTOM_LUT_COLOR_STRENGTH);
+  // _2811 = lerp(_2402 * 10.f, _2811, CUSTOM_LUT_COLOR_STRENGTH);
+
   bool _2814 = isfinite((max((max(_2809, _2810)), _2811)));
+
   float _2815 = (_2814 ? _2809 : 1.0f);
   float _2816 = (_2814 ? _2810 : 1.0f);
   float _2817 = (_2814 ? _2811 : 1.0f);
   _2852 = _2815;
   _2853 = _2816;
   _2854 = _2817;
-  if (!(((((uint)(CBControl_000w)) & 8) == 0))) {
+
+  if (!(((((uint)(CBControl_000w)) & 8) == 0))) {  // Custom Matrix
     _2852 = (saturate(((((LDRPostProcessParam_016x)*_2815) + ((LDRPostProcessParam_016y)*_2816)) + ((LDRPostProcessParam_016z)*_2817))));
     _2853 = (saturate(((((LDRPostProcessParam_017x)*_2815) + ((LDRPostProcessParam_017y)*_2816)) + ((LDRPostProcessParam_017z)*_2817))));
     _2854 = (saturate(((((LDRPostProcessParam_018x)*_2815) + ((LDRPostProcessParam_018y)*_2816)) + ((LDRPostProcessParam_018z)*_2817))));
@@ -1591,7 +1651,8 @@ float4 main(
   _3042 = _2935;
   _3043 = _2936;
   _3044 = _2937;
-  if ((((TonemapParam_002w) == 0.0f))) {
+
+  if ((((TonemapParam_002w) == 0.0f))) {  // SDR Tonemap
     float _2945 = (TonemapParam_002y)*_2935;
     _2953 = 1.0f;
     do {
@@ -1623,9 +1684,11 @@ float4 main(
   SV_Target.x = _3042;
   SV_Target.y = _3043;
   SV_Target.z = _3044;
-
-  /* SV_Target.rgb = float3(1, 1, 1) * Exposure;
-  SV_Target.rgb = renodx::color::pq::Encode(SV_Target.rgb, 100.f); */
+  // SV_Target.rgb = float3(_2400, _2401, _2402);
+  // SV_Target.rgb = tTextureMap0.SampleLevel(TrilinearClamp, float3(((_2437 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x)), ((_2447 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x)), ((_2457 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x))), 0.0f).rgb;
+  // SV_Target.rgb = tTextureMap1.SampleLevel(TrilinearClamp, float3(((_2522 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x)), ((_2531 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x)), ((_2540 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x))), 0.0f).rgb;
+  // SV_Target.rgb = tTextureMap2.SampleLevel(TrilinearClamp, float3(((_2614 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x)), ((_2624 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x)), ((_2634 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x))), 0.0f).rgb;
   SV_Target.w = 0.0f;
+
   return SV_Target;
 }

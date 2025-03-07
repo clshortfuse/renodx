@@ -59,7 +59,8 @@ struct SPIRV_Cross_Output {
 };
 
 void frag_main() {
-  uint4 _48 = asuint(Tonemap_m0[5u]);
+  uint4 _48 = asuint(Tonemap_m0[5u]);  // .zw=LELuminanceTextureSize
+   
   float _71;
   uint _73;
   float originalLuminance = LuminanceSRV.Load(int3(uint2(uint(((TEXCOORD.x * 64.0f) * float(int(_48.z))) + 0.5f) >> 6u, uint(((TEXCOORD.y * 64.0f) * float(int(_48.w))) + 0.5f) >> 6u), 0u)).x;
@@ -67,7 +68,9 @@ void frag_main() {
   _73 = 1u;
   float _72;
   for (;;) {
-    uint4 _80 = asuint(Tonemap_m0[5u]);
+    // uint4 _80 = asuint(Tonemap_m0[5u]);
+    uint4 _80 = _48;
+
     float _82 = float(int(_80.w));
     float _83 = _28[_73] / _82;
     float _88 = abs(TEXCOORD.x);
@@ -75,7 +78,8 @@ void frag_main() {
     min16float _93 = min16float(frac(_88));
     min16float _94 = min16float(frac(_89));
     float _101 = float((_88 > 1.0f) ? (min16float(1.0) - _93) : _93);
-    uint4 _127 = asuint(Tonemap_m0[5u]);
+    // uint4 _127 = asuint(Tonemap_m0[5u]);
+    uint4 _127 = _48;
     float _132 = abs(TEXCOORD.y - _83);
     min16float _134 = min16float(frac(_132));
     _72 = ((LuminanceSRV.Load(int3(uint2(uint(((float(int(_80.z)) * 64.0f) * _101) + 0.5f) >> 6u, uint(((_82 * 64.0f) * float((_89 > 1.0f) ? (min16float(1.0) - _94) : _94)) + 0.5f) >> 6u), 0u)).x * _34[_73]) + _71) + (LuminanceSRV.Load(int3(uint2(uint(((float(int(_127.z)) * 64.0f) * _101) + 0.5f) >> 6u, uint(((float(int(_127.w)) * 64.0f) * float((_132 > 1.0f) ? (min16float(1.0) - _134) : _134)) + 0.5f) >> 6u), 0u)).x * _34[_73]);
@@ -87,7 +91,7 @@ void frag_main() {
       _73 = _74;
     }
   }
-  SV_Target.x = lerp(originalLuminance, _72, CUSTOM_SHARPNESS);
+  SV_Target.x = _72;;
   SV_Target.y = 0.0f;
   SV_Target.z = 0.0f;
   SV_Target.w = 1.0f;

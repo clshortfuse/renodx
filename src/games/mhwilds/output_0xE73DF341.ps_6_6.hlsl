@@ -1,4 +1,4 @@
-#include "./hdrcomposite.hlsl"
+#include "./output.hlsl"
 
 /* Texture2D<float4> SrcTexture : register(t0);
 
@@ -16,9 +16,7 @@ float4 main(
     noperspective float4 SV_Position: SV_Position,
     linear float2 TEXCOORD: TEXCOORD)
     : SV_Target {
-  if (RENODX_TONE_MAP_TYPE > 0.f) {
-    return OutputTonemap(SV_Position, TEXCOORD);
-  }
+  return OutputTonemap(SV_Position, TEXCOORD);
 
   float4 SV_Target;
   float4 _11 = SrcTexture.SampleLevel(PointBorder, float2((TEXCOORD.x), (TEXCOORD.y)), 0.0f);
