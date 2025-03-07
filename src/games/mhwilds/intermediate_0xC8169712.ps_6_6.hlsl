@@ -1,3 +1,5 @@
+#include "./shared.h"
+
 Texture2D<float4> HDRImage : register(t0);
 
 cbuffer SceneInfo : register(b0) {
@@ -246,5 +248,7 @@ float4 main(
   SV_Target.y = _291;
   SV_Target.z = _292;
   SV_Target.w = _293;
+
+  SV_Target.xyz = lerp(_14.rgb, SV_Target.xyz, CUSTOM_SHARPNESS);
   return SV_Target;
 }

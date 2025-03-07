@@ -29,11 +29,10 @@ SamplerState PointClamp : register(s1, space32);
 
 [numthreads(256, 1, 1)]
 void main(
- uint3 SV_DispatchThreadID : SV_DispatchThreadID,
- uint3 SV_GroupID : SV_GroupID,
- uint3 SV_GroupThreadID : SV_GroupThreadID,
- uint SV_GroupIndex : SV_GroupIndex
-) {
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
   min16int _15 = min16int(((uint)(SV_GroupThreadID.x)));
   min16int _17 = (min16uint)(_15) >> 1;
   min16int _20 = (min16uint)(_15) >> 2;
@@ -118,7 +117,7 @@ void main(
               float _302 = mad(0.011361200362443924f, _292, (mad(0.9195399880409241f, _291, (_290 * 0.06909699738025665f))));
               float _305 = mad(0.8955950140953064f, _292, (mad(0.08801320195198059f, _291, (_290 * 0.01639159955084324f))));
               float _328 = 10000.0f / (HDRMapping_010y);
-              _328 = 10000.f / RENODX_UI_NITS;
+              _328 = 10000.f / RENODX_GRAPHICS_WHITE_NITS;
               float _337 = exp2(((log2((saturate(((exp2(((log2((((HDRMapping_008y) * (_290 - _299)) + _299))) * (HDRMapping_007y)))) / _328))))) * 0.1593017578125f));
               float _346 = saturate((exp2(((log2((((_337 * 18.8515625f) + 0.8359375f) / ((_337 * 18.6875f) + 1.0f)))) * 78.84375f))));
               float _349 = exp2(((log2((saturate(((exp2(((log2((((HDRMapping_008y) * (_291 - _302)) + _302))) * (HDRMapping_007y)))) / _328))))) * 0.1593017578125f));
@@ -151,7 +150,7 @@ void main(
                 float _457 = exp2(((log2((saturate((_443.y))))) * 0.012683313339948654f));
                 float _458 = exp2(((log2((saturate((_443.z))))) * 0.012683313339948654f));
                 float _485 = 10000.0f / (HDRMapping_010y);
-                _485 = 10000.f / RENODX_UI_NITS;
+                _485 = 10000.f / RENODX_GRAPHICS_WHITE_NITS;
                 float _486 = _485 * (exp2(((log2(((max(0.0f, (_456 + -0.8359375f))) / (18.8515625f - (_456 * 18.6875f))))) * 6.277394771575928f)));
                 float _487 = _485 * (exp2(((log2(((max(0.0f, (_457 + -0.8359375f))) / (18.8515625f - (_457 * 18.6875f))))) * 6.277394771575928f)));
                 float _488 = _485 * (exp2(((log2(((max(0.0f, (_458 + -0.8359375f))) / (18.8515625f - (_458 * 18.6875f))))) * 6.277394771575928f)));

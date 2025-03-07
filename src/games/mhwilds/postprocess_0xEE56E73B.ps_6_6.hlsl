@@ -524,6 +524,19 @@ float4 main(
   float _2770;
   float _2771;
   float _2772;
+
+  float3 test_color = 0.f;
+  float _118 = ((SceneInfo_023z) * (SV_Position.x)) + -0.5f;
+  float _119 = ((SceneInfo_023w) * (SV_Position.y)) + -0.5f;
+  float _120 = dot(float2(_118, _119), float2(_118, _119));
+  float _123 = ((_120 * (LDRPostProcessParam_004x)) + 1.0f) * (LDRPostProcessParam_005w);  // fDistortionCoef * fCorrectCoef
+  float _124 = _123 * _118;
+  float _125 = _123 * _119;
+  float _126 = _124 + 0.5f;
+  float _127 = _125 + 0.5f;
+  float2 _137 = HazeNoiseResult.Sample(BilinearWrap, float2(_126, _127));
+  test_color.xy = _137.xy;
+
   if (!_37) {
     // Not here
     _43 = ((((uint)(LDRPostProcessParam_005z)) == 0));  // distortion type
@@ -543,7 +556,7 @@ float4 main(
     float _59 = (Kerare.x) / (Kerare.w);
     float _60 = (Kerare.y) / (Kerare.w);
     float _61 = (Kerare.z) / (Kerare.w);
-    float _65 = abs(((rsqrt((dot(float3(_59, _60, _61), float3(_59, _60, _61))))) * _61));
+    float _65 = abs(((rsqrt((dot(float3(_59, _60, _61), float3(_59, _60, _61)))))*_61));
     float _70 = _65 * _65;
     _98 = ((_70 * _70) * (1.0f - (saturate((((CameraKerare_000x)*_65) + (CameraKerare_000y))))));
   } else {
@@ -960,39 +973,39 @@ float4 main(
           if (_43) {
             float _1372 = _1280 + (LDRPostProcessParam_022x);
             float _1373 = _1281 + (LDRPostProcessParam_022y);
-            float _1377 = (((dot(float2(_1372, _1373), float2(_1372, _1373))) * _1184) + 1.0f) * _1189;
+            float _1377 = (((dot(float2(_1372, _1373), float2(_1372, _1373)))*_1184) + 1.0f) * _1189;
             float4 _1383 = RE_POSTPROCESS_Color.SampleLevel(BilinearClamp, float2(((_1377 * _1372) + 0.5f), ((_1377 * _1373) + 0.5f)), 0.0f);
             float _1387 = _1292 + (LDRPostProcessParam_022x);
             float _1388 = _1293 + (LDRPostProcessParam_022y);
-            float _1391 = ((dot(float2(_1387, _1388), float2(_1387, _1388))) * _1184) + 1.0f;
+            float _1391 = ((dot(float2(_1387, _1388), float2(_1387, _1388)))*_1184) + 1.0f;
             float4 _1398 = RE_POSTPROCESS_Color.SampleLevel(BilinearClamp, float2((((_1387 * _1189) * _1391) + 0.5f), (((_1388 * _1189) * _1391) + 0.5f)), 0.0f);
             float _1405 = _1303 + (LDRPostProcessParam_022x);
             float _1406 = _1304 + (LDRPostProcessParam_022y);
-            float _1409 = ((dot(float2(_1405, _1406), float2(_1405, _1406))) * _1184) + 1.0f;
+            float _1409 = ((dot(float2(_1405, _1406), float2(_1405, _1406)))*_1184) + 1.0f;
             float4 _1416 = RE_POSTPROCESS_Color.SampleLevel(BilinearClamp, float2((((_1405 * _1189) * _1409) + 0.5f), (((_1406 * _1189) * _1409) + 0.5f)), 0.0f);
             float _1423 = _1314 + (LDRPostProcessParam_022x);
             float _1424 = _1315 + (LDRPostProcessParam_022y);
-            float _1427 = ((dot(float2(_1423, _1424), float2(_1423, _1424))) * _1184) + 1.0f;
+            float _1427 = ((dot(float2(_1423, _1424), float2(_1423, _1424)))*_1184) + 1.0f;
             float4 _1434 = RE_POSTPROCESS_Color.SampleLevel(BilinearClamp, float2((((_1423 * _1189) * _1427) + 0.5f), (((_1424 * _1189) * _1427) + 0.5f)), 0.0f);
             float _1441 = _1325 + (LDRPostProcessParam_022x);
             float _1442 = _1326 + (LDRPostProcessParam_022y);
-            float _1445 = ((dot(float2(_1441, _1442), float2(_1441, _1442))) * _1184) + 1.0f;
+            float _1445 = ((dot(float2(_1441, _1442), float2(_1441, _1442)))*_1184) + 1.0f;
             float4 _1452 = RE_POSTPROCESS_Color.SampleLevel(BilinearClamp, float2((((_1441 * _1189) * _1445) + 0.5f), (((_1442 * _1189) * _1445) + 0.5f)), 0.0f);
             float _1459 = _1336 + (LDRPostProcessParam_022x);
             float _1460 = _1337 + (LDRPostProcessParam_022y);
-            float _1463 = ((dot(float2(_1459, _1460), float2(_1459, _1460))) * _1184) + 1.0f;
+            float _1463 = ((dot(float2(_1459, _1460), float2(_1459, _1460)))*_1184) + 1.0f;
             float4 _1470 = RE_POSTPROCESS_Color.SampleLevel(BilinearClamp, float2((((_1459 * _1189) * _1463) + 0.5f), (((_1460 * _1189) * _1463) + 0.5f)), 0.0f);
             float _1477 = _1347 + (LDRPostProcessParam_022x);
             float _1478 = _1348 + (LDRPostProcessParam_022y);
-            float _1481 = ((dot(float2(_1477, _1478), float2(_1477, _1478))) * _1184) + 1.0f;
+            float _1481 = ((dot(float2(_1477, _1478), float2(_1477, _1478)))*_1184) + 1.0f;
             float4 _1488 = RE_POSTPROCESS_Color.SampleLevel(BilinearClamp, float2((((_1477 * _1189) * _1481) + 0.5f), (((_1478 * _1189) * _1481) + 0.5f)), 0.0f);
             float _1495 = _1358 + (LDRPostProcessParam_022x);
             float _1496 = _1359 + (LDRPostProcessParam_022y);
-            float _1499 = ((dot(float2(_1495, _1496), float2(_1495, _1496))) * _1184) + 1.0f;
+            float _1499 = ((dot(float2(_1495, _1496), float2(_1495, _1496)))*_1184) + 1.0f;
             float4 _1506 = RE_POSTPROCESS_Color.SampleLevel(BilinearClamp, float2((((_1495 * _1189) * _1499) + 0.5f), (((_1496 * _1189) * _1499) + 0.5f)), 0.0f);
             float _1513 = _1369 + (LDRPostProcessParam_022x);
             float _1514 = _1370 + (LDRPostProcessParam_022y);
-            float _1517 = ((dot(float2(_1513, _1514), float2(_1513, _1514))) * _1184) + 1.0f;
+            float _1517 = ((dot(float2(_1513, _1514), float2(_1513, _1514)))*_1184) + 1.0f;
             float4 _1524 = RE_POSTPROCESS_Color.SampleLevel(BilinearClamp, float2((((_1513 * _1189) * _1517) + 0.5f), (((_1514 * _1189) * _1517) + 0.5f)), 0.0f);
             _1867 = (((((((((_1398.x) + (_1383.x)) + (_1416.x)) + (_1434.x)) + (_1452.x)) + (_1470.x)) + (_1488.x)) + (_1506.x)) + (_1524.x));
             _1868 = (((((((((_1398.y) + (_1383.y)) + (_1416.y)) + (_1434.y)) + (_1452.y)) + (_1470.y)) + (_1488.y)) + (_1506.y)) + (_1524.y));
@@ -1191,13 +1204,20 @@ float4 main(
           float _2102 = _2100 * (LDRPostProcessParam_008y);
           float _2103 = _2084 * (LDRPostProcessParam_008y);
           float _2117 = (exp2(((log2((1.0f - (saturate((dot(float3((saturate(_2029)), (saturate(_2030)), (saturate(_2031))), float3(0.29899999499320984f, -0.16899999976158142f, 0.5f)))))))) * (LDRPostProcessParam_009y)))) * (LDRPostProcessParam_009z);
-          _2128 = ((_2117 * ((mad(_2103, 1.4019999504089355f, _2101)) - _2029)) + _2029);
-          _2129 = ((_2117 * ((mad(_2103, -0.7139999866485596f, (mad(_2102, -0.3440000116825104f, _2101)))) - _2030)) + _2030);
-          _2130 = ((_2117 * ((mad(_2102, 1.7719999551773071f, _2101)) - _2031)) + _2031);
+          _2128 = ((_2117 * ((mad(_2103, 1.4019999504089355f, _2101))-_2029)) + _2029);
+          _2129 = ((_2117 * ((mad(_2103, -0.7139999866485596f, (mad(_2102, -0.3440000116825104f, _2101))))-_2030)) + _2030);
+          _2130 = ((_2117 * ((mad(_2102, 1.7719999551773071f, _2101))-_2031)) + _2031);
         } while (false);
       } while (false);
     } while (false);
   }
+
+  if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
+    _2128 = _2029;
+    _2129 = _2030;
+    _2130 = _2031;
+  }
+
   _2537 = _2128;
   _2538 = _2129;
   _2539 = _2130;
@@ -1468,6 +1488,20 @@ float4 main(
                   _2537 = ((mad(_2523, (LDRPostProcessParam_014x), (mad(_2522, (LDRPostProcessParam_013x), (_2521 * (LDRPostProcessParam_012x)))))) + (LDRPostProcessParam_015x));
                   _2538 = ((mad(_2523, (LDRPostProcessParam_014y), (mad(_2522, (LDRPostProcessParam_013y), (_2521 * (LDRPostProcessParam_012y)))))) + (LDRPostProcessParam_015y));
                   _2539 = ((mad(_2523, (LDRPostProcessParam_014z), (mad(_2522, (LDRPostProcessParam_013z), (_2521 * (LDRPostProcessParam_012z)))))) + (LDRPostProcessParam_015z));
+
+                  float3 ap1_input = float3(_2128, _2129, _2130);
+                  float3 ap1_output = float3(_2537, _2538, _2539);
+                  float ap1_input_y = renodx::color::y::from::AP1(ap1_input);
+                  float ap1_output_y = renodx::color::y::from::AP1(ap1_output);
+                  float3 new_color = lerp(
+                      ap1_input * renodx::math::DivideSafe(ap1_output_y, ap1_input_y, 0),
+                      ap1_output,
+                      CUSTOM_LUT_COLOR_STRENGTH);
+
+                  _2537 = new_color.r;
+                  _2538 = new_color.g;
+                  _2539 = new_color.b;
+
                 } while (false);
               } while (false);
             } while (false);
@@ -1476,6 +1510,10 @@ float4 main(
       } while (false);
     } while (false);
   }
+
+  // _2537 = lerp(_2128 * 10.f, _2537, CUSTOM_LUT_COLOR_STRENGTH);
+  // _2538 = lerp(_2129 * 10.f, _2538, CUSTOM_LUT_COLOR_STRENGTH);
+  // _2539 = lerp(_2130 * 10.f, _2539, CUSTOM_LUT_COLOR_STRENGTH);
   bool _2542 = isfinite((max((max(_2537, _2538)), _2539)));
   float _2543 = (_2542 ? _2537 : 1.0f);
   float _2544 = (_2542 ? _2538 : 1.0f);
@@ -1538,7 +1576,7 @@ float4 main(
   _2772 = _2665;
 
   // Skip by adding false
-  if ((((TonemapParam_002w) == 0.0f)) && false) {  // tonemapParam_isHDRMode
+  if ((((TonemapParam_002w) == 0.0f))) {  // tonemapParam_isHDRMode
     // Not here
     // I guess this is their inverse tonemapper?
     // invLinearBegin
@@ -1578,5 +1616,6 @@ float4 main(
   SV_Target.y = _2771;
   SV_Target.z = _2772;
   SV_Target.w = 0.0f;
+
   return SV_Target;
 }
