@@ -21,6 +21,7 @@
 namespace {
 
 ShaderInjectData shader_injection;
+int game = 0;   // 1 = HRR, 2 = SW(2013), 3 = SW2 (sdr), 4 = SW2 (hdr)
 int postprocessing_level;
 bool is_grain_used;
 bool is_sharpen_used;
@@ -147,7 +148,10 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     is_grain_used = false;
     return true;
     }),
-    CustomShaderEntry(0x8FACEF64),  // videos
+    CustomShaderEntryCallback(0x8FACEF64, [](reshade::api::command_list* cmd_list) {  // videos
+    game = 1;
+    return true;
+    }),
     // Shadow Warrior (2013)
     CustomShaderEntryCallback(0x0DA22B92, [](reshade::api::command_list* cmd_list) {  // tonemap
     postprocessing_level = 2;
@@ -554,13 +558,747 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     is_vignette_used = false;
     return true;
     }),
+    CustomShaderEntryCallback(0x48B48F7B, [](reshade::api::command_list* cmd_list) {  // videos
+    game = 2;
+    return true;
+    }),
     CustomShaderEntry(0xA36BCFE2),  // lens dirt
     CustomShaderEntry(0xA4F44331),  // lens dirt
     CustomShaderEntry(0x3708D87A),  // lens flare
-    CustomShaderEntry(0x48B48F7B),  // videos
     CustomShaderEntry(0x6720BADB),  // interactable items outline
     CustomShaderEntry(0x4E5E174F),  // something
-    // Shadow Warrior 2, maybe
+    // Shadow Warrior 2
+    CustomShaderEntry(0x4D593A55),  // UI
+    CustomShaderEntry(0x7DE48FFA),  // UI
+    CustomShaderEntry(0x57D8F01E),  // UI
+    CustomShaderEntry(0x838B4310),  // UI
+    CustomShaderEntry(0x5B0B9295),  // UI
+    CustomShaderEntry(0x320A7BCC),  // UI
+    CustomShaderEntry(0xDB333004),  // UI
+    CustomShaderEntry(0x7DC0A614),  // UI
+    CustomShaderEntry(0xA505992D),  // UI
+    CustomShaderEntry(0xA3A17C66),  // UI
+    CustomShaderEntry(0xE6D30E69),  // UI
+    CustomShaderEntry(0xCACDD090),  // UI
+    CustomShaderEntry(0x10CE0E36),  // UI
+    CustomShaderEntry(0xCBB34038),  // gamma
+    CustomShaderEntryCallback(0x6756A138, [](reshade::api::command_list* cmd_list) {  // videos
+    game = 3;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x93FC2429, [](reshade::api::command_list* cmd_list) {  // tonemap
+    shader_injection.isLinearSpace = true;
+    game = 4;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x231B3B55, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;   // tracks CA here
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xF99C69EC, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xB0BE7319, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xF8AD6A63, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xA351E23F, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xC4FE0520, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x7AE71A38, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x268326F2, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x45995B20, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xF1B4BC09, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x4C5412CF, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x5D4B2922, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x40F026C4, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x55B4E2D7, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x5B14FEDD, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x075F0A3D, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x121503C6, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xBDF52042, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x19AFABC4, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xFB2559D5, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x291AE833, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x4C3AFED2, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x0664A14D, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x32F90855, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x72C9BB0F, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xB7D80646, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xE07F2B70, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x7CF50E75, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x275B517F, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x0771DF62, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xC570E91E, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x3A533147, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x69D2640C, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x1C67E14B, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xDE6FB1B6, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xC0B87AA2, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x9FE92A9D, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xF4EA7010, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xEAC729D8, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xF47ECC50, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x946F6BD1, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x64117C6A, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x88536DF4, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x50BC4290, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x53421D31, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x1541870E, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xE797E530, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xB31BA649, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x330C6A5B, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x900E377D, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xBE6C39BD, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x4B59870B, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x207BE732, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xF8CE1E2A, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x3776EC3D, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xE82075EC, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xED55AF5C, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x5DFBBB7C, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x885495F4, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xD76F33B7, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xE29265B1, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 2;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xD8B52567, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x2744DD30, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x83402A8B, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x4D3E5269, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xBEE1E334, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x27C1C43B, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xF3B1D674, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x31AE8CA6, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x2E26D10C, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xE6A0DEE7, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x9BB66660, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x17C9E4CA, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x037CC98B, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xC573DB4C, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x9FBA649D, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xF69CD003, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x393CB504, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x724C6971, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x62E8D8A4, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x08BB0F87, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x4F081694, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xC06D82E9, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x304EBCD0, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x6F206DC4, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x52DC5990, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x2DAE9396, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xB7D0CEC3, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xCBBB1122, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x55D4EA9A, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x858AE537, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xA8EC5856, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xE18B30E8, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x7F2DAD13, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xB568643C, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xAB144A18, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x9CDD78C7, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x3F4868D6, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xFD30895E, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xBA1D4C3E, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x33D69819, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xA5A83291, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x230F6B5A, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xEC673508, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x8667F96E, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = true;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xCE924A58, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x99BB12A1, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xA81E83DB, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x5F1C7813, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x6697D0DC, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x481CFC2F, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x518FA0B1, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x306345AC, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x3B47B8DF, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x5DB10347, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xC1FF843E, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xD093E1BF, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x7A4B1159, [](reshade::api::command_list* cmd_list) {  // tonemap
+    postprocessing_level = 1;
+    is_grain_used = false;
+    is_vignette_used = false;
+    return true;
+    }),
 };
 
 float current_settings_mode = 0;
@@ -639,7 +1377,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
         .labels = {"Luminance", "Per Channel"},
-        .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
+        .is_enabled = []() { return shader_injection.toneMapType == 3.f || shader_injection.toneMapType == 4.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
@@ -672,7 +1410,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .max = 0.99f,
         .format = "%.2f",
-        .is_visible = []() { return shader_injection.toneMapType == 2.f || shader_injection.toneMapType == 4.f ; },
+        .is_visible = []() { return shader_injection.toneMapType == 2.f || shader_injection.toneMapType == 4.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
@@ -736,7 +1474,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Adds or removes highlights color.",
         .tint = 0xF6AC1C,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 2.f; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -749,7 +1487,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .tint = 0xF6AC1C,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 2.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -783,7 +1521,7 @@ renodx::utils::settings::Settings settings = {
         .tint = 0x01A8DF,
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return lens_effects_active; },
+        .is_visible = []() { return lens_effects_active || game >= 3; },
     },
     new renodx::utils::settings::Setting{
         .key = "fxSharpen",
@@ -883,6 +1621,75 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeDechroma", 80.f);
           renodx::utils::settings::UpdateSetting("colorGradeFlare", 20.f);
         },
+        .is_visible = []() { return game == 1 || game == 2; },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "RenoDRT HDR Look",
+        .section = "Color Grading Templates",
+        .group = "button-line-1",
+        .tint = 0x01A8DF,
+        .on_change = []() {
+          renodx::utils::settings::UpdateSetting("toneMapPerChannel", 0.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueProcessor", 1.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 80.f);
+          renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
+          renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
+          renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
+          renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
+          renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
+          renodx::utils::settings::UpdateSetting("colorGradeBlowout", 80.f);
+          renodx::utils::settings::UpdateSetting("colorGradeDechroma", 65.f);
+          renodx::utils::settings::UpdateSetting("colorGradeFlare", 80.f);
+        },
+        .is_visible = []() { return game == 4 && shader_injection.toneMapType == 3.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "RenoDRT HDR Look 2",
+        .section = "Color Grading Templates",
+        .group = "button-line-1",
+        .tint = 0x01A8DF,
+        .on_change = []() {
+          renodx::utils::settings::UpdateSetting("toneMapPerChannel", 1.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueProcessor", 1.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
+          renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
+          renodx::utils::settings::UpdateSetting("colorGradeShadows", 45.f);
+          renodx::utils::settings::UpdateSetting("colorGradeContrast", 70.f);
+          renodx::utils::settings::UpdateSetting("colorGradeSaturation", 80.f);
+          renodx::utils::settings::UpdateSetting("colorGradeBlowout", 50.f);
+          renodx::utils::settings::UpdateSetting("colorGradeDechroma", 80.f);
+          renodx::utils::settings::UpdateSetting("colorGradeFlare", 10.f);
+        },
+        .is_visible = []() { return game == 4 && shader_injection.toneMapType == 3.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Reinhard+ HDR Look",
+        .section = "Color Grading Templates",
+        .group = "button-line-1",
+        .tint = 0x01A8DF,
+        .on_change = []() {
+          renodx::utils::settings::UpdateSetting("toneMapPerChannel", 1.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueProcessor", 1.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
+          renodx::utils::settings::UpdateSetting("colorGradeHighlights", 45.f);
+          renodx::utils::settings::UpdateSetting("colorGradeShadows", 60.f);
+          renodx::utils::settings::UpdateSetting("colorGradeContrast", 65.f);
+          renodx::utils::settings::UpdateSetting("colorGradeSaturation", 80.f);
+          renodx::utils::settings::UpdateSetting("colorGradeBlowout", 65.f);
+          renodx::utils::settings::UpdateSetting("colorGradeDechroma", 80.f);
+        },
+        .is_visible = []() { return game == 4 && shader_injection.toneMapType == 4.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "HDR has to be enabled in game settings (requires Fullscreen Mode)!!!",
+        .section = "Notes",
+        .is_visible = []() { return game == 3; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -915,9 +1722,9 @@ renodx::utils::settings::Settings settings = {
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
-  renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
+  renodx::utils::settings::UpdateSetting("toneMapPeakNits", game == 4 ? 1050.f : 203.f);
+  renodx::utils::settings::UpdateSetting("toneMapGameNits", game == 4 ? 120.f : 203.f);
+  renodx::utils::settings::UpdateSetting("toneMapUINits", game == 4 ? 120.f : 203.f);
   renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
@@ -935,6 +1742,7 @@ void OnPresetOff() {
 
 auto start = std::chrono::steady_clock::now();
 bool fired_on_init_swapchain = false;
+bool game_check = false;
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
@@ -955,6 +1763,22 @@ void OnPresent(
     const reshade::api::rect* dirty_rects) {
   auto end = std::chrono::steady_clock::now();
   shader_injection.elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    if(game_check) return;
+    if(game != 0) {
+    game_check = true;
+    if(game >= 3){
+    settings[1]->labels = {"Vanilla", "None", "ACES", "RenoDRT", "Reinhard+"};
+    settings[6]->labels = {"Per Channel", "Luminance"};
+    settings[6]->is_enabled = []() { return shader_injection.toneMapType == 3.f; };
+    settings[7]->is_enabled = []() { return shader_injection.toneMapType >= 3.f; };
+    settings[8]->is_enabled = []() { return shader_injection.toneMapType >= 3.f; };
+    settings[9]->is_visible = []() { return shader_injection.toneMapType >= 5.f; };
+    settings[15]->is_enabled = []() { return shader_injection.toneMapType >= 3.f; };
+    settings[16]->is_enabled = []() { return shader_injection.toneMapType >= 3.f; };
+    settings[18]->tooltip = "Requires Bloom ON in game settings.",
+    settings[20]->is_visible = []() { return is_sharpen_used; };
+    }
+    }
 }
 
 }  // namespace
@@ -962,7 +1786,7 @@ void OnPresent(
 // NOLINTBEGIN(readability-identifier-naming)
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Hard Reset Redux | Shadow Warrior (2013)";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Hard Reset Redux, Shadow Warrior (2013) & 2";
 
 // NOLINTEND(readability-identifier-naming)
 
@@ -991,7 +1815,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         .index = index,
     });
 }
-      
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
       break;
@@ -1001,10 +1824,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       break;
   }
-
+  
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
 
   return TRUE;
 }

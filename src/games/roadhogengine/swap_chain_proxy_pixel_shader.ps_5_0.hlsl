@@ -8,6 +8,6 @@ void main(
     float2 texcoord: TEXCOORD,
     out float4 output: SV_Target0) {
   float4 color = sourceTexture.Sample(sourceSampler_s, texcoord.xy);
-  color.rgb = FinalizeOutput(color.rgb);
+  color.rgb = FinalizeOutput(color.rgb, injectedData.isLinearSpace);
   output.rgba = color;
 }

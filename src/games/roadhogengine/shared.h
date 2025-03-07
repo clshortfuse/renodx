@@ -34,6 +34,7 @@ struct ShaderInjectData {
   float fxFilmGrainType;
 
   float elapsedTime;
+  bool isLinearSpace;
 };
 
 #ifndef __cplusplus
