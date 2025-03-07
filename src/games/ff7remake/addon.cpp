@@ -6,11 +6,10 @@
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
-#define NOMINMAX
 
+#define NOMINMAX
 #include <chrono>
 #include <random>
-#include <unordered_set>
 
 #include <deps/imgui/imgui.h>
 #include <embed/shaders.h>
@@ -29,10 +28,10 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x922A71D1),
-    CustomShaderEntry(0x4D6F937E),
-    CustomShaderEntry(0xD950DA01),
-    CustomShaderEntry(0xE87D13A1),
+    CustomDirectXShaders(0x922A71D1),
+    CustomDirectXShaders(0x4D6F937E),
+    CustomDirectXShaders(0xD950DA01),
+    CustomDirectXShaders(0xE87D13A1),
     {0xF68D39B5, {}}  // SDR
 };
 
@@ -253,7 +252,7 @@ renodx::utils::settings::Settings settings = {
         .key = "colorGradeLUTExtraction",
         .binding = &CUSTOM_LUT_EXTRACTION,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 0.f,
         .label = "LUT Extraction",
         .section = "Color Grading",
         .tooltip = "Selects method for applying original LUT."
@@ -297,6 +296,16 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Uses modified BT.2446a to inverse tonemap SDR videos",
         .labels = {"Off", "BT.2446a", "RenoDRT"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ProcessingForceHDR",
+        .binding = &CUSTOM_HDR_VIDEOS,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Force HDR",
+        .section = "Processing",
+        .tooltip = "Required for DX11 support (requires game restart). ",
+        .labels = {"Off", "On"},
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -383,13 +392,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
 
-      renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
-        return device->get_api() == reshade::api::device_api::d3d12;
-      };
-
+      renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::shader::allow_multiple_push_constants = true;
       renodx::mods::shader::expected_constant_buffer_index = 13;
       renodx::mods::shader::expected_constant_buffer_space = 50;
+
+      renodx::mods::swapchain::SetUseHDR10(true);
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
@@ -404,6 +412,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  if (renodx::utils::settings::FindSetting("ProcessingForceHDR")->GetValue() == 1.f) {
+    renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  }
 
   return TRUE;
 }
