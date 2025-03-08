@@ -39,6 +39,7 @@
 #include "../utils/constants.hpp"
 #include "../utils/data.hpp"
 #include "../utils/descriptor.hpp"
+#include "../utils/format.hpp"
 #include "../utils/pipeline_layout.hpp"
 #include "../utils/shader.hpp"
 #include "../utils/shader_compiler_directx.hpp"
@@ -66,7 +67,7 @@
 
 namespace {
 
-std::atomic_bool is_snapshotting = false;
+reshade::api::device* snapshot_device = nullptr;
 
 std::atomic_bool snapshot_pane_show_vertex_shaders = true;
 std::atomic_bool snapshot_pane_show_pixel_shaders = true;
@@ -76,6 +77,7 @@ std::atomic_bool snapshot_pane_show_blends = true;
 std::atomic_bool shaders_pane_show_vertex_shaders = true;
 std::atomic_bool shaders_pane_show_pixel_shaders = true;
 std::atomic_bool shaders_pane_show_compute_shaders = true;
+std::atomic_uint32_t device_data_index = 0;
 
 struct ShaderDetails {
   uint32_t shader_hash;
@@ -189,6 +191,7 @@ struct __declspec(uuid("3224946b-5c5f-478a-8691-83fbb9f88f1b")) CommandListData 
 };
 
 struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
+  reshade::api::device* device;
   std::unordered_map<uint32_t, ShaderDetails> shader_details;
   std::vector<CommandListData> command_list_data;
   std::unordered_map<uint64_t, std::vector<reshade::api::pipeline_layout_param>> pipeline_layout_params;
@@ -199,11 +202,6 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
 
   void StartSnapshot() {
     this->command_list_data.clear();
-    is_snapshotting = true;
-  }
-
-  static void StopSnapshot() {
-    is_snapshotting = false;
   }
 
   ShaderDetails* GetShaderDetails(uint32_t shader_hash) {
@@ -387,11 +385,24 @@ void RemoveDeadSelections() {
 std::vector<std::pair<std::string, std::string>> setting_shader_defines;
 bool setting_shader_defines_changed = false;
 
+std::shared_mutex device_data_list_mutex;
+std::vector<DeviceData*> device_data_list;
+
 void OnInitDevice(reshade::api::device* device) {
-  renodx::utils::data::Create<DeviceData>(device);
+  auto* device_data = renodx::utils::data::Create<DeviceData>(device);
+  std::unique_lock lock(device_data_list_mutex);
+  device_data->device = device;
+  device_data_list.emplace_back(device_data);
 }
 
 void OnDestroyDevice(reshade::api::device* device) {
+  if (snapshot_device == device) {
+    snapshot_device = nullptr;
+  }
+  auto* device_data = renodx::utils::data::Get<DeviceData>(device);
+  if (device_data == nullptr) return;
+  std::unique_lock lock(device_data_list_mutex);
+  std::erase(device_data_list, device_data);
   renodx::utils::data::Delete<DeviceData>(device);
 }
 
@@ -462,7 +473,7 @@ void OnBindPipeline(
     reshade::api::command_list* cmd_list,
     reshade::api::pipeline_stage stage,
     reshade::api::pipeline pipeline) {
-  if (!is_snapshotting) return;
+  if (cmd_list->get_device() != snapshot_device) return;
 
   auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
   auto& details = cmd_list_data->GetCurrentDrawDetails();
@@ -555,7 +566,7 @@ void OnPushDescriptors(
     reshade::api::pipeline_layout layout,
     uint32_t layout_param,
     const reshade::api::descriptor_table_update& update) {
-  if (!is_snapshotting) return;
+  if (cmd_list->get_device() != snapshot_device) return;
   auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
   auto& details = data->GetCurrentDrawDetails();
   auto* device = cmd_list->get_device();
@@ -683,7 +694,7 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
     }
   }
 
-  if (is_snapshotting) {
+  if (device == snapshot_device) {
     auto* command_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
     auto& draw_details = command_list_data->GetCurrentDrawDetails();
     draw_details.draw_method = draw_method;
@@ -939,6 +950,7 @@ void RenderMenuBar(reshade::api::device* device, DeviceData* data) {
     ImGui::PushID("##SnapshotButton");
     if (ImGui::MenuItem("Snapshot")) {
       data->StartSnapshot();
+      snapshot_device = data->device;
       renodx::utils::trace::trace_running = true;
     }
     ImGui::PopID();
@@ -1827,6 +1839,39 @@ void RenderSettingsPane(reshade::api::device* device, DeviceData* data) {
     DrawSettingBoolCheckbox("Show Pixel Shaders", "SnapshotPaneShowPixelShaders", &snapshot_pane_show_pixel_shaders);
     DrawSettingBoolCheckbox("Show Compute Shaders", "SnapshotPaneShowComputeShaders", &snapshot_pane_show_compute_shaders);
     DrawSettingBoolCheckbox("Show Blends", "SnapshotPaneShowBlends", &snapshot_pane_show_blends);
+    std::shared_lock lock(device_data_list_mutex);
+    static std::string current_item;
+    auto size = device_data_list.size();
+    std::vector<std::string> items(size);
+    for (int i = 0; i < size; ++i) {
+      auto* device_data = device_data_list[i];
+      if (device_data->device == nullptr) {
+        assert(device_data->device != nullptr);
+        continue;
+      }
+      std::stringstream s;
+      s << PRINT_PTR(reinterpret_cast<uint64_t>(device_data->device));
+      s << " (" << device_data->device->get_api() << ")";
+      auto name = s.str();
+      items[i] = name;
+      if (device_data_index == i) {
+        current_item.assign(name);
+      }
+    }
+
+    if (!current_item.empty() && ImGui::BeginCombo("Select Device", current_item.c_str())) {
+      for (int n = 0; n < items.size(); n++) {
+        bool is_selected = (current_item == items[n]);
+        if (ImGui::Selectable(items[n].c_str(), is_selected)) {
+          current_item = items[n];
+          device_data_index = n;
+        }
+        if (is_selected) {
+          ImGui::SetItemDefaultFocus();
+        }
+      }
+      ImGui::EndCombo();
+    }
   }
 
   {
@@ -2258,12 +2303,28 @@ void InitializeUserSettings() {
 
 // @see https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
-  auto* device = runtime->get_device();
+  DeviceData* data = nullptr;
+  {
+    std::shared_lock lock(device_data_list_mutex);
+    uint32_t index = device_data_index;
+    auto size = device_data_list.size();
 
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
+    for (auto i = 0; i < size; ++i) {
+      data = device_data_list.at(i);
+      if (data->device == nullptr) {
+        assert(data->device != nullptr);
+        continue;
+      }
+      if (i == index) break;
+    }
+  }
+
+  // auto* data = renodx::utils::data::Get<DeviceData>(device);
 
   // Runtime may be on a separate device
   if (data == nullptr) return;
+
+  auto* device = data->device;
 
   std::unique_lock lock(data->mutex);  // Probably not needed
   if (data->runtime == nullptr) {
@@ -2376,7 +2437,9 @@ void OnPresent(
     renodx::utils::shader::dump::DumpAllPending();
   }
 
-  DeviceData::StopSnapshot();
+  if (swapchain->get_device() == snapshot_device) {
+    snapshot_device = nullptr;
+  }
 }
 
 bool initialized = false;
