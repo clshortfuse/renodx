@@ -211,6 +211,10 @@ class Decompiler {
     return std::format("{}", input);
   }
 
+  static std::string ParseUintString(std::string_view input) {
+    return std::format("{}u", input);
+  }
+
   static std::string ParseFloatString(std::string_view input) {
     std::string output;
     double_t value;
@@ -1152,9 +1156,12 @@ class Decompiler {
   };
 
   struct PhiData {
+    //   %50 = phi i1 [ false, %0 ], [ %48, %45 ]
     std::string variable;
-    std::string value;
     std::string type;
+    std::string value;
+    int predecessor;
+    int code_function;
     bool is_assign = false;
   };
   struct CodeBlock {
@@ -1181,6 +1188,19 @@ class Decompiler {
     std::map<uint32_t, uint32_t> variable_declaration;  // variable _codeblocknumber
     std::map<uint32_t, uint32_t> assignment_values;
     std::set<uint32_t> single_use_variables;
+
+    std::vector<std::string> ComputePhiAssignments(CodeBlock* code_block, int branch_code_function) {
+      std::vector<std::string> phi_lines;
+      for (const auto& [variable, type, value, predecessor, code_function, is_assign] : code_block->phi_lines) {
+        // add phi lines
+        if (code_function == branch_code_function && is_assign) {
+          auto assignment_value = std::format("{}", this->ParseByType(value, type));
+          auto phi_line = std::format("_{} = {};", variable, assignment_value);
+          phi_lines.push_back(phi_line);
+        }
+      }
+      return phi_lines;
+    }
 
     void IncrementVariableCounter(std::string_view variable) {
       uint32_t variable_number;
@@ -1231,7 +1251,7 @@ class Decompiler {
       if (input.at(0) == '%') {
         return ParseVariable(input, "uint");
       }
-      return ParseIntString(input);
+      return ParseUintString(input);
     }
 
     std::string ParseFloat(std::string_view input) {
@@ -2140,32 +2160,31 @@ class Decompiler {
         }
 
       } else if (instruction == "icmp") {
-        // %39 = fcmp fast ogt float %37, 0.000000e+00
-        auto [fast, op, type, a, b] = StringViewMatch<5>(assignment, std::regex{R"(icmp (fast )?(\S+) (\S+) (\S+), (\S+))"});
+        // %44 = icmp eq i32 %43, 0
+        auto [op, type, a, b] = StringViewMatch<4>(assignment, std::regex{R"(icmp (\S+) (\S+) (\S+), (\S+))"});
         std::string cast;
-        if (!fast.empty()) {
-          if (op.starts_with("u")) {
-            cast = "(uint)";
-          } else if (op.starts_with("s")) {
-            cast = "(int)";
-          }
+
+        if (op.starts_with("u")) {
+          cast = "(uint)";
+        } else if (op.starts_with("s")) {
+          cast = "(int)";
         }
 
         assignment_type = "bool";
         if (op == "false") {
           assignment_value = "false";
         } else if (op == "eq") {
-          assignment_value = std::format("({} == {})", ParseInt(a), ParseInt(b));
+          assignment_value = std::format("({} == {})", ParseByType(a, type), ParseByType(b, type));
         } else if (op == "ne") {
-          assignment_value = std::format("({} != {})", ParseInt(a), ParseInt(b));
+          assignment_value = std::format("({} != {})", ParseByType(a, type), ParseByType(b, type));
         } else if (op == "ugt" || op == "sgt") {
-          assignment_value = std::format("({}{} > {}{})", cast, ParseInt(a), cast, ParseInt(b));
+          assignment_value = std::format("({}{} > {}{})", cast, ParseByType(a, type), cast, ParseByType(b, type));
         } else if (op == "uge" || op == "sge") {
-          assignment_value = std::format("({}{} >= {}{})", cast, ParseInt(a), cast, ParseInt(b));
+          assignment_value = std::format("({}{} >= {}{})", cast, ParseByType(a, type), cast, ParseByType(b, type));
         } else if (op == "ult" || op == "slt") {
-          assignment_value = std::format("({}{} < {}{})", cast, ParseInt(a), cast, ParseInt(b));
+          assignment_value = std::format("({}{} < {}{})", cast, ParseByType(a, type), cast, ParseByType(b, type));
         } else if (op == "ule" || op == "sle") {
-          assignment_value = std::format("({}{} <= {}{})", cast, ParseInt(a), cast, ParseInt(b));
+          assignment_value = std::format("({}{} <= {}{})", cast, ParseByType(a, type), cast, ParseByType(b, type));
         } else {
           std::cerr << op << "\n";
           throw std::invalid_argument("Could not parse code assignment operator");
@@ -2276,24 +2295,28 @@ class Decompiler {
         bool declared = false;
         auto pairs = StringViewSplitAll(arguments, std::regex{R"((\[ (\S+), %(\S+) \]),?)"}, {2, 3});
 
-        for (const auto& [value, function_number] : pairs) {
+        for (const auto& [value, predecessor] : pairs) {
           ParseByType(value, type);
-          int function_int;
-          FromStringView(function_number, function_int);
-          if (function_int == 0) {
-            this->code_blocks[function_int].phi_lines.push_back({
+          int predecessor_int;
+          FromStringView(predecessor, predecessor_int);
+          if (predecessor_int == 0) {
+            this->code_blocks[predecessor_int].phi_lines.push_back({
                 .variable = std::string(variable),
-                .value = std::string(value),
                 .type = std::string(type),
+                .value = std::string(value),
+                .predecessor = predecessor_int,
+                .code_function = this->current_code_block_number,
                 .is_assign = false,
             });
 
             declared = true;
           } else {
-            this->code_blocks[function_int].phi_lines.push_back({
+            this->code_blocks[predecessor_int].phi_lines.push_back({
                 .variable = std::string(variable),
-                .value = std::string(value),
                 .type = std::string(type),
+                .value = std::string(value),
+                .predecessor = predecessor_int,
+                .code_function = this->current_code_block_number,
                 .is_assign = true,
             });
           }
@@ -2301,8 +2324,10 @@ class Decompiler {
         if (!declared) {
           this->code_blocks[0].phi_lines.push_back({
               .variable = std::string(variable),
-              .value = "",
               .type = std::string(type),
+              .value = "",
+              .predecessor = 0,
+              .code_function = this->current_code_block_number,
               .is_assign = false,
           });
 
@@ -2555,7 +2580,7 @@ class Decompiler {
     void ParseBlockDefinition(std::string_view line) {
       // ; <label>:21                                      ; preds = %0
       static auto block_definition_regex = std::regex{R"(^; <label>:(\S+)\s+; preds = (.*))"};
-      auto [line_number, predicates] = StringViewMatch<2>(line, block_definition_regex);
+      auto [line_number, predecessors] = StringViewMatch<2>(line, block_definition_regex);
       FromStringView(line_number, this->current_code_block_number);
     }
 
@@ -3493,20 +3518,12 @@ class Decompiler {
       for (const auto& hlsl_line : code_block.hlsl_lines) {
         string_stream << spacing << hlsl_line << "\n";
       }
-      for (const auto& [variable, value, type, is_assign] : code_block.phi_lines) {
+      for (const auto& [variable, type, value, predecessor, code_function, is_assign] : code_block.phi_lines) {
         auto assignment_type = ParseType(type);
         std::string phi_line;
-        if (value.empty()) {
-          phi_line = std::format("{} _{};", assignment_type, variable);
-        } else {
-          auto assignment_value = std::format("{}", current_code_function.ParseByType(value, type));
-
-          if (is_assign) {
-            phi_line = std::format("_{} = {};", variable, assignment_value);
-          } else {
-            phi_line = std::format("{} _{} = {};", assignment_type, variable, assignment_value);
-          }
-        }
+        if (is_assign) continue;
+        // Declare variable now
+        phi_line = std::format("{} _{};", assignment_type, variable);
         string_stream << spacing << phi_line << "\n";
       }
 
@@ -3516,7 +3533,33 @@ class Decompiler {
 
       int next_convergence = pending_convergences.empty() ? -1 : pending_convergences.rbegin()[0];
 
-      auto on_branch = [&](int branch_number) {
+      auto close_lonely_if = [&](int else_code_function) {
+        std::vector<std::string> phi_lines = current_code_function.ComputePhiAssignments(&code_block, else_code_function);
+        if (phi_lines.empty()) {
+          string_stream << spacing << "}\n";
+        } else {
+          string_stream << spacing << "} else {\n";
+          indent_spacing();
+          for (const auto& phi_line : phi_lines) {
+#if DECOMPILER_DXC_DEBUG >= 2
+            string_stream << spacing << "// else_code_function: " << else_code_function << "\n";
+#endif
+            string_stream << spacing << phi_line << "\n";
+          }
+          unindent_spacing();
+          string_stream << spacing << "}\n";
+        }
+      };
+
+      auto on_branch = [&](int branch_number, bool is_fallthrough = false) {
+        if (!is_fallthrough) {
+          for (const auto& phi_line : current_code_function.ComputePhiAssignments(&code_block, branch_number)) {
+#if DECOMPILER_DXC_DEBUG >= 2
+            string_stream << spacing << "// branch_number: " << branch_number << "\n";
+#endif
+            string_stream << spacing << phi_line << "\n";
+          }
+        }
         if (current_loop == branch_number) {
           string_stream << spacing << "continue;\n";  // go back
         } else if (next_convergence == branch_number) {
@@ -3524,7 +3567,7 @@ class Decompiler {
           string_stream << spacing << "// fn:converge " << line_number << " => " << next_convergence << "\n";
 #endif
           // noop
-        } else if (std::find(pending_convergences.begin(), pending_convergences.end(), branch_number) != pending_convergences.end()) {
+        } else if (std::ranges::find(pending_convergences, branch_number) != pending_convergences.end()) {
           string_stream << spacing << "break;\n";
         } else {
           append_code_block(branch_number);
@@ -3550,7 +3593,9 @@ class Decompiler {
         indent_spacing();
         on_branch(code_block.branch.branch_condition_false);
         unindent_spacing();
-        string_stream << spacing << "}\n";
+
+        close_lonely_if(next_convergence);
+
         on_complete();
         return;
       }
@@ -3563,7 +3608,9 @@ class Decompiler {
         indent_spacing();
         on_branch(code_block.branch.branch_condition_true);
         unindent_spacing();
-        string_stream << spacing << "}\n";
+
+        close_lonely_if(next_convergence);
+
         on_complete();
         return;
       }
@@ -3594,7 +3641,9 @@ class Decompiler {
         indent_spacing();
         on_branch(code_block.branch.branch_condition_false);
         unindent_spacing();
-        string_stream << spacing << "}\n";
+
+        close_lonely_if(pair_convergence);
+
         // Only print else
       } else if (pair_convergence == code_block.branch.branch_condition_false) {
         if (code_block.branch.use_hint) {
@@ -3604,7 +3653,9 @@ class Decompiler {
         indent_spacing();
         on_branch(code_block.branch.branch_condition_true);
         unindent_spacing();
-        string_stream << spacing << "}\n";
+
+        close_lonely_if(pair_convergence);
+
       } else if (code_block.branch.branch_condition_true < code_block.branch.branch_condition_false) {
         if (code_block.branch.use_hint) {
           string_stream << spacing << "[branch]\n";
@@ -3636,7 +3687,7 @@ class Decompiler {
       if (pair_convergence != -1) {
         pending_convergences.pop_back();
         bool is_empty = pending_convergences.empty();
-        on_branch(pair_convergence);
+        on_branch(pair_convergence, true);
         if (!is_empty) {
           unindent_spacing();
           string_stream << spacing << "} while (false);\n";
