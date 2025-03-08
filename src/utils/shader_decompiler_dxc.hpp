@@ -1243,10 +1243,14 @@ class Decompiler {
         if (auto pair = variable_aliases.find(result_string);
             pair != variable_aliases.end()) {
           auto& [alias_type, alias_value] = pair->second;
-          if (expected_type != alias_type) {
-            return ParseWrapped(CastType(alias_type, alias_value));
-          }
-          return ParseWrapped(alias_value);
+
+          static constexpr const auto* SAFE_CHARACTERS = "012345789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_.";
+          // static constexpr const auto *UNSAFE_CHARACTERS = " *+-/&^|";
+          bool needs_wrap = alias_value.find_first_not_of(SAFE_CHARACTERS) != std::string_view::npos;
+          auto new_value = (expected_type != alias_type)
+                               ? CastType(alias_type, alias_value)
+                               : alias_value;
+          return needs_wrap ? ParseWrapped(new_value) : new_value;
         }
       }
       return std::format("_{}", result_string);
