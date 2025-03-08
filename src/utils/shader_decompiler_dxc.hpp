@@ -1171,6 +1171,33 @@ class Decompiler {
     CodeBranch branch;
   };
 
+  static bool IsWrapped(std::string_view input) {
+    if (!input.starts_with('(')) return false;
+    size_t parentheses_count = 1;
+    auto size = input.size();
+    for (auto i = 1; i < size; i++) {
+      if (input[i] == '(') {
+        ++parentheses_count;
+      } else if (input[i] == ')') {
+        if (parentheses_count == 1) {
+          return (i == size - 1);
+        }
+        --parentheses_count;
+      }
+    }
+    return false;
+  }
+
+  static std::string ParseWrapped(std::string_view input) {
+    return (!IsWrapped(input))
+               ? std::format("({})", input)
+               : std::string(input);
+  }
+
+  static std::string CastType(std::string_view type, std::string_view variable) {
+    return std::format("({}){}", type, ParseWrapped(variable));
+  }
+
   struct CodeFunction {
     std::string_view name;
     std::string_view return_type;
@@ -1216,18 +1243,10 @@ class Decompiler {
         if (auto pair = variable_aliases.find(result_string);
             pair != variable_aliases.end()) {
           auto& [alias_type, alias_value] = pair->second;
-          bool needs_wrap = !alias_value.starts_with('(') || !alias_value.ends_with(')');
-          needs_wrap = true;
           if (expected_type != alias_type) {
-            if (needs_wrap) {
-              return std::format("(({})({}))", alias_type, alias_value);
-            }
-            return std::format("({}){}", alias_type, alias_value);
+            return ParseWrapped(CastType(alias_type, alias_value));
           }
-          if (needs_wrap) {
-            return std::format("({})", alias_value);
-          }
-          return std::format("{}", alias_value);
+          return ParseWrapped(alias_value);
         }
       }
       return std::format("_{}", result_string);
@@ -1512,7 +1531,7 @@ class Decompiler {
           if (auto pair = UNARY_FLOAT_OPS.find(std::string(opNumber));
               pair != UNARY_FLOAT_OPS.end()) {
             assignment_type = ParseType(type);
-            assignment_value = std::format("{}({})", pair->second, ParseFloat(value));
+            assignment_value = std::format("{}{}", pair->second, ParseWrapped(ParseFloat(value)));
             // decompiled = std::format("{} _{} = {}({});", ParseType(type), variable, pair->second, ParseFloat(value));
           } else {
             throw std::invalid_argument("Unknown @dx.op.unary.f32");
@@ -1522,7 +1541,7 @@ class Decompiler {
           if (auto pair = UNARY_INT32_OPS.find(std::string(opNumber));
               pair != UNARY_INT32_OPS.end()) {
             assignment_type = ParseType(type);
-            assignment_value = std::format("{}({})", pair->second, ParseFloat(value));
+            assignment_value = std::format("{}{}", pair->second, ParseWrapped(ParseFloat(value)));
             // decompiled = std::format("{} _{} = {}({});", ParseType(type), variable, pair->second, ParseFloat(value));
           } else {
             throw std::invalid_argument("Unknown @dx.op.unary.i32");
@@ -1538,7 +1557,7 @@ class Decompiler {
               assignment_type = ParseType(type);
               // decompiled = std::format("{} _{} = {}({});", ParseType(type), variable, pair->second, ParseFloat(value));
             }
-            assignment_value = std::format("{}({})", pair->second, ParseFloat(value));
+            assignment_value = CastType(pair->second, ParseFloat(value));
           } else {
             throw std::invalid_argument("Unknown @dx.op.unaryBits.i32");
           }
@@ -1800,7 +1819,7 @@ class Decompiler {
           } else {
             throw std::invalid_argument("Unknown @dx.op.bufferLoad.i32 resource");
           }
-          assignment_value = std::format("{}.Load({})", res_name, ParseInt(index));
+          assignment_value = std::format("{}.Load{}", res_name, ParseWrapped(ParseInt(index)));
 
         } else if (functionName == "@dx.op.bufferLoad.f32") {
           // call %dx.types.ResRet.i32 @dx.op.bufferLoad.i32(i32 68, %dx.types.Handle %31, i32 %28, i32 undef)  ; BufferLoad(srv,index,wot)
@@ -1814,7 +1833,7 @@ class Decompiler {
           } else {
             throw std::invalid_argument("Unknown @dx.op.bufferLoad.f32 resource");
           }
-          assignment_value = std::format("{}.Load({})", res_name, ParseInt(index));
+          assignment_value = std::format("{}.Load{}", res_name, ParseWrapped(ParseInt(index)));
         } else if (functionName == "@dx.op.threadId.i32") {
           // call i32 @dx.op.threadId.i32(i32 93, i32 0)  ; ThreadId(component)
           auto [opNumber, component] = StringViewSplit<2>(functionParamsString, param_regex, 2);
@@ -1839,7 +1858,7 @@ class Decompiler {
           if (auto pair = UNARY_FLOAT_OPS.find(std::string(opNumber));
               pair != UNARY_FLOAT_OPS.end()) {
             assignment_type = ParseType(type);
-            assignment_value = std::format("{}({})", pair->second, ParseFloat(value));
+            assignment_value = std::format("{}{}", pair->second, ParseWrapped(ParseFloat(value)));
           } else {
             throw std::invalid_argument("Unknown @dx.op.isSpecialFloat.f32");
           }
@@ -2000,7 +2019,7 @@ class Decompiler {
           // %504 = call float @dx.op.waveReadLaneFirst.f32(i32 118, float %503)  ; WaveReadLaneFirst(value)
           auto [op, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
           assignment_type = "float";
-          assignment_value = std::format("WaveReadLaneFirst({})", ParseFloat(value));
+          assignment_value = std::format("WaveReadLaneFirst{}", ParseWrapped(ParseFloat(value)));
         } else {
           std::cerr << line << "\n";
           std::cerr << "Function name: " << functionName << "\n";
@@ -2072,7 +2091,7 @@ class Decompiler {
         // assignment_type = (no_signed_wrap.empty()) ? "uint" : "int";
 
         assignment_type = ParseType(variable_type);
-        assignment_value = std::format("({})({}) >> {}", ParseUnsignedType(variable_type), ParseUint(a), ParseInt(b));
+        assignment_value = std::format("({}){} >> {}", ParseUnsignedType(variable_type), ParseWrapped(ParseUint(a)), ParseInt(b));
       } else if (instruction == "ashr") {
         // %95 = ashr i32 %68, 2
         auto [no_unsigned_wrap, no_signed_wrap, variable_type, a, b] = StringViewMatch<5>(assignment, std::regex{R"(ashr (nuw )?(nsw )?(\S+) (\S+), (\S+))"});
@@ -2139,7 +2158,7 @@ class Decompiler {
         } else if (op == "one") {
           assignment_value = std::format("({} != {})", ParseFloat(a), ParseFloat(b));
         } else if (op == "ord") {
-          assignment_value = std::format("(!isnan({}) && !isnan({}))", ParseFloat(a), ParseFloat(b));
+          assignment_value = std::format("(!isnan{} && !isnan{})", ParseWrapped(ParseFloat(a)), ParseWrapped(ParseFloat(b)));
         } else if (op == "ueq") {
           assignment_value = std::format("!({} != {})", ParseFloat(a), ParseFloat(b));
         } else if (op == "ugt") {
@@ -2153,7 +2172,7 @@ class Decompiler {
         } else if (op == "une") {
           assignment_value = std::format("!({} == {})", ParseFloat(a), ParseFloat(b));
         } else if (op == "uno") {
-          assignment_value = std::format("(isnan({}) || isnan({}))", ParseFloat(a), ParseFloat(b));
+          assignment_value = std::format("(isnan{} || isnan{})", ParseWrapped(ParseFloat(a)), ParseWrapped(ParseFloat(b)));
         } else {
           std::cerr << op << "\n";
           throw std::invalid_argument("Could not parse code assignment operator");
@@ -2209,15 +2228,15 @@ class Decompiler {
         auto [from_type, a, to_type] = StringViewMatch<3>(assignment, std::regex{R"(zext (?:fast )?(\S+) (\S+) to (\S+))"});
         assignment_type = ParseType(to_type);
         if (from_type == "i16") {
-          assignment_value = std::format("(min16uint)({})", ParseInt(a));
+          assignment_value = std::format("(min16uint){}", ParseWrapped(ParseInt(a)));
         } else {
-          assignment_value = std::format("(uint)({})", ParseInt(a));
+          assignment_value = std::format("(uint){}", ParseWrapped(ParseInt(a)));
         }
       } else if (instruction == "sitofp") {
         // sitofp i32 %47 to float
         auto [a] = StringViewMatch<1>(assignment, std::regex{R"(sitofp (?:\S+) (\S+) to (?:\S+))"});
         assignment_type = "float";
-        assignment_value = std::format("float({})", ParseInt(a));
+        assignment_value = std::format("float{}", ParseWrapped(ParseInt(a)));
       } else if (instruction == "uitofp") {
         // uitofp i32 %158 to float
         // uitofp i16 %32 to float
@@ -2227,11 +2246,11 @@ class Decompiler {
       } else if (instruction == "fptoui") {
         auto [a] = StringViewMatch<1>(assignment, std::regex{R"(fptoui (?:\S+) (\S+) to (?:\S+))"});
         assignment_type = "uint";
-        assignment_value = std::format("uint({})", ParseFloat(a));
+        assignment_value = std::format("uint{}", ParseWrapped(ParseFloat(a)));
       } else if (instruction == "fptosi") {
         auto [a] = StringViewMatch<1>(assignment, std::regex{R"(fptosi (?:\S+) (\S+) to (?:\S+))"});
         assignment_type = "int";
-        assignment_value = std::format("int({})", variable, ParseFloat(a));
+        assignment_value = std::format("int{}", ParseWrapped(ParseFloat(a)));
       } else if (instruction == "and") {
         auto [type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(and (\S+) (\S+), (\S+))"});
         if (type == "i1") {
@@ -2299,42 +2318,29 @@ class Decompiler {
           ParseByType(value, type);
           int predecessor_int;
           FromStringView(predecessor, predecessor_int);
-          if (predecessor_int == 0) {
-            this->code_blocks[predecessor_int].phi_lines.push_back({
-                .variable = std::string(variable),
-                .type = std::string(type),
-                .value = std::string(value),
-                .predecessor = predecessor_int,
-                .code_function = this->current_code_block_number,
-                .is_assign = false,
-            });
 
-            declared = true;
-          } else {
-            this->code_blocks[predecessor_int].phi_lines.push_back({
-                .variable = std::string(variable),
-                .type = std::string(type),
-                .value = std::string(value),
-                .predecessor = predecessor_int,
-                .code_function = this->current_code_block_number,
-                .is_assign = true,
-            });
-          }
-        }
-        if (!declared) {
-          this->code_blocks[0].phi_lines.push_back({
+          this->code_blocks[predecessor_int].phi_lines.push_back({
               .variable = std::string(variable),
               .type = std::string(type),
-              .value = "",
-              .predecessor = 0,
+              .value = std::string(value),
+              .predecessor = predecessor_int,
               .code_function = this->current_code_block_number,
-              .is_assign = false,
+              .is_assign = true,
           });
-
-          // this->code_blocks[0].phi_lines.push_back(
-          //     std::format("{} _{};", ParseType(type), variable));
-          // phi_variables.emplace(variable);
         }
+
+        this->code_blocks[0].phi_lines.push_back({
+            .variable = std::string(variable),
+            .type = std::string(type),
+            .value = "",
+            .predecessor = 0,
+            .code_function = this->current_code_block_number,
+            .is_assign = false,
+        });
+
+        // this->code_blocks[0].phi_lines.push_back(
+        //     std::format("{} _{};", ParseType(type), variable));
+        // phi_variables.emplace(variable);
 
       } else if (instruction == "load") {
         // load float, float* %1681, align 4, !tbaa !26
@@ -2359,7 +2365,7 @@ class Decompiler {
           // decompiled = std::format("// {}", line);
         } else {
           assignment_type = ParseType(dest_type);
-          assignment_value = std::format("{}({})", ParseTrunc(dest_type), ParseVariable(source_variable, ParseType(source_type)));
+          assignment_value = std::format("{}{}", ParseTrunc(dest_type), ParseWrapped(ParseVariable(source_variable, ParseType(source_type))));
           // IncrementVariableCounter(source_variable);
         }
       } else if (instruction == "fptrunc") {
@@ -2369,7 +2375,7 @@ class Decompiler {
           // decompiled = std::format("// {}", line);
         } else {
           assignment_type = ParseType(dest_type);
-          assignment_value = std::format("{}({})", ParseTrunc(dest_type), ParseVariable(source_variable, ParseType(source_type)));
+          assignment_value = std::format("{}{}", ParseTrunc(dest_type), ParseWrapped(ParseVariable(source_variable, ParseType(source_type))));
           // IncrementVariableCounter(source_variable);
         }
       } else if (instruction == "fpext") {
@@ -2379,7 +2385,7 @@ class Decompiler {
           // decompiled = std::format("// {}", line);
         } else {
           assignment_type = ParseType(dest_type);
-          assignment_value = std::format("{}({})", ParseType(dest_type), ParseVariable(source_variable, ParseType(source_type)));
+          assignment_value = std::format("{}{}", ParseType(dest_type), ParseWrapped(ParseVariable(source_variable, ParseType(source_type))));
           // IncrementVariableCounter(source_variable);
         }
       } else if (instruction == "getelementptr") {
@@ -2482,7 +2488,7 @@ class Decompiler {
         static auto clip_regex = std::regex(R"((.*)( < 0.0f)(\)+))");
         auto [clip_condition, less_than, parentheses_end] = StringViewMatch<3>(condition_string, clip_regex);
         if (less_than.empty()) {
-          decompiled = std::format("if ({}) discard;", ParseBool(condition));
+          decompiled = std::format("if {} discard;", ParseWrapped(ParseBool(condition)));
         } else {
           decompiled = std::format("clip({}{});", clip_condition, parentheses_end);
         }
@@ -3604,7 +3610,7 @@ class Decompiler {
         if (code_block.branch.use_hint) {
           string_stream << spacing << "[branch]\n";
         }
-        string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\n";
+        string_stream << spacing << std::format("if {} {{\n", ParseWrapped(code_block.branch.branch_condition));
         indent_spacing();
         on_branch(code_block.branch.branch_condition_true);
         unindent_spacing();
@@ -3649,7 +3655,7 @@ class Decompiler {
         if (code_block.branch.use_hint) {
           string_stream << spacing << "[branch]\n";
         }
-        string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\n";
+        string_stream << spacing << std::format("if {} {{\n", ParseWrapped(code_block.branch.branch_condition));
         indent_spacing();
         on_branch(code_block.branch.branch_condition_true);
         unindent_spacing();
@@ -3660,7 +3666,7 @@ class Decompiler {
         if (code_block.branch.use_hint) {
           string_stream << spacing << "[branch]\n";
         }
-        string_stream << spacing << "if (" << code_block.branch.branch_condition << ") {\n";
+        string_stream << spacing << std::format("if {} {{\n", ParseWrapped(code_block.branch.branch_condition));
         indent_spacing();
         on_branch(code_block.branch.branch_condition_true);
         unindent_spacing();
