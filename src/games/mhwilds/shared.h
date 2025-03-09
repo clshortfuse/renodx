@@ -22,7 +22,7 @@
 #define RENODX_TONE_MAP_BLOWOUT                shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                  shader_injection.tone_map_flare
 #define RENODX_SWAP_CHAIN_DECODING             ENCODING_NONE
-#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION     shader_injection.swap_chain_gamma_correction
+#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION     1.f  // shader_injection.swap_chain_gamma_correction
 #define RENODX_SWAP_CHAIN_SCALING_NITS         100.f * RENODX_DIFFUSE_WHITE_NITS / 203.f
 #define RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE color::convert::COLOR_SPACE_BT709
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE   shader_injection.swap_chain_custom_color_space
@@ -34,6 +34,7 @@
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define CUSTOM_SHARPNESS                       0.f
+#define CUSTOM_VIGNETTE                        shader_injection.custom_vignette
 #define CUSTOM_LUT_COLOR_STRENGTH              shader_injection.custom_lut_color_strength
 #define CUSTOM_LUT_OUTPUT_STRENGTH             shader_injection.custom_lut_output_strength
 #define CUSTOM_LUT_PROCESSING                  1.f
@@ -68,7 +69,7 @@ struct ShaderInjectData {
   float custom_lut_color_strength;
   float custom_lut_output_strength;
   float custom_film_grain;
-  float custom_sharpness;
+  float custom_vignette;
   float custom_random;
   float custom_exposure_type;
   float custom_exposure_strength;
