@@ -503,9 +503,9 @@ float3 RestoreSaturationLoss(float3 color_input, float3 color_output, Config lut
     float3 color_output = LinearOutput(lutOutputColor, lut_config);                            \
     [branch]                                                                                   \
     if (lut_config.scaling != 0) {                                                             \
-      float3 lutBlack = LoadTexel(lut_texture, 0, lut_config.size);                            \
+      float3 lutBlack = SampleColor(ConvertInput(0, lut_config), lut_config, lut_texture);     \
       float3 lutMid = SampleColor(ConvertInput(0.18f, lut_config), lut_config, lut_texture);   \
-      float3 lutWhite = LoadTexel(lut_texture, 1, lut_config.size);                            \
+      float3 lutWhite = SampleColor(ConvertInput(1.f, lut_config), lut_config, lut_texture);   \
       float3 unclamped_gamma = Unclamp(                                                        \
           GammaOutput(lutOutputColor, lut_config),                                             \
           GammaOutput(lutBlack, lut_config),                                                   \
