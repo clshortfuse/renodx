@@ -91,7 +91,7 @@ void frag_main() {
       _73 = _74;
     }
   }
-  SV_Target.x = _72;;
+  SV_Target.x = _72;
   SV_Target.y = 0.0f;
   SV_Target.z = 0.0f;
   SV_Target.w = 1.0f;

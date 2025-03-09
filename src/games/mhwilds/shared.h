@@ -40,6 +40,7 @@
 #define CUSTOM_ABERRATION                      1.f
 #define CUSTOM_EXPOSURE_TYPE                   shader_injection.custom_exposure_type
 #define CUSTOM_EXPOSURE_STRENGTH               shader_injection.custom_exposure_strength
+#define CUSTOM_FLAT_EXPOSURE_DEFAULT           1.f
 #define CUSTOM_LUT_EXPOSURE_REVERSE            shader_injection.custom_lut_exposure_reverse
 
 // Must be 32bit aligned
