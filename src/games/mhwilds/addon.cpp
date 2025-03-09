@@ -32,6 +32,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xE188DA93),  // postprocess
     CustomShaderEntry(0x1AD0E9A5),  // NewFiltering (bloom)
     CustomShaderEntry(0xB73F523E),  // NewReduction (bloom)
+    CustomShaderEntry(0x4905680A),  // Rare scenario luminance
 };
 
 ShaderInjectData shader_injection;
@@ -55,14 +56,15 @@ float current_settings_mode = 0;
 // };
 
 const std::unordered_map<std::string, float> VANILLA_PLUS_VALUES = {
-    // {"ToneMapType", 1.f},
+    {"ToneMapType", 1.f},
     {"GammaCorrection", 1.f},
     {"ToneMapScaling", 1.f},
+    {"ColorGradeExposure", 0.5},
     {"ColorGradeHighlights", 50.f},
-    {"ColorGradeShadows", 50.f},
-    {"ColorGradeContrast", 60.f},
-    {"ColorGradeSaturation", 53.f},
-    {"ColorGradeHighlightSaturation", 55.f},
+    {"ColorGradeShadows", 60.f},
+    {"ColorGradeContrast", 65.f},
+    {"ColorGradeSaturation", 45.f},
+    {"ColorGradeHighlightSaturation", 70.f},
     {"ColorGradeBlowout", 20.f},
     {"ColorGradeFlare", 0.f},
     {"SwapChainCustomColorSpace", 0.f},
@@ -135,7 +137,7 @@ renodx::utils::settings::Settings settings = {
         .key = "GammaCorrection",
         .binding = &shader_injection.swap_chain_gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 1.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
         .tooltip = "Emulates a display EOTF.",
@@ -205,7 +207,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
-        .default_value = 57.f,
+        .default_value = 70.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
@@ -225,7 +227,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
         .binding = &shader_injection.tone_map_contrast,
-        .default_value = 60.f,
+        .default_value = 70.f,
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
@@ -243,7 +245,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
         .binding = &shader_injection.tone_map_highlight_saturation,
-        .default_value = 67.f,
+        .default_value = 80.f,
         .label = "Highlight Saturation",
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
@@ -255,7 +257,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
         .binding = &shader_injection.tone_map_blowout,
-        .default_value = 20.f,
+        .default_value = 40.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Adds highlight desaturation due to overexposure.",
@@ -267,7 +269,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
         .binding = &shader_injection.tone_map_flare,
-        .default_value = 40.f,
+        .default_value = 62.f,
         .label = "Flare",
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
@@ -349,17 +351,17 @@ renodx::utils::settings::Settings settings = {
         .label = "Exposure Type",
         .section = "Effects",
         .tooltip = "Which color to output",
-        .labels = {"Vanilla", "Fixed", "Auto", "Local"},
+        .labels = {"Vanilla", "Fixed"},
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxExposureStrength",
         .binding = &shader_injection.custom_exposure_strength,
-        .default_value = 200.f,
+        .default_value = 40.f,
         .can_reset = true,
         .label = "Exposure Strength",
         .section = "Effects",
-        .max = 300.f,
+        .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },

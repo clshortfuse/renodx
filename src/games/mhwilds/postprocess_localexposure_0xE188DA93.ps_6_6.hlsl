@@ -462,14 +462,20 @@ SamplerState BilinearBorder : register(s6, space32);
 
 SamplerState TrilinearClamp : register(s9, space32);
 
+/*
+REF pp mod findings:
+Both disabled: flat exposure with no luminance shaders
+Local exposure only: flat exposure with flat luminance shaders
+Both enabled: local exposure with blurred luminance shaders
+ */
 float4 main(
     noperspective float4 SV_Position: SV_Position,
     linear float4 Kerare: Kerare,
     linear float Exposure: Exposure)
     : SV_Target {
   float4 SV_Target;
-  bool _44 = ((((uint)(CBControl_000w)) & 1) == 0);
 
+  bool _44 = ((((uint)(CBControl_000w)) & 1) == 0);
   bool _50 = false;
   bool _56;
   float _105;
@@ -694,6 +700,7 @@ float4 main(
         _403 = lerp(_134, _403, CUSTOM_ABERRATION);
 
         float4 _406 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2(_402, _403));
+
         _421 = 1.0f;
         do {
           if (!((((uint)(Tonemap_001y)) == 0))) {  // linearStart
@@ -708,7 +715,7 @@ float4 main(
           float _460 = _456 - (Tonemap_004y);
           float _472 = exp2(((((((((bool)((_460 > 0.0f))) ? (Tonemap_003z) : (Tonemap_003w))) * _460) - _457) + (Tonemap_004y)) + ((Tonemap_004x) * (_457 - _456))));
 
-          _472 = PickExposure(_472, 1.f, Tonemap_000x * (asfloat((((int4)(asint(WhitePtSrv[0 / 4]))).x))), _472);
+          _472 = PickExposure(_472);
 
           _1453 = (((_406.x) * _108) * _472);
           _1454 = (((_406.y) * _108) * _472);
@@ -850,7 +857,10 @@ float4 main(
             } while (false);
           }
         }
+        // This section in local FOR SURE
         float4 _956 = RE_POSTPROCESS_Color.Sample(BilinearBorder, float2(_952, _953));
+        SV_Target.rgb = float3(1, 1, 2);
+
         do {
           // Here
           if (!((((uint)(Tonemap_001y)) == 0))) {
@@ -866,7 +876,7 @@ float4 main(
           float _1011 = _1007 - (Tonemap_004y);
           float _1023 = exp2(((((((((bool)((_1011 > 0.0f))) ? (Tonemap_003z) : (Tonemap_003w))) * _1011) - _1008) + (Tonemap_004y)) + ((Tonemap_004x) * (_1008 - _1007))));
 
-          _1023 = PickExposure(_1023, 1.f, Tonemap_000x * (asfloat((((int4)(asint(WhitePtSrv[0 / 4]))).x))), _1023);
+          _1023 = PickExposure(_1023);
 
           _1453 = (((_956.x) * _108) * _1023);
           _1454 = (((_956.y) * _108) * _1023);
@@ -880,11 +890,16 @@ float4 main(
         } while (false);
       } while (false);
     } else {
+      // This section in local FOR SURE
+      SV_Target.rgb = float3(1, 1, 1);
+
       float _1031 = (SceneInfo_023z) * (SV_Position.x);
       float _1032 = (SceneInfo_023w) * (SV_Position.y);
       do {
         if (!_58) {
+          // Here
           float4 _1036 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2(_1031, _1032));
+
           _1051 = 1.0f;
           do {
             if (!((((uint)(Tonemap_001y)) == 0))) {
@@ -899,7 +914,7 @@ float4 main(
             float _1090 = _1086 - (Tonemap_004y);
             float _1102 = exp2(((((((((bool)((_1090 > 0.0f))) ? (Tonemap_003z) : (Tonemap_003w))) * _1090) - _1087) + (Tonemap_004y)) + ((Tonemap_004x) * (_1087 - _1086))));
 
-            _1102 = PickExposure(_1102, 1.f, Tonemap_000x * (asfloat((((int4)(asint(WhitePtSrv[0 / 4]))).x))), _1102);
+            _1102 = PickExposure(_1102);
 
             _1446 = (_1102 * (_1036.x));
             _1447 = (_1102 * (_1036.y));
@@ -997,7 +1012,7 @@ float4 main(
               // This is shortfuse's Vanilla/Local exposure options, they're the same
               float _1441 = exp2(((((((((bool)((_1429 > 0.0f))) ? (Tonemap_003z) : (Tonemap_003w))) * _1429) - _1426) + (Tonemap_004y)) + ((Tonemap_004x) * (_1426 - _1425))));
 
-              _1441 = PickExposure(_1441, 1.f, Tonemap_000x * (asfloat((((int4)(asint(WhitePtSrv[0 / 4]))).x))), _1441);
+              _1441 = PickExposure(_1441);
               _1446 = (_1441 * (_1375.x));
               _1447 = (_1441 * (_1375.y));
               _1448 = (_1441 * (_1375.z));
@@ -1563,26 +1578,11 @@ float4 main(
                   _2810 = ((mad(_2795, (LDRPostProcessParam_014y), (mad(_2794, (LDRPostProcessParam_013y), (_2793 * (LDRPostProcessParam_012y)))))) + (LDRPostProcessParam_015y));
                   _2811 = ((mad(_2795, (LDRPostProcessParam_014z), (mad(_2794, (LDRPostProcessParam_013z), (_2793 * (LDRPostProcessParam_012z)))))) + (LDRPostProcessParam_015z));
 
-                  float3 ap1_input = float3(_2400, _2401, _2402);
-                  float3 ap1_output = float3(_2809, _2810, _2811);
-                  float ap1_input_y = renodx::color::y::from::AP1(ap1_input);
-                  float ap1_output_y = renodx::color::y::from::AP1(ap1_output);
-                  float3 new_color;
-                  new_color = lerp(
-                      ap1_input * (renodx::math::DivideSafe(ap1_output_y, ap1_input_y, 0)),
-                      ap1_output,
-                      CUSTOM_LUT_COLOR_STRENGTH);
-
-                  if (CUSTOM_LUT_EXPOSURE_REVERSE > 0.f) {
-                    new_color = lerp(
-                        ap1_input,
-                        ap1_output * (renodx::math::DivideSafe(ap1_input_y, ap1_output_y, 0)),
-                        CUSTOM_LUT_COLOR_STRENGTH);
-                  }
-
+                  float3 new_color = CustomLUTColor(float3(_2400, _2401, _2402), float3(_2809, _2810, _2811));
                   _2809 = new_color.r;
                   _2810 = new_color.g;
                   _2811 = new_color.b;
+
                 } while (false);
               } while (false);
             } while (false);
@@ -1684,10 +1684,7 @@ float4 main(
   SV_Target.x = _3042;
   SV_Target.y = _3043;
   SV_Target.z = _3044;
-  // SV_Target.rgb = float3(_2400, _2401, _2402);
-  // SV_Target.rgb = tTextureMap0.SampleLevel(TrilinearClamp, float3(((_2437 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x)), ((_2447 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x)), ((_2457 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x))), 0.0f).rgb;
-  // SV_Target.rgb = tTextureMap1.SampleLevel(TrilinearClamp, float3(((_2522 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x)), ((_2531 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x)), ((_2540 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x))), 0.0f).rgb;
-  // SV_Target.rgb = tTextureMap2.SampleLevel(TrilinearClamp, float3(((_2614 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x)), ((_2624 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x)), ((_2634 * (LDRPostProcessParam_011y)) + (LDRPostProcessParam_011x))), 0.0f).rgb;
+
   SV_Target.w = 0.0f;
 
   return SV_Target;

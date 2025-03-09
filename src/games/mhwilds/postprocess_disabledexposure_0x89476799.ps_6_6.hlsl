@@ -265,7 +265,7 @@ float4 main(
   SV_Target.x = _300;
   SV_Target.y = _301;
   SV_Target.z = _302;
-  SV_Target.rgb *= 3;
+  
   SV_Target.w = 1.0f;
   return SV_Target;
 }
