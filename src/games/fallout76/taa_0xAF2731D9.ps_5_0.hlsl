@@ -36,23 +36,19 @@ cbuffer cb12 : register(b12) {
 // 3Dmigoto declarations
 #define cmp -
 
-// convert render input for HDR
+// Convert render input for HDR
 float3 convertRenderInput(float3 render) {
-  render /= injectedData.toneMapGameNits / 80.f;
-  render /= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
-  render = pow(saturate(render), 1.f / 2.2f);  // apply inverse gamma correction
+  render = renodx::color::pq::EncodeSafe(render, 100.f);
   return render;
 }
 
-// convert render output for HDR
+// Convert render output for HDR
 float3 convertRenderOutput(float3 render) {
-  render = pow(saturate(render), 2.2f);  // apply gamma correction
-  render *= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
-  render *= injectedData.toneMapGameNits / 80.f;
+  render = renodx::color::pq::DecodeSafe(render, 100.f);
   return render;
 }
 
-void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Target0, out float4 o1 : SV_Target1) {
+void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Target0, out float4 o1: SV_Target1) {
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16;
   uint4 bitmask, uiDest;
   float4 fDest;
