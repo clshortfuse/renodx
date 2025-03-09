@@ -1,7 +1,7 @@
 #ifndef SRC_MHWILDS_SHARED_H_
 #define SRC_MHWILDS_SHARED_H_
 
-#define RENODX_TONE_MAP_TYPE                   shader_injection.tone_map_type
+#define RENODX_TONE_MAP_TYPE                   3.f
 #define RENODX_PEAK_WHITE_NITS                 shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS              shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS             shader_injection.graphics_white_nits
@@ -25,6 +25,7 @@
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION     shader_injection.swap_chain_gamma_correction
 #define RENODX_SWAP_CHAIN_SCALING_NITS         100.f * RENODX_DIFFUSE_WHITE_NITS / 203.f
 #define RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE color::convert::COLOR_SPACE_BT709
+#define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE   shader_injection.swap_chain_custom_color_space
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_NONE
 #define RENODX_SWAP_CHAIN_ENCODING             ENCODING_PQ
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT2020
@@ -32,7 +33,7 @@
 #define RENODX_RENO_DRT_WHITE_CLIP             100.f
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                          shader_injection.custom_random
-#define CUSTOM_SHARPNESS                       shader_injection.custom_sharpness
+#define CUSTOM_SHARPNESS                       0.f
 #define CUSTOM_LUT_COLOR_STRENGTH              shader_injection.custom_lut_color_strength
 #define CUSTOM_LUT_OUTPUT_STRENGTH             shader_injection.custom_lut_output_strength
 #define CUSTOM_LUT_PROCESSING                  1.f
@@ -62,6 +63,7 @@ struct ShaderInjectData {
   float tone_map_hue_processor;
   float tone_map_per_channel;
   float swap_chain_gamma_correction;
+  float swap_chain_custom_color_space;
   float custom_lut_color_strength;
   float custom_lut_output_strength;
   float custom_film_grain;
