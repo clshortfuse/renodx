@@ -608,6 +608,7 @@ float4 main(
     _105 = ((1.0f / (_100 * _100)) * (1.0f - (saturate((((CameraKerare_000x) * (1.0f / (_92 + 1.0f))) + (CameraKerare_000y))))));
   }
   float _107 = saturate((_105 + (CameraKerare_000z)));
+  CustomVignette(_107);
   float _108 = _107 * (Exposure);
   // Lens distortion
   if (_50) {

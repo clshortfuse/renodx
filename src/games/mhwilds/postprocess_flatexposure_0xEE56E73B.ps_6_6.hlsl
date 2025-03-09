@@ -578,6 +578,7 @@ float4 main(
   }
   // Add brightness?
   float _100 = saturate((_98 + (CameraKerare_000z)));  // kerare_brightness
+  CustomVignette(_100);
   float _101 = _100 * (Exposure);                      // Exposure here is < 1.f, so reduces brightness
 
   float custom_flat_exposure = 1.f;

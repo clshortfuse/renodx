@@ -40,4 +40,8 @@ float3 CustomLUTColor(float3 ap1_input, float3 ap1_output) {
   return new_color;
 }
 
+void CustomVignette(inout float vignette) {
+  vignette = lerp(1.f, vignette, CUSTOM_VIGNETTE);
+}
+
 #endif  // SRC_MHWILDS_POSTPROCESS_HLSL_

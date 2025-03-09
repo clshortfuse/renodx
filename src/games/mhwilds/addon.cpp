@@ -133,7 +133,7 @@ renodx::utils::settings::Settings settings = {
         .min = 80.f,
         .max = 500.f,
     },
-    new renodx::utils::settings::Setting{
+    /* new renodx::utils::settings::Setting{
         .key = "GammaCorrection",
         .binding = &shader_injection.swap_chain_gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -143,7 +143,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Emulates a display EOTF.",
         .labels = {"Off", "2.2", "BT.1886"},
         .is_visible = []() { return current_settings_mode >= 1; },
-    },
+    }, */
     new renodx::utils::settings::Setting{
         .key = "ToneMapScaling",
         .binding = &shader_injection.tone_map_per_channel,
@@ -207,7 +207,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
-        .default_value = 70.f,
+        .default_value = 65.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
@@ -331,17 +331,17 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
-    /* new renodx::utils::settings::Setting{
-        .key = "FxSharpness",
-        .binding = &shader_injection.custom_sharpness,
-        .default_value = 0.f,
-        .label = "Sharpness",
+    new renodx::utils::settings::Setting{
+        .key = "FxVignette",
+        .binding = &shader_injection.custom_vignette,
+        .default_value = 50.f,
+        .label = "Vignette",
         .section = "Effects",
-        .tooltip = "Controls sharpness",
+        .tooltip = "Controls Vignette",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
+        .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
-    }, */
+    },
     new renodx::utils::settings::Setting{
         .key = "FxExposureType",
         .binding = &shader_injection.custom_exposure_type,
@@ -379,7 +379,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Fantasy",
+        .label = "RenoDX",
         .section = "Presets",
         .group = "button-line-1",
         .on_change = []() {
@@ -471,7 +471,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Special thanks to ShortFuse, Jon & Lilium for all the help!",
+        .label = "Special thanks to Jon for tuning presets, and to ShortFuse & Lilium for the support!",
         .section = "About",
     },
     new renodx::utils::settings::Setting{

@@ -1,3 +1,4 @@
+#include "./postprocess.hlsl"
 Texture2D<float4> HDRImage : register(t0);
 
 /*
@@ -223,6 +224,7 @@ float4 main(
     _181 = ((1.0f / (_176 * _176)) * (1.0f - (saturate((((CameraKerare_000x) * (1.0f / (_168 + 1.0f))) + (CameraKerare_000y))))));
   }
   float _183 = saturate((_181 + (CameraKerare_000z)));
+  CustomVignette(_183);
   float _185 = (_132 * (Exposure)) * _183;
   float _187 = (_133 * (Exposure)) * _183;
   float _189 = (_134 * (Exposure)) * _183;
