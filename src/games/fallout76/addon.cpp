@@ -8,14 +8,15 @@
 
 #define DEBUG_LEVEL_0
 
-#include <embed/shaders.h>
-
 #include <chrono>
 
 #include <deps/imgui/imgui.h>
+#include <embed/shaders.h>
 #include <include/reshade.hpp>
+
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
+#include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
@@ -251,6 +252,74 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Reset All",
+        .section = "Options",
+        .group = "button-line-0",
+        .on_change = []() {
+          for (auto setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+          }
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Discord",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          ShellExecute(0, "open", (std::string("https://discord.gg/") + "5WZXDpmbpP").c_str(), 0, 0, SW_SHOW);
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "More Mods",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0x2B3137,
+        .on_change = []() {
+          ShellExecute(0, "open", (std::string("https://github.com/") + "clshortfuse/renodx/wiki/Mods").c_str(), 0, 0, SW_SHOW);
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Github",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0x2B3137,
+        .on_change = []() {
+          ShellExecute(0, "open", (std::string("https://github.com/") + "clshortfuse/renodx").c_str(), 0, 0, SW_SHOW);
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Musa's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0xFF5A16,
+        .on_change = []() {
+          ShellExecute(0, "open", (std::string("https://ko-fi.com/") + "musaqh").c_str(), 0, 0, SW_SHOW);
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "ShortFuse's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0xFF5A16,
+        .on_change = []() {
+          ShellExecute(0, "open", (std::string("https://ko-fi.com/") + "shortfuse").c_str(), 0, 0, SW_SHOW);
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+        .section = "About",
     },
 };
 
