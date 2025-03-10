@@ -78,7 +78,7 @@ void main(
   // ACEScc
   float3 ap1_color;
 
-  if (CUSTOM_LUT_PROCESSING == 0) {
+  if (CUSTOM_LUT_PROCESSING == 0.f) {
     if (!(!(_22 <= -0.3013699948787689f))) {
       _38 = ((exp2(((_19 * 0.2780952751636505f) + -8.720000267028809f))) + -3.0517578125e-05f);
     } else {

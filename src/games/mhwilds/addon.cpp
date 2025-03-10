@@ -17,25 +17,54 @@
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
+#include "../../utils/platform.hpp"
 #include "../../utils/settings.hpp"
+#include "../../utils/swapchain.hpp"
 #include "./shared.h"
 
 namespace {
 
+ShaderInjectData shader_injection;
+
+#define RareExposureShaderEntry(value)                            \
+  {                                                               \
+    value,                                                        \
+        {                                                         \
+            .crc32 = value,                                       \
+            .code = __##value,                                    \
+            .on_draw = [](auto cmd_list) {                        \
+              shader_injection.custom_exposure_shader_draw = 1.f; \
+              return true;                                        \
+            },                                                    \
+        },                                                        \
+  }
+
+#define TypicalExposureShaderEntry(value)                         \
+  {                                                               \
+    value,                                                        \
+        {                                                         \
+            .crc32 = value,                                       \
+            .code = __##value,                                    \
+            .on_drawn = [](auto cmd_list) {                       \
+              shader_injection.custom_exposure_shader_draw = 0.f; \
+              return true;                                        \
+            },                                                    \
+        },                                                        \
+  }
+
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xE73DF341),  // output
-    CustomShaderEntry(0xBC05143A),  // output
-    CustomShaderEntry(0x7B84049A),  // lutbuilder
-    CustomShaderEntry(0x8286B55C),  // UI
-    CustomShaderEntry(0x243CA65C),  // GaussianBlur
-    CustomShaderEntry(0xEE56E73B),  // postprocess
-    CustomShaderEntry(0xE188DA93),  // postprocess
-    CustomShaderEntry(0x1AD0E9A5),  // NewFiltering (bloom)
-    CustomShaderEntry(0xB73F523E),  // NewReduction (bloom)
-    CustomShaderEntry(0x4905680A),  // Rare scenario luminance
+    CustomShaderEntry(0xE73DF341),           // output
+    CustomShaderEntry(0xBC05143A),           // output
+    CustomShaderEntry(0x7B84049A),           // lutbuilder
+    CustomShaderEntry(0x8286B55C),           // UI
+    CustomShaderEntry(0x243CA65C),           // GaussianBlur
+    TypicalExposureShaderEntry(0xEE56E73B),  // postprocess
+    TypicalExposureShaderEntry(0xE188DA93),  // postprocess
+    CustomShaderEntry(0x1AD0E9A5),           // NewFiltering (bloom)
+    CustomShaderEntry(0xB73F523E),           // NewReduction (bloom)
+    RareExposureShaderEntry(0x4905680A),     // Rare scenario luminance
 };
 
-ShaderInjectData shader_injection;
 const std::string build_date = __DATE__;
 const std::string build_time = __TIME__;
 
@@ -169,32 +198,6 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapHueCorrection",
-        .binding = &shader_injection.tone_map_hue_correction,
-        .default_value = 100.f,
-        .label = "Hue Correction",
-        .section = "Tone Mapping",
-        .tooltip = "Hue retention strength.",
-        .min = 0.f,
-        .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1 && RENODX_TONE_MAP_PER_CHANNEL == 0; },
-        .parse = [](float value) { return RENODX_TONE_MAP_PER_CHANNEL ? 0 : value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 2; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapHueShift",
-        .binding = &shader_injection.tone_map_hue_shift,
-        .default_value = 0.f,
-        .label = "Hue Shift",
-        .section = "Tone Mapping",
-        .tooltip = "Hue-shift emulation strength.",
-        .min = 0.f,
-        .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1 && RENODX_TONE_MAP_PER_CHANNEL == 0; },
-        .parse = [](float value) { return RENODX_TONE_MAP_PER_CHANNEL ? 0 : value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
         .binding = &shader_injection.tone_map_exposure,
         .default_value = 1.f,
@@ -207,7 +210,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
-        .default_value = 65.f,
+        .default_value = 62.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
