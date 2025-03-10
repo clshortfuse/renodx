@@ -177,7 +177,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapScaling",
         .binding = &shader_injection.tone_map_per_channel,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 0.f,
         .label = "Scaling",
         .section = "Tone Mapping",
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
@@ -210,7 +210,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
-        .default_value = 62.f,
+        .default_value = 50.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
@@ -220,7 +220,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
         .binding = &shader_injection.tone_map_shadows,
-        .default_value = 50.f,
+        .default_value = 47.f,
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
@@ -230,7 +230,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
         .binding = &shader_injection.tone_map_contrast,
-        .default_value = 70.f,
+        .default_value = 80.f,
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
@@ -239,7 +239,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSaturation",
         .binding = &shader_injection.tone_map_saturation,
-        .default_value = 45.f,
+        .default_value = 55.f,
         .label = "Saturation",
         .section = "Color Grading",
         .max = 100.f,
@@ -260,7 +260,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
         .binding = &shader_injection.tone_map_blowout,
-        .default_value = 40.f,
+        .default_value = 67.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Adds highlight desaturation due to overexposure.",
@@ -305,7 +305,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeLUTColorStrength",
         .binding = &shader_injection.custom_lut_color_strength,
-        .default_value = 100.f,
+        .default_value = 50.f,
         .label = "Color LUT Strength",
         .section = "Color Grading",
         .tooltip = "Strength of Vanilla's Color LUT",
@@ -316,7 +316,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeLUTOutputStrength",
         .binding = &shader_injection.custom_lut_output_strength,
-        .default_value = 100.f,
+        .default_value = 50.f,
         .label = "Output LUT Strength",
         .section = "Color Grading",
         .tooltip = "Strength of Vanilla's Output LUT",
