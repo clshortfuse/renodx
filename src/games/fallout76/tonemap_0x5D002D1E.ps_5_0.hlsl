@@ -30,7 +30,31 @@ cbuffer cb12 : register(b12) {
 // 3Dmigoto declarations
 #define cmp -
 
-void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Target0) {
+float3 ApplyVanillaToneMap(float4 r0) {
+  float4 r1;
+  float3 r2;
+
+  r1.x = max(9.99999975e-005, cb2[2].y);
+  r1.y = 0.560000002 / r1.x;
+  r1.y = 2.43000007 + r1.y;
+  r1.x = r1.x * r1.x;
+  r1.x = 0.140000001 / r1.x;
+  r1.x = r1.y + r1.x;
+  r1.y = cb2[0].x * cb2[0].x;
+  r1.y = -r1.y * 2.43000007 + 0.0299999993;
+  r1.z = -0.589999974 + r1.x;
+  r1.y = r1.z * cb2[0].x + r1.y;
+  r1.xzw = r1.xxx * r0.xyz + float3(0.0299999993, 0.0299999993, 0.0299999993);
+  r1.xzw = r1.xzw * r0.xyz;
+  r2.xyz = r0.xyz * float3(2.43000007, 2.43000007, 2.43000007) + float3(0.589999974, 0.589999974, 0.589999974);
+  r2.xyz = r0.xyz * r2.xyz + r1.yyy;
+  r1.xyz = max(0, r1.xzw / r2.xyz);  // remove saturate()
+  r0.xyz = r0.www ? r1.xyz : r0.xyz;
+
+  return r0.rgb;
+}
+
+void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Target0) {
   float4 r0, r1, r2, r3;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -105,30 +129,17 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
 
   const float3 untonemapped = r0.xyz;
 
-  // tonemapping
-  if (injectedData.toneMapType == 0 || injectedData.toneMapHueCorrection) {  // vanilla
-    r1.x = max(9.99999975e-005, cb2[2].y);
-    r1.y = 0.560000002 / r1.x;
-    r1.y = 2.43000007 + r1.y;
-    r1.x = r1.x * r1.x;
-    r1.x = 0.140000001 / r1.x;
-    r1.x = r1.y + r1.x;
-    r1.y = cb2[0].x * cb2[0].x;
-    r1.y = -r1.y * 2.43000007 + 0.0299999993;
-    r1.z = -0.589999974 + r1.x;
-    r1.y = r1.z * cb2[0].x + r1.y;
-    r1.xzw = r1.xxx * r0.xyz + float3(0.0299999993, 0.0299999993, 0.0299999993);
-    r1.xzw = r1.xzw * r0.xyz;
-    r2.xyz = r0.xyz * float3(2.43000007, 2.43000007, 2.43000007) + float3(0.589999974, 0.589999974, 0.589999974);
-    r2.xyz = r0.xyz * r2.xyz + r1.yyy;
-    r1.xyz = saturate(r1.xzw / r2.xyz);
-    r0.xyz = r0.www ? r1.xyz : r0.xyz;
-
-    if (injectedData.toneMapType != 0) {
-      r0.xyz = renodx::color::correct::Hue(untonemapped, r0.xyz, injectedData.toneMapHueCorrection);
-    }
+  /* tone mapping */
+  if (injectedData.toneMapType == 0) {  // Vanilla
+    r0.rgb = ApplyVanillaToneMap(r0);
   } else {  // untonemapped
-    r0.xyz = untonemapped;
+    const float vanillaMidGrayRatio = renodx::color::y::from::BT709(ApplyVanillaToneMap(float4(0.18f, 0.18f, 0.18f, r0.w))) / 0.18f;
+    r0.xyz = untonemapped * vanillaMidGrayRatio;
+
+    if (injectedData.toneMapHueCorrection) {
+      const float3 vanillaColor = ApplyVanillaToneMap(float4(untonemapped, r0.w));
+      r0.xyz = renodx::color::correct::Hue(r0.xyz, vanillaColor, injectedData.toneMapHueCorrection);
+    }
   }
 
   // scene filter adjustments

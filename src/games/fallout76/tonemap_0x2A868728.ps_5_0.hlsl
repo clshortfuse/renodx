@@ -32,7 +32,59 @@ cbuffer cb12 : register(b12) {
 // 3Dmigoto declarations
 #define cmp -
 
-void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Target0) {
+float3 ApplyVanillaToneMap(float3 r0) {
+  float4 r1, r2, r3;
+  float3 r4, r5, r6;
+
+  r1.xy = float2(-1, -2) + cb2[2].xx;
+
+  // Narkowicz ACES
+  r2.xyz = r0.xyz * float3(2.50999999, 2.50999999, 2.50999999) + float3(0.0299999993, 0.0299999993, 0.0299999993);
+  r2.xyz = r2.xyz * r0.xyz;
+  r3.xyz = r0.xyz * float3(2.43000007, 2.43000007, 2.43000007) + float3(0.589999974, 0.589999974, 0.589999974);
+  r4.xyz = r0.xyz * r3.xyz + float3(0.140000001, 0.140000001, 0.140000001);
+  r2.xyz = max(0, r2.xyz / r4.xyz);  // remove saturate()
+
+  r1.xy = cmp(abs(r1.xy) < float2(9.99999975e-005, 9.99999975e-005));
+  r1.z = max(9.99999975e-005, cb2[2].y);
+  r1.w = 0.560000002 / r1.z;
+  r1.w = 2.43000007 + r1.w;
+  r2.w = r1.z * r1.z;
+  r2.w = 0.140000001 / r2.w;
+  r1.w = r2.w + r1.w;
+  r2.w = cb2[0].x * cb2[0].x;
+  r2.w = -r2.w * 2.43000007 + 0.0299999993;
+  r3.w = -0.589999974 + r1.w;
+  r2.w = r3.w * cb2[0].x + r2.w;
+  r4.xyz = r1.www * r0.xyz + float3(0.0299999993, 0.0299999993, 0.0299999993);
+  r4.xyz = r4.xyz * r0.xyz;
+  r3.xyz = r0.xyz * r3.xyz + r2.www;
+  r3.xyz = max(0, r4.xyz / r3.xyz);  // remove saturate()
+
+  r4.xyz = r0.xyz + r0.xyz;
+  r5.xyz = r0.xyz * float3(0.300000012, 0.300000012, 0.300000012) + float3(0.0500000007, 0.0500000007, 0.0500000007);
+  r1.w = 0.200000003 * cb2[2].z;
+  r5.xyz = r4.xyz * r5.xyz + r1.www;
+  r6.xyz = r0.xyz * float3(0.300000012, 0.300000012, 0.300000012) + float3(0.5, 0.5, 0.5);
+  r4.xyz = r4.xyz * r6.xyz + float3(0.0599999987, 0.0599999987, 0.0599999987);
+  r4.xyz = r5.xyz / r4.xyz;
+  r4.xyz = -cb2[2].zzz * float3(3.33333325, 3.33333325, 3.33333325) + r4.xyz;
+  r5.xy = r1.zz * float2(0.150000006, 0.150000006) + float2(0.0500000007, 0.5);
+  r1.w = r1.z * r5.x + r1.w;
+  r1.z = r1.z * r5.y + 0.0599999987;
+  r1.z = r1.w / r1.z;
+  r1.z = -cb2[2].z * 3.33333325 + r1.z;
+  r1.z = 1 / r1.z;
+  r4.xyz = r4.xyz * r1.zzz;
+
+  // choose tonemapper based on cbuffer
+  r1.yzw = r1.yyy ? r3.xyz : r4.xyz;
+  r0.xyz = r1.xxx ? r2.xyz : r1.yzw;
+
+  return r0.rgb;
+}
+
+void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Target0) {
   float4 r0, r1, r2, r3, r4, r5, r6;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -113,51 +165,17 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
 
   const float3 untonemapped = r0.xyz;  // store untonemapped image
 
-  if (r1.x != 0 && (injectedData.toneMapType == 0 || injectedData.toneMapHueCorrection)) {  // Vanilla
-    r1.xy = float2(-1, -2) + cb2[2].xx;
-    r2.xyz = r0.xyz * float3(2.50999999, 2.50999999, 2.50999999) + float3(0.0299999993, 0.0299999993, 0.0299999993);
-    r2.xyz = r2.xyz * r0.xyz;
-    r3.xyz = r0.xyz * float3(2.43000007, 2.43000007, 2.43000007) + float3(0.589999974, 0.589999974, 0.589999974);
-    r4.xyz = r0.xyz * r3.xyz + float3(0.140000001, 0.140000001, 0.140000001);
-    r2.xyz = saturate(r2.xyz / r4.xyz);
-    r1.xy = cmp(abs(r1.xy) < float2(9.99999975e-005, 9.99999975e-005));
-    r1.z = max(9.99999975e-005, cb2[2].y);
-    r1.w = 0.560000002 / r1.z;
-    r1.w = 2.43000007 + r1.w;
-    r2.w = r1.z * r1.z;
-    r2.w = 0.140000001 / r2.w;
-    r1.w = r2.w + r1.w;
-    r2.w = cb2[0].x * cb2[0].x;
-    r2.w = -r2.w * 2.43000007 + 0.0299999993;
-    r3.w = -0.589999974 + r1.w;
-    r2.w = r3.w * cb2[0].x + r2.w;
-    r4.xyz = r1.www * r0.xyz + float3(0.0299999993, 0.0299999993, 0.0299999993);
-    r4.xyz = r4.xyz * r0.xyz;
-    r3.xyz = r0.xyz * r3.xyz + r2.www;
-    r3.xyz = saturate(r4.xyz / r3.xyz);
-    r4.xyz = r0.xyz + r0.xyz;
-    r5.xyz = r0.xyz * float3(0.300000012, 0.300000012, 0.300000012) + float3(0.0500000007, 0.0500000007, 0.0500000007);
-    r1.w = 0.200000003 * cb2[2].z;
-    r5.xyz = r4.xyz * r5.xyz + r1.www;
-    r6.xyz = r0.xyz * float3(0.300000012, 0.300000012, 0.300000012) + float3(0.5, 0.5, 0.5);
-    r4.xyz = r4.xyz * r6.xyz + float3(0.0599999987, 0.0599999987, 0.0599999987);
-    r4.xyz = r5.xyz / r4.xyz;
-    r4.xyz = -cb2[2].zzz * float3(3.33333325, 3.33333325, 3.33333325) + r4.xyz;
-    r5.xy = r1.zz * float2(0.150000006, 0.150000006) + float2(0.0500000007, 0.5);
-    r1.w = r1.z * r5.x + r1.w;
-    r1.z = r1.z * r5.y + 0.0599999987;
-    r1.z = r1.w / r1.z;
-    r1.z = -cb2[2].z * 3.33333325 + r1.z;
-    r1.z = 1 / r1.z;
-    r4.xyz = r4.xyz * r1.zzz;
-    r1.yzw = r1.yyy ? r3.xyz : r4.xyz;
-    r0.xyz = r1.xxx ? r2.xyz : r1.yzw;
-
-    if (injectedData.toneMapType != 0) {
-      r0.xyz = renodx::color::correct::Hue(untonemapped, r0.xyz, injectedData.toneMapHueCorrection);
-    }
+  /* tone mapping */
+  if (r1.x != 0) {  // Vanilla
+    r0.rgb = ApplyVanillaToneMap(r0.rgb);
   } else {  // untonemapped
-    r0.xyz = untonemapped;
+    const float vanillaMidGrayRatio = renodx::color::y::from::BT709(ApplyVanillaToneMap(0.18f)) / 0.18f;
+    r0.xyz = untonemapped * vanillaMidGrayRatio;
+
+    if (injectedData.toneMapHueCorrection) {
+      const float3 vanillaColor = ApplyVanillaToneMap(untonemapped);
+      r0.xyz = renodx::color::correct::Hue(r0.xyz, vanillaColor, injectedData.toneMapHueCorrection);
+    }
   }
   r1.x = dot(r0.xyz, float3(0.212500006, 0.715399981, 0.0720999986));
   r0.w = 0;

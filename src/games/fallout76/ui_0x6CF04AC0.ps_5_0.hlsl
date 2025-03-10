@@ -12,7 +12,7 @@ cbuffer Constants : register(b0) {
 void main(out float4 o0 : SV_Target0) {
   o0.xyzw = cxmul.xyzw;
 
-  o0.rgb = saturate(o0.rgb);
+  o0 = saturate(o0);
   o0.rgb = injectedData.toneMapGammaCorrection
                ? pow(o0.rgb, 2.2f)
                : renodx::color::srgb::Decode(o0.rgb);

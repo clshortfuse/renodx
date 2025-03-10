@@ -20,8 +20,9 @@ void main(float4 v0 : COLOR0, float2 v1 : TEXCOORD0, float2 w1 : TEXCOORD1, out 
   r0.xyzw = -r1.xyzw + r0.xyzw;
   r0.xyzw = v0.xxxx * r0.xyzw + r1.xyzw;
   o0.w = v0.w * r0.w;
-  o0.xyz = saturate(r0.xyz);  //  o0.xyz = r0.xyz;
+  o0.xyz = r0.xyz;
 
+  o0 = saturate(o0);
   o0.rgb = injectedData.toneMapGammaCorrection
                ? pow(o0.rgb, 2.2f)
                : renodx::color::srgb::Decode(o0.rgb);
