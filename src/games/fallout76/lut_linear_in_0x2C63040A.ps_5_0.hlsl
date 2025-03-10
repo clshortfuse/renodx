@@ -95,11 +95,7 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
         1.f);
     o0.xyz = grainedColor;
   }
-
-  if (!injectedData.toneMapGammaCorrection) {
-    o0.rgb = renodx::color::correct::GammaSafe(o0.rgb, true);
-  }
-
-  o0.rgb *= injectedData.toneMapGameNits / 80.f;
+  o0.rgb = renodx::color::gamma::EncodeSafe(o0.rgb, 2.2f);
+  o0.rgb = GameScale(o0.rgb);
   return;
 }

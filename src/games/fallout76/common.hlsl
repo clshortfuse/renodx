@@ -26,3 +26,27 @@ renodx::tonemap::config::DualToneMap ApplyDualToneMap(float3 color) {
 
   return dual_tone_map;
 }
+
+float3 GameScale(float3 color) {
+  if (injectedData.toneMapGammaCorrection) {
+    color = renodx::color::gamma::DecodeSafe(color, 2.2f);
+    color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+    color = renodx::color::gamma::EncodeSafe(color, 2.2f);
+  } else {
+    color = renodx::color::srgb::DecodeSafe(color);
+    color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+    color = renodx::color::srgb::EncodeSafe(color);
+  }
+  return color;
+}
+
+float4 FinalizeOutput(float4 color) {
+  if (injectedData.toneMapGammaCorrection) {
+    color.rgb = renodx::color::gamma::DecodeSafe(color.rgb, 2.2f);
+    color.rgb *= injectedData.toneMapUINits / renodx::color::srgb::REFERENCE_WHITE;
+  } else {
+    color.rgb = renodx::color::srgb::DecodeSafe(color.rgb);
+    color.rgb *= injectedData.toneMapUINits / renodx::color::srgb::REFERENCE_WHITE;
+  }
+  return color;
+}
