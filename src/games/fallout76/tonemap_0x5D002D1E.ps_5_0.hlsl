@@ -125,7 +125,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     r0.xyz = r0.www ? r1.xyz : r0.xyz;
 
     if (injectedData.toneMapType != 0) {
-      r0.xyz = renodx::color::correct::Hue(untonemapped, r0.xyz);
+      r0.xyz = renodx::color::correct::Hue(untonemapped, r0.xyz, injectedData.toneMapHueCorrection);
     }
   } else {  // untonemapped
     r0.xyz = untonemapped;
