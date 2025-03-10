@@ -22,41 +22,19 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    // CustomShaderEntry(0x2CA9CD55),  // text/UI
-    // CustomShaderEntry(0xA6AB1C75),  // text
-    // CustomShaderEntry(0xF2CCBA8C),  // UI
-    // CustomShaderEntry(0x69B52EA7),  // Images
-    // CustomShaderEntry(0x6CF04AC0),  // UI
-    // CustomShaderEntry(0x7AAE8C2B),  // Images
-    // CustomShaderEntry(0x28213F99),  // UI
-    // CustomShaderEntry(0x21A11DE7),  // UI
-    // CustomShaderEntry(0x4B3388FE),  // UI
-    // CustomShaderEntry(0x4D248432),  // UI
-    // CustomShaderEntry(0x19558629),  // UI
-    CustomShaderEntry(0x0F2CC0D1),  // video
-    // CustomShaderEntry(0x19558629),  // Loading Screen
-    // CustomShaderEntry(0xFEA4E7DB),  // Loading Screen
-    // CustomShaderEntry(0xD66588EF),  // Loading Screen
-    // CustomShaderEntry(0x3C8AF2C9),  // Loading Screen
-    // CustomShaderEntry(0x1CA86895),  // UI Popup, team popup in bottom right corner
+
+    CustomShaderEntry(0x6214D668),  // Bloom
+
     CustomShaderEntry(0x1BDD7570),  // Tonemap
     CustomShaderEntry(0x2A868728),  // Tonemap
     CustomShaderEntry(0x5D002D1E),  // Tonemap
     CustomShaderEntry(0xBF6561E2),  // Tonemap
-    CustomShaderEntry(0x2C63040A),  // LUT (Linear)
-    CustomShaderEntry(0x160805BC),  // LUT (Gamma)
-    // CustomShaderEntry(0xA3C662FB),  // Pipboy
-    // CustomShaderEntry(0xB38E2BDA),  // Quickboy
-
-    // CustomShaderEntry(0x7684FC16),      // FXAA
     CustomShaderEntry(0x3778E664),  // TAA
     CustomShaderEntry(0xAF2731D9),  // TAA
+    CustomShaderEntry(0x2C63040A),  // LUT (Linear)
+    CustomShaderEntry(0x160805BC),  // LUT (Gamma)
 
-    // CustomShaderEntry(0x438DFC72),      // TAA
-    // CustomShaderEntry(0x73F96489),      // TAA?
-
-    // CustomShaderEntry(0xC9C77523),      // DOF?
-    // CustomShaderEntry(0x283C8F43),      // DOF?
+    CustomShaderEntry(0x0F2CC0D1),  // video
 
 };
 
@@ -248,6 +226,15 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
     },
     new renodx::utils::settings::Setting{
+        .key = "FxBloom",
+        .binding = &shader_injection.fxBloom,
+        .default_value = 50.f,
+        .label = "Bloom",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "fxSceneFilter",
         .binding = &shader_injection.fxSceneFilter,
         .default_value = 50.f,
@@ -285,6 +272,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("FxHDRVideos", 0.f);
+  renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
   renodx::utils::settings::UpdateSetting("fxSceneFilter", 50.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 0.f);
