@@ -15,17 +15,21 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
   o0.xyzw = r0.zyxw;
 
   o0.rgb = saturate(o0.rgb);
-  o0.rgb = injectedData.toneMapGammaCorrection
-               ? pow(o0.rgb, 2.2f)
-               : renodx::color::srgb::Decode(o0.rgb);
-  float scaling = injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
-  float videoPeak = 203.f * scaling;
-  o0.rgb = renodx::tonemap::inverse::bt2446a::BT709(o0.rgb, 100.f / scaling, videoPeak);
-  o0.rgb /= videoPeak;  // Normalize to 1.0
-  o0.rgb *= injectedData.toneMapPeakNits / 80.f;
+  if (injectedData.fxHDRVideos) {
+    o0.rgb = injectedData.toneMapGammaCorrection
+                 ? pow(o0.rgb, 2.2f)
+                 : renodx::color::srgb::Decode(o0.rgb);
+    float scaling = injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
+    float videoPeak = 203.f * scaling;
+    o0.rgb = renodx::tonemap::inverse::bt2446a::BT709(o0.rgb, 100.f / scaling, videoPeak);
+    o0.rgb /= videoPeak;  // Normalize to 1.0
+    o0.rgb *= injectedData.toneMapPeakNits / 80.f;
 
-  o0.rgb /= injectedData.toneMapGameNits / 80.f;  // normalize paper white
-  o0.rgb = renodx::color::gamma::EncodeSafe(o0.rgb, 2.2f);
+    o0.rgb /= injectedData.toneMapGameNits / 80.f;  // normalize paper white
+    o0.rgb = injectedData.toneMapGammaCorrection
+                 ? renodx::color::gamma::EncodeSafe(o0.rgb, 2.2f)
+                 : renodx::color::srgb::EncodeSafe(o0.rgb);
+  }
   o0.rgb = GameScale(o0.rgb);
   return;
 }
