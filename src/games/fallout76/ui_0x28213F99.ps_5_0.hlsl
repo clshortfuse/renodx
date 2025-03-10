@@ -15,8 +15,9 @@ void main(float2 v0 : TEXCOORD0, float4 v1 : COLOR0, out float4 o0 : SV_Target0)
 
   r0.x = tex.Sample(sampler_tex_s, v0.xy).x;
   o0.w = v1.w * r0.x;
-  o0.xyz = saturate(v1.xyz);  //  o0.xyz = v1.xyz;
+  o0.xyz = v1.xyz;  //  o0.xyz = v1.xyz;
 
+  o0 = saturate(o0);
   o0.rgb = injectedData.toneMapGammaCorrection
                ? pow(o0.rgb, 2.2f)
                : renodx::color::srgb::Decode(o0.rgb);
