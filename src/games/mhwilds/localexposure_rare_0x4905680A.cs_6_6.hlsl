@@ -55,15 +55,10 @@ void main(
   float _45;
   if (((bool)(_14 < SceneInfo_023x)) && ((bool)(_15 < SceneInfo_023y))) {
     float4 _25 = RE_POSTPROCESS_Color.Load(int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), 0));
-    // It'll be used alongside pp_flatexposure so we can't adjust scaling using vanilla
-    if (CUSTOM_EXPOSURE_TYPE > 0.f) {
-      // Return original without adjustments
-      OutputTex[int2((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y))] = _25.rgb;
-      return;
-    }
     float _31 = RangeCompressInfo_000y * _25.x;
     float _32 = RangeCompressInfo_000y * _25.y;
     float _33 = RangeCompressInfo_000y * _25.z;
+
     do {
       if (!((uint)(Tonemap_001y) == 0)) {
         _45 = (asfloat((((int4)(asint(WhitePtSrv[0 / 4]))).x)));
@@ -80,8 +75,8 @@ void main(
       float _84 = Tonemap_005x + _52;
       float _87 = _83 - Tonemap_004y;
       float _99 = exp2(((((((bool)(_87 > 0.0f)) ? Tonemap_003z : Tonemap_003w) * _87) - _84) + Tonemap_004y) + (Tonemap_004x * (_84 - _83)));
-      float _104 = (_99 * _31) * RangeCompressInfo_000x;
-      OutputTex[int2((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y))] = float3(_104, ((_99 * _32) * RangeCompressInfo_000x), ((_99 * _33) * RangeCompressInfo_000x));
+      _99 = PickExposure(_99);
+      OutputTex[int2((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y))] = float3((_99 * _31) * RangeCompressInfo_000x, ((_99 * _32) * RangeCompressInfo_000x), ((_99 * _33) * RangeCompressInfo_000x));
 
     } while (false);
   }

@@ -579,12 +579,20 @@ float4 main(
   // Add brightness?
   float _100 = saturate((_98 + (CameraKerare_000z)));  // kerare_brightness
   CustomVignette(_100);
-  float _101 = _100 * (Exposure);                      // Exposure here is < 1.f, so reduces brightness
+  float _101 = _100 * (Exposure);  // Exposure here is < 1.f, so reduces brightness
 
+  // This should be 1 if 0x4905680A is loaded, since that one handles exposure
   float custom_flat_exposure = 1.f;
-  if (CUSTOM_EXPOSURE_TYPE > 0.f) {
-    custom_flat_exposure = FlatExposure();
+
+  // We check if 0x4905680A has loaded
+  if (CUSTOM_EXPOSURE_SHADER_DRAW == 0.f) {
+    // In case of vanilla
+    custom_flat_exposure = 1.f * NormalizeExposure();
+    if (CUSTOM_EXPOSURE_TYPE >= 1.f) {
+      custom_flat_exposure = FlatExposure();
+    }
   }
+  
   // Lens distortion
   if (_43) {
     // Not here
@@ -739,6 +747,7 @@ float4 main(
       float _594 = (((SV_Position.x) * 2.0f) * (SceneInfo_023z)) + -1.0f;
       float _598 = sqrt(((_594 * _594) + 1.0f));
       float _599 = 1.0f / _598;
+      // Controls lens distortion
       float _602 = (_598 * (LDRPostProcessParam_007z)) * (_599 + (LDRPostProcessParam_007x));  // fOptimizedParam
       float _606 = (LDRPostProcessParam_007w) * 0.5f;
       float _608 = (_606 * _594) * _602;
@@ -818,6 +827,7 @@ float4 main(
           }
         }
         // Here
+        // RE_POSTPROCESS_Color is adjusted by 0x4905680A
         float4 _883 = RE_POSTPROCESS_Color.Sample(BilinearBorder, float2(_879, _880));
         // This section in flat FOR SURE
         _1181 = ((_883.x) * _101) * custom_flat_exposure;
@@ -936,7 +946,6 @@ float4 main(
   _1920 = _1181;
   _1921 = _1182;
   _1922 = _1183;
-
   // This if handles radial blur
   if (!(((((uint)(CBControl_000w)) & 32) == 0))) {  // CBControl_reserve
     // Not here

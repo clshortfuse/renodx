@@ -15,6 +15,16 @@ float PickExposure(float vanilla, float fixed = CUSTOM_FLAT_EXPOSURE_DEFAULT) {
   return vanilla * normalizedCustomExposure;
 }
 
+float3 PickExposure(float3 vanilla, float fixed = CUSTOM_FLAT_EXPOSURE_DEFAULT) {
+  float normalizedCustomExposure = NormalizeExposure();
+
+  if (CUSTOM_EXPOSURE_TYPE == 1.f) {
+    float newExposure = fixed * normalizedCustomExposure;
+    return float3(newExposure, newExposure, newExposure);
+  }
+  return vanilla.rgb * normalizedCustomExposure;
+}
+
 float FlatExposure(float fixed = CUSTOM_FLAT_EXPOSURE_DEFAULT) {
   float normalizedCustomExposure = NormalizeExposure();
 

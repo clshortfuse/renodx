@@ -8,8 +8,6 @@
 #define RENODX_TONE_MAP_PER_CHANNEL            shader_injection.tone_map_per_channel
 #define RENODX_TONE_MAP_WORKING_COLOR_SPACE    color::convert::COLOR_SPACE_AP1
 #define RENODX_TONE_MAP_HUE_PROCESSOR          shader_injection.tone_map_hue_processor
-#define RENODX_TONE_MAP_HUE_CORRECTION         shader_injection.tone_map_hue_correction
-#define RENODX_TONE_MAP_HUE_SHIFT              shader_injection.tone_map_hue_shift
 #define RENODX_TONE_MAP_HUE_SHIFT_METHOD       HUE_SHIFT_METHOD_AP1_ROLL_OFF
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE      color::convert::COLOR_SPACE_NONE
 #define RENODX_TONE_MAP_CLAMP_PEAK             color::convert::COLOR_SPACE_NONE
@@ -43,6 +41,7 @@
 #define CUSTOM_EXPOSURE_STRENGTH               shader_injection.custom_exposure_strength
 #define CUSTOM_FLAT_EXPOSURE_DEFAULT           1.f
 #define CUSTOM_LUT_EXPOSURE_REVERSE            shader_injection.custom_lut_exposure_reverse
+#define CUSTOM_EXPOSURE_SHADER_DRAW            shader_injection.custom_exposure_shader_draw
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -60,8 +59,6 @@ struct ShaderInjectData {
   float tone_map_highlight_saturation;
   float tone_map_blowout;
   float tone_map_flare;
-  float tone_map_hue_correction;
-  float tone_map_hue_shift;
   float tone_map_hue_processor;
   float tone_map_per_channel;
   float swap_chain_gamma_correction;
@@ -74,6 +71,7 @@ struct ShaderInjectData {
   float custom_exposure_type;
   float custom_exposure_strength;
   float custom_lut_exposure_reverse;
+  float custom_exposure_shader_draw;
 };
 
 #ifndef __cplusplus
