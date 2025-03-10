@@ -8,39 +8,7 @@
 
 #define DEBUG_LEVEL_0
 
-#include <embed/0x0F2CC0D1.h>  // video
-#include <embed/0x19558629.h>  // UI
-#include <embed/0x1CA86895.h>  // UI Popup, team popup in bottom right corner
-#include <embed/0x21A11DE7.h>  // UI
-#include <embed/0x28213F99.h>  // UI
-#include <embed/0x2CA9CD55.h>  // text/UI
-#include <embed/0x3C8AF2C9.h>  // Loading Screen Composite
-#include <embed/0x46A6A1FE.h>  // Loading Screen
-#include <embed/0x4B3388FE.h>  // UI
-#include <embed/0x4D248432.h>  // UI
-#include <embed/0x69B52EA7.h>  // Images
-#include <embed/0x6CF04AC0.h>  // UI
-#include <embed/0x7AAE8C2B.h>  // Images
-#include <embed/0xA6AB1C75.h>  // text
-#include <embed/0xD66588EF.h>  // Loading Screen
-#include <embed/0xF2CCBA8C.h>  // UI
-#include <embed/0xFEA4E7DB.h>  // Loading Screen
-// #include <embed/0x7684FC16.h> // FXAA
-#include <embed/0x160805BC.h>  // LUT
-#include <embed/0x2C63040A.h>  // LUT
-#include <embed/0x3778E664.h>  // TAA
-#include <embed/0xAF2731D9.h>  // TAA
-// #include <embed/0x73F96489.h> // TAA?
-// #include <embed/0xC9C77523.h> // DOF?
-// #include <embed/0x283C8F43.h> // DOF?
-#include <embed/0xA3C662FB.h>  // Pipboy
-#include <embed/0xB38E2BDA.h>  // Quickboy
-
-#include <embed/0x1BDD7570.h>  // Tonemap
-#include <embed/0x2A868728.h>  // Tonemap
-#include <embed/0x5D002D1E.h>  // Tonemap
-#include <embed/0xBF6561E2.h>  // Tonemap
-// #include <embed/0x438DFC72.h>
+#include <embed/shaders.h>
 
 #include <chrono>
 
@@ -54,31 +22,31 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x2CA9CD55),  // text/UI
-    CustomShaderEntry(0xA6AB1C75),  // text
-    CustomShaderEntry(0xF2CCBA8C),  // UI
-    CustomShaderEntry(0x69B52EA7),  // Images
-    CustomShaderEntry(0x6CF04AC0),  // UI
-    CustomShaderEntry(0x7AAE8C2B),  // Images
-    CustomShaderEntry(0x28213F99),  // UI
-    CustomShaderEntry(0x21A11DE7),  // UI
-    CustomShaderEntry(0x4B3388FE),  // UI
-    CustomShaderEntry(0x4D248432),  // UI
-    CustomShaderEntry(0x19558629),  // UI
+    // CustomShaderEntry(0x2CA9CD55),  // text/UI
+    // CustomShaderEntry(0xA6AB1C75),  // text
+    // CustomShaderEntry(0xF2CCBA8C),  // UI
+    // CustomShaderEntry(0x69B52EA7),  // Images
+    // CustomShaderEntry(0x6CF04AC0),  // UI
+    // CustomShaderEntry(0x7AAE8C2B),  // Images
+    // CustomShaderEntry(0x28213F99),  // UI
+    // CustomShaderEntry(0x21A11DE7),  // UI
+    // CustomShaderEntry(0x4B3388FE),  // UI
+    // CustomShaderEntry(0x4D248432),  // UI
+    // CustomShaderEntry(0x19558629),  // UI
     CustomShaderEntry(0x0F2CC0D1),  // video
-    CustomShaderEntry(0x19558629),  // Loading Screen
-    CustomShaderEntry(0xFEA4E7DB),  // Loading Screen
-    CustomShaderEntry(0xD66588EF),  // Loading Screen
-    CustomShaderEntry(0x3C8AF2C9),  // Loading Screen
-    CustomShaderEntry(0x1CA86895),  // UI Popup, team popup in bottom right corner
+    // CustomShaderEntry(0x19558629),  // Loading Screen
+    // CustomShaderEntry(0xFEA4E7DB),  // Loading Screen
+    // CustomShaderEntry(0xD66588EF),  // Loading Screen
+    // CustomShaderEntry(0x3C8AF2C9),  // Loading Screen
+    // CustomShaderEntry(0x1CA86895),  // UI Popup, team popup in bottom right corner
     CustomShaderEntry(0x1BDD7570),  // Tonemap
     CustomShaderEntry(0x2A868728),  // Tonemap
     CustomShaderEntry(0x5D002D1E),  // Tonemap
     CustomShaderEntry(0xBF6561E2),  // Tonemap
     CustomShaderEntry(0x2C63040A),  // LUT (Linear)
     CustomShaderEntry(0x160805BC),  // LUT (Gamma)
-    CustomShaderEntry(0xA3C662FB),  // Pipboy
-    CustomShaderEntry(0xB38E2BDA),  // Quickboy
+    // CustomShaderEntry(0xA3C662FB),  // Pipboy
+    // CustomShaderEntry(0xB38E2BDA),  // Quickboy
 
     // CustomShaderEntry(0x7684FC16),      // FXAA
     CustomShaderEntry(0x3778E664),  // TAA
@@ -358,6 +326,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::expected_constant_buffer_index = 11;
       renodx::mods::shader::trace_unmodified_shaders = true;
 
+      // Swapchain proxy
+      renodx::mods::swapchain::use_resource_cloning = true;
+      renodx::mods::swapchain::expected_constant_buffer_index = 11;
+      renodx::mods::swapchain::swapchain_proxy_compatibility_mode = true;
+      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
+      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // Peak nits / paper white detection
       reshade::register_event<reshade::addon_event::present>(OnPresent);               // Grain
 
@@ -370,7 +345,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  renodx::mods::swapchain::Use(fdw_reason);
+  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
