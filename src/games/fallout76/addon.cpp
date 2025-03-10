@@ -240,6 +240,14 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxHDRVideos",
+        .binding = &shader_injection.fxHDRVideos,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "HDR Videos",
+        .section = "Effects",
+    },
+    new renodx::utils::settings::Setting{
         .key = "fxSceneFilter",
         .binding = &shader_injection.fxSceneFilter,
         .default_value = 50.f,
@@ -276,6 +284,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 60.f);
   renodx::utils::settings::UpdateSetting("colorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("FxHDRVideos", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
   renodx::utils::settings::UpdateSetting("fxSceneFilter", 50.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 0.f);
