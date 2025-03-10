@@ -60,6 +60,6 @@ void main(
   // o0.xyzw = r0.xxxx * r1.xyzw + r2.xyzw;
   
   // o0.xyzw = r0.xxxx * (r1.xyzw - r2.xyzw) + r2.xyzw;
-  o0.xyzw = lerp(r2.xyzw, r1.xyzw, r0.x * injectedData.fxDoF);
+  o0.xyzw = lerp(r2.xyzw, r1.xyzw, r0.x);
   return;
 }
