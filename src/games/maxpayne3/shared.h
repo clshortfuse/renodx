@@ -92,18 +92,7 @@ struct ShaderInjectData {
   float tone_map_hue_processor;
   float tone_map_per_channel;
   float gamma_correction;
-  float intermediate_scaling;
-  float intermediate_encoding;
-  float intermediate_color_space;
-  float swap_chain_decoding;
-  float swap_chain_gamma_correction;
-  //  float swap_chain_decoding_color_space;
-  float swap_chain_custom_color_space;
-  // float swap_chain_scaling_nits;
-  // float swap_chain_clamp_nits;
   float swap_chain_clamp_color_space;
-  float swap_chain_encoding;
-  float swap_chain_encoding_color_space;
 };
 
 #ifndef __cplusplus
