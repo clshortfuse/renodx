@@ -97,6 +97,7 @@ const std::unordered_map<std::string, float> VANILLA_PLUS_VALUES = {
     {"ColorGradeBlowout", 20.f},
     {"ColorGradeFlare", 0.f},
     {"SwapChainCustomColorSpace", 0.f},
+    {"ColorGradeSDRTonemapper", 0.f},
     {"ColorGradeLUTColorStrength", 100.f},
     {"ColorGradeLUTOutputStrength", 100.f},
     {"FxFilmGrain", 50.f},
@@ -220,7 +221,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
         .binding = &shader_injection.tone_map_shadows,
-        .default_value = 47.f,
+        .default_value = 50.f,
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
@@ -248,7 +249,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
         .binding = &shader_injection.tone_map_highlight_saturation,
-        .default_value = 80.f,
+        .default_value = 59.f,
         .label = "Highlight Saturation",
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
@@ -260,7 +261,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
         .binding = &shader_injection.tone_map_blowout,
-        .default_value = 67.f,
+        .default_value = 45.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Adds highlight desaturation due to overexposure.",
@@ -272,7 +273,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
         .binding = &shader_injection.tone_map_flare,
-        .default_value = 62.f,
+        .default_value = 76.f,
         .label = "Flare",
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
@@ -301,6 +302,18 @@ renodx::utils::settings::Settings settings = {
             "JPN CRT",
         },
         .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeSDRTonemapper",
+        .binding = &shader_injection.custom_sdr_tonemapper,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .can_reset = true,
+        .label = "SDR tonemapper",
+        .section = "Color Grading",
+        .tooltip = "Which tonemapper to use for SDR calculations",
+        .labels = {"Reinhard", "Hejl Dawson"},
+        .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeLUTColorStrength",

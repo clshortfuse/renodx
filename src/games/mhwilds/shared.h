@@ -24,7 +24,7 @@
 #define RENODX_SWAP_CHAIN_SCALING_NITS         100.f * RENODX_DIFFUSE_WHITE_NITS / 203.f
 #define RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE color::convert::COLOR_SPACE_BT709
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE   shader_injection.swap_chain_custom_color_space
-#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_NONE
+#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_ENCODING             ENCODING_PQ
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT2020
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
@@ -42,6 +42,7 @@
 #define CUSTOM_FLAT_EXPOSURE_DEFAULT           1.f
 #define CUSTOM_LUT_EXPOSURE_REVERSE            shader_injection.custom_lut_exposure_reverse
 #define CUSTOM_EXPOSURE_SHADER_DRAW            shader_injection.custom_exposure_shader_draw
+#define CUSTOM_SDR_TONEAMPPER                  shader_injection.custom_sdr_tonemapper
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -72,6 +73,7 @@ struct ShaderInjectData {
   float custom_exposure_strength;
   float custom_lut_exposure_reverse;
   float custom_exposure_shader_draw;
+  float custom_sdr_tonemapper;
 };
 
 #ifndef __cplusplus

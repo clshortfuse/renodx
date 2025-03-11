@@ -52,9 +52,15 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
                 renodx::color::pq::EncodeSafe(100.f, 100.f)),
             100.f));
 
+    float3 sdrColor;
+    if (CUSTOM_SDR_TONEAMPPER == 1.f) {
+      sdrColor = renodx::tonemap::HejlDawson(saturate(untonemapped));
+    } else {
+      sdrColor = renodx::tonemap::ReinhardScalable(untonemapped, peak);
+    }
     untonemapped_graded = renodx::tonemap::UpgradeToneMap(
         untonemapped,
-        renodx::tonemap::ReinhardScalable(untonemapped, peak),
+        sdrColor,
         lut_output_color,
         1.f);
     untonemapped_graded = lerp(untonemapped, untonemapped_graded, CUSTOM_LUT_OUTPUT_STRENGTH);
