@@ -70,21 +70,29 @@ const std::string build_time = __TIME__;
 
 float current_settings_mode = 0;
 
-// const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
-//     {"GammaCorrection", 2.f},
-//     {"ToneMapScaling", 1.f},
-//     {"ColorGradeHighlights", 55.f},
-//     {"ColorGradeContrast", 60.f},
-//     {"ColorGradeSaturation", 45.f},
-//     {"ColorGradeHighlightSaturation", 67.f},
-//     {"ColorGradeBlowout", 20.f},
-//     {"ColorGradeFlare", 40.f},
-//     {"FxExposureType", 1.f},
-//     {"FxExposureStrength", 200.f},
-//     {"FxLUTExposureReverse", 1.f},
-// };
+const std::unordered_map<std::string, float> FILMIC_LOOK_VALUES = {
+    {"ToneMapScaling", 0.f},
+    {"ToneMapHueProcessor", 0.f},
+    {"ColorGradeExposure", 1.f},
+    {"ColorGradeHighlights", 50.f},
+    {"ColorGradeShadows", 50.f},
+    {"ColorGradeContrast", 80.f},
+    {"ColorGradeSaturation", 55.f},
+    {"ColorGradeHighlightSaturation", 59.f},
+    {"ColorGradeBlowout", 45.f},
+    {"ColorGradeFlare", 76.f},
+    {"SwapChainCustomColorSpace", 0.f},
+    {"ColorGradeSDRTonemapper", 0.f},
+    {"ColorGradeLUTColorStrength", 50.f},
+    {"ColorGradeLUTOutputStrength", 50.f},
+    {"FxFilmGrain", 50.f},
+    // {"FxSharpness", 0.f},
+    {"FxExposureType", 1.f},
+    {"FxExposureStrength", 40.f},
+    {"FxLUTExposureReverse", 1.f},
+};
 
-const std::unordered_map<std::string, float> VANILLA_PLUS_VALUES = {
+/* const std::unordered_map<std::string, float> VANILLA_PLUS_VALUES = {
     {"ToneMapType", 1.f},
     {"GammaCorrection", 1.f},
     {"ToneMapScaling", 1.f},
@@ -105,7 +113,7 @@ const std::unordered_map<std::string, float> VANILLA_PLUS_VALUES = {
     {"FxExposureType", 0.f},
     {"FxExposureStrength", 50.f},
     {"FxLUTExposureReverse", 0.f},
-};
+}; */
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -163,22 +171,11 @@ renodx::utils::settings::Settings settings = {
         .min = 80.f,
         .max = 500.f,
     },
-    /* new renodx::utils::settings::Setting{
-        .key = "GammaCorrection",
-        .binding = &shader_injection.swap_chain_gamma_correction,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
-        .label = "Gamma Correction",
-        .section = "Tone Mapping",
-        .tooltip = "Emulates a display EOTF.",
-        .labels = {"Off", "2.2", "BT.1886"},
-        .is_visible = []() { return current_settings_mode >= 1; },
-    }, */
     new renodx::utils::settings::Setting{
         .key = "ToneMapScaling",
         .binding = &shader_injection.tone_map_per_channel,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .label = "Scaling",
         .section = "Tone Mapping",
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
@@ -231,7 +228,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
         .binding = &shader_injection.tone_map_contrast,
-        .default_value = 80.f,
+        .default_value = 60.f,
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
@@ -240,7 +237,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSaturation",
         .binding = &shader_injection.tone_map_saturation,
-        .default_value = 55.f,
+        .default_value = 50.f,
         .label = "Saturation",
         .section = "Color Grading",
         .max = 100.f,
@@ -249,7 +246,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
         .binding = &shader_injection.tone_map_highlight_saturation,
-        .default_value = 59.f,
+        .default_value = 60.f,
         .label = "Highlight Saturation",
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
@@ -261,7 +258,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
         .binding = &shader_injection.tone_map_blowout,
-        .default_value = 45.f,
+        .default_value = 50.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Adds highlight desaturation due to overexposure.",
@@ -273,7 +270,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
         .binding = &shader_injection.tone_map_flare,
-        .default_value = 76.f,
+        .default_value = 90.f,
         .label = "Flare",
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
@@ -307,18 +304,18 @@ renodx::utils::settings::Settings settings = {
         .key = "ColorGradeSDRTonemapper",
         .binding = &shader_injection.custom_sdr_tonemapper,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 2.f,
         .can_reset = true,
         .label = "SDR tonemapper",
         .section = "Color Grading",
         .tooltip = "Which tonemapper to use for SDR calculations",
-        .labels = {"Reinhard", "Hejl Dawson"},
+        .labels = {"Reinhard", "Hejl Dawson", "ACES"},
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeLUTColorStrength",
         .binding = &shader_injection.custom_lut_color_strength,
-        .default_value = 50.f,
+        .default_value = 75.f,
         .label = "Color LUT Strength",
         .section = "Color Grading",
         .tooltip = "Strength of Vanilla's Color LUT",
@@ -329,7 +326,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeLUTOutputStrength",
         .binding = &shader_injection.custom_lut_output_strength,
-        .default_value = 50.f,
+        .default_value = 100.f,
         .label = "Output LUT Strength",
         .section = "Color Grading",
         .tooltip = "Strength of Vanilla's Output LUT",
@@ -362,7 +359,7 @@ renodx::utils::settings::Settings settings = {
         .key = "FxExposureType",
         .binding = &shader_injection.custom_exposure_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 0.f,
         .can_reset = true,
         .label = "Exposure Type",
         .section = "Effects",
@@ -373,7 +370,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxExposureStrength",
         .binding = &shader_injection.custom_exposure_strength,
-        .default_value = 40.f,
+        .default_value = 50.f,
         .can_reset = true,
         .label = "Exposure Strength",
         .section = "Effects",
@@ -385,7 +382,7 @@ renodx::utils::settings::Settings settings = {
         .key = "FxLUTExposureReverse",
         .binding = &shader_injection.custom_lut_exposure_reverse,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 0.f,
         .can_reset = true,
         .label = "LUT Exposure Reverse",
         .section = "Effects",
@@ -395,7 +392,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "RenoDX",
+        .label = "Vanilla+",
         .section = "Presets",
         .group = "button-line-1",
         .on_change = []() {
@@ -409,7 +406,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Vanilla+",
+        .label = "Filmic",
         .section = "Presets",
         .group = "button-line-1",
         .on_change = []() {
@@ -417,8 +414,8 @@ renodx::utils::settings::Settings settings = {
             if (setting->key.empty()) continue;
             if (!setting->can_reset) continue;
             if (setting->is_global) continue;
-            if (VANILLA_PLUS_VALUES.contains(setting->key)) {
-              renodx::utils::settings::UpdateSetting(setting->key, VANILLA_PLUS_VALUES.at(setting->key));
+            if (FILMIC_LOOK_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, FILMIC_LOOK_VALUES.at(setting->key));
             } else {
               renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
             }
