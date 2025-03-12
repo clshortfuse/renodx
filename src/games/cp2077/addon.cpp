@@ -58,10 +58,6 @@ ShaderInjectData shader_injection;
 
 auto last_is_hdr = false;
 
-float ComputeReferenceWhite(float peak_nits) {
-  return std::clamp(roundf(powf(10.f, 0.03460730900256f + (0.757737096673107f * log10f(peak_nits)))), 100.f, 300.f);
-}
-
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapType",
@@ -447,7 +443,7 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     settings[1]->default_value = 1000.f;
   }
 
-  settings[2]->default_value = ComputeReferenceWhite(settings[1]->default_value);
+  settings[2]->default_value = renodx::utils::swapchain::ComputeReferenceWhite(settings[1]->default_value);
 }
 
 }  // namespace
