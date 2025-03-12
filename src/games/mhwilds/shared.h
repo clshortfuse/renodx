@@ -6,11 +6,7 @@
 #define RENODX_DIFFUSE_WHITE_NITS              shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS             shader_injection.graphics_white_nits
 #define RENODX_TONE_MAP_PER_CHANNEL            shader_injection.tone_map_per_channel
-#define RENODX_TONE_MAP_WORKING_COLOR_SPACE    color::convert::COLOR_SPACE_AP1
 #define RENODX_TONE_MAP_HUE_PROCESSOR          shader_injection.tone_map_hue_processor
-#define RENODX_TONE_MAP_HUE_SHIFT_METHOD       HUE_SHIFT_METHOD_AP1_ROLL_OFF
-#define RENODX_TONE_MAP_CLAMP_COLOR_SPACE      color::convert::COLOR_SPACE_NONE
-#define RENODX_TONE_MAP_CLAMP_PEAK             color::convert::COLOR_SPACE_NONE
 #define RENODX_TONE_MAP_EXPOSURE               shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS             shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS                shader_injection.tone_map_shadows

@@ -1,3 +1,5 @@
+#include "./shared.h"
+
 Texture2D<float4> SrcTexture : register(t0);
 
 Texture3D<float4> SrcLUT : register(t1);
@@ -46,6 +48,7 @@ float4 main(
   SV_Target.x = (_66.x);
   SV_Target.y = (_66.y);
   SV_Target.z = (_66.z);
+
   SV_Target.w = 1.0f;
   return SV_Target;
 }

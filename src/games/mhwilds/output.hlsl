@@ -19,7 +19,7 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
   float4 _11 = SrcTexture.SampleLevel(PointBorder, float2((TEXCOORD.x), (TEXCOORD.y)), 0.0f);
   float _17 = (HDRMapping_000x) * 0.009999999776482582f;  // overall brightness (defaullt 100.f);
   float3 ap1_color = _11.rgb;
-  ap1_color *= _17;
+  // ap1_color *= _17;
 
   float3 untonemapped = renodx::color::bt709::from::AP1(ap1_color);
   // ap1_color = renodx::color::ap1::from::BT709(float3(1.f, 0, 1.f));
@@ -38,22 +38,10 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
   if (RENODX_TONE_MAP_TYPE == 0) {
     untonemapped_graded = lut_output_color;  // Vanilla Tone Mapping
   } else {
-    float mid_gray = renodx::color::y::from::BT709(
-        renodx::color::pq::DecodeSafe(
-            renodx::lut::Sample(
-                SrcLUT, lut_config,
-                renodx::color::pq::EncodeSafe(0.18f, 100.f)),
-            100.f));
-
-    float peak = renodx::color::y::from::BT709(
-        renodx::color::pq::DecodeSafe(
-            renodx::lut::Sample(
-                SrcLUT, lut_config,
-                renodx::color::pq::EncodeSafe(100.f, 100.f)),
-            100.f));
-
     float3 sdrColor;
-    if (CUSTOM_SDR_TONEAMPPER == 2.f) {
+    if (CUSTOM_SDR_TONEAMPPER == 3.f) {
+      sdrColor = renodx::tonemap::renodrt::NeutralSDR(untonemapped);  // Already tonemapped
+    } else if (CUSTOM_SDR_TONEAMPPER == 2.f) {
       renodx::draw::Config config = renodx::draw::BuildConfig();
       config.tone_map_type = renodx::draw::TONE_MAP_TYPE_ACES;  // aces
       sdrColor = renodx::draw::ToneMapPass(untonemapped, config);
@@ -61,8 +49,23 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
     } else if (CUSTOM_SDR_TONEAMPPER == 1.f) {
       sdrColor = renodx::tonemap::HejlDawson(saturate(untonemapped));
     } else {
+      float mid_gray = renodx::color::y::from::BT709(
+          renodx::color::pq::DecodeSafe(
+              renodx::lut::Sample(
+                  SrcLUT, lut_config,
+                  renodx::color::pq::EncodeSafe(0.18f, 100.f)),
+              100.f));
+
+      float peak = renodx::color::y::from::BT709(
+          renodx::color::pq::DecodeSafe(
+              renodx::lut::Sample(
+                  SrcLUT, lut_config,
+                  renodx::color::pq::EncodeSafe(100.f, 100.f)),
+              100.f));
+
       sdrColor = renodx::tonemap::ReinhardScalable(untonemapped, peak);
     }
+
     untonemapped_graded = renodx::tonemap::UpgradeToneMap(
         untonemapped,
         sdrColor,

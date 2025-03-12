@@ -1,3 +1,4 @@
+#define SHADER_HASH_0xEE56E73B
 #include "./postprocess.hlsl"
 #include "./shared.h"
 
@@ -166,7 +167,7 @@ cbuffer CameraKerare : register(b1) {
 ;
 ;   } TonemapParam;
  */
-cbuffer TonemapParam : register(b2) {
+/* cbuffer TonemapParam : register(b2) {
   float TonemapParam_000x : packoffset(c000.x);
   float TonemapParam_000y : packoffset(c000.y);
   float TonemapParam_000w : packoffset(c000.w);
@@ -178,7 +179,7 @@ cbuffer TonemapParam : register(b2) {
   float TonemapParam_002y : packoffset(c002.y);
   float TonemapParam_002z : packoffset(c002.z);
   float TonemapParam_002w : packoffset(c002.w);
-};
+}; */
 
 /*
 ;   struct LDRPostProcessParam
@@ -592,7 +593,7 @@ float4 main(
       custom_flat_exposure = FlatExposure();
     }
   }
-  
+
   // Lens distortion
   if (_43) {
     // Not here
@@ -1599,6 +1600,20 @@ float4 main(
   _2771 = _2664;
   _2772 = _2665;
 
+  // Don't enter in SDR
+  if (!(TonemapParam_002w == 0.0f) && CUSTOM_SDR_TONEAMPPER == 3.f) {
+    float3 untonemapped = renodx::color::bt709::from::AP1(float3(_2663, _2664, _2665));
+    float3 midgray = VanillaSDRTonemapper(float3(0.18, 0.18, 0.18));
+    float3 sdrTonemapped = VanillaSDRTonemapper(untonemapped);
+
+    float3 tonemapped = UpgradeWithSDR(untonemapped * (midgray / 0.18), sdrTonemapped);
+
+    _2770 = tonemapped.r;
+    _2771 = tonemapped.g;
+    _2772 = tonemapped.b;
+  }
+
+  // Original SDR tonemapper
   if ((((TonemapParam_002w) == 0.0f))) {  // tonemapParam_isHDRMode
     // Not here
     // I guess this is their inverse tonemapper?
@@ -1635,6 +1650,7 @@ float4 main(
       } while (false);
     } while (false);
   }
+
   SV_Target.x = _2770;
   SV_Target.y = _2771;
   SV_Target.z = _2772;
