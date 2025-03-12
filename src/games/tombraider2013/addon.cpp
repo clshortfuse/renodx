@@ -508,7 +508,7 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     peak = 1000.f;
   }
   settings[2]->default_value = peak.value();
-  settings[3]->default_value = std::clamp(roundf(powf(10.f, 0.03460730900256f + (0.757737096673107f * log10f(peak.value())))), 100.f, 300.f);
+  settings[3]->default_value = renodx::utils::swapchain::ComputeReferenceWhite(peak.value());
 }
 
 std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
