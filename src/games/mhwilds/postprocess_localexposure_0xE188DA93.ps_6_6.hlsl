@@ -240,19 +240,19 @@ struct TonemapParam
 ;
 ;   } TonemapParam;
  */
-cbuffer TonemapParam : register(b4) {
+/* cbuffer TonemapParam : register(b4) {
   float TonemapParam_000x : packoffset(c000.x);  // contrast
   float TonemapParam_000y : packoffset(c000.y);  // linearBegin
   float TonemapParam_000w : packoffset(c000.w);  // toe
   float TonemapParam_001x : packoffset(c001.x);  // maxNit
   float TonemapParam_001y : packoffset(c001.y);  // linearStart
-  float TonemapParam_001z : packoffset(c001.z);
-  float TonemapParam_001w : packoffset(c001.w);
+  float TonemapParam_001z : packoffset(c001.z);  // displayMaxNitSubContrastFactor
+  float TonemapParam_001w : packoffset(c001.w);  // contrastFactor
   float TonemapParam_002x : packoffset(c002.x);  // mulLinearStartContrastFactor
   float TonemapParam_002y : packoffset(c002.y);  // invLinearBegin
   float TonemapParam_002z : packoffset(c002.z);  // madLinearStartContrastFactor
   float TonemapParam_002w : packoffset(c002.w);  // tonemapParam_isHDRMode
-};
+}; */
 
 /*
 struct LDRPostProcessParam
@@ -408,7 +408,9 @@ struct CBControl
 ;
 ;       float3 CBControl_reserve;                     ; Offset:    0
 ;       uint cPassEnabled;                            ; Offset:   12
+
 ;       row_major float4x4 fOCIOTransformMatrix;      ; Offset:   16
+
 ;       struct struct.RGCParam
 ;       {
 ;
@@ -416,10 +418,12 @@ struct CBControl
 ;           float MagentaLimit;                       ; Offset:   84
 ;           float YellowLimit;                        ; Offset:   88
 ;           float CyanThreshold;                      ; Offset:   92
+
 ;           float MagentaThreshold;                   ; Offset:   96
 ;           float YellowThreshold;                    ; Offset:  100
 ;           float RollOff;                            ; Offset:  104
 ;           uint EnableReferenceGamutCompress;        ; Offset:  108
+
 ;           float InvCyanSTerm;                       ; Offset:  112
 ;           float InvMagentaSTerm;                    ; Offset:  116
 ;           float InvYellowSTerm;                     ; Offset:  120
@@ -1653,7 +1657,21 @@ float4 main(
   _3043 = _2936;
   _3044 = _2937;
 
+  // Don't enter in SDR
+  if (!(TonemapParam_002w == 0.0f) && CUSTOM_SDR_TONEAMPPER == 3.f) {
+    float3 untonemapped = renodx::color::bt709::from::AP1(float3(_2935, _2936, _2937));
+    float3 midgray = VanillaSDRTonemapper(float3(0.18, 0.18, 0.18));
+    float3 sdrTonemapped = VanillaSDRTonemapper(untonemapped);
+
+    float3 tonemapped = UpgradeWithSDR(untonemapped * (midgray / 0.18), sdrTonemapped);
+
+    _3042 = tonemapped.r;
+    _3043 = tonemapped.g;
+    _3044 = tonemapped.b;
+  }
+
   if ((((TonemapParam_002w) == 0.0f))) {  // SDR Tonemap
+
     float _2945 = (TonemapParam_002y)*_2935;
     _2953 = 1.0f;
     do {
@@ -1672,6 +1690,7 @@ float4 main(
           if ((!(_2937 >= (TonemapParam_000y)))) {
             _2971 = ((_2963 * _2963) * (3.0f - (_2963 * 2.0f)));
           }
+
           float _2980 = (((bool)((_2935 < (TonemapParam_001y)))) ? 0.0f : 1.0f);
           float _2981 = (((bool)((_2936 < (TonemapParam_001y)))) ? 0.0f : 1.0f);
           float _2982 = (((bool)((_2937 < (TonemapParam_001y)))) ? 0.0f : 1.0f);
@@ -1682,6 +1701,7 @@ float4 main(
       } while (false);
     } while (false);
   }
+
   SV_Target.x = _3042;
   SV_Target.y = _3043;
   SV_Target.z = _3044;

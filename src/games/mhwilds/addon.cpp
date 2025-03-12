@@ -228,7 +228,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
         .binding = &shader_injection.tone_map_contrast,
-        .default_value = 60.f,
+        .default_value = 50.f,
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
@@ -304,18 +304,18 @@ renodx::utils::settings::Settings settings = {
         .key = "ColorGradeSDRTonemapper",
         .binding = &shader_injection.custom_sdr_tonemapper,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 3.f,
         .can_reset = true,
         .label = "SDR tonemapper",
         .section = "Color Grading",
         .tooltip = "Which tonemapper to use for SDR calculations",
-        .labels = {"Reinhard", "Hejl Dawson", "ACES"},
+        .labels = {"Reinhard", "Hejl Dawson", "ACES", "Vanilla"},
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeLUTColorStrength",
         .binding = &shader_injection.custom_lut_color_strength,
-        .default_value = 75.f,
+        .default_value = 100.f,
         .label = "Color LUT Strength",
         .section = "Color Grading",
         .tooltip = "Strength of Vanilla's Color LUT",
@@ -528,9 +528,12 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
-    settings[1]->default_value = peak.value();
-    settings[1]->can_reset = true;
+    settings[1]->default_value = roundf(peak.value());
+  } else {
+    settings[1]->default_value = 1000.f;
   }
+
+  settings[2]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[1]->default_value), 203.f);
 }
 
 void OnPresent(
