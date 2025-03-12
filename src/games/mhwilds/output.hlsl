@@ -53,7 +53,12 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
             100.f));
 
     float3 sdrColor;
-    if (CUSTOM_SDR_TONEAMPPER == 1.f) {
+    if (CUSTOM_SDR_TONEAMPPER == 2.f) {
+      renodx::draw::Config config = renodx::draw::BuildConfig();
+      config.tone_map_type = renodx::draw::TONE_MAP_TYPE_ACES;  // aces
+      sdrColor = renodx::draw::ToneMapPass(untonemapped, config);
+      sdrColor = renodx::tonemap::renodrt::NeutralSDR(sdrColor);
+    } else if (CUSTOM_SDR_TONEAMPPER == 1.f) {
       sdrColor = renodx::tonemap::HejlDawson(saturate(untonemapped));
     } else {
       sdrColor = renodx::tonemap::ReinhardScalable(untonemapped, peak);
