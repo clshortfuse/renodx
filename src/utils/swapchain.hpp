@@ -6,6 +6,7 @@
 #pragma once
 
 #include <dxgi1_6.h>
+#include <cmath>
 #include <ios>
 #include <mutex>
 #include <optional>
@@ -274,6 +275,32 @@ static std::optional<float> GetPeakNits(reshade::api::swapchain* swapchain) {
   }
 
   return output_desc->MaxLuminance;
+}
+
+static float ComputeReferenceWhite(const float peak_nits) {
+  // use high precision for calculations
+  const double local_peak_nits = static_cast<double>(peak_nits);
+
+  // source for all math functions: Rec. ITU-R BT.2100-3 Table 5 (end)
+
+  // 75% HLG calculated at high precision
+  // calculated as following:
+  // a = 0.17883277
+  // b = 1 - 4 * a
+  // c = 0.5 - a * ln(4 * a)
+  // then calculate the HLG inverse OETF with x=0.75
+  // hlg_at_75_percent = (exp((0.75 - c) / a) + b) / 12
+  const double hlg_at_75_percent = 0.26496256042100718;
+
+  // get gamma for the HLG OOTF
+  const double gamma = 1.2 + (0.42 * std::log10(local_peak_nits / 1000.0));
+
+  // calculate the refernce white value
+  // HLG OOTF
+  // hlg_at_75_percent is both E and Y_S
+  const double reference_white = local_peak_nits * std::pow(hlg_at_75_percent, gamma - 1.0) * hlg_at_75_percent;
+
+  return std::clamp(std::roundf(static_cast<float>(reference_white)), 100.f, 300.f);
 }
 
 static bool IsHDRColorSpace(reshade::api::swapchain* swapchain) {
