@@ -315,16 +315,6 @@ renodx::utils::settings::Settings settings = {
         },
     },
     new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "ShortFuse's Ko-Fi",
-        .section = "Links",
-        .group = "button-line-1",
-        .tint = 0xFF5A16,
-        .on_change = []() {
-          ShellExecute(0, "open", (std::string("https://ko-fi.com/") + "shortfuse").c_str(), 0, 0, SW_SHOW);
-        },
-    },
-    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
         .section = "About",
@@ -344,6 +334,24 @@ void OnPresetOff() {
   //   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
   //   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   //   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
+}
+
+bool fired_on_init_swapchain = false;
+
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  if (fired_on_init_swapchain) return;
+  fired_on_init_swapchain = true;
+
+  auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+  auto white_level = 203.f;
+  if (!peak.has_value()) {
+    peak = 1000.f;
+  }
+  settings[2]->default_value = peak.value();  // Peak Nits
+
+  float computed_diffuse = std::clamp(roundf(powf(10.f, 0.03460730900256f + (0.757737096673107f * log10f(peak.value())))), 100.f, 203.f);
+  settings[3]->default_value = computed_diffuse;  // Game Nits
+  settings[4]->default_value = computed_diffuse;  // UI Nits
 }
 
 bool initialized = false;
@@ -385,8 +393,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .use_resource_view_cloning = true,  // Results in black screen otherwise
       });
 
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // Peak nits / diffuse white
+
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_addon(h_module);
       break;
   }
