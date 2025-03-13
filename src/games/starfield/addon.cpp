@@ -330,25 +330,29 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
 
       // // Frame Gen
-      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //     .old_format = reshade::api::format::r8g8b8a8_unorm,
-      //     .new_format = reshade::api::format::r16g16b16a16_float,
-      //     .use_resource_view_cloning = true,
-      //     .usage_include = reshade::api::resource_usage::render_target,
-      // });
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+          .usage_include = reshade::api::resource_usage::render_target
+                           | reshade::api::resource_usage::copy_dest,
+      });
 
       // RGBA8 Resource pool
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
-          .usage_include = reshade::api::resource_usage::render_target,
+          .usage_include = reshade::api::resource_usage::render_target
+                           | reshade::api::resource_usage::copy_dest,
       });
 
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r16g16b16a16_typeless,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
+          .usage_include = reshade::api::resource_usage::render_target
+                           | reshade::api::resource_usage::copy_dest,
       });
 
       reshade::register_event<reshade::addon_event::present>(OnPresent);
