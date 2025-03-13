@@ -35,7 +35,7 @@ static const float _34[3] = { 0.2270270287990570068359375f, 0.316216230392456054
 ;       float LEPreExposureLog;                       ; Offset:   80
 ;       int LEBlurredLogDownsampleMip;                ; Offset:   84
 ;       int2 LELuminanceTextureSize;                  ; Offset:   88
-;   
+;
 ;   } Tonemap;                                        ; Offset:    0 Size:    96
 ;
 ; } */
@@ -60,7 +60,7 @@ struct SPIRV_Cross_Output {
 
 void frag_main() {
   uint4 _48 = asuint(Tonemap_m0[5u]);  // .zw=LELuminanceTextureSize
-   
+
   float _71;
   uint _73;
   float originalLuminance = LuminanceSRV.Load(int3(uint2(uint(((TEXCOORD.x * 64.0f) * float(int(_48.z))) + 0.5f) >> 6u, uint(((TEXCOORD.y * 64.0f) * float(int(_48.w))) + 0.5f) >> 6u), 0u)).x;
@@ -91,7 +91,7 @@ void frag_main() {
       _73 = _74;
     }
   }
-  SV_Target.x = _72;
+  SV_Target.x = lerp(originalLuminance, _72, CUSTOM_SHARPNESS);
   SV_Target.y = 0.0f;
   SV_Target.z = 0.0f;
   SV_Target.w = 1.0f;

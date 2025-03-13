@@ -16,7 +16,7 @@
 #define RENODX_TONE_MAP_BLOWOUT                shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                  shader_injection.tone_map_flare
 #define RENODX_SWAP_CHAIN_DECODING             ENCODING_NONE
-#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION     1.f  // shader_injection.swap_chain_gamma_correction
+#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION     1.f
 #define RENODX_SWAP_CHAIN_SCALING_NITS         100.f * RENODX_DIFFUSE_WHITE_NITS / 203.f
 #define RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE color::convert::COLOR_SPACE_BT709
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE   shader_injection.swap_chain_custom_color_space
@@ -39,6 +39,7 @@
 #define CUSTOM_LUT_EXPOSURE_REVERSE            shader_injection.custom_lut_exposure_reverse
 #define CUSTOM_EXPOSURE_SHADER_DRAW            shader_injection.custom_exposure_shader_draw
 #define CUSTOM_SDR_TONEAMPPER                  shader_injection.custom_sdr_tonemapper
+#define CUSTOM_TONE_MAP_METHOD                 shader_injection.custom_tone_map_method
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -47,7 +48,6 @@ struct ShaderInjectData {
   float diffuse_white_nits;
   float graphics_white_nits;
   float color_grade_strength;
-  float tone_map_type;
   float tone_map_exposure;
   float tone_map_highlights;
   float tone_map_shadows;
@@ -70,6 +70,7 @@ struct ShaderInjectData {
   float custom_lut_exposure_reverse;
   float custom_exposure_shader_draw;
   float custom_sdr_tonemapper;
+  float custom_tone_map_method;
 };
 
 #ifndef __cplusplus

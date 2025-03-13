@@ -1601,7 +1601,7 @@ float4 main(
   _2772 = _2665;
 
   // Don't enter in SDR
-  if (!(TonemapParam_002w == 0.0f) && CUSTOM_SDR_TONEAMPPER == 3.f) {
+  if (!(TonemapParam_002w == 0.0f) && ProcessVanilla()) {
     float3 untonemapped = renodx::color::bt709::from::AP1(float3(_2663, _2664, _2665));
     float3 midgray = VanillaSDRTonemapper(float3(0.18, 0.18, 0.18));
     float3 sdrTonemapped = VanillaSDRTonemapper(untonemapped);
