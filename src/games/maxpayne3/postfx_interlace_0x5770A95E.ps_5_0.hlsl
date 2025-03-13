@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsl"
 
 cbuffer _Globals : register(b4) {
   float4 TransColor : packoffset(c206);
@@ -35,7 +35,6 @@ void main(
     float4 v3: COLOR0,
     out float4 o0: SV_Target0) {
   float4 r0, r1, r2, r3, r4;
-  uint4 bitmask, uiDest;
   float4 fDest;
 
   r0.x = AlphaMaskMapSampler.Sample(AlphaMaskMapSampler_s, v2.xy).w;
@@ -77,9 +76,6 @@ void main(
   o0.xyz = r2.xyz + r0.yzw;
   o0.w = r0.x;
 
-  // writes onto swapchain, breaks unless manually clamped
-#if CLAMP_POSTFX
-  o0.rgb = max(0, o0.rgb);
-#endif
+  o0.rgb = PostFXScale(o0.rgb);
   return;
 }
