@@ -206,10 +206,10 @@ struct PipelineShaderDetails {
       });
       this->compatible_shader_infos[shader_type_index] = this->subobject_shaders.back();
 
-#ifdef DEBUG_LEVEL_0
+#ifdef DEBUG_LEVEL_1
       {
         std::stringstream s;
-        s << "utils::shader::PipelineShaderDetails(Storing ";
+        s << "utils::shader::PipelineShaderDetails(Tracking ";
         s << PRINT_CRC32(shader_hash);
         s << ", index: " << i;
         s << ", type: " << subobject.type;
