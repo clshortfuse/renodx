@@ -64,6 +64,8 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
 
   std::vector<SwapChainUpgradeTarget> swap_chain_upgrade_targets;
 
+  std::unordered_map<reshade::api::swapchain*, reshade::api::swapchain_desc> upgraded_swapchains;
+
   reshade::api::resource_desc primary_swapchain_desc;
 
   bool upgraded_resource_view = false;
@@ -118,6 +120,7 @@ static uint32_t expected_constant_buffer_space = 0;
 static float* shader_injection = nullptr;
 static size_t shader_injection_size = 0;
 
+static thread_local std::optional<reshade::api::swapchain_desc> upgraded_swapchain_desc;
 static thread_local SwapChainUpgradeTarget* local_applied_target = nullptr;
 static thread_local reshade::api::resource local_original_resource = {0u};
 static thread_local reshade::api::resource_desc local_original_resource_desc = {};
@@ -1022,9 +1025,15 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 
-  return (old_format != desc.back_buffer.texture.format)
-         || (old_present_mode != desc.present_mode)
-         || (old_present_flags != desc.present_flags);
+  bool changed = (old_format != desc.back_buffer.texture.format)
+                 || (old_present_mode != desc.present_mode)
+                 || (old_present_flags != desc.present_flags);
+  if (changed) {
+    upgraded_swapchain_desc = desc;
+  } else {
+    upgraded_swapchain_desc.reset();
+  }
+  return true;
 }
 
 static void OnPresentForResizeBuffer(
@@ -1048,6 +1057,11 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     auto* data = renodx::utils::data::Get<DeviceData>(device);
     if (data == nullptr) return;
     const std::unique_lock lock(data->mutex);
+
+    if (upgraded_swapchain_desc.has_value()) {
+      data->upgraded_swapchains[swapchain] = upgraded_swapchain_desc.value();
+      upgraded_swapchain_desc.reset();
+    }
     reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnInitSwapchain(reset resource upgrade)");
     data->resource_upgrade_finished = false;
     const uint32_t len = swap_chain_upgrade_targets.size();
@@ -1093,6 +1107,12 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
   reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnDestroySwapchain()");
 }
 
+static bool IsUpgraded(reshade::api::swapchain* swapchain) {
+  auto* data = renodx::utils::data::Get<DeviceData>(swapchain->get_device());
+  if (data == nullptr) return false;
+  return data->upgraded_swapchains.contains(swapchain);
+}
+
 inline bool OnCreateResource(
     reshade::api::device* device,
     reshade::api::resource_desc& desc,
@@ -1116,6 +1136,7 @@ inline bool OnCreateResource(
   }
 
   auto* private_data = renodx::utils::data::Get<DeviceData>(device);
+  if (private_data == nullptr) return false;
   if (private_data->resource_upgrade_finished) return false;
   // const std::unique_lock lock(private_data.mutex);
 
