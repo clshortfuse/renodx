@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
 SamplerState RenderMapPointSampler_s : register(s1);
 Texture2D<float4> RenderMapPointSampler : register(t1);

@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
 cbuffer _Globals : register(b1)
 {
@@ -137,7 +137,7 @@ void main(
   float2 v2 : TEXCOORD2,
   out float4 o0 : SV_Target0)
 {
-  float4 r0,r1,r2,r3,r4;
+  float4 r0,r1,r2;
   uint4 bitmask, uiDest;
   float4 fDest;
 
@@ -162,78 +162,55 @@ void main(
   r0.x = max(r0.y, r0.x);
   PostFxTexture0a.GetDimensions(fDest.x, fDest.y, fDest.z);
   r0.yz = fDest.xy;
-  r1.xy = v1.xy * r0.yz;
-  r1.xy = (int2)r1.xy;
+  r0.yz = v1.xy * r0.yz;
+  r1.xy = (int2)r0.yz;
   r1.zw = float2(0,0);
-  r2.xyz = PostFxTexture0a.Load(r1.xy, 0).xyz;
+  r0.yzw = PostFxTexture0a.Load(r1.xy, 0).xyz;
   r1.xyz = PostFxTexture0a.Load(r1.xy, 1).xyz;
-  r1.xyz = r2.xyz + r1.xyz;
-  r1.xyz = float3(0.5,0.5,0.5) * r1.xyz;
-  r0.w = cmp(radialBlurScale != 1.000000);
-  if (r0.w != 0) {
-    r2.xy = radialBlurTextureStep.xy + v1.xy;
-    r2.xyz = RadialBlurSampler.Sample(RadialBlurSampler_s, r2.xy).xyz;
-    r1.xyz = r1.xyz * radialBlurScale + r2.xyz;
+  r0.yzw = r1.xyz + r0.yzw;
+  r0.yzw = float3(0.5,0.5,0.5) * r0.yzw;
+  r1.x = cmp(radialBlurScale != 1.000000);
+  if (r1.x != 0) {
+    r1.xy = radialBlurTextureStep.xy + v1.xy;
+    r1.xyz = RadialBlurSampler.Sample(RadialBlurSampler_s, r1.xy).xyz;
+    r0.yzw = r0.yzw * radialBlurScale + r1.xyz;
   }
-  r0.w = cmp(0 != blurIntensity);
-  if (r0.w != 0) {
-    r2.xyz = BlurSampler.Sample(BlurSampler_s, v1.xy).xyz;
-    r2.xyz = r2.xyz + -r1.xyz;
-    r1.xyz = blurIntensity * r2.xyz + r1.xyz;
+  r1.x = cmp(0 != blurIntensity);
+  if (r1.x != 0) {
+    r1.xyz = BlurSampler.Sample(BlurSampler_s, v1.xy).xyz;
+    r1.xyz = r1.xyz + -r0.yzw;
+    r0.yzw = blurIntensity * r1.xyz + r0.yzw;
   }
-  r2.xy = DeathSampler.Sample(DeathSampler_s, w1.xy).xz;
-  r0.w = ColorFringeParams1.w / globalScreenSize.x;
-  r2.zw = v1.xy + -r0.ww;
-  r2.zw = r2.zw * r0.yz;
-  r3.xy = (int2)r2.zw;
-  r3.zw = float2(0,0);
-  r4.xyz = PostFxTexture0a.Load(r3.xy, 0).xyz;
-  r3.xyz = PostFxTexture0a.Load(r3.xy, 1).xyz;
-  r3.xyz = r4.xyz + r3.xyz;
-  r3.xyz = ColorFringeParams1.xyz * r3.xyz;
-  r4.xyz = ColorFringeParams1.xyz * r1.xyz;
-  r3.xyz = r3.xyz * float3(0.5,0.5,0.5) + -r4.xyz;
-  r3.xyz = r3.xyz + r1.xyz;
-  r2.zw = -ColorFringeParams2.ww * globalScreenSize.zz + v1.xy;
-  r0.yz = r2.zw * r0.yz;
-  r4.xy = (int2)r0.yz;
-  r4.zw = float2(0,0);
-  r0.yzw = PostFxTexture0a.Load(r4.xy, 0).xyz;
-  r4.xyz = PostFxTexture0a.Load(r4.xy, 1).xyz;
-  r0.yzw = r4.xyz + r0.yzw;
-  r0.yzw = ColorFringeParams2.xyz * r0.yzw;
-  r1.xyz = ColorFringeParams2.xyz * r1.xyz;
-  r0.yzw = r0.yzw * float3(0.5,0.5,0.5) + -r1.xyz;
-  r0.yzw = r3.xyz + r0.yzw;
-  r1.xyz = BlurSampler.Sample(BlurSampler_s, v1.xy).xyz;
-  r1.xyz = r1.xyz + -r0.yzw;
-  r0.xyz = r0.xxx * r1.xyz + r0.yzw;
+  r1.xy = DeathSampler.Sample(DeathSampler_s, w1.xy).xz;
+  r2.xyz = BlurSampler.Sample(BlurSampler_s, v1.xy).xyz;
+  r2.xyz = r2.xyz + -r0.yzw;
+  r0.xyz = r0.xxx * r2.xyz + r0.yzw;
   r0.w = AdapLumSampler.Sample(AdapLumSampler_s, float2(0,0)).x;
-  r0.w = 9.99999997e-007 + r0.w;
+  r0.w = 9.99999997e-07 + r0.w;
   r0.w = ToneMapParams.y / r0.w;
-  r1.xyz = BloomSampler.Sample(BloomSampler_s, v1.xy).xyz;
-  r1.w = ToneMapParams.w + -ToneMapParams.z;
-  r1.w = r2.x * r1.w + ToneMapParams.z;
-  r1.xyz = r1.xyz * r1.www;
-  r0.xyz = r1.xyz * float3(0.25,0.25,0.25) + r0.xyz;
-  r1.xyz = v1.yyy * ColorCorrectBottomOffset.xyz + ColorCorrectTopAndPedReflectScale.xyz;
-  r0.xyz = r1.xyz * r0.xyz;
-  r1.x = Exposures.y + -Exposures.x;
-  r1.x = r2.x * r1.x + Exposures.x;
+  r2.xyz = BloomSampler.Sample(BloomSampler_s, v1.xy).xyz;
+  r1.z = ToneMapParams.w + -ToneMapParams.z;
+  r1.z = r1.x * r1.z + ToneMapParams.z;
+  r2.xyz = r2.xyz * r1.zzz;
+  r0.xyz = r2.xyz * float3(0.25,0.25,0.25) + r0.xyz;
+  r2.xyz = v1.yyy * ColorCorrectBottomOffset.xyz + ColorCorrectTopAndPedReflectScale.xyz;
+  r0.xyz = r2.xyz * r0.xyz;
+  r1.z = Exposures.y + -Exposures.x;
+  r1.x = r1.x * r1.z + Exposures.x;
   r0.xyz = r1.xxx * r0.xyz;
   r1.x = dot(r0.xyz, float3(0.212500006,0.715399981,0.0720999986));
-  r1.y = r1.x * r0.w;
-  r1.z = BurnoutLimit * BurnoutLimit;
-  r1.z = r1.y / r1.z;
-  r1.z = 1 + r1.z;
-  r1.y = r1.y * r1.z;
+  r1.z = r1.x * r0.w;
+  r1.w = BurnoutLimit * BurnoutLimit;
+  r1.w = r1.z / r1.w;
+  r1.w = 1 + r1.w;
+  r1.z = r1.z * r1.w;
   r0.w = r1.x * r0.w + 1;
-  r0.w = r1.y / r0.w;
+  r0.w = r1.z / r0.w;
   r0.xyz = r0.xyz * r0.www;
   r0.w = saturate(dot(r0.xyz, float3(0.212500006,0.715399981,0.0720999986)));
-  r0.w = 1.00999996e-005 + r0.w;
+  r0.w = 1.00999996e-05 + r0.w;
   r1.x = deSatContrastGammaIFX.z + -deSatContrastGamma.z;
-  r1.x = r2.y * r1.x + deSatContrastGamma.z;
+  r1.x = r1.y * r1.x + deSatContrastGamma.z;
   r1.x = -0.999989986 + r1.x;
   r0.w = log2(r0.w);
   r0.w = r1.x * r0.w;
@@ -245,8 +222,6 @@ void main(
   o0.w = dot(r1.xyz, float3(0.298999995,0.587000012,0.114));
   o0.xyz = r0.xyz;
 
-  // cap luminance of screen flash
-  o0.rgb = ApplyToneMapAndScale(o0.rgb, true);
-
+  o0.rgb = ApplyToneMapAndScale(o0.rgb);
   return;
 }

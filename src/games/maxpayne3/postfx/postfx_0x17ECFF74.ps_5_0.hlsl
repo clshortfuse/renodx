@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
 cbuffer _Globals : register(b4) {
   float4 TransColor : packoffset(c206);
