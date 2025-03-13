@@ -39,6 +39,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x17ECFF74),  // PostFX
     CustomShaderEntry(0xD3F808EC),  // PostFX
 
+    CustomShaderEntry(0x32629E1B),  // FMV
+
     // CustomShaderEntry(0x6E78E24F),  // UI - Alpha
     // CustomShaderEntry(0x671C1B51),  // UI - Text
 
