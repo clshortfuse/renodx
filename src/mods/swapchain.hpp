@@ -1441,15 +1441,18 @@ inline void OnDestroyResourceInfo(utils::resource::ResourceInfo* info) {
   if (info->is_swap_chain) {
     if (info->swap_chain_proxy_clone_srv.handle != 0u) {
       device->destroy_resource_view(info->swap_chain_proxy_clone_srv);
+      info->swap_chain_proxy_clone_srv.handle = 0u;
     }
 
     if (info->swap_chain_proxy_rtv.handle != 0u) {
       device->destroy_resource_view(info->swap_chain_proxy_rtv);
+      info->swap_chain_proxy_rtv.handle = 0u;
     }
   }
 
   if (info->fallback.handle != 0u) {
     info->device->destroy_resource(info->fallback);
+    info->fallback.handle = 0u;
   }
   if (info->clone.handle != 0u) {
 #ifdef DEBUG_LEVEL_1
@@ -1461,6 +1464,7 @@ inline void OnDestroyResourceInfo(utils::resource::ResourceInfo* info) {
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
     device->destroy_resource(info->clone);
+    info->clone.handle = 0u;
   }
   if (info->extra_vram != 0u) {
 #ifdef DEBUG_LEVEL_0
