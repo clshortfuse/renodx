@@ -19,10 +19,9 @@ cbuffer _Globals : register(b4) {
   float2 poisson12[12] : packoffset(c224);
 }
 
-SamplerState RenderMapPointSampler_s : register(s1);
 SamplerState AlphaMaskMapSampler_s : register(s3);
-Texture2D<float4> RenderMapPointSampler : register(t1);
 Texture2D<float4> AlphaMaskMapSampler : register(t3);
+Texture2DMS<float4> RenderPointMapMSAA : register(t5);
 
 // 3Dmigoto declarations
 #define cmp -
@@ -34,16 +33,24 @@ void main(
     float4 v3: COLOR0,
     out float4 o0: SV_Target0) {
   float4 r0, r1, r2, r3;
+  float4 fDest;
 
-  r0.xyz = RenderMapPointSampler.Sample(RenderMapPointSampler_s, v1.xy).xyz;
-  r1.xyz = float3(1, 1, 1) + -r0.xyz;
+  RenderPointMapMSAA.GetDimensions(fDest.x, fDest.y, fDest.z);
+  r0.xy = fDest.xy;
+  r0.xy = v1.xy * r0.xy;
+  r0.xy = (int2)r0.xy;
+  r0.zw = float2(0, 0);
+  r1.xyz = RenderPointMapMSAA.Load(r0.xy, 0).xyz;
+  r0.xyz = RenderPointMapMSAA.Load(r0.xy, 1).xyz;
+  r0.xyzw = r1.xyzx + r0.xyzx;
+  r1.xyz = -r0.xyz * float3(0.5, 0.5, 0.5) + float3(1, 1, 1);
+  r0.xyzw = float4(0.5, 0.5, 0.5, 0.00390625) * r0.xyzw;
   r2.xyz = v3.xyz * float3(256, 256, 256) + float3(-128, -128, -128);
   r1.xyz = r2.xyz * r1.xyz;
   r1.xyz = float3(0.0078125, 0.0078125, 0.0078125) * r1.xyz;
-  r3.xyz = cmp(float3(0, 0, 0) < r2.xyz);
-  r0.w = 0.0078125 * r0.x;
-  r2.xyz = r0.www * r2.xyz;
-  r1.xyz = r3.xyz ? r1.xyz : r2.xyz;
+  r3.xyz = r2.xyz * r0.www;
+  r2.xyz = cmp(float3(0, 0, 0) < r2.xyz);
+  r1.xyz = r2.xyz ? r1.xyz : r3.xyz;
   r0.w = cmp(MaskAlphaReverse == 0.000000);
   r1.w = AlphaMaskMapSampler.Sample(AlphaMaskMapSampler_s, v2.xy).w;
   r2.x = 1 + -r1.w;
