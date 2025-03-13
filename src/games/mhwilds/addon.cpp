@@ -71,6 +71,7 @@ const std::string build_time = __TIME__;
 float current_settings_mode = 0;
 
 const std::unordered_map<std::string, float> FILMIC_LOOK_VALUES = {
+    {"CustomToneMapMethod", 0.f},
     {"ToneMapScaling", 0.f},
     {"ToneMapHueProcessor", 0.f},
     {"ColorGradeExposure", 1.f},
@@ -123,22 +124,21 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .can_reset = false,
         .label = "Settings Mode",
-        .labels = {"Simple", "Intermediate", "Advanced"},
+        .labels = {"Simple", "Intermediate", "Advanced", "Deprecated"},
         .is_global = true,
     },
-    /* new renodx::utils::settings::Setting{
-        .key = "ToneMapType",
-        .binding = &shader_injection.tone_map_type,
+    new renodx::utils::settings::Setting{
+        .key = "CustomToneMapMethod",
+        .binding = &shader_injection.custom_tone_map_method,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
         .can_reset = true,
-        .label = "Tone Mapper",
+        .label = "Tone Map Method",
         .section = "Tone Mapping",
-        .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "RenoDRT"},
-        .parse = [](float value) { return value * 3.f; },
-        .is_visible = []() { return current_settings_mode >= 1; },
-    }, */
+        .tooltip = "Sets the tone map method",
+        .labels = {"Old", "New"},
+        .is_visible = []() { return current_settings_mode >= 3; },
+    },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
         .binding = &shader_injection.peak_white_nits,
@@ -208,7 +208,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
-        .default_value = 50.f,
+        .default_value = 40.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
@@ -228,7 +228,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
         .binding = &shader_injection.tone_map_contrast,
-        .default_value = 50.f,
+        .default_value = 75.f,
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
@@ -246,7 +246,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
         .binding = &shader_injection.tone_map_highlight_saturation,
-        .default_value = 60.f,
+        .default_value = 50.f,
         .label = "Highlight Saturation",
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
@@ -258,7 +258,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
         .binding = &shader_injection.tone_map_blowout,
-        .default_value = 50.f,
+        .default_value = 0.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Adds highlight desaturation due to overexposure.",
@@ -270,7 +270,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
         .binding = &shader_injection.tone_map_flare,
-        .default_value = 90.f,
+        .default_value = 50.f,
         .label = "Flare",
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
@@ -305,12 +305,12 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.custom_sdr_tonemapper,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 3.f,
-        .can_reset = true,
         .label = "SDR tonemapper",
         .section = "Color Grading",
         .tooltip = "Which tonemapper to use for SDR calculations",
         .labels = {"Reinhard", "Hejl Dawson", "ACES", "Vanilla"},
-        .is_visible = []() { return current_settings_mode >= 2; },
+        .is_enabled = []() { return CUSTOM_TONE_MAP_METHOD == 0.f; },
+        .is_visible = []() { return current_settings_mode >= 3; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeLUTColorStrength",
@@ -331,8 +331,9 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Strength of Vanilla's Output LUT",
         .max = 100.f,
+        .is_enabled = []() { return CUSTOM_TONE_MAP_METHOD == 0.f; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1; },
+        .is_visible = []() { return current_settings_mode >= 3; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrain",
@@ -528,12 +529,12 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
-    settings[1]->default_value = roundf(peak.value());
+    settings[2]->default_value = roundf(peak.value());
   } else {
-    settings[1]->default_value = 1000.f;
+    settings[2]->default_value = 1000.f;
   }
 
-  settings[2]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[1]->default_value), 203.f);
+  settings[3]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[2]->default_value), 203.f);
 }
 
 void OnPresent(

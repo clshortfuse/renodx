@@ -16,6 +16,10 @@ float PickExposure(float vanilla, float fixed = CUSTOM_FLAT_EXPOSURE_DEFAULT) {
   return vanilla * normalizedCustomExposure;
 }
 
+bool ProcessVanilla() {
+  return CUSTOM_SDR_TONEAMPPER == 3.f && CUSTOM_TONE_MAP_METHOD != 1.f;
+}
+
 float3 PickExposure(float3 vanilla, float fixed = CUSTOM_FLAT_EXPOSURE_DEFAULT) {
   float normalizedCustomExposure = NormalizeExposure();
 
@@ -91,11 +95,8 @@ float3 VanillaSDRTonemapper(float3 color) {
 
 float3 UpgradeWithSDR(float3 untonemapped_bt709, float3 tonemapped_bt709) {
   float3 sdr;
-  // sdr = renodx::tonemap::renodrt::NeutralSDR(untonemapped_bt709); // Higher contrast, desaturates and searing.
   sdr = saturate(untonemapped_bt709);
-  // tonemapped_bt709 = saturate(tonemapped_bt709); // desaturates
   float3 output = renodx::tonemap::UpgradeToneMap(untonemapped_bt709, sdr, tonemapped_bt709, 1.f);
-
   output = renodx::color::ap1::from::BT709(output);
   return output;
 }
