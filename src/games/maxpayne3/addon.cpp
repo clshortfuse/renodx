@@ -85,7 +85,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xFBC327C8),  // FXAA - Very High
 
     // Drawn directly onto swapchain
-    CustomShaderEntry(0xCB1874B7),  // PostFX - Drugs
+    CustomShaderEntry(0xCB1874B7),  // PostFX
+    CustomShaderEntry(0xB7822C98),  // PostFX - MSAA 4x
+    CustomShaderEntry(0xCC0D7856),  // PostFX - MSAA 8x
     CustomShaderEntry(0x5770A95E),  // PostFX - Scanlines
     CustomShaderEntry(0xC3EDCD63),  // PostFX - Scanlines - MSAA Off
     CustomShaderEntry(0x17ECFF74),  // PostFX
