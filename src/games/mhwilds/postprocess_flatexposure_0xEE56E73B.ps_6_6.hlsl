@@ -167,7 +167,7 @@ cbuffer CameraKerare : register(b1) {
 ;
 ;   } TonemapParam;
  */
-/* cbuffer TonemapParam : register(b2) {
+cbuffer TonemapParam : register(b2) {
   float TonemapParam_000x : packoffset(c000.x);
   float TonemapParam_000y : packoffset(c000.y);
   float TonemapParam_000w : packoffset(c000.w);
@@ -179,7 +179,7 @@ cbuffer CameraKerare : register(b1) {
   float TonemapParam_002y : packoffset(c002.y);
   float TonemapParam_002z : packoffset(c002.z);
   float TonemapParam_002w : packoffset(c002.w);
-}; */
+};
 
 /*
 ;   struct LDRPostProcessParam

@@ -240,7 +240,7 @@ struct TonemapParam
 ;
 ;   } TonemapParam;
  */
-/* cbuffer TonemapParam : register(b4) {
+cbuffer TonemapParam : register(b4) {
   float TonemapParam_000x : packoffset(c000.x);  // contrast
   float TonemapParam_000y : packoffset(c000.y);  // linearBegin
   float TonemapParam_000w : packoffset(c000.w);  // toe
@@ -252,7 +252,7 @@ struct TonemapParam
   float TonemapParam_002y : packoffset(c002.y);  // invLinearBegin
   float TonemapParam_002z : packoffset(c002.z);  // madLinearStartContrastFactor
   float TonemapParam_002w : packoffset(c002.w);  // tonemapParam_isHDRMode
-}; */
+};
 
 /*
 struct LDRPostProcessParam
@@ -436,7 +436,7 @@ struct CBControl
  */
 cbuffer CBControl : register(b6) {
   uint CBControl_000w : packoffset(c000.w);   // cPassEnabled
-  float CBControl_001x : packoffset(c001.x);  // fOCIOTransformMatrix
+  float CBControl_001x : packoffset(c001.x);  // fOCIOTransformMatrix (BT709_TO_AP1_MAT)
   float CBControl_001y : packoffset(c001.y);
   float CBControl_001z : packoffset(c001.z);
   float CBControl_002x : packoffset(c002.x);
@@ -1243,9 +1243,11 @@ float4 main(
   }
 
   // Disabling all color grading skips to this stage
+  // BT709 -> AP1
   float _2209 = mad(_2194, (CBControl_003x), (mad(_2193, (CBControl_002x), ((CBControl_001x)*_2192))));
   float _2212 = mad(_2194, (CBControl_003y), (mad(_2193, (CBControl_002y), ((CBControl_001y)*_2192))));
   float _2215 = mad(_2194, (CBControl_003z), (mad(_2193, (CBControl_002z), ((CBControl_001z)*_2192))));
+
   _2301 = _2209;
   _2302 = _2212;
   _2303 = _2215;
@@ -1612,6 +1614,7 @@ float4 main(
   _2854 = _2817;
 
   if (!(((((uint)(CBControl_000w)) & 8) == 0))) {  // Custom Matrix
+    // Doesn't enter in HDR
     _2852 = (saturate(((((LDRPostProcessParam_016x)*_2815) + ((LDRPostProcessParam_016y)*_2816)) + ((LDRPostProcessParam_016z)*_2817))));
     _2853 = (saturate(((((LDRPostProcessParam_017x)*_2815) + ((LDRPostProcessParam_017y)*_2816)) + ((LDRPostProcessParam_017z)*_2817))));
     _2854 = (saturate(((((LDRPostProcessParam_018x)*_2815) + ((LDRPostProcessParam_018y)*_2816)) + ((LDRPostProcessParam_018z)*_2817))));

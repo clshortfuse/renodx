@@ -6,15 +6,73 @@ Texture3D<float4> OCIO_lut3d_1 : register(t1);
 
 RWTexture3D<float4> OutLUT : register(u0);
 
+/*
+;   struct HDRMapping
+;   {
+;
+;       float whitePaperNits;                         ; Offset:    0
+;       float configImageAlphaScale;                  ; Offset:    4
+;       float displayMaxNits;                         ; Offset:    8
+;       float displayMinNits;                         ; Offset:   12
+
+;       float4 displayMaxNitsRect;                    ; Offset:   16
+
+;       float4 secondaryDisplayMaxNitsRect;           ; Offset:   32
+
+;       float4 standardMaxNitsRect;                   ; Offset:   48
+
+;       float4 secondaryStandardMaxNitsRect;          ; Offset:   64
+
+;       float2 displayMaxNitsRectSize;                ; Offset:   80
+;       float2 standardMaxNitsRectSize;               ; Offset:   88
+
+;       float4 mdrOutRangeRect;                       ; Offset:   96
+
+;       uint drawMode;                                ; Offset:  112
+;       float gammaForHDR;                            ; Offset:  116
+;       float displayMaxNitsST2084;                   ; Offset:  120
+;       float displayMinNitsST2084;                   ; Offset:  124
+
+;       uint drawModeOnMDRPass;                       ; Offset:  128
+;       float saturationForHDR;                       ; Offset:  132
+;       float2 targetInvSize;                         ; Offset:  136
+
+// 9
+;       float toeEnd;                                 ; Offset:  144
+;       float toeStrength;                            ; Offset:  148
+;       float blackPoint;                             ; Offset:  152
+;       float shoulderStartPoint;                     ; Offset:  156
+
+;       float shoulderStrength;                       ; Offset:  160
+;       float whitePaperNitsForOverlay;               ; Offset:  164
+;       float saturationOnDisplayMapping;             ; Offset:  168
+;       float graphScale;                             ; Offset:  172
+
+;       float4 hdrImageRect;                          ; Offset:  176
+
+;       float2 hdrImageRectSize;                      ; Offset:  192
+;       float secondaryDisplayMaxNits;                ; Offset:  200
+;       float secondaryDisplayMinNits;                ; Offset:  204
+
+;       float2 secondaryDisplayMaxNitsRectSize;       ; Offset:  208
+;       float2 secondaryStandardMaxNitsRectSize;      ; Offset:  216
+
+;       float shoulderAngle;                          ; Offset:  224
+;       uint enableHDRAdjustmentForOverlay;           ; Offset:  228
+;       float brightnessAdjustmentForOverlay;         ; Offset:  232
+;       float saturateAdjustmentForOverlay;           ; Offset:  236
+;
+;   } HDRMapping;
+ */
 cbuffer HDRMapping : register(b0) {
-  float HDRMapping_000z : packoffset(c000.z);
-  float HDRMapping_009x : packoffset(c009.x);
-  float HDRMapping_009y : packoffset(c009.y);
-  float HDRMapping_009z : packoffset(c009.z);
-  float HDRMapping_009w : packoffset(c009.w);
-  float HDRMapping_010x : packoffset(c010.x);
-  float HDRMapping_010z : packoffset(c010.z);
-  float HDRMapping_014x : packoffset(c014.x);
+  float HDRMapping_000z : packoffset(c000.z);  // displayMaxNits
+  float HDRMapping_009x : packoffset(c009.x);  // toeEnd
+  float HDRMapping_009y : packoffset(c009.y);  // toeStrength
+  float HDRMapping_009z : packoffset(c009.z);  // blackPoint
+  float HDRMapping_009w : packoffset(c009.w);  // shoulderStartPoint
+  float HDRMapping_010x : packoffset(c010.x);  // shoulderStrength
+  float HDRMapping_010z : packoffset(c010.z);  // saturationOnDisplayMapping
+  float HDRMapping_014x : packoffset(c014.x);  // shoulderAngle
 };
 
 cbuffer OCIOTransformXYZMatrix : register(b1) {
@@ -48,8 +106,17 @@ void main(
     uint3 SV_GroupID: SV_GroupID,
     uint3 SV_GroupThreadID: SV_GroupThreadID,
     uint SV_GroupIndex: SV_GroupIndex) {
-  float _15 = (HDRMapping_000z) * 0.009999999776482582f;
-  float _18 = _15 * (HDRMapping_009w);
+  float displayMaxNits = 1000.f;
+  const float toeEnd = 25.f;
+  const float toeStrength = 1.f;
+  const float blackPoint = 0.f;
+  const float shoulderStartPoint = 0.2;
+  const float shoulderStrength = 0.f;
+  const float saturationOnDisplayMapping = 1.f;
+  const float shoulderAngle = 0.5f;
+
+  float _15 = (displayMaxNits) * 0.009999999776482582f;
+  float _18 = _15 * (shoulderStartPoint);
   float _19 = float((uint)(SV_DispatchThreadID.x));
   float _20 = float((uint)(SV_DispatchThreadID.y));
   float _21 = float((uint)(SV_DispatchThreadID.z));
@@ -76,10 +143,11 @@ void main(
   float _639;
 
   // ACEScc
-  float3 ap1_color;
+  float3 ap1_color = renodx::color::pq::DecodeSafe(lutInput, 100.f);
 
-  if (CUSTOM_LUT_PROCESSING == 0.f) {
-    if (!(!(_22 <= -0.3013699948787689f))) {
+  if (CUSTOM_USE_HDR_TONEMAP == 1.f) {
+    // ACEScc
+    /* if (!(!(_22 <= -0.3013699948787689f))) {
       _38 = ((exp2(((_19 * 0.2780952751636505f) + -8.720000267028809f))) + -3.0517578125e-05f);
     } else {
       _38 = 65504.0f;
@@ -102,7 +170,12 @@ void main(
       if (((_24 < 1.468000054359436f))) {
         _66 = (exp2(((_21 * 0.2780952751636505f) + -9.720000267028809f)));
       }
-    }
+    } */
+
+    _38 = ap1_color.r;
+    _52 = ap1_color.g;
+    _66 = ap1_color.b;
+
     float _142 = _38 * 0.000244140625f;
     float _155 = exp2(((log2(((mad(((round(((mad(-0.03579999879002571f, (OCIOTransformXYZMatrix_002z), (mad(0.6976000070571899f, (OCIOTransformXYZMatrix_001z), ((OCIOTransformXYZMatrix_000z) * 0.35920000076293945f))))) * 4096.0f))) * 0.000244140625f), _66, (mad(((round(((mad(-0.03579999879002571f, (OCIOTransformXYZMatrix_002y), (mad(0.6976000070571899f, (OCIOTransformXYZMatrix_001y), ((OCIOTransformXYZMatrix_000y) * 0.35920000076293945f))))) * 4096.0f))) * 0.000244140625f), _52, (_142 * (round(((mad(-0.03579999879002571f, (OCIOTransformXYZMatrix_002x), (mad(0.6976000070571899f, (OCIOTransformXYZMatrix_001x), ((OCIOTransformXYZMatrix_000x) * 0.35920000076293945f))))) * 4096.0f)))))))) * 0.009999999776482582f))) * 0.1593017578125f));
     float _164 = saturate((exp2(((log2((((_155 * 18.8515625f) + 0.8359375f) / ((_155 * 18.6875f) + 1.0f)))) * 78.84375f))));
@@ -111,8 +184,8 @@ void main(
     float _181 = exp2(((log2(((mad(((round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002z), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001z), ((OCIOTransformXYZMatrix_000z) * 0.007000000216066837f))))) * 4096.0f))) * 0.000244140625f), _66, (mad(((round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002y), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001y), ((OCIOTransformXYZMatrix_000y) * 0.007000000216066837f))))) * 4096.0f))) * 0.000244140625f), _52, (_142 * (round(((mad(0.8434000015258789f, (OCIOTransformXYZMatrix_002x), (mad(0.07490000128746033f, (OCIOTransformXYZMatrix_001x), ((OCIOTransformXYZMatrix_000x) * 0.007000000216066837f))))) * 4096.0f)))))))) * 0.009999999776482582f))) * 0.1593017578125f));
     float _190 = saturate((exp2(((log2((((_181 * 18.8515625f) + 0.8359375f) / ((_181 * 18.6875f) + 1.0f)))) * 78.84375f))));
     float _192 = (_177 + _164) * 0.5f;
-    float _198 = (HDRMapping_009x) * 0.009999999776482582f;
-    float _200 = (HDRMapping_009z) * 0.009999999776482582f;
+    float _198 = (toeEnd) * 0.009999999776482582f;
+    float _200 = (blackPoint) * 0.009999999776482582f;
     float _205 = exp2(((log2((saturate(_192)))) * 0.012683313339948654f));
     float _214 = (exp2(((log2(((max(0.0f, (_205 + -0.8359375f))) / (18.8515625f - (_205 * 18.6875f))))) * 6.277394771575928f))) * 100.0f;
     _250 = _214;
@@ -129,21 +202,21 @@ void main(
             _242 = ((-0.0f - _200) - (_214 * (-1.0f - _200)));
           }
         }
-        _250 = ((((exp2(((log2(_242)) * (HDRMapping_009y)))) - _214) * (1.0f - ((_221 * _221) * (3.0f - (_221 * 2.0f))))) + _214);
+        _250 = ((((exp2(((log2(_242)) * (toeStrength)))) - _214) * (1.0f - ((_221 * _221) * (3.0f - (_221 * 2.0f))))) + _214);
       } while (false);
     }
     _300 = _15;
     if (!(((bool)((_18 == _15))) && ((bool)((_250 > _15))))) {
-      float _258 = (1.0f - (HDRMapping_009w)) * _15;
+      float _258 = (1.0f - (shoulderStartPoint)) * _15;
       float _259 = _15 - _258;
-      float _260 = exp2((HDRMapping_010x));
+      float _260 = exp2((shoulderStrength));
       float _263 = _259 / _260;
       float _264 = _15 - _263;
       float _265 = ((1.0f / _260) * _250) - _15;
       _295 = -0.0f;
       do {
         if (((_265 < -0.0f))) {
-          float _281 = (((((((HDRMapping_014x) + -0.5f) * (min((HDRMapping_010x), 1.0f))) + 0.5f) * 2.0f) * ((((bool)((_263 == 0.0f))) ? 1.0f : (_259 / _263)))) * _264) / _258;
+          float _281 = (((((((shoulderAngle) + -0.5f) * (min((shoulderStrength), 1.0f))) + 0.5f) * 2.0f) * ((((bool)((_263 == 0.0f))) ? 1.0f : (_259 / _263)))) * _264) / _258;
           _295 = (-0.0f - (exp2(((((((log2((-0.0f - _265))) * _281) + (log2(_258))) * 0.6931471824645996f) + ((_281 * -0.6931471824645996f) * (log2(_264)))) * 1.4426950216293335f))));
         }
         _300 = ((((bool)((_250 <= _18))) ? _250 : (_295 + _15)));
@@ -155,8 +228,8 @@ void main(
 
     // custom stuff?
     float _320 = min((_192 / _313), (_313 / _192));
-    float _321 = (((dot(float3(_164, _177, _190), float3(6610.0f, -13613.0f, 7003.0f))) * 0.000244140625f) * (HDRMapping_010z)) * _320;
-    float _322 = (((dot(float3(_164, _177, _190), float3(17933.0f, -17390.0f, -543.0f))) * 0.000244140625f) * (HDRMapping_010z)) * _320;
+    float _321 = (((dot(float3(_164, _177, _190), float3(6610.0f, -13613.0f, 7003.0f))) * 0.000244140625f) * (saturationOnDisplayMapping)) * _320;
+    float _322 = (((dot(float3(_164, _177, _190), float3(17933.0f, -17390.0f, -543.0f))) * 0.000244140625f) * (saturationOnDisplayMapping)) * _320;
 
     // More matrix and encode back to PQ
     float _332 = exp2(((log2((saturate((mad(0.11100000143051147f, _322, (mad(0.008999999612569809f, _321, _313)))))))) * 0.012683313339948654f));
@@ -172,8 +245,6 @@ void main(
     float _381 = mad((OCIOTransformXYZMatrix_005z), _375, (mad((OCIOTransformXYZMatrix_005y), _372, (_369 * (OCIOTransformXYZMatrix_005x)))));
     float _384 = mad((OCIOTransformXYZMatrix_006z), _375, (mad((OCIOTransformXYZMatrix_006y), _372, (_369 * (OCIOTransformXYZMatrix_006x)))));
     ap1_color = float3(_378, _381, _384);
-  } else {
-    ap1_color = renodx::color::pq::DecodeSafe(lutInput, 100.f);
   }
 
   float _378 = ap1_color.r;
@@ -307,13 +378,11 @@ void main(
 
   // OutLUT[int3(((uint)(SV_DispatchThreadID.x)), ((uint)(SV_DispatchThreadID.y)), ((uint)(SV_DispatchThreadID.z)))] = float4((((_640 * (_494.x)) + _635) + (_639 * (_501.x))), (((_640 * (_494.y)) + _636) + (_639 * (_501.y))), (((_640 * (_494.z)) + _637) + (_639 * (_501.z))), 1.0f);
   float3 final_color = float3((((_640 * (_494.x)) + _635) + (_639 * (_501.x))), (((_640 * (_494.y)) + _636) + (_639 * (_501.y))), (((_640 * (_494.z)) + _637) + (_639 * (_501.z))));
-  
-  if (CUSTOM_LUT_PROCESSING == 1.f) {
-    // Optimize by converting to BT709 now
-    final_color = renodx::color::pq::DecodeSafe(final_color, 100.f);
-    final_color = renodx::color::bt709::from::BT2020(final_color);
-    final_color = renodx::color::pq::EncodeSafe(final_color, 100.f);
-  }
+
+  // Optimize by converting to BT709 now
+  final_color = renodx::color::pq::DecodeSafe(final_color, 100.f);
+  final_color = renodx::color::bt709::from::BT2020(final_color);
+  final_color = renodx::color::pq::EncodeSafe(final_color, 100.f);
 
   OutLUT[int3(((uint)(SV_DispatchThreadID.x)), ((uint)(SV_DispatchThreadID.y)), ((uint)(SV_DispatchThreadID.z)))] = float4(final_color, 1.f);
 }
