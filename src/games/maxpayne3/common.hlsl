@@ -22,7 +22,7 @@ float3 GammaEncode(float3 color) {
   return color;
 }
 
-float3 ApplyToneMapAndScale(float3 color, bool clamp = false) {
+float3 ApplyToneMapAndScale(float3 color, float2 vpos, bool clamp = false) {
   float3 untonemapped = GammaDecode(max(0, color));
 
   if (RENODX_TONE_MAP_TYPE == 0.f) {  // Vanilla
@@ -48,6 +48,15 @@ float3 ApplyToneMapAndScale(float3 color, bool clamp = false) {
   }
 
   if (clamp) color = min(1, color);
+
+  if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
+    color = renodx::effects::ApplyFilmGrain(
+        color,
+        vpos,
+        CUSTOM_RANDOM,
+        CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
+        1.f);
+  }
 
   color *= RENODX_INTERMEDIATE_SCALING;
 

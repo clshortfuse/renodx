@@ -48,6 +48,8 @@
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION   shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT                shader_injection.tone_map_blowout
 #define CUSTOM_BLOOM                           shader_injection.custom_bloom
+#define CUSTOM_RANDOM                          shader_injection.custom_random
+#define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain_strength
 #define RENODX_INTERMEDIATE_ENCODING           (RENODX_GAMMA_CORRECTION + 1.f)
 #define RENODX_INTERMEDIATE_COLOR_SPACE        color::convert::COLOR_SPACE_BT709
 #define RENODX_SWAP_CHAIN_DECODING             RENODX_INTERMEDIATE_ENCODING
@@ -85,6 +87,8 @@ struct ShaderInjectData {
   float tone_map_hue_processor;
   float custom_bloom;
   float gamma_correction;
+  float custom_random;
+  float custom_film_grain_strength;
 };
 
 #ifndef __cplusplus
