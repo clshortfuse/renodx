@@ -5,11 +5,12 @@
  */
 
 #define ImTextureID ImU64
-
+#define NOMINMAX
 #define DEBUG_LEVEL_0
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
+#include <random>
 
 #include <embed/shaders.h>
 
@@ -322,6 +323,15 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxFilmGrain",
+        .binding = &CUSTOM_FILM_GRAIN_STRENGTH,
+        .default_value = 0.f,
+        .label = "Film Grain",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -347,7 +357,7 @@ renodx::utils::settings::Settings settings = {
               renodx::utils::settings::UpdateSetting(setting->key, 55.f);
             } else if (setting->key == "ColorGradeHighlightSaturation") {
               renodx::utils::settings::UpdateSetting(setting->key, 75.f);
-            } else if (setting->key == "FxBloom") {
+            } else if (setting->key == "FxFilmGrain") {
               renodx::utils::settings::UpdateSetting(setting->key, 50.f);
             } else {
               renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
@@ -417,6 +427,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
   renodx::utils::settings::UpdateSetting("FxBloom", 100.f);
+  renodx::utils::settings::UpdateSetting("FxFilmGrain", 0.f);
 }
 
 bool fired_on_init_swapchain = false;
@@ -435,6 +446,18 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   float computed_diffuse = std::clamp(roundf(powf(10.f, 0.03460730900256f + (0.757737096673107f * log10f(peak.value())))), 100.f, 203.f);
   settings[3]->default_value = computed_diffuse;  // Game Nits
   settings[4]->default_value = computed_diffuse;  // UI Nits
+}
+
+void OnPresent(
+    reshade::api::command_queue* queue,
+    reshade::api::swapchain* swapchain,
+    const reshade::api::rect* source_rect,
+    const reshade::api::rect* dest_rect,
+    uint32_t dirty_rect_count,
+    const reshade::api::rect* dirty_rects) {
+  static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
+  static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
+  CUSTOM_RANDOM = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
 }
 
 bool initialized = false;
@@ -477,10 +500,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       });
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // Peak nits / diffuse white
+      reshade::register_event<reshade::addon_event::present>(OnPresent);               // Grain
 
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // Peak nits / diffuse white
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);               // Grain
       reshade::unregister_addon(h_module);
       break;
   }

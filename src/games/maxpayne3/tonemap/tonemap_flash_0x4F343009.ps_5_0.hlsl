@@ -246,7 +246,7 @@ void main(
   o0.xyz = r0.xyz;
 
   // cap luminance of screen flash
-  o0.rgb = ApplyToneMapAndScale(o0.rgb, true);
+  o0.rgb = ApplyToneMapAndScale(o0.rgb, v1.xy);
 
   return;
 }

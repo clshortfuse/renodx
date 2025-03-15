@@ -213,6 +213,6 @@ void main(
   o0.w = dot(r1.xyz, float3(0.298999995,0.587000012,0.114));
   o0.xyz = r0.xyz;
 
-  o0.rgb = ApplyToneMapAndScale(o0.rgb);
+  o0.rgb = ApplyToneMapAndScale(o0.rgb, v1.xy);
   return;
 }

@@ -234,6 +234,6 @@ void main(
   o0.xyz = r0.xyz;
 
 
-  o0.rgb = ApplyToneMapAndScale(o0.rgb);
+  o0.rgb = ApplyToneMapAndScale(o0.rgb, v1.xy);
   return;
 }

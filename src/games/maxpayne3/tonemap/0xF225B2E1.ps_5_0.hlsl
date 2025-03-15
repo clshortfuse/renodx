@@ -150,6 +150,9 @@ void main(
   r0.xyz = r0.xyz * BrightnessSetting.xxx + BrightnessSetting.yyy;
   r1.xyz = saturate(r0.xyz);
   o0.xyz = r0.xyz;
-  o0.w = dot(r1.xyz, float3(0.298999995,0.298999995,0.298999995));
+  o0.w = dot(r1.xyz, float3(0.298999995, 0.298999995, 0.298999995));
+
+  
+  o0.rgb = ApplyToneMapAndScale(o0.rgb, v1.xy);
   return;
 }
