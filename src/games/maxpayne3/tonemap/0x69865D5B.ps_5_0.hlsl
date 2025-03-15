@@ -1,4 +1,4 @@
-// ---- Created with 3Dmigoto v1.4.1 on Tue Mar 11 03:27:12 2025
+// ---- Created with 3Dmigoto v1.4.1 on Fri Mar 14 15:41:21 2025
 #include "../common.hlsl"
 
 cbuffer _Globals : register(b1)
@@ -190,6 +190,7 @@ void main(
   r1.xyz = saturate(r0.xyz);
   o0.w = dot(r1.xyz, float3(0.298999995,0.587000012,0.114));
   o0.xyz = r0.xyz;
+
 
   o0.rgb = ApplyToneMapAndScale(o0.rgb);
   return;

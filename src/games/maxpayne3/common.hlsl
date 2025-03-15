@@ -40,10 +40,10 @@ float3 ApplyToneMapAndScale(float3 color, bool clamp = false) {
     if (RENODX_TONE_MAP_TYPE == 3.f) {  // Frostbite
       color = renodx::tonemap::frostbite::BT709(
           color, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 1.f,
-          RENODX_TONE_MAP_HIGHLIGHT_SATURATION, RENODX_TONE_MAP_HUE_CORRECTION, RENODX_TONE_MAP_HUE_PROCESSOR);
+          RENODX_TONE_MAP_HIGHLIGHT_SATURATION, RENODX_TONE_MAP_HUE_CORRECTION);
     } else if (RENODX_TONE_MAP_TYPE == 2.f) {  // Exponential Rolloff
       color = renodx::tonemap::ExponentialRollOff(color, min(1.f, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
-      color = renodx::color::correct::Hue(color, untonemapped, RENODX_TONE_MAP_HUE_CORRECTION, RENODX_TONE_MAP_HUE_PROCESSOR);
+      color = renodx::color::correct::Hue(color, untonemapped, RENODX_TONE_MAP_HUE_CORRECTION);
     }
   }
 

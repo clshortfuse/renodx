@@ -34,27 +34,13 @@ float3 RangeCompress(float3 val, float threshold, float max_value = 1.f) {
       RangeCompress(val.z, threshold, max_value));
 }
 
-float3 BT709(float3 col, float max_value = 1.f, float rolloff_start = 0.25f, float saturation_boost_amount = 0.3f, float hue_correct_amount = 0.6f, uint hue_processor = 1u) {
-  float3 perceptual;
-  if (hue_processor == 2u) {
-    perceptual = renodx::color::dtucs::uvY::from::BT709(col).zxy;
-  } else if (hue_processor == 0u) {
-    perceptual = renodx::color::oklab::from::BT709(col);
-  } else {
-    perceptual = renodx::color::ictcp::from::BT709(col);
-  }
+float3 BT709(float3 col, float max_value = 1.f, float rolloff_start = 0.25f, float saturation_boost_amount = 0.3f, float hue_correct_amount = 0.6f) {
+  float3 ictcp = renodx::color::ictcp::from::BT709(col);
 
   // Hue-preserving range compression requires desaturation in order to achieve a natural look. We adaptively desaturate the input based on its luminance.
-  if (hue_processor == 2u) {
-    float saturationAmount = pow(smoothstep(1.0, 0.3, perceptual.x), 1);
-    col = renodx::color::bt709::from::dtucs::uvY((perceptual * float3(1, saturationAmount.xx)).yzx);
-  } else if (hue_processor == 1u) {
-    float saturationAmount = pow(smoothstep(1.0, 0.3, perceptual.x), 1);
-    col = renodx::color::bt709::from::OkLab(perceptual * float3(1, saturationAmount.xx));
-  } else {
-    float saturationAmount = pow(smoothstep(1.0, 0.3, perceptual.x), 1.3);
-    col = renodx::color::bt709::from::ICtCp(perceptual * float3(1, saturationAmount.xx));
-  }
+
+  float saturationAmount = pow(smoothstep(1.0, 0.3, ictcp.x), 1.3);
+  col = renodx::color::bt709::from::ICtCp(ictcp * float3(1, saturationAmount.xx));
 
   // Only compress luminance starting at a certain point. Dimmer inputs are passed through without modification.
   float linearSegmentEnd = rolloff_start;
@@ -71,30 +57,17 @@ float3 BT709(float3 col, float max_value = 1.f, float rolloff_start = 0.25f, flo
   // Actually doing some amount of hue shifting looks more pleasing
   col = lerp(perChannelCompressed, compressedHuePreserving, hue_correct_amount);
 
-  float3 perceptualMapped;
-  if (hue_processor == 2u) {
-    perceptualMapped = renodx::color::dtucs::uvY::from::BT709(col).zxy;
-  } else if (hue_processor == 0u) {
-    perceptualMapped = renodx::color::oklab::from::BT709(col);
-  } else {
-    perceptualMapped = renodx::color::ictcp::from::BT709(col);
-  }
+  float3 ictcpMapped = renodx::color::ictcp::from::BT709(col);
 
   // Smoothly ramp off saturation as brightness increases, but keep some even for very bright input
-  float postCompressionSaturationBoost = saturation_boost_amount * smoothstep(1.0, 0.5, perceptual.x);
+  float postCompressionSaturationBoost = saturation_boost_amount * smoothstep(1.0, 0.5, ictcp.x);
 
   // Re-introduce some hue from the pre-compression color. Something similar could be accomplished by delaying the luma-dependent desaturation before range compression.
   // Doing it here however does a better job of preserving perceptual luminance of highly saturated colors. Because in the hue-preserving path we only range-compress the max channel,
   // saturated colors lose luminance. By desaturating them more aggressively first, compressing, and then re-adding some saturation, we can preserve their brightness to a greater extent.
-  perceptualMapped.yz = lerp(perceptualMapped.yz, perceptual.yz * perceptualMapped.x / max(1e-3, perceptual.x), postCompressionSaturationBoost);
+  ictcpMapped.yz = lerp(ictcpMapped.yz, ictcp.yz * ictcpMapped.x / max(1e-3, ictcp.x), postCompressionSaturationBoost);
 
-  if (hue_processor == 2u) {
-    col = renodx::color::bt709::from::dtucs::uvY(perceptualMapped.yzx);
-  } else if (hue_processor == 0u) {
-    col = renodx::color::bt709::from::OkLab(perceptualMapped);
-  } else {
-    col = renodx::color::bt709::from::ICtCp(perceptualMapped);
-  }
+  col = renodx::color::bt709::from::ICtCp(ictcpMapped);
 
   return col;
 }
