@@ -16,8 +16,9 @@ float PickExposure(float vanilla, float fixed = CUSTOM_FLAT_EXPOSURE_DEFAULT) {
   return vanilla * normalizedCustomExposure;
 }
 
-bool ProcessVanilla() {
-  return CUSTOM_SDR_TONEAMPPER == 3.f && CUSTOM_TONE_MAP_METHOD != 1.f && false;
+// We process it ourselves
+bool ProcessSDRVanilla() {
+  return RENODX_TONE_MAP_TYPE == 0.f;
 }
 
 float3 PickExposure(float3 vanilla, float fixed = CUSTOM_FLAT_EXPOSURE_DEFAULT) {

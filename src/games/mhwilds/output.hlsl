@@ -15,17 +15,21 @@ SamplerState PointBorder : register(s2, space32);
 
 SamplerState TrilinearClamp : register(s9, space32);
 
+float3 PrepareLutInput(float3 color) {
+  return renodx::color::pq::EncodeSafe(renodx::color::ap1::from::BT709(color), 100.f);
+}
+
+float3 DecodeHDRLutOutput(float3 color) {
+  color = renodx::color::pq::DecodeSafe(color, 100.f);
+  color = renodx::color::bt709::from::BT2020(color);
+  return color;
+}
+
 float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
-                     linear float2 TEXCOORD: TEXCOORD) {
+                     linear float2 TEXCOORD: TEXCOORD, bool is_sdr = false) {
   float4 _11 = SrcTexture.SampleLevel(PointBorder, float2((TEXCOORD.x), (TEXCOORD.y)), 0.0f);
   float _17 = (HDRMapping_000x) * 0.009999999776482582f;  // overall brightness (defaullt 100.f);
   float3 ap1_color = _11.rgb;
-  // ap1_color *= _17;
-
-  float3 untonemapped = renodx::color::bt709::from::AP1(ap1_color);
-  float3 untonemapped_graded;
-  // ap1_color = renodx::color::ap1::from::BT709(float3(1.f, 0, 1.f));
-  float3 output_color;
 
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = TrilinearClamp;
@@ -35,131 +39,110 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
   lut_config.type_output = renodx::lut::config::type::LINEAR;
   lut_config.scaling = 0.f;
 
-  float scaling = 1.f / 4.5f;  // Game's too bright
-  if (CUSTOM_TONE_MAP_METHOD == 1.f) {
+  float3 untonemapped = renodx::color::bt709::from::AP1(ap1_color);
+  float3 output_color;
+
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    ap1_color *= _17;
+    float3 lutColor = PrepareLutInput(untonemapped);
+    output_color = renodx::lut::Sample(SrcLUT, lut_config, lutColor);
+  } else {
+    float3 untonemapped_graded;
+
+    float scaling = 1.f / 4.5f;  // Game's too bright
+    if (is_sdr) {
+      scaling = 1.f / 2.f;  // SDR has different exposure
+    }
     untonemapped_graded = untonemapped;
     untonemapped_graded *= scaling;
-    renodx::draw::Config draw_config = renodx::draw::BuildConfig();
 
-    renodx::tonemap::renodrt::Config hazeless_config = renodx::tonemap::renodrt::config::Create();
-    hazeless_config.nits_peak = RENODX_PEAK_WHITE_NITS;
-    hazeless_config.exposure = draw_config.tone_map_exposure;
-    hazeless_config.highlights = draw_config.tone_map_highlights;
-    hazeless_config.shadows = draw_config.tone_map_shadows;
-    hazeless_config.contrast = draw_config.tone_map_contrast;
-    hazeless_config.saturation = draw_config.tone_map_saturation;
-    hazeless_config.dechroma = draw_config.tone_map_blowout;
-    hazeless_config.blowout = -1.f * (draw_config.tone_map_highlight_saturation - 1.f);
-    hazeless_config.flare = 0.10f * pow(draw_config.tone_map_flare, 10.f);
-    hazeless_config.per_channel = draw_config.tone_map_per_channel == 1.f;
-    hazeless_config.working_color_space = (uint)draw_config.tone_map_working_color_space;
-
-    hazeless_config.hue_correction_method = (uint)draw_config.tone_map_hue_processor;
-    hazeless_config.clamp_peak = draw_config.tone_map_clamp_peak;
-    hazeless_config.tone_map_method = (uint)draw_config.reno_drt_tone_map_method;
-
-    float3 vanillaSDR = renodx::tonemap::renodrt::NeutralSDR(untonemapped_graded);
-    vanillaSDR = VanillaSDRTonemapper(vanillaSDR);
+    float3 vanillaSDR = untonemapped_graded;
+    vanillaSDR = renodx::tonemap::renodrt::NeutralSDR(vanillaSDR, true);
+    vanillaSDR = VanillaSDRTonemapper(vanillaSDR, is_sdr);
 
     lut_config.scaling = 0.f;
-    float3 sdr_lut = renodx::color::pq::EncodeSafe(renodx::color::ap1::from::BT709(vanillaSDR), 100.f);
+    float3 sdr_lut = PrepareLutInput(vanillaSDR);
     sdr_lut = renodx::lut::Sample(SrcLUT, lut_config, sdr_lut);
-    sdr_lut = renodx::color::pq::DecodeSafe(sdr_lut, 100.f);
 
-    float midgray = renodx::color::y::from::BT709(VanillaSDRTonemapper(float3(0.18f, 0.18f, 0.18f)));  // Lower brightness by midgray
-    midgray = midgray * 2;                                                                             // But not too much lol
-    lut_config.scaling = 1.f;
-    float3 hdr_lut = renodx::color::pq::EncodeSafe(renodx::color::ap1::from::BT709(untonemapped * midgray), 100.f);
-    hdr_lut = renodx::lut::Sample(SrcLUT, lut_config, hdr_lut);
-    hdr_lut = renodx::color::pq::DecodeSafe(hdr_lut, 100.f);
-    hdr_lut = renodx::tonemap::renodrt::BT709(hdr_lut, hazeless_config);
-
-    output_color = renodx::draw::ToneMapPass(hdr_lut, sdr_lut);
-    // output_color = renodx::draw::ToneMapPass(hazeless, sdr_lut);
-
-    /* renodx::tonemap::renodrt::Config renodrt_config = renodx::tonemap::renodrt::config::Create();
     renodx::draw::Config draw_config = renodx::draw::BuildConfig();
-    renodrt_config.nits_peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS * 203.f;
-    renodrt_config.exposure = draw_config.tone_map_exposure;
-    renodrt_config.highlights = draw_config.tone_map_highlights;
-    renodrt_config.shadows = draw_config.tone_map_shadows;
-    renodrt_config.contrast = draw_config.tone_map_contrast;
-    renodrt_config.saturation = draw_config.tone_map_saturation;
-    renodrt_config.dechroma = draw_config.tone_map_blowout;
-    renodrt_config.blowout = -1.f * (draw_config.tone_map_highlight_saturation - 1.f);
-    renodrt_config.flare = 0.10f * pow(draw_config.tone_map_flare, 10.f);
-    renodrt_config.per_channel = draw_config.tone_map_per_channel == 1.f;
-    renodrt_config.working_color_space = (uint)draw_config.tone_map_working_color_space;
+    renodx::tonemap::renodrt::Config renodrt_config = renodx::tonemap::renodrt::config::Create();
 
-    renodrt_config.hue_correction_method = (uint)draw_config.tone_map_hue_processor;
-    renodrt_config.clamp_peak = draw_config.tone_map_clamp_peak;
-    renodrt_config.tone_map_method = (uint)draw_config.reno_drt_tone_map_method;
+    if (is_sdr) {
+      sdr_lut = renodx::color::srgb::DecodeSafe(sdr_lut);
 
-    float3 tonemapped = renodx::tonemap::renodrt::BT709(untonemapped_graded, renodrt_config); */
-  } else {
-    // Deprecated
+      sdr_lut = renodx::color::grade::UserColorGrading(
+          sdr_lut,
+          draw_config.tone_map_exposure,
+          draw_config.tone_map_highlights,
+          draw_config.tone_map_shadows,
+          draw_config.tone_map_contrast,
+          draw_config.tone_map_saturation,
+          draw_config.tone_map_blowout);
 
-    float3 lut_input_color = renodx::color::pq::EncodeSafe(ap1_color, 100.f);
-    float3 lut_output_encoded = renodx::lut::Sample(SrcLUT, lut_config, lut_input_color);
-    float3 lut_output_color = renodx::color::pq::DecodeSafe(lut_output_encoded, 100.f);
-    if (RENODX_TONE_MAP_TYPE == 0) {
-      untonemapped_graded = lut_output_color;  // Vanilla Tone Mapping
+      sdr_lut = renodx::color::srgb::EncodeSafe(sdr_lut);
+      output_color = sdr_lut;
     } else {
-      float3 sdrColor;
-      if (CUSTOM_SDR_TONEAMPPER == 3.f) {
-        sdrColor = VanillaSDRTonemapper(untonemapped);  // Already tonemapped
-      } else if (CUSTOM_SDR_TONEAMPPER == 2.f) {
-        renodx::draw::Config config = renodx::draw::BuildConfig();
-        config.tone_map_type = renodx::draw::TONE_MAP_TYPE_ACES;  // aces
-        sdrColor = renodx::draw::ToneMapPass(untonemapped, config);
-        sdrColor = renodx::tonemap::renodrt::NeutralSDR(sdrColor);
-      } else if (CUSTOM_SDR_TONEAMPPER == 1.f) {
-        sdrColor = renodx::tonemap::HejlDawson(saturate(untonemapped));
-      } else {
-        float mid_gray = renodx::color::y::from::BT709(
-            renodx::color::pq::DecodeSafe(
-                renodx::lut::Sample(
-                    SrcLUT, lut_config,
-                    renodx::color::pq::EncodeSafe(0.18f, 100.f)),
-                100.f));
+      // HDR LUTs return PQ
+      sdr_lut = DecodeHDRLutOutput(sdr_lut);
 
-        float peak = renodx::color::y::from::BT709(
-            renodx::color::pq::DecodeSafe(
-                renodx::lut::Sample(
-                    SrcLUT, lut_config,
-                    renodx::color::pq::EncodeSafe(100.f, 100.f)),
-                100.f));
+      renodx::tonemap::renodrt::Config renodrt_config = renodx::tonemap::renodrt::config::Create();
+      // renodrt_config.nits_peak = RENODX_PEAK_WHITE_NITS;
+      renodrt_config.exposure = draw_config.tone_map_exposure;
+      renodrt_config.highlights = draw_config.tone_map_highlights;
+      renodrt_config.shadows = draw_config.tone_map_shadows;
+      renodrt_config.contrast = draw_config.tone_map_contrast;
+      renodrt_config.saturation = draw_config.tone_map_saturation;
+      renodrt_config.dechroma = draw_config.tone_map_blowout;
+      renodrt_config.blowout = -1.f * (draw_config.tone_map_highlight_saturation - 1.f);
+      renodrt_config.flare = 0.10f * pow(draw_config.tone_map_flare, 10.f);
+      renodrt_config.per_channel = draw_config.tone_map_per_channel == 1.f;
+      renodrt_config.working_color_space = (uint)draw_config.tone_map_working_color_space;
 
-        sdrColor = renodx::tonemap::ReinhardScalable(untonemapped, peak);
-      }
+      renodrt_config.hue_correction_method = (uint)draw_config.tone_map_hue_processor;
+      renodrt_config.clamp_peak = draw_config.tone_map_clamp_peak;
+      renodrt_config.tone_map_method = (uint)draw_config.reno_drt_tone_map_method;
 
-      untonemapped_graded = renodx::tonemap::UpgradeToneMap(
-          untonemapped,
-          sdrColor,
-          lut_output_color,
-          1.f);
-      untonemapped_graded = lerp(untonemapped, untonemapped_graded, CUSTOM_LUT_OUTPUT_STRENGTH);
+      float midgray = renodx::color::y::from::BT709(VanillaSDRTonemapper(float3(0.18f, 0.18f, 0.18f)));  // Lower brightness by midgray
+      midgray = midgray * 2;                                                                             // But not too much lol
+      lut_config.scaling = 1.f;
+
+      float3 hdr_lut = PrepareLutInput(untonemapped * midgray);
+      hdr_lut = renodx::lut::Sample(SrcLUT, lut_config, hdr_lut);
+      hdr_lut = DecodeHDRLutOutput(hdr_lut);
+
+      hdr_lut = renodx::tonemap::renodrt::BT709(hdr_lut, renodrt_config);
+
+      output_color = renodx::draw::ToneMapPass(hdr_lut, sdr_lut);
     }
 
-    // Scale down brightness to correct levels
-    untonemapped_graded *= scaling;
+    renodx::draw::Config swapchainConfig = renodx::draw::BuildConfig();
 
-    output_color = renodx::draw::ToneMapPass(untonemapped_graded);
+    // Scale at the end
+    output_color *= 1.f / scaling;
+
+    if (is_sdr) {
+      swapchainConfig.swap_chain_gamma_correction = 0.f;
+      // Normalize with HDR
+      swapchainConfig.swap_chain_scaling_nits = 1.f;
+      swapchainConfig.swap_chain_decoding = renodx::draw::ENCODING_NONE;
+      swapchainConfig.swap_chain_encoding = renodx::draw::ENCODING_NONE;
+      swapchainConfig.swap_chain_encoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
+      swapchainConfig.swap_chain_clamp_color_space = renodx::color::convert::COLOR_SPACE_BT709;
+    }
+
+    if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
+      output_color = renodx::effects::ApplyFilmGrain(
+          output_color.rgb,
+          TEXCOORD.xy,
+          CUSTOM_RANDOM,
+          CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
+          1.f);  // if 1.f = SDR range
+    }
+
+    output_color = renodx::draw::SwapChainPass(output_color, swapchainConfig);
   }
 
-  if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
-    output_color = renodx::effects::ApplyFilmGrain(
-        output_color.rgb,
-        TEXCOORD.xy,
-        CUSTOM_RANDOM,
-        CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
-        1.f);  // if 1.f = SDR range
-  }
-
-  // Scale at the end
-  output_color *= 1.f / scaling;
-
-  return float4(renodx::draw::SwapChainPass(output_color), 1.f);
+  return float4(output_color, 1.f);
 }
 
 #endif  // SRC_MHWILDS_OUTPUT_HLSL_

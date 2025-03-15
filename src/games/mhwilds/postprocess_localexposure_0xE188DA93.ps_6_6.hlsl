@@ -1,5 +1,4 @@
 #include "./postprocess.hlsl"
-#include "./shared.h"
 
 Texture2D<float> ReadonlyDepth : register(t0);
 
@@ -1599,11 +1598,6 @@ float4 main(
     } while (false);
   }
 
-  // with_noise *= 10.f;  // LUT_MID_GRAY_SCALING
-  // _2809 = lerp(_2400 * 10.f, _2809, CUSTOM_LUT_COLOR_STRENGTH);
-  // _2810 = lerp(_2401 * 10.f, _2810, CUSTOM_LUT_COLOR_STRENGTH);
-  // _2811 = lerp(_2402 * 10.f, _2811, CUSTOM_LUT_COLOR_STRENGTH);
-
   bool _2814 = isfinite((max((max(_2809, _2810)), _2811)));
 
   float _2815 = (_2814 ? _2809 : 1.0f);
@@ -1660,20 +1654,7 @@ float4 main(
   _3043 = _2936;
   _3044 = _2937;
 
-  // Don't enter in SDR
-  if (!(TonemapParam_002w == 0.0f) && ProcessVanilla()) {
-    float3 untonemapped = renodx::color::bt709::from::AP1(float3(_2935, _2936, _2937));
-    float3 midgray = VanillaSDRTonemapper(float3(0.18, 0.18, 0.18));
-    float3 sdrTonemapped = VanillaSDRTonemapper(untonemapped);
-
-    float3 tonemapped = UpgradeWithSDR(untonemapped * (midgray / 0.18), sdrTonemapped);
-
-    _3042 = tonemapped.r;
-    _3043 = tonemapped.g;
-    _3044 = tonemapped.b;
-  }
-
-  if ((((TonemapParam_002w) == 0.0f))) {  // SDR Tonemap
+  if ((((TonemapParam_002w) == 0.0f)) && ProcessSDRVanilla()) {  // SDR Tonemap
 
     float _2945 = (TonemapParam_002y)*_2935;
     _2953 = 1.0f;

@@ -145,7 +145,8 @@ void main(
   // ACEScc
   float3 ap1_color = renodx::color::pq::DecodeSafe(lutInput, 100.f);
 
-  if (CUSTOM_USE_HDR_TONEMAP == 1.f) {
+  // Doesn't do anything with our hardcoded values
+  if (false) {
     // ACEScc
     /* if (!(!(_22 <= -0.3013699948787689f))) {
       _38 = ((exp2(((_19 * 0.2780952751636505f) + -8.720000267028809f))) + -3.0517578125e-05f);
@@ -378,11 +379,6 @@ void main(
 
   // OutLUT[int3(((uint)(SV_DispatchThreadID.x)), ((uint)(SV_DispatchThreadID.y)), ((uint)(SV_DispatchThreadID.z)))] = float4((((_640 * (_494.x)) + _635) + (_639 * (_501.x))), (((_640 * (_494.y)) + _636) + (_639 * (_501.y))), (((_640 * (_494.z)) + _637) + (_639 * (_501.z))), 1.0f);
   float3 final_color = float3((((_640 * (_494.x)) + _635) + (_639 * (_501.x))), (((_640 * (_494.y)) + _636) + (_639 * (_501.y))), (((_640 * (_494.z)) + _637) + (_639 * (_501.z))));
-
-  // Optimize by converting to BT709 now
-  final_color = renodx::color::pq::DecodeSafe(final_color, 100.f);
-  final_color = renodx::color::bt709::from::BT2020(final_color);
-  final_color = renodx::color::pq::EncodeSafe(final_color, 100.f);
 
   OutLUT[int3(((uint)(SV_DispatchThreadID.x)), ((uint)(SV_DispatchThreadID.y)), ((uint)(SV_DispatchThreadID.z)))] = float4(final_color, 1.f);
 }

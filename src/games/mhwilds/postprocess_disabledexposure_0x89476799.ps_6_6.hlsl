@@ -235,7 +235,7 @@ float4 main(
   _300 = _193;
   _301 = _194;
   _302 = _195;
-  if ((((TonemapParam_002w) == 0.0f))) {
+  if ((((TonemapParam_002w) == 0.0f)) && ProcessSDRVanilla()) {
     float _203 = (TonemapParam_002y)*_193;
     _211 = 1.0f;
     do {
