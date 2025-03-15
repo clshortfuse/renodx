@@ -140,8 +140,10 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xCB1874B7),  // PostFX
     CustomShaderEntry(0xB7822C98),  // PostFX - MSAA 4x
     CustomShaderEntry(0xCC0D7856),  // PostFX - MSAA 8x
-    CustomShaderEntry(0x5770A95E),  // PostFX - Scanlines
     CustomShaderEntry(0xC3EDCD63),  // PostFX - Scanlines - MSAA Off
+    CustomShaderEntry(0x5770A95E),  // PostFX - Scanlines - MSAA 2x
+    CustomShaderEntry(0x30842A90),  // PostFX - Scanlines - MSAA 4x
+    CustomShaderEntry(0x1F296E17),  // PostFX - Scanlines - MSAA 8x
     CustomShaderEntry(0x17ECFF74),  // PostFX
     CustomShaderEntry(0xD3F808EC),  // PostFX
 
