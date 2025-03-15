@@ -22,6 +22,7 @@ OutputSignature main(
     linear float2 TEXCOORD: TEXCOORD) {
   float4 SV_Target;
   float4 SV_Target_1;
+
   OutputSignature output_signature;
 
   output_signature.SV_Target = OutputTonemap(SV_Position, TEXCOORD);
@@ -33,6 +34,7 @@ OutputSignature main(
   float _18 = _17 * (_11.x);
   float _19 = _17 * (_11.y);
   float _20 = _17 * (_11.z);
+
   float _35 = -0.35844698548316956f;
   float _50;
   float _65;
@@ -59,6 +61,7 @@ OutputSignature main(
       _65 = (((log2(_20)) * 0.05707760155200958f) + 0.5547950267791748f);
     }
   }
+
   float4 _74 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_35 * 0.984375f) + 0.0078125f), ((_50 * 0.984375f) + 0.0078125f), ((_65 * 0.984375f) + 0.0078125f)), 0.0f);
   SV_Target.x = (_74.x);
   SV_Target.y = (_74.y);

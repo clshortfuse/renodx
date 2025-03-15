@@ -14,20 +14,31 @@
   const float mulLinearStartContrastFactor = 0.0782207f;
   const float displayMaxNitSubContrastFactor = 9.4525f;
 */
-float3 VanillaSDRTonemapper(float3 color) {
-  color = renodx::color::bt709::clamp::BT709(color); // Deal with AP1 shenanigans
+float3 VanillaSDRTonemapper(float3 color, bool is_sdr = false) {
+  color = renodx::color::bt709::clamp::BT709(color);  // Deal with AP1 shenanigans
 
-  // Values taken from PIX SDR capture
-  const float invLinearBegin = 20.f;
-  const float linearBegin = 0.05f;
-  const float linearStart = 1.70833f;
-  const float contrast = 0.72f;
-  const float madLinearStartContrastFactor = 0.f;
-  const float toe = 1.2f;
-  const float maxNit = 10.f;
-  const float contrastFactor = -0.0457877f;
-  const float mulLinearStartContrastFactor = 0.0782207f;
-  const float displayMaxNitSubContrastFactor = 9.4525f;
+  float invLinearBegin = 20.f;
+  float linearBegin = 0.05f;
+  float linearStart = 1.70833f;
+  float contrast = 0.3f;
+  float madLinearStartContrastFactor = 0.035f;
+  float toe = 1.f;
+  float maxNit = 10.f;
+  float contrastFactor = -0.0457877f;
+  float mulLinearStartContrastFactor = 0.0782207f;
+  float displayMaxNitSubContrastFactor = 9.4525f;
+
+  if (RENODX_TONE_MAP_TYPE > 0.f) {
+    if (is_sdr) {
+      contrast = 0.3f;
+      madLinearStartContrastFactor = 0.f;
+      toe = 1.2f;
+    } else {
+      contrast = 0.72f;
+      madLinearStartContrastFactor = 0.f;
+      toe = 1.2f;
+    }
+  }
 
   float _2673 = (invLinearBegin)*color.r;
   float _2681 = 1.0f;

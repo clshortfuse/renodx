@@ -8,13 +8,23 @@ SamplerState PointBorder : register(s2, space32);
 
 SamplerState TrilinearClamp : register(s9, space32); */
 
-float4 main(
+struct OutputSignature {
+  float4 SV_Target : SV_Target;
+  float4 SV_Target_1 : SV_Target1;
+};
+
+OutputSignature main(
     noperspective float4 SV_Position: SV_Position,
-    linear float2 TEXCOORD: TEXCOORD)
-    : SV_Target {
-  return OutputTonemap(SV_Position, TEXCOORD, true);
+    linear float2 TEXCOORD: TEXCOORD
+) {
+  OutputSignature output_signature;
+
+  output_signature.SV_Target = OutputTonemap(SV_Position, TEXCOORD, true);
+  output_signature.SV_Target_1 = output_signature.SV_Target;
+  return output_signature;
 
   float4 SV_Target;
+  float4 SV_Target_1;
   float4 _9 = SrcTexture.SampleLevel(PointBorder, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
   float _27;
   float _42;
@@ -50,7 +60,11 @@ float4 main(
   SV_Target.x = (_66.x);
   SV_Target.y = (_66.y);
   SV_Target.z = (_66.z);
-
   SV_Target.w = 1.0f;
-  return SV_Target;
+  SV_Target_1.x = (_66.x);
+  SV_Target_1.y = (_66.y);
+  SV_Target_1.z = (_66.z);
+  SV_Target_1.w = 1.0f;
+  /* OutputSignature output_signature = { SV_Target, SV_Target_1 };
+  return output_signature; */
 }

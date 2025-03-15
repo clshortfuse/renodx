@@ -1,3 +1,5 @@
+#include "./postprocess.hlsl"
+
 Texture2D<float4> RE_POSTPROCESS_Color : register(t0);
 
 Texture3D<float4> tTextureMap0 : register(t1);
@@ -77,10 +79,10 @@ SamplerState BilinearClamp : register(s5, space32);
 SamplerState TrilinearClamp : register(s9, space32);
 
 float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float4 Kerare : Kerare,
-  linear float Exposure : Exposure
-) : SV_Target {
+    noperspective float4 SV_Position: SV_Position,
+    linear float4 Kerare: Kerare,
+    linear float Exposure: Exposure)
+    : SV_Target {
   float4 SV_Target;
   float _70;
   float _145;
@@ -137,7 +139,10 @@ float4 main(
     float _65 = (_57 * _57) + 1.0f;
     _70 = ((1.0f / (_65 * _65)) * (1.0f - (saturate((CameraKerare_000x * (1.0f / (_57 + 1.0f))) + CameraKerare_000y))));
   }
-  float _73 = (saturate(_70 + CameraKerare_000z)) * Exposure;
+  float _73 = (saturate(_70 + CameraKerare_000z));
+  CustomVignette(_73);
+  _73 = _73 * Exposure;
+
   float4 _81 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2((SceneInfo_023z * SV_Position.x), (SceneInfo_023w * SV_Position.y)));
   float _85 = _81.x * _73;
   float _86 = _81.y * _73;
@@ -428,11 +433,16 @@ float4 main(
   float _590 = (mad(_586, LDRPostProcessParam_014x, (mad(_585, LDRPostProcessParam_013x, (_584 * LDRPostProcessParam_012x))))) + LDRPostProcessParam_015x;
   float _594 = (mad(_586, LDRPostProcessParam_014y, (mad(_585, LDRPostProcessParam_013y, (_584 * LDRPostProcessParam_012y))))) + LDRPostProcessParam_015y;
   float _598 = (mad(_586, LDRPostProcessParam_014z, (mad(_585, LDRPostProcessParam_013z, (_584 * LDRPostProcessParam_012z))))) + LDRPostProcessParam_015z;
+  float3 new_color = CustomLUTColor(float3(_194, _195, _196), float3(_590, _594, _598));
+  _194 = new_color.r;
+  _195 = new_color.g;
+  _196 = new_color.b;
+  
   bool _601 = isfinite(max((max(_590, _594)), _598));
   float _602 = (_601 ? _590 : 1.0f);
   float _603 = (_601 ? _594 : 1.0f);
   float _604 = (_601 ? _598 : 1.0f);
-  if (TonemapParam_002w == 0.0f) {
+  if (TonemapParam_002w == 0.0f && ProcessSDRVanilla()) {
     float _612 = TonemapParam_002y * _602;
     do {
       if (!(_602 >= TonemapParam_000y)) {

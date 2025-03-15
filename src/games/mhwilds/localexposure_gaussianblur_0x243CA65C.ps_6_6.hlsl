@@ -91,7 +91,7 @@ void frag_main() {
       _73 = _74;
     }
   }
-  SV_Target.x = lerp(originalLuminance, _72, CUSTOM_SHARPNESS);
+  SV_Target.x = lerp(originalLuminance, _72, 0.f); // hardcode to 0
   SV_Target.y = 0.0f;
   SV_Target.z = 0.0f;
   SV_Target.w = 1.0f;

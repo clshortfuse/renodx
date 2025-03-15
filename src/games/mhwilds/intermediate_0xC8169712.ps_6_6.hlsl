@@ -249,6 +249,6 @@ float4 main(
   SV_Target.z = _292;
   SV_Target.w = _293;
 
-  SV_Target.xyz = lerp(_14.rgb, SV_Target.xyz, CUSTOM_SHARPNESS);
+  SV_Target.xyz = lerp(_14.rgb, SV_Target.xyz, 0.f); // hardcode to 0
   return SV_Target;
 }

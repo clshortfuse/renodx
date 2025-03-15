@@ -1,6 +1,4 @@
-#define SHADER_HASH_0xEE56E73B
 #include "./postprocess.hlsl"
-#include "./shared.h"
 
 Texture2D<float> ReadonlyDepth : register(t0);
 
@@ -1536,9 +1534,6 @@ float4 main(
     } while (false);
   }
 
-  // _2537 = lerp(_2128 * 10.f, _2537, CUSTOM_LUT_COLOR_STRENGTH);
-  // _2538 = lerp(_2129 * 10.f, _2538, CUSTOM_LUT_COLOR_STRENGTH);
-  // _2539 = lerp(_2130 * 10.f, _2539, CUSTOM_LUT_COLOR_STRENGTH);
   bool _2542 = isfinite((max((max(_2537, _2538)), _2539)));
   float _2543 = (_2542 ? _2537 : 1.0f);
   float _2544 = (_2542 ? _2538 : 1.0f);
@@ -1600,21 +1595,8 @@ float4 main(
   _2771 = _2664;
   _2772 = _2665;
 
-  // Don't enter in SDR
-  if (!(TonemapParam_002w == 0.0f) && ProcessVanilla()) {
-    float3 untonemapped = renodx::color::bt709::from::AP1(float3(_2663, _2664, _2665));
-    float3 midgray = VanillaSDRTonemapper(float3(0.18, 0.18, 0.18));
-    float3 sdrTonemapped = VanillaSDRTonemapper(untonemapped);
-
-    float3 tonemapped = UpgradeWithSDR(untonemapped * (midgray / 0.18), sdrTonemapped);
-
-    _2770 = tonemapped.r;
-    _2771 = tonemapped.g;
-    _2772 = tonemapped.b;
-  }
-
   // Original SDR tonemapper
-  if ((((TonemapParam_002w) == 0.0f))) {  // tonemapParam_isHDRMode
+  if ((((TonemapParam_002w) == 0.0f)) && ProcessSDRVanilla()) {  // tonemapParam_isHDRMode
     // Not here
     // I guess this is their inverse tonemapper?
     // invLinearBegin
