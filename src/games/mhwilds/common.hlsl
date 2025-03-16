@@ -40,6 +40,17 @@ float3 VanillaSDRTonemapper(float3 color, bool is_sdr = false) {
     }
   }
 
+  // Attmpted rewrite
+  /* float3 invLinearColor = invLinearBegin * color;
+  float3 startColor = float3(1.f, 1.f, 1.f);
+
+  if (color.rgb < linearBegin) {
+    startColor = ((invLinearColor * invLinearColor) * (3.0f - (invLinearColor * 2.0f)));
+  }
+  float3 linearStartColor = select(color < linearStart, 0.0f, 1.0f);
+  color = ((((((contrast)*color) + (madLinearStartContrastFactor)) * (startColor - linearStartColor)) + (((exp2(((log2(invLinearColor)) * (toe)))) * (1.0f - startColor)) * (linearBegin))) + (((maxNit) - ((exp2((((contrastFactor)*color) + (mulLinearStartContrastFactor)))) * (displayMaxNitSubContrastFactor))) * linearStartColor));
+ */
+
   float _2673 = (invLinearBegin)*color.r;
   float _2681 = 1.0f;
   // linearBegin
