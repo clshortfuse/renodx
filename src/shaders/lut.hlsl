@@ -352,13 +352,13 @@ float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma,
 
   const float mid_gray_average = (mid_gray_gamma.r + mid_gray_gamma.g + mid_gray_gamma.b) / 3.f;
 
-  // Remove relative to distance to inverse midgray
-  const float shadow_length = 1.f - mid_gray_average;
+  // Remove from 0 to mid-gray
+  const float shadow_length = mid_gray_average;
   const float shadow_stop = max(neutral_gamma.r, max(neutral_gamma.g, neutral_gamma.b));
   const float3 floor_remove = added_gamma * max(0, shadow_length - shadow_stop) / shadow_length;
 
-  // Add back relative to distance from midgray
-  const float highlights_length = mid_gray_average;
+  // Add back from mid-gray to 1.f
+  const float highlights_length = 1.f - mid_gray_average;
   const float highlights_stop = 1.f - min(neutral_gamma.r, min(neutral_gamma.g, neutral_gamma.b));
   const float3 ceiling_add = removed_gamma * (max(0, highlights_length - highlights_stop) / highlights_length);
 
