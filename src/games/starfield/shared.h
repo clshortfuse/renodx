@@ -29,8 +29,6 @@ struct ShaderInjectData {
   float colorGradeRestorationMethod;
   float colorGradeStrength;
 
-  float processingUseSCRGB;
-
   float custom_lut_strength;
   float custom_lut_scaling;
   float custom_scene_strength;
@@ -38,6 +36,7 @@ struct ShaderInjectData {
   float custom_bloom;
   float custom_film_grain;
   float custom_random;
+  float custom_vanilla_by_luminance;
 };
 
 #ifndef __cplusplus
@@ -60,11 +59,11 @@ cbuffer injectedBuffer : register(b13, space9) {
 #define RENODX_TONE_MAP_SHADOWS                injectedData.colorGradeShadows
 #define RENODX_TONE_MAP_CONTRAST               injectedData.colorGradeContrast
 #define RENODX_TONE_MAP_SATURATION             injectedData.colorGradeSaturation
-#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION   injectedData.colorGradeHighlightSaturation
-#define RENODX_TONE_MAP_BLOWOUT                injectedData.colorGradeBlowout
+#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION   1.f
+#define RENODX_TONE_MAP_BLOWOUT                0.0001f
 #define RENODX_TONE_MAP_FLARE                  injectedData.colorGradeFlare
-#define RENODX_TONE_MAP_WORKING_COLOR_SPACE    color::convert::COLOR_SPACE_AP1
-#define RENODX_TONE_MAP_PER_CHANNEL            injectedData.toneMapPerChannel
+#define RENODX_TONE_MAP_WORKING_COLOR_SPACE    color::convert::COLOR_SPACE_BT709
+#define RENODX_TONE_MAP_PER_CHANNEL            0.f
 #define RENODX_TONE_MAP_HUE_PROCESSOR          injectedData.toneMapHueProcessor
 #define RENODX_TONE_MAP_HUE_CORRECTION         injectedData.toneMapHueCorrection
 #define RENODX_TONE_MAP_HUE_SHIFT              injectedData.toneMapHueShift
@@ -81,6 +80,7 @@ cbuffer injectedBuffer : register(b13, space9) {
 #define CUSTOM_BLOOM                           injectedData.custom_bloom
 #define CUSTOM_FILM_GRAIN                      injectedData.custom_film_grain
 #define CUSTOM_RANDOM                          injectedData.custom_random
+#define CUSTOM_VANILLA_BY_LUMINANCE            injectedData.custom_vanilla_by_luminance
 
 #include "../../shaders/renodx.hlsl"
 #endif
