@@ -488,7 +488,7 @@ float3 RestoreSaturationLoss(float3 color_input, float3 color_output, Config lut
   float chroma_in = distance(perceptual_in.yz, 0);
   float chroma_clamped = distance(perceptual_clamped.yz, 0);
   float chroma_out = distance(perceptual_out.yz, 0);
-  float chroma_loss = (chroma_in / chroma_clamped);
+  float chroma_loss = renodx::math::DivideSafe(chroma_in, chroma_clamped, 0.f);
   float chroma_new = chroma_out * chroma_loss;
 
   perceptual_out.yz *= renodx::math::DivideSafe(chroma_new, chroma_out, 1.f);
