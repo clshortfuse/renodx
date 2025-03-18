@@ -90,49 +90,22 @@ float current_settings_mode = 0;
 auto last_is_hdr = false;
 
 const std::unordered_map<std::string, float> FILMIC_LOOK_VALUES = {
-    {"CustomToneMapMethod", 0.f},
-    {"ToneMapScaling", 0.f},
-    {"ToneMapHueProcessor", 0.f},
+    {"ToneMapType", 1.f},
     {"ColorGradeExposure", 1.f},
     {"ColorGradeHighlights", 50.f},
-    {"ColorGradeShadows", 50.f},
-    {"ColorGradeContrast", 80.f},
-    {"ColorGradeSaturation", 55.f},
-    {"ColorGradeHighlightSaturation", 59.f},
-    {"ColorGradeBlowout", 45.f},
-    {"ColorGradeFlare", 76.f},
+    {"ColorGradeShadows", 48.f},
+    {"ColorGradeContrast", 59.f},
+    {"ColorGradeSaturation", 56.f},
+    {"ColorGradeHighlightSaturation", 40.f},
+    {"ColorGradeBlowout", 50.f},
+    {"ColorGradeFlare", 50.f},
     {"SwapChainCustomColorSpace", 0.f},
     {"ColorGradeSDRTonemapper", 0.f},
-    {"ColorGradeLUTColorStrength", 50.f},
-    {"ColorGradeLUTOutputStrength", 50.f},
-    {"FxFilmGrain", 50.f},
-    // {"FxSharpness", 0.f},
+    {"ColorGradeLUTColorStrength", 60.f},
     {"FxExposureType", 1.f},
-    {"FxExposureStrength", 40.f},
+    {"FxExposureStrength", 75.f},
     {"FxLUTExposureReverse", 1.f},
 };
-
-/* const std::unordered_map<std::string, float> VANILLA_PLUS_VALUES = {
-    {"ToneMapType", 1.f},
-    {"ToneMapScaling", 1.f},
-    {"ColorGradeExposure", 0.5},
-    {"ColorGradeHighlights", 50.f},
-    {"ColorGradeShadows", 60.f},
-    {"ColorGradeContrast", 65.f},
-    {"ColorGradeSaturation", 45.f},
-    {"ColorGradeHighlightSaturation", 70.f},
-    {"ColorGradeBlowout", 20.f},
-    {"ColorGradeFlare", 0.f},
-    {"SwapChainCustomColorSpace", 0.f},
-    {"ColorGradeSDRTonemapper", 0.f},
-    {"ColorGradeLUTColorStrength", 100.f},
-    {"ColorGradeLUTOutputStrength", 100.f},
-    {"FxFilmGrain", 50.f},
-    // {"FxSharpness", 0.f},
-    {"FxExposureType", 0.f},
-    {"FxExposureStrength", 50.f},
-    {"FxLUTExposureReverse", 0.f},
-}; */
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -366,8 +339,8 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Reset all",
-        .section = "Options",
+        .label = "Vanilla+",
+        .section = "Presets",
         .group = "button-line-1",
         .on_change = []() {
           for (auto* setting : settings) {
@@ -378,7 +351,7 @@ renodx::utils::settings::Settings settings = {
           }
         },
     },
-    /* new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Filmic",
         .section = "Presets",
@@ -395,7 +368,7 @@ renodx::utils::settings::Settings settings = {
             }
           }
         },
-    }, */
+    },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = " - In-Game HDR must be turned ON!\n"
@@ -526,19 +499,26 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
-      renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
+      // while (IsDebuggerPresent() == 0) Sleep(100);
+      renodx::mods::shader::on_create_pipeline_layout = [](reshade::api::device* device, auto params) {
+        int vendor_id;
+        auto retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
+        bool is_not_nvidia = !retrieved || vendor_id != 0x10de;
+
         // We only need output shader since it's the only shader using injected data
         auto param_count = params.size();
 
-        // Attempting to fix a visual bug
-        if (param_count <= 20) {
-          return true;
+        if (is_not_nvidia) {
+          // AMD water bug
+          if (param_count <= 14 && param_count >= 10) {
+            return true;
+          }
+        } else {
+          // err on the safe side for Nvidia
+          if (param_count <= 20) {
+            return true;
+          }
         }
-
-        // Works but might mess stuff in dev
-        /* if (param_count <= 15 || param_count >=  10) {
-          return true;
-        } */
 
         return false;
       };
