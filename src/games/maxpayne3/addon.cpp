@@ -489,15 +489,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .new_format = reshade::api::format::r16g16b16a16_float,
       });
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_typeless,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .index = 6,  // Results in artifacts otherwise
-      });
+      // Artifacts in some shadows with r8g8b8a8_typeless upgrades
+      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      //     .old_format = reshade::api::format::r8g8b8a8_typeless,
+      //     .new_format = reshade::api::format::r16g16b16a16_float,
+      //     .index = 6,  // Results in artifacts otherwise
+      // });
 
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r11g11b10_float,
-          .new_format = reshade::api::format::r16g16b16a16_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,  // Results in black screen otherwise
       });
 
