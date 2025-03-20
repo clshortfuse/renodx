@@ -1494,10 +1494,16 @@ class Decompiler {
           auto& [alias_type, alias_value] = pair->second;
 
           // check for function
-          static const auto IS_FUNCTION = std::regex{R"(^(\w*\(.*\))$)"};
+          static const auto IS_FUNCTION = std::regex{R"(^\w*(\(.*\))$)"};
+          const auto [functionlike] = StringViewMatch<1>(alias_value, IS_FUNCTION);
+          bool is_function = false;
+          if (!functionlike.empty()) {
+            is_function = IsWrapped(functionlike);
+          }
+
           static constexpr const auto* SAFE_CHARACTERS = "012345789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_.";
           // static constexpr const auto *UNSAFE_CHARACTERS = " *+-/&^|";
-          bool needs_wrap = StringViewMatch<1>(alias_value, IS_FUNCTION)[0].empty() && alias_value.find_first_not_of(SAFE_CHARACTERS) != std::string_view::npos;
+          bool needs_wrap = !is_function && alias_value.find_first_not_of(SAFE_CHARACTERS) != std::string_view::npos;
           auto new_value = (expected_type != alias_type)
                                ? CastType(alias_type, alias_value)
                                : alias_value;
@@ -2734,19 +2740,19 @@ class Decompiler {
         auto [condition, type_a, value_a, type_b, value_b] = StringViewMatch<5>(assignment, std::regex{R"(select i1 (\S+), (\S+) (\S+), (\S+) (\S+))"});
         if (type_a == "float" && type_b == "float") {
           assignment_type = "float";
-          assignment_value = std::format("({} ? {} : {})", ParseFloat(condition), ParseFloat(value_a), ParseFloat(value_b));
+          assignment_value = std::format("select({}, {}, {})", ParseBool(condition), ParseFloat(value_a), ParseFloat(value_b));
         } else if (type_a == "int" && type_b == "int") {
           assignment_type = "int";
-          assignment_value = std::format("({} ? {} : {})", ParseInt(condition), ParseInt(value_a), ParseInt(value_b));
+          assignment_value = std::format("select({}, {}, {})", ParseBool(condition), ParseInt(value_a), ParseInt(value_b));
         } else if (type_a == "i32" && type_b == "i32") {
           assignment_type = "int";
-          assignment_value = std::format("({} ? {} : {})", ParseInt(condition), ParseInt(value_a), ParseInt(value_b));
+          assignment_value = std::format("select({}, {}, {})", ParseBool(condition), ParseInt(value_a), ParseInt(value_b));
         } else if (type_a == "i1" && type_b == "i1") {
           assignment_type = "bool";
-          assignment_value = std::format("({} ? {} : {})", ParseBool(condition), ParseBool(value_a), ParseBool(value_b));
+          assignment_value = std::format("select({}, {}, {})", ParseBool(condition), ParseBool(value_a), ParseBool(value_b));
         } else if (type_a == "half" && type_b == "half") {
           assignment_type = "half";
-          assignment_value = std::format("({} ? {} : {})", ParseFloat(condition), ParseFloat(value_a), ParseFloat(value_b));
+          assignment_value = std::format("select({}, {}, {})", ParseBool(condition), ParseFloat(value_a), ParseFloat(value_b));
         } else {
           std::cerr << line << "\n";
           throw std::invalid_argument("Unrecognized code assignment");
@@ -4284,7 +4290,7 @@ class Decompiler {
         const auto add_convergence_phis = [&]() {
           for (const auto& phi_line : current_code_function->ComputePhiAssignments(&code_block, switch_convergence)) {
 #if DECOMPILER_DXC_DEBUG >= 2
-            string_stream << spacing << "// branch_number: " << branch_number << "\n";
+            string_stream << spacing << "// branch_number: " << switch_convergence << "\n";
 #endif
             auto optimized_line = (decompile_options.flatten ? OptimizeString(phi_line) : phi_line);
             if (optimized_line != phi_line) {
