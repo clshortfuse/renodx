@@ -1,5 +1,3 @@
-#include "./shared.h"
-
 Texture2D<float4> HDRImage : register(t0);
 
 cbuffer SceneInfo : register(b0) {

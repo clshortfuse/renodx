@@ -34,6 +34,8 @@
 #define CUSTOM_FLAT_EXPOSURE_DEFAULT           1.f
 #define CUSTOM_LUT_EXPOSURE_REVERSE            shader_injection.custom_lut_exposure_reverse
 #define CUSTOM_EXPOSURE_SHADER_DRAW            shader_injection.custom_exposure_shader_draw
+#define CUSTOM_SHARPNESS                       shader_injection.custom_sharpness
+#define CUSTOM_LUT_SCALING                     shader_injection.custom_lut_scaling
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -60,6 +62,8 @@ struct ShaderInjectData {
   float custom_exposure_strength;
   float custom_lut_exposure_reverse;
   float custom_exposure_shader_draw;
+  float custom_sharpness;
+  float custom_lut_scaling;
 };
 
 #ifndef __cplusplus
