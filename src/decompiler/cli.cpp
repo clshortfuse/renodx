@@ -20,7 +20,7 @@ int main(int argc, char** argv) {
   }
 
   if (paths.size() < 1) {
-    std::cerr << "USAGE: decomp.exe {cso} [{hlsl}] [--flatten] [-f]\n";
+    std::cerr << "USAGE: decomp.exe {cso} [{hlsl}] [--flatten] [-f] [--skip-existing] [-s] [--use-do-while]\n";
     std::cerr << "  Creates {hlsl} from the contents of {cso}\n";
     return EXIT_FAILURE;
   }
@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
     auto code = renodx::utils::path::ReadBinaryFile(paths[0]);
     disassembly = renodx::utils::shader::compiler::directx::DisassembleShader(code);
   } catch (const std::exception& ex) {
-    std::cerr << '"' << paths[0] << '"' << ": " << ex.what() << std::endl;
+    std::cerr << '"' << paths[0] << '"' << ": " << ex.what() << '\n';
     return EXIT_FAILURE;
   }
   if (disassembly.empty()) {
@@ -43,7 +43,16 @@ int main(int argc, char** argv) {
     bool flatten = std::ranges::any_of(arguments, [](const std::string& argument) {
       return (argument == "--flatten" || argument == "-f");
     });
-    std::string decompilation = decompiler.Decompile(disassembly, {.flatten = flatten});
+    bool skip_existing = std::ranges::any_of(arguments, [](const std::string& argument) {
+      return (argument == "--skip-existing" || argument == "-s");
+    });
+    bool use_do_while = std::ranges::any_of(arguments, [](const std::string& argument) {
+      return (argument == "--use-do-while");
+    });
+    std::string decompilation = decompiler.Decompile(disassembly, {
+                                                                      .flatten = flatten,
+                                                                      .use_do_while = use_do_while,
+                                                                  });
 
     if (decompilation.empty()) {
       return EXIT_FAILURE;
@@ -62,17 +71,24 @@ int main(int argc, char** argv) {
       output = output_path.string();
     }
 
+    if (skip_existing) {
+      if (renodx::utils::path::CheckExistsFile(output)) {
+        std::cout << "Skipping " << output << '\n';
+        return EXIT_SUCCESS;
+      }
+    }
+
     renodx::utils::path::WriteTextFile(output, decompilation);
-    std::cout << '"' << paths[0] << '"' << " => " << output << std::endl;
+    std::cout << '"' << paths[0] << '"' << " => " << output << '\n';
 
   } catch (const std::exception& ex) {
-    std::cerr << '"' << paths[0] << '"' << ": " << ex.what() << std::endl;
+    std::cerr << '"' << paths[0] << '"' << ": " << ex.what() << '\n';
     return EXIT_FAILURE;
   } catch (const std::string& ex) {
-    std::cerr << '"' << paths[0] << '"' << ": " << ex << std::endl;
+    std::cerr << '"' << paths[0] << '"' << ": " << ex << '\n';
     return EXIT_FAILURE;
   } catch (...) {
-    std::cerr << '"' << paths[0] << '"' << ": Unknown failure" << std::endl;
+    std::cerr << '"' << paths[0] << '"' << ": Unknown failure" << '\n';
     return EXIT_FAILURE;
   }
 

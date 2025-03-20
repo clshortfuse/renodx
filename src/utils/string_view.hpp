@@ -49,6 +49,10 @@ inline std::string_view StringViewMatch(const std::string_view& input, const std
   return "";
 }
 
+inline std::string_view StringViewMatch(const std::string_view& input, const std::string& regex) {
+  return StringViewMatch(input, std::regex{regex});
+}
+
 inline std::vector<std::pair<std::string_view, std::string_view>> StringViewSplitAll(const std::string_view& input, const std::regex& separator, const std::vector<int>& submatches) {
   std::cregex_token_iterator iter(input.data(), input.data() + input.size(), separator, submatches);
   const std::cregex_token_iterator end;
