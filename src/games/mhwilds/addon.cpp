@@ -102,6 +102,7 @@ const std::unordered_map<std::string, float> FILMIC_LOOK_VALUES = {
     {"SwapChainCustomColorSpace", 0.f},
     {"ColorGradeSDRTonemapper", 0.f},
     {"ColorGradeLUTColorStrength", 60.f},
+    {"FxLUTScaling", 0.f},
     {"FxExposureType", 1.f},
     {"FxExposureStrength", 75.f},
     {"FxLUTExposureReverse", 1.f},
@@ -303,6 +304,28 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxSharpness",
+        .binding = &shader_injection.custom_sharpness,
+        .default_value = 0.f,
+        .label = "RCAS Sharpness",
+        .section = "Effects",
+        .tooltip = "Controls Lilium's RCAS Sharpness",
+        .max = 100.f,
+        .parse = [](float value) { return value == 0 ? 0.f : exp2(-(1.f - (value * 0.01f))); },
+        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxLUTScaling",
+        .binding = &shader_injection.custom_lut_scaling,
+        .default_value = 50.f,
+        .label = "LUT Scaling",
+        .section = "Effects",
+        .tooltip = "Controls lut scaling",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxExposureType",
         .binding = &shader_injection.custom_exposure_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -436,6 +459,11 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Credits to Lilium (& Musa) for RCAS!",
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "This build was compiled on " + build_date + " at " + build_time + ".",
         .section = "About",
     },
@@ -505,14 +533,24 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         auto retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
         bool is_not_nvidia = !retrieved || vendor_id != 0x10de;
 
-        // We only need output shader since it's the only shader using injected data
         auto param_count = params.size();
 
         if (is_not_nvidia) {
-          // AMD water bug
-          if (param_count <= 14 && param_count >= 10) {
+          // Give up for now
+          if (param_count <= 20) {
             return true;
           }
+
+          /* // AMD water bug
+          // outputs & post process
+          if (param_count == 15) {
+            return true;
+          }
+
+          // UI
+          if (param_count == 10 && params[1].descriptor_table.count == 1) {
+            return true;
+          } */
         } else {
           // err on the safe side for Nvidia
           if (param_count <= 20) {

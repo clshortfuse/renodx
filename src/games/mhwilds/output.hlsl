@@ -2,6 +2,7 @@
 #define SRC_MHWILDS_OUTPUT_HLSL_
 #include "./common.hlsl"
 #include "./shared.h"
+#include "./lilium_rcas.hlsl"
 
 Texture2D<float4> SrcTexture : register(t0);
 
@@ -44,6 +45,7 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
   lut_config.scaling = 0.f;
 
   float3 untonemapped = renodx::color::bt709::from::AP1(ap1_color);
+  untonemapped = ApplyRCAS(untonemapped, TEXCOORD, SrcTexture, PointBorder);
   float3 output_color;
 
   if (RENODX_TONE_MAP_TYPE == 0.f) {
@@ -78,7 +80,7 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
       lut_peak = renodx::color::y::from::BT709(lut_peak.xxx);
 
       // midgray (in/out) controls midtones brightness
-      vanillaSDR = renodx::tonemap::ReinhardScalable(vanillaSDR, lut_peak, 0.f, lut_mid_gray, vanilla_sdr_midgray * 0.95);  // slightly decrease output midgray to add dynamic range
+      vanillaSDR = renodx::tonemap::ReinhardScalable(vanillaSDR, lut_peak, 0.f, lut_mid_gray, vanilla_sdr_midgray);  // slightly decrease output midgray to add dynamic range
     }
 
     float3 sdr_lut = PrepareLutInput(vanillaSDR);
@@ -96,13 +98,13 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
           draw_config.tone_map_saturation,
           draw_config.tone_map_blowout);
 
-      sdr_lut = renodx::color::srgb::EncodeSafe(sdr_lut);
       output_color = sdr_lut;
     } else {
       sdr_lut = saturate(sdr_lut);
 
       vanilla_sdr_midgray *= 1.f;  // Controls highlights
 
+      lut_config.scaling = CUSTOM_LUT_SCALING;  // 1.f is too harsh
       float3 hdr_lut = PrepareLutInput(untonemapped * vanilla_sdr_midgray);
       hdr_lut = renodx::lut::Sample(SrcLUT, lut_config, hdr_lut);
       hdr_lut = DecodeLutOutput(hdr_lut, is_sdr);
@@ -120,8 +122,7 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
       swapchainConfig.swap_chain_gamma_correction = 0.f;
       // Normalize with HDR
       swapchainConfig.swap_chain_scaling_nits = 1.f;
-      swapchainConfig.swap_chain_decoding = renodx::draw::ENCODING_NONE;
-      swapchainConfig.swap_chain_encoding = renodx::draw::ENCODING_NONE;
+      swapchainConfig.swap_chain_encoding = renodx::draw::ENCODING_SRGB;
       swapchainConfig.swap_chain_encoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
       swapchainConfig.swap_chain_clamp_color_space = renodx::color::convert::COLOR_SPACE_BT709;
     }
