@@ -26,6 +26,11 @@ static std::filesystem::path GetOutputPath() {
   return dump_path;
 }
 
+static bool CheckExistsFile(const std::filesystem::path& path) {
+  std::ifstream file(path, std::ios::binary);
+  return file.good();
+}
+
 static std::vector<uint8_t> ReadBinaryFile(const std::filesystem::path& path) {
   std::ifstream file(path, std::ios::binary);
   file.seekg(0, std::ios::end);
@@ -38,7 +43,7 @@ static std::vector<uint8_t> ReadBinaryFile(const std::filesystem::path& path) {
 }
 
 static std::string ReadTextFile(const std::filesystem::path& path) {
-  const auto &data = ReadBinaryFile(path);
+  const auto& data = ReadBinaryFile(path);
   if (data.empty()) return "";
   return {reinterpret_cast<const char*>(data.data()), data.size()};
 }
