@@ -1392,6 +1392,14 @@ class Decompiler {
     bool use_hint = false;
   };
 
+  struct CodeSwitch {
+    std::string switch_condition;
+    int case_default = -1;
+    std::vector<std::pair<std::string_view, int>> case_values;
+    std::unordered_set<int> branches;  // for tracking convergences
+    bool use_hint = false;
+  };
+
   struct PhiData {
     //   %50 = phi i1 [ false, %0 ], [ %48, %45 ]
     std::string variable;
@@ -1405,7 +1413,8 @@ class Decompiler {
     std::vector<std::string> hlsl_lines;
     std::vector<PhiData> phi_lines;
 
-    CodeBranch branch;
+    CodeBranch code_branch;
+    CodeSwitch code_switch;
   };
 
   static bool IsWrapped(std::string_view input) {
@@ -2878,7 +2887,8 @@ class Decompiler {
     void CloseBranch() {
       // may already exist via phi
       auto& previous_code_block = this->code_blocks[this->current_code_block_number];
-      previous_code_block.branch = this->current_code_block.branch;
+      previous_code_block.code_branch = this->current_code_block.code_branch;
+      previous_code_block.code_switch = this->current_code_block.code_switch;
       previous_code_block.hlsl_lines = this->current_code_block.hlsl_lines;
       this->current_code_block_number = -1;
       this->current_code_block = {};
@@ -2891,17 +2901,52 @@ class Decompiler {
 
       const auto [condition, if_true, if_false, use_hint] = StringViewMatch<4>(line, conditional_branch_regex);
       if (!condition.empty()) {
-        this->current_code_block.branch.branch_condition = ParseBool(condition);
-        FromStringView(if_true, this->current_code_block.branch.branch_condition_true);
-        FromStringView(if_false, this->current_code_block.branch.branch_condition_false);
+        this->current_code_block.code_branch.branch_condition = ParseBool(condition);
+        FromStringView(if_true, this->current_code_block.code_branch.branch_condition_true);
+        FromStringView(if_false, this->current_code_block.code_branch.branch_condition_false);
         if (!use_hint.empty()) {
-          this->current_code_block.branch.use_hint = true;
+          this->current_code_block.code_branch.use_hint = true;
         }
       } else {
         static auto unconditional_branch_regex = std::regex{R"(^  br label %(\S+).*)"};
         const auto [unconditional] = StringViewMatch<1>(line, unconditional_branch_regex);
-        FromStringView(unconditional, this->current_code_block.branch.branch_condition_true);
+        FromStringView(unconditional, this->current_code_block.code_branch.branch_condition_true);
       }
+      this->CloseBranch();
+    }
+
+    void AddCodeSwitch(std::string_view line, PreprocessState& preprocess_state, std::vector<std::string_view>::iterator& iterator) {
+      // switch i32 %24, label %357 [
+      //   i32 2, label %25
+      //   i32 3, label %147
+      //   i32 4, label %213
+      //   i32 5, label %358
+      //   i32 6, label %224
+      //   i32 1, label %229
+      // ]
+      static const auto SWITCH_START_REGEX = std::regex{R"(^  switch i32 (\S+), label %(\S+) \[.*)"};
+
+      const auto [condition, case_default] = StringViewMatch<2>(line, SWITCH_START_REGEX);
+
+      auto& code_switch = this->current_code_block.code_switch;
+
+      code_switch.switch_condition = ParseBool(condition);
+      FromStringView(case_default, code_switch.case_default);
+
+      code_switch.branches.emplace(code_switch.case_default);
+
+      while (true) {
+        auto& current_line = *(++iterator);
+        if (StringViewTrim(current_line) == "]") break;
+        //     i32 2, label %25
+        static const auto SWITCH_CASE_REGEX = std::regex{R"(^    i32 (\S+), label %(\S+).*$)"};
+        const auto [case_value, case_function] = StringViewMatch<2>(current_line, SWITCH_CASE_REGEX);
+        int case_function_int = -1;
+        FromStringView(case_function, case_function_int);
+        code_switch.case_values.emplace_back(case_value, case_function_int);
+        code_switch.branches.emplace(case_function_int);
+      };
+
       this->CloseBranch();
     }
 
@@ -3026,7 +3071,8 @@ class Decompiler {
     }
 
     auto DecompileLines(PreprocessState& preprocess_state) {
-      for (auto line : this->lines) {
+      for (auto it = this->lines.begin(); it != this->lines.end(); ++it) {
+        auto& line = *it;
         if (line.starts_with("  %")) {
           this->AddCodeAssign(line, preprocess_state);
         } else if (line.starts_with("  call ")) {
@@ -3037,6 +3083,8 @@ class Decompiler {
           this->CloseBranch();
         } else if (line.starts_with("  br ")) {
           this->AddCodeBranch(line, preprocess_state);
+        } else if (line.starts_with("  switch ")) {
+          this->AddCodeSwitch(line, preprocess_state, it);
         } else if (line.empty()) {
           //
         } else if (line.starts_with("; <label>:")) {
@@ -3052,11 +3100,17 @@ class Decompiler {
       std::map<int, std::set<int>> convergences;
 
       for (const auto& [line_number, code_block] : code_blocks) {
-        if (code_block.branch.branch_condition_true != -1) {
-          convergences[code_block.branch.branch_condition_true].emplace(line_number);
+        if (code_block.code_branch.branch_condition_true != -1) {
+          convergences[code_block.code_branch.branch_condition_true].emplace(line_number);
         }
-        if (code_block.branch.branch_condition_false != -1) {
-          convergences[code_block.branch.branch_condition_false].emplace(line_number);
+        if (code_block.code_branch.branch_condition_false != -1) {
+          convergences[code_block.code_branch.branch_condition_false].emplace(line_number);
+        }
+        if (!code_block.code_switch.switch_condition.empty()) {
+          convergences[code_block.code_switch.case_default].emplace(line_number);
+          for (const auto& [case_value, case_function] : code_block.code_switch.case_values) {
+            convergences[case_function].emplace(line_number);
+          }
         }
       }
 
@@ -3077,14 +3131,24 @@ class Decompiler {
       std::map<int, std::set<int>> recursions;
 
       for (const auto& [line_number, code_block] : code_blocks) {
-        if (code_block.branch.branch_condition_true != -1) {
-          if (line_number >= code_block.branch.branch_condition_true) {
-            recursions[code_block.branch.branch_condition_true].emplace(line_number);
+        if (code_block.code_branch.branch_condition_true != -1) {
+          if (line_number >= code_block.code_branch.branch_condition_true) {
+            recursions[code_block.code_branch.branch_condition_true].emplace(line_number);
           }
         }
-        if (code_block.branch.branch_condition_false != -1) {
-          if (line_number >= code_block.branch.branch_condition_false) {
-            recursions[code_block.branch.branch_condition_false].emplace(line_number);
+        if (code_block.code_branch.branch_condition_false != -1) {
+          if (line_number >= code_block.code_branch.branch_condition_false) {
+            recursions[code_block.code_branch.branch_condition_false].emplace(line_number);
+          }
+        }
+        if (!code_block.code_switch.switch_condition.empty()) {
+          if (line_number >= code_block.code_switch.case_default) {
+            recursions[code_block.code_switch.case_default].emplace(line_number);
+          }
+          for (const auto& [case_value, case_function] : code_block.code_switch.case_values) {
+            if (line_number >= case_function) {
+              recursions[case_function].emplace(line_number);
+            }
           }
         }
       }
@@ -4127,7 +4191,9 @@ class Decompiler {
 
       int current_loop = current_loops.empty() ? -1 : current_loop = current_loops.rbegin()[0];
 
-      if (code_block.branch.branch_condition_true <= 0) return;
+      if (code_block.code_branch.branch_condition_true <= 0 && code_block.code_switch.switch_condition.empty()) {
+        return;
+      }
 
       int next_convergence = pending_convergences.empty() ? -1 : pending_convergences.rbegin()[0];
 
@@ -4192,24 +4258,109 @@ class Decompiler {
         }
       };
 
-      if (code_block.branch.branch_condition.empty()) {
-        on_branch(code_block.branch.branch_condition_true);
+      if (!code_block.code_switch.switch_condition.empty()) {
+        int switch_convergence = -1;
+        // Paths must converge
+        for (auto& [convergence_line_number, callers] : convergences) {
+          bool missing = false;
+          bool has_match = false;
+          for (const auto branch : code_block.code_switch.branches) {
+            if (convergence_line_number == branch || callers.contains(branch)) {
+              has_match = true;
+            } else {
+              missing = true;
+              break;
+            }
+          }
+          if (has_match && !missing) {
+            switch_convergence = convergence_line_number;
+            break;
+          }
+        }
+
+        assert(switch_convergence != -1);
+        pending_convergences.push_back(switch_convergence);
+
+        const auto add_convergence_phis = [&]() {
+          for (const auto& phi_line : current_code_function->ComputePhiAssignments(&code_block, switch_convergence)) {
+#if DECOMPILER_DXC_DEBUG >= 2
+            string_stream << spacing << "// branch_number: " << branch_number << "\n";
+#endif
+            auto optimized_line = (decompile_options.flatten ? OptimizeString(phi_line) : phi_line);
+            if (optimized_line != phi_line) {
+#if DECOMPILER_DXC_DEBUG >= 2
+              string_stream << spacing << "// optimized: " << phi_line << "\n";
+#endif
+              string_stream << spacing << optimized_line << "\n";
+            } else {
+              string_stream << spacing << phi_line << "\n";
+            }
+          }
+        };
+
+        string_stream << spacing << "switch (" << code_block.code_switch.switch_condition << ") {\n";
+        indent_spacing();
+
+        for (const auto& [case_value, case_function] : code_block.code_switch.case_values) {
+          string_stream << spacing << "case " << case_value << ": {\n";
+          indent_spacing();
+          if (case_function == switch_convergence) {
+            add_convergence_phis();
+          } else {
+            on_branch(case_function);
+          }
+          string_stream << spacing << "break;\n";
+          unindent_spacing();
+          string_stream << spacing << "}\n";
+        }
+
+        string_stream << spacing << "default: {\n";
+        indent_spacing();
+        if (code_block.code_switch.case_default == switch_convergence) {
+          add_convergence_phis();
+        } else {
+          on_branch(code_block.code_switch.case_default);
+        }
+        string_stream << spacing << "break;\n";
+        unindent_spacing();
+        string_stream << spacing << "}\n";
+
+        unindent_spacing();
+        string_stream << spacing << "}\n";
+
+        pending_convergences.pop_back();
+        bool is_empty = pending_convergences.empty();
+        on_branch(switch_convergence, true);
+        if (!is_empty) {
+          // if (decompile_options.use_do_while) {
+          //   unindent_spacing();
+          //   string_stream << spacing << "} while (false);\n";
+          // }
+        }
+
+        on_complete();
+
+        return;
+      }
+
+      if (code_block.code_branch.branch_condition.empty()) {
+        on_branch(code_block.code_branch.branch_condition_true);
         on_complete();
         return;
       }
 
-      if (code_block.branch.branch_condition_false <= line_number
-          && code_block.branch.branch_condition_true <= line_number) {
+      if (code_block.code_branch.branch_condition_false <= line_number
+          && code_block.code_branch.branch_condition_true <= line_number) {
         throw std::exception("Unsupported loop detected.");
       }
 
-      if (code_block.branch.branch_condition_true == next_convergence) {
-        if (code_block.branch.use_hint) {
+      if (code_block.code_branch.branch_condition_true == next_convergence) {
+        if (code_block.code_branch.use_hint) {
           string_stream << spacing << "[branch]\n";
         }
-        string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\n";
+        string_stream << spacing << "if (!" << code_block.code_branch.branch_condition << ") {\n";
         indent_spacing();
-        on_branch(code_block.branch.branch_condition_false);
+        on_branch(code_block.code_branch.branch_condition_false);
         unindent_spacing();
 
         close_lonely_if(next_convergence);
@@ -4218,13 +4369,13 @@ class Decompiler {
         return;
       }
 
-      if (code_block.branch.branch_condition_false == next_convergence) {
-        if (code_block.branch.use_hint) {
+      if (code_block.code_branch.branch_condition_false == next_convergence) {
+        if (code_block.code_branch.use_hint) {
           string_stream << spacing << "[branch]\n";
         }
-        string_stream << spacing << std::format("if {} {{\n", ParseWrapped(code_block.branch.branch_condition));
+        string_stream << spacing << std::format("if {} {{\n", ParseWrapped(code_block.code_branch.branch_condition));
         indent_spacing();
-        on_branch(code_block.branch.branch_condition_true);
+        on_branch(code_block.code_branch.branch_condition_true);
         unindent_spacing();
 
         close_lonely_if(next_convergence);
@@ -4237,8 +4388,8 @@ class Decompiler {
       int pair_convergence = -1;
       for (auto& [convergence_line_number, callers] : convergences) {
         if (
-            (convergence_line_number == code_block.branch.branch_condition_true || callers.contains(code_block.branch.branch_condition_true))
-            && (convergence_line_number == code_block.branch.branch_condition_false || callers.contains(code_block.branch.branch_condition_false))) {
+            (convergence_line_number == code_block.code_branch.branch_condition_true || callers.contains(code_block.code_branch.branch_condition_true))
+            && (convergence_line_number == code_block.code_branch.branch_condition_false || callers.contains(code_block.code_branch.branch_condition_false))) {
           if (convergence_line_number == next_convergence) break;
           pair_convergence = convergence_line_number;
           if (!pending_convergences.empty()) {
@@ -4252,53 +4403,53 @@ class Decompiler {
         }
       }
 
-      if (pair_convergence == code_block.branch.branch_condition_true) {
-        if (code_block.branch.use_hint) {
+      if (pair_convergence == code_block.code_branch.branch_condition_true) {
+        if (code_block.code_branch.use_hint) {
           string_stream << spacing << "[branch]\n";
         }
-        string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\n";
+        string_stream << spacing << "if (!" << code_block.code_branch.branch_condition << ") {\n";
         indent_spacing();
-        on_branch(code_block.branch.branch_condition_false);
+        on_branch(code_block.code_branch.branch_condition_false);
         unindent_spacing();
 
         close_lonely_if(pair_convergence);
 
         // Only print else
-      } else if (pair_convergence == code_block.branch.branch_condition_false) {
-        if (code_block.branch.use_hint) {
+      } else if (pair_convergence == code_block.code_branch.branch_condition_false) {
+        if (code_block.code_branch.use_hint) {
           string_stream << spacing << "[branch]\n";
         }
-        string_stream << spacing << std::format("if {} {{\n", ParseWrapped(code_block.branch.branch_condition));
+        string_stream << spacing << std::format("if {} {{\n", ParseWrapped(code_block.code_branch.branch_condition));
         indent_spacing();
-        on_branch(code_block.branch.branch_condition_true);
+        on_branch(code_block.code_branch.branch_condition_true);
         unindent_spacing();
 
         close_lonely_if(pair_convergence);
 
-      } else if (code_block.branch.branch_condition_true < code_block.branch.branch_condition_false) {
-        if (code_block.branch.use_hint) {
+      } else if (code_block.code_branch.branch_condition_true < code_block.code_branch.branch_condition_false) {
+        if (code_block.code_branch.use_hint) {
           string_stream << spacing << "[branch]\n";
         }
-        string_stream << spacing << std::format("if {} {{\n", ParseWrapped(code_block.branch.branch_condition));
+        string_stream << spacing << std::format("if {} {{\n", ParseWrapped(code_block.code_branch.branch_condition));
         indent_spacing();
-        on_branch(code_block.branch.branch_condition_true);
+        on_branch(code_block.code_branch.branch_condition_true);
         unindent_spacing();
         string_stream << spacing << "} else {\n";
         indent_spacing();
-        on_branch(code_block.branch.branch_condition_false);
+        on_branch(code_block.code_branch.branch_condition_false);
         unindent_spacing();
         string_stream << spacing << "}\n";
       } else {
-        if (code_block.branch.use_hint) {
+        if (code_block.code_branch.use_hint) {
           string_stream << spacing << "[branch]\n";
         }
-        string_stream << spacing << "if (!" << code_block.branch.branch_condition << ") {\n";
+        string_stream << spacing << "if (!" << code_block.code_branch.branch_condition << ") {\n";
         indent_spacing();
-        on_branch(code_block.branch.branch_condition_false);
+        on_branch(code_block.code_branch.branch_condition_false);
         unindent_spacing();
         string_stream << spacing << "} else {\n";
         indent_spacing();
-        on_branch(code_block.branch.branch_condition_true);
+        on_branch(code_block.code_branch.branch_condition_true);
         unindent_spacing();
         string_stream << spacing << "}\n";
       }
