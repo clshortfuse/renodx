@@ -2384,7 +2384,8 @@ class Decompiler {
         // extractvalue %dx.types.CBufRet.i32 %19, 0
         auto [type, input, index] = StringViewMatch<3>(assignment, std::regex{R"(extractvalue (\S+) (\S+), (\S+))"});
         if (type == R"(%dx.types.CBufRet.f32)") {
-          const auto& [cbv_resource, cbv_variable_index] = preprocess_state.cbv_binding_variables[ParseVariable(input).substr(1)];
+          auto source_variable = ParseVariable(input).substr(1);
+          const auto& [cbv_resource, cbv_variable_index] = preprocess_state.cbv_binding_variables[source_variable];
           int literal_index;
           FromStringView(index, literal_index);
 
@@ -2405,7 +2406,8 @@ class Decompiler {
           // decompiled = std::format("float _{} = {};", variable, value);
           // preprocess_state.variable_aliases.emplace(variable, value);
         } else if (type == R"(%dx.types.CBufRet.i32)") {
-          const auto& [cbv_resource, cbv_variable_index] = preprocess_state.cbv_binding_variables[ParseVariable(input).substr(1)];
+          auto source_variable = ParseVariable(input).substr(1);
+          const auto& [cbv_resource, cbv_variable_index] = preprocess_state.cbv_binding_variables[source_variable];
           int literal_index;
           FromStringView(index, literal_index);
 
