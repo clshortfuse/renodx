@@ -144,6 +144,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedShaderEntry(0x95B1E481),
     TracedShaderEntry(0x49D6D8F2),
     TracedShaderEntry(0x06F39D1E),
+    TracedShaderEntry(0xDA10C03E),
 
 };
 
