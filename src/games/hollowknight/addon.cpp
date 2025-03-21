@@ -275,6 +275,12 @@ renodx::utils::settings::Settings settings = {
         .label = "Bloom",
         .section = "Effects",
     }),
+    CreateDefault50PercentSetting({
+        .key = "FxHeroLight",
+        .binding = &shader_injection.custom_hero_light,
+        .label = "Hero Light",
+        .section = "Effects",
+    }),
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
@@ -295,6 +301,7 @@ renodx::utils::settings::Settings settings = {
               {"ColorGradeSaturation", 60.f},
               {"ColorGradeBlowout", 30.f},
               {"FxBloom", 40.f},
+              {"FxHeroLight", 25.f},
           });
         },
     },

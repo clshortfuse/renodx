@@ -41,7 +41,7 @@ void main(
   r2.xyz = r0.yzw * float3(2,2,2) + r2.xyz;
   r2.xyz = float3(-1,-1,-1) + r2.xyz;
   r0.yzw = cmp(float3(0.5,0.5,0.5) < r0.yzw);
-  o0.w = r0.x;
+  o0.w = r0.x * CUSTOM_HERO_LIGHT;
   o0.xyz = r0.yzw ? r1.xyz : r2.xyz;
 
   if (RENODX_TONE_MAP_TYPE == 0) {

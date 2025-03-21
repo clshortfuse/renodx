@@ -27,6 +27,7 @@
 #define CUSTOM_GRAIN_STRENGTH                shader_injection.custom_grain_strength
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom
 #define CUSTOM_RANDOM                        shader_injection.custom_random
+#define CUSTOM_HERO_LIGHT                    shader_injection.custom_hero_light
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -54,6 +55,7 @@ struct ShaderInjectData {
   float custom_grain_type;
   float custom_grain_strength;
   float custom_bloom;
+  float custom_hero_light;
 };
 
 #ifndef __cplusplus
