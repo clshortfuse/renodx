@@ -290,7 +290,7 @@ inline bool ActivateCloneHotSwap(
   auto& info = *resource_view_info->resource_info;
   if (info.clone_enabled) return false;
 
-  if (info.clone.handle == 0u) {
+  if (info.clone_target == nullptr) {
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
     s << "mods::swapchain::ActivateCloneHotSwap(";
