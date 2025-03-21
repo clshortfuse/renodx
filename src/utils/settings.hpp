@@ -162,6 +162,15 @@ static bool UpdateSetting(const std::string& key, float value) {
   return true;
 }
 
+static void ResetSettings(bool reset_global = false) {
+  for (auto* setting : *settings) {
+    if (setting->key.empty()) continue;
+    if (setting->is_global && !reset_global) continue;
+    if (!setting->can_reset) continue;
+    renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+  }
+}
+
 static bool UpdateSettings(const std::vector<std::pair<std::string, float>>& pairs) {
   bool missing_key = false;
   const std::unique_lock lock(renodx::utils::mutex::global_mutex);
