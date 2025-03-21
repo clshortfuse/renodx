@@ -569,8 +569,8 @@ float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, Config config) 
   } else {
     return ToneMapPass(
         untonemapped,
-        renodx::tonemap::renodrt::NeutralSDR(untonemapped),
         graded_sdr_color,
+        renodx::tonemap::renodrt::NeutralSDR(untonemapped),
         config);
   }
 }
