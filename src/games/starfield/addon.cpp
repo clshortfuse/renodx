@@ -7,16 +7,13 @@
 
 #define DEBUG_LEVEL_0
 
-#include <chrono>
-#include <random>
-#define NOMINMAX
-
 #include <deps/imgui/imgui.h>
 #include <embed/shaders.h>
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/shader.hpp"
 #include "../../utils/swapchain.hpp"
@@ -227,18 +224,6 @@ void OnPresetOff() {
   // renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
 }
 
-void OnPresent(
-    reshade::api::command_queue* queue,
-    reshade::api::swapchain* swapchain,
-    const reshade::api::rect* source_rect,
-    const reshade::api::rect* dest_rect,
-    uint32_t dirty_rect_count,
-    const reshade::api::rect* dirty_rects) {
-  static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
-  static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
-  shader_injection.custom_random = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
-}
-
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -274,6 +259,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::allow_multiple_push_constants = true;
       renodx::mods::shader::expected_constant_buffer_index = 13;
       renodx::mods::shader::expected_constant_buffer_space = 9;
+
+      renodx::utils::random::binds.push_back(&shader_injection.custom_random);
 
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::force_borderless = false;
@@ -319,14 +306,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
                            | reshade::api::resource_usage::copy_dest,
       });
 
-      reshade::register_event<reshade::addon_event::present>(OnPresent);
       break;
     case DLL_PROCESS_DETACH:
-      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
   }
 
+  renodx::utils::random::Use(fdw_reason);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
