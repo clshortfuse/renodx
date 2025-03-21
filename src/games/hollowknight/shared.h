@@ -26,6 +26,7 @@
 #define CUSTOM_GRAIN_TYPE                    shader_injection.custom_grain_type
 #define CUSTOM_GRAIN_STRENGTH                shader_injection.custom_grain_strength
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom
+#define CUSTOM_RANDOM                        shader_injection.custom_random
 
 // Must be 32bit aligned
 // Should be 4x32

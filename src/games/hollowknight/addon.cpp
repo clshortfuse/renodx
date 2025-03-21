@@ -280,13 +280,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Reset All",
         .section = "Options",
         .group = "button-line-1",
-        .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-          }
-        },
+        .on_change = []() { renodx::utils::settings::ResetSettings(); },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -294,15 +288,14 @@ renodx::utils::settings::Settings settings = {
         .section = "Options",
         .group = "button-line-1",
         .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-            if (setting->key == "ColorGradeSaturation" || setting->key == "ColorGradeContrast" || setting->key == "ColorGradeBlowout") {
-              renodx::utils::settings::UpdateSetting(setting->key, 80.f);
-            } else {
-              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-            }
-          }
+          renodx::utils::settings::ResetSettings();
+          renodx::utils::settings::UpdateSettings({
+              {"ColorGradeHighlights", 60.f},
+              {"ColorGradeContrast", 70.f},
+              {"ColorGradeSaturation", 60.f},
+              {"ColorGradeBlowout", 30.f},
+              {"FxBloom", 40.f},
+          });
         },
     },
     new renodx::utils::settings::Setting{

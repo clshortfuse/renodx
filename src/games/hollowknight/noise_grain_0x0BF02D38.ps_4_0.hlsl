@@ -26,9 +26,6 @@ void main(
   r1.xyz = float3(1, 1, 1) + -r0.xyz;
   r2.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
 
-  float3 input_color = r2.xyz;
-  float3 random = r0.xyz;
-
   if (CUSTOM_GRAIN_TYPE == 0.f) {
     r2.xyz = saturate(r2.xyz);
 
@@ -45,11 +42,11 @@ void main(
 
     o0 = saturate(o0);
   } else if (CUSTOM_GRAIN_TYPE == 1.f) {
-    float3 linear_color = renodx::color::srgb::Decode(input_color);
+    float3 linear_color = renodx::color::srgb::Decode(r2.xyz);
     float3 grained = renodx::effects::ApplyFilmGrain(
         linear_color,
         v1.xy,
-        random.x,
+        CUSTOM_RANDOM,
         CUSTOM_GRAIN_STRENGTH * 0.03f,
         1.f);
 
