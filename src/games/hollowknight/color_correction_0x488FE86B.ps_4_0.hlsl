@@ -60,6 +60,7 @@ void main(
   gamma_color.g = t1.Sample(s1_s, float2(gamma_color.g, 0.375)).g;
   gamma_color.b = t1.Sample(s1_s, float2(gamma_color.b, 0.625)).b;
   float luma = dot(gamma_color, float3(0.219999999, 0.707000017, 0.0710000023));
+  gamma_color.rgb = lerp(luma, gamma_color.rgb, cb0[2].x);
 
   float3 graded_color = renodx::color::srgb::Decode(gamma_color);
 
