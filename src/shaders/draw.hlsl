@@ -547,18 +547,36 @@ float3 ToneMapPass(float3 color, Config draw_config) {
   return output_color;
 }
 
-float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, Config config) {
+float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, float3 neutral_sdr_color, Config config) {
   float3 untonemapped_graded;
+  [branch]
   if (config.color_grade_strength != 0) {
     untonemapped_graded = renodx::tonemap::UpgradeToneMap(
         untonemapped,
-        renodx::tonemap::renodrt::NeutralSDR(untonemapped),
+        neutral_sdr_color,
         graded_sdr_color,
         config.color_grade_strength);
   } else {
     untonemapped_graded = untonemapped;
   }
   return ToneMapPass(untonemapped_graded, config);
+}
+
+float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, Config config) {
+  [branch]
+  if (config.color_grade_strength == 0) {
+    return ToneMapPass(untonemapped, config);
+  } else {
+    return ToneMapPass(
+        untonemapped,
+        renodx::tonemap::renodrt::NeutralSDR(untonemapped),
+        graded_sdr_color,
+        config);
+  }
+}
+
+float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, float3 neutral_sdr_color) {
+  return ToneMapPass(untonemapped, graded_sdr_color, neutral_sdr_color, BuildConfig());
 }
 
 float3 RenderIntermediatePass(float3 color) {
