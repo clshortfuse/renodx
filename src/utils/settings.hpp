@@ -3,7 +3,6 @@
 #define ImTextureID ImU64
 
 #include <optional>
-#include <shared_mutex>
 #include <string>
 #include <vector>
 
@@ -161,6 +160,20 @@ static bool UpdateSetting(const std::string& key, float value) {
   const std::unique_lock lock(renodx::utils::mutex::global_mutex);
   setting->Set(value)->Write();
   return true;
+}
+
+static bool UpdateSettings(const std::vector<std::pair<std::string, float>>& pairs) {
+  bool missing_key = false;
+  const std::unique_lock lock(renodx::utils::mutex::global_mutex);
+  for (const auto& [key, value] : pairs) {
+    auto* setting = FindSetting(key);
+    if (setting == nullptr) {
+      missing_key = true;
+    } else {
+      setting->Set(value)->Write();
+    }
+  }
+  return !missing_key;
 }
 
 static void LoadSetting(const std::string& section, Setting* setting) {
