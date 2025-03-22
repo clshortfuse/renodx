@@ -296,12 +296,12 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
-              {"ColorGradeHighlights", 60.f},
-              {"ColorGradeContrast", 70.f},
+              {"ColorGradeHighlights", 65.f},
+              {"ColorGradeContrast", 65.f},
               {"ColorGradeSaturation", 60.f},
-              {"ColorGradeBlowout", 30.f},
+              {"ColorGradeBlowout", 40.f},
               {"FxBloom", 40.f},
-              {"FxHeroLight", 25.f},
+              {"FxHeroLight", 20.f},
           });
         },
     },
