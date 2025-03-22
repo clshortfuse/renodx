@@ -1,77 +1,7 @@
-#include "./shared.h"
+#include "./common.hlsl"
 
-static const float _38[10] = {
-  -0.15369999408721923828125f,   0.013500000350177288055419921875f,
-  0.13120000064373016357421875f, 0.2092899978160858154296875f,
-  0.2858000099658966064453125f,  0.513000011444091796875f,
-  0.66879999637603759765625f,    0.745999991893768310546875f,
-  0.84630000591278076171875f,    1.0134999752044677734375f
-};
+static const float _38[10] = { -0.15369999408721923828125f, 0.013500000350177288055419921875f, 0.13120000064373016357421875f, 0.2092899978160858154296875f, 0.2858000099658966064453125f, 0.513000011444091796875f, 0.66879999637603759765625f, 0.745999991893768310546875f, 0.84630000591278076171875f, 1.0134999752044677734375f };
 
-// %ColorGradingGenerateLUT_cbuffer = type { %struct.ColorGradingGenerateLUT__Constants }
-// %struct.ColorGradingGenerateLUT__Constants = type { i32, <3 x float>, <2 x float>, %struct.ColorGradingParameters__Constants, %struct.TonemapperParams__Constants }
-// %struct.ColorGradingParameters__Constants = type { <3 x float>, float, float, float, [10 x <4 x float>], float, float, float, float, float, float, <4 x float>, [32 x <4 x float>], [8 x <4 x float>], i32 }
-// %struct.TonemapperParams__Constants = type { %struct.GTTonemapperParameters__Constants, %struct.LottesTonemapperParameters__Constants, %struct.GeneralTonemappingParameters__Constants, %struct.ACESTonemapperParameters__Constants }
-// %struct.GTTonemapperParameters__Constants = type { float, float, float, float, float }
-// %struct.LottesTonemapperParameters__Constants = type { float, float, float, float }
-// %struct.GeneralTonemappingParameters__Constants = type { i32, i32, float, float }
-// %struct.ACESTonemapperParameters__Constants = type { float }
-/*
-
-// these parameters may be entirely wrong
-cbuffer ColorGradingGenerateLUTConstants : register(b0, space6)
-{
-  // Tone Mapping Parameters
-  float enableFlag;   // _21_m0[0u].x
-  float hue0;         // _21_m0[0u].y
-  float hue1;         // _21_m0[0u].z
-  float maxDistance;  // _21_m0[0u].w
-
-  // Exposure Range Parameters
-  float exposureMin;  // _21_m0[1u].x
-  float exposureMax;  // _21_m0[1u].y
-  float unused1;      // _21_m0[1u].z
-  float unused2;      // _21_m0[1u].w
-
-  // Color Grading Parameters
-  float saturationR;  // _21_m0[2u].x
-  float saturationG;  // _21_m0[2u].y
-  float saturationB;  // _21_m0[2u].z
-  float colorBoost;   // _21_m0[2u].w
-
-  // Display Parameters
-  float gamma;           // _21_m0[3u].x
-  float highlightClamp;  // _21_m0[3u].y
-  float shadowClamp;     // _21_m0[3u].z
-  float unused3;         // _21_m0[3u].w
-
-  // GT Tonemapper Parameters
-  float gtShoulderStrength;  // _21_m0[4u].x
-  float gtLinearStrength;    // _21_m0[4u].y
-  float gtLinearAngle;       // _21_m0[4u].z
-  float gtToeStrength;       // _21_m0[4u].w
-  float gtToeNumerator;      // _21_m0[5u].x
-  float gtToeDenominator;    // _21_m0[5u].y
-
-  // Lottes Tonemapper Parameters
-  float lottesShoulderStrength;  // _21_m0[6u].x
-  float lottesLinearStrength;    // _21_m0[6u].y
-  float lottesToeStrength;       // _21_m0[6u].z
-  float lottesShoulderAngle;     // _21_m0[6u].w
-
-  // General Tonemapping Parameters
-  int tonemapperType;       // _21_m0[7u].x
-  int colorGradingEnabled;  // _21_m0[7u].y
-  float peakBrightness;     // _21_m0[7u].z
-  float hdr10PaperWhite;    // _21_m0[7u].w
-
-  // ACES Tonemapper Parameters
-  float acesExposure;  // _21_m0[8u].x
-
-  // LUT Parameters
-  float4 lutSliceParams[10];       // _21_m0[9u - 18u]
-  float otherParams[63 - 9 - 10];  // Placeholder for additional variables or unused space
-};*/
 cbuffer _19_21 : register(b0, space6)
 {
     float4 _21_m0[63] : packoffset(c0);
@@ -100,20 +30,17 @@ void comp_main()
     float _97;
     float _99;
     float _101;
-
-    if (asuint(_21_m0[0u]).x == 0u) // tonemapping disabled
+    if (asuint(_21_m0[0u]).x == 0u)
     {
         _97 = _83;
         _99 = _86;
         _101 = _89;
     }
-    else    //  tonemapping enabled
+    else
     {
         float _225 = _83 / _73;
         float _226 = _86 / _73;
         float _227 = _89 / _73;
-        
-        // Y from BT.709
         float _228 = dot(float3(_225, _226, _227), float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f));
         float _236 = log2(_228 * 5464.0f);
         float _275;
@@ -176,19 +103,10 @@ void comp_main()
         _97 = _275 * _73;
         _99 = _277 * _73;
         _101 = _279 * _73;
-
-        // tonemapped color
-        float3 tonemappedColor = float3(_97, _99, _101);
     }
-    // BT.709 -> AP1 (with Bradford) + color boost
     float _130 = (_21_m0[2u].x * mad(_101, 0.047379501163959503173828125f, mad(_99, 0.3395229876041412353515625f, _97 * 0.613097012042999267578125f))) * _21_m0[2u].w;
     float _131 = (_21_m0[2u].y * mad(_101, 0.013452400453388690948486328125f, mad(_99, 0.916354000568389892578125f, _97 * 0.070193700492382049560546875f))) * _21_m0[2u].w;
     float _132 = (_21_m0[2u].z * mad(_101, 0.86981499195098876953125f, mad(_99, 0.1095699965953826904296875f, _97 * 0.020615600049495697021484375f))) * _21_m0[2u].w;
-    // float3 ap1Color = renodx::color::ap1::from::BT709(float3(_97, _99, _101));
-    // float _130 = ap1Color.r;
-    // float _131 = ap1Color.g;
-    // float _132 = ap1Color.b;
-
     bool _133 = _131 < _132;
     float _134 = _133 ? _132 : _131;
     float _135 = _133 ? _131 : _132;
@@ -197,8 +115,6 @@ void comp_main()
     float _144 = _141 ? _130 : _134;
     float _146 = _142 - min(_144, _135);
     float _159 = abs((_141 ? (_133 ? 0.666666686534881591796875f : (-0.3333333432674407958984375f)) : (_133 ? (-1.0f) : 0.0f)) + ((_144 - _135) / ((_146 * 6.0f) + 1.0000000133514319600180897396058e-10f)));
-
-    // gamma
     float _184 = min(max((_21_m0[16u].x * ((((log2(dot(float3(_130, _131, _132), 0.3333333432674407958984375f.xxx)) * 0.071428574621677398681640625f) + 0.105280816555023193359375f) * _21_m0[3u].x) + 0.5f)) + _21_m0[16u].y, _21_m0[16u].z), _21_m0[16u].w);
     uint _185 = uint(_184);
     uint _188 = _185 + 1u;
@@ -267,10 +183,21 @@ void comp_main()
     float _348 = (_339 * _306) * _346;
     float _350 = (_346 * _306) * _340;
 
+#if 0
+    float3 sceneColor = float3(_347, _348, _350);
+
+    float3 untonemapped_ap1 = sceneColor;
+    // untonemapped_ap1 /= 5600.f;  // match SDR exposure level
+    const float diffuse_white_nits = 1.f * 203.f;  // 203 paper white at exposure slider 0.0
+    const float peak_nits = 400.f;
+
+    _14[uint3(gl_GlobalInvocationID.rgb)] = float4(ApplyToneMapEncodePQ(untonemapped_ap1, peak_nits, diffuse_white_nits), 1.f);
+    return;
+#endif
+
     float _380 = min(max(abs((frac(_21_m0[14u].z + 1.0f) * 6.0f) + (-3.0f)) + (-1.0f), 0.0f), 1.0f);
     float _381 = min(max(abs((frac(_21_m0[14u].z + 0.666666686534881591796875f) * 6.0f) + (-3.0f)) + (-1.0f), 0.0f), 1.0f);
     float _382 = min(max(abs((frac(_21_m0[14u].z + 0.3333333432674407958984375f) * 6.0f) + (-3.0f)) + (-1.0f), 0.0f), 1.0f);
-
     float _389 = 1.0f / dot(float3(_380, _381, _382), 0.3333333432674407958984375f.xxx);
     float _414 = min(max(abs((frac(_21_m0[15u].x + 1.0f) * 6.0f) + (-3.0f)) + (-1.0f), 0.0f), 1.0f);
     float _415 = min(max(abs((frac(_21_m0[15u].x + 0.666666686534881591796875f) * 6.0f) + (-3.0f)) + (-1.0f), 0.0f), 1.0f);
@@ -283,33 +210,7 @@ void comp_main()
     float _443 = _437 * (((_416 * _306) * _423) - _350);
     float _452 = clamp(((_301 - _21_m0[14u].x) * _21_m0[14u].y) + 0.5f, 0.0f, 1.0f);
     float _458 = (_452 * _452) * (3.0f - (_452 * 2.0f));
-
-    // _14[uint3(gl_GlobalInvocationID.xyz)] = float4(_11.SampleLevel(_25, float3((clamp((log2((_441 + _347) + (_458 * ((_428 * (((_380 * _306) * _389) - _347)) - _441))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f, 0.0f, 1.0f) * 0.96875f) + 0.015625f, (clamp((log2((_442 + _348) + (_458 * ((_428 * (((_381 * _306) * _389) - _348)) - _442))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f, 0.0f, 1.0f) * 0.96875f) + 0.015625f, (clamp((log2((_443 + _350) + (_458 * ((_428 * (((_382 * _306) * _389) - _350)) - _443))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f, 0.0f, 1.0f) * 0.96875f) + 0.015625f), 0.0f).xyz, 1.0f);
-
-    // Original scene color
-    float3 sceneColor = float3(_347, _348, _350);
-
-    // Apply LUT encoding
-    float3 logEncodedColor = saturate(float3(
-        ((log2((_441 + sceneColor.r) + (_458 * ((_428 * (((_380 * _306) * _389) - sceneColor.r)) - _441))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f),
-        ((log2((_442 + sceneColor.g) + (_458 * ((_428 * (((_381 * _306) * _389) - sceneColor.g)) - _442))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f),
-        ((log2((_443 + sceneColor.b) + (_458 * ((_428 * (((_382 * _306) * _389) - sceneColor.b)) - _443))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f)));
-    // Sample the LUT
-    float3 outputColor = renodx::lut::Sample(_11, _25, logEncodedColor, 64);
-#if 0
-
-    float3 inverseLogEncodedColor = (
-        pow(2.0, (outputColor - 0.6236965656280517578125f) / 0.0500000007450580596923828125f)
-                                     - float3(_441, _442, _443)
-    ) / (1.0 + (_458 * ((_428 * ((float3(_380, _381, _382) * _306) * _389)) - float3(_441, _442, _443))));
-
-    outputColor = renodx::color::pq::EncodeSafe(inverseLogEncodedColor, 500.f);
-#endif
-
-    // Output
-    _14[uint3(gl_GlobalInvocationID.xyz)] = float4(outputColor, 1.0f);
-
-
+    _14[uint3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, gl_GlobalInvocationID.z)] = float4(_11.SampleLevel(_25, float3((clamp((log2((_441 + _347) + (_458 * ((_428 * (((_380 * _306) * _389) - _347)) - _441))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f, 0.0f, 1.0f) * 0.96875f) + 0.015625f, (clamp((log2((_442 + _348) + (_458 * ((_428 * (((_381 * _306) * _389) - _348)) - _442))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f, 0.0f, 1.0f) * 0.96875f) + 0.015625f, (clamp((log2((_443 + _350) + (_458 * ((_428 * (((_382 * _306) * _389) - _350)) - _443))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f, 0.0f, 1.0f) * 0.96875f) + 0.015625f), 0.0f).xyz, 1.0f);
 }
 
 [numthreads(16, 16, 1)]
