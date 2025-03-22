@@ -79,9 +79,18 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
     // Sharpness
     CustomShaderEntry(0xC8169712),
-    CustomShaderEntry(0x243CA65C),
+    // CustomShaderEntry(0x243CA65C),
 
-};
+    // Sharpening (Bypass)
+    {
+        0x243CA65C,
+        {
+            .crc32 = 0x243CA65C,
+            .on_draw = [](auto* cmd_list) {
+              return false;
+            },
+        },
+    }};
 
 const std::string build_date = __DATE__;
 const std::string build_time = __TIME__;
