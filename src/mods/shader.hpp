@@ -945,7 +945,9 @@ static bool attached = false;
 template <typename T = float*>
 static void Use(DWORD fdw_reason, CustomShaders new_custom_shaders, T* new_injections = nullptr) {
   renodx::utils::shader::Use(fdw_reason);
-  renodx::utils::resource::Use(fdw_reason);
+  if (resource_tag_float != nullptr) {
+    renodx::utils::resource::Use(fdw_reason);
+  }
   if (trace_unmodified_shaders || invoked_custom_swapchain_shader != nullptr) {
     renodx::utils::swapchain::Use(fdw_reason);
   }
