@@ -33,7 +33,7 @@ void main(
   if (CUSTOM_HDR_VIDEOS == 1.f) {
     o0.rgb = renodx::draw::UpscaleVideoPass(o0.rgb);
   } else if (CUSTOM_HDR_VIDEOS == 2.f) {
-    float3 linear_color = renodx::color::srgb::Decode(o0.rgb);
+    float3 linear_color = renodx::color::srgb::Decode(saturate(o0.rgb));
     float y = renodx::color::y::from::BT709(linear_color);
     float untonemapped_y = renodx::tonemap::inverse::Reinhard(y);
     float3 untonemapped = linear_color * renodx::math::DivideSafe(untonemapped_y, y, 0);
@@ -60,7 +60,7 @@ void main(
     hdr_video_config.clamp_peak = 2u;
     hdr_video_config.clamp_color_space = -1.f;
     float3 hdr_video = renodx::tonemap::renodrt::BT709(untonemapped, hdr_video_config);
-    o0.rgb = renodx::color::srgb::Encode(hdr_video);
+    o0.rgb = renodx::color::srgb::EncodeSafe(hdr_video);
   }
   return;
 }
