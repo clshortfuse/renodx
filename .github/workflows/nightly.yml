@@ -1,0 +1,66 @@
+name: Nightly
+
+on:
+   schedule: 
+    - cron: '0 0 * * *'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+        with:
+          version: latest
+          platform: x64
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+
+      - name: Configure build for amd64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
+      - name: Configure CMake (x64)
+        run: cmake --preset clang-x64
+
+      - name: Build (x64)
+        run: cmake --build --preset clang-x64-release --verbose
+
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+        with:
+          version: latest
+          platform: x86
+
+      - name: Configure build for x86
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64_x86
+
+      - name: Configure CMake (x86)
+        run: cmake --preset clang-x86
+
+      - name: Build (x86)
+        run: cmake --build --preset clang-x86-release --verbose
+
+      - name: Update Nightly Release
+        uses: andelf/nightly-release@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: nightly
+          name: 'RenoDX Nightly Release $$'
+          prerelease: true
+          body: 'Nightly snapshot of all builds.'
+          files: |
+            ./build/release/*.addon64
+            ./build/release/*.addon32
+            ./build/release/*.exe
