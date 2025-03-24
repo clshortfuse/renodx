@@ -65,5 +65,5 @@ jobs:
           body: 'Nightly snapshot of all builds.'
           files: |
             ./build/release/*.addon64
-            ./build/release/*.addon32
+            ./build32/release/*.addon32
             ./build/release/*.exe
