@@ -16,11 +16,17 @@
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
+#include "shared.h"
 
 namespace {
 
+ShaderInjectData shader_injection;
+
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x04B750B4),  // ACES ToneMap
+    CustomShaderEntry(0x5BD664AB),  // Local ToneMap
+
+    CustomShaderEntry(0xD6C9BB0F),  // Color Grade + ToneMap LutBuilder
+    CustomShaderEntry(0x04B750B4),  // ACES ToneMap LutBuilder
 
     CustomShaderEntry(0x2AB4958B),  // UI - sRGB to HDR
     CustomShaderEntry(0x4FE73FF0),  // UI - Video sRGB to HDR
@@ -29,6 +35,25 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 };
 
 renodx::utils::settings::Settings settings = {
+    new renodx::utils::settings::Setting{
+        .key = "FxLocalToneMapStrength",
+        .binding = &CUSTOM_LOCAL_TONEMAP_STRENGTH,
+        .default_value = 100.f,
+        .label = "Local Tonemap Strength",
+        .section = "Tone Mapping",
+        .tooltip = "Adjust the strength of local tonemapping",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeExposure",
+        .binding = &RENODX_TONE_MAP_EXPOSURE,
+        .default_value = 100.f,
+        .label = "Exposure",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
@@ -83,6 +108,11 @@ renodx::utils::settings::Settings settings = {
     },
 };
 
+void OnPresetOff() {
+  renodx::utils::settings::UpdateSetting("FxLocalToneMapStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 100.f);
+}
+
 }  // namespace
 
 // NOLINTBEGIN(readability-identifier-naming)
@@ -96,7 +126,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
-      renodx::utils::settings::use_presets = false;
+      renodx::mods::shader::expected_constant_buffer_space = 50;
+      renodx::mods::shader::expected_constant_buffer_index = 13;
       renodx::mods::shader::force_pipeline_cloning = true;
       break;
     case DLL_PROCESS_DETACH:
@@ -104,8 +135,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
-  renodx::utils::settings::Use(fdw_reason, &settings);
-  renodx::mods::shader::Use(fdw_reason, custom_shaders);
+  renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
+  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
 }
