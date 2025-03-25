@@ -66,9 +66,6 @@ float4 main(
     : SV_Target {
   float4 SV_Target;
   float4 _12 = t1.SampleLevel(s0, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
-
-  if (!CUSTOM_LOCAL_TONEMAPPING) return float4(_12.rgb, 1.f);
-
   float _16 = dot(float3(_12.x, _12.y, _12.z), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
   bool _17 = (_16 == 0.0f);
   float _169;
@@ -174,6 +171,9 @@ float4 main(
   } else {
     _169 = 1.0f;
   }
+#if 1
+  _169 *= lerp(1.f, _169, CUSTOM_LOCAL_TONEMAP_STRENGTH);
+#endif
   float _170 = _169 * _12.x;
   float _171 = _169 * _12.y;
   float _172 = _169 * _12.z;

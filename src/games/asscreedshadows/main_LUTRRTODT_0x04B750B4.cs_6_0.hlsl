@@ -2,6 +2,17 @@
 
 RWTexture3D<float4> u0 : register(u0, space5);
 
+// cbuffer ColorGradingGenerateLUT : register(b0, space5) {
+//   struct ColorGradingGenerateLUT_Constants {
+//     struct ColorGradingParameters_Constants {} ColorGradingParams;
+//     struct TonemapperParams_Constants {
+//       struct GTTonemapperParameters {} GTTonemapper;
+//       struct LottesTonemapperParameters {} LottesTonemapper;
+//       struct GeneralTonemappingParameters {} GeneralTonemapping;
+//       struct ACESTonemapperParameters {} ACESTonemapper;
+//     } TonemapperParams;
+//   } Constants;
+// };
 cbuffer cb0 : register(b0, space5) {
   float cb0_000x : packoffset(c000.x);
   float cb0_000y : packoffset(c000.y);
