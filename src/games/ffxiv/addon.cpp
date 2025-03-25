@@ -37,6 +37,7 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x27EBC404),
+    CustomShaderEntry(0x1F264D17), //new LUT permutation, added with 7.2
     CustomShaderEntryCallback(0xF8F57F0A, &saturate_on_replace),
     CustomShaderEntry(0x85E777EF),
     CustomShaderEntry(0xFE5B6B3E),  // BloomPass1 vs
