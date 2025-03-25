@@ -17,6 +17,9 @@ on:
       - "docs/**"
       - ".github/workflows/**"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -80,6 +83,15 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: "www"
+      
+      - name: Create a Release
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: snapshot
+          prerelease: true
+          title: RenoDX Snapshot Build
+          files: www/*
 
   deploy:
     if: github.ref == 'refs/heads/main'
