@@ -172,7 +172,7 @@ float4 main(
     _169 = 1.0f;
   }
 #if 1
-  _169 *= lerp(1.f, _169, CUSTOM_LOCAL_TONEMAP_STRENGTH);
+  _169 = lerp(1.f, _169, CUSTOM_LOCAL_TONEMAP_STRENGTH);
 #endif
   float _170 = _169 * _12.x;
   float _171 = _169 * _12.y;
