@@ -3,7 +3,7 @@
 
 #define RENODX_UI_MODE               0u  // 1u = per pixel BT.2020 PQ Conversion
 #define RENODX_GRAPHICS_WHITE_NITS   203.f
-#define RENODX_TONE_MAP_TYPE         2u
+#define RENODX_TONE_MAP_TYPE         3u
 #define RENODX_GAME_GAMMA_CORRECTION 0u
 #define CUSTOM_LOCAL_TONEMAPPING     1u
 
