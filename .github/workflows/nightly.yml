@@ -1,11 +1,13 @@
-name: Nightly
+name: nightly
 
 on:
   workflow_dispatch:
   schedule:
     - cron: '0 0 * * *'
 
-permissions: write-all
+permissions:
+  packages: write
+  contents: write
 
 jobs:
   build:
@@ -54,16 +56,29 @@ jobs:
       - name: Build (x86)
         run: cmake --build --preset clang-x86-release --verbose
 
-      - name: Update Nightly Release
-        uses: andelf/nightly-release@main
+      - name: Prepare Release folder
+        run: md githubrelease
+
+      - name: Copy Binaries (x64)
+        run: copy build\release\*.addon64 githubrelease\
+
+      - name: Copy Binaries (x86)
+        run: copy build32\release\*.addon32 githubrelease\
+
+      - name: Copy Binaries (Tools)
+        run: copy build\release\*.exe githubrelease\
+
+      - name: Put current date into a variable
+        run: |
+          $NOW=& Get-Date -format yyyy-MM-dd
+          echo "NOW=$NOW" >> $env:GITHUB_ENV
+
+      - name: Create a Release
+        uses: elgohr/Github-Release-Action@v5
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: nightly
-          name: 'RenoDX Nightly Release $$'
+          title: RenoDX Nightly Build ${{ env.NOW }}
           prerelease: true
-          body: 'Nightly snapshot of all builds.'
-          files: |
-            ./build/release/*.addon64
-            ./build32/release/*.addon32
-            ./build/release/*.exe
+          workdir: githubrelease
+          tag: nightly-${{ env.NOW }}
