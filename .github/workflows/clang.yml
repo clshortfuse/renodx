@@ -17,9 +17,6 @@ on:
       - "docs/**"
       - ".github/workflows/**"
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: windows-latest
@@ -66,48 +63,3 @@ jobs:
 
       - name: Build (x86)
         run: cmake --build --preset clang-x86-release --verbose
-
-      - name: Prepare Web Listing
-        run: md www
-
-      - name: Copy Binaries (x64)
-        run: copy build\release\*.addon64 www\
-
-      - name: Copy Binaries (x86)
-        run: copy build32\release\*.addon32 www\
-
-      - name: Copy Binaries (Tools)
-        run: copy build\release\*.exe www\
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: "www"
-      
-      - name: Create a Release
-        uses: "marvinpinto/action-automatic-releases@latest"
-        with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: snapshot
-          prerelease: true
-          title: RenoDX Snapshot Build
-          files: www/*
-
-  deploy:
-    if: github.ref == 'refs/heads/main'
-    needs: build
-    permissions:
-      pages: write # to deploy to Pages
-      id-token: write # to verify the deployment originates from an appropriate source
-
-    # Deploy to the github-pages environment
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    # Specify runner + deployment step
-    runs-on: windows-latest
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
