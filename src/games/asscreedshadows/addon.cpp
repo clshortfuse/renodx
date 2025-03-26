@@ -56,6 +56,21 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Match SDR Exposure",
+        .section = "Options",
+        .group = "button-line-0",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (setting->key == "ColorGradeExposure") {
+              renodx::utils::settings::UpdateSetting(setting->key, 69.f);
+            }
+          }
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
         .section = "Links",
         .group = "button-line-2",
