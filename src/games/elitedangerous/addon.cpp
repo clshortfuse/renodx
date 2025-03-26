@@ -327,7 +327,7 @@ void OnPresetOff() {
 
 bool fired_on_init_swapchain = false;
 
-void OnInitSwapchain(reshade::api::swapchain* swapchain) {
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
@@ -342,29 +342,36 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain) {
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Elite Dangerous";
 
-const float SCREEN_WIDTH = static_cast<float>(GetSystemMetrics(SM_CXSCREEN));
-const float SCREEN_HEIGHT = static_cast<float>(GetSystemMetrics(SM_CYSCREEN));
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
+      renodx::mods::shader::expected_constant_buffer_index = 13;
+      renodx::mods::shader::force_pipeline_cloning = true;
+
+      // swapchain proxy
       renodx::mods::swapchain::use_resource_cloning = true;
+      renodx::mods::swapchain::expected_constant_buffer_index = 13;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
 
 #if 1  // NOLINT main textures
+      for (auto index : {3, 4}) {
+        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            .old_format = reshade::api::format::r8g8b8a8_typeless,
+            .new_format = reshade::api::format::r16g16b16a16_float,
+            .index = index,
+        });
+      }
+#endif
+
+#if 0  
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
-          .aspect_ratio = SCREEN_WIDTH / SCREEN_HEIGHT,
+        //   .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
       });
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_typeless,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .aspect_ratio = SCREEN_WIDTH / SCREEN_HEIGHT,
-      });
-
 #endif
 #if 0  // NOLINT Seemingly unused (they might be used for copies of the scene buffer used as UI background)
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
