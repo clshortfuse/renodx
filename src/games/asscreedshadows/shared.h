@@ -5,6 +5,7 @@
 #define RENODX_GRAPHICS_WHITE_NITS    203.f
 #define RENODX_TONE_MAP_TYPE          3u
 #define RENODX_GAME_GAMMA_CORRECTION  0u
+#define TONEMAP_BLEND                 1u
 #define CUSTOM_LOCAL_TONEMAP_STRENGTH shader_injection.custom_local_tonemap_strength
 #define RENODX_TONE_MAP_EXPOSURE      shader_injection.tone_map_exposure
 
