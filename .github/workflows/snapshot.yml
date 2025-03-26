@@ -81,9 +81,9 @@ jobs:
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: nightly-${{ env.NOW }}
+          automatic_release_tag: snapshot
           prerelease: true
-          title: RenoDX Nightly Build ${{ env.NOW }}
+          title: RenoDX Snapshot Build
           files: githubrelease/*
       
       - name: Upload artifact
