@@ -190,7 +190,7 @@ float3 RenoDRTSmoothClamp(float3 untonemapped) {
   float3 renoDRTColor = renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
   renoDRTColor = lerp(untonemapped, renoDRTColor, saturate(renodx::color::y::from::BT709(untonemapped) / renodrt_config.mid_gray_value));
 
-  return saturate(renoDRTColor);
+  return min(1.f, renoDRTColor);
 }
 
 renodx::tonemap::config::DualToneMap ToneMap(float3 color, float3 vanillaColor, float vanillaMidGray) {
@@ -224,7 +224,7 @@ renodx::tonemap::config::DualToneMap ToneMap(float3 color, float3 vanillaColor, 
   // config.hue_correction_color = vanillaColor;
 
   renodx::tonemap::config::DualToneMap dual_tone_map = renodx::tonemap::config::ApplyToneMaps(color, config);
-  dual_tone_map.color_sdr = saturate(dual_tone_map.color_sdr);
+  dual_tone_map.color_sdr = min(1.f, dual_tone_map.color_sdr);
 
   return dual_tone_map;
 }
