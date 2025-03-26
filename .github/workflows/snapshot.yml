@@ -11,6 +11,7 @@ on:
       - ".github/workflows/**"
 
 permissions:
+  packages: write
   contents: write
 
 jobs:
