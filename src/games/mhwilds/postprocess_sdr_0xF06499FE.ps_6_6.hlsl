@@ -434,10 +434,10 @@ float4 main(
   float _594 = (mad(_586, LDRPostProcessParam_014y, (mad(_585, LDRPostProcessParam_013y, (_584 * LDRPostProcessParam_012y))))) + LDRPostProcessParam_015y;
   float _598 = (mad(_586, LDRPostProcessParam_014z, (mad(_585, LDRPostProcessParam_013z, (_584 * LDRPostProcessParam_012z))))) + LDRPostProcessParam_015z;
   float3 new_color = CustomLUTColor(float3(_194, _195, _196), float3(_590, _594, _598));
-  _194 = new_color.r;
-  _195 = new_color.g;
-  _196 = new_color.b;
-  
+  _590 = new_color.r;
+  _594 = new_color.g;
+  _598 = new_color.b;
+
   bool _601 = isfinite(max((max(_590, _594)), _598));
   float _602 = (_601 ? _590 : 1.0f);
   float _603 = (_601 ? _594 : 1.0f);
