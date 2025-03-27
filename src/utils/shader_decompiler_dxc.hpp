@@ -4044,7 +4044,7 @@ class Decompiler {
             item_offset = optional_offset.value();
             offset = item_offset;
           }
-          string_stream << std::format(" : packoffset(c{:03}.{}); //  Offset: {: 4}\n", item_offset / 16, VECTOR_INDEXES[item_offset % 16 / 4], item_offset);
+          string_stream << std::format(" : packoffset(c{:03}.{});\n", item_offset / 16, VECTOR_INDEXES[item_offset % 16 / 4], item_offset);
           offset += preprocess_state.GetTypeSize(info);
         }
       } else {
