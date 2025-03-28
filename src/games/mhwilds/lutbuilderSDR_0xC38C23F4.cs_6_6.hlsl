@@ -7,9 +7,21 @@ Texture3D<float4> OCIO_lut3d_1 : register(t1);
 RWTexture3D<float4> OutLUT : register(u0);
 
 cbuffer OutputColorAdjustment : register(b0) {
-  float OutputColorAdjustment_000x : packoffset(c000.x);
-  float OutputColorAdjustment_000y : packoffset(c000.y);
-  float OutputColorAdjustment_000w : packoffset(c000.w);
+  float fGamma : packoffset(c000.x);
+  float fLowerLimit : packoffset(c000.y);
+  float fUpperLimit : packoffset(c000.z);
+  float fConvertToLimit : packoffset(c000.w);
+  float4 fConfigDrawRect : packoffset(c001.x);
+  float4 fSecondaryConfigDrawRect : packoffset(c002.x);
+  float2 fConfigDrawRectSize : packoffset(c003.x);
+  float2 fSecondaryConfigDrawRectSize : packoffset(c003.z);
+  uint uConfigMode : packoffset(c004.x);
+  float fConfigImageIntensity : packoffset(c004.y);
+  float fSecondaryConfigImageIntensity : packoffset(c004.z);
+  float fConfigImageAlphaScale : packoffset(c004.w);
+  float fGammaForOverlay : packoffset(c005.x);
+  float fLowerLimitForOverlay : packoffset(c005.y);
+  float fConvertToLimitForOverlay : packoffset(c005.z);
 };
 
 SamplerState BilinearClamp : register(s5, space32);
@@ -18,10 +30,11 @@ SamplerState TrilinearClamp : register(s9, space32);
 
 [numthreads(8, 8, 8)]
 void main(
-    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
-    uint3 SV_GroupID: SV_GroupID,
-    uint3 SV_GroupThreadID: SV_GroupThreadID,
-    uint SV_GroupIndex: SV_GroupIndex) {
+  uint3 SV_DispatchThreadID : SV_DispatchThreadID,
+  uint3 SV_GroupID : SV_GroupID,
+  uint3 SV_GroupThreadID : SV_GroupThreadID,
+  uint SV_GroupIndex : SV_GroupIndex
+) {
   float _11 = float((uint)SV_DispatchThreadID.x);
   float _12 = float((uint)SV_DispatchThreadID.y);
   float _13 = float((uint)SV_DispatchThreadID.z);
@@ -48,28 +61,28 @@ void main(
 
   if (false) {
     if (!(!(_14 <= -0.3013699948787689f))) {
-      _30 = ((exp2((_11 * 0.2780952751636505f) + -8.720000267028809f)) + -3.0517578125e-05f);
+      _30 = (exp2((_11 * 0.2780952751636505f) + -8.720000267028809f) + -3.0517578125e-05f);
     } else {
       if (_14 < 1.468000054359436f) {
-        _30 = (exp2((_11 * 0.2780952751636505f) + -9.720000267028809f));
+        _30 = exp2((_11 * 0.2780952751636505f) + -9.720000267028809f);
       } else {
         _30 = 65504.0f;
       }
     }
     if (!(!(_15 <= -0.3013699948787689f))) {
-      _44 = ((exp2((_12 * 0.2780952751636505f) + -8.720000267028809f)) + -3.0517578125e-05f);
+      _44 = (exp2((_12 * 0.2780952751636505f) + -8.720000267028809f) + -3.0517578125e-05f);
     } else {
       if (_15 < 1.468000054359436f) {
-        _44 = (exp2((_12 * 0.2780952751636505f) + -9.720000267028809f));
+        _44 = exp2((_12 * 0.2780952751636505f) + -9.720000267028809f);
       } else {
         _44 = 65504.0f;
       }
     }
     if (!(!(_16 <= -0.3013699948787689f))) {
-      _58 = ((exp2((_13 * 0.2780952751636505f) + -8.720000267028809f)) + -3.0517578125e-05f);
+      _58 = (exp2((_13 * 0.2780952751636505f) + -8.720000267028809f) + -3.0517578125e-05f);
     } else {
       if (_16 < 1.468000054359436f) {
-        _58 = (exp2((_13 * 0.2780952751636505f) + -9.720000267028809f));
+        _58 = exp2((_13 * 0.2780952751636505f) + -9.720000267028809f);
       } else {
         _58 = 65504.0f;
       }
@@ -80,45 +93,48 @@ void main(
   _44 = ap1_color.g;
   _58 = ap1_color.b;
 
-  float _61 = mad(_58, 0.1638689935207367f, (mad(_44, 0.1406790018081665f, (_30 * 0.6954519748687744f))));
-  float _64 = mad(_58, 0.0955343022942543f, (mad(_44, 0.8596709966659546f, (_30 * 0.04479460045695305f))));
-  float _67 = mad(_58, 1.0015000104904175f, (mad(_44, 0.004025210160762072f, (_30 * -0.00552588002756238f))));
+  float _61 = mad(_58, 0.1638689935207367f, mad(_44, 0.1406790018081665f, (_30 * 0.6954519748687744f)));
+  float _64 = mad(_58, 0.0955343022942543f, mad(_44, 0.8596709966659546f, (_30 * 0.04479460045695305f)));
+  float _67 = mad(_58, 1.0015000104904175f, mad(_44, 0.004025210160762072f, (_30 * -0.00552588002756238f)));
   float _68 = abs(_61);
   if (_68 > 6.103515625e-05f) {
     float _71 = min(_68, 65504.0f);
     float _73 = floor(log2(_71));
     float _74 = exp2(_73);
-    _81 = (dot(float3(_73, ((_71 - _74) / _74), 15.0f), float3(1024.0f, 1024.0f, 1024.0f)));
+    _81 = dot(float3(_73, ((_71 - _74) / _74), 15.0f), float3(1024.0f, 1024.0f, 1024.0f));
   } else {
     _81 = (_68 * 16777216.0f);
   }
-  float _84 = _81 + (((bool)(_61 > 0.0f)) ? 0.0f : 32768.0f);
+  float _84 = _81 + select((_61 > 0.0f), 0.0f, 32768.0f);
   float _86 = floor(_84 * 0.00024420025874860585f);
+  float4 _95 = OCIO_lut1d_0.SampleLevel(BilinearClamp, float2((((_84 + 0.5f) - (_86 * 4095.0f)) * 0.000244140625f), ((_86 + 0.5f) * 0.05882352963089943f)), 0.0f);
   float _97 = abs(_64);
   if (_97 > 6.103515625e-05f) {
     float _100 = min(_97, 65504.0f);
     float _102 = floor(log2(_100));
     float _103 = exp2(_102);
-    _110 = (dot(float3(_102, ((_100 - _103) / _103), 15.0f), float3(1024.0f, 1024.0f, 1024.0f)));
+    _110 = dot(float3(_102, ((_100 - _103) / _103), 15.0f), float3(1024.0f, 1024.0f, 1024.0f));
   } else {
     _110 = (_97 * 16777216.0f);
   }
-  float _113 = _110 + (((bool)(_64 > 0.0f)) ? 0.0f : 32768.0f);
+  float _113 = _110 + select((_64 > 0.0f), 0.0f, 32768.0f);
   float _115 = floor(_113 * 0.00024420025874860585f);
+  float4 _122 = OCIO_lut1d_0.SampleLevel(BilinearClamp, float2((((_113 + 0.5f) - (_115 * 4095.0f)) * 0.000244140625f), ((_115 + 0.5f) * 0.05882352963089943f)), 0.0f);
   float _124 = abs(_67);
   if (_124 > 6.103515625e-05f) {
     float _127 = min(_124, 65504.0f);
     float _129 = floor(log2(_127));
     float _130 = exp2(_129);
-    _137 = (dot(float3(_129, ((_127 - _130) / _130), 15.0f), float3(1024.0f, 1024.0f, 1024.0f)));
+    _137 = dot(float3(_129, ((_127 - _130) / _130), 15.0f), float3(1024.0f, 1024.0f, 1024.0f));
   } else {
     _137 = (_124 * 16777216.0f);
   }
-  float _140 = _137 + (((bool)(_67 > 0.0f)) ? 0.0f : 32768.0f);
+  float _140 = _137 + select((_67 > 0.0f), 0.0f, 32768.0f);
   float _142 = floor(_140 * 0.00024420025874860585f);
-  float _151 = (((float4)(OCIO_lut1d_0.SampleLevel(BilinearClamp, float2((((_84 + 0.5f) - (_86 * 4095.0f)) * 0.000244140625f), ((_86 + 0.5f) * 0.05882352963089943f)), 0.0f))).x) * 64.0f;
-  float _152 = (((float4)(OCIO_lut1d_0.SampleLevel(BilinearClamp, float2((((_113 + 0.5f) - (_115 * 4095.0f)) * 0.000244140625f), ((_115 + 0.5f) * 0.05882352963089943f)), 0.0f))).x) * 64.0f;
-  float _153 = (((float4)(OCIO_lut1d_0.SampleLevel(BilinearClamp, float2((((_140 + 0.5f) - (_142 * 4095.0f)) * 0.000244140625f), ((_142 + 0.5f) * 0.05882352963089943f)), 0.0f))).x) * 64.0f;
+  float4 _149 = OCIO_lut1d_0.SampleLevel(BilinearClamp, float2((((_140 + 0.5f) - (_142 * 4095.0f)) * 0.000244140625f), ((_142 + 0.5f) * 0.05882352963089943f)), 0.0f);
+  float _151 = _95.x * 64.0f;
+  float _152 = _122.x * 64.0f;
+  float _153 = _149.x * 64.0f;
   float _154 = floor(_151);
   float _155 = floor(_152);
   float _156 = floor(_153);
@@ -204,8 +220,8 @@ void main(
   }
   float _314 = 1.0f - _312;
 
-  float fGamma = 1.f;           // OutputColorAdjustment_m0[0u].x
-  float fLowerLimit = 0.f;      // OutputColorAdjustment_m0[0u].y
-  float fConvertToLimit = 1.f;  // OutputColorAdjustment_m0[0u].w
-  OutLUT[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = float4((((exp2((log2(((_314 * (_168.x)) + _309) + (_313 * _175.x))) * fGamma)) * fConvertToLimit) + fLowerLimit), (((exp2((log2(((_314 * (_168.y)) + _310) + (_313 * _175.y))) * fGamma)) * fConvertToLimit) + fLowerLimit), (((exp2((log2(((_314 * (_168.z)) + _311) + (_313 * _175.z))) * fGamma)) * fConvertToLimit) + fLowerLimit), 1.0f);
+  float fGamma = 1.f;           // Override cbuffer
+  float fLowerLimit = 0.f;      // Override cbuffer
+  float fConvertToLimit = 1.f;  // Override cbuffer
+  OutLUT[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = float4(((exp2(log2(((_314 * (_168.x)) + _309) + (_313 * _175.x)) * fGamma) * fConvertToLimit) + fLowerLimit), ((exp2(log2(((_314 * (_168.y)) + _310) + (_313 * _175.y)) * fGamma) * fConvertToLimit) + fLowerLimit), ((exp2(log2(((_314 * (_168.z)) + _311) + (_313 * _175.z)) * fGamma) * fConvertToLimit) + fLowerLimit), 1.0f);
 }
