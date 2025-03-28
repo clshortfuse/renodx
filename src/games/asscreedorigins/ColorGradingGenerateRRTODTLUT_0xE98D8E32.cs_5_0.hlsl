@@ -16,10 +16,9 @@ cbuffer ColorGradingGenerateRRTODTLUT_cbuffer : register(b6) {
 RWTexture3D<float4> ColorGradingGenerateRRTODTLUT_Output : register(u1);
 
 // 3Dmigoto declarations
-#define cmp -
-#define DISPATCH_BLOCK
+#define DISPATCH_BLOCK 16
 
-[numthreads(16, 16, 1)]
+[numthreads(DISPATCH_BLOCK, DISPATCH_BLOCK, 1)]
 void main(uint3 vThreadID: SV_DispatchThreadID) {
   const float4 icb[] = { { -4.000000, -0.718548, -1.698970, 0.515439 },
                          { -4.000000, 2.081031, -1.698970, 0.847044 },
@@ -42,9 +41,9 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r0.xyz = r0.xyz * float3(0.548387051, 0.548387051, 0.548387051) + float3(-8.97393131, -8.97393131, -8.97393131);
   r0.xyz = exp2(r0.xyz);
 
-#if 1
+#if 0
   if (ColorGradingGenerateRRTODTLUT_constants.UseRec2020 != 0) {
-    ColorGradingGenerateRRTODTLUT_Output[vThreadID.xyz] = float4(ApplyToneMapEncodePQ(r0.rgb, ColorGradingGenerateRRTODTLUT_constants.MaxNitsHDRTV, ColorGradingGenerateRRTODTLUT_constants.WhiteScale), 1.f);
+    ColorGradingGenerateRRTODTLUT_Output[vThreadID] = float4(ApplyToneMapEncodePQ(r0.rgb, ColorGradingGenerateRRTODTLUT_constants.MaxNitsHDRTV, ColorGradingGenerateRRTODTLUT_constants.WhiteScale), 1.f);
     return;
   }
 #endif
@@ -1007,13 +1006,23 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     // r2.z = r0.x ? r0.y : r0.z;
     r2.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
 
-#if RENODX_TONE_MAP_TYPE
-    if (ColorGradingGenerateRRTODTLUT_constants.UseRec2020 != 0) {
-      r2.rgb = renodx::color::gamma::DecodeSafe(r2.rgb, 2.2f);
-      r2.rgb = renodx::color::bt2020::from::BT709(r2.rgb);
-      r2.rgb = renodx::color::pq::EncodeSafe(r2.rgb, ColorGradingGenerateRRTODTLUT_constants.WhiteScale);
-    }
+    if (RENODX_TONE_MAP_TYPE) {
+      if (ColorGradingGenerateRRTODTLUT_constants.UseRec2020 != 0) {
+        r2.rgb = renodx::color::gamma::DecodeSafe(r2.rgb, 2.2f);
+
+#if 1  // blend between SDR and HDR
+        float3 sdr_color = r2.rgb;
+        float3 hdr_color = exp2(vThreadID.xyz * 0.548387051 - 8.97393131);
+
+        hdr_color = ApplyToneMap(hdr_color, ColorGradingGenerateRRTODTLUT_constants.MaxNitsHDRTV, ColorGradingGenerateRRTODTLUT_constants.WhiteScale);
+
+        float sdr_lum = renodx::color::y::from::BT709(sdr_color);
+        r2.rgb = lerp(sdr_color, hdr_color, saturate(sdr_lum));
 #endif
+
+        r2.rgb = renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(r2.rgb), ColorGradingGenerateRRTODTLUT_constants.WhiteScale);
+      }
+    }
   }
   r2.w = 1;
   // No code for instruction (needs manual fix):
