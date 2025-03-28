@@ -40,7 +40,6 @@ Texture3D<float4> ColorGradingGenerateLUT_Aces2OutputLUT : register(t99);
 RWTexture3D<float4> ColorGradingGenerateLUT_Output : register(u1);
 
 // 3Dmigoto declarations
-#define cmp -
 #define DISPATCH_BLOCK
 
 [numthreads(16, 16, 1)]
@@ -69,12 +68,16 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r1.x = dot(r0.xyz, float3(0.613097012, 0.339522988, 0.0473795012));
   r1.y = dot(r0.xyz, float3(0.0701937005, 0.916354001, 0.0134524005));
   r1.z = dot(r0.xyz, float3(0.0206156, 0.109569997, 0.869814992));
-  r0.xyz = ColorGradingGenerateLUT_constants.Parameters.WhitePointScale.xyz * r1.xyz;
-  r0.xyz = ColorGradingGenerateLUT_constants.Parameters.Exposure * r0.xyz;
 
-#if 1  // Lowering exposure to get SDR and HDR to roughly match, too inconsistent
-  if (ColorGradingGenerateLUT_constants.UseRec2020 != 0) r0.rgb /= 2.5f;  // Match SDR Exposure
-#endif
+  // White balance, same in SDR and HDR
+  r0.xyz = lerp(r1.rgb, ColorGradingGenerateLUT_constants.Parameters.WhitePointScale.rgb * r1.rgb, CUSTOM_COLOR_FILTER_STRENGTH);
+
+  r0.xyz = ColorGradingGenerateLUT_constants.Parameters.Exposure * r0.xyz;  // influenced by paper white slider
+
+  if (ColorGradingGenerateLUT_constants.UseRec2020 != 0) {
+    r0.rgb *= RENODX_TONE_MAP_EXPOSURE;
+    if (RENODX_TONE_MAP_TYPE) r0.rgb *= CalculatePaperWhiteExposureCompensation(ColorGradingGenerateLUT_constants.WhiteScale);
+  }
 
   r0.w = cmp(r0.y < r0.z);
   r1.xy = r0.zy;
@@ -98,17 +101,20 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r0.z = r0.w / r0.z;
   r0.x = log2(r0.x);
   r0.x = r0.x * 0.0588235296 + 0.0278782845;
-  r0.x = r0.x * ColorGradingGenerateLUT_constants.Parameters.Contrast + 0.5;
+  r0.x = r0.x * ColorGradingGenerateLUT_constants.Parameters.Contrast * RENODX_TONE_MAP_CONTRAST * CalculatePaperWhiteContrastCompensation(ColorGradingGenerateLUT_constants.WhiteScale) + 0.5;  // Contrast - increased in HDR - set to 45/50 to match SDR
+
   r0.x = max(0, r0.x);
   r0.w = -0.5 + r0.x;
   r0.w = abs(r0.w) * abs(r0.w);
   r0.w = -r0.w * 4 + 1;
   r0.w = max(0, r0.w);
-  r1.x = r0.x * ColorGradingGenerateLUT_constants.Parameters.Shoulder + -r0.x;
+  r1.x = r0.x * ColorGradingGenerateLUT_constants.Parameters.Shoulder * RENODX_TONE_MAP_SHOULDER + -r0.x;  // Shoulder
+
   r0.x = r0.w * r1.x + r0.x;
   r0.w = saturate(1 + -r0.x);
   r1.x = log2(abs(r0.x));
-  r1.x = ColorGradingGenerateLUT_constants.Parameters.Toe * r1.x;
+  r1.x = ColorGradingGenerateLUT_constants.Parameters.Toe * RENODX_TONE_MAP_TOE * r1.x;
+
   r1.x = exp2(r1.x);
   r0.w = r0.w * r0.w;
   r1.x = r1.x + -r0.x;
@@ -224,15 +230,14 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r0.x = r1.x * r0.x;
   r1.xyz = r2.xyz + -r0.yzw;
   r0.xyz = r0.xxx * r1.xyz + r0.yzw;
-
-#if 1
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = saturate(r0.xyz * float3(0.0588235296, 0.0588235296, 0.0588235296) + float3(0.527878284, 0.527878284, 0.527878284));
-  r0.xyz = r0.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
-  r0.xyz = ColorGradingGenerateLUT_Aces2OutputLUT.SampleLevel(ColorGradingGenerateLUT_lutSampler_s, r0.xyz, 0).xyz;
-#else  // tonemap per frame
-  r0.rgb = ApplyToneMapEncodePQ(r0.rgb, ColorGradingGenerateLUT_constants.MaxNitsHDRTV, ColorGradingGenerateLUT_constants.WhiteScale);
-#endif
+  if (ColorGradingGenerateLUT_constants.UseRec2020 != 0 && RENODX_TONE_MAP_TYPE == 0) {
+    r0.rgb = ApplyVanillaToneMapEncodePQ(r0.rgb, ColorGradingGenerateLUT_constants.MaxNitsHDRTV);
+  } else {
+    r0.xyz = log2(r0.xyz);
+    r0.xyz = saturate(r0.xyz * float3(0.0588235296, 0.0588235296, 0.0588235296) + float3(0.527878284, 0.527878284, 0.527878284));
+    r0.xyz = r0.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
+    r0.xyz = ColorGradingGenerateLUT_Aces2OutputLUT.SampleLevel(ColorGradingGenerateLUT_lutSampler_s, r0.xyz, 0).xyz;
+  }
   r0.w = 1;
   // No code for instruction (needs manual fix):
   ColorGradingGenerateLUT_Output[vThreadID] = r0;  // store_uav_typed u1.xyzw, vThreadID.xyzz, r0.xyzw
