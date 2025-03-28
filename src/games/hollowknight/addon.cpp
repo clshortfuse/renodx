@@ -20,39 +20,50 @@
 
 namespace {
 
+float g_draw_pause_menu = 1.f;
+
 renodx::mods::shader::CustomShaders custom_shaders = {
 
-    CustomShaderEntry(0x6521A6DC),  //  blend_linear_dodge
-    CustomShaderEntry(0xC80BBEC9),  //  blend_linear_light
-    CustomShaderEntry(0x85C89D5B),  //  blend_screen
-    CustomShaderEntry(0x9A477D11),  //  blend_vivid_light
-    CustomShaderEntry(0x5D9A0B26),  //  bloom2
-    CustomShaderEntry(0x814E8EBF),  //  bloom3
-    CustomShaderEntry(0x831FCA18),  //  bloom
-    CustomShaderEntry(0x21F7FC48),  //  brightness
-    CustomShaderEntry(0x488FE86B),  //  color_correction
-    CustomShaderEntry(0xE73F8180),  //  custom_blit_screen_space
-    CustomShaderEntry(0x7BDC5643),  //  custom_heat_effect
-    CustomShaderEntry(0xEAEDC29D),  //  hollow_knight_grass_diffuse
-    CustomShaderEntry(0x4E2F49B3),  //  hollow_knight_light_blur
-    CustomShaderEntry(0xC7659A76),  //  hollow_knight_light_blur
-    CustomShaderEntry(0x0BF02D38),  //  noise_grain
-    CustomShaderEntry(0xF1B9A141),  //  noise_grain
-    CustomShaderEntry(0xC8BED5C6),  //  particles_additive
-    CustomShaderEntry(0xFC27B617),  //  sprites_color_flash
-    CustomShaderEntry(0x55CC633B),  //  sprites_default
-    CustomShaderEntry(0xBC821AE4),  //  sprites_default
-    CustomShaderEntry(0x4EF4BBC4),  //  sprites_diffuse
-    CustomShaderEntry(0xFA816188),  //  sprites_diffuse
-    CustomShaderEntry(0x97452557),  //  tk2d_blend
-    CustomShaderEntry(0x39BAA143),  //  ui_blur
-    CustomShaderEntry(0x4D4340BE),  //  ui_blur
-    CustomShaderEntry(0x65DA673D),  //  ui_blur
-    CustomShaderEntry(0x8ADA14EE),  //  ui_blur
-    CustomShaderEntry(0x99C781AD),  //  ui_blur
-    CustomShaderEntry(0x8A6BCB4C),  //  video_composite
-    CustomShaderEntry(0x41D51EB2),  //  video_decode
-
+    CustomShaderEntry(0x6521A6DC),  // blend_linear_dodge
+    CustomShaderEntry(0xC80BBEC9),  // blend_linear_light
+    CustomShaderEntry(0xA3EC6888),  // blend_overlay
+    CustomShaderEntry(0x85C89D5B),  // blend_screen
+    CustomShaderEntry(0x9A477D11),  // blend_vivid_light
+    CustomShaderEntry(0x5D9A0B26),  // bloom2
+    CustomShaderEntry(0x814E8EBF),  // bloom3
+    CustomShaderEntry(0x831FCA18),  // bloom
+    CustomShaderEntry(0x21F7FC48),  // brightness
+    CustomShaderEntry(0x488FE86B),  // color_correction
+    CustomShaderEntry(0xE73F8180),  // custom_blit_screen_space
+    CustomShaderEntry(0x7BDC5643),  // custom_heat_effect
+    CustomShaderEntry(0xEAEDC29D),  // hollow_knight_grass_diffuse
+    CustomShaderEntry(0x4E2F49B3),  // hollow_knight_light_blur
+    CustomShaderEntry(0xC7659A76),  // hollow_knight_light_blur
+    CustomShaderEntry(0x2EDC3804),  // legacy_particles_alpha_blend
+    CustomShaderEntry(0xCCC102EE),  // legacy_particles_multiply
+    CustomShaderEntry(0x0BF02D38),  // noise_grain
+    CustomShaderEntry(0xF1B9A141),  // noise_grain
+    CustomShaderEntry(0xC8BED5C6),  // particles_additive
+    CustomShaderEntry(0xFC27B617),  // sprites_color_flash
+    CustomShaderEntry(0x55CC633B),  // sprites_default
+    CustomShaderEntry(0xBC821AE4),  // sprites_default
+    CustomShaderEntry(0x4EF4BBC4),  // sprites_diffuse
+    CustomShaderEntry(0xFA816188),  // sprites_diffuse
+    CustomShaderEntry(0x97452557),  // tk2d_blend
+    CustomShaderEntry(0x39BAA143),  // ui_blur
+    CustomShaderEntry(0x4D4340BE),  // ui_blur
+    CustomShaderEntry(0x65DA673D),  // ui_blur
+    CustomShaderEntry(0x8ADA14EE),  // ui_blur
+    CustomShaderEntry(0x99C781AD),  // ui_blur
+    CustomShaderEntry(0x8A6BCB4C),  // video_composite
+    CustomShaderEntry(0x41D51EB2),  // video_decode
+    {
+        0x5439FB55,
+        {
+            .crc32 = 0x5439FB55,
+            .on_draw = [](auto* cmd_list) { return g_draw_pause_menu; },
+        },
+    },
 };
 
 renodx::utils::settings::Setting* CreateDefault50PercentSetting(const renodx::utils::settings::Setting& setting) {
@@ -302,6 +313,15 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .labels = {"Off", "BT.2446a", "RenoDRT"},
     }),
+    CreateMultiLabelSetting({
+        .key = "FxDrawPauseMenu",
+        .binding = &g_draw_pause_menu,
+        .default_value = 1.f,
+        .label = "Draw Pause Menu",
+        .section = "Effects",
+        .tooltip = "Allows hiding of pause menu (useful for screenshots)",
+        .labels = {"Off", "On"},
+    }),
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
@@ -373,6 +393,7 @@ void OnPresetOff() {
       {"FxGrainStrength", 50.f},
       {"FxBloom", 50.f},
       {"FxHDRVideos", 0.f},
+      {"FxDrawPauseMenu", 1.f},
   });
 }
 
