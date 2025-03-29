@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <exception>
+#include <filesystem>
 #include <include/reshade.hpp>
 
 #define NOMINMAX
@@ -99,7 +100,7 @@ static bool CompileCustomShaders() {
       return false;
     }
 
-    for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
       if (!entry.is_regular_file()) continue;
 
       const auto& entry_path = entry.path();
