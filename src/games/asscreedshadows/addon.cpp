@@ -36,8 +36,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
-        .key = "FxLocalToneMapStrength",
-        .binding = &CUSTOM_LOCAL_TONEMAP_STRENGTH,
+        .key = "ToneMapLocalToneMapStrength",
+        .binding = &shader_injection.custom_local_tonemap_strength,
         .default_value = 100.f,
         .label = "Local Tonemap Strength",
         .section = "Tone Mapping",
@@ -46,26 +46,33 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeExposure",
-        .binding = &RENODX_TONE_MAP_EXPOSURE,
-        .default_value = 100.f,
+        .key = "Exposure",
+        .binding = &shader_injection.tone_map_exposure,
+        .default_value = 1.f,
         .label = "Exposure",
+        .section = "Color Grading",
+        .max = 2.f,
+        .format = "%.2f",
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorFilterStrength",
+        .binding = &shader_injection.custom_color_filter_strength,
+        .default_value = 100.f,
+        .label = "Color Filter Strength",
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Match SDR Exposure",
+        .label = "Reset All",
         .section = "Options",
-        .group = "button-line-0",
+        .group = "button-line-1",
         .on_change = []() {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
             if (!setting->can_reset) continue;
-            if (setting->key == "ColorGradeExposure") {
-              renodx::utils::settings::UpdateSetting(setting->key, 69.f);
-            }
+            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
           }
         },
     },
@@ -90,7 +97,6 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx/wiki/Mods");
         },
-
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -124,8 +130,9 @@ renodx::utils::settings::Settings settings = {
 };
 
 void OnPresetOff() {
-  renodx::utils::settings::UpdateSetting("FxLocalToneMapStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 100.f);
+  renodx::utils::settings::UpdateSetting("ToneMapLocalToneMapStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("Exposure", 100.f);
+  renodx::utils::settings::UpdateSetting("ColorFilterStrength", 100.f);
 }
 
 }  // namespace

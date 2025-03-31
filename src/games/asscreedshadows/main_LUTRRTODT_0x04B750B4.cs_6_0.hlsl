@@ -35,21 +35,25 @@ void main(
     uint3 SV_GroupID: SV_GroupID,
     uint3 SV_GroupThreadID: SV_GroupThreadID,
     uint SV_GroupIndex: SV_GroupIndex) {
-#if RENODX_TONE_MAP_TYPE        // ShortFuse ACES - HDR only
-  if (asuint(cb0_003x) != 0) {  // HDR
-    float3 untonemapped_ap1 = exp2((float3(SV_DispatchThreadID.rgb) * 0.64516127109527587890625f) + (-12.47393131256103515625f));
-    const float diffuse_white_nits = cb0_003z * 2.03f;  // 203 paper white at exposure 0.0
-    const float peak_nits = cb0_003w;
+  float _20 = (exp2(((float((uint)SV_DispatchThreadID.x)) * 0.6451612710952759f) + -12.473931312561035f));
+  float _21 = (exp2(((float((uint)SV_DispatchThreadID.y)) * 0.6451612710952759f) + -12.473931312561035f));
+  float _22 = (exp2(((float((uint)SV_DispatchThreadID.z)) * 0.6451612710952759f) + -12.473931312561035f));
 
-    u0[uint3(SV_DispatchThreadID.rgb)] = float4(ApplyToneMapEncodePQ(untonemapped_ap1, peak_nits, diffuse_white_nits), 1.f);
-    return;
-  }
+  float exposure = 32.f;  // cb0_003z
+  _20 *= exposure;
+  _21 *= exposure;
+  _22 *= exposure;
 
+#if 1  // apply SDR tonemapper
+  float3 untonemapped = float3(_20, _21, _22);
+  const float diffuse_white_nits = cb0_003z * (203.f / 90.f);  // default exposure was 90.f, offset so 203 paper white at exposure 0.0
+  const float peak_nits = cb0_003w;
+
+  float3 tonemapped = ApplyBlendedToneMapEncodePQ(untonemapped, peak_nits, diffuse_white_nits);
+  u0[uint3(SV_DispatchThreadID.rgb)] = float4(tonemapped, 1.f);
+  return;
 #endif
 
-  float _20 = cb0_003z * (exp2(((float((uint)SV_DispatchThreadID.x)) * 0.6451612710952759f) + -12.473931312561035f));
-  float _21 = cb0_003z * (exp2(((float((uint)SV_DispatchThreadID.y)) * 0.6451612710952759f) + -12.473931312561035f));
-  float _22 = cb0_003z * (exp2(((float((uint)SV_DispatchThreadID.z)) * 0.6451612710952759f) + -12.473931312561035f));
   float _359;
   float _360;
   float _361;
@@ -124,34 +128,59 @@ void main(
       _361 = (min(_22, cb0_003w));
       break;
     }
-    case 1: {
+    case 1: {  // Custom Lottes based tonemapper
+
+      const float paper_white = cb0_003z * (200.f / 90.f);
+      const float peak_white = 1.f;
+
+      const float contrast = 1.25f;  // HDR = 1.75f, SDR = 1.25f
+      const float shoulder = 0.13f;  // HDR = 0.13f, SDR = 0.13f?
+      const float mid_in = 0.5f;     // HDR = 0.50f, SDR = 0.50f
+      const float mid_out = 1.f;     // HDR = 1.25f, SDR = 1.00f
+      const float offset = 0.f;      // HDR = 0.00f, SDR = 0.00f
+      const float inv_ln2 = 1.f / log(2.f);
+#if 1
       float _231 = abs(_20 * 0.009999999776482582f);
-      float _233 = cb0_003w * 0.009999999776482582f;
-      float _243 = ((_233 - cb0_000y) * cb0_000z) / cb0_000x;
-      float _244 = _231 - cb0_000y;
-      bool _247 = (cb0_000y > 9.999999747378752e-06f);
-      float _248 = _231 / cb0_000y;
-      float _259 = _233 - ((_243 * cb0_000x) + cb0_000y);
-      float _260 = (cb0_000x * _233) / _259;
+      float _233 = peak_white;
+      float _243 = ((_233 - shoulder) * mid_in) / contrast;
+      float _244 = _231 - shoulder;
+      bool _247 = (shoulder > 9.999999747378752e-06f);
+      float _248 = _231 / shoulder;
+      float _259 = _233 - ((_243 * contrast) + shoulder);
+      float _260 = (contrast * _233) / _259;
       float _269 = saturate(_248);
       float _273 = (_269 * _269) * (3.0f - (_269 * 2.0f));
-      float _275 = _243 + cb0_000y;
+      float _275 = _243 + shoulder;
       float _277 = select((_231 > _275), 1.0f, 0.0f);
       float _286 = abs(_21 * 0.009999999776482582f);
-      float _287 = _286 - cb0_000y;
-      float _290 = _286 / cb0_000y;
+      float _287 = _286 - shoulder;
+      float _290 = _286 / shoulder;
       float _306 = saturate(_290);
       float _310 = (_306 * _306) * (3.0f - (_306 * 2.0f));
       float _313 = select((_286 > _275), 1.0f, 0.0f);
       float _322 = abs(_22 * 0.009999999776482582f);
-      float _323 = _322 - cb0_000y;
-      float _326 = _322 / cb0_000y;
+      float _323 = _322 - shoulder;
+      float _326 = _322 / shoulder;
       float _342 = saturate(_326);
       float _346 = (_342 * _342) * (3.0f - (_342 * 2.0f));
       float _349 = select((_322 > _275), 1.0f, 0.0f);
-      _359 = (((((_273 - _277) * ((_244 * cb0_000x) + cb0_000y)) + ((_233 - ((exp2(((-0.0f - ((_244 - _243) * _260)) / _233) * 1.4426950216293335f)) * _259)) * _277)) + ((1.0f - _273) * (select(_247, (((exp2((log2(abs(_248)))*cb0_000w))*cb0_000y) + cb0_001x), cb0_001x)))) * 100.0f);
-      _360 = (((((_310 - _313) * ((_287 * cb0_000x) + cb0_000y)) + ((_233 - ((exp2(((-0.0f - ((_287 - _243) * _260)) / _233) * 1.4426950216293335f)) * _259)) * _313)) + ((1.0f - _310) * (select(_247, (((exp2((log2(abs(_290)))*cb0_000w))*cb0_000y) + cb0_001x), cb0_001x)))) * 100.0f);
-      _361 = (((((_346 - _349) * ((_323 * cb0_000x) + cb0_000y)) + ((_233 - ((exp2(((-0.0f - ((_323 - _243) * _260)) / _233) * 1.4426950216293335f)) * _259)) * _349)) + ((1.0f - _346) * (select(_247, (((exp2((log2(abs(_326)))*cb0_000w))*cb0_000y) + cb0_001x), cb0_001x)))) * 100.0f);
+      _359 = (((((_273 - _277) * ((_244 * contrast) + shoulder)) + ((_233 - ((exp2(((-0.0f - ((_244 - _243) * _260)) / _233) * inv_ln2)) * _259)) * _277)) + ((1.0f - _273) * (select(_247, (((exp2((log2(abs(_248)))*mid_out))*shoulder) + offset), offset)))));
+      _360 = (((((_310 - _313) * ((_287 * contrast) + shoulder)) + ((_233 - ((exp2(((-0.0f - ((_287 - _243) * _260)) / _233) * inv_ln2)) * _259)) * _313)) + ((1.0f - _310) * (select(_247, (((exp2((log2(abs(_290)))*mid_out))*shoulder) + offset), offset)))));
+      _361 = (((((_346 - _349) * ((_323 * contrast) + shoulder)) + ((_233 - ((exp2(((-0.0f - ((_323 - _243) * _260)) / _233) * inv_ln2)) * _259)) * _349)) + ((1.0f - _346) * (select(_247, (((exp2((log2(abs(_326)))*mid_out))*shoulder) + offset), offset)))));
+#else
+
+#endif
+      _359 = renodx::color::correct::GammaSafe(_359);
+      _360 = renodx::color::correct::GammaSafe(_360);
+      _361 = renodx::color::correct::GammaSafe(_361);
+
+      // _359 *= 100.0f;
+      // _360 *= 100.0f;
+      // _361 *= 100.0f;
+      _359 *= paper_white;
+      _360 *= paper_white;
+      _361 *= paper_white;
+
       break;
     }
     default: {
@@ -162,12 +191,9 @@ void main(
     }
   }
   if (!((uint)(cb0_003x) == 0)) {
-    float _378 = exp2((log2(abs((mad(_361, -0.005771517753601074f, (mad(_360, -0.020053241401910782f, (_359 * 1.0258245468139648f))))) * 9.999999747378752e-05f))) * 0.1593017578125f);
-    float _391 = exp2((log2(abs((mad(_361, -0.002352168783545494f, (mad(_360, 1.0045864582061768f, (_359 * -0.0022343560121953487f))))) * 9.999999747378752e-05f))) * 0.1593017578125f);
-    float _404 = exp2((log2(abs((mad(_361, 1.0303034782409668f, (mad(_360, -0.02529006451368332f, (_359 * -0.005013367626816034f))))) * 9.999999747378752e-05f))) * 0.1593017578125f);
-    _455 = (exp2((log2(((_378 * 18.8515625f) + 0.8359375f) / ((_378 * 18.6875f) + 1.0f))) * 78.84375f));
-    _456 = (exp2((log2(((_391 * 18.8515625f) + 0.8359375f) / ((_391 * 18.6875f) + 1.0f))) * 78.84375f));
-    _457 = (exp2((log2(((_404 * 18.8515625f) + 0.8359375f) / ((_404 * 18.6875f) + 1.0f))) * 78.84375f));
+    float3 linear_color = float3(_359, _360, _361);
+    float3 pq_color = renodx::color::pq::EncodeSafe(linear_color, (1.f));
+    _455 = pq_color.x, _456 = pq_color.y, _457 = pq_color.z;
   } else {
     float _427 = saturate((mad(_361, -0.08325883746147156f, (mad(_360, -0.6217920184135437f, (_359 * 1.7050509452819824f))))) / cb0_003w);
     float _428 = saturate((mad(_361, -0.010548345744609833f, (mad(_360, 1.1408041715621948f, (_359 * -0.13025641441345215f))))) / cb0_003w);
