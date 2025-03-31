@@ -417,12 +417,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               .section = "Display Output",
               .labels = {"None", "SRGB", "2.2", "2.4", "HDR10", "scRGB"},
               .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
-              .on_change = []() {
-                if (shader_injection.swap_chain_encoding == 4.f) {
-                  shader_injection.swap_chain_encoding_color_space = 1.f;
-                } else {
-                  shader_injection.swap_chain_encoding_color_space = 0.f;
-                }
+              .on_change_value = [](float previous, float current) {
+                bool is_hdr10 = current == 4;
+                shader_injection.swap_chain_encoding_color_space = (is_hdr10 ? 1.f : 0.f);
                 // return void
               },
               .is_global = true,
