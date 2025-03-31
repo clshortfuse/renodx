@@ -18,7 +18,7 @@ cbuffer cb6 : register(b6) {
 // 3Dmigoto declarations
 #define cmp -
 
-void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1, out float4 o0 : SV_TARGET0) {
+void main(float4 v0: SV_POSITION0, float4 v1: TEXCOORD0, float4 v2: TEXCOORD1, out float4 o0: SV_TARGET0) {
   float4 r0, r1, r2, r3;
 
   r0.x = -1000 + cb0[1].y;
@@ -58,6 +58,7 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1
   r1.xyz = r2.xyz ? r3.xyz : r1.xyz;
   r1.xyz = r1.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
   r1.xyz = lutTexture.SampleLevel(s1_s, r1.xyz, 0).xyz;
+
   const float3 texture1Color = r1.xyz;
 
   r2.xyz = r1.xyz * float3(0.947867274, 0.947867274, 0.947867274) + float3(0.0521326996, 0.0521326996, 0.0521326996);
@@ -90,69 +91,16 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : TEXCOORD0, float4 v2 : TEXCOORD1
 
   o0.xyz = r0.www ? r1.xyz : r0.xyz;
 
-  o0.w = 1;
-
-  // LUTs seem to have baked SDR cap. Use untonemapped input for luminance
-  float3 outputColor = o0.rgb;
-  outputColor = max(0, outputColor);
-  if (injectedData.toneMapType == 0.f) {
-    // outputColor = pow(outputColor, 2.2f);
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    o0.rgb = saturate(o0.rgb);
   } else {
-    outputColor = untonemapped.rgb;
-    if (injectedData.toneMapType != 1.f) {
-      float inputY = renodx::color::y::from::BT709(abs(untonemapped));
-      float outputY = renodx::color::y::from::BT709(outputColor);
-      outputY = lerp(inputY, outputY, saturate(inputY));
-      outputColor *= (outputY ? inputY / outputY : 1);
-
-      if (injectedData.colorGradeShadows != 1.f) {
-        // outputColor = apply_user_shadows(outputColor, injectedData.colorGradeShadows);
-      }
-      if (injectedData.colorGradeHighlights != 1.f) {
-        // outputColor = apply_user_highlights(outputColor, injectedData.colorGradeHighlights);
-      }
-      if (injectedData.colorGradeContrast != 1.f) {
-        float3 workingColor = pow(outputColor / 0.18f, injectedData.colorGradeContrast) * 0.18f;
-        // Working in BT709 still
-        float workingColorY = renodx::color::y::from::BT709(workingColor);
-        float outputColorY = renodx::color::y::from::BT709(outputColor);
-        outputColor *= outputColorY ? workingColorY / outputColorY : 1.f;
-      }
-
-      if (injectedData.colorGradeSaturation != 1.f) {
-        float3 okLCh = renodx::color::oklch::from::BT709(outputColor);
-        okLCh[1] *= injectedData.colorGradeSaturation;
-        outputColor = max(0, renodx::color::bt709::from::OkLCh(okLCh));
-      }
-
-      const float vanillaMidGray = 0.18f;
-      if (injectedData.toneMapType == 2.f) {
-        float paperWhite = injectedData.toneMapGameNits * (vanillaMidGray / 0.10);  // ACES mid gray is 10%
-        float hdrScale = (injectedData.toneMapPeakNits / paperWhite);
-        outputColor = renodx::tonemap::aces::RGCAndRRTAndODT(
-            outputColor,
-            0.0001f / (paperWhite / 48.f),
-            48.f * hdrScale,
-            renodx::color::AP1_TO_BT2020_MAT);
-        outputColor /= 48.f;
-        outputColor *= (vanillaMidGray / 0.10);
-        outputColor = mul(renodx::color::BT2020_TO_BT709_MAT, outputColor);
-      } else if (injectedData.toneMapType == 3.f) {
-        outputColor = renodx::tonemap::renodrt::BT709(
-            outputColor,
-            injectedData.toneMapPeakNits / injectedData.toneMapGameNits * 100.f,
-            0.18f,
-            vanillaMidGray * 100.f);
-        outputColor *= injectedData.toneMapGameNits;
-      }
-    }
+    o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
   }
 
-  outputColor *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+  // Manual intermediate pass (Gamma Correction on entire display output)
+  // o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
+  o0.rgb *= (RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS);
 
-  outputColor = sign(outputColor) * pow(abs(outputColor), 1.f / 2.2f);
-
-  o0.rgb = outputColor.rgb;
-
+  o0.w = 1;
   return;
 }
