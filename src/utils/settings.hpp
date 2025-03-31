@@ -73,6 +73,8 @@ struct Setting {
 
   void (*on_change)() = [] {};
 
+  void (*on_change_value)(float previous, float current) = [](float previous, float current) {};
+
   // Return true if value is changed
   bool (*on_draw)() = [] { return false; };
 
@@ -394,7 +396,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         ImGui::BeginDisabled();
       }
       bool changed = false;
-
+      float previous_value = setting->GetValue();
       ImGui::PushID(("##Key" + (setting->key.empty() ? setting->label : setting->key)).c_str());
       switch (setting->value_type) {
         case SettingValueType::FLOAT:
@@ -498,6 +500,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         const std::unique_lock lock(renodx::utils::mutex::global_mutex);
         setting->Write();
         any_change = true;
+        setting->on_change_value(previous_value, setting->GetValue());
       }
       if (is_disabled) {
         ImGui::EndDisabled();
