@@ -97,10 +97,7 @@ void main(float4 v0: SV_POSITION0, float4 v1: TEXCOORD0, float4 v2: TEXCOORD1, o
     o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
   }
 
-  // Manual intermediate pass (Gamma Correction on entire display output)
-  // o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
-  o0.rgb *= (RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS);
-
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   o0.w = 1;
   return;
 }
