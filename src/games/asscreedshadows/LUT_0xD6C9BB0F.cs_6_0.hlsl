@@ -42,7 +42,7 @@ void comp_main() {
     _87 = _73;
     _89 = _76;
   } else {
-    float _216 = asfloat(_8.Load(3u).x);  // not exposure
+    float _216 = asfloat(_8.Load(3u).x);  // not exposure slider
     float _217 = _216 * _70;
     float _218 = _216 * _73;
     float _219 = _216 * _76;
@@ -101,7 +101,7 @@ void comp_main() {
       _269 = _218;
       _271 = _219;
     }
-    float _275 = asfloat(_8.Load(2u).x);  // not exposure
+    float _275 = asfloat(_8.Load(2u).x);  // not exposure slider
     _85 = _275 * _267;
     _87 = _275 * _269;
     _89 = _275 * _271;
@@ -212,7 +212,21 @@ void comp_main() {
       (_437 + _343) + (_453 * ((_423 * (((_376 * _301) * _384) - _343)) - _437)),
       (_438 + _345) + (_453 * ((_423 * (((_377 * _301) * _384) - _345)) - _438)));
 
-  final_color *= RENODX_TONE_MAP_EXPOSURE;  // adjust exposure
+#if 1
+  if (RENODX_TONE_MAP_EXPOSURE != 1.f || RENODX_TONE_MAP_HIGHLIGHTS != 1.f || RENODX_TONE_MAP_SHADOWS != 1.f || RENODX_TONE_MAP_CONTRAST != 1.f || RENODX_TONE_MAP_SATURATION != 1.f || RENODX_TONE_MAP_BLOWOUT != 0.f) {
+    final_color = renodx::color::bt709::from::AP1(final_color);
+    final_color = renodx::color::grade::UserColorGrading(
+        final_color,
+        RENODX_TONE_MAP_EXPOSURE,
+        RENODX_TONE_MAP_HIGHLIGHTS,
+        RENODX_TONE_MAP_SHADOWS,
+        RENODX_TONE_MAP_CONTRAST,
+        RENODX_TONE_MAP_SATURATION,
+        RENODX_TONE_MAP_BLOWOUT);
+
+    final_color = renodx::color::ap1::from::BT709(final_color);
+  }
+#endif
 
   float3 encoded_color = log2(final_color) * 0.0500000007450580596923828125f + 0.6236965656280517578125f;
   _15[uint3(gl_GlobalInvocationID.rgb)] = float4(_12.SampleLevel(_24, saturate(encoded_color * 0.96875f + 0.015625f), 0.0f).xyz, 1.0f);

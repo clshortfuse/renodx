@@ -34,6 +34,17 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // CustomShaderEntry(0x52BBE024),  // UI + Game Blending
 };
 
+const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
+    {"ToneMapLocalToneMapStrength", 100.f},
+    {"Exposure", 1.f},
+    {"ColorGradeHighlights", 46.f},
+    {"ColorGradeShadows", 48.f},
+    {"ColorGradeContrast", 55.f},
+    {"ColorGradeSaturation", 55.f},
+    {"ColorGradeBlowout", 0.f},
+    {"ColorFilterStrength", 100.f},
+};
+
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapLocalToneMapStrength",
@@ -55,6 +66,52 @@ renodx::utils::settings::Settings settings = {
         .format = "%.2f",
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeHighlights",
+        .binding = &shader_injection.tone_map_highlights,
+        .default_value = 50.f,
+        .label = "Highlights",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeShadows",
+        .binding = &shader_injection.tone_map_shadows,
+        .default_value = 50.f,
+        .label = "Shadows",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeContrast",
+        .binding = &shader_injection.tone_map_contrast,
+        .default_value = 50.f,
+        .label = "Contrast",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeSaturation",
+        .binding = &shader_injection.tone_map_saturation,
+        .default_value = 50.f,
+        .label = "Saturation",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeBlowout",
+        .binding = &shader_injection.tone_map_blowout,
+        .default_value = 0.f,
+        .label = "Blowout",
+        .section = "Color Grading",
+        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ColorFilterStrength",
         .binding = &shader_injection.custom_color_filter_strength,
         .default_value = 100.f,
@@ -73,6 +130,24 @@ renodx::utils::settings::Settings settings = {
             if (setting->key.empty()) continue;
             if (!setting->can_reset) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+          }
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Look",
+        .section = "Options",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+
+            if (HDR_LOOK_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, HDR_LOOK_VALUES.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
           }
         },
     },
@@ -130,9 +205,16 @@ renodx::utils::settings::Settings settings = {
 };
 
 void OnPresetOff() {
-  renodx::utils::settings::UpdateSetting("ToneMapLocalToneMapStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("Exposure", 100.f);
-  renodx::utils::settings::UpdateSetting("ColorFilterStrength", 100.f);
+  renodx::utils::settings::UpdateSettings({
+      {"ToneMapLocalToneMapStrength", 100.f},
+      {"Exposure", 1.f},
+      {"ColorGradeHighlights", 50.f},
+      {"ColorGradeShadows", 50.f},
+      {"ColorGradeContrast", 50.f},
+      {"ColorGradeSaturation", 50.f},
+      {"ColorGradeBlowout", 0.f},
+      {"ColorFilterStrength", 100.f},
+  });
 }
 
 }  // namespace
