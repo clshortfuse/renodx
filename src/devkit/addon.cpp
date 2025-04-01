@@ -234,6 +234,7 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
     }
 
     if (resource_view_info->resource_info != nullptr) {
+      details.resource = resource_view_info->resource_info->resource;
       details.resource_desc = resource_view_info->resource_info->desc;
 
       auto resource_reflection = renodx::utils::trace::GetDebugName(device_api, details.resource);
