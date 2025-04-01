@@ -530,6 +530,8 @@ void OnBindPipeline(
         } catch (const std::exception& e) {
           reshade::log::message(reshade::log::level::error, e.what());
         }
+      } else if (device->get_api() == reshade::api::device_api::opengl) {
+        // noop
       }
     }
 
@@ -1930,6 +1932,10 @@ void RenderShaderViewDisassembly(reshade::api::device* device, DeviceData* data,
       }
       if (renodx::utils::device::IsDirectX(device)) {
         shader_details->disassembly = renodx::utils::shader::compiler::directx::DisassembleShader(shader_details->shader_data);
+      } else if (device->get_api() == reshade::api::device_api::opengl) {
+        shader_details->disassembly = std::string(
+            shader_details->shader_data.data(),
+            shader_details->shader_data.data() + shader_details->shader_data.size());
       }
     } catch (std::exception& e) {
       shader_details->disassembly = e;
@@ -2019,6 +2025,10 @@ void RenderShaderViewDecompilation(reshade::api::device* device, DeviceData* dat
             {
                 .flatten = true,
             });
+      } else if (device->get_api() == reshade::api::device_api::opengl) {
+        shader_details->disassembly = std::string(
+            shader_details->shader_data.data(),
+            shader_details->shader_data.data() + shader_details->shader_data.size());
       }
     } catch (std::exception& e) {
       shader_details->decompilation = e;
