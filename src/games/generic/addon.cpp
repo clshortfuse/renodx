@@ -103,7 +103,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
         .labels = {"Luminance", "Per Channel"},
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
@@ -114,7 +114,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Working Color Space",
         .section = "Tone Mapping",
         .labels = {"BT709", "BT2020", "AP1"},
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
@@ -126,7 +126,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Selects hue processor",
         .labels = {"OKLab", "ICtCp", "darkTable UCS"},
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
@@ -138,7 +138,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Hue retention strength.",
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
@@ -151,7 +151,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Hue-shift emulation strength.",
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -164,7 +164,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Hue-shift emulation strength.",
         .labels = {"None", "BT709", "BT2020", "AP1"},
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value - 1.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
@@ -177,7 +177,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Hue-shift emulation strength.",
         .labels = {"None", "BT709", "BT2020", "AP1"},
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value - 1.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
@@ -237,7 +237,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -259,7 +259,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
+        .is_enabled = []() { return shader_injection.tone_map_type == 3; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -284,16 +284,30 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
+        .key = "IntermediateDecoding",
+        .binding = &shader_injection.intermediate_encoding,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Intermediate Encoding",
+        .section = "Display Output",
+        .labels = {"Auto", "None", "SRGB", "2.2", "2.4"},
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
+        .parse = [](float value) {
+            if (value == 0) return shader_injection.gamma_correction + 1.f;
+            return value - 1.f; },
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "SwapChainDecoding",
         .binding = &shader_injection.swap_chain_decoding,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
-        .label = "Decoding",
+        .label = "Swapchain Decoding",
         .section = "Display Output",
         .labels = {"Auto", "None", "SRGB", "2.2", "2.4"},
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) {
-            if (value == 0) return RENODX_INTERMEDIATE_ENCODING;
+            if (value == 0) return shader_injection.intermediate_encoding;
             return value - 1.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
@@ -305,7 +319,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Gamma Correction",
         .section = "Display Output",
         .labels = {"None", "2.2", "2.4"},
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
@@ -316,7 +330,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Clamp Color Space",
         .section = "Display Output",
         .labels = {"None", "BT709", "BT2020", "AP1"},
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value - 1.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
@@ -357,7 +371,7 @@ void OnInitDevice(reshade::api::device* device) {
     renodx::mods::shader::expected_constant_buffer_space = 0;
     renodx::mods::swapchain::expected_constant_buffer_space = 0;
 
-    if (RENODX_SWAP_CHAIN_ENCODING != 0) {
+    if (shader_injection.swap_chain_encoding != 0.f) {
       reshade::log::message(reshade::log::level::info, "Activating DX11 swap chain proxy...");
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader_dx11;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx11;
@@ -371,7 +385,7 @@ void OnInitDevice(reshade::api::device* device) {
     renodx::mods::shader::expected_constant_buffer_space = 50;
     renodx::mods::swapchain::expected_constant_buffer_space = 50;
 
-    if (RENODX_SWAP_CHAIN_ENCODING != 0) {
+    if (shader_injection.swap_chain_encoding != 0) {
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader_dx12;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx12;
     }
@@ -408,15 +422,57 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx11;
 
         {
-          auto* swap_chain_encoding = new renodx::utils::settings::Setting{
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "SwapChainForceBorderless",
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 0.f,
+              .label = "Force Borderless",
+              .section = "Display Output",
+              .tooltip = "Forces fullscreen to be borderless for proper HDR",
+              .labels = {
+                  "Disabled",
+                  "Enabled",
+              },
+              .on_change_value = [](float previous, float current) { renodx::mods::swapchain::force_borderless = (current == 1.f); },
+              .is_global = true,
+              .is_visible = []() { return current_settings_mode >= 2; },
+          };
+          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
+          renodx::mods::swapchain::force_borderless = (setting->GetValue() == 1.f);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "SwapChainPreventFullscreen",
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 0.f,
+              .label = "Prevent Fullscreen",
+              .section = "Display Output",
+              .tooltip = "Prevent exclusive fullscreen for proper HDR",
+              .labels = {
+                  "Disabled",
+                  "Enabled",
+              },
+              .on_change_value = [](float previous, float current) { renodx::mods::swapchain::prevent_full_screen = (current == 1.f); },
+              .is_global = true,
+              .is_visible = []() { return current_settings_mode >= 2; },
+          };
+          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
+          renodx::mods::swapchain::prevent_full_screen = (setting->GetValue() == 1.f);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
               .key = "SwapChainEncoding",
               .binding = &shader_injection.swap_chain_encoding,
               .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 5.f,
+              .default_value = 4.f,
               .label = "Encoding",
               .section = "Display Output",
               .labels = {"None", "SRGB", "2.2", "2.4", "HDR10", "scRGB"},
-              .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+              .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
               .on_change_value = [](float previous, float current) {
                 bool is_hdr10 = current == 4;
                 shader_injection.swap_chain_encoding_color_space = (is_hdr10 ? 1.f : 0.f);
@@ -425,16 +481,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               .is_global = true,
               .is_visible = []() { return current_settings_mode >= 2; },
           };
-          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, swap_chain_encoding);
-          bool is_hdr10 = swap_chain_encoding->GetValue() == 4;
+          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
+          bool is_hdr10 = setting->GetValue() == 4;
           renodx::mods::swapchain::SetUseHDR10(is_hdr10);
-          renodx::mods::swapchain::use_resize_buffer = swap_chain_encoding->GetValue() < 4;
+          renodx::mods::swapchain::use_resize_buffer = setting->GetValue() < 4;
           shader_injection.swap_chain_encoding_color_space = is_hdr10 ? 1.f : 0.f;
-          settings.push_back(swap_chain_encoding);
+          settings.push_back(setting);
         }
 
         for (const auto& [key, format] : UPGRADE_TARGETS) {
-          auto* new_setting = new renodx::utils::settings::Setting{
+          auto* setting = new renodx::utils::settings::Setting{
               .key = "Upgrade_" + key,
               .value_type = renodx::utils::settings::SettingValueType::INTEGER,
               .default_value = 0.f,
@@ -449,10 +505,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               .is_global = true,
               .is_visible = []() { return settings[0]->GetValue() >= 2; },
           };
-          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, new_setting);
-          settings.push_back(new_setting);
+          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
+          settings.push_back(setting);
 
-          auto value = new_setting->GetValue();
+          auto value = setting->GetValue();
           if (value > 0) {
             renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
                 .old_format = format,
