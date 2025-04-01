@@ -435,11 +435,13 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   auto& resource_info = pair->second;
   lock.unlock();
   if (resource_info.destroyed) {
+#ifdef DEBUG_LEVEL_1
     std::stringstream s;
     s << "utils::resource::OnDestroyResource(Resource already destroyed: ";
     s << static_cast<uintptr_t>(resource.handle);
     s << ")";
     reshade::log::message(reshade::log::level::warning, s.str().c_str());
+#endif
     return;
   }
   if (resource_info.is_clone) {
