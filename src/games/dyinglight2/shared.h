@@ -27,6 +27,7 @@ struct ShaderInjectData {
   float gamma_correction;
   float custom_auto_exposure;
   float custom_lens_flare;
+  float custom_lut_scaling;
 };
 
 #ifndef __cplusplus
@@ -59,6 +60,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define CUSTOM_AUTO_EXPOSURE                   shader_injection.custom_auto_exposure
 #define CUSTOM_LENS_FLARE                      shader_injection.custom_lens_flare
+#define CUSTOM_LUT_SCALING                     shader_injection.custom_lut_scaling
 
 #include "../../shaders/renodx.hlsl"
 

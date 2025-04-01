@@ -48,26 +48,42 @@ void main(float4 v0: SV_POSITION0, float4 v1: TEXCOORD0, float4 v2: TEXCOORD1, o
   r2.y = t0.Load(r1.xyz).y;
 
   const float3 untonemapped = r2.xyz;
+  float3 neutral_sdr = renodx::tonemap::renodrt::NeutralSDR(r2.xyz);
 
-  r1.xyz = log2(abs(r2.xyz));
-  r1.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r1.xyz;
-  r1.xyz = exp2(r1.xyz);
-  r1.xyz = r1.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
-  r3.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r2.xyz;
-  r2.xyz = cmp(float3(0.00313080009, 0.00313080009, 0.00313080009) >= r2.xyz);
-  r1.xyz = r2.xyz ? r3.xyz : r1.xyz;
-  r1.xyz = r1.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
-  r1.xyz = lutTexture.SampleLevel(s1_s, r1.xyz, 0).xyz;
+  if (CUSTOM_AUTO_EXPOSURE != 1.f) {
+    r2.xyz = neutral_sdr;
+  }
+  float3 signs = 1.f;
 
-  const float3 texture1Color = r1.xyz;
-
-  r2.xyz = r1.xyz * float3(0.947867274, 0.947867274, 0.947867274) + float3(0.0521326996, 0.0521326996, 0.0521326996);
-  r2.xyz = log2(abs(r2.xyz));
-  r2.xyz = float3(2.4000001, 2.4000001, 2.4000001) * r2.xyz;
-  r2.xyz = exp2(r2.xyz);
-  r3.xyz = float3(0.0773993805, 0.0773993805, 0.0773993805) * r1.xyz;
-  r1.xyz = cmp(float3(0.0404499993, 0.0404499993, 0.0404499993) >= r1.xyz);
-  r1.xyz = r1.xyz ? r3.xyz : r2.xyz;
+  // Lut sample
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    r1.xyz = log2(abs(r2.xyz));
+    r1.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r1.xyz;
+    r1.xyz = exp2(r1.xyz);
+    r1.xyz = r1.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
+    r3.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r2.xyz;
+    r2.xyz = cmp(float3(0.00313080009, 0.00313080009, 0.00313080009) >= r2.xyz);
+    r1.xyz = r2.xyz ? r3.xyz : r1.xyz;
+    r1.xyz = r1.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
+    r1.xyz = lutTexture.SampleLevel(s1_s, r1.xyz, 0).xyz;
+    r2.xyz = r1.xyz * float3(0.947867274, 0.947867274, 0.947867274) + float3(0.0521326996, 0.0521326996, 0.0521326996);
+    r2.xyz = log2(abs(r2.xyz));
+    r2.xyz = float3(2.4000001, 2.4000001, 2.4000001) * r2.xyz;
+    r2.xyz = exp2(r2.xyz);
+    r3.xyz = float3(0.0773993805, 0.0773993805, 0.0773993805) * r1.xyz;
+    r1.xyz = cmp(float3(0.0404499993, 0.0404499993, 0.0404499993) >= r1.xyz);
+    r1.xyz = r1.xyz ? r3.xyz : r2.xyz;
+  } else {
+    renodx::lut::Config lut_config = renodx::lut::config::Create();
+    lut_config.tetrahedral = true;
+    lut_config.type_input = renodx::lut::config::type::SRGB;
+    lut_config.type_output = renodx::lut::config::type::SRGB;
+    lut_config.scaling = CUSTOM_LUT_SCALING;
+    lut_config.lut_sampler = s1_s;
+    r1.xyz = renodx::lut::Sample(lutTexture, lut_config, r2.xyz);
+    signs = renodx::math::Sign(r1.xyz);
+    r1.xyz = abs(r1.xyz);
+  }
   r0.xyz = r1.xyz * r0.xyz;
   r0.w = dot(r0.xyz, float3(0.212599993, 0.715200007, 0.0722000003));
   r0.w = max(9.99999975e-05, r0.w);
@@ -91,10 +107,11 @@ void main(float4 v0: SV_POSITION0, float4 v1: TEXCOORD0, float4 v2: TEXCOORD1, o
 
   o0.xyz = r0.www ? r1.xyz : r0.xyz;
 
+  o0.rgb *= signs;
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     o0.rgb = saturate(o0.rgb);
   } else {
-    o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
+    o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb, neutral_sdr);
   }
 
   o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);

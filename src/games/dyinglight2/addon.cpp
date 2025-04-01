@@ -210,6 +210,15 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeStrength",
+        .binding = &shader_injection.custom_lut_scaling,
+        .default_value = 100.f,
+        .label = "LUT Scaling",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxAutoExposure",
         .binding = &shader_injection.custom_auto_exposure,
         .default_value = 0.f,
