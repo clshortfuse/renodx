@@ -11,6 +11,7 @@ RenoDX is an engine for modifying DirectX games. Recommended configuration:
 * [cmd_decompiler.exe](https://github.com/bo3b/3Dmigoto/releases/tag/1.3.16) - Decompiles upto Shader Model 5.0 to HLSL
 * [dxil-spirv.exe](https://github.com/HansKristian-Work/dxil-spirv) - Converts Shader Model 6.0 to SPIR-V
 * [spirv-cross.exe](https://github.com/KhronosGroup/SPIRV-Cross) - Converts SPIR-V to HLSL
+* [DirectXShaderCompiler](https://github.com/microsoft/DirectXShaderCompiler/releases/) - Used to decompile and compile Shader Module 6.x shaders
 
 RenoDX uses the Reshade Addon API meaning [Reshade](https://reshade.me/) is a **core requirement** for RenoDX.
 
@@ -70,4 +71,4 @@ Every folder inside `src/games/` is considered a game mod. The `CMakeList.txt` f
 
 ### Building a mod
 
-To simplify creating a new mod, the `src/games/template` exists to be copied to start work on a new mod.
+To simplify creating a new mod, the `src/games/generic` exists to be copied to start work on a new mod.
