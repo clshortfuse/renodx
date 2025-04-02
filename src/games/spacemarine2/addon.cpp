@@ -37,8 +37,10 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x7A973CE4),
     CustomShaderEntry(0x7EE72E6A),
     CustomShaderEntry(0x86ACEECC),
-    CustomShaderEntry(0x7056B504)
+    CustomShaderEntry(0x7056B504),
 
+    // Noise
+    BypassShaderEntry(0xB90F6101)
 };
 
 ShaderInjectData shader_injection;
@@ -241,7 +243,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse. Shout-out to Pumbo & Lilium for the support!",
+        .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse.",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
