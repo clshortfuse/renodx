@@ -774,7 +774,8 @@ void main(
     r3.xyz = r1.xyz * r0.yyy + r0.xzw;
   }
   o0.xyzw = r3.xyzw;
-  
+
   o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   return;
 }
