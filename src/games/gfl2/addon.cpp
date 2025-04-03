@@ -14,7 +14,6 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
-#include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
@@ -25,7 +24,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
   CustomShaderEntry(0x55396C7C),
   CustomShaderEntry(0x15EB4AF2),
   CustomShaderEntry(0x82BAB1D5),
-  CustomShaderEntry(0x20133A8B), // Swapchain
+  CustomShaderEntry(0x20133A8B) // Final
 };
 
 ShaderInjectData shader_injection;
@@ -361,12 +360,6 @@ renodx::utils::settings::Settings settings = {
     .value_type = renodx::utils::settings::SettingValueType::TEXT,
     .label = "RenoDX by ShortFuse, game mod by Bit Viper.",
     .section = "About",
-},
-new renodx::utils::settings::Setting{
-  .value_type = renodx::utils::settings::SettingValueType::TEXT,
-  .label = "Version: " + std::string(renodx::utils::date::ISO_DATE),
-  .section = "About",
-  .tooltip = std::string(__DATE__),
 },
 new renodx::utils::settings::Setting{
   .value_type = renodx::utils::settings::SettingValueType::TEXT,
