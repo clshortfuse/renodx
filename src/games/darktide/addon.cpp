@@ -19,31 +19,12 @@
 #include "./shared.h"
 
 namespace {
-reshade::api::swapchain* g_swapchain = nullptr;
-
-// Workaround for reshade 6.4.1 bug
-#define ForceColorspaceShaderEntry(value)                                                                         \
-  {                                                                                                               \
-    value,                                                                                                        \
-        {                                                                                                         \
-            .crc32 = value,                                                                                       \
-            .code = __##value,                                                                                    \
-            .on_replace = [](auto cmd_list) {                                                                     \
-              if (g_swapchain != nullptr) {                                                                       \
-                renodx::utils::swapchain::ChangeColorSpace(g_swapchain, reshade::api::color_space::hdr10_st2084); \
-                g_swapchain = nullptr;                                                                            \
-              }                                                                                                   \
-              return true;                                                                                        \
-            },                                                                                                    \
-        },                                                                                                        \
-  }
-
 renodx::mods::shader::CustomShaders custom_shaders = {
     // Outputs
-    ForceColorspaceShaderEntry(0x882D3C2F),
+    CustomShaderEntry(0x882D3C2F),
 
     // Video
-    ForceColorspaceShaderEntry(0x9715D453),
+    CustomShaderEntry(0x9715D453),
 
     // Tonemappers
     CustomShaderEntry(0x0AF1BCE6),
@@ -255,6 +236,13 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = " - Upscaling must be used (DLSS/FSR/XeSS)!\n"
+        " - AA at native res causes visual bugs\n"
+        " - XeSS users must update the XeSS dll to the latest version, otherwise game will crash\n",
+        .section = "Instructions",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse.",
         .section = "About",
     },
@@ -288,7 +276,6 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     settings[2]->default_value = peak.value();
     settings[2]->can_reset = true;
   }
-  g_swapchain = swapchain;
 }
 
 }  // namespace
