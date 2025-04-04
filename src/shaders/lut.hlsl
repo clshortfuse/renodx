@@ -349,22 +349,27 @@ float3 CorrectWhite(float3 color_input, float3 lut_color, float lut_white_y, flo
 }
 
 float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 white_gamma, float3 neutral_gamma) {
+#if 0 // This normalizes outside of the 0-1 range too
   const float3 added_gamma = black_gamma;
+  const float3 removed_gamma = 1.f - white_gamma;
+#else
+  const float3 added_gamma = max(black_gamma, 0.f);
   const float3 removed_gamma = 1.f - min(1.f, white_gamma);
+#endif
 
   const float mid_gray_average = (mid_gray_gamma.r + mid_gray_gamma.g + mid_gray_gamma.b) / 3.f;
 
   // Remove from 0 to mid-gray
   const float shadow_length = mid_gray_average;
   const float shadow_stop = max(neutral_gamma.r, max(neutral_gamma.g, neutral_gamma.b));
-  const float3 floor_remove = added_gamma * max(0, shadow_length - shadow_stop) / shadow_length;
+  const float3 floor_remove = added_gamma * max(0, shadow_length - shadow_stop) / (shadow_length != 0.f ? shadow_length : 1.f);
 
   // Add back from mid-gray to 1.f
   const float highlights_length = 1.f - mid_gray_average;
   const float highlights_stop = 1.f - min(neutral_gamma.r, min(neutral_gamma.g, neutral_gamma.b));
-  const float3 ceiling_add = removed_gamma * (max(0, highlights_length - highlights_stop) / highlights_length);
+  const float3 ceiling_add = removed_gamma * max(0, highlights_length - highlights_stop) / (highlights_length != 0.f ? highlights_length : 1.f);
 
-  const float3 unclamped_gamma = max(0, original_gamma - floor_remove) + ceiling_add;
+  const float3 unclamped_gamma = max(min(original_gamma, 0.f), original_gamma - floor_remove) + ceiling_add;
   return unclamped_gamma;
 }
 
