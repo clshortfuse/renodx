@@ -1505,7 +1505,7 @@ class Decompiler {
             is_function = IsWrapped(functionlike);
           }
 
-          static constexpr const auto* SAFE_CHARACTERS = "012345789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_.";
+          static constexpr const auto* SAFE_CHARACTERS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_.";
           // static constexpr const auto *UNSAFE_CHARACTERS = " *+-/&^|";
           bool needs_wrap = !is_function && alias_value.find_first_not_of(SAFE_CHARACTERS) != std::string_view::npos;
           auto new_value = (expected_type != alias_type)
