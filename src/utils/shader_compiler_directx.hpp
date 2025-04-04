@@ -6,6 +6,9 @@
 
 #pragma once
 
+#pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "dxcompiler.lib")
+
 #include <comdef.h>
 #include <d3dcompiler.h>
 #include <dxcapi.h>
@@ -120,9 +123,13 @@ class FxcD3DInclude : public ID3DInclude {
 inline HRESULT CreateLibrary(IDxcLibrary** dxc_library) {
   // HMODULE dxil_loader = LoadLibraryW(L"dxil.dll");
   if (dxc_compiler_library == nullptr) {
+    // Use local if available
     dxc_compiler_library = LoadLibraryW(L"dxcompiler.dll");
   }
   if (dxc_compiler_library == nullptr) {
+    // Use static compiled version
+    HRESULT hr = DxcCreateInstance(CLSID_DxcLibrary, __uuidof(IDxcLibrary), reinterpret_cast<void**>(dxc_library));
+    if (SUCCEEDED(hr)) return hr;
     return -1;
   }
   // NOLINTNEXTLINE(google-readability-casting)
@@ -137,6 +144,8 @@ inline HRESULT CreateCompiler(IDxcCompiler** dxc_compiler) {
     dxc_compiler_library = LoadLibraryW(L"dxcompiler.dll");
   }
   if (dxc_compiler_library == nullptr) {
+    HRESULT hr = DxcCreateInstance(CLSID_DxcCompiler, __uuidof(IDxcCompiler), reinterpret_cast<void**>(dxc_compiler));
+    if (SUCCEEDED(hr)) return hr;
     return -1;
   }
   // NOLINTNEXTLINE(google-readability-casting)

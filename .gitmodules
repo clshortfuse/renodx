@@ -5,3 +5,9 @@
 [submodule "external/Streamline"]
 	path = external/Streamline
 	url = https://github.com/NVIDIAGameWorks/Streamline.git
+[submodule "bin/external/DirectXShaderCompiler"]
+	path = bin/external/DirectXShaderCompiler
+	url = https://github.com/microsoft/DirectXShaderCompiler.git
+[submodule "external/DirectXShaderCompiler"]
+	path = external/DirectXShaderCompiler
+	url = https://github.com/microsoft/DirectXShaderCompiler.git

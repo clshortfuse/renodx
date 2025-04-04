@@ -12,19 +12,127 @@ find_program(FXC_BIN fxc.exe
   REQUIRED)
 message("FXC_BIN: " ${FXC_BIN})
 
-find_program(DXC_BIN dxc.exe
-  HINTS ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_SYSTEM_VERSION}/x64/
-  REQUIRED)
-message("DXC_BIN: " ${DXC_BIN})
-
-project(renodx VERSION 0.1.0 LANGUAGES CXX)
+project(renodx VERSION 0.1.0 LANGUAGES C CXX)
 
 include(CTest)
 enable_testing()
 
+# Define the required version for dxcompiler.dll validation
+set(REQUIRED_DXC_VERSION "1.8.2502")
+
+# Define the expected paths for all files in the build directory
+set(EXPECTED_DXC_DLL_PATH "${CMAKE_BINARY_DIR}/dxcompiler.dll")
+set(EXPECTED_DXC_EXE_PATH "${CMAKE_BINARY_DIR}/dxc.exe")
+set(EXPECTED_DXC_LIB_PATH "${CMAKE_BINARY_DIR}/dxcompiler.lib")
+
+# Check if all files exist
+if(EXISTS ${EXPECTED_DXC_DLL_PATH} AND EXISTS ${EXPECTED_DXC_EXE_PATH} AND EXISTS ${EXPECTED_DXC_LIB_PATH})
+  message(STATUS "Found dxcompiler.dll, dxc.exe, and dxcompiler.lib. Checking version of dxcompiler.dll...")
+
+  execute_process(
+    COMMAND powershell -Command "(Get-Item ${EXPECTED_DXC_DLL_PATH}).VersionInfo.FileVersion"
+    OUTPUT_VARIABLE DLL_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  message(STATUS "File Version: ${DLL_VERSION}")
+
+  # Check if the file version starts with the required version
+  string(FIND "${DLL_VERSION}" "${REQUIRED_DXC_VERSION}" VERSION_POSITION)
+  if(VERSION_POSITION EQUAL 0)
+    set(DOWNLOAD_REQUIRED FALSE)
+    message(STATUS "Valid dxcompiler.dll version: ${DLL_VERSION}")
+  else()
+    message(FATAL_ERROR "Invalid dxcompiler.dll version: ${DLL_VERSION}. Required: ${REQUIRED_DXC_VERSION} (prefix match).")
+    set(DOWNLOAD_REQUIRED TRUE)
+  endif()
+else()
+  message(STATUS "One or more required files are missing. Proceeding to download and extract...")
+  set(DOWNLOAD_REQUIRED TRUE)
+endif()
+
+# Download and extract if necessary
+if(DOWNLOAD_REQUIRED)
+  # Define the URL and paths for the ZIP file
+  set(DXC_ZIP_URL "https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.8.2502/dxc_2025_02_20.zip")
+  set(DXC_ZIP_PATH "${CMAKE_BINARY_DIR}/dxc_2025_02_20.zip")
+  set(DXC_EXTRACT_DIR "${CMAKE_BINARY_DIR}/dxc_extracted")
+
+  # Download the ZIP file
+  if(NOT EXISTS ${DXC_ZIP_PATH})
+    message(STATUS "Downloading dxcompiler ZIP from ${DXC_ZIP_URL}...")
+    file(DOWNLOAD ${DXC_ZIP_URL} ${DXC_ZIP_PATH} SHOW_PROGRESS)
+    message(STATUS "Downloaded dxcompiler ZIP to ${DXC_ZIP_PATH}.")
+  else()
+    message(STATUS "dxcompiler ZIP already exists at ${DXC_ZIP_PATH}. Skipping download.")
+  endif()
+
+  # Create the extraction directory if it doesn't exist
+  file(MAKE_DIRECTORY ${DXC_EXTRACT_DIR})
+
+  # Extract the ZIP file
+  execute_process(
+    COMMAND powershell -Command "Expand-Archive -Path '${DXC_ZIP_PATH}' -DestinationPath '${DXC_EXTRACT_DIR}' -Force"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+  message(STATUS "Extracted dxcompiler ZIP to ${DXC_EXTRACT_DIR}.")
+
+  # Define paths to the extracted files
+  set(EXTRACTED_DXC_DLL_PATH "${DXC_EXTRACT_DIR}/bin/x64/dxcompiler.dll")
+  set(EXTRACTED_DXC_EXE_PATH "${DXC_EXTRACT_DIR}/bin/x64/dxc.exe")
+  set(EXTRACTED_DXC_LIB_PATH "${DXC_EXTRACT_DIR}/lib/x64/dxcompiler.lib")
+
+  # Verify all extracted files exist
+  if(NOT EXISTS ${EXTRACTED_DXC_DLL_PATH} OR NOT EXISTS ${EXTRACTED_DXC_EXE_PATH} OR NOT EXISTS ${EXTRACTED_DXC_LIB_PATH})
+    message(FATAL_ERROR "Failed to find dxcompiler.dll, dxc.exe, or dxcompiler.lib after extraction!")
+  endif()
+
+  # Copy the extracted files to the expected locations
+  file(COPY ${EXTRACTED_DXC_DLL_PATH} DESTINATION ${CMAKE_BINARY_DIR})
+  file(COPY ${EXTRACTED_DXC_EXE_PATH} DESTINATION ${CMAKE_BINARY_DIR})
+  file(COPY ${EXTRACTED_DXC_LIB_PATH} DESTINATION ${CMAKE_BINARY_DIR})
+  message(STATUS "Copied dxcompiler.dll, dxc.exe, and dxcompiler.lib to ${CMAKE_BINARY_DIR}.")
+endif()
+
+set(DXC_BIN ${CMAKE_BINARY_DIR}/dxc.exe)
+
 # Use executable to convert resources to .h files for embedding
 add_executable(embedfile embedfile.cpp)
 add_executable(decomp ./src/decompiler/cli.cpp)
+
+# External project for DirectXShaderCompiler
+
+if(${CMAKE_BUILD_TYPE} MATCHES "Release")
+  include(ExternalProject)
+  set(IS_CLANG_CL $<STREQUAL:${CMAKE_CXX_COMPILER},clang-cl.exe>)
+  ExternalProject_Add(
+    DirectXShaderCompiler
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/DirectXShaderCompiler
+    BINARY_DIR ${CMAKE_BINARY_DIR}/builddxc # Specify the binary direct
+    CONFIGURE_COMMAND ${CMAKE_COMMAND} -C ${CMAKE_SOURCE_DIR}/external/DirectXShaderCompiler/cmake/caches/PredefinedParams.cmake -DHLSL_INCLUDE_TESTS=OFF -DSPIRV_BUILD_TESTS=OFF -DSPIRV_SKIP_TESTS=ON -DSPIRV_SKIP_EXECUTABLES=ON -DSPIRV_WERROR=OFF -DLLVM_HOST_TRIPLE=x86_64 -DLLVM_INCLUDE_TESTS=OFF -DCLANG_INCLUDE_TESTS=OFF -DHLSL_DISABLE_SOURCE_GENERATION=ON -DCMAKE_CXX_STANDARD=20 -DCLANG_CL=${IS_CLANG_CL} -DLLVM_ENABLE_WERROR=OFF ${CMAKE_SOURCE_DIR}/external/DirectXShaderCompiler
+    CMAKE_CACHE_ARGS
+    -DHLSL_INCLUDE_TESTS:BOOL=OFF
+    -DSPIRV_BUILD_TESTS:BOOL=OFF
+    -DSPIRV_SKIP_TESTS:BOOL=ON
+    -DSPIRV_SKIP_EXECUTABLES:BOOL=ON
+    -DSPIRV_WERROR:BOOL=OFF
+    -DLLVM_HOST_TRIPLE:STRING=x86_64
+    -DLLVM_INCLUDE_TESTS:BOOL=OFF
+    -DCLANG_INCLUDE_TESTS:BOOL=OFF
+    -DHLSL_DISABLE_SOURCE_GENERATION:BOOL=ON
+    -DCMAKE_CXX_STANDARD:STRING=20
+    -DCLANG_CL:BOOL=${IS_CLANG_CL}
+    -DLLVM_ENABLE_WERROR:BOOL=OFF
+    -DCMAKE_BUILD_TYPE:STRING=Release
+    BUILD_COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}/builddxc --config Release --target install-dxcompiler
+    BUILD_BYPRODUCTS <BINARY_DIR>/lib/dxcompiler.lib
+  )
+  add_dependencies(decomp DirectXShaderCompiler)
+  target_include_directories(decomp PRIVATE ${CMAKE_BINARY_DIR}/builddxc/include)
+  target_link_directories(decomp PRIVATE ${CMAKE_BINARY_DIR}/builddxc/lib)
+  target_link_libraries(decomp PRIVATE dxcompiler)
+endif()
+
+#target_link_libraries(decomp PRIVATE ${EXPECTED_DXC_LIB_PATH})
 
 function(inspect_hlsl_imports FILE VARIABLE REQUESTING_FILE)
   unset(CACHE_ENTRY)
@@ -279,6 +387,7 @@ foreach(FILE ${ADDON_FILES})
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/reshade)
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include)
+  target_link_libraries(${ADDON} PRIVATE ${EXPECTED_DXC_LIB_PATH})
   #target_compile_definitions(${ADDON} PRIVATE _UNICODE)
   set_target_properties(${ADDON}
     PROPERTIES
