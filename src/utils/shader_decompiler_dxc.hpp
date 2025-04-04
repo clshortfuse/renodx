@@ -771,7 +771,11 @@ class Decompiler {
         for (const auto& description : resource_descriptions) {
           if (description.hlsl_binding == hlsl_bind) {
             if (description.name.empty()) {
-              this->name = description.id;
+              if (space == 0u) {
+                this->name = std::format("{}{}", prefix, signature_index);
+              } else {
+                this->name = std::format("{}{}_space{}", prefix, signature_index, space);
+              }
               std::transform(this->name.begin(), this->name.end(), this->name.begin(),
                              [](unsigned char c) { return std::tolower(c); });
             } else {
