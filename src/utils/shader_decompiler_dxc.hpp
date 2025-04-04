@@ -2678,9 +2678,9 @@ class Decompiler {
         auto [from_type, a, to_type] = StringViewMatch<3>(assignment, std::regex{R"(zext (?:fast )?(\S+) (\S+) to (\S+))"});
         assignment_type = ParseType(to_type);
         if (from_type == "i16") {
-          assignment_value = std::format("(min16uint){}", ParseWrapped(ParseInt(a)));
+          assignment_value = std::format("({})(min16uint){}", assignment_type, ParseWrapped(ParseInt(a)));
         } else {
-          assignment_value = std::format("(uint){}", ParseWrapped(ParseInt(a)));
+          assignment_value = std::format("({})(uint){}", assignment_type, ParseWrapped(ParseInt(a)));
         }
       } else if (instruction == "sitofp") {
         // sitofp i32 %47 to float
