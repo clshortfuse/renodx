@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <include/reshade_api_device.hpp>
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
@@ -18,10 +19,31 @@
 #include "./shared.h"
 
 namespace {
+reshade::api::swapchain* g_swapchain = nullptr;
+
+// Workaround for reshade 6.4.1 bug
+#define ForceColorspaceShaderEntry(value)                                                                         \
+  {                                                                                                               \
+    value,                                                                                                        \
+        {                                                                                                         \
+            .crc32 = value,                                                                                       \
+            .code = __##value,                                                                                    \
+            .on_replace = [](auto cmd_list) {                                                                     \
+              if (g_swapchain != nullptr) {                                                                       \
+                renodx::utils::swapchain::ChangeColorSpace(g_swapchain, reshade::api::color_space::hdr10_st2084); \
+                g_swapchain = nullptr;                                                                            \
+              }                                                                                                   \
+              return true;                                                                                        \
+            },                                                                                                    \
+        },                                                                                                        \
+  }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     // Outputs
-    CustomShaderEntry(0x882D3C2F),
+    ForceColorspaceShaderEntry(0x882D3C2F),
+
+    // Video
+    ForceColorspaceShaderEntry(0x9715D453),
 
     // Tonemappers
     CustomShaderEntry(0x0AF1BCE6),
@@ -29,6 +51,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x9347F823),
     CustomShaderEntry(0xF155E283),
 
+    // Unknown
+    BypassShaderEntry(0x3B79D402),
 };
 
 ShaderInjectData shader_injection;
@@ -231,7 +255,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse. Shout-out to Pumbo & Lilium for the support!",
+        .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse.",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
@@ -264,6 +288,7 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     settings[2]->default_value = peak.value();
     settings[2]->can_reset = true;
   }
+  g_swapchain = swapchain;
 }
 
 }  // namespace
@@ -282,15 +307,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         // We only need output shader since it's the only shader using injected data
         auto param_count = params.size();
 
-        // Needed to not crash with RT
-        /* if (param_count <= 15) {
+        if (param_count <= 15) {
           return true;
-        } */
+        }
 
         return false;
       };
-
-      renodx::mods::swapchain::SetUseHDR10();
 
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::shader::expected_constant_buffer_space = 50;
@@ -301,27 +323,33 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-      renodx::mods::swapchain::swap_chain_proxy_format = reshade::api::format::r10g10b10a2_unorm;
+      // renodx::mods::swapchain::swap_chain_proxy_format = reshade::api::format::r10g10b10a2_unorm;
+      renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
+      renodx::mods::swapchain::SetUseHDR10(true);
 
-      // renodx::mods::shader::manual_shader_scheduling = true;
       renodx::mods::shader::allow_multiple_push_constants = true;
       renodx::mods::swapchain::use_resource_cloning = true;
+      // renodx::mods::shader::use_pipeline_layout_cloning = false;
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r8g8b8a8_typeless,
-                                                                     .new_format = reshade::api::format::r16g16b16a16_float,
-                                                                     .use_resource_view_cloning = true});
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+      });
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r8g8b8a8_unorm,
-                                                                     .new_format = reshade::api::format::r16g16b16a16_float,
-                                                                     .use_resource_view_cloning = true});
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+      });
 
-      /* renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r10g10b10a2_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
           .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
           .usage_include = reshade::api::resource_usage::render_target,
-      }); */
+      });
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);

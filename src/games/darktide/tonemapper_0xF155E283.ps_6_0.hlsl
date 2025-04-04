@@ -223,6 +223,7 @@ float4 main(
   _864 = _403;
   _865 = _404;
 
+  // untonemapped_bt709 = float3(_402, _403, _404);
   if ((!((c0_008y) == 0.0f))) {
     // Here
     if ((!((c0_008z) == 0.0f))) {
@@ -417,7 +418,7 @@ float4 main(
   SV_Target.y = _969;
   SV_Target.z = _970;
 
-  SV_Target = TonemapWithLUT(untonemapped_bt709, s2, t2, c0_009x);
+  SV_Target.rgb = Tonemap(untonemapped_bt709, SV_Target.rgb);
 
   SV_Target.w = (_15.w);
 

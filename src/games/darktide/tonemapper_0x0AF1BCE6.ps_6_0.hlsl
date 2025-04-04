@@ -408,7 +408,7 @@ float4 main(
   SV_Target.y = _978;
   SV_Target.z = _979;
 
-  SV_Target = TonemapWithLUT(untonemapped_bt709, s3, t3, c0_009x);
+  SV_Target.rgb = Tonemap(untonemapped_bt709, SV_Target.rgb);
 
   SV_Target.w = (_17.w);
   return SV_Target;
