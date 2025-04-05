@@ -277,15 +277,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "FxCustomAutoExposure",
-        .binding = &shader_injection.custom_auto_exposure,
-        .default_value = 100.f,
-        .label = "Auto Exposure",
-        .section = "Effects",
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "FxCustomBloom",
+        .key = "FxBloom",
         .binding = &shader_injection.custom_bloom,
         .default_value = 50.f,
         .label = "Bloom",
@@ -293,7 +285,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "FxCustomLensFlare",
+        .key = "FxLensFlare",
         .binding = &shader_injection.custom_lens_flare,
         .default_value = 50.f,
         .label = "Lens Flare",
@@ -301,23 +293,50 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "FxCustomFilmGrainStrength",
+        .key = "FxFilmGrain",
         .binding = &shader_injection.custom_film_grain,
         .default_value = 50.f,
-        .label = "Film Grain Strength",
+        .label = "Film Grain",
         .section = "Effects",
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "FxCustomNoiseStrength",
-        .binding = &shader_injection.custom_noise_strength,
+        .key = "FxDithering",
+        .binding = &shader_injection.custom_dithering,
         .default_value = 0.f,
-        .label = "Noise Strength",
+        .label = "Dithering",
         .section = "Effects",
         .is_enabled = []() { return shader_injection.tone_map_type == 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
-
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Reset All",
+        .section = "Options",
+        .group = "button-line-1",
+        .on_change = []() { renodx::utils::settings::ResetSettings(); },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Discord",
+        .section = "Options",
+        .group = "button-line-2",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          renodx::utils::platform::Launch(
+              "https://discord.gg/"
+              "5WZXDpmbpP");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Github",
+        .section = "Options",
+        .group = "button-line-2",
+        .on_change = []() {
+          renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx");
+        },
+    },
 };
 
 void OnPresetOff() {
@@ -339,10 +358,10 @@ void OnPresetOff() {
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorGradeSceneGrading", 100.f},
-      {"FxAutoExposure", 100.f},
       {"FxBloom", 50.f},
       {"FxLensFlare", 50.f},
-      {"FxBloom", 50.f},
+      {"FxFilmGrain", 50.f},
+      {"FxDithering", 50.f},
       {"FxHDRVideos", 0.f},
   });
   //   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
@@ -394,7 +413,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::b8g8r8a8_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
-            // .use_resource_view_cloning = true,
+            .use_resource_view_cloning = true,
             .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
             .usage_include = reshade::api::resource_usage::render_target,
         });

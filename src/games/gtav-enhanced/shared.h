@@ -58,9 +58,8 @@ struct ShaderInjectData {
   float gamma_correction;
   float custom_bloom;
   float custom_film_grain;
-  float custom_noise_strength;
+  float custom_dithering;
   float custom_lens_flare;
-  float custom_auto_exposure;
   float custom_random;
 };
 
@@ -93,9 +92,8 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_FLARE                  shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH            shader_injection.color_grade_strength
 #define CUSTOM_FILM_GRAIN                      shader_injection.custom_film_grain
-#define CUSTOM_NOISE_STRENGTH                  shader_injection.custom_noise_strength
+#define CUSTOM_DITHERING                       shader_injection.custom_dithering
 #define CUSTOM_LENS_FLARE                      shader_injection.custom_lens_flare
-#define CUSTOM_AUTO_EXPOSURE                   shader_injection.custom_auto_exposure
 #define CUSTOM_BLOOM                           shader_injection.custom_bloom
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define RENODX_TONE_MAP_HUE_SHIFT_METHOD       HUE_SHIFT_METHOD_SDR_MODIFIED

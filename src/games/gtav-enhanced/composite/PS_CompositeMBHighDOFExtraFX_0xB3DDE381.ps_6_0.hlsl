@@ -654,7 +654,7 @@ float4 main(
 
   float3 untonemapped = float3(_1094, _1095, _1096);
 
-  float mid_gray = 0.5f;
+  float mid_gray = 0.18f;
   {
     float _1094 = renodx::color::gamma::Encode(mid_gray);
     float _1095 = renodx::color::gamma::Encode(mid_gray);
@@ -683,8 +683,6 @@ float4 main(
     float _1222 = _1219 * _1181;
     float _1223 = _1220 * _1181;
     float _1224 = _1221 * _1181;
-
-    ConfigureAutoExposure(untonemapped, _1222, _1223, _1224);
 
     float _1252 = ((((((_1222 + _1203) * _1219) + _1206) / (((_1222 + _1182) * _1219) + _1210)) - _1213) * _1215);
     float _1253 = ((((((_1223 + _1203) * _1220) + _1206) / (((_1223 + _1182) * _1220) + _1210)) - _1213) * _1215);
@@ -716,8 +714,6 @@ float4 main(
   float _1222 = _1219 * _1181;
   float _1223 = _1220 * _1181;
   float _1224 = _1221 * _1181;
-
-  ConfigureAutoExposure(untonemapped, _1222, _1223, _1224);
 
   float _1252 = ((((((_1222 + _1203) * _1219) + _1206) / (((_1222 + _1182) * _1219) + _1210)) - _1213) * _1215);
   float _1253 = ((((((_1223 + _1203) * _1220) + _1206) / (((_1223 + _1182) * _1220) + _1210)) - _1213) * _1215);
@@ -756,7 +752,7 @@ float4 main(
   float _1368 = saturate(max(0.0f, (_1360 + (_1340 * exp2(log2(abs(saturate(lerp(_1288, _1265, _1295)))) * cb12_space1_067y)))));
   float _1369 = saturate(max(0.0f, (_1360 + (_1340 * exp2(log2(abs(saturate(lerp(_1289, _1266, _1295)))) * cb12_space1_067y)))));
 
-  // NOISE
+  // DITHER
   if (!(asint(cb12_space1_089x) == 0)) {
     bool _1379 = (asint(cb12_space1_092w) != 0);
     float _1381 = max(_1367, max(_1368, _1369));
@@ -768,7 +764,7 @@ float4 main(
     _1460 = (((_1448 * (((cb12_space1_091y - cb12_space1_090y) * exp2(log2(saturate((select(_1379, _1368, _1381) - cb12_space1_093y) * cb12_space1_092y)) * cb12_space1_093w)) + cb12_space1_090y)) * _1444) + _1368);
     _1461 = (((_1448 * (((cb12_space1_091z - cb12_space1_090z) * exp2(log2(saturate((select(_1379, _1369, _1381) - cb12_space1_093z) * cb12_space1_092z)) * cb12_space1_093w)) + cb12_space1_090z)) * _1444) + _1369);
 
-    ConfigureVanillaNoise(
+    ConfigureVanillaDithering(
         _1367, _1368, _1369,
         _1459, _1460, _1461);
 
