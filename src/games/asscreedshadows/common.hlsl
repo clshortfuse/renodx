@@ -4,9 +4,31 @@ float3 HueCorrectAP1(float3 incorrect_color_ap1, float3 correct_color_ap1, float
   float3 incorrect_color_bt709 = renodx::color::bt709::from::AP1(incorrect_color_ap1);
   float3 correct_color_bt709 = renodx::color::bt709::from::AP1(correct_color_ap1);
 
-  float3 corrected_color_bt709 = renodx::color::correct::Hue(incorrect_color_bt709, correct_color_bt709, hue_correct_strength);
+  float3 corrected_color_bt709 = renodx::color::correct::Hue(incorrect_color_bt709, correct_color_bt709, hue_correct_strength, 2u);
   float3 corrected_color_ap1 = renodx::color::ap1::from::BT709(corrected_color_bt709);
   return corrected_color_ap1;
+}
+
+float3 HueChromaCorrectAP1(float3 incorrect_color_ap1, float3 correct_color_ap1) {
+  float3 incorrect_bt709 = renodx::color::bt709::from::AP1(incorrect_color_ap1);
+  float3 correct_bt709 = renodx::color::bt709::from::AP1(correct_color_ap1);
+
+  float3 incorrect_jch = renodx::color::dtucs::jch::from::BT709(incorrect_bt709);
+  float3 correct_jch = renodx::color::dtucs::jch::from::BT709(correct_bt709);
+
+  incorrect_jch.yz = float2(correct_jch.y * 1.1f, correct_jch.z);  // boost chroma
+
+  float3 corrected_bt709 = renodx::color::bt709::from::dtucs::JCH(incorrect_jch);
+
+  return renodx::color::ap1::from::BT709(corrected_bt709);
+}
+
+float3 ApplyFrostbiteAP1(float3 untonemapped_ap1, float hdr_scale) {
+  float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
+
+  float3 tonemapped_bt709 = renodx::tonemap::frostbite::BT709(untonemapped_bt709, hdr_scale, min(1.f, 0.75f * hdr_scale), 0.5f, 1.f);
+  float3 tonemapped_ap1 = renodx::color::ap1::from::BT709(tonemapped_bt709);
+  return tonemapped_ap1;
 }
 
 float3 ApplySDRToneMap(float3 untonemapped_ap1) {
@@ -65,10 +87,12 @@ float3 ApplyBlendedToneMap(float3 untonemapped_ap1, float peak_nits, float diffu
 #endif
 
   float3 hdr_untonemapped = untonemapped_ap1 * GetSDRMidGrayRatio();
-  hdr_untonemapped = HueCorrectAP1(hdr_untonemapped, sdr_tonemap, 0.5f);
-  float3 hdr_tonemap = renodx::tonemap::ExponentialRollOff(hdr_untonemapped, 0.2f, hdr_scale);
+  float3 hdr_tonemap = ApplyFrostbiteAP1(hdr_untonemapped, hdr_scale);
 
-  return lerp(sdr_tonemap, hdr_tonemap, saturate(sdr_tonemap));
+  float3 sdr_tonemap_by_lum = HueChromaCorrectAP1(sdr_tonemap, hdr_untonemapped);
+
+  float sdr_lum = renodx::color::y::from::AP1(sdr_tonemap_by_lum);
+  return lerp(sdr_tonemap_by_lum, hdr_tonemap, saturate(sdr_lum));
 }
 
 float3 ApplyBlendedToneMapEncodePQ(float3 untonemapped_ap1, float peak_nits, float diffuse_white) {
