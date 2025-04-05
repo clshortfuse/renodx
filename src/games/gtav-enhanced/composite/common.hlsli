@@ -17,20 +17,21 @@ void ConfigureVanillaGrain(inout float grain_add, inout float grain_multiply) {
 float4 CustomToneMap(float3 untonemapped, float midgray, float3 post_effect_a,
                      float3 post_effect_b, float post_effect_lerp,
                      float exponent, float2 position) {
-  untonemapped = renodx::color::gamma::Decode(untonemapped);
+  untonemapped = renodx::color::gamma::Decode(max(0, untonemapped));
   untonemapped *= midgray / 0.18f;
   untonemapped = renodx::color::gamma::Encode(untonemapped);
-  untonemapped = renodx::math::SignPow(untonemapped, exponent);
+  untonemapped = pow(untonemapped, exponent);
   untonemapped = renodx::color::gamma::Decode(untonemapped);
 
   float3 post_process_color =
       lerp(post_effect_a, post_effect_b, post_effect_lerp);
-  post_process_color = renodx::math::SignPow(post_process_color, exponent);
+  post_process_color = pow(max(0, post_process_color), exponent);
   post_process_color = renodx::color::gamma::Decode(post_process_color);
 
   float3 tonemapped =
       renodx::draw::ToneMapPass(untonemapped, post_process_color);
-  float tonemap_luminance = renodx::color::y::from::BT709(tonemapped);
+
+  float tonemap_luminance = renodx::color::y::from::BT709(abs(tonemapped));
   if (CUSTOM_FILM_GRAIN != 0.f) {
     tonemapped = renodx::effects::ApplyFilmGrain(
         tonemapped, position, CUSTOM_RANDOM, CUSTOM_FILM_GRAIN * 0.03f, 1.f);

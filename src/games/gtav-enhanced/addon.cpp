@@ -26,9 +26,23 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xC44FC390),  // PS_BlitCalibration
     CustomShaderEntry(0x9A3213A0),  // PS_LensDistortion
     CustomShaderEntry(0x3A668290),  // PS_Sharpen
+
     CustomShaderEntry(0xED97A548),  // PS_CompositeExtraFX
+    CustomShaderEntry(0x561305D2),  // PS_CompositeHHExtraFX
     CustomShaderEntry(0xD0746A48),  // PS_CompositeHighDOFExtraFX
+    CustomShaderEntry(0xA695CEB0),  // PS_CompositeHighDOFHHExtraFX
+    // CustomShaderEntry(0x40497C42),  // PS_CompositeHighDOFNV
+    CustomShaderEntry(0x01C9FD7F),  // PS_CompositeMBExtraFX
+    CustomShaderEntry(0xA9CCF727),  // PS_CompositeMBHHExtraFX
     CustomShaderEntry(0xB3DDE381),  // PS_CompositeMBHighDOFExtraFX
+    CustomShaderEntry(0xE83B0B7E),  // PS_CompositeMBHighDOFHHExtraFX
+    // CustomShaderEntry(0x7DCEAC64),  // PS_CompositeMBHighDOFNV
+    CustomShaderEntry(0xA7D7E765),  // PS_CompositeMBShallowHighDOFExtraFX
+    CustomShaderEntry(0x88D3E3C8),  // PS_CompositeMBShallowHighDOFHHExtraFX
+    // CustomShaderEntry(0xDDB307E0),  // PS_CompositeNV
+    // CustomShaderEntry(0x864A867F),  // PS_CompositeSeeThrough
+    CustomShaderEntry(0xD0EB7F86),  // PS_CompositeShallowHighDOFExtraFX
+    CustomShaderEntry(0x2ACFAE90),  // PS_CompositeShallowHighDOFHHExtraFX
 };
 
 ShaderInjectData shader_injection;
@@ -75,7 +89,8 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "ACES", "RenoDRT"},
+        .labels = {"Vanilla", "RenoDRT"},
+        .parse = [](float value) { return value * 3.f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
