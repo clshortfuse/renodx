@@ -365,6 +365,9 @@ inline reshade::api::resource CloneResource(utils::resource::ResourceInfo* resou
   new_desc.usage = static_cast<reshade::api::resource_usage>(
       static_cast<uint32_t>(desc.usage)
       | (target->usage_set & ~target->usage_unset));
+  if (new_desc.heap == reshade::api::memory_heap::custom) {
+    new_desc.heap = reshade::api::memory_heap::gpu_only;
+  }
 
   auto& initial_state = resource_info->initial_state;
   reshade::api::resource& resource_clone = resource_info->clone;
