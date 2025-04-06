@@ -46,6 +46,18 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xE020E0E3),
     // even more artifact fixes
     CustomShaderEntry(0xF2280F92),
+    CustomShaderEntry(0x7EA3E0B2),
+    CustomShaderEntry(0x92EF8684),
+    CustomShaderEntry(0x95E462F3),
+    CustomShaderEntry(0x0422C69E),
+    CustomShaderEntry(0xE311E5C3),
+    CustomShaderEntry(0x89FC4143),
+    CustomShaderEntry(0xB932F19B),
+    CustomShaderEntry(0x11507068),
+    CustomShaderEntry(0xB8F1C5BC),
+    CustomShaderEntry(0x61EDCA76),
+    CustomShaderEntry(0x3D449D34),
+    CustomShaderEntry(0x1612A2ED),
 
     CustomShaderEntry(0x470BECFA),  // post processing ubershader
     CustomShaderEntry(0x52BC2F1B),  // final
