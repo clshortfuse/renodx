@@ -216,7 +216,7 @@ renodx::tonemap::config::DualToneMap ToneMap(float3 color, float3 vanillaColor, 
   config.reno_drt_shadows = 1.f;
   config.reno_drt_working_color_space = 0u;
   config.reno_drt_blowout = RENODX_TONE_MAP_HIGHLIGHT_SATURATION;
-  config.reno_drt_dechroma = RENODX_TONE_MAP_BLOWOUT;
+  config.reno_drt_dechroma = max(0.0001f, RENODX_TONE_MAP_BLOWOUT);
   config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::OKLAB;
   // config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;

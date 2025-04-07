@@ -249,7 +249,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeSaturation", 60.f);
           renodx::utils::settings::UpdateSetting("ColorGradeRestorationMethod", 0.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-          renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
+          renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 45.f);
           renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
           renodx::utils::settings::UpdateSetting("colorGradeFlare", 75.f);
           renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
@@ -324,6 +324,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("FxBloom", 100.f);
 }
 
 bool fired_on_init_swapchain = false;
