@@ -1749,7 +1749,7 @@ inline void OnInitResourceViewInfo(utils::resource::ResourceViewInfo* resource_v
 }
 
 inline void OnDestroyResourceViewInfo(utils::resource::ResourceViewInfo* resource_view_info) {
-  if (resource_view_info->clone.handle == 0u) {
+  if (resource_view_info->clone.handle != 0u) {
     resource_view_info->device->destroy_resource_view(resource_view_info->clone);
   }
 
