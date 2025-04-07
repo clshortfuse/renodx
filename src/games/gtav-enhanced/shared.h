@@ -52,11 +52,13 @@ struct ShaderInjectData {
   float tone_map_flare;
   float tone_map_hue_correction;
   float tone_map_hue_shift;
-  float tone_map_clamp_color_space;
-  float tone_map_clamp_peak;
+  float tone_map_white_clip;
   float tone_map_hue_processor;
   float gamma_correction;
+  float custom_lens_distortion;
   float custom_bloom;
+  float custom_chromatic_aberration;
+  float custom_sun_bloom;
   float custom_film_grain;
   float custom_dithering;
   float custom_lens_flare;
@@ -80,8 +82,6 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_HUE_PROCESSOR          shader_injection.tone_map_hue_processor
 #define RENODX_TONE_MAP_HUE_CORRECTION         shader_injection.tone_map_hue_correction
 #define RENODX_TONE_MAP_HUE_SHIFT              shader_injection.tone_map_hue_shift
-#define RENODX_TONE_MAP_CLAMP_COLOR_SPACE      shader_injection.tone_map_clamp_color_space
-#define RENODX_TONE_MAP_CLAMP_PEAK             shader_injection.tone_map_clamp_peak
 #define RENODX_TONE_MAP_EXPOSURE               shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS             shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS                shader_injection.tone_map_shadows
@@ -91,11 +91,15 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_BLOWOUT                shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                  shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH            shader_injection.color_grade_strength
+#define CUSTOM_LENS_DISTORTION                 shader_injection.custom_lens_distortion
 #define CUSTOM_FILM_GRAIN                      shader_injection.custom_film_grain
 #define CUSTOM_DITHERING                       shader_injection.custom_dithering
 #define CUSTOM_LENS_FLARE                      shader_injection.custom_lens_flare
 #define CUSTOM_BLOOM                           shader_injection.custom_bloom
 #define CUSTOM_RANDOM                          shader_injection.custom_random
+#define CUSTOM_SUN_BLOOM                       shader_injection.custom_sun_bloom
+#define CUSTOM_CHROMATIC_ABERRATION            shader_injection.custom_chromatic_aberration
+#define RENODX_RENO_DRT_WHITE_CLIP             shader_injection.tone_map_white_clip
 #define RENODX_TONE_MAP_HUE_SHIFT_METHOD       HUE_SHIFT_METHOD_SDR_MODIFIED
 #define RENODX_TONE_MAP_HUE_SHIFT_MODIFIER     0.5f
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020

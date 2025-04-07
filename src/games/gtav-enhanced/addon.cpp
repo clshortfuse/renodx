@@ -22,9 +22,9 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x7EABC435),  // PS_BinkNoAlpha
+    // CustomShaderEntry(0x7EABC435),  // PS_BinkNoAlpha
     CustomShaderEntry(0xC44FC390),  // PS_BlitCalibration
-    CustomShaderEntry(0x9A3213A0),  // PS_LensDistortion
+    // CustomShaderEntry(0x9A3213A0),  // PS_LensDistortion
     CustomShaderEntry(0x3A668290),  // PS_Sharpen
 
     CustomShaderEntry(0xED97A548),  // PS_CompositeExtraFX
@@ -43,6 +43,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // CustomShaderEntry(0x864A867F),  // PS_CompositeSeeThrough
     CustomShaderEntry(0xD0EB7F86),  // PS_CompositeShallowHighDOFExtraFX
     CustomShaderEntry(0x2ACFAE90),  // PS_CompositeShallowHighDOFHHExtraFX
+
+    CustomShaderEntry(0x4BA8AA92),  // PS_puddleMaskAndPassCombined
 };
 
 ShaderInjectData shader_injection;
@@ -174,29 +176,14 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapClampColorSpace",
-        .binding = &shader_injection.tone_map_clamp_color_space,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Clamp Color Space",
+        .key = "ToneMapWhiteClip",
+        .binding = &shader_injection.tone_map_white_clip,
+        .default_value = 100.f,
+        .label = "White Clip",
         .section = "Tone Mapping",
-        .tooltip = "Hue-shift emulation strength.",
-        .labels = {"None", "BT709", "BT2020", "AP1"},
+        .min = 0.f,
+        .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
-        .parse = [](float value) { return value - 1.f; },
-        .is_visible = []() { return current_settings_mode >= 2; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapClampPeak",
-        .binding = &shader_injection.tone_map_clamp_peak,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Clamp Peak",
-        .section = "Tone Mapping",
-        .tooltip = "Hue-shift emulation strength.",
-        .labels = {"None", "BT709", "BT2020", "AP1"},
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
-        .parse = [](float value) { return value - 1.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
@@ -292,10 +279,35 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxLensDistortion",
+        .binding = &shader_injection.custom_lens_distortion,
+        .default_value = 50.f,
+        .label = "Lens Distortion",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxChromaticAberration",
+        .binding = &shader_injection.custom_chromatic_aberration,
+        .default_value = 50.f,
+        .label = "Chromatic Aberration",
+        .section = "Effects",
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxBloom",
         .binding = &shader_injection.custom_bloom,
         .default_value = 50.f,
         .label = "Bloom",
+        .section = "Effects",
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxSunBloom",
+        .binding = &shader_injection.custom_sun_bloom,
+        .default_value = 50.f,
+        .label = "Sun Bloom",
         .section = "Effects",
         .parse = [](float value) { return value * 0.02f; },
     },
@@ -321,7 +333,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .label = "Dithering",
         .section = "Effects",
-        .is_enabled = []() { return shader_injection.tone_map_type == 0; },
+        .is_enabled = []() { return false; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -373,10 +385,13 @@ void OnPresetOff() {
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorGradeSceneGrading", 100.f},
+      {"FxLensDistortion", 50.f},
+      {"FxChromaticAberration", 50.f},
       {"FxBloom", 50.f},
+      {"FxSunBloom", 50.f},
       {"FxLensFlare", 50.f},
       {"FxFilmGrain", 50.f},
-      {"FxDithering", 50.f},
+      {"FxDithering", 0.f},
       {"FxHDRVideos", 0.f},
   });
   //   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);

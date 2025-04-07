@@ -73,9 +73,9 @@ cbuffer cb3 : register(b3) {
 };
 
 cbuffer cb5 : register(b5) {
-  float cb5_014w : packoffset(c014.w);
-  float cb5_015x : packoffset(c015.x);
-  float cb5_015y : packoffset(c015.y);
+  float cb5_014w : packoffset(c014.w);  // 1.f
+  float cb5_015x : packoffset(c015.x);  // 2160
+  float cb5_015y : packoffset(c015.y);  // 1272
   uint cb5_022y : packoffset(c022.y);
 };
 
@@ -221,7 +221,7 @@ float4 main(
   float _58 = TEXCOORD.y + -0.5f;
   float _59 = (cb12_space1_072x / cb12_space1_072y) * _57;
   float _60 = dot(float2(_59, _58), float2(_59, _58));
-  float _66 = ((_50 * _60) * ((sqrt(_60) * cb12_space1_069y) + cb12_space1_069x)) + 1.0f;
+  float _66 = CUSTOM_LENS_DISTORTION * ((_50 * _60) * ((sqrt(_60) * cb12_space1_069y) + cb12_space1_069x)) + 1.0f;
   float _67 = _66 * _57;
   float _68 = _66 * _58;
   float _69 = _67 + 0.5f;
@@ -261,7 +261,7 @@ float4 main(
   float _193 = max(0.0f, ((((((_150.z * _129) + (_141.z * _128)) + (_161.z * _130)) + (_172.z * _131)) + (_183.z * _132)) / _136));
   float _201 = (cb12_space1_072x / cb12_space1_072y) * _67;
   float _202 = dot(float2(_201, _68), float2(_201, _68));
-  float _208 = ((_50 * _202) * ((sqrt(_202) * cb12_space1_069w) + cb12_space1_069z)) + 1.0f;
+  float _208 = CUSTOM_CHROMATIC_ABERRATION * ((_50 * _202) * ((sqrt(_202) * cb12_space1_069w) + cb12_space1_069z)) + 1.0f;
   float4 _217 = t15_space1.Sample(s0_space2[(g_rage_dynamicsamplerindices_012 + 0u)], float2(((_208 * _67) + 0.5f), ((_208 * _68) + 0.5f)));
   float _221 = cb5_014w * _217.x;
   float _369;
@@ -637,7 +637,7 @@ float4 main(
 
     float _1051 = _1049.x * _1049.x;
     float _1052 = _1051 * _1051;
-    float _1053 = _1052 * _1052;
+    float _1053 = _1052 * _1052 * CUSTOM_SUN_BLOOM;
     _1065 = ((_1053 * cb12_space1_046x) + _1031);
     _1066 = ((_1053 * cb12_space1_046y) + _1032);
     _1067 = ((_1053 * cb12_space1_046z) + _1033);
@@ -676,15 +676,14 @@ float4 main(
   float _1215 = 1.0f / (((((_1202 + _1203) * _1201) + _1206) / (((_1202 + _1182) * _1201) + _1210)) - _1213);
 
   float mid_gray = 0.18f;
-  float mid_gray_gamma = renodx::color::gamma::Encode(mid_gray);
   {
-    float _1042 = mid_gray_gamma;
-    float _1043 = mid_gray_gamma;
-    float _1044 = mid_gray_gamma;
+    float _1042 = 0.18f;
+    float _1043 = 0.18f;
+    float _1044 = 0.18f;
 
-    float _1094 = mid_gray_gamma;
-    float _1095 = mid_gray_gamma;
-    float _1096 = mid_gray_gamma;
+    float _1094 = 0.18f;
+    float _1095 = 0.18f;
+    float _1096 = 0.18f;
 
     float _1219 = max(0.0f, (min(((lerp(cb12_space1_058x, 1.0f, _1137)) * (_1094 + select(_1036, (((cb5_014w * _1042) - _1094) * _1105), ((_1042 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
     float _1220 = max(0.0f, (min(((lerp(cb12_space1_058y, 1.0f, _1137)) * (_1095 + select(_1036, (((cb5_014w * _1043) - _1095) * _1105), ((_1043 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
@@ -697,7 +696,7 @@ float4 main(
     float _1253 = max(0.f, (((((_1223 + _1203) * _1220) + _1206) / (((_1223 + _1182) * _1220) + _1210)) - _1213) * _1215);
     float _1254 = max(0.f, (((((_1224 + _1203) * _1221) + _1206) / (((_1224 + _1182) * _1221) + _1210)) - _1213) * _1215);
 
-    mid_gray = renodx::color::y::from::BT709(renodx::color::gamma::Decode(float3(_1252, _1253, _1254)));
+    mid_gray = renodx::color::y::from::BT709(float3(_1252, _1253, _1254));
   }
 
   float _1219 = max(0.0f, (min(((lerp(cb12_space1_058x, 1.0f, _1137)) * (_1094 + select(_1036, (((cb5_014w * _1042) - _1094) * _1105), ((_1042 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
@@ -727,7 +726,6 @@ float4 main(
         float3(_1287, _1288, _1289),
         float3(_1264, _1265, _1266),
         _1295,
-        cb12_space1_067y,
         TEXCOORD.xy);
   }
 
@@ -765,6 +763,6 @@ float4 main(
   SV_Target.z = _1461;
   SV_Target.w = dot(float3(_1367, _1368, _1369), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
 
-  SV_Target.rgb = renodx::draw::RenderIntermediatePass(renodx::color::gamma::Decode(SV_Target.rgb));
+  SV_Target.rgb = renodx::draw::RenderIntermediatePass(renodx::color::gamma::Decode(SV_Target.rgb, 1.f / cb12_space1_067y));
   return SV_Target;
 }

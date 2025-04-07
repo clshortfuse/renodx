@@ -220,7 +220,7 @@ float4 main(
   float _58 = TEXCOORD.y + -0.5f;
   float _59 = (cb12_space1_072x / cb12_space1_072y) * _57;
   float _60 = dot(float2(_59, _58), float2(_59, _58));
-  float _66 = ((_50 * _60) * ((sqrt(_60) * cb12_space1_069y) + cb12_space1_069x)) + 1.0f;
+  float _66 = CUSTOM_LENS_DISTORTION * ((_50 * _60) * ((sqrt(_60) * cb12_space1_069y) + cb12_space1_069x)) + 1.0f;
   float _67 = _66 * _57;
   float _68 = _66 * _58;
   float _69 = _67 + 0.5f;
@@ -260,7 +260,7 @@ float4 main(
   float _193 = max(0.0f, ((((((_150.z * _129) + (_141.z * _128)) + (_161.z * _130)) + (_172.z * _131)) + (_183.z * _132)) / _136));
   float _201 = (cb12_space1_072x / cb12_space1_072y) * _67;
   float _202 = dot(float2(_201, _68), float2(_201, _68));
-  float _208 = ((_50 * _202) * ((sqrt(_202) * cb12_space1_069w) + cb12_space1_069z)) + 1.0f;
+  float _208 = CUSTOM_CHROMATIC_ABERRATION * ((_50 * _202) * ((sqrt(_202) * cb12_space1_069w) + cb12_space1_069z)) + 1.0f;
   float4 _217 = t15_space1.Sample(s0_space2[(g_rage_dynamicsamplerindices_012 + 0u)], float2(((_208 * _67) + 0.5f), ((_208 * _68) + 0.5f)));
   float _221 = cb5_014w * _217.x;
   float _302;
@@ -614,7 +614,8 @@ float4 main(
 
     float _984 = _982.x * _982.x;
     float _985 = _984 * _984;
-    float _986 = _985 * _985;
+    float _986 = _985 * _985 * CUSTOM_SUN_BLOOM;
+
     _998 = ((_986 * cb12_space1_046x) + _964);
     _999 = ((_986 * cb12_space1_046y) + _965);
     _1000 = ((_986 * cb12_space1_046z) + _966);
@@ -654,15 +655,14 @@ float4 main(
   float _1148 = 1.0f / (((((_1135 + _1136) * _1134) + _1139) / (((_1135 + _1115) * _1134) + _1143)) - _1146);
 
   float mid_gray = 0.18f;
-  float mid_gray_gamma = renodx::color::gamma::Encode(mid_gray);
   {
-    float _975 = mid_gray_gamma;
-    float _976 = mid_gray_gamma;
-    float _977 = mid_gray_gamma;
+    float _975 = 0.18f;
+    float _976 = 0.18f;
+    float _977 = 0.18f;
 
-    float _1027 = mid_gray_gamma;
-    float _1028 = mid_gray_gamma;
-    float _1029 = mid_gray_gamma;
+    float _1027 = 0.18f;
+    float _1028 = 0.18f;
+    float _1029 = 0.18f;
 
     float _1152 = max(0.0f, (min(((lerp(cb12_space1_058x, 1.0f, _1070)) * (_1027 + select(_969, (((cb5_014w * _975) - _1027) * _1038), ((_975 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
     float _1153 = max(0.0f, (min(((lerp(cb12_space1_058y, 1.0f, _1070)) * (_1028 + select(_969, (((cb5_014w * _976) - _1028) * _1038), ((_976 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
@@ -675,7 +675,7 @@ float4 main(
     float _1186 = max(0.f, (((((_1156 + _1136) * _1153) + _1139) / (((_1156 + _1115) * _1153) + _1143)) - _1146) * _1148);
     float _1187 = max(0.f, (((((_1157 + _1136) * _1154) + _1139) / (((_1157 + _1115) * _1154) + _1143)) - _1146) * _1148);
 
-    mid_gray = renodx::color::y::from::BT709(renodx::color::gamma::Decode(float3(_1185, _1186, _1187)));
+    mid_gray = renodx::color::y::from::BT709(float3(_1185, _1186, _1187));
   }
 
   float _1152 = max(0.0f, (min(((lerp(cb12_space1_058x, 1.0f, _1070)) * (_1027 + select(_969, (((cb5_014w * _975) - _1027) * _1038), ((_975 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
@@ -705,7 +705,6 @@ float4 main(
         float3(_1220, _1221, _1222),
         float3(_1197, _1198, _1199),
         _1228,
-        cb12_space1_067y,
         TEXCOORD.xy);
   }
 
@@ -743,6 +742,6 @@ float4 main(
   SV_Target.z = _1394;
   SV_Target.w = dot(float3(_1300, _1301, _1302), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
 
-  SV_Target.rgb = renodx::draw::RenderIntermediatePass(renodx::color::gamma::Decode(SV_Target.rgb));
+  SV_Target.rgb = renodx::draw::RenderIntermediatePass(renodx::color::gamma::Decode(SV_Target.rgb, 1.f / cb12_space1_067y));
   return SV_Target;
 }
