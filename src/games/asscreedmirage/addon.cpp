@@ -23,7 +23,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xFE07E3F3),  // ACES ToneMap
 
     CustomShaderEntry(0x0E048C6D),  // UI - sRGB to HDR
-    CustomShaderEntry(0xAF8A7EAB),  // UI - Video sRGB to HDR
+    // CustomShaderEntry(0xAF8A7EAB),  // UI - Video sRGB to HDR
 
 };
 
