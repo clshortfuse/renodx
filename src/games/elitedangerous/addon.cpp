@@ -8,12 +8,14 @@
 #define DEBUG_LEVEL_0
 
 #include <deps/imgui/imgui.h>
-#include <embed/shaders.h>
 #include <include/reshade.hpp>
+
+#include <embed/shaders.h>
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
@@ -217,6 +219,15 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxGrainStrength",
+        .binding = &CUSTOM_GRAIN_STRENGTH,
+        .default_value = 50.f,
+        .label = "Grain Strength",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Color Grading Templates",
@@ -253,6 +264,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
           renodx::utils::settings::UpdateSetting("colorGradeFlare", 75.f);
           renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
+          renodx::utils::settings::UpdateSetting("FxGrainStrength", 50.f);
         },
     },
     new renodx::utils::settings::Setting{
@@ -325,6 +337,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("FxBloom", 100.f);
+  renodx::utils::settings::UpdateSetting("FxGrainStrength", 0.f);
 }
 
 bool fired_on_init_swapchain = false;
@@ -357,6 +370,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::expected_constant_buffer_index = 13;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+
+      // film grain
+      renodx::utils::random::binds.push_back(&shader_injection.custom_random);
 
 #if 1  // NOLINT main textures
       for (auto index : {3, 4}) {
@@ -410,6 +426,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  renodx::utils::random::Use(fdw_reason);
 
   return TRUE;
 }

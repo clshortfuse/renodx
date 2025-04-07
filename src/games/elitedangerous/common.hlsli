@@ -149,6 +149,32 @@ float3 GameScale(float3 color) {
   return color;
 }
 
+float3 GameScaleAndGrain(float3 color, float2 screen_position) {
+  if (RENODX_GAMMA_CORRECTION == 1.f) {
+    color = renodx::color::gamma::DecodeSafe(color, 2.2f);
+    color = renodx::effects::ApplyFilmGrain(
+        color,
+        screen_position,
+        CUSTOM_RANDOM,
+        CUSTOM_GRAIN_STRENGTH * 0.03f,
+        1.f);
+
+    color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
+    color = renodx::color::gamma::EncodeSafe(color, 2.2f);
+  } else {
+    color = renodx::color::srgb::DecodeSafe(color);
+    color = renodx::effects::ApplyFilmGrain(
+        color,
+        screen_position,
+        CUSTOM_RANDOM,
+        CUSTOM_GRAIN_STRENGTH * 0.03f,
+        1.f);
+    color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
+    color = renodx::color::srgb::EncodeSafe(color);
+  }
+  return color;
+}
+
 float3 FinalizeOutput(float3 color) {
   if (RENODX_GAMMA_CORRECTION == 1.f) {
     color = renodx::color::gamma::DecodeSafe(color, 2.2f);
