@@ -20,7 +20,10 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xD7E646E3),
+    CustomShaderEntry(0xDEAFF53A),  // Bloom
+    CustomShaderEntry(0xD7E646E3),  // Tonemap
+
+    CustomShaderEntry(0x2F04633E),  // Video
 };
 
 ShaderInjectData shader_injection;
@@ -205,28 +208,25 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxBloom",
+        .binding = &CUSTOM_BLOOM,
+        .default_value = 100.f,
+        .label = "Bloom",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Defaults",
+        .label = "Reset All",
         .section = "Color Grading Templates",
         .group = "Templates",
-        .tooltip = "Reset to defaults",
         .on_change = []() {
-          renodx::utils::settings::UpdateSetting("toneMapType", 3.f);
-          renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-          renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
-          renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 1.f);
-          renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 75.f);
-          renodx::utils::settings::UpdateSetting("ToneMapScaling", 1.f);
-          renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
-          renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-          renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
-          renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-          renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-          renodx::utils::settings::UpdateSetting("ColorGradeRestorationMethod", 1.f);
-          renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-          renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
-          renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
-          renodx::utils::settings::UpdateSetting("colorGradeFlare", 50.f);
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+          }
         },
     },
     new renodx::utils::settings::Setting{
@@ -234,7 +234,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Recommended Settings",
         .section = "Color Grading Templates",
         .group = "Templates",
-        .tooltip = "Match the original art direction as closely as possible",
+        .tooltip = "Less black crush and by luminance tonemapper for less hue shifting",
         .on_change = []() {
           renodx::utils::settings::UpdateSetting("toneMapType", 3.f);
           renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
@@ -252,6 +252,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
           renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
           renodx::utils::settings::UpdateSetting("colorGradeFlare", 75.f);
+          renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
         },
     },
     new renodx::utils::settings::Setting{

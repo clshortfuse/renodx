@@ -1,4 +1,4 @@
-#include "C:\Users\Musa\Documents\Programming Projects\renodx\src\games\elitedangerous\common.hlsl"
+#include "./common.hlsli"
 
 // ---- Created with 3Dmigoto v1.3.16 on Thu Jan 02 19:08:33 2025
 Texture2D<float4> t2 : register(t2);
@@ -169,6 +169,6 @@ void main(
   }
   o0.xyzw = r0.xyzw;
 
-  o0.rgb = DisplayMapAndScale(o0.rgb);
+  o0.rgb = GameScale(o0.rgb);
   return;
 }
