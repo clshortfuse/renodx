@@ -136,7 +136,7 @@ float3 UpgradeToneMap(float3 color_hdr, float3 color_sdr, float3 post_process_co
   }
 }
 
-float3 DisplayMapAndScale(float3 color) {
+float3 GameScale(float3 color) {
   if (RENODX_GAMMA_CORRECTION == 1.f) {
     color = renodx::color::gamma::DecodeSafe(color, 2.2f);
     color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;

@@ -20,6 +20,7 @@
 #define RENODX_TONE_MAP_RESTORATION_METHOD   shader_injection.tone_map_restoration_method
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
 #define CUSTOM_LUT_STRENGTH                  shader_injection.custom_lut_strength
+#define CUSTOM_BLOOM                         shader_injection.custom_bloom
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -43,6 +44,7 @@ struct ShaderInjectData {
   float tone_map_restoration_method;
   float gamma_correction;
   float custom_lut_strength;
+  float custom_bloom;
 };
 
 #ifndef __cplusplus
