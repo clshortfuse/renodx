@@ -21,6 +21,8 @@
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
 #define CUSTOM_LUT_STRENGTH                  shader_injection.custom_lut_strength
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom
+#define CUSTOM_RANDOM                        shader_injection.custom_random
+#define CUSTOM_GRAIN_STRENGTH                shader_injection.custom_grain_strength
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -45,6 +47,8 @@ struct ShaderInjectData {
   float gamma_correction;
   float custom_lut_strength;
   float custom_bloom;
+  float custom_random;
+  float custom_grain_strength;
 };
 
 #ifndef __cplusplus

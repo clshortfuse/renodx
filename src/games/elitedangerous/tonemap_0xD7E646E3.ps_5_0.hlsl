@@ -169,6 +169,6 @@ void main(
   }
   o0.xyzw = r0.xyzw;
 
-  o0.rgb = GameScale(o0.rgb);
+  o0.rgb = GameScaleAndGrain(o0.rgb, v0.xy);
   return;
 }
