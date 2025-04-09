@@ -201,7 +201,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "ACES", "RenoDRT", "Reinhard+"},
+        .labels = {"Vanilla", "None", "ACES", "RenoDRT (Daniele)", "RenoDRT (Reinhard)"},
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
@@ -256,7 +256,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
         .labels = {"Per Channel", "Luminance"},
-        .is_enabled = []() { return shader_injection.toneMapType == 3.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
@@ -402,7 +402,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = 0x01A8DF,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 3.f; },
+        .is_enabled = []() { return shader_injection.toneMapType == 3.f || shader_injection.toneMapType == 4.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -704,12 +704,12 @@ void OnPresent(
   if(game != 0) {
     game_check = true;
   if(game == 1){
-    settings[1]->labels = {"Vanilla", "None", "Frostbite", "RenoDRT", "DICE"};
+    settings[1]->labels = {"Vanilla", "None", "Frostbite", "RenoDRT (Reinhard)", "RenoDRT (Daniele)", "DICE"};
     settings[6]->labels = {"Luminance", "Per Channel"};
     settings[6]->is_enabled = []() { return shader_injection.toneMapType >= 3.f; };
     settings[8]->is_enabled = []() { return shader_injection.toneMapType >= 2.f; };
     settings[9]->is_enabled = []() { return shader_injection.toneMapType >= 2.f; };
-    settings[10]->is_visible = []() { return shader_injection.toneMapType == 2.f || shader_injection.toneMapType == 4.f ; },
+    settings[10]->is_visible = []() { return shader_injection.toneMapType == 2.f || shader_injection.toneMapType == 5.f ; },
     settings[16]->is_enabled = []() { return shader_injection.toneMapType >= 2.f; };
     settings[17]->is_enabled = []() { return shader_injection.toneMapType >= 2.f; };
     settings[19]->label = "Vanilla Grading Strength";

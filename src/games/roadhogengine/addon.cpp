@@ -1320,12 +1320,12 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 3.f,
+        .default_value = 4.f,
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "Frostbite", "RenoDRT", "DICE"},
+        .labels = {"Vanilla", "None", "Frostbite", "RenoDRT (Daniele)", "RenoDRT (Reinhard)", "DICE"},
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
@@ -1380,7 +1380,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
         .labels = {"Luminance", "Per Channel"},
-        .is_enabled = []() { return shader_injection.toneMapType == 3.f || shader_injection.toneMapType == 4.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
@@ -1426,7 +1426,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .max = 0.99f,
         .format = "%.2f",
-        .is_visible = []() { return shader_injection.toneMapType == 2.f || shader_injection.toneMapType == 4.f; },
+        .is_visible = []() { return shader_injection.toneMapType == 2.f || shader_injection.toneMapType == 5.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
@@ -1795,7 +1795,7 @@ void OnPresent(
     if(game != 0) {
     game_check = true;
     if(game >= 3){
-    settings[1]->labels = {"Vanilla", "None", "ACES", "RenoDRT", "Reinhard+"};
+    settings[1]->labels = {"Vanilla", "None", "ACES", "RenoDRT (Daniele)", "RenoDRT (Reinhard)"};
     settings[6]->labels = {"Per Channel", "Luminance"};
     settings[6]->is_enabled = []() { return shader_injection.toneMapType == 3.f; };
     settings[7]->is_enabled = []() { return shader_injection.toneMapType >= 3.f; };

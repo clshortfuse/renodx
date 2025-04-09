@@ -259,7 +259,7 @@ float3 Apply(float3 inputColor, renodx::tonemap::Config tm_config, renodx::lut::
 float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState lutSampler, float3 LUTless) {
   float3 outputColor;
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
-  config.type = injectedData.toneMapType;
+  config.type = min(3, injectedData.toneMapType);
   config.peak_nits = injectedData.toneMapPeakNits;
   config.game_nits = injectedData.toneMapGameNits;
   config.gamma_correction = injectedData.toneMapGammaCorrection;
@@ -273,10 +273,10 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   config.reno_drt_saturation = 1.f;
   config.reno_drt_dechroma = 0.5f;
   config.reno_drt_flare = 0.01 * pow(injectedData.colorGradeFlare, 5.32192809489);
-  config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.hue_correction_type = renodx::tonemap::config::hue_correction_type::INPUT;
   config.hue_correction_strength = 1.f - injectedData.toneMapHueCorrection;
-  config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
+  config.reno_drt_tone_map_method = injectedData.toneMapType == 4.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+                                                                    : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
   config.reno_drt_per_channel = true;
@@ -301,7 +301,7 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
     float3 hdrColor = applyFrostbite(outputColor, config);
     float3 lutColor = renodx::lut::Sample(lutTexture, lut_config, sdrColor);
     outputColor = injectedData.upgradePerChannel != 0.f ? UpgradeToneMapPerChannel(hdrColor, sdrColor, lutColor, previous_lut_config_strength) : UpgradeToneMapByLuminance(hdrColor, sdrColor, lutColor, previous_lut_config_strength);
-  } else if (injectedData.toneMapType == 4.f) {  // DICE
+  } else if (injectedData.toneMapType == 5.f) {  // DICE
     float previous_lut_config_strength = lut_config.strength;
     lut_config.strength = 1.f;
     float3 sdrColor = applyDICE(outputColor, config, true);

@@ -36,7 +36,7 @@ void main(
   }
   r0.rgb = renodx::color::srgb::DecodeSafe(r0.rgb);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
-  config.type = injectedData.toneMapType;
+  config.type = min(3, injectedData.toneMapType);
   config.peak_nits = injectedData.toneMapPeakNits;
   config.game_nits = injectedData.toneMapGameNits;
   config.gamma_correction = injectedData.toneMapGammaCorrection;
@@ -57,7 +57,8 @@ void main(
                                        ? (1.f - injectedData.toneMapHueCorrection)
                                        : injectedData.toneMapHueCorrection;
   config.hue_correction_color = lerp(r0.rgb, renodx::tonemap::renodrt::NeutralSDR(r0.rgb), injectedData.toneMapHueShift);
-  config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
+  config.reno_drt_tone_map_method = injectedData.toneMapType == 3.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+                                                                    : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
@@ -65,7 +66,7 @@ void main(
   if (injectedData.colorGradeLUTStrength == 0.f || config.type == 1.f) {
     if (config.type == 2.f) {
       r0.rgb = applyFrostbite(r0.rgb, config);
-    } else if (config.type == 4.f) {
+    } else if (config.type == 5.f) {
       r0.rgb = applyDICE(r0.rgb, config);
     } else {
       r0.rgb = renodx::tonemap::config::Apply(r0.rgb, config);
@@ -76,7 +77,7 @@ void main(
     if (config.type == 2.f) {
       sdrColor = applyFrostbite(r0.rgb, config, true);
       hdrColor = applyFrostbite(r0.rgb, config);
-    } else if (config.type == 4.f) {
+    } else if (config.type == 5.f) {
       sdrColor = applyDICE(r0.rgb, config, true);
       hdrColor = applyDICE(r0.rgb, config);
     } else {

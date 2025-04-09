@@ -73,7 +73,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "ACES", "RenoDRT", "Reinhard+"},
+        .labels = {"Vanilla", "None", "ACES", "RenoDRT (Daniele)", "RenoDRT (Reinhard)"},
         .tint = 0xFE4C4F,
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
@@ -134,7 +134,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
         .labels = {"Luminance", "Per Channel"},
         .tint = 0x610512,
-        .is_enabled = []() { return shader_injection.toneMapType == 3.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
@@ -261,7 +261,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = 0x004A6A,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 3.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
