@@ -354,7 +354,8 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
-static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
+static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize = false) {
+  if (resize) return;
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
   std::vector<ResourceInfo*> infos;
   {

@@ -1301,23 +1301,6 @@ inline bool OnCreateResource(
 }
 
 inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_info) {
-  if (resource_info->is_swap_chain) {
-    if (UsingSwapchainProxy()) {
-      if (!UsingSwapchainCompatibilityMode()) {
-        {
-          std::stringstream s;
-          s << "mods::swapchain::OnInitResourceInfo(Marking swapchain buffer for cloning: ";
-          s << PRINT_PTR(resource_info->resource.handle);
-          s << ")";
-          reshade::log::message(reshade::log::level::debug, s.str().c_str());
-        }
-        resource_info->clone_enabled = true;
-      }
-      resource_info->clone_target = &swap_chain_proxy_upgrade_target;
-    }
-    return;
-  }
-
   auto* device = resource_info->device;
   auto& desc = resource_info->desc;
 
@@ -1360,6 +1343,24 @@ inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
   } else if (use_resource_cloning) {
     auto* private_data = renodx::utils::data::Get<DeviceData>(device);
     if (private_data == nullptr) return;
+
+    if (resource_info->is_swap_chain) {
+      if (UsingSwapchainProxy()) {
+        if (!UsingSwapchainCompatibilityMode()) {
+          {
+            std::stringstream s;
+            s << "mods::swapchain::OnInitResourceInfo(Marking swapchain buffer for cloning: ";
+            s << PRINT_PTR(resource_info->resource.handle);
+            s << ")";
+            reshade::log::message(reshade::log::level::debug, s.str().c_str());
+          }
+          resource_info->clone_enabled = true;
+        }
+        resource_info->clone_target = &swap_chain_proxy_upgrade_target;
+      }
+      return;
+    }
+
     if (private_data->resource_upgrade_finished) return;
     auto& device_back_buffer_desc = private_data->primary_swapchain_desc;
     if (device_back_buffer_desc.type == reshade::api::resource_type::unknown) {
@@ -1516,8 +1517,8 @@ inline void OnDestroyResourceInfo(utils::resource::ResourceInfo* info) {
     s << ", -vram: " << info->extra_vram;
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
-    info->extra_vram = 0;
 #endif
+    info->extra_vram = 0;
   }
 }
 
