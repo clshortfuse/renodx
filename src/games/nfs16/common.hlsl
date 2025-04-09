@@ -257,9 +257,8 @@ float3 Apply(float3 inputColor, renodx::tonemap::Config tm_config, renodx::lut::
 }
 
 float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState lutSampler, float3 LUTless) {
-  float3 outputColor = untonemapped;
+  float3 outputColor;
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
-
   config.type = injectedData.toneMapType;
   config.peak_nits = injectedData.toneMapPeakNits;
   config.game_nits = injectedData.toneMapGameNits;
@@ -281,7 +280,7 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
   config.reno_drt_per_channel = true;
-
+  config.reno_drt_white_clip = injectedData.colorGradeClip;
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = lutSampler;
   lut_config.strength = injectedData.colorGradeLUTStrength;
@@ -290,9 +289,10 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   lut_config.type_output = renodx::lut::config::type::SRGB;
   lut_config.size = 32;
   lut_config.tetrahedral = injectedData.colorGradeLUTSampling != 0.f;
-
   if (injectedData.toneMapType == 0.f) {
     outputColor = saturate(LUTless);
+  } else {
+    outputColor = untonemapped;
   }
   if (injectedData.toneMapType == 2.f) {  // Frostbite
     float previous_lut_config_strength = lut_config.strength;

@@ -257,19 +257,16 @@ float3 Apply(float3 inputColor, renodx::tonemap::Config tm_config, renodx::lut::
 float3 vanillaTonemap(float3 color, float A, float CB, float DE, float B, float DF, float mEF, float LW){
   float3 numerator = mad(color, mad(A, color, CB), DE);  // x * (a * x + c * b) + d * e
   float3 denominator = mad(color, mad(A, color, B), DF);    // x * (a * x + b) + d * f
-  color = ((numerator / denominator) + mEF) * LW;
-return saturate(color);
+  return (numerator / denominator + mEF) * LW;;
 }
 
 float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState lutSampler, float4 Params0, float3 Params1){
-		
-		float3 outputColor = untonemapped;
+		float3 outputColor;
 		float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18f,0.18f,0.18f),
 		Params0.x, Params0.y, Params0.z, Params0.w, Params1.x, Params1.y, Params1.z));
 		float3 hueCorrectionColor = vanillaTonemap(outputColor,
 		Params0.x, Params0.y, Params0.z, Params0.w, Params1.x, Params1.y, Params1.z);
 		  renodx::tonemap::Config config = renodx::tonemap::config::Create();
-
 			config.type = injectedData.toneMapType;
 			config.peak_nits = injectedData.toneMapPeakNits;
 			config.game_nits = injectedData.toneMapGameNits;
@@ -291,12 +288,12 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
 			config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f
       ? (1.f - injectedData.toneMapHueCorrection)
       : injectedData.toneMapHueCorrection;
-			config.hue_correction_color = hueCorrectionColor;
+			config.hue_correction_color = lerp(untonemapped, hueCorrectionColor, injectedData.toneMapHueShift);
 			config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
 			config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
 			config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
 			config.reno_drt_blowout = injectedData.colorGradeBlowout;
-
+      config.reno_drt_white_clip = injectedData.colorGradeClip;
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = lutSampler;
   lut_config.strength = injectedData.colorGradeLUTStrength;
@@ -305,10 +302,11 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   lut_config.type_output = renodx::lut::config::type::LINEAR;
   lut_config.size = 32;
   lut_config.tetrahedral = injectedData.colorGradeLUTSampling != 0.f;
-
 				if(injectedData.toneMapType == 0.f){
-			outputColor = hueCorrectionColor;
-			}
+			outputColor = saturate(hueCorrectionColor);
+			} else {
+      outputColor = untonemapped;
+      }
 				if (injectedData.toneMapType == 4.f){
 			config.contrast *= 1.1f;
 			config.saturation *= 1.2f;

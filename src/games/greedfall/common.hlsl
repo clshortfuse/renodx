@@ -200,5 +200,5 @@ float3 vanillaTonemap(float3 color){
   const float c = 2.43f;
   const float d = 0.59f;
   const float e = 0.14f;
-  return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0f, 1.0f);
+  return (color * (a * color + b)) / (color * (c * color + d) + e);
 }
