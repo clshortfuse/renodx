@@ -3,15 +3,18 @@
 #pragma comment(lib, "version.lib")
 
 #include <dxgi1_6.h>
+#include <windows.h>
 #include <winver.h>
+#include <algorithm>
 #include <filesystem>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <vector>
 
 namespace renodx::utils::platform {
 
-inline std::vector<DISPLAYCONFIG_PATH_INFO> GetPathInfos() {
+static std::vector<DISPLAYCONFIG_PATH_INFO> GetPathInfos() {
   for (LONG result = ERROR_INSUFFICIENT_BUFFER;
        result == ERROR_INSUFFICIENT_BUFFER;) {
     uint32_t path_elements;
@@ -34,7 +37,7 @@ inline std::vector<DISPLAYCONFIG_PATH_INFO> GetPathInfos() {
   return {};
 }
 
-inline std::optional<DISPLAYCONFIG_PATH_INFO> GetPathInfo(HMONITOR monitor) {
+static std::optional<DISPLAYCONFIG_PATH_INFO> GetPathInfo(HMONITOR monitor) {
   // Get the monitor name.
   MONITORINFOEX monitor_info = {};
   monitor_info.cbSize = sizeof(monitor_info);
@@ -60,7 +63,7 @@ inline std::optional<DISPLAYCONFIG_PATH_INFO> GetPathInfo(HMONITOR monitor) {
   return std::nullopt;
 }
 
-inline void Launch(const std::string& location) {
+static void Launch(const std::string& location) {
 #if WIN32
   ShellExecute(nullptr, "open", location.c_str(), nullptr, nullptr, SW_SHOW);
 #else
@@ -68,7 +71,7 @@ inline void Launch(const std::string& location) {
 #endif
 }
 
-inline std::filesystem::path GetCurrentProcessPath() {
+static std::filesystem::path GetCurrentProcessPath() {
   TCHAR file_name[MAX_PATH + 1];
   DWORD chars_written = GetModuleFileName(nullptr, file_name, MAX_PATH + 1);
   if (chars_written != 0) {
@@ -77,7 +80,7 @@ inline std::filesystem::path GetCurrentProcessPath() {
   return "";
 }
 
-inline std::string GetProductName(const std::filesystem::path& path = GetCurrentProcessPath()) {
+static std::string GetProductName(const std::filesystem::path& path = GetCurrentProcessPath()) {
   [[maybe_unused]] DWORD dummy{};
   const auto required_buffer_size{
       GetFileVersionInfoSizeExW(
@@ -90,7 +93,7 @@ inline std::string GetProductName(const std::filesystem::path& path = GetCurrent
           static_cast<::std::size_t>(required_buffer_size))};
   const auto get_version_info_result{
       GetFileVersionInfoExW(
-          FILE_VER_GET_NEUTRAL, path.wstring().c_str(), DWORD{}, required_buffer_size, static_cast<void*>(p_buffer.get()))};
+          FILE_VER_GET_NEUTRAL, path.wstring().c_str(), DWORD{}, required_buffer_size, reinterpret_cast<void*>(p_buffer.get()))};
   if (FALSE == get_version_info_result) {
     return "";
   }
@@ -98,7 +101,7 @@ inline std::string GetProductName(const std::filesystem::path& path = GetCurrent
   UINT value_length{};
   const auto query_result{
       VerQueryValueW(
-          static_cast<void*>(p_buffer.get()),
+          reinterpret_cast<void*>(p_buffer.get()),
           L"\\StringFileInfo"
           L"\\040904B0"
           L"\\ProductName",
@@ -121,6 +124,21 @@ inline std::string GetProductName(const std::filesystem::path& path = GetCurrent
     return std::string(output_string.get());
   }
   return "";
+}
+
+static bool IsToolWindow(HWND hwnd) {
+  LONG_PTR ex_style = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+  return (ex_style & WS_EX_TOOLWINDOW) != 0;
+}
+
+static bool IsDummyWindow(HWND hwnd) {
+  char class_name[256];
+  if (GetClassName(hwnd, class_name, sizeof(class_name))) {
+    auto lower_case_view = std::string(class_name) | std::views::transform([](auto c) { return std::tolower(c); });
+    if (!std::ranges::search(lower_case_view, std::string("dummy")).empty()) return true;
+  }
+
+  return false;
 }
 
 }  // namespace renodx::utils::platform
