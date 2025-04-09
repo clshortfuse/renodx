@@ -121,7 +121,7 @@ void main(
     float3 lutOutput;
     float3 outputColor;
   	renodx::tonemap::Config config = renodx::tonemap::config::Create();
-			config.type = injectedData.toneMapType;
+			config.type = min(3, injectedData.toneMapType);
 			config.peak_nits = injectedData.toneMapPeakNits;
 			config.game_nits = injectedData.toneMapGameNits;
 			config.gamma_correction = injectedData.toneMapGammaCorrection;
@@ -145,7 +145,8 @@ void main(
       : injectedData.toneMapHueCorrection;
 			config.hue_correction_color = lerp(linearColor, hueCorrectionColor, injectedData.toneMapHueShift);
 			config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
-			config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
+			config.reno_drt_tone_map_method = injectedData.toneMapType == 4.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+                                                                    : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
       config.reno_drt_working_color_space = (uint)injectedData.toneMapPerChannel;
 			config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
 			config.reno_drt_blowout = injectedData.colorGradeBlowout;
@@ -157,30 +158,11 @@ void main(
     }
       if(injectedData.colorGradeLUTStrength == 0.f || config.type == 1.f){
     r2.rgb = renodx::tonemap::config::Apply(outputColor, config);
-        if(config.type == 4.f){
-		config.shadows *= 0.8f;
-		config.contrast *= 1.2f;
-		config.saturation *= 1.4f;
-    config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
-    config.hue_correction_strength = injectedData.toneMapHueCorrection;
-    r2.rgb = applyReinhardPlus(outputColor, config);
-      } 
-    } else {
-      if(config.type == 4.f){
-		config.shadows *= 0.8f;
-		config.contrast *= 1.2f;
-		config.saturation *= 1.4f;
-    config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
-    config.hue_correction_strength = injectedData.toneMapHueCorrection;
-    hdrColor = applyReinhardPlus(outputColor, config);
-    sdrColor = applyReinhardPlus(outputColor, config, true);
-    lutInput = sdrColor;
     } else {
     renodx::tonemap::config::DualToneMap tone_maps = renodx::tonemap::config::ApplyToneMaps(outputColor, config);
       hdrColor = tone_maps.color_hdr;
       sdrColor = tone_maps.color_sdr;
       lutInput = sdrColor;
-    }
     r2.gba = lutInput;
       float previous_lut_config_strength;
   r0.z = cmp(1 < cb1[2].x);

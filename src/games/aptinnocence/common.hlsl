@@ -178,7 +178,7 @@ float3 applyDICE(float3 input, renodx::tonemap::Config DiceConfig, bool sdr = fa
 float3 applyUserTonemap(float3 untonemapped, float3 vanilla){
 	float3 outputColor;
 		renodx::tonemap::Config config = renodx::tonemap::config::Create();
-	config.type = injectedData.toneMapType;
+	config.type = min(3, injectedData.toneMapType);
 	config.peak_nits = injectedData.toneMapPeakNits;
 	config.game_nits = injectedData.toneMapGameNits;
   config.gamma_correction = injectedData.toneMapGammaCorrection;
@@ -199,7 +199,8 @@ float3 applyUserTonemap(float3 untonemapped, float3 vanilla){
                                        ? (1.f - injectedData.toneMapHueCorrection)
                                        : injectedData.toneMapHueCorrection;
   config.hue_correction_color = lerp(untonemapped, vanilla, injectedData.toneMapHueShift);
-  config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
+  config.reno_drt_tone_map_method = injectedData.toneMapType == 4.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+                                                                    : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
@@ -211,7 +212,7 @@ float3 applyUserTonemap(float3 untonemapped, float3 vanilla){
   }
   if (injectedData.toneMapType == 2.f) {  // Frostbite
     outputColor = applyFrostbite(untonemapped, config);
-  } else if (injectedData.toneMapType == 4.f) {  // DICE
+  } else if (injectedData.toneMapType == 5.f) {  // DICE
     outputColor = applyDICE(outputColor, config);
   } else {
     outputColor = renodx::tonemap::config::Apply(outputColor, config);
