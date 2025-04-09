@@ -85,7 +85,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     game = 1;
     return true;
     }),
-    UpgradeRTVReplaceShader(0x8B2AB983),  // tonemap
+    UpgradeRTVReplaceShader(0x8B2AB983),  // grading
+    UpgradeRTVReplaceShader(0x52A3DCD5),  // grading
+    CustomShaderEntry(0x2DE809A9),  // bloom sample (black square bug fix)
     UpgradeRTVShader(0x556ADFB0),   // effect
     UpgradeRTVShader(0x381C7189),   // effect
     UpgradeRTVShader(0x073DC55B),   // effect
@@ -688,6 +690,7 @@ void OnPresent(
     settings[25]->is_visible = []() { return shader_injection.fxFilmGrainType != 0.f ; };
     settings[26]->labels = {"Vanilla (none)", "Perceptual"};
     settings[26]->is_visible = []() { return true ; };
+    settings[32]->label = "Bloom should be enabled in game settings.";
   }
   if(game == 2){
     settings[23]->is_visible = []() { return false ; };
