@@ -354,8 +354,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
-static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize = false) {
-  if (resize) return;
+static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
   std::vector<ResourceInfo*> infos;
   {
@@ -428,7 +427,7 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   if (pair == store->resource_infos.end()) {
     std::stringstream s;
     s << "utils::resource::OnDestroyResource(Unknown resource: ";
-    s << static_cast<uintptr_t>(resource.handle);
+    s << PRINT_PTR(resource.handle);
     s << ")";
     reshade::log::message(reshade::log::level::warning, s.str().c_str());
     return;
@@ -439,7 +438,7 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
     s << "utils::resource::OnDestroyResource(Resource already destroyed: ";
-    s << static_cast<uintptr_t>(resource.handle);
+    s << PRINT_PTR(resource.handle);
     s << ")";
     reshade::log::message(reshade::log::level::warning, s.str().c_str());
 #endif
@@ -448,7 +447,7 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   if (resource_info.is_clone) {
     std::stringstream s;
     s << "utils::resource::OnDestroyResource(Clone destroyed directly: ";
-    s << static_cast<uintptr_t>(resource.handle);
+    s << PRINT_PTR(resource.handle);
     s << ")";
     reshade::log::message(reshade::log::level::warning, s.str().c_str());
     device->destroy_resource(resource_info.resource);
