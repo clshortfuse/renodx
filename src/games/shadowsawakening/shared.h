@@ -32,7 +32,6 @@ struct ShaderInjectData {
   float fxFilmGrainType;
   float fxCameraLight;
 
-  float elapsedTime;
   float random_1;
   float random_2;
   float random_3;

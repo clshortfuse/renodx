@@ -529,10 +529,6 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("fxBlooom", 50.f);
 }
 
-auto start = std::chrono::steady_clock::now();
-static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
-static float random_range = (random_generator.max() - random_generator.min());
-
 bool fired_on_init_swapchain = false;
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
@@ -552,11 +548,11 @@ void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-  auto end = std::chrono::steady_clock::now();
-  shader_injection.elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-  shader_injection.random_1 = (float)(random_generator() + random_generator.min()) / random_range;
-  shader_injection.random_2 = (float)(random_generator() + random_generator.min()) / random_range;
-  shader_injection.random_3 = (float)(random_generator() + random_generator.min()) / random_range;
+    static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
+    static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
+  shader_injection.random_1 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
+  shader_injection.random_2 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
+  shader_injection.random_3 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
 }
 
 }  // namespace

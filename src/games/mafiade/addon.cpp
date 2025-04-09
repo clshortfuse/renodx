@@ -6,7 +6,10 @@
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
+#define NOMINMAX
 
+#include <chrono>
+#include <random>
 #include <embed/shaders.h>
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -473,7 +476,6 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("fxNoise", 50.f);
 }
 
-auto start = std::chrono::steady_clock::now();
 bool fired_on_init_swapchain = false;
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
@@ -493,8 +495,9 @@ void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-  auto end = std::chrono::steady_clock::now();
-  shader_injection.elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
+    static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
+  shader_injection.random = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
   shader_injection.is_swapchain_write = false;
 }
 
