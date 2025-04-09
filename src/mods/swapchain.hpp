@@ -1120,10 +1120,6 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 }
 
 static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  if (resize) {
-    reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnDestroySwapchain(Resize)");
-    return;  // Not actually destroyed
-  }
   auto* device = swapchain->get_device();
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return;
