@@ -16,7 +16,7 @@ float3 HueChromaCorrectAP1(float3 incorrect_color_ap1, float3 correct_color_ap1)
   float3 incorrect_jch = renodx::color::dtucs::jch::from::BT709(incorrect_bt709);
   float3 correct_jch = renodx::color::dtucs::jch::from::BT709(correct_bt709);
 
-  incorrect_jch.yz = float2(correct_jch.y * 1.1f, correct_jch.z);  // boost chroma
+  incorrect_jch.yz = float2(correct_jch.y * 1.125f, correct_jch.z);  // boost chroma
 
   float3 corrected_bt709 = renodx::color::bt709::from::dtucs::JCH(incorrect_jch);
 
@@ -104,4 +104,23 @@ float3 ApplyBlendedToneMapEncodePQ(float3 untonemapped_ap1, float peak_nits, flo
   tonemapped = renodx::color::bt2020::from::BT709(tonemapped);
   tonemapped = renodx::color::pq::EncodeSafe(tonemapped, diffuse_white);
   return tonemapped;
+}
+
+float3 ApplyBlendedACESToneMapEncodePQ(float3 untonemapped_ap1, float peak_nits, float diffuse_white_nits) {
+  float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1) / 32.f;
+
+  const float ACES_MIN = 0.0001f;
+  float aces_min = ACES_MIN / diffuse_white_nits;
+  float aces_max = (peak_nits / diffuse_white_nits);
+
+  float3 untonemapped_ap0 = mul(renodx::color::BT709_TO_AP0_MAT, untonemapped_bt709);
+  float3 untonemapped_rrt_ap1 = renodx::tonemap::aces::RRT(untonemapped_ap0);
+  float3 tonemapped_ap1 = renodx::tonemap::aces::ODT(untonemapped_rrt_ap1, aces_min * 48.f, aces_max * 48.f, renodx::color::IDENTITY_MAT) / 48.f;
+
+  float3 hue_corrected_ap1 = HueCorrectAP1(tonemapped_ap1, untonemapped_rrt_ap1);
+
+  float3 blended_color_ap1 = lerp(hue_corrected_ap1, tonemapped_ap1, saturate(hue_corrected_ap1));
+
+  float3 blended_color_bt2020 = renodx::color::bt2020::from::AP1(blended_color_ap1);
+  return renodx::color::pq::EncodeSafe(blended_color_bt2020, diffuse_white_nits);
 }
