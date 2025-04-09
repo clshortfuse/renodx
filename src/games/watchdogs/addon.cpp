@@ -521,17 +521,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .new_format = reshade::api::format::r16g16b16a16_float,
           .ignore_size = true,
           .use_resource_view_cloning = true,
-          .view_upgrades = {
-          {{reshade::api::resource_usage::shader_resource,
-          reshade::api::format::r11g11b10_float},
-          reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::unordered_access,
-          reshade::api::format::r11g11b10_float},
-          reshade::api::format::r16g16b16a16_float},
-          {{reshade::api::resource_usage::render_target,
-          reshade::api::format::r11g11b10_float},
-          reshade::api::format::r16g16b16a16_float},
-          }
       });
     reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
     //reshade::register_event<reshade::addon_event::present>(OnPresent);
