@@ -3,13 +3,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <include/reshade_api_device.hpp>
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
-#define NOMINMAX
-
-#include <chrono>
-#include <random>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -18,38 +15,26 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
-#include "../../utils/platform.hpp"
 #include "../../utils/settings.hpp"
-#include "../../utils/swapchain.hpp"
 #include "./shared.h"
 
 namespace {
-
 renodx::mods::shader::CustomShaders custom_shaders = {
     // Outputs
-    CustomShaderEntry(0xC6FBD9A4),
-    CustomShaderEntry(0x3B3FC437),
-    CustomShaderEntry(0xAB7215D2),
-    CustomShaderEntry(0xD1C5DCB9),
+    CustomShaderEntry(0x882D3C2F),
 
-    // DOF
-    CustomShaderEntry(0x0A4344AF),
-    CustomShaderEntry(0x1F60EC02),
-    CustomShaderEntry(0x1FA67B57),
-    CustomShaderEntry(0x5B62AA56),
-    CustomShaderEntry(0xA18A5613),
+    // Video
+    CustomShaderEntry(0x9715D453),
 
-    // UI
-    CustomShaderEntry(0x7A973CE4),
-    CustomShaderEntry(0x7EE72E6A),
-    CustomShaderEntry(0x86ACEECC),
-    CustomShaderEntry(0x7056B504),
+    // Tonemappers
+    CustomShaderEntry(0x0AF1BCE6),
+    CustomShaderEntry(0x2DA6CA4B),
+    CustomShaderEntry(0x9347F823),
+    CustomShaderEntry(0xF155E283),
 
-    // Filmgrain
-    CustomShaderEntry(0xB90F6101),
-
-    // Death Vignette
-    CustomShaderEntry(0x171A62C9)};
+    // Unknown
+    BypassShaderEntry(0x3B79D402),
+};
 
 ShaderInjectData shader_injection;
 const std::string build_date = __DATE__;
@@ -206,7 +191,8 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::Launch(("https://discord.gg/XUhv") + std::string("tR54yc"));
+          static const std::string obfuscated_link = std::string("start https://discord.gg/XUhv") + std::string("tR54yc");
+          system(obfuscated_link.c_str());
         },
     },
     new renodx::utils::settings::Setting{
@@ -215,7 +201,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Links",
         .group = "button-line-1",
         .on_change = []() {
-          renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx");
+          ShellExecute(0, "open", "https://github.com/clshortfuse/renodx", 0, 0, SW_SHOW);
         },
     },
     new renodx::utils::settings::Setting{
@@ -225,7 +211,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0xFF5F5F,
         .on_change = []() {
-          renodx::utils::platform::Launch("https://ko-fi.com/ritsucecil");
+          ShellExecute(0, "open", "https://ko-fi.com/ritsucecil", 0, 0, SW_SHOW);
         },
     },
     new renodx::utils::settings::Setting{
@@ -235,7 +221,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0xFF5F5F,
         .on_change = []() {
-          renodx::utils::platform::Launch("https://ko-fi.com/shortfuse");
+          ShellExecute(0, "open", "https://ko-fi.com/shortfuse", 0, 0, SW_SHOW);
         },
     },
     new renodx::utils::settings::Setting{
@@ -245,12 +231,14 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0xFF5F5F,
         .on_change = []() {
-          renodx::utils::platform::Launch("https://ko-fi.com/hdrden");
+          ShellExecute(0, "open", "https://ko-fi.com/hdrden", 0, 0, SW_SHOW);
         },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = " - AA at native res causes bloom issues",
+        .label = " - Upscaling must be used (DLSS/FSR/XeSS)!\n"
+        " - AA at native res causes visual bugs\n"
+        " - XeSS users must update the XeSS dll to the latest version, otherwise game will crash\n",
         .section = "Instructions",
     },
     new renodx::utils::settings::Setting{
@@ -289,36 +277,29 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     settings[2]->can_reset = true;
   }
 }
-void OnPresent(
-    reshade::api::command_queue* queue,
-    reshade::api::swapchain* swapchain,
-    const reshade::api::rect* source_rect,
-    const reshade::api::rect* dest_rect,
-    uint32_t dirty_rect_count,
-    const reshade::api::rect* dirty_rects) {
-  static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
-  static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
-  CUSTOM_RANDOM = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
-}
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX Space Marine 2";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX Darktide";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       // while (IsDebuggerPresent() == 0) Sleep(100);
 
       renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
         // We only need output shader since it's the only shader using injected data
         auto param_count = params.size();
 
-        return true;
-      };
+        if (param_count <= 15) {
+          return true;
+        }
 
-      // renodx::mods::swapchain::SetUseHDR10();
+        return false;
+      };
 
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::shader::expected_constant_buffer_space = 50;
@@ -329,17 +310,25 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-      // renodx::mods::shader::manual_shader_scheduling = true;
+      // renodx::mods::swapchain::swap_chain_proxy_format = reshade::api::format::r10g10b10a2_unorm;
+      renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
+      renodx::mods::swapchain::SetUseHDR10(true);
+
       renodx::mods::shader::allow_multiple_push_constants = true;
       renodx::mods::swapchain::use_resource_cloning = true;
+      // renodx::mods::shader::use_pipeline_layout_cloning = false;
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r8g8b8a8_typeless,
-                                                                     .new_format = reshade::api::format::r16g16b16a16_float,
-                                                                     .use_resource_view_cloning = true});
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+      });
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r8g8b8a8_unorm,
-                                                                     .new_format = reshade::api::format::r16g16b16a16_float,
-                                                                     .use_resource_view_cloning = true});
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+      });
 
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r10g10b10a2_unorm,
@@ -348,15 +337,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
           .usage_include = reshade::api::resource_usage::render_target,
       });
-
-      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::register_event<reshade::addon_event::present>(OnPresent);
-
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
-
       reshade::unregister_addon(h_module);
       break;
   }
