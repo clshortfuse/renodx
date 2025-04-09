@@ -23,36 +23,40 @@ namespace {
 ShaderInjectData shader_injection;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x5BD664AB),  // Local ToneMap
+    CustomShaderEntry(0xF83B5539),  // Local ToneMap
 
-    CustomShaderEntry(0xD6C9BB0F),  // Color Grade + ToneMap LutBuilder
-    CustomShaderEntry(0x04B750B4),  // ACES ToneMap LutBuilder
+    CustomShaderEntry(0x05D11E4F),  // Sample LUT + Bloom
+    CustomShaderEntry(0xF65A634F),  // Color Grade + ToneMap LutBuilder
+    CustomShaderEntry(0x551A03A4),  // ToneMap LutBuilder
 
-    CustomShaderEntry(0x2AB4958B),  // UI - sRGB to HDR
-    CustomShaderEntry(0x4FE73FF0),  // UI - Video sRGB to HDR
-
-    // CustomShaderEntry(0x52BBE024),  // UI + Game Blending
+    CustomShaderEntry(0x2339C673),  // UI - sRGB to HDR
+    CustomShaderEntry(0x315AE769),  // UI - Video sRGB to HDR
 };
 
 const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
-    {"ToneMapLocalToneMapStrength", 100.f},
-    {"Exposure", 1.f},
-    {"ColorGradeHighlights", 46.f},
-    {"ColorGradeShadows", 48.f},
-    {"ColorGradeContrast", 55.f},
-    {"ColorGradeSaturation", 55.f},
-    {"ColorGradeBlowout", 0.f},
-    {"ColorFilterStrength", 100.f},
+    {"ToneMapLocalToneMapShoulder", 75.f},
+    {"ToneMapLocalToneMapToe", 50.f},
+    {"FxBloom", 33.f},
 };
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
-        .key = "ToneMapLocalToneMapStrength",
-        .binding = &shader_injection.custom_local_tonemap_strength,
+        .key = "ToneMapLocalToneMapShoulder",
+        .binding = &shader_injection.custom_local_tonemap_shoulder,
         .default_value = 100.f,
-        .label = "Local Tonemap Strength",
+        .label = "Local Tonemap Shoulder",
         .section = "Tone Mapping",
-        .tooltip = "Adjust the strength of local tonemapping",
+        .tooltip = "Adjust the strength of local tonemapping shoulder",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapLocalToneMapToe",
+        .binding = &shader_injection.custom_local_tonemap_toe,
+        .default_value = 100.f,
+        .label = "Local Tonemap Toe",
+        .section = "Tone Mapping",
+        .tooltip = "Adjust the strength of local tonemapping toe",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
@@ -117,6 +121,15 @@ renodx::utils::settings::Settings settings = {
         .default_value = 100.f,
         .label = "Color Filter Strength",
         .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxBloom",
+        .binding = &shader_injection.custom_bloom,
+        .default_value = 100.f,
+        .label = "Bloom",
+        .section = "Effects",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
@@ -206,7 +219,8 @@ renodx::utils::settings::Settings settings = {
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
-      {"ToneMapLocalToneMapStrength", 100.f},
+      {"ToneMapLocalToneMapToe", 100.f},
+      {"ToneMapLocalToneMapShoulder", 100.f},
       {"Exposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
@@ -214,6 +228,7 @@ void OnPresetOff() {
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
       {"ColorFilterStrength", 100.f},
+      {"FxBloom", 100.f},
   });
 }
 
