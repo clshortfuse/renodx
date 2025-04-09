@@ -234,7 +234,7 @@ renodx::utils::settings::Settings settings = {
         .tint = 0x432A26,
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType >= 2.f; },
-        .parse = [](float value) { return value * 0.01f; },
+        .parse = [](float value) { return fmax(0.00001f, value * 0.01f); },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeFlare",
