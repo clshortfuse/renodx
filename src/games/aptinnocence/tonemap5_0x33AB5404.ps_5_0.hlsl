@@ -14,7 +14,7 @@ void main(
 
   r0.xyzw = s0.Sample(s0Sampler_s, v1.zw).xyzw;
   o0.w = r0.w;
-  r0.rgb = applyUserTonemap(r0.rgb);
+  r0.rgb = applyUserTonemap(r0.rgb, vanillaTonemap(r0.rgb));
   r0.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
   o0.xyz = PostToneMapScale(r0.rgb);
   return;

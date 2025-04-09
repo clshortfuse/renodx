@@ -315,11 +315,12 @@ float3 applyUserTonemap(float3 untonemapped, float2 screen, bool grain = true) {
   config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f
                                        ? (1.f - injectedData.toneMapHueCorrection)
                                        : injectedData.toneMapHueCorrection;
-  config.hue_correction_color = renodx::tonemap::renodrt::NeutralSDR(outputColor);
+  config.hue_correction_color = lerp(outputColor, renodx::tonemap::renodrt::NeutralSDR(outputColor), injectedData.toneMapHueShift);
   config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
+  config.reno_drt_white_clip = injectedData.colorGradeClip;
   if (injectedData.toneMapType == 2.f) {  // Frostbite
     outputColor = applyFrostbite(outputColor, config);
   } else if (injectedData.toneMapType == 4.f) {  // DICE
@@ -339,7 +340,7 @@ float3 vanillaTonemapSDR(float3 color) {
   const float c = 2.43;
   const float d = 0.59;
   const float e = 0.14;
-  return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0f, 1.0f);
+  return (color * (a * color + b)) / (color * (c * color + d) + e);
 }
 
 float3 vanillaTonemapHDR(float3 color) {
@@ -355,7 +356,7 @@ float3 vanillaTonemapHDR(float3 color) {
 }
 
 float3 applyUserTonemapACES(float3 untonemapped) {
-  float3 outputColor = untonemapped;
+  float3 outputColor;
   float midGray = renodx::color::y::from::BT709(vanillaTonemapSDR(float3(0.18f, 0.18f, 0.18f)));
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = injectedData.toneMapType;
@@ -379,11 +380,12 @@ float3 applyUserTonemapACES(float3 untonemapped) {
   config.hue_correction_strength = injectedData.toneMapPerChannel == 0.f
                                        ? (1.f - injectedData.toneMapHueCorrection)
                                        : injectedData.toneMapHueCorrection;
-  config.hue_correction_color = vanillaTonemapSDR(outputColor);
+  config.hue_correction_color = lerp(untonemapped, vanillaTonemapSDR(outputColor), injectedData.toneMapHueShift);
   config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel == 0.f;
+  config.reno_drt_white_clip = injectedData.colorGradeClip;
   if (injectedData.toneMapType == 0.f) {
     outputColor = vanillaTonemapHDR(outputColor);
   }

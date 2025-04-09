@@ -16,6 +16,7 @@ struct ShaderInjectData {
   float toneMapPerChannel;
   float toneMapColorSpace;
   float toneMapHueProcessor;
+  float toneMapHueShift;
   float toneMapHueCorrection;
   float toneMapShoulderStart;
   float colorGradeExposure;
@@ -26,6 +27,7 @@ struct ShaderInjectData {
   float colorGradeBlowout;
   float colorGradeDechroma;
   float colorGradeFlare;
+  float colorGradeClip;
   float colorGradeLUTStrength;
   float colorGradeLUTSampling;
   float upgradePerChannel;

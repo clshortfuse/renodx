@@ -324,12 +324,12 @@ float3 applyUserTonemap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f
                                        ? (1.f - injectedData.toneMapHueCorrection)
                                        : injectedData.toneMapHueCorrection;
-  config.hue_correction_color = renodx::tonemap::renodrt::NeutralSDR(outputColor);
+  config.hue_correction_color = lerp(outputColor, renodx::tonemap::renodrt::NeutralSDR(outputColor), injectedData.toneMapHueShift);
   config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
-
+  config.reno_drt_white_clip = injectedData.colorGradeClip;
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = lutSampler;
   lut_config.strength = injectedData.colorGradeLUTStrength;

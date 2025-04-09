@@ -224,12 +224,11 @@ static const float D = 0.20;  // Toe Strength
 static const float E = 0.01;  // Toe Numerator
 static const float F = 0.30;  // Toe Denominator
 
-  color = renodx::tonemap::ApplyCurve(color, A, B, C, D, E, F) / LW;
-return saturate(color);
+  return color = renodx::tonemap::ApplyCurve(color, A, B, C, D, E, F) / LW;
 }
 
 float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState lutSampler, float LW) {
-  float3 outputColor = untonemapped;
+  float3 outputColor;
   float3 hueCorrectionColor = vanillaTonemap(outputColor, LW);
   float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18f,0.18f,0.18f), LW));
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
@@ -254,12 +253,12 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f
                                        ? (1.f - injectedData.toneMapHueCorrection)
                                        : injectedData.toneMapHueCorrection;
-  config.hue_correction_color = hueCorrectionColor;
+  config.hue_correction_color = lerp(untonemapped, hueCorrectionColor, injectedData.toneMapHueShift);
   config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
   config.reno_drt_blowout = injectedData.colorGradeBlowout;
-
+  config.reno_drt_white_clip = injectedData.colorGradeClip;
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = lutSampler;
   lut_config.strength = injectedData.colorGradeLUTStrength;
@@ -269,7 +268,9 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   lut_config.size = 16;
   lut_config.tetrahedral = injectedData.colorGradeLUTSampling != 0.f;
   if (injectedData.toneMapType == 0.f) {
-    outputColor = hueCorrectionColor;
+    outputColor = saturate(hueCorrectionColor);
+  } else {
+    outputColor = untonemapped;
   }
   if (injectedData.toneMapType == 4.f) {  // Reinhard+
     config.contrast *= 1.1f;

@@ -119,7 +119,7 @@ void main(
     float3 sdrColor;
     float3 lutInput;
     float3 lutOutput;
-    float3 outputColor = linearColor;
+    float3 outputColor;
   	renodx::tonemap::Config config = renodx::tonemap::config::Create();
 			config.type = injectedData.toneMapType;
 			config.peak_nits = injectedData.toneMapPeakNits;
@@ -143,15 +143,18 @@ void main(
 			config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f
       ? (1.f - injectedData.toneMapHueCorrection)
       : injectedData.toneMapHueCorrection;
-			config.hue_correction_color = hueCorrectionColor;
+			config.hue_correction_color = lerp(linearColor, hueCorrectionColor, injectedData.toneMapHueShift);
 			config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
 			config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
       config.reno_drt_working_color_space = (uint)injectedData.toneMapPerChannel;
 			config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
 			config.reno_drt_blowout = injectedData.colorGradeBlowout;
+      config.reno_drt_white_clip = injectedData.colorGradeClip;
 			if(config.type == 0.f){
-		outputColor = hueCorrectionColor;
-		}
+		outputColor = saturate(hueCorrectionColor);
+		} else {
+    outputColor = linearColor;
+    }
       if(injectedData.colorGradeLUTStrength == 0.f || config.type == 1.f){
     r2.rgb = renodx::tonemap::config::Apply(outputColor, config);
         if(config.type == 4.f){

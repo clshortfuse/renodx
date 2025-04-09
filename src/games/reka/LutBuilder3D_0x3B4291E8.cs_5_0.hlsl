@@ -270,10 +270,8 @@ cbuffer cb0 : register(b0){
   r0.x = exp2(r0.x);
   r0.x = r0.w ? r0.x : 0;
   r3.z = r0.x * r1.w + r1.y;
-  r0.xyz = max(float3(0,0,0), r3.xyz);
-    float3 vanilla = r0.rgb;
-    r1.rgb = float3(0.18,0.18,0.18);
-  r0.xyz = max(float3(0,0,0), r1.xyz);
+  float3 vanilla = r3.rgb;
+    r0.rgb = float3(0.18,0.18,0.18);
   r1.xyz = cb0[18].xxx * r0.xyz;
   r2.xyzw = cmp(r1.xxyy < cb0[18].yzyz);
   r3.xyzw = r2.yyyy ? cb0[21].xyzw : cb0[23].xyzw;
@@ -317,8 +315,7 @@ cbuffer cb0 : register(b0){
   r0.x = exp2(r0.x);
   r0.x = r0.w ? r0.x : 0;
   r3.z = r0.x * r1.w + r1.y;
-  r0.xyz = max(float3(0,0,0), r3.xyz);
-    float midGray = renodx::color::y::from::BT709(r0.rgb);
+    float midGray = renodx::color::y::from::BT709(r3.rgb);
     r0.rgb = applyUserTonemap(untonemapped, vanilla, midGray);
   r0.w = 1;
   u0[vThreadID.xyz] = r0.xyzw;

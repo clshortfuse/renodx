@@ -176,7 +176,7 @@ float3 applyDICE(float3 input, renodx::tonemap::Config DiceConfig, bool sdr = fa
 }
 
 float3 applyUserTonemap(float3 untonemapped, float3 vanilla){
-	float3 outputColor = untonemapped.rgb;
+	float3 outputColor;
 		renodx::tonemap::Config config = renodx::tonemap::config::Create();
 	config.type = injectedData.toneMapType;
 	config.peak_nits = injectedData.toneMapPeakNits;
@@ -198,14 +198,16 @@ float3 applyUserTonemap(float3 untonemapped, float3 vanilla){
   config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f
                                        ? (1.f - injectedData.toneMapHueCorrection)
                                        : injectedData.toneMapHueCorrection;
-  config.hue_correction_color = vanilla;
+  config.hue_correction_color = lerp(untonemapped, vanilla, injectedData.toneMapHueShift);
   config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
-
+  config.reno_drt_white_clip = injectedData.colorGradeClip;
   if (injectedData.toneMapType == 0.f) {
-    outputColor = vanilla;
+    outputColor = saturate(vanilla);
+  } else {
+    outputColor = untonemapped;
   }
   if (injectedData.toneMapType == 2.f) {  // Frostbite
     outputColor = applyFrostbite(untonemapped, config);
@@ -217,44 +219,18 @@ float3 applyUserTonemap(float3 untonemapped, float3 vanilla){
 	return outputColor;
 }
 
-float3 applyUserTonemap(float3 untonemapped) {
-  float3 outputColor = untonemapped;
-  renodx::tonemap::Config config = renodx::tonemap::config::Create();
-  config.type = injectedData.toneMapType;
-  config.peak_nits = injectedData.toneMapPeakNits;
-  config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = injectedData.toneMapGammaCorrection;
-  config.exposure = injectedData.colorGradeExposure;
-  config.highlights = injectedData.colorGradeHighlights;
-  config.shadows = injectedData.colorGradeShadows;
-  config.contrast = injectedData.colorGradeContrast;
-  config.saturation = injectedData.colorGradeSaturation;
-  config.mid_gray_nits = 19.f;
-  config.reno_drt_contrast = 1.04f;
-  config.reno_drt_saturation = 1.05f;
-  config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_flare = 0.01 * pow(injectedData.colorGradeFlare, 5.32192809489);
-  config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
-                                   ? renodx::tonemap::config::hue_correction_type::INPUT
-                                   : renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f
-                                       ? (1.f - injectedData.toneMapHueCorrection)
-                                       : injectedData.toneMapHueCorrection;
-  config.hue_correction_color = renodx::tonemap::renodrt::NeutralSDR(untonemapped);
-  config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
-  config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
-  config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
-
-  if (injectedData.toneMapType == 0.f) {
-    outputColor = saturate(outputColor);
-  }
-  if (injectedData.toneMapType == 2.f) {  // Frostbite
-    outputColor = applyFrostbite(untonemapped, config);
-  } else if (injectedData.toneMapType == 4.f) {  // DICE
-    outputColor = applyDICE(outputColor, config);
-  } else {
-    outputColor = renodx::tonemap::config::Apply(outputColor, config);
-  }
-  return outputColor;
+float3 vanillaTonemap(float3 untonemapped) {
+  float3 r0;
+  float3 r1;
+  float3 r2;
+  r0.xyz = max(float3(0,0,0), untonemapped);
+  r1.xyz = r0.xyz * r0.xyz;
+  r1.xyz = r1.xyz * r1.xyz;
+  r1.xyz = r0.xyz * r1.xyz + float3(-1,-1,-1);
+  r2.xyz = float3(-1,-1,-1) + r0.xyz;
+  r1.xyz = r1.xyz / r2.xyz;
+  r2.xyz = float3(-1,-1,-1) + r1.xyz;
+  r1.xyz = r2.xyz / r1.xyz;
+  r0.xyz = r0.xyz != float3(1,1,1) ? r1.xyz : float3(0.800000012,0.800000012,0.800000012);
+return r0;
 }

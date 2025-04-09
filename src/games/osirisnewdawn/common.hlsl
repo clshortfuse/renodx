@@ -223,13 +223,13 @@ float3 vanillaTonemap(float3 color) {
   color = mul(renodx::color::AP1_TO_XYZ_MAT, color);
   color = mul(renodx::color::D60_TO_D65_MAT, color);
   color = mul(renodx::color::XYZ_TO_BT709_MAT, color);
-  color = max(0, color);
   return color;
 }
 
 float3 applyUserTonemapNeutral(float3 untonemapped) {
-  float3 outputColor = untonemapped;
+  float3 outputColor;
   float midGray = renodx::color::y::from::BT709(renodx::tonemap::unity::BT709(float3(0.18f, 0.18f, 0.18f)));
+  float3 hueCorrectionColor = renodx::tonemap::unity::BT709(untonemapped);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = injectedData.toneMapType;
   config.peak_nits = injectedData.toneMapPeakNits;
@@ -250,17 +250,16 @@ float3 applyUserTonemapNeutral(float3 untonemapped) {
   config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f
                                        ? (1.f - injectedData.toneMapHueCorrection)
                                        : injectedData.toneMapHueCorrection;
-  config.hue_correction_color = max(0, renodx::tonemap::unity::BT709(outputColor));
+  config.hue_correction_color = lerp(untonemapped, hueCorrectionColor, injectedData.toneMapHueShift);
   config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
   config.reno_drt_blowout = injectedData.colorGradeBlowout;
-
+  config.reno_drt_white_clip = injectedData.colorGradeClip;
   if (injectedData.toneMapType == 0.f) {
-    outputColor = max(0, renodx::tonemap::unity::BT709(outputColor));
-  } else if (injectedData.toneMapType == 2.f) {  // ACES
-    config.contrast *= 0.8f;
-    config.saturation *= 0.8f;
+    outputColor = saturate(hueCorrectionColor);
+  } else {
+    outputColor = untonemapped;
   }
   if (injectedData.toneMapType == 4.f) {  // Reinhard+
     config.highlights *= 0.9f;
@@ -276,9 +275,9 @@ float3 applyUserTonemapNeutral(float3 untonemapped) {
 }
 
 float3 applyUserTonemapACES(float3 untonemapped) {
-  float3 outputColor = untonemapped;
-  float midGray = renodx::color::y::from::BT709(renodx::tonemap::ACESFittedAP1(float3(0.18f, 0.18f, 0.18f)));
-  bool perChannel = injectedData.toneMapPerChannel != 0.f;
+  float3 outputColor;
+  float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18f, 0.18f, 0.18f)));
+  float3 hueCorrectionColor = vanillaTonemap(untonemapped);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = injectedData.toneMapType;
   config.peak_nits = injectedData.toneMapPeakNits;
@@ -296,19 +295,21 @@ float3 applyUserTonemapACES(float3 untonemapped) {
   config.reno_drt_saturation = 1.f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
   config.reno_drt_flare = 0.1f * pow(injectedData.colorGradeFlare, 4.32192809489);
-  config.hue_correction_type = perChannel ? renodx::tonemap::config::hue_correction_type::INPUT
-                                          : renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_strength = perChannel ? (1.f - injectedData.toneMapHueCorrection)
+  config.hue_correction_type = injectedData.toneMapPerChannel != 0.f ? renodx::tonemap::config::hue_correction_type::INPUT
+                                                                     : renodx::tonemap::config::hue_correction_type::CUSTOM;
+  config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f ? (1.f - injectedData.toneMapHueCorrection)
                                               : injectedData.toneMapHueCorrection;
-  config.hue_correction_color = renodx::tonemap::ACESFittedAP1(outputColor);
+  config.hue_correction_color = lerp(untonemapped, hueCorrectionColor, injectedData.toneMapHueShift);
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_working_color_space = (uint)injectedData.toneMapColorSpace;
-  config.reno_drt_per_channel = perChannel;
+  config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
   config.reno_drt_blowout = injectedData.colorGradeBlowout;
-
+  config.reno_drt_white_clip = injectedData.colorGradeClip;
   if (injectedData.toneMapType == 0.f) {
-    outputColor = vanillaTonemap(outputColor);
+    outputColor = saturate(hueCorrectionColor);
+  } else {
+    outputColor = untonemapped;
   }
   if (injectedData.toneMapType == 4.f) {  // Reinhard+
     config.shadows *= 0.85f;
