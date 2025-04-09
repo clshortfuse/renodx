@@ -31,7 +31,7 @@ struct ShaderInjectData {
   float fxAutoExposure;
   //float fxVignette;
   //float fxFilmGrain;
-  //float elapsedTime;
+  //float random;
   //float is_not_camera;
   bool has_loaded_title_menu;
 };

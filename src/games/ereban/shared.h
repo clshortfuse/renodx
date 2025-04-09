@@ -30,7 +30,8 @@ struct ShaderInjectData {
   float fxVignette;
   float fxFilmGrain;
   float fxFilmGrainType;
-  float elapsedTime;
+  
+  float random;
 };
 
 #ifndef __cplusplus

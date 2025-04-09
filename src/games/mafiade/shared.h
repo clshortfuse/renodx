@@ -33,8 +33,8 @@ struct ShaderInjectData {
   float fxFilmGrain;
   float fxFilmGrainType;
   float fxNoise;
-  float elapsedTime;
 
+  float random;
   float hasLoadedTitleMenu;
   bool is_swapchain_write;
 };

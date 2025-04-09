@@ -5,7 +5,7 @@
   float3 grainedColor = renodx::effects::ApplyFilmGrain(
       outputColor,
       screen,
-      frac(injectedData.elapsedTime / 1000.f),
+      injectedData.random,
       injectedData.fxFilmGrain * 0.03f * injectedData.is_not_camera,
 			1.f);
     return grainedColor;
