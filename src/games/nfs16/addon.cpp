@@ -417,8 +417,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
-    settings[1]->default_value = peak.value();
-    settings[1]->can_reset = true;
+    settings[2]->default_value = peak.value();
+    settings[2]->can_reset = true;
   }
 }
 
