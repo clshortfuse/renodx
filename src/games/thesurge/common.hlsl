@@ -229,7 +229,7 @@ static const float F = 0.30;  // Toe Denominator
 
 float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState lutSampler, float LW) {
   float3 outputColor;
-  float3 hueCorrectionColor = vanillaTonemap(outputColor, LW);
+  float3 hueCorrectionColor = vanillaTonemap(untonemapped, LW);
   float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18f,0.18f,0.18f), LW));
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = injectedData.toneMapType;

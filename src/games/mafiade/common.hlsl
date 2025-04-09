@@ -223,7 +223,7 @@ float3 Apply(float3 inputColor, renodx::tonemap::Config tm_config, renodx::lut::
 float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState lutSampler, float linearWhite, bool Noir){
 		float3 outputColor;
 		float midGray = renodx::color::y::from::BT709(renodx::tonemap::uncharted2::BT709(float3(0.18f,0.18f,0.18f), linearWhite));
-		float3 hueCorrectionColor = renodx::tonemap::uncharted2::BT709(outputColor, linearWhite);
+		float3 hueCorrectionColor = renodx::tonemap::uncharted2::BT709(untonemapped, linearWhite);
 		  renodx::tonemap::Config config = renodx::tonemap::config::Create();
 			config.type = injectedData.toneMapType;
 			config.peak_nits = injectedData.toneMapPeakNits;

@@ -429,7 +429,7 @@ float3 vanillaTonemapFCP(float3 color) {
 float3 applyUserTonemapFC3(float3 untonemapped, Texture3D lutTexture, SamplerState lutSampler, int sat = 0, float intensity = 1.f) {
   float3 outputColor;
   float midGray = renodx::color::y::from::BT709(vanillaTonemapFC3(float3(0.18f, 0.18f, 0.18f)));
-  float3 hueCorrectionColor = vanillaTonemapFC3(outputColor);
+  float3 hueCorrectionColor = vanillaTonemapFC3(untonemapped);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = injectedData.toneMapType;
   config.peak_nits = injectedData.toneMapPeakNits;
@@ -504,7 +504,7 @@ float3 applyUserTonemapFC3(float3 untonemapped, Texture3D lutTexture, SamplerSta
 float3 applyUserTonemapFCP(float3 untonemapped, Texture3D lutTexture, SamplerState lutSampler) {
   float3 outputColor;
   float midGray = renodx::color::y::from::BT709(vanillaTonemapFCP(float3(0.18f, 0.18f, 0.18f)));
-  float3 hueCorrectionColor = vanillaTonemapFCP(outputColor);
+  float3 hueCorrectionColor = vanillaTonemapFCP(untonemapped);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = injectedData.toneMapType;
   config.peak_nits = injectedData.toneMapPeakNits;
