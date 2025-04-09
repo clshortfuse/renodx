@@ -986,70 +986,95 @@ static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
 
 // Before CreatePipelineState
 static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
-  bool changed = false;
-  if (!renodx::utils::platform::IsToolWindow(static_cast<HWND>(hwnd))
-      && (!bypass_dummy_windows || !renodx::utils::platform::IsDummyWindow(static_cast<HWND>(hwnd)))) {
-    auto old_format = desc.back_buffer.texture.format;
-    auto old_present_mode = desc.present_mode;
-    auto old_present_flags = desc.present_flags;
-    auto old_buffer_count = desc.back_buffer_count;
+  auto abort_modification = [=]() {
+    upgraded_swapchain_desc.reset();
+    return false;
+  };
 
-    if (!use_resize_buffer) {
-      desc.back_buffer.texture.format = target_format;
-
-      if (desc.back_buffer_count == 1) {
-        // 0 is only for resize, so if game uses more than 2 buffers, that will be retained
-        desc.back_buffer_count = 2;
-      }
-    }
-
-    if (!is_vulkan) {
-      switch (desc.present_mode) {
-        case static_cast<uint32_t>(DXGI_SWAP_EFFECT_SEQUENTIAL):
-          desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL);
-          break;
-        case static_cast<uint32_t>(DXGI_SWAP_EFFECT_DISCARD):
-          desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD);
-          break;
-      }
-
-      if (!use_resize_buffer) {
-        if (prevent_full_screen) {
-          desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-        }
-        desc.present_flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-      }
-    }
-
+  if (renodx::utils::platform::IsToolWindow(static_cast<HWND>(hwnd))) {
     std::stringstream s;
-    s << "mods::swapchain::OnCreateSwapchain(";
-    s << "swap: " << old_format << " => " << desc.back_buffer.texture.format;
-    s << ", present mode:";
-    s << "0x" << std::hex << old_present_mode << std::dec;
-    s << " => ";
-    s << "0x" << std::hex << desc.present_mode << std::dec;
-    s << ", present flag:";
-    s << "0x" << std::hex << old_present_flags << std::dec;
-    s << " => ";
-    s << "0x" << std::hex << desc.present_flags << std::dec;
-    s << ", buffers:";
-    s << old_buffer_count;
-    s << " => ";
-    s << desc.back_buffer_count;
+    s << "mods::swapchain::OnCreateSwapchain(Abort from tool window: ";
+    s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
+    return abort_modification();
+  }
 
-    changed = (old_format != desc.back_buffer.texture.format)
-              || (old_present_mode != desc.present_mode)
-              || (old_present_flags != desc.present_flags);
+  if (bypass_dummy_windows && renodx::utils::platform::IsDummyWindow(static_cast<HWND>(hwnd))) {
+    std::stringstream s;
+    s << "mods::swapchain::OnCreateSwapchain(Abort from dummy window: ";
+    s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
+    s << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+    return abort_modification();
   }
-  
-  if (changed) {
-    upgraded_swapchain_desc = desc;
-  } else {
-    upgraded_swapchain_desc.reset();
+
+  auto old_format = desc.back_buffer.texture.format;
+  auto old_present_mode = desc.present_mode;
+  auto old_present_flags = desc.present_flags;
+  auto old_buffer_count = desc.back_buffer_count;
+
+  if (!use_resize_buffer) {
+    desc.back_buffer.texture.format = target_format;
+
+    if (desc.back_buffer_count == 1) {
+      // 0 is only for resize, so if game uses more than 2 buffers, that will be retained
+      desc.back_buffer_count = 2;
+    }
   }
-  return changed;
+
+  if (!is_vulkan) {
+    switch (desc.present_mode) {
+      case static_cast<uint32_t>(DXGI_SWAP_EFFECT_SEQUENTIAL):
+        desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL);
+        break;
+      case static_cast<uint32_t>(DXGI_SWAP_EFFECT_DISCARD):
+        desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD);
+        break;
+    }
+
+    if (!use_resize_buffer) {
+      if (prevent_full_screen) {
+        desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+      }
+      desc.present_flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+    }
+  }
+
+  bool changed = (old_format != desc.back_buffer.texture.format)
+                 || (old_present_mode != desc.present_mode)
+                 || (old_present_flags != desc.present_flags);
+
+  if (!changed) {
+    std::stringstream s;
+    s << "mods::swapchain::OnCreateSwapchain(Abort from unchanged desc: ";
+    s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
+    s << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+    return abort_modification();
+  }
+
+  std::stringstream s;
+  s << "mods::swapchain::OnCreateSwapchain(";
+  s << "swap: " << old_format << " => " << desc.back_buffer.texture.format;
+  s << ", present mode:";
+  s << "0x" << std::hex << old_present_mode << std::dec;
+  s << " => ";
+  s << "0x" << std::hex << desc.present_mode << std::dec;
+  s << ", present flag:";
+  s << "0x" << std::hex << old_present_flags << std::dec;
+  s << " => ";
+  s << "0x" << std::hex << desc.present_flags << std::dec;
+  s << ", buffers:";
+  s << old_buffer_count;
+  s << " => ";
+  s << desc.back_buffer_count;
+  s << ")";
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
+
+  upgraded_swapchain_desc = desc;
+
+  return true;
 }
 
 static void OnPresentForResizeBuffer(
@@ -1070,14 +1095,32 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return;
 
-  HWND hwnd = static_cast<HWND>(swapchain->get_hwnd());
-  if (renodx::utils::platform::IsToolWindow(hwnd)
-      || (bypass_dummy_windows && renodx::utils::platform::IsDummyWindow(hwnd))) {
+  auto abort_modification = [=]() {
     if (data->swap_chain_proxy_sampler.handle != 0u) {
       device->destroy_sampler(data->swap_chain_proxy_sampler);
       data->swap_chain_proxy_sampler.handle = 0u;
     }
     renodx::utils::data::Delete(device, data);
+  };
+
+  HWND hwnd = static_cast<HWND>(swapchain->get_hwnd());
+  if (renodx::utils::platform::IsToolWindow(hwnd)) {
+    std::stringstream s;
+    s << "mods::swapchain::OnInitSwapchain(Abort from tool window: ";
+    s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
+    s << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+    abort_modification();
+    return;
+  }
+
+  if (bypass_dummy_windows && renodx::utils::platform::IsDummyWindow(hwnd)) {
+    std::stringstream s;
+    s << "mods::swapchain::OnInitSwapchain(Abort from dummy window: ";
+    s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
+    s << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+    abort_modification();
     return;
   }
 
