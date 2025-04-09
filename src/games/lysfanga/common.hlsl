@@ -210,39 +210,6 @@ float3 UpgradeToneMapByLuminance(float3 color_hdr, float3 color_sdr, float3 post
   return lerp(color_hdr, color_scaled, post_process_strength);
 }
 
-#define SAMPLE_FUNCTION_GENERATOR(textureType)                                                                         \
-  float3 Sample(textureType lut_texture, renodx::lut::Config lut_config, float3 color_input) {                         \
-    float3 lutInputColor = renodx::lut::ConvertInput(color_input, lut_config);                                         \
-    float3 lutOutputColor = renodx::lut::SampleColor(lutInputColor, lut_config, lut_texture);                          \
-    float3 color_output = renodx::lut::LinearOutput(lutOutputColor, lut_config);                                       \
-    [branch]                                                                                                           \
-    if (lut_config.scaling != 0) {                                                                                     \
-      float3 lutBlack = renodx::lut::LoadTexel(lut_texture, 0, lut_config.size);                                       \
-      float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(0.18f, lut_config), lut_config, lut_texture); \
-      float3 lutWhite = renodx::lut::LoadTexel(lut_texture, 1, lut_config.size);                                       \
-      float3 unclamped_gamma = renodx::lut::Unclamp(                                                                   \
-          renodx::lut::GammaOutput(lutOutputColor, lut_config),                                                        \
-          renodx::lut::GammaOutput(lutBlack, lut_config),                                                              \
-          renodx::lut::GammaOutput(lutMid, lut_config),                                                                \
-          1.f, /* don't scale highlights */                                                                            \
-          renodx::lut::GammaInput(color_input, lutInputColor, lut_config));                                            \
-      float3 unclamped_linear = renodx::lut::LinearUnclampedOutput(unclamped_gamma, lut_config);                       \
-      float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling);            \
-      color_output = recolored;                                                                                        \
-    } else {                                                                                                           \
-    }                                                                                                                  \
-    color_output = renodx::lut::RestoreSaturationLoss(color_input, color_output, lut_config);                          \
-                                                                                                                       \
-    return lerp(color_input, color_output, lut_config.strength);                                                       \
-  }
-
-SAMPLE_FUNCTION_GENERATOR(Texture3D<float4>);
-SAMPLE_FUNCTION_GENERATOR(Texture3D<float3>);
-SAMPLE_FUNCTION_GENERATOR(Texture2D<float4>);
-SAMPLE_FUNCTION_GENERATOR(Texture2D<float3>);
-
-#undef SAMPLE_FUNCTION_GENERATOR
-
 float3 sampleLUT(float3 color, Texture2D lutTexture, SamplerState lutSampler, float3 preCompute, bool perChannel) {
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = lutSampler;
@@ -253,7 +220,7 @@ float3 sampleLUT(float3 color, Texture2D lutTexture, SamplerState lutSampler, fl
   lut_config.precompute = preCompute;
   lut_config.tetrahedral = injectedData.colorGradeLUTSampling != 0.f;
   float3 input = color;
-  float3 lutColor = Sample(lutTexture, lut_config, saturate(input));
+  float3 lutColor = renodx::lut::Sample(lutTexture, lut_config, saturate(input));
   float3 output = perChannel ? UpgradeToneMapPerChannel(input, saturate(input), lutColor, injectedData.colorGradeLUTStrength)
   : UpgradeToneMapByLuminance(input, saturate(input), lutColor, injectedData.colorGradeLUTStrength);
   return output;
@@ -340,7 +307,7 @@ float3 Apply(float3 inputColor, renodx::tonemap::Config tm_config, renodx::lut::
 
     float previous_lut_config_strength = lut_config.strength;
     lut_config.strength = 1.f;
-    float3 color_lut = Sample(lutTexture, lut_config, color_sdr);
+    float3 color_lut = renodx::lut::Sample(lutTexture, lut_config, color_sdr);
     if (tm_config.type == 0.f) {
       return lerp(inputColor, color_lut, previous_lut_config_strength);
     } else if (perChannel == true) {
