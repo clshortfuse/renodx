@@ -204,6 +204,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
     std::stringstream s;
     s << "destroy_swapchain(";
     s << "buffer:" << PRINT_PTR(buffer.handle);
+    s << ", resize:" << (resize ? "true" : "false");
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
@@ -212,6 +213,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
   s << "destroy_swapchain(";
   s << "device: " << reinterpret_cast<uintptr_t>(swapchain->get_device());
   s << ", colorspace: " << swapchain->get_color_space();
+  s << ", resize:" << (resize ? "true" : "false");
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
