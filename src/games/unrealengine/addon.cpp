@@ -153,6 +153,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedShaderEntry(0x06F39D1E),
     TracedShaderEntry(0xDA10C03E),
 
+    TracedShaderEntry(0x9DF2DDD4),
+    TracedShaderEntry(0xBBB5CA7B),
 };
 
 ShaderInjectData shader_injection;
@@ -859,6 +861,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         auto product_name = renodx::utils::platform::GetProductName(process_path);
         auto param_count = params.size();
         if (params.size() >= 20) return false;
+
+        if (product_name == "Jusant") return true;
 
         // UE DX12 has a 4 param root sig that crashes if modified. Track for now
         return std::ranges::any_of(params, [](auto param) {
