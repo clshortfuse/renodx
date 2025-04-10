@@ -173,7 +173,7 @@ struct PipelineShaderDetails {
             if (replacement_subobjects == nullptr) {
               replacement_subobjects = renodx::utils::pipeline::ClonePipelineSubObjects(subobjects, subobject_count);
             }
-#ifdef DEBUG_LEVEL_0
+#ifdef DEBUG_LEVEL_1
             {
               std::stringstream s;
               s << "utils::shader::BuildReplacementPipeline(Replacing ";
@@ -183,7 +183,7 @@ struct PipelineShaderDetails {
             }
 #endif
             AddShaderReplacement(&replacement_subobjects[i], new_shader);
-#ifdef DEBUG_LEVEL_0
+#ifdef DEBUG_LEVEL_1
             {
               std::stringstream s;
               s << "utils::shader::BuildReplacementPipeline(Added replacement ";
@@ -206,18 +206,33 @@ struct PipelineShaderDetails {
       });
       this->compatible_shader_infos[shader_type_index] = this->subobject_shaders.back();
 
-#ifdef DEBUG_LEVEL_1
-      {
+      if (replacement_subobjects != nullptr) {
+#ifdef DEBUG_LEVEL_0
         std::stringstream s;
-        s << "utils::shader::PipelineShaderDetails(Tracking ";
+        s << "utils::shader::PipelineShaderDetails(";
+        s << "Replacing pipeline for ";
         s << PRINT_CRC32(shader_hash);
+        s << ", pipeline: " << PRINT_PTR(pipeline.handle);
         s << ", index: " << i;
         s << ", type: " << subobject.type;
         s << ", stage: " << stage;
         s << ")";
         reshade::log::message(reshade::log::level::debug, s.str().c_str());
-      }
 #endif
+      } else {
+#ifdef DEBUG_LEVEL_1
+        std::stringstream s;
+        s << "utils::shader::PipelineShaderDetails(";
+        s << "Tracking ";
+        s << PRINT_CRC32(shader_hash);
+        s << ", pipeline: " << PRINT_PTR(pipeline.handle);
+        s << ", index: " << i;
+        s << ", type: " << subobject.type;
+        s << ", stage: " << stage;
+        s << ")";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
+      }
     }
 
     if (replacement_subobjects != nullptr) {
@@ -234,7 +249,7 @@ struct PipelineShaderDetails {
           replacement_subobjects,
           &new_pipeline);
 
-#ifdef DEBUG_LEVEL_0
+#ifdef DEBUG_LEVEL_2
       {
         std::stringstream s;
         s << "utils::shader::BuildReplacementPipeline(Added replacement pipeline";
