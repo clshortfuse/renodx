@@ -325,6 +325,7 @@ static void OnDestroyDevice(reshade::api::device* device) {
 }
 
 static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  if (!is_primary_hook) return;
   auto* device = swapchain->get_device();
 
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
@@ -355,6 +356,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 }
 
 static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  if (!is_primary_hook) return;
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
   std::vector<ResourceInfo*> infos;
   {
@@ -386,6 +388,7 @@ inline void OnInitResource(
     const reshade::api::subresource_data* initial_data,
     reshade::api::resource_usage initial_state,
     reshade::api::resource resource) {
+  if (!is_primary_hook) return;
   if (resource.handle == 0) return;
 
   // assume write new
@@ -420,6 +423,7 @@ inline void OnInitResource(
 }
 
 inline void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
+  if (!is_primary_hook) return;
   if (resource.handle == 0) return;
 
   std::shared_lock lock(store->resource_infos_mutex);
@@ -470,6 +474,7 @@ inline void OnInitResourceView(
     reshade::api::resource_usage usage_type,
     const reshade::api::resource_view_desc& desc,
     reshade::api::resource_view view) {
+  if (!is_primary_hook) return;
   if (view.handle == 0u) return;
   std::unique_lock lock(store->resource_view_infos_mutex);
   auto& resource_view_info = store->resource_view_infos[view.handle];
@@ -505,6 +510,7 @@ inline void OnInitResourceView(
 }
 
 inline void OnDestroyResourceView(reshade::api::device* device, reshade::api::resource_view view) {
+  if (!is_primary_hook) return;
   if (view.handle == 0u) return;
 
   std::shared_lock lock(store->resource_view_infos_mutex);
