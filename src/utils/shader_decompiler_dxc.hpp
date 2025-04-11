@@ -180,6 +180,18 @@ inline TokenizerState& operator++(TokenizerState& state, int) {
   return state;
 }
 
+struct Metadata {
+  static std::string_view ParseString(std::string_view s) {
+    static const std::regex METADATA_STRING_REGEX = std::regex("^!\"(.*)\"$");
+    return StringViewMatch(s, METADATA_STRING_REGEX);
+  }
+
+  static std::array<std::string_view, 2> ParseKeyValue(std::string_view s) {
+    static const std::regex METADATA_KEY_VALUE_REGEX = std::regex(R"(^(.*) (\S+)$)");
+    return StringViewMatch<2>(s, METADATA_KEY_VALUE_REGEX);
+  }
+};
+
 class Decompiler {
   constexpr static const auto VECTOR_INDEXES = "xyzw";
 
@@ -642,17 +654,7 @@ class Decompiler {
     }
   };
 
-  struct Metadata {
-    static std::string_view ParseString(std::string_view s) {
-      static const std::regex METADATA_STRING_REGEX = std::regex("^!\"(.*)\"$");
-      return StringViewMatch(s, METADATA_STRING_REGEX);
-    }
-
-    static std::array<std::string_view, 2> ParseKeyValue(std::string_view s) {
-      static const std::regex METADATA_KEY_VALUE_REGEX = std::regex(R"(^(.*) (\S+)$)");
-      return StringViewMatch<2>(s, METADATA_KEY_VALUE_REGEX);
-    }
-  };
+  
 
   struct ResourceDescription {
     std::string_view name;
