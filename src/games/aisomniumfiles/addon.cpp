@@ -20,7 +20,8 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xEE5CA39C), // lutsample
+    CustomShaderEntry(0xEE5CA39C), // uberpost/lutsample
+    CustomShaderEntry(0x46AE5D9D), // uberpost, somnium scene (green)
     CustomShaderEntry(0x224059A1), // somnia postprocess
     CustomShaderEntry(0xCE0AF0C9), // output success screen
     CustomShaderEntry(0xED466B41), // flowchart menu
@@ -56,19 +57,6 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Vanilla", "RenoDRT"},
         .parse = [](float value) { return value * 3.f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapConfiguration",
-        .binding = &CUSTOM_TONE_MAP_CONFIGURATION,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
-        .can_reset = true,
-        .label = "Tonemapping Expansion",
-        .section = "Tone Mapping",
-        .tooltip = "Choose to honor the blownout look of the SDR presentation or to expand the tonemapping range.",
-        .labels = {"Vanilla", "Expanded"},
-        //.is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
-        .is_visible = []() { return settings[0]->GetValue() >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -113,19 +101,19 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
         .is_visible = []() { return settings[0]->GetValue() >= 2; },
     },
-    //new renodx::utils::settings::Setting{
-    //    .key = "ToneMapHueShift",
-    //    .binding = &RENODX_TONE_MAP_HUE_SHIFT,
-    //    .default_value = 0.f,
-    //    .label = "Hue Shift",
-    //    .section = "Tone Mapping",
-    //    .tooltip = "Hue-shift emulation strength.",
-    //    .min = 0.f,
-    //    .max = 100.f,
-    //    .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
-    //    .parse = [](float value) { return value * 0.01f; },
-    //    .is_visible = []() { return settings[0]->GetValue() >= 1; },
-    //},
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapHueShift",
+        .binding = &RENODX_TONE_MAP_HUE_SHIFT,
+        .default_value = 50.f,
+        .label = "Hue Shift",
+        .section = "Tone Mapping",
+        .tooltip = "Hue-shift emulation strength.",
+        .min = 0.f,
+        .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    },
     new renodx::utils::settings::Setting{
         .key = "ToneMapWorkingColorSpace",
         .binding = &RENODX_TONE_MAP_WORKING_COLOR_SPACE,
@@ -137,19 +125,19 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
         .is_visible = []() { return settings[0]->GetValue() >= 2; },
     },
-    //new renodx::utils::settings::Setting{
-    //    .key = "ToneMapHueCorrection",
-    //    .binding = &RENODX_TONE_MAP_HUE_CORRECTION,
-    //    .default_value = 0.f,
-    //    .label = "Hue Correction",
-    //    .section = "Tone Mapping",
-    //    .tooltip = "Hue retention strength.",
-    //    .min = 0.f,
-    //    .max = 100.f,
-    //    .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
-    //    .parse = [](float value) { return value * 0.01f; },
-    //    .is_visible = []() { return settings[0]->GetValue() >= 2; },
-    //},
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapHueCorrection",
+        .binding = &RENODX_TONE_MAP_HUE_CORRECTION,
+        .default_value = 0.f,
+        .label = "Hue Correction",
+        .section = "Tone Mapping",
+        .tooltip = "Hue retention strength.",
+        .min = 0.f,
+        .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    },
     new renodx::utils::settings::Setting{
         .key = "GammaCorrection",
         .binding = &RENODX_GAMMA_CORRECTION,
@@ -254,6 +242,43 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
         .parse = [](float value) { return value * 0.01f; },
     },
+    //new renodx::utils::settings::Setting{
+    //    .key = "CustomHueCorrection",
+    //    .binding = &CUSTOM_HUE_CORRECTION,
+    //    .default_value = 0.f,
+    //    .label = "Hue Correction",
+    //    .section = "Color Grading",
+    //    .tooltip = "Hue retention strength.",
+    //    .min = 0.f,
+    //    .max = 100.f,
+    //    .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+    //    .parse = [](float value) { return value * 0.01f; },
+    //    .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    //},
+    //new renodx::utils::settings::Setting{
+    //    .key = "ToneMapHueShiftMethod",
+    //    .binding = &RENODX_TONE_MAP_HUE_SHIFT_METHOD,
+    //    .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+    //    .default_value = 1.f,
+    //    .label = "RENODX_TONE_MAP_HUE_SHIFT_METHOD",
+    //    .section = "Color Grading",
+    //    .tooltip = "Emulates a display EOTF.",
+    //    .labels = {"Clip", "SDR mod", "UC2", "ACES F BT709", "ACES F AP1"},
+    //    .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    //},
+    //new renodx::utils::settings::Setting{
+    //    .key = "ToneMapHueShiftModifier",
+    //    .binding = &RENODX_TONE_MAP_HUE_SHIFT_MODIFIER,
+    //    .default_value = 0.f,
+    //    .label = "RENODX_TONE_MAP_HUE_SHIFT_MODIFIER",
+    //    .section = "Color Grading",
+    //    .tooltip = "Hue retention strength.",
+    //    .min = 0.f,
+    //    .max = 100.f,
+    //    .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+    //    .parse = [](float value) { return value * 0.01f; },
+    //    .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    //},
     new renodx::utils::settings::Setting{
         .key = "FxHDRVideos",
         .binding = &CUSTOM_HDR_VIDEOS,
@@ -417,8 +442,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
-    settings[3]->default_value = peak.value();
-    settings[3]->can_reset = true;
+    settings[2]->default_value = peak.value();
+    settings[2]->can_reset = true;
   }
 }
 
