@@ -93,14 +93,18 @@ void main(
   r0.xyz = r0.xyz * float3(5.55555582, 5.55555582, 5.55555582) + float3(0.0479959995, 0.0479959995, 0.0479959995);
   r0.xyz = log2(r0.xyz);
   r0.xyz = saturate(r0.xyz * float3(0.0734997839, 0.0734997839, 0.0734997839) + float3(0.386036009, 0.386036009, 0.386036009));
+#if CUSTOM_LUT_TETRAHEDRAL
+  r0.rgb = renodx::lut::SampleTetrahedral(t5, r0.rgb, 1.f / cb0[36].x);
+#else
   r0.xyz = cb0[36].yyy * r0.xyz;
   r0.w = 0.5 * cb0[36].x;
   r0.xyz = r0.xyz * cb0[36].xxx + r0.www;
   r0.xyzw = t5.Sample(s5_s, r0.xyz).xyzw;  // sample LUT
+#endif
 
   if (CUSTOM_GRAIN_TYPE) {  // film grain
     float2 noise_uv = v1.xy * cb0[30].xy + cb0[30].zw;
-    float random = t0.Sample(s0_s, noise_uv).a * 2.f - 1.f;
+    float random = t0.Sample(s0_s, noise_uv).a;
     o0.rgb = renodx::effects::ApplyFilmGrain(
         r0.rgb,
         noise_uv,
