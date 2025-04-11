@@ -6,7 +6,6 @@
 #define RENODX_GRAPHICS_WHITE_NITS           shader_injection.graphics_white_nits
 #define RENODX_TONE_MAP_TYPE                 shader_injection.tone_map_type
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-#define RENODX_RENO_DRT_WHITE_CLIP           4.f
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
@@ -21,13 +20,12 @@
 #define RENODX_TONE_MAP_HUE_PROCESSOR        shader_injection.tone_map_hue_processor
 #define RENODX_TONE_MAP_PER_CHANNEL          shader_injection.tone_map_per_channel
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
-//#define RENODX_TONE_MAP_HUE_SHIFT_METHOD     shader_injection.tone_map_hue_shift_method
-//#define RENODX_TONE_MAP_HUE_SHIFT_MODIFIER   shader_injection.tone_map_hue_shift_modifier
 #define RENODX_TONE_MAP_HUE_SHIFT_METHOD     HUE_SHIFT_METHOD_SDR_MODIFIED
 #define RENODX_TONE_MAP_HUE_SHIFT_MODIFIER   1.f
-//#define CUSTOM_HUE_CORRECTION                shader_injection.custom_hue_correction
+#define RENODX_SWAP_CHAIN_CLAMP_NITS         10000.f
 #define CUSTOM_HDR_VIDEOS                    shader_injection.custom_hdr_videos
 #define CUSTOM_HDR_VIDEOS_PEAK_NITS          shader_injection.custom_hdr_videos_peak_nits
+#define CUSTOM_TONE_MAP_SHOULDER_START       shader_injection.custom_tone_map_shoulder_start
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -50,11 +48,9 @@ struct ShaderInjectData {
   float tone_map_hue_processor;
   float tone_map_per_channel;
   float gamma_correction;
-  //float tone_map_hue_shift_method;
-  //float tone_map_hue_shift_modifier;
-  //float custom_hue_correction;
   float custom_hdr_videos;
   float custom_hdr_videos_peak_nits;
+  float custom_tone_map_shoulder_start;
 };
 
 #ifndef __cplusplus

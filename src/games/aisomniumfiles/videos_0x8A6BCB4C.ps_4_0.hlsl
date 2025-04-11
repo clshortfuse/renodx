@@ -34,7 +34,6 @@ void main(
 
   renodx::draw::Config draw_config = renodx::draw::BuildConfig();
   draw_config.peak_white_nits = CUSTOM_HDR_VIDEOS_PEAK_NITS;
-  //draw_config.peak_white_nits = max(min(RENODX_PEAK_WHITE_NITS / 2.f, 550.f), 300.f); // ensure inv tonemap stays between 300-550 nits
 
   if (CUSTOM_HDR_VIDEOS != 0) {
     o0.rgb = renodx::draw::UpscaleVideoPass(o0.rgb, draw_config);
