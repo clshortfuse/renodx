@@ -31,6 +31,7 @@ bool is_bloom_enabled = false;
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x8A6BCB4C),  // videos
     CustomShaderEntry(0x6EA48EC8),  // LUT3DBaker
+    CustomShaderEntry(0x995B320A),  // LUT3DBaker
     CustomShaderEntryCallback(0x2706BB7A, [](reshade::api::command_list* cmd_list) {  // uberpost (title menu)
     is_bloom_enabled = false;
     is_CA_enabled = true;
