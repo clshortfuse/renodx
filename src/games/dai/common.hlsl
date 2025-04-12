@@ -173,10 +173,15 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   config.saturation = injectedData.colorGradeSaturation;
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
-  config.reno_drt_contrast = 1.f;
-  config.reno_drt_saturation = 1.f;
+  if (cutscene == false) {
+  config.reno_drt_shadows = 0.9f;
+  config.reno_drt_contrast = 1.2f;
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
+  } else {
+  config.reno_drt_flare = 0.005f * pow(injectedData.colorGradeFlare, 10.f);
+  }
+  config.reno_drt_saturation = 1.1f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_flare = cutscene ? 0.005f : 0.2f * pow(injectedData.colorGradeFlare, 4.32192809489);
   config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
                                    ? renodx::tonemap::config::hue_correction_type::INPUT
                                    : renodx::tonemap::config::hue_correction_type::CUSTOM;
@@ -199,9 +204,10 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   lut_config.size = 32;
   lut_config.tetrahedral = injectedData.colorGradeLUTSampling != 0.f;
   if (injectedData.toneMapType == 0.f) {
-    outputColor = LUTless;
+    outputColor = Apply(saturate(LUTless), config, lut_config, lutTexture, injectedData.upgradePerChannel != 0.f);
+    outputColor = renodx::color::correct::GammaSafe(outputColor, true, 2.2f);
   } else {
-    outputColor = untonemapped;
+    outputColor = Apply(untonemapped, config, lut_config, lutTexture, injectedData.upgradePerChannel != 0.f);
   }
-return Apply(outputColor, config, lut_config, lutTexture, injectedData.upgradePerChannel != 0.f);
+return outputColor;
 }

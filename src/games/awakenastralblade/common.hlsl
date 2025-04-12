@@ -205,7 +205,7 @@ float3 applyUserTonemap(float3 untonemapped) {
   config.reno_drt_contrast = 1.04f;
   config.reno_drt_saturation = 1.05f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_flare = 0.01 * pow(injectedData.colorGradeFlare, 5.32192809489);
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
   config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
                                    ? renodx::tonemap::config::hue_correction_type::INPUT

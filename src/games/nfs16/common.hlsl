@@ -268,11 +268,10 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   config.shadows = injectedData.colorGradeShadows;
   config.contrast = injectedData.colorGradeContrast;
   config.saturation = injectedData.colorGradeSaturation;
-  config.mid_gray_nits = 19;
+  config.mid_gray_nits = 19.f;
   config.reno_drt_contrast = 1.04f;
-  config.reno_drt_saturation = 1.f;
-  config.reno_drt_dechroma = 0.5f;
-  config.reno_drt_flare = 0.01 * pow(injectedData.colorGradeFlare, 5.32192809489);
+  config.reno_drt_dechroma = injectedData.colorGradeDechroma;
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = renodx::tonemap::config::hue_correction_type::INPUT;
   config.hue_correction_strength = 1.f - injectedData.toneMapHueCorrection;
   config.reno_drt_tone_map_method = injectedData.toneMapType == 4.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD

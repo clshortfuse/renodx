@@ -360,9 +360,8 @@ float3 applyUserTonemapFC3(float3 untonemapped, Texture3D lutTexture, SamplerSta
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
   config.reno_drt_contrast = 1.1f;
-  config.reno_drt_saturation = 1.05f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_flare = 0.005f * pow(injectedData.colorGradeFlare, 7.32192809489);
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = injectedData.toneMapPerChannel != 1.f
                                    ? renodx::tonemap::config::hue_correction_type::INPUT
                                    : renodx::tonemap::config::hue_correction_type::CUSTOM;
@@ -380,7 +379,7 @@ float3 applyUserTonemapFC3(float3 untonemapped, Texture3D lutTexture, SamplerSta
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = lutSampler;
   lut_config.strength = injectedData.colorGradeLUTStrength;
-  lut_config.scaling = 0.f;
+  lut_config.scaling = injectedData.fxFilmGrain;
   lut_config.type_input = renodx::lut::config::type::GAMMA_2_0;
   lut_config.type_output = renodx::lut::config::type::SRGB;
   lut_config.size = 32;
@@ -409,9 +408,10 @@ float3 applyUserTonemapFCP(float3 untonemapped, Texture3D lutTexture, SamplerSta
   config.saturation = injectedData.colorGradeSaturation;
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
-  config.reno_drt_contrast = 1.1f;
+  config.reno_drt_shadows = 0.9f;
+  config.reno_drt_contrast = 1.6f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_flare = 0.37f * pow(injectedData.colorGradeFlare, 2.32192809489);
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = injectedData.toneMapPerChannel != 1.f
                                    ? renodx::tonemap::config::hue_correction_type::INPUT
                                    : renodx::tonemap::config::hue_correction_type::CUSTOM;

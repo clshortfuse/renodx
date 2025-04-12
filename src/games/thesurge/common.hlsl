@@ -146,21 +146,20 @@ float3 Apply(float3 inputColor, renodx::tonemap::Config tm_config, renodx::lut::
   }
 }
 
-float3 vanillaTonemap(float3 color, float LW){
-static const float A = 0.22;  // Shoulder Strength
-static const float B = 0.30;  // Linear Strength
-static const float C = 0.10;  // Linear Angle
-static const float D = 0.20;  // Toe Strength
-static const float E = 0.01;  // Toe Numerator
-static const float F = 0.30;  // Toe Denominator
-
-  return color = renodx::tonemap::ApplyCurve(color, A, B, C, D, E, F) / LW;
+float3 vanillaTonemap(float3 color, float4 params){
+float A = 0.22f * params.x;  // Shoulder Strength
+float B = 0.3f * params.y;  // Linear Strength
+static const float C = 0.1;  // Linear Angle
+static const float D = 0.2;  // Toe Strength
+float E = 0.01f * params.z;  // Toe Numerator
+static const float F = 0.3f;  // Toe Denominator
+ return renodx::tonemap::ApplyCurve(color, A, B, C, D, E, F) / renodx::tonemap::ApplyCurve(params.w, A, B, C, D, E, F);
 }
 
-float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState lutSampler, float LW) {
+float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState lutSampler, float4 params) {
   float3 outputColor;
-  float3 hueCorrectionColor = vanillaTonemap(untonemapped, LW);
-  float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18f,0.18f,0.18f), LW));
+  float3 hueCorrectionColor = vanillaTonemap(untonemapped, params);
+  float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18f,0.18f,0.18f), params));
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = min(3, injectedData.toneMapType);
   config.peak_nits = injectedData.toneMapPeakNits;
@@ -173,10 +172,9 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   config.saturation = injectedData.colorGradeSaturation;
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
-  config.reno_drt_contrast = 1.1f;
-  config.reno_drt_saturation = 1.1f;
+  config.reno_drt_contrast = 1.2f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_flare = 0.01 * pow(injectedData.colorGradeFlare, 5.32192809489);
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
                                    ? renodx::tonemap::config::hue_correction_type::INPUT
                                    : renodx::tonemap::config::hue_correction_type::CUSTOM;

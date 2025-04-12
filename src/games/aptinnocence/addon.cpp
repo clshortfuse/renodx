@@ -1352,7 +1352,7 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapHueShift",
+        .key = "toneMapHueShift",
         .binding = &shader_injection.toneMapHueShift,
         .default_value = 50.f,
         .label = "Hue Shift",
@@ -1475,7 +1475,7 @@ renodx::utils::settings::Settings settings = {
         .tint = 0x3A5953,
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType == 3.f || shader_injection.toneMapType == 4.f; },
-        .parse = [](float value) { return value * 0.02f; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeClip",
@@ -1624,6 +1624,7 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::UpdateSetting("toneMapPerChannel", 0.f);
           renodx::utils::settings::UpdateSetting("toneMapHueProcessor", 1.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueShift", 50.f);
           renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 100.f);
           renodx::utils::settings::UpdateSetting("toneMapShoulderStart", 0.25f);
           renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
@@ -1646,19 +1647,19 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::UpdateSetting("toneMapPerChannel", 0.f);
           renodx::utils::settings::UpdateSetting("toneMapHueProcessor", 1.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueShift", 50.f);
           renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 100.f);
           renodx::utils::settings::UpdateSetting("toneMapShoulderStart", 0.33f);
           renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
           renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-          renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
-          renodx::utils::settings::UpdateSetting("colorGradeContrast", 75.f);
+          renodx::utils::settings::UpdateSetting("colorGradeShadows", 42.f);
+          renodx::utils::settings::UpdateSetting("colorGradeContrast", 63.f);
           renodx::utils::settings::UpdateSetting("colorGradeSaturation", 75.f);
           renodx::utils::settings::UpdateSetting("colorGradeBlowout", 50.f);
           renodx::utils::settings::UpdateSetting("colorGradeDechroma", 80.f);
-          renodx::utils::settings::UpdateSetting("colorGradeFlare", 20.f);
+          renodx::utils::settings::UpdateSetting("colorGradeFlare", 50.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 100.f); },
-        .is_visible = []() { return shader_injection.toneMapType == 3.f; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
