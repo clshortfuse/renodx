@@ -122,13 +122,15 @@ static const float d = 88.7122;
 static const float e = 80.6889;
 	color = mul(SRGB_to_ACES_MAT, color);
 	color = RRT(color);
-      color = (color * (a * color + b)) / (color * (c * color + d) + e);
-      color = renodx::tonemap::aces::DarkToDim(color);
-      float3 AP1_RGB2Y = renodx::color::AP1_TO_XYZ_MAT[1].rgb;
-      color = lerp(dot(color, AP1_RGB2Y).rrr, color, 0.93);
-      color = mul(renodx::color::AP1_TO_XYZ_MAT, color);
-      color = mul(renodx::color::D60_TO_D65_MAT, color);
-      color = mul(renodx::color::XYZ_TO_BT709_MAT, color);
+  color = (color * (a * color + b)) / (color * (c * color + d) + e);
+  color = mul(renodx::color::AP1_TO_XYZ_MAT, color);
+  color = renodx::tonemap::aces::DarkToDim(color);
+  color = mul(renodx::color::XYZ_TO_AP1_MAT, color);
+  float3 AP1_RGB2Y = renodx::color::AP1_TO_XYZ_MAT[1].rgb;
+  color = lerp(dot(color, AP1_RGB2Y).rrr, color, 0.93);
+  color = mul(renodx::color::AP1_TO_XYZ_MAT, color);
+  color = mul(renodx::color::D60_TO_D65_MAT, color);
+  color = mul(renodx::color::XYZ_TO_BT709_MAT, color);
 return color;
 }
 

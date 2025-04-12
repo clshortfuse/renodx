@@ -112,7 +112,10 @@ float3 vanillaTonemap(float3 color) {
   color = mul(SRGB_to_ACES_MAT, color);
   color = RRT(color);
   color = (color * (color + a) - b) / (color * (c * color + d) + e);
+  color = max(0, color);
+  color = mul(renodx::color::AP1_TO_XYZ_MAT, color);
   color = renodx::tonemap::aces::DarkToDim(color);
+  color = mul(renodx::color::XYZ_TO_AP1_MAT, color);
   float3 AP1_RGB2Y = renodx::color::AP1_TO_XYZ_MAT[1].rgb;
   color = lerp(dot(color, AP1_RGB2Y).rrr, color, 0.93);
   color = mul(renodx::color::AP1_TO_XYZ_MAT, color);
@@ -137,7 +140,6 @@ float3 applyUserTonemap(float3 untonemapped) {
   config.saturation = injectedData.colorGradeSaturation;
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
-  config.reno_drt_shadows = 1.1f;
   config.reno_drt_contrast = 1.6f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
