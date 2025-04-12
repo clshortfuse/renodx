@@ -142,7 +142,7 @@ float3 applyUserTonemap(float3 untonemapped) {
   config.reno_drt_contrast = 0.9f;
   config.reno_drt_saturation = 1.f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_flare = 0.01 * pow(injectedData.colorGradeFlare, 5.32192809489);
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
                                    ? renodx::tonemap::config::hue_correction_type::INPUT
                                    : renodx::tonemap::config::hue_correction_type::CUSTOM;
@@ -158,6 +158,8 @@ float3 applyUserTonemap(float3 untonemapped) {
   config.reno_drt_white_clip = injectedData.colorGradeClip;
   if (injectedData.toneMapType == 0.f) {
     outputColor = saturate(hueCorrectionColor);
+  } else {
+    outputColor = untonemapped;
   }
 return renodx::tonemap::config::Apply(outputColor, config);
 }

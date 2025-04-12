@@ -112,7 +112,7 @@ void main(
     r3.xyz = r3.xyz + -r2.yzw;
     r2.yzw = r0.zzz * r3.xyz + r2.yzw;
   }
-    float3 linearColor = renodx::color::gamma::DecodeSafe(r2.gba);
+    float3 linearColor = renodx::color::gamma::DecodeSafe(r2.gba, 2.2f);
 		float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18f,0.18f,0.18f)));
 		float3 hueCorrectionColor = vanillaTonemap(linearColor);
     float3 hdrColor;
@@ -132,11 +132,10 @@ void main(
 			config.saturation = injectedData.colorGradeSaturation;
 			config.mid_gray_value = midGray;
 			config.mid_gray_nits = midGray * 100;
-      config.reno_drt_highlights = 1.f;
-      config.reno_drt_shadows = 1.f;
-      config.reno_drt_contrast = 1.f;
-			config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-			config.reno_drt_flare = 0.1f * pow(injectedData.colorGradeFlare, 4.32192809489);
+      config.reno_drt_shadows = 0.95f;
+      config.reno_drt_contrast = 1.45f;
+      config.reno_drt_dechroma = injectedData.colorGradeDechroma;
+      config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
 			config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
       ? renodx::tonemap::config::hue_correction_type::INPUT
       : renodx::tonemap::config::hue_correction_type::CUSTOM;

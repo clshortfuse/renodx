@@ -177,10 +177,9 @@ float3 applyUserTonemap(float3 untonemapped) {
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
   config.reno_drt_shadows = 1.1f;
-  config.reno_drt_contrast = 1.1f;
-  config.reno_drt_saturation = 1.f;
+  config.reno_drt_contrast = 1.6f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_flare = 0.1f * pow(injectedData.colorGradeFlare, 4.32192809489);
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = injectedData.toneMapPerChannel != 0.f ? renodx::tonemap::config::hue_correction_type::INPUT
                                                                      : renodx::tonemap::config::hue_correction_type::CUSTOM;
   config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f ? (1.f - injectedData.toneMapHueCorrection)
@@ -215,7 +214,7 @@ float3 applyUserTonemapMenu(float3 untonemapped) {
   config.saturation = injectedData.colorGradeSaturation;
   config.reno_drt_saturation = 1.1f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_flare = 0.01f * pow(injectedData.colorGradeFlare, 3.32192809489);
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = injectedData.toneMapPerChannel != 0.f ? renodx::tonemap::config::hue_correction_type::INPUT
                                                                      : renodx::tonemap::config::hue_correction_type::CUSTOM;
   config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f ? (1.f - injectedData.toneMapHueCorrection)

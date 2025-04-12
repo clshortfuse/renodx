@@ -136,10 +136,10 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   config.saturation = injectedData.colorGradeSaturation;
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
-  config.reno_drt_contrast = 1.f;
-  config.reno_drt_saturation = 1.2f;
+  config.reno_drt_contrast = 1.5f;
+  config.reno_drt_saturation = 1.1f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_flare = 0.1f * pow(injectedData.colorGradeFlare, 5.32192809489);
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
                                    ? renodx::tonemap::config::hue_correction_type::INPUT
                                    : renodx::tonemap::config::hue_correction_type::CUSTOM;
@@ -215,10 +215,10 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   config.saturation = injectedData.colorGradeSaturation;
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
-  config.reno_drt_contrast = 1.f;
+  config.reno_drt_contrast = 1.5f;
   config.reno_drt_saturation = 1.1f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_flare = 0.075f * pow(injectedData.colorGradeFlare, 4.32192809489);
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
                                    ? renodx::tonemap::config::hue_correction_type::INPUT
                                    : renodx::tonemap::config::hue_correction_type::CUSTOM;

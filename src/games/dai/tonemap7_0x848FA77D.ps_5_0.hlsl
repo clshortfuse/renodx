@@ -94,7 +94,7 @@ void main(
   r0.xyz = exp2(r0.xyz);
   r0.xyz = r0.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
   r0.xyz = colorGradingTexture.Sample(colorGradingTextureSampler_s, r0.xyz).xyz;
-  o0.rgb = applyUserTonemap(untonemapped, colorGradingTexture, colorGradingTextureSampler_s, untonemapped, midGray, true);
+  o0.rgb = applyUserTonemap(untonemapped, colorGradingTexture, colorGradingTextureSampler_s, saturate(untonemapped), midGray, true);
   o0.a = renodx::color::y::from::BT709(o0.rgb);
   if (injectedData.fxFilmGrain > 0.f) {
     o0.rgb = applyFilmGrain(o0.rgb, screen, injectedData.fxFilmGrainType != 0.f);

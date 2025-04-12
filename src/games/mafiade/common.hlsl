@@ -149,10 +149,15 @@ float3 Apply(float3 inputColor, renodx::tonemap::Config tm_config, renodx::lut::
   }
 }
 
-float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState lutSampler, float linearWhite, bool Noir){
+float3 vanillaTonemap(float3 color, float3 params1, float4 params2) {
+  return renodx::tonemap::ApplyCurve(color, params1.x, params1.y, params1.z, params2.x, params2.y, params2.z)
+         / renodx::tonemap::ApplyCurve(params2.w, params1.x, params1.y, params1.z, params2.x, params2.y, params2.z);
+}
+
+float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState lutSampler, float3 params1, float4 params2, bool Noir){
 		float3 outputColor;
-		float midGray = renodx::color::y::from::BT709(renodx::tonemap::uncharted2::BT709(float3(0.18f,0.18f,0.18f), linearWhite));
-		float3 hueCorrectionColor = renodx::tonemap::uncharted2::BT709(untonemapped, linearWhite);
+		float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18f,0.18f,0.18f), params1, params2));
+		float3 hueCorrectionColor = vanillaTonemap(untonemapped, params1, params2);
 		  renodx::tonemap::Config config = renodx::tonemap::config::Create();
 			config.type = min(3, injectedData.toneMapType);
 			config.peak_nits = injectedData.toneMapPeakNits;
@@ -165,10 +170,9 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
 			config.saturation = injectedData.colorGradeSaturation;
 			config.mid_gray_value = midGray;
 			config.mid_gray_nits = midGray * 100;
-			config.reno_drt_contrast = 1.1f;
-      config.reno_drt_saturation = 1.1f;
-			config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-			config.reno_drt_flare = 0.01 * pow(injectedData.colorGradeFlare, 5.32192809489);
+      config.reno_drt_contrast = 1.2f;
+      config.reno_drt_dechroma = injectedData.colorGradeDechroma;
+      config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
 			config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
       ? renodx::tonemap::config::hue_correction_type::INPUT
       : renodx::tonemap::config::hue_correction_type::CUSTOM;
