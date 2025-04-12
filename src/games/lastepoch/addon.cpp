@@ -41,12 +41,17 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xAD82901B),  // UI cutout globe
     CustomShaderEntry(0x066C98CB),  // UI default 1
     CustomShaderEntry(0x8E2521B8),  // UI default 2
+    CustomShaderEntry(0x510352D9),  // UI default 3
     CustomShaderEntry(0x40D3C83D),  // UI dmap
     CustomShaderEntry(0xF18BD84B),  // UI effect shiny
     CustomShaderEntry(0x55B0DCB7),  // UI text 1
     CustomShaderEntry(0x915C6643),  // UI text 2
     CustomShaderEntry(0xB4EB8715),  // UI text 3
     CustomShaderEntry(0x49EB4070),  // UI dmg digits
+    CustomShaderEntry(0x59E0A9E2),  // UI chat
+    CustomShaderEntry(0xC63FDA06),  // UI chat
+    CustomShaderEntry(0x76F5A816),  // UI blend
+    CustomShaderEntry(0x752CC6FA),  // UI gamepad
     CustomShaderEntry(0x67B5C47D),  // worldmap
     CustomShaderEntry(0xD8EECF85),  // time travel
     CustomShaderEntry(0x20133A8B),  // Final
