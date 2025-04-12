@@ -142,8 +142,8 @@ float3 sampleLUT(float3 color, Texture2D lutTexture, SamplerState lutSampler, fl
   lut_config.tetrahedral = injectedData.colorGradeLUTSampling != 0.f;
   float3 input = color;
   float3 lutColor = renodx::lut::Sample(lutTexture, lut_config, saturate(input));
-  float3 output = perChannel ? UpgradeToneMapPerChannel(input, saturate(input), lutColor, injectedData.colorGradeLUTStrength)
-  : UpgradeToneMapByLuminance(input, saturate(input), lutColor, injectedData.colorGradeLUTStrength);
+  float3 output = perChannel ? UpgradeToneMapPerChannel(input, min(1.f, input), lutColor, injectedData.colorGradeLUTStrength)
+  : UpgradeToneMapByLuminance(input, min(1.f, input), lutColor, injectedData.colorGradeLUTStrength);
   return output;
 }
 

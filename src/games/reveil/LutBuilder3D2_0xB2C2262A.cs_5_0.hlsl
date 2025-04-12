@@ -236,7 +236,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r0.xyz = r2.xyz;
   float3 lutInput = renodx::color::arri::logc::c1000::Encode(r0.rgb, false);
   float3 lutColor = min(1.f, renodx::lut::Sample(t0, s0_s, lutInput, 32.f));
-  r0.rgb = renodx::tonemap::UpgradeToneMap(r0.rgb, saturate(r0.rgb), lutColor, cb0[1].z);
+  r0.rgb = renodx::tonemap::UpgradeToneMap(r0.rgb, min(1.f, r0.rgb), lutColor, cb0[1].z);
   r0.w = 1;
   u0[vThreadID.xyz] = r0.rgba;
   return;
