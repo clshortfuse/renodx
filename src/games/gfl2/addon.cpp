@@ -20,10 +20,14 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-  CustomShaderEntry(0xA1661D35),
-  CustomShaderEntry(0x55396C7C),
-  CustomShaderEntry(0x15EB4AF2),
-  CustomShaderEntry(0x82BAB1D5),
+  CustomShaderEntry(0xA1661D35), // Uberpost 1
+  CustomShaderEntry(0x55396C7C), // Uberpost 2
+  CustomShaderEntry(0x15EB4AF2), // Uberpost 3
+  CustomShaderEntry(0x82BAB1D5), // Uberpost 4
+  CustomShaderEntry(0x22747820), // No AA 1
+  CustomShaderEntry(0x54A7AA7F), // No AA 2
+  CustomShaderEntry(0x32F923E2), // No Bloom 1
+  CustomShaderEntry(0x3DA85276), // No Bloom 2
   CustomShaderEntry(0x20133A8B) // Final
 };
 
@@ -348,23 +352,61 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
-      .key = "fxBloom",
-      .binding = &shader_injection.custom_bloom,
-      .default_value = 50.f,
-      .label = "Bloom",
-      .section = "Effects",
-      .max = 100.f,
-      .parse = [](float value) { return value * 0.02f; },
+        .key = "fxBloom",
+        .binding = &shader_injection.custom_bloom,
+        .default_value = 50.f,
+        .label = "Bloom",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "RenoDX by ShortFuse, game mod by Bit Viper.",
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+      .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+      .label = "Reset All",
+      .section = "Options",
+      .group = "button-line-1",
+      .on_change = []() {
+        for (auto setting : settings) {
+          if (setting->key.empty()) continue;
+          if (!setting->can_reset) continue;
+          renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+        }
+      },
   },
   new renodx::utils::settings::Setting{
-    .value_type = renodx::utils::settings::SettingValueType::TEXT,
-    .label = "RenoDX by ShortFuse, game mod by Bit Viper.",
-    .section = "About",
+    .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    .label = "Discord",
+    .section = "Options",
+    .group = "button-line-2",
+    .tint = 0x5865F2,
+    .on_change = []() {
+      renodx::utils::platform::Launch(
+          "https://discord.gg/"
+          "5WZXDpmbpP");
+    },
+  },
+  new renodx::utils::settings::Setting{
+    .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    .label = "Github",
+    .section = "Options",
+    .group = "button-line-2",
+    .on_change = []() {
+      renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx");
+    },
 },
-new renodx::utils::settings::Setting{
-  .value_type = renodx::utils::settings::SettingValueType::TEXT,
-  .label = "Disabling anti-aliasing or bloom are known to cause SDR clamping.",
-  .section = "Notes",
+  new renodx::utils::settings::Setting{
+    .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    .label = "Ko-Fi",
+    .section = "Options",
+    .group = "button-line-2",
+    .on_change = []() {
+      renodx::utils::platform::Launch("https://ko-fi.com/bitviper");
+    },
 },
 };
 

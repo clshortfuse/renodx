@@ -55,7 +55,7 @@
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH          1.f
-#define RENODX_INTERMEDIATE_ENCODING         (RENODX_GAMMA_CORRECTION - 1.f) // Not sure if this proper, but it makes the UI render in Linear rather than Gamma.
+#define RENODX_INTERMEDIATE_ENCODING         (RENODX_GAMMA_CORRECTION - 1.f)
 #define RENODX_SWAP_CHAIN_DECODING           shader_injection.swap_chain_decoding
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION   shader_injection.swap_chain_gamma_correction
 // #define RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE shader_injection.swap_chain_decoding_color_space
@@ -66,6 +66,7 @@
 #define RENODX_SWAP_CHAIN_ENCODING             shader_injection.swap_chain_encoding
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
 #define CUSTOM_BLOOM                           shader_injection.custom_bloom
+#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 
 
 // Must be 32bit aligned
