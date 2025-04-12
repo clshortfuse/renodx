@@ -80,7 +80,7 @@ float3 applyFrostbite(float3 input, renodx::tonemap::Config FbConfig) {
   color = renodx::color::grade::UserColorGrading(color, FbConfig.exposure, FbConfig.highlights, FbConfig.shadows, FbConfig.contrast);
   color = renodx::tonemap::frostbite::BT709(color, FbPeak, injectedData.toneMapShoulderStart, injectedData.colorGradeBlowout, injectedData.toneMapHueCorrection);
 
-  if (FbConfig.saturation != 1.f || FbConfig.reno_drt_blowout != 0.f) {
+  if (FbConfig.saturation != 1.f || FbConfig.reno_drt_dechroma != 0.f) {
     float3 perceptual_new;
 
     if (FbConfig.reno_drt_hue_correction_method == 0u) {
@@ -224,7 +224,6 @@ float3 applyUserTonemap(float3 untonemapped) {
     outputColor = saturate(outputColor);
   }
   if (injectedData.toneMapType == 2.f) {  // Frostbite
-    config.hue_correction_strength = injectedData.toneMapHueCorrection;
     outputColor = applyFrostbite(outputColor, config);
   } else if (injectedData.toneMapType == 5.f) {  // DICE
     outputColor = applyDICE(outputColor, config);
