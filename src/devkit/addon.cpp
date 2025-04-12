@@ -690,8 +690,6 @@ void OnBindPipeline(
     }
   }
 
-  if (added_shaders.empty()) return;
-
   auto* device = cmd_list->get_device();
 
   auto* device_data = renodx::utils::data::Get<DeviceData>(device);
