@@ -215,12 +215,21 @@ static void CheckSwapchainSize(
     // if (window_rect.top == 0 && window_rect.left == 0) return;
 
     RemoveWindowBorder(output_window);
-    SetWindowPos(
-        output_window,
-        HWND_TOP,
-        monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
-        screen_width, screen_height,
-        SWP_FRAMECHANGED);
+
+    RECT rect = {NULL};
+    if (GetWindowRect(output_window, &rect) != 0) {
+      if (rect.left != monitor_info.rcMonitor.left
+          || rect.top != monitor_info.rcMonitor.top
+          || rect.right - rect.left != screen_width
+          || rect.bottom - rect.top != screen_height) {
+        SetWindowPos(
+            output_window,
+            HWND_TOP,
+            monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
+            screen_width, screen_height,
+            SWP_ASYNCWINDOWPOS | SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER);
+      }
+    }
   }
 }
 
