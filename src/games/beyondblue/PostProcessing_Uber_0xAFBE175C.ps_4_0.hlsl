@@ -1,4 +1,5 @@
 // main post processing
+#include "./shared.h"
 
 Texture2D<float4> t6 : register(t6);
 
@@ -114,7 +115,7 @@ void main(
   r0.xyzw = r2.xyzw + r0.xyzw;
 
   r0.xyzw = cb0[34].yyyy * r0.xyzw;
-  
+
   r2.xy = v1.xy * cb0[33].xy + cb0[33].zw;
   r2.xyzw = t3.Sample(s3_s, r2.xy).xyzw;
   r3.xyzw = float4(0.0625, 0.0625, 0.0625, 0.0625) * r0.xyzw;
@@ -171,10 +172,14 @@ void main(
   r0.xyz = r0.xyz * float3(5.55555582, 5.55555582, 5.55555582) + float3(0.0479959995, 0.0479959995, 0.0479959995);
   r0.xyz = log2(r0.xyz);
   r0.xyz = saturate(r0.xyz * float3(0.0734997839, 0.0734997839, 0.0734997839) + float3(0.386036009, 0.386036009, 0.386036009));
-  r0.xyz = cb0[36].yyy * r0.xyz;
-  r1.x = 0.5 * cb0[36].x;
-  r0.xyz = r0.xyz * cb0[36].xxx + r1.xxx;
-  r1.xyzw = t5.Sample(s5_s, r0.xyz).wxyz;  // sample LUT
+  if (CUSTOM_LUT_TETRAHEDRAL) {
+    r1.rgb = renodx::lut::SampleTetrahedral(t5, r0.rgb, 1 / cb0[36].x);
+  } else {
+    r0.xyz = cb0[36].yyy * r0.xyz;
+    r1.x = 0.5 * cb0[36].x;
+    r0.xyz = r0.xyz * cb0[36].xxx + r1.xxx;
+    r1.xyzw = t5.Sample(s5_s, r0.xyz).wxyz;  // sample LUT
+  }
   r0.x = cmp(0.5 < cb0[42].x);
   if (r0.x != 0) {
     r0.xyz = saturate(r1.yzw);

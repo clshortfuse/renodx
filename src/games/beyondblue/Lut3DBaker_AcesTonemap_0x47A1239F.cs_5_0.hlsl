@@ -1,4 +1,4 @@
-#include "./common.hlsli"
+#include "./tonemap.hlsli"
 
 // https://github.com/Unity-Technologies/Graphics/blob/e42df452b62857a60944aed34f02efa1bda50018/com.unity.postprocessing/PostProcessing/Shaders/Builtins/Lut3DBaker.compute
 // KGenLUT3D_AcesTonemap
