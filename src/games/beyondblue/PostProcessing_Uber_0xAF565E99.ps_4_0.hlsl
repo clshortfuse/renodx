@@ -173,15 +173,14 @@ void main(
   r0.xyz = log2(r0.xyz);
   r0.xyz = saturate(r0.xyz * float3(0.0734997839, 0.0734997839, 0.0734997839) + float3(0.386036009, 0.386036009, 0.386036009));
 
-#if CUSTOM_LUT_TETRAHEDRAL
-  r1.rgb = renodx::lut::SampleTetrahedral(t6, r0.rgb, 1.f / cb0[36].x);
-#else
-  r0.xyz = cb0[36].yyy * r0.xyz;
-  r1.x = 0.5 * cb0[36].x;
-  r0.xyz = r0.xyz * cb0[36].xxx + r1.xxx;
-  r1.xyzw = t6.Sample(s6_s, r0.xyz).xyzw;  // LUT sample
-#endif
-
+  if (CUSTOM_LUT_TETRAHEDRAL) {
+    r1.rgb = renodx::lut::SampleTetrahedral(t6, r0.rgb, 1.f / cb0[36].x);
+  } else {
+    r0.xyz = cb0[36].yyy * r0.xyz;
+    r1.x = 0.5 * cb0[36].x;
+    r0.xyz = r0.xyz * cb0[36].xxx + r1.xxx;
+    r1.xyzw = t6.Sample(s6_s, r0.xyz).xyzw;  // LUT sample
+  }
   if (CUSTOM_GRAIN_TYPE) {
     float2 noise_uv = v1.xy * cb0[30].xy + cb0[30].zw;
     float random = t0.Sample(s0_s, noise_uv).a;

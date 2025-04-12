@@ -218,7 +218,7 @@ void main(
   r0.x = t1.Sample(s1_s, w1.xy).w;
   if (CUSTOM_GRAIN_TYPE) {  // film grain
     float2 noise_uv = v1.xy * cb0[28].xy + cb0[28].zw;
-    float random = t0.Sample(s0_s, noise_uv).a * 2.f - 1.f;
+    float random = t0.Sample(s0_s, noise_uv).a;
     o0.rgb = renodx::effects::ApplyFilmGrain(
         r1.rgb,
         noise_uv,
