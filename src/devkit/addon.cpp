@@ -85,10 +85,11 @@ std::atomic_bool shaders_pane_show_compute_shaders = true;
 uint32_t skip_draw_count = 0;
 std::atomic_uint32_t device_data_index = 0;
 
-struct TextureBind {
+struct ResourceBind {
   enum class BindType : std::uint8_t {
     SRV = 0,
     UAV = 1,
+    CBV = 2,
   } type = BindType::SRV;
   uint32_t slot = 0;
   uint32_t space = 0;
@@ -103,7 +104,7 @@ struct ShaderDetails {
   std::vector<uint8_t> addon_shader;
   std::optional<renodx::utils::shader::compiler::watcher::CustomShader> disk_shader = std::nullopt;
   reshade::api::pipeline_stage shader_type = static_cast<reshade::api::pipeline_stage>(0);
-  std::optional<std::vector<TextureBind>> texture_binds = std::nullopt;
+  std::optional<std::vector<ResourceBind>> resource_binds = std::nullopt;
   bool bypass_draw = false;
 
   enum class ShaderSource : std::uint8_t {
@@ -177,7 +178,7 @@ struct DrawDetails {
   std::vector<PipelineBindDetails> pipeline_binds;
   std::optional<reshade::api::blend_desc> blend_desc = std::nullopt;
   std::optional<reshade::api::rasterizer_desc> rasterizer_desc = std::nullopt;
-  std::optional<std::vector<TextureBind>> texture_binds = std::nullopt;
+  std::optional<std::vector<ResourceBind>> resource_binds = std::nullopt;
 
   enum class DrawMethods : std::uint8_t {
     PRESENT,
@@ -322,49 +323,51 @@ bool ComputeDisassemblyForShaderDetails(reshade::api::device* device, DeviceData
   return true;
 }
 
-std::optional<std::vector<TextureBind>> GetTextureBindsForShaderDetails(
+std::optional<std::vector<ResourceBind>> GetResourceBindsForShaderDetails(
     reshade::api::device* device, DeviceData* data, ShaderDetails* shader_details) {
-  if (shader_details->texture_binds.has_value()) {
-    return shader_details->texture_binds;
+  if (shader_details->resource_binds.has_value()) {
+    return shader_details->resource_binds;
   }
 
   bool ok = ComputeDisassemblyForShaderDetails(device, data, shader_details);
   if (!ok) {
-    return shader_details->texture_binds;
+    return shader_details->resource_binds;
   }
 
   // Read texture declarations from SM5 disassembly
   if (shader_details->program_version.has_value()) {
-    shader_details->texture_binds = std::vector<TextureBind>();
+    shader_details->resource_binds = std::vector<ResourceBind>();
 
     if (shader_details->program_version->GetMajor() <= 5) {
       auto disassembly = std::get<std::string>(shader_details->disassembly);
       auto source_lines = StringViewSplitAll(disassembly, '\n');
 
       for (auto line : source_lines) {
-        static const auto REGEX = std::regex(R"(^.*dcl_(?:resource|uav)_\S+ (?:\([^)]+\) )?(\w)(\d+)(?:\.x?y?z?w?)?(?:\[[^[]+\])?(?:, \d+)?(?:, space=(\d+))?.*$)");
+        static const auto REGEX = std::regex(R"(^.*dcl_(?:resource_\S+|uav_\S+|constantbuffer) (?:\([^)]+\) )?(T|t|U|u|cb|CB)(\d+)(?:\.x?y?z?w?)?(?:\[[^[]+\])?(?:, \d+)?(?:, space=(\d+))?.*$)");
         auto [type, slot, space] = StringViewMatch<3>(line, REGEX);
         if (type.empty()) continue;
         assert(!slot.empty());
-        TextureBind texture_bind = {};
+        ResourceBind resource_bind = {};
         if (type == "T" || type == "t") {
-          texture_bind.type = TextureBind::BindType::SRV;
+          resource_bind.type = ResourceBind::BindType::SRV;
         } else if (type == "U" || type == "u") {
-          texture_bind.type = TextureBind::BindType::UAV;
+          resource_bind.type = ResourceBind::BindType::UAV;
+        } else if (type == "cb" || type == "CB") {
+          resource_bind.type = ResourceBind::BindType::CBV;
         } else {
           assert(false);
           continue;
         }
-        FromStringView(slot, texture_bind.slot);
+        FromStringView(slot, resource_bind.slot);
         if (!space.empty()) {
-          FromStringView(space, texture_bind.space);
+          FromStringView(space, resource_bind.space);
         }
-        shader_details->texture_binds->push_back(texture_bind);
+        shader_details->resource_binds->push_back(resource_bind);
       }
     } else {
       auto disassembly = std::get<std::string>(shader_details->disassembly);
       auto source_lines = StringViewSplitAll(disassembly, '\n');
-      shader_details->texture_binds = std::vector<TextureBind>();
+      shader_details->resource_binds = std::vector<ResourceBind>();
       std::map<std::string_view, std::vector<std::string_view>> metadata_map;
 
       for (auto line : source_lines) {
@@ -390,24 +393,24 @@ std::optional<std::vector<TextureBind>> GetTextureBindsForShaderDetails(
 
         auto srv_list_key = resource_list[0];
         auto uav_list_key = resource_list[1];
-        // auto cbv_list_key = resource_list[2];
+        auto cbv_list_key = resource_list[2];
         // auto sampler_list_key = resource_list[3];
 
         if (srv_list_key != "null") {
           auto srv_list = metadata_map[srv_list_key];
           for (const auto srv_key : srv_list) {
             auto metadata = metadata_map[srv_key];
-            TextureBind texture_bind = {
-                .type = TextureBind::BindType::SRV,
+            ResourceBind resource_bind = {
+                .type = ResourceBind::BindType::SRV,
             };
 
             FromStringView(
                 renodx::utils::shader::decompiler::dxc::Metadata::ParseKeyValue(metadata[3])[1],
-                texture_bind.space);
+                resource_bind.space);
             FromStringView(
                 renodx::utils::shader::decompiler::dxc::Metadata::ParseKeyValue(metadata[4])[1],
-                texture_bind.slot);
-            shader_details->texture_binds->push_back(texture_bind);
+                resource_bind.slot);
+            shader_details->resource_binds->push_back(resource_bind);
           }
         }
 
@@ -415,19 +418,33 @@ std::optional<std::vector<TextureBind>> GetTextureBindsForShaderDetails(
           auto uav_list = metadata_map[uav_list_key];
           for (const auto uav_key : uav_list) {
             auto metadata = metadata_map[uav_key];
-            TextureBind texture_bind = {
-                .type = TextureBind::BindType::UAV,
+            ResourceBind resource_bind = {
+                .type = ResourceBind::BindType::UAV,
             };
 
-            FromStringView(renodx::utils::shader::decompiler::dxc::Metadata::ParseKeyValue(metadata[3])[1], texture_bind.space);
-            FromStringView(renodx::utils::shader::decompiler::dxc::Metadata::ParseKeyValue(metadata[4])[1], texture_bind.slot);
-            shader_details->texture_binds->push_back(texture_bind);
+            FromStringView(renodx::utils::shader::decompiler::dxc::Metadata::ParseKeyValue(metadata[3])[1], resource_bind.space);
+            FromStringView(renodx::utils::shader::decompiler::dxc::Metadata::ParseKeyValue(metadata[4])[1], resource_bind.slot);
+            shader_details->resource_binds->push_back(resource_bind);
+          }
+        }
+
+        if (cbv_list_key != "null") {
+          auto cbv_list = metadata_map[cbv_list_key];
+          for (const auto cbv_key : cbv_list) {
+            auto metadata = metadata_map[cbv_key];
+            ResourceBind resource_bind = {
+                .type = ResourceBind::BindType::CBV,
+            };
+
+            FromStringView(renodx::utils::shader::decompiler::dxc::Metadata::ParseKeyValue(metadata[3])[1], resource_bind.space);
+            FromStringView(renodx::utils::shader::decompiler::dxc::Metadata::ParseKeyValue(metadata[4])[1], resource_bind.slot);
+            shader_details->resource_binds->push_back(resource_bind);
           }
         }
       }
     }
   }
-  return shader_details->texture_binds;
+  return shader_details->resource_binds;
 }
 
 // Settings
@@ -919,6 +936,7 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
 
     std::unique_lock lock(device_data->mutex);
 
+    std::set<reshade::api::pipeline> added_pipelines;
     for (auto stage_state : state->stage_states) {
       if (draw_method == DrawDetails::DrawMethods::DISPATCH) {
         if (stage_state.stage != reshade::api::pipeline_stage::compute_shader) continue;
@@ -950,7 +968,6 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
             stage_state.pipeline_details->shader_hashes.begin(),
             stage_state.pipeline_details->shader_hashes.end()};
       }
-      draw_details.pipeline_binds.push_back(pipeline_details);
 
       if ((draw_method == DrawDetails::DrawMethods::DISPATCH && stage_state.stage == reshade::api::pipeline_stage::compute_shader)
           || (draw_details.draw_method != DrawDetails::DrawMethods::DISPATCH && stage_state.stage == reshade::api::pipeline_stage::pixel_shader)) {
@@ -958,11 +975,16 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
           shader_details = device_data->GetShaderDetails(shader_hash);
         }
         if (shader_details != nullptr) {
-          if (!shader_details->texture_binds.has_value()) {
-            GetTextureBindsForShaderDetails(device, device_data, shader_details);
+          if (!shader_details->resource_binds.has_value()) {
+            GetResourceBindsForShaderDetails(device, device_data, shader_details);
           }
-          draw_details.texture_binds = shader_details->texture_binds;
+          draw_details.resource_binds = shader_details->resource_binds;
         }
+      }
+
+      if (!added_pipelines.contains(pipeline_details.pipeline)) {
+        added_pipelines.emplace(pipeline_details.pipeline);
+        draw_details.pipeline_binds.push_back(pipeline_details);
       }
     }
 
@@ -1363,8 +1385,17 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
         ImGui::Text("%03d", draw_index);
       }
 
-      for (const auto& [slot, buffer_range] : draw_details.constants) {
+      for (const auto& [slot_space, buffer_range] : draw_details.constants) {
+        const auto& slot = slot_space.first;
+        const auto& space = slot_space.second;
         if (buffer_range.buffer.handle == 0u) continue;
+        if (snapshot_pane_filter_resources_by_shader_use && draw_details.resource_binds.has_value()) {
+          if (std::ranges::none_of(*draw_details.resource_binds, [&slot, &space](const ResourceBind& bind) {
+                return bind.type == ResourceBind::BindType::CBV && bind.slot == slot && bind.space == space;
+              })) {
+            continue;
+          }
+        }
         ++row_index;
 
         if (draw_node_open) {
@@ -1378,7 +1409,7 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
                                 | selection.GetTreeNodeFlags();
 
             ImGui::PushID(row_index);
-            ImGui::TreeNodeEx("", bullet_flags, (slot.second == 0) ? "CB%d" : "CB%d,space%d", slot.first, slot.second);
+            ImGui::TreeNodeEx("", bullet_flags, (space == 0) ? "CB%d" : "CB%d,space%d", slot, space);
             ImGui::PopID();
             if (ImGui::IsItemClicked()) {
               MakeSelectionCurrent(selection);
@@ -1490,9 +1521,9 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
       for (auto& [slot_space, resource_view_details] : draw_details.srv_binds) {
         const auto& slot = slot_space.first;
         const auto& space = slot_space.second;
-        if (snapshot_pane_filter_resources_by_shader_use && draw_details.texture_binds.has_value()) {
-          if (std::ranges::none_of(*draw_details.texture_binds, [&slot, &space](const TextureBind& bind) {
-                return bind.type == TextureBind::BindType::SRV && bind.slot == slot && bind.space == space;
+        if (snapshot_pane_filter_resources_by_shader_use && draw_details.resource_binds.has_value()) {
+          if (std::ranges::none_of(*draw_details.resource_binds, [&slot, &space](const ResourceBind& bind) {
+                return bind.type == ResourceBind::BindType::SRV && bind.slot == slot && bind.space == space;
               })) {
             continue;
           }
@@ -1621,9 +1652,9 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
         const auto& slot = slot_space.first;
         const auto& space = slot_space.second;
 
-        if (snapshot_pane_filter_resources_by_shader_use && draw_details.texture_binds.has_value()) {
-          if (std::ranges::none_of(*draw_details.texture_binds, [&slot, &space](const TextureBind& bind) {
-                return bind.type == TextureBind::BindType::UAV && bind.slot == slot && bind.space == space;
+        if (snapshot_pane_filter_resources_by_shader_use && draw_details.resource_binds.has_value()) {
+          if (std::ranges::none_of(*draw_details.resource_binds, [&slot, &space](const ResourceBind& bind) {
+                return bind.type == ResourceBind::BindType::UAV && bind.slot == slot && bind.space == space;
               })) {
             continue;
           }
@@ -2680,9 +2711,9 @@ void RenderResourceViewHistory(reshade::api::device* device, DeviceData* data, r
       const auto& slot = slot_space.first;
       const auto& space = slot_space.second;
       if (resource_view_details.resource.handle != resource.handle) continue;
-      if (draw_details.texture_binds.has_value()) {
-        if (std::ranges::none_of(*draw_details.texture_binds, [&slot, &space](const TextureBind& bind) {
-              return bind.type == TextureBind::BindType::SRV && bind.slot == slot && bind.space == space;
+      if (draw_details.resource_binds.has_value()) {
+        if (std::ranges::none_of(*draw_details.resource_binds, [&slot, &space](const ResourceBind& bind) {
+              return bind.type == ResourceBind::BindType::SRV && bind.slot == slot && bind.space == space;
             })) {
           continue;
         }
@@ -2697,9 +2728,9 @@ void RenderResourceViewHistory(reshade::api::device* device, DeviceData* data, r
       const auto& slot = slot_space.first;
       const auto& space = slot_space.second;
       if (resource_view_details.resource.handle != resource.handle) continue;
-      if (draw_details.texture_binds.has_value()) {
-        if (std::ranges::none_of(*draw_details.texture_binds, [&slot, &space](const TextureBind& bind) {
-              return bind.type == TextureBind::BindType::UAV && bind.slot == slot && bind.space == space;
+      if (draw_details.resource_binds.has_value()) {
+        if (std::ranges::none_of(*draw_details.resource_binds, [&slot, &space](const ResourceBind& bind) {
+              return bind.type == ResourceBind::BindType::UAV && bind.slot == slot && bind.space == space;
             })) {
           continue;
         }
