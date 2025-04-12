@@ -248,7 +248,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeFlare",
         .binding = &shader_injection.colorGradeFlare,
-        .default_value = 0.f,
+        .default_value = 50.f,
         .label = "Flare",
         .section = "Color Grading",
         .tint = 0x4D7180,
@@ -394,7 +394,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
           renodx::utils::settings::UpdateSetting("colorGradeBlowout", 50.f);
           renodx::utils::settings::UpdateSetting("colorGradeDechroma", 0.f);
-          renodx::utils::settings::UpdateSetting("colorGradeFlare", 0.f);
+          renodx::utils::settings::UpdateSetting("colorGradeFlare", 50.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f);
@@ -414,12 +414,12 @@ renodx::utils::settings::Settings settings = {
             renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 80.f);
             renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
             renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-            renodx::utils::settings::UpdateSetting("colorGradeShadows", 45.f);
+            renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
             renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-            renodx::utils::settings::UpdateSetting("colorGradeSaturation", 55.f);
-            renodx::utils::settings::UpdateSetting("colorGradeBlowout", 55.f);
-            renodx::utils::settings::UpdateSetting("colorGradeDechroma", 0.f);
-            renodx::utils::settings::UpdateSetting("colorGradeFlare", 50.f);
+            renodx::utils::settings::UpdateSetting("colorGradeSaturation", 65.f);
+            renodx::utils::settings::UpdateSetting("colorGradeBlowout", 65.f);
+            renodx::utils::settings::UpdateSetting("colorGradeDechroma", 65.f);
+            renodx::utils::settings::UpdateSetting("colorGradeFlare", 65.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f);},
@@ -439,12 +439,12 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
           renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-          renodx::utils::settings::UpdateSetting("colorGradeShadows", 38.f);
+          renodx::utils::settings::UpdateSetting("colorGradeShadows", 41.f);
           renodx::utils::settings::UpdateSetting("colorGradeContrast", 41.f);
           renodx::utils::settings::UpdateSetting("colorGradeSaturation", 80.f);
           renodx::utils::settings::UpdateSetting("colorGradeBlowout", 35.f);
           renodx::utils::settings::UpdateSetting("colorGradeDechroma", 65.f);
-          renodx::utils::settings::UpdateSetting("colorGradeFlare", 65.f);
+          renodx::utils::settings::UpdateSetting("colorGradeFlare", 80.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f);},

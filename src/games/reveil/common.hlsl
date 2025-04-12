@@ -109,15 +109,18 @@ float3 RRT(float3 aces) {
 }
 
 float3 vanillaTonemap(float3 color) {
-  static const float a = 278.5085;
-  static const float b = 10.7772;
-  static const float c = 293.6045;
-  static const float d = 88.7122;
-  static const float e = 80.6889;
+  static const float a = 0.0245786;
+  static const float b = 0.000090537;
+  static const float c = 0.983729;
+  static const float d = 0.4329510;
+  static const float e = 0.238081;
   color = mul(SRGB_to_ACES_MAT, color);
   color = RRT(color);
   color = (color * (a * color + b)) / (color * (c * color + d) + e);
+  color = max(0, color);
+  color = mul(renodx::color::AP1_TO_XYZ_MAT, color);
   color = renodx::tonemap::aces::DarkToDim(color);
+  color = mul(renodx::color::XYZ_TO_AP1_MAT, color);
   float3 AP1_RGB2Y = renodx::color::AP1_TO_XYZ_MAT[1].rgb;
   color = lerp(dot(color, AP1_RGB2Y).rrr, color, 0.93);
   color = mul(renodx::color::AP1_TO_XYZ_MAT, color);
@@ -142,7 +145,6 @@ float3 applyUserTonemap(float3 untonemapped) {
   config.saturation = injectedData.colorGradeSaturation;
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
-  config.reno_drt_shadows = 1.1f;
   config.reno_drt_contrast = 1.6f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
