@@ -15,6 +15,8 @@
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE  color::convert::COLOR_SPACE_BT2020
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
+#define CUSTOM_FILM_GRAIN_STRENGTH           30.f * 0.01f
+#define CUSTOM_RANDOM                        shader_injection.custom_random
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -31,6 +33,7 @@ struct ShaderInjectData {
   float tone_map_highlight_saturation;
   float tone_map_blowout;
   float tone_map_flare;
+  float custom_random;
 };
 
 #ifndef __cplusplus

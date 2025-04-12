@@ -83,6 +83,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedDualShaderEntry(0xB864B3B8),
 
     // SM5 LUT Builder
+    TracedDualShaderEntry(0x1BA80C5E),
     TracedDualShaderEntry(0x1DF6036B),
     TracedDualShaderEntry(0x20EAC9B6),
     TracedDualShaderEntry(0x2A94C68A),
@@ -125,6 +126,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedDualShaderEntry(0x40A581ED),
     TracedDualShaderEntry(0x18639D8F),
     TracedDualShaderEntry(0x95A3F50E),
+    TracedDualShaderEntry(0x6757E671),
+    TracedDualShaderEntry(0x0F17B0B3),
+    TracedDualShaderEntry(0xE349C52A),
 
     // SM6 LUT Builder
 
@@ -149,6 +153,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedShaderEntry(0x06F39D1E),
     TracedShaderEntry(0xDA10C03E),
 
+    TracedShaderEntry(0x9DF2DDD4),
+    TracedShaderEntry(0xBBB5CA7B),
 };
 
 ShaderInjectData shader_injection;
@@ -411,9 +417,32 @@ const std::unordered_map<std::string, reshade::api::format> UPGRADE_TARGETS = {
 renodx::utils::settings::Settings info_settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Reset All",
+        .section = "Options",
+        .group = "button-line-1",
+        .on_change = []() { renodx::utils::settings::ResetSettings(); },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "SDR Grading Bypass",
+        .section = "Options",
+        .group = "button-line-1",
+        .tooltip = "Improves highlight appearance in games with little to no SDR grading",
+        .on_change = []() {
+          renodx::utils::settings::ResetSettings();
+          renodx::utils::settings::UpdateSettings({
+              {"ColorGradeContrast", 80.f},
+              {"ColorGradeSaturation", 80.f},
+              {"ColorGradeBlowout", 80.f},
+              {"ColorGradeStrength", 0.f},
+          });
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
         .section = "Links",
-        .group = "button-line-1",
+        .group = "button-line-2",
         .tint = 0x5865F2,
         .on_change = []() {
           renodx::utils::platform::Launch(
@@ -426,7 +455,7 @@ renodx::utils::settings::Settings info_settings = {
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "More Mods",
         .section = "Links",
-        .group = "button-line-1",
+        .group = "button-line-2",
         .tint = 0x2B3137,
         .on_change = []() {
           renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx/wiki/Mods");
@@ -436,7 +465,7 @@ renodx::utils::settings::Settings info_settings = {
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Github",
         .section = "Links",
-        .group = "button-line-1",
+        .group = "button-line-2",
         .tint = 0x2B3137,
         .on_change = []() {
           renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx");
@@ -446,7 +475,7 @@ renodx::utils::settings::Settings info_settings = {
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "ShortFuse's Ko-Fi",
         .section = "Links",
-        .group = "button-line-1",
+        .group = "button-line-2",
         .tint = 0xFF5A16,
         .on_change = []() {
           renodx::utils::platform::Launch("https://ko-fi.com/shortfuse");
@@ -501,11 +530,11 @@ bool fired_on_init_swapchain = false;
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
-  fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
     settings[2]->default_value = peak.value();
     settings[2]->can_reset = true;
+    fired_on_init_swapchain = true;
   }
 }
 
@@ -764,6 +793,27 @@ void AddAdvancedSettings() {
   }
 
   {
+    auto* setting = new renodx::utils::settings::Setting{
+        .key = "PreventFullscreen",
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Prevent Fullscreen",
+        .section = "Resource Upgrades",
+        .tooltip = "Prevent exclusive fullscreen for proper HDR",
+        .labels = {
+            "Disabled",
+            "Enabled",
+        },
+        .on_change_value = [](float previous, float current) { renodx::mods::swapchain::prevent_full_screen = (current == 1.f); },
+        .is_global = true,
+        .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    };
+
+    renodx::mods::swapchain::prevent_full_screen = (setting->GetValue() == 1.f);
+    add_setting(setting);
+  }
+
+  {
     auto* lut_dump_setting = new renodx::utils::settings::Setting{
         .key = "DumpLUTShaders",
         .binding = &g_dump_shaders,
@@ -810,16 +860,15 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         auto process_path = renodx::utils::platform::GetCurrentProcessPath();
         auto product_name = renodx::utils::platform::GetProductName(process_path);
         auto param_count = params.size();
-        if (params.size() >= 20) {
-          return false;
-        }
+        if (params.size() >= 20) return false;
+
+        if (product_name == "Jusant") return true;
+
         // UE DX12 has a 4 param root sig that crashes if modified. Track for now
         return std::ranges::any_of(params, [](auto param) {
           return (param.type == reshade::api::pipeline_layout_param_type::descriptor_table);
         });
       };
-
-      // while (IsDebuggerPresent() == 0) Sleep(100);
 
       if (!initialized) {
         AddAdvancedSettings();
@@ -856,6 +905,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::utils::shader::use_shader_cache = true;
         renodx::utils::resource::Use(fdw_reason);
         reshade::register_event<reshade::addon_event::draw>(OnDrawForLUTDump);
+        reshade::log::message(reshade::log::level::info, "DumpLUTShaders enabled.");
       }
 
       break;

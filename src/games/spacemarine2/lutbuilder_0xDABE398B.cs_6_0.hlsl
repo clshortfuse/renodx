@@ -2,7 +2,7 @@ Texture3D<float4> HDR_TEX_3D_PREV : register(t5, space2);
 
 Texture3D<float4> HDR_TEX_3D_NEXT : register(t6, space2);
 
-RWTexture3D<float> HDR_LUT_OUT : register(u1);
+RWTexture3D<float4> HDR_LUT_OUT : register(u1);
 
 cbuffer CB_PASS_HDR : register(b4) {
   float CB_PASS_HDR_003x : packoffset(c003.x);

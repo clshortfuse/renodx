@@ -65,6 +65,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
   if (!is_primary_hook) return;
   auto* device = swapchain->get_device();
   auto* data = renodx::utils::data::Get<DeviceData>(device);
+  if (data == nullptr) return;
   data->back_buffer_desc = {};
 }
 

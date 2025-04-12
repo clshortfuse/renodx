@@ -279,7 +279,7 @@ static bool OnCopyDescriptorTables(
       s << static_cast<uintptr_t>(src_heap.handle);
       s << " undersized ";
       s << src_pool_data.size() << " => " << min_source_size;
-      reshade::log::message(reshade::log::level::warn, s.str().c_str());
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
 #endif
       continue;
     }

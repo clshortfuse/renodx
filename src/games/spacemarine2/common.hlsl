@@ -6,7 +6,7 @@ static const float DEFAULT_BRIGHTNESS = 0.f;  // 50%
 static const float DEFAULT_CONTRAST = 1.f;    // 50%
 static const float DEFAULT_GAMMA = 1.f;
 
-float3 LutToneMap(float3 untonemapped, Texture3D<float4> lut, SamplerState colorGradingLUTSampler) {
+/* float3 LutToneMap(float3 untonemapped, Texture3D<float4> lut, SamplerState colorGradingLUTSampler) {
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = colorGradingLUTSampler;
   lut_config.size = 32u;
@@ -26,7 +26,7 @@ float3 LutToneMap(float3 untonemapped, Texture3D<float4> lut, SamplerState color
 
   final = renodx::draw::RenderIntermediatePass(final.rgb);
   return final;
-}
+} */
 
 float3 LutToneMap(float3 untonemapped, float3 lutOutput) {
   float3 final = renodx::color::srgb::DecodeSafe(lutOutput);
