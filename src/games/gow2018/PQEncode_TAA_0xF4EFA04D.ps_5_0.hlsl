@@ -1,7 +1,5 @@
 #include "./shared.h"
-#include "./tonemapper.hlsl"
 
-// ---- Created with 3Dmigoto v1.3.16 on Sun Oct 13 15:49:48 2024
 Texture2D<float4> t16 : register(t16);
 
 Texture2D<float4> t11 : register(t11);
@@ -95,28 +93,20 @@ void main(
   r0.y = t16.SampleLevel(s2_s, r0.yz, 0).x;
   r0.y = r0.y * 2 + -1;
   r0.xyz = r0.yyy * r0.xxx + r2.xyz;
-  if (injectedData.toneMapType != 0) {
-    r0.rgb = renodx::color::grade::UserColorGrading(  // apply saturation and hue after LUT
-        r0.rgb,
-        1.f,                                // exposure, applied earlier
-        1.f,                                // highlights, applied earlier
-        1.f,                                // shadows, applied earlier
-        1.f,                                // contrast, applied earlier
-        injectedData.colorGradeSaturation,  // saturation
-        injectedData.colorGradeBlowout,     // dechroma
-        injectedData.toneMapHueCorrection,  // hue correction
-        renodx::tonemap::uncharted2::BT709(r0.rgb));
 
-    r0.xyz = renodx::color::correct::GammaSafe(r0.xyz);  // linearize with 2.2 instead of srgb
+  // add saturation/blowout/hue shift sliders
+  r0.rgb = renodx::color::grade::UserColorGrading(
+      r0.rgb,
+      1.f,
+      1.f,
+      1.f,
+      1.f,
+      RENODX_TONE_MAP_SATURATION,
+      RENODX_TONE_MAP_BLOWOUT,
+      RENODX_TONE_MAP_HUE_SHIFT,
+      renodx::tonemap::ExponentialRollOff(r0.rgb, 1.f, 2.f));
 
-    if (injectedData.toneMapType == 2) {  // DICE tonemap
-      r0.rgb = applyDICE(r0.rgb);
-    }
-
-    r0.xyz = renodx::color::bt2020::from::BT709(r0.xyz);  // Convert to BT.2020
-    r0.xyz = max(0, r0.xyz);                              // Clamp needed to prevent artifacts
-    o0.xyz = renodx::color::pq::Encode(r0.xyz, injectedData.toneMapGameNits);
-  } else {  //  Original BT.2020 + PQ code
+  if (!RENODX_GAMMA_CORRECTION) {
     r0.xyz = max(float3(0, 0, 0), r0.xyz);
     r0.w = dot(float3(0.627403915, 0.329283029, 0.0433130674), r0.xyz);
     r1.x = dot(float3(0.069097288, 0.919540405, 0.0113623161), r0.xyz);
@@ -126,7 +116,27 @@ void main(
     r2.z = log2(r0.x);
     r0.xyz = cb0[25].zzz * r2.xyz;
     r0.xyz = exp2(r0.xyz);
+  } else {
+    r0.rgb = renodx::color::correct::GammaSafe(r0.rgb);
+    r0.rgb = renodx::color::bt2020::from::BT709(r0.rgb);
+  }
+
+  float peak_nits;
+  if (!RENODX_OVERRIDE_BRIGHTNESS) {
+    if (RENODX_TONE_MAP_TYPE) {
+      peak_nits = RENODX_PEAK_WHITE_NITS / (cb0[24].y * 100.f);
+      r0.rgb = renodx::tonemap::ExponentialRollOff(r0.rgb, min(1.f, peak_nits * 0.5f), peak_nits);
+    }
     r0.xyz = cb0[24].yyy * r0.xyz;
+  } else {
+    if (RENODX_TONE_MAP_TYPE) {
+      peak_nits = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+      r0.rgb = renodx::tonemap::ExponentialRollOff(r0.rgb, min(1.f, peak_nits * 0.5f), peak_nits);
+    }
+    r0.rgb *= RENODX_DIFFUSE_WHITE_NITS / 100.f;
+  }
+
+  if (!RENODX_USE_PQ_ENCODING) {
     r1.xyz = r0.xyz * float3(533095.75, 533095.75, 533095.75) + float3(47438308, 47438308, 47438308);
     r1.xyz = r0.xyz * r1.xyz + float3(29063622, 29063622, 29063622);
     r1.xyz = r0.xyz * r1.xyz + float3(575216.75, 575216.75, 575216.75);
@@ -137,6 +147,8 @@ void main(
     r2.xyz = r0.xyz * r2.xyz + float3(10668.4043, 10668.4043, 10668.4043);
     r0.xyz = r0.xyz * r2.xyz + float3(1, 1, 1);
     o0.xyz = r1.xyz / r0.xyz;
+  } else {
+    o0.rgb = renodx::color::pq::EncodeSafe(r0.rgb, 100.f);
   }
   o0.w = 1;
   return;
