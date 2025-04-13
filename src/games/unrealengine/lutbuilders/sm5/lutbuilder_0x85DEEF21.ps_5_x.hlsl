@@ -99,7 +99,7 @@ void main(
   r1.zw = r2.xy + -r3.xy;
   r1.xy = r1.xy + r1.zw;
   r1.zw = float2(0.312700003, 0.328999996);
-  r1.xyzw = cb0[32].zzzz ? r1.xyzw : r1.zwxy;
+  r1.xyzw = (asuint(cb0[32].z) != 0u) ? r1.xyzw : r1.zwxy;
   r2.xy = max(float2(1.00000001e-10, 1.00000001e-10), r1.yw);
   r2.zw = float2(1, 1) + -r1.xz;
   r1.yw = r2.zw + -r1.yw;
@@ -459,7 +459,8 @@ void main(
     return;
   }
 
-  if (cb0[34].w == 0) {
+  [branch]
+  if (asuint(cb0[34].w) == 0) {
     r4.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r3.xyz;
     r5.xyz = cmp(r3.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
     r2.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r2.xyz;

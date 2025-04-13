@@ -115,7 +115,7 @@ void main(
   r4.zw = r5.xy + -r6.xy;
   r4.xy = r4.xy + r4.zw;
   r4.zw = float2(0.312700003, 0.328999996);
-  r4.xyzw = cb0[38].wwww ? r4.xyzw : r4.zwxy;
+  r4.xyzw = (asuint(cb0[38].w) != 0u) ? r4.xyzw : r4.zwxy;
   r5.xy = max(float2(1.00000001e-10, 1.00000001e-10), r4.yw);
   r5.zw = float2(1, 1) + -r4.xz;
   r4.yw = r5.zw + -r4.yw;
@@ -499,14 +499,15 @@ void main(
     return;
   }
 
-  if (cb0[40].w == 0) {
+  [branch]
+  if (asuint(cb0[40].w) == 0) {
     r6.x = dot(cb1[8].xyz, r5.xyz);
     r6.y = dot(cb1[9].xyz, r5.xyz);
     r6.z = dot(cb1[10].xyz, r5.xyz);
     r7.x = dot(r2.xyz, r6.xyz);
     r7.y = dot(r3.xyz, r6.xyz);
     r7.z = dot(r0.xyz, r6.xyz);
-    r6.xyz = cb1[20].xxx ? r5.xyz : r7.xyz;
+    r6.xyz = (asuint(cb1[20].x) != 0u) ? r5.xyz : r7.xyz;
     r7.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r6.xyz;
     r8.xyz = cmp(r6.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
     r6.xyz = log2(r6.xyz);

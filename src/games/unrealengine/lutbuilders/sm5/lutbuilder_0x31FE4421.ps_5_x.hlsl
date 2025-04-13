@@ -117,7 +117,7 @@ void main(
   r1.zw = r5.xy + -r6.xy;
   r1.xy = r1.xy + r1.zw;
   r1.zw = float2(0.312700003, 0.328999996);
-  r1.xyzw = cb0[38].zzzz ? r1.xyzw : r1.zwxy;
+  r1.xyzw = (asuint(cb0[38].z) != 0u) ? r1.xyzw : r1.zwxy;
   r5.xy = max(float2(1.00000001e-10, 1.00000001e-10), r1.yw);
   r5.zw = float2(1, 1) + -r1.xz;
   r1.yw = r5.zw + -r1.yw;
@@ -520,7 +520,8 @@ void main(
     return;
   }
 
-  if (cb0[40].w == 0) {  // cb[40].w = output device
+  [branch]
+  if (asuint(cb0[40].w) == 0) {  // cb[40].w = output device
     // Shader uses this section
     r6.x = dot(cb1[8].xyz, r5.xyz);
     r6.y = dot(cb1[9].xyz, r5.xyz);
@@ -528,7 +529,7 @@ void main(
     r7.x = dot(r3.xyz, r6.xyz);
     r7.y = dot(r4.xyz, r6.xyz);
     r7.z = dot(r2.xyz, r6.xyz);
-    r6.xyz = cb1[20].xxx ? r5.xyz : r7.xyz;
+    r6.xyz = (asuint(cb1[20].x) != 0u) ? r5.xyz : r7.xyz;
     r7.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r6.xyz;
     r8.xyz = cmp(r6.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
     r6.xyz = log2(r6.xyz);

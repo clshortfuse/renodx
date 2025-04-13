@@ -348,7 +348,7 @@ void main(
   r2.yzw = r2.yyy ? float3(-0.00501335133, -0.025290072, 1.03030348) : r4.xyz;
   r2.xyz = r2.xxx ? float3(-0.00215900945, -0.0454593264, 1.04761839) : r2.yzw;
   r3.z = dot(r2.xyz, r1.xyz);
-  r0.xyz = cb1[20].xxx ? r0.xyz : r3.xyz;
+  r0.xyz = (asuint(cb1[20].x) != 0u) ? r0.xyz : r3.xyz;
   r1.xyz = log2(r0.xyz);
   r1.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r1.xyz;
   r1.xyz = exp2(r1.xyz);

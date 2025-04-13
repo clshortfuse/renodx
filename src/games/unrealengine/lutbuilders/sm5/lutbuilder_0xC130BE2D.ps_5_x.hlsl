@@ -71,7 +71,7 @@ void main(
   r0.zw = r0.zz ? r1.xy : r2.xy;
   r0.xy = r0.zw + r0.xy;
   r0.zw = float2(0.312700003, 0.328999996);
-  r0.xyzw = cb0[38].wwww ? r0.xyzw : r0.zwxy;
+  r0.xyzw = (asuint(cb0[38].w) != 0u) ? r0.xyzw : r0.zwxy;
   r1.xy = max(float2(1.00000001e-10, 1.00000001e-10), r0.yw);
   r2.xy = r0.xz / r1.xy;
   r0.xz = float2(1, 1) + -r0.xz;
@@ -457,7 +457,7 @@ void main(
   r2.yzw = r2.yyy ? float3(-0.00501335133, -0.025290072, 1.03030348) : r4.xyz;
   r2.xyz = r2.xxx ? float3(-0.00215900945, -0.0454593264, 1.04761839) : r2.yzw;
   r3.z = dot(r2.xyz, r1.xyz);
-  r0.xyz = cb1[20].xxx ? r0.xyz : r3.xyz;
+  r0.xyz = (asuint(cb1[20].x) != 0u) ? r0.xyz : r3.xyz;
   r1.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r0.xyz;
   r2.xyz = cmp(r0.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
   r0.xyz = log2(r0.xyz);
