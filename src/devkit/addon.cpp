@@ -1455,18 +1455,19 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
   static ImGuiTreeNodeFlags tree_node_flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_SpanFullWidth;
   if (ImGui::BeginTable(
           "##SnapshotTree",
-          5,
+          CAPTURE_PANE_COLUMN_COUNT,
           ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_Resizable | ImGuiTableFlags_Hideable
               | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_ScrollY,
           ImVec2(-4, -4))) {
-    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthStretch, 24.0f);
-    ImGui::TableSetupColumn("Ref", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 16.0f);
-    ImGui::TableSetupColumn("Info", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 24.0f);
-    ImGui::TableSetupColumn("Reflection", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 24.0f);
+    const auto char_width = ImGui::CalcTextSize("0").x;
+    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthFixed, char_width * 16.0f);
+    ImGui::TableSetupColumn("Ref", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthFixed, char_width * 18.0f);
+    ImGui::TableSetupColumn("Info", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthFixed, char_width * 24.0f);
+    ImGui::TableSetupColumn("Reflection", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, -1.f);
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableHeadersRow();
 
-    uint32_t row_index = 0x2000;
+    int row_index = 0x2000;
     int draw_index = 0;
     for (auto& draw_details : data->draw_details_list) {
       ImGui::TableNextRow();
@@ -2351,12 +2352,13 @@ void RenderShadersPane(reshade::api::device* device, DeviceData* data) {
           ImGuiTableFlags_BordersInner | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY
               | ImGuiTableFlags_Sortable | ImGuiTableFlags_SortMulti | ImGuiTableFlags_Hideable,
           ImVec2(0, 0))) {
-    ImGui::TableSetupColumn("Hash", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 16.0f);
-    ImGui::TableSetupColumn("Alias", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 16.0f);
-    ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_NoHide);
-    ImGui::TableSetupColumn("Options", ImGuiTableColumnFlags_NoHide);
-    ImGui::TableSetupColumn("Snapshot", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, 16.0f);
+    const auto char_width = ImGui::CalcTextSize("0").x;
+    ImGui::TableSetupColumn("Hash", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthFixed, char_width * 10.f);
+    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthFixed, char_width * 6.0f);
+    ImGui::TableSetupColumn("Alias", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, -1.f);
+    ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthFixed, (char_width * 8.f) + 20.f);
+    ImGui::TableSetupColumn("Options", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthFixed, 3.f * ((char_width * 4.f) + (ImGui::GetStyle().FramePadding.x * 2) + 8.f));
+    ImGui::TableSetupColumn("Snapshot", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthFixed, char_width * 3.f);
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableHeadersRow();
 
@@ -2547,7 +2549,7 @@ void RenderShaderDefinesPane(reshade::api::device* device, DeviceData* data) {
   static ImGuiTreeNodeFlags tree_node_flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_SpanFullWidth;
   if (ImGui::BeginTable(
           "##ShaderDefinesTable",
-          4,
+          3,
           ImGuiTableFlags_BordersInner | ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH
               | ImGuiTableFlags_Resizable
               | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_ScrollY,
@@ -3011,8 +3013,8 @@ void RenderResourceViewPreview(reshade::api::device* device, DeviceData* data, r
 
   auto available_size = ImGui::GetContentRegionAvail();
   auto output_size = ImVec2(
-      info->desc.texture.width,
-      info->desc.texture.height);
+      static_cast<float>(info->desc.texture.width),
+      static_cast<float>(info->desc.texture.height));
   auto x_overage = output_size.x - available_size.x;
   auto y_overage = output_size.y - available_size.y;
   auto scale = 1.f;
@@ -3254,24 +3256,24 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   if (data->runtime == nullptr) {
     data->runtime = runtime;
   }
-  static auto setting_window_size = 0;
-  static auto setting_side_sheet_width = 0;
+
+  static auto setting_side_sheet_width = 96.f;
+
+  const auto x_height = ImGui::CalcTextSize("x").y;
+
+  ImGui::SetNextWindowSizeConstraints({SETTING_NAV_RAIL_SIZE + 128 + 128 + 96, (2 * x_height) + (SETTING_NAV_RAIL_SIZE * 4.f)}, {FLT_MAX, FLT_MAX});
 
   if (ImGui::BeginChild("DevKit", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_MenuBar)) {
-    {
-      auto width = ImGui::CalcItemWidth();
-      if (setting_window_size != width) {
-        setting_window_size = width;
-        setting_side_sheet_width = 0;
-      }
-    }
-
     RenderMenuBar(device, data);
 
     RenderNavRail(device, data);
 
     ImGui::SameLine();
-    if (ImGui::BeginChild("##LayoutList", ImVec2(72, 0), ImGuiChildFlags_ResizeX)) {
+
+    auto size_remaining = ImGui::GetContentRegionAvail().x;
+
+    ImGui::SetNextWindowSizeConstraints({128.f, 0}, {size_remaining - 8 - 128 - setting_side_sheet_width, FLT_MAX});
+    if (ImGui::BeginChild("##LayoutList", ImVec2(0, 0), ImGuiChildFlags_ResizeX)) {
       switch (setting_nav_item) {
         case 0:
           RenderCapturePane(device, data);
@@ -3293,7 +3295,8 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
     ImGui::SameLine();
 
-    ImGui::SetNextWindowSizeConstraints({0, 0}, {ImGui::GetContentRegionAvail().x - setting_side_sheet_width, FLT_MAX});
+    size_remaining = ImGui::GetContentRegionAvail().x;
+    ImGui::SetNextWindowSizeConstraints({size_remaining - 4 - setting_side_sheet_width, 0}, {size_remaining - 96, FLT_MAX});
     if (ImGui::BeginChild("##Details", {0, 0}, ImGuiChildFlags_ResizeX)) {
       if (!setting_open_tabs.empty()) {
         if (ImGui::BeginTabBar("##SelectedTabs", ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_FittingPolicyScroll)) {
@@ -3313,6 +3316,9 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
     }
     ImGui::EndChild();
     ImGui::SameLine();
+
+    size_remaining = ImGui::GetContentRegionAvail().x;
+    ImGui::SetNextWindowSizeConstraints({96, 0}, {FLT_MAX, FLT_MAX});
     if (ImGui::BeginChild("##SideSheet", {0, 0}, ImGuiChildFlags_AutoResizeX)) {
       auto selection = GetCurrentSelection();
       if (selection.has_value()) {
@@ -3325,8 +3331,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           ImGui::RadioButton("Preview", &selection->get().resource_view, 1);
         }
       }
-
-      setting_side_sheet_width = 96;
+      setting_side_sheet_width = ImGui::CalcItemWidth();
     }
     ImGui::EndChild();
   }
