@@ -69,6 +69,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedDualShaderEntry(0x00E9C5FE),
     TracedDualShaderEntry(0xE9343033),
 
+    // Master Detective Archives: RAIN CODE
+    TracedDualShaderEntry(0x388FF776),
+
     // Persona 3 Reload
     TracedShaderEntry(0xCB9976C8),
     TracedShaderEntry(0xBFE48347),
@@ -559,6 +562,12 @@ const std::unordered_map<
             "CRISIS CORE -FINAL FANTASY VII- REUNION",
             {
                 {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
+        {
+            "RainCodePlus-Win64-Shipping.exe",
+            {
+                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_RATIO},
             },
         },
         {
