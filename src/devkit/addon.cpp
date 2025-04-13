@@ -2158,7 +2158,7 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
               }
 
               if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_INFO))) {
-                std::string details = "(none)";
+                std::string details;
                 if ((render_target_write_mask & 0x1) != 0) {
                   details += "R";
                 }
@@ -2170,6 +2170,10 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
                 }
                 if ((render_target_write_mask & 0x8) != 0) {
                   details += "A";
+                }
+
+                if (details.empty()) {
+                  details = "(none))";
                 }
 
                 ImGui::TextUnformatted(details.c_str());
@@ -2379,9 +2383,7 @@ void RenderShadersPane(reshade::api::device* device, DeviceData* data) {
 
       if (ImGui::TableSetColumnIndex(SHADER_PANE_COLUMN_SNAPSHOT)) {  // Snapshot
         ImGui::PushID(cell_index_id++);
-        if (snapshot_index == -1) {
-          ImGui::TextUnformatted("");
-        } else {
+        if (snapshot_index != -1) {
           ImGui::Text("%03d", snapshot_index);
         }
         ImGui::PopID();
