@@ -75,6 +75,9 @@ struct Setting {
 
   void (*on_change_value)(float previous, float current) = [](float previous, float current) {};
 
+  // Return true to save settings
+  bool (*on_click)() = [] { return true; };
+
   // Return true if value is changed
   bool (*on_draw)() = [] { return false; };
 
@@ -257,7 +260,22 @@ static void LoadGlobalSettings() {
   }
 }
 
-static void SaveSettings(const std::string& section) {
+static std::string GetCurrentPresetName() {
+  switch (preset_index) {
+    case 1:
+      return global_name + "-preset1";
+      break;
+    case 2:
+      return global_name + "-preset2";
+      break;
+    case 3:
+      return global_name + "-preset3";
+      break;
+  }
+  return "";
+}
+
+static void SaveSettings(const std::string& section = GetCurrentPresetName()) {
   for (auto* setting : *settings) {
     if (setting->key.empty()) continue;
     if (setting->is_global) continue;
@@ -432,8 +450,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           break;
         case SettingValueType::BUTTON:
           if (ImGui::Button(setting->label.c_str())) {
-            // Internal change firing
-            setting->on_change();
+            changed = setting->on_click();
           }
           break;
         case SettingValueType::LABEL:
