@@ -409,14 +409,6 @@ float3 ConvertInput(float3 color, Config lut_config) {
   return color;
 }
 
-float3 GammaOutput(float3 color, Config lut_config) {
-  if (lut_config.type_output == config::type::LINEAR) {
-    return renodx::color::srgb::Encode(max(0, color));
-  } else {
-    return color;
-  }
-}
-
 float3 LinearOutput(float3 color, Config lut_config) {
   if (lut_config.type_output == config::type::SRGB) {
     color = renodx::color::srgb::DecodeSafe(color);
@@ -436,6 +428,19 @@ float3 LinearOutput(float3 color, Config lut_config) {
     color = renodx::math::Sign(color) * renodx::color::arri::logc::c1000::Decode(abs(color), false);
   }
   return color;
+}
+
+float3 GammaOutput(float3 lut_output_color, Config lut_config) {
+  if (
+      lut_config.type_output == config::type::SRGB
+      || lut_config.type_output == config::type::GAMMA_2_4
+      || lut_config.type_output == config::type::GAMMA_2_2
+      || lut_config.type_output == config::type::GAMMA_2_0) {
+    return lut_output_color;
+  } else {
+    float3 linear_color = LinearOutput(lut_output_color, lut_config);
+    return renodx::color::srgb::Encode(max(0, linear_color));
+  }
 }
 
 float3 GammaInput(float3 color_input, float3 color_input_converted, Config lut_config) {
