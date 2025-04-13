@@ -105,6 +105,8 @@ struct ShaderDetails {
   std::optional<renodx::utils::shader::compiler::watcher::CustomShader> disk_shader = std::nullopt;
   reshade::api::pipeline_stage shader_type = static_cast<reshade::api::pipeline_stage>(0);
   std::optional<std::vector<ResourceBind>> resource_binds = std::nullopt;
+  std::string entrypoint;
+
   bool bypass_draw = false;
 
   enum class ShaderSource : std::uint8_t {
@@ -445,6 +447,62 @@ std::optional<std::vector<ResourceBind>> GetResourceBindsForShaderDetails(
     }
   }
   return shader_details->resource_binds;
+}
+
+std::string GetEntryPointForShaderDetails(reshade::api::device* device, DeviceData* data, ShaderDetails* shader_details) {
+  if (!shader_details->entrypoint.empty()) {
+    return shader_details->entrypoint;
+  }
+
+  bool ok = ComputeDisassemblyForShaderDetails(device, data, shader_details);
+  if (!ok) {
+    return shader_details->entrypoint;
+  }
+
+  // Read texture declarations from SM5 disassembly
+  if (shader_details->program_version.has_value()) {
+    shader_details->resource_binds = std::vector<ResourceBind>();
+
+    if (shader_details->program_version->GetMajor() <= 5) {
+      return "main";
+    } else {
+      auto disassembly = std::get<std::string>(shader_details->disassembly);
+      auto source_lines = StringViewSplitAll(disassembly, '\n');
+      shader_details->resource_binds = std::vector<ResourceBind>();
+      std::map<std::string_view, std::vector<std::string_view>> metadata_map;
+
+      for (auto line : source_lines) {
+        if (!line.starts_with("!")) continue;
+        static auto regex = std::regex{R"(^(\S+) = !\{(.*)\}$)"};
+        static auto values_regex = std::regex(R"(\s*([^,"]+(("[^"]*")[^,]*|)),?)");
+
+        auto [variable_name, values_packed] = StringViewMatch<2>(line, regex);
+        auto values = StringViewSplitAll(values_packed, values_regex, 1);
+        auto len = values.size();
+        for (int i = 0; i < len; ++i) {
+          values[i] = StringViewTrim(values[i]);
+        }
+        metadata_map[variable_name] = values;
+      }
+
+      if (auto pair = metadata_map.find("!dx.entryPoints");
+          pair != metadata_map.end() && !pair->second.empty()) {
+        auto entry_points_reference = pair->second.at(0);
+        auto entry_points_key = entry_points_reference;
+        auto entry_points = metadata_map[entry_points_key];
+
+        auto name = entry_points[1];
+        static auto regex = std::regex{R"(^!\"?([^"]*)\"?$)"};
+        auto [parsed_name] = StringViewMatch<1>(name, regex);
+        if (!parsed_name.empty()) {
+          shader_details->entrypoint = parsed_name;
+        } else {
+          shader_details->entrypoint = "main";
+        }
+      }
+    }
+  }
+  return shader_details->entrypoint;
 }
 
 // Settings
@@ -1236,26 +1294,24 @@ void LoadDiskShaders(reshade::api::device* device, DeviceData* data, bool activa
   }
 }
 
-void RenderFileAlias(std::optional<renodx::utils::shader::compiler::watcher::CustomShader>& disk_shader) {
-  if (disk_shader.has_value()) {
-    // Has custom shader file
-    std::string file_alias = disk_shader->GetFileAlias();
-    if (disk_shader->IsCompilationOK()) {
-      if (file_alias.empty()) {
-        ImGui::TextColored(ImVec4(0, 255, 0, 128), "Custom");
-      } else {
-        ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", file_alias.c_str());
-      }
+bool RenderFileAlias(std::optional<renodx::utils::shader::compiler::watcher::CustomShader>& disk_shader) {
+  if (!disk_shader.has_value()) return false;
+  // Has custom shader file
+  std::string file_alias = disk_shader->GetFileAlias();
+  if (disk_shader->IsCompilationOK()) {
+    if (file_alias.empty()) {
+      ImGui::TextColored(ImVec4(0, 255, 0, 128), "Custom");
     } else {
-      if (file_alias.empty()) {
-        ImGui::TextColored(ImVec4(255, 0, 0, 128), "Custom");
-      } else {
-        ImGui::TextColored(ImVec4(255, 0, 0, 255), "%s", file_alias.c_str());
-      }
+      ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", file_alias.c_str());
     }
   } else {
-    ImGui::TextUnformatted("");
+    if (file_alias.empty()) {
+      ImGui::TextColored(ImVec4(255, 0, 0, 128), "Custom");
+    } else {
+      ImGui::TextColored(ImVec4(255, 0, 0, 255), "%s", file_alias.c_str());
+    }
   }
+  return true;
 }
 
 void RenderMenuBar(reshade::api::device* device, DeviceData* data) {
@@ -1510,7 +1566,10 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
             }
 
             if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REFLECTION))) {
-              if (!pipeline_details.tag->empty()) {
+              auto entrypoint = GetEntryPointForShaderDetails(device, data, shader_details);
+              if (!entrypoint.empty() && entrypoint != "main") {
+                ImGui::TextUnformatted(entrypoint.c_str());
+              } else if (!pipeline_details.tag->empty()) {
                 ImGui::TextUnformatted(pipeline_details.tag->c_str());
               }
             }
@@ -2214,7 +2273,12 @@ void RenderShadersPane(reshade::api::device* device, DeviceData* data) {
       if (ImGui::TableSetColumnIndex(SHADER_PANE_COLUMN_ALIAS)) {
         ImGui::PushID(cell_index_id++);
         ImGui::AlignTextToFramePadding();
-        RenderFileAlias(shader_details->disk_shader);
+        if (!RenderFileAlias(shader_details->disk_shader)) {
+          auto entrypoint = GetEntryPointForShaderDetails(device, data, shader_details);
+          if (!entrypoint.empty() && entrypoint != "main") {
+            ImGui::TextUnformatted(entrypoint.c_str());
+          }
+        }
         ImGui::PopID();
       }
 
