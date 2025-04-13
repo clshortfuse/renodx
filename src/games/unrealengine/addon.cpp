@@ -129,6 +129,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TracedDualShaderEntry(0x6757E671),
     TracedDualShaderEntry(0x0F17B0B3),
     TracedDualShaderEntry(0xE349C52A),
+    TracedDualShaderEntry(0x86F9308B),
 
     // SM6 LUT Builder
 
