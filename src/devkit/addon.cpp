@@ -172,6 +172,15 @@ struct PipelineBindDetails {
 };
 
 struct DrawDetails {
+  enum class DrawMethods : std::uint8_t {
+    PRESENT,
+    DRAW,
+    DRAW_INDEXED,
+    DRAW_INDEXED_OR_INDIRECT,
+    DISPATCH,
+    COPY
+  } draw_method;
+
   std::chrono::time_point<std::chrono::system_clock> timestamp;
   std::map<std::pair<uint32_t, uint32_t>, ResourceViewDetails> srv_binds;
   std::map<std::pair<uint32_t, uint32_t>, ResourceViewDetails> uav_binds;
@@ -182,13 +191,21 @@ struct DrawDetails {
   std::optional<reshade::api::rasterizer_desc> rasterizer_desc = std::nullopt;
   std::optional<std::vector<ResourceBind>> resource_binds = std::nullopt;
 
-  enum class DrawMethods : std::uint8_t {
-    PRESENT,
-    DRAW,
-    DRAW_INDEXED,
-    DRAW_INDEXED_OR_INDIRECT,
-    DISPATCH
-  } draw_method;
+  reshade::api::resource copy_source = {0u};
+  reshade::api::resource copy_destination = {0u};
+
+  [[nodiscard]] bool IsDraw() const {
+    switch (draw_method) {
+      case DrawMethods::DRAW:                     return true;
+      case DrawMethods::DRAW_INDEXED:             return true;
+      case DrawMethods::DRAW_INDEXED_OR_INDIRECT: return true;
+      default:                                    return false;
+    }
+  };
+
+  [[nodiscard]] bool IsDispatch() const {
+    return draw_method == DrawMethods::DISPATCH;
+  };
 
   [[nodiscard]] std::string DrawMethodString() const {
     switch (draw_method) {
@@ -197,6 +214,7 @@ struct DrawDetails {
       case DrawMethods::DRAW_INDEXED:             return "DrawIndexed";
       case DrawMethods::DRAW_INDEXED_OR_INDIRECT: return "DrawIndirect";
       case DrawMethods::DISPATCH:                 return "Dispatch";
+      case DrawMethods::COPY:                     return "Copy";
       default:                                    return "Unknown";
     }
   }
@@ -830,6 +848,33 @@ void OnBindPipeline(
       }
     }
   }
+}
+
+bool OnCopyResource(
+    reshade::api::command_list* cmd_list,
+    reshade::api::resource source,
+    reshade::api::resource dest) {
+  if (snapshot_device == nullptr) return false;
+
+  auto* device = cmd_list->get_device();
+
+  if (device == snapshot_device) {
+    DrawDetails draw_details = {
+        .draw_method = DrawDetails::DrawMethods::COPY,
+        .timestamp = std::chrono::system_clock::now(),
+        .copy_source = source,
+        .copy_destination = dest,
+    };
+
+    auto* device_data = renodx::utils::data::Get<DeviceData>(device);
+    std::unique_lock lock(device_data->mutex);
+    reshade::log::message(reshade::log::level::debug, std::format("Snapshot #{}", device_data->draw_details_list.size()).c_str());
+    device_data->draw_details_list.push_back(draw_details);
+  } else {
+    reshade::log::message(reshade::log::level::debug, "Foreign Copy.");
+  }
+
+  return false;
 }
 
 static void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
@@ -2173,7 +2218,7 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
                 }
 
                 if (details.empty()) {
-                  details = "(none))";
+                  details = "(none)";
                 }
 
                 ImGui::TextUnformatted(details.c_str());
@@ -2184,6 +2229,94 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
 
         if (rtv_node_open) {
           ImGui::TreePop();
+        }
+      }
+
+      if (draw_details.copy_source.handle != 0u) {
+        ++row_index;
+        bool res_node_open = false;
+        if (draw_node_open) {
+          ImGui::TableNextRow();
+          if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
+            SettingSelection search = {.resource_handle = draw_details.copy_source.handle};
+            auto& selection = GetSelection(search);
+            auto bullet_flags = tree_node_flags | ImGuiTreeNodeFlags_Leaf
+                                | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
+                                | selection.GetTreeNodeFlags();
+
+            ImGui::PushID(row_index);
+            ImGui::TreeNodeEx("", bullet_flags, "Source");
+            ImGui::PopID();
+            if (ImGui::IsItemClicked()) {
+              MakeSelectionCurrent(selection);
+              ImGui::SetItemDefaultFocus();
+            }
+          }
+
+          if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REF))) {
+            ImGui::Text("0x%016llX", draw_details.copy_source.handle);
+          }
+
+          auto* info = renodx::utils::resource::GetResourceInfo(draw_details.copy_source);
+          if (info != nullptr) {
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_INFO))) {
+              std::stringstream s;
+              s << info->desc.texture.format;
+              if (info->is_swap_chain) {
+                ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
+              } else if (info->upgraded) {
+                ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
+              } else if (info->clone.handle != 0u) {
+                ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
+              } else {
+                ImGui::TextUnformatted(s.str().c_str());
+              }
+            }
+          }
+        }
+      }
+
+      if (draw_details.copy_destination.handle != 0u) {
+        ++row_index;
+        bool res_node_open = false;
+        if (draw_node_open) {
+          ImGui::TableNextRow();
+          if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
+            SettingSelection search = {.resource_handle = draw_details.copy_destination.handle};
+            auto& selection = GetSelection(search);
+            auto bullet_flags = tree_node_flags | ImGuiTreeNodeFlags_Leaf
+                                | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
+                                | selection.GetTreeNodeFlags();
+
+            ImGui::PushID(row_index);
+            ImGui::TreeNodeEx("", bullet_flags, "Destination");
+            ImGui::PopID();
+            if (ImGui::IsItemClicked()) {
+              MakeSelectionCurrent(selection);
+              ImGui::SetItemDefaultFocus();
+            }
+          }
+
+          if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REF))) {
+            ImGui::Text("0x%016llX", draw_details.copy_destination.handle);
+          }
+
+          auto* info = renodx::utils::resource::GetResourceInfo(draw_details.copy_destination);
+          if (info != nullptr) {
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_INFO))) {
+              std::stringstream s;
+              s << info->desc.texture.format;
+              if (info->is_swap_chain) {
+                ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
+              } else if (info->upgraded) {
+                ImGui::TextColored(ImVec4(0, 255, 255, 255), "%s", s.str().c_str());
+              } else if (info->clone.handle != 0u) {
+                ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", s.str().c_str());
+              } else {
+                ImGui::TextUnformatted(s.str().c_str());
+              }
+            }
+          }
         }
       }
 
@@ -2812,6 +2945,12 @@ void RenderResourceViewHistory(reshade::api::device* device, DeviceData* data, r
       ImGui::Text("Snapshot %03d: RTV%d", current_snapshot_index,
                   slot);
     }
+    if (draw_details.copy_source == resource.handle) {
+      ImGui::Text("Snapshot %03d: Copy Source", current_snapshot_index);
+    }
+    if (draw_details.copy_destination == resource.handle) {
+      ImGui::Text("Snapshot %03d: Copy Destination", current_snapshot_index);
+    }
 
     current_snapshot_index++;
   }
@@ -3279,6 +3418,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::init_pipeline>(OnInitPipeline);
       reshade::register_event<reshade::addon_event::bind_pipeline>(OnBindPipeline);
       reshade::register_event<reshade::addon_event::destroy_pipeline>(OnDestroyPipeline);
+      reshade::register_event<reshade::addon_event::copy_resource>(OnCopyResource);
       reshade::register_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
 
       reshade::register_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
@@ -3308,6 +3448,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::unregister_event<reshade::addon_event::init_pipeline>(OnInitPipelineTrackAddons);
       reshade::unregister_event<reshade::addon_event::init_pipeline>(OnInitPipeline);
       reshade::unregister_event<reshade::addon_event::bind_pipeline>(OnBindPipeline);
+      reshade::unregister_event<reshade::addon_event::copy_resource>(OnCopyResource);
       reshade::unregister_event<reshade::addon_event::destroy_pipeline>(OnDestroyPipeline);
       reshade::unregister_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
       reshade::unregister_event<reshade::addon_event::draw>(OnDraw);
