@@ -223,7 +223,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Grain Type",
         .section = "Effects",
-        .labels = {"Vanilla (Noise)", "Perceptual"},
+        .labels = {"Vanilla (Dithering Noise)", "Perceptual"},
         .is_visible = []() { return current_settings_mode >= 1; },
     }),
     CreateDefault50PercentSetting({
