@@ -655,12 +655,14 @@ float4 main(
   float _1095 = (_1090 * _1068.y) + _1066;
   float _1096 = (_1090 * _1068.z) + _1067;
 
-  float3 untonemapped = float3(_1094, _1095, _1096);
-
   float _1105 = abs(cb12_space1_007y);
+
   float _1127 = TEXCOORD.x + -0.5f;
   float _1128 = TEXCOORD.y + -0.5f;
   float _1137 = saturate(saturate(exp2(log2(1.0f - dot(float2(_1127, _1128), float2(_1127, _1128))) * cb12_space1_057y) + cb12_space1_057x) * cb12_space1_057z);
+
+  _1137 = lerp(1.f, _1137, CUSTOM_VIGNETTE);
+
   float _1162 = saturate((cb12_space1_014x * TEXCOORD_1) + cb12_space1_014y);
   float _1181 = ((cb12_space1_012x - cb12_space1_010x) * _1162) + cb12_space1_010x;
   float _1182 = ((cb12_space1_012y - cb12_space1_010y) * _1162) + cb12_space1_010y;
@@ -688,6 +690,7 @@ float4 main(
     float _1219 = max(0.0f, (min(((lerp(cb12_space1_058x, 1.0f, _1137)) * (_1094 + select(_1036, (((cb5_014w * _1042) - _1094) * _1105), ((_1042 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
     float _1220 = max(0.0f, (min(((lerp(cb12_space1_058y, 1.0f, _1137)) * (_1095 + select(_1036, (((cb5_014w * _1043) - _1095) * _1105), ((_1043 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
     float _1221 = max(0.0f, (min(((lerp(cb12_space1_058z, 1.0f, _1137)) * (_1096 + select(_1036, (((cb5_014w * _1044) - _1096) * _1105), ((_1044 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
+
     float _1222 = _1219 * _1181;
     float _1223 = _1220 * _1181;
     float _1224 = _1221 * _1181;
@@ -705,10 +708,16 @@ float4 main(
   float _1222 = _1219 * _1181;
   float _1223 = _1220 * _1181;
   float _1224 = _1221 * _1181;
+
+  float3 untonemapped = float3(_1222, _1223, _1224) * mid_gray / 0.18f;
+
   // Replace saturate with max
   float _1252 = max(0.f, (((((_1222 + _1203) * _1219) + _1206) / (((_1222 + _1182) * _1219) + _1210)) - _1213) * _1215);
   float _1253 = max(0.f, (((((_1223 + _1203) * _1220) + _1206) / (((_1223 + _1182) * _1220) + _1210)) - _1213) * _1215);
   float _1254 = max(0.f, (((((_1224 + _1203) * _1221) + _1206) / (((_1224 + _1182) * _1221) + _1210)) - _1213) * _1215);
+
+  ApplyPerChannelCorrection(untonemapped, _1252, _1253, _1254);
+
   float _1255 = dot(float3(_1252, _1253, _1254), float3(0.21250000596046448f, 0.715399980545044f, 0.07209999859333038f));
   float _1264 = (cb12_space1_067x * (_1252 - _1255)) + _1255;
   float _1265 = (cb12_space1_067x * (_1253 - _1255)) + _1255;
@@ -722,7 +731,6 @@ float4 main(
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     return CustomToneMap(
         untonemapped,
-        mid_gray,
         float3(_1287, _1288, _1289),
         float3(_1264, _1265, _1266),
         _1295,

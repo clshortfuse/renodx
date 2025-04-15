@@ -633,13 +633,13 @@ float4 main(
   float _1027 = (_1023 * _1001.x) + _998;
   float _1028 = (_1023 * _1001.y) + _999;
   float _1029 = (_1023 * _1001.z) + _1000;
-
-  float3 untonemapped = float3(_1027, _1028, _1029);
-
   float _1038 = abs(cb12_space1_007y);
   float _1060 = TEXCOORD.x + -0.5f;
   float _1061 = TEXCOORD.y + -0.5f;
   float _1070 = saturate(saturate(exp2(log2(1.0f - dot(float2(_1060, _1061), float2(_1060, _1061))) * cb12_space1_057y) + cb12_space1_057x) * cb12_space1_057z);
+
+  _1070 = lerp(1.f, _1070, CUSTOM_VIGNETTE);
+
   float _1095 = saturate((cb12_space1_014x * TEXCOORD_1) + cb12_space1_014y);
   float _1114 = ((cb12_space1_012x - cb12_space1_010x) * _1095) + cb12_space1_010x;
   float _1115 = ((cb12_space1_012y - cb12_space1_010y) * _1095) + cb12_space1_010y;
@@ -684,10 +684,16 @@ float4 main(
   float _1155 = _1152 * _1114;
   float _1156 = _1153 * _1114;
   float _1157 = _1154 * _1114;
+
+  float3 untonemapped = float3(_1155, _1156, _1157) * mid_gray / 0.18f;
+
   // Replace saturate with max
   float _1185 = max(0.f, (((((_1155 + _1136) * _1152) + _1139) / (((_1155 + _1115) * _1152) + _1143)) - _1146) * _1148);
   float _1186 = max(0.f, (((((_1156 + _1136) * _1153) + _1139) / (((_1156 + _1115) * _1153) + _1143)) - _1146) * _1148);
   float _1187 = max(0.f, (((((_1157 + _1136) * _1154) + _1139) / (((_1157 + _1115) * _1154) + _1143)) - _1146) * _1148);
+
+  ApplyPerChannelCorrection(untonemapped, _1185, _1186, _1187);
+
   float _1188 = dot(float3(_1185, _1186, _1187), float3(0.21250000596046448f, 0.715399980545044f, 0.07209999859333038f));
   float _1197 = (cb12_space1_067x * (_1185 - _1188)) + _1188;
   float _1198 = (cb12_space1_067x * (_1186 - _1188)) + _1188;
@@ -701,7 +707,6 @@ float4 main(
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     return CustomToneMap(
         untonemapped,
-        mid_gray,
         float3(_1220, _1221, _1222),
         float3(_1197, _1198, _1199),
         _1228,
