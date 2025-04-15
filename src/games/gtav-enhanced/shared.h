@@ -99,7 +99,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_FILM_GRAIN                        shader_injection.custom_film_grain
 #define CUSTOM_DITHERING                         shader_injection.custom_dithering
 #define CUSTOM_LENS_FLARE                        shader_injection.custom_lens_flare
-// #define CUSTOM_LIGHT_STREAKS                     shader_injection.custom_light_streaks
+#define CUSTOM_LIGHT_STREAKS                     1.f
 #define CUSTOM_CORONA                            shader_injection.custom_corona
 #define CUSTOM_BLOOM                             shader_injection.custom_bloom
 #define CUSTOM_RANDOM                            shader_injection.custom_random
