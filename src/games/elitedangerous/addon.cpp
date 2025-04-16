@@ -304,7 +304,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-2",
         .tint = 0xFF5A16,
         .on_change = []() {
-          renodx::utils::platform::Launch("https://ko-fi.com/", "musaqh/");
+          renodx::utils::platform::LaunchURL("https://ko-fi.com/", "musaqh/");
         },
     },
     new renodx::utils::settings::Setting{
