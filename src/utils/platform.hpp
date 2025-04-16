@@ -3,6 +3,7 @@
 #pragma comment(lib, "version.lib")
 
 #include <dxgi1_6.h>
+#include <shellapi.h>
 #include <windows.h>
 #include <winver.h>
 #include <algorithm>
@@ -65,9 +66,27 @@ static std::optional<DISPLAYCONFIG_PATH_INFO> GetPathInfo(HMONITOR monitor) {
 
 static void Launch(const std::string& location) {
 #if WIN32
-  ShellExecute(nullptr, "open", location.c_str(), nullptr, nullptr, SW_SHOW);
+  ShellExecute(nullptr, "open", location.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #else
   std::system(location);
+#endif
+}
+
+template <typename... Args>
+static void LaunchURL(Args... args) {
+  std::string url = (std::string(args) + ...);
+#if WIN32
+  SHELLEXECUTEINFO execute_info = {};
+  execute_info.cbSize = sizeof(SHELLEXECUTEINFO);
+  execute_info.fMask = SEE_MASK_DEFAULT;
+  execute_info.lpFile = url.c_str();
+  execute_info.lpVerb = "open";
+  execute_info.nShow = SW_SHOWNORMAL;
+  execute_info.hInstApp = nullptr;
+
+  ShellExecuteEx(&execute_info);
+#else
+  std::system(url.c_str());
 #endif
 }
 
