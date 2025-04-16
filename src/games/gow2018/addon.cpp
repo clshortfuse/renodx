@@ -210,9 +210,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-2",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::Launch(
-              "https://discord.gg/"
-              "5WZXDpmbpP");
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
         },
     },
     new renodx::utils::settings::Setting{
@@ -222,7 +220,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-2",
         .tint = 0x2B3137,
         .on_change = []() {
-          renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx/wiki/Mods");
+          renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx/wiki/Mods");
         },
     },
     new renodx::utils::settings::Setting{
@@ -232,7 +230,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-2",
         .tint = 0x2B3137,
         .on_change = []() {
-          renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx");
+          renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
         },
     },
     new renodx::utils::settings::Setting{
@@ -241,7 +239,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Links",
         .group = "button-line-3",
         .tint = 0xFF5A16,
-        .on_change = []() { renodx::utils::platform::Launch("https://ko-fi.com/musaqh"); },
+        .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/musaqh"); },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,

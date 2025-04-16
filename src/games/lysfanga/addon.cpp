@@ -489,9 +489,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-3",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::Launch(
-            "https://discord.gg/XUhv"
-            "tR54yc");
+          renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc");
         },
     },
     new renodx::utils::settings::Setting{
@@ -500,7 +498,7 @@ renodx::utils::settings::Settings settings = {
         .section = "About",
         .group = "button-line-3",
         .on_change = []() {
-          ShellExecute(0, "open", "https://github.com/clshortfuse/renodx", 0, 0, SW_SHOW);
+          renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
         },
     },
     new renodx::utils::settings::Setting{

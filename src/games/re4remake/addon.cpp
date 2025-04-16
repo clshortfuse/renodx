@@ -138,8 +138,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          static const std::string obfuscated_link = std::string("start https://discord.gg/5WZX") + std::string("DpmbpP");
-          system(obfuscated_link.c_str());
+          renodx::utils::platform::LaunchURL("https://discord.gg/5WZX", "DpmbpP");
         },
     },
     new renodx::utils::settings::Setting{
@@ -149,7 +148,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          system("start https://github.com/clshortfuse/renodx/wiki/Mods");
+          renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx/wiki/Mods");
         },
     },
     new renodx::utils::settings::Setting{

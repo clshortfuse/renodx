@@ -96,8 +96,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          static const std::string obfuscated_link = std::string("start https://discord.gg/J9fM") + std::string("3EVuEZ");
-          system(obfuscated_link.c_str());
+          renodx::utils::platform::LaunchURL("https://discord.gg/J9fM", "3EVuEZ");
         },
     },
     new renodx::utils::settings::Setting{
@@ -106,7 +105,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Links",
         .group = "button-line-1",
         .on_change = []() {
-          system("start https://github.com/clshortfuse/renodx");
+          renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
         },
     },
     new renodx::utils::settings::Setting{
@@ -116,7 +115,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0xFF5F5F,
         .on_change = []() {
-          system("start https://buymeacoffee.com/realfiloppi");
+          renodx::utils::platform::LaunchURL("https://buymeacoffee.com/realfiloppi");
         },
     },
 };

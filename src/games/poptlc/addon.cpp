@@ -118,7 +118,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          system("start https://discord.gg/Z7kXxw5VDR");
+          renodx::utils::platform::LaunchURL("https://discord.gg/Z7kXxw5VDR");
         },
     },
     new renodx::utils::settings::Setting{
@@ -128,7 +128,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0xFF5F5F,
         .on_change = []() {
-          system("start https://ko-fi.com/ershin");
+          renodx::utils::platform::LaunchURL("https://ko-fi.com/ershin");
         },
     },
     new renodx::utils::settings::Setting{
@@ -138,7 +138,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0xFF5F5F,
         .on_change = []() {
-          system("start https://buymeacoffee.com/realfiloppi");
+          renodx::utils::platform::LaunchURL("https://buymeacoffee.com/realfiloppi");
         },
     },
     new renodx::utils::settings::Setting{
@@ -148,7 +148,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0xFF5F5F,
         .on_change = []() {
-          system("start https://ko-fi.com/shortfuse");
+          renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse");
         },
     },
 };
