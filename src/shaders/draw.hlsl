@@ -12,43 +12,46 @@ namespace renodx {
 namespace draw {
 
 struct Config {
-  float peak_white_nits;                  // 1000
-  float diffuse_white_nits;               // 203
-  float graphics_white_nits;              // 203
-  float color_grade_strength;             // 1.f
-  float tone_map_type;                    // 3.f
-  float tone_map_exposure;                // 1.f
-  float tone_map_highlights;              // 1.f
-  float tone_map_shadows;                 // 1.f
-  float tone_map_contrast;                // 1.f
-  float tone_map_saturation;              // 1.f
-  float tone_map_highlight_saturation;    // 1.f
-  float tone_map_blowout;                 // 0
-  float tone_map_flare;                   // 0
-  float tone_map_hue_correction;          // 1.f
-  float tone_map_hue_shift;               // 0.f
-  float tone_map_hue_shift_method;        // 0.f
-  float tone_map_hue_shift_modifier;      // 0.5f
-  float tone_map_working_color_space;     // 0.f
-  float tone_map_clamp_color_space;       // -1 = none, bt709, bt2020, ap1
-  float tone_map_clamp_peak;              // -1 = none, bt709, bt2020, ap1
-  float tone_map_hue_processor;           // 0.f
-  float tone_map_per_channel;             // 0.f
-  float reno_drt_tone_map_method;         // 0.f
-  float reno_drt_white_clip;              // 100.f
-  float gamma_correction;                 // 0 = srgb/none, 1 = 2.2, 2 = 2.4
-  float intermediate_scaling;             // generally game / ui nits
-  float intermediate_encoding;            // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
-  float intermediate_color_space;         // 0 = d65, 1 = bt2020, 2 = ap1
-  float swap_chain_decoding;              // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
-  float swap_chain_decoding_color_space;  // 0 = d65, 1 = bt2020, 2 = ap1
-  float swap_chain_gamma_correction;      // 0 = srgb/none, 1 = 2.2, 2 = 2.4
-  float swap_chain_custom_color_space;    // 0 = d65, 1 = d93, 2 = ntsc-u, 3 = ntsc-j
-  float swap_chain_scaling_nits;          // generally ui nits
-  float swap_chain_clamp_nits;            // generally peak nits
-  float swap_chain_clamp_color_space;     // -1 = none, bt709, bt2020, ap1
-  float swap_chain_encoding;              // 0 = none, 4 = hdr10, 5 = scrgb
-  float swap_chain_encoding_color_space;  // 0 = none, 4 = hdr10, 5 = scrgb
+  float peak_white_nits;                     // 1000
+  float diffuse_white_nits;                  // 203
+  float graphics_white_nits;                 // 203
+  float color_grade_strength;                // 1.f
+  float per_channel_blowout_restoration;     // 0.f
+  float per_channel_hue_correction;          // 0.f
+  float per_channel_chrominance_correction;  // 0.f
+  float tone_map_type;                       // 3.f
+  float tone_map_exposure;                   // 1.f
+  float tone_map_highlights;                 // 1.f
+  float tone_map_shadows;                    // 1.f
+  float tone_map_contrast;                   // 1.f
+  float tone_map_saturation;                 // 1.f
+  float tone_map_highlight_saturation;       // 1.f
+  float tone_map_blowout;                    // 0
+  float tone_map_flare;                      // 0
+  float tone_map_hue_correction;             // 1.f
+  float tone_map_hue_shift;                  // 0.f
+  float tone_map_hue_shift_method;           // 0.f
+  float tone_map_hue_shift_modifier;         // 0.5f
+  float tone_map_working_color_space;        // 0.f
+  float tone_map_clamp_color_space;          // -1 = none, bt709, bt2020, ap1
+  float tone_map_clamp_peak;                 // -1 = none, bt709, bt2020, ap1
+  float tone_map_hue_processor;              // 0.f
+  float tone_map_per_channel;                // 0.f
+  float reno_drt_tone_map_method;            // 0.f
+  float reno_drt_white_clip;                 // 100.f
+  float gamma_correction;                    // 0 = srgb/none, 1 = 2.2, 2 = 2.4
+  float intermediate_scaling;                // generally game / ui nits
+  float intermediate_encoding;               // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
+  float intermediate_color_space;            // 0 = d65, 1 = bt2020, 2 = ap1
+  float swap_chain_decoding;                 // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
+  float swap_chain_decoding_color_space;     // 0 = d65, 1 = bt2020, 2 = ap1
+  float swap_chain_gamma_correction;         // 0 = srgb/none, 1 = 2.2, 2 = 2.4
+  float swap_chain_custom_color_space;       // 0 = d65, 1 = d93, 2 = ntsc-u, 3 = ntsc-j
+  float swap_chain_scaling_nits;             // generally ui nits
+  float swap_chain_clamp_nits;               // generally peak nits
+  float swap_chain_clamp_color_space;        // -1 = none, bt709, bt2020, ap1
+  float swap_chain_encoding;                 // 0 = none, 4 = hdr10, 5 = scrgb
+  float swap_chain_encoding_color_space;     // -1 = none, bt709, bt2020, ap1
 };
 
 static const float GAMMA_CORRECTION_NONE = 0;
@@ -115,6 +118,21 @@ Config BuildConfig() {
 #endif
   config.color_grade_strength = RENODX_COLOR_GRADE_STRENGTH;
 
+#if !defined(PER_CHANNEL_BLOWOUT_RESTORATION)
+#define PER_CHANNEL_BLOWOUT_RESTORATION 0.f
+#endif
+  config.per_channel_blowout_restoration = PER_CHANNEL_BLOWOUT_RESTORATION;
+
+#if !defined(PER_CHANNEL_HUE_CORRECTION)
+#define PER_CHANNEL_HUE_CORRECTION 0.f
+#endif
+  config.per_channel_hue_correction = PER_CHANNEL_HUE_CORRECTION;
+
+#if !defined(PER_CHANNEL_CHROMINANCE_CORRECTION)
+#define PER_CHANNEL_CHROMINANCE_CORRECTION 0.f
+#endif
+  config.per_channel_chrominance_correction = PER_CHANNEL_CHROMINANCE_CORRECTION;
+
 #if !defined(RENODX_TONE_MAP_TYPE)
 #define RENODX_TONE_MAP_TYPE renodx::draw::TONE_MAP_TYPE_RENO_DRT
 #endif
@@ -166,7 +184,7 @@ Config BuildConfig() {
   config.tone_map_hue_correction = RENODX_TONE_MAP_HUE_CORRECTION;
 
 #if !defined(RENODX_TONE_MAP_HUE_SHIFT)
-#define RENODX_TONE_MAP_HUE_SHIFT 0
+#define RENODX_TONE_MAP_HUE_SHIFT 0.f
 #endif
   config.tone_map_hue_shift = RENODX_TONE_MAP_HUE_SHIFT;
 
@@ -266,7 +284,7 @@ Config BuildConfig() {
   config.swap_chain_clamp_nits = RENODX_SWAP_CHAIN_CLAMP_NITS;
 
 #if !defined(RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE)
-#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE color::convert::COLOR_SPACE_UNKNOWN
+#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE color::convert::COLOR_SPACE_NONE
 #endif
   config.swap_chain_clamp_color_space = RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE;
 
@@ -396,26 +414,26 @@ float3 SwapChainPass(float3 color, Config config) {
   color = DecodeColor(color, config.swap_chain_decoding);
 
   if (config.swap_chain_gamma_correction == GAMMA_CORRECTION_GAMMA_2_2) {
-    color = color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, color::convert::COLOR_SPACE_BT709);
+    color = renodx::color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, renodx::color::convert::COLOR_SPACE_BT709);
     config.swap_chain_decoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
     color = renodx::color::correct::GammaSafe(color, false, 2.2f);
   } else if (config.swap_chain_gamma_correction == GAMMA_CORRECTION_GAMMA_2_4) {
-    color = color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, color::convert::COLOR_SPACE_BT709);
+    color = renodx::color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, renodx::color::convert::COLOR_SPACE_BT709);
     config.swap_chain_decoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
     color = renodx::color::correct::GammaSafe(color, false, 2.4f);
   }
 
   [branch]
   if (config.swap_chain_custom_color_space == COLOR_SPACE_CUSTOM_BT709D93) {
-    color = color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, color::convert::COLOR_SPACE_BT709);
+    color = renodx::color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, renodx::color::convert::COLOR_SPACE_BT709);
     color = renodx::color::bt709::from::BT709D93(color);
     config.swap_chain_decoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
   } else if (config.swap_chain_custom_color_space == COLOR_SPACE_CUSTOM_NTSCU) {
-    color = color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, color::convert::COLOR_SPACE_BT709);
+    color = renodx::color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, renodx::color::convert::COLOR_SPACE_BT709);
     color = renodx::color::bt709::from::BT601NTSCU(color);
     config.swap_chain_decoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
   } else if (config.swap_chain_custom_color_space == COLOR_SPACE_CUSTOM_NTSCJ) {
-    color = color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, color::convert::COLOR_SPACE_BT709);
+    color = renodx::color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, renodx::color::convert::COLOR_SPACE_BT709);
     color = renodx::color::bt709::from::ARIBTRB9(color);
     config.swap_chain_decoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
   }
@@ -503,7 +521,7 @@ float3 ToneMapPass(float3 color, Config draw_config) {
 
   tone_map_config.hue_correction_strength = draw_config.tone_map_hue_correction;
 
-  if (draw_config.tone_map_hue_shift != 0) {
+  if (draw_config.tone_map_hue_shift != 0.f) {
     tone_map_config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
 
     float3 hue_shifted_color;
@@ -547,10 +565,65 @@ float3 ToneMapPass(float3 color, Config draw_config) {
   return output_color;
 }
 
+float3 ApplyPerChannelCorrection(
+    float3 untonemapped,
+    float3 per_channel_color,
+    float blowout_restoration = 0.5f,
+    float hue_correction_strength = 1.f,
+    float chrominance_correction_strength = 1.f) {
+  const float3 tonemapped_perceptual = renodx::color::ictcp::from::BT709(per_channel_color);
+  const float3 untonemapped_perceptual = renodx::color::ictcp::from::BT709(untonemapped);
+
+  float2 untonemapped_chromas = untonemapped_perceptual.yz;
+  float2 tonemapped_chromas = tonemapped_perceptual.yz;
+
+  float untonemapped_chrominance = length(untonemapped_perceptual.yz);  // eg: 0.80
+  float tonemapped_chrominance = length(tonemapped_perceptual.yz);      // eg: 0.20
+
+  // clamp saturation loss
+  float chrominance_loss = max(
+      renodx::math::DivideSafe(tonemapped_chrominance / untonemapped_chrominance, 1.f),  // eg: 0.25
+      blowout_restoration);
+
+  // Untonemapped hue, tonemapped chrominance (with limit)
+  float2 reduced_untonemapped_chromas = untonemapped_chromas * chrominance_loss;
+
+  const float2 reduced_hue_shifted = lerp(reduced_untonemapped_chromas, tonemapped_chromas, chrominance_loss);
+
+  const float2 blowout_restored_chromas = reduced_hue_shifted * length(reduced_untonemapped_chromas) / length(reduced_hue_shifted);
+
+  const float2 blended_correct_chromas = lerp(untonemapped_chromas, blowout_restored_chromas, saturate(renodx::color::y::from::BT709(untonemapped) / 0.36));
+
+  const float2 blowout_restored_chrominance = length(blowout_restored_chromas);
+
+  const float2 chroma_corrected = blowout_restored_chromas
+                                  * lerp(blowout_restored_chrominance, length(blended_correct_chromas), chrominance_correction_strength)
+                                  / blowout_restored_chrominance;
+
+  const float2 hue_corrected_chromas = lerp(chroma_corrected, blended_correct_chromas, hue_correction_strength);
+
+  const float2 final_chromas = hue_corrected_chromas
+                               * length(chroma_corrected)
+                               / length(hue_corrected_chromas);
+
+  return renodx::color::bt709::from::ICtCp(float3(tonemapped_perceptual.x, final_chromas));
+}
+
 float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, float3 neutral_sdr_color, Config config) {
   float3 untonemapped_graded;
   [branch]
   if (config.color_grade_strength != 0) {
+    if (config.per_channel_blowout_restoration != 0.f
+        || config.per_channel_hue_correction != 0.f
+        || config.per_channel_chrominance_correction != 0.f) {
+      graded_sdr_color = ApplyPerChannelCorrection(
+          untonemapped,
+          graded_sdr_color,
+          config.per_channel_blowout_restoration,
+          config.per_channel_hue_correction,
+          config.per_channel_chrominance_correction);
+    }
+
     untonemapped_graded = renodx::tonemap::UpgradeToneMap(
         untonemapped,
         neutral_sdr_color,
