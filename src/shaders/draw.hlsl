@@ -118,20 +118,20 @@ Config BuildConfig() {
 #endif
   config.color_grade_strength = RENODX_COLOR_GRADE_STRENGTH;
 
-#if !defined(PER_CHANNEL_BLOWOUT_RESTORATION)
-#define PER_CHANNEL_BLOWOUT_RESTORATION 0.f
+#if !defined(RENODX_PER_CHANNEL_BLOWOUT_RESTORATION)
+#define RENODX_PER_CHANNEL_BLOWOUT_RESTORATION 0.f
 #endif
-  config.per_channel_blowout_restoration = PER_CHANNEL_BLOWOUT_RESTORATION;
+  config.per_channel_blowout_restoration = RENODX_PER_CHANNEL_BLOWOUT_RESTORATION;
 
-#if !defined(PER_CHANNEL_HUE_CORRECTION)
-#define PER_CHANNEL_HUE_CORRECTION 0.f
+#if !defined(RENODX_PER_CHANNEL_HUE_CORRECTION)
+#define RENODX_PER_CHANNEL_HUE_CORRECTION 0.f
 #endif
-  config.per_channel_hue_correction = PER_CHANNEL_HUE_CORRECTION;
+  config.per_channel_hue_correction = RENODX_PER_CHANNEL_HUE_CORRECTION;
 
-#if !defined(PER_CHANNEL_CHROMINANCE_CORRECTION)
-#define PER_CHANNEL_CHROMINANCE_CORRECTION 0.f
+#if !defined(RENODX_PER_CHANNEL_CHROMINANCE_CORRECTION)
+#define RENODX_PER_CHANNEL_CHROMINANCE_CORRECTION 0.f
 #endif
-  config.per_channel_chrominance_correction = PER_CHANNEL_CHROMINANCE_CORRECTION;
+  config.per_channel_chrominance_correction = RENODX_PER_CHANNEL_CHROMINANCE_CORRECTION;
 
 #if !defined(RENODX_TONE_MAP_TYPE)
 #define RENODX_TONE_MAP_TYPE renodx::draw::TONE_MAP_TYPE_RENO_DRT
