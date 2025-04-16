@@ -661,16 +661,9 @@ float4 main(
 
   float mid_gray = 0.18f;
   {
-    float _1029 = 0.18f;
-    float _1030 = 0.18f;
-    float _1031 = 0.18f;
-
-    float _1052 = 0.18f;
-    float _1053 = 0.18f;
-    float _1054 = 0.18f;
-    float _1177 = max(0.0f, (min(((lerp(cb12_space1_058x, 1.0f, _1095)) * (_1052 + select(_1023, (((cb5_014w * _1029) - _1052) * _1063), ((_1029 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
-    float _1178 = max(0.0f, (min(((lerp(cb12_space1_058y, 1.0f, _1095)) * (_1053 + select(_1023, (((cb5_014w * _1030) - _1053) * _1063), ((_1030 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
-    float _1179 = max(0.0f, (min(((lerp(cb12_space1_058z, 1.0f, _1095)) * (_1054 + select(_1023, (((cb5_014w * _1031) - _1054) * _1063), ((_1031 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
+    float _1177 = 0.18f;
+    float _1178 = 0.18f;
+    float _1179 = 0.18f;
     float _1180 = _1177 * _1139;
     float _1181 = _1178 * _1139;
     float _1182 = _1179 * _1139;
@@ -685,11 +678,12 @@ float4 main(
   float _1177 = max(0.0f, (min(((lerp(cb12_space1_058x, 1.0f, _1095)) * (_1052 + select(_1023, (((cb5_014w * _1029) - _1052) * _1063), ((_1029 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
   float _1178 = max(0.0f, (min(((lerp(cb12_space1_058y, 1.0f, _1095)) * (_1053 + select(_1023, (((cb5_014w * _1030) - _1053) * _1063), ((_1030 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
   float _1179 = max(0.0f, (min(((lerp(cb12_space1_058z, 1.0f, _1095)) * (_1054 + select(_1023, (((cb5_014w * _1031) - _1054) * _1063), ((_1031 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
+
+  float3 untonemapped = float3(_1177, _1178, _1179) * mid_gray / 0.18f;
+
   float _1180 = _1177 * _1139;
   float _1181 = _1178 * _1139;
   float _1182 = _1179 * _1139;
-
-  float3 untonemapped = float3(_1180, _1181, _1182) * mid_gray / 0.18f;
 
   // Replace saturate with max
   float _1210 = max(0.f, (((((_1180 + _1161) * _1177) + _1164) / (((_1180 + _1140) * _1177) + _1168)) - _1171) * _1173);

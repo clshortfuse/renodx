@@ -63,6 +63,11 @@ void ApplyPerChannelCorrection(float3 untonemapped,
                                inout float vanilla_green,
                                inout float vanilla_blue) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return;
+  if (CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION == 0.f
+      && CUSTOM_COLOR_GRADE_HUE_CORRECTION == 0.f
+      && CUSTOM_COLOR_GRADE_SATURATION_CORRECTION == 0.f) {
+    return;
+  }
   float3 vanilla_color = float3(vanilla_red, vanilla_green, vanilla_blue);
   float3 new_vanilla_color = ApplyPerChannelCorrection(
       untonemapped,

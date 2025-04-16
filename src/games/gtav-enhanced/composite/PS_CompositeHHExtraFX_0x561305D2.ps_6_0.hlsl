@@ -280,17 +280,9 @@ float4 main(
 
   float mid_gray = 0.18f;
   {
-    float _317 = 0.18f;
-    float _318 = 0.18f;
-    float _319 = 0.18f;
-
-    float _340 = 0.18f;
-    float _341 = 0.18f;
-    float _342 = 0.18f;
-
-    float _465 = max(0.0f, (min(((lerp(cb12_space1_058x, 1.0f, _383)) * (_340 + select(_311, (((cb5_014w * _317) - _340) * _351), ((_317 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
-    float _466 = max(0.0f, (min(((lerp(cb12_space1_058y, 1.0f, _383)) * (_341 + select(_311, (((cb5_014w * _318) - _341) * _351), ((_318 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
-    float _467 = max(0.0f, (min(((lerp(cb12_space1_058z, 1.0f, _383)) * (_342 + select(_311, (((cb5_014w * _319) - _342) * _351), ((_319 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
+    float _465 = 0.18f;
+    float _466 = 0.18f;
+    float _467 = 0.18f;
     float _468 = _465 * _427;
     float _469 = _466 * _427;
     float _470 = _467 * _427;
@@ -305,11 +297,12 @@ float4 main(
   float _465 = max(0.0f, (min(((lerp(cb12_space1_058x, 1.0f, _383)) * (_340 + select(_311, (((cb5_014w * _317) - _340) * _351), ((_317 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
   float _466 = max(0.0f, (min(((lerp(cb12_space1_058y, 1.0f, _383)) * (_341 + select(_311, (((cb5_014w * _318) - _341) * _351), ((_318 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
   float _467 = max(0.0f, (min(((lerp(cb12_space1_058z, 1.0f, _383)) * (_342 + select(_311, (((cb5_014w * _319) - _342) * _351), ((_319 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
+
+  float3 untonemapped = float3(_465, _466, _467) * mid_gray / 0.18f;
+
   float _468 = _465 * _427;
   float _469 = _466 * _427;
   float _470 = _467 * _427;
-
-  float3 untonemapped = float3(_468, _469, _470) * mid_gray / 0.18f;
 
   // Replace saturate with max
   float _498 = max(0.f, (((((_468 + _449) * _465) + _452) / (((_468 + _428) * _465) + _456)) - _459) * _461);

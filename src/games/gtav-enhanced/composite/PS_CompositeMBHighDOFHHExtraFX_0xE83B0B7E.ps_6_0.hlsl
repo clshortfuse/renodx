@@ -684,17 +684,9 @@ float4 main(
 
   float mid_gray = 0.18f;
   {
-    float _1096 = 0.18f;
-    float _1097 = 0.18f;
-    float _1098 = 0.18f;
-
-    float _1119 = 0.18f;
-    float _1120 = 0.18f;
-    float _1121 = 0.18f;
-
-    float _1244 = max(0.0f, (min(((lerp(cb12_space1_058x, 1.0f, _1162)) * (_1119 + select(_1090, (((cb5_014w * _1096) - _1119) * _1130), ((_1096 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
-    float _1245 = max(0.0f, (min(((lerp(cb12_space1_058y, 1.0f, _1162)) * (_1120 + select(_1090, (((cb5_014w * _1097) - _1120) * _1130), ((_1097 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
-    float _1246 = max(0.0f, (min(((lerp(cb12_space1_058z, 1.0f, _1162)) * (_1121 + select(_1090, (((cb5_014w * _1098) - _1121) * _1130), ((_1098 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
+    float _1244 = 0.18f;
+    float _1245 = 0.18f;
+    float _1246 = 0.18f;
     float _1247 = _1244 * _1206;
     float _1248 = _1245 * _1206;
     float _1249 = _1246 * _1206;
@@ -709,11 +701,12 @@ float4 main(
   float _1244 = max(0.0f, (min(((lerp(cb12_space1_058x, 1.0f, _1162)) * (_1119 + select(_1090, (((cb5_014w * _1096) - _1119) * _1130), ((_1096 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
   float _1245 = max(0.0f, (min(((lerp(cb12_space1_058y, 1.0f, _1162)) * (_1120 + select(_1090, (((cb5_014w * _1097) - _1120) * _1130), ((_1097 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
   float _1246 = max(0.0f, (min(((lerp(cb12_space1_058z, 1.0f, _1162)) * (_1121 + select(_1090, (((cb5_014w * _1098) - _1121) * _1130), ((_1098 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
+
+  float3 untonemapped = float3(_1244, _1245, _1246) * mid_gray / 0.18f;
+
   float _1247 = _1244 * _1206;
   float _1248 = _1245 * _1206;
   float _1249 = _1246 * _1206;
-
-  float3 untonemapped = float3(_1247, _1248, _1249) * mid_gray / 0.18f;
 
   // Replace saturate with max
   float _1277 = max(0.f, (((((_1247 + _1228) * _1244) + _1231) / (((_1247 + _1207) * _1244) + _1235)) - _1238) * _1240);

@@ -656,17 +656,9 @@ float4 main(
 
   float mid_gray = 0.18f;
   {
-    float _975 = 0.18f;
-    float _976 = 0.18f;
-    float _977 = 0.18f;
-
-    float _1027 = 0.18f;
-    float _1028 = 0.18f;
-    float _1029 = 0.18f;
-
-    float _1152 = max(0.0f, (min(((lerp(cb12_space1_058x, 1.0f, _1070)) * (_1027 + select(_969, (((cb5_014w * _975) - _1027) * _1038), ((_975 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
-    float _1153 = max(0.0f, (min(((lerp(cb12_space1_058y, 1.0f, _1070)) * (_1028 + select(_969, (((cb5_014w * _976) - _1028) * _1038), ((_976 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
-    float _1154 = max(0.0f, (min(((lerp(cb12_space1_058z, 1.0f, _1070)) * (_1029 + select(_969, (((cb5_014w * _977) - _1029) * _1038), ((_977 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
+    float _1152 = 0.18f;
+    float _1153 = 0.18f;
+    float _1154 = 0.18f;
     float _1155 = _1152 * _1114;
     float _1156 = _1153 * _1114;
     float _1157 = _1154 * _1114;
@@ -681,11 +673,12 @@ float4 main(
   float _1152 = max(0.0f, (min(((lerp(cb12_space1_058x, 1.0f, _1070)) * (_1027 + select(_969, (((cb5_014w * _975) - _1027) * _1038), ((_975 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
   float _1153 = max(0.0f, (min(((lerp(cb12_space1_058y, 1.0f, _1070)) * (_1028 + select(_969, (((cb5_014w * _976) - _1028) * _1038), ((_976 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
   float _1154 = max(0.0f, (min(((lerp(cb12_space1_058z, 1.0f, _1070)) * (_1029 + select(_969, (((cb5_014w * _977) - _1029) * _1038), ((_977 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
+
+  float3 untonemapped = float3(_1152, _1153, _1154) * mid_gray / 0.18f;
+
   float _1155 = _1152 * _1114;
   float _1156 = _1153 * _1114;
   float _1157 = _1154 * _1114;
-
-  float3 untonemapped = float3(_1155, _1156, _1157) * mid_gray / 0.18f;
 
   // Replace saturate with max
   float _1185 = max(0.f, (((((_1155 + _1136) * _1152) + _1139) / (((_1155 + _1115) * _1152) + _1143)) - _1146) * _1148);

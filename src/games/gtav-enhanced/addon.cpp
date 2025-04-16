@@ -412,8 +412,12 @@ void OnPresetOff() {
       {"ToneMapUINits", 203.f},
       {"GammaCorrection", 0.f},
       {"ToneMapHueProcessor", 0.f},
-      {"ToneMapHueCorrection", 0.f},
-      {"ToneMapHueShift", 0.f},
+      {"ToneMapWhiteClip", 1.f},
+      {"ColorGradeStrength", 100.f},
+      {"ColorGradeHueCorrection", 0.f},
+      {"ColorGradeSaturationCorrection", 0.f},
+      {"ColorGradeBlowoutCorrection", 0.f},
+
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
@@ -422,28 +426,19 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
-      {"ColorGradeSceneGrading", 100.f},
+
       {"FxLensDistortion", 50.f},
       {"FxChromaticAberration", 50.f},
       {"FxBloom", 50.f},
       {"FxSunBloom", 50.f},
+      {"FxCorona", 50.f},
       {"FxLensFlare", 50.f},
+      {"FxVignette", 50.f},
       {"FxFilmGrain", 50.f},
       {"FxDithering", 0.f},
-      {"FxHDRVideos", 0.f},
+
   });
-  //   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
-  //   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
+  
 }
 
 bool initialized = false;
