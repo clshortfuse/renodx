@@ -1,9 +1,5 @@
 #include "./shared.h"
-// ---- Created with 3Dmigoto v1.3.2 on Sun Mar 23 14:15:04 2025
-Texture2D<float4> t9 : register(t9);
-
-Texture2D<float4> t8 : register(t8);
-
+// ---- Created with 3Dmigoto v1.3.2 on Tue Apr 15 14:55:46 2025
 Texture2D<float4> t7 : register(t7);
 
 Texture2D<float4> t6 : register(t6);
@@ -91,22 +87,13 @@ void main(
   r0.xy = r0.xx ? r1.zw : v1.xy;
   r0.z = cmp(0.5 < cb0[1466].x);
   if (r0.z != 0) {
-    r1.xyzw = t9.Sample(s1_s, r0.xy).xyzw;
+    r1.xyzw = t7.Sample(s1_s, r0.xy).xyzw;
     r0.xy = r1.xy + r0.xy;
   }
-
   r1.xyzw = t0.Sample(s3_s, r0.xy).xyzw;
 
   float3 untonemapped = r1.rgb;
 
-  r2.xyzw = t2.Sample(s1_s, r0.xy).xyzw;
-  r3.xyzw = t3.Sample(s1_s, r0.xy).xyzw;
-  r2.xyzw = r3.xyzw + r2.xyzw;
-  r0.z = cmp(0 < cb0[1407].x);
-  r3.xyz = r2.xyz * r2.www;
-  r3.xyz = float3(8,8,8) * r3.xyz;
-  r2.xyz = r0.zzz ? r3.xyz : r2.xyz;
-  r2.xyz = r2.xyz * CUSTOM_BLOOM + r1.xyz;
   r0.z = cmp(0 < cb0[1415].z);
   if (r0.z != 0) {
     r0.xy = -cb0[1415].xy + r0.xy;
@@ -120,10 +107,9 @@ void main(
     r0.x = exp2(r0.x);
     r0.yzw = float3(1,1,1) + -cb0[1414].xyz;
     r0.xyz = r0.xxx * r0.yzw + cb0[1414].xyz;
-    r2.xyz = r2.xyz * r0.xyz;
+    r1.xyz = r1.xyz * r0.xyz;
   }
-
-  r0.xyz = cb0[1404].www * r2.zxy;
+  r0.xyz = cb0[1404].www * r1.zxy;
   r0.xyz = r0.xyz * float3(5.55555582,5.55555582,5.55555582) + float3(0.0479959995,0.0479959995,0.0479959995);
   r0.xyz = log2(r0.xyz);
   r0.xyz = (r0.xyz * float3(0.0734997839,0.0734997839,0.0734997839) + float3(0.386036009,0.386036009,0.386036009));
@@ -132,11 +118,11 @@ void main(
   r2.xy = float2(0.5,0.5) * cb0[1404].xy;
   r2.yz = r0.zw * cb0[1404].xy + r2.xy;
   r2.x = r0.y * cb0[1404].y + r2.y;
-  r3.xyzw = t5.SampleLevel(s1_s, r2.xz, 0).xyzw;
+  r3.xyzw = t3.SampleLevel(s1_s, r2.xz, 0).xyzw;
   r4.x = cb0[1404].y;
   r4.y = 0;
   r0.zw = r4.xy + r2.xz;
-  r2.xyzw = t5.SampleLevel(s1_s, r0.zw, 0).xyzw;
+  r2.xyzw = t3.SampleLevel(s1_s, r0.zw, 0).xyzw;
   r0.x = r0.x * cb0[1404].z + -r0.y;
   r0.yzw = r2.xyz + -r3.xyz;
   r0.xyz = r0.xxx * r0.yzw + r3.xyz;
@@ -156,11 +142,11 @@ void main(
     r3.xw = float2(0.5,0.5) * cb0[1405].xy;
     r3.yz = r3.yz * cb0[1405].xy + r3.xw;
     r3.x = r0.w * cb0[1405].y + r3.y;
-    r4.xyzw = t6.SampleLevel(s1_s, r3.xz, 0).xyzw;
+    r4.xyzw = t4.SampleLevel(s1_s, r3.xz, 0).xyzw;
     r5.x = cb0[1405].y;
     r5.y = 0;
     r3.xy = r5.xy + r3.xz;
-    r3.xyzw = t6.SampleLevel(s1_s, r3.xy, 0).xyzw;
+    r3.xyzw = t4.SampleLevel(s1_s, r3.xy, 0).xyzw;
     r0.w = r2.z * cb0[1405].z + -r0.w;
     r3.xyz = r3.xyz + -r4.xyz;
     r3.xyz = r0.www * r3.xyz + r4.xyz;
@@ -180,15 +166,15 @@ void main(
   if (r0.w != 0) {
     r2.yz = cb0[1463].yx + v1.yx;
     r3.xy = -cb0[1463].xy + v1.xy;
-    r4.xyzw = t8.Sample(s1_s, v1.xy).xyzw;
+    r4.xyzw = t6.Sample(s1_s, v1.xy).xyzw;
     r0.w = cmp(0 < cb0[1463].w);
     if (r0.w != 0) {
       r3.zw = v1.yx;
-      r5.xyzw = t8.Sample(s1_s, r3.xz).xyzw;
+      r5.xyzw = t6.Sample(s1_s, r3.xz).xyzw;
       r2.xw = v1.yx;
-      r6.xyzw = t8.Sample(s1_s, r2.zx).xyzw;
-      r7.xyzw = t8.Sample(s1_s, r2.wy).xyzw;
-      r8.xyzw = t8.Sample(s1_s, r3.wy).xyzw;
+      r6.xyzw = t6.Sample(s1_s, r2.zx).xyzw;
+      r7.xyzw = t6.Sample(s1_s, r2.wy).xyzw;
+      r8.xyzw = t6.Sample(s1_s, r3.wy).xyzw;
       r0.w = r6.x + r5.x;
       r0.w = r0.w + r7.x;
       r0.w = r0.w + r8.x;
@@ -196,10 +182,10 @@ void main(
       r0.w = 0;
     }
     r2.xw = r3.xy;
-    r5.xyzw = t8.Sample(s1_s, r2.xy).xyzw;
-    r6.xyzw = t8.Sample(s1_s, r2.zy).xyzw;
-    r3.xyzw = t8.Sample(s1_s, r3.xy).xyzw;
-    r2.xyzw = t8.Sample(s1_s, r2.zw).xyzw;
+    r5.xyzw = t6.Sample(s1_s, r2.xy).xyzw;
+    r6.xyzw = t6.Sample(s1_s, r2.zy).xyzw;
+    r3.xyzw = t6.Sample(s1_s, r3.xy).xyzw;
+    r2.xyzw = t6.Sample(s1_s, r2.zw).xyzw;
     r0.w = r5.x + r0.w;
     r0.w = r0.w + r6.x;
     r0.w = r0.w + r3.x;
@@ -212,7 +198,7 @@ void main(
     r0.xyz = r2.www * r2.xyz + r0.xyz;
   }
   r2.xy = v1.xy * cb0[1417].xy + cb0[1417].zw;
-  r2.xyzw = t4.Sample(s2_s, r2.xy).xyzw;
+  r2.xyzw = t2.Sample(s2_s, r2.xy).xyzw;
   r0.w = -0.5 + r2.w;
   r0.w = r0.w + r0.w;
   r2.x = dot(r0.xyz, float3(0.212672904,0.715152204,0.0721750036));
@@ -240,7 +226,7 @@ void main(
     r0.xy = r0.xz * r0.yy + cb0[1295].xz;
     r0.xy = -cb0[1450].zw + r0.xy;
     r0.xy = cb0[1450].xy * r0.xy;
-    r0.xyzw = t7.Sample(s1_s, r0.xy).xyzw;
+    r0.xyzw = t5.Sample(s1_s, r0.xy).xyzw;
     r0.x = 1 + -r0.y;
     r0.y = cb0[1449].w * r0.x;
     // r2.xyz = float3(0.0773993805,0.0773993805,0.0773993805) * cb0[1449].xyz;

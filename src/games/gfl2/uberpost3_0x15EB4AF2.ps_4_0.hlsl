@@ -125,6 +125,8 @@ void main(
   }
   r3.xyzw = t0.Sample(s4_s, r0.zw).xyzw;
 
+  float3 untonemapped = r3.rgb;
+
   r0.y = (int)r0.y | (int)r1.y;
   if (r0.y != 0) {
     if (r1.y != 0) {
@@ -598,9 +600,6 @@ void main(
     r1.xyz = r2.xyz + r1.xyz;
   }
 
-  float3 untonemapped = r1.rgb;
-  untonemapped = renodx::color::srgb::DecodeSafe(untonemapped);
-
   r2.xyzw = t2.Sample(s1_s, r0.zw).xyzw;
   r4.xyzw = t3.Sample(s1_s, r0.zw).xyzw;
   r2.xyzw = r4.xyzw + r2.xyzw;
@@ -624,11 +623,11 @@ void main(
     r0.xzw = r0.xxx * r2.xyz + cb0[1414].xyz;
     r1.xyz = r1.xyz * r0.xzw;
   }
-  
+
   r0.xzw = cb0[1404].www * r1.zxy;
   r0.xzw = r0.xzw * float3(5.55555582,5.55555582,5.55555582) + float3(0.0479959995,0.0479959995,0.0479959995);
   r0.xzw = log2(r0.xzw);
-  r0.xzw = saturate(r0.xzw * float3(0.0734997839,0.0734997839,0.0734997839) + float3(0.386036009,0.386036009,0.386036009));
+  r0.xzw = (r0.xzw * float3(0.0734997839,0.0734997839,0.0734997839) + float3(0.386036009,0.386036009,0.386036009));
   r1.xyz = cb0[1404].zzz * r0.xzw;
   r0.z = floor(r1.x);
   r1.xw = float2(0.5,0.5) * cb0[1404].xy;
@@ -644,14 +643,15 @@ void main(
   r0.xzw = r0.xxx * r1.xyz + r2.xyz;
   r1.x = cmp(0 < cb0[1405].w);
   if (r1.x != 0) {
-    r0.xzw = saturate(r0.xzw);
-    r1.xyz = float3(12.9200001,12.9200001,12.9200001) * r0.xzw;
-    r2.xyz = log2(r0.xzw);
-    r2.xyz = float3(0.416666657,0.416666657,0.416666657) * r2.xyz;
-    r2.xyz = exp2(r2.xyz);
-    r2.xyz = r2.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
-    r4.xyz = cmp(float3(0.00313080009,0.00313080009,0.00313080009) >= r0.xzw);
-    r1.xyz = r4.xyz ? r1.xyz : r2.xyz;
+    r0.xzw = (r0.xzw);
+    // r1.xyz = float3(12.9200001,12.9200001,12.9200001) * r0.xzw;
+    // r2.xyz = log2(r0.xzw);
+    // r2.xyz = float3(0.416666657,0.416666657,0.416666657) * r2.xyz;
+    // r2.xyz = exp2(r2.xyz);
+    // r2.xyz = r2.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
+    // r4.xyz = cmp(float3(0.00313080009,0.00313080009,0.00313080009) >= r0.xzw);
+    // r1.xyz = r4.xyz ? r1.xyz : r2.xyz;
+    r1.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
     r2.xyz = cb0[1405].zzz * r1.zxy;
     r1.w = floor(r2.x);
     r2.xw = float2(0.5,0.5) * cb0[1405].xy;
@@ -667,14 +667,15 @@ void main(
     r2.xyz = r1.www * r2.xyz + r4.xyz;
     r2.xyz = r2.xyz + -r1.xyz;
     r1.xyz = cb0[1405].www * r2.xyz + r1.xyz;
-    r2.xyz = float3(0.0773993805,0.0773993805,0.0773993805) * r1.xyz;
-    r4.xyz = float3(0.0549999997,0.0549999997,0.0549999997) + r1.xyz;
-    r4.xyz = float3(0.947867334,0.947867334,0.947867334) * r4.xyz;
-    r4.xyz = log2(abs(r4.xyz));
-    r4.xyz = float3(2.4000001,2.4000001,2.4000001) * r4.xyz;
-    r4.xyz = exp2(r4.xyz);
-    r1.xyz = cmp(float3(0.0404499993,0.0404499993,0.0404499993) >= r1.xyz);
-    r0.xzw = r1.xyz ? r2.xyz : r4.xyz;
+    // r2.xyz = float3(0.0773993805,0.0773993805,0.0773993805) * r1.xyz;
+    // r4.xyz = float3(0.0549999997,0.0549999997,0.0549999997) + r1.xyz;
+    // r4.xyz = float3(0.947867334,0.947867334,0.947867334) * r4.xyz;
+    // r4.xyz = log2(abs(r4.xyz));
+    // r4.xyz = float3(2.4000001,2.4000001,2.4000001) * r4.xyz;
+    // r4.xyz = exp2(r4.xyz);
+    // r1.xyz = cmp(float3(0.0404499993,0.0404499993,0.0404499993) >= r1.xyz);
+    // r0.xzw = r1.xyz ? r2.xyz : r4.xyz;
+    r1.rgb = renodx::color::srgb::DecodeSafe(r2.rgb);
   }
   r1.x = cmp(0 < cb0[1463].z);
   if (r1.x != 0) {
@@ -703,17 +704,17 @@ void main(
     r1.y = r5.x + r2.z;
     r1.y = r1.y + r6.x;
     r1.y = r1.y + r7.x;
-    r1.x = saturate(r1.y + r1.x);
-    r1.x = saturate(r1.x + -r4.x);
+    r1.x = (r1.y + r1.x);
+    r1.x = (r1.x + -r4.x);
     r1.xyzw = cb0[1464].xyzw * r1.xxxx;
     r2.xyzw = cb0[1465].xyzw * r4.xxxx;
-    r1.xyzw = saturate(max(r2.xyzw, r1.xyzw));
+    r1.xyzw = (max(r2.xyzw, r1.xyzw));
     r1.xyz = r1.xyz + -r0.xzw;
     r0.xzw = r1.www * r1.xyz + r0.xzw;
   }
   r1.x = cmp(0 < cb0[1421].x);
   r1.y = cb0[1421].y + v1.y;
-  r1.y = saturate(-1 + r1.y);
+  r1.y = (-1 + r1.y);
   r1.z = max(0.00100000005, cb0[1421].y);
   r1.y = r1.y / r1.z;
   r1.z = cb0[1421].z * 0.5 + 0.5;
@@ -732,11 +733,11 @@ void main(
     r0.xz = cb0[1446].yy * float2(1.13999999,2.99000001) + float2(1,1);
     r1.x = r1.y / r0.x;
     r1.z = r1.y * r0.z;
-    r1.xyz = saturate(r1.xyz);
+    r1.xyz = (r1.xyz);
     r2.xyzw = t7.Sample(s1_s, float2(0.5,0.5)).xyzw;
     r0.x = 1.44269502 * r2.y;
     r0.x = exp2(r0.x);
-    r0.x = saturate(-cb0[1446].z + r0.x);
+    r0.x = (-cb0[1446].z + r0.x);
     r2.xyz = r3.xyz + -r1.xyz;
     r3.xyz = r0.xxx * r2.xyz + r1.xyz;
   }
@@ -750,10 +751,10 @@ void main(
     r0.xyz = r0.xyz / r0.www;
     r0.xyz = -cb0[1295].xyz + r0.xyz;
     r0.w = dot(r0.xyz, r0.xyz);
-    r1.x = rsqrt(r0.w);
+    r1.x = (r0.w);
     r0.xyz = r1.xxx * r0.xyz;
     r0.y = cb0[1295].y / r0.y;
-    r0.w = sqrt(r0.w);
+    r0.w = (r0.w);
     r0.y = min(abs(r0.y), r0.w);
     r0.xy = r0.xz * r0.yy + cb0[1295].xz;
     r0.xy = -cb0[1450].zw + r0.xy;
@@ -761,23 +762,30 @@ void main(
     r0.xyzw = t9.Sample(s1_s, r0.xy).xyzw;
     r0.x = 1 + -r0.y;
     r0.y = cb0[1449].w * r0.x;
-    r1.xyz = float3(0.0773993805,0.0773993805,0.0773993805) * cb0[1449].xyz;
-    r2.xyz = float3(0.0549999997,0.0549999997,0.0549999997) + cb0[1449].xyz;
-    r2.xyz = float3(0.947867334,0.947867334,0.947867334) * r2.xyz;
-    r2.xyz = log2(abs(r2.xyz));
-    r2.xyz = float3(2.4000001,2.4000001,2.4000001) * r2.xyz;
-    r2.xyz = exp2(r2.xyz);
-    r4.xyz = cmp(float3(0.0404499993,0.0404499993,0.0404499993) >= cb0[1449].xyz);
-    r1.xyz = r4.xyz ? r1.xyz : r2.xyz;
+    // r1.xyz = float3(0.0773993805,0.0773993805,0.0773993805) * cb0[1449].xyz;
+    // r2.xyz = float3(0.0549999997,0.0549999997,0.0549999997) + cb0[1449].xyz;
+    // r2.xyz = float3(0.947867334,0.947867334,0.947867334) * r2.xyz;
+    // r2.xyz = log2(abs(r2.xyz));
+    // r2.xyz = float3(2.4000001,2.4000001,2.4000001) * r2.xyz;
+    // r2.xyz = exp2(r2.xyz);
+    // r4.xyz = cmp(float3(0.0404499993,0.0404499993,0.0404499993) >= cb0[1449].xyz);
+    // r1.xyz = r4.xyz ? r1.xyz : r2.xyz;
+    r1.rgb = renodx::color::srgb::DecodeSafe(r0.rgb);
     r0.x = -r0.x * cb0[1449].w + 1;
     r0.xzw = r3.xyz * r0.xxx;
     r3.xyz = r1.xyz * r0.yyy + r0.xzw;
   }
   o0.xyzw = r3.xyzw;
+  
+  float3 sdr = o0.rgb;
 
-  float3 sdr = saturate(o0.rgb);
-  o0.rgb = renodx::color::srgb::DecodeSafe(sdr);
-  o0.rgb = renodx::draw::ToneMapPass(untonemapped, sdr);
-  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
+  float3 outputColor;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    outputColor = max(0, sdr);
+  } 
+  else {
+    outputColor = renodx::draw::ToneMapPass(untonemapped, sdr);
+  }
+  o0.rgb = renodx::draw::RenderIntermediatePass(outputColor);
   return;
 }

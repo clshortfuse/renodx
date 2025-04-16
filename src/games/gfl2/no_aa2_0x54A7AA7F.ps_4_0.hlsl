@@ -86,7 +86,6 @@ void main(
   r0.x = min(r0.w, r0.x);
   r4.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
   float3 untonemapped = r4.rgb;
-  untonemapped = renodx::color::srgb::DecodeSafe(untonemapped);
   r4.xyz = saturate(r4.xyz);
   o0.w = r4.w;
   r0.w = dot(r4.xyz, float3(0.212672904,0.715152204,0.0721750036));
@@ -98,9 +97,6 @@ void main(
   r0.x = (int)r0.y | (int)r0.x;
   o0.xyz = r0.xxx ? r2.xyz : r3.xyz;
 
-  float3 sdr = saturate(o0.rgb);
-  o0.rgb = renodx::color::srgb::DecodeSafe(sdr);
-  o0.rgb = renodx::draw::ToneMapPass(untonemapped, sdr);
-  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
+  o0.rgb = untonemapped;
   return;
 }
