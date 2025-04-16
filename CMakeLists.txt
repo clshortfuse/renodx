@@ -240,17 +240,84 @@ function(build_shader_target ADDON ADDON_PATH)
   endforeach()
 
   unset(SHADERS_H_OUTPUT)
-  foreach(FILE ${SHADER_BINARIES})
-    cmake_path(GET FILE STEM LAST_ONLY FILENAME)
-    add_custom_command(
-      OUTPUT ${EMBED_FOLDER}/${FILENAME}.h
-      COMMAND embedfile ${FILE} ${EMBED_FOLDER}/${FILENAME}.h
-      DEPENDS ${FILE}
-    )
-    list(APPEND SHADER_HEADER_FILES ${EMBED_FOLDER}/${FILENAME}.h)
-    string(APPEND SHADERS_H_OUTPUT "#include \"./${FILENAME}.h\"\n")
-  endforeach()
+  list(LENGTH SHADER_BINARIES SHADER_BINARIES_LENGTH)
+  if(SHADER_BINARIES_LENGTH GREATER 0)
 
+    string(APPEND SHADERS_H_OUTPUT "#pragma once\n")
+
+    set(ANY_VERSION_SHADERS)
+    set(DX11_SHADERS)
+    set(DX12_SHADERS)
+
+    foreach(FILE ${SHADER_BINARIES})
+      cmake_path(GET FILE STEM LAST_ONLY FILENAME)
+      add_custom_command(
+        OUTPUT ${EMBED_FOLDER}/${FILENAME}.h
+        COMMAND embedfile ${FILE} ${EMBED_FOLDER}/${FILENAME}.h
+        DEPENDS ${FILE}
+      )
+      list(APPEND SHADER_HEADER_FILES ${EMBED_FOLDER}/${FILENAME}.h)
+      string(APPEND SHADERS_H_OUTPUT "#include \"./${FILENAME}.h\"\n")
+
+      if(FILENAME MATCHES "^0x[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$")
+        list(APPEND ANY_VERSION_SHADERS ${FILENAME})
+      elseif(FILENAME MATCHES "^0x[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]_dx11$")
+        list(APPEND DX11_SHADERS ${FILENAME})
+      elseif(FILENAME MATCHES "^0x[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]_dx12$")
+        list(APPEND DX12_SHADERS ${FILENAME})
+      endif()
+
+    endforeach()
+
+    list(LENGTH ANY_VERSION_SHADERS ANY_VERSION_SHADERS_LENGTH)
+    if(ANY_VERSION_SHADERS_LENGTH GREATER 0)
+      string(APPEND SHADERS_H_OUTPUT "#define __CUSTOM_SHADER_ENTRIES \\\n")
+      math(EXPR LAST_INDEX "${ANY_VERSION_SHADERS_LENGTH} - 1")
+      foreach(INDEX RANGE 0 ${LAST_INDEX})
+        list(GET ANY_VERSION_SHADERS ${INDEX} FILENAME)
+        if(INDEX EQUAL LAST_INDEX)
+          string(APPEND SHADERS_H_OUTPUT "  CustomShaderEntry(${FILENAME})\n")
+        else()
+          string(APPEND SHADERS_H_OUTPUT "  CustomShaderEntry(${FILENAME}), \\\n")
+        endif()
+      endforeach()
+    endif()
+
+    set(DX11_DX12_INTERSECT)
+    foreach(FILENAME ${DX11_SHADERS})
+      string(REGEX REPLACE "_dx11$" "" BASE_NAME ${FILENAME})
+      list(FIND DX12_SHADERS "${BASE_NAME}_dx12" IDX)
+      if(NOT IDX EQUAL -1)
+        list(APPEND DX11_DX12_INTERSECT ${BASE_NAME})
+      endif()
+    endforeach()
+
+    list(LENGTH DX11_DX12_INTERSECT DX11_DX12_INTERSECT_LENGTH)
+    if(DX11_DX12_INTERSECT_LENGTH GREATER 0)
+      string(APPEND SHADERS_H_OUTPUT "#define __CUSTOM_DIRECTX_SHADERS \\\n")
+      math(EXPR LAST_INDEX "${DX11_DX12_INTERSECT_LENGTH} - 1")
+      foreach(INDEX RANGE 0 ${LAST_INDEX})
+        list(GET DX11_DX12_INTERSECT ${INDEX} BASE_NAME)
+        if(INDEX EQUAL LAST_INDEX)
+          string(APPEND SHADERS_H_OUTPUT "  CustomDirectXShaders(${BASE_NAME})\n")
+        else()
+          string(APPEND SHADERS_H_OUTPUT "  CustomDirectXShaders(${BASE_NAME}), \\\n")
+        endif()
+      endforeach()
+    endif()
+
+    if(ANY_VERSION_SHADERS_LENGTH GREATER 0 OR DX11_DX12_INTERSECT_LENGTH GREATER 0)
+      string(APPEND SHADERS_H_OUTPUT "#define __ALL_CUSTOM_SHADERS \\\n")
+      if(ANY_VERSION_SHADERS_LENGTH GREATER 0 AND DX11_DX12_INTERSECT_LENGTH GREATER 0)
+        string(APPEND SHADERS_H_OUTPUT "  __CUSTOM_SHADER_ENTRIES, \\\n  __CUSTOM_DIRECTX_SHADERS\n")
+      elseif(ANY_VERSION_SHADERS_LENGTH GREATER 0)
+        string(APPEND SHADERS_H_OUTPUT "  __CUSTOM_SHADER_ENTRIES\n")
+      elseif(DX11_DX12_INTERSECT_LENGTH GREATER 0)
+        string(APPEND SHADERS_H_OUTPUT "  __CUSTOM_DIRECTX_SHADERS\n")
+      endif()
+    endif()
+
+  endif()
 
   list(JOIN SHADER_HEADER_FILES " " SHADER_HEADER_FILE_ITEMS)
   add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES})
