@@ -1430,6 +1430,9 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r0.w = 0;
   // No code for instruction (needs manual fix):
   // store_uav_typed u0.xyzw, vThreadID.xyzz, r0.xyzw
+
+  r0 = saturate(r0);
+
   u0[vThreadID.xyz] = r0;
   return;
 }

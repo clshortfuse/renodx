@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../../common.hlsl"
 
 // ---- Created with 3Dmigoto v1.3.2 on Thu Dec 26 16:58:24 2024
 cbuffer cb0 : register(b0) {
@@ -922,5 +922,8 @@ void main(
     o0.xyz = float3(0.952381015, 0.952381015, 0.952381015) * r0.xyz;
     o0.w = 0;
   }
+
+  o0 = saturate(o0);
+
   return;
 }

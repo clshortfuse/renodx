@@ -1,4 +1,4 @@
-#include "../shared.h"
+#include "../../shared.h"
 
 // ---- Created with 3Dmigoto v1.4.1 on Tue Feb 11 11:37:42 2025
 Texture3D<float4> t2 : register(t2);
@@ -51,8 +51,6 @@ void main(linear noperspective float2 w0: TEXCOORD0,
     r1.xyz = r1.xxx;
   }
   // r1.xyz = r0.www ? r1.yzw : r1.xxx;
-
-  // r2.yw = cb0[96].zz * cb0[95].xy;
 
   r2.yw = cb0[96].zz * cb0[95].xy;
 
@@ -133,7 +131,7 @@ void main(linear noperspective float2 w0: TEXCOORD0,
     r3.xyz = r0.xyz * r3.xyz + float3(0.140000001, 0.140000001, 0.140000001);
     // r0.xyz = saturate(r2.xyz / r3.xyz);
     r0.xyz = (r2.xyz / r3.xyz);
-    if (RENODX_TONE_MAP_TYPE == 0) {
+    if (RENODX_TONE_MAP_TYPE == 0.f) {
       r0.xyz = saturate(r0.xyz);
     }
   }
@@ -164,12 +162,12 @@ void main(linear noperspective float2 w0: TEXCOORD0,
     r0.w = cb0[38].y / cb0[38].z;
     // r0.xyz = saturate(r2.xyz + -r0.www);
     r0.xyz = (r2.xyz + -r0.www);
-    if (RENODX_TONE_MAP_TYPE == 0) {
+    if (RENODX_TONE_MAP_TYPE == 0.f) {
       r0.xyz = saturate(r0.xyz);
     }
   }
 
-  if (RENODX_TONE_MAP_TYPE != 0) {
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
     r0.xyz = max(0, r0.xyz);
     r0.xyz = renodx::tonemap::UpgradeToneMap(
         untonemapped,
@@ -185,7 +183,7 @@ void main(linear noperspective float2 w0: TEXCOORD0,
   r0.xyz = float3(1.04999995, 1.04999995, 1.04999995) * r0.xyz;
   // o0.w = saturate(dot(r0.xyz, float3(0.298999995, 0.587000012, 0.114)));
   o0.w = dot(r0.xyz, float3(0.298999995, 0.587000012, 0.114));
-  if (RENODX_TONE_MAP_TYPE == 0) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     o0.w = saturate(o0.w);
   }
   r0.xyz = r1.xyz * float3(0.00390625, 0.00390625, 0.00390625) + r0.xyz;

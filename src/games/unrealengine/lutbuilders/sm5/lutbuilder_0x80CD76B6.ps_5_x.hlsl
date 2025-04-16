@@ -361,5 +361,8 @@ void main(
   r0.xyz = r0.xyz ? r1.xyz : r2.xyz;
   o0.xyz = float3(0.952381015, 0.952381015, 0.952381015) * r0.xyz;
   o0.w = 0;
+
+  o0 = saturate(o0);
+
   return;
 }

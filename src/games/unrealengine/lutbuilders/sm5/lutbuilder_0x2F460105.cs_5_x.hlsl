@@ -1391,6 +1391,8 @@ RWTexture3D<float4> u0 : register(u0);
   r0.xyz = float3(0.952381015, 0.952381015, 0.952381015) * r2.xyz;
   r0.w = 0;
 
+  r0 = saturate(r0);
+
   u0[vThreadID.xyz] = r0;
   return;
 }
