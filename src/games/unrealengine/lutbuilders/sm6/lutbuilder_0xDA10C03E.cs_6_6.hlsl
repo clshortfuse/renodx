@@ -183,11 +183,12 @@ cbuffer UniformBufferConstants_WorkingColorSpace : register(b1) {
   uint UniformBufferConstants_WorkingColorSpace_020x : packoffset(c020.x);
 };
 
-[numthreads(8, 8, 8)] void main(
-    uint3 SV_DispatchThreadID : SV_DispatchThreadID,
-    uint3 SV_GroupID : SV_GroupID,
-    uint3 SV_GroupThreadID : SV_GroupThreadID,
-    uint SV_GroupIndex : SV_GroupIndex) {
+[numthreads(8, 8, 8)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
   float _9[6];
   float _10[6];
   float _11[6];
@@ -393,7 +394,7 @@ cbuffer UniformBufferConstants_WorkingColorSpace : register(b1) {
   float _799 = ((_683 * ((((cb0_019y) + (cb0_034y)) + _580) + ((((cb0_018y) * (cb0_033y)) * _589) * (exp2(((log2(((exp2(((((cb0_016y) * (cb0_031y)) * _607) * (log2(((max(0.0f, (((((cb0_015y) * (cb0_030y)) * _616) * _508) + _433))) * 5.55555534362793f)))))) * 0.18000000715255737f))) * (1.0f / (((cb0_017y) * (cb0_032y)) * _598)))))))) + (_571 * ((((cb0_019y) + (cb0_024y)) + _447) + ((((cb0_018y) * (cb0_023y)) * _461) * (exp2(((log2(((exp2(((((cb0_016y) * (cb0_021y)) * _489) * (log2(((max(0.0f, (((((cb0_015y) * (cb0_020y)) * _503) * _508) + _433))) * 5.55555534362793f)))))) * 0.18000000715255737f))) * (1.0f / (((cb0_017y) * (cb0_022y)) * _475))))))))) + (((((cb0_019y) + (cb0_029y)) + _692) + ((((cb0_018y) * (cb0_028y)) * _701) * (exp2(((log2(((exp2(((((cb0_016y) * (cb0_026y)) * _719) * (log2(((max(0.0f, (((((cb0_015y) * (cb0_025y)) * _728) * _508) + _433))) * 5.55555534362793f)))))) * 0.18000000715255737f))) * (1.0f / (((cb0_017y) * (cb0_027y)) * _710))))))) * _786);
   float _801 = ((_683 * ((((cb0_019z) + (cb0_034z)) + _580) + ((((cb0_018z) * (cb0_033z)) * _589) * (exp2(((log2(((exp2(((((cb0_016z) * (cb0_031z)) * _607) * (log2(((max(0.0f, (((((cb0_015z) * (cb0_030z)) * _616) * _509) + _433))) * 5.55555534362793f)))))) * 0.18000000715255737f))) * (1.0f / (((cb0_017z) * (cb0_032z)) * _598)))))))) + (_571 * ((((cb0_019z) + (cb0_024z)) + _447) + ((((cb0_018z) * (cb0_023z)) * _461) * (exp2(((log2(((exp2(((((cb0_016z) * (cb0_021z)) * _489) * (log2(((max(0.0f, (((((cb0_015z) * (cb0_020z)) * _503) * _509) + _433))) * 5.55555534362793f)))))) * 0.18000000715255737f))) * (1.0f / (((cb0_017z) * (cb0_022z)) * _475))))))))) + (((((cb0_019z) + (cb0_029z)) + _692) + ((((cb0_018z) * (cb0_028z)) * _701) * (exp2(((log2(((exp2(((((cb0_016z) * (cb0_026z)) * _719) * (log2(((max(0.0f, (((((cb0_015z) * (cb0_025z)) * _728) * _509) + _433))) * 5.55555534362793f)))))) * 0.18000000715255737f))) * (1.0f / (((cb0_017z) * (cb0_027z)) * _710))))))) * _786);
 
-  float3 untonemapped_ap1 = float3(_797, _799, _801);
+  SetUntonemappedAP1(float3(_797, _799, _801));
 
   float _837 = (((mad(0.061360642313957214f, _801, (mad(-4.540197551250458e-09f, _799, (_797 * 0.9386394023895264f))))) - _797) * (cb0_036z)) + _797;
   float _838 = (((mad(0.169205904006958f, _801, (mad(0.8307942152023315f, _799, (_797 * 6.775371730327606e-08f))))) - _799) * (cb0_036z)) + _799;
@@ -492,6 +493,9 @@ cbuffer UniformBufferConstants_WorkingColorSpace : register(b1) {
   float _1159 = (((mad(-0.06537103652954102f, _1143, (mad(1.451815478503704e-06f, _1142, (_1141 * 1.065374732017517f))))) - _1141) * (cb0_036z)) + _1141;
   float _1160 = (((mad(-0.20366770029067993f, _1143, (mad(1.2036634683609009f, _1142, (_1141 * -2.57161445915699e-07f))))) - _1142) * (cb0_036z)) + _1142;
   float _1161 = (((mad(0.9999996423721313f, _1143, (mad(2.0954757928848267e-08f, _1142, (_1141 * 1.862645149230957e-08f))))) - _1143) * (cb0_036z)) + _1143;
+
+  SetTonemappedAP1(_1159, _1160, _1161);
+
   float _1171 = max(0.0f, (mad((UniformBufferConstants_WorkingColorSpace_012z), _1161, (mad((UniformBufferConstants_WorkingColorSpace_012y), _1160, ((UniformBufferConstants_WorkingColorSpace_012x)*_1159))))));
   float _1172 = max(0.0f, (mad((UniformBufferConstants_WorkingColorSpace_013z), _1161, (mad((UniformBufferConstants_WorkingColorSpace_013y), _1160, ((UniformBufferConstants_WorkingColorSpace_013x)*_1159))))));
   float _1173 = max(0.0f, (mad((UniformBufferConstants_WorkingColorSpace_014z), _1161, (mad((UniformBufferConstants_WorkingColorSpace_014y), _1160, ((UniformBufferConstants_WorkingColorSpace_014x)*_1159))))));
@@ -512,8 +516,8 @@ cbuffer UniformBufferConstants_WorkingColorSpace : register(b1) {
   float _1236 = exp2(((log2((max(0.0f, _1210)))) * (cb0_040y)));
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    // return LutBuilderToneMap(untonemapped_ap1, float3(_981, _982, _983));
-    RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = LutBuilderToneMap(untonemapped_ap1, float3(_1234, _1235, _1236));
+    // return GenerateOutput(float3(_981, _982, _983));
+    RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = GenerateOutput(float3(_1234, _1235, _1236));
     return;
   }
 

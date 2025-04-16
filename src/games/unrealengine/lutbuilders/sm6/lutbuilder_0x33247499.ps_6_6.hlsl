@@ -397,7 +397,7 @@ float4 main(
   float _791 = ((_675 * ((((cb0_019y) + (cb0_034y)) + _572) + ((((cb0_018y) * (cb0_033y)) * _581) * (exp2(((log2(((exp2(((((cb0_016y) * (cb0_031y)) * _599) * (log2(((max(0.0f, (((((cb0_015y) * (cb0_030y)) * _608) * _500) + _425))) * 5.55555534362793f)))))) * 0.18000000715255737f))) * (1.0f / (((cb0_017y) * (cb0_032y)) * _590)))))))) + (_563 * ((((cb0_019y) + (cb0_024y)) + _439) + ((((cb0_018y) * (cb0_023y)) * _453) * (exp2(((log2(((exp2(((((cb0_016y) * (cb0_021y)) * _481) * (log2(((max(0.0f, (((((cb0_015y) * (cb0_020y)) * _495) * _500) + _425))) * 5.55555534362793f)))))) * 0.18000000715255737f))) * (1.0f / (((cb0_017y) * (cb0_022y)) * _467))))))))) + (((((cb0_019y) + (cb0_029y)) + _684) + ((((cb0_018y) * (cb0_028y)) * _693) * (exp2(((log2(((exp2(((((cb0_016y) * (cb0_026y)) * _711) * (log2(((max(0.0f, (((((cb0_015y) * (cb0_025y)) * _720) * _500) + _425))) * 5.55555534362793f)))))) * 0.18000000715255737f))) * (1.0f / (((cb0_017y) * (cb0_027y)) * _702))))))) * _778);
   float _793 = ((_675 * ((((cb0_019z) + (cb0_034z)) + _572) + ((((cb0_018z) * (cb0_033z)) * _581) * (exp2(((log2(((exp2(((((cb0_016z) * (cb0_031z)) * _599) * (log2(((max(0.0f, (((((cb0_015z) * (cb0_030z)) * _608) * _501) + _425))) * 5.55555534362793f)))))) * 0.18000000715255737f))) * (1.0f / (((cb0_017z) * (cb0_032z)) * _590)))))))) + (_563 * ((((cb0_019z) + (cb0_024z)) + _439) + ((((cb0_018z) * (cb0_023z)) * _453) * (exp2(((log2(((exp2(((((cb0_016z) * (cb0_021z)) * _481) * (log2(((max(0.0f, (((((cb0_015z) * (cb0_020z)) * _495) * _501) + _425))) * 5.55555534362793f)))))) * 0.18000000715255737f))) * (1.0f / (((cb0_017z) * (cb0_022z)) * _467))))))))) + (((((cb0_019z) + (cb0_029z)) + _684) + ((((cb0_018z) * (cb0_028z)) * _693) * (exp2(((log2(((exp2(((((cb0_016z) * (cb0_026z)) * _711) * (log2(((max(0.0f, (((((cb0_015z) * (cb0_025z)) * _720) * _501) + _425))) * 5.55555534362793f)))))) * 0.18000000715255737f))) * (1.0f / (((cb0_017z) * (cb0_027z)) * _702))))))) * _778);
 
-  float3 untonemapped_ap1 = float3(_789, _791, _793);  // CustomEdit
+  SetUntonemappedAP1(float3(_789, _791, _793));  // CustomEdit
 
   float _829 = (((mad(0.061360642313957214f, _793, (mad(-4.540197551250458e-09f, _791, (_789 * 0.9386394023895264f))))) - _789) * (cb0_036z)) + _789;
   float _830 = (((mad(0.169205904006958f, _793, (mad(0.8307942152023315f, _791, (_789 * 6.775371730327606e-08f))))) - _791) * (cb0_036z)) + _791;
@@ -496,6 +496,9 @@ float4 main(
   float _1151 = (((mad(-0.06537103652954102f, _1135, (mad(1.451815478503704e-06f, _1134, (_1133 * 1.065374732017517f))))) - _1133) * (cb0_036z)) + _1133;
   float _1152 = (((mad(-0.20366770029067993f, _1135, (mad(1.2036634683609009f, _1134, (_1133 * -2.57161445915699e-07f))))) - _1134) * (cb0_036z)) + _1134;
   float _1153 = (((mad(0.9999996423721313f, _1135, (mad(2.0954757928848267e-08f, _1134, (_1133 * 1.862645149230957e-08f))))) - _1135) * (cb0_036z)) + _1135;
+
+  SetTonemappedAP1(_1151, _1152, _1153);
+
   float _1166 = saturate((max(0.0f, (mad((UniformBufferConstants_WorkingColorSpace_012z), _1153, (mad((UniformBufferConstants_WorkingColorSpace_012y), _1152, ((UniformBufferConstants_WorkingColorSpace_012x)*_1151))))))));
   float _1167 = saturate((max(0.0f, (mad((UniformBufferConstants_WorkingColorSpace_013z), _1153, (mad((UniformBufferConstants_WorkingColorSpace_013y), _1152, ((UniformBufferConstants_WorkingColorSpace_013x)*_1151))))))));
   float _1168 = saturate((max(0.0f, (mad((UniformBufferConstants_WorkingColorSpace_014z), _1153, (mad((UniformBufferConstants_WorkingColorSpace_014y), _1152, ((UniformBufferConstants_WorkingColorSpace_014x)*_1151))))))));
@@ -544,7 +547,7 @@ float4 main(
   float _1334 = exp2(((log2((max(0.0f, _1308)))) * (cb0_040y)));
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    return LutBuilderToneMap(untonemapped_ap1, float3(_1332, _1333, _1334));
+    return GenerateOutput(float3(_1332, _1333, _1334));
   }
 
   if (((((uint)(cb0_040w)) == 0))) {

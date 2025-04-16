@@ -163,7 +163,7 @@ void main(
   r0.xyz = r1.xyz * r1.www + r0.xyz;
   r0.xyz = r2.xyz * r3.yyy + r0.xyz;
 
-  float3 untonemapped_ap1 = r0.xyz;
+  SetUntonemappedAP1(r0.xyz);
 
   // AP1 => BT709
   r1.x = dot(float3(1.70505154, -0.621790707, -0.0832583979), r0.xyz);
@@ -368,6 +368,9 @@ void main(
     r3.x = dot(float3(1.70505154, -0.621790707, -0.0832583979), r0.xyz);
     r3.y = dot(float3(-0.130257145, 1.14080286, -0.0105485283), r0.xyz);
     r3.z = dot(float3(-0.0240032747, -0.128968775, 1.15297174), r0.xyz);
+
+    SetTonemappedBT709(r3.xyz);
+
     r2.xyz = max(float3(0, 0, 0), r3.xyz);
   }
   r0.xyz = r2.xyz * r2.xyz;
@@ -383,7 +386,7 @@ void main(
   r3.xyz = exp2(r2.xyz);
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    o0 = LutBuilderToneMap(untonemapped_ap1, r3.xyz);
+    o0 = GenerateOutput(r3.xyz);
     return;
   }
 

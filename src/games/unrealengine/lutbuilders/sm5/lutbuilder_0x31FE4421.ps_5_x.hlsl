@@ -283,7 +283,7 @@ void main(
   r0.xyz = r1.xyz * r1.www + r0.xyz;
   r0.xyz = r5.xyz * r4.www + r0.xyz;
 
-  float3 untonemapped_ap1 = r0.xyz;
+  SetUntonemappedAP1(r0.xyz);
 
   r1.x = dot(float3(0.938639402, 1.02359565e-10, 0.0613606237), r0.xyz);
   r1.y = dot(float3(8.36008554e-11, 0.830794156, 0.169205874), r0.xyz);
@@ -467,7 +467,8 @@ void main(
   r5.xyz = r5.xyz + -r1.xyz;
   r1.xyz = cb0[36].yyy * r5.xyz + r1.xyz;
 
-  // Convert to target space but lacks clamp
+  SetTonemappedAP1(r1.xyz);
+
   r5.x = saturate(dot(cb1[12].xyz, r1.xyz));
   r5.y = saturate(dot(cb1[13].xyz, r1.xyz));
   r5.z = saturate(dot(cb1[14].xyz, r1.xyz));
@@ -516,7 +517,7 @@ void main(
   r5.xyz = exp2(r5.xyz);
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    o0 = LutBuilderToneMap(untonemapped_ap1, r5.xyz);
+    o0 = GenerateOutput(r5.xyz);
     return;
   }
 

@@ -755,7 +755,7 @@ float4 main(
   float _554 = mad(_545, _533, _553);
   float _555 = _RootShaderParameters_036y;
 
-  float3 untonemapped_ap1 = float3(_529, _531, _533);  // CustomEdit
+  SetUntonemappedAP1(float3(_529, _531, _533));  // CustomEdit
 
   float _556 = _529 * 0.9386394023895264f;
   float _557 = mad(-4.540197551250458e-09f, _531, _556);
@@ -1182,7 +1182,7 @@ float4 main(
 
   // CustomEdit
   if (RENODX_TONE_MAP_TYPE != 0) {
-    return LutBuilderToneMap(untonemapped_ap1, float3(_966, _967, _968));
+    return GenerateOutput(float3(_966, _967, _968));
   }
 
   uint _970 = _RootShaderParameters_040w;

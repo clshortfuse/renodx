@@ -238,7 +238,7 @@ void main(
   r0.xyz = r2.xyz * r1.www + r0.xyz;
   r0.xyz = r3.xyz * r4.xxx + r0.xyz;
 
-  float3 untonemapped_ap1 = r0.xyz;
+  SetUntonemappedAP1(r0.xyz);
 
   // AP1 => BT709
   r2.x = dot(float3(1.70505154, -0.621790707, -0.0832583979), r0.xyz);
@@ -401,7 +401,7 @@ void main(
     r1.xyz = exp2(r0.xyz);
 
     if (RENODX_TONE_MAP_TYPE != 0) {
-      float3 color = UpgradeToneMapAP1(untonemapped_ap1, r1.xyz);
+      float3 color = GenerateToneMap(r1.xyz);
       color = renodx::draw::RenderIntermediatePass(color);
       color = cb0[37].www * -cb0[37].xyz + color;  // lerp to 0
       color *= 1.f / 1.05f;

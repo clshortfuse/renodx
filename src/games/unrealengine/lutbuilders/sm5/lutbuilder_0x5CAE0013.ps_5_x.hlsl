@@ -165,7 +165,7 @@ void main(
   r1.xyz = r4.xyz * r1.www + r1.xyz;
   r1.xyz = r5.xyz * r4.www + r1.xyz;
 
-  float3 untonemapped_ap1 = r1.xyz;
+  SetUntonemappedAP1(r1.xyz);
 
   // Lerp Blue Correct
   r4.x = dot(float3(0.938639402, 1.02359565e-10, 0.0613606237), r1.xyz);
@@ -340,6 +340,9 @@ void main(
   r5.x = dot(cb1[12].xyz, r4.xyz);
   r5.y = dot(cb1[13].xyz, r4.xyz);
   r5.z = dot(cb1[14].xyz, r4.xyz);
+
+  SetTonemappedBT709(r5.xyz);
+
   r4.xyz = max(float3(0, 0, 0), r5.xyz);
   r5.xyz = r4.xyz * r4.xyz;
   r4.xyz = cb0[39].yyy * r4.xyz;
@@ -354,7 +357,7 @@ void main(
   r5.xyz = exp2(r5.xyz);
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    o0 = LutBuilderToneMap(untonemapped_ap1, r5.xyz);
+    o0 = GenerateOutput(r5.xyz);
     return;
   }
 
