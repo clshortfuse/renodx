@@ -391,7 +391,7 @@ static void OnInitPipelineLayout(
         if (slots > max_count) {
           std::stringstream s;
           s << "mods::shader::OnInitPipelineLayout(";
-          s << static_cast<uintptr_t>(layout.handle);
+          s << PRINT_PTR(layout.handle);
           s << "shader injection oversized: ";
           s << slots << "/" << max_count;
           s << " )";
@@ -408,7 +408,7 @@ static void OnInitPipelineLayout(
       {
         std::stringstream s;
         s << "mods::shader::OnInitPipelineLayout(Cloning D3D12 Layout ";
-        s << static_cast<uintptr_t>(layout.handle);
+        s << PRINT_PTR(layout.handle);
         s << ")";
         reshade::log::message(reshade::log::level::debug, s.str().c_str());
       }
@@ -418,9 +418,9 @@ static void OnInitPipelineLayout(
       new_params = nullptr;
       std::stringstream s;
       s << "mods::shader::OnInitPipelineLayout(Cloning D3D12 Layout ";
-      s << static_cast<uintptr_t>(layout.handle);
+      s << PRINT_PTR(layout.handle);
       s << " => ";
-      s << static_cast<uintptr_t>(injection_layout.handle);
+      s << PRINT_PTR(injection_layout.handle);
       s << ", b" << cbv_index << ",space" << data->expected_constant_buffer_space;
       s << ", param_index: " << injection_index;
       s << ", slots : " << shader_injection_size;
@@ -434,7 +434,7 @@ static void OnInitPipelineLayout(
         std::stringstream s;
         s << "mods::shader::OnInitPipelineLayout(";
         s << "Params not created for: ";
-        s << static_cast<uintptr_t>(layout.handle);
+        s << PRINT_PTR(layout.handle);
         s << ")";
         reshade::log::message(reshade::log::level::warning, s.str().c_str());
         return;
@@ -456,7 +456,7 @@ static void OnInitPipelineLayout(
         std::stringstream s;
         s << "mods::shader::OnInitPipelineLayout(";
         s << "Injection index not found for ";
-        s << static_cast<uintptr_t>(layout.handle);
+        s << PRINT_PTR(layout.handle);
         s << " )";
         reshade::log::message(reshade::log::level::warning, s.str().c_str());
         return;
@@ -468,7 +468,7 @@ static void OnInitPipelineLayout(
       std::stringstream s;
       s << "mods::shader::OnInitPipelineLayout(";
       s << "Forcing cbuffer index ";
-      s << static_cast<uintptr_t>(layout.handle);
+      s << PRINT_PTR(layout.handle);
       s << ": " << cbv_index;
       s << " )";
       reshade::log::message(reshade::log::level::warning, s.str().c_str());
@@ -479,7 +479,7 @@ static void OnInitPipelineLayout(
       std::stringstream s;
       s << "mods::shader::OnInitPipelineLayout(";
       s << "Using last slot for buffer injection ";
-      s << static_cast<uintptr_t>(layout.handle);
+      s << PRINT_PTR(layout.handle);
       s << ": " << cbv_index;
       s << " )";
       reshade::log::message(reshade::log::level::warning, s.str().c_str());
@@ -499,7 +499,7 @@ static void OnInitPipelineLayout(
     std::stringstream s;
     s << "mods::shader::OnInitPipelineLayout(";
     s << "Creating D3D11 Layout ";
-    s << static_cast<uintptr_t>(injection_layout.handle);
+    s << PRINT_PTR(injection_layout.handle);
     s << ": " << result;
     s << " )";
     reshade::log::message(reshade::log::level::warning, s.str().c_str());
@@ -517,9 +517,9 @@ static void OnInitPipelineLayout(
 
   std::stringstream s;
   s << "mods::shader::OnInitPipelineLayout(";
-  s << static_cast<uintptr_t>(layout.handle);
+  s << PRINT_PTR(layout.handle);
   s << ", injection index: " << injection_index;
-  s << ", injection layout: " << static_cast<uintptr_t>(injection_layout.handle);
+  s << ", injection layout: " << PRINT_PTR(injection_layout.handle);
   s << ", cbvIndex:" << cbv_index;
   s << " )";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
@@ -543,7 +543,7 @@ static void OnDestroyPipelineLayout(
 
   std::stringstream s;
   s << "mods::shader::OnDestroyPipelineLayout(";
-  s << static_cast<uintptr_t>(layout.handle);
+  s << PRINT_PTR(layout.handle);
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
@@ -567,8 +567,8 @@ inline void OnPushConstants(
 #ifdef DEBUG_LEVEL_1
   std::stringstream s;
   s << "mods::shader::OnPushConstants(clone push ";
-  s << static_cast<uintptr_t>(layout.handle);
-  s << " => " << static_cast<uintptr_t>(cloned_layout.handle);
+  s << PRINT_PTR(layout.handle);
+  s << " => " << PRINT_PTR(cloned_layout.handle);
   s << ", param: " << layout_param;
   s << ", first: " << first;
   s << ", count: " << count;
@@ -595,10 +595,10 @@ inline void OnPushDescriptors(
 
 #ifdef DEBUG_LEVEL_1
   std::stringstream s;
-  s << "mods::shader::OnPushDescriptors(clone push " << static_cast<uintptr_t>(layout.handle);
-  s << " => " << static_cast<uintptr_t>(cloned_layout.handle);
+  s << "mods::shader::OnPushDescriptors(clone push " << PRINT_PTR(layout.handle);
+  s << " => " << PRINT_PTR(cloned_layout.handle);
   s << ", param: " << layout_param;
-  s << ", table: " << static_cast<uintptr_t>(update.table.handle);
+  s << ", table: " << PRINT_PTR(update.table.handle);
   s << ", binding: " << update.binding;
   s << ", array_offset: " << update.array_offset;
   s << ", count: " << update.count;
@@ -607,7 +607,7 @@ inline void OnPushDescriptors(
     case reshade::api::descriptor_type::constant_buffer: {
       // NOLINTNEXTLINE(google-readability-casting)
       auto* range = (reshade::api::buffer_range*)update.descriptors;
-      s << ", buffer: " << static_cast<uintptr_t>(range->buffer.handle);
+      s << ", buffer: " << PRINT_PTR(range->buffer.handle);
       s << ", offset: " << range->offset;
       s << ", size: " << range->size;
       break;
@@ -642,11 +642,11 @@ inline void OnBindDescriptorTables(
   for (uint32_t i = 0; i < count; ++i) {
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
-    s << "mods::shader::OnBindDescriptorTables(clone bind " << static_cast<uintptr_t>(layout.handle);
-    s << " => " << static_cast<uintptr_t>(cloned_layout.handle);
+    s << "mods::shader::OnBindDescriptorTables(clone bind " << PRINT_PTR(layout.handle);
+    s << " => " << PRINT_PTR(cloned_layout.handle);
     s << ", stages: 0x" << std::hex << static_cast<uint32_t>(stages) << std::dec << " (" << stages << ")";
     s << ", param: " << first + i;
-    s << ", table: " << static_cast<uintptr_t>(tables[i].handle);
+    s << ", table: " << PRINT_PTR(tables[i].handle);
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
 #endif
@@ -667,7 +667,7 @@ inline bool PushShaderInjections(
 #ifdef DEBUG_LEVEL_1
   std::stringstream s;
   s << "mods::shader::HandlePreDraw(pushing constants: ";
-  s << ", layout: " << static_cast<uintptr_t>(injection_layout.handle) << "[" << injection_index << "]";
+  s << ", layout: " << PRINT_PTR(injection_layout.handle) << "[" << injection_index << "]";
   s << ", dispatch: " << (is_dispatch ? "true" : "false");
   s << ", resource_tag: " << resource_tag;
   s << ")";
@@ -781,7 +781,7 @@ inline bool HandleStatesAndBypass(
         state.pipeline_details->layout_data->failed_injection = true;
         std::stringstream s;
         s << "mods::shader::PushShaderInjections(did not find modded pipeline root index";
-        s << ", layout: " << static_cast<uintptr_t>(state.pipeline_details->layout.handle);
+        s << ", layout: " << PRINT_PTR(state.pipeline_details->layout.handle);
         s << ")";
         reshade::log::message(reshade::log::level::warning, s.str().c_str());
       }

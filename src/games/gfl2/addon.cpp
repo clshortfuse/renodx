@@ -377,37 +377,37 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
         }
       },
-  },
-  new renodx::utils::settings::Setting{
-    .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-    .label = "Discord",
-    .section = "Options",
-    .group = "button-line-2",
-    .tint = 0x5865F2,
-    .on_change = []() {
-      renodx::utils::platform::Launch(
-          "https://discord.gg/"
-          "5WZXDpmbpP");
     },
-  },
-  new renodx::utils::settings::Setting{
-    .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-    .label = "Github",
-    .section = "Options",
-    .group = "button-line-2",
-    .on_change = []() {
-      renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx");
+    new renodx::utils::settings::Setting{
+      .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+      .label = "Discord",
+      .section = "Options",
+      .group = "button-line-2",
+      .tint = 0x5865F2,
+      .on_change = []() {
+        renodx::utils::platform::Launch(
+            "https://discord.gg/"
+            "5WZXDpmbpP");
+      },
     },
-},
-  new renodx::utils::settings::Setting{
-    .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-    .label = "Ko-Fi",
-    .section = "Options",
-    .group = "button-line-2",
-    .on_change = []() {
-      renodx::utils::platform::Launch("https://ko-fi.com/bitviper");
+    new renodx::utils::settings::Setting{
+      .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+      .label = "Github",
+      .section = "Options",
+      .group = "button-line-2",
+      .on_change = []() {
+        renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx");
+      },
     },
-},
+    new renodx::utils::settings::Setting{
+      .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+      .label = "Ko-Fi",
+      .section = "Options",
+      .group = "button-line-2",
+      .on_change = []() {
+        renodx::utils::platform::Launch("https://ko-fi.com/bitviper");
+      },
+    },
 };
 
 void OnPresetOff() {

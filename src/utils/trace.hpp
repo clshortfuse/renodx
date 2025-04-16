@@ -204,6 +204,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
     std::stringstream s;
     s << "destroy_swapchain(";
     s << "buffer:" << PRINT_PTR(buffer.handle);
+    s << ", resize:" << (resize ? "true" : "false");
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
@@ -212,6 +213,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
   s << "destroy_swapchain(";
   s << "device: " << reinterpret_cast<uintptr_t>(swapchain->get_device());
   s << ", colorspace: " << swapchain->get_color_space();
+  s << ", resize:" << (resize ? "true" : "false");
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
@@ -1135,7 +1137,7 @@ static void OnBindDescriptorTables(
   auto* device = cmd_list->get_device();
 
   auto* layout_data = pipeline_layout::GetPipelineLayoutData(layout);
-  auto* descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
+  renodx::utils::descriptor::DeviceData* descriptor_data = nullptr;
 
   for (uint32_t i = 0; i < count; ++i) {
     auto layout_index = first + i;
@@ -1169,6 +1171,12 @@ static void OnBindDescriptorTables(
         case reshade::api::descriptor_type::unordered_access_view:
           break;
         default:
+          assert(false);
+        case reshade::api::descriptor_type::sampler:
+        case reshade::api::descriptor_type::buffer_unordered_access_view:
+        case reshade::api::descriptor_type::constant_buffer:
+        case reshade::api::descriptor_type::shader_storage_buffer:
+        case reshade::api::descriptor_type::acceleration_structure:
           continue;
       }
 
@@ -1176,6 +1184,9 @@ static void OnBindDescriptorTables(
       reshade::api::descriptor_heap heap = {0};
       device->get_descriptor_heap_offset(tables[i], range.binding, 0, &heap, &base_offset);
 
+      if (descriptor_data == nullptr) {
+        descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
+      }
       const std::shared_lock descriptor_lock(descriptor_data->mutex);
 
       for (uint32_t j = 0; j < range.count; ++j) {
@@ -1232,6 +1243,8 @@ static bool OnCopyDescriptorTables(
   if (!is_primary_hook) return false;
   if (!trace_running && present_count >= trace_initial_frame_count) return false;
 
+  renodx::utils::descriptor::DeviceData* descriptor_data = nullptr;
+
   for (uint32_t i = 0; i < count; i++) {
     const auto& copy = copies[i];
 
@@ -1258,7 +1271,9 @@ static bool OnCopyDescriptorTables(
       s << ", heap: " << PRINT_PTR(src_heap.handle) << "[" << src_offset + j << "]";
       s << " => " << PRINT_PTR(dest_heap.handle) << "[" << dest_offset + j << "]";
 
-      auto* descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
+      if (descriptor_data == nullptr) {
+        descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
+      }
       const std::shared_lock decriptor_lock(descriptor_data->mutex);
       auto origin_primary_key = std::pair<uint64_t, uint32_t>(copy.source_table.handle, copy.source_binding + j);
       if (auto pair = descriptor_data->table_descriptor_resource_views.find(origin_primary_key);

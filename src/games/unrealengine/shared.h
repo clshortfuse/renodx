@@ -62,6 +62,8 @@ cbuffer injectedBuffer : register(b13) {
 #define RENODX_TONE_MAP_PER_CHANNEL            injectedData.toneMapPerChannel
 #define RENODX_TONE_MAP_HUE_PROCESSOR          injectedData.toneMapHueProcessor
 #define RENODX_TONE_MAP_HUE_CORRECTION         injectedData.toneMapHueCorrection
+#define RENODX_TONE_MAP_HUE_SHIFT_METHOD       HUE_SHIFT_METHOD_SDR_MODIFIED
+#define RENODX_TONE_MAP_HUE_SHIFT_MODIFIER     0.5f
 #define RENODX_TONE_MAP_HUE_SHIFT              injectedData.toneMapHueShift
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE      color::convert::COLOR_SPACE_BT2020
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD

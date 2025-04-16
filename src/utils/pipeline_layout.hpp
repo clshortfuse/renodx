@@ -110,18 +110,10 @@ static void OnInitPipelineLayout(
       case reshade::api::pipeline_layout_param_type::descriptor_table:
         if (param.descriptor_table.count == 0u) continue;
         {
-          auto& ranges = layout_data->ranges[i];
-          if (param.descriptor_table.ranges->count != UINT32_MAX) {
-            ranges.assign(
-                param.descriptor_table.ranges,
-                param.descriptor_table.ranges + param.descriptor_table.count);
-          } else {
-            ranges.assign(
-                param.descriptor_table.ranges,
-                param.descriptor_table.ranges + 1);
-          }
-          layout_data->params[i] = param;
-          layout_data->params[i].descriptor_table.ranges = ranges.data();
+          layout_data->ranges[i].assign(
+              param.descriptor_table.ranges,
+              param.descriptor_table.ranges + param.descriptor_table.count);
+          layout_data->params[i].descriptor_table.ranges = layout_data->ranges[i].data();
         }
         break;
       case reshade::api::pipeline_layout_param_type::push_constants:
