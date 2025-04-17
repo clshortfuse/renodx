@@ -349,6 +349,17 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "LUT Sampling",
         .section = "Color Grading",
+        .labels = {"Trilinear", "Tetrahedral"},
+        .tint = 0xE50067,
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "colorGradeLUTShaper",
+        .binding = &shader_injection.colorGradeLUTShaper,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "LUT Shaper",
+        .section = "Color Grading",
         .labels = {"Arri C1000", "PQ"},
         .tint = 0x3FD9B9,
         .is_visible = []() { return current_settings_mode >= 2; },
@@ -432,6 +443,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeFlare", 0.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f);
+          renodx::utils::settings::UpdateSetting("colorGradeLUTShaper", 1.f);
         },
     },
     new renodx::utils::settings::Setting{
@@ -455,7 +467,8 @@ renodx::utils::settings::Settings settings = {
             renodx::utils::settings::UpdateSetting("colorGradeDechroma", 70.f);
             renodx::utils::settings::UpdateSetting("colorGradeFlare", 50.f);
             renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-            renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f); },
+            renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f);
+            renodx::utils::settings::UpdateSetting("colorGradeLUTShaper", 1.f); },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -479,7 +492,8 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeDechroma", 65.f);
           renodx::utils::settings::UpdateSetting("colorGradeFlare", 65.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-          renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f); },
+          renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f);
+          renodx::utils::settings::UpdateSetting("colorGradeLUTShaper", 1.f); },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -521,6 +535,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 0.f);
+  renodx::utils::settings::UpdateSetting("colorGradeLUTShaper", 0.f);
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
   renodx::utils::settings::UpdateSetting("fxChroma", 50.f);
   renodx::utils::settings::UpdateSetting("fxNoise", 50.f);

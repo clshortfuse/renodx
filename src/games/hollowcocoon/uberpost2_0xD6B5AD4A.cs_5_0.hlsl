@@ -244,10 +244,14 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   } else {
     r0.xyz = cb1[6].zzz * r0.xyz;
     r0.rgb = lutShaper(r0.rgb);
+    if (injectedData.colorGradeLUTSampling == 0.f) {
     r0.xyz = cb1[6].yyy * r0.xyz;
     r0.w = 0.5 * cb1[6].x;
     r0.xyz = r0.xyz * cb1[6].xxx + r0.www;
     r1.xyz = t4.SampleLevel(s2_s, r0.xyz, 0).xyz;
+    } else {
+      r1.rgb = renodx::lut::SampleTetrahedral(t4, r0.rgb, 1 / cb1[6].x);
+    }
   }
   r0.x = saturate(r2.w * cb1[13].x + cb1[13].y);
   r0.yzw = r1.xyz + -r2.xyz;

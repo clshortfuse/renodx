@@ -113,10 +113,14 @@ void main(
   }
   r0.xyzw = cb0[36].zzzz * r2.xyzw;
   r0.rgb = lutShaper(r0.rgb);
+  if (injectedData.colorGradeLUTSampling == 0.f) {
   r0.xyz = cb0[36].yyy * r0.xyz;
   r1.x = 0.5 * cb0[36].x;
   r0.xyz = r0.xyz * cb0[36].xxx + r1.xxx;
   r1.xyzw = t5.Sample(s5_s, r0.xyz).xyzw;
+  } else {
+    r1.rgb = renodx::lut::SampleTetrahedral(t5, r0.rgb, 1 / cb0[36].x);
+  }
   if (injectedData.fxNoise > 0.f) {
     r0.xy = v1.xy * cb0[30].xy + cb0[30].zw;
     r2.xyzw = t0.Sample(s0_s, r0.xy).xyzw;

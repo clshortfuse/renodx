@@ -78,6 +78,7 @@ void main(
   r0.xyz = cb0[12].www * r0.xyz;
   float3 preLUT = r0.gbr;
   r0.rgb = lutShaper(r0.rgb);
+  if (injectedData.colorGradeLUTSampling == 0.f) {
   r0.yzw = cb0[12].zzz * r0.xyz;
   r0.y = floor(r0.y);
   r0.x = r0.x * cb0[12].z + -r0.y;
@@ -91,6 +92,9 @@ void main(
   r2.xyzw = t3.Sample(s3_s, r0.yz).xyzw;
   r0.yzw = r2.xyz + -r1.xyz;
   o0.rgb = r0.xxx * r0.yzw + r1.xyz;
+  } else {
+    o0.rgb = renodx::lut::SampleTetrahedral(t3, r0.gbr, cb0[12].z + 1u);
+  }
   if (injectedData.colorGradeLUTStrength > 0.f && injectedData.colorGradeLUTScaling > 0.f) {
     float3 uvw = float3(0, 0, 0);
     uvw.z *= cb0[12].zzz;

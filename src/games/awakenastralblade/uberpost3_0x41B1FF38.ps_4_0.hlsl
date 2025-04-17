@@ -29,10 +29,14 @@ void main(
   r0.xyzw = cb0[36].zzzz * r1.xyzw;
   o0.w = r0.w;
   r0.rgb = lutShaper(r0.rgb);
+  if (injectedData.colorGradeLUTSampling == 0.f) {
   r0.xyz = cb0[36].yyy * r0.xyz;
   r0.w = 0.5 * cb0[36].x;
   r0.xyz = r0.xyz * cb0[36].xxx + r0.www;
   r0.xyzw = t3.Sample(s3_s, r0.xyz).xyzw;
+  } else {
+    r0.rgb = renodx::lut::SampleTetrahedral(t3, r0.rgb, 1 / cb0[36].x);
+  }
   if (injectedData.fxNoise > 0.f) {
     r0.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
     r1.xy = v1.xy * cb0[30].xy + cb0[30].zw;

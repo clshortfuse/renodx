@@ -51,7 +51,7 @@ float3 FinalizeOutput(float3 color) {
 }
 
 float3 lutShaper(float3 color, bool builder = false) {
-  if (injectedData.colorGradeLUTSampling == 0.f) {
+  if (injectedData.colorGradeLUTShaper == 0.f) {
     color = builder ? renodx::color::arri::logc::c1000::Decode(color, false)
                     : saturate(renodx::color::arri::logc::c1000::Encode(color, false));
   } else {
@@ -62,28 +62,6 @@ float3 lutShaper(float3 color, bool builder = false) {
 }
 
 //-----TONEMAP-----//
-float3 RenoDRTSmoothClamp(float3 untonemapped) {
-  renodx::tonemap::renodrt::Config renodrtSC_config = renodx::tonemap::renodrt::config::Create();
-  renodrtSC_config.nits_peak = 100.f;
-  renodrtSC_config.mid_gray_value = 0.18f;
-  renodrtSC_config.mid_gray_nits = 18.f;
-  renodrtSC_config.exposure = 1.f;
-  renodrtSC_config.highlights = 1.f;
-  renodrtSC_config.shadows = 1.f;
-  renodrtSC_config.contrast = 1.05f;
-  renodrtSC_config.saturation = 1.05f;
-  renodrtSC_config.dechroma = 0.f;
-  renodrtSC_config.flare = 0.f;
-  renodrtSC_config.hue_correction_strength = 0.f;
-  renodrtSC_config.hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::ICTCP;
-  renodrtSC_config.tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  renodrtSC_config.hue_correction_type = renodx::tonemap::renodrt::config::hue_correction_type::INPUT;
-  renodrtSC_config.working_color_space = 0u;
-  renodrtSC_config.per_channel = false;
-  float3 renoDRTColor = renodx::tonemap::renodrt::BT709(untonemapped, renodrtSC_config);
-  return renoDRTColor;
-}
-
 static const float3x3 ACES_to_ACEScg_MAT = float3x3(
     1.4514393161f, -0.2365107469f, -0.2149285693f,
     -0.0765537734f, 1.1762296998f, -0.0996759264f,
@@ -221,7 +199,7 @@ float3 applyUserTonemapMenu(float3 untonemapped) {
                                                                      : renodx::tonemap::config::hue_correction_type::CUSTOM;
   config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f ? (1.f - injectedData.toneMapHueCorrection)
                                               : injectedData.toneMapHueCorrection;
-  config.hue_correction_color = lerp(untonemapped, RenoDRTSmoothClamp(untonemapped), injectedData.toneMapHueShift);
+  config.hue_correction_color = lerp(untonemapped, renodx::tonemap::renodrt::NeutralSDR(untonemapped), injectedData.toneMapHueShift);
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_tone_map_method = injectedData.toneMapType == 4.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
                                                                     : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
