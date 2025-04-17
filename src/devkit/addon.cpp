@@ -71,6 +71,7 @@
 namespace {
 
 reshade::api::device* snapshot_device = nullptr;
+reshade::api::device* snapshot_queued_device = nullptr;
 
 std::atomic_bool snapshot_pane_show_vertex_shaders = true;
 std::atomic_bool snapshot_pane_show_pixel_shaders = true;
@@ -247,14 +248,6 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
 
   reshade::api::effect_runtime* runtime = nullptr;
 
-  void StartSnapshot() {
-    this->draw_details_list.clear();
-  }
-
-  void StopSnapshot() {
-    this->draw_details_list.clear();
-  }
-
   ShaderDetails* GetShaderDetails(uint32_t shader_hash) {
     // assert(shader_hash != 0u);
     if (auto pair = shader_details.find(shader_hash);
@@ -288,9 +281,12 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
       details.resource = resource_view_info->resource_info->resource;
       details.resource_desc = resource_view_info->resource_info->desc;
 
-      auto resource_reflection = renodx::utils::trace::GetDebugName(device_api, details.resource);
-      if (resource_reflection.has_value()) {
-        details.resource_reflection = resource_reflection.value();
+
+      if (!resource_view_info->destroyed) {
+        auto resource_reflection = renodx::utils::trace::GetDebugName(device_api, details.resource);
+        if (resource_reflection.has_value()) {
+          details.resource_reflection = resource_reflection.value();
+        }
       }
     }
 
@@ -331,16 +327,15 @@ bool ComputeDisassemblyForShaderDetails(reshade::api::device* device, DeviceData
         shader_details->disassembly = std::string(
             shader_details->shader_data.data(),
             shader_details->shader_data.data() + shader_details->shader_data.size());
+      } else {
+        throw std::exception("Unsupported device API.");
       }
     } catch (std::exception& e) {
       shader_details->disassembly = e;
     }
   }
 
-  if (std::holds_alternative<std::exception>(shader_details->disassembly)) {
-    return false;
-  }
-  return true;
+  return std::holds_alternative<std::string>(shader_details->disassembly);
 }
 
 std::optional<std::vector<ResourceBind>> GetResourceBindsForShaderDetails(
@@ -672,6 +667,9 @@ void OnInitDevice(reshade::api::device* device) {
 void OnDestroyDevice(reshade::api::device* device) {
   if (snapshot_device == device) {
     snapshot_device = nullptr;
+  }
+  if (snapshot_queued_device == device) {
+    snapshot_queued_device = nullptr;
   }
   auto* device_data = renodx::utils::data::Get<DeviceData>(device);
   if (device_data == nullptr) return;
@@ -1362,11 +1360,12 @@ bool RenderFileAlias(std::optional<renodx::utils::shader::compiler::watcher::Cus
 void RenderMenuBar(reshade::api::device* device, DeviceData* data) {
   if (ImGui::BeginMenuBar()) {
     ImGui::PushID("##SnapshotButton");
+    ImGui::BeginDisabled(snapshot_device != nullptr);
     if (ImGui::MenuItem("Snapshot")) {
-      data->StartSnapshot();
-      snapshot_device = data->device;
-      renodx::utils::trace::trace_running = true;
+      snapshot_queued_device = device;
+      renodx::utils::trace::trace_scheduled = true;
     }
+    ImGui::EndDisabled();
     ImGui::PopID();
 
     ImGui::PushID("##menu_shaders_auto_dump");
@@ -1845,6 +1844,36 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
           if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REFLECTION))) {
             if (!resource_view_details.resource_reflection.empty()) {
               ImGui::TextUnformatted(resource_view_details.resource_reflection.c_str());
+            }
+          }
+
+          if (resource_view_details.resource_desc.texture.format != reshade::api::format::unknown) {
+            row_index++;
+            ImGui::TableNextRow();
+
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
+              auto bullet_flags = tree_node_flags | ImGuiTreeNodeFlags_Leaf
+                                  | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
+                                  | selection.GetTreeNodeFlags();
+              ImGui::PushID(row_index);
+              ImGui::TreeNodeEx("", bullet_flags, "Dimensions");
+              ImGui::PopID();
+              if (ImGui::IsItemClicked()) {
+                MakeSelectionCurrent(selection);
+                ImGui::SetItemDefaultFocus();
+              }
+            }
+
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REF))) {
+              ImGui::Text("0x%016llX", resource_view_details.resource.handle);
+            }
+
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_INFO))) {
+              if (resource_view_details.resource_desc.type == reshade::api::resource_type::texture_3d) {
+                ImGui::Text("%dx%dx%d", resource_view_details.resource_desc.texture.width, resource_view_details.resource_desc.texture.height, resource_view_details.resource_desc.texture.depth_or_layers);
+              } else {
+                ImGui::Text("%dx%d", resource_view_details.resource_desc.texture.width, resource_view_details.resource_desc.texture.height);
+              }
             }
           }
 
@@ -3370,7 +3399,16 @@ void OnPresent(
     renodx::utils::shader::dump::DumpAllPending();
   }
 
-  if (device == snapshot_device) {
+  if (snapshot_device == nullptr) {
+    if (snapshot_queued_device == device) {
+      if (data == nullptr) {
+        data = renodx::utils::data::Get<DeviceData>(device);
+      }
+      data->draw_details_list.clear();
+      snapshot_device = device;
+      snapshot_queued_device = nullptr;
+    }
+  } else if (device == snapshot_device) {
     snapshot_device = nullptr;
     if (data == nullptr) {
       data = renodx::utils::data::Get<DeviceData>(device);
