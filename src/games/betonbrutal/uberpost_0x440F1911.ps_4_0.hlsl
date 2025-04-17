@@ -151,11 +151,15 @@ void main(
     r2.rgb = applyFilmGrain(r1.gba, v1);
     }
   r0.xyzw = cb0[36].zzzz * r2.xyzw;
-    r0.rgb = lutShaper(r0.rgb);
+  r0.rgb = lutShaper(r0.rgb);
+  if (injectedData.colorGradeLUTSampling == 0.f) {
   r0.xyz = cb0[36].yyy * r0.xyz;
   r1.x = 0.5 * cb0[36].x;
   r0.xyz = r0.xyz * cb0[36].xxx + r1.xxx;
   r1.xyzw = t5.Sample(s5_s, r0.xyz).wxyz;
+  } else {
+    r1.gba = renodx::lut::SampleTetrahedral(t5, r0.rgb, 1 / cb0[36].x);
+  }
   r0.x = cmp(0.5 < cb0[42].x);
   if (r0.x != 0) {
       r1.x = renodx::color::y::from::BT709(r1.gba);

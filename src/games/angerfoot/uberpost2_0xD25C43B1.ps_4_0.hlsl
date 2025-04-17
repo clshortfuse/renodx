@@ -73,11 +73,15 @@ void main(
   r0.xyzw = r2.xyzw * r0.xyzw + r1.xyzw;
   r0.xyzw = cb0[36].zzzz * r0.xyzw;
   o0.w = r0.w;
-  r0.rgb = lutShaper(r0.rgb);
+  r0.xyz = lutShaper(r0.rgb);
+  if (injectedData.colorGradeLUTSampling == 0.f) {
   r0.xyz = cb0[36].yyy * r0.xyz;
   r0.w = 0.5 * cb0[36].x;
   r0.xyz = r0.xyz * cb0[36].xxx + r0.www;
   r0.xyzw = t5.Sample(s5_s, r0.xyz).xyzw;
+  } else {
+    r0.rgb = renodx::lut::SampleTetrahedral(t5, r0.rgb, 1 / cb0[36].x);
+  }
   if (injectedData.fxFilmGrain > 0.f) {
     r0.rgb = applyFilmGrain(r0.rgb, w1, injectedData.fxFilmGrainType != 0.f);
   }

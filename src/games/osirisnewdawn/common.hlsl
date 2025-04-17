@@ -53,7 +53,7 @@ float3 FinalizeOutput(float3 color) {
 }
 
 float3 lutShaper(float3 color, bool builder = false) {
-  if (injectedData.colorGradeLUTSampling == 0.f) {
+  if (injectedData.colorGradeLUTShaper == 0.f) {
     color = builder ? renodx::color::arri::logc::c1000::Decode(color, false)
                     : saturate(renodx::color::arri::logc::c1000::Encode(color, false));
   } else {

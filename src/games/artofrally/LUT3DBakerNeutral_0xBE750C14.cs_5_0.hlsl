@@ -27,10 +27,9 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     // (start) LogGrade
     // Contrast(r0.rgb, ACEScc_MIDGRAY, cb0[3].b)
     r0.rgb = r0.rgb * cb0[0].ggg;
-    float3 preContrast = r0.rgb;
+    float3 preContrast = lutShaper(r0.rgb, true);
     r0.rgb = r0.rgb + float3(-0.413588405, -0.413588405, -0.413588405);
     r0.rgb = r0.rgb * cb0[3].bbb + float3(0.413588405, 0.413588405, 0.413588405);
-    r0.rgb = lerp(preContrast, r0.rgb, injectedData.colorGradeLUTStrength);
     r0.rgb = lutShaper(r0.rgb, true);
     float3 preCG = r0.rgb;
     // (start) LinearGrade

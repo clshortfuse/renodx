@@ -134,10 +134,14 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
       r1.xyz = cb1[6].zzz * r0.xyz;
       float3 preCG = r1.rgb;
       r1.rgb = lutShaper(r1.rgb);
+      if (injectedData.colorGradeLUTSampling == 0.f) {
       r1.xyz = cb1[6].yyy * r1.xyz;
       r0.w = 0.5 * cb1[6].x;
       r1.xyz = r1.xyz * cb1[6].xxx + r0.www;
       r0.xyz = t3.SampleLevel(s1_s, r1.xyz, 0).xyz;
+      } else {
+        r0.rgb = renodx::lut::SampleTetrahedral(t3, r1.rgb, 1 / cb1[6].x);
+      }
       r0.rgb = lerp(preCG, r0.rgb, injectedData.colorGradeLUTStrength);
     }
   }
