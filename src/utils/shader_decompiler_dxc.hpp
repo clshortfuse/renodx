@@ -1342,6 +1342,9 @@ class Decompiler {
           if (depth != 0) continue;
           if (line_declaration.starts_with("struct ")) {
             std::string definition = std::string("%") + std::string(line_declaration.substr(7));
+            if (definition == "%$Globals") {
+              definition = "%\"$Globals\"";
+            }
             auto pair = this->type_definitions.find(definition);
             assert(pair != this->type_definitions.end());
             type_definition = &pair->second;
@@ -3789,7 +3792,7 @@ class Decompiler {
         CodeFunction replacement_code_function;
         replacement_code_function.threads = current_code_function->threads;
         replacement_code_function.return_type = current_code_function->return_type;
-        replacement_code_function.name = current_code_function->return_type;
+        replacement_code_function.name = current_code_function->name;
         replacement_code_function.parameters = current_code_function->parameters;
         replacement_code_function.lines = current_code_function->lines;
         replacement_code_function.single_use_variables = current_code_function->single_use_variables;
