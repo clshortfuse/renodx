@@ -96,13 +96,12 @@ void main(
   r0.xyz = r1.xyz * r0.xyz + -r0.www;
   r0.xyz = cb0[31].xxx * r0.xyz + r0.www;
   r0.rgb = renodx::color::srgb::DecodeSafe(r0.rgb);
+  r0.rgb = RestoreSaturationLoss(sdrColor, r0.rgb, injectedData.colorGradeLUTScaling);
   if (config.type == 0.f) {
     r0.rgb = lerp(sdrColor, r0.rgb, injectedData.colorGradeLUTStrength);
   } else if (injectedData.upgradePerChannel == 1.f) {
-    r0.rgb = RestoreSaturationLoss(sdrColor, r0.rgb);
     r0.rgb = UpgradeToneMapPerChannel(hdrColor, sdrColor, r0.rgb, injectedData.colorGradeLUTStrength);
   } else {
-    r0.rgb = RestoreSaturationLoss(sdrColor, r0.rgb);
     r0.rgb = UpgradeToneMapByLuminance(hdrColor, sdrColor, r0.rgb, injectedData.colorGradeLUTStrength);
   }
   }
