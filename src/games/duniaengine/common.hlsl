@@ -81,7 +81,7 @@ float3 InverseToneMap(float3 color) {
 }
 
 //-----TONEMAP-----//
-float3 RestoreSaturationLoss(float3 color_input, float3 color_output) {
+float3 RestoreSaturationLoss(float3 color_input, float3 color_output, float strength) {
   float3 clamped = saturate(color_input);
   float3 perceptual_in = renodx::color::oklab::from::BT709(color_input);
   float3 perceptual_clamped = renodx::color::oklab::from::BT709(clamped);
@@ -93,7 +93,7 @@ float3 RestoreSaturationLoss(float3 color_input, float3 color_output) {
   float chroma_loss = renodx::math::DivideSafe(chroma_in, chroma_clamped, 0.f);
   float chroma_new = chroma_out * chroma_loss;
 
-  perceptual_out.yz *= lerp(1.f, renodx::math::DivideSafe(chroma_new, chroma_out, 1.f), 1.f);
+  perceptual_out.yz *= lerp(1.f, renodx::math::DivideSafe(chroma_new, chroma_out, 1.f), strength);
 
   return renodx::color::bt709::from::OkLab(perceptual_out);
 }
@@ -384,6 +384,7 @@ float3 applyUserTonemapFC3(float3 untonemapped, Texture3D lutTexture, SamplerSta
   lut_config.type_output = renodx::lut::config::type::SRGB;
   lut_config.size = 32;
   lut_config.tetrahedral = injectedData.colorGradeLUTSampling != 0.f;
+  lut_config.recolor = injectedData.colorGradeLUTScaling;
   if (injectedData.toneMapType == 0.f) {
     outputColor = saturate(hueCorrectionColor);
   } else {
