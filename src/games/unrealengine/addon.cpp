@@ -440,6 +440,8 @@ const std::unordered_map<
 };
 
 float g_dump_shaders = 0;
+float g_upgrade_copy_destinations = 0.f;
+
 std::unordered_set<uint32_t> g_dumped_shaders = {};
 
 bool OnDrawForLUTDump(
@@ -561,6 +563,25 @@ void AddAdvancedSettings() {
     settings.push_back(setting);
   };
 
+  {
+    auto* setting = new renodx::utils::settings::Setting{
+        .key = "Upgrade_CopyDestinations",
+        .binding = &g_upgrade_copy_destinations,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Upgrade Copy Destinations",
+        .section = "Resource Upgrades",
+        .tooltip = "Includes upgrading texture copy destinations.",
+        .labels = {
+            "Off",
+            "On",
+        },
+        .is_global = true,
+        .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    };
+    add_setting(setting);
+  }
+
   for (const auto& [key, format] : UPGRADE_TARGETS) {
     auto* new_setting = new renodx::utils::settings::Setting{
         .key = "Upgrade_" + key,
@@ -589,7 +610,10 @@ void AddAdvancedSettings() {
           .aspect_ratio = static_cast<float>((value == UPGRADE_TYPE_OUTPUT_RATIO)
                                                  ? renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER
                                                  : renodx::mods::swapchain::SwapChainUpgradeTarget::ANY),
-          .usage_include = reshade::api::resource_usage::render_target,
+          .usage_include = reshade::api::resource_usage::render_target
+                           | (g_upgrade_copy_destinations == 0.f
+                                  ? reshade::api::resource_usage::undefined
+                                  : reshade::api::resource_usage::copy_dest),
       });
       std::stringstream s;
       s << "Applying user resource upgrade for ";
