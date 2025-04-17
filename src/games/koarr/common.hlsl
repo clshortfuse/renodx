@@ -70,7 +70,11 @@ float3 FinalizeOutput(float3 color) {
   }
   color *= injectedData.toneMapUINits;
   if (injectedData.toneMapType != 1.f) {
-  color = min(injectedData.toneMapPeakNits, color);
+    float y_max = injectedData.toneMapPeakNits;
+    float y = renodx::color::y::from::BT709(abs(color));
+    if (y > y_max) {
+      color *= renodx::math::DivideSafe(y_max, y);
+    }
   }
   if (injectedData.toneMapType == 0.f) {
     color = renodx::color::bt709::clamp::BT709(color);

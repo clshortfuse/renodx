@@ -73,7 +73,7 @@ float3 FinalizeOutput(float3 color, bool linear_space = false) {
       float y_max = injectedData.toneMapPeakNits;
       float y = renodx::color::y::from::BT709(abs(color));
       if (y > y_max) {
-        color *= y_max / y;
+        color *= renodx::math::DivideSafe(y_max, y);
       }
     }
   } else {  // SW2
@@ -87,7 +87,7 @@ float3 FinalizeOutput(float3 color, bool linear_space = false) {
       float y_max = injectedData.toneMapPeakNits;
       float y = renodx::color::y::from::BT709(abs(color));
       if (y > y_max) {
-        color *= y_max / y;
+        color *= renodx::math::DivideSafe(y_max, y);
       }
     }
   }
