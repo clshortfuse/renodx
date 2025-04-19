@@ -38,7 +38,6 @@ void main(
   r0.x = v4.w * r0.x;
   r0.yzw = r1.xyz * float3(10, 10, 10) + float3(-1, -1, -1);
   r0.yzw = w2.yyy * r0.yzw + float3(1, 1, 1);
-  r1.rgb = UIScale(r1.rgb);
   o0.xyz = r0.xxx * r0.yzw + r1.xyz;
   r0.xy = cmp(v3.xy >= cb0[4].xy);
   r0.zw = cmp(cb0[4].zw >= v3.xy);
