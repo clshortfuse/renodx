@@ -28,29 +28,14 @@ float3 applyFilmGrain(float3 outputColor, float2 screen, bool colored) {
 float3 PostToneMapScale(float3 color) {
   if (injectedData.toneMapGammaCorrection == 2.f) {
     color = renodx::color::correct::GammaSafe(color, false, 2.4f);
-    color *= injectedData.toneMapGameNits / 80.f;
+    color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
     color = renodx::color::correct::GammaSafe(color, true, 2.4f);
   } else if (injectedData.toneMapGammaCorrection == 1.f) {
     color = renodx::color::correct::GammaSafe(color, false, 2.2f);
-    color *= injectedData.toneMapGameNits / 80.f;
+    color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
     color = renodx::color::correct::GammaSafe(color, true, 2.2f);
   } else {
-    color *= injectedData.toneMapGameNits / 80.f;
-  }
-  return color;
-}
-
-float3 UIScale(float3 color) {
-  if (injectedData.toneMapGammaCorrection == 2.f) {
-    color = renodx::color::correct::Gamma(color, false, 2.4f);
-    color *= injectedData.toneMapUINits / 80.f;
-    color = renodx::color::correct::Gamma(color, true, 2.4f);
-  } else if (injectedData.toneMapGammaCorrection == 2.f) {
-    color = renodx::color::correct::Gamma(color, false, 2.2f);
-    color *= injectedData.toneMapUINits / 80.f;
-    color = renodx::color::correct::Gamma(color, true, 2.2f);
-  } else {
-    color *= injectedData.toneMapUINits / 80.f;
+    color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
   }
   return color;
 }
@@ -61,11 +46,13 @@ float3 FinalizeOutput(float3 color) {
   } else if (injectedData.toneMapGammaCorrection == 1.f) {
     color = renodx::color::correct::GammaSafe(color, false, 2.2f);
   }
+  color *= injectedData.toneMapUINits;
   if (injectedData.toneMapType == 0.f) {
     color = renodx::color::bt709::clamp::BT709(color);
   } else {
     color = renodx::color::bt709::clamp::BT2020(color);
   }
+  color /= 80.f;
   return color;
 }
 

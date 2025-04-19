@@ -144,6 +144,6 @@ void main(
   r0.y = saturate(r0.y * r0.z);
   o0.xyz = r0.xxx + -r0.yyy;
   o0.w = cb0[5].x;
-  o0.rgb = UIScale(max(0.f, o0.rgb));
+  o0.rgb = max(0.f, o0.rgb);
   return;
 }
