@@ -56,7 +56,7 @@ float3 lutShaper(float3 color, bool builder = false) {
                     : saturate(renodx::color::arri::logc::c1000::Encode(color, false));
   } else {
     color = builder ? renodx::color::pq::Decode(color, 100.f)
-                    : renodx::color::pq::Encode(color, 100.f);
+                    : renodx::color::pq::EncodeSafe(color, 100.f);
   }
   return color;
 }
