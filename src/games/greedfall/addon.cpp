@@ -305,6 +305,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "fxGodRays",
+        .binding = &shader_injection.fxGodRays,
+        .default_value = 50.f,
+        .label = "God Rays",
+        .section = "Effects",
+        .tint = 0x895434,
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "fxVignette",
         .binding = &shader_injection.fxVignette,
         .default_value = 50.f,
@@ -450,6 +460,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 0.f);
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
+  renodx::utils::settings::UpdateSetting("fxGodRays", 50.f);
   renodx::utils::settings::UpdateSetting("fxVignette", 50.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 50.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrainType", 0.f);

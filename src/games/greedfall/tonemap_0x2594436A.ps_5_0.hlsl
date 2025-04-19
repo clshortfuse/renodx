@@ -29,10 +29,10 @@ void main(
   r1.xyz = cb1[1].xxx * r1.xyz * injectedData.fxBloom;
   r0.yzw = r0.yzw * v1.zzz + r1.xyz;
   r1.xyz = t2.Sample(s0_s, v1.xy).xyz;
-  r1.xyz = cb1[2].xxx * r1.xyz;
+  r1.xyz = cb1[2].xxx * r1.xyz * injectedData.fxGodRays;
   r1.w = 0.00100000005 * cb0[96].w;
   r2.xyz = t3.Sample(s0_s, v1.xy).xyz;
-  r2.xyz = cb1[2].xxx * r2.xyz;
+  r2.xyz = cb1[2].xxx * r2.xyz * injectedData.fxGodRays;
   r2.xyz = r2.xyz * r1.www;
   r1.xyz = r1.xyz * r1.www + r2.xyz;
   r0.yzw = r1.xyz + r0.yzw;
