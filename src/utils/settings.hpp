@@ -2,6 +2,7 @@
 
 #define ImTextureID ImU64
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -63,23 +64,50 @@ struct Setting {
   float min = 0.f;
   float max = 100.f;
   std::string format = "%.0f";
-  bool (*is_enabled)() = [] {
+
+  std::function<bool()> is_enabled = [] {
     return true;
   };
 
-  float (*parse)(float value) = [](float value) {
+  std::function<float(float value)> parse = [](float value) {
     return value;
   };
 
-  void (*on_change)() = [] {};
+  std::function<void()> on_change = [] {};
 
-  void (*on_change_value)(float previous, float current) = [](float previous, float current) {};
+  std::function<void(float previous, float current)> on_change_value = [](float previous, float current) {};
 
   // Return true to save settings
-  bool (*on_click)() = [] { return true; };
+  std::function<bool()> on_click = [] { return true; };
 
   // Return true if value is changed
-  bool (*on_draw)() = [] { return false; };
+  std::function<bool()> on_draw = [] { return false; };
+
+  bool is_global = false;
+
+  std::function<bool()> is_visible = [] {
+    return true;
+  };
+
+  //
+
+  float value = default_value;
+  int value_as_int = static_cast<int>(default_value);
+
+  [[nodiscard]]
+  float GetMax() const {
+    switch (this->value_type) {
+      case SettingValueType::BOOLEAN:
+        return 1.f;
+      case SettingValueType::INTEGER:
+        return this->labels.empty()
+                   ? this->max
+                   : (this->labels.size() - 1);
+      case SettingValueType::FLOAT:
+      default:
+        return this->max;
+    }
+  }
 
   [[nodiscard]]
   float GetValue() const {
@@ -109,29 +137,6 @@ struct Setting {
     }
     return this;
   }
-
-  float value = default_value;
-  int value_as_int = static_cast<int>(default_value);
-
-  [[nodiscard]]
-  float GetMax() const {
-    switch (this->value_type) {
-      case SettingValueType::BOOLEAN:
-        return 1.f;
-      case SettingValueType::INTEGER:
-        return this->labels.empty()
-                   ? this->max
-                   : (this->labels.size() - 1);
-      case SettingValueType::FLOAT:
-      default:
-        return this->max;
-    }
-  }
-
-  bool is_global = false;
-  bool (*is_visible)() = [] {
-    return true;
-  };
 };
 
 using Settings = std::vector<Setting*>;

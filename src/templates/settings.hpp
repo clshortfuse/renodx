@@ -334,28 +334,28 @@ static const SettingConfig FX_BLOOM_CONFIG = {
 static renodx::utils::settings::Setting* CreateSetting(const std::vector<SettingConfig>& configs) {
   auto* new_setting = new renodx::utils::settings::Setting();
   for (const auto& config : configs) {
-    if (config.key) new_setting->key = *config.key;
-    if (config.binding) new_setting->binding = *config.binding;
-    if (config.value_type) new_setting->value_type = *config.value_type;
-    if (config.default_value) new_setting->default_value = *config.default_value;
-    if (config.can_reset) new_setting->can_reset = *config.can_reset;
-    if (config.label) new_setting->label = *config.label;
-    if (config.section) new_setting->section = *config.section;
-    if (config.group) new_setting->group = *config.group;
-    if (config.tooltip) new_setting->tooltip = *config.tooltip;
+    if (config.key.has_value()) new_setting->key = config.key.value();
+    if (config.binding.has_value()) new_setting->binding = config.binding.value();
+    if (config.value_type.has_value()) new_setting->value_type = config.value_type.value();
+    if (config.default_value.has_value()) new_setting->default_value = config.default_value.value();
+    if (config.can_reset.has_value()) new_setting->can_reset = config.can_reset.value();
+    if (config.label.has_value()) new_setting->label = config.label.value();
+    if (config.section.has_value()) new_setting->section = config.section.value();
+    if (config.group.has_value()) new_setting->group = config.group.value();
+    if (config.tooltip.has_value()) new_setting->tooltip = config.tooltip.value();
     if (!config.labels.empty()) new_setting->labels = config.labels;
-    if (config.tint) new_setting->tint = *config.tint;
-    if (config.min) new_setting->min = *config.min;
-    if (config.max) new_setting->max = *config.max;
-    if (config.format) new_setting->format = *config.format;
-    if (config.is_enabled) new_setting->is_enabled = *config.is_enabled;
-    if (config.parse) new_setting->parse = *config.parse;
-    if (config.on_change) new_setting->on_change = *config.on_change;
-    if (config.on_change_value) new_setting->on_change_value = *config.on_change_value;
-    if (config.on_click) new_setting->on_click = *config.on_click;
-    if (config.on_draw) new_setting->on_draw = *config.on_draw;
-    if (config.is_global) new_setting->is_global = *config.is_global;
-    if (config.is_visible) new_setting->is_visible = *config.is_visible;
+    if (config.tint.has_value()) new_setting->tint = config.tint.value();
+    if (config.min.has_value()) new_setting->min = config.min.value();
+    if (config.max.has_value()) new_setting->max = config.max.value();
+    if (config.format.has_value()) new_setting->format = config.format.value();
+    if (config.is_enabled.has_value()) new_setting->is_enabled = config.is_enabled.value();
+    if (config.parse.has_value()) new_setting->parse = config.parse.value();
+    if (config.on_change.has_value()) new_setting->on_change = config.on_change.value();
+    if (config.on_change_value.has_value()) new_setting->on_change_value = config.on_change_value.value();
+    if (config.on_click.has_value()) new_setting->on_click = config.on_click.value();
+    if (config.on_draw.has_value()) new_setting->on_draw = config.on_draw.value();
+    if (config.is_global.has_value()) new_setting->is_global = config.is_global.value();
+    if (config.is_visible.has_value()) new_setting->is_visible = config.is_visible.value();
   }
   return new_setting;
 }
