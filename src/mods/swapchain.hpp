@@ -13,7 +13,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <include/reshade_api_resource.hpp>
 #include <initializer_list>
 #include <mutex>
 #include <optional>
@@ -122,6 +121,11 @@ static int32_t expected_constant_buffer_index = -1;
 static uint32_t expected_constant_buffer_space = 0;
 static float* shader_injection = nullptr;
 static size_t shader_injection_size = 0;
+struct SwapChainProxyShaders {
+  std::vector<std::uint8_t> vertex_shader;
+  std::vector<std::uint8_t> pixel_shader;
+};
+static std::unordered_map<reshade::api::device_api, SwapChainProxyShaders> swap_chain_proxy_shaders = {};
 
 static thread_local std::optional<reshade::api::swapchain_desc> upgraded_swapchain_desc;
 static thread_local SwapChainUpgradeTarget* local_applied_target = nullptr;
@@ -143,7 +147,7 @@ static SwapChainUpgradeTarget swap_chain_proxy_upgrade_target = {
 // Methods
 
 static bool UsingSwapchainProxy() {
-  return !swap_chain_proxy_pixel_shader.empty();
+  return !swap_chain_proxy_pixel_shader.empty() || !swap_chain_proxy_shaders.empty();
 }
 
 static bool UsingSwapchainCompatibilityMode() {
@@ -960,8 +964,16 @@ static void OnInitDevice(reshade::api::device* device) {
 
   data->swap_chain_upgrade_targets = swap_chain_upgrade_targets;
   data->prevent_full_screen = prevent_full_screen;
-  data->swap_chain_proxy_vertex_shader = swap_chain_proxy_vertex_shader;
-  data->swap_chain_proxy_pixel_shader = swap_chain_proxy_pixel_shader;
+  if (!swap_chain_proxy_shaders.empty()) {
+    if (auto pair = swap_chain_proxy_shaders.find(device->get_api());
+        pair != swap_chain_proxy_shaders.end()) {
+      data->swap_chain_proxy_vertex_shader = pair->second.vertex_shader;
+      data->swap_chain_proxy_pixel_shader = pair->second.pixel_shader;
+    }
+  } else {
+    data->swap_chain_proxy_vertex_shader = swap_chain_proxy_vertex_shader;
+    data->swap_chain_proxy_pixel_shader = swap_chain_proxy_pixel_shader;
+  }
   data->swapchain_proxy_revert_state = swapchain_proxy_revert_state;
   data->expected_constant_buffer_index = expected_constant_buffer_index;
   data->expected_constant_buffer_space = expected_constant_buffer_space;
