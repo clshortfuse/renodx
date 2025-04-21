@@ -85,6 +85,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_DIFFUSE_WHITE_NITS                shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS               shader_injection.graphics_white_nits
 #define RENODX_GAMMA_CORRECTION                  shader_injection.gamma_correction
+#define RENODX_RENO_DRT_WHITE_CLIP               shader_injection.tone_map_white_clip
 #define RENODX_TONE_MAP_HUE_PROCESSOR            shader_injection.tone_map_hue_processor
 #define RENODX_TONE_MAP_EXPOSURE                 shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS               shader_injection.tone_map_highlights
@@ -109,11 +110,9 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_COLOR_GRADE_HUE_CORRECTION        shader_injection.color_grade_hue_correction
 #define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION shader_injection.color_grade_saturation_correction
 #define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   shader_injection.color_grade_blowout_restoration
-#define CUSTOM_PER_CHANNEL_CORRECTION            shader_injection.per_channel_correction
-#define RENODX_RENO_DRT_WHITE_CLIP               shader_injection.tone_map_white_clip
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE      color::convert::COLOR_SPACE_BT2020
-#define RENODX_SWAP_CHAIN_ENCODING               renodx::draw::ENCODING_PQ
-#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE   color::convert::COLOR_SPACE_BT2020
+#define RENODX_SWAP_CHAIN_ENCODING               renodx::draw::ENCODING_SCRGB
+#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE   color::convert::COLOR_SPACE_BT709
 #define RENODX_RENO_DRT_TONE_MAP_METHOD          renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 
 #include "../../shaders/renodx.hlsl"

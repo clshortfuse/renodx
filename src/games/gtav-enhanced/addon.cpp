@@ -436,7 +436,6 @@ void OnPresetOff() {
       {"FxDithering", 0.f},
 
   });
-  
 }
 
 bool initialized = false;
@@ -467,7 +466,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
         renodx::mods::swapchain::force_borderless = true;
         renodx::mods::swapchain::prevent_full_screen = true;
-        renodx::mods::swapchain::SetUseHDR10(true);
 
         renodx::utils::random::binds.push_back(&shader_injection.custom_random);
 
