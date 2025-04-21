@@ -413,6 +413,8 @@ float3 InvertIntermediatePass(float3 color, Config config) {
 float3 SwapChainPass(float3 color, Config config) {
   color = DecodeColor(color, config.swap_chain_decoding);
 
+  color *= config.swap_chain_scaling_nits;
+
   if (config.swap_chain_gamma_correction == GAMMA_CORRECTION_GAMMA_2_2) {
     color = renodx::color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, renodx::color::convert::COLOR_SPACE_BT709);
     config.swap_chain_decoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
@@ -437,8 +439,6 @@ float3 SwapChainPass(float3 color, Config config) {
     color = renodx::color::bt709::from::ARIBTRB9(color);
     config.swap_chain_decoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
   }
-
-  color *= config.swap_chain_scaling_nits;
 
   color = min(color, config.swap_chain_clamp_nits);  // Clamp UI or Videos
 
