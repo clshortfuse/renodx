@@ -202,7 +202,12 @@ struct Config {
   float reno_drt_white_clip;
 };
 
-float3 UpgradeToneMap(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength) {
+float3 UpgradeToneMap(
+    float3 color_hdr,
+    float3 color_sdr,
+    float3 post_process_color,
+    float post_process_strength = 1.f,
+    float auto_correction = 0.f) {
   float ratio = 1.f;
 
   float y_hdr = renodx::color::y::from::BT709(abs(color_hdr));
@@ -221,6 +226,8 @@ float3 UpgradeToneMap(float3 color_hdr, float3 color_sdr, float3 post_process_co
     const bool y_valid = (y_post_process > 0);  // Cleans up NaN and ignore black
     ratio = y_valid ? (y_new / y_post_process) : 0;
   }
+  float auto_correct_ratio = lerp(1.f, ratio, saturate(y_hdr));
+  ratio = lerp(ratio, auto_correct_ratio, auto_correction);
 
   float3 color_scaled = post_process_color * ratio;
   // Match hue

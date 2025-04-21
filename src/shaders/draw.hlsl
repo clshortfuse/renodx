@@ -37,6 +37,7 @@ struct Config {
   float tone_map_clamp_peak;                 // -1 = none, bt709, bt2020, ap1
   float tone_map_hue_processor;              // 0.f
   float tone_map_per_channel;                // 0.f
+  float tone_map_pass_autocorrection;        // 0.f
   float reno_drt_tone_map_method;            // 0.f
   float reno_drt_white_clip;                 // 100.f
   float gamma_correction;                    // 0 = srgb/none, 1 = 2.2, 2 = 2.4
@@ -219,9 +220,14 @@ Config BuildConfig() {
   config.tone_map_hue_processor = RENODX_TONE_MAP_HUE_PROCESSOR;
 
 #if !defined(RENODX_TONE_MAP_PER_CHANNEL)
-#define RENODX_TONE_MAP_PER_CHANNEL 0
+#define RENODX_TONE_MAP_PER_CHANNEL 0.f
 #endif
   config.tone_map_per_channel = RENODX_TONE_MAP_PER_CHANNEL;
+
+#if !defined(RENODX_TONE_MAP_PASS_AUTOCORRECTION)
+#define RENODX_TONE_MAP_PASS_AUTOCORRECTION 0.f
+#endif
+  config.tone_map_pass_autocorrection = RENODX_TONE_MAP_PASS_AUTOCORRECTION;
 
 #if !defined(RENODX_RENO_DRT_TONE_MAP_METHOD)
 #define RENODX_RENO_DRT_TONE_MAP_METHOD renodx::tonemap::renodrt::config::tone_map_method::DANIELE
@@ -570,7 +576,17 @@ float3 ApplyPerChannelCorrection(
     float3 per_channel_color,
     float blowout_restoration = 0.5f,
     float hue_correction_strength = 1.f,
-    float chrominance_correction_strength = 1.f) {
+    float chrominance_correction_strength = 1.f,
+    float hue_shift_strength = 0.5f) {
+  const float tonemapped_luminance = renodx::color::y::from::BT709(abs(per_channel_color));
+
+  const float AUTO_CORRECT_BLACK = 0.02f;
+  // Fix near black
+  const float untonemapped_luminance = renodx::color::y::from::BT709(abs(untonemapped));
+  float ratio = tonemapped_luminance / untonemapped_luminance;
+  float auto_correct_ratio = lerp(ratio, 1.f, saturate(untonemapped_luminance / AUTO_CORRECT_BLACK));
+  untonemapped *= auto_correct_ratio;
+
   const float3 tonemapped_perceptual = renodx::color::ictcp::from::BT709(per_channel_color);
   const float3 untonemapped_perceptual = renodx::color::ictcp::from::BT709(untonemapped);
 
@@ -581,32 +597,62 @@ float3 ApplyPerChannelCorrection(
   float tonemapped_chrominance = length(tonemapped_perceptual.yz);      // eg: 0.20
 
   // clamp saturation loss
-  float chrominance_loss = max(
-      renodx::math::DivideSafe(tonemapped_chrominance / untonemapped_chrominance, 1.f),  // eg: 0.25
-      blowout_restoration);
+
+  float chrominance_ratio = min(renodx::math::DivideSafe(tonemapped_chrominance, untonemapped_chrominance, 1.f), 1.f);
+  chrominance_ratio = max(chrominance_ratio, blowout_restoration);
 
   // Untonemapped hue, tonemapped chrominance (with limit)
-  float2 reduced_untonemapped_chromas = untonemapped_chromas * chrominance_loss;
+  float2 reduced_untonemapped_chromas = untonemapped_chromas * chrominance_ratio;
 
-  const float2 reduced_hue_shifted = lerp(reduced_untonemapped_chromas, tonemapped_chromas, chrominance_loss);
+  // pick chroma based on per-channel luminance (supports not oversaturating crushed areas)
+  const float2 reduced_hue_shifted = lerp(
+      tonemapped_chromas,
+      reduced_untonemapped_chromas,
+      saturate(tonemapped_luminance / 0.36));
 
-  const float2 blowout_restored_chromas = reduced_hue_shifted * length(reduced_untonemapped_chromas) / length(reduced_hue_shifted);
+  // Tonemapped hue, restored chrominance (with limit)
+  const float2 blowout_restored_chromas = tonemapped_chromas
+                                          * renodx::math::DivideSafe(
+                                              length(reduced_hue_shifted),
+                                              length(tonemapped_chromas), 1.f);
 
-  const float2 blended_correct_chromas = lerp(untonemapped_chromas, blowout_restored_chromas, saturate(renodx::color::y::from::BT709(untonemapped) / 0.36));
+  const float2 hue_shifted_chromas = lerp(reduced_hue_shifted, blowout_restored_chromas, hue_shift_strength);
 
-  const float2 blowout_restored_chrominance = length(blowout_restored_chromas);
+  // Pick untonemapped hues for shadows/midtones
+  const float2 hue_correct_chromas = untonemapped_chromas
+                                     * renodx::math::DivideSafe(
+                                         length(hue_shifted_chromas),
+                                         length(untonemapped_chromas), 1.f);
 
-  const float2 chroma_corrected = blowout_restored_chromas
-                                  * lerp(blowout_restored_chrominance, length(blended_correct_chromas), chrominance_correction_strength)
-                                  / blowout_restored_chrominance;
+  const float2 selectable_hue_correct_range = lerp(
+      hue_correct_chromas,
+      hue_shifted_chromas,
+      saturate(tonemapped_luminance / 0.36f));
 
-  const float2 hue_corrected_chromas = lerp(chroma_corrected, blended_correct_chromas, hue_correction_strength);
+  const float2 hue_corrected_chromas = lerp(hue_shifted_chromas, selectable_hue_correct_range, hue_correction_strength);
 
-  const float2 final_chromas = hue_corrected_chromas
-                               * length(chroma_corrected)
-                               / length(hue_corrected_chromas);
+  const float2 chroma_correct_chromas = hue_corrected_chromas
+                                        * renodx::math::DivideSafe(
+                                            length(untonemapped_chromas),
+                                            length(hue_corrected_chromas), 1.f);
 
-  return renodx::color::bt709::from::ICtCp(float3(tonemapped_perceptual.x, final_chromas));
+  const float2 selectable_chroma_correct_range = lerp(
+      chroma_correct_chromas,
+      hue_corrected_chromas,
+      saturate(tonemapped_luminance / 0.36f));
+
+  const float2 chroma_corrected_chromas = lerp(
+      hue_correct_chromas,
+      selectable_chroma_correct_range,
+      chrominance_correction_strength);
+
+  float2 final_chromas = chroma_corrected_chromas;
+
+  const float3 final_color = renodx::color::bt709::from::ICtCp(float3(
+      tonemapped_perceptual.x,
+      final_chromas));
+
+  return final_color;
 }
 
 float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, float3 neutral_sdr_color, Config config) {
@@ -628,7 +674,8 @@ float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, float3 neutral_
         untonemapped,
         neutral_sdr_color,
         graded_sdr_color,
-        config.color_grade_strength);
+        config.color_grade_strength,
+        config.tone_map_pass_autocorrection);
   } else {
     untonemapped_graded = untonemapped;
   }
