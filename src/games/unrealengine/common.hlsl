@@ -22,13 +22,15 @@ void SetTonemappedBT709(inout float color_red, inout float color_green, inout fl
 
   if (CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION != 0.f
       || CUSTOM_COLOR_GRADE_HUE_CORRECTION != 0.f
-      || CUSTOM_COLOR_GRADE_SATURATION_CORRECTION != 0.f) {
+      || CUSTOM_COLOR_GRADE_SATURATION_CORRECTION != 0.f
+      || CUSTOM_COLOR_GRADE_HUE_SHIFT != 0.f) {
     color = renodx::draw::ApplyPerChannelCorrection(
         RENODX_UE_CONFIG.untonemapped_bt709,
         float3(color_red, color_green, color_blue),
         CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION,
         CUSTOM_COLOR_GRADE_HUE_CORRECTION,
-        CUSTOM_COLOR_GRADE_SATURATION_CORRECTION);
+        CUSTOM_COLOR_GRADE_SATURATION_CORRECTION,
+        CUSTOM_COLOR_GRADE_HUE_SHIFT);
   }
 
   color = abs(color);

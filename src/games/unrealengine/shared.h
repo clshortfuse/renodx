@@ -26,6 +26,7 @@ struct ShaderInjectData {
   float color_grade_hue_correction;
   float color_grade_saturation_correction;
   float color_grade_blowout_restoration;
+  float color_grade_hue_shift;
 
   float processing_use_scrgb;
 };
@@ -58,6 +59,7 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION     shader_injection.color_grade_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT                  shader_injection.color_grade_blowout
 #define RENODX_TONE_MAP_FLARE                    shader_injection.color_grade_flare
+#define RENODX_TONE_MAP_PASS_AUTOCORRECTION      1.f
 #define RENODX_TONE_MAP_WORKING_COLOR_SPACE      color::convert::COLOR_SPACE_AP1
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE        -1.f
 #define RENODX_RENO_DRT_TONE_MAP_METHOD          renodx::tonemap::renodrt::config::tone_map_method::REINHARD
@@ -68,6 +70,7 @@ cbuffer injected_buffer : register(b13) {
 #define CUSTOM_COLOR_GRADE_HUE_CORRECTION        shader_injection.color_grade_hue_correction
 #define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION shader_injection.color_grade_saturation_correction
 #define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   shader_injection.color_grade_blowout_restoration
+#define CUSTOM_COLOR_GRADE_HUE_SHIFT             shader_injection.color_grade_hue_shift
 
 #include "../../shaders/renodx.hlsl"
 #endif
