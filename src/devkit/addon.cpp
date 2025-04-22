@@ -73,13 +73,13 @@ namespace {
 reshade::api::device* snapshot_device = nullptr;
 reshade::api::device* snapshot_queued_device = nullptr;
 
-std::atomic_bool snapshot_pane_show_vertex_shaders = true;
+std::atomic_bool snapshot_pane_show_vertex_shaders = false;
 std::atomic_bool snapshot_pane_show_pixel_shaders = true;
 std::atomic_bool snapshot_pane_show_compute_shaders = true;
 std::atomic_bool snapshot_pane_show_blends = true;
 std::atomic_bool snapshot_pane_expand_all_nodes = true;
 std::atomic_bool snapshot_pane_filter_resources_by_shader_use = true;
-std::atomic_bool shaders_pane_show_vertex_shaders = true;
+std::atomic_bool shaders_pane_show_vertex_shaders = false;
 std::atomic_bool shaders_pane_show_pixel_shaders = true;
 std::atomic_bool shaders_pane_show_compute_shaders = true;
 
@@ -2990,6 +2990,7 @@ void RenderResourceViewHistory(reshade::api::device* device, DeviceData* data, r
 void RenderResourceViewPreview(reshade::api::device* device, DeviceData* data, reshade::api::resource resource) {
   auto* info = renodx::utils::resource::GetResourceInfo(resource);
   if (info == nullptr) return;
+  if (info->destroyed) return;
 
   reshade::api::format format = reshade::api::format_to_default_typed(info->desc.texture.format);
   switch (info->desc.texture.format) {
