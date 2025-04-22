@@ -165,7 +165,7 @@ static void OnInitPipeline(
     s << PRINT_CRC32(shader_hash);
     s << ", size: " << shader_data->size();
     s << ")";
-    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
 
     shaders_pending[shader_hash] = {
         .data = shader_data.value(),
