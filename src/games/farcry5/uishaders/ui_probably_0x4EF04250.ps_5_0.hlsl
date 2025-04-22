@@ -97,6 +97,7 @@ void main(
 
   if (SCRGB != 0) {
     o0.xyz = r0.xyz;
+    if (RENODX_TONE_MAP_TYPE != 0.f) o0.rgb *= RENODX_GRAPHICS_WHITE_NITS / 80.f;
   } else {
     r1.x = dot(r0.xyz, float3(0.753832996,0.198596999,0.047569599));
     r1.y = dot(r0.xyz, float3(0.0457439013,0.941776991,0.0124787996));
