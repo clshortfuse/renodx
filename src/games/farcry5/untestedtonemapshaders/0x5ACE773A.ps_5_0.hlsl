@@ -219,6 +219,9 @@ void main(
   r0.xyz = r0.www * r0.xyz + r1.xyz;
   r0.w = dot(r0.xyz, float3(0.212599993,0.715200007,0.0722000003));
   o0.xyzw = r0.xyzw;
+
+  o0.rgb = renodx::color::bt709::clamp::BT2020(o0.rgb);
+
   o1.x = r0.w;
   o1.yzw = float3(0,0,0);
   return;
