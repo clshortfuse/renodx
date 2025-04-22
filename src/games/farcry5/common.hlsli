@@ -105,16 +105,29 @@ float3 ApplyVanillaToneMap(float3 untonemapped_ap1) {
   return r0.rgb;
 }
 
-float3 SaturationAP1(float3 color_ap1, float saturation) {
+float3 SaturationAP1(float3 color_ap1, float saturation, float blowout = 0.f) {
   float3 color_bt709 = renodx::color::bt709::from::AP1(max(0, color_ap1));
 
-  float3 color_jch = renodx::color::dtucs::jch::from::BT709(color_bt709);
-
-  color_jch.yz = float2(color_jch.y * saturation, color_jch.z);  // boost chroma
-
-  color_bt709 = renodx::color::bt709::from::dtucs::JCH(color_jch);
+  color_bt709 = renodx::color::grade::UserColorGrading(
+      color_bt709,
+      1.f,  // exposure
+      1.f,  // highlights
+      1.f,  // shadows
+      1.f,  // contrast
+      saturation,
+      blowout,
+      0.f);
 
   return renodx::color::ap1::from::BT709(color_bt709);
+}
+
+float3 HueCorrectAP1(float3 incorrect_color_ap1, float3 correct_color_ap1, float hue_correct_strength = 0.5f) {
+  float3 incorrect_color_bt709 = renodx::color::bt709::from::AP1(incorrect_color_ap1);
+  float3 correct_color_bt709 = renodx::color::bt709::from::AP1(correct_color_ap1);
+
+  float3 corrected_color_bt709 = renodx::color::correct::Hue(incorrect_color_bt709, correct_color_bt709, hue_correct_strength, 2u);
+  float3 corrected_color_ap1 = renodx::color::ap1::from::BT709(corrected_color_bt709);
+  return corrected_color_ap1;
 }
 
 float3 TonemapByLuminance(float3 untonemapped_ap1) {
@@ -126,7 +139,7 @@ float3 TonemapByLuminance(float3 untonemapped_ap1) {
   float scale = y > 0 ? y_mapped / y : 0;
   float3 tonemapped_ap1 = untonemapped_ap1 * scale;
 
-  tonemapped_ap1 = max(0, SaturationAP1(tonemapped_ap1, 1.25f));
+  tonemapped_ap1 = max(0, SaturationAP1(tonemapped_ap1, 22.f, .99f)); // increase saturation in midtones and shadows
 
   float blend_brightness_ratio = 0.613478879269;
   float tonemapped_y = renodx::color::y::from::AP1(tonemapped_ap1);
@@ -147,6 +160,7 @@ float3 TonemapByChannel(float3 untonemapped_ap1) {
   // num -= 7.45694997e-05f; // remove black clip
   float3 denom = x * (0.983796f * x + 0.433679014f) + 0.246179f;
   float3 tonemapped = num / denom;
+  tonemapped = max(0, HueCorrectAP1(tonemapped, untonemapped_ap1));
 
   float blend_brightness_ratio = 0.613478879269;
   tonemapped = lerp(tonemapped, untonemapped_ap1 * blend_brightness_ratio, saturate(tonemapped));
