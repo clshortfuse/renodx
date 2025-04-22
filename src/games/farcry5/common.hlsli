@@ -42,8 +42,8 @@ float3 LUTCorrectBlack(float3 lut_input_color_bt709, float3 lut_output_color_ap1
     float3 min_black = LogDecodeLUT(ColorRemap0VolumeSampler.SampleLevel(Clamp_s, LogEncodeLUT((0.f).xxx) + (0.5f / 32.f), 0.0f).rgb);
 
     float lut_min_y = (renodx::color::y::from::AP1(max(0, min_black)));
+    if (RENODX_GAMMA_CORRECTION) lut_min_y = renodx::color::correct::Gamma(lut_min_y);
     if (lut_min_y > 0) {
-      //   float3 lut_input_color_bt709 = ODTSATToBT709(lut_input_color);
       float3 lut_output_color_bt709 = renodx::color::bt709::from::AP1(lut_output_color_ap1);
 
       float3 corrected_black = renodx::lut::CorrectBlack(max(0, lut_input_color_bt709), max(0, lut_output_color_bt709), lut_min_y, 1.f);
@@ -105,21 +105,28 @@ float3 ApplyVanillaToneMap(float3 untonemapped_ap1) {
   return r0.rgb;
 }
 
+float3 SaturationAP1(float3 color_ap1, float saturation) {
+  float3 color_bt709 = renodx::color::bt709::from::AP1(max(0, color_ap1));
+
+  float3 color_jch = renodx::color::dtucs::jch::from::BT709(color_bt709);
+
+  color_jch.yz = float2(color_jch.y * saturation, color_jch.z);  // boost chroma
+
+  color_bt709 = renodx::color::bt709::from::dtucs::JCH(color_jch);
+
+  return renodx::color::ap1::from::BT709(color_bt709);
+}
+
 float3 TonemapByLuminance(float3 untonemapped_ap1) {
   float y = renodx::color::y::from::AP1(untonemapped_ap1);
-
   float num = y * (y + 0.0206166003f);
   // num -= 7.45694997e-05f; // remove black clip
   float denom = y * (0.983796f * y + 0.433679014f) + 0.246179f;
   float y_mapped = num / denom;
-
   float scale = y > 0 ? y_mapped / y : 0;
-
   float3 tonemapped_ap1 = untonemapped_ap1 * scale;
 
-  float3 tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
-  tonemapped_bt709 = renodx::color::grade::Saturation(tonemapped_bt709, 1.3f);
-  tonemapped_ap1 = renodx::color::ap1::from::BT709(tonemapped_bt709);
+  tonemapped_ap1 = max(0, SaturationAP1(tonemapped_ap1, 1.25f));
 
   float blend_brightness_ratio = 0.613478879269;
   float tonemapped_y = renodx::color::y::from::AP1(tonemapped_ap1);

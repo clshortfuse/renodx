@@ -132,6 +132,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeBlowout",
+        .binding = &shader_injection.tone_map_blowout,
+        .default_value = 0.f,
+        .label = "Blowout",
+        .section = "Color Grading",
+        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ColorGradeSceneScaling",
         .binding = &shader_injection.color_grade_scaling,
         .default_value = 50.f,
@@ -212,6 +222,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ToneMapType", 0);
   renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 1000.f);
   renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
+  renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
   renodx::utils::settings::UpdateSetting("ToneMapGammaCorrection", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
