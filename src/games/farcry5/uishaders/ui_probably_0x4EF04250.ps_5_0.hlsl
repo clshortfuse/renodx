@@ -92,6 +92,9 @@ void main(
   r0.xyz = r1.xxx * r1.yzw + r0.xyz;
   r0.w = -1 + r0.w;
   o0.w = UseAlpha * r0.w + 1;
+
+  if (RENODX_TONE_MAP_TYPE != 0 && RENODX_GAMMA_CORRECTION) r0.rgb = renodx::color::correct::GammaSafe(r0.rgb);
+
   if (SCRGB != 0) {
     o0.xyz = r0.xyz;
   } else {
