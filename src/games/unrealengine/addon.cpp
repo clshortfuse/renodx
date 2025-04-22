@@ -746,6 +746,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         auto process_path = renodx::utils::platform::GetCurrentProcessPath();
         auto product_name = renodx::utils::platform::GetProductName(process_path);
         auto param_count = params.size();
+
+        if (product_name == "OblivionRemastered") return true;
+
         if (params.size() >= 20) return false;
 
         if (product_name == "Jusant") return true;
