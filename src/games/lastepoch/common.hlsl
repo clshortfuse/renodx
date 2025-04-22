@@ -24,6 +24,26 @@ float3 applyFilmGrain(float3 outputColor, float2 screen, bool colored) {
   return grainedColor;
 }
 
+// based on https://github.com/aliasIsolation/aliasIsolation/blob/master/data/shaders/chromaticAberration_ps.hlsl
+float4 applyCA(Texture2D colorBuffer, SamplerState colorSampler, float2 texCoord, float2 screenSize, float intensity) {
+float4 output;
+float ca_amount = 0.018 * intensity;
+float2 center_offset = texCoord - float2(0.5, 0.5);
+ca_amount *= saturate(length(center_offset) * 2);
+int num_colors = max(3, int(max(screenSize.x, screenSize.y) * 0.075 * sqrt(ca_amount)));
+if (intensity == 0.f) {
+  output = colorBuffer.Sample(colorSampler, texCoord);
+} else {
+  output.ga = colorBuffer.Sample(colorSampler, texCoord).ga; // unchanged green and alpha
+  float offset = float(3 - num_colors * 0.5) * ca_amount / num_colors;
+  float2 sampleUvR = float2(0.5, 0.5) + center_offset * (1 + offset);
+  float2 sampleUvB = float2(0.5, 0.5) + center_offset * (1 - offset);
+  output.r = colorBuffer.Sample(colorSampler, sampleUvR).r;
+  output.b = colorBuffer.Sample(colorSampler, sampleUvB).b;
+  }
+return output;
+}
+
 //-----SCALING-----//
 float3 PostToneMapScale(float3 color) {
   if (injectedData.toneMapGammaCorrection == 2.f) {

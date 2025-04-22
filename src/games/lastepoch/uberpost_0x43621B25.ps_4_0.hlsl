@@ -28,7 +28,8 @@ void main(
   float4 fDest;
 
   r0.xyzw = t1.Sample(s1_s, v1.xy).xyzw;
-  r1.xyzw = t0.Sample(s0_s, w1.xy).xyzw;
+  //r1.xyzw = t0.Sample(s0_s, w1.xy).xyzw;
+  r1.rgba = applyCA(t0, s0_s, w1, cb0[32].zw * 2, injectedData.fxCA);
   r1.xyz = r1.xyz * r0.xxx;
   r0.xyzw = float4(1, 1, -1, 0) * cb0[32].xyxy;
   r2.xyzw = saturate(-r0.xywy * cb0[34].xxxx + v1.xyxy);
