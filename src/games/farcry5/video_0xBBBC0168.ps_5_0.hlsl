@@ -134,6 +134,9 @@ void main(
   r0.xyz = r1.xxx * r1.yzw + r0.xyz;
   r0.w = -1 + r0.w;
   o0.w = UseAlpha * r0.w + 1;
+
+  if (RENODX_TONE_MAP_TYPE != 0 && RENODX_GAMMA_CORRECTION) r0.rgb = renodx::color::correct::GammaSafe(r0.rgb);
+
   if (SCRGB != 0) {
     if (RENODX_TONE_MAP_TYPE) {
       r0.w = 0.0125000002 * HDRReferenceWhiteNits;
@@ -160,7 +163,7 @@ void main(
       r0.xyz = cmp(float3(0.5, 0.5, 0.5) < r0.xyz);
       r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
     } else {
-      r0.w = RENODX_GRAPHICS_WHITE_NITS;
+      r0.w = RENODX_DIFFUSE_WHITE_NITS;
     }
     r1.x = dot(r0.xyz, float3(0.627399981, 0.329299986, 0.0432999991));
     r1.y = dot(r0.xyz, float3(0.0691, 0.919499993, 0.0114000002));
