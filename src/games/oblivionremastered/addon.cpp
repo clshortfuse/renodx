@@ -124,6 +124,13 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         }),
         hdr_upgrade_setting,
         new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::TEXT,
+            .label = "Note: Color Grading options do not update in real-time."
+                     "\nPause and unpause the game to see changes.",
+            .section = "Notes",
+            .is_visible = []() { return shader_injection.custom_processing_mode == 0.f; },
+        },
+        new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
             .label = "Discord",
             .section = "Links",
