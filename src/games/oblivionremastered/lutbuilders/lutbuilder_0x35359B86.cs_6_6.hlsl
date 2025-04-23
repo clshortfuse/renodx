@@ -84,11 +84,10 @@ SamplerState Samplers_4 : register(s3);
 
 [numthreads(8, 8, 8)]
 void main(
-  uint3 SV_DispatchThreadID : SV_DispatchThreadID,
-  uint3 SV_GroupID : SV_GroupID,
-  uint3 SV_GroupThreadID : SV_GroupThreadID,
-  uint SV_GroupIndex : SV_GroupIndex
-) {
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
   float _17[6];
   float _18[6];
   float _19[6];
@@ -217,7 +216,6 @@ void main(
   float _188 = dot(float3(_185, _186, _187), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
 
   SetUntonemappedAP1(float3(_185, _186, _187));
-
 
   float _202 = ColorOffset.w + ColorOffsetShadows.w;
   float _216 = ColorGain.w * ColorGainShadows.w;
@@ -404,9 +402,9 @@ void main(
   float _1173 = exp2(log2(max(0.0f, _1147)) * InverseGamma.y);
   float _1174 = exp2(log2(max(0.0f, _1148)) * InverseGamma.y);
 
-if (CUSTOM_PROCESSING_MODE == 0.f && RENODX_TONE_MAP_TYPE != 0.f) {
+  if (CUSTOM_PROCESSING_MODE == 0.f && RENODX_TONE_MAP_TYPE != 0.f) {
     RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] =
-        GenerateOutput(float3(_1172, _1173, _1174));
+        GenerateOutput(float3(_1172, _1173, _1174), OutputDevice);
     return;
   }
 

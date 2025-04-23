@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 Carlos Lopez
+ * Copyright (C) 2025 Carlos Lopez
  * SPDX-License-Identifier: MIT
  */
 
@@ -20,13 +20,24 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
-#define OBLIVION_REMASTERED_HDR_VIDEO
-
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
+
+float g_hdr_upgrade = 2.f;
+
+auto* hdr_upgrade_setting = renodx::templates::settings::CreateSetting({
+    .key = "HDRUpgrade",
+    .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+    .default_value = 2.f,
+    .label = "HDR Upgrade",
+    .section = "Processing",
+    .tooltip = "Selects how to apply HDR upgrade (restart required)",
+    .labels = {"None", "Swap Chain", "Swap Chain + Videos"},
+    .is_global = true,
+});
 
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({
     renodx::templates::settings::CreateDefaultSettings({
@@ -92,7 +103,6 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .section = "Effects",
             .parse = [](float value) { return value * 0.01f; },
         }),
-#ifdef OBLIVION_REMASTERED_HDR_VIDEO
         renodx::templates::settings::CreateSetting({
             .key = "FxHDRVideos",
             .binding = &shader_injection.custom_hdr_videos,
@@ -101,8 +111,8 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .label = "HDR Videos",
             .section = "Effects",
             .labels = {"Off", "BT.2446a", "RenoDRT"},
+            .is_enabled = []() { return g_hdr_upgrade >= 2.f; },
         }),
-#endif
         renodx::templates::settings::CreateSetting({
             .key = "ProcessingMode",
             .binding = &shader_injection.custom_processing_mode,
@@ -112,7 +122,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .section = "Processing",
             .labels = {"LUT", "Output"},
         }),
-
+        hdr_upgrade_setting,
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
             .label = "Discord",
@@ -229,38 +239,42 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           return static_cast<bool>(params.size() < 20);
         };
 
-        // DLSSFG
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-            .old_format = reshade::api::format::r10g10b10a2_unorm,
-            .new_format = reshade::api::format::r16g16b16a16_float,
-            .use_resource_view_cloning = true,
-            .usage_include = reshade::api::resource_usage::render_target,
-        });
+        renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, hdr_upgrade_setting);
+        g_hdr_upgrade = hdr_upgrade_setting->GetValue();
 
-        // Internal LUT
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-            .old_format = reshade::api::format::r10g10b10a2_unorm,
-            .new_format = reshade::api::format::r16g16b16a16_float,
-            .dimensions = {.width = 32, .height = 32, .depth = 32},
-        });
+        if (g_hdr_upgrade >= 1.f) {
+          // DLSSFG
+          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+              .old_format = reshade::api::format::r10g10b10a2_unorm,
+              .new_format = reshade::api::format::r16g16b16a16_float,
+              .use_resource_view_cloning = true,
+              .usage_include = reshade::api::resource_usage::render_target,
+          });
+          // Internal LUT
+          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+              .old_format = reshade::api::format::r10g10b10a2_unorm,
+              .new_format = reshade::api::format::r16g16b16a16_float,
+              .dimensions = {.width = 32, .height = 32, .depth = 32},
+          });
+        }
 
-#ifdef OBLIVION_REMASTERED_HDR_VIDEO
-        // FMV
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-            .old_format = reshade::api::format::b8g8r8a8_typeless,
-            .new_format = reshade::api::format::r16g16b16a16_float,
-            .use_resource_view_cloning = true,
-            .aspect_ratio = 3360.f / 1440.f,
-        });
+        if (g_hdr_upgrade >= 2.f) {
+          // FMV
+          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+              .old_format = reshade::api::format::b8g8r8a8_typeless,
+              .new_format = reshade::api::format::r16g16b16a16_float,
+              .use_resource_view_cloning = true,
+              .aspect_ratio = 3360.f / 1440.f,
+          });
 
-        // FMV
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-            .old_format = reshade::api::format::b8g8r8a8_typeless,
-            .new_format = reshade::api::format::r16g16b16a16_float,
-            .use_resource_view_cloning = true,
-            .aspect_ratio = 3440.f / 1440.f,
-        });
-#endif
+          // FMV
+          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+              .old_format = reshade::api::format::b8g8r8a8_typeless,
+              .new_format = reshade::api::format::r16g16b16a16_float,
+              .use_resource_view_cloning = true,
+              .aspect_ratio = 3440.f / 1440.f,
+          });
+        }
 
         // // UI
         // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
@@ -287,7 +301,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::random::Use(fdw_reason);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  if (g_hdr_upgrade > 0.f) {
+    renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  }
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;

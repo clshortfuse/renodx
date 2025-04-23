@@ -1,3 +1,5 @@
+#include "../common.hlsl"
+
 Texture2D<float4> Textures_1 : register(t0);
 
 Texture2D<float4> Textures_2 : register(t1);
@@ -78,11 +80,10 @@ SamplerState Samplers_3 : register(s2);
 
 [numthreads(8, 8, 8)]
 void main(
-  uint3 SV_DispatchThreadID : SV_DispatchThreadID,
-  uint3 SV_GroupID : SV_GroupID,
-  uint3 SV_GroupThreadID : SV_GroupThreadID,
-  uint SV_GroupIndex : SV_GroupIndex
-) {
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
   float _15[6];
   float _16[6];
   float _17[6];
@@ -267,6 +268,9 @@ void main(
   float _398 = mad((WorkingColorSpace_ToAP1[1].z), _380, mad((WorkingColorSpace_ToAP1[1].y), _377, ((WorkingColorSpace_ToAP1[1].x) * _374)));
   float _401 = mad((WorkingColorSpace_ToAP1[2].z), _380, mad((WorkingColorSpace_ToAP1[2].y), _377, ((WorkingColorSpace_ToAP1[2].x) * _374)));
   float _402 = dot(float3(_395, _398, _401), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+
+  SetUntonemappedAP1(float3(_395, _398, _401));
+
   float _406 = (_395 / _402) + -1.0f;
   float _407 = (_398 / _402) + -1.0f;
   float _408 = (_401 / _402) + -1.0f;
@@ -403,6 +407,9 @@ void main(
   float _1165 = ((mad(-0.06537103652954102f, _1149, mad(1.451815478503704e-06f, _1148, (_1147 * 1.065374732017517f))) - _1147) * BlueCorrection) + _1147;
   float _1166 = ((mad(-0.20366770029067993f, _1149, mad(1.2036634683609009f, _1148, (_1147 * -2.57161445915699e-07f))) - _1148) * BlueCorrection) + _1148;
   float _1167 = ((mad(0.9999996423721313f, _1149, mad(2.0954757928848267e-08f, _1148, (_1147 * 1.862645149230957e-08f))) - _1149) * BlueCorrection) + _1149;
+
+  SetTonemappedAP1(_1165, _1166, _1167);
+
   float _1180 = saturate(max(0.0f, mad((WorkingColorSpace_FromAP1[0].z), _1167, mad((WorkingColorSpace_FromAP1[0].y), _1166, ((WorkingColorSpace_FromAP1[0].x) * _1165)))));
   float _1181 = saturate(max(0.0f, mad((WorkingColorSpace_FromAP1[1].z), _1167, mad((WorkingColorSpace_FromAP1[1].y), _1166, ((WorkingColorSpace_FromAP1[1].x) * _1165)))));
   float _1182 = saturate(max(0.0f, mad((WorkingColorSpace_FromAP1[2].z), _1167, mad((WorkingColorSpace_FromAP1[2].y), _1166, ((WorkingColorSpace_FromAP1[2].x) * _1165)))));
@@ -454,6 +461,13 @@ void main(
   float _1396 = exp2(log2(max(0.0f, _1370)) * InverseGamma.y);
   float _1397 = exp2(log2(max(0.0f, _1371)) * InverseGamma.y);
   float _1398 = exp2(log2(max(0.0f, _1372)) * InverseGamma.y);
+
+  if (CUSTOM_PROCESSING_MODE == 0.f && RENODX_TONE_MAP_TYPE != 0.f) {
+    RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] =
+        GenerateOutput(float3(_1396, _1397, _1398), OutputDevice);
+    return;
+  }
+
   [branch]
   if ((uint)(OutputDevice) == 0) {
     do {

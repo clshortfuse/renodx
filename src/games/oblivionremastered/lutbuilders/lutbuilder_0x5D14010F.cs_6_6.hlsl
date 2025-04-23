@@ -414,7 +414,7 @@ void main(
 
   if (CUSTOM_PROCESSING_MODE == 0.f && RENODX_TONE_MAP_TYPE != 0.f) {
     RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] =
-        GenerateOutput(float3(_1326, _1327, _1328));
+        GenerateOutput(float3(_1326, _1327, _1328), OutputDevice);
     return;
   }
 

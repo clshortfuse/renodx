@@ -383,9 +383,9 @@ void main(
   float _1088 = exp2(log2(max(0.0f, _1062)) * InverseGamma.y);
   float _1089 = exp2(log2(max(0.0f, _1063)) * InverseGamma.y);
 
-if (CUSTOM_PROCESSING_MODE == 0.f && RENODX_TONE_MAP_TYPE != 0.f) {
+  if (CUSTOM_PROCESSING_MODE == 0.f && RENODX_TONE_MAP_TYPE != 0.f) {
     RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] =
-        GenerateOutput(float3(_1087, _1088, _1089));
+        GenerateOutput(float3(_1087, _1088, _1089), OutputDevice);
     return;
   }
 

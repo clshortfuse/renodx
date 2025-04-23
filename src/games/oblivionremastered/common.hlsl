@@ -74,15 +74,21 @@ float3 GenerateToneMap(float3 graded_bt709) {
   return GenerateToneMap();
 }
 
-float4 GenerateOutput() {
+float4 GenerateOutput(uint OutputDevice = 0u) {
   float3 color = renodx::draw::ToneMapPass(RENODX_UE_CONFIG.untonemapped_bt709, RENODX_UE_CONFIG.graded_bt709);
-  color = renodx::draw::RenderIntermediatePass(color);
+  renodx::draw::Config config = renodx::draw::BuildConfig();
+  if (OutputDevice != 0u) {
+    config.intermediate_encoding = renodx::draw::ENCODING_PQ;
+    config.intermediate_scaling = RENODX_DIFFUSE_WHITE_NITS;
+    config.intermediate_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
+  }
+  color = renodx::draw::RenderIntermediatePass(color, config);
   color *= 1.f / 1.05f;
   return float4(color, 1.f);
 }
 
-float4 GenerateOutput(float3 graded_bt709) {
+float4 GenerateOutput(float3 graded_bt709, uint OutputDevice = 0u) {
   SetGradedBT709(graded_bt709);
-  return GenerateOutput();
+  return GenerateOutput(OutputDevice);
 }
 
