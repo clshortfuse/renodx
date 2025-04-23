@@ -386,6 +386,13 @@ float3 RenderIntermediatePass(float3 color, Config config) {
 
   color *= config.intermediate_scaling;
 
+  [branch]
+  if (config.swap_chain_gamma_correction == GAMMA_CORRECTION_GAMMA_2_2) {
+    color = renodx::color::correct::GammaSafe(color, true, 2.2f);
+  } else if (config.swap_chain_gamma_correction == GAMMA_CORRECTION_GAMMA_2_4) {
+    color = renodx::color::correct::GammaSafe(color, true, 2.4f);
+  }
+
   color = renodx::color::convert::ColorSpaces(
       color,
       renodx::color::convert::COLOR_SPACE_BT709,
@@ -404,6 +411,13 @@ float3 InvertIntermediatePass(float3 color, Config config) {
       config.intermediate_color_space,
       renodx::color::convert::COLOR_SPACE_BT709);
 
+  [branch]
+  if (config.swap_chain_gamma_correction == GAMMA_CORRECTION_GAMMA_2_2) {
+    color = renodx::color::correct::GammaSafe(color, false, 2.2f);
+  } else if (config.swap_chain_gamma_correction == GAMMA_CORRECTION_GAMMA_2_4) {
+    color = renodx::color::correct::GammaSafe(color, false, 2.4f);
+  }
+
   color /= config.intermediate_scaling;
 
   [branch]
@@ -419,8 +433,6 @@ float3 InvertIntermediatePass(float3 color, Config config) {
 float3 SwapChainPass(float3 color, Config config) {
   color = DecodeColor(color, config.swap_chain_decoding);
 
-  color *= config.swap_chain_scaling_nits;
-
   if (config.swap_chain_gamma_correction == GAMMA_CORRECTION_GAMMA_2_2) {
     color = renodx::color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, renodx::color::convert::COLOR_SPACE_BT709);
     config.swap_chain_decoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
@@ -430,6 +442,8 @@ float3 SwapChainPass(float3 color, Config config) {
     config.swap_chain_decoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
     color = renodx::color::correct::GammaSafe(color, false, 2.4f);
   }
+
+  color *= config.swap_chain_scaling_nits;
 
   [branch]
   if (config.swap_chain_custom_color_space == COLOR_SPACE_CUSTOM_BT709D93) {
