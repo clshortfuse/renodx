@@ -40,7 +40,6 @@ struct ShaderInjectData {
   float peak_white_nits;
   float diffuse_white_nits;
   float graphics_white_nits;
-  float scene_grade_strength;
   float tone_map_type;
   float tone_map_exposure;
   float tone_map_highlights;
@@ -53,17 +52,19 @@ struct ShaderInjectData {
   float tone_map_hue_correction;
   float tone_map_hue_shift;
   float gamma_correction;
+  float scene_grade_strength;
+  float scene_grade_hue_correction;
+  float scene_grade_saturation_correction;
+  float scene_grade_blowout_restoration;
+  float scene_grade_hue_shift;
   float custom_auto_exposure;
   float custom_bloom;
   float custom_black_floor;
   float custom_processing_mode;
   float custom_chromatic_aberration;
+  float custom_eye_adaptation;
   float custom_hdr_videos;
-
-  float scene_grade_hue_correction;
-  float scene_grade_saturation_correction;
-  float scene_grade_blowout_restoration;
-  float scene_grade_hue_shift;
+  
 };
 
 #ifndef __cplusplus
@@ -101,6 +102,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_PROCESSING_MODE                   shader_injection.custom_processing_mode
 #define CUSTOM_CHROMATIC_ABERRATION              shader_injection.custom_chromatic_aberration
 #define CUSTOM_HDR_VIDEOS                        shader_injection.custom_hdr_videos
+#define CUSTOM_EYE_ADAPTATION                    shader_injection.custom_eye_adaptation
 #define CUSTOM_SCENE_GRADE_HUE_CORRECTION        shader_injection.scene_grade_hue_correction
 #define CUSTOM_SCENE_GRADE_SATURATION_CORRECTION shader_injection.scene_grade_saturation_correction
 #define CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION   shader_injection.scene_grade_blowout_restoration

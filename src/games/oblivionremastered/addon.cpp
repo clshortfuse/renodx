@@ -15,8 +15,11 @@
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../templates/settings.hpp"
+#include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
+
+#define OBLIVION_REMASTERED_HDR_VIDEO
 
 namespace {
 
@@ -35,6 +38,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         {"SceneGradeHueCorrection", &shader_injection.scene_grade_hue_correction},
         {"SceneGradeSaturationCorrection", &shader_injection.scene_grade_saturation_correction},
         {"SceneGradeBlowoutRestoration", &shader_injection.scene_grade_blowout_restoration},
+        {"SceneGradeHueShift", &shader_injection.scene_grade_hue_shift},
         {"ColorGradeExposure", &shader_injection.tone_map_exposure},
         {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
         {"ColorGradeShadows", &shader_injection.tone_map_shadows},
@@ -71,15 +75,24 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .parse = [](float value) { return value * 0.01f; },
         }),
         renodx::templates::settings::CreateSetting({
+            .key = "FxEyeAdaptation",
+            .binding = &shader_injection.custom_eye_adaptation,
+            .default_value = 100.f,
+            .label = "Eye Adaptation",
+            .section = "Effects",
+            .parse = [](float value) { return value * 0.01f; },
+        }),
+#ifdef OBLIVION_REMASTERED_HDR_VIDEO
+        renodx::templates::settings::CreateSetting({
             .key = "FxHDRVideos",
             .binding = &shader_injection.custom_hdr_videos,
             .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-            .default_value = 0.f,
+            .default_value = 2.f,
             .label = "HDR Videos",
             .section = "Effects",
             .labels = {"Off", "BT.2446a", "RenoDRT"},
         }),
-
+#endif
         renodx::templates::settings::CreateSetting({
             .key = "ProcessingMode",
             .binding = &shader_injection.custom_processing_mode,
@@ -89,6 +102,52 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .section = "Processing",
             .labels = {"LUT", "Output"},
         }),
+
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "Discord",
+            .section = "Links",
+            .group = "button-line-2",
+            .tint = 0x5865F2,
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "More Mods",
+            .section = "Links",
+            .group = "button-line-2",
+            .tint = 0x2B3137,
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx/wiki/Mods");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "Github",
+            .section = "Links",
+            .group = "button-line-2",
+            .tint = 0x2B3137,
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "ShortFuse's Ko-Fi",
+            .section = "Links",
+            .group = "button-line-2",
+            .tint = 0xFF5A16,
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::TEXT,
+            .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+            .section = "About",
+        },
     },
 });
 
@@ -171,6 +230,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .dimensions = {.width = 32, .height = 32, .depth = 32},
         });
 
+#ifdef OBLIVION_REMASTERED_HDR_VIDEO
         // FMV
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::b8g8r8a8_typeless,
@@ -186,6 +246,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .use_resource_view_cloning = true,
             .aspect_ratio = 3440.f / 1440.f,
         });
+#endif
 
         // // UI
         // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({

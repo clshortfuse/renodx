@@ -39,17 +39,16 @@ cbuffer _RootShaderParameters : register(b0) {
 
 [numthreads(1, 1, 1)]
 void main(
-  uint3 SV_DispatchThreadID : SV_DispatchThreadID,
-  uint3 SV_GroupID : SV_GroupID,
-  uint3 SV_GroupThreadID : SV_GroupThreadID,
-  uint SV_GroupIndex : SV_GroupIndex
-) {
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
   float _5;
   int _6;
   float _865;
   _5 = 0.0f;
   _6 = 0;
-  while(true) {
+  while (true) {
     int _7 = (uint)(_6) >> 2;
     float4 _9 = HistogramTexture.Load(int3(_7, 0, 0));
     int _14 = _6 & 3;
@@ -1626,11 +1625,18 @@ void main(
     float _1748 = max(9.999999747378752e-05f, _1747);
     float _1749 = _1746 / _1748;
     float _1750 = exp2(_1749);
-    RWEyeAdaptationBuffer[0] = float4(_884, _885, _821, _833);
-    RWEyeAdaptationBuffer[1] = float4(_1750, 0.0f, 0.0f, 0.0f);
 
-    // RWEyeAdaptationBuffer[0] = float4(_884, _885, _821, _833);
-    // RWEyeAdaptationBuffer[1] = float4(0.18f, 0.0f, 0.0f, 0.0f);
+    RWEyeAdaptationBuffer[0] = float4(_884, _885, _821, _833);
+    // RWEyeAdaptationBuffer[1] = float4(_1750, 0.0f, 0.0f, 0.0f);
+
+    // RWEyeAdaptationBuffer[0] = float4(
+    //     lerp(0.18f, _884, CUSTOM_EYE_ADAPTATION),
+    //     lerp(0.18f, _885, CUSTOM_EYE_ADAPTATION),
+    //     lerp(0.18f, _821, CUSTOM_EYE_ADAPTATION),
+    //     lerp(0.18f, _833, CUSTOM_EYE_ADAPTATION));
+
+    RWEyeAdaptationBuffer[1] = float4(lerp(1.f, _1750, CUSTOM_EYE_ADAPTATION), 0.0f, 0.0f, 0.0f);
+
     break;
   }
 }
