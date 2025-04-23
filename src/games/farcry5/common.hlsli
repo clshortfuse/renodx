@@ -105,6 +105,12 @@ float3 ApplyVanillaToneMap(float3 untonemapped_ap1) {
   return r0.rgb;
 }
 
+// solves for x
+// (x * (x + 0.0206166003) / (x * (0.983796 * x + 0.433679014) + 0.246179)) = 0.18
+float GetVanillaSDRMidGray() {
+  return 0.269565;
+}
+
 float3 SaturationAP1(float3 color_ap1, float saturation, float blowout = 0.f) {
   float3 color_bt709 = renodx::color::bt709::from::AP1(max(0, color_ap1));
 
@@ -139,11 +145,11 @@ float3 TonemapByLuminance(float3 untonemapped_ap1) {
   float scale = y > 0 ? y_mapped / y : 0;
   float3 tonemapped_ap1 = untonemapped_ap1 * scale;
 
-  tonemapped_ap1 = max(0, SaturationAP1(tonemapped_ap1, 22.f, .99f)); // increase saturation in midtones and shadows
+  tonemapped_ap1 = max(0, SaturationAP1(tonemapped_ap1, 22.f, .99f));  // increase saturation in midtones and shadows
 
-  float blend_brightness_ratio = 0.613478879269;
+  float mid_gray_ratio = 0.18f / GetVanillaSDRMidGray();
   float tonemapped_y = renodx::color::y::from::AP1(tonemapped_ap1);
-  tonemapped_ap1 = lerp(tonemapped_ap1, untonemapped_ap1 * blend_brightness_ratio, saturate(tonemapped_y));
+  tonemapped_ap1 = lerp(tonemapped_ap1, untonemapped_ap1 * mid_gray_ratio, saturate(tonemapped_y));
   tonemapped_ap1 = ApplyUserColorGrading(tonemapped_ap1);
 
   float peak_nits = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
@@ -162,8 +168,8 @@ float3 TonemapByChannel(float3 untonemapped_ap1) {
   float3 tonemapped = num / denom;
   tonemapped = max(0, HueCorrectAP1(tonemapped, untonemapped_ap1));
 
-  float blend_brightness_ratio = 0.613478879269;
-  tonemapped = lerp(tonemapped, untonemapped_ap1 * blend_brightness_ratio, saturate(tonemapped));
+  float mid_gray_ratio = 0.18f / GetVanillaSDRMidGray();
+  tonemapped = lerp(tonemapped, untonemapped_ap1 * mid_gray_ratio, saturate(tonemapped));
   tonemapped = ApplyUserColorGrading(tonemapped);
 
   tonemapped = renodx::tonemap::ExponentialRollOff(tonemapped, 0.f, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
