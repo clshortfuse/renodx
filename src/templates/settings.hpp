@@ -242,6 +242,18 @@ static const SettingConfig SCENE_GRADE_BLOWOUT_RESTORATION_CONFIG = {
     .is_visible = []() { return current_settings_mode >= 2; },
 };
 
+static const SettingConfig SCENE_GRADE_HUE_SHIFT_CONFIG = {
+    .key = "SceneGradeHueShift",
+    .default_value = 50.f,
+    .label = "Hue Shift",
+    .section = "Scene Grading",
+    .tooltip = "Selects strength of hue shifts from per-channel grading.",
+    .min = 0.f,
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.01f; },
+    .is_visible = []() { return current_settings_mode >= 2; },
+};
+
 static const SettingConfig COLOR_GRADE_EXPOSURE_CONFIG = {
     .key = "ColorGradeExposure",
     .default_value = 1.f,
@@ -408,6 +420,8 @@ static std::vector<renodx::utils::settings::Setting*> CreateDefaultSettings(cons
       settings.push_back(CreateSetting({SCENE_GRADE_SATURATION_CORRECTION_CONFIG, {.binding = binding}}));
     } else if (key == "SceneGradeBlowoutRestoration") {
       settings.push_back(CreateSetting({SCENE_GRADE_BLOWOUT_RESTORATION_CONFIG, {.binding = binding}}));
+    } else if (key == "SceneGradeHueShift") {
+      settings.push_back(CreateSetting({SCENE_GRADE_HUE_SHIFT_CONFIG, {.binding = binding}}));
     } else if (key == "ColorGradeExposure") {
       settings.push_back(CreateSetting({COLOR_GRADE_EXPOSURE_CONFIG, {.binding = binding}}));
     } else if (key == "ColorGradeHighlights") {
@@ -428,6 +442,16 @@ static std::vector<renodx::utils::settings::Setting*> CreateDefaultSettings(cons
       settings.push_back(CreateSetting({FX_BLOOM_CONFIG, {.binding = binding}}));
     } else {
       throw std::runtime_error("Unknown setting key: " + key);
+    }
+  }
+  return settings;
+}
+
+static std::vector<renodx::utils::settings::Setting*> JoinSettings(const std::vector<std::vector<renodx::utils::settings::Setting*>>& collection) {
+  std::vector<renodx::utils::settings::Setting*> settings;
+  for (const auto& group : collection) {
+    for (const auto& setting : group) {
+      settings.push_back(setting);
     }
   }
   return settings;
