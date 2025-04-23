@@ -3062,9 +3062,9 @@ class Decompiler {
         std::string value;
         if (has_value_w) {
           value = std::format("float4({}, {}, {}, {})", ParseFloat(value0), ParseFloat(value1), ParseFloat(value2), ParseFloat(value3));
-        } else if (has_coord_z) {
+        } else if (has_value_z) {
           value = std::format("float3({}, {}, {})", ParseFloat(value0), ParseFloat(value1), ParseFloat(value2));
-        } else if (has_coord_y) {
+        } else if (has_value_y) {
           value = std::format("float2({}, {})", ParseFloat(value0), ParseFloat(value1));
         } else {
           value = std::format("{}", ParseFloat(value0));
