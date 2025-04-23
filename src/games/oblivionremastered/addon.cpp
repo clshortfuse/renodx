@@ -16,6 +16,7 @@
 #include "../../mods/swapchain.hpp"
 #include "../../templates/settings.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
@@ -51,14 +52,6 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
     }),
     {
         renodx::templates::settings::CreateSetting({
-            .key = "FxBlackFloor",
-            .binding = &shader_injection.custom_black_floor,
-            .default_value = 0.f,
-            .label = "Black Floor",
-            .section = "Effects",
-            .parse = [](float value) { return value * 0.02f; },
-        }),
-        renodx::templates::settings::CreateSetting({
             .key = "FxAutoExposure",
             .binding = &shader_injection.custom_auto_exposure,
             .default_value = 100.f,
@@ -79,6 +72,23 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .binding = &shader_injection.custom_eye_adaptation,
             .default_value = 100.f,
             .label = "Eye Adaptation",
+            .section = "Effects",
+            .parse = [](float value) { return value * 0.01f; },
+        }),
+        renodx::templates::settings::CreateSetting({
+            .key = "FxGrainType",
+            .binding = &shader_injection.custom_grain_type,
+            .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+            .default_value = 1.f,
+            .label = "Grain Type",
+            .section = "Effects",
+            .labels = {"Vanilla", "Perceptual"},
+        }),
+        renodx::templates::settings::CreateSetting({
+            .key = "FxGrainStrength",
+            .binding = &shader_injection.custom_grain_strength,
+            .default_value = 0.f,
+            .label = "Grain Strength",
             .section = "Effects",
             .parse = [](float value) { return value * 0.01f; },
         }),
@@ -166,9 +176,13 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
-      {"FxBloom", 50.f},
       {"FxHDRVideos", 0.f},
-      {"FxBlackFloor", 50.f},
+      {"FxAutoExposure", 100.f},
+      {"FxChromaticAberration", 100.f},
+      {"FxEyeAdaptation", 100.f},
+      {"FxCustomGrain", 100.f},
+      {"FxBloom", 0.f},
+
   });
 }
 
@@ -260,6 +274,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::prevent_full_screen = false;
         renodx::mods::swapchain::force_screen_tearing = true;
 
+        renodx::utils::random::binds.push_back(&shader_injection.custom_random);
+
         initialized = true;
       }
 
@@ -269,6 +285,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
+  renodx::utils::random::Use(fdw_reason);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);

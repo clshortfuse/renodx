@@ -638,7 +638,7 @@ void main(
     // float4 _275 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, float3(((LUTScale * saturate((log2((((((BloomDirtMaskTint.x * _139.x) + 1.0f) * _129.x) * _232) + 0.002667719265446067f) + (((ColorScale0.x * _105.x) * _172) * _233)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset), ((LUTScale * saturate((log2((((((BloomDirtMaskTint.y * _139.y) + 1.0f) * _129.y) * _232) + 0.002667719265446067f) + (((ColorScale0.y * _105.y) * _173) * _233)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset), ((LUTScale * saturate((log2((((((BloomDirtMaskTint.z * _139.z) + 1.0f) * _129.z) * _232) + 0.002667719265446067f) + (((ColorScale0.z * _105.z) * _174) * _233)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset)), 0.0f);
 
     float3 untonemapped = float3(_105.x, _105.y, _105.z);
-    float3 bloom_extra = ((((BloomDirtMaskTint.x * _139.rgb) + 1.0f) * _129.rgb) * _232) * CUSTOM_BLOOM + 0.002667719265446067f * 0;
+    float3 bloom_extra = ((((BloomDirtMaskTint.x * _139.rgb) + 1.0f) * _129.rgb) * _232) * CUSTOM_BLOOM + 0.002667719265446067f;
     _233 = lerp(1.f, _233, CUSTOM_AUTO_EXPOSURE);
     float3 scaled_color = (((ColorScale0.rgb * untonemapped.rgb) * SceneColorApplyParamaters[0].rgb) * _233);
     float3 lut_input_color = bloom_extra + scaled_color;
@@ -678,13 +678,26 @@ void main(
       _357 = _280;
       _358 = _281;
     }
-    
 
-    float _365 = (frac(sin((GrainRandomFull.x + _49) + ((GrainRandomFull.y + _50) * 543.3099975585938f)) * 493013.0f) * 2.0f) + -1.0f;
-    float _368 = min(max((_365 * +1.#INF), -1.0f), 1.0f);
-    float _377 = (_368 - (sqrt(saturate(1.0f - abs(_365))) * _368)) * BackbufferQuantizationDithering;
+    float _377 = 0.f;
+    if (CUSTOM_GRAIN_TYPE == 1.f) {
+      float3 linear_color = renodx::draw::InvertIntermediatePass(float3(_356, _357, _358));
+      float3 grained = renodx::effects::ApplyFilmGrain(
+          linear_color,
+          float2(_49, _50),
+          CUSTOM_RANDOM,
+          CUSTOM_GRAIN_STRENGTH * 0.03f,
+          1.f);
 
-    _377 *= CUSTOM_BLACK_FLOOR;
+      float3 encoded = renodx::draw::RenderIntermediatePass(grained);
+      _356 = encoded.r;
+      _357 = encoded.g;
+      _358 = encoded.b;
+    } else {
+      float _365 = (frac(sin((GrainRandomFull.x + _49) + ((GrainRandomFull.y + _50) * 543.3099975585938f)) * 493013.0f) * 2.0f) + -1.0f;
+      float _368 = min(max((_365 * +1.#INF), -1.0f), 1.0f);
+      _377 = (_368 - (sqrt(saturate(1.0f - abs(_365))) * _368)) * BackbufferQuantizationDithering;
+    }
 
     uint _384 = Output_ViewportMin.x + SV_DispatchThreadID.x;
     uint _385 = Output_ViewportMin.y + SV_DispatchThreadID.y;

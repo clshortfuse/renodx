@@ -59,12 +59,13 @@ struct ShaderInjectData {
   float scene_grade_hue_shift;
   float custom_auto_exposure;
   float custom_bloom;
-  float custom_black_floor;
   float custom_processing_mode;
   float custom_chromatic_aberration;
   float custom_eye_adaptation;
   float custom_hdr_videos;
-  
+  float custom_grain_type;
+  float custom_grain_strength;
+  float custom_random;
 };
 
 #ifndef __cplusplus
@@ -98,7 +99,6 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE        -1.f
 #define CUSTOM_BLOOM                             shader_injection.custom_bloom
 #define CUSTOM_AUTO_EXPOSURE                     shader_injection.custom_auto_exposure
-#define CUSTOM_BLACK_FLOOR                       shader_injection.custom_black_floor
 #define CUSTOM_PROCESSING_MODE                   shader_injection.custom_processing_mode
 #define CUSTOM_CHROMATIC_ABERRATION              shader_injection.custom_chromatic_aberration
 #define CUSTOM_HDR_VIDEOS                        shader_injection.custom_hdr_videos
@@ -107,6 +107,9 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_SCENE_GRADE_SATURATION_CORRECTION shader_injection.scene_grade_saturation_correction
 #define CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION   shader_injection.scene_grade_blowout_restoration
 #define CUSTOM_SCENE_GRADE_HUE_SHIFT             shader_injection.scene_grade_hue_shift
+#define CUSTOM_GRAIN_TYPE                        shader_injection.custom_grain_type
+#define CUSTOM_GRAIN_STRENGTH                    shader_injection.custom_grain_strength
+#define CUSTOM_RANDOM                            shader_injection.custom_random
 
 #include "../../shaders/renodx.hlsl"
 
