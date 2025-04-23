@@ -652,9 +652,8 @@ void main(
     if (RENODX_TONE_MAP_TYPE != 0.f && CUSTOM_PROCESSING_MODE == 1.f) {
       float3 mid_gray = (((ColorScale0.rgb * 0.18f) * SceneColorApplyParamaters[0].rgb) * _233);
       float mid_gray_luminance = renodx::color::y::from::BT709(mid_gray);
-      float3 sdr_color = renodx::color::srgb::DecodeSafe(float3(_279, _280, _281));
-
-      float3 tonemapped = renodx::draw::ToneMapPass(lut_input_color, sdr_color);
+      float3 linear_color = renodx::draw::InvertIntermediatePass(float3(_279, _280, _281));
+      float3 tonemapped = renodx::draw::ToneMapPass(lut_input_color * mid_gray_luminance / 0.18f, linear_color);
       tonemapped = renodx::draw::RenderIntermediatePass(tonemapped);
       _279 = tonemapped.r;
       _280 = tonemapped.g;

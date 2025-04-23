@@ -670,10 +670,14 @@ void main(
     if (RENODX_TONE_MAP_TYPE != 0.f && CUSTOM_PROCESSING_MODE == 1.f) {
       float3 mid_gray = (((ColorScale0.rgb * 0.18f) * SceneColorApplyParamaters[0].rgb) * _304);
       float mid_gray_luminance = renodx::color::y::from::BT709(mid_gray);
-      float3 sdr_color = renodx::color::srgb::DecodeSafe(float3(_374, _375, _376));
+      renodx::draw::Config config = renodx::draw::BuildConfig();
+      config.intermediate_encoding = renodx::draw::ENCODING_PQ;
+      config.intermediate_scaling = RENODX_DIFFUSE_WHITE_NITS;
+      config.intermediate_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
 
-      float3 tonemapped = renodx::draw::ToneMapPass(lut_input_color * mid_gray_luminance / 0.18f, sdr_color);
-      tonemapped = renodx::draw::RenderIntermediatePass(tonemapped);
+      float3 linear_color = renodx::draw::InvertIntermediatePass(float3(_374, _375, _376), config);
+      float3 tonemapped = renodx::draw::ToneMapPass(lut_input_color * mid_gray_luminance / 0.18f, linear_color, config);
+      tonemapped = renodx::draw::RenderIntermediatePass(tonemapped, config);
       _374 = tonemapped.r;
       _375 = tonemapped.g;
       _376 = tonemapped.b;
@@ -699,7 +703,11 @@ void main(
 
     float _472 = 0.f;
     if (CUSTOM_GRAIN_TYPE == 1.f) {
-      float3 linear_color = renodx::draw::InvertIntermediatePass(float3(_451, _452, _453));
+      renodx::draw::Config config = renodx::draw::BuildConfig();
+      config.intermediate_encoding = renodx::draw::ENCODING_PQ;
+      config.intermediate_scaling = RENODX_DIFFUSE_WHITE_NITS;
+      config.intermediate_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
+      float3 linear_color = renodx::draw::InvertIntermediatePass(float3(_451, _452, _453), config);
       float3 grained = renodx::effects::ApplyFilmGrain(
           linear_color,
           float2(_49, _50),
@@ -707,7 +715,7 @@ void main(
           CUSTOM_GRAIN_STRENGTH * 0.03f,
           1.f);
 
-      float3 encoded = renodx::draw::RenderIntermediatePass(grained);
+      float3 encoded = renodx::draw::RenderIntermediatePass(grained, config);
       _451 = encoded.r;
       _452 = encoded.g;
       _453 = encoded.b;
