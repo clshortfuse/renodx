@@ -110,6 +110,7 @@ static bool upgrade_unknown_resource_views = false;
 static bool upgrade_resource_views = true;
 static bool prevent_full_screen = true;
 static bool force_borderless = true;
+static bool force_screen_tearing = true;
 static bool is_vulkan = false;
 static bool swapchain_proxy_compatibility_mode = true;
 static bool swapchain_proxy_revert_state = false;
@@ -1069,7 +1070,9 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
       if (prevent_full_screen) {
         desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
       }
-      desc.present_flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+      if (force_screen_tearing) {
+        desc.present_flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+      }
     }
   }
 
