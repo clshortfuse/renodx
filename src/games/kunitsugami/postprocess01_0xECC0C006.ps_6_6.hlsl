@@ -193,7 +193,6 @@ float4 main(
 ) : SV_Target {
   float4 SV_Target;
   float3 untonemapped;
-  float3 test = float3(0.0f, 0.0f, 0.0f);
 
   bool _50 = (((uint)(cPassEnabled) & 1) == 0);
   bool _56;

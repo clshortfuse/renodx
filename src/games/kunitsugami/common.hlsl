@@ -12,8 +12,6 @@ float3 Tonemap(float3 untonemapped, float3 graded) {
 
 float3 FinalOutput(float3 final_image) {
   final_image = renodx::draw::SwapChainPass(final_image);
-  final_image = renodx::color::correct::GammaSafe(final_image);
-  final_image = renodx::color::bt2020::from::BT709(final_image);
-  final_image = renodx::color::pq::EncodeSafe(final_image, 80.f);
+
   return final_image;
 }
