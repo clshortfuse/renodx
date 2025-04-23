@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../common.hlsl"
 
 Texture2D<float4> Textures_1 : register(t0);
 
@@ -456,7 +456,7 @@ void main(
   float _1369 = exp2(log2(max(0.0f, _1343)) * InverseGamma.y);
   float _1370 = exp2(log2(max(0.0f, _1344)) * InverseGamma.y);
 
-  if (RENODX_TONE_MAP_TYPE != 0) {
+if (CUSTOM_PROCESSING_MODE == 0.f && RENODX_TONE_MAP_TYPE != 0.f) {
     RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] =
         GenerateOutput(float3(_1368, _1369, _1370));
     return;

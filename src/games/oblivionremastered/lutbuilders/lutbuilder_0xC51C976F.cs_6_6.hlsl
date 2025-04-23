@@ -1,3 +1,5 @@
+#include "../common.hlsl"
+
 Texture2D<float4> Textures_1 : register(t0);
 
 RWTexture3D<float4> RWOutputTexture : register(u0);
@@ -70,11 +72,10 @@ SamplerState Samplers_1 : register(s0);
 
 [numthreads(8, 8, 8)]
 void main(
-  uint3 SV_DispatchThreadID : SV_DispatchThreadID,
-  uint3 SV_GroupID : SV_GroupID,
-  uint3 SV_GroupThreadID : SV_GroupThreadID,
-  uint SV_GroupIndex : SV_GroupIndex
-) {
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
   float _22 = 0.5f / LUTSize;
   float _27 = LUTSize + -1.0f;
   float _51;
@@ -160,6 +161,9 @@ void main(
   float _131 = ((mad(-0.010861365124583244f, _95, mad(1.0970927476882935f, _92, (_89 * -0.08343357592821121f))) - _92) * _114) + _92;
   float _132 = ((mad(1.2036951780319214f, _95, mad(-0.09862580895423889f, _92, (_89 * -0.02579331398010254f))) - _95) * _114) + _95;
   float _133 = dot(float3(_130, _131, _132), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+
+  SetUntonemappedAP1(float3(_130, _131, _132));
+
   float _147 = ColorOffset.w + ColorOffsetShadows.w;
   float _161 = ColorGain.w * ColorGainShadows.w;
   float _175 = ColorGamma.w * ColorGammaShadows.w;
@@ -288,6 +292,9 @@ void main(
   float _838 = ((mad(-0.06537103652954102f, _822, mad(1.451815478503704e-06f, _821, (_820 * 1.065374732017517f))) - _820) * BlueCorrection) + _820;
   float _839 = ((mad(-0.20366770029067993f, _822, mad(1.2036634683609009f, _821, (_820 * -2.57161445915699e-07f))) - _821) * BlueCorrection) + _821;
   float _840 = ((mad(0.9999996423721313f, _822, mad(2.0954757928848267e-08f, _821, (_820 * 1.862645149230957e-08f))) - _822) * BlueCorrection) + _822;
+
+  SetTonemappedAP1(_838, _839, _840);
+
   float _865 = saturate(max(0.0f, mad((WorkingColorSpace_FromAP1[0].z), _840, mad((WorkingColorSpace_FromAP1[0].y), _839, ((WorkingColorSpace_FromAP1[0].x) * _838)))));
   float _866 = saturate(max(0.0f, mad((WorkingColorSpace_FromAP1[1].z), _840, mad((WorkingColorSpace_FromAP1[1].y), _839, ((WorkingColorSpace_FromAP1[1].x) * _838)))));
   float _867 = saturate(max(0.0f, mad((WorkingColorSpace_FromAP1[2].z), _840, mad((WorkingColorSpace_FromAP1[2].y), _839, ((WorkingColorSpace_FromAP1[2].x) * _838)))));
@@ -325,6 +332,13 @@ void main(
   float _1017 = exp2(log2(max(0.0f, (lerp(_994, OverlayColor.x, OverlayColor.w)))) * InverseGamma.y);
   float _1018 = exp2(log2(max(0.0f, (lerp(_995, OverlayColor.y, OverlayColor.w)))) * InverseGamma.y);
   float _1019 = exp2(log2(max(0.0f, (lerp(_996, OverlayColor.z, OverlayColor.w)))) * InverseGamma.y);
+
+  if (CUSTOM_PROCESSING_MODE == 0.f && RENODX_TONE_MAP_TYPE != 0.f) {
+    RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] =
+        GenerateOutput(float3(_1017, _1018, _1019));
+    return;
+  }
+
   if ((uint)(WorkingColorSpace_bIsSRGB) == 0) {
     float _1026 = mad((WorkingColorSpace_ToAP1[0].z), _1019, mad((WorkingColorSpace_ToAP1[0].y), _1018, ((WorkingColorSpace_ToAP1[0].x) * _1017)));
     float _1029 = mad((WorkingColorSpace_ToAP1[1].z), _1019, mad((WorkingColorSpace_ToAP1[1].y), _1018, ((WorkingColorSpace_ToAP1[1].x) * _1017)));

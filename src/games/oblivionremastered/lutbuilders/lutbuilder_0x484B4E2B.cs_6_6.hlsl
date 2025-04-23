@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../common.hlsl"
 
 RWTexture3D<float4> RWOutputTexture : register(u0);
 
@@ -365,8 +365,9 @@ void main(
   float _1165 = exp2(log2(max(0.0f, (lerp(_1142, OverlayColor.y, OverlayColor.w)))) * InverseGamma.y);
   float _1166 = exp2(log2(max(0.0f, (lerp(_1143, OverlayColor.z, OverlayColor.w)))) * InverseGamma.y);
 
-  if (RENODX_TONE_MAP_TYPE != 0) {
-    RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = GenerateOutput(float3(_1164, _1165, _1166));
+  if (CUSTOM_PROCESSING_MODE == 0.f && RENODX_TONE_MAP_TYPE != 0.f) {
+    RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] =
+        GenerateOutput(float3(_1164, _1165, _1166));
     return;
   }
 

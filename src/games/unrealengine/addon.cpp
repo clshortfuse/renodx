@@ -430,12 +430,6 @@ const std::unordered_map<
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
-        {
-            "OblivionRemastered",
-            {
-                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
-            },
-        },
 };
 
 float g_dump_shaders = 0;
@@ -752,8 +746,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         auto process_path = renodx::utils::platform::GetCurrentProcessPath();
         auto product_name = renodx::utils::platform::GetProductName(process_path);
         auto param_count = params.size();
-
-        if (product_name == "OblivionRemastered") return true;
 
         if (params.size() >= 20) return false;
 
