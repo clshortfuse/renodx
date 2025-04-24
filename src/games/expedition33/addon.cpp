@@ -33,9 +33,9 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
                                                                                             {"ToneMapPeakNits", &shader_injection.peak_white_nits},
                                                                                             {"ToneMapGameNits", &shader_injection.diffuse_white_nits},
                                                                                             {"ToneMapUINits", &shader_injection.graphics_white_nits},
-                                                                                            {"SceneGradeSaturationCorrection", &shader_injection.scene_grade_saturation_correction},
+                                                                                            /* {"SceneGradeSaturationCorrection", &shader_injection.scene_grade_saturation_correction},
                                                                                             {"SceneGradeHueCorrection", &shader_injection.scene_grade_hue_correction},
-                                                                                            {"SceneGradeBlowoutRestoration", &shader_injection.scene_grade_blowout_restoration},
+                                                                                            {"SceneGradeBlowoutRestoration", &shader_injection.scene_grade_blowout_restoration}, */
                                                                                             {"ColorGradeExposure", &shader_injection.tone_map_exposure},
                                                                                             {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
                                                                                             {"ColorGradeShadows", &shader_injection.tone_map_shadows},
@@ -144,12 +144,17 @@ bool fired_on_init_swapchain = false;
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
-  fired_on_init_swapchain = true;
+
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+  settings[2]->can_reset = true;
   if (peak.has_value()) {
-    settings[1]->default_value = peak.value();
-    settings[1]->can_reset = true;
+    settings[2]->default_value = roundf(peak.value());
+  } else {
+    settings[2]->default_value = 1000.f;
   }
+
+  settings[3]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[2]->default_value), 203.f);
+  fired_on_init_swapchain = true;
 }
 
 }  // namespace
