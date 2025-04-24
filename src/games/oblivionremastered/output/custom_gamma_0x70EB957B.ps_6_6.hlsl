@@ -31,9 +31,6 @@ float4 main(
   float4 SV_Target;
   float4 _32 = PostProcessInput_0_Texture.Sample(PostProcessInput_0_Sampler, float2(((((SV_Position.x - float((uint)PostProcessOutput_ViewportMin.x)) * PostProcessOutput_ViewportSizeInverse.x) * PostProcessInput_0_UVViewportSize.x) + PostProcessInput_0_UVViewportMin.x), ((((SV_Position.y - float((uint)PostProcessOutput_ViewportMin.y)) * PostProcessOutput_ViewportSizeInverse.y) * PostProcessInput_0_UVViewportSize.y) + PostProcessInput_0_UVViewportMin.y)));
 
-  float4 signs = renodx::math::Sign(_32);
-  _32 = abs(_32);
-
   float _42 = select((_32.x <= 0.0f), 0.0f, exp2(log2(_32.x) * (Material_PreshaderBuffer[1].w)));
   float _47 = select((_32.y <= 0.0f), 0.0f, exp2(log2(_32.y) * (Material_PreshaderBuffer[1].w)));
   float _52 = select((_32.z <= 0.0f), 0.0f, exp2(log2(_32.z) * (Material_PreshaderBuffer[1].w)));
@@ -42,6 +39,7 @@ float4 main(
   SV_Target.z = max(((((Material_PreshaderBuffer[2].w) - _52) * (Material_PreshaderBuffer[2].x)) + _52), 0.0f);
   SV_Target.w = 0.0f;
 
-  SV_Target *= signs;
+  // Disable post process gamma raise (breaks peak nits, breaks scaling, and broken with PQ)
+  SV_Target.rgb = _32.rgb;
   return SV_Target;
 }
