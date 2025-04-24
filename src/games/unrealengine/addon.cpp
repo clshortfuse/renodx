@@ -754,6 +754,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         if (product_name == "Lords of the Fallen") return true;
         if (product_name == "Ready Or Not") return true;
         if (product_name == "Eternal Strands") return true;
+        if (product_name == "Expedition 33") return true;
 
 
         // UE DX12 has a 4 param root sig that crashes if modified. Track for now
