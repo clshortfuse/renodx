@@ -9,6 +9,14 @@ struct OutputSignature {
   float SV_Target_1 : SV_Target1;
 };
 
+void PrepareLutInput(inout float3 lut_input_color, float mid_gray_luminance) {
+  if (RENODX_TONE_MAP_TYPE) {
+    lut_input_color = renodx::tonemap::dice::BT709(lut_input_color, CUSTOM_DICE_PEAK, mid_gray_luminance);
+  } else {
+    lut_input_color = saturate(lut_input_color);
+  }
+}
+
 OutputSignature FinalizeLutTonemap(float3 linearColor) {
   OutputSignature output;
 
@@ -21,12 +29,13 @@ OutputSignature FinalizeLutTonemap(float3 linearColor) {
 }
 
 OutputSignature LutToneMap(float3 untonemapped, float3 lutOutput, float2 TEXCOORD) {
-  lutOutput *= 1.0499999523162842f;
   lutOutput = renodx::color::srgb::DecodeSafe(lutOutput);
   float3 final = lutOutput;
 
   if (RENODX_TONE_MAP_TYPE > 0.f) {
-    final = renodx::draw::ToneMapPass(untonemapped.rgb, saturate(final));
+    final = saturate(final);
+
+    final = renodx::draw::ToneMapPass(untonemapped.rgb, final);
   }
 
   /* if (CUSTOM_GRAIN_STRENGTH > 0.f) {
@@ -51,3 +60,10 @@ OutputSignature LutToneMap(float3 untonemapped, float3 lutOutput, float2 TEXCOOR
   return LutToneMap(untonemapped, lutOutput, TEXCOORD);
 }
 
+OutputSignature LutToneMap(float3 untonemapped, float3 lutOutput, float2 TEXCOORD, float mid_gray_luminance) {
+  if (RENODX_TONE_MAP_TYPE > 0.f) {
+    untonemapped = untonemapped * mid_gray_luminance / 0.18f;
+  }
+
+  return LutToneMap(untonemapped, lutOutput, TEXCOORD);
+}

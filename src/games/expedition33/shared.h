@@ -66,28 +66,32 @@ cbuffer shader_injection : register(b13) {
   ShaderInjectData shader_injection : packoffset(c0);
 }
 
-#define RENODX_TONE_MAP_TYPE                      shader_injection.tone_map_type
-#define RENODX_PEAK_WHITE_NITS                    shader_injection.peak_white_nits
-#define RENODX_DIFFUSE_WHITE_NITS                 shader_injection.diffuse_white_nits
-#define RENODX_GRAPHICS_WHITE_NITS                shader_injection.graphics_white_nits
-#define RENODX_TONE_MAP_PER_CHANNEL               shader_injection.tone_map_per_channel
-#define RENODX_TONE_MAP_EXPOSURE                  shader_injection.tone_map_exposure
-#define RENODX_TONE_MAP_HIGHLIGHTS                shader_injection.tone_map_highlights
-#define RENODX_TONE_MAP_SHADOWS                   shader_injection.tone_map_shadows
-#define RENODX_TONE_MAP_CONTRAST                  shader_injection.tone_map_contrast
-#define RENODX_TONE_MAP_SATURATION                shader_injection.tone_map_saturation
-#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION      shader_injection.tone_map_highlight_saturation
-#define RENODX_TONE_MAP_BLOWOUT                   shader_injection.tone_map_blowout
-#define RENODX_TONE_MAP_FLARE                     shader_injection.tone_map_flare
-#define RENODX_RENO_DRT_TONE_MAP_METHOD           renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-#define RENODX_PER_CHANNEL_HUE_CORRECTION         shader_injection.scene_grade_hue_correction
-#define RENODX_PER_CHANNEL_CHROMINANCE_CORRECTION shader_injection.scene_grade_saturation_correction
-#define RENODX_PER_CHANNEL_BLOWOUT_RESTORATION    shader_injection.scene_grade_blowout_restoration
-#define CUSTOM_GRAIN_STRENGTH                     0.f
-#define CUSTOM_RANDOM                             shader_injection.custom_random
-#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
-#define RENODX_SWAP_CHAIN_ENCODING                renodx::draw::ENCODING_PQ
-
+#define RENODX_TONE_MAP_TYPE                     shader_injection.tone_map_type
+#define RENODX_PEAK_WHITE_NITS                   shader_injection.peak_white_nits
+#define RENODX_DIFFUSE_WHITE_NITS                shader_injection.diffuse_white_nits
+#define RENODX_GRAPHICS_WHITE_NITS               shader_injection.graphics_white_nits
+#define RENODX_TONE_MAP_PER_CHANNEL              shader_injection.tone_map_per_channel
+#define RENODX_TONE_MAP_EXPOSURE                 shader_injection.tone_map_exposure
+#define RENODX_TONE_MAP_HIGHLIGHTS               shader_injection.tone_map_highlights
+#define RENODX_TONE_MAP_SHADOWS                  shader_injection.tone_map_shadows
+#define RENODX_TONE_MAP_CONTRAST                 shader_injection.tone_map_contrast
+#define RENODX_TONE_MAP_SATURATION               shader_injection.tone_map_saturation
+#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION     shader_injection.tone_map_highlight_saturation
+#define RENODX_TONE_MAP_BLOWOUT                  shader_injection.tone_map_blowout
+#define RENODX_TONE_MAP_FLARE                    shader_injection.tone_map_flare
+#define RENODX_RENO_DRT_TONE_MAP_METHOD          renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE   color::convert::COLOR_SPACE_BT2020
+#define RENODX_SWAP_CHAIN_ENCODING               renodx::draw::ENCODING_PQ
+#define RENODX_TONE_MAP_HUE_SHIFT                1.f
+#define RENODX_TONE_MAP_HUE_SHIFT_METHOD         renodx::draw::HUE_SHIFT_METHOD_ACES_FITTED_AP1
+#define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   1.f
+#define CUSTOM_COLOR_GRADE_HUE_CORRECTION        1.f
+#define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION 0.5f
+#define CUSTOM_COLOR_GRADE_HUE_SHIFT             1.f
+#define CUSTOM_DICE_PEAK                         1.f
+#define CUSTOM_DICE_SHOULDER                     0.18f
+#define CUSTOM_GRAIN_STRENGTH                    0.f
+#define CUSTOM_RANDOM                            shader_injection.custom_random
 
 #include "../../shaders/renodx.hlsl"
 

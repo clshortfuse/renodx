@@ -617,12 +617,14 @@ OutputSignature main(
   float3 untonemapped = _46.rgb;
   float3 bloom_extra = (((BloomDirtMaskTint.rgb * _89.rgb) + 1.0f) * _70.rgb * _197) + 0.002667719265446067f;
   float3 scaled_color = (((ColorScale0.rgb * untonemapped.rgb) * SceneColorApplyParamaters[0].rgb) * _198);
+  float3 midgray = (((ColorScale0.rgb * 0.18f) * SceneColorApplyParamaters[0].rgb) * _198);
+  float midgray_lum = renodx::color::y::from::BT709(midgray);
   float3 lut_input_color = bloom_extra + scaled_color;
+  PrepareLutInput(lut_input_color, midgray_lum);
   float3 lut_coordinates = (((LUTScale * saturate((log2(lut_input_color) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset));
   float4 _240 = ColorGradingLUT.Sample(ColorGradingLUTSampler, lut_coordinates);
 
-  float3 midgray = (((ColorScale0.rgb * 0.18f) * SceneColorApplyParamaters[0].rgb) * _198);
-  return LutToneMap(untonemapped, _240.rgb, TEXCOORD, midgray);
+  return LutToneMap(untonemapped, _240.rgb, TEXCOORD, midgray_lum);
 
   float _244 = _240.x * 1.0499999523162842f;
   float _245 = _240.y * 1.0499999523162842f;

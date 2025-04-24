@@ -569,11 +569,19 @@ OutputSignature main(
   float _101 = SceneColorApplyParamaters[0].y;
   float _102 = SceneColorApplyParamaters[0].z;
   float _103 = _25 * View.OneOverPreExposure;
-  float4 _148 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3(((LUTScale * saturate((log2((((_61.x * _103) * ((BloomDirtMaskTint.x * _80.x) + 1.0f)) + 0.002667719265446067f) + (((_37.x * _103) * ColorScale0.x) * _100)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset), ((LUTScale * saturate((log2((((_61.y * _103) * ((BloomDirtMaskTint.y * _80.y) + 1.0f)) + 0.002667719265446067f) + (((_37.y * _103) * ColorScale0.y) * _101)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset), ((LUTScale * saturate((log2((((_61.z * _103) * ((BloomDirtMaskTint.z * _80.z) + 1.0f)) + 0.002667719265446067f) + (((_37.z * _103) * ColorScale0.z) * _102)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset)));
 
   float3 midgray = (((ColorScale0.rgb * 0.18f) * SceneColorApplyParamaters[0].rgb) * _103);
+  float midgray_lum = renodx::color::y::from::BT709(midgray);
   float3 untonemapped = _37.rgb;
-  return LutToneMap(untonemapped, _148.rgb, TEXCOORD, midgray);
+  float3 bloom_extra = (((BloomDirtMaskTint.rgb * _80.rgb) + 1.0f) * _61.rgb * _103) + 0.002667719265446067f;
+  float3 scaled_color = (((ColorScale0.rgb * untonemapped.rgb) * SceneColorApplyParamaters[0].rgb) * _103);
+  float3 lut_input_color = bloom_extra + scaled_color;
+  PrepareLutInput(lut_input_color, midgray_lum);
+  float3 lut_coordinates = (((LUTScale * saturate((log2(lut_input_color) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset));
+
+  float4 _148 = ColorGradingLUT.Sample(ColorGradingLUTSampler, lut_coordinates);
+
+  return LutToneMap(untonemapped, _148.rgb, TEXCOORD, midgray_lum);
 
   float _152 = _148.x * 1.0499999523162842f;
   float _153 = _148.y * 1.0499999523162842f;
