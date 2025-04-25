@@ -56,11 +56,21 @@ float3 UIScale(float3 color) {
   return color;
 }
 
+// logc c1000 custom encoding
+static const float arri_a = renodx::color::arri::logc::c1000::PARAMS.a;
+static const float arri_b = renodx::color::arri::logc::c1000::PARAMS.b;
+static const float arri_c = renodx::color::arri::logc::c1000::PARAMS.c;
+static const float arri_d = renodx::color::arri::logc::c1000::PARAMS.d;
+
+float3 arriDecode(float3 color) {
+  return (pow(10.f, (color - arri_d) / arri_c) - arri_b) / arri_a;
+}
+
 float3 lutShaper(float3 color, bool builder = false) {
-  // color = builder ? renodx::color::arri::logc::c1000::Decode(color, false)
-  //				: saturate(renodx::color::arri::logc::c1000::Encode(color, false));
-  color = builder ? renodx::color::pq::Decode(color, 100.f)
-                  : renodx::color::pq::EncodeSafe(color, 100.f);
+  // color = builder ? arriDecode(color)
+  //				: saturate(renodx::color::arri::logc::c1000::Encode(color));
+  color = builder ? renodx::color::bt709::from::BT2020(renodx::color::pq::Decode(color, 100.f))
+                  : renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(color), 100.f);
   return color;
 }
 
