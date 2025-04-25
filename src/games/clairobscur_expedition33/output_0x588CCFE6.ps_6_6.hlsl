@@ -507,6 +507,7 @@ struct FViewConstants {
   float3 TLASPreViewTranslationLow;
 };
 
+
 StructuredBuffer<float4> EyeAdaptationBuffer : register(t0);
 
 Texture2D<float4> ColorTexture : register(t1);
@@ -574,12 +575,13 @@ SamplerState ColorGradingLUTSampler : register(s5);
 }; */
 
 OutputSignature main(
-    noperspective float2 TEXCOORD: TEXCOORD,
-    noperspective float2 TEXCOORD_1: TEXCOORD1,
-    noperspective float4 TEXCOORD_2: TEXCOORD2,
-    noperspective float2 TEXCOORD_3: TEXCOORD3,
-    noperspective float2 TEXCOORD_4: TEXCOORD4,
-    noperspective float4 SV_Position: SV_Position) {
+  noperspective float2 TEXCOORD : TEXCOORD,
+  noperspective float2 TEXCOORD_1 : TEXCOORD1,
+  noperspective float4 TEXCOORD_2 : TEXCOORD2,
+  noperspective float2 TEXCOORD_3 : TEXCOORD3,
+  noperspective float2 TEXCOORD_4 : TEXCOORD4,
+  noperspective float4 SV_Position : SV_Position
+) {
   float4 SV_Target;
   float SV_Target_1;
   float _33 = EyeAdaptationBuffer[0].x;
@@ -613,17 +615,11 @@ OutputSignature main(
   }
   float _197 = (_33 * View.OneOverPreExposure) * (_112 * _112);
   float _198 = _197 * exp2((((_168 - _173) + ((_173 - _168) * LocalExposure_DetailStrength)) - _188) + (_188 * select(_176, LocalExposure_HighlightContrastScale, LocalExposure_ShadowContrastScale)));
+  float4 _240 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3(((LUTScale * saturate((log2((((((BloomDirtMaskTint.x * _89.x) + 1.0f) * _70.x) * _197) + 0.002667719265446067f) + (((ColorScale0.x * _46.x) * _120) * _198)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset), ((LUTScale * saturate((log2((((((BloomDirtMaskTint.y * _89.y) + 1.0f) * _70.y) * _197) + 0.002667719265446067f) + (((ColorScale0.y * _46.y) * _121) * _198)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset), ((LUTScale * saturate((log2((((((BloomDirtMaskTint.z * _89.z) + 1.0f) * _70.z) * _197) + 0.002667719265446067f) + (((ColorScale0.z * _46.z) * _122) * _198)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset)));
 
   float3 untonemapped = _46.rgb;
-  float3 bloom_extra = (((BloomDirtMaskTint.rgb * _89.rgb) + 1.0f) * _70.rgb * _197) + 0.002667719265446067f;
-  float3 scaled_color = (((ColorScale0.rgb * untonemapped.rgb) * SceneColorApplyParamaters[0].rgb) * _198);
   float3 midgray = (((ColorScale0.rgb * 0.18f) * SceneColorApplyParamaters[0].rgb) * _198);
   float midgray_lum = renodx::color::y::from::BT709(midgray);
-  float3 lut_input_color = bloom_extra + scaled_color;
-  PrepareLutInput(lut_input_color, midgray_lum);
-  float3 lut_coordinates = (((LUTScale * saturate((log2(lut_input_color) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset));
-  float4 _240 = ColorGradingLUT.Sample(ColorGradingLUTSampler, lut_coordinates);
-
   return LutToneMap(untonemapped, _240.rgb, TEXCOORD, midgray_lum);
 
   float _244 = _240.x * 1.0499999523162842f;

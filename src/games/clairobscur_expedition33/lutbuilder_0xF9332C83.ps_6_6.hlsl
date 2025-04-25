@@ -151,7 +151,7 @@ float4 main(
   float _85 = mad((WorkingColorSpace.ToAP1[2].z), _64, mad((WorkingColorSpace.ToAP1[2].y), _63, ((WorkingColorSpace.ToAP1[2].x) * _62)));
   float _86 = dot(float3(_79, _82, _85), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
 
-  // SetUntonemappedAP1(float3(_79, _82, _85));
+  SetUntonemappedAP1(float3(_79, _82, _85));
 
   float _90 = (_79 / _86) + -1.0f;
   float _91 = (_82 / _86) + -1.0f;
@@ -290,7 +290,7 @@ float4 main(
   float _829 = ((mad(-0.20366770029067993f, _812, mad(1.2036634683609009f, _811, (_810 * -2.57161445915699e-07f))) - _811) * BlueCorrection) + _811;
   float _830 = ((mad(0.9999996423721313f, _812, mad(2.0954757928848267e-08f, _811, (_810 * 1.862645149230957e-08f))) - _812) * BlueCorrection) + _812;
 
-  // SetTonemappedAP1(_828, _829, _830);
+  SetTonemappedAP1(_828, _829, _830);
 
   float _855 = saturate(max(0.0f, mad((WorkingColorSpace.FromAP1[0].z), _830, mad((WorkingColorSpace.FromAP1[0].y), _829, ((WorkingColorSpace.FromAP1[0].x) * _828)))));
   float _856 = saturate(max(0.0f, mad((WorkingColorSpace.FromAP1[1].z), _830, mad((WorkingColorSpace.FromAP1[1].y), _829, ((WorkingColorSpace.FromAP1[1].x) * _828)))));
