@@ -225,11 +225,24 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .use_resource_view_cloning = true,
         });
 
+        // Ultrawide
+        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r10g10b10a2_unorm,
+                                                                       .new_format = reshade::api::format::r16g16b16a16_float,
+                                                                       .use_resource_view_cloning = true,
+                                                                       .aspect_ratio = 3044.f / 1276.f});
+
+        // Ultrawide DLAA
+        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r10g10b10a2_unorm,
+                                                                       .new_format = reshade::api::format::r16g16b16a16_float,
+                                                                       .use_resource_view_cloning = true,
+                                                                       .aspect_ratio = 3840.f / 1608.f});
+
+        // Fixes DLAA lol
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r10g10b10a2_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
             .use_resource_view_cloning = true,
-            .aspect_ratio = 3044.f / 1712.f, // Fixes DLAA lol
+            .aspect_ratio = 3044.f / 1712.f,
         });
 
         renodx::mods::swapchain::force_borderless = false;

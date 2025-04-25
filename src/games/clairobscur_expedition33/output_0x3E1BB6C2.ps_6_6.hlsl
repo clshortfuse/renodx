@@ -507,6 +507,7 @@ struct FViewConstants {
   float3 TLASPreViewTranslationLow;
 };
 
+
 StructuredBuffer<float4> EyeAdaptationBuffer : register(t0);
 
 Texture2D<float4> ColorTexture : register(t1);
@@ -593,12 +594,13 @@ SamplerState ColorGradingLUTSampler : register(s6);
 }; */
 
 OutputSignature main(
-    noperspective float2 TEXCOORD: TEXCOORD,
-    noperspective float2 TEXCOORD_1: TEXCOORD1,
-    noperspective float4 TEXCOORD_2: TEXCOORD2,
-    noperspective float2 TEXCOORD_3: TEXCOORD3,
-    noperspective float2 TEXCOORD_4: TEXCOORD4,
-    noperspective float4 SV_Position: SV_Position) {
+  noperspective float2 TEXCOORD : TEXCOORD,
+  noperspective float2 TEXCOORD_1 : TEXCOORD1,
+  noperspective float4 TEXCOORD_2 : TEXCOORD2,
+  noperspective float2 TEXCOORD_3 : TEXCOORD3,
+  noperspective float2 TEXCOORD_4 : TEXCOORD4,
+  noperspective float4 SV_Position : SV_Position
+) {
   float4 SV_Target;
   float SV_Target_1;
   float _36 = EyeAdaptationBuffer[0].x;
@@ -661,15 +663,11 @@ OutputSignature main(
   float _459 = (_455 * _455) * (3.0f - (_455 * 2.0f));
   float _469 = (((_447 - _459) * FilmGrainIntensityMidtones) + (FilmGrainIntensityShadows * (1.0f - _447))) + (FilmGrainIntensityHighlights * _459);
   float3 _481 = FilmGrainTexture.SampleLevel(FilmGrainSampler, float2(((ScreenPosToFilmGrainTextureUV.x * TEXCOORD_3.x) + ScreenPosToFilmGrainTextureUV.z), ((ScreenPosToFilmGrainTextureUV.y * TEXCOORD_3.y) + ScreenPosToFilmGrainTextureUV.w)), 0.0f);
+  float4 _526 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3(((LUTScale * saturate((log2((((((_481.x * _436) + -1.0f) * _469) + 1.0f) * _431) + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset), ((LUTScale * saturate((log2((((((_481.y * _437) + -1.0f) * _469) + 1.0f) * _432) + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset), ((LUTScale * saturate((log2((((((_481.z * _438) + -1.0f) * _469) + 1.0f) * _433) + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset)));
 
+  float3 untonemapped = float3(_125.x, _138.y, _151.z);
   float3 midgray = (((ColorScale0.rgb * 0.18f) * SceneColorApplyParamaters[0].rgb) * _421);
   float midgray_lum = renodx::color::y::from::BT709(midgray);
-  float3 untonemapped = float3(_125.x, _138.y, _151.z);
-  float3 lut_input_color = (((((_481.rgb * FilmGrainTextureConstants[0].rgb) + -1.0f) * _469) + 1.0f) * float3(_431, _432, _433));
-  PrepareLutInput(lut_input_color, midgray_lum);
-  float3 lut_coordinates = (((LUTScale * saturate((log2(lut_input_color) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset));
-  float4 _526 = ColorGradingLUT.Sample(ColorGradingLUTSampler, lut_coordinates);
-
   return LutToneMap(untonemapped, _526.rgb, TEXCOORD, midgray_lum);
 
   float _530 = _526.x * 1.0499999523162842f;

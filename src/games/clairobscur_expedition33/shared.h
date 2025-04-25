@@ -84,9 +84,9 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_ENCODING               renodx::draw::ENCODING_PQ
 #define RENODX_TONE_MAP_HUE_SHIFT                1.f
 #define RENODX_TONE_MAP_HUE_SHIFT_METHOD         renodx::draw::HUE_SHIFT_METHOD_ACES_FITTED_AP1
-#define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   1.f
+#define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   0.5f
 #define CUSTOM_COLOR_GRADE_HUE_CORRECTION        1.f
-#define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION 0.5f
+#define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION 1.f
 #define CUSTOM_COLOR_GRADE_HUE_SHIFT             1.f
 #define CUSTOM_DICE_PEAK                         1.f
 #define CUSTOM_DICE_SHOULDER                     0.18f
