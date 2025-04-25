@@ -100,6 +100,13 @@ static const float3x3 ARIB_TR_B9_D93_TO_BT709_D65_MAT = float3x3(
 
 // chromatic adaptation method: vK20
 // chromatic adaptation transform: CAT02
+static const float3x3 ARIB_TR_B9_9300K_8_MPCD_TO_BT709_D65_MAT = float3x3(
+    0.898766815f, -0.129979714f, 0.00223334273f,
+    0.0401015169f, 0.972650587f, 0.00570049602f,
+    0.00123276025f, 0.0316823720f, 1.45910859f);
+
+// chromatic adaptation method: vK20
+// chromatic adaptation transform: CAT02
 static const float3x3 ARIB_TR_B9_9300K_27_MPCD_TO_BT709_D65_MAT = float3x3(
     0.783664464f, -0.178418442f, 0.00223907502f,
     0.0380520112f, 1.03919935f, 0.00543892197f,
@@ -248,6 +255,10 @@ float3 BT601NTSCU(float3 bt601) {
 
 float3 ARIBTRB9(float3 aribtrb9) {
   return mul(ARIB_TR_B9_D93_TO_BT709_D65_MAT, aribtrb9);
+}
+
+float3 ARIBTRB98MPCD(float3 aribtrb9) {
+  return mul(ARIB_TR_B9_9300K_8_MPCD_TO_BT709_D65_MAT, aribtrb9);
 }
 
 float3 ARIBTRB927MPCD(float3 aribtrb9) {
