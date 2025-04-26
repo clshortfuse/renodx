@@ -652,7 +652,7 @@ OutputSignature main(
     _440 = _363;
   }
   float _447 = (frac(sin((TEXCOORD_2.w * 543.3099975585938f) + TEXCOORD_2.z) * 493013.0f) * 2.0f) + -1.0f;
-  float _450 = min(max((_447 * +1.#INF), -1.0f), 1.0f);
+  float _450 = min(max((_447 * 0x7FF0000000000000), -1.0f), 1.0f);
   float _459 = (_450 - (sqrt(saturate(1.0f - abs(_447))) * _450)) * BackbufferQuantizationDithering;
   SV_Target.x = (_459 + _438);
   SV_Target.y = (_459 + _439);
