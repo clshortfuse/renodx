@@ -32,11 +32,11 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapType",
         .binding = &shader_injection.tone_map_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 3.f,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "Vanilla+"},
+        .labels = {"Vanilla", "None", "Vanilla+", "ACES"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -80,6 +80,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Overrides in-game contrast slider, emulates a 2.2 EOTF",
         .labels = {"Off", "2.2"},
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
@@ -144,7 +145,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSceneScaling",
         .binding = &shader_injection.color_grade_scaling,
-        .default_value = 50.f,
+        .default_value = 75.f,
         .label = "Scene Grading Scaling",
         .section = "Color Grading",
         .tooltip = "Scales the scene grading to full range when size is clamped.",

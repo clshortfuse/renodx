@@ -42,7 +42,7 @@ float3 LUTCorrectBlack(float3 lut_input_color_bt709, float3 lut_output_color_ap1
     float3 min_black = LogDecodeLUT(ColorRemap0VolumeSampler.SampleLevel(Clamp_s, LogEncodeLUT((0.f).xxx) + (0.5f / 32.f), 0.0f).rgb);
 
     float lut_min_y = (renodx::color::y::from::AP1(max(0, min_black)));
-    if (RENODX_GAMMA_CORRECTION) lut_min_y = renodx::color::correct::Gamma(lut_min_y);
+    if (RENODX_GAMMA_CORRECTION && RENODX_TONE_MAP_TYPE != 0.f) lut_min_y = renodx::color::correct::Gamma(lut_min_y);
     if (lut_min_y > 0) {
       float3 lut_output_color_bt709 = renodx::color::bt709::from::AP1(lut_output_color_ap1);
 
@@ -177,9 +177,30 @@ float3 TonemapByChannel(float3 untonemapped_ap1) {
   return tonemapped;
 }
 
+float3 ApplyACESToneMap(float3 untonemapped_ap1) {
+  const float ACES_MIN = 0.0001f;
+  float aces_min = ACES_MIN / RENODX_DIFFUSE_WHITE_NITS;
+  float aces_max = (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+
+  if (RENODX_GAMMA_CORRECTION) {
+    aces_max = renodx::color::correct::Gamma(aces_max, true);
+    aces_min = renodx::color::correct::Gamma(aces_min, true);
+  }
+
+  untonemapped_ap1 = ApplyUserColorGrading(untonemapped_ap1);
+  float3 tonemapped_ap1 = renodx::tonemap::aces::ODT(untonemapped_ap1, aces_min * 48.f, aces_max * 48.f, renodx::color::IDENTITY_MAT) / 48.f;
+
+  // float3 tonemapped_hue_corrected_ap1 = HueCorrectAP1(tonemapped_ap1, untonemapped_ap1);
+  // tonemapped_ap1 = lerp(tonemapped_hue_corrected_ap1, tonemapped_ap1, saturate(tonemapped_hue_corrected_ap1));
+
+  return tonemapped_ap1;
+}
+
 float3 ApplyUserToneMap(float3 untonemapped_ap1) {
   float3 tonemapped_ap1;
-  if (RENODX_TONE_MAP_TYPE == 2.f) {  // Vanilla+
+  if (RENODX_TONE_MAP_TYPE == 3.f) {
+    tonemapped_ap1 = ApplyACESToneMap(untonemapped_ap1);
+  } else if (RENODX_TONE_MAP_TYPE == 2.f) {  // Vanilla+
     tonemapped_ap1 = TonemapByLuminance(untonemapped_ap1);
   } else if (RENODX_TONE_MAP_TYPE == 1.f) {  // None
     tonemapped_ap1 = ApplyUserColorGrading(untonemapped_ap1);
@@ -199,7 +220,7 @@ float3 ApplyUserToneMap(float3 untonemapped_ap1) {
 
 float3 ApplyUserDisplayMap(float3 untonemapped_ap1) {
   float3 display_mapped_ap1;
-  if (RENODX_TONE_MAP_TYPE == 2.f) {
+  if (RENODX_TONE_MAP_TYPE == 2.f || RENODX_TONE_MAP_TYPE == 3.f) {  // Vanilla+ or ACES
     untonemapped_ap1 = ApplyUserColorGrading(untonemapped_ap1);
     float peak_nits = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
     if (RENODX_GAMMA_CORRECTION) peak_nits = renodx::color::correct::GammaSafe(peak_nits, true);
