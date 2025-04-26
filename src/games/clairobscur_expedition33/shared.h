@@ -53,6 +53,7 @@ struct ShaderInjectData {
   float scene_grade_saturation_correction;
   float scene_grade_blowout_restoration;
   float scene_grade_hue_correction;
+  float custom_grain_type;
   float custom_grain_strength;
   float custom_random;
 };
@@ -82,15 +83,13 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_RENO_DRT_TONE_MAP_METHOD          renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE   color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_ENCODING               renodx::draw::ENCODING_PQ
-#define RENODX_TONE_MAP_HUE_SHIFT                1.f
-#define RENODX_TONE_MAP_HUE_SHIFT_METHOD         renodx::draw::HUE_SHIFT_METHOD_ACES_FITTED_AP1
+#define RENODX_TONE_MAP_HUE_SHIFT                0.f
 #define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   0.5f
 #define CUSTOM_COLOR_GRADE_HUE_CORRECTION        1.f
 #define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION 1.f
-#define CUSTOM_COLOR_GRADE_HUE_SHIFT             1.f
-#define CUSTOM_DICE_PEAK                         1.f
-#define CUSTOM_DICE_SHOULDER                     0.18f
-#define CUSTOM_GRAIN_STRENGTH                    0.f
+#define CUSTOM_COLOR_GRADE_HUE_SHIFT             0.f
+#define CUSTOM_GRAIN_TYPE                        0.f
+#define CUSTOM_GRAIN_STRENGTH                    shader_injection.custom_grain_strength
 #define CUSTOM_RANDOM                            shader_injection.custom_random
 
 #include "../../shaders/renodx.hlsl"

@@ -26,7 +26,7 @@ OutputSignature FinalizeLutTonemap(float3 linearColor) {
   return output;
 }
 
-OutputSignature LutToneMap(float3 untonemapped, float3 lutOutput, float2 TEXCOORD) {
+OutputSignature LutToneMap(float3 untonemapped, float3 lutOutput, float2 TEXCOORD, bool enable_film_grain = false) {
   lutOutput = renodx::color::srgb::DecodeSafe(lutOutput);
   float3 final = lutOutput;
 
@@ -36,34 +36,34 @@ OutputSignature LutToneMap(float3 untonemapped, float3 lutOutput, float2 TEXCOOR
     final = renodx::draw::ToneMapPass(untonemapped.rgb, final);
   }
 
-  /* if (CUSTOM_GRAIN_STRENGTH > 0.f) {
+  if (CUSTOM_GRAIN_TYPE > 0.f && CUSTOM_GRAIN_STRENGTH > 0.f && enable_film_grain) {
     final = renodx::effects::ApplyFilmGrain(
         final,
         TEXCOORD.xy,
         CUSTOM_RANDOM,
         CUSTOM_GRAIN_STRENGTH * 0.03f,
         1.f);
-  } */
+  }
 
   return FinalizeLutTonemap(final);
 }
 
-OutputSignature LutToneMap(float3 untonemapped, float3 lutOutput, float2 TEXCOORD, float3 mid_gray) {
+OutputSignature LutToneMap(float3 untonemapped, float3 lutOutput, float2 TEXCOORD, float3 mid_gray, bool enable_film_grain = false) {
   if (RENODX_TONE_MAP_TYPE > 0.f) {
     float mid_gray_luminance = renodx::color::y::from::BT709(mid_gray);
 
     untonemapped = untonemapped * mid_gray_luminance / 0.18f;
   }
 
-  return LutToneMap(untonemapped, lutOutput, TEXCOORD);
+  return LutToneMap(untonemapped, lutOutput, TEXCOORD, enable_film_grain);
 }
 
-OutputSignature LutToneMap(float3 untonemapped, float3 lutOutput, float2 TEXCOORD, float mid_gray_luminance) {
+OutputSignature LutToneMap(float3 untonemapped, float3 lutOutput, float2 TEXCOORD, float mid_gray_luminance, bool enable_film_grain = false) {
   if (RENODX_TONE_MAP_TYPE > 0.f) {
     untonemapped = untonemapped * mid_gray_luminance / 0.18f;
   }
 
-  return LutToneMap(untonemapped, lutOutput, TEXCOORD);
+  return LutToneMap(untonemapped, lutOutput, TEXCOORD, enable_film_grain);
 }
 
 // clang-format off
