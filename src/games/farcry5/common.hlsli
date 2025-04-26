@@ -187,11 +187,36 @@ float3 ApplyACESToneMap(float3 untonemapped_ap1) {
     aces_min = renodx::color::correct::Gamma(aces_min, true);
   }
 
-  untonemapped_ap1 = ApplyUserColorGrading(untonemapped_ap1);
+  // exposure, highlights, shadows, contrast
+  if (RENODX_TONE_MAP_EXPOSURE != 1.f || RENODX_TONE_MAP_HIGHLIGHTS != 1.f || RENODX_TONE_MAP_SHADOWS != 1.f || RENODX_TONE_MAP_CONTRAST != 1.f) {
+    untonemapped_ap1 = renodx::color::ap1::from::BT709(
+        renodx::color::grade::UserColorGrading(
+            renodx::color::bt709::from::AP1(untonemapped_ap1),
+            RENODX_TONE_MAP_EXPOSURE,
+            RENODX_TONE_MAP_HIGHLIGHTS,
+            RENODX_TONE_MAP_SHADOWS,
+            RENODX_TONE_MAP_CONTRAST,
+            1.f,
+            0.f,
+            0.f));
+  }
+
   float3 tonemapped_ap1 = renodx::tonemap::aces::ODT(untonemapped_ap1, aces_min * 48.f, aces_max * 48.f, renodx::color::IDENTITY_MAT) / 48.f;
 
-  // float3 tonemapped_hue_corrected_ap1 = HueCorrectAP1(tonemapped_ap1, untonemapped_ap1);
-  // tonemapped_ap1 = lerp(tonemapped_hue_corrected_ap1, tonemapped_ap1, saturate(tonemapped_hue_corrected_ap1));
+  // saturation, blowout, hue correction
+  if (RENODX_TONE_MAP_SATURATION != 1.f || RENODX_TONE_MAP_BLOWOUT != 0.f || RENODX_TONE_MAP_HUE_CORRECTION != 0.f) {
+    tonemapped_ap1 = renodx::color::ap1::from::BT709(
+        renodx::color::grade::UserColorGrading(
+            renodx::color::bt709::from::AP1(tonemapped_ap1),
+            1.f,
+            1.f,
+            1.f,
+            1.f,
+            RENODX_TONE_MAP_SATURATION,
+            RENODX_TONE_MAP_BLOWOUT,
+            RENODX_TONE_MAP_HUE_CORRECTION,
+            renodx::color::bt709::from::AP1(untonemapped_ap1)));
+  }
 
   return tonemapped_ap1;
 }
