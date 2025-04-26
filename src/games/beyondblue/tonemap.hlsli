@@ -41,7 +41,9 @@ float3 vanillaACES(float3 color) {
   color = mul(renodx::color::BT709_TO_AP0_MAT, color);  // Convert to AP0
   color = renodx::tonemap::aces::RRT(color);
   color = (color * (a * color + b)) / (color * (c * color + d) + e);
+  color = mul(renodx::color::AP1_TO_XYZ_MAT, color);
   color = renodx::tonemap::aces::DarkToDim(color);
+  color = mul(renodx::color::XYZ_TO_AP1_MAT, color);
   float3 AP1_RGB2Y = renodx::color::AP1_TO_XYZ_MAT[1].rgb;
   color = lerp(dot(color, AP1_RGB2Y).rrr, color, 0.93);
   color = renodx::color::bt709::from::AP1(color);
