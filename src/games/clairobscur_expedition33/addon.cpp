@@ -65,6 +65,17 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
                                                                                                 .parse = [](float value) { return value * 0.01f; },
                                                                                                 .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
                                                                                             }), */
+                                                                                            renodx::templates::settings::CreateSetting({
+                                                                                                .key = "FxPostProcessGrain",
+                                                                                                .binding = &shader_injection.custom_enable_post_filmgrain,
+                                                                                                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                                                                                                .default_value = 1.f,
+                                                                                                .label = "Film Grain",
+                                                                                                .section = "Effects",
+                                                                                                .tooltip = "Enable cutscenes film grain",
+                                                                                                .labels = {"Disabled", "Enabled"},
+                                                                                                .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
+                                                                                            }),
                                                                                             new renodx::utils::settings::Setting{
                                                                                                 .value_type = renodx::utils::settings::SettingValueType::BUTTON,
                                                                                                 .label = "HDR Den Discord",

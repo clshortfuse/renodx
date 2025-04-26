@@ -9,6 +9,18 @@ struct OutputSignature {
   float SV_Target_1 : SV_Target1;
 };
 
+float3 ApplyFilmGrain(float3 color, float2 screen) {
+  if (CUSTOM_GRAIN_TYPE > 0.f && CUSTOM_GRAIN_STRENGTH > 0.f) {
+    color = renodx::effects::ApplyFilmGrain(
+        color,
+        screen,
+        CUSTOM_RANDOM,
+        CUSTOM_GRAIN_STRENGTH * 0.03f,
+        1.f);
+  }
+  return color;
+}
+
 void PrepareLutInput(inout float3 lut_input_color, float mid_gray_luminance) {
   /* if (RENODX_TONE_MAP_TYPE) {
     lut_input_color = renodx::tonemap::dice::BT709(lut_input_color, CUSTOM_DICE_PEAK, mid_gray_luminance);
@@ -36,13 +48,8 @@ OutputSignature LutToneMap(float3 untonemapped, float3 lutOutput, float2 TEXCOOR
     final = renodx::draw::ToneMapPass(untonemapped.rgb, final);
   }
 
-  if (CUSTOM_GRAIN_TYPE > 0.f && CUSTOM_GRAIN_STRENGTH > 0.f && enable_film_grain) {
-    final = renodx::effects::ApplyFilmGrain(
-        final,
-        TEXCOORD.xy,
-        CUSTOM_RANDOM,
-        CUSTOM_GRAIN_STRENGTH * 0.03f,
-        1.f);
+  if (enable_film_grain) {
+    // ApplyFilmGrain(final, TEXCOORD);
   }
 
   return FinalizeLutTonemap(final);
