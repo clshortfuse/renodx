@@ -13,150 +13,132 @@ cbuffer cb0 : register(b0) {
   float4 cb0[10];
 }
 
-#define cmp -
-
 [numthreads(4, 4, 4)]
 void main(uint3 vThreadID: SV_DispatchThreadID) {
   float4 r0, r1, r2, r3;
   uint4 bitmask, uiDest;
   float4 fDest;
   float3 sanity;
-  r0.rgb = (uint3)vThreadID.rgb;
-  r1.rgb = cmp(r0.rgb < cb0[0].rrr);
-  r0.a = r1.g ? r1.r : 0;
-  r0.a = r1.b ? r0.a : 0;
-  if (r0.a != 0) {
-    // (start) ColorGrade
-    r0.rgb = r0.rgb * cb0[0].ggg;
+if (float(vThreadID.x) < cb0[0].x && float(vThreadID.y) < cb0[0].x && float(vThreadID.z) < cb0[0].x) {
+    r0.xyz = float3(vThreadID) * cb0[0].yyy;
 
     r0.rgb = lutShaper(r0.rgb, true);
     sanity = r0.rgb;
 
+    // (start) ColorGrade
     // unity_to_ACES(r0.rgb)
-    r1.r = dot(float3(0.439701, 0.382978, 0.177335), r0.rgb);
-    r1.g = dot(float3(0.0897922963, 0.813423, 0.0967615992), r0.rgb);
-    r1.b = dot(float3(0.017544, 0.111544, 0.870704), r0.rgb);
+    r1.x = dot(float3(0.4397010, 0.3829780, 0.1773350), r0.xyz);
+    r1.y = dot(float3(0.0897923, 0.8134230, 0.0967616), r0.xyz);
+    r1.z = dot(float3(0.0175440, 0.1115440, 0.8707040), r0.xyz);
 
     float3 preCG = mul(renodx::color::AP0_TO_AP1_MAT, r1.rgb);
 
     // ACEScc (log) space
     // ACES_to_ACEScc(r1.rgb)
-    r0.rgb = max(0, r1.rgb);
-    r0.rgb = min(r0.rgb, 65504);
-    r1.rgb = cmp(r0.rgb < float3(0.0000305175708, 0.0000305175708, 0.0000305175708));
-    r2.rgb = r0.rgb * float3(0.5, 0.5, 0.5) + float3(0.0000152587800, 0.0000152587800, 0.0000152587800);
-    r2.rgb = log2(r2.rgb);
-    r2.rgb = r2.rgb + float3(9.72, 9.72, 9.72);
-    r2.rgb = r2.rgb * float3(0.0570776239, 0.0570776239, 0.0570776239);
-    r0.rgb = log2(r0.rgb);
-    r0.rgb = r0.rgb + float3(9.72, 9.72, 9.72);
-    r0.rgb = r0.rgb * float3(0.0570776239, 0.0570776239, 0.0570776239);
-    r0.rgb = r1.rgb ? r2.rgb : r0.rgb;
+    r0.xyz = max(float3(0,0,0), r1.xyz);
+    r0.xyz = min(float3(65504,65504,65504), r0.xyz);
+    r1.xyz = r0.xyz;
+    r2.xyz = r0.xyz * float3(0.5,0.5,0.5) + float3(0.0000152587800,0.0000152587800,0.0000152587800);
+    r2.xyz = log2(r2.xyz);
+    r2.xyz = r2.xyz + float3(9.72,9.72,9.72);
+    r2.xyz = r2.xyz / float3(17.52,17.52,17.52);
+    r0.xyz = log2(r0.xyz);
+    r0.xyz = r0.xyz + float3(9.72,9.72,9.72);
+    r0.xyz = r0.xyz / float3(17.52,17.52,17.52);
+    r0.xyz = (r1.xyz < 0.00003051757) ? r2.xyz : r0.xyz;
 
     // (start) LogGrade
     // Contrast(r0.rgb, ACEScc_MIDGRAY, cb0[3].b)
-    r0.rgb = r0.rgb + float3(-0.413588405, -0.413588405, -0.413588405);  // ACEScc_MIDGRAY = 0.4135884
-    r0.rgb = r0.rgb * cb0[3].bbb + float3(0.413588405, 0.413588405, 0.413588405);
-
+    r0.xyz = r0.xyz + float3(-0.4135884,-0.4135884,-0.4135884);  // ACEScc_MIDGRAY = 0.4135884
+    r0.xyz = r0.xyz * cb0[3].zzz + float3(0.4135884,0.4135884,0.4135884);
     // ACEScc_to_ACES(r0.rgb)
-    r1.rgb = r0.rgb * float3(17.52, 17.52, 17.52) + float3(-9.72, -9.72, -9.72);
-    r1.rgb = exp2(r1.rgb);
-    r2.rgb = r1.rgb + float3(-0.0000152587891, -0.0000152587891, -0.0000152587891);
-    r2.rgb = r2.rgb + r2.rgb;
-    r3.rgba = cmp(r0.rrgg < float4(-0.301369876, 1.46799636, -0.301369876, 1.46799636));
-    r0.rg = r3.ga ? r1.rg : float2(65504, 65504);
-    r3.rg = r3.rb ? r2.rg : r0.rg;
-    r0.rg = cmp(r0.bb < float2(-0.301369876, 1.46799636));
-    r0.g = r0.g ? r1.b : 65504;
-    r3.b = r0.r ? r2.b : r0.g;
-
-    r0.rgb = mul(renodx::color::AP0_TO_AP1_MAT, r3.rgb);
+    r3.rgb = acescc::Decode(r0.rgb);
+    //  ACES_to_ACEScg
+    r0.x = dot(float3(1.4514393161,-0.2365107469,-0.2149285693), r3.xyz);
+    r0.y = dot(float3(-0.0765537734,1.1762296998,-0.0996759264), r3.xyz);
+    r0.z = dot(float3(0.0083161484,-0.0060324498,0.9977163014), r3.xyz);
     // (start) LinearGrade
     // WhiteBalance(r0.rgb, cb0[1].rgb)
-    r1.r = dot(float3(0.390405, 0.549941, 0.00892631989), r0.rgb);
-    r1.g = dot(float3(0.0708416030, 0.963172, 0.00135775004), r0.rgb);
-    r1.b = dot(float3(0.0231081992, 0.128021, 0.936245), r0.rgb);
-    r0.rgb = r1.rgb * cb0[1].rgb;
-    r1.r = dot(float3(2.858470, -1.628790, -0.024891), r0.rgb);
-    r1.g = dot(float3(-0.210182, 1.158200, 0.000324280991), r0.rgb);
-    r1.b = dot(float3(-0.041812, -0.118169, 1.068670), r0.rgb);
+    r1.x = dot(float3(0.390405,0.549941,0.00892632), r0.xyz);
+    r1.y = dot(float3(0.0708416,0.963172,0.00135775), r0.xyz);
+    r1.z = dot(float3(0.0231082,0.128021,0.936245), r0.xyz);
+    r0.xyz = cb0[1].xyz * r1.xyz;
+    r1.x = dot(float3(2.85847,-1.62879,-0.0248910), r0.xyz);
+    r1.y = dot(float3(-0.210182,1.15820,0.000324281), r0.xyz);
+    r1.z = dot(float3(-0.0418120,-0.118169,1.06867), r0.xyz);
     // ColorFilter
-    r0.rgb = r1.rgb * cb0[2].rgb;
+    r0.xyz = cb0[2].xyz * r1.xyz;
     // ChannelMixer(r0.rgb, cb0[4].rgb, cb0[5].rgb, cb0[6].rgb)
-    r1.r = dot(r0.rgb, cb0[4].rgb);
-    r1.g = dot(r0.rgb, cb0[5].rgb);
-    r1.b = dot(r0.rgb, cb0[6].rgb);
+    r1.x = dot(r0.xyz, cb0[4].xyz);
+    r1.y = dot(r0.xyz, cb0[5].xyz);
+    r1.z = dot(r0.xyz, cb0[6].xyz);
     // LiftGammaGainHDR(r1.rgb, cb0[7].rgb, cb0[8].rgb, cb0[9].rgb)
-    r0.rgb = r1.rgb * cb0[9].rgb + cb0[7].rgb;
-    r1.rgb = saturate(r1.rgb * renodx::math::FLT_MAX + 0.5) * 2.0 - 1.0;
-    r0.rgb = pow(abs(r0.rgb), cb0[8].rgb);
-    r0.rgb = r0.rgb * r1.rgb;
+    r0.xyz = r1.xyz * cb0[9].xyz + cb0[7].xyz;
+    r1.rgb = saturate(r0.rgb * renodx::math::FLT_MAX + 0.5) * 2.0 - 1.0;
+    r0.rgb = pow(abs(r0.rgb), cb0[8].xyz);
+    r0.xyz = r1.xyz * r0.xyz;
     // Do NOT feed negative values to RgbToHsv or they'll wrap around
-    r0.rgb = max(0, r0.rgb);
+    r0.xyz = max(float3(0,0,0), r0.xyz);
     // RgbToHsv
-    r0.a = cmp(r0.g >= r0.b);
-    r0.a = r0.a ? 1.00000 : 0;
-    r1.rg = r0.bg;
-    r1.ba = float2(-1, 0.666666687);
-    r2.rg = r0.gb + -r1.rg;
-    r2.ba = float2(1, -1);
-    r1.rgba = r0.aaaa * r2.rgba + r1.rgba;
-    r0.a = cmp(r0.r >= r1.r);
-    r0.a = r0.a ? 1.00000 : 0;
-    r2.rgb = r1.rga;
-    r2.a = r0.r;
-    r1.rga = r2.agr;
-    r1.rgba = -r2.rgba + r1.rgba;
-    r1.rgba = r0.aaaa * r1.rgba + r2.rgba;
-    r0.a = min(r1.g, r1.a);
-    r0.a = -r0.a + r1.r;
-    r1.g = -r1.g + r1.a;
-    r1.a = r0.a * 6 + 0.0001;
-    r1.g = r1.g / r1.a;
-    r1.g = r1.g + r1.b;
-    r2.r = abs(r1.g);
-    r1.g = r1.r + 0.0001;
-    r2.b = r0.a / r1.g;
+    r0.w = step(r0.z, r0.y);
+    r1.xy = r0.zy;
+    r1.zw = float2(-1, 2.0 / 3.0);
+    r2.xy = -r1.xy + r0.yz;
+    r2.zw = float2(1,-1);
+    r1.xyzw = r0.wwww * r2.xyzw + r1.xyzw;
+    r0.w = step(r1.x, r0.x);
+    r2.xyz = r1.xyw;
+    r2.w = r0.x;
+    r1.xyw = r2.wyx;
+    r1.xyzw = r1.xyzw + -r2.xyzw;
+    r1.xyzw = r0.wwww * r1.xyzw + r2.xyzw;
+    r0.w = min(r1.w, r1.y);
+    r0.w = r1.x + -r0.w;
+    r1.y = r1.w + -r1.y;
+    r1.w = r0.w * 6.0 + 0.0001;
+    r1.y = r1.y / r1.w;
+    r1.y = r1.z + r1.y;
+    r2.x = abs(r1.y);
+    r1.y = 0.0001 + r1.x;
+    r2.z = r0.w / r1.y;
     // Hue Vs Sat
-    r2.ga = float2(0.25, 0.25);
-    r0.a = t0.SampleLevel(s0_s, r2.rg, 0).g;
-    r0.a = saturate(r0.a);
-    r0.a = r0.a + r0.a;
+    r2.yw = float2(0.25,0.25);
+    r0.w = t0.SampleLevel(s0_s, r2.xy, 0).y;
+    r0.w = saturate(r0.w);
+    r0.w = r0.w + r0.w;
     // Sat Vs Sat
-    r1.g = t0.SampleLevel(s0_s, r2.ba, 0).b;
-    r1.g = saturate(r1.g);
-    r0.a = dot(r1.gg, r0.aa);
+    r1.y = t0.SampleLevel(s0_s, r2.zw, 0).z;
+    r1.y = saturate(r1.y);
+    r0.w = dot(r1.yy, r0.ww);
     // Lum Vs Sat
-    r3.r = dot(r0.rgb, float3(0.212672904, 0.715152204, 0.072175));
-    r3.ga = float2(0.25, 0.25);
-    r0.r = t0.SampleLevel(s0_s, r3.rg, 0).a;
-    r0.r = saturate(r0.r);
-    r0.r = r0.a * r0.r;
+    r3.x = dot(r0.xyz, float3(0.2126729, 0.7151522, 0.0721750));
+    r3.yw = float2(0.25,0.25);
+    r0.x = t0.SampleLevel(s0_s, r3.xy, 0).w;
+    r0.x = saturate(r0.x);
+    r0.x = r0.x * r0.w;
     // Hue Vs Hue
-    r3.b = r2.r + cb0[3].r;
-    r0.g = t0.SampleLevel(s0_s, r3.ba, 0).r;
-    r0.g = saturate(r0.g);
-    r0.g = r0.g + -0.5f;
-    r0.g = r0.g + r3.b;
-    r0.b = cmp(r0.g < 0);
-    r0.a = cmp(1 < r0.g);
-    r1.gb = r0.gg + float2(1, -1);
-    r0.g = r0.a ? r1.b : r0.g;
-    r0.g = r0.b ? r1.g : r0.g;
+    r3.z = cb0[3].x + r2.x;
+    r0.y = t0.SampleLevel(s0_s, r3.zw, 0).x;
+    r0.y = saturate(r0.y);
+    r0.y = -0.5 + r0.y;
+    r0.y = r3.z + r0.y;
+    r1.yz = float2(1,-1) + r0.yy;
+    float value = r0.y;
+    r0.y = (value > 1.0) ? r1.z : r0.y;
+    r0.y = (value < 0.0) ? r1.y : r0.y;
     // HsvToRgb(r0.gba)
-    r0.gba = r0.ggg + float3(1, 0.666666687, 0.333333343);
-    r0.gba = frac(r0.gba);
-    r0.gba = r0.gba * float3(6, 6, 6) + float3(-3, -3, -3);
-    r0.gba = saturate(abs(r0.gba) + float3(-1, -1, -1));
-    r0.gba = r0.gba + float3(-1, -1, -1);
-    r0.gba = r2.bbb * r0.gba + float3(1, 1, 1);
-
+    r0.yzw = float3(1, 2.0 / 3.0, 1.0 / 3.0) + r0.yyy;
+    r0.yzw = frac(r0.yzw);
+    r0.yzw = r0.yzw * float3(6,6,6) + float3(-3,-3,-3);
+    r0.yzw = saturate(float3(-1,-1,-1) + abs(r0.yzw));
+    r0.yzw = float3(-1,-1,-1) + r0.yzw;
+    r0.yzw = r2.zzz * r0.yzw + float3(1,1,1);
     // Saturation(r0.gba, cb0[3].g * r0.r)
-    r1.gba = r0.gba * r1.rrr;
-    r0.r = dot(cb0[3].gg, r0.rr);
-    r1.g = dot(r1.gba, float3(0.212672904, 0.715152204, 0.072175));
-    r0.gba = r1.rrr * r0.gba + -r1.ggg;
-    r0.rgb = r0.rrr * r0.gba + r1.ggg;
+    r1.yzw = r1.xxx * r0.yzw;
+    r0.x = dot(cb0[3].yy, r0.xx);
+    r1.y = dot(r1.yzw, float3(0.2126729, 0.7151522, 0.0721750));
+    r0.yzw = r1.xxx * r0.yzw + -r1.yyy;
+    r0.xyz = r0.xxx * r0.yzw + r1.yyy;
     // (end) LinearGrade
     r0.rgb = lerp(preCG, r0.rgb, injectedData.colorGradeLUTStrength);
 
@@ -171,8 +153,9 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
       float d = 88.7122;
       float e = 80.6889;
       r3.rgb = (r3.rgb * (a * r3.rgb + b)) / (r3.rgb * (c * r3.rgb + d) + e);
+      r3.rgb = mul(renodx::color::AP1_TO_XYZ_MAT, r3.rgb);
       r3.rgb = renodx::tonemap::aces::DarkToDim(r3.rgb);
-
+      r3.rgb = mul(renodx::color::XYZ_TO_AP1_MAT, r3.rgb);
       half3 AP1_RGB2Y = half3(0.272229, 0.674082, 0.0536895);
       r3.rgb = lerp(dot(r3.rgb, AP1_RGB2Y).rrr, r3.rgb, 0.93);
       r3.rgb = mul(renodx::color::AP1_TO_XYZ_MAT, r3.rgb);
