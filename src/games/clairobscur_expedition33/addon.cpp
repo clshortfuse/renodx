@@ -26,8 +26,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 
-float current_settings_mode = 0;
-
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({renodx::templates::settings::CreateDefaultSettings({
                                                                                             {"ToneMapType", &shader_injection.tone_map_type},
                                                                                             {"ToneMapPeakNits", &shader_injection.peak_white_nits},
@@ -47,12 +45,25 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
                                                                                         }),
                                                                                         {
                                                                                             /* renodx::templates::settings::CreateSetting({
+                                                                                                .key = "FxGrainType",
+                                                                                                .binding = &shader_injection.custom_grain_type,
+                                                                                                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                                                                                                .default_value = 1.f,
+                                                                                                .label = "Grain Type",
+                                                                                                .section = "Effects",
+                                                                                                .tooltip = "Replaces film grain with perceptual",
+                                                                                                .labels = {"Vanilla", "Perceptual"},
+                                                                                                .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
+                                                                                            }),
+                                                                                            renodx::templates::settings::CreateSetting({
                                                                                                 .key = "FxGrainStrength",
                                                                                                 .binding = &shader_injection.custom_grain_strength,
-                                                                                                .default_value = 0.f,
-                                                                                                .label = "Grain Strength",
+                                                                                                .default_value = 25.f,
+                                                                                                .label = "Perceptual Grain Strength",
                                                                                                 .section = "Effects",
+                                                                                                .is_enabled = []() { return shader_injection.custom_grain_type != 0; },
                                                                                                 .parse = [](float value) { return value * 0.01f; },
+                                                                                                .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
                                                                                             }), */
                                                                                             new renodx::utils::settings::Setting{
                                                                                                 .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -132,12 +143,6 @@ void OnPresetOff() {
       {"ColorGradeFlare", 0.f},
   });
 }
-
-const auto UPGRADE_TYPE_NONE = 0.f;
-const auto UPGRADE_TYPE_OUTPUT_SIZE = 1.f;
-const auto UPGRADE_TYPE_OUTPUT_RATIO = 2.f;
-const auto UPGRADE_TYPE_ANY = 3.f;
-
 bool initialized = false;
 
 bool fired_on_init_swapchain = false;
@@ -251,6 +256,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .new_format = reshade::api::format::r16g16b16a16_float,
             .use_resource_view_cloning = true,
             .aspect_ratio = 3044.f / 1712.f,
+        });
+
+        // Portrait letterboxes screens
+        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            .old_format = reshade::api::format::r10g10b10a2_unorm,
+            .new_format = reshade::api::format::r16g16b16a16_float,
+            .use_resource_view_cloning = true,
+            .aspect_ratio = 2880.f / 2160.f,
         });
 
         // Everything else
