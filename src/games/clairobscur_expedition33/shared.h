@@ -56,6 +56,7 @@ struct ShaderInjectData {
   float custom_grain_type;
   float custom_grain_strength;
   float custom_random;
+  float custom_enable_post_filmgrain;
 };
 
 #ifndef __cplusplus
@@ -91,6 +92,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_GRAIN_TYPE                        0.f
 #define CUSTOM_GRAIN_STRENGTH                    shader_injection.custom_grain_strength
 #define CUSTOM_RANDOM                            shader_injection.custom_random
+#define CUSTOM_ENABLE_POST_FILMGRAIN             shader_injection.custom_enable_post_filmgrain
 
 #include "../../shaders/renodx.hlsl"
 
