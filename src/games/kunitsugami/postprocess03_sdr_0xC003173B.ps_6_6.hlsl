@@ -108,7 +108,6 @@ float4 main(
 ) : SV_Target {
   float4 SV_Target;
   float3 untonemapped;
-  float3 test = float3(0.0f, 0.0f, 0.0f);
 
   float4 _24 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2((screenInverseSize.x * SV_Position.x), (screenInverseSize.y * SV_Position.y)));
   float _28 = _24.x * Exposure;
