@@ -655,12 +655,11 @@ void main(
     // float _331 = exp2(log2(((((ColorScale0.z * _178.z) * _245) * _304) + ((((BloomDirtMaskTint.z * _210.z) + 1.0f) * _200.z) * _303)) * 0.009999999776482582f) * 0.1593017578125f);
     // float4 _370 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, float3(((LUTScale * exp2(log2((1.0f / ((_329 * 18.6875f) + 1.0f)) * ((_329 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset), ((LUTScale * exp2(log2((1.0f / ((_330 * 18.6875f) + 1.0f)) * ((_330 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset), ((LUTScale * exp2(log2((1.0f / ((_331 * 18.6875f) + 1.0f)) * ((_331 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset)), 0.0f);
 
-    float3 untonemapped = float3(_166.x, _172.y, _178.z);
-    float3 bloom_extra = ((((BloomDirtMaskTint.rgb * _210.rgb) + 1.0f) * _200.rgb) * _303) * CUSTOM_BLOOM + 0.002667719265446067f;
-    _304 = lerp(1.f, _304, CUSTOM_AUTO_EXPOSURE);
-    float3 scaled_color = (((ColorScale0.rgb * untonemapped.rgb) * SceneColorApplyParamaters[0].rgb) * _304);
-    float3 lut_input_color = bloom_extra + scaled_color;
-    float3 lut_coordinates = float3(LUTScale * saturate(renodx::color::pq::Encode(lut_input_color, 100.f)) + LUTOffset);
+    float3 bloom_extra = ((((BloomDirtMaskTint.rgb * _210.rgb) + 1.0f) * _200.rgb) * _303) * CUSTOM_BLOOM;
+    float autoexposure = lerp(1.f, _304, CUSTOM_AUTO_EXPOSURE);
+    float3 scaled_color = (((ColorScale0.rgb * float3(_166.x, _172.y, _178.z)) * SceneColorApplyParamaters[0].rgb) * autoexposure);
+    float3 untonemapped = bloom_extra + scaled_color;
+    float3 lut_coordinates = float3(LUTScale * saturate(renodx::color::pq::Encode(untonemapped, 100.f)) + LUTOffset);
     float4 _370 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, lut_coordinates, 0.0f);
 
     float _374 = _370.x * 1.0499999523162842f;
@@ -668,7 +667,7 @@ void main(
     float _376 = _370.z * 1.0499999523162842f;
 
     if (RENODX_TONE_MAP_TYPE != 0.f && CUSTOM_PROCESSING_MODE == 1.f) {
-      float3 mid_gray = (((ColorScale0.rgb * 0.18f) * SceneColorApplyParamaters[0].rgb) * _304);
+      float3 mid_gray = (((ColorScale0.rgb * 0.18f) * SceneColorApplyParamaters[0].rgb) * autoexposure);
       float mid_gray_luminance = renodx::color::y::from::BT709(mid_gray);
       renodx::draw::Config config = renodx::draw::BuildConfig();
       config.intermediate_encoding = renodx::draw::ENCODING_PQ;
@@ -676,7 +675,7 @@ void main(
       config.intermediate_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
 
       float3 linear_color = renodx::draw::InvertIntermediatePass(float3(_374, _375, _376), config);
-      float3 tonemapped = renodx::draw::ToneMapPass(lut_input_color * mid_gray_luminance / 0.18f, linear_color, config);
+      float3 tonemapped = renodx::draw::ToneMapPass(untonemapped * mid_gray_luminance / 0.18f, linear_color, config);
       tonemapped = renodx::draw::RenderIntermediatePass(tonemapped, config);
       _374 = tonemapped.r;
       _375 = tonemapped.g;
@@ -707,6 +706,7 @@ void main(
       config.intermediate_encoding = renodx::draw::ENCODING_PQ;
       config.intermediate_scaling = RENODX_DIFFUSE_WHITE_NITS;
       config.intermediate_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
+
       float3 linear_color = renodx::draw::InvertIntermediatePass(float3(_451, _452, _453), config);
       float3 grained = renodx::effects::ApplyFilmGrain(
           linear_color,
