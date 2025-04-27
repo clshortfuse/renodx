@@ -151,7 +151,7 @@ float4 main(
   float _85 = mad((WorkingColorSpace.ToAP1[2].z), _64, mad((WorkingColorSpace.ToAP1[2].y), _63, ((WorkingColorSpace.ToAP1[2].x) * _62)));
   float _86 = dot(float3(_79, _82, _85), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
 
-  SetUntonemappedAP1(float3(_79, _82, _85));
+  SetUntonemappedAP1(_79, _82, _85);
 
   float _90 = (_79 / _86) + -1.0f;
   float _91 = (_82 / _86) + -1.0f;

@@ -93,6 +93,8 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_GRAIN_STRENGTH                    shader_injection.custom_grain_strength
 #define CUSTOM_RANDOM                            shader_injection.custom_random
 #define CUSTOM_ENABLE_POST_FILMGRAIN             shader_injection.custom_enable_post_filmgrain
+#define CUSTOM_DICE_PEAK                         2.f
+#define CUSTOM_DICE_SHOULDER                     0.5f
 
 #include "../../shaders/renodx.hlsl"
 

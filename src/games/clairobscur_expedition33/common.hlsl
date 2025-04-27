@@ -82,10 +82,21 @@ static struct UELutBuilderConfig {
 } RENODX_UE_CONFIG;
 // clang-format on
 
-void SetUntonemappedAP1(float3 color) {
+void SetUntonemappedAP1(inout float3 color) {
   RENODX_UE_CONFIG.untonemapped_ap1 = color;
   RENODX_UE_CONFIG.untonemapped_bt709 = renodx::color::bt709::from::AP1(RENODX_UE_CONFIG.untonemapped_ap1);
   RENODX_UE_CONFIG.tonemapped_bt709 = abs(RENODX_UE_CONFIG.untonemapped_bt709);
+
+  color = renodx::tonemap::dice::BT709(color, CUSTOM_DICE_PEAK, CUSTOM_DICE_SHOULDER);
+}
+
+void SetUntonemappedAP1(inout float color_red, inout float color_green, inout float color_blue) {
+  float3 color = float3(color_red, color_green, color_blue);
+
+  SetUntonemappedAP1(color);
+  color_red = color.r;
+  color_green = color.g;
+  color_blue = color.b;
 }
 
 void SetTonemappedBT709(inout float color_red, inout float color_green, inout float color_blue) {
@@ -93,17 +104,20 @@ void SetTonemappedBT709(inout float color_red, inout float color_green, inout fl
   float3 color = float3(color_red, color_green, color_blue);
   RENODX_UE_CONFIG.tonemapped_bt709 = color;
 
+  // Per channel correction messes up black and white scenes
   if (CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION != 0.f
       || CUSTOM_COLOR_GRADE_HUE_CORRECTION != 0.f
       || CUSTOM_COLOR_GRADE_SATURATION_CORRECTION != 0.f
       || CUSTOM_COLOR_GRADE_HUE_SHIFT != 0.f) {
-    color = renodx::draw::ApplyPerChannelCorrection(
+    /* color = renodx::draw::ApplyPerChannelCorrection(
         RENODX_UE_CONFIG.untonemapped_bt709,
         float3(color_red, color_green, color_blue),
         CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION,
         CUSTOM_COLOR_GRADE_HUE_CORRECTION,
         CUSTOM_COLOR_GRADE_SATURATION_CORRECTION,
-        CUSTOM_COLOR_GRADE_HUE_SHIFT);
+        CUSTOM_COLOR_GRADE_HUE_SHIFT); */
+
+    
   }
 
   color = abs(color);
@@ -135,6 +149,6 @@ void SetTonemappedAP1(inout float3 color) {
 
 void SetGradedBT709(inout float3 color) {
   RENODX_UE_CONFIG.graded_bt709 = color;
-  RENODX_UE_CONFIG.graded_bt709 *= sign(RENODX_UE_CONFIG.tonemapped_bt709);
+  // RENODX_UE_CONFIG.graded_bt709 *= sign(RENODX_UE_CONFIG.tonemapped_bt709);
 }
 
