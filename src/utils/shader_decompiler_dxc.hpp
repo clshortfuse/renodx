@@ -1776,7 +1776,7 @@ class Decompiler {
           int input_signature_index;
           FromStringView(inputSigId, input_signature_index);
           auto signature = preprocess_state.input_signature[input_signature_index];
-          assignment_type = "uint";
+          assignment_type = "int";
           is_identity = true;
           if (signature.packed.MaskString() == "1") {
             if (ParseIndex(colIndex) != "x") {
@@ -2077,7 +2077,7 @@ class Decompiler {
           } else if (resource_class == "1") {
             is_raw_buffer = preprocess_state.uav_resources[range_index].shape == Resource::ResourceKind::RawBuffer;
           } else {
-            throw std::invalid_argument("Unknown @dx.op.rawBufferLoad.i32 resource");
+            throw std::invalid_argument("Unknown @dx.op.rawBufferLoad.f32 resource");
           }
 
           if (is_raw_buffer) {
@@ -2469,12 +2469,12 @@ class Decompiler {
             char sub_index = VECTOR_INDEXES[literal_index];
             std::string suffix = std::format("{:03}{}", real_index, sub_index);
             assignment_value = std::format("{}_{}", cbv_resource->name, suffix);
-            cbv_resource->data_types[suffix] = "uint";
+            cbv_resource->data_types[suffix] = "int";
           } else {
             assignment_value = value_from_reflection;
           }
 
-          assignment_type = "uint";
+          assignment_type = "int";
           is_identity = true;
           // preprocess_state.variable_aliases.emplace(variable, value);
         } else if (type == R"(%dx.types.ResRet.f32)") {
@@ -3022,7 +3022,42 @@ class Decompiler {
         } else {
           throw std::exception("Unknown barrier mode.");
         }
+      } else if (functionName == "@dx.op.rawBufferStore.f32") {
+        // call void @dx.op.rawBufferStore.f32(i32 140, %dx.types.Handle %1751, i32 0, i32 0, float %884, float %885, float %821, float %833, i8 15, i32 4)  ; RawBufferStore(uav,index,elementOffset,value0,value1,value2,value3,mask,alignment)
+        // call %dx.types.ResRet.f32 @dx.op.rawBufferLoad.f32(i32 139, %dx.types.Handle %21, i32 %20, i32 0, i8 15, i32 4)  ; RawBufferLoad(srv,index,elementOffset,mask,alignment)
+        // call %dx.types.ResRet.f32 @dx.op.rawBufferLoad.f32(i32 139, %dx.types.Handle %21, i32 %20, i32 32, i8 1, i32 4)  ; RawBufferLoad(srv,index,elementOffset,mask,alignment)
 
+        auto [opNumber, uav, index, elementOffset, value0, value1, value2, value3, mask, alignment] = StringViewSplit<10>(functionParamsString, param_regex, 2);
+        auto ref = std::string{uav.substr(1)};
+        auto [res_name, range_index, resource_class] = preprocess_state.resource_binding_variables.at(ref);
+        bool is_raw_buffer = false;
+        if (resource_class == "0") {
+          is_raw_buffer = preprocess_state.srv_resources[range_index].shape == Resource::ResourceKind::RawBuffer;
+        } else if (resource_class == "1") {
+          is_raw_buffer = preprocess_state.uav_resources[range_index].shape == Resource::ResourceKind::RawBuffer;
+        } else {
+          throw std::invalid_argument("Unknown @dx.op.rawBufferStore.f32 resource");
+        }
+
+        const bool has_value_y = value1 != "undef";
+        const bool has_value_z = value2 != "undef";
+        const bool has_value_w = value3 != "undef";
+        std::string value;
+        if (has_value_w) {
+          value = std::format("float4({}, {}, {}, {})", ParseFloat(value0), ParseFloat(value1), ParseFloat(value2), ParseFloat(value3));
+        } else if (has_value_z) {
+          value = std::format("float3({}, {}, {})", ParseFloat(value0), ParseFloat(value1), ParseFloat(value2));
+        } else if (has_value_y) {
+          value = std::format("float2({}, {})", ParseFloat(value0), ParseFloat(value1));
+        } else {
+          value = std::format("{}", ParseFloat(value0));
+        }
+
+        // assert(is_raw_buffer);
+
+        // assert(elementOffset == "undef");
+        decompiled = std::format("{}[{} / {}] = {};",
+                                 res_name, ParseInt(index), ParseInt(alignment), value);
       } else if (functionName == "@dx.op.storeOutput.f32") {
         // call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %2772)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
         auto [opNumber, outputSigId, rowIndex, colIndex, value] = StringViewSplit<5>(functionParamsString, param_regex, 2);
