@@ -169,7 +169,7 @@ float4 main(
   float _128 = mad((WorkingColorSpace_ToAP1[2].z), _107, mad((WorkingColorSpace_ToAP1[2].y), _106, ((WorkingColorSpace_ToAP1[2].x) * _105)));
   float _129 = dot(float3(_122, _125, _128), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
 
-  SetUntonemappedAP1(float3(_125, _128, _128));
+  SetUntonemappedAP1(float3(_122, _125, _128));
 
   float _133 = (_122 / _129) + -1.0f;
   float _134 = (_125 / _129) + -1.0f;
