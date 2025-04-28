@@ -238,9 +238,6 @@ OutputSignature main(
   float _184 = cb2_010y * _143;
   float _185 = cb2_010z * _144;
   float4 _186 = t5.SampleLevel(s2_space2, float2(TEXCOORD0_centroid.x, TEXCOORD0_centroid.y), 0.0f);
-
-  _186.rgb *= CUSTOM_BLOOM;
-
   float _190 = _177 - _174;
   float _191 = _190 + _180;
   float _192 = _191 + _183;
@@ -257,8 +254,8 @@ OutputSignature main(
   float _203 = _200 + _175;
   float _204 = _201 + _176;
   float _205 = dot(float3(_202, _203, _204), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
-  
-  float _209 = t0[0].SExposureData_000;  //  SExposureData _209 = t0.Load(0);  //  bin2hlsl:  asfloat(_8.Load(5u).x);
+
+  float _209 = t0[0].SExposureData_020;  //  SExposureData _209 = t0.Load(0);  //  bin2hlsl:  asfloat(_8.Load(5u).x);
 
   float _211 = t0[0].SExposureData_004;  //  SExposureData _211 = t0.Load(0);  //  bin2hlsl:  asfloat(_8.Load(1u).x); // exposure
 
@@ -475,7 +472,7 @@ OutputSignature main(
   float _433 = _430 + _416;
   float _434 = _431 + _419;
 
-  if (false) {
+  if (_379 && RENODX_TONE_MAP_TYPE == 0.f) {
     float _437 = cb2_024x * _432;
     float _438 = cb2_024x * _433;
     float _439 = cb2_024x * _434;
@@ -562,9 +559,11 @@ OutputSignature main(
       _544 = _515;
       _545 = _516;
       _546 = _517;
+    } else {
+
+      float3 tonemapped = ApplyCustomToneMap(float3(_446, _449, _451));
+      _544 = tonemapped.x, _545 = tonemapped.y, _546 = tonemapped.z;
     }
-    float3 tonemapped = ApplyCustomToneMap(float3(_446, _449, _451));
-    _544 = tonemapped.x, _545 = tonemapped.y, _546 = tonemapped.z;
 
   } else {
     float _519 = _446 + 0.020616600289940834f;
