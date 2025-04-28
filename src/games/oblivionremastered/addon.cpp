@@ -62,6 +62,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x1BD60193),
     CustomShaderEntry(0x8E39B831),
     CustomShaderEntry(0xCC2B95BB),
+    CustomShaderEntry(0x9D0421B9),
 
     // FMV
     CustomShaderEntry(0x1FAA96A2),
@@ -103,7 +104,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         {"ToneMapType", {.binding = &shader_injection.tone_map_type, .on_change = &OnSettingChange}},
         {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits, .on_change = &OnSettingChange}},
         {"ToneMapGameNits", {.binding = &shader_injection.diffuse_white_nits, .on_change = &OnSettingChange}},
-        {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .on_change = &OnSettingChange}},
+        {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .is_enabled = []() { return g_hdr_upgrade >= 1.f; }, .on_change = &OnSettingChange}},
         {"ToneMapGammaCorrection", {.binding = &shader_injection.gamma_correction, .on_change = &OnSettingChange}},
         {"SceneGradeStrength", {.binding = &shader_injection.scene_grade_strength, .on_change = &OnSettingChange}},
         {"SceneGradeHueCorrection", {.binding = &shader_injection.scene_grade_hue_correction, .on_change = &OnSettingChange}},
