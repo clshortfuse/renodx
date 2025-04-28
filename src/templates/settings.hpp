@@ -2,6 +2,7 @@
 #include <initializer_list>
 #include <map>
 #include <optional>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -262,7 +263,6 @@ static const SettingConfig COLOR_GRADE_EXPOSURE_CONFIG = {
     .max = 2.f,
     .format = "%.2f",
     .is_visible = []() { return current_settings_mode >= 1; },
-
 };
 
 static const SettingConfig COLOR_GRADE_HIGHLIGHTS_CONFIG = {
@@ -372,7 +372,7 @@ static renodx::utils::settings::Setting* CreateSetting(const std::vector<Setting
   return new_setting;
 }
 
-inline renodx::utils::settings::Setting* CreateSetting(const SettingConfig& config) {
+static renodx::utils::settings::Setting* CreateSetting(const SettingConfig& config) {
   return CreateSetting(std::vector<SettingConfig>({config}));
 }
 
@@ -381,6 +381,68 @@ static std::vector<renodx::utils::settings::Setting*> CreateSettings(const std::
   for (const auto& config : configs) {
     auto* setting = CreateSetting(config);
     settings.push_back(setting);
+  }
+  return settings;
+}
+
+static std::vector<renodx::utils::settings::Setting*> CreateDefaultSettings(const std::vector<std::pair<std::string, const SettingConfig>>& default_settings) {
+  std::vector<renodx::utils::settings::Setting*> settings = {CreateSetting(SETTINGS_MODE_CONFIG)};
+  for (const auto& [key, value] : default_settings) {
+    if (key == "ToneMapType") {
+      settings.push_back(CreateSetting({TONE_MAP_TYPE_CONFIG, value}));
+    } else if (key == "ToneMapPeakNits") {
+      settings.push_back(CreateSetting({PEAK_NITS_CONFIG, value}));
+    } else if (key == "ToneMapGameNits") {
+      settings.push_back(CreateSetting({GAME_NITS_CONFIG, value}));
+    } else if (key == "ToneMapUINits") {
+      settings.push_back(CreateSetting({UI_NITS_CONFIG, value}));
+    } else if (key == "ToneMapGammaCorrection") {
+      settings.push_back(CreateSetting({GAMMA_CORRECTION_CONFIG, value}));
+    } else if (key == "ToneMapScaling") {
+      settings.push_back(CreateSetting({TONE_MAP_SCALING_CONFIG, value}));
+    } else if (key == "ToneMapWorkingColorSpace") {
+      settings.push_back(CreateSetting({TONE_MAP_WORKING_COLOR_SPACE_CONFIG, value}));
+    } else if (key == "ToneMapHueProcessor") {
+      settings.push_back(CreateSetting({TONE_MAP_HUE_PROCESSOR_CONFIG, value}));
+    } else if (key == "ToneMapHueCorrection") {
+      settings.push_back(CreateSetting({TONE_MAP_HUE_CORRECTION_CONFIG, value}));
+    } else if (key == "ToneMapHueShift") {
+      settings.push_back(CreateSetting({TONE_MAP_HUE_SHIFT_CONFIG, value}));
+    } else if (key == "ToneMapClampColorSpace") {
+      settings.push_back(CreateSetting({TONE_MAP_CLAMP_COLOR_SPACE_CONFIG, value}));
+    } else if (key == "ToneMapClampPeak") {
+      settings.push_back(CreateSetting({TONE_MAP_CLAMP_PEAK_CONFIG, value}));
+    } else if (key == "SceneGradeStrength") {
+      settings.push_back(CreateSetting({SCENE_GRADE_STRENGTH_CONFIG, value}));
+    } else if (key == "SceneGradeHueCorrection") {
+      settings.push_back(CreateSetting({SCENE_GRADE_HUE_CORRECTION_CONFIG, value}));
+    } else if (key == "SceneGradeSaturationCorrection") {
+      settings.push_back(CreateSetting({SCENE_GRADE_SATURATION_CORRECTION_CONFIG, value}));
+    } else if (key == "SceneGradeBlowoutRestoration") {
+      settings.push_back(CreateSetting({SCENE_GRADE_BLOWOUT_RESTORATION_CONFIG, value}));
+    } else if (key == "SceneGradeHueShift") {
+      settings.push_back(CreateSetting({SCENE_GRADE_HUE_SHIFT_CONFIG, value}));
+    } else if (key == "ColorGradeExposure") {
+      settings.push_back(CreateSetting({COLOR_GRADE_EXPOSURE_CONFIG, value}));
+    } else if (key == "ColorGradeHighlights") {
+      settings.push_back(CreateSetting({COLOR_GRADE_HIGHLIGHTS_CONFIG, value}));
+    } else if (key == "ColorGradeShadows") {
+      settings.push_back(CreateSetting({COLOR_GRADE_SHADOWS_CONFIG, value}));
+    } else if (key == "ColorGradeContrast") {
+      settings.push_back(CreateSetting({COLOR_GRADE_CONTRAST_CONFIG, value}));
+    } else if (key == "ColorGradeSaturation") {
+      settings.push_back(CreateSetting({COLOR_GRADE_SATURATION_CONFIG, value}));
+    } else if (key == "ColorGradeHighlightSaturation") {
+      settings.push_back(CreateSetting({COLOR_GRADE_HIGHLIGHT_SATURATION_CONFIG, value}));
+    } else if (key == "ColorGradeBlowout") {
+      settings.push_back(CreateSetting({COLOR_GRADE_BLOWOUT_CONFIG, value}));
+    } else if (key == "ColorGradeFlare") {
+      settings.push_back(CreateSetting({COLOR_GRADE_FLARE_CONFIG, value}));
+    } else if (key == "FxBloom") {
+      settings.push_back(CreateSetting({FX_BLOOM_CONFIG, value}));
+    } else {
+      throw std::runtime_error("Unknown setting key: " + key);
+    }
   }
   return settings;
 }
@@ -449,8 +511,13 @@ static std::vector<renodx::utils::settings::Setting*> CreateDefaultSettings(cons
 
 static std::vector<renodx::utils::settings::Setting*> JoinSettings(const std::vector<std::vector<renodx::utils::settings::Setting*>>& collection) {
   std::vector<renodx::utils::settings::Setting*> settings;
+  std::unordered_set<std::string> unique_keys;
   for (const auto& group : collection) {
     for (const auto& setting : group) {
+      if (!setting->key.empty()) {
+        bool is_unique = unique_keys.insert(setting->key).second;
+        if (!is_unique) continue;
+      }
       settings.push_back(setting);
     }
   }
