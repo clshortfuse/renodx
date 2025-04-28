@@ -66,9 +66,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // FMV
     CustomShaderEntry(0x1FAA96A2),
 
-    // User Gamma
-    
-    CustomShaderEntry(0x56DD5820),
 };
 
 ShaderInjectData shader_injection;
