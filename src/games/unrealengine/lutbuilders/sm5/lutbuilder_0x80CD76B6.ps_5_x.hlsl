@@ -40,6 +40,9 @@ void main(
   r0.z = dot(float3(-0.0257933214, -0.0986258015, 1.20369494), r1.xyz);
   r0.xyz = r0.xyz + -r1.xyz;
   r0.w = dot(r1.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
+
+  SetUngradedAP1(r1.xyz);
+
   r2.xyz = r1.xyz / r0.www;
   r0.w = r0.w * r0.w;
   r0.w = cb0[36].w * r0.w;

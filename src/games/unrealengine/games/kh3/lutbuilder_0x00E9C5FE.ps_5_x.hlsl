@@ -153,6 +153,9 @@ void main(
   r0.y = dot(float3(0.0702069029, 0.916335821, 0.0134500116), r3.xyz);
   r0.z = dot(float3(0.0206188709, 0.109567292, 0.869606733), r3.xyz);
   r0.w = dot(r0.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
+
+  SetUngradedAP1(r0.xyz);
+
   r2.xyzw = cb0[46].xyzw * cb0[41].xyzw;
   r3.xyzw = cb0[47].xyzw * cb0[42].xyzw;
   r4.xyzw = cb0[48].xyzw * cb0[43].xyzw;
@@ -270,6 +273,9 @@ void main(
     r0.xyz = r0.xyz * cb0[21].www + r3.xyz;
     r0.xyz = r5.xyz * r4.xyz + r0.xyz;
     r0.xyz = float3(-0.00200000009, -0.00200000009, -0.00200000009) + r0.xyz;
+
+    SetTonemappedBT709(r0.xyz);
+
   } else {
     r3.x = dot(float3(0.613191485, 0.33951208, 0.0473663323), r2.xyz);
     r3.y = dot(float3(0.0702069029, 0.916335821, 0.0134500116), r2.xyz);

@@ -468,6 +468,9 @@ void main(
     r2.xyz = r2.xyz * cb0[30].www + r3.xyz;
     r2.xyz = r5.xyz * r4.xyz + r2.xyz;
     r2.xyz = float3(-0.00200000009, -0.00200000009, -0.00200000009) + r2.xyz;
+
+    SetTonemappedBT709(r2.xyz);
+
   } else {
     r3.x = dot(float3(1.06537485, 1.44678506e-006, -0.0653710067), r0.xyz);
     r3.y = dot(float3(-3.45525592e-007, 1.20366347, -0.203667715), r0.xyz);

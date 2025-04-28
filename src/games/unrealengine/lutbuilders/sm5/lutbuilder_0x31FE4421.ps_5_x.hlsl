@@ -180,6 +180,9 @@ void main(
   r0.y = dot(cb1[9].xyz, r5.xyz);
   r0.z = dot(cb1[10].xyz, r5.xyz);
   r0.w = dot(r0.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
+
+  SetUngradedAP1(r0.xyz);
+
   r1.xyz = r0.xyz / r0.www;
   r1.xyz = float3(-1, -1, -1) + r1.xyz;
   r1.x = dot(r1.xyz, r1.xyz);

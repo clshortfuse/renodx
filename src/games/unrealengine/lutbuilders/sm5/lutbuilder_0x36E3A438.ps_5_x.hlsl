@@ -72,6 +72,9 @@ void main(
   r1.y = dot(cb1[9].xyz, r0.xyz);
   r1.z = dot(cb1[10].xyz, r0.xyz);
   r0.x = dot(r1.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
+
+  SetUngradedAP1(r1.xyz);
+
   r0.yzw = r1.xyz / r0.xxx;
   r0.yzw = float3(-1, -1, -1) + r0.yzw;
   r0.y = dot(r0.yzw, r0.yzw);
@@ -423,7 +426,7 @@ void main(
 
   [branch]
   if (asuint(cb0[40].w) == 0) {  // cb[40].w = output device
-                         // SDR path
+                                 // SDR path
     r6.x = dot(cb1[8].xyz, r5.xyz);
     r6.y = dot(cb1[9].xyz, r5.xyz);
     r6.z = dot(cb1[10].xyz, r5.xyz);

@@ -2,12 +2,18 @@
 
 // clang-format off
 static struct UELutBuilderConfig {
+  float3 ungraded_ap1;
   float3 untonemapped_ap1;
   float3 untonemapped_bt709;
   float3 tonemapped_bt709;
   float3 graded_bt709;
 } RENODX_UE_CONFIG;
 // clang-format on
+
+// First instance of 0.272228718, 0.674081743, 0.0536895171
+void SetUngradedAP1(float3 color) {
+  RENODX_UE_CONFIG.ungraded_ap1 = color;
+}
 
 void SetUntonemappedAP1(float3 color) {
   RENODX_UE_CONFIG.untonemapped_ap1 = color;
