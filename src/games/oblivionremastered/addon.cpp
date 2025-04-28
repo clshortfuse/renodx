@@ -22,7 +22,54 @@
 
 namespace {
 
-renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
+bool g_lut_builder_updated = true;
+
+bool OnLutBuilderDrawn(reshade::api::command_list* cmd_list) {
+  g_lut_builder_updated = true;
+  return true;
+}
+
+renodx::mods::shader::CustomShaders custom_shaders = {
+    // Lut Builders
+    CustomShaderEntryCallback(0x00C34813, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0x35359B86, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0x47329E4A, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0x484B4E2B, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0x56299258, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0x57EE8201, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0x5D14010F, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0x704AB527, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0x7D28F020, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0x81243B91, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0x8AB5FB23, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0x92690156, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0x9ECC8B3C, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0xA8DA5452, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0xAF588657, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0xB439D7F0, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0xC3C5B8AD, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0xC51C976F, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0xF890095A, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0xFF16F46F, &OnLutBuilderDrawn),
+
+    // Output
+    CustomShaderEntry(0x70EB957B),
+    CustomShaderEntry(0xD1CDE904),
+    CustomShaderEntry(0x99B126EC),
+    CustomShaderEntry(0x59C7FFCE),
+    CustomShaderEntry(0xB6EDB152),
+    CustomShaderEntry(0x04C003FD),
+    CustomShaderEntry(0x1BD60193),
+    CustomShaderEntry(0x8E39B831),
+    CustomShaderEntry(0xCC2B95BB),
+
+    // FMV
+    CustomShaderEntry(0x1FAA96A2),
+
+    // User Gamma
+    
+    CustomShaderEntry(0x56DD5820),
+};
 
 ShaderInjectData shader_injection;
 
@@ -39,27 +86,42 @@ auto* hdr_upgrade_setting = renodx::templates::settings::CreateSetting({
     .is_global = true,
 });
 
+void OnSettingChange() {
+  g_lut_builder_updated = false;
+};
+
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({
+    {
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::TEXT,
+            .label = "Pause and unpause the game to apply changes.",
+            .tint = 0xFF0000,
+            .is_visible = []() {
+              return shader_injection.custom_processing_mode == 0.f
+                     && !g_lut_builder_updated;
+            },
+        },
+    },
     renodx::templates::settings::CreateDefaultSettings({
-        {"ToneMapType", &shader_injection.tone_map_type},
-        {"ToneMapPeakNits", &shader_injection.peak_white_nits},
-        {"ToneMapGameNits", &shader_injection.diffuse_white_nits},
-        {"ToneMapUINits", &shader_injection.graphics_white_nits},
-        {"ToneMapGammaCorrection", &shader_injection.gamma_correction},
-        {"SceneGradeStrength", &shader_injection.scene_grade_strength},
-        {"SceneGradeHueCorrection", &shader_injection.scene_grade_hue_correction},
-        {"SceneGradeSaturationCorrection", &shader_injection.scene_grade_saturation_correction},
-        {"SceneGradeBlowoutRestoration", &shader_injection.scene_grade_blowout_restoration},
-        {"SceneGradeHueShift", &shader_injection.scene_grade_hue_shift},
-        {"ColorGradeExposure", &shader_injection.tone_map_exposure},
-        {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
-        {"ColorGradeShadows", &shader_injection.tone_map_shadows},
-        {"ColorGradeContrast", &shader_injection.tone_map_contrast},
-        {"ColorGradeSaturation", &shader_injection.tone_map_saturation},
-        {"ColorGradeHighlightSaturation", &shader_injection.tone_map_highlight_saturation},
-        {"ColorGradeBlowout", &shader_injection.tone_map_blowout},
-        {"ColorGradeFlare", &shader_injection.tone_map_flare},
-        {"FxBloom", &shader_injection.custom_bloom},
+        {"ToneMapType", {.binding = &shader_injection.tone_map_type, .on_change = &OnSettingChange}},
+        {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits, .on_change = &OnSettingChange}},
+        {"ToneMapGameNits", {.binding = &shader_injection.diffuse_white_nits, .on_change = &OnSettingChange}},
+        {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .on_change = &OnSettingChange}},
+        {"ToneMapGammaCorrection", {.binding = &shader_injection.gamma_correction, .on_change = &OnSettingChange}},
+        {"SceneGradeStrength", {.binding = &shader_injection.scene_grade_strength, .on_change = &OnSettingChange}},
+        {"SceneGradeHueCorrection", {.binding = &shader_injection.scene_grade_hue_correction, .on_change = &OnSettingChange}},
+        {"SceneGradeSaturationCorrection", {.binding = &shader_injection.scene_grade_saturation_correction, .on_change = &OnSettingChange}},
+        {"SceneGradeBlowoutRestoration", {.binding = &shader_injection.scene_grade_blowout_restoration, .on_change = &OnSettingChange}},
+        {"SceneGradeHueShift", {.binding = &shader_injection.scene_grade_hue_shift, .on_change = &OnSettingChange}},
+        {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure, .on_change = &OnSettingChange}},
+        {"ColorGradeHighlights", {.binding = &shader_injection.tone_map_highlights, .on_change = &OnSettingChange}},
+        {"ColorGradeShadows", {.binding = &shader_injection.tone_map_shadows, .on_change = &OnSettingChange}},
+        {"ColorGradeContrast", {.binding = &shader_injection.tone_map_contrast, .on_change = &OnSettingChange}},
+        {"ColorGradeSaturation", {.binding = &shader_injection.tone_map_saturation, .on_change = &OnSettingChange}},
+        {"ColorGradeHighlightSaturation", {.binding = &shader_injection.tone_map_highlight_saturation, .on_change = &OnSettingChange}},
+        {"ColorGradeBlowout", {.binding = &shader_injection.tone_map_blowout, .on_change = &OnSettingChange}},
+        {"ColorGradeFlare", {.binding = &shader_injection.tone_map_flare, .on_change = &OnSettingChange}},
+        {"FxBloom", {.binding = &shader_injection.custom_bloom}},
     }),
     {
         renodx::templates::settings::CreateSetting({
@@ -123,13 +185,6 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .labels = {"LUT", "Output"},
         }),
         hdr_upgrade_setting,
-        new renodx::utils::settings::Setting{
-            .value_type = renodx::utils::settings::SettingValueType::TEXT,
-            .label = "Note: Color Grading options do not update in real-time."
-                     "\nPause and unpause the game to see changes.",
-            .section = "Notes",
-            .is_visible = []() { return shader_injection.custom_processing_mode == 0.f; },
-        },
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
             .label = "Discord",
