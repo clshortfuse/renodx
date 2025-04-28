@@ -272,6 +272,9 @@ void main(
   float _139 = mad((UniformBufferConstants_WorkingColorSpace_009z), _121, (mad((UniformBufferConstants_WorkingColorSpace_009y), _120, ((UniformBufferConstants_WorkingColorSpace_009x)*_119))));
   float _142 = mad((UniformBufferConstants_WorkingColorSpace_010z), _121, (mad((UniformBufferConstants_WorkingColorSpace_010y), _120, ((UniformBufferConstants_WorkingColorSpace_010x)*_119))));
   float _143 = dot(float3(_136, _139, _142), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+
+  SetUngradedAP1(float3(_136, _139, _142));
+
   float _147 = (_136 / _143) + -1.0f;
   float _148 = (_139 / _143) + -1.0f;
   float _149 = (_142 / _143) + -1.0f;

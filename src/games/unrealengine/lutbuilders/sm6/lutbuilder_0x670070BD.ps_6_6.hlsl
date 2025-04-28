@@ -159,6 +159,9 @@ float4 main(
   float _86 = mad((WorkingColorSpace_ToAP1[1].z), _68, mad((WorkingColorSpace_ToAP1[1].y), _67, ((WorkingColorSpace_ToAP1[1].x) * _66)));
   float _89 = mad((WorkingColorSpace_ToAP1[2].z), _68, mad((WorkingColorSpace_ToAP1[2].y), _67, ((WorkingColorSpace_ToAP1[2].x) * _66)));
   float _90 = dot(float3(_83, _86, _89), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+
+  SetUngradedAP1(float3(_83, _86, _89));
+
   float _94 = (_83 / _90) + -1.0f;
   float _95 = (_86 / _90) + -1.0f;
   float _96 = (_89 / _90) + -1.0f;
