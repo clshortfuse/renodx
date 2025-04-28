@@ -872,6 +872,36 @@ static void OnBarrier(
   }
 }
 
+static void OnBeginRenderPass(
+    reshade::api::command_list* cmd_list,
+    uint32_t count, const reshade::api::render_pass_render_target_desc* rts,
+    const reshade::api::render_pass_depth_stencil_desc* ds) {
+  if (!is_primary_hook) return;
+  if (!trace_running && present_count >= trace_initial_frame_count) return;
+  for (uint32_t i = 0; i < count; i++) {
+    std::stringstream s;
+    s << "OnBeginRenderPass(" << PRINT_PTR(rts[i].view.handle);
+    s << ", load_op: " << rts->load_op;
+    s << ", store_op: " << rts->store_op;
+    s << ") [" << i << "]";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+  }
+  if (ds != nullptr) {
+    std::stringstream s;
+    s << "OnBeginRenderPass(dsv: " << PRINT_PTR(ds->view.handle);
+    s << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+  }
+}
+
+static void OnEndRenderPass(reshade::api::command_list* cmd_list) {
+  if (!is_primary_hook) return;
+  if (!trace_running && present_count >= trace_initial_frame_count) return;
+  std::stringstream s;
+  s << "OnEndRenderPass()";
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
+}
+
 static void OnBindRenderTargetsAndDepthStencil(
     reshade::api::command_list* cmd_list,
     uint32_t count,
@@ -887,10 +917,7 @@ static void OnBindRenderTargetsAndDepthStencil(
     auto* data = renodx::utils::data::Get<DeviceData>(device);
     const std::shared_lock lock(data->mutex);
     for (uint32_t i = 0; i < count; i++) {
-      auto rtv = rtvs[i];
-      // if (rtv.handle) {
-      //   state.renderTargets.push_back(rtv.handle);
-      // }
+      const auto& rtv = rtvs[i];
       std::stringstream s;
       s << "on_bind_render_targets(";
       s << PRINT_PTR(rtv.handle);
@@ -1031,6 +1058,7 @@ static void OnInitResourceView(
 
 static void OnDestroyResourceView(reshade::api::device* device, reshade::api::resource_view view) {
   if (!is_primary_hook) return;
+  if (!trace_running && present_count >= trace_initial_frame_count) return;
   std::stringstream s;
   s << "utils::trace::on_destroy_resource_view(";
   s << PRINT_PTR(view.handle);
@@ -1055,6 +1083,7 @@ static void OnPushDescriptors(
     s << "[" << layout_param << "]";
     s << "[" << update.binding + i << "]";
     s << ", type: " << update.type;
+    s << ", stages: " << stages << " (" << std::hex << static_cast<uint32_t>(stages) << std::dec << ")";
 
     auto log_heap = [&]() {
       if (update.table.handle == 0u) return std::string("");
@@ -1662,8 +1691,8 @@ static void Use(DWORD fdw_reason) {
       // destroy_query_heap
       // get_query_heap_results
       reshade::register_event<reshade::addon_event::barrier>(internal::OnBarrier);
-      // begin_render_pass
-      // end_render_pass
+      reshade::register_event<reshade::addon_event::begin_render_pass>(internal::OnBeginRenderPass);
+      reshade::register_event<reshade::addon_event::end_render_pass>(internal::OnEndRenderPass);
       reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(internal::OnBindRenderTargetsAndDepthStencil);
       reshade::register_event<reshade::addon_event::bind_pipeline>(internal::OnBindPipeline);
       reshade::register_event<reshade::addon_event::bind_pipeline_states>(internal::OnBindPipelineStates);
@@ -1700,7 +1729,7 @@ static void Use(DWORD fdw_reason) {
       // reset_command_list
       // close_command_list
       // execute_command_list
-      // execute_command_list
+      // execute_secondary_command_list
       reshade::register_event<reshade::addon_event::present>(internal::OnPresent);
       // set_fullscreen_state
 
@@ -1746,8 +1775,8 @@ static void Use(DWORD fdw_reason) {
       // destroy_query_heap
       // get_query_heap_results
       reshade::unregister_event<reshade::addon_event::barrier>(internal::OnBarrier);
-      // begin_render_pass
-      // end_render_pass
+      reshade::unregister_event<reshade::addon_event::begin_render_pass>(internal::OnBeginRenderPass);
+      reshade::unregister_event<reshade::addon_event::end_render_pass>(internal::OnEndRenderPass);
       reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(internal::OnBindRenderTargetsAndDepthStencil);
       reshade::unregister_event<reshade::addon_event::bind_pipeline>(internal::OnBindPipeline);
       reshade::unregister_event<reshade::addon_event::bind_pipeline_states>(internal::OnBindPipelineStates);
@@ -1784,7 +1813,7 @@ static void Use(DWORD fdw_reason) {
       // reset_command_list
       // close_command_list
       // execute_command_list
-      // execute_command_list
+      // execute_secondary_command_list
       reshade::unregister_event<reshade::addon_event::present>(internal::OnPresent);
       // set_fullscreen_state
       break;

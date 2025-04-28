@@ -173,7 +173,7 @@ struct PipelineShaderDetails {
             if (replacement_subobjects == nullptr) {
               replacement_subobjects = renodx::utils::pipeline::ClonePipelineSubObjects(subobjects, subobject_count);
             }
-#ifdef DEBUG_LEVEL_1
+#ifdef DEBUG_LEVEL_0
             {
               std::stringstream s;
               s << "utils::shader::BuildReplacementPipeline(Replacing ";
