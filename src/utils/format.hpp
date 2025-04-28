@@ -15,7 +15,7 @@
 #include <include/reshade.hpp>
 
 #define PRINT_CRC32(crc32) "0x" << std::hex << std::setw(8) << std::setfill('0') << crc32 << std::setfill(' ') << std::dec
-#define PRINT_PTR(ptr)    "0x" << std::hex << std::setw(sizeof(uintptr_t) * 2) << std::setfill('0') << static_cast<uintptr_t>(ptr) << std::setfill(' ') << std::dec
+#define PRINT_PTR(ptr)     "0x" << std::hex << std::setw(sizeof(uintptr_t) * 2) << std::setfill('0') << static_cast<uintptr_t>(ptr) << std::setfill(' ') << std::dec
 
 inline std::ostream& operator<<(std::ostream& os, const reshade::api::device_api value) {
   switch (value) {
@@ -564,5 +564,24 @@ inline std::ostream& operator<<(std::ostream& os, const DXGI_FORMAT value) {
       return os << "DXGI_FORMAT_UNKNOWN";
     default:
       return os << "unknown";
+  }
+}
+
+inline std::ostream& operator<<(std::ostream& os, const reshade::api::render_pass_load_op value) {
+  switch (value) {
+    case reshade::api::render_pass_load_op::load:      return os << "load";
+    case reshade::api::render_pass_load_op::clear:     return os << "clear";
+    case reshade::api::render_pass_load_op::discard:   return os << "discard";
+    case reshade::api::render_pass_load_op::no_access: return os << "no_access";
+    default:                                           return os << "unknown";
+  }
+}
+
+inline std::ostream& operator<<(std::ostream& os, const reshade::api::render_pass_store_op value) {
+  switch (value) {
+    case reshade::api::render_pass_store_op::store:     return os << "store";
+    case reshade::api::render_pass_store_op::discard:   return os << "discard";
+    case reshade::api::render_pass_store_op::no_access: return os << "no_access";
+    default:                                            return os << "unknown";
   }
 }
