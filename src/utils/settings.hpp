@@ -363,29 +363,47 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       float target_hsv[3] = {};
       ImGui::ColorConvertRGBtoHSV(target_rgb.x, target_rgb.y, target_rgb.z, target_hsv[0], target_hsv[1], target_hsv[2]);
 
-      const auto styles = {
-          ImGuiCol_FrameBg,
-          ImGuiCol_FrameBgHovered,
-          ImGuiCol_FrameBgActive,
-          ImGuiCol_SliderGrab,
-          ImGuiCol_SliderGrabActive,
-          ImGuiCol_Button,
-          ImGuiCol_ButtonActive,
-          ImGuiCol_ButtonHovered,
-          ImGuiCol_TextSelectedBg,
-          ImGuiCol_Header,
-          ImGuiCol_HeaderHovered,
-          ImGuiCol_HeaderActive,
-      };
-      for (const auto style : styles) {
-        auto style_rgb = ImGui::GetStyleColorVec4(style);
-        float style_hsv[3] = {};
-        ImGui::ColorConvertRGBtoHSV(style_rgb.x, style_rgb.y, style_rgb.z, style_hsv[0], style_hsv[1], style_hsv[2]);
+      static const auto COMMON_STYLES =
+          {
+              ImGuiCol_FrameBg,
+              ImGuiCol_FrameBgHovered,
+              ImGuiCol_FrameBgActive,
+              ImGuiCol_SliderGrab,
+              ImGuiCol_SliderGrabActive,
+              ImGuiCol_Button,
+              ImGuiCol_ButtonActive,
+              ImGuiCol_ButtonHovered,
+              ImGuiCol_TextSelectedBg,
+              ImGuiCol_Header,
+              ImGuiCol_HeaderHovered,
+              ImGuiCol_HeaderActive,
+          };
 
-        ImGui::ColorConvertHSVtoRGB(target_hsv[0], style_hsv[1], style_hsv[2], style_rgb.x, style_rgb.y, style_rgb.z);
-        ImGui::PushStyleColor(style, style_rgb);
+      static const auto TEXT_STYLES = {
+          ImGuiCol_Text,
+          ImGuiCol_TextDisabled,
+      };
+      if (setting->value_type == SettingValueType::TEXT
+          || setting->value_type == SettingValueType::TEXT_NOWRAP) {
+        for (const auto style : TEXT_STYLES) {
+          auto style_rgb = ImGui::GetStyleColorVec4(style);
+          style_rgb.x = target_rgb.x;
+          style_rgb.y = target_rgb.y;
+          style_rgb.z = target_rgb.z;
+          ImGui::PushStyleColor(style, style_rgb);
+        }
+        styles_pushed = TEXT_STYLES.size();
+      } else {
+        for (const auto style : COMMON_STYLES) {
+          auto style_rgb = ImGui::GetStyleColorVec4(style);
+          float style_hsv[3] = {};
+          ImGui::ColorConvertRGBtoHSV(style_rgb.x, style_rgb.y, style_rgb.z, style_hsv[0], style_hsv[1], style_hsv[2]);
+
+          ImGui::ColorConvertHSVtoRGB(target_hsv[0], style_hsv[1], style_hsv[2], style_rgb.x, style_rgb.y, style_rgb.z);
+          ImGui::PushStyleColor(style, style_rgb);
+        }
+        styles_pushed = COMMON_STYLES.size();
       }
-      styles_pushed = styles.size();
     }
 
     if (last_section != setting->section) {
