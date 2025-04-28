@@ -634,6 +634,9 @@ float4 main(
 
   // Gamut Expansion
   float _383 = dot(float3(_376, _379, _382), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+
+  SetUngradedAP1(float3(_376, _379, _382));
+
   float _384 = _376 / _383;
   float _385 = _379 / _383;
   float _386 = _382 / _383;

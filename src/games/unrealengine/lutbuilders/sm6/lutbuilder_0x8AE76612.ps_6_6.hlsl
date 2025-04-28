@@ -221,6 +221,9 @@ float4 main(
   float _337 = mad((WorkingColorSpace_ToAP1[1].z), _319, mad((WorkingColorSpace_ToAP1[1].y), _316, ((WorkingColorSpace_ToAP1[1].x) * _313)));
   float _340 = mad((WorkingColorSpace_ToAP1[2].z), _319, mad((WorkingColorSpace_ToAP1[2].y), _316, ((WorkingColorSpace_ToAP1[2].x) * _313)));
   float _341 = dot(float3(_334, _337, _340), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+
+  SetUngradedAP1(float3(_334, _337, _340));
+
   float _345 = (_334 / _341) + -1.0f;
   float _346 = (_337 / _341) + -1.0f;
   float _347 = (_340 / _341) + -1.0f;

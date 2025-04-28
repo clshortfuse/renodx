@@ -367,6 +367,9 @@ float4 main(
   float _384 = mad((UniformBufferConstants_WorkingColorSpace_009z), _366, (mad((UniformBufferConstants_WorkingColorSpace_009y), _363, ((UniformBufferConstants_WorkingColorSpace_009x)*_360))));
   float _387 = mad((UniformBufferConstants_WorkingColorSpace_010z), _366, (mad((UniformBufferConstants_WorkingColorSpace_010y), _363, ((UniformBufferConstants_WorkingColorSpace_010x)*_360))));
   float _388 = dot(float3(_381, _384, _387), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+
+  SetUngradedAP1(float3(_381, _384, _387));
+
   float _392 = (_381 / _388) + -1.0f;
   float _393 = (_384 / _388) + -1.0f;
   float _394 = (_387 / _388) + -1.0f;

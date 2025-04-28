@@ -197,6 +197,9 @@ float4 main(
   float _80 = mad((WorkingColorSpace_009z), _62, (mad((WorkingColorSpace_009y), _61, ((WorkingColorSpace_009x)*_60))));
   float _83 = mad((WorkingColorSpace_010z), _62, (mad((WorkingColorSpace_010y), _61, ((WorkingColorSpace_010x)*_60))));
   float _84 = dot(float3(_77, _80, _83), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+
+  SetUngradedAP1(float3(_77, _80, _83));
+
   float _88 = (_77 / _84) + -1.0f;
   float _89 = (_80 / _84) + -1.0f;
   float _90 = (_83 / _84) + -1.0f;
