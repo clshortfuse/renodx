@@ -669,10 +669,11 @@ float3 ApplyPerChannelCorrection(
   return final_color;
 }
 
-float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, float3 neutral_sdr_color, Config config) {
-  float3 untonemapped_graded;
+float3 ComputeUntonemappedGraded(float3 untonemapped, float3 graded_sdr_color, float3 neutral_sdr_color, Config config) {
   [branch]
-  if (config.color_grade_strength != 0) {
+  if (config.color_grade_strength == 0) {
+    return untonemapped;
+  } else {
     if (config.per_channel_blowout_restoration != 0.f
         || config.per_channel_hue_correction != 0.f
         || config.per_channel_chrominance_correction != 0.f) {
@@ -684,24 +685,21 @@ float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, float3 neutral_
           config.per_channel_chrominance_correction);
     }
 
-    untonemapped_graded = renodx::tonemap::UpgradeToneMap(
+    return renodx::tonemap::UpgradeToneMap(
         untonemapped,
         neutral_sdr_color,
         graded_sdr_color,
         config.color_grade_strength,
         config.tone_map_pass_autocorrection);
-  } else {
-    untonemapped_graded = untonemapped;
   }
-  return ToneMapPass(untonemapped_graded, config);
 }
 
-float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, Config config) {
+float3 ComputeUntonemappedGraded(float3 untonemapped, float3 graded_sdr_color, Config config) {
   [branch]
   if (config.color_grade_strength == 0) {
-    return ToneMapPass(untonemapped, config);
+    return untonemapped;
   } else {
-    return ToneMapPass(
+    return ComputeUntonemappedGraded(
         untonemapped,
         graded_sdr_color,
         renodx::tonemap::renodrt::NeutralSDR(untonemapped),
@@ -709,8 +707,34 @@ float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, Config config) 
   }
 }
 
+float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, float3 neutral_sdr_color, Config config) {
+  float3 untonemapped_graded = ComputeUntonemappedGraded(
+      untonemapped,
+      graded_sdr_color,
+      neutral_sdr_color,
+      config);
+  return ToneMapPass(untonemapped_graded, config);
+}
+
+float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, Config config) {
+  float3 untonemapped_graded = ComputeUntonemappedGraded(
+      untonemapped,
+      graded_sdr_color,
+      config);
+
+  return ToneMapPass(untonemapped_graded, config);
+}
+
 float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color, float3 neutral_sdr_color) {
   return ToneMapPass(untonemapped, graded_sdr_color, neutral_sdr_color, BuildConfig());
+}
+
+float3 ComputeUntonemappedGraded(float3 untonemapped, float3 graded_sdr_color, float3 neutral_sdr_color) {
+  return ComputeUntonemappedGraded(untonemapped, graded_sdr_color, neutral_sdr_color, BuildConfig());
+}
+
+float3 ComputeUntonemappedGraded(float3 untonemapped, float3 graded_sdr_color) {
+  return ComputeUntonemappedGraded(untonemapped, graded_sdr_color, BuildConfig());
 }
 
 float3 RenderIntermediatePass(float3 color) {
