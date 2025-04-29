@@ -232,7 +232,7 @@ void main(
   float _354 = mad((WorkingColorSpace_ToAP1[2].z), _333, mad((WorkingColorSpace_ToAP1[2].y), _330, ((WorkingColorSpace_ToAP1[2].x) * _327)));
   float _355 = dot(float3(_348, _351, _354), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
 
-  SetUntonemappedAP1(float3(_348, _351, _354));
+  SetUngradedAP1(float3(_348, _351, _354));
 
   float _359 = (_348 / _355) + -1.0f;
   float _360 = (_351 / _355) + -1.0f;
@@ -269,6 +269,9 @@ void main(
   float _756 = ((_642 * (((ColorOffset.x + ColorOffsetHighlights.x) + _539) + (((ColorGain.x * ColorGainHighlights.x) * _548) * exp2(log2(exp2(((ColorContrast.x * ColorContrastHighlights.x) * _566) * log2(max(0.0f, ((((ColorSaturation.x * ColorSaturationHighlights.x) * _575) * _466) + _392)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((ColorGamma.x * ColorGammaHighlights.x) * _557)))))) + (_530 * (((ColorOffset.x + ColorOffsetShadows.x) + _406) + (((ColorGain.x * ColorGainShadows.x) * _420) * exp2(log2(exp2(((ColorContrast.x * ColorContrastShadows.x) * _448) * log2(max(0.0f, ((((ColorSaturation.x * ColorSaturationShadows.x) * _462) * _466) + _392)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((ColorGamma.x * ColorGammaShadows.x) * _434))))))) + ((((ColorOffset.x + ColorOffsetMidtones.x) + _651) + (((ColorGain.x * ColorGainMidtones.x) * _660) * exp2(log2(exp2(((ColorContrast.x * ColorContrastMidtones.x) * _678) * log2(max(0.0f, ((((ColorSaturation.x * ColorSaturationMidtones.x) * _687) * _466) + _392)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((ColorGamma.x * ColorGammaMidtones.x) * _669))))) * _745);
   float _758 = ((_642 * (((ColorOffset.y + ColorOffsetHighlights.y) + _539) + (((ColorGain.y * ColorGainHighlights.y) * _548) * exp2(log2(exp2(((ColorContrast.y * ColorContrastHighlights.y) * _566) * log2(max(0.0f, ((((ColorSaturation.y * ColorSaturationHighlights.y) * _575) * _467) + _392)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((ColorGamma.y * ColorGammaHighlights.y) * _557)))))) + (_530 * (((ColorOffset.y + ColorOffsetShadows.y) + _406) + (((ColorGain.y * ColorGainShadows.y) * _420) * exp2(log2(exp2(((ColorContrast.y * ColorContrastShadows.y) * _448) * log2(max(0.0f, ((((ColorSaturation.y * ColorSaturationShadows.y) * _462) * _467) + _392)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((ColorGamma.y * ColorGammaShadows.y) * _434))))))) + ((((ColorOffset.y + ColorOffsetMidtones.y) + _651) + (((ColorGain.y * ColorGainMidtones.y) * _660) * exp2(log2(exp2(((ColorContrast.y * ColorContrastMidtones.y) * _678) * log2(max(0.0f, ((((ColorSaturation.y * ColorSaturationMidtones.y) * _687) * _467) + _392)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((ColorGamma.y * ColorGammaMidtones.y) * _669))))) * _745);
   float _760 = ((_642 * (((ColorOffset.z + ColorOffsetHighlights.z) + _539) + (((ColorGain.z * ColorGainHighlights.z) * _548) * exp2(log2(exp2(((ColorContrast.z * ColorContrastHighlights.z) * _566) * log2(max(0.0f, ((((ColorSaturation.z * ColorSaturationHighlights.z) * _575) * _468) + _392)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((ColorGamma.z * ColorGammaHighlights.z) * _557)))))) + (_530 * (((ColorOffset.z + ColorOffsetShadows.z) + _406) + (((ColorGain.z * ColorGainShadows.z) * _420) * exp2(log2(exp2(((ColorContrast.z * ColorContrastShadows.z) * _448) * log2(max(0.0f, ((((ColorSaturation.z * ColorSaturationShadows.z) * _462) * _468) + _392)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((ColorGamma.z * ColorGammaShadows.z) * _434))))))) + ((((ColorOffset.z + ColorOffsetMidtones.z) + _651) + (((ColorGain.z * ColorGainMidtones.z) * _660) * exp2(log2(exp2(((ColorContrast.z * ColorContrastMidtones.z) * _678) * log2(max(0.0f, ((((ColorSaturation.z * ColorSaturationMidtones.z) * _687) * _468) + _392)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((ColorGamma.z * ColorGammaMidtones.z) * _669))))) * _745);
+
+  SetUntonemappedAP1(float3(_756, _758, _760));
+
   float _775 = ((mad(0.061360642313957214f, _760, mad(-4.540197551250458e-09f, _758, (_756 * 0.9386394023895264f))) - _756) * BlueCorrection) + _756;
   float _776 = ((mad(0.169205904006958f, _760, mad(0.8307942152023315f, _758, (_756 * 6.775371730327606e-08f))) - _758) * BlueCorrection) + _758;
   float _777 = (mad(-2.3283064365386963e-10f, _758, (_756 * -9.313225746154785e-10f)) * BlueCorrection) + _760;
@@ -418,7 +421,7 @@ void main(
   float _1356 = exp2(log2(max(0.0f, (lerp(_1333, OverlayColor.y, OverlayColor.w)))) * InverseGamma.y);
   float _1357 = exp2(log2(max(0.0f, (lerp(_1334, OverlayColor.z, OverlayColor.w)))) * InverseGamma.y);
 
-  if (CUSTOM_PROCESSING_MODE == 0.f && RENODX_TONE_MAP_TYPE != 0.f) {
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
     RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] =
         GenerateOutput(float3(_1355, _1356, _1357), OutputDevice);
     return;

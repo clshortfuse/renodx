@@ -1,4 +1,4 @@
-#include "../shared.h"
+#include "../common.hlsl"
 
 StructuredBuffer<float4> EyeAdaptationBuffer : register(t0);
 
@@ -661,19 +661,10 @@ void main(
     float _353 = _349.x * 1.0499999523162842f;
     float _354 = _349.y * 1.0499999523162842f;
     float _355 = _349.z * 1.0499999523162842f;
-
-    if (RENODX_TONE_MAP_TYPE != 0.f && CUSTOM_PROCESSING_MODE == 1.f) {
-      float3 mid_gray = (((ColorScale0.rgb * 0.18f) * SceneColorApplyParamaters[0].rgb) * autoexposure);
-      float mid_gray_luminance = renodx::color::y::from::BT709(mid_gray);
-      float3 linear_color = renodx::draw::InvertIntermediatePass(float3(_353, _354, _355));
-      float3 tonemapped = renodx::draw::ToneMapPass(untonemapped * mid_gray_luminance / 0.18f, linear_color);
-      tonemapped = renodx::draw::RenderIntermediatePass(tonemapped);
-      _353 = tonemapped.r;
-      _354 = tonemapped.g;
-      _355 = tonemapped.b;
-    }
-
     float _356 = dot(float3(_353, _354, _355), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
+
+    HandleLUTOutput(_353, _354, _355, _356, float2(_49, _50), false);
+
     [branch]
     if (!((uint)(bOutputInHDR) == 0)) {
       float _367 = (pow(_353, 0.012683313339948654f));
@@ -692,20 +683,7 @@ void main(
     }
 
     float _451 = 0.0f;
-    if (CUSTOM_GRAIN_TYPE == 1.f) {
-      float3 linear_color = renodx::draw::InvertIntermediatePass(float3(_430, _431, _432));
-      float3 grained = renodx::effects::ApplyFilmGrain(
-          linear_color,
-          float2(_49, _50),
-          CUSTOM_RANDOM,
-          CUSTOM_GRAIN_STRENGTH * 0.03f,
-          1.f);
-
-      float3 encoded = renodx::draw::RenderIntermediatePass(grained);
-      _430 = encoded.r;
-      _431 = encoded.g;
-      _432 = encoded.b;
-    } else {
+    if (CUSTOM_GRAIN_TYPE == 0.f) {
       float _439 = (frac(sin((GrainRandomFull.x + _49) + ((GrainRandomFull.y + _50) * 543.3099975585938f)) * 493013.0f) * 2.0f) + -1.0f;
       float _442 = min(max((_439 * +1.#INF), -1.0f), 1.0f);
       _451 = (_442 - (sqrt(saturate(1.0f - abs(_439))) * _442)) * BackbufferQuantizationDithering;

@@ -59,7 +59,7 @@ struct ShaderInjectData {
   float scene_grade_hue_shift;
   float custom_auto_exposure;
   float custom_bloom;
-  float custom_processing_mode;
+  float custom_lut_optimization;
   float custom_chromatic_aberration;
   float custom_eye_adaptation;
   float custom_hdr_videos;
@@ -99,7 +99,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE        -1.f
 #define CUSTOM_BLOOM                             shader_injection.custom_bloom
 #define CUSTOM_AUTO_EXPOSURE                     shader_injection.custom_auto_exposure
-#define CUSTOM_PROCESSING_MODE                   shader_injection.custom_processing_mode
+#define CUSTOM_LUT_OPTIMIZATION                  shader_injection.custom_lut_optimization
 #define CUSTOM_CHROMATIC_ABERRATION              shader_injection.custom_chromatic_aberration
 #define CUSTOM_HDR_VIDEOS                        shader_injection.custom_hdr_videos
 #define CUSTOM_EYE_ADAPTATION                    shader_injection.custom_eye_adaptation

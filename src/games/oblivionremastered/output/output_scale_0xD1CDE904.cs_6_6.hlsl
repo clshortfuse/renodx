@@ -1,4 +1,5 @@
-#include "../shared.h"
+#include "../common.hlsl"
+
 
 StructuredBuffer<float4> EyeAdaptationBuffer : register(t0);
 
@@ -650,18 +651,9 @@ void main(
     float _279 = _275.x * 1.0499999523162842f;
     float _280 = _275.y * 1.0499999523162842f;
     float _281 = _275.z * 1.0499999523162842f;
-
-    if (RENODX_TONE_MAP_TYPE != 0.f && CUSTOM_PROCESSING_MODE == 1.f) {
-      float3 mid_gray = (((ColorScale0.rgb * 0.18f) * SceneColorApplyParamaters[0].rgb) * autoexposure);
-      float mid_gray_luminance = renodx::color::y::from::BT709(mid_gray);
-      float3 linear_color = renodx::draw::InvertIntermediatePass(float3(_279, _280, _281));
-      float3 tonemapped = renodx::draw::ToneMapPass(untonemapped * mid_gray_luminance / 0.18f, linear_color);
-      tonemapped = renodx::draw::RenderIntermediatePass(tonemapped);
-      _279 = tonemapped.r;
-      _280 = tonemapped.g;
-      _281 = tonemapped.b;
-    }
     float _282 = dot(float3(_279, _280, _281), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
+
+    HandleLUTOutput(_279, _280, _281, _282, float2(_49, _50), false);
 
     [branch]
     if (!((uint)(bOutputInHDR) == 0)) {
@@ -681,20 +673,7 @@ void main(
     }
 
     float _377 = 0.f;
-    if (CUSTOM_GRAIN_TYPE == 1.f) {
-      float3 linear_color = renodx::draw::InvertIntermediatePass(float3(_356, _357, _358));
-      float3 grained = renodx::effects::ApplyFilmGrain(
-          linear_color,
-          float2(_49, _50),
-          CUSTOM_RANDOM,
-          CUSTOM_GRAIN_STRENGTH * 0.03f,
-          1.f);
-
-      float3 encoded = renodx::draw::RenderIntermediatePass(grained);
-      _356 = encoded.r;
-      _357 = encoded.g;
-      _358 = encoded.b;
-    } else {
+    if (CUSTOM_GRAIN_TYPE == 0.f) {
       float _365 = (frac(sin((GrainRandomFull.x + _49) + ((GrainRandomFull.y + _50) * 543.3099975585938f)) * 493013.0f) * 2.0f) + -1.0f;
       float _368 = min(max((_365 * +1.#INF), -1.0f), 1.0f);
       _377 = (_368 - (sqrt(saturate(1.0f - abs(_365))) * _368)) * BackbufferQuantizationDithering;

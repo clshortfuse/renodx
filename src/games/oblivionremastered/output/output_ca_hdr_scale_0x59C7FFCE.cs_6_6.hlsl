@@ -1,4 +1,4 @@
-#include "../shared.h"
+#include "../common.hlsl"
 
 StructuredBuffer<float4> EyeAdaptationBuffer : register(t0);
 
@@ -669,24 +669,10 @@ void main(
     float _374 = _370.x * 1.0499999523162842f;
     float _375 = _370.y * 1.0499999523162842f;
     float _376 = _370.z * 1.0499999523162842f;
-
-    if (RENODX_TONE_MAP_TYPE != 0.f && CUSTOM_PROCESSING_MODE == 1.f) {
-      float3 mid_gray = (((ColorScale0.rgb * 0.18f) * SceneColorApplyParamaters[0].rgb) * autoexposure);
-      float mid_gray_luminance = renodx::color::y::from::BT709(mid_gray);
-      renodx::draw::Config config = renodx::draw::BuildConfig();
-      config.intermediate_encoding = renodx::draw::ENCODING_PQ;
-      config.intermediate_scaling = RENODX_DIFFUSE_WHITE_NITS;
-      config.intermediate_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
-
-      float3 linear_color = renodx::draw::InvertIntermediatePass(float3(_374, _375, _376), config);
-      float3 tonemapped = renodx::draw::ToneMapPass(untonemapped * mid_gray_luminance / 0.18f, linear_color, config);
-      tonemapped = renodx::draw::RenderIntermediatePass(tonemapped, config);
-      _374 = tonemapped.r;
-      _375 = tonemapped.g;
-      _376 = tonemapped.b;
-    }
-
     float _377 = dot(float3(_374, _375, _376), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
+
+    HandleLUTOutput(_374, _375, _376, _377, float2(_49, _50), true);
+
     [branch]
     if (!((uint)(bOutputInHDR) == 0)) {
       float _388 = (pow(_374, 0.012683313339948654f));
@@ -705,25 +691,7 @@ void main(
     }
 
     float _472 = 0.f;
-    if (CUSTOM_GRAIN_TYPE == 1.f) {
-      renodx::draw::Config config = renodx::draw::BuildConfig();
-      config.intermediate_encoding = renodx::draw::ENCODING_PQ;
-      config.intermediate_scaling = RENODX_DIFFUSE_WHITE_NITS;
-      config.intermediate_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
-
-      float3 linear_color = renodx::draw::InvertIntermediatePass(float3(_451, _452, _453), config);
-      float3 grained = renodx::effects::ApplyFilmGrain(
-          linear_color,
-          float2(_49, _50),
-          CUSTOM_RANDOM,
-          CUSTOM_GRAIN_STRENGTH * 0.03f,
-          1.f);
-
-      float3 encoded = renodx::draw::RenderIntermediatePass(grained, config);
-      _451 = encoded.r;
-      _452 = encoded.g;
-      _453 = encoded.b;
-    } else {
+    if (CUSTOM_GRAIN_TYPE == 0.f) {
       float _460 = (frac(sin((GrainRandomFull.x + _49) + ((GrainRandomFull.y + _50) * 543.3099975585938f)) * 493013.0f) * 2.0f) + -1.0f;
       float _463 = min(max((_460 * +1.#INF), -1.0f), 1.0f);
       _472 = (_463 - (sqrt(saturate(1.0f - abs(_460))) * _463)) * BackbufferQuantizationDithering;

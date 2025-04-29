@@ -7,6 +7,8 @@
 
 #define DEBUG_LEVEL_0
 
+#include <shared_mutex>
+
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
@@ -22,38 +24,71 @@
 
 namespace {
 
-bool g_lut_builder_updated = true;
+int lut_invalidation_level = 0;
+int global_invalidation_level = 0;
 
-bool OnLutBuilderDrawn(reshade::api::command_list* cmd_list) {
-  g_lut_builder_updated = true;
+float current_hdr_upgrade = 2.f;
+float current_render_reshade_before_ui = 0.f;
+
+float initial_hdr_upgrade = current_hdr_upgrade;
+float initial_render_reshade_before_ui = current_render_reshade_before_ui;
+
+bool OnLutBuilderReplace(reshade::api::command_list* cmd_list) {
+  lut_invalidation_level = 0;
+  return true;
+}
+
+bool OnCustomGammaDrawn(reshade::api::command_list* cmd_list) {
+  if (initial_render_reshade_before_ui == 0.f && initial_hdr_upgrade == 0.f) return true;
+  if (current_render_reshade_before_ui == 0.f) return true;
+
+  auto* cmd_list_data = renodx::utils::data::Get<renodx::utils::swapchain::CommandListData>(cmd_list);
+  if (cmd_list_data == nullptr) return true;
+  if (cmd_list_data->current_render_targets.empty()) return true;
+
+  auto rtv0 = cmd_list_data->current_render_targets[0];
+  if (rtv0.handle == 0) return true;
+  if (initial_hdr_upgrade != 0.f) {
+    auto* info = renodx::utils::resource::GetResourceViewInfo(rtv0);
+    if (info->clone.handle != 0u) {
+      rtv0 = info->clone;
+    }
+  }
+
+  auto* data = renodx::utils::data::Get<renodx::utils::swapchain::DeviceData>(cmd_list->get_device());
+  if (data == nullptr) return true;
+  const std::shared_lock lock(data->mutex);
+  for (auto* runtime : data->effect_runtimes) {
+    runtime->render_effects(cmd_list, rtv0, rtv0);
+  }
+
   return true;
 }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     // Lut Builders
-    CustomShaderEntryCallback(0x00C34813, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0x35359B86, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0x47329E4A, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0x484B4E2B, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0x56299258, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0x57EE8201, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0x5D14010F, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0x704AB527, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0x7D28F020, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0x81243B91, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0x8AB5FB23, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0x92690156, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0x9ECC8B3C, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0xA8DA5452, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0xAF588657, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0xB439D7F0, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0xC3C5B8AD, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0xC51C976F, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0xF890095A, &OnLutBuilderDrawn),
-    CustomShaderEntryCallback(0xFF16F46F, &OnLutBuilderDrawn),
+    CustomShaderEntryCallback(0x00C34813, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0x35359B86, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0x47329E4A, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0x484B4E2B, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0x56299258, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0x57EE8201, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0x5D14010F, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0x704AB527, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0x7D28F020, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0x81243B91, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0x8AB5FB23, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0x92690156, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0x9ECC8B3C, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0xA8DA5452, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0xAF588657, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0xB439D7F0, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0xC3C5B8AD, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0xC51C976F, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0xF890095A, &OnLutBuilderReplace),
+    CustomShaderEntryCallback(0xFF16F46F, &OnLutBuilderReplace),
 
     // Output
-    CustomShaderEntry(0x70EB957B),
     CustomShaderEntry(0xD1CDE904),
     CustomShaderEntry(0x99B126EC),
     CustomShaderEntry(0x59C7FFCE),
@@ -67,14 +102,20 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // FMV
     CustomShaderEntry(0x1FAA96A2),
 
+    // Custom Gamma
+    {0x70EB957B, {
+                     .crc32 = 0x70EB957B,
+                     .code = __0x70EB957B,
+                     .on_drawn = &OnCustomGammaDrawn,
+                 }},
+
 };
 
 ShaderInjectData shader_injection;
 
-float g_hdr_upgrade = 2.f;
-
 auto* hdr_upgrade_setting = renodx::templates::settings::CreateSetting({
     .key = "HDRUpgrade",
+    .binding = &current_hdr_upgrade,
     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
     .default_value = 2.f,
     .label = "HDR Upgrade",
@@ -84,41 +125,73 @@ auto* hdr_upgrade_setting = renodx::templates::settings::CreateSetting({
     .is_global = true,
 });
 
-void OnSettingChange() {
-  g_lut_builder_updated = false;
+auto* reshade_before_ui_setting = renodx::templates::settings::CreateSetting({
+    .key = "RenderReshadeBeforeUI",
+    .binding = &current_render_reshade_before_ui,
+    .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+    .default_value = 0.f,
+    .label = "Reshade Effects Before UI",
+    .section = "Processing",
+    .labels = {"Off", "On"},
+});
+
+void OnLUTSettingChange() {
+  lut_invalidation_level = 2;
+};
+
+void OnOptimizableSettingChange() {
+  if (lut_invalidation_level < 1) {
+    lut_invalidation_level = 1;
+  }
 };
 
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({
     {
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::TEXT,
+            .label = "Restart game to apply changes.",
+            .tint = 0xFF0000,
+            .is_visible = []() {
+              if (current_render_reshade_before_ui == 1.f) {
+                if (initial_render_reshade_before_ui == 0.f && initial_hdr_upgrade == 0.f) {
+                  return true;
+                }
+              }
+              if (current_hdr_upgrade != initial_hdr_upgrade) return true;
+              return false;
+            },
+        },
+    },
+    {
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::TEXT,
             .label = "Pause and unpause the game to apply changes.",
             .tint = 0xFF0000,
             .is_visible = []() {
-              return shader_injection.custom_processing_mode == 0.f
-                     && !g_lut_builder_updated;
+              return lut_invalidation_level == 2
+                     || (shader_injection.custom_lut_optimization == 1.f && lut_invalidation_level != 0);
             },
         },
     },
     renodx::templates::settings::CreateDefaultSettings({
-        {"ToneMapType", {.binding = &shader_injection.tone_map_type, .on_change = &OnSettingChange}},
-        {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits, .on_change = &OnSettingChange}},
-        {"ToneMapGameNits", {.binding = &shader_injection.diffuse_white_nits, .on_change = &OnSettingChange}},
-        {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .is_enabled = []() { return g_hdr_upgrade >= 1.f; }, .on_change = &OnSettingChange}},
-        {"ToneMapGammaCorrection", {.binding = &shader_injection.gamma_correction, .on_change = &OnSettingChange}},
-        {"SceneGradeStrength", {.binding = &shader_injection.scene_grade_strength, .on_change = &OnSettingChange}},
-        {"SceneGradeHueCorrection", {.binding = &shader_injection.scene_grade_hue_correction, .on_change = &OnSettingChange}},
-        {"SceneGradeSaturationCorrection", {.binding = &shader_injection.scene_grade_saturation_correction, .on_change = &OnSettingChange}},
-        {"SceneGradeBlowoutRestoration", {.binding = &shader_injection.scene_grade_blowout_restoration, .on_change = &OnSettingChange}},
-        {"SceneGradeHueShift", {.binding = &shader_injection.scene_grade_hue_shift, .on_change = &OnSettingChange}},
-        {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure, .on_change = &OnSettingChange}},
-        {"ColorGradeHighlights", {.binding = &shader_injection.tone_map_highlights, .on_change = &OnSettingChange}},
-        {"ColorGradeShadows", {.binding = &shader_injection.tone_map_shadows, .on_change = &OnSettingChange}},
-        {"ColorGradeContrast", {.binding = &shader_injection.tone_map_contrast, .on_change = &OnSettingChange}},
-        {"ColorGradeSaturation", {.binding = &shader_injection.tone_map_saturation, .on_change = &OnSettingChange}},
-        {"ColorGradeHighlightSaturation", {.binding = &shader_injection.tone_map_highlight_saturation, .on_change = &OnSettingChange}},
-        {"ColorGradeBlowout", {.binding = &shader_injection.tone_map_blowout, .on_change = &OnSettingChange}},
-        {"ColorGradeFlare", {.binding = &shader_injection.tone_map_flare, .on_change = &OnSettingChange}},
+        {"ToneMapType", {.binding = &shader_injection.tone_map_type, .on_change = &OnOptimizableSettingChange}},
+        {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits, .on_change = &OnOptimizableSettingChange}},
+        {"ToneMapGameNits", {.binding = &shader_injection.diffuse_white_nits, .on_change = &OnOptimizableSettingChange}},
+        {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .is_enabled = []() { return initial_hdr_upgrade >= 1.f; }, .on_change = &OnOptimizableSettingChange}},
+        {"ToneMapGammaCorrection", {.binding = &shader_injection.gamma_correction, .on_change = &OnOptimizableSettingChange}},
+        {"SceneGradeStrength", {.binding = &shader_injection.scene_grade_strength, .on_change = &OnLUTSettingChange}},
+        {"SceneGradeHueCorrection", {.binding = &shader_injection.scene_grade_hue_correction, .on_change = &OnLUTSettingChange}},
+        {"SceneGradeSaturationCorrection", {.binding = &shader_injection.scene_grade_saturation_correction, .on_change = &OnLUTSettingChange}},
+        {"SceneGradeBlowoutRestoration", {.binding = &shader_injection.scene_grade_blowout_restoration, .on_change = &OnLUTSettingChange}},
+        {"SceneGradeHueShift", {.binding = &shader_injection.scene_grade_hue_shift, .on_change = &OnLUTSettingChange}},
+        {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure, .on_change = &OnOptimizableSettingChange}},
+        {"ColorGradeHighlights", {.binding = &shader_injection.tone_map_highlights, .on_change = &OnOptimizableSettingChange}},
+        {"ColorGradeShadows", {.binding = &shader_injection.tone_map_shadows, .on_change = &OnOptimizableSettingChange}},
+        {"ColorGradeContrast", {.binding = &shader_injection.tone_map_contrast, .on_change = &OnOptimizableSettingChange}},
+        {"ColorGradeSaturation", {.binding = &shader_injection.tone_map_saturation, .on_change = &OnOptimizableSettingChange}},
+        {"ColorGradeHighlightSaturation", {.binding = &shader_injection.tone_map_highlight_saturation, .on_change = &OnOptimizableSettingChange}},
+        {"ColorGradeBlowout", {.binding = &shader_injection.tone_map_blowout, .on_change = &OnOptimizableSettingChange}},
+        {"ColorGradeFlare", {.binding = &shader_injection.tone_map_flare, .on_change = &OnOptimizableSettingChange}},
         {"FxBloom", {.binding = &shader_injection.custom_bloom}},
     }),
     {
@@ -171,17 +244,20 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .label = "HDR Videos",
             .section = "Effects",
             .labels = {"Off", "BT.2446a", "RenoDRT"},
-            .is_enabled = []() { return g_hdr_upgrade >= 2.f; },
+            .is_enabled = []() { return initial_hdr_upgrade >= 2.f; },
         }),
         renodx::templates::settings::CreateSetting({
-            .key = "ProcessingMode",
-            .binding = &shader_injection.custom_processing_mode,
+            .key = "LUTOptimization",
+            .binding = &shader_injection.custom_lut_optimization,
             .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-            .default_value = 0.f,
-            .label = "Processing Mode",
+            .default_value = 1.f,
+            .label = "LUT Optimization",
             .section = "Processing",
-            .labels = {"LUT", "Output"},
+            .tooltip = "Selects whether to use UE's LUT optimization or tone map every frame.",
+            .labels = {"Off", "On"},
+            .on_change = &OnLUTSettingChange,
         }),
+        reshade_before_ui_setting,
         hdr_upgrade_setting,
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -300,9 +376,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         };
 
         renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, hdr_upgrade_setting);
-        g_hdr_upgrade = hdr_upgrade_setting->GetValue();
+        hdr_upgrade_setting->Write();
+        initial_hdr_upgrade = current_hdr_upgrade;
 
-        if (g_hdr_upgrade >= 1.f) {
+        renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, reshade_before_ui_setting);
+        reshade_before_ui_setting->Write();
+        initial_render_reshade_before_ui = current_render_reshade_before_ui;
+
+        if (initial_hdr_upgrade >= 1.f) {
           // DLSSFG
           renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
               .old_format = reshade::api::format::r10g10b10a2_unorm,
@@ -318,7 +399,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           });
         }
 
-        if (g_hdr_upgrade >= 2.f) {
+        if (initial_hdr_upgrade >= 2.f) {
           // FMV
           renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
               .old_format = reshade::api::format::b8g8r8a8_typeless,
@@ -359,9 +440,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
+  if (initial_render_reshade_before_ui != 0.f) {
+    renodx::utils::swapchain::Use(fdw_reason);
+  }
+
   renodx::utils::random::Use(fdw_reason);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  if (g_hdr_upgrade > 0.f) {
+  if (initial_hdr_upgrade != 0.f) {
     renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   }
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
