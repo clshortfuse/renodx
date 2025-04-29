@@ -646,7 +646,7 @@ OutputSignature main(
   
   // Moved up
   SV_Target_1 = dot(float3(_252, _253, _254), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
-  HandleLUTOutput(_252, _253, _254, SV_Target_1, TEXCOORD.xy, false);
+  HandleLUTOutput(_252, _253, _254, SV_Target_1, TEXCOORD.xy, true);
 
   float _329;
   float _330;
