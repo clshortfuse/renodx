@@ -133,6 +133,7 @@ auto* reshade_before_ui_setting = renodx::templates::settings::CreateSetting({
     .label = "Reshade Effects Before UI",
     .section = "Processing",
     .labels = {"Off", "On"},
+    .is_global = true,
 });
 
 void OnLUTSettingChange() {
