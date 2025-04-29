@@ -80,25 +80,36 @@ float3 GenerateToneMap(float3 graded_bt709) {
   return GenerateToneMap();
 }
 
-float4 GenerateOutput(uint OutputDevice = 0u) {
-  float3 untonemapped_graded = renodx::draw::ComputeUntonemappedGraded(RENODX_UE_CONFIG.untonemapped_bt709, RENODX_UE_CONFIG.graded_bt709);
-  float3 color;
-  [branch]
-  if (CUSTOM_LUT_OPTIMIZATION == 1.f) {
-    // Perform here and now
-    color = renodx::draw::ToneMapPass(untonemapped_graded);
-  } else {
-    color = untonemapped_graded; // Apply in output
-  }
-
+renodx::draw::Config GetOutputConfig(bool is_pq) {
   renodx::draw::Config config = renodx::draw::BuildConfig();
-  if (OutputDevice != 0u) {
+  if (is_pq) {
     config.intermediate_encoding = renodx::draw::ENCODING_PQ;
-    config.intermediate_scaling = RENODX_DIFFUSE_WHITE_NITS;
+    if (CUSTOM_LUT_OPTIMIZATION == 0.f) {
+      config.intermediate_scaling = 1.f;
+    } else {
+      config.intermediate_scaling = RENODX_DIFFUSE_WHITE_NITS;
+    }
     config.intermediate_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
   }
+  return config;
+}
+
+float4 GenerateOutput(uint OutputDevice = 0u) {
+  float3 untonemapped_graded = renodx::draw::ComputeUntonemappedGraded(RENODX_UE_CONFIG.untonemapped_bt709, RENODX_UE_CONFIG.graded_bt709);
+
+  renodx::draw::Config config = GetOutputConfig(OutputDevice != 0u);
+
+  float3 color;
+  [branch]
+  if (CUSTOM_LUT_OPTIMIZATION == 0.f) {
+    color = untonemapped_graded;  // Apply in output
+    config.gamma_correction = 0.f;
+  } else {
+    color = renodx::draw::ToneMapPass(untonemapped_graded, config);
+  }
+
   color = renodx::draw::RenderIntermediatePass(color, config);
-  color *= 1.f / 1.05f;
+  // color *= 1.f / 1.05f;
   return float4(color, 1.f);
 }
 
@@ -113,19 +124,27 @@ void HandleLUTOutput(
     float2 position,
     bool is_pq) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return;
-  if (CUSTOM_GRAIN_TYPE == 0.f && CUSTOM_LUT_OPTIMIZATION == 1.f) return;
+  red /= 1.05f;
+  green /= 1.05f;
+  blue /= 1.05f;
+  luminance /= 1.05f;
+  if (CUSTOM_GRAIN_TYPE == 0.f && CUSTOM_LUT_OPTIMIZATION == 1.f) {
+    return;
+  }
 
-  renodx::draw::Config config = renodx::draw::BuildConfig();
-  if (is_pq) {
-    config.intermediate_encoding = renodx::draw::ENCODING_PQ;
-    config.intermediate_scaling = RENODX_DIFFUSE_WHITE_NITS;
-    config.intermediate_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
+  renodx::draw::Config config = GetOutputConfig(is_pq);
+  if (CUSTOM_LUT_OPTIMIZATION == 0.f) {
+    config.gamma_correction = 0.f;
   }
 
   float3 linear_color = renodx::draw::InvertIntermediatePass(float3(red, green, blue), config);
   float3 tonemapped;
   [branch]
   if (CUSTOM_LUT_OPTIMIZATION == 0.f) {
+    config.gamma_correction = RENODX_GAMMA_CORRECTION;
+    // config.tone_map_per_channel = 1.f;
+    // config.tone_map_working_color_space = 2.f;
+    // config.tone_map_hue_correction = 0.f;
     tonemapped = renodx::draw::ToneMapPass(linear_color, config);
   } else {
     tonemapped = linear_color;
@@ -142,6 +161,11 @@ void HandleLUTOutput(
         1.f);
     tonemapped = grained;
   }
+
+  if (is_pq) {
+    config.intermediate_scaling = RENODX_DIFFUSE_WHITE_NITS;
+  }
+
   tonemapped = renodx::draw::RenderIntermediatePass(tonemapped, config);
 
   red = tonemapped.r;
