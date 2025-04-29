@@ -31,6 +31,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xF5AC76A9),  // LutBuilder3D
     CustomShaderEntry(0x8A6BCB4C),  // videos
     CustomShaderEntry(0xE6B97032),  // uberpost
+    CustomShaderEntry(0x3530AC89),  // uberpost (feeding animation)
     CustomShaderEntryCallback(0x8FEBA362, [](reshade::api::command_list* cmd_list) {  // uberpost (title menu)
       shader_injection.hasLoadedTitleMenu = 1.f;
       return true;
@@ -509,19 +510,23 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::force_borderless = false;
       renodx::mods::swapchain::prevent_full_screen = false;
 
-      //  RG11B10_float (UAV stuff)
+      //  RG11B10_float
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r11g11b10_float,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .ignore_size = true,
       });
-
       //  RGBA8_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
-          .ignore_size = true,
       });
+      //  RGB10A2_typeless
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        .old_format = reshade::api::format::r10g10b10a2_typeless,
+        .new_format = reshade::api::format::r16g16b16a16_typeless,
+        .ignore_size = true,
+    });
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
