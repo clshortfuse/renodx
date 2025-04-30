@@ -33,10 +33,12 @@ int lut_invalidation_level = 0;
 int global_invalidation_level = 0;
 
 bool current_hdr_ini_enabled = false;
+float current_post_process_format = 0.f;
 float current_hdr_upgrade = 3.f;
 float current_render_reshade_before_ui = 0.f;
 
 bool initial_hdr_ini_enabled = current_hdr_ini_enabled;
+float initial_post_process_format = current_post_process_format;
 float initial_hdr_upgrade = current_hdr_upgrade;
 float initial_render_reshade_before_ui = current_render_reshade_before_ui;
 
@@ -47,8 +49,18 @@ bool OnLutBuilderReplace(reshade::api::command_list* cmd_list) {
   return true;
 }
 
+bool UsingSwapchainUpgrade() {
+  return (initial_hdr_upgrade == 1.f || initial_hdr_upgrade == 2.f);
+}
+
+bool UsingSwapchainUtil() {
+  return (initial_post_process_format != 0.f
+          || initial_render_reshade_before_ui != 0.f
+          || UsingSwapchainUpgrade());
+}
+
 bool OnCustomGammaDrawn(reshade::api::command_list* cmd_list) {
-  if (initial_render_reshade_before_ui == 0.f && initial_hdr_upgrade == 0.f) return true;
+  if (!UsingSwapchainUtil()) return true;
   if (current_render_reshade_before_ui == 0.f) return true;
 
   auto* cmd_list_data = renodx::utils::data::Get<renodx::utils::swapchain::CommandListData>(cmd_list);
@@ -57,7 +69,7 @@ bool OnCustomGammaDrawn(reshade::api::command_list* cmd_list) {
 
   auto rtv0 = cmd_list_data->current_render_targets[0];
   if (rtv0.handle == 0) return true;
-  if (initial_hdr_upgrade != 0.f) {
+  if (UsingSwapchainUpgrade()) {
     auto* info = renodx::utils::resource::GetResourceViewInfo(rtv0);
     if (info->clone.handle != 0u) {
       rtv0 = info->clone;
@@ -244,6 +256,18 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 };
 
+auto* post_process_format_setting = renodx::templates::settings::CreateSetting({
+    .key = "PostProcessFormat",
+    .binding = &current_post_process_format,
+    .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+    .default_value = 0.f,
+    .label = "Post Process Format",
+    .section = "Processing",
+    .tooltip = "Selects whether to upgrade the post process format to reduce banding",
+    .labels = {"R11G11B10F", "R16G16B16A16F"},
+    .is_global = true,
+});
+
 auto* hdr_upgrade_setting = renodx::templates::settings::CreateSetting({
     .key = "HDRUpgrade",
     .binding = &current_hdr_upgrade,
@@ -289,13 +313,11 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .tint = 0xFF0000,
             .is_visible = []() {
               if (current_render_reshade_before_ui == 1.f) {
-                if (initial_render_reshade_before_ui == 0.f
-                    && (initial_hdr_upgrade != 1.f || initial_hdr_upgrade != 2.f)) {
-                  return true;
-                }
+                if (!UsingSwapchainUtil()) return true;
               }
               if (current_hdr_upgrade != initial_hdr_upgrade) return true;
               if (current_hdr_ini_enabled != initial_hdr_ini_enabled) return true;
+              if (current_post_process_format != initial_post_process_format) return true;
               return false;
             },
             .is_sticky = true,
@@ -317,10 +339,11 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         {"ToneMapType", {.binding = &shader_injection.tone_map_type, .on_change = &OnLUTSettingChange}},
         {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits, .on_change = &OnOptimizableSettingChange}},
         {"ToneMapGameNits", {.binding = &shader_injection.diffuse_white_nits, .on_change = &OnOptimizableSettingChange}},
-        {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .on_change_value = [](float old_value, float new_value) {
+        {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .can_reset = false, .on_change_value = [](float old_value, float new_value) {
                              OnOptimizableSettingChange();
                              UpdateUIBrightnessIni();
                            }}},
+        {"ToneMapWhiteClip", {.binding = &shader_injection.tone_map_white_clip, .on_change = &OnOptimizableSettingChange}},
         {"ToneMapGammaCorrection", {.binding = &shader_injection.gamma_correction, .on_change = &OnOptimizableSettingChange}},
         {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure, .on_change = &OnOptimizableSettingChange}},
         {"ColorGradeHighlights", {.binding = &shader_injection.tone_map_highlights, .on_change = &OnOptimizableSettingChange}},
@@ -401,6 +424,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .on_change = &OnLUTSettingChange,
         }),
         reshade_before_ui_setting,
+        post_process_format_setting,
         hdr_upgrade_setting,
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -409,6 +433,27 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .group = "button-line-1",
             .on_change = []() { renodx::utils::settings::ResetSettings(); },
         },
+
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "HDR Look",
+            .section = "Options",
+            .group = "button-line-1",
+            .on_change = []() {
+              renodx::utils::settings::ResetSettings();
+              renodx::utils::settings::UpdateSettings({
+                  {"ToneMapWhiteClip", 15.f},
+                  {"ColorGradeShadows", 60.f},
+                  {"ColorGradeContrast", 80.f},
+                  {"ColorGradeSaturation", 65.f},
+                  {"ColorGradeBlowout", 50.f},
+                  {"ColorGradeFlare", 25.f},
+                  {"FxBloom", 20.f},
+                  {"FxGrainStrength", 50.f},
+              });
+            },
+        },
+
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
             .label = "Discord",
@@ -502,23 +547,41 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         reshade_before_ui_setting->Write();
         initial_render_reshade_before_ui = current_render_reshade_before_ui;
 
+        renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, post_process_format_setting);
+        post_process_format_setting->Write();
+        initial_post_process_format = current_post_process_format;
+
         initial_hdr_ini_enabled = CheckHDREnabled();
         current_hdr_ini_enabled = initial_hdr_ini_enabled;
         UpdateHDRIni();
 
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::expected_constant_buffer_space = 50;
-        renodx::mods::shader::allow_multiple_push_constants = true;
+        renodx::mods::shader::allow_multiple_push_constants = false;
         renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
           return static_cast<bool>(params.size() < 20);
         };
 
+        renodx::mods::swapchain::force_borderless = false;
+        renodx::mods::swapchain::prevent_full_screen = false;
+        renodx::mods::swapchain::force_screen_tearing = false;
+        renodx::mods::swapchain::SetUseHDR10(true);
+        renodx::mods::swapchain::use_resize_buffer = true;
+        renodx::mods::swapchain::use_resource_cloning = true;
+
+        if (initial_post_process_format == 1.f) {
+          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+              .old_format = reshade::api::format::r11g11b10_float,
+              .new_format = reshade::api::format::r16g16b16a16_float,
+              .use_resource_view_cloning = true,
+              .usage_include = reshade::api::resource_usage::render_target | reshade::api::resource_usage::unordered_access,
+          });
+        }
+
         if (initial_hdr_upgrade == 1.f || initial_hdr_upgrade == 2.f) {
-          renodx::mods::swapchain::SetUseHDR10(true);
-          renodx::mods::swapchain::force_borderless = false;
-          renodx::mods::swapchain::prevent_full_screen = false;
-          renodx::mods::swapchain::force_screen_tearing = true;
+          renodx::mods::swapchain::use_resize_buffer = false;
+
           renodx::mods::swapchain::expected_constant_buffer_index = 13;
           renodx::mods::swapchain::expected_constant_buffer_space = 50;
           renodx::mods::swapchain::use_resource_cloning = true;
@@ -591,13 +654,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
-  if (initial_render_reshade_before_ui != 0.f) {
+  if (UsingSwapchainUtil()) {
     renodx::utils::swapchain::Use(fdw_reason);
   }
 
   renodx::utils::random::Use(fdw_reason);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  if (initial_hdr_upgrade == 1.f || initial_hdr_upgrade == 2.f) {
+  if (initial_post_process_format == 1.f || UsingSwapchainUpgrade()) {
     renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   }
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);

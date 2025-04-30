@@ -16,6 +16,7 @@ struct ShaderInjectData {
   float tone_map_highlight_saturation;
   float tone_map_blowout;
   float tone_map_flare;
+  float tone_map_white_clip;
   float gamma_correction;
   float scene_grade_strength;
   float scene_grade_hue_correction;
@@ -62,6 +63,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_PASS_AUTOCORRECTION      1.f
 #define RENODX_TONE_MAP_WORKING_COLOR_SPACE      color::convert::COLOR_SPACE_AP1
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE        -1.f
+#define RENODX_RENO_DRT_WHITE_CLIP               shader_injection.tone_map_white_clip
 #define CUSTOM_BLOOM                             shader_injection.custom_bloom
 #define CUSTOM_AUTO_EXPOSURE                     shader_injection.custom_auto_exposure
 #define CUSTOM_LUT_OPTIMIZATION                  shader_injection.custom_lut_optimization
