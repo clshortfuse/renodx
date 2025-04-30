@@ -95,9 +95,9 @@ renodx::draw::Config GetOutputConfig(bool is_pq) {
 }
 
 float4 GenerateOutput(uint OutputDevice = 0u) {
-  float3 untonemapped_graded = renodx::draw::ComputeUntonemappedGraded(RENODX_UE_CONFIG.untonemapped_bt709, RENODX_UE_CONFIG.graded_bt709);
-
   renodx::draw::Config config = GetOutputConfig(OutputDevice != 0u);
+
+  float3 untonemapped_graded = renodx::draw::ComputeUntonemappedGraded(RENODX_UE_CONFIG.untonemapped_bt709, RENODX_UE_CONFIG.graded_bt709, config);
 
   float3 color;
   [branch]

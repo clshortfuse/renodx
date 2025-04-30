@@ -206,6 +206,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntryCallback(0xF890095A, &OnLutBuilderReplace),
     CustomShaderEntryCallback(0xFF16F46F, &OnLutBuilderReplace),
 
+    // Eye Adaptation
+    CustomShaderEntry(0x41DCD632),
+
     // Output
     CustomShaderEntry(0xEED8F029),
     CustomShaderEntry(0x8E39B831),
@@ -218,6 +221,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xB6EDB152),
     CustomShaderEntry(0xD1CDE904),
     CustomShaderEntry(0x04C003FD),
+    CustomShaderEntry(0x440BCDEB),
 
     // FMV
     CustomShaderEntry(0x1FAA96A2),
