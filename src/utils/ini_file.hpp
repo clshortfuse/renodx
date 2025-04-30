@@ -39,6 +39,11 @@ static std::vector<std::tuple<std::string, std::string, std::string>> ParseIniCo
       std::string key = line.substr(0, eq_pos);
       std::string value = line.substr(eq_pos + 1);
 
+      auto comment_pos = value.find_first_of(";#");
+      if (comment_pos != std::string::npos) {
+        value = value.substr(0, comment_pos);
+      }
+
       // Trim key and value
       key.erase(0, key.find_first_not_of(" \t\r\n"));
       key.erase(key.find_last_not_of(" \t\r\n") + 1);
