@@ -1,3 +1,5 @@
+#include "./common.hlsl"
+
 Texture2D<float4> t3 : register(t3);
 Texture2D<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -176,7 +178,10 @@ void main(
   r1.xyzw = float4(43758.5469,28001.8379,50849.4141,12996.8896) * r1.xxxx;
   r1.xyzw = frac(r1.xyzw);
   r1.xyzw = r1.xyzw * float4(2,2,2,2) + float4(-1,-1,-1,-1);
-  r0.xyzw = r1.xyzw * float4(0.00196078443,0.00196078443,0.00196078443,0.00196078443) + r0.xyzw;
+  r0.xyzw = r1.xyzw * float4(0.00196078443, 0.00196078443, 0.00196078443, 0.00196078443) + r0.xyzw;
+  if (injectedData.toneMapType == 0.f) {
+    r0 = saturate(r0);
+  }
   o0.xyzw = r0.xyzw;
   o1.xyzw = r0.xyzw;
   return;
