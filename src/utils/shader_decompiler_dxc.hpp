@@ -2418,11 +2418,46 @@ class Decompiler {
           auto [op, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
           assignment_type = "int";
           assignment_value = std::format("WaveReadLaneFirst{}", ParseWrapped(ParseInt(value)));
+
+        } else if (functionName == "@dx.op.waveActiveOp.i32") {
+          // call i32 @dx.op.waveActiveOp.i32(i32 119, i32 %140, i8 3, i8 1)  ; WaveActiveOp(value,op,sop)
+          auto [op, value, op2, sop] = StringViewSplit<4>(functionParamsString, param_regex, 2);
+          assignment_type = "int";
+          if (op2 == "0") {
+            assignment_value = std::format("WaveActiveSum{}", ParseWrapped(ParseInt(value)));
+          } else if (op2 == "1") {
+            assignment_value = std::format("WaveActiveProduct{}", ParseWrapped(ParseInt(value)));
+          } else if (op2 == "2") {
+            assignment_value = std::format("WaveActiveMin{}", ParseWrapped(ParseInt(value)));
+          } else if (op2 == "3") {
+            assignment_value = std::format("WaveActiveMax{}", ParseWrapped(ParseInt(value)));
+          } else {
+            throw std::invalid_argument("Unknown wave active op");
+          }
+        } else if (functionName == "@dx.op.waveAllTrue") {
+          // call i1 @dx.op.waveAllTrue(i32 114, i1 %144)  ; WaveAllTrue(cond)
+          auto [op, cond] = StringViewSplit<2>(functionParamsString, param_regex, 2);
+          assignment_type = "bool";
+          assignment_value = std::format("WaveActiveAllTrue{}", ParseWrapped(ParseBool(cond)));
         } else if (functionName == "@dx.op.waveAllTrue.i32") {
           // call i1 @dx.op.waveAllTrue(i32 114, i1 %34)  ; WaveAllTrue(cond)
           auto [op, cond] = StringViewSplit<2>(functionParamsString, param_regex, 2);
           assignment_type = "bool";
           assignment_value = std::format("WaveActiveAllTrue{}", ParseWrapped(ParseBool(cond)));
+        } else if (functionName == "@dx.op.waveAnyTrue") {
+          // call i1 @dx.op.waveAnyTrue(i32 113, i1 %264)  ; WaveAnyTrue(cond)
+          auto [op, cond] = StringViewSplit<2>(functionParamsString, param_regex, 2);
+          assignment_type = "bool";
+          assignment_value = std::format("WaveActiveAnyTrue{}", ParseWrapped(ParseBool(cond)));
+        } else if (functionName == "@dx.op.waveGetLaneIndex") {
+          // %347 = call i32 @dx.op.waveGetLaneIndex(i32 111)  ; WaveGetLaneIndex()
+          assignment_type = "int";
+          assignment_value = "WaveGetLaneIndex()";
+        } else if (functionName == "@dx.op.waveReadLaneAt.i32") {
+          //   %350 = call i32 @dx.op.waveReadLaneAt.i32(i32 117, i32 %346, i32 %349)  ; WaveReadLaneAt(value,lane)
+          auto [op, value, lane] = StringViewSplit<3>(functionParamsString, param_regex, 2);
+          assignment_type = "int";
+          assignment_value = std::format("WaveReadLaneAt({},{})", ParseInt(value), ParseInt(lane));
         } else {
           std::cerr << line << "\n";
           std::cerr << "Function name: " << functionName << "\n";
@@ -2573,7 +2608,8 @@ class Decompiler {
       } else if (instruction == "lshr") {
         // %132 = lshr i32 %131, 16
         // %17  = lshr i16 %15, 1
-        auto [no_unsigned_wrap, no_signed_wrap, variable_type, a, b] = StringViewMatch<5>(assignment, std::regex{R"(lshr (nuw )?(nsw )?(\S+) (\S+), (\S+))"});
+        // %168 = lshr exact i32 %167, 1
+        auto [exact, no_unsigned_wrap, no_signed_wrap, variable_type, a, b] = StringViewMatch<6>(assignment, std::regex{R"(lshr (exact )?(nuw )?(nsw )?(\S+) (\S+), (\S+))"});
         // assignment_type = (no_signed_wrap.empty()) ? "uint" : "int";
 
         assignment_type = ParseType(variable_type);
