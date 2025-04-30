@@ -100,11 +100,11 @@ bool CheckHDREnabled() {
     if (entry != nullptr) {
       auto value = std::get<2>(*entry);
       if (value == "1") {
-        reshade::log::message(reshade::log::level::info, "Found HDR enabled in Engine.ini");
+        reshade::log::message(reshade::log::level::info, "CheckHDREnabled: Enabled");
         return true;
       }
     }
-    reshade::log::message(reshade::log::level::info, "HDR not enabled in Engine.ini");
+    reshade::log::message(reshade::log::level::info, "CheckHDREnabled: Not Enabled");
   }
 
   return false;
@@ -112,7 +112,10 @@ bool CheckHDREnabled() {
 
 bool EnableHDR() {
   const auto ini_folder_path = GetIniFolderPath();
-  if (ini_folder_path.empty()) return false;
+  if (ini_folder_path.empty()) {
+    reshade::log::message(reshade::log::level::warning, "EnableHDR: Path not found");
+    return false;
+  }
 
   renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", false);
   if (renodx::utils::ini_file::UpdateIniFile(
@@ -120,9 +123,9 @@ bool EnableHDR() {
           {{"ConsoleVariables", "r.HDR.EnableHDROutput", "1"}},
           true,
           true)) {
-    reshade::log::message(reshade::log::level::info, "Enabled HDR in Engine.ini");
+    reshade::log::message(reshade::log::level::info, "EnableHDR: Updated");
   } else {
-    reshade::log::message(reshade::log::level::warning, "Failed to enabled HDR in Engine.ini");
+    reshade::log::message(reshade::log::level::warning, "EnableHDR: Failed");
   }
   renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", true);
 
@@ -131,7 +134,10 @@ bool EnableHDR() {
 
 bool DisableHDR() {
   const auto ini_folder_path = GetIniFolderPath();
-  if (ini_folder_path.empty()) return false;
+  if (ini_folder_path.empty()) {
+    reshade::log::message(reshade::log::level::warning, "DisableHDR: Path not found");
+    return false;
+  }
 
   renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", false);
   if (renodx::utils::ini_file::UpdateIniFile(
@@ -139,9 +145,9 @@ bool DisableHDR() {
           {{"ConsoleVariables", "r.HDR.EnableHDROutput", "0"}},
           false,
           false)) {
-    reshade::log::message(reshade::log::level::info, "Disabled HDR in Engine.ini");
+    reshade::log::message(reshade::log::level::info, "DisableHDR: Updated");
   } else {
-    reshade::log::message(reshade::log::level::info, "HDR not enabled in Engine.ini");
+    reshade::log::message(reshade::log::level::info, "DisableHDR: Not Updated");
   }
   renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", true);
 
@@ -150,7 +156,10 @@ bool DisableHDR() {
 
 bool UpdateUIBrightnessIni() {
   const auto ini_folder_path = GetIniFolderPath();
-  if (ini_folder_path.empty()) return false;
+  if (ini_folder_path.empty()) {
+    reshade::log::message(reshade::log::level::warning, "UpdateUIBrightnessIni: Path not found");
+    return false;
+  }
 
   renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", false);
   if (renodx::utils::ini_file::UpdateIniFile(
@@ -158,9 +167,9 @@ bool UpdateUIBrightnessIni() {
           {{"ConsoleVariables", "r.HDR.UI.Luminance", std::to_string(static_cast<std::uint32_t>(shader_injection.graphics_white_nits))}},
           true,
           true)) {
-    reshade::log::message(reshade::log::level::info, "Enabled HDR in Engine.ini");
+    reshade::log::message(reshade::log::level::info, "UpdateUIBrightnessIni: Updated");
   } else {
-    reshade::log::message(reshade::log::level::warning, "Failed to enabled HDR in Engine.ini");
+    reshade::log::message(reshade::log::level::warning, "UpdateUIBrightnessIni: Failed");
   }
   renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", true);
 
@@ -393,6 +402,13 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         }),
         reshade_before_ui_setting,
         hdr_upgrade_setting,
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "Reset All",
+            .section = "Options",
+            .group = "button-line-1",
+            .on_change = []() { renodx::utils::settings::ResetSettings(); },
+        },
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
             .label = "Discord",
