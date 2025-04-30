@@ -304,15 +304,6 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .is_sticky = true,
         },
     },
-    {
-        new renodx::utils::settings::Setting{
-            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-            .label = "Pause and unpause the game to apply changes.",
-            .on_change = []() {
-              CheckHDREnabled();
-            },
-        },
-    },
     renodx::templates::settings::CreateDefaultSettings({
         {"ToneMapType", {.binding = &shader_injection.tone_map_type, .on_change = &OnLUTSettingChange}},
         {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits, .on_change = &OnOptimizableSettingChange}},
