@@ -12,7 +12,6 @@
 #include <shared_mutex>
 #include <string>
 
-
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
@@ -208,15 +207,17 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntryCallback(0xFF16F46F, &OnLutBuilderReplace),
 
     // Output
-    CustomShaderEntry(0xD1CDE904),
-    CustomShaderEntry(0x99B126EC),
-    CustomShaderEntry(0x59C7FFCE),
-    CustomShaderEntry(0xB6EDB152),
-    CustomShaderEntry(0x04C003FD),
-    CustomShaderEntry(0x1BD60193),
+    CustomShaderEntry(0xEED8F029),
     CustomShaderEntry(0x8E39B831),
-    CustomShaderEntry(0xCC2B95BB),
+    CustomShaderEntry(0x59C7FFCE),
+    CustomShaderEntry(0x1BD60193),
+    CustomShaderEntry(0x99B126EC),
     CustomShaderEntry(0x9D0421B9),
+    CustomShaderEntry(0xCF3ED7E2),
+    CustomShaderEntry(0xCC2B95BB),
+    CustomShaderEntry(0xB6EDB152),
+    CustomShaderEntry(0xD1CDE904),
+    CustomShaderEntry(0x04C003FD),
 
     // FMV
     CustomShaderEntry(0x1FAA96A2),
