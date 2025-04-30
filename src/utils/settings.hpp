@@ -89,7 +89,7 @@ struct Setting {
     return true;
   };
 
-  //
+  bool is_sticky = false;
 
   float value = default_value;
   int value_as_int = static_cast<int>(default_value);
@@ -320,34 +320,39 @@ static void SaveGlobalSettings() {
 // https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   bool changed_preset = false;
-  if (use_presets) {
-    changed_preset = ImGui::SliderInt(
-        "Preset",
-        &preset_index,
-        0,
-        preset_strings.size() - 1,
-        preset_strings[preset_index].c_str(),
-        ImGuiSliderFlags_NoInput);
-  }
+  bool has_drawn_presets = !use_presets;
 
-  if (changed_preset) {
-    switch (preset_index) {
-      case 0:
-        if (on_preset_off != nullptr) {
-          on_preset_off();
-        }
-        break;
-      case 1:
-        LoadSettings(global_name + "-preset1");
-        break;
-      case 2:
-        LoadSettings(global_name + "-preset2");
-        break;
-      case 3:
-        LoadSettings(global_name + "-preset3");
-        break;
+  auto draw_presets = [&]() {
+    if (use_presets) {
+      changed_preset = ImGui::SliderInt(
+          "Preset",
+          &preset_index,
+          0,
+          preset_strings.size() - 1,
+          preset_strings[preset_index].c_str(),
+          ImGuiSliderFlags_NoInput);
     }
-  }
+
+    if (changed_preset) {
+      switch (preset_index) {
+        case 0:
+          if (on_preset_off != nullptr) {
+            on_preset_off();
+          }
+          break;
+        case 1:
+          LoadSettings(global_name + "-preset1");
+          break;
+        case 2:
+          LoadSettings(global_name + "-preset2");
+          break;
+        case 3:
+          LoadSettings(global_name + "-preset3");
+          break;
+      }
+    }
+    has_drawn_presets = true;
+  };
 
   bool any_change = false;
   std::string last_section;
@@ -357,6 +362,13 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   bool has_indent = false;
   for (auto* setting : *settings) {
     if (setting->is_visible != nullptr && !setting->is_visible()) continue;
+
+    if (!setting->is_sticky) {
+      if (!has_drawn_presets) {
+        draw_presets();
+      }
+    }
+
     int styles_pushed = 0;
     if (setting->tint.has_value()) {
       auto target_rgb = ImVec4FromHex(setting->tint.value());
@@ -557,6 +569,9 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
     ImGui::TreePop();
   }
 
+  if (!has_drawn_presets) {
+    draw_presets();
+  }
   if (!changed_preset && any_change) {
     switch (preset_index) {
       case 1:
