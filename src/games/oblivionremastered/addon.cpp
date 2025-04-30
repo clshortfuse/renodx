@@ -7,7 +7,11 @@
 
 #define DEBUG_LEVEL_0
 
+#include <cstdint>
+#include <filesystem>
 #include <shared_mutex>
+#include <string>
+
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -18,6 +22,8 @@
 #include "../../mods/swapchain.hpp"
 #include "../../templates/settings.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/ini_file.hpp"
+#include "../../utils/path.hpp"
 #include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
@@ -27,11 +33,15 @@ namespace {
 int lut_invalidation_level = 0;
 int global_invalidation_level = 0;
 
-float current_hdr_upgrade = 2.f;
+bool current_hdr_ini_enabled = false;
+float current_hdr_upgrade = 3.f;
 float current_render_reshade_before_ui = 0.f;
 
+bool initial_hdr_ini_enabled = current_hdr_ini_enabled;
 float initial_hdr_upgrade = current_hdr_upgrade;
 float initial_render_reshade_before_ui = current_render_reshade_before_ui;
+
+ShaderInjectData shader_injection;
 
 bool OnLutBuilderReplace(reshade::api::command_list* cmd_list) {
   lut_invalidation_level = 0;
@@ -63,6 +73,115 @@ bool OnCustomGammaDrawn(reshade::api::command_list* cmd_list) {
   }
 
   return true;
+}
+
+std::string GetIniFolderPath() {
+  auto process_name = renodx::utils::platform::GetCurrentProcessPath();
+  bool is_game_pass = process_name.string().find("WinGDK") != std::string::npos;
+
+  auto envirables_variables = renodx::utils::platform::GetEnvironmentVariables();
+  auto user_profile_pair = envirables_variables.find("USERPROFILE");
+  if (user_profile_pair == envirables_variables.end()) return "";
+  auto user_profile = user_profile_pair->second;
+  if (user_profile.empty()) return "";
+
+  static const std::string ENGINE_INI_PATH = "/Documents/My Games/Oblivion Remastered/Saved/Config/Windows/";
+  static const std::string GAME_PASS_ENGINE_INI_PATH = "/Documents/My Games/Oblivion Remastered/Saved/Config/WinGDK/";
+  auto ini_path = is_game_pass ? GAME_PASS_ENGINE_INI_PATH : ENGINE_INI_PATH;
+  return user_profile + ini_path;
+}
+
+bool CheckHDREnabled() {
+  const auto ini_folder_path = GetIniFolderPath();
+  auto engine_ini_path = ini_folder_path + "Engine.ini";
+  if (renodx::utils::path::CheckExistsFile(engine_ini_path)) {
+    auto ini_contents = renodx::utils::path::ReadTextFile(engine_ini_path);
+    auto ini_map = renodx::utils::ini_file::ParseIniContents(ini_contents);
+    const auto* entry = renodx::utils::ini_file::FindLastEntry(ini_map, "ConsoleVariables", "r.HDR.EnableHDROutput");
+    if (entry != nullptr) {
+      auto value = std::get<2>(*entry);
+      if (value == "1") {
+        reshade::log::message(reshade::log::level::info, "Found HDR enabled in Engine.ini");
+        return true;
+      }
+    }
+    reshade::log::message(reshade::log::level::info, "HDR not enabled in Engine.ini");
+  }
+
+  return false;
+}
+
+bool EnableHDR() {
+  const auto ini_folder_path = GetIniFolderPath();
+  if (ini_folder_path.empty()) return false;
+
+  renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", false);
+  if (renodx::utils::ini_file::UpdateIniFile(
+          ini_folder_path + "Engine.ini",
+          {{"ConsoleVariables", "r.HDR.EnableHDROutput", "1"}},
+          true,
+          true)) {
+    reshade::log::message(reshade::log::level::info, "Enabled HDR in Engine.ini");
+  } else {
+    reshade::log::message(reshade::log::level::warning, "Failed to enabled HDR in Engine.ini");
+  }
+  renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", true);
+
+  return true;
+}
+
+bool DisableHDR() {
+  const auto ini_folder_path = GetIniFolderPath();
+  if (ini_folder_path.empty()) return false;
+
+  renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", false);
+  if (renodx::utils::ini_file::UpdateIniFile(
+          ini_folder_path + "Engine.ini",
+          {{"ConsoleVariables", "r.HDR.EnableHDROutput", "0"}},
+          false,
+          false)) {
+    reshade::log::message(reshade::log::level::info, "Disabled HDR in Engine.ini");
+  } else {
+    reshade::log::message(reshade::log::level::info, "HDR not enabled in Engine.ini");
+  }
+  renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", true);
+
+  return true;
+}
+
+bool UpdateUIBrightnessIni() {
+  const auto ini_folder_path = GetIniFolderPath();
+  if (ini_folder_path.empty()) return false;
+
+  renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", false);
+  if (renodx::utils::ini_file::UpdateIniFile(
+          ini_folder_path + "Engine.ini",
+          {{"ConsoleVariables", "r.HDR.UI.Luminance", std::to_string(static_cast<std::uint32_t>(shader_injection.graphics_white_nits))}},
+          true,
+          true)) {
+    reshade::log::message(reshade::log::level::info, "Enabled HDR in Engine.ini");
+  } else {
+    reshade::log::message(reshade::log::level::warning, "Failed to enabled HDR in Engine.ini");
+  }
+  renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", true);
+
+  return true;
+}
+
+void UpdateHDRIni() {
+  if (current_hdr_ini_enabled) {
+    if (current_hdr_upgrade != 3.f) {
+      reshade::log::message(reshade::log::level::info, "Should disable HDR");
+      DisableHDR();
+      current_hdr_ini_enabled = false;
+    }
+  } else {
+    if (current_hdr_upgrade == 3.f) {
+      reshade::log::message(reshade::log::level::info, "Should enable HDR");
+      EnableHDR();
+      current_hdr_ini_enabled = true;
+    }
+  }
 }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
@@ -111,17 +230,19 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 };
 
-ShaderInjectData shader_injection;
-
 auto* hdr_upgrade_setting = renodx::templates::settings::CreateSetting({
     .key = "HDRUpgrade",
     .binding = &current_hdr_upgrade,
     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-    .default_value = 2.f,
+    .default_value = 3.f,
     .label = "HDR Upgrade",
     .section = "Processing",
     .tooltip = "Selects how to apply HDR upgrade (restart required)",
-    .labels = {"None", "Swap Chain", "Swap Chain + Videos"},
+    .labels = {"None",
+               "Swap Chain",
+               "Swap Chain + Videos",
+               "UE HDR"},
+    .on_change_value = [](float previous, float current) { UpdateHDRIni(); },
     .is_global = true,
 });
 
@@ -154,13 +275,16 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .tint = 0xFF0000,
             .is_visible = []() {
               if (current_render_reshade_before_ui == 1.f) {
-                if (initial_render_reshade_before_ui == 0.f && initial_hdr_upgrade == 0.f) {
+                if (initial_render_reshade_before_ui == 0.f
+                    && (initial_hdr_upgrade != 1.f || initial_hdr_upgrade != 2.f)) {
                   return true;
                 }
               }
               if (current_hdr_upgrade != initial_hdr_upgrade) return true;
+              if (current_hdr_ini_enabled != initial_hdr_ini_enabled) return true;
               return false;
             },
+            .is_sticky = true,
         },
     },
     {
@@ -172,13 +296,26 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
               return lut_invalidation_level == 2
                      || (shader_injection.custom_lut_optimization == 1.f && lut_invalidation_level != 0);
             },
+            .is_sticky = true,
+        },
+    },
+    {
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "Pause and unpause the game to apply changes.",
+            .on_change = []() {
+              CheckHDREnabled();
+            },
         },
     },
     renodx::templates::settings::CreateDefaultSettings({
         {"ToneMapType", {.binding = &shader_injection.tone_map_type, .on_change = &OnLUTSettingChange}},
         {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits, .on_change = &OnOptimizableSettingChange}},
         {"ToneMapGameNits", {.binding = &shader_injection.diffuse_white_nits, .on_change = &OnOptimizableSettingChange}},
-        {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .is_enabled = []() { return initial_hdr_upgrade >= 1.f; }, .on_change = &OnOptimizableSettingChange}},
+        {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .on_change_value = [](float old_value, float new_value) {
+                             OnOptimizableSettingChange();
+                             UpdateUIBrightnessIni();
+                           }}},
         {"ToneMapGammaCorrection", {.binding = &shader_injection.gamma_correction, .on_change = &OnOptimizableSettingChange}},
         {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure, .on_change = &OnOptimizableSettingChange}},
         {"ColorGradeHighlights", {.binding = &shader_injection.tone_map_highlights, .on_change = &OnOptimizableSettingChange}},
@@ -245,7 +382,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .label = "HDR Videos",
             .section = "Effects",
             .labels = {"Off", "BT.2446a", "RenoDRT"},
-            .is_enabled = []() { return initial_hdr_upgrade >= 2.f; },
+            .is_enabled = []() { return initial_hdr_upgrade == 2.f; },
         }),
         renodx::templates::settings::CreateSetting({
             .key = "LUTOptimization",
@@ -353,6 +490,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         reshade_before_ui_setting->Write();
         initial_render_reshade_before_ui = current_render_reshade_before_ui;
 
+        initial_hdr_ini_enabled = CheckHDREnabled();
+        current_hdr_ini_enabled = initial_hdr_ini_enabled;
+        UpdateHDRIni();
+
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::expected_constant_buffer_space = 50;
         renodx::mods::shader::allow_multiple_push_constants = true;
@@ -361,8 +502,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           return static_cast<bool>(params.size() < 20);
         };
 
-        if (initial_hdr_upgrade >= 1.f) {
+        if (initial_hdr_upgrade == 1.f || initial_hdr_upgrade == 2.f) {
           renodx::mods::swapchain::SetUseHDR10(true);
+          renodx::mods::swapchain::force_borderless = false;
+          renodx::mods::swapchain::prevent_full_screen = false;
+          renodx::mods::swapchain::force_screen_tearing = true;
           renodx::mods::swapchain::expected_constant_buffer_index = 13;
           renodx::mods::swapchain::expected_constant_buffer_space = 50;
           renodx::mods::swapchain::use_resource_cloning = true;
@@ -397,24 +541,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               .dimensions = {.width = 32, .height = 32, .depth = 32},
           });
 
-          if (initial_hdr_upgrade >= 2.f) {
-            // FMV
-            renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-                .old_format = reshade::api::format::b8g8r8a8_typeless,
-                .new_format = reshade::api::format::r16g16b16a16_float,
-                .use_resource_view_cloning = true,
-                .aspect_ratio = 3360.f / 1440.f,
-            });
-
-            // FMV
-            renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-                .old_format = reshade::api::format::b8g8r8a8_typeless,
-                .new_format = reshade::api::format::r16g16b16a16_float,
-                .use_resource_view_cloning = true,
-                .aspect_ratio = 3440.f / 1440.f,
-            });
-          }
-
           // // UI
           // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           //     .old_format = reshade::api::format::b8g8r8a8_typeless,
@@ -422,10 +548,24 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           //     .use_resource_view_cloning = true,
           //     .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
           // });
+        }
 
-          renodx::mods::swapchain::force_borderless = false;
-          renodx::mods::swapchain::prevent_full_screen = false;
-          renodx::mods::swapchain::force_screen_tearing = true;
+        if (initial_hdr_upgrade == 2.f) {
+          // FMV
+          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+              .old_format = reshade::api::format::b8g8r8a8_typeless,
+              .new_format = reshade::api::format::r16g16b16a16_float,
+              .use_resource_view_cloning = true,
+              .aspect_ratio = 3360.f / 1440.f,
+          });
+
+          // FMV
+          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+              .old_format = reshade::api::format::b8g8r8a8_typeless,
+              .new_format = reshade::api::format::r16g16b16a16_float,
+              .use_resource_view_cloning = true,
+              .aspect_ratio = 3440.f / 1440.f,
+          });
         }
 
         renodx::utils::random::binds.push_back(&shader_injection.custom_random);
@@ -445,7 +585,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::random::Use(fdw_reason);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  if (initial_hdr_upgrade != 0.f) {
+  if (initial_hdr_upgrade == 1.f || initial_hdr_upgrade == 2.f) {
     renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   }
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
