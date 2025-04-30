@@ -177,7 +177,6 @@ struct DrawDetails {
     PRESENT,
     DRAW,
     DRAW_INDEXED,
-    DRAW_INDEXED_OR_INDIRECT,
     DISPATCH,
     COPY
   } draw_method;
@@ -197,10 +196,9 @@ struct DrawDetails {
 
   [[nodiscard]] bool IsDraw() const {
     switch (draw_method) {
-      case DrawMethods::DRAW:                     return true;
-      case DrawMethods::DRAW_INDEXED:             return true;
-      case DrawMethods::DRAW_INDEXED_OR_INDIRECT: return true;
-      default:                                    return false;
+      case DrawMethods::DRAW:         return true;
+      case DrawMethods::DRAW_INDEXED: return true;
+      default:                        return false;
     }
   };
 
@@ -210,13 +208,12 @@ struct DrawDetails {
 
   [[nodiscard]] std::string DrawMethodString() const {
     switch (draw_method) {
-      case DrawMethods::PRESENT:                  return "Present";
-      case DrawMethods::DRAW:                     return "Draw";
-      case DrawMethods::DRAW_INDEXED:             return "DrawIndexed";
-      case DrawMethods::DRAW_INDEXED_OR_INDIRECT: return "DrawIndirect";
-      case DrawMethods::DISPATCH:                 return "Dispatch";
-      case DrawMethods::COPY:                     return "Copy";
-      default:                                    return "Unknown";
+      case DrawMethods::PRESENT:      return "Present";
+      case DrawMethods::DRAW:         return "Draw";
+      case DrawMethods::DRAW_INDEXED: return "DrawIndexed";
+      case DrawMethods::DISPATCH:     return "Dispatch";
+      case DrawMethods::COPY:         return "Copy";
+      default:                        return "Unknown";
     }
   }
 };
@@ -281,8 +278,7 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
       details.resource = resource_view_info->resource_info->resource;
       details.resource_desc = resource_view_info->resource_info->desc;
 
-
-      if (!resource_view_info->destroyed) {
+      if (!resource_view_info->resource_info->destroyed) {
         auto resource_reflection = renodx::utils::trace::GetDebugName(device_api, details.resource);
         if (resource_reflection.has_value()) {
           details.resource_reflection = resource_reflection.value();
@@ -1302,7 +1298,27 @@ bool OnDrawOrDispatchIndirect(
     uint64_t offset,
     uint32_t draw_count,
     uint32_t stride) {
-  return OnDraw(cmd_list, DrawDetails::DrawMethods::DRAW_INDEXED_OR_INDIRECT);
+  bool is_dispatch = false;
+  switch (type) {
+    case reshade::api::indirect_command::unknown: {
+      {
+        auto* cmd_list_data = renodx::utils::shader::GetCurrentState(cmd_list);
+        auto shader_hash = renodx::utils::shader::GetCurrentComputeShaderHash(cmd_list_data);
+        is_dispatch = (shader_hash != 0u);
+      }
+      break;
+    }
+    case reshade::api::indirect_command::dispatch:
+    case reshade::api::indirect_command::dispatch_mesh:
+    case reshade::api::indirect_command::dispatch_rays:
+      is_dispatch = true;
+      break;
+    default:
+      break;
+  }
+
+  return OnDraw(cmd_list, is_dispatch ? DrawDetails::DrawMethods::DISPATCH
+                                      : DrawDetails::DrawMethods::DRAW_INDEXED);
 }
 
 void DeactivateShader(reshade::api::device* device, uint32_t shader_hash) {
