@@ -6,8 +6,10 @@
 #include <shellapi.h>
 #include <windows.h>
 #include <winver.h>
+
 #include <algorithm>
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <ranges>
 #include <string>
@@ -90,6 +92,44 @@ static void LaunchURL(Args... args) {
 #endif
 }
 
+static std::filesystem::path GetCurrentWorkingPath() {
+  return std::filesystem::current_path();
+}
+
+std::map<std::string, std::string> GetEnvironmentVariables() {
+  std::map<std::string, std::string> env_map;
+
+#ifdef _WIN32
+  LPWCH env_strings = GetEnvironmentStringsW();
+  if (!env_strings) {
+    return env_map;
+  }
+
+  LPWCH p = env_strings;
+  while (*p) {
+    std::wstring ws(p);
+    size_t pos = ws.find(L'=');
+    if (pos != std::wstring::npos) {
+      env_map[std::string(ws.begin(), ws.begin() + pos)] = std::string(ws.begin() + pos + 1, ws.end());
+    }
+    p += ws.length() + 1;
+  }
+
+  FreeEnvironmentStringsW(env_strings);
+#else
+  extern char** environ;
+  for (char** env = environ; *env; ++env) {
+    std::string entry(*env);
+    size_t pos = entry.find('=');
+    if (pos != std::string::npos) {
+      env_map[entry.substr(0, pos)] = entry.substr(pos + 1);
+    }
+  }
+#endif
+
+  return env_map;
+}
+
 static std::filesystem::path GetCurrentProcessPath() {
   TCHAR file_name[MAX_PATH + 1];
   DWORD chars_written = GetModuleFileName(nullptr, file_name, MAX_PATH + 1);
@@ -97,6 +137,25 @@ static std::filesystem::path GetCurrentProcessPath() {
     return file_name;
   }
   return "";
+}
+
+static bool UpdateReadOnlyAttribute(const std::filesystem::path& file_path, bool set_readonly) {
+  DWORD attributes = GetFileAttributes(file_path.string().c_str());
+  if (attributes == INVALID_FILE_ATTRIBUTES) {
+    return false;  // File not found or error retrieving attributes
+  }
+
+  if (set_readonly) {
+    attributes |= FILE_ATTRIBUTE_READONLY;  // Add read-only attribute
+  } else {
+    attributes &= ~FILE_ATTRIBUTE_READONLY;  // Remove read-only attribute
+  }
+
+  if (!SetFileAttributes(file_path.string().c_str(), attributes)) {
+    return false;  // Failed to set attributes
+  }
+
+  return true;  // Successfully updated the read-only attribute
 }
 
 static std::string GetProductName(const std::filesystem::path& path = GetCurrentProcessPath()) {
@@ -158,6 +217,47 @@ static bool IsDummyWindow(HWND hwnd) {
   }
 
   return false;
+}
+
+static std::string GetFileVersion(const std::filesystem::path& path) {
+  [[maybe_unused]] DWORD dummy{};
+  const auto required_buffer_size{
+      GetFileVersionInfoSizeExW(
+          FILE_VER_GET_NEUTRAL, path.wstring().c_str(), std::addressof(dummy))};
+  if (0 == required_buffer_size) {
+    return "";
+  }
+
+  const auto p_buffer{
+      std::make_unique<char[]>(
+          static_cast<::std::size_t>(required_buffer_size))};
+  const auto get_version_info_result{
+      GetFileVersionInfoExW(
+          FILE_VER_GET_NEUTRAL, path.wstring().c_str(), DWORD{}, required_buffer_size, reinterpret_cast<void*>(p_buffer.get()))};
+  if (FALSE == get_version_info_result) {
+    return "";
+  }
+
+  LPVOID p_value{};
+  UINT value_length{};
+  const auto query_result{
+      VerQueryValueW(
+          reinterpret_cast<void*>(p_buffer.get()),
+          L"\\",
+          std::addressof(p_value), std::addressof(value_length))};
+  if ((FALSE == query_result) || (nullptr == p_value) || (value_length == 0)) {
+    return "";
+  }
+
+  auto* fixed_file_info = static_cast<VS_FIXEDFILEINFO*>(p_value);
+
+  if (fixed_file_info->dwSignature == 0xfeef04bd) {  // Check valid signature
+    // Format version numbers
+    std::string version = std::to_string(HIWORD(fixed_file_info->dwFileVersionMS)) + "." + std::to_string(LOWORD(fixed_file_info->dwFileVersionMS)) + "." + std::to_string(HIWORD(fixed_file_info->dwFileVersionLS)) + "." + std::to_string(LOWORD(fixed_file_info->dwFileVersionLS));
+    return version;
+  }
+
+  return "";  // Invalid file signature
 }
 
 }  // namespace renodx::utils::platform
