@@ -53,13 +53,6 @@ float3 FinalizeOutput(float3 color) {
   color = renodx::color::srgb::DecodeSafe(color);
   }
   color *= injectedData.toneMapUINits;
-  if (injectedData.toneMapType != 1.f) {
-    float y_max = injectedData.toneMapPeakNits;
-    float y = renodx::color::y::from::BT709(abs(color));
-    if (y > y_max) {
-      color *= renodx::math::DivideSafe(y_max, y);
-    }
-  }
   	if(injectedData.toneMapType == 0.f){
   color = renodx::color::bt709::clamp::BT709(color);
   } else {
