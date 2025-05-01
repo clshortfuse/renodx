@@ -87,6 +87,15 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   int32_t expected_constant_buffer_index = -1;
   uint32_t expected_constant_buffer_space = 0;
   bool swapchain_proxy_revert_state = false;
+
+  SwapChainUpgradeTarget swap_chain_proxy_upgrade_target = {
+      .new_format = reshade::api::format::r16g16b16a16_float,
+      .usage_set =
+          static_cast<uint32_t>(
+              reshade::api::resource_usage::shader_resource
+              | reshade::api::resource_usage::render_target),
+      .use_resource_view_cloning_and_upgrade = true,
+  };
 };
 
 struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData {
@@ -135,15 +144,6 @@ static thread_local reshade::api::resource_desc local_original_resource_desc = {
 
 static thread_local bool local_upgraded_resource_view = false;
 static thread_local reshade::api::resource_view_desc local_original_resource_view_desc = {};
-
-static SwapChainUpgradeTarget swap_chain_proxy_upgrade_target = {
-    .new_format = target_format,
-    .usage_set =
-        static_cast<uint32_t>(
-            reshade::api::resource_usage::shader_resource
-            | reshade::api::resource_usage::render_target),
-    .use_resource_view_cloning_and_upgrade = true,
-};
 
 // Methods
 
@@ -496,33 +496,6 @@ static void SetupSwapchainProxyLayout(reshade::api::device* device, DeviceData* 
   device->create_pipeline_layout(new_layout_params.size(), new_layout_params.data(), &data->swap_chain_proxy_layout);
 }
 
-static void SetupSwapchainProxy(
-    reshade::api::swapchain* swapchain,
-    reshade::api::device* device,
-    DeviceData* data) {
-  swap_chain_proxy_upgrade_target.new_format = swap_chain_proxy_format;
-  if (swap_chain_proxy_format == reshade::api::format::r10g10b10a2_unorm) {
-    swap_chain_proxy_upgrade_target.view_upgrades = utils::resource::VIEW_UPGRADES_R10G10B10A2_UNORM;
-  }
-  SetupSwapchainProxyLayout(device, data);
-  if (data->swap_chain_proxy_layout != 0u) {
-    if (data->swap_chain_proxy_pipeline.handle == 0u) {
-      data->swap_chain_proxy_pipeline = renodx::utils::pipeline::CreateRenderPipeline(
-          device,
-          data->swap_chain_proxy_layout,
-          {
-              {reshade::api::pipeline_subobject_type::vertex_shader, data->swap_chain_proxy_vertex_shader},
-              {reshade::api::pipeline_subobject_type::pixel_shader, data->swap_chain_proxy_pixel_shader},
-          },
-          target_format);
-    }
-  }
-
-  if (data->swap_chain_proxy_sampler.handle == 0u) {
-    device->create_sampler({}, &data->swap_chain_proxy_sampler);
-  }
-}
-
 inline reshade::api::resource GetResourceClone(utils::resource::ResourceInfo* resource_info = nullptr) {
   if (resource_info == nullptr) return {0u};
 
@@ -784,10 +757,10 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
   s << " => " << PRINT_PTR(current_back_buffer.handle);
 
   if (data->swap_chain_proxy_layout.handle == 0u) {
-    reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(No pipeline layout handle. Creating...)");
+    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent(Creating pipeline layout...)");
     SetupSwapchainProxyLayout(device, data);
     if (data->swap_chain_proxy_layout.handle == 0u) {
-      reshade::log::message(reshade::log::level::warning, "No pipeline layout handle.");
+      reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(Pipeline layout creation failed.)");
       cmd_list->copy_resource(swapchain_clone, current_back_buffer);
       return;
     }
@@ -805,9 +778,24 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
 
   // Bind sampler and SRV
 
+  auto& sampler = data->swap_chain_proxy_sampler;
+  if (sampler.handle == 0u) {
+    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent(Creating sampler...)");
+    if (data->swap_chain_proxy_sampler.handle == 0u) {
+      device->create_sampler({}, &data->swap_chain_proxy_sampler);
+    }
+
+    if (sampler.handle == 0u) {
+      reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(Sampler creation failed.)");
+      cmd_list->copy_resource(swapchain_clone, current_back_buffer);
+      return;
+    }
+  }
+  s << ", sampler: " << PRINT_PTR(sampler.handle);
+
   auto& srv = resource_info->swap_chain_proxy_clone_srv;
   if (srv.handle == 0u) {
-    reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(No SRV. Creating...)");
+    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent(Creating SRV...)");
     device->create_resource_view(
         swapchain_clone,
         reshade::api::resource_usage::shader_resource,
@@ -815,7 +803,7 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
         &srv);
 
     if (srv.handle == 0u) {
-      reshade::log::message(reshade::log::level::warning, "No SRV.");
+      reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(SRV creation failed.)");
       cmd_list->copy_resource(swapchain_clone, current_back_buffer);
       return;
     }
@@ -826,6 +814,8 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
 
   auto& rtv = resource_info->swap_chain_proxy_rtv;
   if (rtv.handle == 0u) {
+    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent(Creating RTV...)");
+
     auto& buffer_desc = resource_info->desc;
     // target format instead?
     device->create_resource_view(
@@ -835,7 +825,7 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
         &rtv);
 
     if (rtv.handle == 0u) {
-      reshade::log::message(reshade::log::level::warning, "No RTV.");
+      reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(RTV creation failed.)");
       cmd_list->copy_resource(swapchain_clone, current_back_buffer);
       return;
     }
@@ -847,7 +837,7 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
   cmd_list->begin_render_pass(1, &render_target_desc, nullptr);
 
   if (data->swap_chain_proxy_pipeline.handle == 0) {
-    reshade::log::message(reshade::log::level::warning, "No pipeline handle. Creating...");
+    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent(Creating pipeline...)");
     data->swap_chain_proxy_pipeline = renodx::utils::pipeline::CreateRenderPipeline(
         device,
         data->swap_chain_proxy_layout,
@@ -857,7 +847,7 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
         },
         target_format);
     if (data->swap_chain_proxy_pipeline == 0u) {
-      reshade::log::message(reshade::log::level::error, "No pipeline handle. Creating failed.");
+      reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(Pipeline creation failed.)");
       cmd_list->copy_resource(swapchain_clone, current_back_buffer);
       return;
     }
@@ -878,7 +868,7 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
           .array_offset = 0,
           .count = 1,
           .type = reshade::api::descriptor_type::sampler,
-          .descriptors = &data->swap_chain_proxy_sampler,
+          .descriptors = &sampler,
       });
   cmd_list->push_descriptors(
       reshade::api::shader_stage::all_graphics,
@@ -988,6 +978,23 @@ static void OnInitDevice(reshade::api::device* device) {
   }
 }
 
+static void DestroySwapchainProxyItems(reshade::api::device* device, DeviceData* data) {
+  if (data->swap_chain_proxy_sampler.handle != 0u) {
+    device->destroy_sampler(data->swap_chain_proxy_sampler);
+    data->swap_chain_proxy_sampler.handle = 0u;
+  }
+
+  if (data->swap_chain_proxy_layout.handle != 0u) {
+    device->destroy_pipeline_layout(data->swap_chain_proxy_layout);
+    data->swap_chain_proxy_layout.handle = 0u;
+  }
+
+  if (data->swap_chain_proxy_pipeline.handle != 0u) {
+    device->destroy_pipeline(data->swap_chain_proxy_pipeline);
+    data->swap_chain_proxy_pipeline.handle = 0u;
+  }
+}
+
 static void OnDestroyDevice(reshade::api::device* device) {
   std::stringstream s;
   s << "mods::swapchain::OnDestroyDevice(";
@@ -997,10 +1004,8 @@ static void OnDestroyDevice(reshade::api::device* device) {
 
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return;
-  if (data->swap_chain_proxy_sampler.handle != 0u) {
-    device->destroy_sampler(data->swap_chain_proxy_sampler);
-    data->swap_chain_proxy_sampler.handle = 0u;
-  }
+
+  DestroySwapchainProxyItems(device, data);
   renodx::utils::data::Delete(device, data);
 }
 
@@ -1135,10 +1140,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (data == nullptr) return;
 
   auto abort_modification = [=]() {
-    if (data->swap_chain_proxy_sampler.handle != 0u) {
-      device->destroy_sampler(data->swap_chain_proxy_sampler);
-      data->swap_chain_proxy_sampler.handle = 0u;
-    }
+    DestroySwapchainProxyItems(device, data);
     renodx::utils::data::Delete(device, data);
   };
 
@@ -1183,7 +1185,10 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     }
     data->primary_swapchain_desc = primary_swapchain_desc;
     if (UsingSwapchainProxy()) {
-      SetupSwapchainProxy(swapchain, device, data);
+      data->swap_chain_proxy_upgrade_target.new_format = swap_chain_proxy_format;
+      if (swap_chain_proxy_format == reshade::api::format::r10g10b10a2_unorm) {
+        data->swap_chain_proxy_upgrade_target.view_upgrades = utils::resource::VIEW_UPGRADES_R10G10B10A2_UNORM;
+      }
     }
   }
 
@@ -1206,22 +1211,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return;
   const std::unique_lock lock(data->mutex);
-
-  if (data->swap_chain_proxy_sampler.handle != 0u) {
-    device->destroy_sampler(data->swap_chain_proxy_sampler);
-    data->swap_chain_proxy_sampler.handle = 0u;
-  }
-
-  if (data->swap_chain_proxy_layout.handle != 0u) {
-    device->destroy_pipeline_layout(data->swap_chain_proxy_layout);
-    data->swap_chain_proxy_layout.handle = 0u;
-  }
-
-  if (data->swap_chain_proxy_pipeline.handle != 0u) {
-    device->destroy_pipeline(data->swap_chain_proxy_pipeline);
-    data->swap_chain_proxy_pipeline.handle = 0u;
-  }
-
+  DestroySwapchainProxyItems(device, data);
   reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnDestroySwapchain()");
 }
 
@@ -1443,7 +1433,7 @@ inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
           }
           resource_info->clone_enabled = true;
         }
-        resource_info->clone_target = &swap_chain_proxy_upgrade_target;
+        resource_info->clone_target = &private_data->swap_chain_proxy_upgrade_target;
       }
       return;
     }
