@@ -1,6 +1,5 @@
 #include "../common.hlsl"
 
-
 StructuredBuffer<float4> EyeAdaptationBuffer : register(t0);
 
 Texture2D<float4> ColorTexture : register(t1);
@@ -653,7 +652,8 @@ void main(
 
     float3 bloom_extra = ((((BloomDirtMaskTint.rgb * _139.rgb) + 1.0f) * _129.rgb) * _309) * CUSTOM_BLOOM;
     float autoexposure = lerp(1.f, _310, CUSTOM_AUTO_EXPOSURE);
-    float3 scaled_color = (((SceneColorApplyParamaters[0].rgb * ColorScale0.rgb) * autoexposure) * ((((((_240.rgb - (_105.rgb * 4.0f)) + _247.rgb) + _255.rgb) + _262.rgb) * _287) + _105.rgb));
+    float3 scaled_color = (((SceneColorApplyParamaters[0].rgb * ColorScale0.rgb) * autoexposure)
+                           * ((((((_240.rgb - (_105.rgb * 4.0f)) + _247.rgb) + _255.rgb) + _262.rgb) * _287) + _105.rgb));
     float3 untonemapped = bloom_extra + scaled_color;
     float3 lut_coordinates = ((LUTScale * renodx::color::pq::Encode(untonemapped, 100.f)) + LUTOffset);
     float4 _373 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, lut_coordinates, 0.0f);

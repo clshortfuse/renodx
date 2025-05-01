@@ -1,6 +1,5 @@
 #include "../common.hlsl"
 
-
 StructuredBuffer<float4> EyeAdaptationBuffer : register(t0);
 
 Texture2D<float4> ColorTexture : register(t1);
@@ -667,7 +666,9 @@ void main(
 
     float3 bloom_extra = ((((BloomDirtMaskTint.rgb * _210.rgb) + 1.0f) * _200.rgb) * _378) * CUSTOM_BLOOM;
     float autoexposure = lerp(1.f, _379, CUSTOM_AUTO_EXPOSURE);
-    float3 scaled_color = (((SceneColorApplyParamaters[0].rgb * ColorScale0.x) * _379) * ((((((_310.x - (float3(_166.x, _172.y, _178.z) * 4.0f)) + _317.rgb) + _324.rgb) + _331.rgb) * _356) + float3(_166.x, _172.y, _178.z)));
+    float3 scaled_color = (((SceneColorApplyParamaters[0].rgb * ColorScale0.x) * _379)
+                           * ((((((_310.rgb - (float3(_166.x, _172.y, _178.z) * 4.0f)) + _317.rgb) + _324.rgb) + _331.rgb) * _356)
+                              + float3(_166.x, _172.y, _178.z)));
     float3 untonemapped = bloom_extra + scaled_color;
     float3 lut_coordinates = float3(((LUTScale * saturate((log2(untonemapped + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset));
     float4 _418 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, lut_coordinates, 0.0f);
@@ -678,7 +679,6 @@ void main(
     float _425 = dot(float3(_422, _423, _424), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
 
     HandleLUTOutput(_422, _423, _424, _425, float2(_49, _50), false);
-
 
     [branch]
     if (!((uint)(bOutputInHDR) == 0)) {

@@ -617,12 +617,14 @@ void main(
     float _93 = EyeAdaptationBuffer[0].w;
     float _108 = float(((int)(uint)((bool)(_76 > 0.0f))) - ((int)(uint)((bool)(_76 < 0.0f))));
     float _109 = float(((int)(uint)((bool)(_77 > 0.0f))) - ((int)(uint)((bool)(_77 < 0.0f))));
+
     // float _114 = saturate(abs(_76) - ChromaticAberrationParams.z);
     // float _115 = saturate(abs(_77) - ChromaticAberrationParams.z);
     // float4 _166 = ColorTexture.SampleLevel(ColorSampler, float2(min(max(((((((_76 - ((_114 * ChromaticAberrationParams.x) * _108)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x) * Color_ScreenPosToViewportScale.x) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max(((((((_77 - ((_115 * ChromaticAberrationParams.x) * _109)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y) * Color_ScreenPosToViewportScale.y) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)), 0.0f);
     // float4 _172 = ColorTexture.SampleLevel(ColorSampler, float2(min(max((((Color_ScreenPosToViewportScale.x * (((_76 - ((_114 * ChromaticAberrationParams.y) * _108)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x)) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max((((Color_ScreenPosToViewportScale.y * (((_77 - ((_115 * ChromaticAberrationParams.y) * _109)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y)) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)), 0.0f);
 
     float3 chromatic_aberration = ChromaticAberrationParams.xyz * CUSTOM_CHROMATIC_ABERRATION;
+
     float _114 = saturate(abs(_76) - chromatic_aberration.z);
     float _115 = saturate(abs(_77) - chromatic_aberration.z);
     float4 _166 = ColorTexture.SampleLevel(ColorSampler, float2(min(max(((((((_76 - ((_114 * chromatic_aberration.x) * _108)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x) * Color_ScreenPosToViewportScale.x) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max(((((((_77 - ((_115 * chromatic_aberration.x) * _109)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y) * Color_ScreenPosToViewportScale.y) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)), 0.0f);
@@ -665,7 +667,9 @@ void main(
 
     float3 bloom_extra = ((((BloomDirtMaskTint.rgb * _210.rgb) + 1.0f) * _200.rgb) * _378) * CUSTOM_BLOOM;
     float autoexposure = lerp(1.f, _379, CUSTOM_AUTO_EXPOSURE);
-    float3 scaled_color = (((SceneColorApplyParamaters[0].rgb * ColorScale0.x) * _379) * ((((((_310.x - (float3(_166.x, _172.y, _178.z) * 4.0f)) + _317.rgb) + _324.rgb) + _331.rgb) * _356) + float3(_166.x, _172.y, _178.z)));
+    float3 scaled_color = (((SceneColorApplyParamaters[0].rgb * ColorScale0.x) * _379)
+                           * ((((((_310.rgb - (float3(_166.x, _172.y, _178.z) * 4.0f)) + _317.rgb) + _324.rgb) + _331.rgb) * _356)
+                              + float3(_166.x, _172.y, _178.z)));
     float3 untonemapped = bloom_extra + scaled_color;
     float3 lut_coordinates = ((LUTScale * renodx::color::pq::Encode(untonemapped, 100.f)) + LUTOffset);
     float4 _442 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, lut_coordinates, 0.0f);

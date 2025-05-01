@@ -231,18 +231,23 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x41DCD632),
 
     // Output
+    CustomShaderEntry(0x12E07ACC),
+    CustomShaderEntry(0x4B58AFCD),
+    CustomShaderEntry(0xA4374A0A),
     CustomShaderEntry(0xEED8F029),
     CustomShaderEntry(0x8E39B831),
     CustomShaderEntry(0x59C7FFCE),
+    CustomShaderEntry(0x440BCDEB),
     CustomShaderEntry(0x1BD60193),
     CustomShaderEntry(0x99B126EC),
     CustomShaderEntry(0x9D0421B9),
     CustomShaderEntry(0xCF3ED7E2),
     CustomShaderEntry(0xCC2B95BB),
     CustomShaderEntry(0xB6EDB152),
-    CustomShaderEntry(0xD1CDE904),
+    CustomShaderEntry(0x2F45593A),
+    CustomShaderEntry(0xDBD0F5E7),
     CustomShaderEntry(0x04C003FD),
-    CustomShaderEntry(0x440BCDEB),
+    CustomShaderEntry(0xD1CDE904),
 
     // FMV
     CustomShaderEntry(0x1FAA96A2),

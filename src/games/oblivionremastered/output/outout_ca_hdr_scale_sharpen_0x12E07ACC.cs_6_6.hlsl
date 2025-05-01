@@ -16,6 +16,10 @@ Texture2D<float4> BloomDirtMaskTexture : register(t6);
 
 Texture3D<float4> ColorGradingLUT : register(t7);
 
+RWTexture2D<float4> RWOutputTexture : register(u0);
+
+RWTexture2D<float> RWOutputLuminance : register(u1);
+
 cbuffer _RootShaderParameters : register(b0) {
   float3 GrainRandomFull : packoffset(c001.x);
   float FilmGrainIntensityShadows : packoffset(c001.w);
@@ -591,93 +595,111 @@ SamplerState BloomDirtMaskSampler : register(s4);
 
 SamplerState ColorGradingLUTSampler : register(s5);
 
-struct OutputSignature {
-  float4 SV_Target : SV_Target;
-  float SV_Target_1 : SV_Target1;
-};
+[numthreads(8, 8, 1)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
+  float _29 = float((uint)SV_DispatchThreadID.x) + 0.5f;
+  float _31 = float((uint)SV_DispatchThreadID.y) + 0.5f;
+  float _503;
+  float _504;
+  float _505;
+  if (!(max(abs(((_29 + float((uint)(int)(Output_ViewportMin.x))) * Output_ExtentInverse.x) + -0.5f), abs(((_31 + float((uint)(int)(Output_ViewportMin.y))) * Output_ExtentInverse.y) + -0.5f)) >= 0.5f)) {
+    float _49 = Output_ExtentInverse.x * _29;
+    float _50 = Output_ExtentInverse.y * _31;
+    float _74 = EyeAdaptationBuffer[0].x;
+    float _75 = EyeAdaptationBuffer[0].w;
+    float _87 = (LensPrincipalPointOffsetScale.z * (((Color_Extent.x * _49) - Color_ScreenPosToViewportBias.x) / Color_ScreenPosToViewportScale.x)) + LensPrincipalPointOffsetScale.x;
+    float _88 = (LensPrincipalPointOffsetScale.w * (((Color_Extent.y * _50) - Color_ScreenPosToViewportBias.y) / Color_ScreenPosToViewportScale.y)) + LensPrincipalPointOffsetScale.y;
+    float _99 = float(((int)(uint)((bool)(_87 > 0.0f))) - ((int)(uint)((bool)(_87 < 0.0f))));
+    float _100 = float(((int)(uint)((bool)(_88 > 0.0f))) - ((int)(uint)((bool)(_88 < 0.0f))));
 
-OutputSignature main(
-    noperspective float2 TEXCOORD: TEXCOORD,
-    noperspective float2 TEXCOORD_1: TEXCOORD1,
-    noperspective float4 TEXCOORD_2: TEXCOORD2,
-    noperspective float2 TEXCOORD_3: TEXCOORD3,
-    noperspective float2 TEXCOORD_4: TEXCOORD4,
-    noperspective float4 SV_Position: SV_Position) {
-  float4 SV_Target;
-  float SV_Target_1;
-  float _33 = EyeAdaptationBuffer[0].x;
-  float _34 = EyeAdaptationBuffer[0].w;
-  float4 _46 = ColorTexture.Sample(ColorSampler, float2(min(max(TEXCOORD.x, Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max(TEXCOORD.y, Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)));
-  float4 _70 = BloomTexture.Sample(BloomSampler, float2(min(max(((ColorToBloom.x * TEXCOORD.x) + ColorToBloom.z), BloomUVViewportBilinearMin.x), BloomUVViewportBilinearMax.x), min(max(((ColorToBloom.y * TEXCOORD.y) + ColorToBloom.w), BloomUVViewportBilinearMin.y), BloomUVViewportBilinearMax.y)));
-  float4 _89 = BloomDirtMaskTexture.Sample(BloomDirtMaskSampler, float2(((((LensPrincipalPointOffsetScale.z * TEXCOORD_3.x) + LensPrincipalPointOffsetScale.x) * 0.5f) + 0.5f), (0.5f - (((LensPrincipalPointOffsetScale.w * TEXCOORD_3.y) + LensPrincipalPointOffsetScale.y) * 0.5f))));
-  float _108 = TonemapperParams.x * TEXCOORD_1.x;
-  float _109 = TonemapperParams.x * TEXCOORD_1.y;
-  float _112 = 1.0f / (dot(float2(_108, _109), float2(_108, _109)) + 1.0f);
-  float _120 = SceneColorApplyParamaters[0].x;
-  float _121 = SceneColorApplyParamaters[0].y;
-  float _122 = SceneColorApplyParamaters[0].z;
-  float _130 = log2(max(dot(float3((_46.x * View_OneOverPreExposure), (_46.y * View_OneOverPreExposure), (_46.z * View_OneOverPreExposure)), float3(0.3333333432674408f, 0.3333333432674408f, 0.3333333432674408f)), EyeAdaptation_LuminanceMin));
-  float _135 = log2((_34 * 0.18000000715255737f) * LocalExposure_MiddleGreyExposureCompensation);
-  float4 _150 = LumBilateralGrid.Sample(LumBilateralGridSampler, float3((LocalExposure_BilateralGridUVScale.x * TEXCOORD_4.x), (LocalExposure_BilateralGridUVScale.y * TEXCOORD_4.y), ((((EyeAdaptation_HistogramScale * _130) + EyeAdaptation_HistogramBias) * 0.96875f) + 0.015625f)));
-  float4 _156 = BlurredLogLum.Sample(BlurredLogLumSampler, float2(TEXCOORD_4.x, TEXCOORD_4.y));
-  float _159 = select((_150.y < 0.0010000000474974513f), _156.x, (_150.x / _150.y));
-  float _162 = log2(_33);
-  float _164 = (_159 + _162) + ((_156.x - _159) * LocalExposure_BlurredLuminanceBlend);
-  float _169 = _162 + _130;
-  float _171 = _164 - _135;
-  float _181 = (_33 * View_OneOverPreExposure) * (_112 * _112);
-  float _182 = _181 * exp2(((_135 - _169) + ((_169 - _164) * LocalExposure_DetailStrength)) + (select((_171 > 0.0f), LocalExposure_HighlightContrastScale, LocalExposure_ShadowContrastScale) * _171));
-  // float _207 = exp2(log2(((((ColorScale0.x * _46.x) * _120) * _182) + ((((BloomDirtMaskTint.x * _89.x) + 1.0f) * _70.x) * _181)) * 0.009999999776482582f) * 0.1593017578125f);
-  // float _208 = exp2(log2(((((ColorScale0.y * _46.y) * _121) * _182) + ((((BloomDirtMaskTint.y * _89.y) + 1.0f) * _70.y) * _181)) * 0.009999999776482582f) * 0.1593017578125f);
-  // float _209 = exp2(log2(((((ColorScale0.z * _46.z) * _122) * _182) + ((((BloomDirtMaskTint.z * _89.z) + 1.0f) * _70.z) * _181)) * 0.009999999776482582f) * 0.1593017578125f);
-  // float4 _248 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3(((LUTScale * exp2(log2((1.0f / ((_207 * 18.6875f) + 1.0f)) * ((_207 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset), ((LUTScale * exp2(log2((1.0f / ((_208 * 18.6875f) + 1.0f)) * ((_208 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset), ((LUTScale * exp2(log2((1.0f / ((_209 * 18.6875f) + 1.0f)) * ((_209 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset)));
+    // float _105 = saturate(abs(_87) - ChromaticAberrationParams.z);
+    // float _106 = saturate(abs(_88) - ChromaticAberrationParams.z);
+    // float4 _157 = ColorTexture.SampleLevel(ColorSampler, float2(min(max(((((((_87 - ((_105 * ChromaticAberrationParams.x) * _99)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x) * Color_ScreenPosToViewportScale.x) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max(((((((_88 - ((_106 * ChromaticAberrationParams.x) * _100)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y) * Color_ScreenPosToViewportScale.y) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)), 0.0f);
+    // float4 _163 = ColorTexture.SampleLevel(ColorSampler, float2(min(max((((Color_ScreenPosToViewportScale.x * (((_87 - ((_105 * ChromaticAberrationParams.y) * _99)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x)) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max((((Color_ScreenPosToViewportScale.y * (((_88 - ((_106 * ChromaticAberrationParams.y) * _100)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y)) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)), 0.0f);
 
-  float3 bloom_extra = ((((BloomDirtMaskTint.rgb * _89.rgb) + 1.0f) * _70.rgb) * _181) * CUSTOM_BLOOM;
-  float autoexposure = lerp(1.f, _182, CUSTOM_AUTO_EXPOSURE);
-  float3 scaled_color = (((ColorScale0.rgb * _46.rgb) * SceneColorApplyParamaters[0].rgb) * autoexposure);
-  float3 untonemapped = bloom_extra + scaled_color;
-  float3 lut_coordinates = ((LUTScale * renodx::color::pq::Encode(untonemapped, 100.f)) + LUTOffset);
-  float4 _248 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, lut_coordinates, 0.0f);
+    float3 chromatic_aberration = ChromaticAberrationParams.xyz * CUSTOM_CHROMATIC_ABERRATION;
 
-  float _252 = _248.x * 1.0499999523162842f;
-  float _253 = _248.y * 1.0499999523162842f;
-  float _254 = _248.z * 1.0499999523162842f;
+    float _105 = saturate(abs(_87) - chromatic_aberration.z);
+    float _106 = saturate(abs(_88) - chromatic_aberration.z);
+    float4 _157 = ColorTexture.SampleLevel(ColorSampler, float2(min(max(((((((_87 - ((_105 * chromatic_aberration.x) * _99)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x) * Color_ScreenPosToViewportScale.x) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max(((((((_88 - ((_106 * chromatic_aberration.x) * _100)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y) * Color_ScreenPosToViewportScale.y) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)), 0.0f);
+    float4 _163 = ColorTexture.SampleLevel(ColorSampler, float2(min(max((((Color_ScreenPosToViewportScale.x * (((_87 - ((_105 * chromatic_aberration.y) * _99)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x)) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max((((Color_ScreenPosToViewportScale.y * (((_88 - ((_106 * chromatic_aberration.y) * _100)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y)) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)), 0.0f);
 
-  // Moved up
-  SV_Target_1 = dot(float3(_252, _253, _254), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
-  HandleLUTOutput(_252, _253, _254, SV_Target_1, TEXCOORD.xy, true);
+    float _167 = min(max(_49, Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x);
+    float _168 = min(max(_50, Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y);
+    float4 _169 = ColorTexture.SampleLevel(ColorSampler, float2(_167, _168), 0.0f);
+    float4 _191 = BloomTexture.SampleLevel(BloomSampler, float2(min(max(((ColorToBloom.x * _49) + ColorToBloom.z), BloomUVViewportBilinearMin.x), BloomUVViewportBilinearMax.x), min(max(((ColorToBloom.y * _50) + ColorToBloom.w), BloomUVViewportBilinearMin.y), BloomUVViewportBilinearMax.y)), 0.0f);
+    float4 _201 = BloomDirtMaskTexture.SampleLevel(BloomDirtMaskSampler, float2(((_87 * 0.5f) + 0.5f), (0.5f - (_88 * 0.5f))), 0.0f);
+    float _221 = SceneColorApplyParamaters[0].x;
+    float _222 = SceneColorApplyParamaters[0].y;
+    float _223 = SceneColorApplyParamaters[0].z;
+    float _234 = log2(max(dot(float3((_157.x * View_OneOverPreExposure), (_163.y * View_OneOverPreExposure), (_169.z * View_OneOverPreExposure)), float3(0.3333333432674408f, 0.3333333432674408f, 0.3333333432674408f)), EyeAdaptation_LuminanceMin));
+    float _239 = log2((_75 * 0.18000000715255737f) * LocalExposure_MiddleGreyExposureCompensation);
+    float4 _254 = LumBilateralGrid.SampleLevel(LumBilateralGridSampler, float3((LocalExposure_BilateralGridUVScale.x * _49), (LocalExposure_BilateralGridUVScale.y * _50), ((((EyeAdaptation_HistogramScale * _234) + EyeAdaptation_HistogramBias) * 0.96875f) + 0.015625f)), 0.0f);
+    float4 _260 = BlurredLogLum.SampleLevel(BlurredLogLumSampler, float2(_49, _50), 0.0f);
+    float _263 = select((_254.y < 0.0010000000474974513f), _260.x, (_254.x / _254.y));
+    float _266 = log2(_74);
+    float _268 = (_263 + _266) + ((_260.x - _263) * LocalExposure_BlurredLuminanceBlend);
+    float _272 = _266 + _234;
+    float _274 = _268 - _239;
+    float _285 = dot(float3(_157.x, _163.y, _169.z), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f));
+    float4 _289 = ColorTexture.SampleLevel(ColorSampler, float2(min(max((_49 - Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), _168), 0.0f);
+    float4 _296 = ColorTexture.SampleLevel(ColorSampler, float2(min(max((Color_ExtentInverse.x + _49), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), _168), 0.0f);
+    float4 _303 = ColorTexture.SampleLevel(ColorSampler, float2(_167, min(max((_50 - Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)), 0.0f);
+    float4 _310 = ColorTexture.SampleLevel(ColorSampler, float2(_167, min(max((Color_ExtentInverse.y + _50), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)), 0.0f);
+    float _329 = _74 * View_OneOverPreExposure;
+    float _330 = _329 * exp2(((_239 - _272) + ((_272 - _268) * LocalExposure_DetailStrength)) + (select((_274 > 0.0f), LocalExposure_HighlightContrastScale, LocalExposure_ShadowContrastScale) * _274));
+    float _335 = -0.0f - (TonemapperParams.y * saturate(1.0f - (_330 * max(max(abs(_285 - dot(float3(_289.x, _289.y, _289.z), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f))), abs(_285 - dot(float3(_296.x, _296.y, _296.z), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f)))), max(abs(_285 - dot(float3(_303.x, _303.y, _303.z), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f))), abs(_285 - dot(float3(_310.x, _310.y, _310.z), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f))))))));
+    // float _381 = exp2(log2(((((_221 * ColorScale0.x) * _330) * ((((((_289.x - (_157.x * 4.0f)) + _296.x) + _303.x) + _310.x) * _335) + _157.x)) + ((_191.x * _329) * ((BloomDirtMaskTint.x * _201.x) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);
+    // float _382 = exp2(log2(((((_222 * ColorScale0.y) * _330) * ((((((_289.y - (_163.y * 4.0f)) + _296.y) + _303.y) + _310.y) * _335) + _163.y)) + ((_191.y * _329) * ((BloomDirtMaskTint.y * _201.y) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);
+    // float _383 = exp2(log2(((((_223 * ColorScale0.z) * _330) * ((((((_289.z - (_169.z * 4.0f)) + _296.z) + _303.z) + _310.z) * _335) + _169.z)) + ((_191.z * _329) * ((BloomDirtMaskTint.z * _201.z) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);
+    // float4 _422 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, float3(((LUTScale * exp2(log2((1.0f / ((_381 * 18.6875f) + 1.0f)) * ((_381 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset), ((LUTScale * exp2(log2((1.0f / ((_382 * 18.6875f) + 1.0f)) * ((_382 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset), ((LUTScale * exp2(log2((1.0f / ((_383 * 18.6875f) + 1.0f)) * ((_383 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset)), 0.0f);
 
-  float _329;
-  float _330;
-  float _331;
-  [branch]
-  if (!(bOutputInHDR == 0)) {
-    float _266 = (pow(_252, 0.012683313339948654f));
-    float _267 = (pow(_253, 0.012683313339948654f));
-    float _268 = (pow(_254, 0.012683313339948654f));
-    float _301 = max(6.103519990574569e-05f, ((exp2(log2(max(0.0f, (_266 + -0.8359375f)) / (18.8515625f - (_266 * 18.6875f))) * 6.277394771575928f) * 10000.0f) / EditorNITLevel));
-    float _302 = max(6.103519990574569e-05f, ((exp2(log2(max(0.0f, (_267 + -0.8359375f)) / (18.8515625f - (_267 * 18.6875f))) * 6.277394771575928f) * 10000.0f) / EditorNITLevel));
-    float _303 = max(6.103519990574569e-05f, ((exp2(log2(max(0.0f, (_268 + -0.8359375f)) / (18.8515625f - (_268 * 18.6875f))) * 6.277394771575928f) * 10000.0f) / EditorNITLevel));
-    _329 = min((_301 * 12.920000076293945f), ((exp2(log2(max(_301, 0.0031306699384003878f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f));
-    _330 = min((_302 * 12.920000076293945f), ((exp2(log2(max(_302, 0.0031306699384003878f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f));
-    _331 = min((_303 * 12.920000076293945f), ((exp2(log2(max(_303, 0.0031306699384003878f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f));
-  } else {
-    _329 = _252;
-    _330 = _253;
-    _331 = _254;
+    float autoexposure = lerp(1.f, _330, CUSTOM_AUTO_EXPOSURE);
+    float3 scaled_color = ((SceneColorApplyParamaters[0].rgb * ColorScale0.x)
+                           * ((((((_289.rgb - (float3(_157.x, _163.y, _169.z) * 4.0f)) + _296.rgb) + _303.rgb) + _310.rgb) * _335)
+                              + float3(_157.x, _163.y, _169.z)));
+    float3 bloom_extra = ((_191.rgb * _329) * ((BloomDirtMaskTint.rgb * _201.rgb) + 1.0f)) * CUSTOM_BLOOM;
+    float3 untonemapped = bloom_extra + scaled_color;
+    float3 lut_coordinates = ((LUTScale * renodx::color::pq::Encode(untonemapped, 100.f)) + LUTOffset);
+    float4 _422 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, lut_coordinates, 0.0f);
+
+    float _426 = _422.x * 1.0499999523162842f;
+    float _427 = _422.y * 1.0499999523162842f;
+    float _428 = _422.z * 1.0499999523162842f;
+    float _429 = dot(float3(_426, _427, _428), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
+
+    HandleLUTOutput(_426, _427, _428, _429, float2(_49, _50), true);
+
+    [branch]
+    if (!(bOutputInHDR == 0)) {
+      float _440 = (pow(_426, 0.012683313339948654f));
+      float _441 = (pow(_427, 0.012683313339948654f));
+      float _442 = (pow(_428, 0.012683313339948654f));
+      float _475 = max(6.103519990574569e-05f, ((exp2(log2(max(0.0f, (_440 + -0.8359375f)) / (18.8515625f - (_440 * 18.6875f))) * 6.277394771575928f) * 10000.0f) / EditorNITLevel));
+      float _476 = max(6.103519990574569e-05f, ((exp2(log2(max(0.0f, (_441 + -0.8359375f)) / (18.8515625f - (_441 * 18.6875f))) * 6.277394771575928f) * 10000.0f) / EditorNITLevel));
+      float _477 = max(6.103519990574569e-05f, ((exp2(log2(max(0.0f, (_442 + -0.8359375f)) / (18.8515625f - (_442 * 18.6875f))) * 6.277394771575928f) * 10000.0f) / EditorNITLevel));
+      _503 = min((_475 * 12.920000076293945f), ((exp2(log2(max(_475, 0.0031306699384003878f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f));
+      _504 = min((_476 * 12.920000076293945f), ((exp2(log2(max(_476, 0.0031306699384003878f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f));
+      _505 = min((_477 * 12.920000076293945f), ((exp2(log2(max(_477, 0.0031306699384003878f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f));
+    } else {
+      _503 = _426;
+      _504 = _427;
+      _505 = _428;
+    }
+
+    float _524 = 0.0f;
+    if (CUSTOM_GRAIN_TYPE == 0.f) {
+      float _512 = (frac(sin((_49 + GrainRandomFull.x) + ((_50 + GrainRandomFull.y) * 543.3099975585938f)) * 493013.0f) * 2.0f) + -1.0f;
+      float _515 = min(max((_512 * +1.#INF), -1.0f), 1.0f);
+      float _524 = (_515 - (sqrt(saturate(1.0f - abs(_512))) * _515)) * BackbufferQuantizationDithering;
+    }
+    uint _531 = (int)(Output_ViewportMin.x) + SV_DispatchThreadID.x;
+    uint _532 = (int)(Output_ViewportMin.y) + SV_DispatchThreadID.y;
+    RWOutputTexture[int2(_531, _532)] = float4((_524 + _503), (_524 + _504), (_524 + _505), 0.0f);
+    RWOutputLuminance[int2(_531, _532)] = _429;
   }
-
-  float _350 = 0.0f;
-  if (CUSTOM_GRAIN_TYPE == 0.f) {
-    float _338 = (frac(sin((TEXCOORD_2.w * 543.3099975585938f) + TEXCOORD_2.z) * 493013.0f) * 2.0f) + -1.0f;
-    float _341 = min(max((_338 * +1.#INF), -1.0f), 1.0f);
-    _350 = (_341 - (sqrt(saturate(1.0f - abs(_338))) * _341)) * BackbufferQuantizationDithering;
-  }
-  SV_Target.x = (_350 + _329);
-  SV_Target.y = (_350 + _330);
-  SV_Target.z = (_350 + _331);
-  SV_Target.w = 0.0f;
-  // SV_Target_1 = dot(float3(_252, _253, _254), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
-  OutputSignature output_signature = { SV_Target, SV_Target_1 };
-  return output_signature;
 }
