@@ -320,15 +320,13 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeClip",
         .binding = &shader_injection.colorGradeClip,
-        .default_value = 4000.f,
+        .default_value = 100.f,
         .label = "Clipping",
         .section = "Color Grading",
-        .tooltip = "Clip point for white in nits",
         .tint = 0xE50067,
-        .min = 48.f,
-        .max = 4000.f,
+        .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType == 4.f; },
-        .parse = [](float value) { return value / 250.f; },
+        .parse = [](float value) { return value; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{

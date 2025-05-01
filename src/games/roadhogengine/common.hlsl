@@ -234,9 +234,6 @@ float3 applyUserTonemap(float3 untonemapped, float2 screen, bool grain = true) {
   config.shadows = injectedData.colorGradeShadows;
   config.contrast = injectedData.colorGradeContrast;
   config.saturation = injectedData.colorGradeSaturation;
-  config.mid_gray_nits = 19.f;
-  config.reno_drt_contrast = 1.04f;
-  config.reno_drt_saturation = 1.05f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
@@ -305,10 +302,10 @@ float3 applyUserTonemapACES(float3 untonemapped) {
   config.reno_drt_contrast = 1.45f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
-  config.hue_correction_type = injectedData.toneMapPerChannel == 0.f
+  config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
                                    ? renodx::tonemap::config::hue_correction_type::INPUT
                                    : renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_strength = injectedData.toneMapPerChannel == 0.f
+  config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f
                                        ? (1.f - injectedData.toneMapHueCorrection)
                                        : injectedData.toneMapHueCorrection;
   config.hue_correction_color = lerp(untonemapped, vanillaTonemapSDR(untonemapped), injectedData.toneMapHueShift);
@@ -316,7 +313,7 @@ float3 applyUserTonemapACES(float3 untonemapped) {
                                                                     : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
-  config.reno_drt_per_channel = injectedData.toneMapPerChannel == 0.f;
+  config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
   config.reno_drt_white_clip = injectedData.colorGradeClip;
   if (injectedData.toneMapType == 0.f) {
     outputColor = vanillaTonemapHDR(untonemapped);
