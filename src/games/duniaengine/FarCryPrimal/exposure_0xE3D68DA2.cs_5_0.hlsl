@@ -140,7 +140,7 @@ void main() {
   r0.x = min(5, r0.x);
   r0.x = r0.w + r0.x;
   r0.x = exp2(r0.x);
-  r1.x = cb0[43].w ? lerp(cb0[43].x, r0.x, injectedData.fxAutoExposure) : cb0[43].x;
+  r1.x = asuint(cb0[43].w) ? lerp(cb0[43].x, r0.x, injectedData.fxAutoExposure) : cb0[43].x;
   r1.w = rcp(r1.x);
   u0[0].val[0/4] = r1.x;
   u0[0].val[0/4+1] = r1.y;
