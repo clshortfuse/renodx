@@ -196,8 +196,8 @@ float4 main(
   float _126 = mad((WorkingColorSpace.ToAP1[0].z), _111, mad((WorkingColorSpace.ToAP1[0].y), _110, ((WorkingColorSpace.ToAP1[0].x) * _109)));
   float _129 = mad((WorkingColorSpace.ToAP1[1].z), _111, mad((WorkingColorSpace.ToAP1[1].y), _110, ((WorkingColorSpace.ToAP1[1].x) * _109)));
   float _132 = mad((WorkingColorSpace.ToAP1[2].z), _111, mad((WorkingColorSpace.ToAP1[2].y), _110, ((WorkingColorSpace.ToAP1[2].x) * _109)));
-  
-  // SetUntonemappedAP1(_126, _129, _132);
+
+  SetUngradedAP1(_126, _129, _132);
 
   float _133 = dot(float3(_126, _129, _132), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
   float _137 = (_126 / _133) + -1.0f;
