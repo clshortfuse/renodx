@@ -629,9 +629,9 @@ OutputSignature main(
   // float _198 = exp2(log2(((((ColorScale0.z * _44.z) * _109) * _168) + ((_68.z * _167) * ((BloomDirtMaskTint.z * _87.z) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);
   // float4 _237 = ColorGradingLUT.Sample(ColorGradingLUTSampler, float3(((LUTScale * exp2(log2((1.0f / ((_196 * 18.6875f) + 1.0f)) * ((_196 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset), ((LUTScale * exp2(log2((1.0f / ((_197 * 18.6875f) + 1.0f)) * ((_197 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset), ((LUTScale * exp2(log2((1.0f / ((_198 * 18.6875f) + 1.0f)) * ((_198 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset)));
 
-  float3 bloom_extra = ((((BloomDirtMaskTint.rgb * _87.rgb) + 1.0f) * _68.rgb) * _167) * CUSTOM_BLOOM;
   float autoexposure = lerp(1.f, _168, CUSTOM_AUTO_EXPOSURE);
   float3 scaled_color = (((ColorScale0.rgb * _44.rgb) * SceneColorApplyParamaters[0].rgb) * autoexposure);
+  float3 bloom_extra = ((((BloomDirtMaskTint.rgb * _87.rgb) + 1.0f) * _68.rgb) * _167) * CUSTOM_BLOOM;
   float3 untonemapped = bloom_extra + scaled_color;
   float3 lut_coordinates = ((LUTScale * renodx::color::pq::Encode(untonemapped, 100.f)) + LUTOffset);
   float4 _237 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, lut_coordinates, 0.0f);
@@ -640,7 +640,6 @@ OutputSignature main(
   float _242 = _237.y * 1.0499999523162842f;
   float _243 = _237.z * 1.0499999523162842f;
 
-  // Moved up
   SV_Target_1 = dot(float3(_241, _242, _243), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
   HandleLUTOutput(_241, _242, _243, SV_Target_1, TEXCOORD.xy, true);
 
