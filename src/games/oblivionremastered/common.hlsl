@@ -118,6 +118,10 @@ float4 GenerateOutput(float3 graded_bt709, uint OutputDevice = 0u) {
   return GenerateOutput(OutputDevice);
 }
 
+void HandleLocalExposure(float a, float b, inout float c) {
+  c = lerp(b / a, c, CUSTOM_LOCAL_EXPOSURE);
+}
+
 void HandleLUTOutput(
     inout float red, inout float green, inout float blue,
     inout float luminance,

@@ -367,10 +367,18 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
     }),
     {
         renodx::templates::settings::CreateSetting({
-            .key = "FxAutoExposure",
-            .binding = &shader_injection.custom_auto_exposure,
+            .key = "FxVignette",
+            .binding = &shader_injection.custom_vignette,
+            .default_value = 50.f,
+            .label = "Vignette",
+            .section = "Effects",
+            .parse = [](float value) { return value * 0.02f; },
+        }),
+        renodx::templates::settings::CreateSetting({
+            .key = "FxLocalExposure",
+            .binding = &shader_injection.custom_local_exposure,
             .default_value = 100.f,
-            .label = "Auto Exposure",
+            .label = "Local Exposure",
             .section = "Effects",
             .parse = [](float value) { return value * 0.01f; },
         }),
@@ -449,7 +457,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
               renodx::utils::settings::UpdateSettings({
                   {"ToneMapWhiteClip", 15.f},
                   {"ColorGradeShadows", 60.f},
-                  {"ColorGradeContrast", 80.f},
+                  {"ColorGradeContrast", 70.f},
                   {"ColorGradeSaturation", 65.f},
                   {"ColorGradeBlowout", 50.f},
                   {"ColorGradeFlare", 25.f},
@@ -523,11 +531,12 @@ void OnPresetOff() {
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
       {"FxHDRVideos", 0.f},
-      {"FxAutoExposure", 100.f},
+      {"FxBloom", 50.f},
+      {"FxVignette", 50.f},
+      {"FxLocalExposure", 100.f},
       {"FxChromaticAberration", 100.f},
       {"FxEyeAdaptation", 100.f},
       {"FxCustomGrain", 100.f},
-      {"FxBloom", 0.f},
   });
 }
 

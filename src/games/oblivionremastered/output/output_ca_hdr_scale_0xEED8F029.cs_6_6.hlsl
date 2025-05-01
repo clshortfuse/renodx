@@ -627,9 +627,11 @@ void main(
     float _106 = saturate(abs(_88) - chromatic_aberration.z);
     float4 _157 = ColorTexture.SampleLevel(ColorSampler, float2(min(max(((((((_87 - ((_105 * chromatic_aberration.x) * _99)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x) * Color_ScreenPosToViewportScale.x) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max(((((((_88 - ((_106 * chromatic_aberration.x) * _100)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y) * Color_ScreenPosToViewportScale.y) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)), 0.0f);
     float4 _163 = ColorTexture.SampleLevel(ColorSampler, float2(min(max((((Color_ScreenPosToViewportScale.x * (((_87 - ((_105 * chromatic_aberration.y) * _99)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x)) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max((((Color_ScreenPosToViewportScale.y * (((_88 - ((_106 * chromatic_aberration.y) * _100)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y)) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)), 0.0f);
-
     float4 _169 = ColorTexture.SampleLevel(ColorSampler, float2(min(max(_49, Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max(_50, Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)), 0.0f);
     float4 _191 = BloomTexture.SampleLevel(BloomSampler, float2(min(max(((ColorToBloom.x * _49) + ColorToBloom.z), BloomUVViewportBilinearMin.x), BloomUVViewportBilinearMax.x), min(max(((ColorToBloom.y * _50) + ColorToBloom.w), BloomUVViewportBilinearMin.y), BloomUVViewportBilinearMax.y)), 0.0f);
+
+    _191 *= CUSTOM_BLOOM;
+
     float4 _201 = BloomDirtMaskTexture.SampleLevel(BloomDirtMaskSampler, float2(((_87 * 0.5f) + 0.5f), (0.5f - (_88 * 0.5f))), 0.0f);
     float _221 = SceneColorApplyParamaters[0].x;
     float _222 = SceneColorApplyParamaters[0].y;
@@ -645,18 +647,13 @@ void main(
     float _271 = _265 - _236;
     float _280 = _74 * View_OneOverPreExposure;
     float _281 = _280 * exp2(((_236 - _269) + ((_269 - _265) * LocalExposure_DetailStrength)) + (select((_271 > 0.0f), LocalExposure_HighlightContrastScale, LocalExposure_ShadowContrastScale) * _271));
-    // float _309 = exp2(log2(((((ColorScale0.x * _157.x) * _221) * _281) + ((_191.x * _280) * ((BloomDirtMaskTint.x * _201.x) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);
-    // float _310 = exp2(log2(((((ColorScale0.y * _163.y) * _222) * _281) + ((_191.y * _280) * ((BloomDirtMaskTint.y * _201.y) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);
-    // float _311 = exp2(log2(((((ColorScale0.z * _169.z) * _223) * _281) + ((_191.z * _280) * ((BloomDirtMaskTint.z * _201.z) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);
-    // float4 _350 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, float3(((LUTScale * exp2(log2((1.0f / ((_309 * 18.6875f) + 1.0f)) * ((_309 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset), ((LUTScale * exp2(log2((1.0f / ((_310 * 18.6875f) + 1.0f)) * ((_310 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset), ((LUTScale * exp2(log2((1.0f / ((_311 * 18.6875f) + 1.0f)) * ((_311 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset)), 0.0f);
 
-    float3 bloom_extra = ((((BloomDirtMaskTint.rgb * _201.rgb) + 1.0f) * _191.rgb) * _280) * CUSTOM_BLOOM;
-    float autoexposure = lerp(1.f, _281, CUSTOM_AUTO_EXPOSURE);
-    float3 scaled_color = (((ColorScale0.rgb * float3(_157.x, _163.y, _169.z)) * SceneColorApplyParamaters[0].rgb) * autoexposure);
-    float3 untonemapped = bloom_extra + scaled_color;
-    float3 lut_coordinates = float3(LUTScale * saturate(renodx::color::pq::Encode(untonemapped, 100.f)) + LUTOffset);
-    float4 _350 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, lut_coordinates, 0.0f);
+    HandleLocalExposure(_280, _280, _281);
 
+    float _309 = exp2(log2(((((ColorScale0.x * _157.x) * _221) * _281) + ((_191.x * _280) * ((BloomDirtMaskTint.x * _201.x) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);
+    float _310 = exp2(log2(((((ColorScale0.y * _163.y) * _222) * _281) + ((_191.y * _280) * ((BloomDirtMaskTint.y * _201.y) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);
+    float _311 = exp2(log2(((((ColorScale0.z * _169.z) * _223) * _281) + ((_191.z * _280) * ((BloomDirtMaskTint.z * _201.z) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);
+    float4 _350 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, float3(((LUTScale * exp2(log2((1.0f / ((_309 * 18.6875f) + 1.0f)) * ((_309 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset), ((LUTScale * exp2(log2((1.0f / ((_310 * 18.6875f) + 1.0f)) * ((_310 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset), ((LUTScale * exp2(log2((1.0f / ((_311 * 18.6875f) + 1.0f)) * ((_311 * 18.8515625f) + 0.8359375f)) * 78.84375f)) + LUTOffset)), 0.0f);
     float _354 = _350.x * 1.0499999523162842f;
     float _355 = _350.y * 1.0499999523162842f;
     float _356 = _350.z * 1.0499999523162842f;

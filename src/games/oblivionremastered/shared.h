@@ -23,7 +23,8 @@ struct ShaderInjectData {
   float scene_grade_saturation_correction;
   float scene_grade_blowout_restoration;
   float scene_grade_hue_shift;
-  float custom_auto_exposure;
+  float custom_local_exposure;
+  float custom_vignette;
   float custom_bloom;
   float custom_lut_optimization;
   float custom_chromatic_aberration;
@@ -64,8 +65,9 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_WORKING_COLOR_SPACE      color::convert::COLOR_SPACE_AP1
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE        -1.f
 #define RENODX_RENO_DRT_WHITE_CLIP               shader_injection.tone_map_white_clip
+#define CUSTOM_VIGNETTE                          shader_injection.custom_vignette
 #define CUSTOM_BLOOM                             shader_injection.custom_bloom
-#define CUSTOM_AUTO_EXPOSURE                     shader_injection.custom_auto_exposure
+#define CUSTOM_LOCAL_EXPOSURE                    shader_injection.custom_local_exposure
 #define CUSTOM_LUT_OPTIMIZATION                  shader_injection.custom_lut_optimization
 #define CUSTOM_CHROMATIC_ABERRATION              shader_injection.custom_chromatic_aberration
 #define CUSTOM_HDR_VIDEOS                        shader_injection.custom_hdr_videos

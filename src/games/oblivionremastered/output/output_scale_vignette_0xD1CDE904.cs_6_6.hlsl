@@ -617,10 +617,13 @@ void main(
     float _93 = EyeAdaptationBuffer[0].w;
     float4 _105 = ColorTexture.SampleLevel(ColorSampler, float2(min(max(_49, Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max(_50, Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)), 0.0f);
     float4 _129 = BloomTexture.SampleLevel(BloomSampler, float2(min(max(((ColorToBloom.x * _49) + ColorToBloom.z), BloomUVViewportBilinearMin.x), BloomUVViewportBilinearMax.x), min(max(((ColorToBloom.y * _50) + ColorToBloom.w), BloomUVViewportBilinearMin.y), BloomUVViewportBilinearMax.y)), 0.0f);
+
+    _129 *= CUSTOM_BLOOM;
+
     float4 _139 = BloomDirtMaskTexture.SampleLevel(BloomDirtMaskSampler, float2(((_76 * 0.5f) + 0.5f), (0.5f - (_77 * 0.5f))), 0.0f);
     float _158 = (_76 * _81) * TonemapperParams.x;
     float _161 = ((_81 * _54) * _77) * TonemapperParams.x;
-    float _164 = 1.0f / (dot(float2(_158, _161), float2(_158, _161)) + 1.0f);
+    float _164 = 1.0f / (dot(float2(_158, _161), float2(_158, _161)) * CUSTOM_VIGNETTE + 1.0f);
     float _172 = SceneColorApplyParamaters[0].x;
     float _173 = SceneColorApplyParamaters[0].y;
     float _174 = SceneColorApplyParamaters[0].z;
@@ -635,18 +638,10 @@ void main(
     float _222 = _216 - _187;
     float _232 = (_92 * View_OneOverPreExposure) * (_164 * _164);
     float _233 = _232 * exp2(((_187 - _220) + ((_220 - _216) * LocalExposure_DetailStrength)) + (select((_222 > 0.0f), LocalExposure_HighlightContrastScale, LocalExposure_ShadowContrastScale) * _222));
-    // float4 _275 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, float3(((LUTScale * saturate((log2((((((BloomDirtMaskTint.x * _139.x) + 1.0f) * _129.x) * _232) + 0.002667719265446067f) + (((ColorScale0.x * _105.x) * _172) * _233)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset), ((LUTScale * saturate((log2((((((BloomDirtMaskTint.y * _139.y) + 1.0f) * _129.y) * _232) + 0.002667719265446067f) + (((ColorScale0.y * _105.y) * _173) * _233)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset), ((LUTScale * saturate((log2((((((BloomDirtMaskTint.z * _139.z) + 1.0f) * _129.z) * _232) + 0.002667719265446067f) + (((ColorScale0.z * _105.z) * _174) * _233)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset)), 0.0f);
-    // ((LUTScale * saturate((log2((((((BloomDirtMaskTint.x * _139.x) + 1.0f) * _129.x) * _232) + 0.002667719265446067f) + (((ColorScale0.x * _105.x) * _172) * _233)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset)
-    // ((LUTScale * saturate((log2((((((BloomDirtMaskTint.y * _139.y) + 1.0f) * _129.y) * _232) + 0.002667719265446067f) + (((ColorScale0.y * _105.y) * _173) * _233)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset)
-    // ((LUTScale * saturate((log2((((((BloomDirtMaskTint.z * _139.z) + 1.0f) * _129.z) * _232) + 0.002667719265446067f) + (((ColorScale0.z * _105.z) * _174) * _233)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset)
 
-    float3 bloom_extra = ((((BloomDirtMaskTint.rgb * _139.rgb) + 1.0f) * _129.rgb) * _232) * CUSTOM_BLOOM;
-    float autoexposure = lerp(1.f, _233, CUSTOM_AUTO_EXPOSURE);
-    float3 scaled_color = (((ColorScale0.rgb * _105.rgb) * SceneColorApplyParamaters[0].rgb) * autoexposure);
-    float3 untonemapped = bloom_extra + scaled_color;
-    float3 lut_coordinates = float3(((LUTScale * saturate((log2(untonemapped + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset));
-    float4 _275 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, lut_coordinates, 0.0f);
+    HandleLocalExposure(_92 * View_OneOverPreExposure, _232, _233);
 
+    float4 _275 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, float3(((LUTScale * saturate((log2((((((BloomDirtMaskTint.x * _139.x) + 1.0f) * _129.x) * _232) + 0.002667719265446067f) + (((ColorScale0.x * _105.x) * _172) * _233)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset), ((LUTScale * saturate((log2((((((BloomDirtMaskTint.y * _139.y) + 1.0f) * _129.y) * _232) + 0.002667719265446067f) + (((ColorScale0.y * _105.y) * _173) * _233)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset), ((LUTScale * saturate((log2((((((BloomDirtMaskTint.z * _139.z) + 1.0f) * _129.z) * _232) + 0.002667719265446067f) + (((ColorScale0.z * _105.z) * _174) * _233)) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset)), 0.0f);
     float _279 = _275.x * 1.0499999523162842f;
     float _280 = _275.y * 1.0499999523162842f;
     float _281 = _275.z * 1.0499999523162842f;
