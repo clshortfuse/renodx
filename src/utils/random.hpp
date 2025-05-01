@@ -29,9 +29,10 @@ static void OnPresent(
   auto binds_count = binds.size();
   auto generators_count = generators.size();
 
-  for (auto i = 0; i < binds_count; ++i) {
+  for (size_t i = 0; i < binds_count; ++i) {
     if (generators_count <= i) {
-      generators.emplace_back(std::chrono::system_clock::now().time_since_epoch().count() + i);
+      std::mt19937 generator = std::mt19937(std::chrono::system_clock::now().time_since_epoch().count() + i);
+      generators.push_back(generator);
       ++generators_count;
     }
     *binds[i] = (generators[i]() + (std::mt19937::min)()) / RANDOM_RANGE;

@@ -1,13 +1,9 @@
 #pragma once
 
-#include <algorithm>
-#include <map>
-#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
 
-#include <list>
 #include <tuple>
 
 #include "./path.hpp"

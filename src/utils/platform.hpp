@@ -99,7 +99,7 @@ static std::filesystem::path GetCurrentWorkingPath() {
 std::map<std::string, std::string> GetEnvironmentVariables() {
   std::map<std::string, std::string> env_map;
 
-#ifdef _WIN32
+#ifdef WIN32
   LPWCH env_strings = GetEnvironmentStringsW();
   if (!env_strings) {
     return env_map;

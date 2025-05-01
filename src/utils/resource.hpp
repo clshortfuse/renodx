@@ -192,7 +192,6 @@ struct ResourceInfo {
   bool is_swap_chain = false;
   bool is_clone = false;
   uint32_t extra_vram;
-  reshade::api::format format = reshade::api::format::unknown;
   ResourceUpgradeInfo* clone_target = nullptr;
   ResourceUpgradeInfo* upgrade_target = nullptr;
   reshade::api::resource_usage initial_state = reshade::api::resource_usage::undefined;
