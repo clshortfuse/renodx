@@ -148,6 +148,16 @@ static const SettingConfig TONE_MAP_HUE_PROCESSOR_CONFIG = {
     .is_visible = []() { return current_settings_mode >= 2; },
 };
 
+static const SettingConfig TONE_MAP_WHITE_CLIP = {
+  .key = "ToneMapWhiteClip",
+  .default_value = 100.f,
+  .label = "White Clip",
+  .section = "Tone Mapping",
+  .min = 0.f,
+  .max = 100.f,
+  .is_visible = []() { return current_settings_mode >= 2; },
+};
+
 static const SettingConfig TONE_MAP_HUE_CORRECTION_CONFIG = {
     .key = "ToneMapHueCorrection",
     .default_value = 100.f,
@@ -404,6 +414,8 @@ static std::vector<renodx::utils::settings::Setting*> CreateDefaultSettings(cons
       settings.push_back(CreateSetting({TONE_MAP_WORKING_COLOR_SPACE_CONFIG, value}));
     } else if (key == "ToneMapHueProcessor") {
       settings.push_back(CreateSetting({TONE_MAP_HUE_PROCESSOR_CONFIG, value}));
+    } else if (key == "ToneMapWhiteClip") {
+      settings.push_back(CreateSetting({TONE_MAP_WHITE_CLIP, value}));
     } else if (key == "ToneMapHueCorrection") {
       settings.push_back(CreateSetting({TONE_MAP_HUE_CORRECTION_CONFIG, value}));
     } else if (key == "ToneMapHueShift") {
