@@ -756,6 +756,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         if (product_name == "Jusant") return true;
         if (product_name == "InfinityNikki") return true;
         if (product_name == "Lords of the Fallen") return true;  // Lords of the Fallen 2023
+        if (product_name == "NobodyWantsToDie") return true;
         if (product_name == "Ready Or Not") return true;
         if (product_name == "Eternal Strands") return true;
         if (product_name == "Expedition 33") return true;
