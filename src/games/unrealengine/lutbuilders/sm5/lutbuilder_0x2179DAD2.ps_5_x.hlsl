@@ -163,6 +163,9 @@ void main(
   r0.y = dot(float3(0.0702069029,0.916335821,0.0134500116), r1.xyz);
   r0.z = dot(float3(0.0206188709,0.109567292,0.869606733), r1.xyz);
   r0.w = dot(r0.xyz, float3(0.272228718,0.674081743,0.0536895171));
+
+  SetUngradedAP1(r0.xyz);
+
   r1.xyzw = cb0[41].xyzw * cb0[36].xyzw;
   r2.xyzw = cb0[42].xyzw * cb0[37].xyzw;
   r3.xyzw = cb0[43].xyzw * cb0[38].xyzw;
