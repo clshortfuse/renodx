@@ -1,3 +1,4 @@
+#include "./DICE.hlsli"
 #include "./shared.h"
 
 float3 HueCorrectAP1(float3 incorrect_color_ap1, float3 correct_color_ap1, float hue_correct_strength = 0.5f) {
@@ -87,7 +88,7 @@ float3 ApplyBlendedToneMap(float3 untonemapped_ap1, float peak_nits, float diffu
 #endif
 
   float3 hdr_untonemapped = untonemapped_ap1 * GetSDRMidGrayRatio();
-  float3 hdr_tonemap = ApplyFrostbiteAP1(hdr_untonemapped, hdr_scale);
+  float3 hdr_tonemap = renodx::color::ap1::from::BT709(renodx::color::correct::GammaSafe(applyDICE(renodx::color::correct::GammaSafe(renodx::color::bt709::from::AP1(hdr_untonemapped)), diffuse_white, peak_nits, 0.5f), true));
 
   float3 sdr_tonemap_by_lum = HueChromaCorrectAP1(sdr_tonemap, hdr_untonemapped);
 
