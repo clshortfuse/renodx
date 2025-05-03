@@ -205,7 +205,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!initialized) {
         renodx::mods::shader::expected_constant_buffer_space = 50;
         renodx::mods::shader::expected_constant_buffer_index = 13;
-        renodx::mods::shader::allow_multiple_push_constants = true;
 
         // For puredark FG mod compatibility
         renodx::mods::shader::use_pipeline_layout_cloning = false;
