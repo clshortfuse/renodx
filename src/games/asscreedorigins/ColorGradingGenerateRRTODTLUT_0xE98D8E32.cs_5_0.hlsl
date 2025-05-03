@@ -41,7 +41,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r0.xyz = r0.xyz * float3(0.548387051, 0.548387051, 0.548387051) + float3(-8.97393131, -8.97393131, -8.97393131);
   r0.xyz = exp2(r0.xyz);
 
-#if 0
+#if 1
   if (ColorGradingGenerateRRTODTLUT_constants.UseRec2020 != 0) {
     ColorGradingGenerateRRTODTLUT_Output[vThreadID] = float4(ApplyToneMapEncodePQ(r0.rgb, ColorGradingGenerateRRTODTLUT_constants.MaxNitsHDRTV, ColorGradingGenerateRRTODTLUT_constants.WhiteScale), 1.f);
     return;
