@@ -395,6 +395,43 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
+// Per game resource upgrades, where we need custom paramaters -- the sliders (output size/ratio/all) don't work
+void Expedition33Upgrades() {
+  // Portrait letterboxes screens
+  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      .old_format = reshade::api::format::r10g10b10a2_unorm,
+      .new_format = reshade::api::format::r16g16b16a16_float,
+      .use_resource_view_cloning = true,
+      .aspect_ratio = 2880.f / 2160.f,
+  });
+
+  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      .old_format = reshade::api::format::r10g10b10a2_unorm,
+      .new_format = reshade::api::format::r16g16b16a16_float,
+      .use_resource_view_cloning = true,
+      .aspect_ratio = 3840.f / 1608.f,
+  });
+  // DLAA support
+  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      .old_format = reshade::api::format::r10g10b10a2_unorm,
+      .new_format = reshade::api::format::r16g16b16a16_float,
+      .use_resource_view_cloning = true,
+      .aspect_ratio = 3044.f / 1712.f,
+  });
+}
+
+void AddGamePatches() {
+  auto process_path = renodx::utils::platform::GetCurrentProcessPath();
+  auto filename = process_path.filename().string();
+  auto product_name = renodx::utils::platform::GetProductName(process_path);
+
+  // Clair Obscur Expedition 33
+  if (product_name == "Expedition 33") {
+    Expedition33Upgrades();
+    reshade::log::message(reshade::log::level::info, std::format("Applied patches for {}.", product_name).c_str());
+  }
+}
+
 const auto UPGRADE_TYPE_NONE = 0.f;
 const auto UPGRADE_TYPE_OUTPUT_SIZE = 1.f;
 const auto UPGRADE_TYPE_OUTPUT_RATIO = 2.f;
@@ -810,42 +847,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             },
         };
 
-        // Per game resource upgrades, where we need custom paramaters -- the sliders (output size/ratio/all) don't work
-        auto process_path = renodx::utils::platform::GetCurrentProcessPath();
-        auto filename = process_path.filename().string();
-        auto product_name = renodx::utils::platform::GetProductName(process_path);
-
-        // Clair Obscur Expedition 33
-        if (product_name == "Expedition 33") {
-          // Portrait letterboxes screens
-          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-              .old_format = reshade::api::format::r10g10b10a2_unorm,
-              .new_format = reshade::api::format::r16g16b16a16_float,
-              .use_resource_view_cloning = true,
-              .aspect_ratio = 2880.f / 2160.f,
-          });
-
-          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-              .old_format = reshade::api::format::r10g10b10a2_unorm,
-              .new_format = reshade::api::format::r16g16b16a16_float,
-              .use_resource_view_cloning = true,
-              .aspect_ratio = 3840.f / 1608.f,
-          });
-          // DLAA support
-          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-              .old_format = reshade::api::format::r10g10b10a2_unorm,
-              .new_format = reshade::api::format::r16g16b16a16_float,
-              .use_resource_view_cloning = true,
-              .aspect_ratio = 3044.f / 1712.f,
-          });
-        }
-
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r10g10b10a2_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
             .dimensions = {.width = 32, .height = 32, .depth = 32},
             .resource_tag = 1.f,
         });
+
+        AddGamePatches();
 
         initialized = true;
       }
