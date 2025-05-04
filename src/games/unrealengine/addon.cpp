@@ -428,7 +428,7 @@ void AddGamePatches() {
   // Clair Obscur Expedition 33
   if (product_name == "Expedition 33") {
     Expedition33Upgrades();
-    reshade::log::message(reshade::log::level::info, std::format("Applied patches for {}.", product_name).c_str());
+    reshade::log::message(reshade::log::level::info, std::format("Applied patches for {}.", product_name + " || " + filename).c_str());
   }
 }
 
