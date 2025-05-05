@@ -396,7 +396,7 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 }
 
 // Per game resource upgrades, where we need custom paramaters -- the sliders (output size/ratio/all) don't work
-void Expedition33Upgrades() {
+void AddExpedition33Upgrades() {
   // Portrait letterboxes screens
   renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
       .old_format = reshade::api::format::r10g10b10a2_unorm,
@@ -427,8 +427,8 @@ void AddGamePatches() {
 
   // Clair Obscur Expedition 33
   if (product_name == "Expedition 33") {
-    Expedition33Upgrades();
-    reshade::log::message(reshade::log::level::info, std::format("Applied patches for {}.", product_name + " || " + filename).c_str());
+    AddExpedition33Upgrades();
+    reshade::log::message(reshade::log::level::info, std::format("Applied patches for {} ({}).", filename, product_name).c_str());
   }
 }
 
