@@ -1,20 +1,20 @@
 #include "./shared.h"
 
 //-----EFFECTS-----//
-/*float3 applyFilmGrain(float3 outputColor, float2 screen){
+float3 applyFilmGrain(float3 outputColor, float2 screen, float intensity){
   float3 grainedColor = renodx::effects::ApplyFilmGrain(
       outputColor,
       screen,
       injectedData.random,
-      injectedData.fxFilmGrain * 0.03f * injectedData.is_not_camera,
+      intensity * 0.03f,
 			1.f);
     return grainedColor;
 }
 
 float3 applyVignette(float3 inputColor, float2 screen, float slider) {
-  static float intensity = 1.f;	// internal
-  static float roundness = 1.15f;	// parameters
-  static float light = 0.1f;		// for now
+  static float intensity = 0.9f;  // internal
+  static float roundness = 1.15f;  // parameters
+  static float light = 0.15f;      // for now
   
 	float Vintensity = intensity * min(1, slider);	// Slider below 1 to Vintensity
 	float Vroundness = roundness * max(1, slider);	// Slider above 1 to Vroundness
@@ -25,43 +25,90 @@ float3 applyVignette(float3 inputColor, float2 screen, float slider) {
 	v = pow(v, Vroundness);
 	float3 output = inputColor * min(1, v + light);
 	return output;
-}*/
+}
+
+// based on https://github.com/aliasIsolation/aliasIsolation/blob/master/data/shaders/chromaticAberration_ps.hlsl
+float3 applyCA(Texture2D colorBuffer, SamplerState colorSampler, float2 texCoord, float intensity) {
+float3 output;
+uint screenWidth, screenHeight;
+colorBuffer.GetDimensions(screenWidth, screenHeight);
+float ca_amount = 0.018 * intensity;
+float2 center_offset = texCoord - float2(0.5, 0.5);
+ca_amount *= saturate(length(center_offset) * 2);
+int num_colors = max(3, int(max(screenWidth, screenHeight) * 0.075 * sqrt(ca_amount)));
+if (intensity == 0.f) {
+  output = colorBuffer.Sample(colorSampler, texCoord).rgb;
+} else {
+  output.g = colorBuffer.Sample(colorSampler, texCoord).g; // unchanged green
+  float offset = float(7 - num_colors * 0.5) * ca_amount / num_colors;
+  float2 sampleUvR = float2(0.5, 0.5) + center_offset * (1 + offset);
+  float2 sampleUvB = float2(0.5, 0.5) + center_offset * (1 - offset);
+  output.r = colorBuffer.Sample(colorSampler, sampleUvR).r;
+  output.b = colorBuffer.Sample(colorSampler, sampleUvB).b;
+  }
+return output;
+}
 
 //-----SCALING-----//
 float3 PostToneMapScale(float3 color) {
-    if(injectedData.toneMapGammaCorrection == 2.f){
-  color = renodx::color::srgb::EncodeSafe(color);
-  color = renodx::color::gamma::DecodeSafe(color, 2.4f);
-  color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-  color = renodx::color::gamma::EncodeSafe(color, 2.4f);
-  } else if(injectedData.toneMapGammaCorrection == 1.f){
-  color = renodx::color::srgb::EncodeSafe(color);
-  color = renodx::color::gamma::DecodeSafe(color, 2.2f);
-  color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-  color = renodx::color::gamma::EncodeSafe(color, 2.2f);
+  if (injectedData.toneMapGammaCorrection == 2.f) {
+    color = renodx::color::correct::GammaSafe(color, false, 2.4f);
+    color *= injectedData.toneMapGameNits / 80.f;
+    color = renodx::color::correct::GammaSafe(color, true, 2.4f);
+  } else if (injectedData.toneMapGammaCorrection == 1.f) {
+    color = renodx::color::correct::GammaSafe(color, false, 2.2f);
+    color *= injectedData.toneMapGameNits / 80.f;
+    color = renodx::color::correct::GammaSafe(color, true, 2.2f);
   } else {
-  color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-  color = renodx::color::srgb::EncodeSafe(color);
+    color *= injectedData.toneMapGameNits / 80.f;
+  }
+  return color;
+}
+
+float3 InvertToneMapScale(float3 color) {
+  if (injectedData.toneMapGammaCorrection == 2.f) {
+    color = renodx::color::correct::GammaSafe(color, false, 2.4f);
+    color *= 80.f / injectedData.toneMapGameNits;
+    color = renodx::color::correct::GammaSafe(color, true, 2.4f);
+  } else if (injectedData.toneMapGammaCorrection == 1.f) {
+    color = renodx::color::correct::GammaSafe(color, false, 2.2f);
+    color *= 80.f / injectedData.toneMapGameNits;
+    color = renodx::color::correct::GammaSafe(color, true, 2.2f);
+  } else {
+    color *= 80.f / injectedData.toneMapGameNits;
+  }
+  return color;
+}
+
+float3 UIScale(float3 color) {
+  if (injectedData.toneMapGammaCorrection == 2.f) {
+    color = renodx::color::gamma::Decode(color, 2.4f);
+    color *= injectedData.toneMapUINits / 80.f;
+    color = renodx::color::gamma::Encode(color, 2.4f);
+    color = renodx::color::srgb::Decode(color);
+  } else if (injectedData.toneMapGammaCorrection == 1.f) {
+    color = renodx::color::gamma::Decode(color, 2.2f);
+    color *= injectedData.toneMapUINits / 80.f;
+    color = renodx::color::gamma::Encode(color, 2.2f);
+    color = renodx::color::srgb::Decode(color);
+  } else {
+    color = renodx::color::srgb::Decode(color);
+    color *= injectedData.toneMapUINits / 80.f;
   }
   return color;
 }
 
 float3 FinalizeOutput(float3 color) {
-  	if(injectedData.toneMapGammaCorrection == 2.f){
-	color = renodx::color::gamma::DecodeSafe(color, 2.4f);
-  } else if(injectedData.toneMapGammaCorrection == 1.f){
-	color = renodx::color::gamma::DecodeSafe(color, 2.2f);
-  } else {
-	color = renodx::color::srgb::DecodeSafe(color);
+  if (injectedData.toneMapGammaCorrection == 2.f) {
+    color = renodx::color::correct::GammaSafe(color, false, 2.4f);
+  } else if (injectedData.toneMapGammaCorrection == 1.f) {
+    color = renodx::color::correct::GammaSafe(color, false, 2.2f);
   }
-  color *= injectedData.toneMapUINits;
-  color = min(color, injectedData.toneMapPeakNits);
-    if(injectedData.toneMapType == 0.f){
-  color = renodx::color::bt709::clamp::BT709(color);
+  if (injectedData.toneMapType == 0.f) {
+    color = renodx::color::bt709::clamp::BT709(color);
   } else {
-  color = renodx::color::bt709::clamp::BT2020(color);
+    color = renodx::color::bt709::clamp::BT2020(color);
   }
-  color /= 80.f;
   return color;
 }
 
@@ -89,28 +136,6 @@ float3 InverseToneMap(float3 color) {
 }
 
 //-----TONEMAP-----//
-float3 RenoDRTSmoothClamp(float3 untonemapped) {
-  renodx::tonemap::renodrt::Config renodrtSC_config = renodx::tonemap::renodrt::config::Create();
-  renodrtSC_config.nits_peak = 100.f;
-  renodrtSC_config.mid_gray_value = 0.18f;
-  renodrtSC_config.mid_gray_nits = 18.f;
-  renodrtSC_config.exposure = 1.f;
-  renodrtSC_config.highlights = 1.f;
-  renodrtSC_config.shadows = 1.f;
-  renodrtSC_config.contrast = 1.05f;
-  renodrtSC_config.saturation = 1.05f;
-  renodrtSC_config.dechroma = 0.f;
-  renodrtSC_config.flare = 0.f;
-  renodrtSC_config.hue_correction_strength = 0.f;
-  renodrtSC_config.hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::ICTCP;
-  renodrtSC_config.tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  renodrtSC_config.hue_correction_type = renodx::tonemap::renodrt::config::hue_correction_type::INPUT;
-  renodrtSC_config.working_color_space = 0u;
-  renodrtSC_config.per_channel = false;
-  float3 renoDRTColor = renodx::tonemap::renodrt::BT709(untonemapped, renodrtSC_config);
-  return renoDRTColor;
-}
-
 float UpgradeToneMapRatio(float ap1_color_hdr, float ap1_color_sdr, float ap1_post_process_color) {
   if (ap1_color_hdr < ap1_color_sdr) {
     // If substracting (user contrast or paperwhite) scale down instead
@@ -187,7 +212,7 @@ float3 Apply(float3 inputColor, renodx::tonemap::Config tm_config, renodx::lut::
 float3 vanillaTonemap(float3 color, float A, float CB, float DE, float B, float DF, float mEF, float LW){
   float3 numerator = mad(color, mad(A, color, CB), DE);  // x * (a * x + c * b) + d * e
   float3 denominator = mad(color, mad(A, color, B), DF);    // x * (a * x + b) + d * f
-  return (numerator / denominator + mEF) * LW;;
+  return (numerator / denominator + mEF) * LW;
 }
 
 float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState lutSampler, float4 Params0, float3 Params1){
@@ -208,7 +233,9 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
 			config.saturation = injectedData.colorGradeSaturation;
 			config.mid_gray_value = midGray;
 			config.mid_gray_nits = midGray * 100;
-      config.reno_drt_contrast = 1.1f;
+      config.reno_drt_highlights = 1.1f;
+      config.reno_drt_shadows = 1.03f;
+      config.reno_drt_contrast = 1.15f;
 			config.reno_drt_dechroma = injectedData.colorGradeDechroma;
 			config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
 			config.hue_correction_type = injectedData.toneMapPerChannel != 0.f

@@ -50,26 +50,16 @@ void main(
   r0.w = _ArtifactValues.z * r0.w;
   r0.xyz = r0.xyz * r0.www;
   r0.w = PostFxBloom__CurrentAutoExposureScaleTexture__TexObj__.Sample(PostFxBloom__CurrentAutoExposureScaleTexture__SampObj___s, float2(0.5,0.5)).x;
-  r1.xyzw = PostFxBloom__SourceTextureSampler__TexObj__.Sample(PostFxBloom__SourceTextureSampler__SampObj___s, v0.xy).xyzw;
-  r0.xyz = r1.xyz * lerp(1.f, r0.www, injectedData.fxAutoExposure) + r0.xyz;
+  r1.rgb = applyCA(PostFxBloom__SourceTextureSampler__TexObj__, PostFxBloom__SourceTextureSampler__SampObj___s, v0.xy, injectedData.fxChroma * injectedData.is_not_camera);
+  r1.w = PostFxBloom__SourceTextureSampler__TexObj__.Sample(PostFxBloom__SourceTextureSampler__SampObj___s, v0.xy).w;
+  r0.xyz = r1.xyz * r0.www + r0.xyz;
   o0.w = r1.w;
   r1.xyz = PostFxBloom__BloomSampler__TexObj__.Sample(PostFxBloom__BloomSampler__SampObj___s, v0.zw).xyz;
   r0.xyz = r1.xyz * injectedData.fxBloom + r0.xyz;
-    float3 untonemapped = r0.rgb;
-  r1.xyz = r0.xyz * _ToneMapParams0.xxx + _ToneMapParams0.yyy;
-  r1.xyz = r0.xyz * r1.xyz + _ToneMapParams0.zzz;
-  r2.xyz = r0.xyz * _ToneMapParams0.xxx + _ToneMapParams0.www;
-  r0.xyz = r0.xyz * r2.xyz + _ToneMapParams1.xxx;
-  r0.xyz = r1.xyz / r0.xyz;
-  r0.xyz = _ToneMapParams1.yyy + r0.xyz;
-  r0.xyz = _ToneMapParams1.zzz * r0.xyz;
-  r0.xyz = sqrt(r0.xyz);
-  r0.w = -1 + _ColorRemapTextureSize.x;
-  r0.xyz = r0.xyz * r0.www + float3(0.5,0.5,0.5);
-  r0.xyz = _ColorRemapTextureSize.zzz * r0.xyz;
-  r0.xyz = PostFxBloom__ColorRemapTexture__TexObj__.Sample(PostFxBloom__ColorRemapTexture__SampObj___s, r0.xyz).xyz;
-    o0.rgb = applyUserTonemap(untonemapped, PostFxBloom__ColorRemapTexture__TexObj__, PostFxBloom__ColorRemapTexture__SampObj___s,
-    _ToneMapParams0, _ToneMapParams1);
-    o0.rgb = PostToneMapScale(o0.rgb);
+    r0.rgb = applyVignette(r0.rgb, v0.xy, injectedData.fxVignette * injectedData.is_not_camera);
+    r0.rgb = applyUserTonemap(r0.rgb, PostFxBloom__ColorRemapTexture__TexObj__, PostFxBloom__ColorRemapTexture__SampObj___s,
+                              _ToneMapParams0, _ToneMapParams1);
+    r0.rgb = applyFilmGrain(r0.rgb, v0.xy, injectedData.fxFilmGrain * injectedData.is_not_camera);
+    o0.rgb = PostToneMapScale(r0.rgb);
   return;
 }

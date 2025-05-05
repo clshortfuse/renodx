@@ -48,6 +48,7 @@ void main(
   o0.xyz = _DesaturationFactor * r0.xyz + r0.www;
   o0.w = v0.w;
   o0 = saturate(o0);
+  o0.rgb = InverseToneMap(o0.rgb);
   o0.rgb = PostToneMapScale(o0.rgb);
   return;
 }
