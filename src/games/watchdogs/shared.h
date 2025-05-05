@@ -30,11 +30,14 @@ struct ShaderInjectData {
   float colorGradeLUTSampling;
   float upgradePerChannel;
   float fxBloom;
+  float fxProfiler;
   float fxAutoExposure;
-  //float fxVignette;
-  //float fxFilmGrain;
-  //float random;
-  //float is_not_camera;
+  float fxChroma;
+  float fxVignette;
+  float fxSharpen;
+  float fxFilmGrain;
+  float random;
+  float is_not_camera;
   bool has_loaded_title_menu;
 };
 

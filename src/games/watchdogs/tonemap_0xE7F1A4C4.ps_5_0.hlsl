@@ -22,19 +22,12 @@ cbuffer PostFxBloom : register(b0){
   float _LuminanceThreshold : packoffset(c18);
   float _PixelCountSAT : packoffset(c18.y);
 }
-
 SamplerState PostFxBloom__BloomSampler__SampObj___s : register(s0);
-SamplerState PostFxBloom__PostFxMaskTexture__SampObj___s : register(s1);
-SamplerState PostFxBloom__SourceTextureSampler__SampObj___s : register(s2);
-SamplerState PostFxBloom__ColorRemapTexture__SampObj___s : register(s3);
-SamplerState PostFxBloom__CurrentAutoExposureScaleTexture__SampObj___s : register(s4);
+SamplerState PostFxBloom__SourceTextureSampler__SampObj___s : register(s1);
+SamplerState PostFxBloom__ColorRemapTexture__SampObj___s : register(s2);
 Texture2D<float4> PostFxBloom__BloomSampler__TexObj__ : register(t0);
-Texture2D<float4> PostFxBloom__PostFxMaskTexture__TexObj__ : register(t1);
-Texture2D<float4> PostFxBloom__SourceTextureSampler__TexObj__ : register(t2);
-Texture3D<float4> PostFxBloom__ColorRemapTexture__TexObj__ : register(t3);
-Texture2D<float4> PostFxBloom__CurrentAutoExposureScaleTexture__TexObj__ : register(t4);
-
-#define cmp -
+Texture2D<float4> PostFxBloom__SourceTextureSampler__TexObj__ : register(t1);
+Texture3D<float4> PostFxBloom__ColorRemapTexture__TexObj__ : register(t2);
 
 void main(
   float4 v0 : TEXCOORD0,
@@ -47,22 +40,21 @@ void main(
   float4 fDest;
 
   r0.xyz = PostFxBloom__BloomSampler__TexObj__.Sample(PostFxBloom__BloomSampler__SampObj___s, v1.xy).xyz;
-    r0.a = renodx::color::y::from::BT709(r0.rgb);
+  r0.w = dot(float3(0.212500006,0.715399981,0.0720999986), r0.xyz);
   r1.x = -_ArtifactValues.y + r0.w;
   r0.w = saturate(r1.x / r0.w);
   r0.w = _ArtifactValues.z * r0.w;
   r0.xyz = r0.xyz * r0.www;
   r1.rgb = applyCA(PostFxBloom__SourceTextureSampler__TexObj__, PostFxBloom__SourceTextureSampler__SampObj___s, v0.xy, injectedData.fxChroma * injectedData.is_not_camera);
-  r0.w = PostFxBloom__CurrentAutoExposureScaleTexture__TexObj__.Sample(PostFxBloom__CurrentAutoExposureScaleTexture__SampObj___s, float2(0.5,0.5)).x;
-  r0.xyz = r1.xyz * r0.www + r0.xyz;
+  r1.w = PostFxBloom__SourceTextureSampler__TexObj__.Sample(PostFxBloom__SourceTextureSampler__SampObj___s, v0.xy).w;
+  r0.xyz = r1.xyz * lerp(1.f, _AutoExposureScale, injectedData.fxAutoExposure) + r0.xyz;
+  o0.w = r1.w;
   r1.xyz = PostFxBloom__BloomSampler__TexObj__.Sample(PostFxBloom__BloomSampler__SampObj___s, v0.zw).xyz;
   r0.xyz = r1.xyz * injectedData.fxBloom + r0.xyz;
-    r0.rgb = applyVignette(r0.rgb, v0.xy, injectedData.fxVignette * injectedData.is_not_camera);
+  r0.rgb = applyVignette(r0.rgb, v0.xy, injectedData.fxVignette * injectedData.is_not_camera);
   r0.rgb = applyUserTonemap(r0.rgb, PostFxBloom__ColorRemapTexture__TexObj__, PostFxBloom__ColorRemapTexture__SampObj___s,
                             _ToneMapParams0, _ToneMapParams1);
-    r0.rgb = applyFilmGrain(r0.rgb, v0.xy, injectedData.fxFilmGrain * injectedData.is_not_camera);
+  r0.rgb = applyFilmGrain(r0.rgb, v0.xy, injectedData.fxFilmGrain * injectedData.is_not_camera);
   o0.rgb = PostToneMapScale(r0.rgb);
-  r0.x = PostFxBloom__PostFxMaskTexture__TexObj__.Sample(PostFxBloom__PostFxMaskTexture__SampObj___s, v0.xy).w;
-  o0.w = 1 + -r0.x;
   return;
 }

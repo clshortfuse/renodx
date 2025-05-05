@@ -26,9 +26,10 @@ void main(
   r0.xyzw = PostFxSimple__TextureSampler__TexObj__.Sample(PostFxSimple__TextureSampler__SampObj___s, v0.xy).xyzw;
  // r0.xyz = log2(abs(r0.xyz));
   o0.w = r0.w;
-  //r0.xyz = _GammaBrightnessContrastParams.xxx * r0.xyz;
-  //r0.xyz = exp2(r0.xyz);
-  //o0.xyz = r0.xyz * _GammaBrightnessContrastParams.yyy + _GammaBrightnessContrastParams.zzz;
-    o0.rgb = FinalizeOutput(r0.rgb);
+  // r0.xyz = _GammaBrightnessContrastParams.xxx * r0.xyz;
+  // r0.xyz = exp2(r0.xyz);
+  // o0.xyz = r0.xyz * _GammaBrightnessContrastParams.yyy + _GammaBrightnessContrastParams.zzz;
+  o0.rgb = FinalizeOutput(r0.rgb);
+  //o0.rgb = r0.rgb;
   return;
 }
