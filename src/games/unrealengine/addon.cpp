@@ -808,6 +808,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         if (product_name == "Expedition 33") return true;
         if (product_name == "YKS") return true;  // Slitterhead
         if (product_name == "Split Fiction") return true;
+        if (product_name == "RSDragonwilds") return true;
+        if (product_name == "Enotria: The Last Song") return true;
 
         // UE DX12 has a 4 param root sig that crashes if modified. Track for now
         return std::ranges::any_of(params, [](auto param) {
