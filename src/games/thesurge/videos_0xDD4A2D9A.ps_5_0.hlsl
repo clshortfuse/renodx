@@ -36,7 +36,6 @@ void main(
   r0.xyz = saturate(v1.xyz * r0.xyz);
   o0.xyz = color_parameters2.www * r0.xyz;
   o0.w = v1.w;
-  o0.rgb = renodx::color::srgb::Encode(o0.rgb);
   o0.rgb = InverseToneMap(o0.rgb);
   o0.rgb = PostToneMapScale(o0.rgb);
   return;
