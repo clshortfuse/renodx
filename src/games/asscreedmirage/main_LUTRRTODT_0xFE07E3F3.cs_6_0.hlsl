@@ -18,18 +18,17 @@ struct SPIRV_Cross_Input {
 };
 
 void comp_main() {
-#if RENODX_TONE_MAP_TYPE            // ShortFuse ACES - HDR only
-  if (asuint(_15_m0[3u].x) != 0) {  // HDR
-    float3 untonemapped_ap1 = exp2((gl_GlobalInvocationID.rgb) * 0.64516127109527587890625f) + (-12.47393131256103515625f);
-    untonemapped_ap1 /= 5550.f;                             // match SDR exposure level
-    const float diffuse_white_nits = _15_m0[4u].x * 203.f;  // 203 paper white at exposure slider 0.0
-    const float peak_nits = _15_m0[3u].w;
+  if (RENODX_TONE_MAP_TYPE != 0.f) {  // ShortFuse ACES - HDR only
+    if (asuint(_15_m0[3u].x) != 0) {  // HDR
+      float3 untonemapped_ap1 = exp2((gl_GlobalInvocationID.rgb) * 0.64516127109527587890625f) + (-12.47393131256103515625f);
+      untonemapped_ap1 /= 5550.f;                             // match SDR exposure level
+      const float diffuse_white_nits = _15_m0[4u].x * 203.f;  // 203 paper white at exposure slider 0.0
+      const float peak_nits = _15_m0[3u].w;
 
-    _8[uint3(gl_GlobalInvocationID.rgb)] = float4(ApplyToneMapEncodePQ(untonemapped_ap1, peak_nits, diffuse_white_nits), 1.f);
-    return;
+      _8[uint3(gl_GlobalInvocationID.rgb)] = float4(ApplyToneMapEncodePQ(untonemapped_ap1, peak_nits, diffuse_white_nits), 1.f);
+      return;
+    }
   }
-
-#endif
 
   const float exposure = _15_m0[4u].x;  // 1.f at slider 0.0
   float _91 = exposure * exp2((float(gl_GlobalInvocationID.x) * 0.64516127109527587890625f) + (-12.47393131256103515625f));
