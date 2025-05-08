@@ -420,6 +420,15 @@ void AddExpedition33Upgrades() {
   });
 }
 
+void AddAvowedUpgrades() {
+  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      .old_format = reshade::api::format::r10g10b10a2_unorm,
+      .new_format = reshade::api::format::r16g16b16a16_float,
+      .use_resource_view_cloning = true,
+      .aspect_ratio = 4360.f / 2160.f,
+  });
+}
+
 void AddGamePatches() {
   auto process_path = renodx::utils::platform::GetCurrentProcessPath();
   auto filename = process_path.filename().string();
@@ -428,6 +437,12 @@ void AddGamePatches() {
   // Clair Obscur Expedition 33
   if (product_name == "Expedition 33") {
     AddExpedition33Upgrades();
+    reshade::log::message(reshade::log::level::info, std::format("Applied patches for {} ({}).", filename, product_name).c_str());
+  }
+
+  // Avowed
+  if (product_name == "Avowed") {
+    AddAvowedUpgrades();
     reshade::log::message(reshade::log::level::info, std::format("Applied patches for {} ({}).", filename, product_name).c_str());
   }
 }
@@ -475,6 +490,12 @@ const std::unordered_map<
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
+        {
+            "Avowed",
+            {
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
 };
 
 float g_dump_shaders = 0;
@@ -488,7 +509,7 @@ bool OnDrawForLUTDump(
     uint32_t instance_count,
     uint32_t first_vertex,
     uint32_t first_instance) {
-  if (g_dump_shaders == 0) return false;
+  if (g_dump_shaders == 0) return false; 
 
   auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
 
