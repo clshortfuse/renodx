@@ -33,13 +33,27 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 };
 
 const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
-    {"ColorGradeSaturation", 55.f},
-    {"ColorGradeBlowout", 33.f},
     {"FxBloom", 50.f},
 };
 
-
 renodx::utils::settings::Settings settings = {
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapType",
+        .binding = &shader_injection.tone_map_type,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Tone Mapper",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the tone mapper type",
+        .labels = {"Vanilla", "ACES"},
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Toggle in-game HDR setting or restart game to apply changes to Tone Mapper.",
+        .section = "Tone Mapping",
+        .tint = 0xFF0000,
+        .is_sticky = true,
+    },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
         .binding = &shader_injection.tone_map_exposure,
@@ -112,6 +126,23 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapUINits",
+        .binding = &shader_injection.graphics_white_nits,
+        .default_value = 203.f,
+        .label = "UI Brightness",
+        .section = "Miscellaneous",
+        .tooltip = "Sets the brightness of UI and HUD elements in nits. Requires a game restart to take effect.",
+        .min = 48.f,
+        .max = 500.f,
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Restart game to apply changes to UI Brightness.",
+        .section = "Miscellaneous",
+        .tint = 0xFF0000,
+        .is_sticky = true,
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -199,6 +230,7 @@ renodx::utils::settings::Settings settings = {
 };
 
 void OnPresetOff() {
+  renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
   renodx::utils::settings::UpdateSetting("ColorFilterStrength", 100.f);
   renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
@@ -207,6 +239,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("FxBloom", 100.f);
+  renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
 }
 
 }  // namespace
