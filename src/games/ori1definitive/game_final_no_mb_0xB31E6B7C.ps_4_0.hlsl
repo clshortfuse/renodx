@@ -1,6 +1,6 @@
 #include "./common.hlsl"
 
-// ---- Created with 3Dmigoto v1.4.1 on Sat Apr  5 00:32:38 2025
+// ---- Created with 3Dmigoto v1.4.1 on Thu May  8 19:21:04 2025
 Texture2D<float4> t2 : register(t2);
 
 Texture2D<float4> t1 : register(t1);
@@ -14,7 +14,7 @@ SamplerState s1_s : register(s1);
 SamplerState s0_s : register(s0);
 
 cbuffer cb0 : register(b0) {
-  float4 cb0[21];
+  float4 cb0[20];
 }
 
 /// Correct black levels after applying a black floor offset
@@ -41,56 +41,23 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xy = -cb0[16].xy + v1.xy;
+  r0.xy = v1.xy * float2(2, 2) + float2(-1, -1);
   r0.x = dot(r0.xy, r0.xy);
-  r0.x = saturate(cb0[16].w * r0.x);
-  r0.yz = -cb0[17].xy + v1.xy;
-  r0.y = dot(r0.yz, r0.yz);
-  r0.y = saturate(cb0[17].w * r0.y);
-  r0.x = r0.x * r0.y;
-  r0.yz = -cb0[18].xy + v1.xy;
-  r0.y = dot(r0.yz, r0.yz);
-  r0.y = saturate(cb0[18].w * r0.y);
-  r0.x = r0.x * r0.y;
-  r0.yz = v1.xy * float2(2, 2) + float2(-1, -1);
-  r0.y = dot(r0.yz, r0.yz);
-  r0.z = 2.5 * r0.y;
-  r0.yz = min(float2(1, 1), r0.yz);
-  r0.y = r0.y * cb0[8].x + 0.142849997;
-  r0.x = r0.x * r0.z;
-  r0.xz = cb0[20].xy * r0.xx;
+  r0.x = min(1, r0.x);
+  r0.x = cb0[8].x * r0.x;
+  r0.x = r0.x * 7 + 1;
   r1.xyzw = t0.Sample(s2_s, v2.xy).xyzw;
-  r1.xy = float2(-0.498039216, -0.498039216) + r1.xy;
-  r1.zw = r1.xy * float2(0.100000001, 0.100000001) + v1.xy;
-  r1.xy = r1.xy * float2(0.100000001, 0.100000001) + v2.xy;
-  r2.xyzw = t2.Sample(s1_s, r1.xy).xyzw;  // blur
+  r0.yz = float2(-0.498039216, -0.498039216) + r1.xy;
+  r1.xy = r0.yz * float2(0.100000001, 0.100000001) + v1.xy;
+  r0.yz = r0.yz * float2(0.100000001, 0.100000001) + v2.xy;
+  r2.xyzw = t2.Sample(s1_s, r0.yz).xyzw;
   r2.xyzw = saturate(-r2.xyzw * cb0[19].xxxx + float4(1, 1, 1, 1));
 
-  r3.xyzw = t1.Sample(s0_s, r1.zw).xyzw;  // game render
+  r1.xyzw = t1.Sample(s0_s, r1.xy).xyzw;  // game render
 
-  r0.w = r3.w * 0.5 + 1;
-  r1.xy = r0.xz * r0.ww + r1.zw;
-  r4.xyzw = t1.Sample(s0_s, r1.xy).xyzw;
-  r3.xyzw = r4.xyzw + r3.xyzw;
-  r1.xy = -r0.xz * r0.ww + r1.zw;
-  r0.xz = r0.xz * r0.ww;
-  r4.xyzw = t1.Sample(s0_s, r1.xy).xyzw;
-  r3.xyzw = r4.xyzw + r3.xyzw;
-  r1.xy = r0.xz * float2(2, 2) + r1.zw;
-  r4.xyzw = t1.Sample(s0_s, r1.xy).xyzw;
-  r3.xyzw = r4.xyzw + r3.xyzw;
-  r1.xy = -r0.xz * float2(2, 2) + r1.zw;
-  r4.xyzw = t1.Sample(s0_s, r1.xy).xyzw;
-  r3.xyzw = r4.xyzw + r3.xyzw;
-  r1.xy = r0.xz * float2(3, 3) + r1.zw;
-  r0.xz = -r0.xz * float2(3, 3) + r1.zw;
-  r4.xyzw = t1.Sample(s0_s, r0.xz).xyzw;
-  r1.xyzw = t1.Sample(s0_s, r1.xy).xyzw;
-  r1.xyzw = r3.xyzw + r1.xyzw;
-  r1.xyzw = r1.xyzw + r4.xyzw;
-  r0.xyzw = r1.xyzw * r0.yyyy;
+  r0.xyzw = r1.xyzw * r0.xxxx;
+
   r1.xyz = (cb0[15].xyz * r0.xyz);
-
   float3 color_hdr, color_sdr;
   if (RENODX_TONE_MAP_TYPE) {
     color_hdr = renodx::math::SignPow(r1.rgb, 2.2f);
@@ -124,7 +91,7 @@ void main(
 
   float3 color_pre_offset = r0.rgb;
 
-  r0.rgb += cb0[9].y;  // offset
+  r0.rgb += cb0[9].yyy; // offset
 
   float3 color_post_offset = r0.rgb;
 
