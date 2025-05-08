@@ -176,6 +176,14 @@ renodx::utils::settings::Settings settings = {
         },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("Toggle in-game HDR setting or restart game to apply changes to Tone Mapper.\n"
+                             "Restart game to apply changes to UI Brightness."),
+        .section = "Options",
+        .tint = 0xFF0000,
+        .is_sticky = true,
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
         .section = "Links",
