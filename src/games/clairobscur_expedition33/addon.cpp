@@ -206,10 +206,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::expected_constant_buffer_space = 50;
         renodx::mods::shader::expected_constant_buffer_index = 13;
 
-        // For puredark FG mod compatibility
+        // Has to be false for puredark FG mod compatibility
         renodx::mods::shader::use_pipeline_layout_cloning = false;
-        renodx::mods::shader::force_pipeline_cloning = false;
-        renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
+
+        renodx::mods::shader::force_pipeline_cloning = true;
+        renodx::mods::swapchain::swapchain_proxy_compatibility_mode = true;
 
         renodx::mods::swapchain::expected_constant_buffer_index = 13;
         renodx::mods::swapchain::expected_constant_buffer_space = 50;
