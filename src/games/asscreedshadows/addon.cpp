@@ -23,9 +23,9 @@ namespace {
 ShaderInjectData shader_injection;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xF83B5539),  // Local ToneMap
+    CustomShaderEntry(0xAE262C33),  // Local ToneMap
 
-    CustomShaderEntry(0x05D11E4F),  // Sample LUT + Bloom
+    CustomShaderEntry(0x7F7E20A0),  // Sample LUT + Bloom
     CustomShaderEntry(0xF65A634F),  // Color Grade + ToneMap LutBuilder
     CustomShaderEntry(0x551A03A4),  // ToneMap LutBuilder
 
@@ -34,18 +34,35 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 };
 
 const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
-    {"ToneMapLocalToneMapShoulder", 75.f},
-    {"ToneMapLocalToneMapToe", 50.f},
+    {"ToneMapType", 1.f},
+    {"ColorGradeShadows", 42.f},
     {"FxBloom", 33.f},
 };
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
+        .key = "ToneMapType",
+        .binding = &shader_injection.tone_map_type,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Tone Mapper",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the tone mapper type",
+        .labels = {"Vanilla", "Vanilla+", "ACES"},
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Toggle in-game HDR setting or restart game to apply changes to Tone Mapper.",
+        .section = "Tone Mapping",
+        .tint = 0xFF0000,
+        .is_sticky = true,
+    },
+    new renodx::utils::settings::Setting{
         .key = "ToneMapLocalToneMapShoulder",
         .binding = &shader_injection.custom_local_tonemap_shoulder,
         .default_value = 100.f,
         .label = "Local Tonemap Shoulder",
-        .section = "Tone Mapping",
+        .section = "Local Tone Mapping",
         .tooltip = "Adjust the strength of local tonemapping shoulder",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
@@ -55,7 +72,7 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.custom_local_tonemap_toe,
         .default_value = 100.f,
         .label = "Local Tonemap Toe",
-        .section = "Tone Mapping",
+        .section = "Local Tone Mapping",
         .tooltip = "Adjust the strength of local tonemapping toe",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
@@ -134,6 +151,23 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ToneMapUINits",
+        .binding = &shader_injection.graphics_white_nits,
+        .default_value = 203.f,
+        .label = "UI Brightness",
+        .section = "Miscellaneous",
+        .tooltip = "Sets the brightness of UI and HUD elements in nits. Requires a game restart to take effect.",
+        .min = 48.f,
+        .max = 500.f,
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Restart game to apply changes to UI Brightness.",
+        .section = "Miscellaneous",
+        .tint = 0xFF0000,
+        .is_sticky = true,
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -163,6 +197,14 @@ renodx::utils::settings::Settings settings = {
             }
           }
         },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("Toggle in-game HDR setting or restart game to apply changes to Tone Mapper.\n"
+                             "Restart game to apply changes to UI Brightness."),
+        .section = "Options",
+        .tint = 0xFF0000,
+        .is_sticky = true,
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -219,6 +261,7 @@ renodx::utils::settings::Settings settings = {
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
+      {"ToneMapType", 0.f},
       {"ToneMapLocalToneMapToe", 100.f},
       {"ToneMapLocalToneMapShoulder", 100.f},
       {"Exposure", 1.f},
@@ -229,6 +272,7 @@ void OnPresetOff() {
       {"ColorGradeBlowout", 0.f},
       {"ColorFilterStrength", 100.f},
       {"FxBloom", 100.f},
+      {"ToneMapUINits", 203.f},
   });
 }
 
