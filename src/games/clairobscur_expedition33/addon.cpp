@@ -77,6 +77,17 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
                                                                                                 .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
                                                                                             }),
                                                                                             new renodx::utils::settings::Setting{
+                                                                                                .key = "FxSharpness",
+                                                                                                .binding = &shader_injection.custom_sharpness,
+                                                                                                .default_value = 0.f,
+                                                                                                .label = "RCAS Sharpness",
+                                                                                                .section = "Effects",
+                                                                                                .tooltip = "Controls Lilium's RCAS Sharpness",
+                                                                                                .max = 100.f,
+                                                                                                .parse = [](float value) { return value == 0 ? 0.f : exp2(-(1.f - (value * 0.01f))); },
+                                                                                                .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
+                                                                                            },
+                                                                                            new renodx::utils::settings::Setting{
                                                                                                 .value_type = renodx::utils::settings::SettingValueType::BUTTON,
                                                                                                 .label = "HDR Den Discord",
                                                                                                 .section = "Links",
@@ -128,6 +139,11 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
                                                                                             new renodx::utils::settings::Setting{
                                                                                                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
                                                                                                 .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse.",
+                                                                                                .section = "About",
+                                                                                            },
+                                                                                            new renodx::utils::settings::Setting{
+                                                                                                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                                                                                                .label = "Credits to Lilium (& Musa) for RCAS!",
                                                                                                 .section = "About",
                                                                                             },
                                                                                             new renodx::utils::settings::Setting{

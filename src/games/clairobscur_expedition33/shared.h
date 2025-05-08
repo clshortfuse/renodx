@@ -57,6 +57,7 @@ struct ShaderInjectData {
   float custom_grain_strength;
   float custom_random;
   float custom_enable_post_filmgrain;
+  float custom_sharpness;
 };
 
 #ifndef __cplusplus
@@ -96,6 +97,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_ENABLE_POST_FILMGRAIN             shader_injection.custom_enable_post_filmgrain
 #define CUSTOM_DICE_PEAK                         2.f
 #define CUSTOM_DICE_SHOULDER                     0.5f
+#define CUSTOM_SHARPNESS                         shader_injection.custom_sharpness
 
 #include "../../shaders/renodx.hlsl"
 
