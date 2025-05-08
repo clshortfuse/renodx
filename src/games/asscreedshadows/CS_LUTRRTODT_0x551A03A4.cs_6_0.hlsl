@@ -36,21 +36,26 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID,
   float _16 = _15 + -12.473931312561035f;
   float _17 = exp2(_16);
 
-  float exposure = 32.f;  // cb0_space5_003z
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    float3 untonemapped = float3(_11, _14, _17) * 32.f;                  // use SDR exposure level
+    const float diffuse_white_nits = cb0_space5_003z * (203.f / 90.5f);  // default exposure was 90.5f, offset so 203 paper white at exposure 0.0
+    const float peak_nits = cb0_space5_003w;
+
+    float3 tonemapped = untonemapped;
+    if (RENODX_TONE_MAP_TYPE == 2.f) {
+      tonemapped = ApplyBlendedACESToneMapEncodePQ(untonemapped, peak_nits, diffuse_white_nits);  // ACES
+    } else {
+      tonemapped = ApplyBlendedToneMapEncodePQ(untonemapped, peak_nits, diffuse_white_nits);  // Vanilla SDR (by luminance) + Pumbo DICE
+    }
+    u0_space5[uint3(SV_DispatchThreadID.rgb)] = float4(tonemapped, 1.f);
+    return;
+  }
+
+  // Vanilla tonemapper
+  float exposure = cb0_space5_003z;
   float _20 = exposure * _11;
   float _21 = exposure * _14;
   float _22 = exposure * _17;
-
-#if 1  // apply SDR tonemapper
-  float3 untonemapped = float3(_20, _21, _22);
-  const float diffuse_white_nits = cb0_space5_003z * (203.f / 90.5f);  // default exposure was 90.5f, offset so 203 paper white at exposure 0.0
-  const float peak_nits = cb0_space5_003w;
-
-  float3 tonemapped = ApplyBlendedToneMapEncodePQ(untonemapped, peak_nits, diffuse_white_nits);  // Vanilla SDR + Frostbite
-  // float3 tonemapped = ApplyBlendedACESToneMapEncodePQ(untonemapped, peak_nits, diffuse_white_nits);  // ACES
-  u0_space5[uint3(SV_DispatchThreadID.rgb)] = float4(tonemapped, 1.f);
-  return;
-#endif
 
   float _359;
   float _360;

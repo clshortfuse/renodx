@@ -1,4 +1,4 @@
-#include "shared.h"
+#include "./shared.h"
 struct CustomDepthMapParams__Constants {
   int CustomDepthMapParams__Constants_000;
   int CustomDepthMapParams__Constants_004;
@@ -318,6 +318,7 @@ struct PassParams__Constants {
     int TerrainFrameParams2__Constants_168;
     int TerrainFrameParams2__Constants_172;
     int TerrainFrameParams2__Constants_176;
+    int TerrainFrameParams2__Constants_180;
   } PassParams__Constants_3584;
   struct ToolModeParams__Constants {
     float4 ToolModeParams__Constants_000;
@@ -336,13 +337,13 @@ struct PassParams__Constants {
     int4 ToolModeParams__Constants_172;
     float4 ToolModeParams__Constants_188;
     int ToolModeParams__Constants_204;
-  } PassParams__Constants_3764;
+  } PassParams__Constants_3768;
   struct UIPassParams__Constants {
     int UIPassParams__Constants_000;
-  } PassParams__Constants_3972;
+  } PassParams__Constants_3976;
   struct UnderwaterLightingParams__Constants {
     float3 UnderwaterLightingParams__Constants_000;
-  } PassParams__Constants_3976;
+  } PassParams__Constants_3980;
   struct VertexPickingParams__Constants {
     float2 VertexPickingParams__Constants_000[2];
     int2 VertexPickingParams__Constants_016;
@@ -351,189 +352,186 @@ struct PassParams__Constants {
     float VertexPickingParams__Constants_036;
     float VertexPickingParams__Constants_040;
     int VertexPickingParams__Constants_044;
-  } PassParams__Constants_3988;
+  } PassParams__Constants_3992;
   struct WaterBaseLevelParams__Constants {
     float4 WaterBaseLevelParams__Constants_000;
     float4 WaterBaseLevelParams__Constants_016;
     float4 WaterBaseLevelParams__Constants_032;
     float2 WaterBaseLevelParams__Constants_048;
-  } PassParams__Constants_4036;
+  } PassParams__Constants_4040;
   struct WaterCustomMeshParams__Constants {
     float3 WaterCustomMeshParams__Constants_000;
-  } PassParams__Constants_4092;
+  } PassParams__Constants_4096;
   struct WaterStamperTextureParams__Constants {
     float4 WaterStamperTextureParams__Constants_000;
     float WaterStamperTextureParams__Constants_016;
-  } PassParams__Constants_4104;
+  } PassParams__Constants_4108;
 };
+
 // clang-format on
 
-StructuredBuffer<float> t0_space1 : register(t0, space1);
+Texture2D<float4> t0 : register(t0);
 
-Texture2D<float4> t0_space3 : register(t0, space3);
+Texture2D<float4> t0_space2 : register(t0, space2);
 
-Texture3D<float2> t1_space3 : register(t1, space3);
+Texture3D<float4> t3_space2 : register(t3, space2);
 
-Texture2D<float> t2_space3 : register(t2, space3);
+Texture2D<float4> t11_space2 : register(t11, space2);
 
-// clang-format off
-cbuffer cb1 : register(b1) {
-  struct SkyLightingValues {
-    float4 SkyLightingValues_000[7];
-    float3 SkyLightingValues_112;
-  } FrameParams_skylighting_SkyConstants_cbuffer_000 : packoffset(c000.x);
-};
+Texture2D<float4> t12_space2 : register(t12, space2);
 
 cbuffer cb0_space1 : register(b0, space1) {
-  float cb0_space1_071x : packoffset(c071.x);
+  int cb0_space1_076x : packoffset(c076.x);
 };
 
-cbuffer cb0_space3 : register(b0, space3) {
-  struct LocalToneMappingBilateralGridParams__Constants {
-    float LocalToneMappingBilateralGridParams__Constants_000;
-    float LocalToneMappingBilateralGridParams__Constants_004;
-    float LocalToneMappingBilateralGridParams__Constants_008;
-    float LocalToneMappingBilateralGridParams__Constants_012;
-    float LocalToneMappingBilateralGridParams__Constants_016;
-    float LocalToneMappingBilateralGridParams__Constants_020;
-    float LocalToneMappingBilateralGridParams__Constants_024;
-    float LocalToneMappingBilateralGridParams__Constants_028;
-    float LocalToneMappingBilateralGridParams__Constants_032;
-    float LocalToneMappingBilateralGridParams__Constants_036;
-    float LocalToneMappingBilateralGridParams__Constants_040;
-    int LocalToneMappingBilateralGridParams__Constants_044;
-  } LocalToneMappingBilateralGridParams_cbuffer_000 : packoffset(c000.x);
+cbuffer cb0_space2 : register(b0, space2) {
+  float cb0_space2_000x : packoffset(c000.x);
+  float cb0_space2_007x : packoffset(c007.x);
+  int cb0_space2_007y : packoffset(c007.y);
+  float cb0_space2_008x : packoffset(c008.x);
+  float cb0_space2_008y : packoffset(c008.y);
+  float cb0_space2_008z : packoffset(c008.z);
 };
-// clang-format on
 
 SamplerState s0_space99 : register(s0, space99);
 
-SamplerState s8_space98 : register(s8, space98);
+SamplerState s0_space3 : register(s0, space3);
+
+SamplerState s1_space3 : register(s1, space3);
 
 float4 main(
     noperspective float4 SV_Position: SV_Position,
-    linear float2 TEXCOORD: TEXCOORD)
+    linear float2 TEXCOORD: TEXCOORD,
+    nointerpolation float TEXCOORD_1: TEXCOORD1)
     : SV_Target {
   float4 SV_Target;
+  float4 _16 = t0_space2.SampleLevel(s0_space99, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
+  float _20 = _16.x * TEXCOORD_1;
+  float _21 = _16.y * TEXCOORD_1;
+  float _22 = _16.z * TEXCOORD_1;
+  float4 _23 = t11_space2.SampleLevel(s1_space3, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
 
-  float4 _12 = t0_space3.SampleLevel(s0_space99, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
-  float _16 = dot(float3(_12.x, _12.y, _12.z), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
-  bool _17 = (_16 == 0.0f);
-  float _169;
-  if (!_17) {
-    float _21 = t0_space1.Load(3);
-    float _23 = t0_space1.Load(0);
-    float _27 = _21.x * 983.52001953125f;
-    float _28 = _27 * _23.x;
-    float _29 = _28 * cb0_space1_071x;
-    float _30 = log2(_29);
-    float _33 = LocalToneMappingBilateralGridParams_cbuffer_000.LocalToneMappingBilateralGridParams__Constants_000 * 0.5f;
-    float _34 = _30 - _33;
-    float _35 = 1.0f / LocalToneMappingBilateralGridParams_cbuffer_000.LocalToneMappingBilateralGridParams__Constants_000;
-    float _36 = _34 * _35;
-    bool _37 = (_16 > 9.99999993922529e-09f);
-    float _38 = _16 * 5464.0f;
-    float _39 = log2(_38);
-    float _40 = select(_37, _39, -14.159683227539062f);
-    float _41 = _40 - _34;
-    float _42 = _41 * _35;
-    float _43 = saturate(_42);
-    float2 _44 = t1_space3.SampleLevel(s8_space98, float3(TEXCOORD.x, TEXCOORD.y, _43), 0.0f);
-    float _47 = max(_44.y, 1.0000000116860974e-07f);
-    float _48 = _44.x / _47;
-    float _49 = _48 + _36;
-    float _50 = _49 / _35;
-    float _51 = t2_space3.SampleLevel(s8_space98, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
-    float _53 = _51.x * 5464.0f;
-    float _54 = log2(_53);
-    float _71 = dot(float4((FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[0].x), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[0].y), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[0].z), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[0].w)), float4(0.0f, 0.0f, 0.0f, 1.0f));
-    float _77 = dot(float4((FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[1].x), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[1].y), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[1].z), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[1].w)), float4(0.0f, 0.0f, 0.0f, 1.0f));
-    float _83 = dot(float4((FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[2].x), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[2].y), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[2].z), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[2].w)), float4(0.0f, 0.0f, 0.0f, 1.0f));
-    float _89 = dot(float4((FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[3].x), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[3].y), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[3].z), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[3].w)), float4(0.0f, 0.0f, 0.0f, 0.0f));
-    float _95 = dot(float4((FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[4].x), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[4].y), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[4].z), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[4].w)), float4(0.0f, 0.0f, 0.0f, 0.0f));
-    float _101 = dot(float4((FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[5].x), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[5].y), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[5].z), (FrameParams_skylighting_SkyConstants_cbuffer_000.SkyLightingValues_000[5].w)), float4(0.0f, 0.0f, 0.0f, 0.0f));
-    float _102 = _89 + _71;
-    float _103 = _95 + _77;
-    float _104 = _101 + _83;
-    float _105 = max(0.0f, _102);
-    float _106 = max(0.0f, _103);
-    float _107 = max(0.0f, _104);
-    float _108 = max(0.0f, _105);
-    float _109 = max(0.0f, _106);
-    float _110 = max(0.0f, _107);
-    float _111 = dot(float3(_108, _109, _110), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
-    float _112 = _21.x * 5464.0f;
-    float _113 = log2(_112);
-    float _114 = _111 * 5464.0f;
-    float _115 = log2(_114);
-    float _116 = _111 * 10928.0f;
-    float _117 = log2(_116);
-    float _118 = _115 - _113;
-    float _119 = _117 - _113;
-    float _120 = _119 * 6.0f;
-    float _121 = max(0.0f, _118);
-    float _122 = max(0.0f, _120);
-    float _123 = LocalToneMappingBilateralGridParams_cbuffer_000.LocalToneMappingBilateralGridParams__Constants_032 / LocalToneMappingBilateralGridParams_cbuffer_000.LocalToneMappingBilateralGridParams__Constants_004;
-    float _124 = LocalToneMappingBilateralGridParams_cbuffer_000.LocalToneMappingBilateralGridParams__Constants_036 / LocalToneMappingBilateralGridParams_cbuffer_000.LocalToneMappingBilateralGridParams__Constants_008;
-    float _125 = max(1.0f, _123);
-    float _126 = max(1.0f, _124);
-    float _127 = _121 * LocalToneMappingBilateralGridParams_cbuffer_000.LocalToneMappingBilateralGridParams__Constants_020;
-    float _128 = _122 * LocalToneMappingBilateralGridParams_cbuffer_000.LocalToneMappingBilateralGridParams__Constants_024;
-    float _129 = min(_127, _125);
-    float _130 = min(_128, _126);
-    float _131 = max(1.0f, _129);
-    float _132 = max(1.0f, _130);
-    float _133 = _121 * LocalToneMappingBilateralGridParams_cbuffer_000.LocalToneMappingBilateralGridParams__Constants_028;
-    float _134 = LocalToneMappingBilateralGridParams_cbuffer_000.LocalToneMappingBilateralGridParams__Constants_016 + _30;
-    float _135 = _134 - _133;
-    float _136 = _54 - _50;
-    float _137 = _136 * LocalToneMappingBilateralGridParams_cbuffer_000.LocalToneMappingBilateralGridParams__Constants_040;
-    float _138 = _137 + _50;
-    float _139 = _138 - _135;
-    float _140 = _40 - _138;
-    bool _141 = (_139 > 0.0f);
-    bool _142 = (_139 < 0.0f);
-    int _143 = (int)(uint)(_141);
-    int _144 = (int)(uint)(_142);
-    int _145 = _143 - _144;
-    int _146 = max(0, _145);
-    float _147 = float(_146);
-    float _148 = 1.0f - _147;
-    float _149 = _131 * LocalToneMappingBilateralGridParams_cbuffer_000.LocalToneMappingBilateralGridParams__Constants_004;
-    float _150 = _149 * _147;
-    float _151 = _132 * LocalToneMappingBilateralGridParams_cbuffer_000.LocalToneMappingBilateralGridParams__Constants_008;
+  _23.rgb *= CUSTOM_BLOOM;
 
-#if 1
-    _150 *= CUSTOM_LOCAL_TONEMAP_SHOULDER;
-    _151 *= CUSTOM_LOCAL_TONEMAP_TOE;
-#endif
-
-    float _152 = _151 * _148;
-    float _153 = 1.0f - _150;
-    float _154 = _153 - _152;
-    float _155 = _154 * _139;
-    float _156 = LocalToneMappingBilateralGridParams_cbuffer_000.LocalToneMappingBilateralGridParams__Constants_012 * _140;
-    float _157 = _135 + _156;
-    float _158 = _157 + _155;
-    float _159 = exp2(_158);
-    float _160 = _159 * 0.0001830161054385826f;
-    float _161 = _160 / _16;
-    int _162 = asint(_161);
-    int _163 = _162 & 2139095040;
-    bool _164 = ((uint)_163 > (uint)2139095039);
-    bool _165 = isinf(_161);
-    bool _166 = _165 || _164;
-    float _167 = select(_166, 1.0f, _161);
-    _169 = _167;
+  float _28 = _23.x + _20;
+  float _29 = _23.y + _21;
+  float _30 = _23.z + _22;
+  bool _33 = (cb0_space2_007y == 0);
+  float _53;
+  float _54;
+  float _55;
+  float _126;
+  float _127;
+  float _128;
+  if (!_33) {
+    float4 _35 = t12_space2.SampleLevel(s1_space3, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
+    float _39 = _35.x * _23.x;
+    float _40 = _35.y * _23.y;
+    float _41 = _35.z * _23.z;
+    float _46 = _39 * cb0_space2_008x;
+    float _47 = _40 * cb0_space2_008y;
+    float _48 = _41 * cb0_space2_008z;
+    float _49 = _46 + _28;
+    float _50 = _47 + _29;
+    float _51 = _48 + _30;
+    _53 = _49;
+    _54 = _50;
+    _55 = _51;
   } else {
-    _169 = 1.0f;
+    _53 = _28;
+    _54 = _29;
+    _55 = _30;
   }
-  float _170 = _169 * _12.x;
-  float _171 = _169 * _12.y;
-  float _172 = _169 * _12.z;
-  SV_Target.x = _170;
-  SV_Target.y = _171;
-  SV_Target.z = _172;
+  float _58 = cb0_space2_007x * _23.w;
+  float _59 = _58 + 1.0f;
+  float _60 = 1.0f / _59;
+  float _61 = _60 * _53;
+  float _62 = _60 * _54;
+  float _63 = _60 * _55;
+  bool _66 = !(cb0_space2_000x == 0.0f);
+  if (_66) {
+    float _68 = TEXCOORD.x + -0.5f;
+    float _69 = TEXCOORD.y + -0.5f;
+    float _70 = dot(float2(_68, _69), float2(_68, _69));
+    float _71 = 1.0f - _70;
+    float _72 = saturate(_71);
+    float _73 = log2(_72);
+    float _74 = _73 * cb0_space2_000x;
+    float _75 = exp2(_74);
+    uint _78 = (int)(cb0_space1_076x) + 41451437u;
+    uint _79 = uint(SV_Position.x);
+    uint _80 = uint(SV_Position.y);
+    uint _81 = _78 * 1215282323;
+    uint _82 = _81 + -200870954u;
+    uint _83 = _82 << 16;
+    int _84 = (uint)(_82) >> 16;
+    int _85 = _83 | _84;
+    uint _86 = _85 * _82;
+    uint _87 = _82 + _79;
+    uint _88 = _87 + _86;
+    uint _89 = _84 + _80;
+    int _90 = _88 & 63;
+    int _91 = _89 & 63;
+    float4 _92 = t0.Load(int3(_90, _91, 0));
+    uint _95 = _78 * -1935564855;
+    uint _96 = _95 + 706565374u;
+    uint _97 = _96 << 16;
+    int _98 = (uint)(_96) >> 16;
+    int _99 = _97 | _98;
+    uint _100 = _99 * _96;
+    uint _101 = _96 + _79;
+    uint _102 = _101 + _100;
+    uint _103 = _98 + _80;
+    int _104 = _102 & 63;
+    int _105 = _103 & 63;
+    float4 _106 = t0.Load(int3(_104, _105, 0));
+    float _108 = _75 * 0.0625f;
+    float _109 = _75 * 0.125f;
+    float _110 = _92.x + -0.5f;
+    float _111 = _92.y + -0.5f;
+    float _112 = _106.x + -0.5f;
+    float _113 = _108 * _110;
+    float _114 = _108 * _111;
+    float _115 = _109 * _112;
+    float _116 = _113 + _75;
+    float _117 = _114 + _75;
+    float _118 = _115 + _75;
+    float _119 = max(0.0f, _116);
+    float _120 = max(0.0f, _117);
+    float _121 = max(0.0f, _118);
+    float _122 = _119 * _61;
+    float _123 = _120 * _62;
+    float _124 = _121 * _63;
+    _126 = _122;
+    _127 = _123;
+    _128 = _124;
+  } else {
+    _126 = _61;
+    _127 = _62;
+    _128 = _63;
+  }
+  float _129 = log2(_126);
+  float _130 = _129 * 0.05000000074505806f;
+  float _131 = _130 + 0.6236965656280518f;
+  float _132 = log2(_127);
+  float _133 = _132 * 0.05000000074505806f;
+  float _134 = _133 + 0.6236965656280518f;
+  float _135 = log2(_128);
+  float _136 = _135 * 0.05000000074505806f;
+  float _137 = _136 + 0.6236965656280518f;
+  float _138 = saturate(_131);
+  float _139 = saturate(_134);
+  float _140 = saturate(_137);
+  float _141 = _138 * 0.96875f;
+  float _142 = _139 * 0.96875f;
+  float _143 = _140 * 0.96875f;
+  float _144 = _141 + 0.015625f;
+  float _145 = _142 + 0.015625f;
+  float _146 = _143 + 0.015625f;
+  float4 _147 = t3_space2.SampleLevel(s0_space3, float3(_144, _145, _146), 0.0f);
+  SV_Target.x = _147.x;
+  SV_Target.y = _147.y;
+  SV_Target.z = _147.z;
   SV_Target.w = 1.0f;
   return SV_Target;
 }
