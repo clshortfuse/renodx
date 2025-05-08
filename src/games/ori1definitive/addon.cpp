@@ -61,6 +61,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
     CustomShaderEntry(0x470BECFA),  // post processing ubershader
     CustomShaderEntry(0x52BC2F1B),  // final
+    CustomShaderEntry(0xB31E6B7C),  // final - no motion blur
     CustomShaderEntry(0x591107A5),  // video final
 
     // UI
