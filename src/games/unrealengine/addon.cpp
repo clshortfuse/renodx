@@ -434,22 +434,16 @@ void AddGamePatches() {
   auto filename = process_path.filename().string();
   auto product_name = renodx::utils::platform::GetProductName(process_path);
 
-  // Clair Obscur Expedition 33
   if (product_name == "Expedition 33") {
     AddExpedition33Upgrades();
-    reshade::log::message(reshade::log::level::info, std::format("Applied patches for {} ({}).", filename, product_name).c_str());
-  }
-
-  // Avowed
-  if (product_name == "Avowed") {
+  } else if (product_name == "Avowed") {
     AddAvowedUpgrades();
-    reshade::log::message(reshade::log::level::info, std::format("Applied patches for {} ({}).", filename, product_name).c_str());
-  }
-
-  if (product_name == "InfinityNikki") {
+  } else if (product_name == "InfinityNikki") {
     renodx::mods::swapchain::ignored_window_class_names.emplace("bridge");  // Dummy window created by PerfSight.dll
-    reshade::log::message(reshade::log::level::info, std::format("Applied patches for {} ({}).", filename, product_name).c_str());
+  } else {
+    return;
   }
+  reshade::log::message(reshade::log::level::info, std::format("Applied patches for {} ({}).", filename, product_name).c_str());
 }
 
 const auto UPGRADE_TYPE_NONE = 0.f;
@@ -520,7 +514,7 @@ bool OnDrawForLUTDump(
     uint32_t instance_count,
     uint32_t first_vertex,
     uint32_t first_instance) {
-  if (g_dump_shaders == 0) return false; 
+  if (g_dump_shaders == 0) return false;
 
   auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
 
