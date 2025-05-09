@@ -20,14 +20,7 @@
 
 namespace {
 
-renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x47A1239F),
-    CustomShaderEntry(0xAF565E99),
-    CustomShaderEntry(0x98ADAF37),
-    CustomShaderEntry(0x89BA88BC),
-    CustomShaderEntry(0x5439FB55),
-    CustomShaderEntry(0x55B0DCB7),
-};
+renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 const std::string build_date = __DATE__;
