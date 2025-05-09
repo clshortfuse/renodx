@@ -46,7 +46,7 @@ float3 UIScale(float3 color) {
     color = renodx::color::correct::Gamma(color, false, 2.4f);
     color *= injectedData.toneMapUINits / 80.f;
     color = renodx::color::correct::Gamma(color, true, 2.4f);
-  } else if (injectedData.toneMapGammaCorrection == 2.f) {
+  } else if (injectedData.toneMapGammaCorrection == 1.f) {
     color = renodx::color::correct::Gamma(color, false, 2.2f);
     color *= injectedData.toneMapUINits / 80.f;
     color = renodx::color::correct::Gamma(color, true, 2.2f);
