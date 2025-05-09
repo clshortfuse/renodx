@@ -51,8 +51,6 @@ Texture3D<float4> colorGradingTexture : register(t1);
 Texture2D<float4> distortionTexture : register(t2);
 Texture2D<float4> tonemapBloomTexture : register(t3);
 
-#define cmp -
-
 void main(
     float4 v0: SV_Position0,
     float4 v1: TEXCOORD0,
@@ -81,13 +79,15 @@ void main(
   float3 untonemapped = r0.rgb;
   float midGray = renodx::color::y::from::BT709(renodx::tonemap::HejlDawson(0.18f));
   float3 LUTless = renodx::tonemap::HejlDawson(untonemapped);
-  r0.xyz = r0.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
-  r0.xyz = colorGradingTexture.Sample(colorGradingTextureSampler_s, r0.xyz).xyz;
   o0.rgb = applyUserTonemap(untonemapped, colorGradingTexture, colorGradingTextureSampler_s, LUTless, midGray);
-  o0.a = renodx::color::y::from::BT709(o0.rgb);
+  if (!injectedData.resScaleCheck) {
   if (injectedData.fxFilmGrain > 0.f) {
     o0.rgb = applyFilmGrain(o0.rgb, screen, injectedData.fxFilmGrainType != 0.f);
   }
   o0.rgb = PostToneMapScale(o0.rgb);
+  } else {
+    o0.rgb = renodx::color::srgb::EncodeSafe(o0.rgb);
+  }
+  o0.a = renodx::color::y::from::BT709(o0.rgb);
   return;
 }

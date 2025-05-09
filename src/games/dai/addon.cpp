@@ -66,6 +66,8 @@ ShaderInjectData shader_injection;
         },                                     \
   }
 
+bool isResScaleEnabled = false;
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x5545BDF0),  // Title Menu background video, pre-rendered cutscenes
     CustomShaderEntry(0xE8AAA41F),  // UI alpha
@@ -82,8 +84,12 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     UpgradeRTVReplaceShader(0x298147DD),  // tonemapper Cutscene 2                                 //
     UpgradeRTVReplaceShader(0xEE7DEA72),  // tonemapper Cutscene 3                      same but different tonemapper
     UpgradeRTVReplaceShader(0xE30CE1FB),  // tonemapper Cutscene 4                                  //
-    UpgradeRTVShader(0xC372881a),         // FXAA
-    UpgradeRTVShader(0x79766F9D),         // Resolution Scale 1
+    UpgradeRTVShader(0xC372881A),         // FXAA
+    UpgradeRTVShader(0x79766F9D),         // Resolution Scale 1st pass
+    CustomShaderEntryCallback(0xE6C75B8E, [](reshade::api::command_list* cmd_list) {  // Resolution Scale 2nd pass
+    isResScaleEnabled = true;
+    return true;
+    }),
 };
 
 float current_settings_mode = 0;
@@ -429,10 +435,11 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
           renodx::utils::settings::UpdateSetting("colorGradeShadows", 55.f);
           renodx::utils::settings::UpdateSetting("colorGradeContrast", 65.f);
-          renodx::utils::settings::UpdateSetting("colorGradeSaturation", 60.f);
+          renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
           renodx::utils::settings::UpdateSetting("colorGradeBlowout", 65.f);
-          renodx::utils::settings::UpdateSetting("colorGradeDechroma", 65.f);
+          renodx::utils::settings::UpdateSetting("colorGradeDechroma", 35.f);
           renodx::utils::settings::UpdateSetting("colorGradeFlare", 50.f);
+          renodx::utils::settings::UpdateSetting("colorGradeClip", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f);},
     },
@@ -554,6 +561,8 @@ void OnPresent(
   shader_injection.random_1 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
   shader_injection.random_2 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
   shader_injection.random_3 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
+    shader_injection.resScaleCheck = isResScaleEnabled;
+    isResScaleEnabled = false;
 }
 
 }  // namespace
