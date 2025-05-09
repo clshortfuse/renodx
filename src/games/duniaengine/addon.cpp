@@ -702,7 +702,6 @@ void OnPresent(
     if(game == 1){
       settings[1]->labels = {"Vanilla", "None", "Frostbite", "RenoDRT (Daniele)", "RenoDRT (Reinhard)", "DICE"};
       settings[6]->is_enabled = []() { return shader_injection.toneMapType >= 3.f; };
-      settings[8]->is_enabled = []() { return shader_injection.toneMapType >= 2.f; };
       settings[10]->is_enabled = []() { return shader_injection.toneMapType >= 2.f; };
       settings[11]->is_visible = []() { return shader_injection.toneMapType == 2.f || shader_injection.toneMapType == 5.f ; },
       settings[17]->is_enabled = []() { return shader_injection.toneMapType >= 2.f; };

@@ -1391,7 +1391,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Hue Processor",
         .section = "Tone Mapping",
         .labels = {"OKLab", "ICtCp", "darktable UCS"},
-        .is_enabled = []() { return shader_injection.toneMapType >= 2.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
@@ -1782,7 +1782,6 @@ void OnPresent(
     game_check = true;
     if(game >= 3){
     settings[1]->labels = {"Vanilla", "None", "ACES", "RenoDRT (Daniele)", "RenoDRT (Reinhard)"};
-    settings[7]->is_enabled = []() { return shader_injection.toneMapType >= 3.f; };
     settings[9]->is_enabled = []() { return shader_injection.toneMapType >= 3.f; };
     settings[10]->is_visible = []() { return false; };
     settings[16]->is_enabled = []() { return shader_injection.toneMapType >= 3.f; };

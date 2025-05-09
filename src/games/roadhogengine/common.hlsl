@@ -110,32 +110,17 @@ float3 applyFrostbite(float3 input, renodx::tonemap::Config FbConfig, bool sdr =
   }
   float y = renodx::color::y::from::BT709(color * FbConfig.exposure);
   color = renodx::color::grade::UserColorGrading(color, FbConfig.exposure, FbConfig.highlights, FbConfig.shadows, FbConfig.contrast);
-  color = renodx::tonemap::frostbite::BT709(color, FbPeak, injectedData.toneMapShoulderStart, injectedData.colorGradeBlowout, injectedData.toneMapHueCorrection);
+  color = renodx::tonemap::frostbite::BT709(color, FbPeak, injectedData.toneMapShoulderStart, injectedData.colorGradeBlowout / 2.f, injectedData.toneMapHueCorrection);
 
   if (FbConfig.saturation != 1.f || FbConfig.reno_drt_dechroma != 0.f) {
-    float3 perceptual_new;
-
-    if (FbConfig.reno_drt_hue_correction_method == 0u) {
-      perceptual_new = renodx::color::oklab::from::BT709(color);
-    } else if (FbConfig.reno_drt_hue_correction_method == 1u) {
-      perceptual_new = renodx::color::ictcp::from::BT709(color);
-    } else if (FbConfig.reno_drt_hue_correction_method == 2u) {
-      perceptual_new = renodx::color::dtucs::uvY::from::BT709(color).zxy;
-    }
+    float3 perceptual_new = renodx::color::ictcp::from::BT709(color);
 
     if (FbConfig.reno_drt_dechroma != 0.f) {
       perceptual_new.yz *= lerp(1.f, 0.f, saturate(pow(y / (10000.f / 100.f), (1.f - FbConfig.reno_drt_dechroma))));
     }
-
     perceptual_new.yz *= FbConfig.saturation;
 
-    if (FbConfig.reno_drt_hue_correction_method == 0u) {
-      color = renodx::color::bt709::from::OkLab(perceptual_new);
-    } else if (FbConfig.reno_drt_hue_correction_method == 1u) {
       color = renodx::color::bt709::from::ICtCp(perceptual_new);
-    } else if (FbConfig.reno_drt_hue_correction_method == 2u) {
-      color = renodx::color::bt709::from::dtucs::uvY(perceptual_new.yzx);
-    }
   }
   color = renodx::color::bt709::clamp::AP1(color);
   return color;
