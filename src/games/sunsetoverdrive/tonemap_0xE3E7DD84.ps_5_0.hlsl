@@ -84,6 +84,5 @@ void main(
   r0.w = saturate(r0.w * g_TM_VignetteParams.y + g_TM_VignetteParams.z);
   o0.xyz = r0.xyz * r0.www;
   o0.w = 1;
-  o0.rgb = PostToneMapScale(o0.rgb);
   return;
 }

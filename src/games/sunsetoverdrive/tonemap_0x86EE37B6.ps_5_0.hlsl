@@ -66,6 +66,5 @@ void main(
   r0.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
   o0.xyz = r0.xyz;
   o0.w = 1;
-  o0.rgb = PostToneMapScale(o0.rgb);
   return;
 }

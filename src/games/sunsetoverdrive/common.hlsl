@@ -38,7 +38,13 @@ float3 FinalizeOutput(float3 color) {
     color = renodx::color::srgb::DecodeSafe(color);
   }
   color *= injectedData.toneMapUINits;
-  //color = min(color, injectedData.toneMapPeakNits);
+  if (injectedData.toneMapType != 1.f) {
+    float y_max = injectedData.toneMapPeakNits;
+    float y = renodx::color::y::from::BT709(abs(color));
+    if (y > y_max) {
+      color *= y_max / y;
+    }
+  }
   if (injectedData.toneMapType == 0.f) {
     color = renodx::color::bt709::clamp::BT709(color);
   } else {
@@ -137,7 +143,7 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
   config.reno_drt_contrast = 1.5f;
-  config.reno_drt_saturation = 1.1f;
+  config.reno_drt_shadows = 1.2f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
@@ -216,7 +222,7 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
   config.reno_drt_contrast = 1.5f;
-  config.reno_drt_saturation = 1.1f;
+  config.reno_drt_shadows = 1.2f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
