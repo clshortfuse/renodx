@@ -278,6 +278,16 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Github Discussions",
+        .section = "Links",
+        .group = "button-line-2",
+        .tint = 0x2B3137,
+        .on_change = []() {
+          renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx/discussions/223");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Musa's Ko-Fi",
         .section = "Links",
         .group = "button-line-3",
