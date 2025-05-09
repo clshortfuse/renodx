@@ -247,6 +247,12 @@ static void LogLayout(
             case reshade::api::descriptor_type::texture_unordered_access_view:
               s << "TUAV";
               break;
+            case reshade::api::descriptor_type::buffer_shader_resource_view:
+              s << "BSRV";
+              break;
+            case reshade::api::descriptor_type::buffer_unordered_access_view:
+              s << "BUAV";
+              break;
             case reshade::api::descriptor_type::constant_buffer:
               s << "CBV";
               break;
@@ -1111,9 +1117,8 @@ static void OnPushDescriptors(
         // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
         break;
       }
-      case reshade::api::descriptor_type::buffer_shader_resource_view:
-
-      case reshade::api::descriptor_type::shader_resource_view: {
+      case reshade::api::descriptor_type::texture_shader_resource_view:
+      case reshade::api::descriptor_type::buffer_shader_resource_view:  {
         s << log_heap();
         auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
         s << ", shaderrsv: " << PRINT_PTR(item.handle);
@@ -1121,9 +1126,8 @@ static void OnPushDescriptors(
         // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
         break;
       }
-      case reshade::api::descriptor_type::buffer_unordered_access_view:
-
-      case reshade::api::descriptor_type::unordered_access_view: {
+      case reshade::api::descriptor_type::texture_unordered_access_view:
+      case reshade::api::descriptor_type::buffer_unordered_access_view:  {
         s << log_heap();
         auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
         s << ", uav: " << PRINT_PTR(item.handle);
@@ -1194,18 +1198,18 @@ static void OnBindDescriptorTables(
       if (range.count == UINT32_MAX) continue;
 
       switch (range.type) {
-        case reshade::api::descriptor_type::shader_resource_view:
         case reshade::api::descriptor_type::sampler_with_resource_view:
+        case reshade::api::descriptor_type::texture_shader_resource_view:
+        case reshade::api::descriptor_type::texture_unordered_access_view:
         case reshade::api::descriptor_type::buffer_shader_resource_view:
-        case reshade::api::descriptor_type::unordered_access_view:
+        case reshade::api::descriptor_type::buffer_unordered_access_view:
+        case reshade::api::descriptor_type::acceleration_structure:
           break;
         default:
           assert(false);
         case reshade::api::descriptor_type::sampler:
-        case reshade::api::descriptor_type::buffer_unordered_access_view:
         case reshade::api::descriptor_type::constant_buffer:
         case reshade::api::descriptor_type::shader_storage_buffer:
-        case reshade::api::descriptor_type::acceleration_structure:
           continue;
       }
 
@@ -1380,7 +1384,7 @@ static bool OnUpdateDescriptorTables(
           // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
           break;
         }
-        case reshade::api::descriptor_type::shader_resource_view: {
+        case reshade::api::descriptor_type::texture_shader_resource_view: {
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
           s << ", srv: " << PRINT_PTR(item.handle);
           auto* data = renodx::utils::data::Get<DeviceData>(device);
@@ -1389,7 +1393,7 @@ static bool OnUpdateDescriptorTables(
           // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
           break;
         }
-        case reshade::api::descriptor_type::unordered_access_view: {
+        case reshade::api::descriptor_type::texture_unordered_access_view: {
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
           s << ", uav: " << PRINT_PTR(item.handle);
           auto* data = renodx::utils::data::Get<DeviceData>(device);

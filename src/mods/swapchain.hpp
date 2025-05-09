@@ -259,11 +259,11 @@ static reshade::api::descriptor_table_update CloneDescriptorUpdateWithResourceVi
       };
       break;
     }
+    case reshade::api::descriptor_type::texture_shader_resource_view:
+    case reshade::api::descriptor_type::texture_unordered_access_view:
     case reshade::api::descriptor_type::buffer_shader_resource_view:
     case reshade::api::descriptor_type::buffer_unordered_access_view:
-    case reshade::api::descriptor_type::shader_resource_view:
-
-    case reshade::api::descriptor_type::unordered_access_view: {
+    case reshade::api::descriptor_type::acceleration_structure:        {
       return reshade::api::descriptor_table_update{
           .table = update.table,
           .binding = update.binding + index,
@@ -2016,10 +2016,11 @@ inline bool OnUpdateDescriptorTables(
             }
 
           } break;
+          case reshade::api::descriptor_type::texture_shader_resource_view:
+          case reshade::api::descriptor_type::texture_unordered_access_view:
           case reshade::api::descriptor_type::buffer_shader_resource_view:
           case reshade::api::descriptor_type::buffer_unordered_access_view:
-          case reshade::api::descriptor_type::shader_resource_view:
-          case reshade::api::descriptor_type::unordered_access_view:        {
+          case reshade::api::descriptor_type::acceleration_structure:        {
             auto resource_view = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
             if (resource_view.handle == 0u) continue;
 
@@ -2064,10 +2065,11 @@ inline bool OnUpdateDescriptorTables(
         // }
         break;
       }
+      case reshade::api::descriptor_type::texture_shader_resource_view:
+      case reshade::api::descriptor_type::texture_unordered_access_view:
       case reshade::api::descriptor_type::buffer_shader_resource_view:
       case reshade::api::descriptor_type::buffer_unordered_access_view:
-      case reshade::api::descriptor_type::shader_resource_view:
-      case reshade::api::descriptor_type::unordered_access_view:        {
+      case reshade::api::descriptor_type::acceleration_structure:        {
         auto resource_view_clone = GetResourceViewClone(info);
         if (resource_view_clone.handle == 0u) continue;
 #ifdef DEBUG_LEVEL_1
@@ -2399,10 +2401,11 @@ inline void OnPushDescriptors(
         changed = true;
         break;
       }
+      case reshade::api::descriptor_type::texture_shader_resource_view:
+      case reshade::api::descriptor_type::texture_unordered_access_view:
       case reshade::api::descriptor_type::buffer_shader_resource_view:
       case reshade::api::descriptor_type::buffer_unordered_access_view:
-      case reshade::api::descriptor_type::shader_resource_view:
-      case reshade::api::descriptor_type::unordered_access_view:        {
+      case reshade::api::descriptor_type::acceleration_structure:        {
         auto resource_view = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
         if (resource_view.handle == 0) continue;
         auto clone = GetResourceViewClone(resource_view);

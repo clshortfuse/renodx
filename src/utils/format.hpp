@@ -117,16 +117,16 @@ inline std::ostream& operator<<(std::ostream& os, const reshade::api::pipeline_s
 
 inline std::ostream& operator<<(std::ostream& os, const reshade::api::descriptor_type value) {
   switch (value) {
-    case reshade::api::descriptor_type::sampler:                      return os << "sampler";
-    case reshade::api::descriptor_type::sampler_with_resource_view:   return os << "sampler_with_resource_view";
-    case reshade::api::descriptor_type::shader_resource_view:         return os << "shader_resource_view";
-    case reshade::api::descriptor_type::unordered_access_view:        return os << "unordered_access_view";
-    case reshade::api::descriptor_type::buffer_shader_resource_view:  return os << "buffer_shader_resource_view";
-    case reshade::api::descriptor_type::buffer_unordered_access_view: return os << "buffer_unordered_access_view";
-    case reshade::api::descriptor_type::constant_buffer:              return os << "constant_buffer";
-    case reshade::api::descriptor_type::shader_storage_buffer:        return os << "shader_storage_buffer";
-    case reshade::api::descriptor_type::acceleration_structure:       return os << "acceleration_structure";
-    default:                                                          return os << "unknown";
+    case reshade::api::descriptor_type::sampler:                       return os << "sampler";
+    case reshade::api::descriptor_type::sampler_with_resource_view:    return os << "sampler_with_resource_view";
+    case reshade::api::descriptor_type::texture_shader_resource_view:  return os << "texture_shader_resource_view";
+    case reshade::api::descriptor_type::texture_unordered_access_view: return os << "texture_unordered_access_view";
+    case reshade::api::descriptor_type::buffer_shader_resource_view:   return os << "buffer_shader_resource_view";
+    case reshade::api::descriptor_type::buffer_unordered_access_view:  return os << "buffer_unordered_access_view";
+    case reshade::api::descriptor_type::constant_buffer:               return os << "constant_buffer";
+    case reshade::api::descriptor_type::shader_storage_buffer:         return os << "shader_storage_buffer";
+    case reshade::api::descriptor_type::acceleration_structure:        return os << "acceleration_structure";
+    default:                                                           return os << "unknown";
   }
 }
 

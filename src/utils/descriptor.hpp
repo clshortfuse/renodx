@@ -62,10 +62,11 @@ static reshade::api::resource_view GetResourceViewFromDescriptorUpdate(
       auto item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[index];
       return item.view;
     }
+    case reshade::api::descriptor_type::texture_shader_resource_view:
+    case reshade::api::descriptor_type::texture_unordered_access_view:
     case reshade::api::descriptor_type::buffer_shader_resource_view:
     case reshade::api::descriptor_type::buffer_unordered_access_view:
-    case reshade::api::descriptor_type::shader_resource_view:
-    case reshade::api::descriptor_type::unordered_access_view:        {
+    case reshade::api::descriptor_type::acceleration_structure:        {
       auto resource_view = static_cast<const reshade::api::resource_view*>(update.descriptors)[index];
       return resource_view;
     }
@@ -180,12 +181,11 @@ static bool OnUpdateDescriptorTables(
           s << static_cast<uintptr_t>(static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[k].view.handle);
 #endif
           break;
-        case reshade::api::descriptor_type::buffer_shader_resource_view:
-        case reshade::api::descriptor_type::buffer_unordered_access_view:
         case reshade::api::descriptor_type::texture_shader_resource_view:
         case reshade::api::descriptor_type::texture_unordered_access_view:
-          // case reshade::api::descriptor_type::shader_resource_view:
-          // case reshade::api::descriptor_type::unordered_access_view:
+        case reshade::api::descriptor_type::buffer_shader_resource_view:
+        case reshade::api::descriptor_type::buffer_unordered_access_view:
+        case reshade::api::descriptor_type::acceleration_structure:
           descriptor.second = static_cast<const reshade::api::resource_view*>(update.descriptors)[k];
           heap_set.emplace(offset + k);
 #ifdef DEBUG_LEVEL_2
@@ -193,7 +193,6 @@ static bool OnUpdateDescriptorTables(
 #endif
           break;
         case reshade::api::descriptor_type::constant_buffer:
-        case reshade::api::descriptor_type::acceleration_structure:
         case reshade::api::descriptor_type::shader_storage_buffer:
           descriptor.second = static_cast<const reshade::api::buffer_range*>(update.descriptors)[k];
           break;
@@ -351,18 +350,16 @@ static reshade::api::descriptor_table_update* CloneDescriptorTableUpdates(
       case reshade::api::descriptor_type::sampler_with_resource_view:
         descriptor_size = sizeof(reshade::api::sampler_with_resource_view) * update.count;
         break;
+      case reshade::api::descriptor_type::texture_shader_resource_view:
+      case reshade::api::descriptor_type::texture_unordered_access_view:
       case reshade::api::descriptor_type::buffer_shader_resource_view:
       case reshade::api::descriptor_type::buffer_unordered_access_view:
-      case reshade::api::descriptor_type::shader_resource_view:
-      case reshade::api::descriptor_type::unordered_access_view:
+      case reshade::api::descriptor_type::acceleration_structure:
         descriptor_size = sizeof(reshade::api::resource_view) * update.count;
         break;
       case reshade::api::descriptor_type::constant_buffer:
       case reshade::api::descriptor_type::shader_storage_buffer:
         descriptor_size = sizeof(reshade::api::buffer_range) * update.count;
-        break;
-      case reshade::api::descriptor_type::acceleration_structure:
-        descriptor_size = sizeof(reshade::api::resource_view) * update.count;
         break;
       default:
         break;
