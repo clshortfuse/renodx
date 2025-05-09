@@ -209,14 +209,17 @@ static bool IsToolWindow(HWND hwnd) {
   return (ex_style & WS_EX_TOOLWINDOW) != 0;
 }
 
-static bool IsDummyWindow(HWND hwnd) {
+static std::string GetWindowClassName(HWND hwnd) {
   char class_name[256];
   if (GetClassName(hwnd, class_name, sizeof(class_name))) {
-    auto lower_case_view = std::string(class_name) | std::views::transform([](auto c) { return std::tolower(c); });
-    if (!std::ranges::search(lower_case_view, std::string("dummy")).empty()) return true;
+    return std::string(class_name);
   }
+  return "";
+}
 
-  return false;
+static bool IsDummyWindow(HWND hwnd) {
+  auto lower_case_view = GetWindowClassName(hwnd) | std::views::transform([](auto c) { return std::tolower(c); });
+  return !std::ranges::search(lower_case_view, std::string("dummy")).empty();
 }
 
 static std::string GetFileVersion(const std::filesystem::path& path) {
