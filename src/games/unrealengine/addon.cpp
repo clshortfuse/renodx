@@ -445,6 +445,11 @@ void AddGamePatches() {
     AddAvowedUpgrades();
     reshade::log::message(reshade::log::level::info, std::format("Applied patches for {} ({}).", filename, product_name).c_str());
   }
+
+  if (product_name == "InfinityNikki") {
+    renodx::mods::swapchain::ignored_window_class_names.emplace("bridge");  // Dummy window created by PerfSight.dll
+    reshade::log::message(reshade::log::level::info, std::format("Applied patches for {} ({}).", filename, product_name).c_str());
+  }
 }
 
 const auto UPGRADE_TYPE_NONE = 0.f;
@@ -492,6 +497,12 @@ const std::unordered_map<
         },
         {
             "Avowed",
+            {
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
+        {
+            "InfinityNikki",
             {
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
