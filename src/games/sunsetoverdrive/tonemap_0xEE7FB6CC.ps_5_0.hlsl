@@ -154,6 +154,5 @@ void main(
   o0.xyz = g_TM_GrainStrength * r0.xyz * injectedData.fxFilmGrain + r1.xyz;
   }
   o0.w = 1;
-  o0.rgb = PostToneMapScale(o0.rgb);
   return;
 }
