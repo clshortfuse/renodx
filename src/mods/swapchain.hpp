@@ -124,6 +124,7 @@ static bool is_vulkan = false;
 static bool swapchain_proxy_compatibility_mode = true;
 static bool swapchain_proxy_revert_state = false;
 static bool bypass_dummy_windows = true;
+static std::unordered_set<std::string> ignored_window_class_names = {};
 static reshade::api::format swap_chain_proxy_format = reshade::api::format::r16g16b16a16_float;
 static std::vector<std::uint8_t> swap_chain_proxy_vertex_shader = {};
 static std::vector<std::uint8_t> swap_chain_proxy_pixel_shader = {};
@@ -1017,6 +1018,42 @@ static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
   renodx::utils::data::Delete<CommandListData>(cmd_list);
 }
 
+static bool ShouldModifySwapchainHwnd(HWND hwnd) {
+  if (renodx::utils::platform::IsToolWindow(hwnd)) {
+    std::stringstream s;
+    s << "mods::swapchain::ShouldModifySwapchainHwnd(Tool Window: ";
+    s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
+    s << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+    return false;
+  }
+
+  if (bypass_dummy_windows && renodx::utils::platform::IsDummyWindow(hwnd)) {
+    std::stringstream s;
+    s << "mods::swapchain::ShouldModifySwapchainHwnd(Dummy window: ";
+    s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
+    s << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+    return false;
+  }
+
+  if (!ignored_window_class_names.empty()) {
+    auto class_name = renodx::utils::platform::GetWindowClassName(hwnd);
+    if (!class_name.empty()) {
+      if (ignored_window_class_names.contains(class_name)) {
+        std::stringstream s;
+        s << "mods::swapchain::ShouldModifySwapchainHwnd(Ignored class name: ";
+        s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
+        s << ")";
+        reshade::log::message(reshade::log::level::info, s.str().c_str());
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 // Before CreatePipelineState
 static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   auto abort_modification = [=]() {
@@ -1026,25 +1063,12 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
 
   if (!renodx::utils::bitwise::HasFlag(desc.back_buffer.usage, reshade::api::resource_usage::render_target)) {
     std::stringstream s;
-    s << "mods::swapchain::OnCreateSwapchain(Abort from not used for rendering: ";
-    s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
-    s << ")";
-    reshade::log::message(reshade::log::level::info, s.str().c_str());
     return abort_modification();
   }
 
-  if (renodx::utils::platform::IsToolWindow(static_cast<HWND>(hwnd))) {
+  if (!ShouldModifySwapchainHwnd(static_cast<HWND>(hwnd))) {
     std::stringstream s;
-    s << "mods::swapchain::OnCreateSwapchain(Abort from tool window: ";
-    s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
-    s << ")";
-    reshade::log::message(reshade::log::level::info, s.str().c_str());
-    return abort_modification();
-  }
-
-  if (bypass_dummy_windows && renodx::utils::platform::IsDummyWindow(static_cast<HWND>(hwnd))) {
-    std::stringstream s;
-    s << "mods::swapchain::OnCreateSwapchain(Abort from dummy window: ";
+    s << "mods::swapchain::OnCreateSwapchain(Abort from ShouldModifySwapchainHwnd: ";
     s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
@@ -1145,19 +1169,10 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   };
 
   HWND hwnd = static_cast<HWND>(swapchain->get_hwnd());
-  if (renodx::utils::platform::IsToolWindow(hwnd)) {
-    std::stringstream s;
-    s << "mods::swapchain::OnInitSwapchain(Abort from tool window: ";
-    s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
-    s << ")";
-    reshade::log::message(reshade::log::level::info, s.str().c_str());
-    abort_modification();
-    return;
-  }
 
-  if (bypass_dummy_windows && renodx::utils::platform::IsDummyWindow(hwnd)) {
+  if (!ShouldModifySwapchainHwnd(hwnd)) {
     std::stringstream s;
-    s << "mods::swapchain::OnInitSwapchain(Abort from dummy window: ";
+    s << "mods::swapchain::OnInitSwapchain(Abort from ShouldModifySwapchainHwnd: ";
     s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
