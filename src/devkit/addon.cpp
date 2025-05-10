@@ -871,6 +871,38 @@ bool OnCopyResource(
   return false;
 }
 
+static bool OnCopyTextureRegion(
+    reshade::api::command_list* cmd_list,
+    reshade::api::resource source,
+    uint32_t source_subresource,
+    const reshade::api::subresource_box* source_box,
+    reshade::api::resource dest,
+    uint32_t dest_subresource,
+    const reshade::api::subresource_box* dest_box,
+    reshade::api::filter_mode filter) {
+  if (snapshot_device == nullptr) return false;
+
+  auto* device = cmd_list->get_device();
+
+  if (device == snapshot_device) {
+    DrawDetails draw_details = {
+        .draw_method = DrawDetails::DrawMethods::COPY,
+        .timestamp = std::chrono::system_clock::now(),
+        .copy_source = source,
+        .copy_destination = dest,
+    };
+
+    auto* device_data = renodx::utils::data::Get<DeviceData>(device);
+    std::unique_lock lock(device_data->mutex);
+    reshade::log::message(reshade::log::level::debug, std::format("Snapshot #{}", device_data->draw_details_list.size()).c_str());
+    device_data->draw_details_list.push_back(draw_details);
+  } else {
+    reshade::log::message(reshade::log::level::debug, "Foreign Copy.");
+  }
+
+  return false;
+}
+
 static void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
   auto* data = renodx::utils::data::Get<DeviceData>(device);
 
@@ -3479,6 +3511,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::bind_pipeline>(OnBindPipeline);
       reshade::register_event<reshade::addon_event::destroy_pipeline>(OnDestroyPipeline);
       reshade::register_event<reshade::addon_event::copy_resource>(OnCopyResource);
+      reshade::register_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
       reshade::register_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
 
       reshade::register_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
@@ -3509,6 +3542,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::unregister_event<reshade::addon_event::init_pipeline>(OnInitPipeline);
       reshade::unregister_event<reshade::addon_event::bind_pipeline>(OnBindPipeline);
       reshade::unregister_event<reshade::addon_event::copy_resource>(OnCopyResource);
+      reshade::unregister_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
       reshade::unregister_event<reshade::addon_event::destroy_pipeline>(OnDestroyPipeline);
       reshade::unregister_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
       reshade::unregister_event<reshade::addon_event::draw>(OnDraw);
