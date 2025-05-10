@@ -18,8 +18,10 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
+#include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
+
 
 namespace {
 
@@ -428,6 +430,12 @@ renodx::utils::settings::Settings settings = {
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Special thanks to Voosh, Ritsu, Marat, Jon and everyone over at HDR Den.",
         .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Version: " + std::string(renodx::utils::date::ISO_DATE),
+        .section = "About",
+        .tooltip = std::string(__DATE__),
     },
 
 };
