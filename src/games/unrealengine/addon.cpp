@@ -742,7 +742,6 @@ void AddAdvancedSettings() {
         .is_global = true,
         .is_visible = []() { return settings[0]->GetValue() >= 2; },
     };
-
     add_setting(force_borderless_setting);
 
     if (force_borderless_setting->GetValue() == 0) {
@@ -766,9 +765,9 @@ void AddAdvancedSettings() {
         .is_global = true,
         .is_visible = []() { return settings[0]->GetValue() >= 2; },
     };
+    add_setting(setting);
 
     renodx::mods::swapchain::prevent_full_screen = (setting->GetValue() == 1.f);
-    add_setting(setting);
   }
 
   {
