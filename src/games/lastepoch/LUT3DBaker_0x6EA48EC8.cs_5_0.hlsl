@@ -136,7 +136,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r1.w = dot(float3(-0.0055258826,0.0040252103,1.0015006723), r0.xyz);
     r0.rgb = mul(ACES_to_SRGB_MAT, r1.gba);
     r0.rgb = lerp(preCG, r0.rgb, injectedData.colorGradeLUTStrength);
-    r0.rgb = applyUserTonemap(r3.rgb);
+    r0.rgb = applyUserTonemap(r0.rgb);
     r0.a = 1;
     u0[vThreadID.xyz] = r0.rgba;
   }
