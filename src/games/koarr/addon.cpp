@@ -25,6 +25,7 @@ ShaderInjectData shader_injection;
 namespace {
 
 bool is_bloom_enabled = false;
+float is_fxaa_enabled = 0;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x138CBA83),  // videos (pre-rendered)
@@ -37,8 +38,12 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     is_bloom_enabled = false;
     return true;
     }),
+    CustomShaderEntryCallback(0x8159D8EB, [](reshade::api::command_list* cmd_list) {  // fxaa
+    is_fxaa_enabled = 1;
+    return true;
+    }),
     CustomShaderEntryCallback(0xE76323E6, [](reshade::api::command_list* cmd_list) {  // UI
-        shader_injection.hasLoadedTitleMenu = 1.f;
+    shader_injection.hasLoadedTitleMenu = 1.f;
     return true;
     }),
 };
@@ -325,6 +330,41 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return is_bloom_enabled; },
     },
     new renodx::utils::settings::Setting{
+        .key = "fxBlur",
+        .binding = &shader_injection.fxBlur,
+        .default_value = 50.f,
+        .label = "Blur",
+        .section = "Effects",
+        .tint = 0x0D1D34,
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return is_bloom_enabled; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "fxCA",
+        .binding = &shader_injection.fxCA,
+        .default_value = 0.f,
+        .label = "Chromatic Aberration",
+        .section = "Effects",
+        .tint = 0x0D1D34,
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "fxSharpen",
+        .binding = &shader_injection.fxSharpen,
+        .default_value = 0.f,
+        .label = "Sharpening",
+        .section = "Effects",
+        .tooltip = "Requires FXAA enabled in game settings.",
+        .tint = 0x0D1D34,
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.FxaaCheck == 1.f; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "fxFlash",
         .binding = &shader_injection.fxFlash,
         .default_value = 100.f,
@@ -462,6 +502,9 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 0.f);
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
+  renodx::utils::settings::UpdateSetting("fxBlur", 50.f);
+  renodx::utils::settings::UpdateSetting("fxCA", 0.f);
+  renodx::utils::settings::UpdateSetting("fxSharpen", 0.f);
   renodx::utils::settings::UpdateSetting("fxVignette", 0.f);
   renodx::utils::settings::UpdateSetting("fxFlash", 100.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 0.f);
@@ -491,6 +534,8 @@ void OnPresent(
   shader_injection.random_1 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
   shader_injection.random_2 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
   shader_injection.random_3 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
+    shader_injection.FxaaCheck = is_fxaa_enabled;
+    is_fxaa_enabled = 0;
 }
 
 }  // namespace
