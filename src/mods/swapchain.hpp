@@ -9,7 +9,9 @@
 #include <d3d12.h>
 #include <dxgi.h>
 #include <dxgi1_6.h>
+#include <windef.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -200,7 +202,13 @@ static void CheckSwapchainSize(
   }
 
   if (force_borderless) {
-    HMONITOR monitor = MonitorFromWindow(output_window, 0x0);
+    RemoveWindowBorder(output_window);
+
+    HMONITOR monitor = MonitorFromWindow(output_window, MONITOR_DEFAULTTONEAREST);
+    if (monitor == nullptr) {
+      reshade::log::message(reshade::log::level::error, "mods::swapchain::OnSetFullscreenState(could not get monitor)");
+      return;
+    }
     MONITORINFO monitor_info = {};
     monitor_info.cbSize = sizeof(MONITORINFO);
 
@@ -234,7 +242,7 @@ static void CheckSwapchainSize(
             output_window,
             HWND_TOP,
             monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
-            screen_width, screen_height,
+            buffer_desc.texture.width, buffer_desc.texture.height,
             SWP_ASYNCWINDOWPOS | SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER);
       }
     }
@@ -2777,7 +2785,12 @@ static bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullsc
   if (private_data->prevent_full_screen) {
     HWND output_window = static_cast<HWND>(swapchain->get_hwnd());
     if (output_window != nullptr) {
-      HMONITOR monitor = MonitorFromWindow(output_window, 0x0);
+      HMONITOR monitor = MonitorFromWindow(output_window, MONITOR_DEFAULTTONEAREST);
+      if (monitor == nullptr) {
+        reshade::log::message(reshade::log::level::error, "mods::swapchain::OnSetFullscreenState(could not get monitor)");
+        return false;
+      }
+
       MONITORINFO monitor_info = {};
       monitor_info.cbSize = sizeof(MONITORINFO);
 
@@ -2793,12 +2806,19 @@ static bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullsc
       const uint32_t top = trunc((screen_height - texture_height) / 2.f);
 
       RemoveWindowBorder(output_window);
-      SetWindowPos(
-          output_window,
-          HWND_TOP,
-          monitor_info.rcMonitor.left + left, monitor_info.rcMonitor.top + top,
-          screen_width, screen_height,
-          SWP_FRAMECHANGED);
+
+      RECT rect = {NULL};
+      if (GetWindowRect(output_window, &rect) != 0) {
+        auto rect_width = rect.right - rect.left;
+        auto rect_height = rect.bottom - rect.top;
+
+        SetWindowPos(
+            output_window,
+            HWND_TOP,
+            monitor_info.rcMonitor.left + left, monitor_info.rcMonitor.top + top,
+            texture_width, texture_height,
+            SWP_ASYNCWINDOWPOS | SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER);
+      }
     }
     reshade::log::message(reshade::log::level::info, "Preventing fullscreen");
     return true;
