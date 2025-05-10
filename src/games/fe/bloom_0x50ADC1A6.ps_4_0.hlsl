@@ -49,14 +49,6 @@ void main(
   r0.xyz = float3(0.0625,0.0625,0.0625) * r0.xyz;
   r1.xyzw = t0.Sample(s1_s, w1.xy).xyzw;
   r1.rgb = renodx::color::srgb::DecodeSafe(r1.rgb);
-  if (injectedData.toneMapType != 0.f) {
-  float old_y = renodx::color::y::from::BT709(r1.rgb);
-  //r0.rgb = r1.rgb + r0.rgb;
-  float new_y = renodx::color::y::from::BT709(r0.rgb + r1.rgb);
-  if (new_y > old_y) {
-    r1.rgb *= renodx::math::DivideSafe(old_y, new_y);
-  }
-  }
   r0.rgb = r1.rgb + r0.rgb;
   if (injectedData.fxFilmGrain > 0.f) {
     r0.rgb = applyFilmGrain(r0.rgb, w1, injectedData.fxFilmGrainType != 0.f);
