@@ -41,6 +41,73 @@ float3 applyVignette(float3 inputColor, float2 screen, float slider) {
   return output;
 }
 
+// based on https://github.com/aliasIsolation/aliasIsolation/blob/master/data/shaders/chromaticAberration_ps.hlsl
+float4 applyCA(Texture2D colorBuffer, SamplerState colorSampler, float2 texCoord, float intensity) {
+  float4 output;
+  uint screenWidth, screenHeight;
+  colorBuffer.GetDimensions(screenWidth, screenHeight);
+  float ca_amount = 0.018 * intensity;
+  float2 center_offset = texCoord - float2(0.5, 0.5);
+  ca_amount *= saturate(length(center_offset) * 2);
+  int num_colors = max(3, int(max(screenWidth, screenHeight) * 0.075 * sqrt(ca_amount)));
+  if (intensity == 0.f) {
+    output = colorBuffer.Sample(colorSampler, texCoord);
+  } else {
+    output.ga = colorBuffer.Sample(colorSampler, texCoord).ga;  // unchanged green and alpha
+    float offset = float(7 - num_colors * 0.5) * ca_amount / num_colors;
+    float2 sampleUvR = float2(0.5, 0.5) + center_offset * (1 + offset);
+    float2 sampleUvB = float2(0.5, 0.5) + center_offset * (1 - offset);
+    output.r = colorBuffer.Sample(colorSampler, sampleUvR).r;
+    output.b = colorBuffer.Sample(colorSampler, sampleUvB).b;
+  }
+  return output;
+}
+
+// https://github.com/aliasIsolation/aliasIsolation/blob/master/data/shaders/sharpen_ps.hlsl
+float4 applySharpen(Texture2D colorBuffer, SamplerState colorSampler, float2 texCoord, float intensity) {
+  float4 output;
+  uint screenWidth, screenHeight;
+  colorBuffer.GetDimensions(screenWidth, screenHeight);
+  const float2 texelSize = 1.0.xx / float2(screenWidth, screenHeight);
+  float4 center = colorBuffer.SampleLevel(colorSampler, texCoord + float2(0,0) * texelSize, 0);
+  center.rgb = renodx::color::srgb::DecodeSafe(center.rgb);
+    if (intensity > 0.f)
+      {
+      float3 neighbors[4] =
+          {
+            renodx::color::srgb::DecodeSafe(colorBuffer.SampleLevel(colorSampler, texCoord + float2(1, 1) * texelSize, 0).xyz),
+            renodx::color::srgb::DecodeSafe(colorBuffer.SampleLevel(colorSampler, texCoord + float2(-1, 1) * texelSize, 0).xyz),
+            renodx::color::srgb::DecodeSafe(colorBuffer.SampleLevel(colorSampler, texCoord + float2(1, -1) * texelSize, 0).xyz),
+            renodx::color::srgb::DecodeSafe(colorBuffer.SampleLevel(colorSampler, texCoord + float2(-1, -1) * texelSize, 0).xyz)
+          };
+      float neighborDiff = 0;
+      [unroll]
+      for (uint i = 0; i < 4; ++i)
+          {
+        neighborDiff += renodx::color::y::from::BT709(abs(neighbors[i] - center));
+      }
+  
+      float sharpening = (1 - saturate(2 * neighborDiff)) * intensity;
+  
+      float3 sharpened = float3(
+                             0.0.xxx
+                             + neighbors[0] * -sharpening
+                             + neighbors[1] * -sharpening
+                             + neighbors[2] * -sharpening
+                             + neighbors[3] * -sharpening
+                             + center * 5
+      ) * 1.0 / (5.0 + sharpening * -4.0);
+  
+      output = float4(sharpened, center.w);
+    }
+      else
+      {
+      output = center;
+    }
+    output.rgb = renodx::color::srgb::EncodeSafe(output.rgb);
+  return output;
+  }
+
 //-----SCALING-----//
 float3 PostToneMapScale(float3 color) {
   if (injectedData.toneMapGammaCorrection == 2.f) {

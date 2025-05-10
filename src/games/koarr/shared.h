@@ -31,7 +31,10 @@ struct ShaderInjectData {
   float colorGradeLUTSampling;
   float upgradePerChannel;
   float fxBloom;
+  float fxBlur;
   float fxVignette;
+  float fxCA;
+  float fxSharpen;
   float fxFlash;
   float fxFilmGrain;
   float fxFilmGrainType;
@@ -39,6 +42,7 @@ struct ShaderInjectData {
   float random_1;
   float random_2;
   float random_3;
+  float FxaaCheck;
   bool hasLoadedTitleMenu;
 };
 
