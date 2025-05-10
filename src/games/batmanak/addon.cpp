@@ -433,7 +433,7 @@ bool OnCopyTextureRegion(
   if (resource_info->clone_target == nullptr) return false;
   std::stringstream s;
   s << "OnCopyTextureRegion(Upgrading source resource";
-  s << reinterpret_cast<uintptr_t>(source.handle);
+  // s << reinterpret_cast<uintptr_t>(source.handle);
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 
