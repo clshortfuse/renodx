@@ -17,10 +17,10 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   float4 fDest;
 
   if (float(vThreadID.x) < cb0[0].x && float(vThreadID.y) < cb0[0].x && float(vThreadID.z) < cb0[0].x) {
+    // (start) ColorGrade
     r0.xyz = float3(vThreadID) * cb0[0].yyy;
     r0.rgb = lutShaper(r0.rgb, true);
     float3 preCG = r0.rgb;
-    // (start) ColorGrade
     // unity_to_ACES(r0.rgb)
     r1.x = dot(float3(0.4397010, 0.3829780, 0.1773350), r0.xyz);
     r1.y = dot(float3(0.0897923, 0.8134230, 0.0967616), r0.xyz);
@@ -136,7 +136,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r1.w = dot(float3(-0.0055258826,0.0040252103,1.0015006723), r0.xyz);
     r0.rgb = mul(ACES_to_SRGB_MAT, r1.gba);
     r0.rgb = lerp(preCG, r0.rgb, injectedData.colorGradeLUTStrength);
-    r0.rgb = applyUserTonemapACES(r3.rgb);
+    r0.rgb = applyUserTonemapACES(r0.rgb);
     r0.a = 1;
     u0[vThreadID.xyz] = r0.rgba;
   }
