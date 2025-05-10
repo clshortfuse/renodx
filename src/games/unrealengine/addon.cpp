@@ -753,7 +753,7 @@ void AddAdvancedSettings() {
     auto* setting = new renodx::utils::settings::Setting{
         .key = "PreventFullscreen",
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .label = "Prevent Fullscreen",
         .section = "Resource Upgrades",
         .tooltip = "Prevent exclusive fullscreen for proper HDR",
