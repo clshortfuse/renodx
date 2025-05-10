@@ -416,6 +416,31 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     settings[1]->can_reset = true;
   }
 }
+bool OnCopyTextureRegion(
+    reshade::api::command_list* cmd_list,
+    reshade::api::resource source,
+    uint32_t source_subresource,
+    const reshade::api::subresource_box* source_box,
+    reshade::api::resource dest,
+    uint32_t dest_subresource,
+    const reshade::api::subresource_box* dest_box,
+    reshade::api::filter_mode filter) {
+  // Game performs this copy to swapchain.
+  // Skip checking destination. Just check if source is hotswappable
+  auto* resource_info = renodx::utils::resource::GetResourceInfo(source);
+  if (resource_info == nullptr) return false;
+  if (resource_info->clone_enabled) return false;
+  if (resource_info->clone_target == nullptr) return false;
+  std::stringstream s;
+  s << "OnCopyTextureRegion(Upgrading source resource";
+  s << reinterpret_cast<uintptr_t>(source.handle);
+  s << ")";
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
+
+  resource_info->clone_enabled = true;
+
+  return false;
+}
 
 }  // namespace
 
@@ -434,7 +459,15 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
-          .index = 3,
+          .use_resource_view_cloning = true,
+          .use_resource_view_hot_swap = true,
+          .usage_include = reshade::api::resource_usage::render_target
+                           | reshade::api::resource_usage::shader_resource
+                           | reshade::api::resource_usage::unordered_access
+                           | reshade::api::resource_usage::copy_dest
+                           | reshade::api::resource_usage::copy_source
+                           | reshade::api::resource_usage::resolve_dest,
+
       });
 
       renodx::mods::swapchain::use_resource_cloning = true;
@@ -442,10 +475,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-
+      reshade::register_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::unregister_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
       reshade::unregister_addon(h_module);
       break;
   }
