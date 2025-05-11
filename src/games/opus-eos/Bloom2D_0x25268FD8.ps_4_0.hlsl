@@ -38,6 +38,6 @@ void main(
   r1.xyzw = r2.xyzw + r1.xyzw;
   r0.xyzw = r1.xyzw + r0.xyzw;
   r1.xyzw = t1.Sample(s1_s, w1.xy).xyzw;
-  o0.xyzw = r0.xyzw * float4(0.25, 0.25, 0.25, 0.25) * shader_injection.bloom_radius + r1.xyzw * pow(shader_injection.bloom_intensity, 2.f);  // Bloom strength and intensity
+  o0.xyzw = r0.xyzw * float4(0.25, 0.25, 0.25, 0.25) * shader_injection.bloom_radius + r1.xyzw * pow(shader_injection.bloom_intensity, 2.f);  // Bloom radius and intensity
   return;
 }

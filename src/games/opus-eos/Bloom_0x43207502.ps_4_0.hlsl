@@ -28,7 +28,7 @@ void main(
   r0.xy = cb0[26].xx * r0.xy;
   r0.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
   r1.x = 1;
-  r1.z = cb0[29].x;  // Sampling radius (?)
+  r1.z = cb0[29].x;  
   r1.xyzw = cb0[28].xyxy * r1.xxzz;
   r2.zw = float2(-1, 0);
   r2.x = cb0[29].x;
@@ -56,7 +56,7 @@ void main(
   r3.xyzw = t0.Sample(s0_s, r2.xy).xyzw;
   r2.xyzw = t0.Sample(s0_s, r2.zw).xyzw;
   r0.xyzw = r3.xyzw + r0.xyzw;
-  r0.xyzw = r2.xyzw * float4(2, 2, 2, 2) + r0.xyzw * shader_injection.bloom_radius;  // Bloom intensity? - TODO: rename to whatever this actually is
+  r0.xyzw = r2.xyzw * float4(2, 2, 2, 2) + r0.xyzw * shader_injection.bloom_radius;  // Bloom radius
   r0.xyzw = r0.xyzw + r1.xyzw;
   r1.xyzw = t1.Sample(s1_s, w1.xy).xyzw;
   o0.xyzw = r0.xyzw * float4(0.0625, 0.0625, 0.0625, 0.0625) + r1.xyzw * pow(shader_injection.bloom_intensity, 2.f);  // Bloom Intensity
