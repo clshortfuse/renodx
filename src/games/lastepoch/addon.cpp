@@ -334,6 +334,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "fxSharpen",
+        .binding = &shader_injection.fxSharpen,
+        .default_value = 50.f,
+        .label = "Sharpening",
+        .section = "Effects",
+        .tint = 0x452f7A,
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "fxVignette",
         .binding = &shader_injection.fxVignette,
         .default_value = 50.f,
@@ -506,8 +516,9 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 0.f);
   renodx::utils::settings::UpdateSetting("colorGradeLUTShaper", 0.f);
   renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
-  renodx::utils::settings::UpdateSetting("fxCA", 0.f);
   renodx::utils::settings::UpdateSetting("fxVignette", 50.f);
+  renodx::utils::settings::UpdateSetting("fxCA", 0.f);
+  renodx::utils::settings::UpdateSetting("fxSharpen", 0.f);
   renodx::utils::settings::UpdateSetting("fxNoise", 50.f);
   renodx::utils::settings::UpdateSetting("fxCameraLight", 1.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 0.f);

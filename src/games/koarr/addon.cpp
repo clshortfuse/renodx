@@ -348,7 +348,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tint = 0x0D1D34,
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
+        .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
