@@ -13,8 +13,6 @@ cbuffer cb0 : register(b0) {
   float4 cb0[6];
 }
 
-#define cmp -
-
 void main(
     float4 v0: SV_POSITION0,
     float2 v1: TEXCOORD0,
@@ -52,8 +50,7 @@ void main(
   r1.z = 0;
   r2.xyzw = t2.SampleLevel(s0_s, r1.xyz, 0).xyzw;
   o0.xyz = r2.www * r0.xyz + r2.xyz;
-  r0.x = cmp(cb0[5].x == 1.000000);
-  o0.w = r0.x ? r1.w : 1;
+  o0.w = (cb0[5].x == 1.0) ? r1.w : 1;
   o0.rgb = PostToneMapScale(o0.rgb);
   return;
 }

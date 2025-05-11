@@ -11,8 +11,6 @@ cbuffer cb0 : register(b0) {
   float4 cb0[4];
 }
 
-#define cmp -
-
 void main(
     float4 v0: SV_POSITION0,
     float2 v1: TEXCOORD0,
@@ -141,27 +139,20 @@ void main(
   r3.yzw = r2.xyz * float3(0.25, 0.25, 0.25) + r3.yzw;
   r2.xyz = float3(0.5, 0.5, 0.5) * r2.xyz;
   r1.w = renodx::color::y::from::BT709(r3.gba);
-  r2.w = cmp(r1.w < r5.z);
-  r0.w = cmp(r0.w < r1.w);
-  r0.w = (int)r0.w | (int)r2.w;
-  r0.w = r0.w ? r5.x : r5.y;
-  r2.w = cmp(0 < r0.w);
+  r0.w = (r1.w < r5.z) || (r0.w < r1.w) ? r5.x : r5.y;
   o0.w = r0.w;
-  r0.w = min(r1.x, r1.y);
+  r4.w = min(r1.x, r1.y);
   r1.x = max(r1.x, r1.y);
   r1.x = max(r1.x, r1.z);
-  r0.w = min(r0.w, r1.z);
+  r4.w = min(r4.w, r1.z);
   r4.rgb = r0.rgb;
   r1.y = renodx::color::y::from::BT709(r4.rgb);
   r1.z = min(r1.y, r3.x);
   r1.y = max(r1.y, r3.x);
-  r1.x = max(r1.y, r1.x);
-  r1.x = cmp(r1.x < r1.w);
-  r0.w = min(r1.z, r0.w);
-  r0.w = cmp(r1.w < r0.w);
-  r0.w = (int)r1.x | (int)r0.w;
-  r1.xyz = r0.www ? r2.xyz : r3.yzw;
-  r0.xyz = r2.www ? r1.xyz : r0.xyz;
+  float max1 = max(r1.y, r1.x);
+  float min1 = min(r1.z, r4.w);
+  r1.xyz = (r1.w < min1) || (r1.w > max1) ? r2.xyz : r3.yzw;
+  r0.xyz = (r0.w > 0) ? r1.xyz : r0.xyz;
   r6.z = 0;
   r1.xyzw = t1.SampleLevel(s0_s, r6.xyz, 0).xyzw;
   o0.xyz = r1.www * r0.xyz + r1.xyz;

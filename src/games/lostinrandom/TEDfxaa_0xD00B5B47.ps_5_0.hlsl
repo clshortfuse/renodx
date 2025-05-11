@@ -6,8 +6,6 @@ cbuffer cb0 : register(b0){
   float4 cb0[133];
 }
 
-#define cmp -
-
 void main(
   float4 v0 : SV_POSITION0,
   float2 v1 : TEXCOORD0,
@@ -82,12 +80,9 @@ void main(
   r2.g = renodx::color::y::from::BT709(r3.rgb);
   r2.w = min(r2.y, r2.x);
   r2.x = max(r2.y, r2.x);
-  r1.x = max(r2.x, r1.x);
-  r1.x = cmp(r1.x < r2.z);
-  r0.x = min(r2.w, r0.x);
-  r0.x = cmp(r2.z < r0.x);
-  r0.x = (int)r1.x | (int)r0.x;
-  o0.xyz = r0.xxx ? r1.yzw : r0.yzw;
+  float max1 = max(r2.x, r1.x);
+  float min1 = min(r2.w, r0.x);
+  o0.xyz = (r2.z < min1) || (r2.z > max1) ? r1.yzw : r0.yzw;
   o0.w = 1;
   return;
 }

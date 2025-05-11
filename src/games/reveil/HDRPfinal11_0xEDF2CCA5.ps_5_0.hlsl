@@ -142,11 +142,7 @@ void main(
   r3.yzw = r2.xyz * float3(0.25, 0.25, 0.25) + r3.yzw;
   r2.xyz = float3(0.5, 0.5, 0.5) * r2.xyz;
   r1.w = renodx::color::y::from::BT709(r3.gba);
-  r2.w = cmp(r1.w < r5.z);
-  r0.w = cmp(r0.w < r1.w);
-  r0.w = (int)r0.w | (int)r2.w;
-  r4.w = r0.w ? r5.x : r5.y;
-  r0.w = cmp(0 < r4.w);
+  r4.w = (r1.w < r5.z) || (r0.w < r1.w) ? r5.x : r5.y;
   r2.w = min(r1.x, r1.y);
   r1.x = max(r1.x, r1.y);
   r1.x = max(r1.x, r1.z);
@@ -158,9 +154,8 @@ void main(
   r1.x = max(r1.z, r1.x);
   r1.y = min(r2.w, r1.y);
   r1.xy = cmp(r1.xw < r1.wy);
-  r1.x = (int)r1.x | (int)r1.y;
-  r1.xyz = r1.xxx ? r2.xyz : r3.yzw;
-  r4.xyz = r0.www ? r1.xyz : r0.xyz;
+  r1.xyz = (r1.x < r1.w) || (r1.w < r1.y) ? r2.xyz : r3.yzw;
+  r4.xyz = r4.w > 0 ? r1.xyz : r0.xyz;
   r0.xy = r6.xy * cb0[1].xy + cb0[1].zw;
   r1.xy = cb1[48].xy * r6.xy;
   r0.x = t1.SampleBias(s1_s, r0.xy, cb1[79].y).w;

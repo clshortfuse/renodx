@@ -34,11 +34,10 @@ void main(
   r3.y = min(r2.x, r2.y);
   r2.z = max(r3.x, r2.z);
   r2.w = min(r3.y, r2.w);
-  r3.x = 0.063000001 * r2.z;
+  r3.x = 0.063 * r2.z;
   r2.z = r2.z + -r2.w;
   r2.w = max(0.0311999992, r3.x);
-  r2.w = cmp(r2.z >= r2.w);
-  if (r2.w != 0) {
+  if (r2.z >= r2.w) {
     r2.w = t1.SampleLevel(s1_s, r0.xy, 0, int2(-1, -1)).w;
     r3.x = t1.SampleLevel(s1_s, r0.xy, 0, int2(1, 1)).w;
     r3.y = t1.SampleLevel(s1_s, r0.xy, 0, int2(1, -1)).w;
@@ -62,25 +61,25 @@ void main(
     r0.y = abs(r3.y) + r0.y;
     r0.x = abs(r0.x) + r3.x;
     r2.w = r2.w + r4.x;
-    r0.x = cmp(r0.y >= r0.x);
+    bool isHorizontal = r0.y >= r0.x;
     r0.y = r3.w * 2 + r2.w;
-    r2.x = r0.x ? r2.x : r2.y;
-    r0.z = r0.x ? r0.z : r0.w;
-    r0.w = r0.x ? cb0[29].y : cb0[29].x;
-    r0.y = r0.y * 0.0833333358 + -r1.w;
+    r2.x = isHorizontal ? r2.x : r2.y;
+    r0.z = isHorizontal ? r0.z : r0.w;
+    r0.w = isHorizontal ? cb0[29].y : cb0[29].x;
+    r0.y = r0.y * (1.0 / 12.0) + -r1.w;
     r2.y = r2.x + -r1.w;
     r2.w = r0.z + -r1.w;
     r2.x = r2.x + r1.w;
     r0.z = r0.z + r1.w;
-    r3.x = cmp(abs(r2.y) >= abs(r2.w));
+    bool is1Steepest = abs(r2.y) >= abs(r2.w);
     r2.y = max(abs(r2.y), abs(r2.w));
-    r0.w = r3.x ? -r0.w : r0.w;
+    r0.w = is1Steepest ? -r0.w : r0.w;
     r0.y = saturate(abs(r0.y) * r2.z);
-    r2.z = r0.x ? cb0[29].x : 0;
-    r2.w = r0.x ? 0 : cb0[29].y;
+    r2.z = isHorizontal ? cb0[29].x : 0;
+    r2.w = isHorizontal ? 0 : cb0[29].y;
     r3.yz = r0.ww * float2(0.5, 0.5) + v1.xy;
-    r3.y = r0.x ? v1.x : r3.y;
-    r3.z = r0.x ? r3.z : v1.y;
+    r3.y = isHorizontal ? v1.x : r3.y;
+    r3.z = isHorizontal ? r3.z : v1.y;
     r4.xy = r3.yz + -r2.zw;
     r5.xy = r3.yz + r2.zw;
     r3.y = r0.y * -2 + 3;
@@ -91,256 +90,257 @@ void main(
     r4.zw = saturate(r5.xy);
     r4.zw = cb0[26].xx * r4.zw;
     r3.w = t1.SampleLevel(s1_s, r4.zw, 0).w;
-    r0.z = r3.x ? r2.x : r0.z;
+    r0.z = is1Steepest ? r2.x : r0.z;
     r2.x = 0.25 * r2.y;
     r2.y = -r0.z * 0.5 + r1.w;
     r0.y = r3.y * r0.y;
-    r2.y = cmp(r2.y < 0);
+    bool isLumaCenterSmaller = r2.y < 0;
     r3.x = -r0.z * 0.5 + r3.z;
     r3.y = -r0.z * 0.5 + r3.w;
-    r3.zw = cmp(abs(r3.xy) >= r2.xx);
+    bool reached1 = abs(r3.x) >= r2.x;
+    bool reached2 = abs(r3.y) >= r2.x;
     r4.z = -r2.z * 1.5 + r4.x;
-    r4.x = r3.z ? r4.x : r4.z;
+    r4.x = reached1 ? r4.x : r4.z;
     r4.w = -r2.w * 1.5 + r4.y;
-    r4.z = r3.z ? r4.y : r4.w;
-    r4.yw = ~(int2)r3.zw;
-    r4.y = (int)r4.w | (int)r4.y;
+    r4.z = reached1 ? r4.y : r4.w;
+    bool notReachedBoth = !reached1 || !reached2;
     r4.w = r2.z * 1.5 + r5.x;
-    r5.x = r3.w ? r5.x : r4.w;
+    r5.x = reached2 ? r5.x : r4.w;
     r4.w = r2.w * 1.5 + r5.y;
-    r5.z = r3.w ? r5.y : r4.w;
-    if (r4.y != 0) {
-      if (r3.z == 0) {
+    r5.z = reached2 ? r5.y : r4.w;
+    if (notReachedBoth) {
+      if (!reached1) {
         r4.yw = saturate(r4.xz);
         r4.yw = cb0[26].xx * r4.yw;
         r3.x = t1.SampleLevel(s1_s, r4.yw, 0).w;
       }
-      if (r3.w == 0) {
+      if (!reached2) {
         r4.yw = saturate(r5.xz);
         r4.yw = cb0[26].xx * r4.yw;
         r3.y = t1.SampleLevel(s1_s, r4.yw, 0).w;
       }
       r4.y = -r0.z * 0.5 + r3.x;
-      r3.x = r3.z ? r3.x : r4.y;
+      r3.x = reached1 ? r3.x : r4.y;
       r3.z = -r0.z * 0.5 + r3.y;
-      r3.y = r3.w ? r3.y : r3.z;
-      r3.zw = cmp(abs(r3.xy) >= r2.xx);
+      r3.y = reached2 ? r3.y : r3.z;
+      reached1 = abs(r3.x) >= r2.x;
+      reached2 = abs(r3.y) >= r2.x;
       r4.y = -r2.z * 2 + r4.x;
-      r4.x = r3.z ? r4.x : r4.y;
+      r4.x = reached1 ? r4.x : r4.y;
       r4.y = -r2.w * 2 + r4.z;
-      r4.z = r3.z ? r4.z : r4.y;
-      r4.yw = ~(int2)r3.zw;
-      r4.y = (int)r4.w | (int)r4.y;
+      r4.z = reached1 ? r4.z : r4.y;
+      notReachedBoth = !reached1 || !reached2;
       r4.w = r2.z * 2 + r5.x;
-      r5.x = r3.w ? r5.x : r4.w;
+      r5.x = reached2 ? r5.x : r4.w;
       r4.w = r2.w * 2 + r5.z;
-      r5.z = r3.w ? r5.z : r4.w;
-      if (r4.y != 0) {
-        if (r3.z == 0) {
+      r5.z = reached2 ? r5.z : r4.w;
+      if (notReachedBoth) {
+        if (!reached1) {
           r4.yw = saturate(r4.xz);
           r4.yw = cb0[26].xx * r4.yw;
           r3.x = t1.SampleLevel(s1_s, r4.yw, 0).w;
         }
-        if (r3.w == 0) {
+        if (!reached2) {
           r4.yw = saturate(r5.xz);
           r4.yw = cb0[26].xx * r4.yw;
           r3.y = t1.SampleLevel(s1_s, r4.yw, 0).w;
         }
         r4.y = -r0.z * 0.5 + r3.x;
-        r3.x = r3.z ? r3.x : r4.y;
+        r3.x = reached1 ? r3.x : r4.y;
         r3.z = -r0.z * 0.5 + r3.y;
-        r3.y = r3.w ? r3.y : r3.z;
-        r3.zw = cmp(abs(r3.xy) >= r2.xx);
+        r3.y = reached2 ? r3.y : r3.z;
+        reached1 = abs(r3.x) >= r2.x;
+        reached2 = abs(r3.y) >= r2.x;
         r4.y = -r2.z * 2 + r4.x;
-        r4.x = r3.z ? r4.x : r4.y;
+        r4.x = reached1 ? r4.x : r4.y;
         r4.y = -r2.w * 2 + r4.z;
-        r4.z = r3.z ? r4.z : r4.y;
-        r4.yw = ~(int2)r3.zw;
-        r4.y = (int)r4.w | (int)r4.y;
+        r4.z = reached1 ? r4.z : r4.y;
+        notReachedBoth = !reached1 || !reached2;
         r4.w = r2.z * 2 + r5.x;
-        r5.x = r3.w ? r5.x : r4.w;
+        r5.x = reached2 ? r5.x : r4.w;
         r4.w = r2.w * 2 + r5.z;
-        r5.z = r3.w ? r5.z : r4.w;
-        if (r4.y != 0) {
-          if (r3.z == 0) {
+        r5.z = reached2 ? r5.z : r4.w;
+        if (notReachedBoth) {
+          if (!reached1) {
             r4.yw = saturate(r4.xz);
             r4.yw = cb0[26].xx * r4.yw;
             r3.x = t1.SampleLevel(s1_s, r4.yw, 0).w;
           }
-          if (r3.w == 0) {
+          if (!reached2) {
             r4.yw = saturate(r5.xz);
             r4.yw = cb0[26].xx * r4.yw;
             r3.y = t1.SampleLevel(s1_s, r4.yw, 0).w;
           }
           r4.y = -r0.z * 0.5 + r3.x;
-          r3.x = r3.z ? r3.x : r4.y;
+          r3.x = reached1 ? r3.x : r4.y;
           r3.z = -r0.z * 0.5 + r3.y;
-          r3.y = r3.w ? r3.y : r3.z;
-          r3.zw = cmp(abs(r3.xy) >= r2.xx);
+          r3.y = reached2 ? r3.y : r3.z;
+          reached1 = abs(r3.x) >= r2.x;
+          reached2 = abs(r3.y) >= r2.x;
           r4.y = -r2.z * 2 + r4.x;
-          r4.x = r3.z ? r4.x : r4.y;
+          r4.x = reached1 ? r4.x : r4.y;
           r4.y = -r2.w * 2 + r4.z;
-          r4.z = r3.z ? r4.z : r4.y;
-          r4.yw = ~(int2)r3.zw;
-          r4.y = (int)r4.w | (int)r4.y;
+          r4.z = reached1 ? r4.z : r4.y;
+          notReachedBoth = !reached1 || !reached2;
           r4.w = r2.z * 2 + r5.x;
-          r5.x = r3.w ? r5.x : r4.w;
+          r5.x = reached2 ? r5.x : r4.w;
           r4.w = r2.w * 2 + r5.z;
-          r5.z = r3.w ? r5.z : r4.w;
-          if (r4.y != 0) {
-            if (r3.z == 0) {
+          r5.z = reached2 ? r5.z : r4.w;
+          if (notReachedBoth) {
+            if (!reached1) {
               r4.yw = saturate(r4.xz);
               r4.yw = cb0[26].xx * r4.yw;
               r3.x = t1.SampleLevel(s1_s, r4.yw, 0).w;
             }
-            if (r3.w == 0) {
+            if (!reached2) {
               r4.yw = saturate(r5.xz);
               r4.yw = cb0[26].xx * r4.yw;
               r3.y = t1.SampleLevel(s1_s, r4.yw, 0).w;
             }
             r4.y = -r0.z * 0.5 + r3.x;
-            r3.x = r3.z ? r3.x : r4.y;
+            r3.x = reached1 ? r3.x : r4.y;
             r3.z = -r0.z * 0.5 + r3.y;
-            r3.y = r3.w ? r3.y : r3.z;
-            r3.zw = cmp(abs(r3.xy) >= r2.xx);
+            r3.y = reached2 ? r3.y : r3.z;
+            reached1 = abs(r3.x) >= r2.x;
+            reached2 = abs(r3.y) >= r2.x;
             r4.y = -r2.z * 2 + r4.x;
-            r4.x = r3.z ? r4.x : r4.y;
+            r4.x = reached1 ? r4.x : r4.y;
             r4.y = -r2.w * 2 + r4.z;
-            r4.z = r3.z ? r4.z : r4.y;
-            r4.yw = ~(int2)r3.zw;
-            r4.y = (int)r4.w | (int)r4.y;
+            r4.z = reached1 ? r4.z : r4.y;
+            notReachedBoth = !reached1 || !reached2;
             r4.w = r2.z * 2 + r5.x;
-            r5.x = r3.w ? r5.x : r4.w;
+            r5.x = reached2 ? r5.x : r4.w;
             r4.w = r2.w * 2 + r5.z;
-            r5.z = r3.w ? r5.z : r4.w;
-            if (r4.y != 0) {
-              if (r3.z == 0) {
+            r5.z = reached2 ? r5.z : r4.w;
+            if (notReachedBoth) {
+              if (!reached1) {
                 r4.yw = saturate(r4.xz);
                 r4.yw = cb0[26].xx * r4.yw;
                 r3.x = t1.SampleLevel(s1_s, r4.yw, 0).w;
               }
-              if (r3.w == 0) {
+              if (!reached2) {
                 r4.yw = saturate(r5.xz);
                 r4.yw = cb0[26].xx * r4.yw;
                 r3.y = t1.SampleLevel(s1_s, r4.yw, 0).w;
               }
               r4.y = -r0.z * 0.5 + r3.x;
-              r3.x = r3.z ? r3.x : r4.y;
+              r3.x = reached1 ? r3.x : r4.y;
               r3.z = -r0.z * 0.5 + r3.y;
-              r3.y = r3.w ? r3.y : r3.z;
-              r3.zw = cmp(abs(r3.xy) >= r2.xx);
+              r3.y = reached2 ? r3.y : r3.z;
+              reached1 = abs(r3.x) >= r2.x;
+              reached2 = abs(r3.y) >= r2.x;
               r4.y = -r2.z * 2 + r4.x;
-              r4.x = r3.z ? r4.x : r4.y;
+              r4.x = reached1 ? r4.x : r4.y;
               r4.y = -r2.w * 2 + r4.z;
-              r4.z = r3.z ? r4.z : r4.y;
-              r4.yw = ~(int2)r3.zw;
-              r4.y = (int)r4.w | (int)r4.y;
+              r4.z = reached1 ? r4.z : r4.y;
+              notReachedBoth = !reached1 || !reached2;
               r4.w = r2.z * 2 + r5.x;
-              r5.x = r3.w ? r5.x : r4.w;
+              r5.x = reached2 ? r5.x : r4.w;
               r4.w = r2.w * 2 + r5.z;
-              r5.z = r3.w ? r5.z : r4.w;
-              if (r4.y != 0) {
-                if (r3.z == 0) {
+              r5.z = reached2 ? r5.z : r4.w;
+              if (notReachedBoth) {
+                if (!reached1) {
                   r4.yw = saturate(r4.xz);
                   r4.yw = cb0[26].xx * r4.yw;
                   r3.x = t1.SampleLevel(s1_s, r4.yw, 0).w;
                 }
-                if (r3.w == 0) {
+                if (!reached2) {
                   r4.yw = saturate(r5.xz);
                   r4.yw = cb0[26].xx * r4.yw;
                   r3.y = t1.SampleLevel(s1_s, r4.yw, 0).w;
                 }
                 r4.y = -r0.z * 0.5 + r3.x;
-                r3.x = r3.z ? r3.x : r4.y;
+                r3.x = reached1 ? r3.x : r4.y;
                 r3.z = -r0.z * 0.5 + r3.y;
-                r3.y = r3.w ? r3.y : r3.z;
-                r3.zw = cmp(abs(r3.xy) >= r2.xx);
+                r3.y = reached2 ? r3.y : r3.z;
+                reached1 = abs(r3.x) >= r2.x;
+                reached2 = abs(r3.y) >= r2.x;
                 r4.y = -r2.z * 2 + r4.x;
-                r4.x = r3.z ? r4.x : r4.y;
+                r4.x = reached1 ? r4.x : r4.y;
                 r4.y = -r2.w * 2 + r4.z;
-                r4.z = r3.z ? r4.z : r4.y;
-                r4.yw = ~(int2)r3.zw;
-                r4.y = (int)r4.w | (int)r4.y;
+                r4.z = reached1 ? r4.z : r4.y;
+                notReachedBoth = !reached1 || !reached2;
                 r4.w = r2.z * 2 + r5.x;
-                r5.x = r3.w ? r5.x : r4.w;
+                r5.x = reached2 ? r5.x : r4.w;
                 r4.w = r2.w * 2 + r5.z;
-                r5.z = r3.w ? r5.z : r4.w;
-                if (r4.y != 0) {
-                  if (r3.z == 0) {
+                r5.z = reached2 ? r5.z : r4.w;
+                if (notReachedBoth) {
+                  if (!reached1) {
                     r4.yw = saturate(r4.xz);
                     r4.yw = cb0[26].xx * r4.yw;
                     r3.x = t1.SampleLevel(s1_s, r4.yw, 0).w;
                   }
-                  if (r3.w == 0) {
+                  if (!reached2) {
                     r4.yw = saturate(r5.xz);
                     r4.yw = cb0[26].xx * r4.yw;
                     r3.y = t1.SampleLevel(s1_s, r4.yw, 0).w;
                   }
                   r4.y = -r0.z * 0.5 + r3.x;
-                  r3.x = r3.z ? r3.x : r4.y;
+                  r3.x = reached1 ? r3.x : r4.y;
                   r3.z = -r0.z * 0.5 + r3.y;
-                  r3.y = r3.w ? r3.y : r3.z;
-                  r3.zw = cmp(abs(r3.xy) >= r2.xx);
+                  r3.y = reached2 ? r3.y : r3.z;
+                  reached1 = abs(r3.x) >= r2.x;
+                  reached2 = abs(r3.y) >= r2.x;
                   r4.y = -r2.z * 2 + r4.x;
-                  r4.x = r3.z ? r4.x : r4.y;
+                  r4.x = reached1 ? r4.x : r4.y;
                   r4.y = -r2.w * 2 + r4.z;
-                  r4.z = r3.z ? r4.z : r4.y;
-                  r4.yw = ~(int2)r3.zw;
-                  r4.y = (int)r4.w | (int)r4.y;
+                  r4.z = reached1 ? r4.z : r4.y;
+                  notReachedBoth = !reached1 || !reached2;
                   r4.w = r2.z * 2 + r5.x;
-                  r5.x = r3.w ? r5.x : r4.w;
+                  r5.x = reached2 ? r5.x : r4.w;
                   r4.w = r2.w * 2 + r5.z;
-                  r5.z = r3.w ? r5.z : r4.w;
-                  if (r4.y != 0) {
-                    if (r3.z == 0) {
+                  r5.z = reached2 ? r5.z : r4.w;
+                  if (notReachedBoth) {
+                    if (!reached1) {
                       r4.yw = saturate(r4.xz);
                       r4.yw = cb0[26].xx * r4.yw;
                       r3.x = t1.SampleLevel(s1_s, r4.yw, 0).w;
                     }
-                    if (r3.w == 0) {
+                    if (!reached2) {
                       r4.yw = saturate(r5.xz);
                       r4.yw = cb0[26].xx * r4.yw;
                       r3.y = t1.SampleLevel(s1_s, r4.yw, 0).w;
                     }
                     r4.y = -r0.z * 0.5 + r3.x;
-                    r3.x = r3.z ? r3.x : r4.y;
+                    r3.x = reached1 ? r3.x : r4.y;
                     r3.z = -r0.z * 0.5 + r3.y;
-                    r3.y = r3.w ? r3.y : r3.z;
-                    r3.zw = cmp(abs(r3.xy) >= r2.xx);
+                    r3.y = reached2 ? r3.y : r3.z;
+                    reached1 = abs(r3.x) >= r2.x;
+                    reached2 = abs(r3.y) >= r2.x;
                     r4.y = -r2.z * 4 + r4.x;
-                    r4.x = r3.z ? r4.x : r4.y;
+                    r4.x = reached1 ? r4.x : r4.y;
                     r4.y = -r2.w * 4 + r4.z;
-                    r4.z = r3.z ? r4.z : r4.y;
-                    r4.yw = ~(int2)r3.zw;
-                    r4.y = (int)r4.w | (int)r4.y;
+                    r4.z = reached1 ? r4.z : r4.y;
+                    notReachedBoth = !reached1 || !reached2;
                     r4.w = r2.z * 4 + r5.x;
-                    r5.x = r3.w ? r5.x : r4.w;
+                    r5.x = reached2 ? r5.x : r4.w;
                     r4.w = r2.w * 4 + r5.z;
-                    r5.z = r3.w ? r5.z : r4.w;
-                    if (r4.y != 0) {
-                      if (r3.z == 0) {
+                    r5.z = reached2 ? r5.z : r4.w;
+                    if (notReachedBoth) {
+                      if (!reached1) {
                         r4.yw = saturate(r4.xz);
                         r4.yw = cb0[26].xx * r4.yw;
                         r3.x = t1.SampleLevel(s1_s, r4.yw, 0).w;
                       }
-                      if (r3.w == 0) {
+                      if (!reached2) {
                         r4.yw = saturate(r5.xz);
                         r4.yw = cb0[26].xx * r4.yw;
                         r3.y = t1.SampleLevel(s1_s, r4.yw, 0).w;
                       }
                       r4.y = -r0.z * 0.5 + r3.x;
-                      r3.x = r3.z ? r3.x : r4.y;
+                      r3.x = reached1 ? r3.x : r4.y;
                       r0.z = -r0.z * 0.5 + r3.y;
-                      r3.y = r3.w ? r3.y : r0.z;
-                      r3.zw = cmp(abs(r3.xy) >= r2.xx);
+                      r3.y = reached2 ? r3.y : r0.z;
+                      reached1 = abs(r3.x) >= r2.x;
+                      reached2 = abs(r3.y) >= r2.x;
                       r0.z = -r2.z * 8 + r4.x;
-                      r4.x = r3.z ? r4.x : r0.z;
+                      r4.x = reached1 ? r4.x : r0.z;
                       r0.z = -r2.w * 8 + r4.z;
-                      r4.z = r3.z ? r4.z : r0.z;
+                      r4.z = reached1 ? r4.z : r0.z;
                       r0.z = r2.z * 8 + r5.x;
-                      r5.x = r3.w ? r5.x : r0.z;
+                      r5.x = reached2 ? r5.x : r0.z;
                       r0.z = r2.w * 8 + r5.z;
-                      r5.z = r3.w ? r5.z : r0.z;
+                      r5.z = reached2 ? r5.z : r0.z;
                     }
                   }
                 }
@@ -352,23 +352,25 @@ void main(
     }
     r0.z = v1.x + -r4.x;
     r2.z = v1.y + -r4.z;
-    r0.z = r0.x ? r0.z : r2.z;
+    r0.z = isHorizontal ? r0.z : r2.z;
     r2.xz = -v1.xy + r5.xz;
-    r2.x = r0.x ? r2.x : r2.z;
-    r2.zw = cmp(r3.xy < float2(0, 0));
+    r2.x = isHorizontal ? r2.x : r2.z;
+    bool correctVariation1 = (r3.x < 0.0);
+    bool correctVariation2 = (r3.y < 0.0);
     r3.x = r2.x + r0.z;
-    r2.yz = cmp((int2)r2.yy != (int2)r2.zw);
+    correctVariation1 = correctVariation1 != isLumaCenterSmaller;
+    correctVariation2 = correctVariation2 != isLumaCenterSmaller;
     r2.w = 1 / r3.x;
-    r3.x = cmp(r0.z < r2.x);
+    bool isDirection1 = r0.z < r2.x;
     r0.z = min(r2.x, r0.z);
-    r2.x = r3.x ? r2.y : r2.z;
+    bool correctVariation = isDirection1 ? correctVariation1 : correctVariation2;
     r0.y = r0.y * r0.y;
     r0.z = r0.z * -r2.w + 0.5;
-    r0.z = (int)r0.z & (int)r2.x;
+    r0.z = correctVariation ? r0.z : 0.0;
     r0.y = max(r0.z, r0.y);
     r0.yz = r0.yy * r0.ww + v1.xy;
-    r2.x = saturate(r0.x ? v1.x : r0.y);
-    r2.y = saturate(r0.x ? r0.z : v1.y);
+    r2.x = saturate(isHorizontal ? v1.x : r0.y);
+    r2.y = saturate(isHorizontal ? r0.z : v1.y);
     r0.xy = cb0[26].xx * r2.xy;
     r1.xyz = t1.SampleLevel(s1_s, r0.xy, 0).xyz;
   }
