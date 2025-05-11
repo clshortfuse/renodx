@@ -390,11 +390,11 @@ renodx::utils::settings::Settings settings = {
             renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 80.f);
             renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
             renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-            renodx::utils::settings::UpdateSetting("colorGradeShadows", 45.f);
-            renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-            renodx::utils::settings::UpdateSetting("colorGradeSaturation", 55.f);
-            renodx::utils::settings::UpdateSetting("colorGradeBlowout", 55.f);
-            renodx::utils::settings::UpdateSetting("colorGradeDechroma", 70.f);
+            renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
+            renodx::utils::settings::UpdateSetting("colorGradeContrast", 55.f);
+            renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
+            renodx::utils::settings::UpdateSetting("colorGradeBlowout", 65.f);
+            renodx::utils::settings::UpdateSetting("colorGradeDechroma", 60.f);
             renodx::utils::settings::UpdateSetting("colorGradeFlare", 50.f);
             renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
             renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f);
@@ -411,7 +411,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("toneMapPerChannel", 0.f);
           renodx::utils::settings::UpdateSetting("toneMapColorSpace", 2.f);
           renodx::utils::settings::UpdateSetting("toneMapHueProcessor", 1.f);
-          renodx::utils::settings::UpdateSetting("toneMapHueShift", 100.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueShift", 80.f);
           renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
           renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);

@@ -27,11 +27,13 @@ float is_og_game = 1.f;
 renodx::mods::shader::CustomShaders custom_shaders = {
     // original game
     CustomShaderEntry(0x8EF2D0AE),  // fxaa1
+    CustomShaderEntry(0xB3DF43CA),  // lutbuilder
     CustomShaderEntry(0xA9329B7F),  // uberpost
     CustomShaderEntry(0x4B92CD8E),  // uberpost 2 (dice world)
     CustomShaderEntry(0x72D26F35),  // uberpost 3
     CustomShaderEntry(0x0D7738C5),  // post final
     // The Eternal Die
+    CustomShaderEntry(0x13EEF169),  // lutbuilder
     CustomShaderEntryCallback(0xEF39E7C4, [](reshade::api::command_list* cmd_list) {  // uberpost
     is_og_game = 0.f;
     return true;
@@ -317,18 +319,6 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
-        .key = "upgradePerChannel",
-        .binding = &shader_injection.upgradePerChannel,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
-        .label = "Restoration Method",
-        .section = "Color Grading",
-        .labels = {"Luminance", "Per Channel"},
-        .tint = 0x1E5787,
-        .is_enabled = []() { return shader_injection.toneMapType >= 2.f; },
-        .is_visible = []() { return current_settings_mode >= 2; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "fxBloom",
         .binding = &shader_injection.fxBloom,
         .default_value = 50.f,
@@ -394,8 +384,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeFlare", 0.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 100.f);
-          renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f);
-          renodx::utils::settings::UpdateSetting("upgradePerChannel", is_og_game); },
+          renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f); },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -411,16 +400,15 @@ renodx::utils::settings::Settings settings = {
             renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 80.f);
             renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
             renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-            renodx::utils::settings::UpdateSetting("colorGradeShadows", 45.f);
-            renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-            renodx::utils::settings::UpdateSetting("colorGradeSaturation", 55.f);
-            renodx::utils::settings::UpdateSetting("colorGradeBlowout", 55.f);
-            renodx::utils::settings::UpdateSetting("colorGradeDechroma", 70.f);
+            renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
+            renodx::utils::settings::UpdateSetting("colorGradeContrast", 55.f);
+            renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
+            renodx::utils::settings::UpdateSetting("colorGradeBlowout", 65.f);
+            renodx::utils::settings::UpdateSetting("colorGradeDechroma", 60.f);
             renodx::utils::settings::UpdateSetting("colorGradeFlare", 50.f);
             renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 100.f);
-          renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f);
-          renodx::utils::settings::UpdateSetting("upgradePerChannel", is_og_game); },
+          renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f); },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -433,7 +421,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("toneMapPerChannel", 0.f);
           renodx::utils::settings::UpdateSetting("toneMapColorSpace", 2.f);
           renodx::utils::settings::UpdateSetting("toneMapHueProcessor", 1.f);
-          renodx::utils::settings::UpdateSetting("toneMapHueShift", 100.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueShift", 80.f);
           renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
           renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
@@ -445,8 +433,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeFlare", 65.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 100.f);
-          renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f);
-          renodx::utils::settings::UpdateSetting("upgradePerChannel", is_og_game); },
+          renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f); },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
@@ -552,6 +539,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
           .ignore_size = false,
+      });
+      //  internal LUT
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_typeless,
+          .dimensions = {.width=1024, .height=32},
       });
       //  RGB10A2_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
