@@ -19,7 +19,8 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r1.xyzw = t1.Sample(s1_s, w1.xy).xyzw;
+  //r1.xyzw = t1.Sample(s1_s, w1.xy).xyzw;
+  r1 = applySharpen(t1, s1_s, w1, injectedData.fxSharpen);
   o0.w = r1.w;
   if (injectedData.fxFilmGrain > 0.f) {
     r1.rgb = applyFilmGrain(r1.rgb, w1.xy, injectedData.fxFilmGrainType != 0.f);

@@ -19,7 +19,7 @@ void main(
 
   r0.xy = saturate(v1.xy);
   r0.xy = cb0[26].xx * r0.xy;
-  r1.xyzw = t1.SampleLevel(s1_s, r0.xy, 0).xyzw;
+  r1 = applySharpen(t1, s1_s, r0.xy, injectedData.fxSharpen);
   r0.z = t1.SampleLevel(s1_s, r0.xy, 0, int2(0, 1)).w;
   r0.w = t1.SampleLevel(s1_s, r0.xy, 0, int2(1, 0)).w;
   r2.x = t1.SampleLevel(s1_s, r0.xy, 0, int2(0, -1)).w;
@@ -370,7 +370,8 @@ void main(
     r2.x = saturate(isHorizontal ? v1.x : r0.y);
     r2.y = saturate(isHorizontal ? r0.z : v1.y);
     r0.xy = cb0[26].xx * r2.xy;
-    r1.xyz = t1.SampleLevel(s1_s, r0.xy, 0).xyz;
+    r2 = applySharpen(t1, s1_s, r0.xy, injectedData.fxSharpen);
+    r1.xyz = r2.xyz;
   }
   if (injectedData.fxFilmGrain > 0.f) {
     r1.rgb = applyFilmGrain(r1.rgb, v1, injectedData.fxFilmGrainType != 0.f);
