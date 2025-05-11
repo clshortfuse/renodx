@@ -9,8 +9,6 @@ cbuffer cb0 : register(b0) {
   float4 cb0[9];
 }
 
-#define cmp -
-
 void main(
     float4 v0: SV_POSITION0,
     float2 v1: TEXCOORD0,
@@ -33,7 +31,6 @@ void main(
     r1.rgb = applyFilmGrain(r1.rgb, v1.xy, injectedData.fxFilmGrainType != 0.f);
   }
   o0.rgb = PostToneMapScale(r1.rgb);
-  r0.y = cmp(cb0[8].x == 1.000000);
-  o0.w = r0.y ? r0.x : 1;
+  o0.w = cb0[8].x == 1.0 ? r0.x : 1;
   return;
 }

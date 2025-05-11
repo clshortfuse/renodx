@@ -10,8 +10,6 @@ cbuffer cb0 : register(b0) {
   float4 cb0[9];
 }
 
-#define cmp -
-
 void main(
     float4 v0: SV_POSITION0,
     float2 v1: TEXCOORD0,
@@ -98,17 +96,13 @@ void main(
   r0.y = renodx::color::y::from::BT709(r4.rgb);
   r0.z = min(r0.y, r3.x);
   r0.y = max(r0.y, r3.x);
-  r0.y = max(r0.y, r2.x);
-  r0.y = cmp(r0.y < r3.z);
-  r0.z = min(r0.z, r1.x);
-  r0.z = cmp(r3.z < r0.z);
-  r0.y = (int)r0.y | (int)r0.z;
-  r0.yzw = r0.yyy ? r2.yzw : r1.yzw;
+  float max1 = max(r0.y, r2.x);
+  float min1 = min(r0.z, r1.x);
+  r0.yzw = (r3.z < min1) || (r3.z > max1) ? r2.yzw : r1.yzw;
   if (injectedData.fxFilmGrain > 0.f) {
     r0.gba = applyFilmGrain(r0.gba, v1.xy, injectedData.fxFilmGrainType != 0.f);
   }
   o0.rgb = PostToneMapScale(r0.gba);
-  r0.y = cmp(cb0[8].x == 1.000000);
-  o0.w = r0.y ? r0.x : 1;
+  o0.w = cb0[8].x == 1.0 ? r0.x : 1;
   return;
 }

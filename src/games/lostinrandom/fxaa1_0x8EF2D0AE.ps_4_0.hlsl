@@ -5,8 +5,6 @@ cbuffer cb0 : register(b0) {
   float4 cb0[122];
 }
 
-#define cmp -
-
 void main(
     float4 v0: SV_POSITION0,
     float4 v1: TEXCOORD0,
@@ -37,8 +35,7 @@ void main(
   r0.w = r2.z + -r0.w;
   r2.z = cb0[121].x * r2.x;
   r2.z = max(0, r2.z);
-  r0.w = cmp(r0.w < r2.z);
-  if (r0.w != 0) {
+  if (r0.w < r2.z) {
     o0.xyz = r0.xyz;
     o0.w = 1;
     return;
@@ -67,11 +64,8 @@ void main(
   r3.xyz = float3(0.25, 0.25, 0.25) * r1.xyz;
   r0.xyz = r0.xyz * float3(0.25, 0.25, 0.25) + r3.xyz;
   r0.w = dot(r1.xyz, float3(0.0396819152, 0.45802179, 0.00609653955));
-  r0.w = cmp(r0.w < r2.y);
   r1.w = dot(r0.xyz, float3(0.0396819152, 0.45802179, 0.00609653955));
-  r1.w = cmp(r2.x < r1.w);
-  r0.w = (int)r0.w | (int)r1.w;
-  if (r0.w != 0) {
+  if (r0.w < r2.y || r2.x < r1.w) {
     o0.xyz = float3(0.5, 0.5, 0.5) * r1.xyz;
     o0.w = 1;
     return;

@@ -101,7 +101,7 @@ void main(
   r2.x = reached2 ? r8.y : r2.x;
   r2.x = -r0.z * 0.5 + r2.x;
   r6.y = reached2 ? r8.y : r2.x;
-  bool reachedBoth1 = reached1 && reached2;
+  bool notReachedBoth1 = !reached1 || !reached2;
   reached1 = abs(r6.x) >= r2.z;
   reached2 = abs(r6.y) >= r2.z;
   r2.w = -r5.x * 2 + r9.x;
@@ -122,7 +122,7 @@ void main(
   r2.w = reached2 ? r6.y : r2.w;
   r2.w = -r0.z * 0.5 + r2.w;
   r10.y = reached2 ? r6.y : r2.w;
-  bool reachedBoth2 = reached1 && reached2;
+  bool notReachedBoth2 = !reached1 || !reached2;
   reached1 = abs(r10.x) >= r2.z;
   reached2 = abs(r10.y) >= r2.z;
   r6.z = -r5.x * 4 + r7.x;
@@ -145,12 +145,12 @@ void main(
   r0.z = -r0.z * 0.5 + r2.y;
   bool isLumaCenterSmaller = r0.z < 0;
   r12.y = reached2 ? r10.y : r6.z;
-  bool reachedBoth3 = reached1 && reached2;
+  bool notReachedBoth3 = !reached1 || !reached2;
   reached1 = abs(r12.x) >= r2.z;
   reached2 = abs(r12.y) >= r2.z;
-  r8.zw = reachedBoth3 ? r12.xy : r10.xy;
-  r6.xy = reachedBoth2 ? r8.zw : r6.xy;
-  r6.xy = reachedBoth1 ? r6.xy : r8.xy;
+  r8.zw = notReachedBoth3 ? r12.xy : r10.xy;
+  r6.xy = notReachedBoth2 ? r8.zw : r6.xy;
+  r6.xy = notReachedBoth1 ? r6.xy : r8.xy;
   bool correctVariation1 = (r6.x < 0.0) != isLumaCenterSmaller;
   bool correctVariation2 = (r6.y < 0.0) != isLumaCenterSmaller;
   r0.z = -r5.x * 12 + r11.x;
@@ -161,9 +161,9 @@ void main(
   r2.z = r5.y * 12 + r11.w;
   r8.w = reached2 ? r11.w : r2.z;
   r8.y = reached1 ? r11.y : r0.z;
-  r5.xyzw = reachedBoth3 ? r8.xyzw : r11.xyzw;
-  r5.xyzw = reachedBoth2 ? r5.xyzw : r7.xyzw;
-  r5.xyzw = reachedBoth1 ? r5.xyzw : r9.xyzw;
+  r5.xyzw = notReachedBoth3 ? r8.xyzw : r11.xyzw;
+  r5.xyzw = notReachedBoth2 ? r5.xyzw : r7.xyzw;
+  r5.xyzw = notReachedBoth1 ? r5.xyzw : r9.xyzw;
   r2.xz = v0.xy + -r5.xy;
   r5.xy = -v0.xy + r5.zw;
   r0.z = isHorizontal ? r5.x : r5.y;

@@ -13,8 +13,6 @@ cbuffer cb0 : register(b0) {
   float4 cb0[6];
 }
 
-#define cmp -
-
 void main(
     float4 v0: SV_POSITION0,
     float2 v1: TEXCOORD0,
@@ -56,7 +54,6 @@ void main(
   r0.xy = (uint2)r0.xy;
   r0.zw = float2(0, 0);
   r0.x = t3.Load(r0.xyzw).x;
-  r0.y = cmp(cb0[5].x == 1.000000);
-  o0.w = r0.y ? r0.x : 1;
+  o0.w = (cb0[5].x == 1.0) ? r0.x : 1;
   return;
 }

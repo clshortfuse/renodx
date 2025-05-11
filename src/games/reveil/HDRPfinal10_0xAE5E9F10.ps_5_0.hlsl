@@ -12,8 +12,6 @@ cbuffer cb0 : register(b0) {
   float4 cb0[4];
 }
 
-#define cmp -
-
 void main(
     float4 v0: SV_POSITION0,
     float2 v1: TEXCOORD0,
@@ -41,8 +39,7 @@ void main(
     r0.w = t2.SampleBias(s1_s, r1.xyz, cb1[79].y).w;
     r0.w = r0.w * 2 + -1;
     r1.x = 1 + -abs(r0.w);
-    r0.w = cmp(r0.w >= 0);
-    r0.w = r0.w ? 1 : -1;
+    r0.w = r0.w >= 0 ? 1 : -1;
     r1.x = sqrt(r1.x);
     r1.x = 1 + -r1.x;
     r0.w = r1.x * r0.w;

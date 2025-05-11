@@ -142,11 +142,7 @@ void main(
   r2.yzw = r3.yzw * float3(0.25, 0.25, 0.25) + r2.yzw;
   r3.yzw = float3(0.5, 0.5, 0.5) * r3.yzw;
   r1.z = renodx::color::y::from::BT709(r2.gba);
-  r1.w = cmp(r1.z < r5.z);
-  r0.w = cmp(r0.w < r1.z);
-  r0.w = (int)r0.w | (int)r1.w;
-  r4.w = r0.w ? r5.x : r5.y;
-  r0.w = cmp(0 < r4.w);
+  r4.w = (r1.z < r5.z) || (r0.w < r1.z) ? r5.x : r5.y;
   r1.w = min(r2.x, r1.y);
   r1.y = max(r2.x, r1.y);
   r1.y = max(r1.y, r1.x);
@@ -156,11 +152,9 @@ void main(
   r2.x = min(r1.w, r3.x);
   r1.w = max(r1.w, r3.x);
   r1.y = max(r1.w, r1.y);
-  r1.x = min(r2.x, r1.x);
-  r1.xy = cmp(r1.zy < r1.xz);
-  r1.x = (int)r1.y | (int)r1.x;
-  r1.xyz = r1.xxx ? r3.yzw : r2.yzw;
-  r4.xyz = r0.www ? r1.xyz : r0.xyz;
+  r1.x = min(r2.x, r1.x);  
+  r1.xyz = (r1.z < r1.x) || (r1.y < r1.z) ? r3.yzw : r2.yzw;
+  r4.xyz = r4.w > 0 ? r1.xyz : r0.xyz;
   r0.xy = r6.xy * cb0[1].xy + cb0[1].zw;
   r0.x = t1.Sample(s1_s, r0.xy).w;
   r0.x = -0.5 + r0.x;

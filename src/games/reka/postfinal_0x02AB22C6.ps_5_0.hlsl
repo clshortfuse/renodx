@@ -11,8 +11,6 @@ cbuffer cb0 : register(b0){
   float4 cb0[6];
 }
 
-#define cmp -
-
 void main(
   float4 v0 : SV_POSITION0,
   float2 v1 : TEXCOORD0,
@@ -37,8 +35,7 @@ void main(
   r2.xyz = t0.Load(r1.xyww).xyz;
   r1.x = t2.Load(r1.xyzw).x;
   o0.xyz = r0.www * r2.xyz + r0.xyz;
-  r0.x = cmp(cb0[5].x == 1.000000);
-  o0.w = r0.x ? r1.x : 1;
+  o0.w = (cb0[5].x == 1.0) ? r1.x : 1;
       if(injectedData.fxFilmGrain > 0.f){
     o0.rgb = applyFilmGrain(o0.rgb, v1, injectedData.fxFilmGrainType != 0.f);
     }

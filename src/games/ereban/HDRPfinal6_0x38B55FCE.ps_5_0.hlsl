@@ -14,8 +14,6 @@ cbuffer cb0 : register(b0) {
   float4 cb0[6];
 }
 
-#define cmp -
-
 void main(
     float4 v0: SV_POSITION0,
     float2 v1: TEXCOORD0,
@@ -102,12 +100,9 @@ void main(
   r0.y = renodx::color::y::from::BT709(r3.gba);
   r0.z = min(r0.y, r3.x);
   r0.y = max(r0.y, r3.x);
-  r0.y = max(r0.y, r1.x);
-  r0.y = cmp(r0.y < r2.w);
-  r0.z = min(r0.z, r1.y);
-  r0.z = cmp(r2.w < r0.z);
-  r0.y = (int)r0.y | (int)r0.z;
-  r0.yzw = r0.yyy ? r2.xyz : r4.xyz;
+  float max1 = max(r0.y, r1.x);
+  float min1 = min(r0.z, r1.y);
+  r0.yzw = (r2.w < min1) || (r2.w > max1) ? r2.xyz : r4.xyz;
   r1.xy = r1.zw * cb0[1].xy + cb0[1].zw;
   r2.xy = cb1[48].xy * r1.zw;
   r1.x = t1.SampleBias(s1_s, r1.xy, cb1[79].y).w;
@@ -126,7 +121,6 @@ void main(
   r2.z = 0;
   r1.xyzw = t2.SampleLevel(s0_s, r2.xyz, 0).xyzw;
   o0.xyz = r1.www * r0.yzw + r1.xyz;
-  r0.y = cmp(cb0[5].x == 1.000000);
-  o0.w = r0.y ? r0.x : 1;
+  o0.w = (cb0[5].x == 1.0) ? r0.x : 1;
   return;
 }
