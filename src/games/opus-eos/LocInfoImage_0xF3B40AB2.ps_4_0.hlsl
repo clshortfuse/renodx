@@ -19,7 +19,7 @@ cbuffer cb0 : register(b0) {
   float4 cb0[17];
 }
 
-// Fix Eye-searingly UI Elements
+// Eye-searingly bright UI Elements
 
 // 3Dmigoto declarations
 #define cmp -

@@ -26,10 +26,7 @@
 #define CUSTOM_FILM_GRAIN_STRENGTH           shader_injection.custom_film_grain_strength
 #define CUSTOM_RANDOM                        shader_injection.custom_random
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-#define ORIGINAL_GAMMA                       shader_injection.original_gamma
-#define ORIGINAL_DITHER                      shader_injection.original_dither
-#define ORIGINAL_BLACK_FLOOR                 shader_injection.original_black_floor
-#define ORIGINAL_BLOWOUT                     shader_injection.original_blowout
+#define VANILLA_BLACK_FLOOR                 shader_injection.vanilla_black_floor
 #define RENODX_RENO_DRT_WHITE_CLIP           10.f
 
 // Must be 32bit aligned
@@ -73,9 +70,7 @@ struct ShaderInjectData {
   float custom_grain_toggle;
   float custom_film_grain_strength;
   float custom_random;
-  float original_gamma;
-  float original_dither;
-  float original_black_floor;
+  float vanilla_black_floor;
 };
 
 #ifndef __cplusplus

@@ -40,7 +40,7 @@ float3 ApplyUserTonemap(float3 ungraded, Texture2D lut_texture, SamplerState lut
   return color;
 }
 
-// Vaniilla tonemapping 
+// Vanilla tonemapping 
 float3 Vanilla(float3 ungraded, Texture2D lut_texture, SamplerState lut_sampler, float3 precompute, float2 uv, Texture2D ditherTex, SamplerState ditherSampler, float4 ditherCoords) {
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.type_input = renodx::lut::config::type::SRGB;

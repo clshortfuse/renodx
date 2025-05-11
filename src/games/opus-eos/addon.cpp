@@ -22,7 +22,6 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
-
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
@@ -42,7 +41,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x43207502),  // Bloom
     CustomShaderEntry(0x25268FD8),  // Bloom2D
     CustomShaderEntry(0x461C59CD),  // LetterBoxShader
-    CustomShaderEntry(0x49E25D6C),  // BlitCopy
     CustomShaderEntry(0x2C10C965),  // MaskBloom
     CustomShaderEntry(0xA696BC7D),  // StylizedWater
     CustomShaderEntry(0xF3B40AB2),  // LocInfoImage
@@ -330,33 +328,13 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return CUSTOM_GRAIN_TOGGLE > 0; },
     },
     new renodx::utils::settings::Setting{
-        .key = "OriginalGamma",
-        .binding = &ORIGINAL_GAMMA,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Og Gamma/contrast",
-        .section = "Effects",
-        .labels = {"Off", "On"},
-        .is_visible = []() { return false; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "OriginalBlackFloor",
-        .binding = &ORIGINAL_BLACK_FLOOR,
+        .key = "VanillaBlackFloor",
+        .binding = &VANILLA_BLACK_FLOOR,
         .default_value = 100.f,
         .label = "Vanilla Black Floor",
         .section = "Effects",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "OriginalDither",
-        .binding = &ORIGINAL_DITHER,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Orginal 8-bit Dithering ",
-        .section = "Effects",
-        .labels = {"Off", "On"},
-        .is_visible = []() { return false; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -371,7 +349,7 @@ renodx::utils::settings::Settings settings = {
               {"ColorGradeSaturation", 55.f},
               {"ColorGradeHighlightSaturation", 55.f},
               {"ColorGradeBlowout", 40.f},
-              {"OriginalBlackFloor", 50.f},
+              {"VanillaBlackFloor", 50.f},
           });
         },
     },
@@ -442,24 +420,12 @@ renodx::utils::settings::Settings settings = {
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
-  renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 203.f);
-  renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
-  renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
   renodx::utils::settings::UpdateSetting("GammaCorrection", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 100.f);
   renodx::utils::settings::UpdateSetting("ColorGradeLUTScaling", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeLUTSampling", 0.f);
   renodx::utils::settings::UpdateSetting("Bloom Radius", 50.f);
   renodx::utils::settings::UpdateSetting("Bloom Intensity", 50.f);
-  renodx::utils::settings::UpdateSetting("OriginalGamma", 1.f);
-  renodx::utils::settings::UpdateSetting("OriginalDither", 1.f);
-  renodx::utils::settings::UpdateSetting("GrainToggle", 0.f);
-  renodx::utils::settings::UpdateSetting("FxSWFilmGrainStrength", 0.f);
 }
 
 bool fired_on_init_swapchain = false;
