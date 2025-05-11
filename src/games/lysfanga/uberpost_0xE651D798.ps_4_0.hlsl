@@ -9,8 +9,6 @@ cbuffer cb0 : register(b0) {
   float4 cb0[142];
 }
 
-#define cmp -
-
 void main(
     float4 v0: SV_POSITION0,
     float2 v1: TEXCOORD0,
@@ -56,15 +54,13 @@ void main(
   r1.xyzw = r2.zzzz * r3.xyzw + r1.xyzw;
   r1.xyzw = r2.yyyy * r1.xyzw;
   r1.xyzw = r2.wwww * r4.xyzw + r1.xyzw;
-  r0.w = cmp(0 < cb0[131].x);
-  if (r0.w != 0) {
+  if (cb0[131].x > 0) {
     r2.xyz = r1.xyz * r1.www;
     r1.xyz = float3(8, 8, 8) * r2.xyz;
   }
   r1.xyz = cb0[130].xxx * r1.xyz * injectedData.fxBloom;
   r0.xyz = r1.xyz * cb0[130].yzw + r0.xyz;
-  r0.w = cmp(0 < cb0[138].z);
-  if (r0.w != 0) {
+  if (cb0[138].z > 0) {
     r1.xy = -cb0[138].xy + v1.xy;
     r1.yz = cb0[138].zz * abs(r1.xy) * min(1, injectedData.fxVignette);
     r1.x = cb0[137].w * r1.y;
@@ -79,16 +75,9 @@ void main(
     r0.xyz = r1.xyz * r0.xyz;
   }
   r0.xyz = cb0[128].www * r0.xyz;
-  float3 untonemapped = r0.rgb;
-  r0.x = cmp(0 < cb0[129].w);
-  if (r0.x != 0) {
-    r0.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r1.xyz;
-    r2.xyz = log2(r1.xyz);
-    r2.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r2.xyz;
-    r2.xyz = exp2(r2.xyz);
-    r2.xyz = r2.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
-    r3.xyz = cmp(float3(0.00313080009, 0.00313080009, 0.00313080009) >= r1.xyz);
-    r0.xyz = r3.xyz ? r0.xyz : r2.xyz;
+  r1.rgb = applyUserTonemap(r0.rgb);
+  if (cb0[129].w > 0) {
+    r0.xyz = renodx::color::srgb::Encode(r1.xyz);
     r2.xyz = cb0[129].zzz * r0.zxy;
     r0.w = floor(r2.x);
     r2.xw = float2(0.5, 0.5) * cb0[129].xy;
@@ -104,15 +93,14 @@ void main(
     r2.xyz = r0.www * r2.xyz + r3.xyz;
     r2.xyz = r2.xyz + -r0.xyz;
     r0.xyz = cb0[129].www * r2.xyz + r0.xyz;
-    r2.xyz = float3(0.0773993805, 0.0773993805, 0.0773993805) * r0.xyz;
-    r3.xyz = float3(0.0549999997, 0.0549999997, 0.0549999997) + r0.xyz;
-    r3.xyz = float3(0.947867334, 0.947867334, 0.947867334) * r3.xyz;
-    r3.xyz = log2(abs(r3.xyz));
-    r3.xyz = float3(2.4000001, 2.4000001, 2.4000001) * r3.xyz;
-    r3.xyz = exp2(r3.xyz);
-    r0.xyz = cmp(float3(0.0404499993, 0.0404499993, 0.0404499993) >= r0.xyz);
-    r1.xyz = r0.xyz ? r2.xyz : r3.xyz;
+    r1.xyz = renodx::color::srgb::Decode(r0.xyz);
   }
+  float3 preLUT = r1.rgb;
+  if (injectedData.colorGradeLUTStrength > 0.f) {
+    if (injectedData.toneMapType != 0.f) {
+      r1.rgb = lutShaper(r1.rgb);
+    }
+    if (injectedData.colorGradeLUTSampling == 0.f) {
   r0.xyz = cb0[128].zzz * r1.zxy;
   r0.x = floor(r0.x);
   r1.xy = float2(0.5, 0.5) * cb0[128].xy;
@@ -125,14 +113,27 @@ void main(
   r2.xyzw = t2.SampleLevel(s0_s, r0.yz, 0).xyzw;
   r0.x = r1.z * cb0[128].z + -r0.x;
   r0.yzw = r2.xyz + -r3.xyz;
-  o0.xyz = r0.xxx * r0.yzw + r3.xyz;
-  o0.w = 1;
-  o0.rgb = applyUserTonemap(untonemapped, t2, s0_s, cb0[128].rgb);
+  r1.xyz = r0.xxx * r0.yzw + r3.xyz;
+    } else {
+      r1.xyz = renodx::lut::SampleTetrahedral(t2, r1.rgb, cb0[128].z + 1u);
+    }
+    if (injectedData.colorGradeLUTScaling > 0.f) {
+      float3 minBlack = renodx::lut::Sample(t2, s0_s, float3(0, 0, 0), cb0[128].xyz);
+      float lutMinY = renodx::color::y::from::BT709(abs(minBlack));
+      if (lutMinY > 0) {
+        float3 correctedBlack = renodx::lut::CorrectBlack(preLUT, r1.rgb, lutMinY, 0.f);
+        r1.rgb = lerp(r1.rgb, correctedBlack, injectedData.colorGradeLUTScaling);
+      }
+    }
+    r1.rgb = lerp(preLUT, r1.rgb, injectedData.colorGradeLUTStrength);
+  }
   if (injectedData.fxFilmGrain > 0.f) {
-    o0.rgb = applyFilmGrain(o0.rgb, v1, injectedData.fxFilmGrainType != 0.f);
+    r1.rgb = applyFilmGrain(r1.rgb, v1, injectedData.fxFilmGrainType != 0.f);
   }
   if (injectedData.fxBlooom == 0.f) {
-    o0.rgb = PostToneMapScale(o0.rgb);
+    r1.rgb = PostToneMapScale(r1.rgb);
   }
+  o0.rgb = r1.rgb;
+  o0.w = 1;
   return;
 }

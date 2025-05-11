@@ -9,8 +9,6 @@ cbuffer cb0 : register(b0) {
   float4 cb0[139];
 }
 
-#define cmp -
-
 void main(
     float4 v0: SV_POSITION0,
     float2 v1: TEXCOORD0,
@@ -21,15 +19,13 @@ void main(
 
   r0.xyzw = t0.SampleBias(s0_s, v1.xy, cb0[19].x).xyzw;
   r1.xyzw = t1.SampleBias(s0_s, v1.xy, cb0[19].x).xyzw;
-  r0.w = cmp(0 < cb0[131].x);
-  if (r0.w != 0) {
+  if (cb0[131].x > 0) {
     r2.xyz = r1.xyz * r1.www;
     r1.xyz = float3(8, 8, 8) * r2.xyz;
   }
   r1.xyz = cb0[130].xxx * r1.xyz * injectedData.fxBlooom;
   r0.xyz = r1.xyz * cb0[130].yzw + r0.xyz;
-  r0.w = cmp(0 < cb0[138].z);
-  if (r0.w != 0) {
+  if (cb0[138].z > 0) {
     r1.xy = -cb0[138].xy + v1.xy;
     r1.yz = cb0[138].zz * abs(r1.xy);
     r1.x = cb0[137].w * r1.y;
@@ -43,17 +39,12 @@ void main(
     r1.xyz = r0.www * r1.xyz + cb0[137].xyz;
     r0.xyz = r1.xyz * r0.xyz;
   }
-  float3 preLUT = cb0[128].www * r0.rgb;
-  r0.rgb = saturate(preLUT);
-  r0.w = cmp(0 < cb0[129].w);
-  if (r0.w != 0) {
-    r1.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r0.xyz;
-    r2.xyz = log2(r0.xyz);
-    r2.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r2.xyz;
-    r2.xyz = exp2(r2.xyz);
-    r2.xyz = r2.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
-    r3.xyz = cmp(float3(0.00313080009, 0.00313080009, 0.00313080009) >= r0.xyz);
-    r1.xyz = r3.xyz ? r1.xyz : r2.xyz;
+  r0.rgb = cb0[128].www * r0.rgb;
+  if (injectedData.toneMapType == 0.f) {
+    r0.rgb = saturate(r0.rgb);
+  }
+  if (cb0[129].w > 0) {
+    r1.xyz = renodx::color::srgb::Encode(r0.xyz);
     r2.xyz = cb0[129].zzz * r1.zxy;
     r0.w = floor(r2.x);
     r2.xw = float2(0.5, 0.5) * cb0[129].xy;
@@ -69,15 +60,14 @@ void main(
     r2.xyz = r0.www * r2.xyz + r3.xyz;
     r2.xyz = r2.xyz + -r1.xyz;
     r1.xyz = cb0[129].www * r2.xyz + r1.xyz;
-    r2.xyz = float3(0.0773993805, 0.0773993805, 0.0773993805) * r1.xyz;
-    r3.xyz = float3(0.0549999997, 0.0549999997, 0.0549999997) + r1.xyz;
-    r3.xyz = float3(0.947867334, 0.947867334, 0.947867334) * r3.xyz;
-    r3.xyz = log2(abs(r3.xyz));
-    r3.xyz = float3(2.4000001, 2.4000001, 2.4000001) * r3.xyz;
-    r3.xyz = exp2(r3.xyz);
-    r1.xyz = cmp(float3(0.0404499993, 0.0404499993, 0.0404499993) >= r1.xyz);
-    r0.xyz = r1.xyz ? r2.xyz : r3.xyz;
+    r0.xyz = renodx::color::srgb::Decode(r1.xyz);
   }
+  float3 preLUT = r0.rgb;
+  if (injectedData.colorGradeLUTStrength > 0.f) {
+    if (injectedData.toneMapType != 0.f) {
+      r0.rgb = lutShaper(r0.rgb);
+    }
+    if (injectedData.colorGradeLUTSampling == 0.f) {
   r0.xyw = cb0[128].zzz * r0.xyz;
   r0.w = floor(r0.w);
   r1.xy = float2(0.5, 0.5) * cb0[128].xy;
@@ -90,17 +80,24 @@ void main(
   r1.xyzw = t2.SampleLevel(s0_s, r0.xy, 0).xyzw;
   r0.x = r0.z * cb0[128].z + -r0.w;
   r0.yzw = r1.xyz + -r2.xyz;
-  o0.xyz = r0.xxx * r0.yzw + r2.xyz;
-  o0.w = 1;
-  if (injectedData.toneMapType == 0.f) {
-    o0.rgb = lerp(preLUT, o0.rgb, injectedData.colorGradeLUTStrength);
-  } else if (injectedData.toneMapType == 1.f) {
-    o0.rgb = preLUT;
-  } else {
-    o0.rgb = sampleLUT(preLUT, t2, s0_s, cb0[128].rgb, injectedData.upgradePerChannel != 0.f);
+  r0.xyz = r0.xxx * r0.yzw + r2.xyz;
+    } else {
+      r0.xyz = renodx::lut::SampleTetrahedral(t2, r0.rgb, cb0[128].z + 1u);
+    }
+    if (injectedData.colorGradeLUTScaling > 0.f) {
+      float3 minBlack = renodx::lut::Sample(t2, s0_s, float3(0, 0, 0), cb0[128].xyz);
+      float lutMinY = renodx::color::y::from::BT709(abs(minBlack));
+      if (lutMinY > 0) {
+        float3 correctedBlack = renodx::lut::CorrectBlack(preLUT, r1.rgb, lutMinY, 0.f);
+        r0.rgb = lerp(r0.rgb, correctedBlack, injectedData.colorGradeLUTScaling);
+      }
+    }
+    r0.rgb = lerp(preLUT, r0.rgb, injectedData.colorGradeLUTStrength);
   }
   if (injectedData.fxBlooom > 0.f) {
-    o0.rgb = PostToneMapScale(o0.rgb);
+    r0.rgb = PostToneMapScale(r0.rgb);
   }
+  o0.rgb = r0.rgb;
+  o0.w = 1;
   return;
 }
