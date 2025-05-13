@@ -25,11 +25,19 @@ namespace {
 
 bool is_grain_enabled = false;
 bool is_vignette_enabled = false;
+bool BWEffectCheck = false;
+ShaderInjectData shader_injection;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x8A6BCB4C),  // videos
-    CustomShaderEntry(0xF5AC76A9),  // LutBuilder3D
-    CustomShaderEntry(0xB2C2262A),  // LutBuilder3D 2 (B&W)
+    CustomShaderEntryCallback(0xF5AC76A9, [](reshade::api::command_list* cmd_list) {  // LutBuilder3D
+    BWEffectCheck = false;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xB2C2262A, [](reshade::api::command_list* cmd_list) {  // LutBuilder3D 2 (B&W)
+    BWEffectCheck = true;
+    return true;
+    }),
     CustomShaderEntryCallback(0xF1A75575, [](reshade::api::command_list* cmd_list) {  // uberpost (vignette)
     is_vignette_enabled = true;
     return true;
@@ -93,7 +101,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x20133A8B),  // Final
 };
 
-ShaderInjectData shader_injection;
 float current_settings_mode = 0;
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -177,7 +184,7 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Luminance", "Per Channel"},
         .tint = 0x610512,
         .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
-        .is_visible = []() { return current_settings_mode >= 2; },
+        .is_visible = []() { return current_settings_mode >= 2 && !BWEffectCheck; },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapColorSpace",
@@ -189,7 +196,7 @@ renodx::utils::settings::Settings settings = {
         .labels = {"BT709", "BT2020", "AP1"},
         .tint = 0x610512,
         .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
-        .is_visible = []() { return current_settings_mode >= 2; },
+        .is_visible = []() { return current_settings_mode >= 2 && !BWEffectCheck; },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapHueProcessor",
@@ -201,7 +208,7 @@ renodx::utils::settings::Settings settings = {
         .labels = {"OKLab", "ICtCp", "darktable UCS"},
         .tint = 0x610512,
         .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
-        .is_visible = []() { return current_settings_mode >= 2; },
+        .is_visible = []() { return current_settings_mode >= 2 && !BWEffectCheck; },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapHueShift",
@@ -215,7 +222,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType >= 3.f && shader_injection.toneMapPerChannel == 0.f; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1; },
+        .is_visible = []() { return current_settings_mode >= 1 && !BWEffectCheck; },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapHueCorrection",
@@ -227,7 +234,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 2; },
+        .is_visible = []() { return current_settings_mode >= 2 && !BWEffectCheck; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
@@ -281,6 +288,7 @@ renodx::utils::settings::Settings settings = {
         .tint = 0x610512,
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return !BWEffectCheck; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeBlowout",
@@ -293,7 +301,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
         .parse = [](float value) { return 1.f - value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1; },
+        .is_visible = []() { return current_settings_mode >= 1 && !BWEffectCheck; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeDechroma",
@@ -306,11 +314,12 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
         .parse = [](float value) { return fmax(0.00001f, value * 0.01f); },
+        .is_visible = []() { return !BWEffectCheck; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeFlare",
         .binding = &shader_injection.colorGradeFlare,
-        .default_value = 50.f,
+        .default_value = 0.f,
         .label = "Flare",
         .section = "Color Grading",
         .tint = 0x610512,
@@ -321,7 +330,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeClip",
         .binding = &shader_injection.colorGradeClip,
-        .default_value = 100.f,
+        .default_value = 1.f,
         .label = "Clipping",
         .section = "Color Grading",
         .tint = 0x610512,
@@ -338,7 +347,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = 0x610512,
         .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
+        .is_enabled = []() { return !BWEffectCheck; },
+        .parse = [](float value) { return BWEffectCheck ? 1.f : value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
@@ -438,7 +448,8 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
           renodx::utils::settings::UpdateSetting("colorGradeBlowout", 50.f);
           renodx::utils::settings::UpdateSetting("colorGradeDechroma", 65.f);
-          renodx::utils::settings::UpdateSetting("colorGradeFlare", 50.f);
+          renodx::utils::settings::UpdateSetting("colorGradeFlare", 0.f);
+          renodx::utils::settings::UpdateSetting("colorGradeClip", 1.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f);
         },
@@ -457,12 +468,13 @@ renodx::utils::settings::Settings settings = {
             renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 80.f);
             renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
             renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-            renodx::utils::settings::UpdateSetting("colorGradeShadows", 45.f);
-            renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
+            renodx::utils::settings::UpdateSetting("colorGradeShadows", BWEffectCheck ? 42.f : 45.f);
+            renodx::utils::settings::UpdateSetting("colorGradeContrast", BWEffectCheck ? 65.f : 50.f);
             renodx::utils::settings::UpdateSetting("colorGradeSaturation", 55.f);
             renodx::utils::settings::UpdateSetting("colorGradeBlowout", 55.f);
             renodx::utils::settings::UpdateSetting("colorGradeDechroma", 70.f);
             renodx::utils::settings::UpdateSetting("colorGradeFlare", 50.f);
+            renodx::utils::settings::UpdateSetting("colorGradeClip", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f); },
     },
@@ -487,8 +499,10 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeBlowout", 35.f);
           renodx::utils::settings::UpdateSetting("colorGradeDechroma", 65.f);
           renodx::utils::settings::UpdateSetting("colorGradeFlare", 65.f);
+          renodx::utils::settings::UpdateSetting("colorGradeClip", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f); },
+          .is_visible = []() { return !BWEffectCheck; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
@@ -565,6 +579,15 @@ void OnPresent(
     static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
     static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
   shader_injection.random = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
+  if(BWEffectCheck == shader_injection.BWCameraEffect) return;
+    if(BWEffectCheck){
+        settings[1]->labels = {"Vanilla", "None", "ACES", "RenoDRT (Reinhard)", "RenoDRT (Daniele)"};
+        settings[19]->is_enabled = []() { return shader_injection.toneMapType == 3.f; };
+    } else {
+        settings[1]->labels = {"Vanilla", "None", "ACES", "RenoDRT (Daniele)", "RenoDRT (Reinhard)"};
+        settings[19]->is_enabled = []() { return shader_injection.toneMapType == 4.f; };
+    }
+    shader_injection.BWCameraEffect = BWEffectCheck;
 }
 
 }  // namespace
