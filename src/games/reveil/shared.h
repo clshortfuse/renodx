@@ -37,6 +37,7 @@ struct ShaderInjectData {
   float fxChroma;
 
   float random;
+  bool BWCameraEffect;
 };
 
 #ifndef __cplusplus

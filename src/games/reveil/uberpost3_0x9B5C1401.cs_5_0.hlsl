@@ -258,7 +258,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
       r0.rgb = lerp(preCG, r0.rgb, injectedData.colorGradeLUTStrength);
     }
   }
-  r0.rgb = applyUserTonemap(r0.rgb);
+  r0.rgb = injectedData.BWCameraEffect ? applyUserTonemapBW(r0.rgb) : applyUserTonemap(r0.rgb);
   r0.w = cmp(cb1[12].w == 0.000000);
   r1.x = saturate(r2.w * cb1[13].x + cb1[13].y);
   r1.yzw = r0.xyz + -r2.xyz;
