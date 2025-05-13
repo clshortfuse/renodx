@@ -169,19 +169,7 @@ void main(
   } else {
     r0.rgb = applyFilmGrain(r0.rgb, v1.xy);
   }
-  float3 untonemapped = r0.rgb;
-  r0.xyz = max(float3(0,0,0), r0.xyz);
-  r1.xyz = r0.xyz * r0.xyz;
-  r1.xyz = r1.xyz * r1.xyz;
-  r1.xyz = r0.xyz * r1.xyz + float3(-1,-1,-1);
-  r2.xyz = float3(-1,-1,-1) + r0.xyz;
-  r1.xyz = r1.xyz / r2.xyz;
-  r2.xyz = float3(-1,-1,-1) + r1.xyz;
-  r0.xyz = cmp(r0.xyz != float3(1,1,1));
-  r1.xyz = r2.xyz / r1.xyz;
-  r0.xyz = r0.xyz ? r1.xyz : float3(0.800000012,0.800000012,0.800000012);
-  float3 vanilla = r0.rgb;
-  r0.rgb = applyUserTonemap(untonemapped, vanilla);
+  r0.rgb = applyUserTonemap(r0.rgb);
   r0.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
   r1.xy = (uint2)v0.xy;
   r2.z = (uint)Global.c[1].w;

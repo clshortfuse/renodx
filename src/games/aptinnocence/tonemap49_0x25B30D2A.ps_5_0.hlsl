@@ -118,18 +118,7 @@ void main(
     }
   }
   r0.rgb = lerp(preLUT, r0.rgb, injectedData.colorGradeLUTStrength);
-  float3 untonemapped = r0.rgb;
-  r1.xyz = r0.xyz * r0.xyz;
-  r1.xyz = r1.xyz * r1.xyz;
-  r1.xyz = r0.xyz * r1.xyz + float3(-1,-1,-1);
-  r2.xyz = float3(-1,-1,-1) + r0.xyz;
-  r0.xyz = cmp(r0.xyz != float3(1,1,1));
-  r1.xyz = r1.xyz / r2.xyz;
-  r2.xyz = float3(-1,-1,-1) + r1.xyz;
-  r1.xyz = r2.xyz / r1.xyz;
-  r0.xyz = r0.xyz ? r1.xyz : float3(0.800000012,0.800000012,0.800000012);
-  float3 vanilla = r0.rgb;
-  r0.rgb = applyUserTonemap(untonemapped, vanilla);
+  r0.rgb = applyUserTonemap(r0.rgb);
   r0.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
   r1.xy = (uint2)v0.xy;
   r1.xy = (int2)r1.xy & int2(63,63);
