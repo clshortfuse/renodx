@@ -835,6 +835,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         if (product_name == "Split Fiction") return true;
         if (product_name == "RSDragonwilds") return true;
         if (product_name == "Enotria: The Last Song") return true;
+        if (product_name == "FactoryGameSteam") return true;  // Satisfactory, Steam only?
 
         // UE DX12 has a 4 param root sig that crashes if modified. Track for now
         return std::ranges::any_of(params, [](auto param) {
