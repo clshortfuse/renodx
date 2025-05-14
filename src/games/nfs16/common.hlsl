@@ -253,12 +253,11 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   config.shadows = injectedData.colorGradeShadows;
   config.contrast = injectedData.colorGradeContrast;
   config.saturation = injectedData.colorGradeSaturation;
-  config.mid_gray_nits = 19.f;
-  config.reno_drt_contrast = 1.04f;
+  config.reno_drt_contrast = 1.03f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = renodx::tonemap::config::hue_correction_type::INPUT;
-  config.hue_correction_strength = 1.f - injectedData.toneMapHueCorrection;
+  config.hue_correction_strength = injectedData.toneMapHueCorrection;
   config.reno_drt_tone_map_method = injectedData.toneMapType == 4.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
                                                                     : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
@@ -276,7 +275,7 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   if (injectedData.toneMapType == 0.f) {
     outputColor = saturate(LUTless);
   } else {
-    outputColor = untonemapped;
+    outputColor = untonemapped * 1.1f;
   }
   if (injectedData.toneMapType == 2.f) {  // Frostbite
     float previous_lut_config_strength = lut_config.strength;
