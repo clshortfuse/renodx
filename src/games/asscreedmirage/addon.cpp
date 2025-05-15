@@ -159,7 +159,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the brightness of UI and HUD elements in nits. Requires a game restart to take effect.",
         .min = 48.f,
         .max = 500.f,
-        .on_change_value = [](float previous, float current) { &OnOptimizableUISettingChange; },
+        .on_change = &OnOptimizableUISettingChange,
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
