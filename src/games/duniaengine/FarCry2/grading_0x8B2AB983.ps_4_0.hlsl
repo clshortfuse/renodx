@@ -98,10 +98,8 @@ void main(
   r0.rgb = RestoreSaturationLoss(sdrColor, r0.rgb, injectedData.colorGradeLUTScaling);
   if (config.type == 0.f) {
     r0.rgb = lerp(sdrColor, r0.rgb, injectedData.colorGradeLUTStrength);
-  } else if (injectedData.upgradePerChannel == 1.f) {
-    r0.rgb = UpgradeToneMapPerChannel(hdrColor, sdrColor, r0.rgb, injectedData.colorGradeLUTStrength);
   } else {
-    r0.rgb = UpgradeToneMapByLuminance(hdrColor, sdrColor, r0.rgb, injectedData.colorGradeLUTStrength);
+    r0.rgb = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, r0.rgb, injectedData.colorGradeLUTStrength);
   }
   }
   if (injectedData.fxFilmGrainType == 1.f) {

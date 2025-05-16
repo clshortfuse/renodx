@@ -170,45 +170,6 @@ float3 UpgradeToneMapPerChannel(float3 color_hdr, float3 color_sdr, float3 post_
   return lerp(color_hdr, color_scaled, post_process_strength);
 }
 
-float3 UpgradeToneMapByLuminance(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength) {
-  // float ratio = 1.f;
-
-  float3 bt2020_hdr = max(0, renodx::color::bt2020::from::BT709(color_hdr));
-  float3 bt2020_sdr = max(0, renodx::color::bt2020::from::BT709(color_sdr));
-  float3 bt2020_post_process = max(0, renodx::color::bt2020::from::BT709(post_process_color));
-
-  float ratio = UpgradeToneMapRatio(
-      renodx::color::y::from::BT2020(bt2020_hdr),
-      renodx::color::y::from::BT2020(bt2020_sdr),
-      renodx::color::y::from::BT2020(bt2020_post_process));
-
-  float3 color_scaled = max(0, bt2020_post_process * ratio);
-  color_scaled = renodx::color::bt709::from::BT2020(color_scaled);
-  color_scaled = renodx::color::correct::Hue(color_scaled, post_process_color);
-  return lerp(color_hdr, color_scaled, post_process_strength);
-}
-
-float3 Apply(float3 inputColor, renodx::tonemap::Config tm_config, renodx::lut::Config lut_config, Texture3D lutTexture, bool perChannel) {
-  if (lut_config.strength == 0.f || tm_config.type == 1.f) {
-    return renodx::tonemap::config::Apply(inputColor, tm_config);
-  } else {
-    renodx::tonemap::config::DualToneMap tone_maps = renodx::tonemap::config::ApplyToneMaps(inputColor, tm_config);
-    float3 color_hdr = tone_maps.color_hdr;
-    float3 color_sdr = tone_maps.color_sdr;
-
-    float previous_lut_config_strength = lut_config.strength;
-    lut_config.strength = 1.f;
-    float3 color_lut = renodx::lut::Sample(lutTexture, lut_config, color_sdr);
-    if (tm_config.type == 0.f) {
-      return lerp(inputColor, color_lut, previous_lut_config_strength);
-    } else if (perChannel == true) {
-      return UpgradeToneMapPerChannel(color_hdr, color_sdr, color_lut, previous_lut_config_strength);
-    } else {
-      return UpgradeToneMapByLuminance(color_hdr, color_sdr, color_lut, previous_lut_config_strength);
-    }
-  }
-}
-
 float3 vanillaTonemap(float3 color, float A, float CB, float DE, float B, float DF, float mEF, float LW){
   float3 numerator = mad(color, mad(A, color, CB), DE);  // x * (a * x + c * b) + d * e
   float3 denominator = mad(color, mad(A, color, B), DF);    // x * (a * x + b) + d * f
@@ -264,5 +225,5 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
 			} else {
       outputColor = untonemapped;
       }
-return Apply(outputColor, config, lut_config, lutTexture, injectedData.upgradePerChannel != 0.f);
+return renodx::tonemap::config::Apply(outputColor, config, lut_config, lutTexture);
 }

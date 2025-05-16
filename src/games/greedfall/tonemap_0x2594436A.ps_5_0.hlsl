@@ -81,7 +81,7 @@ void main(
           r2.xyz = log2(r2.xyz);
           r2.xyz = float3(0.454545468,0.454545468,0.454545468) * r2.xyz;
           r1.xyz = exp2(r2.xyz);
-            r1.rgb = renodx::color::gamma::EncodeSafe(untonemapped);
+          r1.rgb = injectedData.toneMapType == 0.f ? r1.rgb : renodx::color::gamma::EncodeSafe(untonemapped);
         } else {
           r1.w = cmp((int)r0.x == 5);
           if (r1.w != 0) {

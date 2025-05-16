@@ -295,7 +295,7 @@ void main(
       r0.w = saturate(cb1[6].y);
       r4.xyz = -r1.xyz * r2.xyz + r4.xyz;
       r0.xyz = r0.www * r4.xyz + r0.xyz;
-        r1.rgb = applyUserTonemap(untonemapped, t9, s2_s, cb1[4].xyz, float4(cb1[5].xyz, linearWhite), cb1[6].y == 1.f);
+        r1.rgb = applyUserTonemap(untonemapped, t9, s2_s, cb1[4].xyz, float4(cb1[5].xyz, linearWhite));
       r1.xyz = r0.xyz / r2.xyz;
     } else {
       // color grading LUT
@@ -305,7 +305,7 @@ void main(
       r0.xyz = exp2(r0.xyz);
       r0.xyz = r0.xyz * float3(0.9375,0.9375,0.9375) + float3(0.03125,0.03125,0.03125);
       r0.xyz = t9.Sample(s2_s, r0.xyz).xyz;
-      r0.rgb = applyUserTonemap(untonemapped, t9, s2_s, cb1[4].xyz, float4(cb1[5].xyz, linearWhite), cb1[6].y == 1.f);
+      r0.rgb = applyUserTonemap(untonemapped, t9, s2_s, cb1[4].xyz, float4(cb1[5].xyz, linearWhite));
       r0.w = saturate(cb1[6].y);
       r0.xyz = r0.xyz + -r1.xyz;
       r1.xyz = r0.www * r0.xyz + r1.xyz;
