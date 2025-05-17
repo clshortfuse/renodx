@@ -337,7 +337,6 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType == 4.f; },
         .parse = [](float value) { return value; },
-        .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeLUTStrength",
