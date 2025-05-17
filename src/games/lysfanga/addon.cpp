@@ -283,7 +283,6 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = 0x896895,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType != 1.f; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -296,7 +295,6 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Scales the color grade LUT to full range when size is clamped.",
         .tint = 0x896895,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType != 1.f; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
@@ -309,7 +307,6 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .labels = {"Trilinear", "Tetrahedral"},
         .tint = 0x896895,
-        .is_enabled = []() { return shader_injection.toneMapType != 1.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
