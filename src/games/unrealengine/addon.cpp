@@ -820,7 +820,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
         auto filename = process_path.filename().string();
 
-        if (filename == "RoboCop-Win64-Shipping.exe") return true;  // RoboCop: Rogue City
+        if (filename == "RoboCop-Win64-Shipping.exe") return true;         // RoboCop: Rogue City
+        if (filename == "FactoryGameEGS-Win64-Shipping.exe") return true;  // Satisfactory, EGS
 
         auto product_name = renodx::utils::platform::GetProductName(process_path);
 
@@ -835,7 +836,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         if (product_name == "Split Fiction") return true;
         if (product_name == "RSDragonwilds") return true;
         if (product_name == "Enotria: The Last Song") return true;
-        if (product_name == "FactoryGameSteam") return true;  // Satisfactory, Steam only?
+        if (product_name == "FactoryGameSteam") return true;  // Satisfactory, Steam
+        if (product_name == "FATAL FURY: City of the Wolves") return true;
 
         // UE DX12 has a 4 param root sig that crashes if modified. Track for now
         return std::ranges::any_of(params, [](auto param) {
