@@ -164,15 +164,20 @@ void main(
   r0.xyzw = r1.xxxx * r0.xyzw + r2.xyzw;
   r1.xy = cb1[1].xx + v1.xy;
   r1.xy = float2(0.695917428,0.695917428) + r1.xy;
-  r1.x = dot(r1.xy, float2(12.9898005,78.2330017));
+  r1.x = dot(r1.xy, float2(12.9898,78.233));
   r1.x = sin(r1.x);
   r1.xyzw = float4(43758.5469,28001.8379,50849.4141,12996.8896) * r1.xxxx;
   r1.xyzw = frac(r1.xyzw);
   r1.xyzw = r1.xyzw * float4(2,2,2,2) + float4(-1,-1,-1,-1);
-  r0.xyzw = r1.xyzw * float4(0.00196078443, 0.00196078443, 0.00196078443, 0.00196078443) + r0.xyzw;
+  r0.xyzw = r1.xyzw * float4(0.00196078443, 0.00196078443, 0.00196078443, 0.00196078443) * injectedData.fxNoise + r0.xyzw;
   if (injectedData.toneMapType == 0.f) {
     r0 = saturate(r0);
   }
+  r0.rgb = renodx::color::srgb::DecodeSafe(r0.rgb);
+  if (injectedData.fxFilmGrain > 0.f) {
+    r0.rgb = applyFilmGrain(r0.rgb, v1, injectedData.fxFilmGrainType != 0.f);
+  }
+  r0.rgb = PostToneMapScale(r0.rgb);
   o0.xyzw = r0.xyzw;
   o1.xyzw = r0.xyzw;
   return;
