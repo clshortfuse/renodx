@@ -247,8 +247,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = 0x27627C,
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 3.f || shader_injection.toneMapType == 4.f; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return shader_injection.toneMapType == 3.f || shader_injection.toneMapType == 4.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeClip",
@@ -260,7 +260,6 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType == 4.f; },
         .parse = [](float value) { return value; },
-        .is_visible = []() { return shader_injection.toneMapType == 3.f || shader_injection.toneMapType == 4.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeLUTStrength",
