@@ -1,3 +1,5 @@
+#include "./common.hlsl"
+
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
 cbuffer cb0 : register(b0){
@@ -47,9 +49,7 @@ void main(
   r0.xyz = min(r4.xyz, r0.xyz);
   r0.xyz = r3.xyz + -r0.xyz;
   r0.xyz = r0.xyz + -r1.xyz;
-  r1.xyz = r0.xyz * float3(0.305306,0.305306,0.305306) + float3(0.682171,0.682171,0.682171);
-  r1.xyz = r0.xyz * r1.xyz + float3(0.012523,0.012523,0.012523);
-  r0.xyz = r1.xyz * r0.xyz;
+  r0.rgb = renodx::color::srgb::DecodeSafe(r0.rgb);
   r0.w = max(r0.x, r0.y);
   r0.w = max(r0.w, r0.z);
   r1.x = -cb0[6].x + r0.w;

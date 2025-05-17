@@ -116,5 +116,5 @@ float3 applyUserTonemap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   } else {
     outputColor = untonemapped;
   }
-return renodx::tonemap::config::Apply(outputColor, config, lut_config, lutTexture);
+return renodx::tonemap::config::Apply(outputColor, config);
 }
