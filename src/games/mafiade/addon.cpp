@@ -21,18 +21,82 @@
 
 namespace {
 
+#define UpgradeRTVReplaceShader(value)       \
+  {                                          \
+      value,                                 \
+      {                                      \
+          .crc32 = value,                    \
+          .code = __##value,                 \
+          .on_draw = [](auto* cmd_list) {                                                             \
+            auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                         \
+            bool changed = false;                                                                     \
+            for (auto rtv : rtvs) {                                                                   \
+              changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv);   \
+            }                                                                                         \
+            if (changed) {                                                                            \
+              renodx::mods::swapchain::FlushDescriptors(cmd_list);                                    \
+              renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0}); \
+            }                                                                                         \
+            return true; }, \
+      },                                     \
+  }
+
+#define UpgradeRTVReplaceShaderCallback(value)       \
+  {                                          \
+      value,                                 \
+      {                                      \
+          .crc32 = value,                    \
+          .code = __##value,                 \
+          .on_draw = [](auto* cmd_list) {                                                             \
+            auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                         \
+            bool changed = false;                                                                     \
+            for (auto rtv : rtvs) {                                                                   \
+              changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv);   \
+            }                                                                                         \
+            if (changed) {                                                                            \
+              renodx::mods::swapchain::FlushDescriptors(cmd_list);                                    \
+              renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0}); \
+            }                                                                                         \
+        shader_injection.hasLoadedTitleMenu = 1.f;\
+        shader_injection.is_swapchain_write = renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list);\
+            return true; }, \
+      },                                     \
+  }
+
+#define UpgradeRTVShader(value)              \
+  {                                          \
+      value,                                 \
+      {                                      \
+          .crc32 = value,                    \
+          .on_draw = [](auto* cmd_list) {                                                           \
+            auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                       \
+            bool changed = false;                                                                   \
+            for (auto rtv : rtvs) {                                                                 \
+              changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv); \
+            }                                                                                       \
+            if (changed) {                                                                          \
+              renodx::mods::swapchain::FlushDescriptors(cmd_list);                                  \
+              renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});      \
+            }                                                                                       \
+            return true; }, \
+      },                                     \
+  }
+
 ShaderInjectData shader_injection;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntryCallback(0x916B1D65, [](reshade::api::command_list* cmd_list) {  // tonemap (+ post-processing)
-    shader_injection.hasLoadedTitleMenu = 1.f;
-        shader_injection.is_swapchain_write = renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list);
-    return true;
-    }),
-
+    UpgradeRTVReplaceShaderCallback(0x916B1D65),    // tonemap
     CustomShaderEntry(0x747C6210),  // loading screen
     CustomShaderEntry(0xA7799306),  // videos
     CustomShaderEntry(0x00D96EAE),  // videos 2
+    UpgradeRTVShader(0x48A2BAAB),    // videos
+    UpgradeRTVShader(0xB89B09F1),    // effect
+    UpgradeRTVShader(0xAC2AC170),    // effect
+    UpgradeRTVShader(0x0BCDC0C8),    // effect
+    UpgradeRTVShader(0xDBFE2485),    // effect
+    UpgradeRTVShader(0x73525850),    // effect
+    UpgradeRTVShader(0xA50F7DBD),    // effect
+    UpgradeRTVShader(0xD32E27BD),    // effect
     CustomSwapchainShader(0xACD34CE7),  // fireworks ("Happy Birthday")
     CustomSwapchainShader(0x3EB9D976),  // DoF 7
     CustomSwapchainShader(0xD980FA68),  // low health effect
@@ -521,23 +585,18 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .new_format = reshade::api::format::r16g16b16a16_typeless,
           .dimensions = {3840, 2160},
       });
-      // videos
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r11g11b10_float,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .use_resource_view_cloning = true,
-          .dimensions = {3840, 2160},
-      });
       // not required
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::b8g8r8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
       });
-      // not required
+      // effects
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r11g11b10_float,
           .new_format = reshade::api::format::r16g16b16a16_float,
+          .ignore_size = true,
           .use_resource_view_cloning = true,
+          .use_resource_view_hot_swap = true,
       });
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
