@@ -1,4 +1,3 @@
-#include "./DICE.hlsl"
 #include "./shared.h"
 
 //-----EFFECTS-----//
@@ -200,11 +199,30 @@ float3 applyFrostbite(float3 input, renodx::tonemap::Config FbConfig, bool sdr =
   return color;
 }
 
+float3 DICEMap(float3 color, float output_luminance_max, float highlights_shoulder_start = 0.f,
+  float highlights_modulation_pow = 1.f, bool perChannel = true) {
+if (!perChannel) {
+const float source_luminance = renodx::color::y::from::BT709(color);
+if (source_luminance > 0.0f) {
+const float compressed_luminance =
+renodx::tonemap::dice::internal::LuminanceCompress(source_luminance, output_luminance_max, highlights_shoulder_start, false,
+            renodx::math::FLT_MAX, highlights_modulation_pow);
+color *= compressed_luminance / source_luminance;
+}
+return color;
+} else {
+color.r = renodx::tonemap::dice::internal::LuminanceCompress(color.r, output_luminance_max, highlights_shoulder_start, false,
+                renodx::math::FLT_MAX, highlights_modulation_pow);
+color.g = renodx::tonemap::dice::internal::LuminanceCompress(color.g, output_luminance_max, highlights_shoulder_start, false,
+                renodx::math::FLT_MAX, highlights_modulation_pow);
+color.b = renodx::tonemap::dice::internal::LuminanceCompress(color.b, output_luminance_max, highlights_shoulder_start, false,
+                renodx::math::FLT_MAX, highlights_modulation_pow);
+return color;
+}
+}
+
 float3 applyDICE(float3 input, renodx::tonemap::Config DiceConfig, bool sdr = false) {
   float3 color = input;
-  DICESettings DICEconfig = DefaultDICESettings();
-  DICEconfig.Type = 2 + (uint)injectedData.toneMapPerChannel;
-  DICEconfig.ShoulderStart = injectedData.toneMapShoulderStart;
   float DicePaperWhite = DiceConfig.game_nits / 80.f;
   float DicePeak = sdr ? DicePaperWhite : DiceConfig.peak_nits / 80.f;
   if (DiceConfig.gamma_correction != 0.f && sdr == false) {
@@ -214,7 +232,7 @@ float3 applyDICE(float3 input, renodx::tonemap::Config DiceConfig, bool sdr = fa
 
   float y = renodx::color::y::from::BT709(color * DiceConfig.exposure);
   color = renodx::color::grade::UserColorGrading(color, DiceConfig.exposure, DiceConfig.highlights, DiceConfig.shadows, DiceConfig.contrast);
-  color = DICETonemap(color * DicePaperWhite, DicePeak, DICEconfig) / DicePaperWhite;
+  color = DICEMap(color * DicePaperWhite, DicePeak, injectedData.toneMapShoulderStart * DicePaperWhite, 1.f, DiceConfig.reno_drt_per_channel) / DicePaperWhite;
 
   if (DiceConfig.saturation != 1.f || DiceConfig.hue_correction_strength != 0.f || DiceConfig.reno_drt_blowout != 0.f || DiceConfig.reno_drt_dechroma != 0.f) {
     float3 perceptual_new;
