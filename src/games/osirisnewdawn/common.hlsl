@@ -191,8 +191,9 @@ float3 applyUserTonemapACES(float3 untonemapped) {
   config.saturation = injectedData.colorGradeSaturation;
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
-  config.reno_drt_shadows = 1.1f;
+  config.reno_drt_shadows = 1.06f;
   config.reno_drt_contrast = 1.6f;
+  config.reno_drt_saturation = 0.92f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = injectedData.toneMapPerChannel != 0.f ? renodx::tonemap::config::hue_correction_type::INPUT
