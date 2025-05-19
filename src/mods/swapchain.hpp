@@ -111,6 +111,7 @@ static bool attached = false;
 static std::vector<SwapChainUpgradeTarget> swap_chain_upgrade_targets = {};
 static reshade::api::format target_format = reshade::api::format::r16g16b16a16_float;
 static reshade::api::color_space target_color_space = reshade::api::color_space::extended_srgb_linear;
+static bool set_color_space = true;
 static bool use_shared_device = false;
 static bool use_resource_cloning = false;
 static bool use_resize_buffer = false;
@@ -1226,7 +1227,9 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     return;
   }
 
-  renodx::utils::swapchain::ChangeColorSpace(swapchain, target_color_space);
+  if (set_color_space) {
+    renodx::utils::swapchain::ChangeColorSpace(swapchain, target_color_space);
+  }
 }
 
 static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
