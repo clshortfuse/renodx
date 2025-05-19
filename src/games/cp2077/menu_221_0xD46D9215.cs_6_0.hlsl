@@ -347,7 +347,7 @@ void comp_main() {
 
       // Custom
       if (injectedData.toneMapGammaCorrection >= 1.f) {
-        _1782 = renodx::color::correct::GammaSafe(_1782);
+        _1782 = renodx::color::correct::Gamma(max(0, _1782));
       }
 
       _1793 = (cb6[2u].x * _1782.x) + _1600;
