@@ -569,8 +569,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::force_screen_tearing = false;
         renodx::mods::swapchain::use_resize_buffer = true;
         renodx::mods::swapchain::use_resource_cloning = true;
-        renodx::mods::swapchain::target_format = reshade::api::format::r10g10b10a2_unorm;
-        renodx::mods::swapchain::target_color_space = reshade::api::color_space::srgb_nonlinear;
+        renodx::mods::swapchain::set_color_space = false;
+        renodx::mods::swapchain::SetUseHDR10(true);
 
         if (initial_post_process_format == 1.f) {
           renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
@@ -582,7 +582,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         }
 
         if (initial_hdr_upgrade == 1.f || initial_hdr_upgrade == 2.f) {
-          renodx::mods::swapchain::target_color_space = reshade::api::color_space::hdr10_st2084;
+          renodx::mods::swapchain::set_color_space = true;
           renodx::mods::swapchain::use_resize_buffer = false;
 
           renodx::mods::swapchain::expected_constant_buffer_index = 13;
