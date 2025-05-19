@@ -154,7 +154,7 @@ bool DisableHDR() {
   renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", false);
   if (renodx::utils::ini_file::UpdateIniFile(
           ini_folder_path + "Engine.ini",
-          {{"ConsoleVariables", "r.HDR.EnableHDROutput", "0"}},
+          {{"ConsoleVariables", "r.HDR.EnableHDROutput", ""}},
           false,
           false)) {
     reshade::log::message(reshade::log::level::info, "DisableHDR: Updated");
@@ -235,6 +235,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
     CustomShaderEntry(0x04C003FD),
     CustomShaderEntry(0xD1CDE904),
+    CustomShaderEntry(0xD8972207),
 
     // FMV
     CustomShaderEntry(0x1FAA96A2),
@@ -566,9 +567,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::force_borderless = false;
         renodx::mods::swapchain::prevent_full_screen = false;
         renodx::mods::swapchain::force_screen_tearing = false;
-        renodx::mods::swapchain::SetUseHDR10(true);
         renodx::mods::swapchain::use_resize_buffer = true;
         renodx::mods::swapchain::use_resource_cloning = true;
+        renodx::mods::swapchain::target_format = reshade::api::format::r10g10b10a2_unorm;
+        renodx::mods::swapchain::target_color_space = reshade::api::color_space::srgb_nonlinear;
 
         if (initial_post_process_format == 1.f) {
           renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
@@ -580,6 +582,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         }
 
         if (initial_hdr_upgrade == 1.f || initial_hdr_upgrade == 2.f) {
+          renodx::mods::swapchain::target_color_space = reshade::api::color_space::hdr10_st2084;
           renodx::mods::swapchain::use_resize_buffer = false;
 
           renodx::mods::swapchain::expected_constant_buffer_index = 13;
