@@ -121,6 +121,19 @@ static void InsertEntry(
                   std::make_tuple(section, key, value));
 }
 
+static bool DeleteEntry(
+    std::vector<std::tuple<std::string, std::string, std::string>>& ini_data,
+    const std::string& section,
+    const std::string& key) {
+  const auto [first, last] = std::ranges::remove_if(
+      ini_data,
+      [&](const auto& entry) {
+        return std::get<0>(entry) == section && std::get<1>(entry) == key;
+      });
+  ini_data.erase(first, last);
+  return first != last;
+}
+
 static bool UpdateIniFile(
     const std::filesystem::path& file_path,
     const std::vector<std::tuple<std::string, std::string, std::string>>& ini_data,
@@ -142,6 +155,13 @@ static bool UpdateIniFile(
     const auto& section = std::get<0>(entry);
     const auto& key = std::get<1>(entry);
     const auto& value = std::get<2>(entry);
+
+    if (value.empty()) {
+      if (DeleteEntry(existing_data, section, key)) {
+        updated = true;
+      }
+      continue;
+    }
 
     auto* existing_entry = FindLastEntry(existing_data, section, key);
     if (existing_entry != nullptr) {
