@@ -90,7 +90,8 @@ cbuffer _RootShaderParameters : register(b0) {
   float2 BloomUVViewportBilinearMax : packoffset(c034.z);
   float4 ColorScale0 : packoffset(c041.x);
   float4 BloomDirtMaskTint : packoffset(c042.x);
-  float4 ChromaticAberrationParams : packoffset(c043.x);
+  // float4 ChromaticAberrationParams : packoffset(c043.x);
+  float4 ChromaticAberrationParams2 : packoffset(c043.x);
   float4 TonemapperParams : packoffset(c044.x);
   float4 LensPrincipalPointOffsetScale : packoffset(c045.x);
   float4 LensPrincipalPointOffsetScaleInverse : packoffset(c046.x);
@@ -612,21 +613,15 @@ OutputSignature main(
   float _58 = float(((int)(uint)((bool)(_46 > 0.0f))) - ((int)(uint)((bool)(_46 < 0.0f))));
   float _59 = float(((int)(uint)((bool)(_47 > 0.0f))) - ((int)(uint)((bool)(_47 < 0.0f))));
 
-  // float _64 = saturate(abs(_46) - ChromaticAberrationParams.z);
-  // float _65 = saturate(abs(_47) - ChromaticAberrationParams.z);
-  // float4 _122 = ColorTexture.Sample(ColorSampler, float2(min(max(((((((_46 - ((_64 * ChromaticAberrationParams.x) * _58)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x) * Color_ScreenPosToViewportScale.x) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max(((((((_47 - ((_65 * ChromaticAberrationParams.x) * _59)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y) * Color_ScreenPosToViewportScale.y) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)));
-  // float4 _135 = ColorTexture.Sample(ColorSampler, float2(min(max((((Color_ScreenPosToViewportScale.x * (((_46 - ((_64 * ChromaticAberrationParams.y) * _58)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x)) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max((((Color_ScreenPosToViewportScale.y * (((_47 - ((_65 * ChromaticAberrationParams.y) * _59)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y)) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)));
+  float3 ChromaticAberrationParams = ChromaticAberrationParams2.xyz * CUSTOM_CHROMATIC_ABERRATION;
 
-  float3 chromatic_aberration = ChromaticAberrationParams.xyz * CUSTOM_CHROMATIC_ABERRATION;
-
-  float _64 = saturate(abs(_46) - chromatic_aberration.z);
-  float _65 = saturate(abs(_47) - chromatic_aberration.z);
-  float4 _122 = ColorTexture.Sample(ColorSampler, float2(min(max(((((((_46 - ((_64 * chromatic_aberration.x) * _58)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x) * Color_ScreenPosToViewportScale.x) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max(((((((_47 - ((_65 * chromatic_aberration.x) * _59)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y) * Color_ScreenPosToViewportScale.y) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)));
-  float4 _135 = ColorTexture.Sample(ColorSampler, float2(min(max((((Color_ScreenPosToViewportScale.x * (((_46 - ((_64 * chromatic_aberration.y) * _58)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x)) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max((((Color_ScreenPosToViewportScale.y * (((_47 - ((_65 * chromatic_aberration.y) * _59)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y)) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)));
-
+  float _64 = saturate(abs(_46) - ChromaticAberrationParams.z);
+  float _65 = saturate(abs(_47) - ChromaticAberrationParams.z);
+  float4 _122 = ColorTexture.Sample(ColorSampler, float2(min(max(((((((_46 - ((_64 * ChromaticAberrationParams.x) * _58)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x) * Color_ScreenPosToViewportScale.x) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max(((((((_47 - ((_65 * ChromaticAberrationParams.x) * _59)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y) * Color_ScreenPosToViewportScale.y) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)));
+  float4 _135 = ColorTexture.Sample(ColorSampler, float2(min(max((((Color_ScreenPosToViewportScale.x * (((_46 - ((_64 * ChromaticAberrationParams.y) * _58)) * LensPrincipalPointOffsetScaleInverse.z) + LensPrincipalPointOffsetScaleInverse.x)) + Color_ScreenPosToViewportBias.x) * Color_ExtentInverse.x), Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max((((Color_ScreenPosToViewportScale.y * (((_47 - ((_65 * ChromaticAberrationParams.y) * _59)) * LensPrincipalPointOffsetScaleInverse.w) + LensPrincipalPointOffsetScaleInverse.y)) + Color_ScreenPosToViewportBias.y) * Color_ExtentInverse.y), Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)));
   float4 _148 = ColorTexture.Sample(ColorSampler, float2(min(max(TEXCOORD.x, Color_UVViewportBilinearMin.x), Color_UVViewportBilinearMax.x), min(max(TEXCOORD.y, Color_UVViewportBilinearMin.y), Color_UVViewportBilinearMax.y)));
   float4 _170 = BloomTexture.Sample(BloomSampler, float2(min(max(((ColorToBloom.x * TEXCOORD.x) + ColorToBloom.z), BloomUVViewportBilinearMin.x), BloomUVViewportBilinearMax.x), min(max(((ColorToBloom.y * TEXCOORD.y) + ColorToBloom.w), BloomUVViewportBilinearMin.y), BloomUVViewportBilinearMax.y)));
-
+  
   _170 *= CUSTOM_BLOOM;
 
   float4 _189 = BloomDirtMaskTexture.Sample(BloomDirtMaskSampler, float2(((((LensPrincipalPointOffsetScale.z * TEXCOORD_3.x) + LensPrincipalPointOffsetScale.x) * 0.5f) + 0.5f), (0.5f - (((LensPrincipalPointOffsetScale.w * TEXCOORD_3.y) + LensPrincipalPointOffsetScale.y) * 0.5f))));

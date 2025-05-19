@@ -176,3 +176,32 @@ void HandleLUTOutput(
   green = tonemapped.g;
   blue = tonemapped.b;
 }
+
+bool HandleUICompositing(float4 ui_color, float4 scene_color, inout float4 output_color) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) return false;
+
+  float3 ui_color_linear = renodx::color::srgb::DecodeSafe(ui_color.rgb);
+
+  if (RENODX_GAMMA_CORRECTION == 1.f) {
+    ui_color_linear = renodx::color::correct::GammaSafe(ui_color_linear, false, 2.2f);
+  } else if (RENODX_GAMMA_CORRECTION == 2.f) {
+    ui_color_linear = renodx::color::correct::GammaSafe(ui_color_linear, false, 2.4f);
+  }
+
+  ui_color_linear *= RENODX_GRAPHICS_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+
+  ui_color.rgb = renodx::color::srgb::EncodeSafe(ui_color_linear);
+
+  float3 scene_color_linear_bt2020 = renodx::color::pq::DecodeSafe(scene_color.rgb, RENODX_DIFFUSE_WHITE_NITS);
+  float3 scene_color_linear = renodx::color::bt709::from::BT2020(scene_color_linear_bt2020);
+  float3 scene_color_srgb = renodx::color::srgb::EncodeSafe(scene_color_linear);
+
+  // Blend in SRGB based on opacity
+  float3 composited_color = lerp(scene_color_srgb, ui_color.rgb, saturate(ui_color.a));
+  float3 linear_color = renodx::color::srgb::DecodeSafe(composited_color);
+
+  float3 bt2020_color = renodx::color::bt2020::from::BT709(linear_color);
+  float3 pq_color = renodx::color::pq::EncodeSafe(bt2020_color, RENODX_DIFFUSE_WHITE_NITS);
+  output_color = float4(pq_color, 1.f);
+  return true;
+}

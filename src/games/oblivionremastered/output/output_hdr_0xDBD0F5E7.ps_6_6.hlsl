@@ -628,7 +628,7 @@ OutputSignature main(
   float _167 = _31 * View_OneOverPreExposure;
   float _168 = _167 * exp2(((_122 - _156) + ((_156 - _151) * LocalExposure_DetailStrength)) + (select((_158 > 0.0f), LocalExposure_HighlightContrastScale, LocalExposure_ShadowContrastScale) * _158));
 
-  HandleLocalExposure(_167, _167, _168);
+  HandleLocalExposure(_31 * View_OneOverPreExposure, _167, _168);
 
   float _196 = exp2(log2(((((ColorScale0.x * _44.x) * _107) * _168) + ((_68.x * _167) * ((BloomDirtMaskTint.x * _87.x) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);
   float _197 = exp2(log2(((((ColorScale0.y * _44.y) * _108) * _168) + ((_68.y * _167) * ((BloomDirtMaskTint.y * _87.y) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);

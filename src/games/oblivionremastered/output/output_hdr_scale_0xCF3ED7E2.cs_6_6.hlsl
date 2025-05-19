@@ -632,7 +632,7 @@ void main(
     float _209 = _74 * View_OneOverPreExposure;
     float _210 = _209 * exp2(((_165 - _198) + ((_198 - _194) * LocalExposure_DetailStrength)) + (select((_200 > 0.0f), LocalExposure_HighlightContrastScale, LocalExposure_ShadowContrastScale) * _200));
 
-    HandleLocalExposure(_209, _209, _210);
+    HandleLocalExposure(_74 * View_OneOverPreExposure, _209, _210);
 
     float _238 = exp2(log2(((((ColorScale0.x * _87.x) * _150) * _210) + ((_111.x * _209) * ((BloomDirtMaskTint.x * _130.x) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);
     float _239 = exp2(log2(((((ColorScale0.y * _87.y) * _151) * _210) + ((_111.y * _209) * ((BloomDirtMaskTint.y * _130.y) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);

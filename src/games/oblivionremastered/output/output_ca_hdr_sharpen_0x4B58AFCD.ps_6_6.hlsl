@@ -650,7 +650,7 @@ OutputSignature main(
   float _354 = _31 * View_OneOverPreExposure;
   float _355 = _354 * exp2(((_225 - _259) + ((_259 - _254) * LocalExposure_DetailStrength)) + (select((_261 > 0.0f), LocalExposure_HighlightContrastScale, LocalExposure_ShadowContrastScale) * _261));
 
-  HandleLocalExposure(_354, _354, _355);
+  HandleLocalExposure(_31 * View_OneOverPreExposure, _354, _355);
 
   float _360 = -0.0f - (TonemapperParams.y * saturate(1.0f - (_355 * max(max(abs(_272 - dot(float3(_304.x, _304.y, _304.z), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f))), abs(_272 - dot(float3(_323.x, _323.y, _323.z), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f)))), max(abs(ddx_fine(_272) * _285), abs(ddy_fine(_272) * _289))))));
   float _412 = exp2(log2(((((_207 * ColorScale0.x) * _355) * ((((((((_304.x - (_120.x * 4.0f)) + _323.x) + _120.x) - (ddx_fine(_120.x) * _285)) + _120.x) - (ddy_fine(_120.x) * _289)) * _360) + _120.x)) + ((_168.x * _354) * ((BloomDirtMaskTint.x * _187.x) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);

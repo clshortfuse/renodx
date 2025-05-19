@@ -166,28 +166,6 @@ bool DisableHDR() {
   return true;
 }
 
-bool UpdateUIBrightnessIni() {
-  const auto ini_folder_path = GetIniFolderPath();
-  if (ini_folder_path.empty()) {
-    reshade::log::message(reshade::log::level::warning, "UpdateUIBrightnessIni: Path not found");
-    return false;
-  }
-
-  renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", false);
-  if (renodx::utils::ini_file::UpdateIniFile(
-          ini_folder_path + "Engine.ini",
-          {{"ConsoleVariables", "r.HDR.UI.Luminance", std::to_string(static_cast<std::uint32_t>(shader_injection.graphics_white_nits))}},
-          true,
-          true)) {
-    reshade::log::message(reshade::log::level::info, "UpdateUIBrightnessIni: Updated");
-  } else {
-    reshade::log::message(reshade::log::level::warning, "UpdateUIBrightnessIni: Failed");
-  }
-  renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", true);
-
-  return true;
-}
-
 void UpdateHDRIni() {
   if (current_hdr_ini_enabled) {
     if (current_hdr_upgrade != 3.f) {
@@ -230,22 +208,31 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // Eye Adaptation
     CustomShaderEntry(0x41DCD632),
 
+    // UI Composite
+    CustomShaderEntry(0xBF88A580),
+
     // Output
-    CustomShaderEntry(0x12E07ACC),
-    CustomShaderEntry(0x4B58AFCD),
-    CustomShaderEntry(0xA4374A0A),
+    CustomShaderEntry(0xB7AF8D8D),
     CustomShaderEntry(0xEED8F029),
+    CustomShaderEntry(0x12E07ACC),
     CustomShaderEntry(0x8E39B831),
     CustomShaderEntry(0x59C7FFCE),
+    CustomShaderEntry(0x4B58AFCD),
+    CustomShaderEntry(0xA4374A0A),
     CustomShaderEntry(0x440BCDEB),
+
     CustomShaderEntry(0x1BD60193),
     CustomShaderEntry(0x99B126EC),
-    CustomShaderEntry(0x9D0421B9),
+
+    CustomShaderEntry(0xDBD0F5E7),
     CustomShaderEntry(0xCF3ED7E2),
+    CustomShaderEntry(0x15B02998),
     CustomShaderEntry(0xCC2B95BB),
     CustomShaderEntry(0xB6EDB152),
+    CustomShaderEntry(0x683652C8),
     CustomShaderEntry(0x2F45593A),
-    CustomShaderEntry(0xDBD0F5E7),
+    CustomShaderEntry(0x9D0421B9),
+
     CustomShaderEntry(0x04C003FD),
     CustomShaderEntry(0xD1CDE904),
 
@@ -344,9 +331,8 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         {"ToneMapType", {.binding = &shader_injection.tone_map_type, .on_change = &OnLUTSettingChange}},
         {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits, .on_change = &OnOptimizableSettingChange}},
         {"ToneMapGameNits", {.binding = &shader_injection.diffuse_white_nits, .on_change = &OnOptimizableSettingChange}},
-        {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .can_reset = false, .on_change_value = [](float old_value, float new_value) {
+        {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .on_change_value = [](float old_value, float new_value) {
                              OnOptimizableSettingChange();
-                             UpdateUIBrightnessIni();
                            }}},
         {"ToneMapWhiteClip", {.binding = &shader_injection.tone_map_white_clip, .on_change = &OnOptimizableSettingChange}},
         {"ToneMapGammaCorrection", {.binding = &shader_injection.gamma_correction, .on_change = &OnOptimizableSettingChange}},

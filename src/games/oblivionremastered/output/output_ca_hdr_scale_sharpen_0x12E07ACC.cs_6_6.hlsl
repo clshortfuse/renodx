@@ -656,7 +656,7 @@ void main(
     float _329 = _74 * View_OneOverPreExposure;
     float _330 = _329 * exp2(((_239 - _272) + ((_272 - _268) * LocalExposure_DetailStrength)) + (select((_274 > 0.0f), LocalExposure_HighlightContrastScale, LocalExposure_ShadowContrastScale) * _274));
 
-    HandleLocalExposure(_329, _329, _330);
+    HandleLocalExposure(_74 * View_OneOverPreExposure, _329, _330);
 
     float _335 = -0.0f - (TonemapperParams.y * saturate(1.0f - (_330 * max(max(abs(_285 - dot(float3(_289.x, _289.y, _289.z), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f))), abs(_285 - dot(float3(_296.x, _296.y, _296.z), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f)))), max(abs(_285 - dot(float3(_303.x, _303.y, _303.z), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f))), abs(_285 - dot(float3(_310.x, _310.y, _310.z), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f))))))));
     float _381 = exp2(log2(((((_221 * ColorScale0.x) * _330) * ((((((_289.x - (_157.x * 4.0f)) + _296.x) + _303.x) + _310.x) * _335) + _157.x)) + ((_191.x * _329) * ((BloomDirtMaskTint.x * _201.x) + 1.0f))) * 0.009999999776482582f) * 0.1593017578125f);

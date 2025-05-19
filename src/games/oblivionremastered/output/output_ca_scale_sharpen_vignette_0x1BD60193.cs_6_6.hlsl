@@ -662,7 +662,7 @@ void main(
     float _378 = _350 * (_235 * _235);
     float _379 = _378 * _304;
 
-    HandleLocalExposure(_350, _378, _379);
+    HandleLocalExposure(_92 * View_OneOverPreExposure, _378, _379);
 
     float4 _418 = ColorGradingLUT.SampleLevel(ColorGradingLUTSampler, float3(((LUTScale * saturate((log2((((((BloomDirtMaskTint.x * _210.x) + 1.0f) * _200.x) * _378) + 0.002667719265446067f) + (((_243 * ColorScale0.x) * _379) * ((((((_310.x - (_166.x * 4.0f)) + _317.x) + _324.x) + _331.x) * _356) + _166.x))) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset), ((LUTScale * saturate((log2((((((BloomDirtMaskTint.y * _210.y) + 1.0f) * _200.y) * _378) + 0.002667719265446067f) + (((_244 * ColorScale0.y) * _379) * ((((((_310.y - (_172.y * 4.0f)) + _317.y) + _324.y) + _331.y) * _356) + _172.y))) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset), ((LUTScale * saturate((log2((((((BloomDirtMaskTint.z * _210.z) + 1.0f) * _200.z) * _378) + 0.002667719265446067f) + (((_245 * ColorScale0.z) * _379) * ((((((_310.z - (_178.z * 4.0f)) + _317.z) + _324.z) + _331.z) * _356) + _178.z))) * 0.0714285746216774f) + 0.6107269525527954f)) + LUTOffset)), 0.0f);
     float _422 = _418.x * 1.0499999523162842f;
