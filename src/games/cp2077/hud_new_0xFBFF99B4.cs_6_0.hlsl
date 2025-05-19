@@ -393,7 +393,7 @@ void comp_main() {
 
       // Custom
       if (injectedData.toneMapGammaCorrection >= 1.f) {
-        _1625 = renodx::color::correct::Gamma(max(0, _1625));
+        _1625 = renodx::color::correct::Gamma(max(0.f, _1625));
       }
       _1636 = (cb6[2u].x * _1625.x) + _1443;
       _1637 = (cb6[2u].x * _1625.y) + _1445;
@@ -435,12 +435,12 @@ void comp_main() {
 
       // Custom
       if (injectedData.toneMapGammaCorrection >= 1.f) {
-        _1900 = renodx::color::correct::Gamma(max(0, _1900));
-        _1904 = renodx::color::correct::Gamma(max(0, _1904));
-        _1911 = renodx::color::correct::Gamma(max(0, _1911));
-        _1926 = renodx::color::correct::Gamma(max(0, _1926));
-        _1937 = renodx::color::correct::Gamma(max(0, _1937));
-        _1952 = renodx::color::correct::Gamma(max(0, _1952));
+        _1900 = renodx::color::correct::Gamma(max(0.f, _1900));
+        _1904 = renodx::color::correct::Gamma(max(0.f, _1904));
+        _1911 = renodx::color::correct::Gamma(max(0.f, _1911));
+        _1926 = renodx::color::correct::Gamma(max(0.f, _1926));
+        _1937 = renodx::color::correct::Gamma(max(0.f, _1937));
+        _1952 = renodx::color::correct::Gamma(max(0.f, _1952));
       }
 
       float _1984 = 1.0f - (((_1904.w + _1900.w) + _1911.w) * 0.3333333432674407958984375f);

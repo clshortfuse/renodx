@@ -347,7 +347,7 @@ void comp_main() {
 
       // Custom
       if (injectedData.toneMapGammaCorrection >= 1.f) {
-        _1632 = renodx::color::correct::GammaSafe(_1632);
+        _1632 = renodx::color::correct::Gamma(max(0.f, _1632));
       }
 
       _1643 = (cb6[2u].x * _1632.x) + _1450;
@@ -390,12 +390,12 @@ void comp_main() {
 
       // Custom
       if (injectedData.toneMapGammaCorrection >= 1.f) {
-        _1907 = renodx::color::correct::GammaSafe(_1907);
-        _1911 = renodx::color::correct::GammaSafe(_1911);
-        _1918 = renodx::color::correct::GammaSafe(_1918);
-        _1933 = renodx::color::correct::GammaSafe(_1933);
-        _1944 = renodx::color::correct::GammaSafe(_1944);
-        _1959 = renodx::color::correct::GammaSafe(_1959);
+        _1907 = renodx::color::correct::Gamma(max(0.f, _1907));
+        _1911 = renodx::color::correct::Gamma(max(0.f, _1911));
+        _1918 = renodx::color::correct::Gamma(max(0.f, _1918));
+        _1933 = renodx::color::correct::Gamma(max(0.f, _1933));
+        _1944 = renodx::color::correct::Gamma(max(0.f, _1944));
+        _1959 = renodx::color::correct::Gamma(max(0.f, _1959));
       }
 
       float _1991 = 1.0f - (((_1911.w + _1907.w) + _1918.w) * 0.3333333432674407958984375f);
@@ -891,16 +891,16 @@ void comp_main() {
   float3 outputColor1 = float3(_595, _597, _599);
   if (asuint(cb6[13u].y) != 0u) {
     ConvertColorParams params = {
-        outputTypeEnum,  // outputTypeEnum
-        cb6[14u].x,      // paperWhiteScaling
-        cb6[14u].y,      // blackFloorAdjust
-        cb6[14u].z,      // gammaCorrection
-        cb6[16u].x,      // pqSaturation
-        float3x3(
-            cb6[22u].x, cb6[22u].y, cb6[22u].z,
-            cb6[23u].x, cb6[23u].y, cb6[23u].z,
-            cb6[24u].x, cb6[24u].y, cb6[24u].z),  // pqMatrix
-        float3(_72, _73, cb0[0u].x)               // random3
+      outputTypeEnum,  // outputTypeEnum
+      cb6[14u].x,      // paperWhiteScaling
+      cb6[14u].y,      // blackFloorAdjust
+      cb6[14u].z,      // gammaCorrection
+      cb6[16u].x,      // pqSaturation
+      float3x3(
+          cb6[22u].x, cb6[22u].y, cb6[22u].z,
+          cb6[23u].x, cb6[23u].y, cb6[23u].z,
+          cb6[24u].x, cb6[24u].y, cb6[24u].z),  // pqMatrix
+      float3(_72, _73, cb0[0u].x)               // random3
     };
     outputColor1 = convertColor(outputColor1, params);
   }
@@ -910,16 +910,16 @@ void comp_main() {
   if (!_117) {
     float3 outputColor2 = float3(_292, _295, _297);
     ConvertColorParams params = {
-        outputTypeEnum,  // outputTypeEnum
-        cb6[15u].y,      // paperWhiteScaling
-        cb6[15u].z,      // blackFloorAdjust
-        cb6[15u].w,      // gammaCorrection
-        cb6[16u].x,      // pqSaturation
-        float3x3(
-            cb6[26u].x, cb6[26u].y, cb6[26u].z,
-            cb6[27u].x, cb6[27u].y, cb6[27u].z,
-            cb6[28u].x, cb6[28u].y, cb6[28u].z),  // pqMatrix
-        float3(_72, _73, cb0[0u].x)               // random3
+      outputTypeEnum,  // outputTypeEnum
+      cb6[15u].y,      // paperWhiteScaling
+      cb6[15u].z,      // blackFloorAdjust
+      cb6[15u].w,      // gammaCorrection
+      cb6[16u].x,      // pqSaturation
+      float3x3(
+          cb6[26u].x, cb6[26u].y, cb6[26u].z,
+          cb6[27u].x, cb6[27u].y, cb6[27u].z,
+          cb6[28u].x, cb6[28u].y, cb6[28u].z),  // pqMatrix
+      float3(_72, _73, cb0[0u].x)               // random3
     };
 
     outputColor2 = convertColor(outputColor2, params);
@@ -927,7 +927,8 @@ void comp_main() {
   }
 }
 
-[numthreads(16, 16, 1)] void main(SPIRV_Cross_Input stage_input) {
+[numthreads(16, 16, 1)]
+void main(SPIRV_Cross_Input stage_input) {
   gl_GlobalInvocationID = stage_input.gl_GlobalInvocationID;
   comp_main();
 }
