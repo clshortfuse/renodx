@@ -471,7 +471,7 @@ float4 main(
 
   // CustomEdit
   if (RENODX_TONE_MAP_TYPE != 0) {
-    return GenerateOutput(float3(_1079, _1080, _1081));
+    return GenerateOutput(float3(_1079, _1080, _1081), cb0_042w);
   }
 
   if (((((uint)(cb0_042w)) == 0))) {

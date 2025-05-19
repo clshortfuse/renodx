@@ -496,7 +496,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r3.xyz = exp2(r2.xyz);
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    u0[vThreadID.xyz] = GenerateOutput(r3.xyz);
+    u0[vThreadID.xyz] = GenerateOutput(r3.xyz, asuint(cb0[65].z));
     return;
   }
 

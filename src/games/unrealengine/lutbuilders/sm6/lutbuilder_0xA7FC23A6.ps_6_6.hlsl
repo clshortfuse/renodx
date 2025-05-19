@@ -342,7 +342,7 @@ float4 main(
   float _1042 = exp2(log2(max(0.0f, (lerp(_1019, OverlayColor.z, OverlayColor.w)))) * InverseGamma.y);
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    return GenerateOutput(float3(_1040, _1041, _1042));
+    return GenerateOutput(float3(_1040, _1041, _1042), OutputDevice);
   }
 
   if ((uint)(WorkingColorSpace_bIsSRGB) == 0) {

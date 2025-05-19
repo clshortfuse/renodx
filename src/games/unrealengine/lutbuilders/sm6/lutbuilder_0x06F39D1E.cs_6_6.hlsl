@@ -433,8 +433,8 @@ void main(
   float _983 = exp2(((log2((max(0.0f, _957)))) * (cb0_040y)));
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    // return GenerateOutput(float3(_981, _982, _983));
-    RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = GenerateOutput(float3(_981, _982, _983));
+    // return GenerateOutput(float3(_981, _982, _983), cb0_040w);
+    RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = GenerateOutput(float3(_981, _982, _983), cb0_040w);
     return;
   }
 

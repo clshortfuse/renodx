@@ -372,7 +372,7 @@ void main(
 
   // CustomEdit
   if (RENODX_TONE_MAP_TYPE != 0) {
-    o0 = GenerateOutput(r5.xyz);
+    o0 = GenerateOutput(r5.xyz, asuint(cb0[40].w));
     return;
   }
 

@@ -368,7 +368,7 @@ void main(
   r0.xyz = exp2(r0.xyz);
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    o0 = GenerateOutput(r0.xyz);
+    o0 = GenerateOutput(r0.xyz, asuint(cb0[41].x));
     return;
   }
 

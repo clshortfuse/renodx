@@ -556,7 +556,7 @@ float4 main(
   float _1334 = exp2(((log2((max(0.0f, _1308)))) * (cb0_042y)));
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    return GenerateOutput(float3(_1332, _1333, _1334));
+    return GenerateOutput(float3(_1332, _1333, _1334), cb0_042w);
   }
 
   if (((((uint)(cb0_042w)) == 0))) {

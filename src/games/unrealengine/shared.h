@@ -71,6 +71,11 @@ cbuffer injected_buffer : register(b13) {
 #define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION shader_injection.color_grade_saturation_correction
 #define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   shader_injection.color_grade_blowout_restoration
 #define CUSTOM_COLOR_GRADE_HUE_SHIFT             shader_injection.color_grade_hue_shift
+#define CUSTOM_LUT_OPTIMIZATION                  1.f
+#define CUSTOM_GRAIN_TYPE                        0.f
+#define CUSTOM_GRAIN_STRENGTH                    1.f
+#define CUSTOM_RANDOM                            0.f
+#define CUSTOM_LOCAL_EXPOSURE                    1.f
 
 #include "../../shaders/renodx.hlsl"
 #endif

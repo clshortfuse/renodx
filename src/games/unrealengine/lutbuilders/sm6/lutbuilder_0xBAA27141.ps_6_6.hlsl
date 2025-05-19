@@ -1185,7 +1185,7 @@ float4 main(
 
   // CustomEdit
   if (RENODX_TONE_MAP_TYPE != 0) {
-    return GenerateOutput(float3(_966, _967, _968));
+    return GenerateOutput(float3(_966, _967, _968), _RootShaderParameters_040w);
   }
 
   uint _970 = _RootShaderParameters_040w;

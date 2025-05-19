@@ -403,11 +403,12 @@ void main(
   r2.xyz = exp2(r0.xyz);
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    o0 = GenerateOutput(r2.xyz);
+    o0 = GenerateOutput(r2.xyz, asuint(cb0[56].z));
     return;
   }
 
-  if (cb0[56].z == 0) {
+  [branch]
+  if (asuint(cb0[56].z) == 0) {
     r3.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r2.xyz;
     r4.xyz = cmp(r2.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
     r0.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r0.xyz;
