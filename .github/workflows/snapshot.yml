@@ -72,6 +72,9 @@ jobs:
 
       - name: Copy Binaries (Tools)
         run: copy build\release\*.exe githubrelease\
+      
+      - name: Copy Binaries (PDBs)
+        run: copy build\release\*.pdb githubrelease\
 
       - name: Put current date into a variable
         run: |
