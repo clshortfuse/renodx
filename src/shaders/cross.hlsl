@@ -1,11 +1,11 @@
 #ifndef SRC_SHADERS_CROSS_HLSL_
 #define SRC_SHADERS_CROSS_HLSL_
 
-#if defined(VULKAN)
+#if defined(VULKAN) || defined(GL_ES)
+
 #define START_NAMESPACE(x)
 #define END_NAMESPACE(x)
-#define CROSS_COMPILE(dx, vulkan_glsl)      vulkan_glsl
-#define CROSS_COMPILE_ALL(dx, vulkan, glsl) vulkan
+#define CROSS_COMPILE(dx, vulkan_glsl) vulkan_glsl
 
 #define static
 #define asfloat       uintBitsToFloat
@@ -15,19 +15,39 @@
 #define float2        vec2
 #define float3        vec3
 #define float4        vec4
-#define float2f       vec2
-#define float3f       vec3
-#define float4f       vec4
+#define mul(a, b)     (b * a)
 
-#define CROSS_CAST(type, x) type(x)
+vec2 pow(vec2 x, float y) {
+  return pow(x, vec2(y));
+}
 
-#elif defined(GL_ES)
+vec3 pow(vec3 x, float y) {
+  return pow(x, vec3(y));
+}
 
-#define START_NAMESPACE(x)
-#define END_NAMESPACE(x)
-#define CROSS_COMPILE(dx, vulkan_glsl)      vulkan_glsl
+vec4 pow(vec4 x, float y) {
+  return pow(x, vec4(y));
+}
+
+vec2 fma(vec2 a, float b, float c) {
+  return fma(a, vec2(b), vec2(c));
+}
+
+vec3 fma(vec3 a, float b, float c) {
+  return fma(a, vec3(b), vec3(c));
+}
+
+vec4 fma(vec4 a, float b, float c) {
+  return fma(a, vec4(b), vec4(c));
+}
+
+#define CROSS_MATRIX(matrix, row, column) matrix[column][row]
+
+#if defined(VULKAN)
+#define CROSS_COMPILE_ALL(dx, vulkan, glsl) vulkan
+#else
 #define CROSS_COMPILE_ALL(dx, vulkan, glsl) glsl
-#define CROSS_CAST(type, x)                 ##type(x)
+#endif
 
 #else  // HLSL
 
@@ -35,22 +55,7 @@
 #define END_NAMESPACE(x)                    }
 #define CROSS_COMPILE(dx, vulkan_glsl)      dx
 #define CROSS_COMPILE_ALL(dx, vulkan, glsl) dx
-
-#define CROSS_CAST(type, x) cast_##type(x)
-
-float cast_float(float x) {
-  return x;
-}
-
-float2 cast_float2(float x) {
-  return float2(x, x);
-}
-float3 cast_float3(float x) {
-  return float3(x, x, x);
-}
-float4 cast_float4(float x) {
-  return float4(x, x, x, x);
-}
+#define CROSS_MATRIX(matrix, row, column)   matrix[row][column]
 
 #endif  // HLSL
 

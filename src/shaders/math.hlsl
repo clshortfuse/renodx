@@ -24,9 +24,9 @@ static const float NEG_INFINITY = CROSS_COMPILE(asfloat(0xFF800000), -1.0 / 0.0)
     return sign(x);                \
   }
 #else
-#define SIGN_FUNCTION_GENERATOR(T)                                                                                      \
-  T Sign(T x) {                                                                                                         \
-    return mad(saturate(mad(x, CROSS_CAST(T, FLT_MAX), CROSS_CAST(T, 0.5f))), CROSS_CAST(T, 2.f), CROSS_CAST(T, -1.f)); \
+#define SIGN_FUNCTION_GENERATOR(T)                          \
+  T Sign(T x) {                                             \
+    return mad(saturate(mad(x, FLT_MAX, 0.5f)), 2.f, -1.f); \
   }
 #endif
 
@@ -39,7 +39,7 @@ SIGN_FUNCTION_GENERATOR(float4)
 
 #define SIGNPOW_FUNCTION_GENERATOR(struct)                      \
   struct SignPow(struct x, float exponent) {                    \
-    return Sign(x) * pow(abs(x), CROSS_CAST(struct, exponent)); \
+    return Sign(x) * pow(abs(x), exponent); \
   }
 
 SIGNPOW_FUNCTION_GENERATOR(float)
