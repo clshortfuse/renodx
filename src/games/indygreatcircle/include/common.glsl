@@ -1,3 +1,75 @@
+// START INCLUDES
+
+// --- sRGB ENCODING ---
+float EncodeSRGB(float x) {
+  return mix(
+      x * 12.92,
+      1.055 * pow(x, 1.0 / 2.4) - 0.055,
+      step(0.0031308, x)
+    );
+}
+
+vec3 EncodeSRGB(vec3 x) {
+  return mix(
+      x * 12.92,
+      1.055 * pow(x, vec3(1.0 / 2.4)) - 0.055,
+      step(vec3(0.0031308), x)
+    );
+}
+
+// --- sRGB DECODING ---
+float DecodeSRGB(float x) {
+  return mix(
+      x / 12.92,
+      pow((x + 0.055) / 1.055, 2.4),
+      step(0.04045, x)
+    );
+}
+
+vec3 DecodeSRGB(vec3 x) {
+  return mix(
+      x / 12.92,
+      pow((x + 0.055) / 1.055, vec3(2.4)),
+      step(vec3(0.04045), x)
+    );
+}
+
+// --- GAMMA ENCODING ---
+float EncodeGamma(float x, float gamma) {
+  return pow(x, 1.0 / gamma);
+}
+
+vec3 EncodeGamma(vec3 x, float gamma) {
+  return pow(x, vec3(1.0 / gamma));
+}
+
+// --- GAMMA DECODING ---
+float DecodeGamma(float x, float gamma) {
+  return pow(x, gamma);
+}
+
+vec3 DecodeGamma(vec3 x, float gamma) {
+  return pow(x, vec3(gamma));
+}
+
+// Fix or undo gamma mismatch by converting between sRGB and gamma 2.2
+float CorrectGammaMismatch(float x, bool inverse) {
+  return inverse
+             ? DecodeSRGB(EncodeGamma(x, 2.2))   // undo fix
+             : DecodeGamma(EncodeSRGB(x), 2.2);  // apply fix
+}
+
+vec3 CorrectGammaMismatch(vec3 x, bool inverse) {
+  vec3 s = sign(x);
+  vec3 a = abs(x);
+
+  vec3 result = inverse
+                    ? DecodeSRGB(EncodeGamma(a, 2.2))
+                    : DecodeGamma(EncodeSRGB(a), 2.2);
+
+  return s * result;
+}
+
 const mat3 BT709_TO_BT2020_MAT = mat3(
     vec3(0.6274039149284363, 0.06909728795289993, 0.0163914393633604),
     vec3(0.3292830288410187, 0.9195404052734375, 0.08801330626010895),
@@ -7,6 +79,8 @@ const mat3 BT2020_TO_BT709_MAT = mat3(
     vec3(1.6604909896850586, -0.12455047667026520, -0.01815076358616352),
     vec3(-0.5876411199569702, 1.1328998804092407, -0.10057889670133591),
     vec3(-0.07284986227750778, -0.00834942236542702, 1.1187297105789185));
+
+// START ACES INCLUDE
 
 // color conversion matrices
 const mat3 BT709_TO_XYZ_MAT = mat3(
@@ -436,7 +510,7 @@ vec3 GamutCompress(vec3 lin_ap1)
 
 vec3 RRT(vec3 aces)
 {
-  const vec3 AP1_RGB2Y = AP1_TO_XYZ_MAT[1].rgb;
+  const vec3 AP1_RGB2Y = vec3(0.2722287168, 0.6740817658, 0.0536895174);
 
   // --- Glow module --- //
   // "Glow" module constants
@@ -580,3 +654,361 @@ vec3 RGCAndRRTAndODT(vec3 color, float min_y, float max_y, mat3 odt_matrix)
   color = ODT(color, min_y, max_y, odt_matrix);  // ODT AP1 => Matrix
   return color;
 }
+
+// -----------------------------------------------------------------------------
+// Fast 1-channel SSTS helper   (identical math, no vec3 work)
+// -----------------------------------------------------------------------------
+float SSTS1(float x,
+            vec2 logMin, vec2 logMid, vec2 logMax,
+            vec3 cLowA, vec3 cLowB,
+            vec3 cHighA, vec3 cHighB)
+{
+  const int N_LOW = 4;
+  const int N_HIGH = 4;
+
+  float logx = log10(max(x, 6.0e-8));  // FLT_MIN for HALF
+
+  // --- overshoot / undershoot ------------------------------------------------
+  if (logx > logMax.x) return logMax.y;
+  if (logx <= logMin.x) return logMin.y;
+
+  // --- mid- or low-region spline --------------------------------------------
+  bool hiRegion = (logx >= logMid.x);
+  float knotCoord = hiRegion
+                        ? float(N_HIGH - 1) * (logx - logMid.x) / (logMax.x - logMid.x)
+                        : float(N_LOW - 1) * (logx - logMin.x) / (logMid.x - logMin.x);
+
+  int j = int(knotCoord);
+  float t = knotCoord - float(j);
+
+  vec3 cf = hiRegion
+                ? vec3(cHighA[j], cHighA[j + 1], cHighA[j + 2])
+                : vec3(cLowA[j], cLowA[j + 1], cLowA[j + 2]);
+
+  vec3 mono = vec3(t * t, t, 1.0);
+  float logy = dot(mono, M * cf);
+
+  return pow(10.0, logy);
+}
+
+// -----------------------------------------------------------------------------
+// Scalar ODTToneMap  –– takes scene-referred luminance and returns tonemapped Y
+// -----------------------------------------------------------------------------
+float ODTToneMapY(float yScene, float minY, float maxY)
+{
+  /* === pre-compute frame-constant tables just as in the vec3 version === */
+  const mat2 BENDS_LOW = mat2(MIN_STOP_RRT, MIN_STOP_SDR, 0.18, 0.35);
+  const mat2 BENDS_HIGH = mat2(MAX_STOP_SDR, MAX_STOP_RRT, 0.89, 0.90);
+
+  float minLog = log10(minY);
+  float maxLog = log10(maxY);
+
+  float acesMin = LookUpAcesMin(minLog);
+  float acesMax = LookUpAcesMax(maxLog);
+
+  vec2 logMin = vec2(log10(acesMin), minLog);
+  vec2 LOGMID = vec2(log10(0.18), log10(4.8));  // fixed mid-point
+  vec2 logMax = vec2(log10(acesMax), maxLog);
+
+  /* --- knot coefficients (identical math, but scalar) ------------------- */
+  float knotLow = (LOGMID.x - logMin.x) / 3.0;
+  float knotHigh = (logMax.x - LOGMID.x) / 3.0;
+
+  vec3 cLowA, cLowB;
+  vec3 cHighA, cHighB;
+
+  cLowA.x = cLowA.y = logMin.y;
+  cLowB.x = (1.55 * (LOGMID.x - 0.5 * knotLow)) + (LOGMID.y - 1.55 * LOGMID.x);
+  cLowB.y = (1.55 * (LOGMID.x + 0.5 * knotLow)) + (LOGMID.y - 1.55 * LOGMID.x);
+  cLowB.z = cLowB.y;
+  cLowA.z = logMin.y + Interpolate1D(BENDS_LOW, log2(acesMin / 0.18))
+             * (LOGMID.y - logMin.y);
+
+  cHighA.x = (1.55 * (LOGMID.x - 0.5 * knotHigh))
+             + (LOGMID.y - 1.55 * LOGMID.x);
+  cHighA.y = (1.55 * (LOGMID.x + 0.5 * knotHigh))
+             + (LOGMID.y - 1.55 * LOGMID.x);
+  cHighA.z = LOGMID.y + Interpolate1D(BENDS_HIGH, log2(acesMax / 0.18))
+              * (logMax.y - LOGMID.y);
+
+  cHighB = vec3(logMax.y);  // flat slope beyond maxPt
+
+  /* --- run spline once --------------------------------------------------- */
+  float yLog = SSTS1(yScene, logMin, LOGMID, logMax,
+                     cLowA, cLowB,
+                     cHighA, cHighB);
+
+  return yLog;  // still in “cv” space (nits); caller can divide by 48 later
+}
+
+// -----------------------------------------------------------------------------
+// Scalar ODT –– for the luminance-only path
+// -----------------------------------------------------------------------------
+float ODT_Y(float yScene, float minY, float maxY)
+{
+  /* tone-scale */
+  float yCv = ODTToneMapY(yScene, minY, maxY);
+
+  /* convert “cv” back to linear nits, then to display-linear */
+  return yCv;  // LinCv2Y(), but scalar
+}
+
+// END ACES INCLUDE
+
+const mat3 BT709_TO_OKLAB_LMS = mat3(
+    0.4122214708, 0.2119034982, 0.0883024619,
+    0.5363325363, 0.6806995451, 0.2817188376,
+    0.0514459929, 0.1073969566, 0.6299787005
+);
+
+const mat3 OKLAB_LMS_TO_OKLAB = mat3(
+     0.2104542553,  1.9779984951, 0.0259040371,
+     0.7936177850, -2.4285922050, 0.7827717662,
+    -0.0040720468,  0.4505937099,-0.8086757660
+);
+
+const mat3 OKLAB_TO_OKLAB_LMS = mat3(
+    1.0000000000, 1.0000000000, 1.0000000000,
+    0.3963377774,-0.1055613458,-0.0894841775,
+    0.2158037573,-0.0638541728,-1.2914855480
+);
+
+const mat3 OKLAB_LMS_TO_BT709 = mat3(
+     4.0767416621,-1.2684380046,-0.0041960863,
+    -3.3077115913,  2.6097574011,-0.7034186147,
+     0.2309699292,-0.3413193965,  1.7076147010
+);
+
+vec3 okLabFromBT709(vec3 bt709)
+{
+  vec3 lms = BT709_TO_OKLAB_LMS * bt709;
+  lms = sign(lms) * pow(abs(lms), vec3(1.0 / 3.0));  // cube-root with sign
+  return OKLAB_LMS_TO_OKLAB * lms;
+}
+
+vec3 bt709FromOKLab(vec3 okLab)
+{
+  vec3 lms = OKLAB_TO_OKLAB_LMS * okLab;
+  lms *= lms * lms;  // cube
+  return OKLAB_LMS_TO_BT709 * lms;
+}
+
+vec3 okLChFromOKLab(vec3 okLab)
+{
+  float L = okLab.x;
+  float a = okLab.y;
+  float b = okLab.z;
+  return vec3(L,
+              length(okLab.yz),  // C
+              atan(b, a));       // h  (radians)
+}
+
+vec3 okLabFromOKLCh(vec3 okLCh)
+{
+  float L = okLCh.x;
+  float C = okLCh.y;
+  float h = okLCh.z;
+  return vec3(L,
+              C * cos(h),
+              C * sin(h));
+}
+
+vec3 okLChFromBT709(vec3 bt709)
+{
+  return okLChFromOKLab(okLabFromBT709(bt709));
+}
+
+vec3 bt709FromOKLCh(vec3 okLCh)
+{
+  return bt709FromOKLab(okLabFromOKLCh(okLCh));
+}
+
+vec3 EncodePQ(vec3 color, float scaling) {
+  float M1 = 2610.f / 16384.f;           // 0.1593017578125f;
+  float M2 = 128.f * (2523.f / 4096.f);  // 78.84375f;
+  float C1 = 3424.f / 4096.f;            // 0.8359375f;
+  float C2 = 32.f * (2413.f / 4096.f);   // 18.8515625f;
+  float C3 = 32.f * (2392.f / 4096.f);   // 18.6875f;
+  color *= (scaling / 10000.f);
+  vec3 y_m1 = pow(color, vec3(M1));
+  return pow((vec3(C1) + vec3(C2) * y_m1) / (1.f + vec3(C3) * y_m1), vec3(M2));
+}
+vec3 EncodePQ(vec3 color) { return EncodePQ(color, 10000.f); }
+
+vec3 DecodePQ(vec3 in_color, float scaling) {
+  float M1 = 2610.f / 16384.f;           // 0.1593017578125f;
+  float M2 = 128.f * (2523.f / 4096.f);  // 78.84375f;
+  float C1 = 3424.f / 4096.f;            // 0.8359375f;
+  float C2 = 32.f * (2413.f / 4096.f);   // 18.8515625f;
+  float C3 = 32.f * (2392.f / 4096.f);   // 18.6875f;
+
+  vec3 e_m12 = pow(in_color, 1.f / vec3(M2));
+  vec3 out_color = pow(max(e_m12 - vec3(C1), 0) / (vec3(C2) - vec3(C3) * e_m12),
+                       1.f / vec3(M1));
+  return out_color * (10000.f / scaling);
+}
+vec3 DecodePQ(vec3 color) { return DecodePQ(color, 10000.f); }
+
+const mat3 XYZ_TO_LMS_MAT =
+    mat3(0.3592832590121217f, 0.6976051147779502f, -0.0358915932320290f,
+         -0.1920808463704993f, 1.1004767970374321f, 0.0753748658519118f,
+         0.0070797844607479f, 0.0748396662186362f, 0.8433265453898765f);
+
+const mat3 LMS_TO_XYZ_MAT =
+    mat3(2.07018005669561320, -1.32645687610302100, 0.206616006847855170,
+         0.36498825003265756, 0.68046736285223520, -0.045421753075853236,
+         -0.04959554223893212, -0.04942116118675749, 1.187995941732803400);
+
+vec3 IctcpFromBT709(vec3 bt709_color) {
+  vec3 xyz_color = bt709_color * BT709_TO_XYZ_MAT;
+  vec3 lms_color = xyz_color * XYZ_TO_LMS_MAT;
+
+  mat3 mat = mat3(0.5000, 0.5000, 0.0000, 1.6137, -3.3234, 1.7097, 4.3780,
+                  -4.2455, -0.1325);
+
+  return EncodePQ(lms_color, 100.0f) * mat;
+}
+
+vec3 BT709FromICtCp(vec3 col) {
+  mat3 mat = mat3(1.0, 0.00860514569398152, 0.11103560447547328, 1.0,
+                  -0.00860514569398152, -0.11103560447547328, 1.0,
+                  0.56004885956263900, -0.32063747023212210);
+  col = col * mat;
+
+  // 1.0f = 100 nits, 100.0f = 10k nits
+  col = DecodePQ(col, 100.f);
+  col = col * LMS_TO_XYZ_MAT;
+  return col * XYZ_TO_BT709_MAT;
+}
+
+const vec3 BT709_LUMA = vec3(0.2126390059,
+                             0.7151686788,
+                             0.0721923154);
+
+float luminanceBT709(vec3 c) { return dot(c, BT709_LUMA); }
+
+// Safe divide (float & vec2 versions)
+float DivideSafe(float a, float b, float fallback) { return (b == 0.0) ? fallback : a / b; }
+float DivideSafe(float a, float b) { return DivideSafe(a, b, 3.4028235e38); }
+vec2 DivideSafe(vec2 a, vec2 b, vec2 fallback) { return vec2(DivideSafe(a.x, b.x, fallback.x), DivideSafe(a.y, b.y, fallback.y)); }
+vec2 DivideSafe(vec2 a, vec2 b) { return DivideSafe(a, b, vec2(3.4028235e38)); }
+
+vec3 ApplyPerChannelCorrection(
+    vec3 untonemapped,
+    vec3 per_channel_color,
+    float blowout_restoration,
+    float hue_correction_strength,
+    float chrominance_correction_strength,
+    float hue_shift_strength)
+{
+  const float tonemapped_luminance = luminanceBT709(abs(per_channel_color));
+
+  const float AUTO_CORRECT_BLACK = 0.02;
+  // Fix near black
+  const float untonemapped_luminance = luminanceBT709(abs(untonemapped));
+  float ratio = tonemapped_luminance / untonemapped_luminance;
+  float auto_correct_ratio = mix(ratio, 1.0,
+                                 clamp(untonemapped_luminance / AUTO_CORRECT_BLACK, 0.0, 1.0));
+  untonemapped *= auto_correct_ratio;
+
+  const vec3 tonemapped_perceptual = IctcpFromBT709(per_channel_color);
+  const vec3 untonemapped_perceptual = IctcpFromBT709(untonemapped);
+
+  vec2 untonemapped_chromas = untonemapped_perceptual.yz;
+  vec2 tonemapped_chromas = tonemapped_perceptual.yz;
+
+  float untonemapped_chrominance = length(untonemapped_perceptual.yz);  // eg: 0.80
+  float tonemapped_chrominance = length(tonemapped_perceptual.yz);      // eg: 0.20
+
+  // clamp saturation loss
+  float chrominance_ratio = min(DivideSafe(tonemapped_chrominance,
+                                           untonemapped_chrominance, 1.0), 1.0);
+  chrominance_ratio = max(chrominance_ratio, blowout_restoration);
+
+  // Untonemapped hue, tonemapped chrominance (with limit)
+  vec2 reduced_untonemapped_chromas = untonemapped_chromas * chrominance_ratio;
+
+  // pick chroma based on per-channel luminance (supports not oversaturating crushed areas)
+  const vec2 reduced_hue_shifted = mix(
+      tonemapped_chromas,
+      reduced_untonemapped_chromas,
+      clamp(tonemapped_luminance / 0.36, 0.0, 1.0));
+
+  // Tonemapped hue, restored chrominance (with limit)
+  const vec2 blowout_restored_chromas = tonemapped_chromas *
+      DivideSafe(length(reduced_hue_shifted), length(tonemapped_chromas), 1.0);
+
+  const vec2 hue_shifted_chromas = mix(reduced_hue_shifted,
+                                       blowout_restored_chromas,
+                                       hue_shift_strength);
+
+  // Pick untonemapped hues for shadows/midtones
+  const vec2 hue_correct_chromas = untonemapped_chromas *
+      DivideSafe(length(hue_shifted_chromas), length(untonemapped_chromas), 1.0);
+
+  const vec2 selectable_hue_correct_range = mix(
+      hue_correct_chromas,
+      hue_shifted_chromas,
+      clamp(tonemapped_luminance / 0.36, 0.0, 1.0));
+
+  const vec2 hue_corrected_chromas = mix(hue_shifted_chromas,
+                                         selectable_hue_correct_range,
+                                         hue_correction_strength);
+
+  const vec2 chroma_correct_chromas = hue_corrected_chromas *
+      DivideSafe(length(untonemapped_chromas), length(hue_corrected_chromas), 1.0);
+
+  const vec2 selectable_chroma_correct_range = mix(
+      chroma_correct_chromas,
+      hue_corrected_chromas,
+      clamp(tonemapped_luminance / 0.36, 0.0, 1.0));
+
+  const vec2 chroma_corrected_chromas = mix(
+      hue_correct_chromas,
+      selectable_chroma_correct_range,
+      chrominance_correction_strength);
+
+  vec2 final_chromas = chroma_corrected_chromas;
+
+  const vec3 final_color = BT709FromICtCp(vec3(
+      tonemapped_perceptual.x,
+      final_chromas));
+
+  return final_color;
+}
+
+vec3 CorrectHue(vec3 incorrect_color, vec3 correct_color, float strength)
+{
+  if (strength == 0.0) return incorrect_color;
+
+  vec3 correct_lab = okLabFromBT709(correct_color);
+  vec3 incorrect_lab = okLabFromBT709(incorrect_color);
+
+  float chrominance_pre_adjust = length(incorrect_lab.yz);
+
+  incorrect_lab.yz = mix(incorrect_lab.yz, correct_lab.yz, strength);
+
+  float chrominance_post_adjust = length(incorrect_lab.yz);
+
+  incorrect_lab.yz *= DivideSafe(chrominance_pre_adjust,
+                                 chrominance_post_adjust,
+                                 1.0);
+
+  vec3 color = bt709FromOKLab(incorrect_lab);
+  color = AP1_TO_BT709_MAT *  // convert to ap1, clamp negatives, convert back to bt709
+          max(BT709_TO_AP1_MAT * color, vec3(0.0));
+
+  return color;
+}
+
+vec3 SaturationAP1(vec3 ap1, float saturation) {
+  vec3 bt709 = AP1_TO_BT709_MAT * ap1;
+
+  vec3 perceptual = okLabFromBT709(bt709);
+  perceptual.yz *= saturation;
+  
+  bt709 = bt709FromOKLab(perceptual);
+  return max(vec3(0.0), BT709_TO_AP1_MAT * bt709);
+}
+
+// END INCLUDES
