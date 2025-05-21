@@ -840,6 +840,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         if (product_name == "FATAL FURY: City of the Wolves") return true;
         if (product_name == "Deadzone: Rogue") return true;
         if (product_name == "EVERSPACE 2") return true;
+        if (product_name == "JDM") return true;  // JDM: Japanese Drift Master
 
         // UE DX12 has a 4 param root sig that crashes if modified. Track for now
         return std::ranges::any_of(params, [](auto param) {
