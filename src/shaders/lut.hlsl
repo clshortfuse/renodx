@@ -51,14 +51,16 @@ Config Create(SamplerState lut_sampler, float strength, float scaling, uint type
 #pragma dxc diagnostic push
 #pragma dxc diagnostic ignored "-Weffects-syntax"
 #endif
-sampler NULL_SAMPLER = sampler_state {};
+
+SamplerState NULL_SAMPLER_STATE;
+
 #if defined(__SHADER_TARGET_MAJOR) && (__SHADER_TARGET_MAJOR >= 6)
 #pragma dxc diagnostic pop
 #endif
 
 Config Create() {
   Config lut_config = {
-    NULL_SAMPLER,
+    NULL_SAMPLER_STATE,
     1.f,
     1.f,
     config::type::SRGB,
