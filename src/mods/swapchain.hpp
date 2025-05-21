@@ -231,8 +231,6 @@ static void CheckSwapchainSize(
     if (screen_height != buffer_desc.texture.height) return;
     // if (window_rect.top == 0 && window_rect.left == 0) return;
 
-    RemoveWindowBorder(output_window);
-
     RECT rect = {NULL};
     if (GetWindowRect(output_window, &rect) != 0) {
       if (rect.left != monitor_info.rcMonitor.left
