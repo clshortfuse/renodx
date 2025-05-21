@@ -231,26 +231,49 @@ class Decompiler {
     return std::format("{}u", input);
   }
 
-  static std::string ParseFloatString(std::string_view input) {
+  static std::string ParseSuffixedString(std::string_view input, char suffix = 'f') {
     std::string output;
-    double_t value;
+
     if (input == "0x7FF0000000000000") return "+1.#INF";
-    if (input.starts_with("0x")) {
+    if (input.starts_with("0xH")) {
+      const std::string string = std::string{input.substr(3)};
+      auto as_uint16 = static_cast<uint16_t>(strtoul(string.c_str(), nullptr, 16));
+      // bfloat16: upper 16 bits of IEEE 754 float32
+      uint32_t sign = (as_uint16 & 0x8000) << 16;
+      uint32_t exponent = ((as_uint16 & 0x7C00) >> 10) - 15 + 127;
+      uint32_t mantissa = (as_uint16 & 0x03FF) << (23 - 10);
+
+      if ((as_uint16 & 0x7C00) == 0) {
+        exponent = 0;  // Subnormal numbers
+      } else if ((as_uint16 & 0x7C00) == 0x7C00) {
+        exponent = 255;  // Infinity or NaN
+        mantissa = ((as_uint16 & 0x03FF) != 0) ? 0x00400000 : 0;
+      }
+
+      // Combine into full IEEE 754 float32 format
+      uint32_t float_bits = sign | (exponent << 23) | mantissa;
+
+      float as_float;
+      memcpy(&as_float, &float_bits, sizeof(as_float));  // Reinterpret bits
+      output = std::format("{}", as_float);
+    } else if (input.starts_with("0x")) {
       const std::string string = std::string{input};
       auto unsigned_long = strtoull(string.c_str(), nullptr, 16);
       uint64_t as_uint64 = unsigned_long;
-      memcpy(&value, &as_uint64, sizeof value);
+      double_t as_double;
+      memcpy(&as_double, &as_uint64, sizeof(as_double));
+      output = std::format("{}", as_double);
     } else {
-      FromStringView(input, value);
+      double_t as_double;
+      FromStringView(input, as_double);
+      output = std::format("{}", as_double);
     }
-    output = std::format("{}", value);
     bool has_dot = output.find('.') != std::string::npos;
     bool has_plus = output.find('+') != std::string::npos;
     if (!has_dot && !has_plus) {
-      output += ".0f";
-    } else {
-      output += "f";
+      output += ".0";
     }
+    output += suffix;
     return output;
   }
 
@@ -258,6 +281,7 @@ class Decompiler {
     if (input == "float") return "float";
     if (input == "half") return "half";
     if (input == "i32") return "int";
+    if (input == "f16") return "min16float";
     if (input == "i16") return "min16int";
     if (input == "i1") return "bool";
     throw std::invalid_argument("Could not parse code type");
@@ -677,6 +701,7 @@ class Decompiler {
     enum class ResourceFormat {
       NA,
       BYTE,
+      F16,
       F32,
       I32,
       U32,
@@ -717,6 +742,7 @@ class Decompiler {
     static ResourceFormat ResourceFormatFromString(std::string_view input) {
       if (input == "NA") return ResourceFormat::NA;
       if (input == "byte") return ResourceFormat::BYTE;
+      if (input == "f16") return ResourceFormat::F16;
       if (input == "f32") return ResourceFormat::F32;
       if (input == "i32") return ResourceFormat::I32;
       if (input == "u32") return ResourceFormat::U32;
@@ -1569,7 +1595,14 @@ class Decompiler {
       if (input.at(0) == '%') {
         return ParseVariable(input);
       }
-      return ParseFloatString(input);
+      return ParseSuffixedString(input, 'f');
+    }
+
+    std::string ParseHalf(std::string_view input) {
+      if (input.at(0) == '%') {
+        return ParseVariable(input);
+      }
+      return ParseSuffixedString(input, 'h');
     }
 
     std::string ParseByType(std::string_view input, std::string_view type) {
@@ -1577,6 +1610,7 @@ class Decompiler {
       if (type == "i32") return ParseInt(input);
       if (type == "int") return ParseInt(input);
       if (type == "uint") return ParseUint(input);
+      if (type == "half") return ParseHalf(input);
       return ParseFloat(input);
     }
 
@@ -1870,6 +1904,17 @@ class Decompiler {
           } else {
             throw std::invalid_argument("Unknown @dx.op.binary.f32");
           }
+        } else if (functionName == "@dx.op.binary.f16") {
+          // call half @dx.op.binary.f16(i32 35, half %696, half 0xH0000)
+          auto [opNumber, a, b] = StringViewSplit<3>(functionParamsString, param_regex, 2);
+          if (auto pair = BINARY_FLOAT_OPS.find(std::string(opNumber));
+              pair != BINARY_FLOAT_OPS.end()) {
+            assignment_type = ParseType(type);
+            assignment_value = std::format("{}({}, {})", pair->second, ParseHalf(a), ParseHalf(b));
+            // decompiled = std::format("{} _{} = {}({}, {});", ParseType(type), variable, pair->second, ParseFloat(a), ParseFloat(b));
+          } else {
+            throw std::invalid_argument("Unknown @dx.op.binary.f16");
+          }
         } else if (functionName == "@dx.op.binary.i32") {
           auto [opNumber, a, b] = StringViewSplit<3>(functionParamsString, param_regex, 2);
           if (auto pair = BINARY_INT32_OPS.find(std::string(opNumber));
@@ -1878,7 +1923,7 @@ class Decompiler {
             assignment_value = std::format("{}({}, {})", pair->second, ParseInt(a), ParseInt(b));
             // decompiled = std::format("{} _{} = {}({}, {});", ParseType(type), variable, pair->second, ParseInt(a), ParseInt(b));
           } else {
-            throw std::invalid_argument("Unknown @dx.op.binary.f32");
+            throw std::invalid_argument("Unknown @dx.op.binary.i32");
           }
         } else if (functionName == "@dx.op.textureLoad.f32" || functionName == "@dx.op.textureLoad.i32") {
           // %dx.types.ResRet.f32 @dx.op.textureLoad.f32(i32 66, %dx.types.Handle %40, i32 0, i32 %38, i32 %39, i32 undef, i32 undef, i32 undef, i32 undef)  ; TextureLoad(srv,mipLevelOrSampleCount,coord0,coord1,coord2,offset0,offset1,offset2)
@@ -1948,7 +1993,7 @@ class Decompiler {
             assignment_value = std::format("{}.Load({}, {})", binding_name, coords, offset);
             // decompiled = std::format("{} _{} = {}.Load({}, {});", srv_resource.data_type, variable, binding_name, coords, offset);
           }
-        } else if (functionName == "@dx.op.sample.f32") {
+        } else if (functionName == "@dx.op.sample.f32" || functionName == "@dx.op.sample.f16") {
           //  call %dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, %dx.types.Handle %1, %dx.types.Handle %2, float %4, float %5, float undef, float undef, i32 0, i32 0, i32 undef, float undef)  ; Sample(srv,sampler,coord0,coord1,coord2,coord3,offset0,offset1,offset2,clamp)
           auto [opNumber, srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp] = StringViewSplit<11>(functionParamsString, param_regex, 2);
           auto ref_resource = std::string{srv.substr(1)};
@@ -1992,7 +2037,7 @@ class Decompiler {
             assignment_value = std::format("{}.Sample({}, {}, {})", srv_name, sampler_name, coords, offset);
             // decompiled = std::format("{} _{} = {}.Sample({}, {}, {});", srv_resource.data_type, variable, srv_name, sampler_name, coords, offset);
           }
-        } else if (functionName == "@dx.op.sampleLevel.f32") {
+        } else if (functionName == "@dx.op.sampleLevel.f32" || functionName == "@dx.op.sampleLevel.f16") {
           // %427 = call %dx.types.ResRet.f32 @dx.op.sampleLevel.f32(i32 62, %dx.types.Handle %3, %dx.types.Handle %7, float %384, float %385, float %426, float undef, i32 undef, i32 undef, i32 undef, float 0.000000e+00)  ; SampleLevel(srv,sampler,coord0,coord1,coord2,coord3,offset0,offset1,offset2,LOD)
           // %427 = i32 62, %dx.types.Handle %3, %dx.types.Handle %7,
           // float %384, float %385, float %426, float undef,
@@ -2058,6 +2103,25 @@ class Decompiler {
           assignment_value = std::format("dot(float4({}, {}, {}, {}), float4({}, {}, {}, {}))",
                                          ParseFloat(ax), ParseFloat(ay), ParseFloat(az), ParseFloat(aw),
                                          ParseFloat(bx), ParseFloat(by), ParseFloat(bz), ParseFloat(bw));
+        } else if (functionName == "@dx.op.dot2.f16") {
+          auto [opNumber, ax, ay, bx, by] = StringViewSplit<5>(functionParamsString, param_regex, 2);
+          assignment_type = "half";
+          assignment_value = std::format("dot(half2({}, {}), half2({}, {}))",
+                                         ParseHalf(ax), ParseHalf(ay),
+                                         ParseHalf(bx), ParseHalf(by));
+        } else if (functionName == "@dx.op.dot3.f16") {
+          // call half @dx.op.dot3.f16(i32 55, half %704, half %705, half %706, half 0xH34C9, half 0xH38B2, half 0xH2F4C)
+          auto [opNumber, ax, ay, az, bx, by, bz] = StringViewSplit<7>(functionParamsString, param_regex, 2);
+          assignment_type = "half";
+          assignment_value = std::format("dot(half3({}, {}, {}), half3({}, {}, {}))",
+                                         ParseHalf(ax), ParseHalf(ay), ParseHalf(az),
+                                         ParseHalf(bx), ParseHalf(by), ParseHalf(bz));
+        } else if (functionName == "@dx.op.dot4.f32") {
+          auto [opNumber, ax, ay, az, aw, bx, by, bz, bw] = StringViewSplit<9>(functionParamsString, param_regex, 2);
+          assignment_type = "half";
+          assignment_value = std::format("dot(half4({}, {}, {}, {}), half4({}, {}, {}, {}))",
+                                         ParseHalf(ax), ParseHalf(ay), ParseHalf(az), ParseHalf(aw),
+                                         ParseHalf(bx), ParseHalf(by), ParseHalf(bz), ParseHalf(bw));
         } else if (functionName == "@dx.op.tertiary.f32") {
           // call float @dx.op.tertiary.f32(i32 46, float 0xBFC4A8C160000000, float %210, float %217)  ; FMad(a,b,c)
           auto [opNumber, a, b, c] = StringViewSplit<4>(functionParamsString, param_regex, 2);
@@ -2552,6 +2616,19 @@ class Decompiler {
 
           // decompiled = std::format("float _{} = {};", variable, value);
           // preprocess_state.variable_aliases.emplace(variable, value);
+        } else if (type == R"(%dx.types.ResRet.f16)") {
+          auto source_variable = ParseVariable(input).substr(1);
+          assignment_type = "half";
+          if (auto pair = preprocess_state.srv_binding_load_variables.find(source_variable);
+              pair != preprocess_state.srv_binding_load_variables.end()) {
+            throw std::invalid_argument("Unsupported half in SRV.");
+          } else if (auto pair = preprocess_state.uav_binding_load_variables.find(source_variable);
+                     pair != preprocess_state.uav_binding_load_variables.end()) {
+            throw std::invalid_argument("Unsupported half in UAV.");
+          } else {
+            assignment_value = std::format("{}.{}", ParseVariable(input), ParseIndex(index));
+            is_identity = true;
+          }
         } else if (type == R"(%dx.types.ResRet.i32)") {
           auto source_variable = ParseVariable(input).substr(1);
           assignment_type = "int";
@@ -2644,57 +2721,59 @@ class Decompiler {
       } else if (instruction == "fmul") {
         auto [value_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(fmul (?:fast )?(\S+) (\S+), (\S+))"});
         assignment_type = ParseType(value_type);
-        assignment_value = std::format("{} * {}", ParseFloat(a), ParseFloat(b));
+        assignment_value = std::format("{} * {}", ParseByType(a, value_type), ParseByType(b, value_type));
       } else if (instruction == "fdiv") {
         auto [value_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(fdiv (?:fast )?(\S+) (\S+), (\S+))"});
         assignment_type = ParseType(value_type);
-        assignment_value = std::format("{} / {}", ParseFloat(a), ParseFloat(b));
+        assignment_value = std::format("{} / {}", ParseByType(a, value_type), ParseByType(b, value_type));
       } else if (instruction == "fadd") {
         auto [value_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(fadd (?:fast )?(\S+) (\S+), (\S+))"});
         assignment_type = ParseType(value_type);
-        assignment_value = std::format("{} + {}", ParseFloat(a), ParseFloat(b));
+        assignment_value = std::format("{} + {}", ParseByType(a, value_type), ParseByType(b, value_type));
       } else if (instruction == "fsub") {
         // fsub fast half 0xH3C00, %42
         auto [value_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(fsub (?:fast )?(\S+) (\S+), (\S+))"});
         assignment_type = ParseType(value_type);
-        assignment_value = std::format("{} - {}", ParseFloat(a), ParseFloat(b));
+        assignment_value = std::format("{} - {}", ParseByType(a, value_type), ParseByType(b, value_type));
       } else if (instruction == "fcmp") {
         // %39 = fcmp fast ogt float %37, 0.000000e+00
-        auto [fast, op, type, a, b] = StringViewMatch<5>(assignment, std::regex{R"(fcmp (fast )?(\S+) (\S+) (\S+), (\S+))"});
+        auto [fast, op, value_type, a, b] = StringViewMatch<5>(assignment, std::regex{R"(fcmp (fast )?(\S+) (\S+) (\S+), (\S+))"});
 
         // Missing fast support
         assignment_type = "bool";
 
+        auto a_parsed = ParseByType(a, value_type);
+        auto b_parsed = ParseByType(b, value_type);
         if (op == "false") {
           assignment_value = "false";
         } else if (op == "oeq") {
-          assignment_value = std::format("({} == {})", ParseFloat(a), ParseFloat(b));
+          assignment_value = std::format("({} == {})", a_parsed, b_parsed);
         } else if (op == "ogt") {
-          assignment_value = std::format("({} > {})", ParseFloat(a), ParseFloat(b));
+          assignment_value = std::format("({} > {})", a_parsed, b_parsed);
         } else if (op == "oge") {
-          assignment_value = std::format("({} >= {})", ParseFloat(a), ParseFloat(b));
+          assignment_value = std::format("({} >= {})", a_parsed, b_parsed);
         } else if (op == "olt") {
-          assignment_value = std::format("({} < {})", ParseFloat(a), ParseFloat(b));
+          assignment_value = std::format("({} < {})", a_parsed, b_parsed);
         } else if (op == "ole") {
-          assignment_value = std::format("({} <= {})", ParseFloat(a), ParseFloat(b));
+          assignment_value = std::format("({} <= {})", a_parsed, b_parsed);
         } else if (op == "one") {
-          assignment_value = std::format("({} != {})", ParseFloat(a), ParseFloat(b));
+          assignment_value = std::format("({} != {})", a_parsed, b_parsed);
         } else if (op == "ord") {
-          assignment_value = std::format("(!isnan{} && !isnan{})", ParseWrapped(ParseFloat(a)), ParseWrapped(ParseFloat(b)));
+          assignment_value = std::format("(!isnan{} && !isnan{})", ParseWrapped(a_parsed), ParseWrapped(b_parsed));
         } else if (op == "ueq") {
-          assignment_value = std::format("!({} != {})", ParseFloat(a), ParseFloat(b));
+          assignment_value = std::format("!({} != {})", a_parsed, b_parsed);
         } else if (op == "ugt") {
-          assignment_value = std::format("!({} <= {})", ParseFloat(a), ParseFloat(b));
+          assignment_value = std::format("!({} <= {})", a_parsed, b_parsed);
         } else if (op == "uge") {
-          assignment_value = std::format("!({} > {})", ParseFloat(a), ParseFloat(b));
+          assignment_value = std::format("!({} > {})", a_parsed, b_parsed);
         } else if (op == "ult") {
-          assignment_value = std::format("!({} >= {})", ParseFloat(a), ParseFloat(b));
+          assignment_value = std::format("!({} >= {})", a_parsed, b_parsed);
         } else if (op == "ule") {
-          assignment_value = std::format("!({} > {})", ParseFloat(a), ParseFloat(b));
+          assignment_value = std::format("!({} > {})", a_parsed, b_parsed);
         } else if (op == "une") {
-          assignment_value = std::format("!({} == {})", ParseFloat(a), ParseFloat(b));
+          assignment_value = std::format("!({} == {})", a_parsed, b_parsed);
         } else if (op == "uno") {
-          assignment_value = std::format("(isnan{} || isnan{})", ParseWrapped(ParseFloat(a)), ParseWrapped(ParseFloat(b)));
+          assignment_value = std::format("(isnan{} || isnan{})", ParseWrapped(a_parsed), ParseWrapped(b_parsed));
         } else {
           std::cerr << op << "\n";
           throw std::invalid_argument("Could not parse code assignment operator");
@@ -3691,7 +3770,9 @@ class Decompiler {
               FromStringView(array_size, array_size_number);
               for (int i = 0; i < array_size_number; ++i) {
                 if (array_type == "float") {
-                  decompiled << ParseFloatString(values[i].second);
+                  decompiled << ParseSuffixedString(values[i].second, 'f');
+                } else if (array_type == "half") {
+                  decompiled << ParseSuffixedString(values[i].second, 'h');
                 }
                 if (i != array_size_number - 1) {
                   decompiled << ", ";
