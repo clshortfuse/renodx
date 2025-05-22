@@ -40,6 +40,41 @@ float3 applyVignette(float3 inputColor, float2 screen, float slider) {
   return output;
 }
 
+// https://github.com/aliasIsolation/aliasIsolation/blob/master/data/shaders/sharpen_ps.hlsl
+float3 applySharpen(Texture2D colorBuffer, int2 texCoord) {
+  float3 output;
+  float3 center = colorBuffer.Load(int3(texCoord,0)).xyz;
+  float3 neighbors[4] =
+      {
+        colorBuffer.Load(int3(texCoord + int2(1, 1), 0)).xyz,
+        colorBuffer.Load(int3(texCoord + int2(-1, 1), 0)).xyz,
+        colorBuffer.Load(int3(texCoord + int2(1, -1), 0)).xyz,
+        colorBuffer.Load(int3(texCoord + int2(-1, -1), 0)).xyz
+      };
+    center = renodx::color::pq::Decode(center);
+    neighbors[0] = renodx::color::pq::Decode(neighbors[0]);
+    neighbors[1] = renodx::color::pq::Decode(neighbors[1]);
+    neighbors[2] = renodx::color::pq::Decode(neighbors[2]);
+    neighbors[3] = renodx::color::pq::Decode(neighbors[3]);
+      float neighborDiff = 0;
+      [unroll]
+      for (uint i = 0; i < 4; ++i)
+          {
+        neighborDiff += renodx::color::y::from::BT2020(abs(neighbors[i] - center));
+      }
+      float sharpening = (1 - saturate(2 * neighborDiff)) * 0.71f;
+      float3 sharpened = float3(
+                             0.0.xxx
+                             + neighbors[0] * -sharpening
+                             + neighbors[1] * -sharpening
+                             + neighbors[2] * -sharpening
+                             + neighbors[3] * -sharpening
+                             + center * 5
+      ) * 1.0 / (5.0 + sharpening * -4.0);
+      output = renodx::color::bt709::from::BT2020(sharpened);
+  return output;
+  }
+
 //-----SCALING-----//
 float3 PostToneMapScale(float3 color) {
   if (injectedData.toneMapGammaCorrection == 2.f) {
