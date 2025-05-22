@@ -37,7 +37,7 @@ struct ShaderInjectData {
   float random_1;
   float random_2;
   float random_3;
-  bool hasLoadedTitleMenu;
+  int check;
 };
 
 #ifndef __cplusplus
