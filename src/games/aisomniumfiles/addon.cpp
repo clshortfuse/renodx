@@ -28,6 +28,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xFEB3E510), // UI - menu
     CustomShaderEntry(0x8A6BCB4C), // videos
     CustomShaderEntry(0xEE94CA0F), // overlay, specific somnium scenes
+    CustomShaderEntry(0x3F47A4BB), // map in somnia
 };
 
 ShaderInjectData shader_injection;
@@ -79,7 +80,6 @@ renodx::utils::settings::Settings settings = {
         .max = 0.99f,
         .format = "%.2f",
         .is_visible = []() { return settings[0]->GetValue() >= 1; }
-        //.is_visible = []() { return RENODX_TONE_MAP_TYPE == 6.f || RENODX_TONE_MAP_TYPE == 9.f ; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
@@ -140,7 +140,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueCorrection",
         .binding = &RENODX_TONE_MAP_HUE_CORRECTION,
-        .default_value = 0.f,
+        .default_value = 100.f,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tooltip = "Hue retention strength.",
