@@ -517,6 +517,12 @@ inline DxilProgramVersion DecodeShaderVersion(std::span<uint8_t> blob) {
     case FourCC('D', 'X', 'I', 'L'):
       break;
     default:
+      // DX9 Shader
+      if (blob[3] == 0xFF) {
+        return DxilProgramVersion{
+            .value = static_cast<uint32_t>((0xFF - blob[2]) << 16 | (blob[1] << 4) | (blob[0] << 0))};
+      }
+      assert(false);
       throw std::exception("Unrecognized header.");
   }
 

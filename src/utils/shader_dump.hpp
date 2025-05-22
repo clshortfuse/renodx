@@ -218,62 +218,68 @@ static bool DumpShader(
 
   bool is_binary = true;
 
-  if (device::IsDirectX(internal::device_api)) {
-    renodx::utils::shader::compiler::directx::DxilProgramVersion shader_version;
-    try {
+  switch (internal::device_api) {
+    case reshade::api::device_api::d3d9:
+    case reshade::api::device_api::d3d10:
+    case reshade::api::device_api::d3d11:
+    case reshade::api::device_api::d3d12: {
+      renodx::utils::shader::compiler::directx::DxilProgramVersion shader_version;
+      try {
 #ifdef DEBUG_LEVEL_1
-      std::stringstream s;
-      s << "utils::shader::dump(Decoding shader_data: ";
-      s << PRINT_CRC32(shader_hash);
-      s << ": " << shader_data.size();
-      s << ")";
-      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+        std::stringstream s;
+        s << "utils::shader::dump(Decoding shader_data: ";
+        s << PRINT_CRC32(shader_hash);
+        s << ": " << shader_data.size();
+        s << ")";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-      shader_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data);
-    } catch (std::exception& e) {
-      std::stringstream s;
-      s << "utils::shader::dump(Failed to parse ";
-      s << PRINT_CRC32(shader_hash);
-      s << ": " << e.what();
-      s << ")";
-      reshade::log::message(reshade::log::level::error, s.str().c_str());
+        shader_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data);
+      } catch (std::exception& e) {
+        std::stringstream s;
+        s << "utils::shader::dump(Failed to parse ";
+        s << PRINT_CRC32(shader_hash);
+        s << ": " << e.what();
+        s << ")";
+        reshade::log::message(reshade::log::level::error, s.str().c_str());
+      }
+      std::string kind = shader_version.GetKindAbbr();
+      if (kind != "??") {
+        dump_path += L".";
+        dump_path += kind;
+        dump_path += L"_";
+        dump_path += std::to_string(shader_version.GetMajor());
+        dump_path += L"_";
+        dump_path += std::to_string(shader_version.GetMinor());
+      } else {
+        std::stringstream s;
+        s << "utils::shader::dump(Unknown shader type: ";
+        s << PRINT_CRC32(shader_hash);
+        s << ", type: " << shader_version.GetKind();
+        s << ")";
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
+      }
+      break;
     }
-    std::string kind = shader_version.GetKindAbbr();
-    if (kind != "??") {
-      dump_path += L".";
-      dump_path += kind;
-      dump_path += L"_";
-      dump_path += std::to_string(shader_version.GetMajor());
-      dump_path += L"_";
-      dump_path += std::to_string(shader_version.GetMinor());
-    } else {
-      std::stringstream s;
-      s << "utils::shader::dump(Unknown shader type: ";
-      s << PRINT_CRC32(shader_hash);
-      s << ", type: " << shader_version.GetKind();
-      s << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
-    }
-  } else {
-    // Vulkan
-    switch (shader_type) {
-      case reshade::api::pipeline_subobject_type::pixel_shader:
-        dump_path += L".frag";
-        break;
-      case reshade::api::pipeline_subobject_type::vertex_shader:
-        dump_path += L".vert";
-        break;
-      case reshade::api::pipeline_subobject_type::compute_shader:
-        dump_path += L".comp";
-        break;
-      default:
-        break;
-    }
-
-    if (internal::device_api == reshade::api::device_api::opengl) {
+    case reshade::api::device_api::opengl:
       is_binary = false;
-    }
-    // Use type
+      [[fallthrough]];
+    case reshade::api::device_api::vulkan:
+      // Vulkan
+      switch (shader_type) {
+        case reshade::api::pipeline_subobject_type::pixel_shader:
+          dump_path += L".frag";
+          break;
+        case reshade::api::pipeline_subobject_type::vertex_shader:
+          dump_path += L".vert";
+          break;
+        case reshade::api::pipeline_subobject_type::compute_shader:
+          dump_path += L".comp";
+          break;
+        default:
+          break;
+      }
+    default:
+      break;
   }
 
   dump_path += internal::file_extension;
