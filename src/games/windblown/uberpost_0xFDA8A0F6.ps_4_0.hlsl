@@ -155,10 +155,13 @@ void main(
   }
   r1.rgb = lerp(preLUT, r1.rgb, injectedData.colorGradeLUTStrength);
   }
+  if (!injectedData.postfinal_check) {
   if (injectedData.fxFilmGrain > 0.f) {
     r1.rgb = applyFilmGrain(r1.rgb, v1, injectedData.fxFilmGrainType != 0);
   }
-  o0.rgb = PostToneMapScale(r1.rgb);
+  r1.rgb = PostToneMapScale(r1.rgb);
+  }
+  o0.rgb = r1.rgb;
   o0.w = 1;
   return;
 }
