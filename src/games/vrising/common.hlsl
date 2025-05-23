@@ -25,7 +25,7 @@ float3 applyFilmGrain(float3 outputColor, float2 screen, bool colored) {
 }
 
 // https://github.com/aliasIsolation/aliasIsolation/blob/master/data/shaders/sharpen_ps.hlsl
-float3 applySharpen(Texture2DArray colorBuffer, int2 texCoord) {
+float3 applySharpen(Texture2DArray colorBuffer, int2 texCoord, float intensity) {
   float3 output;
   float3 center = colorBuffer.Load(int4(texCoord,0, 0)).xyz;
   float3 neighbors[4] =
@@ -46,7 +46,7 @@ float3 applySharpen(Texture2DArray colorBuffer, int2 texCoord) {
           {
         neighborDiff += renodx::color::y::from::BT2020(abs(neighbors[i] - center));
       }
-      float sharpening = (1 - saturate(2 * neighborDiff)) * 0.71f;
+      float sharpening = (1 - saturate(2 * neighborDiff)) * intensity;
       float3 sharpened = float3(
                              0.0.xxx
                              + neighbors[0] * -sharpening
