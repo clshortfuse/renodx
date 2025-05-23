@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -16,7 +16,9 @@ void main(
   float4 fDest;
 
   r0.xyzw = t0.SampleBias(s0_s, v1.xy, cb0[5].x).xyzw;
-  o0.xyz = renodx::math::SignSqrt(r0.xyz);
+  r0.rgb = renodx::color::bt2020::from::BT709(r0.rgb);
+  r0.rgb = renodx::color::pq::EncodeSafe(r0.rgb);
+  o0.xyz = sqrt(r0.xyz);
   o0.w = 1;
   return;
 }
