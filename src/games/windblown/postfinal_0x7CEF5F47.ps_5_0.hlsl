@@ -20,8 +20,8 @@ void main(
   //r2.xyzw = (int4)r1.xyxy + int4(0,-1,-1,0);
   //r0.xy = r2.zw;
   r0.xy = cb0[132].xy * v1.xy;
-  //r0.xyz = t0.Load(r0.xyz).xyz;
-  r0.rgb = applySharpen(t0, int2(cb0[132].xy * v1.xy));
+  // r0.xyz = t0.Load(r0.xyz).xyz;
+  r0.rgb = applySharpen(t0, int2(r0.xy), cb0[141].x);
   /*r3.xyzw = (int4)r1.xyxy + int4(0,1,1,0);
   r4.xy = r3.zw;
   r4.zw = float2(0,0);

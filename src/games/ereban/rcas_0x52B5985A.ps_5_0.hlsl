@@ -25,7 +25,7 @@ void main(
   r0.zw = float2(0,0);
   r1.xy = v1.xy * cb0[3].xy + cb0[3].zw;
   r1.zw = cb0[4].xy * r1.xy;
-  r0.xyz = applySharpen(t0, int2(r1.zw));
+  r0.xyz = applySharpen(t0, int2(r1.zw), cb0[12].x);
   /*r2.xy = (uint2)r1.zw;
   r3.xyzw = (int4)r2.xyxy + int4(0,-1,-1,0);
   r0.xy = r3.zw;
