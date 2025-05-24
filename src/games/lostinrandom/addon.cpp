@@ -23,7 +23,7 @@
 #include "./shared.h"
 
 namespace {
-float is_og_game = 1.f;
+bool postfinal_check = false;
 renodx::mods::shader::CustomShaders custom_shaders = {
     // original game
     CustomShaderEntry(0x8EF2D0AE),  // fxaa1
@@ -34,12 +34,22 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x0D7738C5),  // post final
     // The Eternal Die
     CustomShaderEntry(0x13EEF169),  // lutbuilder
-    CustomShaderEntryCallback(0xEF39E7C4, [](reshade::api::command_list* cmd_list) {  // uberpost
-    is_og_game = 0.f;
+    CustomShaderEntry(0x9862BA48),  // uberpost UI (mirror)
+    CustomShaderEntry(0xEF39E7C4),  // uberpost
+    CustomShaderEntry(0xC244242D),  // fsr1
+    CustomShaderEntry(0xE102D2F9),  // fsr1 fxaa
+    CustomShaderEntryCallback(0xD00B5B47, [](reshade::api::command_list* cmd_list) {  // fxaa
+    postfinal_check = true;
     return true;
     }),
-    CustomShaderEntry(0xD00B5B47),  // fxaa
-    CustomShaderEntry(0xC244242D),  // fsr 1
+    CustomShaderEntryCallback(0x7CEF5F47, [](reshade::api::command_list* cmd_list) {  // rcas
+    postfinal_check = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xB1CE8C1C, [](reshade::api::command_list* cmd_list) {  // no rcas (postfinal)
+    postfinal_check = true;
+    return true;
+    }),
     // common
     CustomShaderEntry(0x20133A8B),  // Final
 };
@@ -436,12 +446,6 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f); },
     },
     new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Known issue: FSR clamps colors to rec709.",
-        .section = "Notes",
-        .is_visible = []() { return is_og_game == 0.f; },
-    },
-    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "HDR Den Discord",
         .section = "About",
@@ -511,6 +515,8 @@ void OnPresent(
   shader_injection.random_1 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
   shader_injection.random_2 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
   shader_injection.random_3 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
+  shader_injection.postfinal_check = postfinal_check;
+  postfinal_check = false;
 }
 
 }  // namespace
@@ -545,6 +551,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
           .dimensions = {.width=1024, .height=32},
+      });
+      //  UI mirror (TED)
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_typeless,
+          .dimensions = {.width=1080, .height=1080},
       });
       //  RGB10A2_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({

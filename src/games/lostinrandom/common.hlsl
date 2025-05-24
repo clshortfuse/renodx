@@ -24,6 +24,41 @@ float3 applyFilmGrain(float3 outputColor, float2 screen, bool colored) {
   return grainedColor;
 }
 
+// https://github.com/aliasIsolation/aliasIsolation/blob/master/data/shaders/sharpen_ps.hlsl
+float3 applySharpen(Texture2D colorBuffer, int2 texCoord, float intensity) {
+  float3 output;
+  float3 center = colorBuffer.Load(int3(texCoord,0)).xyz;
+  float3 neighbors[4] =
+      {
+        colorBuffer.Load(int3(texCoord + int2(1, 1), 0)).xyz,
+        colorBuffer.Load(int3(texCoord + int2(-1, 1), 0)).xyz,
+        colorBuffer.Load(int3(texCoord + int2(1, -1), 0)).xyz,
+        colorBuffer.Load(int3(texCoord + int2(-1, -1), 0)).xyz
+      };
+    center = renodx::color::pq::Decode(center);
+    neighbors[0] = renodx::color::pq::Decode(neighbors[0]);
+    neighbors[1] = renodx::color::pq::Decode(neighbors[1]);
+    neighbors[2] = renodx::color::pq::Decode(neighbors[2]);
+    neighbors[3] = renodx::color::pq::Decode(neighbors[3]);
+      float neighborDiff = 0;
+      [unroll]
+      for (uint i = 0; i < 4; ++i)
+          {
+        neighborDiff += renodx::color::y::from::BT2020(abs(neighbors[i] - center));
+      }
+      float sharpening = (1 - saturate(2 * neighborDiff)) * intensity;
+      float3 sharpened = float3(
+                             0.0.xxx
+                             + neighbors[0] * -sharpening
+                             + neighbors[1] * -sharpening
+                             + neighbors[2] * -sharpening
+                             + neighbors[3] * -sharpening
+                             + center * 5
+      ) * 1.0 / (5.0 + sharpening * -4.0);
+      output = renodx::color::bt709::from::BT2020(sharpened);
+  return output;
+  }
+
 //-----SCALING-----//
 float3 PostToneMapScale(float3 color) {
   if (injectedData.toneMapGammaCorrection == 2.f) {
@@ -171,6 +206,26 @@ float3 applyUserTonemap(float3 untonemapped) {
   config.reno_drt_white_clip = injectedData.colorGradeClip;
   if (injectedData.toneMapType == 0.f) {
     outputColor = saturate(hueCorrectionColor);
+  } else {
+    outputColor = untonemapped;
+  }
+return renodx::tonemap::config::Apply(outputColor, config);
+}
+
+float3 applyUserTonemapMenu(float3 untonemapped) {
+  float3 outputColor;
+  renodx::tonemap::Config config = renodx::tonemap::config::Create();
+  config.type = injectedData.toneMapType > 1.f ? 3.f : injectedData.toneMapType;
+  config.peak_nits = injectedData.toneMapPeakNits;
+  config.game_nits = injectedData.toneMapGameNits;
+  config.gamma_correction = injectedData.toneMapGammaCorrection;
+  config.exposure = injectedData.colorGradeExposure;
+  config.hue_correction_strength = 0.f;
+  config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
+  config.reno_drt_per_channel = true;
+  config.reno_drt_white_clip = 1.f;
+  if (injectedData.toneMapType == 0.f) {
+    outputColor = saturate(untonemapped);
   } else {
     outputColor = untonemapped;
   }

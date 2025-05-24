@@ -30,15 +30,29 @@ namespace {
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xF5AC76A9),  // LutBuilder3D
     CustomShaderEntry(0x8A6BCB4C),  // videos
-    CustomShaderEntry(0xE6B97032),  // uberpost
+    CustomShaderEntryCallback(0xE6B97032, [](reshade::api::command_list* cmd_list) {  // uberpost
+      shader_injection.check = 1;
+      return true;
+    }),
     CustomShaderEntry(0x3530AC89),  // uberpost (feeding animation)
+    CustomShaderEntryCallback(0xE59F5A45, [](reshade::api::command_list* cmd_list) {  // uberpost (fsr)
+      shader_injection.check = 2;
+      return true;
+    }),
+    CustomShaderEntry(0xA7F94682),  // uberpost (fsr)
     CustomShaderEntryCallback(0x8FEBA362, [](reshade::api::command_list* cmd_list) {  // uberpost (title menu)
-      shader_injection.hasLoadedTitleMenu = 1.f;
+      shader_injection.check = 1;
+      return true;
+    }),
+    CustomShaderEntryCallback(0x18151718, [](reshade::api::command_list* cmd_list) {  // uberpost (title menu)
+      shader_injection.check = 2;
       return true;
     }),
     CustomShaderEntry(0x6D3B4FF0),  // HDRP final
     CustomShaderEntry(0xBBC1FA0B),  // HDRP final (FXAA)
+    CustomShaderEntry(0xB0B50F1F),  // HDRP final (rcas)
     CustomShaderEntry(0xE52188B2),  // gamma
+    CustomShaderEntry(0x2C19A3F5),  // UI blur background
     CustomShaderEntry(0x20133A8B),  // Final
 };
 
@@ -418,11 +432,6 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeClip", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f); },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "FSR1 is currently not supported.",
-        .section = "Notes",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,

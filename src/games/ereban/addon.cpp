@@ -28,13 +28,18 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x8A6BCB4C),  // pre-rendered cutscenes
     CustomShaderEntry(0x0EBC87AB),  // screenLUT (game brightness)
     CustomShaderEntry(0xE363E5C8),  // uberpost (bloom + vignette)
+    CustomShaderEntry(0x59A9259E),  // uberpost (fsr)
     CustomShaderEntry(0x3BD8B8FD),  // uberpost title menu (CA + bloom + vignette)
+    CustomShaderEntry(0xB9857DFB),  // uberpost title menu (fsr)
+    CustomShaderEntry(0x064D62B7),  // fxaa
     CustomShaderEntry(0x192EEB27),  // HDRPfinal (grain)
     CustomShaderEntry(0x02AB22C6),  // HDRPfinal (title menu)
     CustomShaderEntry(0x0FA783B7),  // HDRPfinal2 (title menu)
     CustomShaderEntry(0xCF6A37F9),  // HDRPfinal (DLSS/TAAU)
     CustomShaderEntry(0x9A3E0141),  // HDRPfinal (FXAA)
     CustomShaderEntry(0x38B55FCE),  // HDRPfinal6 (FXAA + grain)
+    CustomShaderEntry(0xE0FE0468),  // HDRPfinal (rcas)
+    CustomShaderEntry(0x52B5985A),  // HDRPfinal (rcas + grain)
     CustomShaderEntry(0x20133A8B),  // Final
 };
 
@@ -414,11 +419,6 @@ renodx::utils::settings::Settings settings = {
             renodx::utils::settings::UpdateSetting("colorGradeClip", 100.f);
             renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
             renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f); },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Upscaler Mode: EdgeAdaptiveScalingUpres, is not currently supported.",
-        .section = "Notes",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,

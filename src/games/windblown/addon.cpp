@@ -25,15 +25,27 @@
 
 namespace {
 
+ShaderInjectData shader_injection;
+bool postfinal_check = false;
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xF804335C),  // videos
     CustomShaderEntry(0x13EEF169),  // lutbuilder
     CustomShaderEntry(0xFDA8A0F6),  // uberpost
+    CustomShaderEntry(0xC244242D),  // fsr1
+    CustomShaderEntry(0xE102D2F9),  // fsr1 (fxaa)
+    CustomShaderEntryCallback(0x7CEF5F47, [](reshade::api::command_list* cmd_list) {  // postfinal (rcas)
+    postfinal_check = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xD00B5B47, [](reshade::api::command_list* cmd_list) {  // postfinal (fxaa)
+    postfinal_check = true;
+    return true;
+    }),
     CustomShaderEntry(0xD63FB4E2),  // UI fast additive
     CustomShaderEntry(0x20133A8B),  // Final
 };
 
-ShaderInjectData shader_injection;
 float current_settings_mode = 0;
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -507,6 +519,8 @@ void OnPresent(
   shader_injection.random_1 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
   shader_injection.random_2 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
   shader_injection.random_3 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
+  shader_injection.postfinal_check = postfinal_check;
+  postfinal_check = false;
 }
 
 }  // namespace
@@ -534,6 +548,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       //  RGBA8_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_typeless,
+          .ignore_size = true,
+      });
+      //  RGB10A2_typeless
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r10g10b10a2_typeless,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
           .ignore_size = true,
       });
