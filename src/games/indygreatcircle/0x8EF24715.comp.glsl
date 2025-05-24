@@ -1408,13 +1408,13 @@ void main()
           float y_out = ODT(vec3(y_in), aces_min * 48.0, aces_max * 48.0, mat3(1.0)).x / 48.f;
 
           vec3 luminance_tonemapped_ap1 = untonemapped_graded_ap1 * (y_out / y_in);
-          luminance_tonemapped_ap1 = SaturationAP1(luminance_tonemapped_ap1, 1.325);
+          luminance_tonemapped_ap1 = SaturationBlowoutAP1(luminance_tonemapped_ap1, y_in, 8.25, 0.975f);
 
           // blend it in only on shadows / mid-tones
           float tonemapped_lum = dot(luminance_tonemapped_ap1, vec3(0.2722287168, 0.6740817658, 0.0536895174));
-          tonemapped_ap1 = mix(luminance_tonemapped_ap1, tonemapped_ap1, clamp(tonemapped_lum / 0.2, 0.0, 1.0));
+          tonemapped_ap1 = mix(luminance_tonemapped_ap1, tonemapped_ap1, clamp(tonemapped_lum / 0.6, 0.0, 1.0));
 
-        //   tonemapped_bt709 = corrected_bt709;
+        //   tonemapped_ap1 = luminance_tonemapped_ap1;
         }
 
         vec3 tonemapped_bt709 = AP1_TO_BT709_MAT * tonemapped_ap1;

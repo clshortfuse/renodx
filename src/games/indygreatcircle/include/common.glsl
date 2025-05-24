@@ -1011,4 +1011,18 @@ vec3 SaturationAP1(vec3 ap1, float saturation) {
   return max(vec3(0.0), BT709_TO_AP1_MAT * bt709);
 }
 
+vec3 SaturationBlowoutAP1(vec3 ap1, float y, float saturation, float dechroma) {
+  vec3 bt709 = AP1_TO_BT709_MAT * ap1;
+
+  vec3 perceptual = okLabFromBT709(bt709);
+  perceptual.yz *= saturation;
+
+  if (dechroma != 0.f) {
+    perceptual.yz *= mix(1.f, 0.f, clamp(pow(y / (10000.f / 100.f), (1.f - dechroma)), 0.0, 1.0));
+  }
+
+  bt709 = bt709FromOKLab(perceptual);
+  return max(vec3(0.0), BT709_TO_AP1_MAT * bt709);
+}
+
 // END INCLUDES
