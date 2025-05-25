@@ -16,7 +16,8 @@
 #define RENODX_SWAP_CHAIN_ENCODING             renodx::draw::ENCODING_PQ
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT2020
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-#define RENODX_RENO_DRT_WHITE_CLIP             100.f
+#define RENODX_TONE_MAP_PASS_AUTOCORRECTION    1.f
+#define CUSTOM_SHARPNESS                       shader_injection.custom_sharpness
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -33,6 +34,8 @@ struct ShaderInjectData {
   float tone_map_highlight_saturation;
   float tone_map_blowout;
   float tone_map_flare;
+
+  float custom_sharpness;
 };
 
 #ifndef __cplusplus

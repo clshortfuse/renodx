@@ -1,3 +1,5 @@
+#include "./lilium_cas.hlsl"
+
 cbuffer c0UBO : register(b0, space0) {
   float4 c0_m0[2] : packoffset(c0);
 };
@@ -22,7 +24,26 @@ float2 spvUnpackHalf2x16(uint value) {
 }
 
 void comp_main() {
-  uint _46 = ((gl_LocalInvocationID.x >> 1u) & 7u) | (gl_WorkGroupID.x << 4u);
+  int _8 = (uint)(gl_LocalInvocationID.x) >> 1;  // 1 = 0x000000001 = 32 bit (All 0 except 1st bit). Operation halves the value?
+  int _9 = _8 & 7;
+  int _10 = (uint)(gl_LocalInvocationID.x) >> 3;
+  int _11 = (uint)(gl_LocalInvocationID.x) & 1;
+  int _12 = _10 & 6;
+  int _13 = _12 | _11;
+  uint _14 = (uint)(gl_WorkGroupID.x) << 4;
+  uint _15 = (uint)(gl_WorkGroupID.y) << 4;
+  int _16 = _9 | _14;
+  int _17 = _13 | _15;
+  uint _20 = _17 + -1u;  // Center pixel is _17, so this is the pixel left of it
+  input_texture1[int2(_16, _17)] = float4(ApplyCAS(input_texture0, int3(_16, _17, 0)), 1.0f);
+  int _122 = _16 | 8;
+  input_texture1[int2(_122, _17)] = float4(ApplyCAS(input_texture0, int3(_122, _17, 0)), 1.0f);
+
+  int _225 = _17 | 8;
+  input_texture1[int2(_122, _225)] = float4(ApplyCAS(input_texture0, int3(_122, _225, 0)), 1.0f);
+  input_texture1[int2(_16, _225)] = float4(ApplyCAS(input_texture0, int3(_16, _225, 0)), 1.0f);
+
+  /* uint _46 = ((gl_LocalInvocationID.x >> 1u) & 7u) | (gl_WorkGroupID.x << 4u);
   uint _47 = (((gl_LocalInvocationID.x >> 3u) & 6u) | (gl_LocalInvocationID.x & 1u)) | (gl_WorkGroupID.y << 4u);
   uint _66 = _46 << 16u;
   uint _68 = uint(int(_66) >> int(16u));
@@ -97,12 +118,9 @@ void comp_main() {
   float _311 = _168 * sqrt(clamp(min(min(min(_275, _280), min(min(_260, _265), _270)), 1.0f - _297) * (1.0f / _297), 0.0f, 1.0f));
   float _316 = 1.0f / ((_310 * 4.0f) + 1.0f);
   float _317 = 1.0f / ((_311 * 4.0f) + 1.0f);
-  /* input_texture1[uint2(_46, _225)] = float4(clamp(((_310 * (((_235.x + _229.x) + _245.x) + _252.x)) + _240.x) * _316, 0.0f, 1.0f), clamp(((_310 * (((_238 + _232) + _248) + _255)) + _243) * _316, 0.0f, 1.0f), clamp(((_310 * (((_235.z + _229.z) + _245.z) + _252.z)) + _240.z) * _316, 0.0f, 1.0f), 0.0f);
+  input_texture1[uint2(_46, _225)] = float4(clamp(((_310 * (((_235.x + _229.x) + _245.x) + _252.x)) + _240.x) * _316, 0.0f, 1.0f), clamp(((_310 * (((_238 + _232) + _248) + _255)) + _243) * _316, 0.0f, 1.0f), clamp(((_310 * (((_235.z + _229.z) + _245.z) + _252.z)) + _240.z) * _316, 0.0f, 1.0f), 0.0f);
   input_texture1[uint2(_222, _225)] = float4(clamp(((_311 * (((_262.x + _257.x) + _272.x) + _277.x)) + _267.x) * _317, 0.0f, 1.0f), clamp(((_311 * (((_265 + _260) + _275) + _280)) + _270) * _317, 0.0f, 1.0f), clamp(((_311 * (((_262.z + _257.z) + _272.z) + _277.z)) + _267.z) * _317, 0.0f, 1.0f), 0.0f);
- */
-  input_texture1[uint2(_46, _225)] = float4(((_310 * (((_235.x + _229.x) + _245.x) + _252.x)) + _240.x) * _316, (((_310 * (((_238 + _232) + _248) + _255)) + _243) * _316), (((_310 * (((_235.z + _229.z) + _245.z) + _252.z)) + _240.z) * _316), 0.0f);
-  input_texture1[uint2(_222, _225)] = float4((((_311 * (((_262.x + _257.x) + _272.x) + _277.x)) + _267.x) * _317), (((_311 * (((_265 + _260) + _275) + _280)) + _270) * _317), (((_311 * (((_262.z + _257.z) + _272.z) + _277.z)) + _267.z) * _317), 0.0f);
-}
+ */}
 
 [numthreads(64, 1, 1)]
 void main(SPIRV_Cross_Input stage_input) {
