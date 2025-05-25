@@ -19,22 +19,7 @@
 #include "./shared.h"
 
 namespace {
-renodx::mods::shader::CustomShaders custom_shaders = {
-    // Outputs
-    CustomShaderEntry(0x882D3C2F),
-
-    // Video
-    CustomShaderEntry(0x9715D453),
-
-    // Tonemappers
-    CustomShaderEntry(0x0AF1BCE6),
-    CustomShaderEntry(0x2DA6CA4B),
-    CustomShaderEntry(0x9347F823),
-    CustomShaderEntry(0xF155E283),
-
-    // Unknown
-    BypassShaderEntry(0x3B79D402),
-};
+renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 const std::string build_date = __DATE__;
@@ -185,6 +170,17 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxSharpness",
+        .binding = &CUSTOM_SHARPNESS,
+        .default_value = 50.f,
+        .label = "CAS Sharpness",
+        .section = "Effects",
+        .tooltip = "Controls Lilium's CAS Sharpness",
+        .max = 100.f,
+        .parse = [](float value) { return value == 0.f ? 0.f : value * -0.002; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "HDR Den Discord",
         .section = "Links",
@@ -236,13 +232,18 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = " - Upscaling must be used (DLSS/FSR/XeSS)!\n"
-        " - AA at native res causes visual bugs\n"
-        " - XeSS users must update the XeSS dll to the latest version, otherwise game will crash\n",
+                 " - AA at native res causes visual bugs\n"
+                 " - XeSS users must update the XeSS dll to the latest version, otherwise game will crash\n",
         .section = "Instructions",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse.",
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Credits to Lilium for CAS!",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
