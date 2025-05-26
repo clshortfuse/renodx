@@ -104,6 +104,7 @@ static bool OnUpdateDescriptorTables(
   if (!trace_descriptor_tables) return false;
 
   auto* data = renodx::utils::data::Get<DeviceData>(device);
+  if (data == nullptr) return false;
   const std::unique_lock lock(data->mutex);
 
   if (!data->trace_descriptor_tables) return false;
@@ -216,6 +217,7 @@ static bool OnCopyDescriptorTables(
   if (count == 0u) return false;
   if (!trace_descriptor_tables) return false;
   auto* data = renodx::utils::data::Get<DeviceData>(device);
+  if (data == nullptr) return false;
   const std::unique_lock lock(data->mutex);
   if (!data->trace_descriptor_tables) return false;
 
