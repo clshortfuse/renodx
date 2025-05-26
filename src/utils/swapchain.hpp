@@ -174,7 +174,7 @@ inline void OnBindRenderTargetsAndDepthStencil(
 
 static bool HasBackBufferRenderTarget(reshade::api::command_list* cmd_list) {
   auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
-
+  if (cmd_list_data == nullptr) return false;
   if (!cmd_list_data->has_swapchain_render_target_dirty) {
     return cmd_list_data->has_swapchain_render_target;
   }
