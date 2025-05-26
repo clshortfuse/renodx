@@ -591,12 +591,14 @@ static void AddRuntimeReplacement(
     uint32_t shader_hash,
     const std::vector<uint8_t>& shader_data) {
   auto* data = renodx::utils::data::Get<DeviceData>(device);
+  if (data == nullptr) return;
   data->runtime_replacements[shader_hash] = std::vector<uint8_t>(shader_data);
   runtime_replacement_count = data->runtime_replacements.size();
 }
 
 static void RemoveRuntimeReplacements(reshade::api::device* device, const std::unordered_set<uint32_t>& filter = {}) {
   auto* data = renodx::utils::data::Get<DeviceData>(device);
+  if (data == nullptr) return;
   std::unique_lock device_lock(data->mutex);
   for (auto& [shader_hash, replacement] : data->runtime_replacements) {
     if (!filter.empty() && !filter.contains(shader_hash)) continue;
@@ -723,6 +725,16 @@ static void OnDestroyDevice(reshade::api::device* device) {
   s << reinterpret_cast<uintptr_t>(device);
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
+  const std::unique_lock write_lock(store->pipeline_shader_details_mutex);
+  std::vector<uint64_t> pipeline_handles;
+  for (auto& [pipeline_handle, details] : store->pipeline_shader_details) {
+    if (details.device == device) {
+      pipeline_handles.push_back(pipeline_handle);
+    }
+  }
+  for (const auto& pipeline_handle : pipeline_handles) {
+    store->pipeline_shader_details.erase(pipeline_handle);
+  }
   device->destroy_private_data<DeviceData>();
 }
 
@@ -741,6 +753,7 @@ inline DeviceData* GetDeviceData(reshade::api::command_list* cmd_list, CommandLi
 static void OnResetCommandList(reshade::api::command_list* cmd_list) {
   if (!is_primary_hook) return;
   auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  if (data == nullptr) return;
   data->last_pipeline = {0u};
   data->stage_states[0].pipeline = {0u};
   data->stage_states[1].pipeline = {0u};
@@ -766,7 +779,7 @@ static bool OnCreatePipeline(
     if (use_replace_async) return false;
   }
   auto* data = renodx::utils::data::Get<DeviceData>(device);
-
+  if (data == nullptr) return false;
   if (!initialized_device) {
     use_replace_async = data->use_replace_async;
     use_shader_cache = data->use_shader_cache;
@@ -836,6 +849,7 @@ static void OnInitPipeline(
   if (pipeline.handle == 0u) return;
 
   auto* data = renodx::utils::data::Get<DeviceData>(device);
+  if (data == nullptr) return;
   bool locking = !data->compile_time_replacements.empty();
 
   if (locking) {
@@ -909,6 +923,7 @@ static void OnDestroyPipeline(
     auto* details = &details_pair->second;
     if (details->replacement_pipeline.handle != 0u) {
       device->destroy_pipeline(details->replacement_pipeline);
+      details->replacement_pipeline = {0u};
     }
     renodx::utils::pipeline::DestroyPipelineSubobjects(details->subobjects);
     store->pipeline_shader_details.erase(details_pair);
