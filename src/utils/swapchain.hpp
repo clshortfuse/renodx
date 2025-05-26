@@ -142,6 +142,10 @@ static reshade::api::resource_desc GetBackBufferDesc(reshade::api::device* devic
   reshade::api::resource_desc desc = {};
   {
     auto* device_data = renodx::utils::data::Get<DeviceData>(device);
+    if (device_data == nullptr) {
+      reshade::log::message(reshade::log::level::error, "GetBackBufferDesc(No device data)");
+      return desc;
+    }
     // const std::shared_lock lock(device_data->mutex);
     desc = device_data->back_buffer_desc;
   }
@@ -161,6 +165,7 @@ inline void OnBindRenderTargetsAndDepthStencil(
     reshade::api::resource_view dsv) {
   if (!is_primary_hook) return;
   auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  if (cmd_list_data == nullptr) return;
   const bool found_swapchain_rtv = false;
   cmd_list_data->current_render_targets.assign(rtvs, rtvs + count);
   cmd_list_data->current_depth_stencil = dsv;
@@ -199,11 +204,13 @@ static bool HasBackBufferRenderTarget(reshade::api::command_list* cmd_list) {
 
 static std::vector<reshade::api::resource_view>& GetRenderTargets(reshade::api::command_list* cmd_list) {
   auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  assert(cmd_list_data != nullptr);
   return cmd_list_data->current_render_targets;
 };
 
 static reshade::api::resource_view& GetDepthStencil(reshade::api::command_list* cmd_list) {
   auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  assert(cmd_list_data != nullptr);
   return cmd_list_data->current_depth_stencil;
 };
 
