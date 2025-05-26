@@ -7,7 +7,6 @@
 
 #include <cassert>
 #include <functional>
-#include <include/reshade_api_device.hpp>
 #include <mutex>
 #include <shared_mutex>
 #include <sstream>
@@ -91,6 +90,7 @@ struct ResourceUpgradeInfo {
   bool use_resource_view_hot_swap = false;
   reshade::api::resource_usage usage = reshade::api::resource_usage::undefined;
   reshade::api::resource_usage state = reshade::api::resource_usage::undefined;
+  bool use_shared_handle = false;
 
   static const int16_t BACK_BUFFER = -1;
   static const int16_t ANY = -2;
@@ -198,6 +198,7 @@ struct ResourceInfo {
   float resource_tag = -1;
   reshade::api::resource_view swap_chain_proxy_clone_srv = {0u};
   reshade::api::resource_view swap_chain_proxy_rtv = {0u};
+  void* shared_handle = nullptr;
 };
 
 struct ResourceViewInfo {
@@ -323,6 +324,65 @@ static void OnDestroyDevice(reshade::api::device* device) {
   device->destroy_private_data<DeviceData>();
 }
 
+inline void OnInitResourceView(
+    reshade::api::device* device,
+    reshade::api::resource resource,
+    reshade::api::resource_usage usage_type,
+    const reshade::api::resource_view_desc& desc,
+    reshade::api::resource_view view) {
+  if (!is_primary_hook) return;
+  if (view.handle == 0u) return;
+  std::unique_lock lock(store->resource_view_infos_mutex);
+  auto& resource_view_info = store->resource_view_infos[view.handle];
+  lock.unlock();
+
+  if (resource_view_info.view.handle != 0u && !resource_view_info.destroyed) {
+    for (const auto& callback : store->on_destroy_resource_view_info_callbacks) {
+      callback(&resource_view_info);
+    }
+  }
+
+  ResourceInfo* resource_info = nullptr;
+  if (resource.handle != 0u) {
+    std::unique_lock resource_lock(store->resource_infos_mutex);
+    resource_info = &store->resource_infos[resource.handle];
+  }
+
+  resource_view_info = {
+      .device = device,
+      .desc = desc,
+      .view = view,
+      .original_resource = resource,
+      .resource_info = resource_info,
+      .usage = usage_type,
+  };
+  if (resource_info != nullptr) {
+    resource_view_info.clone_target = resource_view_info.resource_info->clone_target;
+  }
+
+  for (const auto& callback : store->on_init_resource_view_info_callbacks) {
+    callback(&resource_view_info);
+  }
+}
+
+inline void OnDestroyResourceView(reshade::api::device* device, reshade::api::resource_view view) {
+  if (!is_primary_hook) return;
+  if (view.handle == 0u) return;
+
+  std::shared_lock lock(store->resource_view_infos_mutex);
+  auto pair = store->resource_view_infos.find(view.handle);
+  if (pair == store->resource_view_infos.end()) return;
+  lock.unlock();
+
+  auto& resource_view_info = pair->second;
+  resource_view_info.destroyed = true;
+  if (resource_view_info.view.handle != 0u) {
+    for (auto& callback : store->on_destroy_resource_view_info_callbacks) {
+      callback(&resource_view_info);
+    }
+  }
+}
+
 static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (!is_primary_hook) return;
   auto* device = swapchain->get_device();
@@ -350,6 +410,17 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   for (auto& resource_info : infos) {
     for (auto& callback : store->on_init_resource_info_callbacks) {
       callback(resource_info);
+    }
+
+    if (device->get_api() == reshade::api::device_api::d3d9) {
+      // D3D9 do no have SRVs but do have implicit RTV which are the same handles
+      auto resource = resource_info->resource;
+      reshade::api::resource_view view = {resource.handle};
+      auto usage_type = reshade::api::resource_usage::render_target;
+      const auto desc = device->get_resource_view_desc(view);
+
+      // Slower to lock each cycle, but swapchain creation isn't a hot path
+      OnInitResourceView(device, resource, usage_type, desc, view);
     }
   }
 }
@@ -464,65 +535,6 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
 
   for (auto& callback : store->on_destroy_resource_info_callbacks) {
     callback(&resource_info);
-  }
-}
-
-inline void OnInitResourceView(
-    reshade::api::device* device,
-    reshade::api::resource resource,
-    reshade::api::resource_usage usage_type,
-    const reshade::api::resource_view_desc& desc,
-    reshade::api::resource_view view) {
-  if (!is_primary_hook) return;
-  if (view.handle == 0u) return;
-  std::unique_lock lock(store->resource_view_infos_mutex);
-  auto& resource_view_info = store->resource_view_infos[view.handle];
-  lock.unlock();
-
-  if (resource_view_info.view.handle != 0u && !resource_view_info.destroyed) {
-    for (const auto& callback : store->on_destroy_resource_view_info_callbacks) {
-      callback(&resource_view_info);
-    }
-  }
-
-  ResourceInfo* resource_info = nullptr;
-  if (resource.handle != 0u) {
-    std::unique_lock resource_lock(store->resource_infos_mutex);
-    resource_info = &store->resource_infos[resource.handle];
-  }
-
-  resource_view_info = {
-      .device = device,
-      .desc = desc,
-      .view = view,
-      .original_resource = resource,
-      .resource_info = resource_info,
-      .usage = usage_type,
-  };
-  if (resource_info != nullptr) {
-    resource_view_info.clone_target = resource_view_info.resource_info->clone_target;
-  }
-
-  for (const auto& callback : store->on_init_resource_view_info_callbacks) {
-    callback(&resource_view_info);
-  }
-}
-
-inline void OnDestroyResourceView(reshade::api::device* device, reshade::api::resource_view view) {
-  if (!is_primary_hook) return;
-  if (view.handle == 0u) return;
-
-  std::shared_lock lock(store->resource_view_infos_mutex);
-  auto pair = store->resource_view_infos.find(view.handle);
-  if (pair == store->resource_view_infos.end()) return;
-  lock.unlock();
-
-  auto& resource_view_info = pair->second;
-  resource_view_info.destroyed = true;
-  if (resource_view_info.view.handle != 0u) {
-    for (auto& callback : store->on_destroy_resource_view_info_callbacks) {
-      callback(&resource_view_info);
-    }
   }
 }
 
