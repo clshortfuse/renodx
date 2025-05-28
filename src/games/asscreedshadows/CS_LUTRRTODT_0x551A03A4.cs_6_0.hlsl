@@ -37,7 +37,8 @@ void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID,
   float _17 = exp2(_16);
 
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    float3 untonemapped = float3(_11, _14, _17) * 32.f;                  // use SDR exposure level
+    float3 untonemapped = float3(_11, _14, _17) * 32.f;  // use SDR exposure level
+    untonemapped = max(0, untonemapped);
     const float diffuse_white_nits = cb0_space5_003z * (203.f / 90.5f);  // default exposure was 90.5f, offset so 203 paper white at exposure 0.0
     const float peak_nits = cb0_space5_003w;
 
