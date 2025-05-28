@@ -252,7 +252,7 @@ float3 DICETonemap(float3 Color, float PeakWhite,
 }
 
 /// Applies DICE tonemapper to the untonemapped HDR color.
-float3 applyDICE(float3 untonemapped, float diffuse_white, float peak_white, float shoulder_start = 0.5f) {
+float3 ApplyDICE(float3 untonemapped, float diffuse_white, float peak_white, float shoulder_start = 0.5f) {
   // Declare DICE parameters
   DICESettings config = DefaultDICESettings();
   config.Type = 3u;

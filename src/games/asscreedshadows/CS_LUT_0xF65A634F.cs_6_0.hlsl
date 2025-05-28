@@ -213,19 +213,25 @@ void comp_main() {
       (_438 + _345) + (_453 * ((_423 * (((_377 * _301) * _384) - _345)) - _438)));
 
 #if 1
-  if (RENODX_TONE_MAP_EXPOSURE != 1.f || RENODX_TONE_MAP_HIGHLIGHTS != 1.f || RENODX_TONE_MAP_SHADOWS != 1.f || RENODX_TONE_MAP_CONTRAST != 1.f || RENODX_TONE_MAP_SATURATION != 1.f || RENODX_TONE_MAP_BLOWOUT != 0.f) {
-    final_color = renodx::color::bt709::from::AP1(final_color);
-    final_color = renodx::color::grade::UserColorGrading(
-        final_color,
-        RENODX_TONE_MAP_EXPOSURE,
-        RENODX_TONE_MAP_HIGHLIGHTS,
-        RENODX_TONE_MAP_SHADOWS,
-        RENODX_TONE_MAP_CONTRAST,
-        RENODX_TONE_MAP_SATURATION,
-        RENODX_TONE_MAP_BLOWOUT);
+  final_color = renodx::color::bt709::from::AP1(final_color);
+  renodx::color::grade::Config cg_config = renodx::color::grade::config::Create(
+      RENODX_TONE_MAP_EXPOSURE,
+      RENODX_TONE_MAP_HIGHLIGHTS,
+      RENODX_TONE_MAP_SHADOWS,
+      RENODX_TONE_MAP_CONTRAST,
+      0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+      RENODX_TONE_MAP_SATURATION,
+      RENODX_TONE_MAP_BLOWOUT,
+      0.f,
+      0,
+      renodx::color::grade::config::hue_correction_type::INPUT,
+      0.f  // highlight saturation causes artifacts
+  );
+  final_color = renodx::color::grade::config::ApplyUserColorGrading(
+      final_color,
+      cg_config);
 
-    final_color = renodx::color::ap1::from::BT709(final_color);
-  }
+  final_color = max(0, renodx::color::ap1::from::BT709(final_color));
 #endif
 
   float3 encoded_color = log2(final_color) * 0.0500000007450580596923828125f + 0.6236965656280517578125f;

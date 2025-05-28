@@ -56,8 +56,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
     {"ToneMapType", 1.f},
-    {"ColorGradeShadows", 42.f},
-    {"FxBloom", 33.f},
+    {"ColorGradeFlare", 35.f},
+    {"FxBloom", 50.f},
+    {"FxBloomScaling", 100.f},
 };
 
 renodx::utils::settings::Settings settings = {
@@ -156,6 +157,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeFlare",
+        .binding = &shader_injection.tone_map_flare,
+        .default_value = 0.f,
+        .label = "Flare",
+        .section = "Color Grading",
+        .tooltip = "Flare/Glare Compensation",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ColorFilterStrength",
         .binding = &shader_injection.custom_color_filter_strength,
         .default_value = 100.f,
@@ -170,6 +181,16 @@ renodx::utils::settings::Settings settings = {
         .default_value = 100.f,
         .label = "Bloom",
         .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxBloomScaling",
+        .binding = &shader_injection.custom_bloom_scaling,
+        .default_value = 100.f,
+        .label = "Bloom Scaling",
+        .section = "Effects",
+        .tooltip = "Scales the black floor of the bloom effect.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
@@ -212,7 +233,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "HDR Look",
+        .label = "Recommended Settings",
         .section = "Options",
         .group = "button-line-1",
         .on_change = []() {
@@ -306,8 +327,10 @@ void OnPresetOff() {
       {"ColorGradeContrast", 50.f},
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
+      {"ColorGradeFlare", 0.f},
       {"ColorFilterStrength", 100.f},
       {"FxBloom", 100.f},
+      {"FxBloomScaling", 0.f},
       {"ToneMapUINits", 203.f},
   });
 }

@@ -412,10 +412,21 @@ float4 main(
   float4 _23 = t11_space2.SampleLevel(s1_space3, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
 
   _23.rgb *= CUSTOM_BLOOM;
+  float3 bloom_color = _23.rgb;
 
-  float _28 = _23.x + _20;
-  float _29 = _23.y + _21;
-  float _30 = _23.z + _22;
+#if 1
+  float mid_gray_bloomed = (0.18 + renodx::color::y::from::BT709(bloom_color)) / 0.18;
+
+  float scene_luminance = renodx::color::y::from::BT709(float3(_20, _21, _22)) * mid_gray_bloomed;
+  float bloom_blend = saturate(smoothstep(0.f, 0.18f, scene_luminance));
+  float3 bloom_scaled = lerp(0.f, bloom_color, bloom_blend);
+  bloom_color = lerp(bloom_color, bloom_scaled, CUSTOM_BLOOM_SCALING * 0.5f);
+#endif
+
+  float _28 = bloom_color.x + _20;
+  float _29 = bloom_color.y + _21;
+  float _30 = bloom_color.z + _22;
+
   bool _33 = (cb0_space2_007y == 0);
   float _53;
   float _54;
