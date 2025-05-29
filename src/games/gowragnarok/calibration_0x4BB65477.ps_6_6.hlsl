@@ -75,13 +75,9 @@ void frag_main() {
   if (RENODX_TONE_MAP_TYPE) {
     min_nits = 0.0001f;
     exposure = 8.f * RENODX_TONE_MAP_EXPOSURE;
-    float scale = 100.f / RENODX_DIFFUSE_WHITE_NITS;
-    peak_nits *= scale;
-    min_nits *= scale;
 
-    float invDiffuseWhite = 1.0f / RENODX_DIFFUSE_WHITE_NITS;
-    peak_nits = renodx::color::correct::Gamma(peak_nits * invDiffuseWhite, true) * RENODX_DIFFUSE_WHITE_NITS;
-    min_nits = renodx::color::correct::Gamma(min_nits * invDiffuseWhite, true) * RENODX_DIFFUSE_WHITE_NITS;
+    peak_nits = renodx::color::correct::Gamma(peak_nits / RENODX_DIFFUSE_WHITE_NITS, true) * 100.f;
+    min_nits = renodx::color::correct::Gamma(min_nits / RENODX_DIFFUSE_WHITE_NITS, true) * 100.f;
   }
 
   if ((asuint(ConstBuf_modelData_m0[0u]).x & 512u) == 0u) {
