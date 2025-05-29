@@ -124,7 +124,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 100.f,
         .label = "Hue Correction",
         .section = "Tone Mapping",
-        .tooltip = "Emulates hue shifting from the vanilla tonemapper",
+        .tooltip = "Hue retention strength.",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type == 2; },
         .parse = [](float value) { return value * 0.01f; },
