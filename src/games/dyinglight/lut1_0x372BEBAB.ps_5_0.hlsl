@@ -86,7 +86,7 @@ void main(
   r1.xyz = r1.xyz + -r0.xyz;
   o0.xyz = cb0[7].www * r1.xyz + r0.xyz;
 
-  o0.xyz = lerp(inputColor, o0.xyz, injectedData.colorGradeLUTStrength);
+  o0.xyz = lerp(inputColor, o0.xyz, RENODX_COLOR_GRADE_STRENGTH);
 
   return;
 }

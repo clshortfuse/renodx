@@ -62,8 +62,8 @@ float3 applyDICE(float3 untonemapped) {
   config.DesaturationAmount = 0.f;
   config.DarkeningAmount = 0.f;
 
-  const float dicePaperWhite = injectedData.toneMapGameNits / renodx::color::srgb::REFERENCE_WHITE;
-  const float dicePeakWhite = injectedData.toneMapPeakNits / renodx::color::srgb::REFERENCE_WHITE;
+  const float dicePaperWhite = RENODX_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
+  const float dicePeakWhite = RENODX_PEAK_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
 
   // multiply paper white in for tonemapping and out for output
   return DICETonemap(untonemapped * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
@@ -80,30 +80,30 @@ void main(
 
   // o0.xyz = sign(o0.xyz) * pow(abs(o0.xyz), cb0[0].xxx);  // disable in game gamma slider
 
-  if (injectedData.toneMapGammaCorrection) {  // 2.2 Gamma
+  if (RENODX_GAMMA_CORRECTION) {  // 2.2 Gamma
     o0.xyz = renodx::color::correct::GammaSafe(o0.xyz);
 
-    if (injectedData.toneMapType == 0) {  // vanilla tonemap flickers if left unclamped
+    if (RENODX_TONE_MAP_TYPE == 0) {  // vanilla tonemap flickers if left unclamped
       o0.xyz = saturate(o0.xyz);
-    } else if (injectedData.toneMapType == 2) {  // tonemap after gamma correction for correct highlights
-      o0.rgb = Hue(o0.rgb, injectedData.toneMapHueCorrection);
-      o0.rgb = extendGamut(o0.rgb, injectedData.colorGradeGamutExpansion);
+    } else if (RENODX_TONE_MAP_TYPE == 2) {  // tonemap after gamma correction for correct highlights
+      o0.rgb = Hue(o0.rgb, RENODX_TONE_MAP_HUE_CORRECTION);
+      o0.rgb = extendGamut(o0.rgb, RENODX_COLOR_GRADE_GAMUT_EXPANSION);
       o0.rgb = applyDICE(o0.rgb);
     }
 
-    o0.xyz *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+    o0.xyz *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
     o0.xyz = renodx::color::correct::GammaSafe(o0.xyz, true);
 
   } else {                                // sRGB Gamma
-    if (injectedData.toneMapType == 0) {  // vanilla tonemap flickers if left unclamped
+    if (RENODX_TONE_MAP_TYPE == 0) {  // vanilla tonemap flickers if left unclamped
       o0.xyz = saturate(o0.xyz);
-    } else if (injectedData.toneMapType == 2) {
-      o0.rgb = Hue(o0.rgb, injectedData.toneMapHueCorrection);
-      o0.rgb = extendGamut(o0.rgb, injectedData.colorGradeGamutExpansion);
+    } else if (RENODX_TONE_MAP_TYPE == 2) {
+      o0.rgb = Hue(o0.rgb, RENODX_TONE_MAP_HUE_CORRECTION);
+      o0.rgb = extendGamut(o0.rgb, RENODX_COLOR_GRADE_GAMUT_EXPANSION);
       o0.rgb = applyDICE(o0.rgb);
     }
 
-    o0.xyz *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+    o0.xyz *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
   }
   o0.w = saturate(o0.w);
   return;

@@ -42,6 +42,6 @@ void main(
   r1.xy = t2.SampleLevel(s2_s, v2.xy, 0).zw;
   r1.x = saturate(cb0[0].y * r1.x + r1.y);
   r0.w = v1.w;
-  o0.xyzw = -r0.xyzw * r1.xxxx + r0.xyzw * injectedData.fxLensFlare;
+  o0.xyzw = -r0.xyzw * r1.xxxx + r0.xyzw * CUSTOM_LENS_FLARE;
   return;
 }
