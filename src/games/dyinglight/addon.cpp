@@ -348,8 +348,12 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 
 }  // namespace
 
+// NOLINTBEGIN(readability-identifier-naming)
+
 extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Dying Light";
+
+// NOLINTEND(readability-identifier-naming)
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
@@ -380,11 +384,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       }
 
       // LUT
-      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //     .old_format = reshade::api::format::r8g8b8a8_typeless,
-      //     .new_format = reshade::api::format::r16g16b16a16_float,
-      //     .dimensions = {.width = 256, .height = 1},
-      // });
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .dimensions = {.width = 256, .height = 1},
+          .usage_include = reshade::api::resource_usage::render_target,
+      });
 
       break;
     case DLL_PROCESS_DETACH:
