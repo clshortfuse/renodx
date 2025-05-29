@@ -344,13 +344,24 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // auto detect peak and paper white
 
-      for (auto index : {3, 4}) {
+      // 2: TAA History
+      for (auto index : {2, 3, 4}) {
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r8g8b8a8_typeless,
             .new_format = reshade::api::format::r16g16b16a16_float,
             .index = index,
+            // .use_resource_view_cloning = true,
+            .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
+            .usage_include = reshade::api::resource_usage::render_target,
         });
       }
+
+      // LUT
+      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      //     .old_format = reshade::api::format::r8g8b8a8_typeless,
+      //     .new_format = reshade::api::format::r16g16b16a16_float,
+      //     .dimensions = {.width = 256, .height = 1},
+      // });
 
       break;
     case DLL_PROCESS_DETACH:
