@@ -55,7 +55,7 @@ void main(
   float3 hdrColor = outputColor;
   float3 sdrColor = outputColor;
   const float vanillaMidGray = 0.178f;
-  if (injectedData.toneMapType == 2) {
+  if (RENODX_TONE_MAP_TYPE == 2) {
     hdrColor = outputColor;
     sdrColor = renoDRTSmoothClamp(outputColor);
   }
@@ -69,10 +69,10 @@ void main(
   r1.z = t2.Sample(s2_s, r0.zz).z;
   r0.xyz = sign(r1.xyz) * pow(abs(r1.xyz), 2.2f);
   
-  if (injectedData.toneMapType > 1) {
-    outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, saturate(sdrColor), r0.xyz, injectedData.colorGradeLUTStrength);
-  } else if (injectedData.toneMapType == 0) {
-    outputColor = lerp(outputColor, r0.xyz, injectedData.colorGradeLUTStrength);
+  if (RENODX_TONE_MAP_TYPE > 1) {
+    outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, saturate(sdrColor), r0.xyz, RENODX_COLOR_GRADE_STRENGTH);
+  } else if (RENODX_TONE_MAP_TYPE == 0) {
+    outputColor = lerp(outputColor, r0.xyz, RENODX_COLOR_GRADE_STRENGTH);
   }
 
   r1.xyz = t1.SampleLevel(s1_s, v2.zw, 0).xyz;

@@ -54,12 +54,12 @@ void main(
 
   float3 vanillaColor = o0.rgb;
   float vanillaMidGray = 0.178f;
-  if (injectedData.toneMapType == 2) {
+  if (RENODX_TONE_MAP_TYPE == 2) {
     untonemapped *= vanillaMidGray / 0.18f;
     untonemapped = renodx::color::grade::UserColorGrading(
         untonemapped,
         1.f,
-        1.f * injectedData.colorGradeHighlights,
+        1.f * RENODX_TONE_MAP_HIGHLIGHTS,
         1.f,
         1.f,
         1.f,
@@ -70,13 +70,13 @@ void main(
     o0.xyz = lerp(vanillaColor.rgb, untonemapped, saturate(vanillaLum / vanillaMidGray));  // combine tonemappers
     o0.xyz = renodx::color::grade::UserColorGrading(
         o0.xyz,
-        injectedData.colorGradeExposure,
+        RENODX_TONE_MAP_EXPOSURE,
         1.f,
-        injectedData.colorGradeShadows,
-        injectedData.colorGradeContrast,
-        injectedData.colorGradeSaturation,
+        RENODX_TONE_MAP_SHADOWS,
+        RENODX_TONE_MAP_CONTRAST,
+        RENODX_TONE_MAP_SATURATION,
         0.f);
-  } else if (injectedData.toneMapType == 1) {
+  } else if (RENODX_TONE_MAP_TYPE == 1) {
     o0.xyz = untonemapped;
   }
   return;
