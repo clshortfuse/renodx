@@ -1,6 +1,5 @@
 #include "./shared.h"
-#include "./RenoDRTSmoothClamp.hlsl"
-
+#include "./ToneMapMaxCLL.hlsli"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sat May 25 22:39:06 2024
 Texture2D<float4> t4 : register(t4);
