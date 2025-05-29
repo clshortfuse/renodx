@@ -84,6 +84,7 @@ void main(
   r0.w = dot(r0.xyz, cb0[1].xyz);
   r0.xyz = r0.xyz * cb0[1].www + r0.www;
 
+  r0.rgb = max(0, r0.rgb);
   float3 outputColor = r0.xyz;
   float3 hdrColor = outputColor;
   float3 sdrColor = outputColor;

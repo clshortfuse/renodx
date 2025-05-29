@@ -1,6 +1,26 @@
 #ifndef SRC_DYING_LIGHT_SHARED_H_
 #define SRC_DYING_LIGHT_SHARED_H_
 
+// #define RENODX_TONE_MAP_TYPE                 2.f
+// #define RENODX_PEAK_WHITE_NITS               400.f
+// #define RENODX_DIFFUSE_WHITE_NITS            100.f
+// #define RENODX_GRAPHICS_WHITE_NITS           100.f
+// #define RENODX_GAMMA_CORRECTION              1.f
+// #define RENODX_TONE_MAP_HUE_CORRECTION       1.f
+// #define RENODX_TONE_MAP_EXPOSURE             1.f
+// #define RENODX_TONE_MAP_HIGHLIGHTS           1.f
+// #define RENODX_TONE_MAP_SHADOWS              1.f
+// #define RENODX_TONE_MAP_CONTRAST             1.f
+// #define RENODX_TONE_MAP_SATURATION           1.f
+// #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION 1.1f
+// #define RENODX_TONE_MAP_BLOWOUT              0.f
+// #define RENODX_TONE_MAP_FLARE                0.f
+// #define RENODX_COLOR_GRADE_STRENGTH          1.f
+// #define RENODX_COLOR_GRADE_GAMUT_EXPANSION   0.f
+// #define CUSTOM_BLOOM                         0.f
+// #define CUSTOM_LENS_FLARE                    0.f
+// #define CUSTOM_GRAIN_STRENGTH                1.f
+
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
@@ -17,6 +37,7 @@ struct ShaderInjectData {
   float tone_map_saturation;
   float tone_map_highlight_saturation;
   float tone_map_blowout;
+  float tone_map_flare;
   float scene_grade_strength;
   float color_grade_gamut_expansion;
   float custom_bloom;
@@ -42,6 +63,7 @@ cbuffer cb13 : register(b13) {
 #define RENODX_TONE_MAP_SATURATION           shader_injection.tone_map_saturation
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
+#define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.scene_grade_strength
 #define RENODX_COLOR_GRADE_GAMUT_EXPANSION   shader_injection.color_grade_gamut_expansion
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom
