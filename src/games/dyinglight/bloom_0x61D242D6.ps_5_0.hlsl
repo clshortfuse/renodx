@@ -89,6 +89,9 @@ void main(
   r1.xyzw = t0.Sample(s0_s, v4.wy).xyzw;
   r0.xyzw = r1.xyzw * float4(0.000310633885,0.000310633885,0.000310633885,0.000310633885) + r0.xyzw;
   r1.xyzw = t0.Sample(s0_s, v4.wz).xyzw;
-  o0.xyzw = r1.xyzw * float4(0.000194795124,0.000194795124,0.000194795124,0.000194795124) + r0.xyzw * injectedData.fxBloom;
+  o0.xyzw = r1.xyzw * float4(0.000194795124,0.000194795124,0.000194795124,0.000194795124) + r0.xyzw;
+
+  o0.rgb *= injectedData.fxBloom;
+
   return;
 }
