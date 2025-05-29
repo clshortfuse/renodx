@@ -438,8 +438,6 @@ void AddGamePatches() {
     AddExpedition33Upgrades();
   } else if (product_name == "Avowed") {
     AddAvowedUpgrades();
-  } else if (product_name == "InfinityNikki") {
-    renodx::mods::swapchain::ignored_window_class_names.emplace("bridge");  // Dummy window created by PerfSight.dll
   } else {
     return;
   }
