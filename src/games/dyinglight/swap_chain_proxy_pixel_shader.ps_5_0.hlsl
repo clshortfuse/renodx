@@ -8,6 +8,7 @@ void main(
     float2 texcoord: TEXCOORD,
     out float4 output: SV_Target0) {
   float4 color = sourceTexture.Sample(sourceSampler_s, texcoord.xy);
+  color.a = saturate(color.a);
 
   if (RENODX_GAMMA_CORRECTION) {
     color.rgb = renodx::color::correct::GammaSafe(color.rgb);
