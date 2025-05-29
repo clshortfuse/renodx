@@ -46,6 +46,7 @@ float3 Hue(float3 input_color, float correct_amount = 1.f) {
 
     // Convert back to linear BT.709 space
     float3 color = renodx::color::bt709::from::OkLCh(new_lch);
+    color = renodx::color::bt709::clamp::AP1(color);
     return color;
   }
 }
@@ -94,7 +95,7 @@ void main(
     o0.xyz *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
     o0.xyz = renodx::color::correct::GammaSafe(o0.xyz, true);
 
-  } else {                                // sRGB Gamma
+  } else {                            // sRGB Gamma
     if (RENODX_TONE_MAP_TYPE == 0) {  // vanilla tonemap flickers if left unclamped
       o0.xyz = saturate(o0.xyz);
     } else if (RENODX_TONE_MAP_TYPE == 2) {
