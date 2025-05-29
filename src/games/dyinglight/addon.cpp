@@ -61,42 +61,7 @@
 
 namespace {
 
-renodx::mods::shader::CustomShaders custom_shaders = {
-    // CustomShaderEntry(0x1FB36E90),       // screen blood effect
-    CustomShaderEntry(0x61D242D6),  // bloom
-    CustomShaderEntry(0x3F53E66E),  // lens flare - circles and color
-    // CustomShaderEntry(0x95588EA5),       // radial dirty lens effect
-    // CustomShaderEntry(0x8135BEA2),       // radial lens flare
-    CustomShaderEntry(0xA6EC1DEC),  // god rays
-    CustomShaderEntry(0xA67ABF78),  // tonemap
-    // CustomShaderEntry(0x11737C11),       // debris and other effects?
-    CustomShaderEntry(0x372BEBAB),  // LUT 1
-    // CustomShaderEntry(0xED9872EB),       // AA?
-    CustomShaderEntry(0xC20255E1),      // LUT 2a - Film Grain
-    CustomShaderEntry(0xD42BAD58),      // LUT 2b - No Film Grain
-    CustomShaderEntry(0x45D95DCB),      // LUT 2c - B&W Film Grain
-    CustomShaderEntry(0xBA423838),      // LUT 2d - B&W No Film Grain
-    CustomShaderEntry(0x8194877A),      // caps brightness
-    CustomSwapchainShader(0x558540C8),  // Gamma adjust
-
-    // CustomSwapchainShader(0x548937E1),      // UI - loading screen
-    // CustomSwapchainShader(0x404A04C7),      // UI - highlighted stuff, orange elements
-    // CustomSwapchainShader(0xBCBEE1E5),      // UI - text
-    // CustomSwapchainShader(0xDC15A986),      // UI - Alpha, semitransparent UI boxes, quit overlay
-    // CustomSwapchainShader(0x6562755C),      // UI - Alpha, some text
-    // CustomSwapchainShader(0xB917BF4E),      // UI - HUD, nav arrows, slider outlines, some icons, some text boxes
-    // CustomSwapchainShader(0x7E8358E3),      // UI - HUD numbers
-    // CustomSwapchainShader(0x929C8CA5),      // UI - Minimap
-    // CustomShaderEntry(0x4D09799F),      // UI - HUD Floating markers
-    // CustomSwapchainShader(0x9F9A6B19),      // UI - Menu tab bar
-    // CustomSwapchainShader(0xD292312D),      // UI - ?
-    // CustomSwapchainShader(0x822D56FA),      // UI - Menu blur
-    // CustomSwapchainShader(0x03554D47),      // UI - Menu background - breaks alpha
-    // CustomSwapchainShader(0x23EFA382),      // UI - Images
-    // CustomSwapchainShader(0x7D5191F6),      // UI - Loading please wait
-    // CustomSwapchainShader(0x637A1F5C),      // UI - popup notification
-    // CustomSwapchainShader(0x379D46ED),      // UI - Death screen images
-};
+renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 
