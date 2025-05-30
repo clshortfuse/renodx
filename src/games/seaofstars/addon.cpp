@@ -25,12 +25,25 @@
 
 namespace {
 
+bool UpgradeRTVReplaceShader(reshade::api::command_list* cmd_list) {
+  auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);
+  bool changed = false;
+  for (auto rtv : rtvs) {
+    changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv);
+  }
+  if (changed) {
+    renodx::mods::swapchain::FlushDescriptors(cmd_list);
+    renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});
+  }
+  return true;
+}
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x552A4A60),
-    CustomShaderEntry(0x72B31CDE),
     CustomShaderEntry(0x67758842),
-    CustomShaderEntry(0x77850945),
     CustomShaderEntry(0xB646820B),
+    CustomShaderEntry(0x77850945),
+    CustomShaderEntryCallback(0x72B31CDE, &UpgradeRTVReplaceShader),
 };
 
 ShaderInjectData shader_injection;
@@ -287,11 +300,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
+      renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_float,
-          .index = 0,
-          .aspect_ratio = 16.f / 9.f,
+          .ignore_size = true,
+          .use_resource_view_cloning = true,
+          .use_resource_view_hot_swap = true,
       });
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r11g11b10_float,
