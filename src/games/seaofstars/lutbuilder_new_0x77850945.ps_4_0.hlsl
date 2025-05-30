@@ -123,7 +123,6 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Targe
   r0.xyz = r0.xyz * r2.xyz + r1.xyz;
 
   // colorLinear = PositivePow(colorGamma, 2.2);
-
   r0.xyz = log2(abs(r0.xyz));
   r0.xyz = float3(2.20000005, 2.20000005, 2.20000005) * r0.xyz;
   r0.xyz = exp2(r0.xyz);

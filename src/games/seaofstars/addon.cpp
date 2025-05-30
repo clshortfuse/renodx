@@ -7,13 +7,7 @@
 
 #define DEBUG_LEVEL_0
 
-#include <algorithm>
-
-#include <embed/0x552A4A60.h>
-#include <embed/0x67758842.h>
-#include <embed/0x72B31CDE.h>
-#include <embed/0x77850945.h>
-#include <embed/0xB646820B.h>
+#include <embed/shaders.h>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -43,6 +37,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x67758842),
     CustomShaderEntry(0xB646820B),
     CustomShaderEntry(0x77850945),
+    CustomShaderEntry(0xC1637E4E),
     CustomShaderEntryCallback(0x72B31CDE, &UpgradeRTVReplaceShader),
 };
 
