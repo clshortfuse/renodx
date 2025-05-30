@@ -28,14 +28,12 @@ void main(
 
   // upgraded index 2: r8g8b8a8_typeless -> r16g16b16a16_float
   float4 previous_frame = t2.SampleLevel(s2_s, r0.xy, 0).xyzw;
-  // clamp after upgrading to 16 bit
 
   r0.x = max(abs(r0.z), abs(r0.w));
   r0.x = cmp(r0.x >= 1);
   r0.y = previous_frame.w * previous_frame.w;
 
   float4 current_frame = t1.SampleLevel(s1_s, v1.xy, 0).xyzw;
-  // clamp after upgrading to 16 bit
 
   r0.y = current_frame.w * current_frame.w + -r0.y;
   r0.y = 0.200000003 * abs(r0.y);

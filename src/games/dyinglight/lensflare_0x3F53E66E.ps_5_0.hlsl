@@ -13,25 +13,19 @@ SamplerState s1_s : register(s1);
 
 SamplerState s0_s : register(s0);
 
-cbuffer cb0 : register(b0)
-{
+cbuffer cb0 : register(b0) {
   float4 cb0[1];
 }
-
-
-
 
 // 3Dmigoto declarations
 #define cmp -
 
-
 void main(
-  float4 v0 : SV_POSITION0,
-  float4 v1 : TEXCOORD0,
-  float4 v2 : TEXCOORD1,
-  out float4 o0 : SV_TARGET0)
-{
-  float4 r0,r1;
+    float4 v0: SV_POSITION0,
+    float4 v1: TEXCOORD0,
+    float4 v2: TEXCOORD1,
+    out float4 o0: SV_TARGET0) {
+  float4 r0, r1;
   uint4 bitmask, uiDest;
   float4 fDest;
 
