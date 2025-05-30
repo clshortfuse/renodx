@@ -3107,7 +3107,7 @@ void RenderResourceViewPreview(reshade::api::device* device, DeviceData* data, r
   output_size.x *= scale;
   output_size.y *= scale;
 
-  ImGui::Image(srv.handle, output_size, ImVec2(0, 0), ImVec2(1, 1), ImColor(1.0f, 1.0f, 1.0f), ImColor(0.0f, 0.0f, 0.0f, 0.0f));
+  ImGui::Image(srv.handle, output_size, ImVec2(0, 0), ImVec2(1, 1));
 }
 
 // Returns false selection is to be removed
