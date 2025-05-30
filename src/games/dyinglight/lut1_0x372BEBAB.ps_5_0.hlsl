@@ -5,28 +5,22 @@ Texture2D<float4> t0 : register(t0);
 
 SamplerState s0_s : register(s0);
 
-cbuffer cb0 : register(b0)
-{
+cbuffer cb0 : register(b0) {
   float4 cb0[8];
 }
-
-
-
 
 // 3Dmigoto declarations
 #define cmp -
 
-
 void main(
-  float4 v0 : SV_POSITION0,
-  float4 v1 : TEXCOORD0,
-  float4 v2 : TEXCOORD1,
-  float4 v3 : TEXCOORD2,
-  float4 v4 : TEXCOORD3,
-  float3 v5 : TEXCOORD4,
-  out float4 o0 : SV_TARGET0)
-{
-  float4 r0,r1,r2;
+    float4 v0: SV_POSITION0,
+    float4 v1: TEXCOORD0,
+    float4 v2: TEXCOORD1,
+    float4 v3: TEXCOORD2,
+    float4 v4: TEXCOORD3,
+    float3 v5: TEXCOORD4,
+    out float4 o0: SV_TARGET0) {
+  float4 r0, r1, r2;
   uint4 bitmask, uiDest;
   float4 fDest;
 
@@ -43,7 +37,7 @@ void main(
   r0.xyzw = r1.xyzw * cb0[3].xxxx + r0.xyzw;
   r1.xyzw = t0.SampleLevel(s0_s, v5.xz, 0).xyzw;
   r0.xyzw = r1.xyzw * cb0[3].yyyy + r0.xyzw;
-  r1.xyz = r0.xyz * float3(0.996093988,0.996093988,0.996093988) + float3(0.00195299997,0.00195299997,0.00195299997);  // 255/256 + 1/512
+  r1.xyz = r0.xyz * float3(0.996093988, 0.996093988, 0.996093988) + float3(0.00195299997, 0.00195299997, 0.00195299997);  // 255/256 + 1/512
   o0.w = r0.w;
   r0.x = r1.z;
   r0.y = cb0[1].w;
