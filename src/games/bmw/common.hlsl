@@ -132,7 +132,7 @@ float3 ToneMap(float3 bt709) {
   config.reno_drt_shadows = 1.0f;
   config.reno_drt_contrast = 1.0f;
   config.reno_drt_saturation = 1.0f;
-  config.reno_drt_dechroma = 0;
+  config.reno_drt_dechroma = injectedData.colorGradeDechroma;
   config.reno_drt_blowout = injectedData.colorGradeBlowout;
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.reno_drt_working_color_space = 2u;
