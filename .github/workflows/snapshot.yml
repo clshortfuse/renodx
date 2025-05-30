@@ -86,7 +86,6 @@ jobs:
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: snapshot
-          prerelease: true
           title: RenoDX Snapshot Build
           files: githubrelease/*
       

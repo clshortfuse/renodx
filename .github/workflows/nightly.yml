@@ -81,7 +81,6 @@ jobs:
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: nightly-${{ env.NOW }}
-          prerelease: true
           title: RenoDX Nightly Build ${{ env.NOW }}
           files: githubrelease/*
 
