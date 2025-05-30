@@ -828,38 +828,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
 
       renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
-        if (params.size() >= 20) return false;
-
-        auto process_path = renodx::utils::platform::GetCurrentProcessPath();
-
-        auto filename = process_path.filename().string();
-
-        if (filename == "RoboCop-Win64-Shipping.exe") return true;         // RoboCop: Rogue City
-        if (filename == "FactoryGameEGS-Win64-Shipping.exe") return true;  // Satisfactory, EGS
-
-        auto product_name = renodx::utils::platform::GetProductName(process_path);
-
-        if (product_name == "Jusant") return true;
-        if (product_name == "InfinityNikki") return true;
-        if (product_name == "Lords of the Fallen") return true;  // Lords of the Fallen 2023
-        if (product_name == "NobodyWantsToDie") return true;
-        if (product_name == "Ready Or Not") return true;
-        if (product_name == "Eternal Strands") return true;
-        if (product_name == "Expedition 33") return true;
-        if (product_name == "YKS") return true;  // Slitterhead
-        if (product_name == "Split Fiction") return true;
-        if (product_name == "RSDragonwilds") return true;
-        if (product_name == "Enotria: The Last Song") return true;
-        if (product_name == "FactoryGameSteam") return true;  // Satisfactory, Steam
-        if (product_name == "FATAL FURY: City of the Wolves") return true;
-        if (product_name == "Deadzone: Rogue") return true;
-        if (product_name == "EVERSPACE 2") return true;
-        if (product_name == "JDM") return true;  // JDM: Japanese Drift Master
-
-        // UE DX12 has a 4 param root sig that crashes if modified. Track for now
-        return std::ranges::any_of(params, [](auto param) {
-          return (param.type == reshade::api::pipeline_layout_param_type::descriptor_table);
-        });
+        return (params.size() < 20);
       };
 
       if (!initialized) {
