@@ -44,10 +44,7 @@ Texture2D<float4> gbuffer1Texture : register(t4);
 // 3Dmigoto declarations
 #define cmp -
 
-void main(float4 v0
-          : SV_POSITION0, float2 v1
-          : TEXCOORD0, out float4 o0
-          : SV_Target0) {
+void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Target0) {
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -87,6 +84,13 @@ void main(float4 v0
     r1.w = dot(float3(0.439700812, 0.382978052, 0.1773348), r2.xyz);
     r3.y = dot(float3(0.0897923037, 0.813423157, 0.096761629), r2.xyz);
     r3.z = dot(float3(0.0175439864, 0.111544058, 0.870704114), r2.xyz);
+    if (RENODX_TONE_MAP_TYPE) {
+      float3 corrected_bt709 = mul(renodx::color::BT709_TO_AP0_MAT, r2.rgb);
+      r1.w = corrected_bt709.r;
+      r3.y = corrected_bt709.g;
+      r3.z = corrected_bt709.b;
+    }
+
     r2.w = min(r3.y, r1.w);
     r2.w = min(r2.w, r3.z);
     r3.w = max(r3.y, r1.w);
@@ -218,27 +222,10 @@ void main(float4 v0
     r3.xyz = max(float3(0, 0, 0), r3.xyz);
     r3.xyz = r3.xyz + -r2.xyz;
     r1.xyz = FilmAlpha * r3.xyz + r2.xyz;
-    vanilla = r1.rgb;
+    vanilla = r1.rgb;  // in AP1
+    vanilla = UpgradeTonemap(untonemapped, vanilla);
   }
-
-  if (injectedData.toneMapType == 0.f) {
-    outputColor.rgb = vanilla;
-  } else if (injectedData.toneMapType == 3.f) {  // Adjust colors if tonemapper is renoDRT
-    outputColor.rgb = renodx::color::correct::Hue(
-        untonemapped, renodx::tonemap::ACESFittedAP1(untonemapped));
-  } else {
-    outputColor.rgb = untonemapped;
-  }
-
-  outputColor = applyUserTonemap(outputColor);
-
-  if (injectedData.toneMapType > 1) {
-    // We don't get a lot of WCG colors but might as well ig
-    // blend HDR with SDR
-    float3 negHDR = min(0, outputColor);  // save WCG
-    outputColor = lerp(saturate(vanilla), max(0, outputColor), saturate(vanilla));
-    outputColor += negHDR;  // add back WCG
-  }
+  outputColor = vanilla;
 
   // Add bloom
   // We add it to outputColor cause devs add linear bloom to tonemapped image

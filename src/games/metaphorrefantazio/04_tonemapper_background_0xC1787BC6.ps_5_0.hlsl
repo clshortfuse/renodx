@@ -47,14 +47,11 @@ Texture2D<float4> gbuffer1Texture : register(t4);
 // 3Dmigoto declarations
 #define cmp -
 
-void main(float4 v0
-          : SV_POSITION0, float2 v1
-          : TEXCOORD0, out float4 o0
-          : SV_Target0) {
+void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Target0) {
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9;
   uint4 bitmask, uiDest;
   float4 fDest;
-  float3 untonemapped, vanilla, outputColor;
+  float3 untonemapped, vanilla, outputColor, midgray;
 
   r0.xyzw = bloomTexture.Sample(bloomSampler_s, v1.xy).xyzw;  // 1/4th of res
   r1.xyz = starTexture.Sample(starSampler_s, v1.xy).xyz;      // 1/4th of res
@@ -107,6 +104,13 @@ void main(float4 v0
     r4.y = dot(float3(0.0897923037, 0.813423157, 0.096761629), r3.xyz);
     r4.z = dot(float3(0.0175439864, 0.111544058, 0.870704114), r3.xyz);
 
+    if (RENODX_TONE_MAP_TYPE) {
+      float3 corrected_bt709 = mul(renodx::color::BT709_TO_AP0_MAT, r3.rgb);
+      r1.w = corrected_bt709.r;
+      r4.y = corrected_bt709.g;
+      r4.z = corrected_bt709.b;
+    }
+
     r2.w = min(r4.y, r1.w);
     r2.w = min(r2.w, r4.z);
     r3.w = max(r4.y, r1.w);
@@ -152,6 +156,9 @@ void main(float4 v0
     r3.w = r4.w ? r5.x : r3.w;
     r3.w = max(0, r3.w);
     r3.w = min(360, r3.w);
+    // rgb_2_hue end
+
+    // center_hue
     r4.w = cmp(180 < r3.w);
     r5.x = -360 + r3.w;
     r3.w = r4.w ? r5.x : r3.w;
@@ -239,28 +246,11 @@ void main(float4 v0
     r4.xyz = max(float3(0, 0, 0), r4.xyz);
     r4.xyz = r4.xyz + -r3.xyz;
     r2.xyz = FilmAlpha * r4.xyz + r3.xyz;
-    vanilla = r2.rgb;
+    vanilla = r2.rgb;  // in AP1
+    vanilla = UpgradeTonemap(untonemapped, vanilla);
     // End of ACES SDR tonemapper
   }
-
-  if (injectedData.toneMapType == 0.f) {
-    outputColor.rgb = vanilla;
-  } else if (injectedData.toneMapType == 3.f) {  // Adjust colors if tonemapper is renoDRT
-    outputColor.rgb = renodx::color::correct::Hue(
-        untonemapped, renodx::tonemap::ACESFittedAP1(untonemapped));
-  } else {
-    outputColor.rgb = untonemapped;
-  }
-
-  outputColor = applyUserTonemap(outputColor);
-
-  if (injectedData.toneMapType > 1) {
-    // We don't get a lot of WCG colors but might as well ig
-    // blend HDR with SDR
-    float3 negHDR = min(0, outputColor);  // save WCG
-    outputColor = lerp(saturate(vanilla), max(0, outputColor), saturate(vanilla));
-    outputColor += negHDR;  // add back WCG
-  }
+  outputColor = vanilla;
 
   /* r1.xyz = starScale * r1.xyz + r2.xyz;
   o0.xyz = r0.xyz * r0.www + r1.xyz; */
