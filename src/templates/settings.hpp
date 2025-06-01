@@ -353,6 +353,14 @@ static const SettingConfig FX_BLOOM_CONFIG = {
     .parse = [](float value) { return value * 0.02f; },
 };
 
+static const SettingConfig FX_VIGNETTE_CONFIG = {
+    .key = "FxVignette",
+    .default_value = 50.f,
+    .label = "Vignette",
+    .section = "Effects",
+    .parse = [](float value) { return value * 0.02f; },
+};
+
 static renodx::utils::settings::Setting* CreateSetting(const std::vector<SettingConfig>& configs) {
   auto* new_setting = new renodx::utils::settings::Setting();
   for (const auto& config : configs) {
@@ -514,6 +522,8 @@ static std::vector<renodx::utils::settings::Setting*> CreateDefaultSettings(cons
       settings.push_back(CreateSetting({COLOR_GRADE_FLARE_CONFIG, {.binding = binding}}));
     } else if (key == "FxBloom") {
       settings.push_back(CreateSetting({FX_BLOOM_CONFIG, {.binding = binding}}));
+    } else if (key == "FxVignette") {
+      settings.push_back(CreateSetting({FX_VIGNETTE_CONFIG, {.binding = binding}}));
     } else {
       throw std::runtime_error("Unknown setting key: " + key);
     }
