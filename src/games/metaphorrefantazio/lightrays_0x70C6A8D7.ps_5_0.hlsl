@@ -91,7 +91,6 @@ void main(float4 v0
   r1.xyz = matEmissiveColor.www * r2.xyz + r1.xyz;
   r1.xyz = matEmissiveColor.xyz + r1.xyz;
   o0.xyz = v3.xyz * r1.xyz;
-  // o0.xyz = scaleLuminance(v3.xyz * r1.xyz);
   r0.y = matEmissiveColor.w * r0.y + 1;
   r0.x = r0.x * r0.y;
   r0.x = r0.x * r0.z;

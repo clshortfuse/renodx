@@ -34,7 +34,5 @@ void main(float4 v0
   r0.xyz = v3.xyz * r0.xyz;
   o0.xyz = r0.xyz;
 
-  // o0.xyz = scaleLuminance(r0.xyz);
-
   return;
 }

@@ -32,15 +32,10 @@ void main(float4 v0
   r0.xyz = gamma * r0.xyz;
   o0.xyz = exp2(r0.xyz); */
 
-  if (injectedData.toneMapType == 0.f) {
-    color.rgb = max(float3(0, 0, 0), color.rgb);
+  if (RENODX_TONE_MAP_TYPE == 0) {
+    color.rgb = saturate(color.rgb);
   }
-
-  if (injectedData.toneMapGammaCorrection) {
-    color.rgb = renodx::color::correct::GammaSafe(color.rgb);
-  }
-
-  color.rgb *= injectedData.toneMapUINits / 80.f;
+  color.rgb = renodx::draw::SwapChainPass(color.rgb);
 
   o0 = color;
   return;

@@ -60,7 +60,6 @@ void main(
   r1.xyzw = v3.xyzw * r1.xyzw;
   r0.x = r1.w * r0.x + 0.000500000024;
   o0.xyz = r1.xyz;
-  // o0.xyz = scaleLuminance(r1.xyz);
   o0.w = min(1, r0.x);
   return;
 }
