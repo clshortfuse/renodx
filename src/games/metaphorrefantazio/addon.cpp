@@ -84,7 +84,18 @@ ShaderInjectData shader_injection;
 renodx::mods::shader::CustomShaders custom_shaders = {
     LutBuilderShaderEntry(0xD8196629),
     OutputShaderEntry(0xAC103037),
-    GodrayShaderEntry(0x0DA4540E),
+    // GodrayShaderEntry(0x0DA4540E),
+    {
+        // UI Text and Text Shadow (With alpha)
+        0x0DA4540E,
+        {
+            .crc32 = 0x0DA4540E,
+            .code = __0x0DA4540E,
+            .on_replace = [](auto cmd_list) {
+              return false;
+            },
+        },
+    },
     FinalShaderEntry(0x1F993880),
     __ALL_CUSTOM_SHADERS,
 };
