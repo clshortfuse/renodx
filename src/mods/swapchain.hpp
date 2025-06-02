@@ -868,9 +868,9 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
 
   reshade::api::resource swapchain_clone;
 
-  ID3D11Texture2D* shared_texture = nullptr;
   if (use_device_proxy) {
     assert(last_device_proxy_shared_handle != nullptr);
+    ID3D11Texture2D* shared_texture = nullptr;
     if (FAILED(proxy_device->OpenSharedResource(last_device_proxy_shared_handle, IID_PPV_ARGS(&shared_texture)))) {
       reshade::log::message(reshade::log::level::error,
                             "mods::swapchain::OnPresent(OpenSharedResource failed.)");
@@ -891,6 +891,9 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
       device->create_resource(new_desc, nullptr, reshade::api::resource_usage::general, &data->proxy_device_resource);
     }
     cmd_list->copy_resource({reinterpret_cast<uintptr_t>(shared_texture)}, data->proxy_device_resource);
+    queue->flush_immediate_command_list();
+    shared_texture->Release();
+    shared_texture = nullptr;
     swapchain_clone = data->proxy_device_resource;
 
   } else if (UsingSwapchainCompatibilityMode()) {
@@ -1075,13 +1078,9 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
   cmd_list->draw(3, 1, 0, 0);
   cmd_list->end_render_pass();
 
-  if (device->get_api() != reshade::api::device_api::d3d12) {
+  if (!use_device_proxy && device->get_api() != reshade::api::device_api::d3d12) {
     // Reshade calls this on DX12
     queue->flush_immediate_command_list();
-  }
-  if (shared_texture != nullptr) {
-    shared_texture->Release();
-    shared_texture = nullptr;
   }
 
   if (previous_state.has_value()) {
@@ -3153,12 +3152,9 @@ inline void OnPresent(
 
     // Trigger a DX11 Present which will start the swapchain proxy steps on DX11
 
-    proxy_device_context->Flush();
     auto* native_device = (IDirect3DDevice9*)device->get_native();
-    native_device->BeginScene();
     HWND output_window = static_cast<HWND>(swapchain->get_hwnd());
-    proxy_swap_chain->Present(0, DXGI_PRESENT_DO_NOT_WAIT);
-    native_device->EndScene();
+    proxy_swap_chain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
     last_device_proxy_shared_handle = nullptr;
   } else {
     DrawSwapChainProxy(swapchain, queue);
