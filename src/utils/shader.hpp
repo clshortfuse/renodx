@@ -10,8 +10,6 @@
 #include <dxgi.h>
 #include <dxgi1_6.h>
 
-#include <include/reshade_api_device.hpp>
-
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -25,7 +23,9 @@
 #include <vector>
 
 #include <crc32_hash.hpp>
+#include <gtl/phmap.hpp>
 #include <include/reshade.hpp>
+#include <include/reshade_api_device.hpp>
 
 #include "./bitwise.hpp"
 #include "./data.hpp"
@@ -103,7 +103,7 @@ struct PipelineShaderDetails {
   reshade::api::pipeline_stage replacement_stages = static_cast<reshade::api::pipeline_stage>(0u);
   renodx::utils::pipeline_layout::PipelineLayoutData* layout_data = nullptr;
   bool initialized_replacement = false;
-  const std::unordered_map<uint32_t, std::vector<uint8_t>>* runtime_replacements;
+  const gtl::parallel_node_hash_map<uint32_t, std::vector<uint8_t>>* runtime_replacements;
 
   std::optional<std::string> tag;
   bool destroyed = false;
@@ -116,8 +116,8 @@ struct PipelineShaderDetails {
       const reshade::api::pipeline_layout& layout,
       const reshade::api::pipeline_subobject* subobjects,
       const uint32_t& subobject_count,
-      const std::unordered_map<uint32_t, uint32_t>* shader_replacements_inverse,
-      const std::unordered_map<uint32_t, std::vector<uint8_t>>* runtime_replacements) {
+      const gtl::parallel_flat_hash_map<uint32_t, uint32_t>* shader_replacements_inverse,
+      const gtl::parallel_node_hash_map<uint32_t, std::vector<uint8_t>>* runtime_replacements) {
     this->pipeline = pipeline;
     this->device = device;
     this->layout = layout;
@@ -282,22 +282,19 @@ struct PipelineShaderDetails {
 };
 
 static struct Store {
-  std::shared_mutex pipeline_shader_details_mutex;
-  std::unordered_map<uint64_t, PipelineShaderDetails> pipeline_shader_details;
+  gtl::parallel_node_hash_map<uint64_t, PipelineShaderDetails> pipeline_shader_details;
 } local_store;
 
 static Store* store = &local_store;
 
 struct __declspec(uuid("908f0889-64d8-4e22-bd26-ded3dd0cef77")) DeviceData {
-  std::shared_mutex mutex;
-
   Store* store;
-  std::unordered_map<uint32_t, std::unordered_set<uint64_t>> shader_pipeline_handles;
-  std::unordered_map<uint32_t, std::vector<uint8_t>> compile_time_replacements;
-  std::unordered_map<uint32_t, std::vector<uint8_t>> runtime_replacements;
+  gtl::parallel_node_hash_map<uint32_t, std::unordered_set<uint64_t>> shader_pipeline_handles;
+  gtl::parallel_node_hash_map<uint32_t, std::vector<uint8_t>> compile_time_replacements;
+  gtl::parallel_node_hash_map<uint32_t, std::vector<uint8_t>> runtime_replacements;
 
-  std::unordered_map<uint32_t, uint32_t> shader_replacements;          // Old => New
-  std::unordered_map<uint32_t, uint32_t> shader_replacements_inverse;  // New => Old
+  gtl::parallel_flat_hash_map<uint32_t, uint32_t> shader_replacements;          // Old => New
+  gtl::parallel_flat_hash_map<uint32_t, uint32_t> shader_replacements_inverse;  // New => Old
   bool use_replace_on_bind = true;
   bool use_replace_async = false;
   bool use_shader_cache = false;
@@ -323,7 +320,7 @@ struct __declspec(uuid("8707f724-c7e5-420e-89d6-cc032c732d2d")) CommandListData 
 };
 
 inline PipelineShaderDetails* GetPipelineShaderDetails(const reshade::api::pipeline& pipeline) {
-  std::shared_lock read_lock(store->pipeline_shader_details_mutex);
+  // std::shared_lock read_lock(store->pipeline_shader_details_mutex);
   if (auto details_pair = store->pipeline_shader_details.find(pipeline.handle);
       details_pair != store->pipeline_shader_details.end()) {
     return &details_pair->second;
@@ -521,11 +518,11 @@ inline void ApplyDrawReplacements(reshade::api::command_list* cmd_list, CommandL
 namespace internal {
 
 static std::shared_mutex mutex;
-static std::unordered_map<uint32_t, std::vector<uint8_t>> compile_time_replacements;
-static std::unordered_map<uint32_t, std::vector<uint8_t>> initial_runtime_replacements;
-static std::unordered_map<reshade::api::device_api, std::unordered_map<uint32_t, std::vector<uint8_t>>>
+static gtl::parallel_node_hash_map<uint32_t, std::vector<uint8_t>> compile_time_replacements;
+static gtl::parallel_node_hash_map<uint32_t, std::vector<uint8_t>> initial_runtime_replacements;
+static std::unordered_map<reshade::api::device_api, gtl::parallel_node_hash_map<uint32_t, std::vector<uint8_t>>>
     device_based_compile_time_replacements;
-static std::unordered_map<reshade::api::device_api, std::unordered_map<uint32_t, std::vector<uint8_t>>>
+static std::unordered_map<reshade::api::device_api, gtl::parallel_node_hash_map<uint32_t, std::vector<uint8_t>>>
     device_based_initial_runtime_replacements;
 }  // namespace internal
 
@@ -599,14 +596,14 @@ static void AddRuntimeReplacement(
 static void RemoveRuntimeReplacements(reshade::api::device* device, const std::unordered_set<uint32_t>& filter = {}) {
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return;
-  std::unique_lock device_lock(data->mutex);
+  // std::unique_lock device_lock(data->mutex);
   for (auto& [shader_hash, replacement] : data->runtime_replacements) {
     if (!filter.empty() && !filter.contains(shader_hash)) continue;
     if (auto pair = data->shader_pipeline_handles.find(shader_hash);
         pair != data->shader_pipeline_handles.end()) {
       auto& pipeline_handles = pair->second;
       if (pipeline_handles.empty()) continue;
-      std::shared_lock read_lock(store->pipeline_shader_details_mutex);
+      // std::shared_lock read_lock(store->pipeline_shader_details_mutex);
       for (auto pipeline_handle : pipeline_handles) {
         if (auto details_pair = store->pipeline_shader_details.find(pipeline_handle);
             details_pair != store->pipeline_shader_details.end()) {
@@ -683,8 +680,8 @@ static void OnInitDevice(reshade::api::device* device) {
   }
 
   auto insert_shaders = [](
-                            const std::unordered_map<uint32_t, std::vector<uint8_t>>& source,
-                            std::unordered_map<uint32_t, std::vector<uint8_t>>& dest,
+                            const gtl::parallel_node_hash_map<uint32_t, std::vector<uint8_t>>& source,
+                            gtl::parallel_node_hash_map<uint32_t, std::vector<uint8_t>>& dest,
                             const std::string& type = "") {
     for (const auto& [shader_hash, replacement] : source) {
       auto [iterator, is_new] = dest.emplace(shader_hash, replacement);
@@ -708,7 +705,7 @@ static void OnInitDevice(reshade::api::device* device) {
   };
 
   std::shared_lock local_lock(internal::mutex);
-  std::unique_lock device_lock(data->mutex);
+  // std::unique_lock device_lock(data->mutex);
   insert_shaders(internal::compile_time_replacements, data->compile_time_replacements, "compile-time");
   insert_shaders(internal::initial_runtime_replacements, data->runtime_replacements, "runtime");
 
@@ -725,11 +722,12 @@ static void OnDestroyDevice(reshade::api::device* device) {
   s << reinterpret_cast<uintptr_t>(device);
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
-  const std::unique_lock write_lock(store->pipeline_shader_details_mutex);
+  // const std::unique_lock write_lock(store->pipeline_shader_details_mutex);
   std::vector<uint64_t> pipeline_handles;
   for (auto& [pipeline_handle, details] : store->pipeline_shader_details) {
     if (details.device == device) {
       pipeline_handles.push_back(pipeline_handle);
+      renodx::utils::pipeline::DestroyPipelineSubobjects(details.subobjects);
     }
   }
   for (const auto& pipeline_handle : pipeline_handles) {
@@ -788,7 +786,7 @@ static bool OnCreatePipeline(
   std::vector<std::pair<uint32_t, uint32_t>> hash_changes;
 
   {
-    std::shared_lock read_lock(data->mutex);
+    // std::shared_lock read_lock(data->mutex);
     for (uint32_t i = 0; i < subobject_count; ++i) {
       if (!COMPATIBLE_SUBOBJECT_TYPE_TO_STAGE.contains(subobjects[i].type)) continue;
       auto* desc = static_cast<reshade::api::shader_desc*>(subobjects[i].data);
@@ -829,7 +827,7 @@ static bool OnCreatePipeline(
 
   if (hash_changes.empty()) return false;
 
-  std::unique_lock lock(data->mutex);
+  // std::unique_lock lock(data->mutex);
   for (auto& [shader_hash, new_hash] : hash_changes) {
     data->shader_replacements[shader_hash] = new_hash;
     if (new_hash != 0u) {
@@ -853,7 +851,7 @@ static void OnInitPipeline(
   bool locking = !data->compile_time_replacements.empty();
 
   if (locking) {
-    data->mutex.lock_shared();
+    // data->mutex.lock_shared();
   }
   auto details = PipelineShaderDetails(
       pipeline,
@@ -865,7 +863,7 @@ static void OnInitPipeline(
       &data->runtime_replacements);
 
   if (locking) {
-    data->mutex.unlock_shared();
+    // data->mutex.unlock_shared();
   }
   bool has_useful_details = !details.subobject_shaders.empty();
   if (!has_useful_details) return;
@@ -882,7 +880,7 @@ static void OnInitPipeline(
   }
 
   {
-    const std::unique_lock write_lock(store->pipeline_shader_details_mutex);
+    // const std::unique_lock write_lock(store->pipeline_shader_details_mutex);
     store->pipeline_shader_details[pipeline.handle] = details;
 
     if (data->use_replace_async) {
@@ -907,7 +905,7 @@ static void OnDestroyPipeline(
   // Prefer read-only and orphaning data
 
   if (use_replace_async || use_shader_cache) {
-    std::shared_lock read_lock(store->pipeline_shader_details_mutex);
+    // std::shared_lock read_lock(store->pipeline_shader_details_mutex);
     auto details_pair = store->pipeline_shader_details.find(pipeline.handle);
     if (details_pair == store->pipeline_shader_details.end()) return;
     auto* details = &details_pair->second;
@@ -917,16 +915,17 @@ static void OnDestroyPipeline(
       details->replacement_pipeline = {0u};
     }
   } else {
-    std::unique_lock write_lock(store->pipeline_shader_details_mutex);
-    auto details_pair = store->pipeline_shader_details.find(pipeline.handle);
+    // std::unique_lock write_lock(store->pipeline_shader_details_mutex);
+    const auto details_pair = store->pipeline_shader_details.find(pipeline.handle);
     if (details_pair == store->pipeline_shader_details.end()) return;
     auto* details = &details_pair->second;
+    details->destroyed = true;
     if (details->replacement_pipeline.handle != 0u) {
       device->destroy_pipeline(details->replacement_pipeline);
       details->replacement_pipeline = {0u};
     }
     renodx::utils::pipeline::DestroyPipelineSubobjects(details->subobjects);
-    store->pipeline_shader_details.erase(details_pair);
+    store->pipeline_shader_details.erase(pipeline.handle);
   }
 }
 

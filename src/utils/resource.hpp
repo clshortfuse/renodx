@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <gtl/phmap.hpp>
 #include <include/reshade.hpp>
 
 #include "../utils/data.hpp"
@@ -223,10 +224,10 @@ struct ResourceViewInfo {
 static bool is_primary_hook = false;
 
 static struct Store {
-  std::shared_mutex resource_infos_mutex;
-  std::unordered_map<uint64_t, ResourceInfo> resource_infos;
-  std::shared_mutex resource_view_infos_mutex;
-  std::unordered_map<uint64_t, ResourceViewInfo> resource_view_infos;
+  // std::shared_mutex resource_infos_mutex;
+  gtl::parallel_node_hash_map<uint64_t, ResourceInfo> resource_infos;
+  // std::shared_mutex resource_view_infos_mutex;
+  gtl::parallel_node_hash_map<uint64_t, ResourceViewInfo> resource_view_infos;
   std::vector<std::function<void(ResourceInfo* resource_info)>> on_init_resource_info_callbacks;
   std::vector<std::function<void(ResourceInfo* resource_info)>> on_destroy_resource_info_callbacks;
 
@@ -237,7 +238,7 @@ static struct Store {
 static Store* store = &local_store;
 
 inline ResourceInfo* GetResourceInfo(const reshade::api::resource& resource) {
-  std::shared_lock lock(store->resource_infos_mutex);
+  // std::shared_lock lock(store->resource_infos_mutex);
   auto pair = store->resource_infos.find(resource.handle);
   if (pair != store->resource_infos.end()) return &pair->second;
   return nullptr;
@@ -252,7 +253,7 @@ inline ResourceInfo* GetResourceInfoUnsafe(const reshade::api::resource& resourc
 }
 
 inline ResourceInfo& CreateResourceInfo(const reshade::api::resource& resource) {
-  std::unique_lock write_lock(store->resource_infos_mutex);
+  // std::unique_lock write_lock(store->resource_infos_mutex);
   auto& info = store->resource_infos[resource.handle];
   info.destroyed = false;
   info.resource = resource;
@@ -261,13 +262,13 @@ inline ResourceInfo& CreateResourceInfo(const reshade::api::resource& resource) 
 
 inline ResourceViewInfo* GetResourceViewInfo(const reshade::api::resource_view& view, const bool& create = false) {
   {
-    std::shared_lock lock(store->resource_view_infos_mutex);
+    // std::shared_lock lock(store->resource_view_infos_mutex);
     auto pair = store->resource_view_infos.find(view.handle);
     if (pair != store->resource_view_infos.end()) return &pair->second;
     if (!create) return nullptr;
   }
   {
-    std::unique_lock write_lock(store->resource_view_infos_mutex);
+    // std::unique_lock write_lock(store->resource_view_infos_mutex);
     auto& info = store->resource_view_infos.insert({view.handle, ResourceViewInfo({.view = view})}).first->second;
     return &info;
   }
@@ -332,7 +333,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   std::vector<ResourceInfo*> infos(back_buffer_count);
 
   {
-    std::unique_lock lock(store->resource_infos_mutex);
+    // std::unique_lock lock(store->resource_infos_mutex);
     for (uint32_t index = 0; index < back_buffer_count; ++index) {
       auto buffer = swapchain->get_back_buffer(index);
       auto& info = store->resource_infos[buffer.handle];
@@ -345,7 +346,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
       };
       infos[index] = &info;
     }
-    lock.unlock();
+    // lock.unlock();
   }
 
   for (auto& resource_info : infos) {
@@ -360,7 +361,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
   std::vector<ResourceInfo*> infos;
   {
-    std::unique_lock lock(store->resource_infos_mutex);
+    // std::unique_lock lock(store->resource_infos_mutex);
     for (uint32_t index = 0; index < back_buffer_count; ++index) {
       auto buffer = swapchain->get_back_buffer(index);
       auto pair = store->resource_infos.find(buffer.handle);
@@ -372,7 +373,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
       info.destroyed = true;
       infos.push_back(&info);
     }
-    lock.unlock();
+    // lock.unlock();
   }
 
   for (auto& resource_info : infos) {
@@ -392,9 +393,9 @@ inline void OnInitResource(
   if (resource.handle == 0) return;
 
   // assume write new
-  std::unique_lock lock(store->resource_infos_mutex);
+  // std::unique_lock lock(store->resource_infos_mutex);
   auto& resource_info = store->resource_infos[resource.handle];
-  lock.unlock();
+  // lock.unlock();
   if (
       resource_info.resource.handle == resource.handle
       && !resource_info.destroyed) {
@@ -426,7 +427,7 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   if (!is_primary_hook) return;
   if (resource.handle == 0) return;
 
-  std::shared_lock lock(store->resource_infos_mutex);
+  // std::shared_lock lock(store->resource_infos_mutex);
   auto pair = store->resource_infos.find(resource.handle);
   if (pair == store->resource_infos.end()) {
     std::stringstream s;
@@ -437,7 +438,7 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
     return;
   }
   auto& resource_info = pair->second;
-  lock.unlock();
+  // lock.unlock();
   if (resource_info.destroyed) {
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
@@ -476,9 +477,9 @@ inline void OnInitResourceView(
     reshade::api::resource_view view) {
   if (!is_primary_hook) return;
   if (view.handle == 0u) return;
-  std::unique_lock lock(store->resource_view_infos_mutex);
+  // std::unique_lock lock(store->resource_view_infos_mutex);
   auto& resource_view_info = store->resource_view_infos[view.handle];
-  lock.unlock();
+  // lock.unlock();
 
   if (resource_view_info.view.handle != 0u && !resource_view_info.destroyed) {
     for (const auto& callback : store->on_destroy_resource_view_info_callbacks) {
@@ -488,7 +489,7 @@ inline void OnInitResourceView(
 
   ResourceInfo* resource_info = nullptr;
   if (resource.handle != 0u) {
-    std::unique_lock resource_lock(store->resource_infos_mutex);
+    // std::unique_lock resource_lock(store->resource_infos_mutex);
     resource_info = &store->resource_infos[resource.handle];
   }
 
@@ -513,10 +514,10 @@ inline void OnDestroyResourceView(reshade::api::device* device, reshade::api::re
   if (!is_primary_hook) return;
   if (view.handle == 0u) return;
 
-  std::shared_lock lock(store->resource_view_infos_mutex);
+  // std::shared_lock lock(store->resource_view_infos_mutex);
   auto pair = store->resource_view_infos.find(view.handle);
   if (pair == store->resource_view_infos.end()) return;
-  lock.unlock();
+  // lock.unlock();
 
   auto& resource_view_info = pair->second;
   resource_view_info.destroyed = true;
