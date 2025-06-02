@@ -2871,6 +2871,11 @@ class Decompiler {
         auto [type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(srem (\S+) (\S+), (\S+))"});
         assignment_type = "int";
         assignment_value = std::format("{} % {}", ParseInt(a), ParseInt(b));
+      } else if (instruction == "udiv") {
+        // %16 = udiv i32 %14, 38
+        auto [type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(udiv (\S+) (\S+), (\S+))"});
+        assignment_type = "int";
+        assignment_value = std::format("{} / {}", ParseInt(a), ParseInt(b));
       } else if (instruction == "or") {
         auto [type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(or (\S+) (\S+), (\S+))"});
         if (type == "i1") {
@@ -3743,7 +3748,9 @@ class Decompiler {
           case TokenizerState::GLOBAL_VARIABLE: {
             // @C.i.22.i.i.95.i.0.hca = internal unnamed_addr constant [6 x float] [float -4.000000e+00, float -4.000000e+00, float 0xC009424EA0000000, float 0xBFDF0E5600000000, float 0x3FFD904FE0000000, float 0x3FFD904FE0000000]
             // @"\01?g_ToneMapRadianceSamples@@3PAMA" = external addrspace(3) global [128 x float], align 4
-            static auto regex = std::regex{R"(^(\S+) = (\S+) ([A-Za-z()0-9_]+) (\S+) \[(\S+) x ([^\]]+)\](?:,|(?: \[([^\]]+)\])).*)"};
+            // @"\01?shPixelsY@@3PAY0CG@$$CAMA.1dim" = addrspace(3) global [1444 x float] undef, align 4
+
+            static auto regex = std::regex{R"(^(\S+) = (?:(\S*) )?([A-Za-z()0-9_]+) (\S+) \[(\S+) x ([^\]]+)\](?:,|(?: \[([^\]]+)\])| undef).*)"};
             auto [variable_name, scope, addr, qualifier, array_size, array_type, entries] = StringViewMatch<7>(line, regex);
 
             std::string output_name = std::format("_global_{}", preprocess_state.global_variables.size());
@@ -3752,7 +3759,7 @@ class Decompiler {
 
             if (scope == "internal") {
               decompiled << "static const ";
-            } else if (scope == "external") {
+            } else if (scope == "external" || scope == "") {
               decompiled << "groupshared ";
             } else {
               throw std::exception("Unknown global variable scope.");
