@@ -30,6 +30,7 @@
 #include <utility>
 #include <vector>
 
+#include <gtl/phmap.hpp>
 #include <include/reshade.hpp>
 
 #include "../utils/bitwise.hpp"
@@ -72,8 +73,6 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
 
   std::vector<SwapChainUpgradeTarget> swap_chain_upgrade_targets;
 
-  std::unordered_map<reshade::api::swapchain*, reshade::api::swapchain_desc> upgraded_swapchains;
-
   reshade::api::resource_desc primary_swapchain_desc;
 
   bool upgraded_resource_view = false;
@@ -83,7 +82,6 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   // <resource_original.handle, SwapChainUpgradeTarget>
 
   // <descriptor_heap.handle, std::map<base_offset, descriptor_table>>
-  std::unordered_map<uint64_t, std::unordered_map<uint32_t, HeapDescriptorInfo*>> heap_descriptor_infos;
 
   reshade::api::pipeline_layout swap_chain_proxy_layout = {0};
   reshade::api::pipeline swap_chain_proxy_pipeline = {0};
@@ -110,9 +108,12 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
 struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData {
   std::vector<BoundDescriptorInfo> unbound_descriptors;
   std::vector<PushDescriptorInfo> unpushed_updates;
+  bool is_in_custom_render_pass = false;
 };
 
 // Variables
+static gtl::parallel_node_hash_map<uint64_t, std::unordered_map<uint32_t, HeapDescriptorInfo*>> heap_descriptor_infos;
+static gtl::parallel_flat_hash_map<reshade::api::swapchain*, reshade::api::swapchain_desc> upgraded_swapchains;
 
 static bool attached = false;
 static std::vector<SwapChainUpgradeTarget> swap_chain_upgrade_targets = {};
@@ -682,7 +683,7 @@ inline void RewriteRenderTargets(
   bool changed = false;
   std::vector<std::pair<int, utils::resource::ResourceViewInfo*>> infos;
 
-  std::shared_lock lock(utils::resource::store->resource_view_infos_mutex);
+  // std::shared_lock lock(utils::resource::store->resource_view_infos_mutex);
   for (uint32_t i = 0; i < count; ++i) {
     const reshade::api::resource_view resource_view = rtvs[i];
     if (resource_view.handle == 0u) continue;
@@ -691,7 +692,7 @@ inline void RewriteRenderTargets(
       infos.emplace_back(i, &pair->second);
     }
   }
-  lock.unlock();
+  // lock.unlock();
 
   for (const auto& [i, info] : infos) {
     auto new_resource_view = GetResourceViewClone(info);
@@ -1044,7 +1045,7 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
           .descriptors = &srv,
       });
   if (shader_injection_size != 0u) {
-    const std::shared_lock lock(renodx::utils::mutex::global_mutex);
+    // const std::shared_lock lock(renodx::utils::mutex::global_mutex);
     cmd_list->push_constants(
         reshade::api::shader_stage::all_graphics,  // Used by reshade to specify graphics or compute
         data->swap_chain_proxy_layout,
@@ -1297,10 +1298,10 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   auto old_present_flags = desc.present_flags;
   auto old_buffer_count = desc.back_buffer_count;
 
-  if (!use_resize_buffer && is_dxgi && !use_device_proxy) {
+  if (!use_resize_buffer && !use_device_proxy) {
     desc.back_buffer.texture.format = target_format;
 
-    if (desc.back_buffer_count == 1) {
+    if (is_dxgi && desc.back_buffer_count == 1) {
       // 0 is only for resize, so if game uses more than 2 buffers, that will be retained
       desc.back_buffer_count = 2;
     }
@@ -1415,11 +1416,12 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   auto primary_swapchain_desc = device->get_resource_desc(swapchain->get_current_back_buffer());
 
   {
-    const std::unique_lock lock(data->mutex);
+    // const std::unique_lock lock(data->mutex);
     if (upgraded_swapchain_desc.has_value()) {
-      data->upgraded_swapchains[swapchain] = upgraded_swapchain_desc.value();
+      upgraded_swapchains[swapchain] = upgraded_swapchain_desc.value();
       upgraded_swapchain_desc.reset();
     }
+    const std::unique_lock lock(data->mutex);
     reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnInitSwapchain(reset resource upgrade)");
     data->resource_upgrade_finished = false;
     const uint32_t len = swap_chain_upgrade_targets.size();
@@ -1480,7 +1482,7 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
 static bool IsUpgraded(reshade::api::swapchain* swapchain) {
   auto* data = renodx::utils::data::Get<DeviceData>(swapchain->get_device());
   if (data == nullptr) return false;
-  return data->upgraded_swapchains.contains(swapchain);
+  return upgraded_swapchains.contains(swapchain);
 }
 
 inline bool OnCreateResource(
@@ -1909,7 +1911,7 @@ inline bool OnCopyBufferToTexture(
     return true;
   }
 
-  std::shared_lock lock(utils::resource::store->resource_infos_mutex);
+  // std::shared_lock lock(utils::resource::store->resource_infos_mutex);
   auto source_pair = utils::resource::store->resource_infos.find(source.handle);
   if (source_pair == utils::resource::store->resource_infos.end()) {
     // assert(source_pair != utils::resource::store->resource_infos.end());
@@ -1918,11 +1920,11 @@ inline bool OnCopyBufferToTexture(
 
   auto destination_pair = utils::resource::store->resource_infos.find(dest.handle);
   if (destination_pair == utils::resource::store->resource_infos.end()) {
-    assert(destination_pair != utils::resource::store->resource_infos.end());
+    // assert(destination_pair != utils::resource::store->resource_infos.end());
     return false;
   }
 
-  lock.unlock();
+  // lock.unlock();
 
   auto& source_info = source_pair->second;
   auto& destination_info = destination_pair->second;
@@ -2195,7 +2197,7 @@ inline bool OnCopyResource(
                            == reshade::api::format_to_typeless(dest_desc_new.texture.format));
 
   if (use_resource_cloning) {
-    std::shared_lock lock(utils::resource::store->resource_infos_mutex);
+    // std::shared_lock lock(utils::resource::store->resource_infos_mutex);
 
     auto source_pair = utils::resource::store->resource_infos.find(source.handle);
     if (source_pair == utils::resource::store->resource_infos.end()) {
@@ -2209,7 +2211,7 @@ inline bool OnCopyResource(
       return false;
     }
 
-    lock.unlock();
+    // lock.unlock();
 
     auto& source_info = source_pair->second;
     auto& destination_info = destination_pair->second;
@@ -2307,7 +2309,7 @@ inline bool OnUpdateDescriptorTables(
 
   std::vector<std::pair<std::pair<int, int>, utils::resource::ResourceViewInfo*>> infos;
   {
-    std::shared_lock lock(utils::resource::store->resource_view_infos_mutex);
+    // std::shared_lock lock(utils::resource::store->resource_view_infos_mutex);
     for (uint32_t i = 0; i < count; ++i) {
       const auto& update = updates[i];
       if (update.table.handle == 0u) continue;
@@ -2433,9 +2435,9 @@ inline bool OnCopyDescriptorTables(
   for (uint32_t i = 0; i < count; i++) {
     const auto& copy = copies[i];
     for (uint32_t j = 0; j < copy.count; j++) {
-      auto* data = renodx::utils::data::Get<DeviceData>(device);
-      if (data == nullptr) return false;
-      const std::unique_lock lock(data->mutex);
+      // auto* data = renodx::utils::data::Get<DeviceData>(device);
+      // if (data == nullptr) return false;
+      // const std::unique_lock lock(data->mutex);
 
       reshade::api::descriptor_heap source_heap = {0};
       uint32_t source_base_offset = 0;
@@ -2445,17 +2447,17 @@ inline bool OnCopyDescriptorTables(
       device->get_descriptor_heap_offset(copy.dest_table, copy.dest_binding + j, copy.dest_array_offset, &dest_heap, &dest_base_offset);
 
       bool erase = false;
-      if (auto pair = data->heap_descriptor_infos.find(source_heap.handle); pair != data->heap_descriptor_infos.end()) {
+      if (auto pair = heap_descriptor_infos.find(source_heap.handle); pair != heap_descriptor_infos.end()) {
         auto& source_map = pair->second;
         if (auto pair2 = source_map.find(source_base_offset); pair2 != source_map.end()) {
           if (dest_heap.handle == source_heap.handle) {
             source_map[dest_base_offset] = source_map[source_base_offset];
           } else {
-            if (auto pair3 = data->heap_descriptor_infos.find(dest_heap.handle); pair3 != data->heap_descriptor_infos.end()) {
+            if (auto pair3 = heap_descriptor_infos.find(dest_heap.handle); pair3 != heap_descriptor_infos.end()) {
               auto& dest_map = pair3->second;
               dest_map[dest_base_offset] = source_map[source_base_offset];
             } else {
-              data->heap_descriptor_infos[dest_heap.handle] = {{
+              heap_descriptor_infos[dest_heap.handle] = {{
                   dest_base_offset,
                   source_map[source_base_offset],
               }};
@@ -2481,7 +2483,7 @@ inline bool OnCopyDescriptorTables(
         erase = true;
       }
       if (erase) {
-        if (auto pair3 = data->heap_descriptor_infos.find(dest_heap.handle); pair3 != data->heap_descriptor_infos.end()) {
+        if (auto pair3 = heap_descriptor_infos.find(dest_heap.handle); pair3 != heap_descriptor_infos.end()) {
           auto& dest_map = pair3->second;
           dest_map.erase(dest_base_offset);
         }
@@ -2512,9 +2514,6 @@ inline void OnBindDescriptorTables(
   bool built_new_tables = false;
   bool active = false;
 
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  if (data == nullptr) return;
-  const std::unique_lock lock(data->mutex);
   reshade::api::descriptor_heap heap = {0};
   uint32_t base_offset = 0;
   for (uint32_t i = 0; i < count; ++i) {
@@ -2522,7 +2521,7 @@ inline void OnBindDescriptorTables(
 
     HeapDescriptorInfo* info = nullptr;
     bool found_info = false;
-    if (auto pair = data->heap_descriptor_infos.find(heap.handle); pair != data->heap_descriptor_infos.end()) {
+    if (auto pair = heap_descriptor_infos.find(heap.handle); pair != heap_descriptor_infos.end()) {
       auto& map = pair->second;
       if (auto pair2 = map.find(base_offset); pair2 != map.end()) {
         info = pair2->second;
@@ -2780,6 +2779,53 @@ inline void OnBindRenderTargetsAndDepthStencil(
   RewriteRenderTargets(cmd_list, count, rtvs, dsv);
 }
 
+static void OnBeginRenderPass(
+    reshade::api::command_list* cmd_list,
+    uint32_t count, const reshade::api::render_pass_render_target_desc* rts,
+    const reshade::api::render_pass_depth_stencil_desc* ds) {
+  if (count == 0u) return;
+
+  reshade::api::render_pass_render_target_desc* new_rts = nullptr;
+  bool changed = false;
+  std::vector<std::pair<int, utils::resource::ResourceViewInfo*>> infos;
+
+  // std::shared_lock lock(utils::resource::store->resource_view_infos_mutex);
+  for (uint32_t i = 0; i < count; ++i) {
+    const reshade::api::resource_view resource_view = rts[i].view;
+    if (resource_view.handle == 0u) continue;
+    auto pair = utils::resource::store->resource_view_infos.find(resource_view.handle);
+    if (pair != utils::resource::store->resource_view_infos.end()) {
+      infos.emplace_back(i, &pair->second);
+    }
+  }
+  // lock.unlock();
+
+  for (const auto& [i, info] : infos) {
+    auto new_resource_view = GetResourceViewClone(info);
+    if (new_resource_view.handle == 0u) continue;
+
+#ifdef DEBUG_LEVEL_1
+    std::stringstream s;
+    s << "mods::swapchain::RewriteRenderTargets(rewrite ";
+    s << PRINT_PTR(info->view.handle);
+    s << " => ";
+    s << PRINT_PTR(new_resource_view.handle);
+    s << ") [" << i << "]";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
+    if (!changed) {
+      const size_t size = count * sizeof(reshade::api::render_pass_render_target_desc);
+      new_rts = static_cast<reshade::api::render_pass_render_target_desc*>(malloc(size));
+      memcpy(new_rts, rts, size);
+      changed = true;
+    }
+    new_rts[i].view = new_resource_view;
+  }
+  if (!changed) return;
+  cmd_list->begin_render_pass(count, new_rts, ds);
+  free(new_rts);
+}
+
 inline bool OnClearRenderTargetView(
     reshade::api::command_list* cmd_list,
     reshade::api::resource_view rtv,
@@ -2848,7 +2894,7 @@ inline bool OnResolveTextureRegion(
     uint32_t dest_y,
     uint32_t dest_z,
     reshade::api::format format) {
-  std::shared_lock lock(utils::resource::store->resource_infos_mutex);
+  // std::shared_lock lock(utils::resource::store->resource_infos_mutex);
 
   auto source_pair = utils::resource::store->resource_infos.find(source.handle);
   if (source_pair == utils::resource::store->resource_infos.end()) {
@@ -2862,7 +2908,7 @@ inline bool OnResolveTextureRegion(
     return false;
   }
 
-  lock.unlock();
+  // lock.unlock();
 
   auto& source_info = source_pair->second;
   auto& destination_info = destination_pair->second;
@@ -2897,7 +2943,7 @@ inline void OnBarrier(
   std::unordered_set<uint64_t> checked_resources;
   std::vector<std::pair<int, utils::resource::ResourceInfo*>> infos;
   {
-    std::shared_lock lock(utils::resource::store->resource_infos_mutex);
+    // std::shared_lock lock(utils::resource::store->resource_infos_mutex);
     for (uint32_t i = 0; i < count; ++i) {
       if (old_states[i] == reshade::api::resource_usage::undefined) continue;
       const auto& resource = resources[i];
@@ -2957,7 +3003,7 @@ inline bool OnCopyTextureRegion(
   auto source_desc_new = source_desc;
   auto dest_desc_new = dest_desc;
   if (use_resource_cloning) {
-    std::shared_lock lock(utils::resource::store->resource_infos_mutex);
+    // std::shared_lock lock(utils::resource::store->resource_infos_mutex);
     auto source_pair = utils::resource::store->resource_infos.find(source.handle);
     if (source_pair == utils::resource::store->resource_infos.end()) {
       assert(source_pair != utils::resource::store->resource_infos.end());
@@ -2970,7 +3016,7 @@ inline bool OnCopyTextureRegion(
       return false;
     }
 
-    lock.unlock();
+    // lock.unlock();
 
     auto& source_info = source_pair->second;
     auto& destination_info = destination_pair->second;
@@ -3206,6 +3252,8 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
         // reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
 
         reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
+        reshade::register_event<reshade::addon_event::begin_render_pass>(OnBeginRenderPass);
+
         reshade::register_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
         reshade::register_event<reshade::addon_event::update_descriptor_tables>(OnUpdateDescriptorTables);
         // reshade::register_event<reshade::addon_event::copy_descriptor_tables>(OnCopyDescriptorTables);

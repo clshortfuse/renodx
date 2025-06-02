@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <crc32_hash.hpp>
+#include <gtl/phmap.hpp>
 #include <include/reshade.hpp>
 
 #include "../utils/format.hpp"
@@ -48,7 +49,7 @@ struct CustomShader {
   std::unordered_map<reshade::api::device_api, std::vector<uint8_t>> code_by_device;
 };
 
-using CustomShaders = std::unordered_map<uint32_t, CustomShader>;
+using CustomShaders = gtl::parallel_node_hash_map<uint32_t, CustomShader>;
 
 static std::function<bool(reshade::api::command_list*)> invoked_custom_swapchain_shader = nullptr;
 
@@ -87,9 +88,8 @@ static int32_t expected_constant_buffer_index = -1;
 static uint32_t expected_constant_buffer_space = 0;
 static uint32_t constant_buffer_offset = 0;
 
-static std::shared_mutex unmodified_shaders_mutex;
-static std::unordered_set<uint32_t> unmodified_shaders;
-static std::unordered_map<uint32_t, CustomShader> custom_shaders;
+static gtl::parallel_flat_hash_set<uint32_t> unmodified_shaders;
+static gtl::parallel_node_hash_map<uint32_t, CustomShader> custom_shaders;
 
 static std::unordered_map<uint32_t, uint32_t> counted_shaders;
 
@@ -696,7 +696,7 @@ inline bool PushShaderInjections(
 #endif
 
   if (resource_tag_float != nullptr) {
-    const std::unique_lock lock(renodx::utils::mutex::global_mutex);
+    // const std::unique_lock lock(renodx::utils::mutex::global_mutex);
     *resource_tag_float = resource_tag;
   }
 
@@ -709,7 +709,7 @@ inline bool PushShaderInjections(
     shader_stage = reshade::api::shader_stage::all_graphics;
   }
 
-  const std::shared_lock lock(renodx::utils::mutex::global_mutex);
+  // const std::shared_lock lock(renodx::utils::mutex::global_mutex);
   cmd_list->push_constants(
       shader_stage,
       injection_layout,
@@ -738,7 +738,7 @@ inline bool HandleStatesAndBypass(
         index != renodx::utils::shader::COMPUTE_INDEX
         && trace_unmodified_shaders
         && renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list)) {
-      std::unique_lock lock(unmodified_shaders_mutex);
+      // std::unique_lock lock(unmodified_shaders_mutex);
       if (unmodified_shaders.insert(shader_hash).second) {
         std::stringstream s;
         s << "mods::shader::HandlePreDraw(unmodified ";

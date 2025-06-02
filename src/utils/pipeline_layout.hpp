@@ -6,13 +6,14 @@
 #pragma once
 
 #include <cassert>
-#include <include/reshade.hpp>
-#include <include/reshade_api_pipeline.hpp>
 #include <mutex>
 #include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
 #include <vector>
+
+#include <gtl/phmap.hpp>
+#include <include/reshade.hpp>
 
 #include "./data.hpp"
 #include "./format.hpp"
@@ -31,8 +32,7 @@ struct PipelineLayoutData {
 };
 
 static struct Store {
-  std::shared_mutex pipeline_layout_data_mutex;
-  std::unordered_map<uint64_t, PipelineLayoutData> pipeline_layout_data;
+  gtl::parallel_node_hash_map<uint64_t, PipelineLayoutData> pipeline_layout_data;
 } local_store;
 
 static Store* store = &local_store;
@@ -41,14 +41,14 @@ static bool is_primary_hook = false;
 
 static PipelineLayoutData* GetPipelineLayoutData(const reshade::api::pipeline_layout& layout, bool create = false) {
   {
-    std::shared_lock lock(store->pipeline_layout_data_mutex);
+    // std::shared_lock lock(store->pipeline_layout_data_mutex);
     auto pair = store->pipeline_layout_data.find(layout.handle);
     if (pair != store->pipeline_layout_data.end()) return &pair->second;
     if (!create) return nullptr;
   }
 
   {
-    std::unique_lock write_lock(store->pipeline_layout_data_mutex);
+    // std::unique_lock write_lock(store->pipeline_layout_data_mutex);
     auto& info = store->pipeline_layout_data.insert({layout.handle, PipelineLayoutData({.layout = layout})}).first->second;
     return &info;
   }
@@ -132,7 +132,7 @@ static void OnInitPipelineLayout(
 static void OnDestroyPipelineLayout(
     reshade::api::device* device,
     reshade::api::pipeline_layout layout) {
-  const std::unique_lock lock(store->pipeline_layout_data_mutex);
+  // const std::unique_lock lock(store->pipeline_layout_data_mutex);
   store->pipeline_layout_data.erase(layout.handle);
 }
 
