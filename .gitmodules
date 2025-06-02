@@ -5,3 +5,7 @@
 [submodule "external/Streamline"]
 	path = external/Streamline
 	url = https://github.com/NVIDIAGameWorks/Streamline.git
+
+[submodule "external/parallel-hashmap"]
+	path = external/parallel-hashmap
+	url = https://github.com/greg7mdp/parallel-hashmap
