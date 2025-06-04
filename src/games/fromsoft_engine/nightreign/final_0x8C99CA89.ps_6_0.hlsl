@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
 Texture2D<float4> HDRScene : register(t0);
 
@@ -30,26 +30,18 @@ float4 main(
   float4 _10 = HDRScene.Sample(SS_ClampLinear, float2(TEXCOORD_1.x, TEXCOORD_1.y));  // Directly from tonemapper
   float4 _14 = UIScene.Sample(SS_ClampLinear, float2(TEXCOORD_1.x, TEXCOORD_1.y));
 
+  if (HandleFinal(_10, _14, SV_Target)) {
+    return SV_Target;
+  }
+
   // Scene gets decoded here, then again when merged with UI
   float _33 = exp2(log2(_10.x * 2.009232997894287f) * 1.5f);
   float _34 = exp2(log2(_10.y * 2.009232997894287f) * 1.5f);
   float _35 = exp2(log2(_10.z * 2.009232997894287f) * 1.5f);
 
-  if (RENODX_TONE_MAP_TYPE) {
-    _10.rgb = renodx::color::pq::DecodeSafe(_10.rgb, RENODX_DIFFUSE_WHITE_NITS);
-
-    // Set it up for ui blending
-    _10.rgb = renodx::color::gamma::EncodeSafe(_10.rgb);
-    _33 = _10.r;
-    _34 = _10.g;
-    _35 = _10.b;
-  }
-
   // default value, brightness slider;
   // 1 = 203.0 nits
   float uiScale = uiMaxLumScale;
-  HandleUIScale(_14);
-  uiScale = 1.f;
 
   float _54;
   float _70;
@@ -100,10 +92,6 @@ float4 main(
   float _92 = (pow(_83, 2.200000047683716f));
   float _93 = (pow(_84, 2.200000047683716f));
   float _94 = (pow(_85, 2.200000047683716f));
-
-  if (RENODX_TONE_MAP_TYPE) {
-    return HandleFinalEncoding(float3(_92, _93, _94));
-  }
 
   float _134 = PQEncodeLUT.Sample(SS_ClampLinear, float2(((exp2(log2(mad(_94, (mtxColorConvert[0].z), mad(_93, (mtxColorConvert[0].y), ((mtxColorConvert[0].x) * _92))) * 0.019999999552965164f) * 0.25f) * 0.99609375f) + 0.001953125f), 0.0f));
   float _136 = PQEncodeLUT.Sample(SS_ClampLinear, float2(((exp2(log2(mad(_94, (mtxColorConvert[1].z), mad(_93, (mtxColorConvert[1].y), ((mtxColorConvert[1].x) * _92))) * 0.019999999552965164f) * 0.25f) * 0.99609375f) + 0.001953125f), 0.0f));

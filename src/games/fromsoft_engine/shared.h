@@ -1,5 +1,5 @@
-#ifndef SRC_ELDEN_RING_NIGHTREIGN_H_
-#define SRC_ELDEN_RING_NIGHTREIGN_H_
+#ifndef SRC_FROMSOFT_ENGINE_H_
+#define SRC_FROMSOFT_ENGINE_H_
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -47,4 +47,4 @@ cbuffer shader_injection : register(b13) {
 
 #endif
 
-#endif  // SRC_ELDEN_RING_NIGHTREIGN_H_
+#endif  // SRC_FROMSOFT_ENGINE_H_

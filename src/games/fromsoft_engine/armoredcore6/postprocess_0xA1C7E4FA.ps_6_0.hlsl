@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "../common.hlsl"
 
 Texture2D<float4> g_SourceTexture : register(t0);
 
@@ -38,18 +38,9 @@ cbuffer cbToneMap : register(b1) {
   uint4 g_vMaxSampleCount : packoffset(c023.x);
   float4 g_vScenePreExposure : packoffset(c024.x);
   float4 g_vCameraParam : packoffset(c025.x);
-  float4 g_vLocalExposureParam : packoffset(c026.x);
-  float4 g_vLocalExposureTexScale : packoffset(c027.x);
-  uint g_LocalExposureMode : packoffset(c028.x);
-  float g_LocalExposureDetailBoost : packoffset(c028.y);
-  float2 g_LocalExposureLumMinMax : packoffset(c028.z);
-  float g_LocalExposureModeRate : packoffset(c029.x);
-  uint padd0 : packoffset(c029.y);
-  uint2 padd1 : packoffset(c029.z);
-  float4 g_vVignettingColor : packoffset(c030.x);
 };
 
-SamplerState SS_ClampLinear : register(s3);
+SamplerState SS_ClampLinear : register(s1);
 
 float4 main(
     noperspective float4 SV_Position: SV_Position,

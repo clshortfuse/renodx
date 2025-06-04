@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
 Texture2D<float4> g_SourceTexture : register(t0);
 
@@ -65,7 +65,6 @@ float4 main(
     noperspective float4 SV_Position: SV_Position,
     linear float3 TEXCOORD: TEXCOORD) : SV_Target {
   float4 SV_Target;
-  float3 test;
   float _15 = g_dynamicScreenPercentage.x * TEXCOORD.x;
   float _16 = g_dynamicScreenPercentage.y * TEXCOORD.y;
   float4 _17 = g_GlareAccTexture.SampleLevel(SS_ClampLinear, float2(_15, _16), 0.0f);
@@ -155,16 +154,8 @@ float4 main(
   [branch]
   if (!(g_bEnableFlags.z == 0)) {
     // Only run in HDR, game launches in SDR
-    if (RENODX_TONE_MAP_TYPE) {
-      float3 sdr_gamma = _258.rgb;
-      float3 sdr_linear = renodx::color::gamma::DecodeSafe(sdr_gamma, vanilla_gamma);
-      float3 outputColor = renodx::draw::ToneMapPass(untonemapped, sdr_linear);
-      outputColor = renodx::color::correct::GammaSafe(outputColor);
-      outputColor = renodx::color::pq::EncodeSafe(outputColor, RENODX_DIFFUSE_WHITE_NITS);
-
-      _342 = outputColor.r;
-      _343 = outputColor.g;
-      _344 = outputColor.b;
+    if (Tonemap(untonemapped, _258, SV_Target)) {
+      return SV_Target;
     } else {
       // HDR Inv tonemap
 
