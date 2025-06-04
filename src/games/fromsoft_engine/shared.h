@@ -18,6 +18,9 @@ struct ShaderInjectData {
   float tone_map_flare;
   float color_grade_color_space;
   float custom_fx_chromatic_aberration;
+  float custom_random;
+  float custom_grain_type;
+  float custom_grain_strength;
 };
 
 #ifndef __cplusplus
@@ -42,6 +45,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_BLOWOUT                  shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                    shader_injection.tone_map_flare
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE     shader_injection.color_grade_color_space
+#define RENODX_GAMMA_CORRECTION                  GAMMA_CORRECTION_NONE
 #define RENODX_SWAP_CHAIN_ENCODING               ENCODING_PQ
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE   color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_DECODING               GAMMA_CORRECTION_NONE
@@ -55,6 +59,9 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_COLOR_GRADE_HUE_CORRECTION        0.f
 #define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION 0.f
 #define CUSTOM_COLOR_GRADE_HUE_SHIFT             1.f
+#define CUSTOM_GRAIN_TYPE                        shader_injection.custom_grain_type
+#define CUSTOM_GRAIN_STRENGTH                    shader_injection.custom_grain_strength
+#define CUSTOM_RANDOM                            shader_injection.custom_random
 #include "../../shaders/renodx.hlsl"
 
 #endif

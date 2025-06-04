@@ -50,7 +50,17 @@ void main(
   r0.xyz = g_GlareLuminance.xxx * r0.xyz;
   r1.xyz = g_SourceTexture.SampleLevel(SS_ClampLinear_s, v1.xy, 0).xyz;
   r1.xyz = g_ToneMapSceneLumScale.xyz * r1.xyz;
+
   float3 untonemapped = r1.rgb;
+  float y_in = renodx::color::y::from::NTSC1953(untonemapped);
+  float y_out = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, float2((((y_in / (y_in + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
+  float midgray = 0.18f;
+  float midgray_lum = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, float2((((midgray / (midgray + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
+
+  float3 luminance_tonemapped = untonemapped * (y_out / y_in);
+  untonemapped = untonemapped * (midgray_lum / 0.18f);
+  untonemapped = lerp(luminance_tonemapped, untonemapped, saturate(luminance_tonemapped));
+
   r0.xyz = r1.xyz * v1.zzz + r0.xyz;
   r1.xyz = float3(0.200000003, 0.200000003, 0.200000003) + r0.xyz;
   r0.xyz = r0.xyz / r1.xyz;
@@ -84,7 +94,7 @@ void main(
       r0.xyz = r0.xyz * float3(0.9375, 0.9375, 0.9375) + float3(0.03125, 0.03125, 0.03125);
       r1.xyz = g_ColorGradingLUTTexture.Sample(SS_ClampLinear_s, r0.xyz).xyz;
 
-      Tonemap(untonemapped, r1, o0);
+      Tonemap(untonemapped, r1, o0, v1, v0);
       return;
     } else {
       r1.xyz = log2(r0.xyz);
