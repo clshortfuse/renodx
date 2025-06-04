@@ -65,6 +65,15 @@ float4 main(
 
   float3 untonemapped = float3(_65, _66, _67);
 
+  float y_in = renodx::color::y::from::NTSC1953(untonemapped);
+  float y_out = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((y_in / (y_in + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
+  float midgray = 0.18f;
+  float midgray_lum = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((midgray / (midgray + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
+
+  float3 luminance_tonemapped = untonemapped * (y_out / y_in);
+  untonemapped = untonemapped * (midgray_lum / 0.18f);
+  untonemapped = lerp(luminance_tonemapped, untonemapped, saturate(luminance_tonemapped));
+
   float4 _74 = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((_65 / (_65 + 0.20000000298023224f)), 0.0f), 0.0f);
   float4 _76 = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((_66 / (_66 + 0.20000000298023224f)), 0.0f), 0.0f);
   float4 _78 = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((_67 / (_67 + 0.20000000298023224f)), 0.0f), 0.0f);
@@ -80,7 +89,7 @@ float4 main(
   float _216;
   [branch]
   if (!(g_bEnableFlags.z == 0)) {
-    if (Tonemap(untonemapped, _130, SV_Target)) {
+    if (Tonemap(untonemapped, _130, SV_Target, TEXCOORD, SV_Position)) {
       return SV_Target;
     } else {
       float _135 = 1.0f / g_ToneMapParam.z;

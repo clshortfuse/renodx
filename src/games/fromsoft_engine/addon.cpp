@@ -16,12 +16,40 @@
 #include "../../mods/swapchain.hpp"
 #include "../../templates/settings.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
+
+renodx::utils::settings::Setting* CreateDefault0PercentSetting(const renodx::utils::settings::Setting& setting) {
+  auto* new_setting = new renodx::utils::settings::Setting(setting);
+  new_setting->default_value = 0.f;
+  new_setting->parse = [](float value) { return value * 0.01f; };
+  return new_setting;
+}
+
+renodx::utils::settings::Setting* CreateDefault50PercentSetting(const renodx::utils::settings::Setting& setting) {
+  auto* new_setting = new renodx::utils::settings::Setting(setting);
+  new_setting->default_value = 50.f;
+  new_setting->parse = [](float value) { return value * 0.02f; };
+  return new_setting;
+}
+
+renodx::utils::settings::Setting* CreateDefault100PercentSetting(const renodx::utils::settings::Setting& setting) {
+  auto* new_setting = new renodx::utils::settings::Setting(setting);
+  new_setting->default_value = 100.f;
+  new_setting->parse = [](float value) { return value * 0.01f; };
+  return new_setting;
+}
+
+renodx::utils::settings::Setting* CreateMultiLabelSetting(const renodx::utils::settings::Setting& setting) {
+  auto* new_setting = new renodx::utils::settings::Setting(setting);
+  new_setting->value_type = renodx::utils::settings::SettingValueType::INTEGER;
+  return new_setting;
+}
 
 ShaderInjectData shader_injection;
 
@@ -49,6 +77,22 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
                                                                                                 .section = "Effects",
                                                                                                 .tooltip = "Enable chromatic aberration",
                                                                                                 .labels = {"Disabled", "Enabled"},
+                                                                                                .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
+                                                                                            }),
+                                                                                            CreateMultiLabelSetting({
+                                                                                                .key = "FxGrainType",
+                                                                                                .binding = &shader_injection.custom_grain_type,
+                                                                                                .default_value = 0.f,
+                                                                                                .label = "Grain Type",
+                                                                                                .section = "Effects",
+                                                                                                .labels = {"Vanilla (Dithering Noise)", "Perceptual"},
+                                                                                                .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
+                                                                                            }),
+                                                                                            CreateDefault50PercentSetting({
+                                                                                                .key = "FxGrainStrength",
+                                                                                                .binding = &shader_injection.custom_grain_strength,
+                                                                                                .label = "Grain Strength",
+                                                                                                .section = "Effects",
                                                                                                 .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
                                                                                             }),
                                                                                             new renodx::utils::settings::Setting{
@@ -210,12 +254,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::SetUseHDR10();
 
         /* renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-            .old_format = reshade::api::format::r10g10b10a2_unorm,
+            .old_format = reshade::api::format::r11g11b10_float,
             .new_format = reshade::api::format::r16g16b16a16_float,
-            .dimensions = {.width = 32, .height = 32, .depth = 32},
-            .resource_tag = 1.f,
+            .use_resource_view_cloning = true
         }); */
 
+        renodx::utils::random::binds.push_back(&shader_injection.custom_random);
         initialized = true;
       }
 

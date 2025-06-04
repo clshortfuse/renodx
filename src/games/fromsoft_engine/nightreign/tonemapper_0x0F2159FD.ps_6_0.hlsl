@@ -132,16 +132,15 @@ float4 main(
   float3 untonemapped = float3(_177, _178, _179);
 
   // Experimental
-  /*
-    float y_in = renodx::color::y::from::BT709(untonemapped);
-    float y_out = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((y_in / (y_in + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
-    float midgray = 0.18f;
-    float midgray_lum = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((midgray / (midgray + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
 
-    float3 luminance_tonemapped = untonemapped * (y_out / y_in);
-    untonemapped = untonemapped * (midgray_lum / 0.18f);
-    untonemapped = lerp(luminance_tonemapped, untonemapped, saturate(luminance_tonemapped));
-   */
+  float y_in = renodx::color::y::from::NTSC1953(untonemapped);
+  float y_out = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((y_in / (y_in + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
+  float midgray = 0.18f;
+  float midgray_lum = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((midgray / (midgray + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
+
+  float3 luminance_tonemapped = untonemapped * (y_out / y_in);
+  untonemapped = untonemapped * (midgray_lum / 0.18f);
+  untonemapped = lerp(luminance_tonemapped, untonemapped, saturate(luminance_tonemapped));
 
   float4 _192 = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((_177 / (_177 + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f);
   float4 _194 = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((_178 / (_178 + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f);
@@ -170,7 +169,7 @@ float4 main(
     float midgray_lum = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((midgray / (midgray + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r; */
 
     // Only run in HDR, game launches in SDR
-    if (Tonemap(untonemapped, _258, SV_Target)) {
+    if (Tonemap(untonemapped, _258, SV_Target, TEXCOORD, SV_Position)) {
       return SV_Target;
     } else {
       // HDR Inv tonemap
