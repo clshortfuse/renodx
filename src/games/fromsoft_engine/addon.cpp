@@ -102,6 +102,11 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
                                                                                             },
                                                                                             new renodx::utils::settings::Setting{
                                                                                                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                                                                                                .label = " - Ingame HDR must be turned ON!",
+                                                                                                .section = "Instructions",
+                                                                                            },
+                                                                                            new renodx::utils::settings::Setting{
+                                                                                                .value_type = renodx::utils::settings::SettingValueType::TEXT,
                                                                                                 .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse.",
                                                                                                 .section = "About",
                                                                                             },
@@ -157,7 +162,7 @@ bool initialized = false;
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Elden Ring: Nightreign";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Fromsoft Engine";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
