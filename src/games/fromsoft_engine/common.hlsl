@@ -25,7 +25,7 @@ float3 vanillaBlend(float3 scene_linear, float4 ui_gamma) {
 void HandleUIScale(inout float4 ui_color_gamma) {
   float3 ui_color_linear = renodx::color::gamma::DecodeSafe(ui_color_gamma.rgb);
 
-  ui_color_linear = renodx::color::correct::GammaSafe(ui_color_linear);
+  // ui_color_linear = renodx::color::correct::GammaSafe(ui_color_linear);
   ui_color_linear *= RENODX_GRAPHICS_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
 
   ui_color_gamma.rgb = renodx::color::gamma::EncodeSafe(ui_color_linear.rgb);
@@ -40,10 +40,10 @@ float4 HandleEncoding(float3 final_color_linear) {
 bool Tonemap(float3 untonemapped_linear, float4 sdr_graded_gamma, inout float4 SV_TARGET, float vanilla_gamma = 2.2f) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
 
-  float3 sdr_linear = renodx::color::gamma::DecodeSafe(sdr_graded_gamma.rgb, vanilla_gamma);
+  float3 sdr_linear = renodx::color::gamma::DecodeSafe(sdr_graded_gamma.rgb);
   renodx::draw::Config config = renodx::draw::BuildConfig();
   float3 outputColor = renodx::draw::ToneMapPass(untonemapped_linear, sdr_linear);
-  outputColor = renodx::color::correct::GammaSafe(outputColor);
+  // outputColor = renodx::color::correct::GammaSafe(outputColor);
   outputColor = renodx::color::pq::EncodeSafe(outputColor, RENODX_DIFFUSE_WHITE_NITS);
 
   SV_TARGET = float4(outputColor, 1.f);
