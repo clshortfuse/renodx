@@ -35,7 +35,7 @@ float4 main(
   float4 _16 = HDRScene.Sample(LinearClampSampler, float2((g_HDRTexturePercentage.x * TEXCOORD_1.x), (g_HDRTexturePercentage.y * TEXCOORD_1.y)));
   float4 _25 = UIScene.Sample(LinearClampSampler, float2((g_UITexturePercentage.x * TEXCOORD_1.x), (g_UITexturePercentage.y * TEXCOORD_1.y)));
 
-  if (HandleFinal(_16, _25, SV_Target)) {
+  if (HandleFinal(_16, _25, SV_Target, SV_Position)) {
     return SV_Target;
   }
 

@@ -30,7 +30,7 @@ float4 main(
   float4 _10 = HDRScene.Sample(SS_ClampLinear, float2(TEXCOORD_1.x, TEXCOORD_1.y));  // Directly from tonemapper
   float4 _14 = UIScene.Sample(SS_ClampLinear, float2(TEXCOORD_1.x, TEXCOORD_1.y));
 
-  if (HandleFinal(_10, _14, SV_Target)) {
+  if (HandleFinal(_10, _14, SV_Target, SV_Position)) {
     return SV_Target;
   }
 

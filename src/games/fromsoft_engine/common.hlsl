@@ -28,7 +28,23 @@ void ApplyPerChannelCorrection(float3 untonemapped, inout float3 post_tonemap) {
   }
 }
 
-float3 vanillaBlend(float3 scene_linear, float4 ui_gamma) {
+float3 SampleLUT(float3 color_linear, Texture3D<float4> lut, SamplerState lut_sampler) {
+  renodx::lut::Config lut_config = renodx::lut::config::Create();
+  lut_config.lut_sampler = lut_sampler;
+  lut_config.tetrahedral = true;
+  lut_config.type_input = renodx::lut::config::type::GAMMA_2_2;
+  lut_config.type_output = renodx::lut::config::type::GAMMA_2_2;
+  lut_config.scaling = 1.f;
+
+  color_linear = renodx::lut::Sample(
+      ToneMapMaxCLL(color_linear),
+      lut_config,
+      lut);
+
+  return color_linear;
+}
+
+float3 VanillaBlend(float3 scene_linear, float4 ui_gamma) {
   float3 scene_gamma = renodx::color::gamma::EncodeSafe(scene_linear);
   // Luminance of scene in linear space
   float scene_luminance = renodx::color::y::from::NTSC1953(scene_gamma);
@@ -59,17 +75,16 @@ void HandleUIScale(inout float4 ui_color_gamma) {
   ui_color_gamma.rgb = renodx::color::gamma::EncodeSafe(ui_color_linear.rgb);
 }
 
-bool Tonemap(float3 untonemapped_linear, float4 sdr_graded_gamma, inout float4 SV_TARGET, float3 TEXCOORD, float4 SV_Position, float midgray_lum = 0.f, float vanilla_gamma = 2.2f) {
+bool Tonemap(float3 untonemapped_linear, float4 sdr_linear, inout float4 SV_TARGET, float3 TEXCOORD, float midgray_lum = 0.f, float vanilla_gamma = 2.2f) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
   /* if (midgray_lum > 0.f) {
     untonemapped_linear = untonemapped_linear * (midgray_lum / 0.18f);
   } */
-  float3 sdr_linear = renodx::color::gamma::DecodeSafe(sdr_graded_gamma.rgb);
   renodx::draw::Config config = renodx::draw::BuildConfig();
   float3 outputColor = untonemapped_linear;
 
   config.peak_white_nits = 10000.f;
-  outputColor = renodx::draw::UpgradeToneMapByLuminance(outputColor, ToneMapMaxCLL(outputColor), sdr_linear, 1.f);
+  outputColor = renodx::draw::UpgradeToneMapByLuminance(outputColor, ToneMapMaxCLL(outputColor), sdr_linear.rgb, 1.f);
   outputColor = renodx::draw::ToneMapPass(outputColor, config);
   outputColor.rgb = renodx::tonemap::ExponentialRollOff(outputColor.rgb, 0.f, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
   if (CUSTOM_GRAIN_TYPE) {
@@ -79,28 +94,29 @@ bool Tonemap(float3 untonemapped_linear, float4 sdr_graded_gamma, inout float4 S
         CUSTOM_RANDOM,
         CUSTOM_GRAIN_STRENGTH * 0.01f,
         1.f);  // if 1.f = SDR range
-  } else {
-    float random = dot(float2(171.0f, 231.0f), float2(SV_Position.x, SV_Position.y));
-    outputColor = ((((frac(random * 0.009345794096589088f) + -0.5f) * 0.0009775171056389809f) * CUSTOM_GRAIN_STRENGTH) + outputColor.rgb);
   }
   // outputColor = renodx::color::correct::GammaSafe(outputColor);
-  outputColor = renodx::color::bt2020::from::BT709(outputColor);
+  outputColor = renodx::color::bt2020::from::BT709(outputColor.rgb);
   outputColor = renodx::draw::RenderIntermediatePass(outputColor * 100.f);
 
   SV_TARGET = float4(outputColor, 1.f);
   return true;
 }
 
-bool HandleFinal(float4 scene_pq, float4 ui_gamma, inout float4 SV_TARGET) {
+bool HandleFinal(float4 scene_pq, float4 ui_gamma, inout float4 SV_TARGET, float4 SV_Position) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
 
   float3 scene_linear = renodx::draw::InvertIntermediatePass(scene_pq.rgb) / 100.f;
   scene_linear = renodx::color::bt709::from::BT2020(scene_linear);
 
   HandleUIScale(ui_gamma);
-  float3 blended_linear = vanillaBlend(scene_linear, ui_gamma);
+  float3 blended_linear = VanillaBlend(scene_linear, ui_gamma);
 
   SV_TARGET.rgb = renodx::draw::SwapChainPass(blended_linear).rgb;
+  if (!CUSTOM_GRAIN_TYPE) {
+    float random = dot(float2(171.0f, 231.0f), float2(SV_Position.x, SV_Position.y));
+    SV_TARGET.rgb = ((((frac(random * 0.009345794096589088f) + -0.5f) * 0.0009775171056389809f) * CUSTOM_GRAIN_STRENGTH) + SV_TARGET.rgb);
+  }
   SV_TARGET.a = 1.f;
   return true;
 }

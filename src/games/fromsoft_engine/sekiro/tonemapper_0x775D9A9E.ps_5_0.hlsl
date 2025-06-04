@@ -87,14 +87,9 @@ void main(
   r0.xyz = r0.xyz * r0.www;
   if (g_bEnableFlags.z != 0) {
     if (RENODX_TONE_MAP_TYPE) {
-      // Copied from below
-      r0.xyz = log2(r0.xyz);
-      r0.xyz = g_ToneMapParam.zzz * r0.xyz;
-      r0.xyz = exp2(r0.xyz);
-      r0.xyz = r0.xyz * float3(0.9375, 0.9375, 0.9375) + float3(0.03125, 0.03125, 0.03125);
-      r1.xyz = g_ColorGradingLUTTexture.Sample(SS_ClampLinear_s, r0.xyz).xyz;
+      r1.rgb = SampleLUT(r0.xyz, g_ColorGradingLUTTexture, SS_ClampLinear_s);
 
-      Tonemap(untonemapped, r1, o0, v1, v0);
+      Tonemap(untonemapped, r1, o0, v1);
       return;
     } else {
       r1.xyz = log2(r0.xyz);
