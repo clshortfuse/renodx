@@ -52,6 +52,27 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
                                                                                                 .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
                                                                                             }),
                                                                                             new renodx::utils::settings::Setting{
+                                                                                                .key = "ColorGradeColorSpace",
+                                                                                                .binding = &shader_injection.color_grade_color_space,
+                                                                                                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                                                                                                .default_value = 0.f,
+                                                                                                .label = "Color Space",
+                                                                                                .section = "Custom Color Grading",
+                                                                                                .tooltip = "Selects output color space"
+                                                                                                           "\nUS Modern for BT.709 D65."
+                                                                                                           "\nJPN Modern for BT.709 D93."
+                                                                                                           "\nUS CRT for BT.601 (NTSC-U)."
+                                                                                                           "\nJPN CRT for BT.601 ARIB-TR-B9 D93 (NTSC-J)."
+                                                                                                           "\nDefault: US CRT",
+                                                                                                .labels = {
+                                                                                                    "US Modern",
+                                                                                                    "JPN Modern",
+                                                                                                    "US CRT",
+                                                                                                    "JPN CRT",
+                                                                                                },
+                                                                                                .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
+                                                                                            },
+                                                                                            new renodx::utils::settings::Setting{
                                                                                                 .value_type = renodx::utils::settings::SettingValueType::BUTTON,
                                                                                                 .label = "HDR Den Discord",
                                                                                                 .section = "Links",
