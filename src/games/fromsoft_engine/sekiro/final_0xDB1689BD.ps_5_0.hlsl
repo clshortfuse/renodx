@@ -54,7 +54,7 @@ void main(
   r2.xyzw = UIScene.Sample(PointSampler_s, v2.xy).xyzw;
   float4 ui = r2;
   
-  if (HandleFinal(scene, ui, o0)) {
+  if (HandleFinal(scene, ui, o0, v0)) {
     return;
   }
 

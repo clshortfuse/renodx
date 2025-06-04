@@ -88,12 +88,15 @@ float4 main(
   const float vanilla_gamma = 1 / g_ToneMapParam.z;
 
   float4 _130 = g_ColorGradingLUTTexture.Sample(SS_ClampLinear, float3(((exp2(log2(max((_103 * _74.x), 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f), ((exp2(log2(max((_103 * _76.x), 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f), ((exp2(log2(max((_103 * _78.x), 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f)));
+  if (RENODX_TONE_MAP_TYPE) {
+    _130.rgb = SampleLUT((float3(_74.r, _76.r, _78.r) * _103), g_ColorGradingLUTTexture, SS_ClampLinear);
+  }
   float _214;
   float _215;
   float _216;
   [branch]
   if (!(g_bEnableFlags.z == 0)) {
-    if (Tonemap(untonemapped, _130, SV_Target, TEXCOORD, SV_Position)) {
+    if (Tonemap(untonemapped, _130, SV_Target, TEXCOORD)) {
       return SV_Target;
     } else {
       float _135 = 1.0f / g_ToneMapParam.z;

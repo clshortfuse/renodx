@@ -162,14 +162,16 @@ float4 main(
   // g_ToneMapParam.z is 0.4545 according to renderdoc, might be different for SDR (Doubt)
   // Lut takes in gamma 2.2 (0.4545 = 1 / 2.2)
   float4 _258 = g_ColorGradingLUTTexture.Sample(SS_ClampLinear, ((exp2(log2(max(sceneColor.rgb, 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f));
-
+  if (RENODX_TONE_MAP_TYPE) {
+    _258.rgb = SampleLUT(sceneColor, g_ColorGradingLUTTexture, SS_ClampLinear);
+  }
   [branch]
   if (!(g_bEnableFlags.z == 0)) {
     /* float midgray = 0.18f;
     float midgray_lum = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((midgray / (midgray + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r; */
 
     // Only run in HDR, game launches in SDR
-    if (Tonemap(untonemapped, _258, SV_Target, TEXCOORD, SV_Position)) {
+    if (Tonemap(untonemapped, _258, SV_Target, TEXCOORD)) {
       return SV_Target;
     } else {
       // HDR Inv tonemap
