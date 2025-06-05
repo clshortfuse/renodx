@@ -64,20 +64,25 @@ float4 main(
   float _67 = max(0.0f, (mad(_37, (g_mtxColorMultiplyer[2].z), mad(_36, (g_mtxColorMultiplyer[2].y), ((g_mtxColorMultiplyer[2].x) * _35))) + (g_mtxColorMultiplyer[2].w)));
 
   float3 untonemapped = float3(_65, _66, _67);
+  if (CUSTOM_MATCH_MIDGRAY) {
+    float y_in = renodx::color::y::from::NTSC1953(untonemapped);
+    float y_out = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((y_in / (y_in + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
+    const float midgray = 0.18f;
+    float midgray_lum = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((midgray / (midgray + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
 
-  float y_in = renodx::color::y::from::NTSC1953(untonemapped);
-  float y_out = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((y_in / (y_in + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
-  float midgray = 0.18f;
-  float midgray_lum = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((midgray / (midgray + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
+    float3 luminance_tonemapped = untonemapped * (y_out / y_in);
+    untonemapped = untonemapped * (midgray_lum / midgray);
+    untonemapped = lerp(luminance_tonemapped, untonemapped, saturate(luminance_tonemapped));
+  }
 
-  float3 luminance_tonemapped = untonemapped * (y_out / y_in);
-  untonemapped = untonemapped * (midgray_lum / 0.18f);
-  untonemapped = lerp(luminance_tonemapped, untonemapped, saturate(luminance_tonemapped));
+  float3 sdr_tonemapped;
+  if (!ApplyLuminanceSaturationAdjustments(untonemapped, sdr_tonemapped)) {
+    float4 _74 = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((_65 / (_65 + 0.20000000298023224f)), 0.0f), 0.0f);
+    float4 _76 = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((_66 / (_66 + 0.20000000298023224f)), 0.0f), 0.0f);
+    float4 _78 = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((_67 / (_67 + 0.20000000298023224f)), 0.0f), 0.0f);
 
-  float4 _74 = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((_65 / (_65 + 0.20000000298023224f)), 0.0f), 0.0f);
-  float4 _76 = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((_66 / (_66 + 0.20000000298023224f)), 0.0f), 0.0f);
-  float4 _78 = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((_67 / (_67 + 0.20000000298023224f)), 0.0f), 0.0f);
-
+    sdr_tonemapped = float3(_74.x, _76.x, _78.x);
+  }
   float _89 = g_vVignettingParam.x * ((TEXCOORD.x * 2.0f) + -1.0f);
   float _90 = g_vVignettingParam.y * ((TEXCOORD.y * 2.0f) + -1.0f);
   float _97 = saturate(1.0f - saturate((sqrt(dot(float2(_89, _90), float2(_89, _90))) * g_vVignettingParam.z) + g_vVignettingParam.w));
@@ -87,9 +92,9 @@ float4 main(
 
   const float vanilla_gamma = 1 / g_ToneMapParam.z;
 
-  float4 _130 = g_ColorGradingLUTTexture.Sample(SS_ClampLinear, float3(((exp2(log2(max((_103 * _74.x), 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f), ((exp2(log2(max((_103 * _76.x), 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f), ((exp2(log2(max((_103 * _78.x), 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f)));
+  float4 _130 = g_ColorGradingLUTTexture.Sample(SS_ClampLinear, float3(((exp2(log2(max((_103 * sdr_tonemapped.r), 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f), ((exp2(log2(max((_103 * sdr_tonemapped.g), 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f), ((exp2(log2(max((_103 * sdr_tonemapped.b), 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f)));
   if (RENODX_TONE_MAP_TYPE) {
-    _130.rgb = SampleLUT((float3(_74.r, _76.r, _78.r) * _103), g_ColorGradingLUTTexture, SS_ClampLinear);
+    _130.rgb = SampleLUT((sdr_tonemapped * _103), g_ColorGradingLUTTexture, SS_ClampLinear);
   }
   float _214;
   float _215;

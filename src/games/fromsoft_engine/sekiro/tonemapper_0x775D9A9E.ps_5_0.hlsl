@@ -51,28 +51,35 @@ void main(
   r1.xyz = g_SourceTexture.SampleLevel(SS_ClampLinear_s, v1.xy, 0).xyz;
   r1.xyz = g_ToneMapSceneLumScale.xyz * r1.xyz;
 
-  float3 untonemapped = r1.rgb;
-  float y_in = renodx::color::y::from::NTSC1953(untonemapped);
-  float y_out = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, float2((((y_in / (y_in + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
-  float midgray = 0.18f;
-  float midgray_lum = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, float2((((midgray / (midgray + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
-
-  float3 luminance_tonemapped = untonemapped * (y_out / y_in);
-  untonemapped = untonemapped * (midgray_lum / 0.18f);
-  untonemapped = lerp(luminance_tonemapped, untonemapped, saturate(luminance_tonemapped));
-
   r0.xyz = r1.xyz * v1.zzz + r0.xyz;
-  r1.xyz = float3(0.200000003, 0.200000003, 0.200000003) + r0.xyz;
-  r0.xyz = r0.xyz / r1.xyz;
-  r0.w = 0;
-  r1.x = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, r0.xw, 0).x;
-  r1.y = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, r0.yw, 0).x;
-  r1.z = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, r0.zw, 0).x;
-  r1.w = 1;
+
+  float3 untonemapped = r0.rgb;
+
+  if (CUSTOM_MATCH_MIDGRAY) {
+    float y_in = renodx::color::y::from::BT709(untonemapped);
+    float y_out = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, float2((((y_in / (y_in + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
+    const float midgray = 0.18f;
+    float midgray_lum = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, float2((((midgray / (midgray + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
+
+    float3 luminance_tonemapped = untonemapped * (y_out / y_in);
+    untonemapped = untonemapped * (midgray_lum / midgray);
+    untonemapped = lerp(luminance_tonemapped, untonemapped, saturate(luminance_tonemapped));
+  }
+
+  if (!ApplyLuminanceSaturationAdjustments(untonemapped, r1.rgb)) {
+    r1.xyz = float3(0.200000003, 0.200000003, 0.200000003) + r0.xyz;
+    r0.xyz = r0.xyz / r1.xyz;
+    r0.w = 0;
+    r1.x = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, r0.xw, 0).x;
+    r1.y = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, r0.yw, 0).x;
+    r1.z = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, r0.zw, 0).x;
+    r1.w = 1;
+  }
+
   r0.x = dot(r1.xyzw, g_mtxColorMultiplyer._m00_m10_m20_m30);
   r0.y = dot(r1.xyzw, g_mtxColorMultiplyer._m01_m11_m21_m31);
   r0.z = dot(r1.xyzw, g_mtxColorMultiplyer._m02_m12_m22_m32);
-  r0.xyz = max(float3(0, 0, 0), r0.xyz);
+  // r0.xyz = max(float3(0, 0, 0), r0.xyz);
   r1.xy = v1.xy * float2(2, 2) + float2(-1, -1);
   r1.xy = g_vVignettingParam.xy * r1.xy;
   r0.w = dot(r1.xy, r1.xy);
