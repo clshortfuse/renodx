@@ -55,13 +55,14 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_RENO_DRT_TONE_MAP_METHOD          renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_TONE_MAP_PASS_AUTOCORRECTION      1.f
 #define CUSTOM_FX_CHROMATIC_ABERRATION           shader_injection.custom_fx_chromatic_aberration
-#define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   0.5f
-#define CUSTOM_COLOR_GRADE_HUE_CORRECTION        0.f
+#define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   1.f
+#define CUSTOM_COLOR_GRADE_HUE_CORRECTION        1.f
 #define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION 0.f
 #define CUSTOM_COLOR_GRADE_HUE_SHIFT             1.f
 #define CUSTOM_GRAIN_TYPE                        shader_injection.custom_grain_type
 #define CUSTOM_GRAIN_STRENGTH                    shader_injection.custom_grain_strength
 #define CUSTOM_RANDOM                            shader_injection.custom_random
+#define CUSTOM_MATCH_MIDGRAY                     1.f
 #include "../../shaders/renodx.hlsl"
 
 #endif

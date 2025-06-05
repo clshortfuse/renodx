@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <cstddef>
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
@@ -26,21 +27,29 @@ renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 renodx::utils::settings::Setting* CreateDefault0PercentSetting(const renodx::utils::settings::Setting& setting) {
   auto* new_setting = new renodx::utils::settings::Setting(setting);
-  new_setting->default_value = 0.f;
+  if (new_setting->default_value == NULL) {
+    new_setting->default_value = 0.f;
+  }
   new_setting->parse = [](float value) { return value * 0.01f; };
   return new_setting;
 }
 
 renodx::utils::settings::Setting* CreateDefault50PercentSetting(const renodx::utils::settings::Setting& setting) {
   auto* new_setting = new renodx::utils::settings::Setting(setting);
-  new_setting->default_value = 50.f;
-  new_setting->parse = [](float value) { return value * 0.02f; };
+  if (new_setting->default_value == NULL) {
+    new_setting->default_value = 50.f;
+  }
+  new_setting->parse = [](
+    
+    float value) { return value * 0.02f; };
   return new_setting;
 }
 
 renodx::utils::settings::Setting* CreateDefault100PercentSetting(const renodx::utils::settings::Setting& setting) {
   auto* new_setting = new renodx::utils::settings::Setting(setting);
-  new_setting->default_value = 100.f;
+  if (new_setting->default_value == NULL) {
+    new_setting->default_value = 100.f;
+  }
   new_setting->parse = [](float value) { return value * 0.01f; };
   return new_setting;
 }
@@ -53,134 +62,247 @@ renodx::utils::settings::Setting* CreateMultiLabelSetting(const renodx::utils::s
 
 ShaderInjectData shader_injection;
 
-renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({renodx::templates::settings::CreateDefaultSettings({
-                                                                                            {"ToneMapType", &shader_injection.tone_map_type},
-                                                                                            {"ToneMapPeakNits", &shader_injection.peak_white_nits},
-                                                                                            {"ToneMapGameNits", &shader_injection.diffuse_white_nits},
-                                                                                            {"ToneMapUINits", &shader_injection.graphics_white_nits},
-                                                                                            {"ColorGradeExposure", &shader_injection.tone_map_exposure},
-                                                                                            {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
-                                                                                            {"ColorGradeShadows", &shader_injection.tone_map_shadows},
-                                                                                            {"ColorGradeContrast", &shader_injection.tone_map_contrast},
-                                                                                            {"ColorGradeSaturation", &shader_injection.tone_map_saturation},
-                                                                                            {"ColorGradeHighlightSaturation", &shader_injection.tone_map_highlight_saturation},
-                                                                                            {"ColorGradeBlowout", &shader_injection.tone_map_blowout},
-                                                                                            {"ColorGradeFlare", &shader_injection.tone_map_flare},
-                                                                                        }),
-                                                                                        {
-                                                                                            renodx::templates::settings::CreateSetting({
-                                                                                                .key = "FxPostProcessCA",
-                                                                                                .binding = &shader_injection.custom_fx_chromatic_aberration,
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-                                                                                                .default_value = 0.f,
-                                                                                                .label = "Chromatic Aberration",
-                                                                                                .section = "Effects",
-                                                                                                .tooltip = "Enable chromatic aberration",
-                                                                                                .labels = {"Disabled", "Enabled"},
-                                                                                                .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
-                                                                                            }),
-                                                                                            CreateMultiLabelSetting({
-                                                                                                .key = "FxGrainType",
-                                                                                                .binding = &shader_injection.custom_grain_type,
-                                                                                                .default_value = 0.f,
-                                                                                                .label = "Grain Type",
-                                                                                                .section = "Effects",
-                                                                                                .labels = {"Vanilla (Dithering Noise)", "Perceptual"},
-                                                                                                .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
-                                                                                            }),
-                                                                                            CreateDefault50PercentSetting({
-                                                                                                .key = "FxGrainStrength",
-                                                                                                .binding = &shader_injection.custom_grain_strength,
-                                                                                                .label = "Grain Strength",
-                                                                                                .section = "Effects",
-                                                                                                .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
-                                                                                            }),
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .key = "ColorGradeColorSpace",
-                                                                                                .binding = &shader_injection.color_grade_color_space,
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-                                                                                                .default_value = 0.f,
-                                                                                                .label = "Color Space",
-                                                                                                .section = "Custom Color Grading",
-                                                                                                .tooltip = "Selects output color space"
-                                                                                                           "\nUS Modern for BT.709 D65."
-                                                                                                           "\nJPN Modern for BT.709 D93."
-                                                                                                           "\nUS CRT for BT.601 (NTSC-U)."
-                                                                                                           "\nJPN CRT for BT.601 ARIB-TR-B9 D93 (NTSC-J)."
-                                                                                                           "\nDefault: US CRT",
-                                                                                                .labels = {
-                                                                                                    "US Modern",
-                                                                                                    "JPN Modern",
-                                                                                                    "US CRT",
-                                                                                                    "JPN CRT",
-                                                                                                },
-                                                                                                .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-                                                                                                .label = "HDR Den Discord",
-                                                                                                .section = "Links",
-                                                                                                .group = "button-line-1",
-                                                                                                .tint = 0x5865F2,
-                                                                                                .on_change = []() {
-                                                                                                  renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc");
-                                                                                                },
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-                                                                                                .label = "Github",
-                                                                                                .section = "Links",
-                                                                                                .group = "button-line-1",
-                                                                                                .on_change = []() {
-                                                                                                  renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
-                                                                                                },
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-                                                                                                .label = "Ritsu's Ko-Fi",
-                                                                                                .section = "Links",
-                                                                                                .group = "button-line-1",
-                                                                                                .tint = 0xFF5F5F,
-                                                                                                .on_change = []() {
-                                                                                                  renodx::utils::platform::LaunchURL("https://ko-fi.com/ritsucecil");
-                                                                                                },
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-                                                                                                .label = "ShortFuse's Ko-Fi",
-                                                                                                .section = "Links",
-                                                                                                .group = "button-line-1",
-                                                                                                .tint = 0xFF5F5F,
-                                                                                                .on_change = []() {
-                                                                                                  renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse");
-                                                                                                },
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-                                                                                                .label = "HDR Den's Ko-Fi",
-                                                                                                .section = "Links",
-                                                                                                .group = "button-line-1",
-                                                                                                .tint = 0xFF5F5F,
-                                                                                                .on_change = []() {
-                                                                                                  renodx::utils::platform::LaunchURL("https://ko-fi.com/hdrden");
-                                                                                                },
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                                                                                                .label = " - Ingame HDR must be turned ON!",
-                                                                                                .section = "Instructions",
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                                                                                                .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse.",
-                                                                                                .section = "About",
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                                                                                                .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
-                                                                                                .section = "About",
-                                                                                            },
-                                                                                        }});
+float current_settings_mode = 0;
+
+renodx::utils::settings::Settings settings = {
+    CreateMultiLabelSetting({
+        .key = "SettingsMode",
+        .binding = &current_settings_mode,
+        .default_value = 0.f,
+        .can_reset = false,
+        .label = "Settings Mode",
+        .labels = {"Simple", "Intermediate", "Advanced"},
+        .is_global = true,
+    }),
+    renodx::templates::settings::CreateSetting({
+        .key = "ToneMapType",
+        .binding = &shader_injection.tone_map_type,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .can_reset = true,
+        .label = "Tone Mapper",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the tone mapper type",
+        .labels = {"Vanilla", "RenoDRT"},
+        .parse = [](float value) { return value * 3.f; },
+        .is_visible = []() { return current_settings_mode >= 1; },
+    }),
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapPeakNits",
+        .binding = &shader_injection.peak_white_nits,
+        .default_value = 1000.f,
+        .label = "Peak Brightness",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the value of peak white in nits",
+        .min = 48.f,
+        .max = 4000.f,
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapGameNits",
+        .binding = &shader_injection.diffuse_white_nits,
+        .default_value = 203.f,
+        .label = "Game Brightness",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the value of 100% white in nits",
+        .min = 48.f,
+        .max = 500.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapUINits",
+        .binding = &shader_injection.graphics_white_nits,
+        .default_value = 203.f,
+        .label = "UI Brightness",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the brightness of UI and HUD elements in nits",
+        .min = 48.f,
+        .max = 500.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeExposure",
+        .binding = &shader_injection.tone_map_exposure,
+        .default_value = 1.f,
+        .label = "Exposure",
+        .section = "Color Grading",
+        .max = 2.f,
+        .format = "%.2f",
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    CreateDefault50PercentSetting({
+        .key = "ColorGradeHighlights",
+        .binding = &shader_injection.tone_map_highlights,
+        .default_value = 60.f,
+        .label = "Highlights",
+        .section = "Color Grading",
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .is_visible = []() { return current_settings_mode >= 1; },
+    }),
+    CreateDefault50PercentSetting({
+        .key = "ColorGradeShadows",
+        .binding = &shader_injection.tone_map_shadows,
+        .label = "Shadows",
+        .section = "Color Grading",
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .is_visible = []() { return current_settings_mode >= 1; },
+    }),
+    CreateDefault50PercentSetting({
+        .key = "ColorGradeContrast",
+        .binding = &shader_injection.tone_map_contrast,
+        .label = "Contrast",
+        .section = "Color Grading",
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .is_visible = []() { return current_settings_mode >= 1; },
+    }),
+    CreateDefault50PercentSetting({
+        .key = "ColorGradeSaturation",
+        .binding = &shader_injection.tone_map_saturation,
+        .label = "Saturation",
+        .section = "Color Grading",
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .is_visible = []() { return current_settings_mode >= 1; },
+    }),
+    CreateDefault50PercentSetting({
+        .key = "ColorGradeHighlightSaturation",
+        .binding = &shader_injection.tone_map_highlight_saturation,
+        .default_value = 55.f,
+        .label = "Highlight Saturation",
+        .section = "Color Grading",
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .is_visible = []() { return current_settings_mode >= 1; },
+    }),
+    CreateDefault0PercentSetting({
+        .key = "ColorGradeBlowout",
+        .binding = &shader_injection.tone_map_blowout,
+        .label = "Blowout",
+        .section = "Color Grading",
+        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .is_visible = []() { return current_settings_mode >= 1; },
+    }),
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeFlare",
+        .binding = &shader_injection.tone_map_flare,
+        .label = "Flare",
+        .section = "Color Grading",
+        .tooltip = "Flare/Glare Compensation",
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    renodx::templates::settings::CreateSetting({
+        .key = "FxPostProcessCA",
+        .binding = &shader_injection.custom_fx_chromatic_aberration,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Chromatic Aberration",
+        .section = "Effects",
+        .tooltip = "Enable chromatic aberration",
+        .labels = {"Disabled", "Enabled"},
+        .is_visible = []() { return current_settings_mode >= 2; },
+    }),
+    CreateMultiLabelSetting({
+        .key = "FxGrainType",
+        .binding = &shader_injection.custom_grain_type,
+        .default_value = 0.f,
+        .label = "Grain Type",
+        .section = "Effects",
+        .labels = {"Vanilla (Dithering Noise)", "Perceptual"},
+        .is_visible = []() { return current_settings_mode >= 2; },
+    }),
+    CreateDefault50PercentSetting({
+        .key = "FxGrainStrength",
+        .binding = &shader_injection.custom_grain_strength,
+        .label = "Grain Strength",
+        .section = "Effects",
+        .is_visible = []() { return current_settings_mode >= 2; },
+    }),
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeColorSpace",
+        .binding = &shader_injection.color_grade_color_space,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Color Space",
+        .section = "Custom Color Grading",
+        .tooltip = "Selects output color space"
+                   "\nUS Modern for BT.709 D65."
+                   "\nJPN Modern for BT.709 D93."
+                   "\nUS CRT for BT.601 (NTSC-U)."
+                   "\nJPN CRT for BT.601 ARIB-TR-B9 D93 (NTSC-J)."
+                   "\nDefault: US CRT",
+        .labels = {
+            "US Modern",
+            "JPN Modern",
+            "US CRT",
+            "JPN CRT",
+        },
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Den Discord",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Github",
+        .section = "Links",
+        .group = "button-line-1",
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Ritsu's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0xFF5F5F,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://ko-fi.com/ritsucecil");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "ShortFuse's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0xFF5F5F,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Den's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0xFF5F5F,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://ko-fi.com/hdrden");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = " - Ingame HDR must be turned ON!",
+        .section = "Instructions",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse.",
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+        .section = "About",
+    },
+};
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
@@ -197,6 +319,10 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
+      {"FxPostProcessCA", 0.f},
+      {"FxGrainType", 0.f},
+      {"FxGrainStrength", 50.f},
+      {"ColorGradeColorSpace", 0.f},  // US CRT
   });
 }
 
@@ -214,10 +340,6 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   settings[2]->can_reset = true;
 
   settings[3]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[2]->default_value), 203.f);
-
-  // Highlight saturation
-  settings[10]->default_value = 55.f;
-  settings[10]->can_reset = true;
 
   fired_on_init_swapchain = true;
 }
