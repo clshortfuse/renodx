@@ -39,9 +39,7 @@ renodx::utils::settings::Setting* CreateDefault50PercentSetting(const renodx::ut
   if (new_setting->default_value == NULL) {
     new_setting->default_value = 50.f;
   }
-  new_setting->parse = [](
-    
-    float value) { return value * 0.02f; };
+  new_setting->parse = [](float value) { return value * 0.02f; };
   return new_setting;
 }
 
@@ -358,7 +356,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
 
       /* renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
-        if (params.size() >= 20) return false;
+        if (params.size() >= 8) return false;
 
         return true;
       }; */

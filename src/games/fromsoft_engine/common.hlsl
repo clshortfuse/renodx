@@ -173,8 +173,8 @@ float3 SampleLUT(float3 color_linear, Texture3D<float4> lut, SamplerState lut_sa
   color_linear = renodx::lut::Sample(
       lut,
       lut_config,
-      ToneMapMaxCLL(color_linear));
-
+      saturate(color_linear));
+  color_linear = saturate(color_linear);  // Fix NaNs
   return color_linear;
 }
 
@@ -211,7 +211,7 @@ void HandleUIScale(inout float4 ui_color_gamma) {
 
 bool ApplyLuminanceSaturationAdjustments(float3 luminance_tonemap_blend, inout float3 saturation_corrected) {
   if (RENODX_TONE_MAP_TYPE != 6.f) return false;
-  
+
   luminance_tonemap_blend = renodx::color::grade::UserColorGrading(
       luminance_tonemap_blend,
       1.f,
@@ -270,6 +270,7 @@ bool HandleFinal(float4 scene_pq, float4 ui_gamma, inout float4 SV_TARGET, float
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
 
   float3 scene_linear = renodx::draw::InvertIntermediatePass(scene_pq.rgb) / 100.f;
+  scene_linear = max(0, scene_linear);
   scene_linear = renodx::color::bt709::from::BT2020(scene_linear);
 
   HandleUIScale(ui_gamma);
