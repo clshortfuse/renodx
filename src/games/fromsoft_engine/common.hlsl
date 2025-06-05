@@ -162,6 +162,12 @@ void ApplyPerChannelCorrection(float3 untonemapped, inout float3 post_tonemap) {
   }
 }
 
+float3 ToneMapMaxCLLSafe(float3 color_linear) {
+  color_linear = min(1.f, ToneMapMaxCLL(max(0.f, color_linear)));
+
+  return color_linear;
+}
+
 float3 SampleLUT(float3 color_linear, Texture3D<float4> lut, SamplerState lut_sampler) {
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = lut_sampler;
@@ -173,8 +179,8 @@ float3 SampleLUT(float3 color_linear, Texture3D<float4> lut, SamplerState lut_sa
   color_linear = renodx::lut::Sample(
       lut,
       lut_config,
-      saturate(color_linear));
-  color_linear = saturate(color_linear);  // Fix NaNs
+      ToneMapMaxCLLSafe(color_linear));
+  color_linear = max(0, color_linear);  // Fix NaNs
   return color_linear;
 }
 
@@ -237,7 +243,7 @@ bool Tonemap(float3 untonemapped_linear, float4 sdr_linear, inout float4 SV_TARG
   float3 outputColor = untonemapped_linear;
 
   config.peak_white_nits = 10000.f;
-  outputColor = renodx::draw::UpgradeToneMapByLuminance(outputColor, ToneMapMaxCLL(outputColor), sdr_linear.rgb, 1.f);
+  outputColor = renodx::draw::UpgradeToneMapByLuminance(outputColor, ToneMapMaxCLLSafe(outputColor), sdr_linear.rgb, 1.f);
 
   CG_Config grading_config = cg_config::Create();
   grading_config.exposure = RENODX_TONE_MAP_EXPOSURE;
