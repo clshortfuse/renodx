@@ -250,7 +250,6 @@ bool Tonemap(float3 untonemapped_linear, float4 sdr_linear, inout float4 SV_TARG
   grading_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
   outputColor = cg_config::ApplyUserColorGrading(outputColor, grading_config);
 
-  outputColor.rgb = renodx::tonemap::ExponentialRollOff(outputColor.rgb, 0.2f, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
   if (CUSTOM_GRAIN_TYPE) {
     outputColor = renodx::effects::ApplyFilmGrain(
         outputColor.rgb,
@@ -260,6 +259,10 @@ bool Tonemap(float3 untonemapped_linear, float4 sdr_linear, inout float4 SV_TARG
         1.f);  // if 1.f = SDR range
   }
   outputColor = renodx::color::bt2020::from::BT709(outputColor.rgb);
+  outputColor = max(0, outputColor);
+  float shoulder_start = 0.375f;
+  outputColor = exp2(renodx::tonemap::ExponentialRollOff(log2(outputColor * RENODX_DIFFUSE_WHITE_NITS), log2(RENODX_PEAK_WHITE_NITS * shoulder_start), log2(RENODX_PEAK_WHITE_NITS))) / RENODX_DIFFUSE_WHITE_NITS;
+
   outputColor = renodx::draw::RenderIntermediatePass(outputColor * 100.f);
 
   SV_TARGET = float4(outputColor, 1.f);
@@ -270,7 +273,6 @@ bool HandleFinal(float4 scene_pq, float4 ui_gamma, inout float4 SV_TARGET, float
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
 
   float3 scene_linear = renodx::draw::InvertIntermediatePass(scene_pq.rgb) / 100.f;
-  scene_linear = max(0, scene_linear);
   scene_linear = renodx::color::bt709::from::BT2020(scene_linear);
 
   HandleUIScale(ui_gamma);
