@@ -130,7 +130,7 @@ renodx::utils::settings::Settings settings = {
     CreateDefault50PercentSetting({
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
-        .default_value = 60.f,
+        .default_value = 55.f,
         .label = "Highlights",
         .section = "Color Grading",
         .is_enabled = []() { return shader_injection.tone_map_type > 0; },
@@ -293,6 +293,11 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse.",
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Special thanks to Musa for the support!",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
