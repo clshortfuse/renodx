@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./common.hlsl"
 
 Texture2D<float4> globalTextures[8192] : register(t0, space1);
 
@@ -311,21 +312,8 @@ float4 main(
   
   untonemapped *= luminance;
 
-  float3 displaymappedColor = untonemapped;
-
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    if (CUSTOM_DISPLAY_MAP_TYPE == 1.f) {
-      displaymappedColor = renodx::tonemap::dice::BT709(untonemapped, 1.f, 0.f);
-    }
-    else if (CUSTOM_DISPLAY_MAP_TYPE == 2.f) {
-      displaymappedColor = renodx::tonemap::frostbite::BT709(untonemapped, 1.f, 0.f, 1.f);
-    }
-    else if (CUSTOM_DISPLAY_MAP_TYPE == 3.f) {
-      untonemapped = min(100.f, untonemapped);
-      displaymappedColor = renodx::tonemap::renodrt::NeutralSDR(untonemapped);
-    }
-
-    displaymappedColor = lerp(untonemapped, displaymappedColor, saturate(renodx::color::y::from::BT709(untonemapped)));
+    float3 displaymappedColor = DisplaymapUntonemapped(untonemapped);
 
     displaymappedColor /= luminance;
 
@@ -581,21 +569,7 @@ float4 main(
   
   float3 graded = float3(_535, _536, _537);
 
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
-    untonemapped = renodx::color::grade::UserColorGrading(
-      untonemapped,
-      1.f,
-      1.f,
-      1.f,
-      1.6f,
-      1.6f,
-      0.8f);
-    
-    untonemapped = min(100.f, untonemapped);
-    SV_Target.rgb = renodx::draw::ToneMapPass(untonemapped, graded);
-  }
-
-  SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
+  SV_Target.rgb = ApplyToneMap(untonemapped, graded);
   
   return SV_Target;
 }
