@@ -95,14 +95,17 @@ float4 main(
   const float vanilla_gamma = 1 / g_ToneMapParam.z;
 
   float4 _130 = g_ColorGradingLUTTexture.Sample(SS_ClampLinear, float3(((exp2(log2(max((_103 * sdr_tonemapped.r), 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f), ((exp2(log2(max((_103 * sdr_tonemapped.g), 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f), ((exp2(log2(max((_103 * sdr_tonemapped.b), 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f)));
-  if (RENODX_TONE_MAP_TYPE) {
+  bool isHDR = !(g_bEnableFlags.z == 0);
+  // Menus blend game and UI sometimes, so it has to be gamma encoded
+  // wanted to avoid avoid inner branching so we just return original lut sampling
+  if (RENODX_TONE_MAP_TYPE && isHDR) {
     _130.rgb = SampleLUT((sdr_tonemapped * _103), g_ColorGradingLUTTexture, SS_ClampLinear);
   }
   float _214;
   float _215;
   float _216;
   [branch]
-  if (!(g_bEnableFlags.z == 0)) {
+  if (isHDR) {
     if (Tonemap(untonemapped, _130, SV_Target, TEXCOORD)) {
       return SV_Target;
     } else {
