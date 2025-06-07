@@ -164,11 +164,14 @@ float4 main(
   // g_ToneMapParam.z is 0.4545 according to renderdoc, might be different for SDR (Doubt)
   // Lut takes in gamma 2.2 (0.4545 = 1 / 2.2)
   float4 _258 = g_ColorGradingLUTTexture.Sample(SS_ClampLinear, ((exp2(log2(max(sdr_tonemapped.rgb, 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f));
-  if (RENODX_TONE_MAP_TYPE) {
+  bool isHDR = !(g_bEnableFlags.z == 0);
+  // Menus blend game and UI sometimes, so it has to be gamma encoded
+  // wanted to avoid avoid inner branching so we just return original lut sampling
+  if (RENODX_TONE_MAP_TYPE && isHDR) {
     _258.rgb = SampleLUT(sdr_tonemapped, g_ColorGradingLUTTexture, SS_ClampLinear);
   }
   [branch]
-  if (!(g_bEnableFlags.z == 0)) {
+  if (isHDR) {
     /* float midgray = 0.18f;
     float midgray_lum = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((midgray / (midgray + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r; */
 
