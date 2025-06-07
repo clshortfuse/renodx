@@ -1307,13 +1307,15 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   }
 
   if (is_dxgi) {
-    switch (desc.present_mode) {
-      case static_cast<uint32_t>(DXGI_SWAP_EFFECT_SEQUENTIAL):
-        desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL);
-        break;
-      case static_cast<uint32_t>(DXGI_SWAP_EFFECT_DISCARD):
-        desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD);
-        break;
+    if (!use_device_proxy) {
+      switch (desc.present_mode) {
+        case static_cast<uint32_t>(DXGI_SWAP_EFFECT_SEQUENTIAL):
+          desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL);
+          break;
+        case static_cast<uint32_t>(DXGI_SWAP_EFFECT_DISCARD):
+          desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD);
+          break;
+      }
     }
 
     if (!use_resize_buffer) {
