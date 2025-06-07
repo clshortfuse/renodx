@@ -39,7 +39,6 @@ void main(
   r0.xyz = exp2(r0.xyz);
   o0.xyz = Exposure * r0.xyz;
 
-  output = renodx::draw::SwapChainPass(output);
   o0.rgb = output;
   o0.w = 1;
   return;

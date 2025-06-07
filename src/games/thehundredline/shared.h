@@ -7,7 +7,6 @@ struct ShaderInjectData {
   float peak_white_nits;
   float diffuse_white_nits;
   float graphics_white_nits;
-  float scene_grade_strength;
   float tone_map_type;
   float tone_map_exposure;
   float tone_map_highlights;
@@ -17,6 +16,9 @@ struct ShaderInjectData {
   float tone_map_highlight_saturation;
   float tone_map_blowout;
   float tone_map_flare;
+  float custom_video_has_drawn;
+  float custom_ui_has_drawn;
+  float custom_lower_white;
 };
 
 #ifndef __cplusplus
@@ -40,10 +42,14 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
+#define RENODX_TONE_MAP_HUE_SHIFT            0.9f
 #define RENODX_GAMMA_CORRECTION              GAMMA_CORRECTION_NONE
 #define RENODX_INTERMEDIATE_ENCODING         GAMMA_CORRECTION_GAMMA_2_2
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION   GAMMA_CORRECTION_GAMMA_2_2
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define CUSTOM_VIDEO_HAS_DRAWN               shader_injection.custom_video_has_drawn
+#define CUSTOM_UI_HAS_DRAWN                  shader_injection.custom_ui_has_drawn
+#define CUSTOM_LOWER_WHITE_UI                shader_injection.custom_lower_white
 
 #include "../../shaders/renodx.hlsl"
 #endif

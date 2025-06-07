@@ -5,7 +5,7 @@
 
 #define ImTextureID ImU64
 
-#define DEBUG_LEVEL_2
+#define DEBUG_LEVEL_0
 
 #include <embed/shaders.h>
 
@@ -23,9 +23,54 @@
 
 namespace {
 
-renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
-
 ShaderInjectData shader_injection;
+
+#define OutputShaderEntry(value)                           \
+  {                                                        \
+      value,                                               \
+      {                                                    \
+          .crc32 = value,                                  \
+          .code = __##value,                               \
+          .on_drawn = [](auto cmd_list) {                  \
+            shader_injection.custom_video_has_drawn = 0.f; \
+            shader_injection.custom_ui_has_drawn = 0.f;    \
+            return true;                                   \
+          },                                               \
+      },                                                   \
+  }
+
+#define VideoShaderEntry(value)                            \
+  {                                                        \
+      value,                                               \
+      {                                                    \
+          .crc32 = value,                                  \
+          .code = __##value,                               \
+          .on_drawn = [](auto cmd_list) {                  \
+            shader_injection.custom_video_has_drawn = 1.f; \
+            return true;                                   \
+          },                                               \
+      },                                                   \
+  }
+
+#define UIShaderEntry(value)                             \
+  {                                                      \
+      value,                                             \
+      {                                                  \
+          .crc32 = value,                                \
+          .code = __##value,                             \
+          .on_drawn = [](auto cmd_list) {                \
+            shader_injection.custom_ui_has_drawn += 1.f; \
+            return true;                                 \
+          },                                             \
+      },                                                 \
+  }
+renodx::mods::shader::CustomShaders custom_shaders = {
+    VideoShaderEntry(0xA4311A98),
+    OutputShaderEntry(0x13D78644),
+    UIShaderEntry(0x25CC5A3A),
+    __ALL_CUSTOM_SHADERS,
+};
+
 const std::string build_date = __DATE__;
 const std::string build_time = __TIME__;
 
@@ -44,6 +89,17 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
                                                                                             {"ColorGradeFlare", &shader_injection.tone_map_flare},
                                                                                         }),
                                                                                         {
+                                                                                            new renodx::utils::settings::Setting{
+                                                                                                .key = "CustomLowerWhiteUI",
+                                                                                                .binding = &shader_injection.custom_lower_white,
+                                                                                                .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+                                                                                                .default_value = 1.f,
+                                                                                                .label = "Lower white UI",
+                                                                                                .section = "Color Grading",
+                                                                                                .tooltip = "Lowers UI elements that are displayed at max nits",
+                                                                                                .labels = {"Off", "On"},
+                                                                                                .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
+                                                                                            },
                                                                                             new renodx::utils::settings::Setting{
                                                                                                 .value_type = renodx::utils::settings::SettingValueType::BUTTON,
                                                                                                 .label = "HDR Den Discord",
@@ -138,29 +194,53 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
-      while (IsDebuggerPresent() == 0) Sleep(100);
       if (!initialized) {
         /* renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::allow_multiple_push_constants = true; */
 
         /* renodx::mods::swapchain::force_borderless = true;
         renodx::mods::swapchain::prevent_full_screen = true; */
-        // renodx::mods::swapchain::use_resource_cloning = true;
+        // renodx::mods::shader::force_pipeline_cloning = true;
+        renodx::mods::shader::expected_constant_buffer_space = 50;
+        renodx::mods::shader::expected_constant_buffer_index = 13;
+        renodx::mods::shader::allow_multiple_push_constants = true;
         renodx::mods::swapchain::use_device_proxy = true;
+        renodx::mods::swapchain::use_resource_cloning = true;
+        renodx::mods::swapchain::set_color_space = false;
         renodx::mods::swapchain::use_resize_buffer = true;
         renodx::mods::swapchain::use_resize_buffer_on_demand = true;
+
+        renodx::mods::swapchain::swap_chain_proxy_shaders = {
+            {
+                reshade::api::device_api::d3d11,
+                {
+                    .vertex_shader = __swap_chain_proxy_vertex_shader_dx11,
+                    .pixel_shader = __swap_chain_proxy_pixel_shader_dx11,
+                },
+            },
+            {
+                reshade::api::device_api::d3d12,
+                {
+                    .vertex_shader = __swap_chain_proxy_vertex_shader_dx12,
+                    .pixel_shader = __swap_chain_proxy_pixel_shader_dx12,
+                },
+            },
+        };
 
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r8g8b8a8_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
+            .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
         });
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r11g11b10_float,
             .new_format = reshade::api::format::r16g16b16a16_float,
+            .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
         });
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r8g8b8a8_typeless,
             .new_format = reshade::api::format::r16g16b16a16_float,
+            .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
         });
         initialized = true;
       }
