@@ -130,7 +130,7 @@ renodx::utils::settings::Settings settings = {
     CreateDefault50PercentSetting({
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
-        .default_value = 55.f,
+        .default_value = 52.f,
         .label = "Highlights",
         .section = "Color Grading",
         .is_enabled = []() { return shader_injection.tone_map_type > 0; },
