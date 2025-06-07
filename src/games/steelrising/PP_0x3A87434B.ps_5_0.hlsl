@@ -1,0 +1,337 @@
+#include "./common.hlsl"
+
+cbuffer cbEngine : register(b0){
+  float4x4 p_View : packoffset(c0);
+  float4x4 p_Projection : packoffset(c4);
+  float4x4 p_ViewProjection[16] : packoffset(c8);
+  float4x4 p_InvView : packoffset(c72);
+  float4x4 p_InvProjection : packoffset(c76);
+  float4x4 p_InvViewProjection : packoffset(c80);
+  float4 p_CameraParam : packoffset(c84);
+  float4 p_EyePosition : packoffset(c85);
+  float4 p_EyeDirection : packoffset(c86);
+  float4 p_CornerViewVector[4] : packoffset(c87);
+  float4x4 p_NonJitteredView : packoffset(c91);
+  float4x4 p_NonJitteredProjection : packoffset(c95);
+  float4x4 p_NonJitteredViewProjection : packoffset(c99);
+  float4x4 p_NonJitteredInvView : packoffset(c103);
+  float4x4 p_NonJitteredInvProjection : packoffset(c107);
+  float4x4 p_NonJitteredInvViewProjection : packoffset(c111);
+  float4 p_NonJitteredCameraParam : packoffset(c115);
+  float4 p_NonJitteredEyePosition : packoffset(c116);
+  float4 p_NonJitteredEyeDirection : packoffset(c117);
+  float4 p_NonJitteredCornerViewVector[4] : packoffset(c118);
+  float4x4 p_PreviousFrameNonJitteredView : packoffset(c122);
+  float4x4 p_PreviousFrameNonJitteredProjection : packoffset(c126);
+  float4x4 p_PreviousFrameNonJitteredViewProjection : packoffset(c130);
+  float4 p_MainCameraPosition : packoffset(c134);
+  float4 p_MainCameraDirection : packoffset(c135);
+  float4 g_Time : packoffset(c136);
+  float4 g_PreviousFrameTime : packoffset(c137);
+  float4 g_ViewportSize : packoffset(c138);
+  float2 g_FinalResolution : packoffset(c139);
+  float2 g_RenderTargetRatio : packoffset(c139.z);
+  uint g_ModeFlags : packoffset(c140);
+  float g_ParticleScaling : packoffset(c140.y);
+  float g_SpeedTreeWetBias : packoffset(c140.z);
+  float g_TanHalfVerticalFOV : packoffset(c140.w);
+  float4 g_NightDayParams : packoffset(c141);
+  float4 g_WindForce : packoffset(c142);
+  float4 g_WindForcePrev : packoffset(c143);
+  float g_specularMultiplier : packoffset(c144);
+  float g_DistLimitShaderSkinLOD : packoffset(c144.y);
+  float g_ShaderDebug : packoffset(c144.z);
+  uint g_FrameNumber : packoffset(c144.w);
+  float4 g_FogSunFrontColor : packoffset(c145);
+  float4 g_FogSunBackColor : packoffset(c146);
+  float4 g_FogDistances : packoffset(c147);
+  float4 g_FogSettings : packoffset(c148);
+  float4 g_FogHeightParams : packoffset(c149);
+  float4 g_VolumetricFogColor : packoffset(c150);
+  float4 g_VolumetricFogParams : packoffset(c151);
+  float4 g_VolumetricFogParams2 : packoffset(c152);
+  float4 g_VolumetricFogDistances : packoffset(c153);
+  float4 g_VoxelJittering : packoffset(c154);
+  float g_taaFrameNumber : packoffset(c155);
+  float g_undergrowthDistance : packoffset(c155.y);
+  uint g_debugMode : packoffset(c155.z);
+  float g_candelaPerUnit : packoffset(c155.w);
+  uint g_reflectionDownscale : packoffset(c156);
+  uint g_raytracingEnabled : packoffset(c156.y);
+  uint g_debugOverlay : packoffset(c156.z);
+  float g_pad2 : packoffset(c156.w);
+  float4 g_WireframeColor : packoffset(c157);
+  float4 g_SelectionColor : packoffset(c158);
+  float4 g_DebugPcVector : packoffset(c159);
+}
+cbuffer cbMaterial : register(b1){
+  float4 g_ColorFilterParams : packoffset(c0);
+  float4 g_ColorFilterHue : packoffset(c1);
+  float4 g_ColorGradingParams : packoffset(c2);
+  float4 g_SharpenParams : packoffset(c3);
+  float4 g_SharpenDistances : packoffset(c4);
+  float4 g_GrainParams : packoffset(c5);
+  float4 g_TextureSizeAndDuDv : packoffset(c6);
+  float4 g_VignetteParams : packoffset(c7);
+  float4 g_VignetteColor : packoffset(c8);
+  float4 g_ScreenXYProjFactor : packoffset(c9);
+  float4 g_OutlineSetting : packoffset(c10);
+  float4 g_References03 : packoffset(c11);
+  float4 g_References47 : packoffset(c12);
+  float4 g_References811 : packoffset(c13);
+  float4 g_ShowRtParams : packoffset(c14);
+  float g_BackgroundTransition : packoffset(c15);
+  float g_BackgroundOpacity : packoffset(c15.y);
+  int g_Channel : packoffset(c15.z);
+}
+SamplerState g_Sampler_PointClamp_s : register(s0);
+SamplerState g_Sampler_LinearClamp_s : register(s1);
+Texture2D<float4> g_Texture : register(t0);
+Texture2D<float4> g_finalDepth : register(t1);
+
+#define cmp -
+
+void main(
+  float4 v0 : SV_POSITION0,
+  float2 v1 : TEXCOORD0,
+  out float4 o0 : SV_Target0)
+{
+  float4 r0,r1,r2,r3,r4,r5,r6;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+
+  float4 x0[9];
+  x0[0].x = -0.707106769;
+  x0[1].x = -1;
+  x0[2].x = -0.707106769;
+  x0[3].x = -1;
+  x0[4].x = 6.82842731;
+  x0[5].x = -1;
+  x0[6].x = -0.707106769;
+  x0[7].x = -1;
+  x0[8].x = -0.707106769;
+  g_Texture.GetDimensions(0, uiDest.x, uiDest.y, uiDest.z);
+  r0.xy = uiDest.xy;
+  r0.xy = (uint2)r0.xy;
+  r0.zw = float2(1,1) / r0.xy;
+  r1.x = g_finalDepth.SampleLevel(g_Sampler_LinearClamp_s, v1.xy, 0).x;
+  r1.y = cmp(p_Projection._m33 == 1.000000);
+  r1.z = r1.x * p_CameraParam.w + -p_CameraParam.y;
+  r1.x = r1.x * p_CameraParam.w + p_CameraParam.x;
+  r1.x = -p_CameraParam.z / r1.x;
+  r1.z = r1.y ? r1.z : r1.x;
+  r2.xy = v1.xy * float2(2,2) + float2(-1,-1);
+  r1.w = g_ScreenXYProjFactor.y * r2.y;
+  r3.x = g_ScreenXYProjFactor.x * r2.x;
+  r3.y = -1 * r1.w;
+  r1.xy = r3.xy * -r1.zz;
+  r1.x = dot(r1.xyz, r1.xyz);
+  r1.x = sqrt(r1.x);
+  r1.xy = -g_SharpenDistances.xz + r1.xx;
+  r1.xy = saturate(r1.xy / g_SharpenDistances.yw);
+  r1.x = 1 + -r1.x;
+  r1.x = r1.x + -r1.y;
+  r1.y = cmp(r1.x >= 0);
+  r1.y = r1.y ? g_SharpenParams.x : g_SharpenParams.y;
+  r1.y = 0.146446601 * r1.y;
+  r3.xyz = float3(0,0,0);
+  r1.z = -1;
+  while (true) {
+    r1.w = cmp(1 < (int)r1.z);
+    if (r1.w != 0) break;
+    r1.w = mad((int)r1.z, 3, 3);
+    r2.z = cmp((int)r1.z == 0);
+    r4.y = (int)r1.z;
+    r5.xyz = r3.xyz;
+    r2.w = -1;
+    while (true) {
+      r3.w = cmp(1 < (int)r2.w);
+      if (r3.w != 0) break;
+      r4.x = (int)r2.w;
+      r4.xz = r0.zw * r4.xy + v1.xy;
+      r4.xzw = g_Texture.SampleLevel(g_Sampler_PointClamp_s, r4.xz, 0).xyz;
+      r3.w = (int)r2.w + 1;
+      r5.w = (int)r1.w + (int)r3.w;
+      r5.w = x0[r5.w+0].x;
+      r5.w = r5.w * r1.y;
+      r6.x = r5.w * r1.x;
+      r6.y = cmp((int)r2.w == 0);
+      r6.y = r2.z ? r6.y : 0;
+      r5.w = r5.w * r1.x + 1;
+      r5.w = r6.y ? r5.w : r6.x;
+      r5.xyz = r5.www * r4.xzw + r5.xyz;
+      r2.w = r3.w;
+    }
+    r3.xyz = r5.xyz;
+    r1.z = (int)r1.z + 1;
+  }
+  r3.rgb = renodx::color::srgb::DecodeSafe(r3.rgb);
+  float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18f,0.18f,0.18f)));
+  float3 hueCorrectionColor = vanillaTonemap(r3.rgb);
+  renodx::tonemap::Config config = renodx::tonemap::config::Create();
+  config.type = min(3, injectedData.toneMapType);
+  config.peak_nits = injectedData.toneMapPeakNits;
+  config.game_nits = injectedData.toneMapGameNits;
+  config.gamma_correction = injectedData.toneMapGammaCorrection;
+  config.exposure = injectedData.colorGradeExposure;
+  config.highlights = injectedData.colorGradeHighlights;
+  config.shadows = injectedData.colorGradeShadows;
+  config.contrast = injectedData.colorGradeContrast;
+  config.saturation = injectedData.colorGradeSaturation;
+  config.mid_gray_value = midGray;
+  config.mid_gray_nits = midGray * 100;
+  config.reno_drt_contrast = 1.25f;
+  config.reno_drt_dechroma = injectedData.colorGradeDechroma;
+  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
+  config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
+                                   ? renodx::tonemap::config::hue_correction_type::INPUT
+                                   : renodx::tonemap::config::hue_correction_type::CUSTOM;
+  config.hue_correction_strength = injectedData.toneMapHueCorrection;
+  config.hue_correction_color = lerp(r3.rgb, hueCorrectionColor, injectedData.toneMapHueShift);
+  config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
+  config.reno_drt_tone_map_method = injectedData.toneMapType == 4.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+                                                                    : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
+  config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
+  config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
+  config.reno_drt_white_clip = injectedData.colorGradeClip;
+  if (injectedData.colorGradeLUTStrength == 0.f || config.type == 1.f || g_ColorFilterParams.x <= 0) {
+    r1.rgb = renodx::tonemap::config::Apply(r3.rgb, config);
+  } else {
+    renodx::tonemap::config::DualToneMap tone_maps = renodx::tonemap::config::ApplyToneMaps(r3.rgb, config);
+    float3 sdrColor = tone_maps.color_sdr;
+    float3 hdrColor = tone_maps.color_hdr;
+    r3.rgb = renodx::color::gamma::EncodeSafe(sdrColor, 2.2f);
+  r0.w = dot(r3.xzy, float3(0.707099974,0.707099974,0.701699972));
+  r1.xyz = float3(0.707099974,0.701699972,0.707099974) * r0.www;
+  r4.xyz = g_ColorFilterHue.xyz * r1.zyz + -r3.xyz;
+  r4.xyz = g_ColorFilterHue.www * r4.xyz + r3.xyz;
+  r4.xyz = -r0.www * float3(0.707099974,0.701699972,0.707099974) + r4.xyz;
+  r1.xyz = g_ColorFilterParams.zzz * r1.xyz;
+  r1.xyz = g_ColorFilterParams.yyy * r4.xyz + r1.xyz;
+  r1.xyz = float3(-0.730000019,-0.730000019,-0.730000019) + r1.xyz;
+  r1.xyz = saturate(r1.xyz * g_ColorFilterParams.www + float3(0.730000019,0.730000019,0.730000019));
+  r1.rgb = renodx::color::gamma::DecodeSafe(r1.rgb);
+  if (config.type == 0.f) {
+    r1.rgb = lerp(sdrColor, r1.rgb, injectedData.colorGradeLUTStrength);
+  } else {
+    r1.rgb = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, r1.rgb, injectedData.colorGradeLUTStrength);
+  }
+  }
+  r1.rgb = renodx::color::gamma::EncodeSafe(r1.rgb);
+  r0.zw = float2(-0.5,-0.5) + v1.xy;
+  r0.z = dot(r0.zw, r0.zw) * min(1, injectedData.fxVignette);
+  r0.z = log2(r0.z);
+  r0.z = g_VignetteParams.y * r0.z;
+  r0.z = exp2(r0.z);
+  r0.z = saturate(g_VignetteParams.x * r0.z * max(1, injectedData.fxVignette));
+  r3.xyz = g_VignetteColor.xyz + -r1.xyz;
+  r1.xyz = r0.zzz * r3.xyz + r1.xyz;
+  if (injectedData.fxFilmGrainType == 0.f) {
+  r0.z = 1.42499995 + g_Time.x;
+  r0.w = r0.x / r0.y;
+  r1.w = r2.x * r0.w;
+  sincos(r0.z, r2.x, r3.x);
+  r0.z = r2.y * r2.x;
+  r0.z = r1.w * r3.x + -r0.z;
+  r1.w = r2.x * r1.w;
+  r1.w = r2.y * r3.x + r1.w;
+  r0.z = r0.z / r0.w;
+  r2.x = r0.z * 0.5 + 0.5;
+  r2.y = r1.w * 0.5 + 0.5;
+  r0.xy = r0.xy / g_GrainParams.yy;
+  r0.xy = r2.xy * r0.xy;
+  r0.zw = floor(r0.xy);
+  r2.xy = r0.zw * float2(0.00390625,0.00390625) + float2(0.001953125,0.001953125);
+  r0.xy = frac(r0.xy);
+  r1.w = 0.00999999978 * g_Time.x;
+  r2.xy = g_Time.xx * float2(0.00999999978,0.00999999978) + r2.xy;
+  r2.x = dot(r2.xy, float2(12.9898005,78.2330017));
+  r2.x = sin(r2.x);
+  r2.x = 59717.2891 * r2.x;
+  r2.x = frac(r2.x);
+  r2.x = r2.x * 2 + r1.w;
+  r2.yz = float2(0.001953125,-1);
+  r2.w = 0.00999999978 * g_Time.x;
+  r2.xy = r2.xy + r2.zw;
+  r2.x = dot(r2.xy, float2(12.9898005,78.2330017));
+  r2.x = sin(r2.x);
+  r2.xy = float2(43758.5469,53184.1367) * r2.xx;
+  r2.xy = frac(r2.xy);
+  r2.xy = r2.xy * float2(2,2) + float2(-1,-1);
+  r2.xy = r2.xy * float2(4,4) + float2(-1,-1);
+  r2.x = dot(r2.xy, r0.xy);
+  r0.zw = r0.zw * float2(0.00390625,0.00390625) + r1.ww;
+  r3.xyzw = float4(0.001953125,0.005859375,0.005859375,0.001953125) + r0.zwzw;
+  r3.x = dot(r3.xy, float2(12.9898005,78.2330017));
+  r3.x = sin(r3.x);
+  r3.x = 59717.2891 * r3.x;
+  r3.x = frac(r3.x);
+  r4.x = r3.x * 2 + r1.w;
+  r4.yw = float2(0.001953125,0.001953125);
+  r3.xy = r4.xy + r2.zw;
+  r3.x = dot(r3.xy, float2(12.9898005,78.2330017));
+  r3.x = sin(r3.x);
+  r3.xy = float2(43758.5469,53184.1367) * r3.xx;
+  r3.xy = frac(r3.xy);
+  r3.xy = r3.xy * float2(2,2) + float2(-1,-1);
+  r3.xy = r3.xy * float2(4,4) + float2(-1,-1);
+  r5.xyzw = float4(-0,-1,-1,-0) + r0.xyxy;
+  r2.y = dot(r3.xy, r5.xy);
+  r3.x = dot(r3.zw, float2(12.9898005,78.2330017));
+  r3.x = sin(r3.x);
+  r3.x = 59717.2891 * r3.x;
+  r3.x = frac(r3.x);
+  r4.z = r3.x * 2 + r1.w;
+  r3.xy = r4.zw + r2.zw;
+  r3.x = dot(r3.xy, float2(12.9898005,78.2330017));
+  r3.x = sin(r3.x);
+  r3.xy = float2(43758.5469,53184.1367) * r3.xx;
+  r3.xy = frac(r3.xy);
+  r3.xy = r3.xy * float2(2,2) + float2(-1,-1);
+  r3.xy = r3.xy * float2(4,4) + float2(-1,-1);
+  r3.x = dot(r3.xy, r5.zw);
+  r0.zw = float2(0.005859375,0.005859375) + r0.zw;
+  r0.z = dot(r0.zw, float2(12.9898005,78.2330017));
+  r0.z = sin(r0.z);
+  r0.z = 59717.2891 * r0.z;
+  r0.z = frac(r0.z);
+  r4.x = r0.z * 2 + r1.w;
+  r4.y = 0.001953125;
+  r0.zw = r4.xy + r2.zw;
+  r0.z = dot(r0.zw, float2(12.9898005,78.2330017));
+  r0.z = sin(r0.z);
+  r0.zw = float2(43758.5469,53184.1367) * r0.zz;
+  r0.zw = frac(r0.zw);
+  r0.zw = r0.zw * float2(2,2) + float2(-1,-1);
+  r0.zw = r0.zw * float2(4,4) + float2(-1,-1);
+  r2.zw = float2(-1,-1) + r0.xy;
+  r3.y = dot(r0.zw, r2.zw);
+  r0.zw = r0.xy * r0.xy;
+  r0.zw = r0.zw * r0.xy;
+  r2.zw = r0.xy * float2(6,6) + float2(-15,-15);
+  r0.xy = r0.xy * r2.zw + float2(10,10);
+  r0.xy = r0.zw * r0.xy;
+  r0.zw = r3.xy + -r2.xy;
+  r0.xz = r0.xx * r0.zw + r2.xy;
+  r0.z = r0.z + -r0.x;
+  r0.x = r0.y * r0.z + r0.x;
+  r0.y = dot(r1.xyz, float3(0.298999995,0.587000012,0.114));
+  r0.z = g_GrainParams.z * r0.y;
+  r0.y = g_GrainParams.z * r0.y + -0.200000003;
+  r0.y = saturate(-5 * r0.y);
+  r0.w = r0.y * -2 + 3;
+  r0.y = r0.y * r0.y;
+  r0.y = r0.w * r0.y + r0.z;
+  r0.y = r0.y * r0.y;
+  r0.y = r0.y * r0.y;
+  r0.x = r0.y * -r0.x + r0.x;
+  r0.xyz = r0.xxx * g_GrainParams.xxx * injectedData.fxFilmGrain + r1.xyz;
+  r0.rgb = renodx::color::gamma::DecodeSafe(r0.rgb);
+  } else {
+    r0.rgb = renodx::color::gamma::DecodeSafe(r1.rgb);
+    r0.rgb = applyFilmGrain(r0.rgb, v1);
+  }
+  o0.xyz = PostToneMapScale(r0.xyz);
+  o0.w = 1;
+  return;
+}
