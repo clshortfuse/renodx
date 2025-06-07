@@ -13,6 +13,8 @@ Texture2D<float4> ColorSampler : register(t0);
 // 3Dmigoto declarations
 #define cmp -
 
+// Runs as a godray + other stuff
+// We only want to adjust the godray aspect
 void main(
     float4 v0: TEXCOORD0,
     float4 v1: TEXCOORD1,
@@ -36,6 +38,11 @@ void main(
   r0.xyz = ColorDegammaValue.xyz * r0.xyz;
   o0.xyz = exp2(r0.xyz); */
   o0.rgb = renodx::math::SafePow(r0.rgb, ColorDegammaValue.r);
+  if (CUSTOM_VIDEO_HAS_DRAWN == 0.f) {
+    o0.rgb = saturate(o0.rgb);
+    o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb);
+    o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb * 0.25);
+  }
   // o0.rgb = saturate(o0.rgb);
   // o0.rgb = renodx::color::correct::GammaSafe(o0.rgb);
   // o0.rgb = renodx::color::gamma::DecodeSafe(r0.rgb);
