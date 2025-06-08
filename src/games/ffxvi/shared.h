@@ -5,7 +5,6 @@
 // #define RENODX_TONE_MAP_TYPE                 1.f
 // #define RENODX_PEAK_WHITE_NITS               400.f
 // #define RENODX_DIFFUSE_WHITE_NITS            100.f
-// #define RENODX_TONE_MAP_HUE_CORRECTION       0.5f
 // #define RENODX_TONE_MAP_EXPOSURE             1.f
 // #define RENODX_TONE_MAP_HIGHLIGHTS           1.f
 // #define RENODX_TONE_MAP_SHADOWS              1.f
@@ -18,7 +17,6 @@
 // #define CUSTOM_BLOOM_SCALING                 1.f
 // #define RENODX_CUSTOM_COLOR_SPACE            0.f
 // #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION 1.35f
-// #define RENODX_TONE_MAP_SHOULDER_START       0.2f
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -36,8 +34,6 @@ struct ShaderInjectData {
   float tone_map_saturation;
   float tone_map_blowout;
   float tone_map_highlight_saturation;
-  float tone_map_hue_correction;
-  float tone_map_shoulder_start;
   float custom_color_space;
 
   float custom_bloom;
@@ -53,7 +49,6 @@ cbuffer shader_injection : register(b13, space50) {
 #define RENODX_TONE_MAP_TYPE                 shader_injection.tone_map_type
 #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
-#define RENODX_TONE_MAP_HUE_CORRECTION       shader_injection.tone_map_hue_correction
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
@@ -66,7 +61,6 @@ cbuffer shader_injection : register(b13, space50) {
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom
 #define CUSTOM_BLOOM_SCALING                 shader_injection.custom_bloom_scaling
 #define RENODX_CUSTOM_COLOR_SPACE            shader_injection.custom_color_space
-#define RENODX_TONE_MAP_SHOULDER_START       shader_injection.tone_map_shoulder_start
 
 #include "../../shaders/renodx.hlsl"
 

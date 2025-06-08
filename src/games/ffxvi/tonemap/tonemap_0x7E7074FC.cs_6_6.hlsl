@@ -1,4 +1,4 @@
-#include "../common.hlsli"
+#include "../tonemap.hlsli"
 
 // clang-format off
 struct cCommon_Struct {
@@ -89,76 +89,7 @@ cbuffer cb0 : register(b0) {
   cCommon_Struct cCommon_000 : packoffset(c000.x);
 };
 
-// clang-format off
-cbuffer cb1 : register(b1) {
-  struct cConstant0_Struct {
-    struct ChromaticAberrationParameter {
-      float4 ChromaticAberrationParameter_000[3];
-      float ChromaticAberrationParameter_048;
-      int ChromaticAberrationParameter_052;
-      int2 ChromaticAberrationParameter_056;
-    } cConstant0_Struct_000;
-    struct VignetteParameter {
-      struct VignetteMechanicalParameter {
-        float VignetteMechanicalParameter_000;
-        float VignetteMechanicalParameter_004;
-        int2 VignetteMechanicalParameter_008;
-      } VignetteParameter_000;
-      struct VignetteNaturalParameter {
-        float VignetteNaturalParameter_000;
-        float VignetteNaturalParameter_004;
-        float VignetteNaturalParameter_008;
-        int VignetteNaturalParameter_012;
-      } VignetteParameter_016;
-      float3 VignetteParameter_032;
-      float VignetteParameter_044;
-    } cConstant0_Struct_064;
-    struct NightFilterParameter {
-      float4 NightFilterParameter_000[30];
-    } cConstant0_Struct_112;
-    struct FilmGrainParameter {
-      float2 FilmGrainParameter_000;
-      float2 FilmGrainParameter_008;
-      float FilmGrainParameter_016;
-      int3 FilmGrainParameter_020;
-    } cConstant0_Struct_592;
-    struct ColorGradingLutParameter {
-      int ColorGradingLutParameter_000;
-      float ColorGradingLutParameter_004;
-      int2 ColorGradingLutParameter_008;
-    } cConstant0_Struct_624;
-    struct ColorGradingRuntimeParameter {
-      float4 ColorGradingRuntimeParameter_000;
-      float4 ColorGradingRuntimeParameter_016;
-      float4 ColorGradingRuntimeParameter_032;
-      float4 ColorGradingRuntimeParameter_048;
-      float4 ColorGradingRuntimeParameter_064;
-    } cConstant0_Struct_640;
-    struct ColorGradingRuntime2Parameter {
-      float4 ColorGradingRuntime2Parameter_000;
-      float4 ColorGradingRuntime2Parameter_016;
-      float4 ColorGradingRuntime2Parameter_032;
-    } cConstant0_Struct_720;
-    struct ToneMappingParameter {
-      struct TripleSectionToneMappingParams {
-        float TripleSectionToneMappingParams_000;
-        float TripleSectionToneMappingParams_004;
-        float TripleSectionToneMappingParams_008;
-        float TripleSectionToneMappingParams_012;
-        float TripleSectionToneMappingParams_016;
-        float TripleSectionToneMappingParams_020;
-        int2 TripleSectionToneMappingParams_024;
-        float4 TripleSectionToneMappingParams_032;
-      } ToneMappingParameter_000;
-      float ToneMappingParameter_048;
-      float ToneMappingParameter_052;
-      int2 ToneMappingParameter_056;
-    } cConstant0_Struct_768;
-    float cConstant0_Struct_832;
-    int3 cConstant0_Struct_836;
-  } cConstant0_000 : packoffset(c000.x);
-};
-// clang-format on
+
 
 SamplerState s0 : register(s0);
 
@@ -340,126 +271,14 @@ void main(
     float _205 = _203 + _189;
     float _206 = _203 + _190;
 
-    float y_in;
-    float3 untonemapped = ApplySliders(_204, _205, _206, y_in);
-
-    float _209 = _204 * cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_048;
-    float _210 = _205 * cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_048;
-    float _211 = _206 * cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_048;
-    float _223 = _209 - cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_008;
-    float _224 = _210 - cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_008;
-    float _225 = _211 - cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_008;
-    float _226 = _223 * cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_004;
-    float _227 = _224 * cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_004;
-    float _228 = _225 * cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_004;
-    float _229 = _226 + cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_008;
-    float _230 = _227 + cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_008;
-    float _231 = _228 + cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_008;
-    float _232 = _209 / cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_008;
-    float _233 = _210 / cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_008;
-    float _234 = _211 / cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_008;
-    float _235 = abs(_232);
-    float _236 = abs(_233);
-    float _237 = abs(_234);
-
-    // screen brightness slider (is actually gamma)
-    float _238 = log2(_235);
-    float _239 = log2(_236);
-    float _240 = log2(_237);
-    float _241 = _238 * cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_016;
-    float _242 = _239 * cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_016;
-    float _243 = _240 * cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_016;
-    float _244 = exp2(_241);
-    float _245 = exp2(_242);
-    float _246 = exp2(_243);
-
-    float _247 = _244 * cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_008;
-    float _248 = _245 * cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_008;
-    float _249 = _246 * cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_008;
-    float _250 = _247 + cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_020;
-    float _251 = _248 + cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_020;
-    float _252 = _249 + cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_020;
-
-    float _253 = peak_ratio - cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_032.y;
-    float _254 = -0.0f - cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_032.z;
-    float _255 = _209 - cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_032.x;
-    float _256 = _210 - cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_032.x;
-    float _257 = _211 - cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_032.x;
-    float _258 = _255 * _254;
-    float _259 = _256 * _254;
-    float _260 = _257 * _254;
-    float _261 = _258 / peak_ratio;
-    float _262 = _259 / peak_ratio;
-    float _263 = _260 / peak_ratio;
-    float _264 = _261 * 1.4426950216293335f;
-    float _265 = _262 * 1.4426950216293335f;
-    float _266 = _263 * 1.4426950216293335f;
-    float _267 = exp2(_264);
-    float _268 = exp2(_265);
-    float _269 = exp2(_266);
-
-    float _270 = _267 * _253;
-    float _271 = _268 * _253;
-    float _272 = _269 * _253;
-    float _273 = peak_ratio - _270;
-    float _274 = peak_ratio - _271;
-    float _275 = peak_ratio - _272;
-    float _276 = saturate(_232);
-    float _277 = saturate(_233);
-    float _278 = saturate(_234);
-
-    // hermite blend?
-    float _279 = _276 * 2.0f;
-    float _280 = _277 * 2.0f;
-    float _281 = _278 * 2.0f;
-    float _282 = 3.0f - _279;
-    float _283 = 3.0f - _280;
-    float _284 = 3.0f - _281;
-    float _285 = _276 * _276;
-    float _286 = _285 * _282;
-    float _287 = _277 * _277;
-    float _288 = _287 * _283;
-    float _289 = _278 * _278;
-    float _290 = _289 * _284;
-    float _291 = 1.0f - _286;
-    float _292 = 1.0f - _288;
-    float _293 = 1.0f - _290;
-
-    // cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_032.x = 1.f
-    bool _294 = (_209 < cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_032.x);
-    bool _295 = (_210 < cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_032.x);
-    bool _296 = (_211 < cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_032.x);
-    float _297 = select(_294, 0.0f, 1.0f);
-    float _298 = select(_295, 0.0f, 1.0f);
-    float _299 = select(_296, 0.0f, 1.0f);
-
-    // lerp?
-    float _300 = _286 - _297;
-    float _301 = _288 - _298;
-    float _302 = _290 - _299;
-    float _303 = _291 * _250;
-    float _304 = _292 * _251;
-    float _305 = _293 * _252;
-    float _306 = _300 * _229;
-    float _307 = _301 * _230;
-    float _308 = _302 * _231;
-    float _309 = _273 * _297;
-    float _310 = _274 * _298;
-    float _311 = _275 * _299;
-    float _312 = _306 + _309;
-    float _313 = _312 + _303;
-    float _314 = _307 + _310;
-    float _315 = _314 + _304;
-    float _316 = _308 + _311;
-    float _317 = _316 + _305;
+    float3 untonemapped = float3(_204, _205, _206);
+    float3 tonemapped = ApplyToneMap(untonemapped, peak_ratio);
 
     float paper_white = cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_052;
 
-    FinalizeToneMap(_313, _315, _317, untonemapped, y_in);
-
-    float _319 = _313 * paper_white;
-    float _320 = _315 * paper_white;
-    float _321 = _317 * paper_white;
+    float _319 = tonemapped.r * paper_white;
+    float _320 = tonemapped.g * paper_white;
+    float _321 = tonemapped.b * paper_white;
 
     // BT.709 -> BT.2020
     float _322 = _319 * 0.6274039149284363f;
