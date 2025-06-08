@@ -658,6 +658,8 @@ void AddAdvancedSettings() {
         .is_visible = []() { return settings[0]->GetValue() >= 2; },
     };
     add_setting(setting);
+
+    g_upgrade_copy_destinations = setting->GetValue();
   }
 
   for (const auto& [key, format] : UPGRADE_TARGETS) {
