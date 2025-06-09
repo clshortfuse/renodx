@@ -19,11 +19,30 @@
 
 namespace {
 
-renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xEEFE9737),  // LUT
-    CustomShaderEntry(0xAA66A0B6),  // LUT + Noise
-    CustomShaderEntry(0x4AC5CC39)   // glow
-};
+bool UpgradeRTVShader(reshade::api::command_list* cmd_list) {
+  auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);
+  bool changed = false;
+  for (auto rtv : rtvs) {
+    changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv);
+  }
+  if (changed) {
+    renodx::mods::swapchain::FlushDescriptors(cmd_list);
+    renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});
+  }
+  return true;
+}
+
+const renodx::mods::shader::CustomShaders custom_shaders = {
+    CustomShaderEntry(0xEEFE9737),                             // LUT
+    CustomShaderEntry(0xAA66A0B6),                             // LUT + Noise
+    CustomShaderEntryCallback(0x4AC5CC39, &UpgradeRTVShader),  // glow
+    {
+        0x49E25D6C,
+        {
+            .crc32 = 0x49E25D6C,
+            .on_draw = &UpgradeRTVShader,
+        },
+    }};
 
 ShaderInjectData shader_injection;
 
@@ -298,7 +317,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Options",
         .group = "button-line-1",
         .on_change = []() {
-          for (auto setting : settings) {
+          for (auto* setting : settings) {
             if (setting->key.empty()) continue;
             if (!setting->can_reset) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
@@ -311,7 +330,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Options",
         .group = "button-line-1",
         .on_change = []() {
-          for (auto setting : settings) {
+          for (auto* setting : settings) {
             if (setting->key.empty()) continue;
             if (!setting->can_reset) continue;
             if (setting->key == "ColorGradeSaturation" || setting->key == "ColorGradeContrast" || setting->key == "ColorGradeBlowout") {
@@ -397,11 +416,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
 
       // Always upgrade first of format
+      renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_float,
-          .index = 0,
           .ignore_size = true,
+          .use_resource_view_cloning = true,
+          .use_resource_view_hot_swap = true,
       });
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
