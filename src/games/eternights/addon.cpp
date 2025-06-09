@@ -25,7 +25,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x8191B510),  // uber_battle shader
     CustomShaderEntry(0xFBF8FE52),  // uber_main_menu shader
     CustomShaderEntry(0x97E9E2C4),  // uber_dodge shader
-    CustomShaderEntry(0x066C98CB),  // movie_fix shader
     CustomShaderEntry(0xCE499034),  // motion blur disable shader (game has motion blur enabled, even though it's disabled by default in options)
 };
 
