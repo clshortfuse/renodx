@@ -108,6 +108,22 @@ float3 DivideSafe(float3 dividend, float3 divisor, float3 fallback) {
                 DivideSafe(dividend.z, divisor.z, fallback.z));
 }
 
+float Max(float x, float y, float z) {
+  return max(x, max(y, z));
+}
+
+float Max(float x, float y, float z, float w) {
+  return max(x, max(y, max(z, w)));
+}
+
+float Min(float x, float y, float z) {
+  return min(x, min(y, z));
+}
+
+float Min(float x, float y, float z, float w) {
+  return min(x, min(y, min(z, w)));
+}
+
 END_NAMESPACE(math)
 END_NAMESPACE(renodx)
 
