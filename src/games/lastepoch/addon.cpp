@@ -25,13 +25,21 @@
 
 namespace {
 
+ShaderInjectData shader_injection;
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x900045BA),  // camera light
     CustomShaderEntry(0x6EA48EC8),  // LUT3DBaker
     CustomShaderEntry(0x43621B25),  // uberpost
     CustomShaderEntry(0xFF4E4EF2),  // uberpost (title menu)
-    CustomShaderEntry(0x366EE13E),  // postfinal
-    CustomShaderEntry(0xCC8B6ACF),  // postfinal (FXAA)
+    CustomShaderEntryCallback(0x366EE13E, [](reshade::api::command_list* cmd_list) {  // postfinal
+    shader_injection.stateCheck = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xCC8B6ACF, [](reshade::api::command_list* cmd_list) {  // postfinal (FXAA)
+    shader_injection.stateCheck = true;
+    return true;
+    }),
     CustomShaderEntry(0x15096C7B),  // outline
     CustomShaderEntry(0x4B83BA2B),  // SMAA 2
     CustomShaderEntry(0xB5EA3401),  // TAA
@@ -43,7 +51,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x20133A8B),  // Final
 };
 
-ShaderInjectData shader_injection;
 float current_settings_mode = 0;
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -551,6 +558,7 @@ void OnPresent(
   shader_injection.random_1 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
   shader_injection.random_2 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
   shader_injection.random_3 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
+  shader_injection.stateCheck = false;
 }
 
 }  // namespace
