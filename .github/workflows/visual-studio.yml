@@ -6,14 +6,12 @@ on:
     branches: [main]
     paths-ignore:
       - "**/*.md"
-      - "**/*.json"
       - "docs/**"
       - ".github/workflows/**"
   pull_request:
     branches: [main]
     paths-ignore:
       - "**/*.md"
-      - "**/*.json"
       - "docs/**"
       - ".github/workflows/**"
 
