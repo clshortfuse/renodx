@@ -504,57 +504,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .use_resource_view_cloning = true,
             .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
         });
-        /*
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-            .old_format = reshade::api::format::r10g10b10a2_typeless,
-            .new_format = reshade::api::format::r16g16b16a16_float,
-            .use_resource_view_cloning = true,
-            .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
-        });
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-            .old_format = reshade::api::format::r10g10b10a2_unorm,
-            .new_format = reshade::api::format::r16g16b16a16_float,
-            .use_resource_view_cloning = true,
-            .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
-        });*/
-        /*
-        for (const auto& [key, format] : UPGRADE_TARGETS) {
-          auto* setting = new renodx::utils::settings::Setting{
-              .key = "Upgrade_" + key,
-              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 0.f,
-              .label = key,
-              .section = "Resource Upgrades",
-              .labels = {
-                  "Off",
-                  "Output size",
-                  "Output ratio",
-                  "Any size",
-              },
-              .is_global = true,
-              .is_visible = []() { return settings[0]->GetValue() >= 2; },
-          };
-          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-          settings.push_back(setting);
-
-          auto value = setting->GetValue();
-          if (value > 0) {
-            renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-                .old_format = format,
-                .new_format = reshade::api::format::r16g16b16a16_float,
-                .ignore_size = (value == UPGRADE_TYPE_ANY),
-                .use_resource_view_cloning = true,
-                .aspect_ratio = static_cast<float>((value == UPGRADE_TYPE_OUTPUT_RATIO)
-                                                       ? renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER
-                                                       : renodx::mods::swapchain::SwapChainUpgradeTarget::ANY),
-                .usage_include = reshade::api::resource_usage::render_target,
-            });
-            std::stringstream s;
-            s << "Applying user resource upgrade for ";
-            s << format << ": " << value;
-            reshade::log::message(reshade::log::level::info, s.str().c_str());
-          }
-        }*/
 
         initialized = true;
       }
