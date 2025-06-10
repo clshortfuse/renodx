@@ -331,12 +331,6 @@ void main(
 
   o0.xyz = r0.xyz;
 
-  #ifdef DEBUG_UBER
-  if (v1.x < 0.005 && v1.y <= 0.005) {
-    o0.xyz = (0,0,0);
-  }
-  #endif
-
   o0.w = r3.w;
   return;
 }

@@ -119,6 +119,3 @@ cbuffer shader_injection : register(b13) {
 #endif
 
 #endif  // SRC_TEMPLATE_SHARED_H_
-
-
-#define DEBUG_UBER
