@@ -103,6 +103,21 @@ float3 PostToneMapScale(float3 color) {
   return color;
 }
 
+float3 InvertToneMapScale(float3 color) {
+  if (injectedData.toneMapGammaCorrection == 2.f) {
+    color = renodx::color::correct::GammaSafe(color, false, 2.4f);
+    color *= injectedData.toneMapUINits / injectedData.toneMapGameNits;
+    color = renodx::color::correct::GammaSafe(color, true, 2.4f);
+  } else if (injectedData.toneMapGammaCorrection == 1.f) {
+    color = renodx::color::correct::GammaSafe(color, false, 2.2f);
+    color *= injectedData.toneMapUINits / injectedData.toneMapGameNits;
+    color = renodx::color::correct::GammaSafe(color, true, 2.2f);
+  } else {
+    color *= injectedData.toneMapUINits / injectedData.toneMapGameNits;
+  }
+  return color;
+}
+
 float3 FinalizeOutput(float3 color) {
   if (injectedData.toneMapGammaCorrection == 2.f) {
     color = renodx::color::correct::GammaSafe(color, false, 2.4f);

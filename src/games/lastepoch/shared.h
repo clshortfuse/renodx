@@ -42,6 +42,7 @@ struct ShaderInjectData {
   float random_1;
   float random_2;
   float random_3;
+  bool stateCheck;
 };
 
 #ifndef __cplusplus
