@@ -1,7 +1,7 @@
 #ifndef SRC_SHADERS_CROSS_HLSL_
 #define SRC_SHADERS_CROSS_HLSL_
 
-#if defined(VULKAN) || defined(GL_ES)
+#if !defined(__SLANG__) && (defined(VULKAN) || defined(GL_ES))
 
 #define START_NAMESPACE(x)
 #define END_NAMESPACE(x)
@@ -12,10 +12,12 @@
 #define mad(a, b, c)  fma(a, b, c)
 #define saturate(a)   clamp(a, 0.0, 1.0)
 #define lerp(a, b, t) mix(a, b, t)
-#define float2        vec2
-#define float3        vec3
-#define float4        vec4
-#define mul(a, b)     (b * a)
+
+#define float3x3  mat3
+#define float2    vec2
+#define float3    vec3
+#define float4    vec4
+#define mul(a, b) (b * a)
 
 vec2 pow(vec2 x, float y) {
   return pow(x, vec2(y));
