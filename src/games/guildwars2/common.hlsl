@@ -152,17 +152,14 @@ float3 FinalizeOutput(float3 color) {
     color = renodx::color::srgb::DecodeSafe(color);
   }
   color *= injectedData.toneMapUINits;
-  if (injectedData.toneMapType != 1.f) {
-    float y_max = injectedData.toneMapPeakNits;
-    float y = renodx::color::y::from::BT709(abs(color));
-    if (y > y_max) {
-      color *= renodx::math::DivideSafe(y_max, y);
-    }
-  }
-  if (injectedData.toneMapType == 0.f) {
-    color = renodx::color::bt709::clamp::BT709(color);
+  	if(injectedData.toneMapType == 0.f) {
+  color = renodx::color::bt709::clamp::BT709(color);
+  color = min(injectedData.toneMapGameNits, color);
+  } else if (injectedData.toneMapType != 1.f) {
+  color = renodx::tonemap::ExponentialRollOff(color, injectedData.toneMapGameNits, injectedData.toneMapPeakNits);
+  color = renodx::color::bt709::clamp::BT2020(color);
   } else {
-    color = renodx::color::bt709::clamp::BT2020(color);
+  color = renodx::color::bt709::clamp::BT2020(color);
   }
   color /= 80.f;
   return color;
@@ -320,9 +317,9 @@ float3 applyUserTonemap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   float3 outputColor;
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = min(3, injectedData.toneMapType);
-  config.peak_nits = injectedData.toneMapPeakNits;
+  config.peak_nits = 10000.f;
   config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = injectedData.toneMapGammaCorrection;
+  config.gamma_correction = 0.f;
   config.exposure = injectedData.colorGradeExposure;
   config.highlights = injectedData.colorGradeHighlights;
   config.shadows = injectedData.colorGradeShadows;
@@ -380,9 +377,9 @@ float3 applyUserTonemap(float3 untonemapped) {
   float3 outputColor;
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = min(3, injectedData.toneMapType);
-  config.peak_nits = injectedData.toneMapPeakNits;
+  config.peak_nits = 10000.f;
   config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = injectedData.toneMapGammaCorrection;
+  config.gamma_correction = 0.f;
   config.exposure = injectedData.colorGradeExposure;
   config.highlights = injectedData.colorGradeHighlights;
   config.shadows = injectedData.colorGradeShadows;

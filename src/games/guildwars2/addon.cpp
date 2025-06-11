@@ -267,10 +267,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     shader_injection.stateCheck = 3.f;
     return true;
     }),
-    CustomShaderEntryCallback(0x616B3F61, [](reshade::api::command_list* cmd_list) {    // UI (vista flashbang)
-    shader_injection.stateCheck += 1.f;
-    return true;
-    }),
     __ALL_CUSTOM_SHADERS
 };
 
