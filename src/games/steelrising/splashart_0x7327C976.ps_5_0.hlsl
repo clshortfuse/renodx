@@ -29,7 +29,7 @@ void main(
   r0.xyzw = g_texture.Sample(g_Sampler_LinearClamp_s, v1.xy).xyzw;
   o0.xyzw = g_color.xyzw * r0.xyzw;
   o0 = saturate(o0);
-  o0.rgb = renodx::color::srgb::Decode(o0.rgb);
+  o0.rgb = renodx::color::gamma::Decode(o0.rgb, 2.2f);
   o0.rgb = PostToneMapScale(o0.rgb);
   o0.rgb = FinalizeOutput(o0.rgb);
   return;

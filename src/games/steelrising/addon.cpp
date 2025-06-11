@@ -52,12 +52,12 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 4.f,
+        .default_value = 3.f,
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "ACES", "RenoDRT (Daniele)", "RenoDRT (Reinhard)"},
+        .labels = {"Vanilla", "None", "RenoDRT (Daniele)", "RenoDRT (Reinhard)"},
         .tint = 0xB12419,
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
@@ -118,7 +118,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
         .labels = {"Luminance", "Per Channel"},
         .tint = 0x927A13,
-        .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 2.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
@@ -130,7 +130,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .labels = {"OKLab", "ICtCp", "darktable UCS"},
         .tint = 0x927A13,
-        .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 2.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
@@ -143,7 +143,7 @@ renodx::utils::settings::Settings settings = {
         .tint = 0x927A13,
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType >= 3.f && shader_injection.toneMapPerChannel == 0.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 2.f && shader_injection.toneMapPerChannel == 0.f; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -245,7 +245,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = 0x432A26,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType >= 3.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 2.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -256,7 +256,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = 0x432A26,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 4.f; },
+        .is_enabled = []() { return shader_injection.toneMapType == 3.f; },
         .parse = [](float value) { return value; },
     },
     new renodx::utils::settings::Setting{
@@ -321,7 +321,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x02A9C9,
         .on_change = []() {
-          renodx::utils::settings::UpdateSetting("toneMapType", 4.f);
+          renodx::utils::settings::UpdateSetting("toneMapType", 3.f);
           renodx::utils::settings::UpdateSetting("toneMapPerChannel", 1.f);
           renodx::utils::settings::UpdateSetting("toneMapHueProcessor", 1.f);
           renodx::utils::settings::UpdateSetting("toneMapHueShift", 50.f);
@@ -345,7 +345,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x02A9C9,
         .on_change = []() {
-          renodx::utils::settings::UpdateSetting("toneMapType", 4.f);
+          renodx::utils::settings::UpdateSetting("toneMapType", 3.f);
           renodx::utils::settings::UpdateSetting("toneMapPerChannel", 0.f);
           renodx::utils::settings::UpdateSetting("toneMapHueProcessor", 1.f);
           renodx::utils::settings::UpdateSetting("toneMapHueShift", 50.f);
