@@ -429,20 +429,6 @@ void AddAvowedUpgrades() {
   });
 }
 
-void AddStellarBladeUpgrades() {
-  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      .old_format = reshade::api::format::r10g10b10a2_unorm,
-      .new_format = reshade::api::format::r16g16b16a16_float,
-      .use_resource_view_cloning = true,
-  });
-
-  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      .old_format = reshade::api::format::b8g8r8a8_typeless,
-      .new_format = reshade::api::format::r16g16b16a16_float,
-      .use_resource_view_cloning = true,
-  });
-}
-
 void AddGamePatches() {
   auto process_path = renodx::utils::platform::GetCurrentProcessPath();
   auto filename = process_path.filename().string();
@@ -452,8 +438,6 @@ void AddGamePatches() {
     AddExpedition33Upgrades();
   } else if (product_name == "Avowed") {
     AddAvowedUpgrades();
-  } else if (product_name == "Stellar Blade (Demo)") {
-    AddStellarBladeUpgrades();
   } else {
     return;
   }
@@ -515,6 +499,25 @@ const std::unordered_map<
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
+
+        {
+            "Stellar Blade",
+            {
+                {"Upgrade_CopyDestinations", 1.f},
+                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
+
+        {
+            "Stellar Blade (Demo)",
+            {
+                {"Upgrade_CopyDestinations", 1.f},
+                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
+
 };
 
 float g_dump_shaders = 0;
