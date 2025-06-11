@@ -86,35 +86,38 @@ float4 applySharpen(Texture2D colorBuffer, SamplerState colorSampler, float2 tex
 //-----SCALING-----//
 float3 PostToneMapScale(float3 color) {
   if (injectedData.toneMapGammaCorrection == 2.f) {
-    color = renodx::color::srgb::EncodeSafe(color);
-    color = renodx::color::gamma::DecodeSafe(color, 2.4f);
-    color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    color = renodx::color::gamma::EncodeSafe(color, 2.4f);
+  color = renodx::color::gamma::EncodeSafe(color, 2.2f);
+  color = renodx::color::gamma::DecodeSafe(color, 2.4f);
+  color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+  color = renodx::color::gamma::EncodeSafe(color, 2.4f);
   } else if (injectedData.toneMapGammaCorrection == 1.f) {
-    color = renodx::color::srgb::EncodeSafe(color);
-    color = renodx::color::gamma::DecodeSafe(color, 2.2f);
-    color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    color = renodx::color::gamma::EncodeSafe(color, 2.2f);
+  color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+  color = renodx::color::gamma::EncodeSafe(color, 2.2f);
   } else {
-    color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-    color = renodx::color::srgb::EncodeSafe(color);
+  color = renodx::color::gamma::EncodeSafe(color, 2.2f);
+  color = renodx::color::srgb::DecodeSafe(color);
+  color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
+  color = renodx::color::srgb::EncodeSafe(color);
   }
   return color;
 }
 
 float3 FinalizeOutput(float3 color) {
   if (injectedData.toneMapGammaCorrection == 2.f) {
-    color = renodx::color::gamma::DecodeSafe(color, 2.4f);
+  color = renodx::color::gamma::DecodeSafe(color, 2.4f);
   } else if (injectedData.toneMapGammaCorrection == 1.f) {
-    color = renodx::color::gamma::DecodeSafe(color, 2.2f);
+  color = renodx::color::gamma::DecodeSafe(color, 2.2f);
   } else {
-    color = renodx::color::srgb::DecodeSafe(color);
+  color = renodx::color::srgb::DecodeSafe(color);
   }
   color *= injectedData.toneMapUINits;
-  if (injectedData.toneMapType == 0.f) {
-    color = renodx::color::bt709::clamp::BT709(color);
+  	if(injectedData.toneMapType == 0.f) {
+  color = renodx::color::bt709::clamp::BT709(color);
+  } else if (injectedData.toneMapType == 3.f || injectedData.toneMapType == 4.f) {
+  color = renodx::tonemap::ExponentialRollOff(color, injectedData.toneMapGameNits, injectedData.toneMapPeakNits);
+  color = renodx::color::bt709::clamp::BT2020(color);
   } else {
-    color = renodx::color::bt709::clamp::BT2020(color);
+  color = renodx::color::bt709::clamp::BT2020(color);
   }
   color /= 80.f;
   return color;
@@ -128,8 +131,12 @@ float3 vanillaTonemap(float3 color) {
 float3 applyFrostbite(float3 input, renodx::tonemap::Config FbConfig) {
   float3 color = input;
   float FbPeak = FbConfig.peak_nits / FbConfig.game_nits;
-  if (FbConfig.gamma_correction != 0.f) {
-    FbPeak = renodx::color::correct::Gamma(FbPeak, FbConfig.gamma_correction > 0.f, abs(FbConfig.gamma_correction) == 1.f ? 2.2f : 2.4f);
+  if (FbConfig.gamma_correction == 0.f) {
+    FbPeak = renodx::color::srgb::Encode(FbPeak);
+    FbPeak = renodx::color::gamma::Decode(FbPeak, 2.2f);
+  } else if (FbConfig.gamma_correction == 2.f) {
+    FbPeak = renodx::color::gamma::Encode(FbPeak, 2.4f);
+    FbPeak = renodx::color::gamma::Decode(FbPeak, 2.2f);
   }
   float y = renodx::color::y::from::BT709(color * FbConfig.exposure);
   color = renodx::color::grade::UserColorGrading(color, FbConfig.exposure, FbConfig.highlights, FbConfig.shadows, FbConfig.contrast);
@@ -175,11 +182,17 @@ float3 applyDICE(float3 input, renodx::tonemap::Config DiceConfig) {
   float3 color = input;
   float DicePaperWhite = DiceConfig.game_nits / 80.f;
   float DicePeak = DiceConfig.peak_nits / 80.f;
-  if (DiceConfig.gamma_correction != 0.f) {
-    DicePaperWhite = renodx::color::correct::Gamma(DicePaperWhite, DiceConfig.gamma_correction > 0.f, abs(DiceConfig.gamma_correction) == 1.f ? 2.2f : 2.4f);
-    DicePeak = renodx::color::correct::Gamma(DicePeak, DiceConfig.gamma_correction > 0.f, abs(DiceConfig.gamma_correction) == 1.f ? 2.2f : 2.4f);
-  }
-
+    if (DiceConfig.gamma_correction == 0.f) {
+      DicePeak = renodx::color::srgb::Encode(DicePeak);
+      DicePeak = renodx::color::gamma::Decode(DicePeak, 2.2f);
+      DicePaperWhite = renodx::color::srgb::Encode(DicePaperWhite);
+      DicePaperWhite = renodx::color::gamma::Decode(DicePaperWhite, 2.2f);
+    } else if (DiceConfig.gamma_correction == 2.f) {
+      DicePeak = renodx::color::gamma::Encode(DicePeak, 2.4f);
+      DicePeak = renodx::color::gamma::Decode(DicePeak, 2.2f);
+      DicePaperWhite = renodx::color::gamma::Encode(DicePaperWhite, 2.4f);
+      DicePaperWhite = renodx::color::gamma::Decode(DicePaperWhite, 2.2f);
+    }
   float y = renodx::color::y::from::BT709(color * DiceConfig.exposure);
   color = renodx::color::grade::UserColorGrading(color, DiceConfig.exposure, DiceConfig.highlights, DiceConfig.shadows, DiceConfig.contrast);
   color = DICEMap(color * DicePaperWhite, DicePeak, injectedData.toneMapShoulderStart * DicePaperWhite, 1.f, DiceConfig.reno_drt_per_channel) / DicePaperWhite;
@@ -251,7 +264,7 @@ float3 applyDICE(float3 input, renodx::tonemap::Config DiceConfig) {
 float3 applyUserTonemap(float3 untonemapped) {
   float3 outputColor;
   float3 hueCorrectionColor = vanillaTonemap(untonemapped);
-  float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18f,0.18f,0.18f)));
+  float midGray = vanillaTonemap(float3(0.18f,0.18f,0.18f)).x;
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = min(3, injectedData.toneMapType);
   config.peak_nits = injectedData.toneMapPeakNits;
@@ -287,6 +300,8 @@ float3 applyUserTonemap(float3 untonemapped) {
   } else if (injectedData.toneMapType == 5.f) {  // DICE
     outputColor = applyDICE(outputColor, config);
   } else {
+    config.peak_nits = 10000.f;
+    config.gamma_correction = 0.f;
     outputColor = renodx::tonemap::config::Apply(outputColor, config);
   }
   return outputColor;
