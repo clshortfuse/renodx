@@ -14,16 +14,16 @@ float3 applyFilmGrain(float3 outputColor, float2 screen){
 //-----SCALING-----//
 float3 PostToneMapScale(float3 color) {
   if (injectedData.toneMapGammaCorrection == 2.f) {
-  color = renodx::color::srgb::EncodeSafe(color);
+  color = renodx::color::gamma::EncodeSafe(color, 2.2f);
   color = renodx::color::gamma::DecodeSafe(color, 2.4f);
   color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
   color = renodx::color::gamma::EncodeSafe(color, 2.4f);
   } else if (injectedData.toneMapGammaCorrection == 1.f) {
-  color = renodx::color::srgb::EncodeSafe(color);
-  color = renodx::color::gamma::DecodeSafe(color, 2.2f);
   color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
   color = renodx::color::gamma::EncodeSafe(color, 2.2f);
   } else {
+  color = renodx::color::gamma::EncodeSafe(color, 2.2f);
+  color = renodx::color::srgb::DecodeSafe(color);
   color *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
   color = renodx::color::srgb::EncodeSafe(color);
   }
@@ -42,6 +42,7 @@ float3 FinalizeOutput(float3 color) {
   	if(injectedData.toneMapType == 0.f){
   color = renodx::color::bt709::clamp::BT709(color);
   } else {
+  color = renodx::tonemap::ExponentialRollOff(color, injectedData.toneMapGameNits, injectedData.toneMapPeakNits);
   color = renodx::color::bt709::clamp::BT2020(color);
   }
   color /= 80.f;
@@ -52,22 +53,26 @@ float3 InverseToneMap(float3 color) {
   if (injectedData.toneMapType != 0.f) {
 	float scaling = injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
 	float videoPeak = scaling * renodx::color::bt2408::REFERENCE_WHITE;
-    videoPeak = renodx::color::correct::Gamma(videoPeak, false, 2.4f);
-    scaling = renodx::color::correct::Gamma(scaling, false, 2.4f);
-      if(injectedData.toneMapGammaCorrection == 2.f){
-    videoPeak = renodx::color::correct::Gamma(videoPeak, true, 2.4f);
-    scaling = renodx::color::correct::Gamma(scaling, true, 2.4f);
-    } else if(injectedData.toneMapGammaCorrection == 1.f){
-    videoPeak = renodx::color::correct::Gamma(videoPeak, true, 2.2f);
-    scaling = renodx::color::correct::Gamma(scaling, true, 2.2f);
-    }
+  videoPeak = renodx::color::gamma::Encode(videoPeak, 2.2f);
+  videoPeak = renodx::color::gamma::Decode(videoPeak, 2.4f);
+  scaling = renodx::color::gamma::Encode(scaling, 2.2f);
+  scaling = renodx::color::gamma::Decode(scaling, 2.4f);
+    if(injectedData.toneMapGammaCorrection == 2.f){
+  videoPeak = renodx::color::gamma::Encode(videoPeak, 2.4f);
+  videoPeak = renodx::color::gamma::Decode(videoPeak, 2.2f);
+  scaling = renodx::color::gamma::Encode(scaling, 2.4f);
+  scaling = renodx::color::gamma::Decode(scaling, 2.2f);    
+  } else if(injectedData.toneMapGammaCorrection == 0.f){
+  videoPeak = renodx::color::correct::Gamma(videoPeak, false, 2.2f);
+  scaling = renodx::color::correct::Gamma(scaling, false, 2.2f);
+  }
     color = renodx::color::gamma::Decode(color, 2.4f);
     color = renodx::tonemap::inverse::bt2446a::BT709(color, renodx::color::bt709::REFERENCE_WHITE, videoPeak);
 	color /= videoPeak;
 	color *= scaling;
   color = renodx::color::gamma::EncodeSafe(color, 2.4f);
   } else {}
-  color = renodx::color::srgb::DecodeSafe(color);
+  color = renodx::color::gamma::DecodeSafe(color, 2.2f);
 	return color;
 }
 

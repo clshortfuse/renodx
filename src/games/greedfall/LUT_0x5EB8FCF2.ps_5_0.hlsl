@@ -109,7 +109,7 @@ void main(
     r2.yzw = r0.zzz * r3.xyz + r2.yzw;
   }
     float3 linearColor = renodx::color::gamma::DecodeSafe(r2.gba, 2.2f);
-		float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18f,0.18f,0.18f)));
+		float midGray = vanillaTonemap(0.18f).x;
 		float3 hueCorrectionColor = vanillaTonemap(linearColor);
     float3 hdrColor;
     float3 sdrColor;
@@ -117,10 +117,10 @@ void main(
     float3 lutOutput;
     float3 outputColor;
   	renodx::tonemap::Config config = renodx::tonemap::config::Create();
-			config.type = min(3, injectedData.toneMapType);
-			config.peak_nits = injectedData.toneMapPeakNits;
+			config.type = injectedData.toneMapType > 1.f ? 3.f : injectedData.toneMapType;
+			config.peak_nits = 10000.f;
 			config.game_nits = injectedData.toneMapGameNits;
-			config.gamma_correction = injectedData.toneMapGammaCorrection;
+			config.gamma_correction = 0.f;
 			config.exposure = injectedData.colorGradeExposure;
 			config.highlights = injectedData.colorGradeHighlights;
 			config.shadows = injectedData.colorGradeShadows;
@@ -135,14 +135,11 @@ void main(
 			config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
       ? renodx::tonemap::config::hue_correction_type::INPUT
       : renodx::tonemap::config::hue_correction_type::CUSTOM;
-			config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f
-      ? (1.f - injectedData.toneMapHueCorrection)
-      : injectedData.toneMapHueCorrection;
+			config.hue_correction_strength = injectedData.toneMapHueCorrection;
 			config.hue_correction_color = lerp(linearColor, hueCorrectionColor, injectedData.toneMapHueShift);
 			config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
-			config.reno_drt_tone_map_method = injectedData.toneMapType == 4.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+			config.reno_drt_tone_map_method = injectedData.toneMapType == 3.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
                                                                     : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-      config.reno_drt_working_color_space = (uint)injectedData.toneMapPerChannel;
 			config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0;
 			config.reno_drt_blowout = injectedData.colorGradeBlowout;
       config.reno_drt_white_clip = injectedData.colorGradeClip;
@@ -151,7 +148,7 @@ void main(
 		} else {
     outputColor = linearColor;
     }
-      if(injectedData.colorGradeLUTStrength == 0.f || config.type == 1.f){
+      if(injectedData.colorGradeLUTStrength == 0.f || config.type == 1.f || (cb1[2].x <= 0 && cb1[0].x <= 0) ){
     r2.rgb = renodx::tonemap::config::Apply(outputColor, config);
     } else {
     renodx::tonemap::config::DualToneMap tone_maps = renodx::tonemap::config::ApplyToneMaps(outputColor, config);
@@ -351,9 +348,9 @@ void main(
   r0.y = r0.y * r0.y;
   r0.x = r0.y * -r0.x + r0.x;
   o0.xyz = r0.xxx * cb1[5].xxx * injectedData.fxFilmGrain + r2.xyz;
-  o0.rgb = renodx::color::srgb::DecodeSafe(o0.rgb);
+  o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb);
   } else {
-    r2.rgb = renodx::color::srgb::DecodeSafe(r2.rgb);
+    r2.rgb = renodx::color::gamma::DecodeSafe(r2.rgb);
     o0.rgb = applyFilmGrain(r2.rgb, v1);
   }
   o0.w = 1;
