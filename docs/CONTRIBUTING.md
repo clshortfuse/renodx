@@ -9,17 +9,28 @@ RenoDX is an engine for modifying DirectX games. Recommended configuration:
 * [ninja](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages) - For faster building
 * [Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/) - Used to build addons and compile HLSL
 * [cmd_decompiler.exe](https://github.com/bo3b/3Dmigoto/releases/tag/1.3.16) - Decompiles upto Shader Model 5.0 to HLSL
+* [slangc.exe](https://github.com/shader-slang/slang/releases) - Compiles .slang files for DXBC, DXIL, and SPIR-V
 * [dxil-spirv.exe](https://github.com/HansKristian-Work/dxil-spirv) - Converts Shader Model 6.0 to SPIR-V
 * [spirv-cross.exe](https://github.com/KhronosGroup/SPIRV-Cross) - Converts SPIR-V to HLSL
 * [DirectXShaderCompiler](https://github.com/microsoft/DirectXShaderCompiler/releases/) - Used to decompile and compile Shader Module 6.x shaders
 
 RenoDX uses the Reshade Addon API meaning [Reshade](https://reshade.me/) is a **core requirement** for RenoDX.
 
-## Initial steps
+## Setup (CLI)
 
-Clone the repository 
+[Clone](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) or [fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) the repository:
 
-* `git clone git@github.com:clshortfuse/renodx.git`
+* `git clone https://github.com/clshortfuse/renodx.git`
+
+Setup compilers binaries (Create `./bin` folder or have binaries in `PATH`)
+
+* `mkdir bin`
+* `curl -L -o dxc.zip https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.8.2505/dxc_2025_05_24.zip`
+* `curl -L -o slang.zip https://github.com/shader-slang/slang/releases/download/v2025.10.3/slang-2025.10.3-windows-x86_64.zip`
+* `powershell -Command "Expand-Archive -Path dxc.zip -DestinationPath dxc_temp -Force; Copy-Item dxc_temp\bin\* .\bin -Force; Remove-Item dxc_temp -Recurse -Force"`
+* `powershell -Command "Expand-Archive -Path slang.zip -DestinationPath slang_temp -Force; Copy-Item slang_temp\bin\* .\bin -Force; Remove-Item slang_temp -Recurse -Force"`
+* `del dxc.zip`
+* `del slang.zip`
 
 Update the submodules
 
@@ -53,7 +64,6 @@ Build the project
 
 * `cmake --preset vs-x64`
 * `cmake --build --preset vs-x64-release`
-
 
 ### Automated configuration
 

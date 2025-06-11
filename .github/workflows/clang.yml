@@ -24,6 +24,11 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Download Slang binaries
+        run: |
+          curl -L -o slang.zip https://github.com/shader-slang/slang/releases/download/v2025.10.3/slang-2025.10.3-windows-x86_64.zip
+          powershell -Command "Expand-Archive -Path slang.zip -DestinationPath slang_temp -Force; if (!(Test-Path -Path .\bin)) { New-Item -ItemType Directory -Path .\bin }; Copy-Item slang_temp\bin\* .\bin -Force; Remove-Item slang_temp -Recurse -Force"
+
       - name: Set up Clang
         uses: egor-tensin/setup-clang@v1
         with:
