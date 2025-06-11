@@ -166,7 +166,7 @@ void main(
     r1.z = (int)r1.z + 1;
   }
   r3.rgb = renodx::color::gamma::DecodeSafe(r3.rgb, 2.2f);
-  float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18f,0.18f,0.18f)));
+  float midGray = vanillaTonemap(float3(0.18f,0.18f,0.18f)).x;
   float3 hueCorrectionColor = vanillaTonemap(r3.rgb);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = injectedData.toneMapType > 1.f ? 3.f : injectedData.toneMapType;

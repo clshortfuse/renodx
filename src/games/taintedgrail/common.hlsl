@@ -182,7 +182,7 @@ float3 vanillACES(float3 color) {
 
 float3 applyUserTonemapMenuCES(float3 untonemapped) {
   float3 outputColor;
-  float midGray = renodx::color::y::from::BT709(vanillACES(float3(0.18f, 0.18f, 0.18f)));
+  float midGray = vanillACES(float3(0.18f, 0.18f, 0.18f)).x;
   float3 hueCorrectionColor = vanillACES(untonemapped);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = injectedData.toneMapType > 1.f ? 2.f : injectedData.toneMapType;
@@ -202,7 +202,7 @@ return renodx::tonemap::config::Apply(outputColor, config);
 
 float3 applyUserTonemapNeutral(float3 untonemapped) {
   float3 outputColor;
-  float midGray = renodx::color::y::from::BT709(renodx::tonemap::unity::BT709(float3(0.18f, 0.18f, 0.18f)));
+  float midGray = renodx::tonemap::unity::BT709(float3(0.18f, 0.18f, 0.18f)).x;
   float3 hueCorrectionColor = renodx::tonemap::unity::BT709(untonemapped);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = min(3, injectedData.toneMapType);
@@ -239,7 +239,7 @@ return renodx::tonemap::config::Apply(outputColor, config);
 
 float3 applyUserTonemapACES(float3 untonemapped) {
   float3 outputColor = untonemapped;
-  float midGray = renodx::color::y::from::BT709(renodx::tonemap::ACESFittedAP1(float3(0.18f, 0.18f, 0.18f)));
+  float midGray = renodx::tonemap::ACESFittedAP1(float3(0.18f, 0.18f, 0.18f)).x;
   float3 hueCorrectionColor = renodx::tonemap::ACESFittedAP1(untonemapped);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = min(3, injectedData.toneMapType);
@@ -275,7 +275,7 @@ return renodx::tonemap::config::Apply(outputColor, config);
 
 float3 applyUserTonemapMenuNeutral(float3 untonemapped) {
   float3 outputColor;
-  float midGray = renodx::color::y::from::BT709(renodx::tonemap::unity::BT709(float3(0.18f, 0.18f, 0.18f)));
+  float midGray = renodx::tonemap::unity::BT709(float3(0.18f, 0.18f, 0.18f)).x;
   float3 hueCorrectionColor = renodx::tonemap::unity::BT709(untonemapped);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = injectedData.toneMapType > 1.f ? 3.f : injectedData.toneMapType;
