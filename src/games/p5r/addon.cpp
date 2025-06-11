@@ -326,6 +326,16 @@ bool OnDrawIndexed(
 
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   std::shared_lock read_only_lock(data->mutex);
+
+  if (data->injection_layout.handle == 0) {
+    auto* layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(pixel_state->pipeline_details->layout);
+    if (layout_data != nullptr) {
+      data->injection_layout = layout_data->injection_layout;
+    } else {
+      return false;
+    }
+  }
+
   if (data->unsafe_blend_pipelines.contains(command_list_data->last_output_merger.handle)) {
     if (data->min_alpha_pipeline.handle == 0) {
       reshade::api::blend_desc blend_desc = {};
@@ -364,15 +374,6 @@ bool OnDrawIndexed(
         device->create_pipeline(pixel_state->pipeline_details->layout, 1, &subobjects, &data->max_alpha_pipeline);
       }
       read_only_lock.lock();
-    }
-
-    if (data->injection_layout.handle == 0) {
-      auto* layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(pixel_state->pipeline_details->layout);
-      if (layout_data != nullptr) {
-        data->injection_layout = layout_data->replacement_layout;
-      } else {
-        return false;
-      }
     }
 
     cmd_list->bind_render_targets_and_depth_stencil(
@@ -430,7 +431,7 @@ void OnBindPipeline(
 void OnDestroyPipeline(
     reshade::api::device* device,
     reshade::api::pipeline pipeline) {
-      auto* data = renodx::utils::data::Get<DeviceData>(device);
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
   const std::unique_lock lock(data->mutex);
   data->unsafe_blend_pipelines.erase(pipeline.handle);
 }
