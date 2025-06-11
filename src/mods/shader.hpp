@@ -490,7 +490,7 @@ static void OnInitPipelineLayout(
       s << "mods::shader::OnInitPipelineLayout(";
       s << "Forcing cbuffer index ";
       s << PRINT_PTR(layout.handle);
-      s << ": " << cbv_index;
+      s << ": " << data->expected_constant_buffer_index;
       s << " )";
       reshade::log::message(reshade::log::level::warning, s.str().c_str());
       cbv_index = data->expected_constant_buffer_index;
@@ -948,9 +948,8 @@ inline void OnPresent(
     const reshade::api::rect* /*dest_rect*/,
     uint32_t /*dirty_rect_count*/,
     const reshade::api::rect* /*dirty_rects*/) {
-  auto* data_ptr = renodx::utils::data::Get<DeviceData>(swapchain->get_device());
-  if (data_ptr == nullptr) return;
-  auto& data = *data_ptr;
+  auto* data = renodx::utils::data::Get<DeviceData>(swapchain->get_device());
+  if (data == nullptr) return;
 
   if (using_counted_shaders) {
     counted_shaders.clear();
