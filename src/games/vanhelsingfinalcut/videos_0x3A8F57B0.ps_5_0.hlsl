@@ -37,7 +37,7 @@ void main(
   o0.xyz = r0.xyz;
   o0.w = _g_vDiffuseColor.w;
   o0 = saturate(o0);
-  o0.rgb = renodx::color::srgb::Decode(o0.rgb);
+  o0.rgb = renodx::color::gamma::Decode(o0.rgb, 2.2f);
   o0.rgb = PostToneMapScale(o0.rgb);
   return;
 }

@@ -44,10 +44,9 @@ void main(
   r1.xyz = _g_fPProgress * r1.xyz + r0.yzw;
   r1.xyz = r0.xxx * float3(0.2,-0.1,-0.1) + r1.xyz;
   r0.xyz = (_g_fPProgress > 0) ? r1.xyz : r0.yzw;
-
   r0.rgb = applyVignette(r0.rgb, v1, injectedData.fxVignette);
 
-  float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18f, 0.18f, 0.18f)));
+  float midGray = vanillaTonemap(float3(0.18f, 0.18f, 0.18f)).x;
   float3 hueCorrectionColor = vanillaTonemap(r0.rgb);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = min(3, injectedData.toneMapType);
@@ -78,23 +77,27 @@ void main(
     r0.xyz = saturate(hueCorrectionColor);
   }
   if (injectedData.colorGradeLUTStrength == 0.f || config.type == 1.f) {
-    if (config.type == 2.f) {
+    if (injectedData.toneMapType == 2.f) {
       r0.rgb = applyFrostbite(r0.rgb, config);
-    } else if (config.type == 5.f) {
+    } else if (injectedData.toneMapType == 5.f) {
       r0.rgb = applyDICE(r0.rgb, config);
     } else {
+      config.peak_nits = 10000.f;
+      config.gamma_correction = 0.f;
       r0.rgb = renodx::tonemap::config::Apply(r0.rgb, config);
     }
   } else {
     float3 sdrColor;
     float3 hdrColor;
-    if (config.type == 2.f) {
+    if (injectedData.toneMapType == 2.f) {
       sdrColor = applyFrostbite(r0.rgb, config, true);
       hdrColor = applyFrostbite(r0.rgb, config);
-    } else if (config.type == 5.f) {
+    } else if (injectedData.toneMapType == 5.f) {
       sdrColor = applyDICE(r0.rgb, config, true);
       hdrColor = applyDICE(r0.rgb, config);
     } else {
+      config.peak_nits = 10000.f;
+      config.gamma_correction = 0.f;
       renodx::tonemap::config::DualToneMap tone_maps = renodx::tonemap::config::ApplyToneMaps(r0.rgb, config);
       sdrColor = tone_maps.color_sdr;
       hdrColor = tone_maps.color_hdr;
@@ -139,7 +142,6 @@ void main(
     }
     r0.rgb = RestoreSaturationLoss(sdrColor, r0.rgb, injectedData.colorGradeLUTScaling);
   }
-  r0.rgb = renodx::color::correct::GammaSafe(r0.rgb, true, 2.2f);
     if (config.type == 0.f) {
     r0.rgb = lerp(sdrColor, r0.rgb, injectedData.colorGradeLUTStrength);
   } else {
@@ -152,7 +154,7 @@ void main(
     }
     r0.rgb = PostToneMapScale(r0.rgb);
   } else {
-    r0.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
+    r0.rgb = renodx::color::gamma::EncodeSafe(r0.rgb, 2.2f);
   }
   o0.rgb = r0.rgb;
   return;

@@ -47,15 +47,15 @@ uint screenWidth, screenHeight;
 colorBuffer.GetDimensions(screenWidth, screenHeight);
 const float2 texelSize = 1.0.xx / float2(screenWidth, screenHeight);
 float4 center = colorBuffer.SampleLevel(colorSampler, texCoord + float2(0,0) * texelSize, 0);
-center.rgb = renodx::color::srgb::DecodeSafe(center.rgb);
+center.rgb = renodx::color::gamma::DecodeSafe(center.rgb, 2.2f);
   if (intensity > 0.f)
     {
     float3 neighbors[4] =
         {
-          renodx::color::srgb::DecodeSafe(colorBuffer.SampleLevel(colorSampler, texCoord + float2(1, 1) * texelSize, 0).xyz),
-          renodx::color::srgb::DecodeSafe(colorBuffer.SampleLevel(colorSampler, texCoord + float2(-1, 1) * texelSize, 0).xyz),
-          renodx::color::srgb::DecodeSafe(colorBuffer.SampleLevel(colorSampler, texCoord + float2(1, -1) * texelSize, 0).xyz),
-          renodx::color::srgb::DecodeSafe(colorBuffer.SampleLevel(colorSampler, texCoord + float2(-1, -1) * texelSize, 0).xyz)
+          renodx::color::gamma::DecodeSafe(colorBuffer.SampleLevel(colorSampler, texCoord + float2(1, 1) * texelSize, 0).xyz, 2.2f),
+          renodx::color::gamma::DecodeSafe(colorBuffer.SampleLevel(colorSampler, texCoord + float2(-1, 1) * texelSize, 0).xyz, 2.2f),
+          renodx::color::gamma::DecodeSafe(colorBuffer.SampleLevel(colorSampler, texCoord + float2(1, -1) * texelSize, 0).xyz, 2.2f),
+          renodx::color::gamma::DecodeSafe(colorBuffer.SampleLevel(colorSampler, texCoord + float2(-1, -1) * texelSize, 0).xyz, 2.2f)
         };
     float neighborDiff = 0;
     [unroll]
@@ -108,36 +108,41 @@ return output;
 
 //-----SCALING-----//
 float3 PostToneMapScale(float3 color) {
+  if (injectedData.toneMapGammaCorrection == 2.f) {
+    color = renodx::color::gamma::EncodeSafe(color, 2.2f);
+    color = renodx::color::gamma::DecodeSafe(color, 2.4f);
+    color *= injectedData.toneMapGameNits;
+  } else if (injectedData.toneMapGammaCorrection == 1.f) {
+    color *= injectedData.toneMapGameNits;
+  } else {
+    color = renodx::color::gamma::EncodeSafe(color, 2.2f);
+    color = renodx::color::srgb::DecodeSafe(color);
+    color *= injectedData.toneMapGameNits;
+  }
   if (injectedData.toneMapType == 0.f) {
     color = renodx::color::bt709::clamp::BT709(color);
+  } else if (injectedData.toneMapType == 3.f || injectedData.toneMapType == 4.f) {
+    color = renodx::tonemap::ExponentialRollOff(color, injectedData.toneMapGameNits, injectedData.toneMapPeakNits);
+    color = renodx::color::bt709::clamp::BT2020(color);
   } else {
     color = renodx::color::bt709::clamp::BT2020(color);
   }
-  if (injectedData.toneMapGammaCorrection == 2.f) {
-    color = renodx::color::srgb::EncodeSafe(color);
-    color = renodx::color::gamma::DecodeSafe(color, 2.4f);
-    color *= injectedData.toneMapGameNits / 80.f;
-  } else if (injectedData.toneMapGammaCorrection == 1.f) {
-    color = renodx::color::srgb::EncodeSafe(color);
-    color = renodx::color::gamma::DecodeSafe(color, 2.2f);
-    color *= injectedData.toneMapGameNits / 80.f;
-  } else {
-    color *= injectedData.toneMapGameNits / 80.f;
-  }
+  color /= 80.f;
   return color;
 }
 
 float3 UIScale(float3 color) {
   if (injectedData.toneMapGammaCorrection == 2.f) {
     color = renodx::color::gamma::Decode(color, 2.4f);
-    color *= injectedData.toneMapUINits / 80.f;
+    color *= injectedData.toneMapUINits;
   } else if (injectedData.toneMapGammaCorrection == 1.f) {
     color = renodx::color::gamma::Decode(color, 2.2f);
-    color *= injectedData.toneMapUINits / 80.f;
+    color *= injectedData.toneMapUINits;
   } else {
     color = renodx::color::srgb::Decode(color);
-    color *= injectedData.toneMapUINits / 80.f;
+    color *= injectedData.toneMapUINits;
   }
+  color /= 80.f;
   return color;
 }
 
@@ -149,9 +154,14 @@ float3 vanillaTonemap(float3 input) {
 float3 applyFrostbite(float3 input, renodx::tonemap::Config FbConfig, bool sdr = false) {
   float3 color = input;
   float FbPeak = sdr ? 1.f : FbConfig.peak_nits / FbConfig.game_nits;
-  if (FbConfig.gamma_correction != 0.f && sdr == false) {
-    FbPeak = renodx::color::correct::Gamma(FbPeak, FbConfig.gamma_correction > 0.f, abs(FbConfig.gamma_correction) == 1.f ? 2.2f : 2.4f);
+  if (FbConfig.gamma_correction == 0.f) {
+    FbPeak = renodx::color::srgb::Encode(FbPeak);
+    FbPeak = renodx::color::gamma::Decode(FbPeak, 2.2f);
+  } else if (FbConfig.gamma_correction == 2.f) {
+    FbPeak = renodx::color::gamma::Encode(FbPeak, 2.4f);
+    FbPeak = renodx::color::gamma::Decode(FbPeak, 2.2f);
   }
+
   float y = renodx::color::y::from::BT709(color * FbConfig.exposure);
   color = renodx::color::grade::UserColorGrading(color, FbConfig.exposure, FbConfig.highlights, FbConfig.shadows, FbConfig.contrast);
   color = renodx::tonemap::frostbite::BT709(color, FbPeak, injectedData.toneMapShoulderStart, injectedData.colorGradeBlowout / 2.f, injectedData.toneMapHueCorrection);
@@ -211,9 +221,18 @@ float3 applyDICE(float3 input, renodx::tonemap::Config DiceConfig, bool sdr = fa
   float3 color = input;
   float DicePaperWhite = DiceConfig.game_nits / 80.f;
   float DicePeak = sdr ? DicePaperWhite : DiceConfig.peak_nits / 80.f;
-  if (DiceConfig.gamma_correction != 0.f && sdr == false) {
-    DicePaperWhite = renodx::color::correct::Gamma(DicePaperWhite, DiceConfig.gamma_correction > 0.f, abs(DiceConfig.gamma_correction) == 1.f ? 2.2f : 2.4f);
-    DicePeak = renodx::color::correct::Gamma(DicePeak, DiceConfig.gamma_correction > 0.f, abs(DiceConfig.gamma_correction) == 1.f ? 2.2f : 2.4f);
+  if (!sdr) {
+  if (DiceConfig.gamma_correction == 0.f) {
+    DicePeak = renodx::color::srgb::Encode(DicePeak);
+    DicePeak = renodx::color::gamma::Decode(DicePeak, 2.2f);
+    DicePaperWhite = renodx::color::srgb::Encode(DicePaperWhite);
+    DicePaperWhite = renodx::color::gamma::Decode(DicePaperWhite, 2.2f);
+  } else if (DiceConfig.gamma_correction == 2.f) {
+    DicePeak = renodx::color::gamma::Encode(DicePeak, 2.4f);
+    DicePeak = renodx::color::gamma::Decode(DicePeak, 2.2f);
+    DicePaperWhite = renodx::color::gamma::Encode(DicePaperWhite, 2.4f);
+    DicePaperWhite = renodx::color::gamma::Decode(DicePaperWhite, 2.2f);
+  }
   }
 
   float y = renodx::color::y::from::BT709(color * DiceConfig.exposure);
