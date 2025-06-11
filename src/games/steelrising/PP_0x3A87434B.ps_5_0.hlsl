@@ -150,6 +150,7 @@ void main(
       r4.x = (int)r2.w;
       r4.xz = r0.zw * r4.xy + v1.xy;
       r4.xzw = g_Texture.SampleLevel(g_Sampler_PointClamp_s, r4.xz, 0).xyz;
+      r4.xzw = renodx::color::gamma::EncodeSafe(r4.xzw, 2.2f);
       r3.w = (int)r2.w + 1;
       r5.w = (int)r1.w + (int)r3.w;
       r5.w = x0[r5.w+0].x;

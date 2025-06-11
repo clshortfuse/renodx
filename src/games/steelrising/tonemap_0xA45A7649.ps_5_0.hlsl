@@ -151,10 +151,7 @@ void main(
             r2.xyz = exp2(r2.xyz);
             r3.xyz = r2.xyz * float3(0.997784019,0.997784019,0.997784019) + float3(0.493900597,0.493900597,0.493900597);
             r2.xyz = r2.xyz / r3.xyz;
-            r2.xyz = log2(r2.xyz);
-            r2.xyz = float3(0.454545468,0.454545468,0.454545468) * r2.xyz;
-            r1.xyz = exp2(r2.xyz);
-            r1.rgb = injectedData.toneMapType == 0.f ? saturate(r1.rgb) : renodx::color::gamma::EncodeSafe(untonemapped);
+            r1.rgb = injectedData.toneMapType == 0.f ? saturate(r2.rgb) : untonemapped;
           } else {
             r0.w = cmp(g_ToneMapOperator == 6);
             if (r0.w != 0) {
