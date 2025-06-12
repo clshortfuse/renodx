@@ -80,8 +80,7 @@ void main(
   r0.xyz = r2.xyz * r0.xyz;
   r0.xyz = r1.xyz / r0.xyz;
   float3 LUTless = r0.xyz;
-  float3 vanillaGray = 0.161404936911f;
-  float midGray = renodx::color::y::from::BT709(vanillaGray);
+  float midGray = 0.161404936911f;
   o0.rgb = applyUserTonemap(untonemapped, colorGradingTexture, colorGradingTextureSampler_s, LUTless, midGray, true);
   if (!injectedData.resScaleCheck) {
   if (injectedData.fxFilmGrain > 0.f) {
@@ -89,7 +88,7 @@ void main(
   }
   o0.rgb = PostToneMapScale(o0.rgb);
   } else {
-    o0.rgb = renodx::color::srgb::EncodeSafe(o0.rgb);
+    o0.rgb = renodx::color::gamma::EncodeSafe(o0.rgb, 2.2f);
   }
   o0.a = renodx::color::y::from::BT709(o0.rgb);
   return;
