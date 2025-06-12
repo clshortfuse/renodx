@@ -21,8 +21,10 @@ void main(
   o0.xyzw = r0.xyzw;
   uint2 textureSize;
   t0.GetDimensions(textureSize.x, textureSize.y);
-  if (textureSize.x == 4 && textureSize.y == 4 && all(cb0[0].xyz == 1.f) && all(tex == 1.f)) {
-    o0 *= injectedData.fxFlashbang;
+  if (textureSize.x == 4 && textureSize.y == 4) {
+    if (all(cb0[0].xyz == 1.f) && all(tex == 1.f)) {
+      o0 *= injectedData.fxFlashbang;
+    }
   }
   if (r1.x < 0) discard;
   return;
