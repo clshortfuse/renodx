@@ -83,7 +83,7 @@ float3 GenerateToneMap(float3 graded_bt709) {
 renodx::draw::Config GetOutputConfig(uint OutputDevice = 0u) {
   renodx::draw::Config config = renodx::draw::BuildConfig();
   bool is_hdr = (OutputDevice >= 3u && OutputDevice <= 6u);
-  if (is_hdr >= 3u) {
+  if (is_hdr) {
     config.intermediate_encoding = renodx::draw::ENCODING_PQ;
     if (CUSTOM_LUT_OPTIMIZATION == 0.f) {
       config.intermediate_scaling = 1.f;
