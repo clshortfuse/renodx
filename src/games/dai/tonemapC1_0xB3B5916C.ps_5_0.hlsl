@@ -76,7 +76,7 @@ void main(
   r0.yzw = colorScale.xyz * r0.yzw;
   r0.xyz = r0.yzw * r0.xxx;
   float3 untonemapped = r0.rgb;
-  float midGray = renodx::color::y::from::BT709(renodx::tonemap::HejlDawson(0.18f));
+  float midGray = renodx::tonemap::HejlDawson(0.18f).x;
   float3 LUTless = renodx::tonemap::HejlDawson(untonemapped);
   r0.xyz = r0.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
   r0.xyz = colorGradingTexture.Sample(colorGradingTextureSampler_s, r0.xyz).xyz;
@@ -89,7 +89,7 @@ void main(
   }
   o0.rgb = PostToneMapScale(o0.rgb);
   } else {
-    o0.rgb = renodx::color::srgb::EncodeSafe(o0.rgb);
+    o0.rgb = renodx::color::gamma::EncodeSafe(o0.rgb, 2.2f);
   }
   o0.a = renodx::color::y::from::BT709(o0.rgb);
   return;

@@ -43,7 +43,7 @@ void main(
   r0.xyz = r1.zzz * r2.xyz + r0.yzw;
   o0.xyz = r1.www * r3.xyz + r0.xyz;
   o0.w = 1;
-  o0.rgb = renodx::color::srgb::DecodeSafe(o0.rgb);
+  o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb, 2.2f);
   if (injectedData.fxFilmGrain > 0.f) {
     o0.rgb = applyFilmGrain(o0.rgb, v1, injectedData.fxFilmGrainType != 0.f);
   }
