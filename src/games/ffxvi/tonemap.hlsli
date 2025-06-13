@@ -152,21 +152,9 @@ float3 ApplyToneMap(float3 untonemapped, float peak_ratio) {
 
     float y_out = dual_tonemaps.a;
     tonemapped = untonemapped * select(y_in > 0, y_out / y_in, 0.f);
-    renodx::color::grade::Config lum_tm_config = renodx::color::grade::config::Create(
-        1.f,
-        1.f,
-        1.f,
-        1.f,
-        0.f,
-        6.4f,
-        0.97f,
-        0.f,
-        0,
-        renodx::color::grade::config::hue_correction_type::INPUT,
-        -1.f * (1.f - 1.f));
-    tonemapped = renodx::color::grade::config::ApplyUserColorGrading(
-        tonemapped,
-        lum_tm_config);
+
+    // automatically calculate chrominance adjustment
+    tonemapped = renodx::color::correct::ChrominanceOKLab(tonemapped, vanilla_tonemapped);
 
     float3 vanilla_tonemapped_bt2020 = renodx::color::bt2020::from::BT709(vanilla_tonemapped);
     float3 tonemapped_bt2020 = max(0, renodx::color::bt2020::from::BT709(tonemapped));
