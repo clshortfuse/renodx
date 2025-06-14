@@ -360,10 +360,7 @@ void main(
   }
   o0.xyz = float3(0.952381015,0.952381015,0.952381015) * r2.xyz;
 
-  // needed for correct vanilla SDR output in ABZU
-  if (RENODX_TONE_MAP_TYPE == 0.f) {
-    o0.rgb = renodx::color::bt709::clamp::BT709(o0.rgb);
-  }
+  o0 = saturate(o0);
 
   return;
 }
