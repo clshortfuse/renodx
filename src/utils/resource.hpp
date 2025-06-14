@@ -225,9 +225,9 @@ static bool is_primary_hook = false;
 
 static struct Store {
   // std::shared_mutex resource_infos_mutex;
-  gtl::parallel_node_hash_map<uint64_t, ResourceInfo> resource_infos;
+  gtl::parallel_node_hash_map<uint64_t, ResourceInfo> resource_infos = gtl::parallel_node_hash_map<uint64_t, ResourceInfo>(4096);
   // std::shared_mutex resource_view_infos_mutex;
-  gtl::parallel_node_hash_map<uint64_t, ResourceViewInfo> resource_view_infos;
+  gtl::parallel_node_hash_map<uint64_t, ResourceViewInfo> resource_view_infos = gtl::parallel_node_hash_map<uint64_t, ResourceViewInfo>(8192);
   std::vector<std::function<void(ResourceInfo* resource_info)>> on_init_resource_info_callbacks;
   std::vector<std::function<void(ResourceInfo* resource_info)>> on_destroy_resource_info_callbacks;
 

@@ -282,7 +282,7 @@ struct PipelineShaderDetails {
 };
 
 static struct Store {
-  gtl::parallel_node_hash_map<uint64_t, PipelineShaderDetails> pipeline_shader_details;
+  gtl::parallel_node_hash_map<uint64_t, PipelineShaderDetails> pipeline_shader_details = gtl::parallel_node_hash_map<uint64_t, PipelineShaderDetails>(16384);
 } local_store;
 
 static Store* store = &local_store;
