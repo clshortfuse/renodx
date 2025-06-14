@@ -43,8 +43,8 @@ void main(
   r0.xyz = cb0[133].xyz * r1.xyz;
   r1.x = dot(float3(2.85846996,-1.62879002,-0.0248910002), r0.xyz);
   r1.y = dot(float3(-0.210181996,1.15820003,0.000324280991), r0.xyz);
-  r1.z = dot(float3(-0.0418119989,-0.118169002,1.06867003), r0.xyz);
-  if(injectedData.toneMapType == 0.f){
+  r1.z = dot(float3(-0.0418119989, -0.118169002, 1.06867003), r0.xyz);
+  if (injectedData.toneMapType == 0.f) {
   r0.xyz = r1.xyz * float3(5.55555582,5.55555582,5.55555582) + float3(0.0479959995,0.0479959995,0.0479959995);
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.xyz = log2(r0.xyz);
@@ -55,10 +55,12 @@ void main(
   r0.xyz = float3(-0.0479959995,-0.0479959995,-0.0479959995) + r0.xyz;
   r0.xyz = float3(0.179999992, 0.179999992, 0.179999992) * r0.xyz;
   } else {
-    r0.xyz = renodx::color::arri::logc::c1000::Encode(r1.xyz, true);
+    r0.rgb = renodx::color::ap1::from::BT709(r1.rgb);
+    r0.rgb = acescc::Encode(r0.rgb);
     r0.xyz = r0.xyz + float3(-0.4135884,-0.4135884,-0.4135884);
     r0.xyz = r0.xyz * cb0[138].zzz + float3(0.4135884,0.4135884,0.4135884);
-    r0.xyz = renodx::color::arri::logc::c1000::Decode(r0.xyz, true);
+    r0.rgb = acescc::Decode(r0.rgb);
+    r0.rgb = renodx::color::bt709::from::AP1(r0.rgb);
   }
   r0.xyz = cb0[134].xyz * r0.xyz;
   float3 signs = sign(r0.xyz);
