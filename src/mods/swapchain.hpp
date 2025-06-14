@@ -869,6 +869,8 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
 
   reshade::api::resource swapchain_clone;
 
+  auto previous_barrier = reshade::api::resource_usage::render_target;
+
   if (use_device_proxy) {
     assert(last_device_proxy_shared_handle != nullptr);
     ID3D11Texture2D* shared_texture = nullptr;
@@ -905,8 +907,14 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
     if (resource_clone.handle == 0u) return;
     swapchain_clone = resource_clone;
 
+    cmd_list->barrier(
+        swapchain_clone,
+        previous_barrier,
+        reshade::api::resource_usage::copy_source);
     // Copy current swapchain to clone
     cmd_list->copy_resource(current_back_buffer, resource_info->clone);
+
+    previous_barrier = reshade::api::resource_usage::copy_source;
   } else {
     // Ignore if not activated yet
     if (resource_info->clone.handle == 0u) return;
@@ -1015,10 +1023,10 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
     }
   }
 
-  // cmd_list->barrier(
-  //     swapchain_clone,
-  //     reshade::api::resource_usage::general,
-  //     reshade::api::resource_usage::shader_resource);
+  cmd_list->barrier(
+      swapchain_clone,
+      previous_barrier,
+      reshade::api::resource_usage::shader_resource);
 
   cmd_list->push_descriptors(
       reshade::api::shader_stage::all_graphics,
@@ -1078,6 +1086,11 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
   cmd_list->bind_scissor_rects(0, 1, &scissor_rect);
   cmd_list->draw(3, 1, 0, 0);
   cmd_list->end_render_pass();
+
+  cmd_list->barrier(
+      swapchain_clone,
+      reshade::api::resource_usage::shader_resource,
+      reshade::api::resource_usage::render_target);
 
   if (!use_device_proxy && device->get_api() != reshade::api::device_api::d3d12) {
     // Reshade calls this on DX12
@@ -3263,7 +3276,7 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
         reshade::register_event<reshade::addon_event::clear_unordered_access_view_float>(OnClearUnorderedAccessViewFloat);
 
         reshade::register_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
-        // reshade::register_event<reshade::addon_event::barrier>(OnBarrier);
+        reshade::register_event<reshade::addon_event::barrier>(OnBarrier);
         reshade::register_event<reshade::addon_event::copy_buffer_to_texture>(OnCopyBufferToTexture);
 
         if (UsingSwapchainProxy()) {
