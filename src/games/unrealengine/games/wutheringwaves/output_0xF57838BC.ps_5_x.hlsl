@@ -1,6 +1,6 @@
 #include "../../shared.h"
 
-// ---- Created with 3Dmigoto v1.4.1 on Tue Feb 11 11:37:42 2025
+// ---- Created with 3Dmigoto v1.3.16 on Thu Jun 12 15:20:21 2025
 Texture3D<float4> t2 : register(t2);
 
 Texture2D<float4> t1 : register(t1);
@@ -20,23 +20,24 @@ cbuffer cb0 : register(b0) {
 // 3Dmigoto declarations
 #define cmp -
 
-void main(linear noperspective float2 w0: TEXCOORD0,
-          linear noperspective float2 v0: TEXCOORD3,
-          linear noperspective float4 v1: TEXCOORD1,
-          linear noperspective float4 v2: TEXCOORD2, float2 v3: TEXCOORD4,
-          float4 v4: SV_POSITION0, out float4 o0: SV_Target0) {
+void main(
+    linear noperspective float2 v0: TEXCOORD0,
+    linear noperspective float2 w0: TEXCOORD3,
+    linear noperspective float4 v1: TEXCOORD1,
+    linear noperspective float4 v2: TEXCOORD2,
+    float2 v3: TEXCOORD4,
+    float4 v4: SV_POSITION0,
+    out float4 o0: SV_Target0) {
   float4 r0, r1, r2, r3, r4, r5;
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xy = v0.xy * cb0[48].xy + cb0[48].zw;
-  r0.xy = cb0[47].zw * r0.xy;
+  r0.xy = w0.xy * cb0[48].xy + cb0[48].zw;
   r0.z = v2.w * 543.309998 + v2.z;
   r0.w = sin(r0.z);
   r0.w = 493013.f * r0.w;
   r1.x = frac(r0.w);
-
-  // r0.w = cmp(0 < cb0[76].x);
+  r0.w = cmp(0 < cb0[76].x);
   // Add branch for performance if grain is off
   [branch]
   if (0 < cb0[76].x) {
@@ -51,18 +52,20 @@ void main(linear noperspective float2 w0: TEXCOORD0,
     r1.xyz = r1.xxx;
   }
   // r1.xyz = r0.www ? r1.yzw : r1.xxx;
-
+  r0.z = -r1.x * r1.x + 1;
+  r0.z = cb0[75].z * r0.z;
+  r2.xy = -r0.xy * cb0[47].zw + v2.xy;
+  r0.zw = r2.xy * r0.zz;
+  r0.xy = r0.xy * cb0[47].zw + r0.zw;
   r2.yw = cb0[96].zz * cb0[95].xy;
+  r1.w = cmp(cb0[96].x == 0.000000);
+  r2.xz = r1.ww ? r2.yw : cb0[95].xy;
 
-  // r0.z = cmp(cb0[96].x == 0.000000);
-  // r2.xz = r0.zz ? r2.yw : cb0[95].xy;
-  r2.xz = (cb0[96].x == 0.f) ? r2.yw : cb0[95].xy;
+  // r3.xyzw = w0.xyzw * cb0[92].zwzw + cb0[92].xyxy;
+  r3.xyzw = w0.xyxy * cb0[92].zwzw + cb0[92].xyxy;
 
-  // r3.xyzw = v0.xyzw * cb0[92].zwzw + cb0[92].xyxy;
-  r3.xyzw = v0.xyxy * cb0[92].zwzw + cb0[92].xyxy;
-
-  // r4.xyzw = cmp(float4(0,0,0,0) < r3.zwzw);
-  // r5.xyzw = cmp(r3.zwzw < float4(0,0,0,0));
+  // r4.xyzw = cmp(float4(0, 0, 0, 0) < r3.zwzw);
+  // r5.xyzw = cmp(r3.zwzw < float4(0, 0, 0, 0));
   // r4.xyzw = (int4)-r4.xyzw + (int4)r5.xyzw;
   // r4.xyzw = (int4)r4.xyzw;
 
@@ -72,11 +75,9 @@ void main(linear noperspective float2 w0: TEXCOORD0,
   r4.xyzw = r5.xyzw * r4.xyzw;
   r2.xyzw = -r4.ywxz * r2.ywxz + r3.ywxz;
 
-  // r0.z = cmp(0 < cb0[96].x);
-  bool r0zb = 0 < cb0[96].x;
-
+  // r1.w = cmp(0 < cb0[96].x);
   // r3.xy = -cb0[96].ww * float2(0.400000006, 0.200000003) + r2.xy;
-  // r2.xy = r0.zz ? r3.xy : r2.xy;
+  // r2.xy = r1.ww ? r3.xy : r2.xy;
 
   if (0 < cb0[96].x) {
     r2.xy = -cb0[96].ww * float2(0.400000006, 0.200000003) + r2.xy;
@@ -84,23 +85,26 @@ void main(linear noperspective float2 w0: TEXCOORD0,
 
   r2.xyzw = r2.zxwy * cb0[93].zwzw + cb0[93].xyxy;
   r2.xyzw = r2.xyzw * cb0[48].xyxy + cb0[48].zwzw;
-  r2.xyzw = cb0[47].zwzw * r2.xyzw;
-
-  r3.xyz = t0.Sample(s0_s, r0.xy).xyz;
+  r3.xy = max(cb0[53].xy, r0.xy);
+  r3.xy = min(cb0[53].zw, r3.xy);
+  r3.xyz = t0.Sample(s0_s, r3.xy).xyz;
+  r2.xyzw = r2.xyzw * cb0[47].zwzw + r0.zwzw;
+  r2.xyzw = max(cb0[53].xyxy, r2.xyzw);
+  r2.xyzw = min(cb0[53].zwzw, r2.xyzw);
   r4.x = t0.Sample(s0_s, r2.xy).x;
   r4.y = t0.Sample(s0_s, r2.zw).y;
-  r0.w = dot(r3.xyz, float3(0.298999995, 0.587000012, 0.114));
-  r0.w = -cb0[96].y + r0.w;
-  r0.w = saturate(10 * r0.w);
-  r1.w = r0.w * -2 + 3;
-  r0.w = r0.w * r0.w;
-  r0.w = r1.w * r0.w;
+  r0.z = dot(r3.xyz, float3(0.298999995, 0.587000012, 0.114));
+  r0.z = -cb0[96].y + r0.z;
+  r0.z = saturate(10 * r0.z);
+  r0.w = r0.z * -2 + 3;
+  r0.z = r0.z * r0.z;
+  r0.z = r0.w * r0.z;
   r4.z = r3.z;
   r2.xyz = r4.xyz + -r3.xyz;
-  r2.xyz = r0.www * r2.xyz + r3.xyz;
+  r2.xyz = r0.zzz * r2.xyz + r3.xyz;
   r2.xyz = r2.xyz + -r4.xyz;
   r2.xyz = cb0[96].xxx * r2.xyz + r4.xyz;
-  // r2.xyz = r0.zzz ? r2.xyz : r4.xyz;
+  // r2.xyz = r1.www ? r2.xyz : r4.xyz;
   r2.xyz = (0 < cb0[96].x) ? r2.xyz : r4.xyz;
 
   r2.xyz = cb0[69].xyz * r2.xyz;
@@ -131,7 +135,6 @@ void main(linear noperspective float2 w0: TEXCOORD0,
     r3.xyz = r0.xyz * float3(0.959999979, 0.959999979, 0.959999979) + float3(0.560000002, 0.560000002, 0.560000002);
     r3.xyz = r0.xyz * r3.xyz + float3(0.140000001, 0.140000001, 0.140000001);
     // r0.xyz = saturate(r2.xyz / r3.xyz);
-
     r0.xyz = (r2.xyz / r3.xyz);
     if (RENODX_TONE_MAP_TYPE == 0.f) {
       r0.xyz = saturate(r0.xyz);
@@ -144,7 +147,6 @@ void main(linear noperspective float2 w0: TEXCOORD0,
     r2.xyz = float3(1.00495005, 1.00495005, 1.00495005) + r2.xyz;
     // r3.xyz = cmp(float3(0.600000024, 0.600000024, 0.600000024) >= r0.xyz);
     // r3.xyz = r3.xyz ? float3(1, 1, 1) : 0;
-
     r3.xyz = (float3(0.600000024, 0.600000024, 0.600000024) >= r0.xyz) ? float3(1, 1, 1) : 0;
     r4.xyz = -r2.xyz + r0.xyz;
     // r0.xyz = saturate(r3.xyz * r4.xyz + r2.xyz);
@@ -189,7 +191,6 @@ void main(linear noperspective float2 w0: TEXCOORD0,
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     o0.w = saturate(o0.w);
   }
-
   r0.xyz = r1.xyz * float3(0.00390625, 0.00390625, 0.00390625) + r0.xyz;
   r0.xyz = float3(-0.001953125, -0.001953125, -0.001953125) + r0.xyz;
   [branch]

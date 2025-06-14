@@ -27,7 +27,7 @@ Setup compilers binaries (Create `./bin` folder or have binaries in `PATH`)
 * `mkdir bin`
 * `curl -L -o dxc.zip https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.8.2505/dxc_2025_05_24.zip`
 * `curl -L -o slang.zip https://github.com/shader-slang/slang/releases/download/v2025.10.3/slang-2025.10.3-windows-x86_64.zip`
-* `powershell -Command "Expand-Archive -Path dxc.zip -DestinationPath dxc_temp -Force; Copy-Item dxc_temp\bin\* .\bin -Force; Remove-Item dxc_temp -Recurse -Force"`
+* `powershell -Command "Expand-Archive -Path dxc.zip -DestinationPath dxc_temp -Force; Copy-Item dxc_temp\bin\x64\* .\bin -Force; Remove-Item dxc_temp -Recurse -Force"`
 * `powershell -Command "Expand-Archive -Path slang.zip -DestinationPath slang_temp -Force; Copy-Item slang_temp\bin\* .\bin -Force; Remove-Item slang_temp -Recurse -Force"`
 * `del dxc.zip`
 * `del slang.zip`

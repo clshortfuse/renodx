@@ -70,8 +70,8 @@ void main(linear noperspective float2 v0: TEXCOORD0,
   // r3.xyzw = w0.xyzw * cb0[92].zwzw + cb0[92].xyxy;
   r3.xyzw = w0.xyxy * cb0[92].zwzw + cb0[92].xyxy;
 
-  // r4.xyzw = cmp(float4(0,0,0,0) < r3.zwzw);
-  // r5.xyzw = cmp(r3.zwzw < float4(0,0,0,0));
+  // r4.xyzw = cmp(float4(0, 0, 0, 0) < r3.zwzw);
+  // r5.xyzw = cmp(r3.zwzw < float4(0, 0, 0, 0));
   // r4.xyzw = (int4)-r4.xyzw + (int4)r5.xyzw;
   // r4.xyzw = (int4)r4.xyzw;
 
@@ -82,8 +82,6 @@ void main(linear noperspective float2 v0: TEXCOORD0,
   r2.xyzw = -r4.ywxz * r2.ywxz + r3.ywxz;
 
   // r0.z = cmp(0 < cb0[96].x);
-  bool r0zb = 0 < cb0[96].x;
-
   // r3.xy = -cb0[96].ww * float2(0.400000006, 0.200000003) + r2.xy;
   // r2.xy = r0.zz ? r3.xy : r2.xy;
 
