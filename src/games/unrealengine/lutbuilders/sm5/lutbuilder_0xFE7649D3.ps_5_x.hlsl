@@ -1502,5 +1502,8 @@ void main(
   r1.xyz = r1.xyz + -r0.xyz;
   o0.xyz = cb0[67].www * r1.xyz + r0.xyz;
   o0.w = 0;
+
+  o0 = saturate(o0);
+
   return;
 }
