@@ -463,19 +463,21 @@ float3 SwapChainPass(float3 color, Config config) {
   color = min(color, config.swap_chain_clamp_nits);  // Clamp UI or Videos
 
   [branch]
-  if (config.swap_chain_clamp_color_space != renodx::color::convert::COLOR_SPACE_UNKNOWN) {
+  if (config.swap_chain_clamp_color_space == renodx::color::convert::COLOR_SPACE_UNKNOWN) {
+    color = renodx::color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, config.swap_chain_encoding_color_space);
+  } else {
     [branch]
     if (config.swap_chain_clamp_color_space == config.swap_chain_encoding_color_space) {
       color = renodx::color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, config.swap_chain_encoding_color_space);
       color = max(0, color);
     } else {
-      if (config.swap_chain_clamp_color_space == config.swap_chain_decoding_color_space) {
-        color = max(0, color);
+      if (config.swap_chain_clamp_color_space != config.swap_chain_decoding_color_space) {
+        color = renodx::color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, config.swap_chain_clamp_color_space);
       }
-      color = renodx::color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, config.swap_chain_encoding_color_space);
+      color = max(0, color);
+      color = renodx::color::convert::ColorSpaces(color, config.swap_chain_clamp_color_space, config.swap_chain_encoding_color_space);
+      
     }
-  } else {
-    color = renodx::color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, config.swap_chain_encoding_color_space);
   }
 
   color = EncodeColor(color, config.swap_chain_encoding);
