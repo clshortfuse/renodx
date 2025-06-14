@@ -2845,5 +2845,8 @@ float4 main(
   SV_Target.y = _2504;
   SV_Target.z = _2505;
   SV_Target.w = 0.0f;
+
+  SV_Target = saturate(SV_Target);
+
   return SV_Target;
 }

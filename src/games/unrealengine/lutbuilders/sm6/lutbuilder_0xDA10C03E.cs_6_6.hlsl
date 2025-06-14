@@ -1083,5 +1083,6 @@ void main(
       }
     }
   }
-  RWOutputTexture[int3(((uint)(SV_DispatchThreadID.x)), ((uint)(SV_DispatchThreadID.y)), ((uint)(SV_DispatchThreadID.z)))] = float4((_2656 * 0.9523810148239136f), (_2657 * 0.9523810148239136f), (_2658 * 0.9523810148239136f), 0.0f);
+  // RWOutputTexture[int3(((uint)(SV_DispatchThreadID.x)), ((uint)(SV_DispatchThreadID.y)), ((uint)(SV_DispatchThreadID.z)))] = float4((_2656 * 0.9523810148239136f), (_2657 * 0.9523810148239136f), (_2658 * 0.9523810148239136f), 0.0f);
+  RWOutputTexture[int3(((uint)(SV_DispatchThreadID.x)), ((uint)(SV_DispatchThreadID.y)), ((uint)(SV_DispatchThreadID.z)))] = saturate(float4((_2656 * 0.9523810148239136f), (_2657 * 0.9523810148239136f), (_2658 * 0.9523810148239136f), 0.0f));
 }

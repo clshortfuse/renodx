@@ -1072,6 +1072,9 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   }
   r0.xyz = float3(0.952381015, 0.952381015, 0.952381015) * r2.xyz;
   r0.w = 0;
+
+  r0 = saturate(r0);
+
   // No code for instruction (needs manual fix):
   u0[vThreadID.xyz] = r0;
   return;

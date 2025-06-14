@@ -1476,4 +1476,6 @@ void main(
   o0.w = 0;
 
   o0 = saturate(o0);
+
+  return;
 }
