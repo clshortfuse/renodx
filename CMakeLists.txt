@@ -84,6 +84,51 @@ function(inspect_hlsl_imports FILE VARIABLE REQUESTING_FILE)
 
 endfunction()
 
+function(generate_resource_rc ADDON)
+
+  string(TIMESTAMP VERSION_FALLBACK "0,%Y,%m%d,%H%M" UTC)
+
+  set(RESOURCE_RC_CONTENT "
+#include <winver.h>
+
+#ifndef VER_FILEVERSION
+#define VER_FILEVERSION ${VERSION_FALLBACK}
+#endif
+
+#ifndef DEBUG
+#define VER_DEBUG 0
+#else
+#define VER_DEBUG VS_FF_DEBUG
+#endif
+
+1 VERSIONINFO
+FILEVERSION VER_FILEVERSION
+FILETYPE VFT_DLL
+FILEFLAGS VER_DEBUG
+BEGIN
+  BLOCK \"StringFileInfo\"
+  BEGIN
+    BLOCK \"040904b0\"
+    BEGIN
+      VALUE \"OriginalFilename\", \"renodx-${ADDON}${TARGET_SUFFIX}\\0\"
+    END
+  END
+  BLOCK \"VarFileInfo\"
+  BEGIN
+    VALUE \"Translation\", 0x409, 1200
+  END
+END
+
+")
+
+  # Write the content to the resource file
+  file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include/resource.rc CONTENT "${RESOURCE_RC_CONTENT}")
+
+  # Add the generated resource.rc to the addon compilation
+  target_sources(${ADDON} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include/resource.rc)
+
+endfunction()
+
 function(build_shader_target ADDON ADDON_PATH)
   set(EMBED_FOLDER ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include/embed)
   unset(SHADER_BINARIES)
@@ -485,6 +530,7 @@ foreach(FILE ${ADDON_FILES})
   add_compile_options(/bigobj)
   add_library(${ADDON} MODULE ${FILE})
   build_shader_target(${ADDON} ${CMAKE_CURRENT_SOURCE_DIR}/src/games/${ADDON})
+  generate_resource_rc(${ADDON})
   add_dependencies(${ADDON} ${ADDON}-shaders)
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/gtl/include)
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/reshade)
