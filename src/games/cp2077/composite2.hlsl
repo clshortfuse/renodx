@@ -63,4 +63,12 @@ void composite2_global(in float4 global_values,
   // out_r += global_values.r * injectedData.processingGlobalLift;
   // out_g += global_values.g * injectedData.processingGlobalLift;
   // out_b += global_values.b * injectedData.processingGlobalLift;
+
+  out_r *= global_values.w;
+  out_g *= global_values.w;
+  out_b *= global_values.w;
+
+  out_r += global_values.r;
+  out_g += global_values.g;
+  out_b += global_values.b;
 }
