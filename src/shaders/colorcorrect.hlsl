@@ -48,26 +48,23 @@ float4 GammaSafe(float4 color, bool pow_to_srgb = false, float gamma = 2.2f) {
 float3 ChrominanceOKLab(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
   if (strength == 0.f) return incorrect_color;
 
-  float3 correct_lab = renodx::color::oklab::from::BT709(correct_color);
   float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
+  float3 correct_lab = renodx::color::oklab::from::BT709(correct_color);
 
   float2 incorrect_ab = incorrect_lab.yz;
   float2 correct_ab = correct_lab.yz;
 
   // Compute chrominance (magnitude of the a–b vector)
-  float incorrect_chrominance = length(incorrect_ab);
-  float correct_chrominance = length(correct_ab);
+  float incorrect_chroma = length(incorrect_ab);
+  float correct_chroma = length(correct_ab);
 
-  // Get tint (hue direction)
-  float2 incorrect_direction = (incorrect_ab / incorrect_chrominance) * step(0.f, incorrect_chrominance);
+  // Scale original chroma vector toward target chrominance
+  float chroma_ratio = renodx::math::DivideSafe(correct_chroma, incorrect_chroma, 1.f);
+  float scale = lerp(1.f, chroma_ratio, strength);
+  incorrect_lab.yz = incorrect_ab * scale;
 
-  // Blend chrominance and apply to original tint
-  float blended_chroma = lerp(incorrect_chrominance, correct_chrominance, strength);
-  incorrect_lab.yz = incorrect_direction * blended_chroma;
-
-  float3 color = renodx::color::bt709::from::OkLab(incorrect_lab);
-  color = renodx::color::bt709::clamp::AP1(color);
-  return color;
+  float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
+  return renodx::color::bt709::clamp::AP1(result);
 }
 
 float3 HueOKLab(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
