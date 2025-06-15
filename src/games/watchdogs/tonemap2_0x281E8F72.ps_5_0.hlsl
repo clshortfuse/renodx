@@ -31,8 +31,6 @@ Texture2D<float4> PostFxBloom__SourceTextureSampler__TexObj__ : register(t1);
 Texture3D<float4> PostFxBloom__ColorRemapTexture__TexObj__ : register(t2);
 Texture2D<float4> PostFxBloom__CurrentAutoExposureScaleTexture__TexObj__ : register(t3);
 
-#define cmp -
-
 void main(
   float4 v0 : TEXCOORD0,
   float2 v1 : TEXCOORD1,

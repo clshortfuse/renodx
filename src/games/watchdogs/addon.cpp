@@ -71,18 +71,13 @@ bool video(reshade::api::command_list* cmd_list) {
 bool camera_check;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-  CustomShaderEntry(0x2A728B79),  // something (bloom ?)
-  CustomShaderEntry(0xBB51F561),  // something (AO ?)
-
   UpgradeRTVReplaceShader(0x7D710FC6),  // videos
-  CustomShaderEntry(0x783B7659),  // videos 2 (tutorial/worldmap)
-  CustomShaderEntry(0xB0F937B2),  // exposure
   UpgradeRTVReplaceShader(0x3FFE03C2),  // tonemap/LUT
   UpgradeRTVReplaceShader(0x6E94A097),  // tonemap/LUT
   UpgradeRTVReplaceShader(0xE7F1A4C4),  // tonemap/LUT
-  UpgradeRTVReplaceShader(0x281E8F72),  // tonemap/LUT
-  CustomShaderEntry(0xB2F6A39B),  // pills
-  
+  UpgradeRTVReplaceShader(0x281E8F72),  // tonemap/LUT  
+  UpgradeRTVReplaceShader(0x21AA1CAD),  // tonemap/LUT (native dither mod)
+  UpgradeRTVReplaceShader(0xB49BF9C5),  // tonemap/LUT (native dither mod)
   UpgradeRTVShader(0xDCFAB50E),  // motion blur
   UpgradeRTVShader(0x8032AD49),  // motion blur
   UpgradeRTVShader(0xE29C3783),  // motion blur
@@ -90,38 +85,12 @@ renodx::mods::shader::CustomShaders custom_shaders = {
   UpgradeRTVShader(0x55731EC1),  // SMAA
   UpgradeRTVShader(0x3F943E33),  // AA
   UpgradeRTVReplaceShader(0xAE725CAD),  // FXAA
-  CustomShaderEntry(0xC4817D66),  // Profiler
-  CustomShaderEntry(0x8262D185),  // Profiler
   CustomShaderEntryCallback(0x9FA5703C, [](reshade::api::command_list* cmd_list) {  // camera view
   camera_check = true;
   return true;
   }),
-  CustomShaderEntry(0x2168D571),  // worldmap
-  CustomShaderEntry(0x1D9DE59D),  // UI
-  CustomShaderEntry(0x3E3D329A),  // UI
-  CustomShaderEntry(0x4F111C22),  // UI
-  CustomShaderEntry(0x5A4A5CCB),  // UI
-  CustomShaderEntry(0x5AE351F5),  // UI
-  CustomShaderEntry(0x5B7F3F53),  // UI
-  CustomShaderEntry(0x18A98259),  // UI
-  CustomShaderEntry(0x79B4C97A),  // UI
-  CustomShaderEntry(0x3536A197),  // UI
-  CustomShaderEntry(0x241150DC),  // UI
-  CustomShaderEntry(0xA56D9CF5),  // UI
-  CustomShaderEntry(0xAB1543DA),  // UI
-  CustomShaderEntry(0xABB9827E),  // UI
-  CustomShaderEntry(0xB3FD67FA),  // UI
-  CustomShaderEntry(0xBB3A8176),  // UI
   CustomShaderEntryCallback(0xCAAA3088, &video),  // UI
-  CustomShaderEntry(0xDE7D3985),  // UI
-  CustomShaderEntry(0xE73ECAA8),  // UI
-  CustomShaderEntry(0xEA5EA4BD),  // UI
-  CustomShaderEntry(0xF267B0FD),  // UI
-  CustomShaderEntry(0xF2112ED9),  // UI
-  CustomShaderEntry(0xF66408FD),  // UI
-  CustomShaderEntry(0xFCF8A953),  // UI
-  
-  CustomShaderEntry(0x471BAF60),  // Final (swapchain)
+  __ALL_CUSTOM_SHADERS
 };
 
 float current_settings_mode = 0;
@@ -447,7 +416,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("toneMapPerChannel", 1.f);
           renodx::utils::settings::UpdateSetting("toneMapHueProcessor", 1.f);
           renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 20.f);
-          renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
+          renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.2f);
           renodx::utils::settings::UpdateSetting("colorGradeHighlights", 44.f);
           renodx::utils::settings::UpdateSetting("colorGradeShadows", 48.f);
           renodx::utils::settings::UpdateSetting("colorGradeContrast", 69.f);
