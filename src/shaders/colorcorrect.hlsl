@@ -70,41 +70,51 @@ float3 ChrominanceOKLab(float3 incorrect_color, float3 correct_color, float stre
 float3 HueOKLab(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
   if (strength == 0.f) return incorrect_color;
 
+  float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
   float3 correct_lab = renodx::color::oklab::from::BT709(correct_color);
 
-  float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
+  float2 incorrect_ab = incorrect_lab.yz;
+  float2 correct_ab = correct_lab.yz;
 
-  float chrominance_pre_adjust = distance(incorrect_lab.yz, 0);
+  // Preserve original chrominance (magnitude of the a–b vector)
+  float chrominance_pre_adjust = length(incorrect_ab);
 
-  incorrect_lab.yz = lerp(incorrect_lab.yz, correct_lab.yz, strength);
+  // Blend chrominance and hue by interpolating (a, b) components
+  float2 blended_ab = lerp(incorrect_ab, correct_ab, strength);
 
-  float chrominance_post_adjust = distance(incorrect_lab.yz, 0);
+  // Rescale to original chrominance to avoid saturation shift
+  float chrominance_post_adjust = length(blended_ab);
+  blended_ab *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
 
-  incorrect_lab.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
+  incorrect_lab.yz = blended_ab;
 
-  float3 color = renodx::color::bt709::from::OkLab(incorrect_lab);
-  color = renodx::color::bt709::clamp::AP1(color);
-  return color;
+  float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
+  return renodx::color::bt709::clamp::AP1(result);
 }
 
 float3 HueICtCp(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
   if (strength == 0.f) return incorrect_color;
 
-  float3 correct_perceptual = renodx::color::ictcp::from::BT709(correct_color);
+  float3 incorrect_ictcp = renodx::color::ictcp::from::BT709(incorrect_color);
+  float3 correct_ictcp = renodx::color::ictcp::from::BT709(correct_color);
 
-  float3 incorrect_perceptual = renodx::color::ictcp::from::BT709(incorrect_color);
+  float2 incorrect_ctcp = incorrect_ictcp.yz;
+  float2 correct_ctcp = correct_ictcp.yz;
 
-  float chrominance_pre_adjust = distance(incorrect_perceptual.yz, 0);
+  // Preserve original chrominance (magnitude of the Ct-Cp vector)
+  float chrominance_pre_adjust = length(incorrect_ctcp);
 
-  incorrect_perceptual.yz = lerp(incorrect_perceptual.yz, correct_perceptual.yz, strength);
+  // Blend chrominance and hue by interpolating (Ct, Cp) components
+  float2 blended_ctcp = lerp(incorrect_ctcp, correct_ctcp, strength);
 
-  float chrominance_post_adjust = distance(incorrect_perceptual.yz, 0);
+  // Rescale to original chrominance to avoid saturation shift
+  float chrominance_post_adjust = length(blended_ctcp);
+  blended_ctcp *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
 
-  incorrect_perceptual.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
+  incorrect_ictcp.yz = blended_ctcp;
 
-  float3 color = renodx::color::bt709::from::ICtCp(incorrect_perceptual);
-  color = renodx::color::bt709::clamp::AP1(color);
-  return color;
+  float3 result = renodx::color::bt709::from::ICtCp(incorrect_ictcp);
+  return renodx::color::bt709::clamp::AP1(result);
 }
 
 float3 HuedtUCS(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
