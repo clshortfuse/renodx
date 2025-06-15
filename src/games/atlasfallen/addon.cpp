@@ -134,7 +134,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         renodx::utils::settings::UpdateSetting("ColorGradeContrast", 60.f);
         renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 60.f);
         renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
+        renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 25.f);
         renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
         renodx::utils::settings::UpdateSetting("ToneMapUpradeType", 1.f);
         renodx::utils::settings::UpdateSetting("ToneMapUpradeHueCorr", 90.f);
@@ -243,6 +243,10 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 
   //settings[3]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[2]->default_value), 203.f);
+
+  // Blowout
+  settings[12]->default_value = 25.f;
+  settings[12]->can_reset = true;
 
   fired_on_init_swapchain = true;
 }
