@@ -1,6 +1,8 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
+Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
+SamplerState s1_s : register(s1);
 SamplerState s0_s : register(s0);
 cbuffer cb1 : register(b1){
   float4 cb1[21];
@@ -19,6 +21,11 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
+  r0.xy = -cb1[3].xy + cb0[35].xy;
+  r0.xy = -r0.xy * float2(0.5,0.5) + v2.xy;
+  r0.xy = cb1[3].zw * r0.xy;
+  r0.x = t1.Sample(s1_s, r0.xy).w;
+  if (r0.x >= 0.1) discard;
   r0.x = t0.Sample(s0_s, v1.xy).y;
   r1.w = r0.x;
   r1.x = 1;
@@ -29,6 +36,6 @@ void main(
   r2.xyz = cb0[38].www * r0.yzw;
   r1.xyzw = cb1[0].xyzw + r2.xyzw;
   o0.xyzw = (r0.x > 0) ? r1.xyzw : r2.xyzw;
-  o0.rgb = UIScale(o0.rgb);
+  o0.rgb = renodx::color::srgb::Decode(o0.rgb);
   return;
 }

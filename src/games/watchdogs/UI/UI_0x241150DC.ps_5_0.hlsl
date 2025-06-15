@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
 cbuffer cb0 : register(b0){
   float4 cb0[21];
@@ -17,7 +17,7 @@ void main(
   r0.yzw = v0.xyz + -r0.xxx;
   r0.xyz = cb0[20].zzz * r0.yzw + r0.xxx;
   r0.w = v0.w;
-  o0.xyzw = r0.xyzw * cb0[1].xyzw + cb0[0].xyzw;
-  o0.rgb = UIScale(o0.rgb);
+  o0.xyzw = cb0[1].xyzw * r0.xyzw;
+  o0.rgb = renodx::color::srgb::Decode(o0.rgb);
   return;
 }

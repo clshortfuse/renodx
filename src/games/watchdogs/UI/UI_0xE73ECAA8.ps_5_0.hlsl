@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -26,6 +26,6 @@ void main(
   r0.xyz = r1.xyz * r0.xyz;
   o0.w = r1.w;
   o0.xyz = cb0[17].xxx * r0.xyz;
-  o0.rgb = UIScale(o0.rgb);
+  o0.rgb = renodx::color::srgb::Decode(o0.rgb);
   return;
 }

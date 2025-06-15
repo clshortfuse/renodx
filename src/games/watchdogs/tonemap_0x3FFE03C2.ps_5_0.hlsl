@@ -42,7 +42,7 @@ void main(
   float4 fDest;
 
   r0.xyz = PostFxBloom__BloomSampler__TexObj__.Sample(PostFxBloom__BloomSampler__SampObj___s, v1.xy).xyz;
-  r0.w = dot(float3(0.212500006,0.715399981,0.0720999986), r0.xyz);
+  r0.a = renodx::color::y::from::BT709(r0.rgb);
   r1.x = -_ArtifactValues.y + r0.w;
   r0.w = saturate(r1.x / r0.w);
   r0.w = _ArtifactValues.z * r0.w;

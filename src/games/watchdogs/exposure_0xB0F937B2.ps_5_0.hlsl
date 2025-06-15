@@ -25,20 +25,13 @@ void main(
   r0.x = r0.x + -r0.y;
   r0.x = cb0[13].w * r0.x + r0.y;
   r0.x = log2(r0.x);
-  //r0.y = cmp(r0.x < 0);
-  //r0.z = cmp(cb0[15].w < 0);
-  //r0.y = r0.z ? r0.y : 0;
   r0.y = (cb0[15].w < 0) ? (r0.x < 0) : 0;
   r0.z = -cb0[15].w + r0.x;
   r0.w = min(0, r0.z);
   r0.z = max(0, r0.z);
   r0.y = r0.y ? r0.w : r0.x;
-  //r0.x = cmp(0 < r0.x);
-  //r0.w = cmp(0 < cb0[15].w);
-  //r0.x = r0.w ? r0.x : 0;
   r0.x = (cb0[15].w > 0) ? (r0.x > 0) : 0;
   r0.x = r0.x ? r0.z : r0.y;
-  //o0.xyzw = lerp(1.f, exp2(r0.xxxx), injectedData.fxAutoExposure);
   o0.xyzw = exp2(lerp(float4(1,1,1,1), r0.xxxx, injectedData.fxAutoExposure));
   return;
 }

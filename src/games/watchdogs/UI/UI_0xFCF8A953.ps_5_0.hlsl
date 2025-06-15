@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -23,8 +23,9 @@ void main(
   r0.y = dot(r2.xyz, float3(0.298999995,0.587000012,0.114));
   r1.xyz = v0.xyz * r1.xxx + -r0.yyy;
   r2.xyz = cb0[20].zzz * r1.xyz + r0.yyy;
-  r1.xyzw = cb0[0].xyzw + r2.xyzw;
-  o0.xyzw = (r0.x > 0) ? r1.xyzw : r2.xyzw;
-  o0.rgb = UIScale(o0.rgb);
+  r1.xyzw = cb0[1].xyzw * r2.xyzw;
+  r2.xyzw = r2.xyzw * cb0[1].xyzw + cb0[0].xyzw;
+  o0.xyzw = (r0.x > 0) ? r2.xyzw : r1.xyzw;
+  o0.rgb = renodx::color::srgb::Decode(o0.rgb);
   return;
 }
