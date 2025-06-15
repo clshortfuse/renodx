@@ -36,8 +36,6 @@ Texture2D<float4> lensDirtSampler : register(t6);
 Texture3D<float4> colorGradingLUTSampler : register(t7);
 Texture2D<float4> motionBlurSampler : register(t8);
 
-#define cmp -
-
 void main(
   float4 v0 : SV_Position0,
   out float4 o0 : SV_Target0)
@@ -54,8 +52,7 @@ void main(
   r2.x = saturate(r2.x);
   r2.yzw = r2.yzw + -r0.xyz;
   r0.xyz = r2.xxx * r2.yzw + r0.xyz;
-  r1.z = cmp(0 < dof_parameters0.z);
-  if (r1.z != 0) {
+  if (dof_parameters0.z > 0) {
     r1.z = depthSampler.SampleLevel(sampler_point_clamp_s, r1.xy, 0).x;
     r1.z = -camera_clip_distances.z + r1.z;
     r1.z = camera_clip_distances.w / r1.z;
@@ -76,7 +73,7 @@ void main(
   r2.xyz = r3.xyz * r2.xyz;
   r0.xyz = r2.xyz * hdr_color_parameters1.yyy + r0.xyz;
   r1.xyz = vignetteSampler.SampleLevel(sampler_bilinear_clamp_s, r1.xy, 0).xyz;
-  r1.w = dot(r0.xyz, float3(0.212599993,0.715200007,0.0722000003));
+  r1.w = renodx::color::y::from::BT709(r0.xyz);
   r0.xyz = -r1.www + r0.xyz;
   r0.xyz = hdr_color_parameters0.www * r0.xyz + r1.www;
   r0.xyz = hdr_color_parameters0.xyz * r0.xyz;

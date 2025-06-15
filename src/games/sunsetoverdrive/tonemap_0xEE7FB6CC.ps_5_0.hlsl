@@ -128,7 +128,7 @@ void main(
   r2.x = log2(r2.x);
   r2.x = r2.x * 0.0769230798f + 0.615384638f;
   r3.x = g_ToneCurve.Sample(g_ToneCurveSampler_s, r2.x).x;
-  float midGray = renodx::color::y::from::BT709(r3.rrr);
+  float midGray = r3.x;
   r1.xyz = saturate(r3.xyz + r1.xyz);
   r2.xyz = log2(r1.xyz);
   r2.xyz = float3(0.416666657,0.416666657,0.416666657) * r2.xyz;

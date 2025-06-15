@@ -31,11 +31,11 @@ void main(
   r0.xyz = r0.yzw * r0.xxx;
   r0.xyz = cb0[3].xxx * r0.xyz;
   r0.rgb = renodx::color::bt709::clamp::BT2020(r0.gbr);
-  float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18f, 0.18f, 0.18f)));
+  float midGray = vanillaTonemap(float3(0.18f, 0.18f, 0.18f)).x;
   float3 hueCorrectionColor = vanillaTonemap(r0.rgb);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = min(3, injectedData.toneMapType);
-  config.peak_nits = injectedData.toneMapPeakNits;
+  config.peak_nits = 10000.f;
   config.game_nits = injectedData.toneMapGameNits;
   config.gamma_correction = injectedData.toneMapGammaCorrection;
   config.exposure = injectedData.colorGradeExposure;
