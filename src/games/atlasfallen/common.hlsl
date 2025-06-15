@@ -114,17 +114,6 @@ float3 ApplyToneMap(float3 untonemapped, float3 graded) {
   float3 output = graded;
 
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    // simulate ACES contrast 
-    // (I doubt this is correct, but grading strength 0-100 look consistent now except for grading)
-    untonemapped = renodx::color::grade::UserColorGrading(
-      untonemapped,
-      1.f,
-      1.f,
-      1.f,
-      1.6f,
-      1.6f,
-      0.8f);
-
     untonemapped = min(100.f, untonemapped);
 
     if (CUSTOM_TONEMAP_UPGRADE_TYPE == 0.f) {
