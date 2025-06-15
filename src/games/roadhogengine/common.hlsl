@@ -78,6 +78,7 @@ float3 FinalizeOutput(float3 color, bool linear_space = false) {
   }
 
   if (injectedData.toneMapType == 0.f) {
+    color = renodx::color::bt709::clamp::BT709(color);
     color = min(injectedData.toneMapGameNits, color);
   } else if (injectedData.toneMapType != 1.f) {
     color = renodx::tonemap::ExponentialRollOff(color, injectedData.toneMapGameNits, max(injectedData.toneMapPeakNits, injectedData.toneMapGameNits + 1.f));
