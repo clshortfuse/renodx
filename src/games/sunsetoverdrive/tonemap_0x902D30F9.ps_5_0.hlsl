@@ -119,7 +119,7 @@ void main(
   r1.r = log2(r1.r);
   r1.r = r1.r * 0.0769230798f + 0.615384638f;
   r2.x = g_ToneCurve.Sample(g_ToneCurveSampler_s, r1.x).x;
-  float midGray = renodx::color::y::from::BT709(r2.rrr);
+  float midGray = r2.x;
   r1.xyz = log2(abs(r2.xyz));
   r1.xyz = float3(0.416666657,0.416666657,0.416666657) * r1.xyz;
   r1.xyz = exp2(r1.xyz);

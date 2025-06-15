@@ -38,15 +38,11 @@ float3 FinalizeOutput(float3 color) {
   color = renodx::color::srgb::DecodeSafe(color);
   }
   color *= injectedData.toneMapUINits;
-  if (injectedData.toneMapType != 1.f) {
-    float y_max = injectedData.toneMapPeakNits;
-    float y = renodx::color::y::from::BT709(abs(color));
-    if (y > y_max) {
-      color *= renodx::math::DivideSafe(y_max, y);
-    }
-  }
     if(injectedData.toneMapType == 0.f){
-  color = renodx::color::bt709::clamp::BT709(color);
+  color = min(injectedData.toneMapGameNits, color);
+  } else if (injectedData.toneMapType != 1.f) {
+  color = renodx::tonemap::ExponentialRollOff(color, injectedData.toneMapGameNits, max(injectedData.toneMapPeakNits, injectedData.toneMapGameNits + 1.f));
+  color = renodx::color::bt709::clamp::BT2020(color);
   } else {
   color = renodx::color::bt709::clamp::BT2020(color);
   }
@@ -196,13 +192,13 @@ return r0;
 
 float3 applyUserTonemap(float3 untonemapped, bool tonemapper = true){
 	float3 outputColor;
-  float midGray = renodx::color::y::from::BT709(vanillaTonemap(float3(0.18,0.18,0.18)));
+  float midGray = vanillaTonemap(float3(0.18,0.18,0.18)).x;
   float3 hueCorrectionColor = vanillaTonemap(untonemapped);
 		renodx::tonemap::Config config = renodx::tonemap::config::Create();
 	config.type = min(3, injectedData.toneMapType);
-	config.peak_nits = injectedData.toneMapPeakNits;
+	config.peak_nits = 10000.f;
 	config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = injectedData.toneMapGammaCorrection;
+  config.gamma_correction = 0.f;
 	config.exposure = injectedData.colorGradeExposure;
 	config.highlights = injectedData.colorGradeHighlights;
 	config.shadows = injectedData.colorGradeShadows;
@@ -215,9 +211,7 @@ float3 applyUserTonemap(float3 untonemapped, bool tonemapper = true){
   config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
                                    ? renodx::tonemap::config::hue_correction_type::INPUT
                                    : renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f
-                                       ? (1.f - injectedData.toneMapHueCorrection)
-                                       : injectedData.toneMapHueCorrection;
+  config.hue_correction_strength = injectedData.toneMapHueCorrection;
   config.hue_correction_color = lerp(untonemapped, hueCorrectionColor, injectedData.toneMapHueShift);
   config.reno_drt_tone_map_method = injectedData.toneMapType == 4.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
                                                                     : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
