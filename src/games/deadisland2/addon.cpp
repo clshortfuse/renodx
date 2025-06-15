@@ -17,11 +17,9 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
-
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
-
 
 renodx::utils::settings::Setting* CreateDefault0PercentSetting(const renodx::utils::settings::Setting& setting) {
   auto* new_setting = new renodx::utils::settings::Setting(setting);
@@ -123,8 +121,21 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Emulates a display EOTF.",
         .labels = {"Off (sRGB)", "2.2"},
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
         .is_visible = []() { return current_settings_mode >= 1; },
     }),
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapScaling",
+        .binding = &shader_injection.tone_map_per_channel,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Scaling",
+        .section = "Tone Mapping",
+        .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
+        .labels = {"Luminance & Channel Blend", "Per Channel"},
+        .is_enabled = []() { return shader_injection.tone_map_type == 2; },
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
         .binding = &shader_injection.tone_map_exposure,

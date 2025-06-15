@@ -40,7 +40,7 @@ void main(
   // r3.xyz = exp2(r3.xyz);
   // r0.xyz = float3(0.0773993805,0.0773993805,0.0773993805) * r0.xyz;
   // r0.xyz = r2.xyz ? r3.xyz : r0.xyz;
-  if (RENODX_GAMMA_CORRECTION != 0.f) {
+  if (RENODX_GAMMA_CORRECTION != 0.f && RENODX_TONE_MAP_TYPE != 0.f) {
     r0.rgb = renodx::color::gamma::DecodeSafe(r0.rgb, 2.2f);
   } else {
     r0.rgb = renodx::color::srgb::Decode(max(0, r0.rgb));
