@@ -55,12 +55,12 @@ float3 ChrominanceOKLab(float3 incorrect_color, float3 correct_color, float stre
   float2 correct_ab = correct_lab.yz;
 
   // Compute chrominance (magnitude of the a–b vector)
-  float incorrect_chroma = length(incorrect_ab);
-  float correct_chroma = length(correct_ab);
+  float incorrect_chrominance = length(incorrect_ab);
+  float correct_chrominance = length(correct_ab);
 
-  // Scale original chroma vector toward target chrominance
-  float chroma_ratio = renodx::math::DivideSafe(correct_chroma, incorrect_chroma, 1.f);
-  float scale = lerp(1.f, chroma_ratio, strength);
+  // Scale original chrominance vector toward target chrominance
+  float chrominance_ratio = renodx::math::DivideSafe(correct_chrominance, incorrect_chrominance, 1.f);
+  float scale = lerp(1.f, chrominance_ratio, strength);
   incorrect_lab.yz = incorrect_ab * scale;
 
   float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
