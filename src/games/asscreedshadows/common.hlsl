@@ -1,31 +1,26 @@
 #include "./DICE.hlsli"
 #include "./shared.h"
 
-float3 HueCorrectAP1(float3 incorrect_color_ap1, float3 correct_color_ap1, float hue_correct_strength = 0.5f) {
+float3 HueCorrectAP1(float3 incorrect_color_ap1, float3 correct_color_ap1, float hue_correct_strength = 1.f) {
   float3 incorrect_color_bt709 = renodx::color::bt709::from::AP1(incorrect_color_ap1);
   float3 correct_color_bt709 = renodx::color::bt709::from::AP1(correct_color_ap1);
 
-  float3 corrected_color_bt709 = renodx::color::correct::Hue(incorrect_color_bt709, correct_color_bt709, hue_correct_strength, 0u);
+  float3 corrected_color_bt709 = renodx::color::correct::HuedtUCS(incorrect_color_bt709, correct_color_bt709, hue_correct_strength);
   float3 corrected_color_ap1 = renodx::color::ap1::from::BT709(corrected_color_bt709);
   return corrected_color_ap1;
 }
 
-float3 HueChromaCorrectAP1(float3 incorrect_color_ap1, float3 correct_color_ap1) {
-  float3 incorrect_bt709 = renodx::color::bt709::from::AP1(incorrect_color_ap1);
-  float3 correct_bt709 = renodx::color::bt709::from::AP1(correct_color_ap1);
+float3 ChrominanceCorrectAP1(float3 incorrect_color_ap1, float3 correct_color_ap1, float chrominance_correct_strength = 1.f) {
+  float3 incorrect_color_bt709 = renodx::color::bt709::from::AP1(incorrect_color_ap1);
+  float3 correct_color_bt709 = renodx::color::bt709::from::AP1(correct_color_ap1);
 
-  float3 incorrect_jch = renodx::color::dtucs::jch::from::BT709(incorrect_bt709);
-  float3 correct_jch = renodx::color::dtucs::jch::from::BT709(correct_bt709);
-
-  incorrect_jch.yz = float2(correct_jch.y * 1.125f, correct_jch.z);  // boost chroma
-
-  float3 corrected_bt709 = renodx::color::bt709::from::dtucs::JCH(incorrect_jch);
-
-  return renodx::color::ap1::from::BT709(corrected_bt709);
+  float3 corrected_color_bt709 = renodx::color::correct::ChrominancedtUCS(incorrect_color_bt709, correct_color_bt709, chrominance_correct_strength);
+  float3 corrected_color_ap1 = renodx::color::ap1::from::BT709(corrected_color_bt709);
+  return corrected_color_ap1;
 }
 
-float3 ApplySDRToneMap(float3 untonemapped_ap1) {
-  const float hdr_max = 100.f;  // SDR = 100.f
+float3 ApplySDRToneMap(float3 untonemapped_ap1, float peak_white = 100.f) {
+  const float hdr_max = peak_white;  // SDR = 100.f
 
   const float contrast = 1.25f;  // SDR = 1.25f
   const float shoulder = 0.13f;  // SDR = 0.13f?
@@ -68,26 +63,6 @@ float3 ApplySDRToneMap(float3 untonemapped_ap1) {
 
 // unused
 float3 ApplySDRToneMapByLuminance(float3 untonemapped_ap1) {
-  // Adjust saturation, increase chroma contrast
-  // This allows for the luminance tonemap to have as much saturation in midtones and shadows as channel,
-  // while having better hues and none of the ugly per channel stuff.
-  renodx::color::grade::Config cg_config = renodx::color::grade::config::Create(
-      1.f,
-      1.f,
-      1.f,
-      1.f,
-      0.f,
-      5.f,   // Saturation: 220
-      0.96,  // Blowout: 96
-      0.f,
-      0,
-      renodx::color::grade::config::hue_correction_type::INPUT,
-      -1.f * (1.4f - 1.f));  // Highlight Saturation: 70
-  untonemapped_ap1 = renodx::color::ap1::from::BT709(
-      renodx::color::grade::config::ApplyUserColorGrading(
-          renodx::color::bt709::from::AP1(untonemapped_ap1),
-          cg_config));
-
   untonemapped_ap1 = max(0, untonemapped_ap1);
   float3 input_color = untonemapped_ap1;
 
@@ -146,11 +121,18 @@ float3 GetSDRMidGrayRatio() {
 }
 
 float3 ApplyBlendedToneMap(float3 untonemapped_ap1, float peak_nits, float diffuse_white) {
-  float3 hdr_untonemapped = untonemapped_ap1 * GetSDRMidGrayRatio();
-  float3 sdr_tonemap_by_lum = HueChromaCorrectAP1(ApplySDRToneMap(untonemapped_ap1), hdr_untonemapped);
+  float3 hdr_untonemapped = untonemapped_ap1 * GetSDRMidGrayRatio();  // untonemapped + mid-gray correction
+
+  // tonemap by luminance with chrominance from per channel
+  float3 sdr_tonemap_by_lum =
+      ChrominanceCorrectAP1(
+          ApplySDRToneMapByLuminance(untonemapped_ap1),
+          ApplySDRToneMap(untonemapped_ap1));
 
   float sdr_lum = renodx::color::y::from::AP1(sdr_tonemap_by_lum);
   float3 blended_tonemap = lerp(sdr_tonemap_by_lum, hdr_untonemapped, saturate(sdr_lum));
+  // ensure is fully hue conserving
+  blended_tonemap = HueCorrectAP1(blended_tonemap, untonemapped_ap1);
 
   return blended_tonemap;
 }
@@ -159,8 +141,8 @@ float3 ApplyBlendedToneMapEncodePQ(float3 untonemapped_ap1, float peak_nits, flo
   float3 tonemapped = ApplyBlendedToneMap(untonemapped_ap1, peak_nits, diffuse_white);
   tonemapped = renodx::color::bt709::from::AP1(tonemapped);
 
-#if RENODX_GAME_GAMMA_CORRECTION
-  tonemapped = renodx::color::correct::GammaSafe(tonemapped);  // apply sRGB -> 2.2 gamma correction
+#if RENODX_GAME_GAMMA_CORRECTION  // apply sRGB -> 2.2 gamma correction with hue correction
+  tonemapped = renodx::color::correct::HuedtUCS(renodx::color::correct::GammaSafe(tonemapped), tonemapped);
 #endif
 
   float3 display_mapped = ApplyDICE(tonemapped, diffuse_white, peak_nits, 0.375f);
