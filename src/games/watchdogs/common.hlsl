@@ -93,8 +93,10 @@ float3 FinalizeOutput(float3 color) {
   if (injectedData.toneMapType == 0.f) {
     color = renodx::color::bt709::clamp::BT709(color);
   } else if (injectedData.toneMapType != 1.f) {
+    color = renodx::color::bt2020::from::BT709(color);
     color = renodx::tonemap::ExponentialRollOff(color, injectedData.toneMapGameNits, max(injectedData.toneMapPeakNits, injectedData.toneMapGameNits + 1.f));
-    color = renodx::color::bt709::clamp::BT2020(color);
+    color = max(0.f, color);
+    color = renodx::color::bt709::from::BT2020(color);
   } else {
     color = renodx::color::bt709::clamp::BT2020(color);
   }
