@@ -10,7 +10,7 @@ float4 GenerateOutput(float3 untonemapped_ap1) {
   float3 tonemapped_bt709;
   float3 pq_color;
   if (RENODX_TONE_MAP_TYPE == 1.f) {
-    float3 untonemapped_bt709 = renodx::color::ap1::from::BT709(
+    float3 untonemapped_bt709 =
         renodx::color::grade::UserColorGrading(
             renodx::color::bt709::from::AP1(untonemapped_ap1),
             RENODX_TONE_MAP_EXPOSURE,
@@ -19,7 +19,11 @@ float4 GenerateOutput(float3 untonemapped_ap1) {
             RENODX_TONE_MAP_CONTRAST,
             RENODX_TONE_MAP_SATURATION,
             RENODX_TONE_MAP_BLOWOUT,
-            0.f));
+            0.f)
+        * 0.1f / 0.18f;
+    if (RENODX_GAMMA_CORRECTION) {
+      untonemapped_bt709 = renodx::color::correct::GammaSafe(untonemapped_bt709);
+    }
     pq_color = renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(untonemapped_bt709), RENODX_DIFFUSE_WHITE_NITS);
     return float4(pq_color * (1.f / 1.05f), 0.f);  // lutbuilder does this
   } else if (RENODX_TONE_MAP_PER_CHANNEL == 0.f) {
