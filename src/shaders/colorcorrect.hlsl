@@ -155,10 +155,10 @@ float3 HuedtUCS(float3 incorrect_color, float3 correct_color, float strength = 1
   // Reconstruct hue from blended vector
   float h = atan2(blended_vec.y, blended_vec.x);
 
-  // Compute original perceptual lightness (J)
+  // Compute J
   float J = pow(L_star_i / color::dtucs::L_WHITE, 1.f);
 
-  // Build JCH from original J, original chrominance, and interpolated hue
+  // Build JCH from original J, original chrominance, and new hue
   float3 final_jch = float3(J, C_incorrect, h);
 
   float3 result = renodx::color::bt709::from::dtucs::JCH(final_jch);
