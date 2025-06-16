@@ -60,7 +60,7 @@ float4 GenerateOutput(float3 untonemapped_ap1) {
 
     // correct luminance tonemap saturation
     luminance_tonemapped_ap1 = renodx::color::ap1::from::BT709(
-        renodx::color::correct::ChrominanceOKLab(
+        renodx::color::correct::ChrominancedtUCS(
             renodx::color::bt709::from::AP1(luminance_tonemapped_ap1),
             renodx::color::bt709::from::AP1(channel_tonemapped_ap1)));
 
