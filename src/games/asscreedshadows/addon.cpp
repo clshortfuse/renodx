@@ -226,6 +226,8 @@ renodx::utils::settings::Settings settings = {
               if (setting->value != setting->default_value) OnOptimizableUISettingChange();
             } else if (setting->key == "ToneMapType") {
               if (setting->value != setting->default_value) OnOptimizableToneMapSettingChange();
+            } else if (setting->key == "ToneMapUINits") {
+              if (setting->value != setting->default_value) OnOptimizableToneMapSettingChange();
             }
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
           }
@@ -245,6 +247,8 @@ renodx::utils::settings::Settings settings = {
               if (setting->key == "ToneMapUINits") {
                 if (setting->value != setting->default_value) OnOptimizableUISettingChange();
               } else if (setting->key == "ToneMapType") {
+                if (setting->value != setting->default_value) OnOptimizableToneMapSettingChange();
+              } else if (setting->key == "ToneMapUINits") {
                 if (setting->value != setting->default_value) OnOptimizableToneMapSettingChange();
               }
               renodx::utils::settings::UpdateSetting(setting->key, HDR_LOOK_VALUES.at(setting->key));
