@@ -5,18 +5,25 @@ float3 HueCorrectAP1(float3 incorrect_color_ap1, float3 correct_color_ap1, float
   float3 incorrect_color_bt709 = renodx::color::bt709::from::AP1(incorrect_color_ap1);
   float3 correct_color_bt709 = renodx::color::bt709::from::AP1(correct_color_ap1);
 
-  float3 corrected_color_bt709 = renodx::color::correct::HuedtUCS(incorrect_color_bt709, correct_color_bt709, hue_correct_strength);
+  float3 corrected_color_bt709 = renodx::color::correct::HueOKLab(incorrect_color_bt709, correct_color_bt709, hue_correct_strength);
   float3 corrected_color_ap1 = renodx::color::ap1::from::BT709(corrected_color_bt709);
-  return corrected_color_ap1;
+  return max(0, corrected_color_ap1);
 }
 
 float3 ChrominanceCorrectAP1(float3 incorrect_color_ap1, float3 correct_color_ap1, float chrominance_correct_strength = 1.f) {
   float3 incorrect_color_bt709 = renodx::color::bt709::from::AP1(incorrect_color_ap1);
   float3 correct_color_bt709 = renodx::color::bt709::from::AP1(correct_color_ap1);
 
-  float3 corrected_color_bt709 = renodx::color::correct::ChrominancedtUCS(incorrect_color_bt709, correct_color_bt709, chrominance_correct_strength);
+  float3 corrected_color_bt709 = renodx::color::correct::ChrominanceOKLab(incorrect_color_bt709, correct_color_bt709, chrominance_correct_strength);
   float3 corrected_color_ap1 = renodx::color::ap1::from::BT709(corrected_color_bt709);
-  return corrected_color_ap1;
+  return max(0, corrected_color_ap1);
+}
+
+float3 GammaCorrectLuminance(float3 incorrect_color) {
+  const float y_in = renodx::color::y::from::BT709(incorrect_color);
+  const float y_out = max(0, renodx::color::correct::Gamma(y_in));
+
+  return incorrect_color * select(y_in > 0, y_out / y_in, 0.f);
 }
 
 float3 ApplySDRToneMap(float3 untonemapped_ap1, float peak_white = 100.f) {
@@ -121,7 +128,7 @@ float3 GetSDRMidGrayRatio() {
 }
 
 float3 ApplyBlendedToneMap(float3 untonemapped_ap1, float peak_nits, float diffuse_white) {
-  float3 hdr_untonemapped = untonemapped_ap1 * GetSDRMidGrayRatio();  // untonemapped + mid-gray correction
+  float3 hdr_untonemapped_ap1 = untonemapped_ap1 * GetSDRMidGrayRatio();  // untonemapped + mid-gray correction
 
   // tonemap by luminance with chrominance from per channel
   float3 sdr_tonemap_by_lum =
@@ -130,19 +137,28 @@ float3 ApplyBlendedToneMap(float3 untonemapped_ap1, float peak_nits, float diffu
           ApplySDRToneMap(untonemapped_ap1));
 
   float sdr_lum = renodx::color::y::from::AP1(sdr_tonemap_by_lum);
-  float3 blended_tonemap = lerp(sdr_tonemap_by_lum, hdr_untonemapped, saturate(sdr_lum));
+  float3 blended_tonemap_ap1 = lerp(sdr_tonemap_by_lum, hdr_untonemapped_ap1, saturate(sdr_lum));
   // ensure is fully hue conserving
-  blended_tonemap = HueCorrectAP1(blended_tonemap, untonemapped_ap1);
+  blended_tonemap_ap1 = HueCorrectAP1(blended_tonemap_ap1, hdr_untonemapped_ap1);
 
-  return blended_tonemap;
+  return blended_tonemap_ap1;
 }
 
 float3 ApplyBlendedToneMapEncodePQ(float3 untonemapped_ap1, float peak_nits, float diffuse_white) {
   float3 tonemapped = ApplyBlendedToneMap(untonemapped_ap1, peak_nits, diffuse_white);
   tonemapped = renodx::color::bt709::from::AP1(tonemapped);
 
-#if RENODX_GAME_GAMMA_CORRECTION  // apply sRGB -> 2.2 gamma correction with hue correction
-  tonemapped = renodx::color::correct::HuedtUCS(renodx::color::correct::GammaSafe(tonemapped), tonemapped);
+#if RENODX_GAME_GAMMA_CORRECTION  // apply custom sRGB -> 2.2 gamma correction
+
+  // gamma correction by luminance with channel chrominance
+  float3 corrected =
+      renodx::color::correct::ChrominanceOKLab(
+          GammaCorrectLuminance(tonemapped),
+          renodx::color::correct::GammaSafe(tonemapped));
+
+  // ensure is fully hue conserving
+  tonemapped = renodx::color::correct::HueOKLab(corrected, tonemapped);
+
 #endif
 
   float3 display_mapped = ApplyDICE(tonemapped, diffuse_white, peak_nits, 0.375f);
