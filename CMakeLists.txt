@@ -88,6 +88,18 @@ function(generate_resource_rc ADDON)
 
   string(TIMESTAMP VERSION_FALLBACK "0,%Y,%m%d,%H%M" UTC)
 
+  # llvm-rc will parse leading zeros as octet
+  # Strip leading zeros in each comma-delimited value of VERSION_FALLBACK
+  string(REPLACE "," ";" VERSION_LIST "${VERSION_FALLBACK}")
+
+  set(STRIPPED_VERSION_LIST "")
+  foreach(V IN LISTS VERSION_LIST)
+    # Remove leading zeros, but keep "0" if the value is zero
+    string(REGEX REPLACE "^0*([1-9][0-9]*|0)$" "\\1" V_STRIPPED "${V}")
+    list(APPEND STRIPPED_VERSION_LIST "${V_STRIPPED}")
+  endforeach()
+  list(JOIN STRIPPED_VERSION_LIST "," VERSION_FALLBACK)
+
   set(RESOURCE_RC_CONTENT "
 #include <winver.h>
 
@@ -527,12 +539,13 @@ list(APPEND ADDON_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/devkit/addon.cpp)
 foreach(FILE ${ADDON_FILES})
   cmake_path(GET FILE PARENT_PATH ADDON_PATH)
   cmake_path(GET ADDON_PATH FILENAME ADDON) # treat as filename
-  add_compile_options(/bigobj)
+  add_compile_options(/bigobj -Wdeprecated-declarations -Wattributes)
   add_library(${ADDON} MODULE ${FILE})
   build_shader_target(${ADDON} ${CMAKE_CURRENT_SOURCE_DIR}/src/games/${ADDON})
   generate_resource_rc(${ADDON})
   add_dependencies(${ADDON} ${ADDON}-shaders)
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/gtl/include)
+  target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/Streamline/include)
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/reshade)
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include)
