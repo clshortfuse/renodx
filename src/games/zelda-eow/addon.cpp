@@ -18,6 +18,7 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
+    CustomShaderEntry(0x0A67EFF4),  // bloom
     CustomShaderEntry(0xA380E737),  // tonemap+scale
     CustomShaderEntry(0xF1FC454C),  // tonemap
     CustomShaderEntry(0xF3C7B934),  // output

@@ -3,6 +3,7 @@
 const float PEAK_NITS = 1000.f;
 const float GAME_NITS = 203.f;
 const float UI_NITS = 203.f;
+const float CUSTOM_BLOOM = 1.0f;
 
 
 float HejlDawsonCustom(float color, float a, float b) {

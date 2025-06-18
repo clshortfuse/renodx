@@ -27,6 +27,7 @@ void main()
     float _33 = _23.x;
     float _35 = _23.y;
     vec4 _38 = textureLod(fp_t_tcb_A, vec2(_33, _35), 0.0).xyzw;
+    _38 *= CUSTOM_BLOOM;
     float _40 = _38.x;
     float _42 = _38.y;
     float _44 = _38.z;
