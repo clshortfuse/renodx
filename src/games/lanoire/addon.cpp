@@ -229,8 +229,8 @@ void OnPresetOff() {
 
 }  // namespace
 
-extern "C" __declspec(dllexport) constexpr const char* name = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* description = "RenoDX for LA Noire";
+extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for LA Noire";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
