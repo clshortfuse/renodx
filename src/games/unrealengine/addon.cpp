@@ -251,7 +251,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Custom Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
+        .is_enabled = []() { return shader_injection.tone_map_type == 3; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -264,7 +264,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Clip point for white in nits",
         .min = 1.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
+        .is_enabled = []() { return shader_injection.tone_map_type == 3; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
