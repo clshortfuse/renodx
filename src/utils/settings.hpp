@@ -16,7 +16,10 @@
 
 namespace renodx::utils::settings {
 
+extern "C" __declspec(dllexport) const char* const NAME;
+
 static bool use_presets = true;
+static std::string overlay_title = NAME;
 static std::string global_name = "renodx";
 static int preset_index = 1;
 static std::vector<std::string> preset_strings = {
@@ -600,11 +603,11 @@ static void Use(DWORD fdw_reason, Settings* new_settings, void (*new_on_preset_o
       on_preset_off = new_on_preset_off;
       LoadGlobalSettings();
       LoadSettings(global_name + "-preset1");
-      reshade::register_overlay("RenoDX", OnRegisterOverlay);
+      reshade::register_overlay(overlay_title.c_str(), OnRegisterOverlay);
 
       break;
     case DLL_PROCESS_DETACH:
-      reshade::unregister_overlay("RenoDX", OnRegisterOverlay);
+      reshade::unregister_overlay(overlay_title.c_str(), OnRegisterOverlay);
       break;
   }
 }
