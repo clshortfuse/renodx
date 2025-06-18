@@ -72,7 +72,7 @@
         "CMAKE_CXX_COMPILER": "clang-cl.exe",
         "CMAKE_CXX_COMPILER_TARGET": "i686-pc-windows-msvc",
         "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc",
-        "CMAKE_CXX_FLAGS_RELEASE": "/Ox /Ob2 /DNDEBUG /Ot /GF /arch:AVX2 -flto",
+        "CMAKE_CXX_FLAGS_RELEASE": "/Ox /Ob2 /DNDEBUG /Ot /GF -flto",
         "CMAKE_EXE_LINKER_FLAGS": "/machine:X86",
         "CMAKE_EXE_LINKER_FLAGS_RELEASE": "/debug /INCREMENTAL:NO",
         "CMAKE_MODULE_LINKER_FLAGS": "/machine:X86",
