@@ -475,12 +475,8 @@ void OnPresent(
 
 }  // namespace
 
-// NOLINTBEGIN(readability-identifier-naming)
-
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for GreedFall";
-
-// NOLINTEND(readability-identifier-naming)
 
 const float screen_width = GetSystemMetrics(SM_CXSCREEN);
 const float screen_height = GetSystemMetrics(SM_CYSCREEN);

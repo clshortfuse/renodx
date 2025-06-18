@@ -182,10 +182,8 @@ void OnPresetOff() {
 
 }  // namespace
 
-// NOLINTBEGIN(readability-identifier-naming)
-
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for The Town of Light";
+extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for The Town of Light";
 
 
    // Caches all the states we might need to modify to draw a simple pixel shader.
@@ -309,8 +307,6 @@ struct DrawStateStack {
 
 #undef ENABLE_SHADER_CLASS_INSTANCES
 };
-
-// NOLINTEND(readability-identifier-naming)
 
 // Final shader [ty Ersh/FF14]
 struct __declspec(uuid("1228220F-364A-46A2-BB29-1CCE591A018A")) DeviceData {

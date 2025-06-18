@@ -163,12 +163,8 @@ void OnPresetOff() {
 
 }  // namespace
 
-// NOLINTBEGIN(readability-identifier-naming)
-
-extern "C" __declspec(dllexport) const char* name = "RenoDX";
-extern "C" __declspec(dllexport) const char* description = "RenoDX for Prince of Persia: The Lost Crown";
-
-// NOLINTEND(readability-identifier-naming)
+extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Prince of Persia: The Lost Crown";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {

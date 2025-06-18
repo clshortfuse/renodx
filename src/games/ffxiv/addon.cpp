@@ -286,12 +286,8 @@ void OnPresetOff() {
 
 }  // namespace
 
-// NOLINTBEGIN(readability-identifier-naming)
-
-extern "C" __declspec(dllexport) const char* name = "RenoDX";
-extern "C" __declspec(dllexport) const char* description = "RenoDX for Final Fantasy XIV Online";
-
-// NOLINTEND(readability-identifier-naming)
+extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Final Fantasy XIV Online";
 
 struct __declspec(uuid("1228220F-364A-46A2-BB29-1CCE591A018A")) DeviceData {
   reshade::api::effect_runtime* main_runtime = nullptr;

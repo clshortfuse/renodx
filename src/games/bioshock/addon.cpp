@@ -121,13 +121,9 @@ renodx::utils::settings::Settings settings = {
 };
 }  // namespace
 
-// NOLINTBEGIN(readability-identifier-naming)
-
 // NOTE: Bioshock is x32 not x64
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for BioShock (Remastered)";
-
-// NOLINTEND(readability-identifier-naming)
+extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for BioShock (Remastered)";
 
 // Final shader [ty Ersh/FF14]
 struct __declspec(uuid("1228220F-364A-46A2-BB29-1CCE591A018A")) DeviceData {

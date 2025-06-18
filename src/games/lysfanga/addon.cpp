@@ -532,12 +532,8 @@ void OnPresent(
 
 }  // namespace
 
-// NOLINTBEGIN(readability-identifier-naming)
-
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Lysfanga: The Time Shift Warrior";
-
-// NOLINTEND(readability-identifier-naming)
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
