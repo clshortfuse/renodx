@@ -21,6 +21,7 @@ struct ShaderInjectData {
   float color_grade_highlight_saturation;
   float color_grade_blowout;
   float color_grade_flare;
+  float reno_drt_white_clip;
   float color_grade_color_space;
 
   float color_grade_hue_correction;
@@ -59,6 +60,7 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION     shader_injection.color_grade_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT                  shader_injection.color_grade_blowout
 #define RENODX_TONE_MAP_FLARE                    shader_injection.color_grade_flare
+#define RENODX_RENO_DRT_WHITE_CLIP               shader_injection.reno_drt_white_clip
 #define RENODX_TONE_MAP_PASS_AUTOCORRECTION      1.f
 #define RENODX_TONE_MAP_WORKING_COLOR_SPACE      color::convert::COLOR_SPACE_AP1
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE        -1.f
