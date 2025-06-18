@@ -13,7 +13,6 @@
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
-#include "../../mods/swapchain.hpp"
 
 namespace {
 
@@ -21,6 +20,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x0A67EFF4),  // bloom
     CustomShaderEntry(0xA380E737),  // tonemap+scale
     CustomShaderEntry(0xF1FC454C),  // tonemap
+    CustomShaderEntry(0xEF7E426D),  // tonemap la
     CustomShaderEntry(0xF3C7B934),  // output
 };
 
