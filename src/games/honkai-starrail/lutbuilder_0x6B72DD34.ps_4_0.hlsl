@@ -1,6 +1,6 @@
 #include "./common.hlsl"
 
-// ---- Created with 3Dmigoto v1.4.1 on Tue Feb 25 20:32:34 2025
+// ---- Created with 3Dmigoto v1.4.1 on Thu Jun 19 08:11:22 2025
 cbuffer cb0 : register(b0) {
   float4 cb0[32];
 }
@@ -49,7 +49,7 @@ void main(
   r2.xyz = cb0[5].xyz * cb0[5].www;
   r0.xyz = r0.xyz + -r0.www;
   r2.xyz = r2.xyz * r0.xyz + r0.www;
-  r2.xyz = max(float3(0, 0, 0), r2.xyz);
+  r2.xyz = max(float3(0.00100000005, 0.00100000005, 0.00100000005), r2.xyz);
   r2.xyz = float3(5.55555534, 5.55555534, 5.55555534) * r2.xyz;
   r3.xyz = cb0[6].xyz * cb0[6].www;
   r2.xyz = log2(r2.xyz);
@@ -60,7 +60,7 @@ void main(
   r2.xyz = r3.xyz * r2.xyz;
   r3.xyz = cb0[11].xyz * cb0[11].www;
   r3.xyz = r3.xyz * r0.xyz + r0.www;
-  r3.xyz = max(float3(0, 0, 0), r3.xyz);
+  r3.xyz = max(float3(0.00100000005, 0.00100000005, 0.00100000005), r3.xyz);
   r3.xyz = float3(5.55555534, 5.55555534, 5.55555534) * r3.xyz;
   r4.xyz = cb0[12].xyz * cb0[12].www;
   r3.xyz = log2(r3.xyz);
@@ -71,7 +71,7 @@ void main(
   r3.xyz = r4.xyz * r3.xyz;
   r4.xyz = cb0[8].xyz * cb0[8].www;
   r0.xyz = r4.xyz * r0.xyz + r0.www;
-  r0.xyz = max(float3(0, 0, 0), r0.xyz);
+  r0.xyz = max(float3(0.00100000005, 0.00100000005, 0.00100000005), r0.xyz);
   r0.xyz = float3(5.55555534, 5.55555534, 5.55555534) * r0.xyz;
   r4.xyz = cb0[9].xyz * cb0[9].www;
   r0.xyz = log2(r0.xyz);
