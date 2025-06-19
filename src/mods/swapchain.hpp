@@ -777,7 +777,7 @@ inline ID3D11Device* GetDeviceProxy(reshade::api::swapchain* swapchain, reshade:
   fullscreen_desc.RefreshRate.Numerator = 0;
   fullscreen_desc.RefreshRate.Denominator = 0;
   sc_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-  auto* output_window = hwnd ? static_cast<HWND>(hwnd) : GetDesktopWindow();
+  auto* output_window = hwnd != nullptr ? static_cast<HWND>(hwnd) : GetDesktopWindow();
   sc_desc.SampleDesc.Count = 1;
   fullscreen_desc.Windowed = TRUE;
   sc_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
@@ -1120,7 +1120,8 @@ static bool OnCreateDevice(reshade::api::device_api api, uint32_t& api_version) 
 static void OnInitDevice(reshade::api::device* device) {
   std::stringstream s;
   s << "mods::swapchain::OnInitDevice(";
-  s << reinterpret_cast<uintptr_t>(device);
+  s << PRINT_PTR(reinterpret_cast<uintptr_t>(device));
+  s << ", native: " << PRINT_PTR(reinterpret_cast<uintptr_t>(device->get_native()));
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
   auto* data = renodx::utils::data::Create<DeviceData>(device);
