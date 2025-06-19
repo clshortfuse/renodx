@@ -24,7 +24,7 @@ void main(
   r1.x = r1.z ? r1.x : 0;
   if (r1.x != 0) discard;
   o0.xyzw = v1.xyzw * r0.xyzw;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     o0.rgb = saturate(o0.rgb);
   }
   o0.a = saturate(o0.a);

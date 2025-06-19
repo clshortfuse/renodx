@@ -15,12 +15,14 @@ cbuffer PS_CONSTANT_BUFFER : register(b0) {
     float pad;
     float pad2;
     float pad3;
-  } boxes[4] : packoffset(c0);
+  }
+  boxes[4] : packoffset(c0);
 
   struct
   {
     float4 s;
-  } spheres[4] : packoffset(c12);
+  }
+  spheres[4] : packoffset(c12);
 
   struct
   {
@@ -32,12 +34,14 @@ cbuffer PS_CONSTANT_BUFFER : register(b0) {
     float rz;
     float rInner;
     float rOuter;
-  } toruses[4] : packoffset(c16);
+  }
+  toruses[4] : packoffset(c16);
 
   struct
   {
     float4 s;
-  } bgSpheres[21] : packoffset(c24);
+  }
+  bgSpheres[21] : packoffset(c24);
 
   int numBoxes : packoffset(c45);
   int numSpheres : packoffset(c45.y);
@@ -97,11 +101,10 @@ Texture2D<float4> mainWindow : register(t0);
 #define cmp -
 
 void main(
-  float4 v0 : SV_POSITION0,
-              float4 v1 : COLOR0,
-                          float2 v2 : UV0,
-                                      out float4 o0 : SV_TARGET0
-) {
+    float4 v0: SV_POSITION0,
+    float4 v1: COLOR0,
+    float2 v2: UV0,
+    out float4 o0: SV_TARGET0) {
   float4 r0, r1, r2, r3;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -109,7 +112,7 @@ void main(
   r0.zw = float2(-1, 0.666666687);
   r1.zw = float2(1, -1);
   r2.xyzw = mainWindow.Sample(PointSampler_s, v2.xy).xyzw;
-  float4 inputColor = r2.xyzw;
+  float3 inputColor = r2.rgb;
   r2.xyz = log2(abs(r2.xyz));
   o0.w = r2.w;
   r2.xyz = colorGainSaturation.xyz * r2.xyz;
@@ -146,8 +149,17 @@ void main(
   o0.xyz = r0.xxx * r0.yzw;
 
   o0.rgb = max(o0.rgb, 0);
-  o0.rgb = pow(o0.rgb, 2.2f);
-  o0.rgb *= injectedData.toneMapGameNits / injectedData.toneMapUINits;
-  o0.rgb = pow(o0.rgb, 1.f / 2.2f);
+
+  o0.rgb = renodx::color::srgb::Decode(o0.rgb);
+  if (RENODX_TONE_MAP_TYPE == 0) {
+    o0.rgb = lerp(renodx::color::srgb::Decode(inputColor), o0.rgb, RENODX_COLOR_GRADE_STRENGTH);
+  } else {
+    o0.rgb = renodx::draw::ToneMapPass(
+        renodx::color::srgb::Decode(inputColor),
+        renodx::tonemap::renodrt::NeutralSDR(o0.rgb));
+  }
+
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
+  // o0.rgb *= 2.f;
   return;
 }

@@ -7,9 +7,14 @@ cbuffer ViewportConstantBuffer : register(b2) {
 SamplerState BilinearSampler_s : register(s1);
 Texture2D<float4> tex : register(t0);
 
+// 3Dmigoto declarations
 #define cmp -
 
-void main(float4 v0 : SV_POSITION0, float4 v1 : COLOR0, float2 v2 : UV0, out float4 o0 : SV_TARGET0) {
+void main(
+    float4 v0: SV_POSITION0,
+    float4 v1: COLOR0,
+    float2 v2: UV0,
+    out float4 o0: SV_TARGET0) {
   float4 r0, r1, r2, r3;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -115,8 +120,6 @@ void main(float4 v0 : SV_POSITION0, float4 v1 : COLOR0, float2 v2 : UV0, out flo
   o0.y = exp2(r0.x);
   o0.w = 1;
 
-  o0.rgb = lerp(untouched, o0.rgb, injectedData.fxScanlines);
-  o0.rgb = pow(o0.rgb, 2.2f);
-  o0.rgb *= injectedData.toneMapUINits / 80.f;
+  o0.rgb = lerp(untouched, o0.rgb, CUSTOM_SCANLINES);
   return;
 }

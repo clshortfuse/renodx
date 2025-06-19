@@ -20,10 +20,10 @@ void main(
 
   r0.xyzw = tex.Sample(PointSampler_s, v2.xy).xyzw;
   o0.xyzw = v1.xyzw * r0.xyzw;
-  if (injectedData.resourceTag == 36.f) {
-    o0.rgb = 2.f;
+  if (RESOURCE_TAG == 36.f) {
+    // o0.rgb = 2.f;
   }
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     o0.rgb = saturate(o0.rgb);
   }
   o0.a = saturate(o0.a);
