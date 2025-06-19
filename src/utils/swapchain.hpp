@@ -36,6 +36,7 @@ struct __declspec(uuid("3cf9a628-8518-4509-84c3-9fbe9a295212")) CommandListData 
   reshade::api::resource_view current_depth_stencil = {0};
   bool has_swapchain_render_target_dirty = true;
   bool has_swapchain_render_target = false;
+  uint8_t pass_count = 0;
 };
 
 static bool is_primary_hook = false;
@@ -169,6 +170,43 @@ inline void OnBindRenderTargetsAndDepthStencil(
   const bool found_swapchain_rtv = false;
   cmd_list_data->current_render_targets.assign(rtvs, rtvs + count);
   cmd_list_data->current_depth_stencil = dsv;
+  cmd_list_data->has_swapchain_render_target_dirty = true;
+}
+
+static void OnBeginRenderPass(
+    reshade::api::command_list* cmd_list,
+    uint32_t count, const reshade::api::render_pass_render_target_desc* rts,
+    const reshade::api::render_pass_depth_stencil_desc* ds) {
+  if (!is_primary_hook) return;
+  auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  if (cmd_list_data == nullptr) return;
+  const bool found_swapchain_rtv = false;
+
+  // Ignore subpasses
+  if (cmd_list_data->pass_count++ != 0) return;
+
+  cmd_list_data->current_render_targets.reserve(count);
+  for (const auto& rt : std::span<const reshade::api::render_pass_render_target_desc>(rts, count)) {
+    cmd_list_data->current_render_targets.push_back(rt.view);
+  }
+  if (ds != nullptr) {
+    cmd_list_data->current_depth_stencil = ds->view;
+  } else {
+    cmd_list_data->current_depth_stencil = {0};
+  }
+  cmd_list_data->has_swapchain_render_target_dirty = true;
+}
+
+static void OnEndRenderPass(reshade::api::command_list* cmd_list) {
+  if (!is_primary_hook) return;
+  auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  if (cmd_list_data == nullptr) return;
+
+  // Ignore subpasses
+  if (--cmd_list_data->pass_count != 0) return;
+
+  cmd_list_data->current_render_targets.clear();
+  cmd_list_data->current_depth_stencil = {0};
   cmd_list_data->has_swapchain_render_target_dirty = true;
 }
 
@@ -504,6 +542,8 @@ static void Use(DWORD fdw_reason) {
       reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
       reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
       reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
+      reshade::register_event<reshade::addon_event::begin_render_pass>(OnBeginRenderPass);
+      reshade::register_event<reshade::addon_event::end_render_pass>(OnEndRenderPass);
       reshade::register_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
       reshade::register_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
 
@@ -515,6 +555,9 @@ static void Use(DWORD fdw_reason) {
       reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
       reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitCommandList);
       reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
+      reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
+      reshade::unregister_event<reshade::addon_event::begin_render_pass>(OnBeginRenderPass);
+      reshade::unregister_event<reshade::addon_event::end_render_pass>(OnEndRenderPass);
       reshade::unregister_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
       reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
 
