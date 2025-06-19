@@ -116,7 +116,7 @@ static bool OnUpdateDescriptorTables(
     {
       std::stringstream s;
       s << "utils::descriptor::OnUpdateDescriptorTables(Getting heap: "
-        << static_cast<uintptr_t>(update.table.handle)
+        << PRINT_PTR(update.table.handle)
         << "[" << update.binding << "] + " << update.array_offset
         << ")";
       reshade::log::message(reshade::log::level::debug, s.str().c_str());
@@ -131,9 +131,9 @@ static bool OnUpdateDescriptorTables(
     {
       std::stringstream s;
       s << "utils::descriptor::OnUpdateDescriptorTables(Got heap: "
-        << static_cast<uintptr_t>(update.table.handle)
+        << PRINT_PTR(update.table.handle)
         << "[" << update.binding << "] + " << update.array_offset
-        << " = " << static_cast<uintptr_t>(heap.handle)
+        << " = " << PRINT_PTR(heap.handle)
         << ")";
       reshade::log::message(reshade::log::level::debug, s.str().c_str());
     }
@@ -147,7 +147,7 @@ static bool OnUpdateDescriptorTables(
 #ifdef DEBUG_LEVEL_2
       std::stringstream s;
       s << "utils::descriptor::OnUpdateDescriptorTables(Heap ";
-      s << static_cast<uintptr_t>(heap.handle);
+      s << PRINT_PTR(heap.handle);
       s << " resized ";
       s << heap_data.size() << " => " << total_size;
       reshade::log::message(reshade::log::level::debug, s.str().c_str());
@@ -164,22 +164,22 @@ static bool OnUpdateDescriptorTables(
 
       std::stringstream s;
       s << "utils::descriptor::OnUpdateDescriptorTables(Log heap: ";
-      s << static_cast<uintptr_t>(heap.handle);
-      s << "[" << offset + k << "]:";
+      s << PRINT_PTR(heap.handle);
+      s << "[" << offset + k << "]: ";
 #endif
 
       switch (update.type) {
         case reshade::api::descriptor_type::sampler:
           descriptor.second = static_cast<const reshade::api::sampler*>(update.descriptors)[k];
 #ifdef DEBUG_LEVEL_2
-          s << static_cast<uintptr_t>(static_cast<const reshade::api::sampler*>(update.descriptors)[k].handle);
+          s << PRINT_PTR(static_cast<const reshade::api::sampler*>(update.descriptors)[k].handle);
 #endif
           break;
         case reshade::api::descriptor_type::sampler_with_resource_view:
           descriptor.second = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[k];
-
+          heap_set.emplace(offset + k);
 #ifdef DEBUG_LEVEL_2
-          s << static_cast<uintptr_t>(static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[k].view.handle);
+          s << PRINT_PTR(static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[k].view.handle);
 #endif
           break;
         case reshade::api::descriptor_type::texture_shader_resource_view:
@@ -190,12 +190,15 @@ static bool OnUpdateDescriptorTables(
           descriptor.second = static_cast<const reshade::api::resource_view*>(update.descriptors)[k];
           heap_set.emplace(offset + k);
 #ifdef DEBUG_LEVEL_2
-          s << static_cast<uintptr_t>(static_cast<const reshade::api::resource_view*>(update.descriptors)[k].handle);
+          s << PRINT_PTR(static_cast<const reshade::api::resource_view*>(update.descriptors)[k].handle);
 #endif
           break;
         case reshade::api::descriptor_type::constant_buffer:
         case reshade::api::descriptor_type::shader_storage_buffer:
           descriptor.second = static_cast<const reshade::api::buffer_range*>(update.descriptors)[k];
+#ifdef DEBUG_LEVEL_2
+          s << PRINT_PTR(static_cast<const reshade::api::buffer_range*>(update.descriptors)[k].buffer.handle);
+#endif
           break;
         default:
           break;
