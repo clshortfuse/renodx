@@ -1120,8 +1120,8 @@ static bool OnCreateDevice(reshade::api::device_api api, uint32_t& api_version) 
 static void OnInitDevice(reshade::api::device* device) {
   std::stringstream s;
   s << "mods::swapchain::OnInitDevice(";
-  s << PRINT_PTR(reinterpret_cast<uintptr_t>(device));
-  s << ", native: " << PRINT_PTR(reinterpret_cast<uintptr_t>(device->get_native()));
+  s << PRINT_PTR((uintptr_t)(device));
+  s << ", native: " << PRINT_PTR((uintptr_t)(device->get_native()));
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
   auto* data = renodx::utils::data::Create<DeviceData>(device);
