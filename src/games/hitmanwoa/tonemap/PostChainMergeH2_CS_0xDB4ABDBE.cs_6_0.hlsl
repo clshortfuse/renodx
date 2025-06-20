@@ -34,28 +34,29 @@ void comp_main() {
   float _139 = (((CUSTOM_BLOOM * _26_m0[9u].x * _110.x) + _104.x) * _26_m0[7u].x) * _138;
   float _140 = (((CUSTOM_BLOOM * _26_m0[9u].x * _110.y) + _104.y) * _26_m0[7u].y) * _138;
   float _141 = (((CUSTOM_BLOOM * _26_m0[9u].x * _110.z) + _104.z) * _26_m0[7u].z) * _138;
-  // float _142 = _139 * 0.60000002384185791015625f;
-  // float _157 = _140 * 0.60000002384185791015625f;
-  // float _166 = _141 * 0.60000002384185791015625f;
   float _200 = clamp(1.0f - (_26_m0[9u].y * frac(sin((_26_m0[10u].z + floor(_26_m0[9u].z * _47)) + ((_26_m0[10u].z + floor(_26_m0[9u].z * _48)) * 0.0129898004233837127685546875f)) * 43758.546875f)), 0.0f, 1.0f);
 
   float3 color_combined = float3(_139, _140, _141);
 
-  // tonemapped color
-  float3 tonemapped = ToneMapHitman2(color_combined);
 #if 1
-  // create hdr tonemapped color
-  float3 untonemapped_midgray_corrected = color_combined * (ToneMapHitman2(0.18f) / 0.18f);
-  tonemapped = lerp(tonemapped, untonemapped_midgray_corrected, tonemapped);
-  // add vignette and dithering
+  float3 tonemapped = ApplyCustomToneMap(color_combined);
+#endif
+#if 1
+  // add vignette and grain
   tonemapped = (_26_m0[4u].xyz * _78) + (((((_26_m0[5u].xyz - 0.5f) * _77) + 0.5f) * 2.0f) * tonemapped * _26_m0[10u].y * _200);
 
-  float3 _239 = ToneMapMaxCLLAndSampleGamma2LUT16AndFinalizeOutput(tonemapped, _12, _29);
+  float3 _239 = ToneMapMaxCLLAndSampleGamma2LUT16AndFinalizeOutput(tonemapped, _12, _29, _26_m0[8u].y);
 #endif
 
-  float _255 = (frac(sin(dot(float2(_57, _58), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f) * 0.0039215688593685626983642578125f) + (-0.00196078442968428134918212890625f);
+  float3 final_color = _239;
 
-  _20[uint2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y)] = float4((_255 + _239.x) * _26_m0[11u].x, (_255 + _239.y) * _26_m0[11u].x, (_255 + _239.z) * _26_m0[11u].x, 0.0f);
+  if (CUSTOM_DITHERING) {
+    float _255 = (frac(sin(dot(float2(_57, _58), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f) * 0.0039215688593685626983642578125f) + (-0.00196078442968428134918212890625f);
+    final_color = renodx::color::pq::DecodeSafe((_255 + renodx::color::pq::EncodeSafe(final_color, RENODX_DIFFUSE_WHITE_NITS / 2.5f)) * _26_m0[11u].x, RENODX_DIFFUSE_WHITE_NITS / 2.5f);
+
+  }
+
+  _20[uint2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y)] = float4(final_color, 0.0f);
 }
 
 [numthreads(8, 8, 1)]
