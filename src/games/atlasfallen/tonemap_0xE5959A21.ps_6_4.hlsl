@@ -1,4 +1,3 @@
-#include "./shared.h"
 #include "./common.hlsl"
 
 Texture2D<float4> globalTextures[8192] : register(t0, space1);
@@ -313,7 +312,7 @@ float4 main(
   untonemapped *= luminance;
 
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    float3 displaymappedColor = DisplaymapUntonemapped(untonemapped);
+    float3 displaymappedColor = RestoreHighlightSaturation(untonemapped);
 
     displaymappedColor /= luminance;
 
