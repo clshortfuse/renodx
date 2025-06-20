@@ -1,60 +1,14 @@
-#include "../../shaders/renodx.hlsl"
+#version 450
 
-const float PEAK_NITS = 1000.f;
-const float GAME_NITS = 203.f;
-const float UI_NITS = 203.f;
-const float CUSTOM_BLOOM = 1.0f;
+#include "./shared.h"
 
-
-float HejlDawsonCustom(float color, float a, float b) {
+float3 HejlDawsonCustom(float3 color, float x, float y) {
   color = max(0, color - 0.004f);
-  color = (color * (a * color + 0.5f)) / (color * (a * color + 1.7f) + b);
-  return pow(color, 2.2f);
+  float3 a = fma(color, x, 1.7);
+  float3 b = fma(color, x, 0.5);
+  float3 c = fma(color, a, y);
+  float3 d = color * b / c;
+
+  return pow(abs(d), 2.2f);
 }
 
-float HejlDawson(float color, float a, float b) {
-  return HejlDawsonCustom(color, 6.2f, 0.06f);
-}
-
-float3 CustomToneMap(float3 untonemapped, float3 vanilla, float vanilla_mid_gray) {
-  float peak = PEAK_NITS / GAME_NITS;
-  peak = renodx::color::srgb::Decode(pow(peak, 1.0 / 2.2f));
-  // peak = DecodeSRGB(pow(peak, 1.f / 2.2f));
-
-  renodx::tonemap::renodrt::Config renodrt_config = renodx::tonemap::renodrt::config::Create();
-  renodrt_config.nits_peak = peak * 100.f;
-  renodrt_config.mid_gray_value = 0.18f;
-  renodrt_config.mid_gray_nits = vanilla_mid_gray * 100.f;
-  renodrt_config.exposure = 1.f;
-  renodrt_config.highlights = 1.f;
-  renodrt_config.shadows = 1.f;
-  renodrt_config.contrast = 1.0f;
-  renodrt_config.saturation = 1.6f;
-  renodrt_config.dechroma = 0.f;
-  renodrt_config.flare = 0.f;
-  renodrt_config.hue_correction_strength = 0.5f;
-  renodrt_config.working_color_space = 0u;
-
-  renodrt_config.blowout = 0.00f;
-  renodrt_config.dechroma = 0.80;
-  renodrt_config.flare = 0.05;
-
-  renodrt_config.tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
-  renodrt_config.hue_correction_type = renodx::tonemap::renodrt::config::hue_correction_type::CUSTOM;
-  renodrt_config.hue_correction_source = saturate(vanilla);
-  renodrt_config.per_channel = false;
-  renodrt_config.working_color_space = 1u;
-  renodrt_config.clamp_peak = 1u;
-  renodrt_config.clamp_color_space = -1.f;
-
-  bool use_per_channel = true;
-
-  if (use_per_channel) {
-    renodrt_config.per_channel = true;
-    renodrt_config.contrast = 1.00f;
-    renodrt_config.saturation = 1.0f;
-    renodrt_config.dechroma = 0.0;
-    renodrt_config.hue_correction_strength = 0.0f;
-  }
-  return renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
-}

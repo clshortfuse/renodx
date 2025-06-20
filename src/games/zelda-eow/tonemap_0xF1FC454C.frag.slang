@@ -95,41 +95,19 @@ void main() {
   _32.z = _126;
   _32.w = _118;
 
-  vec3 untonemapped = vec3(_46, _48, _50);
-  float vanilla_mid_gray =
-      HejlDawsonCustom(0.18f, fp_c1_1._m0[0].x, fp_c1_1._m0[0].y);  // 0.225f
-  untonemapped *= fp_c5_1._m0[0].x;                                 // 2x exposure
-  vec3 vanilla =
-      vec3(HejlDawsonCustom(_32.r, fp_c1_1._m0[0].x, fp_c1_1._m0[0].y),
-           HejlDawsonCustom(_32.g, fp_c1_1._m0[0].x, fp_c1_1._m0[0].y),
-           HejlDawsonCustom(_32.b, fp_c1_1._m0[0].x, fp_c1_1._m0[0].y));
+  float exposure = fp_c5_1._m0[0].x;
+  float param_x = fp_c1_1._m0[0].x;
+  float param_y = fp_c1_1._m0[0].y;
 
-  _32.rgb = CustomToneMap(untonemapped, vanilla, vanilla_mid_gray);
+  vec3 untonemapped = _44.rgb * exposure;
+  float vanilla_mid_gray = HejlDawsonCustom(0.18f, param_x, param_y).x;
+  float3 vanilla = HejlDawsonCustom(untonemapped.rgb, param_x, param_y);
 
-  // _32.rgb = renodx::color::bt2020::from::BT709(_32.rgb);
-
-
-  // _32.rgb = renodx::draw::ToneMapPass(untonemapped, _32.rgb);
-
-  
-
-      // untonemapped, peak * 100.f, 0.18f, vanilla_mid_gray * 100.f,
-      // 1.0f,  // float exposure,
-      // 1.0f,  // float highlights,
-      // 1.1f,  // float shadows,
-      // 1.1f,  // float contrast,
-      // 1.6f,  // float saturation,
-      // 0.8,   // float dechroma,
-      // 0.25,  // float flare,
-      // 0.5f,  // float hue_correction_strength,
-      // vanilla.rgb,
-      // 1.f,
-      // );
-
-
-  // _32.rgb = renodx::color::srgb::EncodeSafe(_32.rgb);
-  // _36.rgb = vec3(vanilla_mid_gray * 1.f / 80.f);
-  // _36.rgb = ReinhardScalable(_36.rgb, (800.f / 203.f).xxx, (0).xxx,
-  // (0.18f).xxx, (0.18f).xxx); _36.w = 0;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    _32.rgb = saturate(vanilla);
+  } else {
+    _32.rgb = renodx::draw::ToneMapPass(untonemapped * vanilla_mid_gray / 0.18f, vanilla);
+  }
+  _32.rgb = renodx::draw::RenderIntermediatePass(_32.rgb);
 }
 

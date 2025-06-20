@@ -145,33 +145,18 @@ void main() {
   _36.z = _182;
   _36.w = _178;
 
-  vec3 untonemapped = vec3(_100, _102, _104);
-  float vanilla_mid_gray =
-      HejlDawsonCustom(0.18f, fp_c1_1._m0[0].x, fp_c1_1._m0[0].y);  // 0.225f
-  untonemapped *= fp_c5_1._m0[0].x;                                 // 2x exposure
-  vec3 vanilla =
-      vec3(HejlDawsonCustom(_36.r, fp_c1_1._m0[0].x, fp_c1_1._m0[0].y),
-           HejlDawsonCustom(_36.g, fp_c1_1._m0[0].x, fp_c1_1._m0[0].y),
-           HejlDawsonCustom(_36.b, fp_c1_1._m0[0].x, fp_c1_1._m0[0].y));
+  float exposure = fp_c5_1._m0[0].x;
+  float param_x = fp_c1_1._m0[0].x;
+  float param_y = fp_c1_1._m0[0].y;
 
-  float peak = PEAK_NITS / GAME_NITS;
-  peak = renodx::color::srgb::Decode(pow(peak, 1.0 / 2.2f));
-  // peak = DecodeSRGB(pow(peak, 1.f / 2.2f));
+  vec3 untonemapped = _48.rgb * exposure;
+  float vanilla_mid_gray = HejlDawsonCustom(0.18f, param_x, param_y).x;
+  float3 vanilla = HejlDawsonCustom(untonemapped.rgb, param_x, param_y);
 
-  // _36.rgb = renodx::tonemap::renodrt::BT709(
-  //     untonemapped, peak * 100.f, 0.18f, vanilla_mid_gray * 100.f,
-  //     1.0f,  // float exposure,
-  //     1.0f,  // float highlights,
-  //     1.1f,  // float shadows,
-  //     1.2f,  // float contrast,
-  //     1.6f,  // float saturation,
-  //     0.8,   // float dechroma,
-  //     0.25,  // float flare,
-  //     0.5f,  // float hue_correction_strength,
-  //     vanilla.rgb);
-  // _36.rgb = vec3(vanilla_mid_gray * 1.f / 80.f);
-  // _36.rgb = ReinhardScalable(_36.rgb, (800.f / 203.f).xxx, (0).xxx,
-  // (0.18f).xxx, (0.18f).xxx); _36.w = 0;
-
-  _36.rgb = CustomToneMap(untonemapped, vanilla, vanilla_mid_gray);
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    _36.rgb = saturate(vanilla);
+  } else {
+    _36.rgb = renodx::draw::ToneMapPass(untonemapped * vanilla_mid_gray / 0.18f, vanilla);
+  }
+  _36.rgb = renodx::draw::RenderIntermediatePass(_36.rgb);
 }
