@@ -127,7 +127,7 @@ float3 ApplyToneMap(float3 untonemapped, float3 graded) {
   return renodx::draw::RenderIntermediatePass(output);
 }
 
-float3 DisplaymapUntonemapped(float3 untonemapped) {
+float3 RestoreHighlightSaturation(float3 untonemapped) {
   float3 displaymappedColor = untonemapped;
 
   if (CUSTOM_DISPLAY_MAP_TYPE == 1.f) {

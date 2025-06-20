@@ -14,8 +14,6 @@
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
-//#define RENODX_TONE_MAP_HUE_CORRECTION       shader_injection.tone_map_hue_correction
-//#define RENODX_TONE_MAP_HUE_SHIFT            shader_injection.tone_map_hue_shift
 #define RENODX_TONE_MAP_HUE_CORRECTION       0.f
 #define RENODX_TONE_MAP_HUE_SHIFT            0.f
 #define RENODX_TONE_MAP_WORKING_COLOR_SPACE  shader_injection.tone_map_working_color_space
@@ -24,24 +22,15 @@
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
 #define RENODX_TONE_MAP_HUE_SHIFT_METHOD     renodx::draw::HUE_SHIFT_METHOD_ACES_FITTED_BT709
 #define RENODX_TONE_MAP_HUE_SHIFT_MODIFIER   0.f
-//#define RENODX_SWAP_CHAIN_CLAMP_NITS       10000.f
 #define RENODX_INTERMEDIATE_ENCODING         0.f
 #define RENODX_SWAP_CHAIN_DECODING           0.f
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE  renodx::color::convert::COLOR_SPACE_AP1
-
-//#define RENODX_PER_CHANNEL_CHROMINANCE_CORRECTION shader_injection.scene_grade_saturation_correction
-//#define RENODX_PER_CHANNEL_BLOWOUT_RESTORATION    shader_injection.scene_grade_blowout_restoration
-//#define RENODX_PER_CHANNEL_HUE_CORRECTION         shader_injection.scene_grade_hue_correction
-//#define RENODX_COLOR_GRADE_STRENGTH               shader_injection.scene_grade_strength
 #define RENODX_PER_CHANNEL_CHROMINANCE_CORRECTION 0.f
 #define RENODX_PER_CHANNEL_BLOWOUT_RESTORATION    0.f
 #define RENODX_PER_CHANNEL_HUE_CORRECTION         0.f
-
 #define CUSTOM_DISPLAY_MAP_TYPE                   shader_injection.custom_display_map_type
 #define CUSTOM_CHROMATIC_ABERRATION               shader_injection.custom_chromatic_aberration
 #define CUSTOM_TONEMAP_UPGRADE_TYPE               shader_injection.custom_tonemap_upgrade_type
-//#define DEBUG_SLIDER1                             shader_injection.debug_slider1
-//#define DEBUG_SLIDER2                             shader_injection.debug_slider2
 #define CUSTOM_TONEMAP_UPGRADE_HUECORR            shader_injection.custom_tonemap_upgrade_huecorr
 #define CUSTOM_TONEMAP_UPGRADE_STRENGTH           shader_injection.custom_tonemap_upgrade_strength
 
@@ -75,8 +64,6 @@ struct ShaderInjectData {
   float custom_tonemap_upgrade_type;
   float custom_tonemap_upgrade_huecorr;
   float custom_tonemap_upgrade_strength;
-  //float debug_slider1;
-  //float debug_slider2;
 };
 
 #ifndef __cplusplus
