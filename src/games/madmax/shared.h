@@ -22,9 +22,12 @@
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
+#define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE shader_injection.swap_chain_custom_color_space
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT709
 #define RENODX_SWAP_CHAIN_ENCODING             ENCODING_SCRGB
+#define CUSTOM_FILM_GRAIN_STRENGTH           shader_injection.custom_film_grain
+#define CUSTOM_RANDOM                        shader_injection.custom_random
 #define RENODX_WORLD_MAP                     shader_injection.world_map
 
 // Must be 32bit aligned
@@ -51,6 +54,9 @@ struct ShaderInjectData {
   float tone_map_hue_processor;
   float tone_map_per_channel;
   float gamma_correction;
+  float swap_chain_custom_color_space;
+  float custom_film_grain;
+  float custom_random;
   float world_map;
 };
 
