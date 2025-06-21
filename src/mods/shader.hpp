@@ -36,7 +36,7 @@ inline bool OnBypassShaderDraw(reshade::api::command_list* cmd_list) { return fa
 
 struct CustomShader {
   std::uint32_t crc32;
-  std::vector<uint8_t> code;
+  std::span<const uint8_t> code;
   int32_t index = -1;
   // return false to abort
   std::function<bool(reshade::api::command_list*)> on_replace = nullptr;
@@ -45,7 +45,7 @@ struct CustomShader {
   // return false to abort
   std::function<bool(reshade::api::command_list*)> on_draw = nullptr;
   std::function<void(reshade::api::command_list*)> on_drawn = nullptr;
-  std::unordered_map<reshade::api::device_api, std::vector<uint8_t>> code_by_device;
+  std::unordered_map<reshade::api::device_api, std::span<const uint8_t>> code_by_device;
 };
 
 using CustomShaders = std::unordered_map<uint32_t, CustomShader>;

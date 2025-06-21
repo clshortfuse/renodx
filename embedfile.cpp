@@ -44,20 +44,26 @@ int main(int argc, char** argv) {
   stream << "#ifndef __" << output_basename << "_EMBED_FILE\n";
   stream << "#define __" << output_basename << "_EMBED_FILE\n";
   stream << "#include <cstdint>\n";
-  stream << "#include <initializer_list>\n";
-  stream << "const std::initializer_list<uint8_t> __" << output_basename << " = {\n";
+  stream << "#include <span>\n";
+  stream << "static const std::uint8_t __" << output_basename << "_base[] = {\n";
   size_t current_line_bytes = 0;
   for (uint8_t byte : binary_data) {
     if (current_line_bytes == 0) {
       stream << "   ";
     }
-    stream << std::format(" 0x{:02x},", byte);
+    stream << " " << static_cast<int>(byte) << ",";
     if (++current_line_bytes == 8) {
       stream << "\n";
       current_line_bytes = 0;
     }
   }
-  stream << "\n};\n";
+  if (current_line_bytes != 0) {
+    stream << "\n";
+  }
+  stream << "};\n";
+  stream << "static std::span<const std::uint8_t> __" << output_basename << "(\n";
+  stream << "__" << output_basename << "_base, sizeof(__" << output_basename << "_base)\n";
+  stream << ");\n";
   stream << "#endif\n";
 
   std::string output = stream.str();

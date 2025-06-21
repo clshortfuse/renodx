@@ -198,7 +198,7 @@ static bool HasSDRAlphaBlend(std::span<const reshade::api::pipeline_subobject> s
 static reshade::api::pipeline CreateRenderPipeline(
     reshade::api::device* device,
     const reshade::api::pipeline_layout layout,
-    const std::unordered_map<reshade::api::pipeline_subobject_type, std::span<std::uint8_t>>& shaders,
+    const std::unordered_map<reshade::api::pipeline_subobject_type, std::span<const std::uint8_t>>& shaders,
     const reshade::api::format render_target_format = reshade::api::format::r16g16b16a16_float) {
   auto format = render_target_format;
   uint32_t num_vertices = 3;

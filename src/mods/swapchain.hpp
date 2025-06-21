@@ -89,8 +89,8 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   reshade::api::pipeline swap_chain_proxy_pipeline = {0};
   reshade::api::sampler swap_chain_proxy_sampler = {0};
 
-  std::vector<std::uint8_t> swap_chain_proxy_vertex_shader;
-  std::vector<std::uint8_t> swap_chain_proxy_pixel_shader;
+  std::span<const std::uint8_t> swap_chain_proxy_vertex_shader;
+  std::span<const std::uint8_t> swap_chain_proxy_pixel_shader;
   int32_t expected_constant_buffer_index = -1;
   uint32_t expected_constant_buffer_space = 0;
   bool swapchain_proxy_revert_state = false;
@@ -150,15 +150,15 @@ static bool bypass_dummy_windows = true;
 static bool use_auto_upgrade = false;
 static std::unordered_set<std::string> ignored_window_class_names = {};
 static reshade::api::format swap_chain_proxy_format = reshade::api::format::r16g16b16a16_float;
-static std::vector<std::uint8_t> swap_chain_proxy_vertex_shader = {};
-static std::vector<std::uint8_t> swap_chain_proxy_pixel_shader = {};
+static std::span<const std::uint8_t> swap_chain_proxy_vertex_shader = {};
+static std::span<const std::uint8_t> swap_chain_proxy_pixel_shader = {};
 static int32_t expected_constant_buffer_index = -1;
 static uint32_t expected_constant_buffer_space = 0;
 static float* shader_injection = nullptr;
 static size_t shader_injection_size = 0;
 struct SwapChainProxyShaders {
-  std::vector<std::uint8_t> vertex_shader;
-  std::vector<std::uint8_t> pixel_shader;
+  std::span<const std::uint8_t> vertex_shader;
+  std::span<const std::uint8_t> pixel_shader;
 };
 static std::unordered_map<reshade::api::device_api, SwapChainProxyShaders> swap_chain_proxy_shaders = {};
 static SwapChainUpgradeTarget auto_upgrade_target = {
