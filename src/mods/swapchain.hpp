@@ -150,15 +150,15 @@ static bool bypass_dummy_windows = true;
 static bool use_auto_upgrade = false;
 static std::unordered_set<std::string> ignored_window_class_names = {};
 static reshade::api::format swap_chain_proxy_format = reshade::api::format::r16g16b16a16_float;
-static std::vector<std::uint8_t> swap_chain_proxy_vertex_shader = {};
-static std::vector<std::uint8_t> swap_chain_proxy_pixel_shader = {};
+static std::span<const std::uint8_t> swap_chain_proxy_vertex_shader = {};
+static std::span<const std::uint8_t> swap_chain_proxy_pixel_shader = {};
 static int32_t expected_constant_buffer_index = -1;
 static uint32_t expected_constant_buffer_space = 0;
 static float* shader_injection = nullptr;
 static size_t shader_injection_size = 0;
 struct SwapChainProxyShaders {
-  std::vector<std::uint8_t> vertex_shader;
-  std::vector<std::uint8_t> pixel_shader;
+  std::span<const std::uint8_t> vertex_shader;
+  std::span<const std::uint8_t> pixel_shader;
 };
 static std::unordered_map<reshade::api::device_api, SwapChainProxyShaders> swap_chain_proxy_shaders = {};
 static SwapChainUpgradeTarget auto_upgrade_target = {
