@@ -147,7 +147,6 @@ void main(
   r0.xyz = r1.xyz * Consts[2].xxx + r0.xyz;
 
   float3 untonemapped = r0.rgb;
-  untonemapped = renodx::color::srgb::DecodeSafe(untonemapped);
   
   r0.xyz = max(float3(1.00000001e-07, 1.00000001e-07, 1.00000001e-07), r0.xyz);
   r1.xyz = r0.xyz * float3(0.150000006, 0.150000006, 0.150000006) + float3(0.0500000007, 0.0500000007, 0.0500000007);
@@ -168,6 +167,14 @@ void main(
 
   if (RENODX_TONE_MAP_TYPE != 0){
     o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
+  }
+  if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
+    o0.rgb = renodx::effects::ApplyFilmGrain(
+        o0.rgb,
+        v2.xy,
+        CUSTOM_RANDOM,
+        CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
+        1.f);
   }
   o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   return;

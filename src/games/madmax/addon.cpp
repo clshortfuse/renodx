@@ -6,6 +6,10 @@
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
+#define NOMINMAX
+
+#include <chrono>
+#include <random>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -35,6 +39,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x254ED214),
     CustomShaderEntry(0x49E82873),
     CustomShaderEntry(0x38A599E8),
+    CustomShaderEntry(0x83FCCE5D),
+    CustomShaderEntry(0x058D8234),
 };
 
 ShaderInjectData shader_injection;
@@ -171,7 +177,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapClampColorSpace",
         .binding = &shader_injection.tone_map_clamp_color_space,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 0.f,
         .label = "Clamp Color Space",
         .section = "Tone Mapping",
         .tooltip = "Hue-shift emulation strength.",
@@ -285,6 +291,16 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type > 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
+        new renodx::utils::settings::Setting{
+        .key = "FxFilmGrain",
+        .binding = &shader_injection.custom_film_grain,
+        .default_value = 0.f,
+        .label = "FilmGrain",
+        .section = "Effects",
+        .tooltip = "Controls new perceptual film grain.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
     new renodx::utils::settings::Setting{
         .key = "World_Map",
         .binding = &shader_injection.world_map,
@@ -313,6 +329,18 @@ void OnPresetOff() {
 }
 
 bool initialized = false;
+
+void OnPresent(
+    reshade::api::command_queue* queue,
+    reshade::api::swapchain* swapchain,
+    const reshade::api::rect* source_rect,
+    const reshade::api::rect* dest_rect,
+    uint32_t dirty_rect_count,
+    const reshade::api::rect* dirty_rects) {
+  static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
+  static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
+  CUSTOM_RANDOM = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
+}
 
 }  // namespace
 
@@ -364,21 +392,15 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         .old_format = reshade::api::format::r10g10b10a2_unorm,
         .new_format = reshade::api::format::r16g16b16a16_float,
     });
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r11g11b10_float,
-                                                                     .new_format = reshade::api::format::r16g16b16a16_float,
-                                                                     .ignore_size = true,
-                                                                     .view_upgrades = {
-                                                                         {{reshade::api::resource_usage::shader_resource,
-                                                                           reshade::api::format::r11g11b10_float},
-                                                                          reshade::api::format::r16g16b16a16_float},
-                                                                         {{reshade::api::resource_usage::unordered_access,
-                                                                           reshade::api::format::r11g11b10_float},
-                                                                          reshade::api::format::r16g16b16a16_float},
-                                                                         {{reshade::api::resource_usage::render_target,
-                                                                           reshade::api::format::r11g11b10_float},
-                                                                          reshade::api::format::r16g16b16a16_float},
-                                                                     }});
-      break;
+    renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        .old_format = reshade::api::format::r11g11b10_float,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .ignore_size = true,
+    });
+        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        .old_format = reshade::api::format::r8g8b8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+    });
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(h_module);
       break;
