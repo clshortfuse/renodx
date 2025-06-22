@@ -149,13 +149,13 @@ static const SettingConfig TONE_MAP_HUE_PROCESSOR_CONFIG = {
 };
 
 static const SettingConfig TONE_MAP_WHITE_CLIP = {
-  .key = "ToneMapWhiteClip",
-  .default_value = 100.f,
-  .label = "White Clip",
-  .section = "Tone Mapping",
-  .min = 0.f,
-  .max = 100.f,
-  .is_visible = []() { return current_settings_mode >= 2; },
+    .key = "ToneMapWhiteClip",
+    .default_value = 100.f,
+    .label = "White Clip",
+    .section = "Tone Mapping",
+    .min = 0.f,
+    .max = 100.f,
+    .is_visible = []() { return current_settings_mode >= 2; },
 };
 
 static const SettingConfig TONE_MAP_HUE_CORRECTION_CONFIG = {

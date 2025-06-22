@@ -103,7 +103,7 @@ struct PipelineShaderDetails {
   reshade::api::pipeline_stage replacement_stages = static_cast<reshade::api::pipeline_stage>(0u);
   renodx::utils::pipeline_layout::PipelineLayoutData* layout_data = nullptr;
   bool initialized_replacement = false;
-  const std::unordered_map<uint32_t, std::vector<uint8_t>>* runtime_replacements;
+  const std::unordered_map<uint32_t, std::span<const uint8_t>>* runtime_replacements;
 
   std::optional<std::string> tag;
   bool destroyed = false;
@@ -117,7 +117,7 @@ struct PipelineShaderDetails {
       const reshade::api::pipeline_subobject* subobjects,
       const uint32_t& subobject_count,
       const std::unordered_map<uint32_t, uint32_t>* shader_replacements_inverse,
-      const std::unordered_map<uint32_t, std::vector<uint8_t>>* runtime_replacements) {
+      const std::unordered_map<uint32_t, std::span<const uint8_t>>* runtime_replacements) {
     this->pipeline = pipeline;
     this->device = device;
     this->layout = layout;
@@ -293,8 +293,8 @@ struct __declspec(uuid("908f0889-64d8-4e22-bd26-ded3dd0cef77")) DeviceData {
 
   Store* store;
   std::unordered_map<uint32_t, std::unordered_set<uint64_t>> shader_pipeline_handles;
-  std::unordered_map<uint32_t, std::vector<uint8_t>> compile_time_replacements;
-  std::unordered_map<uint32_t, std::vector<uint8_t>> runtime_replacements;
+  std::unordered_map<uint32_t, std::span<const uint8_t>> compile_time_replacements;
+  std::unordered_map<uint32_t, std::span<const uint8_t>> runtime_replacements;
 
   std::unordered_map<uint32_t, uint32_t> shader_replacements;          // Old => New
   std::unordered_map<uint32_t, uint32_t> shader_replacements_inverse;  // New => Old
@@ -521,23 +521,23 @@ inline void ApplyDrawReplacements(reshade::api::command_list* cmd_list, CommandL
 namespace internal {
 
 static std::shared_mutex mutex;
-static std::unordered_map<uint32_t, std::vector<uint8_t>> compile_time_replacements;
-static std::unordered_map<uint32_t, std::vector<uint8_t>> initial_runtime_replacements;
-static std::unordered_map<reshade::api::device_api, std::unordered_map<uint32_t, std::vector<uint8_t>>>
+static std::unordered_map<uint32_t, std::span<const uint8_t>> compile_time_replacements;
+static std::unordered_map<uint32_t, std::span<const uint8_t>> initial_runtime_replacements;
+static std::unordered_map<reshade::api::device_api, std::unordered_map<uint32_t, std::span<const uint8_t>>>
     device_based_compile_time_replacements;
-static std::unordered_map<reshade::api::device_api, std::unordered_map<uint32_t, std::vector<uint8_t>>>
+static std::unordered_map<reshade::api::device_api, std::unordered_map<uint32_t, std::span<const uint8_t>>>
     device_based_initial_runtime_replacements;
 }  // namespace internal
 
 static void QueueCompileTimeReplacement(
     uint32_t shader_hash,
-    const std::vector<uint8_t>& shader_data) {
+    const std::span<const uint8_t> shader_data) {
   const std::unique_lock lock(internal::mutex);
   internal::compile_time_replacements[shader_hash] = shader_data;
 }
 
 static void UpdateReplacements(
-    const std::unordered_map<uint32_t, std::vector<uint8_t>>& replacements,
+    const std::unordered_map<uint32_t, std::span<const uint8_t>>& replacements,
     bool compile_time = true,
     bool initial_runtime = true,
     const std::unordered_set<reshade::api::device_api>& devices = {}) {
@@ -573,14 +573,14 @@ static void UnqueueCompileTimeReplacement(
 
 static void QueueRuntimeReplacement(
     uint32_t shader_hash,
-    const std::vector<uint8_t>& shader_data) {
+    const std::span<const uint8_t> shader_data) {
   const std::unique_lock lock(internal::mutex);
-  internal::initial_runtime_replacements[shader_hash] = std::vector<uint8_t>(shader_data);
+  internal::initial_runtime_replacements[shader_hash] = shader_data;
 }
 
 static void UnqueueRuntimeReplacement(
     uint32_t shader_hash,
-    const std::vector<uint8_t>& shader_data) {
+    const std::span<const uint8_t> shader_data) {
   const std::unique_lock lock(internal::mutex);
   internal::initial_runtime_replacements.erase(shader_hash);
 }
@@ -589,11 +589,30 @@ static void UnqueueRuntimeReplacement(
 static void AddRuntimeReplacement(
     reshade::api::device* device,
     uint32_t shader_hash,
-    const std::vector<uint8_t>& shader_data) {
+    const std::span<const uint8_t> shader_data) {
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return;
-  data->runtime_replacements[shader_hash] = std::vector<uint8_t>(shader_data);
+  std::unique_lock device_lock(data->mutex);
+  data->runtime_replacements[shader_hash] = shader_data;
   runtime_replacement_count = data->runtime_replacements.size();
+  if (auto pair = data->shader_pipeline_handles.find(shader_hash);
+      pair != data->shader_pipeline_handles.end()) {
+    auto& pipeline_handles = pair->second;
+    if (!pipeline_handles.empty()) {
+      std::shared_lock read_lock(store->pipeline_shader_details_mutex);
+      for (auto pipeline_handle : pipeline_handles) {
+        if (auto details_pair = store->pipeline_shader_details.find(pipeline_handle);
+            details_pair != store->pipeline_shader_details.end()) {
+          auto& details = details_pair->second;
+          if (details.replacement_pipeline.handle != 0u) {
+            device->destroy_pipeline(details.replacement_pipeline);
+            details.replacement_pipeline = {0u};
+          }
+          details.initialized_replacement = false;
+        }
+      }
+    }
+  }
 }
 
 static void RemoveRuntimeReplacements(reshade::api::device* device, const std::unordered_set<uint32_t>& filter = {}) {
@@ -683,8 +702,8 @@ static void OnInitDevice(reshade::api::device* device) {
   }
 
   auto insert_shaders = [](
-                            const std::unordered_map<uint32_t, std::vector<uint8_t>>& source,
-                            std::unordered_map<uint32_t, std::vector<uint8_t>>& dest,
+                            const std::unordered_map<uint32_t, std::span<const uint8_t>>& source,
+                            std::unordered_map<uint32_t, std::span<const uint8_t>>& dest,
                             const std::string& type = "") {
     for (const auto& [shader_hash, replacement] : source) {
       auto [iterator, is_new] = dest.emplace(shader_hash, replacement);

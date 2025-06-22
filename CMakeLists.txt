@@ -145,8 +145,8 @@ function(build_shader_target ADDON ADDON_PATH)
   set(EMBED_FOLDER ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include/embed)
   unset(SHADER_BINARIES)
 
-  file(GLOB_RECURSE SHADER_SOURCES ${ADDON_PATH}/*.hlsl)
-  foreach(FILE ${SHADER_SOURCES})
+  file(GLOB_RECURSE SHADER_HLSL_SOURCES CONFIGURE_DEPENDS ${ADDON_PATH}/*.hlsl)
+  foreach(FILE ${SHADER_HLSL_SOURCES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)
     string(REGEX MATCH "(.*)\\.([pcv]s_[0-9]_[0-9x])\\.hlsl$" _ ${FILENAME})
@@ -263,8 +263,8 @@ function(build_shader_target ADDON ADDON_PATH)
     endif()
   endforeach()
 
-  file(GLOB_RECURSE SHADER_SOURCES ${ADDON_PATH}/*.slang)
-  foreach(FILE ${SHADER_SOURCES})
+  file(GLOB_RECURSE SHADER_SLANG_SOURCES CONFIGURE_DEPENDS ${ADDON_PATH}/*.slang)
+  foreach(FILE ${SHADER_SLANG_SOURCES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)
     string(REGEX MATCH "(.*)\\.([^.]+)\\.slang$" _ ${FILENAME})
@@ -276,10 +276,16 @@ function(build_shader_target ADDON ADDON_PATH)
       set(SHADER_HASH ${CMAKE_MATCH_1})
     endif()
 
+    set(SHADER_COMPILER ${SLANGC_BIN})
+    unset(SHADER_FLAGS)
+    set(SHADER_FLAGS ${SHADER_FLAGS} -O3)
+    set(SHADER_FLAGS ${SHADER_FLAGS} -g0)
+    set(SHADER_FLAGS ${SHADER_FLAGS} -entry main)
+    set(SHADER_FLAGS ${SHADER_FLAGS} -Wno-30056)
+    set(SHADER_FLAGS ${SHADER_FLAGS} -Wno-15205)
+
     if(SHADER_TARGET AND (SHADER_HASH OR SHADER_NAME))
       if(SHADER_TARGET STREQUAL "frag" OR SHADER_TARGET STREQUAL "vert" OR SHADER_TARGET STREQUAL "comp")
-        set(SHADER_COMPILER ${SLANGC_BIN})
-
         # Add dependencies
         unset(HLSL_DEPENDENCIES)
         unset(HLSL_CHILD_DEPENDENCIES)
@@ -299,14 +305,14 @@ function(build_shader_target ADDON ADDON_PATH)
         if(SHADER_HASH)
           add_custom_command(
             OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.spv
-            COMMAND ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} -O3 -g0 -entry main -target spirv -o ${EMBED_FOLDER}/${SHADER_HASH}.spv
+            COMMAND ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv -o ${EMBED_FOLDER}/${SHADER_HASH}.spv
             DEPENDS ${HLSL_DEPENDENCIES}
           )
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}.spv)
         else()
           add_custom_command(
             OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.spv
-            COMMAND ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} -O3 -g0 -entry main -target spirv -o ${EMBED_FOLDER}/${SHADER_NAME}.spv
+            COMMAND ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv -o ${EMBED_FOLDER}/${SHADER_NAME}.spv
             DEPENDS ${HLSL_DEPENDENCIES}
           )
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}.spv)
@@ -325,47 +331,39 @@ function(build_shader_target ADDON ADDON_PATH)
           inspect_hlsl_imports(${FILE} HLSL_CHILD_DEPENDENCIES ".")
           list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
 
-          #DX11
-          set(SHADER_COMPILER ${SLANGC_BIN})
-
           if(SHADER_HASH)
             add_custom_command(
               OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso
-              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_0 -O3 -g0 -entry main -target dxbc -o ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso
+              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_0 ${SHADER_FLAGS} -target dxbc -o ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso
               DEPENDS ${HLSL_DEPENDENCIES}
             )
             list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso)
           else()
             add_custom_command(
               OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso
-              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_0 -O3 -g0 -entry main -target dxbc -o ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso
+              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_0 ${SHADER_FLAGS} -target dxbc -o ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso
               DEPENDS ${HLSL_DEPENDENCIES}
             )
             list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso)
           endif()
 
-          #DX12
-          unset(SHADER_FLAGS)
-
           if(SHADER_HASH)
             add_custom_command(
               OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso
-              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_1 -O3 -g0 -entry main -target dxbc -o ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso
+              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_1 ${SHADER_FLAGS} -target dxbc -o ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso
               DEPENDS ${HLSL_DEPENDENCIES}
             )
             list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso)
           else()
             add_custom_command(
               OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso
-              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_1 -O3 -g0 -entry main -target dxbc -o ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso
+              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_1 ${SHADER_FLAGS} -target dxbc -o ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso
               DEPENDS ${HLSL_DEPENDENCIES}
             )
             list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso)
           endif()
 
         else()
-          set(SHADER_COMPILER ${SLANGC_BIN})
-
           # Add dependencies
           unset(HLSL_DEPENDENCIES)
           unset(HLSL_CHILD_DEPENDENCIES)
@@ -377,14 +375,14 @@ function(build_shader_target ADDON ADDON_PATH)
             # message("Registering: " ${FILE} " => " ${EMBED_FOLDER}/${SHADER_HASH}.cso)
             add_custom_command(
               OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.cso
-              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET} -O3 -g0 -entry main -target dxil -o ${EMBED_FOLDER}/${SHADER_HASH}.cso
+              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET} ${SHADER_FLAGS} -target dxil -o ${EMBED_FOLDER}/${SHADER_HASH}.cso
               DEPENDS ${HLSL_DEPENDENCIES}
             )
             list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}.cso)
           else()
             add_custom_command(
               OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.cso
-              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET} -O3 -g0 -entry main -target dxil -o ${EMBED_FOLDER}/${SHADER_NAME}.cso
+              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET} ${SHADER_FLAGS} -target dxil -o ${EMBED_FOLDER}/${SHADER_NAME}.cso
               DEPENDS ${HLSL_DEPENDENCIES}
             )
             list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}.cso)
@@ -396,8 +394,7 @@ function(build_shader_target ADDON ADDON_PATH)
     endif()
   endforeach()
 
-
-  file(GLOB_RECURSE SHADER_CSO_FILES ${ADDON_PATH}/*.cso)
+  file(GLOB_RECURSE SHADER_CSO_FILES CONFIGURE_DEPENDS ${ADDON_PATH}/*.cso)
   foreach(FILE ${SHADER_CSO_FILES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)
@@ -418,7 +415,7 @@ function(build_shader_target ADDON ADDON_PATH)
     endif()
   endforeach()
 
-  file(GLOB_RECURSE SHADER_SPV_FILES ${ADDON_PATH}/*.spv)
+  file(GLOB_RECURSE SHADER_SPV_FILES CONFIGURE_DEPENDS ${ADDON_PATH}/*.spv)
   foreach(FILE ${SHADER_SPV_FILES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)

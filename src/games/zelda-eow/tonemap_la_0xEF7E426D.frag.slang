@@ -98,14 +98,18 @@ void main() {
   _32.z = _128;
   _32.w = _60;
 
-  vec3 untonemapped = vec3(_46, _48, _50);
-  float vanilla_mid_gray =
-      HejlDawsonCustom(0.18f, fp_c1_1._m0[0].x, fp_c1_1._m0[0].y);  // 0.225f
-  untonemapped *= fp_c5_1._m0[0].x;                                 // 2x exposure
-  vec3 vanilla =
-      vec3(HejlDawsonCustom(_32.r, fp_c1_1._m0[0].x, fp_c1_1._m0[0].y),
-           HejlDawsonCustom(_32.g, fp_c1_1._m0[0].x, fp_c1_1._m0[0].y),
-           HejlDawsonCustom(_32.b, fp_c1_1._m0[0].x, fp_c1_1._m0[0].y));
+  float exposure = fp_c5_1._m0[0].x;
+  float param_x = fp_c1_1._m0[0].x;
+  float param_y = fp_c1_1._m0[0].y;
 
-  _32.rgb = CustomToneMap(untonemapped, vanilla, vanilla_mid_gray);
+  vec3 untonemapped = _44.rgb * exposure;
+  float vanilla_mid_gray = HejlDawsonCustom(0.18f, param_x, param_y).x;
+  float3 vanilla = HejlDawsonCustom(untonemapped.rgb, param_x, param_y);
+
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    _32.rgb = saturate(vanilla);
+  } else {
+    _32.rgb = renodx::draw::ToneMapPass(untonemapped * vanilla_mid_gray / 0.18f, vanilla);
+  }
+  _32.rgb = renodx::draw::RenderIntermediatePass(_32.rgb);
 }

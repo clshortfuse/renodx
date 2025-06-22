@@ -102,7 +102,7 @@ struct ShaderDetails {
   std::variant<std::nullopt_t, std::exception, std::string> disassembly = std::nullopt;
   std::variant<std::nullopt_t, std::exception, std::string> decompilation = std::nullopt;
   std::optional<renodx::utils::shader::compiler::directx::DxilProgramVersion> program_version = std::nullopt;
-  std::vector<uint8_t> addon_shader;
+  std::span<const uint8_t> addon_shader;
   std::optional<renodx::utils::shader::compiler::watcher::CustomShader> disk_shader = std::nullopt;
   reshade::api::pipeline_stage shader_type = static_cast<reshade::api::pipeline_stage>(0);
   std::optional<std::vector<ResourceBind>> resource_binds = std::nullopt;
@@ -1415,7 +1415,7 @@ void DeactivateShader(reshade::api::device* device, uint32_t shader_hash) {
   renodx::utils::shader::RemoveRuntimeReplacements(device, {shader_hash});
 }
 
-void ActivateShader(reshade::api::device* device, uint32_t shader_hash, std::vector<uint8_t>& shader_data) {
+void ActivateShader(reshade::api::device* device, uint32_t shader_hash, std::span<const uint8_t> shader_data) {
   renodx::utils::shader::AddRuntimeReplacement(device, shader_hash, shader_data);
 }
 
@@ -1425,8 +1425,8 @@ void LoadDiskShaders(reshade::api::device* device, DeviceData* data, bool activa
   } else {
     renodx::utils::shader::compiler::watcher::CompileSync();
   }
-  auto new_shaders = renodx::utils::shader::compiler::watcher::FlushCompiledShaders();
-  for (auto& [shader_hash, custom_shader] : new_shaders) {
+  const auto& custom_shaders = renodx::utils::shader::compiler::watcher::FlushCompiledShaders();
+  for (const auto& [shader_hash, custom_shader] : custom_shaders) {
     reshade::log::message(reshade::log::level::debug, "new shaders");
     auto* details = data->GetShaderDetails(shader_hash);
     details->disk_shader = custom_shader;
@@ -1436,7 +1436,7 @@ void LoadDiskShaders(reshade::api::device* device, DeviceData* data, bool activa
       DeactivateShader(device, shader_hash);
 
       if (!custom_shader.removed && custom_shader.IsCompilationOK()) {
-        auto shader_data = custom_shader.GetCompilationData();
+        const auto& shader_data = details->disk_shader->GetCompilationData();
         ActivateShader(device, shader_hash, shader_data);
       }
     }
@@ -2594,7 +2594,7 @@ void RenderShadersPane(reshade::api::device* device, DeviceData* data) {
                 if (i == 1) {
                   ActivateShader(device, shader_details->shader_hash, shader_details->addon_shader);
                 } else if (i == 2) {
-                  auto shader_data = shader_details->disk_shader->GetCompilationData();
+                  const auto& shader_data = shader_details->disk_shader->GetCompilationData();
                   ActivateShader(device, shader_details->shader_hash, shader_data);
                 }
               }

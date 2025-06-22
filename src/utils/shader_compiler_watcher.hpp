@@ -33,15 +33,15 @@ struct CustomShader {
   uint32_t shader_hash;
   bool removed = false;
 
-  [[nodiscard]] bool IsCompilationOK() const {
+  [[nodiscard]] bool IsCompilationOK() const{
     return std::holds_alternative<std::vector<uint8_t>>(compilation);
   }
 
-  [[nodiscard]] std::vector<uint8_t> GetCompilationData() const {
+  [[nodiscard]] std::vector<uint8_t>& GetCompilationData() {
     return std::get<std::vector<uint8_t>>(compilation);
   }
 
-  [[nodiscard]] std::exception GetCompilationException() const {
+  [[nodiscard]] std::exception& GetCompilationException()  {
     return std::get<std::exception>(compilation);
   }
 

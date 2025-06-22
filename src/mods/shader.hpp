@@ -36,7 +36,7 @@ inline bool OnBypassShaderDraw(reshade::api::command_list* cmd_list) { return fa
 
 struct CustomShader {
   std::uint32_t crc32;
-  std::vector<uint8_t> code;
+  std::span<const uint8_t> code;
   int32_t index = -1;
   // return false to abort
   std::function<bool(reshade::api::command_list*)> on_replace = nullptr;
@@ -45,7 +45,7 @@ struct CustomShader {
   // return false to abort
   std::function<bool(reshade::api::command_list*)> on_draw = nullptr;
   std::function<void(reshade::api::command_list*)> on_drawn = nullptr;
-  std::unordered_map<reshade::api::device_api, std::vector<uint8_t>> code_by_device;
+  std::unordered_map<reshade::api::device_api, std::span<const uint8_t>> code_by_device;
 };
 
 using CustomShaders = std::unordered_map<uint32_t, CustomShader>;
@@ -155,12 +155,17 @@ static bool OnCreatePipelineLayout(
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return false;
 
+  auto device_api = device->get_api();
+  bool is_dx = (device_api == reshade::api::device_api::d3d9
+                || device_api == reshade::api::device_api::d3d11
+                || device_api == reshade::api::device_api::d3d12);
+
   for (uint32_t param_index = 0; param_index < param_count; ++param_index) {
-    auto param = params[param_index];
-    if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
+    const auto& param = params[param_index];
+    if (is_dx && param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
       dword_count += 1;
       for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
-        auto range = param.descriptor_table.ranges[range_index];
+        const auto& range = param.descriptor_table.ranges[range_index];
         if (range.type == reshade::api::descriptor_type::constant_buffer) {
           if (
               range.dx_register_space == data->expected_constant_buffer_space
@@ -172,12 +177,12 @@ static bool OnCreatePipelineLayout(
     } else if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
       dword_count += 1;
       pc_count++;
-      if (
-          param.push_constants.dx_register_space == data->expected_constant_buffer_space
+      if (is_dx
+          && param.push_constants.dx_register_space == data->expected_constant_buffer_space
           && cbv_index < param.push_constants.dx_register_index + param.push_constants.count) {
         cbv_index = param.push_constants.dx_register_index + param.push_constants.count;
       }
-    } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
+    } else if (is_dx && param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
       dword_count += 2;
       if (param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer) {
         if (
@@ -187,7 +192,7 @@ static bool OnCreatePipelineLayout(
         }
       }
 #if RESHADE_API_VERSION >= 13
-    } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers) {
+    } else if (is_dx && param.type == reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers) {
       if (pdss_index == -1) pdss_index = param_index;
       for (uint32_t range_index = 0; range_index < param.descriptor_table_with_static_samplers.count; ++range_index) {
         auto range = param.descriptor_table_with_static_samplers.ranges[range_index];
@@ -205,25 +210,28 @@ static bool OnCreatePipelineLayout(
     }
   }
 
-  if (data->expected_constant_buffer_index != -1 && cbv_index > data->expected_constant_buffer_index) {
-    std::stringstream s;
-    s << "mods::shader::OnCreatePipelineLayout(";
-    s << "Pipeline layout index mismatch, actual: " << cbv_index;
-    s << ", expected: " << data->expected_constant_buffer_index;
-    s << ")";
-    reshade::log::message(reshade::log::level::debug, s.str().c_str());
-    return false;
-  }
-
-  if (data->expected_constant_buffer_index != -1) {
-    cbv_index = data->expected_constant_buffer_index;
+  if (is_dx) {
+    if (data->expected_constant_buffer_index != -1 && cbv_index > data->expected_constant_buffer_index) {
+      std::stringstream s;
+      s << "mods::shader::OnCreatePipelineLayout(";
+      s << "Pipeline layout index mismatch, actual: " << cbv_index;
+      s << ", expected: " << data->expected_constant_buffer_index;
+      s << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+      return false;
+    }
+    if (data->expected_constant_buffer_index != -1) {
+      cbv_index = data->expected_constant_buffer_index;
+    }
   }
 
   if (pc_count != 0 && !allow_multiple_push_constants) {
     std::stringstream s;
     s << "mods::shader::OnCreatePipelineLayout(";
     s << "Pipeline layout already has push constants: " << pc_count;
-    s << " with cbvIndex: " << cbv_index;
+    if (is_dx) {
+      s << " with cbv_index: " << cbv_index;
+    }
     s << ")";
     reshade::log::message(reshade::log::level::warning, s.str().c_str());
     return false;
@@ -238,7 +246,8 @@ static bool OnCreatePipelineLayout(
 
   // Copy up to size of old
   uint32_t injection_index = old_count;
-  if (pdss_index == -1) {
+
+  if (!is_dx || pdss_index == -1) {
     memcpy(new_params, params, sizeof(reshade::api::pipeline_layout_param) * old_count);
   } else {
     // copy upto pdss index, leave slot for push constants, add pdss after
@@ -275,7 +284,11 @@ static bool OnCreatePipelineLayout(
 
   std::stringstream s;
   s << "mods::shader::OnCreatePipelineLayout(";
-  s << "will insert cbuffer " << cbv_index;
+  if (is_dx) {
+    s << "will insert cbuffer " << cbv_index;
+  } else {
+    s << "will insert push constants ";
+  }
   s << " at root_index " << injection_index;
   s << " with slot count " << slots;
   s << " creating new size of " << (old_count + 1u + slots);
@@ -303,6 +316,10 @@ static void OnInitPipelineLayout(
   uint32_t cbv_index = 0;
   uint32_t pc_count = 0;
   uint32_t pdss_index = -1;
+
+  bool is_dx = (device_api == reshade::api::device_api::d3d9
+                || device_api == reshade::api::device_api::d3d11
+                || device_api == reshade::api::device_api::d3d12);
 
   for (uint32_t param_index = 0; param_index < param_count; ++param_index) {
     auto param = params[param_index];
@@ -386,7 +403,7 @@ static void OnInitPipelineLayout(
         new_params = reinterpret_cast<reshade::api::pipeline_layout_param*>(malloc(sizeof(reshade::api::pipeline_layout_param) * new_count));
         // Copy up to size of old
         injection_index = old_count;
-        if (pdss_index == -1) {
+        if (!is_dx || pdss_index == -1) {
           memcpy(new_params, params, sizeof(reshade::api::pipeline_layout_param) * old_count);
         } else {
           // copy upto pdss index, leave slot for push constants, add pdss after
@@ -541,7 +558,9 @@ static void OnInitPipelineLayout(
   s << PRINT_PTR(layout.handle);
   s << ", injection index: " << injection_index;
   s << ", injection layout: " << PRINT_PTR(injection_layout.handle);
-  s << ", cbvIndex:" << cbv_index;
+  if (is_dx) {
+    s << ", cbvIndex:" << cbv_index;
+  }
   s << " )";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
