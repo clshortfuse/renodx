@@ -7,6 +7,7 @@
 
 #define NOMINMAX
 
+#include <cstdint>
 #include <algorithm>
 #include <optional>
 #include <sstream>
@@ -308,19 +309,69 @@ static void LogLayout(
         break;
       }
       case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges: {
-        std::stringstream s;
-        s << "logPipelineLayout(";
-        s << PRINT_PTR(layout.handle) << "[" << param_index << "]";
-        s << " | PDR | ";
-        s << " array_size: " << param.push_descriptors.array_size;
-        s << ", binding: " << param.push_descriptors.binding;
-        s << ", count " << param.push_descriptors.count;
-        s << ", register: " << param.push_descriptors.dx_register_index;
-        s << ", space: " << param.push_descriptors.dx_register_space;
-        s << ", type: " << param.push_descriptors.type;
-        s << ", visibility " << param.push_descriptors.visibility;
-        s << ")";
-        reshade::log::message(reshade::log::level::info, s.str().c_str());
+        for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
+          auto range = param.descriptor_table.ranges[range_index];
+          std::stringstream s;
+          s << "logPipelineLayout(";
+          s << PRINT_PTR(layout.handle) << "[" << param_index << "]";
+          s << " | PDR | ";
+          s << PRINT_PTR((uintptr_t)param.descriptor_table.ranges);
+          s << " | ";
+          switch (range.type) {
+            case reshade::api::descriptor_type::sampler:
+              s << "SMP";
+              break;
+            case reshade::api::descriptor_type::sampler_with_resource_view:
+              s << "SMPRV";
+              break;
+            case reshade::api::descriptor_type::texture_shader_resource_view:
+              s << "TSRV";
+              break;
+            case reshade::api::descriptor_type::texture_unordered_access_view:
+              s << "TUAV";
+              break;
+            case reshade::api::descriptor_type::buffer_shader_resource_view:
+              s << "BSRV";
+              break;
+            case reshade::api::descriptor_type::buffer_unordered_access_view:
+              s << "BUAV";
+              break;
+            case reshade::api::descriptor_type::constant_buffer:
+              s << "CBV";
+              break;
+            case reshade::api::descriptor_type::shader_storage_buffer:
+              s << "SSB";
+              break;
+            case reshade::api::descriptor_type::acceleration_structure:
+              s << "ACC";
+              break;
+            default:
+              s << "??? (0x" << std::hex << static_cast<uint32_t>(range.type) << std::dec << ")";
+          }
+
+          s << ", array_size: " << range.array_size;
+          s << ", binding: " << range.binding;
+          s << ", count: " << range.count;
+          s << ", register: " << range.dx_register_index;
+          s << ", space: " << range.dx_register_space;
+          s << ", visibility: " << range.visibility;
+          s << ")";
+          s << " [" << range_index << "/" << param.descriptor_table.count << "]";
+          reshade::log::message(reshade::log::level::info, s.str().c_str());
+        }
+        // std::stringstream s;
+        // s << "logPipelineLayout(";
+        // s << PRINT_PTR(layout.handle) << "[" << param_index << "]";
+        // s << " | PDR | ";
+        // s << " array_size: " << param.descriptor_table.array_size;
+        // s << ", binding: " << param.push_descriptors.binding;
+        // s << ", count " << param.push_descriptors.count;
+        // s << ", register: " << param.push_descriptors.dx_register_index;
+        // s << ", space: " << param.push_descriptors.dx_register_space;
+        // s << ", type: " << param.push_descriptors.type;
+        // s << ", visibility " << param.push_descriptors.visibility;
+        // s << ")";
+        // reshade::log::message(reshade::log::level::info, s.str().c_str());
         break;
       }
 #if RESHADE_API_VERSION >= 13
@@ -754,11 +805,11 @@ static bool OnCopyTextureRegion(
   s << "OnCopyTextureRegion";
   s << "(" << PRINT_PTR(source.handle);
   s << ", " << (source_desc.texture.format);
-  s << ", " << (source_subresource);
-  s << " => " << PRINT_PTR(dest.handle);
+  s << "[" << (source_subresource);
+  s << "] => " << PRINT_PTR(dest.handle);
   s << ", " << (dest_desc.texture.format);
-  s << ", " << (dest_subresource);
-  s << ", " << static_cast<uint32_t>(filter);
+  s << "[" << (dest_subresource);
+  s << "], filter: " << static_cast<uint32_t>(filter);
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 
@@ -1079,7 +1130,7 @@ static void OnPushDescriptors(
     uint32_t layout_param,
     const reshade::api::descriptor_table_update& update) {
   if (!is_primary_hook) return;
-  if (!trace_running) return;
+  if (!FORCE_ALL && !trace_running) return;
   auto* device = cmd_list->get_device();
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   const std::shared_lock lock(data->mutex);
@@ -1166,7 +1217,7 @@ static void OnBindDescriptorTables(
     uint32_t count,
     const reshade::api::descriptor_table* tables) {
   if (!is_primary_hook) return;
-  if (!trace_running) return;
+  if (!FORCE_ALL && !trace_running) return;
   auto* device = cmd_list->get_device();
 
   auto* layout_data = pipeline_layout::GetPipelineLayoutData(layout);
@@ -1274,7 +1325,7 @@ static bool OnCopyDescriptorTables(
     uint32_t count,
     const reshade::api::descriptor_table_copy* copies) {
   if (!is_primary_hook) return false;
-  if (!trace_running && present_count >= trace_initial_frame_count) return false;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return false;
 
   renodx::utils::descriptor::DeviceData* descriptor_data = nullptr;
 
@@ -1335,7 +1386,7 @@ static bool OnUpdateDescriptorTables(
     const reshade::api::descriptor_table_update* updates) {
   if (!is_primary_hook) return false;
 
-  if (!trace_running && present_count >= trace_initial_frame_count) return false;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return false;
 
   for (uint32_t i = 0; i < count; i++) {
     const auto& update = updates[i];
@@ -1416,9 +1467,14 @@ static bool OnUpdateDescriptorTables(
           s << ", offset: " << item.offset;
           break;
         }
-        case reshade::api::descriptor_type::acceleration_structure:
-          s << ", accl: unknown";
+        case reshade::api::descriptor_type::acceleration_structure: {
+          auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
+          s << ", accl: " << PRINT_PTR(item.handle);
+          auto* data = renodx::utils::data::Get<DeviceData>(device);
+          const std::shared_lock lock(data->mutex);
+          s << ", res:" << PRINT_PTR(GetResourceByViewHandle(data, item.handle));
           break;
+        }
         default:
           break;
       }
