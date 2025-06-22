@@ -30,45 +30,36 @@ static const float NEG_INFINITY = CROSS_COMPILE(asfloat(0xFF800000), -1.0 / 0.0)
   }
 #endif
 
-SIGN_FUNCTION_GENERATOR(float)
-SIGN_FUNCTION_GENERATOR(float2)
-SIGN_FUNCTION_GENERATOR(float3)
-SIGN_FUNCTION_GENERATOR(float4)
-
-#undef SIGN_FUNCTION_GENERATOR
-
-#define SIGNPOW_FUNCTION_GENERATOR(struct)                      \
-  struct SignPow(struct x, float exponent) {                    \
-    return Sign(x) * pow(abs(x), exponent); \
+#define SIGNPOW_FUNCTION_GENERATOR(struct)   \
+  struct SignPow(struct x, float exponent) { \
+    return Sign(x) * pow(abs(x), exponent);  \
   }
-
-SIGNPOW_FUNCTION_GENERATOR(float)
-SIGNPOW_FUNCTION_GENERATOR(float2)
-SIGNPOW_FUNCTION_GENERATOR(float3)
-SIGNPOW_FUNCTION_GENERATOR(float4)
-#undef SIGNPOW_FUNCTION_GENERATOR
 
 #define SIGNSQRT_FUNCTION_GENERATOR(struct) \
   struct SignSqrt(struct x) {               \
     return Sign(x) * sqrt(abs(x));          \
   }
 
-SIGNSQRT_FUNCTION_GENERATOR(float)
-SIGNSQRT_FUNCTION_GENERATOR(float2)
-SIGNSQRT_FUNCTION_GENERATOR(float3)
-SIGNSQRT_FUNCTION_GENERATOR(float4)
-#undef SIGNSQRT_FUNCTION_GENERATOR
-
 #define CBRT_FUNCTION_GENERATOR(struct) \
   struct Cbrt(struct x) {               \
     return SignPow(x, 1.f / 3.f);       \
   }
 
-CBRT_FUNCTION_GENERATOR(float)
-CBRT_FUNCTION_GENERATOR(float2)
-CBRT_FUNCTION_GENERATOR(float3)
-CBRT_FUNCTION_GENERATOR(float4)
+#define ALL_FLOATS_FUNCTION_GENERATOR(generator) \
+  generator(float)                               \
+      generator(float2)                          \
+          generator(float3)                      \
+              generator(float4)
+
+ALL_FLOATS_FUNCTION_GENERATOR(SIGN_FUNCTION_GENERATOR)
+ALL_FLOATS_FUNCTION_GENERATOR(SIGNPOW_FUNCTION_GENERATOR)
+ALL_FLOATS_FUNCTION_GENERATOR(SIGNSQRT_FUNCTION_GENERATOR)
+ALL_FLOATS_FUNCTION_GENERATOR(CBRT_FUNCTION_GENERATOR)
+#undef SIGN_FUNCTION_GENERATOR
+#undef SIGNPOW_FUNCTION_GENERATOR
+#undef SIGNSQRT_FUNCTION_GENERATOR
 #undef CBRT_FUNCTION_GENERATOR
+#undef ALL_FLOATS_FUNCTION_GENERATOR
 
 float Average(float3 color) {
   return (color.x + color.y + color.z) / 3.f;
