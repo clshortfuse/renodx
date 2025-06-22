@@ -25,7 +25,12 @@ struct ShaderInjectData {
   float tone_map_hue_processor;
 
   float tone_map_per_channel;
-  float color_grade_strength;
+  float scene_grade_strength;
+  float scene_grade_hue_correction;
+  float scene_grade_saturation_correction;
+  float scene_grade_blowout_restoration;
+  float scene_grade_hue_shift;
+
   float gamma_correction;
   float custom_bloom;
 
@@ -48,14 +53,18 @@ struct ShaderInjectData {
 // #define RENODX_TONE_MAP_HUE_SHIFT            shader_injection.tone_map_hue_shift
 // #define RENODX_TONE_MAP_HUE_SHIFT_METHOD     HUE_SHIFT_METHOD_SDR_MODIFIED
 // #define RENODX_TONE_MAP_HUE_SHIFT_MODIFIER   0.5f
-#define RENODX_COLOR_GRADE_STRENGTH         shader_injection.color_grade_strength
-#define RENODX_TONE_MAP_WORKING_COLOR_SPACE shader_injection.tone_map_working_color_space
-#define RENODX_TONE_MAP_HUE_PROCESSOR       shader_injection.tone_map_hue_processor
-#define RENODX_TONE_MAP_PER_CHANNEL         shader_injection.tone_map_per_channel
-#define RENODX_RENO_DRT_TONE_MAP_METHOD     renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-#define RENODX_GAMMA_CORRECTION             shader_injection.gamma_correction
-#define CUSTOM_BLOOM                        shader_injection.custom_bloom
-#define CUSTOM_DOF                          shader_injection.custom_dof
+#define RENODX_PER_CHANNEL_BLOWOUT_RESTORATION    shader_injection.scene_grade_blowout_restoration
+#define RENODX_PER_CHANNEL_HUE_CORRECTION         shader_injection.scene_grade_hue_correction
+#define RENODX_PER_CHANNEL_CHROMINANCE_CORRECTION shader_injection.scene_grade_saturation_correction
+#define RENODX_PER_CHANNEL_HUE_SHIFT              shader_injection.scene_grade_hue_shift
+#define RENODX_COLOR_GRADE_STRENGTH               shader_injection.scene_grade_strength
+#define RENODX_TONE_MAP_WORKING_COLOR_SPACE       shader_injection.tone_map_working_color_space
+#define RENODX_TONE_MAP_HUE_PROCESSOR             shader_injection.tone_map_hue_processor
+#define RENODX_TONE_MAP_PER_CHANNEL               shader_injection.tone_map_per_channel
+#define RENODX_RENO_DRT_TONE_MAP_METHOD           renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_GAMMA_CORRECTION                   shader_injection.gamma_correction
+#define CUSTOM_BLOOM                              shader_injection.custom_bloom
+#define CUSTOM_DOF                                shader_injection.custom_dof
 
 // #define RENODX_INTERMEDIATE_SCALING            (RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS)
 #define RENODX_INTERMEDIATE_ENCODING renodx::draw::ENCODING_NONE
