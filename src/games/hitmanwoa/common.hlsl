@@ -55,7 +55,9 @@ float3 HueAndChrominanceOKLab(
 /// Applies Exponential Roll-Off tonemapping using the maximum channel.
 /// Used to fit the color into a 0–output_max range for SDR LUT compatibility.
 float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.375f, float output_max = 1.f) {
-  // color = min(color, 100.f);
+  color = renodx::color::correct::Hue(exp2(renodx::tonemap::ExponentialRollOff(log2(max(0, color) * 100.f), log2(1.5f * 100.f), log2(10.f * 100.f))) / 100.f, color, 1.f);
+
+  // color = min(10.f, color);
   float peak = max(color.r, max(color.g, color.b));
   peak = min(peak, 100.f);
   float log_peak = log2(peak);
@@ -105,26 +107,25 @@ float3 ToneMapHitman2(float3 x) {
              ToneMapHitman2(x.g),
              ToneMapHitman2(x.b));
 
-#if 1  // blended luminance and channel
+#if 1  // luminance with channel chrominance
   const float y_in = renodx::color::y::from::BT709(x);
   const float y_out = ToneMapHitman2(y_in);
 
   float3 lum = x * select(y_in > 0, y_out / y_in, 0.f);
   lum = ChrominanceOKLab(lum, result);
 
-  result = lerp(lum, result, saturate(lum / 0.4f));
+  result = lerp(lum, result, saturate(result / 0.4f));
 
 #endif
+
   return saturate(result);
 }
 
-float3 ApplyCustomToneMap(float3 untonemapped) {
+float3 ApplyCustomHitmanToneMap(float3 untonemapped) {
   float3 sdr_tonemap = ToneMapHitman2(untonemapped);
 
   float3 untonemapped_midgray_corrected = untonemapped * (ToneMapHitman2(0.18f) / 0.18f);
   float3 blended_tonemap = lerp(sdr_tonemap, untonemapped_midgray_corrected, sdr_tonemap);
-
-  // blended_tonemap = renodx::color::correct::Hue(blended_tonemap, untonemapped_midgray_corrected);
 
   return blended_tonemap;
 }
@@ -296,8 +297,41 @@ float3 ApplyDisplayMap(float3 color_input, float peak_ratio) {
   return color_input;
 }
 
+float3 ApplyDithering(float3 color_input, float screen_pos_x, float screen_pos_y) {
+  if (CUSTOM_DITHERING)
+    return color_input;
+
+  // Constants for HDR10 PQ dithering
+  const float INV_HDR10PQ_STEPS = 1.0f / 1023.0f;  // ~0.000977, size of one PQ code step at 10-bit
+  const float DITHER_SCALE = 1.0f;
+  const float2 DITHER_HASH_VEC = float2(12.9898f, 78.233f);
+  const float DITHER_HASH_SCALE = 43758.546875f;
+
+  float2 base = float2(screen_pos_x, screen_pos_y);
+
+  // Use BT.2020 luminance weights
+  float3 offsets = renodx::color::BT2020_TO_XYZ_MAT[1];  // {0.2627002120f, 0.6779980715f, 0.0593017165f}
+
+  // Generate per-channel hash noise
+  float3 noise = float3(
+      frac(sin(dot(base + offsets.r, DITHER_HASH_VEC)) * DITHER_HASH_SCALE),
+      frac(sin(dot(base + offsets.g, DITHER_HASH_VEC)) * DITHER_HASH_SCALE),
+      frac(sin(dot(base + offsets.b, DITHER_HASH_VEC)) * DITHER_HASH_SCALE));
+
+  // Center and scale the dither to ~±0.5 PQ step
+  float3 dither = (noise - 0.5f) * INV_HDR10PQ_STEPS * DITHER_SCALE;
+
+  // Apply dithering in PQ space
+  float3 encoded_pq = renodx::color::pq::EncodeSafe(color_input, RENODX_DIFFUSE_WHITE_NITS);
+  float3 dithered_pq = encoded_pq + dither;
+  return renodx::color::pq::DecodeSafe(dithered_pq, RENODX_DIFFUSE_WHITE_NITS);
+}
+
+float3 ApplyFade(float3 color_input, float fade) {
+  return color_input * fade;
+}
+
 float3 FinalizeOutput(float3 color_input) {
-  // color_input = renodx::color::bt2020::from::BT709(color_input);
   color_input = renodx::color::correct::GammaSafe(color_input);
   color_input *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
   color_input = renodx::color::correct::GammaSafe(color_input, true);
@@ -307,12 +341,17 @@ float3 FinalizeOutput(float3 color_input) {
 
 float3 ToneMapMaxCLLAndSampleGamma2LUT16AndFinalizeOutput(
     float3 hdr_tonemapped,
-    Texture3D<float4> lut_texture, SamplerState lut_sampler, float peak_ratio) {
+    Texture3D<float4> lut_texture, SamplerState lut_sampler, float peak_ratio,
+    float screen_pos_x, float screen_pos_y,
+    float fade) {
   float3 sdr_tonemapped = ToneMapMaxCLL(hdr_tonemapped);
+  // float3 sdr_tonemapped = renodx::tonemap::dice::BT709(hdr_tonemapped, 1.f, 0.7f);
 
   float3 lutted = SampleGamma2LUT16(lut_texture, lut_sampler, sdr_tonemapped);
   float3 upgraded = renodx::tonemap::UpgradeToneMap(hdr_tonemapped, sdr_tonemapped, lutted, RENODX_COLOR_GRADE_STRENGTH, 0.f);
   float3 display_mapped = ApplyDisplayMap(upgraded, peak_ratio);
+  display_mapped = ApplyDithering(display_mapped, screen_pos_x, screen_pos_y);
+  display_mapped = ApplyFade(display_mapped, fade);
   display_mapped = FinalizeOutput(display_mapped);
 
   return display_mapped;
@@ -320,27 +359,26 @@ float3 ToneMapMaxCLLAndSampleGamma2LUT16AndFinalizeOutput(
 
 float3 ToneMapMaxCLLAndSampleLinearLUT16AndFinalizeOutput(
     float3 hdr_tonemapped,
-    Texture3D<float4> lut_texture, SamplerState lut_sampler, float peak_ratio) {
+    Texture3D<float4> lut_texture, SamplerState lut_sampler, float peak_ratio,
+    float screen_pos_x, float screen_pos_y,
+    float fade) {
   float3 sdr_tonemapped = ToneMapMaxCLL(hdr_tonemapped);
 
   float3 lutted = SampleLinearLUT16(lut_texture, lut_sampler, sdr_tonemapped);
   float3 upgraded = renodx::tonemap::UpgradeToneMap(hdr_tonemapped, sdr_tonemapped, lutted, RENODX_COLOR_GRADE_STRENGTH, 0.f);
   float3 display_mapped = ApplyDisplayMap(upgraded, peak_ratio);
+  display_mapped = ApplyDithering(display_mapped, screen_pos_x, screen_pos_y);
+  display_mapped = ApplyFade(display_mapped, fade);
   display_mapped = FinalizeOutput(display_mapped);
 
   return display_mapped;
 }
 
-float3 GammaCorrectChrominance(float3 incorrect_color) {
+float3 GammaCorrectHuePreserving(float3 incorrect_color) {
   float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
 
-  const float y_in = renodx::color::y::from::BT709(incorrect_color);
-  const float y_out = max(0, renodx::color::correct::Gamma(y_in));
-
-  float3 lum = incorrect_color * select(y_in > 0, y_out / y_in, 0.f);
-
   // use chrominance from channel gamma correction
-  float3 result = ChrominanceOKLab(lum, ch);
+  float3 result = renodx::color::correct::Hue(ch, incorrect_color);
 
   return result;
 }
