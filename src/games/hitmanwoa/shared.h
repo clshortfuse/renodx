@@ -19,7 +19,7 @@
 #define RENODX_COLOR_GRADE_SCALING           1.f
 #define CUSTOM_BLOOM                         0.7f
 #define CUSTOM_LUT_TETRAHEDRAL               1.f
-#define CUSTOM_SHARPENING                    1.f
+#define CUSTOM_SHARPENING                    2.f
 #define CUSTOM_DITHERING                     1.f
 
 // Must be 32bit aligned

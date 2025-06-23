@@ -43,8 +43,6 @@ void main(
     u0[int2(_15, _254)] = t0.Load(int3(_15, _254, 0)).xyz;
     return;
   } else if (CUSTOM_SHARPENING == 2.f) {
-    // from Lilium
-    // RCAS - Robust Contrast Adaptive Sharpening
     _7 = (uint)(SV_GroupThreadID.x) >> 1;
     _8 = _7 & 7;
     _9 = (uint)(SV_GroupThreadID.x) >> 3;
@@ -66,6 +64,12 @@ void main(
       int2(_15, _254)
     };
 
+    uint tex_width, tex_height;
+    t0.GetDimensions(tex_width, tex_height);
+    int2 tex_max = int2(tex_width - 1, tex_height - 1);
+
+    // from Lilium
+    // RCAS - Robust Contrast Adaptive Sharpening
     [unroll]
     for (int i = 0; i < 4; ++i) {
       int2 coord = coords[i];
@@ -75,11 +79,11 @@ void main(
       //  d e f
       //    h
 
-      float3 b = t0.Load(int3(coord + int2(0, -1), 0)).rgb / normalization_point;
-      float3 d = t0.Load(int3(coord + int2(-1, 0), 0)).rgb / normalization_point;
-      float3 e = t0.Load(int3(coord, 0)).rgb / normalization_point;
-      float3 f = t0.Load(int3(coord + int2(1, 0), 0)).rgb / normalization_point;
-      float3 h = t0.Load(int3(coord + int2(0, 1), 0)).rgb / normalization_point;
+      float3 b = t0.Load(int3(clamp(coord + int2(0, -1), int2(0, 0), tex_max), 0)).rgb / normalization_point;
+      float3 d = t0.Load(int3(clamp(coord + int2(-1, 0), int2(0, 0), tex_max), 0)).rgb / normalization_point;
+      float3 e = t0.Load(int3(clamp(coord, int2(0, 0), tex_max), 0)).rgb / normalization_point;
+      float3 f = t0.Load(int3(clamp(coord + int2(1, 0), int2(0, 0), tex_max), 0)).rgb / normalization_point;
+      float3 h = t0.Load(int3(clamp(coord + int2(0, 1), int2(0, 0), tex_max), 0)).rgb / normalization_point;
 
       // Immediate constants for peak range.
       static const float2 peak_c = float2(1.f, -4.f);
@@ -108,8 +112,8 @@ void main(
 // 0.25f - (1.f / 16.f)
 #define FSR_RCAS_LIMIT 0.1875f
 
-      const float sharpness_multiplier = 0.75f;
-      float sharpness = (_cbCAS_000.S_cbCAS_032.x == 0.0f) ? 0.0f : exp2(-(1.0f - (_cbCAS_000.S_cbCAS_032.x * sharpness_multiplier)));
+      const float sharpness_strength = 0.75f;
+      float sharpness = (_cbCAS_000.S_cbCAS_032.x == 0.0f) ? 0.0f : exp2(-(1.0f - sharpness_strength));
       float lobe = max(float(-FSR_RCAS_LIMIT), min(local_lobe, 0.f)) * sharpness;
 
       // Noise detection.
@@ -136,7 +140,7 @@ void main(
       // Resolve, which needs the medium precision rcp approximation to avoid visible tonality changes.
       float rcp_l = rcp(4.f * lobe + 1.f);
       float pix_lum = ((b_lum + d_lum + h_lum + f_lum) * lobe + e_lum) * rcp_l;
-      float3 sharpened = (pix_lum / max(e_lum, 1e-6f)) * e;
+      float3 sharpened = clamp(pix_lum / e_lum, 0.f, 4.f) * e;
 
       u0[coord] = sharpened * normalization_point;
     }
