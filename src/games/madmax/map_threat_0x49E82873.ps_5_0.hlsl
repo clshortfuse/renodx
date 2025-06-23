@@ -43,7 +43,6 @@ void main(
     o0.w = r0.w;
     r0.xyz = TypeConsts[1].xxx * r0.xyz;
     o0.xyz = exp2(r0.xyz);
-    o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   }
   else
   {
