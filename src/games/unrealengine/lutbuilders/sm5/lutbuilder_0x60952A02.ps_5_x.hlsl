@@ -394,8 +394,9 @@ void main(
   r2.xyz = cb0[27].yyy * r2.xyz;
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    r2.xyz = exp2(r2.xyz);  // added, only needed for RenoDRT to work
-    o0 = GenerateOutput(r2.xyz, asuint(cb0[66].z));
+    r3.xyz = cb0[28].xxx * r2.xyz;  // Added, needed for RenoDRT to work
+    r4.xyz = exp2(r3.xyz);          // Added
+    o0 = GenerateOutput(r4.xyz, asuint(cb0[66].z));
     return;
   }
 
