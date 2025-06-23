@@ -42,8 +42,106 @@ void main(
     u0[int2(_147, _254)] = t0.Load(int3(_147, _254, 0)).xyz;
     u0[int2(_15, _254)] = t0.Load(int3(_15, _254, 0)).xyz;
     return;
-  }
+  } else if (CUSTOM_SHARPENING == 2.f) {
+    // from Lilium
+    // RCAS - Robust Contrast Adaptive Sharpening
+    _7 = (uint)(SV_GroupThreadID.x) >> 1;
+    _8 = _7 & 7;
+    _9 = (uint)(SV_GroupThreadID.x) >> 3;
+    _10 = (uint)(SV_GroupThreadID.x) & 1;
+    _11 = _9 & 6;
+    _12 = _11 | _10;
+    _13 = (uint)(SV_GroupID.x) << 4;
+    _14 = (uint)(SV_GroupID.y) << 4;
+    _15 = _8 | _13;
+    _16 = _12 | _14;
+    _147 = _15 | 8;
+    _254 = _16 | 8;
 
+    const float normalization_point = 100.f;
+    const int2 coords[4] = {
+      int2(_15, _16),
+      int2(_147, _16),
+      int2(_147, _254),
+      int2(_15, _254)
+    };
+
+    [unroll]
+    for (int i = 0; i < 4; ++i) {
+      int2 coord = coords[i];
+
+      // Algorithm uses minimal 3x3 pixel neighborhood.
+      //    b
+      //  d e f
+      //    h
+
+      float3 b = t0.Load(int3(coord + int2(0, -1), 0)).rgb / normalization_point;
+      float3 d = t0.Load(int3(coord + int2(-1, 0), 0)).rgb / normalization_point;
+      float3 e = t0.Load(int3(coord, 0)).rgb / normalization_point;
+      float3 f = t0.Load(int3(coord + int2(1, 0), 0)).rgb / normalization_point;
+      float3 h = t0.Load(int3(coord + int2(0, 1), 0)).rgb / normalization_point;
+
+      // Immediate constants for peak range.
+      static const float2 peak_c = float2(1.f, -4.f);
+
+      // Calculate luminance of center and neighbors
+      float b_lum = renodx::color::y::from::BT709(b);
+      float d_lum = renodx::color::y::from::BT709(d);
+      float e_lum = renodx::color::y::from::BT709(e);
+      float f_lum = renodx::color::y::from::BT709(f);
+      float h_lum = renodx::color::y::from::BT709(h);
+
+      // Min and max of ring.
+      float min4_lum = renodx::math::Min(b_lum, d_lum, f_lum, h_lum);
+      float max4_lum = renodx::math::Max(b_lum, d_lum, f_lum, h_lum);
+
+      // 0.99 found through testing -> see my latest desmos or https://www.desmos.com/calculator/4dyqhishpl
+      // this helps reducing massive overshoot that would happen otherwise
+      // normal CAS applies a limiter too so that there is no overshoot
+      float limited_max4_lum = min(max4_lum, 0.99f);
+
+      float hit_min_lum = min4_lum * rcp(4.f * limited_max4_lum);
+      float hit_max_lum = (peak_c.x - limited_max4_lum) * rcp(4.f * min4_lum + peak_c.y);
+      float local_lobe = max(-hit_min_lum, hit_max_lum);
+
+// This is set at the limit of providing unnatural results for sharpening.
+// 0.25f - (1.f / 16.f)
+#define FSR_RCAS_LIMIT 0.1875f
+
+      const float sharpness_multiplier = 0.75f;
+      float sharpness = (_cbCAS_000.S_cbCAS_032.x == 0.0f) ? 0.0f : exp2(-(1.0f - (_cbCAS_000.S_cbCAS_032.x * sharpness_multiplier)));
+      float lobe = max(float(-FSR_RCAS_LIMIT), min(local_lobe, 0.f)) * sharpness;
+
+      // Noise detection.
+      float b_luma_2x = b_lum * 2.f;
+      float d_luma_2x = d_lum * 2.f;
+      float e_luma_2x = e_lum * 2.f;
+      float f_luma_2x = f_lum * 2.f;
+      float h_luma_2x = h_lum * 2.f;
+
+      float nz = 0.25f * b_luma_2x
+                 + 0.25f * d_luma_2x
+                 + 0.25f * f_luma_2x
+                 + 0.25f * h_luma_2x
+                 - e_luma_2x;
+
+      float max_luma_2x = renodx::math::Max(renodx::math::Max(b_luma_2x, d_luma_2x, e_luma_2x), f_luma_2x, h_luma_2x);
+      float min_luma_2x = renodx::math::Min(renodx::math::Min(b_luma_2x, d_luma_2x, e_luma_2x), f_luma_2x, h_luma_2x);
+
+      nz = saturate(abs(nz) * rcp(max_luma_2x - min_luma_2x));
+      nz = -0.5f * nz + 1.f;
+
+      lobe *= nz;
+
+      // Resolve, which needs the medium precision rcp approximation to avoid visible tonality changes.
+      float rcp_l = rcp(4.f * lobe + 1.f);
+      float pix_lum = ((b_lum + d_lum + h_lum + f_lum) * lobe + e_lum) * rcp_l;
+      float3 sharpened = (pix_lum / max(e_lum, 1e-6f)) * e;
+
+      u0[coord] = sharpened * normalization_point;
+    }
+    return;
+  }
   _7 = (uint)(SV_GroupThreadID.x) >> 1;
   _8 = _7 & 7;
   _9 = (uint)(SV_GroupThreadID.x) >> 3;
