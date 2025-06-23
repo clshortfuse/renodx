@@ -1,12 +1,12 @@
-#ifndef SRC_FFXVI_SHARED_H_
-#define SRC_FFXVI_SHARED_H_
+#ifndef SRC_HITMANWOA_SHARED_H_
+#define SRC_HITMANWOA_SHARED_H_
 
 #define RENODX_TONE_MAP_TYPE                 1.f
 #define RENODX_PEAK_WHITE_NITS               400.f
 #define RENODX_DIFFUSE_WHITE_NITS            100.f
 #define RENODX_GRAPHICS_WHITE_NITS           100.f
-#define RENODX_TONE_MAP_HUE_CORRECTION       0.25f
-#define RENODX_GAMMA_CORRECTION              1.f
+#define RENODX_TONE_MAP_HUE_CORRECTION       1.f
+#define RENODX_GAMMA_CORRECTION              2.f
 #define RENODX_TONE_MAP_EXPOSURE             1.f
 #define RENODX_TONE_MAP_HIGHLIGHTS           1.f
 #define RENODX_TONE_MAP_SHADOWS              1.f
@@ -19,8 +19,8 @@
 #define RENODX_COLOR_GRADE_SCALING           1.f
 #define CUSTOM_BLOOM                         0.7f
 #define CUSTOM_LUT_TETRAHEDRAL               1.f
-#define CUSTOM_SHARPENING                    0.f
-#define CUSTOM_DITHERING                     0.f
+#define CUSTOM_SHARPENING                    1.f
+#define CUSTOM_DITHERING                     1.f
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -50,9 +50,9 @@ struct ShaderInjectData {
 };
 
 #ifndef __cplusplus
-cbuffer shader_injection : register(b13, space50) {
-  ShaderInjectData shader_injection : packoffset(c0);
-}
+// cbuffer shader_injection : register(b13, space50) {
+//   ShaderInjectData shader_injection : packoffset(c0);
+// }
 
 #define RENODX_TONE_MAP_SHOULDER_START 0.375f
 
@@ -80,4 +80,4 @@ cbuffer shader_injection : register(b13, space50) {
 
 #endif
 
-#endif  // SRC_FFXVI_SHARED_H_
+#endif  // SRC_HITMANWOA_SHARED_H_

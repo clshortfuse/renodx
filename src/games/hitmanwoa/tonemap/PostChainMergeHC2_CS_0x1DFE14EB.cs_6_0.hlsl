@@ -1,3 +1,4 @@
+// from PostChainMergeC2_CS_0x30C605C8.cs_6_0
 #include "../common.hlsl"
 cbuffer _24_26 : register(b5, space0) {
   float4 _26_m0[12] : packoffset(c0);
@@ -37,21 +38,17 @@ void comp_main() {
   float3 color_combined = float3(_139, _140, _141);
   // create hdr tonemapped color
 #if 1
-  float3 tonemapped = ApplyCustomToneMap(color_combined);
+  float3 tonemapped = ApplyCustomHitmanToneMap(color_combined);
 #endif
 
 #if 1
 
   tonemapped = float3((((_26_m0[4u].x * _78) + ((((((_26_m0[5u].x + (-0.5f)) * _77) + 0.5f) * 2.0f) * tonemapped.r * _26_m0[10u].y) * _200))), (((_26_m0[4u].y * _78) + ((((((_26_m0[5u].y + (-0.5f)) * _77) + 0.5f) * 2.0f) * tonemapped.g * _26_m0[10u].y) * _200))), (((_26_m0[4u].z * _78) + ((((((_26_m0[5u].z + (-0.5f)) * _77) + 0.5f) * 2.0f) * tonemapped.b * _26_m0[10u].y) * _200))));
-  float3 _236 = ToneMapMaxCLLAndSampleLinearLUT16AndFinalizeOutput(tonemapped, _12, _29, _26_m0[8u].y);
+  float3 _236 = ToneMapMaxCLLAndSampleLinearLUT16AndFinalizeOutput(tonemapped, _12, _29, _26_m0[8u].y, _57, _58, _26_m0[11u].x);
 
 #endif
 
   float3 final_color = _236;
-  if (CUSTOM_DITHERING) {
-    float _252 = (frac(sin(dot(float2(_57, _58), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f) * 0.0039215688593685626983642578125f) + (-0.00196078442968428134918212890625f);
-    final_color = renodx::color::pq::DecodeSafe((_252 + renodx::color::pq::EncodeSafe(final_color, RENODX_DIFFUSE_WHITE_NITS / 2.5f)) * _26_m0[11u].x, RENODX_DIFFUSE_WHITE_NITS / 2.5f);
-  }
 
   _20[uint2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y)] = float4(final_color, 0.0f);
 }
