@@ -130,11 +130,20 @@ float3 ApplyCustomHitmanToneMap(float3 untonemapped) {
   return blended_tonemap;
 }
 
+float3 ApplyCustomSimpleReinhardToneMap(float3 untonemapped) {
+  float3 sdr_tonemap = renodx::tonemap::Reinhard(untonemapped);
+
+  float3 untonemapped_midgray_corrected = untonemapped * (renodx::tonemap::Reinhard(0.18f) / 0.18f);
+  float3 blended_tonemap = lerp(sdr_tonemap, untonemapped_midgray_corrected, sdr_tonemap);
+
+  return blended_tonemap;
+}
+
 renodx::lut::Config CreateLUTConfig(SamplerState lut_sampler) {
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.tetrahedral = CUSTOM_LUT_TETRAHEDRAL;
   lut_config.type_output = renodx::lut::config::type::SRGB;
-  lut_config.scaling = RENODX_GAMMA_CORRECTION ? RENODX_COLOR_GRADE_SCALING * 0.75f : RENODX_COLOR_GRADE_SCALING;
+  lut_config.scaling = (RENODX_GAMMA_CORRECTION != 0.f) ? RENODX_COLOR_GRADE_SCALING * 0.75f : RENODX_COLOR_GRADE_SCALING;
   lut_config.lut_sampler = lut_sampler;
   lut_config.size = 16u;
   return lut_config;
