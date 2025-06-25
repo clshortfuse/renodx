@@ -17,7 +17,9 @@
 #define RENODX_TONE_MAP_FLARE                0.f
 #define RENODX_COLOR_GRADE_STRENGTH          1.f
 #define RENODX_COLOR_GRADE_SCALING           1.f
-#define CUSTOM_BLOOM                         0.7f
+#define RENODX_LUT_SAMPLING_TYPE             1.f  // 0 = default, 1 = replace linear input with srgb input
+#define CUSTOM_BLOOM                         0.75f
+#define CUSTOM_BLOOM_SCALING                 1.f
 #define CUSTOM_LUT_TETRAHEDRAL               1.f
 #define CUSTOM_SHARPENING                    2.f
 #define CUSTOM_DITHERING                     1.f
