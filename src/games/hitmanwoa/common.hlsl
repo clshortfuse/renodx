@@ -1,5 +1,35 @@
 #include "./shared.h"
 
+float4 Sample2DPackedLUT(float3 srgb_color, SamplerState lut_sampler, Texture2D<float4> lut_tex) {
+  // Convert sRGB color to 3D LUT index space (0–15)
+  float3 lut_coord = srgb_color * 15.0f;
+
+  // Blue channel determines which 2D tile slice (Z axis)
+  float lut_b = lut_coord.b;
+  uint b_index = (uint)lut_b;
+  uint b_index_next = b_index + 1u;
+  float b_frac = lut_b - float(b_index);  // interpolation weight between slices
+
+  // Red and green determine position within each 2D tile (X and Y axes)
+  float lut_r = lut_coord.r + 0.5f;
+  float lut_g = lut_coord.g + 0.5f;
+
+  // Compute 4×4 tile grid index for blue slices (tiles of size 16x16)
+  int2 tile_a = int2(b_index & 3, b_index >> 2);
+  int2 tile_b = int2(b_index_next & 3, b_index_next >> 2);
+
+  // Get UVs inside the 64×64 packed LUT texture
+  float2 uv_a = (float2(tile_a * 16) + float2(lut_r, lut_g)) / 64.0f;
+  float2 uv_b = (float2(tile_b * 16) + float2(lut_r, lut_g)) / 64.0f;
+
+  // Trilinear interpolation between adjacent blue slices
+  float4 lut_slice_low = lut_tex.SampleLevel(lut_sampler, uv_a, 0.0f);
+  float4 lut_slice_high = lut_tex.SampleLevel(lut_sampler, uv_b, 0.0f);
+  float4 lut_sample = lerp(lut_slice_low, lut_slice_high, b_frac);
+
+  return lut_sample;
+}
+
 float3 ChrominanceOKLab(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
   if (strength == 0.f) return incorrect_color;
 
@@ -52,12 +82,102 @@ float3 HueAndChrominanceOKLab(
   return renodx::color::bt709::clamp::AP1(result);
 }
 
+float3 HueChrominanceOKLabSameColor(float3 incorrect_color, float3 correct_color) {
+  float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
+  float3 correct_lab = renodx::color::oklab::from::BT709(correct_color);
+
+  incorrect_lab.yz = correct_lab.yz;
+
+  float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
+  return renodx::color::bt709::clamp::AP1(result);
+}
+
+float3 CorrectBlackPerChannel(float3 color_input, float3 lut_color, float3 lut_black_rgb, float strength) {
+  float3 input_y = renodx::color::y::from::BT709(abs(color_input));
+  float3 color_y = renodx::color::y::from::BT709(abs(lut_color));
+  float3 a = lut_black_rgb;
+  float3 b = lerp(0.0f, lut_black_rgb, strength);
+  float3 g = input_y;
+  float3 h = color_y;
+
+  float3 new_y = h - pow(a, pow(1.f + g, renodx::math::DivideSafe(b, a, 0.f)));
+
+  float3 safe_ratio = renodx::math::DivideSafe(saturate(min(h, new_y)), h, 1.f);
+  return lut_color * safe_ratio;
+}
+
+float3 CorrectBlackChrominance(float3 color_input, float3 lut_color, float3 lut_black_rgb, float lut_black_y, float strength) {
+  float3 ch = CorrectBlackPerChannel(color_input, lut_color, lut_black_rgb, strength);
+  float3 lum = renodx::lut::CorrectBlack(color_input, lut_color, lut_black_y, strength);
+
+  float3 corrected = ChrominanceOKLab(lum, ch);
+
+  return corrected;
+}
+
+float4 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sampler, float3 srgb_input) {
+  float4 lut_sample = Sample2DPackedLUT(srgb_input, lut_sampler, lut_texture);
+  if (RENODX_COLOR_GRADE_SCALING > 0.f) {
+    float3 min_black = max(0, Sample2DPackedLUT(0.f, lut_sampler, lut_texture).rgb);
+    float3 lut_min_rgb = pow(min_black, 2.2f);
+    float lut_min_y = renodx::color::y::from::BT709(max(0, lut_min_rgb));
+    if (lut_min_y > 0) {
+      float3 mid_gray = pow(Sample2DPackedLUT(renodx::color::srgb::EncodeSafe(0.18), lut_sampler, lut_texture).rgb, 2.2f);
+      float3 linear_color_input_adjusted = pow(srgb_input, 2.2f) * mid_gray / 0.18f;
+      float3 linear_lutted = pow(lut_sample.rgb, 2.2f);
+      float3 corrected_black = CorrectBlackChrominance(linear_color_input_adjusted, linear_lutted, lut_min_rgb, lut_min_y, 1.f);
+      // float3 corrected_black = CorrectBlackPerChannel(linear_color_input_adjusted, linear_lutted, lut_min_rgb, 1.f);
+      // float3 corrected_black = renodx::lut::CorrectBlack(linear_color_input_adjusted, linear_lutted, lut_min_y, 1.f);
+      corrected_black = max(0, corrected_black);
+      lut_sample.rgb = lerp(pow(lut_sample.rgb, 2.2f), corrected_black, RENODX_COLOR_GRADE_SCALING * 0.999f);
+      lut_sample.rgb = pow(lut_sample.rgb, 1.f / 2.2f);
+    }
+  }
+
+  return lut_sample;
+}
+
+float4 SampleLUTSRGBInLinearOut(Texture2D<float4> lut_texture, SamplerState lut_sampler, float3 srgb_input) {
+  float4 lut_sample = Sample2DPackedLUT(srgb_input, lut_sampler, lut_texture);
+  if (RENODX_COLOR_GRADE_SCALING > 0.f) {
+    float3 min_black = Sample2DPackedLUT(0.f, lut_sampler, lut_texture).rgb;
+    float3 lut_min_rgb = pow(min_black, 2.2f);
+    float lut_min_y = renodx::color::y::from::BT709(max(0, lut_min_rgb));
+    if (lut_min_y > 0) {
+      float3 mid_gray = renodx::color::correct::GammaSafe(Sample2DPackedLUT(renodx::color::srgb::EncodeSafe(0.18), lut_sampler, lut_texture).rgb);
+      float3 linear_color_input_adjusted = pow(srgb_input, 2.2f) * mid_gray / 0.18f;
+      float3 lutted_gamma_corrected = renodx::color::correct::GammaSafe(lut_sample.rgb);
+      float3 corrected_black = CorrectBlackChrominance(linear_color_input_adjusted, lutted_gamma_corrected, lut_min_rgb, lut_min_y, 1.f);
+      // float3 corrected_black = renodx::lut::CorrectBlack(linear_color_input_adjusted, lutted_gamma_corrected, lut_min_y, 1.f);
+      corrected_black = max(0, corrected_black);
+      lut_sample.rgb = lerp(renodx::color::correct::GammaSafe(lut_sample.rgb), corrected_black, RENODX_COLOR_GRADE_SCALING * 0.999f);
+      lut_sample.rgb = renodx::color::correct::GammaSafe(lut_sample.rgb, true);
+    }
+  }
+
+  return lut_sample;
+}
+
+float3 ScaleBloom(float3 color_scene, float3 tex_bloom, float bloom_strength) {
+  float3 bloom_color = bloom_strength * tex_bloom;
+
+  if (bloom_strength > 0.f && CUSTOM_BLOOM_SCALING > 0.f && CUSTOM_BLOOM > 0.f) {
+    float mid_gray_bloomed = (0.18 + renodx::color::y::from::BT709(bloom_color)) / 0.18;
+
+    float scene_luminance = renodx::color::y::from::BT709(color_scene) * mid_gray_bloomed;
+    float bloom_blend = saturate(smoothstep(0.f, 0.18f, scene_luminance));
+    float3 bloom_scaled = lerp(0.f, bloom_color, bloom_blend);
+    bloom_color = lerp(bloom_color, bloom_scaled, CUSTOM_BLOOM_SCALING * 0.25f);
+  }
+
+  return CUSTOM_BLOOM * bloom_color + color_scene;
+}
+
 /// Applies Exponential Roll-Off tonemapping using the maximum channel.
 /// Used to fit the color into a 0–output_max range for SDR LUT compatibility.
-float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.375f, float output_max = 1.f) {
+float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.5f, float output_max = 1.f) {
   color = renodx::color::correct::Hue(exp2(renodx::tonemap::ExponentialRollOff(log2(max(0, color) * 100.f), log2(1.5f * 100.f), log2(10.f * 100.f))) / 100.f, color, 1.f);
 
-  // color = min(10.f, color);
   float peak = max(color.r, max(color.g, color.b));
   peak = min(peak, 100.f);
   float log_peak = log2(peak);
@@ -67,28 +187,6 @@ float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.375f, float output_ma
   float scale = exp2(log_mapped - log_peak);  // How much to compress all channels
 
   return min(output_max, color * scale);
-}
-
-float3 CorrectBlackChrominance(float3 color_input, float3 lut_color, float3 lut_black_rgb, float lut_black_y, float strength) {
-  float3 input_rgb = abs(color_input);
-  float3 lut_rgb = abs(lut_color);
-
-  float3 a = lut_black_rgb;
-  float3 b = lerp(0.0f, lut_black_rgb, strength);
-  float3 g = input_rgb;
-  float3 h = lut_rgb;
-
-  float3 new_rgb = h - pow(lut_black_rgb, pow(1.0f + g, b / a));
-
-  float3 scale_raw = min(h, new_rgb) / h;
-  float3 scale = lerp(1.0f, scale_raw, step(0.0f, h));  // fast select
-
-  float3 per_channel = lut_color * scale;
-  float3 lum = renodx::lut::CorrectBlack(color_input, lut_color, lut_black_y, strength);
-
-  float3 corrected = HueAndChrominanceOKLab(lum, per_channel, lut_color);
-
-  return corrected;
 }
 
 float ToneMapHitman2(float x) {
@@ -143,9 +241,10 @@ renodx::lut::Config CreateLUTConfig(SamplerState lut_sampler) {
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.tetrahedral = CUSTOM_LUT_TETRAHEDRAL;
   lut_config.type_output = renodx::lut::config::type::SRGB;
-  lut_config.scaling = (RENODX_GAMMA_CORRECTION != 0.f) ? RENODX_COLOR_GRADE_SCALING * 0.75f : RENODX_COLOR_GRADE_SCALING;
+  lut_config.scaling = 0.f;  // handle inside lutbuilder
   lut_config.lut_sampler = lut_sampler;
   lut_config.size = 16u;
+  lut_config.recolor = 0.f;
   return lut_config;
 }
 
@@ -154,42 +253,16 @@ float3 SampleGamma2LUT16(Texture3D<float4> lut_texture, SamplerState lut_sampler
   lut_config.type_input = renodx::lut::config::type::GAMMA_2_0;
 
   float3 lutted = renodx::lut::Sample(lut_texture, lut_config, color_input);
-#if 0
-  if (RENODX_COLOR_GRADE_STRENGTH > 0.f && RENODX_COLOR_GRADE_SCALING > 0.f) {
-    float3 min_black = lut_texture.SampleLevel(lut_sampler, float3(0.03125f, 0.03125f, 0.03125f), 0.0f).rgb;
-    float3 lut_min_rgb = pow(min_black, 2.2f);
-    float lut_min_y = renodx::color::y::from::BT709(abs(lut_min_rgb));
-    if (lut_min_y > 0) {
-      float3 gamma_corrected_color_input = renodx::color::correct::GammaSafe(color_input);
-      float3 gamma_corrected_lutted = renodx::color::correct::GammaSafe(lutted);
-      float3 corrected_black = CorrectBlackChrominance(gamma_corrected_color_input, gamma_corrected_lutted, lut_min_rgb, lut_min_y, 1.f);
-      lutted = lerp(lutted, corrected_black, RENODX_COLOR_GRADE_SCALING);
-      lutted = renodx::color::correct::GammaSafe(lutted, true);
-    }
-  }
-#endif
+
   return lutted;
 }
 
 float3 SampleLinearLUT16(Texture3D<float4> lut_texture, SamplerState lut_sampler, float3 color_input) {
   renodx::lut::Config lut_config = CreateLUTConfig(lut_sampler);
-  lut_config.type_input = renodx::lut::config::type::LINEAR;
+  lut_config.type_input = renodx::lut::config::type::SRGB;
 
   float3 lutted = renodx::lut::Sample(lut_texture, lut_config, color_input);
-#if 0
-  if (RENODX_COLOR_GRADE_STRENGTH > 0.f && RENODX_COLOR_GRADE_SCALING > 0.f) {
-    float3 min_black = lut_texture.SampleLevel(lut_sampler, float3(0.03125f, 0.03125f, 0.03125f), 0.0f).rgb;
-    float3 lut_min_rgb = pow(min_black, 2.2f);
-    float lut_min_y = renodx::color::y::from::BT709(abs(lut_min_rgb));
-    if (lut_min_y > 0) {
-      float3 gamma_corrected_color_input = renodx::color::correct::GammaSafe(color_input);
-      float3 gamma_corrected_lutted = renodx::color::correct::GammaSafe(lutted);
-      float3 corrected_black = CorrectBlackChrominance(gamma_corrected_color_input, gamma_corrected_lutted, lut_min_rgb, lut_min_y, 1.f);
-      lutted = lerp(lutted, corrected_black, RENODX_COLOR_GRADE_SCALING);
-      lutted = renodx::color::correct::GammaSafe(lutted, true);
-    }
-  }
-#endif
+
   return lutted;
 }
 
@@ -296,6 +369,7 @@ float3 ApplyDisplayMap(float3 color_input, float peak_ratio) {
         log2(peak_nits)));
     display_mapped /= diffuse_white;
     display_mapped *= signs;
+    // float3 display_mapped = renodx::tonemap::frostbite::BT709(color_input, peak_ratio / 2.f, (peak_ratio / 2.f) * 0.375f, 1.f, 1.f);
     display_mapped = renodx::color::correct::GammaSafe(display_mapped, true);
     display_mapped = ApplyPostToneMapSliders(display_mapped, color_input, cg_config);
     color_input = display_mapped;
