@@ -41,6 +41,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x38A599E8),
     CustomShaderEntry(0x83FCCE5D),
     CustomShaderEntry(0x058D8234),
+    CustomShaderEntry(0x66C17996),
 };
 
 ShaderInjectData shader_injection;
@@ -372,35 +373,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
-
-      if (!initialized) {
-        renodx::mods::shader::force_pipeline_cloning = true;
-        renodx::mods::shader::expected_constant_buffer_space = 50;
-        renodx::mods::shader::expected_constant_buffer_index = 13;
-        renodx::mods::shader::allow_multiple_push_constants = true;
-
-        renodx::mods::swapchain::expected_constant_buffer_index = 13;
-        renodx::mods::swapchain::expected_constant_buffer_space = 50;
-        renodx::mods::swapchain::use_resource_cloning = true;
-        renodx::mods::swapchain::swap_chain_proxy_shaders = {
-            {
-                reshade::api::device_api::d3d11,
-                {
-                    .vertex_shader = __swap_chain_proxy_vertex_shader_dx11,
-                    .pixel_shader = __swap_chain_proxy_pixel_shader_dx11,
-                },
-            },
-            {
-                reshade::api::device_api::d3d12,
-                {
-                    .vertex_shader = __swap_chain_proxy_vertex_shader_dx12,
-                    .pixel_shader = __swap_chain_proxy_pixel_shader_dx12,
-                },
-            },
-        };
-
-        initialized = true;
-      }
+      renodx::mods::swapchain::force_borderless = false;
+      renodx::mods::swapchain::prevent_full_screen = false;
+      renodx::mods::swapchain::use_resource_cloning = true;
+      renodx::mods::swapchain::swapchain_proxy_revert_state = true;
+      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader_dx11;
+      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx11;
+      
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
         .old_format = reshade::api::format::r8g8b8a8_typeless,
         .new_format = reshade::api::format::r16g16b16a16_float,
@@ -422,8 +401,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         .old_format = reshade::api::format::r8g8b8a8_unorm,
         .new_format = reshade::api::format::r16g16b16a16_float,
     });
+    
+      reshade::register_event<reshade::addon_event::present>(OnPresent);
+      break;    
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(h_module);
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       break;
   }
 

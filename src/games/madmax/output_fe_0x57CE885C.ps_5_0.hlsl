@@ -75,7 +75,7 @@ void main(
   if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
     o0.rgb = renodx::effects::ApplyFilmGrain(
         o0.rgb,
-        v2.xy,
+        v1.xy,
         CUSTOM_RANDOM,
         CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
         1.f);
