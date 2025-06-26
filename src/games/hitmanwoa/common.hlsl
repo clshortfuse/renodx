@@ -1,6 +1,9 @@
 #include "./shared.h"
 
 float4 Sample2DPackedLUT(float3 srgb_color, SamplerState lut_sampler, Texture2D<float4> lut_tex) {
+  if (RENODX_LUT_SAMPLING_TYPE) {                     
+    srgb_color = srgb_color * 0.984375f + 0.0078125;  // add missing offsets
+  }
   // Convert sRGB color to 3D LUT index space (0–15)
   float3 lut_coord = srgb_color * 15.f;
 
@@ -129,7 +132,7 @@ float4 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
       // float3 corrected_black = CorrectBlackPerChannel(linear_color_input_adjusted, linear_lutted, lut_min_rgb, 1.f);
       // float3 corrected_black = renodx::lut::CorrectBlack(linear_color_input_adjusted, linear_lutted, lut_min_y, 1.f);
       corrected_black = max(0, corrected_black);
-      lut_sample.rgb = lerp(pow(lut_sample.rgb, 2.2f), corrected_black, RENODX_COLOR_GRADE_SCALING * 0.999f);
+      lut_sample.rgb = lerp(pow(lut_sample.rgb, 2.2f), corrected_black, RENODX_COLOR_GRADE_SCALING);
       lut_sample.rgb = pow(lut_sample.rgb, 1.f / 2.2f);
     }
   }
@@ -138,19 +141,22 @@ float4 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
 }
 
 float4 SampleLUTSRGBInLinearOut(Texture2D<float4> lut_texture, SamplerState lut_sampler, float3 srgb_input) {
+  float black = 0.f;
+  float mid = 0.18f;
+
   float4 lut_sample = Sample2DPackedLUT(srgb_input, lut_sampler, lut_texture);
   if (RENODX_COLOR_GRADE_SCALING > 0.f) {
-    float3 min_black = Sample2DPackedLUT(0.f, lut_sampler, lut_texture).rgb;
+    float3 min_black = Sample2DPackedLUT(black, lut_sampler, lut_texture).rgb;
     float3 lut_min_rgb = pow(min_black, 2.2f);
     float lut_min_y = renodx::color::y::from::BT709(max(0, lut_min_rgb));
     if (lut_min_y > 0) {
-      float3 mid_gray = renodx::color::correct::GammaSafe(Sample2DPackedLUT(renodx::color::srgb::EncodeSafe(0.18), lut_sampler, lut_texture).rgb);
+      float3 mid_gray = renodx::color::correct::GammaSafe(Sample2DPackedLUT(renodx::color::srgb::EncodeSafe(mid), lut_sampler, lut_texture).rgb);
       float3 linear_color_input_adjusted = pow(srgb_input, 2.2f) * mid_gray / 0.18f;
       float3 lutted_gamma_corrected = renodx::color::correct::GammaSafe(lut_sample.rgb);
       float3 corrected_black = CorrectBlackChrominance(linear_color_input_adjusted, lutted_gamma_corrected, lut_min_rgb, lut_min_y, 1.f);
       // float3 corrected_black = renodx::lut::CorrectBlack(linear_color_input_adjusted, lutted_gamma_corrected, lut_min_y, 1.f);
       corrected_black = max(0, corrected_black);
-      lut_sample.rgb = lerp(renodx::color::correct::GammaSafe(lut_sample.rgb), corrected_black, RENODX_COLOR_GRADE_SCALING * 0.999f);
+      lut_sample.rgb = lerp(renodx::color::correct::GammaSafe(lut_sample.rgb), corrected_black, RENODX_COLOR_GRADE_SCALING);
       lut_sample.rgb = renodx::color::correct::GammaSafe(lut_sample.rgb, true);
     }
   }
@@ -189,7 +195,7 @@ float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.5f, float output_max 
   return min(output_max, color * scale);
 }
 
-float InverseToneMapHitman2(float y) {
+float InverseToneMapHitman(float y) {
   // Coefficients derived from inverse of Hitman 2's tonemap curve
   const float numerator1 = -(5.f / 6.f) * (y - (1.0f / 30.f));
   const float sqrt_term = (1.f / 180.f) * sqrt(19260.f * y * y + 1524.f * y + 25.f);
@@ -200,7 +206,7 @@ float InverseToneMapHitman2(float y) {
   return x;
 }
 
-float ToneMapHitman2(float x) {
+float ToneMapHitman(float x) {
   float A = 0.6f;
   float B = 0.1f;
   float C = 1.f;
@@ -219,16 +225,16 @@ float ToneMapHitman2(float x) {
   return max(0, result);
 }
 
-float3 ToneMapHitman2(float3 x) {
+float3 ToneMapHitman(float3 x) {
   x *= RENODX_TONE_MAP_EXPOSURE;
   float3 result =
-      float3(ToneMapHitman2(x.r),
-             ToneMapHitman2(x.g),
-             ToneMapHitman2(x.b));
+      float3(ToneMapHitman(x.r),
+             ToneMapHitman(x.g),
+             ToneMapHitman(x.b));
 
 #if 1  // luminance with channel chrominance
   const float y_in = renodx::color::y::from::BT709(x);
-  const float y_out = ToneMapHitman2(y_in);
+  const float y_out = ToneMapHitman(y_in);
 
   float3 lum = x * select(y_in > 0, y_out / y_in, 0.f);
   lum = ChrominanceOKLab(lum, result);
@@ -265,9 +271,9 @@ float3 Reinhard(float3 x) {
 }
 
 float3 ApplyCustomHitmanToneMap(float3 untonemapped) {
-  float3 sdr_tonemap = ToneMapHitman2(untonemapped);
+  float3 sdr_tonemap = ToneMapHitman(untonemapped);
 
-  float3 untonemapped_midgray_corrected = untonemapped * (0.18 / InverseToneMapHitman2(0.18f));
+  float3 untonemapped_midgray_corrected = untonemapped * (0.18 / InverseToneMapHitman(0.18f));
   float3 blended_tonemap = lerp(sdr_tonemap, untonemapped_midgray_corrected, sdr_tonemap);
 
   return blended_tonemap;
@@ -295,7 +301,7 @@ renodx::lut::Config CreateLUTConfig(SamplerState lut_sampler) {
 
 float3 SampleGamma2LUT16(Texture3D<float4> lut_texture, SamplerState lut_sampler, float3 color_input) {
   renodx::lut::Config lut_config = CreateLUTConfig(lut_sampler);
-  if (RENODX_LUT_SAMPLING_TYPE == 2.f) {
+  if (RENODX_LUT_SAMPLING_TYPE) {
     lut_config.type_input = renodx::lut::config::type::SRGB;
   } else {
     lut_config.type_input = renodx::lut::config::type::GAMMA_2_0;
@@ -308,7 +314,7 @@ float3 SampleGamma2LUT16(Texture3D<float4> lut_texture, SamplerState lut_sampler
 
 float3 SampleLinearLUT16(Texture3D<float4> lut_texture, SamplerState lut_sampler, float3 color_input) {
   renodx::lut::Config lut_config = CreateLUTConfig(lut_sampler);
-  if (RENODX_LUT_SAMPLING_TYPE != 0.f) {  // replace linear lut sampling with sRGB
+  if (RENODX_LUT_SAMPLING_TYPE) {  // replace linear lut sampling with sRGB
     lut_config.type_input = renodx::lut::config::type::SRGB;
   } else {
     lut_config.type_input = renodx::lut::config::type::LINEAR;
@@ -513,8 +519,29 @@ float3 ToneMapMaxCLLAndSampleLinearLUT16AndFinalizeOutput(
 float3 GammaCorrectHuePreserving(float3 incorrect_color) {
   float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
 
-  // use chrominance from channel gamma correction
-  float3 result = renodx::color::correct::Hue(ch, incorrect_color);
+  const float y_in = renodx::color::y::from::BT709(incorrect_color);
+  const float y_out = max(0, renodx::color::correct::Gamma(y_in));
+
+  float3 lum = incorrect_color * select(y_in > 0, y_out / y_in, 0.f);
+
+  // use chrominance from channel gamma correction and apply hue shifting from per channel tonemap
+  float3 result = ChrominanceOKLab(lum, ch);
 
   return result;
+}
+
+float3 ApplyGammaCorrection(float3 incorrect_color) {
+  float3 corrected_color;
+  if (RENODX_GAMMA_CORRECTION == 1.f) {
+    corrected_color = renodx::color::correct::GammaSafe(incorrect_color);
+  } else if (RENODX_GAMMA_CORRECTION == 2.f) {
+    corrected_color = renodx::color::correct::GammaSafe(incorrect_color);
+    corrected_color = renodx::color::correct::Hue(corrected_color, incorrect_color, 1.f);
+  } else if (RENODX_GAMMA_CORRECTION == 3.f) {
+    corrected_color = GammaCorrectHuePreserving(incorrect_color);
+  } else {
+    corrected_color = incorrect_color;
+  }
+
+  return corrected_color;
 }

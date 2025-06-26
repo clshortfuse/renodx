@@ -15,7 +15,7 @@ void main(
   float3 color_input = float3(SV_DispatchThreadID.xyz) / 15.f;
 
   float3 color_srgb;
-  if (RENODX_LUT_SAMPLING_TYPE == 2.f) {  // sRGB input
+  if (RENODX_LUT_SAMPLING_TYPE) {  // sRGB input
     color_srgb = color_input;
   } else {  // gamma 2 input
     float3 color_linear = color_input * color_input;

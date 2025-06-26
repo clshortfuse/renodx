@@ -24,10 +24,7 @@ float4 main(
   float3 linear_color = t0.Load(int3(pixel_coord, 0)).rgb;
 
   linear_color /= 2.5f;  // normalize brightness
-  if (RENODX_GAMMA_CORRECTION == 1.f)
-    linear_color = renodx::color::correct::GammaSafe(linear_color);
-  else if (RENODX_GAMMA_CORRECTION == 2.f)
-    linear_color = GammaCorrectHuePreserving(linear_color);
+  linear_color = ApplyGammaCorrection(linear_color);
 
   // linear_color = renodx::math::SignPow(linear_color, _cbHDRResolve_000.S_cbHDRResolve_000.x);
   float3 bt2020_color = renodx::color::bt2020::from::BT709(linear_color);
