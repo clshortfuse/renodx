@@ -19,15 +19,20 @@ void main(
     uint3 SV_GroupID: SV_GroupID,
     uint3 SV_GroupThreadID: SV_GroupThreadID,
     uint SV_GroupIndex: SV_GroupIndex) {
-  float3 gamma2_color = float3(SV_DispatchThreadID) / 15.f;
-  float3 linear_color = gamma2_color * gamma2_color;
+  float3 color_input = float3(SV_DispatchThreadID) / 15.f;
 
-  float3 srgb_color = saturate(renodx::color::srgb::Encode(linear_color));
+  float3 color_srgb;
+  if (RENODX_LUT_SAMPLING_TYPE == 2.f) {  // sRGB input
+    color_srgb = color_input;
+  } else {  // gamma 2 input
+    float3 color_linear = color_input * color_input;
+    color_srgb = saturate(renodx::color::srgb::Encode(color_linear));
+  }
 
-  float4 lut_sample = saturate(SampleLUTSRGBInLinearOut(t0, s4, srgb_color));
-  lut_sample.rgb = renodx::color::srgb::Encode(lut_sample.rgb);
+  float4 lut_output_linear = saturate(SampleLUTSRGBInLinearOut(t0, s4, color_srgb));
+  float4 lut_output_srgb = renodx::color::srgb::Encode(lut_output_linear);
 
-  float4 interpolated_output = lerp(lut_sample, float4(srgb_color, 1.f), _cbColorCorrectionResolve_000.S_cbColorCorrectionResolve_000);
+  float4 interpolated_output = lerp(lut_output_srgb, float4(color_srgb, 1.f), _cbColorCorrectionResolve_000.S_cbColorCorrectionResolve_000);
 
   u0[SV_DispatchThreadID] = interpolated_output;
 }

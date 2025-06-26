@@ -250,7 +250,11 @@ renodx::lut::Config CreateLUTConfig(SamplerState lut_sampler) {
 
 float3 SampleGamma2LUT16(Texture3D<float4> lut_texture, SamplerState lut_sampler, float3 color_input) {
   renodx::lut::Config lut_config = CreateLUTConfig(lut_sampler);
-  lut_config.type_input = renodx::lut::config::type::GAMMA_2_0;
+  if (RENODX_LUT_SAMPLING_TYPE == 2.f) {
+    lut_config.type_input = renodx::lut::config::type::SRGB;
+  } else {
+    lut_config.type_input = renodx::lut::config::type::GAMMA_2_0;
+  }
 
   float3 lutted = renodx::lut::Sample(lut_texture, lut_config, color_input);
 
@@ -259,7 +263,11 @@ float3 SampleGamma2LUT16(Texture3D<float4> lut_texture, SamplerState lut_sampler
 
 float3 SampleLinearLUT16(Texture3D<float4> lut_texture, SamplerState lut_sampler, float3 color_input) {
   renodx::lut::Config lut_config = CreateLUTConfig(lut_sampler);
-  lut_config.type_input = renodx::lut::config::type::SRGB;
+  if (RENODX_LUT_SAMPLING_TYPE != 0.f) {  // replace linear lut sampling with sRGB
+    lut_config.type_input = renodx::lut::config::type::SRGB;
+  } else {
+    lut_config.type_input = renodx::lut::config::type::LINEAR;
+  }
 
   float3 lutted = renodx::lut::Sample(lut_texture, lut_config, color_input);
 

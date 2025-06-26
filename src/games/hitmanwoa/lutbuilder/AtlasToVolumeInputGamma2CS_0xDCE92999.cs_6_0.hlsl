@@ -12,14 +12,20 @@ void main(
     uint3 SV_GroupID: SV_GroupID,
     uint3 SV_GroupThreadID: SV_GroupThreadID,
     uint SV_GroupIndex: SV_GroupIndex) {
-  float3 color_gamma2 = float3((uint3)(SV_DispatchThreadID.xyz)) / 15.f;
 
-  float3 color_linear = color_gamma2 * color_gamma2;
+  
+  float3 color_input = float3((uint3)(SV_DispatchThreadID.xyz)) / 15.f;
 
-  float3 color_srgb = renodx::color::srgb::EncodeSafe(color_linear);
+  float3 color_srgb;
+  if (RENODX_LUT_SAMPLING_TYPE == 2.f) {  // sRGB input
+    color_srgb = color_input;
+  } else { // gamma 2 input
+    float3 color_linear = color_input * color_input;
+    color_srgb = renodx::color::srgb::EncodeSafe(color_linear);
+  }
 
   float4 lut_output_linear = saturate(SampleLUTSRGBInLinearOut(t0, s4, color_srgb));
   float4 lut_output_srgb = renodx::color::srgb::Encode(lut_output_linear);
 
-  u0[int3((uint3)(SV_DispatchThreadID.xyz))] = lut_output_srgb;
+  u0[SV_DispatchThreadID] = lut_output_srgb;
 }
