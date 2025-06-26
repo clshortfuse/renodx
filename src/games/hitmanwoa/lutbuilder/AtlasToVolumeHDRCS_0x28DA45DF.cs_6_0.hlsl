@@ -17,11 +17,11 @@ void main(
   float3 color_srgb;
   if (RENODX_LUT_SAMPLING_TYPE != 0.f) {  // sRGB input
     color_srgb = color_input;
-  } else {                                // linear input
+  } else {  // linear input
     color_srgb = renodx::color::srgb::EncodeSafe(color_input);
   }
 
   float4 lut_output_srgb = saturate(SampleLUTSRGBInSRGBOut(t0, s4, color_srgb));
 
-  u0[int3((uint3)(SV_DispatchThreadID.xyz))] = lut_output_srgb;
+  u0[SV_DispatchThreadID] = lut_output_srgb;
 }
