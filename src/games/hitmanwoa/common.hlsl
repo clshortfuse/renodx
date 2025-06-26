@@ -2,7 +2,7 @@
 
 float4 Sample2DPackedLUT(float3 srgb_color, SamplerState lut_sampler, Texture2D<float4> lut_tex) {
   // Convert sRGB color to 3D LUT index space (0–15)
-  float3 lut_coord = srgb_color * 15.0f;
+  float3 lut_coord = srgb_color * 15.f;
 
   // Blue channel determines which 2D tile slice (Z axis)
   float lut_b = lut_coord.b;
@@ -19,12 +19,12 @@ float4 Sample2DPackedLUT(float3 srgb_color, SamplerState lut_sampler, Texture2D<
   int2 tile_b = int2(b_index_next & 3, b_index_next >> 2);
 
   // Get UVs inside the 64×64 packed LUT texture
-  float2 uv_a = (float2(tile_a * 16) + float2(lut_r, lut_g)) / 64.0f;
-  float2 uv_b = (float2(tile_b * 16) + float2(lut_r, lut_g)) / 64.0f;
+  float2 uv_a = (float2(tile_a * 16) + float2(lut_r, lut_g)) / 64.f;
+  float2 uv_b = (float2(tile_b * 16) + float2(lut_r, lut_g)) / 64.f;
 
   // Trilinear interpolation between adjacent blue slices
-  float4 lut_slice_low = lut_tex.SampleLevel(lut_sampler, uv_a, 0.0f);
-  float4 lut_slice_high = lut_tex.SampleLevel(lut_sampler, uv_b, 0.0f);
+  float4 lut_slice_low = lut_tex.SampleLevel(lut_sampler, uv_a, 0.f);
+  float4 lut_slice_high = lut_tex.SampleLevel(lut_sampler, uv_b, 0.f);
   float4 lut_sample = lerp(lut_slice_low, lut_slice_high, b_frac);
 
   return lut_sample;
@@ -96,7 +96,7 @@ float3 CorrectBlackPerChannel(float3 color_input, float3 lut_color, float3 lut_b
   float3 input_y = renodx::color::y::from::BT709(abs(color_input));
   float3 color_y = renodx::color::y::from::BT709(abs(lut_color));
   float3 a = lut_black_rgb;
-  float3 b = lerp(0.0f, lut_black_rgb, strength);
+  float3 b = lerp(0.f, lut_black_rgb, strength);
   float3 g = input_y;
   float3 h = color_y;
 
@@ -189,13 +189,34 @@ float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.5f, float output_max 
   return min(output_max, color * scale);
 }
 
+float InverseToneMapHitman2(float y) {
+  // Coefficients derived from inverse of Hitman 2's tonemap curve
+  const float numerator1 = -(5.f / 6.f) * (y - (1.0f / 30.f));
+  const float sqrt_term = (1.f / 180.f) * sqrt(19260.f * y * y + 1524.f * y + 25.f);
+  const float denominator = y - (14.f / 15.f);
+
+  // Use the positive root for physically plausible inverse
+  float x = (numerator1 / denominator) - (sqrt_term / denominator);
+  return x;
+}
+
 float ToneMapHitman2(float x) {
-  float scaled = x * 0.6f;
-  float num = (scaled + 0.1f) * x + 0.004f;
-  float den = (scaled + 1.0f) * x + 0.06f;
-  float result = num / den;
-  result -= 2.f / 30.f;
-  return saturate(result);
+  float A = 0.6f;
+  float B = 0.1f;
+  float C = 1.f;
+  float D = 0.004f;
+  float E = 0.06f;
+  float F = D / E;
+
+  float scaled = x * A;
+  float numerator = (scaled + B) * x + D;
+  float denominator = (scaled + C) * x + E;
+  float result = numerator / denominator;
+  result -= F;
+
+  // ((0.6x + 0.1) * 0.6 + 0.004)/((0.6x + 1) * 0.6 + 0.06) - 0.004 / 0.06
+
+  return max(0, result);
 }
 
 float3 ToneMapHitman2(float3 x) {
@@ -212,17 +233,41 @@ float3 ToneMapHitman2(float3 x) {
   float3 lum = x * select(y_in > 0, y_out / y_in, 0.f);
   lum = ChrominanceOKLab(lum, result);
 
-  result = lerp(lum, result, saturate(result / 0.4f));
+  const float blending_threshold = 1.f;
+  result = lerp(lum, result, saturate(result / blending_threshold));
 
 #endif
 
   return saturate(result);
 }
 
+float InverseReinhard(float y) {
+  return y / (1.0f - y);
+}
+
+float3 Reinhard(float3 x) {
+  x *= RENODX_TONE_MAP_EXPOSURE;
+  float3 result = renodx::tonemap::Reinhard(x);
+
+#if 1  // luminance with channel chrominance
+  const float y_in = renodx::color::y::from::BT709(x);
+  const float y_out = renodx::tonemap::Reinhard(y_in);
+
+  float3 lum = x * select(y_in > 0, y_out / y_in, 0.f);
+  lum = ChrominanceOKLab(lum, result);
+
+  const float blending_threshold = 1.f;
+  result = lerp(lum, result, saturate(result / blending_threshold));
+
+#endif
+
+  return result;
+}
+
 float3 ApplyCustomHitmanToneMap(float3 untonemapped) {
   float3 sdr_tonemap = ToneMapHitman2(untonemapped);
 
-  float3 untonemapped_midgray_corrected = untonemapped * (ToneMapHitman2(0.18f) / 0.18f);
+  float3 untonemapped_midgray_corrected = untonemapped * (0.18 / InverseToneMapHitman2(0.18f));
   float3 blended_tonemap = lerp(sdr_tonemap, untonemapped_midgray_corrected, sdr_tonemap);
 
   return blended_tonemap;
@@ -231,7 +276,7 @@ float3 ApplyCustomHitmanToneMap(float3 untonemapped) {
 float3 ApplyCustomSimpleReinhardToneMap(float3 untonemapped) {
   float3 sdr_tonemap = renodx::tonemap::Reinhard(untonemapped);
 
-  float3 untonemapped_midgray_corrected = untonemapped * (renodx::tonemap::Reinhard(0.18f) / 0.18f);
+  float3 untonemapped_midgray_corrected = untonemapped * (0.18f / InverseReinhard(0.18f));
   float3 blended_tonemap = lerp(sdr_tonemap, untonemapped_midgray_corrected, sdr_tonemap);
 
   return blended_tonemap;
@@ -393,8 +438,8 @@ float3 ApplyDithering(float3 color_input, float screen_pos_x, float screen_pos_y
     return color_input;
 
   // Constants for HDR10 PQ dithering
-  const float INV_HDR10PQ_STEPS = 1.0f / 1023.0f;  // ~0.000977, size of one PQ code step at 10-bit
-  const float DITHER_SCALE = 1.0f;
+  const float INV_HDR10PQ_STEPS = 1.f / 1023.f;  // ~0.000977, size of one PQ code step at 10-bit
+  const float DITHER_SCALE = 1.f;
   const float2 DITHER_HASH_VEC = float2(12.9898f, 78.233f);
   const float DITHER_HASH_SCALE = 43758.546875f;
 
