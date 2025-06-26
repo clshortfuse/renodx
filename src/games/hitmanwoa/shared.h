@@ -56,7 +56,7 @@ struct ShaderInjectData {
 //   ShaderInjectData shader_injection : packoffset(c0);
 // }
 
-#define RENODX_TONE_MAP_SHOULDER_START 0.375f
+#define RENODX_TONE_MAP_SHOULDER_START 0.39f
 
 // #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
 // #define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
