@@ -46,8 +46,11 @@ void comp_main() {
   float _194 = asfloat(_18.Load(5u).x);
   float _222 = clamp(1.0f - (_33_m0[9u].y * frac(sin((_33_m0[10u].z + floor(_33_m0[9u].z * _73)) + ((_33_m0[10u].z + floor(_33_m0[9u].z * _74)) * 0.0129898004233837127685546875f)) * 43758.546875f)), 0.0f, 1.0f);
 #if 1
+
+  float3 bloomed_color = ScaleBloom(_156.rgb, _164.rgb, _33_m0[9u].x);
+
   // this shader doesn't use a tonemapper, so our custom `HDR tonemap` will just be untonemapped with `saturate()` removed
-  float3 color_combined = (((_33_m0[9u].x * _164.xyz) + _156.xyz) * _33_m0[7u].xyz) * _194;
+  float3 color_combined = (bloomed_color * _33_m0[7u].xyz) * _194;
   // add vignette and grain
   float3 tonemapped = (_33_m0[4u].xyz * _137) + ((((_33_m0[5u].xyz - 0.5f) * _129 + 0.5f) * 2.0f) * color_combined * _33_m0[10u].y * _222);
 

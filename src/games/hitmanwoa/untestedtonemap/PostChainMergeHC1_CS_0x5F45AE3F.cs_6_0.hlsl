@@ -29,9 +29,12 @@ void comp_main() {
   float4 _104 = _8.SampleLevel(_29, float2(_85, _86), 0.0f);
   float4 _110 = _9.SampleLevel(_29, float2(_85, _86), 0.0f);
   float _138 = asfloat(_17.Load(5u).x);
-  float _139 = (((_26_m0[9u].x * _110.x) + _104.x) * _26_m0[7u].x) * _138;
-  float _140 = (((_26_m0[9u].x * _110.y) + _104.y) * _26_m0[7u].y) * _138;
-  float _141 = (((_26_m0[9u].x * _110.z) + _104.z) * _26_m0[7u].z) * _138;
+
+  float3 bloomed_color = ScaleBloom(_104.rgb, _110.rgb, _26_m0[9u].x);
+
+  float _139 = (bloomed_color.r * _26_m0[7u].x) * _138;
+  float _140 = (bloomed_color.g * _26_m0[7u].y) * _138;
+  float _141 = (bloomed_color.b * _26_m0[7u].z) * _138;
   float _174 = clamp(1.0f - (_26_m0[9u].y * frac(sin((_26_m0[10u].z + floor(_26_m0[9u].z * _47)) + ((_26_m0[10u].z + floor(_26_m0[9u].z * _48)) * 0.0129898004233837127685546875f)) * 43758.546875f)), 0.0f, 1.0f);
 #if 1
   float3 color_combined = float3(_139, _140, _141);
