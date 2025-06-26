@@ -20,5 +20,5 @@ void main(
   // LUT input has been changed to sRGB for better bit depth
   float4 color = t0.Load(int3(_8, _11, 0));
 
-  u0[int3(SV_DispatchThreadID)] = color;
+  u0[SV_DispatchThreadID] = color;
 }
