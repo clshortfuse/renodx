@@ -15,7 +15,7 @@ void main(
   float3 color_input = float3(SV_DispatchThreadID.xyz) / 15.f;
 
   float3 color_srgb;
-  if (RENODX_LUT_SAMPLING_TYPE != 0.f) {  // sRGB input
+  if (RENODX_LUT_SAMPLING_TYPE) {  // sRGB input
     color_srgb = color_input;
   } else {  // linear input
     color_srgb = renodx::color::srgb::EncodeSafe(color_input);
