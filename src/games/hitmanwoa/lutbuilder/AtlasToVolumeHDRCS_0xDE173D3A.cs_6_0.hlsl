@@ -19,8 +19,14 @@ void main(
     uint3 SV_GroupID: SV_GroupID,
     uint3 SV_GroupThreadID: SV_GroupThreadID,
     uint SV_GroupIndex: SV_GroupIndex) {
-  // LUT input has been changed to sRGB for better bit depth
-  float3 color_srgb = saturate(float3(SV_DispatchThreadID) / 15.f);
+  float3 color_input = float3(SV_DispatchThreadID.xyz) / 15.f;
+
+  float3 color_srgb;
+  if (RENODX_LUT_SAMPLING_TYPE != 0.f) {  // sRGB input
+    color_srgb = color_input;
+  } else {  // linear input
+    color_srgb = renodx::color::srgb::EncodeSafe(color_input);
+  }
 
   float4 lut_output_srgb = saturate(SampleLUTSRGBInSRGBOut(t0, s4, color_srgb));
 
