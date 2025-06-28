@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
 cbuffer _Globals : register(b0){
   float _g_fBrightness : packoffset(c0);
@@ -27,7 +27,7 @@ void main(
   r0.xy = r0.zz * r0.xy;
   r0.z = 3.1415 * r0.w;
   r0.z = sin(r0.z);
-  r0.z = r0.z * -0.00999999978 + r0.w;
+  r0.z = r0.z * 0.0500000007 + r0.w;
   r0.z = -1 + r0.z;
   r0.z = _g_fUIDesat * r0.z + 1;
   r0.xy = r0.xy * r0.zz;
@@ -35,9 +35,8 @@ void main(
   r0.xyzw = _TMP30.Sample(_g_sSlot0Clamp_s, r0.xy).xyzw;
   r1.x = dot(r0.xyz, float3(0.333332986,0.333332986,0.333332986));
   r1.yzw = -r1.xxx + r0.xyz;
-  r1.xyz = r1.yzw * float3(1.25,1.25,1.25) + r1.xxx;
-  r1.xyz = r1.xyz * float3(1.29999995,1.29999995,1.29999995) + float3(-0.100000001,-0.100000001,-0.100000001);
-  r1.xyz = r1.xyz + -r0.xyz;
+  r1.xyz = r1.yzw * float3(0.75,0.75,0.75) + r1.xxx;
+  r1.xyz = r1.xyz * float3(0.819999993,0.819999993,0.819999993) + -r0.xyz;
   r0.xyz = _g_fUIDesat * r1.xyz + r0.xyz;
   r0.xyzw = r0.xyzw * _g_vDiffuseColor.xyzw + _g_vHighliteColor.xyzw;
   r0.xyz = max(float3(0.0009765625,0.0009765625,0.0009765625), r0.xyz);

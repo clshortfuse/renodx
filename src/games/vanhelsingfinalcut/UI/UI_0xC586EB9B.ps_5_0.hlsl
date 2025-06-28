@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
 SamplerState _g_sSlot1_s : register(s0);
 Texture2D<float4> _TMP5 : register(t0);

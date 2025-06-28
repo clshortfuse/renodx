@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
 cbuffer _Globals : register(b0){
   float _g_fTimer : packoffset(c0);
