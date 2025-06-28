@@ -5,10 +5,6 @@
 
 #pragma once
 
-#pragma comment(lib, "d3dcompiler.lib")
-#pragma comment(lib, "dxgi.lib")
-#pragma comment(lib, "d3d11.lib")
-
 #include <d3d11.h>
 #include <d3d12.h>
 #include <d3d9.h>
@@ -43,6 +39,9 @@
 #include "../utils/swapchain.hpp"
 
 namespace renodx::mods::swapchain {
+
+static decltype(&D3D11CreateDevice) pD3D11CreateDevice = nullptr;
+static decltype(&CreateDXGIFactory1) pCreateDXGIFactory1 = nullptr;
 
 using SwapChainUpgradeTarget = utils::resource::ResourceUpgradeInfo;
 
@@ -752,16 +751,51 @@ inline void FlushDescriptors(reshade::api::command_list* cmd_list) {
   cmd_data->unpushed_updates.clear();
 }
 
+bool LoadDirectXLibraries() {
+  if (!pD3D11CreateDevice) {
+    HMODULE d3d11Module = GetModuleHandleW(L"d3d11.dll");
+    if (!d3d11Module) {
+      d3d11Module = LoadLibraryW(L"d3d11.dll");
+    }
+    if (d3d11Module) {
+      pD3D11CreateDevice = reinterpret_cast<decltype(&D3D11CreateDevice)>(GetProcAddress(d3d11Module, "D3D11CreateDevice"));
+    }
+  }
+
+  if (!pD3D11CreateDevice) {
+    return false;
+  }
+  // Dynamically load CreateDXGIFactory1 from dxgi.dll
+
+  if (!pCreateDXGIFactory1) {
+    HMODULE dxgiModule = GetModuleHandleW(L"dxgi.dll");
+    if (!dxgiModule) {
+      dxgiModule = LoadLibraryW(L"dxgi.dll");
+    }
+    if (dxgiModule) {
+      pCreateDXGIFactory1 = reinterpret_cast<decltype(&CreateDXGIFactory1)>(
+          GetProcAddress(dxgiModule, "CreateDXGIFactory1"));
+    }
+  }
+
+  if (!pCreateDXGIFactory1) {
+    return false;
+  }
+  return true;
+}
+
 inline ID3D11Device* GetDeviceProxy(reshade::api::swapchain* swapchain, reshade::api::command_queue* queue) {
   auto* hwnd = swapchain->get_hwnd();
   if (proxy_device != nullptr) {
     return proxy_device;
   }
 
+  if (!LoadDirectXLibraries()) return nullptr;
+
   // Create a new D3D11 device and HDR10 swapchain
   IDXGIFactory2* dxgi_factory = nullptr;
 
-  if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory)))) {
+  if (FAILED(pCreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory)))) {
     return nullptr;
   }
 
@@ -793,8 +827,9 @@ inline ID3D11Device* GetDeviceProxy(reshade::api::swapchain* swapchain, reshade:
   D3D_FEATURE_LEVEL feature_level;
 
   assert(is_creating_proxy_device == false);
+  assert(proxy_device_reshade == nullptr);
   is_creating_proxy_device = true;
-  if (FAILED(D3D11CreateDevice(
+  if (FAILED(pD3D11CreateDevice(
           nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, create_flags,
           nullptr, 0, D3D11_SDK_VERSION, &proxy_device, &feature_level, &proxy_device_context))) {
     is_creating_proxy_device = false;
@@ -806,6 +841,7 @@ inline ID3D11Device* GetDeviceProxy(reshade::api::swapchain* swapchain, reshade:
     return nullptr;
   }
   is_creating_proxy_device = false;
+  assert(proxy_device_reshade != nullptr);
 
   // Create swapchain for HWND
   if (FAILED(dxgi_factory->CreateSwapChainForHwnd(
