@@ -9,22 +9,24 @@
 #include <cstdint>
 #include <cstring>
 
-#include <mutex>
-#include <shared_mutex>
 #include <span>
 #include <sstream>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
+#include <gtl/phmap.hpp>
 #include <include/reshade.hpp>
 
 #include "./bitwise.hpp"
 #include "./data.hpp"
 #include "./format.hpp"
+#include "./pipeline_layout.hpp"
 
 namespace renodx::utils::constants {
 
-static bool capture_constant_buffers = true;
+static std::atomic_bool capture_constant_buffers = false;
+static std::atomic_bool capture_push_descriptors = false;
 
 namespace internal {
 static bool is_primary_hook = false;
@@ -32,15 +34,33 @@ static bool is_primary_hook = false;
 static bool attached = false;
 }  // namespace internal
 
+struct BufferRangeData {
+  std::vector<uint8_t> cache;
+  std::vector<uint8_t> history;
+  std::span<uint8_t> mapping;  // only available when mappped
+};
+
+struct BoundSlotData {
+  reshade::api::pipeline_layout layout = {0u};
+  uint32_t param_index = 0;
+  reshade::api::shader_stage stages = reshade::api::shader_stage(0u);
+  reshade::api::buffer_range buffer_range = {};
+  reshade::api::descriptor_table_update update = {};
+};
+
+static struct Store {
+  gtl::parallel_node_hash_map<uint64_t, BufferRangeData> buffer_range_data;
+} local_store;
+
+static Store* store = &local_store;
+
 struct __declspec(uuid("1aa69bfe-5467-47e1-9c8e-c6b935198169")) DeviceData {
-  std::shared_mutex mutex;
+  Store* store;
   std::unordered_map<uint64_t, std::vector<reshade::api::pipeline_layout_param>> pipeline_layout_params;
-  std::unordered_map<uint64_t, std::vector<uint8_t>> buffer_cache;
-  std::unordered_map<uint64_t, std::vector<uint8_t>> buffer_history;
-  std::unordered_map<uint64_t, std::span<uint8_t>> buffer_mapping;
 };
 
 struct __declspec(uuid("f8805bac-a932-49ef-b0c9-e4db1a8b33fc")) CommandListData {
+  gtl::parallel_flat_hash_map<std::pair<uint8_t, uint8_t>, BoundSlotData> bound_slots;
 };
 
 static void OnInitDevice(reshade::api::device* device) {
@@ -56,6 +76,7 @@ static void OnInitDevice(reshade::api::device* device) {
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
     internal::is_primary_hook = true;
+    data->store = store;
   } else {
     std::stringstream s;
     s << "utils::constants::OnInitDevice(Attaching to hook: ";
@@ -63,6 +84,7 @@ static void OnInitDevice(reshade::api::device* device) {
     s << ", api: " << device->get_api();
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    store = data->store;
   }
 }
 
@@ -94,52 +116,41 @@ static void OnInitResource(
 
   if (!renodx::utils::bitwise::HasFlag(desc.usage, reshade::api::resource_usage::constant_buffer)) return;
 
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  if (data == nullptr) return;
-  const std::unique_lock lock(data->mutex);
-
   if (initial_data == nullptr) {
     if (desc.buffer.size > 64 * 1024) {
       // Invalid size?
+      store->buffer_range_data.erase(resource.handle);
       return;
     }
-    data->buffer_cache[resource.handle] = std::vector<uint8_t>(desc.buffer.size, 0);
+    store->buffer_range_data[resource.handle] = {
+        .cache = std::vector<uint8_t>(desc.buffer.size, 0),
+        .history = {},
+        .mapping = {},
+    };
   } else {
-    data->buffer_cache[resource.handle] = {
-        static_cast<uint8_t*>(initial_data->data),
-        static_cast<uint8_t*>(initial_data->data) + desc.buffer.size,
+    store->buffer_range_data[resource.handle] = {
+        .cache = {
+            static_cast<uint8_t*>(initial_data->data),
+            static_cast<uint8_t*>(initial_data->data) + desc.buffer.size,
+        },
+        .history = {},
+        .mapping = {},
     };
   }
-  data->buffer_mapping[resource.handle] = {};
 }
 
 static void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
   if (!internal::is_primary_hook) return;
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  if (data == nullptr) return;
-  const std::unique_lock lock(data->mutex);
-  data->buffer_mapping.erase(resource.handle);
-  auto pair = data->buffer_cache.find(resource.handle);
-  if (pair != data->buffer_cache.end()) {
-    data->buffer_history[resource.handle] = pair->second;
-    data->buffer_cache.erase(pair);
-  }
-}
+  if (!capture_constant_buffers) return;
 
-static void OnInitPipelineLayout(
-    reshade::api::device* device,
-    const uint32_t param_count,
-    const reshade::api::pipeline_layout_param* params,
-    reshade::api::pipeline_layout layout) {
-  if (!internal::is_primary_hook) return;
-
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  if (data == nullptr) return;
-  const std::unique_lock lock(data->mutex);
-  std::vector<reshade::api::pipeline_layout_param> cloned_params = {
-      params, params + param_count};
-
-  data->pipeline_layout_params[layout.handle] = cloned_params;
+  auto pair = store->buffer_range_data.find(resource.handle);
+  if (pair == store->buffer_range_data.end()) return;
+  auto& data = pair->second;
+  data = {
+      .cache = {},
+      .history = data.cache,
+      .mapping = {},
+  };
 }
 
 static void OnMapBufferRegion(
@@ -151,21 +162,18 @@ static void OnMapBufferRegion(
     void** mapped_data) {
   if (!internal::is_primary_hook) return;
   if (!capture_constant_buffers) return;
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  if (data == nullptr) return;
-  std::shared_lock read_lock(data->mutex);
-  auto pair = data->buffer_mapping.find(resource.handle);
-  if (pair == data->buffer_mapping.end()) return;
-  read_lock.unlock();
-  std::unique_lock write_lock(data->mutex);
+
+  auto pair = store->buffer_range_data.find(resource.handle);
+  if (pair == store->buffer_range_data.end()) return;
+  auto& data = pair->second;
   uint8_t* start = *(reinterpret_cast<uint8_t**>(mapped_data));
   if (size == UINT64_MAX) {
     auto desc = device->get_resource_desc(resource);
-    pair->second = {
+    data.mapping = {
         start + offset,
         start + offset + desc.buffer.size};
   } else {
-    pair->second = {
+    data.mapping = {
         start + offset,
         start + offset + size};
   }
@@ -176,26 +184,16 @@ static void OnUnmapBufferRegion(
     reshade::api::resource resource) {
   if (!internal::is_primary_hook) return;
   if (!capture_constant_buffers) return;
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  if (data == nullptr) return;
-  std::shared_lock read_lock(data->mutex);
-  auto pair = data->buffer_mapping.find(resource.handle);
-  if (pair == data->buffer_mapping.end()) return;
-  // Update contents of
-  read_lock.unlock();
+  auto pair = store->buffer_range_data.find(resource.handle);
+  if (pair == store->buffer_range_data.end()) return;
+  auto& data = pair->second;
 
-  std::unique_lock write_lock(data->mutex);
-
-  auto pair2 = data->buffer_cache.find(resource.handle);
-  if (pair2 != data->buffer_cache.end()) {
-    pair2->second.assign(
-        static_cast<uint8_t*>(pair->second.data()),
-        static_cast<uint8_t*>(pair->second.data()) + pair->second.size());
+  if (data.mapping.empty()) {
+    std::ranges::fill(data.cache, 0);
   } else {
-    std::fill(pair2->second.begin(), pair2->second.end(), 0);
+    data.cache.assign(data.mapping.begin(), data.mapping.end());
   }
-
-  pair->second = {};
+  data.mapping = {};
 }
 
 static bool OnUpdateBufferRegion(
@@ -205,22 +203,14 @@ static bool OnUpdateBufferRegion(
   if (!internal::is_primary_hook) return false;
   if (!capture_constant_buffers) return false;
 
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  if (data == nullptr) return false;
-  std::shared_lock read_lock(data->mutex);
-  auto pair = data->buffer_mapping.find(resource.handle);
-  if (pair == data->buffer_mapping.end()) return false;
-  read_lock.unlock();
+  auto pair = store->buffer_range_data.find(resource.handle);
+  if (pair == store->buffer_range_data.end()) return false;
+  auto& data = pair->second;
 
-  auto pair2 = data->buffer_cache.find(resource.handle);
-  auto desc = device->get_resource_desc(resource);
-  if (pair2 == data->buffer_cache.end()) {
-    auto new_data = std::vector<uint8_t>(desc.buffer.size, 0);
-    memcpy(new_data.data() + offset, static_cast<const uint8_t*>(buffer_data) + offset, size);
-    data->buffer_cache[resource.handle] = new_data;
-  } else {
-    memcpy(pair2->second.data() + offset, static_cast<const uint8_t*>(buffer_data) + offset, size);
+  if (data.cache.size() < offset + size) {
+    data.cache.resize(offset + size, 0);
   }
+  memcpy(data.cache.data() + offset, static_cast<const uint8_t*>(buffer_data) + offset, size);
 
   return false;
 }
@@ -242,53 +232,166 @@ static void OnPushDescriptors(
     uint32_t layout_param,
     const reshade::api::descriptor_table_update& update) {
   if (!internal::is_primary_hook) return;
-  if (!capture_constant_buffers) return;
+  if (!capture_push_descriptors) return;
+  auto* cmd_list_data = cmd_list->get_private_data<CommandListData>();
+  if (cmd_list_data == nullptr) return;
 
-  bool fetched_param = false;
-  reshade::api::pipeline_layout_param param;
-
+  renodx::utils::pipeline_layout::PipelineLayoutData* layout_data = nullptr;
   for (uint32_t i = 0; i < update.count; i++) {
     if (update.type != reshade::api::descriptor_type::constant_buffer) continue;
 
-    if (!fetched_param) {
-      auto* device = cmd_list->get_device();
-      auto* device_data = renodx::utils::data::Get<DeviceData>(device);
-      if (device_data == nullptr) return;
-      std::shared_lock lock(device_data->mutex);
-      auto pair = device_data->pipeline_layout_params.find(layout.handle);
-      if (pair == device_data->pipeline_layout_params.end()) {
-        reshade::log::message(reshade::log::level::error, "Could not find handle.");
-        // add warning
+    if (layout_data == nullptr) {
+      layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(layout, true);
+      if (layout_data == nullptr) {
+        assert(layout_data != nullptr);
         return;
       }
-      auto layout_params = pair->second;
-      param = layout_params[layout_param];
-      fetched_param = true;
     }
 
-    uint32_t dx_register_index = param.push_constants.dx_register_index;
+    auto& param = layout_data->params[layout_param];
+
+    uint32_t dx_register_index = param.push_constants.dx_register_index + update.binding + i;
     uint32_t dx_register_space = param.push_constants.dx_register_space;
-    auto buffer_range = static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
-    auto slot = std::pair<uint32_t, uint32_t>(dx_register_index + update.binding + i, dx_register_space);
+    const auto& buffer_range = static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
+    auto slot = std::pair<uint32_t, uint32_t>(dx_register_index, dx_register_space);
+    auto& data = cmd_list_data->bound_slots[slot];
+    data.layout = layout;
+    data.param_index = layout_param;
+    data.stages = stages;
+    data.buffer_range = buffer_range;
+    data.update = update;
+    data.update.binding = update.binding + i;
+    data.update.descriptors = &data.buffer_range;
+
+#ifdef DEBUG_LEVEL_2
+    {
+      std::stringstream s;
+      s << "utils::constants::OnPushDescriptors(";
+      s << PRINT_PTR(data.layout.handle);
+      s << "[" << data.param_index << "]";
+      s << "[" << data.update.binding << "]";
+      s << ", dx_register_index: " << dx_register_index;
+      s << ", dx_register_space: " << dx_register_space;
+      s << ", stages: " << data.stages;
+      s << ", buffer_range: " << PRINT_PTR(data.buffer_range.buffer.handle);
+      if (data.buffer_range.size == UINT64_MAX) {
+        s << "[all]";
+      } else if (data.buffer_range.size == 0) {
+        s << "[empty]";
+      } else {
+        s << "[" << data.buffer_range.offset;
+        s << " - " << data.buffer_range.offset + data.buffer_range.size << "]";
+      }
+      s << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    }
+#endif
   }
 }
 
 inline std::vector<uint8_t> GetResourceCache(reshade::api::device* device, reshade::api::resource resource) {
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  if (data == nullptr) return {};
-  std::shared_lock read_lock(data->mutex);
-  auto pair = data->buffer_cache.find(resource.handle);
-  if (pair != data->buffer_cache.end()) return pair->second;
-  return {};
+  auto pair = store->buffer_range_data.find(resource.handle);
+  if (pair == store->buffer_range_data.end()) return {};
+  auto& data = pair->second;
+  return data.cache;
 }
 
 inline std::vector<uint8_t> GetResourceHistory(reshade::api::device* device, reshade::api::resource resource) {
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  if (data == nullptr) return {};
-  std::shared_lock read_lock(data->mutex);
-  auto pair = data->buffer_history.find(resource.handle);
-  if (pair != data->buffer_history.end()) return pair->second;
-  return {};
+  auto pair = store->buffer_range_data.find(resource.handle);
+  if (pair == store->buffer_range_data.end()) return {};
+  auto& data = pair->second;
+  return data.history;
+}
+
+inline void PushShaderInjections(
+    reshade::api::command_list* cmd_list,
+    reshade::api::pipeline_layout layout,
+    uint32_t layout_param = 0,
+    bool is_dispatch = false,
+    std::span<float> shader_injection = {},
+    uint32_t offset = 0.f,
+    float* resource_tag_float = nullptr,
+    float resource_tag = 0.f) {
+  auto device_api = cmd_list->get_device()->get_api();
+  bool use_root_constants = (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan);
+
+#ifdef DEBUG_LEVEL_2
+  std::stringstream s;
+  s << "utils::constants::PushShaderInjections(";
+  s << "layout: " << PRINT_PTR(layout.handle) << "[" << layout_param << "]";
+  s << ", dispatch: " << (is_dispatch ? "true" : "false");
+  s << ", resource_tag: " << resource_tag;
+  s << ")";
+  reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
+
+  if (resource_tag_float != nullptr) {
+    // const std::unique_lock lock(renodx::utils::mutex::global_mutex);
+    *resource_tag_float = resource_tag;
+  }
+
+  reshade::api::shader_stage shader_stage;
+  if (device_api == reshade::api::device_api::d3d9) {
+    shader_stage = reshade::api::shader_stage::pixel;
+  } else if (is_dispatch) {
+    shader_stage = reshade::api::shader_stage::all_compute;
+  } else {
+    shader_stage = reshade::api::shader_stage::all_graphics;
+  }
+
+  // const std::shared_lock lock(renodx::utils::mutex::global_mutex);
+  cmd_list->push_constants(
+      shader_stage,
+      layout,
+      layout_param,
+      offset,
+      shader_injection.size(),
+      shader_injection.data());
+}
+
+static bool RevertBufferRange(reshade::api::command_list* cmd_list, uint32_t dx_register_index, uint32_t dx_register_space = 0) {
+  auto* cmd_list_data = cmd_list->get_private_data<CommandListData>();
+  if (cmd_list_data == nullptr) {
+    reshade::log::message(reshade::log::level::warning, "Could not find command list data.");
+    return false;
+  }
+
+  auto slot = std::pair<uint32_t, uint32_t>(dx_register_index, dx_register_space);
+  auto it = cmd_list_data->bound_slots.find(slot);
+  if (it == cmd_list_data->bound_slots.end()) return false;
+  auto& data = it->second;
+
+#ifdef DEBUG_LEVEL_2
+  {
+    std::stringstream s;
+    s << "utils::constants::RevertBufferRange(";
+    s << PRINT_PTR(data.layout.handle);
+    s << "[" << data.param_index << "]";
+    s << "[" << data.update.binding << "]";
+    s << ", dx_register_index: " << dx_register_index;
+    s << ", dx_register_space: " << dx_register_space;
+    s << ", stages: " << data.stages;
+    s << ", buffer_range: " << PRINT_PTR(data.buffer_range.buffer.handle);
+    if (data.buffer_range.size == UINT64_MAX) {
+      s << "[all]";
+    } else if (data.buffer_range.size == 0) {
+      s << "[empty]";
+    } else {
+      s << "[" << data.buffer_range.offset;
+      s << " - " << data.buffer_range.offset + data.buffer_range.size << "]";
+    }
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+  }
+#endif
+
+  cmd_list->push_descriptors(
+      data.stages,
+      data.layout,
+      data.param_index,
+      data.update);
+
+  return true;
 }
 
 static void Use(DWORD fdw_reason) {
@@ -300,29 +403,34 @@ static void Use(DWORD fdw_reason) {
 
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
-      reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
-      reshade::register_event<reshade::addon_event::init_resource>(OnInitResource);
-      reshade::register_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
-      reshade::register_event<reshade::addon_event::init_pipeline_layout>(OnInitPipelineLayout);
-      reshade::register_event<reshade::addon_event::push_constants>(OnPushConstants);
-      reshade::register_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
-
-      reshade::register_event<reshade::addon_event::map_buffer_region>(OnMapBufferRegion);
-      reshade::register_event<reshade::addon_event::unmap_buffer_region>(OnUnmapBufferRegion);
-      reshade::register_event<reshade::addon_event::update_buffer_region>(OnUpdateBufferRegion);
+      if (capture_push_descriptors) {
+        reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
+        reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
+        reshade::register_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
+      }
+      if (capture_constant_buffers) {
+        reshade::register_event<reshade::addon_event::init_resource>(OnInitResource);
+        reshade::register_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
+        reshade::register_event<reshade::addon_event::push_constants>(OnPushConstants);
+        reshade::register_event<reshade::addon_event::map_buffer_region>(OnMapBufferRegion);
+        reshade::register_event<reshade::addon_event::unmap_buffer_region>(OnUnmapBufferRegion);
+        reshade::register_event<reshade::addon_event::update_buffer_region>(OnUpdateBufferRegion);
+      }
 
       break;
 
     case DLL_PROCESS_DETACH:
-
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitCommandList);
       reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
-      reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(OnInitPipelineLayout);
-      reshade::unregister_event<reshade::addon_event::push_constants>(OnPushConstants);
       reshade::unregister_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
+      reshade::unregister_event<reshade::addon_event::init_resource>(OnInitResource);
+      reshade::unregister_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
+      reshade::unregister_event<reshade::addon_event::push_constants>(OnPushConstants);
+      reshade::unregister_event<reshade::addon_event::map_buffer_region>(OnMapBufferRegion);
+      reshade::unregister_event<reshade::addon_event::unmap_buffer_region>(OnUnmapBufferRegion);
+      reshade::unregister_event<reshade::addon_event::update_buffer_region>(OnUpdateBufferRegion);
       break;
   }
 }
