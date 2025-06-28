@@ -359,8 +359,8 @@ bool initialized = false;
 
 // NOLINTBEGIN(readability-identifier-naming)
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for HITMAN World of Assassination";
+extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for HITMAN World of Assassination";
 
 // NOLINTEND(readability-identifier-naming)
 
