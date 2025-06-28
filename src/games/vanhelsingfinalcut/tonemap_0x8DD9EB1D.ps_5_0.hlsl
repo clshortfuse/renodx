@@ -82,7 +82,7 @@ void main(
     } else if (injectedData.toneMapType == 5.f) {
       r0.rgb = applyDICE(r0.rgb, config);
     } else {
-      config.peak_nits = 10000.f;
+      config.peak_nits = gammaCorrectPeak(injectedData.toneMapPeakNits);
       config.gamma_correction = 0.f;
       r0.rgb = renodx::tonemap::config::Apply(r0.rgb, config);
     }
@@ -96,7 +96,7 @@ void main(
       sdrColor = applyDICE(r0.rgb, config, true);
       hdrColor = applyDICE(r0.rgb, config);
     } else {
-      config.peak_nits = 10000.f;
+      config.peak_nits = gammaCorrectPeak(injectedData.toneMapPeakNits);
       config.gamma_correction = 0.f;
       renodx::tonemap::config::DualToneMap tone_maps = renodx::tonemap::config::ApplyToneMaps(r0.rgb, config);
       sdrColor = tone_maps.color_sdr;

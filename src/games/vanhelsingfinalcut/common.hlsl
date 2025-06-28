@@ -121,11 +121,6 @@ float3 PostToneMapScale(float3 color) {
   }
   if (injectedData.toneMapType == 0.f) {
     color = renodx::color::bt709::clamp::BT709(color);
-  } else if (injectedData.toneMapType == 3.f || injectedData.toneMapType == 4.f) {
-    color = renodx::color::bt2020::from::BT709(color);
-    color = renodx::tonemap::ExponentialRollOff(color, injectedData.toneMapGameNits, injectedData.toneMapPeakNits);
-    color = max(0.f, color);
-    color = renodx::color::bt709::from::BT2020(color);
   } else {
     color = renodx::color::bt709::clamp::BT2020(color);
   }
@@ -321,4 +316,14 @@ float3 RestoreSaturationLoss(float3 color_input, float3 color_output, float stre
   perceptual_out.yz *= lerp(1.f, renodx::math::DivideSafe(chroma_new, chroma_out, 1.f), strength);
 
   return renodx::color::bt709::from::OkLab(perceptual_out);
+}
+
+float gammaCorrectPeak(float peak) {
+  if (injectedData.toneMapGammaCorrection == 0.f) {
+   return renodx::color::gamma::Decode(renodx::color::srgb::Encode(peak / injectedData.toneMapGameNits), 2.2f) * injectedData.toneMapGameNits;
+  } else if (injectedData.toneMapGammaCorrection == 2.f) {
+    return renodx::color::gamma::Decode(renodx::color::gamma::Encode(peak / injectedData.toneMapGameNits, 2.4), 2.2f) * injectedData.toneMapGameNits;
+ } else {
+   return peak;
+ }
 }

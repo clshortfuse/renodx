@@ -113,11 +113,6 @@ float3 FinalizeOutput(float3 color) {
   color *= injectedData.toneMapUINits;
   	if(injectedData.toneMapType == 0.f) {
   color = renodx::color::bt709::clamp::BT709(color);
-  } else if (injectedData.toneMapType == 3.f || injectedData.toneMapType == 4.f) {
-    color = renodx::color::bt2020::from::BT709(color);
-    color = renodx::tonemap::ExponentialRollOff(color, injectedData.toneMapGameNits, injectedData.toneMapPeakNits);
-    color = max(0.f, color);
-    color = renodx::color::bt709::from::BT2020(color);
   } else {
   color = renodx::color::bt709::clamp::BT2020(color);
   }
@@ -263,6 +258,16 @@ float3 applyDICE(float3 input, renodx::tonemap::Config DiceConfig) {
   return color;
 }
 
+float gammaCorrectPeak(float peak) {
+  if (injectedData.toneMapGammaCorrection == 0.f) {
+   return renodx::color::gamma::Decode(renodx::color::srgb::Encode(peak / injectedData.toneMapGameNits), 2.2f) * injectedData.toneMapGameNits;
+  } else if (injectedData.toneMapGammaCorrection == 2.f) {
+    return renodx::color::gamma::Decode(renodx::color::gamma::Encode(peak / injectedData.toneMapGameNits, 2.4), 2.2f) * injectedData.toneMapGameNits;
+ } else {
+   return peak;
+ }
+}
+
 float3 applyUserTonemap(float3 untonemapped) {
   float3 outputColor;
   float3 hueCorrectionColor = vanillaTonemap(untonemapped);
@@ -302,7 +307,7 @@ float3 applyUserTonemap(float3 untonemapped) {
   } else if (injectedData.toneMapType == 5.f) {  // DICE
     outputColor = applyDICE(outputColor, config);
   } else {
-    config.peak_nits = 10000.f;
+    config.peak_nits = gammaCorrectPeak(injectedData.toneMapPeakNits);
     config.gamma_correction = 0.f;
     outputColor = renodx::tonemap::config::Apply(outputColor, config);
   }
