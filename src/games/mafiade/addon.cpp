@@ -317,9 +317,11 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeClip",
         .binding = &shader_injection.colorGradeClip,
-        .default_value = 11.f,
+        .default_value = 0.f,
         .label = "Clipping",
         .section = "Color Grading",
+        .tooltip = "0: automatic based on exposure"
+        "\nAny value: manual override",
         .tint = 0xC84638,
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType == 4.f; },
