@@ -3816,8 +3816,8 @@ class Decompiler {
             // @"\01?shPixelsY@@3PAY0CG@$$CAMA.1dim" = addrspace(3) global [1444 x float] undef, align 4
             // @"\01?pixelOffsets@?1??DirectionalObscuranceCommon@@YA?AUSSDOOutput@@USSAOParams@@@Z@3QBV?$vector@M$01@@B.v.1dim" = internal constant [8 x float] [float -1.000000e+00, float 1.000000e+00, float 1.000000e+00, float 1.000000e+00, float 1.000000e+00, float -1.000000e+00, float -1.000000e+00, float -1.000000e+00], align 4
 
-            static auto regex = std::regex{R"(^(\S+) = (?:(internal|external) )?(?:(unnamed_addr|addrspace\(\d+\)) )?(constant|global) \[(\S+) x ([^\]]+)\](?:,|(?: \[([^\]]+)\])| undef).*)"};
-            auto [variable_name, scope, addr, qualifier, array_size, array_type, entries] = StringViewMatch<7>(line, regex);
+            static auto regex = std::regex{R"(^(\S+) = (?:(internal|external) )?(?:(unnamed_addr|addrspace\(\d+\)) )?(constant|global) (?:\[(\S+) x ([^\]]+)\]|(\S+))(?:,|(?: \[([^\]]+)\])| undef).*)"};
+            auto [variable_name, scope, addr, qualifier, array_size, array_type, value_type, entries] = StringViewMatch<8>(line, regex);
 
             std::string output_name = std::format("_global_{}", preprocess_state.global_variables.size());
 
@@ -3825,14 +3825,19 @@ class Decompiler {
 
             if (scope == "internal") {
               decompiled << "static const ";
-            } else if (scope == "external") {
+            } else if (scope == "external" || scope == "") {
               decompiled << "groupshared ";
             } else {
               throw std::exception("Unknown global variable scope.");
             }
-            decompiled << array_type << " ";
-            decompiled << output_name;
-            decompiled << "[" << array_size << "]";
+            if (!array_type.empty()) {
+              decompiled << array_type << " ";
+              decompiled << output_name;
+              decompiled << "[" << array_size << "]";
+            } else {
+              decompiled << value_type << " ";
+              decompiled << output_name;
+            }
             if (entries.empty()) {
               decompiled << ";";
             } else {
