@@ -2265,10 +2265,6 @@ class Decompiler {
 
           auto ref_resource = std::string{handle.substr(1)};
           auto [srv_name, range_index, resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
-          if (mip_level != "0") {
-            std::cerr << "Unexpected mipLevel: " << mip_level << "\n";
-            throw std::invalid_argument("Unexpected mipLevel");
-          }
           Resource::ResourceKind shape;
           if (resource_class == "0") {
             shape = preprocess_state.srv_resources[range_index].shape;
@@ -2277,21 +2273,34 @@ class Decompiler {
           } else {
             throw std::invalid_argument("Unknown @dx.op.textureLoad.f32 resource");
           }
+
+          std::string get_dimensions_arguments;
           switch (shape) {
             case SRVResource::ResourceKind::Texture1D:
-              decompiled = std::format("uint _{}; {}.GetDimensions(_{});", variable, srv_name, variable);
+              assignment_type = "uint";
+              get_dimensions_arguments = std::format("_{}", variable);
               break;
             case SRVResource::ResourceKind::Texture2D:
-              decompiled = std::format("uint2 _{}; {}.GetDimensions(_{}.x, _{}.y);", variable, srv_name, variable, variable);
+              assignment_type = "uint2";
+              get_dimensions_arguments = std::format("_{}.x, _{}.y", variable, variable);
               break;
             case SRVResource::ResourceKind::Texture2DArray:
             case SRVResource::ResourceKind::Texture3D:
-              decompiled = std::format("uint3 _{}; {}.GetDimensions(_{}.x, _{}.y, _{}.z);", variable, srv_name, variable, variable, variable);
+              assignment_type = "uint3";
+              get_dimensions_arguments = std::format("_{}.x, _{}.y, _{}.z", variable, variable, variable);
               break;
             default:
               std::cerr << "Unexpected shape: " << Resource::ResourceKindString(shape) << "\n";
               throw std::invalid_argument("Unexpected shape");
           }
+
+          if (mip_level != "0") {
+            decompiled = std::format("{} _{}; uint _{}_levels; {}.GetDimensions({}, {}, _{}_levels);",
+                                     assignment_type, variable, variable, srv_name, ParseUint(mip_level), get_dimensions_arguments, variable);
+          } else {
+            decompiled = std::format("{} _{}; {}.GetDimensions({});", assignment_type, variable, srv_name, get_dimensions_arguments);
+          }
+          is_identity = false;  // Can never be identity
         } else if (functionName == "@dx.op.sampleBias.f32") {
           // call %dx.types.ResRet.f32 @dx.op.sampleBias.f32(i32 61, %dx.types.Handle %66, %dx.types.Handle %67, float %62, float %63, float undef, float undef, i32 0, i32 0, i32 undef, float %65, float undef)  ; SampleBias(srv,sampler,coord0,coord1,coord2,coord3,offset0,offset1,offset2,bias,clamp)
           auto [op, srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, bias, clamp] = StringViewSplit<12>(functionParamsString, param_regex, 2);
@@ -2522,6 +2531,11 @@ class Decompiler {
           auto [op, value, lane] = StringViewSplit<3>(functionParamsString, param_regex, 2);
           assignment_type = "int";
           assignment_value = std::format("WaveReadLaneAt({},{})", ParseInt(value), ParseInt(lane));
+        } else if (functionName == "@dx.op.legacyF32ToF16") {
+          //   %1390 = call i32 @dx.op.legacyF32ToF16(i32 130, float %115)  ; LegacyF32ToF16(value)
+          auto [op, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
+          assignment_type = "uint";
+          assignment_value = std::format("f32tof16({})", ParseFloat(value));
         } else {
           std::cerr << line << "\n";
           std::cerr << "Function name: " << functionName << "\n";
@@ -3211,9 +3225,19 @@ class Decompiler {
         } else {
           coords = std::format("{}", ParseInt(coord0));
         }
-        const bool has_value_y = value1 != "undef";
-        const bool has_value_z = value2 != "undef";
-        const bool has_value_w = value3 != "undef";
+        bool has_value_y = value1 != "undef";
+        bool has_value_z = value2 != "undef";
+        bool has_value_w = value3 != "undef";
+
+        if (has_value_w && value3 == value0 && uav_resource.data_type != "float4") {
+          has_value_w = false;
+        }
+        if (has_value_z && value2 == value0 && uav_resource.data_type != "float3") {
+          has_value_z = false;
+        }
+        if (has_value_y && value1 == value0 && uav_resource.data_type != "float2") {
+          has_value_y = false;
+        }
         std::string value;
         if (has_value_w) {
           value = std::format("float4({}, {}, {}, {})", ParseFloat(value0), ParseFloat(value1), ParseFloat(value2), ParseFloat(value3));
@@ -3223,6 +3247,47 @@ class Decompiler {
           value = std::format("float2({}, {})", ParseFloat(value0), ParseFloat(value1));
         } else {
           value = std::format("{}", ParseFloat(value0));
+        }
+
+        decompiled = std::format("{}[{}] = {};", uav_name, coords, value);
+      } else if (functionName == "@dx.op.textureStore.i32") {
+        //     call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %1, i32 %12, i32 %13, i32 undef, i32 %1392, i32 %1405, i32 %1392, i32 %1392, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)
+        auto [opNumber, uav, coord0, coord1, coord2, value0, value1, value2, value3, mask] = StringViewSplit<10>(functionParamsString, param_regex, 2);
+        auto ref_resource = std::string{uav.substr(1)};
+        const bool has_coord_y = coord1 != "undef";
+        const bool has_coord_z = coord2 != "undef";
+        std::string coords;
+        auto [uav_name, uav_range_index, resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
+        auto uav_resource = preprocess_state.uav_resources[uav_range_index];
+        if (has_coord_z) {
+          coords = std::format("int3({}, {}, {})", ParseInt(coord0), ParseInt(coord1), ParseInt(coord2));
+        } else if (has_coord_y) {
+          coords = std::format("int2({}, {})", ParseInt(coord0), ParseInt(coord1));
+        } else {
+          coords = std::format("{}", ParseInt(coord0));
+        }
+        bool has_value_y = value1 != "undef";
+        bool has_value_z = value2 != "undef";
+        bool has_value_w = value3 != "undef";
+
+        if (has_value_w && value3 == value0 && uav_resource.data_type != "uint4") {
+          has_value_w = false;
+        }
+        if (has_value_z && value2 == value0 && uav_resource.data_type != "uint3") {
+          has_value_z = false;
+        }
+        if (has_value_y && value1 == value0 && uav_resource.data_type != "uint2") {
+          has_value_y = false;
+        }
+        std::string value;
+        if (has_value_w) {
+          value = std::format("int4({}, {}, {}, {})", ParseInt(value0), ParseInt(value1), ParseInt(value2), ParseInt(value3));
+        } else if (has_value_z) {
+          value = std::format("int3({}, {}, {})", ParseInt(value0), ParseInt(value1), ParseInt(value2));
+        } else if (has_value_y) {
+          value = std::format("int2({}, {})", ParseInt(value0), ParseInt(value1));
+        } else {
+          value = std::format("{}", ParseInt(value0));
         }
 
         decompiled = std::format("{}[{}] = {};", uav_name, coords, value);
@@ -3749,8 +3814,9 @@ class Decompiler {
             // @C.i.22.i.i.95.i.0.hca = internal unnamed_addr constant [6 x float] [float -4.000000e+00, float -4.000000e+00, float 0xC009424EA0000000, float 0xBFDF0E5600000000, float 0x3FFD904FE0000000, float 0x3FFD904FE0000000]
             // @"\01?g_ToneMapRadianceSamples@@3PAMA" = external addrspace(3) global [128 x float], align 4
             // @"\01?shPixelsY@@3PAY0CG@$$CAMA.1dim" = addrspace(3) global [1444 x float] undef, align 4
+            // @"\01?pixelOffsets@?1??DirectionalObscuranceCommon@@YA?AUSSDOOutput@@USSAOParams@@@Z@3QBV?$vector@M$01@@B.v.1dim" = internal constant [8 x float] [float -1.000000e+00, float 1.000000e+00, float 1.000000e+00, float 1.000000e+00, float 1.000000e+00, float -1.000000e+00, float -1.000000e+00, float -1.000000e+00], align 4
 
-            static auto regex = std::regex{R"(^(\S+) = (?:(\S*) )?([A-Za-z()0-9_]+) (\S+) \[(\S+) x ([^\]]+)\](?:,|(?: \[([^\]]+)\])| undef).*)"};
+            static auto regex = std::regex{R"(^(\S+) = (?:(internal|external) )?(?:(unnamed_addr|addrspace\(\d+\)) )?(constant|global) \[(\S+) x ([^\]]+)\](?:,|(?: \[([^\]]+)\])| undef).*)"};
             auto [variable_name, scope, addr, qualifier, array_size, array_type, entries] = StringViewMatch<7>(line, regex);
 
             std::string output_name = std::format("_global_{}", preprocess_state.global_variables.size());
@@ -3759,7 +3825,7 @@ class Decompiler {
 
             if (scope == "internal") {
               decompiled << "static const ";
-            } else if (scope == "external" || scope == "") {
+            } else if (scope == "external") {
               decompiled << "groupshared ";
             } else {
               throw std::exception("Unknown global variable scope.");
