@@ -78,6 +78,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
   UpgradeRTVReplaceShader(0x281E8F72),  // tonemap/LUT  
   UpgradeRTVReplaceShader(0x21AA1CAD),  // tonemap/LUT (native dither mod)
   UpgradeRTVReplaceShader(0xB49BF9C5),  // tonemap/LUT (native dither mod)
+  UpgradeRTVReplaceShader(0x6C147AAD),  // tonemap
+  UpgradeRTVReplaceShader(0x43701848),  // tonemap
   UpgradeRTVShader(0xDCFAB50E),  // motion blur
   UpgradeRTVShader(0x8032AD49),  // motion blur
   UpgradeRTVShader(0xE29C3783),  // motion blur
