@@ -2851,7 +2851,7 @@ class Decompiler {
         // sitofp i32 %47 to float
         auto [a] = StringViewMatch<1>(assignment, std::regex{R"(sitofp (?:\S+) (\S+) to (?:\S+))"});
         assignment_type = "float";
-        assignment_value = std::format("float{}", ParseWrapped(ParseInt(a)));
+        assignment_value = std::format("float((int){})", ParseWrapped(ParseInt(a)));
       } else if (instruction == "uitofp") {
         // uitofp i32 %158 to float
         // uitofp i16 %32 to float
@@ -3158,8 +3158,6 @@ class Decompiler {
         }
       } else if (functionName == "@dx.op.rawBufferStore.f32") {
         // call void @dx.op.rawBufferStore.f32(i32 140, %dx.types.Handle %1751, i32 0, i32 0, float %884, float %885, float %821, float %833, i8 15, i32 4)  ; RawBufferStore(uav,index,elementOffset,value0,value1,value2,value3,mask,alignment)
-        // call %dx.types.ResRet.f32 @dx.op.rawBufferLoad.f32(i32 139, %dx.types.Handle %21, i32 %20, i32 0, i8 15, i32 4)  ; RawBufferLoad(srv,index,elementOffset,mask,alignment)
-        // call %dx.types.ResRet.f32 @dx.op.rawBufferLoad.f32(i32 139, %dx.types.Handle %21, i32 %20, i32 32, i8 1, i32 4)  ; RawBufferLoad(srv,index,elementOffset,mask,alignment)
 
         auto [opNumber, uav, index, elementOffset, value0, value1, value2, value3, mask, alignment] = StringViewSplit<10>(functionParamsString, param_regex, 2);
         auto ref = std::string{uav.substr(1)};
@@ -3266,6 +3264,46 @@ class Decompiler {
         } else {
           coords = std::format("{}", ParseInt(coord0));
         }
+        bool has_value_y = value1 != "undef";
+        bool has_value_z = value2 != "undef";
+        bool has_value_w = value3 != "undef";
+
+        if (has_value_w && value3 == value0 && uav_resource.data_type != "uint4") {
+          has_value_w = false;
+        }
+        if (has_value_z && value2 == value0 && uav_resource.data_type != "uint3") {
+          has_value_z = false;
+        }
+        if (has_value_y && value1 == value0 && uav_resource.data_type != "uint2") {
+          has_value_y = false;
+        }
+        std::string value;
+        if (has_value_w) {
+          value = std::format("int4({}, {}, {}, {})", ParseInt(value0), ParseInt(value1), ParseInt(value2), ParseInt(value3));
+        } else if (has_value_z) {
+          value = std::format("int3({}, {}, {})", ParseInt(value0), ParseInt(value1), ParseInt(value2));
+        } else if (has_value_y) {
+          value = std::format("int2({}, {})", ParseInt(value0), ParseInt(value1));
+        } else {
+          value = std::format("{}", ParseInt(value0));
+        }
+
+        decompiled = std::format("{}[{}] = {};", uav_name, coords, value);
+      } else if (functionName == "@dx.op.bufferStore.i32") {
+        // call void @dx.op.bufferStore.i32(i32 69, %dx.types.Handle %1, i32 %17, i32 undef, i32 %438, i32 %438, i32 %438, i32 %438, i8 15)  ; BufferStore(uav,coord0,coord1,value0,value1,value2,value3,mask)
+
+        auto [opNumber, uav, coord0, coord1, value0, value1, value2, value3, mask] = StringViewSplit<9>(functionParamsString, param_regex, 2);
+        auto ref = std::string{uav.substr(1)};
+        const bool has_coord_y = coord1 != "undef";
+        std::string coords;
+        auto [uav_name, uav_range_index, resource_class] = preprocess_state.resource_binding_variables.at(ref);
+        auto uav_resource = preprocess_state.uav_resources[uav_range_index];
+        if (has_coord_y) {
+          coords = std::format("int2({}, {})", ParseInt(coord0), ParseInt(coord1));
+        } else {
+          coords = std::format("{}", ParseInt(coord0));
+        }
+
         bool has_value_y = value1 != "undef";
         bool has_value_z = value2 != "undef";
         bool has_value_w = value3 != "undef";
