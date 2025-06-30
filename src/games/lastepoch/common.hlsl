@@ -145,7 +145,7 @@ float3 arriDecode(float3 color) {
 }
 
 float3 lutShaper(float3 color, bool builder = false) {
-  if (injectedData.colorGradeLUTSampling == 0.f) {
+  if (injectedData.colorGradeLUTShaper == 0.f) {
     color = builder ? arriDecode(color)
                     : saturate(renodx::color::arri::logc::c1000::Encode(color));
   } else {
