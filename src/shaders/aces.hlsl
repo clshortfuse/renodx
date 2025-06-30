@@ -534,7 +534,7 @@ float4 ODT(float4 rgb_pre, float min_y, float max_y, float3x3 odt_matrix = renod
   return output_color;
 }
 
-float4 ODT(float rgb_pre, float min_y, float max_y) {
+float ODT(float rgb_pre, float min_y, float max_y) {
   float tonescaled = ODTToneMap(rgb_pre, min_y, max_y);
 
   float output_color = tonescaled;
