@@ -168,9 +168,11 @@ inline void OnBindRenderTargetsAndDepthStencil(
   auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (cmd_list_data == nullptr) return;
   const bool found_swapchain_rtv = false;
-  cmd_list_data->current_render_targets.assign(rtvs, rtvs + count);
+  if (count != 0) {
+    cmd_list_data->current_render_targets.assign(rtvs, rtvs + count);
+    cmd_list_data->has_swapchain_render_target_dirty = true;
+  }
   cmd_list_data->current_depth_stencil = dsv;
-  cmd_list_data->has_swapchain_render_target_dirty = true;
 }
 
 static void OnBeginRenderPass(
