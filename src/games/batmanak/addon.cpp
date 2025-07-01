@@ -7,62 +7,66 @@
 
 #define DEBUG_LEVEL_0
 
-#include <embed/shaders.h>
+#include <atomic>
 
 #include <deps/imgui/imgui.h>
+#include <embed/shaders.h>
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
-#include "../../utils/swapchain.hpp"
 #include "./shared.h"
 
 namespace {
 
 ShaderInjectData shader_injection;
 
+std::atomic_uint64_t g_current_uav0 = 0;
+
+bool OnToneMapDraw(reshade::api::command_list* cmd_list) {
+  reshade::api::resource_view current_uav0 = {g_current_uav0};
+  auto* resource_view_info = renodx::utils::resource::GetResourceViewInfo(current_uav0);
+  if (resource_view_info->resource_info == nullptr) return true;
+  if (resource_view_info->resource_info->clone_enabled) return true;
+  resource_view_info->resource_info->clone_enabled = true;
+  renodx::mods::swapchain::FlushDescriptors(cmd_list);  // Not implemented yet, will fix next draw
+  return true;
+}
+
 renodx::mods::shader::CustomShaders custom_shaders = {
-    {
-        // UI Text and Text Shadow (With alpha)
-        0x2C2D0899,
-        {
-            .crc32 = 0x2C2D0899,
-            .code = __0x2C2D0899,
-            .on_replace = [](auto cmd_list) {
-              CUSTOM_HAS_DRAWN_MENU = 1.f;
-              return &renodx::utils::swapchain::HasBackBufferRenderTarget;
-            },
-        },
-    },
-    CustomSwapchainShader(0x5DAD9473),  // ui
-                                        // CustomSwapchainShader(0x311E0BDA),  // ui
-                                        // CustomSwapchainShader(0x2AC7F89E),  // ui
-                                        // CustomSwapchainShader(0x7527C8AD),  // ui
-                                        // CustomSwapchainShader(0xF3B4727D),  // ui
-                                        // CustomSwapchainShader(0x8D4B625A),  // ui
-                                        // CustomSwapchainShader(0xBD36EC09),  // ui
-                                        // CustomSwapchainShader(0x420BA351),  // ui
-                                        // CustomSwapchainShader(0xFE8B44FC),  // ui
-                                        // CustomSwapchainShader(0xB4B3061C),  // ui
-                                        // CustomSwapchainShader(0xDB56A8CA),  // ui
-                                        // CustomSwapchainShader(0x45741188),  // ui
-    CustomSwapchainShader(0x8CBD2352),  // ui
-    CustomSwapchainShader(0xD6A846C8),  // unknown
-    CustomSwapchainShader(0x0C142BB2),  // unknown
-                                        // CustomSwapchainShader(0x8F20CC31),  // unknown
-    CustomSwapchainShader(0x931FF3DD),  // unknown
-    CustomSwapchainShader(0x93793FBB),  // unknown
-                                        // CustomSwapchainShader(0xC6D12ACD),  // unknown
-    CustomSwapchainShader(0xCD1E0E4C),  // unknown video
-                                        // CustomSwapchainShader(0xDB45CCFE),  // unknown
-    CustomSwapchainShader(0x12200F17),  // video
-    CustomShaderEntry(0xB6B56605),      // tonemap
-    CustomShaderEntry(0x978BFB09),      // tonemap + motionblur
-    CustomShaderEntry(0xF01CCC7E),      // tonemap + fx
-    CustomShaderEntry(0x3A4E0B90),      // tonemap + fx + motionblur
-    CustomShaderEntry(0xB42A7F40),      // lens flare
+    CustomShaderEntryCallback(0x2C2D0899, [](reshade::api::command_list* cmd_list) {
+      CUSTOM_HAS_DRAWN_MENU = 1.f;
+      return &renodx::utils::swapchain::HasBackBufferRenderTarget;
+    }),
+    CustomSwapchainShader(0x5DAD9473),                      // ui
+                                                            // CustomSwapchainShader(0x311E0BDA),  // ui
+                                                            // CustomSwapchainShader(0x2AC7F89E),  // ui
+                                                            // CustomSwapchainShader(0x7527C8AD),  // ui
+                                                            // CustomSwapchainShader(0xF3B4727D),  // ui
+                                                            // CustomSwapchainShader(0x8D4B625A),  // ui
+                                                            // CustomSwapchainShader(0xBD36EC09),  // ui
+                                                            // CustomSwapchainShader(0x420BA351),  // ui
+                                                            // CustomSwapchainShader(0xFE8B44FC),  // ui
+                                                            // CustomSwapchainShader(0xB4B3061C),  // ui
+                                                            // CustomSwapchainShader(0xDB56A8CA),  // ui
+                                                            // CustomSwapchainShader(0x45741188),  // ui
+    CustomSwapchainShader(0x8CBD2352),                      // ui
+    CustomSwapchainShader(0xD6A846C8),                      // unknown
+    CustomSwapchainShader(0x0C142BB2),                      // unknown
+                                                            // CustomSwapchainShader(0x8F20CC31),  // unknown
+    CustomSwapchainShader(0x931FF3DD),                      // unknown
+    CustomSwapchainShader(0x93793FBB),                      // unknown
+                                                            // CustomSwapchainShader(0xC6D12ACD),  // unknown
+    CustomSwapchainShader(0xCD1E0E4C),                      // unknown video
+                                                            // CustomSwapchainShader(0xDB45CCFE),  // unknown
+    CustomSwapchainShader(0x12200F17),                      // video
+    CustomShaderEntryCallback(0xB6B56605, &OnToneMapDraw),  // tonemap
+    CustomShaderEntryCallback(0x978BFB09, &OnToneMapDraw),  // tonemap + motionblur
+    CustomShaderEntryCallback(0xF01CCC7E, &OnToneMapDraw),  // tonemap + fx
+    CustomShaderEntryCallback(0x3A4E0B90, &OnToneMapDraw),  // tonemap + fx + motionblur
+    CustomShaderEntry(0xB42A7F40),                          // lens flare
 };
 
 renodx::utils::settings::Settings settings = {
@@ -416,30 +420,23 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     settings[1]->can_reset = true;
   }
 }
-bool OnCopyTextureRegion(
+
+inline void OnPushDescriptors(
     reshade::api::command_list* cmd_list,
-    reshade::api::resource source,
-    uint32_t source_subresource,
-    const reshade::api::subresource_box* source_box,
-    reshade::api::resource dest,
-    uint32_t dest_subresource,
-    const reshade::api::subresource_box* dest_box,
-    reshade::api::filter_mode filter) {
-  // Game performs this copy to swapchain.
-  // Skip checking destination. Just check if source is hotswappable
-  auto* resource_info = renodx::utils::resource::GetResourceInfo(source);
-  if (resource_info == nullptr) return false;
-  if (resource_info->clone_enabled) return false;
-  if (resource_info->clone_target == nullptr) return false;
-  std::stringstream s;
-  s << "OnCopyTextureRegion(Upgrading source resource";
-  // s << reinterpret_cast<uintptr_t>(source.handle);
-  s << ")";
-  reshade::log::message(reshade::log::level::info, s.str().c_str());
+    reshade::api::shader_stage stages,
+    reshade::api::pipeline_layout layout,
+    uint32_t layout_param,
+    const reshade::api::descriptor_table_update& update) {
+  if (update.count == 0u) return;
 
-  resource_info->clone_enabled = true;
-
-  return false;
+  for (uint32_t i = 0; i < update.count; i++) {
+    if (update.type != reshade::api::descriptor_type::texture_unordered_access_view) continue;
+    // Optimized: Use hardcoded Reshade DX11 psuedo-layout values
+    if (layout_param != 3) continue;          // Only UAVs
+    if ((update.binding + i) != 0) continue;  // Only for slot 0
+    g_current_uav0 = static_cast<const reshade::api::resource_view*>(update.descriptors)[i].handle;
+    return;
+  }
 }
 
 }  // namespace
@@ -475,11 +472,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::register_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
+      reshade::register_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::unregister_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
+      reshade::unregister_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
       reshade::unregister_addon(h_module);
       break;
   }
