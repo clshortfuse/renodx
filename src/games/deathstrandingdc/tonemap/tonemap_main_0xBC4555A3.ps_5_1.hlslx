@@ -1,0 +1,433 @@
+#include "../common.hlsli"
+
+// ---- Created with 3Dmigoto v1.4.1 on Mon Jun 30 11:30:36 2025
+Texture3D<float4> Rgb3dLookupTexture : register(t9, space8);
+
+Texture2D<float4> GrainTexture : register(t8, space8);
+
+Texture2D<float4> FlareTexture : register(t7, space8);
+
+Texture2D<float4> LightShaftTexture : register(t6, space8);
+
+Texture2D<float4> BloomAndGrainWeightTexture : register(t5, space8);
+
+Texture2D<float4> DoFMaskTexture : register(t4, space8);
+
+Texture2D<float4> FarDoFTexture : register(t3, space8);
+
+Texture2D<float4> NearDoFTexture : register(t2, space8);
+
+Texture2D<float4> CoCTexture : register(t1, space8);
+
+Texture2D<float4> SceneTexture : register(t0, space8);
+
+SamplerState s2_s : register(s2, space8);
+
+SamplerState s1_s : register(s1, space8);
+
+SamplerState s0_s : register(s0, space8);
+
+RWBuffer<float4> rwRenderInfo : register(u0, space8);  // missed by decompiler
+
+// cbuffer cb0 : register(b0, space8) {
+//   float4 cb0[20];
+// }
+
+cbuffer ShaderInstance_PerInstance : register(b0, space8) {
+  // cb0[0] : offset 0
+  float2 mRgb3dLookupScaleBias;  // offset 0,   mRgb3dLookupScaleBias.x mRgb3dLookupScaleBias.y
+  float mLightShaftIntensity;    // offset 8,   mLightShaftIntensity
+  float _pad0;                   // offset 12,  cb0[0].w (padding for alignment)
+
+  // cb0[1] : offset 16
+  float4 mLightShaftColor;  // offset 16,  mLightShaftColor.rgb
+
+  // cb0[2] : offset 32
+  float mDistortionIntensity;         // offset 32,  cb0[2].x
+  float mDistortionFalloffIntensity;  // offset 36,  cb0[2].y
+  float mDistortionFalloffPower0;     // offset 40,  cb0[2].z
+  float mDistortionFalloffPower1;     // offset 44,  cb0[2].w
+
+  // cb0[3] : offset 48
+  float mDistortionFalloffHorizontal;       // offset 48,  cb0[3].x
+  float2 mDistortionAspectRatioMultiplier;  // offset 52,  cb0[3].y, cb0[3].z
+  float mContrastIntensity;                 // offset 56,  mContrastIntensity
+
+  // cb0[4] : offset 64
+  float mGrainWeightScale;  // offset 64,  mGrainWeightScale
+  float mVignetteScale;     // offset 68,  mVignetteScale
+  float mVignetteBias;      // offset 72,  mVignetteBias
+  float _pad1;              // offset 76,  cb0[4].w (padding for alignment)
+
+  // cb0[5] : offset 80
+  float4 mVignetteColor;  // offset 80,  mVignetteColor
+
+  // cb0[6] : offset 96
+  float4 mExposureControl;  // offset 96,  mExposureControl
+
+  // cb0[7] : offset 112
+  float4 mHDRCompressionControl;  // offset 112, mHDRCompressionControl
+
+  // cb0[8] : offset 128
+  float4 mHDRDebugControl;  // offset 128, mHDRDebugControl
+
+  // cb0[9] : offset 144
+  float4 mHDROutputControl;  // offset 144, mHDROutputControl
+
+  // cb0[10] : offset 160
+  float4 mOETFSettings;  // offset 160, mOETFSettings
+
+  // cb0[11] : offset 176
+  float4 mKjpGammaSettings;  // offset 176, mKjpGammaSettings
+
+  // cb0[12] : offset 192
+  float4 mHDRCompressionParam1;  // offset 192, mHDRCompressionParam1
+
+  // cb0[13] : offset 208
+  float4 mHDRCompressionParam2;  // offset 208, mHDRCompressionParam2
+
+  // cb0[14] : offset 224
+  float4 mHDRCompressionParam3;  // offset 224, mHDRCompressionParam3
+
+  // cb0[15] : offset 240
+  float4 mWhiteBalanceControl;  // offset 240, mWhiteBalanceControl
+
+  // cb0[16] : offset 256
+  float4 mFullResUvClamp;  // offset 256, mFullResUvClamp
+
+  // cb0[17] : offset 272
+  float4 mHalfResUvClamp;  // offset 272, mHalfResUvClamp
+
+  // cb0[18] : offset 288
+  float4 mQuarterResUvClamp;  // offset 288, mQuarterResUvClamp
+
+  // cb0[19] : offset 304
+  float4 mCoCScale;  // offset 304, mCoCScale
+
+  // cb0[20] : offset 320
+  uint4 mTileSizeMultiplier;  // offset 320, mTileSizeMultiplier
+};
+
+// 3Dmigoto declarations
+#define cmp -
+
+void main(
+    float4 v0: SV_POSITION0,
+    float2 v1: TEXCOORD0,
+    float2 w1: TEXCOORD1,
+    float4 v2: TEXCOORD2,
+    out float4 o0: SV_TARGET0,
+    out float o1: SV_TARGET1) {
+  const float4 icb[] = { { -1.000000, -1.000000, 1.000000, 0 },
+                         { 0, -1.000000, 1.000000, 0 },
+                         { 1.000000, -1.000000, 1.000000, 0 },
+                         { -1.000000, 0, 1.000000, 0 },
+                         { 0, 0, 1.000000, 0 },
+                         { 1.000000, 0, 1.000000, 0 },
+                         { -1.000000, 1.000000, 1.000000, 0 },
+                         { 0, 1.000000, 1.000000, 0 },
+                         { 1.000000, 1.000000, 1.000000, 0 } };
+  // Needs manual fix for instruction:
+  // unknown dcl_: dcl_uav_typed_buffer (float,float,float,float) u0
+  float4 r0, r1, r2, r3, r4, r5, r6;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+
+  // o0.xyz = SceneTexture.SampleLevel(s1_s, float2(0.5, 0.5), 0).xyz;
+
+  float4 x0[2];
+  float4 x1[2];
+  r0.xy = min(mHalfResUvClamp.xy, v1.xy);
+  r0.zw = max(mHalfResUvClamp.xy, v1.xy);
+  r0.zw = min(mHalfResUvClamp.zw, r0.zw);
+  r0.xy = max(r0.xy, r0.zw);
+  r0.zw = min(mQuarterResUvClamp.xy, v1.xy);
+  r1.xy = max(mQuarterResUvClamp.xy, v1.xy);
+  r1.xy = min(mQuarterResUvClamp.zw, r1.xy);
+  r0.zw = max(r1.xy, r0.zw);
+  r1.xyz = NearDoFTexture.Sample(s1_s, r0.xy).xyz;
+  r1.w = DoFMaskTexture.Sample(s1_s, r0.xy).x;
+  r2.xyz = FarDoFTexture.Sample(s1_s, r0.xy).xyz;
+
+  r3.xyz = SceneTexture.Sample(s1_s, v1.xy).xyz;
+
+  float3 scene_texture = r3.rgb;
+
+  r2.w = CoCTexture.Sample(s0_s, v1.xy).x;
+  r4.xyz = saturate(float3(-0.25, 4.8, -4.8) * r2.www);
+
+  // returning r3.xyz encoded in pq works here
+
+  r3.w = max(r4.x, r1.w);
+  r4.x = cmp(0 < r1.w);
+  r4.x = r4.x ? 1.0 : 0;
+  r3.w = r3.w + -r1.w;
+  r1.w = r4.x * r3.w + r1.w;
+  r3.w = mCoCScale.x * abs(r2.w);
+  r3.w = 24 * r3.w;
+  r3.w = min(1, r3.w);
+  r2.w = r2.w + r1.w;
+  r2.w = -0.3 + r2.w;
+  r2.w = saturate(5 * r2.w);
+  r1.w = cmp(0 < r1.w);
+  r1.w = r1.w ? 1.0 : 0;
+  r1.w = r1.w + -r4.z;
+  r1.w = r2.w * r1.w + r4.z;
+  x0[0].xy = v1.xy;
+  x0[1].xy = v2.xy;
+  x1[0].xyz = r3.xyz;
+
+  // returning x1[0].xyz (scenetexture is stored in here) encoded as pq works
+
+  r2.w = cmp(0 < r3.w);
+  r3.x = cmp(r4.y < 1);
+  r3.y = cmp(r1.w < 1);
+  r3.x = (int)r3.y | (int)r3.x;
+  r2.w = r2.w ? r3.x : 0;
+  if (r2.w != 0) {
+    r2.w = 0;
+    while (true) {
+      r3.x = cmp((int)r2.w >= 1);
+      if (r3.x != 0) break;
+      // Unknown use of GetDimensions for resinfo_ from missing reflection info, need manual fix.
+      //     resinfo r3.xy, l(0), t0.xyzw
+      // Example for texture2d type, uint return:
+      // tx.GetDimensions(0, uiDest.x, uiDest.y, uiDest.z);
+      // rx = uiDest;
+      //  state=0, constZero.eType=4, returnType=0, texture.eType=7, afImmediates[0]=0.000000
+      uint tex_width, tex_height;
+      SceneTexture.GetDimensions(tex_width, tex_height);
+      r3.x = tex_width;
+      r3.y = tex_height;
+
+      r3.xy = r3.ww / r3.xy;
+      r4.xz = x0[r2.w + 0].xy;
+      r5.xyz = float3(0, 0, 0);
+      r3.z = 0;
+      r4.w = 0;
+
+      o0.rgb = scene_texture;
+      o0.rgb = renodx::color::bt2020::from::BT709(o0.rgb);
+      o0.rgb = renodx::color::pq::EncodeSafe(o0.rgb, mOETFSettings.y * 10000.f);
+      o1.x = 1;
+      return;
+
+      while (true) {
+        r5.w = cmp((int)r4.w == 9);
+        if (r5.w != 0) break;
+        r6.xy = icb[r4.w + 0].xy * r3.xy + r4.xz;
+        r6.zw = min(mFullResUvClamp.xy, r6.xy);
+        r6.xy = max(mFullResUvClamp.xy, r6.xy);
+        r6.xy = min(mFullResUvClamp.zw, r6.xy);
+        r6.xy = max(r6.zw, r6.xy);
+        r6.xyz = SceneTexture.SampleLevel(s1_s, r6.xy, 0).xyz;
+
+        // returning r6.rgb here encoded as pq returns a black screen
+
+        r5.w = dot(float3(0.30, 0.59, 0.11), r6.xyz);
+        r5.w = 0.5 + r5.w;
+        r5.w = (int)-r5.w + 0x7ef311c2;
+        r5.xyz = r6.xyz * r5.www + r5.xyz;
+        r3.z = r5.w + r3.z;
+        r4.w = (int)r4.w + 1;
+      }
+      r4.xzw = r5.xyz / r3.zzz;
+      x1[r2.w + 0].xyz = r4.xzw;
+      r2.w = (int)r2.w + 1;
+    }
+  }
+  r3.xyz = x1[0].xyz;
+  r2.xyz = -r3.xyz + r2.xyz;
+  r2.xyz = r4.yyy * r2.xyz + r3.xyz;
+  r1.xyz = -r2.xyz + r1.xyz;
+  r1.xyz = r1.www * r1.xyz + r2.xyz;
+  r2.xyzw = BloomAndGrainWeightTexture.Sample(s1_s, r0.zw).xyzw;
+
+  r3.xyz = FlareTexture.Sample(s1_s, r0.xy).xyz;
+  r0.xyz = LightShaftTexture.Sample(s1_s, r0.zw).xyz;
+  r3.xyz = r3.xyz * r3.xyz;
+
+  // No code for instruction (needs manual fix):
+  // ld_uav_typed r0.w, l(2, 2, 2, 2), u0.yzwx
+  r0.w = rwRenderInfo.Load(2).y;  // r0.w = rwRenderInfo[2].y;
+
+  r1.w = cmp(mExposureControl.w != 0.000000);
+  if (r1.w != 0) {
+    r0.w = mExposureControl.w;
+  }
+  r1.w = mExposureControl.y * mExposureControl.z;
+  r2.xyz = r2.xyz / r1.www;
+  r3.w = 4 * r0.w;
+  r4.x = 0.25 + r0.w;
+  r3.w = r3.w / r4.x;
+  r4.xyz = r2.xyz * r1.xyz;
+  r4.w = max(0, r0.w);
+  r4.xyz = r4.xyz / r4.www;
+  r4.xyz = sqrt(r4.xyz);
+  r0.w = r3.w + r0.w;
+  r0.w = 1 + r0.w;
+  r0.w = 1 / r0.w;
+  r2.xyz = r4.xyz * r3.www + r2.xyz;
+  r2.xyz = r2.xyz * r0.www;
+  r1.xyz = r1.xyz * r0.www + r2.xyz;
+  r1.xyz = r3.xyz * mExposureControl.xxx + r1.xyz;
+  r2.x = mWhiteBalanceControl.x + -mWhiteBalanceControl.y;
+  r2.x = r2.x * r1.y;
+  r2.yz = float2(0, 0);
+  r1.xyz = r1.xyz * mWhiteBalanceControl.xyz + r2.xyz;
+  r2.x = cmp(0 < mGrainWeightScale);
+  if (r2.x != 0) {
+    r2.x = mGrainWeightScale * r2.w;
+    r2.y = GrainTexture.Sample(s2_s, w1.xy).y;
+    r2.y = -0.5 + r2.y;
+    r2.xyz = r2.yyy * r2.xxx + r1.xyz;
+    r1.xyz = max(float3(0, 0, 0), r2.xyz);
+  }
+  r2.xy = v1.xy * float2(2, 2) + float2(-1, -1);
+  r2.x = dot(r2.xy, r2.xy);
+  r2.x = sqrt(r2.x);
+  r2.x = saturate(r2.x * mVignetteScale + mVignetteBias);
+  r2.x = r2.x * r2.x;
+  r2.y = mVignetteColor.w * r2.x;
+  r2.x = -r2.x * mVignetteColor.w + 1;
+  r2.yzw = mVignetteColor.xyz * r2.yyy;
+  r2.yzw = r2.yzw * r0.www;
+  r1.xyz = r1.xyz * r2.xxx + r2.yzw;
+  r0.w = cmp(mHDROutputControl.x >= 0);
+  r1.xyz = max(float3(0.000001, 0.000001, 0.000001), r1.xyz);
+  r1.xyz = r1.xyz * r1.www;
+  r1.w = cmp(mHDRDebugControl.y >= 0);
+  if (r1.w != 0) {
+    r1.w = cmp(v1.y < 0.2);
+    if (r1.w != 0) {
+      r1.w = 0.833333 + v1.x;
+      r1.w = frac(r1.w);
+      r1.w = r1.w * 18 + 0.5;
+      r1.w = floor(r1.w);
+      r2.xyz = r1.www * float3(0.333333, 0.333333, 0.333333) + float3(-3, -2, -4);
+      r2.xyz = saturate(abs(r2.xyz) * float3(1, -1, -1) + float3(-1, 2, 2));
+      r2.xyz = log2(r2.xyz);
+      r2.xyz = float3(2.4, 2.4, 2.4) * r2.xyz;
+      r2.xyz = exp2(r2.xyz);
+      r1.w = dot(r2.xyz, float3(0.2126, 0.7152, 0.0722));
+      r2.xyz = r2.xyz / r1.www;
+      r1.w = v1.y * 100 + -10;
+      r1.w = exp2(r1.w);
+      r1.xyz = r1.www * r2.xyz;
+    }
+    r1.w = cmp(0.8 < v1.y);
+    if (r1.w != 0) {
+      r1.w = -0.8 + v1.y;
+      r2.x = 33.333332 * v1.x;
+      r2.yzw = cmp(float3(0.05, 0.1, 0.15) < r1.www);
+      if (r2.y != 0) {
+        r3.yz = float2(0, 0);
+      } else {
+        r3.yz = v1.xx;
+      }
+      if (r2.z != 0) {
+        r3.xz = float2(0, 0);
+        r3.y = v1.x;
+      } else {
+        r3.x = v1.x;
+      }
+      if (r2.w != 0) {
+        r4.x = 0;
+        r4.z = v1.x;
+        r3.xyz = r4.xxz;
+      }
+      r1.xyz = r3.xyz * r2.xxx;
+    }
+  }
+  r1.w = cmp(0.5 < mHDRCompressionControl.x);
+  if (r1.w != 0) {
+    r2.xyz = mHDRCompressionParam1.yyy * r1.xyz + mHDRCompressionParam1.zzz;
+    r3.xyz = mHDRCompressionParam2.xxx + r1.xyz;
+    r3.xyz = -mHDRCompressionParam1.www / r3.xyz;
+    r3.xyz = mHDRCompressionParam2.yyy + r3.xyz;
+    r4.xyz = cmp(r1.xyz < mHDRCompressionParam2.zzz);
+    r1.xyz = r4.xyz ? r2.xyz : r3.xyz;
+  }
+  r0.xyz = mLightShaftIntensity * r0.xyz;
+  r0.xyz = mLightShaftColor.rgb * r0.xyz;
+  r2.xyz = saturate(float3(1, 1, 1) + -r1.xyz);
+  r0.xyz = r0.xyz * r2.xyz + r1.xyz;
+  r0.xyz = sqrt(r0.xyz);
+  r1.xyz = min(float3(1, 1, 1), r0.xyz);
+  r1.xyz = r1.xyz * mRgb3dLookupScaleBias.x + mRgb3dLookupScaleBias.y;
+  r2.xyz = cmp(float3(1, 1, 1) >= r1.xyz);
+  r2.xyz = r0.www ? r2.xyz : float3(-1, -1, -1);
+  r0.w = (int)r2.y & (int)r2.x;
+  r0.w = r0.w ? r2.z : 0;
+  if (r0.w != 0) {
+    r0.xyz = Rgb3dLookupTexture.SampleLevel(s1_s, r1.xyz, 0).xyz;
+  }
+  r0.xyz = float3(-0.5, -0.5, -0.5) + r0.xyz;
+  r0.xyz = saturate(r0.xyz * mContrastIntensity + float3(0.5, 0.5, 0.5));
+  r1.xyz = cmp(float3(0, 0, 0) < r0.xyz);
+  r0.xyz = log2(r0.xyz);
+  r0.xyz = mKjpGammaSettings.xxx * r0.xyz;
+  r0.xyz = exp2(r0.xyz);
+  r0.xyz = r1.xyz ? r0.xyz : 0;
+  r0.xyz = r0.xyz * r0.xyz;
+  r0.xyz = min(mHDRCompressionParam1.xxx, r0.xyz);
+  r1.xyz = -mHDRCompressionParam1.zzz + r0.xyz;
+  r1.xyz = r1.xyz / mHDRCompressionParam1.yyy;
+  r2.xyz = -mHDRCompressionParam2.yyy + r0.xyz;
+  r2.xyz = -mHDRCompressionParam1.www / r2.xyz;
+  r2.xyz = -mHDRCompressionParam2.xxx + r2.xyz;
+  r0.xyz = cmp(r0.xyz < mHDRCompressionParam2.www);
+  r0.xyz = r0.xyz ? r1.xyz : r2.xyz;
+  r0.w = cmp(mHDRCompressionControl.z != 5.000000);
+  if (r0.w != 0) {
+    r1.xyz = mHDRCompressionParam1.yyy * r0.xyz + mHDRCompressionParam1.zzz;
+    r2.xyz = mHDRCompressionParam3.yyy + r0.xyz;
+    r2.xyz = -mHDRCompressionParam3.xxx / r2.xyz;
+    r2.xyz = mHDRCompressionParam3.zzz + r2.xyz;
+    r3.xyz = cmp(r0.xyz < mHDRCompressionParam2.zzz);
+    r0.xyz = r3.xyz ? r1.xyz : r2.xyz;
+  }
+  r0.w = (int)mOETFSettings.w;
+  r1.x = cmp((int)r0.w == 1);
+
+  // r0.rgb = scene_texture;
+
+  if (r1.x != 0) {
+    r1.xyz = log2(r0.xyz);
+    r1.xyz = mOETFSettings.xxx * r1.xyz;
+    r2.xyz = exp2(r1.xyz);
+    r3.xyz = cmp(r2.xyz < float3(0.0031, 0.0031, 0.0031));
+    r2.xyz = float3(12.92, 12.92, 12.92) * r2.xyz;
+    r1.xyz = float3(0.416667, 0.416667, 0.416667) * r1.xyz;
+    r1.xyz = exp2(r1.xyz);
+    r1.xyz = r1.xyz * float3(1.055, 1.055, 1.055) + float3(-0.055000, -0.055000, -0.055000);
+    r0.xyz = r3.xyz ? r2.xyz : r1.xyz;
+  } else {
+    r0.w = cmp((int)r0.w == 2);
+    if (r0.w != 0) {
+      r1.x = dot(float3(0.627404, 0.329283, 0.043313), r0.xyz);
+      r1.y = dot(float3(0.069097, 0.919540, 0.011362), r0.xyz);
+      r1.z = dot(float3(0.016391, 0.088013, 0.895595), r0.xyz);
+      r1.xyz = mOETFSettings.yyy * r1.xyz;
+      r1.xyz = log2(r1.xyz);
+      r1.xyz = mOETFSettings.xxx * r1.xyz;
+      r1.xyz = exp2(r1.xyz);
+      r2.xyzw = r1.xxyy * float4(18.8515625, 18.6875, 18.8515625, 18.6875) + float4(0.835938, 1, 0.835938, 1);
+      r1.xy = r2.xz / r2.yw;
+      r1.xy = log2(r1.xy);
+      r1.xy = float2(78.84375, 78.84375) * r1.xy;
+      r0.xy = exp2(r1.xy);
+      r1.xy = r1.zz * float2(18.8515625, 18.6875) + float2(0.835938, 1);
+      r0.w = r1.x / r1.y;
+      r0.w = log2(r0.w);
+      r0.w = 78.84375 * r0.w;
+      r0.z = exp2(r0.w);
+    }
+  }
+  o1.x = dot(r0.xyz, float3(0.212600, 0.715200, 0.072200));
+  o0.xyz = r0.xyz;
+  o0.w = 1;
+  return;
+
+  // letting the entire shader run results in the scene being black except for the light shaft texture being visible
+}
