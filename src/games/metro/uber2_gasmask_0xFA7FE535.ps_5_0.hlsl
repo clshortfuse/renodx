@@ -69,6 +69,9 @@ void main(
   float4 fDest;
 
   r0.xy = rtdim.xy * v0.xy;
+
+  float2 coords = r0.xy;
+
   r1.xy = (int2)v0.xy;
   r1.zw = float2(0,0);
   r0.z = t_position.Load(r1.xyw).z;
@@ -531,7 +534,7 @@ void main(
   }
   r0.xyz = r3.xyz * lshafts_color.xyz + r0.xyz;
 
-  float3 untonemapped = r0.xyz;
+  float3 untonemapped = renodx::color::srgb::DecodeSafe(r0.xyz);
 
   r1.xyz = r0.xyz * float3(0.150000006,0.150000006,0.150000006) + float3(0.0500000007,0.0500000007,0.0500000007);
   r1.xyz = r0.xyz * r1.xyz + float3(0.00400000019,0.00400000019,0.00400000019);
@@ -542,9 +545,14 @@ void main(
   r1.xyz = float3(0.125,0.125,0.125) * r4.xyz;
   r0.xyz = r0.xyz * float3(4.53191471,4.53191471,4.53191471) + r1.xyz;
 
-  //r0.rgb = renodx::color::bt709::clamp::BT2020(r0.rgb);
-  // float3 tonemapped_bt709 = r0.rgb;
-  // r0.rgb = CustomTonemap(untonemapped, tonemapped_bt709);
+  float3 tonemapped_bt709 = renodx::tonemap::uncharted2::BT709(untonemapped, 1);
+
+  float midgray = renodx::tonemap::uncharted2::BT709(0.18f, 1);
+  midgray /= 0.18;
+  untonemapped *= midgray;
+
+  float3 tonemapped_hdr = CustomUpgradeTonemap(untonemapped, tonemapped_bt709, RENODX_COLOR_GRADE_STRENGTH);
+  r0.xyz = renodx::color::srgb::EncodeSafe(tonemapped_hdr);
 
   r1.xy = float2(-0.5,-0.5) + r2.xy;
   r1.z = 1;
@@ -559,7 +567,9 @@ void main(
   r0.w = r2.z * r2.z;
   r0.xyz = r0.www * r1.xyz + r0.xyz;
 
-  float3 ungraded_color = r0.xyz;
+  float3 ungraded_color = renodx::color::srgb::DecodeSafe(r0.xyz);
+  float3 ungraded_sdr = CustomTonemapSDR(ungraded_color);
+  r0.rgb = renodx::color::srgb::EncodeSafe(ungraded_sdr);
 
   r1.xyz = t_grade.Sample(s_clamp_bi_s, r0.zyx).xyz;
   // r0.xyz = saturate(r0.xyz);
@@ -569,13 +579,12 @@ void main(
   o0.w = sqrt(r0.w);
   o0.xyz = r0.xyz;
 
-  float3 tonemapped_bt709 = o0.rgb;
-  o0.rgb = CustomTonemap(untonemapped, tonemapped_bt709);
+  float3 graded_color = renodx::color::srgb::DecodeSafe(o0.rgb);
+  float3 outputColor = CustomUpgradeGrading(ungraded_color, ungraded_sdr, graded_color, CUSTOM_COLOR_GRADE_TWO);
+  outputColor = CustomTonemap(outputColor, graded_color);
+  outputColor = CustomPostProcessing(outputColor, coords);
+  outputColor = CustomIntermediatePass(outputColor);
 
-  //o0.rgb = lerp(ungraded_color, o0.rgb, CUSTOM_COLOR_GRADE_TWO);
-  //o0.rgb = renodx::color::bt709::clamp::BT2020(o0.rgb);
-  //o0.rgb = CustomPostProcessing(o0.rgb, r0.xy);
-  //o0.rgb = CustomIntermediatePass(o0.rgb);
-  //o0.w = saturate(o0.w);
+  o0.rgb = outputColor;
   return;
 }

@@ -56,7 +56,10 @@ void main(
   float4 fDest;
 
   r0.xy = rtdim.xy * v0.xy;
-  r1.xyzw = rtdim.xyxy * float4(-0.400000006,0.800000012,0.800000012,0.400000006) + r0.xyxy;
+
+  float2 coords = r0.xy;
+
+  r1.xyzw = rtdim.xyxy * float4(-0.400000006, 0.800000012, 0.800000012, 0.400000006) + r0.xyxy;
   r2.xyz = t_accum.Sample(s_clamp_bi_s, r1.xy).xyz;
   r1.xyz = t_accum.Sample(s_clamp_bi_s, r1.zw).xyz;
   r0.zw = r2.xy + r1.xy;
@@ -207,32 +210,37 @@ void main(
   r5.z = r1.x * r0.z + 0.5;
   r1.xyzw = t_lensdirt.Sample(s_clamp_tri_s, r5.xz).xyzw;
   r2.xyz = t_bloom_b.Sample(s_clamp_bi_s, r5.xy).xyz;
+
+  r2.xyz *= CUSTOM_BLOOM_STRENGTH;
+  r1.xyz *= CUSTOM_LENS_DIRT;
+
   r1.xyz = r1.xyz * r1.www;
   r1.xyz = float3(5,5,5) * r1.xyz;
   r0.z = pp_gasmask.w * 5 + 1;
-  r1.xyz = r1.xyz * r0.zzz + float3(1,1,1);
-
-  //r1.xyz *= CUSTOM_LENS_DIRT;
-  //r2.xyz *= CUSTOM_BLOOM_STRENGTH;
-
+  r1.xyz = r1.xyz * r0.zzz + float3(1, 1, 1);
   r0.xyz = r2.xyz * r1.xyz + r0.xyw;
 
-  float3 untonemapped = r0.rgb;
-  
-  r1.xyz = r2.xyz * r1.xyz;
-  r1.xyz = float3(0.125, 0.125, 0.125) * r1.xyz;
-  r2.xyz = r0.xyz * float3(0.150000006,0.150000006,0.150000006) + float3(0.0500000007,0.0500000007,0.0500000007);
-  r2.xyz = r0.xyz * r2.xyz + float3(0.00400000019,0.00400000019,0.00400000019);
-  r3.xyz = r0.xyz * float3(0.150000006,0.150000006,0.150000006) + float3(0.5,0.5,0.5);
-  r0.xyz = r0.xyz * r3.xyz + float3(0.0600000024,0.0600000024,0.0600000024);
-  r0.xyz = r2.xyz / r0.xyz;
-  r0.xyz = float3(-0.0666666627,-0.0666666627,-0.0666666627) + r0.xyz;
-  r0.xyz = r0.xyz * float3(4.53191471, 4.53191471, 4.53191471) + r1.xyz;
+  float3 untonemapped = renodx::color::srgb::DecodeSafe(r0.rgb);
 
-  // float3 tonemapped_bt709 = r0.rgb;
-  // r0.rgb = CustomTonemap(untonemapped, tonemapped_bt709);
+  // r1.xyz = r2.xyz * r1.xyz;
+  // r1.xyz = float3(0.125, 0.125, 0.125) * r1.xyz;
+  // r2.xyz = r0.xyz * float3(0.150000006,0.150000006,0.150000006) + float3(0.0500000007,0.0500000007,0.0500000007);
+  // r2.xyz = r0.xyz * r2.xyz + float3(0.00400000019,0.00400000019,0.00400000019);
+  // r3.xyz = r0.xyz * float3(0.150000006,0.150000006,0.150000006) + float3(0.5,0.5,0.5);
+  // r0.xyz = r0.xyz * r3.xyz + float3(0.0600000024,0.0600000024,0.0600000024);
+  // r0.xyz = r2.xyz / r0.xyz;
+  // r0.xyz = float3(-0.0666666627,-0.0666666627,-0.0666666627) + r0.xyz;
+  // r0.xyz = r0.xyz * float3(4.53191471, 4.53191471, 4.53191471) + r1.xyz;
 
-  float3 ungraded_color = r0.rgb;
+  float3 tonemapped_bt709 = renodx::tonemap::uncharted2::BT709(untonemapped, 1);
+
+  float midgray = renodx::tonemap::uncharted2::BT709(0.18f, 1);
+  midgray /= 0.18;
+  untonemapped *= midgray;
+
+  float3 ungraded_color = CustomUpgradeTonemap(untonemapped, tonemapped_bt709, RENODX_COLOR_GRADE_STRENGTH);
+  float3 ungraded_sdr = CustomTonemapSDR(ungraded_color);
+  r0.rgb = renodx::color::srgb::EncodeSafe(ungraded_sdr);
 
   r1.xyz = t_grade.Sample(s_clamp_bi_s, r0.zyx).xyz;
   //r0.xyz = saturate(r0.xyz);
@@ -242,12 +250,13 @@ void main(
   o0.xyz = r0.xyz;
   o0.w = sqrt(r0.w);
 
-  float3 tonemapped_bt709 = o0.rgb;
-  o0.rgb = CustomTonemap(untonemapped, tonemapped_bt709);
+  float3 graded_color = renodx::color::srgb::DecodeSafe(o0.rgb);
+  float3 outputColor = CustomUpgradeGrading(ungraded_color, ungraded_sdr, graded_color, CUSTOM_COLOR_GRADE_TWO);
+  outputColor = CustomTonemap(outputColor, graded_color);
+  outputColor = CustomPostProcessing(outputColor, coords);
+  outputColor = CustomIntermediatePass(outputColor);
 
-  //o0.rgb = lerp(ungraded_color, o0.rgb, CUSTOM_COLOR_GRADE_TWO);
-  //o0.rgb = CustomPostProcessing(o0.rgb, r1.xy);
-  //o0.rgb = CustomIntermediatePass(o0.rgb);
+  o0.rgb = outputColor;
   //o0.w = saturate(o0.w);
   return;
 }
