@@ -199,6 +199,7 @@ struct ResourceInfo {
   reshade::api::resource_view swap_chain_proxy_clone_srv = {0u};
   reshade::api::resource_view swap_chain_proxy_rtv = {0u};
   void* shared_handle = nullptr;
+  reshade::api::resource proxy_resource = {0u};
 };
 
 struct ResourceViewInfo {
