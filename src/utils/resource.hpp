@@ -237,11 +237,18 @@ static struct Store {
 
 static Store* store = &local_store;
 
-inline ResourceInfo* GetResourceInfo(const reshade::api::resource& resource) {
-  std::shared_lock lock(store->resource_infos_mutex);
-  auto pair = store->resource_infos.find(resource.handle);
-  if (pair != store->resource_infos.end()) return &pair->second;
-  return nullptr;
+inline ResourceInfo* GetResourceInfo(const reshade::api::resource& resource, const bool& create = false) {
+  {
+    std::shared_lock lock(store->resource_infos_mutex);
+    auto pair = store->resource_infos.find(resource.handle);
+    if (pair != store->resource_infos.end()) return &pair->second;
+    if (!create) return nullptr;
+  }
+  {
+    std::unique_lock write_lock(store->resource_infos_mutex);
+    auto& info = store->resource_infos.insert({resource.handle, ResourceInfo({.resource = resource})}).first->second;
+    return &info;
+  }
 }
 
 inline ResourceInfo* GetResourceInfoUnsafe(const reshade::api::resource& resource, const bool& create = false) {
@@ -272,6 +279,14 @@ inline ResourceViewInfo* GetResourceViewInfo(const reshade::api::resource_view& 
     auto& info = store->resource_view_infos.insert({view.handle, ResourceViewInfo({.view = view})}).first->second;
     return &info;
   }
+}
+
+inline ResourceViewInfo* GetResourceViewInfoUnsafe(const reshade::api::resource_view& view, const bool& create = false) {
+  auto pair = store->resource_view_infos.find(view.handle);
+  if (pair != store->resource_view_infos.end()) return &pair->second;
+  if (!create) return nullptr;
+  auto& info = store->resource_view_infos.insert({view.handle, ResourceViewInfo({.view = view})}).first->second;
+  return &info;
 }
 
 struct __declspec(uuid("3c7a0a1f-4bf3-4e7a-ac02-6f63fdc70187")) DeviceData {
