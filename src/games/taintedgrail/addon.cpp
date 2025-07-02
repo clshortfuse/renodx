@@ -27,48 +27,6 @@ namespace {
 int game = 0; // 1 = Conquest, 2 = The Fall of Avalon
 ShaderInjectData shader_injection;
 
-#define UpgradeRTVReplaceShader(value)       \
-  {                                          \
-      value,                                 \
-      {                                      \
-          .crc32 = value,                    \
-          .code = __##value,                 \
-          .on_draw = [](auto* cmd_list) {                                                             \
-            auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                         \
-            bool changed = false;                                                                     \
-            for (auto rtv : rtvs) {                                                                   \
-              changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv);   \
-            }                                                                                         \
-            if (changed) {                                                                            \
-              renodx::mods::swapchain::FlushDescriptors(cmd_list);                                    \
-              renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0}); \
-            }                                                                                         \
-            return true; }, \
-      },                                     \
-  }
-
-
-#define UpgradeRTVReplaceShaderCallback(value)       \
-  {                                          \
-      value,                                 \
-      {                                      \
-          .crc32 = value,                    \
-          .code = __##value,                 \
-          .on_draw = [](auto* cmd_list) {                                                             \
-            auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                         \
-            bool changed = false;                                                                     \
-            for (auto rtv : rtvs) {                                                                   \
-              changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv);   \
-            }                                                                                         \
-            if (changed) {                                                                            \
-              renodx::mods::swapchain::FlushDescriptors(cmd_list);                                    \
-              renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0}); \
-            }                                                                                         \
-            shader_injection.stateCheck = true;\
-            return true; }, \
-      },                                     \
-  }
-
 renodx::mods::shader::CustomShaders custom_shaders = {
     //------CONQUEST-------//
     CustomShaderEntry(0xD849047B),  // LUTBuilder3D gameplay (neutral)
@@ -81,13 +39,13 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x5F120263),  // uberpost
     CustomShaderEntry(0x9F0BEDCA),  // uberpost
     CustomShaderEntry(0xD36BB165),  // uberpost
-    UpgradeRTVReplaceShader(0x4E2A63EE),  // postfinal
+    CustomShaderEntry(0x4E2A63EE),  // postfinal
     //------AVALON-------//
     CustomShaderEntryCallback(0xF804335C, [](reshade::api::command_list* cmd_list) {  // videos
     game = 2;
     return true;
     }),
-    CustomShaderEntry(0x3661DD34),  // LUTBuilder3D (neutral)
+    CustomShaderEntry(0x3661DD34),  // LUTBuilder3D (custom)
     CustomShaderEntry(0xE6786595),  // LUTBuilder3D (no tonemap)
     CustomShaderEntry(0x534F0886),  // LUTBuilder3D (ACES)
     CustomShaderEntry(0x3F04EE8D),  // uberpost
@@ -96,13 +54,34 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x490447DA),  // uberpost
     CustomShaderEntry(0xC6F22BEE),  // uberpost
     CustomShaderEntry(0xF110C44D),  // uberpost
-    UpgradeRTVReplaceShaderCallback(0x4BD9F109),  // postfinal
-    UpgradeRTVReplaceShaderCallback(0x55D603B1),  // postfinal
-    UpgradeRTVReplaceShaderCallback(0x85DF4472),  // postfinal
-    UpgradeRTVReplaceShaderCallback(0x110E8EE6),  // postfinal
-    UpgradeRTVReplaceShaderCallback(0x810A1D59),  // postfinal
-    UpgradeRTVReplaceShaderCallback(0x1310A22D),  // postfinal
-    UpgradeRTVReplaceShaderCallback(0xAB2CD6E2),  // postfinal
+    CustomShaderEntryCallback(0x4BD9F109, [](reshade::api::command_list* cmd_list) {  // postfinal
+    shader_injection.stateCheck = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x55D603B1, [](reshade::api::command_list* cmd_list) {  // postfinal
+    shader_injection.stateCheck = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x85DF4472, [](reshade::api::command_list* cmd_list) {  // postfinal
+    shader_injection.stateCheck = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x110E8EE6, [](reshade::api::command_list* cmd_list) {  // postfinal
+    shader_injection.stateCheck = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x810A1D59, [](reshade::api::command_list* cmd_list) {  // postfinal
+    shader_injection.stateCheck = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0x1310A22D, [](reshade::api::command_list* cmd_list) {  // postfinal
+    shader_injection.stateCheck = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xAB2CD6E2, [](reshade::api::command_list* cmd_list) {  // postfinal
+    shader_injection.stateCheck = true;
+    return true;
+    }),
     CustomShaderEntry(0x066C98CB),  // UI (vignette)
     //------shared-------//
     CustomShaderEntry(0x20133A8B),  // Final
@@ -222,7 +201,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapHueCorrection",
         .binding = &shader_injection.toneMapHueCorrection,
-        .default_value = 100.f,
+        .default_value = 0.f,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tint = 0xF8CB7C,
@@ -439,7 +418,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("toneMapPerChannel", 1.f);
           renodx::utils::settings::UpdateSetting("toneMapHueProcessor", game == 2 ? 2.f : 1.f);
           renodx::utils::settings::UpdateSetting("toneMapHueShift", game == 2 ? 100.f : 50.f);
-          renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 100.f);          
+          renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 0.f);          
           renodx::utils::settings::UpdateSetting("toneMapColorSpace", 2.f);
           renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
           renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
@@ -511,9 +490,7 @@ renodx::utils::settings::Settings settings = {
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label ="Tone Mapping/Color Grading changes may require to open/close inventory to take effect."
                 "\nGame's Brightness setting is disabled."
-                "\n(bug)Character creation scene is affected by UI Brightness slider."
-                "\n(bug)Save file preview pictures are broken."
-                "\n(bug)Sketching is broken.",
+                "\n(bug)Character creation scene is affected by UI Brightness slider.",
         .section = "Notes",
         .is_visible = []() { return false; },
     },
@@ -640,15 +617,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!reshade::register_addon(h_module)) return FALSE;
       renodx::mods::swapchain::force_borderless = false;
       renodx::mods::swapchain::prevent_full_screen = false;
-      renodx::mods::swapchain::use_resource_cloning = true;
 
       //  RGBA8_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
-          .ignore_size = true,
-          .use_resource_view_cloning = true,
-          .use_resource_view_hot_swap = true,
+          .ignore_size = false,
+          .usage_include = reshade::api::resource_usage::render_target,
+          .usage_exclude = reshade::api::resource_usage::unordered_access | reshade::api::resource_usage::undefined,
       });
       //  RG11B10_float
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({

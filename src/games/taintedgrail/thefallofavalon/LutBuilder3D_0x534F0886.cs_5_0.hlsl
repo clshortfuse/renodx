@@ -233,7 +233,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r2.y = dot(float3(-0.130260006,1.1408,-0.0105499998), r0.xyz);
     r2.z = dot(float3(-0.0240000002,-0.128969997,1.15296996), r0.xyz);
   }
-  if (injectedData.toneMapType == 0.f) {
+  float3 untonemapped = r2.xyz;
   r0.xyz = max(float3(0,0,0), r2.xyz);
   r1.xyz = cb0[18].xxx * r0.xyz;
   r2.xyzw = cmp(r1.xxyy < cb0[18].yzyz);
@@ -278,9 +278,26 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r0.x = exp2(r0.x);
   r0.x = r0.w ? r0.x : 0;
   r3.z = r0.x * r1.w + r1.y;
-  r2.xyz = max(float3(0,0,0), r3.xyz);
-  }
-  r0.rgb = applyUserTonemapMenuNeutral(r2.rgb);
+  float3 vanilla = r3.xyz;
+  r0.xyz = float3(0.18,0.18,0.18);
+  r1.xyz = cb0[18].xxx * r0.xyz;
+  r2.xyzw = cmp(r1.xxyy < cb0[18].yzyz);
+  r3.xyzw = r2.yyyy ? cb0[21].xyzw : cb0[23].xyzw;
+  r4.xyzw = r2.yyww ? cb0[22].xyxy : cb0[24].xyxy;
+  r3.xyzw = r2.xxxx ? cb0[19].xyzw : r3.xyzw;
+  r4.xyzw = r2.xxzz ? cb0[20].xyxy : r4.xyzw;
+  r0.x = r0.x * cb0[18].x + -r3.x;
+  r0.x = r0.x * r3.z;
+  r0.w = cmp(0 < r0.x);
+  r0.x = log2(r0.x);
+  r0.x = r4.y * r0.x;
+  r0.x = r0.x * 0.693147182 + r4.x;
+  r0.x = 1.44269502 * r0.x;
+  r0.x = exp2(r0.x);
+  r0.x = r0.w ? r0.x : 0;
+  r3.x = r0.x * r3.w + r3.y;
+  float midGray = r3.x;
+  r0.rgb = applyUserTonemapMenuCustom(untonemapped, vanilla, midGray);
   r0.w = 1;
   u0[vThreadID.xyz] = r0;
   return;
