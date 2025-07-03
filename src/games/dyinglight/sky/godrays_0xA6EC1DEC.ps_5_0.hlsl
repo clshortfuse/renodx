@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "../shared.h"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sat May 25 22:39:30 2024
 Texture2D<float4> t2 : register(t2);
@@ -38,5 +38,8 @@ void main(
   r2.xy = r0.ww * cb0[0].xz + cb0[0].zz;
   r0.w = r2.x / r2.y;
   o0.xyz = r1.xyz * r0.www + r0.xyz;  //  o0.xyz = saturate(r1.xyz * r0.www + r0.xyz);
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    o0.rgb = saturate(o0.rgb);
+  }
   return;
 }

@@ -21,6 +21,15 @@
 // #define CUSTOM_LENS_FLARE                    0.f
 // #define CUSTOM_GRAIN_STRENGTH                1.f
 
+#define ORIGINAL_THRESHOLD    0.999985337
+#define SUN_SIZE              5.5
+#define SUN_THRESHOLD         (cos(acos(ORIGINAL_THRESHOLD) * SUN_SIZE))
+#define SUN_SHIFT_X           -0.01
+#define SUNSTAR_UV_OFFSET_X   -0.00385f
+#define SUNSTAR_BOOST         15.f
+#define SUNSTAR_BRIGHT_RADIUS .0275
+#define SUNSTAR_SHARPNESS     1.75
+
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
@@ -42,7 +51,11 @@ struct ShaderInjectData {
   float color_grade_gamut_expansion;
   float custom_bloom;
   float custom_lens_flare;
+  float custom_lens_flare_2;
   float custom_grain_strength;
+
+  float unclamp_lighting;
+  float improved_sun;
 };
 
 #ifndef __cplusplus
@@ -68,7 +81,10 @@ cbuffer cb13 : register(b13) {
 #define RENODX_COLOR_GRADE_GAMUT_EXPANSION   shader_injection.color_grade_gamut_expansion
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom
 #define CUSTOM_LENS_FLARE                    shader_injection.custom_lens_flare
+#define CUSTOM_LENS_FLARE_2                  shader_injection.custom_lens_flare_2
 #define CUSTOM_GRAIN_STRENGTH                shader_injection.custom_grain_strength
+#define CUSTOM_UNCLAMP_LIGHTING              shader_injection.unclamp_lighting
+#define CUSTOM_IMPROVED_SUN                  shader_injection.improved_sun
 
 #include "../../shaders/renodx.hlsl"
 

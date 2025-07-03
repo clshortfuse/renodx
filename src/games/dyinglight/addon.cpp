@@ -8,6 +8,8 @@
 
 #define DEBUG_LEVEL_0
 
+// 0x2f14b3e9 - moon
+
 // #include <embed/0x9165A474.h> // black smoke
 // #include <embed/0xEC3D14D2.h> // distant fog/smoke
 // #include <embed/0x32A56036.h> // distant fog/smoke
@@ -65,6 +67,18 @@ namespace {
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
+
+const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
+    {"GammaCorrection", 0.f},
+    {"ColorGradeShadows", 45.f},
+    {"ColorGradeSaturation", 55.f},
+    {"ColorGradeHighlightSaturation", 57.f},
+    {"ColorGradeBlowout", 50.f},
+    {"ColorGradeFlare", 32.f},
+    {"ColorGradeScene", 65.f},
+    {"FxLensFlare", 0.f},
+    {"FxBloom", 20.f},
+};
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -242,6 +256,15 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxLensFlare2",
+        .binding = &shader_injection.custom_lens_flare_2,
+        .default_value = 100.f,
+        .label = "Lens Flare 2",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxGrainStrength",
         .binding = &shader_injection.custom_grain_strength,
         .default_value = 50.f,
@@ -249,6 +272,24 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "UnclampLighting",
+        .binding = &shader_injection.unclamp_lighting,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "Unclamp Lighting",
+        .section = "Advanced",
+        .tooltip = "Unclamps specular reflections and fires",
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ImprovedSun",
+        .binding = &shader_injection.improved_sun,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "Improved sun",
+        .section = "Advanced",
+        .tooltip = "Increases size of the sun and centers it",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -260,6 +301,24 @@ renodx::utils::settings::Settings settings = {
             if (setting->key.empty()) continue;
             if (!setting->can_reset) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+          }
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Recommended Settings",
+        .section = "Options",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+
+            if (RECOMMENDED_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, RECOMMENDED_VALUES.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
           }
         },
     },
@@ -327,7 +386,10 @@ void OnPresetOff() {
       {"ColorGradeScene", 100.f},
       {"FxBloom", 100.f},
       {"FxLensFlare", 100.f},
+      {"FxLensFlare2", 100.f},
       {"FxGrainStrength", 50.f},
+      {"UnclampLighting", 0.f},
+      {"ImprovedSun", 0.f},
   });
 }
 
