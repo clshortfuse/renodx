@@ -456,15 +456,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
+          .ignore_size = true,
           .use_resource_view_cloning = true,
           .use_resource_view_hot_swap = true,
-          .usage_include = reshade::api::resource_usage::render_target
-                           | reshade::api::resource_usage::shader_resource
-                           | reshade::api::resource_usage::unordered_access
-                           | reshade::api::resource_usage::copy_dest
-                           | reshade::api::resource_usage::copy_source
-                           | reshade::api::resource_usage::resolve_dest,
-
+          .usage_include = reshade::api::resource_usage::unordered_access,
       });
 
       renodx::mods::swapchain::use_resource_cloning = true;
