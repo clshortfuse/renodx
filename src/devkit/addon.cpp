@@ -5,8 +5,6 @@
 
 #define ImTextureID ImU64
 
-#pragma comment(lib, "dxguid.lib")
-
 #define NOMINMAX
 
 #include <d3d11.h>

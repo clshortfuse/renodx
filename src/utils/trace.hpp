@@ -7,8 +7,10 @@
 
 #define NOMINMAX
 
-#include <cstdint>
+#include <initguid.h>
+
 #include <algorithm>
+#include <cstdint>
 #include <optional>
 #include <sstream>
 
@@ -20,6 +22,14 @@
 #include "./pipeline_layout.hpp"
 #include "./resource.hpp"
 #include "./shader.hpp"
+
+// Define WKPDID_D3DDebugObjectName and WKPDID_D3DDebugObjectNameW if not already defined
+#ifndef WKPDID_D3DDebugObjectName
+DEFINE_GUID(WKPDID_D3DDebugObjectName, 0x429b8c22, 0x9188, 0x4b0c, 0x87, 0x42, 0xac, 0xb0, 0xbf, 0x85, 0xc2, 0x00);
+#endif
+#ifndef WKPDID_D3DDebugObjectNameW
+DEFINE_GUID(WKPDID_D3DDebugObjectNameW, 0x4cca5fd8, 0x921f, 0x42c8, 0x85, 0x66, 0x70, 0xca, 0x1f, 0xa6, 0x2a, 0x85);
+#endif
 
 namespace renodx::utils::trace {
 
