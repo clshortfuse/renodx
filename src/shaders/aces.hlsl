@@ -222,7 +222,7 @@ float SSTS(
   } else if (log_x >= y_mid.x) {
     // Part of Midtones area (Must have slope)
     float knot_coord = (N_KNOTS_HIGH - 1) * (log_x - y_mid.x) / (y_max.x - y_mid.x);
-    uint j = knot_coord;
+    int j = (int)knot_coord;
     float t = knot_coord - j;
 
     float3 cf = float3(coefs_high[j], coefs_high[j + 1], coefs_high[j + 2]);
@@ -231,7 +231,7 @@ float SSTS(
     log_y = dot(monomials, mul(M, cf));
   } else if (log_x > y_min.x) {
     float knot_coord = (N_KNOTS_LOW - 1) * (log_x - y_min.x) / (y_mid.x - y_min.x);
-    uint j = knot_coord;
+    int j = (int)knot_coord;
     float t = knot_coord - j;
 
     float3 cf = float3(coefs_low[j], coefs_low[j + 1], coefs_low[j + 2]);
@@ -282,7 +282,7 @@ float3 GamutCompress(float3 lin_ap1) {
   float ach = max(lin_ap1.r, max(lin_ap1.g, lin_ap1.b));
   float abs_ach = abs(ach);
   // Distance from the achromatic axis for each color component aka inverse RGB ratios
-  float3 dist = ach ? (ach - lin_ap1) / abs_ach : 0;
+  float3 dist = ach != 0.f ? (ach - lin_ap1) / abs_ach : 0;
 
   // Compress distance with parameterized shaper function
   float3 compr_dist = float3(
