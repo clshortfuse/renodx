@@ -466,46 +466,40 @@ std::string GetEntryPointForShaderDetails(reshade::api::device* device, DeviceDa
     return shader_details->entrypoint;
   }
 
-  // Read texture declarations from SM5 disassembly
   if (shader_details->program_version.has_value()) {
-    shader_details->resource_binds = std::vector<ResourceBind>();
+    if (shader_details->program_version->GetMajor() <= 5) return "main";
 
-    if (shader_details->program_version->GetMajor() <= 5) {
-      return "main";
-    } else {
-      auto disassembly = std::get<std::string>(shader_details->disassembly);
-      auto source_lines = StringViewSplitAll(disassembly, '\n');
-      shader_details->resource_binds = std::vector<ResourceBind>();
-      std::map<std::string_view, std::vector<std::string_view>> metadata_map;
+    auto disassembly = std::get<std::string>(shader_details->disassembly);
+    auto source_lines = StringViewSplitAll(disassembly, '\n');
+    std::map<std::string_view, std::vector<std::string_view>> metadata_map;
 
-      for (auto line : source_lines) {
-        if (!line.starts_with("!")) continue;
-        static auto regex = std::regex{R"(^(\S+) = !\{(.*)\}$)"};
-        static auto values_regex = std::regex(R"(\s*([^,"]+(("[^"]*")[^,]*|)),?)");
+    for (auto line : source_lines) {
+      if (!line.starts_with("!")) continue;
+      static auto regex = std::regex{R"(^(\S+) = !\{(.*)\}$)"};
+      static auto values_regex = std::regex(R"(\s*([^,"]+(("[^"]*")[^,]*|)),?)");
 
-        auto [variable_name, values_packed] = StringViewMatch<2>(line, regex);
-        auto values = StringViewSplitAll(values_packed, values_regex, 1);
-        auto len = values.size();
-        for (int i = 0; i < len; ++i) {
-          values[i] = StringViewTrim(values[i]);
-        }
-        metadata_map[variable_name] = values;
+      auto [variable_name, values_packed] = StringViewMatch<2>(line, regex);
+      auto values = StringViewSplitAll(values_packed, values_regex, 1);
+      auto len = values.size();
+      for (int i = 0; i < len; ++i) {
+        values[i] = StringViewTrim(values[i]);
       }
+      metadata_map[variable_name] = values;
+    }
 
-      if (auto pair = metadata_map.find("!dx.entryPoints");
-          pair != metadata_map.end() && !pair->second.empty()) {
-        auto entry_points_reference = pair->second.at(0);
-        auto entry_points_key = entry_points_reference;
-        auto entry_points = metadata_map[entry_points_key];
+    if (auto pair = metadata_map.find("!dx.entryPoints");
+        pair != metadata_map.end() && !pair->second.empty()) {
+      auto entry_points_reference = pair->second.at(0);
+      auto entry_points_key = entry_points_reference;
+      auto entry_points = metadata_map[entry_points_key];
 
-        auto name = entry_points[1];
-        static auto regex = std::regex{R"(^!\"?([^"]*)\"?$)"};
-        auto [parsed_name] = StringViewMatch<1>(name, regex);
-        if (!parsed_name.empty()) {
-          shader_details->entrypoint = parsed_name;
-        } else {
-          shader_details->entrypoint = "main";
-        }
+      auto name = entry_points[1];
+      static auto regex = std::regex{R"(^!\"?([^"]*)\"?$)"};
+      auto [parsed_name] = StringViewMatch<1>(name, regex);
+      if (!parsed_name.empty()) {
+        shader_details->entrypoint = parsed_name;
+      } else {
+        shader_details->entrypoint = "main";
       }
     }
   }
