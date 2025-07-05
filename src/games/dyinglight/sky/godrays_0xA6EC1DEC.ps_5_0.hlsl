@@ -28,10 +28,10 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyz = t2.SampleLevel(s2_s, v1.xy, 0).xyz;
+  r0.xyz = t2.SampleLevel(s2_s, v1.xy, 0).xyz;  // lens flare
   r0.xyz = cb0[0].yyy * r0.xyz;
   r0.w = t1.SampleLevel(s1_s, float2(0, 0), 0).x;
-  r1.xyzw = t0.SampleLevel(s0_s, v1.xy, 0).xyzw;
+  r1.xyzw = t0.SampleLevel(s0_s, v1.xy, 0).xyzw;  // main game render
   r1.xyz = r1.xyz * r0.www;
   o0.w = r1.w;
   r0.w = dot(float3(0.212500006, 0.715399981, 0.0720999986), r1.xyz);

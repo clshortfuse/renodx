@@ -29,7 +29,7 @@ void main(
   if (CUSTOM_IMPROVED_SUN == 0.f) {
     offset = float3(0.0, 0.0, 0.0);
   } else {
-    offset = float3(0.0, 0.0, SUN_SHIFT_X);
+    offset = float3(0.0, SUN_SHIFT_Y, SUN_SHIFT_X);
   }
 
   float3 sun_dir = normalize(cb0[0].xyz + offset);
@@ -40,13 +40,16 @@ void main(
   r0.z = saturate(r0.x);
 
   float threshold;
+  float sun_brightness;
   if (CUSTOM_IMPROVED_SUN == 0.f) {
     threshold = ORIGINAL_THRESHOLD;
+    sun_brightness = 1.f;
   } else {
     threshold = SUN_THRESHOLD;
+    sun_brightness = SUN_BRIGHTNESS_BOOST;
   }
   r0.x = cmp(threshold < r0.x);  // SUN_THRESHOLD originally 0.999985337
-  r0.x = r0.x ? cb0[0].w : 0;
+  r0.x = r0.x ? cb0[0].w * sun_brightness: 0;
   r0.w = cb0[5].w * r0.z + cb0[6].x;
   r0.z = r0.z * r0.z;
   r0.z = r0.z * 0.238732412 + 0.238732412;
@@ -61,7 +64,7 @@ void main(
   r0.yz = -r0.yy * float2(12742000, 12742000) + r0.zw;
   r0.y = 0.5 * r0.y;
   r0.z = r0.z * 0.5 + -r0.y;
-  r2.xyzw = t0.Sample(s0_s, v2.xy).xyzw;
+  r2.xyzw = t0.Sample(s0_s, v2.xy).xyzw; // clouds
   r3.xyzw = cb0[1].xyzw * r2.xyzw;
   r2.xyzw = -r2.wwww * cb0[1].wwww + float4(1, 1, 1, 1);
   r0.y = r3.w * r0.z + r0.y;
