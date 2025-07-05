@@ -192,9 +192,9 @@ struct Config {
   float hue_correction_type;
   float hue_correction_strength;
   float3 hue_correction_color;
-  uint reno_drt_hue_correction_method;
-  uint reno_drt_tone_map_method;
-  uint reno_drt_working_color_space;
+  int reno_drt_hue_correction_method;
+  int reno_drt_tone_map_method;
+  int reno_drt_working_color_space;
   bool reno_drt_per_channel;
   float reno_drt_blowout;
   float reno_drt_clamp_color_space;

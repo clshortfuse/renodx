@@ -533,12 +533,12 @@ float3 ToneMapPass(float3 color, Config draw_config) {
   tone_map_config.reno_drt_blowout = -1.f * (draw_config.tone_map_highlight_saturation - 1.f);
   tone_map_config.reno_drt_dechroma = draw_config.tone_map_blowout;
   tone_map_config.reno_drt_flare = 0.10f * pow(draw_config.tone_map_flare, 10.f);
-  tone_map_config.reno_drt_working_color_space = (uint)draw_config.tone_map_working_color_space;
+  tone_map_config.reno_drt_working_color_space = draw_config.tone_map_working_color_space;
   tone_map_config.reno_drt_per_channel = draw_config.tone_map_per_channel == 1.f;
-  tone_map_config.reno_drt_hue_correction_method = (uint)draw_config.tone_map_hue_processor;
+  tone_map_config.reno_drt_hue_correction_method = draw_config.tone_map_hue_processor;
   tone_map_config.reno_drt_clamp_color_space = draw_config.tone_map_clamp_color_space;
   tone_map_config.reno_drt_clamp_peak = draw_config.tone_map_clamp_peak;
-  tone_map_config.reno_drt_tone_map_method = (uint)draw_config.reno_drt_tone_map_method;
+  tone_map_config.reno_drt_tone_map_method = draw_config.reno_drt_tone_map_method;
   tone_map_config.reno_drt_white_clip = draw_config.reno_drt_white_clip;
 
   tone_map_config.hue_correction_strength = draw_config.tone_map_hue_correction;

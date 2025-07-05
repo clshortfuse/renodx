@@ -23,10 +23,10 @@ struct Config {
   float flare;
   float hue_correction_strength;
   float3 hue_correction_source;
-  uint hue_correction_method;
-  uint tone_map_method;
-  uint hue_correction_type;
-  uint working_color_space;
+  int hue_correction_method;
+  int tone_map_method;
+  int hue_correction_type;
+  int working_color_space;
   bool per_channel;
   float blowout;
   float clamp_color_space;
@@ -37,19 +37,19 @@ struct Config {
 namespace config {
 
 namespace hue_correction_type {
-static const uint INPUT = 0u;
-static const uint CUSTOM = 1u;
+static const int INPUT = 0;
+static const int CUSTOM = 1;
 }
 
 namespace hue_correction_method {
-static const uint OKLAB = 0u;
-static const uint ICTCP = 1u;
-static const uint DARKTABLE_UCS = 2u;
+static const int OKLAB = 0;
+static const int ICTCP = 1;
+static const int DARKTABLE_UCS = 2;
 }
 
 namespace tone_map_method {
-static const uint DANIELE = 0u;
-static const uint REINHARD = 1u;
+static const int DANIELE = 0;
+static const int REINHARD = 1;
 }
 
 Config Create(
@@ -65,10 +65,10 @@ Config Create(
     float flare = 0.f,
     float hue_correction_strength = 1.f,
     float3 hue_correction_source = 0,
-    uint hue_correction_method = config::hue_correction_method::OKLAB,
-    uint tone_map_method = config::tone_map_method::DANIELE,
-    uint hue_correction_type = config::hue_correction_type::INPUT,
-    uint working_color_space = 0u,
+    int hue_correction_method = config::hue_correction_method::OKLAB,
+    int tone_map_method = config::tone_map_method::DANIELE,
+    int hue_correction_type = config::hue_correction_type::INPUT,
+    int working_color_space = 0,
     bool per_channel = false,
     float blowout = 0,
     float clamp_color_space = 2.f,
@@ -288,20 +288,15 @@ float3 BT709(float3 bt709, Config current_config) {
                           : current_config.hue_correction_source;
 
       [branch]
-      switch (current_config.hue_correction_method) {
-        case config::hue_correction_method::OKLAB:
-        default:
-          perceptual_new = renodx::color::oklab::from::BT709(color_output);
-          perceptual_old = renodx::color::oklab::from::BT709(source);
-          break;
-        case config::hue_correction_method::ICTCP:
-          perceptual_new = renodx::color::ictcp::from::BT709(color_output);
-          perceptual_old = renodx::color::ictcp::from::BT709(source);
-          break;
-        case config::hue_correction_method::DARKTABLE_UCS:
-          perceptual_new = renodx::color::dtucs::uvY::from::BT709(color_output).zxy;
-          perceptual_old = renodx::color::dtucs::uvY::from::BT709(source).zxy;
-          break;
+      if (current_config.hue_correction_method == config::hue_correction_method::OKLAB) {
+        perceptual_new = renodx::color::oklab::from::BT709(color_output);
+        perceptual_old = renodx::color::oklab::from::BT709(source);
+      } else if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
+        perceptual_new = renodx::color::ictcp::from::BT709(color_output);
+        perceptual_old = renodx::color::ictcp::from::BT709(source);
+      } else if (current_config.hue_correction_method == config::hue_correction_method::DARKTABLE_UCS) {
+        perceptual_new = renodx::color::dtucs::uvY::from::BT709(color_output).zxy;
+        perceptual_old = renodx::color::dtucs::uvY::from::BT709(source).zxy;
       }
 
       // Save chrominance to apply back
@@ -316,17 +311,14 @@ float3 BT709(float3 bt709, Config current_config) {
       perceptual_new.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
     } else {
       [branch]
-      switch (current_config.hue_correction_method) {
-        default:
-        case config::hue_correction_method::OKLAB:
-          perceptual_new = renodx::color::oklab::from::BT709(color_output);
-          break;
-        case config::hue_correction_method::ICTCP:
-          perceptual_new = renodx::color::ictcp::from::BT709(color_output);
-          break;
-        case config::hue_correction_method::DARKTABLE_UCS:
-          perceptual_new = renodx::color::dtucs::uvY::from::BT709(color_output).zxy;
-          break;
+      if (current_config.hue_correction_method == config::hue_correction_method::OKLAB) {
+        perceptual_new = renodx::color::oklab::from::BT709(color_output);
+      } else if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
+        perceptual_new = renodx::color::ictcp::from::BT709(color_output);
+      } else if (current_config.hue_correction_method == config::hue_correction_method::DARKTABLE_UCS) {
+        perceptual_new = renodx::color::dtucs::uvY::from::BT709(color_output).zxy;
+      } else {
+        perceptual_new = renodx::color::oklab::from::BT709(color_output);
       }
     }
 
