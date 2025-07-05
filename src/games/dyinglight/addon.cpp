@@ -70,14 +70,15 @@ ShaderInjectData shader_injection;
 
 const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
     {"GammaCorrection", 0.f},
-    {"ColorGradeShadows", 45.f},
-    {"ColorGradeSaturation", 55.f},
-    {"ColorGradeHighlightSaturation", 57.f},
-    {"ColorGradeBlowout", 50.f},
-    {"ColorGradeFlare", 32.f},
-    {"ColorGradeScene", 65.f},
+    {"ColorGradeShadows", 37.f},
+    {"ColorGradeSaturation", 58.f},
+    {"ColorGradeHighlightSaturation", 52.f},
+    {"ColorGradeBlowout", 60.f},
+    {"ColorGradeFlare", 30.f},
+    {"ColorGradeScene", 80.f},
     {"FxLensFlare", 0.f},
-    {"FxBloom", 20.f},
+    {"FxLensFlare2", 50.f},
+    {"FxBloom", 15.f},
 };
 
 renodx::utils::settings::Settings settings = {
@@ -126,16 +127,17 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "GammaCorrection",
         .binding = &shader_injection.gamma_correction,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1.f,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 2.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
         .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
+        .labels = {"Off", "2.2 (Per Channel)", "2.2 (By Luminance with Per Channel Chrominance)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueCorrection",
         .binding = &shader_injection.tone_map_hue_correction,
-        .default_value = 100.f,
+        .default_value = 50.f,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tooltip = "Hue retention strength.",
@@ -249,8 +251,8 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxLensFlare",
         .binding = &shader_injection.custom_lens_flare,
-        .default_value = 100.f,
-        .label = "Lens Flare",
+        .default_value = 50.f,
+        .label = "Lens Flare 1",
         .section = "Effects",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
@@ -258,7 +260,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxLensFlare2",
         .binding = &shader_injection.custom_lens_flare_2,
-        .default_value = 100.f,
+        .default_value = 50.f,
         .label = "Lens Flare 2",
         .section = "Effects",
         .max = 100.f,

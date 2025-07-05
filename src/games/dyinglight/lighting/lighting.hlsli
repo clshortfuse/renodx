@@ -40,7 +40,7 @@ float ApplyCustomClampFire(float unclamped_value) {
   clamped_value = min(100.f, unclamped_value);
   clamped_value = renodx::tonemap::ExponentialRollOff(unclamped_value, 1.f, 5.f);
 #else
-  clamped_value = min(5.f, clamped_value);
+  clamped_value = min(7.5f, clamped_value);
 #endif
 
   return clamped_value;
