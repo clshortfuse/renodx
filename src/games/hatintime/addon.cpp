@@ -20,7 +20,7 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    __ALL_CUSTOM_SHADERS
+    __ALL_CUSTOM_SHADERS,
 };
 
 ShaderInjectData shader_injection;
@@ -399,6 +399,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::expected_constant_buffer_space = 50;
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::allow_multiple_push_constants = true;
+        renodx::mods::shader::constant_buffer_offset = 50 * 4;
 
         renodx::mods::swapchain::expected_constant_buffer_index = 13;
         renodx::mods::swapchain::expected_constant_buffer_space = 50;
@@ -476,7 +477,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               .key = "SwapChainEncoding",
               .binding = &shader_injection.swap_chain_encoding,
               .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 4.f,
+              .default_value = 5.f,
               .label = "Encoding",
               .section = "Display Output",
               .labels = {"None", "SRGB", "2.2", "2.4", "HDR10", "scRGB"},
@@ -493,6 +494,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           bool is_hdr10 = setting->GetValue() == 4;
           renodx::mods::swapchain::SetUseHDR10(is_hdr10);
           renodx::mods::swapchain::use_resize_buffer = setting->GetValue() < 4;
+          renodx::mods::swapchain::use_resize_buffer_on_demand = renodx::mods::swapchain::use_resize_buffer;
+          renodx::mods::swapchain::set_color_space = !renodx::mods::swapchain::use_resize_buffer;
           shader_injection.swap_chain_encoding_color_space = is_hdr10 ? 1.f : 0.f;
           settings.push_back(setting);
         }
@@ -546,7 +549,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
-  renodx::mods::shader::Use(fdw_reason, custom_shaders);
+  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
 }
