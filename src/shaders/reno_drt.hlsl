@@ -163,7 +163,7 @@ float3 BT709(float3 bt709, Config current_config) {
 
   float current_color_space = current_config.working_color_space;
 
-  if (current_config.working_color_space == 2u) {
+  if (current_config.working_color_space == 2) {
     input_color = max(0, renodx::color::ap1::from::BT709(bt709));
     y_original = renodx::color::y::from::AP1(input_color);
   } else if (current_config.working_color_space == 1) {
