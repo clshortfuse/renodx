@@ -25,8 +25,8 @@
 
 namespace renodx::utils::constants {
 
-static std::atomic_bool capture_constant_buffers = false;
-static std::atomic_bool capture_push_descriptors = false;
+static bool capture_constant_buffers = false;
+static bool capture_push_descriptors = false;
 
 namespace internal {
 static bool is_primary_hook = false;
@@ -57,6 +57,8 @@ static Store* store = &local_store;
 struct __declspec(uuid("1aa69bfe-5467-47e1-9c8e-c6b935198169")) DeviceData {
   Store* store;
   std::unordered_map<uint64_t, std::vector<reshade::api::pipeline_layout_param>> pipeline_layout_params;
+  bool capture_constant_buffers = false;
+  bool capture_push_descriptors = false;
 };
 
 struct __declspec(uuid("f8805bac-a932-49ef-b0c9-e4db1a8b33fc")) CommandListData {
@@ -77,6 +79,12 @@ static void OnInitDevice(reshade::api::device* device) {
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
     internal::is_primary_hook = true;
     data->store = store;
+    if (capture_constant_buffers) {
+      data->capture_constant_buffers = true;
+    }
+    if (capture_push_descriptors) {
+      data->capture_push_descriptors = true;
+    }
   } else {
     std::stringstream s;
     s << "utils::constants::OnInitDevice(Attaching to hook: ";
@@ -85,6 +93,12 @@ static void OnInitDevice(reshade::api::device* device) {
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
     store = data->store;
+    if (data->capture_constant_buffers) {
+      capture_constant_buffers = true;
+    }
+    if (data->capture_push_descriptors) {
+      capture_push_descriptors = true;
+    }
   }
 }
 
