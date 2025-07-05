@@ -7,9 +7,33 @@
 
 #include <cstdint>
 
+#include <gtl/phmap.hpp>
+
 #include <include/reshade.hpp>
 
 namespace renodx::utils::data {
+
+static const uint32_t THREAD_COUNT = 4;
+
+template <typename Key, typename Value, typename Mutex = gtl::NullMutex>
+using ParallelNodeHashMap = gtl::parallel_node_hash_map<
+    Key,
+    Value,
+    gtl::Hash<Key>,
+    gtl::EqualTo<Key>,
+    std::allocator<std::pair<const Key, Value>>,
+    THREAD_COUNT,
+    Mutex>;
+
+template <typename Key, typename Value, typename Mutex = gtl::NullMutex>
+using ParallelFlatHashMap = gtl::parallel_flat_hash_map<
+    Key,
+    Value,
+    gtl::Hash<Key>,
+    gtl::EqualTo<Key>,
+    std::allocator<std::pair<const Key, Value>>,
+    THREAD_COUNT,
+    Mutex>;
 
 template <typename T>
 inline T* Get(const reshade::api::api_object* api_object) {

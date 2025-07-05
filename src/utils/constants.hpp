@@ -49,7 +49,7 @@ struct BoundSlotData {
 };
 
 static struct Store {
-  gtl::parallel_node_hash_map<uint64_t, BufferRangeData> buffer_range_data;
+  data::ParallelNodeHashMap<uint64_t, BufferRangeData> buffer_range_data;
 } local_store;
 
 static Store* store = &local_store;
@@ -60,7 +60,7 @@ struct __declspec(uuid("1aa69bfe-5467-47e1-9c8e-c6b935198169")) DeviceData {
 };
 
 struct __declspec(uuid("f8805bac-a932-49ef-b0c9-e4db1a8b33fc")) CommandListData {
-  gtl::parallel_flat_hash_map<std::pair<uint8_t, uint8_t>, BoundSlotData> bound_slots;
+  data::ParallelNodeHashMap<std::pair<uint8_t, uint8_t>, BoundSlotData> bound_slots;
 };
 
 static void OnInitDevice(reshade::api::device* device) {
@@ -143,14 +143,13 @@ static void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   if (!internal::is_primary_hook) return;
   if (!capture_constant_buffers) return;
 
-  auto pair = store->buffer_range_data.find(resource.handle);
-  if (pair == store->buffer_range_data.end()) return;
-  auto& data = pair->second;
-  data = {
-      .cache = {},
-      .history = data.cache,
-      .mapping = {},
-  };
+  store->buffer_range_data.modify_if(resource.handle, [&](std::pair<const uint64_t, BufferRangeData>& pair) {
+    pair.second = {
+        .cache = {},
+        .history = pair.second.cache,
+        .mapping = {},
+    };
+  });
 }
 
 static void OnMapBufferRegion(
@@ -163,20 +162,19 @@ static void OnMapBufferRegion(
   if (!internal::is_primary_hook) return;
   if (!capture_constant_buffers) return;
 
-  auto pair = store->buffer_range_data.find(resource.handle);
-  if (pair == store->buffer_range_data.end()) return;
-  auto& data = pair->second;
-  uint8_t* start = *(reinterpret_cast<uint8_t**>(mapped_data));
-  if (size == UINT64_MAX) {
-    auto desc = device->get_resource_desc(resource);
-    data.mapping = {
-        start + offset,
-        start + offset + desc.buffer.size};
-  } else {
-    data.mapping = {
-        start + offset,
-        start + offset + size};
-  }
+  store->buffer_range_data.modify_if(resource.handle, [&](std::pair<const uint64_t, BufferRangeData>& pair) {
+    uint8_t* start = *(reinterpret_cast<uint8_t**>(mapped_data));
+    if (size == UINT64_MAX) {
+      auto desc = device->get_resource_desc(resource);
+      pair.second.mapping = {
+          start + offset,
+          start + offset + desc.buffer.size};
+    } else {
+      pair.second.mapping = {
+          start + offset,
+          start + offset + size};
+    }
+  });
 }
 
 static void OnUnmapBufferRegion(
@@ -184,16 +182,14 @@ static void OnUnmapBufferRegion(
     reshade::api::resource resource) {
   if (!internal::is_primary_hook) return;
   if (!capture_constant_buffers) return;
-  auto pair = store->buffer_range_data.find(resource.handle);
-  if (pair == store->buffer_range_data.end()) return;
-  auto& data = pair->second;
-
-  if (data.mapping.empty()) {
-    std::ranges::fill(data.cache, 0);
-  } else {
-    data.cache.assign(data.mapping.begin(), data.mapping.end());
-  }
-  data.mapping = {};
+  store->buffer_range_data.modify_if(resource.handle, [&](std::pair<const uint64_t, BufferRangeData>& pair) {
+    if (pair.second.mapping.empty()) {
+      std::ranges::fill(pair.second.cache, 0);
+    } else {
+      pair.second.cache.assign(pair.second.mapping.begin(), pair.second.mapping.end());
+    }
+    pair.second.mapping = {};
+  });
 }
 
 static bool OnUpdateBufferRegion(
@@ -203,14 +199,12 @@ static bool OnUpdateBufferRegion(
   if (!internal::is_primary_hook) return false;
   if (!capture_constant_buffers) return false;
 
-  auto pair = store->buffer_range_data.find(resource.handle);
-  if (pair == store->buffer_range_data.end()) return false;
-  auto& data = pair->second;
-
-  if (data.cache.size() < offset + size) {
-    data.cache.resize(offset + size, 0);
-  }
-  memcpy(data.cache.data() + offset, static_cast<const uint8_t*>(buffer_data) + offset, size);
+  store->buffer_range_data.modify_if(resource.handle, [&](std::pair<const uint64_t, BufferRangeData>& pair) {
+    if (pair.second.cache.size() < offset + size) {
+      pair.second.cache.resize(offset + size, 0);
+    }
+    memcpy(pair.second.cache.data() + offset, static_cast<const uint8_t*>(buffer_data) + offset, size);
+  });
 
   return false;
 }
@@ -254,33 +248,33 @@ static void OnPushDescriptors(
     uint32_t dx_register_space = param.push_constants.dx_register_space;
     const auto& buffer_range = static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
     auto slot = std::pair<uint32_t, uint32_t>(dx_register_index, dx_register_space);
-    auto& data = cmd_list_data->bound_slots[slot];
-    data.layout = layout;
-    data.param_index = layout_param;
-    data.stages = stages;
-    data.buffer_range = buffer_range;
-    data.update = update;
-    data.update.binding = update.binding + i;
-    data.update.descriptors = &data.buffer_range;
+    auto* data = &cmd_list_data->bound_slots[slot];
+    data->layout = layout;
+    data->param_index = layout_param;
+    data->stages = stages;
+    data->buffer_range = buffer_range;
+    data->update = update;
+    data->update.binding = update.binding + i;
+    data->update.descriptors = &data->buffer_range;
 
 #ifdef DEBUG_LEVEL_2
     {
       std::stringstream s;
       s << "utils::constants::OnPushDescriptors(";
-      s << PRINT_PTR(data.layout.handle);
-      s << "[" << data.param_index << "]";
-      s << "[" << data.update.binding << "]";
+      s << PRINT_PTR(data->layout.handle);
+      s << "[" << data->param_index << "]";
+      s << "[" << data->update.binding << "]";
       s << ", dx_register_index: " << dx_register_index;
       s << ", dx_register_space: " << dx_register_space;
-      s << ", stages: " << data.stages;
-      s << ", buffer_range: " << PRINT_PTR(data.buffer_range.buffer.handle);
-      if (data.buffer_range.size == UINT64_MAX) {
+      s << ", stages: " << data->stages;
+      s << ", buffer_range: " << PRINT_PTR(data->buffer_range.buffer.handle);
+      if (data->buffer_range.size == UINT64_MAX) {
         s << "[all]";
-      } else if (data.buffer_range.size == 0) {
+      } else if (data->buffer_range.size == 0) {
         s << "[empty]";
       } else {
-        s << "[" << data.buffer_range.offset;
-        s << " - " << data.buffer_range.offset + data.buffer_range.size << "]";
+        s << "[" << data->buffer_range.offset;
+        s << " - " << data->buffer_range.offset + data->buffer_range.size << "]";
       }
       s << ")";
       reshade::log::message(reshade::log::level::debug, s.str().c_str());
@@ -290,17 +284,19 @@ static void OnPushDescriptors(
 }
 
 inline std::vector<uint8_t> GetResourceCache(reshade::api::device* device, reshade::api::resource resource) {
-  auto pair = store->buffer_range_data.find(resource.handle);
-  if (pair == store->buffer_range_data.end()) return {};
-  auto& data = pair->second;
-  return data.cache;
+  std::vector<uint8_t> value;
+  store->buffer_range_data.if_contains(resource.handle, [&](const std::pair<const uint64_t, BufferRangeData>& pair) {
+    value = pair.second.cache;
+  });
+  return value;
 }
 
 inline std::vector<uint8_t> GetResourceHistory(reshade::api::device* device, reshade::api::resource resource) {
-  auto pair = store->buffer_range_data.find(resource.handle);
-  if (pair == store->buffer_range_data.end()) return {};
-  auto& data = pair->second;
-  return data.history;
+  std::vector<uint8_t> value;
+  store->buffer_range_data.if_contains(resource.handle, [&](const std::pair<const uint64_t, BufferRangeData>& pair) {
+    value = pair.second.history;
+  });
+  return value;
 }
 
 inline void PushShaderInjections(
@@ -359,26 +355,26 @@ static bool RevertBufferRange(reshade::api::command_list* cmd_list, uint32_t dx_
   auto slot = std::pair<uint32_t, uint32_t>(dx_register_index, dx_register_space);
   auto it = cmd_list_data->bound_slots.find(slot);
   if (it == cmd_list_data->bound_slots.end()) return false;
-  auto& data = it->second;
+  auto* data = &it->second;
 
 #ifdef DEBUG_LEVEL_2
   {
     std::stringstream s;
     s << "utils::constants::RevertBufferRange(";
-    s << PRINT_PTR(data.layout.handle);
-    s << "[" << data.param_index << "]";
-    s << "[" << data.update.binding << "]";
+    s << PRINT_PTR(data->layout.handle);
+    s << "[" << data->param_index << "]";
+    s << "[" << data->update.binding << "]";
     s << ", dx_register_index: " << dx_register_index;
     s << ", dx_register_space: " << dx_register_space;
-    s << ", stages: " << data.stages;
-    s << ", buffer_range: " << PRINT_PTR(data.buffer_range.buffer.handle);
-    if (data.buffer_range.size == UINT64_MAX) {
+    s << ", stages: " << data->stages;
+    s << ", buffer_range: " << PRINT_PTR(data->buffer_range.buffer.handle);
+    if (data->buffer_range.size == UINT64_MAX) {
       s << "[all]";
-    } else if (data.buffer_range.size == 0) {
+    } else if (data->buffer_range.size == 0) {
       s << "[empty]";
     } else {
-      s << "[" << data.buffer_range.offset;
-      s << " - " << data.buffer_range.offset + data.buffer_range.size << "]";
+      s << "[" << data->buffer_range.offset;
+      s << " - " << data->buffer_range.offset + data->buffer_range.size << "]";
     }
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
@@ -386,10 +382,10 @@ static bool RevertBufferRange(reshade::api::command_list* cmd_list, uint32_t dx_
 #endif
 
   cmd_list->push_descriptors(
-      data.stages,
-      data.layout,
-      data.param_index,
-      data.update);
+      data->stages,
+      data->layout,
+      data->param_index,
+      data->update);
 
   return true;
 }
