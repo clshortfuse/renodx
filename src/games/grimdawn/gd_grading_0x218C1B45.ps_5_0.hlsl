@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsl"
 
 // ---- Created with 3Dmigoto v1.3.16 on Tue Feb 11 16:39:33 2025
 
@@ -141,25 +141,16 @@ void main(
   // o0.xyzw = v1.xyzw * r0.xyzw;
 
   r0.xyz = brightnessAdjustment + r1.xyz;
-  float3 vanilla_graded = saturate(r0.xyz) * v1.xyz;
+  float3 sdr_color = saturate(r0.xyz) * v1.xyz;
 
   float3 graded = r0.rgb * v1.rgb;
 
   graded = renodx::color::srgb::DecodeSafe(graded);
   ungraded = renodx::color::srgb::DecodeSafe(ungraded);
-  vanilla_graded = renodx::color::srgb::DecodeSafe(vanilla_graded);
-  graded = lerp(ungraded, graded, CUSTOM_COLOR_GRADING);
+  sdr_color = renodx::color::srgb::DecodeSafe(sdr_color);
+  float3 untonemapped = lerp(ungraded, graded, CUSTOM_COLOR_GRADING);
 
-  float3 outputColor = vanilla_graded;
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
-    if (CUSTOM_TONE_MAP_CONFIGURATION == 0) {
-      outputColor = renodx::draw::ToneMapPass(graded, vanilla_graded);
-    }
-    else {
-      outputColor = renodx::draw::ToneMapPass(graded);
-    }
-  }
-  o0.rgb = renodx::draw::RenderIntermediatePass(outputColor);
+  o0.rgb = CustomTonemapIntermediate(untonemapped, sdr_color);
   o0.w = v1.w * r0.w;
   return;
 }
