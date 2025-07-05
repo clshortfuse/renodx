@@ -68,7 +68,6 @@ struct __declspec(uuid("f8805bac-a932-49ef-b0c9-e4db1a8b33fc")) CommandListData 
 static void OnInitDevice(reshade::api::device* device) {
   DeviceData* data;
   bool created = renodx::utils::data::CreateOrGet<DeviceData>(device, data);
-  if (!created) return;
 
   if (created) {
     std::stringstream s;
