@@ -281,14 +281,13 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeClip",
         .binding = &shader_injection.colorGradeClip,
-        .default_value = 100.f,
+        .default_value = 26.f,
         .label = "Clipping",
         .section = "Color Grading",
         .tint = 0x182939,
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType == 4.f; },
         .parse = [](float value) { return value; },
-        .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeLUTStrength",
@@ -376,7 +375,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeBlowout", 50.f);
           renodx::utils::settings::UpdateSetting("colorGradeDechroma", 0.f);
           renodx::utils::settings::UpdateSetting("colorGradeFlare", 0.f);
-          renodx::utils::settings::UpdateSetting("colorGradeClip", 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeClip", 26.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f);
         },
