@@ -35,7 +35,7 @@ void main(
   float3 hueCorrectionColor = vanillaTonemap(r0.rgb);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = min(3, injectedData.toneMapType);
-  config.peak_nits = 10000.f;
+  config.peak_nits = injectedData.toneMapPeakNits;
   config.game_nits = injectedData.toneMapGameNits;
   config.gamma_correction = injectedData.toneMapGammaCorrection;
   config.exposure = injectedData.colorGradeExposure;

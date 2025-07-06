@@ -83,20 +83,12 @@ float3 InvertToneMapScale(float3 color) {
 float3 FinalizeOutput(float3 color) {
   if (injectedData.toneMapGammaCorrection == 2.f) {
     color = renodx::color::correct::GammaSafe(color, false, 2.4f);
-    color *= injectedData.toneMapUINits;
   } else if (injectedData.toneMapGammaCorrection == 1.f) {
     color = renodx::color::correct::GammaSafe(color, false, 2.2f);
-    color *= injectedData.toneMapUINits;
-  } else {
-    color *= injectedData.toneMapUINits;
   }
+  color *= injectedData.toneMapUINits;
   if (injectedData.toneMapType == 0.f) {
     color = renodx::color::bt709::clamp::BT709(color);
-  } else if (injectedData.toneMapType != 1.f) {
-    color = renodx::color::bt2020::from::BT709(color);
-    color = renodx::tonemap::ExponentialRollOff(color, injectedData.toneMapGameNits, max(injectedData.toneMapPeakNits, injectedData.toneMapGameNits + 1.f));
-    color = max(0.f, color);
-    color = renodx::color::bt709::from::BT2020(color);
   } else {
     color = renodx::color::bt709::clamp::BT2020(color);
   }
@@ -142,7 +134,7 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
 		Params0.x, Params0.y, Params0.z, Params0.w, Params1.x, Params1.y, Params1.z);
 		  renodx::tonemap::Config config = renodx::tonemap::config::Create();
 			config.type = min(3, injectedData.toneMapType);
-			config.peak_nits = 10000.f;
+			config.peak_nits = injectedData.toneMapPeakNits;
 			config.game_nits = injectedData.toneMapGameNits;
 			config.gamma_correction = injectedData.toneMapGammaCorrection;
 			config.exposure = injectedData.colorGradeExposure;
@@ -192,7 +184,7 @@ float3 applyUserTonemap(float3 untonemapped, float4 Params0, float3 Params1){
   Params0.x, Params0.y, Params0.z, Params0.w, Params1.x, Params1.y, Params1.z);
     renodx::tonemap::Config config = renodx::tonemap::config::Create();
     config.type = min(3, injectedData.toneMapType);
-    config.peak_nits = 10000.f;
+    config.peak_nits = injectedData.toneMapPeakNits;
     config.game_nits = injectedData.toneMapGameNits;
     config.gamma_correction = injectedData.toneMapGammaCorrection;
     config.exposure = injectedData.colorGradeExposure;
@@ -224,4 +216,38 @@ float3 applyUserTonemap(float3 untonemapped, float4 Params0, float3 Params1){
     outputColor = untonemapped;
     }
 return renodx::tonemap::config::Apply(outputColor, config);
+}
+
+float UpgradeToneMapRatio(float ap1_color_hdr, float ap1_color_sdr, float ap1_post_process_color) {
+  if (ap1_color_hdr < ap1_color_sdr) {
+    // If substracting (user contrast or paperwhite) scale down instead
+    // Should only apply on mismatched HDR
+    return ap1_color_hdr / ap1_color_sdr;
+  } else {
+    float ap1_delta = ap1_color_hdr - ap1_color_sdr;
+    ap1_delta = max(0, ap1_delta);  // Cleans up NaN
+    const float ap1_new = ap1_post_process_color + ap1_delta;
+
+    const bool ap1_valid = (ap1_post_process_color > 0);  // Cleans up NaN and ignore black
+    return ap1_valid ? (ap1_new / ap1_post_process_color) : 0;
+  }
+}
+
+float3 UpgradeToneMapPerChannel(float3 color_hdr, float3 color_sdr, float3 post_process_color, float post_process_strength) {
+  // float ratio = 1.f;
+
+  float3 bt2020_hdr = max(0, renodx::color::bt2020::from::BT709(color_hdr));
+  float3 bt2020_sdr = max(0, renodx::color::bt2020::from::BT709(color_sdr));
+  float3 bt2020_post_process = max(0, renodx::color::bt2020::from::BT709(post_process_color));
+
+  float3 ratio = float3(
+      UpgradeToneMapRatio(bt2020_hdr.r, bt2020_sdr.r, bt2020_post_process.r),
+      UpgradeToneMapRatio(bt2020_hdr.g, bt2020_sdr.g, bt2020_post_process.g),
+      UpgradeToneMapRatio(bt2020_hdr.b, bt2020_sdr.b, bt2020_post_process.b));
+
+  float3 color_scaled = max(0, bt2020_post_process * ratio);
+  color_scaled = renodx::color::bt709::from::BT2020(color_scaled);
+  float peak_correction = saturate(1.f - renodx::color::y::from::BT2020(bt2020_post_process));
+  color_scaled = renodx::color::correct::Hue(color_scaled, post_process_color, peak_correction);
+  return lerp(color_hdr, color_scaled, post_process_strength);
 }

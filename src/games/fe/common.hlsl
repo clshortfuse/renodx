@@ -55,11 +55,6 @@ float3 FinalizeOutput(float3 color) {
   color *= injectedData.toneMapUINits;
   	if(injectedData.toneMapType == 0.f){
   color = renodx::color::bt709::clamp::BT709(color);
-  } else if (injectedData.toneMapType != 1.f) {
-    color = renodx::color::bt2020::from::BT709(color);
-    color = renodx::tonemap::ExponentialRollOff(color, injectedData.toneMapGameNits, max(injectedData.toneMapPeakNits, injectedData.toneMapGameNits + 1.f));
-    color = max(0.f, color);
-    color = renodx::color::bt709::from::BT2020(color);
   } else {
     color = renodx::color::bt709::clamp::BT2020(color);
   }
@@ -83,7 +78,7 @@ float3 applyUserTonemap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   float3 hueCorrectionColor = vanillaTonemap(untonemapped);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = min(3, injectedData.toneMapType);
-  config.peak_nits = 10000.f;
+  config.peak_nits = injectedData.toneMapPeakNits;
   config.game_nits = injectedData.toneMapGameNits;
   config.gamma_correction = injectedData.toneMapGammaCorrection;
   config.exposure = injectedData.colorGradeExposure;

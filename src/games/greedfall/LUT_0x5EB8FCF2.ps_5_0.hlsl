@@ -118,7 +118,7 @@ void main(
     float3 outputColor;
   	renodx::tonemap::Config config = renodx::tonemap::config::Create();
 			config.type = injectedData.toneMapType > 1.f ? 3.f : injectedData.toneMapType;
-			config.peak_nits = 10000.f;
+			config.peak_nits = gammaCorrectPeak(injectedData.toneMapPeakNits);
 			config.game_nits = injectedData.toneMapGameNits;
 			config.gamma_correction = 0.f;
 			config.exposure = injectedData.colorGradeExposure;

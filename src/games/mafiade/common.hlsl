@@ -42,15 +42,28 @@ float3 FinalizeOutput(float3 color) {
   color *= injectedData.toneMapUINits;
     if(injectedData.toneMapType == 0.f){
   color = renodx::color::bt709::clamp::BT709(color);
-  } else if (injectedData.toneMapType != 1.f) {
-  color = renodx::color::bt2020::from::BT709(color);
-  color = renodx::tonemap::ExponentialRollOff(color, injectedData.toneMapGameNits, max(injectedData.toneMapPeakNits, injectedData.toneMapGameNits + 1.f));
-  color = max(0.f, color);
-  color = renodx::color::bt709::from::BT2020(color);
+  color = min(injectedData.toneMapGameNits, color);
   } else {
   color = renodx::color::bt709::clamp::BT2020(color);
   }
   color /= 80.f;
+  return color;
+}
+
+float3 InvertFinalizeOutput(float3 color) {
+  if (injectedData.toneMapGammaCorrection == 2.f) {
+    color = renodx::color::gamma::DecodeSafe(color, 2.4f);
+    color *= 80.f / injectedData.toneMapUINits;
+    color = renodx::color::gamma::EncodeSafe(color, 2.4f);
+  } else if (injectedData.toneMapGammaCorrection == 1.f) {
+    color = renodx::color::gamma::DecodeSafe(color, 2.2f);
+    color *= 80.f / injectedData.toneMapUINits;
+    color = renodx::color::gamma::EncodeSafe(color, 2.2f);
+  } else {
+    color = renodx::color::srgb::DecodeSafe(color);
+    color *= 80.f / injectedData.toneMapUINits;
+    color = renodx::color::srgb::EncodeSafe(color);
+  }
   return color;
 }
 
@@ -89,7 +102,7 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
 		float3 hueCorrectionColor = vanillaTonemap(untonemapped, params1, params2);
 		  renodx::tonemap::Config config = renodx::tonemap::config::Create();
 			config.type = min(3, injectedData.toneMapType);
-			config.peak_nits = 10000.f;
+			config.peak_nits = injectedData.toneMapPeakNits;
 			config.game_nits = injectedData.toneMapGameNits;
 			config.gamma_correction = injectedData.toneMapGammaCorrection;
 			config.exposure = injectedData.colorGradeExposure;

@@ -105,6 +105,15 @@ void main(
   o0.w = 1;
   if (injectedData.toneMapType == 0.f) {
     r0.rgb = saturate(r0.rgb);
+  } else {
+    float y_max = injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
+    if (injectedData.toneMapGammaCorrection != 0.f) {
+      y_max = renodx::color::correct::Gamma(y_max, true, injectedData.toneMapGammaCorrection == 1.f ? 2.2f : 2.4f);
+    }
+    float y = renodx::color::y::from::BT709(abs(r0.rgb));
+    if (y > y_max) {
+      r0.rgb = renodx::tonemap::ExponentialRollOff(r0.rgb, 1.f, max(1.005f, y_max));
+    }
   }
   o0.rgb = PostToneMapScale(r0.rgb);
   return;

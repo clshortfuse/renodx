@@ -567,7 +567,10 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     }),
     CustomShaderEntry(0xA36BCFE2),  // lens dirt
     CustomShaderEntry(0xA4F44331),  // lens dirt
-    CustomShaderEntry(0x3708D87A),  // lens flare
+    CustomShaderEntryCallback(0x3708D87A, [](reshade::api::command_list* cmd_list) {  // lens flare
+    shader_injection.stateCheck = renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list) ? 1.f : 0.f;
+    return true;
+    }),
     CustomShaderEntry(0x6720BADB),  // interactable items outline
     CustomShaderEntry(0x4E5E174F),  // something
     // Shadow Warrior 2
@@ -1666,7 +1669,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("toneMapPerChannel", 1.f);
           renodx::utils::settings::UpdateSetting("toneMapHueProcessor", 1.f);
           renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 20.f);
-          renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.25f);
+          renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
           renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
           renodx::utils::settings::UpdateSetting("colorGradeShadows", 53.f);
           renodx::utils::settings::UpdateSetting("colorGradeContrast", 56.f);
