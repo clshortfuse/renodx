@@ -29,11 +29,12 @@ static std::atomic_size_t custom_shaders_count = 0;
 struct CustomShader {
   std::variant<std::exception, std::vector<uint8_t>> compilation;
   bool is_hlsl = false;
+  bool is_glsl = false;
   std::filesystem::path file_path;
   uint32_t shader_hash;
   bool removed = false;
 
-  [[nodiscard]] bool IsCompilationOK() const{
+  [[nodiscard]] bool IsCompilationOK() const {
     return std::holds_alternative<std::vector<uint8_t>>(compilation);
   }
 
@@ -41,7 +42,7 @@ struct CustomShader {
     return std::get<std::vector<uint8_t>>(compilation);
   }
 
-  [[nodiscard]] std::exception& GetCompilationException()  {
+  [[nodiscard]] std::exception& GetCompilationException() {
     return std::get<std::exception>(compilation);
   }
 
@@ -49,7 +50,7 @@ struct CustomShader {
     if (!is_hlsl) return "";
     static const auto CHARACTERS_TO_REMOVE_FROM_END = std::string("0x12345678.xx_x_x.hlsl").length();
     auto filename = file_path.filename().string();
-    filename.erase(filename.length() - std::min(CHARACTERS_TO_REMOVE_FROM_END, filename.length()));
+    filename.erase(filename.length() - (std::min)(CHARACTERS_TO_REMOVE_FROM_END, filename.length()));
     if (filename.ends_with("_")) {
       filename.erase(filename.length() - 1);
     }
@@ -166,6 +167,7 @@ static bool CompileCustomShaders() {
 
       CustomShader custom_shader = {
           .is_hlsl = is_hlsl,
+          .is_glsl = is_glsl,
           .file_path = entry_path,
       };
 
