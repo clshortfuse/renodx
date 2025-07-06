@@ -180,6 +180,198 @@ static thread_local std::optional<reshade::api::resource_view_desc> local_origin
 
 // Methods
 
+bool LoadDirectXLibraries() {
+#ifndef RENODX_PROXY_DEVICE_D3D12
+  if (pD3D11CreateDevice == nullptr) {
+    HMODULE d3d11_module = LoadLibraryW(L"d3d11.dll");
+    if (d3d11_module == nullptr) {
+      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(LoadLibraryW(d3d11.dll) failed)");
+      return false;
+    }
+    pD3D11CreateDevice = reinterpret_cast<decltype(&D3D11CreateDevice)>(GetProcAddress(d3d11_module, "D3D11CreateDevice"));
+    if (pD3D11CreateDevice == nullptr) {
+      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(d3d11.dll, D3D11CreateDevice) failed)");
+      return false;
+    }
+  }
+
+#else
+  if (pD3D12CreateDevice == nullptr) {
+    HMODULE d3d12_module = LoadLibraryW(L"d3d12.dll");
+    if (d3d12_module == nullptr) {
+      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(LoadLibraryW(d3d12.dll) failed)");
+      return false;
+    }
+    pD3D12CreateDevice = reinterpret_cast<decltype(&D3D12CreateDevice)>(GetProcAddress(d3d12_module, "D3D12CreateDevice"));
+    if (pD3D12CreateDevice == nullptr) {
+      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(d3d12.dll, D3D12CreateDevice) failed)");
+      return false;
+    }
+  }
+#endif
+
+  if (pCreateDXGIFactory1 == nullptr) {
+    HMODULE dxgi_module = LoadLibraryW(L"dxgi.dll");
+    if (dxgi_module == nullptr) {
+      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(LoadLibraryW(dxgi.dll) failed)");
+      return false;
+    }
+
+    pCreateDXGIFactory1 = reinterpret_cast<decltype(&CreateDXGIFactory1)>(
+        GetProcAddress(dxgi_module, "CreateDXGIFactory1"));
+    if (pCreateDXGIFactory1 == nullptr) {
+      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(dxgi.dll, CreateDXGIFactory1) failed)");
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_resource_info, HWND hwnd = nullptr) {
+  if (proxy_device != nullptr) {
+    return proxy_device;
+  }
+
+  if (!LoadDirectXLibraries()) return nullptr;
+
+  IDXGIFactory2* dxgi_factory = nullptr;
+
+  if (FAILED(pCreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory)))) {
+    reshade::log::message(reshade::log::level::error, "mods::swapchain::GetDeviceProxy(CreateDXGIFactory1 failed)");
+    return nullptr;
+  }
+
+  DXGI_SWAP_CHAIN_FULLSCREEN_DESC fullscreen_desc = {};
+  DXGI_SWAP_CHAIN_DESC1 sc_desc = {};
+  sc_desc.BufferCount = 2;
+  sc_desc.Width = host_resource_info->desc.texture.width;
+  sc_desc.Height = host_resource_info->desc.texture.height;
+  sc_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+  fullscreen_desc.RefreshRate.Numerator = 0;
+  fullscreen_desc.RefreshRate.Denominator = 0;
+  sc_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+  auto* output_window = hwnd != nullptr ? static_cast<HWND>(hwnd) : GetDesktopWindow();
+  sc_desc.SampleDesc.Count = 1;
+  fullscreen_desc.Windowed = TRUE;
+  sc_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+  sc_desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+
+  sc_desc.Stereo = FALSE;
+  sc_desc.SampleDesc.Quality = 0;
+  sc_desc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+  sc_desc.Scaling = DXGI_SCALING_NONE;
+  fullscreen_desc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+
+  IUnknown* swapchain_creator = nullptr;
+#ifndef RENODX_PROXY_DEVICE_D3D12
+  UINT create_flags = D3D11_CREATE_DEVICE_SINGLETHREADED;
+  D3D_FEATURE_LEVEL feature_level;
+
+  assert(is_creating_proxy_device == false);
+  assert(proxy_device_reshade == nullptr);
+  is_creating_proxy_device = true;
+  if (FAILED(pD3D11CreateDevice(
+          nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, create_flags,
+          nullptr, 0, D3D11_SDK_VERSION, &proxy_device, &feature_level, &proxy_device_context))) {
+    is_creating_proxy_device = false;
+    if (dxgi_factory != nullptr) {
+      dxgi_factory->Release();
+    }
+    proxy_device = nullptr;
+    proxy_device_context = nullptr;
+    return nullptr;
+  }
+  is_creating_proxy_device = false;
+  assert(proxy_device_reshade != nullptr);
+
+  swapchain_creator = proxy_device;
+#else
+  // UINT create_flags = D3D11_CREATE_DEVICE_SINGLETHREADED;
+  D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_12_0;
+
+  assert(is_creating_proxy_device == false);
+  assert(proxy_device_reshade == nullptr);
+  is_creating_proxy_device = true;
+
+  if (FAILED(pD3D12CreateDevice(
+          nullptr, feature_level, IID_PPV_ARGS(&proxy_device)))) {
+    is_creating_proxy_device = false;
+    if (dxgi_factory != nullptr) {
+      dxgi_factory->Release();
+    }
+    proxy_device = nullptr;
+    return nullptr;
+  }
+
+  is_creating_proxy_device = false;
+  assert(proxy_device_reshade != nullptr);
+
+  // Create swapchain for HWND
+  // For D3D12, the swapchain must be created from a command queue, not the device.
+  assert(proxy_command_queue == nullptr);
+  D3D12_COMMAND_QUEUE_DESC queue_desc = {};
+  queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+  queue_desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+  queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+  queue_desc.NodeMask = 0;
+  if (FAILED(proxy_device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&proxy_command_queue)))) {
+    if (dxgi_factory != nullptr) {
+      dxgi_factory->Release();
+    }
+    if (proxy_device != nullptr) {
+      proxy_device->Release();
+      proxy_device = nullptr;
+    }
+    return nullptr;
+  }
+  assert(proxy_command_queue != nullptr);
+  swapchain_creator = proxy_command_queue;
+#endif
+
+  if (FAILED(dxgi_factory->CreateSwapChainForHwnd(
+          swapchain_creator,
+          output_window,
+          &sc_desc,
+          &fullscreen_desc,
+          nullptr,
+          &proxy_swap_chain))) {
+    reshade::log::message(reshade::log::level::error, "mods::swapchain::GetDeviceProxy(CreateSwapChainForHwnd failed)");
+    if (proxy_device_context != nullptr) {
+      proxy_device_context->Release();
+      proxy_device_context = nullptr;
+    }
+    if (proxy_command_queue != nullptr) {
+      proxy_command_queue->Release();
+      proxy_command_queue = nullptr;
+    }
+    if (dxgi_factory != nullptr) {
+      dxgi_factory->Release();
+    }
+    if (proxy_device != nullptr) {
+      proxy_device->Release();
+      proxy_device = nullptr;
+    }
+    proxy_swap_chain = nullptr;
+    return nullptr;
+  }
+  reshade::log::message(reshade::log::level::info, "mods::swapchain::GetDeviceProxy(Swapchain created successfully)");
+
+  // Cleanup local references (do not release d3d11Device, it's returned)
+  if (dxgi_factory != nullptr) {
+    dxgi_factory->Release();
+    dxgi_factory = nullptr;
+  }
+
+  IDXGISwapChain3* swapChain3 = nullptr;
+  if (SUCCEEDED(proxy_swap_chain->QueryInterface(IID_PPV_ARGS(&swapChain3)))) {
+    swapChain3->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709);
+    swapChain3->Release();
+  }
+
+  return proxy_device;
+}
+
 static bool UsingSwapchainProxy() {
   return !swap_chain_proxy_pixel_shader.empty() || !swap_chain_proxy_shaders.empty();
 }
@@ -461,8 +653,6 @@ inline reshade::api::resource CloneResource(utils::resource::ResourceInfo* resou
         auto* data = renodx::utils::data::Get<DeviceData>(resource_info->device);
         assert(data != nullptr);
         auto* hwnd = data->primary_swapchain_window;
-        // Forward declare GetDeviceProxy to avoid undeclared identifier error
-        ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo * host_resource_info, HWND hwnd);
 
         auto* new_device = GetDeviceProxy(resource_info, hwnd);
         assert(new_device != nullptr);
@@ -856,198 +1046,6 @@ inline void FlushDescriptors(reshade::api::command_list* cmd_list) {
         info.update);
   }
   cmd_data->unpushed_updates.clear();
-}
-
-bool LoadDirectXLibraries() {
-#ifndef RENODX_PROXY_DEVICE_D3D12
-  if (pD3D11CreateDevice == nullptr) {
-    HMODULE d3d11_module = LoadLibraryW(L"d3d11.dll");
-    if (d3d11_module == nullptr) {
-      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(LoadLibraryW(d3d11.dll) failed)");
-      return false;
-    }
-    pD3D11CreateDevice = reinterpret_cast<decltype(&D3D11CreateDevice)>(GetProcAddress(d3d11_module, "D3D11CreateDevice"));
-    if (pD3D11CreateDevice == nullptr) {
-      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(d3d11.dll, D3D11CreateDevice) failed)");
-      return false;
-    }
-  }
-
-#else
-  if (pD3D12CreateDevice == nullptr) {
-    HMODULE d3d12_module = LoadLibraryW(L"d3d12.dll");
-    if (d3d12_module == nullptr) {
-      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(LoadLibraryW(d3d12.dll) failed)");
-      return false;
-    }
-    pD3D12CreateDevice = reinterpret_cast<decltype(&D3D12CreateDevice)>(GetProcAddress(d3d12_module, "D3D12CreateDevice"));
-    if (pD3D12CreateDevice == nullptr) {
-      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(d3d12.dll, D3D12CreateDevice) failed)");
-      return false;
-    }
-  }
-#endif
-
-  if (pCreateDXGIFactory1 == nullptr) {
-    HMODULE dxgi_module = LoadLibraryW(L"dxgi.dll");
-    if (dxgi_module == nullptr) {
-      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(LoadLibraryW(dxgi.dll) failed)");
-      return false;
-    }
-
-    pCreateDXGIFactory1 = reinterpret_cast<decltype(&CreateDXGIFactory1)>(
-        GetProcAddress(dxgi_module, "CreateDXGIFactory1"));
-    if (pCreateDXGIFactory1 == nullptr) {
-      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(dxgi.dll, CreateDXGIFactory1) failed)");
-      return false;
-    }
-  }
-
-  return true;
-}
-
-static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_resource_info, HWND hwnd = nullptr) {
-  if (proxy_device != nullptr) {
-    return proxy_device;
-  }
-
-  if (!LoadDirectXLibraries()) return nullptr;
-
-  IDXGIFactory2* dxgi_factory = nullptr;
-
-  if (FAILED(pCreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory)))) {
-    reshade::log::message(reshade::log::level::error, "mods::swapchain::GetDeviceProxy(CreateDXGIFactory1 failed)");
-    return nullptr;
-  }
-
-  DXGI_SWAP_CHAIN_FULLSCREEN_DESC fullscreen_desc = {};
-  DXGI_SWAP_CHAIN_DESC1 sc_desc = {};
-  sc_desc.BufferCount = 2;
-  sc_desc.Width = host_resource_info->desc.texture.width;
-  sc_desc.Height = host_resource_info->desc.texture.height;
-  sc_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-  fullscreen_desc.RefreshRate.Numerator = 0;
-  fullscreen_desc.RefreshRate.Denominator = 0;
-  sc_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-  auto* output_window = hwnd != nullptr ? static_cast<HWND>(hwnd) : GetDesktopWindow();
-  sc_desc.SampleDesc.Count = 1;
-  fullscreen_desc.Windowed = TRUE;
-  sc_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-  sc_desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-
-  sc_desc.Stereo = FALSE;
-  sc_desc.SampleDesc.Quality = 0;
-  sc_desc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-  sc_desc.Scaling = DXGI_SCALING_NONE;
-  fullscreen_desc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-
-  IUnknown* swapchain_creator = nullptr;
-#ifndef RENODX_PROXY_DEVICE_D3D12
-  UINT create_flags = D3D11_CREATE_DEVICE_SINGLETHREADED;
-  D3D_FEATURE_LEVEL feature_level;
-
-  assert(is_creating_proxy_device == false);
-  assert(proxy_device_reshade == nullptr);
-  is_creating_proxy_device = true;
-  if (FAILED(pD3D11CreateDevice(
-          nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, create_flags,
-          nullptr, 0, D3D11_SDK_VERSION, &proxy_device, &feature_level, &proxy_device_context))) {
-    is_creating_proxy_device = false;
-    if (dxgi_factory != nullptr) {
-      dxgi_factory->Release();
-    }
-    proxy_device = nullptr;
-    proxy_device_context = nullptr;
-    return nullptr;
-  }
-  is_creating_proxy_device = false;
-  assert(proxy_device_reshade != nullptr);
-
-  swapchain_creator = proxy_device;
-#else
-  // UINT create_flags = D3D11_CREATE_DEVICE_SINGLETHREADED;
-  D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_12_0;
-
-  assert(is_creating_proxy_device == false);
-  assert(proxy_device_reshade == nullptr);
-  is_creating_proxy_device = true;
-
-  if (FAILED(pD3D12CreateDevice(
-          nullptr, feature_level, IID_PPV_ARGS(&proxy_device)))) {
-    is_creating_proxy_device = false;
-    if (dxgi_factory != nullptr) {
-      dxgi_factory->Release();
-    }
-    proxy_device = nullptr;
-    return nullptr;
-  }
-
-  is_creating_proxy_device = false;
-  assert(proxy_device_reshade != nullptr);
-
-  // Create swapchain for HWND
-  // For D3D12, the swapchain must be created from a command queue, not the device.
-  assert(proxy_command_queue == nullptr);
-  D3D12_COMMAND_QUEUE_DESC queue_desc = {};
-  queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-  queue_desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-  queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-  queue_desc.NodeMask = 0;
-  if (FAILED(proxy_device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&proxy_command_queue)))) {
-    if (dxgi_factory != nullptr) {
-      dxgi_factory->Release();
-    }
-    if (proxy_device != nullptr) {
-      proxy_device->Release();
-      proxy_device = nullptr;
-    }
-    return nullptr;
-  }
-  assert(proxy_command_queue != nullptr);
-  swapchain_creator = proxy_command_queue;
-#endif
-
-  if (FAILED(dxgi_factory->CreateSwapChainForHwnd(
-          swapchain_creator,
-          output_window,
-          &sc_desc,
-          &fullscreen_desc,
-          nullptr,
-          &proxy_swap_chain))) {
-    reshade::log::message(reshade::log::level::error, "mods::swapchain::GetDeviceProxy(CreateSwapChainForHwnd failed)");
-    if (proxy_device_context != nullptr) {
-      proxy_device_context->Release();
-      proxy_device_context = nullptr;
-    }
-    if (proxy_command_queue != nullptr) {
-      proxy_command_queue->Release();
-      proxy_command_queue = nullptr;
-    }
-    if (dxgi_factory != nullptr) {
-      dxgi_factory->Release();
-    }
-    if (proxy_device != nullptr) {
-      proxy_device->Release();
-      proxy_device = nullptr;
-    }
-    proxy_swap_chain = nullptr;
-    return nullptr;
-  }
-  reshade::log::message(reshade::log::level::info, "mods::swapchain::GetDeviceProxy(Swapchain created successfully)");
-
-  // Cleanup local references (do not release d3d11Device, it's returned)
-  if (dxgi_factory != nullptr) {
-    dxgi_factory->Release();
-    dxgi_factory = nullptr;
-  }
-
-  IDXGISwapChain3* swapChain3 = nullptr;
-  if (SUCCEEDED(proxy_swap_chain->QueryInterface(IID_PPV_ARGS(&swapChain3)))) {
-    swapChain3->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709);
-    swapChain3->Release();
-  }
-
-  return proxy_device;
 }
 
 inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api::command_queue* queue) {
