@@ -7,7 +7,6 @@
 
 #include <cassert>
 #include <functional>
-#include <mutex>
 #include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
@@ -18,6 +17,7 @@
 #include "../utils/data.hpp"
 #include "../utils/format.hpp"
 #include "../utils/hash.hpp"
+#include "../utils/log.hpp"
 
 namespace renodx::utils::resource {
 
@@ -219,15 +219,14 @@ struct ResourceViewInfo {
   ResourceUpgradeInfo* clone_target = nullptr;
   ResourceUpgradeInfo* upgrade_target = nullptr;
   reshade::api::resource_usage usage = reshade::api::resource_usage::undefined;
+  bool is_clone = false;
 };
 
 static bool is_primary_hook = false;
 
 static struct Store {
-  std::shared_mutex resource_infos_mutex;
-  std::unordered_map<uint64_t, ResourceInfo> resource_infos;
-  std::shared_mutex resource_view_infos_mutex;
-  std::unordered_map<uint64_t, ResourceViewInfo> resource_view_infos;
+  data::ParallelNodeHashMap<uint64_t, ResourceInfo, std::shared_mutex> resource_infos;
+  data::ParallelNodeHashMap<uint64_t, ResourceViewInfo, std::shared_mutex> resource_view_infos;
   std::vector<std::function<void(ResourceInfo* resource_info)>> on_init_resource_info_callbacks;
   std::vector<std::function<void(ResourceInfo* resource_info)>> on_destroy_resource_info_callbacks;
 
@@ -238,55 +237,72 @@ static struct Store {
 static Store* store = &local_store;
 
 inline ResourceInfo* GetResourceInfo(const reshade::api::resource& resource, const bool& create = false) {
-  {
-    std::shared_lock lock(store->resource_infos_mutex);
-    auto pair = store->resource_infos.find(resource.handle);
-    if (pair != store->resource_infos.end()) return &pair->second;
-    if (!create) return nullptr;
+  if (create) {
+    auto [pointer, inserted] = store->resource_infos.try_emplace_p(resource.handle, ResourceInfo({.resource = resource}));
+    return &pointer->second;
   }
-  {
-    std::unique_lock write_lock(store->resource_infos_mutex);
-    auto& info = store->resource_infos.insert({resource.handle, ResourceInfo({.resource = resource})}).first->second;
-    return &info;
+  ResourceInfo* info = nullptr;
+  store->resource_infos.if_contains(resource.handle, [&info](std::pair<const uint64_t, ResourceInfo>& pair) {
+    info = &pair.second;
+  });
+  if (info == nullptr) {
+    log::e("utils::resource::GetResourceInfo(Resource not found for handle: ",
+           log::AsPtr(resource.handle), ")");
+    assert(info != nullptr);
   }
-}
-
-inline ResourceInfo* GetResourceInfoUnsafe(const reshade::api::resource& resource, const bool& create = false) {
-  auto pair = store->resource_infos.find(resource.handle);
-  if (pair != store->resource_infos.end()) return &pair->second;
-  if (!create) return nullptr;
-  auto& info = store->resource_infos.insert({resource.handle, ResourceInfo({.resource = resource})}).first->second;
-  return &info;
-}
-
-inline ResourceInfo& CreateResourceInfo(const reshade::api::resource& resource) {
-  std::unique_lock write_lock(store->resource_infos_mutex);
-  auto& info = store->resource_infos[resource.handle];
-  info.destroyed = false;
-  info.resource = resource;
   return info;
 }
 
+inline ResourceInfo* GetResourceInfoUnsafe(const reshade::api::resource& resource, const bool& create = false) {
+  if (create) {
+    auto [pointer, inserted] = store->resource_infos.try_emplace_p(resource.handle, ResourceInfo({.resource = resource}));
+    return &pointer->second;
+  }
+  ResourceInfo* data = nullptr;
+  store->resource_infos.if_contains_unsafe(resource.handle, [&data](std::pair<const uint64_t, ResourceInfo>& pair) {
+    data = &pair.second;
+  });
+  if (data == nullptr) {
+    log::e("utils::resource::GetResourceInfoUnsafe(Resource not found for handle: ",
+           log::AsPtr(resource.handle), ")");
+    assert(data != nullptr);
+  }
+
+  return data;
+}
+
 inline ResourceViewInfo* GetResourceViewInfo(const reshade::api::resource_view& view, const bool& create = false) {
-  {
-    std::shared_lock lock(store->resource_view_infos_mutex);
-    auto pair = store->resource_view_infos.find(view.handle);
-    if (pair != store->resource_view_infos.end()) return &pair->second;
-    if (!create) return nullptr;
+  if (create) {
+    auto [pointer, inserted] = store->resource_view_infos.try_emplace_p(view.handle, ResourceViewInfo({.view = view}));
+    return &pointer->second;
   }
-  {
-    std::unique_lock write_lock(store->resource_view_infos_mutex);
-    auto& info = store->resource_view_infos.insert({view.handle, ResourceViewInfo({.view = view})}).first->second;
-    return &info;
+  ResourceViewInfo* data = nullptr;
+  store->resource_view_infos.if_contains(view.handle, [&data](std::pair<const uint64_t, ResourceViewInfo>& pair) {
+    data = &pair.second;
+  });
+  if (data == nullptr) {
+    log::e("utils::resource::GetResourceViewInfo(Resource view not found for handle: ",
+           log::AsPtr(view.handle), ")");
+    assert(data != nullptr);
   }
+  return data;
 }
 
 inline ResourceViewInfo* GetResourceViewInfoUnsafe(const reshade::api::resource_view& view, const bool& create = false) {
-  auto pair = store->resource_view_infos.find(view.handle);
-  if (pair != store->resource_view_infos.end()) return &pair->second;
-  if (!create) return nullptr;
-  auto& info = store->resource_view_infos.insert({view.handle, ResourceViewInfo({.view = view})}).first->second;
-  return &info;
+  if (create) {
+    auto [pointer, inserted] = store->resource_view_infos.try_emplace_p(view.handle, ResourceViewInfo({.view = view}));
+    return &pointer->second;
+  }
+  ResourceViewInfo* data = nullptr;
+  store->resource_view_infos.if_contains_unsafe(view.handle, [&data](std::pair<const uint64_t, ResourceViewInfo>& pair) {
+    data = &pair.second;
+  });
+  if (data == nullptr) {
+    log::e("utils::resource::GetResourceViewInfoUnsafe(Resource view not found for handle: ",
+           log::AsPtr(view.handle), ")");
+    assert(data != nullptr);
+  }
+  return data;
 }
 
 struct __declspec(uuid("3c7a0a1f-4bf3-4e7a-ac02-6f63fdc70187")) DeviceData {
@@ -345,28 +361,28 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   auto* device = swapchain->get_device();
 
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
-  std::vector<ResourceInfo*> infos(back_buffer_count);
 
-  {
-    std::unique_lock lock(store->resource_infos_mutex);
-    for (uint32_t index = 0; index < back_buffer_count; ++index) {
-      auto buffer = swapchain->get_back_buffer(index);
-      auto& info = store->resource_infos[buffer.handle];
-      info = {
-          .device = device,
-          .desc = device->get_resource_desc(buffer),
-          .resource = buffer,
-          .is_swap_chain = true,
-          .initial_state = reshade::api::resource_usage::general,
-      };
-      infos[index] = &info;
+  for (uint32_t index = 0; index < back_buffer_count; ++index) {
+    auto buffer = swapchain->get_back_buffer(index);
+    ResourceInfo new_info = {
+        .device = device,
+        .desc = device->get_resource_desc(buffer),
+        .resource = buffer,
+        .is_swap_chain = true,
+        .initial_state = reshade::api::resource_usage::general,
+    };
+    auto [pair, inserted] = store->resource_infos.try_emplace_p(buffer.handle, new_info);
+    if (!inserted) {
+      assert(pair->second.resource.handle == buffer.handle);
+      if (!pair->second.destroyed) {
+        for (auto& callback : store->on_destroy_resource_info_callbacks) {
+          callback(&pair->second);
+        }
+      }
+      pair->second = new_info;
     }
-    lock.unlock();
-  }
-
-  for (auto& resource_info : infos) {
     for (auto& callback : store->on_init_resource_info_callbacks) {
-      callback(resource_info);
+      callback(&pair->second);
     }
   }
 }
@@ -374,26 +390,18 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (!is_primary_hook) return;
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
-  std::vector<ResourceInfo*> infos;
-  {
-    std::unique_lock lock(store->resource_infos_mutex);
-    for (uint32_t index = 0; index < back_buffer_count; ++index) {
-      auto buffer = swapchain->get_back_buffer(index);
-      auto pair = store->resource_infos.find(buffer.handle);
-      if (pair == store->resource_infos.end()) {
-        assert(pair != store->resource_infos.end());
-        continue;
-      }
-      auto& info = pair->second;
-      info.destroyed = true;
-      infos.push_back(&info);
-    }
-    lock.unlock();
-  }
 
-  for (auto& resource_info : infos) {
+  for (uint32_t index = 0; index < back_buffer_count; ++index) {
+    auto buffer = swapchain->get_back_buffer(index);
+    auto* info = GetResourceInfo(buffer, false);
+    if (info == nullptr) {
+      assert(info != nullptr);
+      continue;
+    }
+    info->destroyed = true;
+
     for (auto& callback : store->on_destroy_resource_info_callbacks) {
-      callback(resource_info);
+      callback(info);
     }
   }
 }
@@ -407,34 +415,37 @@ inline void OnInitResource(
   if (!is_primary_hook) return;
   if (resource.handle == 0) return;
 
-  // assume write new
-  std::unique_lock lock(store->resource_infos_mutex);
-  auto& resource_info = store->resource_infos[resource.handle];
-  lock.unlock();
-  if (
-      resource_info.resource.handle == resource.handle
-      && !resource_info.destroyed) {
-#ifdef DEBUG_LEVEL_1
-    std::stringstream s;
-    s << "utils::resource::OnInitResource(Resource reused: ";
-    s << static_cast<uintptr_t>(resource.handle);
-    s << ")";
-    reshade::log::message(reshade::log::level::debug, s.str().c_str());
-#endif
-    for (auto& callback : store->on_destroy_resource_info_callbacks) {
-      callback(&resource_info);
-    }
-  }
-
-  resource_info = {
+  ResourceInfo new_data = {
       .device = device,
       .desc = desc,
       .resource = resource,
       .destroyed = false,
       .initial_state = initial_state,
   };
+
+  ResourceInfo* pointer = nullptr;
+
+  bool was_destroyed = false;
+
+  auto [pair, inserted] = store->resource_infos.try_emplace_p(resource.handle, new_data);
+  if (!inserted) {
+    assert(pair->second.resource.handle == resource.handle);
+    if (!pair->second.destroyed) {
+#ifdef DEBUG_LEVEL_1
+      std::stringstream s;
+      s << "utils::resource::OnInitResource(Resource reused: ";
+      s << static_cast<uintptr_t>(resource.handle);
+      s << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
+      for (auto& callback : store->on_destroy_resource_info_callbacks) {
+        callback(&pair->second);
+      }
+    }
+    pair->second = new_data;
+  }
   for (auto& callback : store->on_init_resource_info_callbacks) {
-    callback(&resource_info);
+    callback(&pair->second);
   }
 }
 
@@ -442,45 +453,49 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   if (!is_primary_hook) return;
   if (resource.handle == 0) return;
 
-  std::shared_lock lock(store->resource_infos_mutex);
-  auto pair = store->resource_infos.find(resource.handle);
-  if (pair == store->resource_infos.end()) {
-    std::stringstream s;
-    s << "utils::resource::OnDestroyResource(Unknown resource: ";
-    s << PRINT_PTR(resource.handle);
-    s << ")";
-    reshade::log::message(reshade::log::level::warning, s.str().c_str());
-    return;
-  }
-  auto& resource_info = pair->second;
-  lock.unlock();
-  if (resource_info.destroyed) {
-#ifdef DEBUG_LEVEL_1
-    std::stringstream s;
-    s << "utils::resource::OnDestroyResource(Resource already destroyed: ";
-    s << PRINT_PTR(resource.handle);
-    s << ")";
-    reshade::log::message(reshade::log::level::warning, s.str().c_str());
-#endif
-    return;
-  }
-  if (resource_info.is_clone) {
-    std::stringstream s;
-    s << "utils::resource::OnDestroyResource(Clone destroyed directly: ";
-    s << PRINT_PTR(resource.handle);
-    s << ")";
-    reshade::log::message(reshade::log::level::warning, s.str().c_str());
-    device->destroy_resource(resource_info.resource);
-    // Destroy original and fire that event instead
-    OnDestroyResource(device, resource_info.resource);
-    return;
-  }
+  reshade::api::resource pending_fallback = {0u};
+  auto exists = store->resource_infos.if_contains(
+      resource.handle,
+      [&device, &resource, &pending_fallback](std::pair<const uint64_t, ResourceInfo>& pair) {
+        auto* resource_info = &pair.second;
+        if (resource_info->destroyed) {
+          log::w("utils::resource::OnDestroyResource(Resource already destroyed: ",
+                 log::AsPtr(resource.handle), ")");
+          assert(!resource_info->destroyed);
+          return;
+        }
+        if (resource_info->device != device) {
+          log::e("utils::resource::OnDestroyResource(Resource destroyed on different device: ",
+                 log::AsPtr(resource.handle), ")");
+          assert(resource_info->device == device);
+        }
+        if (resource_info->resource.handle != resource.handle) {
+          log::e("utils::resource::OnDestroyResource(Resource handle mismatch: ",
+                 log::AsPtr(resource.handle), " != ", log::AsPtr(resource_info->resource.handle), ")");
+          assert(resource_info->resource.handle == resource.handle);
+          return;
+        }
+        if (resource_info->is_clone) {
+          log::e("utils::resource::OnDestroyResource(Resource is a clone, cannot destroy directly: ",
+                 log::AsPtr(resource.handle), ")");
+          assert(!resource_info->is_clone);
+          assert(resource_info->fallback.handle != 0u);
 
-  resource_info.device = device;
-  resource_info.destroyed = true;
+          pending_fallback = resource_info->fallback;
+          return;
+        }
 
-  for (auto& callback : store->on_destroy_resource_info_callbacks) {
-    callback(&resource_info);
+        resource_info->device = device;
+        resource_info->destroyed = true;
+
+        for (auto& callback : store->on_destroy_resource_info_callbacks) {
+          callback(resource_info);
+        }
+      });
+  if (pending_fallback.handle != 0u) {
+    // If we have a pending fallback, destroy it instead
+    device->destroy_resource(pending_fallback);
+    OnDestroyResource(device, pending_fallback);
   }
 }
 
@@ -492,36 +507,44 @@ inline void OnInitResourceView(
     reshade::api::resource_view view) {
   if (!is_primary_hook) return;
   if (view.handle == 0u) return;
-  std::unique_lock lock(store->resource_view_infos_mutex);
-  auto& resource_view_info = store->resource_view_infos[view.handle];
-  lock.unlock();
 
-  if (resource_view_info.view.handle != 0u && !resource_view_info.destroyed) {
-    for (const auto& callback : store->on_destroy_resource_view_info_callbacks) {
-      callback(&resource_view_info);
-    }
-  }
-
-  ResourceInfo* resource_info = nullptr;
-  if (resource.handle != 0u) {
-    std::unique_lock resource_lock(store->resource_infos_mutex);
-    resource_info = &store->resource_infos[resource.handle];
-  }
-
-  resource_view_info = {
+  ResourceViewInfo new_data = {
       .device = device,
       .desc = desc,
       .view = view,
       .original_resource = resource,
-      .resource_info = resource_info,
       .usage = usage_type,
   };
-  if (resource_info != nullptr) {
-    resource_view_info.clone_target = resource_view_info.resource_info->clone_target;
+
+  ResourceInfo* resource_info = nullptr;
+  if (resource.handle != 0u) {
+    new_data.resource_info = GetResourceInfo(resource, false);
+    if (new_data.resource_info != nullptr) {
+      new_data.clone_target = new_data.resource_info->clone_target;
+    } else {
+      assert(new_data.resource_info != nullptr);
+    }
   }
 
+  auto [pair, inserted] = store->resource_view_infos.try_emplace_p(view.handle, new_data);
+  if (!inserted) {
+    assert(pair->second.view.handle == view.handle);
+    if (!pair->second.destroyed) {
+#ifdef DEBUG_LEVEL_2
+      std::stringstream s;
+      s << "utils::resource::OnInitResourceView(Resource view reused: ";
+      s << PRINT_PTR(view.handle);
+      s << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
+      for (const auto& callback : store->on_destroy_resource_view_info_callbacks) {
+        callback(&pair->second);
+      }
+    }
+    pair->second = new_data;
+  }
   for (const auto& callback : store->on_init_resource_view_info_callbacks) {
-    callback(&resource_view_info);
+    callback(&pair->second);
   }
 }
 
@@ -529,17 +552,18 @@ inline void OnDestroyResourceView(reshade::api::device* device, reshade::api::re
   if (!is_primary_hook) return;
   if (view.handle == 0u) return;
 
-  std::shared_lock lock(store->resource_view_infos_mutex);
-  auto pair = store->resource_view_infos.find(view.handle);
-  if (pair == store->resource_view_infos.end()) return;
-  lock.unlock();
+  auto* resource_view_info = GetResourceViewInfo(view);
+  if (resource_view_info == nullptr) {
+    log::e("utils::resource::OnDestroyResourceView(Resource view not found for handle: ",
+           log::AsPtr(view.handle), ")");
+    assert(resource_view_info != nullptr);
+    return;
+  }
 
-  auto& resource_view_info = pair->second;
-  resource_view_info.destroyed = true;
-  if (resource_view_info.view.handle != 0u) {
-    for (auto& callback : store->on_destroy_resource_view_info_callbacks) {
-      callback(&resource_view_info);
-    }
+  resource_view_info->destroyed = true;
+  assert(resource_view_info->view.handle != 0u);
+  for (auto& callback : store->on_destroy_resource_view_info_callbacks) {
+    callback(resource_view_info);
   }
 }
 
