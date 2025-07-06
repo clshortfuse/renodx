@@ -3274,8 +3274,8 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
 
       reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitCommandList);
       reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
-      reshade::register_event<reshade::addon_event::begin_render_pass>(OnBeginRenderPass);
-        reshade::register_event<reshade::addon_event::end_render_pass>(OnEndRenderPass);
+      reshade::unregister_event<reshade::addon_event::begin_render_pass>(OnBeginRenderPass);
+      reshade::unregister_event<reshade::addon_event::end_render_pass>(OnEndRenderPass);
 
       reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
       reshade::unregister_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
