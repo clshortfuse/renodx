@@ -57,7 +57,7 @@ void main(
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
-  config.reno_drt_white_clip = injectedData.colorGradeClip;
+  config.reno_drt_white_clip = injectedData.colorGradeClip == 0.f ? 1.f : injectedData.colorGradeClip;
   if (injectedData.colorGradeLUTStrength == 0.f || config.type == 1.f) {
     if (config.type == 2.f) {
       r0.rgb = applyFrostbite(r0.rgb, config);

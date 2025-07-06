@@ -321,7 +321,7 @@ float3 applyUserTonemapFC3(float3 untonemapped, Texture3D lutTexture, SamplerSta
   config.reno_drt_working_color_space = 0;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
   config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
-  config.reno_drt_white_clip = injectedData.colorGradeClip;
+  config.reno_drt_white_clip = injectedData.colorGradeClip == 0.f ? 4.f : injectedData.colorGradeClip;
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = lutSampler;
   lut_config.strength = injectedData.colorGradeLUTStrength;
@@ -370,7 +370,7 @@ float3 applyUserTonemapFCP(float3 untonemapped, Texture3D lutTexture, SamplerSta
   config.reno_drt_working_color_space = (uint)injectedData.toneMapColorSpace;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
   config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
-  config.reno_drt_white_clip = injectedData.colorGradeClip;
+  config.reno_drt_white_clip = injectedData.colorGradeClip == 0.f ? 27.f : injectedData.colorGradeClip;
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = lutSampler;
   lut_config.strength = injectedData.colorGradeLUTStrength;
