@@ -252,7 +252,7 @@ float3 applyUserTonemap(float3 untonemapped, float2 screen, bool grain = true) {
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
-  config.reno_drt_white_clip = injectedData.colorGradeClip;
+  config.reno_drt_white_clip = injectedData.colorGradeClip == 0.f ? 1.f : injectedData.colorGradeClip;
   if (injectedData.toneMapType == 2.f) {  // Frostbite
     outputColor = applyFrostbite(outputColor, config);
   } else if (injectedData.toneMapType == 5.f) {  // DICE
@@ -316,7 +316,7 @@ float3 applyUserTonemapACES(float3 untonemapped) {
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
-  config.reno_drt_white_clip = injectedData.colorGradeClip;
+  config.reno_drt_white_clip = injectedData.colorGradeClip == 0.f ? 8.f : injectedData.colorGradeClip;
   if (injectedData.toneMapType == 0.f) {
     outputColor = vanillaTonemapHDR(untonemapped);
   } else {
