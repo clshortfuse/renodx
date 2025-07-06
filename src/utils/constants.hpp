@@ -6,9 +6,9 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
-
 #include <span>
 #include <sstream>
 #include <unordered_map>
@@ -25,8 +25,8 @@
 
 namespace renodx::utils::constants {
 
-static bool capture_constant_buffers = false;
-static bool capture_push_descriptors = false;
+static std::atomic_bool capture_constant_buffers = false;
+static std::atomic_bool capture_push_descriptors = false;
 
 namespace internal {
 static bool is_primary_hook = false;
@@ -62,7 +62,7 @@ struct __declspec(uuid("1aa69bfe-5467-47e1-9c8e-c6b935198169")) DeviceData {
 };
 
 struct __declspec(uuid("f8805bac-a932-49ef-b0c9-e4db1a8b33fc")) CommandListData {
-  data::ParallelNodeHashMap<std::pair<uint8_t, uint8_t>, BoundSlotData> bound_slots;
+  data::ParallelNodeHashMap<std::tuple<uint8_t, uint8_t, reshade::api::shader_stage>, BoundSlotData> bound_slots;
 };
 
 static void OnInitDevice(reshade::api::device* device) {
@@ -93,10 +93,10 @@ static void OnInitDevice(reshade::api::device* device) {
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
     store = data->store;
     if (data->capture_constant_buffers) {
-      capture_constant_buffers = true;
+      capture_constant_buffers = false;
     }
     if (data->capture_push_descriptors) {
-      capture_push_descriptors = true;
+      capture_push_descriptors = false;
     }
   }
 }
@@ -106,14 +106,14 @@ static void OnDestroyDevice(reshade::api::device* device) {
   device->destroy_private_data<DeviceData>();
 }
 
-static void OnInitCommandList(reshade::api::command_list* cmd_list) {
-  if (!internal::is_primary_hook) return;
-  cmd_list->create_private_data<CommandListData>();
-}
-
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
   if (!internal::is_primary_hook) return;
   cmd_list->destroy_private_data<CommandListData>();
+}
+
+static void OnInitCommandList(reshade::api::command_list* cmd_list) {
+  if (!capture_push_descriptors) return;
+  cmd_list->create_private_data<CommandListData>();
 }
 
 static void OnInitResource(
@@ -122,7 +122,6 @@ static void OnInitResource(
     const reshade::api::subresource_data* initial_data,
     reshade::api::resource_usage initial_state,
     reshade::api::resource resource) {
-  if (!internal::is_primary_hook) return;
   if (!capture_constant_buffers) return;
 
   if (desc.type != reshade::api::resource_type::buffer) return;
@@ -153,7 +152,6 @@ static void OnInitResource(
 }
 
 static void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
-  if (!internal::is_primary_hook) return;
   if (!capture_constant_buffers) return;
 
   store->buffer_range_data.modify_if(resource.handle, [&](std::pair<const uint64_t, BufferRangeData>& pair) {
@@ -172,7 +170,6 @@ static void OnMapBufferRegion(
     uint64_t size,
     reshade::api::map_access access,
     void** mapped_data) {
-  if (!internal::is_primary_hook) return;
   if (!capture_constant_buffers) return;
 
   store->buffer_range_data.modify_if(resource.handle, [&](std::pair<const uint64_t, BufferRangeData>& pair) {
@@ -193,7 +190,6 @@ static void OnMapBufferRegion(
 static void OnUnmapBufferRegion(
     reshade::api::device* device,
     reshade::api::resource resource) {
-  if (!internal::is_primary_hook) return;
   if (!capture_constant_buffers) return;
   store->buffer_range_data.modify_if(resource.handle, [&](std::pair<const uint64_t, BufferRangeData>& pair) {
     if (pair.second.mapping.empty()) {
@@ -209,7 +205,6 @@ static bool OnUpdateBufferRegion(
     reshade::api::device* device,
     const void* buffer_data, reshade::api::resource resource,
     uint64_t offset, uint64_t size) {
-  if (!internal::is_primary_hook) return false;
   if (!capture_constant_buffers) return false;
 
   store->buffer_range_data.modify_if(resource.handle, [&](std::pair<const uint64_t, BufferRangeData>& pair) {
@@ -238,7 +233,6 @@ static void OnPushDescriptors(
     reshade::api::pipeline_layout layout,
     uint32_t layout_param,
     const reshade::api::descriptor_table_update& update) {
-  if (!internal::is_primary_hook) return;
   if (!capture_push_descriptors) return;
   auto* cmd_list_data = cmd_list->get_private_data<CommandListData>();
   if (cmd_list_data == nullptr) return;
@@ -260,39 +254,46 @@ static void OnPushDescriptors(
     uint32_t dx_register_index = param.push_constants.dx_register_index + update.binding + i;
     uint32_t dx_register_space = param.push_constants.dx_register_space;
     const auto& buffer_range = static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
-    auto slot = std::pair<uint32_t, uint32_t>(dx_register_index, dx_register_space);
-    auto* data = &cmd_list_data->bound_slots[slot];
-    data->layout = layout;
-    data->param_index = layout_param;
-    data->stages = stages;
-    data->buffer_range = buffer_range;
-    data->update = update;
-    data->update.binding = update.binding + i;
-    data->update.descriptors = &data->buffer_range;
+    for (const auto stage : {
+             reshade::api::shader_stage::vertex,
+             reshade::api::shader_stage::pixel,
+             reshade::api::shader_stage::compute,
+         }) {
+      if (!renodx::utils::bitwise::HasFlag(stages, stage)) continue;
+
+      auto* data = &cmd_list_data->bound_slots[{dx_register_index, dx_register_space, stage}];
+      data->layout = layout;
+      data->param_index = layout_param;
+      data->stages = stages;
+      data->buffer_range = buffer_range;
+      data->update = update;
+      data->update.binding = update.binding + i;
+      data->update.descriptors = &data->buffer_range;
 
 #ifdef DEBUG_LEVEL_2
-    {
-      std::stringstream s;
-      s << "utils::constants::OnPushDescriptors(";
-      s << PRINT_PTR(data->layout.handle);
-      s << "[" << data->param_index << "]";
-      s << "[" << data->update.binding << "]";
-      s << ", dx_register_index: " << dx_register_index;
-      s << ", dx_register_space: " << dx_register_space;
-      s << ", stages: " << data->stages;
-      s << ", buffer_range: " << PRINT_PTR(data->buffer_range.buffer.handle);
-      if (data->buffer_range.size == UINT64_MAX) {
-        s << "[all]";
-      } else if (data->buffer_range.size == 0) {
-        s << "[empty]";
-      } else {
-        s << "[" << data->buffer_range.offset;
-        s << " - " << data->buffer_range.offset + data->buffer_range.size << "]";
+      {
+        std::stringstream s;
+        s << "utils::constants::OnPushDescriptors(";
+        s << PRINT_PTR(data->layout.handle);
+        s << "[" << data->param_index << "]";
+        s << "[" << data->update.binding << "]";
+        s << ", dx_register_index: " << dx_register_index;
+        s << ", dx_register_space: " << dx_register_space;
+        s << ", stages: " << data->stages;
+        s << ", buffer_range: " << PRINT_PTR(data->buffer_range.buffer.handle);
+        if (data->buffer_range.size == UINT64_MAX) {
+          s << "[all]";
+        } else if (data->buffer_range.size == 0) {
+          s << "[empty]";
+        } else {
+          s << "[" << data->buffer_range.offset;
+          s << " - " << data->buffer_range.offset + data->buffer_range.size << "]";
+        }
+        s << ")";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
       }
-      s << ")";
-      reshade::log::message(reshade::log::level::debug, s.str().c_str());
-    }
 #endif
+    }
   }
 }
 
@@ -358,15 +359,18 @@ inline void PushShaderInjections(
       shader_injection.data());
 }
 
-static bool RevertBufferRange(reshade::api::command_list* cmd_list, uint32_t dx_register_index, uint32_t dx_register_space = 0) {
+static bool RevertBufferRange(
+    reshade::api::command_list* cmd_list,
+    uint32_t dx_register_index,
+    uint32_t dx_register_space = 0,
+    reshade::api::shader_stage stage = reshade::api::shader_stage::pixel) {
   auto* cmd_list_data = cmd_list->get_private_data<CommandListData>();
   if (cmd_list_data == nullptr) {
     reshade::log::message(reshade::log::level::warning, "Could not find command list data.");
     return false;
   }
 
-  auto slot = std::pair<uint32_t, uint32_t>(dx_register_index, dx_register_space);
-  auto it = cmd_list_data->bound_slots.find(slot);
+  auto it = cmd_list_data->bound_slots.find({dx_register_index, dx_register_space, stage});
   if (it == cmd_list_data->bound_slots.end()) return false;
   auto* data = &it->second;
 
@@ -395,7 +399,7 @@ static bool RevertBufferRange(reshade::api::command_list* cmd_list, uint32_t dx_
 #endif
 
   cmd_list->push_descriptors(
-      data->stages,
+      stage,
       data->layout,
       data->param_index,
       data->update);

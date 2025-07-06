@@ -901,7 +901,11 @@ inline bool OnDispatch(
   }
 
   if (response.injection_register_index != -1) {
-    renodx::utils::constants::RevertBufferRange(cmd_list, response.injection_register_index);
+    renodx::utils::constants::RevertBufferRange(
+        cmd_list,
+        response.injection_register_index,
+        0,
+        reshade::api::shader_stage::compute);
   }
 
   return true;
@@ -968,7 +972,11 @@ inline bool OnDrawOrDispatchIndirect(
   }
 
   if (response.injection_register_index != -1) {
-    renodx::utils::constants::RevertBufferRange(cmd_list, response.injection_register_index);
+    renodx::utils::constants::RevertBufferRange(
+        cmd_list,
+        response.injection_register_index,
+        0,
+        is_dispatch ? reshade::api::shader_stage::compute : reshade::api::shader_stage::pixel);
   }
 
   return true;
