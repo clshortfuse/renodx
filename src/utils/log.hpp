@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <sstream>
 
 #include <include/reshade.hpp>
@@ -23,6 +24,12 @@ template <typename T>
 inline std::string AsPtr(T value) {
   std::ostringstream oss;
   oss << "0x" << std::hex << std::setw(sizeof(uint64_t) * 2) << std::setfill('0') << reinterpret_cast<uint64_t>(value) << std::dec;
+  return oss.str();
+}
+
+inline std::string AsPtr(uintptr_t value) {
+  std::ostringstream oss;
+  oss << "0x" << std::hex << std::setw(sizeof(uint64_t) * 2) << std::setfill('0') << static_cast<uint64_t>(value) << std::dec;
   return oss.str();
 }
 
