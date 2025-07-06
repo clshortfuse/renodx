@@ -220,6 +220,7 @@ float3 applyUserTonemapMenu(float3 untonemapped) {
   config.gamma_correction = injectedData.toneMapGammaCorrection;
   config.exposure = injectedData.colorGradeExposure;
   config.hue_correction_strength = 0.f;
+  config.reno_drt_dechroma = 0.f;
   config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
   config.reno_drt_per_channel = true;
   config.reno_drt_white_clip = 1.f;

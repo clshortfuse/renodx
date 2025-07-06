@@ -164,6 +164,8 @@ float3 applyUserTonemapNeutral(float3 untonemapped) {
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
   config.hue_correction_strength = 0.f;
+  config.reno_drt_contrast = 1.03f;
+  config.reno_drt_dechroma = 0.f;
   config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
   config.reno_drt_per_channel = true;
   config.reno_drt_white_clip = 4.f;
