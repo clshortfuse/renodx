@@ -41,6 +41,7 @@
 namespace renodx::mods::swapchain {
 
 static decltype(&D3D11CreateDevice) pD3D11CreateDevice = nullptr;
+static decltype(&D3D12CreateDevice) pD3D12CreateDevice = nullptr;
 static decltype(&CreateDXGIFactory1) pCreateDXGIFactory1 = nullptr;
 
 using SwapChainUpgradeTarget = utils::resource::ResourceUpgradeInfo;
@@ -104,6 +105,8 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   };
 
   reshade::api::resource proxy_device_resource = {0};
+
+  HWND primary_swapchain_window = nullptr;
 };
 
 struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData {
@@ -134,6 +137,7 @@ static bool swapchain_proxy_compatibility_mode = true;
 static bool swapchain_proxy_revert_state = false;
 static bool use_device_proxy = false;
 static thread_local void* last_device_proxy_shared_handle = nullptr;
+static thread_local reshade::api::resource last_device_proxy_shared_resource = {0u};
 static void* swap_chain_proxy_handle = nullptr;
 
 static thread_local bool is_creating_proxy_device = false;
@@ -141,6 +145,8 @@ static thread_local bool is_creating_proxy_device = false;
 static IDXGISwapChain1* proxy_swap_chain = nullptr;
 static ID3D11Device* proxy_device = nullptr;
 static ID3D11DeviceContext* proxy_device_context = nullptr;
+static ID3D12Device* proxy_device_12 = nullptr;
+static ID3D12CommandQueue* proxy_command_queue = nullptr;
 static reshade::api::device* proxy_device_reshade = nullptr;
 static reshade::api::device* proxied_device_reshade = nullptr;
 static reshade::api::swapchain* proxy_swapchain_reshade = nullptr;
@@ -442,6 +448,41 @@ inline reshade::api::resource CloneResource(utils::resource::ResourceInfo* resou
     new_desc.flags = reshade::api::resource_flags::shared;
     new_desc.type = reshade::api::resource_type::texture_2d;
     shared_handle = &resource_info->shared_handle;
+
+    if (resource_info->device->get_api() == reshade::api::device_api::opengl) {
+      new_desc.usage |= reshade::api::resource_usage::shader_resource;
+      new_desc.usage |= reshade::api::resource_usage::render_target;
+      new_desc.flags |= reshade::api::resource_flags::shared_nt_handle;
+      if (use_device_proxy && resource_info->device != proxy_device_reshade) {
+        if (proxy_device == nullptr) {
+          // no present yet, ignore
+          return {0u};
+        }
+        auto* data = renodx::utils::data::Get<DeviceData>(resource_info->device);
+        assert(data != nullptr);
+        auto* hwnd = data->primary_swapchain_window;
+        // Forward declare GetDeviceProxy to avoid undeclared identifier error
+        ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo * host_resource_info, HWND hwnd);
+
+        auto* new_device = GetDeviceProxy(resource_info, hwnd);
+        assert(new_device != nullptr);
+        assert(proxy_device_reshade != nullptr);
+        assert(resource_info->proxy_resource.handle == 0u);
+
+        proxy_device_reshade->create_resource(new_desc, nullptr, initial_state, &resource_info->proxy_resource, shared_handle);
+
+        assert(resource_info->proxy_resource.handle != 0u);
+
+        renodx::utils::resource::store->resource_infos[resource_info->proxy_resource.handle] = {
+            .device = proxy_device_reshade,
+            .desc = new_desc,
+            .resource = resource_info->resource,
+        };
+
+        // shared handle can now be used in opengl
+      }
+    }
+
   } else {
     new_desc.flags = reshade::api::resource_flags::none;
   }
@@ -818,35 +859,50 @@ inline void FlushDescriptors(reshade::api::command_list* cmd_list) {
 }
 
 bool LoadDirectXLibraries() {
-  if (!pD3D11CreateDevice) {
-    HMODULE d3d11Module = GetModuleHandleW(L"d3d11.dll");
-    if (!d3d11Module) {
-      d3d11Module = LoadLibraryW(L"d3d11.dll");
+#ifndef RENODX_PROXY_DEVICE_D3D12
+  if (pD3D11CreateDevice == nullptr) {
+    HMODULE d3d11_module = LoadLibraryW(L"d3d11.dll");
+    if (d3d11_module == nullptr) {
+      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(LoadLibraryW(d3d11.dll) failed)");
+      return false;
     }
-    if (d3d11Module) {
-      pD3D11CreateDevice = reinterpret_cast<decltype(&D3D11CreateDevice)>(GetProcAddress(d3d11Module, "D3D11CreateDevice"));
-    }
-  }
-
-  if (!pD3D11CreateDevice) {
-    return false;
-  }
-  // Dynamically load CreateDXGIFactory1 from dxgi.dll
-
-  if (!pCreateDXGIFactory1) {
-    HMODULE dxgiModule = GetModuleHandleW(L"dxgi.dll");
-    if (!dxgiModule) {
-      dxgiModule = LoadLibraryW(L"dxgi.dll");
-    }
-    if (dxgiModule) {
-      pCreateDXGIFactory1 = reinterpret_cast<decltype(&CreateDXGIFactory1)>(
-          GetProcAddress(dxgiModule, "CreateDXGIFactory1"));
+    pD3D11CreateDevice = reinterpret_cast<decltype(&D3D11CreateDevice)>(GetProcAddress(d3d11_module, "D3D11CreateDevice"));
+    if (pD3D11CreateDevice == nullptr) {
+      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(d3d11.dll, D3D11CreateDevice) failed)");
+      return false;
     }
   }
 
-  if (!pCreateDXGIFactory1) {
-    return false;
+#else
+  if (pD3D12CreateDevice == nullptr) {
+    HMODULE d3d12_module = LoadLibraryW(L"d3d12.dll");
+    if (d3d12_module == nullptr) {
+      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(LoadLibraryW(d3d12.dll) failed)");
+      return false;
+    }
+    pD3D12CreateDevice = reinterpret_cast<decltype(&D3D12CreateDevice)>(GetProcAddress(d3d12_module, "D3D12CreateDevice"));
+    if (pD3D12CreateDevice == nullptr) {
+      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(d3d12.dll, D3D12CreateDevice) failed)");
+      return false;
+    }
   }
+#endif
+
+  if (pCreateDXGIFactory1 == nullptr) {
+    HMODULE dxgi_module = LoadLibraryW(L"dxgi.dll");
+    if (dxgi_module == nullptr) {
+      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(LoadLibraryW(dxgi.dll) failed)");
+      return false;
+    }
+
+    pCreateDXGIFactory1 = reinterpret_cast<decltype(&CreateDXGIFactory1)>(
+        GetProcAddress(dxgi_module, "CreateDXGIFactory1"));
+    if (pCreateDXGIFactory1 == nullptr) {
+      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(dxgi.dll, CreateDXGIFactory1) failed)");
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -860,6 +916,7 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
   IDXGIFactory2* dxgi_factory = nullptr;
 
   if (FAILED(pCreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory)))) {
+    reshade::log::message(reshade::log::level::error, "mods::swapchain::GetDeviceProxy(CreateDXGIFactory1 failed)");
     return nullptr;
   }
 
@@ -884,6 +941,8 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
   sc_desc.Scaling = DXGI_SCALING_NONE;
   fullscreen_desc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 
+  IUnknown* swapchain_creator = nullptr;
+#ifndef RENODX_PROXY_DEVICE_D3D12
   UINT create_flags = D3D11_CREATE_DEVICE_SINGLETHREADED;
   D3D_FEATURE_LEVEL feature_level;
 
@@ -904,14 +963,37 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
   is_creating_proxy_device = false;
   assert(proxy_device_reshade != nullptr);
 
+  swapchain_creator = proxy_device;
+#else
+  // UINT create_flags = D3D11_CREATE_DEVICE_SINGLETHREADED;
+  D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_12_0;
+
+  assert(is_creating_proxy_device == false);
+  assert(proxy_device_reshade == nullptr);
+  is_creating_proxy_device = true;
+
+  if (FAILED(pD3D12CreateDevice(
+          nullptr, feature_level, IID_PPV_ARGS(&proxy_device)))) {
+    is_creating_proxy_device = false;
+    if (dxgi_factory != nullptr) {
+      dxgi_factory->Release();
+    }
+    proxy_device = nullptr;
+    return nullptr;
+  }
+
+  is_creating_proxy_device = false;
+  assert(proxy_device_reshade != nullptr);
+
   // Create swapchain for HWND
-  if (FAILED(dxgi_factory->CreateSwapChainForHwnd(
-          proxy_device,
-          output_window,
-          &sc_desc,
-          &fullscreen_desc,
-          nullptr,
-          &proxy_swap_chain))) {
+  // For D3D12, the swapchain must be created from a command queue, not the device.
+  assert(proxy_command_queue == nullptr);
+  D3D12_COMMAND_QUEUE_DESC queue_desc = {};
+  queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+  queue_desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+  queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+  queue_desc.NodeMask = 0;
+  if (FAILED(proxy_device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&proxy_command_queue)))) {
     if (dxgi_factory != nullptr) {
       dxgi_factory->Release();
     }
@@ -919,13 +1001,39 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
       proxy_device->Release();
       proxy_device = nullptr;
     }
+    return nullptr;
+  }
+  assert(proxy_command_queue != nullptr);
+  swapchain_creator = proxy_command_queue;
+#endif
+
+  if (FAILED(dxgi_factory->CreateSwapChainForHwnd(
+          swapchain_creator,
+          output_window,
+          &sc_desc,
+          &fullscreen_desc,
+          nullptr,
+          &proxy_swap_chain))) {
+    reshade::log::message(reshade::log::level::error, "mods::swapchain::GetDeviceProxy(CreateSwapChainForHwnd failed)");
     if (proxy_device_context != nullptr) {
       proxy_device_context->Release();
       proxy_device_context = nullptr;
     }
+    if (proxy_command_queue != nullptr) {
+      proxy_command_queue->Release();
+      proxy_command_queue = nullptr;
+    }
+    if (dxgi_factory != nullptr) {
+      dxgi_factory->Release();
+    }
+    if (proxy_device != nullptr) {
+      proxy_device->Release();
+      proxy_device = nullptr;
+    }
     proxy_swap_chain = nullptr;
     return nullptr;
   }
+  reshade::log::message(reshade::log::level::info, "mods::swapchain::GetDeviceProxy(Swapchain created successfully)");
 
   // Cleanup local references (do not release d3d11Device, it's returned)
   if (dxgi_factory != nullptr) {
@@ -967,12 +1075,25 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
 
   if (use_device_proxy) {
     assert(last_device_proxy_shared_handle != nullptr);
+#ifndef RENODX_PROXY_DEVICE_D3D12
     ID3D11Texture2D* shared_texture = nullptr;
-    if (FAILED(proxy_device->OpenSharedResource(last_device_proxy_shared_handle, IID_PPV_ARGS(&shared_texture)))) {
+    reshade::api::resource proxy_temp_resource = last_device_proxy_shared_resource;
+    if (proxy_temp_resource.handle == 0u) {
+      if (FAILED(proxy_device->OpenSharedResource(last_device_proxy_shared_handle, IID_PPV_ARGS(&shared_texture)))) {
+        reshade::log::message(reshade::log::level::error,
+                              "mods::swapchain::DrawSwapChainProxy(OpenSharedResource failed.)");
+        return;
+      }
+      proxy_temp_resource = {reinterpret_cast<uintptr_t>(shared_texture)};
+    }
+#else
+    ID3D12Resource* shared_texture = nullptr;
+    if (FAILED(proxy_device->OpenSharedHandle(last_device_proxy_shared_handle, IID_PPV_ARGS(&shared_texture)))) {
       reshade::log::message(reshade::log::level::error,
-                            "mods::swapchain::OnPresent(OpenSharedResource failed.)");
+                            "mods::swapchain::DrawSwapChainProxy(OpenSharedHandle failed.)");
       return;
     }
+#endif
 
     if (data->proxy_device_resource.handle == 0u) {
       // Create proxy device resource
@@ -987,10 +1108,12 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
       new_desc.usage = reshade::api::resource_usage::copy_dest | reshade::api::resource_usage::shader_resource;
       device->create_resource(new_desc, nullptr, reshade::api::resource_usage::general, &data->proxy_device_resource);
     }
-    cmd_list->copy_resource({reinterpret_cast<uintptr_t>(shared_texture)}, data->proxy_device_resource);
+    cmd_list->copy_resource(proxy_temp_resource, data->proxy_device_resource);
     queue->flush_immediate_command_list();
-    shared_texture->Release();
-    shared_texture = nullptr;
+    if (shared_texture != nullptr) {
+      shared_texture->Release();
+      shared_texture = nullptr;
+    }
     swapchain_clone = data->proxy_device_resource;
 
   } else if (UsingSwapchainCompatibilityMode()) {
@@ -1015,10 +1138,10 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
   s << " => " << PRINT_PTR(current_back_buffer.handle);
 
   if (data->swap_chain_proxy_layout.handle == 0u) {
-    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent(Creating pipeline layout...)");
+    reshade::log::message(reshade::log::level::info, "mods::swapchain::DrawSwapChainProxy(Creating pipeline layout...)");
     SetupSwapchainProxyLayout(device, data);
     if (data->swap_chain_proxy_layout.handle == 0u) {
-      reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(Pipeline layout creation failed.)");
+      reshade::log::message(reshade::log::level::warning, "mods::swapchain::DrawSwapChainProxy(Pipeline layout creation failed.)");
       cmd_list->copy_resource(swapchain_clone, current_back_buffer);
       return;
     }
@@ -1038,13 +1161,13 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
 
   auto& sampler = data->swap_chain_proxy_sampler;
   if (sampler.handle == 0u) {
-    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent(Creating sampler...)");
+    reshade::log::message(reshade::log::level::info, "mods::swapchain::DrawSwapChainProxy(Creating sampler...)");
     if (data->swap_chain_proxy_sampler.handle == 0u) {
       device->create_sampler({}, &data->swap_chain_proxy_sampler);
     }
 
     if (sampler.handle == 0u) {
-      reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(Sampler creation failed.)");
+      reshade::log::message(reshade::log::level::warning, "mods::swapchain::DrawSwapChainProxy(Sampler creation failed.)");
       cmd_list->copy_resource(swapchain_clone, current_back_buffer);
       return;
     }
@@ -1053,7 +1176,7 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
 
   auto& srv = resource_info->swap_chain_proxy_clone_srv;
   if (srv.handle == 0u) {
-    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent(Creating SRV...)");
+    reshade::log::message(reshade::log::level::info, "mods::swapchain::DrawSwapChainProxy(Creating SRV...)");
     device->create_resource_view(
         swapchain_clone,
         reshade::api::resource_usage::shader_resource,
@@ -1061,7 +1184,7 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
         &srv);
 
     if (srv.handle == 0u) {
-      reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(SRV creation failed.)");
+      reshade::log::message(reshade::log::level::warning, "mods::swapchain::DrawSwapChainProxy(SRV creation failed.)");
       cmd_list->copy_resource(swapchain_clone, current_back_buffer);
       return;
     }
@@ -1072,7 +1195,7 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
 
   auto& rtv = resource_info->swap_chain_proxy_rtv;
   if (rtv.handle == 0u) {
-    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent(Creating RTV...)");
+    reshade::log::message(reshade::log::level::info, "mods::swapchain::DrawSwapChainProxy(Creating RTV...)");
 
     auto& buffer_desc = resource_info->desc;
     // target format instead?
@@ -1083,7 +1206,7 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
         &rtv);
 
     if (rtv.handle == 0u) {
-      reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(RTV creation failed.)");
+      reshade::log::message(reshade::log::level::warning, "mods::swapchain::DrawSwapChainProxy(RTV creation failed.)");
       cmd_list->copy_resource(swapchain_clone, current_back_buffer);
       return;
     }
@@ -1095,7 +1218,7 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
   cmd_list->begin_render_pass(1, &render_target_desc, nullptr);
 
   if (data->swap_chain_proxy_pipeline.handle == 0) {
-    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnPresent(Creating pipeline...)");
+    reshade::log::message(reshade::log::level::info, "mods::swapchain::DrawSwapChainProxy(Creating pipeline...)");
     data->swap_chain_proxy_pipeline = renodx::utils::pipeline::CreateRenderPipeline(
         device,
         data->swap_chain_proxy_layout,
@@ -1105,7 +1228,7 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
         },
         resource_info->desc.texture.format);
     if (data->swap_chain_proxy_pipeline == 0u) {
-      reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnPresent(Pipeline creation failed.)");
+      reshade::log::message(reshade::log::level::warning, "mods::swapchain::DrawSwapChainProxy(Pipeline creation failed.)");
       cmd_list->copy_resource(swapchain_clone, current_back_buffer);
       return;
     }
@@ -1289,11 +1412,19 @@ static void OnDestroyDevice(reshade::api::device* device) {
       proxy_device_context->Release();
       proxy_device_context = nullptr;
     }
+    if (proxy_command_queue != nullptr) {
+      proxy_command_queue->Release();
+      proxy_command_queue = nullptr;
+    }
     if (proxy_device != nullptr) {
       proxy_device->Release();
       proxy_device = nullptr;
     }
     proxied_device_reshade = nullptr;
+    if (proxy_device_12 != nullptr) {
+      proxy_device_12->Release();
+      proxy_device_12 = nullptr;
+    }
   } else if (device == proxy_device_reshade) {
     proxy_device_reshade = nullptr;
   }
@@ -1529,6 +1660,17 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
       target->completed = false;
     }
     data->primary_swapchain_desc = primary_swapchain_desc;
+    data->primary_swapchain_window = hwnd;
+    {
+      std::stringstream s;
+      s << "mods::swapchain::OnInitSwapchain(Primary swapchain desc: ";
+      s << primary_swapchain_desc.texture.width << "x";
+      s << primary_swapchain_desc.texture.height << ", format: ";
+      s << primary_swapchain_desc.texture.format;
+      s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
+      s << ")";
+      reshade::log::message(reshade::log::level::info, s.str().c_str());
+    }
 
     if (use_device_proxy) {
       if (resize && proxy_device_reshade != nullptr && device != proxy_device_reshade && proxy_swap_chain != nullptr) {
@@ -1683,6 +1825,9 @@ inline bool OnCreateResource(
         initial_data,
         initial_state,
         &original_resource);
+
+    // Internal clear needed for OpenGL
+    initial_data->data = nullptr;
     initial_data = nullptr;
   }
 
@@ -3163,13 +3308,13 @@ inline void OnPresent(
     queue->flush_immediate_command_list();
     assert(last_device_proxy_shared_handle == nullptr);
     last_device_proxy_shared_handle = resource_info->shared_handle;
+    last_device_proxy_shared_resource = resource_info->proxy_resource;
 
     // Trigger a DX11 Present which will start the swapchain proxy steps on DX11
 
-    auto* native_device = (IDirect3DDevice9*)device->get_native();
-    HWND output_window = static_cast<HWND>(swapchain->get_hwnd());
     proxy_swap_chain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
     last_device_proxy_shared_handle = nullptr;
+    last_device_proxy_shared_resource = {0u};
   } else {
     DrawSwapChainProxy(swapchain, queue);
   }
