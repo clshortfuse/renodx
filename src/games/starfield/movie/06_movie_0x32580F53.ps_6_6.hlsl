@@ -1,5 +1,5 @@
-#include "./shared.h"
-#include "./common.hlsl"
+#include "../common.hlsl"
+#include "../shared.h"
 
 Texture2D<float> t0 : register(t0, space8);
 
