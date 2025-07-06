@@ -1337,6 +1337,14 @@ static bool OnCreateDevice(reshade::api::device_api api, uint32_t& api_version) 
 }
 
 static void OnInitDevice(reshade::api::device* device) {
+  if (ignored_device_apis.contains(device->get_api())) {
+    std::stringstream s;
+    s << "mods::swapchain::OnInitDevice(Abort from ignored device api: ";
+    s << static_cast<uint32_t>(device->get_api());
+    s << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+    return;
+  }
   std::stringstream s;
   s << "mods::swapchain::OnInitDevice(";
   s << PRINT_PTR((uintptr_t)(device));
@@ -1527,7 +1535,7 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
 
   if (!ShouldModifySwapchain(static_cast<HWND>(hwnd), device_api)) {
     std::stringstream s;
-    s << "mods::swapchain::OnCreateSwapchain(Abort from ShouldModifySwapchainHwnd: ";
+    s << "mods::swapchain::OnCreateSwapchain(Abort from ShouldModifySwapchain: ";
     s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
@@ -1645,9 +1653,9 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 
   HWND hwnd = static_cast<HWND>(swapchain->get_hwnd());
 
-  if (!ShouldModifySwapchainHwnd(hwnd, device->get_api())) {
+  if (!ShouldModifySwapchain(hwnd, device->get_api())) {
     std::stringstream s;
-    s << "mods::swapchain::OnInitSwapchain(Abort from ShouldModifySwapchainHwnd: ";
+    s << "mods::swapchain::OnInitSwapchain(Abort from ShouldModifySwapchain: ";
     s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
