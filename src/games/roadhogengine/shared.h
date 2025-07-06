@@ -36,6 +36,7 @@ struct ShaderInjectData {
   float fxFilmGrainType;
 
   float random;
+  float stateCheck;
   bool isLinearSpace;
 };
 

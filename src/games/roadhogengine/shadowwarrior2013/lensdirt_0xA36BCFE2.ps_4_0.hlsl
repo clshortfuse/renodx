@@ -25,6 +25,7 @@ void main(
   r0.w = dot(r1.xyz, float3(1,1,1));
   r0.xyz = r1.xyz * r0.xyz;
   o0.xyz = v2.xyz * r0.xyz * injectedData.fxLens;
+  o0.rgb = InvertFinalizeOutput(o0.rgb);
   r0.x = -9.99999975e-05 + r0.w;
   r0.x = cmp(r0.x < 0);
   if (r0.x != 0) discard;
