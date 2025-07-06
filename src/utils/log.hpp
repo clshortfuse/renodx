@@ -27,9 +27,15 @@ inline std::string AsPtr(T value) {
   return oss.str();
 }
 
-inline std::string AsPtr(uintptr_t value) {
+inline std::string AsPtr(uint64_t value) {
   std::ostringstream oss;
-  oss << "0x" << std::hex << std::setw(sizeof(uint64_t) * 2) << std::setfill('0') << static_cast<uint64_t>(value) << std::dec;
+  oss << "0x" << std::hex << std::setw(sizeof(uint64_t) * 2) << std::setfill('0') << value << std::dec;
+  return oss.str();
+}
+
+inline std::string AsPtr(uint32_t value) {
+  std::ostringstream oss;
+  oss << "0x" << std::hex << std::setw(sizeof(uint32_t) * 2) << std::setfill('0') << value << std::dec;
   return oss.str();
 }
 
