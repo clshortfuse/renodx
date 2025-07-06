@@ -191,6 +191,7 @@ float3 applyUserTonemapBW(float3 untonemapped) {
   config.contrast = injectedData.colorGradeContrast;
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_strength = 0.f;
+  config.reno_drt_dechroma = 0.f;
   config.reno_drt_tone_map_method = injectedData.toneMapType == 3.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
                                                                     : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_per_channel = true;
