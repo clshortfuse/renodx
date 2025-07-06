@@ -23,8 +23,8 @@
 #include <include/reshade.hpp>
 
 #include "../utils/constants.hpp"
+#include "../utils/data.hpp"
 #include "../utils/format.hpp"
-#include "../utils/mutex.hpp"
 #include "../utils/resource.hpp"
 #include "../utils/shader.hpp"
 #include "../utils/swapchain.hpp"
@@ -141,6 +141,14 @@ static bool OnCreatePipelineLayout(
   uint32_t pc_count = 0;
   uint32_t pdss_index = -1;
   uint32_t dword_count = 0;
+  if (param_count == 0) {
+    std::stringstream s;
+    s << "mods::shader::OnCreatePipelineLayout(";
+    s << "Skipping empty pipeline layout creation";
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    return false;
+  }
   if (param_count == -1) {
     std::stringstream s;
     s << "mods::shader::OnCreatePipelineLayout(";
@@ -307,6 +315,8 @@ static void OnInitPipelineLayout(
     const uint32_t param_count,
     const reshade::api::pipeline_layout_param* params,
     reshade::api::pipeline_layout layout) {
+  assert(layout.handle != 0u);
+
   if (on_init_pipeline_layout != nullptr) {
     if (!on_init_pipeline_layout(device, layout, {params, param_count})) return;
   }
@@ -571,6 +581,8 @@ static void OnInitPipelineLayout(
 static void OnDestroyPipelineLayout(
     reshade::api::device* device,
     reshade::api::pipeline_layout layout) {
+  assert(layout.handle != 0u);
+
   bool changed = false;
 
   if (auto pair = rebuilt_params.find(layout.handle);
