@@ -1500,12 +1500,16 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
 
   bool is_dxgi = false;
   switch (device_api) {
-    default:
     case reshade::api::device_api::d3d10:
     case reshade::api::device_api::d3d11:
     case reshade::api::device_api::d3d12:
       is_dxgi = true;
+    case reshade::api::device_api::d3d9:
+    case reshade::api::device_api::opengl:
     case reshade::api::device_api::vulkan:
+      break;
+    default:
+      assert(false);
       break;
   }
 
