@@ -54,7 +54,7 @@ void main(
   config.hue_correction_strength = injectedData.toneMapPerChannel != 0.f ? (1.f - injectedData.toneMapHueCorrection)
                                               : injectedData.toneMapHueCorrection;
   config.hue_correction_color = lerp(r0.rgb, hueCorrectionColor, injectedData.toneMapHueShift);
-  config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
+  config.reno_drt_hue_correction_method = (int)injectedData.toneMapHueProcessor;
   config.reno_drt_tone_map_method = injectedData.toneMapType == 4.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
                                                                     : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
