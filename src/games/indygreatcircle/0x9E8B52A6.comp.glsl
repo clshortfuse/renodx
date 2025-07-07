@@ -1,5 +1,9 @@
 // Color Grade
 #version 450
+
+#extension GL_GOOGLE_include_directive : require
+#include "./include/common.glsl"
+
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_nonuniform_qualifier : require
 #if defined(GL_EXT_control_flow_attributes)
@@ -771,7 +775,7 @@ void main()
         float _2042 = _2017.z;
         // ACEScc Encode
         vec3 _2033 = vec3(_122(_2034), _122(_2038), _122(_2042));
-        // Sample LUT
+        // Sample color grading LUT
         _1178 = textureLod(sampler3D(_2049, _887), vec4(_2033, 0.0).xyz, vec4(_2033, 0.0).w).xyz;
         float _2068 = _1178.x;
         float _2072 = _1178.y;
@@ -1385,7 +1389,8 @@ void main()
         // log lut encode
         vec3 _4554 = _137(_4555, _4557);
         // sample tonemapping LUT?
-        _4428 = textureLod(sampler3D(_4488, _887), vec4(_4554, 0.0).xyz, vec4(_4554, 0.0).w).xyz;
+        _4428 = textureLod(sampler3D(_4488, _887), vec4(_4554, 0.0).xyz, vec4(_4554, 0.0).w).xyz; // tonemap
+        // _4428 = BT709_TO_BT2020_MAT * (_4555 * 100.f * 0.1 / 0.18);
     }
     float _4583;
     if (_864._m75 == 0.0)
