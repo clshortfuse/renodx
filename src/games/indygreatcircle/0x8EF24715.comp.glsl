@@ -1139,7 +1139,7 @@ float _190(float _188, _179 _189)
             float _1985 = _1964 - float(_1982);
             vec3 _1990 = vec3(_189._m3[_1982], _189._m3[_1982 + 1], _189._m3[_1982 + 2]);
             vec3 _2003 = vec3(_1985 * _1985, _1985, 1.0);
-            mat3 _2010 = mat3(vec3(0.5, -1.0, 0.5), vec3(-1.0, 1.0, 0.5), vec3(0.5, 0.0, 0.0));
+            mat3 _2010 = mat3(vec3(0.5, -1.0, 0.5), vec3(-1.0, 1.0, 0.5), vec3(0.5, 0.0, 0.0)); // SSTS Matrix
             vec3 _2011 = _1990;
             _1928 = dot(_2003, _35(_2010, _2011));
         }
@@ -1276,9 +1276,21 @@ vec3 _221(vec3 _218, bool _219, _215 _220, float paper_white)
     }
     else  // HDR
     {
-        float _2795 = _220._m2; // brightness
-        _2694 = max(9.9999997473787516355514526367188e-05, _220._m0);   // min nits
-        _2695 = _220._m1;                                               // max nits
+        // fix paper whte
+#if 0
+        float _2795 = 10.f;  // brightness
+        const float mid_gray_ratio = _220._m2 / 10.f;
+
+#else
+        float _2795 = _220._m2;  // brightness
+        const float mid_gray_ratio = 1.f;
+        // _2694 /= 10.f;
+
+        // _2694 = CorrectGammaMismatch(_2694 / 100.f, true) * 100.f;
+        // _2695 = CorrectGammaMismatch(_2695 / 100.f, true) * 100.f;
+#endif
+        _2694 = max(0.0001, _220._m0) / mid_gray_ratio;  // min nits
+        _2695 = _220._m1 / mid_gray_ratio;                // max nits
 
 
         float _2804 = _2694;
@@ -1321,7 +1333,7 @@ vec3 _221(vec3 _218, bool _219, _215 _220, float paper_white)
 
         float _2873 = _2695;
         float _2875 = _2694;
-        _2696 = max(vec3(0.0), _102(_2871, _2873, _2875));
+        _2696 = max(vec3(0.0), _102(_2871, _2873, _2875)) * mid_gray_ratio;
     }
     return _2696;
 }
@@ -1387,6 +1399,7 @@ void main()
     } else {
 
         const float ACES_MIN = 0.0001f;
+        const float ACES_EXPOSURE = 48.f;
         float aces_min = ACES_MIN / paper_white;
         float aces_max = (_2949._m1 / paper_white);
 
@@ -1394,27 +1407,35 @@ void main()
             aces_max = CorrectGammaMismatch(aces_max, true);
             aces_min = CorrectGammaMismatch(aces_min, true);
         } else {
-            aces_min /= 10.f;
+            aces_min /= 5.f;
         }
 
         // Apply ACES ToneMap
         vec3 untonemapped_ap0 = BT709_TO_AP0_MAT * _2972;
         vec3 untonemapped_graded_ap1 = max(vec3(0.0), RRT(untonemapped_ap0));  // do max(0, ) just in case for the by luminance tonemap
-        vec3 tonemapped_ap1 = max(vec3(0.0), ODT(untonemapped_graded_ap1, aces_min * 48.0, aces_max * 48.0, mat3(1.0)) / 48.f);
 
+        vec3 tonemapped_ap1;
         if (USE_PER_CHANNEL_CORRECTION) {
-          // ODT by luminance
           float y_in = dot(untonemapped_graded_ap1, vec3(0.2722287168, 0.6740817658, 0.0536895174));
-          float y_out = ODT(vec3(y_in), aces_min * 48.0, aces_max * 48.0, mat3(1.0)).x / 48.f;
-
+          vec4 tonemapped_ap1_combined = max(vec4(0.0), ODT(vec4(untonemapped_graded_ap1, y_in), aces_min * ACES_EXPOSURE, aces_max * ACES_EXPOSURE, mat3(1.0)) / ACES_EXPOSURE);
+          tonemapped_ap1 = tonemapped_ap1_combined.rgb;
+          float y_out = tonemapped_ap1_combined.a;
+          
+          // ODT by luminance
           vec3 luminance_tonemapped_ap1 = untonemapped_graded_ap1 * (y_out / y_in);
-          luminance_tonemapped_ap1 = SaturationBlowoutAP1(luminance_tonemapped_ap1, y_in, 8.25, 0.975f);
+        
+            // luminance_tonemapped_ap1 = SaturationBlowoutAP1(luminance_tonemapped_ap1, y_in, 9.0, 0.975f);
+          luminance_tonemapped_ap1 = SaturationBlowoutAP1ICtCp(luminance_tonemapped_ap1, y_in, 9.25, 0.975f);
+        //   luminance_tonemapped_ap1 = ChrominanceICtCp(luminance_tonemapped_ap1, tonemapped_ap1, 1.f);
+        //   luminance_tonemapped_ap1 = ChrominanceOKLab(luminance_tonemapped_ap1, tonemapped_ap1, 1.f);
 
           // blend it in only on shadows / mid-tones
           float tonemapped_lum = dot(luminance_tonemapped_ap1, vec3(0.2722287168, 0.6740817658, 0.0536895174));
           tonemapped_ap1 = mix(luminance_tonemapped_ap1, tonemapped_ap1, clamp(tonemapped_lum / 0.6, 0.0, 1.0));
 
-        //   tonemapped_ap1 = luminance_tonemapped_ap1;
+          //   tonemapped_ap1 = luminance_tonemapped_ap1;
+        } else {
+          tonemapped_ap1 = max(vec3(0.0), ODT(untonemapped_graded_ap1, aces_min * ACES_EXPOSURE, aces_max * ACES_EXPOSURE, mat3(1.0)) / ACES_EXPOSURE);
         }
 
         vec3 tonemapped_bt709 = AP1_TO_BT709_MAT * tonemapped_ap1;
