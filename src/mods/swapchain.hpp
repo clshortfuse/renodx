@@ -2397,7 +2397,7 @@ inline void OnDestroyResourceViewInfo(utils::resource::ResourceViewInfo* resourc
     resource_view_info->clone.handle = 0u;
   }
 
-  if (resource_view_info->fallback.handle != 0u) {
+  if (!resource_view_info->is_clone && resource_view_info->fallback.handle != 0u) {
     assert(resource_view_info->device != nullptr);
     resource_view_info->device->destroy_resource_view(resource_view_info->fallback);
     resource_view_info->fallback.handle = 0u;
