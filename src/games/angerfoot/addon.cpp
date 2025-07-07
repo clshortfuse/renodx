@@ -566,7 +566,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::random::binds.push_back(&shader_injection.random_1);
       renodx::utils::random::binds.push_back(&shader_injection.random_2);
       renodx::utils::random::binds.push_back(&shader_injection.random_3);
-      renodx::utils::random::Use(fdw_reason);
 
       //  RGBA8_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
