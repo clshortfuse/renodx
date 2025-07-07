@@ -6,10 +6,6 @@
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
-#define NOMINMAX
-
-#include <chrono>
-#include <random>
 
 #include <embed/shaders.h>
 #include <deps/imgui/imgui.h>
@@ -18,6 +14,7 @@
 #include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
+#include "../../utils/random.hpp"
 #include "./shared.h"
 
 ShaderInjectData shader_injection;
@@ -480,7 +477,7 @@ renodx::utils::settings::Settings settings = {
         .tint = 0x38F6FC,
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType >= 2.f; },
-        .parse = [](float value) { return fmax(0.00001f, value * 0.01f); },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeFlare",
@@ -816,11 +813,6 @@ void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-    static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
-    static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
-  shader_injection.random_1 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
-  shader_injection.random_2 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
-  shader_injection.random_3 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
   shader_injection.isUnderWater = isUnderWater;
   isUnderWater = false;
   toggleNote = ppcheck;
@@ -845,6 +837,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swapchain_proxy_revert_state = false;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+      renodx::utils::random::binds.push_back(&shader_injection.random_1);
+      renodx::utils::random::binds.push_back(&shader_injection.random_2);
+      renodx::utils::random::binds.push_back(&shader_injection.random_3);
 
       // BGRA8_unorm
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
@@ -874,6 +869,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx::utils::random::Use(fdw_reason);
 
   return TRUE;
 }
