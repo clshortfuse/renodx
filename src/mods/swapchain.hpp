@@ -2267,7 +2267,7 @@ inline bool OnCreateResourceView(
       reshade::log::message(reshade::log::level::warning, s.str().c_str());
     }
     expected = true;
-  } else if (reshade::api::format_to_typeless(resource_desc.texture.format) != reshade::api::format_to_typeless(new_desc.format)) {
+  } else if (utils::resource::FormatToTypeless(resource_desc.texture.format) != utils::resource::FormatToTypeless(new_desc.format)) {
     // Games may use the swapchain format to define textures, causing resource views to mismatch
     switch (resource_desc.texture.format) {
       case reshade::api::format::r8g8b8a8_typeless:
@@ -2277,14 +2277,14 @@ inline bool OnCreateResourceView(
       case reshade::api::format::r16g16b16a16_float:
         new_desc.format = resource_desc.texture.format;
         break;
-
       default:
+        // Maybe be decompressible
         std::stringstream s;
         s << "mods::swapchain::OnCreateResourceView(";
         s << "unexpected case(" << desc.format << ")";
         s << ")";
         reshade::log::message(reshade::log::level::warning, s.str().c_str());
-        // assert(false);
+        assert(false);
         return false;
         break;
     }
@@ -2449,8 +2449,8 @@ inline bool OnCopyResource(
       dest_new = dest_clone;
     }
     can_be_copied = (source_desc_new.texture.format == dest_desc_new.texture.format)
-                    || (reshade::api::format_to_typeless(source_desc_new.texture.format)
-                        == reshade::api::format_to_typeless(dest_desc_new.texture.format));
+                    || (utils::resource::FormatToTypeless(source_desc_new.texture.format) == utils::resource::FormatToTypeless(dest_desc_new.texture.format))
+                    || utils::resource::IsCompressible(source_desc_new.texture.format, dest_desc_new.texture.format);
 
     if (!can_be_copied && use_auto_upgrade) {
       if (source_info->desc.texture.format != auto_upgrade_target.new_format && source_info->clone_target == nullptr) {
@@ -2478,8 +2478,8 @@ inline bool OnCopyResource(
     }
   } else {
     can_be_copied = (source_desc_new.texture.format == dest_desc_new.texture.format)
-                    || (reshade::api::format_to_typeless(source_desc_new.texture.format)
-                        == reshade::api::format_to_typeless(dest_desc_new.texture.format));
+                    || (utils::resource::FormatToTypeless(source_desc_new.texture.format) == utils::resource::FormatToTypeless(dest_desc_new.texture.format))
+                    || utils::resource::IsCompressible(source_desc_new.texture.format, dest_desc_new.texture.format);
   }
 
   // {
@@ -3160,8 +3160,8 @@ inline bool OnCopyTextureRegion(
   }
 
   bool can_be_copied = (source_desc_new.texture.format == dest_desc_new.texture.format)
-                       || (reshade::api::format_to_typeless(source_desc_new.texture.format)
-                           == reshade::api::format_to_typeless(dest_desc_new.texture.format));
+                       || (utils::resource::FormatToTypeless(source_desc_new.texture.format) == utils::resource::FormatToTypeless(dest_desc_new.texture.format))
+                       || utils::resource::IsCompressible(source_desc_new.texture.format, dest_desc_new.texture.format);
 
   if (can_be_copied) {
     cmd_list->copy_texture_region(source_new, source_subresource, source_box, dest_new, dest_subresource, dest_box, filter);
@@ -3198,6 +3198,8 @@ inline bool OnCopyTextureRegion(
   s << ")";
 
   reshade::log::message(reshade::log::level::warning, s.str().c_str());
+
+  assert(false);
 
   if (cmd_list->get_device()->get_api() == reshade::api::device_api::vulkan) {
     // perform blit

@@ -430,6 +430,7 @@ inline void OnInitResource(
   auto [pair, inserted] = store->resource_infos.try_emplace_p(resource.handle, new_data);
   if (!inserted) {
     assert(pair->second.resource.handle == resource.handle);
+    was_destroyed = pair->second.destroyed;
     if (!pair->second.destroyed) {
 #ifdef DEBUG_LEVEL_1
       std::stringstream s;
@@ -444,6 +445,45 @@ inline void OnInitResource(
     }
     pair->second = new_data;
   }
+
+#ifdef DEBUG_LEVEL_2
+  {
+    std::stringstream s;
+    s << "utils::resource::OnInitResource(";
+    s << PRINT_PTR(resource.handle);
+    if (device->get_api() == reshade::api::device_api::opengl) {
+      const int opengl_target = resource.handle >> 40;
+      const int opengl_object = resource.handle & 0xFFFFFFFF;
+      s << ", opengl target: " << opengl_target;
+      s << ", opengl object: " << opengl_object;
+    }
+    s << ", type: " << desc.type;
+
+    if (desc.type == reshade::api::resource_type::unknown) {
+      assert(false);
+    } else if (desc.type == reshade::api::resource_type::buffer) {
+      s << ", size: " << desc.buffer.size;
+    } else {
+      s << ", format: " << desc.texture.format;
+      s << ", width: " << desc.texture.width;
+      s << ", height: " << desc.texture.height;
+      s << ", depth_or_layers: " << desc.texture.depth_or_layers;
+      s << ", levels: " << desc.texture.levels;
+    }
+    s << ", usage: " << desc.usage;
+    if (initial_data != nullptr) {
+      s << ", initial_data: " << initial_data;
+    } else {
+      s << ", initial_data: nullptr";
+    }
+    s << ", initial_state: " << initial_state;
+    s << ", inserted: " << (inserted ? "true" : "false");
+    s << ", was_destroyed: " << (was_destroyed ? "true" : "false");
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+  }
+#endif
+
   for (auto& callback : store->on_init_resource_info_callbacks) {
     callback(&pair->second);
   }
@@ -613,6 +653,185 @@ static uint32_t ComputeTextureSize(
   }
   auto size = format_slice_pitch(desc.texture.format, row_pitch, desc.texture.height);
   return size;
+}
+
+static bool IsCompressible(
+    reshade::api::format uncompressed,
+    reshade::api::format compressed) {
+  switch (uncompressed) {
+    case reshade::api::format::r32_uint:
+    case reshade::api::format::r32_sint:
+      switch (compressed) {
+        case reshade::api::format::r9g9b9e5:
+          return true;
+        default:
+          return false;
+      }
+    case reshade::api::format::r16g16b16a16_uint:
+    case reshade::api::format::r16g16b16a16_sint:
+    case reshade::api::format::r32g32_uint:
+    case reshade::api::format::r32g32_sint:
+      switch (compressed) {
+        case reshade::api::format::bc1_unorm:
+        case reshade::api::format::bc1_unorm_srgb:
+        case reshade::api::format::bc1_typeless:
+        case reshade::api::format::bc4_unorm:
+        case reshade::api::format::bc4_snorm:
+        case reshade::api::format::bc4_typeless:
+          return true;
+        default:
+          return false;
+      }
+    case reshade::api::format::r32g32b32a32_uint:
+    case reshade::api::format::r32g32b32a32_sint:
+      switch (compressed) {
+        case reshade::api::format::bc2_unorm:
+        case reshade::api::format::bc2_unorm_srgb:
+        case reshade::api::format::bc2_typeless:
+        case reshade::api::format::bc3_unorm:
+        case reshade::api::format::bc3_unorm_srgb:
+        case reshade::api::format::bc3_typeless:
+        case reshade::api::format::bc5_unorm:
+        case reshade::api::format::bc5_snorm:
+        case reshade::api::format::bc5_typeless:
+          return true;
+        default:
+          return false;
+      }
+    default:
+      return false;
+  }
+}
+
+inline reshade::api::format FormatToTypeless(reshade::api::format value) {
+  switch (value) {
+    case reshade::api::format::l8_unorm:
+    case reshade::api::format::r8_typeless:
+    case reshade::api::format::r8_uint:
+    case reshade::api::format::r8_sint:
+    case reshade::api::format::r8_unorm:
+    case reshade::api::format::r8_snorm:
+      return reshade::api::format::r8_typeless;
+    case reshade::api::format::l8a8_unorm:
+    case reshade::api::format::r8g8_typeless:
+    case reshade::api::format::r8g8_uint:
+    case reshade::api::format::r8g8_sint:
+    case reshade::api::format::r8g8_unorm:
+    case reshade::api::format::r8g8_snorm:
+      return reshade::api::format::r8g8_typeless;
+    case reshade::api::format::r8g8b8a8_typeless:
+    case reshade::api::format::r8g8b8a8_uint:
+    case reshade::api::format::r8g8b8a8_sint:
+    case reshade::api::format::r8g8b8a8_unorm:
+    case reshade::api::format::r8g8b8a8_unorm_srgb:
+    case reshade::api::format::r8g8b8a8_snorm:
+    case reshade::api::format::r8g8b8x8_unorm:
+    case reshade::api::format::r8g8b8x8_unorm_srgb:
+      return reshade::api::format::r8g8b8a8_typeless;
+    case reshade::api::format::b8g8r8a8_typeless:
+    case reshade::api::format::b8g8r8a8_unorm:
+    case reshade::api::format::b8g8r8a8_unorm_srgb:
+      return reshade::api::format::b8g8r8a8_typeless;
+    case reshade::api::format::b8g8r8x8_typeless:
+    case reshade::api::format::b8g8r8x8_unorm:
+    case reshade::api::format::b8g8r8x8_unorm_srgb:
+      return reshade::api::format::b8g8r8x8_typeless;
+    case reshade::api::format::r10g10b10a2_typeless:
+    case reshade::api::format::r10g10b10a2_uint:
+    case reshade::api::format::r10g10b10a2_unorm:
+    case reshade::api::format::r10g10b10a2_xr_bias:
+      return reshade::api::format::r10g10b10a2_typeless;
+    case reshade::api::format::b10g10r10a2_typeless:
+    case reshade::api::format::b10g10r10a2_uint:
+    case reshade::api::format::b10g10r10a2_unorm:
+      return reshade::api::format::b10g10r10a2_typeless;
+    case reshade::api::format::l16_unorm:
+    case reshade::api::format::d16_unorm:
+    case reshade::api::format::r16_typeless:
+    case reshade::api::format::r16_uint:
+    case reshade::api::format::r16_sint:
+    case reshade::api::format::r16_float:
+    case reshade::api::format::r16_unorm:
+    case reshade::api::format::r16_snorm:
+      return reshade::api::format::r16_typeless;
+    case reshade::api::format::l16a16_unorm:
+    case reshade::api::format::r16g16_typeless:
+    case reshade::api::format::r16g16_uint:
+    case reshade::api::format::r16g16_sint:
+    case reshade::api::format::r16g16_float:
+    case reshade::api::format::r16g16_unorm:
+    case reshade::api::format::r16g16_snorm:
+      return reshade::api::format::r16g16_typeless;
+    case reshade::api::format::r16g16b16a16_typeless:
+    case reshade::api::format::r16g16b16a16_uint:
+    case reshade::api::format::r16g16b16a16_sint:
+    case reshade::api::format::r16g16b16a16_float:
+    case reshade::api::format::r16g16b16a16_unorm:
+    case reshade::api::format::r16g16b16a16_snorm:
+      return reshade::api::format::r16g16b16a16_typeless;
+    case reshade::api::format::d32_float:
+    case reshade::api::format::r32_typeless:
+    case reshade::api::format::r32_uint:
+    case reshade::api::format::r32_sint:
+    case reshade::api::format::r32_float:
+      return reshade::api::format::r32_typeless;
+    case reshade::api::format::r32g32_typeless:
+    case reshade::api::format::r32g32_uint:
+    case reshade::api::format::r32g32_sint:
+    case reshade::api::format::r32g32_float:
+      return reshade::api::format::r32g32_typeless;
+    case reshade::api::format::r32g32b32_typeless:
+    case reshade::api::format::r32g32b32_uint:
+    case reshade::api::format::r32g32b32_sint:
+    case reshade::api::format::r32g32b32_float:
+      return reshade::api::format::r32g32b32_typeless;
+    case reshade::api::format::r32g32b32a32_typeless:
+    case reshade::api::format::r32g32b32a32_uint:
+    case reshade::api::format::r32g32b32a32_sint:
+    case reshade::api::format::r32g32b32a32_float:
+      return reshade::api::format::r32g32b32a32_typeless;
+    case reshade::api::format::d32_float_s8_uint:
+    case reshade::api::format::r32_g8_typeless:
+    case reshade::api::format::r32_float_x8_uint:
+    case reshade::api::format::x32_float_g8_uint:
+      return reshade::api::format::r32_g8_typeless;
+      // Do not also convert 'd24_unorm_x8_uint' here, to keep it distinguishable from 'd24_unorm_s8_uint'
+    case reshade::api::format::d24_unorm_s8_uint:
+    case reshade::api::format::r24_g8_typeless:
+    case reshade::api::format::r24_unorm_x8_uint:
+    case reshade::api::format::x24_unorm_g8_uint:
+      return reshade::api::format::r24_g8_typeless;
+    case reshade::api::format::bc1_typeless:
+    case reshade::api::format::bc1_unorm:
+    case reshade::api::format::bc1_unorm_srgb:
+      return reshade::api::format::bc1_typeless;
+    case reshade::api::format::bc2_typeless:
+    case reshade::api::format::bc2_unorm:
+    case reshade::api::format::bc2_unorm_srgb:
+      return reshade::api::format::bc2_typeless;
+    case reshade::api::format::bc3_typeless:
+    case reshade::api::format::bc3_unorm:
+    case reshade::api::format::bc3_unorm_srgb:
+      return reshade::api::format::bc3_typeless;
+    case reshade::api::format::bc4_typeless:
+    case reshade::api::format::bc4_unorm:
+    case reshade::api::format::bc4_snorm:
+      return reshade::api::format::bc4_typeless;
+    case reshade::api::format::bc5_typeless:
+    case reshade::api::format::bc5_unorm:
+    case reshade::api::format::bc5_snorm:
+      return reshade::api::format::bc5_typeless;
+    case reshade::api::format::bc6h_typeless:
+    case reshade::api::format::bc6h_ufloat:
+    case reshade::api::format::bc6h_sfloat:
+      return reshade::api::format::bc6h_typeless;
+    case reshade::api::format::bc7_typeless:
+    case reshade::api::format::bc7_unorm:
+    case reshade::api::format::bc7_unorm_srgb:
+      return reshade::api::format::bc7_typeless;
+    default:
+      return value;
+  }
 }
 
 static bool attached = false;
