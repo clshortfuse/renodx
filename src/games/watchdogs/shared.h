@@ -35,6 +35,7 @@ struct ShaderInjectData {
   float fxVignette;
   float fxSharpen;
   float fxFilmGrain;
+  float fxHDRVideos;
   float random;
   float is_not_camera;
   bool has_loaded_title_menu;
