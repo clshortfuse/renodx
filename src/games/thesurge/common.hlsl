@@ -43,7 +43,7 @@ float3 FinalizeOutput(float3 color) {
   return color;
 }
 
-float3 InverseToneMap(float3 color) {
+float3 InverseToneMapBT2446a(float3 color) {
   if (injectedData.toneMapType != 0.f && injectedData.hasLoadedTitleMenu == true) {
   color = renodx::color::srgb::Encode(color);
 	float scaling = injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
@@ -78,6 +78,30 @@ static const float F = 0.3f;  // Toe Denominator
  return renodx::tonemap::ApplyCurve(color, A, B, C, D, E, F) / renodx::tonemap::ApplyCurve(params.w, A, B, C, D, E, F);
 }
 
+float3 uncharted2Inverse(float3 x, float linear_white) {
+  // all parameters are tweakable
+  static const float A = 0.22 * 1.30;  // Shoulder Strength
+  static const float B = 0.30 * 0.95;  // Linear Strength
+  static const float C = 0.10;  // Linear Angle
+  static const float D = 0.20;  // Toe Strength
+  static const float E = 0.01 * 1.20;  // Toe Numerator
+  static const float F = 0.30;  // Toe Denominator
+  float W = linear_white;       // Linear White
+  static const float exposure = 1.0;         // SHOULD ONLY BE 1.0 OR 2.0 (pre-tonemap adjustment)
+  // ITM_max = (W / exposure) * 203;    // (theoretical target peak in nits)
+  x *= renodx::tonemap::ApplyCurve(W, A, B, C, D, E, F);
+
+  float3 part1 = renodx::math::DivideSafe(
+    (B * C * F) - (B * E) - (B * F * x),
+    exposure * 2.f * A * (E + F * x - F));
+
+  float3 part2 = renodx::math::DivideSafe(
+  renodx::math::SignSqrt((- (exposure * B * C * F) + (exposure * B * E) + (exposure * B * F * x)) * (- (exposure * B * C * F) + (exposure * B * E) + (exposure * B * F * x)) - (4.f * D * F * F * x * ((pow(exposure,exposure) * A * E) + (pow(exposure,exposure) * A * F * x) - (pow(exposure,exposure) * A * F)))),
+  pow(exposure, exposure) * 2.f * A * (E + F * x - F));
+
+  return part1 - part2;
+}
+
 float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState lutSampler, float4 params) {
   float3 outputColor;
   float3 hueCorrectionColor = vanillaTonemap(untonemapped, params);
@@ -94,7 +118,7 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   config.saturation = injectedData.colorGradeSaturation;
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
-  config.reno_drt_contrast = 1.2f;
+  config.reno_drt_contrast = 1.18f;
   config.reno_drt_dechroma = injectedData.colorGradeDechroma;
   config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
   config.hue_correction_type = injectedData.toneMapPerChannel != 0.f
@@ -107,11 +131,11 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
   config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
   config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
   config.reno_drt_blowout = injectedData.colorGradeBlowout;
-  config.reno_drt_white_clip = injectedData.colorGradeClip;
+  config.reno_drt_white_clip = injectedData.colorGradeClip == 0.f ? params.w : injectedData.colorGradeClip;
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = lutSampler;
   lut_config.strength = injectedData.colorGradeLUTStrength;
-  lut_config.scaling = 0.f;
+  lut_config.scaling = injectedData.colorGradeLUTScaling;
   lut_config.type_input = renodx::lut::config::type::GAMMA_2_0;
   lut_config.type_output = renodx::lut::config::type::GAMMA_2_0;
   lut_config.size = 16;
@@ -122,4 +146,43 @@ float3 applyUserTonemap(float3 untonemapped, Texture3D lutTexture, SamplerState 
     outputColor = untonemapped;
   }
 return renodx::tonemap::config::Apply(outputColor, config, lut_config, lutTexture);
+}
+
+float3 applyVideoTonemap(float3 untonemapped, float linear_white){
+  float3 outputColor;
+  float midGray = renodx::tonemap::uncharted2::BT709(float3(0.18f,0.18f,0.18f), linear_white).x;
+  float3 hueCorrectionColor = renodx::tonemap::uncharted2::BT709(untonemapped, linear_white);
+  bool perChannel = injectedData.toneMapPerChannel != 0.f;
+    renodx::tonemap::Config config = renodx::tonemap::config::Create();
+    config.type = injectedData.toneMapType > 1.f ? 3.f : injectedData.toneMapType;
+    config.peak_nits = injectedData.toneMapPeakNits;
+    config.game_nits = injectedData.toneMapGameNits;
+    config.gamma_correction = injectedData.toneMapGammaCorrection;
+    config.mid_gray_value = midGray;
+    config.mid_gray_nits = midGray * 100;
+    config.reno_drt_contrast = 1.18f;
+    config.reno_drt_saturation = perChannel ? 1.f : 1.6f;
+    config.reno_drt_dechroma = perChannel ? 0.f : 0.8f;
+    config.hue_correction_type = perChannel ? renodx::tonemap::config::hue_correction_type::INPUT
+                                     : renodx::tonemap::config::hue_correction_type::CUSTOM;
+    config.hue_correction_strength = perChannel ? 0.f : 1.f;
+    config.hue_correction_color = lerp(untonemapped, hueCorrectionColor, injectedData.toneMapHueShift);
+    config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
+    config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
+    config.reno_drt_per_channel = perChannel;
+    config.reno_drt_white_clip = linear_white;
+    config.reno_drt_blowout = perChannel ? -0.01f : 0.f;
+      if(injectedData.toneMapType == 0.f){
+    outputColor = saturate(hueCorrectionColor);
+    } else {
+    outputColor = untonemapped;
+    }
+return renodx::tonemap::config::Apply(outputColor, config);
+}
+
+float3 InverseToneMapCustom(float3 color, float linear_white) {
+  color = renodx::color::correct::Gamma(color, true, 2.2f);
+  if (linear_white == 0.f || injectedData.hasLoadedTitleMenu == false) {return color;}
+  float3 untonemapped = uncharted2Inverse(color, linear_white);
+  return applyVideoTonemap(untonemapped, linear_white);
 }
