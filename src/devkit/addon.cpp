@@ -299,17 +299,18 @@ bool ComputeDisassemblyForShaderDetails(reshade::api::device* device, DeviceData
     try {
       if (shader_details->shader_data.empty()) {
         reshade::api::pipeline pipeline = {0};
-        {
-          // Get pipeline handle
-          auto* store = renodx::utils::shader::GetStore();
-          // std::shared_lock lock(shader_device_data->mutex);
-          auto pair = store->shader_pipeline_handles.find({device, shader_details->shader_hash});
-          if (pair == store->shader_pipeline_handles.end()) {
-            throw std::exception("Shader data not found.");
-          }
-          auto& pipeline_handles = pair->second;
-          if (pipeline_handles.empty()) throw std::exception("Shader data not found.");
-          pipeline = {*(pipeline_handles.begin())};
+
+        // Get pipeline handle
+        auto* store = renodx::utils::shader::GetStore();
+        store->shader_pipeline_handles.if_contains(
+            {device, shader_details->shader_hash},
+            [&pipeline](const std::pair<const std::pair<reshade::api::device*, uint32_t>, std::unordered_set<uint64_t>>& pair) {
+              if (pair.second.empty()) return;
+              auto handle = *pair.second.begin();
+              pipeline = {handle};
+            });
+        if (pipeline.handle == 0u) {
+          throw std::exception("Shader data not found.");
         }
 
         auto shader_data = renodx::utils::shader::GetShaderData(pipeline, shader_details->shader_hash);
@@ -711,13 +712,14 @@ void OnInitPipelineTrackAddons(
   if (data == nullptr) return;
   auto* store = renodx::utils::shader::GetStore();
   // std::shared_lock shader_data_lock(shader_device_data->mutex);
-  for (const auto& [device_shader_hash_pair, addon_data] : store->runtime_replacements) {
-    auto& [pair_device, shader_hash] = device_shader_hash_pair;
-    if (pair_device != device) continue;
-    auto* shader_details = data->GetShaderDetails(shader_hash);
-    shader_details->addon_shader = addon_data;
-    shader_details->shader_source = ShaderDetails::ShaderSource::ADDON_SHADER;
-  }
+  store->runtime_replacements.for_each(
+      [&](const std::pair<const std::pair<reshade::api::device*, uint32_t>, std::span<const uint8_t>>& pair) {
+        const auto& [pair_device, shader_hash] = pair.first;
+        if (pair_device != device) return;
+        auto* shader_details = data->GetShaderDetails(shader_hash);
+        shader_details->addon_shader = pair.second;
+        shader_details->shader_source = ShaderDetails::ShaderSource::ADDON_SHADER;
+      });
 }
 
 void OnInitPipeline(
@@ -2966,13 +2968,17 @@ void RenderShaderViewDecompilation(reshade::api::device* device, DeviceData* dat
         {
           // Get pipeline handle
           auto* store = renodx::utils::shader::GetStore();
-          auto pair = store->shader_pipeline_handles.find({device, shader_details->shader_hash});
-          if (pair == store->shader_pipeline_handles.end()) {
+          store->shader_pipeline_handles.if_contains(
+              {device, shader_details->shader_hash},
+              [&pipeline](const std::pair<const std::pair<reshade::api::device*, uint32_t>, std::unordered_set<uint64_t>>& pair) {
+                if (pair.second.empty()) return;
+                auto handle = *pair.second.begin();
+                pipeline = {handle};
+              });
+
+          if (pipeline.handle == 0u) {
             throw std::exception("Shader data not found.");
           }
-          auto& pipeline_handles = pair->second;
-          if (pipeline_handles.empty()) throw std::exception("Shader data not found.");
-          pipeline = {*(pipeline_handles.begin())};
         }
 
         auto shader_data = renodx::utils::shader::GetShaderData(pipeline, shader_details->shader_hash);
