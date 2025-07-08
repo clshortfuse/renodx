@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "../shared.h"
 
 struct CameraBlock {
   float3 CameraBlock_000;
@@ -42,7 +42,8 @@ struct CameraBlockArray {
     int ResolutionBlock_116;
     int ResolutionBlock_120;
     int ResolutionBlock_124;
-  } CameraBlockArray_2064[5];
+  }
+  CameraBlockArray_2064[5];
 };
 
 struct VolumeShape {
@@ -103,7 +104,8 @@ struct ProbeRenderData {
     int VolumeArrayData_020;
     int VolumeArrayData_024;
     int VolumeArrayData_028;
-  } ProbeRenderData_064[12];
+  }
+  ProbeRenderData_064[12];
   int ProbeRenderData_448;
   int ProbeRenderData_452;
   float ProbeRenderData_456;
@@ -194,13 +196,15 @@ struct SPerSceneConstants {
     float CameraExposureData_020;
     float CameraExposureData_024;
     float CameraExposureData_028;
-  } SPerSceneConstants_5056;
+  }
+  SPerSceneConstants_5056;
   struct GlobalLightData {
     int GlobalLightData_000;
     int GlobalLightData_004;
     int GlobalLightData_008;
     int GlobalLightData_012;
-  } SPerSceneConstants_5088;
+  }
+  SPerSceneConstants_5088;
   struct GlobalShadowData {
     struct CloudOverlaySet {
       struct CloudPlaneShadowData {
@@ -211,8 +215,10 @@ struct SPerSceneConstants {
         int CloudPlaneShadowData_020;
         int CloudPlaneShadowData_024;
         int CloudPlaneShadowData_028;
-      } CloudOverlaySet_000;
-    } GlobalShadowData_000[2];
+      }
+      CloudOverlaySet_000;
+    }
+    GlobalShadowData_000[2];
     float GlobalShadowData_064;
     float GlobalShadowData_068;
     float GlobalShadowData_072;
@@ -221,7 +227,8 @@ struct SPerSceneConstants {
     int GlobalShadowData_084;
     int GlobalShadowData_088;
     int GlobalShadowData_092;
-  } SPerSceneConstants_5104;
+  }
+  SPerSceneConstants_5104;
   struct ReflectionProbeDescData {
     int ReflectionProbeDescData_000;
     int ReflectionProbeDescData_004;
@@ -235,15 +242,18 @@ struct SPerSceneConstants {
     int ReflectionProbeDescData_036;
     int ReflectionProbeDescData_040;
     int ReflectionProbeDescData_044;
-  } SPerSceneConstants_5200;
+  }
+  SPerSceneConstants_5200;
   struct ReflectionProbeExposureData {
     struct IndirectExposureData {
       float IndirectExposureData_000;
       float IndirectExposureData_004;
       int IndirectExposureData_008;
       int IndirectExposureData_012;
-    } ReflectionProbeExposureData_000[32];
-  } SPerSceneConstants_5248;
+    }
+    ReflectionProbeExposureData_000[32];
+  }
+  SPerSceneConstants_5248;
   SIndirectLightingData SPerSceneConstants_5760;
   ProbeRenderData SPerSceneConstants_46928;
   struct PlanetConstantsData {
@@ -251,7 +261,8 @@ struct SPerSceneConstants {
     int PlanetConstantsData_004;
     int PlanetConstantsData_008;
     int PlanetConstantsData_012;
-  } SPerSceneConstants_47392;
+  }
+  SPerSceneConstants_47392;
   float SPerSceneConstants_47408;
   int SPerSceneConstants_47412;
   int SPerSceneConstants_47416;
@@ -282,7 +293,8 @@ struct SPerSceneConstants {
     float2 TiledBinning_idTech7FrameData_096;
     int TiledBinning_idTech7FrameData_104;
     int TiledBinning_idTech7FrameData_108;
-  } SPerSceneConstants_47424;
+  }
+  SPerSceneConstants_47424;
   float SPerSceneConstants_47536;
   float SPerSceneConstants_47540;
   float SPerSceneConstants_47544;
@@ -308,7 +320,8 @@ struct SPerSceneConstants {
     float InlineContactShadowsConstants_036;
     int InlineContactShadowsConstants_040;
     int InlineContactShadowsConstants_044;
-  } SPerSceneConstants_47584;
+  }
+  SPerSceneConstants_47584;
   struct VolumetricLightingApplyParameters {
     float VolumetricLightingApplyParameters_000;
     float VolumetricLightingApplyParameters_004;
@@ -318,7 +331,8 @@ struct SPerSceneConstants {
     float VolumetricLightingApplyParameters_020;
     float VolumetricLightingApplyParameters_024;
     int VolumetricLightingApplyParameters_028;
-  } SPerSceneConstants_47632;
+  }
+  SPerSceneConstants_47632;
   struct PrecomputeTransmittanceParameters {
     float3 PrecomputeTransmittanceParameters_000;
     int PrecomputeTransmittanceParameters_012;
@@ -326,7 +340,8 @@ struct SPerSceneConstants {
     int PrecomputeTransmittanceParameters_028;
     float3 PrecomputeTransmittanceParameters_032;
     float PrecomputeTransmittanceParameters_044;
-  } SPerSceneConstants_47664;
+  }
+  SPerSceneConstants_47664;
   HeightfieldData SPerSceneConstants_47712;
   struct MomentBasedOITSettings {
     float MomentBasedOITSettings_000;
@@ -344,7 +359,8 @@ struct SPerSceneConstants {
     int MomentBasedOITSettings_052;
     int MomentBasedOITSettings_056;
     int MomentBasedOITSettings_060;
-  } SPerSceneConstants_52080;
+  }
+  SPerSceneConstants_52080;
   struct TonemappingParams {
     float TonemappingParams_000;
     float TonemappingParams_004;
@@ -354,13 +370,15 @@ struct SPerSceneConstants {
     float TonemappingParams_020;
     float TonemappingParams_024;
     int TonemappingParams_028;
-  } SPerSceneConstants_52144;
+  }
+  SPerSceneConstants_52144;
   struct EffectsAlphaThresholdParams {
     float EffectsAlphaThresholdParams_000;
     float EffectsAlphaThresholdParams_004;
     float EffectsAlphaThresholdParams_008;
     float EffectsAlphaThresholdParams_012;
-  } SPerSceneConstants_52176;
+  }
+  SPerSceneConstants_52176;
   struct TiledLightingDebug {
     int TiledLightingDebug_000;
     int TiledLightingDebug_004;
@@ -370,13 +388,15 @@ struct SPerSceneConstants {
     int TiledLightingDebug_020;
     int TiledLightingDebug_024;
     int TiledLightingDebug_028;
-  } SPerSceneConstants_52192;
+  }
+  SPerSceneConstants_52192;
   struct GPUDebugGeometrySettings {
     int GPUDebugGeometrySettings_000;
     int GPUDebugGeometrySettings_004;
     int GPUDebugGeometrySettings_008;
     int GPUDebugGeometrySettings_012;
-  } SPerSceneConstants_52224;
+  }
+  SPerSceneConstants_52224;
   struct FoliageDeformationData {
     struct FoliageDeformationInstance {
       float3 FoliageDeformationInstance_000;
@@ -385,7 +405,8 @@ struct SPerSceneConstants {
       int FoliageDeformationInstance_020;
       int FoliageDeformationInstance_024;
       int FoliageDeformationInstance_028;
-    } FoliageDeformationData_000[25];
+    }
+    FoliageDeformationData_000[25];
     int FoliageDeformationData_800;
     float FoliageDeformationData_804;
     float FoliageDeformationData_808;
@@ -394,7 +415,8 @@ struct SPerSceneConstants {
     int FoliageDeformationData_820;
     int FoliageDeformationData_824;
     int FoliageDeformationData_828;
-  } SPerSceneConstants_52240;
+  }
+  SPerSceneConstants_52240;
 };
 
 Texture2D<float3> t0 : register(t0, space9);
@@ -448,8 +470,11 @@ cbuffer cb0 : register(b0, space6) {
       int FrameDebug_052;
       int FrameDebug_056;
       int FrameDebug_060;
-    } FrameData_080;
-  } SharedFrameData_000:   packoffset(c000.x);  //  Offset:    0
+    }
+    FrameData_080;
+  }
+SharedFrameData_000:
+  packoffset(c000.x);  //  Offset:    0
 };
 
 cbuffer cb1 : register(b0, space7) {
@@ -461,7 +486,8 @@ cbuffer cb2 : register(b0) {
     int PushConstantWrapper_HDRComposite_000;
     int PushConstantWrapper_HDRComposite_004;
     int PushConstantWrapper_HDRComposite_008;
-  } stub_PushConstantWrapper_HDRComposite_000:
+  }
+stub_PushConstantWrapper_HDRComposite_000:
   packoffset(c000.x);  //  Offset:    0
 };
 
@@ -508,16 +534,18 @@ float4 main(
   }
 
   float3 _58 = t2.SampleLevel(s0, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
+
+  _58 *= CUSTOM_BLOOM;
+
   float _63 = asfloat((uint)(stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_008));
-  float _70 = ((_58.x * _55) * _63) * CUSTOM_BLOOM * 0 + _41.x;
-  float _71 = ((_58.y * _55) * _63) * CUSTOM_BLOOM * 0 + _41.y;
-  float _72 = ((_58.z * _55) * _63) * CUSTOM_BLOOM * 0 + _41.z;
+  float _70 = ((_58.x * _55) * _63) + _41.x;
+  float _71 = ((_58.y * _55) * _63) + _41.y;
+  float _72 = ((_58.z * _55) * _63) + _41.z;
 
   float3 untonemapped = float3(_70, _71, _72);
 
-
   float mid_gray = 0.18f;
-  // Duplicate for midgray computation 
+  // Duplicate for midgray computation
   {
     _70 = 0.18f;
     if ((uint)(stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_004) == 0) {
@@ -728,8 +756,9 @@ float4 main(
   float _338 = (((((((_307 * _23) - _314) * _26) + _314) * _35) - (PerSceneConstants_000.SPerSceneConstants_5056.CameraExposureData_008)) * _37) + (PerSceneConstants_000.SPerSceneConstants_5056.CameraExposureData_008);
   float _339 = (((((((_307 * _24) - _315) * _26) + _315) * _35) - (PerSceneConstants_000.SPerSceneConstants_5056.CameraExposureData_008)) * _37) + (PerSceneConstants_000.SPerSceneConstants_5056.CameraExposureData_008);
   float _340 = (((((((_307 * _25) - _316) * _26) + _316) * _35) - (PerSceneConstants_000.SPerSceneConstants_5056.CameraExposureData_008)) * _37) + (PerSceneConstants_000.SPerSceneConstants_5056.CameraExposureData_008);
-  
-  // User contrast
+
+  // User Contrast
+
   float _352 = max(SharedFrameData_000.FrameData_032, 0.0010000000474974513f);
   float _359 = ((lerp(_338, _28, _31) * 2.0f) + -1.0f) * _352;
   float _360 = ((lerp(_339, _29, _31) * 2.0f) + -1.0f) * _352;
@@ -739,14 +768,13 @@ float4 main(
   // float _388 = 1.0f / (max(SharedFrameData_000.FrameData_028, 0.0010000000474974513f));
   // Bethesda thinks the 2.4 in SRGB is "Brightness" and should be user selectable.
 
-  // float _404 = max((((exp2((log2((_359 / ((sqrt((_359 * _359) + 1.0f)) * _366)) + 0.5f)) * _388)) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
-  // float _405 = max((((exp2((log2((_360 / ((sqrt((_360 * _360) + 1.0f)) * _366)) + 0.5f)) * _388)) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
-  // float _406 = max((((exp2((log2((_361 / ((sqrt((_361 * _361) + 1.0f)) * _366)) + 0.5f)) * _388)) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
+  // float _404 = max(((exp2(log2((_359 / (sqrt((_359 * _359) + 1.0f) * _366)) + 0.5f) * _388) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
+  // float _405 = max(((exp2(log2((_360 / (sqrt((_360 * _360) + 1.0f) * _366)) + 0.5f) * _388) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
+  // float _406 = max(((exp2(log2((_361 / (sqrt((_361 * _361) + 1.0f) * _366)) + 0.5f) * _388) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
 
   float _404 = (_359 / ((sqrt((_359 * _359) + 1.0f)) * _366)) + 0.5f;
   float _405 = (_360 / ((sqrt((_360 * _360) + 1.0f)) * _366)) + 0.5f;
   float _406 = (_361 / ((sqrt((_361 * _361) + 1.0f)) * _366)) + 0.5f;
-
 
   if (CUSTOM_VANILLA_BY_LUMINANCE != 0) {
     float3 by_luminance = untonemapped * renodx::math::DivideSafe(_404, _70, 0);
@@ -774,7 +802,7 @@ float4 main(
   lut_config.type_input = renodx::lut::config::type::SRGB;
   lut_config.type_output = renodx::lut::config::type::SRGB;
   lut_config.size = 16u;
-  lut_config.recolor = 0.f; // imprecise
+  lut_config.recolor = 0.f;  // imprecise
   float3 lut_output_color = renodx::lut::Sample(float3(_404, _405, _406), lut_config, t3);
 
   float3 mid_gray_lut = renodx::lut::Sample((mid_gray).xxx, lut_config, t3);

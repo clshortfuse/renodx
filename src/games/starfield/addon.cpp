@@ -13,6 +13,7 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
+#include "../../utils/bitwise.hpp"
 #include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/shader.hpp"
@@ -22,19 +23,7 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    // CustomSwapchainShader(0x0D5ADD1F),  // output
-    CustomShaderEntry(0xAC5319C5),  // film grain
-    // CustomShaderEntry(0x0A152BB1),      // HDRComposite
-    // CustomShaderEntry(0x054D0CB8),      // HDRComposite (no bloom)
-    // CustomShaderEntry(0x3B344832),      // HDRComposite (lut only)
-    // CustomShaderEntry(0x17FAB08F),      // PostSharpen
-    // CustomShaderEntry(0x1C18052A),      // CAS1
-    // CustomShaderEntry(0x58E74610),      // CAS2
-    // CustomShaderEntry(0x4348FFAE),      // CAS3
-    // CustomShaderEntry(0xEED8A831),      // CAS4
-    // CustomShaderEntry(0xE9D9E225),  // ui
-    CustomShaderEntry(0x32580F53),  // movie
-    CustomShaderEntry(0xD546E059),  // tonemapper
+    __ALL_CUSTOM_SHADERS,
 };
 
 ShaderInjectData shader_injection;
@@ -236,20 +225,20 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       // while (IsDebuggerPresent() == 0) Sleep(100);
 
-      renodx::mods::shader::on_create_pipeline_layout = [](reshade::api::device* device, auto params) {
-        if (device->get_api() != reshade::api::device_api::d3d12) return false;
-        bool has_tbl = std::ranges::any_of(params, [](auto param) {
-          return (param.type == reshade::api::pipeline_layout_param_type::descriptor_table);
-        });
-        if (!has_tbl) return false;
-        switch (params.size()) {
-          case 3:  return true;
-          case 15: return true;
-          default:
-            break;
-        }
-        return false;
-      };
+      //   renodx::mods::shader::on_create_pipeline_layout = [](reshade::api::device* device, auto params) {
+      //     if (device->get_api() != reshade::api::device_api::d3d12) return false;
+      //     bool has_tbl = std::ranges::any_of(params, [](auto param) {
+      //       return (param.type == reshade::api::pipeline_layout_param_type::descriptor_table);
+      //     });
+      //     if (!has_tbl) return false;
+      //     switch (params.size()) {
+      //       case 3:  return true;
+      //       case 15: return true;
+      //       default:
+      //         break;
+      //     }
+      //     return false;
+      //   };
 
       renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
         return device->get_api() == reshade::api::device_api::d3d12;
@@ -258,14 +247,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::shader::allow_multiple_push_constants = true;
       renodx::mods::shader::expected_constant_buffer_index = 13;
-      renodx::mods::shader::expected_constant_buffer_space = 9;
+      renodx::mods::shader::expected_constant_buffer_space = 50;
 
       renodx::utils::random::binds.push_back(&shader_injection.custom_random);
 
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::force_borderless = false;
       renodx::mods::swapchain::expected_constant_buffer_index = 13;
-      renodx::mods::swapchain::expected_constant_buffer_space = 9;
+      renodx::mods::swapchain::expected_constant_buffer_space = 50;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
       renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
