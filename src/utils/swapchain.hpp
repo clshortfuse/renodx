@@ -414,12 +414,14 @@ static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::c
 
     const HRESULT hr = swapchain4->SetColorSpace1(dx_color_space);
 
-    if (!FAILED(hr)) {
+    if (FAILED(hr)) {
       if (swapchain4 != nullptr) {
         swapchain4->Release();
         swapchain4 = nullptr;
       }
-      reshade::log::message(reshade::log::level::warning, "renodx::utils::swapchain::ChangeColorSpace(Failed to set DirectX color space)");
+      std::stringstream s;
+      s << "renodx::utils::swapchain::ChangeColorSpace(Failed to set DirectX color space, hr = 0x" << std::hex << hr << std::dec << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
       return false;
     }
 
