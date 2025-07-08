@@ -597,6 +597,8 @@ class Decompiler {
     SignaturePacked packed;
     SignatureProperty property;
 
+    explicit Signature() = default;
+
     explicit Signature(SignaturePacked packed, SignatureProperty property) {
       this->name = packed.name;
       this->packed = packed;
@@ -4820,10 +4822,20 @@ class Decompiler {
       if (threads.empty()) {
         auto len = preprocess_state.input_signature.size();
         if (len > 0) string_stream << "\n";
-        for (int i = 0; i < len; ++i) {
-          auto& signature = preprocess_state.input_signature[i];
+        std::vector<std::pair<uint32_t, Signature>> sorted_inputs;
+        sorted_inputs.reserve(preprocess_state.input_signature.size());
+        for (const auto& signature : preprocess_state.input_signature) {
+          sorted_inputs.emplace_back(signature.packed.dxregister, signature);
+        }
+        std::ranges::sort(sorted_inputs,
+                          [](const auto& a, const auto& b) { return a.first < b.first; });
+
+        auto it = sorted_inputs.begin();
+        auto end = sorted_inputs.end();
+        for (; it != end; ++it) {
+          const auto& signature = it->second;
           string_stream << "  " << signature.ToString();
-          if (i != len - 1) {
+          if (std::next(it) != end) {
             string_stream << ",";
           }
           string_stream << "\n";
