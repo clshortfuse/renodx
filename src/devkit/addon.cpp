@@ -2894,6 +2894,7 @@ void RenderSettingsPane(reshade::api::device* device, DeviceData* data) {
     ImGui::SeparatorText("Trace");
     DrawSettingBoolCheckbox("Trace Pipeline Creation", "TracePipelineCreation", &renodx::utils::trace::trace_pipeline_creation);
     DrawSettingBoolCheckbox("Trace Descriptor Tables", "TraceDescriptorTables", &renodx::utils::descriptor::trace_descriptor_tables);
+    DrawSettingBoolCheckbox("Trace Constant Buffers", "TraceConstantBuffers", &renodx::utils::constants::capture_constant_buffers);
     DrawSettingUint32Textbox("Trace Initial Frame Count", "TraceInitialFrameCount", &renodx::utils::trace::trace_initial_frame_count);
   }
 
@@ -3354,6 +3355,7 @@ void InitializeUserSettings() {
   for (const auto& [key, value] : std::vector<std::pair<const char*, std::atomic_bool*>>({
            {"TracePipelineCreation", &renodx::utils::trace::trace_pipeline_creation},
            {"TraceDescriptorTables", &renodx::utils::descriptor::trace_descriptor_tables},
+           {"TraceConstantBuffers", &renodx::utils::constants::capture_constant_buffers},
            {"SnapshotPaneShowVertexShaders", &snapshot_pane_show_vertex_shaders},
            {"SnapshotPaneShowPixelShaders", &snapshot_pane_show_pixel_shaders},
            {"SnapshotPaneShowComputeShaders", &snapshot_pane_show_compute_shaders},
