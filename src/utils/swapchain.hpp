@@ -405,10 +405,23 @@ static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::c
 
     if (!SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4)))) {
       reshade::log::message(reshade::log::level::error, "changeColorSpace(Failed to get native swap chain)");
+      if (swapchain4 != nullptr) {
+        swapchain4->Release();
+        swapchain4 = nullptr;
+      }
       return false;
     }
 
     const HRESULT hr = swapchain4->SetColorSpace1(dx_color_space);
+
+    if (!FAILED(hr)) {
+      if (swapchain4 != nullptr) {
+        swapchain4->Release();
+        swapchain4 = nullptr;
+      }
+      reshade::log::message(reshade::log::level::warning, "renodx::utils::swapchain::ChangeColorSpace(Failed to set DirectX color space)");
+      return false;
+    }
 
     {
       // Notify SpecialK of color space change
@@ -421,13 +434,8 @@ static bool ChangeColorSpace(reshade::api::swapchain* swapchain, reshade::api::c
           sizeof(DXGI_COLOR_SPACE_TYPE),
           &dx_color_space);
     }
-
     swapchain4->Release();
     swapchain4 = nullptr;
-    if (!SUCCEEDED(hr)) {
-      reshade::log::message(reshade::log::level::warning, "renodx::utils::swapchain::ChangeColorSpace(Failed to set DirectX color space)");
-      return false;
-    }
   } else {
     // Vulkan ???
   }
