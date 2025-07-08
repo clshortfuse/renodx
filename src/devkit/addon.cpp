@@ -301,10 +301,10 @@ bool ComputeDisassemblyForShaderDetails(reshade::api::device* device, DeviceData
         reshade::api::pipeline pipeline = {0};
         {
           // Get pipeline handle
-          auto* shader_device_data = renodx::utils::shader::GetShaderDeviceData(device);
-          std::shared_lock lock(shader_device_data->mutex);
-          auto pair = shader_device_data->shader_pipeline_handles.find(shader_details->shader_hash);
-          if (pair == shader_device_data->shader_pipeline_handles.end()) {
+          auto* store = renodx::utils::shader::GetStore();
+          // std::shared_lock lock(shader_device_data->mutex);
+          auto pair = store->shader_pipeline_handles.find({device, shader_details->shader_hash});
+          if (pair == store->shader_pipeline_handles.end()) {
             throw std::exception("Shader data not found.");
           }
           auto& pipeline_handles = pair->second;
@@ -709,9 +709,11 @@ void OnInitPipelineTrackAddons(
 
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return;
-  auto* shader_device_data = renodx::utils::shader::GetShaderDeviceData(device);
-  std::shared_lock shader_data_lock(shader_device_data->mutex);
-  for (const auto& [shader_hash, addon_data] : shader_device_data->runtime_replacements) {
+  auto* store = renodx::utils::shader::GetStore();
+  // std::shared_lock shader_data_lock(shader_device_data->mutex);
+  for (const auto& [device_shader_hash_pair, addon_data] : store->runtime_replacements) {
+    auto& [pair_device, shader_hash] = device_shader_hash_pair;
+    if (pair_device != device) continue;
     auto* shader_details = data->GetShaderDetails(shader_hash);
     shader_details->addon_shader = addon_data;
     shader_details->shader_source = ShaderDetails::ShaderSource::ADDON_SHADER;
@@ -2963,10 +2965,9 @@ void RenderShaderViewDecompilation(reshade::api::device* device, DeviceData* dat
         reshade::api::pipeline pipeline = {0};
         {
           // Get pipeline handle
-          auto* shader_device_data = renodx::utils::shader::GetShaderDeviceData(device);
-          std::shared_lock lock(shader_device_data->mutex);
-          auto pair = shader_device_data->shader_pipeline_handles.find(shader_details->shader_hash);
-          if (pair == shader_device_data->shader_pipeline_handles.end()) {
+          auto* store = renodx::utils::shader::GetStore();
+          auto pair = store->shader_pipeline_handles.find({device, shader_details->shader_hash});
+          if (pair == store->shader_pipeline_handles.end()) {
             throw std::exception("Shader data not found.");
           }
           auto& pipeline_handles = pair->second;
