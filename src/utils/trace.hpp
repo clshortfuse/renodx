@@ -724,33 +724,32 @@ static bool OnDraw(
     uint32_t first_vertex,
     uint32_t first_instance) {
   if (!is_primary_hook) return false;
-  if (trace_running) {
-    std::stringstream s;
-    s << "on_draw";
-    s << "(" << vertex_count;
-    s << ", " << instance_count;
-    s << ", " << first_vertex;
-    s << ", " << first_instance;
-    s << ")";
-    reshade::log::message(reshade::log::level::info, s.str().c_str());
-  }
+  if (!FORCE_ALL && !trace_running) return false;
+
+  std::stringstream s;
+  s << "on_draw";
+  s << "(" << vertex_count;
+  s << ", " << instance_count;
+  s << ", " << first_vertex;
+  s << ", " << first_instance;
+  s << ")";
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
+
   return false;
 }
 
 static bool OnDispatch(reshade::api::command_list* cmd_list, uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z) {
   if (!is_primary_hook) return false;
-  if (trace_running) {
-    std::stringstream s;
-    s << "on_dispatch";
-    s << "(" << group_count_x;
-    s << ", " << group_count_y;
-    s << ", " << group_count_z;
-    s << ")";
-    reshade::log::message(reshade::log::level::info, s.str().c_str());
-    // InstructionState state = instructions.at(instructions.size() - 1);
-    // state.action = reshade::addon_event::dispatch;
-    // resetInstructionState();
-  }
+  if (!FORCE_ALL && !trace_running) return false;
+
+  std::stringstream s;
+  s << "on_dispatch";
+  s << "(" << group_count_x;
+  s << ", " << group_count_y;
+  s << ", " << group_count_z;
+  s << ")";
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
+
   return false;
 }
 
@@ -762,21 +761,18 @@ static bool OnDrawIndexed(
     int32_t vertex_offset,
     uint32_t first_instance) {
   if (!is_primary_hook) return false;
+  if (!FORCE_ALL && !trace_running) return false;
 
-  if (trace_running) {
-    std::stringstream s;
-    s << "on_draw_indexed";
-    s << "(" << index_count;
-    s << ", " << instance_count;
-    s << ", " << first_index;
-    s << ", " << vertex_offset;
-    s << ", " << first_instance;
-    s << ")";
-    reshade::log::message(reshade::log::level::info, s.str().c_str());
-    // InstructionState state = instructions.at(instructions.size() - 1);
-    // state.action = reshade::addon_event::draw_indexed;
-    // resetInstructionState();
-  }
+  std::stringstream s;
+  s << "on_draw_indexed";
+  s << "(" << index_count;
+  s << ", " << instance_count;
+  s << ", " << first_index;
+  s << ", " << vertex_offset;
+  s << ", " << first_instance;
+  s << ")";
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
+
   return false;
 }
 
@@ -788,20 +784,17 @@ static bool OnDrawOrDispatchIndirect(
     uint32_t draw_count,
     uint32_t stride) {
   if (!is_primary_hook) return false;
+  if (!FORCE_ALL && !trace_running) return false;
 
-  if (trace_running) {
-    std::stringstream s;
-    s << "on_draw_or_dispatch_indirect(" << type;
-    s << ", " << PRINT_PTR(buffer.handle);
-    s << ", " << offset;
-    s << ", " << draw_count;
-    s << ", " << stride;
-    s << ")";
-    reshade::log::message(reshade::log::level::info, s.str().c_str());
-    // InstructionState state = instructions.at(instructions.size() - 1);
-    // state.action = reshade::addon_event::draw_or_dispatch_indirect;
-    // resetInstructionState();
-  }
+  std::stringstream s;
+  s << "on_draw_or_dispatch_indirect(" << type;
+  s << ", " << PRINT_PTR(buffer.handle);
+  s << ", " << offset;
+  s << ", " << draw_count;
+  s << ", " << stride;
+  s << ")";
+  reshade::log::message(reshade::log::level::info, s.str().c_str());
+
   return false;
 }
 
@@ -815,8 +808,8 @@ static bool OnCopyTextureRegion(
     const reshade::api::subresource_box* dest_box,
     reshade::api::filter_mode filter) {
   if (!is_primary_hook) return false;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return false;
 
-  if (!trace_running && present_count >= trace_initial_frame_count) return false;
   auto* device = cmd_list->get_device();
   const auto source_desc = device->get_resource_desc(source);
   const auto dest_desc = device->get_resource_desc(dest);
@@ -845,8 +838,8 @@ static bool OnCopyTextureToBuffer(
     uint32_t row_length,
     uint32_t slice_height) {
   if (!is_primary_hook) return false;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return false;
 
-  if (!trace_running && present_count >= trace_initial_frame_count) return false;
   std::stringstream s;
   s << "OnCopyTextureToBuffer(" << PRINT_PTR(source.handle);
   s << "[" << source_subresource << "]";
@@ -871,8 +864,8 @@ static bool OnCopyBufferToTexture(
     uint32_t dest_subresource,
     const reshade::api::subresource_box* dest_box) {
   if (!is_primary_hook) return false;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return false;
 
-  if (!trace_running && present_count >= trace_initial_frame_count) return false;
   std::stringstream s;
   s << "OnCopyBufferToTexture";
   s << "(" << PRINT_PTR(source.handle);
@@ -901,7 +894,7 @@ static bool OnResolveTextureRegion(
     reshade::api::format format) {
   if (!is_primary_hook) return false;
 
-  if (!trace_running && present_count >= trace_initial_frame_count) return false;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return false;
   std::stringstream s;
   s << "on_resolve_texture_region";
   s << "(" << PRINT_PTR(source.handle);
@@ -920,7 +913,7 @@ static bool OnCopyResource(
     reshade::api::resource dest) {
   if (!is_primary_hook) return false;
 
-  if (!trace_running && present_count >= trace_initial_frame_count) return false;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return false;
   std::stringstream s;
   s << "on_copy_resource";
   s << "(" << PRINT_PTR(source.handle);
@@ -937,7 +930,7 @@ static void OnBarrier(
     const reshade::api::resource_usage* old_states,
     const reshade::api::resource_usage* new_states) {
   if (!is_primary_hook) return;
-  if (!trace_running && present_count >= trace_initial_frame_count) return;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return;
   for (uint32_t i = 0; i < count; i++) {
     std::stringstream s;
     s << "on_barrier(" << PRINT_PTR(resources[i].handle);
@@ -1076,7 +1069,7 @@ static void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   if (data == nullptr) return;
   const std::unique_lock lock(data->mutex);
   data->resource_names.erase(resource.handle);
-  if (!trace_running && present_count >= trace_initial_frame_count) return;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return;
 
   std::stringstream s;
   s << "utils::trace::on_destroy_resource(";
@@ -1249,9 +1242,13 @@ static void OnBindDescriptorTables(
   if (count == 0 && layout.handle == 0u) {
     reshade::log::message(reshade::log::level::info, "bind_descriptor_table(empty)");
     return;
-  } 
+  }
 
-  auto* layout_data = pipeline_layout::GetPipelineLayoutData(layout);
+  pipeline_layout::PipelineLayoutData* layout_data = nullptr;
+  if (layout.handle != 0u) {
+    layout_data = pipeline_layout::GetPipelineLayoutData(layout);
+  }
+
   renodx::utils::descriptor::DeviceData* descriptor_data = nullptr;
 
   for (uint32_t i = 0; i < count; ++i) {
@@ -1270,6 +1267,7 @@ static void OnBindDescriptorTables(
       s << ") [" << i << "]";
       reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
+    if (layout_data == nullptr) continue;
 
     const auto& param = layout_data->params.at(layout_index);
 
@@ -1525,7 +1523,7 @@ static bool OnClearDepthStencilView(
     const reshade::api::rect* rects) {
   if (!is_primary_hook) return false;
 
-  if (!trace_running) return false;
+  if (!FORCE_ALL && !trace_running) return false;
   std::stringstream s;
   s << "OnClearDepthStencilView(";
   s << PRINT_PTR(dsv.handle);
@@ -1543,7 +1541,7 @@ static bool OnClearRenderTargetView(
     const reshade::api::rect* rects) {
   if (!is_primary_hook) return false;
 
-  if (!trace_running && present_count >= trace_initial_frame_count) return false;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return false;
   std::stringstream s;
   s << "OnClearRenderTargetView(";
   s << PRINT_PTR(rtv.handle);
@@ -1561,7 +1559,7 @@ static bool OnClearUnorderedAccessViewUint(
     const reshade::api::rect* rects) {
   if (!is_primary_hook) return false;
 
-  if (!trace_running && present_count >= trace_initial_frame_count) return false;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return false;
   std::stringstream s;
   s << "on_clear_unordered_access_view_uint(";
   s << PRINT_PTR(uav.handle);
@@ -1579,7 +1577,7 @@ static void OnMapBufferRegion(
     reshade::api::map_access access,
     void** data) {
   if (!is_primary_hook) return;
-  if (!trace_running && present_count >= trace_initial_frame_count) return;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return;
   std::stringstream s;
   s << "map_buffer_region(";
   s << PRINT_PTR(resource.handle);
@@ -1592,7 +1590,7 @@ static void OnUnmapBufferRegion(
     reshade::api::device* device,
     reshade::api::resource resource) {
   if (!is_primary_hook) return;
-  if (!trace_running && present_count >= trace_initial_frame_count) return;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return;
 
   std::stringstream s;
   s << "unmap_buffer_region(";
@@ -1610,7 +1608,7 @@ static void OnMapTextureRegion(
     reshade::api::map_access access,
     reshade::api::subresource_data* data) {
   if (!is_primary_hook) return;
-  if (!trace_running && present_count >= trace_initial_frame_count) return;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return;
   std::stringstream s;
   s << "map_texture_region(";
   s << PRINT_PTR(resource.handle);
@@ -1625,7 +1623,7 @@ static bool OnUpdateBufferRegion(
     const void* data, reshade::api::resource resource,
     uint64_t offset, uint64_t size) {
   if (!is_primary_hook) return false;
-  if (!trace_running && present_count >= trace_initial_frame_count) return false;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return false;
   std::stringstream s;
   s << "OnUpdateBufferRegion(";
   s << PRINT_PTR(resource.handle);
@@ -1642,7 +1640,7 @@ static bool OnUpdateTextureRegion(
     uint32_t subresource,
     const reshade::api::subresource_box* box) {
   if (!is_primary_hook) return false;
-  if (!trace_running && present_count >= trace_initial_frame_count) return false;
+  if (!FORCE_ALL && !trace_running && present_count >= trace_initial_frame_count) return false;
   std::stringstream s;
   s << "OnUpdateTextureRegion(";
   s << PRINT_PTR(resource.handle);
