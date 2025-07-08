@@ -235,6 +235,7 @@ class Decompiler {
     std::string output;
 
     if (input == "0x7FF0000000000000") return "+1.#INF";
+    if (input == "0xH7C00") return "+1.#INF";  // Special case for bfloat16 infinity
     if (input.starts_with("0xH")) {
       const std::string string = std::string{input.substr(3)};
       auto as_uint16 = static_cast<uint16_t>(strtoul(string.c_str(), nullptr, 16));
@@ -1871,6 +1872,16 @@ class Decompiler {
           } else {
             throw std::invalid_argument("Unknown @dx.op.unary.f32");
           }
+        } else if (functionName == "@dx.op.unary.f16") {
+          auto [opNumber, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
+          if (auto pair = UNARY_FLOAT_OPS.find(std::string(opNumber));
+              pair != UNARY_FLOAT_OPS.end()) {
+            assignment_type = ParseType(type);
+            assignment_value = std::format("{}{}", pair->second, ParseWrapped(ParseHalf(value)));
+            // decompiled = std::format("{} _{} = {}({});", ParseType(type), variable, pair->second, ParseFloat(value));
+          } else {
+            throw std::invalid_argument("Unknown @dx.op.unary.f32");
+          }
         } else if (functionName == "@dx.op.unary.i32") {
           auto [opNumber, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
           if (auto pair = UNARY_INT32_OPS.find(std::string(opNumber));
@@ -2538,6 +2549,11 @@ class Decompiler {
           auto [op, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
           assignment_type = "uint";
           assignment_value = std::format("f32tof16({})", ParseFloat(value));
+        } else if (functionName == "@dx.op.legacyF16ToF32") {
+          //   %350 = call float @dx.op.legacyF16ToF32(i32 131, i32 %349)  ; LegacyF16ToF32(value)
+          auto [op, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
+          assignment_type = "float";
+          assignment_value = std::format("f16tof32({})", ParseUint(value));
         } else {
           std::cerr << line << "\n";
           std::cerr << "Function name: " << functionName << "\n";
@@ -2709,7 +2725,8 @@ class Decompiler {
         assignment_value = std::format("({}){} >> {}", ParseUnsignedType(variable_type), ParseWrapped(ParseUint(a)), ParseInt(b));
       } else if (instruction == "ashr") {
         // %95 = ashr i32 %68, 2
-        auto [no_unsigned_wrap, no_signed_wrap, variable_type, a, b] = StringViewMatch<5>(assignment, std::regex{R"(ashr (nuw )?(nsw )?(\S+) (\S+), (\S+))"});
+        // %36 = exact i32 %35, 16
+        auto [exact, no_unsigned_wrap, no_signed_wrap, variable_type, a, b] = StringViewMatch<6>(assignment, std::regex{R"(ashr (exact )?(nuw )?(nsw )?(\S+) (\S+), (\S+))"});
         assignment_type = ParseType(variable_type);
         if (no_signed_wrap.empty()) {
           if (assignment_type == "int") {
