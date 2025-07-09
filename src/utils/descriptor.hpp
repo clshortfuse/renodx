@@ -321,6 +321,7 @@ static void OnBindDescriptorTables(
   if (!is_primary_hook) return;
   if (!trace_descriptor_tables) return;
   if (count == 0u) return;
+  if (layout.handle == 0u) return;
   auto* device = cmd_list->get_device();
   auto* layout_data = pipeline_layout::GetPipelineLayoutData(layout);
 
