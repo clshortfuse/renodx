@@ -143,8 +143,8 @@ void main(
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     if ((bool)((uint)_23 <= (uint)CASData_000.ContrastAdaptiveSharpeningData_032.z) && (bool)((uint)_24 <= (uint)CASData_000.ContrastAdaptiveSharpeningData_032.w)) {
       u0_space4[int2(_23, _24)] = float4(
-        renodx::draw::RenderIntermediatePass(
-          ComputeCASByGreen(
+          renodx::draw::RenderIntermediatePass(
+              ComputeCAS(
               renodx::draw::InvertIntermediatePass(_49).rgb,
               renodx::draw::InvertIntermediatePass(_67).rgb,
               renodx::draw::InvertIntermediatePass(_74).rgb,
@@ -158,8 +158,8 @@ void main(
       float test = float(saturate((((((_353 * ((((((_216 + _184)) + _280)) + _312)))) + _248)) * _359)));
 
       u0_space4[int2(_513, _24)] = float4(
-        renodx::draw::RenderIntermediatePass(
-          ComputeCASByGreen(
+          renodx::draw::RenderIntermediatePass(
+              ComputeCAS(
               renodx::draw::InvertIntermediatePass(_114).rgb,
               renodx::draw::InvertIntermediatePass(_127).rgb,
               renodx::draw::InvertIntermediatePass(_134).rgb,
@@ -242,8 +242,8 @@ void main(
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     if ((bool)((uint)_23 <= (uint)CASData_000.ContrastAdaptiveSharpeningData_032.z) && (bool)((uint)_545 <= (uint)CASData_000.ContrastAdaptiveSharpeningData_032.w)) {
       u0_space4[int2(_23, _545)] = float4(
-        renodx::draw::RenderIntermediatePass(
-          ComputeCASByGreen(
+          renodx::draw::RenderIntermediatePass(
+              ComputeCAS(
               renodx::draw::InvertIntermediatePass(_563).rgb,
               renodx::draw::InvertIntermediatePass(_579).rgb,
               renodx::draw::InvertIntermediatePass(_586).rgb,
@@ -254,8 +254,8 @@ void main(
     }
     if ((bool)((uint)_513 <= (uint)CASData_000.ContrastAdaptiveSharpeningData_032.z) && (bool)((uint)_545 <= (uint)CASData_000.ContrastAdaptiveSharpeningData_032.w)) {
       u0_space4[int2(_513, _545)] = float4(
-        renodx::draw::RenderIntermediatePass(
-          ComputeCASByGreen(
+          renodx::draw::RenderIntermediatePass(
+              ComputeCAS(
               renodx::draw::InvertIntermediatePass(_621).rgb,
               renodx::draw::InvertIntermediatePass(_632).rgb,
               renodx::draw::InvertIntermediatePass(_639).rgb,
