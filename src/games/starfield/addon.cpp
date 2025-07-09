@@ -13,11 +13,8 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
-#include "../../utils/bitwise.hpp"
 #include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
-#include "../../utils/shader.hpp"
-#include "../../utils/swapchain.hpp"
 #include "./shared.h"
 
 namespace {
@@ -89,7 +86,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Exposure",
         .section = "Color Grading",
-        .max = 10.f,
+        .max = 2.f,
         .format = "%.2f",
     },
     new renodx::utils::settings::Setting{
@@ -264,25 +261,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
-          .usage_include = reshade::api::resource_usage::render_target
-                           | reshade::api::resource_usage::copy_dest,
+          .usage_include = reshade::api::resource_usage::render_target,
       });
 
-      // RGBA8 Resource pool
+      // RGBA8 Resource Pool and Render
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
-          .usage_include = reshade::api::resource_usage::render_target
-                           | reshade::api::resource_usage::copy_dest,
-      });
-
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r16g16b16a16_typeless,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .use_resource_view_cloning = true,
-          .usage_include = reshade::api::resource_usage::render_target
-                           | reshade::api::resource_usage::copy_dest,
+          .aspect_ratio = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
+          .usage_include = reshade::api::resource_usage::render_target,
       });
 
       // Primary render (reduces banding)
@@ -291,8 +279,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
           .aspect_ratio = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
-          .usage_include = reshade::api::resource_usage::render_target
-                           | reshade::api::resource_usage::copy_dest,
+          .usage_include = reshade::api::resource_usage::render_target,
       });
 
       break;
