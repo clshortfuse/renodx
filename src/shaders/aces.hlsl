@@ -103,9 +103,15 @@ float CenterHue(float hue, float center_h) {
   return hue_centered;
 }
 
-float3 YToLinCV(float3 y, float y_max, float y_min) {
-  return (y - y_min) / (y_max - y_min);
-}
+#define YTOLINCV_GENERATOR(T)                 \
+  T YToLinCV(T y, float y_max, float y_min) { \
+    return (y - y_min) / (y_max - y_min);     \
+  }
+
+YTOLINCV_GENERATOR(float)
+YTOLINCV_GENERATOR(float3)
+YTOLINCV_GENERATOR(float4)
+#undef YTOLINCV_GENERATOR
 
 // Transformations between CIE XYZ tristimulus values and CIE x,y
 // chromaticity coordinates
@@ -510,6 +516,7 @@ float3 RRT(float3 aces) {
              coefs_high_a, coefs_high_b);                                                                    \
                                                                                                              \
     /* Nits to Linear */                                                                                     \
+    T linear_cv = YToLinCV(rgb_post, max_y, min_y);                                                          \
     return clamp(rgb_post, 0.0, 65535.0f);                                                                   \
   }
 
