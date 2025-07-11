@@ -1,6 +1,4 @@
-#include "./shared.h"
-
-// ---- Created with 3Dmigoto v1.3.16 on Sat May 25 22:39:05 2024
+// ---- Created with 3Dmigoto v1.4.1 on Wed Jul  2 02:45:41 2025
 Texture2D<float4> t2 : register(t2);
 
 Texture2D<float4> t1 : register(t1);
@@ -31,11 +29,12 @@ void main(
 
   r0.xyz = t0.Sample(s0_s, v2.zw).xyz;
   r0.xyz = v1.xyz * r0.xyz;
+
   r0.w = t1.SampleLevel(s1_s, v2.xy, 0).x;
   r0.xyz = r0.xyz * r0.www;
   r1.xy = t2.SampleLevel(s2_s, v2.xy, 0).zw;
-  r1.x = saturate(cb0[0].y * r1.x + r1.y);
+  r1.x = saturate(cb0[0].z * r1.x + r1.y);
   r0.w = v1.w;
-  o0.xyzw = -r0.xyzw * r1.xxxx + r0.xyzw * CUSTOM_LENS_FLARE;
+  o0.xyzw = -r0.xyzw * r1.xxxx + r0.xyzw;
   return;
 }

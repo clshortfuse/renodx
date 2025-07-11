@@ -1,25 +1,12 @@
 #ifndef SRC_DYING_LIGHT_SHARED_H_
 #define SRC_DYING_LIGHT_SHARED_H_
 
-// #define RENODX_TONE_MAP_TYPE                 2.f
-// #define RENODX_PEAK_WHITE_NITS               400.f
-// #define RENODX_DIFFUSE_WHITE_NITS            100.f
-// #define RENODX_GRAPHICS_WHITE_NITS           100.f
-// #define RENODX_GAMMA_CORRECTION              1.f
-// #define RENODX_TONE_MAP_HUE_CORRECTION       1.f
-// #define RENODX_TONE_MAP_EXPOSURE             1.f
-// #define RENODX_TONE_MAP_HIGHLIGHTS           1.f
-// #define RENODX_TONE_MAP_SHADOWS              1.f
-// #define RENODX_TONE_MAP_CONTRAST             1.f
-// #define RENODX_TONE_MAP_SATURATION           1.f
-// #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION 1.1f
-// #define RENODX_TONE_MAP_BLOWOUT              0.f
-// #define RENODX_TONE_MAP_FLARE                0.f
-// #define RENODX_COLOR_GRADE_STRENGTH          1.f
-// #define RENODX_COLOR_GRADE_GAMUT_EXPANSION   0.f
-// #define CUSTOM_BLOOM                         0.f
-// #define CUSTOM_LENS_FLARE                    0.f
-// #define CUSTOM_GRAIN_STRENGTH                1.f
+#define ORIGINAL_THRESHOLD   0.999985337
+#define SUN_SIZE             5.5
+#define SUN_THRESHOLD        (cos(acos(ORIGINAL_THRESHOLD) * SUN_SIZE))
+#define SUN_SHIFT_X          0.0185
+#define SUN_SHIFT_Y          -0.0125
+#define SUN_BRIGHTNESS_BOOST 3.0  // 3x brighter sun
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -42,7 +29,11 @@ struct ShaderInjectData {
   float color_grade_gamut_expansion;
   float custom_bloom;
   float custom_lens_flare;
+  float custom_lens_flare_2;
   float custom_grain_strength;
+
+  float unclamp_lighting;
+  float improved_sun;
 };
 
 #ifndef __cplusplus
@@ -68,7 +59,10 @@ cbuffer cb13 : register(b13) {
 #define RENODX_COLOR_GRADE_GAMUT_EXPANSION   shader_injection.color_grade_gamut_expansion
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom
 #define CUSTOM_LENS_FLARE                    shader_injection.custom_lens_flare
+#define CUSTOM_LENS_FLARE_2                  shader_injection.custom_lens_flare_2
 #define CUSTOM_GRAIN_STRENGTH                shader_injection.custom_grain_strength
+#define CUSTOM_UNCLAMP_LIGHTING              shader_injection.unclamp_lighting
+#define CUSTOM_IMPROVED_SUN                  shader_injection.improved_sun
 
 #include "../../shaders/renodx.hlsl"
 
