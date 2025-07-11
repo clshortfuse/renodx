@@ -22,9 +22,7 @@
 
 namespace {
 
-//renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
-
-renodx::mods::shader::CustomShaders custom_shaders = {};
+renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 
@@ -34,14 +32,9 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
     {"ToneMapType", {.binding = &shader_injection.tone_map_type, .labels = {"Vanilla", "DICE"}}}
   }),
   renodx::templates::settings::CreateDefaultSettings({
-    {"ToneMapPeakNits", &shader_injection.peak_white_nits}
-  }),
-  renodx::templates::settings::CreateDefaultSettings({
-    {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .label = "Brightness", .tooltip = "Sets the brightness of game and UI in nits"}},
-  }),
-  renodx::templates::settings::CreateDefaultSettings({
-  /*{"ToneMapGameNits", &shader_injection.diffuse_white_nits},
-  {"ToneMapUINits", &shader_injection.graphics_white_nits},*/
+  {"ToneMapPeakNits", &shader_injection.peak_white_nits},
+  {"ToneMapGameNits", &shader_injection.graphics_white_nits}, // intentionally swapped
+  {"ToneMapUINits", &shader_injection.diffuse_white_nits},    // intentionally swapped
   {"ToneMapGammaCorrection", &shader_injection.gamma_correction},
   {"ToneMapHueCorrection", &shader_injection.tone_map_hue_correction},
   {"ColorGradeExposure", &shader_injection.tone_map_exposure},
@@ -88,6 +81,11 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
           renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
         }
       },
+  },
+  new renodx::utils::settings::Setting{
+      .value_type = renodx::utils::settings::SettingValueType::TEXT,
+      .label = "UI brightness is affected by color grading, so the slider may not be accurate.",
+      .section = "Instructions",
   },
   new renodx::utils::settings::Setting{
       .value_type = renodx::utils::settings::SettingValueType::TEXT,
