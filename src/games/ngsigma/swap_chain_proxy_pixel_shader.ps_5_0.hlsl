@@ -1,7 +1,8 @@
 #include "./shared.h"
 
 float3 applyRenoDice(float3 color) {
-  const float paperWhite = RENODX_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
+  //const float paperWhite = RENODX_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
+  const float paperWhite = RENODX_GRAPHICS_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
   const float peakWhite = RENODX_PEAK_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
   const float highlightsShoulderStart = paperWhite;
   return renodx::tonemap::dice::BT709(color.rgb * paperWhite, peakWhite, highlightsShoulderStart) / paperWhite;
@@ -24,6 +25,8 @@ float4 main(float4 vpos: SV_POSITION, float2 uv: TEXCOORD0)
     draw_config.peak_white_nits = 10000.f;
     draw_config.tone_map_hue_correction = 0.f;
     draw_config.tone_map_hue_shift = 0.f;
+    draw_config.diffuse_white_nits = RENODX_GRAPHICS_WHITE_NITS;
+    draw_config.graphics_white_nits = RENODX_DIFFUSE_WHITE_NITS;
 
     SV_Target.rgb = renodx::draw::ToneMapPass(SV_Target.rgb, draw_config);
 
