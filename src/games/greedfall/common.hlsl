@@ -41,11 +41,6 @@ float3 FinalizeOutput(float3 color) {
   color *= injectedData.toneMapUINits;
   	if(injectedData.toneMapType == 0.f){
   color = renodx::color::bt709::clamp::BT709(color);
-  } else if (injectedData.toneMapType != 1.f) {
-    color = renodx::color::bt2020::from::BT709(color);
-    color = renodx::tonemap::ExponentialRollOff(color, injectedData.toneMapGameNits, max(injectedData.toneMapPeakNits, injectedData.toneMapGameNits + 1.f));
-    color = max(0.f, color);
-    color = renodx::color::bt709::from::BT2020(color);
   } else {
     color = renodx::color::bt709::clamp::BT2020(color);
   }
@@ -88,4 +83,14 @@ float3 vanillaTonemap(float3 color){
   const float d = 0.59f;
   const float e = 0.14f;
   return (color * (a * color + b)) / (color * (c * color + d) + e);
+}
+
+float gammaCorrectPeak(float peak) {
+  if (injectedData.toneMapGammaCorrection == 0.f) {
+   return renodx::color::gamma::Decode(renodx::color::srgb::Encode(peak / injectedData.toneMapGameNits), 2.2f) * injectedData.toneMapGameNits;
+  } else if (injectedData.toneMapGammaCorrection == 2.f) {
+    return renodx::color::gamma::Decode(renodx::color::gamma::Encode(peak / injectedData.toneMapGameNits, 2.4), 2.2f) * injectedData.toneMapGameNits;
+ } else {
+   return peak;
+ }
 }

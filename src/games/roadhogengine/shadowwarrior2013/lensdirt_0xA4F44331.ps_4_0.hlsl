@@ -35,6 +35,7 @@ void main(
   r1.xyz = cb1[0].xyz * r0.www;
   r0.xyz = r0.xyz * v2.xyz + -r1.xyz;
   o0.xyz = (cb1[0].www * r0.xyz + r1.xyz) * injectedData.fxLens;
+  o0.rgb = InvertFinalizeOutput(o0.rgb);
   o0.w = 1;
   return;
 }

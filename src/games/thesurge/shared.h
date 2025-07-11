@@ -27,12 +27,14 @@ struct ShaderInjectData {
   float colorGradeFlare;
   float colorGradeClip;
   float colorGradeLUTStrength;
+  float colorGradeLUTScaling;
   float colorGradeLUTSampling;
   float fxBloom;
   float fxVignette;
   float fxFlash;
   float fxFilmGrain;
   float fxFilmGrainType;
+  float fxHDRVideos;
 
   float random;
   bool hasLoadedTitleMenu;

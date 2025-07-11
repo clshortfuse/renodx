@@ -6,10 +6,6 @@
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
-#define NOMINMAX
-
-#include <chrono>
-#include <random>
 
 #include <embed/shaders.h>
 #include <deps/imgui/imgui.h>
@@ -18,6 +14,7 @@
 #include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
+#include "../../utils/random.hpp"
 #include "./shared.h"
 
 ShaderInjectData shader_injection;
@@ -516,11 +513,6 @@ void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-    static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
-    static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
-  shader_injection.random_1 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
-  shader_injection.random_2 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
-  shader_injection.random_3 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
     shader_injection.FxaaCheck = is_fxaa_enabled;
     is_fxaa_enabled = 0;
 }
@@ -541,6 +533,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swapchain_proxy_revert_state = true;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+      renodx::utils::random::binds.push_back(&shader_injection.random_1);
+      renodx::utils::random::binds.push_back(&shader_injection.random_2);
+      renodx::utils::random::binds.push_back(&shader_injection.random_3);
 
       // RGBA8_unorm
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
@@ -569,6 +564,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx::utils::random::Use(fdw_reason);
 
   return TRUE;
 }

@@ -34,6 +34,7 @@ struct ShaderInjectData {
   float fxFilmGrain;
   float fxFilmGrainType;
   float fxNoise;
+  float fxHDRVideos;
 
   float random;
   float hasLoadedTitleMenu;

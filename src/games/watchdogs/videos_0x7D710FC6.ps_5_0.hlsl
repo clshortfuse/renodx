@@ -42,7 +42,11 @@ void main(
   r0.w = 1;
   o0.xyzw = v0.xyzw * r0.xyzw;
   o0 = saturate(o0);
-  o0.rgb = InverseToneMap(o0.rgb);
+  if(injectedData.fxHDRVideos == 1.f){
+    o0.rgb = InverseToneMapBT2446a(o0.rgb);
+  } else {
+    o0.rgb = InverseToneMapCustom(o0.rgb, injectedData.fxHDRVideos);
+  }
   o0.rgb = PostToneMapScale(o0.rgb);
   return;
 }

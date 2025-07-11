@@ -36,8 +36,12 @@ void main(
   r0.w = r1.y * r0.w;
   r0.w = exp2(r0.w);
   o0.xyz = r1.xxx ? r0.www : r0.xyz;
-    o0 = saturate(o0);
-    o0.rgb = InverseToneMap(o0.rgb);
+  o0 = saturate(o0);
+    if(injectedData.fxHDRVideos == 1.f){
+      o0.rgb = InverseToneMapBT2446a(o0.rgb);
+    } else {
+      o0.rgb = InverseToneMapCustom(o0.rgb, injectedData.fxHDRVideos);
+    }
     o0.rgb = PostToneMapScale(o0.rgb);
   r0.x = t3.Sample(s0_s, v1.xy).x;
   o0.w = r0.x;

@@ -221,7 +221,15 @@ void main(
   }
   o0.xyz = r1.www * r0.xyz;
   o0.w = r1.w;
-    o0 = saturate(o0);
-    o0.rgb = PostToneMapScale(o0.rgb);
+    float peak = injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
+    if (injectedData.toneMapGammaCorrection != 0.f) {
+      peak = renodx::color::correct::Gamma(peak, true, injectedData.toneMapGammaCorrection == 1.f ? 2.2f : 2.4f);
+    }
+    float y = renodx::color::y::from::BT709(abs(o0.rgb));
+    if (y > peak) {
+      o0.rgb = renodx::tonemap::ExponentialRollOff(o0.rgb, 1.f, max(1.005f, peak));
+    }
+    o0.rgb = renodx::color::srgb::EncodeSafe(o0.rgb);
+    o0.rgb = InvertFinalizeOutput(o0.rgb);
   return;
 }
