@@ -13,7 +13,8 @@
 // #define RENODX_TONE_MAP_BLOWOUT     0.f
 // #define RENODX_COLOR_GRADE_STRENGTH 1.f
 
-#define RENODX_TONE_MAP_TYPE 1u
+#define RENODX_TONE_MAP_TYPE            1u
+#define GAMMA_CORRECTION_HUE_PRESERVING 1u
 
 // Must be 32bit aligned
 // Should be 4x32

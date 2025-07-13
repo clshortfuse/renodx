@@ -1826,7 +1826,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
 
     float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
     r0.rgb = ApplyUserToneMap(untonemapped_bt709, 0.18);
-    r0.rgb = renodx::color::correct::GammaSafe(r0.rgb);
+    r0.rgb = ApplyGammaCorrection(r0.rgb);
     r0.rgb = renodx::color::bt2020::from::BT709(r0.rgb);
 
     r1.rgb = renodx::color::pq::EncodeSafe(r0.rgb, 100.f);
