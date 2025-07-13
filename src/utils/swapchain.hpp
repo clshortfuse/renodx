@@ -6,7 +6,11 @@
 #pragma once
 
 #include <dxgi1_6.h>
+#include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <deque>
+#include <functional>
 #include <ios>
 #include <mutex>
 #include <optional>
@@ -24,6 +28,8 @@
 
 namespace renodx::utils::swapchain {
 
+static float fps_limit = 0.f;
+
 struct __declspec(uuid("4721e307-0cf3-4293-b4a5-40d0a4e62544")) DeviceData {
   std::shared_mutex mutex;
   std::unordered_set<reshade::api::effect_runtime*> effect_runtimes;
@@ -38,100 +44,6 @@ struct __declspec(uuid("3cf9a628-8518-4509-84c3-9fbe9a295212")) CommandListData 
   bool has_swapchain_render_target = false;
   uint8_t pass_count = 0;
 };
-
-static bool is_primary_hook = false;
-static void OnInitDevice(reshade::api::device* device) {
-  DeviceData* data;
-  bool created = renodx::utils::data::CreateOrGet<DeviceData>(device, data);
-  if (!created) return;
-
-  is_primary_hook = true;
-}
-static void OnDestroyDevice(reshade::api::device* device) {
-  if (!is_primary_hook) return;
-  device->destroy_private_data<DeviceData>();
-}
-
-static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  if (!is_primary_hook) return;
-  auto* device = swapchain->get_device();
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  if (data == nullptr) return;
-  const std::unique_lock lock(data->mutex);
-
-  data->back_buffer_desc = device->get_resource_desc(swapchain->get_current_back_buffer());
-}
-
-static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  if (!is_primary_hook) return;
-  auto* device = swapchain->get_device();
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  if (data == nullptr) return;
-  data->back_buffer_desc = {};
-}
-
-static void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
-  if (!is_primary_hook) return;
-  auto* device = runtime->get_device();
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-
-  // Runtime may be on a separate device
-  std::stringstream s;
-  if (data == nullptr) {
-    s << "utils::swapchain::OnInitEffectRuntime(No device data: " << reinterpret_cast<uintptr_t>(device);
-    s << ")";
-    reshade::log::message(reshade::log::level::warning, s.str().c_str());
-    return;
-  }
-
-  reshade::api::color_space color_space;
-  {
-    const std::unique_lock lock(data->mutex);
-    data->effect_runtimes.emplace(runtime);
-    s << "utils::swapchain::OnInitEffectRuntime(Runtime: " << reinterpret_cast<uintptr_t>(device);
-    if (!data->effect_runtimes.contains(runtime)) {
-      s << " (new) ";
-    }
-    color_space = data->current_color_space;
-  }
-  if (color_space != reshade::api::color_space::unknown) {
-    runtime->set_color_space(color_space);
-    s << ", colorspace: ";
-    s << color_space;
-    s << ")";
-    reshade::log::message(reshade::log::level::info, s.str().c_str());
-  } else {
-    s << ", colorspace: unknown";
-    s << ")";
-    reshade::log::message(reshade::log::level::warning, s.str().c_str());
-  }
-}
-
-static void OnDestroyEffectRuntime(reshade::api::effect_runtime* runtime) {
-  if (!is_primary_hook) return;
-  auto* device = runtime->get_device();
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-
-  // Runtime may be on a separate device
-  if (data == nullptr) return;
-
-  const std::unique_lock lock(data->mutex);
-  data->effect_runtimes.erase(runtime);
-}
-
-static void OnInitCommandList(reshade::api::command_list* cmd_list) {
-  if (!is_primary_hook) return;
-  renodx::utils::data::Create<CommandListData>(cmd_list);
-}
-
-static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
-  if (!is_primary_hook) return;
-  renodx::utils::data::Delete<CommandListData>(cmd_list);
-}
-
-static CommandListData* GetCurrentState(reshade::api::command_list* cmd_list) {
-  return renodx::utils::data::Get<CommandListData>(cmd_list);
-}
 
 static bool IsBackBuffer(reshade::api::resource resource) {
   auto* info = resource::GetResourceInfo(resource);
@@ -157,59 +69,6 @@ static reshade::api::resource_desc GetBackBufferDesc(reshade::api::command_list*
   auto* device = cmd_list->get_device();
   if (device == nullptr) return {};
   return GetBackBufferDesc(device);
-}
-
-inline void OnBindRenderTargetsAndDepthStencil(
-    reshade::api::command_list* cmd_list,
-    uint32_t count,
-    const reshade::api::resource_view* rtvs,
-    reshade::api::resource_view dsv) {
-  if (!is_primary_hook) return;
-  auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
-  if (cmd_list_data == nullptr) return;
-  const bool found_swapchain_rtv = false;
-  if (count != 0) {
-    cmd_list_data->current_render_targets.assign(rtvs, rtvs + count);
-    cmd_list_data->has_swapchain_render_target_dirty = true;
-  }
-  cmd_list_data->current_depth_stencil = dsv;
-}
-
-static void OnBeginRenderPass(
-    reshade::api::command_list* cmd_list,
-    uint32_t count, const reshade::api::render_pass_render_target_desc* rts,
-    const reshade::api::render_pass_depth_stencil_desc* ds) {
-  if (!is_primary_hook) return;
-  auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
-  if (cmd_list_data == nullptr) return;
-  const bool found_swapchain_rtv = false;
-
-  // Ignore subpasses
-  if (cmd_list_data->pass_count++ != 0) return;
-
-  cmd_list_data->current_render_targets.reserve(count);
-  for (const auto& rt : std::span<const reshade::api::render_pass_render_target_desc>(rts, count)) {
-    cmd_list_data->current_render_targets.push_back(rt.view);
-  }
-  if (ds != nullptr) {
-    cmd_list_data->current_depth_stencil = ds->view;
-  } else {
-    cmd_list_data->current_depth_stencil = {0};
-  }
-  cmd_list_data->has_swapchain_render_target_dirty = true;
-}
-
-static void OnEndRenderPass(reshade::api::command_list* cmd_list) {
-  if (!is_primary_hook) return;
-  auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
-  if (cmd_list_data == nullptr) return;
-
-  // Ignore subpasses
-  if (--cmd_list_data->pass_count != 0) return;
-
-  cmd_list_data->current_render_targets.clear();
-  cmd_list_data->current_depth_stencil = {0};
-  cmd_list_data->has_swapchain_render_target_dirty = true;
 }
 
 static bool HasBackBufferRenderTarget(reshade::api::command_list* cmd_list) {
@@ -536,42 +395,281 @@ static void ResizeBuffer(
   }
 }
 
+namespace internal {
 static bool attached = false;
+static std::chrono::high_resolution_clock::time_point last_time_point;
+static float last_fps_limit;
+static auto spin_lock_duration = std::chrono::nanoseconds(0);
+static std::uint32_t spin_lock_failures = 0;
+
+static std::deque<std::chrono::nanoseconds> sleep_latency_history;
+static const size_t MAX_LATENCY_HISTORY_SIZE = 1000;
+
+static bool is_primary_hook = false;
+static void OnInitDevice(reshade::api::device* device) {
+  DeviceData* data;
+  bool created = renodx::utils::data::CreateOrGet<DeviceData>(device, data);
+  if (!created) return;
+
+  is_primary_hook = true;
+}
+static void OnDestroyDevice(reshade::api::device* device) {
+  if (!is_primary_hook) return;
+  device->destroy_private_data<DeviceData>();
+}
+
+static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  if (!is_primary_hook) return;
+  auto* device = swapchain->get_device();
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  if (data == nullptr) return;
+  const std::unique_lock lock(data->mutex);
+
+  data->back_buffer_desc = device->get_resource_desc(swapchain->get_current_back_buffer());
+}
+
+static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  if (!is_primary_hook) return;
+  auto* device = swapchain->get_device();
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  if (data == nullptr) return;
+  data->back_buffer_desc = {};
+}
+
+static void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
+  if (!is_primary_hook) return;
+  auto* device = runtime->get_device();
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+
+  // Runtime may be on a separate device
+  std::stringstream s;
+  if (data == nullptr) {
+    s << "utils::swapchain::OnInitEffectRuntime(No device data: " << reinterpret_cast<uintptr_t>(device);
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+    return;
+  }
+
+  reshade::api::color_space color_space;
+  {
+    const std::unique_lock lock(data->mutex);
+    data->effect_runtimes.emplace(runtime);
+    s << "utils::swapchain::OnInitEffectRuntime(Runtime: " << reinterpret_cast<uintptr_t>(device);
+    if (!data->effect_runtimes.contains(runtime)) {
+      s << " (new) ";
+    }
+    color_space = data->current_color_space;
+  }
+  if (color_space != reshade::api::color_space::unknown) {
+    runtime->set_color_space(color_space);
+    s << ", colorspace: ";
+    s << color_space;
+    s << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+  } else {
+    s << ", colorspace: unknown";
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+  }
+}
+
+static void OnDestroyEffectRuntime(reshade::api::effect_runtime* runtime) {
+  if (!is_primary_hook) return;
+  auto* device = runtime->get_device();
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+
+  // Runtime may be on a separate device
+  if (data == nullptr) return;
+
+  const std::unique_lock lock(data->mutex);
+  data->effect_runtimes.erase(runtime);
+}
+
+static void OnInitCommandList(reshade::api::command_list* cmd_list) {
+  if (!is_primary_hook) return;
+  renodx::utils::data::Create<CommandListData>(cmd_list);
+}
+
+static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
+  if (!is_primary_hook) return;
+  renodx::utils::data::Delete<CommandListData>(cmd_list);
+}
+
+static CommandListData* GetCurrentState(reshade::api::command_list* cmd_list) {
+  return renodx::utils::data::Get<CommandListData>(cmd_list);
+}
+
+inline void OnBindRenderTargetsAndDepthStencil(
+    reshade::api::command_list* cmd_list,
+    uint32_t count,
+    const reshade::api::resource_view* rtvs,
+    reshade::api::resource_view dsv) {
+  if (!is_primary_hook) return;
+  auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  if (cmd_list_data == nullptr) return;
+  const bool found_swapchain_rtv = false;
+  if (count != 0) {
+    cmd_list_data->current_render_targets.assign(rtvs, rtvs + count);
+    cmd_list_data->has_swapchain_render_target_dirty = true;
+  }
+  cmd_list_data->current_depth_stencil = dsv;
+}
+
+static void OnBeginRenderPass(
+    reshade::api::command_list* cmd_list,
+    uint32_t count, const reshade::api::render_pass_render_target_desc* rts,
+    const reshade::api::render_pass_depth_stencil_desc* ds) {
+  if (!is_primary_hook) return;
+  auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  if (cmd_list_data == nullptr) return;
+  const bool found_swapchain_rtv = false;
+
+  // Ignore subpasses
+  if (cmd_list_data->pass_count++ != 0) return;
+
+  cmd_list_data->current_render_targets.reserve(count);
+  for (const auto& rt : std::span<const reshade::api::render_pass_render_target_desc>(rts, count)) {
+    cmd_list_data->current_render_targets.push_back(rt.view);
+  }
+  if (ds != nullptr) {
+    cmd_list_data->current_depth_stencil = ds->view;
+  } else {
+    cmd_list_data->current_depth_stencil = {0};
+  }
+  cmd_list_data->has_swapchain_render_target_dirty = true;
+}
+
+static void OnEndRenderPass(reshade::api::command_list* cmd_list) {
+  if (!is_primary_hook) return;
+  auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  if (cmd_list_data == nullptr) return;
+
+  // Ignore subpasses
+  if (--cmd_list_data->pass_count != 0) return;
+
+  cmd_list_data->current_render_targets.clear();
+  cmd_list_data->current_depth_stencil = {0};
+  cmd_list_data->has_swapchain_render_target_dirty = true;
+}
+
+static void OnPresent(
+    reshade::api::command_queue* queue,
+    reshade::api::swapchain* swapchain,
+    const reshade::api::rect* source_rect,
+    const reshade::api::rect* dest_rect,
+    uint32_t dirty_rect_count,
+    const reshade::api::rect* dirty_rects) {
+  // is_primary_hook not needed
+  if (last_fps_limit != fps_limit) {
+    spin_lock_duration = std::chrono::nanoseconds(0);
+    sleep_latency_history.clear();
+    last_fps_limit = fps_limit;
+  }
+  if (fps_limit <= 0.f) return;
+
+  const auto time_per_frame = std::chrono::high_resolution_clock::duration(std::chrono::milliseconds(1000)) / static_cast<double>(fps_limit);
+  const auto next_time_point = last_time_point + time_per_frame;
+
+  auto now = std::chrono::high_resolution_clock::now();
+  auto time_till_next_frame = next_time_point - now;
+  if (time_till_next_frame.count() <= 0) {
+    last_time_point = now;
+    return;
+  }
+
+  // Use sleep for as much as reliably possible
+  auto sleep_duration = time_till_next_frame - spin_lock_duration;
+  bool changed_spin_lock_duration = false;
+  if (sleep_duration.count() > 0) {
+    std::this_thread::sleep_for(sleep_duration);
+    auto after_sleep = std::chrono::high_resolution_clock::now();
+    auto actual_sleep_duration = after_sleep - now;
+    auto sleep_latency = actual_sleep_duration - sleep_duration;
+
+    // Record the sleep latency
+    sleep_latency_history.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(sleep_latency));
+    auto current_size = sleep_latency_history.size() + 1;
+    if (current_size > MAX_LATENCY_HISTORY_SIZE) {
+      sleep_latency_history.pop_front();
+      --current_size;
+    }
+
+    // Calculate the worst 1% latency
+    if (current_size >= MAX_LATENCY_HISTORY_SIZE * 0.10f) {  // Ensure enough data points
+      auto sorted_latencies = sleep_latency_history;
+      std::ranges::sort(sorted_latencies, std::greater<>());
+      auto worst_1_percent = sorted_latencies[current_size * 0.01];
+      spin_lock_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(worst_1_percent * 1.5);
+    }
+
+    spin_lock_failures = 0;
+    now = after_sleep;
+  } else {
+    ++spin_lock_failures;
+
+    if (spin_lock_failures > fps_limit) {
+      // Full second of failures, try increasing
+      spin_lock_failures = 0;
+
+      if (sleep_latency_history.empty()) {
+        spin_lock_duration = std::chrono::nanoseconds(0);
+      } else {
+        auto sorted_latencies = sleep_latency_history;
+        std::ranges::sort(sorted_latencies, std::less<>());
+        if (sorted_latencies[0] * 1.5 < time_per_frame) {
+          // Decrease spin lock duration by 10%
+          spin_lock_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(spin_lock_duration * 0.90f);
+        } else {
+          // Lowest latency is longer than time per frame
+        }
+      }
+    }
+  }
+
+  while (now < next_time_point) {
+    // Spin lock until the next time point
+    now = std::chrono::high_resolution_clock::now();
+  }
+
+  last_time_point = now;
+}
+}  // namespace internal
 
 static void Use(DWORD fdw_reason) {
   renodx::utils::resource::Use(fdw_reason);
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
-      if (attached) return;
-      attached = true;
+      if (internal::attached) return;
+      internal::attached = true;
 
       reshade::log::message(reshade::log::level::info, "utils::swapchain attached.");
 
-      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
-      reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
-      reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
-      reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
-      reshade::register_event<reshade::addon_event::begin_render_pass>(OnBeginRenderPass);
-      reshade::register_event<reshade::addon_event::end_render_pass>(OnEndRenderPass);
-      reshade::register_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
-      reshade::register_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
-
+      reshade::register_event<reshade::addon_event::init_device>(internal::OnInitDevice);
+      reshade::register_event<reshade::addon_event::destroy_device>(internal::OnDestroyDevice);
+      reshade::register_event<reshade::addon_event::init_swapchain>(internal::OnInitSwapchain);
+      reshade::register_event<reshade::addon_event::destroy_swapchain>(internal::OnDestroySwapchain);
+      reshade::register_event<reshade::addon_event::init_command_list>(internal::OnInitCommandList);
+      reshade::register_event<reshade::addon_event::destroy_command_list>(internal::OnDestroyCommandList);
+      reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(internal::OnBindRenderTargetsAndDepthStencil);
+      reshade::register_event<reshade::addon_event::begin_render_pass>(internal::OnBeginRenderPass);
+      reshade::register_event<reshade::addon_event::end_render_pass>(internal::OnEndRenderPass);
+      reshade::register_event<reshade::addon_event::init_effect_runtime>(internal::OnInitEffectRuntime);
+      reshade::register_event<reshade::addon_event::destroy_effect_runtime>(internal::OnDestroyEffectRuntime);
+      reshade::register_event<reshade::addon_event::present>(internal::OnPresent);
       break;
     case DLL_PROCESS_DETACH:
-      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
-      reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitCommandList);
-      reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
-      reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
-      reshade::unregister_event<reshade::addon_event::begin_render_pass>(OnBeginRenderPass);
-      reshade::unregister_event<reshade::addon_event::end_render_pass>(OnEndRenderPass);
-      reshade::unregister_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
-      reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
+      reshade::unregister_event<reshade::addon_event::init_device>(internal::OnInitDevice);
+      reshade::unregister_event<reshade::addon_event::destroy_device>(internal::OnDestroyDevice);
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(internal::OnInitSwapchain);
+      reshade::unregister_event<reshade::addon_event::destroy_swapchain>(internal::OnDestroySwapchain);
+      reshade::unregister_event<reshade::addon_event::init_command_list>(internal::OnInitCommandList);
+      reshade::unregister_event<reshade::addon_event::destroy_command_list>(internal::OnDestroyCommandList);
+      reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(internal::OnBindRenderTargetsAndDepthStencil);
+      reshade::unregister_event<reshade::addon_event::begin_render_pass>(internal::OnBeginRenderPass);
+      reshade::unregister_event<reshade::addon_event::end_render_pass>(internal::OnEndRenderPass);
+      reshade::unregister_event<reshade::addon_event::init_effect_runtime>(internal::OnInitEffectRuntime);
+      reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(internal::OnDestroyEffectRuntime);
+      reshade::unregister_event<reshade::addon_event::present>(internal::OnPresent);
 
       break;
   }
