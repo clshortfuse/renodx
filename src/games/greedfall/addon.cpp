@@ -330,6 +330,16 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1 && shader_injection.fxFilmGrain != 0.f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "fxHDRVideos",
+        .binding = &shader_injection.fxHDRVideos,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 2.f,
+        .label = "HDR Videos",
+        .section = "Effects",
+        .labels = {"Off", "BT.2446a", "RenoDRT"},
+        .tint = 0x895434,
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset",
         .section = "Color Grading Templates",
@@ -445,6 +455,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("fxVignette", 50.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 50.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrainType", 0.f);
+  renodx::utils::settings::UpdateSetting("fxHDRVideos", 0.f);
 }
 
 bool fired_on_init_swapchain = false;
