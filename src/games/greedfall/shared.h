@@ -33,6 +33,7 @@ struct ShaderInjectData {
   float fxVignette;
   float fxFilmGrain;
   float fxFilmGrainType;
+  float fxHDRVideos;
 
   float random;
 };
