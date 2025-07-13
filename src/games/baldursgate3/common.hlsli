@@ -1,20 +1,49 @@
 #include "./shared.h"
 
-float3 HueCorrectBT2020(float3 incorrect_color_bt2020, float3 correct_color_bt2020, float hue_correct_strength = 0.5f) {
-  float3 incorrect_color_bt709 = renodx::color::bt709::from::BT2020(incorrect_color_bt2020);
-  float3 correct_color_bt709 = renodx::color::bt709::from::BT2020(correct_color_bt2020);
+float3 ChrominanceOKLab(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
+  if (strength == 0.f) return incorrect_color;
 
-  float3 corrected_color_bt709 = renodx::color::correct::Hue(incorrect_color_bt709, correct_color_bt709, hue_correct_strength, 0u);
-  float3 corrected_color_bt2020 = renodx::color::bt2020::from::BT709(corrected_color_bt709);
-  return corrected_color_bt2020;
+  float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
+  float3 correct_lab = renodx::color::oklab::from::BT709(correct_color);
+
+  float2 incorrect_ab = incorrect_lab.yz;
+  float2 correct_ab = correct_lab.yz;
+
+  // Compute chrominance (magnitude of the a–b vector)
+  float incorrect_chrominance = length(incorrect_ab);
+  float correct_chrominance = length(correct_ab);
+
+  // Scale original chrominance vector toward target chrominance
+  float chrominance_ratio = renodx::math::DivideSafe(correct_chrominance, incorrect_chrominance, 1.f);
+  float scale = lerp(1.f, chrominance_ratio, strength);
+  incorrect_lab.yz = incorrect_ab * scale;
+
+  float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
+  return renodx::color::bt709::clamp::AP1(result);
 }
 
-#include "./shared.h"
-
-float3 ApplyUserToneMap(float3 untonemapped, float mid_gray) {
+float3 ApplyUserToneMap(float3 untonemapped_bt709, float mid_gray) {
   renodx::tonemap::Config tm_config = renodx::tonemap::config::Create();
 
   float vanillaMidGray = mid_gray;  // ACES mid gray is 10%
+  const float diffuse_white_nits = 100.f;
+  const float peak_nits = 10000.f;
+
+  const float ACES_MIN = 0.0001f;
+  const float ACES_MID_GRAY = 0.10f;
+  // const float mid_gray_scale = (0.18f / ACES_MID_GRAY);
+  float aces_min = ACES_MIN / diffuse_white_nits;
+  float aces_max = (peak_nits / diffuse_white_nits);
+  // aces_max /= mid_gray_scale;
+  // aces_min /= mid_gray_scale;
+
+#if 1
+  aces_max = renodx::color::correct::Gamma(aces_max, true);
+  aces_min = renodx::color::correct::Gamma(aces_min, true);
+#endif
+
+  float3 tonemapped_aces = renodx::tonemap::aces::RRTAndODT(untonemapped_bt709, aces_min * 48.f, aces_max * 48.f) / 48.f;
+  // tonemapped_aces *= mid_gray_scale;
 
   // RENOCES
   float renoDRTHighlights = 0.8f;
@@ -22,19 +51,6 @@ float3 ApplyUserToneMap(float3 untonemapped, float mid_gray) {
   float renoDRTContrast = 1.46f;
   float renoDRTSaturation = 7.35f;
   float renoDRTDechroma = 0.98;
-
-  if (RENODX_TONE_MAP_TYPE != 2) {  // AP1 highlight hue correction
-    float3 incorrect_hue_ap1 = renodx::color::ap1::from::BT709(untonemapped * vanillaMidGray / 0.18f);
-    float3 correct_hue = renodx::color::bt709::from::AP1(
-        renodx::tonemap::ExponentialRollOff(incorrect_hue_ap1, vanillaMidGray, 2.f));
-
-    tm_config.hue_correction_type = renodx::tonemap::renodrt::config::hue_correction_type::CUSTOM;
-    tm_config.hue_correction_color = correct_hue;
-    tm_config.hue_correction_strength = 0.25f;
-    tm_config.reno_drt_hue_correction_method = 0u;
-  } else {  // No hue correction if using ACES
-    tm_config.hue_correction_strength = 0.0f;
-  }
 
   tm_config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   tm_config.reno_drt_per_channel = true;
@@ -58,7 +74,35 @@ float3 ApplyUserToneMap(float3 untonemapped, float mid_gray) {
   tm_config.reno_drt_flare = 0.10f * pow(0.47f, 10.f);
   tm_config.reno_drt_working_color_space = 2u;
 
-  float3 tonemapped = renodx::tonemap::config::Apply(untonemapped, tm_config);
+  float3 tonemapped_renodrt = renodx::tonemap::config::Apply(untonemapped_bt709, tm_config);
 
-  return tonemapped;
+  float y = renodx::color::y::from::BT709(tonemapped_renodrt);
+  float blending_ratio = 0.6f;
+  float3 tonemapped_blended = lerp(tonemapped_renodrt, tonemapped_aces, saturate(y / blending_ratio));
+
+  return tonemapped_blended;
+}
+
+float3 GammaCorrectHuePreserving(float3 incorrect_color) {
+  float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
+
+  const float y_in = renodx::color::y::from::BT709(incorrect_color);
+  const float y_out = max(0, renodx::color::correct::Gamma(y_in));
+
+  float3 lum = incorrect_color * (y_in > 0 ? y_out / y_in : 0.f);
+
+  // use chrominance from channel gamma correction and apply hue shifting from per channel tonemap
+  float3 result = ChrominanceOKLab(lum, ch);
+
+  return result;
+}
+
+float3 ApplyGammaCorrection(float3 uncorrected) {
+#if GAMMA_CORRECTION_HUE_PRESERVING
+  float3 corrected_color = GammaCorrectHuePreserving(uncorrected);
+#else
+  float3 corrected_color = renodx::color::correct::GammaSafe(uncorrected);
+#endif
+
+  return corrected_color;
 }
