@@ -51,6 +51,10 @@ static bool IsBackBuffer(reshade::api::resource resource) {
   return info->is_swap_chain;
 }
 
+static CommandListData* GetCurrentState(reshade::api::command_list* cmd_list) {
+  return renodx::utils::data::Get<CommandListData>(cmd_list);
+}
+
 static reshade::api::resource_desc GetBackBufferDesc(reshade::api::device* device) {
   reshade::api::resource_desc desc = {};
   {
@@ -493,10 +497,6 @@ static void OnInitCommandList(reshade::api::command_list* cmd_list) {
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
   if (!is_primary_hook) return;
   renodx::utils::data::Delete<CommandListData>(cmd_list);
-}
-
-static CommandListData* GetCurrentState(reshade::api::command_list* cmd_list) {
-  return renodx::utils::data::Get<CommandListData>(cmd_list);
 }
 
 inline void OnBindRenderTargetsAndDepthStencil(
