@@ -345,6 +345,16 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return shader_injection.fxFilmGrain > 0.f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FPSLimit",
+        .binding = &renodx::utils::swapchain::fps_limit,
+        .default_value = 0.f,
+        .label = "FPS Limit",
+        .section = "Effects",
+        .tint = 0x02A9C9,
+        .min = 0.f,
+        .max = 240.f,
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset",
         .section = "Color Grading Templates",
@@ -442,6 +452,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("fxVignette", 0.f);
   renodx::utils::settings::UpdateSetting("fxSharpen", 0.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 0.f);
+  renodx::utils::settings::UpdateSetting("FPSLimit", 0.f);
 }
 
 bool fired_on_init_swapchain = false;

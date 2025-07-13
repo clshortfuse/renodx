@@ -332,6 +332,16 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FPSLimit",
+        .binding = &renodx::utils::swapchain::fps_limit,
+        .default_value = 0.f,
+        .label = "FPS Limit",
+        .section = "Effects",
+        .tint = 0x02A9C9,
+        .min = 0.f,
+        .max = 240.f,
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset",
         .section = "Color Grading Templates",
