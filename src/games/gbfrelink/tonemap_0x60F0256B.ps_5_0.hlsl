@@ -12,6 +12,35 @@ Texture2D<float4> g_TextureSceneColorHDR : register(t4);
 // 3Dmigoto declarations
 #define cmp -
 
+float applyVanillaToneMap(float untonemapped) {
+  float r0, r1, r2;
+  r0 = untonemapped;
+
+  r1 = r0 * 0.15 + 0.05;
+  r1 = r0 * r1 + 0.004;
+  r2 = r0 * 0.15 + 0.5;
+  r0 = r0 * r2 + 0.06;
+  r0 = r1 / r0;
+  r0 = -0.0666666701 + r0;
+  r0 *= 1.37906432;
+
+  return r0;
+}
+
+float3 applyVanillaToneMap(float3 untonemapped) {
+  float3 r0, r1, r2;
+  r0.rgb = untonemapped;
+
+  r1.xyz = r0.xyz * 0.15 + 0.05;
+  r1.xyz = r0.xyz * r1.xyz + 0.004;
+  r2.xyz = r0.xyz * 0.15 + 0.5;
+  r0.xyz = r0.xyz * r2.xyz + 0.06;
+  r0.xyz = r1.xyz / r0.xyz;
+  r0.xyz = -0.0666666701 + r0.xyz;
+  r0.rgb *= 1.37906432;
+
+  return r0;
+}
 
 void main(
   float4 v0 : SV_Position0,
@@ -33,6 +62,7 @@ void main(
   r0.w = g_TextureAdaptLumminance.Sample(g_TextureAdaptLumminanceSampler_s, float2(0.5,0.5)).x;
   r0.xyz = r0.www * r0.xyz;
 
+  [branch]
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     r1.xyz = r0.xyz * float3(0.150000006, 0.150000006, 0.150000006) + float3(0.0500000007, 0.0500000007, 0.0500000007);
     r1.xyz = r0.xyz * r1.xyz + float3(0.00400000019, 0.00400000019, 0.00400000019);
@@ -44,13 +74,32 @@ void main(
   
   r1.xyz = g_TextureBloom.Sample(g_TextureBloomSampler_s, v1.xy).xyz;
 
+  [branch]
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    // custom
+    o0.rgb = r0.rgb;
+
+    // custom, eyeballed bloom blend + exposure
     r0.rgb = r0.rgb + r1.rgb * 2.f * CUSTOM_BLOOM;
     o0.rgb = r0.rgb / 203.f * 80.f;
 
-    r0.rgb = renodx::draw::ToneMapPass(o0.rgb);
-    o0.rgb = renodx::draw::RenderIntermediatePass(r0.rgb);
+    /* should be better, but is overbright
+    float3 mid_gray = applyVanillaToneMap(float3(0.18f, 0.18f, 0.18f));
+    o0.rgb *= mid_gray / 0.18f;
+
+    // bloom
+    o0.rgb = (o0.rgb * 1.37906432) + (r1.rgb * CUSTOM_BLOOM);
+    */
+
+    o0.rgb = min(100.f, o0.rgb);
+
+    renodx::draw::Config draw_config = renodx::draw::BuildConfig();
+    draw_config.tone_map_hue_shift = 0.f;
+    draw_config.tone_map_hue_correction = 0.f;
+
+    o0.rgb = renodx::color::correct::Hue(o0.rgb, applyVanillaToneMap(o0.rgb), RENODX_TONE_MAP_HUE_CORRECTION);
+
+    o0.rgb = renodx::draw::ToneMapPass(o0.rgb);
+    o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
     o0.w = 1;
     
     return;

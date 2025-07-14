@@ -27,14 +27,14 @@ void main(
   r1.zw = float2(0,-0.333332986);
   r2.xyzw = g_Texture0.Sample(g_Texture0Sampler_s, v1.xy).xyzw;
 
-  float3 hdrColor, sdrColor = 0.f;
+  float3 tonemapped, neutral_sdr = 0.f;
 
+  [branch]
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    hdrColor = r2.rgb;
-
-    sdrColor = renodx::tonemap::renodrt::NeutralSDR(r2.rgb);
-
-    r2.rgb = sdrColor;
+    tonemapped = r2.rgb;
+    tonemapped = renodx::draw::InvertIntermediatePass(tonemapped);
+    neutral_sdr = saturate(renodx::tonemap::renodrt::NeutralSDR(tonemapped));
+    r2.rgb = renodx::color::srgb::Encode(neutral_sdr);
   }
 
   r0.xy = r2.zy;
@@ -69,15 +69,11 @@ void main(
   r1.x = r1.y * r1.x;
   o0.xyz = r0.yzw * r1.xxx + r0.xxx;
 
+  [branch]
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-
-    float3 finalColor = o0.rgb;
-
-    o0.rgb = renodx::tonemap::UpgradeToneMap(
-      hdrColor,
-      sdrColor,
-      finalColor,
-      1.f);
+    o0.rgb = renodx::color::srgb::Decode(o0.rgb);
+    o0.rgb = renodx::tonemap::UpgradeToneMap(tonemapped, neutral_sdr, o0.rgb, 1.f);
+    o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   }
   
   return;

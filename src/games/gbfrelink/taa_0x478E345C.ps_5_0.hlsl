@@ -142,6 +142,7 @@ void main(
   //r1.xyz = saturate(r1.xyz);
   r1.xyz = (r1.xyz);
 
+  [branch]
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     r2.xyz = saturate(r2.xyz);
     r1.xyz = saturate(r1.xyz);
@@ -245,10 +246,6 @@ void main(
   r1.y = dot(float2(1,1), r0.xz);
   r1.z = dot(float3(1,-1,-1), r0.xyz);
   r1.w = 1;
-
-  r1.rgb = renodx::color::ap1::from::BT709(r1.rgb);
-  r1.rgb = max(0, r1.rgb);  // Clamp to AP1
-  r1.rgb = renodx::color::bt709::from::AP1(r1.rgb);
 
   o0.xyzw = r1.xyzw;
   o1.xyzw = r1.xyzw;
