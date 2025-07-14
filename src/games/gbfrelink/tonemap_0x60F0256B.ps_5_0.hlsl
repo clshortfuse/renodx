@@ -79,8 +79,8 @@ void main(
     o0.rgb = r0.rgb;
 
     // custom, eyeballed bloom blend + exposure
-    r0.rgb = r0.rgb + r1.rgb * 2.f * CUSTOM_BLOOM;
-    o0.rgb = r0.rgb / 203.f * 80.f;
+    o0.rgb = o0.rgb + r1.rgb * 2.f * CUSTOM_BLOOM;
+    o0.rgb = o0.rgb / 203.f * 80.f;
 
     /* should be better, but is overbright
     float3 mid_gray = applyVanillaToneMap(float3(0.18f, 0.18f, 0.18f));
@@ -96,7 +96,7 @@ void main(
     draw_config.tone_map_hue_shift = 0.f;
     draw_config.tone_map_hue_correction = 0.f;
 
-    o0.rgb = renodx::color::correct::Hue(o0.rgb, applyVanillaToneMap(o0.rgb), RENODX_TONE_MAP_HUE_CORRECTION);
+    o0.rgb = renodx::color::correct::Hue(o0.rgb, saturate(applyVanillaToneMap(r0.rgb) + r1.rgb), RENODX_TONE_MAP_HUE_CORRECTION);
 
     o0.rgb = renodx::draw::ToneMapPass(o0.rgb);
     o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
