@@ -2311,6 +2311,8 @@ inline bool OnCreateResourceView(
         new_desc.format = target_format;
         break;
       case reshade::api::format::r16g16b16a16_float:
+      case reshade::api::format::r16g16b16a16_uint:
+      case reshade::api::format::r16g16b16a16_unorm:
         break;
       default: {
         assert(false);
@@ -3297,13 +3299,18 @@ inline void OnPresent(
   if (use_device_proxy && device != proxy_device_reshade) {
     auto current_back_buffer = swapchain->get_current_back_buffer();
     auto* resource_info = utils::resource::GetResourceInfoUnsafe(current_back_buffer);
-    assert(resource_info != nullptr);
-    if (resource_info == nullptr) return;
+    if (resource_info == nullptr) {
+      assert(resource_info != nullptr);
+      return;
+    }
 
     HWND hwnd = static_cast<HWND>(swapchain->get_hwnd());
 
     auto* new_device = GetDeviceProxy(resource_info, hwnd);
-    if (new_device == nullptr) return;
+    if (new_device == nullptr) {
+      assert(new_device != nullptr);
+      return;
+    }
     if (proxied_device_reshade == nullptr) {
       proxied_device_reshade = device;
     } else {
@@ -3335,8 +3342,8 @@ inline void OnPresent(
     last_device_proxy_shared_resource = resource_info->proxy_resource;
 
     // Trigger a DX11 Present which will start the swapchain proxy steps on DX11
-
     proxy_swap_chain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
+
     last_device_proxy_shared_handle = nullptr;
     last_device_proxy_shared_resource = {0u};
   } else {
