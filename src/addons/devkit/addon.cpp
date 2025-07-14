@@ -33,22 +33,22 @@
 #include <include/reshade.hpp>
 
 #include <crc32_hash.hpp>
-#include "../mods/swapchain.hpp"
-#include "../utils/bitwise.hpp"
-#include "../utils/constants.hpp"
-#include "../utils/data.hpp"
-#include "../utils/date.hpp"
-#include "../utils/descriptor.hpp"
-#include "../utils/format.hpp"
-#include "../utils/pipeline_layout.hpp"
-#include "../utils/shader.hpp"
-#include "../utils/shader_compiler_directx.hpp"
-#include "../utils/shader_compiler_watcher.hpp"
-#include "../utils/shader_decompiler_dxc.hpp"
-#include "../utils/shader_dump.hpp"
-#include "../utils/string_view.hpp"
-#include "../utils/swapchain.hpp"
-#include "../utils/trace.hpp"
+#include "../../mods/swapchain.hpp"
+#include "../../utils/bitwise.hpp"
+#include "../../utils/constants.hpp"
+#include "../../utils/data.hpp"
+#include "../../utils/date.hpp"
+#include "../../utils/descriptor.hpp"
+#include "../../utils/format.hpp"
+#include "../../utils/pipeline_layout.hpp"
+#include "../../utils/shader.hpp"
+#include "../../utils/shader_compiler_directx.hpp"
+#include "../../utils/shader_compiler_watcher.hpp"
+#include "../../utils/shader_decompiler_dxc.hpp"
+#include "../../utils/shader_dump.hpp"
+#include "../../utils/string_view.hpp"
+#include "../../utils/swapchain.hpp"
+#include "../../utils/trace.hpp"
 
 #define ICON_FK_CANCEL      reinterpret_cast<const char*>(u8"\uf00d")
 #define ICON_FK_FILE        reinterpret_cast<const char*>(u8"\uf016")
