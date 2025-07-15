@@ -94,30 +94,30 @@ static const float3x3 NTSC_U_1953_TO_XYZ_MAT = float3x3(
 // chromatic adaptation method: vK20
 // chromatic adaptation transform: CAT02
 static const float3x3 ARIB_TR_B9_D93_TO_BT709_D65_MAT = float3x3(
-    0.897676467f, -0.129552796f, 0.00210331683f,
-    0.0400346256f, 0.970825016f, 0.00575808621f,
-    0.00136304146f, 0.0323694758f, 1.48031127f);
+    0.886132895f, -0.144765302f, -0.000316959019f,
+    0.0408876389f, 0.971982538f, 0.00582195585f,
+    0.00312487990f, 0.0414751693f, 1.56167137f);
 
 // chromatic adaptation method: vK20
 // chromatic adaptation transform: CAT02
 static const float3x3 ARIB_TR_B9_9300K_8_MPCD_TO_BT709_D65_MAT = float3x3(
-    0.898766815f, -0.129979714f, 0.00223334273f,
-    0.0401015169f, 0.972650587f, 0.00570049602f,
-    0.00123276025f, 0.0316823720f, 1.45910859f);
+    0.887350380f, -0.145325064f, -0.0000826625182f,
+    0.0409696400f, 0.974039375f, 0.00576419429f,
+    0.00292735593f, 0.0404177531f, 1.53643214f);
 
 // chromatic adaptation method: vK20
 // chromatic adaptation transform: CAT02
 static const float3x3 ARIB_TR_B9_9300K_27_MPCD_TO_BT709_D65_MAT = float3x3(
-    0.783664464f, -0.178418442f, 0.00223907502f,
-    0.0380520112f, 1.03919935f, 0.00543892197f,
-    0.000365949701f, 0.0269012674f, 1.31387364f);
+    0.768497526f, -0.210804164f, 0.000297427177f,
+    0.0397904068f, 1.04825413f, 0.00555809540f,
+    0.00147510506f, 0.0328789241f, 1.36515128f);
 
 // chromatic adaptation method: vK20
 // chromatic adaptation transform: CAT02
 static const float3x3 BT709_D93_TO_BT709_D65_MAT = float3x3(
-    0.968665063f, -0.0445920750f, -0.00335013796f,
-    0.00231231073f, 1.00339293f, 0.0000867190974f,
-    0.00326244067f, 0.0161521788f, 1.11353743f);
+    0.956910431f, -0.0613676644f, -0.00503798108f,
+    0.00317927985f, 1.00466823f, 0.000124804413f,
+    0.00494503090f, 0.0247498396f, 1.17469859f);
 
 // chromatic adaptation method: von Kries
 // chromatic adaptation transform: Bradford
