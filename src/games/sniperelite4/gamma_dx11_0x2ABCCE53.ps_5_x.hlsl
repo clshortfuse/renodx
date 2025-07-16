@@ -26,7 +26,7 @@ void main(
   float4 fDest;
 
   r0.xy = v1.xy * g_xMulAddConsts.xy + g_xMulAddConsts.zw;
-  r0.xyz = g_xSourceTexture.Sample(g_xFilteredClamp_s, r0.xy).xyz;
+  r0.xyz = g_xSourceTexture.Sample(g_xFilteredClamp_s, r0.xy).xyz; // game scene + UI
   
   //r0.xyz = log2(abs(r0.xyz));
   //r0.xyz = g_xGamma.xxx * r0.xyz;

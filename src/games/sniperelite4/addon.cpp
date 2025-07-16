@@ -28,7 +28,7 @@ ShaderInjectData shader_injection;
 
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({
   renodx::templates::settings::CreateDefaultSettings({
-    {"ToneMapType", {.binding = &shader_injection.tone_map_type, .labels = {"Vanilla", "DICE"}}}
+    {"ToneMapType", {.binding = &shader_injection.tone_map_type, .labels = {"Vanilla", "Exponential Rolloff"}}}
   }),
   renodx::templates::settings::CreateDefaultSettings({
   {"ToneMapPeakNits", &shader_injection.peak_white_nits},
@@ -114,7 +114,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
   },
   new renodx::utils::settings::Setting{
       .value_type = renodx::utils::settings::SettingValueType::TEXT,
-      .label = "Motion blur causes artifacts, has to be disabled!",
+      .label = "Motion blur causes artifacts, has to be disabled! Use the DX11 version!",
       .section = "Instructions",
   },
   new renodx::utils::settings::Setting{
