@@ -1737,7 +1737,7 @@ float4 main(
     // output_color = applyUserToneMap(output_color * 1.5f, 0.18f);
     // output_color = renodx::color::correct::GammaSafe(output_color);
     output_color = renodx::color::bt2020::from::BT709(output_color);
-    output_color = renodx::color::pq::EncodeSafe(output_color, 100.f);
+    output_color = renodx::color::pq::EncodeSafe(output_color, RENODX_DIFFUSE_WHITE_NITS);
   }
 
   SV_Target.x = (output_color.r * 0.9523810148239136f);

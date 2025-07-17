@@ -1,23 +1,21 @@
 #ifndef SRC_GAMES_JEDISURVIVOR_SHARED_H_
 #define SRC_GAMES_JEDISURVIVOR_SHARED_H_
 
+// #define RENODX_TONE_MAP_TYPE                 2  // 0 - Vanilla, 1 - None, 2 - ACES, 3 - RenoDRT, 4 - SDR
 // #define RENODX_PEAK_WHITE_NITS               400
 // #define RENODX_DIFFUSE_WHITE_NITS            100
 // #define RENODX_GRAPHICS_WHITE_NITS           100
-// #define RENODX_TONE_MAP_TYPE                 2 // 0 - Vanilla, 1 - None, 2 - ACES, 3 - RenoDRT, 4 - SDR
+// #define RENODX_TONE_MAP_HUE_SHIFT            1
+// #define RENODX_GAMMA_CORRECTION              1
+// #define RENODX_GAMMA_CORRECTION_UI           1
 // #define RENODX_TONE_MAP_EXPOSURE             1
 // #define RENODX_TONE_MAP_HIGHLIGHTS           1
 // #define RENODX_TONE_MAP_SHADOWS              1
 // #define RENODX_TONE_MAP_CONTRAST             1
 // #define RENODX_TONE_MAP_SATURATION           1
-// #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION 1.0
-// #define RENODX_TONE_MAP_BLOWOUT              0.93
-// #define RENODX_TONE_MAP_FLARE                0.0
-// #define RENODX_TONE_MAP_HUE_SHIFT            1.0
-// #define RENODX_TONE_MAP_WORKING_COLOR_SPACE  2
-// #define RENODX_TONE_MAP_PER_CHANNEL          0
-// #define RENODX_GAMMA_CORRECTION              1
-// #define RENODX_GAMMA_CORRECTION_UI           1
+// #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION 1
+// #define RENODX_TONE_MAP_BLOWOUT              0
+// #define RENODX_TONE_MAP_FLARE                0
 // #define CUSTOM_LUT_STRENGTH                  1
 // #define CUSTOM_LUT_SCALING                   1
 // #define CUSTOM_FISHEYE                       1
