@@ -26,7 +26,7 @@ float4 main(
   float4 ui_color_pq = t2.SampleLevel(s2, _10.rgb * 0.96875f + 0.015625f, 0.0f) * 1.05f;
   float ui_alpha = _10.a;
 
-  if (HandleUICompositing(float4(ui_color_pq.rgb, _10.a), scene_color_pq, composited_color_pq)) {
+  if (HandleUICompositing(float4(ui_color_pq.rgb, ui_alpha), scene_color_pq, composited_color_pq)) {
     return composited_color_pq;
   }
 

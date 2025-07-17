@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "../shared.h"
 
 cbuffer cb0 : register(b0) {
   int cb0_010y : packoffset(c010.y);
