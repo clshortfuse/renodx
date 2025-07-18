@@ -449,6 +449,8 @@ void AddGamePatches() {
     AddExpedition33Upgrades();
   } else if (product_name == "Avowed") {
     AddAvowedUpgrades();
+  } else if (product_name == "Tony Hawks(TM) Pro Skater(TM) 3 + 4"){
+    renodx::mods::swapchain::swapchain_proxy_revert_state = true;
   } else {
     return;
   }
