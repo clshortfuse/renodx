@@ -201,7 +201,7 @@ renodx::utils::settings::Settings settings = {
         .key = "FxGrainStrength",
         .binding = &shader_injection.custom_grain_strength,
         .default_value = 0.f,
-        .label = "FilmGrain",
+        .label = "Film Grain",
         .section = "Effects",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
