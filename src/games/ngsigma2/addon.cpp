@@ -37,6 +37,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
   {"ToneMapUINits", &shader_injection.graphics_white_nits},
   {"ToneMapGammaCorrection", &shader_injection.gamma_correction},
   {"ToneMapHueCorrection", &shader_injection.tone_map_hue_correction},
+  {"ToneMapHueShift", &shader_injection.tone_map_hue_shift},
   {"ColorGradeExposure", &shader_injection.tone_map_exposure},
   {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
   {"ColorGradeShadows", &shader_injection.tone_map_shadows},

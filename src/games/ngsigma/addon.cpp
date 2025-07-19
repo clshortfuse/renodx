@@ -37,6 +37,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
   {"ToneMapUINits", &shader_injection.diffuse_white_nits},    // intentionally swapped
   {"ToneMapGammaCorrection", &shader_injection.gamma_correction},
   {"ToneMapHueCorrection", &shader_injection.tone_map_hue_correction},
+  {"ToneMapHueShift", &shader_injection.tone_map_hue_shift},
   {"ColorGradeExposure", &shader_injection.tone_map_exposure},
   {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
   {"ColorGradeShadows", &shader_injection.tone_map_shadows},
@@ -184,6 +185,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .new_format = reshade::api::format::r16g16b16a16_typeless,
           .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
           //.ignore_size = true,
+      });
+
+      // battle fx
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_typeless,
+          .dimensions = {.width = 512, .height = 512}
       });
 
       break;
