@@ -26,7 +26,7 @@ void main(
   r0.xy = min(cb3[0].zw, v1.xy);
   r1.xyz = t0.SampleLevel(s0_s, r0.xy, 0).xyz;
   r0.xyz = t1.SampleLevel(s0_s, r0.xy, 0).xyz;
-  o0.xyz = max(r1.xyz, r0.xyz) * injectedData.fxBloom;
+  o0.xyz = max(r1.xyz, r0.xyz) * CUSTOM_BLOOM;
   o0.w = 1;
   return;
 }
