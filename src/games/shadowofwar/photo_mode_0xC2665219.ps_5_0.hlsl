@@ -1,3 +1,5 @@
+#include "./shared.h"
+
 // ---- Created with 3Dmigoto v1.3.16 on Fri Oct 04 16:28:22 2024
 Texture2D<float4> t0 : register(t0);
 
@@ -37,6 +39,7 @@ void main(
   r0.yzw = t0.Sample(s0_s, r0.yz).xyz;  // main tex
 
   r0.yzw = (r0.yzw / cb0[25].xxx);  //   r0.yzw = saturate(r0.yzw / cb0[25].xxx);  // clamp photo mode, breaks otherwise
+  if (RENODX_TONE_MAP_TYPE == 0.f) r0.yzw = saturate(r0.yzw);
 
   r1.xyz = -r0.yzw * float3(2, 2, 2) + float3(2, 2, 2);
   r1.xyz = sign(r1.xyz) * pow(abs(r1.xyz), r0.x);
@@ -51,6 +54,7 @@ void main(
   r0.xzw = float3(0.5, 0.5, 0.5) * r0.xzw;
 
   r0.xyz = (r0.yyy ? r0.xzw : r1.xyz);  //  r0.xyz = saturate(r0.yyy ? r0.xzw : r1.xyz);
+  if (RENODX_TONE_MAP_TYPE == 0.f) r0.rgb = saturate(r0.rgb);
 
   o0.xyz = cb0[25].xxx * r0.xyz;  // 500 nits paper white
   o0.w = 1;
