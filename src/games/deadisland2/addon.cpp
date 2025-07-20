@@ -103,6 +103,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
         .min = 48.f,
         .max = 500.f,
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
     },
     CreateDefault0PercentSetting({
         .key = "toneMapHueCorrection",
@@ -144,7 +145,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 2.f,
         .format = "%.2f",
-        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.tone_map_type != 3; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     CreateDefault50PercentSetting({
@@ -152,7 +153,7 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.tone_map_highlights,
         .label = "Highlights",
         .section = "Color Grading",
-        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.tone_map_type != 3; },
         .is_visible = []() { return current_settings_mode >= 1; },
     }),
     CreateDefault50PercentSetting({
@@ -160,7 +161,7 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.tone_map_shadows,
         .label = "Shadows",
         .section = "Color Grading",
-        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.tone_map_type != 3; },
         .is_visible = []() { return current_settings_mode >= 1; },
     }),
     CreateDefault50PercentSetting({
@@ -168,14 +169,22 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.tone_map_contrast,
         .label = "Contrast",
         .section = "Color Grading",
-        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.tone_map_type != 3; },
     }),
     CreateDefault50PercentSetting({
         .key = "ColorGradeSaturation",
         .binding = &shader_injection.tone_map_saturation,
         .label = "Saturation",
         .section = "Color Grading",
-        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.tone_map_type != 3; },
+    }),
+    CreateDefault50PercentSetting({
+        .key = "ColorGradeHighlightSaturation",
+        .binding = &shader_injection.tone_map_highlight_saturation,
+        .label = "Highlight Saturation",
+        .section = "Color Grading",
+        .tooltip = "Adds or removes highlight color.",
+        .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.tone_map_type != 3; },
     }),
     CreateDefault0PercentSetting({
         .key = "ColorGradeBlowout",
@@ -183,6 +192,14 @@ renodx::utils::settings::Settings settings = {
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+    }),
+    CreateDefault0PercentSetting({
+        .key = "ColorGradeFlare",
+        .binding = &shader_injection.tone_map_flare,
+        .label = "Flare",
+        .section = "Color Grading",
+        .tooltip = "Flare/Glare Compensation",
         .is_enabled = []() { return shader_injection.tone_map_type > 0; },
     }),
     CreateDefault100PercentSetting({
