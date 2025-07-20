@@ -18,7 +18,6 @@ struct ShaderInjectData {
   float tone_map_flare;
   float tone_map_hue_correction;
   float tone_map_hue_shift;
-  float tone_map_white_clip;
   float color_grade_hue_correction;
   float color_grade_saturation_correction;
   float color_grade_blowout_restoration;
@@ -45,13 +44,13 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION     shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT                  shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                    shader_injection.tone_map_flare
-#define RENODX_RENO_DRT_WHITE_CLIP               shader_injection.tone_map_white_clip
 #define RENODX_RENO_DRT_TONE_MAP_METHOD          renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_TONE_MAP_PASS_AUTOCORRECTION      1.f
-#define CUSTOM_COLOR_GRADE_HUE_CORRECTION        1.f
-#define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION 1.f
-#define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   0.5f
-#define CUSTOM_COLOR_GRADE_HUE_SHIFT             0.5f
+#define RENODX_GAMMA_CORRECTION                  0.f
+#define CUSTOM_COLOR_GRADE_HUE_CORRECTION        0.f
+#define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION 0.f
+#define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   0.f
+#define CUSTOM_COLOR_GRADE_HUE_SHIFT             0.f
 #define CUSTOM_LUT_OPTIMIZATION                  1.f
 #define CUSTOM_GRAIN_TYPE                        0.f
 #define CUSTOM_GRAIN_STRENGTH                    1.f

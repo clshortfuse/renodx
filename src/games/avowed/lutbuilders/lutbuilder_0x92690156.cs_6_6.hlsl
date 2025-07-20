@@ -402,7 +402,7 @@ void main(
   float _1271 = exp2(log2(max(0.0f, (lerp(_1248, OverlayColor.y, OverlayColor.w)))) * InverseGamma.y);
   float _1272 = exp2(log2(max(0.0f, (lerp(_1249, OverlayColor.z, OverlayColor.w)))) * InverseGamma.y);
 
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
+  if (true) {
     RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] =
         GenerateOutput(float3(_1270, _1271, _1272), OutputDevice);
     return;

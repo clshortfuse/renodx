@@ -39,10 +39,6 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
                                                                                             {"ColorGradeBlowout", &shader_injection.tone_map_blowout},
                                                                                             {"ColorGradeFlare", &shader_injection.tone_map_flare},
                                                                                         }),
-                                                                                        // use CreateDefaultSettings to build of custom settings list
-                                                                                        renodx::templates::settings::CreateDefaultSettings({
-                                                                                            {"ToneMapWhiteClip", {.binding = &shader_injection.tone_map_white_clip, .default_value = 5.f, .can_reset = true}},
-                                                                                        }),
                                                                                         {
                                                                                             new renodx::utils::settings::Setting{
                                                                                                 .value_type = renodx::utils::settings::SettingValueType::BUTTON,

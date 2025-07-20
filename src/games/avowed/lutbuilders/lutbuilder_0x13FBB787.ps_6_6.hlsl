@@ -250,7 +250,7 @@ float4 main(
   float _749 = exp2(log2(max(0.0f, _723)) * InverseGamma.y);
   float _750 = exp2(log2(max(0.0f, _724)) * InverseGamma.y);
 
-  if (RENODX_TONE_MAP_TYPE != 0) {
+  if (true) {
     return GenerateOutput(float3(_748, _749, _750), OutputDevice);
   }
 

@@ -318,7 +318,7 @@ void main(
 
 
 
-  if (RENODX_TONE_MAP_TYPE != 0) {
+  if (true) {
     RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = GenerateOutput(float3(_911, _912, _913), OutputDevice);
     return;
   }

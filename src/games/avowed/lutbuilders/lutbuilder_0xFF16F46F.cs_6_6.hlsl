@@ -471,7 +471,7 @@ void main(
   float _1426 = exp2(log2(max(0.0f, _1400)) * InverseGamma.y);
   float _1427 = exp2(log2(max(0.0f, _1401)) * InverseGamma.y);
 
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
+  if (true) {
     RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] =
         GenerateOutput(float3(_1425, _1426, _1427), OutputDevice);
     return;

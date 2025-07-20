@@ -365,7 +365,7 @@ float4 main(
   float _1155 = exp2(log2(max(0.0f, (lerp(_1132, OverlayColor.y, OverlayColor.w)))) * InverseGamma.y);
   float _1156 = exp2(log2(max(0.0f, (lerp(_1133, OverlayColor.z, OverlayColor.w)))) * InverseGamma.y);
 
-  if (RENODX_TONE_MAP_TYPE != 0) {
+  if (true) {
     return GenerateOutput(float3(_1154, _1155, _1156), OutputDevice);
   }
 
