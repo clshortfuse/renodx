@@ -45,51 +45,72 @@ float4 GammaSafe(float4 color, bool pow_to_srgb = false, float gamma = 2.2f) {
 #undef GAMMA
 #undef GAMMA_SAFE
 
-float3 ChrominanceOKLab(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
+float3 ChrominanceOKLab(
+    float3 incorrect_color,
+    float3 reference_color,
+    float strength = 1.f,
+    float clamp_chrominance_loss = 0.f) {
   if (strength == 0.f) return incorrect_color;
 
   float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
-  float3 correct_lab = renodx::color::oklab::from::BT709(correct_color);
+  float3 reference_lab = renodx::color::oklab::from::BT709(reference_color);
 
   float2 incorrect_ab = incorrect_lab.yz;
-  float2 correct_ab = correct_lab.yz;
+  float2 reference_ab = reference_lab.yz;
 
   // Compute chrominance (magnitude of the a–b vector)
   float incorrect_chrominance = length(incorrect_ab);
-  float correct_chrominance = length(correct_ab);
+  float correct_chrominance = length(reference_ab);
 
   // Scale original chrominance vector toward target chrominance
   float chrominance_ratio = renodx::math::DivideSafe(correct_chrominance, incorrect_chrominance, 1.f);
   float scale = lerp(1.f, chrominance_ratio, strength);
+
+  float t = 1.0f - step(1.0f, scale);  // t = 1 when scale < 1, 0 when scale >= 1
+  scale = lerp(scale, 1.0f, t * clamp_chrominance_loss);
+
   incorrect_lab.yz = incorrect_ab * scale;
 
   float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
-  return renodx::color::bt709::clamp::AP1(result);
+  return result;
 }
 
-float3 ChrominanceICtCp(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
+float3 ChrominanceICtCp(
+    float3 incorrect_color,
+    float3 reference_color,
+    float strength = 1.f,
+    float clamp_chrominance_loss = 0.f) {
   if (strength == 0.f) return incorrect_color;
 
-  float3 incorrect_ictcp = renodx::color::ictcp::from::BT709(incorrect_color);
-  float3 correct_ictcp = renodx::color::ictcp::from::BT709(correct_color);
+  float3 incorrect_lab = renodx::color::ictcp::from::BT709(incorrect_color);
+  float3 reference_lab = renodx::color::ictcp::from::BT709(reference_color);
 
-  float2 incorrect_ctcp = incorrect_ictcp.yz;
-  float2 correct_ctcp = correct_ictcp.yz;
+  float2 incorrect_ab = incorrect_lab.yz;
+  float2 reference_ab = reference_lab.yz;
 
-  // Compute chrominance (magnitude of the Ct–Cp vector)
-  float incorrect_chrominance = length(incorrect_ctcp);
-  float correct_chrominance = length(correct_ctcp);
+  // Compute chrominance (magnitude of the Ct-Cp vector)
+  float incorrect_chrominance = length(incorrect_ab);
+  float correct_chrominance = length(reference_ab);
 
-  // Scale chrominance vector to match target chrominance
-  float chroma_ratio = renodx::math::DivideSafe(correct_chrominance, incorrect_chrominance, 1.f);
-  float scale = lerp(1.f, chroma_ratio, strength);
-  incorrect_ictcp.yz = incorrect_ctcp * scale;
+  // Scale original chrominance vector toward target chrominance
+  float chrominance_ratio = renodx::math::DivideSafe(correct_chrominance, incorrect_chrominance, 1.f);
+  float scale = lerp(1.f, chrominance_ratio, strength);
 
-  float3 result = renodx::color::bt709::from::ICtCp(incorrect_ictcp);
-  return renodx::color::bt709::clamp::AP1(result);
+  float t = 1.0f - step(1.0f, scale);  // t = 1 when scale < 1, 0 when scale >= 1
+  scale = lerp(scale, 1.0f, t * clamp_chrominance_loss);
+
+  incorrect_lab.yz = incorrect_ab * scale;
+
+  float3 result = renodx::color::bt709::from::ICtCp(incorrect_lab);
+  return result;
 }
 
-float3 ChrominancedtUCS(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
+float3 ChrominancedtUCS(
+    float3 incorrect_color,
+    float3 correct_color,
+    float strength = 1.f,
+    float clamp_chrominance_loss = 0.f)  // new param
+{
   if (strength == 0.f) return incorrect_color;
 
   float3 incorrect_uvY = renodx::color::dtucs::uvY::from::BT709(incorrect_color);
@@ -114,23 +135,29 @@ float3 ChrominancedtUCS(float3 incorrect_color, float3 correct_color, float stre
   float C_correct = 15.932993652962535f * pow(L_star_c, 0.6523997524738018f) * pow(M2_correct, 0.6007557017508491f) / color::dtucs::L_WHITE;
 
   // Interpolate chrominance while preserving original hue direction
-  float C = lerp(C_incorrect, C_correct, strength);
+  float C_lerp = lerp(C_incorrect, C_correct, strength);
+
+  float chroma_scale = renodx::math::DivideSafe(C_lerp, C_incorrect, 1.f);
+  float t = 1.0f - step(1.0f, chroma_scale);  // t = 1 when scale < 1, 0 when scale >= 1
+  chroma_scale = lerp(chroma_scale, 1.0f, t * clamp_chrominance_loss);
+  float C = C_incorrect * chroma_scale;
+
   float h = atan2(incorrect_uv.y, incorrect_uv.x);
 
   // Compute original perceptual lightness (J)
   float J = pow(L_star_i / color::dtucs::L_WHITE, 1.f);
 
-  // Build JCH from original J, interpolated chrominance, and original hue
+  // Build JCH from original J, clamped/interpolated chrominance, and original hue
   float3 final_jch = float3(J, C, h);
 
   float3 result = renodx::color::bt709::from::dtucs::JCH(final_jch);
   return renodx::color::bt709::clamp::AP1(result);
 }
 
-float3 Chrominance(float3 incorrect_color, float3 correct_color, float strength = 1.f, uint method = 0u) {
-  if (method == 1u) return ChrominanceICtCp(incorrect_color, correct_color, strength);
-  if (method == 2u) return ChrominancedtUCS(incorrect_color, correct_color, strength);
-  return ChrominanceOKLab(incorrect_color, correct_color, strength);
+float3 Chrominance(float3 incorrect_color, float3 correct_color, float strength = 1.f, float clamp_chrominance_loss = 0.f, uint method = 0u) {
+  if (method == 1u) return ChrominanceICtCp(incorrect_color, correct_color, strength, clamp_chrominance_loss);
+  if (method == 2u) return ChrominancedtUCS(incorrect_color, correct_color, strength, clamp_chrominance_loss);
+  return ChrominanceOKLab(incorrect_color, correct_color, strength, clamp_chrominance_loss);
 }
 
 float3 HueOKLab(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
