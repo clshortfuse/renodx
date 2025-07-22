@@ -308,17 +308,7 @@ float3 ToneMapMaxCLLSafe(float3 color_linear) {
   return color_linear;
 }
 
-float3 ExponentialRollOffByLog(float3 color, float highlights_shoulder_start = 0.f) {
-  float3 colorSign = sign(color);
-  
-  color = abs(color);
-  color = exp2(renodx::tonemap::ExponentialRollOff(log2(color * RENODX_DIFFUSE_WHITE_NITS), log2(RENODX_PEAK_WHITE_NITS * highlights_shoulder_start), log2(RENODX_PEAK_WHITE_NITS))) / RENODX_DIFFUSE_WHITE_NITS;
-  color *= colorSign;
-  
-  return color;
-}
-
-float3 ExponentialRollOffByLum(float3 color, float output_luminance_max, float highlights_shoulder_start = 0.f) {
+float3 ExponentialRollOffByLum(float3 color, float output_luminance_max, float highlights_shoulder_start = 0.18f) {
   const float source_luminance = renodx::color::y::from::BT709(color);
 
   [branch]
@@ -335,12 +325,7 @@ float3 applyExponentialRollOff(float3 color) {
 
   const float peakWhite = RENODX_PEAK_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
 
-  // const float highlightsShoulderStart = paperWhite;
-  const float highlightsShoulderStart = 1.f;
-
-  // return renodx::tonemap::dice::BT709(color.rgb * paperWhite, peakWhite, highlightsShoulderStart) / paperWhite;
-  return ExponentialRollOffByLog(color, highlightsShoulderStart);
-  // return ExponentialRollOffByLum(color * paperWhite, peakWhite, highlightsShoulderStart) / paperWhite;
+  return ExponentialRollOffByLum(color * paperWhite, peakWhite) / paperWhite;
 }
 
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
