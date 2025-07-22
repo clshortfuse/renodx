@@ -1,6 +1,6 @@
 #version 450
 
-#include "./common.slangi"
+#include "./common.slang"
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -974,7 +974,7 @@ void main() {
     vec3 _3750 = _934;
     float lerpValue = _281._m53;
     if (RENODX_TONE_MAP_TYPE) {
-      lerpValue = 0.9f;
+      lerpValue = 1.f;
     }
     _934 = max(vec3(0.0), mix(vec3(_52(_3750)), _934, vec3(lerpValue)));
     vec3 _3762 = _934;

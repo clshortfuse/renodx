@@ -21,7 +21,7 @@ ShaderInjectData shader_injection;
       {                                              \
           .crc32 = value,                            \
           .code = __##value,                         \
-          .on_replace = [](auto cmd_list) {            \
+          .on_replace = [](auto cmd_list) {          \
             shader_injection.output_has_drawn = 1.f; \
             return true;                             \
           },                                         \
@@ -30,22 +30,21 @@ ShaderInjectData shader_injection;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     OutputShaderEntry(0x36EAB036),
-    __ALL_CUSTOM_SHADERS
-  };
+    __ALL_CUSTOM_SHADERS};
 
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({renodx::templates::settings::CreateDefaultSettings({
-                                                                                            {"ToneMapType", &shader_injection.tone_map_type},
-                                                                                            {"ToneMapPeakNits", &shader_injection.peak_white_nits},
-                                                                                            {"ToneMapGameNits", &shader_injection.diffuse_white_nits},
-                                                                                            {"ToneMapUINits", &shader_injection.graphics_white_nits},
-                                                                                            {"ColorGradeExposure", &shader_injection.tone_map_exposure},
-                                                                                            {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
-                                                                                            {"ColorGradeShadows", &shader_injection.tone_map_shadows},
-                                                                                            {"ColorGradeContrast", &shader_injection.tone_map_contrast},
-                                                                                            {"ColorGradeSaturation", &shader_injection.tone_map_saturation},
-                                                                                            {"ColorGradeHighlightSaturation", &shader_injection.tone_map_highlight_saturation},
-                                                                                            {"ColorGradeBlowout", &shader_injection.tone_map_blowout},
-                                                                                            {"ColorGradeFlare", &shader_injection.tone_map_flare},
+                                                                                            {"ToneMapType", {.binding = &shader_injection.tone_map_type}},
+                                                                                            {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits}},
+                                                                                            {"ToneMapGameNits", {.binding = &shader_injection.diffuse_white_nits}},
+                                                                                            {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits}},
+                                                                                            {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure}},
+                                                                                            {"ColorGradeHighlights", {.binding = &shader_injection.tone_map_highlights}},
+                                                                                            {"ColorGradeShadows", {.binding = &shader_injection.tone_map_shadows}},
+                                                                                            {"ColorGradeContrast", {.binding = &shader_injection.tone_map_contrast, .default_value = 42.f}},
+                                                                                            {"ColorGradeSaturation", {.binding = &shader_injection.tone_map_saturation}},
+                                                                                            {"ColorGradeHighlightSaturation", {.binding = &shader_injection.tone_map_highlight_saturation}},
+                                                                                            {"ColorGradeBlowout", {.binding = &shader_injection.tone_map_blowout}},
+                                                                                            {"ColorGradeFlare", {.binding = &shader_injection.tone_map_flare}},
                                                                                         }),
                                                                                         {
                                                                                             new renodx::utils::settings::Setting{

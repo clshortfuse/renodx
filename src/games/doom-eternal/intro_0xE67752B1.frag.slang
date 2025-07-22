@@ -1,7 +1,7 @@
 // Intro
 #version 450
 
-#include "./common.slangi"
+#include "./common.slang"
 
 layout(set = 2, binding = 0, std140) uniform _183_185 {
   vec4 _m0;

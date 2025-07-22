@@ -2,7 +2,7 @@
 
 #version 450
 
-#include "./common.slangi"
+#include "./common.slang"
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -318,10 +318,10 @@ void main() {
   vec2 _596 = (vec2(_528.x + _544, _528.y + _559) - vec2(0.5)) / _445._m2.xy;
   vec2 _612 = (vec2(_528.x + _549, _528.y + _559) - vec2(0.5)) / _445._m2.xy;
   vec4 _629 = _632.Sample(_636, _564.xy);
-  test = _629.xyz;
   vec4 _652 = _632.Sample(_636, _580.xy);
   vec4 _667 = _632.Sample(_636, _596.xy);
   vec4 _682 = _632.Sample(_636, _612.xy);
+
   float _698 = _531.y;
   float _710 = _531.y;
   vec4 _697 = (((_629 * _534) + (_652 * _539)) * _64(_698)) + (((_667 * _534) + (_682 * _539)) * _67(_710));

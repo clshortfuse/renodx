@@ -1,52 +1,70 @@
 #version 450
 
+#include "./include/aces.hlsl"
 #include "./shared.h"
 
-float3 ChrominanceOKLab(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
+float3 ChrominanceOKLab(float3 incorrect_color,
+                        float3 reference_color,
+                        float strength = 1.f,
+                        float clamp_chrominance_loss = 0.f) {
   if (strength == 0.f) return incorrect_color;
 
   float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
-  float3 correct_lab = renodx::color::oklab::from::BT709(correct_color);
+  float3 reference_lab = renodx::color::oklab::from::BT709(reference_color);
 
   float2 incorrect_ab = incorrect_lab.yz;
-  float2 correct_ab = correct_lab.yz;
+  float2 reference_ab = reference_lab.yz;
 
   // Compute chrominance (magnitude of the a–b vector)
   float incorrect_chrominance = length(incorrect_ab);
-  float correct_chrominance = length(correct_ab);
+  float correct_chrominance = length(reference_ab);
 
   // Scale original chrominance vector toward target chrominance
   float chrominance_ratio = renodx::math::DivideSafe(correct_chrominance, incorrect_chrominance, 1.f);
   float scale = lerp(1.f, chrominance_ratio, strength);
+
+  float t = 1.0f - step(1.0f, scale);  // t = 1 when scale < 1, 0 when scale >= 1
+  scale = lerp(scale, 1.0f, t * clamp_chrominance_loss);
+
   incorrect_lab.yz = incorrect_ab * scale;
 
   float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
-  return renodx::color::bt709::clamp::AP1(result);
+  return result;
 }
 
-float3 ChrominanceICtCp(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
+float3 ChrominanceICtCp(float3 incorrect_color,
+                        float3 reference_color,
+                        float strength = 1.f,
+                        float clamp_chrominance_loss = 0.f) {
   if (strength == 0.f) return incorrect_color;
 
-  float3 incorrect_ictcp = renodx::color::ictcp::from::BT709(incorrect_color);
-  float3 correct_ictcp = renodx::color::ictcp::from::BT709(correct_color);
+  float3 incorrect_lab = renodx::color::ictcp::from::BT709(incorrect_color);
+  float3 reference_lab = renodx::color::ictcp::from::BT709(reference_color);
 
-  float2 incorrect_ctcp = incorrect_ictcp.yz;
-  float2 correct_ctcp = correct_ictcp.yz;
+  float2 incorrect_ab = incorrect_lab.yz;
+  float2 reference_ab = reference_lab.yz;
 
-  // Compute chrominance (magnitude of the Ct–Cp vector)
-  float incorrect_chrominance = length(incorrect_ctcp);
-  float correct_chrominance = length(correct_ctcp);
+  // Compute chrominance (magnitude of the Ct-Cp vector)
+  float incorrect_chrominance = length(incorrect_ab);
+  float correct_chrominance = length(reference_ab);
 
-  // Scale chrominance vector to match target chrominance
-  float chroma_ratio = renodx::math::DivideSafe(correct_chrominance, incorrect_chrominance, 1.f);
-  float scale = lerp(1.f, chroma_ratio, strength);
-  incorrect_ictcp.yz = incorrect_ctcp * scale;
+  // Scale original chrominance vector toward target chrominance
+  float chrominance_ratio = renodx::math::DivideSafe(correct_chrominance, incorrect_chrominance, 1.f);
+  float scale = lerp(1.f, chrominance_ratio, strength);
 
-  float3 result = renodx::color::bt709::from::ICtCp(incorrect_ictcp);
-  return renodx::color::bt709::clamp::AP1(result);
+  float t = 1.0f - step(1.0f, scale);  // t = 1 when scale < 1, 0 when scale >= 1
+  scale = lerp(scale, 1.0f, t * clamp_chrominance_loss);
+
+  incorrect_lab.yz = incorrect_ab * scale;
+
+  float3 result = renodx::color::bt709::from::ICtCp(incorrect_lab);
+  return result;
 }
 
-float3 ChrominancedtUCS(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
+float3 ChrominancedtUCS(float3 incorrect_color,
+                        float3 correct_color,
+                        float strength = 1.f,
+                        float clamp_chrominance_loss = 0.f) {
   if (strength == 0.f) return incorrect_color;
 
   float3 incorrect_uvY = renodx::color::dtucs::uvY::from::BT709(incorrect_color);
@@ -71,23 +89,29 @@ float3 ChrominancedtUCS(float3 incorrect_color, float3 correct_color, float stre
   float C_correct = 15.932993652962535f * pow(L_star_c, 0.6523997524738018f) * pow(M2_correct, 0.6007557017508491f) / renodx::color::dtucs::L_WHITE;
 
   // Interpolate chrominance while preserving original hue direction
-  float C = lerp(C_incorrect, C_correct, strength);
+  float C_lerp = lerp(C_incorrect, C_correct, strength);
+
+  float chroma_scale = renodx::math::DivideSafe(C_lerp, C_incorrect, 1.f);
+  float t = 1.0f - step(1.0f, chroma_scale);  // t = 1 when scale < 1, 0 when scale >= 1
+  chroma_scale = lerp(chroma_scale, 1.0f, t * clamp_chrominance_loss);
+  float C = C_incorrect * chroma_scale;
+
   float h = atan2(incorrect_uv.y, incorrect_uv.x);
 
   // Compute original perceptual lightness (J)
   float J = pow(L_star_i / renodx::color::dtucs::L_WHITE, 1.f);
 
-  // Build JCH from original J, interpolated chrominance, and original hue
+  // Build JCH from original J, clamped/interpolated chrominance, and original hue
   float3 final_jch = float3(J, C, h);
 
   float3 result = renodx::color::bt709::from::dtucs::JCH(final_jch);
-  return renodx::color::bt709::clamp::AP1(result);
+  return result;
 }
 
-float3 Chrominance(float3 incorrect_color, float3 correct_color, float strength = 1.f, uint method = 0u) {
-  if (method == 1u) return ChrominanceICtCp(incorrect_color, correct_color, strength);
-  if (method == 2u) return ChrominancedtUCS(incorrect_color, correct_color, strength);
-  return ChrominanceOKLab(incorrect_color, correct_color, strength);
+float3 Chrominance(float3 incorrect_color, float3 correct_color, float strength = 1.f, float clamp_chrominance_loss = 0.f, uint method = 0u) {
+  if (method == 1u) return ChrominanceICtCp(incorrect_color, correct_color, strength, clamp_chrominance_loss);
+  if (method == 2u) return ChrominancedtUCS(incorrect_color, correct_color, strength, clamp_chrominance_loss);
+  return ChrominanceOKLab(incorrect_color, correct_color, strength, clamp_chrominance_loss);
 }
 
 float3 HueOKLab(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
@@ -215,17 +239,7 @@ float3 ToneMapMaxCLLSafe(float3 color_linear) {
   return color_linear;
 }
 
-float3 ExponentialRollOffByLog(float3 color, float highlights_shoulder_start = 0.f) {
-  float3 colorSign = sign(color);
-
-  color = abs(color);
-  color = exp2(renodx::tonemap::ExponentialRollOff(log2(color * RENODX_DIFFUSE_WHITE_NITS), log2(RENODX_PEAK_WHITE_NITS * highlights_shoulder_start), log2(RENODX_PEAK_WHITE_NITS))) / RENODX_DIFFUSE_WHITE_NITS;
-  color *= colorSign;
-
-  return color;
-}
-
-float3 ExponentialRollOffByLum(float3 color, float output_luminance_max, float highlights_shoulder_start = 0.f) {
+float3 ExponentialRollOffByLum(float3 color, float output_luminance_max, float highlights_shoulder_start = 1.f) {
   const float source_luminance = renodx::color::y::from::BT709(color);
 
   [branch]
@@ -242,11 +256,8 @@ float3 applyExponentialRollOff(float3 color) {
 
   const float peakWhite = RENODX_PEAK_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
 
-  // const float highlightsShoulderStart = paperWhite;
   const float highlightsShoulderStart = 1.f;
 
-  // return renodx::tonemap::dice::BT709(color.rgb * paperWhite, peakWhite, highlightsShoulderStart) / paperWhite;
-  // return ExponentialRollOffByLog(color, highlightsShoulderStart);
   return ExponentialRollOffByLum(color * paperWhite, peakWhite, highlightsShoulderStart) / paperWhite;
 }
 
@@ -290,13 +301,6 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
     if (config.hue_correction_strength != 0.f) {
       float3 perceptual_old = renodx::color::oklab::from::BT709(hue_reference_color);
 
-      // ShortFuse's previous values
-      // float renoDRTHighlights = 1.20f;
-      // float renoDRTShadows = 1.0f;
-      // float renoDRTContrast = 1.80f;
-      // float renoDRTSaturation = 1.40f;
-      // float renoDRTDechroma = 0.60f;
-      // float renoDRTFlare = 0.f;
       // Save chrominance to apply black
       float chrominance_pre_adjust = distance(perceptual_new.yz, 0);
 
@@ -333,17 +337,54 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
   return color;
 }
 
-float3 ApplyACES(float3 untonemapped_ap1) {
-  renodx::color::grade::Config cg_config = renodx::color::grade::config::Create();
-  cg_config.exposure = RENODX_TONE_MAP_EXPOSURE;
-  cg_config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
-  cg_config.shadows = RENODX_TONE_MAP_SHADOWS;
-  cg_config.contrast = RENODX_TONE_MAP_CONTRAST;
-  cg_config.flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
-  cg_config.saturation = RENODX_TONE_MAP_SATURATION;
-  // cg_config.dechroma = RENODX_TONE_MAP_BLOWOUT;
-  cg_config.hue_correction_strength = 1.f;
+float3 ApplyACESByLum(float3 untonemapped_ap1, renodx::color::grade::Config cg_config, bool apply_grading = true) {
+  float untonemapped_lum = renodx::color::y::from::AP1(untonemapped_ap1);
+  untonemapped_ap1 = local::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1));
 
+  const float ACES_MIN = 0.0001f;
+  float aces_min = ACES_MIN / RENODX_DIFFUSE_WHITE_NITS;
+  float aces_max = (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+
+  if (RENODX_GAMMA_CORRECTION) {
+    aces_max = renodx::color::correct::Gamma(aces_max, true);
+    aces_min = renodx::color::correct::Gamma(aces_min, true);
+  }
+
+  float3 graded_ap1 = untonemapped_ap1;
+  if (apply_grading) {
+    graded_ap1 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped_ap1, untonemapped_lum, cg_config);
+  }
+
+  // tonemap both by channel and luminance
+  graded_ap1 = max(0, graded_ap1);
+  untonemapped_lum = renodx::color::y::from::AP1(graded_ap1);
+  float4 dual_tonemapped_ap1 = local::tonemap::aces::ODT(float4(graded_ap1, untonemapped_lum), aces_min * 48.f, aces_max * 48.f, renodx::color::IDENTITY_MAT) / 48.f;
+
+  float3 channel_tonemapped_ap1 = dual_tonemapped_ap1.rgb;
+  float3 luminance_tonemapped_ap1 = graded_ap1 * (dual_tonemapped_ap1.a / untonemapped_lum);
+
+  // correct luminance tonemap saturation
+  luminance_tonemapped_ap1 = renodx::color::ap1::from::BT709(
+      Chrominance(
+          renodx::color::bt709::from::AP1(luminance_tonemapped_ap1),
+          renodx::color::bt709::from::AP1(channel_tonemapped_ap1),
+          1.f,   // strength
+          0.f,   // clamp chrominance loss
+          1u));  // hue processor
+
+  // blend luminance and channel
+  float lum = renodx::color::y::from::AP1(luminance_tonemapped_ap1);
+  float3 tonemapped_ap1 = lerp(luminance_tonemapped_ap1, channel_tonemapped_ap1, saturate(lum / 1.f));
+  float3 tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1.rgb);
+
+  if (apply_grading) {
+    tonemapped_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(tonemapped_bt709, renodx::color::bt709::from::AP1(untonemapped_ap1), untonemapped_lum, cg_config);
+  }
+
+  return tonemapped_bt709;
+}
+
+float3 ApplyACES(float3 untonemapped_ap1, renodx::color::grade::Config cg_config) {
   untonemapped_ap1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1));
   float untonemapped_lum = renodx::color::y::from::AP1(untonemapped_ap1);
   cg_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
@@ -351,7 +392,7 @@ float3 ApplyACES(float3 untonemapped_ap1) {
   const float ACES_MIN = 0.0001f;
   const float ACES_EXPOSURE = 48.f;
   float aces_min = ACES_MIN / RENODX_DIFFUSE_WHITE_NITS;
-  float aces_max = (10000.f / RENODX_DIFFUSE_WHITE_NITS);
+  float aces_max = (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
 
   if (RENODX_GAMMA_CORRECTION != 0.f) {
     aces_max = renodx::color::correct::Gamma(aces_max, true);
@@ -361,7 +402,6 @@ float3 ApplyACES(float3 untonemapped_ap1) {
   untonemapped_ap1 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped_ap1, untonemapped_lum, cg_config);
   float3 tonemapped_ap1 = renodx::tonemap::aces::ODT(untonemapped_ap1, aces_min * ACES_EXPOSURE, aces_max * ACES_EXPOSURE, renodx::color::IDENTITY_MAT) / 48.f;
   float3 tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
-  // tonemapped_bt709 = renodx::draw::UpgradeToneMapByLuminance(tonemapped_bt709, ToneMapMaxCLLSafe(tonemapped_bt709), graded_bt709, 1.f);
   tonemapped_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(tonemapped_bt709, renodx::color::bt709::from::AP1(untonemapped_ap1), untonemapped_lum, cg_config);
 
   return tonemapped_bt709;
@@ -382,18 +422,10 @@ float3 Tonemap(float3 untonemapped_bt709) {
   grading_config.saturation = RENODX_TONE_MAP_SATURATION;
   grading_config.dechroma = RENODX_TONE_MAP_BLOWOUT;
   grading_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
+  grading_config.hue_correction_strength = 0.f;
 
-  /* renodx::draw::Config config = renodx::draw::BuildConfig();
-  config.peak_white_nits = 10000.f;
-  config.tone_map_type = 3.f;
-  config.tone_map_hue_shift = 0.f;
-
-  color = renodx::draw::ToneMapPass(RENODX_UE_CONFIG.untonemapped_bt709, color, ToneMapMaxCLLSafe(RENODX_UE_CONFIG.untonemapped_bt709), config);
-  color = Hue(color, RENODX_UE_CONFIG.graded_bt709, 1.f, 1u); */
   float3 untonemapped_ap1 = renodx::color::ap1::from::BT709(color);
-  color = ApplyACES(untonemapped_ap1);
-  color = applyExponentialRollOff(color);
-  color = renodx::color::grade::config::ApplyUserColorGrading(color, grading_config);
+  color = ApplyACESByLum(untonemapped_ap1, grading_config);
   color = GammaCorrectHuePreserving(color);
   color = renodx::color::bt2020::from::BT709(color);
 

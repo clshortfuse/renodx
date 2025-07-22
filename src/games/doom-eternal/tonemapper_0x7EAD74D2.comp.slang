@@ -2,7 +2,7 @@
 // ACES ToneMap
 #version 450
 
-#include "./common.slangi"
+#include "./common.slang"
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
 
@@ -600,8 +600,8 @@ void main() {
   vec3 _1577 = vec3(_1543) / vec3(_1427._m30 - 1.0);
   vec3 _1585 = _1577;
   _1577 = _128(_1585);
-  float3 untonemapped = _1577 * 3.f;  // Match SDR
-  _1577 *= _1427._m31;  // brightness
+  float3 untonemapped = _1577 * 3.5f;  // Match SDR
+  _1577 *= _1427._m31;                 // brightness
   vec3 _1594 = _1577;
   float _1596 = _1533;
   float _1598 = _1537;
