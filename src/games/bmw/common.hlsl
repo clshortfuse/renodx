@@ -160,7 +160,7 @@ float4 FinalizeUEOutput(float4 scene, float4 ui) {
   // blend in srgb based on opacity
   ui.rgb = renodx::color::srgb::EncodeSafe(ui.rgb);
   scene.rgb = renodx::color::srgb::EncodeSafe(scene.rgb);
-  scene.rgb = lerp(scene.rgb, ui.rgb, saturate(ui.a));
+  scene.rgb = ui.rgb + scene.rgb * (1.0 - ui.a);
 
   scene.rgb = renodx::color::srgb::DecodeSafe(scene.rgb);
 
