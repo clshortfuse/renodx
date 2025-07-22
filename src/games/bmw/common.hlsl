@@ -144,27 +144,30 @@ float3 ToneMap(float3 bt709) {
   return output_color;
 }
 
-float4 FinalizeUEOutput(float4 scene, float4 ui, bool is_hdr10 = true, bool only_correct_ui = false) {
-  scene.rgb = renodx::color::pq::Decode(scene.rgb, injectedData.toneMapGameNits);
+float4 FinalizeUEOutput(float4 scene, float4 ui) {
+  ui.rgb = renodx::color::srgb::DecodeSafe(ui.rgb);
 
-  ui.rgb = renodx::color::srgb::Decode(ui.rgb);
-  ui.rgb = renodx::color::bt2020::from::BT709(ui.rgb);
-  if (only_correct_ui && injectedData.toneMapGammaCorrection == 1.f) {
+  [branch]
+  if (injectedData.toneMapGammaCorrection == 1.f) {
     ui.rgb = CorrectGamma(ui.rgb);
   }
-  ui.rgb = ui.rgb * injectedData.toneMapUINits / injectedData.toneMapGameNits;
 
-  if (is_hdr10) {
-    scene.rgb = lerp(scene.rgb, ui.rgb, ui.a);
-    if (!only_correct_ui && injectedData.toneMapGammaCorrection == 1.f) {
-      scene.rgb = CorrectGamma(scene.rgb);
-    }
-    scene.rgb = renodx::color::pq::Encode(scene.rgb, injectedData.toneMapGameNits);
+  ui.rgb *= injectedData.toneMapUINits / injectedData.toneMapGameNits;
 
-    return float4(scene.rgb, ui.a);
-  } else {
-    return scene;
-  }
+  scene.rgb = renodx::color::pq::DecodeSafe(scene.rgb, injectedData.toneMapGameNits);
+  scene.rgb = renodx::color::bt709::from::BT2020(scene.rgb);
+
+  // blend in srgb based on opacity
+  ui.rgb = renodx::color::srgb::EncodeSafe(ui.rgb);
+  scene.rgb = renodx::color::srgb::EncodeSafe(scene.rgb);
+  scene.rgb = lerp(scene.rgb, ui.rgb, saturate(ui.a));
+
+  scene.rgb = renodx::color::srgb::DecodeSafe(scene.rgb);
+
+  scene.rgb = renodx::color::bt2020::from::BT709(scene.rgb);
+  scene.rgb = renodx::color::pq::EncodeSafe(scene.rgb, injectedData.toneMapGameNits);
+
+  return float4(scene.rgb, ui.a);
 }
 
 float3 FinalizeTonemap(float3 color, bool is_hdr10 = true) {
