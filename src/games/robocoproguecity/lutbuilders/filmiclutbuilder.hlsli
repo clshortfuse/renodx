@@ -204,17 +204,20 @@ float3 ApplyPostToneMapDesaturation(float3 tonemapped) {
 }
 
 float3 ApplyUnrealFilmicToneMap(float3 untonemapped) {
+  float film_black_clip = FilmBlackClip;
+  float film_white_clip = FilmWhiteClip;
+
   float _1007 = log2(untonemapped.r) * 0.3010300099849701f;
   float _1008 = log2(untonemapped.g) * 0.3010300099849701f;
   float _1009 = log2(untonemapped.b) * 0.3010300099849701f;
-  float _976 = (FilmBlackClip + 1.0f) - FilmToe;
-  float _978 = FilmWhiteClip + 1.0f;
+  float _976 = (film_black_clip + 1.0f) - FilmToe;
+  float _978 = film_white_clip + 1.0f;
   float _980 = _978 - FilmShoulder;
   float _998;
   if (FilmToe > 0.800000011920929f) {
     _998 = (((0.8199999928474426f - FilmToe) / FilmSlope) + -0.7447274923324585f);
   } else {
-    float _989 = (FilmBlackClip + 0.18000000715255737f) / _976;
+    float _989 = (film_black_clip + 0.18000000715255737f) / _976;
     _998 = (-0.7447274923324585f - ((log2(_989 / (2.0f - _989)) * 0.3465735912322998f) * (_976 / FilmSlope)));
   }
   float _1001 = ((1.0f - FilmToe) / FilmSlope) - _998;
@@ -229,9 +232,9 @@ float3 ApplyUnrealFilmicToneMap(float3 untonemapped) {
   float _1021 = _1009 - _998;
   float _1040 = _980 * 2.0f;
   float _1042 = (FilmSlope * 2.0f) / _980;
-  float _1067 = select((_1007 < _998), ((_1016 / (exp2((_1019 * 1.4426950216293335f) * _1018) + 1.0f)) - FilmBlackClip), _1013);
-  float _1068 = select((_1008 < _998), ((_1016 / (exp2((_1020 * 1.4426950216293335f) * _1018) + 1.0f)) - FilmBlackClip), _1014);
-  float _1069 = select((_1009 < _998), ((_1016 / (exp2((_1021 * 1.4426950216293335f) * _1018) + 1.0f)) - FilmBlackClip), _1015);
+  float _1067 = select((_1007 < _998), ((_1016 / (exp2((_1019 * 1.4426950216293335f) * _1018) + 1.0f)) - film_black_clip), _1013);
+  float _1068 = select((_1008 < _998), ((_1016 / (exp2((_1020 * 1.4426950216293335f) * _1018) + 1.0f)) - film_black_clip), _1014);
+  float _1069 = select((_1009 < _998), ((_1016 / (exp2((_1021 * 1.4426950216293335f) * _1018) + 1.0f)) - film_black_clip), _1015);
   float _1076 = _1003 - _998;
   float _1080 = saturate(_1019 / _1076);
   float _1081 = saturate(_1020 / _1076);
@@ -321,4 +324,38 @@ bool GenerateOutput(float r, float g, float b, inout float4 SV_Target) {
 
   SV_Target = float4(encoded_color, 0.f);
   return true;
+}
+
+float3 ToneMapForLUT(inout float r, inout float g, inout float b) {
+  float3 tonemapped = float3(r, g, b);
+  if (RENODX_TONE_MAP_TYPE != 4.f) {
+    tonemapped = ToneMapMaxCLL(tonemapped);
+  }
+  r = saturate(tonemapped.r), g = saturate(tonemapped.g), b = saturate(tonemapped.b);
+  return tonemapped;
+}
+
+float3 RestoreSaturationLoss(float3 color_input, float3 clamped, float3 color_output) {
+  float3 perceptual_in = renodx::color::oklab::from::BT709(color_input);
+  float3 perceptual_clamped = renodx::color::oklab::from::BT709(clamped);
+  float3 perceptual_out = renodx::color::oklab::from::BT709(color_output);
+
+  float chroma_in = distance(perceptual_in.yz, 0);
+  float chroma_clamped = distance(perceptual_clamped.yz, 0);
+  float chroma_out = distance(perceptual_out.yz, 0);
+  float chroma_loss = renodx::math::DivideSafe(chroma_in, chroma_clamped, 0.f);
+  float chroma_new = chroma_out * chroma_loss;
+
+  perceptual_out.yz *= lerp(1.f, renodx::math::DivideSafe(chroma_new, chroma_out, 1.f), 1.f);
+
+  return renodx::color::bt709::from::OkLab(perceptual_out);
+}
+
+void LUTUpgradeToneMap(float3 untonemapped, float3 displaymapped_unclamped_gamut, float3 displaymapped_clamped_gamut, inout float r, inout float g, inout float b) {
+  if (RENODX_TONE_MAP_TYPE != 4.f) {
+    float3 upgraded = renodx::tonemap::UpgradeToneMap(untonemapped, displaymapped_unclamped_gamut, float3(r, g, b), 1.f);
+    // upgraded = RestoreSaturationLoss(displaymapped_unclamped_gamut, displaymapped_clamped_gamut, upgraded);
+
+    r = upgraded.r, g = upgraded.g, b = upgraded.b;
+  }
 }
