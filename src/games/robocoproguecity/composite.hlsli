@@ -14,11 +14,15 @@ bool HandleUICompositing(float4 ui_color_linear, float4 scene_color_pq, inout fl
 
   // linearize scene, normalize brightness, convert to BT.709
   float3 scene_color_linear = renodx::color::pq::DecodeSafe(scene_color_pq.rgb, RENODX_DIFFUSE_WHITE_NITS);
+#if 1
   if (RENODX_TONE_MAP_TYPE == 2.f || RENODX_TONE_MAP_TYPE == 3.f) {
     float peak_clamp = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
     if (RENODX_GAMMA_CORRECTION) peak_clamp = renodx::color::correct::Gamma(peak_clamp, true);
     scene_color_linear = min(peak_clamp, scene_color_linear);
+  } else if (RENODX_TONE_MAP_TYPE == 4.f) {
+    scene_color_linear = saturate(scene_color_linear);
   }
+#endif
   scene_color_linear = renodx::color::bt709::from::BT2020(scene_color_linear);
 
   float3 ui_color_gamma = renodx::color::gamma::EncodeSafe(ui_color_linear.rgb);
