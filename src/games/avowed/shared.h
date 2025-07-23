@@ -21,6 +21,7 @@ struct ShaderInjectData {
   float color_grade_hue_correction;
   float color_grade_saturation_correction;
   float color_grade_blowout_restoration;
+  float custom_tone_map_curve;
 };
 
 #ifndef __cplusplus
@@ -56,6 +57,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_GRAIN_STRENGTH                    1.f
 #define CUSTOM_RANDOM                            0.f
 #define CUSTOM_LOCAL_EXPOSURE                    1.f
+#define CUSTOM_TONE_MAP_CURVE                    shader_injection.custom_tone_map_curve
 
 #include "../../shaders/renodx.hlsl"
 

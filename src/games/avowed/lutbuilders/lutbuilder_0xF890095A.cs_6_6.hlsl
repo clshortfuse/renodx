@@ -293,18 +293,18 @@ void main(
   float _796 = (((_775 * _775) * (select((_695 > _690), (_665 - (_727 / (exp2(((_695 - _690) * 1.4426950216293335f) * _729) + 1.0f))), _701) - _755)) * (3.0f - (_775 * 2.0f))) + _755;
   float _797 = (((_776 * _776) * (select((_696 > _690), (_665 - (_727 / (exp2(((_696 - _690) * 1.4426950216293335f) * _729) + 1.0f))), _702) - _756)) * (3.0f - (_776 * 2.0f))) + _756;
   float _798 = dot(float3(_795, _796, _797), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
-  float _818 = (ToneCurveAmount * (max(0.0f, (lerp(_798, _795, 0.9300000071525574f))) - _514)) + _514;
-  float _819 = (ToneCurveAmount * (max(0.0f, (lerp(_798, _796, 0.9300000071525574f))) - _515)) + _515;
-  float _820 = (ToneCurveAmount * (max(0.0f, (lerp(_798, _797, 0.9300000071525574f))) - _516)) + _516;
+  float tonemapCurveAmount = ToneCurveAmount;
+  if (RENODX_TONE_MAP_TYPE) {
+    tonemapCurveAmount = tonemapCurveAmount - CUSTOM_TONE_MAP_CURVE;
+  }
+  float _818 = (tonemapCurveAmount * (max(0.0f, (lerp(_798, _795, 0.9300000071525574f))) - _514)) + _514;
+  float _819 = (tonemapCurveAmount * (max(0.0f, (lerp(_798, _796, 0.9300000071525574f))) - _515)) + _515;
+  float _820 = (tonemapCurveAmount * (max(0.0f, (lerp(_798, _797, 0.9300000071525574f))) - _516)) + _516;
   float _836 = ((mad(-0.06537103652954102f, _820, mad(1.451815478503704e-06f, _819, (_818 * 1.065374732017517f))) - _818) * BlueCorrection) + _818;
   float _837 = ((mad(-0.20366770029067993f, _820, mad(1.2036634683609009f, _819, (_818 * -2.57161445915699e-07f))) - _819) * BlueCorrection) + _819;
   float _838 = ((mad(0.9999996423721313f, _820, mad(2.0954757928848267e-08f, _819, (_818 * 1.862645149230957e-08f))) - _820) * BlueCorrection) + _820;
 
-
-
   SetTonemappedAP1(_836, _837, _838);
-
-
 
   float _860 = max(0.0f, mad((WorkingColorSpace_FromAP1[0].z), _838, mad((WorkingColorSpace_FromAP1[0].y), _837, ((WorkingColorSpace_FromAP1[0].x) * _836))));
   float _861 = max(0.0f, mad((WorkingColorSpace_FromAP1[1].z), _838, mad((WorkingColorSpace_FromAP1[1].y), _837, ((WorkingColorSpace_FromAP1[1].x) * _836))));

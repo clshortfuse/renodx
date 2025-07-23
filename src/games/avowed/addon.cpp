@@ -41,6 +41,16 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
                                                                                         }),
                                                                                         {
                                                                                             new renodx::utils::settings::Setting{
+                                                                                                .key = "FxToneMapCurve",
+                                                                                                .binding = &shader_injection.custom_tone_map_curve,
+                                                                                                .default_value = 100.f,
+                                                                                                .label = "SDR Tonemap Curve",
+                                                                                                .section = "Color Grading",
+                                                                                                .max = 100.f,
+                                                                                                .parse = [](float value) { return (100.0f - value) * 0.001f; },
+                                                                                                .is_visible = []() { return settings[0]->GetValue() >= 2.f; },
+                                                                                            },
+                                                                                            new renodx::utils::settings::Setting{
                                                                                                 .value_type = renodx::utils::settings::SettingValueType::BUTTON,
                                                                                                 .label = "HDR Den Discord",
                                                                                                 .section = "Links",
