@@ -2660,7 +2660,10 @@ void RenderShadersPane(reshade::api::device* device, DeviceData* data) {
         ImGui::SameLine();
 
         if (ImGui::Button("Dump", {text_size, 0})) {
-          renodx::utils::shader::dump::DumpShader(shader_details->shader_hash, shader_details->shader_data);
+          renodx::utils::shader::dump::DumpShader(
+              shader_details->shader_hash,
+              shader_details->shader_data,
+              shader_details->shader_type);
         }
 
         ImGui::BeginDisabled(!shader_details->disk_shader.has_value());

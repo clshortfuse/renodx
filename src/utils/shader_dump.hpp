@@ -132,19 +132,17 @@ static void OnInitPipeline(
 
     if (shaders_dumped.contains(shader_hash)) continue;
     if (shaders_pending.contains(shader_hash)) continue;
-    auto shader_data = renodx::utils::shader::GetShaderData(*details, info);
-    if (!shader_data.has_value()) {
-      std::stringstream s;
-      s << "utils::shader::dump(Failed to retreive shader data: ";
-      s << PRINT_CRC32(shader_hash);
-      s << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
-      continue;
-    }
+    const auto& subobject = subobjects[info.index];
+    const reshade::api::shader_desc desc = *static_cast<const reshade::api::shader_desc*>(subobject.data);
+    if (desc.code_size == 0) continue;
+    auto shader_data = std::vector<uint8_t>({
+        static_cast<const uint8_t*>(desc.code),
+        static_cast<const uint8_t*>(desc.code) + desc.code_size,
+    });
 
     if (device::IsDirectX(device)) {
       try {
-        auto shader_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data.value());
+        auto shader_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data);
         if (shader_version.GetMajor() == 0) {
           // No shader information found
           continue;
@@ -163,12 +161,12 @@ static void OnInitPipeline(
     std::stringstream s;
     s << "utils::shader::dump(storing: ";
     s << PRINT_CRC32(shader_hash);
-    s << ", size: " << shader_data->size();
+    s << ", size: " << shader_data.size();
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 
     shaders_pending[shader_hash] = {
-        .data = shader_data.value(),
+        .data = shader_data,
         .type = details->subobjects[info.index].type,
     };
   }
@@ -298,6 +296,29 @@ static bool DumpShader(
     renodx::utils::path::WriteBinaryFile(dump_path, shader_data.subspan(0, shader_data.size() - 1));
   }
   return true;
+}
+
+static bool DumpShader(
+    uint32_t shader_hash,
+    std::span<uint8_t> shader_data,
+    reshade::api::pipeline_stage shader_stage = static_cast<reshade::api::pipeline_stage>(0u),
+    const std::string& prefix = "") {
+  auto shader_type =
+      reshade::api::pipeline_subobject_type::unknown;
+  switch (shader_stage) {
+    case reshade::api::pipeline_stage::pixel_shader:
+      shader_type = reshade::api::pipeline_subobject_type::pixel_shader;
+      break;
+    case reshade::api::pipeline_stage::vertex_shader:
+      shader_type = reshade::api::pipeline_subobject_type::vertex_shader;
+      break;
+    case reshade::api::pipeline_stage::compute_shader:
+      shader_type = reshade::api::pipeline_subobject_type::compute_shader;
+      break;
+    default:
+      break;
+  }
+  return DumpShader(shader_hash, shader_data, shader_type, prefix);
 }
 
 static void DumpAllPending() {
