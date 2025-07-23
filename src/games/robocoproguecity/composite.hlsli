@@ -14,7 +14,7 @@ bool HandleUICompositing(float4 ui_color_linear, float4 scene_color_pq, inout fl
 
   // linearize scene, normalize brightness, convert to BT.709
   float3 scene_color_linear = renodx::color::pq::DecodeSafe(scene_color_pq.rgb, RENODX_DIFFUSE_WHITE_NITS);
-#if 1
+#if 0
   if (RENODX_TONE_MAP_TYPE == 2.f || RENODX_TONE_MAP_TYPE == 3.f) {
     float peak_clamp = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
     if (RENODX_GAMMA_CORRECTION) peak_clamp = renodx::color::correct::Gamma(peak_clamp, true);

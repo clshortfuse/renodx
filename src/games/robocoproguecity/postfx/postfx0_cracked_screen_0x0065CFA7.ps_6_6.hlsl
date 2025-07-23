@@ -620,15 +620,19 @@ float4 main(
   float _33 = (SV_Position.x - float((uint)(int)(PostProcessOutput_ViewportMin.x))) * PostProcessOutput_ViewportSizeInverse.x;
   float _34 = (SV_Position.y - float((uint)(int)(PostProcessOutput_ViewportMin.y))) * PostProcessOutput_ViewportSizeInverse.y;
   // float4 _47 = PostProcessInput_0_Texture.Sample(PostProcessInput_0_Sampler, float2(((_33 * PostProcessInput_0_UVViewportSize.x) + PostProcessInput_0_UVViewportMin.x), ((_34 * PostProcessInput_0_UVViewportSize.y) + PostProcessInput_0_UVViewportMin.y)));
-  float4 _47 = SampleAndConvertToSRGBWithToneMap(unclamped_linear_sample1, tonemapped_linear_sample1, PostProcessInput_0_Texture, PostProcessInput_0_Sampler, float2(((_33 * PostProcessInput_0_UVViewportSize.x) + PostProcessInput_0_UVViewportMin.x), ((_34 * PostProcessInput_0_UVViewportSize.y) + PostProcessInput_0_UVViewportMin.y)));
+  // float4 _47 = SampleAndConvertToSRGBWithToneMap(unclamped_linear_sample1, tonemapped_linear_sample1, PostProcessInput_0_Texture, PostProcessInput_0_Sampler, float2(((_33 * PostProcessInput_0_UVViewportSize.x) + PostProcessInput_0_UVViewportMin.x), ((_34 * PostProcessInput_0_UVViewportSize.y) + PostProcessInput_0_UVViewportMin.y)));
+  float4 _47 = SampleAndConvertToSRGB(PostProcessInput_0_Texture, PostProcessInput_0_Sampler, float2(((_33 * PostProcessInput_0_UVViewportSize.x) + PostProcessInput_0_UVViewportMin.x), ((_34 * PostProcessInput_0_UVViewportSize.y) + PostProcessInput_0_UVViewportMin.y)));
   float _56 = min(View_ViewSizeAndInvSize.x, View_ViewSizeAndInvSize.y);
   float _61 = ((_33 + -0.5f) * (View_ViewSizeAndInvSize.x / _56)) + 0.5f;
   float _62 = ((_34 + -0.5f) * (View_ViewSizeAndInvSize.y / _56)) + 0.5f;
   float _66 = (_61 + (Material_PreshaderBuffer[1].x)) * 0.5f;
   float _68 = (Material_PreshaderBuffer[1].y) + _62;
   float4 _71 = Material_Texture2D_0.Sample(Material_Texture2D_0Sampler, float2(_66, _68));
+  _71 = ConditionalConvertSRGBToBT2020(_71);
+
   // float4 _110 = PostProcessInput_0_Texture.Sample(PostProcessInput_0_Sampler, float2(min(max(((((((((_71.x * 2.0f) + -1.0f) * (Material_PreshaderBuffer[1].z)) + (Material_PreshaderBuffer[1].w)) * 0.5f) + _33) * PostProcessInput_0_UVViewportSize.x) + PostProcessInput_0_UVViewportMin.x), PostProcessInput_0_UVViewportBilinearMin.x), PostProcessInput_0_UVViewportBilinearMax.x), min(max(((((((((_71.y * 2.0f) + -1.0f) * (Material_PreshaderBuffer[1].z)) + (Material_PreshaderBuffer[1].w)) * 0.5f) + _34) * PostProcessInput_0_UVViewportSize.y) + PostProcessInput_0_UVViewportMin.y), PostProcessInput_0_UVViewportBilinearMin.y), PostProcessInput_0_UVViewportBilinearMax.y)));
-  float4 _110 = SampleAndConvertToSRGBWithToneMap(unclamped_linear_sample1, tonemapped_linear_sample1, PostProcessInput_0_Texture, PostProcessInput_0_Sampler, float2(min(max(((((((((_71.x * 2.0f) + -1.0f) * (Material_PreshaderBuffer[1].z)) + (Material_PreshaderBuffer[1].w)) * 0.5f) + _33) * PostProcessInput_0_UVViewportSize.x) + PostProcessInput_0_UVViewportMin.x), PostProcessInput_0_UVViewportBilinearMin.x), PostProcessInput_0_UVViewportBilinearMax.x), min(max(((((((((_71.y * 2.0f) + -1.0f) * (Material_PreshaderBuffer[1].z)) + (Material_PreshaderBuffer[1].w)) * 0.5f) + _34) * PostProcessInput_0_UVViewportSize.y) + PostProcessInput_0_UVViewportMin.y), PostProcessInput_0_UVViewportBilinearMin.y), PostProcessInput_0_UVViewportBilinearMax.y)));
+  // float4 _110 = SampleAndConvertToSRGBWithToneMap(unclamped_linear_sample2, tonemapped_linear_sample2, PostProcessInput_0_Texture, PostProcessInput_0_Sampler, float2(min(max(((((((((_71.x * 2.0f) + -1.0f) * (Material_PreshaderBuffer[1].z)) + (Material_PreshaderBuffer[1].w)) * 0.5f) + _33) * PostProcessInput_0_UVViewportSize.x) + PostProcessInput_0_UVViewportMin.x), PostProcessInput_0_UVViewportBilinearMin.x), PostProcessInput_0_UVViewportBilinearMax.x), min(max(((((((((_71.y * 2.0f) + -1.0f) * (Material_PreshaderBuffer[1].z)) + (Material_PreshaderBuffer[1].w)) * 0.5f) + _34) * PostProcessInput_0_UVViewportSize.y) + PostProcessInput_0_UVViewportMin.y), PostProcessInput_0_UVViewportBilinearMin.y), PostProcessInput_0_UVViewportBilinearMax.y)));
+  float4 _110 = SampleAndConvertToSRGB(PostProcessInput_0_Texture, PostProcessInput_0_Sampler, float2(min(max(((((((((_71.x * 2.0f) + -1.0f) * (Material_PreshaderBuffer[1].z)) + (Material_PreshaderBuffer[1].w)) * 0.5f) + _33) * PostProcessInput_0_UVViewportSize.x) + PostProcessInput_0_UVViewportMin.x), PostProcessInput_0_UVViewportBilinearMin.x), PostProcessInput_0_UVViewportBilinearMax.x), min(max(((((((((_71.y * 2.0f) + -1.0f) * (Material_PreshaderBuffer[1].z)) + (Material_PreshaderBuffer[1].w)) * 0.5f) + _34) * PostProcessInput_0_UVViewportSize.y) + PostProcessInput_0_UVViewportMin.y), PostProcessInput_0_UVViewportBilinearMin.y), PostProcessInput_0_UVViewportBilinearMax.y)));
 
   float4 _116 = Material_Texture2D_1.Sample(Material_Texture2D_1Sampler, float2(_66, _68));  // cracked glass main
   _116 = ConditionalConvertSRGBToBT2020(_116);
@@ -669,7 +673,8 @@ float4 main(
   SV_Target.z = ((((Material_PreshaderBuffer[4].z) - _242) * (Material_PreshaderBuffer[3].w)) + _242);
 
   // SV_Target.rgb = max(0, SV_Target.rgb);
-  SV_Target.rgb = ConvertSRGBtoPQAndUpgradeToneMap(SV_Target.rgb, unclamped_linear_sample1, tonemapped_linear_sample1);
+  // SV_Target.rgb = ConvertSRGBtoPQAndUpgradeToneMap(SV_Target.rgb, unclamped_linear_sample2, tonemapped_linear_sample1);
+  SV_Target.rgb = ConvertSRGBtoPQ(SV_Target.rgb);
 
   // SV_Target.rgb = _122.rgb;
 
