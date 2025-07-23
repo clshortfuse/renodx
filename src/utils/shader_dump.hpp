@@ -189,7 +189,7 @@ static bool attached = false;
 
 static std::string default_dump_folder = "dump";
 
-static bool DumpShader(
+static std::filesystem::path GetShaderDumpPath(
     uint32_t shader_hash,
     std::span<uint8_t> shader_data,
     reshade::api::pipeline_subobject_type shader_type = reshade::api::pipeline_subobject_type::unknown,
@@ -213,8 +213,6 @@ static bool DumpShader(
     dump_path /= prefix;
     dump_path += hash_string;
   }
-
-  bool is_binary = true;
 
   switch (internal::device_api) {
     case reshade::api::device_api::d3d9:
@@ -259,8 +257,6 @@ static bool DumpShader(
       break;
     }
     case reshade::api::device_api::opengl:
-      is_binary = false;
-      [[fallthrough]];
     case reshade::api::device_api::vulkan:
       // Vulkan
       switch (shader_type) {
@@ -281,13 +277,16 @@ static bool DumpShader(
   }
 
   dump_path += internal::file_extension;
+  return dump_path;
+}
 
-  std::stringstream s;
-  s << "utils::shader::dump(Dumping: ";
-  s << PRINT_CRC32(shader_hash);
-  s << " => " << dump_path.string();
-  s << ")";
-  reshade::log::message(reshade::log::level::debug, s.str().c_str());
+static bool DumpShader(
+    uint32_t shader_hash,
+    std::span<uint8_t> shader_data,
+    reshade::api::pipeline_subobject_type shader_type = reshade::api::pipeline_subobject_type::unknown,
+    const std::string& prefix = "") {
+  auto dump_path = GetShaderDumpPath(shader_hash, shader_data, shader_type, prefix);
+  auto is_binary = internal::device_api != reshade::api::device_api::opengl;
 
   if (is_binary) {
     renodx::utils::path::WriteBinaryFile(dump_path, shader_data);
@@ -319,6 +318,30 @@ static bool DumpShader(
       break;
   }
   return DumpShader(shader_hash, shader_data, shader_type, prefix);
+}
+
+static std::filesystem::path GetShaderDumpPath(
+    uint32_t shader_hash,
+    std::span<uint8_t> shader_data,
+    reshade::api::pipeline_stage shader_stage = static_cast<reshade::api::pipeline_stage>(0u),
+    const std::string& prefix = "") {
+  auto shader_type =
+      reshade::api::pipeline_subobject_type::unknown;
+  switch (shader_stage) {
+    case reshade::api::pipeline_stage::pixel_shader:
+      shader_type = reshade::api::pipeline_subobject_type::pixel_shader;
+      break;
+    case reshade::api::pipeline_stage::vertex_shader:
+      shader_type = reshade::api::pipeline_subobject_type::vertex_shader;
+      break;
+    case reshade::api::pipeline_stage::compute_shader:
+      shader_type = reshade::api::pipeline_subobject_type::compute_shader;
+      break;
+    default:
+      break;
+  }
+
+  return GetShaderDumpPath(shader_hash, shader_data, shader_type, prefix);
 }
 
 static void DumpAllPending() {
