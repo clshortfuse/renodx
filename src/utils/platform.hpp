@@ -6,6 +6,9 @@
 #include <shellapi.h>
 #include <windows.h>
 #include <winver.h>
+#if WIN32
+#include <shlobj.h>
+#endif
 
 #include <algorithm>
 #include <filesystem>
@@ -261,6 +264,20 @@ static std::string GetFileVersion(const std::filesystem::path& path) {
   }
 
   return "";  // Invalid file signature
+}
+
+static void OpenExplorerToFile(const std::filesystem::path& file_path) {
+#if WIN32
+  PIDLIST_ABSOLUTE pidl = nullptr;
+  HRESULT hr = SHParseDisplayName(file_path.wstring().c_str(), nullptr, &pidl, 0, nullptr);
+  if (SUCCEEDED(hr) && (pidl != nullptr)) {
+    SHOpenFolderAndSelectItems(pidl, 0, nullptr, 0);
+    CoTaskMemFree(pidl);
+  }
+#else
+  std::string command = "xdg-open " + file_path.parent_path().string();
+  std::system(command.c_str());
+#endif
 }
 
 }  // namespace renodx::utils::platform
