@@ -1,7 +1,5 @@
 #include "./shared.h"
 
-// ME2
-
 // ---- Created with 3Dmigoto v1.3.16 on Wed Jul 23 11:24:29 2025
 
 cbuffer _Globals : register(b0) {
@@ -116,6 +114,7 @@ void main(
     r1.xyz = exp2(r1.xyz);
     r1.xyz = float3(1, 1, 1) + -r1.xyz;
   }
+
   r0.xyz = r0.xyz * r0.www + r1.xyz;
   r1.xyz = float3(0.993047416, 0.98082906, 0.980000436) * r0.xyz;
   r0.w = dot(r0.yzx, float3(0.333000004, 0.333000004, 0.333000004));
@@ -157,6 +156,7 @@ void main(
     r0.xyz = GammaColorScaleAndInverse.www * r0.xyz;
     r0.xyz = exp2(r0.xyz);
   }
+
   r1.xy = float2(-0.5, -0.5) + v0.zw;
   r1.xy = float2(0.832050323, 0.554700196) * r1.xy;
   r0.w = dot(r1.xy, r1.xy);

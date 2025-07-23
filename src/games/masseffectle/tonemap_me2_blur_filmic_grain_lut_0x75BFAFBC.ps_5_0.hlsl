@@ -1,6 +1,6 @@
 #include "./shared.h"
 
-// ---- Created with 3Dmigoto v1.3.16 on Wed Jul 23 11:30:49 2025
+// ---- Created with 3Dmigoto v1.3.16 on Wed Jul 23 15:11:48 2025
 
 cbuffer _Globals : register(b0) {
   float4 PackedParameters : packoffset(c0);
@@ -20,6 +20,8 @@ cbuffer _Globals : register(b0) {
   float StepWeightsOpaque[5] : packoffset(c24);
   float StepOffsetsTranslucent[5] : packoffset(c29);
   float StepWeightsTranslucent[5] : packoffset(c34);
+  float4 NoiseTextureOffset : packoffset(c39);
+  float FilmGrain_Scale : packoffset(c40);
 }
 
 cbuffer PSOffsetConstants : register(b2) {
@@ -36,6 +38,8 @@ SamplerState DOFBlurredFarSampler_s : register(s4);
 SamplerState BlurredImageSeperateBloomSampler_s : register(s5);
 SamplerState ColorGradingLUTSampler_s : register(s6);
 SamplerState VelocityBufferSampler_s : register(s7);
+SamplerState NoiseTextureSampler_s : register(s8);
+SamplerState smpFilmicLUTSampler_s : register(s9);
 Texture2D<float4> SceneDepthTexture : register(t0);
 Texture2D<float4> SceneColorTexture : register(t1);
 Texture2D<float4> DOFTexture : register(t2);
@@ -44,6 +48,8 @@ Texture2D<float4> DOFBlurredFar : register(t4);
 Texture2D<float4> BlurredImageSeperateBloom : register(t5);
 Texture2D<float4> ColorGradingLUT : register(t6);
 Texture2D<float4> VelocityBuffer : register(t7);
+Texture2D<float4> NoiseTexture : register(t8);
+Texture2D<float4> smpFilmicLUT : register(t9);
 
 // 3Dmigoto declarations
 #define cmp -
@@ -156,56 +162,49 @@ void main(
     r2.xyz = -r3.xyz + r2.xyz;
     r1.xyz = r0.zzz * r2.xyz + r3.xyz;
   }
-  // r1.xyz = float3(-1.70000005, -1.70000005, -1.70000005) * r1.zxy;
+
+  // r1.xyz = float3(-1.70000005, -1.70000005, -1.70000005) * r1.xyz;
   // r1.xyz = exp2(r1.xyz);
   // r1.xyz = float3(1, 1, 1) + -r1.xyz;
   r0.xyz = BlurredImageSeperateBloom.Sample(BlurredImageSeperateBloomSampler_s, r0.xy).xyz;
-  r0.xyz = BloomTintAndScreenBlendThreshold.zxy * r0.zxy;
-  r0.w = dot(r1.yzx, float3(0.298999995, 0.587000012, 0.114));
+  r0.xyz = BloomTintAndScreenBlendThreshold.xyz * r0.xyz;
+  r0.w = dot(r1.xyz, float3(0.298999995, 0.587000012, 0.114));
   r0.xyzw = float4(4, 4, 4, -3) * r0.xyzw;
   r0.w = exp2(r0.w);
   r0.w = saturate(BloomTintAndScreenBlendThreshold.w * r0.w) * CUSTOM_BLOOM;
 
-  float3 untonemapped = r0.yzx * r0.www + r1.xyz;
+  float3 untonemapped = r0.xyz * r0.www + r1.xyz;
 
   {
-    r1.xyz = float3(-1.70000005, -1.70000005, -1.70000005) * r1.zxy;
+    r1.xyz = float3(-1.70000005, -1.70000005, -1.70000005) * r1.xyz;
     r1.xyz = exp2(r1.xyz);
     r1.xyz = float3(1, 1, 1) + -r1.xyz;
   }
+
   r0.xyz = r0.xyz * r0.www + r1.xyz;
-  r1.xyz = float3(0.993047416, 0.98082906, 0.980000436) * r0.xyz;
-  r0.w = dot(r0.yzx, float3(0.333000004, 0.333000004, 0.333000004));
-  r0.w = cmp(1.10000002 < r0.w);
-  r1.w = r0.w ? 1.000000 : 0;
-  r2.x = dot(r1.yzx, float3(0.300000012, 0.589999974, 0.109999999));
-  r2.xyz = -r0.xyz * float3(0.993047416, 0.98082906, 0.980000436) + r2.xxx;
-  r1.xyz = r2.xyz * float3(0.5, 0.5, 0.5) + r1.xyz;
-  r0.w = r0.w ? 0 : 1;
-  r0.xyz = r0.www * r0.xyz;
-  r0.xyz = r1.www * r1.xyz + r0.xyz;
-  r0.w = dot(r0.yzx, float3(0.300000012, 0.589999974, 0.109999999));
-  r1.xyz = float3(0.400000006, 0.400000006, 0.400000006) * r0.xyz;
-  r1.xyz = r0.www * float3(0.600000024, 0.600000024, 0.600000024) + r1.xyz;
-  r1.xyz = r1.xyz * float3(1, 0.00658500008, 0.0199180003) + -r0.xyz;
-  r0.xyz = saturate(r1.xyz * float3(0.200000003, 0.200000003, 0.200000003) + r0.xyz);
-  r1.yzw = float3(15, 0.05859375, 0.9375) * r0.xyz;
-  r0.y = floor(r1.y);
-  r0.x = r0.x * 15 + -r0.y;
-  r1.x = r0.y * 0.0625 + r1.z;
-  r1.xyzw = float4(0.001953125, 0.03125, 0.064453125, 0.03125) + r1.xwxw;
-  r0.yzw = ColorGradingLUT.Sample(ColorGradingLUTSampler_s, r1.xy).xyz;
-  r1.xyz = ColorGradingLUT.Sample(ColorGradingLUTSampler_s, r1.zw).xyz;
-  r1.xyz = r1.xyz + -r0.yzw;
-  r0.xyz = r0.xxx * r1.xyz + r0.yzw;
+
+  r0.xyz = float3(0.0616082214, 0.0616082214, 0.0616082214) * r0.xyz;
+  r1.y = smpFilmicLUT.Sample(smpFilmicLUTSampler_s, r0.xx).x;
+  r1.z = smpFilmicLUT.Sample(smpFilmicLUTSampler_s, r0.yy).x;
+  r1.x = smpFilmicLUT.Sample(smpFilmicLUTSampler_s, r0.zz).x;
+  r1.xyz = saturate(r1.xyz);
+  r0.yzw = float3(15, 0.05859375, 0.9375) * r1.xyz;
+  r0.y = floor(r0.y);
+  r1.x = r1.x * 15 + -r0.y;
+  r0.x = r0.y * 0.0625 + r0.z;
+  r0.xyzw = float4(0.001953125, 0.03125, 0.064453125, 0.03125) + r0.xwxw;
+  r1.yzw = ColorGradingLUT.Sample(ColorGradingLUTSampler_s, r0.xy).xyz;
+  r0.xyz = ColorGradingLUT.Sample(ColorGradingLUTSampler_s, r0.zw).xyz;
+  r0.xyz = r0.xyz + -r1.yzw;
+  r0.xyz = r1.xxx * r0.xyz + r1.yzw;
   r0.xyz = GammaOverlayColor.xyz + r0.xyz;
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     r0.xyz = (GammaColorScaleAndInverse.xyz * r0.xyz);
     r0.xyz = renodx::math::SignPow(r0.xyz, GammaColorScaleAndInverse.w);
     r0.xyz = renodx::color::gamma::DecodeSafe(r0.xyz);
     float3 tonemapped = renodx::draw::ToneMapPass(untonemapped, r0.xyz);
-    tonemapped *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
-    r0.xyz = renodx::color::gamma::EncodeSafe(tonemapped, 2.2f);
+    r0.xyz = tonemapped;
+    // Scale and Encode later with film grain
   } else {
     r0.xyz = saturate(GammaColorScaleAndInverse.xyz * r0.xyz);
     r0.xyz = max(float3(9.99999975e-05, 9.99999975e-05, 9.99999975e-05), r0.xyz);
@@ -226,9 +225,25 @@ void main(
   r0.w = exp2(r0.w);
   r1.xyz = float3(0.0103630004, 5.75000013e-06, 0.163092494) + r0.www;
   r1.xyz = lerp(1.f, r1.xyz, CUSTOM_VIGNETTE);
-  r0.xyz = r1.xyz * r0.xyz;
-  if (RENODX_TONE_MAP_TYPE == 0.f) {
-    r0.xyz = min(float3(1, 1, 1), r0.xyz);
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    if (FilmGrain_Scale > 0 && CUSTOM_FILM_GRAIN > 0.f) {
+      r0.xyz = renodx::effects::ApplyFilmGrain(
+          r0.xyz,
+          v0.zw,
+          CUSTOM_RANDOM,
+          FilmGrain_Scale / 0.06 * CUSTOM_FILM_GRAIN * 0.03f,
+          1.f);
+    }
+    r0.xyz *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
+    r0.xyz = renodx::color::gamma::EncodeSafe(r0.rgb, 2.2f);
+    // vignette in gamma
+    r0.xyz = r0.xyz * r1.xyz;
+  } else {
+    r2.xy = v0.zw * NoiseTextureOffset.xy + NoiseTextureOffset.zw;
+    r0.w = NoiseTexture.Sample(NoiseTextureSampler_s, r2.xy).x;
+    r0.w = -0.5 + r0.w;
+    r0.w = FilmGrain_Scale * r0.w;
+    r0.xyz = saturate(r0.xyz * r1.xyz + r0.www);
   }
   r0.w = dot(r0.xyz, float3(0.212670997, 0.715160012, 0.0721689984));
   r0.w = r0.w * 15 + 1;

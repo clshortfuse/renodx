@@ -1,7 +1,5 @@
 #include "./shared.h"
 
-// ME2
-
 // ---- Created with 3Dmigoto v1.3.16 on Wed Jul 23 11:34:52 2025
 
 cbuffer _Globals : register(b0) {

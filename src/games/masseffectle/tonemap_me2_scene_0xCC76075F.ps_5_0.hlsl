@@ -142,6 +142,7 @@ void main(
     r0.xyz = (GammaColorScaleAndInverse.xyz * r0.xyz);
     r0.xyz = renodx::math::SignPow(r0.xyz, GammaColorScaleAndInverse.w);
     r0.xyz = float3(1.01036298, 1.00000572, 1.16309249) * r0.xyz;
+    r0.w = dot(r0.xyz, float3(0.212670997, 0.715160012, 0.0721689984));
     r0.xyz = renodx::color::gamma::DecodeSafe(r0.xyz, 2.2f);
     float3 tonemapped = renodx::draw::ToneMapPass(untonemapped, r0.xyz);
     tonemapped *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
@@ -153,9 +154,9 @@ void main(
     r0.xyz = exp2(r0.xyz);
     r0.xyz = float3(1.01036298, 1.00000572, 1.16309249) * r0.xyz;
     r0.xyz = min(float3(1, 1, 1), r0.xyz);
+    r0.w = dot(r0.xyz, float3(0.212670997, 0.715160012, 0.0721689984));
   }
 
-  r0.w = dot(r0.xyz, float3(0.212670997, 0.715160012, 0.0721689984));
   r0.w = r0.w * 15 + 1;
   r0.w = log2(r0.w);
   o1.x = 0.25 * r0.w;
