@@ -205,6 +205,11 @@ float3 ApplyPostToneMapDesaturation(float3 tonemapped) {
 
 float3 ApplyUnrealFilmicToneMap(float3 untonemapped) {
   float film_black_clip = FilmBlackClip;
+  if (OVERRIDE_BLACK_CLIP && RENODX_TONE_MAP_TYPE == 3.f) {
+    float target_black_nits = 0.0001f / RENODX_DIFFUSE_WHITE_NITS;
+    if (RENODX_GAMMA_CORRECTION) target_black_nits = renodx::color::correct::Gamma(target_black_nits, true);
+    film_black_clip = target_black_nits * -1.f;
+  }
   float film_white_clip = FilmWhiteClip;
 
   float _1007 = log2(untonemapped.r) * 0.3010300099849701f;
@@ -315,7 +320,7 @@ void ApplyFilmicToneMap(
 }
 
 bool GenerateOutput(float r, float g, float b, inout float4 SV_Target) {
-  if (OutputDevice == 0 || RENODX_TONE_MAP_TYPE == 0) return false;  // we are using engine.ini hdr as a base
+  if (RENODX_TONE_MAP_TYPE == 0) return false;  // off uses Engine.ini HDR
 
   float3 final_color = (float3(r, g, b));
   if (RENODX_TONE_MAP_TYPE == 4.f) final_color = saturate(final_color);
