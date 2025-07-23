@@ -37,6 +37,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xC783FBA1),  // film grain overlay
     CustomShaderEntry(0xC83E64DF),  // hud
     CustomShaderEntry(0x11C9D257),  // hud_221
+    CustomShaderEntry(0x066EBCF7),  // hud_23
     CustomShaderEntry(0xDE517511),  // menu
     CustomShaderEntry(0x89C4A7A4),  // new_menu
     CustomShaderEntry(0x18CFEFF4),  // new_menu_renderless
