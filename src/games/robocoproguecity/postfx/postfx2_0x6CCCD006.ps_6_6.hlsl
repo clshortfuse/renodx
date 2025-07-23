@@ -584,10 +584,10 @@ float4 main(
     noperspective float4 SV_Position: SV_Position)
     : SV_Target {
   float4 SV_Target;
-  float3 unclamped_linear_sample1;
-  float3 unclamped_linear_sample2;
-  float3 tonemapped_linear_sample1;
-  float3 tonemapped_linear_sample2;
+  float3 unclamped_linear_sample1 = float3(0, 0, 0);
+  float3 unclamped_linear_sample2 = float3(0, 0, 0);
+  float3 tonemapped_linear_sample1 = float3(0, 0, 0);
+  float3 tonemapped_linear_sample2 = float3(0, 0, 0);
 
   float _28 = (SV_Position.x - float((uint)(int)(PostProcessOutput_ViewportMin.x))) * PostProcessOutput_ViewportSizeInverse.x;
   float _29 = (SV_Position.y - float((uint)(int)(PostProcessOutput_ViewportMin.y))) * PostProcessOutput_ViewportSizeInverse.y;

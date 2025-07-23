@@ -582,17 +582,17 @@ SamplerState PostProcessInput_0_Sampler : register(s2);
 SamplerState PostProcessInput_BilinearSampler : register(s3);
 
 float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float4 TEXCOORD : TEXCOORD
-) : SV_Target {
+    noperspective float4 SV_Position: SV_Position,
+    linear float4 TEXCOORD: TEXCOORD)
+    : SV_Target {
   float4 SV_Target;
-  float3 unclamped_linear_sample;
-  float3 unclamped_linear_sample2;
-  float3 unclamped_linear_sample3;
-  float3 tonemapped_linear_sample;
-  float3 tonemapped_linear_sample2;
-  float3 tonemapped_linear_sample3;
-  
+  float3 unclamped_linear_sample = float3(0, 0, 0);
+  float3 unclamped_linear_sample2 = float3(0, 0, 0);
+  float3 unclamped_linear_sample3 = float3(0, 0, 0);
+  float3 tonemapped_linear_sample = float3(0, 0, 0);
+  float3 tonemapped_linear_sample2 = float3(0, 0, 0);
+  float3 tonemapped_linear_sample3 = float3(0, 0, 0);
+
   float _28 = (SV_Position.x - float((uint)(int)(PostProcessOutput_ViewportMin.x))) * PostProcessOutput_ViewportSizeInverse.x;
   float _29 = (SV_Position.y - float((uint)(int)(PostProcessOutput_ViewportMin.y))) * PostProcessOutput_ViewportSizeInverse.y;
   // float4 _42 = PostProcessInput_0_Texture.Sample(PostProcessInput_0_Sampler, float2(((_28 * PostProcessInput_0_UVViewportSize.x) + PostProcessInput_0_UVViewportMin.x), ((_29 * PostProcessInput_0_UVViewportSize.y) + PostProcessInput_0_UVViewportMin.y)));
