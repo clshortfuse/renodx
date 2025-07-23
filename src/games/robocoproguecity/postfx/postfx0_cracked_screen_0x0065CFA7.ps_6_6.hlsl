@@ -611,10 +611,10 @@ float4 main(
     noperspective float4 SV_Position: SV_Position,
     linear float4 TEXCOORD: TEXCOORD)
     : SV_Target {
-  float3 unclamped_linear_sample1;
-  float3 unclamped_linear_sample2;
-  float3 tonemapped_linear_sample1;
-  float3 tonemapped_linear_sample2;
+  float3 unclamped_linear_sample1 = float3(0, 0, 0);
+  float3 unclamped_linear_sample2 = float3(0, 0, 0);
+  float3 tonemapped_linear_sample1 = float3(0, 0, 0);
+  float3 tonemapped_linear_sample2 = float3(0, 0, 0);
 
   float4 SV_Target;
   float _33 = (SV_Position.x - float((uint)(int)(PostProcessOutput_ViewportMin.x))) * PostProcessOutput_ViewportSizeInverse.x;
@@ -629,7 +629,7 @@ float4 main(
   float4 _71 = Material_Texture2D_0.Sample(Material_Texture2D_0Sampler, float2(_66, _68));
   // float4 _110 = PostProcessInput_0_Texture.Sample(PostProcessInput_0_Sampler, float2(min(max(((((((((_71.x * 2.0f) + -1.0f) * (Material_PreshaderBuffer[1].z)) + (Material_PreshaderBuffer[1].w)) * 0.5f) + _33) * PostProcessInput_0_UVViewportSize.x) + PostProcessInput_0_UVViewportMin.x), PostProcessInput_0_UVViewportBilinearMin.x), PostProcessInput_0_UVViewportBilinearMax.x), min(max(((((((((_71.y * 2.0f) + -1.0f) * (Material_PreshaderBuffer[1].z)) + (Material_PreshaderBuffer[1].w)) * 0.5f) + _34) * PostProcessInput_0_UVViewportSize.y) + PostProcessInput_0_UVViewportMin.y), PostProcessInput_0_UVViewportBilinearMin.y), PostProcessInput_0_UVViewportBilinearMax.y)));
   float4 _110 = SampleAndConvertToSRGBWithToneMap(unclamped_linear_sample1, tonemapped_linear_sample1, PostProcessInput_0_Texture, PostProcessInput_0_Sampler, float2(min(max(((((((((_71.x * 2.0f) + -1.0f) * (Material_PreshaderBuffer[1].z)) + (Material_PreshaderBuffer[1].w)) * 0.5f) + _33) * PostProcessInput_0_UVViewportSize.x) + PostProcessInput_0_UVViewportMin.x), PostProcessInput_0_UVViewportBilinearMin.x), PostProcessInput_0_UVViewportBilinearMax.x), min(max(((((((((_71.y * 2.0f) + -1.0f) * (Material_PreshaderBuffer[1].z)) + (Material_PreshaderBuffer[1].w)) * 0.5f) + _34) * PostProcessInput_0_UVViewportSize.y) + PostProcessInput_0_UVViewportMin.y), PostProcessInput_0_UVViewportBilinearMin.y), PostProcessInput_0_UVViewportBilinearMax.y)));
-  
+
   float4 _116 = Material_Texture2D_1.Sample(Material_Texture2D_1Sampler, float2(_66, _68));  // cracked glass main
   _116 = ConditionalConvertSRGBToBT2020(_116);
 
