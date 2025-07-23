@@ -10,14 +10,13 @@ cbuffer UniformBufferConstants_WorkingColorSpace : register(b1) {
 };
 
 float4 main(
-  noperspective float2 TEXCOORD : TEXCOORD,
-  noperspective float4 SV_Position : SV_Position,
-  nointerpolation uint SV_RenderTargetArrayIndex : SV_RenderTargetArrayIndex
-) : SV_Target {
+    noperspective float2 TEXCOORD: TEXCOORD,
+    noperspective float4 SV_Position: SV_Position,
+    nointerpolation uint SV_RenderTargetArrayIndex: SV_RenderTargetArrayIndex)
+    : SV_Target {
   uint output_gamut = OutputGamut;
   uint output_device = OutputDevice;
   float expand_gamut = ExpandGamut;
-
 
   float4 output_color;
 
@@ -312,7 +311,7 @@ float4 main(
   // ApplyFilmicToneMap(float3(_1007, _1008, _1009));
 #if 1
   ApplyFilmicToneMap(_1007, _1008, _1009, _827, _828, _829);
-  float _1149 = _1007, _1150 = _1008, _1151 = _1009; 
+  float _1149 = _1007, _1150 = _1008, _1151 = _1009;
 #else
   _1007 = log2(_1007) * 0.3010300099849701f;
   _1008 = log2(_1008) * 0.3010300099849701f;
@@ -360,7 +359,6 @@ float4 main(
   float _1150 = ((mad(-0.20366770029067993f, _1133, mad(1.2036634683609009f, _1132, (_1131 * -2.57161445915699e-07f))) - _1132) * BlueCorrection) + _1132;
   float _1151 = ((mad(0.9999996423721313f, _1133, mad(2.0954757928848267e-08f, _1132, (_1131 * 1.862645149230957e-08f))) - _1133) * BlueCorrection) + _1133;
 #endif
-  // SetTonemappedAP1(_1149, _1150, _1151);
 
   float _1161 = mad((WorkingColorSpace_FromAP1[0].z), _1151, mad((WorkingColorSpace_FromAP1[0].y), _1150, ((WorkingColorSpace_FromAP1[0].x) * _1149)));
   float _1162 = mad((WorkingColorSpace_FromAP1[1].z), _1151, mad((WorkingColorSpace_FromAP1[1].y), _1150, ((WorkingColorSpace_FromAP1[1].x) * _1149)));
