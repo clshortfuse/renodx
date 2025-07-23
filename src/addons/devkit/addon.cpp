@@ -2472,8 +2472,8 @@ enum ShaderPaneColumns : uint8_t {
   SHADER_PANE_COLUMN_TYPE,
   SHADER_PANE_COLUMN_ALIAS,
   SHADER_PANE_COLUMN_SOURCE,
-  SHADER_PANE_COLUMN_OPTIONS,
   SHADER_PANE_COLUMN_SNAPSHOT,
+  SHADER_PANE_COLUMN_OPTIONS,
   //
   SHADER_PANE_COLUMN_COUNT
 };
@@ -2492,8 +2492,8 @@ void RenderShadersPane(reshade::api::device* device, DeviceData* data) {
     ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthFixed, char_width * 6.0f);
     ImGui::TableSetupColumn("Alias", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthStretch, -1.f);
     ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthFixed, (char_width * 8.f) + 20.f);
-    ImGui::TableSetupColumn("Options", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthFixed, 3.f * ((char_width * 4.f) + (ImGui::GetStyle().FramePadding.x * 2) + 8.f));
     ImGui::TableSetupColumn("Snapshot", ImGuiTableColumnFlags_None | ImGuiTableColumnFlags_WidthFixed, char_width * 3.f);
+    ImGui::TableSetupColumn("Options", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthFixed, 2.f * ((char_width * 4.f) + (ImGui::GetStyle().FramePadding.x * 2) + 8.f));
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableHeadersRow();
 
@@ -2636,6 +2636,14 @@ void RenderShadersPane(reshade::api::device* device, DeviceData* data) {
         ImGui::PopID();
       }
 
+      if (ImGui::TableSetColumnIndex(SHADER_PANE_COLUMN_SNAPSHOT)) {  // Snapshot
+        ImGui::PushID(cell_index_id++);
+        if (snapshot_index != -1) {
+          ImGui::Text("%03d", snapshot_index);
+        }
+        ImGui::PopID();
+      }
+
       if (ImGui::TableSetColumnIndex(SHADER_PANE_COLUMN_OPTIONS)) {  // Options
         ImGui::PushID(cell_index_id++);
 
@@ -2647,8 +2655,7 @@ void RenderShadersPane(reshade::api::device* device, DeviceData* data) {
 
         float text_size = std::max({
                               ImGui::CalcTextSize("Draw").x,
-                              ImGui::CalcTextSize("Dump").x,
-                              ImGui::CalcTextSize("Edit").x,
+                              ImGui::CalcTextSize("More").x,
                           })
                           + (ImGui::GetStyle().FramePadding.x * 2);
         if (ImGui::Button("Draw", {text_size, 0})) {
@@ -2659,32 +2666,41 @@ void RenderShadersPane(reshade::api::device* device, DeviceData* data) {
 
         ImGui::SameLine();
 
-        if (ImGui::Button("Dump", {text_size, 0})) {
-          renodx::utils::shader::dump::DumpShader(
-              shader_details->shader_hash,
-              shader_details->shader_data,
-              shader_details->shader_type);
+        if (ImGui::Button("More", {text_size, 0})) {
+          ImGui::OpenPopup("###ShaderDetailsPopup");
         }
-
-        ImGui::BeginDisabled(!shader_details->disk_shader.has_value());
-        ImGui::SameLine();
-        if (ImGui::Button("Edit", {text_size, 0})) {
-          if (shader_details->disk_shader.has_value()) {
-            if (!shader_details->disk_shader->file_path.empty()) {
-              ShellExecute(0, "open", shader_details->disk_shader->file_path.string().c_str(), 0, 0, SW_SHOW);
-            }
+        if (ImGui::BeginPopup("###ShaderDetailsPopup")) {
+          if (ImGui::Selectable("Copy Hash")) {
+            ImGui::SetClipboardText(std::format("0x{:08X}", shader_details->shader_hash).c_str());
           }
-        }
-        ImGui::EndDisabled();
 
-        ImGui::PopID();
-      }
+          if (ImGui::Selectable("Dump Binary")) {
+            renodx::utils::shader::dump::DumpShader(
+                shader_details->shader_hash,
+                shader_details->shader_data,
+                shader_details->shader_type);
+          }
 
-      if (ImGui::TableSetColumnIndex(SHADER_PANE_COLUMN_SNAPSHOT)) {  // Snapshot
-        ImGui::PushID(cell_index_id++);
-        if (snapshot_index != -1) {
-          ImGui::Text("%03d", snapshot_index);
+          if (ImGui::Selectable("Locate Binary")) {
+            auto dump_path = renodx::utils::shader::dump::GetShaderDumpPath(
+                shader_details->shader_hash,
+                shader_details->shader_data,
+                shader_details->shader_type);
+            renodx::utils::platform::OpenExplorerToFile(dump_path);
+          }
+
+          ImGui::BeginDisabled(!shader_details->disk_shader.has_value() || shader_details->disk_shader->file_path.empty());
+          if (ImGui::Selectable("Edit Source")) {
+            ShellExecute(nullptr, "open", shader_details->disk_shader->file_path.string().c_str(), nullptr, nullptr, SW_SHOW);
+          }
+          if (ImGui::Selectable("Locate Source")) {
+            renodx::utils::platform::OpenExplorerToFile(shader_details->disk_shader->file_path);
+          }
+          ImGui::EndDisabled();
+
+          ImGui::EndPopup();
         }
+
         ImGui::PopID();
       }
       drawn_hashes.emplace(shader_details->shader_hash);
