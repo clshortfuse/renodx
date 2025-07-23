@@ -35,14 +35,16 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x97CA5A85),  // tonemapper lowbit
     CustomShaderEntry(0x745E34E1),  // tonemapper sdr lowbit
     CustomShaderEntry(0xC783FBA1),  // film grain overlay
+    CustomShaderEntry(0xCE7EB8C7),  // flim grain overlay v23
     CustomShaderEntry(0xC83E64DF),  // hud
     CustomShaderEntry(0x11C9D257),  // hud_221
-    CustomShaderEntry(0x066EBCF7),  // hud_23
+    CustomShaderEntry(0x066EBCF7),  // hud v23
     CustomShaderEntry(0xDE517511),  // menu
     CustomShaderEntry(0x89C4A7A4),  // new_menu
     CustomShaderEntry(0x18CFEFF4),  // new_menu_renderless
     CustomShaderEntry(0xFDE6BBAC),  // menu_221_no_render
     CustomShaderEntry(0xD46D9215),  // menu_221
+    CustomShaderEntry(0x3BF1C870),  // menu v23
     CustomShaderEntry(0xFBFF99B4),  // new_hud
     CustomShaderEntry(0x80CEFAE4),  // film_grain_new
     CustomShaderEntry(0xE87F9B2E),  // film_grain_221
