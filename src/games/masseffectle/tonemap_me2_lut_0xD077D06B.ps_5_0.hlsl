@@ -1,6 +1,8 @@
 #include "./shared.h"
 
-// ---- Created with 3Dmigoto v1.4.1 on Sat May 31 19:45:36 2025
+// ME2
+
+// ---- Created with 3Dmigoto v1.3.16 on Wed Jul 23 11:34:52 2025
 
 cbuffer _Globals : register(b0) {
   float4 PackedParameters : packoffset(c0);
@@ -8,12 +10,8 @@ cbuffer _Globals : register(b0) {
   float4 MinMaxBlurClamp : packoffset(c2);
   float4 DOFKernelParams : packoffset(c3);
   float4 BloomTintAndScreenBlendThreshold : packoffset(c4);
-  float4 SceneShadowsAndDesaturation : packoffset(c5);
-  float4 SceneInverseHighLights : packoffset(c6);
-  float4 SceneMidTones : packoffset(c7);
-  float4 SceneScaledLuminanceWeights : packoffset(c8);
-  float4 GammaColorScaleAndInverse : packoffset(c9);
-  float4 GammaOverlayColor : packoffset(c10);
+  float4 GammaColorScaleAndInverse : packoffset(c5);
+  float4 GammaOverlayColor : packoffset(c6);
 }
 
 cbuffer PSOffsetConstants : register(b2) {
@@ -27,11 +25,13 @@ SamplerState DOFTextureSampler_s : register(s1);
 SamplerState DOFBlurredNearSampler_s : register(s2);
 SamplerState DOFBlurredFarSampler_s : register(s3);
 SamplerState BlurredImageSeperateBloomSampler_s : register(s4);
+SamplerState ColorGradingLUTSampler_s : register(s5);
 Texture2D<float4> SceneColorTexture : register(t0);
 Texture2D<float4> DOFTexture : register(t1);
 Texture2D<float4> DOFBlurredNear : register(t2);
 Texture2D<float4> DOFBlurredFar : register(t3);
 Texture2D<float4> BlurredImageSeperateBloom : register(t4);
+Texture2D<float4> ColorGradingLUT : register(t5);
 
 // 3Dmigoto declarations
 #define cmp -
@@ -95,68 +95,85 @@ void main(
     r2.xyz = -r3.xyz + r2.xyz;
     r1.xyz = r0.zzz * r2.xyz + r3.xyz;
   }
-
-  // r1.xyz = float3(-1.70000005,-1.70000005,-1.70000005) * r1.xyz;
+  // r1.xyz = float3(-1.70000005, -1.70000005, -1.70000005) * r1.zxy;
   // r1.xyz = exp2(r1.xyz);
-  // r1.xyz = float3(1,1,1) + -r1.xyz;
+  // r1.xyz = float3(1, 1, 1) + -r1.xyz;
   r0.xyz = BlurredImageSeperateBloom.Sample(BlurredImageSeperateBloomSampler_s, r0.xy).xyz;
-  r0.xyz = BloomTintAndScreenBlendThreshold.xyz * r0.xyz;
-  r0.w = dot(r1.xyz, float3(0.298999995, 0.587000012, 0.114));
+  r0.xyz = BloomTintAndScreenBlendThreshold.zxy * r0.zxy;
+  r0.w = dot(r1.yzx, float3(0.298999995, 0.587000012, 0.114));
   r0.xyzw = float4(4, 4, 4, -3) * r0.xyzw;
   r0.w = exp2(r0.w);
-  r0.w = saturate(BloomTintAndScreenBlendThreshold.w * r0.w);
+  r0.w = saturate(BloomTintAndScreenBlendThreshold.w * r0.w) * CUSTOM_BLOOM;
 
-  float3 untonemapped = r0.xyz * r0.www * CUSTOM_BLOOM + r1.xyz;
+  float3 untonemapped = r0.yzx * r0.www + r1.xyz;
 
   {
-    r1.xyz = float3(-1.70000005, -1.70000005, -1.70000005) * r1.xyz;
+    r1.xyz = float3(-1.70000005, -1.70000005, -1.70000005) * r1.zxy;
     r1.xyz = exp2(r1.xyz);
     r1.xyz = float3(1, 1, 1) + -r1.xyz;
   }
   r0.xyz = r0.xyz * r0.www + r1.xyz;
-
-  r1.xyz = float3(0.98082906, 0.980000436, 0.993047416) * r0.xyz;
-  r0.w = dot(r0.xyz, float3(0.333000004, 0.333000004, 0.333000004));
+  r1.xyz = float3(0.993047416, 0.98082906, 0.980000436) * r0.xyz;
+  r0.w = dot(r0.yzx, float3(0.333000004, 0.333000004, 0.333000004));
   r0.w = cmp(1.10000002 < r0.w);
   r1.w = r0.w ? 1.000000 : 0;
-  r2.x = dot(r1.xyz, float3(0.300000012, 0.589999974, 0.109999999));
-  r2.xyz = -r0.xyz * float3(0.98082906, 0.980000436, 0.993047416) + r2.xxx;
+  r2.x = dot(r1.yzx, float3(0.300000012, 0.589999974, 0.109999999));
+  r2.xyz = -r0.xyz * float3(0.993047416, 0.98082906, 0.980000436) + r2.xxx;
   r1.xyz = r2.xyz * float3(0.5, 0.5, 0.5) + r1.xyz;
   r0.w = r0.w ? 0 : 1;
   r0.xyz = r0.www * r0.xyz;
   r0.xyz = r1.www * r1.xyz + r0.xyz;
-  r0.w = dot(r0.xyz, float3(0.300000012, 0.589999974, 0.109999999));
+  r0.w = dot(r0.yzx, float3(0.300000012, 0.589999974, 0.109999999));
   r1.xyz = float3(0.400000006, 0.400000006, 0.400000006) * r0.xyz;
   r1.xyz = r0.www * float3(0.600000024, 0.600000024, 0.600000024) + r1.xyz;
-  r1.xyz = r1.xyz * float3(0.00658500008, 0.0199180003, 1) + -r0.xyz;
-  r0.xyz = r1.xyz * float3(0.200000003, 0.200000003, 0.200000003) + r0.xyz;
-  r0.xyz = saturate(-SceneShadowsAndDesaturation.xyz + r0.xyz);
-  r0.xyz = SceneInverseHighLights.xyz * r0.xyz;
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = SceneMidTones.xyz * r0.xyz;
-  r0.xyz = exp2(r0.xyz);
-  r0.w = dot(r0.xyz, SceneScaledLuminanceWeights.xyz);
-  r0.xyz = r0.xyz * SceneShadowsAndDesaturation.www + GammaOverlayColor.xyz;
-  r0.xyz = r0.xyz + r0.www;
-
+  r1.xyz = r1.xyz * float3(1, 0.00658500008, 0.0199180003) + -r0.xyz;
+  r0.xyz = saturate(r1.xyz * float3(0.200000003, 0.200000003, 0.200000003) + r0.xyz);
+  r1.yzw = float3(15, 0.05859375, 0.9375) * r0.xyz;
+  r0.y = floor(r1.y);
+  r0.x = r0.x * 15 + -r0.y;
+  r1.x = r0.y * 0.0625 + r1.z;
+  r1.xyzw = float4(0.001953125, 0.03125, 0.064453125, 0.03125) + r1.xwxw;
+  r0.yzw = ColorGradingLUT.Sample(ColorGradingLUTSampler_s, r1.xy).xyz;
+  r1.xyz = ColorGradingLUT.Sample(ColorGradingLUTSampler_s, r1.zw).xyz;
+  r1.xyz = r1.xyz + -r0.yzw;
+  r0.xyz = r0.xxx * r1.xyz + r0.yzw;
+  r0.xyz = GammaOverlayColor.xyz + r0.xyz;
   if (RENODX_TONE_MAP_TYPE != 0.f) {
+    r0.xyz = (GammaColorScaleAndInverse.xyz * r0.xyz);
+    r0.xyz = renodx::math::SignPow(r0.xyz, GammaColorScaleAndInverse.w);
+    r0.xyz = renodx::color::gamma::DecodeSafe(r0.xyz);
     float3 tonemapped = renodx::draw::ToneMapPass(untonemapped, r0.xyz);
     tonemapped *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
     r0.xyz = renodx::color::gamma::EncodeSafe(tonemapped, 2.2f);
   } else {
     r0.xyz = saturate(GammaColorScaleAndInverse.xyz * r0.xyz);
+    r0.xyz = max(float3(9.99999975e-05, 9.99999975e-05, 9.99999975e-05), r0.xyz);
     r0.xyz = log2(r0.xyz);
     r0.xyz = GammaColorScaleAndInverse.www * r0.xyz;
     r0.xyz = exp2(r0.xyz);
+  }
+  r1.xy = float2(-0.5, -0.5) + v0.zw;
+  r1.xy = float2(0.832050323, 0.554700196) * r1.xy;
+  r0.w = dot(r1.xy, r1.xy);
+  r0.w = max(9.99999975e-05, r0.w);
+  r0.w = log2(r0.w);
+  r0.w = 3.25 * r0.w;
+  r0.w = exp2(r0.w);
+  r0.w = 1 + -r0.w;
+  r0.w = log2(r0.w);
+  r0.w = 200 * r0.w;
+  r0.w = exp2(r0.w);
+  r1.xyz = float3(0.0103630004, 5.75000013e-06, 0.163092494) + r0.www;
+  r1.xyz = lerp(1.f, r1.xyz, CUSTOM_VIGNETTE);
+  r0.xyz = r1.xyz * r0.xyz;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     r0.xyz = min(float3(1, 1, 1), r0.xyz);
   }
-
   r0.w = dot(r0.xyz, float3(0.212670997, 0.715160012, 0.0721689984));
   r0.w = r0.w * 15 + 1;
   r0.w = log2(r0.w);
   o1.x = 0.25 * r0.w;
   o0.xyz = r0.xyz;
   o0.w = 0;
-
   return;
 }

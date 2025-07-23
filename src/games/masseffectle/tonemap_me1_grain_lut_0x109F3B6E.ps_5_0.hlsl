@@ -1,8 +1,6 @@
 #include "./shared.h"
 
-// ME2
-
-// ---- Created with 3Dmigoto v1.3.16 on Tue Jul 15 15:31:21 2025
+// ---- Created with 3Dmigoto v1.4.1 on Sat May 31 21:16:25 2025
 
 cbuffer _Globals : register(b0) {
   float4 PackedParameters : packoffset(c0);
@@ -12,18 +10,8 @@ cbuffer _Globals : register(b0) {
   float4 BloomTintAndScreenBlendThreshold : packoffset(c4);
   float4 GammaColorScaleAndInverse : packoffset(c5);
   float4 GammaOverlayColor : packoffset(c6);
-  float4 RenderTargetClampParameter : packoffset(c7);
-  float4 MotionBlurMaskScaleAndBias : packoffset(c8);
-  float4x4 ScreenToWorld : packoffset(c9);
-  float4x4 PrevViewProjMatrix : packoffset(c13);
-  float4 StaticVelocityParameters : packoffset(c17) = { 0.5, -0.5, 0.0125000002, 0.0222222228 };
-  float4 DynamicVelocityParameters : packoffset(c18) = { 0.0250000004, -0.0444444455, -0.0500000007, 0.088888891 };
-  float StepOffsetsOpaque[5] : packoffset(c19);
-  float StepWeightsOpaque[5] : packoffset(c24);
-  float StepOffsetsTranslucent[5] : packoffset(c29);
-  float StepWeightsTranslucent[5] : packoffset(c34);
-  float4 NoiseTextureOffset : packoffset(c39);
-  float FilmGrain_Scale : packoffset(c40);
+  float4 NoiseTextureOffset : packoffset(c7);
+  float FilmGrain_Scale : packoffset(c8);
 }
 
 cbuffer PSOffsetConstants : register(b2) {
@@ -32,24 +20,20 @@ cbuffer PSOffsetConstants : register(b2) {
   float4 DynamicScale : packoffset(c2);
 }
 
-SamplerState SceneDepthTextureSampler_s : register(s0);
-SamplerState SceneColorTextureSampler_s : register(s1);
-SamplerState DOFTextureSampler_s : register(s2);
-SamplerState DOFBlurredNearSampler_s : register(s3);
-SamplerState DOFBlurredFarSampler_s : register(s4);
-SamplerState BlurredImageSeperateBloomSampler_s : register(s5);
-SamplerState ColorGradingLUTSampler_s : register(s6);
-SamplerState VelocityBufferSampler_s : register(s7);
-SamplerState NoiseTextureSampler_s : register(s8);
-Texture2D<float4> SceneDepthTexture : register(t0);
-Texture2D<float4> SceneColorTexture : register(t1);
-Texture2D<float4> DOFTexture : register(t2);
-Texture2D<float4> DOFBlurredNear : register(t3);
-Texture2D<float4> DOFBlurredFar : register(t4);
-Texture2D<float4> BlurredImageSeperateBloom : register(t5);
-Texture2D<float4> ColorGradingLUT : register(t6);
-Texture2D<float4> VelocityBuffer : register(t7);
-Texture2D<float4> NoiseTexture : register(t8);
+SamplerState SceneColorTextureSampler_s : register(s0);
+SamplerState DOFTextureSampler_s : register(s1);
+SamplerState DOFBlurredNearSampler_s : register(s2);
+SamplerState DOFBlurredFarSampler_s : register(s3);
+SamplerState BlurredImageSeperateBloomSampler_s : register(s4);
+SamplerState ColorGradingLUTSampler_s : register(s5);
+SamplerState NoiseTextureSampler_s : register(s6);
+Texture2D<float4> SceneColorTexture : register(t0);
+Texture2D<float4> DOFTexture : register(t1);
+Texture2D<float4> DOFBlurredNear : register(t2);
+Texture2D<float4> DOFBlurredFar : register(t3);
+Texture2D<float4> BlurredImageSeperateBloom : register(t4);
+Texture2D<float4> ColorGradingLUT : register(t5);
+Texture2D<float4> NoiseTexture : register(t6);
 
 // 3Dmigoto declarations
 #define cmp -
@@ -65,55 +49,6 @@ void main(
 
   r0.xy = DynamicScale.xy * v0.zw;
   r1.xyz = SceneColorTexture.Sample(SceneColorTextureSampler_s, r0.xy).xyz;
-  r0.z = VelocityBuffer.Sample(VelocityBufferSampler_s, r0.xy).x;
-  r0.w = SceneDepthTexture.Sample(SceneDepthTextureSampler_s, r0.xy).x;
-  r0.w = r0.w * MinZ_MaxZRatio.z + -MinZ_MaxZRatio.w;
-  r0.w = max(1.00000001e-07, r0.w);
-  r0.w = 1 / r0.w;
-  r0.w = min(65504, r0.w);
-  r1.w = cmp(r0.w < 14);
-  r0.w = r1.w ? 65504 : r0.w;
-  r2.xy = v0.xy * r0.ww;
-  r2.yzw = PrevViewProjMatrix._m01_m11_m31 * r2.yyy;
-  r2.xyz = PrevViewProjMatrix._m00_m10_m30 * r2.xxx + r2.yzw;
-  r2.xyz = PrevViewProjMatrix._m02_m12_m32 * r0.www + r2.xyz;
-  r2.xyz = PrevViewProjMatrix._m03_m13_m33 + r2.xyz;
-  r2.xy = r2.xy / r2.zz;
-  r2.xy = v0.xy + -r2.xy;
-  r2.xy = StaticVelocityParameters.xy * r2.xy;
-  r0.w = dot(r2.xy, r2.xy);
-  r0.w = max(1, r0.w);
-  r0.w = rsqrt(r0.w);
-  r2.xy = r2.xy * r0.ww;
-  r0.zw = r2.xy * r0.zz;
-  r0.zw = DynamicVelocityParameters.xy * r0.zw;
-  r2.xy = r0.zw * StepOffsetsOpaque[1] + r0.xy;
-  r2.xy = max(RenderTargetClampParameter.xy, r2.xy);
-  r2.xy = min(RenderTargetClampParameter.zw, r2.xy);
-  r2.xyz = SceneColorTexture.Sample(SceneColorTextureSampler_s, r2.xy).xyz;
-  r2.xyz = float3(0.200000003, 0.200000003, 0.200000003) * r2.xyz;
-  r2.xyz = r1.xyz * float3(0.200000003, 0.200000003, 0.200000003) + r2.xyz;
-  r3.xy = r0.zw * StepOffsetsOpaque[2] + r0.xy;
-  r3.xy = max(RenderTargetClampParameter.xy, r3.xy);
-  r3.xy = min(RenderTargetClampParameter.zw, r3.xy);
-  r3.xyz = SceneColorTexture.Sample(SceneColorTextureSampler_s, r3.xy).xyz;
-  r2.xyz = r3.xyz * float3(0.200000003, 0.200000003, 0.200000003) + r2.xyz;
-  r3.xy = r0.zw * StepOffsetsOpaque[3] + r0.xy;
-  r3.xy = max(RenderTargetClampParameter.xy, r3.xy);
-  r3.xy = min(RenderTargetClampParameter.zw, r3.xy);
-  r3.xyz = SceneColorTexture.Sample(SceneColorTextureSampler_s, r3.xy).xyz;
-  r2.xyz = r3.xyz * float3(0.200000003, 0.200000003, 0.200000003) + r2.xyz;
-  r3.xy = r0.zw * StepOffsetsOpaque[4] + r0.xy;
-  r3.xy = max(RenderTargetClampParameter.xy, r3.xy);
-  r3.xy = min(RenderTargetClampParameter.zw, r3.xy);
-  r3.xyz = SceneColorTexture.Sample(SceneColorTextureSampler_s, r3.xy).xyz;
-  r2.xyz = r3.xyz * float3(0.200000003, 0.200000003, 0.200000003) + r2.xyz;
-  r0.zw = MotionBlurMaskScaleAndBias.xy * r0.zw;
-  r0.z = dot(r0.zw, r0.zw);
-  r0.z = sqrt(r0.z);
-  r0.z = min(1, r0.z);
-  r2.xyz = r2.xyz + -r1.xyz;
-  r1.xyz = r0.zzz * r2.xyz + r1.xyz;
   r0.zw = cmp(float2(0, 0) < MinMaxBlurClamp.xy);
   r1.w = (int)r0.w | (int)r0.z;
   if (r1.w != 0) {
@@ -170,9 +105,9 @@ void main(
   r0.w = dot(r1.yzx, float3(0.298999995, 0.587000012, 0.114));
   r0.xyzw = float4(4, 4, 4, -3) * r0.xyzw;
   r0.w = exp2(r0.w);
-  r0.w = saturate(BloomTintAndScreenBlendThreshold.w * r0.w);
+  r0.w = saturate(BloomTintAndScreenBlendThreshold.w * r0.w) * CUSTOM_BLOOM;
 
-  float3 untonemapped = r0.yzx * r0.www * CUSTOM_BLOOM + r1.xyz;
+  float3 untonemapped = r0.yzx * r0.www + r1.xyz;
 
   {
     r1.xyz = float3(-1.70000005, -1.70000005, -1.70000005) * r1.zxy;
@@ -206,8 +141,12 @@ void main(
   r0.xyz = r0.xxx * r1.xyz + r0.yzw;
   r0.xyz = GammaOverlayColor.xyz + r0.xyz;
   if (RENODX_TONE_MAP_TYPE != 0.f) {
+    r0.xyz = (GammaColorScaleAndInverse.xyz * r0.xyz);
+    r0.xyz = renodx::math::SignPow(r0.xyz, GammaColorScaleAndInverse.w);
+    r0.xyz = renodx::color::gamma::DecodeSafe(r0.xyz);
     float3 tonemapped = renodx::draw::ToneMapPass(untonemapped, r0.xyz);
     r0.xyz = tonemapped;
+    // Scale and Encode later with film grain
   } else {
     r0.xyz = saturate(GammaColorScaleAndInverse.xyz * r0.xyz);
     r0.xyz = max(float3(9.99999975e-05, 9.99999975e-05, 9.99999975e-05), r0.xyz);
@@ -224,9 +163,9 @@ void main(
   r0.w = exp2(r0.w);
   r0.w = 1 + -r0.w;
   r0.w = log2(r0.w);
-  r0.w = 200 * r0.w;
+  r0.w = 100 * r0.w;
   r0.w = exp2(r0.w);
-  r1.xyz = float3(0.0103630004, 5.75000013e-06, 0.163092494) + r0.www;
+  r1.xyz = float3(0.0103630004, 5.75000013e-06, 0.0130924946) + r0.www;
   r1.xyz = lerp(1.f, r1.xyz, CUSTOM_VIGNETTE);
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     if (FilmGrain_Scale > 0 && CUSTOM_FILM_GRAIN > 0.f) {
