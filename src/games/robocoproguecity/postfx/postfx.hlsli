@@ -50,7 +50,7 @@ float3 ConvertSRGBtoPQAndUpgradeToneMap(float3 srgb_color, float3 unclamped_line
     unclamped_linear_sample = renodx::color::bt709::from::BT2020(unclamped_linear_sample);
     tonemapped_linear_sample = renodx::color::bt709::from::BT2020(tonemapped_linear_sample);
   }
-  linear_color = renodx::tonemap::UpgradeToneMap(unclamped_linear_sample, tonemapped_linear_sample, linear_color, 1.f);
+  linear_color = renodx::tonemap::UpgradeToneMap(unclamped_linear_sample, tonemapped_linear_sample, linear_color, 0.f);
   return renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(linear_color), RENODX_DIFFUSE_WHITE_NITS);
 }
 

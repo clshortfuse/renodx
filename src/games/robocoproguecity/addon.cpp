@@ -29,7 +29,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapType",
         .binding = &shader_injection.tone_map_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 3.f,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
@@ -293,6 +293,7 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
+      {"FixPostProcess", 0.f},
       //   {"ColorGradeLUTScaling", 0.f},
       //   {"ColorGradeLUTStrength", 100.f},
   });
