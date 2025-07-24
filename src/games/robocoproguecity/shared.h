@@ -1,22 +1,6 @@
 #ifndef SRC_GAMES_ROBOCOPROGUECITY_SHARED_H_
 #define SRC_GAMES_ROBOCOPROGUECITY_SHARED_H_
 
-// #define RENODX_TONE_MAP_TYPE                 2  // 0 - Vanilla, 1 - None, 2 - ACES, 3 - Vanilla+, 4 - SDR
-// #define RENODX_PEAK_WHITE_NITS               400
-// #define RENODX_DIFFUSE_WHITE_NITS            100
-// #define RENODX_GRAPHICS_WHITE_NITS           100
-// #define RENODX_GAMMA_CORRECTION              1
-// #define RENODX_GAMMA_CORRECTION_UI           1
-// #define RENODX_TONE_MAP_EXPOSURE             1
-// #define RENODX_TONE_MAP_HIGHLIGHTS           1
-// #define RENODX_TONE_MAP_SHADOWS              1
-// #define RENODX_TONE_MAP_CONTRAST             1
-// #define RENODX_TONE_MAP_SATURATION           1
-// #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION 1
-// #define RENODX_TONE_MAP_BLOWOUT              0
-// #define RENODX_TONE_MAP_FLARE                0
-// #define FIX_POST_PROCESS                     2  // 0 - BT.2020 PQ, 1 - BT.709 piecewise sRGB, 2 - BT.2020 piecewise sRGB
-
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
