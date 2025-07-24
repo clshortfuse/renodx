@@ -1,4 +1,4 @@
-#include "./composite.hlsli"
+#include "../composite.hlsli"
 
 Texture2D<float4> UITexture : register(t0);
 
@@ -35,7 +35,7 @@ float4 main(
   float4 _10 = UITexture.Sample(UISampler, float2(TEXCOORD.x, TEXCOORD.y));
   float4 _57 = SceneTexture.Sample(UISampler, float2(TEXCOORD.x, TEXCOORD.y));
 
-  if (HandleUICompositing(_10, _57, SV_Target)) {
+  if (HandleIntermediateCompositing(_10, _57, SV_Target)) {
     return SV_Target;
   }
 
