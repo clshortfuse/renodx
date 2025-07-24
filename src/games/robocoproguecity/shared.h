@@ -26,6 +26,7 @@ struct ShaderInjectData {
   float graphics_white_nits;
   float gamma_correction;
   float gamma_correction_ui;
+  float tone_map_hue_correction;
   float override_black_clip;
   float tone_map_exposure;
   float tone_map_highlights;
@@ -49,6 +50,7 @@ cbuffer cb13 : register(b13, space50) {
 #define RENODX_GRAPHICS_WHITE_NITS           shader_injection.graphics_white_nits
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
 #define RENODX_GAMMA_CORRECTION_UI           shader_injection.gamma_correction_ui
+#define RENODX_TONE_MAP_HUE_CORRECTION       shader_injection.tone_map_hue_correction
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
