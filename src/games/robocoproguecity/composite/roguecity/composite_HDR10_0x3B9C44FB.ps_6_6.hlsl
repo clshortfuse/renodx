@@ -1,4 +1,4 @@
-#include "./composite.hlsli"
+#include "../composite.hlsli"
 
 Texture2D<float4> UITexture : register(t0);
 
