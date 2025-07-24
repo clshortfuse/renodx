@@ -1,6 +1,15 @@
 #include "./shared.h"
 
-bool HandleUICompositing(float4 ui_color_linear, float4 scene_color_pq, inout float4 output_color) {
+float4 OutputscRGB(float4 color) {
+  return float4(color.rgb *= RENODX_DIFFUSE_WHITE_NITS / 80.f, color.a);
+}
+
+float4 OutputHDR10(float4 color) {
+  float3 pq_color = renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(color.rgb), RENODX_DIFFUSE_WHITE_NITS);
+  return float4(pq_color, color.a);
+}
+
+bool HandleUICompositing(float4 ui_color_linear, float4 scene_color_pq, inout float4 output_color, bool use_hdr10 = true) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
   float ui_alpha = ui_color_linear.a;
 
@@ -37,8 +46,13 @@ bool HandleUICompositing(float4 ui_color_linear, float4 scene_color_pq, inout fl
 
   // linearize and encode to pq
   float3 composited_color_linear = renodx::color::gamma::DecodeSafe(composited_color_gamma);
-  float3 pq_color = renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(composited_color_linear), RENODX_DIFFUSE_WHITE_NITS);
-  output_color = float4(pq_color, ui_alpha);  // return ui alpha for better FG support
+
+  // return ui alpha for better FG support
+  if (use_hdr10) {
+    output_color = OutputHDR10(float4(composited_color_linear, ui_alpha));
+  } else {
+    output_color = OutputscRGB(float4(composited_color_linear, ui_alpha));
+  }
 
   return true;
 }
