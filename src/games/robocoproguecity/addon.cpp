@@ -33,7 +33,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla (HDR)", "None", "ACES", "Vanilla+ (ACES + SDR Blend)", "Vanilla (SDR)"},
+        .labels = {"UE ACES (HDR)", "None", "ACES", "Vanilla+ (ACES + UE Filmic Blend)", "UE Filmic (SDR)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -204,25 +204,6 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Off (BT.2020 PQ)", "BT.709 sRGB Piecewise (most accurate)", "BT.2020 sRGB Piecewise (retains WCG)"},
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
-    // new renodx::utils::settings::Setting{
-    //     .key = "ColorGradeLUTStrength",
-    //     .binding = &shader_injection.custom_lut_strength,
-    //     .default_value = 100.f,
-    //     .label = "LUT Strength",
-    //     .section = "Color Grading",
-    //     .max = 100.f,
-    //     .parse = [](float value) { return value * 0.01f; },
-    // },
-    // new renodx::utils::settings::Setting{
-    //     .key = "ColorGradeLUTScaling",
-    //     .binding = &shader_injection.custom_lut_scaling,
-    //     .default_value = 100.f,
-    //     .label = "LUT Scaling",
-    //     .section = "Color Grading",
-    //     .tooltip = "Scales the color grade LUT to full range when size is clamped.",
-    //     .max = 100.f,
-    //     .parse = [](float value) { return value * 0.01f; },
-    // },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
@@ -293,7 +274,15 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("- Requires HDR on in game"),
+        .label = std::string("Requires HDR enabled through Engine.ini edits:\n"
+                             " 1. Open Engine.ini in %localappdata%\\Local\\Robocop\\Saved\\Config\\Windows\\Engine.ini\n"
+                             " 2. Add:\n"
+                             "         [SystemSettings]\n"
+                             "         r.AllowHDR=1\n"
+                             "         r.HDR.EnableHDROutput=1\n"
+                             "         r.HDR.Display.OutputDevice=3\n"
+                             "         r.HDR.Display.ColorGamut=2\n"
+                             "         r.HDR.UI.CompositeMode=1\n"),
         .section = "About",
     },
 };
@@ -306,6 +295,7 @@ void OnPresetOff() {
       {"ToneMapUINits", 203.f},
       {"ToneMapGammaCorrection", 0.f},
       {"UIGammaCorrection", 0.f},
+      {"ToneMapHueCorrection", 0.f},
       {"OverrideBlackClip", 0.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
