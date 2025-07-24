@@ -490,6 +490,9 @@ class Decompiler {
 
     static uint32_t FlagsFromCoordinates(std::string_view input) {
       uint32_t flags = 0;
+      if (input == "N/A") return 0b1000;
+      if (input == "NO") return 0;
+      if (input == "YES") return 0b1000;
       const size_t len = input.length();
 
       for (size_t i = 0; i < len; i++) {
@@ -520,8 +523,9 @@ class Decompiler {
        * ; SV_Position              0   xyzw        1      POS   float
        * ; SV_RenderTargetArrayIndex     0   x           2  RTINDEX    uint   x
        */
+      // ; SV_DepthLessEqual        0    N/A oDepthLE  DEPTHLE   float    YES
 
-      static auto regex = std::regex{R"(; (\S+)\s+(\S+)\s+((?:x| )(?:y| )(?:z| )(?:w| ))\s+(\S+)\s+(\S+)\s+(\S+)\s*([xyzw ]*))"};
+      static auto regex = std::regex{R"(; (\S+)\s+(\S+)\s+((?:(?:x| )(?:y| )(?:z| )(?:w| ))|(?:N\/A))\s+(\S+)\s+(\S+)\s+(\S+)\s*((?:[xyzw]+)|(?:YES)|))"};
       auto [name, index, mask, dxregister, sysValue, format, used] = StringViewMatch<7>(line, regex);
 
       this->name = name;
@@ -543,6 +547,7 @@ class Decompiler {
       NONE,
       NOINTERPOLATION,
       NOPERSPECTIVE,
+      NOPERSPECTIVE_SAMPLE,
       LINEAR,
       CENTROID,
     } interp_mode;
@@ -562,6 +567,7 @@ class Decompiler {
       if (input.empty()) return InterpMode::NONE;
       if (input == "nointerpolation") return InterpMode::NOINTERPOLATION;
       if (input == "noperspective") return InterpMode::NOPERSPECTIVE;
+      if (input == "noperspective sample") return InterpMode::NOPERSPECTIVE_SAMPLE;
       if (input == "linear") return InterpMode::LINEAR;
       if (input == "centroid") return InterpMode::CENTROID;
       throw std::invalid_argument("Unknown InterpMode");
@@ -649,6 +655,9 @@ class Decompiler {
           break;
         case SignatureProperty::InterpMode::NOPERSPECTIVE:
           string_stream << "noperspective ";
+          break;
+        case SignatureProperty::InterpMode::NOPERSPECTIVE_SAMPLE:
+          string_stream << "noperspective sample ";
           break;
         case SignatureProperty::InterpMode::NONE:
         default:
@@ -1201,15 +1210,6 @@ class Decompiler {
       }
       assert(data_type_size != 0);
       return data_type_size;
-    }
-
-    TypeDefinition& GetResourceType(const Resource& resource) {
-      auto type_name = resource.pointer.substr(0, resource.pointer.length() - 1);
-      auto pair = type_definitions.find(type_name);
-      assert(pair != type_definitions.end());
-      auto& definition = pair->second;
-
-      return definition;
     }
 
     std::string GetSubValueFromType(std::string_view type_namex, const DataType& info, uint32_t offset) {
@@ -2554,6 +2554,48 @@ class Decompiler {
           auto [op, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
           assignment_type = "float";
           assignment_value = std::format("f16tof32({})", ParseUint(value));
+        } else if (functionName == "@dx.op.atomicBinOp.i32") {
+          // %78 = call i32 @dx.op.atomicBinOp.i32(i32 78, %dx.types.Handle %1, i32 7, i32 %62, i32 %63, i32 0, i32 %77)  ; AtomicBinOp(handle,atomicOp,offset0,offset1,offset2,newValue)
+          auto [op, handle, atomicOp, offset0, offset1, offset2, newValue] = StringViewSplit<7>(functionParamsString, param_regex, 2);
+          auto ref_resource = std::string{handle.substr(1)};
+          const bool has_offset_y = offset1 != "undef";
+          const bool has_offset_z = offset2 != "undef";
+          std::string offset;
+          if (has_offset_z) {
+            offset = std::format("int3({}, {}, {})", ParseInt(offset0), ParseInt(offset1), ParseInt(offset2));
+          } else if (has_offset_y) {
+            offset = std::format("int2({}, {})", ParseInt(offset0), ParseInt(offset1));
+          } else {
+            offset = std::format("{}", ParseInt(offset0));
+          }
+          auto [uav_name, uav_range_index, resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
+          auto uav_resource = preprocess_state.uav_resources[uav_range_index];
+          // assignment_type = "int";
+          std::string atomic_func;
+
+          if (atomicOp == "0") {
+            atomic_func = "InterlockedAdd";
+          } else if (atomicOp == "1") {
+            atomic_func = "InterlockedAnd";
+          } else if (atomicOp == "2") {
+            atomic_func = "InterlockedOr";
+          } else if (atomicOp == "3") {
+            atomic_func = "InterlockedXor";
+          } else if (atomicOp == "4") {
+            atomic_func = "InterlockedMin";
+          } else if (atomicOp == "5") {
+            atomic_func = "InterlockedMax";
+          } else if (atomicOp == "6") {
+            atomic_func = "InterlockedMin";
+          } else if (atomicOp == "7") {
+            atomic_func = "InterlockedMax";
+          } else if (atomicOp == "8") {
+            atomic_func = "InterlockedExchange";
+          } else {
+            throw std::invalid_argument("Unknown atomicOp for AtomicBinOp");
+          }
+          assignment_type = uav_resource.data_type;
+          decompiled = std::format("{} _{}; {}({}[{}], {}, _{});", assignment_type, variable, atomic_func, uav_name, offset, ParseInt(newValue), variable);
         } else {
           std::cerr << line << "\n";
           std::cerr << "Function name: " << functionName << "\n";
@@ -2763,6 +2805,11 @@ class Decompiler {
         auto [value_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(fadd (?:fast )?(\S+) (\S+), (\S+))"});
         assignment_type = ParseType(value_type);
         assignment_value = std::format("{} + {}", ParseByType(a, value_type), ParseByType(b, value_type));
+      } else if (instruction == "frem") {
+        // frem fast float %25, 2.000000e+00
+        auto [value_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(frem (?:fast )?(\S+) (\S+), (\S+))"});
+        assignment_type = ParseType(value_type);
+        assignment_value = std::format("fmod({}, {})", ParseByType(a, value_type), ParseByType(b, value_type));
       } else if (instruction == "fsub") {
         // fsub fast half 0xH3C00, %42
         auto [value_type, a, b] = StringViewMatch<3>(assignment, std::regex{R"(fsub (?:fast )?(\S+) (\S+), (\S+))"});
@@ -4223,22 +4270,24 @@ class Decompiler {
     }
 
     for (const auto& srv_resource : preprocess_state.srv_resources) {
-      auto resource_type_definition = preprocess_state.GetResourceType(srv_resource);
+      auto pair = preprocess_state.type_definitions.find(srv_resource.data_type);
+      if (pair != preprocess_state.type_definitions.end()) {
+        auto& resource_type_definition = pair->second;
 
-      if (resource_type_definition.name.starts_with("%\"class.StructuredBuffer<")) {
-        auto struct_pair = preprocess_state.type_definitions.find(resource_type_definition.variables[0].type);
-        if (struct_pair != preprocess_state.type_definitions.end()) {
-          resource_type_definition = struct_pair->second;
+        if (resource_type_definition.name.starts_with("%\"class.StructuredBuffer<")) {
+          auto struct_pair = preprocess_state.type_definitions.find(resource_type_definition.variables[0].type);
+          if (struct_pair != preprocess_state.type_definitions.end()) {
+            resource_type_definition = struct_pair->second;
+          }
+        }
+        if (srv_resource.shape == SRVResource::ResourceKind::StructuredBuffer) {
+          declare_definition(resource_type_definition.name, "");
         }
       }
 
       static const std::regex TYPE_NAME_PATTERN = std::regex(R"(%?(?:host)?(?:layout\.)?(?:struct\.)?(.*))");
       auto [type_name_parsed] = StringViewMatch<1>(srv_resource.data_type, TYPE_NAME_PATTERN);
       assert(!type_name_parsed.empty());
-
-      if (srv_resource.shape == SRVResource::ResourceKind::StructuredBuffer) {
-        declare_definition(resource_type_definition.name, "");
-      }
 
       string_stream << SRVResource::ResourceKindString(srv_resource.shape);
 
