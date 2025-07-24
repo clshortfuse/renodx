@@ -552,6 +552,13 @@ const std::unordered_map<
             },
         },
 
+        {
+            "Project_Plague",
+            {
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_ANY},
+            },
+        },
+
 };
 
 float g_dump_shaders = 0;
