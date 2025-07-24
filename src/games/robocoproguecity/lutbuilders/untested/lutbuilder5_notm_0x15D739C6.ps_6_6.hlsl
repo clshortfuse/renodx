@@ -1,3 +1,5 @@
+#include "../lutbuildercommon.hlsli"
+
 cbuffer $Globals : register(b0) {
   float3 InverseGamma : packoffset(c000.x);
   float FilmSlope : packoffset(c000.w);
@@ -19,16 +21,21 @@ cbuffer $Globals : register(b0) {
 };
 
 float4 main(
-  noperspective float2 TEXCOORD : TEXCOORD,
-  noperspective float4 SV_Position : SV_Position,
-  nointerpolation uint SV_RenderTargetArrayIndex : SV_RenderTargetArrayIndex
-) : SV_Target {
+    noperspective float2 TEXCOORD: TEXCOORD,
+    noperspective float4 SV_Position: SV_Position,
+    nointerpolation uint SV_RenderTargetArrayIndex: SV_RenderTargetArrayIndex)
+    : SV_Target {
   float4 SV_Target;
   float _6[6];
   float _7[6];
   float _10 = (TEXCOORD.x + -0.015625f) * 1.0322580337524414f;
   float _11 = (TEXCOORD.y + -0.015625f) * 1.0322580337524414f;
   float _13 = float((uint)(int)(SV_RenderTargetArrayIndex)) * 0.032258063554763794f;
+
+  if (GenerateOutput(_10, _11, _13, SV_Target)) {
+    return SV_Target;
+  }
+
   float _33;
   float _34;
   float _35;
