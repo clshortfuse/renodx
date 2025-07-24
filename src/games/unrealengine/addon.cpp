@@ -440,6 +440,15 @@ void AddAvowedUpgrades() {
   });
 }
 
+void AddWuchangUpgrades() {
+    renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      .old_format = reshade::api::format::r10g10b10a2_unorm,
+      .new_format = reshade::api::format::r16g16b16a16_float,
+      .use_resource_view_cloning = true,
+      .aspect_ratio = 2560.f / 1024.f,
+  });
+}
+
 void AddGamePatches() {
   auto process_path = renodx::utils::platform::GetCurrentProcessPath();
   auto filename = process_path.filename().string();
@@ -451,6 +460,8 @@ void AddGamePatches() {
     AddAvowedUpgrades();
   } else if (product_name == "Tony Hawks(TM) Pro Skater(TM) 3 + 4"){
     renodx::mods::swapchain::swapchain_proxy_revert_state = true;
+  } else if (product_name == "Project_Plague"){
+    AddWuchangUpgrades();
   } else {
     return;
   }
@@ -555,7 +566,8 @@ const std::unordered_map<
         {
             "Project_Plague",
             {
-                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_ANY},
+                {"Upgrade_CopyDestinations", 1.f},
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
 
