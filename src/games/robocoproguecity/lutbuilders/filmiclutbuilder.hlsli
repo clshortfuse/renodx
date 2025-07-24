@@ -1,4 +1,4 @@
-#include "../shared.h"
+#include "./lutbuildercommon.hlsli"
 
 cbuffer _RootShaderParameters : register(b0) {
   float4 LUTWeights[2] : packoffset(c005.x);
@@ -262,6 +262,7 @@ float3 LerpToneMapStrength(float3 tonemapped, float3 preRRT) {
 
 float3 ApplyBlueCorrection(float3 tonemapped) {
   float _1131 = tonemapped.r, _1132 = tonemapped.g, _1133 = tonemapped.b;
+  // return tonemapped;
 
   float _1149 = ((mad(-0.06537103652954102f, _1133, mad(1.451815478503704e-06f, _1132, (_1131 * 1.065374732017517f))) - _1131) * BlueCorrection) + _1131;
   float _1150 = ((mad(-0.20366770029067993f, _1133, mad(1.2036634683609009f, _1132, (_1131 * -2.57161445915699e-07f))) - _1132) * BlueCorrection) + _1132;
@@ -317,19 +318,6 @@ void ApplyFilmicToneMap(
   r = tonemapped.r;
   g = tonemapped.g;
   b = tonemapped.b;
-}
-
-bool GenerateOutput(float r, float g, float b, inout float4 SV_Target) {
-  if (RENODX_TONE_MAP_TYPE == 0) return false;  // off uses Engine.ini HDR
-
-  float3 final_color = (float3(r, g, b));
-  if (RENODX_TONE_MAP_TYPE == 4.f) final_color = saturate(final_color);
-
-  float3 bt2020_color = renodx::color::bt2020::from::BT709(final_color);
-  float3 encoded_color = renodx::color::pq::EncodeSafe(bt2020_color, RENODX_DIFFUSE_WHITE_NITS) / 1.05f;
-
-  SV_Target = float4(encoded_color, 0.f);
-  return true;
 }
 
 float3 ToneMapForLUT(inout float r, inout float g, inout float b) {
