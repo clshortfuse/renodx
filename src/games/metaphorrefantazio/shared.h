@@ -49,7 +49,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE shader_injection.swap_chain_custom_color_space
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-#define RENODX_GAMMA_CORRECTION              GAMMA_CORRECTION_NONE
+#define RENODX_GAMMA_CORRECTION              GAMMA_CORRECTION_GAMMA_2_2
 #define RENODX_INTERMEDIATE_ENCODING         GAMMA_CORRECTION_NONE
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION   GAMMA_CORRECTION_GAMMA_2_2
 #define RENODX_TONE_MAP_HUE_PROCESSOR        renodx::draw::HUE_PROCESSOR_ICTCP
