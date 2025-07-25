@@ -307,33 +307,28 @@ float4 main(
   float _914 = mad((WorkingColorSpace_FromAP1[1].z), _900, mad((WorkingColorSpace_FromAP1[1].y), _899, ((WorkingColorSpace_FromAP1[1].x) * _898)));
   float _915 = mad((WorkingColorSpace_FromAP1[2].z), _900, mad((WorkingColorSpace_FromAP1[2].y), _899, ((WorkingColorSpace_FromAP1[2].x) * _898)));
 
+  // _926 = renodx::color::srgb::Encode(saturate(_913));
+  // _937 = renodx::color::srgb::Encode(saturate(_914));
+  // _948 = renodx::color::srgb::Encode(saturate(_915));
+  // float _952 = (_937 * 0.9375f) + 0.03125f;
+  // float _959 = _948 * 15.0f;
+  // float _960 = floor(_959);
+  // float _961 = _959 - _960;
+  // float _963 = (((_926 * 0.9375f) + 0.03125f) + _960) * 0.0625f;
+  // float4 _966 = Textures_1.Sample(Samplers_1, float2(_963, _952));
+  // float4 _973 = Textures_1.Sample(Samplers_1, float2((_963 + 0.0625f), _952));
+  // float _992 = (((lerp(_966.x, _973.x, _961)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _926));
+  // float _993 = (((lerp(_966.y, _973.y, _961)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _937));
+  // float _994 = (((lerp(_966.z, _973.z, _961)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _948));
+  // float _1016 = renodx::color::srgb::Decode(max(_992, 6.103519990574569e-05f));
+  // float _1017 = renodx::color::srgb::Decode(max(_993, 6.103519990574569e-05f));
+  // float _1018 = renodx::color::srgb::Decode(max(_994, 6.103519990574569e-05f));
+
   float3 untonemapped = float3(_913, _914, _915);
-  float3 displaymapped_unclamped_gamut = ToneMapForLUT(_913, _914, _915);
-
-  _926 = renodx::color::srgb::EncodeSafe(_913);
-  _937 = renodx::color::srgb::EncodeSafe(_914);
-  _948 = renodx::color::srgb::EncodeSafe(_915);
-
-  float _952 = (_937 * 0.9375f) + 0.03125f;
-  float _959 = _948 * 15.0f;
-  float _960 = floor(_959);
-  float _961 = _959 - _960;
-  float _963 = (((_926 * 0.9375f) + 0.03125f) + _960) * 0.0625f;
-  float4 _966 = Textures_1.Sample(Samplers_1, float2(_963, _952));
-  float4 _973 = Textures_1.Sample(Samplers_1, float2((_963 + 0.0625f), _952));
-  float _992 = (((lerp(_966.x, _973.x, _961)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _926));
-  float _993 = (((lerp(_966.y, _973.y, _961)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _937));
-  float _994 = (((lerp(_966.z, _973.z, _961)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _948));
-
-  // _992 = max(6.103519990574569e-05f, _992);
-  // _993 = max(6.103519990574569e-05f, _993);
-  // _994 = max(6.103519990574569e-05f, _994);
-
-  float _1016 = renodx::color::srgb::DecodeSafe(_992);
-  float _1017 = renodx::color::srgb::DecodeSafe(_993);
-  float _1018 = renodx::color::srgb::DecodeSafe(_994);
-
-  LUTUpgradeToneMap(untonemapped, displaymapped_unclamped_gamut, float3(_913, _914, _915), _1016, _1017, _1018);
+  float _1016;
+  float _1017;
+  float _1018;
+  SampleLUTUpgradeToneMap(untonemapped, Samplers_1, Textures_1, _1016, _1017, _1018);
 
   float _1044 = ColorScale.x * (((MappingPolynomial.y + (MappingPolynomial.x * _1016)) * _1016) + MappingPolynomial.z);
   float _1045 = ColorScale.y * (((MappingPolynomial.y + (MappingPolynomial.x * _1017)) * _1017) + MappingPolynomial.z);

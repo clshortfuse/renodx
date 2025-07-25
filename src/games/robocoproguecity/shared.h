@@ -20,6 +20,8 @@ struct ShaderInjectData {
   float tone_map_highlight_saturation;
   float tone_map_blowout;
   float tone_map_flare;
+  float custom_lut_strength;
+  float custom_lut_scaling;
   float fix_post_process;
 };
 
