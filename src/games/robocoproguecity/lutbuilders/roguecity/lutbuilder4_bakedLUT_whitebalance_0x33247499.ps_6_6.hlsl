@@ -369,54 +369,32 @@ float4 main(
   float _1153 = ((mad(0.9999996423721313f, _1135, mad(2.0954757928848267e-08f, _1134, (_1133 * 1.862645149230957e-08f))) - _1135) * BlueCorrection) + _1135;
 #endif
 
-  float _1166 = saturate(max(0.0f, mad((WorkingColorSpace_FromAP1[0].z), _1153, mad((WorkingColorSpace_FromAP1[0].y), _1152, ((WorkingColorSpace_FromAP1[0].x) * _1151)))));
-  float _1167 = saturate(max(0.0f, mad((WorkingColorSpace_FromAP1[1].z), _1153, mad((WorkingColorSpace_FromAP1[1].y), _1152, ((WorkingColorSpace_FromAP1[1].x) * _1151)))));
-  float _1168 = saturate(max(0.0f, mad((WorkingColorSpace_FromAP1[2].z), _1153, mad((WorkingColorSpace_FromAP1[2].y), _1152, ((WorkingColorSpace_FromAP1[2].x) * _1151)))));
+  float _1166 = mad((WorkingColorSpace_FromAP1[0].z), _1153, mad((WorkingColorSpace_FromAP1[0].y), _1152, ((WorkingColorSpace_FromAP1[0].x) * _1151)));
+  float _1167 = mad((WorkingColorSpace_FromAP1[1].z), _1153, mad((WorkingColorSpace_FromAP1[1].y), _1152, ((WorkingColorSpace_FromAP1[1].x) * _1151)));
+  float _1168 = mad((WorkingColorSpace_FromAP1[2].z), _1153, mad((WorkingColorSpace_FromAP1[2].y), _1152, ((WorkingColorSpace_FromAP1[2].x) * _1151)));
+
+  // _1179 = renodx::color::srgb::Encode(saturate(_1166));
+  // _1190 = renodx::color::srgb::Encode(saturate(_1167));
+  // _1201 = renodx::color::srgb::Encode(saturate(_1168));
+  // float _1205 = (_1190 * 0.9375f) + 0.03125f;
+  // float _1212 = _1201 * 15.0f;
+  // float _1213 = floor(_1212);
+  // float _1214 = _1212 - _1213;
+  // float _1216 = (((_1179 * 0.9375f) + 0.03125f) + _1213) * 0.0625f;
+  // float4 _1219 = Textures_1.Sample(Samplers_1, float2(_1216, _1205));
+  // float4 _1226 = Textures_1.Sample(Samplers_1, float2((_1216 + 0.0625f), _1205));
+  // float _1245 = (((lerp(_1219.x, _1226.x, _1214)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _1179));
+  // float _1246 = (((lerp(_1219.y, _1226.y, _1214)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _1190));
+  // float _1247 = (((lerp(_1219.z, _1226.z, _1214)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _1201));
+  // float _1269 = renodx::color::srgb::Decode(max(_1245, 6.103519990574569e-05f));
+  // float _1270 = renodx::color::srgb::Decode(max(_1246, 6.103519990574569e-05f));
+  // float _1271 = renodx::color::srgb::Decode(max(_1247, 6.103519990574569e-05f));
 
   float3 untonemapped = float3(_1166, _1167, _1168);
-  float3 displaymapped_unclamped_gamut = ToneMapForLUT(_1166, _1167, _1168);
-
-  // if (_1166 < 0.0031306699384003878f) {
-  //   _1179 = (_1166 * 12.920000076293945f);
-  // } else {
-  //   _1179 = (((pow(_1166, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
-  // }
-  // if (_1167 < 0.0031306699384003878f) {
-  //   _1190 = (_1167 * 12.920000076293945f);
-  // } else {
-  //   _1190 = (((pow(_1167, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
-  // }
-  // if (_1168 < 0.0031306699384003878f) {
-  //   _1201 = (_1168 * 12.920000076293945f);
-  // } else {
-  //   _1201 = (((pow(_1168, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
-  // }
-  _1179 = renodx::color::srgb::EncodeSafe(_1166);
-  _1190 = renodx::color::srgb::EncodeSafe(_1167);
-  _1201 = renodx::color::srgb::EncodeSafe(_1168);
-
-  float _1205 = (_1190 * 0.9375f) + 0.03125f;
-  float _1212 = _1201 * 15.0f;
-  float _1213 = floor(_1212);
-  float _1214 = _1212 - _1213;
-  float _1216 = (((_1179 * 0.9375f) + 0.03125f) + _1213) * 0.0625f;
-  float4 _1219 = Textures_1.Sample(Samplers_1, float2(_1216, _1205));
-  float4 _1226 = Textures_1.Sample(Samplers_1, float2((_1216 + 0.0625f), _1205));
-  float _1245 = (((lerp(_1219.x, _1226.x, _1214)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _1179));
-  float _1246 = (((lerp(_1219.y, _1226.y, _1214)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _1190));
-  float _1247 = (((lerp(_1219.z, _1226.z, _1214)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _1201));
-
-  // _1245 = max(_1245, 6.103519990574569e-05f);
-  // _1246 = max(_1246, 6.103519990574569e-05f);
-  // _1247 = max(_1247, 6.103519990574569e-05f);
-  // float _1269 = select((_1245 > 0.040449999272823334f), exp2(log2((_1245 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1245 * 0.07739938050508499f));
-  // float _1270 = select((_1246 > 0.040449999272823334f), exp2(log2((_1246 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1246 * 0.07739938050508499f));
-  // float _1271 = select((_1247 > 0.040449999272823334f), exp2(log2((_1247 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1247 * 0.07739938050508499f));
-  float _1269 = renodx::color::srgb::DecodeSafe(_1245);
-  float _1270 = renodx::color::srgb::DecodeSafe(_1246);
-  float _1271 = renodx::color::srgb::DecodeSafe(_1247);
-
-  LUTUpgradeToneMap(untonemapped, displaymapped_unclamped_gamut, untonemapped, _1269, _1270, _1271);
+  float _1269;
+  float _1270;
+  float _1271;
+  SampleLUTUpgradeToneMap(untonemapped, Samplers_1, Textures_1, _1269, _1270, _1271);
 
   float _1297 = ColorScale.x * (((MappingPolynomial.y + (MappingPolynomial.x * _1269)) * _1269) + MappingPolynomial.z);
   float _1298 = ColorScale.y * (((MappingPolynomial.y + (MappingPolynomial.x * _1270)) * _1270) + MappingPolynomial.z);

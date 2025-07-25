@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2024 Musa Haji
- * Copyright (C) 2024 Carlos Lopez
  * SPDX-License-Identifier: MIT
  */
 
@@ -194,6 +193,27 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeLUTStrength",
+        .binding = &shader_injection.custom_lut_strength,
+        .default_value = 100.f,
+        .label = "LUT Strength",
+        .section = "Color Grading",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeLUTScaling",
+        .binding = &shader_injection.custom_lut_scaling,
+        .default_value = 100.f,
+        .label = "LUT Scaling",
+        .section = "Color Grading",
+        .tooltip = "Scales the color grade LUT to full range when size is clamped.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.tone_map_type != 4; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "FixPostProcess",
         .binding = &shader_injection.fix_post_process,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -275,7 +295,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("Requires HDR enabled through Engine.ini edits:\n"
-                             " 1. Open Engine.ini in %localappdata%\\Local\\Robocop\\Saved\\Config\\Windows\\Engine.ini\n"
+                             " 1. Open Engine.ini in %localappdata%\\Robocop\\Saved\\Config\\Windows\n"
                              " 2. Add:\n"
                              "         [SystemSettings]\n"
                              "         r.AllowHDR=1\n"
@@ -305,9 +325,9 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
+      {"ColorGradeLUTStrength", 0.f},
+      {"ColorGradeLUTScaling", 0.f},
       {"FixPostProcess", 0.f},
-      //   {"ColorGradeLUTScaling", 0.f},
-      //   {"ColorGradeLUTStrength", 100.f},
   });
 }
 
