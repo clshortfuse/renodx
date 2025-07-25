@@ -5,6 +5,7 @@
 #include "./color_convert.hlsl"
 #include "./math.hlsl"
 #include "./reinhard.hlsl"
+#include "./tonemap/daniele.hlsl"
 
 namespace renodx {
 namespace tonemap {
@@ -128,35 +129,9 @@ float CustomizeLuminance(float value, float highlights = 1.f, float shadows = 1.
 }
 
 float3 BT709(float3 bt709, Config current_config) {
-  const float n_r = 100.f;
-  float n = 1000.f;
+  const float reference_white = 100.f;
 
-  // drt cam
-  // n_r = 100
-  // g = 1.15
-  // c = 0.18
-  // c_d = 10.013
-  // w_g = 0.14
-  // t_1 = 0.04
-  // r_hit_min = 128
-  // r_hit_max = 896
-
-  float g = 1.1;            // gamma/contrast
-  float c = 0.18;           // scene-referred gray
-  float c_d = 10.013;       // output gray in nits
-  const float w_g = 0.00f;  // gray change
-  float t_1 = 0.01;         // shadow toe
-  const float r_hit_min = 128;
-  const float r_hit_max = 256;
-
-  float white_clip = 100.f;
-
-  g = current_config.contrast;
-  c = current_config.mid_gray_value;
-  c_d = current_config.mid_gray_nits;
-  n = current_config.nits_peak;
-  t_1 = current_config.flare;
-  white_clip = current_config.white_clip;
+  float peak = (current_config.nits_peak / reference_white);
 
   float3 input_color;
   float y_original;
@@ -187,41 +162,37 @@ float3 BT709(float3 bt709, Config current_config) {
     per_channel_color = input_color;
   }
 
-  float m_0 = (n / n_r);
-
   float3 color_output;
+
   [branch]
   if (current_config.tone_map_method == config::tone_map_method::DANIELE) {
-    float m_1 = 0.5 * (m_0 + sqrt(m_0 * (m_0 + (4.0 * t_1))));
-    float r_hit = r_hit_min + ((r_hit_max - r_hit_min) * (log(m_0) / log(10000.0 / 100.0)));
+    renodx::tonemap::daniele::Config daniele_config = renodx::tonemap::daniele::config::Create();
 
-    float u = pow((r_hit / m_1) / ((r_hit / m_1) + 1.0), g);
-    const float m = m_1 / u;
-    const float w_i = log(n / 100.0) / log(2.0);
-    const float c_t = (c_d / n_r) * (1.0 + (w_i * w_g));
-    const float g_ip = 0.5 * (c_t + sqrt(c_t * (c_t + (4.0 * t_1))));
-    const float g_ipp2 = -m_1 * pow(g_ip / m, 1.0 / g) / (pow(g_ip / m, 1.0 / g) - 1.0);
-    const float w_2 = c / g_ipp2;
-    const float s_2 = w_2 * m_1;
-    float u_2 = pow((r_hit / m_1) / ((r_hit / m_1) + w_2), g);
-    float m_2 = m_1 / u_2;
+    daniele_config.n_r = reference_white;               // reference nits
+    daniele_config.n = current_config.nits_peak;        // peak nits
+    daniele_config.g = current_config.contrast;         // surround/contrast
+    daniele_config.c = current_config.mid_gray_value;   // scene-referred gray
+    daniele_config.c_d = current_config.mid_gray_nits;  // output gray in nits
+    daniele_config.w_g = 0;                             // gray change
+    daniele_config.t_1 = current_config.flare;          // shadow toe
 
     [branch]
     if (current_config.per_channel) {
-      float3 ts3 = pow(max(0, per_channel_color) / (per_channel_color + s_2), g) * m_2;
-      float3 flared3 = max(0, (ts3 * ts3) / (ts3 + t_1));
+      float3 ts3 = float3(
+          renodx::tonemap::daniele::ToneMap(per_channel_color.r, daniele_config),
+          renodx::tonemap::daniele::ToneMap(per_channel_color.g, daniele_config),
+          renodx::tonemap::daniele::ToneMap(per_channel_color.b, daniele_config));
 
-      color_output = clamp(flared3, 0, m_0);
+      color_output = clamp(ts3, 0, peak);
     } else {
-      float ts = pow(max(0, y) / (y + s_2), g) * m_2;
-      float flared = max(0, (ts * ts) / (ts + t_1));
+      float ts = renodx::tonemap::daniele::ToneMap(y, daniele_config);
 
-      float y_new = clamp(flared, 0, m_0);
+      float y_new = clamp(ts, 0, peak);
 
       color_output = input_color * (y_original > 0 ? (y_new / y_original) : 0);
     }
   } else if (current_config.tone_map_method == config::tone_map_method::REINHARD) {
-    white_clip = max(white_clip, m_0);
+    float white_clip = max(current_config.white_clip, peak);
     white_clip = CustomizeLuminance(white_clip, current_config.highlights, current_config.shadows, current_config.contrast);
 
     [branch]
@@ -243,7 +214,7 @@ float3 BT709(float3 bt709, Config current_config) {
       color_output = ReinhardScalableExtended(
           color_output,
           white_clip,
-          m_0,
+          peak,
           0,
           0.18f,
           current_config.mid_gray_nits / 100.f);
@@ -262,7 +233,7 @@ float3 BT709(float3 bt709, Config current_config) {
       float y_new = ReinhardScalableExtended(
           y,
           white_clip,
-          m_0,
+          peak,
           0,
           0.18f,
           current_config.mid_gray_nits / 100.f);
@@ -363,7 +334,7 @@ float3 BT709(float3 bt709, Config current_config) {
   [branch]
   if (current_config.clamp_peak != -1.f) {
     color_output = renodx::color::convert::ColorSpaces(color_output, current_color_space, current_config.clamp_peak);
-    color_output = min(color_output, m_0);
+    color_output = min(color_output, peak);
     current_color_space = current_config.clamp_peak;
   }
 

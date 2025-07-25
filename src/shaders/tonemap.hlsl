@@ -7,6 +7,7 @@
 #include "./lut.hlsl"
 #include "./reinhard.hlsl"
 #include "./reno_drt.hlsl"
+#include "./tonemap/daniele.hlsl"
 
 namespace renodx {
 namespace tonemap {
