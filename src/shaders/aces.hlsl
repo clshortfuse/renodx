@@ -182,29 +182,95 @@ float LookUpAcesMax(float max_lum_log10) {
   return 0.18 * exp2(Interpolate1D(MAX_LUM_TABLE, max_lum_log10));
 }
 
-float SSTS(
-    float x,
-    float3 y_min, float3 y_mid, float3 y_max,
-    float3 coefs_low_a, float3 coefs_low_b,
-    float3 coefs_high_a, float3 coefs_high_b) {
-  static const uint N_KNOTS_LOW = 4;
-  static const uint N_KNOTS_HIGH = 4;
-
+struct ODTConfig {
+  float3 y_min;
+  float3 y_mid;
+  float3 y_max;
   float coefs_low[6];
-
-  coefs_low[0] = coefs_low_a.x;
-  coefs_low[1] = coefs_low_a.y;
-  coefs_low[2] = coefs_low_a.z;
-  coefs_low[3] = coefs_low_b.x;
-  coefs_low[4] = coefs_low_b.y;
-  coefs_low[5] = coefs_low_b.z;
   float coefs_high[6];
-  coefs_high[0] = coefs_high_a.x;
-  coefs_high[1] = coefs_high_a.y;
-  coefs_high[2] = coefs_high_a.z;
-  coefs_high[3] = coefs_high_b.x;
-  coefs_high[4] = coefs_high_b.y;
-  coefs_high[5] = coefs_high_b.z;
+};
+
+ODTConfig CreateODTConfig(float min_y, float max_y) {
+  ODTConfig config;
+
+  const float min_lum = min_y;
+  const float max_lum = max_y;
+  // Aces-dev has more expensive version
+  // AcesParams PARAMS = init_aces_params(minY, maxY);
+
+  static const float2x2 BENDS_LOW_TABLE = float2x2(
+      MIN_STOP_RRT, 0.18, MIN_STOP_SDR, 0.35);
+
+  static const float2x2 BENDS_HIGH_TABLE = float2x2(
+      MAX_STOP_SDR, 0.89, MAX_STOP_RRT, 0.90);
+
+  float min_lum_log10 = log10(min_lum);
+  float max_lum_log10 = log10(max_lum);
+  const float aces_min = LookUpAcesMin(min_lum_log10);
+  const float aces_max = LookUpAcesMax(max_lum_log10);
+  // float3 MIN_PT = float3(lookup_ACESmin(minLum), minLum, 0.0);
+  static const float3 MID_PT = float3(0.18, 4.8, 1.55);
+  // float3 MAX_PT = float3(lookup_ACESmax(maxLum), maxLum, 0.0);
+  // float coefs_low[5];
+  // float coefs_high[5];
+
+  float2 log_min = float2(log10(aces_min), min_lum_log10);
+  static const float2 LOG_MID = float2(log10(MID_PT.xy));
+  float2 log_max = float2(log10(aces_max), max_lum_log10);
+
+  float knot_inc_low = (LOG_MID.x - log_min.x) / 3.;
+  // float halfKnotInc = (logMid.x - log_min.x) / 6.;
+
+  // Determine two lowest coefficients (straddling minPt)
+  // coefs_low[0] = (MIN_PT.z * (log_min.x- 0.5 * knot_inc_low)) + ( log_min.y - MIN_PT.z * log_min.x);
+  // coefs_low[1] = (MIN_PT.z * (log_min.x+ 0.5 * knot_inc_low)) + ( log_min.y - MIN_PT.z * log_min.x);
+  // NOTE: if slope=0, then the above becomes just
+  config.coefs_low[0] = log_min.y;
+  config.coefs_low[1] = config.coefs_low[0];
+  // leaving it as a variable for now in case we decide we need non-zero slope extensions
+
+  // Determine two highest coefficients (straddling midPt)
+  float min_coef = (LOG_MID.y - MID_PT.z * LOG_MID.x);
+  config.coefs_low[3] = (MID_PT.z * (LOG_MID.x - 0.5 * knot_inc_low)) + (LOG_MID.y - MID_PT.z * LOG_MID.x);
+  config.coefs_low[4] = (MID_PT.z * (LOG_MID.x + 0.5 * knot_inc_low)) + (LOG_MID.y - MID_PT.z * LOG_MID.x);
+  config.coefs_low[5] = config.coefs_low[4];
+
+  // Middle coefficient (which defines the "sharpness of the bend") is linearly interpolated
+  float pct_low = Interpolate1D(BENDS_LOW_TABLE, log2(aces_min / 0.18));
+  config.coefs_low[2] = log_min.y + pct_low * (LOG_MID.y - log_min.y);
+
+  float knot_inc_high = (log_max.x - LOG_MID.x) / 3.0f;
+  // float halfKnotInc = (log_max.x - logMid.x) / 6.;
+
+  // Determine two lowest coefficients (straddling midPt)
+  // float minCoef = ( logMid.y - MID_PT.z * logMid.x);
+  config.coefs_high[0] = (MID_PT.z * (LOG_MID.x - 0.5 * knot_inc_high)) + min_coef;
+  config.coefs_high[1] = (MID_PT.z * (LOG_MID.x + 0.5 * knot_inc_high)) + min_coef;
+
+  // Determine two highest coefficients (straddling maxPt)
+  // coefs_high[3] = (MAX_PT.z * (log_max.x-0.5*knotIncHigh)) + ( log_max.y - MAX_PT.z * log_max.x);
+  // coefs_high[4] = (MAX_PT.z * (log_max.x+0.5*knotIncHigh)) + ( log_max.y - MAX_PT.z * log_max.x);
+  // NOTE: if slope=0, then the above becomes just
+  config.coefs_high[3] = log_max.y;
+  config.coefs_high[4] = config.coefs_high[3];
+  config.coefs_high[5] = config.coefs_high[4];
+  // leaving it as a variable for now in case we decide we need non-zero slope extensions
+
+  // Middle coefficient (which defines the "sharpness of the bend") is linearly interpolated
+
+  float pct_high = Interpolate1D(BENDS_HIGH_TABLE, log2(aces_max / 0.18));
+  config.coefs_high[2] = LOG_MID.y + pct_high * (log_max.y - LOG_MID.y);
+
+  config.y_min = float3(log_min.x, log_min.y, 0);
+  config.y_mid = float3(LOG_MID.x, LOG_MID.y, MID_PT.z);
+  config.y_max = float3(log_max.x, log_max.y, 0);
+
+  return config;
+}
+
+float SSTS(float x, ODTConfig config) {
+  static const int N_KNOTS_LOW = 4;
+  static const int N_KNOTS_HIGH = 4;
 
   // Check for negatives or zero before taking the log. If negative or zero,
   // set to HALF_MIN.
@@ -212,36 +278,36 @@ float SSTS(
 
   float log_y;
 
-  if (log_x > y_max.x) {
+  if (log_x > config.y_max.x) {
     // Above max breakpoint (overshoot)
     // If MAX_PT slope is 0, this is just a straight line and always returns
     // maxLum
     // y = mx+b
     // log_y = computeGraphY(C.Max.z, log_x, (C.Max.y) - (C.Max.z * (C.Max.x)));
-    log_y = y_max.y;
-  } else if (log_x >= y_mid.x) {
+    log_y = config.y_max.y;
+  } else if (log_x >= config.y_mid.x) {
     // Part of Midtones area (Must have slope)
-    float knot_coord = (N_KNOTS_HIGH - 1) * (log_x - y_mid.x) / (y_max.x - y_mid.x);
+    float knot_coord = (N_KNOTS_HIGH - 1) * (log_x - config.y_mid.x) / (config.y_max.x - config.y_mid.x);
     int j = (int)knot_coord;
     float t = knot_coord - j;
 
-    float3 cf = float3(coefs_high[j], coefs_high[j + 1], coefs_high[j + 2]);
+    float3 cf = float3(config.coefs_high[j], config.coefs_high[j + 1], config.coefs_high[j + 2]);
 
     float3 monomials = float3(t * t, t, 1.0);
     log_y = dot(monomials, mul(M, cf));
-  } else if (log_x > y_min.x) {
-    float knot_coord = (N_KNOTS_LOW - 1) * (log_x - y_min.x) / (y_mid.x - y_min.x);
+  } else if (log_x > config.y_min.x) {
+    float knot_coord = (N_KNOTS_LOW - 1) * (log_x - config.y_min.x) / (config.y_mid.x - config.y_min.x);
     int j = (int)knot_coord;
     float t = knot_coord - j;
 
-    float3 cf = float3(coefs_low[j], coefs_low[j + 1], coefs_low[j + 2]);
+    float3 cf = float3(config.coefs_low[j], config.coefs_low[j + 1], config.coefs_low[j + 2]);
 
     float3 monomials = float3(t * t, t, 1.0);
     log_y = dot(monomials, mul(M, cf));
   } else {  //(log_x <= (C.Min.x))
     // Below min breakpoint (undershoot)
     // log_y = computeGraphY(C.Min.z, log_x, ((C.Min.y) - C.Min.z * (C.Min.x)));
-    log_y = y_min.y;
+    log_y = config.y_min.y;
   }
 
   return pow(10.0, log_y);
@@ -339,87 +405,25 @@ float3 RRT(float3 aces) {
   return rgb_pre;
 }
 
-float3 ODTToneMap(float3 rgb_pre, float min_y, float max_y) {
-  const float min_lum = min_y;
-  const float max_lum = max_y;
-  // Aces-dev has more expensive version
-  // AcesParams PARAMS = init_aces_params(minY, maxY);
+float ODTToneMap(float x, ODTConfig config) {
+  return clamp(SSTS(x, config), 0.0, 65535.0f);
+}
 
-  static const float2x2 BENDS_LOW_TABLE = float2x2(
-      MIN_STOP_RRT, 0.18, MIN_STOP_SDR, 0.35);
+float3 ODTToneMap(float3 rgb, ODTConfig config) {
+  return clamp(
+      float3(
+          SSTS(rgb.r, config),
+          SSTS(rgb.g, config),
+          SSTS(rgb.b, config)),
+      0.0, 65535.0f);
+}
 
-  static const float2x2 BENDS_HIGH_TABLE = float2x2(
-      MAX_STOP_SDR, 0.89, MAX_STOP_RRT, 0.90);
+float ODTToneMap(float x, float min_y, float max_y) {
+  return ODTToneMap(x, CreateODTConfig(min_y, max_y));
+}
 
-  float min_lum_log10 = log10(min_lum);
-  float max_lum_log10 = log10(max_lum);
-  const float aces_min = LookUpAcesMin(min_lum_log10);
-  const float aces_max = LookUpAcesMax(max_lum_log10);
-  // float3 MIN_PT = float3(lookup_ACESmin(minLum), minLum, 0.0);
-  static const float3 MID_PT = float3(0.18, 4.8, 1.55);
-  // float3 MAX_PT = float3(lookup_ACESmax(maxLum), maxLum, 0.0);
-  // float coefs_low[5];
-  // float coefs_high[5];
-  float3 coefs_low_a;
-  float3 coefs_low_b;
-  float3 coefs_high_a;
-  float3 coefs_high_b;
-
-  float2 log_min = float2(log10(aces_min), min_lum_log10);
-  static const float2 LOG_MID = float2(log10(MID_PT.xy));
-  float2 log_max = float2(log10(aces_max), max_lum_log10);
-
-  float knot_inc_low = (LOG_MID.x - log_min.x) / 3.;
-  // float halfKnotInc = (logMid.x - log_min.x) / 6.;
-
-  // Determine two lowest coefficients (straddling minPt)
-  // coefs_low[0] = (MIN_PT.z * (log_min.x- 0.5 * knot_inc_low)) + ( log_min.y - MIN_PT.z * log_min.x);
-  // coefs_low[1] = (MIN_PT.z * (log_min.x+ 0.5 * knot_inc_low)) + ( log_min.y - MIN_PT.z * log_min.x);
-  // NOTE: if slope=0, then the above becomes just
-  coefs_low_a.x = log_min.y;
-  coefs_low_a.y = coefs_low_a.x;
-  // leaving it as a variable for now in case we decide we need non-zero slope extensions
-
-  // Determine two highest coefficients (straddling midPt)
-  float min_coef = (LOG_MID.y - MID_PT.z * LOG_MID.x);
-  coefs_low_b.x = (MID_PT.z * (LOG_MID.x - 0.5 * knot_inc_low)) + (LOG_MID.y - MID_PT.z * LOG_MID.x);
-  coefs_low_b.y = (MID_PT.z * (LOG_MID.x + 0.5 * knot_inc_low)) + (LOG_MID.y - MID_PT.z * LOG_MID.x);
-  coefs_low_b.z = coefs_low_b.y;
-
-  // Middle coefficient (which defines the "sharpness of the bend") is linearly interpolated
-  float pct_low = Interpolate1D(BENDS_LOW_TABLE, log2(aces_min / 0.18));
-  coefs_low_a.z = log_min.y + pct_low * (LOG_MID.y - log_min.y);
-
-  float knot_inc_high = (log_max.x - LOG_MID.x) / 3.0f;
-  // float halfKnotInc = (log_max.x - logMid.x) / 6.;
-
-  // Determine two lowest coefficients (straddling midPt)
-  // float minCoef = ( logMid.y - MID_PT.z * logMid.x);
-  coefs_high_a.x = (MID_PT.z * (LOG_MID.x - 0.5 * knot_inc_high)) + min_coef;
-  coefs_high_a.y = (MID_PT.z * (LOG_MID.x + 0.5 * knot_inc_high)) + min_coef;
-
-  // Determine two highest coefficients (straddling maxPt)
-  // coefs_high[3] = (MAX_PT.z * (log_max.x-0.5*knotIncHigh)) + ( log_max.y - MAX_PT.z * log_max.x);
-  // coefs_high[4] = (MAX_PT.z * (log_max.x+0.5*knotIncHigh)) + ( log_max.y - MAX_PT.z * log_max.x);
-  // NOTE: if slope=0, then the above becomes just
-  coefs_high_b.x = log_max.y;
-  coefs_high_b.y = coefs_high_b.x;
-  coefs_high_b.z = coefs_high_b.y;
-  // leaving it as a variable for now in case we decide we need non-zero slope extensions
-
-  // Middle coefficient (which defines the "sharpness of the bend") is linearly interpolated
-
-  float pct_high = Interpolate1D(BENDS_HIGH_TABLE, log2(aces_max / 0.18));
-  coefs_high_a.z = LOG_MID.y + pct_high * (log_max.y - LOG_MID.y);
-
-  float3 rgb_post = float3(
-      SSTS(rgb_pre.x, float3(log_min.x, log_min.y, 0), float3(LOG_MID.x, LOG_MID.y, MID_PT.z), float3(log_max.x, log_max.y, 0), coefs_low_a, coefs_low_b, coefs_high_a, coefs_high_b),
-      SSTS(rgb_pre.y, float3(log_min.x, log_min.y, 0), float3(LOG_MID.x, LOG_MID.y, MID_PT.z), float3(log_max.x, log_max.y, 0), coefs_low_a, coefs_low_b, coefs_high_a, coefs_high_b),
-      SSTS(rgb_pre.z, float3(log_min.x, log_min.y, 0), float3(LOG_MID.x, LOG_MID.y, MID_PT.z), float3(log_max.x, log_max.y, 0), coefs_low_a, coefs_low_b, coefs_high_a, coefs_high_b));
-
-  // Nits to Linear
-  float3 linear_cv = YToLinCV(rgb_post, max_y, min_y);
-  return clamp(rgb_post, 0.0, 65535.0f);
+float3 ODTToneMap(float3 rgb, float min_y, float max_y) {
+  return ODTToneMap(rgb, CreateODTConfig(min_y, max_y));
 }
 
 float3 ODT(float3 rgb_pre, float min_y, float max_y, float3x3 odt_matrix = renodx::color::AP1_TO_BT709_MAT) {
