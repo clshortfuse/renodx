@@ -19,38 +19,69 @@ float3 AdjustGammaOnLuminance(float3 linearColor, float gammaAdjustmentFactor) {
   return linearColor * (adjustedLuminance / originalLuminance);
 }
 
-/// Applies a modified `renodx::lut::Sample` that accounts for only black level correction,
-/// leaving peak white untouched as LUTs are already HDR, ensuring no highlight impact.
-/// @param color_input Input color to apply the LUT to.
-/// @param lut_texture The LUT texture.
-/// @param lut_config Configuration for LUT sampling.
-/// @return Color output after applying LUT correction.
+// /// Applies a modified `renodx::lut::Sample` that accounts for only black level correction
+// /// @param color_input Input color to apply the LUT to.
+// /// @param lut_texture The LUT texture.
+// /// @param lut_config Configuration for LUT sampling.
+// /// @return Color output after applying LUT correction.
+// float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut::Config lut_config) {
+//   float3 lutInputColor = renodx::lut::ConvertInput(color_input, lut_config);
+//   float3 lutOutputColor = renodx::lut::SampleColor(lutInputColor, lut_config, lut_texture);
+//   float3 color_output = renodx::lut::LinearOutput(lutOutputColor, lut_config);
+
+//   float3 original_output = color_output;
+
+//   if (lut_config.scaling != 0) {
+//     float3 lutBlack = renodx::lut::SampleColor(renodx::lut::ConvertInput(0, lut_config), lut_config, lut_texture);
+//     float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(0.18f, lut_config), lut_config, lut_texture);
+//     float3 unclamped = renodx::lut::Unclamp(
+//         renodx::lut::GammaOutput(lutOutputColor, lut_config),
+//         renodx::lut::GammaOutput(lutBlack, lut_config),
+//         renodx::lut::GammaOutput(lutMid, lut_config),
+//         1.f,  // set peak to 1 so it doesn't touch highlights
+//         renodx::lut::GammaInput(color_input, lutInputColor, lut_config));
+//     float3 recolored = renodx::lut::RecolorUnclamped(color_output, renodx::lut::LinearUnclampedOutput(unclamped, lut_config));
+//     color_output = lerp(color_output, recolored, lut_config.scaling);
+// #if 1  // fixes crushed blacks with 2.2 gamma correction
+//     color_output = lerp(color_output, original_output, saturate(pow(color_output, lutMid)));
+// #endif
+//   }
+//   color_output = renodx::lut::RestoreSaturationLoss(color_input, color_output, lut_config);
+//   if (lut_config.strength != 1.f) {
+//     color_output = lerp(color_input, color_output, lut_config.strength);
+//   }
+//   return color_output;
+// }
+
 float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut::Config lut_config) {
   float3 lutInputColor = renodx::lut::ConvertInput(color_input, lut_config);
   float3 lutOutputColor = renodx::lut::SampleColor(lutInputColor, lut_config, lut_texture);
   float3 color_output = renodx::lut::LinearOutput(lutOutputColor, lut_config);
-
-  float3 original_output = color_output;
-
-  if (lut_config.scaling != 0) {
+  [branch]
+  if (lut_config.scaling != 0.f) {
     float3 lutBlack = renodx::lut::SampleColor(renodx::lut::ConvertInput(0, lut_config), lut_config, lut_texture);
-    float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(0.18f, lut_config), lut_config, lut_texture);
-    float3 unclamped = renodx::lut::Unclamp(
-        renodx::lut::GammaOutput(lutOutputColor, lut_config),
-        renodx::lut::GammaOutput(lutBlack, lut_config),
-        renodx::lut::GammaOutput(lutMid, lut_config),
-        1.f,  // set peak to 1 so it doesn't touch highlights
-        renodx::lut::GammaInput(color_input, lutInputColor, lut_config));
-    float3 recolored = renodx::lut::RecolorUnclamped(color_output, renodx::lut::LinearUnclampedOutput(unclamped, lut_config));
-    color_output = lerp(color_output, recolored, lut_config.scaling);
-#if 1  // fixes crushed blacks with 2.2 gamma correction
-    color_output = lerp(color_output, original_output, saturate(pow(color_output, lutMid)));
-#endif
+    float3 lutBlackLinear = renodx::lut::LinearOutput(lutBlack, lut_config);
+    float lutBlackY = renodx::color::y::from::BT709(lutBlackLinear);
+    if (lutBlackY > 0.f) {
+      float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_config, lut_texture);               // use lutBlackY instead of 0.18 to avoid black crush
+      float3 lutShift = renodx::lut::SampleColor(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_config, lut_texture) / lutBlack;  // galaxy brain
+
+      float3 unclamped_gamma = renodx::lut::Unclamp(
+          renodx::lut::GammaOutput(lutOutputColor, lut_config),
+          renodx::lut::GammaOutput(lutBlack, lut_config),
+          renodx::lut::GammaOutput(lutMid, lut_config),
+          1.f,  // renodx::lut::GammaOutput(lutWhite, lut_config),
+          renodx::lut::ConvertInput(color_input * lutShift, lut_config));
+      float3 unclamped_linear = renodx::lut::LinearUnclampedOutput(unclamped_gamma, lut_config);
+      float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling);
+      color_output = recolored;
+    }
+  } else {
   }
-  color_output = renodx::lut::RestoreSaturationLoss(color_input, color_output, lut_config);
-  if (lut_config.strength != 1.f) {
-    color_output = lerp(color_input, color_output, lut_config.strength);
+  if (lut_config.recolor != 0.f) {
+    color_output = renodx::lut::RestoreSaturationLoss(color_input, color_output, lut_config);
   }
+
   return color_output;
 }
 
