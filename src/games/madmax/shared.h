@@ -26,9 +26,14 @@
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT709
 #define RENODX_SWAP_CHAIN_ENCODING             ENCODING_SCRGB
+#define CUSTOM_BLOOM                         shader_injection.custom_bloom
+#define CUSTOM_LENS_FLARE                    shader_injection.custom_lens_flare
+#define CUSTOM_FOG                           shader_injection.custom_fog
+#define CUSTOM_WIND                          shader_injection.custom_wind
+#define CUSTOM_HEAT_HAZE                     shader_injection.custom_heat_haze
 #define CUSTOM_FILM_GRAIN_STRENGTH           shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                        shader_injection.custom_random
-#define RENODX_WORLD_MAP                     shader_injection.world_map
+#define RENODX_MAP_THREAT                    shader_injection.map_threat
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -55,9 +60,14 @@ struct ShaderInjectData {
   float tone_map_per_channel;
   float gamma_correction;
   float swap_chain_custom_color_space;
+  float custom_bloom;
+  float custom_lens_flare;
+  float custom_fog;
+  float custom_wind;
+  float custom_heat_haze;
   float custom_film_grain;
   float custom_random;
-  float world_map;
+  float map_threat;
 };
 
 #ifndef __cplusplus
