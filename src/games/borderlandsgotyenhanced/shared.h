@@ -11,8 +11,6 @@
 #define RENODX_TONE_MAP_HUE_PROCESSOR        shader_injection.tone_map_hue_processor
 #define RENODX_TONE_MAP_HUE_CORRECTION       shader_injection.tone_map_hue_correction
 #define RENODX_TONE_MAP_HUE_SHIFT            shader_injection.tone_map_hue_shift
-#define RENODX_TONE_MAP_CLAMP_COLOR_SPACE    shader_injection.tone_map_clamp_color_space
-#define RENODX_TONE_MAP_CLAMP_PEAK           shader_injection.tone_map_clamp_peak
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
@@ -21,11 +19,16 @@
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
+#define RENODX_RENO_DRT_WHITE_CLIP           shader_injection.tone_map_white_clip
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
+#define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE shader_injection.swap_chain_custom_color_space
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT709
 #define RENODX_SWAP_CHAIN_ENCODING             ENCODING_SCRGB
-#define RENODX_RENO_DRT_WHITE_CLIP           shader_injection.white_clip
+#define CUSTOM_FLARE_OUT                     shader_injection.custom_flare_out
+#define CUSTOM_FILM_GRAIN_STRENGTH           shader_injection.custom_film_grain
+#define CUSTOM_RANDOM                        shader_injection.custom_random
+#define CELL_SHADING                         shader_injection.cell_shading
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -46,12 +49,15 @@ struct ShaderInjectData {
   float tone_map_hue_correction;
   float tone_map_hue_shift;
   float tone_map_working_color_space;
-  float tone_map_clamp_color_space;
-  float tone_map_clamp_peak;
   float tone_map_hue_processor;
   float tone_map_per_channel;
+  float tone_map_white_clip;
   float gamma_correction;
-  float white_clip;
+  float swap_chain_custom_color_space;
+  float custom_flare_out;
+  float custom_film_grain;
+  float custom_random;
+  float cell_shading;
 };
 
 #ifndef __cplusplus
