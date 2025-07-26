@@ -64,8 +64,18 @@ void main(
   o0.xyz = exp2(r0.xyz);
 
   o0.rgb = renodx::color::srgb::DecodeSafe(o0.rgb);
-  if (RENODX_TONE_MAP_TYPE != 0) {
+  if (RENODX_TONE_MAP_TYPE == 0) {
+    o0.rgb = saturate(o0.rgb);
+  } else {
     o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
+  }
+  if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
+    o0.rgb = renodx::effects::ApplyFilmGrain(
+        o0.rgb,
+        v1.xy,
+        CUSTOM_RANDOM,
+        CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
+        1.f);
   }
   o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   o0.w = 0;
