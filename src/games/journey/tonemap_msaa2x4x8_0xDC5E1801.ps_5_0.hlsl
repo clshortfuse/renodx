@@ -67,13 +67,13 @@ void main(
   r2.xyz = r2.xyz * r0.www;
   r0.xyz = r2.xyz + r0.xyz;
   r0.xyz = sharpMult * r0.xyz;
-  r1.xyz = bloomMult * r1.xyz;
-  r0.xyz = r1.xyz + r0.xyz;
-  r1.xyz = float3(-0.00400000019,-0.00400000019,-0.00400000019);
+  r1.xyz = bloomMult * r1.xyz * CUSTOM_BLOOM;
   r0.xyz = r1.xyz + r0.xyz;
 
   float3 untonemapped = r0.rgb;
 
+  r1.xyz = float3(-0.00400000019, -0.00400000019, -0.00400000019);
+  r0.xyz = r1.xyz + r0.xyz;
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.xyz = min(float3(64,64,64), r0.xyz);
   r1.xyz = float3(6.19999981,6.19999981,6.19999981) * r0.xyz;
@@ -87,8 +87,18 @@ void main(
   o0.xyz = r0.xyz;
 
   o0.rgb = renodx::color::srgb::DecodeSafe(o0.rgb);
-  if (RENODX_TONE_MAP_TYPE != 0) {
+  if (RENODX_TONE_MAP_TYPE == 0) {
+    o0.rgb = saturate(o0.rgb);
+  } else {
     o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
+  }
+  if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
+    o0.rgb = renodx::effects::ApplyFilmGrain(
+        o0.rgb,
+        v1.xy,
+        CUSTOM_RANDOM,
+        CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
+        1.f);
   }
   o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   o0.w = 1;
