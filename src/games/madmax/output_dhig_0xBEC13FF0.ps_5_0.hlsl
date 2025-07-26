@@ -90,7 +90,8 @@ void main(
     r2.xyw = float3(-0,-0.5,-0.5) + r2.xyw;
     r3.xyz = HeatHazeTexture.Sample(HeatHazeTexture_s, r3.zw).xyw;
     r3.xyz = float3(-0.5,-0.5,-0.5) + r3.xyz;
-    r2.xyw = r3.xyz * float3(0,0.75,0.75) + r2.xyw;
+    r2.xyw = r3.xyz * float3(0, 0.75, 0.75) + r2.xyw;
+    r2.xyw *= CUSTOM_HEAT_HAZE;
     r3.xy = r2.wy * r1.zz;
     r3.xy = r3.xy * r2.xx + v1.xy;
     r1.z = dot(r2.yw, r2.yw);
@@ -108,8 +109,8 @@ void main(
     r1.y = 0;
   }
   r2.xyz = SceneTexture.Sample(SceneTexture_s, r0.xy).xyz;
-  r3.xyz = BloomTexture.Sample(BloomTexture_s, r0.xy).xyz;
-  r4.xyz = SecondaryBloomTexture.Sample(SecondaryBloomTexture_s, r0.xy).xyz;
+  r3.xyz = BloomTexture.Sample(BloomTexture_s, r0.xy).xyz * CUSTOM_BLOOM;
+  r4.xyz = SecondaryBloomTexture.Sample(SecondaryBloomTexture_s, r0.xy).xyz * CUSTOM_BLOOM;
   r1.x = saturate(r1.x);
   r1.x = r1.x * r1.x;
   r1.x = r1.x * Consts[12].z + 1;
@@ -153,7 +154,9 @@ void main(
   o0.w = sqrt(r0.w);
   o0.xyz = r0.xyz;
 
-  if (RENODX_TONE_MAP_TYPE != 0) {
+  if (RENODX_TONE_MAP_TYPE == 0) {
+    o0.rgb = saturate(o0.rgb);
+  } else {
     o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
   }
   if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {

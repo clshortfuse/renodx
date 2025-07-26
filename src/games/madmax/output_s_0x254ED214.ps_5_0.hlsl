@@ -43,11 +43,11 @@ void main(
 
   r0.xyzw = Consts[9].xyzw * v1.xyxy;
   r1.xyz = LensDirtTexture.Sample(LensDirtTexture_s, r0.zw).xyz;
-  r1.xyz = r1.xyz * Consts[12].www + float3(1,1,1);
-  r2.xyz = SecondaryBloomTexture.Sample(SecondaryBloomTexture_s, r0.xy).xyz;
+  r1.xyz = r1.xyz * Consts[12].www + float3(1, 1, 1);
+  r2.xyz = SecondaryBloomTexture.Sample(SecondaryBloomTexture_s, r0.xy).xyz * CUSTOM_BLOOM;
   r2.xyz = Consts[3].yyy * r2.xyz;
   r1.xyz = r2.xyz * r1.xyz;
-  r2.xyz = BloomTexture.Sample(BloomTexture_s, r0.xy).xyz;
+  r2.xyz = BloomTexture.Sample(BloomTexture_s, r0.xy).xyz * CUSTOM_BLOOM;
   r0.xyz = SceneTexture.Sample(SceneTexture_s, r0.xy).xyz;
   r1.xyz = r2.xyz * Consts[3].xxx + r1.xyz;
   r2.xyz = EdgeFadeTexture.Sample(EdgeFadeTexture_s, v1.xy).xyz;
@@ -81,7 +81,9 @@ void main(
   o0.xyz = r0.xyz;
   o0.w = sqrt(r0.w);
 
-  if (RENODX_TONE_MAP_TYPE != 0) {
+  if (RENODX_TONE_MAP_TYPE == 0) {
+    o0.rgb = saturate(o0.rgb);
+  } else {
     o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
   }
   if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
