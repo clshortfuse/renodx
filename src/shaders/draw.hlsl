@@ -476,7 +476,7 @@ float3 SwapChainPass(float3 color, Config config) {
       }
       color = max(0, color);
       color = renodx::color::convert::ColorSpaces(color, config.swap_chain_clamp_color_space, config.swap_chain_encoding_color_space);
-      
+
     }
   }
 
@@ -648,9 +648,8 @@ float3 ApplyPerChannelCorrection(
   const float2 hue_corrected_chromas = lerp(hue_shifted_chromas, selectable_hue_correct_range, hue_correction_strength);
 
   const float2 chroma_correct_chromas = hue_corrected_chromas
-                                        * renodx::math::DivideSafe(
-                                            length(untonemapped_chromas),
-                                            length(hue_corrected_chromas), 1.f);
+                                        * (length(untonemapped_chromas) /
+                                        max(length(hue_corrected_chromas), 0.004f));
 
   const float2 selectable_chroma_correct_range = lerp(
       chroma_correct_chromas,
