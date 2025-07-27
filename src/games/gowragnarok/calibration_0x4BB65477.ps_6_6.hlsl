@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsli"
 
 cbuffer ConstBuf_passDataUBO : register(b0, space0) {
   float4 ConstBuf_passData_m0[2288] : packoffset(c0);
@@ -347,7 +347,7 @@ void frag_main() {
       _701 = exp2(log2(max(_689 + ((_595 < 0.017999999225139617919921875f) ? (_585 * 0.0449999980628490447998046875f) : ((exp2(_599 * 0.449999988079071044921875f) * 1.09899997711181640625f) + (-0.098999999463558197021484375f))), 0.0f)) * 2.400000095367431640625f) * _688;
       _707 = exp2(log2(max(_689 + ((_596 < 0.017999999225139617919921875f) ? (_591 * 0.0449999980628490447998046875f) : ((exp2(_600 * 0.449999988079071044921875f) * 1.09899997711181640625f) + (-0.098999999463558197021484375f))), 0.0f)) * 2.400000095367431640625f) * _688;
     } else {
-      float3 corrected = renodx::color::correct::GammaSafe(float3(_593, _595, _596));
+      float3 corrected = ApplyGammaCorrection(float3(_593, _595, _596));
       _695 = corrected.r, _701 = corrected.g, _707 = corrected.b;
     }
 

@@ -14,6 +14,7 @@
 struct ShaderInjectData {
   float tone_map_type;
   float tone_map_override_peak_nits;
+  float gamma_correction;
   float peak_white_nits;
   float diffuse_white_nits;
   float tone_map_exposure;
@@ -30,6 +31,7 @@ cbuffer shader_injection : register(b13, space50) {
 #define RENODX_OVERRIDE_PEAK_NITS shader_injection.tone_map_override_peak_nits
 #define RENODX_PEAK_WHITE_NITS    shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS shader_injection.diffuse_white_nits
+#define RENODX_GAMMA_CORRECTION   shader_injection.gamma_correction
 #define RENODX_TONE_MAP_EXPOSURE  shader_injection.tone_map_exposure
 #define CUSTOM_BLOOM              shader_injection.custom_bloom
 #define RENODX_USE_PQ_ENCODING    shader_injection.custom_hdr10_encoding
