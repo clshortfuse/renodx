@@ -20,6 +20,7 @@ struct ShaderInjectData {
   float tone_map_flare;
 
   float output_has_drawn;
+  float color_grade_hue_shift;
 };
 
 #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
@@ -36,6 +37,7 @@ struct ShaderInjectData {
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define CUSTOM_OUTPUT_SHADER_DRAWN           shader_injection.output_has_drawn
+#define CUSTOM_COLOR_GRADE_HUE_SHIFT         shader_injection.color_grade_hue_shift
 
 #ifndef __cplusplus
 #ifdef __SLANG__

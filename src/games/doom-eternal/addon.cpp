@@ -45,6 +45,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
                                                                                             {"ColorGradeHighlightSaturation", {.binding = &shader_injection.tone_map_highlight_saturation}},
                                                                                             {"ColorGradeBlowout", {.binding = &shader_injection.tone_map_blowout}},
                                                                                             {"ColorGradeFlare", {.binding = &shader_injection.tone_map_flare}},
+                                                                                            {"SceneGradeHueShift", {.binding = &shader_injection.color_grade_hue_shift, .default_value = 25.f}},
                                                                                         }),
                                                                                         {
                                                                                             new renodx::utils::settings::Setting{
