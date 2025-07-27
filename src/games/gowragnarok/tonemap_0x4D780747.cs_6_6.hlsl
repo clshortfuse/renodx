@@ -25,8 +25,13 @@ void comp_main() {
     min_nits = 0.0001f;
     exposure = 8.f * RENODX_TONE_MAP_EXPOSURE;
 
-    peak_nits = renodx::color::correct::Gamma(peak_nits / RENODX_DIFFUSE_WHITE_NITS, true) * 100.f;
-    min_nits = renodx::color::correct::Gamma(min_nits / RENODX_DIFFUSE_WHITE_NITS, true) * 100.f;
+    if (RENODX_GAMMA_CORRECTION) {
+      peak_nits = renodx::color::correct::Gamma(peak_nits / RENODX_DIFFUSE_WHITE_NITS, true) * 100.f;
+      min_nits = renodx::color::correct::Gamma(min_nits / RENODX_DIFFUSE_WHITE_NITS, true) * 100.f;
+    } else {
+      peak_nits = (peak_nits / RENODX_DIFFUSE_WHITE_NITS) * 100.f;
+      min_nits = (min_nits / RENODX_DIFFUSE_WHITE_NITS) * 100.f;
+    }
   }
 
   float _44 = log2(min_nits);  // float _44 = log2(max(9.9999997473787516355514526367188e-05f, ConstBuf_constants_m0[3u].w));

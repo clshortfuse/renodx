@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsli"
 
 cbuffer ConstBuf_passDataUBO : register(b0, space0) {
   float4 ConstBuf_passData_m0[39] : packoffset(c0);
@@ -134,7 +134,7 @@ void frag_main() {
 
       _309 = corrected.r, _310 = corrected.g, _311 = corrected.b;
     } else {
-      x = renodx::color::correct::GammaSafe(x);
+      x = ApplyGammaCorrection(x);
       _309 = x.r, _310 = x.g, _311 = x.b;
     }
 
