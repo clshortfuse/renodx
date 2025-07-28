@@ -42,12 +42,11 @@ float3 LUTCorrectBlack(float3 lut_input_color_bt709, float3 lut_output_color_ap1
     float3 min_black = LogDecodeLUT(ColorRemap0VolumeSampler.SampleLevel(Clamp_s, LogEncodeLUT((0.f).xxx) + (0.5f / 32.f), 0.0f).rgb);
 
     float lut_min_y = (renodx::color::y::from::AP1(max(0, min_black)));
-    if (RENODX_GAMMA_CORRECTION && RENODX_TONE_MAP_TYPE != 0.f) lut_min_y = renodx::color::correct::Gamma(lut_min_y);
     if (lut_min_y > 0) {
       float3 lut_output_color_bt709 = renodx::color::bt709::from::AP1(lut_output_color_ap1);
 
-      float3 corrected_black = renodx::lut::CorrectBlack(max(0, lut_input_color_bt709), max(0, lut_output_color_bt709), lut_min_y, 1.f);
-      float3 corrected_black_rrtsat = renodx::color::ap1::from::BT709(corrected_black);
+      float3 corrected_black = renodx::lut::CorrectBlack(lut_input_color_bt709, lut_output_color_bt709, lut_min_y, 80.f);
+      float3 corrected_black_rrtsat = max(0, renodx::color::ap1::from::BT709(corrected_black));
 
       lut_output_color_ap1 = lerp(lut_output_color_ap1, corrected_black_rrtsat, RENODX_COLOR_GRADE_SCALING);
     }
