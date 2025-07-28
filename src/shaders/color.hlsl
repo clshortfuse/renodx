@@ -46,25 +46,15 @@ static const float3x3 XYZ_TO_AP1_MAT = float3x3(
     -0.6636628587f, 1.6153315917f, 0.0167563477f,
     0.0117218943f, -0.0082844420f, 0.9883948585f);
 
-static const float3x3 XYZ_TO_ICTCP_LMS_MAT = float3x3(
-    0.359168797f, 0.697604775f, -0.0357883982f,
-    -0.192186400f, 1.10039842f, 0.0755404010f,
-    0.00695759989f, 0.0749168023f, 0.843357980f);
+static const float3x3 XYZ_D65_TO_VON_KRIES_LMS_MAT = float3x3(
+    0.4002400f, 0.7076000f, -0.0808100f,
+    -0.2263000f, 1.1653200f, 0.0457000f,
+    0.0000000f, 0.0000000f, 0.9182200f);
 
-static const float3x3 ICTCP_LMS_TO_XYZ_MAT = float3x3(
-    2.07036161f, -1.32659053f, 0.206681042f,
-    0.364990383f, 0.680468797f, -0.0454616732f,
-    -0.0495028905f, -0.0495028905f, 1.18806946f);
-
-static const float3x3 BT709_TO_ICTCP_LMS_MAT = float3x3(
-    0.295764088f, 0.623072445f, 0.0811667516f,
-    0.156191974f, 0.727251648f, 0.116557933f,
-    0.0351022854f, 0.156589955f, 0.808302998f);
-
-static const float3x3 ICTCP_LMS_TO_BT709_MAT = float3x3(
-    6.17353248f, -5.32089900f, 0.147354885f,
-    -1.32403194f, 2.56026983f, -0.236238613f,
-    -0.0115983877f, -0.264921456f, 1.27652633f);
+static const float3x3 PLMS_TO_IPT_MAT = float3x3(
+    0.4f, 0.4f, 0.2f,
+    4.4550f, -4.8510f, 0.3960f,
+    0.8056f, 0.3572f, -1.1628f);
 
 static const float3x3 DISPLAYP3_TO_XYZ_MAT = float3x3(
     0.4865709486f, 0.2656676932f, 0.1982172852f,
@@ -227,6 +217,18 @@ float3 BT709(float3 bt709) {
 }  // namespace from
 }  // namespace xyY
 
+namespace ipt {
+static const float RESPONSE_EXPONENT = 1.f / 2.3f;
+namespace from {
+float3 BT709(float3 bt709_color) {
+  float3 lms = mul(mul(XYZ_D65_TO_VON_KRIES_LMS_MAT, BT709_TO_XYZ_MAT), bt709_color);
+  float3 plms = renodx::math::SignPow(lms, RESPONSE_EXPONENT);
+  float3 ipt_color = mul(PLMS_TO_IPT_MAT, plms);
+  return ipt_color;
+}
+}  // namespace from
+}  // namespace ipt
+
 namespace bt709 {
 static const float REFERENCE_WHITE = 100.f;
 
@@ -267,6 +269,17 @@ float3 ARIBTRB927MPCD(float3 aribtrb9) {
 
 float3 BT709D93(float3 bt709d93) {
   return mul(BT709_D93_TO_BT709_D65_MAT, bt709d93);
+}
+
+float3 IPT(float3 ipt_color) {
+  float3 plms_color = mul(renodx::math::Invert3x3(PLMS_TO_IPT_MAT), ipt_color);
+  float3 lms_color = renodx::math::SignPow(plms_color, 1.f / ipt::RESPONSE_EXPONENT);
+  float3 bt709_color = mul(
+      mul(
+          renodx::math::Invert3x3(BT709_TO_XYZ_MAT),
+          renodx::math::Invert3x3(XYZ_D65_TO_VON_KRIES_LMS_MAT)),
+      lms_color);
+  return bt709_color;
 }
 
 float3 OkLab(float3 oklab) {
@@ -372,18 +385,44 @@ float3 DecodeSafe(float3 color, float scaling = 10000.f) {
 }  // namespace pq
 
 namespace ictcp {
+
+static const float CROSSTALK = 0.04f;
+static const float IPT_OPTIMIZATION = 1.0f;
+
+static const float3x3 CROSSTALK_MAT = float3x3(
+    1.0f - (2 * CROSSTALK), CROSSTALK, CROSSTALK,
+    CROSSTALK, 1.0f - (2 * CROSSTALK), CROSSTALK,
+    CROSSTALK, CROSSTALK, 1.0f - (2 * CROSSTALK));
+
+static const float3x3 XYZ_TO_DOLBY_LMS_MAT = mul(XYZ_D65_TO_VON_KRIES_LMS_MAT, CROSSTALK_MAT);
+
+static const float3x3 PLMS_TO_IPT_OPTIMIZED_MAT = float3x3(
+    lerp(PLMS_TO_IPT_MAT[0], float3(0.5f, 0.5f, 0.0f), IPT_OPTIMIZATION),
+    PLMS_TO_IPT_MAT[1],
+    PLMS_TO_IPT_MAT[2]);
+
+static const float VECTORSCOPE_DEGREES = 65.f;
+static const float ROTATION_POINT = VECTORSCOPE_DEGREES * renodx::math::PI / 180.f;
+
+static const float3x3 IPT_ROTATION_MAT = float3x3(
+    1.f, 0, 0.f,
+    0, cos(ROTATION_POINT), -sin(ROTATION_POINT),
+    0, sin(ROTATION_POINT), cos(ROTATION_POINT));
+
+static const float SCALE_FACTOR = 1.4f;
+static const float3x3 IPT_SCALE_MAT = float3x3(
+    1.0f, 1.0f, 1.0f,
+    SCALE_FACTOR, SCALE_FACTOR, SCALE_FACTOR,
+    1.0f, 1.0f, 1.0f);
+
+static const float3x3 PLMS_TO_ICTCP_MAT = mul(IPT_ROTATION_MAT, PLMS_TO_IPT_OPTIMIZED_MAT) * IPT_SCALE_MAT;
+
 namespace from {
-float3 BT709(float3 bt709_color) {
-  float3 lms_color = mul(BT709_TO_ICTCP_LMS_MAT, bt709_color);
-
-  // L'M'S' -> ICtCp
-  float3x3 lms_to_ictcp = {
-    0.5f, 0.5f, 0.f,
-    1.61370003f, -3.32339620f, 1.70969617f,
-    4.37806224f, -4.24553966f, -0.132522642f
-  };
-
-  return mul(lms_to_ictcp, pq::Encode(max(0, lms_color), 100.0f));
+float3 BT709(float3 bt709_color, float scaling = 100.f) {
+  float3 lms = mul(mul(XYZ_TO_DOLBY_LMS_MAT, BT709_TO_XYZ_MAT), bt709_color);
+  float3 plms = pq::Encode(max(0, lms), scaling);
+  float3 ictcp_color = mul(PLMS_TO_ICTCP_MAT, plms);
+  return ictcp_color;
 }
 }  // namespace from
 }  // namespace ictcp
@@ -893,18 +932,15 @@ float3 OkLCh(float3 oklch) {
   return OkLab(ok_lab);
 }
 
-float3 ICtCp(float3 col) {
-  // ICtCp -> L'M'S'
-  float3x3 ictcp_to_lms = float3x3(
-      1.f, 0.00860647484f, 0.111033529f,
-      1.f, -0.00860647484f, -0.111033529f,
-      1.f, 0.560046315f, -0.320631951f);
-
-  col = mul(ictcp_to_lms, col);
-
-  // 1.0f = 100 nits, 100.0f = 10k nits
-  col = pq::DecodeSafe(col, 100.f);
-  return mul(ICTCP_LMS_TO_BT709_MAT, col);
+float3 ICtCp(float3 ictcp_color, float scaling = 100.f) {
+  float3 plms_color = mul(renodx::math::Invert3x3(ictcp::PLMS_TO_ICTCP_MAT), ictcp_color);
+  float3 lms_color = pq::Decode(plms_color, scaling);
+  float3 bt709_color = mul(
+      mul(
+          renodx::math::Invert3x3(BT709_TO_XYZ_MAT),
+          renodx::math::Invert3x3(ictcp::XYZ_TO_DOLBY_LMS_MAT)),
+      lms_color);
+  return bt709_color;
 }
 
 }  // namespace from
