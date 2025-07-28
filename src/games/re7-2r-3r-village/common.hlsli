@@ -1,5 +1,19 @@
 #include "./shared.h"
 
+float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 neutral_gamma) {
+  const float3 added_gamma = black_gamma;
+
+  const float mid_gray_average = (mid_gray_gamma.r + mid_gray_gamma.g + mid_gray_gamma.b) / 3.f;
+
+  // Remove from 0 to mid-gray
+  const float shadow_length = mid_gray_average;
+  const float shadow_stop = max(neutral_gamma.r, max(neutral_gamma.g, neutral_gamma.b));
+  const float3 floor_remove = added_gamma * max(0, shadow_length - shadow_stop) / shadow_length;
+
+  const float3 unclamped_gamma = max(0, original_gamma - floor_remove);
+  return unclamped_gamma;
+}
+
 float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut::Config lut_config) {
   float3 lutInputColor = renodx::lut::ConvertInput(color_input, lut_config);
   float3 lutOutputColor = renodx::lut::SampleColor(lutInputColor, lut_config, lut_texture);
@@ -8,17 +22,17 @@ float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut
   if (lut_config.scaling != 0.f) {
     float3 lutBlack = renodx::lut::SampleColor(renodx::lut::ConvertInput(0, lut_config), lut_config, lut_texture);
     float3 lutBlackLinear = renodx::lut::LinearOutput(lutBlack, lut_config);
-    float lutBlackY = renodx::color::y::from::BT709(lutBlackLinear);
+    float lutBlackY = max(0, renodx::color::y::from::BT709(lutBlackLinear));
     if (lutBlackY > 0.f) {
-      float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_config, lut_texture);               // use lutBlackY instead of 0.18 to avoid black crush
-      float3 lutShift = renodx::lut::SampleColor(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_config, lut_texture) / lutBlack;  // galaxy brain
+      float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_config, lut_texture);                                                            // use lutBlackY instead of 0.18 to avoid black crush
+      float lutShift = (renodx::color::y::from::BT709(renodx::lut::SampleColor(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_config, lut_texture)) + lutBlackY) / lutBlackY;  // galaxy brain
 
-      float3 unclamped_gamma = renodx::lut::Unclamp(
+      float3 unclamped_gamma = Unclamp(
           renodx::lut::GammaOutput(lutOutputColor, lut_config),
           renodx::lut::GammaOutput(lutBlack, lut_config),
           renodx::lut::GammaOutput(lutMid, lut_config),
-          1.f,  // renodx::lut::GammaOutput(lutWhite, lut_config),
           renodx::lut::ConvertInput(color_input * lutShift, lut_config));
+
       float3 unclamped_linear = renodx::lut::LinearUnclampedOutput(unclamped_gamma, lut_config);
       float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling);
       color_output = recolored;
@@ -29,7 +43,7 @@ float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut
     color_output = renodx::lut::RestoreSaturationLoss(color_input, color_output, lut_config);
   }
 
-  return color_output;
+  return lerp(color_input, color_output, lut_config.strength);
 }
 
 /// Applies Exponential Roll-Off tonemapping using the maximum channel.
@@ -81,3 +95,11 @@ float3 GammaCorrectHuePreserving(float3 incorrect_color) {
 EXPONENTIALROLLOFF_GENERATOR(float)
 EXPONENTIALROLLOFF_GENERATOR(float3)
 #undef EXPONENTIALROLLOFF_GENERATOR
+
+float3 ApplyExponentialRolloff(float3 untonemapped, float diffuse_nits, float peak_nits) {
+  // const float diffuse_nits = whitePaperNits;
+  // const float peak_nits = max(displayMaxNits, whitePaperNits);
+  const float rolloff_start = peak_nits * 0.465f;
+  // const float rolloff_modulation = 1.25f;
+  return exp2(ExponentialRollOff(log2(untonemapped * diffuse_nits), log2(rolloff_start), log2(peak_nits))) / diffuse_nits;
+}
