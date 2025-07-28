@@ -1,5 +1,4 @@
-#include "./DICE.hlsl"
-#include "./shared.h"
+#include "./common.hlsli"
 
 Texture2D<float4> tLinearImage : register(t0);
 
@@ -17,21 +16,21 @@ float4 main(noperspective float4 SV_Position: SV_Position,
             linear float2 TEXCOORD: TEXCOORD)
     : SV_Target {
   float3 bt709Color = tLinearImage.SampleLevel(PointBorder, TEXCOORD.xy, 0.0f).rgb;
-#if 1
+#if 0
   bt709Color = renodx::color::correct::GammaSafe(bt709Color);
+#else
+  bt709Color = GammaCorrectHuePreserving(bt709Color);
 #endif
+
+  float3 bt2020Color = max(0.f, renodx::color::bt2020::from::BT709(bt709Color.rgb));
 
 #if 1
-  DICESettings config = DefaultDICESettings();
-  config.Type = 3;
-  config.ShoulderStart = 0.5f;
-  const float dicePaperWhite = whitePaperNits / renodx::color::srgb::REFERENCE_WHITE;
-  const float dicePeakWhite = max(displayMaxNits, whitePaperNits) / renodx::color::srgb::REFERENCE_WHITE;
-  bt709Color.rgb = DICETonemap(bt709Color.rgb * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
+  const float diffuse_nits = whitePaperNits;
+  const float peak_nits = max(displayMaxNits, whitePaperNits);
+  const float rolloff_start = peak_nits * 0.33f;
+  const float rolloff_modulation = 1.33f;
+  bt2020Color = exp2(ExponentialRollOff(log2(bt2020Color * diffuse_nits), log2(rolloff_start), log2(peak_nits), rolloff_modulation)) / diffuse_nits;
 #endif
-
-  float3 bt2020Color =
-      renodx::color::bt2020::from::BT709(bt709Color.rgb);
 
   float3 pqColor = renodx::color::pq::Encode(bt2020Color, whitePaperNits);
 
