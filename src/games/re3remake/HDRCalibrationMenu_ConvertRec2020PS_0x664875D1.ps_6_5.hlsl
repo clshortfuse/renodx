@@ -23,10 +23,11 @@ cbuffer HDRMapping : register(b0) {
 
 SamplerState PointBorder : register(s2, space32);
 
+// replaced incorrect pq conversion with correct one from RE2
 float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float2 TEXCOORD : TEXCOORD
-) : SV_Target {
+    noperspective float4 SV_Position: SV_Position,
+    linear float2 TEXCOORD: TEXCOORD)
+    : SV_Target {
   float4 SV_Target;
   // texture _1 = tLinearImage;
   // SamplerState _2 = PointBorder;
