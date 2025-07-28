@@ -1,4 +1,4 @@
-#include "./common.hlsli"
+#include "../common.hlsli"
 
 cbuffer SceneInfoUBO : register(b0, space0) {
   float4 SceneInfo_m0[33] : packoffset(c0);
@@ -100,8 +100,8 @@ void frag_main() {
   // declare lut config for use with lut black correction
   renodx::lut::Config lut_config = renodx::lut::config::Create(
       TrilinearClamp,
-      1.f,  // strength
-      1.f,  // scaling
+      CUSTOM_LUT_STRENGTH,
+      CUSTOM_LUT_SCALING,
       renodx::lut::config::type::SRGB,
       renodx::lut::config::type::LINEAR,
       ColorCorrectTexture_m0[0u].x);
@@ -592,7 +592,7 @@ void frag_main() {
     untonemapped = float3(_618, _620, _622);
     hdrColor = untonemapped;
 
-    sdrColor = LUTToneMap(untonemapped);  // use neutral RenoDRT as a smoothclamp
+    sdrColor = LUTToneMap(untonemapped);
 #endif
 
 #if 0  // max channel LUT sampling

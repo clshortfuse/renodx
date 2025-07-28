@@ -86,7 +86,7 @@ renodx::utils::settings::Settings settings = {
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Resident Evil 3 Remake";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Resident Evil 7, 2 Remake, 3 Remake, and Village";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
