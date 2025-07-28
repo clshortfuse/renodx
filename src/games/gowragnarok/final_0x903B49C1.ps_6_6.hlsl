@@ -114,14 +114,17 @@ void frag_main() {
 
     float _256 = ((sample.x * 2.0f) - 1.0f) * (((ConstBuf_passData_m0[18u].z * _214) + (ConstBuf_passData_m0[18u].x * _209)) + (ConstBuf_passData_m0[18u].y * clamp((1.0f - _209) - _214, 0.0f, 1.0f)));
 
-    float _260 = max(_256 + _193, 0.0f);
-    float _261 = max(_256 + _194, 0.0f);
-    float _262 = max(_256 + _195, 0.0f);
+    float _260 = (_256 + _193);
+    float _261 = (_256 + _194);
+    float _262 = (_256 + _195);
 
     float _309, _310, _311;
     float3 x = float3(_260, _261, _262);
     float3 corrected;
     if (RENODX_TONE_MAP_TYPE == 0.f) {
+      _260 = max(_260, 0.0f);
+      _261 = max(_261, 0.0f);
+      _262 = max(_262, 0.0f);
       const float a = 0.89722502231597900390625f;
       const float b = -0.001492740004323422908782958984375f;
       //   const float b = 0.005;
@@ -137,6 +140,9 @@ void frag_main() {
       x = ApplyGammaCorrection(x);
       _309 = x.r, _310 = x.g, _311 = x.b;
     }
+
+    float3 color_adjusted = ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3(_309, _310, _311));
+    _309 = color_adjusted.r, _310 = color_adjusted.g, _311 = color_adjusted.b;
 
     float _330 = mad(0.0433130674064159393310546875f, _311, mad(0.3292830288410186767578125f, _310, _309 * 0.627403914928436279296875f));
     float _331 = mad(0.01136231608688831329345703125f, _311, mad(0.9195404052734375f, _310, _309 * 0.069097287952899932861328125f));

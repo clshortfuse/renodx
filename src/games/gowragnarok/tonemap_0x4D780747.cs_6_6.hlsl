@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsli"
 cbuffer ConstBuf_constantsUBO : register(b0, space0) {
   float4 ConstBuf_constants_m0[11] : packoffset(c0);
 };
@@ -33,6 +33,11 @@ void comp_main() {
       min_nits = (min_nits / RENODX_DIFFUSE_WHITE_NITS) * 100.f;
     }
   }
+
+  float untonemapped = exp2(((float(gl_GlobalInvocationID.x) * 33.0f) * ConstBuf_constants_m0[10u].y) + (-15.0f));
+
+  untonemapped = max(untonemapped * 0.18f, 5.9604644775390625e-08f);
+  untonemapped = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped, 0.18f);
 
   float _44 = log2(min_nits);  // float _44 = log2(max(9.9999997473787516355514526367188e-05f, ConstBuf_constants_m0[3u].w));
   float _51 = clamp((_44 * 0.13082401454448699951171875f) + 1.7383518218994140625f, 0.0f, 1.0f);
@@ -131,7 +136,7 @@ void comp_main() {
   _28[3u] = _102;
   _28[4u] = _102;
   _28[5u] = _102;
-  float _201 = log2(max(exp2(((float(gl_GlobalInvocationID.x) * 33.0f) * ConstBuf_constants_m0[10u].y) + (-15.0f)) * 0.180000007152557373046875f, 5.9604644775390625e-08f));  // not brightness slider
+  float _201 = log2(untonemapped);  // not brightness slider
   float _202 = _201 * 0.3010300099849700927734375f;
   float _203 = log2(exp2(_75 - _165));
   float _204 = _203 * 0.3010300099849700927734375f;
