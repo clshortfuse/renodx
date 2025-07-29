@@ -11,3 +11,10 @@ bool GenerateOutput(float r, float g, float b, inout float4 SV_Target) {
   SV_Target = float4(final_color, 0.f);
   return true;
 }
+
+float3 SignPow(float3 value, float3 exponent) {
+  return float3(
+      renodx::math::SignPow(value.x, exponent.x),
+      renodx::math::SignPow(value.y, exponent.y),
+      renodx::math::SignPow(value.z, exponent.z));
+}
