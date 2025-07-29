@@ -1,134 +1,8 @@
 // Found in Wuchang, used to be in repo, updated decomp 7/24/25
 
-#include "./common.hlsl"
+#include "./filmiclutbuilder.hlsli"
 
 Texture2D<float4> t0 : register(t0);
-
-cbuffer cb0 : register(b0) {
-  float cb0_005x : packoffset(c005.x);
-  float cb0_005y : packoffset(c005.y);
-  float cb0_008x : packoffset(c008.x);
-  float cb0_008y : packoffset(c008.y);
-  float cb0_008z : packoffset(c008.z);
-  float cb0_008w : packoffset(c008.w);
-  float cb0_009x : packoffset(c009.x);
-  float cb0_010x : packoffset(c010.x);
-  float cb0_010y : packoffset(c010.y);
-  float cb0_010z : packoffset(c010.z);
-  float cb0_010w : packoffset(c010.w);
-  float cb0_011x : packoffset(c011.x);
-  float cb0_011y : packoffset(c011.y);
-  float cb0_011z : packoffset(c011.z);
-  float cb0_011w : packoffset(c011.w);
-  float cb0_012x : packoffset(c012.x);
-  float cb0_012y : packoffset(c012.y);
-  float cb0_012z : packoffset(c012.z);
-  float cb0_013x : packoffset(c013.x);
-  float cb0_013y : packoffset(c013.y);
-  float cb0_013z : packoffset(c013.z);
-  float cb0_013w : packoffset(c013.w);
-  float cb0_014x : packoffset(c014.x);
-  float cb0_014y : packoffset(c014.y);
-  float cb0_014z : packoffset(c014.z);
-  float cb0_015x : packoffset(c015.x);
-  float cb0_015y : packoffset(c015.y);
-  float cb0_015z : packoffset(c015.z);
-  float cb0_015w : packoffset(c015.w);
-  float cb0_016x : packoffset(c016.x);
-  float cb0_016y : packoffset(c016.y);
-  float cb0_016z : packoffset(c016.z);
-  float cb0_016w : packoffset(c016.w);
-  float cb0_017x : packoffset(c017.x);
-  float cb0_017y : packoffset(c017.y);
-  float cb0_017z : packoffset(c017.z);
-  float cb0_017w : packoffset(c017.w);
-  float cb0_018x : packoffset(c018.x);
-  float cb0_018y : packoffset(c018.y);
-  float cb0_018z : packoffset(c018.z);
-  float cb0_018w : packoffset(c018.w);
-  float cb0_019x : packoffset(c019.x);
-  float cb0_019y : packoffset(c019.y);
-  float cb0_019z : packoffset(c019.z);
-  float cb0_019w : packoffset(c019.w);
-  float cb0_020x : packoffset(c020.x);
-  float cb0_020y : packoffset(c020.y);
-  float cb0_020z : packoffset(c020.z);
-  float cb0_020w : packoffset(c020.w);
-  float cb0_021x : packoffset(c021.x);
-  float cb0_021y : packoffset(c021.y);
-  float cb0_021z : packoffset(c021.z);
-  float cb0_021w : packoffset(c021.w);
-  float cb0_022x : packoffset(c022.x);
-  float cb0_022y : packoffset(c022.y);
-  float cb0_022z : packoffset(c022.z);
-  float cb0_022w : packoffset(c022.w);
-  float cb0_023x : packoffset(c023.x);
-  float cb0_023y : packoffset(c023.y);
-  float cb0_023z : packoffset(c023.z);
-  float cb0_023w : packoffset(c023.w);
-  float cb0_024x : packoffset(c024.x);
-  float cb0_024y : packoffset(c024.y);
-  float cb0_024z : packoffset(c024.z);
-  float cb0_024w : packoffset(c024.w);
-  float cb0_025x : packoffset(c025.x);
-  float cb0_025y : packoffset(c025.y);
-  float cb0_025z : packoffset(c025.z);
-  float cb0_025w : packoffset(c025.w);
-  float cb0_026x : packoffset(c026.x);
-  float cb0_026y : packoffset(c026.y);
-  float cb0_026z : packoffset(c026.z);
-  float cb0_026w : packoffset(c026.w);
-  float cb0_027x : packoffset(c027.x);
-  float cb0_027y : packoffset(c027.y);
-  float cb0_027z : packoffset(c027.z);
-  float cb0_027w : packoffset(c027.w);
-  float cb0_028x : packoffset(c028.x);
-  float cb0_028y : packoffset(c028.y);
-  float cb0_028z : packoffset(c028.z);
-  float cb0_028w : packoffset(c028.w);
-  float cb0_029x : packoffset(c029.x);
-  float cb0_029y : packoffset(c029.y);
-  float cb0_029z : packoffset(c029.z);
-  float cb0_029w : packoffset(c029.w);
-  float cb0_030x : packoffset(c030.x);
-  float cb0_030y : packoffset(c030.y);
-  float cb0_030z : packoffset(c030.z);
-  float cb0_030w : packoffset(c030.w);
-  float cb0_031x : packoffset(c031.x);
-  float cb0_031y : packoffset(c031.y);
-  float cb0_031z : packoffset(c031.z);
-  float cb0_031w : packoffset(c031.w);
-  float cb0_032x : packoffset(c032.x);
-  float cb0_032y : packoffset(c032.y);
-  float cb0_032z : packoffset(c032.z);
-  float cb0_032w : packoffset(c032.w);
-  float cb0_033x : packoffset(c033.x);
-  float cb0_033y : packoffset(c033.y);
-  float cb0_033z : packoffset(c033.z);
-  float cb0_033w : packoffset(c033.w);
-  float cb0_034x : packoffset(c034.x);
-  float cb0_034y : packoffset(c034.y);
-  float cb0_034z : packoffset(c034.z);
-  float cb0_034w : packoffset(c034.w);
-  float cb0_035z : packoffset(c035.z);
-  float cb0_035w : packoffset(c035.w);
-  float cb0_036x : packoffset(c036.x);
-  float cb0_036y : packoffset(c036.y);
-  float cb0_036z : packoffset(c036.z);
-  float cb0_036w : packoffset(c036.w);
-  float cb0_037x : packoffset(c037.x);
-  float cb0_037y : packoffset(c037.y);
-  float cb0_037z : packoffset(c037.z);
-  float cb0_037w : packoffset(c037.w);
-  float cb0_038x : packoffset(c038.x);
-  float cb0_039x : packoffset(c039.x);
-  float cb0_039y : packoffset(c039.y);
-  float cb0_039z : packoffset(c039.z);
-  float cb0_040y : packoffset(c040.y);
-  float cb0_040z : packoffset(c040.z);
-  int cb0_040w : packoffset(c040.w);
-  int cb0_041x : packoffset(c041.x);
-};
 
 cbuffer cb1 : register(b1) {
   float4 UniformBufferConstants_WorkingColorSpace_000[4] : packoffset(c000.x);
@@ -142,10 +16,15 @@ cbuffer cb1 : register(b1) {
 SamplerState s0 : register(s0);
 
 float4 main(
-  noperspective float2 TEXCOORD : TEXCOORD,
-  noperspective float4 SV_Position : SV_Position,
-  nointerpolation uint SV_RenderTargetArrayIndex : SV_RenderTargetArrayIndex
-) : SV_Target {
+    noperspective float2 TEXCOORD: TEXCOORD,
+    noperspective float4 SV_Position: SV_Position,
+    nointerpolation uint SV_RenderTargetArrayIndex: SV_RenderTargetArrayIndex) : SV_Target {
+  uint output_gamut = cb0_041x;
+  uint output_device = cb0_040w;
+  float expand_gamut = cb0_036w;
+
+  float4 output_color;
+
   float4 SV_Target;
   float _10[6];
   float _11[6];
@@ -201,10 +80,10 @@ float4 main(
   float _2500;
   float _2501;
   float _2502;
-  if (!(cb0_041x == 1)) {
-    if (!(cb0_041x == 2)) {
-      if (!(cb0_041x == 3)) {
-        bool _28 = (cb0_041x == 4);
+  if (!(output_gamut == 1)) {
+    if (!(output_gamut == 2)) {
+      if (!(output_gamut == 3)) {
+        bool _28 = (output_gamut == 4);
         _39 = select(_28, 1.0f, 1.7050515413284302f);
         _40 = select(_28, 0.0f, -0.6217905879020691f);
         _41 = select(_28, 0.0f, -0.0832584798336029f);
@@ -247,7 +126,7 @@ float4 main(
     _46 = -0.045465391129255295f;
     _47 = 1.0477596521377563f;
   }
-  if ((uint)cb0_040w > (uint)2) {
+  if ((uint)output_device > (uint)2) {
     float _58 = exp2(log2(_14 * 1.0322580337524414f) * 0.012683313339948654f);
     float _59 = exp2(log2(_15 * 1.0322580337524414f) * 0.012683313339948654f);
     float _60 = exp2(log2(_18 * 0.032258063554763794f) * 0.012683313339948654f);
@@ -264,7 +143,11 @@ float4 main(
   float _128 = mad((UniformBufferConstants_WorkingColorSpace_128[2].z), _107, mad((UniformBufferConstants_WorkingColorSpace_128[2].y), _106, ((UniformBufferConstants_WorkingColorSpace_128[2].x) * _105)));
   float _129 = dot(float3(_122, _125, _128), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
 
-  SetUngradedAP1(float3(_122, _125, _128));
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    output_gamut = 0u;
+    output_device = 0u;
+    expand_gamut = 0.f;
+  }
 
   float _133 = (_122 / _129) + -1.0f;
   float _134 = (_125 / _129) + -1.0f;
@@ -301,8 +184,6 @@ float4 main(
   float _531 = ((_417 * (((cb0_019x + cb0_034x) + _314) + (((cb0_018x * cb0_033x) * _323) * exp2(log2(exp2(((cb0_016x * cb0_031x) * _341) * log2(max(0.0f, ((((cb0_015x * cb0_030x) * _350) * _240) + _166)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017x * cb0_032x) * _332)))))) + (_305 * (((cb0_019x + cb0_024x) + _180) + (((cb0_018x * cb0_023x) * _194) * exp2(log2(exp2(((cb0_016x * cb0_021x) * _222) * log2(max(0.0f, ((((cb0_015x * cb0_020x) * _236) * _240) + _166)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017x * cb0_022x) * _208))))))) + ((((cb0_019x + cb0_029x) + _426) + (((cb0_018x * cb0_028x) * _435) * exp2(log2(exp2(((cb0_016x * cb0_026x) * _453) * log2(max(0.0f, ((((cb0_015x * cb0_025x) * _462) * _240) + _166)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017x * cb0_027x) * _444))))) * _520);
   float _533 = ((_417 * (((cb0_019y + cb0_034y) + _314) + (((cb0_018y * cb0_033y) * _323) * exp2(log2(exp2(((cb0_016y * cb0_031y) * _341) * log2(max(0.0f, ((((cb0_015y * cb0_030y) * _350) * _241) + _166)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017y * cb0_032y) * _332)))))) + (_305 * (((cb0_019y + cb0_024y) + _180) + (((cb0_018y * cb0_023y) * _194) * exp2(log2(exp2(((cb0_016y * cb0_021y) * _222) * log2(max(0.0f, ((((cb0_015y * cb0_020y) * _236) * _241) + _166)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017y * cb0_022y) * _208))))))) + ((((cb0_019y + cb0_029y) + _426) + (((cb0_018y * cb0_028y) * _435) * exp2(log2(exp2(((cb0_016y * cb0_026y) * _453) * log2(max(0.0f, ((((cb0_015y * cb0_025y) * _462) * _241) + _166)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017y * cb0_027y) * _444))))) * _520);
   float _535 = ((_417 * (((cb0_019z + cb0_034z) + _314) + (((cb0_018z * cb0_033z) * _323) * exp2(log2(exp2(((cb0_016z * cb0_031z) * _341) * log2(max(0.0f, ((((cb0_015z * cb0_030z) * _350) * _242) + _166)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_032z) * _332)))))) + (_305 * (((cb0_019z + cb0_024z) + _180) + (((cb0_018z * cb0_023z) * _194) * exp2(log2(exp2(((cb0_016z * cb0_021z) * _222) * log2(max(0.0f, ((((cb0_015z * cb0_020z) * _236) * _242) + _166)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_022z) * _208))))))) + ((((cb0_019z + cb0_029z) + _426) + (((cb0_018z * cb0_028z) * _435) * exp2(log2(exp2(((cb0_016z * cb0_026z) * _453) * log2(max(0.0f, ((((cb0_015z * cb0_025z) * _462) * _242) + _166)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_027z) * _444))))) * _520);
-
-  SetUntonemappedAP1(float3(_531, _533, _535));
 
   float _571 = ((mad(0.061360642313957214f, _535, mad(-4.540197551250458e-09f, _533, (_531 * 0.9386394023895264f))) - _531) * cb0_036y) + _531;
   float _572 = ((mad(0.169205904006958f, _535, mad(0.8307942152023315f, _533, (_531 * 6.775371730327606e-08f))) - _533) * cb0_036y) + _533;
@@ -376,9 +257,14 @@ float4 main(
   }
   float _745 = ((1.0f - cb0_037y) / cb0_037x) - _742;
   float _747 = (cb0_037z / cb0_037x) - _745;
-  float _751 = log2(lerp(_705, _702, 0.9599999785423279f)) * 0.3010300099849701f;
-  float _752 = log2(lerp(_705, _703, 0.9599999785423279f)) * 0.3010300099849701f;
-  float _753 = log2(lerp(_705, _704, 0.9599999785423279f)) * 0.3010300099849701f;
+  float3 lerpColor = lerp(_705, float3(_702, _703, _704), 0.9599999785423279f);
+#if 1
+  ApplyFilmicToneMap(lerpColor.r, lerpColor.g, lerpColor.b, _571, _572, _573);
+  float _893 = lerpColor.r, _894 = lerpColor.g, _895 = lerpColor.b;
+#else
+  float _751 = log2(lerpColor.r) * 0.3010300099849701f;
+  float _752 = log2(lerpColor.g) * 0.3010300099849701f;
+  float _753 = log2(lerpColor.b) * 0.3010300099849701f;
   float _757 = cb0_037x * (_751 + _745);
   float _758 = cb0_037x * (_752 + _745);
   float _759 = cb0_037x * (_753 + _745);
@@ -404,15 +290,20 @@ float4 main(
   float _853 = (((_832 * _832) * (select((_752 > _747), (_722 - (_784 / (exp2(((_752 - _747) * 1.4426950216293335f) * _786) + 1.0f))), _758) - _812)) * (3.0f - (_832 * 2.0f))) + _812;
   float _854 = (((_833 * _833) * (select((_753 > _747), (_722 - (_784 / (exp2(((_753 - _747) * 1.4426950216293335f) * _786) + 1.0f))), _759) - _813)) * (3.0f - (_833 * 2.0f))) + _813;
   float _855 = dot(float3(_852, _853, _854), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
-  float _875 = (cb0_036w * (max(0.0f, (lerp(_855, _852, 0.9300000071525574f))) - _571)) + _571;
-  float _876 = (cb0_036w * (max(0.0f, (lerp(_855, _853, 0.9300000071525574f))) - _572)) + _572;
-  float _877 = (cb0_036w * (max(0.0f, (lerp(_855, _854, 0.9300000071525574f))) - _573)) + _573;
+  float _875 = (expand_gamut * (max(0.0f, (lerp(_855, _852, 0.9300000071525574f))) - _571)) + _571;
+  float _876 = (expand_gamut * (max(0.0f, (lerp(_855, _853, 0.9300000071525574f))) - _572)) + _572;
+  float _877 = (expand_gamut * (max(0.0f, (lerp(_855, _854, 0.9300000071525574f))) - _573)) + _573;
   float _893 = ((mad(-0.06537103652954102f, _877, mad(1.451815478503704e-06f, _876, (_875 * 1.065374732017517f))) - _875) * cb0_036y) + _875;
   float _894 = ((mad(-0.20366770029067993f, _877, mad(1.2036634683609009f, _876, (_875 * -2.57161445915699e-07f))) - _876) * cb0_036y) + _876;
   float _895 = ((mad(0.9999996423721313f, _877, mad(2.0954757928848267e-08f, _876, (_875 * 1.862645149230957e-08f))) - _877) * cb0_036y) + _877;
+#endif
 
-  SetTonemappedAP1(_893, _894, _895);
+  // SetTonemappedAP1(_893, _894, _895);
 
+  float _908 = (max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[0].z), _895, mad((UniformBufferConstants_WorkingColorSpace_192[0].y), _894, ((UniformBufferConstants_WorkingColorSpace_192[0].x) * _893)))));
+  float _909 = (max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[1].z), _895, mad((UniformBufferConstants_WorkingColorSpace_192[1].y), _894, ((UniformBufferConstants_WorkingColorSpace_192[1].x) * _893)))));
+  float _910 = (max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[2].z), _895, mad((UniformBufferConstants_WorkingColorSpace_192[2].y), _894, ((UniformBufferConstants_WorkingColorSpace_192[2].x) * _893)))));
+  /*
   float _908 = saturate(max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[0].z), _895, mad((UniformBufferConstants_WorkingColorSpace_192[0].y), _894, ((UniformBufferConstants_WorkingColorSpace_192[0].x) * _893)))));
   float _909 = saturate(max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[1].z), _895, mad((UniformBufferConstants_WorkingColorSpace_192[1].y), _894, ((UniformBufferConstants_WorkingColorSpace_192[1].x) * _893)))));
   float _910 = saturate(max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[2].z), _895, mad((UniformBufferConstants_WorkingColorSpace_192[2].y), _894, ((UniformBufferConstants_WorkingColorSpace_192[2].x) * _893)))));
@@ -444,12 +335,25 @@ float4 main(
   float _1011 = select((_987 > 0.040449999272823334f), exp2(log2((_987 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_987 * 0.07739938050508499f));
   float _1012 = select((_988 > 0.040449999272823334f), exp2(log2((_988 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_988 * 0.07739938050508499f));
   float _1013 = select((_989 > 0.040449999272823334f), exp2(log2((_989 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_989 * 0.07739938050508499f));
+   */
+
+  float3 untonemapped = float3(_908, _909, _910);
+  float _1011;
+  float _1012;
+  float _1013;
+  SampleLUTUpgradeToneMap(untonemapped, s0, t0, _1011, _1012, _1013);
+
   float _1039 = cb0_014x * (((cb0_039y + (cb0_039x * _1011)) * _1011) + cb0_039z);
   float _1040 = cb0_014y * (((cb0_039y + (cb0_039x * _1012)) * _1012) + cb0_039z);
   float _1041 = cb0_014z * (((cb0_039y + (cb0_039x * _1013)) * _1013) + cb0_039z);
   float _1048 = ((cb0_013x - _1039) * cb0_013w) + _1039;
   float _1049 = ((cb0_013y - _1040) * cb0_013w) + _1040;
   float _1050 = ((cb0_013z - _1041) * cb0_013w) + _1041;
+
+  if (GenerateOutput(_1048, _1049, _1050, SV_Target)) {
+    return SV_Target;
+  }
+  
   float _1051 = cb0_014x * mad((UniformBufferConstants_WorkingColorSpace_192[0].z), _535, mad((UniformBufferConstants_WorkingColorSpace_192[0].y), _533, (_531 * (UniformBufferConstants_WorkingColorSpace_192[0].x))));
   float _1052 = cb0_014y * mad((UniformBufferConstants_WorkingColorSpace_192[1].z), _535, mad((UniformBufferConstants_WorkingColorSpace_192[1].y), _533, ((UniformBufferConstants_WorkingColorSpace_192[1].x) * _531)));
   float _1053 = cb0_014z * mad((UniformBufferConstants_WorkingColorSpace_192[2].z), _535, mad((UniformBufferConstants_WorkingColorSpace_192[2].y), _533, ((UniformBufferConstants_WorkingColorSpace_192[2].x) * _531)));
@@ -460,12 +364,8 @@ float4 main(
   float _1075 = exp2(log2(max(0.0f, _1049)) * cb0_040y);
   float _1076 = exp2(log2(max(0.0f, _1050)) * cb0_040y);
 
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
-    return GenerateOutput(float3(_1074, _1075, _1076), cb0_040w);
-  }
-
   [branch]
-  if (cb0_040w == 0) {
+  if (output_device == 0) {
     do {
       if (UniformBufferConstants_WorkingColorSpace_320 == 0) {
         float _1099 = mad((UniformBufferConstants_WorkingColorSpace_128[0].z), _1076, mad((UniformBufferConstants_WorkingColorSpace_128[0].y), _1075, ((UniformBufferConstants_WorkingColorSpace_128[0].x) * _1074)));
@@ -504,7 +404,7 @@ float4 main(
       } while (false);
     } while (false);
   } else {
-    if (cb0_040w == 1) {
+    if (output_device == 1) {
       float _1167 = mad((UniformBufferConstants_WorkingColorSpace_128[0].z), _1076, mad((UniformBufferConstants_WorkingColorSpace_128[0].y), _1075, ((UniformBufferConstants_WorkingColorSpace_128[0].x) * _1074)));
       float _1170 = mad((UniformBufferConstants_WorkingColorSpace_128[1].z), _1076, mad((UniformBufferConstants_WorkingColorSpace_128[1].y), _1075, ((UniformBufferConstants_WorkingColorSpace_128[1].x) * _1074)));
       float _1173 = mad((UniformBufferConstants_WorkingColorSpace_128[2].z), _1076, mad((UniformBufferConstants_WorkingColorSpace_128[2].y), _1075, ((UniformBufferConstants_WorkingColorSpace_128[2].x) * _1074)));
@@ -515,7 +415,7 @@ float4 main(
       _2501 = min((_1184 * 4.5f), ((exp2(log2(max(_1184, 0.017999999225139618f)) * 0.44999998807907104f) * 1.0989999771118164f) + -0.0989999994635582f));
       _2502 = min((_1185 * 4.5f), ((exp2(log2(max(_1185, 0.017999999225139618f)) * 0.44999998807907104f) * 1.0989999771118164f) + -0.0989999994635582f));
     } else {
-      if ((bool)(cb0_040w == 3) || (bool)(cb0_040w == 5)) {
+      if ((bool)(output_device == 3) || (bool)(output_device == 5)) {
         _12[0] = cb0_010x;
         _12[1] = cb0_010y;
         _12[2] = cb0_010z;
@@ -739,7 +639,7 @@ float4 main(
                       float _1731 = min(max((min(max(mad(0.016756348311901093f, _1708, mad(1.6153316497802734f, _1705, (_1702 * -0.663662850856781f))), 0.0f), 65535.0f) * cb0_008w), 0.0f), 65535.0f);
                       float _1732 = min(max((min(max(mad(0.9883948564529419f, _1708, mad(-0.008284442126750946f, _1705, (_1702 * 0.011721894145011902f))), 0.0f), 65535.0f) * cb0_008w), 0.0f), 65535.0f);
                       do {
-                        if (!(cb0_040w == 5)) {
+                        if (!(output_device == 5)) {
                           _1745 = mad(_41, _1732, mad(_40, _1731, (_1730 * _39)));
                           _1746 = mad(_44, _1732, mad(_43, _1731, (_1730 * _42)));
                           _1747 = mad(_47, _1732, mad(_46, _1731, (_1730 * _45)));
@@ -763,7 +663,7 @@ float4 main(
           } while (false);
         } while (false);
       } else {
-        if ((cb0_040w & -3) == 4) {
+        if ((output_device & -3) == 4) {
           _10[0] = cb0_010x;
           _10[1] = cb0_010y;
           _10[2] = cb0_010z;
@@ -987,7 +887,7 @@ float4 main(
                         float _2307 = min(max((min(max(mad(0.016756348311901093f, _2284, mad(1.6153316497802734f, _2281, (_2278 * -0.663662850856781f))), 0.0f), 65535.0f) * cb0_008w), 0.0f), 65535.0f);
                         float _2308 = min(max((min(max(mad(0.9883948564529419f, _2284, mad(-0.008284442126750946f, _2281, (_2278 * 0.011721894145011902f))), 0.0f), 65535.0f) * cb0_008w), 0.0f), 65535.0f);
                         do {
-                          if (!(cb0_040w == 6)) {
+                          if (!(output_device == 6)) {
                             _2321 = mad(_41, _2308, mad(_40, _2307, (_2306 * _39)));
                             _2322 = mad(_44, _2308, mad(_43, _2307, (_2306 * _42)));
                             _2323 = mad(_47, _2308, mad(_46, _2307, (_2306 * _45)));
@@ -1011,7 +911,7 @@ float4 main(
             } while (false);
           } while (false);
         } else {
-          if (cb0_040w == 7) {
+          if (output_device == 7) {
             float _2380 = mad((UniformBufferConstants_WorkingColorSpace_128[0].z), _1062, mad((UniformBufferConstants_WorkingColorSpace_128[0].y), _1061, ((UniformBufferConstants_WorkingColorSpace_128[0].x) * _1060)));
             float _2383 = mad((UniformBufferConstants_WorkingColorSpace_128[1].z), _1062, mad((UniformBufferConstants_WorkingColorSpace_128[1].y), _1061, ((UniformBufferConstants_WorkingColorSpace_128[1].x) * _1060)));
             float _2386 = mad((UniformBufferConstants_WorkingColorSpace_128[2].z), _1062, mad((UniformBufferConstants_WorkingColorSpace_128[2].y), _1061, ((UniformBufferConstants_WorkingColorSpace_128[2].x) * _1060)));
@@ -1022,8 +922,8 @@ float4 main(
             _2501 = exp2(log2((1.0f / ((_2406 * 18.6875f) + 1.0f)) * ((_2406 * 18.8515625f) + 0.8359375f)) * 78.84375f);
             _2502 = exp2(log2((1.0f / ((_2407 * 18.6875f) + 1.0f)) * ((_2407 * 18.8515625f) + 0.8359375f)) * 78.84375f);
           } else {
-            if (!(cb0_040w == 8)) {
-              if (cb0_040w == 9) {
+            if (!(output_device == 8)) {
+              if (output_device == 9) {
                 float _2454 = mad((UniformBufferConstants_WorkingColorSpace_128[0].z), _1050, mad((UniformBufferConstants_WorkingColorSpace_128[0].y), _1049, ((UniformBufferConstants_WorkingColorSpace_128[0].x) * _1048)));
                 float _2457 = mad((UniformBufferConstants_WorkingColorSpace_128[1].z), _1050, mad((UniformBufferConstants_WorkingColorSpace_128[1].y), _1049, ((UniformBufferConstants_WorkingColorSpace_128[1].x) * _1048)));
                 float _2460 = mad((UniformBufferConstants_WorkingColorSpace_128[2].z), _1050, mad((UniformBufferConstants_WorkingColorSpace_128[2].y), _1049, ((UniformBufferConstants_WorkingColorSpace_128[2].x) * _1048)));
@@ -1052,8 +952,5 @@ float4 main(
   SV_Target.y = (_2501 * 0.9523810148239136f);
   SV_Target.z = (_2502 * 0.9523810148239136f);
   SV_Target.w = 0.0f;
-
-  SV_Target = saturate(SV_Target);
-
   return SV_Target;
 }
