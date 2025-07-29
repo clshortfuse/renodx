@@ -3,6 +3,7 @@
 
 #include "./color.hlsl"
 #include "./color_convert.hlsl"
+#include "./colorgrade.hlsl"
 #include "./math.hlsl"
 #include "./reinhard.hlsl"
 #include "./tonemap/daniele.hlsl"
@@ -102,32 +103,6 @@ Config Create(
 }
 }
 
-float CustomizeLuminance(float value, float highlights = 1.f, float shadows = 1.f, float contrast = 1.f) {
-  value = value / 0.18f;
-  [branch]
-  if (highlights != 1.f) {
-    value = lerp(
-        value,
-        pow(value, highlights),
-        saturate(value));
-  }
-
-  [branch]
-  if (shadows != 1.f) {
-    value = lerp(
-        pow(value, 2.f - shadows),
-        value,
-        saturate(value));
-  }
-
-  [branch]
-  if (contrast != 1.f) {
-    value = pow(value, contrast);
-  }
-  value *= 0.18f;
-  return value;
-}
-
 float3 BT709(float3 bt709, Config current_config) {
   const float reference_white = 100.f;
 
@@ -138,10 +113,10 @@ float3 BT709(float3 bt709, Config current_config) {
 
   float current_color_space = current_config.working_color_space;
 
-  if (current_config.working_color_space == 2) {
+  if (current_color_space == 2) {
     input_color = max(0, renodx::color::ap1::from::BT709(bt709));
     y_original = renodx::color::y::from::AP1(input_color);
-  } else if (current_config.working_color_space == 1) {
+  } else if (current_color_space == 1) {
     input_color = renodx::color::bt2020::from::BT709(bt709);
     y_original = renodx::color::y::from::BT2020(abs(input_color));
   } else {
@@ -152,7 +127,15 @@ float3 BT709(float3 bt709, Config current_config) {
   float y = y_original;
 
   y *= current_config.exposure;
-  y = CustomizeLuminance(y, current_config.highlights, current_config.shadows);
+  [branch]
+  if (current_config.highlights != 1.f) {
+    y = renodx::color::grade::Highlights(y, current_config.highlights, current_config.mid_gray_value);
+  }
+
+  [branch]
+  if (current_config.shadows != 1.f) {
+    y = renodx::color::grade::Shadows(y, current_config.shadows, current_config.mid_gray_value);
+  }
 
   float3 per_channel_color;
   [branch]
@@ -193,49 +176,61 @@ float3 BT709(float3 bt709, Config current_config) {
     }
   } else if (current_config.tone_map_method == config::tone_map_method::REINHARD) {
     float white_clip = max(current_config.white_clip, peak);
-    white_clip = CustomizeLuminance(white_clip, current_config.highlights, current_config.shadows, current_config.contrast);
+    [branch]
+    if (current_config.highlights != 1.f) {
+      white_clip = renodx::color::grade::Highlights(white_clip, current_config.highlights, current_config.mid_gray_value);
+    }
+
+    [branch]
+    if (current_config.shadows != 1.f) {
+      white_clip = renodx::color::grade::Shadows(white_clip, current_config.shadows, current_config.mid_gray_value);
+    }
+
+    float computed_contrast = 1.f;
+    [branch]
+    if (current_config.contrast != 1.f || current_config.flare != 0.f) {
+      y /= current_config.mid_gray_value;
+      float computed_flare = renodx::math::DivideSafe(y + current_config.flare, y, 1.f);
+      computed_flare = lerp(computed_flare, 1.f, saturate(y));
+      y *= current_config.mid_gray_value;
+      computed_contrast = current_config.contrast * computed_flare;
+
+      white_clip = renodx::color::grade::Contrast(white_clip, current_config.contrast, current_config.mid_gray_value);
+    }
 
     [branch]
     if (current_config.per_channel) {
       color_output = per_channel_color;
-      color_output /= 0.18f;
       float3 signs = sign(color_output);
       color_output = abs(color_output);
-
-      // No guard for oversized flare
-      float3 new_flare = math::DivideSafe(color_output + current_config.flare, color_output, 1.f);
-
-      float3 exponent = current_config.contrast * new_flare;
-
-      color_output = pow(color_output, exponent);
-
-      color_output *= 0.18f;
+      [branch]
+      if (current_config.contrast != 1.f || current_config.flare != 0.f) {
+        color_output /= current_config.mid_gray_value;
+        color_output = pow(color_output, computed_contrast);
+        color_output *= current_config.mid_gray_value;
+      }
 
       color_output = ReinhardScalableExtended(
           color_output,
           white_clip,
           peak,
           0,
-          0.18f,
+          current_config.mid_gray_value,
           current_config.mid_gray_nits / 100.f);
 
       color_output *= signs;
 
     } else {
-      y /= 0.18f;
-
-      // No guard for oversized flare
-      float new_flare = math::DivideSafe(y + current_config.flare, y, 1.f);
-      float exponent = current_config.contrast * new_flare;
-      y = math::SignPow(y, exponent);
-      y *= 0.18f;
+      if (current_config.contrast != 1.f || current_config.flare != 0.f) {
+        y = renodx::color::grade::Contrast(y, computed_contrast, current_config.mid_gray_value);
+      }
 
       float y_new = ReinhardScalableExtended(
           y,
           white_clip,
           peak,
           0,
-          0.18f,
+          current_config.mid_gray_value,
           current_config.mid_gray_nits / 100.f);
 
       color_output = input_color * (y_original > 0 ? (y_new / y_original) : 0);
