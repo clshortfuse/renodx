@@ -231,10 +231,22 @@ float3 HuedtUCS(float3 incorrect_color, float3 correct_color, float strength = 1
   return renodx::color::bt709::clamp::AP1(result);
 }
 
-float3 Hue(float3 incorrect_color, float3 correct_color, float strength = 1.f, uint method = 0u) {
-  if (method == 1u) return HueICtCp(incorrect_color, correct_color, strength);
-  if (method == 2u) return HuedtUCS(incorrect_color, correct_color, strength);
+float3 Hue(float3 incorrect_color, float3 correct_color, float strength = 1.f, int method = 0) {
+  if (method == 1) return HueICtCp(incorrect_color, correct_color, strength);
+  if (method == 2) return HuedtUCS(incorrect_color, correct_color, strength);
   return HueOKLab(incorrect_color, correct_color, strength);
+}
+
+float3 Luminance(float3 color, float incorrect_y, float correct_y, float strength = 1.f) {
+  return color * lerp(1.f, renodx::math::DivideSafe(correct_y, incorrect_y, 1.f), strength);
+}
+
+float3 Luminance(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
+  return Luminance(
+      incorrect_color,
+      renodx::color::y::from::BT709(incorrect_color),
+      renodx::color::y::from::BT709(correct_color),
+      strength);
 }
 
 }  // namespace correct
