@@ -688,7 +688,7 @@ void comp_main() {
       float _1638 = cb6[13u].x * _1634;
       float3 _1652;
       if (injectedData.processingInternalSampling == 1.f) {
-        float3 pq_color = renodx::color::pq::Encode(float3(_1632, _1633, _1634), 100.f);
+        float3 pq_color = renodx::color::pq::Encode(float3(_1636, _1637, _1638), 100.f);
         _1652.rgb = renodx::lut::Sample(_21, _49, pq_color).rgb;
       } else {
         _1652.rgb = _21.SampleLevel(_49, float3((cb6[12u].x * log2(_1636)) + cb6[12u].y, (cb6[12u].x * log2(_1637)) + cb6[12u].y, (cb6[12u].x * log2(_1638)) + cb6[12u].y), 0.0f).rgb;
