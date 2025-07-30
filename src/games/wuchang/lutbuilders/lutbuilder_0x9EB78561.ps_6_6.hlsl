@@ -26,6 +26,8 @@ float4 main(
   uint output_gamut = cb0_041x;
   uint output_device = cb0_040w;
   float expand_gamut = cb0_036w;
+  bool is_hdr = (output_device >= 3u && output_device <= 6u);
+
   float4 SV_Target;
   float _12[6];
   float _13[6];
@@ -363,7 +365,7 @@ float4 main(
   float _1080 = ((cb0_013y - _1071) * cb0_013w) + _1071;
   float _1081 = ((cb0_013z - _1072) * cb0_013w) + _1072;
 
-  if (GenerateOutput(_1079, _1080, _1081, SV_Target)) {
+  if (GenerateOutput(_1079, _1080, _1081, SV_Target, is_hdr)) {
     return SV_Target;
   }
 

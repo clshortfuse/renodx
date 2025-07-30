@@ -28,6 +28,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 
+float using_ini_hdr = 0;
+
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapType",
@@ -37,7 +39,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"UE ACES (HDR)", "None", "ACES", "Vanilla+ (ACES + UE Filmic Blend)", "UE Filmic (SDR)"},
+        .labels = {"Vanilla", "None", "ACES", "Vanilla+ (ACES + UE Filmic Blend)", "UE Filmic (SDR)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -196,7 +198,45 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Scales the color grade LUT to full range when size is clamped.",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.tone_map_type != 4; },
-        .parse = [](float value) { return value * 0.01f; },
+        .parse = [](float value) { return value * 0.0065f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "HDRMethod",
+        .binding = &using_ini_hdr,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "HDR Upgrade Method",
+        .section = "HDR Settings",
+        .tooltip = "Sets the method used for upgrading to HDR. Unreal HDR offers full framegen compatibility.",
+        .labels = {"SDR", "Unreal HDR"},
+    },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("Requires HDR DISABLED in-game, and HDR ENABLED through Engine.ini edits:\n\n"
+                             "Add to Engine.ini:\n"
+                             "         [SystemSettings]\n"
+                             "         r.AllowHDR=1\n"
+                             "         r.HDR.EnableHDROutput=1\n"
+                             "         r.HDR.Display.OutputDevice=3\n"
+                             "         r.HDR.Display.ColorGamut=2\n"
+                             "         r.HDR.UI.CompositeMode=1\n\n"
+                            "Steam: %localappdata%\\Project_Plague\\Saved\\Config\\Windows\n"
+                            "Xbox: %localappdata%\\Project_Plague\\Saved\\Config\\WinGDK\n"),
+        .section = "HDR Settings",
+        .is_visible = []() {
+          return using_ini_hdr == 1.f;
+        },
+    },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("Requires HDR DISABLED in-game\n"
+                            "If you previously added HDR settings to Engine.ini, remove them!\n"
+                            "Steam: %localappdata%\\Project_Plague\\Saved\\Config\\Windows\n"
+                            "Xbox: %localappdata%\\Project_Plague\\Saved\\Config\\WinGDK\n"),
+        .section = "HDR Settings",
+        .is_visible = []() {
+          return using_ini_hdr == 0.f;
+        },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -241,27 +281,47 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::platform::LaunchURL("https://github.com/", "clshortfuse/renodx");
         },
     },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "ShortFuse's Ko-Fi",
-        .section = "Links",
-        .group = "button-line-2",
-        .tint = 0xFF5A16,
-        .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://ko-fi.com/", "shortfuse");
-        },
-    },
+    // new renodx::utils::settings::Setting{
+    //     .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    //     .label = "ShortFuse's Ko-Fi",
+    //     .section = "Links",
+    //     .group = "button-line-2",
+    //     .tint = 0xFF5A16,
+    //     .on_change = []() {
+    //       renodx::utils::platform::LaunchURL("https://ko-fi.com/", "shortfuse");
+    //     },
+    // },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
         .section = "About",
+    },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("Mod by Jon, Musa, Ritsu, Marat"),
+        .section = "About",
+    },
+            new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("Special thanks to ShortFuse for RenoDX"),
+        .section = "About",
+    },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Den's Ko-Fi",
+        .section = "About",
+        .group = "button-line-1",
+        .tint = 0xFF5F5F,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://ko-fi.com/hdrden");
+        },
     },
 };
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
-      {"ToneMapPeakNits", 0.f},
+      {"ToneMapPeakNits", 203.f},
       {"toneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
       {"ToneMapGammaCorrection", 0.f},
@@ -317,12 +377,17 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::allow_multiple_push_constants = true;
         renodx::mods::shader::force_pipeline_cloning = true;
 
-        renodx::mods::swapchain::expected_constant_buffer_index = 13;
-        renodx::mods::swapchain::expected_constant_buffer_space = 50;
-        renodx::mods::swapchain::SetUseHDR10();
 
-        renodx::mods::swapchain::use_resource_cloning = true;
-        renodx::mods::swapchain::swap_chain_proxy_shaders = {
+
+
+        
+
+        if (using_ini_hdr == 0.f){
+            renodx::mods::swapchain::use_resource_cloning = true;
+            renodx::mods::swapchain::expected_constant_buffer_index = 13;
+            renodx::mods::swapchain::expected_constant_buffer_space = 50;
+            renodx::mods::swapchain::SetUseHDR10();
+            renodx::mods::swapchain::swap_chain_proxy_shaders = {
             {
                 reshade::api::device_api::d3d11,
                 {
@@ -338,24 +403,25 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
                 },
             },
         };
-
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r10g10b10a2_unorm,
+            renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r10g10b10a2_unorm,
                                                                        .new_format = reshade::api::format::r16g16b16a16_float,
                                                                        .use_resource_view_cloning = true});
 
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r10g10b10a2_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
             .dimensions = {.width = 32, .height = 32, .depth = 32},
             .resource_tag = 1.f,
-        });
+            });
 
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r10g10b10a2_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
             .use_resource_view_cloning = true,
             .aspect_ratio = 2560.f / 1024.f,
-        });
+            });
+        }
+        
         initialized = true;
       }
 
@@ -368,7 +434,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
-  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  if (using_ini_hdr == 0.f){
+    renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  }
 
   return TRUE;
 }
