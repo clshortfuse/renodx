@@ -20,12 +20,14 @@ float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut
   float3 color_output = renodx::lut::LinearOutput(lutOutputColor, lut_config);
   [branch]
   if (lut_config.scaling != 0.f) {
+    const float lut_scaling_factor = 0.65f;
+
     float3 lutBlack = renodx::lut::SampleColor(renodx::lut::ConvertInput(0, lut_config), lut_config, lut_texture);
     float3 lutBlackLinear = renodx::lut::LinearOutput(lutBlack, lut_config);
     float lutBlackY = max(0, renodx::color::y::from::BT709(lutBlackLinear));
     if (lutBlackY > 0.f) {
-      float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_config, lut_texture);                                                            // use lutBlackY instead of 0.18 to avoid black crush
-      float lutShift = (renodx::color::y::from::BT709(renodx::lut::SampleColor(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_config, lut_texture)) + lutBlackY) / lutBlackY;  // galaxy brain
+      float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_config, lut_texture) + lutBlack;  // set midpoint based on black to avoid black crush
+      float lutShift = renodx::color::y::from::BT709(renodx::lut::SampleColor(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_config, lut_texture) / lutBlack);
 
       float3 unclamped_gamma = Unclamp(
           renodx::lut::GammaOutput(lutOutputColor, lut_config),
@@ -34,7 +36,7 @@ float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut
           renodx::lut::ConvertInput(color_input * lutShift, lut_config));
 
       float3 unclamped_linear = renodx::lut::LinearUnclampedOutput(unclamped_gamma, lut_config);
-      float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling);
+      float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling * lut_scaling_factor);
       color_output = recolored;
     }
   } else {
