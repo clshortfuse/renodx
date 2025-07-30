@@ -452,8 +452,10 @@ float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
     float3 lutBlackLinear = renodx::lut::LinearOutput(lutBlack, lut_config);
     float lutBlackY = renodx::color::y::from::BT709(lutBlackLinear);
     if (lutBlackY > 0.f) {
-      float3 lutMid = SamplePacked1DLut(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_sampler, lut_texture, use_lut_weight_z);  // use lutBlackY instead of 0.18 to avoid black crush
-      float lutShift = (renodx::color::y::from::BT709(renodx::lut::LinearOutput(lutMid, lut_config)) + lutBlackY) / lutBlackY;          // galaxy brain
+      float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_config, lut_texture) + lutBlack; // set midpoint based on black to avoid black crush
+      float lutShift = renodx::color::y::from::BT709(SamplePacked1DLut(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_sampler, lut_texture) / lutBlack);
+      //float3 lutMid = SamplePacked1DLut(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_sampler, lut_texture, use_lut_weight_z);  // use lutBlackY instead of 0.18 to avoid black crush
+      //float lutShift = (renodx::color::y::from::BT709(renodx::lut::LinearOutput(lutMid, lut_config)) + lutBlackY) / lutBlackY;          // galaxy brain
       // float3 lutShift = (renodx::lut::LinearOutput(lutMid, lut_config) + lutBlackLinear) / lutBlackLinear;  // galaxy brain
 
       float3 unclamped_gamma = renodx::lut::Unclamp(

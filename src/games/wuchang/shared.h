@@ -55,8 +55,10 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_ENCODING             renodx::draw::ENCODING_PQ
-#define RENODX_SWAP_CHAIN_ENCODING             renodx::draw::ENCODING_PQ
+//#define RENODX_SWAP_CHAIN_DECODING             renodx::draw::ENCODING_NONE
 #define RENODX_TONE_MAP_PASS_AUTOCORRECTION    1.f
+#define RENODX_GAMMA_CORRECTION_UI             1.f
+#define RENODX_GAMMA_CORRECTION                1.f
 
 #define CUSTOM_LUT_STRENGTH shader_injection.custom_lut_strength
 #define CUSTOM_LUT_SCALING  shader_injection.custom_lut_scaling
