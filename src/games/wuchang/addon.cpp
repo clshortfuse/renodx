@@ -229,8 +229,8 @@ renodx::utils::settings::Settings settings = {
     },
         new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("Requires HDR DISABLED in-game\n"
-                            "If you previously added HDR settings to Engine.ini, remove them!\n"
+        .label = std::string("Requires HDR DISABLED in-game\n\n"
+                            "If you previously added HDR settings to Engine.ini, remove them!\n\n"
                             "Steam: %localappdata%\\Project_Plague\\Saved\\Config\\Windows\n"
                             "Xbox: %localappdata%\\Project_Plague\\Saved\\Config\\WinGDK\n"),
         .section = "HDR Settings",
