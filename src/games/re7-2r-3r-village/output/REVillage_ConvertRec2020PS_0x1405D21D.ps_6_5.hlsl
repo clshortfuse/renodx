@@ -19,9 +19,7 @@ float4 main(
 #if 1
   const float diffuse_white = whitePaperNits;
   float3 bt709Color = tLinearImage.SampleLevel(PointBorder, TEXCOORD.xy, 0.0f).rgb;
-#if 0
-  bt709Color = renodx::color::correct::GammaSafe(bt709Color);
-#else
+#if GAMMA_CORRECTION
   bt709Color = GammaCorrectHuePreserving(bt709Color);
 #endif
 
