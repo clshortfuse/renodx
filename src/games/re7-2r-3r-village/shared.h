@@ -3,7 +3,7 @@
 
 #ifndef __cplusplus
 
-#define GAMMA_CORRECTION    2u
+#define GAMMA_CORRECTION    1u
 #define CUSTOM_LUT_STRENGTH 1.f
 #define CUSTOM_LUT_SCALING  1.f
 
