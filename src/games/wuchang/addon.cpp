@@ -30,6 +30,18 @@ ShaderInjectData shader_injection;
 
 float using_ini_hdr = 0;
 
+const std::unordered_map<std::string, float> CANNOT_PRESET_VALUES = {
+    {"ToneMapPeakNits", 0},
+    {"ToneMapGameNits", 0},
+    {"ToneMapUINits", 0},
+    {"OverrideBlackClip", 0},
+    {"OverrideBlackClip", 0},
+};
+
+const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
+    {"ColorGradeLUTScaling", 70.f},
+};
+
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapType",
@@ -75,17 +87,17 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapHueCorrection",
-        .binding = &shader_injection.tone_map_hue_correction,
-        .default_value = 0.f,
-        .label = "Hue Correction",
-        .section = "Tone Mapping",
-        .tooltip = "Hue retention strength.",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type >= 2 && shader_injection.tone_map_type != 4; },
-        .parse = [](float value) { return value * 0.01f; },
-    },
+    // new renodx::utils::settings::Setting{
+    //     .key = "ToneMapHueCorrection",
+    //     .binding = &shader_injection.tone_map_hue_correction,
+    //     .default_value = 0.f,
+    //     .label = "Hue Correction",
+    //     .section = "Tone Mapping",
+    //     .tooltip = "Hue retention strength.",
+    //     .max = 100.f,
+    //     .is_enabled = []() { return shader_injection.tone_map_type >= 2 && shader_injection.tone_map_type != 4; },
+    //     .parse = [](float value) { return value * 0.01f; },
+    // },
     new renodx::utils::settings::Setting{
         .key = "OverrideBlackClip",
         .binding = &shader_injection.override_black_clip,
@@ -95,6 +107,40 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Outputs 0.0001 nits for black, prevents crushing.",
         .is_enabled = []() { return shader_injection.tone_map_type == 3; },
+    },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Vanilla",
+        .section = "Presets",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
+            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
+            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+          }
+        },
+    },
+            new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Recommended",
+        .section = "Presets",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
+            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
+            if (RECOMMENDED_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, RECOMMENDED_VALUES.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
+          }
+        },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
@@ -192,7 +238,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeLUTScaling",
         .binding = &shader_injection.custom_lut_scaling,
-        .default_value = 100.f,
+        .default_value = 0.f,
         .label = "LUT Scaling",
         .section = "Color Grading",
         .tooltip = "Scales the color grade LUT to full range when size is clamped.",
@@ -209,6 +255,7 @@ renodx::utils::settings::Settings settings = {
         .section = "HDR Settings",
         .tooltip = "Sets the method used for upgrading to HDR. Unreal HDR offers full framegen compatibility.",
         .labels = {"SDR", "Unreal HDR"},
+        .is_global = true,
     },
         new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
@@ -236,19 +283,6 @@ renodx::utils::settings::Settings settings = {
         .section = "HDR Settings",
         .is_visible = []() {
           return using_ini_hdr == 0.f;
-        },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Reset All",
-        .section = "Options",
-        .group = "button-line-0",
-        .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-          }
         },
     },
     new renodx::utils::settings::Setting{
@@ -298,7 +332,7 @@ renodx::utils::settings::Settings settings = {
     },
         new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("Mod by Jon, Musa, Ritsu, Marat"),
+        .label = std::string("Mod maintained by Jon, with immense help from Musa, Ritsu, and Marat"),
         .section = "About",
     },
             new renodx::utils::settings::Setting{
@@ -314,6 +348,16 @@ renodx::utils::settings::Settings settings = {
         .tint = 0xFF5F5F,
         .on_change = []() {
           renodx::utils::platform::LaunchURL("https://ko-fi.com/hdrden");
+        },
+    },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Jon's Ko-Fi",
+        .section = "About",
+        .group = "button-line-1",
+        .tint = 0xFF5F5F,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://ko-fi.com/kickfister");
         },
     },
 };

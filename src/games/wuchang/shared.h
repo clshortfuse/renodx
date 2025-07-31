@@ -43,7 +43,8 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_PEAK_WHITE_NITS                 shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS              shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS             shader_injection.graphics_white_nits
-#define RENODX_TONE_MAP_HUE_CORRECTION         shader_injection.tone_map_hue_correction
+//#define RENODX_TONE_MAP_HUE_CORRECTION         shader_injection.tone_map_hue_correction
+#define RENODX_TONE_MAP_HUE_CORRECTION         0.f
 #define RENODX_TONE_MAP_EXPOSURE               shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS             shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS                shader_injection.tone_map_shadows

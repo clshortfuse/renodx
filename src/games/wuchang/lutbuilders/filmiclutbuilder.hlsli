@@ -220,6 +220,10 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
   return color;
 }
 
+// float3 ApplyHueShift(float3 color, float3 hue_shift_color){
+//   return renodx::color::correct::Hue(color, hue_shift_color, config.hue_shift_strength);
+// }
+
 float GetUnrealFilmicMidGrayScale() {
   float film_black_clip = cb0_037w;
   float film_toe = cb0_037y;
