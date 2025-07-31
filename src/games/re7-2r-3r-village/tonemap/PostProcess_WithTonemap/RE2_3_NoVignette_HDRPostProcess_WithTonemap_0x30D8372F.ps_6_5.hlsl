@@ -1,4 +1,4 @@
-#include "../common.hlsli"
+#include "../../common.hlsli"
 
 cbuffer SceneInfoUBO : register(b0, space0) {
   float4 SceneInfo_m0[33] : packoffset(c0);

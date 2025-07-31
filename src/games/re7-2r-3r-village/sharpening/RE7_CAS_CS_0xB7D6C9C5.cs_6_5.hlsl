@@ -19,8 +19,8 @@ void main(
   int _16 = ((((uint)(SV_GroupThreadID.x) >> 3) & 6) | ((uint)(SV_GroupThreadID.x) & 1)) | ((uint)((uint)(SV_GroupID.y) << 4));
   
   
-#if DISABLE_SHARPENING // Skip sharpening - just passthrough the input using EXACT same coordinate transformation
-  // First pixel (_15, _16) - use exact same coordinate calculation as original
+#if DISABLE_SHARPENING
+  // First pixel (_15, _16)
   float pass_24 = float((uint)_15);
   float pass_25 = float((uint)_16);
   float pass_32 = (asfloat(const0.x) * pass_24) + asfloat(const0.z);
@@ -31,7 +31,7 @@ void main(
   int pass_39 = int(pass_35);
   OutputImage[int2(_15, _16)] = SrcImage.Load(int3(pass_38, pass_39, 0));
   
-  // Second pixel (_15|8, _16) - use exact same coordinate calculation as original
+  // Second pixel (_15|8, _16)
   int pass_350 = _15 | 8;
   float pass_358 = float((uint)pass_350);
   float pass_365 = (asfloat(const0.x) * pass_358) + asfloat(const0.z);
@@ -42,7 +42,7 @@ void main(
   int pass_372 = int(pass_368);
   OutputImage[int2(pass_350, _16)] = SrcImage.Load(int3(pass_371, pass_372, 0));
   
-  // Third pixel (_15, _16|8) - use exact same coordinate calculation as original
+  // Third pixel (_15, _16|8)
   int pass_683 = _16 | 8;
   float pass_691 = float((uint)pass_683);
   float pass_698 = (asfloat(const0.x) * pass_358) + asfloat(const0.z);
@@ -53,7 +53,7 @@ void main(
   int pass_705 = int(pass_701);
   OutputImage[int2(pass_350, pass_683)] = SrcImage.Load(int3(pass_704, pass_705, 0));
   
-  // Fourth pixel (_15, _16|8) - use exact same coordinate calculation as original  
+  // Fourth pixel (_15, _16|8)
   float pass_1029 = (asfloat(const0.x) * pass_24) + asfloat(const0.z);
   float pass_1030 = (asfloat(const0.y) * pass_691) + asfloat(const0.w);
   float pass_1031 = floor(pass_1029);
