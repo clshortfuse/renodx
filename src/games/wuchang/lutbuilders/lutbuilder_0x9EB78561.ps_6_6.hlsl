@@ -357,7 +357,7 @@ float4 main(
   float _1042;
   float _1043;
   float _1044;
-  SampleLUTUpgradeToneMap(untonemapped, s0, t0, t1, _1042, _1043, _1044);
+  SampleLUTUpgradeToneMap(untonemapped, s0, s1, t0, t1, _1042, _1043, _1044);
   float _1070 = cb0_014x * (((cb0_039y + (cb0_039x * _1042)) * _1042) + cb0_039z);
   float _1071 = cb0_014y * (((cb0_039y + (cb0_039x * _1043)) * _1043) + cb0_039z);
   float _1072 = cb0_014z * (((cb0_039y + (cb0_039x * _1044)) * _1044) + cb0_039z);
