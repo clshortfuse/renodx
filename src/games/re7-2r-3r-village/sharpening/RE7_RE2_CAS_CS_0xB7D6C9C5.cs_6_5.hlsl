@@ -1,4 +1,5 @@
-#include "../shared.h"
+#include "./sharpening.hlsli"
+
 Texture2D<float4> SrcImage : register(t0);
 
 RWTexture2D<float4> OutputImage : register(u0);
@@ -19,7 +20,7 @@ void main(
   int _16 = ((((uint)(SV_GroupThreadID.x) >> 3) & 6) | ((uint)(SV_GroupThreadID.x) & 1)) | ((uint)((uint)(SV_GroupID.y) << 4));
   
   
-#if DISABLE_SHARPENING
+if (CUSTOM_SHARPENING == 0.f) {
   // First pixel (_15, _16)
   float pass_24 = float((uint)_15);
   float pass_25 = float((uint)_16);
@@ -29,7 +30,7 @@ void main(
   float pass_35 = floor(pass_33);
   int pass_38 = int(pass_34);
   int pass_39 = int(pass_35);
-  OutputImage[int2(_15, _16)] = SrcImage.Load(int3(pass_38, pass_39, 0));
+  OutputImage[int2(_15, _16)] = float4(SrcImage.Load(int3(pass_38, pass_39, 0)).rgb, 1.f);
   
   // Second pixel (_15|8, _16)
   int pass_350 = _15 | 8;
@@ -40,7 +41,7 @@ void main(
   float pass_368 = floor(pass_366);
   int pass_371 = int(pass_367);
   int pass_372 = int(pass_368);
-  OutputImage[int2(pass_350, _16)] = SrcImage.Load(int3(pass_371, pass_372, 0));
+  OutputImage[int2(pass_350, _16)] = float4(SrcImage.Load(int3(pass_371, pass_372, 0)).rgb, 1.f);
   
   // Third pixel (_15, _16|8)
   int pass_683 = _16 | 8;
@@ -51,7 +52,7 @@ void main(
   float pass_701 = floor(pass_699);
   int pass_704 = int(pass_700);
   int pass_705 = int(pass_701);
-  OutputImage[int2(pass_350, pass_683)] = SrcImage.Load(int3(pass_704, pass_705, 0));
+  OutputImage[int2(pass_350, pass_683)] = float4(SrcImage.Load(int3(pass_704, pass_705, 0)).rgb, 1.f);
   
   // Fourth pixel (_15, _16|8)
   float pass_1029 = (asfloat(const0.x) * pass_24) + asfloat(const0.z);
@@ -60,10 +61,50 @@ void main(
   float pass_1032 = floor(pass_1030);
   int pass_1035 = int(pass_1031);
   int pass_1036 = int(pass_1032);
-  OutputImage[int2(_15, pass_683)] = SrcImage.Load(int3(pass_1035, pass_1036, 0));
+  OutputImage[int2(_15, pass_683)] = float4(SrcImage.Load(int3(pass_1035, pass_1036, 0)).rgb, 1.f);
   return;
-#endif
-
+} else if (CUSTOM_SHARPENING == 2.f) {  // Lilium RCAS
+  // Custom RCAS Sharpening Implementation
+  float sharpness_strength = 0.75f; // asfloat(const1.x)
+    
+  // Apply coordinate transformations for all four pixels
+  float _24 = float((uint)_15);
+  float _25 = float((uint)_16);
+  
+  // Transform coordinates for each set of pixels
+  // first pixel (_15, _16)
+  float _32 = (asfloat(const0.x) * _24) + asfloat(const0.z);
+  float _33 = (asfloat(const0.y) * _25) + asfloat(const0.w);
+  int2 coord1 = int2(int(floor(_32)), int(floor(_33)));
+  // second pixel (_15|8, _16)
+  int _350 = _15 | 8;
+  float _358 = float((uint)_350);
+  float _365 = (asfloat(const0.x) * _358) + asfloat(const0.z);
+  float _366 = (asfloat(const0.y) * _25) + asfloat(const0.w);
+  int2 coord2 = int2(int(floor(_365)), int(floor(_366)));
+  // third pixel (_15|8, _16|8)
+  int _683 = _16 | 8;
+  float _691 = float((uint)_683);
+  float _698 = (asfloat(const0.x) * _358) + asfloat(const0.z);
+  float _699 = (asfloat(const0.y) * _691) + asfloat(const0.w);
+  int2 coord3 = int2(int(floor(_698)), int(floor(_699)));
+  // fourth pixel (_15, _16|8)
+  float _1029 = (asfloat(const0.x) * _24) + asfloat(const0.z);
+  float _1030 = (asfloat(const0.y) * _691) + asfloat(const0.w);
+  int2 coord4 = int2(int(floor(_1029)), int(floor(_1030)));
+  
+  // Calculate texture dimensions once for all 4 pixels (optimization)
+  uint tex_width, tex_height;
+  SrcImage.GetDimensions(tex_width, tex_height);
+  int2 tex_max = int2(tex_width - 1, tex_height - 1);
+  // Apply RCAS to all four pixels using optimized function
+  OutputImage[int2(_15, _16)] = float4(ApplyLiliumRCAS(SrcImage, coord1, sharpness_strength, tex_max), 1.f);
+  OutputImage[int2(_350, _16)] = float4(ApplyLiliumRCAS(SrcImage, coord2, sharpness_strength, tex_max), 1.f);
+  OutputImage[int2(_350, _683)] = float4(ApplyLiliumRCAS(SrcImage, coord3, sharpness_strength, tex_max), 1.f);
+  OutputImage[int2(_15, _683)] = float4(ApplyLiliumRCAS(SrcImage, coord4, sharpness_strength, tex_max), 1.f);
+  return;
+} else {
+  // Original CAS Implementation (CUSTOM_SHARPENING == 1.f or other values)
   float _24 = float((uint)_15);
   float _25 = float((uint)_16);
   float _32 = (asfloat(const0.x) * _24) + asfloat(const0.z);
@@ -366,4 +407,5 @@ void main(
   float _1275 = (2.0f - (_1272 * _1269)) * _1272;
   float _1295 = _1275 * 0.0078125f;
   OutputImage[int2(_15, _683)] = float4((saturate(_1295 * ((((((((_1261 * max(0.0f, _1115.x)) + (_1250 * (max(0.0f, _1047.x) + max(0.0f, _1038.x)))) + (_1254 * max(0.0f, _1055.x))) + (_1257 * max(0.0f, _1072.x))) + (_1259 * max(0.0f, _1098.x))) + (_1255 * (max(0.0f, _1131.x) + max(0.0f, _1123.x)))) + (_1252 * (max(0.0f, _1107.x) + max(0.0f, _1090.x)))) + (_1251 * (max(0.0f, _1081.x) + max(0.0f, _1064.x))))) * 128.0f), (saturate(_1275 * ((((((((_1254 * _1062) + (((_1052 + _1043) * 0.0078125f) * _1250)) + (_1261 * _1122)) + (_1257 * _1079)) + (_1259 * _1105)) + (_1255 * ((_1136 + _1128) * 0.0078125f))) + (_1252 * ((_1112 + _1095) * 0.0078125f))) + (_1251 * ((_1086 + _1069) * 0.0078125f)))) * 128.0f), (saturate(_1295 * ((((((((_1261 * max(0.0f, _1115.z)) + (_1250 * (max(0.0f, _1047.z) + max(0.0f, _1038.z)))) + (_1254 * max(0.0f, _1055.z))) + (_1257 * max(0.0f, _1072.z))) + (_1259 * max(0.0f, _1098.z))) + (_1255 * (max(0.0f, _1131.z) + max(0.0f, _1123.z)))) + (_1252 * (max(0.0f, _1107.z) + max(0.0f, _1090.z)))) + (_1251 * (max(0.0f, _1081.z) + max(0.0f, _1064.z))))) * 128.0f), 1.0f);
+  } // End else block (Original CAS)
 }
