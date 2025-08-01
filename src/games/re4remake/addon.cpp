@@ -25,13 +25,19 @@ ShaderInjectData shader_injection;
 
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
+const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
+    {"GammaCorrection", 0.f},
+    {"ColorGradeShadows", 42.f},
+    {"ColorGradeSaturation", 55.f},
+    {"ColorGradeBlowout", 30.f},
+};
+
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapType",
         .binding = &shader_injection.tone_map_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
-        .can_reset = false,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
@@ -74,7 +80,6 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.tone_map_toe_adjustment_type,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
         .default_value = 1.f,
-        .can_reset = false,
         .label = "Toe Adjustment Type",
         .section = "Tone Mapper Parameters",
         .tooltip = "Sets the style of Toe Adjustment, multiplier multiplies the value set by the game by the slider, while fixed overrides it to the value set by the slider",
@@ -87,7 +92,8 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Shadow Toe",
         .section = "Tone Mapper Parameters",
-        .max = 2.f,
+        .min = 0.75f,
+        .max = 1.25f,
         .format = "%.2f",
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
@@ -239,6 +245,24 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Recommended Settings",
+        .section = "Options",
+        .group = "button-line-0",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+
+            if (RECOMMENDED_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, RECOMMENDED_VALUES.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
+          }
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
         .section = "Links",
         .group = "button-line-1",
@@ -311,7 +335,7 @@ void OnPresetOff() {
       {"ColorGradeFlare", 0.f},
       {"ColorGradeHighlightContrast", 50.f},
       {"ColorGradeLUTStrength", 100.f},
-      {"ColorGradeLUTScaling", 1.f},
+      {"ColorGradeLUTScaling", 0.f},
       {"LUTSamplingMethod", 0.f},
       {"FxSharpeningType", 0.f},
       {"FxSharpeningStrength", 100.f},
