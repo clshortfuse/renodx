@@ -1,4 +1,7 @@
 // ---- Created with 3Dmigoto v1.3.16 on Fri Aug 01 10:20:55 2025
+
+#include "../common.hlsl"
+
 Texture2D<float4> t6 : register(t6);
 
 Texture2D<float4> t0 : register(t0);
@@ -24,6 +27,8 @@ void main(
   float4 fDest;
 
   o0.w = 1;
+  
+  //video color
   r0.x = t0.Sample(s1_s, v1.xy).x;
   r0.x = -0.0625 + r0.x;
   r1.xy = t6.Sample(s2_s, v1.xy).xy;
@@ -32,7 +37,8 @@ void main(
   o0.y = dot(float3(1.16439998,-0.213300005,-0.532899976), r0.xyz);
   o0.z = dot(float2(1.16439998,2.11240005), r0.xy);
 
-  
+  //autohdr
+  o0.xyz = PumboAutoHDR(o0.xyz, 1.2f);
 
   return;
 }
