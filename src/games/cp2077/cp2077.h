@@ -1,10 +1,6 @@
 #ifndef SRC_CP2077_CP2077_H_
 #define SRC_CP2077_CP2077_H_
 
-#ifndef __cplusplus
-#include "../../shaders/renodx.hlsl"
-#endif
-
 // Must be 32bit aligned
 // Should be 4x32
 // 27 max for pixel/vertex
@@ -23,7 +19,7 @@ struct ShaderInjectData {
   float fxVignette;
   float fxFilmGrain;
 
-  float processingLUTCorrection;
+  float processingLUTScaling;
   float processingLUTOrder;
   float processingInternalSampling;
 
@@ -38,14 +34,6 @@ struct ShaderInjectData {
   float colorGradeWhitePoint;
   float colorGradeLUTStrength;
 
-  float sceneGradingLift;
-  float sceneGradingGamma;
-  float sceneGradingGain;
-  float sceneGradingColor;
-  float sceneGradingBlack;
-  float sceneGradingClip;
-  float sceneGradingHue;
-  float sceneGradingSaturation;
   float sceneGradingStrength;
 };
 
@@ -58,5 +46,23 @@ struct ShaderInjectData {
 #define OUTPUT_TYPE_PQ     1u
 #define OUTPUT_TYPE_SCRGB  2u
 #define OUTPUT_TYPE_SRGB10 3u
+
+#define RENODX_GAMMA_CORRECTION         injectedData.toneMapGammaCorrection
+#define CUSTOM_SCENE_GRADING_LIFT       1.f
+#define CUSTOM_SCENE_GRADING_GAMMA      1.f
+#define CUSTOM_SCENE_GRADING_GAIN       1.f
+#define CUSTOM_SCENE_GRADING_COLOR      1.f
+#define CUSTOM_SCENE_GRADING_BLACK      1.f
+#define CUSTOM_SCENE_GRADING_CLIP       1.f
+#define CUSTOM_SCENE_GRADING_HUE        1.f
+#define CUSTOM_SCENE_GRADING_SATURATION 1.f
+#define CUSTOM_SCENE_GRADING_STRENGTH   injectedData.sceneGradingStrength
+
+#ifndef __cplusplus
+cbuffer injectedBuffer : register(b14, space0) {
+  ShaderInjectData injectedData : packoffset(c0);
+}
+#include "../../shaders/renodx.hlsl"
+#endif
 
 #endif  // SRC_CP2077_CP2077_H_

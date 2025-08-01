@@ -161,6 +161,18 @@ struct SPIRV_Cross_Input {
   uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
 };
 
+float3 Sample3DLUT(Texture3D<float4> texture, const float3 color, float4 lutSettings) {
+  bool use_tetrahedral = false;
+  if (use_tetrahedral) {
+    return renodx::lut::SampleTetrahedral(texture, color).rgb;
+  }
+  float scale = lutSettings.x;
+  float offset = lutSettings.y;
+  float3 coordinates = color * scale + offset;
+  coordinates = clamp(coordinates, 0.f, 1.f);
+  return texture.SampleLevel(SAMPLER, coordinates, 0.0f).rgb;
+}
+
 float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex, bool force_sdr = false) {
   float3 color = inputColor;
   if (lutSettings.x > 0.0f) {           // LUT Strength
@@ -177,6 +189,7 @@ float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex,
       color *= scale;
     }
 
+    float3 linear_input_color = color;
     if (_504 == 1u) {
       color = renodx::color::srgb::EncodeSafe(color);
     } else if (_504 == 2u) {
@@ -186,11 +199,8 @@ float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex,
     color = saturate(color);  // Ensure within 0-1
 
     float3 lutInputColor = color;
-    float lutScale = lutSettings.x;
-    float lutOffset = lutSettings.y;
-    float3 coordinates = lutScale * color + lutOffset;
 
-    color = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, coordinates, 0.0f).rgb;
+    color = Sample3DLUT(LUT_TEXTURES[textureIndex], lutInputColor, lutSettings);
 
     float3 lutOutputColor = color;
 
@@ -200,41 +210,64 @@ float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex,
 
     float3 lutOutputLinear = color;
 
-    color /= scale;
-
-    if (injectedData.processingLUTCorrection) {
-      float3 minBlack = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, float(0.f).xxx, 0.0f).rgb;
-      float3 peakWhite = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, float(1.f).xxx, 0.0f).rgb;
-      if ((_503 & 240u) == 16u) {
-        float3 midGray = LUT_TEXTURES[textureIndex].SampleLevel(SAMPLER, float(0.5f).xxx, 0.0f).rgb;
-
-        float3 unclamped = renodx::lut::Unclamp(
-            lutOutputColor,
-            minBlack,
-            midGray,
-            peakWhite,
-            lutInputColor);
-
-        float3 recolored = renodx::lut::RecolorUnclamped(
-            lutOutputLinear,
-            renodx::color::srgb::DecodeSafe(unclamped));
-        color = lerp(color, recolored, min(injectedData.processingLUTCorrection * 2.f, 1.f));
-      } else {
-        const float lutMinY = renodx::color::y::from::BT709(abs(minBlack));
-        const float lutPeakY = renodx::color::y::from::BT709(abs(peakWhite));
-        const float targetPeakY = 100.f / max(lutSettings.z, 1.f);
-
-        // Only applies on LUTs that are clamped (all?)
-        if (lutMinY > 0) {
-          color = renodx::lut::CorrectBlack(inputColor, color, lutMinY, min(injectedData.processingLUTCorrection * 2.f, 1.f));
-        }
-
-        // Only scale up HDR LUTs
-        if (!force_sdr && lutPeakY > 1.01f && lutPeakY < targetPeakY) {
-          color = renodx::lut::CorrectWhite(inputColor, color, lutPeakY, targetPeakY, injectedData.processingLUTCorrection);
-        }
+    if (injectedData.processingLUTScaling != 0.f) {
+      float3 lut_black = 0.f;
+      float3 lut_white = 1.f;
+      float3 lut_mid_gray = 0.18f;
+      if (_504 == 1u) {
+        lut_black = Sample3DLUT(LUT_TEXTURES[textureIndex], 0.f, lutSettings);
+        lut_mid_gray = Sample3DLUT(LUT_TEXTURES[textureIndex], renodx::color::srgb::Encode(0.18f), lutSettings);
+        lut_white = Sample3DLUT(LUT_TEXTURES[textureIndex], 1.f, lutSettings);
+      } else if (_504 == 2u) {
+        lut_black = Sample3DLUT(LUT_TEXTURES[textureIndex], renodx::color::arri::logc::c800::Encode(0.f), lutSettings);
+        lut_mid_gray = Sample3DLUT(LUT_TEXTURES[textureIndex], renodx::color::arri::logc::c800::Encode(0.18f), lutSettings);
+        lut_white = Sample3DLUT(LUT_TEXTURES[textureIndex], renodx::color::arri::logc::c800::Encode(100.f), lutSettings);
       }
+
+      float3 output_gamma = lutOutputColor;
+      float3 black_gamma = lut_black;
+      float3 midgray_gamma = lut_mid_gray;
+      float3 peak_gamma = lut_white;
+      float3 input_gamma = lutInputColor;
+
+      if ((_503 & 240u) == 16u) {
+        // noop
+      } else {
+        float mid_gray = renodx::color::y::from::BT709(lut_mid_gray);
+        float peak = renodx::color::y::from::BT709(lut_white);
+
+        // Correct peak
+        float3 neutral_tonemapped = renodx::tonemap::ReinhardScalable(linear_input_color, peak, 0, 0.18f, mid_gray);
+        float3 graded_color = renodx::tonemap::UpgradeToneMap(
+            linear_input_color * mid_gray / 0.18f,
+            neutral_tonemapped,
+            color,
+            1.f);
+        color = lerp(color, graded_color, injectedData.processingLUTScaling);
+
+        // linear to gamma
+        output_gamma = renodx::color::srgb::EncodeSafe(color);
+        black_gamma = renodx::color::srgb::EncodeSafe(lut_black);
+        midgray_gamma = renodx::color::srgb::EncodeSafe(lut_mid_gray);
+        peak_gamma = 1.f;  // Peak already corrected
+        input_gamma = renodx::color::srgb::EncodeSafe(linear_input_color);
+      }
+
+      float3 unclamped = renodx::lut::Unclamp(
+          output_gamma,
+          black_gamma,
+          midgray_gamma,
+          peak_gamma,
+          input_gamma);
+
+      float3 recolored = renodx::lut::RecolorUnclamped(
+          color,
+          renodx::color::srgb::DecodeSafe(unclamped));
+
+      color = lerp(color, recolored, injectedData.processingLUTScaling);
     }
+
+    color /= scale;
   }
   color *= lutSettings.z;  // lut blending
   return color;
@@ -245,7 +278,8 @@ float3 sampleAllLUTs(const float3 color, bool force_sdr = false) {
 
   float3 compositedColor = 0;
 
-  if (injectedData.colorGradeLUTStrength) {  // 0 speed-hack
+  [branch]
+  if (injectedData.colorGradeLUTStrength != 0) {
     for (uint i = 0; i < textureCount; i++) {
       float4 lutSettings = cb6[33u + i];
       compositedColor += SampleLUT(lutSettings, color, i, force_sdr);
@@ -280,7 +314,7 @@ float4 tonemap(bool isACESMode = false) {
 
   float3 outputRGB = inputColor;
 
-  if (injectedData.sceneGradingStrength) {
+  if (CUSTOM_SCENE_GRADING_STRENGTH != 0.f) {
     float3 color = inputColor;
     float fogRangeMin = cb6[5u].w;  // 0.0001
     float fogRangeMax = cb6[6u].w;  // 0.0045
@@ -302,13 +336,13 @@ float4 tonemap(bool isACESMode = false) {
     float _195 = ((((_119 * (cb6[5u].g + 1.0f)) + fogRangeMin) * float((color.g >= fogRangeMin) && (color.g <= fogRangeMax))) + ((float(color.g < fogRangeMin) * fogRangeMin) * (((1.0f - cb6[4u].y) * (color.g / fogRangeMin)) + cb6[4u].y))) + (((_137 * (cb6[6u].y + 1.0f)) + fogRangeMax) * float(color.g > fogRangeMax));
     float _196 = ((((_120 * (cb6[5u].b + 1.0f)) + fogRangeMin) * float((color.b >= fogRangeMin) && (color.b <= fogRangeMax))) + ((float(color.b < fogRangeMin) * fogRangeMin) * (((1.0f - cb6[4u].z) * (color.b / fogRangeMin)) + cb6[4u].z))) + (((_138 * (cb6[6u].z + 1.0f)) + fogRangeMax) * float(color.b > fogRangeMax));
 
-    color = float3(_194, _195, _196);                                            // outside | inside
-    float3 fillColor = cb6[0u].rgb * injectedData.sceneGradingColor;             // 0,0,0   | 0.00, 0.00, 0.00
-    float3 sceneGamma = lerp(1.f, cb6[1u].rgb, injectedData.sceneGradingGamma);  // 1,1,1   | 1.00, 1.15, 1.05
-    float3 sceneGain = lerp(1.f, cb6[2u].rgb, injectedData.sceneGradingGain);    // 1,1,1   | 1.00, 1.18, 1.00
-    float3 sceneLift = cb6[3u].rgb * injectedData.sceneGradingLift;              // 0,0,0   | 0.00, 0.00, 0.00
-    float blackFloor = cb6[4u].w * injectedData.sceneGradingBlack;               // 0       | 0.112
-    float brightness = lerp(cb6[7u].x, 1.f, injectedData.sceneGradingClip);      // 1       | 1.000
+    color = float3(_194, _195, _196);                                        // outside | inside
+    float3 fillColor = cb6[0u].rgb * CUSTOM_SCENE_GRADING_COLOR;             // 0,0,0   | 0.00, 0.00, 0.00
+    float3 sceneGamma = lerp(1.f, cb6[1u].rgb, CUSTOM_SCENE_GRADING_GAMMA);  // 1,1,1   | 1.00, 1.15, 1.05
+    float3 sceneGain = lerp(1.f, cb6[2u].rgb, CUSTOM_SCENE_GRADING_GAIN);    // 1,1,1   | 1.00, 1.18, 1.00
+    float3 sceneLift = cb6[3u].rgb * CUSTOM_SCENE_GRADING_LIFT;              // 0,0,0   | 0.00, 0.00, 0.00
+    float blackFloor = cb6[4u].w * CUSTOM_SCENE_GRADING_BLACK;               // 0       | 0.112
+    float brightness = lerp(cb6[7u].x, 1.f, CUSTOM_SCENE_GRADING_CLIP);      // 1       | 1.000
 
     float3 adjustedColor = color;
     adjustedColor = lerp(adjustedColor, 1.f, fillColor);
@@ -323,7 +357,7 @@ float4 tonemap(bool isACESMode = false) {
     float _257 = adjustedColor.g;
     float _258 = adjustedColor.b;
 
-    const float hueShift = cb6[7u].z * injectedData.sceneGradingHue;
+    const float hueShift = cb6[7u].z * CUSTOM_SCENE_GRADING_HUE;
     float _260 = sin(hueShift);  // sin(0)
     float _261 = cos(hueShift);  // cos(0)
     float _262 = (-0.0f) - _260;
@@ -356,7 +390,7 @@ float4 tonemap(bool isACESMode = false) {
     // float _320 = _318 + cb6[7u].y;
 
     // Correct to BT709
-    float customSaturation = lerp(1.f, cb6[7u].y, injectedData.sceneGradingSaturation);
+    float customSaturation = lerp(1.f, cb6[7u].y, CUSTOM_SCENE_GRADING_SATURATION);
     float inverseSaturation = 1.0f - customSaturation;
     float _311 = inverseSaturation;
     float _312 = _311 * renodx::color::BT709_TO_XYZ_MAT[1].r;
@@ -370,12 +404,12 @@ float4 tonemap(bool isACESMode = false) {
     float _332 = _312 * _293;
     float _340 = _312 * _303;
 
-    float _355 = (cb6[3u].w * injectedData.sceneGradingBlack) + mad(_258, mad(_309, _318, mad(_307, _315, _314 * _303)), mad(_257, mad(_300, _318, mad(_298, _315, _314 * _293)), mad(_289, _318, mad(_286, _315, _314 * _279)) * _256));
-    float _356 = (cb6[3u].w * injectedData.sceneGradingBlack) + mad(_258, mad(_309, _318, mad(_307, _317, _340)), mad(_257, mad(_300, _318, mad(_298, _317, _332)), mad(_289, _318, mad(_286, _317, _324)) * _256));
-    float _357 = (cb6[3u].w * injectedData.sceneGradingBlack) + mad(_258, mad(_309, _320, mad(_307, _315, _340)), mad(_257, mad(_300, _320, mad(_298, _315, _332)), mad(_289, _320, mad(_286, _315, _324)) * _256));
+    float _355 = (cb6[3u].w * CUSTOM_SCENE_GRADING_BLACK) + mad(_258, mad(_309, _318, mad(_307, _315, _314 * _303)), mad(_257, mad(_300, _318, mad(_298, _315, _314 * _293)), mad(_289, _318, mad(_286, _315, _314 * _279)) * _256));
+    float _356 = (cb6[3u].w * CUSTOM_SCENE_GRADING_BLACK) + mad(_258, mad(_309, _318, mad(_307, _317, _340)), mad(_257, mad(_300, _318, mad(_298, _317, _332)), mad(_289, _318, mad(_286, _317, _324)) * _256));
+    float _357 = (cb6[3u].w * CUSTOM_SCENE_GRADING_BLACK) + mad(_258, mad(_309, _320, mad(_307, _315, _340)), mad(_257, mad(_300, _320, mad(_298, _315, _332)), mad(_289, _320, mad(_286, _315, _324)) * _256));
     adjustedColor = float3(_355, _356, _357);
 
-    outputRGB = lerp(inputColor, adjustedColor, injectedData.sceneGradingStrength);
+    outputRGB = lerp(inputColor, adjustedColor, CUSTOM_SCENE_GRADING_STRENGTH);
   }
 
   outputRGB = max(0, outputRGB);
@@ -550,7 +584,7 @@ float4 tonemap(bool isACESMode = false) {
       config.type = injectedData.toneMapType;
       config.peak_nits = injectedData.toneMapPeakNits;
       config.game_nits = (injectedData.toneMapType == 2.f ? (100.f / 203.f) : 1.f) * injectedData.toneMapGameNits;
-      config.gamma_correction = (injectedData.toneMapGammaCorrection == 2.f) ? 1.f : 0.f;
+      config.gamma_correction = (RENODX_GAMMA_CORRECTION == 2.f) ? 1.f : 0.f;
       config.exposure = injectedData.colorGradeExposure;
       config.highlights = injectedData.colorGradeHighlights;
       config.shadows = injectedData.colorGradeShadows;
@@ -569,8 +603,9 @@ float4 tonemap(bool isACESMode = false) {
         config.hue_correction_strength = 0;
       }
       config.reno_drt_dechroma = injectedData.colorGradeBlowout;
-      config.reno_drt_flare = 0.005 * injectedData.colorGradeFlare;
+      config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
       config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
+      config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
 
       outputRGB = renodx::tonemap::config::Apply(outputRGB, config);
       bool useD60 = (injectedData.colorGradeWhitePoint == -1.0f || (injectedData.colorGradeWhitePoint == 0.f && cb6[28u].z == 0.f));
@@ -578,8 +613,8 @@ float4 tonemap(bool isACESMode = false) {
         outputRGB = mul(renodx::color::BT709_TO_BT709D60_MAT, outputRGB);
       }
 
-      if (injectedData.toneMapGammaCorrection == 2.f) {
-        outputRGB = renodx::color::correct::GammaSafe(outputRGB);
+      if (RENODX_GAMMA_CORRECTION >= 2.f) {
+        outputRGB = renodx::color::correct::GammaSafe(outputRGB, false, 2.2f);
       }
 
       outputRGB *= config.game_nits / 100.f;

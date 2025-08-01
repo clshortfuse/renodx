@@ -143,7 +143,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Exposure",
         .section = "Color Grading",
-        .max = 10.f,
+        .max = 2.f,
         .format = "%.2f",
     },
     new renodx::utils::settings::Setting{
@@ -207,7 +207,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "colorGradeFlare",
         .binding = &shader_injection.colorGradeFlare,
-        .default_value = 50.f,
+        .default_value = 0.f,
         .label = "Flare",
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
@@ -234,78 +234,6 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "sceneGradingLift",
-        .binding = &shader_injection.sceneGradingLift,
-        .default_value = 50.f,
-        .label = "Lift",
-        .section = "Scene Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "sceneGradingGamma",
-        .binding = &shader_injection.sceneGradingGamma,
-        .default_value = 50.f,
-        .label = "Gamma",
-        .section = "Scene Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "sceneGradingGain",
-        .binding = &shader_injection.sceneGradingGain,
-        .default_value = 50.f,
-        .label = "Gain",
-        .section = "Scene Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "sceneGradingBlack",
-        .binding = &shader_injection.sceneGradingBlack,
-        .default_value = 50.f,
-        .label = "Black Floor",
-        .section = "Scene Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "sceneGradingColor",
-        .binding = &shader_injection.sceneGradingColor,
-        .default_value = 50.f,
-        .label = "Color Fill",
-        .section = "Scene Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "sceneGradingClip",
-        .binding = &shader_injection.sceneGradingClip,
-        .default_value = 50.f,
-        .label = "White Clip",
-        .section = "Scene Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "sceneGradingHue",
-        .binding = &shader_injection.sceneGradingHue,
-        .default_value = 50.f,
-        .label = "Hue",
-        .section = "Scene Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "sceneGradingSaturation",
-        .binding = &shader_injection.sceneGradingSaturation,
-        .default_value = 50.f,
-        .label = "Saturation",
-        .section = "Scene Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "sceneGradingStrength",
@@ -346,12 +274,12 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "processingLUTCorrection",
-        .binding = &shader_injection.processingLUTCorrection,
-        .default_value = 50.f,
-        .label = "LUT Correction",
+        .key = "processingLUTScaling",
+        .binding = &shader_injection.processingLUTScaling,
+        .default_value = 100.f,
+        .label = "LUT Scaling",
         .section = "Processing",
-        .tooltip = "Selects the strength of LUT correction process when color grading LUTs are not full range.",
+        .tooltip = "Scales the color grade LUT to full range when size is clamped.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
@@ -375,6 +303,19 @@ renodx::utils::settings::Settings settings = {
         .section = "Processing",
         .tooltip = "Selects whether to use the vanilla sampling or PQ for the game's internal rendering LUT.",
         .labels = {"Vanilla", "PQ"},
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Reset All",
+        .section = "Options",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+          }
+        },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
@@ -422,7 +363,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("fxVignette", 50.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 0.f);
 
-  renodx::utils::settings::UpdateSetting("processingLUTCorrection", 0.f);
+  renodx::utils::settings::UpdateSetting("processingLUTScaling", 0.f);
   renodx::utils::settings::UpdateSetting("processingLUTOrder", 1.f);
   renodx::utils::settings::UpdateSetting("processingInternalSampling", 0.f);
 }

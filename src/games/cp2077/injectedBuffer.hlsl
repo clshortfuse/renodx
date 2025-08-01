@@ -3,8 +3,4 @@
 
 #include "./cp2077.h"
 
-cbuffer injectedBuffer : register(b14, space0) {
-  ShaderInjectData injectedData : packoffset(c0);
-}
-
 #endif

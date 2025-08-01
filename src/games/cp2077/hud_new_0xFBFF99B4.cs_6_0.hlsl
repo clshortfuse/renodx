@@ -392,7 +392,7 @@ void comp_main() {
       float4 _1625 = _17.SampleLevel(_46, float2(_1247, 1.0f - _1248), 0.0f);
 
       // Custom
-      if (injectedData.toneMapGammaCorrection >= 1.f) {
+      if (RENODX_GAMMA_CORRECTION >= 1.f) {
         _1625 = renodx::color::correct::Gamma(max(0.f, _1625));
       }
       _1636 = (cb6[2u].x * _1625.x) + _1443;
@@ -434,7 +434,7 @@ void comp_main() {
       float4 _1952 = _13.SampleLevel(_46, float2((cb6[8u].x * _1251) + _1247, (cb6[8u].y * _1252) + _1248), 4.0f);
 
       // Custom
-      if (injectedData.toneMapGammaCorrection >= 1.f) {
+      if (RENODX_GAMMA_CORRECTION >= 1.f) {
         _1900 = renodx::color::correct::Gamma(max(0.f, _1900));
         _1904 = renodx::color::correct::Gamma(max(0.f, _1904));
         _1911 = renodx::color::correct::Gamma(max(0.f, _1911));
