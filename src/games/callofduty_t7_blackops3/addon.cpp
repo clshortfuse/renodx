@@ -67,7 +67,7 @@ const std::unordered_map<std::string, float> PRESET_RENODRT = {
     {"ColorGradeSaturation", 50.f},
     {"ColorGradeHighlightSaturation", 50.f},
     {"ColorGradeBlowout", 0.f},
-    {"ColorGradeFlare", 35.f},
+    {"ColorGradeFlare", 0.f},
 };
 
 const std::unordered_map<std::string, float> PRESET_ACES = {
