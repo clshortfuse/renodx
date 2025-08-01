@@ -805,7 +805,7 @@ float4 main(
   lut_config.lut_sampler = s0_space5;
   lut_config.strength = CUSTOM_LUT_STRENGTH;
   lut_config.scaling = CUSTOM_LUT_SCALING;
-  lut_config.tetrahedral = true;
+  lut_config.tetrahedral = CUSTOM_LUT_SAMPLING != 0.f;
   lut_config.type_input = renodx::lut::config::type::SRGB;
   lut_config.type_output = renodx::lut::config::type::SRGB;
   lut_config.size = 16u;

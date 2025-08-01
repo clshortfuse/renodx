@@ -35,14 +35,13 @@ float4 main(
   SV_Target.z = (max((((exp2(((log2(((_82 / ((sqrt(((_82 * _82) + 1.0f))) * _87)) + 0.5f))) * _109))) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f));
   SV_Target.w = 1.0f;
 
-  if (injectedData.toneMapType != 0.f) {
-    float videoPeak =
-        injectedData.toneMapPeakNits / (injectedData.toneMapGameNits / 203.f);
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    float videoPeak = RENODX_PEAK_WHITE_NITS / (RENODX_DIFFUSE_WHITE_NITS / 203.f);
     SV_Target.rgb = renodx::color::gamma::Decode(SV_Target.rgb, 2.4f);  // 2.4 for BT2446a
     SV_Target.rgb = renodx::tonemap::inverse::bt2446a::BT709(SV_Target.rgb, 100.f, videoPeak);
-    SV_Target.rgb /= videoPeak;                                                    // Normalize to 1.0f = peak;
-    SV_Target.rgb *= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;  // 1.f = game nits
-    SV_Target.rgb = PostToneMapScale(SV_Target.rgb);                               // Gamma Correct
+    SV_Target.rgb /= videoPeak;                                           // Normalize to 1.0f = peak;
+    SV_Target.rgb *= RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;  // 1.f = game nits
+    SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);  // Gamma Correct
   }
   return SV_Target;
 }
