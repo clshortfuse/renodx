@@ -232,9 +232,9 @@ void main(
 
     float lut_min_y = renodx::color::y::from::BT709(max(0, min_black));
     if (lut_min_y > 0) {
-      float lut_mid_ratio = renodx::color::y::from::BT709(renodx::color::arri::logc::c800::Decode(t0.SampleLevel(s1_s, renodx::color::arri::logc::c800::Encode((0.18f).xxx) + 0.0078125, 0.0f).rgb)) / 0.18f;
-      float3 corrected_black = renodx::lut::CorrectBlack(lut_input_color * lut_mid_ratio, r2.wyz, lut_min_y, 70.f);
-      r2.wyz = lerp(r2.wyz, corrected_black, RENODX_COLOR_GRADE_SCALING);
+      float lut_mid_ratio = (max(0, renodx::color::y::from::BT709(renodx::color::arri::logc::c800::Decode(t0.SampleLevel(s1_s, renodx::color::arri::logc::c800::Encode((0.18f).xxx) + 0.0078125, 0.0f).rgb)))) / 0.18f;
+      float3 corrected_black = max(0, renodx::lut::CorrectBlack(max(0, lut_input_color * lut_mid_ratio), r2.wyz, lut_min_y, 40.f));
+      r2.wyz = renodx::lut::RecolorUnclamped(max(0, r2.wyz), corrected_black, RENODX_COLOR_GRADE_SCALING * 0.65f);
     }
   }
 
