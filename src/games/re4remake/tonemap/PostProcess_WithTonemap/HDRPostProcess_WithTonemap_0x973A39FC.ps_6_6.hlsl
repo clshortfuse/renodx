@@ -1,5 +1,4 @@
-#include "./LUTBlackCorrection.hlsl"
-#include "./shared.h"
+#include "../../common.hlsli"
 
 cbuffer SceneInfoUBO : register(b0, space0)
 {
@@ -138,24 +137,25 @@ void frag_main()
   TonemapParam_m0[0u] = float4(contrast, linearBegin, linearLength, toe);
   TonemapParam_m0[1u] = float4(maxNit, linearStart, displayMaxNitSubContrastFactor, contrastFactor);
   TonemapParam_m0[2u] = float4(mulLinearStartContrastFactor, invLinearBegin, madLinearStartContrastFactor, 0.0);
-  if (injectedData.toneMapType != 0) {
-    if (injectedData.colorGradeToeAdjustmentType == 0) {
-      TonemapParam_m0[0u].w *= injectedData.colorGradeShadowToe;  // toe
+  if (TONE_MAP_TYPE != 0) {
+    if (RENODX_TONE_MAP_TOE_ADJUSTMENT_TYPE == 0) {
+      TonemapParam_m0[0u].w *= RENODX_TONE_MAP_SHADOW_TOE;  // toe
     } else {
-      TonemapParam_m0[0u].w = injectedData.colorGradeShadowToe;  // toe
+      TonemapParam_m0[0u].w = RENODX_TONE_MAP_SHADOW_TOE;  // toe
     }
-    TonemapParam_m0[0u].x *= injectedData.colorGradeHighlightContrast;  // contrast
-    TonemapParam_m0[1u].x = 125;                                        // maxNit
-    TonemapParam_m0[1u].y = 125;                                        // linearStart
+    TonemapParam_m0[0u].x *= RENODX_TONE_MAP_HIGHLIGHT_CONTRAST;  // contrast
+    TonemapParam_m0[1u].x = 125;                                  // maxNit
+    TonemapParam_m0[1u].y = 125;                                  // linearStart
   }
   // declare lut config for use with lut black correction
   renodx::lut::Config lut_config = renodx::lut::config::Create(
       TrilinearClamp,
-      injectedData.colorGradeLUTStrength,
-      injectedData.colorGradeLUTScaling,
+      COLOR_GRADE_LUT_STRENGTH,
+      COLOR_GRADE_LUT_SCALING,
       renodx::lut::config::type::SRGB,
       renodx::lut::config::type::LINEAR,
       ColorCorrectTexture_m0[0u].x);
+  lut_config.recolor = 0.f;
   float3 sdrColor;
   float3 untonemapped;
   float3 hdrColor;
@@ -1193,9 +1193,9 @@ void frag_main()
         untonemapped = float3(_1547, _1549, _1551);
         hdrColor = untonemapped;
           
-        sdrColor = renoDRTSmoothClamp(untonemapped);  // use neutral RenoDRT as a smoothclamp
+        sdrColor = LUTToneMap(untonemapped);
 #endif
-        if (injectedData.processingInternalSampling == 0) {
+        if (COLOR_GRADE_LUT_SAMPLING_METHOD == 0) {
             if (_1865)
             {
                 _2185 = _1547 / _1864;
@@ -1379,7 +1379,7 @@ void frag_main()
         float frontier_phi_43_91_ladder_1;
         float frontier_phi_43_91_ladder_2;
 
-        if (injectedData.processingInternalSampling == 0) {
+        if (COLOR_GRADE_LUT_SAMPLING_METHOD == 0) {
             if (_1865)
             {
                 frontier_phi_43_91_ladder = _1835 * _1864;
@@ -1446,8 +1446,9 @@ void frag_main()
     SV_Target.z = _2671;
     SV_Target.w = 0.0f;
 
-    if (injectedData.toneMapType != 0) {
-      SV_Target.rgb = AdjustGammaByChannel(SV_Target.rgb, injectedData.toneMapGammaAdjust);
+    if (TONE_MAP_TYPE != 0) {
+      SV_Target.rgb = ApplyCustomGrading(SV_Target.rgb);
+      SV_Target.rgb = AdjustGammaByChannel(SV_Target.rgb, RENODX_GAMMA_ADJUST);
     }
 }
 
