@@ -33,6 +33,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // extra
     CustomShaderEntry(0x8F563B81),  // fulscreen fx slide
     CustomShaderEntry(0x8324B585),  // rec709 disabled
+    CustomShaderEntry(0x2D7D9715),  // loading movies
 
     // ui
     CustomShaderEntry(0x11920281),

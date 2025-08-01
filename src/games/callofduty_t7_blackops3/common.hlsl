@@ -69,7 +69,6 @@ float3 PumboAutoHDR(float3 sdr_color, float shoulder_pow = 2.75f) {
   // The paper white multiplier is applied later so we account for that.
   float target_max_luminance = min(RENODX_PEAK_WHITE_NITS, pow(10.f, ((log10(RENODX_DIFFUSE_WHITE_NITS) - 0.03460730900256) / 0.757737096673107)));
   target_max_luminance = lerp(1.f, target_max_luminance, .5f);
-  target_max_luminance *= 2.5;
 
   const float auto_HDR_max_white = max(target_max_luminance / RENODX_DIFFUSE_WHITE_NITS, 1.f);
   const float auto_HDR_shoulder_ratio = 1.f - max(1.f - SDRRatio, 0.f);

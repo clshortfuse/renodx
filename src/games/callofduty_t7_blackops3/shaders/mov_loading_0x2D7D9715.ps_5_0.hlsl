@@ -38,7 +38,7 @@ void main(
   o0.z = dot(float2(1.16439998,2.11240005), r0.xy);
 
   //autohdr
-  o0.xyz = PumboAutoHDR(o0.xyz, 1.2f);
+  o0.xyz = PumboAutoHDR(o0.xyz);
 
   return;
 }
