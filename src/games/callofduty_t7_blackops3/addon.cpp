@@ -63,22 +63,21 @@ const std::unordered_map<std::string, float> PRESET_RENODRT = {
     {"ToneMapType", 3.f},
     {"ColorGradeExposure", 1.f},
     {"ColorGradeHighlights", 50.f},
-    {"ColorGradeShadows", 60.f},
+    {"ColorGradeShadows", 50.f},
     {"ColorGradeSaturation", 50.f},
     {"ColorGradeHighlightSaturation", 50.f},
     {"ColorGradeBlowout", 0.f},
-    // {"ColorGradeFlare", 35.f},
+    {"ColorGradeFlare", 35.f},
 };
 
 const std::unordered_map<std::string, float> PRESET_ACES = {
     {"ToneMapType", 2.f},
     {"ColorGradeExposure", 1.5f},
     {"ColorGradeHighlights", 50.f},
-    {"ColorGradeShadows", 50.f},
+    {"ColorGradeShadows", 60.f},
     {"ColorGradeSaturation", 50.f},
     {"ColorGradeHighlightSaturation", 50.f},
     {"ColorGradeBlowout", 0.f},
-    {"ColorGradeFlare", 35.f},
 };
 
 renodx::utils::settings::Settings settings = {
