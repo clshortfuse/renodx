@@ -45,36 +45,34 @@ renodx::utils::settings::Settings settings = {
         .label = "Peak Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of peak white in nits",
-        .min = 48.f,
+        .min = 80.f,
         .max = 4000.f,
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapGameNits",
         .binding = &shader_injection.toneMapGameNits,
         .default_value = 203.f,
-        .can_reset = false,
         .label = "Game Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of 100% white in nits",
-        .min = 48.f,
+        .min = 80.f,
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapUINits",
         .binding = &shader_injection.toneMapUINits,
         .default_value = 203.f,
-        .can_reset = false,
         .label = "UI Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
-        .min = 48.f,
+        .min = 80.f,
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapGammaCorrection",
         .binding = &shader_injection.toneMapGammaCorrection,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .can_reset = false,
+        .default_value = 1.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
         .tooltip = "Emulates an EOTF",
@@ -154,16 +152,6 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeSceneGrading",
-        .binding = &shader_injection.custom_scene_strength,
-        .default_value = 0.f,
-        .label = "Scene Grading",
-        .section = "Color Grading",
-        .tooltip = "Selects the strength of the game's custom scene grading.",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "fxBloom",
         .binding = &shader_injection.custom_bloom,
         .default_value = 50.f,
@@ -189,6 +177,19 @@ renodx::utils::settings::Settings settings = {
         .label = "Vanilla Tone Mapping",
         .section = "Effects",
         .labels = {"Per-Channel", "Luminance"},
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Reset All",
+        .section = "Options",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+          }
+        },
     },
 };
 
@@ -273,14 +274,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .usage_include = reshade::api::resource_usage::render_target,
       });
 
-    //   // Primary render (reduces banding)
-    //   renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-    //       .old_format = reshade::api::format::r11g11b10_float,
-    //       .new_format = reshade::api::format::r16g16b16a16_float,
-    //       .use_resource_view_cloning = true,
-    //       .aspect_ratio = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
-    //       .usage_include = reshade::api::resource_usage::render_target,
-    //   });
+      //   // Primary render (reduces banding)
+      //   renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      //       .old_format = reshade::api::format::r11g11b10_float,
+      //       .new_format = reshade::api::format::r16g16b16a16_float,
+      //       .use_resource_view_cloning = true,
+      //       .aspect_ratio = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
+      //       .usage_include = reshade::api::resource_usage::render_target,
+      //   });
 
       break;
     case DLL_PROCESS_DETACH:

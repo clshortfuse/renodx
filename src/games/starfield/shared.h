@@ -31,7 +31,6 @@ struct ShaderInjectData {
 
   float custom_lut_strength;
   float custom_lut_scaling;
-  float custom_scene_strength;
 
   float custom_bloom;
   float custom_film_grain;

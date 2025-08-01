@@ -524,7 +524,8 @@ float4 main(
   float _506;
   float _507;
   if (!(((uint)(SharedFrameData_000.FrameData_036)) == 0)) {
-    _55 = lerp(SharedFrameData_000.FrameData_040, 1.0f, 0.8500000238418579f);
+    // _55 = lerp(SharedFrameData_000.FrameData_040, 1.0f, 0.8500000238418579f);
+    _55 = 1.0f;
   } else {
     _55 = 1.0f;
   }
@@ -760,6 +761,9 @@ float4 main(
   // User Contrast
 
   float _352 = max(SharedFrameData_000.FrameData_032, 0.0010000000474974513f);
+
+  _352 = 1.f;
+
   float _359 = ((lerp(_338, _28, _31) * 2.0f) + -1.0f) * _352;
   float _360 = ((lerp(_339, _29, _31) * 2.0f) + -1.0f) * _352;
   float _361 = ((lerp(_340, _30, _31) * 2.0f) + -1.0f) * _352;
@@ -819,7 +823,7 @@ float4 main(
   float _430 = (_420.x * (_406 - _415.z)) + _415.z;
 
   // if (!(((uint)(SharedFrameData_000.FrameData_036)) == 0)) {
-  if (CUSTOM_LUT_SCALING == 0 && !(((uint)(SharedFrameData_000.FrameData_036)) == 0)) {
+  if (false && !(((uint)(SharedFrameData_000.FrameData_036)) == 0)) {
     float3 _435 = t3.Sample(s0, float3(0.03125f, 0.03125f, 0.03125f));
     float3 _439 = t3.Sample(s0, float3(0.96875f, 0.96875f, 0.96875f));
     float _444 = min(_435.x, (min(_435.y, _435.z)));
