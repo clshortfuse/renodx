@@ -27,9 +27,10 @@ renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
     {"GammaCorrection", 0.f},
-    {"ColorGradeShadows", 42.f},
+    {"ColorGradeShadows", 45.f},
     {"ColorGradeSaturation", 55.f},
     {"ColorGradeBlowout", 30.f},
+    {"ColorGradeFlare", 22.f},
 };
 
 renodx::utils::settings::Settings settings = {
