@@ -1,26 +1,4 @@
-// cbuffer HDRMapping
-// {
-
-//   struct HDRMapping
-//   {
-
-//       float whitePaperNits;                         ; Offset:    0
-//       float configImageAlphaScale;                  ; Offset:    4
-//       float displayMaxNits;                         ; Offset:    8
-//       float displayMinNits;                         ; Offset:   12
-//       float4 displayMaxNitsRect;                    ; Offset:   16
-//       float4 standardMaxNitsRect;                   ; Offset:   32
-//       float4 mdrOutRangeRect;                       ; Offset:   48
-//       uint drawMode;                                ; Offset:   64
-//       float gammaForHDR;                            ; Offset:   68
-//       float2 configDrawRectSize;                    ; Offset:   72
-
-//   } HDRMapping;                                     ; Offset:    0 Size:    80
-
-// }
-
-#include "./DICE.hlsl"
-#include "./shared.h"
+#include "../common.hlsli"
 
 Texture2D<float4> tLinearImage : register(t0);
 
@@ -38,22 +16,16 @@ SamplerState PointBorder : register(s2, space32);
 float4 main(noperspective float4 SV_Position: SV_Position,
             linear float2 TEXCOORD: TEXCOORD)
     : SV_Target {
-  if (injectedData.toneMapType != 0) {
+  if (TONE_MAP_TYPE != 0) {
     float3 bt709Color = tLinearImage.SampleLevel(PointBorder, TEXCOORD.xy, 0.0f).rgb;
 
-    if (injectedData.toneMapGammaCorrection == 1.f) {
-      bt709Color = renodx::color::correct::GammaSafe(bt709Color);
-    }
-#if 1
-    DICESettings config = DefaultDICESettings();
-    config.Type = 3;
-    config.ShoulderStart = 0.45;
-    const float dicePaperWhite = whitePaperNits / renodx::color::srgb::REFERENCE_WHITE;
-    const float dicePeakWhite = max(displayMaxNits, whitePaperNits) / renodx::color::srgb::REFERENCE_WHITE;
-    bt709Color.rgb = DICETonemap(bt709Color.rgb * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
-#endif
+    bt709Color = ApplyGammaCorrection(bt709Color);
 
     float3 bt2020Color = renodx::color::bt2020::from::BT709(bt709Color.rgb);
+
+#if 1
+  bt2020Color = ApplyExponentialRolloff(bt2020Color, whitePaperNits, displayMaxNits);
+#endif
 
     float3 pqColor = renodx::color::pq::Encode(bt2020Color, whitePaperNits);
 
