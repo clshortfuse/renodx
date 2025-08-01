@@ -181,7 +181,7 @@
 // SV_Target                0   xyzw        0   TARGET   float   xyzw
 //
 
-#include "./shared.h"
+#include "./common.hlsli"
 
 Texture2D<float4> t18 : register(t18);
 
@@ -340,15 +340,21 @@ void main(
   r0.z = cmp(0 != cb0[0].w);
   r1.xyz = r0.zzz ? float3(0, 0, 0) : r1.xyz;
 
-  r1.rgb = renodx::color::grade::UserColorGrading(
-      r1.rgb,
-      RENODX_TONE_MAP_EXPOSURE,
-      RENODX_TONE_MAP_HIGHLIGHTS,
-      RENODX_TONE_MAP_SHADOWS,
-      RENODX_TONE_MAP_CONTRAST,
-      1.f,   // saturation, applied later
-      0.f,   // dechroma, applied later
-      0.f);  // hue correction, applied later
+  // r1.rgb = renodx::color::grade::UserColorGrading(
+  //     r1.rgb,
+  //     RENODX_TONE_MAP_EXPOSURE,
+  //     RENODX_TONE_MAP_HIGHLIGHTS,
+  //     RENODX_TONE_MAP_SHADOWS,
+  //     RENODX_TONE_MAP_CONTRAST,
+  //     1.f,   // saturation, applied later
+  //     0.f,   // dechroma, applied later
+  //     0.f);  // hue correction, applied later
+  // renodx::color::grade::Config cg_config = renodx::color::grade::config::Create();
+  // cg_config.exposure = RENODX_TONE_MAP_EXPOSURE;
+  // cg_config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
+  // cg_config.shadows = RENODX_TONE_MAP_SHADOWS;
+  // cg_config.contrast = RENODX_TONE_MAP_CONTRAST;
+  r1.rgb = ApplyExposureContrastFlareHighlightsShadowsByLuminance(r1.rgb);
 
   float3 lut_input_color = r1.rgb;
 #if 0
@@ -393,6 +399,7 @@ void main(
       renodx::lut::config::type::ARRI_C800,
       64.f  // precompute
   );
+  lut_config.recolor = 0.f;
   r1.rgb = renodx::lut::Sample(t0, lut_config, lut_input_color);
 
   if (RENODX_COLOR_GRADE_SCALING) {
@@ -400,7 +407,8 @@ void main(
 
     float lut_min_y = (renodx::color::y::from::BT709(max(0, min_black)));
     if (lut_min_y > 0) {
-      float3 corrected_black = renodx::lut::CorrectBlack(lut_input_color, r1.rgb, lut_min_y, 1.f);
+      float lut_mid_ratio = renodx::color::y::from::BT709(renodx::color::arri::logc::c800::Decode(t0.SampleLevel(s1_s, renodx::color::arri::logc::c800::Encode((0.18f).xxx) + 0.0078125, 0.0f).rgb)) / 0.18f;
+      float3 corrected_black = renodx::lut::CorrectBlack(lut_input_color * lut_mid_ratio, r1.rgb, lut_min_y, 70.f);
       r1.rgb = lerp(r1.rgb, corrected_black, RENODX_COLOR_GRADE_SCALING);
     }
   }
@@ -438,7 +446,6 @@ void main(
   r0.z = r1.x ? r0.w : r0.z;
   r0.z = cb0[29].w + r0.z;
   r0.z = cb0[30].z * r0.z;
-  // No code for instruction (needs manual fix):
 
   resourceTables__passData__OutRejectionFactor[uint2(r0.xy)] = r0.z;  // store_uav_typed u9.xyzw, r0.xyyy, r0.zzzz
   o0.w = 1;

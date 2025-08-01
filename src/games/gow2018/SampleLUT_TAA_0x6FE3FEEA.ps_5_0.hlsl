@@ -20,7 +20,7 @@
 // resourceTables__passData.OutRejectionFactor        UAV   float          2d             u9      1
 // ConstBuf__passData                cbuffer      NA          NA            cb0      1
 
-#include "./shared.h"
+#include "./common.hlsli"
 
 RWTexture2D<float4> u9 : register(u9);  // decompiler missed this
 
@@ -183,15 +183,16 @@ void main(
   r1.x = cmp(0 != cb0[0].w);
   r2.xyz = r1.xxx ? float3(0, 0, 0) : r2.xyz;
 
-  r2.rgb = renodx::color::grade::UserColorGrading(
-      r2.rgb,
-      RENODX_TONE_MAP_EXPOSURE,
-      RENODX_TONE_MAP_HIGHLIGHTS,
-      RENODX_TONE_MAP_SHADOWS,
-      RENODX_TONE_MAP_CONTRAST,
-      1.f,   // saturation, applied later
-      0.f,   // dechroma, applied later
-      0.f);  // hue correction, applied later
+  // r2.rgb = renodx::color::grade::UserColorGrading(
+  //     r2.rgb,
+  //     RENODX_TONE_MAP_EXPOSURE,
+  //     RENODX_TONE_MAP_HIGHLIGHTS,
+  //     RENODX_TONE_MAP_SHADOWS,
+  //     RENODX_TONE_MAP_CONTRAST,
+  //     1.f,   // saturation, applied later
+  //     0.f,   // dechroma, applied later
+  //     0.f);  // hue correction, applied later
+  r2.rgb = ApplyExposureContrastFlareHighlightsShadowsByLuminance(r2.rgb);
 
   float3 lut_input_color = r2.rgb;
 
@@ -231,7 +232,8 @@ void main(
 
     float lut_min_y = renodx::color::y::from::BT709(max(0, min_black));
     if (lut_min_y > 0) {
-      float3 corrected_black = renodx::lut::CorrectBlack(lut_input_color, r2.wyz, lut_min_y, 1.f);
+      float lut_mid_ratio = renodx::color::y::from::BT709(renodx::color::arri::logc::c800::Decode(t0.SampleLevel(s1_s, renodx::color::arri::logc::c800::Encode((0.18f).xxx) + 0.0078125, 0.0f).rgb)) / 0.18f;
+      float3 corrected_black = renodx::lut::CorrectBlack(lut_input_color * lut_mid_ratio, r2.wyz, lut_min_y, 70.f);
       r2.wyz = lerp(r2.wyz, corrected_black, RENODX_COLOR_GRADE_SCALING);
     }
   }
