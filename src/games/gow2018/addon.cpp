@@ -79,12 +79,12 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapGammaCorrection",
         .binding = &shader_injection.gamma_correction,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1.f,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 2.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
         .tooltip = "Overrides in-game contrast slider, emulates a 2.2 EOTF",
-        .labels = {"Vanilla (Contrast Slider)", "2.2"},
+        .labels = {"Vanilla (Contrast Slider)", "2.2 (Per Channel)", "2.2 (By Luminance with Per Channel Chrominance)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
@@ -142,6 +142,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeHighlightSaturation",
+        .binding = &shader_injection.tone_map_highlight_saturation,
+        .default_value = 50.f,
+        .label = "Highlight Saturation",
+        .section = "Color Grading",
+        .tooltip = "Adds or removes highlight color.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
         .binding = &shader_injection.tone_map_blowout,
         .default_value = 0.f,
@@ -149,7 +160,19 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeFlare",
+        .binding = &shader_injection.tone_map_flare,
+        .default_value = 0.f,
+        .label = "Flare",
+        .section = "Color Grading",
+        .tooltip = "Flare/Glare Compensation",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeScene",
@@ -259,7 +282,9 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeScene", 100.f);
   renodx::utils::settings::UpdateSetting("ColorGradeSceneScaling", 0.f);
   renodx::utils::settings::UpdateSetting("HDR10Encoding", 0.f);

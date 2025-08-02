@@ -1,5 +1,6 @@
 
-#include "./shared.h"
+#include "./common.hlsli"
+
 Texture2D<float4> t16 : register(t16);
 
 Texture2D<float4> t11 : register(t11);
@@ -54,17 +55,7 @@ void main(
   r1.x = r1.x * 2 + -1;
   r0.xyz = r1.xxx * r0.www + r0.xyz;
 
-  // add saturation/blowout/hue shift sliders
-  r0.rgb = renodx::color::grade::UserColorGrading(
-      r0.rgb,
-      1.f,
-      1.f,
-      1.f,
-      1.f,
-      RENODX_TONE_MAP_SATURATION,
-      RENODX_TONE_MAP_BLOWOUT,
-      RENODX_TONE_MAP_HUE_SHIFT,
-      renodx::tonemap::ExponentialRollOff(r0.rgb, 1.f, 2.f));
+  r0.rgb = renodx::color::correct::Hue(r0.rgb, renodx::tonemap::ExponentialRollOff(r0.rgb, 1.f, 2.f), RENODX_TONE_MAP_HUE_SHIFT);
 
   if (!RENODX_GAMMA_CORRECTION) {
     r0.xyz = max(float3(0, 0, 0), r0.xyz);
@@ -77,22 +68,25 @@ void main(
     r0.xyz = cb0[25].zzz * r1.xyz;
     r0.xyz = exp2(r0.xyz);
   } else {
-    r0.rgb = renodx::color::correct::GammaSafe(r0.rgb);
+    r0.rgb = ApplyGammaCorrection(r0.rgb);
     r0.rgb = renodx::color::bt2020::from::BT709(r0.rgb);
   }
 
   float peak_nits;
+  float3 untonemapped = r0.rgb;
   if (!RENODX_OVERRIDE_BRIGHTNESS) {
     if (RENODX_TONE_MAP_TYPE) {
       peak_nits = RENODX_PEAK_WHITE_NITS / (cb0[24].y * 100.f);
       r0.rgb = renodx::tonemap::ExponentialRollOff(r0.rgb, min(1.f, peak_nits * 0.5f), peak_nits);
     }
+    r0.rgb = renodx::color::bt2020::from::BT709(ApplySaturationBlowoutHueCorrectionHighlightSaturation(renodx::color::bt709::from::BT2020(r0.rgb), untonemapped));
     r0.xyz = cb0[24].yyy * r0.xyz;
   } else {
     if (RENODX_TONE_MAP_TYPE) {
       peak_nits = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
       r0.rgb = renodx::tonemap::ExponentialRollOff(r0.rgb, min(1.f, peak_nits * 0.5f), peak_nits);
     }
+    r0.rgb = renodx::color::bt2020::from::BT709(ApplySaturationBlowoutHueCorrectionHighlightSaturation(renodx::color::bt709::from::BT2020(r0.rgb), untonemapped));
     r0.rgb *= RENODX_DIFFUSE_WHITE_NITS / 100.f;
   }
 
