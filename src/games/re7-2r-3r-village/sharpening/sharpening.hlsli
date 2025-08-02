@@ -12,7 +12,6 @@ float3 ApplyLiliumRCAS(
     float sharpness_strength,
     float normalization_point,
     int2 tex_max) {
-  
   // Algorithm uses minimal 3x3 pixel neighborhood
   //    b
   //  d e f
@@ -61,10 +60,10 @@ float3 ApplyLiliumRCAS(
   float h_luma_2x = h_lum * 2.0f;
 
   float nz = 0.25f * b_luma_2x
-           + 0.25f * d_luma_2x
-           + 0.25f * f_luma_2x
-           + 0.25f * h_luma_2x
-           - e_luma_2x;
+             + 0.25f * d_luma_2x
+             + 0.25f * f_luma_2x
+             + 0.25f * h_luma_2x
+             - e_luma_2x;
 
   float max_luma_2x = renodx::math::Max(renodx::math::Max(b_luma_2x, d_luma_2x, e_luma_2x), f_luma_2x, h_luma_2x);
   float min_luma_2x = renodx::math::Min(renodx::math::Min(b_luma_2x, d_luma_2x, e_luma_2x), f_luma_2x, h_luma_2x);
@@ -88,12 +87,11 @@ float3 ApplyLiliumRCAS(
     int2 coord,
     float sharpness_strength,
     float normalization_point) {
-  
   // Get texture dimensions and calculate max valid coordinates
   uint tex_width, tex_height;
   texture.GetDimensions(tex_width, tex_height);
   int2 tex_max = int2(tex_width - 1, tex_height - 1);
-  
+
   return ApplyLiliumRCAS(texture, coord, sharpness_strength, normalization_point, tex_max);
 }
 
@@ -124,14 +122,13 @@ void ApplyLiliumRCAS_RE3_Pattern(
     int2 base_coord,
     int2 offset_coord,
     float sharpness_strength) {
-  
   static const float kDefaultNormalization = 100.0f;
-  
+
   // Calculate texture dimensions once for all 4 pixels
   uint tex_width, tex_height;
   src_texture.GetDimensions(tex_width, tex_height);
   int2 tex_max = int2(tex_width - 1, tex_height - 1);
-  
+
   // Process all 4 pixels in RE3's pattern using optimized function:
   output_texture[base_coord] =
       float4(ApplyLiliumRCAS(src_texture, base_coord, sharpness_strength, kDefaultNormalization, tex_max), 1.f);

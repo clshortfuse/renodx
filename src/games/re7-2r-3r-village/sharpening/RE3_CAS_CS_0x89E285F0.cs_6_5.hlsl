@@ -11,37 +11,35 @@ cbuffer cbCAS : register(b0) {
 
 [numthreads(64, 1, 1)]
 void main(
-  uint3 SV_DispatchThreadID : SV_DispatchThreadID,
-  uint3 SV_GroupID : SV_GroupID,
-  uint3 SV_GroupThreadID : SV_GroupThreadID,
-  uint SV_GroupIndex : SV_GroupIndex
-) {
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
   int _15 = (((uint)(SV_GroupThreadID.x) >> 1) & 7) | ((uint)((uint)(SV_GroupID.x) << 4));
   int _16 = ((((uint)(SV_GroupThreadID.x) >> 3) & 6) | ((uint)(SV_GroupThreadID.x) & 1)) | ((uint)((uint)(SV_GroupID.y) << 4));
-  
-if (CUSTOM_SHARPENING == 0.f) {
-  int pass_306 = _15 | 8;
-  int pass_594 = _16 | 8;
 
-  OutputImage[int2(_15, _16)] = float4(SrcImage.Load(int3(_15, _16, 0)).rgb, 1.0f);
-  OutputImage[int2(pass_306, _16)] = float4(SrcImage.Load(int3(pass_306, _16, 0)).rgb, 1.0f);
-  OutputImage[int2(pass_306, pass_594)] = float4(SrcImage.Load(int3(pass_306, pass_594, 0)).rgb, 1.0f);
-  OutputImage[int2(_15, pass_594)] = float4(SrcImage.Load(int3(_15, pass_594, 0)).rgb, 1.0f);
-  return;
-} else if (CUSTOM_SHARPENING == 2.f) {  // Lilium RCAS
-  float sharpness_strength = 0.75f; // asfloat(const1.x)
-  
-  int offset_x = _15 | 8;  // X offset
-  int offset_y = _16 | 8;  // Y offset
-  ApplyLiliumRCAS_RE3_Pattern(
-    SrcImage,
-    OutputImage,
-    int2(_15, _16),            // base coordinates
-    int2(offset_x, offset_y),  // offset coordinates  
-    sharpness_strength
-  );
-  return;
-}
+  if (CUSTOM_SHARPENING == 0.f) {
+    int pass_306 = _15 | 8;
+    int pass_594 = _16 | 8;
+
+    OutputImage[int2(_15, _16)] = float4(SrcImage.Load(int3(_15, _16, 0)).rgb, 1.0f);
+    OutputImage[int2(pass_306, _16)] = float4(SrcImage.Load(int3(pass_306, _16, 0)).rgb, 1.0f);
+    OutputImage[int2(pass_306, pass_594)] = float4(SrcImage.Load(int3(pass_306, pass_594, 0)).rgb, 1.0f);
+    OutputImage[int2(_15, pass_594)] = float4(SrcImage.Load(int3(_15, pass_594, 0)).rgb, 1.0f);
+    return;
+  } else if (CUSTOM_SHARPENING == 2.f) {  // Lilium RCAS
+    float sharpness_strength = 0.75f;     // asfloat(const1.x)
+
+    int offset_x = _15 | 8;  // X offset
+    int offset_y = _16 | 8;  // Y offset
+    ApplyLiliumRCAS_RE3_Pattern(
+        SrcImage,
+        OutputImage,
+        int2(_15, _16),            // base coordinates
+        int2(offset_x, offset_y),  // offset coordinates
+        sharpness_strength);
+    return;
+  }
 
   uint _19 = _16 + -1u;
   float4 _20 = SrcImage.Load(int3(_15, _19, 0));

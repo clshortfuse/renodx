@@ -23,11 +23,10 @@ cbuffer TonemapParam : register(b1) {
 };
 
 float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float4 Kerare : Kerare,
-  linear float Exposure : Exposure
-) : SV_Target {
-
+    noperspective float4 SV_Position: SV_Position,
+    linear float4 Kerare: Kerare,
+    linear float Exposure: Exposure)
+    : SV_Target {
   float new_toe = toe;
   float new_contrast = contrast;
   float new_max_nit = maxNit;
@@ -36,7 +35,7 @@ float4 main(
     if (RENODX_TONE_MAP_TOE_ADJUSTMENT_TYPE == 0) {
       new_toe *= RENODX_TONE_MAP_SHADOW_TOE;  // toe
     } else {
-        new_toe = RENODX_TONE_MAP_SHADOW_TOE;  // toe
+      new_toe = RENODX_TONE_MAP_SHADOW_TOE;  // toe
     }
     new_contrast *= RENODX_TONE_MAP_HIGHLIGHT_CONTRAST;  // contrast
     new_max_nit = 125;                                   // maxNit
@@ -67,9 +66,9 @@ float4 main(
     float _83 = select((_41 < new_linear_start), 0.0f, 1.0f);
     float _84 = select((_43 < new_linear_start), 0.0f, 1.0f);
     float _85 = select((_45 < new_linear_start), 0.0f, 1.0f);
-    _148 = (((((new_contrast * _41) + madLinearStartContrastFactor) * ((1.0f - _83) - _73)) + (((pow(_54, new_toe)) * _73) * linearBegin)) + ((new_max_nit - (exp2((contrastFactor * _41) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _83));
-    _149 = (((((new_contrast * _43) + madLinearStartContrastFactor) * ((1.0f - _84) - _75)) + (((pow(_60, new_toe)) * _75) * linearBegin)) + ((new_max_nit - (exp2((contrastFactor * _43) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _84));
-    _150 = (((((new_contrast * _45) + madLinearStartContrastFactor) * ((1.0f - _85) - _77)) + (((pow(_66, new_toe)) * _77) * linearBegin)) + ((new_max_nit - (exp2((contrastFactor * _45) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _85));
+    _148 = (((((new_contrast * _41) + madLinearStartContrastFactor) * ((1.0f - _83) - _73)) + (((pow(_54, new_toe))*_73) * linearBegin)) + ((new_max_nit - (exp2((contrastFactor * _41) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _83));
+    _149 = (((((new_contrast * _43) + madLinearStartContrastFactor) * ((1.0f - _84) - _75)) + (((pow(_60, new_toe))*_75) * linearBegin)) + ((new_max_nit - (exp2((contrastFactor * _43) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _84));
+    _150 = (((((new_contrast * _45) + madLinearStartContrastFactor) * ((1.0f - _85) - _77)) + (((pow(_66, new_toe))*_77) * linearBegin)) + ((new_max_nit - (exp2((contrastFactor * _45) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _85));
   } else {
     _148 = 1.0f;
     _149 = 1.0f;
@@ -83,7 +82,7 @@ float4 main(
   if (TONE_MAP_TYPE != 0) {
     SV_Target.rgb = ApplyCustomGrading(SV_Target.rgb);
     SV_Target.rgb = AdjustGammaByChannel(SV_Target.rgb, RENODX_GAMMA_ADJUST);
-  }  
-  
+  }
+
   return SV_Target;
 }
