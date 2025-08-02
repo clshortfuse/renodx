@@ -764,24 +764,26 @@ float4 main(
   float _340 = (((((((_307 * _292) - _316) * _293) + _316) * _302) - PerSceneConstants_000.SPerSceneConstants_5056.CameraExposureData_008) * _304) + PerSceneConstants_000.SPerSceneConstants_5056.CameraExposureData_008;
 
   // User Contrast
-
   // float _352 = max(SharedFrameData_000.FrameData_032, 0.0010000000474974513f);
-  float _352 = 1.f;
-  float _359 = (((lerp(_338, _295, _298)) * 2.0f) + -1.0f) * _352;
-  float _360 = (((lerp(_339, _296, _298)) * 2.0f) + -1.0f) * _352;
-  float _361 = (((lerp(_340, _297, _298)) * 2.0f) + -1.0f) * _352;
-  float _366 = (_352 / sqrt((_352 * _352) + 1.0f)) * 2.0f;
+  // float _359 = (((lerp(_338, _295, _298)) * 2.0f) + -1.0f) * _352;
+  // float _360 = (((lerp(_339, _296, _298)) * 2.0f) + -1.0f) * _352;
+  // float _361 = (((lerp(_340, _297, _298)) * 2.0f) + -1.0f) * _352;
+  // float _366 = (_352 / sqrt((_352 * _352) + 1.0f)) * 2.0f;
 
   // float _388 = 1.0f / max(SharedFrameData_000.FrameData_028, 0.0010000000474974513f);
+  
   // Bethesda thinks the 2.4 in SRGB is "Brightness" and should be user selectable.
-
   // float _404 = max(((exp2(log2((_359 / (sqrt((_359 * _359) + 1.0f) * _366)) + 0.5f) * _388) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
   // float _405 = max(((exp2(log2((_360 / (sqrt((_360 * _360) + 1.0f) * _366)) + 0.5f) * _388) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
   // float _406 = max(((exp2(log2((_361 / (sqrt((_361 * _361) + 1.0f) * _366)) + 0.5f) * _388) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
 
-  float _404 = ((_359 / (sqrt((_359 * _359) + 1.0f) * _366)) + 0.5f);
-  float _405 = ((_360 / (sqrt((_360 * _360) + 1.0f) * _366)) + 0.5f);
-  float _406 = ((_361 / (sqrt((_361 * _361) + 1.0f) * _366)) + 0.5f);
+  // float _404 = ((_359 / (sqrt((_359 * _359) + 1.0f) * _366)) + 0.5f);
+  // float _405 = ((_360 / (sqrt((_360 * _360) + 1.0f) * _366)) + 0.5f);
+  // float _406 = ((_361 / (sqrt((_361 * _361) + 1.0f) * _366)) + 0.5f);
+
+  float _404 = lerp(_338, _295, _298);
+  float _405 = lerp(_339, _296, _298);
+  float _406 = lerp(_340, _297, _298);
 
   if (CUSTOM_VANILLA_BY_LUMINANCE != 0) {
     float3 by_luminance = untonemapped * renodx::math::DivideSafe(_404, _52, 0);
