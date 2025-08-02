@@ -17,11 +17,10 @@ cbuffer TonemapParam : register(b0) {
 };
 
 float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float4 Kerare : Kerare,
-  linear float Exposure : Exposure
-) : SV_Target {
-
+    noperspective float4 SV_Position: SV_Position,
+    linear float4 Kerare: Kerare,
+    linear float Exposure: Exposure)
+    : SV_Target {
   float new_toe = toe;
   float new_contrast = contrast;
   float new_max_nit = maxNit;
@@ -30,13 +29,12 @@ float4 main(
     if (RENODX_TONE_MAP_TOE_ADJUSTMENT_TYPE == 0) {
       new_toe *= RENODX_TONE_MAP_SHADOW_TOE;  // toe
     } else {
-        new_toe = RENODX_TONE_MAP_SHADOW_TOE;  // toe
+      new_toe = RENODX_TONE_MAP_SHADOW_TOE;  // toe
     }
     new_contrast *= RENODX_TONE_MAP_HIGHLIGHT_CONTRAST;  // contrast
     new_max_nit = 125;                                   // maxNit
     new_linear_start = 125;                              // linearStart
   }
-
 
   float4 SV_Target;
   float4 _10 = HDRImage.Load(int3((uint)(uint(SV_Position.x)), (uint)(uint(SV_Position.y)), 0));
@@ -56,9 +54,9 @@ float4 main(
     float _54 = select((_14 < new_linear_start), 0.0f, 1.0f);
     float _55 = select((_15 < new_linear_start), 0.0f, 1.0f);
     float _56 = select((_16 < new_linear_start), 0.0f, 1.0f);
-    _119 = (((((new_contrast * _14) + madLinearStartContrastFactor) * ((1.0f - _54) - _44)) + (((pow(_25, new_toe)) * _44) * linearBegin)) + ((new_max_nit - (exp2((contrastFactor * _14) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _54));
-    _120 = (((((new_contrast * _15) + madLinearStartContrastFactor) * ((1.0f - _55) - _46)) + (((pow(_31, new_toe)) * _46) * linearBegin)) + ((new_max_nit - (exp2((contrastFactor * _15) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _55));
-    _121 = (((((new_contrast * _16) + madLinearStartContrastFactor) * ((1.0f - _56) - _48)) + (((pow(_37, new_toe)) * _48) * linearBegin)) + ((new_max_nit - (exp2((contrastFactor * _16) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _56));
+    _119 = (((((new_contrast * _14) + madLinearStartContrastFactor) * ((1.0f - _54) - _44)) + (((pow(_25, new_toe))*_44) * linearBegin)) + ((new_max_nit - (exp2((contrastFactor * _14) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _54));
+    _120 = (((((new_contrast * _15) + madLinearStartContrastFactor) * ((1.0f - _55) - _46)) + (((pow(_31, new_toe))*_46) * linearBegin)) + ((new_max_nit - (exp2((contrastFactor * _15) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _55));
+    _121 = (((((new_contrast * _16) + madLinearStartContrastFactor) * ((1.0f - _56) - _48)) + (((pow(_37, new_toe))*_48) * linearBegin)) + ((new_max_nit - (exp2((contrastFactor * _16) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _56));
   } else {
     _119 = 1.0f;
     _120 = 1.0f;

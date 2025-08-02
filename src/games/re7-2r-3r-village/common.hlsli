@@ -5,15 +5,15 @@
 // 1 Reduce saturation and increase brightness until luminance is >= 0
 // 2 Clip negative colors (makes luminance >= 0)
 // 3 Snap to black
-void FixColorGradingLUTNegativeLuminance(inout float3 col, uint type = 1)
-        {
-  if (type <= 0) { return; }
+void FixColorGradingLUTNegativeLuminance(inout float3 col, uint type = 1) {
+  if (type <= 0) {
+    return;
+  }
 
   float luminance = renodx::color::y::from::BT709(col.xyz);
   if (luminance < -renodx::math::FLT_MIN)  // -asfloat(0x00800000): -1.175494351e-38f
   {
-    if (type == 1)
-                {
+    if (type == 1) {
       // Make the color more "SDR" (less saturated, and thus less beyond Rec.709) until the luminance is not negative anymore (negative luminance means the color was beyond Rec.709 to begin with, unless all components were negative).
       // This is preferrable to simply clipping all negative colors or snapping to black, because it keeps some HDR colors, even if overall it's still "black", luminance wise.
       // This should work even in case "positiveLuminance" was <= 0, as it will simply make the color black.
@@ -26,19 +26,15 @@ void FixColorGradingLUTNegativeLuminance(inout float3 col, uint type = 1)
 #pragma warning(default: 4008)
       negativeColor.xyz *= negativePositiveLuminanceRatio;
       col.xyz = positiveColor + negativeColor;
-    }
-                else if (type == 2)
-                {
+    } else if (type == 2) {
       // This can break gradients as it snaps colors to brighter ones (it depends on how the displays clips HDR10 or scRGB invalid colors)
       col.xyz = max(col.xyz, 0.0);
-    }
-                else  // if (type >= 3)
+    } else  // if (type >= 3)
     {
       col.xyz = 0.0;
     }
   }
 }
-
 
 float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 neutral_gamma) {
   const float3 added_gamma = black_gamma;
@@ -87,7 +83,6 @@ float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut
 
   return lerp(color_input, color_output, lut_config.strength);
 }
-
 
 /// Applies Exponential Roll-Off tonemapping using the maximum channel.
 /// Used to fit the color into a 0–output_max range for SDR LUT compatibility.

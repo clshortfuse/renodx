@@ -11,25 +11,24 @@ cbuffer cbCAS : register(b0) {
 
 [numthreads(64, 1, 1)]
 void main(
-  uint3 SV_DispatchThreadID : SV_DispatchThreadID,
-  uint3 SV_GroupID : SV_GroupID,
-  uint3 SV_GroupThreadID : SV_GroupThreadID,
-  uint SV_GroupIndex : SV_GroupIndex
-) {
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
   int _15 = (((uint)(SV_GroupThreadID.x) >> 1) & 7) | ((uint)((uint)(SV_GroupID.x) << 4));
   int _16 = ((((uint)(SV_GroupThreadID.x) >> 3) & 6) | ((uint)(SV_GroupThreadID.x) & 1)) | ((uint)((uint)(SV_GroupID.y) << 4));
-  
+
   if (CUSTOM_SHARPENING == 0.f) {
     int _119 = _15 | 8;
     int _220 = _16 | 8;
-    OutputImage[int2(_15, _16)] = float4(SrcImage.Load(int3(_15, _16, 0)).rgb, 1.f);  
+    OutputImage[int2(_15, _16)] = float4(SrcImage.Load(int3(_15, _16, 0)).rgb, 1.f);
     OutputImage[int2(_119, _16)] = float4(SrcImage.Load(int3(_119, _16, 0)).rgb, 1.f);
     OutputImage[int2(_119, _220)] = float4(SrcImage.Load(int3(_119, _220, 0)).rgb, 1.f);
     OutputImage[int2(_15, _220)] = float4(SrcImage.Load(int3(_15, _220, 0)).rgb, 1.f);
     return;
   } else if (CUSTOM_SHARPENING == 2.f) {  // Lilium RCAS
-    float sharpness_strength = 0.75f;  // asfloat(const1.x)
-    
+    float sharpness_strength = 0.75f;     // asfloat(const1.x)
+
     int _119 = _15 | 8;
     int _220 = _16 | 8;
     uint tex_width, tex_height;
@@ -133,5 +132,5 @@ void main(
     float _388 = asfloat(((uint)(2129764351u - (int)(asint(_385)))));
     float _391 = (2.0f - (_388 * _385)) * _388;
     OutputImage[int2(_15, _220)] = float4((saturate((((_383 * (((max(0.0f, _331.x) + max(0.0f, _323.x)) + max(0.0f, _347.x)) + max(0.0f, _355.x))) + max(0.0f, _339.x)) * 0.0078125f) * _391) * 128.0f), (saturate(_391 * ((((((_336 + _328) + _352) + _360) * 0.0078125f) * _383) + _346)) * 128.0f), (saturate((((_383 * (((max(0.0f, _331.z) + max(0.0f, _323.z)) + max(0.0f, _347.z)) + max(0.0f, _355.z))) + max(0.0f, _339.z)) * 0.0078125f) * _391) * 128.0f), 1.0f);
-  } // End else block (Original CAS)
+  }  // End else block (Original CAS)
 }

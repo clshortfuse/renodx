@@ -41,9 +41,9 @@ SamplerState BilinearClamp : register(s1);
 
 // simple sharpening shader that is applied when CAS is turned off in settings
 float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float2 TEXCOORD : TEXCOORD
-) : SV_Target {
+    noperspective float4 SV_Position: SV_Position,
+    linear float2 TEXCOORD: TEXCOORD)
+    : SV_Target {
   float4 SV_Target;
   float4 _8 = HDRImage.SampleLevel(PointBorder, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
 

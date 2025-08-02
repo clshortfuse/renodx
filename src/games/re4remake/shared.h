@@ -47,12 +47,12 @@ cbuffer cb13 : register(b0, space50) {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
-#define COLOR_GRADE_LUT_STRENGTH            shader_injection.color_grade_lut_strength
-#define COLOR_GRADE_LUT_SCALING             shader_injection.color_grade_lut_scaling
-#define COLOR_GRADE_LUT_SAMPLING_METHOD     shader_injection.color_grade_lut_sampling_method
+#define COLOR_GRADE_LUT_STRENGTH             shader_injection.color_grade_lut_strength
+#define COLOR_GRADE_LUT_SCALING              shader_injection.color_grade_lut_scaling
+#define COLOR_GRADE_LUT_SAMPLING_METHOD      shader_injection.color_grade_lut_sampling_method
 
-#define CUSTOM_SHARPENING                   shader_injection.custom_sharpening
-#define CUSTOM_SHARPENING_STRENGTH          shader_injection.custom_sharpening_strength
+#define CUSTOM_SHARPENING          shader_injection.custom_sharpening
+#define CUSTOM_SHARPENING_STRENGTH shader_injection.custom_sharpening_strength
 
 #include "../../shaders/renodx.hlsl"
 

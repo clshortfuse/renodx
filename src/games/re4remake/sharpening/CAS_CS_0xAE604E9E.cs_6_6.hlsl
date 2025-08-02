@@ -11,11 +11,10 @@ cbuffer cbCAS : register(b0) {
 
 [numthreads(64, 1, 1)]
 void main(
-  uint3 SV_DispatchThreadID : SV_DispatchThreadID,
-  uint3 SV_GroupID : SV_GroupID,
-  uint3 SV_GroupThreadID : SV_GroupThreadID,
-  uint SV_GroupIndex : SV_GroupIndex
-) {
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
   int _16 = (((uint)(SV_GroupThreadID.x) >> 1) & 7) | ((uint)((uint)(SV_GroupID.x) << 4));
   int _17 = ((((uint)(SV_GroupThreadID.x) >> 3) & 6) | ((uint)(SV_GroupThreadID.x) & 1)) | ((uint)((uint)(SV_GroupID.y) << 4));
 
@@ -23,7 +22,7 @@ void main(
     const float sharpness_strength = CUSTOM_SHARPENING_STRENGTH;
     uint2 tex_max;
     SrcImage.GetDimensions(tex_max.x, tex_max.y);
-    
+
     // Process 4 pixels per thread with RCAS
     OutputImage[int2(_16, _17)] = float4(ApplyLiliumRCAS(SrcImage, int2(_16, _17), sharpness_strength, tex_max), 1.f);
     OutputImage[int2(_16 | 8, _17)] = float4(ApplyLiliumRCAS(SrcImage, int2(_16 | 8, _17), sharpness_strength, tex_max), 1.f);
