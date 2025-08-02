@@ -134,6 +134,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
                   {"ColorGradeContrast", 60.f},
                   {"ColorGradeSaturation", 80.f},
                   {"ColorGradeBlowout", 80.f},
+                  {"FxBloom", 15.f},
               });
             },
         },
