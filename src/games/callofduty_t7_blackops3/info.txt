@@ -31,3 +31,4 @@ Hashes:
 0x14F64B50 - Gameplay Exposure
 
 0x59F328E3 - Gameplay UNKOWN Fullscreen PS
+

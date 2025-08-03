@@ -39,6 +39,7 @@ void main(
 
   //autohdr
   o0.xyz = PumboAutoHDR(o0.xyz);
+  // o0.xyz = renodx::draw::UpscaleVideoPass(o0.xyz);
 
   return;
 }

@@ -75,7 +75,9 @@ struct ShaderInjectData {
   // float custom_fullscreen_shader_saturation;
   float custom_bloom;
   float custom_slide_lens_dirt;
+  float custom_xray_outline;
   float custom_show_hud;
+  float custom_show_fsfx_blur;
 };
 
 #ifndef __cplusplus
@@ -121,10 +123,11 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define CUSTOM_TRADEOFF_RATIO                  shader_injection.custom_tradeoff_ratio
 #define CUSTOM_FULLSCREEN_SHADER_GAMMA         shader_injection.custom_fullscreen_shader_gamma
-// #define CUSTOM_FULLSCREEN_SHADER_SATURATION    shader_injection.custom_fullscreen_shader_saturation
-#define CUSTOM_BLOOM           shader_injection.custom_bloom
-#define CUSTOM_SLIDE_LENS_DIRT shader_injection.custom_slide_lens_dirt
-#define CUSTOM_SHOW_HUD        shader_injection.custom_show_hud
+#define CUSTOM_BLOOM                           shader_injection.custom_bloom
+#define CUSTOM_SLIDE_LENS_DIRT                 shader_injection.custom_slide_lens_dirt
+#define CUSTOM_XRAY_OUTLINE                    shader_injection.custom_xray_outline
+#define CUSTOM_SHOW_HUD                        shader_injection.custom_show_hud
+#define CUSTOM_SHOW_FSFXBLUR                   shader_injection.custom_show_fsfx_blur
 
 #include "../../shaders/renodx.hlsl"
 

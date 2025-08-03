@@ -142,30 +142,34 @@ void main(
   out float4 o0 : SV_TARGET0)
 {
   float4 r0,r1,r2;
+  // uint4 bitmask, uiDest;
+  // float4 fDest;
+
 
   //take in gamma and decode it to linear
-  o0.xyz = codeTexture0.Sample(bilinearClamp_s, v1.xy).xyz;
-  if (RENODX_TONE_MAP_TYPE != 0) o0.xyz = AfterFullscreenShaderBeforeUiTradeoff(o0.xyz);
+  r0.xyz = codeTexture0.Sample(bilinearClamp_s, v1.xy).xyz;
+
+  if (RENODX_TONE_MAP_TYPE != 0) {
+    //renodx
+    o0.xyz = Tradeoff_AfterFullscreenShaders(r0.xyz);
+  } else {
+    //vanilla to srgb
+    r0.xyz = float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) * r0.xyz;
+    r1.xyz = log2(r0.xyz);
+    r1.xyz = postFxControl2.yyy * r1.xyz;
+    r1.xyz = exp2(r1.xyz);
+    r1.xyz = r1.xyz * postFxControl2.zzz + postFxControl2.www;
+    r2.xyz = cmp(postFxControl1.www >= r0.xyz);
+    r0.xyz = postFxControl2.xxx * r0.xyz;
+    r0.xyz = r2.xyz ? r0.xyz : r1.xyz;
+    o0.xyz = postFxControl1.yyy + r0.xyz;
+
+    //decode srgb for RenderIntermediatePass
+    o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);
+  }
+
+  o0.w = 1.0f;
   o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
+
   return;
-
-  // if (RENODX_TONE_MAP_TYPE != 0) {
-  //   //renodx
-  //   o0.xyz = AfterFullscreenShaderBeforeUiTradeoff(o0.xyz);
-  // } else {
-  //   //vanilla
-  //   r0.xyz = float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) * r0.xyz;
-  //   r1.xyz = log2(r0.xyz);
-  //   r1.xyz = postFxControl2.yyy * r1.xyz;
-  //   r1.xyz = exp2(r1.xyz);
-  //   r1.xyz = r1.xyz * postFxControl2.zzz + postFxControl2.www;
-  //   r2.xyz = cmp(postFxControl1.www >= r0.xyz);
-  //   r0.xyz = postFxControl2.xxx * r0.xyz;
-  //   r0.xyz = r2.xyz ? r0.xyz : r1.xyz;
-  //   o0.xyz = postFxControl1.yyy + r0.xyz;
-  // }
-
-  // o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
-
-  // return;
 }

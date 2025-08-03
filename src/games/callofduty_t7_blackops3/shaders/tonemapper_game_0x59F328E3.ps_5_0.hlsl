@@ -57,7 +57,8 @@ void main(
   r0.xyz = saturate(r1.xyz * float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) + r0.xyz);
   r0.xyz = r0.xyz * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625);
   r0.xyz = codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz; //LUT
-  float3 colorTonemapped = r0.xyz;
+  // o0.xyz = r0.xyz;
+  o0.xyz = Tradeoff_Tonemap(colorUntonemapped, r0.xyz); //renodx tonemap
 
   //idk, and to unknown 2nd output
   r0.x = dot(r0.xyz, float3(6.48803689e-006,2.18261721e-005,2.20336915e-006));
@@ -69,14 +70,8 @@ void main(
   r0.x = r0.z ? r0.y : r0.x;
   o1.x = r0.x * 1.15999997 + -0.159999996; //unknown, maybe for aa and stuff?? RenderDoc says it's just 0-0.0000...01 black
 
-  //renodx tonemap
-  // if (RENODX_TONE_MAP_TYPE != 0) {
-    colorTonemapped = ScaleTonemappedTo01(colorTonemapped);
-    colorTonemapped = renodx::draw::ToneMapPass(colorUntonemapped, colorTonemapped);
 
-    //encode to gamma for fullscreen shaders
-    o0.rgb = AfterTonemapToFullscreenShadersTradeoff(colorTonemapped); 
-  // }
+  
 
   return;
 }

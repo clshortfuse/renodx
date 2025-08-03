@@ -3,48 +3,81 @@
 #define SDR_NOMRALIZATION_MAX 32768.0
 // #define SDR_NOMRALIZATION_TRADEOFF 0.15 //TODO to reshade var instead?
 
-/*
-* in: linear
-* out: srgb/gamma accounting for SDR_NOMRALIZATION_MAX
-* 
-* this is goofy. we have to make a tradeoff for max luminance to render fullscreen shaders.
-* TODO extend LUT past 32768 instead?
-*/
-float3 AfterTonemapToFullscreenShadersTradeoff(float3 color) {
+float3 Tradeoff_LinearToTradeoffSpace(float3 color) {
   if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 0.f) {
-    color.rgb = renodx::color::srgb::EncodeSafe(color.rgb);
+    return renodx::color::srgb::EncodeSafe(color);
   } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 1.f) {
-    color.rgb = renodx::color::gamma::EncodeSafe(color.rgb, 2.2);
+    return renodx::color::gamma::EncodeSafe(color, 2.2f);
+  } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 2.f) {
+    return renodx::color::gamma::EncodeSafe(color, 2.4f);
+  } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 3.f) {
+    return renodx::color::gamma::EncodeSafe(color, 1.0f);
+  } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 4.f) {
+    return renodx::color::pq::EncodeSafe(color);
   } else {
-    color.rgb = renodx::color::gamma::EncodeSafe(color.rgb, 2.4);
+    return color;
   }
-
-  color *= (SDR_NOMRALIZATION_MAX * CUSTOM_TRADEOFF_RATIO);
-
-  return color;
 }
 
-/*
-* in: srgb/gamma
-* out: linear accounting for SDR_NOMRALIZATION_MAX
-*/
-float3 AfterFullscreenShaderBeforeUiTradeoff(float3 color) {
-  color.rgb /= (SDR_NOMRALIZATION_MAX * CUSTOM_TRADEOFF_RATIO);
-
+float3 Tradeoff_TradeoffSpaceToLinear(float3 color) {
   if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 0.f) {
-    color.rgb = renodx::color::srgb::DecodeSafe(color.rgb);
+    return renodx::color::srgb::DecodeSafe(color);
   } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 1.f) {
-    color.rgb = renodx::color::gamma::DecodeSafe(color.rgb, 2.2);
+    return renodx::color::gamma::DecodeSafe(color, 2.2f);
+  } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 2.f) {
+    return renodx::color::gamma::DecodeSafe(color, 2.4f);
+  } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 3.f) {
+    return renodx::color::gamma::DecodeSafe(color, 1.0f);
+  } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 4.f) {
+    return renodx::color::pq::DecodeSafe(color);
   } else {
-    color.rgb = renodx::color::gamma::DecodeSafe(color.rgb, 2.4);
+    return color;
   }
-
-  return color;
 }
 
-float3 ScaleTonemappedTo01(float3 color) {
+
+float3 Tradeoff_TonemappedTo01(float3 color) {
   color.rgb /= SDR_NOMRALIZATION_MAX;
   return color;
+}
+
+/*
+* in: scaled tradeoff color space normalized up to SDR_NOMRALIZATION_MAX
+* out: linear for RenderImmediatePass
+*/
+float3 Tradeoff_AfterFullscreenShaders(float3 color) {
+  if (CUSTOM_TRADEOFF_RATIO == 0) return color;
+
+  //scale down from 32768
+  color.rgb /= (SDR_NOMRALIZATION_MAX * CUSTOM_TRADEOFF_RATIO);
+
+  //to linear
+  color = Tradeoff_TradeoffSpaceToLinear(color);
+
+  return color;
+}
+
+/*
+* in: linear untonemapped & tonemapped
+* out: scaled tradeoff color space normalized up to SDR_NOMRALIZATION_MAX
+*/
+float3 Tradeoff_Tonemap(float3 colorUntonemapped, float3 colorTonemapped) {
+  //color untonemap to tonemapped
+  if (RENODX_TONE_MAP_TYPE != 0) {
+    colorTonemapped = Tradeoff_TonemappedTo01(colorTonemapped);
+    colorTonemapped = renodx::draw::ToneMapPass(colorUntonemapped, colorTonemapped);
+  }
+  
+  //skip tradeoff
+  if (CUSTOM_TRADEOFF_RATIO == 0) return colorTonemapped;
+
+  //to srgb/gamma
+  colorTonemapped = Tradeoff_LinearToTradeoffSpace(colorTonemapped);
+
+  //scale up to 32768
+  colorTonemapped *= (SDR_NOMRALIZATION_MAX * CUSTOM_TRADEOFF_RATIO);
+
+  return colorTonemapped;
 }
 
 float3 AddBloom(float3 color, float3 bloom) {
@@ -56,6 +89,11 @@ float3 ScaleBloomAfterSaturate(float3 color) {
   color.rgb *= CUSTOM_BLOOM;
   return color;
 }
+
+// float3 LinearLowerBlackLevels(float3 color) {
+//   color.rgb = 
+//   return color;
+// }
 
 // Copied from: ff7rebirth
 // AdvancedAutoHDR pass to generate some HDR brightess out of an SDR signal.

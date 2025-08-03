@@ -37,38 +37,40 @@ void main(
   float4 fDest;
 
   //take in gamma and decode it to linear
-  o0.xyz = t0.Sample(s2_s, v1.xy).xyz;
-  if (RENODX_TONE_MAP_TYPE != 0) o0.xyz = AfterFullscreenShaderBeforeUiTradeoff(o0.xyz);
-  o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
-  return;
+  r0.xyz = t0.Sample(s2_s, v1.xy).xyz;
 
-  // if (RENODX_TONE_MAP_TYPE != 0) {
-  //   //renodx
-  //   o0.xyz = AfterFullscreenShaderBeforeUiTradeoff(o0.xyz); 
-  // } else {
-  //   //vanilla
-  //   r0.xy = v1.xy * cb8[0].xy + cb8[0].zw;
-  //   r0.x = t1.Sample(s2_s, r0.xy).x;
-  //   r0.x = cb8[1].x * r0.x;
-  //   r0.yz = float2(0.0250000004,0.0250000004) * v0.xy;
-  //   r0.yzw = t2.Sample(s2_s, r0.yz).xyz;
-  //   r0.xyz = r0.xxx * r0.yzw;
+  if (RENODX_TONE_MAP_TYPE != 0) {
+    //renodx
+    o0.xyz = Tradeoff_AfterFullscreenShaders(r0.xyz); 
+  } else {
+    //vanilla to srgb
+    r0.xy = v1.xy * cb8[0].xy + cb8[0].zw;
+    r0.x = t1.Sample(s2_s, r0.xy).x;
+    r0.x = cb8[1].x * r0.x;
+    r0.yz = float2(0.0250000004,0.0250000004) * v0.xy;
+    r0.yzw = t2.Sample(s2_s, r0.yz).xyz;
+    r0.xyz = r0.xxx * r0.yzw;
     
-  //   r1.xyz = t0.Sample(s0_s, v1.xy).xyz;
-  //   r1.xyz = r1.xyz * float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) + r0.xyz;
-  //   r1.xz = r0.zx * r1.yy + r1.xz;
-  //   r0.xyz = log2(r1.xyz);
-  //   r0.xyz = cb8[2].yyy * r0.xyz;
-  //   r0.xyz = exp2(r0.xyz);
-  //   r0.xyz = r0.xyz * cb8[2].zzz + cb8[2].www;
+    r1.xyz = t0.Sample(s0_s, v1.xy).xyz;
+    r1.xyz = r1.xyz * float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) + r0.xyz;
+    r1.xz = r0.zx * r1.yy + r1.xz;
+    r0.xyz = log2(r1.xyz);
+    r0.xyz = cb8[2].yyy * r0.xyz;
+    r0.xyz = exp2(r0.xyz);
+    r0.xyz = r0.xyz * cb8[2].zzz + cb8[2].www;
 
-  //   r2.xyz = cmp(cb8[1].www >= r1.xyz);
-  //   r1.xyz = cb8[2].xxx * r1.xyz;
-  //   r0.xyz = r2.xyz ? r1.xyz : r0.xyz;
-  //   o0.xyz = cb8[1].yyy + r0.xyz;
-  // }
+    r2.xyz = cmp(cb8[1].www >= r1.xyz);
+    r1.xyz = cb8[2].xxx * r1.xyz;
+    r0.xyz = r2.xyz ? r1.xyz : r0.xyz;
+    o0.xyz = cb8[1].yyy + r0.xyz;
+    
+    //decode srgb for RenderIntermediatePass
+    o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);
+  }
 
-  // o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz); 
+  o0.w = 1.0f;
+  o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz); 
+
   
-  // return;
+  return;
 }
