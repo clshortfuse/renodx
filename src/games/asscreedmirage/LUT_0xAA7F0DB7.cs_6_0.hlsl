@@ -199,24 +199,11 @@ void comp_main() {
 #endif
 
 #if 1
-  if (RENODX_TONE_MAP_EXPOSURE != 1.f || RENODX_TONE_MAP_HIGHLIGHTS != 1.f || RENODX_TONE_MAP_SHADOWS != 1.f || RENODX_TONE_MAP_CONTRAST != 1.f || RENODX_TONE_MAP_SATURATION != 1.f || RENODX_TONE_MAP_BLOWOUT != 0.f) {
-    final_color = renodx::color::bt709::from::AP1(final_color);
-    final_color = renodx::color::grade::UserColorGrading(
-        final_color,
-        RENODX_TONE_MAP_EXPOSURE,
-        RENODX_TONE_MAP_HIGHLIGHTS,
-        RENODX_TONE_MAP_SHADOWS,
-        RENODX_TONE_MAP_CONTRAST,
-        RENODX_TONE_MAP_SATURATION,
-        RENODX_TONE_MAP_BLOWOUT);
-
-    final_color = renodx::color::ap1::from::BT709(final_color);
-  }
+  final_color = ApplyUserColorGradingAP1(final_color);
 #endif
 
   float3 encoded_color = log2(final_color) * 0.0500000007450580596923828125f + 0.6236965656280517578125f;
   _14[gl_GlobalInvocationID] = float4(_11.SampleLevel(_25, saturate(encoded_color) * 0.96875f + 0.015625f, 0.0f).rgb, 1.0f);
-  // _14[uint3(gl_GlobalInvocationID.xyz)] = float4(_11.SampleLevel(_25, float3((clamp((log2((_441 + _347) + (_458 * ((_428 * (((_380 * _306) * _389) - _347)) - _441))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f, 0.0f, 1.0f) * 0.96875f) + 0.015625f, (clamp((log2((_442 + _348) + (_458 * ((_428 * (((_381 * _306) * _389) - _348)) - _442))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f, 0.0f, 1.0f) * 0.96875f) + 0.015625f, (clamp((log2((_443 + _350) + (_458 * ((_428 * (((_382 * _306) * _389) - _350)) - _443))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f, 0.0f, 1.0f) * 0.96875f) + 0.015625f), 0.0f).xyz, 1.0f);
 }
 
 [numthreads(16, 16, 1)]
