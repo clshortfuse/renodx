@@ -529,6 +529,7 @@ struct SettingSelection {
   uint64_t constant_buffer_handle = 0;
   int shader_view = 0;
   int resource_view = 0;
+  int constant_view = 0;
 
   bool is_pinned = false;
   bool is_current = false;
@@ -3273,6 +3274,115 @@ void RenderResourceView(reshade::api::device* device, DeviceData* data, SettingS
   }
 }
 
+void RenderConstantBufferViewPreview(reshade::api::device* device, DeviceData* data, uint64_t constant_buffer_handle) {
+  auto details = device->get_resource_desc({constant_buffer_handle});
+
+  if (details.type == reshade::api::resource_type::buffer) {
+    auto data = renodx::utils::constants::GetResourceCache(device, {constant_buffer_handle});
+    if (data.empty()) {
+      data = renodx::utils::constants::GetResourceHistory(device, {constant_buffer_handle});
+    }
+
+    auto len = data.size() / sizeof(float);
+    std::span<float> float_view = {
+        reinterpret_cast<float*>(data.data()),
+        reinterpret_cast<float*>(data.data()) + len};
+    std::span<uint32_t> uint32_view = {
+        reinterpret_cast<uint32_t*>(data.data()),
+        reinterpret_cast<uint32_t*>(data.data()) + len};
+    std::span<int32_t> int32_view = {
+        reinterpret_cast<int32_t*>(data.data()),
+        reinterpret_cast<int32_t*>(data.data()) + len};
+
+    if (ImGui::BeginTable(
+            std::format("##constant_buffer_view_tab_child_table_0x{:08x}", constant_buffer_handle).c_str(),
+            5,
+            ImGuiTableFlags_BordersInner | ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH
+                | ImGuiTableFlags_Resizable
+                | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_ScrollY,
+            ImVec2(-4, -4))) {
+      ImGui::TableSetupColumn("Position", ImGuiTableColumnFlags_NoHide);
+      ImGui::TableSetupColumn("float", ImGuiTableColumnFlags_NoHide);
+      ImGui::TableSetupColumn("uint32", ImGuiTableColumnFlags_NoHide);
+      ImGui::TableSetupColumn("int32", ImGuiTableColumnFlags_NoHide);
+      ImGui::TableSetupColumn("Offset", ImGuiTableColumnFlags_NoHide);
+      ImGui::TableSetupScrollFreeze(0, 1);
+      ImGui::TableHeadersRow();
+
+      int row_index = 0;
+      int cell_index_id = 0x6000;
+
+      for (auto i = 0; i < len; ++i) {
+        ImGui::TableNextRow();
+
+        if (ImGui::TableNextColumn()) {
+          ImGui::PushID(cell_index_id++);
+          ImGui::TextUnformatted(std::format("[{}].{}", i / 4u, "xyzw"[i % 4]).c_str());
+          ImGui::PopID();
+        }
+
+        if (ImGui::TableNextColumn()) {
+          ImGui::TextUnformatted(std::format("{}", float_view[i]).c_str());
+          ImGui::PushID(cell_index_id++);
+          ImGui::PopID();
+        }
+
+        if (ImGui::TableNextColumn()) {
+          ImGui::TextUnformatted(std::format("{}", uint32_view[i]).c_str());
+          ImGui::PushID(cell_index_id++);
+          ImGui::PopID();
+        }
+
+        if (ImGui::TableNextColumn()) {
+          ImGui::PushID(cell_index_id++);
+          ImGui::TextUnformatted(std::format("{}", int32_view[i]).c_str());
+          ImGui::PopID();
+        }
+
+        if (ImGui::TableNextColumn()) {
+          ImGui::PushID(cell_index_id++);
+          ImGui::TextUnformatted(std::format("{}", i).c_str());
+          ImGui::PopID();
+        }
+
+        row_index++;
+      }
+
+      ImGui::EndTable();
+    }
+  }
+}
+
+void RenderConstantBufferViewHistory(reshade::api::device* device, DeviceData* data, uint64_t constant_buffer_handle) {
+  auto current_snapshot_index = 0;
+  for (auto& draw_details : data->draw_details_list) {
+    for (const auto& [slot_space, buffer_range] : draw_details.constants) {
+      const auto& slot = slot_space.first;
+      const auto& space = slot_space.second;
+      if (buffer_range.buffer.handle != constant_buffer_handle) continue;
+      if (draw_details.resource_binds.has_value()) {
+        if (std::ranges::none_of(*draw_details.resource_binds, [&slot, &space](const ResourceBind& bind) {
+              return bind.type == ResourceBind::BindType::CBV && bind.slot == slot && bind.space == space;
+            })) {
+          continue;
+        }
+      }
+      if (space == 0) {
+        ImGui::Text("Snapshot %03d: C%d", current_snapshot_index, slot);
+      } else {
+        ImGui::Text("Snapshot %03d: C%d,space%d", current_snapshot_index, slot, space);
+      }
+    }
+    if (draw_details.copy_source == constant_buffer_handle) {
+      ImGui::Text("Snapshot %03d: Copy Source", current_snapshot_index);
+    }
+    if (draw_details.copy_destination == constant_buffer_handle) {
+      ImGui::Text("Snapshot %03d: Copy Destination", current_snapshot_index);
+    }
+    current_snapshot_index++;
+  }
+}
+
 void RenderConstantBufferView(reshade::api::device* device, DeviceData* data, SettingSelection& selection) {
   ImGui::PushID(std::format("##constant_buffer_view_tab_0x{:08x}", selection.constant_buffer_handle).c_str());
   auto style = ImGui::GetStyleColorVec4(ImGuiCol_Text);
@@ -3300,81 +3410,14 @@ void RenderConstantBufferView(reshade::api::device* device, DeviceData* data, Se
     if (ImGui::BeginChild(
             std::format("##constant_buffer_view_tab_child_0x{:08x}", selection.constant_buffer_handle).c_str(),
             ImVec2(0, 0))) {
-      auto details = device->get_resource_desc({selection.constant_buffer_handle});
-
-      if (details.type == reshade::api::resource_type::buffer) {
-        auto data = renodx::utils::constants::GetResourceCache(device, {selection.constant_buffer_handle});
-        if (data.empty()) {
-          data = renodx::utils::constants::GetResourceHistory(device, {selection.constant_buffer_handle});
-        }
-
-        auto len = data.size() / sizeof(float);
-        std::span<float> float_view = {
-            reinterpret_cast<float*>(data.data()),
-            reinterpret_cast<float*>(data.data()) + len};
-        std::span<uint32_t> uint32_view = {
-            reinterpret_cast<uint32_t*>(data.data()),
-            reinterpret_cast<uint32_t*>(data.data()) + len};
-        std::span<int32_t> int32_view = {
-            reinterpret_cast<int32_t*>(data.data()),
-            reinterpret_cast<int32_t*>(data.data()) + len};
-
-        if (ImGui::BeginTable(
-                std::format("##constant_buffer_view_tab_child_table_0x{:08x}", selection.constant_buffer_handle).c_str(),
-                5,
-                ImGuiTableFlags_BordersInner | ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH
-                    | ImGuiTableFlags_Resizable
-                    | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_ScrollY,
-                ImVec2(-4, -4))) {
-          ImGui::TableSetupColumn("Position", ImGuiTableColumnFlags_NoHide);
-          ImGui::TableSetupColumn("float", ImGuiTableColumnFlags_NoHide);
-          ImGui::TableSetupColumn("uint32", ImGuiTableColumnFlags_NoHide);
-          ImGui::TableSetupColumn("int32", ImGuiTableColumnFlags_NoHide);
-          ImGui::TableSetupColumn("Offset", ImGuiTableColumnFlags_NoHide);
-          ImGui::TableSetupScrollFreeze(0, 1);
-          ImGui::TableHeadersRow();
-
-          int row_index = 0;
-          int cell_index_id = 0x6000;
-
-          for (auto i = 0; i < len; ++i) {
-            ImGui::TableNextRow();
-
-            if (ImGui::TableNextColumn()) {
-              ImGui::PushID(cell_index_id++);
-              ImGui::TextUnformatted(std::format("[{}].{}", i / 4u, "xyzw"[i % 4]).c_str());
-              ImGui::PopID();
-            }
-
-            if (ImGui::TableNextColumn()) {
-              ImGui::TextUnformatted(std::format("{}", float_view[i]).c_str());
-              ImGui::PushID(cell_index_id++);
-              ImGui::PopID();
-            }
-
-            if (ImGui::TableNextColumn()) {
-              ImGui::TextUnformatted(std::format("{}", uint32_view[i]).c_str());
-              ImGui::PushID(cell_index_id++);
-              ImGui::PopID();
-            }
-
-            if (ImGui::TableNextColumn()) {
-              ImGui::PushID(cell_index_id++);
-              ImGui::TextUnformatted(std::format("{}", int32_view[i]).c_str());
-              ImGui::PopID();
-            }
-
-            if (ImGui::TableNextColumn()) {
-              ImGui::PushID(cell_index_id++);
-              ImGui::TextUnformatted(std::format("{}", i).c_str());
-              ImGui::PopID();
-            }
-
-            row_index++;
-          }
-
-          ImGui::EndTable();
-        }
+      switch (selection.constant_view) {
+        case 0:
+          RenderConstantBufferViewHistory(device, data, selection.constant_buffer_handle);
+          break;
+        case 1:
+          RenderConstantBufferViewPreview(device, data, selection.constant_buffer_handle);
+        default:
+          break;
       }
     }
     ImGui::EndChild();
@@ -3528,6 +3571,9 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         } else if (selection->get().resource_handle != 0u) {
           ImGui::RadioButton("History", &selection->get().resource_view, 0);
           ImGui::RadioButton("Preview", &selection->get().resource_view, 1);
+        } else if (selection->get().constant_buffer_handle != 0u) {
+          ImGui::RadioButton("History", &selection->get().constant_view, 0);
+          ImGui::RadioButton("Preview", &selection->get().constant_view, 1);
         }
       }
       setting_side_sheet_width = ImGui::CalcItemWidth();
