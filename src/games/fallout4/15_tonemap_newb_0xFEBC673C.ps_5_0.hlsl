@@ -46,8 +46,8 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r1.w = r2.x ? cb2[1].y : r1.w;
   r2.x = cmp(cb2[1].x < r1.w);
   r1.w = r2.x ? cb2[1].x : r1.w;
-  r0.xyz = r1.xyz * injectedData.fxBloom + r0.xyz;
-  r0.xyz = r0.xyz * lerp(1.f, r1.www, injectedData.fxAutoExposure);
+  r0.xyz = r1.xyz * CUSTOM_BLOOM + r0.xyz;
+  r0.xyz = r0.xyz * lerp(1.f, r1.www, CUSTOM_AUTOEXPOSURE);
   const float3 untonemapped = r0.xyz;
 
   // Uncharted 2
@@ -62,7 +62,7 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   // float W = 11.2;
   // C * B = 0.05;
 
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     r1.xyz = r0.xyz + r0.xyz;
     r2.xyz = r0.xyz * 0.30f + 0.05f;               // (x * a + c * b)
     r3.xy = float2(0.20f, 3.333333f) * cb2[1].ww;  // d*e, e/f
@@ -92,6 +92,6 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   r1.xyzw = cb2[5].xyzw + -r0.xyzw;
   o0.xyzw = cb2[5].wwww * r1.xyzw + r0.xyzw;
 
-  o0.xyz = lerp(outputColor, o0.xyz, injectedData.fxSceneFilter);
+  o0.xyz = lerp(outputColor, o0.xyz, CUSTOM_SCENE_FILTER);
   return;
 }

@@ -27,7 +27,7 @@ cbuffer cb2 : register(b2) {
 // 3Dmigoto declarations
 #define cmp -
 
-void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Target0) {
+void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0, out float4 o0: SV_Target0) {
   float4 r0, r1, r2;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -36,33 +36,36 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
 
   o0.w = r0.w;
 
+  // Vanilla encodes to 2.2 and sends output to next shader/output
+  // Use SRGB for gamma correction simplicity (to fix later)
+
   float vanillaMidGray = renodx::tonemap::ApplyCurve(0.18f * 2.f, 0.15f, 0.50f, 0.10f, 0.20f, 0.02f, 0.30f)
                          / renodx::tonemap::ApplyCurve(11.2f, 0.15f, 0.50f, 0.10f, 0.20f, 0.02f, 0.30f);
 
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
-  config.type = injectedData.toneMapType;
-  config.peak_nits = injectedData.toneMapPeakNits;
-  config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = injectedData.toneMapGammaCorrection - 1;  // LUT output was in 2.2
-  config.exposure = injectedData.colorGradeExposure;
-  config.highlights = injectedData.colorGradeHighlights;
-  config.shadows = injectedData.colorGradeShadows;
-  config.contrast = injectedData.colorGradeContrast;
-  config.saturation = injectedData.colorGradeSaturation;
+  config.type = RENODX_TONE_MAP_TYPE;
+  config.peak_nits = RENODX_PEAK_WHITE_NITS;
+  config.game_nits = RENODX_DIFFUSE_WHITE_NITS;
+  config.gamma_correction = RENODX_GAMMA_CORRECTION;
+  config.exposure = RENODX_TONE_MAP_EXPOSURE;
+  config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
+  config.shadows = RENODX_TONE_MAP_SHADOWS;
+  config.contrast = RENODX_TONE_MAP_CONTRAST;
+  config.saturation = RENODX_TONE_MAP_SATURATION;
   config.mid_gray_value = vanillaMidGray;
   config.mid_gray_nits = vanillaMidGray * 100.f;
-  config.reno_drt_dechroma = injectedData.colorGradeBlowout;
+  config.reno_drt_dechroma = RENODX_TONE_MAP_BLOWOUT;
 
   renodx::lut::Config lut_config = renodx::lut::config::Create(
       s4_s,
       1.f,
-      injectedData.colorGradeLUTScaling,  // Cleans up raised black floor
+      CUSTOM_LUT_SCALING,  // Cleans up raised black floor
       renodx::lut::config::type::GAMMA_2_2,
       renodx::lut::config::type::GAMMA_2_2,
       16);
 
   float3 outputColor = r0.rgb;
-  if (injectedData.colorGradeLUTStrength == 0.f || config.type == 1.f) {
+  if (CUSTOM_LUT_STRENGTH == 0.f) {
     outputColor = renodx::tonemap::config::Apply(outputColor, config);
   } else {
     float3 hdrColor;
@@ -99,47 +102,52 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
     r0.xyz = sdrColor;
     // r1.xyz = t4.Sample(s4_s, r0.xyz).xyz;
     r1.xyz = renodx::lut::Sample(t4, lut_config, r0.xyz);
+    r1.xyz = renodx::color::gamma::EncodeSafe(r1.xyz, 2.2f);
 
     r1.xyz = cb2[1].yyy * r1.xyz;
 
     // r2.xyz = t3.Sample(s3_s, r0.xyz).xyz;
     lut_config.lut_sampler = s3_s;
     r2.xyz = renodx::lut::Sample(t3, lut_config, r0.xyz);
+    r2.xyz = renodx::color::gamma::EncodeSafe(r2.xyz, 2.2f);
 
     r1.xyz = r2.xyz * cb2[1].xxx + r1.xyz;
 
     // r2.xyz = t5.Sample(s5_s, r0.xyz).xyz;
     lut_config.lut_sampler = s5_s;
     r2.xyz = renodx::lut::Sample(t5, lut_config, r0.xyz);
+    r2.xyz = renodx::color::gamma::EncodeSafe(r2.xyz, 2.2f);
 
     // r0.xyz = t6.Sample(s6_s, r0.xyz).xyz;
     lut_config.lut_sampler = s6_s;
     r0.xyz = renodx::lut::Sample(t6, lut_config, r0.xyz);
+    r0.xyz = renodx::color::gamma::EncodeSafe(r0.xyz, 2.2f);
 
     r1.xyz = r2.xyz * cb2[1].zzz + r1.xyz;
+
+    r0.xyz = renodx::color::gamma::EncodeSafe(r0.xyz, 2.2f);
     float3 postProcessColor = r0.xyz * cb2[1].www + r1.xyz;
 
-    if (config.type == 0.f) {
-      outputColor = lerp(outputColor, postProcessColor, injectedData.colorGradeLUTStrength);
+    if (RENODX_TONE_MAP_TYPE == 0.f) {
+      outputColor = renodx::color::gamma::EncodeSafe(outputColor, 2.2f);
+      outputColor = lerp(outputColor, postProcessColor, CUSTOM_LUT_STRENGTH);
+      outputColor = renodx::color::srgb::DecodeSafe(outputColor);
     } else {
-      outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, postProcessColor, injectedData.colorGradeLUTStrength);
+      postProcessColor = renodx::color::srgb::DecodeSafe(postProcessColor);
+      outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, postProcessColor, CUSTOM_LUT_STRENGTH);
     }
   }
   o0.rgb = outputColor;
-  if (injectedData.fxFilmGrain) {
+  if (CUSTOM_FILM_GRAIN != 0.f) {
     float3 grainedColor = renodx::effects::ApplyFilmGrain(
         o0.rgb,
         v1.xy,
-        frac(injectedData.elapsedTime / 1000.f),
-        injectedData.fxFilmGrain * 0.03f,
+        CUSTOM_RANDOM,
+        CUSTOM_FILM_GRAIN * 0.03f,
         1.f);
     o0.xyz = grainedColor;
   }
 
-  if (injectedData.toneMapGammaCorrection == 0) {
-    o0.rgb = renodx::color::correct::GammaSafe(o0.rgb, true);
-  }
-
-  o0.rgb *= injectedData.toneMapGameNits / 80.f;
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   return;
 }
