@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "./filmiclutbuilder.hlsl"
 
 // Found in Expedition 33
 
@@ -13,55 +13,6 @@ struct FWorkingColorSpaceConstants {
 
 Texture2D<float4> Textures_1 : register(t0);
 
-cbuffer _RootShaderParameters : register(b0) {
-  float4 LUTWeights[2] : packoffset(c005.x);
-  float4 ACESMinMaxData : packoffset(c008.x);
-  float4 ACESMidData : packoffset(c009.x);
-  float4 ACESCoefsLow_0 : packoffset(c010.x);
-  float4 ACESCoefsHigh_0 : packoffset(c011.x);
-  float ACESCoefsLow_4 : packoffset(c012.x);
-  float ACESCoefsHigh_4 : packoffset(c012.y);
-  float ACESSceneColorMultiplier : packoffset(c012.z);
-  float ACESGamutCompression : packoffset(c012.w);
-  float4 OverlayColor : packoffset(c013.x);
-  float3 ColorScale : packoffset(c014.x);
-  float4 ColorSaturation : packoffset(c015.x);
-  float4 ColorContrast : packoffset(c016.x);
-  float4 ColorGamma : packoffset(c017.x);
-  float4 ColorGain : packoffset(c018.x);
-  float4 ColorOffset : packoffset(c019.x);
-  float4 ColorSaturationShadows : packoffset(c020.x);
-  float4 ColorContrastShadows : packoffset(c021.x);
-  float4 ColorGammaShadows : packoffset(c022.x);
-  float4 ColorGainShadows : packoffset(c023.x);
-  float4 ColorOffsetShadows : packoffset(c024.x);
-  float4 ColorSaturationMidtones : packoffset(c025.x);
-  float4 ColorContrastMidtones : packoffset(c026.x);
-  float4 ColorGammaMidtones : packoffset(c027.x);
-  float4 ColorGainMidtones : packoffset(c028.x);
-  float4 ColorOffsetMidtones : packoffset(c029.x);
-  float4 ColorSaturationHighlights : packoffset(c030.x);
-  float4 ColorContrastHighlights : packoffset(c031.x);
-  float4 ColorGammaHighlights : packoffset(c032.x);
-  float4 ColorGainHighlights : packoffset(c033.x);
-  float4 ColorOffsetHighlights : packoffset(c034.x);
-  float LUTSize : packoffset(c035.x);
-  float ColorCorrectionShadowsMax : packoffset(c035.w);
-  float ColorCorrectionHighlightsMin : packoffset(c036.x);
-  float ColorCorrectionHighlightsMax : packoffset(c036.y);
-  float BlueCorrection : packoffset(c036.z);
-  float ExpandGamut : packoffset(c036.w);
-  float ToneCurveAmount : packoffset(c037.x);
-  float FilmSlope : packoffset(c037.y);
-  float FilmToe : packoffset(c037.z);
-  float FilmShoulder : packoffset(c037.w);
-  float FilmBlackClip : packoffset(c038.x);
-  float FilmWhiteClip : packoffset(c038.y);
-  float3 MappingPolynomial : packoffset(c039.x);
-  float3 InverseGamma : packoffset(c040.x);
-  uint OutputGamut : packoffset(c041.x);
-};
-
 cbuffer WorkingColorSpace : register(b1) {
   FWorkingColorSpaceConstants WorkingColorSpace : packoffset(c000.x);
 };
@@ -72,6 +23,10 @@ float4 main(
     noperspective float2 TEXCOORD: TEXCOORD,
     noperspective float4 SV_Position: SV_Position,
     nointerpolation uint SV_RenderTargetArrayIndex: SV_RenderTargetArrayIndex) : SV_Target {
+  uint output_gamut = OutputGamut;
+  uint output_device = OutputDevice;
+  float expand_gamut = ExpandGamut;
+  bool is_hdr = (output_device >= 3u && output_device <= 6u);
   float4 SV_Target;
   float _12 = 0.5f / LUTSize;
   float _17 = LUTSize + -1.0f;
@@ -97,10 +52,10 @@ float4 main(
   float _1060;
   float _1071;
   float _1082;
-  if (!((uint)(OutputGamut) == 1)) {
-    if (!((uint)(OutputGamut) == 2)) {
-      if (!((uint)(OutputGamut) == 3)) {
-        bool _30 = ((uint)(OutputGamut) == 4);
+  if (!((uint)(output_gamut) == 1)) {
+    if (!((uint)(output_gamut) == 2)) {
+      if (!((uint)(output_gamut) == 3)) {
+        bool _30 = ((uint)(output_gamut) == 4);
         _41 = select(_30, 1.0f, 1.705051064491272f);
         _42 = select(_30, 0.0f, -0.6217921376228333f);
         _43 = select(_30, 0.0f, -0.0832589864730835f);
@@ -146,17 +101,24 @@ float4 main(
   float _62 = (exp2((((LUTSize * (TEXCOORD.x - _12)) / _17) + -0.4340175986289978f) * 14.0f) * 0.18000000715255737f) + -0.002667719265446067f;
   float _63 = (exp2((((LUTSize * (TEXCOORD.y - _12)) / _17) + -0.4340175986289978f) * 14.0f) * 0.18000000715255737f) + -0.002667719265446067f;
   float _64 = (exp2(((float((uint)SV_RenderTargetArrayIndex) / _17) + -0.4340175986289978f) * 14.0f) * 0.18000000715255737f) + -0.002667719265446067f;
+
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    output_gamut = 0u;
+    output_device = 0u;
+    expand_gamut = 0.f;
+  }
+  
   float _79 = mad((WorkingColorSpace.ToAP1[0].z), _64, mad((WorkingColorSpace.ToAP1[0].y), _63, ((WorkingColorSpace.ToAP1[0].x) * _62)));
   float _82 = mad((WorkingColorSpace.ToAP1[1].z), _64, mad((WorkingColorSpace.ToAP1[1].y), _63, ((WorkingColorSpace.ToAP1[1].x) * _62)));
   float _85 = mad((WorkingColorSpace.ToAP1[2].z), _64, mad((WorkingColorSpace.ToAP1[2].y), _63, ((WorkingColorSpace.ToAP1[2].x) * _62)));
   float _86 = dot(float3(_79, _82, _85), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
 
-  SetUngradedAP1(_79, _82, _85);
+  // SetUngradedAP1(_79, _82, _85);
 
   float _90 = (_79 / _86) + -1.0f;
   float _91 = (_82 / _86) + -1.0f;
   float _92 = (_85 / _86) + -1.0f;
-  float _104 = (1.0f - exp2(((_86 * _86) * -4.0f) * ExpandGamut)) * (1.0f - exp2(dot(float3(_90, _91, _92), float3(_90, _91, _92)) * -4.0f));
+  float _104 = (1.0f - exp2(((_86 * _86) * -4.0f) * expand_gamut)) * (1.0f - exp2(dot(float3(_90, _91, _92), float3(_90, _91, _92)) * -4.0f));
   float _120 = ((mad(-0.06368321925401688f, _85, mad(-0.3292922377586365f, _82, (_79 * 1.3704125881195068f))) - _79) * _104) + _79;
   float _121 = ((mad(-0.010861365124583244f, _85, mad(1.0970927476882935f, _82, (_79 * -0.08343357592821121f))) - _82) * _104) + _82;
   float _122 = ((mad(1.2036951780319214f, _85, mad(-0.09862580895423889f, _82, (_79 * -0.02579331398010254f))) - _85) * _104) + _85;
@@ -190,8 +152,8 @@ float4 main(
   float _491 = ((_373 * (((ColorOffset.z + ColorOffsetHighlights.z) + _270) + (((ColorGain.z * ColorGainHighlights.z) * _279) * exp2(log2(exp2(((ColorContrast.z * ColorContrastHighlights.z) * _297) * log2(max(0.0f, ((((ColorSaturation.z * ColorSaturationHighlights.z) * _306) * _199) + _123)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((ColorGamma.z * ColorGammaHighlights.z) * _288)))))) + (_261 * (((ColorOffset.z + ColorOffsetShadows.z) + _137) + (((ColorGain.z * ColorGainShadows.z) * _151) * exp2(log2(exp2(((ColorContrast.z * ColorContrastShadows.z) * _179) * log2(max(0.0f, ((((ColorSaturation.z * ColorSaturationShadows.z) * _193) * _199) + _123)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((ColorGamma.z * ColorGammaShadows.z) * _165))))))) + ((((ColorOffset.z + ColorOffsetMidtones.z) + _382) + (((ColorGain.z * ColorGainMidtones.z) * _391) * exp2(log2(exp2(((ColorContrast.z * ColorContrastMidtones.z) * _409) * log2(max(0.0f, ((((ColorSaturation.z * ColorSaturationMidtones.z) * _418) * _199) + _123)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((ColorGamma.z * ColorGammaMidtones.z) * _400))))) * _476);
 
   // Will cause issues with grayscale scenes if moved above
-  SetUntonemappedAP1(_487, _489, _491);
-  
+  // SetUntonemappedAP1(_487, _489, _491);
+
   float _506 = ((mad(0.061360642313957214f, _491, mad(-4.540197551250458e-09f, _489, (_487 * 0.9386394023895264f))) - _487) * BlueCorrection) + _487;
   float _507 = ((mad(0.169205904006958f, _491, mad(0.8307942152023315f, _489, (_487 * 6.775371730327606e-08f))) - _489) * BlueCorrection) + _489;
   float _508 = (mad(-2.3283064365386963e-10f, _489, (_487 * -9.313225746154785e-10f)) * BlueCorrection) + _491;
@@ -259,6 +221,11 @@ float4 main(
   }
   float _680 = ((1.0f - FilmToe) / FilmSlope) - _677;
   float _682 = (FilmShoulder / FilmSlope) - _680;
+  float3 lerpColor = lerp(_640, float3(_637, _638, _639), 0.9599999785423279f);
+#if 1
+  ApplyFilmicToneMap(lerpColor.r, lerpColor.g, lerpColor.b, _506, _507, _508);
+  float _828 = lerpColor.r, _829 = lerpColor.g, _830 = lerpColor.b;
+#else
   float _686 = log2(lerp(_640, _637, 0.9599999785423279f)) * 0.3010300099849701f;
   float _687 = log2(lerp(_640, _638, 0.9599999785423279f)) * 0.3010300099849701f;
   float _688 = log2(lerp(_640, _639, 0.9599999785423279f)) * 0.3010300099849701f;
@@ -293,13 +260,14 @@ float4 main(
   float _828 = ((mad(-0.06537103652954102f, _812, mad(1.451815478503704e-06f, _811, (_810 * 1.065374732017517f))) - _810) * BlueCorrection) + _810;
   float _829 = ((mad(-0.20366770029067993f, _812, mad(1.2036634683609009f, _811, (_810 * -2.57161445915699e-07f))) - _811) * BlueCorrection) + _811;
   float _830 = ((mad(0.9999996423721313f, _812, mad(2.0954757928848267e-08f, _811, (_810 * 1.862645149230957e-08f))) - _812) * BlueCorrection) + _812;
+#endif
 
-  SetTonemappedAP1(_828, _829, _830);
+  // SetTonemappedAP1(_828, _829, _830);
 
-  float _855 = saturate(max(0.0f, mad((WorkingColorSpace.FromAP1[0].z), _830, mad((WorkingColorSpace.FromAP1[0].y), _829, ((WorkingColorSpace.FromAP1[0].x) * _828)))));
-  float _856 = saturate(max(0.0f, mad((WorkingColorSpace.FromAP1[1].z), _830, mad((WorkingColorSpace.FromAP1[1].y), _829, ((WorkingColorSpace.FromAP1[1].x) * _828)))));
-  float _857 = saturate(max(0.0f, mad((WorkingColorSpace.FromAP1[2].z), _830, mad((WorkingColorSpace.FromAP1[2].y), _829, ((WorkingColorSpace.FromAP1[2].x) * _828)))));
-  if (_855 < 0.0031306699384003878f) {
+  float _855 = (max(0.0f, mad((WorkingColorSpace.FromAP1[0].z), _830, mad((WorkingColorSpace.FromAP1[0].y), _829, ((WorkingColorSpace.FromAP1[0].x) * _828)))));
+  float _856 = (max(0.0f, mad((WorkingColorSpace.FromAP1[1].z), _830, mad((WorkingColorSpace.FromAP1[1].y), _829, ((WorkingColorSpace.FromAP1[1].x) * _828)))));
+  float _857 = (max(0.0f, mad((WorkingColorSpace.FromAP1[2].z), _830, mad((WorkingColorSpace.FromAP1[2].y), _829, ((WorkingColorSpace.FromAP1[2].x) * _828)))));
+  /* if (_855 < 0.0031306699384003878f) {
     _868 = (_855 * 12.920000076293945f);
   } else {
     _868 = (((pow(_855, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
@@ -326,17 +294,25 @@ float4 main(
   float _936 = max(6.103519990574569e-05f, (((lerp(_908.z, _915.z, _903)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _890)));
   float _958 = select((_934 > 0.040449999272823334f), exp2(log2((_934 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_934 * 0.07739938050508499f));
   float _959 = select((_935 > 0.040449999272823334f), exp2(log2((_935 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_935 * 0.07739938050508499f));
-  float _960 = select((_936 > 0.040449999272823334f), exp2(log2((_936 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_936 * 0.07739938050508499f));
+  float _960 = select((_936 > 0.040449999272823334f), exp2(log2((_936 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_936 * 0.07739938050508499f)); */
+
+  float3 untonemapped = float3(_855, _856, _857);
+  float _958;
+  float _959;
+  float _960;
+  SampleLUTUpgradeToneMap(untonemapped, Samplers_1, Textures_1, _958, _959, _960);
+  
   float _986 = ColorScale.x * (((MappingPolynomial.y + (MappingPolynomial.x * _958)) * _958) + MappingPolynomial.z);
   float _987 = ColorScale.y * (((MappingPolynomial.y + (MappingPolynomial.x * _959)) * _959) + MappingPolynomial.z);
   float _988 = ColorScale.z * (((MappingPolynomial.y + (MappingPolynomial.x * _960)) * _960) + MappingPolynomial.z);
+
+  if (GenerateOutput(_986, _987, _988, SV_Target, is_hdr)) {
+    return SV_Target;
+  }
+  
   float _1009 = exp2(log2(max(0.0f, (lerp(_986, OverlayColor.x, OverlayColor.w)))) * InverseGamma.y);
   float _1010 = exp2(log2(max(0.0f, (lerp(_987, OverlayColor.y, OverlayColor.w)))) * InverseGamma.y);
   float _1011 = exp2(log2(max(0.0f, (lerp(_988, OverlayColor.z, OverlayColor.w)))) * InverseGamma.y);
-
-  /* if (RENODX_TONE_MAP_TYPE != 0) {
-    return GenerateOutput(float3(_1009, _1010, _1011));
-  } */
 
   if ((uint)(WorkingColorSpace.bIsSRGB) == 0) {
     float _1030 = mad((WorkingColorSpace.ToAP1[0].z), _1011, mad((WorkingColorSpace.ToAP1[0].y), _1010, ((WorkingColorSpace.ToAP1[0].x) * _1009)));
@@ -369,7 +345,6 @@ float4 main(
   SV_Target.y = (_1071 * 0.9523810148239136f);
   SV_Target.z = (_1082 * 0.9523810148239136f);
 
-  SV_Target.rgb = float3(_1060, _1071, _1082);
   SV_Target.w = 0.0f;
   return SV_Target;
 }
