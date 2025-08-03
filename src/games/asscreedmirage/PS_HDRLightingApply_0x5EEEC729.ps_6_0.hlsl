@@ -30,10 +30,20 @@ float4 main(
   float4 _18 = t3_space2.Sample(s0_space3, float2(TEXCOORD.x, TEXCOORD.y));
 
   _18.rgb *= CUSTOM_BLOOM;
+  float3 bloom_color = _18.rgb;
 
-  float _23 = _18.x + _15;
-  float _24 = _18.y + _16;
-  float _25 = _18.z + _17;
+#if 1
+  float3 scene_color = float3(_15, _16, _17);
+  float mid_gray_bloomed = (0.18 + renodx::color::y::from::BT709(bloom_color)) / 0.18;
+  float scene_luminance = renodx::color::y::from::BT709(scene_color) * mid_gray_bloomed;
+  float bloom_blend = saturate(smoothstep(0.f, 0.18f, scene_luminance));
+  float3 bloom_scaled = lerp(0.f, bloom_color, bloom_blend);
+  bloom_color = lerp(bloom_color, bloom_scaled, CUSTOM_BLOOM_SCALING * 0.5f);
+#endif
+
+  float _23 = bloom_color.x + _15;
+  float _24 = bloom_color.y + _16;
+  float _25 = bloom_color.z + _17;
   float _28 = cb0_space2_000y * _18.w;
   float _29 = _28 + 1.0f;
   float _30 = 1.0f / _29;
