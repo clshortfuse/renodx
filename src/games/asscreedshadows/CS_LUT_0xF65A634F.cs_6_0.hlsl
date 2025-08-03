@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsli"
 
 // Hue Weight
 static const float _37[10] = { -0.15369999408721923828125f, 0.013500000350177288055419921875f, 0.13120000064373016357421875f, 0.2092899978160858154296875f, 0.2858000099658966064453125f, 0.513000011444091796875f, 0.66879999637603759765625f, 0.745999991893768310546875f, 0.84630000591278076171875f, 1.0134999752044677734375f };
@@ -212,7 +212,7 @@ void comp_main() {
       (_437 + _343) + (_453 * ((_423 * (((_376 * _301) * _384) - _343)) - _437)),
       (_438 + _345) + (_453 * ((_423 * (((_377 * _301) * _384) - _345)) - _438)));
 
-#if 1
+#if 0
   final_color = renodx::color::bt709::from::AP1(final_color);
   renodx::color::grade::Config cg_config = renodx::color::grade::config::Create(
       RENODX_TONE_MAP_EXPOSURE,
@@ -232,6 +232,8 @@ void comp_main() {
       cg_config);
 
   final_color = max(0, renodx::color::ap1::from::BT709(final_color));
+#else
+  final_color = ApplyUserColorGradingAP1(final_color);
 #endif
 
   float3 encoded_color = log2(final_color) * 0.0500000007450580596923828125f + 0.6236965656280517578125f;
