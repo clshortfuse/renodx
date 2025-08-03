@@ -66,7 +66,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "ACES"},
+        .labels = {"Vanilla", "ACES (Customized)", "ACES (Matches SDR)"},
         .on_change = &OnOptimizableToneMapSettingChange,
     },
     new renodx::utils::settings::Setting{
