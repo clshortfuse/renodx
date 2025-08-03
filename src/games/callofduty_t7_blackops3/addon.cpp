@@ -98,23 +98,24 @@ const std::unordered_map<std::string, float> PRESET_ACES = {
 };
 
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_RAW = {
-    {"CustomTradeOffRatio", 0.f},
+    {"CustomTradeoffRatio", 0.f},
 };
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_HDR = {
-    {"CustomTradeOffRatio", 1.f},
-    {"CustomFullscreenShaderGamma", 0.f},
-};
+    {"CustomTradeoffRatio", 1.f},
+    {"CustomTradeoffMode", 1.f},
+    {"CustomTradeoffGammaAmount", 2.2f}};
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_BALANCED = {
-    {"CustomTradeOffRatio", 10.f},
-    {"CustomFullscreenShaderGamma", 0.f},
-};
+    {"CustomTradeoffRatio", 10.f},
+    {"CustomTradeoffMode", 1.f},
+    {"CustomTradeoffGammaAmount", 2.2f}};
+};  // namespace
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_FSFX = {
-    {"CustomTradeOffRatio", 10.f},
-    {"CustomFullscreenShaderGamma", 3.f},
+    {"CustomTradeoffRatio", 10.f},
+    {"CustomTradeoffMode", 3.f},
 };
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_PQ = {
-    {"CustomTradeOffRatio", 5.f},
-    {"CustomFullscreenShaderGamma", 4.f},
+    {"CustomTradeoffRatio", 5.f},
+    {"CustomTradeoffMode", 2.f},
 };
 
 renodx::utils::settings::Settings settings = {
@@ -122,10 +123,10 @@ renodx::utils::settings::Settings settings = {
         .key = "SettingsMode",
         .binding = &current_settings_mode,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 1.f,
         .can_reset = false,
         .label = "Settings Mode",
-        .labels = {"Simple", "Intermediate", "Advanced (Not Recommended)"},
+        .labels = {"Simple", "Intermediate", "Advanced"},
         .is_global = true,
     },
 
@@ -195,11 +196,11 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "\t- (IMPORTANT) Don't use Exclusive Fullscreen (else ReShade will try to enforce)."
-                 "\n\t- (IMPORTANT) check out \"Tradeoff\" section for hdr accuracy tradeoffs."
-                 "\n\t- Game settings for Brightness slider and Rec.709/sRGB doesn't do anything."
+        .label = "\t- (IMPORTANT) Don't use Exclusive Fullscreen."
+                 "\n\t- (IMPORTANT) check out \"Tradeoff\" section for HDR vs Fullscreen Overlay FX tradeoffs."
+                 "\n\t- Game settings for Brightness and Rec.709/sRGB doesn't do anything."
                  "\n\t- All of the LUTs need some black level lowering."
-                 "\n\t\t- You can use \"Flare\" or download Lilium's Black Floor Lowering ReShade shader."
+                 "\n\t\t- You can use \"Flare\" or download Black Floor Lowering ReShade shader by Lilium."
                  "\n\t- Try the ACES preset. Some LUTs (e.g., Town Reimagined) favor its contrast and hue shift.",
         .section = "Read Me",
     },
@@ -440,54 +441,19 @@ renodx::utils::settings::Settings settings = {
 
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "The game renders fullscreen overlay shaders (e.g., SoE portal transition) at maximum value (32768).\n"
-                 "When they get added/oberlayed over the linear tonemapped HDR image (around 1), you get flashbanged\n"
-                 "Fixing this with just RenoDX requires reducing the brightness of each individual shader in the game, which becomes unattainable with custom maps.\n"
+        .label = "The game renders fullscreen overlay fx shaders (e.g., SoE portal transition & beast mode) at maximum value (32768).\n"
+                 "When they get composited over the linear tonemapped HDR image (median value around 1), you get flashbanged\n"
+                 "Fixing this with just RenoDX requires reducing the brightness of each individual shader in the game, which becomes unattainable accounting for custom maps.\n"
                  "By converting the linear HDR image to another color space, it can be brighten to composite correctly.\n"
-                 "This becomes a tradeoff between peak brightness and the fullscreen shader's brightness/contrast.\n",
+                 "This becomes a tradeoff between peak brightness and the fullscreen overlay shader's brightness/contrast.\n",
         .section = "Tradeoff",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preset: Raw",
+        .label = "Preset: Balanced (Default)",
         .section = "Tradeoff",
         .group = "button-line-1",
-        .tooltip = "Unplayable, only useful for screenshots."
-                   "\nYou will get flashbanged by any unfixed fullscreen overlays",
-        .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-
-            if (PRESET_TRADEOFF_RAW.contains(setting->key)) {
-              renodx::utils::settings::UpdateSetting(setting->key, PRESET_TRADEOFF_RAW.at(setting->key));
-            }
-          }
-        },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preset: Favor HDR",
-        .section = "Tradeoff",
-        .group = "button-line-1",
-        .tooltip = "Annoyingly bright fullscreen shaders, but HDR image is more accurate, though probably not perceptual.",
-        .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-
-            if (PRESET_TRADEOFF_HDR.contains(setting->key)) {
-              renodx::utils::settings::UpdateSetting(setting->key, PRESET_TRADEOFF_HDR.at(setting->key));
-            }
-          }
-        },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preset: Balanced Tradeoff (Default)",
-        .section = "Tradeoff",
-        .group = "button-line-1",
-        .tooltip = "Fullscreen overlay has a bit more contrast have vanilla with enough HDR range for highlights.",
+        .tooltip = "Though the overlays has a bit more contrast, you perceptually have full range for highlights.",
         .on_change = []() {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
@@ -501,10 +467,28 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Preset: Favor HDR",
+        .section = "Tradeoff",
+        .group = "button-line-1",
+        .tooltip = "For if you actually perceive Balance not being enough."
+                   "\nOverlays will be annoyingly bright.",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+
+            if (PRESET_TRADEOFF_HDR.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, PRESET_TRADEOFF_HDR.at(setting->key));
+            }
+          }
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Preset: Favor Overlays",
         .section = "Tradeoff",
-        .group = "button-line-2",
-        .tooltip = "Overlays are more preserved but you clip the extreme details of brightness in like the 1% highs.",
+        .group = "button-line-1",
+        .tooltip = "Overlays are more preserved in linear but you clip the details of brightness.",
         .on_change = []() {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
@@ -516,13 +500,13 @@ renodx::utils::settings::Settings settings = {
           }
         },
     },
-
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Preset: PQ",
         .section = "Tradeoff",
         .group = "button-line-2",
-        .tooltip = "Overlays have crazy contrast, but HDR luminance quantization is along the PQ curve which retains high peak brightness.",
+        .tooltip = "Overlays have crazy contrast but not flashbang bright."
+                   "\nHDR brightness is along the PQ curve which retains all brightness.",
         .on_change = []() {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
@@ -534,30 +518,60 @@ renodx::utils::settings::Settings settings = {
           }
         },
     },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Preset: Raw",
+        .section = "Tradeoff",
+        .group = "button-line-2",
+        .tooltip = "Unplayable, only useful for screenshots."
+                   "\nYou will get flashbanged by any unfixed fullscreen overlay fx",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+
+            if (PRESET_TRADEOFF_RAW.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, PRESET_TRADEOFF_RAW.at(setting->key));
+            }
+          }
+        },
+    },
 
     new renodx::utils::settings::Setting{
-        .key = "CustomTradeOffRatio",
+        .key = "CustomTradeoffRatio",
         .binding = &shader_injection.custom_tradeoff_ratio,
         .default_value = 10.f,
         .label = "Tradeoff Brightness Ratio",
         .section = "Tradeoff",
-        .tooltip = "The lower the value, the more accurate the HDR image, and the brighter the fullscreen shaders will be.\n"
-                   "The higher the value, the more accurate the fullscreen shaders will be, but the HDR image will be more quantized and capped.",
+        .tooltip = "Increasing the value lowers overlay fx brightness at the cost of clipping HDR brightness.",
         .max = 100.f,
         .format = "%.2f",
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "CustomFullscreenShaderGamma",
-        .binding = &shader_injection.custom_fullscreen_shader_gamma,
+        .key = "CustomTradeoffMode",
+        .binding = &shader_injection.custom_tradeoff_mode,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 1.f,
+        .can_reset = true,
+        .label = "Tradeoff Mode / Color Space",
+        .section = "Tradeoff",
+        .tooltip = "Each provides a slightly different (unnoticible) quantization pattern, and changes contrast of overlay fx.",
+        .labels = {"sRGB", "Gamma", "PQ", "Linear (None)"},
+        .is_enabled = []() { return shader_injection.custom_tradeoff_ratio > 0; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "CustomTradeoffGammaAmount",
+        .binding = &shader_injection.custom_tradeoff_gamma_amount,
+        .value_type = renodx::utils::settings::SettingValueType::FLOAT,
+        .default_value = 2.2f,
         .can_reset = true,
         .label = "Tradeoff Gamma Correction",
         .section = "Tradeoff",
-        .tooltip = "Each provides a slightly different quantization pattern.",
-        .labels = {"sRGB", "2.2", "2.4", "1.0", "PQ", "Linear (None)"},
-        .is_enabled = []() { return shader_injection.custom_tradeoff_ratio > 0; },
+        .min = 0.01f,
+        .max = 4.f,
+        .format = "%.2f",
+        .is_visible = []() { return shader_injection.custom_tradeoff_mode == 1; },
     },
 
     new renodx::utils::settings::Setting{
@@ -751,7 +765,7 @@ const auto UPGRADE_TYPE_ANY = 3.f;
 
 bool initialized = false;
 
-}  // namespace
+// namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX (Call of Duty: Black Ops 3)";

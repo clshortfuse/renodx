@@ -4,15 +4,11 @@
 // #define SDR_NOMRALIZATION_TRADEOFF 0.15 //TODO to reshade var instead?
 
 float3 Tradeoff_LinearToTradeoffSpace(float3 color) {
-  if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 0.f) {
+  if (CUSTOM_TRADEOFF_MODE == 0.f) {
     return renodx::color::srgb::EncodeSafe(color);
-  } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 1.f) {
-    return renodx::color::gamma::EncodeSafe(color, 2.2f);
-  } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 2.f) {
-    return renodx::color::gamma::EncodeSafe(color, 2.4f);
-  } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 3.f) {
-    return renodx::color::gamma::EncodeSafe(color, 1.0f);
-  } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 4.f) {
+  } else if (CUSTOM_TRADEOFF_MODE == 1.f) {
+    return renodx::color::gamma::EncodeSafe(color, CUSTOM_TRADEOFF_GAMMA_AMOUNT);
+  } else if (CUSTOM_TRADEOFF_MODE == 2.f) {
     return renodx::color::pq::EncodeSafe(color);
   } else {
     return color;
@@ -20,15 +16,11 @@ float3 Tradeoff_LinearToTradeoffSpace(float3 color) {
 }
 
 float3 Tradeoff_TradeoffSpaceToLinear(float3 color) {
-  if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 0.f) {
+  if (CUSTOM_TRADEOFF_MODE == 0.f) {
     return renodx::color::srgb::DecodeSafe(color);
-  } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 1.f) {
-    return renodx::color::gamma::DecodeSafe(color, 2.2f);
-  } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 2.f) {
-    return renodx::color::gamma::DecodeSafe(color, 2.4f);
-  } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 3.f) {
-    return renodx::color::gamma::DecodeSafe(color, 1.0f);
-  } else if (CUSTOM_FULLSCREEN_SHADER_GAMMA == 4.f) {
+  } else if (CUSTOM_TRADEOFF_MODE == 1.f) {
+    return renodx::color::gamma::DecodeSafe(color, CUSTOM_TRADEOFF_GAMMA_AMOUNT);
+  } else if (CUSTOM_TRADEOFF_MODE == 2.f) {
     return renodx::color::pq::DecodeSafe(color);
   } else {
     return color;
@@ -95,7 +87,7 @@ float3 ScaleBloomAfterSaturate(float3 color) {
 //   return color;
 // }
 
-// Copied from: ff7rebirth
+// (Copied from: ff7rebirth)
 // AdvancedAutoHDR pass to generate some HDR brightess out of an SDR signal.
 // This is hue conserving and only really affects highlights.
 // "sdr_color" is meant to be in "SDR range", as in, a value of 1 matching SDR white (something between 80, 100, 203, 300 nits, or whatever else)

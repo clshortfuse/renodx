@@ -71,7 +71,8 @@ struct ShaderInjectData {
   float swap_chain_encoding;
   float swap_chain_encoding_color_space;
   float custom_tradeoff_ratio;
-  float custom_fullscreen_shader_gamma;
+  float custom_tradeoff_mode;
+  float custom_tradeoff_gamma_amount;
   // float custom_fullscreen_shader_saturation;
   float custom_bloom;
   float custom_slide_lens_dirt;
@@ -122,7 +123,8 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define CUSTOM_TRADEOFF_RATIO                  shader_injection.custom_tradeoff_ratio
-#define CUSTOM_FULLSCREEN_SHADER_GAMMA         shader_injection.custom_fullscreen_shader_gamma
+#define CUSTOM_TRADEOFF_MODE                   shader_injection.custom_tradeoff_mode
+#define CUSTOM_TRADEOFF_GAMMA_AMOUNT           shader_injection.custom_tradeoff_gamma_amount
 #define CUSTOM_BLOOM                           shader_injection.custom_bloom
 #define CUSTOM_SLIDE_LENS_DIRT                 shader_injection.custom_slide_lens_dirt
 #define CUSTOM_XRAY_OUTLINE                    shader_injection.custom_xray_outline
