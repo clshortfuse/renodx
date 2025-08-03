@@ -28,8 +28,8 @@ renodx::utils::settings::Settings settings = {
 
 }  // namespace
 
-extern "C" __declspec(dllexport) constexpr const char* NAME = "FPS Limitter";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX FPS Limitter";
+extern "C" __declspec(dllexport) constexpr const char* NAME = "FPS Limiter";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX FPS Limiter";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
@@ -37,7 +37,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!reshade::register_addon(h_module)) return FALSE;
 
       renodx::utils::settings::use_presets = false;
-      renodx::utils::settings::global_name = "FPSLimitter";
+      renodx::utils::settings::global_name = "FPSLimiter";
 
       break;
     case DLL_PROCESS_DETACH:
