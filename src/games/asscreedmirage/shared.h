@@ -24,6 +24,7 @@ struct ShaderInjectData {
   float tone_map_saturation;
   float tone_map_blowout;
   float custom_bloom;
+  float custom_bloom_scaling;
   float graphics_white_nits;
 };
 
@@ -44,6 +45,7 @@ cbuffer shader_injection : register(b13, space50) {
 #define RENODX_TONE_MAP_SATURATION   shader_injection.tone_map_saturation
 #define RENODX_TONE_MAP_BLOWOUT      shader_injection.tone_map_blowout
 #define CUSTOM_BLOOM                 shader_injection.custom_bloom
+#define CUSTOM_BLOOM_SCALING         shader_injection.custom_bloom_scaling
 #define RENODX_GRAPHICS_WHITE_NITS   shader_injection.graphics_white_nits
 
 #include "../../shaders/renodx.hlsl"

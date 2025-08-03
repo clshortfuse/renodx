@@ -54,7 +54,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 };
 
 const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
-    {"FxBloom", 50.f},
+    {"FxBloomScaling", 100.f},
 };
 
 renodx::utils::settings::Settings settings = {
@@ -147,6 +147,16 @@ renodx::utils::settings::Settings settings = {
         .default_value = 100.f,
         .label = "Bloom",
         .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxBloomScaling",
+        .binding = &shader_injection.custom_bloom_scaling,
+        .default_value = 100.f,
+        .label = "Bloom Scaling",
+        .section = "Effects",
+        .tooltip = "Scales the black floor of the bloom effect.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
@@ -283,6 +293,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("FxBloom", 100.f);
+  renodx::utils::settings::UpdateSetting("FxBloomScaling", 0.f);
   renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
 }
 
