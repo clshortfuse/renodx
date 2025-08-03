@@ -1,4 +1,5 @@
 #include "./shared.h"
+
 struct CustomDepthMapParams__Constants {
   int CustomDepthMapParams__Constants_000;
   int CustomDepthMapParams__Constants_004;
@@ -30,7 +31,6 @@ struct VolumetricCloudShadow__Constants {
   float4 VolumetricCloudShadow__Constants_120[3];
 };
 
-// clang-format off
 struct PassParams__Constants {
   float4 PassParams__Constants_000;
   float4 PassParams__Constants_016;
@@ -85,7 +85,8 @@ struct PassParams__Constants {
     float AerialPerspectiveVolumeParams__Constants_004;
     float AerialPerspectiveVolumeParams__Constants_008;
     float2 AerialPerspectiveVolumeParams__Constants_012;
-  } PassParams__Constants_1464;
+  }
+  PassParams__Constants_1464;
   struct AmbientLightingParams__Constants {
     float AmbientLightingParams__Constants_000;
     float AmbientLightingParams__Constants_004;
@@ -99,7 +100,8 @@ struct PassParams__Constants {
     float3 AmbientLightingParams__Constants_036;
     int4 AmbientLightingParams__Constants_048;
     int AmbientLightingParams__Constants_064;
-  } PassParams__Constants_1484;
+  }
+  PassParams__Constants_1484;
   VolumetricCloudShadow__Constants PassParams__Constants_1552;
   struct ClusteredDecalsEvaluateParams__Constants {
     float4 ClusteredDecalsEvaluateParams__Constants_000;
@@ -109,7 +111,8 @@ struct PassParams__Constants {
     int ClusteredDecalsEvaluateParams__Constants_052;
     int ClusteredDecalsEvaluateParams__Constants_056;
     int ClusteredDecalsEvaluateParams__Constants_060;
-  } PassParams__Constants_1720;
+  }
+  PassParams__Constants_1720;
   struct ClusteredWorldVoxelColorEvaluateParams__Constants {
     float4 ClusteredWorldVoxelColorEvaluateParams__Constants_000;
     float4 ClusteredWorldVoxelColorEvaluateParams__Constants_016;
@@ -119,19 +122,22 @@ struct PassParams__Constants {
     int ClusteredWorldVoxelColorEvaluateParams__Constants_056;
     int ClusteredWorldVoxelColorEvaluateParams__Constants_060;
     int ClusteredWorldVoxelColorEvaluateParams__Constants_064;
-  } PassParams__Constants_1784;
+  }
+  PassParams__Constants_1784;
   struct CombinedCloudShadow__Constants {
     float4 CombinedCloudShadow__Constants_000;
     float4 CombinedCloudShadow__Constants_016;
     float2 CombinedCloudShadow__Constants_032;
     float4 CombinedCloudShadow__Constants_040;
     float CombinedCloudShadow__Constants_056;
-  } PassParams__Constants_1852;
+  }
+  PassParams__Constants_1852;
   CustomDepthMapParams__Constants PassParams__Constants_1912;
   struct DeferredCommonParams__Constants {
     float4 DeferredCommonParams__Constants_000;
     float DeferredCommonParams__Constants_016;
-  } PassParams__Constants_1984;
+  }
+  PassParams__Constants_1984;
   struct DynamicWindParams__Constants {
     float3 DynamicWindParams__Constants_000;
     float3 DynamicWindParams__Constants_012;
@@ -145,10 +151,12 @@ struct PassParams__Constants {
     float4 DynamicWindParams__Constants_120[4];
     float4 DynamicWindParams__Constants_184[4];
     float4 DynamicWindParams__Constants_248[4];
-  } PassParams__Constants_2004;
+  }
+  PassParams__Constants_2004;
   struct FarShadowParams__Constants {
     float FarShadowParams__Constants_000;
-  } PassParams__Constants_2316;
+  }
+  PassParams__Constants_2316;
   struct VolumetricFogParams__Constants {
     float4 VolumetricFogParams__Constants_000;
     float4 VolumetricFogParams__Constants_016;
@@ -167,7 +175,8 @@ struct PassParams__Constants {
     float2 VolumetricFogParams__Constants_308;
     int VolumetricFogParams__Constants_316;
     float VolumetricFogParams__Constants_320;
-  } PassParams__Constants_2320;
+  }
+  PassParams__Constants_2320;
   struct GenericStamperParams__Constants {
     int GenericStamperParams__Constants_000;
     float2 GenericStamperParams__Constants_004[4];
@@ -182,7 +191,8 @@ struct PassParams__Constants {
     float2 GenericStamperParams__Constants_204[4];
     int2 GenericStamperParams__Constants_236;
     float4 GenericStamperParams__Constants_244[4];
-  } PassParams__Constants_2644;
+  }
+  PassParams__Constants_2644;
   struct GrassForceSamplingParams__Constants {
     float2 GrassForceSamplingParams__Constants_000;
     float2 GrassForceSamplingParams__Constants_008;
@@ -190,7 +200,8 @@ struct PassParams__Constants {
     float2 GrassForceSamplingParams__Constants_024;
     float GrassForceSamplingParams__Constants_032;
     float GrassForceSamplingParams__Constants_036;
-  } PassParams__Constants_2952;
+  }
+  PassParams__Constants_2952;
   IndoorDepthMapParams__Constants PassParams__Constants_2992;
   struct LocalizedSkyLightingParams__Constants {
     float4 LocalizedSkyLightingParams__Constants_000;
@@ -198,13 +209,16 @@ struct PassParams__Constants {
     float LocalizedSkyLightingParams__Constants_020;
     float LocalizedSkyLightingParams__Constants_024;
     float LocalizedSkyLightingParams__Constants_028;
-  } PassParams__Constants_3068;
+  }
+  PassParams__Constants_3068;
   struct LocalLightsEvaluateParams__Constants {
     struct TiledZBinLightsEvaluateParams__Constants {
       int4 TiledZBinLightsEvaluateParams__Constants_000;
       int TiledZBinLightsEvaluateParams__Constants_016;
-    } LocalLightsEvaluateParams__Constants_000;
-  } PassParams__Constants_3100;
+    }
+    LocalLightsEvaluateParams__Constants_000;
+  }
+  PassParams__Constants_3100;
   struct LongRangeShadowsParams__Constants {
     int LongRangeShadowsParams__Constants_000;
     float LongRangeShadowsParams__Constants_004;
@@ -213,47 +227,58 @@ struct PassParams__Constants {
     float LongRangeShadowsParams__Constants_016;
     float LongRangeShadowsParams__Constants_020;
     int LongRangeShadowsParams__Constants_024;
-  } PassParams__Constants_3120;
+  }
+  PassParams__Constants_3120;
   struct NearShadowParams__Constants {
     int NearShadowParams__Constants_000;
-  } PassParams__Constants_3148;
+  }
+  PassParams__Constants_3148;
   struct OmnidirectionalLocalLightsEvaluateParams__Constants {
     struct OmnidirectionalClusteredLightsEvaluateParams__Constants {
       float4 OmnidirectionalClusteredLightsEvaluateParams__Constants_000;
-    } OmnidirectionalLocalLightsEvaluateParams__Constants_000;
-  } PassParams__Constants_3152;
+    }
+    OmnidirectionalLocalLightsEvaluateParams__Constants_000;
+  }
+  PassParams__Constants_3152;
   struct OpacitySlices__Constants {
     float OpacitySlices__Constants_000;
     float2 OpacitySlices__Constants_004;
     float2 OpacitySlices__Constants_012;
     float4 OpacitySlices__Constants_020[10];
-  } PassParams__Constants_3168;
+  }
+  PassParams__Constants_3168;
   struct OpaqueLightingCommonParams__Constants {
     int4 OpaqueLightingCommonParams__Constants_000;
     int2 OpaqueLightingCommonParams__Constants_016;
     int OpaqueLightingCommonParams__Constants_024;
     float4 OpaqueLightingCommonParams__Constants_028;
-  } PassParams__Constants_3348;
+  }
+  PassParams__Constants_3348;
   struct PreintergratedSSSParams__Constants {
     int PreintergratedSSSParams__Constants_000;
     int PreintergratedSSSParams__Constants_004;
-  } PassParams__Constants_3392;
+  }
+  PassParams__Constants_3392;
   struct RainBlockerParams__Constants {
     float4 RainBlockerParams__Constants_000;
     float2 RainBlockerParams__Constants_016;
-  } PassParams__Constants_3400;
+  }
+  PassParams__Constants_3400;
   struct ReadbackTextureStreamingMipFeedbackParams__Constants {
     int ReadbackTextureStreamingMipFeedbackParams__Constants_000;
     int ReadbackTextureStreamingMipFeedbackParams__Constants_004;
     float ReadbackTextureStreamingMipFeedbackParams__Constants_008;
     float ReadbackTextureStreamingMipFeedbackParams__Constants_012;
-  } PassParams__Constants_3424;
+  }
+  PassParams__Constants_3424;
   struct RTGILightingParams__Constants {
     float RTGILightingParams__Constants_000;
-  } PassParams__Constants_3440;
+  }
+  PassParams__Constants_3440;
   struct RTSpecularParams__Constants {
     float RTSpecularParams__Constants_000;
-  } PassParams__Constants_3444;
+  }
+  PassParams__Constants_3444;
   struct SnowDisplacementParams__Constants {
     int SnowDisplacementParams__Constants_000;
     int SnowDisplacementParams__Constants_004;
@@ -266,17 +291,20 @@ struct PassParams__Constants {
     float4 SnowDisplacementParams__Constants_056;
     float2 SnowDisplacementParams__Constants_072;
     float SnowDisplacementParams__Constants_080;
-  } PassParams__Constants_3448;
+  }
+  PassParams__Constants_3448;
   struct SnowRemoverMaskParams__Constants {
     float4 SnowRemoverMaskParams__Constants_000;
     float4 SnowRemoverMaskParams__Constants_016;
     float2 SnowRemoverMaskParams__Constants_032;
     float SnowRemoverMaskParams__Constants_040;
     float SnowRemoverMaskParams__Constants_044;
-  } PassParams__Constants_3532;
+  }
+  PassParams__Constants_3532;
   struct TerrainDeformationParams__Constants {
     int TerrainDeformationParams__Constants_000;
-  } PassParams__Constants_3580;
+  }
+  PassParams__Constants_3580;
   struct TerrainFrameParams2__Constants {
     float TerrainFrameParams2__Constants_000;
     float TerrainFrameParams2__Constants_004;
@@ -319,7 +347,8 @@ struct PassParams__Constants {
     int TerrainFrameParams2__Constants_172;
     int TerrainFrameParams2__Constants_176;
     int TerrainFrameParams2__Constants_180;
-  } PassParams__Constants_3584;
+  }
+  PassParams__Constants_3584;
   struct ToolModeParams__Constants {
     float4 ToolModeParams__Constants_000;
     float4 ToolModeParams__Constants_016;
@@ -337,13 +366,16 @@ struct PassParams__Constants {
     int4 ToolModeParams__Constants_172;
     float4 ToolModeParams__Constants_188;
     int ToolModeParams__Constants_204;
-  } PassParams__Constants_3768;
+  }
+  PassParams__Constants_3768;
   struct UIPassParams__Constants {
     int UIPassParams__Constants_000;
-  } PassParams__Constants_3976;
+  }
+  PassParams__Constants_3976;
   struct UnderwaterLightingParams__Constants {
     float3 UnderwaterLightingParams__Constants_000;
-  } PassParams__Constants_3980;
+  }
+  PassParams__Constants_3980;
   struct VertexPickingParams__Constants {
     float2 VertexPickingParams__Constants_000[2];
     int2 VertexPickingParams__Constants_016;
@@ -352,23 +384,25 @@ struct PassParams__Constants {
     float VertexPickingParams__Constants_036;
     float VertexPickingParams__Constants_040;
     int VertexPickingParams__Constants_044;
-  } PassParams__Constants_3992;
+  }
+  PassParams__Constants_3992;
   struct WaterBaseLevelParams__Constants {
     float4 WaterBaseLevelParams__Constants_000;
     float4 WaterBaseLevelParams__Constants_016;
     float4 WaterBaseLevelParams__Constants_032;
     float2 WaterBaseLevelParams__Constants_048;
-  } PassParams__Constants_4040;
+  }
+  PassParams__Constants_4040;
   struct WaterCustomMeshParams__Constants {
     float3 WaterCustomMeshParams__Constants_000;
-  } PassParams__Constants_4096;
+  }
+  PassParams__Constants_4096;
   struct WaterStamperTextureParams__Constants {
     float4 WaterStamperTextureParams__Constants_000;
     float WaterStamperTextureParams__Constants_016;
-  } PassParams__Constants_4108;
+  }
+  PassParams__Constants_4108;
 };
-
-// clang-format on
 
 Texture2D<float4> t0 : register(t0);
 
@@ -391,6 +425,7 @@ cbuffer cb0_space2 : register(b0, space2) {
   float cb0_space2_008x : packoffset(c008.x);
   float cb0_space2_008y : packoffset(c008.y);
   float cb0_space2_008z : packoffset(c008.z);
+  float cb0_space2_008w : packoffset(c008.w);
 };
 
 SamplerState s0_space99 : register(s0, space99);
@@ -405,144 +440,87 @@ float4 main(
     nointerpolation float TEXCOORD_1: TEXCOORD1)
     : SV_Target {
   float4 SV_Target;
-  float4 _16 = t0_space2.SampleLevel(s0_space99, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
-  float _20 = _16.x * TEXCOORD_1;
-  float _21 = _16.y * TEXCOORD_1;
-  float _22 = _16.z * TEXCOORD_1;
-  float4 _23 = t11_space2.SampleLevel(s1_space3, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
+  float4 _16 = t0_space2.SampleLevel(s0_space99, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);  // scene
+  uint _23 = uint(SV_Position.x);
+  uint _24 = uint(SV_Position.y);
+  float4 _25 = t11_space2.SampleLevel(s1_space3, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
 
-  _23.rgb *= CUSTOM_BLOOM;
-  float3 bloom_color = _23.rgb;
+  uint _34 = (int)(cb0_space1_076x) + 60106793u;
+  uint _36 = (_34 * 1215282323) + -200870954u;
+  int _38 = (uint)(_36) >> 16;
+  float4 _46 = t0.Load(int3((((uint)((_36 + _23) + ((((uint)(_36 << 16)) | _38) * _36))) & 63), (((uint)(_38 + _24)) & 63), 0));
+  uint _50 = (_34 * -1935564855) + 706565374u;
+  int _52 = (uint)(_50) >> 16;
+  float4 _60 = t0.Load(int3((((uint)((_50 + _23) + ((((uint)(_50 << 16)) | _52) * _50))) & 63), (((uint)(_52 + _24)) & 63), 0));
+  float _77 = max(0.0f, ((((_25.x * 0.015625f) * cb0_space2_008w) * (_46.x + -0.5f)) + _25.x));
+  float _78 = max(0.0f, ((((_25.y * 0.015625f) * cb0_space2_008w) * (_46.y + -0.5f)) + _25.y));
+  float _79 = max(0.0f, ((((_25.z * 0.03125f) * cb0_space2_008w) * (_60.x + -0.5f)) + _25.z));
+  uint _81 = (cb0_space1_076x * 1215282323) + 2113019745u;
+  int _83 = (uint)(_81) >> 16;
+  float4 _91 = t0.Load(int3((((uint)((_81 + _23) + ((((uint)(_81 << 16)) | _83) * _81))) & 63), (((uint)(_83 + _24)) & 63), 0));
+
+  // Apply bloom scaling before compositing
+  float3 scene_color = _16.rgb * TEXCOORD_1;
+  _77 *= CUSTOM_BLOOM, _78 *= CUSTOM_BLOOM, _79 *= CUSTOM_BLOOM;
+  float3 processed_bloom = float3(_77, _78, _79);
 
 #if 1
-  float mid_gray_bloomed = (0.18 + renodx::color::y::from::BT709(bloom_color)) / 0.18;
-
-  float scene_luminance = renodx::color::y::from::BT709(float3(_20, _21, _22)) * mid_gray_bloomed;
+  float mid_gray_bloomed = (0.18 + renodx::color::y::from::BT709(processed_bloom)) / 0.18;
+  float scene_luminance = renodx::color::y::from::BT709(scene_color) * mid_gray_bloomed;
   float bloom_blend = saturate(smoothstep(0.f, 0.18f, scene_luminance));
-  float3 bloom_scaled = lerp(0.f, bloom_color, bloom_blend);
-  bloom_color = lerp(bloom_color, bloom_scaled, CUSTOM_BLOOM_SCALING * 0.5f);
+  float3 bloom_scaled = lerp(0.f, processed_bloom, bloom_blend);
+  processed_bloom = lerp(processed_bloom, bloom_scaled, CUSTOM_BLOOM_SCALING * 0.5f);
 #endif
 
-  float _28 = bloom_color.x + _20;
-  float _29 = bloom_color.y + _21;
-  float _30 = bloom_color.z + _22;
+  // bloom is applied here
+  float _99 = processed_bloom.x + scene_color.x;
+  float _100 = processed_bloom.y + scene_color.y;
+  float _101 = processed_bloom.z + scene_color.z;
 
-  bool _33 = (cb0_space2_007y == 0);
-  float _53;
-  float _54;
-  float _55;
+  float _124;
+  float _125;
   float _126;
-  float _127;
-  float _128;
-  if (!_33) {
-    float4 _35 = t12_space2.SampleLevel(s1_space3, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
-    float _39 = _35.x * _23.x;
-    float _40 = _35.y * _23.y;
-    float _41 = _35.z * _23.z;
-    float _46 = _39 * cb0_space2_008x;
-    float _47 = _40 * cb0_space2_008y;
-    float _48 = _41 * cb0_space2_008z;
-    float _49 = _46 + _28;
-    float _50 = _47 + _29;
-    float _51 = _48 + _30;
-    _53 = _49;
-    _54 = _50;
-    _55 = _51;
+  float _195;
+  float _196;
+  float _197;
+  if (!(cb0_space2_007y == 0)) {
+    float4 _106 = t12_space2.SampleLevel(s1_space3, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
+    _124 = (((_106.x * _77) * cb0_space2_008x) + _99);
+    _125 = (((_106.y * _78) * cb0_space2_008y) + _100);
+    _126 = (((_106.z * _79) * cb0_space2_008z) + _101);
   } else {
-    _53 = _28;
-    _54 = _29;
-    _55 = _30;
+    _124 = _99;
+    _125 = _100;
+    _126 = _101;
   }
-  float _58 = cb0_space2_007x * _23.w;
-  float _59 = _58 + 1.0f;
-  float _60 = 1.0f / _59;
-  float _61 = _60 * _53;
-  float _62 = _60 * _54;
-  float _63 = _60 * _55;
-  bool _66 = !(cb0_space2_000x == 0.0f);
-  if (_66) {
-    float _68 = TEXCOORD.x + -0.5f;
-    float _69 = TEXCOORD.y + -0.5f;
-    float _70 = dot(float2(_68, _69), float2(_68, _69));
-    float _71 = 1.0f - _70;
-    float _72 = saturate(_71);
-    float _73 = log2(_72);
-    float _74 = _73 * cb0_space2_000x;
-    float _75 = exp2(_74);
-    uint _78 = (int)(cb0_space1_076x) + 41451437u;
-    uint _79 = uint(SV_Position.x);
-    uint _80 = uint(SV_Position.y);
-    uint _81 = _78 * 1215282323;
-    uint _82 = _81 + -200870954u;
-    uint _83 = _82 << 16;
-    int _84 = (uint)(_82) >> 16;
-    int _85 = _83 | _84;
-    uint _86 = _85 * _82;
-    uint _87 = _82 + _79;
-    uint _88 = _87 + _86;
-    uint _89 = _84 + _80;
-    int _90 = _88 & 63;
-    int _91 = _89 & 63;
-    float4 _92 = t0.Load(int3(_90, _91, 0));
-    uint _95 = _78 * -1935564855;
-    uint _96 = _95 + 706565374u;
-    uint _97 = _96 << 16;
-    int _98 = (uint)(_96) >> 16;
-    int _99 = _97 | _98;
-    uint _100 = _99 * _96;
-    uint _101 = _96 + _79;
-    uint _102 = _101 + _100;
-    uint _103 = _98 + _80;
-    int _104 = _102 & 63;
-    int _105 = _103 & 63;
-    float4 _106 = t0.Load(int3(_104, _105, 0));
-    float _108 = _75 * 0.0625f;
-    float _109 = _75 * 0.125f;
-    float _110 = _92.x + -0.5f;
-    float _111 = _92.y + -0.5f;
-    float _112 = _106.x + -0.5f;
-    float _113 = _108 * _110;
-    float _114 = _108 * _111;
-    float _115 = _109 * _112;
-    float _116 = _113 + _75;
-    float _117 = _114 + _75;
-    float _118 = _115 + _75;
-    float _119 = max(0.0f, _116);
-    float _120 = max(0.0f, _117);
-    float _121 = max(0.0f, _118);
-    float _122 = _119 * _61;
-    float _123 = _120 * _62;
-    float _124 = _121 * _63;
-    _126 = _122;
-    _127 = _123;
-    _128 = _124;
+  float _131 = 1.0f / ((cb0_space2_007x * max(0.0f, ((((_25.w * 0.015625f) * cb0_space2_008w) * (_91.x + -0.5f)) + _25.w))) + 1.0f);
+  float _132 = _131 * _124;
+  float _133 = _131 * _125;
+  float _134 = _131 * _126;
+  if (!(cb0_space2_000x == 0.0f)) {
+    float _139 = TEXCOORD.x + -0.5f;
+    float _140 = TEXCOORD.y + -0.5f;
+    float _146 = exp2(log2(saturate(1.0f - dot(float2(_139, _140), float2(_139, _140)))) * cb0_space2_000x);
+    uint _149 = (int)(cb0_space1_076x) + 41451437u;
+    uint _151 = (_149 * 1215282323) + -200870954u;
+    int _153 = (uint)(_151) >> 16;
+    float4 _161 = t0.Load(int3((((uint)((_151 + _23) + ((((uint)(_151 << 16)) | _153) * _151))) & 63), (((uint)(_153 + _24)) & 63), 0));
+    uint _165 = (_149 * -1935564855) + 706565374u;
+    int _167 = (uint)(_165) >> 16;
+    float4 _175 = t0.Load(int3((((uint)((_165 + _23) + ((((uint)(_165 << 16)) | _167) * _165))) & 63), (((uint)(_167 + _24)) & 63), 0));
+    float _177 = _146 * 0.0625f;
+    _195 = (max(0.0f, ((_177 * (_161.x + -0.5f)) + _146)) * _132);
+    _196 = (max(0.0f, ((_177 * (_161.y + -0.5f)) + _146)) * _133);
+    _197 = (max(0.0f, (((_146 * 0.125f) * (_175.x + -0.5f)) + _146)) * _134);
   } else {
-    _126 = _61;
-    _127 = _62;
-    _128 = _63;
+    _195 = _132;
+    _196 = _133;
+    _197 = _134;
   }
-  float _129 = log2(_126);
-  float _130 = _129 * 0.05000000074505806f;
-  float _131 = _130 + 0.6236965656280518f;
-  float _132 = log2(_127);
-  float _133 = _132 * 0.05000000074505806f;
-  float _134 = _133 + 0.6236965656280518f;
-  float _135 = log2(_128);
-  float _136 = _135 * 0.05000000074505806f;
-  float _137 = _136 + 0.6236965656280518f;
-  float _138 = saturate(_131);
-  float _139 = saturate(_134);
-  float _140 = saturate(_137);
-  float _141 = _138 * 0.96875f;
-  float _142 = _139 * 0.96875f;
-  float _143 = _140 * 0.96875f;
-  float _144 = _141 + 0.015625f;
-  float _145 = _142 + 0.015625f;
-  float _146 = _143 + 0.015625f;
-  float4 _147 = t3_space2.SampleLevel(s0_space3, float3(_144, _145, _146), 0.0f);
-  SV_Target.x = _147.x;
-  SV_Target.y = _147.y;
-  SV_Target.z = _147.z;
+  float4 _216 = t3_space2.SampleLevel(s0_space3, float3(((saturate((log2(_195) * 0.05000000074505806f) + 0.6236965656280518f) * 0.96875f) + 0.015625f), ((saturate((log2(_196) * 0.05000000074505806f) + 0.6236965656280518f) * 0.96875f) + 0.015625f), ((saturate((log2(_197) * 0.05000000074505806f) + 0.6236965656280518f) * 0.96875f) + 0.015625f)), 0.0f);
+  SV_Target.x = _216.x;
+  SV_Target.y = _216.y;
+  SV_Target.z = _216.z;
   SV_Target.w = 1.0f;
   return SV_Target;
 }

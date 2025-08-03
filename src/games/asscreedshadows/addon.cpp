@@ -46,17 +46,17 @@ void OnOptimizableUISettingChange() {
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xAE262C33),  // Local ToneMap
 
-    CustomShaderEntry(0x7F7E20A0),                                       // Sample LUT + Bloom
+    CustomShaderEntry(0xAF2BDFB5),                                       // Sample LUT + Bloom
     CustomShaderEntry(0xF65A634F),                                       // Color Grade + ToneMap LutBuilder
     CustomShaderEntryCallback(0x551A03A4, &OnToneMapLutBuilderReplace),  // ToneMap LutBuilder
 
     CustomShaderEntryCallback(0x2339C673, &OnUILutBuilderReplace),  // UI - sRGB to HDR
-    CustomShaderEntry(0x315AE769),                                  // UI - Video sRGB to HDR
+    CustomShaderEntry(0xBD751592),                                  // UI - Video sRGB to HDR
 };
 
 const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
     {"ToneMapType", 1.f},
-    {"ColorGradeFlare", 35.f},
+    {"ColorGradeShadows", 40.f},
     {"FxBloom", 50.f},
     {"FxBloomScaling", 100.f},
 };
@@ -225,8 +225,6 @@ renodx::utils::settings::Settings settings = {
             if (setting->key == "ToneMapUINits") {
               if (setting->value != setting->default_value) OnOptimizableUISettingChange();
             } else if (setting->key == "ToneMapType") {
-              if (setting->value != setting->default_value) OnOptimizableToneMapSettingChange();
-            } else if (setting->key == "ToneMapUINits") {
               if (setting->value != setting->default_value) OnOptimizableToneMapSettingChange();
             }
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
