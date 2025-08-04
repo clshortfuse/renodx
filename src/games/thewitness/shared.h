@@ -87,7 +87,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_CUSTOM_LUT_SCALING            shader_injection.custom_lut_scaling
 #define RENODX_CUSTOM_LUT_SCALING            shader_injection.custom_lut_scaling
 #define RENODX_INTERMEDIATE_ENCODING         renodx::draw::ENCODING_NONE
-#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION   shader_injection.gamma_correction
+#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION   RENODX_GAMMA_CORRECTION
 
 #include "../../shaders/renodx.hlsl"
 
