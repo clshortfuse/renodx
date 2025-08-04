@@ -38,16 +38,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla (Broken ACES)", "ACES"},
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ColorFilterStrength",
-        .binding = &CUSTOM_COLOR_FILTER_STRENGTH,
-        .default_value = 100.f,
-        .label = "Color Filter Strength",
-        .section = "Color Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
+        .labels = {"Vanilla (Broken ACES)", "ACES (Customized)", "ACES"},
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
@@ -84,6 +75,15 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorFilterStrength",
+        .binding = &CUSTOM_COLOR_FILTER_STRENGTH,
+        .default_value = 100.f,
+        .label = "Color Filter Strength",
+        .section = "Color Grading",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "HDRExposureCompensation",

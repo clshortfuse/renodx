@@ -232,6 +232,8 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r0.xyz = r0.xxx * r1.xyz + r0.yzw;
   if (ColorGradingGenerateLUT_constants.UseRec2020 != 0 && RENODX_TONE_MAP_TYPE == 0) {
     r0.rgb = ApplyVanillaToneMapEncodePQ(r0.rgb, ColorGradingGenerateLUT_constants.MaxNitsHDRTV);
+  } else if (RENODX_TONE_MAP_TYPE == 2.f) {
+    r0.rgb = ApplyToneMapEncodePQ(r0.rgb, ColorGradingGenerateLUT_constants.MaxNitsHDRTV, ColorGradingGenerateLUT_constants.WhiteScale, 2.f);
   } else {
     r0.xyz = log2(r0.xyz);
     r0.xyz = saturate(r0.xyz * float3(0.0588235296, 0.0588235296, 0.0588235296) + float3(0.527878284, 0.527878284, 0.527878284));
