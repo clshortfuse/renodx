@@ -1020,7 +1020,7 @@ static void OnInitResource(
 
   bool warn = false;
   std::stringstream s;
-  s << "init_resource(" << PRINT_PTR(resource.handle);
+  s << "utils::trace::OnInitResource(" << PRINT_PTR(resource.handle);
   s << ", flags: " << std::hex << static_cast<uint32_t>(desc.flags) << std::dec;
   s << ", state: " << std::hex << static_cast<uint32_t>(initial_state) << std::dec;
   s << ", type: " << desc.type;
@@ -1030,7 +1030,6 @@ static void OnInitResource(
     case reshade::api::resource_type::buffer:
       s << ", size: " << desc.buffer.size;
       s << ", stride: " << desc.buffer.stride;
-      if (!trace_running && present_count >= trace_initial_frame_count) return;
       break;
     case reshade::api::resource_type::texture_1d:
     case reshade::api::resource_type::texture_2d:
@@ -1069,7 +1068,7 @@ static void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   if (!trace_all && !trace_running && present_count >= trace_initial_frame_count) return;
 
   std::stringstream s;
-  s << "utils::trace::on_destroy_resource(";
+  s << "utils::trace::OnDestroyResource(";
   s << PRINT_PTR(resource.handle);
   s << ")";
   reshade::log::message(reshade::log::level::debug, s.str().c_str());
@@ -1085,7 +1084,7 @@ static void OnInitResourceView(
 
   if (!trace_all && !trace_running && present_count >= trace_initial_frame_count) return;
   std::stringstream s;
-  s << "init_resource_view(" << PRINT_PTR(view.handle);
+  s << "utils::trace::OnInitResourceView(" << PRINT_PTR(view.handle);
   s << ", view type: " << desc.type << " (0x" << std::hex << static_cast<uint32_t>(desc.type) << std::dec << ")";
   s << ", view format: " << desc.format << " (0x" << std::hex << static_cast<uint32_t>(desc.format) << std::dec << ")";
   s << ", resource: " << PRINT_PTR(resource.handle);
@@ -1100,8 +1099,6 @@ static void OnInitResourceView(
       case reshade::api::resource_type::unknown:
         break;
       case reshade::api::resource_type::buffer:
-        // if (!traceRunning) return;
-        return;
         s << ", buffer offset: " << desc.buffer.offset;
         s << ", buffer size: " << desc.buffer.size;
         break;
@@ -1177,8 +1174,8 @@ static void OnPushDescriptors(
         s << ", rsv: " << PRINT_PTR(item.view.handle);
         if (item.view.handle != 0u) {
           s << ", res: " << PRINT_PTR(GetResourceByViewHandle(data, item.view.handle));
+          // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
         }
-        // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
         break;
       }
       case reshade::api::descriptor_type::texture_shader_resource_view:
@@ -1188,8 +1185,8 @@ static void OnPushDescriptors(
         s << ", shaderrsv: " << PRINT_PTR(item.handle);
         if (item.handle != 0u) {
           s << ", res:" << PRINT_PTR(GetResourceByViewHandle(data, item.handle));
+          // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
         }
-        // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
         break;
       }
       case reshade::api::descriptor_type::texture_unordered_access_view:
@@ -1199,8 +1196,8 @@ static void OnPushDescriptors(
         s << ", uav: " << PRINT_PTR(item.handle);
         if (item.handle != 0u) {
           s << ", res:" << PRINT_PTR(GetResourceByViewHandle(data, item.handle));
+          // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
         }
-        // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
         break;
       }
       case reshade::api::descriptor_type::acceleration_structure: {
@@ -1333,6 +1330,12 @@ static void OnBindDescriptorTables(
           s << "bind_descriptor_table(" << PRINT_PTR(layout.handle);
           s << "[" << (layout_index) << "]";
           s << ", rsv: " << PRINT_PTR(resource_view.handle);
+          if (resource_view.handle != 0u) {
+            auto* data = renodx::utils::data::Get<DeviceData>(device);
+            const std::shared_lock lock(data->mutex);
+            s << ", res: " << PRINT_PTR(GetResourceByViewHandle(data, resource_view.handle));
+            // s << ", name: " << getResourceNameByViewHandle(descriptor_data, resource_view.handle);
+          }
           s << ", param: " << param.type;
           s << ", binding: " << range.binding;
           s << ", dx_index: " << range.dx_register_index;
@@ -1437,46 +1440,56 @@ static bool OnUpdateDescriptorTables(
           auto item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[j];
           s << ", sampler: " << PRINT_PTR(item.sampler.handle);
           s << ", rsv: " << PRINT_PTR(item.view.handle);
-          auto* data = renodx::utils::data::Get<DeviceData>(device);
-          const std::shared_lock lock(data->mutex);
-          s << ", res:" << PRINT_PTR(GetResourceByViewHandle(data, item.view.handle));
-          // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
+          if (item.view.handle != 0u) {
+            auto* data = renodx::utils::data::Get<DeviceData>(device);
+            const std::shared_lock lock(data->mutex);
+            s << ", res:" << PRINT_PTR(GetResourceByViewHandle(data, item.view.handle));
+            // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
+          }
           break;
         }
         case reshade::api::descriptor_type::buffer_shader_resource_view: {
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
           s << ", b-srv: " << PRINT_PTR(item.handle);
-          auto* data = renodx::utils::data::Get<DeviceData>(device);
-          const std::shared_lock lock(data->mutex);
-          s << ", res:" << PRINT_PTR(GetResourceByViewHandle(data, item.handle));
-          // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
+          if (item.handle != 0u) {
+            auto* data = renodx::utils::data::Get<DeviceData>(device);
+            const std::shared_lock lock(data->mutex);
+            s << ", res:" << PRINT_PTR(GetResourceByViewHandle(data, item.handle));
+            // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
+          }
           break;
         }
         case reshade::api::descriptor_type::buffer_unordered_access_view: {
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
           s << ", b-uav: " << PRINT_PTR(item.handle);
-          auto* data = renodx::utils::data::Get<DeviceData>(device);
-          const std::shared_lock lock(data->mutex);
-          s << ", res:" << PRINT_PTR(GetResourceByViewHandle(data, item.handle));
-          // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
+          if (item.handle != 0u) {
+            auto* data = renodx::utils::data::Get<DeviceData>(device);
+            const std::shared_lock lock(data->mutex);
+            s << ", res:" << PRINT_PTR(GetResourceByViewHandle(data, item.handle));
+            // s << ", name: " << getResourceNameByViewHandle(data, item.view.handle);
+          }
           break;
         }
         case reshade::api::descriptor_type::texture_shader_resource_view: {
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
           s << ", srv: " << PRINT_PTR(item.handle);
-          auto* data = renodx::utils::data::Get<DeviceData>(device);
-          const std::shared_lock lock(data->mutex);
-          s << ", res:" << PRINT_PTR(GetResourceByViewHandle(data, item.handle));
-          // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
+          if (item.handle != 0u) {
+            auto* data = renodx::utils::data::Get<DeviceData>(device);
+            const std::shared_lock lock(data->mutex);
+            s << ", res:" << PRINT_PTR(GetResourceByViewHandle(data, item.handle));
+            // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
+          }
           break;
         }
         case reshade::api::descriptor_type::texture_unordered_access_view: {
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
           s << ", uav: " << PRINT_PTR(item.handle);
-          auto* data = renodx::utils::data::Get<DeviceData>(device);
-          const std::shared_lock lock(data->mutex);
-          s << ", res: " << PRINT_PTR(GetResourceByViewHandle(data, item.handle));
-          // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
+          if (item.handle != 0u) {
+            auto* data = renodx::utils::data::Get<DeviceData>(device);
+            const std::shared_lock lock(data->mutex);
+            s << ", res:" << PRINT_PTR(GetResourceByViewHandle(data, item.handle));
+            // s << ", name: " << getResourceNameByViewHandle(data, item.handle);
+          }
           break;
         }
         case reshade::api::descriptor_type::constant_buffer: {
@@ -1496,9 +1509,11 @@ static bool OnUpdateDescriptorTables(
         case reshade::api::descriptor_type::acceleration_structure: {
           auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
           s << ", accl: " << PRINT_PTR(item.handle);
-          auto* data = renodx::utils::data::Get<DeviceData>(device);
-          const std::shared_lock lock(data->mutex);
-          s << ", res:" << PRINT_PTR(GetResourceByViewHandle(data, item.handle));
+          if (item.handle != 0u) {
+            auto* data = renodx::utils::data::Get<DeviceData>(device);
+            const std::shared_lock lock(data->mutex);
+            s << ", res:" << PRINT_PTR(GetResourceByViewHandle(data, item.handle));
+          }
           break;
         }
         default:

@@ -629,6 +629,7 @@ inline reshade::api::resource CloneResource(utils::resource::ResourceInfo* resou
   s << ", heap: " << std::hex << static_cast<uint32_t>(desc.heap) << std::dec;
   s << ", usage: 0x" << std::hex << static_cast<uint32_t>(desc.usage) << std::dec;
   s << ", new_usage: 0x" << std::hex << static_cast<uint32_t>(new_desc.usage) << std::dec;
+  s << ", dimensions: " << desc.texture.width << "x" << desc.texture.height;
   s << ", initial_state: " << initial_state;
   s << ")";
   reshade::log::message(reshade::log::level::debug, s.str().c_str());
@@ -684,13 +685,14 @@ inline reshade::api::resource CloneResource(utils::resource::ResourceInfo* resou
           initial_state,
           &resource_clone,
           shared_handle)) {
+    auto extra_ram = renodx::utils::resource::ComputeTextureSize(new_desc);
     utils::resource::store->resource_infos[resource_clone.handle] = {
         .device = device,
         .desc = new_desc,
         .resource = resource_clone,
         .fallback = resource_info->resource,
         .is_clone = true,
-        .extra_vram = renodx::utils::resource::ComputeTextureSize(new_desc),
+        .extra_vram = extra_ram,
         .initial_state = initial_state,
     };
 
@@ -700,7 +702,7 @@ inline reshade::api::resource CloneResource(utils::resource::ResourceInfo* resou
       s << "mods::swapchain::CloneResource(";
       s << PRINT_PTR(resource_info->resource.handle);
       s << " => " << PRINT_PTR(resource_clone.handle);
-      s << ", +vram: " << resource_info->extra_vram;
+      s << ", +vram: " << extra_ram;
       s << ")";
       reshade::log::message(reshade::log::level::debug, s.str().c_str());
     }
@@ -828,7 +830,7 @@ inline reshade::api::resource_view GetResourceViewClone(
     s << ", original resource: " << PRINT_PTR(resource.handle);
     s << ", creating view clone";
     s << ")";
-    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
   }
 #endif
 
@@ -897,6 +899,19 @@ inline reshade::api::resource_view GetResourceViewClone(
             .usage = usage,
             .is_clone = true,
         });
+      } else {
+        resource_view_info->clone.handle = 0;
+#ifdef DEBUG_LEVEL_0
+        std::stringstream s;
+        s << "mods::swapchain::GetResourceViewClone(Failed to clone view: ";
+        s << PRINT_PTR(resource_view_info->view.handle);
+        s << ", original resource: " << PRINT_PTR(resource.handle);
+        s << ", new usage: " << usage;
+        s << ", new format: " << new_desc.format;
+        s << ", new type: " << new_desc.type;
+        s << ")";
+        reshade::log::message(reshade::log::level::error, s.str().c_str());
+#endif
       }
 #ifdef DEBUG_LEVEL_1
       {
@@ -1579,6 +1594,7 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   } else if (device_api == reshade::api::device_api::d3d9) {
     if (prevent_full_screen || use_device_proxy) {
       desc.present_flags &= ~D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
+      // desc.present_mode |= D3DSWAPEFFECT_FLIPEX;
     }
   }
 
@@ -1638,7 +1654,12 @@ static void OnPresentForResizeBuffer(
 }
 
 static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnInitSwapchain()");
+  std::stringstream s;
+  s << "mods::swapchain::OnInitSwapchain(";
+  s << PRINT_PTR(reinterpret_cast<uintptr_t>(swapchain));
+  s << ", resize: " << (resize ? "true" : "false");
+  s << ")";
+  reshade::log::message(reshade::log::level::debug, s.str().c_str());
 
   auto* device = swapchain->get_device();
 
@@ -1685,10 +1706,9 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     {
       std::stringstream s;
       s << "mods::swapchain::OnInitSwapchain(Primary swapchain desc: ";
-      s << primary_swapchain_desc.texture.width << "x";
-      s << primary_swapchain_desc.texture.height << ", format: ";
-      s << primary_swapchain_desc.texture.format;
-      s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
+      s << primary_swapchain_desc.texture.width << "x" << primary_swapchain_desc.texture.height;
+      s << ", format: " << primary_swapchain_desc.texture.format;
+      s << ", hwnd: " PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
       s << ")";
       reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
@@ -1765,6 +1785,7 @@ inline bool OnCreateResource(
     case reshade::api::resource_type::surface:
       break;
     case reshade::api::resource_type::unknown:
+      assert(false);
       reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnCreateResource(Unknown resource type)");
     default:
       return false;
@@ -2000,7 +2021,7 @@ inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
       if (
           target->use_resource_view_cloning
           && target->CheckResourceDesc(desc, device_back_buffer_desc, initial_state)) {
-#ifdef DEBUG_LEVEL_0
+#ifdef DEBUG_LEVEL_1
         std::stringstream s;
         s << "mods::swapchain::OnInitResource(counting target";
         s << ", format: " << target->old_format;
@@ -2030,7 +2051,7 @@ inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
     }
     if (found_target == nullptr) return;
     if (all_completed) {
-#ifdef DEBUG_LEVEL_0
+#ifdef DEBUG_LEVEL_1
       reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnInitResource(All resource cloning completed)");
 #endif
       private_data->resource_upgrade_finished = true;
@@ -2045,7 +2066,7 @@ inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
     }
     if (!found_target->use_resource_view_hot_swap) {
       resource_info->clone_enabled = true;
-#ifdef DEBUG_LEVEL_0
+#ifdef DEBUG_LEVEL_1
       {
         std::stringstream s;
         s << "mods::swapchain::OnInitResource(Marking resource for cloning: ";
@@ -2532,7 +2553,7 @@ inline bool OnUpdateDescriptorTables(
     uint32_t count,
     const reshade::api::descriptor_table_update* updates) {
   if (count == 0u) return false;
-#ifdef DEBUG_LEVEL_2
+#ifdef DEBUG_LEVEL_3
   reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnUpdateDescriptorTables()");
 #endif
   reshade::api::descriptor_table_update* new_updates = nullptr;
@@ -2553,7 +2574,7 @@ inline bool OnUpdateDescriptorTables(
           auto* info = utils::resource::GetResourceViewInfo(resource_view);
           auto resource_view_clone = GetResourceViewClone(info);
           if (resource_view_clone.handle == 0u) continue;
-#ifdef DEBUG_LEVEL_1
+#ifdef DEBUG_LEVEL_2
           std::stringstream s;
           s << "mods::swapchain::OnUpdateDescriptorTables(found clonable: ";
           s << PRINT_PTR(resource_view_clone.handle);
@@ -2583,7 +2604,7 @@ inline bool OnUpdateDescriptorTables(
           auto* info = utils::resource::GetResourceViewInfo(resource_view);
           auto resource_view_clone = GetResourceViewClone(info);
           if (resource_view_clone.handle == 0u) continue;
-#ifdef DEBUG_LEVEL_1
+#ifdef DEBUG_LEVEL_2
           std::stringstream s;
           s << "mods::swapchain::OnUpdateDescriptorTables(found clonable: ";
           s << PRINT_PTR(resource_view_clone.handle);
@@ -2613,13 +2634,13 @@ inline bool OnUpdateDescriptorTables(
     // free(new_updates);
 
   } else {
-#ifdef DEBUG_LEVEL_1
+#ifdef DEBUG_LEVEL_2
     std::stringstream s;
     s << "mods::swapchain::OnUpdateDescriptorTables(no clonable.)";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
   }
-#ifdef DEBUG_LEVEL_2
+#ifdef DEBUG_LEVEL_3
   reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnUpdateDescriptorTables(done)");
 #endif
   return false;
@@ -2707,6 +2728,7 @@ inline void OnBindDescriptorTables(
     uint32_t count,
     const reshade::api::descriptor_table* tables) {
   if (count == 0u) return;
+  if (layout == 0u) return;
 #ifdef DEBUG_LEVEL_2
   reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnBindDescriptorTables()");
 #endif

@@ -13,6 +13,7 @@
 #include <ostream>
 
 #include <include/reshade.hpp>
+#include <reshade_api_resource.hpp>
 
 #define PRINT_CRC32(crc32) "0x" << std::hex << std::setw(8) << std::setfill('0') << crc32 << std::setfill(' ') << std::dec
 #define PRINT_PTR(ptr)     "0x" << std::hex << std::setw(sizeof(uint64_t) * 2) << std::setfill('0') << static_cast<uint64_t>(ptr) << std::setfill(' ') << std::dec
@@ -583,5 +584,18 @@ inline std::ostream& operator<<(std::ostream& os, const reshade::api::render_pas
     case reshade::api::render_pass_store_op::discard:   return os << "discard";
     case reshade::api::render_pass_store_op::no_access: return os << "no_access";
     default:                                            return os << "unknown";
+  }
+}
+
+inline std::ostream& operator<<(std::ostream& os, const reshade::api::resource_flags value) {
+  switch (value) {
+    case reshade::api::resource_flags::none:             return os << "none";
+    case reshade::api::resource_flags::dynamic:          return os << "dynamic";
+    case reshade::api::resource_flags::cube_compatible:  return os << "cube_compatible";
+    case reshade::api::resource_flags::generate_mipmaps: return os << "generate_mipmaps";
+    case reshade::api::resource_flags::shared:           return os << "shared";
+    case reshade::api::resource_flags::shared_nt_handle: return os << "shared_nt_handle";
+    case reshade::api::resource_flags::sparse_binding:   return os << "sparse_binding";
+    default:                                             return os << "unknown";
   }
 }

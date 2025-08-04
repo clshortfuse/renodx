@@ -163,7 +163,15 @@ static bool OnCreatePipelineLayout(
   }
 
   auto* data = renodx::utils::data::Get<DeviceData>(device);
-  if (data == nullptr) return false;
+  if (data == nullptr) {
+    std::stringstream s;
+    s << "mods::shader::OnCreatePipelineLayout(";
+    s << "Device data not found on ";
+    s << PRINT_PTR(std::uintptr_t(device));
+    s << ")";
+    reshade::log::message(reshade::log::level::error, s.str().c_str());
+    return false;
+  }
 
   auto device_api = device->get_api();
   bool is_dx = (device_api == reshade::api::device_api::d3d9
