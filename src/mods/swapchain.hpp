@@ -2262,7 +2262,7 @@ inline bool OnCreateResourceView(
     }
   } else if (resource_info->upgrade_target != nullptr) {
     auto* target = resource_info->upgrade_target;
-    if (auto pair2 = target->view_upgrades.find({usage_type, desc.format});
+    if (auto pair2 = target->view_upgrades.find({usage_type, current_desc.format});
         pair2 != target->view_upgrades.end() && pair2->second != reshade::api::format::unknown) {
       new_desc.format = pair2->second;
       found_upgrade = true;
