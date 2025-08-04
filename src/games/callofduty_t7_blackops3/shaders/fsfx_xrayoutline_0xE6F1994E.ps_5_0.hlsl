@@ -117,8 +117,7 @@ void main(
   r1.xyz = r1.xyz * r0.www;
   o0.xyz = r1.xyz * float3(32768,32768,32768) * r0.xyz;
 
-  o0.xyz /= 32768;
-  o0.xyz *= CUSTOM_XRAY_OUTLINE; 
+  o0.xyz = ScaleXrayForTradeoff(o0.xyz);
 
   o0.w = 1;
   return;

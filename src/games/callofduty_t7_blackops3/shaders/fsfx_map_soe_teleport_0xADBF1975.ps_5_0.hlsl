@@ -1,4 +1,7 @@
 // ---- Created with 3Dmigoto v1.3.16 on Sat Aug 02 16:33:15 2025
+
+#include "../common.hlsl"
+
 Texture2D<float4> t10 : register(t10);
 
 Texture2D<float4> t9 : register(t9);
@@ -25,8 +28,6 @@ cbuffer cb0 : register(b0)
 {
   float4 cb0[15];
 }
-
-#include "../common.hlsl"
 
 
 // 3Dmigoto declarations

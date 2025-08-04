@@ -39,6 +39,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x2D7D9715),  // loading movies
     CustomShaderEntry(0xDA908072),  // fsfx blur
     CustomShaderEntry(0xE6F1994E),  // xray outline
+    CustomShaderEntry(0x4493183C),  // xray outline 1
 
     // map specific
     CustomShaderEntry(0x3E9C52D5),  // Shangri-la water
@@ -146,7 +147,7 @@ renodx::utils::settings::Settings settings = {
 
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preset: RenoDRT (Default)",
+        .label = "Preset: RenoDRT (Balanced Tradeoff)",
         .group = "button-line-1",
         .on_change = []() {
           for (auto* setting : settings) {
@@ -161,7 +162,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preset: ACES",
+        .label = "Preset: ACES (Balanced Tradeoff)",
         .group = "button-line-1",
         .on_change = []() {
           for (auto* setting : settings) {
@@ -176,7 +177,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preset: RenoDRT (10000 Nits Raw)",
+        .label = "Preset: Screenshot (No Tradeoff & HUD)",
         .group = "button-line-1",
         .on_change = []() {
           for (auto* setting : settings) {
@@ -444,8 +445,8 @@ renodx::utils::settings::Settings settings = {
         .label = "The game renders fullscreen overlay fx shaders (e.g., SoE portal transition & beast mode) at maximum value (32768).\n"
                  "When they get composited over the linear tonemapped HDR image (median value around 1), you get flashbanged\n"
                  "Fixing this with just RenoDX requires reducing the brightness of each individual shader in the game, which becomes unattainable accounting for custom maps.\n"
-                 "By converting the linear HDR image to another color space, it can be brighten to composite correctly.\n"
-                 "This becomes a tradeoff between peak brightness and the fullscreen overlay shader's brightness/contrast.\n",
+                 "By converting the linear HDR image to another color space with brughtening, it can be composited well.\n"
+                 "This becomes a tradeoff between the fullscreen overlay shader's brightness/contrast and HDR peak brightness (hard to notice, turn Game Brightness to 1 to check).\n",
         .section = "Tradeoff",
     },
     new renodx::utils::settings::Setting{
@@ -467,10 +468,10 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preset: Favor HDR",
+        .label = "Preset: Favor HDR (Non-perceptual Gain)",
         .section = "Tradeoff",
         .group = "button-line-1",
-        .tooltip = "For if you actually perceive Balance not being enough."
+        .tooltip = "If Balanced not being enough... somehow."
                    "\nOverlays will be annoyingly bright.",
         .on_change = []() {
           for (auto* setting : settings) {
@@ -485,7 +486,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preset: Favor Overlays",
+        .label = "Preset: Favor Overlays (Clipping HDR)",
         .section = "Tradeoff",
         .group = "button-line-1",
         .tooltip = "Overlays are more preserved in linear but you clip the details of brightness.",
@@ -502,7 +503,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preset: PQ",
+        .label = "Preset: PQ (Constrasty Overlays)",
         .section = "Tradeoff",
         .group = "button-line-2",
         .tooltip = "Overlays have crazy contrast but not flashbang bright."
@@ -520,7 +521,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preset: Raw",
+        .label = "Preset: Raw (Screenshots)",
         .section = "Tradeoff",
         .group = "button-line-2",
         .tooltip = "Unplayable, only useful for screenshots."
@@ -546,7 +547,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Increasing the value lowers overlay fx brightness at the cost of clipping HDR brightness.",
         .max = 100.f,
         .format = "%.2f",
-        .parse = [](float value) { return value * 0.01f; },
+        .parse = [](float value) { return shader_injection.tone_map_type == 0 ? 0 : value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "CustomTradeoffMode",
@@ -595,11 +596,11 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "CustomXrayOutline",
         .binding = &shader_injection.custom_xray_outline,
-        .default_value = 50.f,
+        .default_value = 100.f,
         .label = "Xray Outline (other players & objectives)",
         .section = "Extra",
         .max = 100.f,
-        .parse = [](float value) { return value; },
+        .parse = [](float value) { return value * 0.01; },
     },
     new renodx::utils::settings::Setting{
         .key = "CustomShowHUD",
@@ -728,34 +729,19 @@ renodx::utils::settings::Settings settings = {
     },
 };
 
-// const std::unordered_map<std::string, reshade::api::format> UPGRADE_TARGETS = {
-//     // {"R8G8B8A8_TYPELESS", reshade::api::format::r8g8b8a8_typeless},
-//     // {"B8G8R8A8_TYPELESS", reshade::api::format::b8g8r8a8_typeless},
-//     {"R8G8B8A8_UNORM", reshade::api::format::r8g8b8a8_unorm},
-//     // {"B8G8R8A8_UNORM", reshade::api::format::b8g8r8a8_unorm},
-//     // {"R8G8B8A8_SNORM", reshade::api::format::r8g8b8a8_snorm},
-//     // {"R8G8B8A8_UNORM_SRGB", reshade::api::format::r8g8b8a8_unorm_srgb},
-//     // {"B8G8R8A8_UNORM_SRGB", reshade::api::format::b8g8r8a8_unorm_srgb},
-//     // {"R10G10B10A2_TYPELESS", reshade::api::format::r10g10b10a2_typeless},
-//     // {"R10G10B10A2_UNORM", reshade::api::format::r10g10b10a2_unorm},
-//     // {"B10G10R10A2_UNORM", reshade::api::format::b10g10r10a2_unorm},
-//     {"R11G11B10_FLOAT", reshade::api::format::r11g11b10_float},
-//     // {"R16G16B16A16_TYPELESS", reshade::api::format::r16g16b16a16_typeless},
-// };
-
 void OnPresetOff() {
-  //   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
-  //   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
+  renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
+  renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
+  renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
+  renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
+  renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
+  renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
+  renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
+  renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
+  renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
+  renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
+  renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
 }
 
 const auto UPGRADE_TYPE_NONE = 0.f;
@@ -875,47 +861,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           //   renodx::mods::swapchain::use_resize_buffer = false;
           //   shader_injection.swap_chain_encoding_color_space = is_hdr10 ? 1.f : 0.f;
         }
-
-        //     for (const auto& [key, format] : UPGRADE_TARGETS) {
-        //       auto* setting = new renodx::utils::settings::Setting{
-        //           .key = "Upgrade_" + key,
-        //           .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        //           .default_value = 0.f,
-        //           .label = key,
-        //           .section = "Resource Upgrades",
-        //           .labels = {
-        //               "Off",
-        //               "Output size",
-        //               "Output ratio",
-        //               "Any size",
-        //           },
-        //           .is_global = true,
-        //           .is_visible = []() { return settings[0]->GetValue() >= 2; },
-        //       };
-        //       renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-        //       settings.push_back(setting);
-
-        //       auto value = setting->GetValue();
-        //       if (value > 0) {
-        //         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-        //             .old_format = format,
-        //             .new_format = reshade::api::format::r16g16b16a16_float,
-        //             .ignore_size = (value == UPGRADE_TYPE_ANY),
-        //             .use_resource_view_cloning = true,
-        //             .aspect_ratio = static_cast<float>((value == UPGRADE_TYPE_OUTPUT_RATIO)
-        //                                                    ? renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER
-        //                                                    : renodx::mods::swapchain::SwapChainUpgradeTarget::ANY),
-        //             .usage_include = reshade::api::resource_usage::render_target,
-        //         });
-        //         std::stringstream s;
-        //         s << "Applying user resource upgrade for ";
-        //         s << format << ": " << value;
-        //         reshade::log::message(reshade::log::level::info, s.str().c_str());
-        //       }
-        //     }
-
-        //     initialized = true;
-        //   }
 
         //  r8g8b8a8_unorm
         // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({

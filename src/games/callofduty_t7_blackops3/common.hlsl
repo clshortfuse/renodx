@@ -64,7 +64,7 @@ float3 Tradeoff_Tonemap(float3 colorUntonemapped, float3 colorTonemapped) {
   if (CUSTOM_TRADEOFF_RATIO == 0) return colorTonemapped;
 
   //to srgb/gamma
-  colorTonemapped = Tradeoff_LinearToTradeoffSpace(colorTonemapped);
+  colorTonemapped = Tradeoff_LinearToTradeoffSpace(colorTonemapped); //we do this before the next to not immediately clip the values
 
   //scale up to 32768
   colorTonemapped *= (SDR_NOMRALIZATION_MAX * CUSTOM_TRADEOFF_RATIO);
@@ -79,6 +79,17 @@ float3 AddBloom(float3 color, float3 bloom) {
 
 float3 ScaleBloomAfterSaturate(float3 color) {
   color.rgb *= CUSTOM_BLOOM;
+  return color;
+}
+
+float3 ScaleXrayForTradeoff(float3 color) {
+
+  color.xyz /= 32768.0;
+  if (CUSTOM_TRADEOFF_RATIO == 0) return color;
+  color.xyz = Tradeoff_LinearToTradeoffSpace(color.xyz);
+  color.xyz *= (SDR_NOMRALIZATION_MAX * CUSTOM_TRADEOFF_RATIO);;
+  color.xyz *= CUSTOM_XRAY_OUTLINE;
+
   return color;
 }
 
