@@ -43,7 +43,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
 
 #if 1
   if (ColorGradingGenerateRRTODTLUT_constants.UseRec2020 != 0) {
-    ColorGradingGenerateRRTODTLUT_Output[vThreadID] = float4(ApplyToneMapEncodePQ(r0.rgb, ColorGradingGenerateRRTODTLUT_constants.MaxNitsHDRTV, ColorGradingGenerateRRTODTLUT_constants.WhiteScale), 1.f);
+    ColorGradingGenerateRRTODTLUT_Output[vThreadID] = float4(ApplyToneMapEncodePQ(r0.rgb, ColorGradingGenerateRRTODTLUT_constants.MaxNitsHDRTV, ColorGradingGenerateRRTODTLUT_constants.WhiteScale, 1.f), 1.f);
     return;
   }
 #endif
@@ -1005,24 +1005,6 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     // r0.z = 12.9232101 * r0.z;
     // r2.z = r0.x ? r0.y : r0.z;
     r2.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
-
-    if (RENODX_TONE_MAP_TYPE) {
-      if (ColorGradingGenerateRRTODTLUT_constants.UseRec2020 != 0) {
-        r2.rgb = renodx::color::gamma::DecodeSafe(r2.rgb, 2.2f);
-
-#if 1  // blend between SDR and HDR
-        float3 sdr_color = r2.rgb;
-        float3 hdr_color = exp2(vThreadID.xyz * 0.548387051 - 8.97393131);
-
-        hdr_color = ApplyToneMap(hdr_color, ColorGradingGenerateRRTODTLUT_constants.MaxNitsHDRTV, ColorGradingGenerateRRTODTLUT_constants.WhiteScale);
-
-        float sdr_lum = renodx::color::y::from::BT709(sdr_color);
-        r2.rgb = lerp(sdr_color, hdr_color, saturate(sdr_lum));
-#endif
-
-        r2.rgb = renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(r2.rgb), ColorGradingGenerateRRTODTLUT_constants.WhiteScale);
-      }
-    }
   }
   r2.w = 1;
   // No code for instruction (needs manual fix):
