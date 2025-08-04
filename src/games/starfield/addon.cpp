@@ -216,7 +216,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
-          .usage_include = reshade::api::resource_usage::render_target,
+          .usage_include = reshade::api::resource_usage::render_target
+                           | reshade::api::resource_usage::copy_dest,
       });
 
       // RGBA8 Resource Pool and Render
@@ -228,14 +229,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .usage_include = reshade::api::resource_usage::render_target,
       });
 
-      //   // Primary render (reduces banding)
-      //   renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      //       .old_format = reshade::api::format::r11g11b10_float,
-      //       .new_format = reshade::api::format::r16g16b16a16_float,
-      //       .use_resource_view_cloning = true,
-      //       .aspect_ratio = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
-      //       .usage_include = reshade::api::resource_usage::render_target,
-      //   });
+      // Primary render (reduces banding)
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r11g11b10_float,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+          .aspect_ratio = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
+          .usage_include = reshade::api::resource_usage::render_target,
+      });
 
       break;
     case DLL_PROCESS_DETACH:
