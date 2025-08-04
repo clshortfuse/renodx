@@ -207,10 +207,9 @@ void main(
   r1.xyz = r1.xyz * r0.xxx;
   r0.x = saturate(v2.z);
   r0.xyz = r1.xyz * r0.xxx + r0.yzw;
+  o0.xyz = float3(32768,32768,32768) * r0.xyz; 
 
-  o0.xyz = float3(32768,32768,32768) * CUSTOM_TRADEOFF_RATIO * r0.xyz; //this causes the super bright, so scale it down
-  o0.xyz *= CUSTOM_SLIDE_LENS_DIRT;
-
+  o0.xyz = Tradeoff_PrepareFullWidthFsfx(o0.xyz, CUSTOM_SLIDE_LENS_DIRT * 0.05f);
   o0.w = 0;
   return;
 }

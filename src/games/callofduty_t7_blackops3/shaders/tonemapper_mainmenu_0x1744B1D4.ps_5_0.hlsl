@@ -181,10 +181,10 @@ void main(
   r0.xyz = saturate(r1.xyz * r0.xyz + float3(-0.0669102818,-0.0669102818,-0.0669102818));
 
   r1.xyz = codeTexture0.Sample(bilinearClamp_s, v0.xy).xyz;
-  colorUntonemapped = AddBloom(colorUntonemapped, r1.xyz); //add in bloom
+  colorUntonemapped = Bloom_AddScaled(colorUntonemapped, r1.xyz); //add in bloom
 
   r1.xyz = saturate(float3(0.00390625233,0.00390625233,0.00390625233) * r1.xyz);
-  r1.xyz = ScaleBloomAfterSaturate(r1.xyz);
+  r1.xyz = Bloom_ScaleTonemappedAfterSaturate(r1.xyz);
 
   r2.xyz = r1.xyz + r0.xyz;
   r0.xyz = -r0.xyz * r1.xyz + r2.xyz;

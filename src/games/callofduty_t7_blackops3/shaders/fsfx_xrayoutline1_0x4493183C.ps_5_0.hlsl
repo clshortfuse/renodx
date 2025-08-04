@@ -118,10 +118,8 @@ void main(
   }
   r2.x = r2.y * r2.y;
   o0.xyz = r2.xzw * float3(32768,32768,32768) + r1.xyz;
-
-  o0.xyz = ScaleXrayForTradeoff(o0.xyz);
-
+  
+  o0.xyz = Tradeoff_PrepareFullWidthFsfx(o0.xyz, CUSTOM_XRAY_OUTLINE);
   o0.w = 1;
-
   return;
 }

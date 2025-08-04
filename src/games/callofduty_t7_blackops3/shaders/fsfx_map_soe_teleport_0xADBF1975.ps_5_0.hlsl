@@ -123,12 +123,9 @@ void main(
   r1.xyz = -r1.xyz * r2.xyz + float3(1,1,1);
   r0.xyz = cb0[13].yyy ? r0.xyz : r1.xyz;
 
-  // r0.xyz = float3(32768,32768,32768) * r0.xyz;
-  r0.xyz = Tradeoff_LinearToTradeoffSpace(r0.xyz);
-  r0.xyz *= float3(32768,32768,32768) * max(CUSTOM_TRADEOFF_RATIO, 0.0001) * 2;
-  
-  o0.xyz = r0.xyz;
-  o0.w = 1;
+  o0.xyz = float3(32768,32768,32768) * r0.xyz;
 
+  o0.xyz = Tradeoff_PrepareFullWidthFsfx(o0.xyz, 2);
+  o0.w = 1;
   return;
 }

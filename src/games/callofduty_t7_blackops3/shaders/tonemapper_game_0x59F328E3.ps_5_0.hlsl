@@ -46,10 +46,10 @@ void main(
   
   //bloom w/ tonmapping + color
   r1.xyz = codeTexture0.Sample(bilinearClamp_s, v0.xy).xyz;
-  colorUntonemapped = AddBloom(colorUntonemapped, r1.xyz); //add in bloom
+  colorUntonemapped = Bloom_AddScaled(colorUntonemapped, r1.xyz); //add in bloom
 
   r1.xyz = saturate(float3(0.00390625233,0.00390625233,0.00390625233) * r1.xyz);
-  r1.xyz = ScaleBloomAfterSaturate(r1.xyz);
+  r1.xyz = Bloom_ScaleTonemappedAfterSaturate(r1.xyz);
   
   r2.xyz = r1.xyz + r0.xyz;
   r0.xyz = -r0.xyz * r1.xyz + r2.xyz; //bloom is dependent on color, probably to make pronounced and not just straight addition?
@@ -69,9 +69,6 @@ void main(
   r0.x = r0.x * 7.7870369 + 0.137931034;
   r0.x = r0.z ? r0.y : r0.x;
   o1.x = r0.x * 1.15999997 + -0.159999996; //unknown, maybe for aa and stuff?? RenderDoc says it's just 0-0.0000...01 black
-
-
-  
 
   return;
 }

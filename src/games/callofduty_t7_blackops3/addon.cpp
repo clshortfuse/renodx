@@ -156,6 +156,8 @@ renodx::utils::settings::Settings settings = {
 
             if (PRESET_RENODRT.contains(setting->key)) {
               renodx::utils::settings::UpdateSetting(setting->key, PRESET_RENODRT.at(setting->key));
+            } else if (PRESET_TRADEOFF_BALANCED.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, PRESET_TRADEOFF_BALANCED.at(setting->key));
             }
           }
         },
@@ -171,6 +173,8 @@ renodx::utils::settings::Settings settings = {
 
             if (PRESET_ACES.contains(setting->key)) {
               renodx::utils::settings::UpdateSetting(setting->key, PRESET_ACES.at(setting->key));
+            } else if (PRESET_TRADEOFF_BALANCED.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, PRESET_TRADEOFF_BALANCED.at(setting->key));
             }
           }
         },
@@ -185,24 +189,23 @@ renodx::utils::settings::Settings settings = {
             if (!setting->can_reset) continue;
             if (PRESET_RENODRT.contains(setting->key)) {
               renodx::utils::settings::UpdateSetting(setting->key, PRESET_RENODRT.at(setting->key));
-            }
-            if (PRESET_TRADEOFF_RAW.contains(setting->key)) {
+            } else if (PRESET_TRADEOFF_RAW.contains(setting->key)) {
               renodx::utils::settings::UpdateSetting(setting->key, PRESET_TRADEOFF_RAW.at(setting->key));
-            }
-            if (PRESET_SCREENSHOT_10000.contains(setting->key)) {
+            } else if (PRESET_SCREENSHOT_10000.contains(setting->key)) {
               renodx::utils::settings::UpdateSetting(setting->key, PRESET_SCREENSHOT_10000.at(setting->key));
             }
           } },
-        .is_visible = []() { return current_settings_mode >= 2; },
+        // .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "\t- (IMPORTANT) Don't use Exclusive Fullscreen."
-                 "\n\t- (IMPORTANT) check out \"Tradeoff\" section for HDR vs Fullscreen Overlay FX tradeoffs."
-                 "\n\t- Game settings for Brightness and Rec.709/sRGB doesn't do anything."
-                 "\n\t- All of the LUTs need some black level lowering."
-                 "\n\t\t- You can use \"Flare\" or download Black Floor Lowering ReShade shader by Lilium."
-                 "\n\t- Try the ACES preset. Some LUTs (e.g., Town Reimagined) favor its contrast and hue shift.",
+        .label = "- (IMPORTANT) Don't use Exclusive Fullscreen."
+                 "\n- (IMPORTANT) check out \"Tradeoff\" section for HDR vs Fullscreen Overlay FX tradeoffs."
+                 "\n- Game settings for Brightness and Rec.709/sRGB doesn't do anything."
+                 "\n- All of the LUTs need black level lowering."
+                 "\n\t- You stick to the orignal intent, as the raised black / shadow is sometimes colored."
+                 "\n\t- Else, you can use \"Flare\" or download Black Floor Lowering ReShade shader by Lilium."
+                 "\n- Try the ACES preset. Some LUTs (e.g., Town Reimagined) favor its contrast and hue shift.",
         .section = "Read Me",
     },
 
@@ -216,6 +219,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
         .labels = {"Vanilla", "None", "ACES", "RenoDRT"},
+        // .on_change =
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
@@ -442,10 +446,10 @@ renodx::utils::settings::Settings settings = {
 
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "The game renders fullscreen overlay fx shaders (e.g., SoE portal transition & beast mode) at maximum value (32768).\n"
+        .label = "- The game renders fullscreen overlay fx shaders (e.g., SoE portal transition & beast mode) at maximum value (32768).\n"
                  "When they get composited over the linear tonemapped HDR image (median value around 1), you get flashbanged\n"
                  "Fixing this with just RenoDX requires reducing the brightness of each individual shader in the game, which becomes unattainable accounting for custom maps.\n"
-                 "By converting the linear HDR image to another color space with brughtening, it can be composited well.\n"
+                 "By converting the linear HDR image to another color space and brightening, it can be composited better.\n"
                  "This becomes a tradeoff between the fullscreen overlay shader's brightness/contrast and HDR peak brightness (hard to notice, turn Game Brightness to 1 to check).\n",
         .section = "Tradeoff",
     },
@@ -547,7 +551,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Increasing the value lowers overlay fx brightness at the cost of clipping HDR brightness.",
         .max = 100.f,
         .format = "%.2f",
-        .parse = [](float value) { return shader_injection.tone_map_type == 0 ? 0 : value * 0.01f; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "CustomTradeoffMode",
@@ -696,9 +700,9 @@ renodx::utils::settings::Settings settings = {
 
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "\t- Black Ops 3 mod by XgarhontX"
-                 "\n\t- RenoDX by clshortfuse"
-                 "\n\t- PumboAutoHDR shader (used for loading movies) by Filoppi",
+        .label = "- Black Ops 3 mod by XgarhontX"
+                 "\n- RenoDX by clshortfuse"
+                 "\n- PumboAutoHDR shader (used for loading movies) by Filoppi",
         .section = "Credits",
     },
     new renodx::utils::settings::Setting{

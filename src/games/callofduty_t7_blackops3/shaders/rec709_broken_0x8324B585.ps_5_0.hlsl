@@ -20,7 +20,7 @@ void main(
   // float4 r0,r1,r2;
   // uint4 bitmask, uiDest;
   // float4 fDest;
-
+  //
   // r0.xyz = codeTexture0.Sample(bilinearClamp_s, v0.xy).xyz;
   // r1.xyz = float3(0.0549999997,0.0549999997,0.0549999997) + r0.xyz;
   // r1.xyz = float3(0.947867334,0.947867334,0.947867334) * r1.xyz;
