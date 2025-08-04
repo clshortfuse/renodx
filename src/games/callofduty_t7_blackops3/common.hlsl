@@ -38,10 +38,10 @@ float3 Tradeoff_TonemappedTo01(float3 color) {
 * out: linear for RenderImmediatePass
 */
 float3 Tradeoff_AfterFullscreenShaders(float3 color) {
-  if (CUSTOM_TRADEOFF_RATIO == 0 || RENODX_TONE_MAP_TYPE == 0) return color;
+  if (RENODX_TONE_MAP_TYPE == 0) return color;
 
   //scale down from 32768
-  color.rgb /= (SDR_NOMRALIZATION_MAX * CUSTOM_TRADEOFF_RATIO);
+  if (CUSTOM_TRADEOFF_RATIO > 0) color.rgb /= (SDR_NOMRALIZATION_MAX * CUSTOM_TRADEOFF_RATIO);
 
   //to linear
   color = Tradeoff_TradeoffSpaceToLinear(color);
@@ -61,13 +61,13 @@ float3 Tradeoff_Tonemap(float3 colorUntonemapped, float3 colorTonemapped) {
   }
   
   //skip tradeoff
-  if (CUSTOM_TRADEOFF_RATIO == 0 || RENODX_TONE_MAP_TYPE == 0) return colorTonemapped;
+  if (RENODX_TONE_MAP_TYPE == 0) return colorTonemapped;
 
   //to srgb/gamma
   colorTonemapped = Tradeoff_LinearToTradeoffSpace(colorTonemapped); //we do this before the next to not immediately clip the values
 
   //scale up to 32768
-  colorTonemapped *= (SDR_NOMRALIZATION_MAX * CUSTOM_TRADEOFF_RATIO);
+  if (CUSTOM_TRADEOFF_RATIO > 0) colorTonemapped *= (SDR_NOMRALIZATION_MAX * CUSTOM_TRADEOFF_RATIO);
 
   return colorTonemapped;
 }
@@ -84,9 +84,9 @@ float3 Bloom_ScaleTonemappedAfterSaturate(float3 color) {
 
 float3 Tradeoff_PrepareFullWidthFsfx(float3 color, float scale = 1) {
   color.xyz /= 32768.0;
-  if (CUSTOM_TRADEOFF_RATIO == 0 || RENODX_TONE_MAP_TYPE == 0) return color;
+  if (RENODX_TONE_MAP_TYPE == 0) return color;
   color.xyz = Tradeoff_LinearToTradeoffSpace(color.xyz);
-  color.xyz *= (SDR_NOMRALIZATION_MAX * CUSTOM_TRADEOFF_RATIO);;
+  if (CUSTOM_TRADEOFF_RATIO > 0) color.xyz *= (SDR_NOMRALIZATION_MAX * CUSTOM_TRADEOFF_RATIO);;
   color.xyz *= scale;
 
   return color;
