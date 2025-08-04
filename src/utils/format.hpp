@@ -13,7 +13,6 @@
 #include <ostream>
 
 #include <include/reshade.hpp>
-#include <reshade_api_resource.hpp>
 
 #define PRINT_CRC32(crc32) "0x" << std::hex << std::setw(8) << std::setfill('0') << crc32 << std::setfill(' ') << std::dec
 #define PRINT_PTR(ptr)     "0x" << std::hex << std::setw(sizeof(uint64_t) * 2) << std::setfill('0') << static_cast<uint64_t>(ptr) << std::setfill(' ') << std::dec
