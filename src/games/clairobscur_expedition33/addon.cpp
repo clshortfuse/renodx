@@ -165,17 +165,21 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntryCallback(0xF9332C83, &OnLutBuilderReplace),
     __ALL_CUSTOM_SHADERS};
 
-auto* hdr_upgrade_setting = renodx::templates::settings::CreateSetting({.key = "HDRUpgrade",
-                                                                        .binding = &current_hdr_upgrade,
-                                                                        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-                                                                        .default_value = HDR_TYPE_SWAPCHAIN,
-                                                                        .label = "HDR Upgrade",
-                                                                        .section = "Processing",
-                                                                        .tooltip = "Selects how to apply HDR upgrade (restart required)",
-                                                                        .labels = {"Swap Chain",
-                                                                                   "UE HDR"},
-                                                                        .on_change_value = [](float previous, float current) { UpdateHDRIni(); },
-                                                                        .is_global = true});
+auto* hdr_upgrade_setting = renodx::templates::settings::CreateSetting({
+    .key = "HDRUpgrade",
+    .binding = &current_hdr_upgrade,
+    .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+    .default_value = HDR_TYPE_SWAPCHAIN,
+    .can_reset = false,
+    .label = "HDR Upgrade Method",
+    .section = "HDR Settings",
+    .tooltip = "Sets the method used for upgrading to HDR. Unreal HDR offers full framegen compatibility.",
+    .labels = {"SDR",
+               "Unreal HDR"},
+    .tint = 0xFF0000,
+    .on_change_value = [](float previous, float current) { UpdateHDRIni(); },
+    .is_global = true,
+});
 
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings(
     {{
@@ -202,11 +206,22 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
              .is_sticky = true,
          },
      },
+     {
+         new renodx::utils::settings::Setting{
+             .value_type = renodx::utils::settings::SettingValueType::TEXT,
+             .label = "SET HDR UPGRADE METHOD TO UNREAL HDR IF YOU'RE USING FG OR FACING BLACKSCREEN!",
+             .tint = 0xFF0000,
+             .is_visible = []() { return current_hdr_upgrade != HDR_TYPE_UNREAL; },
+             .is_sticky = true,
+         },
+     },
+     {hdr_upgrade_setting},
      renodx::templates::settings::CreateDefaultSettings({
          {"ToneMapType", {.binding = &shader_injection.tone_map_type, .default_value = 3.f, .labels = {"Vanilla", "None", "ACES", "Vanilla+ (ACES + UE Filmic Blend)", "UE Filmic (SDR)"}, .parse = [](float value) { return value; }, .on_change = &OnLUTSettingChange}},
          {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits, .on_change = &OnLUTSettingChange}},
          {"ToneMapGameNits", {.binding = &shader_injection.diffuse_white_nits, .on_change = &OnLUTSettingChange}},
          {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .on_change = &OnLUTSettingChange}},
+         {"ToneMapScaling", {.binding = &shader_injection.tone_map_per_channel, .on_change = &OnLUTSettingChange}},
          /* {"SceneGradeSaturationCorrection", &shader_injection.scene_grade_saturation_correction},
          {"SceneGradeHueCorrection", &shader_injection.scene_grade_hue_correction},
          {"SceneGradeBlowoutRestoration", &shader_injection.scene_grade_blowout_restoration}, */
@@ -241,7 +256,6 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
              .parse = [](float value) { return value * 0.01f; },
              .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 2; },
          }), */
-         hdr_upgrade_setting,
          renodx::templates::settings::CreateSetting({
              .key = "FxPostProcessGrain",
              .binding = &shader_injection.custom_enable_post_filmgrain,
@@ -355,14 +369,14 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
 
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
-  settings[4]->can_reset = true;
+  settings[6]->can_reset = true;
   if (peak.has_value()) {
-    settings[4]->default_value = roundf(peak.value());
+    settings[6]->default_value = roundf(peak.value());
   } else {
-    settings[4]->default_value = 1000.f;
+    settings[6]->default_value = 1000.f;
   }
 
-  settings[5]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[4]->default_value), 203.f);
+  settings[7]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[6]->default_value), 203.f);
   fired_on_init_swapchain = true;
 }
 
