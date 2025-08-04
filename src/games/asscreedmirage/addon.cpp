@@ -123,6 +123,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeHighlightSaturation",
+        .binding = &shader_injection.tone_map_highlight_saturation,
+        .default_value = 50.f,
+        .label = "Highlight Saturation",
+        .section = "Color Grading",
+        .tooltip = "Adds or removes highlight color.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
         .binding = &shader_injection.tone_map_blowout,
         .default_value = 0.f,
@@ -131,6 +141,16 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeFlare",
+        .binding = &shader_injection.tone_map_flare,
+        .default_value = 0.f,
+        .label = "Flare",
+        .section = "Color Grading",
+        .tooltip = "Flare/Glare Compensation",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorFilterStrength",
@@ -291,7 +311,9 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
   renodx::utils::settings::UpdateSetting("FxBloom", 100.f);
   renodx::utils::settings::UpdateSetting("FxBloomScaling", 0.f);
   renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);

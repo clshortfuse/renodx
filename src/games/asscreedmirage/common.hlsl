@@ -89,7 +89,7 @@ float3 ApplyUserColorGradingAP1(float3 ungraded_ap1) {
   cg_config.saturation = RENODX_TONE_MAP_SATURATION;
   cg_config.dechroma = RENODX_TONE_MAP_BLOWOUT;
   cg_config.hue_correction_strength = 0.f;  // no hue correction
-  cg_config.blowout = 0.f;                  // no highlight saturation
+  cg_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
   float ungraded_y = renodx::color::y::from::AP1(ungraded_ap1);
 
   float3 graded_ap1 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded_ap1, ungraded_y, cg_config);
