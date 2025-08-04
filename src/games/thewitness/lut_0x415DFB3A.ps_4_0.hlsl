@@ -76,7 +76,7 @@ void main(float2 v0
 
   // r0.xyz = w0.x * r0.xyz;
 
-  r0.xyz *= lerp(1.f, w0.x, injectedData.fxAutoExposure);
+  r0.xyz *= lerp(1.f, w0.x, CUSTOM_AUTOEXPOSURE);
 
   // r0.xyz = min(float3(1024, 1024, 1024), r0.xyz);
   // remove clamp
@@ -109,9 +109,9 @@ void main(float2 v0
   r1.xyzw = t1.Sample(s1_s, w1.xy).xyzw;
   r1.xyz = cb1[9].xxx * r1.xyz;
 
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     // Tonemap
-    r0.xyz = r0.xyz * r0.www + r1.xyz * injectedData.fxBloom;
+    r0.xyz = r0.xyz * r0.www + r1.xyz * CUSTOM_BLOOM;
     r0.w = cmp(0 < cb1[9].y);
     if (r0.w != 0) {
       r1.xyzw = t2.Sample(s2_s, w1.xy).xyzw;
@@ -136,12 +136,12 @@ void main(float2 v0
     r0.xyz = float3(2.20000005, 2.20000005, 2.20000005) * r0.xyz;
     r0.xyz = exp2(r0.xyz);
 
-    r0.xyz = lerp(input_color, r0.xyz, injectedData.colorGradeLUTStrength);
+    r0.xyz = lerp(input_color, r0.xyz, RENODX_CUSTOM_LUT_STRENGTH);
 
   } else {
     float vanillaMidGray = 0.18f * r0.w;
     // Add bloom to untonemapped
-    r0.xyz = r0.xyz + (r1.xyz * injectedData.fxBloom);
+    r0.xyz = r0.xyz + (r1.xyz * CUSTOM_BLOOM);
 
     // Add unknown to untonemapped
     r0.w = cmp(0 < cb1[9].y);
@@ -153,15 +153,15 @@ void main(float2 v0
     float3 untonemapped = r0.xyz;
 
     renodx::tonemap::Config config = renodx::tonemap::config::Create();
-    config.type = injectedData.toneMapType;
-    config.peak_nits = injectedData.toneMapPeakNits;
-    config.game_nits = injectedData.toneMapGameNits;
-    config.gamma_correction = injectedData.toneMapGammaCorrection;
-    config.exposure = injectedData.colorGradeExposure;
-    config.highlights = injectedData.colorGradeHighlights;
-    config.shadows = injectedData.colorGradeShadows;
-    config.contrast = injectedData.colorGradeContrast;
-    config.saturation = injectedData.colorGradeSaturation;
+    config.type = RENODX_TONE_MAP_TYPE;
+    config.peak_nits = RENODX_PEAK_WHITE_NITS;
+    config.game_nits = RENODX_DIFFUSE_WHITE_NITS;
+    config.gamma_correction = RENODX_GAMMA_CORRECTION;
+    config.exposure = RENODX_TONE_MAP_EXPOSURE;
+    config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
+    config.shadows = RENODX_TONE_MAP_SHADOWS;
+    config.contrast = RENODX_TONE_MAP_CONTRAST;
+    config.saturation = RENODX_TONE_MAP_SATURATION;
     config.mid_gray_value = vanillaMidGray;
     config.mid_gray_nits = vanillaMidGray * 100.f;
 
@@ -169,8 +169,8 @@ void main(float2 v0
     config.reno_drt_shadows = 1.0f;
     config.reno_drt_contrast = 1.00f;
     config.reno_drt_saturation = 1.00f;
-    config.reno_drt_dechroma = injectedData.colorGradeBlowout;
-    config.reno_drt_flare = lerp(0, 0.10, pow(injectedData.colorGradeFlare, 10.f));
+    config.reno_drt_dechroma = RENODX_TONE_MAP_BLOWOUT;
+    config.reno_drt_flare = lerp(0, 0.10, pow(RENODX_TONE_MAP_FLARE, 10.f));
 
     renodx::tonemap::config::DualToneMap dual_tone_map =
         renodx::tonemap::config::ApplyToneMaps(untonemapped, config);
@@ -179,7 +179,7 @@ void main(float2 v0
     float3 sdr_color = dual_tone_map.color_sdr;
 
     renodx::lut::Config lut_config = renodx::lut::config::Create(
-        s4_s, 1.f, injectedData.colorGradeLUTScaling,
+        s4_s, 1.f, RENODX_CUSTOM_LUT_SCALING,
         renodx::lut::config::type::GAMMA_2_2,
         renodx::lut::config::type::GAMMA_2_2);
 
@@ -190,12 +190,12 @@ void main(float2 v0
     float3 lut_color = lerp(lut_color_a, lut_color_b, cb1[11].x);
 
     float3 final_color = renodx::tonemap::UpgradeToneMap(
-        hdr_color, sdr_color, lut_color, injectedData.colorGradeLUTStrength);
+        hdr_color, sdr_color, lut_color, RENODX_CUSTOM_LUT_STRENGTH);
 
 
     r0.xyz = final_color;
 
-    if (injectedData.toneMapType == 1.f) {
+    if (RENODX_TONE_MAP_TYPE == 1.f) {
       r0.xyz = untonemapped;
     }
   }

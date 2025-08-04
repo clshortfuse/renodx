@@ -204,10 +204,6 @@ void main(float4 v0
   o0.xyzw = r0.xyzw;
   o0.rgb = inputColor;
 
-  if (injectedData.toneMapGammaCorrection) {
-    o0.rgb = renodx::color::correct::GammaSafe(o0.rgb);
-  }
-
-  o0.rgb *= injectedData.toneMapGameNits / 80.f;
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   return;
 }
