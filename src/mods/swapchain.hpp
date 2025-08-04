@@ -128,7 +128,6 @@ static bool use_resize_buffer = false;
 static bool use_resize_buffer_on_set_full_screen = false;
 static bool use_resize_buffer_on_demand = false;
 static bool use_resize_buffer_on_present = false;
-static bool upgrade_unknown_resource_views = false;
 static bool upgrade_resource_views = true;
 static bool prevent_full_screen = true;
 static bool force_borderless = true;
@@ -2217,7 +2216,14 @@ inline bool OnCreateResourceView(
   bool expected = false;
   bool found_upgrade = false;
 
-  switch (desc.type) {
+  utils::resource::ResourceInfo* resource_info = nullptr;
+  reshade::api::resource_view_desc current_desc = desc;
+  if (desc.type == reshade::api::resource_view_type::unknown) {
+    resource_info = utils::resource::GetResourceInfo(resource);
+    if (resource_info == nullptr) return false;
+    current_desc = utils::resource::PopulateUnknownResourceViewDesc(device, desc, resource_info);
+  }
+  switch (current_desc.type) {
     case reshade::api::resource_view_type::texture_1d:
     case reshade::api::resource_view_type::texture_1d_array:
     case reshade::api::resource_view_type::texture_2d:
@@ -2228,21 +2234,23 @@ inline bool OnCreateResourceView(
     case reshade::api::resource_view_type::texture_cube:
     case reshade::api::resource_view_type::texture_cube_array:
       break;
+    case reshade::api::resource_view_type::unknown:
+      assert(false);
     default:
     case reshade::api::resource_view_type::acceleration_structure:
-    case reshade::api::resource_view_type::unknown:
     case reshade::api::resource_view_type::buffer:
+
       return false;
   }
 
-  if (!upgrade_unknown_resource_views && desc.format == reshade::api::format::unknown) {
-    return false;
+  reshade::api::resource_view_desc new_desc = current_desc;
+
+  if (resource_info == nullptr) {
+    resource_info = utils::resource::GetResourceInfo(resource);
+    if (resource_info == nullptr) return false;
   }
 
-  reshade::api::resource_view_desc new_desc = desc;
-
-  auto* resource_info = utils::resource::GetResourceInfo(resource);
-  if (resource_info == nullptr) return false;
+  assert(current_desc.format != reshade::api::format::unknown);
 
   reshade::api::resource_desc& resource_desc = resource_info->desc;
   bool& is_back_buffer = resource_info->is_swap_chain;
@@ -2262,7 +2270,7 @@ inline bool OnCreateResourceView(
     if (!found_upgrade) {
       std::stringstream s;
       s << "mods::swapchain::OnCreateResourceView(";
-      s << "unexpected case(" << desc.format << ")";
+      s << "unexpected case(" << current_desc.format << ")";
       s << ")";
       reshade::log::message(reshade::log::level::warning, s.str().c_str());
     }
@@ -2281,7 +2289,7 @@ inline bool OnCreateResourceView(
         // Maybe be decompressible
         std::stringstream s;
         s << "mods::swapchain::OnCreateResourceView(";
-        s << "unexpected case(" << desc.format << ")";
+        s << "unexpected case(" << current_desc.format << ")";
         s << ")";
         reshade::log::message(reshade::log::level::warning, s.str().c_str());
         assert(false);
@@ -2318,7 +2326,7 @@ inline bool OnCreateResourceView(
         assert(false);
         std::stringstream s;
         s << "mods::swapchain::OnCreateResourceView(";
-        s << "unexpected case(" << desc.format << ")";
+        s << "unexpected case(" << current_desc.format << ")";
         s << ")";
         reshade::log::message(reshade::log::level::warning, s.str().c_str());
         break;
@@ -2328,30 +2336,26 @@ inline bool OnCreateResourceView(
     return false;
   }
 
-  const bool changed = (desc.format != new_desc.format);
+  const bool changed = (current_desc.format != new_desc.format);
 
-  if (changed && (
+  if (changed
 #ifdef DEBUG_LEVEL_1
-          true ||
+      || true
 #endif
-          desc.format == reshade::api::format::unknown)) {
+  ) {
     std::stringstream s;
     s << "mods::swapchain::OnCreateResourceView(" << (changed ? "upgrading" : "logging");
     s << ", found_upgrade: " << (found_upgrade ? "true" : "false");
     s << ", expected: " << (expected ? "true" : "false");
-    s << ", view type: " << desc.type;
-    s << ", view format: " << desc.format << " => " << new_desc.format;
+    s << ", view type: " << current_desc.type;
+    s << ", view format: " << current_desc.format << " => " << new_desc.format;
     s << ", resource: " << PRINT_PTR(resource.handle);
     s << ", resource width: " << resource_desc.texture.width;
     s << ", resource height: " << resource_desc.texture.height;
     s << ", resource format: " << resource_desc.texture.format;
     s << ", resource usage: " << usage_type;
     s << ")";
-    reshade::log::message(
-        desc.format == reshade::api::format::unknown
-            ? reshade::log::level::warning
-            : reshade::log::level::info,
-        s.str().c_str());
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
   };
 
   if (!changed) {
@@ -2377,7 +2381,8 @@ inline bool OnCreateResourceView(
 
   local_original_resource_view_desc = desc;
 
-  desc.format = new_desc.format;
+  desc.type = current_desc.type;
+  desc.format = current_desc.format;
 
   return true;
 }
