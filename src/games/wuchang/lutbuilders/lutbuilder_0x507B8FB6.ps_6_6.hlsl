@@ -411,7 +411,7 @@ float4 main(
   float _1303 = ((cb0_013y - _1294) * cb0_013w) + _1294;
   float _1304 = ((cb0_013z - _1295) * cb0_013w) + _1295;
 
-  if (GenerateOutput(_1265, _1266, _1267, SV_Target, is_hdr)) {
+  if (GenerateOutput(_1302, _1303, _1304, SV_Target, is_hdr)) {
     return SV_Target;
   }
 

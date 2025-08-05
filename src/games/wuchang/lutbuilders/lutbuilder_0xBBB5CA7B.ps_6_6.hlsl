@@ -295,8 +295,6 @@ float4 main(
   float _904 = max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[1].z), _893, mad((UniformBufferConstants_WorkingColorSpace_192[1].y), _892, ((UniformBufferConstants_WorkingColorSpace_192[1].x) * _891))));
   float _905 = max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[2].z), _893, mad((UniformBufferConstants_WorkingColorSpace_192[2].y), _892, ((UniformBufferConstants_WorkingColorSpace_192[2].x) * _891))));
 
-  float3 untonemapped = float3(_903, _904, _905);
-
   float _931 = cb0_014x * (((cb0_039y + (cb0_039x * _903)) * _903) + cb0_039z);
   float _932 = cb0_014y * (((cb0_039y + (cb0_039x * _904)) * _904) + cb0_039z);
   float _933 = cb0_014z * (((cb0_039y + (cb0_039x * _905)) * _905) + cb0_039z);
@@ -304,7 +302,7 @@ float4 main(
   float _941 = ((cb0_013y - _932) * cb0_013w) + _932;
   float _942 = ((cb0_013z - _933) * cb0_013w) + _933;
 
-  if (GenerateOutput(untonemapped.r, untonemapped.g, untonemapped.b, SV_Target, is_hdr)) {
+  if (GenerateOutput(_940, _941, _942, SV_Target, is_hdr)) {
     return SV_Target;
   }
 
