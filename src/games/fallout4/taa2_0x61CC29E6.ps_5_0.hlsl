@@ -20,16 +20,16 @@ cbuffer cb2 : register(b2) {
 #define cmp -
 
 float3 convertRenderInput(float3 render) {
-  render /= injectedData.toneMapGameNits / 80.f;
-  render /= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
+  render = renodx::draw::InvertIntermediatePass(render);
+  render /= RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
   render = pow(saturate(render), 1.f / 2.2f);
   return render;
 }
 
 float3 convertRenderOutput(float3 render) {
   render = pow(saturate(render), 2.2f);
-  render *= injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
-  render *= injectedData.toneMapGameNits / 80.f;
+  render *= RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+  render = renodx::draw::RenderIntermediatePass(render);
   return render;
 }
 

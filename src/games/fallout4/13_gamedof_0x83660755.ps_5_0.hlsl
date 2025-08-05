@@ -43,6 +43,6 @@ void main(float4 v0 : SV_POSITION0, float2 v1 : TEXCOORD0, out float4 o0 : SV_Ta
   // o0.xyzw = r0.xxxx * r1.xyzw + r2.xyzw;
   
   // o0.xyzw = r0.xxxx * (r1.xyzw - r2.xyzw) + r2.xyzw;
-  o0.xyzw = lerp(r2.xyzw, r1.xyzw, r0.x * injectedData.fxDoF);
+  o0.xyzw = lerp(r2.xyzw, r1.xyzw, r0.x * CUSTOM_DOF);
   return;
 }
