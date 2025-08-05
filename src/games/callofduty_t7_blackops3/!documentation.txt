@@ -1,0 +1,22 @@
+Summary of Orignal Pipeline:
+1. Renders all to linear Color Buffer (r11g11b10).
+  - Values can be full 0-32768, but majority of luminance is around 1. The rest are for highlights.
+2. Color Buffer tonemapped and applied LUT in linear, normalized 0-32768.
+3. Fullscreen Overlay Fx adding, multiplying, etc. to Color Buffer in linear, normalized 0-32768.
+4. Color Buffer to Swapchain Texture sRGB (r8g8b8), normalized 0-1.
+5. Render UI to Swapchain Texture (idk colorspace)
+
+Summary of Upgraded Pipeline:
+1. Renders all to linear Color Buffer (r16g16b16).
+2. Color Buffer tonemapped (renodx::draw::ToneMapPass) and applied LUT (w/ renodx::lut::CorrectBlack) in linear, 0-32768.
+  - Values can be full 0-32768, but majority of luminance is low.
+2a. Color Buffer to gamma 2.2 and darkened.
+3. Fullscreen Overlay Fx adding, multiplying, etc. to Color Buffer in linear, normalized 0-32768.
+  - Yea, this mismatches the colorspaces making overlays more constrasted.
+  - It's either that or:
+    - Do nothing and get flashbanged by Fullscreen Overlay Fx.
+    - Darken of each Fullscreen Overlay Fx... that's infeasible with modded maps.
+    - Brighten Color buffer in linear which clips the highlights.
+    - Upgrade Color Buffer to r32g32b32, but that breaks math for #1.
+4. Color Buffer to Swapchain Texture HDR10/scRGB (renodx::draw::RenderIntermediatePass).
+5. Render UI to Swapchain Texture (idk colorspace, but it works).
