@@ -128,7 +128,7 @@ cbuffer cb0 : register(b0) {
   float cb0_037z : packoffset(c037.z);
   float cb0_037w : packoffset(c037.w);
   float cb0_038x : packoffset(c038.x);
-  float cb0_038z : packoffset(c038.z);
+  int cb0_038z : packoffset(c038.z);
   float cb0_039x : packoffset(c039.x);
   float cb0_039y : packoffset(c039.y);
   float cb0_039z : packoffset(c039.z);

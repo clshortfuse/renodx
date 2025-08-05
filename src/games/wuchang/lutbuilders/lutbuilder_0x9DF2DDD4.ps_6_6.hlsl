@@ -364,7 +364,6 @@ float4 main(
   float _1158 = max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[1].z), _1147, mad((UniformBufferConstants_WorkingColorSpace_192[1].y), _1146, ((UniformBufferConstants_WorkingColorSpace_192[1].x) * _1145))));
   float _1159 = max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[2].z), _1147, mad((UniformBufferConstants_WorkingColorSpace_192[2].y), _1146, ((UniformBufferConstants_WorkingColorSpace_192[2].x) * _1145))));
 
-  float3 untonemapped = float3(_1157, _1158, _1159);
 
   float _1185 = cb0_014x * (((cb0_039y + (cb0_039x * _1157)) * _1157) + cb0_039z);
   float _1186 = cb0_014y * (((cb0_039y + (cb0_039x * _1158)) * _1158) + cb0_039z);
@@ -373,7 +372,7 @@ float4 main(
   float _1195 = ((cb0_013y - _1186) * cb0_013w) + _1186;
   float _1196 = ((cb0_013z - _1187) * cb0_013w) + _1187;
 
-  if (GenerateOutput(untonemapped.r, untonemapped.g, untonemapped.b, SV_Target, is_hdr)) {
+  if (GenerateOutput(_1194, _1195, _1196, SV_Target, is_hdr)) {
     return SV_Target;
   }
 
