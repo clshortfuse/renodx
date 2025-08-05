@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsli"
 
 // Hue Weight
 static const float _37[10] = { -0.15369999408721923828125f, 0.013500000350177288055419921875f, 0.13120000064373016357421875f, 0.2092899978160858154296875f, 0.2858000099658966064453125f, 0.513000011444091796875f, 0.66879999637603759765625f, 0.745999991893768310546875f, 0.84630000591278076171875f, 1.0134999752044677734375f };
@@ -212,24 +212,32 @@ void comp_main() {
       (_437 + _343) + (_453 * ((_423 * (((_376 * _301) * _384) - _343)) - _437)),
       (_438 + _345) + (_453 * ((_423 * (((_377 * _301) * _384) - _345)) - _438)));
 
-#if 1
-  if (RENODX_TONE_MAP_EXPOSURE != 1.f || RENODX_TONE_MAP_HIGHLIGHTS != 1.f || RENODX_TONE_MAP_SHADOWS != 1.f || RENODX_TONE_MAP_CONTRAST != 1.f || RENODX_TONE_MAP_SATURATION != 1.f || RENODX_TONE_MAP_BLOWOUT != 0.f) {
-    final_color = renodx::color::bt709::from::AP1(final_color);
-    final_color = renodx::color::grade::UserColorGrading(
-        final_color,
-        RENODX_TONE_MAP_EXPOSURE,
-        RENODX_TONE_MAP_HIGHLIGHTS,
-        RENODX_TONE_MAP_SHADOWS,
-        RENODX_TONE_MAP_CONTRAST,
-        RENODX_TONE_MAP_SATURATION,
-        RENODX_TONE_MAP_BLOWOUT);
+#if 0
+  final_color = renodx::color::bt709::from::AP1(final_color);
+  renodx::color::grade::Config cg_config = renodx::color::grade::config::Create(
+      RENODX_TONE_MAP_EXPOSURE,
+      RENODX_TONE_MAP_HIGHLIGHTS,
+      RENODX_TONE_MAP_SHADOWS,
+      RENODX_TONE_MAP_CONTRAST,
+      0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+      RENODX_TONE_MAP_SATURATION,
+      RENODX_TONE_MAP_BLOWOUT,
+      0.f,
+      0,
+      renodx::color::grade::config::hue_correction_type::INPUT,
+      0.f  // highlight saturation causes artifacts
+  );
+  final_color = renodx::color::grade::config::ApplyUserColorGrading(
+      final_color,
+      cg_config);
 
-    final_color = renodx::color::ap1::from::BT709(final_color);
-  }
+  final_color = max(0, renodx::color::ap1::from::BT709(final_color));
+#else
+  final_color = ApplyUserColorGradingAP1(final_color);
 #endif
 
   float3 encoded_color = log2(final_color) * 0.0500000007450580596923828125f + 0.6236965656280517578125f;
-  _15[uint3(gl_GlobalInvocationID.rgb)] = float4(_12.SampleLevel(_24, saturate(encoded_color * 0.96875f + 0.015625f), 0.0f).xyz, 1.0f);
+  _15[uint3(gl_GlobalInvocationID.rgb)] = float4(_12.SampleLevel(_24, saturate(encoded_color) * 0.96875f + 0.015625f, 0.0f).xyz, 1.0f);
   //   _15[uint3(gl_GlobalInvocationID.xyz)] = float4(_12.SampleLevel(_24, float3((clamp((log2((_436 + _342) + (_453 * ((_423 * (((_375 * _301) * _384) - _342)) - _436))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f, 0.0f, 1.0f) * 0.96875f) + 0.015625f, (clamp((log2((_437 + _343) + (_453 * ((_423 * (((_376 * _301) * _384) - _343)) - _437))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f, 0.0f, 1.0f) * 0.96875f) + 0.015625f, (clamp((log2((_438 + _345) + (_453 * ((_423 * (((_377 * _301) * _384) - _345)) - _438))) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f, 0.0f, 1.0f) * 0.96875f) + 0.015625f), 0.0f).xyz, 1.0f);
 }
 

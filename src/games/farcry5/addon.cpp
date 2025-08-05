@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2024 Musa Haji
- * Copyright (C) 2024 Carlos Lopez
  * SPDX-License-Identifier: MIT
  */
 
@@ -14,9 +13,7 @@
 
 #include <embed/shaders.h>
 
-#include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
-#include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
@@ -157,7 +154,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSceneScaling",
         .binding = &shader_injection.color_grade_scaling,
-        .default_value = 75.f,
+        .default_value = 100.f,
         .label = "Scene Grading Scaling",
         .section = "Color Grading",
         .tooltip = "Scales the scene grading to full range when size is clamped.",

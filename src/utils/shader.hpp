@@ -924,7 +924,7 @@ static void OnInitPipeline(
       std::stringstream s;
       s << "utils::shader::OnInitPipeline(Reinserted pipeline: ";
       s << PRINT_PTR(pipeline.handle);
-      s << ", Device: " << reinterpret_cast<uintptr_t>(device);
+      s << ", Device: " << PRINT_PTR(reinterpret_cast<uintptr_t>(device));
       s << ", Layout: " << PRINT_PTR(layout.handle);
       s << ", Subobjects: " << pair->second.subobjects.size() << " => " << subobject_count;
       s << ", Shader hashes: " << pair->second.shader_hashes.size() << " => " << details.shader_hashes.size();
