@@ -1793,7 +1793,12 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
 
           if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_INFO))) {
             std::stringstream s;
-            s << resource_view_details.resource_desc.texture.format;
+
+            if (resource_view_details.resource_desc.type == reshade::api::resource_type::buffer) {
+              s << "Buffer (" << resource_view_details.resource_desc.buffer.size << " bytes)";
+            } else {
+              s << resource_view_details.resource_desc.texture.format;
+            }
 
             if (resource_view_details.is_swapchain) {
               ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
@@ -1922,7 +1927,11 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
 
           if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_INFO))) {
             std::stringstream s;
-            s << resource_view_details.resource_desc.texture.format;
+            if (resource_view_details.resource_desc.type == reshade::api::resource_type::buffer) {
+              s << "Buffer (" << resource_view_details.resource_desc.buffer.size << " bytes)";
+            } else {
+              s << resource_view_details.resource_desc.texture.format;
+            }
 
             if (resource_view_details.is_swapchain) {
               ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
@@ -2035,7 +2044,11 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
 
           if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_INFO))) {
             std::stringstream s;
-            s << render_target.resource_desc.texture.format;
+            if (render_target.resource_desc.type == reshade::api::resource_type::buffer) {
+              s << "Buffer (" << render_target.resource_desc.buffer.size << " bytes)";
+            } else {
+              s << render_target.resource_desc.texture.format;
+            }
 
             if (render_target.is_swapchain) {
               ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
@@ -2385,7 +2398,12 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
           if (info != nullptr) {
             if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_INFO))) {
               std::stringstream s;
-              s << info->desc.texture.format;
+              if (info->desc.type == reshade::api::resource_type::buffer) {
+                s << "Buffer (" << info->desc.buffer.size << " bytes)";
+              } else {
+                s << info->desc.texture.format;
+              }
+
               if (info->is_swap_chain) {
                 ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
               } else if (info->upgraded) {
@@ -2429,7 +2447,11 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
           if (info != nullptr) {
             if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_INFO))) {
               std::stringstream s;
-              s << info->desc.texture.format;
+              if (info->desc.type == reshade::api::resource_type::buffer) {
+                s << "Buffer (" << info->desc.buffer.size << " bytes)";
+              } else {
+                s << info->desc.texture.format;
+              }
               if (info->is_swap_chain) {
                 ImGui::TextColored(ImVec4(0, 255, 0, 255), "%s", s.str().c_str());
               } else if (info->upgraded) {
@@ -2937,7 +2959,7 @@ void RenderSettingsPane(reshade::api::device* device, DeviceData* data) {
 
   {
     ImGui::SeparatorText("Other");
-    DrawSettingDecimalTextbox("FPS Limit", "FPS Limit", &renodx::utils::swapchain::fps_limit);
+    DrawSettingDecimalTextbox("FPS Limit", "FPSLimit", &renodx::utils::swapchain::fps_limit);
   }
 
   ImGui::Text("%s", (std::string("Build: ") + __DATE__ + " " + renodx::utils::date::ISO_DATE_TIME).c_str());
@@ -3165,6 +3187,7 @@ void RenderResourceViewPreview(reshade::api::device* device, DeviceData* data, r
   auto* info = renodx::utils::resource::GetResourceInfo(resource);
   if (info == nullptr) return;
   if (info->destroyed) return;
+  if (info->desc.type == reshade::api::resource_type::buffer) return;
 
   reshade::api::format format = reshade::api::format_to_default_typed(info->desc.texture.format);
   switch (info->desc.texture.format) {

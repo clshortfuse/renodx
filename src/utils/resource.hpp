@@ -14,6 +14,7 @@
 
 #include <include/reshade.hpp>
 
+#include "../utils/bitwise.hpp"
 #include "../utils/data.hpp"
 #include "../utils/format.hpp"
 #include "../utils/hash.hpp"
@@ -470,7 +471,7 @@ inline void OnInitResource(
       s << ", depth_or_layers: " << desc.texture.depth_or_layers;
       s << ", levels: " << desc.texture.levels;
     }
-    s << ", usage: " << desc.usage;
+    s << ", usage: " << std::hex << static_cast<uint32_t>(desc.usage) << std::dec;
     if (initial_data != nullptr) {
       s << ", initial_data: " << initial_data;
     } else {
@@ -539,6 +540,91 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   }
 }
 
+inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(reshade::api::device* device, const reshade::api::resource_view_desc& desc, ResourceInfo* resource_info) {
+  reshade::api::resource_view_desc new_desc = desc;
+  switch (device->get_api()) {
+    case reshade::api::device_api::d3d11:
+      // Set this parameter to NULL to create a view that accesses the entire
+      // resource (using the format the resource was created with).
+    case reshade::api::device_api::d3d12:
+      // A null pDesc is used to initialize a default descriptor, if possible.
+      // This behavior is identical to the D3D11 null descriptor behavior,
+      // where defaults are filled in. This behavior inherits the resource format
+      // and dimension (if not typeless) and for buffers SRVs target a full buffer
+      // and are typed (not raw or structured), and for textures SRVs target
+      // a full texture, all mips and all array slices.
+      // Not all resources support null descriptor initialization.
+      if (resource_info == nullptr) {
+        assert(resource_info != nullptr);
+        return desc;
+      }
+      switch (resource_info->desc.type) {
+        case reshade::api::resource_type::buffer:
+          new_desc.type = reshade::api::resource_view_type::buffer;
+          new_desc.format = reshade::api::format::unknown;
+          break;
+        case reshade::api::resource_type::texture_1d:
+          if (resource_info->desc.texture.depth_or_layers > 1) {
+            new_desc.type = reshade::api::resource_view_type::texture_1d_array;
+          } else {
+            new_desc.type = reshade::api::resource_view_type::texture_1d;
+          }
+          new_desc.texture.level_count = UINT32_MAX;
+          new_desc.texture.layer_count = resource_info->desc.texture.depth_or_layers;
+          new_desc.format = resource_info->desc.texture.format;
+          break;
+        case reshade::api::resource_type::surface:
+        case reshade::api::resource_type::texture_2d:
+          new_desc.texture.level_count = UINT32_MAX;
+          new_desc.texture.layer_count = resource_info->desc.texture.depth_or_layers;
+          if (resource_info->desc.texture.depth_or_layers > 1) {
+            if (resource_info->desc.texture.samples > 1) {
+              new_desc.type = reshade::api::resource_view_type::texture_2d_multisample_array;
+            } else if (renodx::utils::bitwise::HasFlag(resource_info->desc.flags, reshade::api::resource_flags::cube_compatible)) {
+              new_desc.type = reshade::api::resource_view_type::texture_cube_array;
+            } else {
+              new_desc.type = reshade::api::resource_view_type::texture_2d_array;
+            }
+          } else if (resource_info->desc.texture.samples > 1) {
+            new_desc.type = reshade::api::resource_view_type::texture_2d_multisample;
+          } else if (renodx::utils::bitwise::HasFlag(resource_info->desc.flags, reshade::api::resource_flags::cube_compatible)) {
+            new_desc.type = reshade::api::resource_view_type::texture_cube;
+          } else {
+            new_desc.type = reshade::api::resource_view_type::texture_2d;
+          }
+          new_desc.format = resource_info->desc.texture.format;
+          break;
+        case reshade::api::resource_type::texture_3d:
+          new_desc.format = resource_info->desc.texture.format;
+          new_desc.texture.level_count = UINT32_MAX;
+          new_desc.texture.layer_count = UINT32_MAX;
+          break;
+        case reshade::api::resource_type::unknown:
+        default:
+          assert(false);
+          break;
+      }
+      break;
+    default:
+      assert(false && "Unknown format in unsupported device API");
+      break;
+  }
+
+#ifdef DEBUG_LEVEL_2
+  renodx::utils::log::d(
+      "utils::resource::PopulateUnknownResourceViewDesc(",
+      "Populated unknown resource view: ",
+      ", format: ", desc.format, " => ", new_desc.format,
+      ", type: ", desc.type, " => ", new_desc.type,
+      ", first_layer: ", desc.texture.first_layer, " => ", new_desc.texture.first_layer,
+      ", first_level: ", desc.texture.first_level, " => ", new_desc.texture.first_level,
+      ", layer_count: ", desc.texture.layer_count, " => ", new_desc.texture.layer_count,
+      ", level_count: ", desc.texture.level_count, " => ", new_desc.texture.level_count,
+      ")");
+#endif
+  return new_desc;
+}
+
 inline void OnInitResourceView(
     reshade::api::device* device,
     reshade::api::resource resource,
@@ -556,7 +642,6 @@ inline void OnInitResourceView(
       .usage = usage_type,
   };
 
-  ResourceInfo* resource_info = nullptr;
   if (resource.handle != 0u) {
     new_data.resource_info = GetResourceInfo(resource, false);
     if (new_data.resource_info != nullptr) {
@@ -564,6 +649,11 @@ inline void OnInitResourceView(
     } else {
       assert(new_data.resource_info != nullptr);
     }
+  }
+
+  if (desc.type == reshade::api::resource_view_type::unknown
+      || (desc.type != reshade::api::resource_view_type::buffer && desc.format == reshade::api::format::unknown)) {
+    new_data.desc = PopulateUnknownResourceViewDesc(device, desc, new_data.resource_info);
   }
 
   auto [pair, inserted] = store->resource_view_infos.try_emplace_p(view.handle, new_data);

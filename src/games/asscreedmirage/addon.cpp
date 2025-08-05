@@ -22,18 +22,39 @@ namespace {
 
 ShaderInjectData shader_injection;
 
-renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x5EEEC729),  // Sample LUT + Bloom
-    CustomShaderEntry(0xAA7F0DB7),  // Color Grade + ToneMap LutBuilder
-    CustomShaderEntry(0xFE07E3F3),  // ACES ToneMap LutBuilder
+int tone_map_lut_invalidated = 0;
+int ui_lut_invalidated = 0;
 
-    CustomShaderEntry(0x0E048C6D),  // UI - sRGB to HDR
-                                    // CustomShaderEntry(0xAF8A7EAB),  // UI - Video sRGB to HDR
+bool OnToneMapLutBuilderReplace(reshade::api::command_list* cmd_list) {
+  tone_map_lut_invalidated = 0;
+  return true;
+}
+
+bool OnUILutBuilderReplace(reshade::api::command_list* cmd_list) {
+  ui_lut_invalidated = 0;
+  return true;
+}
+
+void OnOptimizableToneMapSettingChange() {
+  tone_map_lut_invalidated = 1;
+};
+
+void OnOptimizableUISettingChange() {
+  ui_lut_invalidated = 1;
+};
+
+renodx::mods::shader::CustomShaders custom_shaders = {
+    CustomShaderEntry(0x5EEEC729),                                       // Sample LUT + Bloom
+    CustomShaderEntry(0xAA7F0DB7),                                       // Color Grade + ToneMap LutBuilder
+    CustomShaderEntryCallback(0xFE07E3F3, &OnToneMapLutBuilderReplace),  // ACES ToneMap LutBuilder
+
+    CustomShaderEntryCallback(0x0E048C6D, &OnUILutBuilderReplace),  // UI - sRGB to HDR
+                                                                    // CustomShaderEntry(0xAF8A7EAB),  // UI - Video sRGB to HDR
 
 };
 
 const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
-    {"FxBloom", 50.f},
+    {"FxBloomScaling", 100.f},
 };
 
 renodx::utils::settings::Settings settings = {
@@ -45,13 +66,15 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "ACES"},
+        .labels = {"Vanilla", "ACES (Customized)", "ACES (Matches SDR)"},
+        .on_change = &OnOptimizableToneMapSettingChange,
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Toggle in-game HDR setting or restart game to apply changes to Tone Mapper.",
         .section = "Tone Mapping",
         .tint = 0xFF0000,
+        .is_visible = []() { return tone_map_lut_invalidated != 0.f; },
         .is_sticky = true,
     },
     new renodx::utils::settings::Setting{
@@ -100,6 +123,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeHighlightSaturation",
+        .binding = &shader_injection.tone_map_highlight_saturation,
+        .default_value = 50.f,
+        .label = "Highlight Saturation",
+        .section = "Color Grading",
+        .tooltip = "Adds or removes highlight color.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
         .binding = &shader_injection.tone_map_blowout,
         .default_value = 0.f,
@@ -108,6 +141,16 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeFlare",
+        .binding = &shader_injection.tone_map_flare,
+        .default_value = 0.f,
+        .label = "Flare",
+        .section = "Color Grading",
+        .tooltip = "Flare/Glare Compensation",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorFilterStrength",
@@ -128,6 +171,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxBloomScaling",
+        .binding = &shader_injection.custom_bloom_scaling,
+        .default_value = 100.f,
+        .label = "Bloom Scaling",
+        .section = "Effects",
+        .tooltip = "Scales the black floor of the bloom effect.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
         .binding = &shader_injection.graphics_white_nits,
         .default_value = 203.f,
@@ -136,12 +189,14 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the brightness of UI and HUD elements in nits. Requires a game restart to take effect.",
         .min = 48.f,
         .max = 500.f,
+        .on_change = &OnOptimizableUISettingChange,
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Restart game to apply changes to UI Brightness.",
         .section = "Miscellaneous",
         .tint = 0xFF0000,
+        .is_visible = []() { return ui_lut_invalidated != 0.f; },
         .is_sticky = true,
     },
     new renodx::utils::settings::Setting{
@@ -153,6 +208,11 @@ renodx::utils::settings::Settings settings = {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
             if (!setting->can_reset) continue;
+            if (setting->key == "ToneMapUINits") {
+              if (setting->value != setting->default_value) OnOptimizableUISettingChange();
+            } else if (setting->key == "ToneMapType") {
+              if (setting->value != setting->default_value) OnOptimizableToneMapSettingChange();
+            }
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
           }
         },
@@ -168,20 +228,17 @@ renodx::utils::settings::Settings settings = {
             if (!setting->can_reset) continue;
 
             if (HDR_LOOK_VALUES.contains(setting->key)) {
+              if (setting->key == "ToneMapUINits") {
+                if (setting->value != setting->default_value) OnOptimizableUISettingChange();
+              } else if (setting->key == "ToneMapType") {
+                if (setting->value != setting->default_value) OnOptimizableToneMapSettingChange();
+              }
               renodx::utils::settings::UpdateSetting(setting->key, HDR_LOOK_VALUES.at(setting->key));
             } else {
               renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
             }
           }
         },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("Toggle in-game HDR setting or restart game to apply changes to Tone Mapper.\n"
-                             "Restart game to apply changes to UI Brightness."),
-        .section = "Options",
-        .tint = 0xFF0000,
-        .is_sticky = true,
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -238,6 +295,15 @@ renodx::utils::settings::Settings settings = {
 };
 
 void OnPresetOff() {
+  auto* tone_map_setting = renodx::utils::settings::FindSetting("ToneMapType");
+  if (tone_map_setting != nullptr && tone_map_setting->value != 0.f) {
+    OnOptimizableToneMapSettingChange();
+  }
+  auto* ui_nits_setting = renodx::utils::settings::FindSetting("ToneMapUINits");
+  if (ui_nits_setting != nullptr && ui_nits_setting->value != 203.f) {
+    OnOptimizableUISettingChange();
+  }
+
   renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
   renodx::utils::settings::UpdateSetting("ColorFilterStrength", 100.f);
   renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
@@ -245,8 +311,11 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
   renodx::utils::settings::UpdateSetting("FxBloom", 100.f);
+  renodx::utils::settings::UpdateSetting("FxBloomScaling", 0.f);
   renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
 }
 
