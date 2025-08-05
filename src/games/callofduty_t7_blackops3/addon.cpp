@@ -110,7 +110,7 @@ const std::unordered_map<std::string, float> PRESET_TRADEOFF_BALANCED = {
     {"CustomTradeoffRatio", 10.f},
     {"CustomTradeoffMode", 1.f},
     {"CustomTradeoffGammaAmount", 2.2f}};
-};
+};  // namespace
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_FSFX = {
     {"CustomTradeoffRatio", 10.f},
     {"CustomTradeoffMode", 3.f},
@@ -202,9 +202,8 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = " * (IMPORTANT) Don't use Exclusive Fullscreen."
-                 "\n * In-game settings for Brightness and Rec.709/sRGB doesn't do anything."
-                 "\n * LUTs have raised black level. Either stick to the orignal intent, else use \"Flare\" in Color Grading or download Lilium's HDR Black Floor Fix ReShade shader.",
+        .label = " * Don't use Exclusive Fullscreen."
+                 "\n * In-game settings for Brightness and Rec.709/sRGB doesn't do anything.",
         .section = "Read Me",
     },
 
@@ -444,6 +443,105 @@ renodx::utils::settings::Settings settings = {
 
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = " * 20 = -0.05 nits"
+                 "\n * 45 = -0.25 nits",
+        .section = "LUT Correction",
+    },
+    new renodx::utils::settings::Setting{
+        .key = "CustomLutBlackThreshold",
+        .binding = &shader_injection.custom_lut_black_threshold,
+        .default_value = 0.f,
+        .label = "LUT Black Lowering Threshold",
+        .section = "LUT Correction",
+        .max = 100.f,
+        .format = "%.2f",
+        .parse = [](float value) { return value * 0.01f; },
+        // .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "CustomLutBlackAmount",
+        .binding = &shader_injection.custom_lut_black_amount,
+        .default_value = 0.f,
+        .label = "LUT Black Lowering Influence Range",
+        .section = "LUT Correction",
+        .max = 100.f,
+        .format = "%.2f",
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
+
+    // new renodx::utils::settings::Setting{
+    //     .key = "CustomLutWhiteThreshold",
+    //     .binding = &shader_injection.custom_lut_white_threshold,
+    //     .default_value = 0.f,
+    //     .label = "LUT White Raising Threshold",
+    //     .section = "LUT Correction",
+    //     .max = 200.f,
+    //     .format = "%.2f",
+    //     .parse = [](float value) { return value * 0.01f; },
+    //     // .is_visible = []() { return current_settings_mode >= 1; },
+    // },
+    // new renodx::utils::settings::Setting{
+    //     .key = "CustomLutWhiteAmount",
+    //     .binding = &shader_injection.custom_lut_white_amount,
+    //     .default_value = 0.f,
+    //     .label = "LUT White Raising Influence Range",
+    //     .section = "LUT Correction",
+    //     .max = 200.f,
+    //     .format = "%.2f",
+    //     .parse = [](float value) { return value * 0.01f; },
+    //     // .is_visible = []() { return current_settings_mode >= 1; },
+    // },
+
+    new renodx::utils::settings::Setting{
+        .key = "CustomBloom",
+        .binding = &shader_injection.custom_bloom,
+        .default_value = 100.f,
+        .label = "Bloom",
+        .section = "Extra",
+        .max = 200.f,
+        .parse = [](float value) { return pow(value * 0.01f, 2.f); },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "CustomSlideLensDirt",
+        .binding = &shader_injection.custom_slide_lens_dirt,
+        .default_value = 100.f,
+        .label = "Slide Lens Dirt",
+        .section = "Extra",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "CustomXrayOutline",
+        .binding = &shader_injection.custom_xray_outline,
+        .default_value = 100.f,
+        .label = "Xray Outline",
+        .section = "Extra",
+        .tooltip = "Other players and important items / objectives.",
+        .max = 200.f,
+        .parse = [](float value) { return value * 0.01; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "CustomShowHUD",
+        .binding = &shader_injection.custom_show_hud,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "HUD (not comprehensive)",
+        .section = "Extra",
+        // .labels = {"False", "True"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "CustomShowFSFXBlur",
+        .binding = &shader_injection.custom_show_fsfx_blur,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "Blur (pause screen & maybe when dazzed)",
+        .section = "Extra",
+        // .labels = {"False", "True"},
+    },
+
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = " * (DISCLAIMER) The game renders fullscreen overlay fx shaders (e.g., SoE portal transition & beast mode) at maximum value (32768). "
                  "When they get composited over the linear tonemapped HDR image, you get flashbanged by the brightness insane difference. "
                  "Fixing this with just RenoDX requires reducing the brightness of each individual shader in the game, which becomes unattainable accounting for custom maps. "
@@ -563,7 +661,7 @@ renodx::utils::settings::Settings settings = {
         .can_reset = true,
         .label = "Tradeoff Mode / Color Space",
         .section = "Tradeoff",
-        .tooltip = "Each provides a slightly different (unnoticible) quantization pattern, and changes contrast of overlay fx.",
+        .tooltip = "Each provides a slightly different (unnoticeable) quantization pattern, and changes contrast of overlay fx.",
         .labels = {"sRGB", "Gamma", "PQ", "Linear (None)"},
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -579,53 +677,6 @@ renodx::utils::settings::Settings settings = {
         .max = 4.f,
         .format = "%.2f",
         .is_visible = []() { return current_settings_mode >= 1 && shader_injection.custom_tradeoff_mode == 1; },
-    },
-
-    new renodx::utils::settings::Setting{
-        .key = "CustomBloom",
-        .binding = &shader_injection.custom_bloom,
-        .default_value = 100.f,
-        .label = "Bloom",
-        .section = "Extra",
-        .max = 200.f,
-        .parse = [](float value) { return pow(value * 0.01f, 2.f); },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "CustomSlideLensDirt",
-        .binding = &shader_injection.custom_slide_lens_dirt,
-        .default_value = 100.f,
-        .label = "Slide Lens Dirt",
-        .section = "Extra",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "CustomXrayOutline",
-        .binding = &shader_injection.custom_xray_outline,
-        .default_value = 100.f,
-        .label = "Xray Outline",
-        .section = "Extra",
-        .tooltip = "Other players and important items / objectives.",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "CustomShowHUD",
-        .binding = &shader_injection.custom_show_hud,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1.f,
-        .label = "HUD (not comprehensive)",
-        .section = "Extra",
-        // .labels = {"False", "True"},
-    },
-    new renodx::utils::settings::Setting{
-        .key = "CustomShowFSFXBlur",
-        .binding = &shader_injection.custom_show_fsfx_blur,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1.f,
-        .label = "Blur (pause screen & maybe when dazzed)",
-        .section = "Extra",
-        // .labels = {"False", "True"},
     },
 
     new renodx::utils::settings::Setting{
@@ -795,26 +846,27 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             // },
         };
 
-        // {
-        //   auto* setting = new renodx::utils::settings::Setting{
-        //       .key = "SwapChainForceBorderless",
-        //       .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        //       .default_value = 0.f,
-        //       .label = "Force Borderless",
-        //       .section = "Display Output",
-        //       .tooltip = "Forces fullscreen to be borderless for proper HDR",
-        //       .labels = {
-        //           "Disabled",
-        //           "Enabled",
-        //       },
-        //       .on_change_value = [](float previous, float current) { renodx::mods::swapchain::force_borderless = (current == 1.f); },
-        //       .is_global = true,
-        //       .is_visible = []() { return current_settings_mode >= 2; },
-        //   };
-        //   renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-        //   renodx::mods::swapchain::force_borderless = (setting->GetValue() == 1.f);
-        //   settings.push_back(setting);
-        // }
+        {
+          //   auto* setting = new renodx::utils::settings::Setting{
+          //       .key = "SwapChainForceBorderless",
+          //       .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+          //       .default_value = 0.f,
+          //       .label = "Force Borderless",
+          //       .section = "Display Output",
+          //       .tooltip = "Forces fullscreen to be borderless for proper HDR",
+          //       .labels = {
+          //           "Disabled",
+          //           "Enabled",
+          //       },
+          //       .on_change_value = [](float previous, float current) { renodx::mods::swapchain::force_borderless = (current == 1.f); },
+          //       .is_global = true,
+          //       .is_visible = []() { return current_settings_mode >= 2; },
+          //   };
+          //   renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
+          //   renodx::mods::swapchain::force_borderless = (setting->GetValue() == 1.f);
+          //   settings.push_back(setting);
+          renodx::mods::swapchain::force_borderless = false;
+        }
 
         {
           //   auto* setting = new renodx::utils::settings::Setting{
@@ -835,6 +887,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           //   renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           //   renodx::mods::swapchain::prevent_full_screen = (setting->GetValue() == 1.f);
           //   settings.push_back(setting);
+          renodx::mods::swapchain::prevent_full_screen = false;
         }
 
         {
@@ -845,7 +898,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               .default_value = 5.f,
               .label = "Encoding (Restart Required)",
               .section = "Display Output",
-              .labels = {"None", "SRGB (Unsupported)", "2.2 (Unsupported)", "2.4 (Unsupported)", "HDR10", "scRGB"},
+              .labels = {"None (Untested)", "SRGB (Unsupported)", "2.2 (Unsupported)", "2.4 (Unsupported)", "HDR10 (Only 0.1% BT2020)", "scRGB (Full BT709)"},
               .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
               .on_change_value = [](float previous, float current) {
                 bool is_hdr10 = current == 4;
@@ -853,7 +906,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
                 // return void
               },
               .is_global = true,
-              .is_visible = []() { return current_settings_mode >= 2; },
+              // .is_visible = []() { return current_settings_mode >= 2; },
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           bool is_hdr10 = setting->GetValue() == 4;
@@ -891,16 +944,28 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         //      .usage_include = reshade::api::resource_usage::resolve_source,
         //  });
 
-        //  r11g11b10_float
+        // Main color output
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r11g11b10_float,
-            .new_format = reshade::api::format::r16g16b16a16_float,  // requires alpha, else it starts lagging. 32bit isnt a valid render target. r16g16b16a16_float
+            .new_format = reshade::api::format::r16g16b16a16_float,  // requires alpha, else it starts lagging. 32bit breaks math. r16g16b16a16_float
             // .index = 0,
             .ignore_size = true,
             .shader_hash = 0x224A8BF5,
             .use_resource_view_cloning = true,
             .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
             .usage_include = reshade::api::resource_usage::render_target,
+        });
+
+        // LUT
+        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            .old_format = reshade::api::format::r11g11b10_float,
+            .new_format = reshade::api::format::r16g16b16a16_float,
+            .ignore_size = true,
+            .shader_hash = 0x2807E427,
+            .use_resource_view_cloning = true,
+            // .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
+            // .dimensions = {.width = 32, .height = 32, .depth = 32},
+            // .usage_include = reshade::api::resource_usage::cpu_access,
         });
       }
 

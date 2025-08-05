@@ -56,7 +56,11 @@ void main(
   r1.xyz = codeTexture4.Sample(bilinearClamp_s, v0.xy).xyz; //unkown what tex is for. RenderDoc shows black. is it only on occasions? 
   r0.xyz = saturate(r1.xyz * float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) + r0.xyz);
   r0.xyz = r0.xyz * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625);
-  r0.xyz = codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz; //LUT
+
+  // r0.xyz = codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz; //LUT
+  r0.xyz = LUT_CorrectBlack(r0.xyz, codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz);
+  // r0.xyz = LUT_CorrectWhite(r0.xyz, codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz);
+
   // o0.xyz = r0.xyz;
   o0.xyz = Tradeoff_Tonemap(colorUntonemapped, r0.xyz); //renodx tonemap
 

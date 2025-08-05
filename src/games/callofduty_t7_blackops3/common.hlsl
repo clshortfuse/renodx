@@ -3,6 +3,16 @@
 #define SDR_NOMRALIZATION_MAX 32768.0
 // #define SDR_NOMRALIZATION_TRADEOFF 0.15 //TODO to reshade var instead?
 
+float3 LUT_CorrectBlack(float3 color_input, float3 lut_color) {
+  // if (CUSTOM_LUT_BLACK_THRESHOLD <= 0) return lut_color;
+  return renodx::lut::CorrectBlack(color_input, lut_color, SDR_NOMRALIZATION_MAX * 0.01f * CUSTOM_LUT_BLACK_THRESHOLD, CUSTOM_LUT_BLACK_AMOUNT);
+}
+
+// float3 LUT_CorrectWhite(float3 color_input, float3 lut_color) {
+//   // if (CUSTOM_LUT_WHITE_THRESHOLD <= 0) return lut_color;
+//   return renodx::lut::CorrectWhite(color_input, lut_color, (SDR_NOMRALIZATION_MAX) - (SDR_NOMRALIZATION_MAX * CUSTOM_LUT_WHITE_THRESHOLD), SDR_NOMRALIZATION_MAX, CUSTOM_LUT_WHITE_AMOUNT);
+// }
+
 float3 Tradeoff_LinearToTradeoffSpace(float3 color) {
   if (CUSTOM_TRADEOFF_MODE == 0.f) {
     return renodx::color::srgb::EncodeSafe(color);
@@ -58,6 +68,7 @@ float3 Tradeoff_Tonemap(float3 colorUntonemapped, float3 colorTonemapped) {
   if (RENODX_TONE_MAP_TYPE != 0) {
     colorTonemapped = Tradeoff_TonemappedTo01(colorTonemapped);
     colorTonemapped = renodx::draw::ToneMapPass(colorUntonemapped, colorTonemapped);
+    // colorTonemapped = renodx::color::bt2020::from::BT709(colorTonemapped);
   }
   
   //skip tradeoff
@@ -92,10 +103,6 @@ float3 Tradeoff_PrepareFullWidthFsfx(float3 color, float scale = 1) {
   return color;
 }
 
-// float3 LinearLowerBlackLevels(float3 color) {
-//   color.rgb = 
-//   return color;
-// }
 
 // (Copied from: ff7rebirth)
 // AdvancedAutoHDR pass to generate some HDR brightess out of an SDR signal.

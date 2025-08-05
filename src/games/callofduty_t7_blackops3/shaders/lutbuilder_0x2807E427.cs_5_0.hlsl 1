@@ -2,6 +2,7 @@
 
 //LUT Builder. Fafiled to decompile.
 
+#include "../common.h"
 
 Texture2D<float4> t0 : register(t0);
 
@@ -17,8 +18,25 @@ cbuffer cb8 : register(b8)
 #define cmp -
 
 
-void main)
+void main()
 {
+
+  return;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // Needs manual fix for instruction:
 // unknown dcl_: dcl_uav_typed_texture3d (float,float,float,float) u0
   float4 r0,r1,r2,r3,r4,r5;
@@ -236,7 +254,7 @@ void main)
   r0.xyzw = float4(0.222222224,0.222222224,0.222222224,0.222222224) * r0.wyzw;
   r0.xyzw = r2.xyzw ? r0.xyzw : r1.xyzw;
   r0.xyzw = float4(32768,32768,32768,32768) * r0.xyzw;
-// No code for instruction (needs manual fix):
-store_uav_typed u0.xyzw, vThreadID.xyzz, r0.xyzw
+  // No code for instruction (needs manual fix):
+  store_uav_typed u0.xyzw, vThreadID.xyzz, r0.xyzw
   return;
 }
