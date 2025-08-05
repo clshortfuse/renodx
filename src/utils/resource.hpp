@@ -542,7 +542,6 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
 
 inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(reshade::api::device* device, const reshade::api::resource_view_desc& desc, ResourceInfo* resource_info) {
   reshade::api::resource_view_desc new_desc = desc;
-  if (desc.type != reshade::api::resource_view_type::unknown) return new_desc;
   switch (device->get_api()) {
     case reshade::api::device_api::d3d11:
       // Set this parameter to NULL to create a view that accesses the entire
@@ -652,7 +651,8 @@ inline void OnInitResourceView(
     }
   }
 
-  if (desc.type == reshade::api::resource_view_type::unknown) {
+  if (desc.type == reshade::api::resource_view_type::unknown
+      || (desc.type != reshade::api::resource_view_type::buffer && desc.format == reshade::api::format::unknown)) {
     new_data.desc = PopulateUnknownResourceViewDesc(device, desc, new_data.resource_info);
   }
 

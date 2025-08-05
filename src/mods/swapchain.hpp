@@ -541,7 +541,7 @@ inline bool ActivateCloneHotSwap(
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
     s << "mods::swapchain::ActivateCloneHotSwap(";
-    if (renodx::utils::swapchain::IsBackBuffer(info.resource)) {
+    if (resource_view_info->resource_info.is_swap_chain) {
       s << ("backbuffer ");
     }
     s << "not cloned ";
@@ -2271,7 +2271,19 @@ inline bool OnCreateResourceView(
     if (resource_info == nullptr) return false;
   }
 
-  assert(current_desc.format != reshade::api::format::unknown);
+  if (current_desc.format == reshade::api::format::unknown) {
+    current_desc = utils::resource::PopulateUnknownResourceViewDesc(device, desc, resource_info);
+    if (current_desc.format == reshade::api::format::unknown) {
+      std::stringstream s;
+      s << "mods::swapchain::OnCreateResourceView(Unknown format for resource view: ";
+      s << PRINT_PTR(resource.handle);
+      s << ", type: " << current_desc.type;
+      s << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+      assert(current_desc.format != reshade::api::format::unknown);
+      return false;
+    }
+  }
 
   reshade::api::resource_desc& resource_desc = resource_info->desc;
   bool& is_back_buffer = resource_info->is_swap_chain;
@@ -2368,8 +2380,8 @@ inline bool OnCreateResourceView(
     s << "mods::swapchain::OnCreateResourceView(" << (changed ? "upgrading" : "logging");
     s << ", found_upgrade: " << (found_upgrade ? "true" : "false");
     s << ", expected: " << (expected ? "true" : "false");
-    s << ", view type: " << current_desc.type;
-    s << ", view format: " << current_desc.format << " => " << new_desc.format;
+    s << ", view type: " << desc.type << " => " << current_desc.type;
+    s << ", view format: " << desc.format << " => " << current_desc.format << " => " << new_desc.format;
     s << ", resource: " << PRINT_PTR(resource.handle);
     s << ", resource width: " << resource_desc.texture.width;
     s << ", resource height: " << resource_desc.texture.height;
@@ -2402,8 +2414,8 @@ inline bool OnCreateResourceView(
 
   local_original_resource_view_desc = desc;
 
-  desc.type = current_desc.type;
-  desc.format = current_desc.format;
+  desc.type = new_desc.type;
+  desc.format = new_desc.format;
 
   return true;
 }
