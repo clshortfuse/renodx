@@ -259,7 +259,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Emulates a display EOTF.",
         .labels = {"Off", "2.2", "BT.1886"},
-        .is_visible = []() { return current_settings_mode >= 1; },
+        // .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapScaling",
@@ -543,9 +543,9 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = " * (DISCLAIMER) The game renders fullscreen overlay fx shaders (e.g., SoE portal transition & beast mode) at maximum value (32768). "
-                 "When they get composited over the linear tonemapped HDR image, you get flashbanged by the brightness insane difference. "
+                 "When they get composited over the linear tonemapped HDR image, you get flashbanged by the insane brightness difference. "
                  "Fixing this with just RenoDX requires reducing the brightness of each individual shader in the game, which becomes unattainable accounting for custom maps. "
-                 "By converting the linear HDR image to another color space and brightening, it can be composited better. "
+                 "By converting the linear HDR image to another color space and then brightening it to match the expectation for the overlays, it can be composited somewhat better. "
                  "This becomes a tradeoff between the fullscreen overlay shader's brightness/contrast and HDR peak brightness. "
                  "Hopefully, I tuned it good enough that you didn't notice it until you read this. You have to turn Game Brightness down to 1 to see the effect.",
         .section = "Tradeoff",
@@ -898,7 +898,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               .default_value = 5.f,
               .label = "Encoding (Restart Required)",
               .section = "Display Output",
-              .labels = {"None (Untested)", "SRGB (Unsupported)", "2.2 (Unsupported)", "2.4 (Unsupported)", "HDR10 (Only 0.1% BT2020)", "scRGB (Full BT709)"},
+              .labels = {"None (Untested)", "SRGB (Unsupported)", "2.2 (Unsupported)", "2.4 (Unsupported)", "HDR10 (Only 0.1%% BT2020)", "scRGB (Full BT709)"},
               .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
               .on_change_value = [](float previous, float current) {
                 bool is_hdr10 = current == 4;

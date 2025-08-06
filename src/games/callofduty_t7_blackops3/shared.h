@@ -81,6 +81,7 @@ struct ShaderInjectData {
   float custom_show_fsfx_blur;
   float custom_lut_black_threshold;
   float custom_lut_black_amount;
+  // float custom_lut_is_upgrade_tex;
   // float custom_lut_white_threshold;
   // float custom_lut_white_amount;
 };

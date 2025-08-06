@@ -1,0 +1,67 @@
+// ---- Created with 3Dmigoto v1.3.16 on Wed Aug 06 00:44:13 2025
+
+//THIS FAILED TO DECOMPILE PROPERLY
+
+Texture2D<float4> t0 : register(t0);
+
+SamplerState s0_s : register(s0);
+
+cbuffer cb1 : register(b1)
+{
+  float4 cb1[86];
+}
+
+cbuffer cb0 : register(b0)
+{
+  float4 cb0[11];
+}
+
+
+
+
+// 3Dmigoto declarations
+#define cmp -
+
+
+void main(
+  float4 v0 : SV_POSITION0,
+  float2 v1 : TEXCOORD0,
+  out float4 o0 : SV_TARGET0)
+{
+  float4 r0,r1;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+
+  switch (cb0[10].x) {
+    case 0 :    r0.xyzw = cb1[74].xyzw;
+    break;
+    case 1 :    r0.xyzw = cb1[75].xyzw;
+    break;
+    case 2 :    r0.xyzw = cb1[76].xyzw;
+    break;
+    case 3 :    r0.xyzw = cb1[77].xyzw;
+    break;
+    case 4 :    r0.xyzw = cb1[78].xyzw;
+    break;
+    case 5 :    r0.xyzw = cb1[79].xyzw;
+    break;
+    default :
+    break;
+  }
+  r1.x = r0.x * r0.y;
+  r1.x = cmp(r1.x != 0.000000);
+  r0.xy = v1.xy * r0.xy + r0.zw;
+  r0.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
+  if (r1.x != 0) {
+    r0.xyz = log2(abs(r0.xyz));
+    r0.xyz = float3(2.20000005,2.20000005,2.20000005) * r0.xyz;
+    r0.xyz = exp2(r0.xyz);
+    r1.x = cmp(0 < cb1[85].w);
+    r1.yzw = float3(32768,32768,32768) * r0.xyz;
+    o0.xyz = r1.xxx ? r1.yzw : r0.xyz;
+    o0.w = r0.w;
+  } else {
+    o0.xyzw = float4(0,0,0,0);
+  }
+  return;
+}
