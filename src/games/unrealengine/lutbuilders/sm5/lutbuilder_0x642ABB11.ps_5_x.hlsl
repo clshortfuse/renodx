@@ -344,6 +344,9 @@ void main(
   r2.z = dot(float3(1.9865448e-08, 2.12079581e-08, 0.999999583), r1.xyz);
   r2.xyz = r2.xyz + -r1.xyz;
   r1.xyz = cb0[30].yyy * r2.xyz + r1.xyz;
+
+  SetTonemappedAP1(r1.rgb);
+
   r2.x = saturate(dot(float3(1.70505154, -0.621790707, -0.0832583979), r1.xyz));
   r2.y = saturate(dot(float3(-0.130257145, 1.14080286, -0.0105485283), r1.xyz));
   r2.z = saturate(dot(float3(-0.0240032747, -0.128968775, 1.15297174), r1.xyz));
@@ -376,9 +379,6 @@ void main(
   r3.xyz = exp2(r3.xyz);
   r1.xyz = float3(0.0773993805, 0.0773993805, 0.0773993805) * r1.xyz;
   r1.xyz = r2.xyz ? r3.xyz : r1.xyz;
-
-  SetTonemappedBT709(r1.xyz);
-
   r2.xyz = r1.xyz * r1.xyz;
   r1.xyz = cb0[33].yyy * r1.xyz;
   r1.xyz = cb0[33].xxx * r2.xyz + r1.xyz;
