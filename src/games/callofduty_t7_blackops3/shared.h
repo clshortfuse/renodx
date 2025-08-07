@@ -84,6 +84,7 @@ struct ShaderInjectData {
   // float custom_lut_is_upgrade_tex;
   // float custom_lut_white_threshold;
   // float custom_lut_white_amount;
+  float custom_tone_map_preexposure;
 };
 
 #ifndef __cplusplus
@@ -139,6 +140,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_LUT_BLACK_AMOUNT                shader_injection.custom_lut_black_amount
 // #define CUSTOM_LUT_WHITE_THRESHOLD             shader_injection.custom_lut_white_threshold
 // #define CUSTOM_LUT_WHITE_AMOUNT                shader_injection.custom_lut_white_amount
+#define CUSTOM_TONE_MAP_PREEXPOSURE shader_injection.custom_tone_map_preexposure
 
 #include "../../shaders/renodx.hlsl"
 

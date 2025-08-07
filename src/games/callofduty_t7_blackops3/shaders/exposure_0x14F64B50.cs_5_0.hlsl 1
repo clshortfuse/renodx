@@ -134,7 +134,7 @@ RWTexture2D<float> gExposureAdapt : register(u1);
 #define cmp -
 
 
-void main)
+void main()
 {
 // Needs manual fix for instruction:
 // unknown dcl_: dcl_uav_typed_texture2d (float,float,float,float) u0

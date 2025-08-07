@@ -27,22 +27,20 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  /*
-  * Tonemapping from Rec709 Linear normalizes to 0-32768 (2^15), with highlight clipping. 
-  */
-
-  //color tonemapping 
+  //color
   r0.xyz = codeTexture2.Sample(bilinearClamp_s, v0.xy).xyz; //linear
   float3 colorUntonemapped = r0.rgb; //without bloom
 
+  //compresses linear to normalized. removing saturate unclamps values.
   r0.xyz = r0.xyz * v1.xxx + float3(0.00872999988,0.00872999988,0.00872999988);
-  r0.xyz = log2(r0.xyz); 
+  r0.xyz = log2(r0.xyz);
   r0.xyz = saturate(r0.xyz * float3(0.0727029592,0.0727029592,0.0727029592) + float3(0.598205984,0.598205984,0.598205984));
   r1.xyz = r0.xyz * float3(7.71294689,7.71294689,7.71294689) + float3(-19.3115273,-19.3115273,-19.3115273);
   r1.xyz = r1.xyz * r0.xyz + float3(14.2751675,14.2751675,14.2751675);
   r1.xyz = r1.xyz * r0.xyz + float3(-2.49004531,-2.49004531,-2.49004531);
   r1.xyz = r1.xyz * r0.xyz + float3(0.87808305,0.87808305,0.87808305);
   r0.xyz = saturate(r1.xyz * r0.xyz + float3(-0.0669102818,-0.0669102818,-0.0669102818));
+  float3 colorSDRNetural = r0.xyz;
   
   //bloom w/ tonmapping + color
   r1.xyz = codeTexture0.Sample(bilinearClamp_s, v0.xy).xyz;
@@ -53,16 +51,16 @@ void main(
   
   r2.xyz = r1.xyz + r0.xyz;
   r0.xyz = -r0.xyz * r1.xyz + r2.xyz; //bloom is dependent on color, probably to make pronounced and not just straight addition?
-  r1.xyz = codeTexture4.Sample(bilinearClamp_s, v0.xy).xyz; //unkown what tex is for. RenderDoc shows black. is it only on occasions? 
+  r1.xyz = codeTexture4.Sample(bilinearClamp_s, v0.xy).xyz; //unkown what tex is for. RenderDoc shows black. is it only on occasions?
   r0.xyz = saturate(r1.xyz * float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) + r0.xyz);
   r0.xyz = r0.xyz * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625);
 
-  // r0.xyz = codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz; //LUT
-  r0.xyz = LUT_CorrectBlack(r0.xyz, codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz);
-  // r0.xyz = LUT_CorrectWhite(r0.xyz, codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz);
+  //LUT
+  r0.xyz = codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz;
+  // r0.xyz = LUT_CorrectBlack(r0.xyz, codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz);
 
   // o0.xyz = r0.xyz;
-  o0.xyz = Tradeoff_Tonemap(colorUntonemapped, r0.xyz); //renodx tonemap
+  o0.xyz = Tradeoff_Tonemap(colorUntonemapped, r0.xyz, colorSDRNetural); //renodx tonemap
 
   //idk, and to unknown 2nd output
   r0.x = dot(r0.xyz, float3(6.48803689e-006,2.18261721e-005,2.20336915e-006));

@@ -150,7 +150,7 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  //getting 
+  //postFxControl1
   r0.xyzw = v0.xyxy * float4(2,2,2,2) + float4(-1,-1,-1,-1);
   r1.xy = r0.zw * r0.zw;
   r1.xy = postFxControl0.xy * r1.xy;
@@ -167,38 +167,51 @@ void main(
   r0.xyzw = r1.xyzw * r0.xyzw;
   r0.xyzw = r0.xyzw * float4(0.5,0.5,0.5,0.5) + float4(0.5,0.5,0.5,0.5);
 
+  //color
   r1.x = codeTexture2.Sample(bilinearClamp_s, r0.zw).x;
   r1.yz = codeTexture2.Sample(bilinearClamp_s, r0.xy).yz;
-  float3 colorUntonemapped = r1.xyz; //without bloom
+  float3 colorUntonemapped = r1.xyz; //linear
+  // o0.xyz = r1.xyz;
+  // return;
 
+  //continues postFxControl1, compresses linear to normalized. removing saturate unclamps values.
   r0.xyz = r1.xyz * v1.xxx + float3(0.00872999988,0.00872999988,0.00872999988);
   r0.xyz = log2(r0.xyz);
   r0.xyz = saturate(r0.xyz * float3(0.0727029592,0.0727029592,0.0727029592) + float3(0.598205984,0.598205984,0.598205984));
+  // r0.xyz = (r0.xyz * float3(0.0727029592,0.0727029592,0.0727029592) + float3(0.598205984,0.598205984,0.598205984));
   r1.xyz = r0.xyz * float3(7.71294689,7.71294689,7.71294689) + float3(-19.3115273,-19.3115273,-19.3115273);
   r1.xyz = r1.xyz * r0.xyz + float3(14.2751675,14.2751675,14.2751675);
   r1.xyz = r1.xyz * r0.xyz + float3(-2.49004531,-2.49004531,-2.49004531);
   r1.xyz = r1.xyz * r0.xyz + float3(0.87808305,0.87808305,0.87808305);
   r0.xyz = saturate(r1.xyz * r0.xyz + float3(-0.0669102818,-0.0669102818,-0.0669102818));
+  // r0.xyz = (r1.xyz * r0.xyz + float3(-0.0669102818,-0.0669102818,-0.0669102818));
+
+  // float3 colorUntonemapped = r0.xyz; //linear
+  // o0.xyz = r0.xyz;
+  // return;
 
   r1.xyz = codeTexture0.Sample(bilinearClamp_s, v0.xy).xyz;
   colorUntonemapped = Bloom_AddScaled(colorUntonemapped, r1.xyz); //add in bloom
 
+  //bloom
   r1.xyz = saturate(float3(0.00390625233,0.00390625233,0.00390625233) * r1.xyz);
-  r1.xyz = Bloom_ScaleTonemappedAfterSaturate(r1.xyz);
-
+  r1.xyz = Bloom_ScaleTonemappedAfterSaturate(r1.xyz); //user scaled bloom
   r2.xyz = r1.xyz + r0.xyz;
   r0.xyz = -r0.xyz * r1.xyz + r2.xyz;
   r1.xyz = codeTexture4.Sample(bilinearClamp_s, v0.xy).xyz;
   r0.xyz = saturate(r1.xyz * float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) + r0.xyz);
   r0.xyz = r0.xyz * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625);
+  float3 colorSDRNetural = r0.xyz;
 
-  // r0.xyz = codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz; //LUT
-  r0.xyz = LUT_CorrectBlack(r0.xyz, codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz);
-  // r0.xyz = LUT_CorrectWhite(r0.xyz, codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz);
+  //LUT
+  r0.xyz = codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz;
+  // r0.xyz = LUT_CorrectBlack(r0.xyz, codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz);
 
   // o0.xyz = r0.xyz;
-  o0.xyz = Tradeoff_Tonemap(colorUntonemapped, r0.xyz); //renodx tonemap
+  o0.xyz = Tradeoff_Tonemap(colorUntonemapped, r0.xyz, colorSDRNetural); //renodx tonemap
+  // o0.xyz = renodx::draw::ToneMapPass(colorUntonemapped, r0.xyz); //renodx tonemap
 
+  //idk, to unknown 2nd output
   r0.x = dot(r0.xyz, float3(6.48803689e-006,2.18261721e-005,2.20336915e-006));
   r0.y = log2(r0.x);
   r0.y = 0.333333343 * r0.y;

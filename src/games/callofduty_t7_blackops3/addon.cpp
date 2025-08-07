@@ -90,9 +90,9 @@ const std::unordered_map<std::string, float> PRESET_SCREENSHOT_10000 = {
 
 const std::unordered_map<std::string, float> PRESET_ACES = {
     {"ToneMapType", 2.f},
-    {"ColorGradeExposure", 1.5f},
+    {"ColorGradeExposure", 1.0f},
     {"ColorGradeHighlights", 50.f},
-    {"ColorGradeShadows", 60.f},
+    {"ColorGradeShadows", 50.f},
     {"ColorGradeSaturation", 50.f},
     {"ColorGradeHighlightSaturation", 50.f},
     {"ColorGradeBlowout", 0.f},
@@ -103,7 +103,7 @@ const std::unordered_map<std::string, float> PRESET_TRADEOFF_RAW = {
     {"CustomTradeoffMode", 3.f},
 };
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_HDR = {
-    {"CustomTradeoffRatio", 1.f},
+    {"CustomTradeoffRatio", 5.f},
     {"CustomTradeoffMode", 1.f},
     {"CustomTradeoffGammaAmount", 2.2f}};
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_BALANCED = {
@@ -259,7 +259,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Emulates a display EOTF.",
         .labels = {"Off", "2.2", "BT.1886"},
-        // .is_visible = []() { return current_settings_mode >= 1; },
+        .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapScaling",
@@ -357,6 +357,18 @@ renodx::utils::settings::Settings settings = {
         .max = 2.f,
         .format = "%.2f",
         .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "CustomColorGradePreExposure",
+        .binding = &shader_injection.custom_tone_map_preexposure,
+        .default_value = 0.05f,
+        .label = "Pre-Exposure (White Clipping)",
+        .section = "Color Grading",
+        .min = 0.05f,
+        .max = 1.f,
+        .format = "%.4f",
+        .parse = [](float value) { return value; },
+        .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
@@ -756,7 +768,8 @@ renodx::utils::settings::Settings settings = {
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = " * Black Ops 3 mod by XgarhontX"
                  "\n * RenoDX by clshortfuse"
-                 "\n * PumboAutoHDR (for loading movies) by Filoppi",
+                 "\n * PumboAutoHDR (for loading movies) by Filoppi"
+                 "\n * HDR expertise from Scrungus",
         .section = "Credits",
     },
     new renodx::utils::settings::Setting{
@@ -956,17 +969,17 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .usage_include = reshade::api::resource_usage::render_target,
         });
 
-        // LUT
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-            .old_format = reshade::api::format::r11g11b10_float,
-            .new_format = reshade::api::format::r16g16b16a16_float,
-            .ignore_size = true,
-            .shader_hash = 0x2807E427,
-            .use_resource_view_cloning = true,
-            // .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
-            // .dimensions = {.width = 32, .height = 32, .depth = 32},
-            // .usage_include = reshade::api::resource_usage::cpu_access,
-        });
+        // // LUT
+        // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        //     .old_format = reshade::api::format::r11g11b10_float,
+        //     .new_format = reshade::api::format::r16g16b16a16_float,
+        //     .ignore_size = true,
+        //     .shader_hash = 0x2807E427,
+        //     .use_resource_view_cloning = true,
+        //     // .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
+        //     // .dimensions = {.width = 32, .height = 32, .depth = 32},
+        //     // .usage_include = reshade::api::resource_usage::cpu_access,
+        // });
       }
 
       break;

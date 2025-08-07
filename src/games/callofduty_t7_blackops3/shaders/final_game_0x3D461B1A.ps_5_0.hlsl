@@ -128,8 +128,8 @@ cbuffer PostFxCBuffer : register(b8)
   float4 postfxViewProjMatrix3 : packoffset(c125);
 }
 
-SamplerState bilinearClamp_s : register(s0);
-Texture2D<float4> codeTexture0 : register(t0);
+SamplerState bilinearClamp_s : register(s0); //bilinearClamp
+Texture2D<float4> codeTexture0 : register(t0); //color
 
 
 // 3Dmigoto declarations
@@ -145,19 +145,21 @@ void main(
   // uint4 bitmask, uiDest;
   // float4 fDest;
 
-
-  //take in gamma and decode it to linear
+  //color
   r0.xyz = codeTexture0.Sample(bilinearClamp_s, v1.xy).xyz;
 
   if (RENODX_TONE_MAP_TYPE != 0) {
     //renodx
     o0.xyz = Tradeoff_AfterFullscreenShaders(r0.xyz);
   } else {
-    //vanilla to srgb
+    //Note: unlike main menu, no noise/dither
+
+    //postFx
     r0.xyz = float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) * r0.xyz;
     r1.xyz = log2(r0.xyz);
     r1.xyz = postFxControl2.yyy * r1.xyz;
     r1.xyz = exp2(r1.xyz);
+
     r1.xyz = r1.xyz * postFxControl2.zzz + postFxControl2.www;
     r2.xyz = cmp(postFxControl1.www >= r0.xyz);
     r0.xyz = postFxControl2.xxx * r0.xyz;

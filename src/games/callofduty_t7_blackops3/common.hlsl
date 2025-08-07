@@ -1,12 +1,13 @@
 #include "./shared.h"
 
-#define SDR_NOMRALIZATION_MAX 32768.0
+#define SDR_NOMRALIZATION_MAX 32769.0 //32768 has floating point error
 // #define SDR_NOMRALIZATION_TRADEOFF 0.15 //TODO to reshade var instead?
 
-float3 LUT_CorrectBlack(float3 color_input, float3 lut_color) {
-  // if (CUSTOM_LUT_BLACK_THRESHOLD <= 0) return lut_color;
-  return renodx::lut::CorrectBlack(color_input, lut_color, SDR_NOMRALIZATION_MAX * 0.01f * CUSTOM_LUT_BLACK_THRESHOLD, CUSTOM_LUT_BLACK_AMOUNT);
-}
+// float3 LUT_CorrectBlack(float3 color_input, float3 lut_color) {
+//   // if (CUSTOM_LUT_BLACK_THRESHOLD <= 0) return lut_color;
+//   return renodx::lut::CorrectBlack(color_input, lut_color, SDR_NOMRALIZATION_MAX * 0.01f * CUSTOM_LUT_BLACK_THRESHOLD, CUSTOM_LUT_BLACK_AMOUNT);
+//   // return color_input;
+// }
 
 // float3 LUT_CorrectWhite(float3 color_input, float3 lut_color) {
 //   // if (CUSTOM_LUT_WHITE_THRESHOLD <= 0) return lut_color;
@@ -63,15 +64,19 @@ float3 Tradeoff_AfterFullscreenShaders(float3 color) {
 * in: linear untonemapped & tonemapped
 * out: scaled tradeoff color space normalized up to SDR_NOMRALIZATION_MAX
 */
-float3 Tradeoff_Tonemap(float3 colorUntonemapped, float3 colorTonemapped) {
+float3 Tradeoff_Tonemap(float3 colorUntonemapped, float3 colorTonemapped, float3 colorSDRNeutral) {
   //color untonemap to tonemapped
   if (RENODX_TONE_MAP_TYPE != 0) {
     colorTonemapped = Tradeoff_TonemappedTo01(colorTonemapped);
-    colorTonemapped = renodx::draw::ToneMapPass(colorUntonemapped, colorTonemapped);
+    // if (colorTonemapped.x > 1) colorTonemapped.x = 100000;
+    // if (colorTonemapped.y > 1) colorTonemapped.y = 100000;
+    // if (colorTonemapped.z > 1) colorTonemapped.z = 100000;
+    colorSDRNeutral = Tradeoff_TonemappedTo01(colorSDRNeutral);
+    colorTonemapped = renodx::draw::ToneMapPass(colorUntonemapped * CUSTOM_TONE_MAP_PREEXPOSURE, colorTonemapped, colorSDRNeutral);
     // colorTonemapped = renodx::color::bt2020::from::BT709(colorTonemapped);
   }
   
-  //skip tradeoff
+  //gatekeep: skip tradeoff
   if (RENODX_TONE_MAP_TYPE == 0) return colorTonemapped;
 
   //to srgb/gamma
