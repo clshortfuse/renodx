@@ -26,6 +26,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 ShaderInjectData shader_injection;
 
+renodx::utils::settings::Setting* upgrade_rendering_setting;
+
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({
     renodx::templates::settings::CreateDefaultSettings({
         {"ToneMapType", {.binding = &shader_injection.tone_map_type}},
@@ -107,6 +109,16 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .section = "Effects",
             .labels = {"Per-Channel", "Luminance"},
         },
+        upgrade_rendering_setting = renodx::templates::settings::CreateSetting({
+            .key = "FxUpgradeRender",
+            .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+            .default_value = 0.f,
+            .label = "Rendering",
+            .section = "Effects",
+            .tooltip = "Upgrades the post process format to reduce banding (requires restart)",
+            .labels = {"R11G11B10F", "R16G16B16A16F"},
+            .is_global = true,
+        }),
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
             .label = "Reset All",
@@ -116,6 +128,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
               for (auto* setting : settings) {
                 if (setting->key.empty()) continue;
                 if (!setting->can_reset) continue;
+                if (setting->is_global) continue;
                 renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
               }
             },
@@ -229,23 +242,28 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .usage_include = reshade::api::resource_usage::render_target,
       });
 
+      renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
+
       // Primary render (reduces banding)
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r11g11b10_float,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .use_resource_view_cloning = true,
-          .aspect_ratio = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
-          .usage_include = reshade::api::resource_usage::render_target,
-      });
+      if (upgrade_rendering_setting->GetValue() == 1.f) {
+        reshade::log::message(reshade::log::level::info, "Upgrading rendering to R16G16B16A16F");
+        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            .old_format = reshade::api::format::r11g11b10_float,
+            .new_format = reshade::api::format::r16g16b16a16_float,
+            .use_resource_view_cloning = true,
+            .aspect_ratio = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
+            .usage_include = reshade::api::resource_usage::render_target,
+        });
+      }
 
       break;
     case DLL_PROCESS_DETACH:
+      renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
       reshade::unregister_addon(h_module);
       break;
   }
 
   renodx::utils::random::Use(fdw_reason);
-  renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
