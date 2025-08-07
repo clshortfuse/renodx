@@ -125,7 +125,7 @@ void main(
 
   o0.xyz = float3(32768,32768,32768) * r0.xyz;
 
-  o0.xyz = Tradeoff_PrepareFullWidthFsfx(o0.xyz, 2);
+  o0.xyz = Tradeoff_PrepareFullWidthFsfx(o0.xyz, 1.5);
   o0.w = 1;
   return;
 }

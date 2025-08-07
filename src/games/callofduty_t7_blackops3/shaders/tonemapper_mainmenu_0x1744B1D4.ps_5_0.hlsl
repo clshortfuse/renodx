@@ -170,6 +170,7 @@ void main(
   //color
   r1.x = codeTexture2.Sample(bilinearClamp_s, r0.zw).x;
   r1.yz = codeTexture2.Sample(bilinearClamp_s, r0.xy).yz;
+  r1.xyz = Tonemap_FixInColor(r1.xyz);
   float3 colorUntonemapped = r1.xyz; //linear
   // o0.xyz = r1.xyz;
   // return;
@@ -198,7 +199,7 @@ void main(
   r1.xyz = Bloom_ScaleTonemappedAfterSaturate(r1.xyz); //user scaled bloom
   r2.xyz = r1.xyz + r0.xyz;
   r0.xyz = -r0.xyz * r1.xyz + r2.xyz;
-  r1.xyz = codeTexture4.Sample(bilinearClamp_s, v0.xy).xyz;
+  r1.xyz = codeTexture4.Sample(bilinearClamp_s, v0.xy).xyz; //idk
   r0.xyz = saturate(r1.xyz * float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) + r0.xyz);
   r0.xyz = r0.xyz * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625);
   float3 colorSDRNetural = r0.xyz;
@@ -211,7 +212,7 @@ void main(
   o0.xyz = Tradeoff_Tonemap(colorUntonemapped, r0.xyz, colorSDRNetural); //renodx tonemap
   // o0.xyz = renodx::draw::ToneMapPass(colorUntonemapped, r0.xyz); //renodx tonemap
 
-  //idk, to unknown 2nd output
+  //idk, to unknown 2nd output, aa?
   r0.x = dot(r0.xyz, float3(6.48803689e-006,2.18261721e-005,2.20336915e-006));
   r0.y = log2(r0.x);
   r0.y = 0.333333343 * r0.y;

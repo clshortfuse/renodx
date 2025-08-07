@@ -29,6 +29,7 @@ void main(
 
   //color
   r0.xyz = codeTexture2.Sample(bilinearClamp_s, v0.xy).xyz; //linear
+  r0.xyz = Tonemap_FixInColor(r0.xyz);
   float3 colorUntonemapped = r0.rgb; //without bloom
 
   //compresses linear to normalized. removing saturate unclamps values.

@@ -74,7 +74,7 @@ float current_settings_mode = 0;
 const std::unordered_map<std::string, float> PRESET_RENODRT = {
     {"ToneMapType", 3.f},
     {"ColorGradeExposure", 1.f},
-    {"ColorGradeHighlights", 50.f},
+    {"ColorGradeHighlights", 75.f},
     {"ColorGradeShadows", 50.f},
     {"ColorGradeSaturation", 50.f},
     {"ColorGradeHighlightSaturation", 50.f},
@@ -92,7 +92,7 @@ const std::unordered_map<std::string, float> PRESET_ACES = {
     {"ToneMapType", 2.f},
     {"ColorGradeExposure", 1.0f},
     {"ColorGradeHighlights", 50.f},
-    {"ColorGradeShadows", 50.f},
+    {"ColorGradeShadows", 75.f},
     {"ColorGradeSaturation", 50.f},
     {"ColorGradeHighlightSaturation", 50.f},
     {"ColorGradeBlowout", 0.f},
@@ -103,11 +103,11 @@ const std::unordered_map<std::string, float> PRESET_TRADEOFF_RAW = {
     {"CustomTradeoffMode", 3.f},
 };
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_HDR = {
-    {"CustomTradeoffRatio", 5.f},
+    {"CustomTradeoffRatio", 10.f},
     {"CustomTradeoffMode", 1.f},
     {"CustomTradeoffGammaAmount", 2.2f}};
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_BALANCED = {
-    {"CustomTradeoffRatio", 10.f},
+    {"CustomTradeoffRatio", 30.f},
     {"CustomTradeoffMode", 1.f},
     {"CustomTradeoffGammaAmount", 2.2f}};
 };  // namespace
@@ -184,7 +184,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preset: Screenshot (No Tradeoff & HUD)",
+        .label = "Preset: Screenshot",
         .group = "button-line-1",
         .on_change = []() {
           for (auto* setting : settings) {
@@ -366,7 +366,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .min = 0.05f,
         .max = 1.f,
-        .format = "%.4f",
+        .format = "%.2f",
         .parse = [](float value) { return value; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
@@ -459,28 +459,28 @@ renodx::utils::settings::Settings settings = {
                  "\n * 45 = -0.25 nits",
         .section = "LUT Correction",
     },
-    new renodx::utils::settings::Setting{
-        .key = "CustomLutBlackThreshold",
-        .binding = &shader_injection.custom_lut_black_threshold,
-        .default_value = 0.f,
-        .label = "LUT Black Lowering Threshold",
-        .section = "LUT Correction",
-        .max = 100.f,
-        .format = "%.2f",
-        .parse = [](float value) { return value * 0.01f; },
-        // .is_visible = []() { return current_settings_mode >= 1; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "CustomLutBlackAmount",
-        .binding = &shader_injection.custom_lut_black_amount,
-        .default_value = 0.f,
-        .label = "LUT Black Lowering Influence Range",
-        .section = "LUT Correction",
-        .max = 100.f,
-        .format = "%.2f",
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 2; },
-    },
+    // new renodx::utils::settings::Setting{
+    //     .key = "CustomLutBlackThreshold",
+    //     .binding = &shader_injection.custom_lut_black_threshold,
+    //     .default_value = 0.f,
+    //     .label = "LUT Black Lowering Threshold",
+    //     .section = "LUT Correction",
+    //     .max = 100.f,
+    //     .format = "%.2f",
+    //     .parse = [](float value) { return value * 0.01f; },
+    //     // .is_visible = []() { return current_settings_mode >= 1; },
+    // },
+    // new renodx::utils::settings::Setting{
+    //     .key = "CustomLutBlackAmount",
+    //     .binding = &shader_injection.custom_lut_black_amount,
+    //     .default_value = 0.f,
+    //     .label = "LUT Black Lowering Influence Range",
+    //     .section = "LUT Correction",
+    //     .max = 100.f,
+    //     .format = "%.2f",
+    //     .parse = [](float value) { return value * 0.01f; },
+    //     .is_visible = []() { return current_settings_mode >= 2; },
+    // },
 
     // new renodx::utils::settings::Setting{
     //     .key = "CustomLutWhiteThreshold",
@@ -617,7 +617,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preset: PQ (Constrasty Overlays)",
+        .label = "Preset: PQ (Constrasted Overlays)",
         .section = "Tradeoff",
         .group = "button-line-2",
         .tooltip = "Pretty useless..."
@@ -656,7 +656,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "CustomTradeoffRatio",
         .binding = &shader_injection.custom_tradeoff_ratio,
-        .default_value = 10.f,
+        .default_value = 30.f,
         .label = "Tradeoff Brightness Ratio",
         .section = "Tradeoff",
         .tooltip = "Increasing the value lowers overlay fx brightness at the cost of clipping HDR brightness.",
@@ -823,6 +823,21 @@ bool initialized = false;
 
 // namespace
 
+// from tombraider2013 de
+bool fired_on_init_swapchain = false;
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  if (fired_on_init_swapchain) return;
+  fired_on_init_swapchain = true;
+
+  auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+  auto white_level = 203.f;
+  if (!peak.has_value()) {
+    peak = 1000.f;
+  }
+  settings[2]->default_value = peak.value();
+  settings[3]->default_value = renodx::utils::swapchain::ComputeReferenceWhite(peak.value());
+}
+
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX (Call of Duty: Black Ops 3)";
 
@@ -927,11 +942,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           renodx::mods::swapchain::use_resize_buffer = setting->GetValue() < 4;
           shader_injection.swap_chain_encoding_color_space = is_hdr10 ? 1.f : 0.f;
           settings.push_back(setting);
-
-          //   bool is_hdr10 = true;
-          //   renodx::mods::swapchain::SetUseHDR10(is_hdr10);
-          //   renodx::mods::swapchain::use_resize_buffer = false;
-          //   shader_injection.swap_chain_encoding_color_space = is_hdr10 ? 1.f : 0.f;
         }
 
         //  r8g8b8a8_unorm
@@ -982,8 +992,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         // });
       }
 
+      // peak nits
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_addon(h_module);
       break;
   }

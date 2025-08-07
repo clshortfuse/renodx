@@ -136,216 +136,219 @@ RWTexture2D<float> gExposureAdapt : register(u1);
 
 void main()
 {
-// Needs manual fix for instruction:
-// unknown dcl_: dcl_uav_typed_texture2d (float,float,float,float) u0
-// Needs manual fix for instruction:
-// unknown dcl_: dcl_uav_typed_texture2d (float,float,float,float) u1
-  float4 r0,r1,r2;
-  uint4 bitmask, uiDest;
-  float4 fDest;
-
-// Needs manual fix for instruction:
-// unknown dcl_: dcl_thread_group 8, 8, 1
-  g1[vThreadIDInGroupFlattened.x].val[0/4] = 0;
-  g0[vThreadIDInGroupFlattened.x].val[0/4] = 0;
-  u0.GetDimensions(0, uiDest.x, uiDest.y, uiDest.z);
-  r0.xy = uiDest.xy;
-  r0.zw = (int2)r0.xy + int2(7,7);
-  r0.zw = (uint2)r0.zw >> int2(3,3);
-  r1.xy = (int2)r0.zw * (int2)vThreadIDInGroup.xy;
-  r0.zw = mad((int2)vThreadIDInGroup.xy, (int2)r0.zw, (int2)r0.zw);
-  r0.xy = min((uint2)r0.zw, (uint2)r0.xy);
-  r0.z = r1.y;
-  while (true) {
-    r0.w = cmp((uint)r0.z >= (uint)r0.y);
-    if (r0.w != 0) break;
-    r2.yzw = r0.zzz;
-    r2.x = r1.x;
-    while (true) {
-      r0.w = cmp((uint)r2.x >= (uint)r0.x);
-      if (r0.w != 0) break;
-    // No code for instruction (needs manual fix):
-        ld_uav_typed_indexable(texture2d)(float,float,float,float) r0.w, r2.xyzw, u0.yzwx
-      r0.w = max(0.00100000005, r0.w);
-      r0.w = log2(r0.w);
-      r1.z = g0[vThreadIDInGroupFlattened.x].val[0/4];
-      r0.w = r0.w * 0.693147182 + r1.z;
-      g0[vThreadIDInGroupFlattened.x].val[0/4] = r0.w;
-      r0.w = g1[vThreadIDInGroupFlattened.x].val[0/4];
-      r0.w = 1 + r0.w;
-      g1[vThreadIDInGroupFlattened.x].val[0/4] = r0.w;
-      r2.x = (int)r2.x + 1;
-    }
-    r0.z = (int)r0.z + 1;
-  }
-  r0.x = g1[vThreadIDInGroupFlattened.x].val[0/4];
-  r0.y = cmp(1 < r0.x);
-  if (r0.y != 0) {
-    r0.y = g0[vThreadIDInGroupFlattened.x].val[0/4];
-    r0.x = r0.y / r0.x;
-    g0[vThreadIDInGroupFlattened.x].val[0/4] = r0.x;
-    g1[vThreadIDInGroupFlattened.x].val[0/4] = 1;
-  }
-  r0.xyzw = cmp((uint4)vThreadIDInGroupFlattened.xxxx < int4(8,32,16,4));
-  if (r0.x != 0) {
-    r1.x = vThreadIDInGroupFlattened.x;
-    r1.yzw = float3(0,0,0);
-  // No code for instruction (needs manual fix):
-    ld_uav_typed_indexable(texture2d)(float,float,float,float) r1.x, r1.xyzw, u1.xyzw
-    g2[vThreadIDInGroupFlattened.x].val[0/4] = r1.x;
-  }
-  GroupMemoryBarrierWithGroupSync();
-  r1.x = cmp(0 < (uint)vThreadIDInGroupFlattened.x);
-  r1.x = r0.x ? r1.x : 0;
-  if (r1.x != 0) {
-    r1.x = (int)vThreadIDInGroupFlattened.x + -1;
-    r1.x = g2[r1.x].val[0/4];
-    r2.x = vThreadIDInGroupFlattened.x;
-    r2.yzw = float3(0,0,0);
-  // No code for instruction (needs manual fix):
-    store_uav_typed u1.xyzw, r2.xyzw, r1.xxxx
-  }
-  if (r0.y != 0) {
-    r0.y = g1[vThreadIDInGroupFlattened.x].val[0/4];
-    r1.x = (int)vThreadIDInGroupFlattened.x + 32;
-    r1.y = g1[r1.x].val[0/4];
-    r0.y = r1.y + r0.y;
-    g1[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
-    r0.y = g0[vThreadIDInGroupFlattened.x].val[0/4];
-    r1.x = g0[r1.x].val[0/4];
-    r0.y = r1.x + r0.y;
-    g0[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
-  }
-  GroupMemoryBarrierWithGroupSync();
-  if (r0.z != 0) {
-    r0.y = g1[vThreadIDInGroupFlattened.x].val[0/4];
-    r0.z = (int)vThreadIDInGroupFlattened.x + 16;
-    r1.x = g1[r0.z].val[0/4];
-    r0.y = r1.x + r0.y;
-    g1[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
-    r0.y = g0[vThreadIDInGroupFlattened.x].val[0/4];
-    r0.z = g0[r0.z].val[0/4];
-    r0.y = r0.y + r0.z;
-    g0[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
-  }
-  GroupMemoryBarrierWithGroupSync();
-  if (r0.x != 0) {
-    r0.y = g1[vThreadIDInGroupFlattened.x].val[0/4];
-    r0.z = (int)vThreadIDInGroupFlattened.x + 8;
-    r1.x = g1[r0.z].val[0/4];
-    r0.y = r1.x + r0.y;
-    g1[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
-    r0.y = g0[vThreadIDInGroupFlattened.x].val[0/4];
-    r0.z = g0[r0.z].val[0/4];
-    r0.y = r0.y + r0.z;
-    g0[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
-  }
-  GroupMemoryBarrierWithGroupSync();
-  if (r0.w != 0) {
-    r0.y = g1[vThreadIDInGroupFlattened.x].val[0/4];
-    r0.z = (int)vThreadIDInGroupFlattened.x + 4;
-    r0.w = g1[r0.z].val[0/4];
-    r0.y = r0.y + r0.w;
-    g1[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
-    r0.y = g0[vThreadIDInGroupFlattened.x].val[0/4];
-    r0.w = g0[r0.z].val[0/4];
-    r0.y = r0.y + r0.w;
-    g0[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
-    r0.y = g2[vThreadIDInGroupFlattened.x].val[0/4];
-    r0.z = g2[r0.z].val[0/4];
-    r0.y = r0.y + r0.z;
-    g2[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
-  }
-  GroupMemoryBarrierWithGroupSync();
-  r0.yz = cmp((uint2)vThreadIDInGroupFlattened.xx < int2(2,1));
-  if (r0.y != 0) {
-    r0.y = g1[vThreadIDInGroupFlattened.x].val[0/4];
-    r0.w = (int)vThreadIDInGroupFlattened.x + 2;
-    r1.x = g1[r0.w].val[0/4];
-    r0.y = r1.x + r0.y;
-    g1[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
-    r0.y = g0[vThreadIDInGroupFlattened.x].val[0/4];
-    r1.x = g0[r0.w].val[0/4];
-    r0.y = r1.x + r0.y;
-    g0[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
-    r0.y = g2[vThreadIDInGroupFlattened.x].val[0/4];
-    r0.w = g2[r0.w].val[0/4];
-    r0.y = r0.y + r0.w;
-    g2[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
-  }
-  GroupMemoryBarrierWithGroupSync();
-  if (r0.z != 0) {
-    r0.y = g1[0].val[0/4];
-    r0.z = g1[1].val[0/4];
-    r0.y = r0.y + r0.z;
-    g1[0].val[0/4] = r0.y;
-    r0.y = g0[0].val[0/4];
-    r0.z = g0[1].val[0/4];
-    r0.y = r0.y + r0.z;
-    g0[0].val[0/4] = r0.y;
-    r0.y = g2[0].val[0/4];
-    r0.z = g2[1].val[0/4];
-    r0.y = r0.y + r0.z;
-    g2[0].val[0/4] = r0.y;
-  }
-  GroupMemoryBarrierWithGroupSync();
-  if (vThreadIDInGroupFlattened.x == 0) {
-    r0.y = g0[0].val[0/4];
-    r0.z = g1[0].val[0/4];
-    r0.y = r0.y / r0.z;
-    r0.y = 1.44269502 * r0.y;
-    r0.y = exp2(r0.y);
-    r0.y = postFxControl1.y * r0.y;
-    r0.y = 5.55555534 * r0.y;
-    r0.y = log2(r0.y);
-    r0.y = postFxControl0.z + r0.y;
-    r0.y = 3 + r0.y;
-    r0.y = -postFxControl1.x + r0.y;
-    r0.y = postFxControl0.w * r0.y + postFxControl1.x;
-    r0.y = max(postFxControl0.x, r0.y);
-    r0.y = min(postFxControl0.y, r0.y);
-    r0.zw = float2(-1,1) + postFxControl1.xx;
-    r0.y = max(r0.y, r0.z);
-    r0.y = min(r0.y, r0.w);
-    r0.y = -3 + r0.y;
-    r0.y = exp2(r0.y);
-    r0.z = cmp(0.5 < postFxControl1.z);
-  // No code for instruction (needs manual fix):
-    ld_uav_typed_indexable(texture2d)(float,float,float,float) r0.w, l(8, 0, 0, 0), u1.yzwx
-    r1.x = 0.0399999991 + r0.y;
-    r1.x = 0.0399999991 / r1.x;
-    r1.y = 1 + -r1.x;
-    r1.y = 0.100000001 * r1.y;
-    r1.x = r1.x * 0.400000006 + r1.y;
-    r1.y = r0.y + -r0.w;
-    r1.x = 60 * r1.x;
-    r1.x = rcp(r1.x);
-    r1.x = -1.44269502 * r1.x;
-    r1.x = exp2(r1.x);
-    r1.x = 1 + -r1.x;
-    r0.w = r1.y * r1.x + r0.w;
-    r0.w = r0.z ? r0.w : r0.y;
-  // No code for instruction (needs manual fix):
-    store_uav_typed u1.xyzw, l(0,0,0,0), r0.wwww
-    r1.x = g2[0].val[0/4];
-    r0.w = r1.x + r0.w;
-    r0.w = 0.111111112 * r0.w;
-    r0.y = r0.z ? r0.w : r0.y;
-  // No code for instruction (needs manual fix):
-    store_uav_typed u1.xyzw, l(8,0,0,0), r0.yyyy
-    r0.y = postFxControl1.y / r0.y;
-  // No code for instruction (needs manual fix):
-    store_uav_typed u0.xyzw, vThreadIDInGroup.xyyy, r0.yyyy
-  }
-  r0.y = cmp(postFxControl1.z < 0.5);
-  r0.x = r0.y ? r0.x : 0;
-  if (r0.x != 0) {
-  // No code for instruction (needs manual fix):
-    ld_uav_typed_indexable(texture2d)(float,float,float,float) r0.x, l(8, 0, 0, 0), u1.xyzw
-    r1.x = vThreadIDInGroupFlattened.x;
-    r1.yzw = float3(0,0,0);
-  // No code for instruction (needs manual fix):
-    store_uav_typed u1.xyzw, r1.xyzw, r0.xxxx
-  }
   return;
+
+
+// // Needs manual fix for instruction:
+// // unknown dcl_: dcl_uav_typed_texture2d (float,float,float,float) u0
+// // Needs manual fix for instruction:
+// // unknown dcl_: dcl_uav_typed_texture2d (float,float,float,float) u1
+//   float4 r0,r1,r2;
+//   uint4 bitmask, uiDest;
+//   float4 fDest;
+
+// // Needs manual fix for instruction:
+// // unknown dcl_: dcl_thread_group 8, 8, 1
+//   g1[vThreadIDInGroupFlattened.x].val[0/4] = 0;
+//   g0[vThreadIDInGroupFlattened.x].val[0/4] = 0;
+//   u0.GetDimensions(0, uiDest.x, uiDest.y, uiDest.z);
+//   r0.xy = uiDest.xy;
+//   r0.zw = (int2)r0.xy + int2(7,7);
+//   r0.zw = (uint2)r0.zw >> int2(3,3);
+//   r1.xy = (int2)r0.zw * (int2)vThreadIDInGroup.xy;
+//   r0.zw = mad((int2)vThreadIDInGroup.xy, (int2)r0.zw, (int2)r0.zw);
+//   r0.xy = min((uint2)r0.zw, (uint2)r0.xy);
+//   r0.z = r1.y;
+//   while (true) {
+//     r0.w = cmp((uint)r0.z >= (uint)r0.y);
+//     if (r0.w != 0) break;
+//     r2.yzw = r0.zzz;
+//     r2.x = r1.x;
+//     while (true) {
+//       r0.w = cmp((uint)r2.x >= (uint)r0.x);
+//       if (r0.w != 0) break;
+//     // No code for instruction (needs manual fix):
+//         ld_uav_typed_indexable(texture2d)(float,float,float,float) r0.w, r2.xyzw, u0.yzwx
+//       r0.w = max(0.00100000005, r0.w);
+//       r0.w = log2(r0.w);
+//       r1.z = g0[vThreadIDInGroupFlattened.x].val[0/4];
+//       r0.w = r0.w * 0.693147182 + r1.z;
+//       g0[vThreadIDInGroupFlattened.x].val[0/4] = r0.w;
+//       r0.w = g1[vThreadIDInGroupFlattened.x].val[0/4];
+//       r0.w = 1 + r0.w;
+//       g1[vThreadIDInGroupFlattened.x].val[0/4] = r0.w;
+//       r2.x = (int)r2.x + 1;
+//     }
+//     r0.z = (int)r0.z + 1;
+//   }
+//   r0.x = g1[vThreadIDInGroupFlattened.x].val[0/4];
+//   r0.y = cmp(1 < r0.x);
+//   if (r0.y != 0) {
+//     r0.y = g0[vThreadIDInGroupFlattened.x].val[0/4];
+//     r0.x = r0.y / r0.x;
+//     g0[vThreadIDInGroupFlattened.x].val[0/4] = r0.x;
+//     g1[vThreadIDInGroupFlattened.x].val[0/4] = 1;
+//   }
+//   r0.xyzw = cmp((uint4)vThreadIDInGroupFlattened.xxxx < int4(8,32,16,4));
+//   if (r0.x != 0) {
+//     r1.x = vThreadIDInGroupFlattened.x;
+//     r1.yzw = float3(0,0,0);
+//   // No code for instruction (needs manual fix):
+//     ld_uav_typed_indexable(texture2d)(float,float,float,float) r1.x, r1.xyzw, u1.xyzw
+//     g2[vThreadIDInGroupFlattened.x].val[0/4] = r1.x;
+//   }
+//   GroupMemoryBarrierWithGroupSync();
+//   r1.x = cmp(0 < (uint)vThreadIDInGroupFlattened.x);
+//   r1.x = r0.x ? r1.x : 0;
+//   if (r1.x != 0) {
+//     r1.x = (int)vThreadIDInGroupFlattened.x + -1;
+//     r1.x = g2[r1.x].val[0/4];
+//     r2.x = vThreadIDInGroupFlattened.x;
+//     r2.yzw = float3(0,0,0);
+//   // No code for instruction (needs manual fix):
+//     store_uav_typed u1.xyzw, r2.xyzw, r1.xxxx
+//   }
+//   if (r0.y != 0) {
+//     r0.y = g1[vThreadIDInGroupFlattened.x].val[0/4];
+//     r1.x = (int)vThreadIDInGroupFlattened.x + 32;
+//     r1.y = g1[r1.x].val[0/4];
+//     r0.y = r1.y + r0.y;
+//     g1[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
+//     r0.y = g0[vThreadIDInGroupFlattened.x].val[0/4];
+//     r1.x = g0[r1.x].val[0/4];
+//     r0.y = r1.x + r0.y;
+//     g0[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
+//   }
+//   GroupMemoryBarrierWithGroupSync();
+//   if (r0.z != 0) {
+//     r0.y = g1[vThreadIDInGroupFlattened.x].val[0/4];
+//     r0.z = (int)vThreadIDInGroupFlattened.x + 16;
+//     r1.x = g1[r0.z].val[0/4];
+//     r0.y = r1.x + r0.y;
+//     g1[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
+//     r0.y = g0[vThreadIDInGroupFlattened.x].val[0/4];
+//     r0.z = g0[r0.z].val[0/4];
+//     r0.y = r0.y + r0.z;
+//     g0[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
+//   }
+//   GroupMemoryBarrierWithGroupSync();
+//   if (r0.x != 0) {
+//     r0.y = g1[vThreadIDInGroupFlattened.x].val[0/4];
+//     r0.z = (int)vThreadIDInGroupFlattened.x + 8;
+//     r1.x = g1[r0.z].val[0/4];
+//     r0.y = r1.x + r0.y;
+//     g1[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
+//     r0.y = g0[vThreadIDInGroupFlattened.x].val[0/4];
+//     r0.z = g0[r0.z].val[0/4];
+//     r0.y = r0.y + r0.z;
+//     g0[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
+//   }
+//   GroupMemoryBarrierWithGroupSync();
+//   if (r0.w != 0) {
+//     r0.y = g1[vThreadIDInGroupFlattened.x].val[0/4];
+//     r0.z = (int)vThreadIDInGroupFlattened.x + 4;
+//     r0.w = g1[r0.z].val[0/4];
+//     r0.y = r0.y + r0.w;
+//     g1[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
+//     r0.y = g0[vThreadIDInGroupFlattened.x].val[0/4];
+//     r0.w = g0[r0.z].val[0/4];
+//     r0.y = r0.y + r0.w;
+//     g0[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
+//     r0.y = g2[vThreadIDInGroupFlattened.x].val[0/4];
+//     r0.z = g2[r0.z].val[0/4];
+//     r0.y = r0.y + r0.z;
+//     g2[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
+//   }
+//   GroupMemoryBarrierWithGroupSync();
+//   r0.yz = cmp((uint2)vThreadIDInGroupFlattened.xx < int2(2,1));
+//   if (r0.y != 0) {
+//     r0.y = g1[vThreadIDInGroupFlattened.x].val[0/4];
+//     r0.w = (int)vThreadIDInGroupFlattened.x + 2;
+//     r1.x = g1[r0.w].val[0/4];
+//     r0.y = r1.x + r0.y;
+//     g1[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
+//     r0.y = g0[vThreadIDInGroupFlattened.x].val[0/4];
+//     r1.x = g0[r0.w].val[0/4];
+//     r0.y = r1.x + r0.y;
+//     g0[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
+//     r0.y = g2[vThreadIDInGroupFlattened.x].val[0/4];
+//     r0.w = g2[r0.w].val[0/4];
+//     r0.y = r0.y + r0.w;
+//     g2[vThreadIDInGroupFlattened.x].val[0/4] = r0.y;
+//   }
+//   GroupMemoryBarrierWithGroupSync();
+//   if (r0.z != 0) {
+//     r0.y = g1[0].val[0/4];
+//     r0.z = g1[1].val[0/4];
+//     r0.y = r0.y + r0.z;
+//     g1[0].val[0/4] = r0.y;
+//     r0.y = g0[0].val[0/4];
+//     r0.z = g0[1].val[0/4];
+//     r0.y = r0.y + r0.z;
+//     g0[0].val[0/4] = r0.y;
+//     r0.y = g2[0].val[0/4];
+//     r0.z = g2[1].val[0/4];
+//     r0.y = r0.y + r0.z;
+//     g2[0].val[0/4] = r0.y;
+//   }
+//   GroupMemoryBarrierWithGroupSync();
+//   if (vThreadIDInGroupFlattened.x == 0) {
+//     r0.y = g0[0].val[0/4];
+//     r0.z = g1[0].val[0/4];
+//     r0.y = r0.y / r0.z;
+//     r0.y = 1.44269502 * r0.y;
+//     r0.y = exp2(r0.y);
+//     r0.y = postFxControl1.y * r0.y;
+//     r0.y = 5.55555534 * r0.y;
+//     r0.y = log2(r0.y);
+//     r0.y = postFxControl0.z + r0.y;
+//     r0.y = 3 + r0.y;
+//     r0.y = -postFxControl1.x + r0.y;
+//     r0.y = postFxControl0.w * r0.y + postFxControl1.x;
+//     r0.y = max(postFxControl0.x, r0.y);
+//     r0.y = min(postFxControl0.y, r0.y);
+//     r0.zw = float2(-1,1) + postFxControl1.xx;
+//     r0.y = max(r0.y, r0.z);
+//     r0.y = min(r0.y, r0.w);
+//     r0.y = -3 + r0.y;
+//     r0.y = exp2(r0.y);
+//     r0.z = cmp(0.5 < postFxControl1.z);
+//   // No code for instruction (needs manual fix):
+//     ld_uav_typed_indexable(texture2d)(float,float,float,float) r0.w, l(8, 0, 0, 0), u1.yzwx
+//     r1.x = 0.0399999991 + r0.y;
+//     r1.x = 0.0399999991 / r1.x;
+//     r1.y = 1 + -r1.x;
+//     r1.y = 0.100000001 * r1.y;
+//     r1.x = r1.x * 0.400000006 + r1.y;
+//     r1.y = r0.y + -r0.w;
+//     r1.x = 60 * r1.x;
+//     r1.x = rcp(r1.x);
+//     r1.x = -1.44269502 * r1.x;
+//     r1.x = exp2(r1.x);
+//     r1.x = 1 + -r1.x;
+//     r0.w = r1.y * r1.x + r0.w;
+//     r0.w = r0.z ? r0.w : r0.y;
+//   // No code for instruction (needs manual fix):
+//     store_uav_typed u1.xyzw, l(0,0,0,0), r0.wwww
+//     r1.x = g2[0].val[0/4];
+//     r0.w = r1.x + r0.w;
+//     r0.w = 0.111111112 * r0.w;
+//     r0.y = r0.z ? r0.w : r0.y;
+//   // No code for instruction (needs manual fix):
+//     store_uav_typed u1.xyzw, l(8,0,0,0), r0.yyyy
+//     r0.y = postFxControl1.y / r0.y;
+//   // No code for instruction (needs manual fix):
+//     store_uav_typed u0.xyzw, vThreadIDInGroup.xyyy, r0.yyyy
+//   }
+//   r0.y = cmp(postFxControl1.z < 0.5);
+//   r0.x = r0.y ? r0.x : 0;
+//   if (r0.x != 0) {
+//   // No code for instruction (needs manual fix):
+//     ld_uav_typed_indexable(texture2d)(float,float,float,float) r0.x, l(8, 0, 0, 0), u1.xyzw
+//     r1.x = vThreadIDInGroupFlattened.x;
+//     r1.yzw = float3(0,0,0);
+//   // No code for instruction (needs manual fix):
+//     store_uav_typed u1.xyzw, r1.xyzw, r0.xxxx
+//   }
+//   return;
 }

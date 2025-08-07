@@ -14,6 +14,11 @@
 //   return renodx::lut::CorrectWhite(color_input, lut_color, (SDR_NOMRALIZATION_MAX) - (SDR_NOMRALIZATION_MAX * CUSTOM_LUT_WHITE_THRESHOLD), SDR_NOMRALIZATION_MAX, CUSTOM_LUT_WHITE_AMOUNT);
 // }
 
+float3 Tonemap_FixInColor(float3 color) {
+  // color /= 0.01;
+  return color;
+}
+
 float3 Tradeoff_LinearToTradeoffSpace(float3 color) {
   if (CUSTOM_TRADEOFF_MODE == 0.f) {
     return renodx::color::srgb::EncodeSafe(color);
