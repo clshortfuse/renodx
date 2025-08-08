@@ -28,40 +28,132 @@ void main(
   float4 fDest;
 
   //color
-  r0.xyz = codeTexture2.Sample(bilinearClamp_s, v0.xy).xyz; //linear
-  r0.xyz = Tonemap_FixInColor(r0.xyz);
-  float3 colorUntonemapped = r0.rgb; //without bloom
+  r0.xyz = codeTexture2.Sample(bilinearClamp_s, v0.xy).xyz; //log
 
-  //compresses linear to normalized. removing saturate unclamps values.
+  float3 colorUntonemapped = r0.xyz; //without bloom
+  // colorUntonemapped = renodx::color::correct::Luminance(colorUntonemapped, 0.1, 1000);
+  // colorUntonemapped = renodx::color::correct::GammaSafe(colorUntonemapped, true);
+  // colorUntonemapped = renodx::color::srgb::DecodeSafe(colorUntonemapped);
+  // colorUntonemapped = renodx::color::srgb::EncodeSafe(colorUntonemapped);
+  // colorUntonemapped = renodx::color::gamma::DecodeSafe(colorUntonemapped);
+
+  //compresses to normalized 01. does blowout, black floor raise. removing saturate unclamps values.
   r0.xyz = r0.xyz * v1.xxx + float3(0.00872999988,0.00872999988,0.00872999988);
-  r0.xyz = log2(r0.xyz);
+  r0.xyz = log2(r0.xyz); //burh
   r0.xyz = saturate(r0.xyz * float3(0.0727029592,0.0727029592,0.0727029592) + float3(0.598205984,0.598205984,0.598205984));
   r1.xyz = r0.xyz * float3(7.71294689,7.71294689,7.71294689) + float3(-19.3115273,-19.3115273,-19.3115273);
   r1.xyz = r1.xyz * r0.xyz + float3(14.2751675,14.2751675,14.2751675);
   r1.xyz = r1.xyz * r0.xyz + float3(-2.49004531,-2.49004531,-2.49004531);
   r1.xyz = r1.xyz * r0.xyz + float3(0.87808305,0.87808305,0.87808305);
   r0.xyz = saturate(r1.xyz * r0.xyz + float3(-0.0669102818,-0.0669102818,-0.0669102818));
-  float3 colorSDRNetural = r0.xyz;
-  
-  //bloom w/ tonmapping + color
-  r1.xyz = codeTexture0.Sample(bilinearClamp_s, v0.xy).xyz;
-  colorUntonemapped = Bloom_AddScaled(colorUntonemapped, r1.xyz); //add in bloom
+  float3 bloomBefore = r0.xyz;
 
+  // float3 temp = r0.xyz;
+  // float3 colorUntonemapped = r0.xyz;
+  // {
+  //   r0.xyz = colorUntonemapped;
+
+  //   r0.xyz = r0.xyz * v1.xxx + float3(0.00872999988,0.00872999988,0.00872999988);
+  //   r0.xyz = log2(r0.xyz);
+  //   r0.xyz = (r0.xyz * float3(0.0727029592,0.0727029592,0.0727029592) + float3(0.598205984,0.598205984,0.598205984));
+  //   r1.xyz = r0.xyz * float3(7.71294689,7.71294689,7.71294689) + float3(-19.3115273,-19.3115273,-19.3115273);
+  //   r1.xyz = r1.xyz * r0.xyz + float3(14.2751675,14.2751675,14.2751675);
+  //   r1.xyz = r1.xyz * r0.xyz + float3(-2.49004531,-2.49004531,-2.49004531);
+  //   r1.xyz = r1.xyz * r0.xyz + float3(0.87808305,0.87808305,0.87808305);
+  //   r0.xyz = (r1.xyz * r0.xyz + float3(-0.0669102818,-0.0669102818,-0.0669102818));
+  //   // r0.xyz = exp2(r0.xyz);
+
+  //   colorUntonemapped = r0.xyz;
+  // }
+  // r0.xyz = temp;
+
+  // if (RENODX_TONE_MAP_TYPE == 2) {
+  //   o0 = r0;
+  //   // o0.xyz = renodx::color::correct::GammaSafe(o0.xyz, true);
+  //   // o0.xyz = renodx::color::srgb::DecodeSafe(o0);
+  //   return;
+  // }
+  
+  //bloom (SDR Neutral 0-1)
+  r1.xyz = codeTexture0.Sample(bilinearClamp_s, v0.xy).xyz;
+  float3 bloomColor = r1.xyz;
   r1.xyz = saturate(float3(0.00390625233,0.00390625233,0.00390625233) * r1.xyz);
   r1.xyz = Bloom_ScaleTonemappedAfterSaturate(r1.xyz);
-  
   r2.xyz = r1.xyz + r0.xyz;
   r0.xyz = -r0.xyz * r1.xyz + r2.xyz; //bloom is dependent on color, probably to make pronounced and not just straight addition?
+  
+  float3 bloomMask = r0.xyz - bloomBefore;
+  colorUntonemapped = Bloom_AddScaled(colorUntonemapped, bloomMask * bloomColor); //add in bloom
+
+  // if (RENODX_TONE_MAP_TYPE == 1) {
+  //   o0 = r0;
+  //   o0.xyz = v0.x < 0.5 ? renodx::color::gamma::DecodeSafe(o0) : renodx::color::srgb::DecodeSafe(o0);
+  //   // o0.xyz = renodx::color::correct::GammaSafe(o0.xyz, true);
+  //   return;
+  // }
+  
+  //higher shadows
   r1.xyz = codeTexture4.Sample(bilinearClamp_s, v0.xy).xyz; //unkown what tex is for. RenderDoc shows black. is it only on occasions?
-  r0.xyz = saturate(r1.xyz * float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) + r0.xyz);
+  r0.xyz = saturate(r1.xyz * float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) + r0.xyz); //scales r1.xyz to 0-1
   r0.xyz = r0.xyz * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625);
 
-  //LUT
-  r0.xyz = codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz;
-  // r0.xyz = LUT_CorrectBlack(r0.xyz, codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz);
+  float3 colorSDRNetural = r0.xyz;
+
+  // if (RENODX_TONE_MAP_TYPE == 2) {
+  //   o0 = colorSDRNetural;
+  //   o0.xyz = v0.x < 0.5 ? renodx::color::gamma::DecodeSafe(o0) : renodx::color::srgb::DecodeSafe(o0);
+  //   // o0.xyz = renodx::color::correct::GammaSafe(o0.xyz, true);
+  //   return;
+  // }
+
+  // if (RENODX_TONE_MAP_TYPE == 2) {
+  //   o0 = colorUntonemapped;
+  //   // o0.xyz = renodx::color::correct::GammaSafe(o0.xyz, true);
+  //   // o0.xyz = renodx::color::gamma::Encode(o0.xyz); //WTH!?!?!?!
+  //   o0.xyz = renodx::color::srgb::Encode(o0.xyz); //WTH!?!?!?!
+  //   // o0.xyz = renodx::color::srgb::Decode(o0.xyz); //WTH!?!?!?!
+  //   // o0.xyz = renodx::draw::ToneMapPass(o0.xyz);
+  //   return;
+  // }
+
+  // o0 = r0;
+  // return;
+
+  //LUT (to 0-32768, will be decoded to sRGB in final
+  // r0.xyz = codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz;
+  r0.xyz = LUT_CorrectBlack(r0.xyz, codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz); 
+
+  // if (RENODX_TONE_MAP_TYPE != 0) {
+  //   // colorUntonemapped = renodx::color::correct::GammaSafe(colorUntonemapped.xyz, false);
+  //   colorUntonemapped /= SDR_NOMRALIZATION_MAX;
+  //   // colorUntonemapped.xyz = renodx::color::srgb::EncodeSafe(colorUntonemapped.xyz);
+  //   colorUntonemapped.xyz = codeTexture1.Sample(bilinearClamp_s, colorUntonemapped.xyz);
+  //   colorUntonemapped.xyz = renodx::color::srgb::DecodeSafe(colorUntonemapped.xyz);
+  //   o0 = colorUntonemapped.xyz;
+  //   return;
+  // } else {
+  //   r0.xyz = LUT_CorrectBlack(r0.xyz, codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz);
+  // }
+
+
+  // if (RENODX_TONE_MAP_TYPE == 2) {
+  //   o0.xyz = r0.xyz / (SDR_NOMRALIZATION_MAX);
+  //   // o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz); //NO
+  //   return;
+  // }
+
+  // o0 = r0 / SDR_NOMRALIZATION_MAX;
+  // return;
 
   // o0.xyz = r0.xyz;
-  o0.xyz = Tradeoff_Tonemap(colorUntonemapped, r0.xyz, colorSDRNetural); //renodx tonemap
+  // if (RENODX_TONE_MAP_TYPE == 1) {
+  //   o0 = colorUntonemapped;
+  //   // o0.xyz = renodx::color::correct::GammaSafe(o0.xyz, true);
+  //   // o0.xyz = renodx::color::correct::GammaSafe(o0.xyz, true);
+  //   // o0.xyz = renodx::draw::ToneMapPass(o0.xyz);
+  //   return;
+  // }
+  o0.xyz = Tonemap_Tradeoff_In(colorUntonemapped, r0.xyz, colorSDRNetural); //renodx tonemap
 
   //idk, and to unknown 2nd output
   r0.x = dot(r0.xyz, float3(6.48803689e-006,2.18261721e-005,2.20336915e-006));

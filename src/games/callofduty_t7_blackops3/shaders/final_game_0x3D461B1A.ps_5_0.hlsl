@@ -149,29 +149,38 @@ void main(
   r0.xyz = codeTexture0.Sample(bilinearClamp_s, v1.xy).xyz;
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    //renodx
-    o0.xyz = Tradeoff_AfterFullscreenShaders(r0.xyz);
+    // renodx
+    r0.xyz = Tonemap_Tradeoff_Out(r0.xyz);
+    // if (RENODX_TONE_MAP_TYPE == 3) r0.xyz = Tonemap_Tradeoff_Out(r0.xyz); //debug
   } else {
     //Note: unlike main menu, no noise/dither
 
-    //postFx
-    r0.xyz = float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) * r0.xyz;
-    r1.xyz = log2(r0.xyz);
-    r1.xyz = postFxControl2.yyy * r1.xyz;
-    r1.xyz = exp2(r1.xyz);
+    //scale down
+    r0.xyz = float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) * r0.xyz; //this is r0.xyz /= SDR_NOMRALIZATION_MAX;
+    
+    //Game Settings Brightness
+    {
+      r1.xyz = log2(r0.xyz);
+      r1.xyz = postFxControl2.yyy * r1.xyz;
+      r1.xyz = exp2(r1.xyz);
 
-    r1.xyz = r1.xyz * postFxControl2.zzz + postFxControl2.www;
-    r2.xyz = cmp(postFxControl1.www >= r0.xyz);
-    r0.xyz = postFxControl2.xxx * r0.xyz;
-    r0.xyz = r2.xyz ? r0.xyz : r1.xyz;
-    o0.xyz = postFxControl1.yyy + r0.xyz;
+      r1.xyz = r1.xyz * postFxControl2.zzz + postFxControl2.www;
+      r2.xyz = cmp(postFxControl1.www >= r0.xyz);
+      r0.xyz = postFxControl2.xxx * r0.xyz;
+      r0.xyz = r2.xyz ? r0.xyz : r1.xyz;
+      r0.xyz = postFxControl1.yyy + r0.xyz;
 
-    //decode srgb for RenderIntermediatePass
-    o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);
+      //decode srgb for RenderIntermediatePass
+      r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
+    }
   }
 
+  o0.xyz = r0.xyz;
   o0.w = 1.0f;
+  // if (o0.x < 0 || o0.y < 0 || o0.z < 0) o0.xyz = float3(100,0,0);
   o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
+  // if (o0.x < 0 || o0.y < 0 || o0.z < 0) o0.xyz = float3(0,100,0);
+
 
   return;
 }

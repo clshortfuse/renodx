@@ -40,6 +40,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xDA908072),  // fsfx blur
     CustomShaderEntry(0xE6F1994E),  // xray outline
     CustomShaderEntry(0x4493183C),  // xray outline 1
+    CustomShaderEntry(0x9AF0BA45),  // sight 1
+    // CustomShaderEntry(0xF0897820),  // sight 2
 
     // map specific
     CustomShaderEntry(0x3E9C52D5),  // Shangri-la water
@@ -74,12 +76,22 @@ float current_settings_mode = 0;
 const std::unordered_map<std::string, float> PRESET_RENODRT = {
     {"ToneMapType", 3.f},
     {"ColorGradeExposure", 1.f},
-    {"ColorGradeHighlights", 75.f},
+    {"ColorGradeHighlights", 50.f},
     {"ColorGradeShadows", 50.f},
     {"ColorGradeSaturation", 50.f},
     {"ColorGradeHighlightSaturation", 50.f},
     {"ColorGradeBlowout", 0.f},
     {"ColorGradeFlare", 0.f},
+};
+
+const std::unordered_map<std::string, float> PRESET_ACES = {
+    {"ToneMapType", 2.f},
+    {"ColorGradeExposure", 1.0f},
+    {"ColorGradeHighlights", 50.f},
+    {"ColorGradeShadows", 70.f},
+    {"ColorGradeSaturation", 40.f},
+    {"ColorGradeHighlightSaturation", 50.f},
+    {"ColorGradeBlowout", 0.f},
 };
 
 const std::unordered_map<std::string, float> PRESET_SCREENSHOT_10000 = {
@@ -88,29 +100,20 @@ const std::unordered_map<std::string, float> PRESET_SCREENSHOT_10000 = {
     {"CustomShowHUD", 0.f},
 };
 
-const std::unordered_map<std::string, float> PRESET_ACES = {
-    {"ToneMapType", 2.f},
-    {"ColorGradeExposure", 1.0f},
-    {"ColorGradeHighlights", 50.f},
-    {"ColorGradeShadows", 75.f},
-    {"ColorGradeSaturation", 50.f},
-    {"ColorGradeHighlightSaturation", 50.f},
-    {"ColorGradeBlowout", 0.f},
-};
-
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_RAW = {
     {"CustomTradeoffRatio", 0.f},
     {"CustomTradeoffMode", 3.f},
 };
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_HDR = {
-    {"CustomTradeoffRatio", 10.f},
-    {"CustomTradeoffMode", 1.f},
-    {"CustomTradeoffGammaAmount", 2.2f}};
+    {"CustomTradeoffRatio", 20.f},
+    {"CustomTradeoffMode", 0.f},
+    // {"CustomTradeoffGammaAmount", 2.2f},
+};
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_BALANCED = {
-    {"CustomTradeoffRatio", 30.f},
-    {"CustomTradeoffMode", 1.f},
-    {"CustomTradeoffGammaAmount", 2.2f}};
-};  // namespace
+    {"CustomTradeoffRatio", 32.5f},
+    {"CustomTradeoffMode", 0.f},
+    // {"CustomTradeoffGammaAmount", 2.2f},
+};
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_FSFX = {
     {"CustomTradeoffRatio", 10.f},
     {"CustomTradeoffMode", 3.f},
@@ -119,6 +122,8 @@ const std::unordered_map<std::string, float> PRESET_TRADEOFF_PQ = {
     {"CustomTradeoffRatio", 5.f},
     {"CustomTradeoffMode", 2.f},
 };
+
+};  // namespace
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -148,7 +153,7 @@ renodx::utils::settings::Settings settings = {
 
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preset: RenoDRT",
+        .label = "Preset: RenoDRT (Original)",
         .group = "button-line-1",
         .tooltip = "Matches original while unclipping the highlights.",
         .on_change = []() {
@@ -164,6 +169,7 @@ renodx::utils::settings::Settings settings = {
           }
         },
     },
+
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Preset: ACES",
@@ -219,6 +225,7 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Vanilla", "None", "ACES", "RenoDRT"},
         .is_visible = []() { return current_settings_mode >= 1; },
     },
+
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
         .binding = &shader_injection.peak_white_nits,
@@ -228,7 +235,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Sets the value of peak white in nits",
         .min = 1.f,
-        .max = 10000.f,
+        .max = 4000.f,
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
@@ -254,12 +261,12 @@ renodx::utils::settings::Settings settings = {
         .key = "GammaCorrection",
         .binding = &shader_injection.gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 0.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
         .tooltip = "Emulates a display EOTF.",
         .labels = {"Off", "2.2", "BT.1886"},
-        .is_visible = []() { return current_settings_mode >= 2; },
+        .is_visible = []() { return current_settings_mode >= 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapScaling",
@@ -361,10 +368,10 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "CustomColorGradePreExposure",
         .binding = &shader_injection.custom_tone_map_preexposure,
-        .default_value = 0.05f,
+        .default_value = 1.f,
         .label = "Pre-Exposure (White Clipping)",
         .section = "Color Grading",
-        .min = 0.05f,
+        .min = 0.01f,
         .max = 1.f,
         .format = "%.2f",
         .parse = [](float value) { return value; },
@@ -378,7 +385,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1; },
+        .is_visible = []() { return current_settings_mode >= 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
@@ -388,7 +395,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1; },
+        .is_visible = []() { return current_settings_mode >= 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
@@ -454,33 +461,27 @@ renodx::utils::settings::Settings settings = {
     },
 
     new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = " * 20 = -0.05 nits"
-                 "\n * 45 = -0.25 nits",
+        .key = "CustomLutBlackThreshold",
+        .binding = &shader_injection.custom_lut_black_threshold,
+        .default_value = 0.f,
+        .label = "LUT Black Lowering Threshold",
         .section = "LUT Correction",
+        .max = 100.f,
+        .format = "%.2f",
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 1; },
     },
-    // new renodx::utils::settings::Setting{
-    //     .key = "CustomLutBlackThreshold",
-    //     .binding = &shader_injection.custom_lut_black_threshold,
-    //     .default_value = 0.f,
-    //     .label = "LUT Black Lowering Threshold",
-    //     .section = "LUT Correction",
-    //     .max = 100.f,
-    //     .format = "%.2f",
-    //     .parse = [](float value) { return value * 0.01f; },
-    //     // .is_visible = []() { return current_settings_mode >= 1; },
-    // },
-    // new renodx::utils::settings::Setting{
-    //     .key = "CustomLutBlackAmount",
-    //     .binding = &shader_injection.custom_lut_black_amount,
-    //     .default_value = 0.f,
-    //     .label = "LUT Black Lowering Influence Range",
-    //     .section = "LUT Correction",
-    //     .max = 100.f,
-    //     .format = "%.2f",
-    //     .parse = [](float value) { return value * 0.01f; },
-    //     .is_visible = []() { return current_settings_mode >= 2; },
-    // },
+    new renodx::utils::settings::Setting{
+        .key = "CustomLutBlackAmount",
+        .binding = &shader_injection.custom_lut_black_amount,
+        .default_value = 0.f,
+        .label = "LUT Black Lowering Influence Range",
+        .section = "LUT Correction",
+        .max = 100.f,
+        .format = "%.2f",
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 1 && shader_injection.custom_lut_black_threshold > 0; },
+    },
 
     // new renodx::utils::settings::Setting{
     //     .key = "CustomLutWhiteThreshold",
@@ -520,6 +521,16 @@ renodx::utils::settings::Settings settings = {
         .default_value = 100.f,
         .label = "Slide Lens Dirt",
         .section = "Extra",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "CustomADSSights",
+        .binding = &shader_injection.custom_ads_sights,
+        .default_value = 50.f,
+        .label = "ADS Sights (not comprehensive)",
+        .section = "Extra",
+        .tooltip = "They do sights like 100 different ways. Some can't be decompiled to fix.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
@@ -656,7 +667,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "CustomTradeoffRatio",
         .binding = &shader_injection.custom_tradeoff_ratio,
-        .default_value = 30.f,
+        .default_value = 20.f,
         .label = "Tradeoff Brightness Ratio",
         .section = "Tradeoff",
         .tooltip = "Increasing the value lowers overlay fx brightness at the cost of clipping HDR brightness.",
@@ -749,13 +760,13 @@ renodx::utils::settings::Settings settings = {
         .section = "Display Output",
         .labels = {"None", "2.2", "2.4"},
         .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
-        .is_visible = []() { return current_settings_mode >= 2; },
+        // .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "SwapChainClampColorSpace",
         .binding = &shader_injection.swap_chain_clamp_color_space,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 0.f,
         .label = "Clamp Color Space",
         .section = "Display Output",
         .labels = {"None", "BT709", "BT2020", "AP1"},
@@ -768,7 +779,7 @@ renodx::utils::settings::Settings settings = {
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = " * Black Ops 3 mod by XgarhontX"
                  "\n * RenoDX by clshortfuse"
-                 "\n * PumboAutoHDR (for loading movies) by Filoppi"
+                 "\n * PumboAutoHDR (for loading movies) by Filoppi (Pumbo)"
                  "\n * HDR expertise from Scrungus",
         .section = "Credits",
     },
@@ -834,8 +845,9 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (!peak.has_value()) {
     peak = 1000.f;
   }
-  settings[2]->default_value = peak.value();
-  settings[3]->default_value = renodx::utils::swapchain::ComputeReferenceWhite(peak.value());
+  settings[7]->default_value = peak.value();
+  settings[7]->can_reset = true;
+  // settings[8]->default_value = renodx::utils::swapchain::ComputeReferenceWhite(peak.value());
 }
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -874,49 +886,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             // },
         };
 
-        {
-          //   auto* setting = new renodx::utils::settings::Setting{
-          //       .key = "SwapChainForceBorderless",
-          //       .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-          //       .default_value = 0.f,
-          //       .label = "Force Borderless",
-          //       .section = "Display Output",
-          //       .tooltip = "Forces fullscreen to be borderless for proper HDR",
-          //       .labels = {
-          //           "Disabled",
-          //           "Enabled",
-          //       },
-          //       .on_change_value = [](float previous, float current) { renodx::mods::swapchain::force_borderless = (current == 1.f); },
-          //       .is_global = true,
-          //       .is_visible = []() { return current_settings_mode >= 2; },
-          //   };
-          //   renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-          //   renodx::mods::swapchain::force_borderless = (setting->GetValue() == 1.f);
-          //   settings.push_back(setting);
-          renodx::mods::swapchain::force_borderless = false;
-        }
-
-        {
-          //   auto* setting = new renodx::utils::settings::Setting{
-          //       .key = "SwapChainPreventFullscreen",
-          //       .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-          //       .default_value = 0.f,
-          //       .label = "Prevent Fullscreen",
-          //       .section = "Display Output",
-          //       .tooltip = "Prevent exclusive fullscreen for proper HDR",
-          //       .labels = {
-          //           "Disabled",
-          //           "Enabled",
-          //       },
-          //       .on_change_value = [](float previous, float current) { renodx::mods::swapchain::prevent_full_screen = (current == 1.f); },
-          //       .is_global = true,
-          //       .is_visible = []() { return current_settings_mode >= 2; },
-          //   };
-          //   renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-          //   renodx::mods::swapchain::prevent_full_screen = (setting->GetValue() == 1.f);
-          //   settings.push_back(setting);
-          renodx::mods::swapchain::prevent_full_screen = false;
-        }
+        renodx::mods::swapchain::force_borderless = false;
+        renodx::mods::swapchain::prevent_full_screen = false;
 
         {
           auto* setting = new renodx::utils::settings::Setting{
@@ -944,39 +915,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           settings.push_back(setting);
         }
 
-        //  r8g8b8a8_unorm
-        // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-        //     .old_format = reshade::api::format::r8g8b8a8_unorm,
-        //     .new_format = reshade::api::format::r16g16b16a16_float,
-        //     .ignore_size = true,
-        //     .use_resource_view_cloning = true,
-        //     .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,  // to catch lower internal res maybe
-        //     .usage_include = reshade::api::resource_usage::resolve_source,
-        // });
-        // std::stringstream s;
-        // s << "Applying user resource upgrade for r8g8b8a8_unorm";
-        // reshade::log::message(reshade::log::level::info, s.str().c_str());
-
-        // r8_unorm
-        //  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-        //      .old_format = reshade::api::format::r8_unorm,
-        //      .new_format = reshade::api::format::r16_unorm,
-        //      .ignore_size = true,
-        //      // .use_resource_view_cloning = true,
-        //      .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,  // to catch lower internal res maybe
-        //      .usage_include = reshade::api::resource_usage::resolve_source,
-        //  });
-
         // Main color output
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r11g11b10_float,
             .new_format = reshade::api::format::r16g16b16a16_float,  // requires alpha, else it starts lagging. 32bit breaks math. r16g16b16a16_float
             // .index = 0,
-            .ignore_size = true,
+            .ignore_size = true,  // because resolution scaler
             .shader_hash = 0x224A8BF5,
             .use_resource_view_cloning = true,
             .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
-            .usage_include = reshade::api::resource_usage::render_target,
+            .usage_include = reshade::api::resource_usage::present,
         });
 
         // // LUT

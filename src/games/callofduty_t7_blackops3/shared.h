@@ -79,12 +79,14 @@ struct ShaderInjectData {
   float custom_xray_outline;
   float custom_show_hud;
   float custom_show_fsfx_blur;
-  // float custom_lut_black_threshold;
-  // float custom_lut_black_amount;
+  float custom_lut_black_threshold;
+  float custom_lut_black_amount;
   // float custom_lut_is_upgrade_tex;
   // float custom_lut_white_threshold;
   // float custom_lut_white_amount;
   float custom_tone_map_preexposure;
+  float custom_ads_sights;
+  float custom_style_mode;
 };
 
 #ifndef __cplusplus
@@ -136,11 +138,12 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_XRAY_OUTLINE                    shader_injection.custom_xray_outline
 #define CUSTOM_SHOW_HUD                        shader_injection.custom_show_hud
 #define CUSTOM_SHOW_FSFXBLUR                   shader_injection.custom_show_fsfx_blur
-// #define CUSTOM_LUT_BLACK_THRESHOLD             shader_injection.custom_lut_black_threshold
-// #define CUSTOM_LUT_BLACK_AMOUNT                shader_injection.custom_lut_black_amount
+#define CUSTOM_LUT_BLACK_THRESHOLD             shader_injection.custom_lut_black_threshold
+#define CUSTOM_LUT_BLACK_AMOUNT                shader_injection.custom_lut_black_amount
 // #define CUSTOM_LUT_WHITE_THRESHOLD             shader_injection.custom_lut_white_threshold
 // #define CUSTOM_LUT_WHITE_AMOUNT                shader_injection.custom_lut_white_amount
 #define CUSTOM_TONE_MAP_PREEXPOSURE shader_injection.custom_tone_map_preexposure
+#define CUSTOM_ADS_SIGHTS           shader_injection.custom_ads_sights
 
 #include "../../shaders/renodx.hlsl"
 

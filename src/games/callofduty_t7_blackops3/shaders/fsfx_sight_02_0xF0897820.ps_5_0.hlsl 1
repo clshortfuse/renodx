@@ -1,7 +1,4 @@
-// ---- Created with 3Dmigoto v1.3.16 on Wed Aug 06 00:44:13 2025
-
-//THIS FAILED TO DECOMPILE PROPERLY
-
+// ---- Created with 3Dmigoto v1.3.16 on Thu Aug 07 15:32:59 2025
 Texture2D<float4> t0 : register(t0);
 
 SamplerState s0_s : register(s0);

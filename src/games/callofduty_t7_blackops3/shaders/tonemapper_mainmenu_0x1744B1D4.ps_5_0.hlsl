@@ -170,46 +170,54 @@ void main(
   //color
   r1.x = codeTexture2.Sample(bilinearClamp_s, r0.zw).x;
   r1.yz = codeTexture2.Sample(bilinearClamp_s, r0.xy).yz;
-  r1.xyz = Tonemap_FixInColor(r1.xyz);
-  float3 colorUntonemapped = r1.xyz; //linear
-  // o0.xyz = r1.xyz;
-  // return;
+  // r1.xyz = Tonemap_FixInColor(r1.xyz);
 
-  //continues postFxControl1, compresses linear to normalized. removing saturate unclamps values.
+  float3 colorUntonemapped = r1.xyz; //log
+  colorUntonemapped = renodx::color::correct::GammaSafe(colorUntonemapped, true);
+
+  // o0.xyz = r1.xyz;
+  // return
+
+
+  //continues postFxControl1, compresses to normalized. removing saturate unclamps values.
   r0.xyz = r1.xyz * v1.xxx + float3(0.00872999988,0.00872999988,0.00872999988);
   r0.xyz = log2(r0.xyz);
   r0.xyz = saturate(r0.xyz * float3(0.0727029592,0.0727029592,0.0727029592) + float3(0.598205984,0.598205984,0.598205984));
-  // r0.xyz = (r0.xyz * float3(0.0727029592,0.0727029592,0.0727029592) + float3(0.598205984,0.598205984,0.598205984));
   r1.xyz = r0.xyz * float3(7.71294689,7.71294689,7.71294689) + float3(-19.3115273,-19.3115273,-19.3115273);
   r1.xyz = r1.xyz * r0.xyz + float3(14.2751675,14.2751675,14.2751675);
   r1.xyz = r1.xyz * r0.xyz + float3(-2.49004531,-2.49004531,-2.49004531);
   r1.xyz = r1.xyz * r0.xyz + float3(0.87808305,0.87808305,0.87808305);
   r0.xyz = saturate(r1.xyz * r0.xyz + float3(-0.0669102818,-0.0669102818,-0.0669102818));
-  // r0.xyz = (r1.xyz * r0.xyz + float3(-0.0669102818,-0.0669102818,-0.0669102818));
+  float3 bloomBefore = r0.xyz;
 
   // float3 colorUntonemapped = r0.xyz; //linear
   // o0.xyz = r0.xyz;
   // return;
 
-  r1.xyz = codeTexture0.Sample(bilinearClamp_s, v0.xy).xyz;
-  colorUntonemapped = Bloom_AddScaled(colorUntonemapped, r1.xyz); //add in bloom
-
   //bloom
+  r1.xyz = codeTexture0.Sample(bilinearClamp_s, v0.xy).xyz;
+  float3 bloomColor = r1.xyz;
   r1.xyz = saturate(float3(0.00390625233,0.00390625233,0.00390625233) * r1.xyz);
   r1.xyz = Bloom_ScaleTonemappedAfterSaturate(r1.xyz); //user scaled bloom
   r2.xyz = r1.xyz + r0.xyz;
   r0.xyz = -r0.xyz * r1.xyz + r2.xyz;
-  r1.xyz = codeTexture4.Sample(bilinearClamp_s, v0.xy).xyz; //idk
-  r0.xyz = saturate(r1.xyz * float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) + r0.xyz);
-  r0.xyz = r0.xyz * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625);
-  float3 colorSDRNetural = r0.xyz;
+  
+  float3 bloomMask = r0.xyz - bloomBefore;
+  colorUntonemapped = Bloom_AddScaled(colorUntonemapped, bloomMask * bloomColor); //add in bloom
 
+  //higher shadows
+  r1.xyz = codeTexture4.Sample(bilinearClamp_s, v0.xy).xyz; //idk, black looking
+  r0.xyz = saturate(r1.xyz * float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) + r0.xyz); //scales r1.xyz to 0-1
+  r0.xyz = r0.xyz * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625); 
+
+  float3 colorSDRNetural = r0.xyz;
+  
   //LUT
-  r0.xyz = codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz;
-  // r0.xyz = LUT_CorrectBlack(r0.xyz, codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz);
+  // r0.xyz = codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz;
+  r0.xyz = LUT_CorrectBlack(r0.xyz, codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz);
 
   // o0.xyz = r0.xyz;
-  o0.xyz = Tradeoff_Tonemap(colorUntonemapped, r0.xyz, colorSDRNetural); //renodx tonemap
+  o0.xyz = Tonemap_Tradeoff_In(colorUntonemapped, r0.xyz, colorSDRNetural); //renodx tonemap
   // o0.xyz = renodx::draw::ToneMapPass(colorUntonemapped, r0.xyz); //renodx tonemap
 
   //idk, to unknown 2nd output, aa?
