@@ -80,7 +80,6 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.scene_grade_strength
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-#define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom
 
 #include "../../shaders/renodx.hlsl"

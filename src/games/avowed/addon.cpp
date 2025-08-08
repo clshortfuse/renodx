@@ -25,96 +25,98 @@ renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 
-renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({renodx::templates::settings::CreateDefaultSettings({
-                                                                                            {"ToneMapType", &shader_injection.tone_map_type},
-                                                                                            {"ToneMapPeakNits", &shader_injection.peak_white_nits},
-                                                                                            {"ToneMapGameNits", &shader_injection.diffuse_white_nits},
-                                                                                            {"ToneMapUINits", &shader_injection.graphics_white_nits},
-                                                                                            {"ColorGradeExposure", &shader_injection.tone_map_exposure},
-                                                                                            {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
-                                                                                            {"ColorGradeShadows", &shader_injection.tone_map_shadows},
-                                                                                            {"ColorGradeContrast", &shader_injection.tone_map_contrast},
-                                                                                            {"ColorGradeSaturation", &shader_injection.tone_map_saturation},
-                                                                                            {"ColorGradeHighlightSaturation", &shader_injection.tone_map_highlight_saturation},
-                                                                                            {"ColorGradeBlowout", &shader_injection.tone_map_blowout},
-                                                                                            {"ColorGradeFlare", &shader_injection.tone_map_flare},
-                                                                                        }),
-                                                                                        {
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .key = "FxToneMapCurve",
-                                                                                                .binding = &shader_injection.custom_tone_map_curve,
-                                                                                                .default_value = 100.f,
-                                                                                                .label = "SDR Tonemap Curve",
-                                                                                                .section = "Color Grading",
-                                                                                                .max = 100.f,
-                                                                                                .parse = [](float value) { return (100.0f - value) * 0.001f; },
-                                                                                                .is_visible = []() { return settings[0]->GetValue() >= 2.f; },
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-                                                                                                .label = "HDR Den Discord",
-                                                                                                .section = "Links",
-                                                                                                .group = "button-line-1",
-                                                                                                .tint = 0x5865F2,
-                                                                                                .on_change = []() {
-                                                                                                  renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc");
-                                                                                                },
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-                                                                                                .label = "Github",
-                                                                                                .section = "Links",
-                                                                                                .group = "button-line-1",
-                                                                                                .on_change = []() {
-                                                                                                  renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
-                                                                                                },
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-                                                                                                .label = "Ritsu's Ko-Fi",
-                                                                                                .section = "Links",
-                                                                                                .group = "button-line-1",
-                                                                                                .tint = 0xFF5F5F,
-                                                                                                .on_change = []() {
-                                                                                                  renodx::utils::platform::LaunchURL("https://ko-fi.com/ritsucecil");
-                                                                                                },
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-                                                                                                .label = "ShortFuse's Ko-Fi",
-                                                                                                .section = "Links",
-                                                                                                .group = "button-line-1",
-                                                                                                .tint = 0xFF5F5F,
-                                                                                                .on_change = []() {
-                                                                                                  renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse");
-                                                                                                },
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-                                                                                                .label = "HDR Den's Ko-Fi",
-                                                                                                .section = "Links",
-                                                                                                .group = "button-line-1",
-                                                                                                .tint = 0xFF5F5F,
-                                                                                                .on_change = []() {
-                                                                                                  renodx::utils::platform::LaunchURL("https://ko-fi.com/hdrden");
-                                                                                                },
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                                                                                                .label = " - Ingame HDR must be turned ON!",
-                                                                                                .section = "Instructions",
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                                                                                                .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse.",
-                                                                                                .section = "About",
-                                                                                            },
-                                                                                            new renodx::utils::settings::Setting{
-                                                                                                .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                                                                                                .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
-                                                                                                .section = "About",
-                                                                                            },
-                                                                                        }});
+renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({
+    renodx::templates::settings::CreateDefaultSettings({
+        {"ToneMapType", &shader_injection.tone_map_type},
+        {"ToneMapPeakNits", &shader_injection.peak_white_nits},
+        {"ToneMapGameNits", &shader_injection.diffuse_white_nits},
+        {"ToneMapUINits", &shader_injection.graphics_white_nits},
+        {"ColorGradeExposure", &shader_injection.tone_map_exposure},
+        {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
+        {"ColorGradeShadows", &shader_injection.tone_map_shadows},
+        {"ColorGradeContrast", &shader_injection.tone_map_contrast},
+        {"ColorGradeSaturation", &shader_injection.tone_map_saturation},
+        {"ColorGradeHighlightSaturation", &shader_injection.tone_map_highlight_saturation},
+        {"ColorGradeBlowout", &shader_injection.tone_map_blowout},
+        {"ColorGradeFlare", &shader_injection.tone_map_flare},
+    }),
+    {
+        new renodx::utils::settings::Setting{
+            .key = "FxToneMapCurve",
+            .binding = &shader_injection.custom_tone_map_curve,
+            .default_value = 100.f,
+            .label = "SDR Tonemap Curve",
+            .section = "Color Grading",
+            .max = 100.f,
+            .parse = [](float value) { return (100.0f - value) * 0.001f; },
+            .is_visible = []() { return settings[0]->GetValue() >= 2.f; },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "HDR Den Discord",
+            .section = "Links",
+            .group = "button-line-1",
+            .tint = 0x5865F2,
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "Github",
+            .section = "Links",
+            .group = "button-line-1",
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "Ritsu's Ko-Fi",
+            .section = "Links",
+            .group = "button-line-1",
+            .tint = 0xFF5F5F,
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://ko-fi.com/ritsucecil");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "ShortFuse's Ko-Fi",
+            .section = "Links",
+            .group = "button-line-1",
+            .tint = 0xFF5F5F,
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "HDR Den's Ko-Fi",
+            .section = "Links",
+            .group = "button-line-1",
+            .tint = 0xFF5F5F,
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://ko-fi.com/hdrden");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::TEXT,
+            .label = " - Ingame HDR must be turned ON!",
+            .section = "Instructions",
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::TEXT,
+            .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse.",
+            .section = "About",
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::TEXT,
+            .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+            .section = "About",
+        },
+    },
+});
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({

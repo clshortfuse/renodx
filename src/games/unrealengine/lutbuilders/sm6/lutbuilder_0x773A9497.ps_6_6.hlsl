@@ -1,4 +1,8 @@
+// Generic UE 5.3
+
 // Clair Obscur: Expedition 33
+// Mafia: The Old Country
+
 #include "../../common.hlsl"
 
 struct FWorkingColorSpaceConstants {
@@ -76,7 +80,7 @@ float4 main(
   float _19 = LUTSize + -1.0f;
   float _20 = (LUTSize * (TEXCOORD.x - _14)) / _19;
   float _21 = (LUTSize * (TEXCOORD.y - _14)) / _19;
-  float _23 = float((uint)SV_RenderTargetArrayIndex) / _19;
+  float _23 = float((uint)(int)(SV_RenderTargetArrayIndex)) / _19;
   float _43;
   float _44;
   float _45;
@@ -133,10 +137,10 @@ float4 main(
   float _2593;
   float _2594;
   float _2595;
-  if (!((uint)(OutputGamut) == 1)) {
-    if (!((uint)(OutputGamut) == 2)) {
-      if (!((uint)(OutputGamut) == 3)) {
-        bool _32 = ((uint)(OutputGamut) == 4);
+  if (!(OutputGamut == 1)) {
+    if (!(OutputGamut == 2)) {
+      if (!(OutputGamut == 3)) {
+        bool _32 = (OutputGamut == 4);
         _43 = select(_32, 1.0f, 1.705051064491272f);
         _44 = select(_32, 0.0f, -0.6217921376228333f);
         _45 = select(_32, 0.0f, -0.0832589864730835f);
@@ -179,7 +183,7 @@ float4 main(
     _50 = -0.0454593189060688f;
     _51 = 1.0476183891296387f;
   }
-  if ((uint)(uint)(OutputDevice) > (uint)2) {
+  if ((uint)OutputDevice > (uint)2) {
     float _62 = (pow(_20, 0.012683313339948654f));
     float _63 = (pow(_21, 0.012683313339948654f));
     float _64 = (pow(_23, 0.012683313339948654f));
@@ -249,7 +253,7 @@ float4 main(
   float _609 = _594 + -0.4000000059604645f;
   float _610 = _609 * 5.0f;
   float _614 = max((1.0f - abs(_609 * 2.5f)), 0.0f);
-  float _625 = ((float(((int)(uint)((bool)(_610 > 0.0f))) - ((int)(uint)((bool)(_610 < 0.0f)))) * (1.0f - (_614 * _614))) + 1.0f) * 0.02500000037252903f;
+  float _625 = ((float((int)(((int)(uint)((bool)(_610 > 0.0f))) - ((int)(uint)((bool)(_610 < 0.0f))))) * (1.0f - (_614 * _614))) + 1.0f) * 0.02500000037252903f;
   if (!(_608 <= 0.0533333346247673f)) {
     if (!(_608 >= 0.1599999964237213f)) {
       _634 = (((0.23999999463558197f / _607) + -0.5f) * _625);
@@ -364,9 +368,9 @@ float4 main(
   }
 
   [branch]
-  if ((uint)(OutputDevice) == 0) {
+  if (OutputDevice == 0) {
     do {
-      if ((uint)(WorkingColorSpace.bIsSRGB) == 0) {
+      if (WorkingColorSpace.bIsSRGB == 0) {
         float _996 = mad((WorkingColorSpace.ToAP1[0].z), _973, mad((WorkingColorSpace.ToAP1[0].y), _972, ((WorkingColorSpace.ToAP1[0].x) * _971)));
         float _999 = mad((WorkingColorSpace.ToAP1[1].z), _973, mad((WorkingColorSpace.ToAP1[1].y), _972, ((WorkingColorSpace.ToAP1[1].x) * _971)));
         float _1002 = mad((WorkingColorSpace.ToAP1[2].z), _973, mad((WorkingColorSpace.ToAP1[2].y), _972, ((WorkingColorSpace.ToAP1[2].x) * _971)));
@@ -403,7 +407,7 @@ float4 main(
       } while (false);
     } while (false);
   } else {
-    if ((uint)(OutputDevice) == 1) {
+    if (OutputDevice == 1) {
       float _1064 = mad((WorkingColorSpace.ToAP1[0].z), _973, mad((WorkingColorSpace.ToAP1[0].y), _972, ((WorkingColorSpace.ToAP1[0].x) * _971)));
       float _1067 = mad((WorkingColorSpace.ToAP1[1].z), _973, mad((WorkingColorSpace.ToAP1[1].y), _972, ((WorkingColorSpace.ToAP1[1].x) * _971)));
       float _1070 = mad((WorkingColorSpace.ToAP1[2].z), _973, mad((WorkingColorSpace.ToAP1[2].y), _972, ((WorkingColorSpace.ToAP1[2].x) * _971)));
@@ -414,7 +418,7 @@ float4 main(
       _2594 = min((_1081 * 4.5f), ((exp2(log2(max(_1081, 0.017999999225139618f)) * 0.44999998807907104f) * 1.0989999771118164f) + -0.0989999994635582f));
       _2595 = min((_1082 * 4.5f), ((exp2(log2(max(_1082, 0.017999999225139618f)) * 0.44999998807907104f) * 1.0989999771118164f) + -0.0989999994635582f));
     } else {
-      if ((bool)((uint)(OutputDevice) == 3) || (bool)((uint)(OutputDevice) == 5)) {
+      if ((bool)(OutputDevice == 3) || (bool)(OutputDevice == 5)) {
         _10[0] = ACESCoefsLow_0.x;
         _10[1] = ACESCoefsLow_0.y;
         _10[2] = ACESCoefsLow_0.z;
@@ -491,7 +495,7 @@ float4 main(
           float _1292 = _1277 + -0.4000000059604645f;
           float _1293 = _1292 * 5.0f;
           float _1297 = max((1.0f - abs(_1292 * 2.5f)), 0.0f);
-          float _1308 = ((float(((int)(uint)((bool)(_1293 > 0.0f))) - ((int)(uint)((bool)(_1293 < 0.0f)))) * (1.0f - (_1297 * _1297))) + 1.0f) * 0.02500000037252903f;
+          float _1308 = ((float((int)(((int)(uint)((bool)(_1293 > 0.0f))) - ((int)(uint)((bool)(_1293 < 0.0f))))) * (1.0f - (_1297 * _1297))) + 1.0f) * 0.02500000037252903f;
           do {
             if (!(_1291 <= 0.0533333346247673f)) {
               if (!(_1291 >= 0.1599999964237213f)) {
@@ -534,7 +538,7 @@ float4 main(
                   if ((bool)(_1364 > -67.5f) && (bool)(_1364 < 67.5f)) {
                     float _1370 = (_1364 + 67.5f) * 0.029629629105329514f;
                     int _1371 = int(_1370);
-                    float _1373 = _1370 - float(_1371);
+                    float _1373 = _1370 - float((int)(_1371));
                     float _1374 = _1373 * _1373;
                     float _1375 = _1374 * _1373;
                     if (_1371 == 3) {
@@ -573,7 +577,7 @@ float4 main(
                       if ((bool)(_1442 > _1444) && (bool)(_1442 < _1452)) {
                         float _1460 = ((_1441 - _1443) * 0.9030900001525879f) / ((_1451 - _1443) * 0.3010300099849701f);
                         int _1461 = int(_1460);
-                        float _1463 = _1460 - float(_1461);
+                        float _1463 = _1460 - float((int)(_1461));
                         float _1465 = _10[_1461];
                         float _1468 = _10[(_1461 + 1)];
                         float _1473 = _1465 * 0.5f;
@@ -585,7 +589,7 @@ float4 main(
                             if (_1442 < (_1482 * 0.3010300099849701f)) {
                               float _1490 = ((_1441 - _1451) * 0.9030900001525879f) / ((_1482 - _1451) * 0.3010300099849701f);
                               int _1491 = int(_1490);
-                              float _1493 = _1490 - float(_1491);
+                              float _1493 = _1490 - float((int)(_1491));
                               float _1495 = _11[_1491];
                               float _1498 = _11[(_1491 + 1)];
                               float _1503 = _1495 * 0.5f;
@@ -608,7 +612,7 @@ float4 main(
                         if ((bool)(_1518 > _1444) && (bool)(_1518 < _1526)) {
                           float _1534 = ((_1517 - _1443) * 0.9030900001525879f) / ((_1525 - _1443) * 0.3010300099849701f);
                           int _1535 = int(_1534);
-                          float _1537 = _1534 - float(_1535);
+                          float _1537 = _1534 - float((int)(_1535));
                           float _1539 = _10[_1535];
                           float _1542 = _10[(_1535 + 1)];
                           float _1547 = _1539 * 0.5f;
@@ -620,7 +624,7 @@ float4 main(
                               if (_1518 < (_1556 * 0.3010300099849701f)) {
                                 float _1564 = ((_1517 - _1525) * 0.9030900001525879f) / ((_1556 - _1525) * 0.3010300099849701f);
                                 int _1565 = int(_1564);
-                                float _1567 = _1564 - float(_1565);
+                                float _1567 = _1564 - float((int)(_1565));
                                 float _1569 = _11[_1565];
                                 float _1572 = _11[(_1565 + 1)];
                                 float _1577 = _1569 * 0.5f;
@@ -643,7 +647,7 @@ float4 main(
                           if ((bool)(_1592 > _1444) && (bool)(_1592 < _1600)) {
                             float _1608 = ((_1591 - _1443) * 0.9030900001525879f) / ((_1599 - _1443) * 0.3010300099849701f);
                             int _1609 = int(_1608);
-                            float _1611 = _1608 - float(_1609);
+                            float _1611 = _1608 - float((int)(_1609));
                             float _1613 = _10[_1609];
                             float _1616 = _10[(_1609 + 1)];
                             float _1621 = _1613 * 0.5f;
@@ -655,7 +659,7 @@ float4 main(
                                 if (_1592 < (_1630 * 0.3010300099849701f)) {
                                   float _1638 = ((_1591 - _1599) * 0.9030900001525879f) / ((_1630 - _1599) * 0.3010300099849701f);
                                   int _1639 = int(_1638);
-                                  float _1641 = _1638 - float(_1639);
+                                  float _1641 = _1638 - float((int)(_1639));
                                   float _1643 = _11[_1639];
                                   float _1646 = _11[(_1639 + 1)];
                                   float _1651 = _1643 * 0.5f;
@@ -684,7 +688,7 @@ float4 main(
                         float _1726 = min(max((min(max(mad(0.016756348311901093f, _1703, mad(1.6153316497802734f, _1700, (_1697 * -0.663662850856781f))), 0.0f), 65535.0f) * ACESMinMaxData.w), 0.0f), 65535.0f);
                         float _1727 = min(max((min(max(mad(0.9883948564529419f, _1703, mad(-0.008284442126750946f, _1700, (_1697 * 0.011721894145011902f))), 0.0f), 65535.0f) * ACESMinMaxData.w), 0.0f), 65535.0f);
                         do {
-                          if (!((uint)(OutputDevice) == 5)) {
+                          if (!(OutputDevice == 5)) {
                             _1740 = mad(_45, _1727, mad(_44, _1726, (_1725 * _43)));
                             _1741 = mad(_48, _1727, mad(_47, _1726, (_1725 * _46)));
                             _1742 = mad(_51, _1727, mad(_50, _1726, (_1725 * _49)));
@@ -709,7 +713,7 @@ float4 main(
           } while (false);
         } while (false);
       } else {
-        if (((uint)(OutputDevice) & -3) == 4) {
+        if ((OutputDevice & -3) == 4) {
           _8[0] = ACESCoefsLow_0.x;
           _8[1] = ACESCoefsLow_0.y;
           _8[2] = ACESCoefsLow_0.z;
@@ -786,7 +790,7 @@ float4 main(
             float _1966 = _1951 + -0.4000000059604645f;
             float _1967 = _1966 * 5.0f;
             float _1971 = max((1.0f - abs(_1966 * 2.5f)), 0.0f);
-            float _1982 = ((float(((int)(uint)((bool)(_1967 > 0.0f))) - ((int)(uint)((bool)(_1967 < 0.0f)))) * (1.0f - (_1971 * _1971))) + 1.0f) * 0.02500000037252903f;
+            float _1982 = ((float((int)(((int)(uint)((bool)(_1967 > 0.0f))) - ((int)(uint)((bool)(_1967 < 0.0f))))) * (1.0f - (_1971 * _1971))) + 1.0f) * 0.02500000037252903f;
             do {
               if (!(_1965 <= 0.0533333346247673f)) {
                 if (!(_1965 >= 0.1599999964237213f)) {
@@ -829,7 +833,7 @@ float4 main(
                     if ((bool)(_2038 > -67.5f) && (bool)(_2038 < 67.5f)) {
                       float _2044 = (_2038 + 67.5f) * 0.029629629105329514f;
                       int _2045 = int(_2044);
-                      float _2047 = _2044 - float(_2045);
+                      float _2047 = _2044 - float((int)(_2045));
                       float _2048 = _2047 * _2047;
                       float _2049 = _2048 * _2047;
                       if (_2045 == 3) {
@@ -868,7 +872,7 @@ float4 main(
                         if ((bool)(_2116 > _2118) && (bool)(_2116 < _2126)) {
                           float _2134 = ((_2115 - _2117) * 0.9030900001525879f) / ((_2125 - _2117) * 0.3010300099849701f);
                           int _2135 = int(_2134);
-                          float _2137 = _2134 - float(_2135);
+                          float _2137 = _2134 - float((int)(_2135));
                           float _2139 = _8[_2135];
                           float _2142 = _8[(_2135 + 1)];
                           float _2147 = _2139 * 0.5f;
@@ -880,7 +884,7 @@ float4 main(
                               if (_2116 < (_2156 * 0.3010300099849701f)) {
                                 float _2164 = ((_2115 - _2125) * 0.9030900001525879f) / ((_2156 - _2125) * 0.3010300099849701f);
                                 int _2165 = int(_2164);
-                                float _2167 = _2164 - float(_2165);
+                                float _2167 = _2164 - float((int)(_2165));
                                 float _2169 = _9[_2165];
                                 float _2172 = _9[(_2165 + 1)];
                                 float _2177 = _2169 * 0.5f;
@@ -903,7 +907,7 @@ float4 main(
                           if ((bool)(_2192 > _2118) && (bool)(_2192 < _2200)) {
                             float _2208 = ((_2191 - _2117) * 0.9030900001525879f) / ((_2199 - _2117) * 0.3010300099849701f);
                             int _2209 = int(_2208);
-                            float _2211 = _2208 - float(_2209);
+                            float _2211 = _2208 - float((int)(_2209));
                             float _2213 = _8[_2209];
                             float _2216 = _8[(_2209 + 1)];
                             float _2221 = _2213 * 0.5f;
@@ -915,7 +919,7 @@ float4 main(
                                 if (_2192 < (_2230 * 0.3010300099849701f)) {
                                   float _2238 = ((_2191 - _2199) * 0.9030900001525879f) / ((_2230 - _2199) * 0.3010300099849701f);
                                   int _2239 = int(_2238);
-                                  float _2241 = _2238 - float(_2239);
+                                  float _2241 = _2238 - float((int)(_2239));
                                   float _2243 = _9[_2239];
                                   float _2246 = _9[(_2239 + 1)];
                                   float _2251 = _2243 * 0.5f;
@@ -938,7 +942,7 @@ float4 main(
                             if ((bool)(_2266 > _2118) && (bool)(_2266 < _2274)) {
                               float _2282 = ((_2265 - _2117) * 0.9030900001525879f) / ((_2273 - _2117) * 0.3010300099849701f);
                               int _2283 = int(_2282);
-                              float _2285 = _2282 - float(_2283);
+                              float _2285 = _2282 - float((int)(_2283));
                               float _2287 = _8[_2283];
                               float _2290 = _8[(_2283 + 1)];
                               float _2295 = _2287 * 0.5f;
@@ -950,7 +954,7 @@ float4 main(
                                   if (_2266 < (_2304 * 0.3010300099849701f)) {
                                     float _2312 = ((_2265 - _2273) * 0.9030900001525879f) / ((_2304 - _2273) * 0.3010300099849701f);
                                     int _2313 = int(_2312);
-                                    float _2315 = _2312 - float(_2313);
+                                    float _2315 = _2312 - float((int)(_2313));
                                     float _2317 = _9[_2313];
                                     float _2320 = _9[(_2313 + 1)];
                                     float _2325 = _2317 * 0.5f;
@@ -979,7 +983,7 @@ float4 main(
                           float _2400 = min(max((min(max(mad(0.016756348311901093f, _2377, mad(1.6153316497802734f, _2374, (_2371 * -0.663662850856781f))), 0.0f), 65535.0f) * ACESMinMaxData.w), 0.0f), 65535.0f);
                           float _2401 = min(max((min(max(mad(0.9883948564529419f, _2377, mad(-0.008284442126750946f, _2374, (_2371 * 0.011721894145011902f))), 0.0f), 65535.0f) * ACESMinMaxData.w), 0.0f), 65535.0f);
                           do {
-                            if (!((uint)(OutputDevice) == 6)) {
+                            if (!(OutputDevice == 6)) {
                               _2414 = mad(_45, _2401, mad(_44, _2400, (_2399 * _43)));
                               _2415 = mad(_48, _2401, mad(_47, _2400, (_2399 * _46)));
                               _2416 = mad(_51, _2401, mad(_50, _2400, (_2399 * _49)));
@@ -1004,7 +1008,7 @@ float4 main(
             } while (false);
           } while (false);
         } else {
-          if ((uint)(OutputDevice) == 7) {
+          if (OutputDevice == 7) {
             float _2473 = mad((WorkingColorSpace.ToAP1[0].z), _959, mad((WorkingColorSpace.ToAP1[0].y), _958, ((WorkingColorSpace.ToAP1[0].x) * _957)));
             float _2476 = mad((WorkingColorSpace.ToAP1[1].z), _959, mad((WorkingColorSpace.ToAP1[1].y), _958, ((WorkingColorSpace.ToAP1[1].x) * _957)));
             float _2479 = mad((WorkingColorSpace.ToAP1[2].z), _959, mad((WorkingColorSpace.ToAP1[2].y), _958, ((WorkingColorSpace.ToAP1[2].x) * _957)));
@@ -1015,8 +1019,8 @@ float4 main(
             _2594 = exp2(log2((1.0f / ((_2499 * 18.6875f) + 1.0f)) * ((_2499 * 18.8515625f) + 0.8359375f)) * 78.84375f);
             _2595 = exp2(log2((1.0f / ((_2500 * 18.6875f) + 1.0f)) * ((_2500 * 18.8515625f) + 0.8359375f)) * 78.84375f);
           } else {
-            if (!((uint)(OutputDevice) == 8)) {
-              if ((uint)(OutputDevice) == 9) {
+            if (!(OutputDevice == 8)) {
+              if (OutputDevice == 9) {
                 float _2547 = mad((WorkingColorSpace.ToAP1[0].z), _947, mad((WorkingColorSpace.ToAP1[0].y), _946, ((WorkingColorSpace.ToAP1[0].x) * _945)));
                 float _2550 = mad((WorkingColorSpace.ToAP1[1].z), _947, mad((WorkingColorSpace.ToAP1[1].y), _946, ((WorkingColorSpace.ToAP1[1].x) * _945)));
                 float _2553 = mad((WorkingColorSpace.ToAP1[2].z), _947, mad((WorkingColorSpace.ToAP1[2].y), _946, ((WorkingColorSpace.ToAP1[2].x) * _945)));

@@ -377,21 +377,29 @@ renodx::utils::settings::Settings info_settings = {
 };
 
 void OnPresetOff() {
-  renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
-  renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 203.f);
-  renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
-  renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
-  renodx::utils::settings::UpdateSetting("ToneMapGammaCorrection", 0.f);
-  renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeLUTScaling", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeColorSpace", 0.f);
+  renodx::utils::settings::UpdateSettings({
+      {"ToneMapType", 0.f},
+      {"ToneMapPeakNits", 203.f},
+      {"ToneMapGameNits", 203.f},
+      {"ToneMapUINits", 203.f},
+      {"GammaCorrection", 0.f},
+      {"ToneMapHueCorrection", 0.f},
+      {"ColorGradeStrength", 100.f},
+      {"ColorGradeSaturationCorrection", 0.f},
+      {"ColorGradeBlowoutRestoration", 0.f},
+      {"ColorGradeHueShift", 100.f},
+      {"ColorGradeHueShift", 100.f},
+      {"ColorGradeExposure", 1.f},
+      {"ColorGradeHighlights", 50.f},
+      {"ColorGradeHighlightSaturation", 50.f},
+      {"ColorGradeShadows", 50.f},
+      {"ColorGradeContrast", 50.f},
+      {"ColorGradeSaturation", 50.f},
+      {"ColorGradeBlowout", 0.f},
+      {"ColorGradeFlare", 0.f},
+      {"ColorGradeClip", 4.f},
+      {"ColorGradeColorSpace", 0.f},
+  });
 }
 
 bool fired_on_init_swapchain = false;
@@ -441,7 +449,7 @@ void AddAvowedUpgrades() {
 }
 
 void AddWuchangUpgrades() {
-    renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
       .old_format = reshade::api::format::r10g10b10a2_unorm,
       .new_format = reshade::api::format::r16g16b16a16_float,
       .use_resource_view_cloning = true,
@@ -458,9 +466,9 @@ void AddGamePatches() {
     AddExpedition33Upgrades();
   } else if (product_name == "Avowed") {
     AddAvowedUpgrades();
-  } else if (product_name == "Tony Hawks(TM) Pro Skater(TM) 3 + 4"){
+  } else if (product_name == "Tony Hawks(TM) Pro Skater(TM) 3 + 4") {
     renodx::mods::swapchain::swapchain_proxy_revert_state = true;
-  } else if (product_name == "Project_Plague"){
+  } else if (product_name == "Project_Plague") {
     AddWuchangUpgrades();
   } else {
     return;
@@ -570,15 +578,216 @@ const std::unordered_map<
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
+        {
+            "Banishers: Ghosts of New Eden",
+            {
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
 
 };
 
-float g_dump_shaders = 0;
+float g_dump_shaders = 0.f;
 float g_upgrade_copy_destinations = 0.f;
 
+namespace lut_dump {
 std::unordered_set<uint32_t> g_dumped_shaders = {};
+struct __declspec(uuid("019886a1-be4c-70df-b8ea-f2c4bab7e95d")) CommandListData {
+  // State
+  std::map<std::pair<uint32_t, uint32_t>, reshade::api::resource_view> pixel_srv_binds;
+  std::map<std::pair<uint32_t, uint32_t>, reshade::api::resource_view> pixel_uav_binds;
+  std::map<std::pair<uint32_t, uint32_t>, reshade::api::resource_view> compute_srv_binds;
+  std::map<std::pair<uint32_t, uint32_t>, reshade::api::resource_view> compute_uav_binds;
+  std::map<std::pair<uint32_t, uint32_t>, reshade::api::buffer_range> constants;
+  std::map<uint32_t, reshade::api::resource_view> render_targets;
+  std::optional<reshade::api::blend_desc> blend_desc = std::nullopt;
+  std::optional<reshade::api::rasterizer_desc> rasterizer_desc = std::nullopt;
 
-bool OnDrawForLUTDump(
+  // std::vector<PipelineBindDetails> pipeline_binds;
+};
+void OnInitCommandList(reshade::api::command_list* cmd_list) {
+  renodx::utils::data::Create<CommandListData>(cmd_list);
+}
+
+void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
+  renodx::utils::data::Delete<CommandListData>(cmd_list);
+}
+
+void OnResetCommandList(reshade::api::command_list* cmd_list) {
+  auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  if (data == nullptr) return;
+  renodx::utils::data::Delete<CommandListData>(cmd_list);
+  renodx::utils::data::Create<CommandListData>(cmd_list);
+}
+
+void OnPushDescriptors(
+    reshade::api::command_list* cmd_list,
+    reshade::api::shader_stage stages,
+    reshade::api::pipeline_layout layout,
+    uint32_t layout_param,
+    const reshade::api::descriptor_table_update& update) {
+  auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  if (data == nullptr) {
+    assert(false && "Command list data not found");
+    return;
+  }
+
+  auto* device = cmd_list->get_device();
+
+  renodx::utils::pipeline_layout::PipelineLayoutData* layout_data = nullptr;
+  auto populate_layout_data = [&]() {
+    if (layout_data != nullptr) return true;
+    auto* local_layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(layout);
+    if (local_layout_data == nullptr) {
+      reshade::log::message(reshade::log::level::error, "Could not find handle.");
+      return false;
+    }
+    layout_data = local_layout_data;
+    return true;
+  };
+
+  auto log_resource_view = [&](uint32_t index,
+                               reshade::api::resource_view view,
+                               std::map<std::pair<uint32_t, uint32_t>,
+                                        reshade::api::resource_view>& destination) {
+    if (!populate_layout_data()) return;
+
+    auto layout_params = layout_data->params;
+    const auto& param = layout_params[layout_param];
+    uint32_t dx_register_index = 0;
+    uint32_t dx_register_space = 0;
+    switch (param.type) {
+      case reshade::api::pipeline_layout_param_type::descriptor_table: {
+        if (param.descriptor_table.count != 1) {
+          reshade::log::message(reshade::log::level::error, "Wrong count.");
+          // add warning
+          return;
+        }
+        dx_register_index = param.descriptor_table.ranges[0].dx_register_index;
+        dx_register_space = param.descriptor_table.ranges[0].dx_register_space;
+        break;
+      }
+      case reshade::api::pipeline_layout_param_type::push_descriptors:
+        dx_register_index = param.push_descriptors.dx_register_index;
+        dx_register_space = param.push_descriptors.dx_register_space;
+        break;
+      default:
+        reshade::log::message(reshade::log::level::error, "Not descriptor table.");
+        return;
+    }
+
+    auto slot = std::pair<uint32_t, uint32_t>(dx_register_index + update.binding + index, dx_register_space);
+
+    if (view.handle == 0u) {
+      destination.erase(slot);
+    } else {
+      destination[slot] = view;
+    }
+  };
+
+  for (uint32_t i = 0; i < update.count; i++) {
+    switch (update.type) {
+      case reshade::api::descriptor_type::sampler:
+        break;
+      case reshade::api::descriptor_type::sampler_with_resource_view: {
+        auto item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[i];
+        if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel)) {
+          log_resource_view(i, item.view, data->pixel_srv_binds);
+        } else if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::compute)) {
+          log_resource_view(i, item.view, data->compute_srv_binds);
+        }
+      } break;
+      case reshade::api::descriptor_type::buffer_shader_resource_view:
+      case reshade::api::descriptor_type::shader_resource_view:        {
+        auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
+        if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel)) {
+          log_resource_view(i, item, data->pixel_srv_binds);
+        } else if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::compute)) {
+          log_resource_view(i, item, data->compute_srv_binds);
+        }
+        break;
+      }
+      case reshade::api::descriptor_type::buffer_unordered_access_view:
+      case reshade::api::descriptor_type::unordered_access_view:        {
+        auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
+        if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel)) {
+          log_resource_view(i, item, data->pixel_uav_binds);
+        } else if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::compute)) {
+          log_resource_view(i, item, data->compute_uav_binds);
+        }
+
+        break;
+      }
+      case reshade::api::descriptor_type::constant_buffer: {
+        if (!populate_layout_data()) return;
+        auto layout_params = layout_data->params;
+        auto param = layout_params[layout_param];
+        if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
+          assert(param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer);
+
+          uint32_t pair_a = 0;
+          uint32_t pair_b = 0;
+          switch (device->get_api()) {
+            case reshade::api::device_api::d3d9:
+            case reshade::api::device_api::d3d10:
+            case reshade::api::device_api::d3d11:
+            case reshade::api::device_api::d3d12:
+              pair_a = param.push_constants.dx_register_index + update.binding + i;
+              pair_b = param.push_constants.dx_register_space;
+              break;
+
+            case reshade::api::device_api::opengl:
+              break;
+
+            case reshade::api::device_api::vulkan:
+              pair_a = update.binding;
+              pair_b = update.array_offset + i;
+              break;
+            default:
+              assert(false);
+          }
+          auto buffer_range = static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
+          auto slot = std::pair<uint32_t, uint32_t>(pair_a, pair_b);
+          data->constants[slot] = buffer_range;
+        } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges) {
+          uint32_t pair_a = 0;
+          uint32_t pair_b = 0;
+
+          switch (device->get_api()) {
+            case reshade::api::device_api::d3d9:
+            case reshade::api::device_api::d3d10:
+            case reshade::api::device_api::d3d11:
+            case reshade::api::device_api::d3d12:
+              assert(false);
+              break;
+            case reshade::api::device_api::opengl:
+              break;
+
+            case reshade::api::device_api::vulkan:
+              assert(param.descriptor_table.count > update.binding);
+              assert(param.descriptor_table.ranges[update.binding].binding == update.binding);
+              pair_a = update.binding;
+              pair_b = update.array_offset + i;
+              break;
+            default:
+              assert(false);
+          }
+          auto buffer_range = static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
+          auto slot = std::pair<uint32_t, uint32_t>(pair_a, pair_b);
+          data->constants[slot] = buffer_range;
+
+        } else {
+          assert(false);
+        }
+
+      } break;
+      default:
+        break;
+    }
+  }
+}
+
+bool OnDraw(
     reshade::api::command_list* cmd_list,
     uint32_t vertex_count,
     uint32_t instance_count,
@@ -593,6 +802,10 @@ bool OnDrawForLUTDump(
   auto pixel_shader_hash = renodx::utils::shader::GetCurrentPixelShaderHash(pixel_state);
   if (pixel_shader_hash == 0u) return false;
 
+  // if (custom_shaders.contains(pixel_shader_hash)) return false;
+
+  if (g_dumped_shaders.contains(pixel_shader_hash)) return false;
+
   auto* swapchain_state = renodx::utils::swapchain::GetCurrentState(cmd_list);
   bool found_lut_render_target = false;
 
@@ -605,10 +818,6 @@ bool OnDrawForLUTDump(
     }
   }
   if (!found_lut_render_target) return false;
-
-  if (custom_shaders.contains(pixel_shader_hash)) return false;
-
-  if (g_dumped_shaders.contains(pixel_shader_hash)) return false;
 
   reshade::log::message(
       reshade::log::level::debug,
@@ -652,6 +861,250 @@ bool OnDrawForLUTDump(
 
   return false;
 }
+
+bool OnDispatch(
+    reshade::api::command_list* cmd_list,
+    uint32_t group_count_x,
+    uint32_t group_count_y,
+    uint32_t group_count_z) {
+  if (g_dump_shaders == 0.f) return false;
+
+  auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
+
+  auto* compute_state = renodx::utils::shader::GetCurrentComputeState(shader_state);
+
+  auto compute_shader_hash = renodx::utils::shader::GetCurrentComputeShaderHash(compute_state);
+  if (compute_shader_hash == 0u) return false;
+  // if (custom_shaders.contains(compute_shader_hash)) return false;
+  if (g_dumped_shaders.contains(compute_shader_hash)) return false;
+
+  auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+
+  auto compute_uav_binds = cmd_list_data->compute_uav_binds;
+
+  auto* device = cmd_list->get_device();
+
+  if (shader_state->last_pipeline != 0u) {
+    auto* pipeline_shader_details = renodx::utils::shader::GetPipelineShaderDetails(shader_state->last_pipeline);
+    if (pipeline_shader_details != nullptr) {
+      auto* layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(pipeline_shader_details->layout);
+      if (layout_data != nullptr) {
+        const auto& info = *layout_data;
+        auto param_count = info.params.size();
+        auto* descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
+        if (descriptor_data == nullptr) return false;
+        for (auto param_index = 0; param_index < param_count; ++param_index) {
+          const auto& param = info.params.at(param_index);
+          const auto& table = info.tables[param_index];
+
+          uint32_t descriptor_table_count;
+          const reshade::api::descriptor_range* descriptor_table_ranges;
+          switch (param.type) {
+            case reshade::api::pipeline_layout_param_type::descriptor_table:
+              if (table.handle == 0u) continue;
+              descriptor_table_count = param.descriptor_table.count;
+              descriptor_table_ranges = param.descriptor_table.ranges;
+              break;
+            case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
+              if (table.handle == 0u) continue;
+              descriptor_table_count = param.descriptor_table_with_static_samplers.count;
+              descriptor_table_ranges = param.descriptor_table_with_static_samplers.ranges;
+              break;
+
+            case reshade::api::pipeline_layout_param_type::push_constants:
+            case reshade::api::pipeline_layout_param_type::push_descriptors:
+            case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges:
+            case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers:
+              continue;
+          }
+
+          for (uint32_t j = 0; j < descriptor_table_count; ++j) {
+            const auto& range = descriptor_table_ranges[j];
+
+            // Skip unbounded ranges
+            if (range.count == UINT32_MAX) continue;
+
+            switch (range.type) {
+              case reshade::api::descriptor_type::shader_resource_view:
+              case reshade::api::descriptor_type::sampler_with_resource_view:
+              case reshade::api::descriptor_type::buffer_shader_resource_view:
+              case reshade::api::descriptor_type::unordered_access_view:
+                break;
+              default:
+                continue;
+            }
+
+            if (!renodx::utils::bitwise::HasFlag(range.visibility, reshade::api::shader_stage::compute)) {
+              continue;
+            }
+            // if (!renodx::utils::bitwise::HasFlag(range.visibility, reshade::api::shader_stage::pixel)) {
+            //   continue;
+            // }
+
+            uint32_t base_offset = 0;
+            reshade::api::descriptor_heap heap = {0};
+            device->get_descriptor_heap_offset(table, range.binding, 0, &heap, &base_offset);
+            const std::shared_lock descriptor_lock(descriptor_data->mutex);
+
+            for (uint32_t k = 0; k < range.count; ++k) {
+              auto heap_pair = descriptor_data->heaps.find(heap.handle);
+              if (heap_pair == descriptor_data->heaps.end()) {
+                // Unknown heap?
+                continue;
+              }
+              const auto& heap_data = heap_pair->second;
+              auto offset = base_offset + k;
+              if (offset >= heap_data.size()) {
+                // Invalid location (may be oversized bind)
+                continue;
+              }
+              auto known_pair = descriptor_data->resource_view_heap_locations.find(heap.handle);
+              if (known_pair == descriptor_data->resource_view_heap_locations.end()) continue;
+              auto& known = known_pair->second;
+              if (!known.contains(offset)) {
+                // Unknown Resource View
+                continue;
+              }
+
+              const auto& [descriptor_type, descriptor_data] = heap_data[offset];
+              reshade::api::resource_view resource_view = {0};
+              bool is_uav = false;
+              switch (descriptor_type) {
+                case reshade::api::descriptor_type::sampler_with_resource_view:
+                  resource_view = std::get<reshade::api::sampler_with_resource_view>(descriptor_data).view;
+                  break;
+                case reshade::api::descriptor_type::buffer_unordered_access_view:
+                case reshade::api::descriptor_type::texture_unordered_access_view:
+                  is_uav = true;
+                  // fallthrough
+                case reshade::api::descriptor_type::buffer_shader_resource_view:
+                case reshade::api::descriptor_type::texture_shader_resource_view:
+                  resource_view = std::get<reshade::api::resource_view>(descriptor_data);
+                  break;
+                case reshade::api::descriptor_type::constant_buffer:
+                case reshade::api::descriptor_type::shader_storage_buffer:
+                case reshade::api::descriptor_type::acceleration_structure:
+                  break;
+                default:
+                  break;
+              }
+
+              auto slot = std::pair<uint32_t, uint32_t>(range.dx_register_index + k, range.dx_register_space);
+
+              if (is_uav || range.type == reshade::api::descriptor_type::unordered_access_view) {
+                if (resource_view.handle == 0u) {
+                  compute_uav_binds.erase(slot);
+                } else {
+                  auto* resource_view_info = renodx::utils::resource::GetResourceViewInfo(resource_view);
+                  if (resource_view_info->resource_info == nullptr && renodx::utils::resource::IsResourceViewEmpty(device, resource_view)) {
+                    compute_uav_binds.erase(slot);
+                  } else {
+                    compute_uav_binds[slot] = resource_view;
+                  }
+                }
+              } else {
+                // if (resource_view.handle == 0u) {
+                //   draw_details.srv_binds.erase(slot);
+                // } else {
+                //   auto detail_item = GetResourceViewDetails(resource_view, device);
+                //   if (detail_item.resource.handle == 0u && renodx::utils::resource::IsResourceViewEmpty(device, resource_view)) {
+                //     draw_details.srv_binds.erase(slot);
+                //   } else {
+                //     draw_details.srv_binds[slot] = detail_item;
+                //   }
+                // }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (compute_uav_binds.empty()) return false;
+  auto pair = compute_uav_binds.find({0, 0});
+  if (pair == compute_uav_binds.end()) return false;
+  auto uav_view = pair->second;
+  if (uav_view.handle == 0u) return false;
+  auto* uav_view_info = renodx::utils::resource::GetResourceViewInfo(uav_view);
+  if (uav_view_info == nullptr) return false;
+  if (uav_view_info->resource_info == nullptr) return false;
+  if (uav_view_info->resource_info->resource_tag != 1.f) return false;
+
+  reshade::log::message(
+      reshade::log::level::debug,
+      std::format("Dumping lutbuiler: 0x{:08x}", compute_shader_hash).c_str());
+
+  g_dumped_shaders.emplace(compute_shader_hash);
+
+  renodx::utils::path::default_output_folder = "renodx";
+  renodx::utils::shader::dump::default_dump_folder = ".";
+  bool found = false;
+  try {
+    auto shader_data = renodx::utils::shader::GetShaderData(compute_state);
+    if (!shader_data.has_value()) {
+      std::stringstream s;
+      s << "utils::shader::dump(Failed to retreive shader data: ";
+      s << PRINT_CRC32(compute_shader_hash);
+      s << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+      return false;
+    }
+
+    auto shader_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data.value());
+    if (shader_version.GetMajor() == 0) {
+      // No shader information found
+      return false;
+    }
+
+    renodx::utils::shader::dump::DumpShader(
+        compute_shader_hash,
+        shader_data.value(),
+        reshade::api::pipeline_subobject_type::pixel_shader,
+        "lutbuilder_");
+
+  } catch (...) {
+    std::stringstream s;
+    s << "utils::shader::dump(Failed to decode shader data: ";
+    s << PRINT_CRC32(compute_shader_hash);
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+  }
+  return false;
+}
+
+void Use(DWORD fdw_reason) {
+  renodx::utils::descriptor::trace_descriptor_tables = true;  // RIP FPS
+
+  renodx::utils::pipeline_layout::Use(fdw_reason);
+  renodx::utils::swapchain::Use(fdw_reason);
+  renodx::utils::shader::Use(fdw_reason);
+  renodx::utils::shader::use_shader_cache = true;
+  renodx::utils::resource::Use(fdw_reason);
+  renodx::utils::descriptor::Use(fdw_reason);
+  switch (fdw_reason) {
+    case DLL_PROCESS_ATTACH:
+      reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
+      reshade::register_event<reshade::addon_event::reset_command_list>(OnResetCommandList);
+      reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
+
+      reshade::register_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
+      reshade::register_event<reshade::addon_event::draw>(OnDraw);
+      reshade::register_event<reshade::addon_event::dispatch>(OnDispatch);
+      reshade::log::message(reshade::log::level::info, "DumpLUTShaders enabled.");
+      break;
+    case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitCommandList);
+      reshade::unregister_event<reshade::addon_event::reset_command_list>(OnResetCommandList);
+      reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
+
+      reshade::unregister_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
+      reshade::unregister_event<reshade::addon_event::draw>(OnDraw);
+      reshade::unregister_event<reshade::addon_event::dispatch>(OnDispatch);
+      break;
+  }
+}
+}  // namespace lut_dump
 
 void AddAdvancedSettings() {
   auto process_path = renodx::utils::platform::GetCurrentProcessPath();
@@ -934,26 +1387,19 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         initialized = true;
       }
 
-      if (g_dump_shaders != 0.f) {
-        renodx::utils::swapchain::Use(fdw_reason);
-        renodx::utils::shader::Use(fdw_reason);
-        renodx::utils::shader::use_shader_cache = true;
-        renodx::utils::resource::Use(fdw_reason);
-        reshade::register_event<reshade::addon_event::draw>(OnDrawForLUTDump);
-        reshade::log::message(reshade::log::level::info, "DumpLUTShaders enabled.");
-      }
-
       break;
     case DLL_PROCESS_DETACH:
       renodx::utils::shader::Use(fdw_reason);
       renodx::utils::swapchain::Use(fdw_reason);
       renodx::utils::resource::Use(fdw_reason);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::unregister_event<reshade::addon_event::draw>(OnDrawForLUTDump);
       reshade::unregister_addon(h_module);
       break;
   }
 
+  if (g_dump_shaders != 0.f) {
+    lut_dump::Use(fdw_reason);
+  }
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);

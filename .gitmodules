@@ -4,7 +4,8 @@
 
 [submodule "external/Streamline"]
 	path = external/Streamline
-	url = https://github.com/NVIDIAGameWorks/Streamline.git
+	url = https://github.com/clshortfuse/Streamline.git
+	branch = patch-1
 
 [submodule "external/gtl"]
 	path = external/gtl
