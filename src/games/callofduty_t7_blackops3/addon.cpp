@@ -460,7 +460,7 @@ renodx::utils::settings::Settings settings = {
         .max = 2.f,
         .format = "%.2f",
         .parse = [](float value) { return value; },
-        .is_visible = []() { return current_settings_mode >= 2; },
+        .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "CustomCompressorKnee",
@@ -473,7 +473,7 @@ renodx::utils::settings::Settings settings = {
         .max = 2.f,
         .format = "%.2f",
         .parse = [](float value) { return value; },
-        .is_visible = []() { return current_settings_mode >= 2; },
+        .is_visible = []() { return current_settings_mode >= 1; },
     },
 
     new renodx::utils::settings::Setting{
@@ -881,18 +881,18 @@ renodx::utils::settings::Settings settings = {
 };
 
 void OnPresetOff() {
-  renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
-  renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
-  renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
-  renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 203.f);
+  renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
+  renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
+  // renodx::utils::settings::UpdateSetting("ToneMapGammaCorrection", 0);
+  // renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
+  // renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
+  // renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
+  // renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
+  // renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
+  // renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
+  // renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
 }
 
 const auto UPGRADE_TYPE_NONE = 0.f;
