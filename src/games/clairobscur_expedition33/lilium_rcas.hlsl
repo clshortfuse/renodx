@@ -1,3 +1,4 @@
+#include "./composite.hlsl"
 #include "./shared.h"
 
 float Max(float x, float y, float z) {
@@ -20,31 +21,41 @@ float Min(float x, float y, float z, float w) {
 // RCAS - Robust Contrast Adaptive Sharpening
 float3 ApplyRCAS(
     float3 center_color, float2 tex_coord,
-    Texture2D<float4> SamplerFrameBuffer_TEX, SamplerState SamplerFrameBuffer_SMP_s) {
+    Texture2D<float4> SamplerFrameBuffer_TEX, SamplerState SamplerFrameBuffer_SMP_s, bool invert_intermediate = true) {
   if (CUSTOM_SHARPNESS == 0.f) return center_color;  // Skip sharpening if amount is zero
 
 #define ENABLE_NOISE_REMOVAL           1u // Always good to be enabled
 #define ENABLE_NORMALIZATION           1u
-#define SHARPENING_NORMALIZATION_POINT 125 
+#define SHARPENING_NORMALIZATION_POINT 125
+  bool enable_normalization = CUSTOM_UNREAL_HDR != 1.f;
 
   uint width, height;
   SamplerFrameBuffer_TEX.GetDimensions(width, height);
   float2 texel_size = 1.0 / float2(width, height);
+  renodx::draw::Config intermediate_config = GetIntermediateConfig(CUSTOM_UNREAL_HDR == 1.f);
 
   // Algorithm uses minimal 3x3 pixel neighborhood.
   //    b
   //  d e f
   //    h
   float3 b =
-      renodx::color::bt709::from::AP1(SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, -1) * texel_size, 0).rgb);
+      SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, -1) * texel_size, 0).rgb;
   float3 d =
-      renodx::color::bt709::from::AP1(SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(-1, 0) * texel_size, 0).rgb);
+      SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(-1, 0) * texel_size, 0).rgb;
   float3 e =
       center_color;
   float3 f =
-      renodx::color::bt709::from::AP1(SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(1, 0) * texel_size, 0).rgb);
+      SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(1, 0) * texel_size, 0).rgb;
   float3 h =
-      renodx::color::bt709::from::AP1(SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, 1) * texel_size, 0).rgb);
+      SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, 1) * texel_size, 0).rgb;
+
+  if (invert_intermediate) {
+    b = renodx::draw::InvertIntermediatePass(b, intermediate_config);
+    d = renodx::draw::InvertIntermediatePass(d, intermediate_config);
+    e = renodx::draw::InvertIntermediatePass(e, intermediate_config);
+    f = renodx::draw::InvertIntermediatePass(f, intermediate_config);
+    h = renodx::draw::InvertIntermediatePass(h, intermediate_config);
+  }
 
 #if ENABLE_NORMALIZATION
   b /= SHARPENING_NORMALIZATION_POINT;
@@ -110,7 +121,6 @@ float3 ApplyRCAS(
 
   lobe *= nz;
 #endif
-
   // Resolve, which needs the medium precision rcp approximation to avoid visible tonality changes.
   float rcpL = rcp(4.f * lobe + 1.f);
 
@@ -120,6 +130,8 @@ float3 ApplyRCAS(
 #if ENABLE_NORMALIZATION
   pix *= SHARPENING_NORMALIZATION_POINT;
 #endif
+
+  pix = renodx::draw::RenderIntermediatePass(pix, intermediate_config);
 
   return pix;
 }
