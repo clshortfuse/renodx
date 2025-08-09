@@ -41,7 +41,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xE6F1994E),  // xray outline
     CustomShaderEntry(0x4493183C),  // xray outline 1
     CustomShaderEntry(0x9AF0BA45),  // sight 1
-    // CustomShaderEntry(0xF0897820),  // sight 2
+    CustomShaderEntry(0xF0897820),  // sight 2
 
     // map specific
     CustomShaderEntry(0x3E9C52D5),  // Shangri-la water
@@ -266,7 +266,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Emulates a display EOTF.",
         .labels = {"Off", "2.2", "BT.1886"},
-        .is_visible = []() { return current_settings_mode >= 0; },
+        // .is_visible = []() { return current_settings_mode >= 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapScaling",
