@@ -115,16 +115,16 @@ float3 Bloom_AddScaled(float3 color, float3 bloom) {
   return color;
 }
 
-float3 Bloom_ScaleTonemappedAfterSaturate(float3 color) {
+float3 Bloom_ScaledAfterSaturate(float3 color) {
   color.rgb *= CUSTOM_BLOOM;
   return color;
 }
 
 float3 Tradeoff_PrepareFullWidthFsfx(float3 color, float scale = 1, bool isDoColorSpace = true) {
-  color.xyz /= SDR_NOMRALIZATION_MAX;
-  if (RENODX_TONE_MAP_TYPE == 0) return color;
-  if (isDoColorSpace) color.xyz = Tradeoff_LinearToTradeoffSpace(color.xyz);
-  if (CUSTOM_TRADEOFF_RATIO > 0) color.xyz *= (SDR_NOMRALIZATION_MAX * CUSTOM_TRADEOFF_RATIO);
+  if (RENODX_TONE_MAP_TYPE == 0) return color; //Vanilla
+  color.xyz /= SDR_NOMRALIZATION_MAX; //scale down
+  if (isDoColorSpace) color.xyz = Tradeoff_LinearToTradeoffSpace(color.xyz); //color space
+  if (CUSTOM_TRADEOFF_RATIO > 0) color.xyz *= (SDR_NOMRALIZATION_MAX * CUSTOM_TRADEOFF_RATIO); //scale up
   color.xyz *= scale;
 
   return color;
