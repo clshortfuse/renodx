@@ -49,66 +49,48 @@ float3 Tonemap_Tradeoff_Out(float3 color) {
   //to linear
   color = Tradeoff_TradeoffSpaceToLinear(color);
 
-  //gamma correct
-  // color.xyz = renodx::color::correct::GammaSafe(color.xyz, false);
-  // color.xyz = renodx::color::gamma::EncodeSafe(color.xyz);
+  //clamp negatves (bruh)
+  color = max(color, float3(0,0,0));
 
   return color;
 }
 
-float Tonemap_FixCrushedBlacks(float color) {
-  if (color > 0.0003125f) return color;
-  color /= 5.f;
-  color += 0.00025f;
-  return color;
-} 
+//scuffed y compressor color https://www.desmos.com/calculator/evxq1t8ifw
+float3 Tonemap_Compressor(float3 colorUntonemapped) {
+  const float preExposure = CUSTOM_COMPRESSOR_TONEMAP_EXPOSURE; //CUSTOM_TONE_MAP_PREEXPOSURE
+  colorUntonemapped /= preExposure;
+
+  float colorY = renodx::color::y::from::BT2020(colorUntonemapped);
+  colorUntonemapped = colorY < 1 ? log2((colorUntonemapped) + 1) : renodx::math::SignPow(colorUntonemapped, CUSTOM_COMPRESSOR_TONEMAP_KNEE_STRENGTH); //Hopefully no one notices the hard knee... 0.65
+
+  colorUntonemapped *= preExposure;
+  return colorUntonemapped;
+}
 
 /*
 * in: linear untonemapped & tonemapped
 * out: scaled tradeoff color space normalized up to SDR_NOMRALIZATION_MAX
 */
-float3 Tonemap_Tradeoff_In(float3 colorUntonemapped, float3 colorTonemapped, float3 colorSDRNeutral) {
+float3 Tonemap_Tradeoff_In(float3 colorUntonemapped, float3 colorTonemapped/*, float3 colorSDRNeutral*/) {
   //ToneMapPass
   if (RENODX_TONE_MAP_TYPE != 0) {
-    //colorTonemapped prepare (dont need decode)
+    //colorTonemapped prepare
     colorTonemapped /= SDR_NOMRALIZATION_MAX;
-    colorTonemapped.xyz = renodx::color::correct::GammaSafe(colorTonemapped.xyz, false, 2.15); //idk why 2.15, but it works the best
+    colorTonemapped.xyz = renodx::color::correct::GammaSafe(colorTonemapped.xyz, false, 2.15); //2.15, idk.
     colorTonemapped = saturate(colorTonemapped);
 
-    colorUntonemapped *= CUSTOM_TONE_MAP_PREEXPOSURE;
-
+    //colorSDRNeutral prepare
+    // colorSDRNeutral = uv.x < 0.5 ? renodx::color::gamma::Decode(colorSDRNeutral) : renodx::color::srgb::Decode(colorSDRNeutral);
+    // colorSDRNeutral = exp2(colorSDRNeutral);
+    // colorSDRNeutral = renodx::color::correct::GammaSafe(colorSDRNeutral.xyz, false, 2.2);
+    
     {
-      colorUntonemapped = log2(colorUntonemapped + 1);
-
+      colorUntonemapped = Tonemap_Compressor(colorUntonemapped);
       colorTonemapped = renodx::draw::ToneMapPass(colorUntonemapped, colorTonemapped);
+      // colorTonemapped = colorSDRNeutral;
+      // colorTonemapped = colorUntonemapped;
     }
 
-
-    // switch (CUSTOM_STYLE_MODE) {
-    //   case 0: //Vanilla
-    //     colorUntonemapped = log2(colorUntonemapped + 1);
-
-    //     colorTonemapped = renodx::draw::ToneMapPass(colorUntonemapped, colorTonemapped);
-    //     break;
-    //   case 1: //Vanilla Alt
-    //     colorUntonemapped = log2(colorUntonemapped + 1);
-    //     // colorUntonemapped.xyz = renodx::color::correct::GammaSafe(colorUntonemapped.xyz, true, 2.2);
-        
-    //     colorSDRNeutral.xyz = renodx::color::srgb::DecodeSafe(colorSDRNeutral.xyz);
-    //     colorSDRNeutral.xyz = renodx::color::correct::GammaSafe(colorSDRNeutral.xyz, true, 2.2);
-    //     colorSDRNeutral = saturate(colorSDRNeutral);
-
-    //     colorTonemapped = renodx::draw::ToneMapPass(colorUntonemapped, colorTonemapped, colorSDRNeutral);
-        
-    //     break;
-    //     case 2: //Weird
-    //     colorUntonemapped.xyz = renodx::color::gamma::EncodeSafe(colorUntonemapped.xyz); //see, very weird.
-    //     colorTonemapped = renodx::draw::ToneMapPass(colorUntonemapped, colorTonemapped);
-    //     break;
-    //   case 3: //Clipping
-    //     colorTonemapped = renodx::draw::ToneMapPass(colorUntonemapped, colorTonemapped);
-    //     break;
-    // }
 
     colorTonemapped.xyz = renodx::color::correct::GammaSafe(colorTonemapped.xyz, true, 2.2);
 
@@ -128,7 +110,7 @@ float3 Tonemap_Tradeoff_In(float3 colorUntonemapped, float3 colorTonemapped, flo
 
 float3 Bloom_AddScaled(float3 color, float3 bloom) {
   // bloom = saturate(bloom);
-  color += bloom * 0.005 * CUSTOM_BLOOM;/////////////////////////////////////////////////
+  color += bloom * 0.005 * CUSTOM_BLOOM;
   // color += bloom * CUSTOM_BLOOM;
   return color;
 }

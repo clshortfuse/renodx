@@ -29,17 +29,13 @@ void main(
 
   //color
   r0.xyz = codeTexture2.Sample(bilinearClamp_s, v0.xy).xyz; //log
-
-  float3 colorUntonemapped = r0.xyz; //without bloom
-  // colorUntonemapped = renodx::color::correct::Luminance(colorUntonemapped, 0.1, 1000);
-  // colorUntonemapped = renodx::color::correct::GammaSafe(colorUntonemapped, true);
-  // colorUntonemapped = renodx::color::srgb::DecodeSafe(colorUntonemapped);
-  // colorUntonemapped = renodx::color::srgb::EncodeSafe(colorUntonemapped);
-  // colorUntonemapped = renodx::color::gamma::DecodeSafe(colorUntonemapped);
+  float3 colorUntonemapped = r0.xyz;
 
   //compresses to normalized 01. does blowout, black floor raise. removing saturate unclamps values.
-  r0.xyz = r0.xyz * v1.xxx + float3(0.00872999988,0.00872999988,0.00872999988);
+  r0.xyz *= v1.xxx; //v1.xxx scales the input
+  r0.xyz += float3(0.00872999988,0.00872999988,0.00872999988); //black level crushing.
   r0.xyz = log2(r0.xyz); //burh
+
   r0.xyz = saturate(r0.xyz * float3(0.0727029592,0.0727029592,0.0727029592) + float3(0.598205984,0.598205984,0.598205984));
   r1.xyz = r0.xyz * float3(7.71294689,7.71294689,7.71294689) + float3(-19.3115273,-19.3115273,-19.3115273);
   r1.xyz = r1.xyz * r0.xyz + float3(14.2751675,14.2751675,14.2751675);
@@ -68,7 +64,7 @@ void main(
   // r0.xyz = temp;
 
   // if (RENODX_TONE_MAP_TYPE == 2) {
-  //   o0 = r0;
+  //   o0.xyz = v0.x < .5 ? r0.xyz : renodx::color::srgb::DecodeSafe(r0.xyz);
   //   // o0.xyz = renodx::color::correct::GammaSafe(o0.xyz, true);
   //   // o0.xyz = renodx::color::srgb::DecodeSafe(o0);
   //   return;
@@ -97,7 +93,7 @@ void main(
   r0.xyz = saturate(r1.xyz * float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) + r0.xyz); //scales r1.xyz to 0-1
   r0.xyz = r0.xyz * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625);
 
-  float3 colorSDRNetural = r0.xyz;
+  // float3 colorSDRNetural = r0.xyz;
 
   // if (RENODX_TONE_MAP_TYPE == 2) {
   //   o0 = colorSDRNetural;
@@ -153,7 +149,7 @@ void main(
   //   // o0.xyz = renodx::draw::ToneMapPass(o0.xyz);
   //   return;
   // }
-  o0.xyz = Tonemap_Tradeoff_In(colorUntonemapped, r0.xyz, colorSDRNetural); //renodx tonemap
+  o0.xyz = Tonemap_Tradeoff_In(colorUntonemapped, r0.xyz/*, colorSDRNetural*/); //renodx tonemap
 
   //idk, and to unknown 2nd output
   r0.x = dot(r0.xyz, float3(6.48803689e-006,2.18261721e-005,2.20336915e-006));

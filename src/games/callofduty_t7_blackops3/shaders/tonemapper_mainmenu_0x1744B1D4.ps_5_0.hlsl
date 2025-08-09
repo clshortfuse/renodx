@@ -210,14 +210,14 @@ void main(
   r0.xyz = saturate(r1.xyz * float3(3.05175781e-005,3.05175781e-005,3.05175781e-005) + r0.xyz); //scales r1.xyz to 0-1
   r0.xyz = r0.xyz * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625); 
 
-  float3 colorSDRNetural = r0.xyz;
+  // float3 colorSDRNetural = r0.xyz;
   
   //LUT
   // r0.xyz = codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz;
   r0.xyz = LUT_CorrectBlack(r0.xyz, codeTexture1.Sample(bilinearClamp_s, r0.xyz).xyz);
 
   // o0.xyz = r0.xyz;
-  o0.xyz = Tonemap_Tradeoff_In(colorUntonemapped, r0.xyz, colorSDRNetural); //renodx tonemap
+  o0.xyz = Tonemap_Tradeoff_In(colorUntonemapped, r0.xyz/*, colorSDRNetural*/); //renodx tonemap
   // o0.xyz = renodx::draw::ToneMapPass(colorUntonemapped, r0.xyz); //renodx tonemap
 
   //idk, to unknown 2nd output, aa?

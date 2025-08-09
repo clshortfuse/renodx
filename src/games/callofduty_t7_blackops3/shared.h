@@ -84,9 +84,14 @@ struct ShaderInjectData {
   // float custom_lut_is_upgrade_tex;
   // float custom_lut_white_threshold;
   // float custom_lut_white_amount;
-  float custom_tone_map_preexposure;
   float custom_ads_sights;
   float custom_style_mode;
+  float custom_compressor_tonemap_exposure;
+  float custom_compressor_tonemap_knee;
+  // float custom_debug_1;
+  // float custom_debug_2;
+  // float custom_debug_3;
+  // float custom_debug_4;
 };
 
 #ifndef __cplusplus
@@ -142,8 +147,13 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_LUT_BLACK_AMOUNT                shader_injection.custom_lut_black_amount
 // #define CUSTOM_LUT_WHITE_THRESHOLD             shader_injection.custom_lut_white_threshold
 // #define CUSTOM_LUT_WHITE_AMOUNT                shader_injection.custom_lut_white_amount
-#define CUSTOM_TONE_MAP_PREEXPOSURE shader_injection.custom_tone_map_preexposure
-#define CUSTOM_ADS_SIGHTS           shader_injection.custom_ads_sights
+#define CUSTOM_ADS_SIGHTS                       shader_injection.custom_ads_sights
+#define CUSTOM_COMPRESSOR_TONEMAP_EXPOSURE      shader_injection.custom_compressor_tonemap_exposure
+#define CUSTOM_COMPRESSOR_TONEMAP_KNEE_STRENGTH shader_injection.custom_compressor_tonemap_knee
+// #define CUSTOM_DEBUG_1              shader_injection.custom_debug_1
+// #define CUSTOM_DEBUG_2              shader_injection.custom_debug_2
+// #define CUSTOM_DEBUG_3              shader_injection.custom_debug_3
+// #define CUSTOM_DEBUG_4              shader_injection.custom_debug_4
 
 #include "../../shaders/renodx.hlsl"
 

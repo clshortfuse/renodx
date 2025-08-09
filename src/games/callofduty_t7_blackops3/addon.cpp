@@ -110,7 +110,7 @@ const std::unordered_map<std::string, float> PRESET_TRADEOFF_HDR = {
     // {"CustomTradeoffGammaAmount", 2.2f},
 };
 const std::unordered_map<std::string, float> PRESET_TRADEOFF_BALANCED = {
-    {"CustomTradeoffRatio", 32.5f},
+    {"CustomTradeoffRatio", 30.0f},
     {"CustomTradeoffMode", 0.f},
     // {"CustomTradeoffGammaAmount", 2.2f},
 };
@@ -365,18 +365,7 @@ renodx::utils::settings::Settings settings = {
         .format = "%.2f",
         .is_visible = []() { return current_settings_mode >= 1; },
     },
-    new renodx::utils::settings::Setting{
-        .key = "CustomColorGradePreExposure",
-        .binding = &shader_injection.custom_tone_map_preexposure,
-        .default_value = 1.f,
-        .label = "Pre-Exposure (White Clipping)",
-        .section = "Color Grading",
-        .min = 0.01f,
-        .max = 1.f,
-        .format = "%.2f",
-        .parse = [](float value) { return value; },
-        .is_visible = []() { return current_settings_mode >= 2; },
-    },
+
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
@@ -461,6 +450,33 @@ renodx::utils::settings::Settings settings = {
     },
 
     new renodx::utils::settings::Setting{
+        .key = "CustomCompressorExposure",
+        .binding = &shader_injection.custom_compressor_tonemap_exposure,
+        .default_value = 1.f,
+        .label = "Compressor In Gain",
+        .section = "Scuffed Compressor",
+        .tooltip = "The multiplier on the signal into the compressor.\nWill be divided afterwards.",
+        .min = 0.01f,
+        .max = 2.f,
+        .format = "%.2f",
+        .parse = [](float value) { return value; },
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "CustomCompressorKnee",
+        .binding = &shader_injection.custom_compressor_tonemap_knee,
+        .default_value = 0.65f,
+        .label = "Compressor Knee Strength",
+        .section = "Scuffed Compressor",
+        .tooltip = "The strength in which extreme high values are compressed (inverted).",
+        .min = 0.f,
+        .max = 2.f,
+        .format = "%.2f",
+        .parse = [](float value) { return value; },
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
+
+    new renodx::utils::settings::Setting{
         .key = "CustomLutBlackThreshold",
         .binding = &shader_injection.custom_lut_black_threshold,
         .default_value = 0.f,
@@ -528,9 +544,9 @@ renodx::utils::settings::Settings settings = {
         .key = "CustomADSSights",
         .binding = &shader_injection.custom_ads_sights,
         .default_value = 50.f,
-        .label = "ADS Sights (not comprehensive)",
+        .label = "ADS Sights",
         .section = "Extra",
-        .tooltip = "They do sights like 100 different ways. Some can't be decompiled to fix.",
+        .tooltip = "Sould be all vanilla sights, but maybe I missed some.\nIf mods do their own sights shader, F.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
@@ -558,15 +574,16 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.custom_show_fsfx_blur,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
         .default_value = 1.f,
-        .label = "Blur (pause screen & maybe when dazzed)",
+        .label = "Fullscreen Blur",
         .section = "Extra",
+        .tooltip = "Pause screen and crawler fart gas.",
         // .labels = {"False", "True"},
     },
 
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = " * (DISCLAIMER) The game renders fullscreen overlay fx shaders (e.g., SoE portal transition & beast mode) at maximum value (32768). "
-                 "When they get composited over the linear tonemapped HDR image, you get flashbanged by the insane brightness difference. "
+                 "When they get composited over the linear tonemapped HDR image (~1), you get flashbanged by the insane brightness difference. "
                  "Fixing this with just RenoDX requires reducing the brightness of each individual shader in the game, which becomes unattainable accounting for custom maps. "
                  "By converting the linear HDR image to another color space and then brightening it to match the expectation for the overlays, it can be composited somewhat better. "
                  "This becomes a tradeoff between the fullscreen overlay shader's brightness/contrast and HDR peak brightness. "
@@ -667,7 +684,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "CustomTradeoffRatio",
         .binding = &shader_injection.custom_tradeoff_ratio,
-        .default_value = 20.f,
+        .default_value = 30.f,
         .label = "Tradeoff Brightness Ratio",
         .section = "Tradeoff",
         .tooltip = "Increasing the value lowers overlay fx brightness at the cost of clipping HDR brightness.",
@@ -680,7 +697,7 @@ renodx::utils::settings::Settings settings = {
         .key = "CustomTradeoffMode",
         .binding = &shader_injection.custom_tradeoff_mode,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 0.f,
         .can_reset = true,
         .label = "Tradeoff Mode / Color Space",
         .section = "Tradeoff",
@@ -755,7 +772,7 @@ renodx::utils::settings::Settings settings = {
         .key = "SwapChainGammaCorrection",
         .binding = &shader_injection.swap_chain_gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .label = "Gamma Correction",
         .section = "Display Output",
         .labels = {"None", "2.2", "2.4"},
@@ -777,10 +794,10 @@ renodx::utils::settings::Settings settings = {
 
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = " * Black Ops 3 mod by XgarhontX"
-                 "\n * RenoDX by clshortfuse"
-                 "\n * PumboAutoHDR (for loading movies) by Filoppi (Pumbo)"
-                 "\n * HDR expertise from Scrungus",
+        .label = " * Black Ops 3 Mod - XgarhontX"
+                 "\n * RenoDX - clshortfuse"
+                 "\n * PumboAutoHDR (for loading movies) - Filoppi (Pumbo)"
+                 "\n * HDR Consultant - Scrungus",
         .section = "Credits",
     },
     new renodx::utils::settings::Setting{
@@ -808,6 +825,59 @@ renodx::utils::settings::Settings settings = {
         .label = "Build Date: " + build_date + " - " + build_time,
         .section = "Credits",
     },
+
+    // new renodx::utils::settings::Setting{
+    //     .key = "CustomDebug1",
+    //     .binding = &shader_injection.custom_debug_1,
+    //     .value_type = renodx::utils::settings::SettingValueType::FLOAT,
+    //     .default_value = 1.f,
+    //     .can_reset = true,
+    //     .label = "1",
+    //     .section = "Bruh",
+    //     .min = -10.f,
+    //     .max = 10.f,
+    //     .format = "%.2f",
+    //     // .is_visible = []() { return current_settings_mode >= 1 && shader_injection.custom_tradeoff_mode == 1; },
+    // },
+    // new renodx::utils::settings::Setting{
+    //     .key = "CustomDebug2",
+    //     .binding = &shader_injection.custom_debug_2,
+    //     .value_type = renodx::utils::settings::SettingValueType::FLOAT,
+    //     .default_value = 1.f,
+    //     .can_reset = true,
+    //     .label = "2",
+    //     .section = "Bruh",
+    //     .min = -10.f,
+    //     .max = 10.f,
+    //     .format = "%.2f",
+    //     // .is_visible = []() { return current_settings_mode >= 1 && shader_injection.custom_tradeoff_mode == 1; },
+    // },
+    // new renodx::utils::settings::Setting{
+    //     .key = "CustomDebug3",
+    //     .binding = &shader_injection.custom_debug_3,
+    //     .value_type = renodx::utils::settings::SettingValueType::FLOAT,
+    //     .default_value = 1.f,
+    //     .can_reset = true,
+    //     .label = "3",
+    //     .section = "Bruh",
+    //     .min = -10.f,
+    //     .max = 10.f,
+    //     .format = "%.2f",
+    //     // .is_visible = []() { return current_settings_mode >= 1 && shader_injection.custom_tradeoff_mode == 1; },
+    // },
+    // new renodx::utils::settings::Setting{
+    //     .key = "CustomDebug4",
+    //     .binding = &shader_injection.custom_debug_4,
+    //     .value_type = renodx::utils::settings::SettingValueType::FLOAT,
+    //     .default_value = 1.f,
+    //     .can_reset = true,
+    //     .label = "4",
+    //     .section = "Bruh",
+    //     .min = -10.f,
+    //     .max = 10.f,
+    //     .format = "%.2f",
+    //     // .is_visible = []() { return current_settings_mode >= 1 && shader_injection.custom_tradeoff_mode == 1; },
+    // },
 };
 
 void OnPresetOff() {
