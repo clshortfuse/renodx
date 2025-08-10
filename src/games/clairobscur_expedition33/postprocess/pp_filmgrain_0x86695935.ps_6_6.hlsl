@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "../composite.hlsl"
 
 struct FViewConstants {
   float4 TranslatedWorldToClip[4];
@@ -560,6 +560,8 @@ float4 main(
     return float4(_36.rgb, 0.f);
   }
 
+  _36.rgb = renodx::draw::InvertIntermediatePass(_36.rgb, GetIntermediateConfig(CUSTOM_IS_ENGINE_HDR == 1.f));
+  _36.rgb = renodx::color::srgb::EncodeSafe(_36.rgb);
   float _40 = dot(float3(_36.x, _36.y, _36.z), float3(0.33333298563957214f, 0.33333298563957214f, 0.33333298563957214f));
   float _54 = (Material.PreshaderBuffer[0].y) * View.GameTime;
   float _57 = ((Material.PreshaderBuffer[0].z) * 0.25f) * _54;
@@ -603,6 +605,11 @@ float4 main(
   SV_Target.x = max(((((Material.PreshaderBuffer[6].x) - _214) * (Material.PreshaderBuffer[5].z)) + _214), 0.0f);
   SV_Target.y = max(((((Material.PreshaderBuffer[6].y) - _217) * (Material.PreshaderBuffer[5].z)) + _217), 0.0f);
   SV_Target.z = max(((((Material.PreshaderBuffer[6].z) - _220) * (Material.PreshaderBuffer[5].z)) + _220), 0.0f);
+
+  SV_Target.rgb = renodx::color::srgb::DecodeSafe(SV_Target.rgb);
+  SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb, GetIntermediateConfig(CUSTOM_IS_ENGINE_HDR == 1.f));
+
   SV_Target.w = 0.0f;
+
   return SV_Target;
 }

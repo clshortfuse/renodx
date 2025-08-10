@@ -58,6 +58,9 @@ struct ShaderInjectData {
   float custom_random;
   float custom_enable_post_filmgrain;
   float custom_sharpness;
+  float custom_lut_strength;
+  float custom_lut_scaling;
+  float custom_is_engine_hdr;
 };
 
 #ifndef __cplusplus
@@ -98,6 +101,13 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_DICE_PEAK                         2.f
 #define CUSTOM_DICE_SHOULDER                     0.5f
 #define CUSTOM_SHARPNESS                         shader_injection.custom_sharpness
+#define CUSTOM_UNREAL_HDR                        shader_injection.custom_is_engine_hdr
+#define RENODX_GAMMA_CORRECTION_UI               1.f
+#define RENODX_GAMMA_CORRECTION                  1.f
+#define CUSTOM_LUT_STRENGTH                      1.f
+#define CUSTOM_LUT_SCALING                       0.f
+#define CUSTOM_IS_ENGINE_HDR                     shader_injection.custom_is_engine_hdr
+#define OVERRIDE_BLACK_CLIP                      1.f  // 0 - Off, 1 - 0.0001 nits
 
 #include "../../shaders/renodx.hlsl"
 
