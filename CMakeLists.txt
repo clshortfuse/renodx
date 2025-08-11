@@ -155,6 +155,13 @@ function(build_shader_target ADDON ADDON_PATH)
   foreach(FILE ${SHADER_HLSL_SOURCES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)
+
+    cmake_path(GET TARGET_PATH FILENAME FOLDER_NAME)
+    # If the folder name starts with a dot, skip
+    if(FOLDER_NAME MATCHES "^\\.")
+      continue()
+    endif()
+
     string(REGEX MATCH "(.*)\\.([pcv]s_[0-9]_[0-9x])\\.hlsl$" _ ${FILENAME})
     set(SHADER_NAME ${CMAKE_MATCH_1})
     set(SHADER_TARGET ${CMAKE_MATCH_2})
