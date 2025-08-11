@@ -87,6 +87,7 @@ endfunction()
 function(generate_resource_rc ADDON)
 
   string(TIMESTAMP VERSION_FALLBACK "0,%Y,%m%d,%H%M" UTC)
+  string(REPLACE "," "." VERSION_STRING_FALLBACK "${VERSION_FALLBACK}")
 
   # llvm-rc will parse leading zeros as octet
   # Strip leading zeros in each comma-delimited value of VERSION_FALLBACK
@@ -107,6 +108,10 @@ function(generate_resource_rc ADDON)
 #define VER_FILEVERSION ${VERSION_FALLBACK}
 #endif
 
+#ifndef VER_FILEVERSION_STR
+#define VER_FILEVERSION_STR \"${VERSION_STRING_FALLBACK}\\0\"
+#endif
+
 #ifndef DEBUG
 #define VER_DEBUG 0
 #else
@@ -123,6 +128,7 @@ BEGIN
     BLOCK \"040904b0\"
     BEGIN
       VALUE \"OriginalFilename\", \"renodx-${ADDON}${TARGET_SUFFIX}\\0\"
+      VALUE \"FileVersion\", VER_FILEVERSION_STR
     END
   END
   BLOCK \"VarFileInfo\"
