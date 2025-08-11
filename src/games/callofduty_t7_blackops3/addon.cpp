@@ -772,7 +772,8 @@ renodx::utils::settings::Settings settings = {
                  "\n * RenoDX - clshortfuse"
                  "\n * PumboAutoHDR (for loading movies) - Filoppi (Pumbo)"
                  "\n * HDR Consultant - Scrungus"
-                 "\n * Coding Help - Musa",
+                 "\n * Coding Help - Musa"
+                 "\n * Bug Hunter - NikkMann",
         .section = "Credits",
     },
     new renodx::utils::settings::Setting{
