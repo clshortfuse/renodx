@@ -29,56 +29,52 @@ ShaderInjectData shader_injection;
 
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({
   renodx::templates::settings::CreateDefaultSettings({
-  {"ToneMapType", &shader_injection.tone_map_type},
-  {"ToneMapPeakNits", &shader_injection.peak_white_nits},
-  {"ToneMapGameNits", &shader_injection.diffuse_white_nits},
-  {"ToneMapUINits", &shader_injection.graphics_white_nits},
-  {"ToneMapGammaCorrection", &shader_injection.gamma_correction},
+    {"ToneMapType", &shader_injection.tone_map_type},
+    {"ToneMapPeakNits", &shader_injection.peak_white_nits},
+    {"ToneMapGameNits", &shader_injection.diffuse_white_nits},
+    {"ToneMapUINits", &shader_injection.graphics_white_nits},
+    {"ToneMapGammaCorrection", &shader_injection.gamma_correction},
   }),
   renodx::templates::settings::CreateDefaultSettings({
-  {"ToneMapScaling", {.binding = &shader_injection.tone_map_per_channel, .default_value = 1.f}},
+    {"ToneMapScaling", {.binding = &shader_injection.tone_map_per_channel, .default_value = 1.f}},
+    {"ToneMapWorkingColorSpace", {.binding = &shader_injection.tone_map_working_color_space, .default_value = 1.f}},
+    {"ToneMapHueProcessor", {.binding = &shader_injection.tone_map_hue_processor, .default_value = 0.f}},
+    {"ToneMapHueCorrection", {.binding = &shader_injection.tone_map_hue_correction, .default_value = 75.f}},
   }),
   renodx::templates::settings::CreateDefaultSettings({
-  {"ToneMapWorkingColorSpace", &shader_injection.tone_map_working_color_space},
-  {"ToneMapHueProcessor", &shader_injection.tone_map_hue_processor},
+    //{"ToneMapHueShift", &shader_injection.tone_map_hue_shift},
+    {"ColorGradeExposure", &shader_injection.tone_map_exposure},
+    {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
+    {"ColorGradeShadows", &shader_injection.tone_map_shadows},
+    {"ColorGradeContrast", &shader_injection.tone_map_contrast},
+    {"ColorGradeSaturation", &shader_injection.tone_map_saturation},
+    {"ColorGradeHighlightSaturation", &shader_injection.tone_map_highlight_saturation},
+    {"ColorGradeBlowout", &shader_injection.tone_map_blowout},
+    {"ColorGradeFlare", &shader_injection.tone_map_flare},
+    {"FxBloom", &shader_injection.custom_bloom},
   }),
-  renodx::templates::settings::CreateDefaultSettings({
-  {"ToneMapHueCorrection", {.binding = &shader_injection.tone_map_hue_correction, .default_value = 75.f}},
-  }),
-  renodx::templates::settings::CreateDefaultSettings({
-  //{"ToneMapHueShift", &shader_injection.tone_map_hue_shift},
-  {"ColorGradeExposure", &shader_injection.tone_map_exposure},
-  {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
-  {"ColorGradeShadows", &shader_injection.tone_map_shadows},
-  {"ColorGradeContrast", &shader_injection.tone_map_contrast},
-  {"ColorGradeSaturation", &shader_injection.tone_map_saturation},
-  {"ColorGradeHighlightSaturation", &shader_injection.tone_map_highlight_saturation},
-  {"ColorGradeBlowout", &shader_injection.tone_map_blowout},
-  {"ColorGradeFlare", &shader_injection.tone_map_flare},
-  {"FxBloom", &shader_injection.custom_bloom},
-}),
-    {
-    new renodx::utils::settings::Setting{
-      .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-      .label = "HDR Look",
-      .section = "Presets",
-      .group = "button-line-1",
-      .tint = 0xb5b2b1,
-      .on_change = []() {
-        renodx::utils::settings::UpdateSetting("ToneMapType", 1.f);
-        renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 1.f);
-        renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 1.f);
-        renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
-        renodx::utils::settings::UpdateSetting("ToneMapScaling", 1.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeShadows", 57.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeContrast", 60.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 60.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
-      }
+  {
+  new renodx::utils::settings::Setting{
+    .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    .label = "HDR Look",
+    .section = "Presets",
+    .group = "button-line-1",
+    .tint = 0xb5b2b1,
+    .on_change = []() {
+      renodx::utils::settings::UpdateSetting("ToneMapType", 1.f);
+      renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 1.f);
+      renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 1.f);
+      renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
+      renodx::utils::settings::UpdateSetting("ToneMapScaling", 1.f);
+      renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
+      renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
+      renodx::utils::settings::UpdateSetting("ColorGradeShadows", 57.f);
+      renodx::utils::settings::UpdateSetting("ColorGradeContrast", 60.f);
+      renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 60.f);
+      renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
+      renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
+      renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
+    }
   },
   new renodx::utils::settings::Setting{
       .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -173,9 +169,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swapchain_proxy_revert_state = true;
 
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_typeless,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
+        .old_format = reshade::api::format::r8g8b8a8_typeless,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        //.aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER, // causes hi-res textures + LODs to not load in anymore
+      });
+
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        .old_format = reshade::api::format::r11g11b10_float,
+        .new_format = reshade::api::format::r16g16b16a16_typeless,
+        //.use_resource_view_cloning = true,
+        //.aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
       });
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
