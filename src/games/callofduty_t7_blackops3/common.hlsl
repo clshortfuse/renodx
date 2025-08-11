@@ -49,7 +49,7 @@ float3 Tonemap_Tradeoff_Out(float3 color) {
   //to linear
   color = Tradeoff_TradeoffSpaceToLinear(color);
 
-  //clamp negatves (bruh)
+  //clamp NaNs / negatves (bruh)
   color = max(color, float3(0,0,0));
 
   return color;

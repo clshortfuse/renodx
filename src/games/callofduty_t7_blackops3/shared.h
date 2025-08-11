@@ -81,9 +81,6 @@ struct ShaderInjectData {
   float custom_show_fsfx_blur;
   float custom_lut_black_threshold;
   float custom_lut_black_amount;
-  // float custom_lut_is_upgrade_tex;
-  // float custom_lut_white_threshold;
-  // float custom_lut_white_amount;
   float custom_ads_sights;
   float custom_style_mode;
   float custom_compressor_tonemap_exposure;
@@ -145,8 +142,6 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_SHOW_FSFXBLUR                   shader_injection.custom_show_fsfx_blur
 #define CUSTOM_LUT_BLACK_THRESHOLD             shader_injection.custom_lut_black_threshold
 #define CUSTOM_LUT_BLACK_AMOUNT                shader_injection.custom_lut_black_amount
-// #define CUSTOM_LUT_WHITE_THRESHOLD             shader_injection.custom_lut_white_threshold
-// #define CUSTOM_LUT_WHITE_AMOUNT                shader_injection.custom_lut_white_amount
 #define CUSTOM_ADS_SIGHTS                       shader_injection.custom_ads_sights
 #define CUSTOM_COMPRESSOR_TONEMAP_EXPOSURE      shader_injection.custom_compressor_tonemap_exposure
 #define CUSTOM_COMPRESSOR_TONEMAP_KNEE_STRENGTH shader_injection.custom_compressor_tonemap_knee

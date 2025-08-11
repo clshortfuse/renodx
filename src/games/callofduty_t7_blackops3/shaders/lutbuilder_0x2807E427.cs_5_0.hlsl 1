@@ -2,7 +2,7 @@
 
 //LUT Builder. Fafiled to decompile.
 
-#include "../common.h"
+#include "../common.hlsl"
 
 Texture2D<float4> t0 : register(t0);
 
@@ -22,20 +22,6 @@ void main()
 {
 
   return;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Needs manual fix for instruction:
 // unknown dcl_: dcl_uav_typed_texture3d (float,float,float,float) u0

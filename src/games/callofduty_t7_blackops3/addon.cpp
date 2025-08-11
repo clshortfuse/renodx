@@ -22,6 +22,46 @@ const std::string build_time = __TIME__;
 
 namespace {
 
+// tombraider2013
+// #define UpgradeRTVReplaceShader(value)       \
+//   {                                          \
+//       value,                                 \
+//       {                                      \
+//           .crc32 = value,                    \
+//           .code = __##value,                 \
+//           .on_draw = [](auto* cmd_list) {                                                             \
+//             auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                         \
+//             bool changed = false;                                                                     \
+//             for (auto rtv : rtvs) {                                                                   \
+//               changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv);   \
+//             }                                                                                         \
+//             if (changed) {                                                                            \
+//               renodx::mods::swapchain::FlushDescriptors(cmd_list);                                    \
+//               renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0}); \
+//             }                                                                                         \
+//             return true; }, \
+//       },                                     \
+//   }
+
+// #define UpgradeRTVShader(value)              \
+//   {                                          \
+//       value,                                 \
+//       {                                      \
+//           .crc32 = value,                    \
+//           .on_draw = [](auto* cmd_list) {                                                           \
+//             auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                       \
+//             bool changed = false;                                                                   \
+//             for (auto rtv : rtvs) {                                                                 \
+//               changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv); \
+//             }                                                                                       \
+//             if (changed) {                                                                          \
+//               renodx::mods::swapchain::FlushDescriptors(cmd_list);                                  \
+//               renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});      \
+//             }                                                                                       \
+//             return true; }, \
+//       },                                     \
+//   }
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     // CustomShaderEntry(0x00000000),
 
@@ -42,6 +82,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x4493183C),  // xray outline 1
     CustomShaderEntry(0x9AF0BA45),  // sight 1
     CustomShaderEntry(0xF0897820),  // sight 2
+    CustomShaderEntry(0x57CF6767),  // bloom
 
     // map specific
     CustomShaderEntry(0x3E9C52D5),  // Shangri-la water
@@ -499,29 +540,6 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1 && shader_injection.custom_lut_black_threshold > 0; },
     },
 
-    // new renodx::utils::settings::Setting{
-    //     .key = "CustomLutWhiteThreshold",
-    //     .binding = &shader_injection.custom_lut_white_threshold,
-    //     .default_value = 0.f,
-    //     .label = "LUT White Raising Threshold",
-    //     .section = "LUT Correction",
-    //     .max = 200.f,
-    //     .format = "%.2f",
-    //     .parse = [](float value) { return value * 0.01f; },
-    //     // .is_visible = []() { return current_settings_mode >= 1; },
-    // },
-    // new renodx::utils::settings::Setting{
-    //     .key = "CustomLutWhiteAmount",
-    //     .binding = &shader_injection.custom_lut_white_amount,
-    //     .default_value = 0.f,
-    //     .label = "LUT White Raising Influence Range",
-    //     .section = "LUT Correction",
-    //     .max = 200.f,
-    //     .format = "%.2f",
-    //     .parse = [](float value) { return value * 0.01f; },
-    //     // .is_visible = []() { return current_settings_mode >= 1; },
-    // },
-
     new renodx::utils::settings::Setting{
         .key = "CustomBloom",
         .binding = &shader_injection.custom_bloom,
@@ -582,12 +600,8 @@ renodx::utils::settings::Settings settings = {
 
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = " * (DISCLAIMER) The game renders fullscreen overlay fx shaders (e.g., SoE portal transition & beast mode) at maximum value (32768). "
-                 "When they get composited over the linear tonemapped HDR image (~1), you get flashbanged by the insane brightness difference. "
-                 "Fixing this with just RenoDX requires reducing the brightness of each individual shader in the game, which becomes unattainable accounting for custom maps. "
-                 "By converting the linear HDR image to another color space and then brightening it to match the expectation for the overlays, it can be composited somewhat better. "
-                 "This becomes a tradeoff between the fullscreen overlay shader's brightness/contrast and HDR peak brightness. "
-                 "Hopefully, I tuned it good enough that you didn't notice it until you read this. You have to turn Game Brightness down to 1 to see the effect.",
+        .label = " * To composite Fullscreen Overlay Shaders (e.g. SoE beast mode), there is a tradoff in the HDR image's peak brightness and overlay color space missmatch to composite them somewhat correctly.\n"
+                 "All is tuned and hopefully you didn't know it was even a thing at first. Turn Game Brightness to 1 in order to see its effect.",
         .section = "Tradeoff",
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -797,7 +811,8 @@ renodx::utils::settings::Settings settings = {
         .label = " * Black Ops 3 Mod - XgarhontX"
                  "\n * RenoDX - clshortfuse"
                  "\n * PumboAutoHDR (for loading movies) - Filoppi (Pumbo)"
-                 "\n * HDR Consultant - Scrungus",
+                 "\n * HDR Consultant - Scrungus"
+                 "\n * Coding Help - Musa",
         .section = "Credits",
     },
     new renodx::utils::settings::Setting{
@@ -959,6 +974,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::force_borderless = false;
         renodx::mods::swapchain::prevent_full_screen = false;
 
+        // SwapChainEncoding
         {
           auto* setting = new renodx::utils::settings::Setting{
               .key = "SwapChainEncoding",
@@ -985,17 +1001,36 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           settings.push_back(setting);
         }
 
-        // Main color output
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-            .old_format = reshade::api::format::r11g11b10_float,
-            .new_format = reshade::api::format::r16g16b16a16_float,  // requires alpha, else it starts lagging. 32bit breaks math. r16g16b16a16_float
-            // .index = 0,
-            .ignore_size = true,  // because resolution scaler
-            .shader_hash = 0x224A8BF5,
-            .use_resource_view_cloning = true,
-            .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
-            .usage_include = reshade::api::resource_usage::present,
-        });
+        // SafeMode
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "SafeMode",
+              .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+              .default_value = 0.f,
+              .label = "Resource Upgrade Safe Mode (Read Tooltip)",
+              .section = "Display Output",
+              .tooltip =
+                  "(Restart Required) Turning it on disables the bit depth upgrade for the main color texture (11 to 16-bit).\n"
+                  "Doing so stops all NaN visual artifacts (e.g. bloom flashing a box, though it should be fixed) at the cost of quantization / posterization.\n"
+                  "Use if the the artifacts too bothersome, and see if the colors still presentatable.",
+              .is_global = true,
+              // .is_visible = []() { return settings[0]->GetValue() >= 2; },
+          };
+          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
+          settings.push_back(setting);
+
+          auto value = setting->GetValue();
+          if (value == 0) {
+            renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+                .old_format = reshade::api::format::r11g11b10_float,
+                .new_format = reshade::api::format::r16g16b16a16_float,  // requires alpha, else it starts lagging. 32bit comepletely breaks math.
+                .ignore_size = true,                                     // because resolution scaler
+                .use_resource_view_cloning = true,
+                .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
+                .usage_include = reshade::api::resource_usage::render_target,
+            });
+          }
+        }
 
         // // LUT
         // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
