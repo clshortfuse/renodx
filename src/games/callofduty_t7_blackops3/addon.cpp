@@ -22,46 +22,6 @@ const std::string build_time = __TIME__;
 
 namespace {
 
-// tombraider2013
-// #define UpgradeRTVReplaceShader(value)       \
-//   {                                          \
-//       value,                                 \
-//       {                                      \
-//           .crc32 = value,                    \
-//           .code = __##value,                 \
-//           .on_draw = [](auto* cmd_list) {                                                             \
-//             auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                         \
-//             bool changed = false;                                                                     \
-//             for (auto rtv : rtvs) {                                                                   \
-//               changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv);   \
-//             }                                                                                         \
-//             if (changed) {                                                                            \
-//               renodx::mods::swapchain::FlushDescriptors(cmd_list);                                    \
-//               renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0}); \
-//             }                                                                                         \
-//             return true; }, \
-//       },                                     \
-//   }
-
-// #define UpgradeRTVShader(value)              \
-//   {                                          \
-//       value,                                 \
-//       {                                      \
-//           .crc32 = value,                    \
-//           .on_draw = [](auto* cmd_list) {                                                           \
-//             auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                       \
-//             bool changed = false;                                                                   \
-//             for (auto rtv : rtvs) {                                                                 \
-//               changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv); \
-//             }                                                                                       \
-//             if (changed) {                                                                          \
-//               renodx::mods::swapchain::FlushDescriptors(cmd_list);                                  \
-//               renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});      \
-//             }                                                                                       \
-//             return true; }, \
-//       },                                     \
-//   }
-
 renodx::mods::shader::CustomShaders custom_shaders = {
     // CustomShaderEntry(0x00000000),
 
