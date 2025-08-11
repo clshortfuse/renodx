@@ -2264,8 +2264,6 @@ inline bool OnCreateResourceView(
       return false;
   }
 
-  reshade::api::resource_view_desc new_desc = current_desc;
-
   if (resource_info == nullptr) {
     resource_info = utils::resource::GetResourceInfo(resource);
     if (resource_info == nullptr) return false;
@@ -2284,6 +2282,8 @@ inline bool OnCreateResourceView(
       return false;
     }
   }
+
+  reshade::api::resource_view_desc new_desc = current_desc;
 
   reshade::api::resource_desc& resource_desc = resource_info->desc;
   bool& is_back_buffer = resource_info->is_swap_chain;
@@ -2308,65 +2308,34 @@ inline bool OnCreateResourceView(
       reshade::log::message(reshade::log::level::warning, s.str().c_str());
     }
     expected = true;
-  } else if (utils::resource::FormatToTypeless(resource_desc.texture.format) != utils::resource::FormatToTypeless(current_desc.format)) {
-    // Games may use the swapchain format to define textures, causing resource views to mismatch
-    switch (resource_desc.texture.format) {
-      case reshade::api::format::r8g8b8a8_typeless:
-      case reshade::api::format::b8g8r8a8_typeless:
-      case reshade::api::format::r10g10b10a2_typeless:
-      case reshade::api::format::r16g16b16a16_typeless:
-      case reshade::api::format::r16g16b16a16_float:
-        new_desc.format = resource_desc.texture.format;
-        break;
-      default:
-        // Maybe be decompressible
-        std::stringstream s;
-        s << "mods::swapchain::OnCreateResourceView(";
-        s << "unexpected case(" << current_desc.format << ")";
-        s << ")";
-        reshade::log::message(reshade::log::level::warning, s.str().c_str());
-        assert(false);
-        return false;
-        break;
-    }
-  } else if (resource_desc.texture.format == target_format || resource_desc.texture.format == reshade::api::format::r16g16b16a16_typeless) {
-    // Legacy RGBA16F fix
-    switch (current_desc.format) {
-      case reshade::api::format::r8g8b8a8_typeless:
-      case reshade::api::format::b8g8r8a8_typeless:
-      case reshade::api::format::r10g10b10a2_typeless:
-      case reshade::api::format::r16g16b16a16_typeless:
-        new_desc.format = reshade::api::format::r16g16b16a16_typeless;
-        break;
-      case reshade::api::format::r8g8b8a8_unorm:
-      case reshade::api::format::b8g8r8a8_unorm:
-        new_desc.format = target_format;
-        break;
-      case reshade::api::format::r8g8b8a8_unorm_srgb:
-      case reshade::api::format::b8g8r8a8_unorm_srgb:
-        // Should upgrade shader
-        new_desc.format = target_format;
-        break;
-      case reshade::api::format::b10g10r10a2_unorm:
-      case reshade::api::format::r10g10b10a2_unorm:
-        new_desc.format = target_format;
-        break;
-      case reshade::api::format::r16g16b16a16_float:
-      case reshade::api::format::r16g16b16a16_uint:
-      case reshade::api::format::r16g16b16a16_unorm:
-        break;
-      default: {
-        assert(false);
-        std::stringstream s;
-        s << "mods::swapchain::OnCreateResourceView(";
-        s << "unexpected case(" << current_desc.format << ")";
-        s << ")";
-        reshade::log::message(reshade::log::level::warning, s.str().c_str());
-        break;
+  } else {
+    auto typeless_resource_format = utils::resource::FormatToTypeless(resource_desc.texture.format);
+    auto typeless_view_format = utils::resource::FormatToTypeless(current_desc.format);
+    if (typeless_resource_format != typeless_view_format) {
+      if (resource_desc.texture.format != typeless_resource_format) {
+        switch (resource_desc.texture.format) {
+          case reshade::api::format::r8g8b8a8_unorm:
+          case reshade::api::format::b8g8r8a8_unorm:
+          case reshade::api::format::r8g8b8a8_unorm_srgb:
+          case reshade::api::format::b8g8r8a8_unorm_srgb:
+          case reshade::api::format::r10g10b10a2_unorm:
+          case reshade::api::format::b10g10r10a2_unorm:
+          case reshade::api::format::r16g16b16a16_float:
+            new_desc.format = current_desc.format;
+            expected = false;
+            found_upgrade = true;
+            break;
+          default:
+            // Maybe be decompressible
+            std::stringstream s;
+            s << "mods::swapchain::OnCreateResourceView(";
+            s << "unexpected case(" << current_desc.format << ")";
+            s << ")";
+            reshade::log::message(reshade::log::level::warning, s.str().c_str());
+            assert(false);
+        }
       }
     }
-  } else {
-    return false;
   }
 
   const bool changed = (current_desc.format != new_desc.format);
