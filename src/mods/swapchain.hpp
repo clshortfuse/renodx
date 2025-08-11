@@ -541,7 +541,7 @@ inline bool ActivateCloneHotSwap(
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
     s << "mods::swapchain::ActivateCloneHotSwap(";
-    if (resource_view_info->resource_info.is_swap_chain) {
+    if (info.is_swap_chain) {
       s << ("backbuffer ");
     }
     s << "not cloned ";
@@ -2308,7 +2308,7 @@ inline bool OnCreateResourceView(
       reshade::log::message(reshade::log::level::warning, s.str().c_str());
     }
     expected = true;
-  } else if (utils::resource::FormatToTypeless(resource_desc.texture.format) != utils::resource::FormatToTypeless(new_desc.format)) {
+  } else if (utils::resource::FormatToTypeless(resource_desc.texture.format) != utils::resource::FormatToTypeless(current_desc.format)) {
     // Games may use the swapchain format to define textures, causing resource views to mismatch
     switch (resource_desc.texture.format) {
       case reshade::api::format::r8g8b8a8_typeless:
@@ -2331,7 +2331,7 @@ inline bool OnCreateResourceView(
     }
   } else if (resource_desc.texture.format == target_format || resource_desc.texture.format == reshade::api::format::r16g16b16a16_typeless) {
     // Legacy RGBA16F fix
-    switch (new_desc.format) {
+    switch (current_desc.format) {
       case reshade::api::format::r8g8b8a8_typeless:
       case reshade::api::format::b8g8r8a8_typeless:
       case reshade::api::format::r10g10b10a2_typeless:
