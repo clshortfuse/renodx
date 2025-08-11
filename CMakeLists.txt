@@ -87,6 +87,7 @@ endfunction()
 function(generate_resource_rc ADDON)
 
   string(TIMESTAMP VERSION_FALLBACK "0,%Y,%m%d,%H%M" UTC)
+  string(REPLACE "," "." VERSION_STRING_FALLBACK "${VERSION_FALLBACK}")
 
   # llvm-rc will parse leading zeros as octet
   # Strip leading zeros in each comma-delimited value of VERSION_FALLBACK
@@ -107,6 +108,10 @@ function(generate_resource_rc ADDON)
 #define VER_FILEVERSION ${VERSION_FALLBACK}
 #endif
 
+#ifndef VER_FILEVERSION_STR
+#define VER_FILEVERSION_STR \"${VERSION_STRING_FALLBACK}\\0\"
+#endif
+
 #ifndef DEBUG
 #define VER_DEBUG 0
 #else
@@ -123,6 +128,7 @@ BEGIN
     BLOCK \"040904b0\"
     BEGIN
       VALUE \"OriginalFilename\", \"renodx-${ADDON}${TARGET_SUFFIX}\\0\"
+      VALUE \"FileVersion\", VER_FILEVERSION_STR
     END
   END
   BLOCK \"VarFileInfo\"
@@ -149,6 +155,13 @@ function(build_shader_target ADDON ADDON_PATH)
   foreach(FILE ${SHADER_HLSL_SOURCES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)
+
+    cmake_path(GET TARGET_PATH FILENAME FOLDER_NAME)
+    # If the folder name starts with a dot, skip
+    if(FOLDER_NAME MATCHES "^\\.")
+      continue()
+    endif()
+
     string(REGEX MATCH "(.*)\\.([pcv]s_[0-9]_[0-9x])\\.hlsl$" _ ${FILENAME})
     set(SHADER_NAME ${CMAKE_MATCH_1})
     set(SHADER_TARGET ${CMAKE_MATCH_2})
