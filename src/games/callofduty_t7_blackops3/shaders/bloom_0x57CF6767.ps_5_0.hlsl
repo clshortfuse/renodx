@@ -123,7 +123,7 @@ void main(
   r1.xyzw = r3.xxxx * r2.xyzw + r1.xyzw;
 
   r2.xyz = codeTexture0.Sample(biLinearClamp_s, v0.xy, int2(0, 0)).xyz;
-  FixNans(r3);
+  FixNans(r2);
   r3.x = dot(r2.xyz, float3(0.212599993,0.715200007,0.0722000003));
   r3.x = 1 + r3.x;
   r3.x = (int)-r3.x + 0x7ef311c2;
@@ -137,21 +137,9 @@ void main(
   r3.x = (int)-r3.x + 0x7ef311c2;
   r2.w = 1;
   r1.xyzw = r3.xxxx * r2.xyzw + r1.xyzw;
-
-  //   o0.xyz = r1.xyz;
-  // return;
-
+  
   r0.xyzw = r1.xyzw * float4(0.125,0.125,0.125,0.125) + r0.xyzw;
-
-  // o0 = r0;
-  // return;
-
-  r0.w = rcp(r0.w); //o
-  // r0.w = min(r0.w, 1);
-  // r0.w = 1/r0.w;
-
-  o0.xyz = r0.xyz * r0.www; //o
-  // o0.xyz = r0.xyz * r0.www;
-
+  r0.w = rcp(r0.w); 
+  o0.xyz = r0.xyz * r0.www; 
   return;
 }
