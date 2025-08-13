@@ -1,6 +1,5 @@
 // ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:09 2024
-#include "./shared.h"
-#include "./tonemapper.hlsl"
+#include "../composite.hlsl"
 
 Texture2D<float4> t1 : register(t1);
 
@@ -25,8 +24,8 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyzw = t0.Sample(s0_s, v0.xy).xyzw;  // UI bt2020
-
+  r0.xyzw = t0.Sample(s0_s, v0.xy).xyzw;  // UI bt709
+  float4 ui = r0;
   r0.xyz = max(float3(6.10351999e-05, 6.10351999e-05, 6.10351999e-05), r0.xyz);
   r1.xyz = cmp(float3(0.0404499993, 0.0404499993, 0.0404499993) < r0.xyz);
   r2.xyz = r0.xyz * float3(0.947867274, 0.947867274, 0.947867274) + float3(0.0521326996, 0.0521326996, 0.0521326996);
@@ -40,63 +39,11 @@ void main(
   r1.z = dot(float3(0.0163962338, 0.0880229846, 0.895499706), r0.xyz);
   r0.xyz = cb0[7].www * r1.xyz;
 
-  r1.xyz = t1.Sample(s1_s, v0.xy).xyz;  // Game in PQ
-  r1.rgb = renodx::color::pq::Decode(r1.rgb, injectedData.toneMapGameNits);
-
-  r1.rgb = renodx::color::bt709::from::BT2020(r1.rgb);
-  r1.rgb = renodx::color::grade::UserColorGrading(
-      r1.rgb,
-      injectedData.colorGradeExposure,
-      injectedData.colorGradeHighlights,
-      injectedData.colorGradeShadows,
-      injectedData.colorGradeContrast,
-      1.f);  // We'll do saturation post tonemap
-
-  if (injectedData.toneMapGammaCorrection == 1.f) {
-    r0.rgb = renodx::color::correct::GammaSafe(r0.rgb);
-    r1.rgb = renodx::color::correct::GammaSafe(r1.rgb);
+  r1.xyzw = t1.Sample(s1_s, v0.xy).xyzw;  // Game in PQ
+  float4 scene = r1;
+  if (HandleUICompositing(ui, scene, o0)) {
+    return;
   }
-
-  r0.rgb *= injectedData.toneMapUINits / 203.f;  // Value found so it matches tonemapUINits
-
-  r1.rgb = renodx::color::grade::UserColorGrading(
-      r1.rgb,
-      1.f,
-      1.f,
-      1.f,
-      1.f,
-      injectedData.colorGradeSaturation);
-
-  // Fix NaN
-  r1.rgb = renodx::color::bt709::clamp::BT709(r1.rgb);
-  r0.rgb = renodx::color::bt709::clamp::BT709(r0.rgb);
-
-  r1.rgb = displayTonemap(r1.rgb);
-
-  r1.rgb = renodx::color::bt2020::from::BT709(r1.rgb);
-  r1.rgb = renodx::color::pq::Encode(r1.rgb, injectedData.toneMapGameNits);
-
-  r1.rgb = renodx::color::pq::Decode(r1.rgb, 1.f);  // We need it to merge with UI
-
-  /* // pow(in_color, 1.f / M2)
-  r1.xyz = log2(r1.xyz);
-  r1.xyz = float3(0.0126833133, 0.0126833133, 0.0126833133) * r1.xyz;
-  r1.xyz = exp2(r1.xyz);
-  // max(e_m12 - C1, 0)
-  r2.xyz = float3(-0.8359375, -0.8359375, -0.8359375) + r1.xyz;
-  r2.xyz = max(float3(0, 0, 0), r2.xyz);
-  // (C2 - C3 * e_m12)
-  r1.xyz = -r1.xyz * float3(18.6875, 18.6875, 18.6875) + float3(18.8515625, 18.8515625, 18.8515625);
-  // r2 is max(e_m12 - C1, 0)
-  // r1 is (C2 - C3 * e_m12)
-  r1.xyz = r2.xyz / r1.xyz;
-  // pow(result, 1.f / M1)
-  r1.xyz = log2(r1.xyz);
-  r1.xyz = float3(6.27739477, 6.27739477, 6.27739477) * r1.xyz;  // 1.f / M1
-  r1.xyz = exp2(r1.xyz);
-  // out_color * (10000.f / scaling)
-  r1.xyz = float3(10000, 10000, 10000) * r1.xyz;  // No scaling used, notice it's full 10k
-  // We use 1.f so it Decodes using the full 10k */
 
   r1.w = cmp(0 < r0.w);
   r2.x = cmp(r0.w < 1);

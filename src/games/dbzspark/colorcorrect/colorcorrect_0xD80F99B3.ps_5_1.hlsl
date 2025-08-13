@@ -1,6 +1,5 @@
 // ---- Created with 3Dmigoto v1.3.16 on Fri Oct 18 20:09:56 2024
-#include "./shared.h"
-#include "./tonemapper.hlsl"
+#include "./colorcorrectcommon.hlsl"
 
 Texture2D<float4> t4 : register(t4);
 
@@ -42,18 +41,16 @@ void main(
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11;
   uint4 bitmask, uiDest;
   float4 fDest;
-  float3 tonemappedPQ, post_srgb, output;
 
   r0.xy = asuint(cb0[37].xy);
   r0.xy = v0.xy + -r0.xy;
   r0.xy = cb0[38].zw * r0.xy;
   r0.zw = r0.xy * cb0[5].xy + cb0[4].xy;
   r1.xyz = t4.Sample(s3_s, r0.zw).xyz;
-  r2.xyz = t4.Sample(s2_s, r0.zw).xyz;
+  InverIntermediateToSRGB(r1.rgb);
 
-  tonemappedPQ = r1.rgb;
-  r1.rgb = pqTosRGB(r1.rgb);
-  r2.rgb = pqTosRGB(r2.rgb);
+  r2.xyz = t4.Sample(s2_s, r0.zw).xyz;
+  InverIntermediateToSRGB(r2.rgb);
 
   r3.xyz = cb2[1].xyz * r2.xyz;
   r0.zw = r0.xy * cb1[129].xy + cb1[128].xy;
@@ -231,9 +228,9 @@ void main(
   r1.xyz = cb2[7].yzw + -r0.xyz;
   r0.xyz = cb2[7].xxx * r1.xyz + r0.xyz;
   o0.xyz = max(float3(0, 0, 0), r0.xyz);
-  post_srgb = o0.rgb;
   o0.w = 0;
 
-  o0.rgb = upgradeSRGBtoPQ(tonemappedPQ, post_srgb);
+  RenderIntermediateFromSRGB(o0.rgb);
+
   return;
 }
