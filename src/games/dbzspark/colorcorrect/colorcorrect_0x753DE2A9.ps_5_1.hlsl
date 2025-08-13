@@ -1,6 +1,5 @@
 // ---- Created with 3Dmigoto v1.3.16 on Fri Oct 18 20:09:35 2024
-#include "./shared.h"
-#include "./tonemapper.hlsl"
+#include "./colorcorrectcommon.hlsl"
 
 Texture2D<float4> t0 : register(t0);
 
@@ -21,12 +20,11 @@ cbuffer cb0 : register(b0) {
 
 // Increases brightness
 void main(
-    float4 v0 : SV_POSITION0,
-                out float4 o0 : SV_Target0) {
+    float4 v0: SV_POSITION0,
+    out float4 o0: SV_Target0) {
   float4 r0, r1;
   uint4 bitmask, uiDest;
   float4 fDest;
-  float3 tonemappedPQ, post_srgb, output;
 
   r0.xy = asuint(cb0[37].xy);
   r0.xy = v0.xy + -r0.xy;
@@ -45,22 +43,19 @@ void main(
   r0.w = min(1, r0.w);
   r0.z = r0.z ? 0 : r0.w;
   r1.xyz = t0.Sample(s0_s, r0.xy).xyz;
+  InverIntermediateToSRGB(r1.rgb);
   r0.xyw = t0.Sample(s1_s, r0.xy).xyz;
-
-  // Both are game render so we srgb both
-  tonemappedPQ = r1.xyz;
-  r0.xyw = pqTosRGB(r0.xyw);
-  r1.xyz = pqTosRGB(r1.xyz);
+  InverIntermediateToSRGB(r0.xyw);
 
   r1.xyz = r1.xyz * r0.zzz + -r0.xyw;
   r0.xyz = cb1[5].xxx * r1.xyz + r0.xyw;
   r1.xyz = cb1[6].xyz + -r0.xyz;
   r0.xyz = cb1[5].yyy * r1.xyz + r0.xyz;
-  o0.xyz = max(float3(0, 0, 0), r0.xyz);
-  post_srgb = o0.rgb;
+  // o0.xyz = max(float3(0, 0, 0), r0.xyz);
+  o0.rgb = r0.rgb;
+  // o0.rgb = max(0, o0.rgb);
   o0.w = 0;
 
-  o0.rgb = upgradeSRGBtoPQ(tonemappedPQ, post_srgb);
-
+  RenderIntermediateFromSRGB(o0.rgb);
   return;
 }

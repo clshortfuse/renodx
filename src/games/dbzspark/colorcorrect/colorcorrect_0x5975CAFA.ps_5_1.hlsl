@@ -1,6 +1,5 @@
 // ---- Created with 3Dmigoto v1.3.16 on Fri Oct 18 20:09:30 2024
-#include "./shared.h"
-#include "./tonemapper.hlsl"
+#include "./colorcorrectcommon.hlsl"
 
 Texture2D<float4> t5 : register(t5);
 
@@ -44,18 +43,13 @@ void main(
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10;
   uint4 bitmask, uiDest;
   float4 fDest;
-  float3 tonemappedPQ, post_srgb;
 
   r0.xy = asuint(cb0[37].xy);
   r0.xy = v0.xy + -r0.xy;
   r0.xy = cb0[38].zw * r0.xy;
   r0.zw = r0.xy * cb0[5].xy + cb0[4].xy;
   r1.xyz = t5.Sample(s2_s, r0.zw).xyz;
-
-  tonemappedPQ = r1.rgb;
-  // Hacky fix for shop
-  float customDecode = 0.f;
-  r1.rgb = pqTosRGB(tonemappedPQ, customDecode, true);
+  InverIntermediateToSRGB(r1.rgb);
 
   r0.zw = r0.xy * cb1[129].xy + cb1[128].xy;
   r0.zw = cb1[132].zw * r0.zw;
@@ -68,7 +62,7 @@ void main(
   r1.w = t2.SampleLevel(s0_s, r0.zw, 0).x;
   r2.w = r1.w * cb1[71].x + cb1[71].y;
   r1.w = r1.w * cb1[71].z + -cb1[71].w;
-  r1.w = 1 / r1.w;
+  r1.w = renodx::math::DivideSafe(1, r1.w);
   r1.w = r2.w + r1.w;
   r4.xy = cb1[132].xy * r0.zw;
   r4.xy = cb1[135].xy * r4.xy;
@@ -80,7 +74,7 @@ void main(
   r0.z = t0.SampleLevel(s0_s, r0.zw, 0).x;
   r0.w = r0.z * cb1[71].x + cb1[71].y;
   r0.z = r0.z * cb1[71].z + -cb1[71].w;
-  r0.z = 1 / r0.z;
+  r0.z = renodx::math::DivideSafe(1, r0.z);
   r0.z = r0.w + r0.z;
   r0.w = -cb2[4].z + r2.w;
   r0.w = cmp(9.99999975e-06 < abs(r0.w));
@@ -99,12 +93,12 @@ void main(
   r3.xyz = r1.www ? r3.xyz : r2.xyz;
   r2.xyz = r0.www ? r3.xyz : r2.xyz;
   r3.xyz = float3(1, 1, 1) + -r1.xyz;
-  r4.xyz = r3.xyz / r2.xyz;
+  r4.xyz = renodx::math::DivideSafe(r3.xyz, r2.xyz);
   r4.xyz = float3(1, 1, 1) + -r4.xyz;
   r0.w = cmp(cb2[5].y != 1.000000);
   if (r0.w != 0) {
     r5.xyz = float3(1, 1, 1) + -r2.xyz;
-    r6.xyz = r1.xyz / r5.xyz;
+    r6.xyz = renodx::math::DivideSafe(r1.xyz, r5.xyz);
     r0.w = cmp(cb2[5].y == 2.000000);
     r4.xyz = r0.www ? r6.xyz : r4.xyz;
     if (r0.w == 0) {
@@ -229,12 +223,14 @@ void main(
   r0.xy = r0.xy * cb2[7].xy + float2(0.5, 0.5);
   r0.xy = -cb2[7].zw + r0.xy;
   r0.x = t4.Sample(s1_s, r0.xy).x;
+  r2.rgb = max(0, r2.rgb);
   r0.xyw = r0.xxx * r2.xyz;
   r0.z = cb2[8].z * r0.z;
   r1.w = cmp(0 >= r0.z);
-  r0.z = log2(r0.z);
+  /* r0.z = log2(r0.z);
   r0.z = cb2[8].w * r0.z;
-  r0.z = exp2(r0.z);
+  r0.z = exp2(r0.z); */
+  r0.z = renodx::math::SignPow(r0.z, cb2[8].w);
   r0.z = min(1, r0.z);
   r0.z = r1.w ? 0 : r0.z;
   r1.w = 1 + -r0.z;
@@ -242,14 +238,12 @@ void main(
   r2.y = cmp(cb2[9].x >= 0);
   r1.w = r2.y ? r1.w : r0.z;
   r0.z = r2.x ? r1.w : r0.z;
-  r0.xyz = r0.zzz * r0.xyw + r1.xyz;
+  r0.xyz = r0.zzz * r0.xyw + r1.xyz;  // r0.xyw has NaNs
   r1.xyz = cb2[10].xyz + -r0.xyz;
   r0.xyz = cb2[9].yyy * r1.xyz + r0.xyz;
   o0.xyz = max(float3(0, 0, 0), r0.xyz);
-  post_srgb = o0.rgb;
+
+  RenderIntermediateFromSRGB(o0.rgb);
   o0.w = 0;
-
-  o0.rgb = upgradeSRGBtoPQ(tonemappedPQ, post_srgb, customDecode);
-
   return;
 }

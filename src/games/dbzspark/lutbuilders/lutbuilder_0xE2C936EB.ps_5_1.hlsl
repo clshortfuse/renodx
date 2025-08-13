@@ -1,10 +1,9 @@
 // ---- Created with 3Dmigoto v1.3.16 on Thu Oct 17 13:24:19 2024
-#include "./shared.h"
-#include "./tonemapper.hlsl"
+#include "./filmiclutbuilder.hlsl"
 
-cbuffer cb0 : register(b0) {
+/* cbuffer cb0 : register(b0) {
   float4 cb0[8];
-}
+} */
 
 // 3Dmigoto declarations
 #define cmp -
@@ -37,9 +36,8 @@ void main(
   r2.xyz = r2.xxx ? float3(-0.00215925858, -0.0454653986, 1.04775953) : r2.yzw;
 
   // CustomEdit
-  uint output_type = OUTPUT_OVERRIDE;
+  uint output_type = cb0[40].w;
   bool is_hdr = (output_type >= 3u && output_type <= 6u);
-  bool shouldTonemap = injectedData.toneMapType != 0.f && is_hdr;
 
   r0.xy = log2(r0.xy);
   r0.z = log2(r1.z);
@@ -52,35 +50,11 @@ void main(
   r0.xyz = log2(r0.xyz);
   r0.xyz = float3(6.27739477, 6.27739477, 6.27739477) * r0.xyz;
   r0.xyz = exp2(r0.xyz);
-  // r0.xyz = float3(10000, 10000, 10000) * r0.xyz;
-  r0.rgb = float3(100, 100, 100) * r0.rgb;
-
-  // They stop before converting to AP1
-  float3 input_color = r0.rgb;
-
-  // uint output_type = cb0[40].w;
-  float3 sdr_color;
-  float3 hdr_color;
-  float3 sdr_ap1_color;
+  r0.xyz = float3(10000, 10000, 10000) * r0.xyz;
 
   r5.xy = cmp(asint(cb0[2].xx) == int2(3, 5));
   r0.w = (int)r5.y | (int)r5.x;
 
-  // CustomEdit
-  // Add upgrade tonemap here
-  if (shouldTonemap) {
-    renodx::tonemap::Config config = getCommonConfig();
-    float3 final_color = input_color;
-
-    if (injectedData.toneMapType != 1.f) {
-      final_color = renodx::tonemap::config::Apply(final_color, config);
-    }
-
-    // We PQ encode at the end
-    o0.rgba = float4(final_color, 0);
-  } else {
-    o0.rgba = float4(input_color, 0);
-  }
   // Nothing to upgrade since ACES SDR adjustments are removed
 
   if (r0.w != 0) {
@@ -965,11 +939,7 @@ void main(
     }
   }
 
-  // CustomEdit
-  float3 output = o0.rgb;
-  output = renodx::color::bt2020::from::BT709(output);
-  output = renodx::color::pq::Encode(output, injectedData.toneMapGameNits);
-  o0.rgb = output;
+  o0.xyz = float3(0.952381015, 0.952381015, 0.952381015) * r1.xyz;
   o0.w = 0;
 
   return;
