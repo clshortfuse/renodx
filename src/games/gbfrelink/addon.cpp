@@ -77,46 +77,46 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
     }
   },
   new renodx::utils::settings::Setting{
-      .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-      .label = "Reset All",
-      .section = "Presets",
-      .group = "button-line-1",
-      .on_change = []() {
-        for (auto setting : settings) {
-          if (setting->key.empty()) continue;
-          if (!setting->can_reset) continue;
-          renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-        }
-      },
-  },
-    new renodx::utils::settings::Setting{
-      .value_type = renodx::utils::settings::SettingValueType::TEXT,
-      .label = "Game mod by akuru, RenoDX Framework by ShortFuse",
-      .section = "About",
+    .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    .label = "Reset All",
+    .section = "Presets",
+    .group = "button-line-1",
+    .on_change = []() {
+      for (auto setting : settings) {
+        if (setting->key.empty()) continue;
+        if (!setting->can_reset) continue;
+        renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+      }
+    },
   },
   new renodx::utils::settings::Setting{
-      .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-      .label = "HDR Den Discord",
-      .section = "Links",
-      .group = "button-line-1",
-      .tint = 0x5865F2,
-      .on_change = []() {
-        renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc");
-      },
+    .value_type = renodx::utils::settings::SettingValueType::TEXT,
+    .label = "Game mod by akuru, RenoDX Framework by ShortFuse",
+    .section = "About",
   },
-  new renodx::utils::settings::Setting{
-      .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-      .label = "More RenoDX mods",
-      .section = "Links",
-      .group = "button-line-1",
-      .on_change = []() {
-        renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx/wiki/Mods");
-      },
+new renodx::utils::settings::Setting{
+    .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    .label = "HDR Den Discord",
+    .section = "Links",
+    .group = "button-line-1",
+    .tint = 0x5865F2,
+    .on_change = []() {
+      renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc");
+    },
   },
-  new renodx::utils::settings::Setting{
-      .value_type = renodx::utils::settings::SettingValueType::TEXT,
-      .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
-      .section = "About",
+new renodx::utils::settings::Setting{
+    .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    .label = "More RenoDX mods",
+    .section = "Links",
+    .group = "button-line-1",
+    .on_change = []() {
+      renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx/wiki/Mods");
+    },
+  },
+new renodx::utils::settings::Setting{
+    .value_type = renodx::utils::settings::SettingValueType::TEXT,
+    .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+    .section = "About",
   },
 }});
 
@@ -171,7 +171,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
         .old_format = reshade::api::format::r8g8b8a8_typeless,
         .new_format = reshade::api::format::r16g16b16a16_float,
-        //.aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER, // causes hi-res textures + LODs to not load in anymore
+        //.aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER, // causes hi-res textures + models to not load in anymore
       });
 
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
