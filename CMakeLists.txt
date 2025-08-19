@@ -539,10 +539,27 @@ endfunction()
 
 if(CMAKE_GENERATOR_PLATFORM STREQUAL "Win32" OR CMAKE_EXE_LINKER_FLAGS MATCHES "/machine:X86")
   message("Building 32" ${CMAKE_GENERATOR_PLATFORM} ${CMAKE_EXE_LINKER_FLAGS})
+  set(DETOURS_ARCH "X86")
   set(TARGET_SUFFIX ".addon32")
 else()
+  set(DETOURS_ARCH "X64")
   set(TARGET_SUFFIX ".addon64")
 endif()
+
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/external/Detours/lib.${DETOURS_ARCH}/detours.lib
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/external/Detours/src
+  COMMAND nmake
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/external/Detours/src/detours.cpp
+)
+
+add_library(detours STATIC IMPORTED GLOBAL)
+set_target_properties(detours PROPERTIES
+  IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/external/Detours/lib.${DETOURS_ARCH}/detours.lib
+)
+add_custom_target(detours_build DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/external/Detours/lib.${DETOURS_ARCH}/detours.lib)
+add_dependencies(detours detours_build)
+
 
 file(GLOB ADDON_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/**/**/addon.cpp)
 foreach(FILE ${ADDON_FILES})
