@@ -1,12 +1,20 @@
 [submodule "external/reshade"]
-	path = external/reshade
-	url = https://github.com/crosire/reshade
+  path = external/reshade
+  url = https://github.com/crosire/reshade
 
 [submodule "external/Streamline"]
-	path = external/Streamline
-	url = https://github.com/clshortfuse/Streamline.git
-	branch = patch-1
+  path = external/Streamline
+  url = https://github.com/clshortfuse/Streamline.git
+  branch = patch-1
 
 [submodule "external/gtl"]
-	path = external/gtl
-	url = https://github.com/greg7mdp/gtl.git
+  path = external/gtl
+  url = https://github.com/greg7mdp/gtl.git
+
+[submodule "external/DLSS"]
+  path = external/DLSS
+  url = https://github.com/NVIDIA/DLSS.git
+
+[submodule "external/Detours"]
+  path = external/Detours
+  url = https://github.com/microsoft/Detours.git
