@@ -549,7 +549,7 @@ endif()
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/external/Detours/lib.${DETOURS_ARCH}/detours.lib
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/external/Detours/src
-  COMMAND nmake
+  COMMAND nmake ARCH=${DETOURS_ARCH}
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/external/Detours/src/detours.cpp
 )
 
