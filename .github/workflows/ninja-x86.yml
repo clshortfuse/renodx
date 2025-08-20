@@ -1,0 +1,44 @@
+name: Ninja x86
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".github/workflows/**"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".github/workflows/**"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4.1.7
+        with:
+          submodules: recursive
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Download Slang binaries
+        run: |
+          curl -L -o slang.zip https://github.com/shader-slang/slang/releases/download/v2025.10.3/slang-2025.10.3-windows-x86_64.zip
+          powershell -Command "Expand-Archive -Path slang.zip -DestinationPath slang_temp -Force; if (!(Test-Path -Path .\bin)) { New-Item -ItemType Directory -Path .\bin }; Copy-Item slang_temp\bin\* .\bin -Force; Remove-Item slang_temp -Recurse -Force"
+
+      - name: Configure build for x86
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64_x86
+
+      - name: Configure CMake (x86)
+        run: cmake --preset ninja-x86
+
+      - name: Build (x86)
+        run: cmake --build --preset ninja-x86-release --verbose
