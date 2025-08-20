@@ -90,7 +90,17 @@ renodx::mods::shader::CustomShaders custom_shaders = {
               return false;
             },
         },
-    }};
+    },
+    {
+        0x87077D36,
+        {
+            .crc32 = 0x87077D36,
+            .on_draw = [](auto* cmd_list) {
+              return false;
+            },
+        },
+    },
+};
 
 const std::string build_date = __DATE__;
 const std::string build_time = __TIME__;
