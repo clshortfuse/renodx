@@ -309,9 +309,13 @@ void ApplyFilmicToneMap(
 
     if (RENODX_TONE_MAP_TYPE == 3.f) {  // run the same steps on ACES but without desaturation and blue correction
       float3 hdr_tonemapped = ApplyACES(untonemapped);
+      // preRRT = renodx::color::bt709::from::AP1(tonemapped);
+      // tonemapped = renodx::color::bt709::clamp::BT2020(tonemapped);
+      // tonemapped = renodx::color::ap1::from::BT709(tonemapped);
       hdr_tonemapped = LerpToneMapStrength(hdr_tonemapped, preRRT);
       const float blend_factor = renodx::color::y::from::AP1(tonemapped);
       tonemapped = lerp(tonemapped, hdr_tonemapped, saturate(blend_factor));
+      // tonemapped = tonemapped / 1.62f; // Random value
     }
   }
   if (RENODX_TONE_MAP_TYPE != 4.f) {
