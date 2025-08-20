@@ -53,16 +53,16 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_SWAP_CHAIN_DECODING           renodx::draw::ENCODING_NONE
-// #define RENODX_INTERMEDIATE_ENCODING         renodx::draw::ENCODING_PQ
-// #define RENODX_INTERMEDIATE_COLOR_SPACE      renodx::color::convert::COLOR_SPACE_BT2020
-#define RENODX_INTERMEDIATE_SCALING         1.f
-#define RENODX_TONE_MAP_HUE_CORRECTION      1.f
-#define RENODX_TONE_MAP_PASS_AUTOCORRECTION 1.f
-#define RENODX_GAMMA_CORRECTION_UI          1.f
-#define RENODX_GAMMA_CORRECTION             1.f
-#define CUSTOM_LUT_STRENGTH                 1.f
-#define CUSTOM_LUT_SCALING                  0.f
-#define OVERRIDE_BLACK_CLIP                 1.f  // 0 - Off, 1 - 0.0001 nits
+#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE  renodx::color::convert::COLOR_SPACE_BT2020
+#define RENODX_INTERMEDIATE_SCALING          1.f
+#define RENODX_TONE_MAP_HUE_CORRECTION       0.75f
+#define RENODX_TONE_MAP_PASS_AUTOCORRECTION  1.f
+#define RENODX_GAMMA_CORRECTION_UI           1.f
+#define RENODX_GAMMA_CORRECTION              1.f
+#define CUSTOM_HUE_CORRECTION                0.f
+#define CUSTOM_LUT_STRENGTH                  1.f
+#define CUSTOM_LUT_SCALING                   0.f
+#define OVERRIDE_BLACK_CLIP                  1.f  // 0 - Off, 1 - 0.0001 nits
 
 #include "../../shaders/renodx.hlsl"
 

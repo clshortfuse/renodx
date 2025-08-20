@@ -30,7 +30,6 @@ void main(
   r0.xy = cb0[38].zw * r0.xy;
   r0.xy = r0.xy * cb0[5].xy + cb0[4].xy;
   r0.xyz = t0.Sample(s0_s, r0.xy).xyz;
-
   InverIntermediateToSRGB(r0.rgb);
 
   r1.xyz = cb1[2].xxx + -cb1[2].yzw;
@@ -46,7 +45,7 @@ void main(
   r0.xyz = cb1[3].xxx * r1.xyz + r0.xyz;
 
   o0.rgb = r0.rgb;
-  // o0.xyz = max(float3(0, 0, 0), o0.xyz);
+  o0.xyz = max(float3(0, 0, 0), o0.xyz);
 
   RenderIntermediateFromSRGB(o0.rgb);
   o0.w = 0;

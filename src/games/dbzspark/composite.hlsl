@@ -41,7 +41,7 @@ bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout flo
   // linearize scene, normalize brightness, convert to BT.709
   float3 scene_color_linear = renodx::draw::InvertIntermediatePass(scene_color_pq.rgb);
   float3 scene_color_bt2020 = renodx::color::bt2020::from::BT709(scene_color_linear);
-
+  
   // #if 0
   if (RENODX_TONE_MAP_TYPE == 2.f || RENODX_TONE_MAP_TYPE == 3.f) {
     float peak_clamp = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
@@ -50,6 +50,7 @@ bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout flo
   } else if (RENODX_TONE_MAP_TYPE == 4.f) {
     scene_color_bt2020 = saturate(scene_color_bt2020);
   }
+
   // #endif
   scene_color_linear = renodx::color::bt709::from::BT2020(scene_color_bt2020);
 
@@ -63,6 +64,7 @@ bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout flo
   }
   float3 composited_color_gamma = ui_color_gamma.rgb + scene_color_gamma * (1.0 - ui_alpha);
   float3 composited_color_linear = renodx::color::gamma::DecodeSafe(composited_color_gamma.rgb);
+  
   if (skip_swapchain) {
     output_color = float4(composited_color_linear, ui_alpha);
     return true;
