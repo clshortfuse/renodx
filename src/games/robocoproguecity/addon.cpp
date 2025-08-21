@@ -116,7 +116,7 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.override_black_clip,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
         .default_value = 1.f,
-        .label = "Overrides Black Clip",
+        .label = "Override Black Clip",
         .section = "Tone Mapping",
         .tooltip = "Outputs 0.0001 nits for black, prevents crushing.",
         .is_enabled = []() { return shader_injection.tone_map_type == 3; },
