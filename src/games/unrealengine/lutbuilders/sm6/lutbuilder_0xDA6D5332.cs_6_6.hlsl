@@ -261,7 +261,7 @@ void main(
   float _137 = dot(float3(_130, _133, _136), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
   
   
-  SetUngradedAP1(float3(130, 133, 136));
+  SetUngradedAP1(float3(_130, _133, _136));
   
   
   float _141 = (_130 / _137) + -1.0f;
@@ -301,7 +301,7 @@ void main(
   float _543 = ((_425 * (((cb0_019z + cb0_034z) + _322) + (((cb0_018z * cb0_033z) * _331) * exp2(log2(exp2(((cb0_016z * cb0_031z) * _349) * log2(max(0.0f, ((((cb0_015z * cb0_030z) * _358) * _250) + _174)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_032z) * _340)))))) + (_313 * (((cb0_019z + cb0_024z) + _188) + (((cb0_018z * cb0_023z) * _202) * exp2(log2(exp2(((cb0_016z * cb0_021z) * _230) * log2(max(0.0f, ((((cb0_015z * cb0_020z) * _244) * _250) + _174)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_022z) * _216))))))) + ((((cb0_019z + cb0_029z) + _434) + (((cb0_018z * cb0_028z) * _443) * exp2(log2(exp2(((cb0_016z * cb0_026z) * _461) * log2(max(0.0f, ((((cb0_015z * cb0_025z) * _470) * _250) + _174)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_027z) * _452))))) * _528);
   
   
-  SetUntonemappedAP1(float3(539, 541, 543));
+  SetUntonemappedAP1(float3(_539, _541, _543));
 
   
   float _579 = ((mad(0.061360642313957214f, _543, mad(-4.540197551250458e-09f, _541, (_539 * 0.9386394023895264f))) - _539) * cb0_036y) + _539;
@@ -412,7 +412,7 @@ void main(
   float _903 = ((mad(0.9999996423721313f, _885, mad(2.0954757928848267e-08f, _884, (_883 * 1.862645149230957e-08f))) - _885) * cb0_036y) + _885;
   
   
-  SetTonemappedAP1(901, 902, 903);
+  SetTonemappedAP1(float3(_901, _902, _903));
 
   
   float _913 = max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[0].z), _903, mad((UniformBufferConstants_WorkingColorSpace_192[0].y), _902, ((UniformBufferConstants_WorkingColorSpace_192[0].x) * _901))));
@@ -435,7 +435,7 @@ void main(
   float _978 = exp2(log2(max(0.0f, _952)) * cb0_040y);
   
   if (RENODX_TONE_MAP_TYPE != 0) {
-    u0[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = GenerateOutput(float3(976, 977, 978), cb0_040w);
+    u0[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = GenerateOutput(float3(_976, _977, _978), cb0_040w);
     return;
   }
   
@@ -1028,3 +1028,4 @@ void main(
 
   u0[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = saturate(float4((_2402 * 0.9523810148239136f), (_2403 * 0.9523810148239136f), (_2404 * 0.9523810148239136f), 0.0f));
 }
+
