@@ -124,9 +124,9 @@ bool HandleIntermediateCompositing(float4 ui_color_gamma, float4 scene_color_pq,
   float3 scene_color_gamma = renodx::color::srgb::EncodeSafe(scene_color_linear);
 
   float3 composited_color_gamma = ui_color_linear + scene_color_linear * (1.0 - ui_alpha);
-  float3 composited_color_linear = renodx::color::srgb::DecodeSafe(composited_color_gamma);
+  composited_color_gamma = (composited_color_gamma) * (RENODX_DIFFUSE_WHITE_NITS / 80.f);  // original shader divides by 80.f
 
-  output_color = float4(composited_color_linear, ui_alpha);
+  output_color = float4(composited_color_gamma, ui_alpha);
 
   return true;
 }
