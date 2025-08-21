@@ -1,4 +1,4 @@
-name: Clang
+name: Ninja x86
 
 on:
   workflow_dispatch:
@@ -20,41 +20,17 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.1.7
         with:
           submodules: recursive
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@v5
 
       - name: Download Slang binaries
         run: |
           curl -L -o slang.zip https://github.com/shader-slang/slang/releases/download/v2025.10.3/slang-2025.10.3-windows-x86_64.zip
           powershell -Command "Expand-Archive -Path slang.zip -DestinationPath slang_temp -Force; if (!(Test-Path -Path .\bin)) { New-Item -ItemType Directory -Path .\bin }; Copy-Item slang_temp\bin\* .\bin -Force; Remove-Item slang_temp -Recurse -Force"
-
-      - name: Set up Clang
-        uses: egor-tensin/setup-clang@v1
-        with:
-          version: latest
-          platform: x64
-
-      - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@v5
-
-
-      - name: Configure build for amd64
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: amd64
-
-      - name: Configure CMake (x64)
-        run: cmake --preset clang-x64
-
-      - name: Build (x64)
-        run: cmake --build --preset clang-x64-release --verbose
-
-      - name: Set up Clang
-        uses: egor-tensin/setup-clang@v1
-        with:
-          version: latest
-          platform: x86
 
       - name: Configure build for x86
         uses: ilammy/msvc-dev-cmd@v1
@@ -62,7 +38,7 @@ jobs:
           arch: amd64_x86
 
       - name: Configure CMake (x86)
-        run: cmake --preset clang-x86
+        run: cmake --preset ninja-x86
 
       - name: Build (x86)
-        run: cmake --build --preset clang-x86-release --verbose
+        run: cmake --build --preset ninja-x86-release --verbose
