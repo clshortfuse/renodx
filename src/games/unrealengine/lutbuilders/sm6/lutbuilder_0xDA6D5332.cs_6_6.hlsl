@@ -1028,4 +1028,3 @@ void main(
 
   u0[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = saturate(float4((_2402 * 0.9523810148239136f), (_2403 * 0.9523810148239136f), (_2404 * 0.9523810148239136f), 0.0f));
 }
-
