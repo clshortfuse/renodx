@@ -412,7 +412,7 @@ void main(
   float _903 = ((mad(0.9999996423721313f, _885, mad(2.0954757928848267e-08f, _884, (_883 * 1.862645149230957e-08f))) - _885) * cb0_036y) + _885;
   
   
-  SetTonemappedAP1(float3(_901, _902, _903));
+  SetTonemappedAP1(_901, _902, _903);
 
   
   float _913 = max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[0].z), _903, mad((UniformBufferConstants_WorkingColorSpace_192[0].y), _902, ((UniformBufferConstants_WorkingColorSpace_192[0].x) * _901))));
@@ -1027,4 +1027,5 @@ void main(
   // u0[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = float4((_2402 * 0.9523810148239136f), (_2403 * 0.9523810148239136f), (_2404 * 0.9523810148239136f), 0.0f);
 
   u0[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = saturate(float4((_2402 * 0.9523810148239136f), (_2403 * 0.9523810148239136f), (_2404 * 0.9523810148239136f), 0.0f));
+
 }
