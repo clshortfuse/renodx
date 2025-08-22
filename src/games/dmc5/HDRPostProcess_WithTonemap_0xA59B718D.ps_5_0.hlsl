@@ -1,5 +1,4 @@
-#include ".\LUTBlackCorrection.hlsl"
-#include ".\shared.h"
+#include ".\common.hlsli"
 
 // ---- Created with 3Dmigoto v1.3.16 on Thu Dec 05 14:56:05 2024
 
@@ -30,7 +29,7 @@ cbuffer Tonemap : register(b1) {
   float exposureAdjustment : packoffset(c0);
   float tonemapRange : packoffset(c0.y);
   float sharpness : packoffset(c0.z);
-  float preTonemapRange : packoffset(c0.w);
+  float pretonemapRange : packoffset(c0.w);
   int useAutoExposure : packoffset(c1);
   float echoBlend : packoffset(c1.y);
   float AABlend : packoffset(c1.z);
@@ -117,11 +116,14 @@ void main(
     out float4 o0: SV_Target0) {
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9;
 
+  float tonemap_range = tonemapRange;
+  tonemap_range = 0.f;  // no highlight compression
+
   // declare lut config for use with lut black correction
   renodx::lut::Config lut_config = renodx::lut::config::Create(
       TrilinearClamp_s,
-      1.f,  // strength
-      1.f,  // scaling
+      CUSTOM_LUT_STRENGTH,  // strength
+      CUSTOM_LUT_SCALING,   // scaling
       renodx::lut::config::type::SRGB,
       renodx::lut::config::type::LINEAR,
       fTextureSize);
@@ -151,7 +153,7 @@ void main(
         r4.xyz = float3(1, 1, 1);
       }
       if (r2.w == 0) {
-        r2.z = r2.z * tonemapRange + 1;
+        r2.z = r2.z * tonemap_range + 1;
         r4.xyz = r3.xyz / r2.zzz;
       }
     } else {
@@ -174,7 +176,7 @@ void main(
         r4.x = 1;
       }
       if (r2.x == 0) {
-        r1.w = r1.w * tonemapRange + 1;
+        r1.w = r1.w * tonemap_range + 1;
         r4.x = r3.x / r1.w;
       }
       r2.xyz = SourceImage.Sample(BilinearClamp_s, r2.zw).xyz;
@@ -188,7 +190,7 @@ void main(
         r4.y = 1;
       }
       if (r2.x == 0) {
-        r1.w = r1.w * tonemapRange + 1;
+        r1.w = r1.w * tonemap_range + 1;
         r4.y = r2.y / r1.w;
       }
       r1.xyw = SourceImage.Sample(BilinearClamp_s, r1.xy).xyz;
@@ -202,7 +204,7 @@ void main(
         r4.z = 1;
       }
       if (r1.y == 0) {
-        r1.x = r1.x * tonemapRange + 1;
+        r1.x = r1.x * tonemap_range + 1;
         r4.z = r1.w / r1.x;
       }
     }
@@ -221,7 +223,7 @@ void main(
       r4.xyz = float3(1, 1, 1);
     }
     if (r1.w == 0) {
-      r1.y = r1.y * tonemapRange + 1;
+      r1.y = r1.y * tonemap_range + 1;
       r4.xyz = r2.xyz / r1.yyy;
     }
     r1.xz = float2(0, 1);
@@ -345,7 +347,7 @@ void main(
           r6.xyz = float3(1, 1, 1);
         }
         if (r1.x == 0) {
-          r0.x = r0.x * tonemapRange + 1;
+          r0.x = r0.x * tonemap_range + 1;
           r6.xyz = r5.xyz / r0.xxx;
         }
         r5.xyz = cbRadialColor.xyz * r4.xyz;
@@ -400,7 +402,7 @@ void main(
           r3.xyw = float3(1, 1, 1);
         }
         if (r1.w == 0) {
-          r0.x = r0.x * tonemapRange + 1;
+          r0.x = r0.x * tonemap_range + 1;
           r3.xyw = r1.xyz / r0.xxx;
         }
         r1.xyz = cbRadialColor.xyz * r4.xyz;
@@ -509,11 +511,11 @@ void main(
     if (r0.y != 0) {
       r1.xyz = r1.xyz / r0.xxx;
     }
-#else
+#else  // use UpgradeToneMap() for LUT sampling
     untonemapped = r1.xyz;
     hdrColor = untonemapped;
 
-    sdrColor = renoDRTSmoothClamp(untonemapped);  // use neutral RenoDRT as a smoothclamp
+    sdrColor = LUTToneMap(untonemapped);
     r1.xyz = sdrColor;
 #endif
 #if 0

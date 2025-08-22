@@ -1,5 +1,4 @@
-#include "./DICE.hlsl"
-#include "./shared.h"
+#include "./common.hlsli"
 
 cbuffer HDRMapping : register(b0) {
   float whitePaperNits : packoffset(c0);
@@ -25,29 +24,19 @@ float4 main(float4 v0: SV_Position0, float2 v1: TEXCOORD0)
 #if 1
   float3 bt709Color =
       tLinearImage.SampleLevel(PointBorder_s, v1.xy, 0.0f).rgb;
+#if GAMMA_CORRECTION
+  bt709Color = GammaCorrectHuePreserving(bt709Color);
+#endif
+
+  float3 bt2020Color = max(0.f, renodx::color::bt2020::from::BT709(bt709Color.rgb));
+
 #if 1
-  bt709Color = renodx::color::correct::GammaSafe(bt709Color);
+  bt2020Color = ApplyExponentialRolloff(bt2020Color, whitePaperNits, displayMaxNits);
 #endif
-
-#if 2
-  DICESettings config = DefaultDICESettings();
-  config.Type = 3;
-  config.ShoulderStart = 0.5f;
-  config.DesaturationAmount = 0.f;
-  config.DarkeningAmount = 0.f;
-  const float dicePaperWhite =
-      whitePaperNits / renodx::color::srgb::REFERENCE_WHITE;
-  const float dicePeakWhite = max(displayMaxNits, whitePaperNits) / renodx::color::srgb::REFERENCE_WHITE;
-  bt709Color.rgb =
-      DICETonemap(bt709Color.rgb * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
-#endif
-
-  float3 bt2020Color = renodx::color::bt2020::from::BT709(bt709Color.rgb);
 
   float3 pqColor = renodx::color::pq::Encode(bt2020Color, whitePaperNits);
 
   return float4(pqColor, 1.0);
-
 #else
 
   float4 r0, r1, r2, r3, r4, o0;
