@@ -107,20 +107,20 @@ float3 ChrominanceICtCp(
 
 float3 ChrominancedtUCS(
     float3 incorrect_color,
-    float3 correct_color,
+    float3 reference_color,
     float strength = 1.f,
     float clamp_chrominance_loss = 0.f)  // new param
 {
   if (strength == 0.f) return incorrect_color;
 
   float3 incorrect_uvY = renodx::color::dtucs::uvY::from::BT709(incorrect_color);
-  float3 correct_uvY = renodx::color::dtucs::uvY::from::BT709(correct_color);
+  float3 reference_uvY = renodx::color::dtucs::uvY::from::BT709(reference_color);
 
   float2 incorrect_uv = incorrect_uvY.xy;
-  float2 correct_uv = correct_uvY.xy;
+  float2 correct_uv = reference_uvY.xy;
 
   float Y_incorrect = incorrect_uvY.z;
-  float Y_correct = correct_uvY.z;
+  float Y_correct = reference_uvY.z;
 
   // Compute perceptual lightness (L*) for both colors
   float L_star_hat_i = pow(Y_incorrect, 0.631651345306265f);
@@ -151,7 +151,7 @@ float3 ChrominancedtUCS(
   float3 final_jch = float3(J, C, h);
 
   float3 result = renodx::color::bt709::from::dtucs::JCH(final_jch);
-  return renodx::color::bt709::clamp::AP1(result);
+  return result;
 }
 
 float3 Chrominance(float3 incorrect_color, float3 correct_color, float strength = 1.f, float clamp_chrominance_loss = 0.f, uint method = 0u) {
