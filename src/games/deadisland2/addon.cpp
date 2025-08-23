@@ -117,11 +117,11 @@ renodx::utils::settings::Settings settings = {
     CreateMultiLabelSetting({
         .key = "GammaCorrection",
         .binding = &shader_injection.gamma_correction,
-        .default_value = 1.f,
+        .default_value = 2.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
         .tooltip = "Emulates a display EOTF.",
-        .labels = {"Off (sRGB)", "2.2"},
+        .labels = {"Off", "2.2 (Per Channel)", "2.2 (By Luminance with Per Channel Chrominance)"},
         .is_enabled = []() { return shader_injection.tone_map_type > 0; },
         .is_visible = []() { return current_settings_mode >= 1; },
     }),

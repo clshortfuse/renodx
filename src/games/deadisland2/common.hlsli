@@ -76,6 +76,31 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
   return color;
 }
 
+float3 GammaCorrectHuePreserving(float3 incorrect_color) {
+  float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
+
+  const float y_in = renodx::color::y::from::BT709(incorrect_color);
+  const float y_out = max(0, renodx::color::correct::Gamma(y_in));
+
+  float3 lum = incorrect_color * (y_in > 0 ? y_out / y_in : 0.f);
+
+  // use chrominance from per channel gamma correction
+  float3 result = renodx::color::correct::ChrominanceOKLab(lum, ch, 1.f, 1.f);
+
+  return result;
+}
+
+float3 ApplyGammaCorrection(float3 incorrect_color) {
+  float3 corrected_color;
+  if (RENODX_GAMMA_CORRECTION == 2.f) {
+    corrected_color = GammaCorrectHuePreserving(incorrect_color);
+  } else {
+    corrected_color = renodx::color::correct::GammaSafe(incorrect_color);
+  }
+
+  return corrected_color;
+}
+
 float4 GenerateOutput(float3 untonemapped_ap1) {
   renodx::color::grade::Config cg_config = renodx::color::grade::config::Create();
   cg_config.exposure = RENODX_TONE_MAP_EXPOSURE;
@@ -103,9 +128,8 @@ float4 GenerateOutput(float3 untonemapped_ap1) {
     float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(graded_ap1);
     untonemapped_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(untonemapped_bt709, renodx::color::bt709::from::AP1(untonemapped_ap1), untonemapped_lum, cg_config);
 
-    if (RENODX_GAMMA_CORRECTION) {
-      untonemapped_bt709 = renodx::color::correct::GammaSafe(untonemapped_bt709);
-    }
+    untonemapped_bt709 = ApplyGammaCorrection(untonemapped_bt709);
+
     pq_color = renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(untonemapped_bt709), RENODX_DIFFUSE_WHITE_NITS);
     return float4(pq_color * (1.f / 1.05f), 0.f);  // lutbuilder does this
   } else if (RENODX_TONE_MAP_PER_CHANNEL == 0.f) {
@@ -119,14 +143,15 @@ float4 GenerateOutput(float3 untonemapped_ap1) {
     }
 
     graded_ap1 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped_ap1, untonemapped_lum, cg_config);
+    graded_ap1 = max(0, graded_ap1);
 
     // tonemap both by channel and luminance
-    graded_ap1 = max(0, graded_ap1);
-    float untonemapped_lum = renodx::color::y::from::AP1(graded_ap1);
-    float4 dual_tonemapped_ap1 = renodx::tonemap::aces::ODT(float4(graded_ap1, untonemapped_lum), aces_min * 48.f, aces_max * 48.f, renodx::color::IDENTITY_MAT) / 48.f;
+    renodx::tonemap::aces::ODTConfig odt_config = renodx::tonemap::aces::CreateODTConfig(aces_min * 48.f, aces_max * 48.f);
+    float y_in = renodx::color::y::from::AP1(untonemapped_ap1);
+    float y_out = renodx::tonemap::aces::ODTToneMap(y_in, odt_config) / 48.f;
 
-    float3 channel_tonemapped_ap1 = dual_tonemapped_ap1.rgb;
-    float3 luminance_tonemapped_ap1 = graded_ap1 * (dual_tonemapped_ap1.a / untonemapped_lum);
+    float3 channel_tonemapped_ap1 = renodx::tonemap::aces::ODTToneMap(untonemapped_ap1, odt_config) / 48.f;
+    float3 luminance_tonemapped_ap1 = renodx::color::correct::Luminance(untonemapped_ap1, y_in, y_out);
 
     // correct luminance tonemap saturation
     luminance_tonemapped_ap1 = renodx::color::ap1::from::BT709(
@@ -144,9 +169,7 @@ float4 GenerateOutput(float3 untonemapped_ap1) {
 
     tonemapped_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(tonemapped_bt709, renodx::color::bt709::from::AP1(untonemapped_ap1), untonemapped_lum, cg_config);
 
-    if (RENODX_GAMMA_CORRECTION) {
-      tonemapped_bt709 = renodx::color::correct::GammaSafe(tonemapped_bt709);
-    }
+    tonemapped_bt709 = ApplyGammaCorrection(tonemapped_bt709);
 
     pq_color = renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(tonemapped_bt709), RENODX_DIFFUSE_WHITE_NITS);
     return float4(pq_color * (1.f / 1.05f), 0.f);  // lutbuilder does this
@@ -161,15 +184,14 @@ float4 GenerateOutput(float3 untonemapped_ap1) {
     }
 
     graded_ap1 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped_ap1, untonemapped_lum, cg_config);
+    graded_ap1 = max(0, graded_ap1);
 
     tonemapped_ap1 = renodx::tonemap::aces::ODT(graded_ap1, aces_min * 48.f, aces_max * 48.f, renodx::color::IDENTITY_MAT) / 48.f;
     tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
 
     tonemapped_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(tonemapped_bt709, renodx::color::bt709::from::AP1(untonemapped_ap1), untonemapped_lum, cg_config);
 
-    if (RENODX_GAMMA_CORRECTION) {
-      tonemapped_bt709 = renodx::color::correct::GammaSafe(tonemapped_bt709);
-    }
+    tonemapped_bt709 = ApplyGammaCorrection(tonemapped_bt709);
 
     pq_color = renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(tonemapped_bt709), RENODX_DIFFUSE_WHITE_NITS);
     return float4(pq_color * (1.f / 1.05f), 0.f);  // lutbuilder does this
