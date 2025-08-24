@@ -92,8 +92,8 @@ float3 UserColorGrading(
   float y = renodx::color::y::from::BT709(abs(color));
 
   const float y_contrasted = Contrast(y, contrast);
-  float y_highlighted = Highlights(y, highlights);
-  float y_shadowed = Shadows(y, shadows);
+  float y_highlighted = Highlights(y_contrasted, highlights);
+  float y_shadowed = Shadows(y_highlighted, shadows);
   const float y_final = y_shadowed;
 
   color = renodx::color::correct::Luminance(color, y, y_final);
