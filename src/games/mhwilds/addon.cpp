@@ -204,7 +204,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1; },
+        .is_visible = []() { return current_settings_mode >= 1 && last_is_hdr; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
@@ -224,6 +224,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return last_is_hdr; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSaturation",
@@ -353,7 +354,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Which color to output",
         .labels = {"Vanilla", "Fixed"},
-        .is_visible = []() { return current_settings_mode >= 2 && last_is_hdr; },
+        .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxExposureStrength",
@@ -364,7 +365,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 2 && last_is_hdr; },
+        .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxLUTExposureReverse",
@@ -376,7 +377,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Use precolor grade exposure or after",
         .labels = {"Post Grade", "Pre Grade"},
-        .is_visible = []() { return current_settings_mode >= 2 && last_is_hdr; },
+        .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
