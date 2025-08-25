@@ -187,7 +187,7 @@ void main(PSInput input, out float4 SV_TARGET: SV_TARGET) {
       // dev attempt at fixing gamma mismatch, weird stretching with paper white and gamma in bt.2020 space
       // r0.xyz *= cShaderInstance_PerInstance_Constants.mInUniform_Constant.mOETFSettings.y;    // mul r0.xyz, r0.xyzx, cb0[0][0].yyyy
       // r0.xyz = pow(r0.xyz, cShaderInstance_PerInstance_Constants.mInUniform_Constant.mOETFSettings.x);
-      r1.xyz = renodx::color::pq::from::BT2020((r0.xyz * RENODX_DIFFUSE_WHITE_NITS) / 10000.f);
+      r1.xyz = renodx::color::pq::from::BT2020((r0.xyz * RENODX_GRAPHICS_WHITE_NITS) / 10000.f);
     }
   }
   SV_TARGET.xyzw = r1.xyzw;
