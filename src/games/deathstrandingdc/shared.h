@@ -25,7 +25,7 @@ struct ShaderInjectData {
 };
 
 #ifndef __cplusplus
-cbuffer shader_injection : register(b0, space9) {
+cbuffer shader_injection : register(b0, space50) {
   ShaderInjectData shader_injection : packoffset(c0);
 }
 
