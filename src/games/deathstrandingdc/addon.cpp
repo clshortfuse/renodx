@@ -157,7 +157,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!reshade::register_addon(h_module)) return FALSE;
 
       renodx::mods::shader::force_pipeline_cloning = true;
-      renodx::mods::shader::expected_constant_buffer_space = 9;
+      renodx::mods::shader::expected_constant_buffer_space = 50;
+      renodx::mods::shader::expected_constant_buffer_index = 0;
 
       break;
     case DLL_PROCESS_DETACH:
