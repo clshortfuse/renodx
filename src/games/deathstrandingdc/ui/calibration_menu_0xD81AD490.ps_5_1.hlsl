@@ -24,9 +24,6 @@ cbuffer ShaderInstance_PerInstance : register(b0, space8) {
   InUniformParams mInUniformParams;
 }
 
-// 3Dmigoto declarations
-#define cmp -
-
 void main(
     float4 v0: SV_POSITION0,
     float2 v1: TEXCOORD0,
@@ -81,41 +78,18 @@ void main(
   }
 
   float3 untonemapped = r0.rgb;
-  if (RENODX_TONE_MAP_TYPE != 1.f) {
-    r1.xyz = mInUniformParams.mHDRCompressionParam1.yyy * r0.xyz + mInUniformParams.mHDRCompressionParam1.zzz;
-    r2.xyz = mInUniformParams.mHDRCompressionParam2.xxx + r0.xyz;
-    r2.xyz = -mInUniformParams.mHDRCompressionParam1.www / r2.xyz;
-    r2.xyz = mInUniformParams.mHDRCompressionParam2.yyy + r2.xyz;
-    r0.xyz = cmp(r0.xyz < mInUniformParams.mHDRCompressionParam2.zzz);
-    r0.xyz = r0.xyz ? r1.xyz : r2.xyz;
-    r0.xyz = sqrt(r0.xyz);
-    r1.xyz = cmp(float3(0, 0, 0) < r0.xyz);
-    r0.xyz = log2(r0.xyz);
-    r0.xyz = mInUniformParams.mHDRCompressionParam3.www * r0.xyz;
-    r0.xyz = exp2(r0.xyz);
-    r0.xyz = r1.xyz ? r0.xyz : 0;
-    r0.xyz = r0.xyz * r0.xyz;
-    r0.xyz = min(mInUniformParams.mHDRCompressionParam1.xxx, r0.xyz);
-    r1.xyz = -mInUniformParams.mHDRCompressionParam1.zzz + r0.xyz;
-    r1.xyz = r1.xyz / mInUniformParams.mHDRCompressionParam1.yyy;
-    r2.xyz = -mInUniformParams.mHDRCompressionParam2.yyy + r0.xyz;
-    r2.xyz = -mInUniformParams.mHDRCompressionParam1.www / r2.xyz;
-    r2.xyz = -mInUniformParams.mHDRCompressionParam2.xxx + r2.xyz;
-    r0.xyz = cmp(r0.xyz < mInUniformParams.mHDRCompressionParam2.www);
-    r0.xyz = r0.xyz ? r1.xyz : r2.xyz;
-    r1.xyz = mInUniformParams.mHDRCompressionParam1.yyy * r0.xyz + mInUniformParams.mHDRCompressionParam1.zzz;
-    r2.xyz = mInUniformParams.mHDRCompressionParam3.yyy + r0.xyz;
-    r2.xyz = -mInUniformParams.mHDRCompressionParam3.xxx / r2.xyz;
-    r2.xyz = mInUniformParams.mHDRCompressionParam3.zzz + r2.xyz;
-    r0.xyz = cmp(r0.xyz < mInUniformParams.mHDRCompressionParam2.zzz);
-    r0.xyz = r0.xyz ? r1.xyz : r2.xyz;
-    if (RENODX_TONE_MAP_TYPE == 2.f) {
-      const float blending_threshold = 0.85f;
-      r0.rgb = lerp(r0.rgb, untonemapped, saturate(r0.rgb / blending_threshold));
-      r0.rgb = renodx::tonemap::ExponentialRollOff(r0.rgb, 0.35f, renodx::color::correct::GammaSafe(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, true));
-      r0.rgb = renodx::color::correct::Hue(r0.rgb, untonemapped, RENODX_TONE_MAP_HUE_CORRECTION);
-    }
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    r0.rgb = ApplyDeathStrandingToneMap(untonemapped, mInUniformParams.mHDRCompressionParam1,
+                                        mInUniformParams.mHDRCompressionParam2, mInUniformParams.mHDRCompressionParam3);
+  } else if (RENODX_TONE_MAP_TYPE == 2.f) {
+    r0.rgb = ApplyDeathStrandingToneMap(untonemapped, mInUniformParams.mHDRCompressionParam1,
+                                        mInUniformParams.mHDRCompressionParam2, mInUniformParams.mHDRCompressionParam3, 1u);
+
+    float peak_white = renodx::color::correct::GammaSafe(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, true);
+    r0.rgb = ApplyDisplayMap(r0.rgb);
   }
+
+  r0.rgb = ScaleScene(r0.rgb);
 
   if (output_mode == 0) {
     r1.xyz = log2(r0.xyz);
