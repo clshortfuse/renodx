@@ -81,15 +81,16 @@ void main(
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     r0.rgb = ApplyDeathStrandingToneMap(untonemapped, mInUniformParams.mHDRCompressionParam1,
                                         mInUniformParams.mHDRCompressionParam2, mInUniformParams.mHDRCompressionParam3);
-  } else if (RENODX_TONE_MAP_TYPE == 2.f) {
+  } else {
     r0.rgb = ApplyDeathStrandingToneMap(untonemapped, mInUniformParams.mHDRCompressionParam1,
                                         mInUniformParams.mHDRCompressionParam2, mInUniformParams.mHDRCompressionParam3, 1u);
 
     float peak_white = renodx::color::correct::GammaSafe(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, true);
-    r0.rgb = ApplyDisplayMap(r0.rgb);
+    if (RENODX_TONE_MAP_TYPE == 2.f) {
+      r0.rgb = ApplyDisplayMap(r0.rgb);
+    }
+    r0.rgb = ScaleScene(r0.rgb);
   }
-
-  r0.rgb = ScaleScene(r0.rgb);
 
   if (output_mode == 0) {
     r1.xyz = log2(r0.xyz);

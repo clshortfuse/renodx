@@ -1,148 +1,151 @@
-#include "./shared.h"
+#include "./common.hlsli"
 
-// Resource Bindings:
-//
-// Name                                 Type  Format         Dim      ID      HLSL Bind  Count
-// ------------------------------ ---------- ------- ----------- ------- -------------- ------
-// Sampler                           sampler      NA          NA      S0      s0,space8      1
-// Texture                           texture  float4          2d      T0      t0,space8      1
-// PerceptualTexture                 texture  float4          2d      T1      t1,space8      1
-// ShaderInstance_PerInstance        cbuffer      NA          NA     CB0     cb0,space8      1
-SamplerState Sampler : register(s0, space8);
-Texture2D<float4> Texture : register(t0, space8);
-Texture2D<float4> PerceptualTexture : register(t1, space8);
-
-// Buffer Definitions:
-struct InUniform_Constant {
-  float4 mOETFSettings;      // Offset: 0
-  float4 mKjpGammaSettings;  // Offset: 16
+cbuffer CB0_buf : register(b0, space8) {
+  float2 CB0_m0 : packoffset(c0);
+  float2 CB0_m1 : packoffset(c0.z);
+  float4 CB0_m2 : packoffset(c1);
 };
 
-struct ShaderInstance_PerInstance_Constants {
-  InUniform_Constant mInUniform_Constant;
+SamplerState S0 : register(s0, space8);
+Texture2D<float4> T0 : register(t0, space8);
+Texture2D<float4> T1 : register(t1, space8);
+
+static float4 SV_POSITION;
+static float2 TEXCOORD;
+static float4 SV_TARGET;
+
+struct SPIRV_Cross_Input {
+  float4 SV_POSITION : SV_POSITION0;
+  float2 TEXCOORD : TEXCOORD;
 };
 
-cbuffer ShaderInstance_PerInstance : register(b0, space8) {
-  ShaderInstance_PerInstance_Constants cShaderInstance_PerInstance_Constants;
+struct SPIRV_Cross_Output {
+  float4 SV_TARGET : SV_Target0;
 };
 
-// Input signature:
-//
-// Name                 Index   Mask Register SysValue  Format   Used
-// -------------------- ----- ------ -------- -------- ------- ------
-// SV_POSITION              0   xyzw        0      POS   float
-// TEXCOORD                 0   xy          1     NONE   float   xy
-struct PSInput {
-  float4 position : SV_POSITION;  // Screen-space position       dcl_output o0.xyzw
-  float2 texcoord : TEXCOORD0;    // Texture coordinates         dcl_input_ps linear v1.xy
-};
+int cvt_f32_i32(float v) {
+  return isnan(v) ? 0 : ((v < (-2147483648.0f)) ? int(0x80000000) : ((v > 2147483520.0f) ? 2147483647 : int(v)));
+}
 
-void main(PSInput input, out float4 SV_TARGET: SV_TARGET) {
-  float4 r0, r1, r2, r3, r4;
+float dp3_f32(float3 a, float3 b) {
+  precise float _92 = a.x * b.x;
+  return mad(a.z, b.z, mad(a.y, b.y, _92));
+}
 
-  r0.xyzw = Texture.Sample(Sampler, input.texcoord);                                                    // sample r0.xyzw, v1.xyxx, T0[0].xyzw, S0[0]
-  r1.xyz = PerceptualTexture.Sample(Sampler, input.texcoord).xyz;                                       // sample r1.xyz, v1.xyxx, T1[1].xyzw, S0[0]
-  r0 = saturate(r0);                                                                                    // mov_sat r0.xyzw, r0.xyzw
-  r0.xyz = sqrt(r0.xyz);                                                                                // sqrt r0.xyz, r0.xyzx
-  r0.xyz = pow(r0.xyz, cShaderInstance_PerInstance_Constants.mInUniform_Constant.mKjpGammaSettings.x);  // r0.xyz = exp(log(r0.xyz) * CB0[0][1].x);
+void frag_main() {
+  SV_TARGET.w = 1.0f;
 
-  // Perform an AND operation between r0 and r2 to mask the results
-  r2.xyz = (float3(0.0, 0.0, 0.0) < r0.xyz) ? 1.0f : 0.0f;  // lt r2.xyz, l(0.000000, 0.000000, 0.000000, 0.000000), r0.xyzx
-  r0.xyz *= r2.xyz;                                         // and r0.xyz, r0.xyzx, r2.xyzx
-  // uint mask previously r1.w in asm
-  uint mask = uint(cShaderInstance_PerInstance_Constants.mInUniform_Constant.mOETFSettings.w);  // ftoi r1.w, CB0[0][0].w
-  r2.xy = (mask == uint2(1, 2)) ? float2(1.0, 1.0) : float2(0.0, 0.0);                          // ieq r2.xy, r1.wwww, l(1, 2, 0, 0)
-
-  if (r2.x != 0) {  // Handle OETF processing for mask 1/2 case
-    r3.xyz = (r1.xyz < float3(0.040450, 0.040450, 0.040450)) ? float3(1.0, 1.0, 1.0) : float3(0.0, 0.0, 0.0);
-    r2.zw = r1.xy * float2(0.077399, 0.077399);                                            // mul r2.zw, r1.xxxy, l(0.000000, 0.000000, 0.077399, 0.077399)
-    r4.xy = r1.xy * float2(0.947867, 0.947867) + float2(0.052133, 0.052133);               // mad r4.xy, r1.xyxx, l(0.947867, 0.947867, 0.000000, 0.000000), l(0.052133, 0.052133, 0.000000, 0.000000)
-    r4.xy = pow(r4.xy, 2.4);                                                               // r4.xy = exp(log(r4.xy) * 2.4);
-    r2.zw = (r3.x != 0) ? r2.zw : r4.xy;                                                   // movc r2.zw, r3.xxxy, r2.zzzw, r4.xxxy
-    r3.z = r1.z * 0.077399;                                                                // mul r3.x, r1.z, l(0.077399)
-    r3.y = r1.z * 0.947867 + 0.052133;                                                     // mad r3.y, r1.z, l(0.947867), l(0.052133)
-    r3.y = pow(r3.y, 2.4);                                                                 // r3.y = exp(log(r3.y) * 2.4);
-    r3.x = (r3.z != 0) ? r3.x : r3.y;                                                      // movc r3.x, r3.z, r3.x, r3.y
-    r3.y = 1 / cShaderInstance_PerInstance_Constants.mInUniform_Constant.mOETFSettings.x;  // div r3.y, l(1.000000, 1.000000, 1.000000, 1.000000), CB0[0][0].x
-    // r4.xy = log(r2.zw);    // log r4.xy, r2.zwzz
-    // r4.z = log(r3.x);    // log r4.z, r3.x
-    // r3.xyz = r3.y * r4.xyz;    // mul r3.xyz, r3.yyyy, r4.xyzx
-    // r1.xyz = exp(r3.xyz);   // exp r1.xyz, r3.xyzx
-    r1.xyz = pow(float3(r2.zw, r3.x), r3.y);
+  float2 _122 = float2(TEXCOORD.x, TEXCOORD.y);
+  float4 _125 = T0.Sample(S0, _122);
+  float4 _132 = T1.Sample(S0, _122);
+  float _133 = _132.x;
+  float _134 = _132.y;
+  float _135 = _132.z;
+  float _140 = sqrt(clamp(_125.x, 0.0f, 1.0f));
+  float _141 = sqrt(clamp(_125.y, 0.0f, 1.0f));
+  float _142 = sqrt(clamp(_125.z, 0.0f, 1.0f));
+  uint _162 = uint(cvt_f32_i32(CB0_m1.y));
+  bool _163 = _162 == 1u;
+  bool _164 = _162 == 2u;
+  float _250;
+  float _251;
+  float _252;
+  if (_163) {
+    float _191 = 1.0f / CB0_m0.x;
+    _250 = exp2(_191 * log2((_135 < 0.040449999272823333740234375f) ? (_135 * 0.077399380505084991455078125f) : exp2(log2(mad(_135, 0.94786727428436279296875f, 0.0521326996386051177978515625f)) * 2.400000095367431640625f)));
+    _251 = exp2(_191 * log2((_134 < 0.040449999272823333740234375f) ? (_134 * 0.077399380505084991455078125f) : exp2(log2(mad(_134, 0.94786727428436279296875f, 0.0521326996386051177978515625f)) * 2.400000095367431640625f)));
+    _252 = exp2(log2((_133 < 0.040449999272823333740234375f) ? (_133 * 0.077399380505084991455078125f) : exp2(log2(mad(_133, 0.94786727428436279296875f, 0.0521326996386051177978515625f)) * 2.400000095367431640625f)) * _191);
   } else {
-    uint maskAlt = 2;                                                                            // ieq r1.w, r1.w, l(2)
-    if (mask == maskAlt) {                                                                       // if_nz r1.w
-      r3.xyz = pow(r1.xyz, 0.012683);                                                            // r3.xyz = exp(log(r1.xyz) * 0.012683));
-      r4.xyz = r3.xyz - 0.835938;                                                                // add r4.xyz, r3.xyzx, l(-0.835938, -0.835938, -0.835938, 0.000000)
-      r3.xyz = -r3.xyz * 18.687500 + 18.851563;                                                  // mad r3.xyz, -r3.xyzx, l(18.687500, 18.687500, 18.687500, 0.000000), l(18.851563, 18.851563, 18.851563, 0.000000)
-      r3.xyz = r4.xyz / r3.xyz;                                                                  // div r3.xyz, r4.xyzx, r3.xyzx
-      r3.xyz = max(0, r3.xyz);                                                                   // max r3.xyz, r3.xyzx, l(0.000000, 0.000000, 0.000000, 0.000000)
-      r2.zw = 1.0 / cShaderInstance_PerInstance_Constants.mInUniform_Constant.mOETFSettings.xy;  // div r2.zw, l(1.000000, 1.000000, 1.000000, 1.000000), CB0[0][0].xxxy
-      r3.xyz = pow(r3.xyz, r2.z);                                                                // r3.xyz = exp(log(r3.xyz) * r2.z);
-      r3.xyz *= r2.w;                                                                            // mul r3.xyz, r2.wwww, r3.xyzx
-      r1.x = dot(float3(1.660490, -0.587641, -0.072850), r3.xyz);                                // dp3 r1.x, l(1.660490, -0.587641, -0.072850, 0.000000), r3.xyzx
-      r1.y = dot(float3(-0.124550, 1.132900, -0.008349), r3.xyz);                                // dp3 r1.y, l(-0.124550, 1.132900, -0.008349, 0.000000), r3.xyzx
-      r1.z = dot(float3(-0.018151, -0.100579, 1.118730), r3.xyz);                                // dp3 r1.z, l(-0.018151, -0.100579, 1.118730, 0.000000), r3.xyzx
+    float _247;
+    float _248;
+    float _249;
+    if (_164) {
+      float _209 = exp2(log2(_133) * 0.0126833133399486541748046875f);
+      float _210 = exp2(log2(_134) * 0.0126833133399486541748046875f);
+      float _211 = exp2(log2(_135) * 0.0126833133399486541748046875f);
+      float _229 = 1.0f / CB0_m0.x;
+      float _230 = 1.0f / CB0_m0.y;
+      float3 _243 = float3(exp2(_229 * log2(max((_209 - 0.8359375f) / mad(_209, -18.6875f, 18.8515625f), 0.0f))) * _230, exp2(_229 * log2(max((_210 - 0.8359375f) / mad(_210, -18.6875f, 18.8515625f), 0.0f))) * _230, exp2(_229 * log2(max((_211 - 0.8359375f) / mad(_211, -18.6875f, 18.8515625f), 0.0f))) * _230);
+      _247 = dp3_f32(float3(-0.01815080083906650543212890625f, -0.100579001009464263916015625f, 1.11872994899749755859375f), _243);
+      _248 = dp3_f32(float3(-0.12454999983310699462890625f, 1.1328999996185302734375f, -0.008349419571459293365478515625f), _243);
+      _249 = dp3_f32(float3(1.6604900360107421875f, -0.5876410007476806640625f, -0.0728498995304107666015625f), _243);
+    } else {
+      _247 = _135;
+      _248 = _134;
+      _249 = _133;
     }
+    _250 = _247;
+    _251 = _248;
+    _252 = _249;
   }
-
-  r0.w = 1 - r0.w;                                                                                       // add r0.w, -r0.w, l(1.000000)
-  r1.xyz *= r0.w;                                                                                        // mul r1.xyz, r0.wwww, r1.xyzx
-  r0.xyz = r0.xyz * r0.xyz + r1.xyz;                                                                     // mad r0.xyz, r0.xyzx, r0.xyzx, r1.xyzx
-  r0.w = (cShaderInstance_PerInstance_Constants.mInUniform_Constant.mOETFSettings.z > 0.0) ? 1.0 : 0.0;  // lt r0.w, l(0.000000), CB0[0][0].z
-  r0.w = (r0.w != 0.0 && r2.y != 0.0) ? 1.0 : 0.0;                                                       // and r0.w, r0.w, r2.y
-
-  if (r0.w != 0) {
-    r1.xyz = (r0.xyz < float3(0.009300, 0.009300, 0.009300)) ? float3(1.0, 1.0, 1.0) : float3(0.0, 0.0, 0.0);  // lt r1.xyz, r0.xyzx, l(0.009300, 0.009300, 0.009300, 0.000000)
-
-    // double check swizzle here
-    r3.xyzw = float4(r0.xyzx * float4(0.333333, 0.333333, 0.333333, 4.30667));  // mul r3.xyzw, r0.xyzx, l(0.333333, 0.333333, 0.333333, 4.306667)
-
-    r3.xyz = pow(r3.xyz, 1 / 2.4);           // exp(log(r3.xyz) * (1 / 2.4));
-    r3.xyz = r3.xyz * 1.055000 - 0.055000;   // mad r3.xyz, r3.xyzx, l(1.055000, 1.055000, 1.055000, 0.000000), l(-0.055000, -0.055000, -0.055000, 0.000000)
-    r0.w = (r1.x != 0) ? r3.w : r3.x;        // movc r0.w, r1.x, r3.w, r3.x
-    r1.xw = r0.yz * 4.306667;                // mul r1.xw, r0.yyyz, l(4.306667, 0.000000, 0.000000, 4.306667)
-    r1.xy = (r1.yz != 0.0) ? r1.xw : r3.yz;  // movc r1.xy, r1.yzyy, r1.xwxx, r3.yzyy
-    // log r3.x, r0.w
-    // log r3.yz, r1.xxyx
-    // mul r1.xyz, r3.xyzx, l(2.200000, 2.200000, 2.200000, 0.000000)
-    // exp r1.xyz, r1.xyzx
-
-    r1.xyz = pow(float3(r0.w, r1.xy), 2.2);  // r1.xyz = exp(log(float3(r0.w, r1.xy) * 2.2));
-
-    r1.xyz *= 3.0;                               // mul r1.xyz, r1.xyzx, l(3.000000, 3.000000, 3.000000, 0.000000)
-    r3.xyz = (r0.xyz >= 0.0) ? 1.0 : 0.0;        // ge r3.xyz, r0.xyzx, l(0.000000, 0.000000, 0.000000, 0.000000)
-    r4.xyz = (r0.xyz < 3.0) ? 1.0 : 0.0;         // lt r4.xyz, r0.xyzx, l(3.000000, 3.000000, 3.000000, 0.000000)
-    r3.xyz = r3.xyz * r4.xyz;                    // and r3.xyz, r3.xyzx, r4.xyzx
-    r0.xyz = (r3.xyz != 0.0) ? r1.xyz : r0.xyz;  // movc r0.xyz, r3.xyzx, r1.xyzx, r0.xyzx
-  }
-  if (r2.x != 0) {
-    // this code saves log(r0.xyz) in r1.xyz and reuses it
-
-    // log r1.xyz, r0.xyzx
-    // mul r1.xyz, r1.xyzx, CB0[0][0].xxxx
-    // exp r2.xzw, r1.xxyz
-    r2.xzw = pow(r0.xyz, cShaderInstance_PerInstance_Constants.mInUniform_Constant.mOETFSettings.x);  // r2.xzw = exp(log(r0.xyz) * CB0[0][0].x);
-    r3.xyz = (r2.xzw < 0.003100) ? 1.0 : 0.0;                                                         // lt r3.xyz, r2.xzwx, l(0.003100, 0.003100, 0.003100, 0.000000)
-    r2.xzw = r2.xzw * 12.920000;                                                                      // mul r2.xzw, r2.xxzw, l(12.920000, 0.000000, 12.920000, 12.920000)
-
-    // mul r1.xyz, r1.xyzx, l(0.416667, 0.416667, 0.416667, 0.000000)
-    // exp r1.xyz, r1.xyzx
-    r1.xyz = pow(r0.xyz, 1.0 / 2.4);  // exp(log(r0.xyz) * (1 / 2.4));
-
-    r1.xyz = r1.xyz * 1.055 - 0.055;             // mad r1.xyz, r1.xyzx, l(1.055000, 1.055000, 1.055000, 0.000000), l(-0.055000, -0.055000, -0.055000, 0.000000)
-    r0.xyz = (r3.xyz != 0.0) ? r1.xyz : r0.xyz;  // movc r0.xyz, r3.xyzx, r1.xyzx, r0.xyzx
+  float _253 = 1.0f - clamp(_125.w, 0.0f, 1.0f);
+  float _257 = (_140 > 0.0f) ? exp2(log2(_140) * CB0_m2.x) : 0.0f;
+  float _258 = (_141 > 0.0f) ? exp2(log2(_141) * CB0_m2.x) : 0.0f;
+  float _259 = (_142 > 0.0f) ? exp2(log2(_142) * CB0_m2.x) : 0.0f;
+  float _263 = (_253 * _252) + (_257 * _257);
+  float _264 = (_258 * _258) + (_251 * _253);
+  float _265 = (_259 * _259) + (_253 * _250);
+  float _320;
+  float _321;
+  float _322;
+  if (_164 && (CB0_m1.x > 0.0f)) {
+    _320 = ((_265 < 3.0f) && (_265 >= 0.0f)) ? (exp2(log2((_265 < 0.009300000034272670745849609375f) ? (_265 * 4.306666851043701171875f) : mad(exp2(log2(_265 * 0.3333333432674407958984375f) * 0.4166666567325592041015625f), 1.05499994754791259765625f, -0.054999999701976776123046875f)) * 2.2000000476837158203125f) * 3.0f) : _265;
+    _321 = ((_264 < 3.0f) && (_264 >= 0.0f)) ? (exp2(log2((_264 < 0.009300000034272670745849609375f) ? (_264 * 4.306666851043701171875f) : mad(exp2(log2(_264 * 0.3333333432674407958984375f) * 0.4166666567325592041015625f), 1.05499994754791259765625f, -0.054999999701976776123046875f)) * 2.2000000476837158203125f) * 3.0f) : _264;
+    _322 = ((_263 >= 0.0f) && (_263 < 3.0f)) ? (exp2(log2((_263 < 0.009300000034272670745849609375f) ? (_263 * 4.306666851043701171875f) : mad(exp2(log2(_263 * 0.3333333432674407958984375f) * 0.4166666567325592041015625f), 1.05499994754791259765625f, -0.054999999701976776123046875f)) * 2.2000000476837158203125f) * 3.0f) : _263;
   } else {
-    if (r2.y != 0) {
-      r0.xyz = renodx::color::correct::GammaSafe(r0.xyz);  // linearize with 2.2
-      r1.xyz = renodx::color::bt2020::from::BT709(r0.xyz);
-      // dev attempt at fixing gamma mismatch, weird stretching with paper white and gamma
-      // r1.xyz = r1.xyz * cShaderInstance_PerInstance_Constants.mInUniform_Constant.mOETFSettings.y;  // mul r1.xyz, r1.xyzx, CB0[0][0].yyyy
-      // r1.xyz = pow(r1.xyz, cShaderInstance_PerInstance_Constants.mInUniform_Constant.mOETFSettings.x);    // r1.xyz = exp(log(r1.xyz) * CB0[0][0].x);
-      r1.xyz *= RENODX_GRAPHICS_WHITE_NITS;  // game sets UI Brightness to 300 nits
-      r0.xyz = renodx::color::pq::from::BT2020((r1.xyz) / 10000.f);
-    }
+    _320 = _265;
+    _321 = _264;
+    _322 = _263;
   }
-  SV_TARGET.xyzw = float4(r0.xyz, 1.0);
-  return;
+  float _398;
+  float _399;
+  float _400;
+  if (_163) {
+    float _331 = log2(_322) * CB0_m0.x;
+    float _332 = log2(_321) * CB0_m0.x;
+    float _333 = log2(_320) * CB0_m0.x;
+    float _334 = exp2(_331);
+    float _335 = exp2(_332);
+    float _336 = exp2(_333);
+    _398 = (_336 < 0.00310000008903443813323974609375f) ? (_336 * 12.9200000762939453125f) : mad(exp2(_333 * 0.4166666567325592041015625f), 1.05499994754791259765625f, -0.054999999701976776123046875f);
+    _399 = (_335 < 0.00310000008903443813323974609375f) ? (_335 * 12.9200000762939453125f) : mad(exp2(_332 * 0.4166666567325592041015625f), 1.05499994754791259765625f, -0.054999999701976776123046875f);
+    _400 = (_334 < 0.00310000008903443813323974609375f) ? (_334 * 12.9200000762939453125f) : mad(exp2(_331 * 0.4166666567325592041015625f), 1.05499994754791259765625f, -0.054999999701976776123046875f);
+  } else {
+    float _395;
+    float _396;
+    float _397;
+    if (_164) {
+      float3 _357 = float3(_322, _321, _320);
+
+#if 1
+      if (GenerateOutput(_357, SV_TARGET)) {
+        return;
+      }
+#endif
+      float _374 = exp2(CB0_m0.x * log2(dp3_f32(float3(0.627403914928436279296875f, 0.3292830288410186767578125f, 0.0433130674064159393310546875f), _357) * CB0_m0.y));
+      float _375 = exp2(log2(dp3_f32(float3(0.069097287952899932861328125f, 0.9195404052734375f, 0.01136231608688831329345703125f), _357) * CB0_m0.y) * CB0_m0.x);
+      float _376 = exp2(log2(dp3_f32(float3(0.01639143936336040496826171875f, 0.08801330626010894775390625f, 0.895595252513885498046875f), _357) * CB0_m0.y) * CB0_m0.x);
+      _395 = exp2(log2(mad(_376, 18.8515625f, 0.8359375f) / mad(_376, 18.6875f, 1.0f)) * 78.84375f);
+      _396 = exp2(log2(mad(_375, 18.8515625f, 0.8359375f) / mad(_375, 18.6875f, 1.0f)) * 78.84375f);
+      _397 = exp2(log2(mad(_374, 18.8515625f, 0.8359375f) / mad(_374, 18.6875f, 1.0f)) * 78.84375f);
+    } else {
+      _395 = _320;
+      _396 = _321;
+      _397 = _322;
+    }
+    _398 = _395;
+    _399 = _396;
+    _400 = _397;
+  }
+  SV_TARGET.x = _400;
+  SV_TARGET.y = _399;
+  SV_TARGET.z = _398;
+}
+
+SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {
+  TEXCOORD = stage_input.TEXCOORD;
+  frag_main();
+  SPIRV_Cross_Output stage_output;
+  stage_output.SV_TARGET = SV_TARGET;
+  return stage_output;
 }

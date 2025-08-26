@@ -289,26 +289,29 @@ void frag_main() {
   float4 mHDRCompressionControl = CB0_m[7u];
   float3 untonemapped = float3(_684, _685, _686);
   float3 tonemapped;
-
+  
+#if 1
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    mHDRCompressionParam2.z = 100.f;
-    mHDRCompressionParam2.w = 100.f;
+    mHDRCompressionParam2.z = 999.f;
+    mHDRCompressionParam2.w = 999.f;
     mHDRCompressionParam1.x = 100.f;
   }
+#endif
 
   // some tonemapping stuff
   if (mHDRCompressionControl.x > 0.5f) {
     _722 = (_684 < mHDRCompressionParam2.z) ? mad(mHDRCompressionParam1.y, _684, mHDRCompressionParam1.z) : (mHDRCompressionParam2.y - (mHDRCompressionParam1.w / (mHDRCompressionParam2.x + _684)));
     _723 = (_685 < mHDRCompressionParam2.z) ? mad(mHDRCompressionParam1.y, _685, mHDRCompressionParam1.z) : (mHDRCompressionParam2.y - (mHDRCompressionParam1.w / (mHDRCompressionParam2.x + _685)));
     _724 = (_686 < mHDRCompressionParam2.z) ? mad(mHDRCompressionParam1.y, _686, mHDRCompressionParam1.z) : (mHDRCompressionParam2.y - (mHDRCompressionParam1.w / (mHDRCompressionParam2.x + _686)));
-    if (RENODX_TONE_MAP_TYPE != 0.f) {
-      tonemapped = ToneMapForLUT(_722, _723, _724);
-    }
   } else {
     _722 = _684;
     _723 = _685;
     _724 = _686;
   }
+
+#if 1
+  tonemapped = ToneMapForLUT(_722, _723, _724);
+#endif
 
   // add light shafts
   float _747 = sqrt(mad(CB0_m[1u].x * (_468.x * CB0_m[0u].z), clamp(1.0f - _724, 0.0f, 1.0f), _724));
