@@ -250,7 +250,7 @@ void OnPresetOff() {
       {"ToneMapPeakNits", 203.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
-      {"ToneMapScaling", 0.f},
+      {"ToneMapScaling", 1.f},
       {"ToneMapHueCorrection", 0.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
@@ -261,6 +261,15 @@ void OnPresetOff() {
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
   });
+}
+
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+  if (peak.has_value()) {
+    settings[1]->default_value = peak.value();
+  } else {
+    settings[1]->default_value = 1000.f;
+  }
 }
 
 }  // namespace
@@ -277,8 +286,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::expected_constant_buffer_space = 50;
       renodx::mods::shader::expected_constant_buffer_index = 0;
 
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // peak nits
+
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // peak nits
       reshade::unregister_addon(h_module);
       break;
   }
