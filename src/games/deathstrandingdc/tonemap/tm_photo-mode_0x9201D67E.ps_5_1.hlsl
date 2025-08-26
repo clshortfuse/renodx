@@ -302,26 +302,27 @@ void frag_main() {
   float3 tonemapped;
 
 #if 1
-  mHDRCompressionParam2.z = 100.f;
-  mHDRCompressionParam2.w = 100.f;
-  mHDRCompressionParam1.x = 100.f;
-
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    mHDRCompressionParam2.z = 999.f;
+    mHDRCompressionParam2.w = 999.f;
+    mHDRCompressionParam1.x = 100.f;
+  }
 #endif
 
   if (mHDRCompressionControl.x > 0.5f) {
     _766 = (mHDRCompressionParam2.z > _728) ? mad(mHDRCompressionParam1.y, _728, mHDRCompressionParam1.z) : (mHDRCompressionParam2.y - (mHDRCompressionParam1.w / (_728 + mHDRCompressionParam2.x)));
     _767 = (mHDRCompressionParam2.z > _729) ? mad(mHDRCompressionParam1.y, _729, mHDRCompressionParam1.z) : (mHDRCompressionParam2.y - (mHDRCompressionParam1.w / (_729 + mHDRCompressionParam2.x)));
     _768 = (mHDRCompressionParam2.z > _730) ? mad(mHDRCompressionParam1.y, _730, mHDRCompressionParam1.z) : (mHDRCompressionParam2.y - (mHDRCompressionParam1.w / (_730 + mHDRCompressionParam2.x)));
-
-#if 1
-    tonemapped = ToneMapForLUT(_766, _767, _768);
-#endif
-
   } else {
     _766 = _728;
     _767 = _729;
     _768 = _730;
   }
+
+#if 1
+  tonemapped = ToneMapForLUT(_766, _767, _768);
+#endif
+
   float _791 = sqrt(mad((_512.x * CB0_m[0u].z) * CB0_m[1u].x, clamp(1.0f - _768, 0.0f, 1.0f), _768));
   float _792 = sqrt(mad(clamp(1.0f - _767, 0.0f, 1.0f), CB0_m[1u].y * (_512.y * CB0_m[0u].z), _767));
   float _793 = sqrt(mad(clamp(1.0f - _766, 0.0f, 1.0f), CB0_m[1u].z * (_512.z * CB0_m[0u].z), _766));
