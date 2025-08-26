@@ -1,4 +1,4 @@
-#include "./common.hlsli"
+#include "../common.hlsli"
 
 cbuffer CB0_buf : register(b0, space8) {
   float2 CB0_m0 : packoffset(c0);
