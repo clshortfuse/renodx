@@ -298,14 +298,12 @@ void frag_main() {
   float4 mHDRCompressionParam2 = CB0_m[13u];
   float4 mHDRCompressionParam3 = CB0_m[14u];
   float4 mHDRCompressionControl = CB0_m[7u];
-  float3 untonemapped = float3(_728, _729, _730);
-  float3 tonemapped;
 
 #if 1
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    mHDRCompressionParam2.z = 999.f;
-    mHDRCompressionParam2.w = 999.f;
-    mHDRCompressionParam1.x = 100.f;
+    mHDRCompressionParam2.z = renodx::math::FLT32_MAX;
+    mHDRCompressionParam2.w = renodx::math::FLT32_MAX;
+    mHDRCompressionParam1.x = renodx::math::FLT32_MAX;
   }
 #endif
 
@@ -319,8 +317,9 @@ void frag_main() {
     _768 = _730;
   }
 
-#if 1
-  tonemapped = ToneMapForLUT(_766, _767, _768);
+#if 1  // account for flipped channels
+  float3 untonemapped, tonemapped;
+  tonemapped = ToneMapForLUT(_768, _767, _766, untonemapped);
 #endif
 
   float _791 = sqrt(mad((_512.x * CB0_m[0u].z) * CB0_m[1u].x, clamp(1.0f - _768, 0.0f, 1.0f), _768));
@@ -366,8 +365,8 @@ void frag_main() {
     _933 = _899;
     _934 = _898;
   }
-#if 1
-  UpgradeToneMapApplyDisplayMapAndScale(untonemapped, tonemapped, _932, _933, _934, CB0_m[14u].z);
+#if 1  // account for flipped channels
+  UpgradeToneMapApplyDisplayMapAndScale(untonemapped, tonemapped, _934, _933, _932);
 #endif
   uint _938 = uint(cvt_f32_i32(CB0_m[10u].w));
   float _1016;

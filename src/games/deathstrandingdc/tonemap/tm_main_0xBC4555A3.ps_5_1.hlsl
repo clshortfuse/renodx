@@ -287,14 +287,11 @@ void frag_main() {
   float4 mHDRCompressionParam2 = CB0_m[13u];
   float4 mHDRCompressionParam3 = CB0_m[14u];
   float4 mHDRCompressionControl = CB0_m[7u];
-  float3 untonemapped = float3(_684, _685, _686);
-  float3 tonemapped;
-  
 #if 1
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    mHDRCompressionParam2.z = 999.f;
-    mHDRCompressionParam2.w = 999.f;
-    mHDRCompressionParam1.x = 100.f;
+    mHDRCompressionParam2.z = renodx::math::FLT32_MAX;
+    mHDRCompressionParam2.w = renodx::math::FLT32_MAX;
+    mHDRCompressionParam1.x = renodx::math::FLT32_MAX;
   }
 #endif
 
@@ -309,8 +306,9 @@ void frag_main() {
     _724 = _686;
   }
 
-#if 1
-  tonemapped = ToneMapForLUT(_722, _723, _724);
+#if 1  // account for flipped channels
+  float3 untonemapped, tonemapped;
+  tonemapped = ToneMapForLUT(_724, _723, _722, untonemapped);
 #endif
 
   // add light shafts
@@ -324,7 +322,7 @@ void frag_main() {
   float _783;
   float _784;
 
-  // sample LUT
+  // sample gamma 2 LUT
   if (!((_602 && (!(_759 <= 1.0f))) || ((_602 && (!(_757 <= 1.0f))) || (_602 && (!(_758 <= 1.0f)))))) {
     float4 _778 = Rgb3dLookupTexture.SampleLevel(S1, float3(_757, _758, _759), 0.0f);
     _782 = _778.z;
@@ -344,7 +342,7 @@ void frag_main() {
   float _811 = (_794 > 0.0f) ? exp2(log2(_794) * CB0_m[11u].x) : 0.0f;
   float _812 = (_795 > 0.0f) ? exp2(log2(_795) * CB0_m[11u].x) : 0.0f;
 
-  // clamp for some reason
+  // clamp for some reason, back to linear
   float _818 = min(mHDRCompressionParam1.x, _810 * _810);
   float _819 = min(mHDRCompressionParam1.x, _811 * _811);
   float _820 = min(mHDRCompressionParam1.x, _812 * _812);
@@ -368,8 +366,9 @@ void frag_main() {
     _890 = _854;
   }
 
-  UpgradeToneMapApplyDisplayMapAndScale(untonemapped, tonemapped, _890, _889, _888, CB0_m[14u].z);
-
+#if 1  // account for flipped channels
+  UpgradeToneMapApplyDisplayMapAndScale(untonemapped, tonemapped, _890, _889, _888);
+#endif
   uint _894 = uint(cvt_f32_i32(CB0_m[10u].w));
   float _972;
   float _973;

@@ -125,17 +125,53 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
   return color;
 }
 
-float3 ToneMapForLUT(inout float r, inout float g, inout float b) {
-  if (RENODX_TONE_MAP_TYPE == 0.f) return float3(r, g, b);
-  float3 color = float3(r, g, b);
+float3 HighlightSaturation(float3 bt709, float y, float highlight_saturation = 0.f) {
+  float3 perceptual = renodx::color::oklab::from::BT709(bt709);
 
-  float y_in = renodx::color::y::from::BT709(color);
-  float y_out = renodx::tonemap::ReinhardScalable(y_in, 1.f, 0.f, 0.18f, 0.18f);
-  color = lerp(color, renodx::color::correct::Luminance(color, y_in, y_out), saturate(color / 0.18f));
+  float percent_max = saturate(y * 100.f / 10000.f);
+  // positive = 1 to 0, negative = 1 to 2
+  float blowout_strength = 100.f;
+  float blowout_change = pow(1.f - percent_max, blowout_strength * abs(highlight_saturation));
+  if (highlight_saturation < 0) {
+    blowout_change = (2.f - blowout_change);
+  }
+  perceptual.yz *= blowout_change;
 
-  r = color.r, g = color.g, b = color.b;
-
+  float3 color = renodx::color::bt709::from::OkLab(perceptual);
+  color = renodx::color::bt709::clamp::AP1(color);
   return color;
+}
+
+/// Applies Exponential Roll-Off tonemapping using the maximum channel.
+/// Used to fit the color into a 0–output_max range for SDR LUT compatibility.
+float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.5f, float output_max = 1.f) {
+  // color = min(color, 100.f);
+  float peak = max(color.r, max(color.g, color.b));
+  peak = min(peak, 100.f);
+  float log_peak = log2(peak);
+
+  // Apply exponential shoulder in log space
+  float log_mapped = renodx::tonemap::ExponentialRollOff(log_peak, log2(rolloff_start), log2(output_max));
+  float scale = exp2(log_mapped - log_peak);  // How much to compress all channels
+
+  return min(output_max, color * scale);
+}
+
+float3 ToneMapForLUT(inout float r, inout float g, inout float b, inout float3 untonemapped) {
+  untonemapped = max(0, float3(r, g, b));
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    return untonemapped;
+  }
+
+  float y_in = renodx::color::y::from::BT709(untonemapped);
+  float y_out = renodx::tonemap::ExponentialRollOff(y_in, 0.f, 1.f);
+  float3 tonemapped = renodx::color::correct::Luminance(untonemapped, y_in, y_out);
+  tonemapped = lerp(untonemapped, tonemapped, saturate(y_in / 0.8f));
+  tonemapped = min(tonemapped, 1.f);
+
+  r = tonemapped.r, g = tonemapped.g, b = tonemapped.b;
+
+  return tonemapped;
 }
 
 float3 ApplyDisplayMap(float3 undisplaymapped) {
@@ -162,7 +198,8 @@ float3 ApplyDisplayMap(float3 undisplaymapped) {
     } else {
       float y_in = renodx::color::y::from::BT709(displaymapped);
       float y_out = renodx::tonemap::ReinhardScalable(y_in, peak_white, 0.f, 0.5f, 0.5f);
-      displaymapped = lerp(displaymapped, renodx::color::correct::Luminance(displaymapped, y_in, y_out), saturate(displaymapped));
+      // float y_out = renodx::tonemap::ExponentialRollOff(y_in, 1.f, peak_white);
+      displaymapped = lerp(displaymapped, renodx::color::correct::Luminance(displaymapped, y_in, y_out), saturate(y_in));
     }
   }
   displaymapped = ApplySaturationBlowoutHueCorrectionHighlightSaturation(displaymapped, undisplaymapped, y, cg_config);
@@ -208,12 +245,14 @@ float3 ScaleScene(float3 color_scene) {
 }
 
 void UpgradeToneMapApplyDisplayMapAndScale(float3 untonemapped, float3 tonemapped,
-                                           inout float graded_r, inout float graded_g, inout float graded_b,
-                                           float peak_white) {
+                                           inout float graded_r, inout float graded_g, inout float graded_b) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return;
-  float3 undisplaymapped = renodx::tonemap::UpgradeToneMap(untonemapped.bgr, tonemapped.bgr, float3(graded_r, graded_g, graded_b), 1.f);
+  float3 undisplaymapped = renodx::tonemap::UpgradeToneMap(untonemapped, tonemapped, float3(graded_r, graded_g, graded_b), 1.f);
 
   float3 displaymapped = ApplyDisplayMap(undisplaymapped);
+
+  // displaymapped = float3(graded_r, graded_g, graded_b);  // preserve grading
+  // displaymapped = tonemapped;  // preserve grading
 
   displaymapped = ScaleScene(displaymapped);
 
