@@ -13,20 +13,20 @@ cbuffer CB0_buf : register(b0, space8) {
   float4 CB0_m[20] : packoffset(c0);
 };
 
-SamplerState S0 : register(s1, space8);
-SamplerState S1 : register(s2, space8);
-SamplerState S2 : register(s3, space8);
-Texture2D<float4> T0 : register(t4, space8);
-Texture2D<float4> T1 : register(t5, space8);
-Texture2D<float4> T2 : register(t6, space8);
-Texture2D<float4> T3 : register(t7, space8);
-Texture2D<float4> T4 : register(t8, space8);
-Texture2D<float4> T5 : register(t9, space8);
-Texture2D<float4> T6 : register(t10, space8);
-Texture2D<float4> T7 : register(t11, space8);
-Texture2D<float4> T8 : register(t12, space8);
-Texture3D<float4> T9 : register(t13, space8);
-RWBuffer<float4> U0 : register(u14, space8);
+SamplerState S0 : register(s0, space8);
+SamplerState S1 : register(s1, space8);
+SamplerState S2 : register(s2, space8);
+Texture2D<float4> T0 : register(t0, space8);
+Texture2D<float4> T1 : register(t1, space8);
+Texture2D<float4> T2 : register(t2, space8);
+Texture2D<float4> T3 : register(t3, space8);
+Texture2D<float4> T4 : register(t4, space8);
+Texture2D<float4> T5 : register(t5, space8);
+Texture2D<float4> T6 : register(t6, space8);
+Texture2D<float4> T7 : register(t7, space8);
+Texture2D<float4> T8 : register(t8, space8);
+Texture3D<float4> T9 : register(t9, space8);
+RWBuffer<float4> U0 : register(u0, space8);
 
 static float4 SV_POSITION;
 static float2 TEXCOORD;
