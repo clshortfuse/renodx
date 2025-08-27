@@ -35,19 +35,7 @@ void main(
 
   r0.xyz = SceneTexture.Sample(SceneSampler, v1.xy).xyz;
   int output_mode = (int)mInUniformParams.mOETFSettingsPQ.w;
-  // const float peak_white = 100.f;
   const float peak_white = mInUniformParams.mHDRCompressionParam3.x;
-
-  // r0.rgb = renodx::color::pq::DecodeSafe(r0.rgb);
-  // // const float peak_white = 400.f;
-  // // const float diffuse_white = 100.f;
-  // float3 untonemapped = r0.rgb;
-  // // r0.rgb = exp2(renodx::tonemap::ExponentialRollOff(log2(untonemapped), log2(peak_white * 0.25f), log2(peak_white)));
-  // // renodx::color::correct::Hue(r0.rgb, untonemapped);
-  // o0.rgb = renodx::color::pq::EncodeSafe(r0.rgb);
-
-  // o0.rgb = renodx::tonemap::ExponentialRollOff(r0.rgb, log2(peak_white * 0.375f), log2(peak_white));
-  // return;
 
   if (output_mode == 0) {
     r1.rgb = renodx::color::srgb::DecodeSafe(r0.rgb);
@@ -70,8 +58,6 @@ void main(
       r1.xyz = r2.xxx * r1.xyz;
       r1.xyz = exp2(r1.xyz);
       r1.xyz = r1.xyz * r2.yyy;
-
-      // r1.rgb = renodx::color::pq::DecodeSafe(r0.rgb, 1.f);
 
       r0.rgb = renodx::color::bt709::from::BT2020(r1.rgb);
     }
