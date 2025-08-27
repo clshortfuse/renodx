@@ -167,6 +167,5 @@ void main(
         CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
         1.f);
   }
-  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   return;
 }

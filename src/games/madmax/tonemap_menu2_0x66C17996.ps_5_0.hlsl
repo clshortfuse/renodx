@@ -1,3 +1,5 @@
+#include "./shared.h"
+
 // ---- Created with 3Dmigoto v1.4.1 on Sun Jun 22 10:06:11 2025
 
 cbuffer cbInstanceConsts : register(b1)
@@ -33,8 +35,8 @@ void main(
   r0.xyzw = r1.xxxx ? float4(0, 0, 0, 0) : r0.xyzw;
   // r0.xyz = log2(r0.xyz);
   o0.w = r0.w;
-  //r0.xyz = TypeConsts[1].xxx * r0.xyz;
-  // o0.xyz = exp2(r0.xyz);
-  o0.rgb = r0.rgb;
+  // r0.xyz = TypeConsts[1].xxx * r0.xyz;
+  //  o0.xyz = exp2(r0.xyz);
+  o0.rgb = renodx::draw::RenderIntermediatePass(r0.rgb);
   return;
 }
