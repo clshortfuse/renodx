@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "./shared.h"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -28,10 +28,10 @@ void main(
   r0.rgb = renodx::color::bt709::clamp::BT2020(r0.rgb);
   r1.x = renodx::color::y::from::BT709(r0.xyz);
   o0.xyz = r0.xyz * r1.xxx + -cb0[0].xyz;
-  if (injectedData.toneMapType == 0.f) {
-    o0.rgb = saturate(o0.rgb);
+  if (injectedData.toneMapType == 0.) {
+    o0.xyz = saturate(o0.xyz);
   } else {
-    o0.rgb = max(0.f, o0.rgb);
+    o0.xyz = max(0.f, o0.xyz);
   }
   o0.w = saturate(r0.w);
   return;

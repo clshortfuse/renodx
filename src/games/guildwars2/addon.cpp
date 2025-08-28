@@ -24,6 +24,7 @@ namespace {
 bool isUnderWater = false;
 bool isLUT = false;
 bool isColorTint = false;
+bool isOutline = false;
 bool ppcheck = false;
 bool toggleNote = false;
 
@@ -33,6 +34,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = false;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0x5A098F2B, [](reshade::api::command_list* cmd_list) {    // lut
@@ -40,6 +42,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = true;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0x4A18D1E0, [](reshade::api::command_list* cmd_list) {    // lut
@@ -47,6 +50,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = true;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0x7DAA4AE4, [](reshade::api::command_list* cmd_list) {    // lut
@@ -54,6 +58,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = false;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0xD4DFFB85, [](reshade::api::command_list* cmd_list) {    // lut
@@ -61,6 +66,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = true;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0x6359AF3D, [](reshade::api::command_list* cmd_list) {    // lut
@@ -68,6 +74,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = true;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0x42928281, [](reshade::api::command_list* cmd_list) {    // lut
@@ -75,6 +82,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = false;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0xAA1CCED3, [](reshade::api::command_list* cmd_list) {    // lut
@@ -82,6 +90,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = true;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0xF6F48311, [](reshade::api::command_list* cmd_list) {    // lut
@@ -89,6 +98,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = true;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0xCE4C348D, [](reshade::api::command_list* cmd_list) {    // lut
@@ -96,6 +106,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = true;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0x36078EF8, [](reshade::api::command_list* cmd_list) {    // lut
@@ -103,6 +114,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = true;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0x7ED580FF, [](reshade::api::command_list* cmd_list) {    // lut
@@ -110,6 +122,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = true;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0x5AAD73BD, [](reshade::api::command_list* cmd_list) {    // lut
@@ -117,6 +130,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = false;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0x062969AB, [](reshade::api::command_list* cmd_list) {    // lut
@@ -124,6 +138,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = true;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0x032D723E, [](reshade::api::command_list* cmd_list) {    // lut
@@ -131,6 +146,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = true;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0x428D48C8, [](reshade::api::command_list* cmd_list) {    // lut
@@ -138,6 +154,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = true;
     isColorTint = true;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0x719BE206, [](reshade::api::command_list* cmd_list) {    // pp
@@ -145,6 +162,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = true;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0xD8C348D5, [](reshade::api::command_list* cmd_list) {    // pp
@@ -152,6 +170,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = true;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0xDCE33C51, [](reshade::api::command_list* cmd_list) {    // pp
@@ -159,6 +178,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = false;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0x7B249DE9, [](reshade::api::command_list* cmd_list) {    // pp
@@ -166,6 +186,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = true;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0xA1C38898, [](reshade::api::command_list* cmd_list) {    // pp
@@ -173,6 +194,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = false;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0x22EFDCF6, [](reshade::api::command_list* cmd_list) {    // pp
@@ -180,6 +202,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = true;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0xB845E50C, [](reshade::api::command_list* cmd_list) {    // pp
@@ -187,6 +210,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = true;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0x48296CE5, [](reshade::api::command_list* cmd_list) {    // pp
@@ -194,6 +218,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = true;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0x74EBB1CB, [](reshade::api::command_list* cmd_list) {    // pp
@@ -201,6 +226,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = false;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0x1B61AA64, [](reshade::api::command_list* cmd_list) {    // pp
@@ -208,6 +234,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = true;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0x8F70C508, [](reshade::api::command_list* cmd_list) {    // pp
@@ -215,6 +242,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = true;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0xF3052684, [](reshade::api::command_list* cmd_list) {    // pp
@@ -222,6 +250,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = true;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0x3B3BA161, [](reshade::api::command_list* cmd_list) {    // pp
@@ -229,6 +258,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = true;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0x4DEA5928, [](reshade::api::command_list* cmd_list) {    // pp
@@ -236,6 +266,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = false;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0x7904D64C, [](reshade::api::command_list* cmd_list) {    // pp
@@ -243,6 +274,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = true;
     ppcheck = true;
+    isOutline = false;
     return true;
     }),
     CustomShaderEntryCallback(0xC3B7FFE7, [](reshade::api::command_list* cmd_list) {    // pp
@@ -250,6 +282,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isLUT = false;
     isColorTint = true;
     ppcheck = true;
+    isOutline = true;
     return true;
     }),
     CustomShaderEntryCallback(0xA033440E, [](reshade::api::command_list* cmd_list) {    // vignette (underwater)
@@ -283,12 +316,12 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 4.f,
+        .default_value = 3.f,
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "Frostbite", "RenoDRT (Daniele)", "RenoDRT (Reinhard)", "DICE"},
+        .labels = {"Vanilla", "None", "Frostbite", "RenoDRT (Reinhard)", "DICE"},
         .tint = 0xFB7352,
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
@@ -399,7 +432,7 @@ renodx::utils::settings::Settings settings = {
         .tint = 0xAC7C38,
         .max = 0.99f,
         .format = "%.2f",
-        .is_visible = []() { return shader_injection.toneMapType == 2.f || shader_injection.toneMapType == 5.f ; },
+        .is_visible = []() { return shader_injection.toneMapType == 2.f || shader_injection.toneMapType == 4.f ; },
     },
     new renodx::utils::settings::Setting{
         .key = "colorGradeExposure",
@@ -487,7 +520,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = 0x38F6FC,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 3.f || shader_injection.toneMapType == 4.f; },
+        .is_enabled = []() { return shader_injection.toneMapType == 3.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -498,7 +531,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = 0x38F6FC,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 4.f; },
+        .is_enabled = []() { return shader_injection.toneMapType == 3.f; },
         .parse = [](float value) { return value; },
     },
     new renodx::utils::settings::Setting{
@@ -587,6 +620,18 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "May affect particles and other effects.",
         .tint = 0x0D1D34,
         .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "fxSelectionOutline",
+        .binding = &shader_injection.fxSelectionOutline,
+        .default_value = 100.f,
+        .label = "Selection Outline",
+        .section = "Effects",
+        .tint = 0x0D1D34,
+        .max = 100.f,
+        .is_enabled = []() { return isOutline; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -689,6 +734,7 @@ renodx::utils::settings::Settings settings = {
         .tint = 0x0D1D34,
         .min = 0.f,
         .max = 240.f,
+        .is_global = true,
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -796,13 +842,13 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("fxLightAdaptation", 100.f);
   renodx::utils::settings::UpdateSetting("fxFog", 100.f);
   renodx::utils::settings::UpdateSetting("fxBlur", 50.f);
+  renodx::utils::settings::UpdateSetting("fxSelectionOutline", 100.f);
   renodx::utils::settings::UpdateSetting("fxCA", 0.f);
   renodx::utils::settings::UpdateSetting("fxSharpen", 0.f);
   renodx::utils::settings::UpdateSetting("fxVignette", 0.f);
   renodx::utils::settings::UpdateSetting("fxVignetteUW", 50.f);
   renodx::utils::settings::UpdateSetting("fxFlashbang", 100.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 0.f);
-  renodx::utils::settings::UpdateSetting("FPSLimit", 0.f);
 }
 
 bool fired_on_init_swapchain = false;

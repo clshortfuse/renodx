@@ -36,6 +36,7 @@ struct ShaderInjectData {
   float fxLightAdaptation;
   float fxFog;
   float fxBlur;
+  float fxSelectionOutline;
   float fxVignette;
   float fxVignetteUW;
   float fxCA;

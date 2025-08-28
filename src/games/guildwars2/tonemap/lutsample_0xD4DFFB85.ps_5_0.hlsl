@@ -35,11 +35,16 @@ void main(
   r1.xyz = t1.Sample(s1_s, w0.xy).xyz;
   r1.xyz = cb0[0].xyz * r1.xyz * injectedData.fxBloom;
   float3 altBloom = r0.rgb + r1.rgb;
-  r0.rgb = lerp(float3(1,1,1), r1.rgb * 2.f, 1.f - r0.rgb);
+  r0.rgb = lerp(float3(1,1,1), r1.rgb * 2.f, saturate(1.f - r0.rgb));
   if(injectedData.toneMapType != 0.f){
-    r0.rgb = lerp(altBloom, r0.rgb, 1.f - r1.rgb);
-  }
+    float3 og = renodx::color::srgb::DecodeSafe(r0.xyz);
+    r0.rgb = lerp(altBloom, r0.rgb, saturate(1.f - r1.rgb));
+    r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
+    r0.xyz = renodx::color::correct::Hue(r0.xyz, og, 0.81f, 1);
+    r0.xyz = renodx::color::correct::Chrominance(r0.xyz, og, 1.f, 0.19f, 1);
+  } else {
   r0.rgb = renodx::color::srgb::DecodeSafe(r0.rgb);
+  }
   if (!injectedData.isUnderWater) {
     r0.rgb = applyVignette(r0.rgb, v0, injectedData.fxVignette);
   }

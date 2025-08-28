@@ -24,10 +24,10 @@ void main(
   r0.xyz = r1.xyz * float3(2,2,2) + r0.xyz;
   r0.w = r0.w * 2 + -1;
   if (r0.w < -0.01) {
-    r1.xyz = cb0[4].xyz * r0.xyz;
+    r1.xyz = lerp(1.f, cb0[4].xyz, injectedData.fxSelectionOutline) * r0.xyz;
   } else {
     if (r0.w > 0.01) {
-      r1.xyz = cb0[2].xyz * r0.xyz;
+      r1.xyz = lerp(1.f, cb0[2].xyz, injectedData.fxSelectionOutline) * r0.xyz;
     } else {
       r0.w = 1.2 * cb0[5].z;
       r2.z = cb0[5].x * r0.w;
@@ -45,9 +45,9 @@ void main(
       r1.w = t0.Sample(s0_s, r2.zw).w;
       r0.w = r1.w + r0.w;
       r2.xyz = cb0[3].xyz + -r0.xyz;
-      r2.xyz = cb0[3].www * r2.xyz + r0.xyz;
+      r2.xyz = injectedData.fxSelectionOutline * cb0[3].www * r2.xyz + r0.xyz;
       r3.xyz = cb0[1].xyz + -r0.xyz;
-      r3.xyz = cb0[1].www * r3.xyz + r0.xyz;
+      r3.xyz = injectedData.fxSelectionOutline * cb0[1].www * r3.xyz + r0.xyz;
       r0.xyz = (r0.w > 2.04) ? r3.xyz : r0.xyz;
       r1.xyz = (r0.w < 1.96) ? r2.xyz : r0.xyz;
     }
