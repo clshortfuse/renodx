@@ -24,7 +24,7 @@ void main(
   r0.xyz = lerp(r1.www, r0.xyz, lerp(1.f, cb0[5].w, injectedData.colorGradeTint));
   r1.xyz = cb0[0].xyz * r1.xyz * injectedData.fxBloom;
   float3 altBloom = r0.rgb + r1.rgb;
-  r0.rgb = lerp(float3(1,1,1), r1.rgb * 2.f, saturate(1.f - r0.rgb));
+  r0.rgb = lerp(float3(1,1,1), r1.rgb * 2.f, 1.f - r0.rgb);
   if(injectedData.toneMapType != 0.f){
     float3 og = renodx::color::srgb::DecodeSafe(r0.xyz);
     r0.rgb = lerp(altBloom, r0.rgb, saturate(1.f - r1.rgb));

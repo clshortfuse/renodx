@@ -23,7 +23,7 @@ void main(
   r0.xyz = cb0[0].xyz * r0.xyz * injectedData.fxBloom;
   r1.xyz = applyCA(t0, s0_s, v0, injectedData.fxCA);
   float3 altBloom = r0.rgb + r1.rgb;
-  r1.rgb = lerp(float3(1,1,1), r0.rgb * 2.f, saturate(1.f - r1.rgb));
+  r1.rgb = lerp(float3(1,1,1), r0.rgb * 2.f, 1.f - r1.rgb);
   if(injectedData.toneMapType != 0.f){
     float3 og = renodx::color::srgb::DecodeSafe(r1.xyz);
     r1.rgb = lerp(altBloom, r1.rgb, saturate(1.f - r0.rgb));
