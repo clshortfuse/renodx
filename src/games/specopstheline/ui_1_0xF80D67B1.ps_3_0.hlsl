@@ -30,7 +30,7 @@ float4 main(PS_IN i) : COLOR
 	r0.y = (r0.z >= 0) ? r1.x : 0;
 	r0.z = r0.y + r0.x;
 	r0.x = r0.x * r0.y + r0.z;
-	r0.xy = r0.x + float2(0.03, 0.35);
+	r0.xy = r0.x + float2(0.349999994, 0.349999994);
 	o.w = saturate(r0.y * UniformPixelScalars_1.x);
 	r0.x = saturate(r0.x);
 	r0.x = UniformPixelScalars_0.z * r0.x + UniformPixelScalars_0.w;
