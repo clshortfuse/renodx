@@ -267,7 +267,7 @@ renodx::utils::settings::Settings settings = {
         },
         .is_visible = []() { return settings[0]->GetValue() == 1; },
     },
-    new renodx::utils::settings::Setting{
+        new renodx::utils::settings::Setting{
       .key = "FxBloom",
       .binding = &shader_injection.custom_bloom,
       .default_value = 50.f,
@@ -314,7 +314,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "F6AUTeWJHM");
         },
     },
     new renodx::utils::settings::Setting{
@@ -362,13 +362,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::swapchain::expected_constant_buffer_index = 13;
       renodx::mods::swapchain::expected_constant_buffer_space = 50;
-      renodx::mods::swapchain::force_borderless = true;
-      renodx::mods::swapchain::prevent_full_screen = true;
+      renodx::mods::swapchain::force_borderless = false;
+      renodx::mods::swapchain::prevent_full_screen = false;
       renodx::mods::swapchain::force_screen_tearing = false;
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::set_color_space = false;
       renodx::mods::swapchain::use_device_proxy = true;
-      renodx::utils::random::binds.push_back(&shader_injection.custom_random);
       renodx::mods::swapchain::ignored_window_class_names = {
             "SplashScreenClass",
         };
