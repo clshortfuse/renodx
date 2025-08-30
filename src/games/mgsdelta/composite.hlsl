@@ -73,6 +73,11 @@ bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout flo
   float3 composited_color_gamma = ui_color_gamma.rgb + scene_color_gamma * (1.0 - ui_alpha);
   float3 composited_color_linear = renodx::color::gamma::DecodeSafe(composited_color_gamma);
 
+  // This applies gamma twice on UI, but ain't gonna move everything around just for that
+  if (RENODX_GAMMA_CORRECTION == renodx::draw::GAMMA_CORRECTION_GAMMA_2_4) {
+    composited_color_linear = renodx::color::gamma::DecodeSafe(composited_color_gamma, 2.4f);
+  }
+
   renodx::draw::Config swapchain_config;
   // return ui alpha for better FG support
   if (output_mode == 0u) {  // HDR10
