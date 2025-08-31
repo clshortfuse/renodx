@@ -36,7 +36,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
   }),
   renodx::templates::settings::CreateDefaultSettings({
     {"ToneMapScaling", {.binding = &shader_injection.tone_map_per_channel, .default_value = 1.f}},
-    //{"ToneMapHueCorrection", {.binding = &shader_injection.tone_map_hue_correction, .default_value = 50.f}},
+    {"ToneMapHueCorrection", {.binding = &shader_injection.tone_map_hue_correction, .default_value = 50.f}},
   }),
   renodx::templates::settings::CreateDefaultSettings({
   //{"ToneMapHueShift", &shader_injection.tone_map_hue_shift},

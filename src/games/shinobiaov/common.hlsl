@@ -5,7 +5,17 @@ float3 InvRenoDRT(float3 color) {
   float untonemapped_y = renodx::tonemap::inverse::Reinhard(y);
   float3 untonemapped = color * renodx::math::DivideSafe(untonemapped_y, y, 0);
   renodx::tonemap::renodrt::Config hdr_video_config = renodx::tonemap::renodrt::config::Create();
-  float peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+
+  //float peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+  float peak = 0.f;
+
+  [branch]
+  if (CUSTOM_SPRITE_ITM < 0.5f) {
+    peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+  } else {
+    peak = lerp(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 10000.f / RENODX_DIFFUSE_WHITE_NITS, (CUSTOM_SPRITE_ITM - 0.5) * 2);
+  }
+
   hdr_video_config.nits_peak = peak * 100.f;
   hdr_video_config.mid_gray_value = 0.18f;
   hdr_video_config.mid_gray_nits = 18.f;
@@ -92,14 +102,14 @@ float3 ApplyTonemapScaling(float3 color) {
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     [branch]
     if (CUSTOM_SPRITE_ITM != 0.f) {
-      itm = renodx::tonemap::dice::BT709(itm, 1.f, CUSTOM_SPRITE_ITM);
+      float shoulder = min(0.5f, CUSTOM_SPRITE_ITM);
+
+      itm = renodx::tonemap::ExponentialRollOff(itm, shoulder, 1.f);
+      itm = renodx::color::correct::Chrominance(itm, saturate(renodx::tonemap::dice::BT709(color, 1.f, 0.f)), .75f);
 
       itm = InvRenoDRT(saturate(itm));
       color = ItmLerp(color, itm);
     }
-
-    //color = renodx::color::correct::Hue(color, hue_color, RENODX_TONE_MAP_HUE_CORRECTION);
-    color = renodx::color::correct::Hue(color, hue_color, RENODX_TONE_MAP_PER_CHANNEL ? 0.25f : 0.5f);
 
     renodx::draw::Config draw_config = renodx::draw::BuildConfig();
     draw_config.peak_white_nits = 10000.f;
@@ -110,6 +120,8 @@ float3 ApplyTonemapScaling(float3 color) {
     color = renodx::draw::ToneMapPass(color, draw_config);
 
     color = ApplyExponentialRollOff(color);
+
+    color = renodx::color::correct::Hue(color, hue_color, RENODX_TONE_MAP_HUE_CORRECTION);
   } else {
     color = saturate(color);
   }
