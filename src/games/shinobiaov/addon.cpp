@@ -78,19 +78,20 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
       .tint = 0xb5b2b1,
       .on_change = []() {
         renodx::utils::settings::UpdateSetting("ToneMapType", 1.f);
-        renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 1.f);
-        renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
+        //renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 1.f);
+        //renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
         renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
-        renodx::utils::settings::UpdateSetting("ToneMapScaling", 1.f);
+        renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
+        renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 25.f);
         renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
         renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 55.f);
         renodx::utils::settings::UpdateSetting("ColorGradeShadows", 57.f);
         renodx::utils::settings::UpdateSetting("ColorGradeContrast", 60.f);
         renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 60.f);
         renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
+        renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 55.f);
         renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
-        renodx::utils::settings::UpdateSetting("CustomSpriteBoost", 50.f);
+        renodx::utils::settings::UpdateSetting("CustomSpriteBoost", 75.f);
       }
   },
   new renodx::utils::settings::Setting{
