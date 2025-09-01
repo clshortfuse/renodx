@@ -41,3 +41,4 @@ build32.vs/**
 bin/**
 **/.vshistory/
 .cache/**
+.env

@@ -7,12 +7,24 @@
       "request": "attach",
       "processId": "${command:pickProcess}"
     },
+    {
+      "name": "Deploy Early Access",
+      "type": "PowerShell",
+      "request": "launch",
+      "script": "${workspaceFolder}/scripts/deploy-early-access.ps1",
+      "cwd": "${cwd}",
+      "args": [
+        "--target", "${command:cmake.buildTargetName}",
+        "--description", "\"${input:deployDescription}\""
+      ],
+    },
   ],
   "inputs": [
     {
+      "id": "deployDescription",
       "type": "promptString",
-      "id": "launchExecutable",
-      "description": "Select executable to launch"
+      "description": "Deploy description (optional)",
+      "default": ""
     }
   ]
 }
