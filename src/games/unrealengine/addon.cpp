@@ -852,11 +852,14 @@ bool OnDraw(
       return false;
     }
 
+    std::string prefix = custom_shaders.contains(pixel_shader_hash)
+                             ? "lutbuilder_"
+                             : "lutbuilder_new_";
     renodx::utils::shader::dump::DumpShader(
         pixel_shader_hash,
         shader_data.value(),
         reshade::api::pipeline_subobject_type::pixel_shader,
-        "lutbuilder_");
+        prefix);
 
   } catch (...) {
     std::stringstream s;
@@ -882,7 +885,6 @@ bool OnDispatch(
 
   auto compute_shader_hash = renodx::utils::shader::GetCurrentComputeShaderHash(compute_state);
   if (compute_shader_hash == 0u) return false;
-  // if (custom_shaders.contains(compute_shader_hash)) return false;
   if (g_dumped_shaders.contains(compute_shader_hash)) return false;
 
   auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
@@ -1064,11 +1066,15 @@ bool OnDispatch(
       return false;
     }
 
+    std::string prefix = custom_shaders.contains(compute_shader_hash)
+                             ? "lutbuilder_"
+                             : "lutbuilder_new_";
+
     renodx::utils::shader::dump::DumpShader(
         compute_shader_hash,
         shader_data.value(),
         reshade::api::pipeline_subobject_type::pixel_shader,
-        "lutbuilder_");
+        prefix);
 
   } catch (...) {
     std::stringstream s;
