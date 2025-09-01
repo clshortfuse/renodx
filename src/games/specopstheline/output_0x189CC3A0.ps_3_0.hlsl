@@ -54,17 +54,17 @@ float4 main(PS_IN i) : COLOR
 	r1 = r1 * r1;                                                         // mul_pp r1, r1, r1
 	r2.w = ImageAdjustments1.w;                                           // mov_pp r2.w, c4.w
 	r1 = r1 * r2.w + 0.00390625;                                          // mad r1, r1, r2.w, c6.x
-	r2.xy = ImageAdjustments1.xy + i.texcoord2.xy;                        // add r2.xy, c4.xy, v2.xy
-	r2.xy = r2.xy * 0.015625;                                             // mul r2.xy, r2.xy, c5.z
-	r2 = tex2D(NoiseTexture, r2);                                         // texld r2, r2, s1
-	r2.x = r2.x + -0.5;                                                   // add r2.x, r2.x, c5.w
-	r0 = saturate(r2.x * r1 + r0);                                        // mad_sat_pp r0, r2.x, r1, r0
-    r1.xy = -0.5 + i.texcoord1.xy;                                        // add r1.xy, c5.w, v1.xy
-    r1.x = dot(r1.x, -r1.x) + 1;                                          // dp2add r1.x, r1.x, -r1.x, c5.y
-    r1.y = abs(r1.x) + -0.000000999999997;                                // add r1.y, r1.x_abs, c6.y
-    r2.x = pow(abs(r1.x), ImageAdjustments1.z);                           // pow r2.x, r1.x_abs, c4.z
-    r1.x = saturate((r1.y >= 0) ? r2.x : 0);                              // cmp_sat r1.x, r1.y, r2.x, c1.z
-    r0 = r0 * r1.x;                                                       // mul_pp r0, r0, r1.x
+	//r2.xy = ImageAdjustments1.xy + i.texcoord2.xy;                      // add r2.xy, c4.xy, v2.xy
+	//r2.xy = r2.xy * 0.015625;                                           // mul r2.xy, r2.xy, c5.z
+	//r2 = tex2D(NoiseTexture, r2);                                       // texld r2, r2, s1
+	//r2.x = r2.x + -0.5;                                                 // add r2.x, r2.x, c5.w
+	//r0 = saturate(r2.x * r1 + r0);                                      // mad_sat_pp r0, r2.x, r1, r0
+    //r1.xy = -0.5 + i.texcoord1.xy;                                      // add r1.xy, c5.w, v1.xy
+    //r1.x = dot(r1.x, -r1.x) + 1;                                        // dp2add r1.x, r1.x, -r1.x, c5.y
+    //r1.y = abs(r1.x) + -0.000000999999997;                              // add r1.y, r1.x_abs, c6.y
+    //r2.x = pow(abs(r1.x), ImageAdjustments1.z);                         // pow r2.x, r1.x_abs, c4.z
+    //r1.x = saturate((r1.y >= 0) ? r2.x : 0);                            // cmp_sat r1.x, r1.y, r2.x, c1.z
+    //r0 = r0 * r1.x;                                                     // mul_pp r0, r0, r1.x
     r1.xyw = (r0.xwzz * float4(14.9999, 0.9375, 0.9375, 0.05859375)).xyw; // mul r1.xyw, r0.xwz, c7.xzz
 	r0.x = frac(r1.x);                                                    // frac r0.x, r1.x
 	r0.x = -r0.x + r1.x;                                                  // add r0.x, -r0.x, r1.x
@@ -96,6 +96,8 @@ float4 main(PS_IN i) : COLOR
       vignette = lerp(0.65, 1.0, vignette);
       o.rgb *= saturate(vignette);
     }
+    o.rgb = renodx::draw::RenderIntermediatePass(o.rgb);
+    o.rgb = renodx::color::srgb::DecodeSafe(o.rgb);
     o.w = 0;                                                              // mov oC0.w, c1.z
 	return o;
 }
