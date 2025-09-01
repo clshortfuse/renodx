@@ -27,8 +27,8 @@ void main(
   r0.xyzw = SceneTexture.SampleLevel(SceneTexture_s, v1.xy, 0).xyzw;
   //r0.xyz = log2(r0.xyz);
   o0.w = r0.w;
-  //r0.xyz = InstanceConsts[0].yyy * r0.xyz;
-  //o0.xyz = exp2(r0.xyz);
-  o0.rgb = r0.rgb;
+  // r0.xyz = InstanceConsts[0].yyy * r0.xyz;
+  // o0.xyz = exp2(r0.xyz);
+  o0.rgb = renodx::draw::RenderIntermediatePass(r0.rgb);
   return;
 }
