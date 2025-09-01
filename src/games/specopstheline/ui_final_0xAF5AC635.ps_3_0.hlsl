@@ -31,7 +31,7 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
   // o.x = exp2(r0.x);                                   // exp oC0.x, r0.x
   // o.y = exp2(r0.y);                                   // exp oC0.y, r0.y
   // o.z = exp2(r0.z);                                   // exp oC0.z, r0.z
-  o.rgb = renodx::draw::RenderIntermediatePass(r0.rgb);
+  o.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
   
 	return o;
 }
