@@ -403,10 +403,10 @@ namespace internal {
 static bool attached = false;
 static std::chrono::high_resolution_clock::time_point last_time_point;
 static float last_fps_limit;
-static auto spin_lock_duration = std::chrono::nanoseconds(0);
-static std::uint32_t spin_lock_failures = 0;
+static auto busy_spin_duration = std::chrono::nanoseconds(0);
+static std::uint32_t busy_spin_failures = 0;
 
-static std::deque<std::chrono::nanoseconds> sleep_latency_history;
+static std::deque<std::chrono::nanoseconds> wait_latency_history;
 static const size_t MAX_LATENCY_HISTORY_SIZE = 1000;
 
 static bool is_primary_hook = false;
@@ -561,8 +561,8 @@ static void OnPresent(
     const reshade::api::rect* dirty_rects) {
   // is_primary_hook not needed
   if (last_fps_limit != fps_limit) {
-    spin_lock_duration = std::chrono::nanoseconds(0);
-    sleep_latency_history.clear();
+    busy_spin_duration = std::chrono::nanoseconds(0);
+    wait_latency_history.clear();
     last_fps_limit = fps_limit;
   }
   if (fps_limit <= 0.f) return;
@@ -577,48 +577,65 @@ static void OnPresent(
     return;
   }
 
-  // Use sleep for as much as reliably possible
-  auto sleep_duration = time_till_next_frame - spin_lock_duration;
-  bool changed_spin_lock_duration = false;
-  if (sleep_duration.count() > 0) {
-    std::this_thread::sleep_for(sleep_duration);
-    auto after_sleep = std::chrono::high_resolution_clock::now();
-    auto actual_sleep_duration = after_sleep - now;
-    auto sleep_latency = actual_sleep_duration - sleep_duration;
+  // Use sleep/timer for as much as reliably possible
+  auto wait_duration = time_till_next_frame - busy_spin_duration;
+  bool changed_busy_spin_duration = false;
+  if (wait_duration.count() > 0) {
+#if defined(RENODX_FPS_LIMIT_HR_TIMER)
+    static const HANDLE WAITABLE_TIMER = CreateWaitableTimerExW(
+        nullptr, nullptr,
+        CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+        TIMER_ALL_ACCESS);
+    auto remaining = wait_duration;
+    auto ticks = remaining.count() / 100;  // 100ns ticks
+    while (remaining.count() > 0) {
+      LARGE_INTEGER due;
+      due.QuadPart = -ticks;
+      SetWaitableTimerEx(WAITABLE_TIMER, &due, 0, nullptr, nullptr, nullptr, 0);
+      WaitForSingleObject(WAITABLE_TIMER, INFINITE);
+      remaining = next_time_point - busy_spin_duration - std::chrono::high_resolution_clock::now();
+    }
+#else
+    std::this_thread::sleep_for(wait_duration);
+#endif
 
-    // Record the sleep latency
-    sleep_latency_history.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(sleep_latency));
-    auto current_size = sleep_latency_history.size() + 1;
+    auto after_wait = std::chrono::high_resolution_clock::now();
+    auto actual_wait_duration = after_wait - now;
+    auto wait_latency = actual_wait_duration - wait_duration;
+
+    // Record the wait latency
+    wait_latency_history.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(wait_latency));
+    auto current_size = wait_latency_history.size() + 1;
     if (current_size > MAX_LATENCY_HISTORY_SIZE) {
-      sleep_latency_history.pop_front();
+      wait_latency_history.pop_front();
       --current_size;
     }
 
     // Calculate the worst 1% latency
     if (current_size >= MAX_LATENCY_HISTORY_SIZE * 0.10f) {  // Ensure enough data points
-      auto sorted_latencies = sleep_latency_history;
+      auto sorted_latencies = wait_latency_history;
       std::ranges::sort(sorted_latencies, std::greater<>());
       auto worst_1_percent = sorted_latencies[current_size * 0.01];
-      spin_lock_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(worst_1_percent * 1.5);
+      busy_spin_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(worst_1_percent * 1.5);
     }
 
-    spin_lock_failures = 0;
-    now = after_sleep;
+    busy_spin_failures = 0;
+    now = after_wait;
   } else {
-    ++spin_lock_failures;
+    ++busy_spin_failures;
 
-    if (spin_lock_failures > fps_limit) {
+    if (busy_spin_failures > fps_limit) {
       // Full second of failures, try increasing
-      spin_lock_failures = 0;
+      busy_spin_failures = 0;
 
-      if (sleep_latency_history.empty()) {
-        spin_lock_duration = std::chrono::nanoseconds(0);
+      if (wait_latency_history.empty()) {
+        busy_spin_duration = std::chrono::nanoseconds(0);
       } else {
-        auto sorted_latencies = sleep_latency_history;
+        auto sorted_latencies = wait_latency_history;
         std::ranges::sort(sorted_latencies, std::less<>());
         if (sorted_latencies[0] * 1.5 < time_per_frame) {
           // Decrease spin lock duration by 10%
-          spin_lock_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(spin_lock_duration * 0.90f);
+          busy_spin_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(busy_spin_duration * 0.90f);
         } else {
           // Lowest latency is longer than time per frame
         }
@@ -627,6 +644,7 @@ static void OnPresent(
   }
 
   while (now < next_time_point) {
+    YieldProcessor();  // __builtin_ia32_pause or _mm_pause
     // Spin lock until the next time point
     now = std::chrono::high_resolution_clock::now();
   }
