@@ -82,16 +82,16 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         //renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
         renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
         renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
-        renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 25.f);
+        renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 50.f);
         renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 55.f);
+        renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
         renodx::utils::settings::UpdateSetting("ColorGradeShadows", 57.f);
         renodx::utils::settings::UpdateSetting("ColorGradeContrast", 60.f);
         renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 60.f);
         renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
         renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 55.f);
         renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
-        renodx::utils::settings::UpdateSetting("CustomSpriteBoost", 75.f);
+        renodx::utils::settings::UpdateSetting("CustomSpriteBoost", 60.f);
       }
   },
   new renodx::utils::settings::Setting{
@@ -184,18 +184,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-
-      //renodx::mods::shader::expected_constant_buffer_space = 50;
-      //renodx::mods::shader::expected_constant_buffer_index = 13;
-      //renodx::mods::shader::allow_multiple_push_constants = true;
-      //renodx::mods::shader::force_pipeline_cloning = true;
-
-      //renodx::mods::swapchain::expected_constant_buffer_index = 13;
-      //renodx::mods::swapchain::expected_constant_buffer_space = 50;
-      /* renodx::mods::swapchain::use_resize_buffer = true;
-      renodx::mods::swapchain::use_resize_buffer_on_demand = true; */
-      //renodx::mods::swapchain::force_borderless = false;
-      //renodx::mods::swapchain::prevent_full_screen = false;
 
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;

@@ -40,27 +40,24 @@ float3 InvRenoDRT(float3 color) {
   return renodx::tonemap::renodrt::BT709(untonemapped, hdr_video_config);
 }
 
+// weirdly blends between normal hdr and itm
 float3 ItmLerp(float3 hdr, float3 itm) {
-  float luma1 = renodx::color::y::from::BT709(hdr);
-  float luma2 = renodx::color::y::from::BT709(itm);
-
-  [branch]
-  if ((luma1 + luma2) == 0.0) {
-    return float3(0, 0, 0);
-  }
-
-  float t = luma1 / (luma1 + luma2);
-
-  return lerp(itm, hdr, t);
-}
-
-float3 ItmLuminanceCorrect(float3 hdr, float3 itm) {
   float hdr_y = renodx::color::y::from::BT709(hdr);
   float itm_y = renodx::color::y::from::BT709(itm);
 
-  float combined_y = max(hdr_y, itm_y);
+  // fixes red sparklies rarely showing up in shadows, no idea why (noticed in kaiju level)
+  float cutoff = 0.000000001f;
+  if (hdr_y < cutoff || itm_y < cutoff) {
+    return hdr;
+  }
 
-  return renodx::color::correct::Luminance(hdr, hdr_y, combined_y);
+  if ((hdr_y + itm_y) == 0.0) {
+    return float3(0, 0, 0);
+  }
+
+  float t = hdr_y / (hdr_y + itm_y);
+
+  return lerp(itm, hdr, t);
 }
 
 float3 ExponentialRollOffByLum(float3 color, float output_luminance_max, float highlights_shoulder_start = 0.f) {
