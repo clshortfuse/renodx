@@ -461,6 +461,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::use_resource_cloning = true;
         renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
         renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+        renodx::mods::swapchain::ignored_window_class_names = {"RGSCD3D12_TEMPWINDOW"};
 
         renodx::mods::swapchain::force_borderless = true;
         renodx::mods::swapchain::prevent_full_screen = true;
