@@ -111,8 +111,8 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION shader_injection.color_grade_saturation_correction
 #define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   shader_injection.color_grade_blowout_restoration
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE      color::convert::COLOR_SPACE_BT2020
-#define RENODX_SWAP_CHAIN_ENCODING               renodx::draw::ENCODING_SCRGB
-#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE   color::convert::COLOR_SPACE_BT709
+#define RENODX_SWAP_CHAIN_ENCODING               renodx::draw::ENCODING_PQ
+#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE   color::convert::COLOR_SPACE_BT2020
 #define RENODX_RENO_DRT_TONE_MAP_METHOD          renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 
 #include "../../shaders/renodx.hlsl"
