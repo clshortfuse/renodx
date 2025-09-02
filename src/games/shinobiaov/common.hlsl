@@ -102,15 +102,21 @@ float3 ApplyTonemapScaling(float3 color) {
       color = ItmLerp(color, itm);
     }
 
-    renodx::draw::Config draw_config = renodx::draw::BuildConfig();
-    draw_config.peak_white_nits = 10000.f;
-    draw_config.tone_map_hue_correction = 0.f;
-    draw_config.tone_map_hue_shift = 0.f;
-    draw_config.tone_map_per_channel = 0.f;
+    [branch]
+    if (RENODX_TONE_MAP_TYPE == 6.f) {
+      renodx::draw::Config draw_config = renodx::draw::BuildConfig();
+      draw_config.peak_white_nits = 10000.f;
+      draw_config.tone_map_hue_correction = 0.f;
+      draw_config.tone_map_hue_shift = 0.f;
+      draw_config.tone_map_per_channel = 0.f;
+      draw_config.tone_map_type = 3.f;
 
-    color = renodx::draw::ToneMapPass(color, draw_config);
+      color = renodx::draw::ToneMapPass(color, draw_config);
 
-    color = ApplyExponentialRollOff(color);
+      color = ApplyExponentialRollOff(color);
+    } else {
+      color = renodx::draw::ToneMapPass(color);
+    }
 
     color = renodx::color::correct::Hue(color, hue_color, RENODX_TONE_MAP_HUE_CORRECTION);
   } else {
