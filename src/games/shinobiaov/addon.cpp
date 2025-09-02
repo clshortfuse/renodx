@@ -28,26 +28,22 @@ ShaderInjectData shader_injection;
 
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings(
 {renodx::templates::settings::CreateDefaultSettings({
-  {"ToneMapType", &shader_injection.tone_map_type},
-  {"ToneMapPeakNits", &shader_injection.peak_white_nits},
-  {"ToneMapGameNits", &shader_injection.diffuse_white_nits},
-  {"ToneMapUINits", &shader_injection.graphics_white_nits},
-  {"ToneMapGammaCorrection", &shader_injection.gamma_correction},
-  }),
-  renodx::templates::settings::CreateDefaultSettings({
-    {"ToneMapScaling", {.binding = &shader_injection.tone_map_per_channel, .default_value = 1.f}},
-    {"ToneMapHueCorrection", {.binding = &shader_injection.tone_map_hue_correction, .default_value = 50.f}},
-  }),
-  renodx::templates::settings::CreateDefaultSettings({
-  //{"ToneMapHueShift", &shader_injection.tone_map_hue_shift},
-  {"ColorGradeExposure", &shader_injection.tone_map_exposure},
-  {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
-  {"ColorGradeShadows", &shader_injection.tone_map_shadows},
-  {"ColorGradeContrast", &shader_injection.tone_map_contrast},
-  {"ColorGradeSaturation", &shader_injection.tone_map_saturation},
-  {"ColorGradeHighlightSaturation", &shader_injection.tone_map_highlight_saturation},
-  {"ColorGradeBlowout", &shader_injection.tone_map_blowout},
-  {"ColorGradeFlare", &shader_injection.tone_map_flare},
+  {"ToneMapType", {.binding = &shader_injection.tone_map_type, .default_value = 2.f, .labels = {"Vanilla", "RenoDRT", "RenoDRT + Exponential Rolloff"}}},
+  {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits}},
+  {"ToneMapGameNits", {.binding = &shader_injection.diffuse_white_nits}},
+  {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits}},
+  {"ToneMapGammaCorrection", {.binding = &shader_injection.gamma_correction}},
+  {"ToneMapScaling", {.binding = &shader_injection.tone_map_per_channel, .default_value = 1.f}},
+  {"ToneMapHueCorrection", {.binding = &shader_injection.tone_map_hue_correction, .default_value = 50.f}},
+  //{"ToneMapHueShift", {.binding = &shader_injection.tone_map_hue_shift}},
+  {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure}},
+  {"ColorGradeHighlights", {.binding = &shader_injection.tone_map_highlights}},
+  {"ColorGradeShadows", {.binding = &shader_injection.tone_map_shadows}},
+  {"ColorGradeContrast", {.binding = &shader_injection.tone_map_contrast}},
+  {"ColorGradeSaturation", {.binding = &shader_injection.tone_map_saturation}},
+  {"ColorGradeHighlightSaturation", {.binding = &shader_injection.tone_map_highlight_saturation}},
+  {"ColorGradeBlowout", {.binding = &shader_injection.tone_map_blowout}},
+  {"ColorGradeFlare", {.binding = &shader_injection.tone_map_flare}},
 }),
 {
   //new renodx::utils::settings::Setting{
