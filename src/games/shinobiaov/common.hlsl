@@ -45,19 +45,13 @@ float3 ItmLerp(float3 hdr, float3 itm) {
   float hdr_y = renodx::color::y::from::BT709(hdr);
   float itm_y = renodx::color::y::from::BT709(itm);
 
-  // fixes red sparklies rarely showing up in shadows, no idea why (noticed in kaiju level)
-  float cutoff = 0.000000001f;
-  if (hdr_y < cutoff || itm_y < cutoff) {
-    return hdr;
-  }
-
   if ((hdr_y + itm_y) == 0.0) {
     return float3(0, 0, 0);
   }
 
   float t = hdr_y / (hdr_y + itm_y);
 
-  return lerp(itm, hdr, t);
+  return lerp(itm, hdr, saturate(t));
 }
 
 float3 ExponentialRollOffByLum(float3 color, float output_luminance_max, float highlights_shoulder_start = 0.f) {
