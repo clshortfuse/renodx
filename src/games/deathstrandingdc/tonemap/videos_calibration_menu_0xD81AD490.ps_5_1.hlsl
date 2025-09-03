@@ -46,6 +46,9 @@ void main(
     r0.xyz = exp2(r1.xyz);
   } else {
     if (output_mode == 2) {
+#if 1
+      DecodePQ(r0.rgb, mInUniformParams.mOETFSettingsPQ.x, mInUniformParams.mOETFSettingsPQ.y, r0.b, r0.g, r0.r);
+#else
       r1.xyz = log2(r0.xyz);
       r1.xyz = float3(0.0126833133, 0.0126833133, 0.0126833133) * r1.xyz;
       r1.xyz = exp2(r1.xyz);
@@ -60,6 +63,7 @@ void main(
       r1.xyz = r1.xyz * r2.yyy;
 
       r0.rgb = renodx::color::bt709::from::BT2020(r1.rgb);
+#endif
     }
   }
 
@@ -71,10 +75,7 @@ void main(
     r0.rgb = ApplyDeathStrandingToneMap(untonemapped, mInUniformParams.mHDRCompressionParam1,
                                         mInUniformParams.mHDRCompressionParam2, mInUniformParams.mHDRCompressionParam3, 1u);
 
-    float peak_white = renodx::color::correct::GammaSafe(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, true);
-    if (RENODX_TONE_MAP_TYPE == 2.f) {
-      r0.rgb = ApplyDisplayMap(r0.rgb);
-    }
+    r0.rgb = ApplyDisplayMap(r0.rgb);
     r0.rgb = ScaleScene(r0.rgb);
   }
 
@@ -90,6 +91,9 @@ void main(
     r0.xyz = r3.xyz ? r2.xyz : r1.xyz;
   } else {
     if (output_mode == 2) {
+#if 1
+      EncodePQ(r0.rgb, mInUniformParams.mOETFSettingsPQ.x, mInUniformParams.mOETFSettingsPQ.y, r0.b, r0.g, r0.r);
+#else
       r1.x = dot(float3(0.627403915, 0.329283029, 0.0433130674), r0.xyz);
       r1.y = dot(float3(0.069097288, 0.919540405, 0.0113623161), r0.xyz);
       r1.z = dot(float3(0.0163914394, 0.0880133063, 0.895595253), r0.xyz);
@@ -107,6 +111,7 @@ void main(
       r0.w = log2(r0.w);
       r0.w = 78.84375 * r0.w;
       r0.z = exp2(r0.w);
+#endif
     }
   }
   o0.xyz = r0.xyz;
