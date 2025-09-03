@@ -5,8 +5,6 @@
 
 #define ImTextureID ImU64
 
-#define NOMINMAX
-
 #include <d3d11.h>
 #include <d3d12.h>
 #include <Windows.h>

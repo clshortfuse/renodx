@@ -587,6 +587,7 @@ foreach(FILE ${ADDON_FILES})
   cmake_path(GET FILE PARENT_PATH ADDON_PATH)
   cmake_path(GET ADDON_PATH FILENAME ADDON) # treat as filename
   add_compile_options(/bigobj)
+  add_compile_definitions(NOMINMAX)
   add_library(${ADDON} MODULE ${FILE})
   build_shader_target(${ADDON} ${ADDON_PATH})
   generate_resource_rc(${ADDON})

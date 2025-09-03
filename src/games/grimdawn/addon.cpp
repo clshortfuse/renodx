@@ -243,7 +243,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
-        .parse = [](float value) { return max(value * 0.01f, 0.000001f); },
+        .parse = [](float value) { return fmax(value * 0.01f, 0.000001f); },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",

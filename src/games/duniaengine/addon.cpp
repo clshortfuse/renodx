@@ -6,7 +6,6 @@
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
-#define NOMINMAX
 
 #include <embed/shaders.h>
 #include <chrono>

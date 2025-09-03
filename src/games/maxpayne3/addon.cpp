@@ -5,7 +5,6 @@
  */
 
 #define ImTextureID ImU64
-#define NOMINMAX
 #define DEBUG_LEVEL_0
 
 #include <deps/imgui/imgui.h>

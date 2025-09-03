@@ -4,7 +4,6 @@
  */
 
 #define ImTextureID ImU64
-#define NOMINMAX
 #define DEBUG_LEVEL_0
 
 #include <include/reshade_api_resource.hpp>

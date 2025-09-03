@@ -328,7 +328,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.toneMapType > 1 && shader_injection.toneMapBlend == 0; },
-        .parse = [](float value) { return max(value * 0.01f, 0.000001f); },
+        .parse = [](float value) { return fmax(value * 0.01f, 0.000001f); },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",

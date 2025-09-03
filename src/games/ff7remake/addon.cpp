@@ -7,7 +7,6 @@
 
 #define DEBUG_LEVEL_0
 
-#define NOMINMAX
 #include <chrono>
 #include <random>
 
