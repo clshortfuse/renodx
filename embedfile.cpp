@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
   stream << "#define __" << output_basename << "_EMBED_FILE\n";
   stream << "#include <cstdint>\n";
   stream << "#include <span>\n";
-  stream << "static const std::uint8_t __" << output_basename << "_base[] = {\n";
+  stream << "inline constexpr std::uint8_t __" << output_basename << "_base[] = {\n";
   size_t current_line_bytes = 0;
   for (uint8_t byte : binary_data) {
     if (current_line_bytes == 0) {
@@ -61,9 +61,9 @@ int main(int argc, char** argv) {
     stream << "\n";
   }
   stream << "};\n";
-  stream << "static std::span<const std::uint8_t> __" << output_basename << "(\n";
-  stream << "__" << output_basename << "_base, sizeof(__" << output_basename << "_base)\n";
-  stream << ");\n";
+  stream << "inline constexpr std::span<const std::uint8_t> __" << output_basename << "{\n";
+  stream << "__" << output_basename << "_base\n";
+  stream << "};\n";
   stream << "#endif\n";
 
   std::string output = stream.str();

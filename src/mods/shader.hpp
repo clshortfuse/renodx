@@ -24,7 +24,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include <frozen/unordered_map.h>
 #include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
@@ -46,28 +45,37 @@ struct CustomShader {
   std::span<const uint8_t> code;
   int32_t index = -1;
   // return false to abort
-  bool (*on_replace)(reshade::api::command_list*) = nullptr;
+  std::function<bool(reshade::api::command_list*)> on_replace = nullptr;
   // return false to abort
-  bool (*on_inject)(reshade::api::command_list*) = nullptr;
+  std::function<bool(reshade::api::command_list*)> on_inject = nullptr;
   // return false to abort
-  bool (*on_draw)(reshade::api::command_list*) = nullptr;
-  void (*on_drawn)(reshade::api::command_list*) = nullptr;
-  frozen::unordered_map<reshade::api::device_api, std::span<const uint8_t>, 2> code_by_device = {
-      {reshade::api::device_api::d3d11, {}},
-      {reshade::api::device_api::d3d12, {}},
-  };
+  std::function<bool(reshade::api::command_list*)> on_draw = nullptr;
+  std::function<void(reshade::api::command_list*)> on_drawn = nullptr;
+  std::unordered_map<reshade::api::device_api, std::span<const uint8_t>> code_by_device;
 };
 
 using CustomShaders = std::unordered_map<uint32_t, CustomShader>;
 
 template <std::size_t N>
-constexpr auto DefineCustomShaders(const std::pair<uint32_t, CustomShader> (&items)[N]) {
-  return frozen::make_unordered_map(items);
+static CustomShaders DefineCustomShaders(const std::pair<uint32_t, CustomShader> (&items)[N]) {
+  CustomShaders cs;
+  for (const auto& item : items) {
+    if (!cs.contains(item.first)) {
+      cs.emplace(item.first, item.second);
+    }
+  }
+  return cs;
 }
 
 template <std::size_t N>
-constexpr auto DefineCustomShaders(const std::array<std::pair<uint32_t, CustomShader>, N>& items) {
-  return frozen::make_unordered_map(items);
+static CustomShaders DefineCustomShaders(const std::array<std::pair<uint32_t, CustomShader>, N>& items) {
+  CustomShaders cs;
+  for (const auto& item : items) {
+    if (!cs.contains(item.first)) {
+      cs.emplace(item.first, item.second);
+    }
+  }
+  return cs;
 }
 
 static std::function<bool(reshade::api::command_list*)> invoked_custom_swapchain_shader = nullptr;
@@ -1106,7 +1114,6 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
         if (force_pipeline_cloning || use_pipeline_layout_cloning) {
           for (const auto& [hash, shader] : (new_custom_shaders)) {
             for (const auto& [device, code] : shader.code_by_device) {
-              if (code.empty()) continue;
               renodx::utils::shader::UpdateReplacements({{hash, code}}, false, true, {device});
             }
             if (!shader.code.empty()) {
@@ -1117,7 +1124,6 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
           for (const auto& [hash, shader] : (new_custom_shaders)) {
             bool compile_supported = shader.on_replace == nullptr && shader.index == -1;
             for (const auto& [device, code] : shader.code_by_device) {
-              if (code.empty()) continue;
               renodx::utils::shader::UpdateReplacements({{hash, code}}, compile_supported, true, {device});
             }
 
