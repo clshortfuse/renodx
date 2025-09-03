@@ -8,9 +8,9 @@ float3 ApplyDeathStrandingToneMap(float3 untonemapped, float4 mHDRCompressionPar
   r0.rgb = untonemapped;
 
   if (peak == 1u) {  // unclamped
-    mHDRCompressionParam2.z = 999.f;
-    mHDRCompressionParam2.w = 999.f;
-    mHDRCompressionParam1.x = 100.f;
+    mHDRCompressionParam2.z = renodx::math::FLT32_MAX;
+    mHDRCompressionParam2.w = renodx::math::FLT32_MAX;
+    mHDRCompressionParam1.x = renodx::math::FLT32_MAX;
   }
 
   // part 1
@@ -164,9 +164,8 @@ float3 ToneMapForLUT(inout float r, inout float g, inout float b, inout float3 u
   }
 
   float y_in = renodx::color::y::from::BT709(untonemapped);
-  float y_out = renodx::tonemap::ExponentialRollOff(y_in, 0.f, 1.f);
+  float y_out = renodx::tonemap::ReinhardPiecewise(y_in, 1.f, 0.18f);
   float3 tonemapped = renodx::color::correct::Luminance(untonemapped, y_in, y_out);
-  tonemapped = lerp(untonemapped, tonemapped, saturate(y_in / 0.8f));
   tonemapped = min(tonemapped, 1.f);
 
   r = tonemapped.r, g = tonemapped.g, b = tonemapped.b;
@@ -191,15 +190,15 @@ float3 ApplyDisplayMap(float3 undisplaymapped) {
 
   displaymapped = ApplyExposureContrastFlareHighlightsShadowsByLuminance(undisplaymapped, y, cg_config, 0.18f);
   if (RENODX_TONE_MAP_TYPE == 2.f) {
-    float peak_white = renodx::color::correct::GammaSafe(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    float peak_white = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+    if (RENODX_GAMMA_CORRECTION) peak_white = renodx::color::correct::GammaSafe(peak_white, true);
 
     if (RENODX_TONE_MAP_PER_CHANNEL == 1.f) {
-      displaymapped = lerp(displaymapped, renodx::tonemap::ReinhardScalable(displaymapped, peak_white, 0.f, 0.5f, 0.5f), saturate(displaymapped));
+      displaymapped = renodx::color::bt709::from::BT2020(renodx::tonemap::ReinhardPiecewiseExtended(renodx::color::bt2020::from::BT709(displaymapped), 140.0f, peak_white, 0.5f));
     } else {
       float y_in = renodx::color::y::from::BT709(displaymapped);
-      float y_out = renodx::tonemap::ReinhardScalable(y_in, peak_white, 0.f, 0.5f, 0.5f);
-      // float y_out = renodx::tonemap::ExponentialRollOff(y_in, 1.f, peak_white);
-      displaymapped = lerp(displaymapped, renodx::color::correct::Luminance(displaymapped, y_in, y_out), saturate(y_in));
+      float y_out = renodx::tonemap::ReinhardPiecewiseExtended(y_in, 140.0f, peak_white, 0.5f);
+      displaymapped = renodx::color::correct::Luminance(displaymapped, y_in, y_out);
     }
   }
   displaymapped = ApplySaturationBlowoutHueCorrectionHighlightSaturation(displaymapped, undisplaymapped, y, cg_config);
@@ -260,6 +259,47 @@ void UpgradeToneMapApplyDisplayMapAndScale(float3 untonemapped, float3 tonemappe
   return;
 }
 
+float DPForPQ(float3 a, float3 b) {
+  precise float _209 = a.x * b.x;
+  return mad(a.z, b.z, mad(a.y, b.y, _209));
+}
+
+void EncodePQ(float3 color_bt709, float mOETFSettings_x, float mOETFSettings_y, inout float b, inout float g, inout float r) {
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    float3 color_bt2020 = renodx::color::bt2020::from::BT709(color_bt709);
+    float3 color_pq = renodx::color::pq::EncodeSafe(color_bt2020, RENODX_DIFFUSE_WHITE_NITS);
+    r = color_pq.r, g = color_pq.g, b = color_pq.b;
+  } else {
+    float3 _975 = color_bt709;
+    float _992 = exp2(mOETFSettings_x * log2(mOETFSettings_y * DPForPQ(float3(0.627403914928436279296875f, 0.3292830288410186767578125f, 0.0433130674064159393310546875f), _975)));
+    float _993 = exp2(log2(mOETFSettings_y * DPForPQ(float3(0.069097287952899932861328125f, 0.9195404052734375f, 0.01136231608688831329345703125f), _975)) * mOETFSettings_x);
+    float _994 = exp2(log2(mOETFSettings_y * DPForPQ(float3(0.01639143936336040496826171875f, 0.08801330626010894775390625f, 0.895595252513885498046875f), _975)) * mOETFSettings_x);
+    b = exp2(log2(mad(_994, 18.8515625f, 0.8359375f) / mad(_994, 18.6875f, 1.0f)) * 78.84375f);
+    g = exp2(log2(mad(_993, 18.8515625f, 0.8359375f) / mad(_993, 18.6875f, 1.0f)) * 78.84375f);
+    r = exp2(log2(mad(_992, 18.8515625f, 0.8359375f) / mad(_992, 18.6875f, 1.0f)) * 78.84375f);
+  }
+  return;
+}
+
+void DecodePQ(float3 color_pq, float mOETFSettings_x, float mOETFSettings_y, inout float b, inout float g, inout float r) {
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    float3 color_bt2020 = renodx::color::pq::DecodeSafe(color_pq, RENODX_DIFFUSE_WHITE_NITS);
+    float3 color_bt709 = renodx::color::bt709::from::BT2020(color_bt2020);
+    r = color_bt709.r, g = color_bt709.g, b = color_bt709.b;
+  } else {
+    float _133 = color_pq.x, _134 = color_pq.y, _135 = color_pq.z;
+    float _206 = exp2(log2(_133) * 0.0126833133399486541748046875f);
+    float _207 = exp2(log2(_134) * 0.0126833133399486541748046875f);
+    float _208 = exp2(log2(_135) * 0.0126833133399486541748046875f);
+    float _226 = 1.0f / mOETFSettings_x;
+    float _227 = 1.0f / mOETFSettings_y;
+    float3 _240 = float3(exp2(_226 * log2(max((_206 - 0.8359375f) / mad(_206, -18.6875f, 18.8515625f), 0.0f))) * _227, exp2(_226 * log2(max((_207 - 0.8359375f) / mad(_207, -18.6875f, 18.8515625f), 0.0f))) * _227, exp2(_226 * log2(max((_208 - 0.8359375f) / mad(_208, -18.6875f, 18.8515625f), 0.0f))) * _227);
+    b = DPForPQ(float3(-0.01815080083906650543212890625f, -0.100579001009464263916015625f, 1.11872994899749755859375f), _240);
+    g = DPForPQ(float3(-0.12454999983310699462890625f, 1.1328999996185302734375f, -0.008349419571459293365478515625f), _240);
+    r = DPForPQ(float3(1.6604900360107421875f, -0.5876410007476806640625f, -0.0728498995304107666015625f), _240);
+  }
+  return;
+}
 // #pragma warning(push)
 // #pragma warning(disable: 4000)
 bool GenerateOutput(float3 color_bt709, inout float4 output, bool clamp_peak = false) {
@@ -275,4 +315,44 @@ bool GenerateOutput(float3 color_bt709, inout float4 output, bool clamp_peak = f
   output.rgb = color_pq;
   return true;
 }
+
+void ReScaleBrightnessAndGammaCorrectForTAA(inout float r, inout float g, inout float b, bool clamp_peak = false) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+  } else {
+    float3 scene_pq = float3(r, g, b);
+    float3 color_linear = renodx::color::pq::DecodeSafe(scene_pq, RENODX_DIFFUSE_WHITE_NITS);
+    color_linear = renodx::color::bt709::from::BT2020(color_linear);
+    if (RENODX_GAMMA_CORRECTION) {
+      color_linear = renodx::color::correct::GammaSafe(color_linear);
+    }
+    color_linear = renodx::color::bt2020::from::BT709(color_linear) * RENODX_GRAPHICS_WHITE_NITS;
+    color_linear = (clamp_peak && RENODX_TONE_MAP_TYPE != 1.f) ? min(color_linear, RENODX_PEAK_WHITE_NITS) : color_linear;
+    scene_pq = renodx::color::pq::EncodeSafe(color_linear, 1.f);
+    r = scene_pq.r, g = scene_pq.g, b = scene_pq.b;
+  }
+  return;
+}
+
+void FinalizeOutput(float3 color_bt709, float mOETFSettings_x, float mOETFSettings_y, inout float r, inout float g, inout float b, bool clamp_peak = false) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    float _740 = exp2(mOETFSettings_x * log2(mOETFSettings_y * DPForPQ(float3(0.627403914928436279296875f, 0.3292830288410186767578125f, 0.0433130674064159393310546875f), color_bt709)));
+    float _741 = exp2(log2(mOETFSettings_y * DPForPQ(float3(0.069097287952899932861328125f, 0.9195404052734375f, 0.01136231608688831329345703125f), color_bt709)) * mOETFSettings_x);
+    float _742 = exp2(log2(mOETFSettings_y * DPForPQ(float3(0.01639143936336040496826171875f, 0.08801330626010894775390625f, 0.895595252513885498046875f), color_bt709)) * mOETFSettings_x);
+    b = exp2(log2(mad(_742, 18.8515625f, 0.8359375f) / mad(_742, 18.6875f, 1.0f)) * 78.84375f);
+    g = exp2(log2(mad(_741, 18.8515625f, 0.8359375f) / mad(_741, 18.6875f, 1.0f)) * 78.84375f);
+    r = exp2(log2(mad(_740, 18.8515625f, 0.8359375f) / mad(_740, 18.6875f, 1.0f)) * 78.84375f);
+  } else {
+    if (RENODX_GAMMA_CORRECTION != 0.f) {
+      color_bt709 = renodx::color::correct::GammaSafe(color_bt709);
+    }
+    float3 color_bt2020 = renodx::color::bt2020::from::BT709(color_bt709);
+    color_bt2020 *= RENODX_GRAPHICS_WHITE_NITS;
+    color_bt2020 = (clamp_peak && RENODX_TONE_MAP_TYPE != 1.f) ? min(color_bt2020, RENODX_PEAK_WHITE_NITS) : color_bt2020;
+    float3 color_pq = renodx::color::pq::EncodeSafe(color_bt2020, 1.f);
+
+    r = color_pq.r, g = color_pq.g, b = color_pq.b;
+  }
+  return;
+}
+
 // #pragma warning(pop)
