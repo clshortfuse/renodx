@@ -27,112 +27,101 @@ renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 ShaderInjectData shader_injection;
 
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings(
-{renodx::templates::settings::CreateDefaultSettings({
-  {"ToneMapType", {.binding = &shader_injection.tone_map_type, .default_value = 2.f, .labels = {"Vanilla", "RenoDRT", "RenoDRT + Exponential Rolloff"}}},
-  {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits}},
-  {"ToneMapGameNits", {.binding = &shader_injection.diffuse_white_nits}},
-  {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits}},
-  {"ToneMapGammaCorrection", {.binding = &shader_injection.gamma_correction}},
-  {"ToneMapScaling", {.binding = &shader_injection.tone_map_per_channel, .default_value = 1.f}},
-  {"ToneMapHueCorrection", {.binding = &shader_injection.tone_map_hue_correction, .default_value = 50.f}},
-  //{"ToneMapHueShift", {.binding = &shader_injection.tone_map_hue_shift}},
-  {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure}},
-  {"ColorGradeHighlights", {.binding = &shader_injection.tone_map_highlights}},
-  {"ColorGradeShadows", {.binding = &shader_injection.tone_map_shadows}},
-  {"ColorGradeContrast", {.binding = &shader_injection.tone_map_contrast}},
-  {"ColorGradeSaturation", {.binding = &shader_injection.tone_map_saturation}},
-  {"ColorGradeHighlightSaturation", {.binding = &shader_injection.tone_map_highlight_saturation}},
-  {"ColorGradeBlowout", {.binding = &shader_injection.tone_map_blowout}},
-  {"ColorGradeFlare", {.binding = &shader_injection.tone_map_flare}},
-}),
-{
-  //new renodx::utils::settings::Setting{
-  //  .key = "CustomBoostMethod",
-  //  .binding = &CUSTOM_SPRITE_ITM_METHOD,
-  //  .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-  //  .default_value = 1.f,
-  //  .label = "Sprite Boost Method",
-  //  .section = "Custom",
-  //  .labels = {"Luminance", "RGB Lerp"},
-  //  .is_visible = []() { return settings[0]->GetValue() >= 1; },
-  //},
-  new renodx::utils::settings::Setting{
-    .key = "CustomSpriteBoost",
-    .binding = &CUSTOM_SPRITE_ITM,
-    .default_value = 50.f,
-    .label = "Sprite Boost",
-    .section = "Custom",
-    .max = 100.f,
-    .parse = [](float value) { return value * 0.01f; },
-    .is_visible = []() { return settings[0]->GetValue() >= 1; },
-  },
-  new renodx::utils::settings::Setting{
-      .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-      .label = "HDR Look",
-      .section = "Presets",
-      .group = "button-line-1",
-      .tint = 0xb5b2b1,
-      .on_change = []() {
-        renodx::utils::settings::UpdateSetting("ToneMapType", 1.f);
-        //renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 1.f);
-        //renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
-        renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
-        renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
-        renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 50.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeShadows", 57.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeContrast", 60.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 60.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 55.f);
-        renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
-        renodx::utils::settings::UpdateSetting("CustomSpriteBoost", 60.f);
-      }
-  },
-  new renodx::utils::settings::Setting{
-      .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-      .label = "Reset All",
-      .section = "Presets",
-      .group = "button-line-1",
-      .on_change = []() {
-        for (auto setting : settings) {
-          if (setting->key.empty()) continue;
-          if (!setting->can_reset) continue;
-          renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-        }
-      },
-  },
-  new renodx::utils::settings::Setting{
-      .value_type = renodx::utils::settings::SettingValueType::TEXT,
-      .label = "Game mod by akuru, RenoDX Framework by ShortFuse",
-      .section = "About",
-  },
-  new renodx::utils::settings::Setting{
-      .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-      .label = "RenoDX Discord",
-      .section = "Links",
-      .group = "button-line-1",
-      .tint = 0x5865F2,
-      .on_change = []() {
-        renodx::utils::platform::LaunchURL("https://discord.gg/F6AU", "TeWJHM");
-      },
-  },
-  new renodx::utils::settings::Setting{
-      .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-      .label = "More RenoDX mods",
-      .section = "Links",
-      .group = "button-line-1",
-      .on_change = []() {
-        renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx/wiki/Mods");
-      },
-  },
-  new renodx::utils::settings::Setting{
-      .value_type = renodx::utils::settings::SettingValueType::TEXT,
-      .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
-      .section = "About",
-  },
-}});
+    {renodx::templates::settings::CreateDefaultSettings({
+         {"ToneMapType", {.binding = &shader_injection.tone_map_type, .default_value = 2.f, .labels = {"Vanilla", "RenoDRT", "RenoDRT + Exponential Rolloff"}}},
+         {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits}},
+         {"ToneMapGameNits", {.binding = &shader_injection.diffuse_white_nits}},
+         {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits}},
+         {"ToneMapGammaCorrection", {.binding = &shader_injection.gamma_correction}},
+         {"ToneMapScaling", {.binding = &shader_injection.tone_map_per_channel, .default_value = 1.f}},
+         {"ToneMapHueCorrection", {.binding = &shader_injection.tone_map_hue_correction, .default_value = 50.f}},
+         //{"ToneMapHueShift", {.binding = &shader_injection.tone_map_hue_shift}},
+         {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure}},
+         {"ColorGradeHighlights", {.binding = &shader_injection.tone_map_highlights}},
+         {"ColorGradeShadows", {.binding = &shader_injection.tone_map_shadows}},
+         {"ColorGradeContrast", {.binding = &shader_injection.tone_map_contrast}},
+         {"ColorGradeSaturation", {.binding = &shader_injection.tone_map_saturation}},
+         {"ColorGradeHighlightSaturation", {.binding = &shader_injection.tone_map_highlight_saturation}},
+         {"ColorGradeBlowout", {.binding = &shader_injection.tone_map_blowout}},
+         {"ColorGradeFlare", {.binding = &shader_injection.tone_map_flare}},
+     }),
+     {
+         new renodx::utils::settings::Setting{
+             .key = "CustomSpriteBoost",
+             .binding = &CUSTOM_SPRITE_ITM,
+             .default_value = 50.f,
+             .label = "Sprite Boost",
+             .section = "Custom",
+             .max = 100.f,
+             .parse = [](float value) { return value * 0.01f; },
+             .is_visible = []() { return settings[0]->GetValue() >= 1; },
+         },
+         new renodx::utils::settings::Setting{
+             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+             .label = "HDR Look",
+             .section = "Presets",
+             .group = "button-line-1",
+             .tint = 0xb5b2b1,
+             .on_change = []() {
+               renodx::utils::settings::UpdateSetting("ToneMapType", 1.f);
+               // renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 1.f);
+               // renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
+               renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
+               renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
+               renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 50.f);
+               renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
+               renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
+               renodx::utils::settings::UpdateSetting("ColorGradeShadows", 57.f);
+               renodx::utils::settings::UpdateSetting("ColorGradeContrast", 60.f);
+               renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 60.f);
+               renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
+               renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 55.f);
+               renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
+               renodx::utils::settings::UpdateSetting("CustomSpriteBoost", 60.f);
+             }},
+         new renodx::utils::settings::Setting{
+             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+             .label = "Reset All",
+             .section = "Presets",
+             .group = "button-line-1",
+             .on_change = []() {
+               for (auto setting : settings) {
+                 if (setting->key.empty()) continue;
+                 if (!setting->can_reset) continue;
+                 renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+               }
+             },
+         },
+         new renodx::utils::settings::Setting{
+             .value_type = renodx::utils::settings::SettingValueType::TEXT,
+             .label = "Game mod by akuru, RenoDX Framework by ShortFuse",
+             .section = "About",
+         },
+         new renodx::utils::settings::Setting{
+             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+             .label = "RenoDX Discord",
+             .section = "Links",
+             .group = "button-line-1",
+             .tint = 0x5865F2,
+             .on_change = []() {
+               renodx::utils::platform::LaunchURL("https://discord.gg/F6AU", "TeWJHM");
+             },
+         },
+         new renodx::utils::settings::Setting{
+             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+             .label = "More RenoDX mods",
+             .section = "Links",
+             .group = "button-line-1",
+             .on_change = []() {
+               renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx/wiki/Mods");
+             },
+         },
+         new renodx::utils::settings::Setting{
+             .value_type = renodx::utils::settings::SettingValueType::TEXT,
+             .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+             .section = "About",
+         },
+     }});
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
@@ -165,7 +154,7 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     settings[2]->default_value = 1000.f;
   }
 
-  //settings[3]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[2]->default_value), 203.f);
+  // settings[3]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[2]->default_value), 203.f);
 
   fired_on_init_swapchain = true;
 }
@@ -184,7 +173,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-      //renodx::mods::swapchain::swapchain_proxy_revert_state = true;
 
       // RGBA8_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({

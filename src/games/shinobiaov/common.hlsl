@@ -6,7 +6,7 @@ float3 InvRenoDRT(float3 color) {
   float3 untonemapped = color * renodx::math::DivideSafe(untonemapped_y, y, 0);
   renodx::tonemap::renodrt::Config hdr_video_config = renodx::tonemap::renodrt::config::Create();
 
-  //float peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+  // float peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
   float peak = 0.f;
 
   [branch]
@@ -80,7 +80,6 @@ float3 ApplyExponentialRollOff(float3 color) {
   } else {
     return renodx::tonemap::ExponentialRollOff(color * paperWhite, highlightsShoulderStart, peakWhite) / paperWhite;
   }
-  
 }
 
 float3 ApplyTonemapScaling(float3 color) {

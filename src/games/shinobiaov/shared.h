@@ -20,7 +20,6 @@
 #define RENODX_TONE_MAP_HUE_PROCESSOR        shader_injection.tone_map_hue_processor
 #define RENODX_TONE_MAP_PER_CHANNEL          shader_injection.tone_map_per_channel
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
-//#define RENODX_SWAP_CHAIN_CLAMP_NITS       10000.f
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE  renodx::color::convert::COLOR_SPACE_BT2020
 #define CUSTOM_SPRITE_ITM                    shader_injection.custom_sprite_itm
 #define CUSTOM_SPRITE_ITM_METHOD             shader_injection.custom_sprite_itm_method
