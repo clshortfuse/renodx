@@ -57,6 +57,15 @@ void main(
 
   float3 untonemapped = renodx::color::srgb::Decode(gamma_color.rgb);
 
+  if (CUSTOM_GRAIN_STRENGTH != 0.f) {
+    untonemapped = renodx::effects::ApplyFilmGrain(
+        untonemapped,
+        v1.xy,
+        CUSTOM_RANDOM,
+        CUSTOM_GRAIN_STRENGTH * 0.03f,
+        1.f);
+  }
+
   float3 neutral_sdr = renodx::tonemap::renodrt::NeutralSDR(untonemapped);
 
   gamma_color = renodx::color::srgb::Encode(neutral_sdr);
@@ -75,7 +84,7 @@ void main(
   // * `mad((b-a), t, a)`       = `lerp(a, b, t)`
   // * `mad(t, (b-a), a)`       = `lerp(a, b, t)`
 
-  gamma_color = gamma_color * cb0[2].xxx + -0.5;
+  gamma_color = gamma_color * cb0[2].xxx + -0.5;  // Game Brightness Slider
   gamma_color = gamma_color * cb0[2].yyy + 0.5;
 
   float3 graded_color = renodx::color::srgb::Decode(gamma_color);
