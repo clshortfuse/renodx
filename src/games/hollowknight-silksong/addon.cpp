@@ -284,6 +284,15 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxHDRVideos",
+        .binding = &shader_injection.custom_hdr_videos,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 2.f,
+        .label = "HDR Videos",
+        .section = "Effects",
+        .labels = {"Off", "BT.2446a", "RenoDRT"},
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxDrawPauseMenu",
         .binding = &g_draw_pause_menu,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -364,6 +373,7 @@ void OnPresetOff() {
       {"FxBloom", 50.f},
       {"FxHeroLight", 50.f},
       {"FxGrainStrength", 0.f},
+      {"FxHDRVideos", 0.f},
       {"FxDrawPauseMenu", 1.f},
   });
 }
