@@ -87,9 +87,11 @@ void main(
   gamma_color = gamma_color * cb0[2].xxx + -0.5;  // Game Brightness Slider
   gamma_color = gamma_color * cb0[2].yyy + 0.5;
 
-  float3 graded_color = renodx::color::srgb::Decode(gamma_color);
+  float3 graded_color = renodx::color::srgb::DecodeSafe(gamma_color);
 
   float3 tonemapped = renodx::draw::ToneMapPass(untonemapped, graded_color, neutral_sdr);
+
+  tonemapped = renodx::color::bt709::clamp::BT2020(tonemapped);
 
   o0.rgb = renodx::draw::RenderIntermediatePass(tonemapped);
   return;
