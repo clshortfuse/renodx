@@ -20,7 +20,17 @@
 
 namespace {
 
+const uint32_t PAUSE_MENU_PIXEL_SHADER = 0x066C98CB;
+float g_draw_pause_menu = 1.f;
+
 renodx::mods::shader::CustomShaders custom_shaders = {
+    {
+        PAUSE_MENU_PIXEL_SHADER,
+        {
+            .crc32 = PAUSE_MENU_PIXEL_SHADER,
+            .on_draw = [](auto* cmd_list) { return g_draw_pause_menu; },
+        },
+    },
     __ALL_CUSTOM_SHADERS,
 };
 
@@ -274,6 +284,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxDrawPauseMenu",
+        .binding = &g_draw_pause_menu,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Draw Pause Menu",
+        .section = "Effects",
+        .tooltip = "Allows hiding of pause menu (useful for screenshots)",
+        .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -344,6 +364,7 @@ void OnPresetOff() {
       {"FxBloom", 50.f},
       {"FxHeroLight", 50.f},
       {"FxGrainStrength", 0.f},
+      {"FxDrawPauseMenu", 1.f},
   });
 }
 
@@ -383,6 +404,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::allow_multiple_push_constants = true;
 
+        renodx::mods::swapchain::force_borderless = false;
+        renodx::mods::swapchain::force_screen_tearing = false;
         renodx::mods::swapchain::use_resource_cloning = true;
         renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
         renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
