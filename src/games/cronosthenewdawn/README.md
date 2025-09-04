@@ -23,4 +23,22 @@ float3 ColorCorrect( float3 WorkingColor,
 
 	return WorkingColor;
 }
+
+// ...
+
+if( GetOutputDevice() == TONEMAPPER_OUTPUT_sRGB)
+{		
+	// Convert from sRGB to specified output gamut	
+	//float3 OutputGamutColor = mul( AP1_2_Output, mul( sRGB_2_AP1, FilmColor ) );
+
+	// FIXME: Workaround for UE-29935, pushing all colors with a 0 component to black output
+	// Default parameters seem to cancel out (sRGB->XYZ->AP1->XYZ->sRGB), so should be okay for a temp fix
+	float3 OutputGamutColor = WorkingColorSpace.bIsSRGB ? FilmColor : mul( AP1_2_Output, mul( (float3x3)WorkingColorSpace.ToAP1, FilmColor ) );
+
+	// Apply conversion to sRGB (this must be an exact sRGB conversion else darks are bad).
+	// ==== changes
+-	OutDeviceColor = LinearToSrgb( OutputGamutColor );
++	OutDeviceColor = pow( abs( OutputGamutColor ), 1.0 / 2.2 ) * sign( OutputGamutColor );  // fix: force gamma 2.2 instead, given that SDR only looked good with a gamma mismatch due to the fog raise
+	// ====
+}
 ```
