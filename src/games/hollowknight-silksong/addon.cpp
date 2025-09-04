@@ -318,12 +318,12 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"ToneMapWhiteClip", 20.f},
-              {"ColorGradeHighlights", 60.f},
+              {"ColorGradeHighlights", 55.f},
               {"ColorGradeContrast", 60.f},
               {"ColorGradeSaturation", 55.f},
               {"ColorGradeBlowout", 40.f},
               {"FxBloom", 40.f},
-              {"FxHeroLight", 20.f},
+              {"FxHeroLight", 15.f},
               {"FxGrainStrength", 50.f},
           });
         },
