@@ -119,32 +119,6 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapHueCorrection",
-        .binding = &shader_injection.tone_map_hue_correction,
-        .default_value = 100.f,
-        .label = "Hue Correction",
-        .section = "Tone Mapping",
-        .tooltip = "Hue retention strength.",
-        .min = 0.f,
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 2; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapHueShift",
-        .binding = &shader_injection.tone_map_hue_shift,
-        .default_value = 50.f,
-        .label = "Hue Shift",
-        .section = "Tone Mapping",
-        .tooltip = "Hue-shift emulation strength.",
-        .min = 0.f,
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "ToneMapWhiteClip",
         .binding = &shader_injection.tone_map_white_clip,
         .default_value = 100.f,
@@ -248,15 +222,36 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "FxVanillaClip",
-        .binding = &shader_injection.custom_vanilla_clip,
-        .default_value = 50.f,
-        .label = "Vanilla Clip",
+        .key = "FxBloomClip",
+        .binding = &shader_injection.custom_bloom_clip,
+        .default_value = 0.f,
+        .label = "Bloom Clip",
         .section = "Effects",
-        .tooltip = "Emulates the vanilla white clip effect",
+        .tooltip = "Emulates the vanilla bloom clipping effect",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
+    new renodx::utils::settings::Setting{
+        .key = "FxHueClip",
+        .binding = &shader_injection.custom_hue_clip,
+        .default_value = 50.f,
+        .label = "Hue Clip",
+        .section = "Effects",
+        .tooltip = "Emulates the vanilla hue clip effect",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxSaturationClip",
+        .binding = &shader_injection.custom_saturation_clip,
+        .default_value = 50.f,
+        .label = "Saturation Clip",
+        .section = "Effects",
+        .tooltip = "Emulates the vanilla saturation clip effect",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+
     new renodx::utils::settings::Setting{
         .key = "FxVignette",
         .binding = &shader_injection.custom_vignette,
@@ -331,10 +326,24 @@ renodx::utils::settings::Settings settings = {
               {"ColorGradeHighlights", 55.f},
               {"ColorGradeContrast", 60.f},
               {"ColorGradeSaturation", 55.f},
-              {"ColorGradeBlowout", 40.f},
+              {"ColorGradeBlowout", 10.f},
               {"FxBloom", 40.f},
               {"FxHeroLight", 15.f},
               {"FxGrainStrength", 50.f},
+          });
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Vanilla Look",
+        .section = "Options",
+        .group = "button-line-1",
+        .on_change = []() {
+          renodx::utils::settings::ResetSettings();
+          renodx::utils::settings::UpdateSettings({
+              {"FxBloomClip", 100.f},
+              {"FxSaturationClip", 100.f},
+              {"FxHueClip", 100.f},
           });
         },
     },
@@ -380,7 +389,9 @@ void OnPresetOff() {
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorGradeScene", 100.f},
-      {"FxVanillaClip", 100.f},
+      {"FxBloomClip", 100.f},
+      {"FxSaturationClip", 100.f},
+      {"FxHueClip", 100.f},
       {"FxVignette", 100.f},
       {"FxBloom", 50.f},
       {"FxHeroLight", 50.f},
@@ -424,7 +435,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       if (!initialized) {
         renodx::mods::shader::force_pipeline_cloning = true;
-        renodx::mods::shader::allow_multiple_push_constants = true;
 
         renodx::mods::swapchain::force_borderless = false;
         renodx::mods::swapchain::force_screen_tearing = false;

@@ -37,10 +37,11 @@ void main(
   o0.w = r0.w;
   o0.xyz = r0.xyz ? r1.xyz : r2.xyz;
 
+  o0.a = saturate(o0.a);
   if (RENODX_TONE_MAP_TYPE == 0.f) {
-    o0 = saturate(o0);
+    o0.rgb = saturate(o0.rgb);
   } else {
-    o0 = max(0, o0);
+    o0.rgb = lerp(max(0, o0.rgb), saturate(o0.rgb), CUSTOM_BLOOM_CLIP);
   }
   return;
 }

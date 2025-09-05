@@ -1,9 +1,9 @@
 #include "./shared.h"
 
-// ---- Created with 3Dmigoto v1.3.16 on Thu Sep  4 10:46:25 2025
-Texture2D<float4> t1 : register(t1);  // 1D-LUT
+// ---- Created with 3Dmigoto v1.3.16 on Thu Sep  4 10:29:13 2025
+Texture2D<float4> t1 : register(t1);
 
-Texture2D<float4> t0 : register(t0);  // Render
+Texture2D<float4> t0 : register(t0);
 
 SamplerState s1_s : register(s1);
 
@@ -39,10 +39,7 @@ void main(
     r0.xyz = r1.xyz * float3(0, 0, 1) + r0.xyz;
     r0.w = dot(r0.xyz, float3(0.219999999, 0.707000017, 0.0710000023));
     r0.xyz = r0.xyz + -r0.www;
-    r0.xyz = cb0[2].zzz * r0.xyz + r0.www;
-    r0.xyz = r0.xyz * cb0[2].xxx + float3(-0.5, -0.5, -0.5);
-    o0.xyz = r0.xyz * cb0[2].yyy + float3(0.5, 0.5, 0.5);
-
+    o0.xyz = cb0[2].zzz * r0.xyz + r0.www;
     o0 = saturate(o0);
 
     o0.rgb = renodx::color::srgb::Decode(o0.rgb);
@@ -66,29 +63,46 @@ void main(
         1.f);
   }
 
+  renodx::tonemap::renodrt::Config renodrt_config = renodx::tonemap::renodrt::config::Create();
+  renodrt_config.nits_peak = 100.f;
+  renodrt_config.mid_gray_value = 0.18f;
+  renodrt_config.mid_gray_nits = 18.f;
+  renodrt_config.exposure = 1.f;
+  renodrt_config.highlights = 1.f;
+  renodrt_config.shadows = 1.f;
+  renodrt_config.contrast = 1.f;
+  renodrt_config.saturation = 1.f;
+  renodrt_config.dechroma = 0.f;
+  renodrt_config.flare = 0.f;
+  renodrt_config.tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
+  renodrt_config.white_clip = 4.f;
+  renodrt_config.hue_correction_strength = 0.f;
+  renodrt_config.working_color_space = 0u;
+  renodrt_config.clamp_color_space = -1.f;
+
   float3 neutral_sdr = lerp(
-      renodx::tonemap::renodrt::NeutralSDR(untonemapped),
-      renodx::tonemap::ExponentialRollOff(untonemapped),
-      CUSTOM_VANILLA_CLIP);
+      renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config),
+      renodx::tonemap::ExponentialRollOff(untonemapped, 0.75f),
+      CUSTOM_SATURATION_CLIP);
 
-  gamma_color = renodx::color::srgb::Encode(saturate(neutral_sdr));
+  neutral_sdr = renodx::color::correct::Hue(neutral_sdr, untonemapped, 1.f - CUSTOM_HUE_CLIP);
 
+  float3 neutral_gamma = renodx::color::srgb::Encode(abs(neutral_sdr));
+
+  float max_channel = max(max(max(neutral_gamma.r, neutral_gamma.g), neutral_gamma.b), 1.f);
+  float3 lut_input_color = neutral_gamma / max_channel;
+  gamma_color = lut_input_color;
   gamma_color.r = t1.Sample(s1_s, float2(gamma_color.r, 0.125)).r;
   gamma_color.g = t1.Sample(s1_s, float2(gamma_color.g, 0.375)).g;
   gamma_color.b = t1.Sample(s1_s, float2(gamma_color.b, 0.625)).b;
+  gamma_color = gamma_color * max_channel;
   float luma = dot(gamma_color, float3(0.219999999, 0.707000017, 0.0710000023));
   // Lerp luminance to desaturate
   gamma_color.rgb = lerp(luma, gamma_color.rgb, cb0[2].z);  // 0 = black & white
-
-  // * `((b-a) * t) + a`        = `lerp(a, b, t)`
-  // * `(t * (b-a)) + a`        = `lerp(a, b, t)`
-  // * `(1-t)*a + t*b`          = `lerp(a, b, t)`
-  // * `b*t + (a*(1-t))`        = `lerp(a, b, t)`
-  // * `mad((b-a), t, a)`       = `lerp(a, b, t)`
-  // * `mad(t, (b-a), a)`       = `lerp(a, b, t)`
-
-  gamma_color = gamma_color * cb0[2].xxx + -0.5;  // Game Brightness Slider
-  gamma_color = gamma_color * cb0[2].yyy + 0.5;
+  neutral_sdr = lut_input_color;
+  float neutral_luma = dot(neutral_sdr, float3(0.219999999, 0.707000017, 0.0710000023));
+  neutral_sdr.rgb = lerp(neutral_luma, neutral_sdr.rgb, cb0[2].z);  // 0 = black & white
+  neutral_sdr = renodx::color::srgb::DecodeSafe(neutral_sdr);
 
   float3 graded_color = renodx::color::srgb::DecodeSafe(gamma_color);
 

@@ -50,18 +50,19 @@ struct ShaderInjectData {
   float tone_map_highlight_saturation;
   float tone_map_blowout;
   float tone_map_flare;
-  float tone_map_hue_correction;
-  float tone_map_hue_shift;
   float tone_map_white_clip;
   float tone_map_hue_processor;
   float gamma_correction;
+  float custom_hue_shift;
   float custom_random;
   float custom_grain_strength;
   float custom_bloom;
   float custom_hero_light;
   float custom_hdr_videos;
   float custom_vignette;
-  float custom_vanilla_clip;
+  float custom_saturation_clip;
+  float custom_bloom_clip;
+  float custom_hue_clip;
 };
 
 #ifndef __cplusplus
@@ -79,10 +80,6 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_GRAPHICS_WHITE_NITS           shader_injection.graphics_white_nits
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
 #define RENODX_TONE_MAP_HUE_PROCESSOR        shader_injection.tone_map_hue_processor
-#define RENODX_TONE_MAP_HUE_CORRECTION       shader_injection.tone_map_hue_correction
-#define RENODX_TONE_MAP_HUE_SHIFT            shader_injection.tone_map_hue_shift
-#define RENODX_TONE_MAP_HUE_SHIFT_METHOD     HUE_SHIFT_METHOD_SDR_MODIFIED
-#define RENODX_TONE_MAP_HUE_SHIFT_MODIFIER   0.5f
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
@@ -100,7 +97,9 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_HERO_LIGHT                    shader_injection.custom_hero_light
 #define CUSTOM_HDR_VIDEOS                    shader_injection.custom_hdr_videos
 #define CUSTOM_VIGNETTE                      shader_injection.custom_vignette
-#define CUSTOM_VANILLA_CLIP                  shader_injection.custom_vanilla_clip
+#define CUSTOM_SATURATION_CLIP               shader_injection.custom_saturation_clip
+#define CUSTOM_BLOOM_CLIP                    shader_injection.custom_bloom_clip
+#define CUSTOM_HUE_CLIP                      shader_injection.custom_hue_clip
 
 #include "../../shaders/renodx.hlsl"
 
