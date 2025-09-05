@@ -248,7 +248,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "FxVignette",
+        .key = "FxVanillaClip",
         .binding = &shader_injection.custom_vanilla_clip,
         .default_value = 50.f,
         .label = "Vanilla Clip",
