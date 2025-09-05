@@ -930,7 +930,14 @@ static void OnInitPipeline(
       s << ", Shader hashes: " << pair->second.shader_hashes.size() << " => " << details.shader_hashes.size();
       s << ")";
       reshade::log::message(reshade::log::level::warning, s.str().c_str());
-      renodx::utils::pipeline::DestroyPipelineSubobjects(details.subobjects);
+      if (pair->second.replacement_pipeline.handle != 0u) {
+        device->destroy_pipeline(pair->second.replacement_pipeline);
+      }
+      if (store->use_replace_async || store->use_shader_cache) {
+        // Retain subobjects for async replacement or shader cache
+      } else {
+        renodx::utils::pipeline::DestroyPipelineSubobjects(pair->second.subobjects);
+      }
     }
     if (store->use_replace_async) {
       for (const auto shader_hash : pair->second.shader_hashes) {
