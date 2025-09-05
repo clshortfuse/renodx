@@ -61,6 +61,7 @@ struct ShaderInjectData {
   float custom_hero_light;
   float custom_hdr_videos;
   float custom_vignette;
+  float custom_vanilla_clip;
 };
 
 #ifndef __cplusplus
@@ -99,6 +100,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_HERO_LIGHT                    shader_injection.custom_hero_light
 #define CUSTOM_HDR_VIDEOS                    shader_injection.custom_hdr_videos
 #define CUSTOM_VIGNETTE                      shader_injection.custom_vignette
+#define CUSTOM_VANILLA_CLIP                  shader_injection.custom_vanilla_clip
 
 #include "../../shaders/renodx.hlsl"
 

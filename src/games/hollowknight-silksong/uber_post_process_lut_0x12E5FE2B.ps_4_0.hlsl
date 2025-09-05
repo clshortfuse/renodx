@@ -66,9 +66,12 @@ void main(
         1.f);
   }
 
-  float3 neutral_sdr = renodx::tonemap::renodrt::NeutralSDR(untonemapped);
+  float3 neutral_sdr = lerp(
+      renodx::tonemap::renodrt::NeutralSDR(untonemapped),
+      renodx::tonemap::ExponentialRollOff(untonemapped),
+      CUSTOM_VANILLA_CLIP);
 
-  gamma_color = renodx::color::srgb::Encode(neutral_sdr);
+  gamma_color = renodx::color::srgb::Encode(saturate(neutral_sdr));
 
   gamma_color.r = t1.Sample(s1_s, float2(gamma_color.r, 0.125)).r;
   gamma_color.g = t1.Sample(s1_s, float2(gamma_color.g, 0.375)).g;
