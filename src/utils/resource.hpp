@@ -96,6 +96,7 @@ struct ResourceUpgradeInfo {
   static const int16_t BACK_BUFFER = -1;
   static const int16_t ANY = -2;
   float aspect_ratio = ANY;
+  float aspect_ratio_tolerance = 0.0001f;
 
   uint32_t usage_set = 0;
   uint32_t usage_unset = 0;
@@ -165,9 +166,8 @@ struct ResourceUpgradeInfo {
         } else {
           target_ratio = this->aspect_ratio;
         }
-        static const float TOLERANCE = 0.0001f;
         const float diff = std::abs(view_ratio - target_ratio);
-        if (diff > TOLERANCE) return false;
+        if (diff > this->aspect_ratio_tolerance) return false;
       }
     }
     return true;
