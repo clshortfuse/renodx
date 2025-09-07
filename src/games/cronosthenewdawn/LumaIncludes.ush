@@ -160,21 +160,21 @@ float3 FixColorFade(float3 Scene, float3 Fade)
 {
   const float FogCorrectionAverageBrightness = 1.0;
   const float FogCorrectionMinBrightness = 0.0;
-  const float FogCorrectionHue = 1.0;
+  const float FogCorrectionHue = 0.8; // 1 might break and turn brown due to divisions by 0 or something, anyway fog is usually grey in Cronos, even if there's a slight different white point between the working and output color spaces (D60 vs D65)
   const float FogCorrectionChrominance = 1.0;
   const float FogCorrectionIntensity = 1.0;
 
   float3 sceneWithFog = Scene + Fade;
-  float3 prevSceneWithFog = sceneWithFog.rgb;
+  float3 prevSceneWithFog = sceneWithFog;
 
-  float fadeMax = max(Fade.x, max(Fade.y, Fade.z)); // This might have values below zero but it should be ok
+  float fadeMax = max(abs(Fade.x), max(abs(Fade.y), abs(Fade.z))); // This might have values below zero but it should be ok
   float3 normalizedFade = fadeMax != 0.0 ? (Fade / fadeMax) : Fade;
   float3 fadeOklab = linear_srgb_to_oklab(normalizedFade);
 
   float3 sceneOklab = linear_srgb_to_oklab(Scene);
     
   const float fogBrightness = saturate((FogCorrectionAverageBrightness * sceneOklab.x) + FogCorrectionMinBrightness); // Restore an optional min amount of fog on black and a good amount of fog on non black backgrounds
-  const float fogHue = FogCorrectionHue * saturate(fadeOklab.z); // Restoring the fog hue might look good if the fog was colorful, but if it was just grey, then it'd randomly shift the background hue to an ugly value, so we scale the fog hue restoration by the chrominance of the fade (it seems like it's usually white/grey in Cronos)
+  const float fogHue = FogCorrectionHue * saturate(length(fadeOklab.yz) / sqrt(2.0)); // Restoring the fog hue might look good if the fog was colorful, but if it was just grey, then it'd randomly shift the background hue to an ugly value, so we scale the fog hue restoration by the chrominance of the fade (it seems like it's usually white/grey in Cronos)
   const float fogChrominance = FogCorrectionChrominance; // Restore the fog chrominance to a 100%, which means we'd either desaturate or saturate the background
   sceneWithFog = RestoreHueAndChrominance(Scene, sceneWithFog, fogHue, fogChrominance, 0.f, FLT_MAX, fogBrightness); 
 
