@@ -53,6 +53,7 @@ struct Config {
   float swap_chain_clamp_color_space;        // -1 = none, bt709, bt2020, ap1
   float swap_chain_encoding;                 // 0 = none, 4 = hdr10, 5 = scrgb
   float swap_chain_encoding_color_space;     // -1 = none, bt709, bt2020, ap1
+  float swap_chain_output_preset;            // -1 = none, 0 = sdr, 1 = hdr10, 2 = scrgb
 };
 
 static const float GAMMA_CORRECTION_NONE = 0;
@@ -89,6 +90,11 @@ static const float TONE_MAP_TYPE_VANILLA = 0;
 static const float TONE_MAP_TYPE_UNTONEMAPPED = 1.f;
 static const float TONE_MAP_TYPE_ACES = 2.f;
 static const float TONE_MAP_TYPE_RENO_DRT = 3.f;
+
+static const float SWAP_CHAIN_OUTPUT_PRESET_NONE = -1.f;
+static const float SWAP_CHAIN_OUTPUT_PRESET_SDR = 0.f;
+static const float SWAP_CHAIN_OUTPUT_PRESET_HDR10 = 1.f;
+static const float SWAP_CHAIN_OUTPUT_PRESET_SCRGB = 2.f;
 
 Config BuildConfig() {
   Config config;
@@ -304,6 +310,11 @@ Config BuildConfig() {
 #endif
   config.swap_chain_encoding_color_space = RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE;
 
+#if !defined(RENODX_SWAP_CHAIN_OUTPUT_PRESET)
+#define RENODX_SWAP_CHAIN_OUTPUT_PRESET SWAP_CHAIN_OUTPUT_PRESET_NONE
+#endif
+  config.swap_chain_output_preset = RENODX_SWAP_CHAIN_OUTPUT_PRESET;
+
   return config;
 };
 
@@ -441,6 +452,23 @@ float3 SwapChainPass(float3 color, Config config) {
     color = renodx::color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, renodx::color::convert::COLOR_SPACE_BT709);
     config.swap_chain_decoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
     color = renodx::color::correct::GammaSafe(color, false, 2.4f);
+  }
+
+  [branch]
+  if (config.swap_chain_output_preset == SWAP_CHAIN_OUTPUT_PRESET_SDR) {
+    config.swap_chain_clamp_color_space = renodx::color::convert::COLOR_SPACE_BT709;
+    config.swap_chain_encoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
+    config.swap_chain_encoding = ENCODING_SRGB;
+    config.swap_chain_scaling_nits = 1.f;
+    config.swap_chain_clamp_nits = 1.f;
+  } else if (config.swap_chain_output_preset == SWAP_CHAIN_OUTPUT_PRESET_HDR10) {
+    config.swap_chain_clamp_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
+    config.swap_chain_encoding_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
+    config.swap_chain_encoding = ENCODING_PQ;
+  } else if (config.swap_chain_output_preset == SWAP_CHAIN_OUTPUT_PRESET_SCRGB) {
+    config.swap_chain_clamp_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
+    config.swap_chain_encoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
+    config.swap_chain_encoding = ENCODING_SCRGB;
   }
 
   color *= config.swap_chain_scaling_nits;
