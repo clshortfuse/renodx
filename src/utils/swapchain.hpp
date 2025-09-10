@@ -14,6 +14,7 @@
 #include <ios>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <unordered_set>
 #include <vector>
 
@@ -185,7 +186,10 @@ static std::optional<float> GetPeakNits(reshade::api::swapchain* swapchain) {
   // Current display colorspace (not swapchain)
   if (output_desc->ColorSpace != DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
       && output_desc->ColorSpace != DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709) {
-    reshade::log::message(reshade::log::level::warning, "GetPeakNits(Not HDR)");
+    std::stringstream s;
+    s << "GetPeakNits(Not HDR Color Space: " << static_cast<int>(output_desc->ColorSpace);
+    s << ", Peak Nits: " << output_desc->MaxLuminance << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
     // Not WCG/HDR
     return std::nullopt;
   }
@@ -228,6 +232,154 @@ static bool IsHDRColorSpace(reshade::api::swapchain* swapchain) {
     default:
       return false;
   }
+}
+
+static bool GetHDRSupported(const DISPLAYCONFIG_PATH_INFO& path) {
+  DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO_2 advanced_color_info_2 = {};
+  advanced_color_info_2.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO_2;
+  advanced_color_info_2.header.size = sizeof(advanced_color_info_2);
+  advanced_color_info_2.header.adapterId = path.targetInfo.adapterId;
+  advanced_color_info_2.header.id = path.targetInfo.id;
+  if (DisplayConfigGetDeviceInfo(&advanced_color_info_2.header) == ERROR_SUCCESS) {
+    return advanced_color_info_2.highDynamicRangeSupported != 0;
+  }
+  // Fallback to older struct
+  DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO advanced_color_info_1 = {};
+  advanced_color_info_1.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+  advanced_color_info_1.header.size = sizeof(advanced_color_info_1);
+  advanced_color_info_1.header.adapterId = path.targetInfo.adapterId;
+  advanced_color_info_1.header.id = path.targetInfo.id;
+  if (DisplayConfigGetDeviceInfo(&advanced_color_info_1.header) == ERROR_SUCCESS) {
+    return advanced_color_info_1.advancedColorSupported != 0;
+  }
+  return false;
+}
+
+static bool GetHDREnabled(const DISPLAYCONFIG_PATH_INFO& path) {
+  DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO_2 advanced_color_info_2 = {};
+  advanced_color_info_2.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO_2;
+  advanced_color_info_2.header.size = sizeof(advanced_color_info_2);
+  advanced_color_info_2.header.adapterId = path.targetInfo.adapterId;
+  advanced_color_info_2.header.id = path.targetInfo.id;
+  if (DisplayConfigGetDeviceInfo(&advanced_color_info_2.header) == ERROR_SUCCESS) {
+    return advanced_color_info_2.highDynamicRangeUserEnabled != 0;
+  }
+  // Fallback to older struct
+  DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO advanced_color_info_1 = {};
+  advanced_color_info_1.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+  advanced_color_info_1.header.size = sizeof(advanced_color_info_1);
+  advanced_color_info_1.header.adapterId = path.targetInfo.adapterId;
+  advanced_color_info_1.header.id = path.targetInfo.id;
+  if (DisplayConfigGetDeviceInfo(&advanced_color_info_1.header) == ERROR_SUCCESS) {
+    return advanced_color_info_1.advancedColorEnabled != 0;
+  }
+  return false;
+}
+
+static bool SetHDREnabled(const DISPLAYCONFIG_PATH_INFO& path, bool enabled = true) {
+  if (GetHDREnabled(path) == enabled) return true;
+
+  DISPLAYCONFIG_SET_HDR_STATE hdr_state = {};
+  hdr_state.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_HDR_STATE;
+  hdr_state.header.size = sizeof(hdr_state);
+  hdr_state.header.adapterId = path.targetInfo.adapterId;
+  hdr_state.header.id = path.targetInfo.id;
+  hdr_state.enableHdr = enabled ? 1 : 0;
+  if (DisplayConfigSetDeviceInfo(&hdr_state.header) == ERROR_SUCCESS) {
+    return true;
+  }
+  // Fallback to older struct
+  DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE advanced_color_state = {};
+  advanced_color_state.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
+  advanced_color_state.header.size = sizeof(advanced_color_state);
+  advanced_color_state.header.adapterId = path.targetInfo.adapterId;
+  advanced_color_state.header.id = path.targetInfo.id;
+  advanced_color_state.enableAdvancedColor = enabled ? 1 : 0;
+  return DisplayConfigSetDeviceInfo(&advanced_color_state.header) == ERROR_SUCCESS;
+}
+
+static bool SetHDREnabled(reshade::api::swapchain* swapchain, bool enabled = true) {
+  if (!IsDXGI(swapchain)) return false;
+
+  auto output_desc = GetDirectXOutputDesc1(swapchain);
+  if (!output_desc.has_value()) return false;
+
+  auto path = renodx::utils::platform::GetPathInfo(output_desc->Monitor);
+  if (!path.has_value()) return false;
+
+  return SetHDREnabled(path.value(), enabled);
+}
+
+struct DisplayInfo {
+  reshade::api::swapchain* swapchain = nullptr;
+  std::optional<DXGI_OUTPUT_DESC1> output_desc = std::nullopt;
+  std::optional<DISPLAYCONFIG_PATH_INFO> display_config = std::nullopt;
+  bool hdr_supported = false;
+  bool hdr_enabled = false;
+  bool hdr_forced = false;
+  float peak_nits = 1000.f;
+  float sdr_white_nits = 203.f;
+  // Unreliable 
+  // reshade::api::format display_color_space = reshade::api::format::unknown;
+};
+
+static DisplayInfo GetDisplayInfo(reshade::api::swapchain* swapchain, bool force_hdr = false) {
+  DisplayInfo info;
+  if (!IsDXGI(swapchain)) return info;
+  info.output_desc = GetDirectXOutputDesc1(swapchain);
+  if (!info.output_desc.has_value()) return info;
+
+  info.display_config = renodx::utils::platform::GetPathInfo(info.output_desc->Monitor);
+  if (!info.display_config.has_value()) return info;
+
+  info.hdr_supported = GetHDRSupported(info.display_config.value());
+
+  info.hdr_enabled = GetHDREnabled(info.display_config.value());
+
+  if (force_hdr && info.hdr_supported && !info.hdr_enabled) {
+    if (SetHDREnabled(info.display_config.value(), true)) {
+      info.hdr_enabled = true;
+      info.hdr_forced = true;
+      info.output_desc = GetDirectXOutputDesc1(swapchain);
+    } else {
+      reshade::log::message(reshade::log::level::error, "GetDisplayInfo(Failed to enable HDR on display)");
+    }
+  }
+
+  // HDR needs to be enabled to get correct values
+  if (info.hdr_enabled) {
+    DISPLAYCONFIG_SDR_WHITE_LEVEL white_level = {};
+    white_level.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
+    white_level.header.size = sizeof(white_level);
+    white_level.header.adapterId = info.display_config->targetInfo.adapterId;
+    white_level.header.id = info.display_config->targetInfo.id;
+    if (DisplayConfigGetDeviceInfo(&white_level.header) == ERROR_SUCCESS) {
+      info.sdr_white_nits = static_cast<float>(white_level.SDRWhiteLevel) / 1000 * 80;  // From wingdi.h.
+    }
+    info.peak_nits = info.output_desc->MaxLuminance;
+  }
+
+  // DirectX still reports SDR color space when changing display mode to HDR
+
+  // switch (info.output_desc->ColorSpace) {
+  //   case DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709:
+  //     info.display_color_space = reshade::api::format::r16g16b16a16_float;
+  //     // assert(info.hdr_enabled == true);
+  //     break;
+  //   case DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020:
+  //     info.display_color_space = reshade::api::format::r10g10b10a2_unorm;
+  //     assert(info.hdr_enabled == true);
+  //     break;
+  //   default:
+  //     assert(false);
+  //     [[fallthrough]];
+  //   case DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709:
+  //     info.display_color_space = reshade::api::format::r8g8b8a8_unorm;
+  //     assert(info.hdr_enabled == false);
+  //     break;
+  // }
+
+  return info;
 }
 
 static std::optional<float> GetSDRWhiteNits(reshade::api::swapchain* swapchain) {
