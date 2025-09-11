@@ -38,6 +38,7 @@ void main(
 
   r0.xy = v1.xy * cb0[7].xy + cb0[7].zw;
   r0.xyzw = t1.Sample(s0_s, r0.xy).xyzw;
+  //r0 = saturate(r0);
   r0.xyz = -cb0[2].xyz + r0.xyz;
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.x = dot(r0.xyz, float3(1,1,1));
