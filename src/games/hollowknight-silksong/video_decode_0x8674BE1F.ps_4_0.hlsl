@@ -14,6 +14,7 @@ void main(
     out float4 o0: SV_Target0) {
   o0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
 
+  [branch]
   if (CUSTOM_HDR_VIDEOS == 1.f) {
     o0.rgb = renodx::draw::UpscaleVideoPass(o0.rgb);
   } else if (CUSTOM_HDR_VIDEOS == 2.f) {

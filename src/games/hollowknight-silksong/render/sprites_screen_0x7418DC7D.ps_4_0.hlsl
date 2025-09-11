@@ -38,6 +38,7 @@ void main(
   o0.xyz = r0.xyz ? r1.xyz : r2.xyz;
 
   o0.a = saturate(o0.a);
+  [branch]
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     o0.rgb = saturate(o0.rgb);
   } else {

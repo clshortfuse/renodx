@@ -20,6 +20,7 @@ void main(
   r0.xyzw = t0.Sample(s0_s, v2.xy).xyzw;
   o0.xyzw = v1.xyzw * r0.xyzw;
 
+  [branch]
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     o0 = saturate(o0);
   } else {

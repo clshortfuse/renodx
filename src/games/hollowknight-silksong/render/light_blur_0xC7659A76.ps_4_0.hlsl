@@ -35,6 +35,7 @@ void main(
   o0.xyz = r0.xyz * float3(0.0702700019, 0.0702700019, 0.0702700019) + r1.xyz;
   o0.w = 1;
 
+  [branch]
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     o0 = saturate(o0);
   } else {

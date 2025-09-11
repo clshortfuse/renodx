@@ -63,6 +63,7 @@ struct ShaderInjectData {
   float custom_saturation_clip;
   float custom_bloom_clip;
   float custom_hue_clip;
+  float swap_chain_output_preset;
 };
 
 #ifndef __cplusplus
@@ -90,6 +91,8 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_TONE_MAP_HUE_CORRECTION       0.f
+#define RENODX_SWAP_CHAIN_OUTPUT_PRESET      shader_injection.swap_chain_output_preset
 #define RENODX_RENO_DRT_WHITE_CLIP           shader_injection.tone_map_white_clip
 #define CUSTOM_GRAIN_STRENGTH                shader_injection.custom_grain_strength
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom

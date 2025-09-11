@@ -46,6 +46,7 @@ void main(
   r0.xyzw = max(float4(0, 0, 0, 0), r0.xyzw);
   o0.xyzw = cb0[4].wwww * r0.xyzw;
 
+  [branch]
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     o0 = saturate(o0);
   } else {

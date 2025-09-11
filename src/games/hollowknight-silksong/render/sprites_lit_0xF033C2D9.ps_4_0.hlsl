@@ -28,6 +28,7 @@ void main(
   r0.xyz = cb0[0].xyz * r0.xyz;
   o0.xyz = r0.xyz + r0.xyz;
 
+  [branch]
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     o0 = saturate(o0);
   } else {
