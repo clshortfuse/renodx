@@ -9,6 +9,7 @@ void main(
     float4 v1: SV_POSITION0,
     out float4 o0: SV_Target0) {
   o0.xyzw = BlitTexture.Sample(BlitSampler_s, v0.xy).xyzw;
+  o0.rgb = renodx::color::bt709::clamp::BT2020(o0.rgb);
   o0.rgb = renodx::draw::SwapChainPass(o0.rgb);
   return;
 }
