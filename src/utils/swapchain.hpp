@@ -404,7 +404,7 @@ static std::optional<float> GetSDRWhiteNits(reshade::api::swapchain* swapchain) 
     if (white_nits == 200.f) {
       white_nits = 203.f;
     }
-    return white_nits
+    return white_nits;
   }
 
   return std::nullopt;
