@@ -7,9 +7,7 @@
 
 #define DEBUG_LEVEL_0
 
-#include <embed/0x808B7411.h>  // Final
-#include <embed/0x8EF24715.h>  // ACES tonemap
-#include <embed/0x9E8B52A6.h>  // ACEScc color grade
+#include <embed/shaders.h>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -21,7 +19,7 @@ namespace {
 renodx::mods::shader::CustomShaders custom_shaders = {
     // CustomShaderEntry(0x9E8B52A6),  // ACEScc color grade
     CustomShaderEntry(0x8EF24715),  // ACES tonemap
-
+    CustomShaderEntry(0x3AF8585D),  // ACES tonemap for Order of the Giants
     CustomShaderEntry(0x808B7411),  // Final
 };
 
