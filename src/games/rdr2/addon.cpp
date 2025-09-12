@@ -120,7 +120,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Restores color blowout from per-channel grading.",
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f && shader_injection.tone_map_per_channel == 0.f; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -356,14 +356,19 @@ void OnPresetOff() {
   });
 }
 
+bool fired_on_init_swapchain = false;
+
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  if (fired_on_init_swapchain) return;
+  fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
-  if (peak.has_value()) {
-    settings[1]->default_value = peak.value();
-  } else {
-    settings[1]->default_value = 1000.f;
+  if (!peak.has_value()) {
+    peak = 1000.f;
   }
+  settings[1]->default_value = peak.value();
 }
+
+bool initialized = false;
 
 }  // namespace
 
@@ -375,25 +380,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      renodx::mods::shader::force_pipeline_cloning = true;
-      renodx::mods::shader::expected_constant_buffer_index = 13;
-      renodx::mods::shader::expected_constant_buffer_space = 50;
+      if (!initialized) {
+        renodx::mods::shader::force_pipeline_cloning = true;
+        renodx::mods::shader::allow_multiple_push_constants = true;
+        renodx::mods::shader::expected_constant_buffer_index = 13;
+        renodx::mods::shader::expected_constant_buffer_space = 50;
+      }
 
-      // renodx::mods::swapchain::use_resource_cloning = true;
-      // renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
-      // renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-
-      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back(
-      //     {
-      //         .old_format = reshade::api::format::r11g11b10_float,
-      //         .new_format = reshade::api::format::r16g16b16a16_float,
-      //         .use_resource_view_cloning = true,
-      //         .dimensions = {.width = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER, .height = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER},
-      //         .usage_include = reshade::api::resource_usage::render_target,
-      //     });
-
-      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // peak nits
-
+      initialized = true;
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // peak nits
@@ -403,7 +397,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
-  // renodx::mods::swapchain::Use(fdw_reason);
+
+  if (fdw_reason == DLL_PROCESS_ATTACH) {
+    // Run check after mods::swapchain
+    reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // peak nits
+  }
 
   return TRUE;
 }
