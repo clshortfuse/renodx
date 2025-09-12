@@ -319,7 +319,7 @@ struct DisplayInfo {
   bool hdr_forced = false;
   float peak_nits = 1000.f;
   float sdr_white_nits = 203.f;
-  // Unreliable 
+  // Unreliable
   // reshade::api::format display_color_space = reshade::api::format::unknown;
 };
 
@@ -355,6 +355,9 @@ static DisplayInfo GetDisplayInfo(reshade::api::swapchain* swapchain, bool force
     white_level.header.id = info.display_config->targetInfo.id;
     if (DisplayConfigGetDeviceInfo(&white_level.header) == ERROR_SUCCESS) {
       info.sdr_white_nits = static_cast<float>(white_level.SDRWhiteLevel) / 1000 * 80;  // From wingdi.h.
+      if (info.sdr_white_nits == 200.f) {
+        info.sdr_white_nits = 203.f;
+      }
     }
     info.peak_nits = info.output_desc->MaxLuminance;
   }
@@ -397,7 +400,11 @@ static std::optional<float> GetSDRWhiteNits(reshade::api::swapchain* swapchain) 
   white_level.header.adapterId = path->targetInfo.adapterId;
   white_level.header.id = path->targetInfo.id;
   if (DisplayConfigGetDeviceInfo(&white_level.header) == ERROR_SUCCESS) {
-    return static_cast<float>(white_level.SDRWhiteLevel) / 1000 * 80;  // From wingdi.h.
+    auto white_nits = static_cast<float>(white_level.SDRWhiteLevel) / 1000 * 80;  // From wingdi.h.
+    if (white_nits == 200.f) {
+      white_nits = 203.f;
+    }
+    return white_nits
   }
 
   return std::nullopt;
