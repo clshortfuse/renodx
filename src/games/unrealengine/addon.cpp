@@ -590,6 +590,15 @@ const std::unordered_map<
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
+        {
+            "Borderlands3.exe",
+            {
+              {"Upgrade_CopyDestinations", 1.f},  
+              {"Upgrade_R8G8B8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_RATIO},
+              {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_RATIO},
+              {"Upgrade_R11G11B10_FLOAT", UPGRADE_TYPE_OUTPUT_RATIO},
+            },
+        },
 
 };
 
