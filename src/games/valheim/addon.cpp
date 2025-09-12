@@ -5,7 +5,7 @@
 
 #define ImTextureID ImU64
 
-#define DEBUG_LEVEL_2
+#define DEBUG_LEVEL_1
 #define NOMINMAX
 
 #include <chrono>
