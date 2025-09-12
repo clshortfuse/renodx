@@ -56,16 +56,6 @@ void main(
 
     float3 untonemapped = renodx::color::srgb::Decode(gamma_color.rgb);
 
-    [branch]
-    if (CUSTOM_GRAIN_STRENGTH != 0.f) {
-      untonemapped = renodx::effects::ApplyFilmGrain(
-          untonemapped,
-          v1.xy,
-          CUSTOM_RANDOM,
-          CUSTOM_GRAIN_STRENGTH * 0.03f,
-          1.f);
-    }
-
     renodx::tonemap::renodrt::Config renodrt_config = renodx::tonemap::renodrt::config::Create();
     renodrt_config.nits_peak = 100.f;
     renodrt_config.mid_gray_value = 0.18f;
@@ -117,6 +107,16 @@ void main(
     float3 graded_color = renodx::color::srgb::DecodeSafe(gamma_color);
 
     o0.rgb = renodx::draw::ToneMapPass(untonemapped, graded_color, neutral_sdr);
+
+    [branch]
+    if (CUSTOM_GRAIN_STRENGTH != 0.f) {
+      o0.rgb = renodx::effects::ApplyFilmGrain(
+          o0.rgb,
+          v1.xy,
+          CUSTOM_RANDOM,
+          CUSTOM_GRAIN_STRENGTH * 0.03f,
+          1.f);
+    }
   }
 
   o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);

@@ -28,17 +28,17 @@ void main(
 
     float3 untonemapped = renodx::color::srgb::Decode(gamma_color.rgb);
 
+    o0.rgb = renodx::draw::ToneMapPass(untonemapped);
+
     [branch]
     if (CUSTOM_GRAIN_STRENGTH != 0.f) {
-      untonemapped = renodx::effects::ApplyFilmGrain(
-          untonemapped,
+      o0.rgb = renodx::effects::ApplyFilmGrain(
+          o0.rgb,
           v1.xy,
           CUSTOM_RANDOM,
           CUSTOM_GRAIN_STRENGTH * 0.03f,
           1.f);
     }
-
-    o0.rgb = renodx::draw::ToneMapPass(untonemapped);
   }
 
   o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
