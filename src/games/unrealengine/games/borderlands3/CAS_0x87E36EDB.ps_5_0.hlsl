@@ -1,8 +1,6 @@
 //THIS IS A BYPASS OF THIS SHARPENING SHADER AND NOT A PROPER FIX
 //THE SHADER DOES NOT FUNCTION IN HDR AND SHOULD BE FIXED PROPERLY
 
-#include "../../effects.hlsl"
-
 // ---- Created with 3Dmigoto v1.4.1 on Mon Sep  8 23:46:55 2025
 Texture2D<float4> t0 : register(t0);
 
