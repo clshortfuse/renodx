@@ -182,6 +182,12 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
 //         },
 //         .is_sticky = true,
 //     },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("HDR must be turned ON in-game!\n\nSliders will not update in real time!\nYou must trigger the lutbuilder to run again by changing the in-game peak brightness slider!\n"),
+        //.section = "Instructions",
+        //.tint = 0xEE1111,
+    },
     new renodx::utils::settings::Setting{
         .key = "ToneMapType",
         .binding = &shader_injection.tone_map_type,
@@ -258,40 +264,40 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
         .labels = {"Luminance", "Per Channel"},
         .is_enabled = []() { return shader_injection.tone_map_type == 3.f; },
     },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Vanilla",
-        .section = "Presets",
-        .group = "button-line-1",
-        .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-            if (setting->is_global) continue;
-            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
-            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-          }
-        },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Recommended",
-        .section = "Presets",
-        .group = "button-line-1",
-        .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-            if (setting->is_global) continue;
-            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
-            if (RECOMMENDED_VALUES.contains(setting->key)) {
-              renodx::utils::settings::UpdateSetting(setting->key, RECOMMENDED_VALUES.at(setting->key));
-            } else {
-              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-            }
-          }
-        },
-    },
+    // new renodx::utils::settings::Setting{
+    //     .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    //     .label = "Vanilla",
+    //     .section = "Presets",
+    //     .group = "button-line-1",
+    //     .on_change = []() {
+    //       for (auto* setting : settings) {
+    //         if (setting->key.empty()) continue;
+    //         if (!setting->can_reset) continue;
+    //         if (setting->is_global) continue;
+    //         if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
+    //         renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+    //       }
+    //     },
+    // },
+    // new renodx::utils::settings::Setting{
+    //     .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    //     .label = "Recommended",
+    //     .section = "Presets",
+    //     .group = "button-line-1",
+    //     .on_change = []() {
+    //       for (auto* setting : settings) {
+    //         if (setting->key.empty()) continue;
+    //         if (!setting->can_reset) continue;
+    //         if (setting->is_global) continue;
+    //         if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
+    //         if (RECOMMENDED_VALUES.contains(setting->key)) {
+    //           renodx::utils::settings::UpdateSetting(setting->key, RECOMMENDED_VALUES.at(setting->key));
+    //         } else {
+    //           renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+    //         }
+    //       }
+    //     },
+    // },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
         .binding = &shader_injection.tone_map_exposure,
@@ -403,6 +409,7 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
         .label = std::string("Note: This FPS limiter is not recommended with frame gen."),
         .section = "Other",
     },
+
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
@@ -443,6 +450,7 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
     //       renodx::utils::platform::LaunchURL("https://ko-fi.com/", "shortfuse");
     //     },
     // },
+
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
@@ -450,7 +458,7 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("Special thanks to ShortFuse for RenoDX"),
+        .label = std::string("Special thanks to ShortFuse for RenoDX, and to Musa for the methods used in this mod."),
         .section = "About",
     },
     new renodx::utils::settings::Setting{
@@ -496,8 +504,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
-    settings[1]->default_value = peak.value();
-    settings[1]->can_reset = true;
+    settings[2]->default_value = peak.value();
+    settings[2]->can_reset = true;
   }
 }
 
