@@ -1,0 +1,58 @@
+// ---- Created with 3Dmigoto v1.3.16 on Tue Aug 05 13:09:08 2025
+Texture2D<float4> t1 : register(t1);
+
+Texture2D<float4> t0 : register(t0);
+
+SamplerState s1_s : register(s1);
+
+SamplerState s0_s : register(s0);
+
+cbuffer cb0 : register(b0)
+{
+  float4 cb0[25];
+}
+
+
+
+
+// 3Dmigoto declarations
+#define cmp -
+
+
+void main(
+  float4 v0 : SV_Position0,
+  float4 v1 : TEXCOORD0,
+  float2 v2 : TEXCOORD1,
+  out float4 o0 : SV_Target0)
+{
+  float4 r0,r1,r2;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+
+  r0.xyzw = cb0[21].xxzz * float4(0,1,0,1) + v2.xyxy;
+  r1.xyzw = t0.Sample(s0_s, r0.zw).xyzw;
+  r0.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
+  r1.xyzw = cb0[21].wwww * r1.xyzw;
+  r0.xyzw = cb0[21].yyyy * r0.xyzw + r1.xyzw;
+  r1.xyzw = cb0[22].xxzz * float4(0,1,0,1) + v2.xyxy;
+  r2.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
+  r1.xyzw = t0.Sample(s0_s, r1.zw).xyzw;
+  r0.xyzw = cb0[22].yyyy * r2.xyzw + r0.xyzw;
+  r0.xyzw = cb0[22].wwww * r1.xyzw + r0.xyzw;
+  r1.xyzw = cb0[23].xxzz * float4(0,1,0,1) + v2.xyxy;
+  r2.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
+  r1.xyzw = t0.Sample(s0_s, r1.zw).xyzw;
+  r0.xyzw = cb0[23].yyyy * r2.xyzw + r0.xyzw;
+  r0.xyzw = cb0[23].wwww * r1.xyzw + r0.xyzw;
+  r1.xy = cb0[24].xx * float2(0,1) + v2.xy;
+  r1.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
+  r0.xyzw = cb0[24].yyyy * r1.xyzw + r0.xyzw;
+  r1.xy = cb0[0].xy * float2(0,7) + v2.xy;
+  r1.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
+  r0.xyzw = cb0[24].zzzz * r1.xyzw + r0.xyzw;
+  r1.xyzw = t1.Sample(s1_s, v2.xy).xyzw;
+  r0.xyzw = r1.xyzw * cb0[20].xxxx + r0.xyzw;
+  r0.xyzw = cb0[20].yyyy * r0.xyzw;
+  o0.xyzw = max(float4(0,0,0,0), r0.xyzw);
+  return;
+}

@@ -1,0 +1,13 @@
+
+
+#include "./!common.hlsl"
+
+
+Bloom_User(r1.xyz);
+
+
+float3 colorUntonemapped = r0.xyz;
+
+
+o0.xyz = Tonemap_Do(colorUntonemapped, o0.xyz);
+  
