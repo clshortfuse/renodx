@@ -380,10 +380,23 @@ float3 ScaleScene(float3 color) {
   return color;
 }
 
-float3 FinalizeTonemap(float3 color) {
+float3 ApplyGrain(float3 color, float2 texcoord) {
+  if (CUSTOM_GRAIN_STRENGTH != 0.f) {
+    color = renodx::effects::ApplyFilmGrain(
+        color,
+        texcoord,
+        CUSTOM_RANDOM,
+        CUSTOM_GRAIN_STRENGTH * 0.03f,
+        1.f);
+  }
+  return color;
+}
+
+float3 FinalizeTonemap(float3 color, float2 texcoord) {
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     color = renodx::color::srgb::DecodeSafe(color);
     color = ApplyDisplayMap(color);
+    color = ApplyGrain(color, texcoord);
     color = ScaleScene(color);
   }
   return color;

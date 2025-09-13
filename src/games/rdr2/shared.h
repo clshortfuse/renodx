@@ -39,6 +39,10 @@ struct ShaderInjectData {
 
   float color_grade_lut_strength;
 
+  float custom_vignette;
+  float custom_random;
+  float custom_grain_strength;
+
   float unclamp_highlights;
   float use_srgb_lut_encoding;
 };
@@ -75,6 +79,10 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_FLARE2               shader_injection.tone_map_flare2
 
 #define RENODX_COLOR_GRADE_STRENGTH shader_injection.color_grade_lut_strength
+
+#define CUSTOM_VIGNETTE       shader_injection.custom_vignette
+#define CUSTOM_GRAIN_STRENGTH shader_injection.custom_grain_strength
+#define CUSTOM_RANDOM         shader_injection.custom_random
 
 #define UNCLAMP_HIGHLIGHTS    shader_injection.unclamp_highlights
 #define USE_SRGB_LUT_ENCODING shader_injection.use_srgb_lut_encoding
