@@ -184,7 +184,7 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
 //     },
         new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("HDR must be turned ON in-game!\n\nSliders will not update in real time!\nYou must trigger the lutbuilder to run again by changing the in-game peak brightness slider!\n"),
+        .label = std::string("HDR must be turned ON in-game!\n\nSliders will not update in real time!\nYou must trigger the lutbuilder to run again by opening and closing the inventory!\n"),
         //.section = "Instructions",
         //.tint = 0xEE1111,
     },
@@ -417,7 +417,7 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "QgXDCfccRy");
         },
     },
     new renodx::utils::settings::Setting{
