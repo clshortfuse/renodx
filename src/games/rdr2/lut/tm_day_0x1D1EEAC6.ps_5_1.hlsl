@@ -251,7 +251,7 @@ void frag_main() {
     }
     float2 _668 = float2(TEXCOORD.x - asfloat(CB0_m[53u].x), TEXCOORD.y - asfloat(CB0_m[53u].y));
     float2 _682 = float2(dp2_f32(float2(asfloat(CB0_m[55u].x), asfloat(CB0_m[55u].y)), _668) * asfloat(CB0_m[53u].z), dp2_f32(float2(asfloat(CB0_m[55u].z), asfloat(CB0_m[55u].w)), _668) * asfloat(CB0_m[53u].w));
-    float _692 = max((dp2_f32(_682, _682) - asfloat(CB0_m[56u].x)) * asfloat(CB0_m[56u].w), 0.0f);
+    float _692 = max((dp2_f32(_682, _682) - asfloat(CB0_m[56u].x)) * asfloat(CB0_m[56u].w) * CUSTOM_VIGNETTE, 0.0f);
     float _704 = (_692 < 1.0f) ? (1.0f - exp2(_692 * (-10.0f))) : ((((_692 - 1.0f) > 0.0f) ? exp2((_692 - 2.0f) * 10.0f) : 0.0f) + 0.9980499744415283203125f);
     float _718 = asfloat(CB0_m[54u].w);
     bool _728 = CB0_m[54u].w != 0u;
@@ -499,7 +499,7 @@ void frag_main() {
   SV_Target.z = _881 ? _1395 : (_1395);
   SV_Target.w = _881 ? _1294 : clamp(_1294, 0.0f, 1.0f);
 
-  SV_Target.rgb = FinalizeTonemap(SV_Target.rgb);
+  SV_Target.rgb = FinalizeTonemap(SV_Target.rgb, TEXCOORD.xy);
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {

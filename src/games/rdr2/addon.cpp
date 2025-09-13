@@ -13,10 +13,9 @@
 
 #include <embed/shaders.h>
 
-#include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
-#include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
@@ -31,6 +30,15 @@ const std::unordered_map<std::string, float> MATCH_SDR_VALUES = {
     {"ToneMapScaling", 1.f},
     {"UnclampLighting", 0.f},
     {"UseSRGBLUTEncoding", 0.f},
+};
+
+const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
+    {"GammaCorrection", 0.f},
+    {"ToneMapBlowoutRestoration", 100.f},
+    {"ColorGradeExposure", 0.8f},
+    {"ColorGradeHighlights", 57.f},
+    {"ColorGradeHighlightSaturation", 60.f},
+    {"ColorGradeFlare2", 38.f},
 };
 
 renodx::utils::settings::Settings settings = {
@@ -238,6 +246,25 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxVignette",
+        .binding = &shader_injection.custom_vignette,
+        .default_value = 100.f,
+        .label = "Vignette",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxGrainStrength",
+        .binding = &shader_injection.custom_grain_strength,
+        .default_value = 0.f,
+        .label = "Film Grain",
+        .section = "Effects",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "UnclampLighting",
         .binding = &shader_injection.unclamp_highlights,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
@@ -288,6 +315,24 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Recommended Settings",
+        .section = "Options",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+
+            if (RECOMMENDED_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, RECOMMENDED_VALUES.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
+          }
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
         .section = "Links",
         .group = "button-line-2",
@@ -329,6 +374,12 @@ renodx::utils::settings::Settings settings = {
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
         .section = "About",
     },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("- Requires HDR on in game"),
+        .section = "About",
+    },
+
 };
 
 void OnPresetOff() {
@@ -351,6 +402,8 @@ void OnPresetOff() {
       {"ColorGradeFlare", 0.f},
       {"ColorGradeFlare2", 0.f},
       {"ColorGradeLUTStrength", 100.f},
+      {"FxVignette", 100.f},
+      {"FxGrainStrength", 0.f},
       {"UnclampLighting", 0.f},
       {"UseSRGBLUTEncoding", 0.f},
   });
@@ -387,6 +440,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::expected_constant_buffer_space = 50;
       }
 
+      renodx::utils::random::binds.push_back(&shader_injection.custom_random);  // film grain
+
       initialized = true;
       break;
     case DLL_PROCESS_DETACH:
@@ -397,6 +452,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx::utils::random::Use(fdw_reason);  // film grain
 
   if (fdw_reason == DLL_PROCESS_ATTACH) {
     // Run check after mods::swapchain
