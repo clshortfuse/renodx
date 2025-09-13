@@ -297,10 +297,10 @@ float3 ApplyPostToneMapDesaturation(float3 tonemapped) {
 /// Unreal Engine Filmic ToneMap based on ACES approximation with customizable parameters
 #define UNREALFILMIC_GENERATOR(T)                                                                                                                                                                                                                                                            \
   T ApplyUnrealFilmicToneMap(T untonemapped) {                                                                                                                                                                                                                                               \
-    float film_black_clip = cb0_038x;
-    float film_toe = cb0_037z;
-    float film_white_clip = cb0_038y;
-    float film_shoulder = cb0_037w;
+    float film_black_clip = cb0_038x; \
+    float film_toe = cb0_037z; \
+    float film_white_clip = cb0_038y; \
+    float film_shoulder = cb0_037w; \
     float film_slope = cb0_037y;                                                                                                                                                                                                                                                           \
     if (OVERRIDE_BLACK_CLIP && RENODX_TONE_MAP_TYPE == 3.f) {                                                                                                                                                                                                                                \
       float target_black_nits = 0.0001f / RENODX_DIFFUSE_WHITE_NITS;                                                                                                                                                                                                                         \
