@@ -33,17 +33,32 @@ namespace internal {
 struct ShaderInfo {
   std::vector<uint8_t> data;
   reshade::api::pipeline_subobject_type type;
+  reshade::api::device_api device_api = reshade::api::device_api::d3d11;
 };
 
 static std::unordered_set<uint32_t> shaders_dumped;
 static std::unordered_set<uint32_t> shaders_seen;
 static std::unordered_map<uint32_t, ShaderInfo> shaders_pending;
 static std::shared_mutex mutex;
-static reshade::api::device_api device_api = reshade::api::device_api::d3d9;
-static std::string file_extension = ".cso";
 static bool scanned_disk = false;
 
-static void CheckShadersOnDisk() {
+static constexpr std::string GetFileExtensionFromDeviceApi(reshade::api::device_api device_api) {
+  switch (device_api) {
+    case reshade::api::device_api::d3d9:
+    case reshade::api::device_api::d3d10:
+    case reshade::api::device_api::d3d11:
+    case reshade::api::device_api::d3d12:
+      return ".cso";
+    case reshade::api::device_api::vulkan:
+      return ".spv";
+    case reshade::api::device_api::opengl:
+      return ".glsl";
+    default:
+      return ".bin";
+  }
+}
+
+static void CheckShadersOnDisk(const reshade::api::device_api device_api = reshade::api::device_api::d3d11) {
   scanned_disk = true;
   auto dump_path = renodx::utils::path::GetOutputPath();
 
@@ -52,10 +67,11 @@ static void CheckShadersOnDisk() {
   if (!std::filesystem::exists(dump_path)) return;
   std::unordered_set<uint32_t> shader_hashes_found = {};
 
+  auto extension = GetFileExtensionFromDeviceApi(device_api);
   for (const auto& entry : std::filesystem::directory_iterator(dump_path)) {
     if (!entry.is_regular_file()) continue;
     const auto& entry_path = entry.path();
-    if (entry_path.extension() != internal::file_extension) continue;
+    if (entry_path.extension() != extension) continue;
     const auto& basename = entry_path.stem().string();
     if (basename.length() < 2 + 8) continue;
     if (!basename.starts_with("0x")) continue;
@@ -100,14 +116,8 @@ static void CheckShadersOnDisk() {
 
 static void OnInitDevice(reshade::api::device* device) {
   std::unique_lock lock(internal::mutex);
-  internal::device_api = device->get_api();
-  if (internal::device_api == reshade::api::device_api::vulkan) {
-    internal::file_extension = ".spv";
-  } else if (internal::device_api == reshade::api::device_api::opengl) {
-    internal::file_extension = ".glsl";
-  }
   if (!internal::scanned_disk) {
-    internal::CheckShadersOnDisk();
+    internal::CheckShadersOnDisk(device->get_api());
   }
 }
 
@@ -168,6 +178,7 @@ static void OnInitPipeline(
     shaders_pending[shader_hash] = {
         .data = shader_data,
         .type = details->subobjects[info.index].type,
+        .device_api = device->get_api(),
     };
   }
 }
@@ -193,7 +204,8 @@ static std::filesystem::path GetShaderDumpPath(
     uint32_t shader_hash,
     std::span<uint8_t> shader_data,
     reshade::api::pipeline_subobject_type shader_type = reshade::api::pipeline_subobject_type::unknown,
-    const std::string& prefix = "") {
+    const std::string& prefix = "",
+    const reshade::api::device_api& device_api = reshade::api::device_api::d3d11) {
   auto dump_path = renodx::utils::path::GetOutputPath();
 
   if (!std::filesystem::exists(dump_path)) {
@@ -214,12 +226,14 @@ static std::filesystem::path GetShaderDumpPath(
     dump_path += hash_string;
   }
 
-  switch (internal::device_api) {
+  std::string extension = ".bin";
+  switch (device_api) {
     case reshade::api::device_api::d3d9:
     case reshade::api::device_api::d3d10:
     case reshade::api::device_api::d3d11:
     case reshade::api::device_api::d3d12: {
       renodx::utils::shader::compiler::directx::DxilProgramVersion shader_version;
+      extension = ".cso";
       try {
 #ifdef DEBUG_LEVEL_1
         std::stringstream s;
@@ -257,7 +271,23 @@ static std::filesystem::path GetShaderDumpPath(
       break;
     }
     case reshade::api::device_api::opengl:
+      extension = ".glsl";
+      switch (shader_type) {
+        case reshade::api::pipeline_subobject_type::pixel_shader:
+          dump_path += L".frag";
+          break;
+        case reshade::api::pipeline_subobject_type::vertex_shader:
+          dump_path += L".vert";
+          break;
+        case reshade::api::pipeline_subobject_type::compute_shader:
+          dump_path += L".comp";
+          break;
+        default:
+          break;
+      }
+      break;
     case reshade::api::device_api::vulkan:
+      extension = ".spv";
       // Vulkan
       switch (shader_type) {
         case reshade::api::pipeline_subobject_type::pixel_shader:
@@ -276,7 +306,7 @@ static std::filesystem::path GetShaderDumpPath(
       break;
   }
 
-  dump_path += internal::file_extension;
+  dump_path += extension;
   return dump_path;
 }
 
@@ -284,9 +314,10 @@ static bool DumpShader(
     uint32_t shader_hash,
     std::span<uint8_t> shader_data,
     reshade::api::pipeline_subobject_type shader_type = reshade::api::pipeline_subobject_type::unknown,
-    const std::string& prefix = "") {
-  auto dump_path = GetShaderDumpPath(shader_hash, shader_data, shader_type, prefix);
-  auto is_binary = internal::device_api != reshade::api::device_api::opengl;
+    const std::string& prefix = "",
+    const reshade::api::device_api& device_api = reshade::api::device_api::d3d11) {
+  auto dump_path = GetShaderDumpPath(shader_hash, shader_data, shader_type, prefix, device_api);
+  auto is_binary = device_api != reshade::api::device_api::opengl;
 
   if (is_binary) {
     renodx::utils::path::WriteBinaryFile(dump_path, shader_data);
@@ -301,7 +332,8 @@ static bool DumpShader(
     uint32_t shader_hash,
     std::span<uint8_t> shader_data,
     reshade::api::pipeline_stage shader_stage = static_cast<reshade::api::pipeline_stage>(0u),
-    const std::string& prefix = "") {
+    const std::string& prefix = "",
+    const reshade::api::device_api& device_api = reshade::api::device_api::d3d11) {
   auto shader_type =
       reshade::api::pipeline_subobject_type::unknown;
   switch (shader_stage) {
@@ -317,14 +349,15 @@ static bool DumpShader(
     default:
       break;
   }
-  return DumpShader(shader_hash, shader_data, shader_type, prefix);
+  return DumpShader(shader_hash, shader_data, shader_type, prefix, device_api);
 }
 
 static std::filesystem::path GetShaderDumpPath(
     uint32_t shader_hash,
     std::span<uint8_t> shader_data,
     reshade::api::pipeline_stage shader_stage = static_cast<reshade::api::pipeline_stage>(0u),
-    const std::string& prefix = "") {
+    const std::string& prefix = "",
+    const reshade::api::device_api& device_api = reshade::api::device_api::d3d11) {
   auto shader_type =
       reshade::api::pipeline_subobject_type::unknown;
   switch (shader_stage) {
@@ -341,7 +374,7 @@ static std::filesystem::path GetShaderDumpPath(
       break;
   }
 
-  return GetShaderDumpPath(shader_hash, shader_data, shader_type, prefix);
+  return GetShaderDumpPath(shader_hash, shader_data, shader_type, prefix, device_api);
 }
 
 static void DumpAllPending() {
@@ -353,7 +386,7 @@ static void DumpAllPending() {
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 
-    DumpShader(shader_hash, shader_info.data, shader_info.type);
+    DumpShader(shader_hash, shader_info.data, shader_info.type, "", shader_info.device_api);
   }
   internal::shaders_pending.clear();
 }
