@@ -49,6 +49,8 @@ ShaderInjectData shader_injection;
 
 float current_settings_mode = 0;
 float output_mode = 1.f;
+float exclusive_fullscreen_detected = 0.f;
+renodx::utils::settings::Setting* exclusive_fullscreen_warning_setting = nullptr;
 renodx::utils::settings::Setting* output_mode_setting = nullptr;
 renodx::utils::settings::Setting* force_display_hdr_setting = nullptr;
 renodx::utils::settings::Setting* tone_map_type_setting = nullptr;
@@ -90,6 +92,13 @@ void HandleOutputModeChange() {
 bool IsHDREnabled() { return shader_injection.swap_chain_output_preset == 1.f; }
 
 renodx::utils::settings::Settings settings = {
+    exclusive_fullscreen_warning_setting = new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Exclusive fullscreen detected. Use Borderless instead.",
+        .tint = 0xFF0000,
+        .is_visible = []() { return exclusive_fullscreen_detected != 0.f; },
+        .is_sticky = true,
+    },
     new renodx::utils::settings::Setting{
         .key = "SettingsMode",
         .binding = &current_settings_mode,
@@ -537,6 +546,13 @@ void RevertForcedHDR() {
   }
 }
 
+bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullscreen, void* hmonitor) {
+  if (fullscreen) {
+    exclusive_fullscreen_detected = 1.f;
+  }
+  return false;
+}
+
 void OnPresent(reshade::api::command_queue* queue,
                reshade::api::swapchain* swapchain,
                const reshade::api::rect* source_rect,
@@ -596,21 +612,37 @@ void SetupPinnedModule() {
       &h_module);
   if (ret == 0 || h_module == nullptr) {
     std::stringstream s;
-    s << "Failed to pin addon module: " << std::hex << GetLastError() << "\n";
+    s << "Failed to pin addon module: " << std::hex << GetLastError();
     reshade::log::message(reshade::log::level::error, s.str().c_str());
-    return;
+
+    // Attempt to increment instead:
+
+    ret = GetModuleHandleExW(
+        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+        reinterpret_cast<LPCWSTR>(&__ImageBase),
+        &h_module);
+
+    if (ret == 0 || h_module == nullptr) {
+      std::stringstream s;
+      s << "Failed to increment addon module ref count: " << std::hex << GetLastError();
+      reshade::log::message(reshade::log::level::error, s.str().c_str());
+      return;
+    }
+    reshade::log::message(reshade::log::level::debug, "Incremented addon module");
+  } else {
+    reshade::log::message(reshade::log::level::debug, "Pinned addon module");
   }
-  reshade::log::message(reshade::log::level::debug, "Pinned addon module\n");
+
   HMODULE h_kernel = GetModuleHandleW(L"kernel32.dll");
   if (h_kernel == nullptr) {
-    reshade::log::message(reshade::log::level::error, "Failed to get handle for kernel32.dll\n");
+    reshade::log::message(reshade::log::level::error, "Failed to get handle for kernel32.dll");
   }
   bool hooked = renodx::utils::vtable::Hook(h_kernel, g_process_hook_items);
   if (!hooked) {
-    reshade::log::message(reshade::log::level::error, "Failed to hook process termination APIs\n");
+    reshade::log::message(reshade::log::level::error, "Failed to hook process termination APIs");
     return;
   }
-  reshade::log::message(reshade::log::level::debug, "Hooked process termination APIs\n");
+  reshade::log::message(reshade::log::level::debug, "Hooked process termination APIs");
   setup_pinned_module = true;
 }
 
@@ -628,6 +660,7 @@ extern "C" __declspec(dllexport) void AddonUninit(HMODULE addon_module, HMODULE 
   renodx::mods::shader::Use(DLL_PROCESS_DETACH, custom_shaders, &shader_injection);
   renodx::utils::random::Use(DLL_PROCESS_DETACH);
   reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+  reshade::unregister_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
   reshade::unregister_addon(addon_module);
 }
 
@@ -640,6 +673,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::force_pipeline_cloning = true;
 
         renodx::mods::swapchain::SetUseHDR10(true);
+        renodx::mods::swapchain::prevent_full_screen = false;
         renodx::mods::swapchain::force_borderless = false;
         renodx::mods::swapchain::force_screen_tearing = false;
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
@@ -654,6 +688,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         initialized = true;
       }
 
+      reshade::register_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
       renodx::utils::settings::Use(DLL_PROCESS_ATTACH, &settings, &OnPresetOff);
       renodx::utils::swapchain::Use(DLL_PROCESS_ATTACH);
       renodx::mods::swapchain::Use(DLL_PROCESS_ATTACH, &shader_injection);
