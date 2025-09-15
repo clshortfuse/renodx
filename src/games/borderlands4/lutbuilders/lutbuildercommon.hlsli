@@ -2,7 +2,7 @@
 
 bool GenerateOutput(float r, float g, float b, inout float4 SV_Target, bool is_hdr = true) {
     
-    if (RENODX_TONE_MAP_TYPE == 0) return false;  // off uses Engine.ini HDR
+    if (RENODX_TONE_MAP_TYPE == 0 || is_hdr == false) return false;  // off uses Engine.ini HDR
     
     float3 final_color = (float3(r, g, b));
     if (RENODX_TONE_MAP_TYPE == 4.f) final_color = saturate(final_color);

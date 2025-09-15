@@ -154,8 +154,11 @@ const std::unordered_map<std::string, float> CANNOT_PRESET_VALUES = {
     {"FPSLimit", 0},
 };
 
-const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
-    {"ColorGradeLUTScaling", 70.f},
+const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
+    {"ColorGradeContrast", 55.f},
+    {"ColorGradeSaturation", 53.f},
+    {"ColorGradeHighlightSaturation", 57.f},
+    {"ColorGradeBlowout", 30.f},
 };
 
 // auto* hdr_upgrade_setting = renodx::templates::settings::CreateSetting({.key = "HDRMethod",
@@ -264,40 +267,40 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
         .labels = {"Luminance", "Per Channel"},
         .is_enabled = []() { return shader_injection.tone_map_type == 3.f; },
     },
-    // new renodx::utils::settings::Setting{
-    //     .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-    //     .label = "Vanilla",
-    //     .section = "Presets",
-    //     .group = "button-line-1",
-    //     .on_change = []() {
-    //       for (auto* setting : settings) {
-    //         if (setting->key.empty()) continue;
-    //         if (!setting->can_reset) continue;
-    //         if (setting->is_global) continue;
-    //         if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
-    //         renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-    //       }
-    //     },
-    // },
-    // new renodx::utils::settings::Setting{
-    //     .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-    //     .label = "Recommended",
-    //     .section = "Presets",
-    //     .group = "button-line-1",
-    //     .on_change = []() {
-    //       for (auto* setting : settings) {
-    //         if (setting->key.empty()) continue;
-    //         if (!setting->can_reset) continue;
-    //         if (setting->is_global) continue;
-    //         if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
-    //         if (RECOMMENDED_VALUES.contains(setting->key)) {
-    //           renodx::utils::settings::UpdateSetting(setting->key, RECOMMENDED_VALUES.at(setting->key));
-    //         } else {
-    //           renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-    //         }
-    //       }
-    //     },
-    // },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Default",
+        .section = "Presets",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
+            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
+            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+          }
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Look",
+        .section = "Presets",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
+            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
+            if (HDR_LOOK_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, HDR_LOOK_VALUES.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
+          }
+        },
+    },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
         .binding = &shader_injection.tone_map_exposure,
