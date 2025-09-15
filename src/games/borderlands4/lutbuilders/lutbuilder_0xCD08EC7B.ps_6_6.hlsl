@@ -442,9 +442,14 @@ float4 main(
 
   //TonemappedAP1
 
-  float _916 = max(0.0f, mad((WorkingColorSpace_192[0].z), _906, mad((WorkingColorSpace_192[0].y), _905, ((WorkingColorSpace_192[0].x) * _904))));
-  float _917 = max(0.0f, mad((WorkingColorSpace_192[1].z), _906, mad((WorkingColorSpace_192[1].y), _905, ((WorkingColorSpace_192[1].x) * _904))));
-  float _918 = max(0.0f, mad((WorkingColorSpace_192[2].z), _906, mad((WorkingColorSpace_192[2].y), _905, ((WorkingColorSpace_192[2].x) * _904))));
+  float _916 = mad((WorkingColorSpace_192[0].z), _906, mad((WorkingColorSpace_192[0].y), _905, ((WorkingColorSpace_192[0].x) * _904)));
+  float _917 = mad((WorkingColorSpace_192[1].z), _906, mad((WorkingColorSpace_192[1].y), _905, ((WorkingColorSpace_192[1].x) * _904)));
+  float _918 = mad((WorkingColorSpace_192[2].z), _906, mad((WorkingColorSpace_192[2].y), _905, ((WorkingColorSpace_192[2].x) * _904)));
+
+  //_916 = max(0, _916);
+  //_917 = max(0, _917);
+  //_918 = max(0, _918);
+  
   float _944 = cb0_014x * (((cb0_040y + (cb0_040x * _916)) * _916) + cb0_040z);
   float _945 = cb0_014y * (((cb0_040y + (cb0_040x * _917)) * _917) + cb0_040z);
   float _946 = cb0_014z * (((cb0_040y + (cb0_040x * _918)) * _918) + cb0_040z);
