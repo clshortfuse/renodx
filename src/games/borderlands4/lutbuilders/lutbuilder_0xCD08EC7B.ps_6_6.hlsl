@@ -271,8 +271,7 @@ float4 main(
     _59 = 1.0476183891296387f;
   }
   [branch]
-  // if ((uint)output_device > (uint)2) {
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
+  if ((uint)output_device > (uint)2) {
     float _70 = (pow(_28, 0.012683313339948654f));
     float _71 = (pow(_29, 0.012683313339948654f));
     float _72 = (pow(_31, 0.012683313339948654f));
@@ -464,7 +463,7 @@ float4 main(
   float _954 = ((cb0_013y - _945) * cb0_013w) + _945;
   float _955 = ((cb0_013z - _946) * cb0_013w) + _946;
 
-  if (is_hdr && GenerateOutput(_953, _954, _955, SV_Target)) {
+  if (GenerateOutput(_953, _954, _955, SV_Target, is_hdr)) {
     return SV_Target;
   }
 
