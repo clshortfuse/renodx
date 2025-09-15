@@ -350,29 +350,23 @@ float3 applyUserTonemap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   lut_config.type_output = renodx::lut::config::type::SRGB;
   lut_config.size = 16;
   lut_config.tetrahedral = injectedData.colorGradeLUTSampling != 0.f;
-
-  if (injectedData.toneMapType == 0.f) {
-    outputColor = saturate(untonemapped);
+    float y = renodx::color::y::from::BT709(untonemapped);
+    float3 neutralSDR = renodx::tonemap::renodrt::NeutralSDR(untonemapped);
+    float3 sdrColor = lerp(untonemapped, neutralSDR, saturate(y));
+    float3 lutInput = injectedData.toneMapType <= 1.f ? untonemapped : sdrColor;
+    if(config.type == 0.f){
+      outputColor = renodx::lut::Sample(lutInput, lut_config, lutTexture);
+    } else {
+      lut_config.strength = 1.f;
+      float3 lutColor = renodx::lut::Sample(lutInput, lut_config, lutTexture);
+      outputColor = renodx::tonemap::UpgradeToneMap(untonemapped, lutInput, lutColor, injectedData.colorGradeLUTStrength);
+    }
+  if (injectedData.toneMapType == 2.f) {
+    outputColor = applyFrostbite(outputColor, config);
+  } else if (injectedData.toneMapType == 4.f) {
+    outputColor = applyDICE(outputColor, config);
   } else {
-    outputColor = untonemapped;
-  }
-
-  if (injectedData.toneMapType == 2.f) {  // Frostbite
-    float previous_lut_config_strength = lut_config.strength;
-    lut_config.strength = 1.f;
-    float3 sdrColor = applyFrostbite(outputColor, config, true);
-    float3 hdrColor = applyFrostbite(outputColor, config);
-    float3 lutColor = renodx::lut::Sample(lutTexture, lut_config, sdrColor);
-    outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, lutColor, previous_lut_config_strength);
-  } else if (injectedData.toneMapType == 4.f) {  // DICE
-    float previous_lut_config_strength = lut_config.strength;
-    lut_config.strength = 1.f;
-    float3 sdrColor = applyDICE(outputColor, config, true);
-    float3 hdrColor = applyDICE(outputColor, config);
-    float3 lutColor = renodx::lut::Sample(lutTexture, lut_config, sdrColor);
-    outputColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, lutColor, previous_lut_config_strength);
-  } else {
-    outputColor = renodx::tonemap::config::Apply(outputColor, config, lut_config, lutTexture);
+    outputColor = renodx::tonemap::config::Apply(outputColor, config);
   }
   return outputColor;
 }
@@ -406,9 +400,9 @@ float3 applyUserTonemap(float3 untonemapped) {
   } else {
     outputColor = untonemapped;
   }
-  if (injectedData.toneMapType == 2.f) {  // Frostbite
+  if (injectedData.toneMapType == 2.f) {
     outputColor = applyFrostbite(outputColor, config);
-  } else if (injectedData.toneMapType == 4.f) {  // DICE
+  } else if (injectedData.toneMapType == 4.f) {
     outputColor = applyDICE(outputColor, config);
   } else {
     outputColor = renodx::tonemap::config::Apply(outputColor, config);
