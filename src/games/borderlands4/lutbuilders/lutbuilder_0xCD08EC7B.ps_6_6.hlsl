@@ -147,7 +147,7 @@ float4 main(
   uint output_gamut = cb0_042x;
   uint output_device = cb0_041w;
   float expand_gamut = cb0_037x;
-  //bool is_hdr = (output_device >= 3u && output_device <= 6u);
+  bool is_hdr = (output_device >= 3u && output_device <= 6u);
 
   float4 SV_Target;
   float _8[6];
@@ -271,7 +271,8 @@ float4 main(
     _59 = 1.0476183891296387f;
   }
   [branch]
-  if ((uint)output_device > (uint)2) {
+  // if ((uint)output_device > (uint)2) {
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
     float _70 = (pow(_28, 0.012683313339948654f));
     float _71 = (pow(_29, 0.012683313339948654f));
     float _72 = (pow(_31, 0.012683313339948654f));
@@ -288,11 +289,11 @@ float4 main(
   float _140 = mad((WorkingColorSpace_128[2].z), _119, mad((WorkingColorSpace_128[2].y), _118, ((WorkingColorSpace_128[2].x) * _117)));
   float _141 = dot(float3(_134, _137, _140), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
 
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
-    output_gamut = 0u;
-    output_device = 0u;
-    expand_gamut = 0.f;
-  }
+  // if (RENODX_TONE_MAP_TYPE != 0.f) {
+  //   output_gamut = 0u;
+  //   output_device = 0u;
+  //   expand_gamut = 0.f;
+  // }
 
   float _145 = (_134 / _141) + -1.0f;
   float _146 = (_137 / _141) + -1.0f;
@@ -401,10 +402,14 @@ float4 main(
   float _758 = (cb0_037w / cb0_037y) - _756;
 
   float3 lerpColor = lerp(_716, float3(_713, _714, _715), 0.9599999785423279f);
-#if 1
+  float _904, _905, _906;
+  // #if 1
+  if (is_hdr) {
   ApplyFilmicToneMap(lerpColor.r, lerpColor.g, lerpColor.b, _582, _583, _584);
-  float _904 = lerpColor.r, _905 = lerpColor.g, _906 = lerpColor.b;
-#else
+  _904 = lerpColor.r, _905 = lerpColor.g, _906 = lerpColor.b;
+  }
+  else {
+//#else
   float _762 = log2(lerp(_716, _713, 0.9599999785423279f)) * 0.3010300099849701f;
   float _763 = log2(lerp(_716, _714, 0.9599999785423279f)) * 0.3010300099849701f;
   float _764 = log2(lerp(_716, _715, 0.9599999785423279f)) * 0.3010300099849701f;
@@ -436,10 +441,11 @@ float4 main(
   float _886 = (expand_gamut * (max(0.0f, (lerp(_866, _863, 0.9300000071525574f))) - _582)) + _582;
   float _887 = (expand_gamut * (max(0.0f, (lerp(_866, _864, 0.9300000071525574f))) - _583)) + _583;
   float _888 = (expand_gamut * (max(0.0f, (lerp(_866, _865, 0.9300000071525574f))) - _584)) + _584;
-  float _904 = ((mad(-0.06537103652954102f, _888, mad(1.451815478503704e-06f, _887, (_886 * 1.065374732017517f))) - _886) * cb0_036z) + _886;
-  float _905 = ((mad(-0.20366770029067993f, _888, mad(1.2036634683609009f, _887, (_886 * -2.57161445915699e-07f))) - _887) * cb0_036z) + _887;
-  float _906 = ((mad(0.9999996423721313f, _888, mad(2.0954757928848267e-08f, _887, (_886 * 1.862645149230957e-08f))) - _888) * cb0_036z) + _888;
-#endif
+  _904 = ((mad(-0.06537103652954102f, _888, mad(1.451815478503704e-06f, _887, (_886 * 1.065374732017517f))) - _886) * cb0_036z) + _886;
+  _905 = ((mad(-0.20366770029067993f, _888, mad(1.2036634683609009f, _887, (_886 * -2.57161445915699e-07f))) - _887) * cb0_036z) + _887;
+  _906 = ((mad(0.9999996423721313f, _888, mad(2.0954757928848267e-08f, _887, (_886 * 1.862645149230957e-08f))) - _888) * cb0_036z) + _888;
+  }
+//#endif
 
   //TonemappedAP1
 
@@ -458,7 +464,7 @@ float4 main(
   float _954 = ((cb0_013y - _945) * cb0_013w) + _945;
   float _955 = ((cb0_013z - _946) * cb0_013w) + _946;
 
-  if (GenerateOutput(_953, _954, _955, SV_Target)) {
+  if (is_hdr && GenerateOutput(_953, _954, _955, SV_Target)) {
     return SV_Target;
   }
 
