@@ -385,6 +385,24 @@ const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.tone_map_type != 4; },
         .parse = [](float value) { return value * 0.02f; },
     },
+        renodx::templates::settings::CreateSetting({
+            .key = "FxRCAS",
+            .binding = &shader_injection.custom_sharpness,
+            .default_value = 0.f,
+            .label = "RCAS Sharpening",
+            .section = "Effects",
+            .tooltip = "Adds RCAS, as implemented by Lilium for HDR.",
+            .parse = [](float value) { return value * 0.01f; },
+        }),
+        renodx::templates::settings::CreateSetting({
+            .key = "FxGrainStrength",
+            .binding = &shader_injection.custom_film_grain,
+            .default_value = 0.f,
+            .label = "Film Grain",
+            .section = "Effects",
+            .tooltip = "Adds a custom perceptual film grain effect.",
+            .parse = [](float value) { return value * 0.01f; },
+        }),
          renodx::templates::settings::CreateSetting({
             .key = "FxBloom",
             .binding = &shader_injection.custom_bloom,
@@ -394,15 +412,7 @@ const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
             .tooltip = "Adjusts the strength of the in-game bloom effect.",
             .parse = [](float value) { return value * 0.02f; },
         }),
-     renodx::templates::settings::CreateSetting({
-            .key = "FxGrainStrength",
-            .binding = &shader_injection.custom_film_grain,
-            .default_value = 0.f,
-            .label = "Film Grain",
-            .section = "Effects",
-            .tooltip = "Adds a custom perceptual film grain effect.",
-            .parse = [](float value) { return value * 0.01f; },
-        }),
+
     // new renodx::utils::settings::Setting{
     //     .key = "ColorGradeLUTStrength",
     //     .binding = &shader_injection.custom_lut_strength,
@@ -480,7 +490,7 @@ const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("Special thanks to ShortFuse for RenoDX, and to Musa for the methods used in this mod."),
+        .label = std::string("Special thanks to ShortFuse for RenoDX, and to Musa for the methods used in this mod.\nCredit to Lilium for the RCAS implementation."),
         .section = "About",
     },
     new renodx::utils::settings::Setting{
@@ -515,6 +525,7 @@ void OnPresetOff() {
       {"ColorGradeFlare", 0.f},
       {"FxBloom", 50.f},
       {"FxGrainStrength", 0.f},
+      {"FxRCAS", 0.f},
   });
 }
 
