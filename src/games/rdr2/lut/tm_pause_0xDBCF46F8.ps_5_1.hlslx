@@ -1,0 +1,193 @@
+#include "../common.hlsli"
+
+struct anon_m {
+  int4 _m0;
+  uint4 _m1;
+  uint4 _m2;
+  uint4 _m3;
+  uint4 _m4;
+  uint4 _m5;
+  uint4 _m6;
+  uint4 _m7;
+  uint4 _m8;
+  uint4 _m9;
+  uint4 _m10;
+  uint4 _m11;
+  uint4 _m12;
+  uint4 _m13;
+  uint3 _m14;
+};
+
+cbuffer CB0_buf : register(b16, space0) {
+  uint4 CB0_m[53] : packoffset(c0);
+};
+
+cbuffer CB1_buf : register(b20, space0) {
+  uint4 CB1_m0 : packoffset(c0);
+  float4 CB1_m1 : packoffset(c1);
+  float4 CB1_m2 : packoffset(c2);
+};
+
+ByteAddressBuffer T5 : register(t118, space0);
+SamplerState S0 : register(s2, space0);
+SamplerState S1 : register(s8, space0);
+Texture1D<float4> T0 : register(t89, space0);
+Texture2D<float4> T1 : register(t90, space0);
+Texture2D<float4> T2 : register(t100, space0);
+Texture2D<float4> T3 : register(t106, space0);
+Texture2D<float4> T4 : register(t107, space0);
+
+static float4 SV_POSITION;
+static float4 TEXCOORD;
+static float4 SV_Target;
+
+struct SPIRV_Cross_Input {
+  float4 SV_POSITION : SV_POSITION;
+  float4 TEXCOORD : TEXCOORD;
+};
+
+struct SPIRV_Cross_Output {
+  float4 SV_Target : SV_Target0;
+};
+
+float dp2_f32(float2 a, float2 b) {
+  precise float _128 = a.x * b.x;
+  return mad(a.y, b.y, _128);
+}
+
+float dp3_f32(float3 a, float3 b) {
+  precise float _113 = a.x * b.x;
+  return mad(a.z, b.z, mad(a.y, b.y, _113));
+}
+
+void frag_main() {
+  float2 _142 = float2(TEXCOORD.x, TEXCOORD.y);
+  float4 _145 = T1.Sample(S1, _142);
+
+  float _146 = _145.x;
+  float _147 = _145.y;
+  float _148 = _145.z;
+
+  float _221;
+  float _222;
+  float _223;
+  if (CB0_m[50u].w != 0u) {
+    float2 _174 = float2(TEXCOORD.x - asfloat(CB0_m[49u].x), TEXCOORD.y - asfloat(CB0_m[49u].y));
+    float2 _188 = float2(dp2_f32(float2(asfloat(CB0_m[51u].x), asfloat(CB0_m[51u].y)), _174) * asfloat(CB0_m[49u].z), dp2_f32(float2(asfloat(CB0_m[51u].z), asfloat(CB0_m[51u].w)), _174) * asfloat(CB0_m[49u].w));
+    float _206 = T0.Sample(S0, clamp((dp2_f32(_188, _188) - asfloat(CB0_m[52u].x)) * asfloat(CB0_m[52u].w), 0.0f, 1.0f)).w * asfloat(CB0_m[50u].w);
+    _221 = mad(_206, asfloat(CB0_m[50u].z) - _148, _148);
+    _222 = mad(_206, asfloat(CB0_m[50u].y) - _147, _147);
+    _223 = mad(_206, asfloat(CB0_m[50u].x) - _146, _146);
+  } else {
+    _221 = _148;
+    _222 = _147;
+    _223 = _146;
+  }
+  float _420;
+  float _421;
+  float _422;
+  if (CB0_m[19u].x != 0u) {
+    float _231 = asfloat(CB0_m[17u].x);
+    float _232 = _231 * 0.070000000298023223876953125f;
+    float _233 = _231 * 0.10999999940395355224609375f;
+    float _234 = _231 * 0.12999999523162841796875f;
+    float _235 = _231 * 0.17000000178813934326171875f;
+    float _238 = asfloat(CB0_m[17u].w);
+    float _239 = TEXCOORD.x * _238;
+    float _240 = TEXCOORD.y * _238;
+    float _269 = _231 * 0.189999997615814208984375f;
+    float _270 = _231 * 0.23000000417232513427734375f;
+    float _271 = _231 * 0.2899999916553497314453125f;
+    float _272 = _231 * 0.310000002384185791015625f;
+    float _312 = clamp(mad((((frac(sin(dp2_f32(float2(_239 + _269, _240 + _269), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f) + (((frac(sin(dp2_f32(float2(_232 + _239, _240 + _232), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f) + frac(sin(dp2_f32(float2(_233 + _239, _240 + _233), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f)) + frac(sin(dp2_f32(float2(_234 + _239, _240 + _234), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f)) + frac(sin(dp2_f32(float2(_235 + _239, _240 + _235), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f))) + frac(sin(dp2_f32(float2(_239 + _270, _240 + _270), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f)) + frac(sin(dp2_f32(float2(_239 + _271, _240 + _271), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f)) + frac(sin(dp2_f32(float2(_239 + _272, _240 + _272), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f), 0.125f, asfloat(CB0_m[17u].z)), 0.0f, 1.0f);
+    float _314 = dp3_f32(float3(_223, _222, _221), float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f));
+    float _322 = (CB0_m[18u].y != 0u) ? mad(_312 * (_314 * (_314 * _314)), -0.5f, _312) : _312;
+    float _326 = _322 - 0.5f;
+    float _329 = asfloat(CB0_m[18u].x);
+    bool _339 = _322 < 0.5f;
+    float _340 = _322 + _322;
+    float _341 = _340 * _223;
+    float _342 = _340 * _222;
+    float _343 = _340 * _221;
+    float _347 = mad(_322, -2.0f, 1.0f);
+    float _357 = 1.0f - _322;
+    float _361 = mad(_322, 2.0f, -1.0f);
+    float _383 = _357 + _357;
+    bool _404 = CB0_m[19u].w != 0u;
+    bool _410 = CB0_m[19u].z != 0u;
+    bool _416 = CB0_m[18u].w != 0u;
+
+    // _404 - SDR = false;
+    // _410 - SDR = false;
+    // _416 - SDR = true;
+
+#if 1
+    _420 = _416 ? (_410 ? mad(_329, (_339 ? (_341 + ((_223 * _223) * _347)) : ((sqrt(_223) * _361) + ((_223 + _223) * _357))) - _223, _223) : (_404 ? mad(_329, ((_223 < 0.5f) ? _341 : mad(-_383, 1.0f - _223, 1.0f)) - _223, _223) : clamp(max(mad(_326, _329, _223), _223 * 0.02500000037252902984619140625f), 0.0f, 1.0f))) : _312;
+    _421 = _416 ? (_410 ? mad(_329, (_339 ? ((_347 * (_222 * _222)) + _342) : ((_357 * (_222 + _222)) + (_361 * sqrt(_222)))) - _222, _222) : (_404 ? mad(_329, ((_222 < 0.5f) ? _342 : mad(-_383, 1.0f - _222, 1.0f)) - _222, _222) : clamp(max(mad(_326, _329, _222), _222 * 0.02500000037252902984619140625f), 0.0f, 1.0f))) : _312;
+    _422 = _416 ? (_410 ? mad(_329, (_339 ? ((_347 * (_221 * _221)) + _343) : ((_357 * (_221 + _221)) + (_361 * sqrt(_221)))) - _221, _221) : (_404 ? mad(_329, ((_221 < 0.5f) ? _343 : mad(-_383, 1.0f - _221, 1.0f)) - _221, _221) : clamp(max(mad(_326, _329, _221), _221 * 0.02500000037252902984619140625f), 0.0f, 1.0f))) : _312;
+#else
+    _420 = _416 ? (_410 ? mad(_329, (_339 ? (_341 + ((_223 * _223) * _347)) : ((sqrt(_223) * _361) + ((_223 + _223) * _357))) - _223, _223) : (_404 ? mad(_329, ((_223 < 0.5f) ? _341 : mad(-_383, 1.0f - _223, 1.0f)) - _223, _223) : max(mad(_326, _329, _223), _223 * 0.02500000037252902984619140625f))) : _312;
+    _421 = _416 ? (_410 ? mad(_329, (_339 ? ((_347 * (_222 * _222)) + _342) : ((_357 * (_222 + _222)) + (_361 * sqrt(_222)))) - _222, _222) : (_404 ? mad(_329, ((_222 < 0.5f) ? _342 : mad(-_383, 1.0f - _222, 1.0f)) - _222, _222) : max(mad(_326, _329, _222), _222 * 0.02500000037252902984619140625f))) : _312;
+    _422 = _416 ? (_410 ? mad(_329, (_339 ? ((_347 * (_221 * _221)) + _343) : ((_357 * (_221 + _221)) + (_361 * sqrt(_221)))) - _221, _221) : (_404 ? mad(_329, ((_221 < 0.5f) ? _343 : mad(-_383, 1.0f - _221, 1.0f)) - _221, _221) : max(mad(_326, _329, _221), _221 * 0.02500000037252902984619140625f))) : _312;
+#endif
+
+  } else {
+    _420 = _223;
+    _421 = _222;
+    _422 = _221;
+  }
+
+  float _425 = max(max(max(_421, _422), _420), 9.9999997473787516355514526367188e-05f);
+  float _441 = (CB1_m0.w != 0u) ? (((_425 > CB1_m1.w) ? mad(CB1_m2.x, _425, CB1_m2.y) : _425) / _425) : 1.0f;
+  float _442 = _422 * _441;
+  float _447 = floor(_442 * 14.99989986419677734375f);
+  float _449 = mad(_442, 15.0f, -_447);
+  float _451 = ((_420 * _441) * 0.05859375f) + (_447 * 0.0625f);
+  float _453 = mad(_421 * _441, 0.9375f, 0.03125f);
+  float4 _459 = T3.Sample(S0, float2(_451 + 0.001953125f, _453));
+  float _460 = _459.x;
+  float _461 = _459.y;
+  float _462 = _459.z;
+  float4 _465 = T3.Sample(S0, float2(_451 + 0.064453125f, _453));
+  float _472 = mad(_449, _465.x - _460, _460);
+  float _473 = mad(_465.y - _461, _449, _461);
+  float _474 = mad(_465.z - _462, _449, _462);
+  float _525;
+  float _526;
+  float _527;
+  if (int(T5.Load(0)) > 0) {
+    float _489 = dp3_f32(float3(T4.Sample(S0, _142).xyz), float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f));
+    float _492 = floor(_474 * 14.99989986419677734375f);
+    float _494 = mad(_474, 15.0f, -_492);
+    float _496 = (_472 * 0.05859375f) + (_492 * 0.0625f);
+    float _498 = mad(_473, 0.9375f, 0.03125f);
+    float4 _503 = T2.Sample(S0, float2(_496 + 0.001953125f, _498));
+    float _504 = _503.x;
+    float _505 = _503.y;
+    float _506 = _503.z;
+    float4 _509 = T2.Sample(S0, float2(_496 + 0.064453125f, _498));
+    _525 = mad(mad(_509.z - _506, _494, _506) - _474, _489, _474);
+    _526 = mad(mad(_509.y - _505, _494, _505) - _473, _489, _473);
+    _527 = mad(_489, mad(_494, _509.x - _504, _504) - _472, _472);
+  } else {
+    _525 = _474;
+    _526 = _473;
+    _527 = _472;
+  }
+  SV_Target.x = _527 / _441;
+  SV_Target.y = _526 / _441;
+  SV_Target.z = _525 / _441;
+
+  SV_Target.w = _145.w;
+#if 1
+  SV_Target.rgb = ScaleScene(SV_Target.rgb);
+#endif
+}
+
+SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {
+  TEXCOORD = stage_input.TEXCOORD;
+  frag_main();
+  SPIRV_Cross_Output stage_output;
+  stage_output.SV_Target = SV_Target;
+  return stage_output;
+}

@@ -1,0 +1,46 @@
+SamplerState s0 : register(s0, space0);
+Texture2D<float4> t0 : register(t1, space0);
+
+static float2 TEXCOORD;
+static float4 SV_TARGET;
+
+struct SPIRV_Cross_Input
+{
+    float2 TEXCOORD : TEXCOORD1;
+};
+
+struct SPIRV_Cross_Output
+{
+    float4 SV_TARGET : SV_Target0;
+};
+
+float dp3_f32(float3 a, float3 b)
+{
+    precise float _53 = a.x * b.x;
+    return mad(a.z, b.z, mad(a.y, b.y, _53));
+}
+
+void frag_main()
+{
+    float4 _74 = t0.Sample(s0, float2(TEXCOORD.x, TEXCOORD.y));
+    float _75 = _74.x;
+    float _76 = _74.y;
+    float _77 = _74.z;
+    SV_TARGET.w = _74.w;
+    float3 _109 = float3((_75 < 0.0003379185800440609455108642578125f) ? (_75 * 0.10793362557888031005859375f) : exp2(log2(abs((_75 + 0.047142855823040008544921875f) * 0.95497953891754150390625f)) * 2.2000000476837158203125f), (_76 < 0.0003379185800440609455108642578125f) ? (_76 * 0.10793362557888031005859375f) : exp2(log2(abs((_76 + 0.047142855823040008544921875f) * 0.95497953891754150390625f)) * 2.2000000476837158203125f), (_77 < 0.0003379185800440609455108642578125f) ? (_77 * 0.10793362557888031005859375f) : exp2(log2(abs((_77 + 0.047142855823040008544921875f) * 0.95497953891754150390625f)) * 2.2000000476837158203125f));
+    float _115 = exp2(log2(abs(dp3_f32(_109, float3(0.6274039745330810546875f, 0.329281985759735107421875f, 0.043313600122928619384765625f)) * 0.0400000028312206268310546875f)) * 0.1593017578125f);
+    SV_TARGET.x = exp2(log2(mad(_115, 18.8515625f, 0.8359375f) / mad(_115, 18.6875f, 1.0f)) * 78.84375f);
+    float _129 = exp2(log2(abs(dp3_f32(_109, float3(0.01639159955084323883056640625f, 0.0880132019519805908203125f, 0.895595014095306396484375f)) * 0.0400000028312206268310546875f)) * 0.1593017578125f);
+    SV_TARGET.z = exp2(log2(mad(_129, 18.8515625f, 0.8359375f) / mad(_129, 18.6875f, 1.0f)) * 78.84375f);
+    float _141 = exp2(log2(abs(dp3_f32(_109, float3(0.06909699738025665283203125f, 0.919539988040924072265625f, 0.0113612003624439239501953125f)) * 0.0400000028312206268310546875f)) * 0.1593017578125f);
+    SV_TARGET.y = exp2(log2(mad(_141, 18.8515625f, 0.8359375f) / mad(_141, 18.6875f, 1.0f)) * 78.84375f);
+}
+
+SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)
+{
+    TEXCOORD = stage_input.TEXCOORD;
+    frag_main();
+    SPIRV_Cross_Output stage_output;
+    stage_output.SV_TARGET = SV_TARGET;
+    return stage_output;
+}

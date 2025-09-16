@@ -1,0 +1,67 @@
+cbuffer CB0_buf : register(b0, space0) {
+  uint4 CB0_m0 : packoffset(c0);
+  float4 CB0_m1 : packoffset(c1);
+  float3 CB0_m2 : packoffset(c2);
+  uint CB0_m3 : packoffset(c2.w);
+  float3 CB0_m4 : packoffset(c3);
+  uint CB0_m5 : packoffset(c3.w);
+  float3 CB0_m6 : packoffset(c4);
+  uint CB0_m7 : packoffset(c4.w);
+  uint4 CB0_m8 : packoffset(c5);
+  uint4 CB0_m9 : packoffset(c6);
+  uint4 CB0_m10 : packoffset(c7);
+  uint4 CB0_m11 : packoffset(c8);
+  uint4 CB0_m12 : packoffset(c9);
+  uint4 CB0_m13 : packoffset(c10);
+  uint4 CB0_m14 : packoffset(c11);
+  uint4 CB0_m15 : packoffset(c12);
+  uint4 CB0_m16 : packoffset(c13);
+  uint4 CB0_m17 : packoffset(c14);
+};
+
+cbuffer CB1_buf : register(b1, space0) {
+  float4 CB1_m0 : packoffset(c0);
+  uint4 CB1_m1 : packoffset(c1);
+  uint4 CB1_m2 : packoffset(c2);
+  float4 CB1_m3 : packoffset(c3);
+};
+
+RWTexture3D<float4> U0 : register(u2, space0);
+
+static uint3 gl_WorkGroupID;
+static uint3 gl_GlobalInvocationID;
+struct SPIRV_Cross_Input {
+  uint3 gl_WorkGroupID : SV_GroupID;
+  uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
+};
+
+float dp3_f32(float3 a, float3 b) {
+  precise float _64 = a.x * b.x;
+  return mad(a.z, b.z, mad(a.y, b.y, _64));
+}
+
+void comp_main() {
+  float _90 = float(CB0_m17.w - 1u);
+  float _100 = exp2(log2(float(gl_GlobalInvocationID.x) / _90) * 0.0126833133399486541748046875f);
+  float _101 = exp2(log2(float(gl_GlobalInvocationID.y) / _90) * 0.0126833133399486541748046875f);
+  float _102 = exp2(log2(float(gl_WorkGroupID.z) / _90) * 0.0126833133399486541748046875f);
+  float _133 = (exp2(log2(max(_100 - 0.8359375f, 0.0f) / mad(_100, -18.6875f, 18.8515625f)) * 6.277394771575927734375f) * CB1_m3.w) / CB1_m0.x;
+  float _134 = (CB1_m3.w * exp2(log2(max(_101 - 0.8359375f, 0.0f) / mad(_101, -18.6875f, 18.8515625f)) * 6.277394771575927734375f)) / CB1_m0.x;
+  float _135 = (CB1_m3.w * exp2(log2(max(_102 - 0.8359375f, 0.0f) / mad(_102, -18.6875f, 18.8515625f)) * 6.277394771575927734375f)) / CB1_m0.x;
+  float _138 = max(max(_133, max(_135, _134)), 5.9604644775390625e-08f);
+  float _145 = log2(_138) * CB0_m1.x;
+  float _156 = exp2(_145) / mad(exp2(_145 * CB0_m1.y), CB0_m1.z, CB0_m1.w);
+  float _169 = exp2(log2(_133 / _138) * CB0_m2.x);
+  float _170 = exp2(log2(_134 / _138) * CB0_m2.y);
+  float _171 = exp2(log2(_135 / _138) * CB0_m2.z);
+  float _172 = log2(_156);
+  float3 _207 = float3(_156 * exp2(log2(mad(exp2(_172 * CB0_m4.x), 1.0f - _169, _169)) * CB0_m6.x), _156 * exp2(log2(mad(1.0f - _170, exp2(_172 * CB0_m4.y), _170)) * CB0_m6.y), _156 * exp2(log2(mad(1.0f - _171, exp2(_172 * CB0_m4.z), _171)) * CB0_m6.z));
+  U0[uint3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, gl_WorkGroupID.z)] = float4(dp3_f32(float3(1.66049015522003173828125f, -0.587639033794403076171875f, -0.072851590812206268310546875f), _207), dp3_f32(float3(-0.124549962580204010009765625f, 1.13289988040924072265625f, -0.00834796018898487091064453125f), _207), dp3_f32(float3(-0.01815111003816127777099609375f, -0.10057871043682098388671875f, 1.11872971057891845703125f), _207), 1.0f);
+}
+
+[numthreads(32, 32, 1)]
+void main(SPIRV_Cross_Input stage_input) {
+  gl_WorkGroupID = stage_input.gl_WorkGroupID;
+  gl_GlobalInvocationID = stage_input.gl_GlobalInvocationID;
+  comp_main();
+}
