@@ -1,0 +1,107 @@
+cbuffer CB0_buf : register(b0, space0) {
+  float4 CB0_m0 : packoffset(c0);
+  float4 CB0_m1 : packoffset(c1);
+  uint2 CB0_m2 : packoffset(c2);
+  float2 CB0_m3 : packoffset(c2.z);
+  float4 CB0_m4 : packoffset(c3);
+};
+
+RWByteAddressBuffer U0 : register(u6, space0);
+SamplerState S0 : register(s1, space0);
+Texture2D<float4> T0 : register(t2, space0);
+Texture2D<float4> T1 : register(t3, space0);
+Texture2D<float4> T2 : register(t4, space0);
+Texture2D<float4> T3 : register(t5, space0);
+
+static uint3 gl_WorkGroupID;
+struct SPIRV_Cross_Input {
+  uint3 gl_WorkGroupID : SV_GroupID;
+};
+
+float dp3_f32(float3 a, float3 b) {
+  precise float _86 = a.x * b.x;
+  return mad(a.z, b.z, mad(a.y, b.y, _86));
+}
+
+uint cvt_f32_u32(float v) {
+  return (v > 4294967040.0f) ? 4294967295u : uint(max(v, 0.0f));
+}
+
+void comp_main() {
+  uint _99 = gl_WorkGroupID.x << 4u;
+  float _106 = CB0_m3.x * 0.5f;
+  float _107 = CB0_m3.y * 0.5f;
+  uint _109;
+  uint _112;
+  uint _114;
+  _109 = 0u;
+  _112 = 1199524608u;
+  _114 = 0u;
+  uint _117;
+  uint _110;
+  uint _113;
+  uint _115;
+  uint _116 = 0u;
+  for (;;) {
+    if (_116 >= 16u) {
+      break;
+    }
+    float _124 = float(_99 + _116);
+    float _127 = (_124 * CB0_m3.x) + _106;
+    float _128 = _107 + (_124 * CB0_m3.y);
+    float2 _142 = float2(_127 * CB0_m4.x, CB0_m4.y * _128);
+    float2 _148 = float2(_127 * CB0_m4.z, CB0_m4.w * _128);
+    float _165 = mad(T1.SampleLevel(S0, _148, 0.0f).x, CB0_m1.x, CB0_m1.z);
+    float _170 = mad(T2.SampleLevel(S0, _148, 0.0f).x, CB0_m1.y, CB0_m1.w);
+    float _177 = (T0.SampleLevel(S0, _142, 0.0f).x + T3.SampleLevel(S0, _142, 0.0f).x) * CB0_m0.x;
+    float _193 = exp2(log2(max(mad(_170, 0.11102962493896484375f, (_165 * 0.008609036915004253387451171875f) + _177), 0.0f)) * 0.0126833133399486541748046875f);
+    float _194 = exp2(log2(max(mad(_170, -0.11102962493896484375f, (_165 * (-0.008609036915004253387451171875f)) + _177), 0.0f)) * 0.0126833133399486541748046875f);
+    float _195 = exp2(log2(max(mad(_170, -0.3206271827220916748046875f, (_165 * 0.560031354427337646484375f) + _177), 0.0f)) * 0.0126833133399486541748046875f);
+    float _217 = exp2(log2(abs(max(_193 - 0.8359375f, 0.0f) / mad(_193, -18.6875f, 18.8515625f))) * 6.277394771575927734375f);
+    float _218 = exp2(log2(abs(max(_194 - 0.8359375f, 0.0f) / mad(_194, -18.6875f, 18.8515625f))) * 6.277394771575927734375f);
+    float _219 = exp2(log2(abs(max(_195 - 0.8359375f, 0.0f) / mad(_195, -18.6875f, 18.8515625f))) * 6.277394771575927734375f);
+    float _233 = dp3_f32(float3(mad(_219, 8.73067760467529296875f, (_217 * 429.575836181640625f) + (_218 * (-313.3065185546875f))), mad(_219, -24.0338611602783203125f, (_217 * (-98.91619110107421875f)) + (_218 * 247.9500579833984375f)), mad(_219, 140.6079559326171875f, (_217 * (-3.2437374591827392578125f)) + (_218 * (-12.3642139434814453125f)))), float3(0.2125000059604644775390625f, 0.7153999805450439453125f, 0.07209999859333038330078125f));
+    _110 = _109;
+    _113 = _112;
+    _115 = _114;
+    uint _235;
+    uint _237;
+    uint _238;
+    uint _240;
+    uint _239 = 0u;
+    for (;;) {
+      if (_239 >= 16u) {
+        break;
+      }
+      _238 = asuint(_233 + asfloat(_115));
+      _237 = asuint(min(_233, asfloat(_113)));
+      _235 = asuint(max(_233, asfloat(_110)));
+      _240 = _239 + 1u;
+      _110 = _235;
+      _113 = _237;
+      _115 = _238;
+      _239 = _240;
+      continue;
+    }
+    _117 = _116 + 1u;
+    _109 = _110;
+    _112 = _113;
+    _114 = _115;
+    _116 = _117;
+    continue;
+  }
+  uint _262;
+  U0.InterlockedAdd(0, cvt_f32_u32(asfloat(_114) * 6.55350017547607421875f), _262);
+  uint _267;
+  U0.InterlockedMin(8, cvt_f32_u32(asfloat(_112) * 6.55350017547607421875f), _267);
+  uint _269;
+  U0.InterlockedMax(4, cvt_f32_u32(asfloat(_109) * 6.55350017547607421875f), _269);
+  uint _271;
+  U0.InterlockedAdd(12, 1u, _271);
+}
+
+[numthreads(1, 1, 1)]
+void main(SPIRV_Cross_Input stage_input) {
+  gl_WorkGroupID = stage_input.gl_WorkGroupID;
+  comp_main();
+}

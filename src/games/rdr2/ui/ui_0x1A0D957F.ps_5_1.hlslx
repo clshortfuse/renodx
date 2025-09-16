@@ -1,0 +1,114 @@
+#include "../common.hlsli"
+
+struct anon_m
+{
+    float4 _m0;
+    uint4 _m1;
+    uint4 _m2;
+    uint4 _m3;
+    uint4 _m4;
+    uint3 _m5;
+};
+
+cbuffer CB0_buf : register(b0, space0)
+{
+    uint4 CB0_m0 : packoffset(c0);
+    uint4 CB0_m1 : packoffset(c1);
+    uint4 CB0_m2 : packoffset(c2);
+    uint4 CB0_m3 : packoffset(c3);
+    uint4 CB0_m4 : packoffset(c4);
+    uint4 CB0_m5 : packoffset(c5);
+    float4 CB0_m6 : packoffset(c6);
+    float4 CB0_m7 : packoffset(c7);
+    float4 CB0_m8 : packoffset(c8);
+    float CB0_m9 : packoffset(c9);
+    uint CB0_m10 : packoffset(c9.y);
+    uint CB0_m11 : packoffset(c9.z);
+    uint CB0_m12 : packoffset(c9.w);
+    uint4 CB0_m13 : packoffset(c10);
+};
+
+cbuffer CB1_buf : register(b1, space0)
+{
+    float4 CB1_m0 : packoffset(c0);
+    uint4 CB1_m1 : packoffset(c1);
+    uint4 CB1_m2 : packoffset(c2);
+    float4 CB1_m3 : packoffset(c3);
+};
+
+ByteAddressBuffer T0 : register(t3, space0);
+SamplerState S0 : register(s2, space0);
+Texture3D<float4> T1 : register(t4, space0);
+
+static float4 SV_Target;
+
+struct SPIRV_Cross_Output
+{
+    float4 SV_Target : SV_Target0;
+};
+
+float dp3_f32(float3 a, float3 b)
+{
+    precise float _75 = a.x * b.x;
+    return mad(a.z, b.z, mad(a.y, b.y, _75));
+}
+
+void frag_main()
+{
+    float _106 = mad(CB0_m6.x, CB0_m8.x, CB0_m7.x);
+    float _107 = mad(CB0_m6.y, CB0_m8.y, CB0_m7.y);
+    float _108 = mad(CB0_m8.z, CB0_m6.z, CB0_m7.z);
+    float _109 = mad(CB0_m8.w, CB0_m6.w, CB0_m7.w);
+    float _126;
+    float _127;
+    float _128;
+    if (CB0_m13.x != 0u)
+    {
+        float4 _122 = T1.SampleLevel(S0, float3(_106, _107, _108), 0.0f);
+        _126 = _122.z;
+        _127 = _122.y;
+        _128 = _122.x;
+    }
+    else
+    {
+        _126 = _108;
+        _127 = _107;
+        _128 = _106;
+    }
+    float _180;
+    float _181;
+    float _182;
+    if (CB0_m10 != 0u)
+    {
+        float3 _134 = float3(_128, _127, _126);
+        float _153 = exp2(log2(abs((dp3_f32(float3(0.6274039745330810546875f, 0.329281985759735107421875f, 0.043313600122928619384765625f), _134) * CB1_m0.x) / CB1_m3.w)) * 0.1593017578125f);
+        float _163 = exp2(log2(abs((dp3_f32(float3(0.06909699738025665283203125f, 0.919539988040924072265625f, 0.0113612003624439239501953125f), _134) * CB1_m0.x) / CB1_m3.w)) * 0.1593017578125f);
+        float _173 = exp2(log2(abs((dp3_f32(float3(0.01639159955084323883056640625f, 0.0880132019519805908203125f, 0.895595014095306396484375f), _134) * CB1_m0.x) / CB1_m3.w)) * 0.1593017578125f);
+        _180 = exp2(log2(mad(_173, 18.8515625f, 0.8359375f) / mad(_173, 18.6875f, 1.0f)) * 78.84375f);
+        _181 = exp2(log2(mad(_163, 18.8515625f, 0.8359375f) / mad(_163, 18.6875f, 1.0f)) * 78.84375f);
+        _182 = exp2(log2(mad(_153, 18.8515625f, 0.8359375f) / mad(_153, 18.6875f, 1.0f)) * 78.84375f);
+        // _134 = renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(_134))
+    }
+    else
+    {
+        _180 = _126;
+        _181 = _127;
+        _182 = _128;
+    }
+    bool _185 = CB0_m9 == 0.0f;
+    float _196 = _109 * asfloat(T0.Load(12));
+    SV_Target.z = (asfloat(T0.Load(12)) != 1.0f) ? (_196 * _196) : (_185 ? _180 : (_109 * _180));
+    float _204 = _109 * asfloat(T0.Load(0));
+    float _210 = (CB0_m11 != 0u) ? (_204 * asfloat(CB0_m11)) : _204;
+    SV_Target.w = clamp((CB0_m13.y != 0u) ? ((CB0_m12 != 0u) ? ((cos(_210 * 3.1415927410125732421875f) - 1.0f) * (-0.5f)) : _210) : _204, 0.0f, 1.0f);
+    SV_Target.x = _185 ? _182 : (_109 * _182);
+    SV_Target.y = _185 ? _181 : (_109 * _181);
+}
+
+SPIRV_Cross_Output main()
+{
+    frag_main();
+    SPIRV_Cross_Output stage_output;
+    stage_output.SV_Target = SV_Target;
+    return stage_output;
+}

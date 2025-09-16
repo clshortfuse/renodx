@@ -1,0 +1,586 @@
+struct anon_m {
+  float4 _m0;
+  uint4 _m1;
+  uint4 _m2;
+  uint4 _m3;
+  uint4 _m4;
+  uint3 _m5;
+};
+
+cbuffer CB0_buf : register(b0, space0) {
+  uint4 CB0_m0 : packoffset(c0);
+  uint4 CB0_m1 : packoffset(c1);
+  uint4 CB0_m2 : packoffset(c2);
+  uint4 CB0_m3 : packoffset(c3);
+  uint4 CB0_m4 : packoffset(c4);
+  uint4 CB0_m5 : packoffset(c5);
+  uint4 CB0_m6 : packoffset(c6);
+  float4 CB0_m7 : packoffset(c7);
+  float4 CB0_m8 : packoffset(c8);
+  float CB0_m9 : packoffset(c9);
+  uint CB0_m10 : packoffset(c9.y);
+  uint CB0_m11 : packoffset(c9.z);
+  uint CB0_m12 : packoffset(c9.w);
+  uint4 CB0_m13 : packoffset(c10);
+};
+
+cbuffer CB1_buf : register(b1, space0) {
+  float4 CB1_m0 : packoffset(c0);
+  uint4 CB1_m1 : packoffset(c1);
+  uint4 CB1_m2 : packoffset(c2);
+  float4 CB1_m3 : packoffset(c3);
+};
+
+ByteAddressBuffer T0 : register(t4, space0);
+SamplerState S0 : register(s2, space0);
+SamplerState S1 : register(s3, space0);
+Texture2D<float4> T1 : register(t5, space0);
+Texture3D<float4> T2 : register(t6, space0);
+
+static float4 COLOR1;
+static float4 TEXCOORD;
+static float4 SV_Target;
+
+struct SPIRV_Cross_Input {
+  float4 COLOR1 : TEXCOORD2;
+  float4 TEXCOORD : TEXCOORD3;
+};
+
+struct SPIRV_Cross_Output {
+  float4 SV_Target : SV_Target0;
+};
+
+float dp3_f32(float3 a, float3 b) {
+  precise float _101 = a.x * b.x;
+  return mad(a.z, b.z, mad(a.y, b.y, _101));
+}
+
+void frag_main() {
+  float2 _120 = float2(TEXCOORD.x, TEXCOORD.y);
+  float4 _123 = T1.SampleLevel(S1, _120, 0.0f);
+  float _125 = _123.y;
+  float4 _128 = T1.GatherGreen(S1, _120);
+  float _129 = _128.x;
+  float _130 = _128.y;
+  float _131 = _128.z;
+  float4 _133 = T1.GatherGreen(S1, _120, int2(-1, -1));
+  float _134 = _133.x;
+  float _135 = _133.z;
+  float _136 = _133.w;
+  float _143 = max(max(_131, max(_125, _129)), max(_134, _135));
+  float _146 = _143 - min(min(_131, min(_125, _129)), min(_134, _135));
+  float _706;
+  float _707;
+  float _708;
+  if (_146 >= max(_143 * 0.063000001013278961181640625f, 0.0f)) {
+    float4 _153 = T1.SampleLevel(S1, _120, 0.0f, int2(1, -1));
+    float _154 = _153.y;
+    float4 _156 = T1.SampleLevel(S1, _120, 0.0f, int2(-1, 1));
+    float _157 = _156.y;
+    float _158 = _129 + _135;
+    float _159 = _131 + _134;
+    float _164 = _130 + _154;
+    float _168 = _136 + _157;
+    bool _183 = (mad(abs(mad(_125, -2.0f, _158)), 2.0f, abs(mad(_131, -2.0f, _164))) + abs(mad(_134, -2.0f, _168))) >= (mad(abs(mad(_125, -2.0f, _159)), 2.0f, abs(mad(_135, -2.0f, _136 + _154))) + abs(mad(_129, -2.0f, _130 + _157)));
+    float _185 = _183 ? _135 : _134;
+    float _186 = _183 ? _129 : _131;
+    float _191 = _183 ? TEXCOORD.w : TEXCOORD.z;
+    float _198 = abs(_185 - _125);
+    float _199 = abs(_186 - _125);
+    bool _200 = _198 >= _199;
+    float _203 = _200 ? (-_191) : _191;
+    float _206 = clamp((1.0f / _146) * abs(mad(mad(_159 + _158, 2.0f, _164 + _168), 0.083333335816860198974609375f, -_125)), 0.0f, 1.0f);
+    float _207 = _183 ? 0.0f : TEXCOORD.w;
+    float _210 = _183 ? TEXCOORD.x : mad(_203, 0.5f, TEXCOORD.x);
+    float _211 = _183 ? mad(_203, 0.5f, TEXCOORD.y) : TEXCOORD.y;
+    float _212 = _183 ? TEXCOORD.z : 0.0f;
+    float _213 = _210 - _212;
+    float _214 = _211 - _207;
+    float _215 = _212 + _210;
+    float _216 = _207 + _211;
+    float _227 = _200 ? (_125 + _185) : (_125 + _186);
+    float _228 = max(_198, _199) * 0.25f;
+    float _230 = mad(_206, -2.0f, 3.0f) * (_206 * _206);
+    bool _231 = mad(_227, -0.5f, _125) < 0.0f;
+    float _232 = mad(_227, -0.5f, T1.SampleLevel(S1, float2(_213, _214), 0.0f).y);
+    float _233 = mad(_227, -0.5f, T1.SampleLevel(S1, float2(_215, _216), 0.0f).y);
+    bool _236 = abs(_232) >= _228;
+    bool _237 = _228 <= abs(_233);
+    float _241 = _236 ? _213 : (_213 - _212);
+    float _242 = _236 ? _214 : (_214 - _207);
+    float _247 = _237 ? _215 : (_212 + _215);
+    float _249 = _237 ? _216 : (_216 + _207);
+    float _660;
+    float _661;
+    float _662;
+    float _663;
+    float _664;
+    float _665;
+    if (!(_236 && _237)) {
+      float _258;
+      if (!_236) {
+        _258 = T1.SampleLevel(S1, float2(_241, _242), 0.0f).y;
+      } else {
+        _258 = _232;
+      }
+      float _265;
+      if (!_237) {
+        _265 = T1.SampleLevel(S1, float2(_247, _249), 0.0f).y;
+      } else {
+        _265 = _233;
+      }
+      float _267 = _236 ? _258 : mad(_227, -0.5f, _258);
+      float _269 = _237 ? _265 : mad(_227, -0.5f, _265);
+      bool _272 = _228 <= abs(_267);
+      bool _273 = _228 <= abs(_269);
+      float _276 = _272 ? _241 : (_241 - _212);
+      float _278 = _272 ? _242 : (_242 - _207);
+      float _283 = _273 ? _247 : (_212 + _247);
+      float _285 = _273 ? _249 : (_249 + _207);
+      float _654;
+      float _655;
+      float _656;
+      float _657;
+      float _658;
+      float _659;
+      if (!(_273 && _272)) {
+        float _294;
+        if (!_272) {
+          _294 = T1.SampleLevel(S1, float2(_276, _278), 0.0f).y;
+        } else {
+          _294 = _267;
+        }
+        float _301;
+        if (!_273) {
+          _301 = T1.SampleLevel(S1, float2(_283, _285), 0.0f).y;
+        } else {
+          _301 = _269;
+        }
+        float _303 = _272 ? _294 : mad(_227, -0.5f, _294);
+        float _305 = _273 ? _301 : mad(_227, -0.5f, _301);
+        bool _308 = _228 <= abs(_303);
+        bool _309 = _228 <= abs(_305);
+        float _312 = _308 ? _276 : (_276 - _212);
+        float _314 = _308 ? _278 : (_278 - _207);
+        float _319 = _309 ? _283 : (_283 + _212);
+        float _321 = _309 ? _285 : (_285 + _207);
+        float _648;
+        float _649;
+        float _650;
+        float _651;
+        float _652;
+        float _653;
+        if (!(_308 && _309)) {
+          float _330;
+          if (!_308) {
+            _330 = T1.SampleLevel(S1, float2(_312, _314), 0.0f).y;
+          } else {
+            _330 = _303;
+          }
+          float _337;
+          if (!_309) {
+            _337 = T1.SampleLevel(S1, float2(_319, _321), 0.0f).y;
+          } else {
+            _337 = _305;
+          }
+          float _339 = _308 ? _330 : mad(_227, -0.5f, _330);
+          float _341 = _309 ? _337 : mad(_227, -0.5f, _337);
+          bool _344 = _228 <= abs(_339);
+          bool _345 = _228 <= abs(_341);
+          float _348 = _344 ? _312 : (_312 - _212);
+          float _350 = _344 ? _314 : (_314 - _207);
+          float _355 = _345 ? _319 : (_319 + _212);
+          float _357 = _345 ? _321 : (_321 + _207);
+          float _642;
+          float _643;
+          float _644;
+          float _645;
+          float _646;
+          float _647;
+          if (!(_345 && _344)) {
+            float _366;
+            if (!_344) {
+              _366 = T1.SampleLevel(S1, float2(_348, _350), 0.0f).y;
+            } else {
+              _366 = _339;
+            }
+            float _373;
+            if (!_345) {
+              _373 = T1.SampleLevel(S1, float2(_355, _357), 0.0f).y;
+            } else {
+              _373 = _341;
+            }
+            float _375 = _344 ? _366 : mad(_227, -0.5f, _366);
+            float _377 = _345 ? _373 : mad(_227, -0.5f, _373);
+            bool _380 = _228 <= abs(_375);
+            bool _381 = _228 <= abs(_377);
+            float _384 = _380 ? _348 : mad(_212, -1.5f, _348);
+            float _386 = _380 ? _350 : mad(_207, -1.5f, _350);
+            float _391 = _381 ? _355 : mad(_212, 1.5f, _355);
+            float _393 = _381 ? _357 : mad(_207, 1.5f, _357);
+            float _636;
+            float _637;
+            float _638;
+            float _639;
+            float _640;
+            float _641;
+            if (!(_380 && _381)) {
+              float _402;
+              if (!_380) {
+                _402 = T1.SampleLevel(S1, float2(_384, _386), 0.0f).y;
+              } else {
+                _402 = _375;
+              }
+              float _409;
+              if (!_381) {
+                _409 = T1.SampleLevel(S1, float2(_391, _393), 0.0f).y;
+              } else {
+                _409 = _377;
+              }
+              float _411 = _380 ? _402 : mad(_227, -0.5f, _402);
+              float _413 = _381 ? _409 : mad(_227, -0.5f, _409);
+              bool _416 = _228 <= abs(_411);
+              bool _417 = _228 <= abs(_413);
+              float _420 = _416 ? _384 : mad(_212, -2.0f, _384);
+              float _422 = _416 ? _386 : mad(_207, -2.0f, _386);
+              float _427 = _417 ? _391 : mad(_212, 2.0f, _391);
+              float _429 = _417 ? _393 : mad(_207, 2.0f, _393);
+              float _630;
+              float _631;
+              float _632;
+              float _633;
+              float _634;
+              float _635;
+              if (!(_417 && _416)) {
+                float _438;
+                if (!_416) {
+                  _438 = T1.SampleLevel(S1, float2(_420, _422), 0.0f).y;
+                } else {
+                  _438 = _411;
+                }
+                float _445;
+                if (!_417) {
+                  _445 = T1.SampleLevel(S1, float2(_427, _429), 0.0f).y;
+                } else {
+                  _445 = _413;
+                }
+                float _447 = _416 ? _438 : mad(_227, -0.5f, _438);
+                float _449 = _417 ? _445 : mad(_227, -0.5f, _445);
+                bool _452 = _228 <= abs(_447);
+                bool _453 = _228 <= abs(_449);
+                float _456 = _452 ? _420 : mad(_212, -2.0f, _420);
+                float _458 = _452 ? _422 : mad(_207, -2.0f, _422);
+                float _463 = _453 ? _427 : mad(_212, 2.0f, _427);
+                float _465 = _453 ? _429 : mad(_207, 2.0f, _429);
+                float _624;
+                float _625;
+                float _626;
+                float _627;
+                float _628;
+                float _629;
+                if (!(_452 && _453)) {
+                  float _474;
+                  if (!_452) {
+                    _474 = T1.SampleLevel(S1, float2(_456, _458), 0.0f).y;
+                  } else {
+                    _474 = _447;
+                  }
+                  float _481;
+                  if (!_453) {
+                    _481 = T1.SampleLevel(S1, float2(_463, _465), 0.0f).y;
+                  } else {
+                    _481 = _449;
+                  }
+                  float _483 = _452 ? _474 : mad(_227, -0.5f, _474);
+                  float _485 = _453 ? _481 : mad(_227, -0.5f, _481);
+                  bool _488 = _228 <= abs(_483);
+                  bool _489 = _228 <= abs(_485);
+                  float _492 = _488 ? _456 : mad(_212, -2.0f, _456);
+                  float _494 = _488 ? _458 : mad(_207, -2.0f, _458);
+                  float _499 = _489 ? _463 : mad(_212, 2.0f, _463);
+                  float _501 = _489 ? _465 : mad(_207, 2.0f, _465);
+                  float _618;
+                  float _619;
+                  float _620;
+                  float _621;
+                  float _622;
+                  float _623;
+                  if (!(_489 && _488)) {
+                    float _510;
+                    if (!_488) {
+                      _510 = T1.SampleLevel(S1, float2(_492, _494), 0.0f).y;
+                    } else {
+                      _510 = _483;
+                    }
+                    float _517;
+                    if (!_489) {
+                      _517 = T1.SampleLevel(S1, float2(_499, _501), 0.0f).y;
+                    } else {
+                      _517 = _485;
+                    }
+                    float _519 = _488 ? _510 : mad(_227, -0.5f, _510);
+                    float _521 = _489 ? _517 : mad(_227, -0.5f, _517);
+                    bool _524 = _228 <= abs(_519);
+                    bool _525 = _228 <= abs(_521);
+                    float _528 = _524 ? _492 : mad(_212, -2.0f, _492);
+                    float _530 = _524 ? _494 : mad(_207, -2.0f, _494);
+                    float _535 = _525 ? _499 : mad(_212, 2.0f, _499);
+                    float _537 = _525 ? _501 : mad(_207, 2.0f, _501);
+                    float _612;
+                    float _613;
+                    float _614;
+                    float _615;
+                    float _616;
+                    float _617;
+                    if (!(_525 && _524)) {
+                      float _546;
+                      if (!_524) {
+                        _546 = T1.SampleLevel(S1, float2(_528, _530), 0.0f).y;
+                      } else {
+                        _546 = _519;
+                      }
+                      float _553;
+                      if (!_525) {
+                        _553 = T1.SampleLevel(S1, float2(_535, _537), 0.0f).y;
+                      } else {
+                        _553 = _521;
+                      }
+                      float _555 = _524 ? _546 : mad(_227, -0.5f, _546);
+                      float _557 = _525 ? _553 : mad(_227, -0.5f, _553);
+                      bool _560 = _228 <= abs(_555);
+                      bool _561 = _228 <= abs(_557);
+                      float _564 = _560 ? _528 : mad(_212, -4.0f, _528);
+                      float _566 = _560 ? _530 : mad(_207, -4.0f, _530);
+                      float _571 = _561 ? _535 : mad(_212, 4.0f, _535);
+                      float _573 = _561 ? _537 : mad(_207, 4.0f, _537);
+                      float _606;
+                      float _607;
+                      float _608;
+                      float _609;
+                      float _610;
+                      float _611;
+                      if (!(_561 && _560)) {
+                        float _582;
+                        if (!_560) {
+                          _582 = T1.SampleLevel(S1, float2(_564, _566), 0.0f).y;
+                        } else {
+                          _582 = _555;
+                        }
+                        float _589;
+                        if (!_561) {
+                          _589 = T1.SampleLevel(S1, float2(_571, _573), 0.0f).y;
+                        } else {
+                          _589 = _557;
+                        }
+                        float _591 = _560 ? _582 : mad(_227, -0.5f, _582);
+                        float _593 = _561 ? _589 : mad(_227, -0.5f, _589);
+                        bool _596 = _228 <= abs(_591);
+                        bool _597 = _228 <= abs(_593);
+                        _606 = _593;
+                        _607 = _591;
+                        _608 = _597 ? _573 : mad(_207, 8.0f, _573);
+                        _609 = _597 ? _571 : mad(_212, 8.0f, _571);
+                        _610 = _596 ? _566 : mad(_207, -8.0f, _566);
+                        _611 = _596 ? _564 : mad(_212, -8.0f, _564);
+                      } else {
+                        _606 = _557;
+                        _607 = _555;
+                        _608 = _573;
+                        _609 = _571;
+                        _610 = _566;
+                        _611 = _564;
+                      }
+                      _612 = _606;
+                      _613 = _607;
+                      _614 = _608;
+                      _615 = _609;
+                      _616 = _610;
+                      _617 = _611;
+                    } else {
+                      _612 = _521;
+                      _613 = _519;
+                      _614 = _537;
+                      _615 = _535;
+                      _616 = _530;
+                      _617 = _528;
+                    }
+                    _618 = _612;
+                    _619 = _613;
+                    _620 = _614;
+                    _621 = _615;
+                    _622 = _616;
+                    _623 = _617;
+                  } else {
+                    _618 = _485;
+                    _619 = _483;
+                    _620 = _501;
+                    _621 = _499;
+                    _622 = _494;
+                    _623 = _492;
+                  }
+                  _624 = _618;
+                  _625 = _619;
+                  _626 = _620;
+                  _627 = _621;
+                  _628 = _622;
+                  _629 = _623;
+                } else {
+                  _624 = _449;
+                  _625 = _447;
+                  _626 = _465;
+                  _627 = _463;
+                  _628 = _458;
+                  _629 = _456;
+                }
+                _630 = _624;
+                _631 = _625;
+                _632 = _626;
+                _633 = _627;
+                _634 = _628;
+                _635 = _629;
+              } else {
+                _630 = _413;
+                _631 = _411;
+                _632 = _429;
+                _633 = _427;
+                _634 = _422;
+                _635 = _420;
+              }
+              _636 = _630;
+              _637 = _631;
+              _638 = _632;
+              _639 = _633;
+              _640 = _634;
+              _641 = _635;
+            } else {
+              _636 = _377;
+              _637 = _375;
+              _638 = _393;
+              _639 = _391;
+              _640 = _386;
+              _641 = _384;
+            }
+            _642 = _636;
+            _643 = _637;
+            _644 = _638;
+            _645 = _639;
+            _646 = _640;
+            _647 = _641;
+          } else {
+            _642 = _341;
+            _643 = _339;
+            _644 = _357;
+            _645 = _355;
+            _646 = _350;
+            _647 = _348;
+          }
+          _648 = _642;
+          _649 = _643;
+          _650 = _644;
+          _651 = _645;
+          _652 = _646;
+          _653 = _647;
+        } else {
+          _648 = _305;
+          _649 = _303;
+          _650 = _321;
+          _651 = _319;
+          _652 = _314;
+          _653 = _312;
+        }
+        _654 = _648;
+        _655 = _649;
+        _656 = _650;
+        _657 = _651;
+        _658 = _652;
+        _659 = _653;
+      } else {
+        _654 = _269;
+        _655 = _267;
+        _656 = _285;
+        _657 = _283;
+        _658 = _278;
+        _659 = _276;
+      }
+      _660 = _654;
+      _661 = _655;
+      _662 = _656;
+      _663 = _657;
+      _664 = _658;
+      _665 = _659;
+    } else {
+      _660 = _233;
+      _661 = _232;
+      _662 = _249;
+      _663 = _247;
+      _664 = _242;
+      _665 = _241;
+    }
+    float _668 = _183 ? (TEXCOORD.x - _665) : (TEXCOORD.y - _664);
+    float _671 = _183 ? (_663 - TEXCOORD.x) : (_662 - TEXCOORD.y);
+    bool _672 = _661 < 0.0f;
+    bool _673 = _660 < 0.0f;
+    bool _675 = !_231;
+    bool _685 = _668 < _671;
+    float _695 = max(_230 * _230, ((((_673 && _675) || (_231 && (!_673))) && (!_685)) || (((_672 && _675) || (_231 && (!_672))) && _685)) ? mad(-(1.0f / (_668 + _671)), min(_668, _671), 0.5f) : 0.0f);
+    float4 _702 = T1.SampleLevel(S1, float2(_183 ? TEXCOORD.x : mad(_203, _695, TEXCOORD.x), _183 ? mad(_203, _695, TEXCOORD.y) : TEXCOORD.y), 0.0f);
+    _706 = _702.z;
+    _707 = _702.y;
+    _708 = _702.x;
+  } else {
+    _706 = _123.z;
+    _707 = _125;
+    _708 = _123.x;
+  }
+  float4 _710 = T1.Sample(S1, _120);
+  float _726 = mad(_708, CB0_m8.x, CB0_m7.x);
+  float _727 = mad(CB0_m8.y, _707, CB0_m7.y);
+  float _728 = mad(_706, CB0_m8.z, CB0_m7.z);
+  float _732 = mad(_710.w, CB0_m8.w, CB0_m7.w) * COLOR1.w;
+  float _748;
+  float _749;
+  float _750;
+  if (CB0_m13.x != 0u) {
+    float4 _744 = T2.SampleLevel(S0, float3(_726, _727, _728), 0.0f);
+    _748 = _744.z;
+    _749 = _744.y;
+    _750 = _744.x;
+  } else {
+    _748 = _728;
+    _749 = _727;
+    _750 = _726;
+  }
+  float _802;
+  float _803;
+  float _804;
+  if (CB0_m10 != 0u) {
+    float3 _756 = float3(_750, _749, _748);
+    float _775 = exp2(log2(abs((dp3_f32(float3(0.6274039745330810546875f, 0.329281985759735107421875f, 0.043313600122928619384765625f), _756) * CB1_m0.x) / CB1_m3.w)) * 0.1593017578125f);
+    float _785 = exp2(log2(abs((dp3_f32(float3(0.06909699738025665283203125f, 0.919539988040924072265625f, 0.0113612003624439239501953125f), _756) * CB1_m0.x) / CB1_m3.w)) * 0.1593017578125f);
+    float _795 = exp2(log2(abs((dp3_f32(float3(0.01639159955084323883056640625f, 0.0880132019519805908203125f, 0.895595014095306396484375f), _756) * CB1_m0.x) / CB1_m3.w)) * 0.1593017578125f);
+    _802 = exp2(log2(mad(_795, 18.8515625f, 0.8359375f) / mad(_795, 18.6875f, 1.0f)) * 78.84375f);
+    _803 = exp2(log2(mad(_785, 18.8515625f, 0.8359375f) / mad(_785, 18.6875f, 1.0f)) * 78.84375f);
+    _804 = exp2(log2(mad(_775, 18.8515625f, 0.8359375f) / mad(_775, 18.6875f, 1.0f)) * 78.84375f);
+  } else {
+    _802 = _748;
+    _803 = _749;
+    _804 = _750;
+  }
+  bool _807 = CB0_m9 == 0.0f;
+  float _818 = _732 * asfloat(T0.Load(12));
+  SV_Target.z = (asfloat(T0.Load(12)) != 1.0f) ? (_818 * _818) : (_807 ? _802 : (_732 * _802));
+  float _826 = _732 * asfloat(T0.Load(0));
+  float _832 = (CB0_m11 != 0u) ? (_826 * asfloat(CB0_m11)) : _826;
+  SV_Target.w = clamp((CB0_m13.y != 0u) ? ((CB0_m12 != 0u) ? ((cos(_832 * 3.1415927410125732421875f) - 1.0f) * (-0.5f)) : _832) : _826, 0.0f, 1.0f);
+  SV_Target.x = _807 ? _804 : (_732 * _804);
+  SV_Target.y = _807 ? _803 : (_732 * _803);
+}
+
+SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {
+  COLOR1 = stage_input.COLOR1;
+  TEXCOORD = stage_input.TEXCOORD;
+  frag_main();
+  SPIRV_Cross_Output stage_output;
+  stage_output.SV_Target = SV_Target;
+  return stage_output;
+}

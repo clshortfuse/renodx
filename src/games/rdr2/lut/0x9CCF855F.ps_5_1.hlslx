@@ -1,0 +1,379 @@
+struct anon_m {
+  int4 _m0;
+  float4 _m1;
+  float4 _m2;
+  float2 _m3;
+  uint4 _m4;
+  uint4 _m5;
+  uint4 _m6;
+  uint4 _m7;
+  uint4 _m8;
+  uint4 _m9;
+  uint4 _m10;
+  uint4 _m11;
+  uint4 _m12;
+  uint4 _m13;
+  uint4 _m14;
+  uint _m15;
+};
+
+cbuffer CB0_buf : register(b0, space0) {
+  uint4 CB0_m[88] : packoffset(c0);
+};
+
+cbuffer CB1_buf : register(b1, space0) {
+  uint4 CB1_m0 : packoffset(c0);
+  uint2 CB1_m1 : packoffset(c1);
+  float2 CB1_m2 : packoffset(c1.z);
+  float4 CB1_m3 : packoffset(c2);
+  float4 CB1_m4 : packoffset(c3);
+};
+
+ByteAddressBuffer T0 : register(t5, space0);
+ByteAddressBuffer T1 : register(t6, space0);
+ByteAddressBuffer T16 : register(t21, space0);
+SamplerState S0 : register(s2, space0);
+SamplerState S1 : register(s3, space0);
+SamplerState S2 : register(s4, space0);
+Texture2DArray<float4> T2 : register(t7, space0);
+Texture2D<float4> T3 : register(t8, space0);
+Texture2D<float4> T4 : register(t9, space0);
+Texture2D<float4> T5 : register(t10, space0);
+Texture1D<float4> T6 : register(t11, space0);
+Texture2D<float4> T7 : register(t12, space0);
+Texture2D<float4> T8 : register(t13, space0);
+Texture2D<float4> T9 : register(t14, space0);
+Texture2D<float4> T10 : register(t15, space0);
+Texture2D<float4> T11 : register(t16, space0);
+Texture2D<float4> T12 : register(t17, space0);
+Texture2D<float4> T13 : register(t18, space0);
+Texture2D<float4> T14 : register(t19, space0);
+Buffer<float4> T15 : register(t20, space0);
+
+static float4 gl_FragCoord;
+static float4 TEXCOORD;
+static float TEXCOORD1;
+static float4 SV_Target;
+
+struct SPIRV_Cross_Input {
+  float4 TEXCOORD : TEXCOORD1;
+  float TEXCOORD1 : TEXCOORD2;
+  float4 gl_FragCoord : SV_Position;
+};
+
+struct SPIRV_Cross_Output {
+  float4 SV_Target : SV_Target0;
+};
+
+float dp3_f32(float3 a, float3 b) {
+  precise float _267 = a.x * b.x;
+  return mad(a.z, b.z, mad(a.y, b.y, _267));
+}
+
+float dp2_f32(float2 a, float2 b) {
+  precise float _256 = a.x * b.x;
+  return mad(a.y, b.y, _256);
+}
+
+uint cvt_f32_u32(float v) {
+  return (v > 4294967040.0f) ? 4294967295u : uint(max(v, 0.0f));
+}
+
+void frag_main() {
+  float2 _283 = float2(TEXCOORD.x, TEXCOORD.y);
+  float4 _286 = T7.Sample(S2, _283);
+  float _294 = asfloat(T0.Load(16));
+  float _295 = _286.x * _294;
+  float _296 = _286.y * _294;
+  float _297 = _286.z * _294;
+  float4 _299 = T15.Load(0u);
+  float _300 = _299.x;
+  float _301 = _299.y;
+  float _302 = _299.z;
+  float4 _303 = T15.Load(1u);
+  float _304 = _303.x;
+  float _305 = _303.y;
+  float _306 = _303.z;
+  float _307 = _303.w;
+  float4 _309 = T3.Load(int3(uint2(0u, 0u), 0u));
+  float _310 = _309.x;
+  float _315 = dp3_f32(float3(_310 * _295, _310 * _296, _310 * _297), float3(0.300000011920928955078125f, 0.589999973773956298828125f, 0.10999999940395355224609375f));
+  bool _342;
+  float _343;
+  float _344;
+  float _345;
+  if (CB0_m[64u].x != 0u) {
+    float4 _328 = T13.Sample(S2, _283);
+    float _329 = _328.x;
+    float _330 = _328.y;
+    float _331 = _328.z;
+    float _332 = _328.w;
+    bool _334 = (_332 + 9.9999997473787516355514526367188e-05f) >= 1.0f;
+    float _335 = 1.0f - _332;
+    _342 = _334;
+    _343 = _334 ? _331 : mad(_335, _297, _331);
+    _344 = _334 ? _330 : mad(_335, _296, _330);
+    _345 = _334 ? _329 : mad(_335, _295, _329);
+  } else {
+    _342 = false;
+    _343 = _297;
+    _344 = _296;
+    _345 = _295;
+  }
+  float _349 = min(_310 * _345, 65504.0f);
+  float _350 = min(_310 * _344, 65504.0f);
+  float _351 = min(_310 * _343, 65504.0f);
+  bool _352 = !_342;
+  float _550;
+  float _551;
+  float _552;
+  float _553;
+  if (_352) {
+    float _432;
+    if (CB0_m[73u].x != 0u) {
+      float4 _365 = T5.Sample(S1, _283);
+      float _380 = clamp(dp3_f32(float3(_310 * _365.x, _310 * _365.y, _310 * _365.z), float3(0.300000011920928955078125f, 0.589999973773956298828125f, 0.10999999940395355224609375f)), asfloat(CB0_m[75u].z), asfloat(CB0_m[75u].w));
+      float _405 = asfloat(CB0_m[69u].x);
+      float _408 = asfloat(CB0_m[69u].y);
+      float _409 = clamp(mad(_380, asfloat(CB0_m[75u].y), mad(log2(_380 + asfloat(CB0_m[75u].x)) * asfloat(CB0_m[73u].y), 0.693147182464599609375f, asfloat(CB0_m[73u].z)) - 10.0f) + asfloat(CB0_m[68u].w), _405, _408);
+      _432 = exp2(mad(clamp(asfloat(CB0_m[73u].x), 0.0f, 1.0f), clamp(_405, mad(abs(_409) * asfloat(CB0_m[69u].z), float(int(((_409 < 0.0f) ? 4294967295u : 0u) + uint(_409 > 0.0f))), _409), _408) - TEXCOORD1, TEXCOORD1));
+    } else {
+      _432 = TEXCOORD.z;
+    }
+    float _435 = asfloat(CB0_m[16u].w);
+    float _459 = _315 * (T8.Sample(S1, float2(frac(mad(TEXCOORD.x * _435, 1.60000002384185791015625f, asfloat(CB0_m[16u].x))), frac(mad(TEXCOORD.y * _435, 0.89999997615814208984375f, asfloat(CB0_m[16u].y))))).w - 0.5f);
+    float _462 = asfloat(CB0_m[16u].z);
+    float _466 = max(_349 * 0.5f, mad(_459, _462, _349));
+    float _467 = max(_350 * 0.5f, mad(_459, _462, _350));
+    float _468 = max(_351 * 0.5f, mad(_459, _462, _351));
+    float2 _484 = float2(TEXCOORD.x - asfloat(CB0_m[53u].x), TEXCOORD.y - asfloat(CB0_m[53u].y));
+    float2 _498 = float2(dp2_f32(float2(asfloat(CB0_m[55u].x), asfloat(CB0_m[55u].y)), _484) * asfloat(CB0_m[53u].z), dp2_f32(float2(asfloat(CB0_m[55u].z), asfloat(CB0_m[55u].w)), _484) * asfloat(CB0_m[53u].w));
+    float _508 = max((dp2_f32(_498, _498) - asfloat(CB0_m[56u].x)) * asfloat(CB0_m[56u].w), 0.0f);
+    float _520 = (_508 < 1.0f) ? (1.0f - exp2(_508 * (-10.0f))) : ((((_508 - 1.0f) > 0.0f) ? exp2((_508 - 2.0f) * 10.0f) : 0.0f) + 0.9980499744415283203125f);
+    float _534 = asfloat(CB0_m[54u].w);
+    bool _544 = CB0_m[54u].w != 0u;
+    _550 = _432;
+    _551 = _544 ? mad(mad(asfloat(CB0_m[54u].z) * _468, _534, -_468), _520, _468) : _468;
+    _552 = _544 ? mad(mad(asfloat(CB0_m[54u].y) * _467, _534, -_467), _520, _467) : _467;
+    _553 = _544 ? mad(mad(_466 * asfloat(CB0_m[54u].x), _534, -_466), _520, _466) : _466;
+  } else {
+    _550 = TEXCOORD.z;
+    _551 = _351;
+    _552 = _350;
+    _553 = _349;
+  }
+  float _563 = clamp(clamp(TEXCOORD.y * asfloat(CB0_m[60u].y), 0.0f, 1.0f) + asfloat(CB0_m[57u].w), 0.0f, 1.0f);
+  float _578 = clamp(clamp(clamp(TEXCOORD.y - asfloat(CB0_m[59u].w), 0.0f, 1.0f) * asfloat(CB0_m[60u].x), 0.0f, 1.0f) - asfloat(CB0_m[58u].w), 0.0f, 1.0f);
+  float _584 = asfloat(CB0_m[57u].x);
+  float _585 = asfloat(CB0_m[57u].y);
+  float _586 = asfloat(CB0_m[57u].z);
+  float _592 = asfloat(CB0_m[59u].x);
+  float _593 = asfloat(CB0_m[59u].y);
+  float _594 = asfloat(CB0_m[59u].z);
+  float _598 = mad(_563, _592 - _584, _584);
+  float _599 = mad(_563, _593 - _585, _585);
+  float _600 = mad(_563, _594 - _586, _586);
+  float _621 = mad(TEXCOORD.y, mad(_578, asfloat(CB0_m[58u].x) - _592, _592) - _598, _598) * _553;
+  float _622 = _552 * mad(TEXCOORD.y, mad(_578, asfloat(CB0_m[58u].y) - _593, _593) - _599, _599);
+  float _623 = _551 * mad(TEXCOORD.y, mad(_578, asfloat(CB0_m[58u].z) - _594, _594) - _600, _600);
+  float _631 = (CB1_m1.x != 0u) ? CB1_m3.z : _302;
+  float _634 = _550 / CB1_m2.x;
+  float _638 = max(_621 * _634, 0.0f);
+  float _639 = max(_634 * _622, 0.0f);
+  float _640 = max(_634 * _623, 0.0f);
+  float _668 = max(_621 * _550, 0.0f);
+  float _669 = max(_550 * _622, 0.0f);
+  float _670 = max(_550 * _623, 0.0f);
+  bool _697 = CB1_m0.w != 0u;
+  float _698 = _697 ? ((((mad(_638, mad(_300, _638, _304), _305) / mad(_638, mad(_300, _638, _301), _306)) - _307) * _631) * CB1_m2.x) : clamp(_302 * ((mad(_668, mad(_300, _668, _304), _305) / mad(_668, mad(_300, _668, _301), _306)) - _307), 0.0f, 1.0f);
+  float _699 = _697 ? (CB1_m2.x * (_631 * ((mad(mad(_300, _639, _304), _639, _305) / mad(mad(_300, _639, _301), _639, _306)) - _307))) : clamp(_302 * ((mad(mad(_300, _669, _304), _669, _305) / mad(mad(_300, _669, _301), _669, _306)) - _307), 0.0f, 1.0f);
+  float _700 = _697 ? (CB1_m2.x * (_631 * ((mad(mad(_300, _640, _304), _640, _305) / mad(mad(_300, _640, _301), _640, _306)) - _307))) : clamp(_302 * ((mad(mad(_300, _670, _304), _670, _305) / mad(mad(_300, _670, _301), _670, _306)) - _307), 0.0f, 1.0f);
+  float _773;
+  float _774;
+  float _775;
+  if (_352) {
+    float _770;
+    float _771;
+    float _772;
+    if (CB0_m[50u].w != 0u) {
+      float2 _723 = float2(TEXCOORD.x - asfloat(CB0_m[49u].x), TEXCOORD.y - asfloat(CB0_m[49u].y));
+      float2 _737 = float2(dp2_f32(float2(asfloat(CB0_m[51u].x), asfloat(CB0_m[51u].y)), _723) * asfloat(CB0_m[49u].z), dp2_f32(float2(asfloat(CB0_m[51u].z), asfloat(CB0_m[51u].w)), _723) * asfloat(CB0_m[49u].w));
+      float _755 = T6.Sample(S1, clamp((dp2_f32(_737, _737) - asfloat(CB0_m[52u].x)) * asfloat(CB0_m[52u].w), 0.0f, 1.0f)).w * asfloat(CB0_m[50u].w);
+      _770 = mad(_755, asfloat(CB0_m[50u].z) - _700, _700);
+      _771 = mad(_755, asfloat(CB0_m[50u].y) - _699, _699);
+      _772 = mad(_755, asfloat(CB0_m[50u].x) - _698, _698);
+    } else {
+      _770 = _700;
+      _771 = _699;
+      _772 = _698;
+    }
+    _773 = _770;
+    _774 = _771;
+    _775 = _772;
+  } else {
+    _773 = _700;
+    _774 = _699;
+    _775 = _698;
+  }
+  bool _811 = _697 && (CB1_m0.z == 0u);
+  float _812 = _811 ? _775 : ((_775 < 0.003130800090730190277099609375f) ? (CB1_m3.w * _775) : mad(exp2(log2(_775) * CB1_m4.x), CB1_m4.y, -CB1_m4.z));
+  float _813 = _811 ? _774 : ((_774 < 0.003130800090730190277099609375f) ? (CB1_m3.w * _774) : mad(CB1_m4.y, exp2(CB1_m4.x * log2(_774)), -CB1_m4.z));
+  float _814 = _811 ? _773 : ((_773 < 0.003130800090730190277099609375f) ? (CB1_m3.w * _773) : mad(CB1_m4.y, exp2(CB1_m4.x * log2(_773)), -CB1_m4.z));
+  float _1012;
+  float _1013;
+  float _1014;
+  if ((CB0_m[19u].x != 0u) && _352) {
+    float _823 = asfloat(CB0_m[17u].x);
+    float _824 = _823 * 0.070000000298023223876953125f;
+    float _825 = _823 * 0.10999999940395355224609375f;
+    float _826 = _823 * 0.12999999523162841796875f;
+    float _827 = _823 * 0.17000000178813934326171875f;
+    float _830 = asfloat(CB0_m[17u].w);
+    float _831 = TEXCOORD.x * _830;
+    float _832 = TEXCOORD.y * _830;
+    float _861 = _823 * 0.189999997615814208984375f;
+    float _862 = _823 * 0.23000000417232513427734375f;
+    float _863 = _823 * 0.2899999916553497314453125f;
+    float _864 = _823 * 0.310000002384185791015625f;
+    float _904 = clamp(mad((((frac(sin(dp2_f32(float2(_831 + _861, _861 + _832), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f) + (((frac(sin(dp2_f32(float2(_831 + _824, _832 + _824), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f) + frac(sin(dp2_f32(float2(_831 + _825, _832 + _825), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f)) + frac(sin(dp2_f32(float2(_831 + _826, _832 + _826), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f)) + frac(sin(dp2_f32(float2(_831 + _827, _832 + _827), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f))) + frac(sin(dp2_f32(float2(_831 + _862, _862 + _832), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f)) + frac(sin(dp2_f32(float2(_831 + _863, _863 + _832), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f)) + frac(sin(dp2_f32(float2(_831 + _864, _864 + _832), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f), 0.125f, asfloat(CB0_m[17u].z)), 0.0f, 1.0f);
+    float _906 = dp3_f32(float3(_812, _813, _814), float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f));
+    float _914 = (CB0_m[18u].y != 0u) ? mad(_904 * (_906 * (_906 * _906)), -0.5f, _904) : _904;
+    float _918 = _914 - 0.5f;
+    float _921 = asfloat(CB0_m[18u].x);
+    bool _931 = _914 < 0.5f;
+    float _932 = _914 + _914;
+    float _933 = _932 * _812;
+    float _934 = _932 * _813;
+    float _935 = _932 * _814;
+    float _939 = mad(_914, -2.0f, 1.0f);
+    float _949 = 1.0f - _914;
+    float _953 = mad(_914, 2.0f, -1.0f);
+    float _975 = _949 + _949;
+    bool _996 = CB0_m[19u].w != 0u;
+    bool _1002 = CB0_m[19u].z != 0u;
+    bool _1008 = CB0_m[18u].w != 0u;
+    _1012 = _1008 ? (_1002 ? mad(_921, (_931 ? ((_939 * (_814 * _814)) + _935) : ((_949 * (_814 + _814)) + (_953 * sqrt(_814)))) - _814, _814) : (_996 ? mad(_921, ((_814 < 0.5f) ? _935 : mad(-_975, 1.0f - _814, 1.0f)) - _814, _814) : clamp(max(mad(_918, _921, _814), _814 * 0.02500000037252902984619140625f), 0.0f, 1.0f))) : _904;
+    _1013 = _1008 ? (_1002 ? mad(_921, (_931 ? ((_939 * (_813 * _813)) + _934) : ((_949 * (_813 + _813)) + (_953 * sqrt(_813)))) - _813, _813) : (_996 ? mad(_921, ((_813 < 0.5f) ? _934 : mad(-_975, 1.0f - _813, 1.0f)) - _813, _813) : clamp(max(mad(_918, _921, _813), _813 * 0.02500000037252902984619140625f), 0.0f, 1.0f))) : _904;
+    _1014 = _1008 ? (_1002 ? mad(_921, (_931 ? (_933 + ((_812 * _812) * _939)) : ((sqrt(_812) * _953) + ((_812 + _812) * _949))) - _812, _812) : (_996 ? mad(_921, ((_812 < 0.5f) ? _933 : mad(-_975, 1.0f - _812, 1.0f)) - _812, _812) : clamp(max(mad(_918, _921, _812), _812 * 0.02500000037252902984619140625f), 0.0f, 1.0f))) : _904;
+  } else {
+    _1012 = _814;
+    _1013 = _813;
+    _1014 = _812;
+  }
+  float3 _1015 = float3(_1014, _1013, _1012);
+  float _1020 = max(dp3_f32(float3(0.265399992465972900390625f, 0.67040002346038818359375f, 0.06419999897480010986328125f), _1015), 0.0f);
+  float _1026 = mad(((max(dp3_f32(float3(0.02480000071227550506591796875f, 0.1247999966144561767578125f, 0.85039997100830078125f), _1015), 0.0f) + _1020) / max(dp3_f32(float3(0.514900028705596923828125f, 0.324400007724761962890625f, 0.1606999933719635009765625f), _1015), 0.00999999977648258209228515625f)) + 1.0f, 1.33000004291534423828125f, -1.67999994754791259765625f) * _1020;
+  float _1040 = asfloat(CB0_m[83u].w);
+  float _1054 = clamp(mad(0.039999999105930328369140625f / (_315 + 0.039999999105930328369140625f), asfloat(CB0_m[84u].x), asfloat(CB0_m[84u].y)), 0.0f, 1.0f);
+  float _1058 = mad(_1054, clamp((_1026 * asfloat(CB0_m[83u].x)) * _1040, 0.0f, 1.0f) - _1014, _1014);
+  float _1059 = mad(_1054, clamp(_1040 * (_1026 * asfloat(CB0_m[83u].y)), 0.0f, 1.0f) - _1013, _1013);
+  float _1060 = mad(_1054, clamp(_1040 * (_1026 * asfloat(CB0_m[83u].z)), 0.0f, 1.0f) - _1012, _1012);
+  float _1116;
+  float _1117;
+  float _1118;
+  if (CB0_m[86u].w != 0u) {
+    float _1070 = asfloat(CB0_m[87u].x);
+    float _1071 = asfloat(CB0_m[87u].w);
+    float _1086 = asfloat(CB0_m[86u].z);
+    float4 _1105 = T14.Sample(S1, float2(((((TEXCOORD.x - 0.5f) * _1086) / mad(TEXCOORD.y, asfloat(CB0_m[87u].z) - _1071, _1071)) - asfloat(CB0_m[86u].x)) + 0.5f, (((_1086 * (TEXCOORD.y - 0.5f)) / mad(TEXCOORD.x, asfloat(CB0_m[87u].y) - _1070, _1070)) - asfloat(CB0_m[86u].y)) + 0.5f));
+    float _1112 = asfloat(CB0_m[86u].w);
+    _1116 = mad(_1105.x - _1058, _1112, _1058);
+    _1117 = mad(_1112, _1105.y - _1059, _1059);
+    _1118 = mad(_1105.z - _1060, _1112, _1060);
+  } else {
+    _1116 = _1058;
+    _1117 = _1059;
+    _1118 = _1060;
+  }
+  float _1320;
+  float _1321;
+  float _1322;
+  if (_352) {
+    float _1127 = max(max(max(_1118, _1117), _1116), 9.9999997473787516355514526367188e-05f);
+    float _1138 = ((CB1_m1.y == 0u) && _811) ? 1.0f : (((_1127 > CB1_m2.y) ? mad(_1127, CB1_m3.x, CB1_m3.y) : _1127) / _1127);
+    float _1139 = _1118 * _1138;
+    float _1144 = floor(_1139 * 14.99989986419677734375f);
+    float _1146 = mad(_1139, 15.0f, -_1144);
+    float _1148 = ((_1116 * _1138) * 0.05859375f) + (_1144 * 0.0625f);
+    float _1150 = mad(_1117 * _1138, 0.9375f, 0.03125f);
+    float4 _1156 = T11.Sample(S1, float2(_1148 + 0.001953125f, _1150));
+    float _1157 = _1156.x;
+    float _1158 = _1156.y;
+    float _1159 = _1156.z;
+    float4 _1162 = T11.Sample(S1, float2(_1148 + 0.064453125f, _1150));
+    float _1169 = mad(_1146, _1162.x - _1157, _1157);
+    float _1170 = mad(_1162.y - _1158, _1146, _1158);
+    float _1171 = mad(_1162.z - _1159, _1146, _1159);
+    float _1314;
+    float _1315;
+    float _1316;
+    if (int(T16.Load(0)) > 0) {
+      float _1192 = asfloat(CB0_m[0u].z) / ((asfloat(CB0_m[0u].w) + 1.0f) - T4.SampleLevel(S0, _283, 0.0f).x);
+      float _1221 = clamp(asfloat(T16.Load4(32)).x + ((_1192 < asfloat(T16.Load4(16)).z) ? clamp((_1192 - asfloat(T16.Load4(16)).x) * asfloat(T16.Load4(16)).y, 0.0f, 1.0f) : (1.0f - clamp(asfloat(T16.Load4(16)).w * (_1192 - asfloat(T16.Load4(16)).z), 0.0f, 1.0f))), 0.0f, 1.0f);
+      float _1224 = floor(_1171 * 14.99989986419677734375f);
+      float _1226 = mad(_1171, 15.0f, -_1224);
+      float _1228 = (_1169 * 0.05859375f) + (_1224 * 0.0625f);
+      float _1230 = mad(_1170, 0.9375f, 0.03125f);
+      float4 _1235 = T9.Sample(S1, float2(_1228 + 0.001953125f, _1230));
+      float _1236 = _1235.x;
+      float _1237 = _1235.y;
+      float _1238 = _1235.z;
+      float4 _1241 = T9.Sample(S1, float2(_1228 + 0.064453125f, _1230));
+      float _1254 = mad(_1221, mad(_1226, _1241.x - _1236, _1236) - _1169, _1169);
+      float _1255 = mad(mad(_1241.y - _1237, _1226, _1237) - _1170, _1221, _1170);
+      float _1256 = mad(mad(_1241.z - _1238, _1226, _1238) - _1171, _1221, _1171);
+      float _1267 = clamp(asfloat(T16.Load2(48)).y + ((asfloat(T16.Load4(32)).w > _1192) ? clamp(asfloat(T16.Load4(32)).z * (_1192 - asfloat(T16.Load4(32)).y), 0.0f, 1.0f) : (1.0f - clamp((_1192 - asfloat(T16.Load4(32)).w) * asfloat(T16.Load2(48)).x, 0.0f, 1.0f))), 0.0f, 1.0f);
+      float _1270 = floor(_1256 * 14.99989986419677734375f);
+      float _1272 = mad(_1256, 15.0f, -_1270);
+      float _1274 = (_1254 * 0.05859375f) + (_1270 * 0.0625f);
+      float _1276 = mad(_1255, 0.9375f, 0.03125f);
+      float4 _1281 = T10.Sample(S1, float2(_1274 + 0.001953125f, _1276));
+      float _1282 = _1281.x;
+      float _1283 = _1281.y;
+      float _1284 = _1281.z;
+      float4 _1287 = T10.Sample(S1, float2(_1274 + 0.064453125f, _1276));
+      float _1310 = dp3_f32(float3(T12.Sample(S1, _283).xyz), float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f));
+      _1314 = mad((mad(_1287.z - _1284, _1272, _1284) - _1256) * _1267, _1310, _1256);
+      _1315 = mad((mad(_1287.y - _1283, _1272, _1283) - _1255) * _1267, _1310, _1255);
+      _1316 = mad(_1267 * (mad(_1272, _1287.x - _1282, _1282) - _1254), _1310, _1254);
+    } else {
+      _1314 = _1171;
+      _1315 = _1170;
+      _1316 = _1169;
+    }
+    _1320 = _1314 / _1138;
+    _1321 = _1315 / _1138;
+    _1322 = _1316 / _1138;
+  } else {
+    _1320 = _1118;
+    _1321 = _1117;
+    _1322 = _1116;
+  }
+  float _1324 = dp3_f32(float3(_1322, _1321, _1320), float3(0.2989999949932098388671875f, 0.58700001239776611328125f, 0.114000000059604644775390625f));
+  float _1326 = max(max(_1320, _1321), _1322);
+  bool _1329 = CB0_m[41u].w != 0u;
+  float _1363 = asfloat(CB0_m[42u].w);
+  float _1375 = asfloat(CB0_m[39u].x);
+  float _1376 = asfloat(CB0_m[39u].y);
+  float _1377 = asfloat(CB0_m[39u].z);
+  float _1409 = mad(T2.Load(int4(uint3(uint2(cvt_f32_u32(gl_FragCoord.x) & 63u, cvt_f32_u32(gl_FragCoord.y) & 63u), T1.Load(1840) & 31u), 0u)).x, 2.0f, -1.0f);
+  float _1422 = _697 ? (float(int(((_1409 < 0.0f) ? 4294967295u : 0u) + uint(_1409 > 0.0f))) * (1.0f - sqrt(1.0f - abs(_1409)))) : _1409;
+  float _1423 = mad(mad(exp2(log2(clamp(((_1329 ? _1322 : _1326) - asfloat(CB0_m[42u].x)) * asfloat(CB0_m[41u].x), 0.0f, 1.0f)) * _1363), asfloat(CB0_m[40u].x) - _1375, _1375), _1422, _1322);
+  float _1424 = mad(mad(asfloat(CB0_m[40u].y) - _1376, exp2(log2(clamp(((_1329 ? _1321 : _1326) - asfloat(CB0_m[42u].y)) * asfloat(CB0_m[41u].y), 0.0f, 1.0f)) * _1363), _1376), _1422, _1321);
+  float _1425 = mad(mad(asfloat(CB0_m[40u].z) - _1377, exp2(log2(clamp(((_1329 ? _1320 : _1326) - asfloat(CB0_m[42u].z)) * asfloat(CB0_m[41u].z), 0.0f, 1.0f)) * _1363), _1377), _1422, _1320);
+  SV_Target.x = _697 ? _1423 : clamp(_1423, 0.0f, 1.0f);
+  SV_Target.y = _697 ? _1424 : clamp(_1424, 0.0f, 1.0f);
+  SV_Target.z = _697 ? _1425 : clamp(_1425, 0.0f, 1.0f);
+  SV_Target.w = _697 ? _1324 : clamp(_1324, 0.0f, 1.0f);
+}
+
+SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {
+  gl_FragCoord = stage_input.gl_FragCoord;
+  gl_FragCoord.w = 1.0 / gl_FragCoord.w;
+  TEXCOORD = stage_input.TEXCOORD;
+  TEXCOORD1 = stage_input.TEXCOORD1;
+  frag_main();
+  SPIRV_Cross_Output stage_output;
+  stage_output.SV_Target = SV_Target;
+  return stage_output;
+}

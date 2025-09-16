@@ -1,0 +1,104 @@
+#include "../common.hlsli"
+
+cbuffer CB0_buf : register(b0, space0) {
+  uint4 CB0_m0 : packoffset(c0);
+  uint4 CB0_m1 : packoffset(c1);
+  uint4 CB0_m2 : packoffset(c2);
+  float2 CB0_m3 : packoffset(c3);
+  float2 CB0_m4 : packoffset(c3.z);
+  float2 CB0_m5 : packoffset(c4);
+  float2 CB0_m6 : packoffset(c4.z);
+  float3 CB0_m7 : packoffset(c5);
+  float CB0_m8 : packoffset(c5.w);
+  float2 CB0_m9 : packoffset(c6);
+  uint2 CB0_m10 : packoffset(c6.z);
+};
+
+SamplerState S0 : register(s1, space0);
+Texture2D<float4> T0 : register(t2, space0);
+Texture1D<float4> T1 : register(t3, space0);
+Texture2D<float4> T2 : register(t4, space0);
+Texture2D<float4> T3 : register(t5, space0);
+Texture2D<float4> T4 : register(t6, space0);
+Texture2D<float4> T5 : register(t7, space0);
+
+static float2 TEXCOORD;
+static float4 SV_Target;
+
+struct SPIRV_Cross_Input {
+  float2 TEXCOORD : TEXCOORD1;
+};
+
+struct SPIRV_Cross_Output {
+  float4 SV_Target : SV_Target0;
+};
+
+float dp2_f32(float2 a, float2 b) {
+  precise float _61 = a.x * b.x;
+  return mad(a.y, b.y, _61);
+}
+
+void frag_main() {
+  float2 _76 = float2(TEXCOORD.x, TEXCOORD.y);
+  float4 _79 = T0.Sample(S0, _76);
+  float _80 = _79.x;
+  float _81 = _79.y;
+  float _82 = _79.z;
+  float2 _93 = float2(TEXCOORD.x - CB0_m3.x, TEXCOORD.y - CB0_m3.y);
+  float2 _104 = float2(dp2_f32(CB0_m5, _93) * CB0_m4.x, dp2_f32(CB0_m6, _93) * CB0_m4.y);
+  float _121 = T1.Sample(S0, clamp((dp2_f32(_104, _104) - CB0_m9.x) * CB0_m9.y, 0.0f, 1.0f)).w * CB0_m8;
+  float _131 = mad(_121, CB0_m7.z - _82, _82);
+  float _136 = floor(_131 * 14.99989986419677734375f);
+  float _138 = mad(_131, 15.0f, -_136);
+  float _140 = (_136 * 0.0625f) + (mad(CB0_m7.x - _80, _121, _80) * 0.05859375f);
+  float _142 = mad(mad(CB0_m7.y - _81, _121, _81), 0.9375f, 0.03125f);
+  float4 _147 = T4.Sample(S0, float2(_140 + 0.001953125f, _142));
+  float _148 = _147.x;
+  float _149 = _147.y;
+  float _150 = _147.z;
+  float4 _153 = T4.Sample(S0, float2(_140 + 0.064453125f, _142));
+  float _160 = mad(_138, _153.z - _150, _150);
+  float4 _165 = T5.Sample(S0, _76);
+  float _166 = _165.x;
+  float _169 = floor(_160 * 14.99989986419677734375f);
+  float _171 = mad(_160, 15.0f, -_169);
+  float _173 = (_169 * 0.0625f) + (mad(_138, _153.x - _148, _148) * 0.05859375f);
+  float _175 = mad(mad(_138, _153.y - _149, _149), 0.9375f, 0.03125f);
+  float2 _178 = float2(_173 + 0.001953125f, _175);
+  float4 _180 = T2.Sample(S0, _178);
+  float _181 = _180.x;
+  float _182 = _180.y;
+  float _183 = _180.z;
+  float2 _184 = float2(_173 + 0.064453125f, _175);
+  float4 _186 = T2.Sample(S0, _184);
+  float _193 = mad(_171, _186.x - _181, _181);
+  float _194 = mad(_171, _186.y - _182, _182);
+  float _195 = mad(_171, _186.z - _183, _183);
+  float4 _198 = T3.Sample(S0, _178);
+  float _199 = _198.x;
+  float _200 = _198.y;
+  float _201 = _198.z;
+  float4 _203 = T3.Sample(S0, _184);
+  float _210 = mad(_171, _203.x - _199, _199);
+  float _211 = mad(_171, _203.y - _200, _200);
+  float _212 = mad(_171, _203.z - _201, _201);
+  float _216 = asfloat(CB0_m10.x);
+  float _218 = mad(-_166, _216, 1.0f);
+  float _223 = mad(_166, _216, 1.0f) - _216;
+  bool _227 = CB0_m10.x != 0u;
+  float _229 = _227 ? (_193 * _218) : _193;
+  float _230 = _227 ? (_194 * _218) : _194;
+  float _231 = _227 ? (_195 * _218) : _195;
+  SV_Target.x = mad(_166, (_227 ? (_210 * _223) : _210) - _229, _229);
+  SV_Target.y = mad(_166, (_227 ? (_211 * _223) : _211) - _230, _230);
+  SV_Target.z = mad(_166, (_227 ? (_212 * _223) : _212) - _231, _231);
+  SV_Target.w = 1.0f;
+}
+
+SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {
+  TEXCOORD = stage_input.TEXCOORD;
+  frag_main();
+  SPIRV_Cross_Output stage_output;
+  stage_output.SV_Target = SV_Target;
+  return stage_output;
+}

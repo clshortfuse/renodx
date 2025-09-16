@@ -1,0 +1,118 @@
+struct anon_m
+{
+    float4 _m0;
+    uint4 _m1;
+    uint4 _m2;
+    uint4 _m3;
+    uint4 _m4;
+    uint3 _m5;
+};
+
+cbuffer CB0_buf : register(b0, space0)
+{
+    uint4 CB0_m0 : packoffset(c0);
+    uint4 CB0_m1 : packoffset(c1);
+    uint4 CB0_m2 : packoffset(c2);
+    uint4 CB0_m3 : packoffset(c3);
+    uint4 CB0_m4 : packoffset(c4);
+    uint4 CB0_m5 : packoffset(c5);
+    uint4 CB0_m6 : packoffset(c6);
+    float4 CB0_m7 : packoffset(c7);
+    float4 CB0_m8 : packoffset(c8);
+    float CB0_m9 : packoffset(c9);
+    uint CB0_m10 : packoffset(c9.y);
+    uint CB0_m11 : packoffset(c9.z);
+    uint CB0_m12 : packoffset(c9.w);
+    uint4 CB0_m13 : packoffset(c10);
+};
+
+cbuffer CB1_buf : register(b1, space0)
+{
+    float4 CB1_m0 : packoffset(c0);
+    uint4 CB1_m1 : packoffset(c1);
+    uint4 CB1_m2 : packoffset(c2);
+    float4 CB1_m3 : packoffset(c3);
+};
+
+ByteAddressBuffer T0 : register(t3, space0);
+SamplerState S0 : register(s2, space0);
+Texture3D<float4> T1 : register(t4, space0);
+
+static float4 COLOR;
+static float4 SV_Target;
+
+struct SPIRV_Cross_Input
+{
+    float4 COLOR : TEXCOORD1;
+};
+
+struct SPIRV_Cross_Output
+{
+    float4 SV_Target : SV_Target0;
+};
+
+float dp3_f32(float3 a, float3 b)
+{
+    precise float _76 = a.x * b.x;
+    return mad(a.z, b.z, mad(a.y, b.y, _76));
+}
+
+void frag_main()
+{
+    float _110 = mad(COLOR.x, CB0_m8.x, CB0_m7.x);
+    float _111 = mad(COLOR.y, CB0_m8.y, CB0_m7.y);
+    float _112 = mad(COLOR.z, CB0_m8.z, CB0_m7.z);
+    float _113 = mad(COLOR.w, CB0_m8.w, CB0_m7.w);
+    float _130;
+    float _131;
+    float _132;
+    if (CB0_m13.x != 0u)
+    {
+        float4 _126 = T1.SampleLevel(S0, float3(_110, _111, _112), 0.0f);
+        _130 = _126.z;
+        _131 = _126.y;
+        _132 = _126.x;
+    }
+    else
+    {
+        _130 = _112;
+        _131 = _111;
+        _132 = _110;
+    }
+    float _184;
+    float _185;
+    float _186;
+    if (CB0_m10 != 0u)
+    {
+        float3 _138 = float3(_132, _131, _130);
+        float _157 = exp2(log2(abs((dp3_f32(float3(0.6274039745330810546875f, 0.329281985759735107421875f, 0.043313600122928619384765625f), _138) * CB1_m0.x) / CB1_m3.w)) * 0.1593017578125f);
+        float _167 = exp2(log2(abs((dp3_f32(float3(0.06909699738025665283203125f, 0.919539988040924072265625f, 0.0113612003624439239501953125f), _138) * CB1_m0.x) / CB1_m3.w)) * 0.1593017578125f);
+        float _177 = exp2(log2(abs((dp3_f32(float3(0.01639159955084323883056640625f, 0.0880132019519805908203125f, 0.895595014095306396484375f), _138) * CB1_m0.x) / CB1_m3.w)) * 0.1593017578125f);
+        _184 = exp2(log2(mad(_177, 18.8515625f, 0.8359375f) / mad(_177, 18.6875f, 1.0f)) * 78.84375f);
+        _185 = exp2(log2(mad(_167, 18.8515625f, 0.8359375f) / mad(_167, 18.6875f, 1.0f)) * 78.84375f);
+        _186 = exp2(log2(mad(_157, 18.8515625f, 0.8359375f) / mad(_157, 18.6875f, 1.0f)) * 78.84375f);
+    }
+    else
+    {
+        _184 = _130;
+        _185 = _131;
+        _186 = _132;
+    }
+    bool _189 = CB0_m9 == 0.0f;
+    float _200 = _113 * asfloat(T0.Load(12));
+    SV_Target.z = (asfloat(T0.Load(12)) != 1.0f) ? (_200 * _200) : (_189 ? _184 : (_113 * _184));
+    float _208 = _113 * asfloat(T0.Load(0));
+    float _214 = (CB0_m11 != 0u) ? (_208 * asfloat(CB0_m11)) : _208;
+    SV_Target.w = clamp((CB0_m13.y != 0u) ? ((CB0_m12 != 0u) ? ((cos(_214 * 3.1415927410125732421875f) - 1.0f) * (-0.5f)) : _214) : _208, 0.0f, 1.0f);
+    SV_Target.x = _189 ? _186 : (_113 * _186);
+    SV_Target.y = _189 ? _185 : (_113 * _185);
+}
+
+SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)
+{
+    COLOR = stage_input.COLOR;
+    frag_main();
+    SPIRV_Cross_Output stage_output;
+    stage_output.SV_Target = SV_Target;
+    return stage_output;
+}
