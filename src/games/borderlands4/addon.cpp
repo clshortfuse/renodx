@@ -435,13 +435,21 @@ const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
     //     .parse = [](float value) { return value * 0.0065f; },
     // },
     //hdr_upgrade_setting,
+    new renodx::utils::settings::Setting{
+        .key = "ToggleHUD",
+        .binding = &shader_injection.custom_toggle_hud,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "HUD Toggle",
+        .section = "Other",
+        .labels = {"Draw", "Hide"},
+    },
     new renodx::utils::settings::Setting{.key = "FPSLimit", .binding = &renodx::utils::swapchain::fps_limit, .default_value = 0.f, .label = "FPS Limit", .section = "Other", .min = 0.f, .max = 480.f},
         new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("Note: This FPS limiter is not recommended with frame gen."),
         .section = "Other",
     },
-
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",

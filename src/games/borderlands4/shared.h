@@ -25,6 +25,7 @@ struct ShaderInjectData {
   float custom_random;
   float custom_bloom;
   float custom_sharpness;
+  float custom_toggle_hud;
 
   float processing_use_scrgb;
 };
@@ -68,6 +69,7 @@ cbuffer injected_buffer : register(b13) {
 #define CUSTOM_FILM_GRAIN                    shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                        shader_injection.custom_random
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom
+#define CUSTOM_TOGGLE_HUD                    shader_injection.custom_toggle_hud
 
 #include "../../shaders/renodx.hlsl"
 #endif
