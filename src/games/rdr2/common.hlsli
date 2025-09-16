@@ -10,7 +10,8 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
 
   const float y_normalized = y / mid_gray;
   const float highlight_mask = 1.f / mid_gray;
-  const float shadow_mask = mid_gray;
+  float shadow_mask = 1.f;
+  if (config.shadows < 1.f) shadow_mask = mid_gray;
 
   // contrast & flare
   float flare = renodx::math::DivideSafe(y_normalized + config.flare, y_normalized, 1.f);
