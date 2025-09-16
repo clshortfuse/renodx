@@ -24,6 +24,7 @@ struct ShaderInjectData {
   float custom_film_grain;
   float custom_random;
   float custom_bloom;
+  float custom_sharpness;
 
   float processing_use_scrgb;
 };
@@ -61,10 +62,11 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_TONE_MAP_PASS_AUTOCORRECTION    1.f
 #define RENODX_GAMMA_CORRECTION_UI             1.f
 #define RENODX_GAMMA_CORRECTION                1.f
-#define CUSTOM_FILM_GRAIN                    shader_injection.custom_film_grain
-#define CUSTOM_RANDOM                        shader_injection.custom_random
 #define OVERRIDE_BLACK_CLIP                    shader_injection.override_black_clip  // 0 - Off, 1 - 0.0001 nits
 
+#define CUSTOM_SHARPNESS                     shader_injection.custom_sharpness
+#define CUSTOM_FILM_GRAIN                    shader_injection.custom_film_grain
+#define CUSTOM_RANDOM                        shader_injection.custom_random
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom
 
 #include "../../shaders/renodx.hlsl"

@@ -1,4 +1,4 @@
-#include "../shared.h"
+#include "./lilium_rcas.hlsl"
 
 float4 OutputscRGB(float4 color) {
   return float4(color.rgb *= RENODX_DIFFUSE_WHITE_NITS / 80.f, color.a);
@@ -9,12 +9,13 @@ float4 OutputHDR10(float4 color) {
   return float4(pq_color, color.a);
 }
 
-float3 ApplyPostProcessing(float3 linear_color, float2 texcoord){
+float3 ApplyPostProcessing(float3 linear_color, Texture2D<float4> scene_color_texture, SamplerState scene_color_sampler, float2 texcoord){
+  linear_color = ApplyRCAS(linear_color, texcoord, scene_color_texture, scene_color_sampler);
   linear_color = renodx::effects::ApplyFilmGrain(linear_color, texcoord, CUSTOM_RANDOM, CUSTOM_FILM_GRAIN * 0.03f);
   return linear_color;
 }
 
-bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout float4 output_color, float2 texcoord, uint output_mode = 0u) {
+bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout float4 output_color, Texture2D<float4> scene_color_texture, SamplerState scene_color_sampler, float2 texcoord, uint output_mode = 0u) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
   float ui_alpha = ui_color_gamma.a;
 
@@ -41,7 +42,7 @@ bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout flo
   scene_color_linear = renodx::color::bt709::from::BT2020(scene_color_linear);
 
   // Apply Custom Post Processing to Scene Color
-  scene_color_linear = ApplyPostProcessing(scene_color_linear, texcoord);
+  scene_color_linear = ApplyPostProcessing(scene_color_linear, scene_color_texture, scene_color_sampler, texcoord);
 
   ui_color_gamma.rgb = renodx::color::gamma::EncodeSafe(ui_color_linear.rgb);
   // blend in gamma, choose between sRGB and gamma based on setting

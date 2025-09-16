@@ -18,10 +18,10 @@ float4 main(
   noperspective float4 SV_Position : SV_Position
 ) : SV_Target {
   float4 SV_Target;
-  float4 _11 = t0.Sample(s0, float2(TEXCOORD.x, TEXCOORD.y));
-  float4 _59 = t1.Sample(s1, float2(TEXCOORD.x, TEXCOORD.y));
+  float4 _11 = t0.Sample(s0, float2(TEXCOORD.x, TEXCOORD.y)); // UI color
+  float4 _59 = t1.Sample(s1, float2(TEXCOORD.x, TEXCOORD.y)); // Scene color (PQ Scaled)
 
-  if (HandleUICompositing(_11, _59, SV_Target, TEXCOORD)) {
+  if (HandleUICompositing(_11, _59, SV_Target, t1, s1, TEXCOORD)) {
     return SV_Target;
   }
 

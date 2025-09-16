@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "../shared.h"
 
 StructuredBuffer<float4> t0 : register(t0);
 
