@@ -21,7 +21,7 @@ float4 main(
   float4 _11 = t0.Sample(s0, float2(TEXCOORD.x, TEXCOORD.y));
   float4 _59 = t1.Sample(s1, float2(TEXCOORD.x, TEXCOORD.y));
 
-  if (HandleUICompositing(_11, _59, SV_Target)) {
+  if (HandleUICompositing(_11, _59, SV_Target, TEXCOORD)) {
     return SV_Target;
   }
 

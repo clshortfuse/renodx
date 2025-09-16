@@ -272,6 +272,7 @@ float4 main(
   }
   [branch]
   if ((uint)output_device > (uint)2) {
+  //if (RENODX_TONE_MAP_TYPE != 0.f || is_hdr) {
     float _70 = (pow(_28, 0.012683313339948654f));
     float _71 = (pow(_29, 0.012683313339948654f));
     float _72 = (pow(_31, 0.012683313339948654f));
