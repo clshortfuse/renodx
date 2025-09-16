@@ -1,3 +1,5 @@
+#include "./shared.h"
+
 StructuredBuffer<float4> t0 : register(t0);
 
 Texture2D<float4> t1 : register(t1);
@@ -629,6 +631,11 @@ float4 main(
   float4 _46 = t1.Sample(s0, float2(min(max(TEXCOORD.x, cb0_016x), cb0_016z), min(max(TEXCOORD.y, cb0_016y), cb0_016w)));
   float4 _70 = t2.Sample(s1, float2(min(max(((cb0_037x * TEXCOORD.x) + cb0_037z), cb0_038x), cb0_038z), min(max(((cb0_037y * TEXCOORD.y) + cb0_037w), cb0_038y), cb0_038w)));
   float4 _89 = t6.Sample(s4, float2(((((cb0_059z * TEXCOORD_3.x) + cb0_059x) * 0.5f) + 0.5f), (0.5f - (((cb0_059w * TEXCOORD_3.y) + cb0_059y) * 0.5f))));
+
+  //_46 = 0;
+  _70.rgb *= CUSTOM_BLOOM;
+  //_89 = 0;
+
   float _112 = t3[0].x;
   float _113 = t3[0].y;
   float _114 = t3[0].z;

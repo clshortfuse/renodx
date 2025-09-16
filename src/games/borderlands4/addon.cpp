@@ -14,15 +14,16 @@
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
-#include "../../mods/swapchain.hpp"
+//#include "../../mods/swapchain.hpp"
 #include "../../templates/settings.hpp"
 #include "../../utils/date.hpp"
-#include "../../utils/ini_file.hpp"
-#include "../../utils/path.hpp"
+//#include "../../utils/ini_file.hpp"
+//#include "../../utils/path.hpp"
 #include "../../utils/platform.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
 #include "./shared.h"
+#include "../../utils/random.hpp"
 
 static const float HDR_TYPE_SWAPCHAIN = 0.f;
 static const float HDR_TYPE_UNREAL = 1.f;
@@ -384,6 +385,24 @@ const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.tone_map_type != 4; },
         .parse = [](float value) { return value * 0.02f; },
     },
+         renodx::templates::settings::CreateSetting({
+            .key = "FxBloom",
+            .binding = &shader_injection.custom_bloom,
+            .default_value = 50.f,
+            .label = "Bloom",
+            .section = "Effects",
+            .tooltip = "Adjusts the strength of the in-game bloom effect.",
+            .parse = [](float value) { return value * 0.02f; },
+        }),
+     renodx::templates::settings::CreateSetting({
+            .key = "FxGrainStrength",
+            .binding = &shader_injection.custom_film_grain,
+            .default_value = 0.f,
+            .label = "Film Grain",
+            .section = "Effects",
+            .tooltip = "Adds a custom perceptual film grain effect.",
+            .parse = [](float value) { return value * 0.01f; },
+        }),
     // new renodx::utils::settings::Setting{
     //     .key = "ColorGradeLUTStrength",
     //     .binding = &shader_injection.custom_lut_strength,
@@ -494,9 +513,8 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
-      {"ColorGradeLUTStrength", 0.f},
-      {"ColorGradeLUTScaling", 0.f},
-      {"FixPostProcess", 0.f},
+      {"FxBloom", 50.f},
+      {"FxGrainStrength", 0.f},
   });
 }
 
@@ -524,6 +542,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!reshade::register_addon(h_module)) return FALSE;
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      renodx::utils::random::binds.push_back(&shader_injection.custom_random);
+      renodx::utils::random::Use(fdw_reason);
 
       renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
         return (params.size() < 15);
