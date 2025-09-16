@@ -17,6 +17,7 @@ float3 ApplyPostProcessing(float3 linear_color, Texture2D<float4> scene_color_te
 
 bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout float4 output_color, Texture2D<float4> scene_color_texture, SamplerState scene_color_sampler, float2 texcoord, uint output_mode = 0u) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
+  if (CUSTOM_TOGGLE_HUD == 1.f) ui_color_gamma = 0.f;
   float ui_alpha = ui_color_gamma.a;
 
   float3 ui_color_linear;
