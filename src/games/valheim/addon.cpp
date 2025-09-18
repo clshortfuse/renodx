@@ -32,6 +32,7 @@ float SetHDR();
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x20133A8B),  // Final
     // CustomShaderEntry(0x1920DC80),  // SSAO2
+    CustomShaderEntry(0x1920DC80),  // SSAO4
     CustomShaderEntry(0x99D271BE),  // Lutsample
     CustomShaderEntry(0x103B8DEE),  // Sun Shafts 1
     CustomShaderEntry(0xBCC908FC),  // Sun Shafts 2
