@@ -33,12 +33,12 @@ void main(
 
   // r0.xyz = r0.xyz * float3(0.9375,0.9375,0.9375) + float3(0.03125,0.03125,0.03125);
   // r0.xyz = g_xCCLutTexture.Sample(g_xBilinearClamp_s, r0.xyz).xyz;
-  r0.rgb = lutSample(r0.rgb, g_xBilinearClamp_s, g_xCCLutTexture);
+  r0.rgb = LutSample(r0.rgb, g_xBilinearClamp_s, g_xCCLutTexture);
 
   o0.xyz = r0.xyz;
   o0.w = g_fIntensity; // no lerp here for some reason
 
-  o0.rgb = applyToneMapScaling(untonemapped, o0.rgb);
+  o0.rgb = ApplyToneMapScaling(untonemapped, o0.rgb);
 
   return;
 }

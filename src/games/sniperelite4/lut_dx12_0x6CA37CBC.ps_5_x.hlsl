@@ -35,17 +35,17 @@ void main(
 
   // r0.xyz = r0.xyz * float3(0.9375, 0.9375, 0.9375) + float3(0.03125, 0.03125, 0.03125);
   // r0.xyz = g_xCCLutTexture.Sample(g_xBilinearClamp_s, r0.xyz).xyz;
-  r0.rgb = lutSample(r0.rgb, g_xBilinearClamp_s, g_xCCLutTexture);
+  r0.rgb = LutSample(r0.rgb, g_xBilinearClamp_s, g_xCCLutTexture);
 
   r1.xyzw = g_xSceneTextureSRGB.Sample(g_xPointClamp_s, v1.xy).xyzw;
 
-  r1.rgb = neutralToneMap(r1.rgb);
+  r1.rgb = NeutralToneMap(r1.rgb);
 
   // r0.xyz = -r1.xyz + r0.xyz;
   // o0.xyz = g_fIntensity * r0.xyz + r1.xyz;
   o0.rgb = lerp(r1.rgb, r0.rgb, g_fIntensity);
 
-  o0.rgb = applyToneMapScaling(untonemapped, o0.rgb);
+  o0.rgb = ApplyToneMapScaling(untonemapped, o0.rgb);
 
   o0.w = r1.w;
   return;

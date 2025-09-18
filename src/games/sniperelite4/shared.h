@@ -18,6 +18,7 @@
 #define RENODX_TONE_MAP_HUE_SHIFT            shader_injection.tone_map_hue_shift
 #define RENODX_TONE_MAP_WORKING_COLOR_SPACE  renodx::color::convert::COLOR_SPACE_BT2020
 #define RENODX_TONE_MAP_HUE_PROCESSOR        shader_injection.tone_map_hue_processor
+#define RENODX_TONE_MAP_PER_CHANNEL          shader_injection.tone_map_per_channel
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION   RENODX_GAMMA_CORRECTION
 #define RENODX_SWAP_CHAIN_CLAMP_NITS         10000.f
@@ -47,6 +48,7 @@ struct ShaderInjectData {
   float tone_map_hue_shift;
   float tone_map_working_color_space;
   float tone_map_hue_processor;
+  float tone_map_per_channel;
   float gamma_correction;
   float custom_lut_scaling;
   float custom_lut_strength;

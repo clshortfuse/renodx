@@ -12,7 +12,7 @@ float3 ExponentialRollOffByLum(float3 color, float output_luminance_max, float h
   return color;
 }
 
-float3 applyExponentialRollOff(float3 color) {
+float3 ApplyExponentialRollOff(float3 color) {
   const float paperWhite = RENODX_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
 
   const float peakWhite = RENODX_PEAK_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
@@ -20,10 +20,15 @@ float3 applyExponentialRollOff(float3 color) {
   //const float highlightsShoulderStart = paperWhite;
   const float highlightsShoulderStart = 1.f;
 
-  return ExponentialRollOffByLum(color * paperWhite, peakWhite, highlightsShoulderStart) / paperWhite;
+  [branch]
+  if (RENODX_TONE_MAP_PER_CHANNEL == 0.f) {
+    return ExponentialRollOffByLum(color * paperWhite, peakWhite, highlightsShoulderStart) / paperWhite;
+  } else {
+    return renodx::tonemap::ExponentialRollOff(color * paperWhite, highlightsShoulderStart, peakWhite) / paperWhite;
+  }
 }
 
-float3 neutralToneMap(float3 color) {
+float3 NeutralToneMap(float3 color) {
   [branch]
   if (RENODX_TONE_MAP_TYPE) {
     color = renodx::tonemap::renodrt::NeutralSDR(color);
@@ -32,18 +37,23 @@ float3 neutralToneMap(float3 color) {
   return color;
 }
 
-float3 applyToneMapScaling(float3 untonemapped, float3 graded) {
+float3 ApplyToneMapScaling(float3 untonemapped, float3 graded) {
   float3 color = graded;
 
   [branch]
-  if (RENODX_TONE_MAP_TYPE == 3.f) {
+  if (RENODX_TONE_MAP_TYPE == 6.f) {
     renodx::draw::Config draw_config = renodx::draw::BuildConfig();
     draw_config.peak_white_nits = 10000.f;
     draw_config.tone_map_type = 3.f;
+    draw_config.tone_map_hue_correction = 0.f;
+    draw_config.tone_map_hue_shift = 0.f;
+    draw_config.tone_map_per_channel = 0.f;
 
     color = renodx::draw::ToneMapPass(untonemapped, color, draw_config);
 
-    color = applyExponentialRollOff(color);
+    color = ApplyExponentialRollOff(color);
+  } else if (RENODX_TONE_MAP_TYPE == 3.f) {
+    color = renodx::draw::ToneMapPass(untonemapped, color);
   } else {
     color = saturate(color);
   }
@@ -51,8 +61,8 @@ float3 applyToneMapScaling(float3 untonemapped, float3 graded) {
   return renodx::draw::RenderIntermediatePass(color);
 }
 
-float3 lutSample(float3 color, SamplerState colorGradingLUTSampler, Texture3D<float4> lut) {
-  color = neutralToneMap(color);
+float3 LutSample(float3 color, SamplerState colorGradingLUTSampler, Texture3D<float4> lut) {
+  color = NeutralToneMap(color);
 
   [branch]
   if (RENODX_TONE_MAP_TYPE == 0.f || (CUSTOM_LUT_STRENGTH == 1.f && CUSTOM_LUT_SCALING == 0.f && CUSTOM_LUT_TETRAHEDRAL == 0.f)) {

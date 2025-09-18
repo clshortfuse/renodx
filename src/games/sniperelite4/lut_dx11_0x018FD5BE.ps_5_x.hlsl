@@ -32,11 +32,11 @@ void main(
 
   float3 untonemapped = r1.rgb;
 
-  r0.rgb = neutralToneMap(r0.rgb);
+  r0.rgb = NeutralToneMap(r0.rgb);
 
   //r1.xyz = r1.xyz * float3(0.9375,0.9375,0.9375) + float3(0.03125,0.03125,0.03125);
   //r1.xyz = g_xColourCorrectionLutTexture.Sample(g_xFilteredClamp_s, r1.xyz).xyz;  // sRGB input, linear output
-  r1.rgb = lutSample(r1.rgb, g_xFilteredClamp_s, g_xColourCorrectionLutTexture);
+  r1.rgb = LutSample(r1.rgb, g_xFilteredClamp_s, g_xColourCorrectionLutTexture);
 
   //r1.xyz = r1.xyz + -r0.xyz;
   //o0.xyz = g_fIntensity * r1.xyz + r0.xyz; // lerp, linear
@@ -44,7 +44,7 @@ void main(
   
   o0.w = r0.w;
 
-  o0.rgb = applyToneMapScaling(untonemapped, o0.rgb);
+  o0.rgb = ApplyToneMapScaling(untonemapped, o0.rgb);
 
   return;
 }
