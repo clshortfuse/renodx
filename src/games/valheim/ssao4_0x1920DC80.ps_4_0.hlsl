@@ -83,5 +83,7 @@ void main(
   r1.xyzw = t1.Sample(s0_s, v2.xy).xyzw;
   o0.xyz = r1.xyz * r0.xxx;
   o0.w = r1.w;
+
+  o0 = saturate(o0); // fix transparency artifacts
   return;
 }
