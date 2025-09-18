@@ -28,23 +28,20 @@ ShaderInjectData shader_injection;
 
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({
   renodx::templates::settings::CreateDefaultSettings({
-    {"ToneMapType", {.binding = &shader_injection.tone_map_type, .labels = {"Vanilla", "Exponential Rolloff"}}}
-  }),
-  renodx::templates::settings::CreateDefaultSettings({
-  {"ToneMapPeakNits", &shader_injection.peak_white_nits},
-  {"ToneMapGameNits", &shader_injection.diffuse_white_nits},
-  {"ToneMapUINits", &shader_injection.graphics_white_nits},
-  {"ToneMapGammaCorrection", &shader_injection.gamma_correction},
-  {"ToneMapHueCorrection", &shader_injection.tone_map_hue_correction},
-  {"ToneMapHueShift", &shader_injection.tone_map_hue_shift},
-  {"ColorGradeExposure", &shader_injection.tone_map_exposure},
-  {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
-  {"ColorGradeShadows", &shader_injection.tone_map_shadows},
-  {"ColorGradeContrast", &shader_injection.tone_map_contrast},
-  {"ColorGradeSaturation", &shader_injection.tone_map_saturation},
-  {"ColorGradeHighlightSaturation", &shader_injection.tone_map_highlight_saturation},
-  {"ColorGradeBlowout", &shader_injection.tone_map_blowout},
-  {"ColorGradeFlare", &shader_injection.tone_map_flare},
+    {"ToneMapType", {.binding = &shader_injection.tone_map_type, .default_value = 2.f, .labels = {"Vanilla", "RenoDRT", "Exponential Rolloff"}}},
+    {"ToneMapPeakNits",  {.binding = &shader_injection.peak_white_nits}},
+    {"ToneMapGameNits",  {.binding = &shader_injection.diffuse_white_nits}},
+    {"ToneMapUINits", {.binding =  &shader_injection.graphics_white_nits}},
+    {"ToneMapGammaCorrection", {.binding =  &shader_injection.gamma_correction}},
+    {"ToneMapScaling", {.binding = &shader_injection.tone_map_per_channel}},
+    {"ColorGradeExposure",  {.binding = &shader_injection.tone_map_exposure}},
+    {"ColorGradeHighlights",  {.binding = &shader_injection.tone_map_highlights}},
+    {"ColorGradeShadows",  {.binding = &shader_injection.tone_map_shadows}},
+    {"ColorGradeContrast",  {.binding = &shader_injection.tone_map_contrast}},
+    {"ColorGradeSaturation",  {.binding = &shader_injection.tone_map_saturation}},
+    {"ColorGradeHighlightSaturation", {.binding =  &shader_injection.tone_map_highlight_saturation}},
+    {"ColorGradeBlowout", {.binding =  &shader_injection.tone_map_blowout}},
+    {"ColorGradeFlare",  {.binding = &shader_injection.tone_map_flare}},
 }),
 {
   new renodx::utils::settings::Setting{
@@ -85,8 +82,6 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
       .tint = 0xb5b2b1,
       .on_change = []() {
         renodx::utils::settings::UpdateSetting("ToneMapType", 1.f);
-        renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 1.f);
-        renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
         renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
         renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
         renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
@@ -97,6 +92,9 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
         renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
         renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
+        renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 100.f);
+        renodx::utils::settings::UpdateSetting("ColorGradeLUTScaling", 100.f);
+        renodx::utils::settings::UpdateSetting("ColorGradeLUTSampling", 1.f);
       }
   },
   new renodx::utils::settings::Setting{
@@ -114,7 +112,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
   },
   new renodx::utils::settings::Setting{
       .value_type = renodx::utils::settings::SettingValueType::TEXT,
-      .label = "Motion blur causes artifacts, has to be disabled! Use the DX11 version!",
+      .label = "Use DX11! Motion blur has to be disabled!",
       .section = "Instructions",
   },
   new renodx::utils::settings::Setting{
@@ -124,12 +122,12 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
   },
   new renodx::utils::settings::Setting{
       .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-      .label = "HDR Den Discord",
+      .label = "RenoDX Discord",
       .section = "Links",
       .group = "button-line-1",
       .tint = 0x5865F2,
       .on_change = []() {
-        renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc");
+        renodx::utils::platform::LaunchURL("https://discord.gg/F6AU", "TeWJHM");
       },
   },
   new renodx::utils::settings::Setting{
