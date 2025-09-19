@@ -35,6 +35,22 @@ float3 ReinhardScalable(float3 x, float x_max = 1.f, float x_min = 0.f, float gr
   return mad(x, exposure, x_min) / mad(x, exposure / x_max, 1.f - x_min);
 }
 
+float ReinhardPiecewise(float x, float x_max = 1.f, float shoulder = 0.18f) {
+  const float x_min = 0.f;
+  float exposure = ComputeReinhardScale(x_max, x_min, shoulder, shoulder);
+  float tonemapped = mad(x, exposure, x_min) / mad(x, exposure / x_max, 1.f - x_min);
+
+  return lerp(x, tonemapped, step(shoulder, x));
+}
+
+float3 ReinhardPiecewise(float3 x, float x_max = 1.f, float shoulder = 0.18f) {
+  const float x_min = 0.f;
+  float exposure = ComputeReinhardScale(x_max, x_min, shoulder, shoulder);
+  float3 tonemapped = mad(x, exposure, x_min) / mad(x, exposure / x_max, 1.f - x_min);
+
+  return lerp(x, tonemapped, step(shoulder, x));
+}
+
 float ComputeReinhardExtendableScale(float w = 100.f, float p = 1.f, float m = 0.f, float x = 0.18f, float y = 0.18f) {
   // y = (sx / (sx/p + 1) * (1 + (psx)/(sw*sw))
   // solve for s (scale)
@@ -52,6 +68,24 @@ float3 ReinhardScalableExtended(float3 x, float white_max = 100.f, float x_max =
   float exposure = ComputeReinhardExtendableScale(white_max, x_max, x_min, gray_in, gray_out);
   float3 extended = ReinhardExtended(x * exposure, white_max * exposure, x_max);
   return min(extended, x_max);
+}
+
+float ReinhardPiecewiseExtended(float x, float white_max, float x_max = 1.f, float shoulder = 0.18f) {
+  const float x_min = 0.f;
+  float exposure = ComputeReinhardExtendableScale(white_max, x_max, x_min, shoulder, shoulder);
+  float extended = ReinhardExtended(x * exposure, white_max * exposure, x_max);
+  extended = min(extended, x_max);
+
+  return lerp(x, extended, step(shoulder, x));
+}
+
+float3 ReinhardPiecewiseExtended(float3 x, float white_max, float x_max = 1.f, float shoulder = 0.18f) {
+  const float x_min = 0.f;
+  float exposure = ComputeReinhardExtendableScale(white_max, x_max, x_min, shoulder, shoulder);
+  float3 extended = ReinhardExtended(x * exposure, white_max * exposure, x_max);
+  extended = min(extended, x_max);
+
+  return lerp(x, extended, step(shoulder, x));
 }
 
 }
