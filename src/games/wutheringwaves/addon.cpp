@@ -88,6 +88,17 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
+        .key = "GammaCorrection",
+        .binding = &shader_injection.gamma_correction,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Gamma Correction",
+        .section = "Tone Mapping",
+        .tooltip = "Simulates the effect of decoding sRGB as pure power gamma that would be seen in SDR.",
+        .labels = {"Off", "2.2", "2.4"},
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "SwapChainGammaCorrection",
         .binding = &shader_injection.swap_chain_gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -223,6 +234,21 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeHighlightsVersion",
+        .binding = &shader_injection.color_grade_highlights_version,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Highlights Version",
+        .section = "Custom Color Grading",
+        .tooltip = "Highlights \"v2\" is experimental.",
+        .labels = {
+            "v1",
+            "v2",
+        },
+        .parse = [](float value) { return value + 1; },
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
         .binding = &shader_injection.color_grade_shadows,
         .default_value = 50.f,
@@ -297,15 +323,6 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting {
-        .key = "WuWaChromaticAberration",
-        .binding = &shader_injection.wuwa_chromatic_aberration,
-        .default_value = 100.f,
-        .label = "Chromatic Aberration",
-        .section = "Post-Processing",
-        .tooltip = "Reduces chromatic aberration intensity when applied by the game.\n100 retains original behavior, 0 disables it completely.",
-        .parse = [](float value) { return value * 0.01f; }
-    },
-    new renodx::utils::settings::Setting {
         .key = "WuWaBloom",
         .binding = &shader_injection.wuwa_bloom,
         .default_value = 100.f,
@@ -315,12 +332,19 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; }
     },
     new renodx::utils::settings::Setting {
-        .key = "WuWaGrain",
-        .binding = &shader_injection.wuwa_grain,
+        .key = "TextOpacity",
+        .binding = &shader_injection.text_opacity,
         .default_value = 100.f,
-        .label = "Grain",
-        .section = "Post-Processing",
-        .tooltip = "Reduces grain intensity when applied by the game.\n100 retains original behavior, 0 disables it completely.\nThe effect is very subtle and likely only exists for dithering.",
+        .label = "Text Opacity",
+        .section = "UI",
+        .parse = [](float value) { return value * 0.01f; }
+    },
+    new renodx::utils::settings::Setting {
+        .key = "HUDOpacity",
+        .binding = &shader_injection.hud_opacity,
+        .default_value = 100.f,
+        .label = "HUD Opacity",
+        .section = "UI",
         .parse = [](float value) { return value * 0.01f; }
     },
 };
@@ -340,6 +364,48 @@ const std::unordered_map<std::string, reshade::api::format> UPGRADE_TARGETS = {
     {"R16G16B16A16_TYPELESS", reshade::api::format::r16g16b16a16_typeless},
 };
 
+void OnPresetVanillaPlus() {
+  renodx::utils::settings::UpdateSetting("ColorGradeStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("WuWaTonemapper", 3.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHueCorrection", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeSaturationCorrection", 100.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeBlowoutRestoration", 28.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHueShift", 75.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 70.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHighlightsVersion", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 60.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeClip", 65.f);
+  renodx::utils::settings::UpdateSetting("WuWaChromaticAberration", 100.f);
+  renodx::utils::settings::UpdateSetting("WuWaBloom", 50.f);
+}
+
+void OnPresetHdrLook() {
+  renodx::utils::settings::UpdateSetting("ColorGradeStrength", 50.f);
+  renodx::utils::settings::UpdateSetting("WuWaTonemapper", 3.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHueCorrection", 100.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeSaturationCorrection", 100.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeBlowoutRestoration", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHueShift", 100.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 75.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHighlightsVersion", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 45.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 55.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 65.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeClip", 65.f);
+  renodx::utils::settings::UpdateSetting("WuWaChromaticAberration", 100.f);
+  renodx::utils::settings::UpdateSetting("WuWaBloom", 100.f);
+}
+
 renodx::utils::settings::Settings info_settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -350,19 +416,19 @@ renodx::utils::settings::Settings info_settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "SDR Grading Bypass",
+        .label = "Vanilla+",
         .section = "Options",
         .group = "button-line-1",
-        .tooltip = "Improves highlight appearance in games with little to no SDR grading",
-        .on_change = []() {
-          renodx::utils::settings::ResetSettings();
-          renodx::utils::settings::UpdateSettings({
-              {"ColorGradeContrast", 80.f},
-              {"ColorGradeSaturation", 80.f},
-              {"ColorGradeBlowout", 80.f},
-              {"ColorGradeStrength", 0.f},
-          });
-        },
+        .tooltip = "A preset that aims to preserve the game's original appearance",
+        .on_change = OnPresetVanillaPlus,
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Look",
+        .section = "Options",
+        .group = "button-line-1",
+        .tooltip = "A preset that aims to showcase the expected impact of HDR",
+        .on_change = OnPresetHdrLook,
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -644,14 +710,17 @@ void AddAdvancedSettings() {
     }
   }
 
+  const std::vector<float> letterbox_aspect_ratios = {3840.f / 1620.f, 2880.f / 1216.f};
   // Upgrade letterbox cutscene resources
-  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-      .old_format = reshade::api::format::r8g8b8a8_typeless,
-      .new_format = reshade::api::format::r16g16b16a16_float,
-      .ignore_size = false,
-      .use_resource_view_cloning = true,
-      .aspect_ratio = 3840.f / 1620.f,
-  });
+  for (const float& ratio : letterbox_aspect_ratios) {
+    renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        .old_format = reshade::api::format::r8g8b8a8_typeless,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .ignore_size = false,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = ratio,
+    });
+  }
 
   {
     auto* swapchain_setting = new renodx::utils::settings::Setting{
