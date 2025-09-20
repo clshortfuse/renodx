@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsl"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sat Mar  1 01:01:19 2025
 Texture2D<float4> t0 : register(t0);
@@ -35,7 +35,8 @@ void main(
   renodx::draw::Config draw_config = renodx::draw::BuildConfig();
   draw_config.peak_white_nits = CUSTOM_HDR_VIDEOS_PEAK_NITS;
 
-  if (CUSTOM_HDR_VIDEOS != 0) {
+  [branch]
+  if (CUSTOM_HDR_VIDEOS != 0.f) {
     o0.rgb = renodx::draw::UpscaleVideoPass(o0.rgb, draw_config);
     o0.rgb = renodx::color::srgb::DecodeSafe(o0.rgb);
     o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);

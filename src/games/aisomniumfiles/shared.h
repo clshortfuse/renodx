@@ -23,9 +23,9 @@
 #define RENODX_TONE_MAP_HUE_SHIFT_METHOD     HUE_SHIFT_METHOD_SDR_MODIFIED
 #define RENODX_TONE_MAP_HUE_SHIFT_MODIFIER   1.f
 #define RENODX_SWAP_CHAIN_CLAMP_NITS         10000.f
+#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE  renodx::color::convert::COLOR_SPACE_BT2020
 #define CUSTOM_HDR_VIDEOS                    shader_injection.custom_hdr_videos
 #define CUSTOM_HDR_VIDEOS_PEAK_NITS          shader_injection.custom_hdr_videos_peak_nits
-#define CUSTOM_TONE_MAP_SHOULDER_START       shader_injection.custom_tone_map_shoulder_start
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -50,7 +50,6 @@ struct ShaderInjectData {
   float gamma_correction;
   float custom_hdr_videos;
   float custom_hdr_videos_peak_nits;
-  float custom_tone_map_shoulder_start;
 };
 
 #ifndef __cplusplus
