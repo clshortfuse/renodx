@@ -20,17 +20,16 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   // Needs manual fix for instruction:
   // unknown dcl_: dcl_thread_group 4, 4, 4
   r0.xyz = (uint3)vThreadID.xyz;
-  if (LUT_SAMPLING_METHOD) {
+  if (RENODX_LUT_SHAPER != 0.f) {
     r0.rgb = renodx::color::pq::DecodeSafe((r0.rgb / 31.f), 100.f);
-  } else { // incorrect
-    r0.xyz = exp2(r0.xyz * (0.625 / 0.96875)  - 13.f);
-    r0.xyz -= 0.0005; // clips blacks
+  } else {  // incorrect
+    r0.xyz = exp2(r0.xyz * (0.625 / 0.96875) - 13.f);
+    r0.xyz -= 0.0005;  // clips blacks
     r0.xyz = max(float3(0, 0, 0), r0.xyz);
 
     // this is how it should actually look
     // r0.rgb /= 31.f;
     // r0.rgb = exp2(r0.rgb / 0.05f - 13.0f);
-
   }
 
   float3 untonemapped_bt709 = r0.rgb;
@@ -39,10 +38,10 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   float max_nits = cb0[0].x;
   float min_nits = cb0[0].z;
 
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
-    u0[vThreadID] = float4(GenerateOutput(untonemapped_bt709, min_nits, max_nits, shadows), 0.f);
-    return;
-  }
+  // if (RENODX_TONE_MAP_TYPE != 0.f) {
+  //   u0[vThreadID] = float4(GenerateOutput(untonemapped_bt709, min_nits, max_nits, shadows), 0.f);
+  //   return;
+  // }
 
   r0.w = dot(r0.xyz, float3(0.212500006, 0.715399981, 0.0720999986));
   r1.xy = r0.ww * float2(1.06858003, 0.421909988) + float2(0.0638085008, 1.26671004);
