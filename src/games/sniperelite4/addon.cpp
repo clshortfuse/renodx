@@ -127,7 +127,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
       .group = "button-line-1",
       .tint = 0x5865F2,
       .on_change = []() {
-        renodx::utils::platform::LaunchURL("https://discord.gg/F6AU", "TeWJHM");
+        renodx::utils::platform::LaunchURL("https://discord.gg/Ce9b", "QHQrSV");
       },
   },
   new renodx::utils::settings::Setting{
