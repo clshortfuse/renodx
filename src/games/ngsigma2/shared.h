@@ -1,5 +1,5 @@
-#ifndef SRC_NGSIGMA_SHARED_H_
-#define SRC_NGSIGMA_SHARED_H_
+#ifndef SRC_NGSIGMA2_SHARED_H_
+#define SRC_NGSIGMA2_SHARED_H_
 
 #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
@@ -59,4 +59,4 @@ cbuffer injected_buffer : register(b13) {
 
 #endif
 
-#endif  // SRC_NGSIGMA_SHARED_H_
+#endif  // SRC_NGSIGMA2_SHARED_H_
