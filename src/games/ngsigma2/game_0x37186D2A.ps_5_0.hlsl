@@ -34,7 +34,7 @@ void main(
   o0.xyz = r0.xyz * gBloomScale.xyz + r1.xyz;
   o0.w = r1.w;
 
-  o0.rgb = applyToneMap(o0.rgb);
+  o0.rgb = ApplyToneMap(o0.rgb);
 
   return;
 }
