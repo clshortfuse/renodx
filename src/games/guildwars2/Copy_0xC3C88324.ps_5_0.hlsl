@@ -1,4 +1,5 @@
 #include "./common.hlsl"
+#include "./lilium_rcas.hlsl"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -12,9 +13,11 @@ void main(
   float4 fDest;
 
   if (injectedData.stateCheck == 2.f) {
-    r0.xyzw = applySharpen(t0, s0_s, v0, injectedData.fxSharpen);
-    r0.rgb = applyFilmGrain(r0.rgb, v0, injectedData.fxFilmGrainType != 0.f);
-    r0.rgb = PostToneMapScale(r0.rgb);
+    r0.xyzw = t0.Sample(s0_s, v0.xy).xyzw;
+    r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
+    r0.xyz = ApplyRCAS(r0.xyz, v0, t0, s0_s);
+    r0.xyz = applyFilmGrain(r0.xyz, v0, injectedData.fxFilmGrainType != 0.f);
+    r0.xyz = PostToneMapScale(r0.xyz);
   } else {
     r0.xyzw = t0.Sample(s0_s, v0.xy).xyzw;
   }
