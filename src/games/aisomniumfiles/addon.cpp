@@ -14,6 +14,9 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
+#include "../../templates/settings.hpp"
+#include "../../utils/date.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
@@ -33,9 +36,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 ShaderInjectData shader_injection;
 
-const std::string build_date = __DATE__;
-const std::string build_time = __TIME__;
-
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "SettingsMode",
@@ -50,12 +50,12 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapType",
         .binding = &RENODX_TONE_MAP_TYPE,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 2.f,
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "RenoDRT + DICE"},
+        .labels = {"Vanilla", "RenoDRT", "Exponential Rolloff"},
         .parse = [](float value) { return value * 3.f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
@@ -69,17 +69,6 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of peak white in nits",
         .min = 48.f,
         .max = 4000.f,
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapShoulderStart",
-        .binding = &CUSTOM_TONE_MAP_SHOULDER_START,
-        .default_value = 0.75f,
-        .label = "Rolloff/Shoulder Start",
-        .section = "Tone Mapping",
-        .tooltip = "Defines the shoulder start for the DICE tonemapper",
-        .max = 0.99f,
-        .format = "%.2f",
-        .is_visible = []() { return settings[0]->GetValue() >= 1; }
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
@@ -114,6 +103,17 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return settings[0]->GetValue() >= 2; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ToneMapWorkingColorSpace",
+        .binding = &RENODX_TONE_MAP_WORKING_COLOR_SPACE,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Working Color Space",
+        .section = "Tone Mapping",
+        .labels = {"BT709", "BT2020", "AP1"},
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
+        .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
         .binding = &RENODX_TONE_MAP_HUE_SHIFT,
         .default_value = 50.f,
@@ -125,17 +125,6 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapWorkingColorSpace",
-        .binding = &RENODX_TONE_MAP_WORKING_COLOR_SPACE,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Working Color Space",
-        .section = "Tone Mapping",
-        .labels = {"BT709", "BT2020", "AP1"},
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 1; },
-        .is_visible = []() { return settings[0]->GetValue() >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueCorrection",
@@ -241,7 +230,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
-        .parse = [](float value) { return max(value * 0.01f, 0.000001f); },
+        .parse = [](float value) { return fmax(value * 0.01f, 0.000001f); },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
@@ -276,6 +265,30 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Boosted Faithful",
+        .section = "Presets",
+        .group = "button-line-1",
+        .tint = 0xb5b2b1,
+        .on_change = []() {
+            renodx::utils::settings::UpdateSetting("ToneMapType", 2.f);
+            renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 1.f);
+            renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
+            renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
+            renodx::utils::settings::UpdateSetting("ToneMapHueShift", 50.f);
+            renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 100.f);
+            renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
+            renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
+            renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 53.f);
+            renodx::utils::settings::UpdateSetting("ColorGradeShadows", 53.f);
+            renodx::utils::settings::UpdateSetting("ColorGradeContrast", 53.f);
+            renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 53.f);
+            renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 60.f);
+            renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 25.f);
+            renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
+        }
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "HDR Look",
         .section = "Presets",
         .group = "button-line-1",
@@ -285,7 +298,9 @@ renodx::utils::settings::Settings settings = {
             renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 1.f);
             renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
             renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
-            renodx::utils::settings::UpdateSetting("ToneMapScaling", 1.f);
+            renodx::utils::settings::UpdateSetting("ToneMapHueShift", 50.f);
+            renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 100.f);
+            renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
             renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
             renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 60.f);
             renodx::utils::settings::UpdateSetting("ColorGradeShadows", 55.f);
@@ -294,7 +309,6 @@ renodx::utils::settings::Settings settings = {
             renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 60.f);
             renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 40.f);
             renodx::utils::settings::UpdateSetting("ColorGradeFlare", 60.f);
-            renodx::utils::settings::UpdateSetting("ToneMapConfiguration", 1.f);
         }
     },
     new renodx::utils::settings::Setting{
@@ -317,17 +331,17 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "HDR Den Discord",
+        .label = "RenoDX Discord",
         .section = "About",
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::Launch(("https://discord.gg/XUhv") + std::string("tR54yc"));
+          renodx::utils::platform::Launch(("https://discord.gg/Ce9b") + std::string("QHQrSV"));
         },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Get more RenoDX mods!",
+        .label = "More RenoDX mods",
         .section = "About",
         .group = "button-line-1",
         .tint = 0x5865F2,
@@ -345,19 +359,9 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::platform::Launch("https://ko-fi.com/shortfuse");
         },
     },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "HDR Den's Ko-Fi",
-        .section = "About",
-        .group = "button-line-1",
-        .tint = 0xFF5F5F,
-        .on_change = []() {
-          renodx::utils::platform::Launch("https://ko-fi.com/hdrden");
-        },
-    },
-    new renodx::utils::settings::Setting{
+new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "This build was compiled on " + build_date + " at " + build_time + ".",
+        .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
         .section = "About",
     },
 };

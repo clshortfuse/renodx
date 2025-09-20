@@ -1,4 +1,3 @@
-#include "./shared.h"
 #include "./common.hlsl"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sat Feb 22 13:28:56 2025
