@@ -121,7 +121,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Restores color blowout from per-channel grading.",
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f && shader_injection.tone_map_per_channel == 1.f; },
+        .is_enabled = []() { return shader_injection.tone_map_type == 2.f && shader_injection.tone_map_per_channel == 1.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -247,6 +247,16 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type == 0.f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "LUTSamplingMethod",
+        .binding = &shader_injection.color_grade_lut_sampling_method,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "LUT Sampling Method",
+        .section = "Color Grading",
+        .tooltip = "Selects whether to use the vanilla sampling or enhanced for the game's LUTs.",
+        .labels = {"Vanilla", "Enhanced"},
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -366,6 +376,7 @@ void OnPresetOff() {
       {"ColorGradeStrength", 100.f},
       {"ColorGradeSceneScaling", 0.f},
       {"CustomLUTShaper", 0.f},
+      {"LUTSamplingMethod", 0.f},
   });
 }
 

@@ -29,6 +29,7 @@ struct ShaderInjectData {
   float color_grade_scaling;
 
   float custom_lut_shaper;
+  float color_grade_lut_sampling_method;
 };
 
 #ifndef __cplusplus
@@ -60,7 +61,8 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_COLOR_GRADE_STRENGTH shader_injection.color_grade_strength
 #define RENODX_COLOR_GRADE_SCALING  shader_injection.color_grade_scaling
 
-#define RENODX_LUT_SHAPER shader_injection.custom_lut_shaper
+#define RENODX_LUT_SHAPER   shader_injection.custom_lut_shaper
+#define LUT_SAMPLING_METHOD shader_injection.color_grade_lut_sampling_method
 
 #include "../../shaders/renodx.hlsl"
 
