@@ -1,4 +1,4 @@
-#include "./common.hlsli"
+#include "./colorgradinglut.hlsli"
 
 Texture2D<float4> t3 : register(t3);
 
@@ -17,9 +17,6 @@ SamplerState s0_s : register(s0);
 cbuffer cb0 : register(b0) {
   float4 cb0[3];
 }
-
-// 3Dmigoto declarations
-#define cmp -
 
 void main(
     float4 v0: SV_POSITION0,
@@ -62,7 +59,7 @@ void main(
   r0.xyz = cmp(r0.xyz >= float3(0, 0, 0));
   r0.xyz = r0.xyz ? r1.xyz : -r1.xyz;
   r0.xyz = saturate(r0.xyz + r2.xyz);
-#if 1
+#if 0
 
   // srgb encode
   r1.xyz = log2(r0.xyz);
@@ -85,6 +82,9 @@ void main(
   r2.xyz = float3(0.0773993805, 0.0773993805, 0.0773993805) * r0.xyz;
   r0.xyz = cmp(float3(0.0404499993, 0.0404499993, 0.0404499993) >= r0.xyz);
   r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
+#else
+  r0.rgb = SampleLUTSRGBInSRGBOut(r0.rgb, t1, s0_s);
+
 #endif
   r0.w = dot(r0.xyz, float3(0.212599993, 0.715200007, 0.0722000003));
   r1.x = -1000 + cb0[2].y;
