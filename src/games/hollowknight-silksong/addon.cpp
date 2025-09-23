@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 Carlos Lopez
+ * Copyright (C) 2025 Carlos Lopez
  * SPDX-License-Identifier: MIT
  */
 
@@ -379,6 +379,22 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxDebanding",
+        .binding = &shader_injection.swap_chain_output_dither_bits,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Debanding",
+        .section = "Effects",
+        .labels = {"None", "Vanilla (Blur)", "8+2 Dither", "10+2 Dither"},
+        .parse = [](float value) {
+          if (value == 0.f) return 0.f;
+          if (value == 1.f) return -1.f;
+          if (value == 2.f) return 8.f;
+          if (value == 3.f) return 10.f;
+          return 0.f;
+        },
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxHDRVideos",
         .binding = &shader_injection.custom_hdr_videos,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -499,6 +515,7 @@ void OnPresetOff() {
       {"FxBloom", 50.f},
       {"FxHeroLight", 50.f},
       {"FxGrainStrength", 0.f},
+      {"FxDithering", 1.f},
       {"FxHDRVideos", 0.f},
       {"FxDrawPauseMenu", 1.f},
   });
@@ -683,6 +700,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         });
 
         renodx::utils::random::binds.push_back(&shader_injection.custom_random);
+        renodx::utils::random::binds.push_back(&shader_injection.swap_chain_output_dither_seed);
         renodx::utils::settings::on_preset_changed_callbacks.emplace_back(&HandleOutputModeChange);
 
         initialized = true;
@@ -709,6 +727,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         // Process is terminating.
         RevertForcedHDR();
       }
+      break;
   }
 
   return TRUE;

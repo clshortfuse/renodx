@@ -1,3 +1,5 @@
+#include "./shared.h"
+
 // ---- Created with 3Dmigoto v1.3.16 on Thu Sep  4 10:46:26 2025
 Texture2D<float4> t0 : register(t0);
 
@@ -40,5 +42,12 @@ void main(
     r2.x = (int)r2.x + 1;
   }
   o0.xyzw = r1.xyzw;
+
+  [branch]
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    o0 = saturate(o0);
+  } else {
+    o0 = max(0, o0);
+  }
   return;
 }

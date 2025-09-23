@@ -33,7 +33,8 @@ void main(
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     o0 = saturate(o0);
   } else {
-    o0 = max(0, o0);
+    // o0 = max(0, o0);
+    o0 = saturate(o0);
   }
   return;
 }

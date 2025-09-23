@@ -29,5 +29,12 @@ void main(
   r0.xyzw = t0.Sample(s0_s, w1.xy).xyzw;
   r1.xyzw = t1.Sample(s1_s, v1.xy).xyzw * CUSTOM_BLOOM;
   o0.xyzw = r1.xyzw + r0.xyzw;
+
+  [branch]
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    o0 = saturate(o0);
+  } else {
+    o0 = max(0, o0);
+  }
   return;
 }
