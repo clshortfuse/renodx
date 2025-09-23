@@ -270,12 +270,12 @@ float3 ApplyToneMap(float3 untonemapped_bt2020) {
                                                                                y, cg_config);
   } else {
     if (RENODX_TONE_MAP_PER_CHANNEL) {
-      tonemapped_bt2020 = ReinhardPiecewiseExtended(untonemapped_bt2020, RENODX_TONE_MAP_WHITE_CLIP, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 0.18f);
+      tonemapped_bt2020 = ReinhardPiecewiseExtended(untonemapped_bt2020, RENODX_TONE_MAP_WHITE_CLIP, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 0.5f);
       tonemapped_bt2020 = RestoreHueAndChrominanceBT2020(tonemapped_bt2020, untonemapped_bt2020, renodx::color::y::from::BT2020(untonemapped_bt2020),
                                                          RENODX_TONE_MAP_HUE_CORRECTION, RENODX_PER_CHANNEL_BLOWOUT_RESTORATION,
                                                          cg_config.dechroma, cg_config.blowout, cg_config.saturation);
     } else {
-      float y_out = ReinhardPiecewiseExtended(y, RENODX_TONE_MAP_WHITE_CLIP, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 0.18f);
+      float y_out = ReinhardPiecewiseExtended(y, RENODX_TONE_MAP_WHITE_CLIP, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 0.5f);
       tonemapped_bt2020 = renodx::color::correct::Luminance(untonemapped_bt2020, y, y_out);
       tonemapped_bt2020 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(tonemapped_bt2020, untonemapped_bt2020, y, cg_config);
     }

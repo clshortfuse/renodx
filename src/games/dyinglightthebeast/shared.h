@@ -24,12 +24,13 @@ struct ShaderInjectData {
   float tone_map_blowout;
   float tone_map_flare;
   float tone_map_flare2;
-
   float color_grade_strength;
   float color_grade_scaling;
+  float color_grade_lut_sampling_method;
+
+  float custom_bloom;
 
   float custom_lut_shaper;
-  float color_grade_lut_sampling_method;
 };
 
 #ifndef __cplusplus
@@ -57,12 +58,13 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_TONE_MAP_FLARE2               shader_injection.tone_map_flare2
+#define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
+#define RENODX_COLOR_GRADE_SCALING           shader_injection.color_grade_scaling
+#define LUT_SAMPLING_METHOD                  shader_injection.color_grade_lut_sampling_method
 
-#define RENODX_COLOR_GRADE_STRENGTH shader_injection.color_grade_strength
-#define RENODX_COLOR_GRADE_SCALING  shader_injection.color_grade_scaling
+#define CUSTOM_BLOOM shader_injection.custom_bloom
 
-#define RENODX_LUT_SHAPER   shader_injection.custom_lut_shaper
-#define LUT_SAMPLING_METHOD shader_injection.color_grade_lut_sampling_method
+#define RENODX_LUT_SHAPER shader_injection.custom_lut_shaper
 
 #include "../../shaders/renodx.hlsl"
 
