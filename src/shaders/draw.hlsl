@@ -6,6 +6,7 @@
 #include "./colorcorrect.hlsl"
 #include "./inverse_tonemap.hlsl"
 #include "./math.hlsl"
+#include "./random.hlsl"
 #include "./tonemap.hlsl"
 
 namespace renodx {
@@ -54,6 +55,9 @@ struct Config {
   float swap_chain_encoding;                 // 0 = none, 4 = hdr10, 5 = scrgb
   float swap_chain_encoding_color_space;     // -1 = none, bt709, bt2020, ap1
   float swap_chain_output_preset;            // -1 = none, 0 = sdr, 1 = hdr10, 2 = scrgb
+  float swap_chain_output_dither_bits;       // 0 = none, 8 = 8-bit, 10 = 10-bit, 12 = 12-bit, etc
+  float swap_chain_output_dither_amplitude;  // 0 = none, 8 = 8-bit, 10 = 10-bit, 12 = 12-bit, etc
+  float swap_chain_output_dither_seed;       // seed for per-pixel dither
 };
 
 static const float GAMMA_CORRECTION_NONE = 0;
@@ -315,6 +319,21 @@ Config BuildConfig() {
 #endif
   config.swap_chain_output_preset = RENODX_SWAP_CHAIN_OUTPUT_PRESET;
 
+#if !defined(RENODX_SWAP_CHAIN_OUTPUT_DITHER_BITS)
+#define RENODX_SWAP_CHAIN_OUTPUT_DITHER_BITS 0.f
+#endif
+  config.swap_chain_output_dither_bits = RENODX_SWAP_CHAIN_OUTPUT_DITHER_BITS;
+
+#if !defined(RENODX_SWAP_CHAIN_OUTPUT_DITHER_AMPLITUDE)
+#define RENODX_SWAP_CHAIN_OUTPUT_DITHER_AMPLITUDE (RENODX_SWAP_CHAIN_OUTPUT_DITHER_BITS + 2.f)
+#endif
+  config.swap_chain_output_dither_amplitude = RENODX_SWAP_CHAIN_OUTPUT_DITHER_AMPLITUDE;
+
+#if !defined(RENODX_SWAP_CHAIN_OUTPUT_DITHER_SEED)
+#define RENODX_SWAP_CHAIN_OUTPUT_DITHER_SEED 0.f
+#endif
+  config.swap_chain_output_dither_seed = RENODX_SWAP_CHAIN_OUTPUT_DITHER_SEED;
+
   return config;
 };
 
@@ -441,7 +460,7 @@ float3 InvertIntermediatePass(float3 color, Config config) {
   return color;
 }
 
-float3 SwapChainPass(float3 color, Config config) {
+float3 SwapChainPass(float3 color, float2 position, Config config) {
   color = DecodeColor(color, config.swap_chain_decoding);
 
   if (config.swap_chain_gamma_correction == GAMMA_CORRECTION_GAMMA_2_2) {
@@ -509,6 +528,22 @@ float3 SwapChainPass(float3 color, Config config) {
   }
 
   color = EncodeColor(color, config.swap_chain_encoding);
+
+  if (config.swap_chain_output_dither_bits > 0.f && config.swap_chain_output_dither_amplitude != 0.f) {
+    float maxValue = exp2(config.swap_chain_output_dither_bits) - 1.0;
+    float dither_strength = exp2(config.swap_chain_output_dither_amplitude) - 1.0;
+    // ie: 12bit amplitude for 10bit quantization
+
+    float random_number = renodx::random::Generate(position + config.swap_chain_output_dither_seed);
+
+    float3 noise = (random_number - 0.5) * (1.f / maxValue);
+
+    float3 dithered = color.rgb * maxValue + noise * dither_strength;
+
+    float3 rounded = round(max(0, dithered)) / maxValue;
+
+    color = rounded;
+  }
 
   return color;
 }
@@ -782,12 +817,25 @@ float4 InvertIntermediatePass(float4 color) {
   return float4(InvertIntermediatePass(color.rgb, BuildConfig()).rgb, 1.f);
 }
 
+// Deprecated
+float3 SwapChainPass(float3 color, Config config) {
+  return SwapChainPass(color, 0, config);
+}
+
+float3 SwapChainPass(float3 color, float2 position) {
+  return SwapChainPass(color, position, BuildConfig());
+}
+
+float4 SwapChainPass(float4 color, float2 position) {
+  return float4(SwapChainPass(color.rgb, position, BuildConfig()).rgb, 1.f);
+}
+
 float3 SwapChainPass(float3 color) {
-  return SwapChainPass(color, BuildConfig());
+  return SwapChainPass(color, 0, BuildConfig());
 }
 
 float4 SwapChainPass(float4 color) {
-  return float4(SwapChainPass(color.rgb, BuildConfig()).rgb, 1.f);
+  return float4(SwapChainPass(color.rgb, 0, BuildConfig()).rgb, 1.f);
 }
 
 float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color) {
