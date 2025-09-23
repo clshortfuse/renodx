@@ -57,21 +57,21 @@ void main(
   r0.x = bezierCurveLUT_Buffer.Sample(bilinear_Sampler_s, r2.xy).x;
   r0.x = r0.x / r1.x;
   r0.xyz = r0.yzw * r0.xxx + float3(-0.5,-0.5,-0.5);
-  r0.xyz = saturate(r0.xyz * contrast + float3(0.5,0.5,0.5));
+  r0.xyz = r0.xyz * contrast + float3(0.5,0.5,0.5);
   r0.xyz = brightness * r0.xyz;
 
   r0.xyz = renodx::draw::ToneMapPass(untonemapped, r0.xyz);
+  float3 linear_color = renodx::color::srgb::DecodeSafe(r0.xyz);
+  r0.xyz = renodx::draw::RenderIntermediatePass(linear_color);
   r0.xyz = log2(r0.xyz);
   r0.w = 1 / gamma;
   r0.xyz = r0.www * r0.xyz;
   r0.xyz = exp2(r0.xyz);
-  r0.xyz = saturate(colorTone.xyz + r0.xyz);
+  r0.xyz = colorTone.xyz + r0.xyz;
   r0.w = dot(r0.xyz, float3(0.212500006,0.715399981,0.0720999986));
   r0.xyz = r0.xyz + -r0.www;
   r0.xyz = saturation * r0.xyz + r0.www;
   o0.w = dot(r0.xyz, float3(0.298999995,0.587000012,0.114));
-  float3 linear_color = renodx::color::srgb::DecodeSafe(r0.xyz);
-  r0.yzw = renodx::draw::RenderIntermediatePass(linear_color);
-  o0.xyz = r0.yzw;
+  o0.xyz = r0.xyz;
   return;
 }
