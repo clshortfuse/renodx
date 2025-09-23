@@ -60,14 +60,14 @@ void main(
   r0.xyz = r0.yzw * r0.xxx + float3(-0.5,-0.5,-0.5);
   r0.xyz = r0.xyz * contrast + float3(0.5,0.5,0.5);
   r0.xyz = brightness * r0.xyz;
-
-  r0.xyz = renodx::draw::ToneMapPass(untonemapped, r0.xyz);
-  float3 linear_color = renodx::color::srgb::DecodeSafe(r0.xyz);
-  r0.xyz = renodx::draw::RenderIntermediatePass(linear_color);
   r0.xyz = log2(r0.xyz);
   r0.w = 1 / gamma;
   r0.xyz = r0.www * r0.xyz;
   r0.xyz = exp2(r0.xyz);
+
+  r0.xyz = renodx::draw::ToneMapPass(untonemapped, r0.xyz);
+  float3 linear_color = renodx::color::srgb::DecodeSafe(r0.xyz);
+  r0.xyz = renodx::draw::RenderIntermediatePass(linear_color);
   r0.xyz = colorTone.xyz + r0.xyz;
   r0.w = dot(r0.xyz, float3(0.212500006,0.715399981,0.0720999986));
   r0.xyz = r0.xyz + -r0.www;
