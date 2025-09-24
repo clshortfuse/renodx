@@ -30,9 +30,9 @@ void main(
   r0.x = r0.x * r0.y;
   r0.x = cb0[0].w * r0.x;
   r1.xyzw = t0.Sample(s0_s, v0.xy).xyzw;
-  r0.yzw = cb0[0].xyz * r1.xyz * (2.f - injectedData.fxVignetteUW);
+  r0.yzw = cb0[0].xyz * r1.xyz;
   r1.xyz = r0.yzw + r0.yzw;
   r1.xyzw = float4(-1,-1,-1,-1) + r1.xyzw;
-  o0.xyzw = r0.xxxx * r1.xyzw + float4(1,1,1,1);
+  o0.xyzw = r0.xxxx * r1.xyzw * injectedData.fxVignetteUW + float4(1,1,1,1);
   return;
 }

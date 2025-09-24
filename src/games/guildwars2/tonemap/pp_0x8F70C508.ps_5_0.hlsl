@@ -33,9 +33,7 @@ void main(
   r1.xyz = cb0[0].xyz * r1.xyz * injectedData.fxBloom;
   r0.xyz = r1.xyz * float3(2,2,2) + r0.xyz;
   r0.rgb = renodx::color::srgb::DecodeSafe(r0.rgb);
-  if (!injectedData.isUnderWater) {
-    r0.rgb = applyVignette(r0.rgb, v0, injectedData.fxVignette);
-  }
+  r0.rgb = applyVignette(r0.rgb, v0, injectedData.fxVignette);
   r0.rgb = applyUserTonemap(r0.rgb);
   o0.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
   o0.w = 0;

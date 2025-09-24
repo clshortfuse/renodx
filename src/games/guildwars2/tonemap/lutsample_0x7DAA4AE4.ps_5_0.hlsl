@@ -24,9 +24,7 @@ void main(
   r1.xyz = applyCA(t0, s0_s, v0, injectedData.fxCA);
   r0.xyz = r0.xyz * float3(2,2,2) + r1.xyz;
   r0.rgb = renodx::color::srgb::DecodeSafe(r0.rgb);
-  if (!injectedData.isUnderWater) {
-    r0.rgb = applyVignette(r0.rgb, v0, injectedData.fxVignette);
-  }
+  r0.rgb = applyVignette(r0.rgb, v0, injectedData.fxVignette);
   r0.rgb = applyUserTonemap(r0.rgb, t2, s2_s);
   o0.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
   o0.w = 0;

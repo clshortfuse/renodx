@@ -671,24 +671,22 @@ renodx::utils::settings::Settings settings = {
         .key = "fxVignette",
         .binding = &shader_injection.fxVignette,
         .default_value = 0.f,
-        .label = "Vignette (terrestrial)",
+        .label = "Vignette",
         .section = "Effects",
         .tint = 0x0D1D34,
         .max = 100.f,
-        .is_enabled = []() { return !shader_injection.isUnderWater; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "fxVignetteUW",
         .binding = &shader_injection.fxVignetteUW,
-        .default_value = 50.f,
-        .label = "Vignette (underwater)",
+        .default_value = 100.f,
+        .label = "Vignette (underwater+mount)",
         .section = "Effects",
         .tint = 0x0D1D34,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.isUnderWater; },
-        .parse = [](float value) { return value * 0.02f; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "fxFlashbang",
@@ -846,7 +844,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("fxCA", 0.f);
   renodx::utils::settings::UpdateSetting("fxSharpen", 0.f);
   renodx::utils::settings::UpdateSetting("fxVignette", 0.f);
-  renodx::utils::settings::UpdateSetting("fxVignetteUW", 50.f);
+  renodx::utils::settings::UpdateSetting("fxVignetteUW", 100.f);
   renodx::utils::settings::UpdateSetting("fxFlashbang", 100.f);
   renodx::utils::settings::UpdateSetting("fxFilmGrain", 0.f);
 }
