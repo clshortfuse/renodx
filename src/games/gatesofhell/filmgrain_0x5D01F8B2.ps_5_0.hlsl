@@ -67,10 +67,6 @@ void main(
   r0.w = 1 / gamma;
   r0.xyz = r0.www * r0.xyz;
   r0.xyz = exp2(r0.xyz);
-
-  r0.xyz = renodx::draw::ToneMapPass(untonemapped, r0.xyz);
-  float3 linear_color = renodx::color::srgb::DecodeSafe(r0.xyz);
-  r0.xyz = renodx::draw::RenderIntermediatePass(linear_color);
   r0.xyz = colorTone.xyz + r0.xyz;
   r0.w = dot(r0.xyz, float3(0.212500006,0.715399981,0.0720999986));
   r0.xyz = r0.xyz + -r0.www;
@@ -90,5 +86,9 @@ void main(
   r0.w = 1 + -r0.w;
   r0.w = grainAmount * r0.w;
   o0.xyz = r0.www * r1.xyz + r0.xyz;
+
+  float3 graded_sdr = renodx::color::srgb::DecodeSafe(o0.xyz);
+  o0.rgb = renodx::draw::ToneMapPass(untonemapped, graded_sdr);
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   return;
 }
