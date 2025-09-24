@@ -599,6 +599,12 @@ const std::unordered_map<
               {"Upgrade_R11G11B10_FLOAT", UPGRADE_TYPE_OUTPUT_RATIO},
             },
         },
+        {
+            "SonicRacingCrossWorlds",
+            {
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
 
 };
 
