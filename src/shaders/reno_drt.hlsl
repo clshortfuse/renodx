@@ -118,10 +118,10 @@ float3 BT709(float3 bt709, Config current_config) {
     y_original = renodx::color::y::from::AP1(input_color);
   } else if (current_color_space == 1) {
     input_color = renodx::color::bt2020::from::BT709(bt709);
-    y_original = renodx::color::y::from::BT2020(abs(input_color));
+    y_original = renodx::color::y::from::BT2020(input_color);
   } else {
     input_color = bt709;
-    y_original = renodx::color::y::from::BT709(abs(bt709));
+    y_original = renodx::color::y::from::BT709(bt709);
   }
 
   float y = y_original;

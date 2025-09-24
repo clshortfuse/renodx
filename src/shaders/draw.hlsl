@@ -657,11 +657,11 @@ float3 ApplyPerChannelCorrection(
     float hue_correction_strength = 1.f,
     float chrominance_correction_strength = 1.f,
     float hue_shift_strength = 0.5f) {
-  const float tonemapped_luminance = renodx::color::y::from::BT709(abs(per_channel_color));
+  const float tonemapped_luminance = renodx::color::y::from::BT709(per_channel_color);
 
   const float AUTO_CORRECT_BLACK = 0.02f;
   // Fix near black
-  const float untonemapped_luminance = renodx::color::y::from::BT709(abs(untonemapped));
+  const float untonemapped_luminance = renodx::color::y::from::BT709(untonemapped);
   float ratio = tonemapped_luminance / untonemapped_luminance;
   float auto_correct_ratio = lerp(ratio, 1.f, saturate(untonemapped_luminance / AUTO_CORRECT_BLACK));
   untonemapped *= auto_correct_ratio;
