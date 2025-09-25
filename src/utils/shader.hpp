@@ -921,7 +921,7 @@ static void OnInitPipeline(
     assert(pair->second.pipeline.handle == pipeline.handle);
     was_destroyed = pair->second.destroyed;
     if (!pair->second.destroyed) {
-#if DEBUG_LEVEL_1
+#ifdef DEBUG_LEVEL_1
       std::stringstream s;
       s << "utils::shader::OnInitPipeline(Reinserted pipeline: ";
       s << PRINT_PTR(pipeline.handle);
