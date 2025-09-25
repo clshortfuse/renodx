@@ -2278,9 +2278,31 @@ inline bool OnCreateResourceView(
       return false;
   }
 
+  utils::resource::ResourceInfo temp_resource_info = {};
   if (resource_info == nullptr) {
     resource_info = utils::resource::GetResourceInfo(resource);
-    if (resource_info == nullptr) return false;
+    if (resource_info == nullptr) {
+      auto reshade_desc = device->get_resource_desc(resource);
+      temp_resource_info = {
+          .device = device,
+          .desc = reshade_desc,
+          .resource = resource,
+          .initial_state = reshade::api::resource_usage::general,
+      };
+      resource_info = &temp_resource_info;
+
+#ifdef DEBUG_LEVEL_0
+      std::stringstream s;
+      s << "mods::swapchain::OnCreateResourceView(Unknown resource: ";
+      s << PRINT_PTR(resource.handle);
+      s << ", type: " << desc.type;
+      s << ", format: " << desc.format;
+      s << ", resource type: " << reshade_desc.type;
+      s << ", resource format: " << reshade_desc.texture.format;
+      s << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+#endif
+    }
   }
 
   if (current_desc.format == reshade::api::format::unknown) {
