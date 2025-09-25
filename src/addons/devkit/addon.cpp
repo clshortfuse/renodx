@@ -272,7 +272,7 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
   // std::vector<CommandListData> command_list_data;
   std::vector<DrawDetails> draw_details_list;
   std::unordered_set<uint64_t> live_pipelines;
-  std::unordered_map<uint64_t, reshade::api::resource_view> preview_srvs;
+  std::unordered_map<uint64_t, std::unordered_map<reshade::api::format, reshade::api::resource_view>> preview_srvs;
   std::shared_mutex mutex;
   std::unordered_map<uint64_t, reshade::api::blend_desc> pipeline_blends;
 
@@ -894,8 +894,11 @@ static void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   const std::unique_lock lock(data->mutex);
   auto pair = data->preview_srvs.find(resource.handle);
   if (pair == data->preview_srvs.end()) return;
-  if (pair->second.handle != 0u) {
-    device->destroy_resource_view(pair->second);
+  auto srvs = pair->second;
+  for (const auto& [format, srv] : srvs) {
+    if (srv.handle != 0u) {
+      device->destroy_resource_view(srv);
+    }
   }
   data->preview_srvs.erase(pair);
 }
@@ -2737,6 +2740,17 @@ void RenderShadersPane(reshade::api::device* device, DeviceData* data) {
   }  // ShadersPaneTable
 }
 
+enum TexturePaneColumns : uint8_t {
+  TEXTURE_PANE_COLUMN_HASH,
+  TEXTURE_PANE_COLUMN_TYPE,
+  TEXTURE_PANE_COLUMN_ALIAS,
+  TEXTURE_PANE_COLUMN_SOURCE,
+  TEXTURE_PANE_COLUMN_SNAPSHOT,
+  TEXTURE_PANE_COLUMN_OPTIONS,
+  //
+  TEXTURE_PANE_COLUMN_COUNT
+};
+
 void RenderShaderDefinesPane(reshade::api::device* device, DeviceData* data) {
   static ImGuiTreeNodeFlags tree_node_flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_SpanFullWidth;
   if (ImGui::BeginTable(
@@ -3191,6 +3205,11 @@ void RenderResourceViewPreview(reshade::api::device* device, DeviceData* data, r
   if (info->destroyed) return;
   if (info->desc.type == reshade::api::resource_type::buffer) return;
 
+  if (info->clone.handle != 0) {
+    RenderResourceViewPreview(device, data, info->clone);
+    return;
+  }
+
   reshade::api::format format = reshade::api::format_to_default_typed(info->desc.texture.format);
   switch (info->desc.texture.format) {
     case reshade::api::format::b10g10r10a2_typeless:
@@ -3212,23 +3231,26 @@ void RenderResourceViewPreview(reshade::api::device* device, DeviceData* data, r
                    || info->desc.type == reshade::api::resource_type::surface);
   if (!is_valid) return;
 
-  auto pair = data->preview_srvs.find(info->resource.handle);
+  auto srvs = data->preview_srvs[info->resource.handle];
+
   reshade::api::resource_view srv = {0};
-  if (pair == data->preview_srvs.end()) {
+  auto pair = srvs.find(format);
+  if (pair == srvs.end()) {
     device->create_resource_view(
         info->resource,
         reshade::api::resource_usage::shader_resource,
         reshade::api::resource_view_desc(format),
         &srv);
     if (srv.handle != 0) {
-      data->preview_srvs[info->resource.handle] = srv;
+      srvs[format] = srv;
     } else {
+      assert(false);
       return;
     }
   } else {
     if (info->destroyed) {
       device->destroy_resource_view(srv);
-      data->preview_srvs.erase(pair);
+      srvs.erase(pair);
       return;
     }
     srv = pair->second;
