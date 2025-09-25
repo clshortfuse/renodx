@@ -456,6 +456,15 @@ void AddWuchangUpgrades() {
   });
 }
 
+void AddSonicRacingCrossWorldsUpgrades() {
+  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      .old_format = reshade::api::format::r10g10b10a2_unorm,
+      .new_format = reshade::api::format::r16g16b16a16_float,
+      .use_resource_view_cloning = true,
+      .aspect_ratio = 16.f / 9.f,
+  });
+}
+
 void AddGamePatches() {
   auto process_path = renodx::utils::platform::GetCurrentProcessPath();
   auto filename = process_path.filename().string();
@@ -469,6 +478,8 @@ void AddGamePatches() {
     renodx::mods::swapchain::swapchain_proxy_revert_state = true;
   } else if (product_name == "Project_Plague") {
     AddWuchangUpgrades();
+  } else if (product_name == "SonicRacingCrossWorlds") {
+    AddSonicRacingCrossWorldsUpgrades();
   } else {
     return;
   }
@@ -602,7 +613,7 @@ const std::unordered_map<
         {
             "SonicRacingCrossWorlds",
             {
-                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_RATIO},
             },
         },
 
