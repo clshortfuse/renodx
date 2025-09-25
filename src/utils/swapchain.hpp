@@ -517,6 +517,8 @@ static void ResizeBuffer(
   }
   reshade::log::message(reshade::log::level::debug, "resize_buffer(Resizing...)");
 
+  renodx::utils::resource::OnDestroySwapchain(swapchain, true);
+
   const HRESULT hr = swapchain4->ResizeBuffers(
       desc.BufferCount == 1 ? 2 : 0,
       desc.Width,
@@ -526,6 +528,8 @@ static void ResizeBuffer(
 
   swapchain4->Release();
   swapchain4 = nullptr;
+
+  renodx::utils::resource::OnInitSwapchain(swapchain, true);
 
   if (hr == DXGI_ERROR_INVALID_CALL) {
     std::stringstream s;
