@@ -120,11 +120,10 @@ void main(
     r1.xyw = r3.yyy ? r2.yxz : r1.xyw;
     r1.xyw = r3.xxx ? r2.xyz : r1.xyw;
     r0.w = r1.z * HSV.z + -r0.y;
-    r1.xyz = saturate(r1.xyw * r0.yyy + r0.www);
+    r1.xyz = r1.xyw * r0.yyy + r0.www;
   }
-  r0.x = saturate(r0.x);
   r0.xyz = r0.zzz ? r1.xyz : r0.xxx;
-  r0.xyz = saturate(ColorBalance.xyz * r0.xyz);
+  r0.xyz = ColorBalance.xyz * r0.xyz;
   r0.xyz = float3(-0.0399999991,-0.0399999991,-0.0399999991) + r0.xyz;
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.xyz = float3(1.31578946,1.31578946,1.31578946) * r0.xyz;
