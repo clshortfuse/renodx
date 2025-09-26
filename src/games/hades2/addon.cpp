@@ -31,12 +31,14 @@
 namespace {
 
 const uint32_t BASE_PLUS_TEXTURE_SHADER = 0xC4177F20;
+// const auto PAUSE_SHADERS = {0x74CBBFCC, 0xEFD1A772, 0x451D08B2};
 float g_base_plus_texture_draws = 0.f;
 float g_base_plus_texture_count = 0.f;
 
 ShaderInjectData shader_injection;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
+    CustomShaderEntry(0x2A1E53CE),  // Bloom2
     CustomShaderEntry(0xB9AF8512),  // Lut Sampler
     CustomShaderEntryCallback(0xC4177F20, [](auto* cmd_list) {
       ++g_base_plus_texture_count;
@@ -136,8 +138,8 @@ renodx::utils::settings::Settings settings = {
         .label = "Force Display HDR",
         .tooltip = "Forces Display into HDR mode on game start (if supported)",
         .labels = {"Off", "On"},
+        .is_global = true,
         .is_visible = []() { return current_settings_mode >= 2; },
-
     },
     tone_map_type_setting = new renodx::utils::settings::Setting{
         .key = "ToneMapType",
@@ -320,6 +322,15 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxBloom",
+        .binding = &shader_injection.custom_bloom,
+        .default_value = 50.f,
+        .label = "Bloom",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxGrainStrength",
         .binding = &shader_injection.custom_grain_strength,
         .default_value = 0.f,
@@ -353,6 +364,7 @@ renodx::utils::settings::Settings settings = {
               {"ColorGradeSaturation", 60.f},
               {"ColorGradeBlowout", 25.f},
               {"FxVignette", 50.f},
+              {"FxBloom", 25.f},
               {"FxGrainStrength", 25.f},
           });
           if (output_mode_setting->GetValue() == 1.f) {
@@ -571,17 +583,6 @@ bool initialized = false;
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Hades II";
 
-extern "C" __declspec(dllexport) void AddonUninit(HMODULE addon_module, HMODULE reshade_module) {
-  renodx::utils::settings::Use(DLL_PROCESS_DETACH, &settings, &OnPresetOff);
-  renodx::utils::swapchain::Use(DLL_PROCESS_DETACH);
-  renodx::mods::swapchain::Use(DLL_PROCESS_DETACH, &shader_injection);
-  renodx::mods::shader::Use(DLL_PROCESS_DETACH, custom_shaders, &shader_injection);
-  renodx::utils::random::Use(DLL_PROCESS_DETACH);
-  reshade::unregister_event<reshade::addon_event::present>(OnPresent);
-  reshade::unregister_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
-  reshade::unregister_addon(addon_module);
-}
-
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
@@ -620,26 +621,37 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       }
 
       reshade::register_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
-      renodx::utils::settings::Use(DLL_PROCESS_ATTACH, &settings, &OnPresetOff);
-      renodx::utils::swapchain::Use(DLL_PROCESS_ATTACH);
-      renodx::mods::swapchain::Use(DLL_PROCESS_ATTACH, &shader_injection);
-      renodx::mods::shader::Use(DLL_PROCESS_ATTACH, custom_shaders, &shader_injection);
-      renodx::utils::random::Use(DLL_PROCESS_ATTACH);
 
       if (force_display_hdr_setting->GetValue() != 0.f) {
         SetupPinnedModule();
       }
 
+      break;
+    case DLL_PROCESS_DETACH:
+      if (lpv_reserved != nullptr) {
+        // Process is terminating (and pinned)
+        RevertForcedHDR();
+      }
+
+      reshade::unregister_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
+      reshade::unregister_addon(h_module);
+
+      break;
+  }
+
+  renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
+  renodx::utils::swapchain::Use(fdw_reason);
+  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx::utils::random::Use(fdw_reason);
+
+  // Custom Addon
+  switch (fdw_reason) {
+    case DLL_PROCESS_ATTACH:
       reshade::register_event<reshade::addon_event::present>(OnPresent);
       break;
     case DLL_PROCESS_DETACH:
-      if (lpv_reserved == nullptr) {
-        // Not pinned
-        AddonUninit(h_module, nullptr);
-      } else {
-        // Process is terminating.
-        RevertForcedHDR();
-      }
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       break;
   }
 
