@@ -122,6 +122,7 @@ void main(
     r0.w = r1.z * HSV.z + -r0.y;
     r1.xyz = r1.xyw * r0.yyy + r0.www;
   }
+  r0.x = saturate(r0.x);
   r0.xyz = r0.zzz ? r1.xyz : r0.xxx;
   r0.xyz = ColorBalance.xyz * r0.xyz;
   r0.xyz = float3(-0.0399999991,-0.0399999991,-0.0399999991) + r0.xyz;
