@@ -346,12 +346,12 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"ToneMapWhiteClip", 20.f},
-              {"ColorGradeHighlights", 55.f},
-              {"ColorGradeShadows", 55.f},
-              {"ColorGradeContrast", 55.f},
+              {"ColorGradeHighlights", 50.f},
+              {"ColorGradeShadows", 50.f},
+              {"ColorGradeContrast", 60.f},
               {"ColorGradeSaturation", 60.f},
               {"ColorGradeBlowout", 25.f},
-              {"FxVignette", 25.f},
+              {"FxVignette", 50.f},
               {"FxGrainStrength", 25.f},
           });
           if (output_mode_setting->GetValue() == 1.f) {
@@ -384,7 +384,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
-        .section = "Options",
+        .section = "Debug",
         .group = "button-line-3",
         .on_draw = []() {
           // Number of draws based on g_base_plus_texture_draws
@@ -392,8 +392,7 @@ renodx::utils::settings::Settings settings = {
           return false;
         },
         .is_visible = []() { return current_settings_mode >= 2; },
-    }
-
+    },
 };
 
 void OnPresetOff() {
@@ -594,7 +593,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::expected_constant_buffer_space = 50;
         renodx::mods::shader::expected_constant_buffer_index = 13;
-        // renodx::mods::shader::allow_multiple_push_constants = true;
+        renodx::mods::shader::allow_multiple_push_constants = true;
 
         renodx::mods::swapchain::SetUseHDR10(true);
         renodx::mods::swapchain::expected_constant_buffer_index = 13;
@@ -604,11 +603,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::force_borderless = false;
         renodx::mods::swapchain::force_screen_tearing = false;
         renodx::mods::swapchain::swapchain_proxy_revert_state = true;
+        renodx::mods::swapchain::use_auto_upgrade = true;
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::b8g8r8a8_typeless,
             .new_format = reshade::api::format::r16g16b16a16_float,
-            .ignore_size = true,
             .use_resource_view_cloning = true,
+            .aspect_ratio = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
         });
         renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
         renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
