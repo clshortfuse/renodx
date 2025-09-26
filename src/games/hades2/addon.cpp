@@ -37,6 +37,7 @@ float g_base_plus_texture_count = 0.f;
 ShaderInjectData shader_injection;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
+    CustomShaderEntry(0xB9AF8512),  // Lut Sampler
     CustomShaderEntryCallback(0xC4177F20, [](auto* cmd_list) {
       ++g_base_plus_texture_count;
       if (g_base_plus_texture_draws == g_base_plus_texture_count) {
@@ -389,8 +390,7 @@ renodx::utils::settings::Settings settings = {
         .on_draw = []() {
           // Number of draws based on g_base_plus_texture_draws
           ImGui::Text("Base+Texture Draws: %d", static_cast<int>(g_base_plus_texture_draws));
-          return false;
-        },
+          return false; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
 };
