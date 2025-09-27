@@ -266,6 +266,7 @@ void ApplyToneMap(inout bool hdr_enabled,
       hdr_tonemap = lerp(lum_tonemap, untonemapped_mid_gray_shifted, saturate(renodx::color::y::from::BT709(lum_tonemap)));
       hdr_tonemap = HueAndChrominanceOKLab(hdr_tonemap, ch_tonemap, untonemapped_mid_gray_shifted, RENODX_TONE_MAP_HUE_CORRECTION, RENODX_TONE_MAP_BLOWOUT_RESTORATION);
     }
+    hdr_tonemap = max(0, hdr_tonemap);
 
     _875 = hdr_tonemap.r, _876 = hdr_tonemap.g, _877 = hdr_tonemap.b;
   }
