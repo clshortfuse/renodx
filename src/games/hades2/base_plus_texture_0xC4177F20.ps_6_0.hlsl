@@ -13,6 +13,8 @@ float4 main(
   float4 SV_Target;
   float4 _6 = Texture.Sample(Sampler, float2(TEXCOORD.x, TEXCOORD.y));
   float4 _11 = Base.Sample(Sampler, float2(TEXCOORD.x, TEXCOORD.y));
+  _6 = max(0.f, _6);
+  _11 = max(0.f, _11);
 
   if (shader_injection.custom_is_base_texture_render == 1.f) {
     _6 = lerp(0.5f, _6, CUSTOM_VIGNETTE);
@@ -44,8 +46,8 @@ float4 main(
   SV_Target.x = _27;
   SV_Target.y = _39;
   SV_Target.z = _51;
-  SV_Target.w = _63;
-  if (RENODX_TONE_MAP_TYPE == 0.f) return SV_Target;
+  SV_Target.w = saturate(_63);
+  if (RENODX_TONE_MAP_TYPE == 0.f) return saturate(SV_Target);
 
   if (shader_injection.custom_is_base_texture_render == 1.f) {
     float3 untonemapped = renodx::color::srgb::DecodeSafe(SV_Target.rgb);

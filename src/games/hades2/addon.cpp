@@ -34,6 +34,8 @@ const uint32_t BASE_PLUS_TEXTURE_SHADER = 0xC4177F20;
 // const auto PAUSE_SHADERS = {0x74CBBFCC, 0xEFD1A772, 0x451D08B2};
 float g_base_plus_texture_draws = 0.f;
 float g_base_plus_texture_count = 0.f;
+bool g_has_drawn_ui_dim = 0.f;
+float g_draw_pause_menu = 1.f;
 
 ShaderInjectData shader_injection;
 
@@ -49,7 +51,35 @@ renodx::mods::shader::CustomShaders custom_shaders = {
       }
 
       return true;
-    })
+    }),
+    {
+        0x74CBBFCC,
+        {
+            .crc32 = 0x74CBBFCC,
+            .on_draw = [](auto) {
+              g_has_drawn_ui_dim = 1.f;
+              return g_draw_pause_menu;
+            },
+        },
+    },
+    {
+        0xEFD1A772,
+        {
+            .crc32 = 0xEFD1A772,
+            .on_draw = [](auto) {
+              return g_draw_pause_menu || !g_has_drawn_ui_dim;
+            },
+        },
+    },
+    {
+        0x451D08B2,
+        {
+            .crc32 = 0x451D08B2,
+            .on_draw = [](auto) {
+              return g_draw_pause_menu || !g_has_drawn_ui_dim;
+            },
+        },
+    },
 
 };
 
@@ -324,7 +354,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxBloom",
         .binding = &shader_injection.custom_bloom,
-        .default_value = 50.f,
+        .default_value = 25.f,
         .label = "Bloom",
         .section = "Effects",
         .max = 100.f,
@@ -338,6 +368,16 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxDrawPauseMenu",
+        .binding = &g_draw_pause_menu,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Draw Pause Menu",
+        .section = "Effects",
+        .tooltip = "Allows hiding of pause menu (useful for screenshots)",
+        .labels = {"Off", "On"},
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -489,6 +529,7 @@ void OnPresent(reshade::api::command_queue* queue,
                const reshade::api::rect* dirty_rects) {
   g_base_plus_texture_draws = g_base_plus_texture_count;
   g_base_plus_texture_count = 0.f;
+  g_has_drawn_ui_dim = 0.f;
   auto* device = queue->get_device();
 
   auto* data = renodx::utils::data::Get<renodx::mods::swapchain::DeviceData>(device);
