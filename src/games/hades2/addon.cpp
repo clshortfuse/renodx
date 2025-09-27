@@ -42,7 +42,8 @@ ShaderInjectData shader_injection;
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x2A1E53CE),  // Bloom2
     CustomShaderEntry(0xB9AF8512),  // Lut Sampler
-    CustomShaderEntryCallback(0xC4177F20, [](auto* cmd_list) {
+    CustomShaderEntry(0xC0F402E1),  // Lut Sampler2
+    CustomShaderEntryCallback(0xC4177F20, [](auto*) {
       ++g_base_plus_texture_count;
       if (g_base_plus_texture_draws == g_base_plus_texture_count) {
         shader_injection.custom_is_base_texture_render = 1.f;
