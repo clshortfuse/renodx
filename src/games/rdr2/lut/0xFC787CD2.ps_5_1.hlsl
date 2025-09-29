@@ -1,3 +1,5 @@
+#include "../common.hlsli"
+
 struct anon_m {
   int4 _m0;
   float4 _m1;
@@ -17,11 +19,11 @@ struct anon_m {
   uint _m15;
 };
 
-cbuffer CB0_buf : register(b0, space0) {
+cbuffer CB0_buf : register(b16, space0) {
   uint4 CB0_m[88] : packoffset(c0);
 };
 
-cbuffer CB1_buf : register(b1, space0) {
+cbuffer CB1_buf : register(b20, space0) {
   uint4 CB1_m0 : packoffset(c0);
   uint2 CB1_m1 : packoffset(c1);
   float2 CB1_m2 : packoffset(c1.z);
@@ -29,32 +31,32 @@ cbuffer CB1_buf : register(b1, space0) {
   float4 CB1_m4 : packoffset(c3);
 };
 
-ByteAddressBuffer T0 : register(t6, space0);
-ByteAddressBuffer T1 : register(t7, space0);
-ByteAddressBuffer T21 : register(t27, space0);
-SamplerState S0 : register(s2, space0);
-SamplerState S1 : register(s3, space0);
-SamplerState S2 : register(s4, space0);
-SamplerState S3 : register(s5, space0);
-Texture2DArray<float4> T2 : register(t8, space0);
-Texture2D<float4> T3 : register(t9, space0);
-Texture2D<float4> T4 : register(t10, space0);
-Texture2D<float4> T5 : register(t11, space0);
-Texture2D<float4> T6 : register(t12, space0);
-Texture1D<float4> T7 : register(t13, space0);
-Texture2D<float4> T8 : register(t14, space0);
-Texture2D<float4> T9 : register(t15, space0);
-Texture2D<float4> T10 : register(t16, space0);
-Texture2D<float4> T11 : register(t17, space0);
-Texture2D<float4> T12 : register(t18, space0);
-Texture2D<float4> T13 : register(t19, space0);
-Texture2D<float4> T14 : register(t20, space0);
-Texture2D<float4> T15 : register(t21, space0);
-Texture2D<float4> T16 : register(t22, space0);
-Texture2D<float4> T17 : register(t23, space0);
-Texture2D<float4> T18 : register(t24, space0);
-Texture2D<float4> T19 : register(t25, space0);
-Buffer<float4> T20 : register(t26, space0);
+ByteAddressBuffer T0 : register(t2, space0);
+ByteAddressBuffer T1 : register(t3, space0);
+ByteAddressBuffer T21 : register(t118, space0);
+SamplerState S0 : register(s0, space0);
+SamplerState S1 : register(s1, space0);
+SamplerState S2 : register(s2, space0);
+SamplerState S3 : register(s8, space0);
+Texture2DArray<float4> T2 : register(t25, space0);
+Texture2D<float4> T3 : register(t44, space0);
+Texture2D<float4> T4 : register(t77, space0);
+Texture2D<float4> T5 : register(t78, space0);
+Texture2D<float4> T6 : register(t81, space0);
+Texture1D<float4> T7 : register(t89, space0);
+Texture2D<float4> T8 : register(t90, space0);
+Texture2D<float4> T9 : register(t93, space0);
+Texture2D<float4> T10 : register(t94, space0);
+Texture2D<float4> T11 : register(t95, space0);
+Texture2D<float4> T12 : register(t100, space0);
+Texture2D<float4> T13 : register(t101, space0);
+Texture2D<float4> T14 : register(t106, space0);
+Texture2D<float4> T15 : register(t107, space0);
+Texture2D<float4> T16 : register(t109, space0);
+Texture2D<float4> T17 : register(t111, space0);
+Texture2D<float4> T18 : register(t113, space0);
+Texture2D<float4> T19 : register(t114, space0);
+Buffer<float4> T20 : register(t116, space0);
 
 static float4 gl_FragCoord;
 static float4 TEXCOORD;
@@ -62,9 +64,9 @@ static float TEXCOORD1;
 static float4 SV_Target;
 
 struct SPIRV_Cross_Input {
-  float4 TEXCOORD : TEXCOORD1;
-  float TEXCOORD1 : TEXCOORD2;
   float4 gl_FragCoord : SV_Position;
+  float4 TEXCOORD : TEXCOORD;
+  float TEXCOORD1 : TEXCOORD1;
 };
 
 struct SPIRV_Cross_Output {
@@ -222,9 +224,9 @@ void frag_main() {
     _590 = _544;
     _591 = _543;
   }
-  float _595 = min(_558 * _591, 65504.0f);
-  float _596 = min(_558 * _590, 65504.0f);
-  float _597 = min(_558 * _589, 65504.0f);
+  float _595 = min(_558 * _591, (UNCLAMP_HIGHLIGHTS != 0.f) ? renodx::math::FLT32_MAX : 65504.0f);
+  float _596 = min(_558 * _590, (UNCLAMP_HIGHLIGHTS != 0.f) ? renodx::math::FLT32_MAX : 65504.0f);
+  float _597 = min(_558 * _589, (UNCLAMP_HIGHLIGHTS != 0.f) ? renodx::math::FLT32_MAX : 65504.0f);
   bool _598 = !_588;
   float _795;
   float _796;
@@ -250,7 +252,7 @@ void frag_main() {
     float _713 = max(mad(_704, _707, _597), _597 * 0.5f);
     float2 _729 = float2(TEXCOORD.x - asfloat(CB0_m[53u].x), TEXCOORD.y - asfloat(CB0_m[53u].y));
     float2 _743 = float2(dp2_f32(float2(asfloat(CB0_m[55u].x), asfloat(CB0_m[55u].y)), _729) * asfloat(CB0_m[53u].z), dp2_f32(float2(asfloat(CB0_m[55u].z), asfloat(CB0_m[55u].w)), _729) * asfloat(CB0_m[53u].w));
-    float _753 = max((dp2_f32(_743, _743) - asfloat(CB0_m[56u].x)) * asfloat(CB0_m[56u].w), 0.0f);
+    float _753 = max((dp2_f32(_743, _743) - asfloat(CB0_m[56u].x)) * asfloat(CB0_m[56u].w) * CUSTOM_VIGNETTE, 0.0f);
     float _765 = (_753 < 1.0f) ? (1.0f - exp2(_753 * (-10.0f))) : ((((_753 - 1.0f) > 0.0f) ? exp2((_753 - 2.0f) * 10.0f) : 0.0f) + 0.9980499744415283203125f);
     float _779 = asfloat(CB0_m[54u].w);
     bool _789 = CB0_m[54u].w != 0u;
