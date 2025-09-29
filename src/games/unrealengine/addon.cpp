@@ -465,6 +465,23 @@ void AddSonicRacingCrossWorldsUpgrades() {
   });
 }
 
+void AddLostSoulAsideUpgrades() {
+  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      .old_format = reshade::api::format::b8g8r8a8_typeless,
+      .new_format = reshade::api::format::r16g16b16a16_float,
+      .use_resource_view_cloning = true,
+      .aspect_ratio = 5040.f / 2160.f, // Ultrawide support
+      .aspect_ratio_tolerance = 0.1f,
+  });
+    renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      .old_format = reshade::api::format::r10g10b10a2_unorm,
+      .new_format = reshade::api::format::r16g16b16a16_float,
+      .use_resource_view_cloning = true,
+      .aspect_ratio = 5040.f / 2160.f, // Ultrawide support
+      .aspect_ratio_tolerance = 0.1f,
+  });
+}
+
 void AddGamePatches() {
   auto process_path = renodx::utils::platform::GetCurrentProcessPath();
   auto filename = process_path.filename().string();
@@ -480,6 +497,8 @@ void AddGamePatches() {
     AddWuchangUpgrades();
   } else if (product_name == "SonicRacingCrossWorlds") {
     AddSonicRacingCrossWorldsUpgrades();
+  } else if (product_name == "Lost Soul Aside") {
+    AddLostSoulAsideUpgrades();
   } else {
     return;
   }
