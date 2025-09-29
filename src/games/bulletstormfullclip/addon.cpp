@@ -448,7 +448,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
       renodx::mods::swapchain::force_borderless = true;
-      renodx::mods::swapchain::prevent_full_screen = true;
+      renodx::mods::swapchain::prevent_full_screen = false;
       renodx::utils::random::binds.push_back(&shader_injection.random);
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
