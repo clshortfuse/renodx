@@ -2399,7 +2399,9 @@ inline bool OnCreateResourceView(
             found_upgrade = true;
             break;
           default:
-            // Maybe be decompressible
+            if (renodx::utils::resource::IsCompressible(current_desc.format, resource_desc.texture.format)) {
+              break;
+            }
             std::stringstream s;
             s << "mods::swapchain::OnCreateResourceView(";
             s << "unexpected case(" << current_desc.format << ")";
