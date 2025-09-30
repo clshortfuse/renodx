@@ -3545,6 +3545,8 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
 
       break;
     case DLL_PROCESS_DETACH:
+      if (!attached) return;
+      attached = false;
 #if RESHADE_API_VERSION >= 17
       reshade::unregister_event<reshade::addon_event::create_device>(OnCreateDevice);
 #endif
