@@ -36,7 +36,7 @@ void main(
   else {
     float3 tonemapped = renodx::tonemap::dice::BT709(r0.rgb, 1.f, 0.025f);
     float mid_gray_ratio = renodx::color::y::from::BT709(renodx::tonemap::dice::BT709(0.18f.xxx, 1.f, 0.025f)) / 0.18f;
-    r0.rgb = lerp(tonemapped, r0.rgb * mid_gray_ratio, max(0, renodx::color::y::from::BT709(tonemapped)));
+    r0.rgb = lerp(tonemapped, r0.rgb * mid_gray_ratio, saturate(renodx::color::y::from::BT709(tonemapped)));
   }
 #endif
 
