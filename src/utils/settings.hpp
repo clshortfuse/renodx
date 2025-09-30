@@ -29,7 +29,8 @@ static std::vector<std::string> preset_strings = {
     "Preset #3",
 };
 
-static void (*on_preset_off)();
+static std::vector<std::function<void()>> on_preset_off_callbacks;
+static std::vector<std::function<void()>> on_preset_changed_callbacks;
 
 static ImVec4 ImVec4FromHex(uint32_t hex) {
   return {
@@ -319,6 +320,24 @@ static void SaveGlobalSettings() {
   }
 }
 
+static std::string ReadGlobalString(const std::string& key) {
+  char temp[256] = "";
+  size_t size = 256;
+  if (reshade::get_config_value(nullptr, global_name.c_str(), key.c_str(), temp, &size)) {
+    std::string temp_string = std::string(temp);
+    auto pos = temp_string.find_last_not_of("\t\n\v\f\r ");
+    if (pos != std::string_view::npos) {
+      temp_string = {temp_string.data(), temp_string.data() + pos + 1};
+    }
+    return temp_string;
+  }
+  return "";
+}
+
+static void WriteGlobalString(const std::string& key, const std::string& value) {
+  reshade::set_config_value(nullptr, global_name.c_str(), key.c_str(), value.c_str());
+}
+
 // Runs first
 // https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
@@ -339,8 +358,8 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
     if (changed_preset) {
       switch (preset_index) {
         case 0:
-          if (on_preset_off != nullptr) {
-            on_preset_off();
+          for (auto& callback : on_preset_off_callbacks) {
+            callback();
           }
           break;
         case 1:
@@ -352,6 +371,9 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         case 3:
           LoadSettings(global_name + "-preset3");
           break;
+      }
+      for (auto& callback : on_preset_changed_callbacks) {
+        callback();
       }
     }
     has_drawn_presets = true;
@@ -600,7 +622,9 @@ static void Use(DWORD fdw_reason, Settings* new_settings, void (*new_on_preset_o
       attached = true;
 
       settings = new_settings;
-      on_preset_off = new_on_preset_off;
+      if (new_on_preset_off != nullptr) {
+        on_preset_off_callbacks.emplace_back(new_on_preset_off);
+      }
       LoadGlobalSettings();
       LoadSettings(global_name + "-preset1");
       reshade::register_overlay(overlay_title.c_str(), OnRegisterOverlay);

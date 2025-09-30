@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsl"
 
 // ---- Created with 3Dmigoto v1.4.1 on Wed Jan 29 15:53:32 2025
 Texture2D<float4> t5 : register(t5);
@@ -118,61 +118,84 @@ void main(
 
   r0.xyz = r1.xyz * r3.xyz + r0.xyz;
   r0.xyz = cb0[12].www * r0.xyz;
-  // Linear to Log
-  
-	float3 untonemapped = r0.gbr;
-	
-  r0.xyz = r0.xyz * float3(5.55555582,5.55555582,5.55555582) + float3(0.0479959995,0.0479959995,0.0479959995);
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = saturate(r0.xyz * float3(0.0734997839,0.0734997839,0.0734997839) + float3(0.386036009,0.386036009,0.386036009));
 
-  // LUT sampling
-  r0.yzw = cb0[12].zzz * r0.xyz;
-  r0.y = floor(r0.y);
-  r1.xy = float2(0.5,0.5) * cb0[12].xy;
-  r1.yz = r0.zw * cb0[12].xy + r1.xy;
-  r1.x = r0.y * cb0[12].y + r1.y;
-  r3.xyzw = t5.Sample(s5_s, r1.xz).xyzw;
-  r2.z = cb0[12].y;
-  r0.zw = r1.xz + r2.zw;
-  r1.xyzw = t5.Sample(s5_s, r0.zw).xyzw;
-  r0.x = r0.x * cb0[12].z + -r0.y;
-  r0.yzw = r1.xyz + -r3.xyz;
-  o0.xyz = saturate(r0.xxx * r0.yzw + r3.xyz);
+  float3 untonemapped = r0.gbr;
+  r0.gbr = LutEncode(untonemapped);
 
-  o0.w = 1;
+  // arri encode start
+  // r0.xyz = r0.xyz * float3(5.55555582,5.55555582,5.55555582) + float3(0.0479959995,0.0479959995,0.0479959995);
+  // r0.xyz = log2(r0.xyz);
+  // r0.xyz = saturate(r0.xyz * float3(0.0734997839,0.0734997839,0.0734997839) + float3(0.386036009,0.386036009,0.386036009));
+  // arri encode end
 
-  float3 tonemapped_bt709 = o0.rgb;
-
-
+  float3 tonemapped_bt709;
 
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = s5_s;
   lut_config.strength = CUSTOM_LUT_STRENGTH;
-  //lut_config.scaling = CUSTOM_LUT_SCALING;
+  lut_config.scaling = CUSTOM_LUT_SCALING;
   lut_config.precompute = cb0[12].xyz;
   lut_config.tetrahedral = CUSTOM_LUT_TETRAHEDRAL == 1.f;
-  lut_config.type_input = renodx::lut::config::type::ARRI_C1000_NO_CUT;
+  lut_config.type_input = renodx::lut::config::type::PQ;
   lut_config.type_output = renodx::lut::config::type::LINEAR;
+  lut_config.recolor = 0.0f;
 
-  float3 outputColor;
-  if (RENODX_TONE_MAP_TYPE == 0.f) {
-    outputColor = tonemapped_bt709;
+  if (CUSTOM_TONE_MAP_CONFIGURATION == 1.f && RENODX_TONE_MAP_TYPE != 0.f) {
+    float3 neutral_sdr = renodx::tonemap::renodrt::NeutralSDR(untonemapped);
+    //neutral_sdr = renodx::color::bt2020::from::BT709(neutral_sdr);
+
+    tonemapped_bt709 = renodx::lut::Sample(
+        neutral_sdr,
+        lut_config,
+        t5);
   } else {
-    if (RENODX_TONE_MAP_TYPE == 3.f && CUSTOM_TONE_MAP_CONFIGURATION == 1.f) {
-      outputColor = renodx::draw::ToneMapPass(
-          untonemapped,
-          renodx::lut::Sample(
-              renodx::tonemap::renodrt::NeutralSDR(untonemapped),
-              lut_config,
-              t5));
-    }
-    else {
-      outputColor = renodx::draw::ToneMapPass(untonemapped, tonemapped_bt709);
-    }
+    // LUT sampling
+    r0.yzw = cb0[12].zzz * r0.xyz;
+    r0.y = floor(r0.y);
+    r1.xy = float2(0.5, 0.5) * cb0[12].xy;
+    r1.yz = r0.zw * cb0[12].xy + r1.xy;
+    r1.x = r0.y * cb0[12].y + r1.y;
+    r3.xyzw = t5.Sample(s5_s, r1.xz).xyzw;
+    r2.z = cb0[12].y;
+    r0.zw = r1.xz + r2.zw;
+    r1.xyzw = t5.Sample(s5_s, r0.zw).xyzw;
+    r0.x = r0.x * cb0[12].z + -r0.y;
+    r0.yzw = r1.xyz + -r3.xyz;
+
+    // o0.xyz = saturate(r0.xxx * r0.yzw + r3.xyz);
+    o0.xyz = r0.xxx * r0.yzw + r3.xyz;
+
+    tonemapped_bt709 = o0.rgb;
   }
 
-  // o0.rgb = renodx::draw::RenderIntermediatePass(outputColor);
-  o0.rgb = outputColor;
+
+  o0.rgb = CustomUpgradeToneMap(untonemapped, tonemapped_bt709);
+  o0.w = 1;
+
+  //float3 tonemapped_bt709 = o0.rgb;
+
+  // float3 outputColor;
+  // if (RENODX_TONE_MAP_TYPE == 0.f) {
+  //   outputColor = tonemapped_bt709;
+  // } else {
+  //   if (RENODX_TONE_MAP_TYPE == 3.f && CUSTOM_TONE_MAP_CONFIGURATION == 1.f) {
+  //     outputColor = renodx::draw::ToneMapPass(
+  //         untonemapped,
+  //         renodx::lut::Sample(
+  //             renodx::tonemap::renodrt::NeutralSDR(untonemapped),
+  //             lut_config,
+  //             t5));
+  //   }
+  //   else {
+  //     outputColor = renodx::draw::ToneMapPass(untonemapped, tonemapped_bt709);
+  //   }
+  // }
+
+  // // o0.rgb = renodx::draw::RenderIntermediatePass(outputColor);
+  // o0.rgb = outputColor;
+  // o0.rgb = renodx::lut::Sample(
+  //     untonemapped,
+  //     lut_config,
+  //     t5); // for comparison
   return;
 }

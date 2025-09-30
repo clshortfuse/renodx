@@ -89,7 +89,7 @@ float3 UserColorGrading(
 
   color *= exposure;
 
-  float y = renodx::color::y::from::BT709(abs(color));
+  float y = renodx::color::y::from::BT709(color);
 
   const float y_contrasted = Contrast(y, contrast);
   float y_highlighted = Highlights(y_contrasted, highlights);
@@ -219,7 +219,7 @@ float3 ApplyUserColorGrading(
 
   color *= config.exposure;
 
-  float y = renodx::color::y::from::BT709(abs(color));
+  float y = renodx::color::y::from::BT709(color);
   const float y_normalized = y / 0.18f;
 
   // contrast & flare

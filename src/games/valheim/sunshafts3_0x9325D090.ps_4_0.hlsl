@@ -35,7 +35,8 @@ void main(
 
   r0.xyzw = t1.Sample(s1_s, r0.xy).xyzw;
 
-  r0.xyzw = saturate(cb0[3].xyzw * r0.xyzw);
+ r0.xyzw = saturate(cb0[3].xyzw * r0.xyzw);
+ //r0.xyzw = cb0[3].xyzw * r0.xyzw;
 
   r0.xyzw = float4(1,1,1,1) + -r0.xyzw;
 
@@ -52,10 +53,16 @@ void main(
   }
   else {
     o0.xyzw = lerp(100, r1.xyzw, r0.xyzw);  // adjust brightness of rays
-    if (RENODX_DISPLAY_MAP == 1.f) {
-      o0.rgb = renodx::tonemap::ExponentialRollOff(o0.rgb, 0.9f, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
-    }
+    // if (RENODX_DISPLAY_MAP == 1.f) {
+    //   o0.rgb = renodx::tonemap::ExponentialRollOff(o0.rgb, 0.9f, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    // }
+    o0.rgb = renodx::draw::ToneMapPass(o0.rgb);
   }
+  // o0.rgb = renodx::effects::ApplyFilmGrain(
+  //     o0.rgb,
+  //     v1.xy,
+  //     CUSTOM_RANDOM,
+  //     CUSTOM_FILM_GRAIN_STRENGTH * 0.03f);
   o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   return;
 }

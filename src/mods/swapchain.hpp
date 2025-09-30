@@ -2278,9 +2278,31 @@ inline bool OnCreateResourceView(
       return false;
   }
 
+  utils::resource::ResourceInfo temp_resource_info = {};
   if (resource_info == nullptr) {
     resource_info = utils::resource::GetResourceInfo(resource);
-    if (resource_info == nullptr) return false;
+    if (resource_info == nullptr) {
+      auto reshade_desc = device->get_resource_desc(resource);
+      temp_resource_info = {
+          .device = device,
+          .desc = reshade_desc,
+          .resource = resource,
+          .initial_state = reshade::api::resource_usage::general,
+      };
+      resource_info = &temp_resource_info;
+
+#ifdef DEBUG_LEVEL_0
+      std::stringstream s;
+      s << "mods::swapchain::OnCreateResourceView(Unknown resource: ";
+      s << PRINT_PTR(resource.handle);
+      s << ", type: " << desc.type;
+      s << ", format: " << desc.format;
+      s << ", resource type: " << reshade_desc.type;
+      s << ", resource format: " << reshade_desc.texture.format;
+      s << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+#endif
+    }
   }
 
   if (current_desc.format == reshade::api::format::unknown) {
@@ -3096,23 +3118,101 @@ inline bool OnResolveTextureRegion(
   auto* destination_info = utils::resource::GetResourceInfo(dest);
   if (destination_info == nullptr) return false;
 
-  auto& source_format = source_info->desc.texture.format;
-  auto& destination_format = destination_info->desc.texture.format;
+  auto source_new = source;
+  auto dest_new = dest;
+  auto source_desc_new = source_info->desc;
+  auto dest_desc_new = destination_info->desc;
 
-  assert(source_format == destination_format);
-  // if (source_format != destination_format) return false;
+  bool can_be_resolved;
 
-  auto new_format = source_format;
-  if (source_format == reshade::api::format::r16g16b16a16_typeless) {
-    new_format = reshade::api::format::r16g16b16a16_float;
+  if (use_resource_cloning) {
+    auto source_clone = GetResourceClone(source_info);
+    auto dest_clone = GetResourceClone(destination_info);
+
+    if (source_clone.handle != 0u) {
+      source_desc_new = source_info->clone_desc;
+      source_new = source_clone;
+    }
+    if (dest_clone.handle != 0u) {
+      dest_desc_new = destination_info->clone_desc;
+      dest_new = dest_clone;
+    }
+    can_be_resolved = (source_desc_new.texture.format == dest_desc_new.texture.format)
+                      || (utils::resource::FormatToTypeless(source_desc_new.texture.format) == utils::resource::FormatToTypeless(dest_desc_new.texture.format))
+                      || utils::resource::IsCompressible(source_desc_new.texture.format, dest_desc_new.texture.format);
+
+    if (!can_be_resolved && use_auto_upgrade) {
+      if (source_info->desc.texture.format != auto_upgrade_target.new_format && source_info->clone_target == nullptr) {
+        std::stringstream s;
+        s << "mods::swapchain::OnResolveTextureRegion(";
+        s << "Auto upgrading source: ";
+        s << "original: " << PRINT_PTR(source.handle);
+        s << ", format: " << source_info->desc.texture.format;
+        s << ", type: " << source_info->desc.type;
+        s << ");";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
+        source_info->clone_target = &auto_upgrade_target;
+      }
+      if (destination_info->desc.texture.format != auto_upgrade_target.new_format && destination_info->clone_target == nullptr) {
+        std::stringstream s;
+        s << "mods::swapchain::OnResolveTextureRegion(";
+        s << "Auto upgrading destination: ";
+        s << "original: " << PRINT_PTR(dest.handle);
+        s << ", format: " << destination_info->desc.texture.format;
+        s << ", type: " << destination_info->desc.type;
+        s << ");";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
+        destination_info->clone_target = &auto_upgrade_target;
+      }
+    }
+  } else {
+    can_be_resolved = (source_desc_new.texture.format == dest_desc_new.texture.format)
+                      || (utils::resource::FormatToTypeless(source_desc_new.texture.format) == utils::resource::FormatToTypeless(dest_desc_new.texture.format))
+                      || utils::resource::IsCompressible(source_desc_new.texture.format, dest_desc_new.texture.format);
   }
 
-  if (format == new_format) return false;
+  if (can_be_resolved) {
+    auto new_format = format;
+    if (utils::resource::FormatToTypeless(source_desc_new.texture.format) != source_desc_new.texture.format) {
+      new_format = source_desc_new.texture.format;
+    } else {
+      switch (source_desc_new.texture.format) {
+        case reshade::api::format::r16g16b16a16_typeless:
+          new_format = reshade::api::format::r16g16b16a16_float;
+          break;
+        case reshade::api::format::b8g8r8a8_typeless:
+          new_format = reshade::api::format::b8g8r8a8_unorm;
+          break;
+        default:
+          assert(false);
+          break;
+      }
+    }
 
-  cmd_list->resolve_texture_region(
-      source, source_subresource, source_box,
-      dest, dest_subresource, dest_x, dest_y, dest_z,
-      new_format);
+    cmd_list->resolve_texture_region(
+        source_new, source_subresource, source_box,
+        dest_new, dest_subresource, dest_x, dest_y, dest_z,
+        new_format);
+
+    return true;
+  }
+
+  // Mismatched (don't resolve);
+  assert(false);
+#ifndef DEBUG_LEVEL_1
+  std::stringstream s;
+  s << "mods::swapchain::OnResolveTextureRegion(";
+  s << "prevent texture resolve: ";
+  s << "original: " << PRINT_PTR(source.handle) << " => " << PRINT_PTR(dest.handle);
+  s << ", format: " << source_info->desc.texture.format << " => " << destination_info->desc.texture.format;
+  s << ", type: " << source_info->desc.type << " => " << destination_info->desc.type;
+  s << ", clone: " << PRINT_PTR(source_new.handle) << " => " << PRINT_PTR(dest_new.handle);
+  s << ", clone_format: " << source_desc_new.texture.format << " => " << dest_desc_new.texture.format;
+  s << ", clone_type: " << source_desc_new.type << " => " << dest_desc_new.type;
+  s << ");";
+  reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
+
   return true;
 }
 

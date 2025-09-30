@@ -35,6 +35,7 @@ void main(
     if (r1.w != 0) break;
     r2.xy = r1.xy * cb0[7].xy + cb0[7].zw;
     r2.xyzw = t0.Sample(s0_s, r2.xy).xyzw;
+    //r2 = saturate(r2);
     r0.xyzw = r2.xyzw + r0.xyzw;
     r1.xy = w1.xy + r1.xy;
     r1.z = (int)r1.z + 1;
@@ -42,10 +43,10 @@ void main(
 
   
   if (RENODX_TONE_MAP_TYPE == 0.f) {
-    o0.xyzw = float4(0.166666672, 0.166666672, 0.166666672, 0.166666672) * r0.xyzw;  // vanilla
+    o0.xyzw = (0.166666672 * CUSTOM_SUN_SHAFTS) * r0.xyzw;  // vanilla
   }
   else {
-    o0.xyzw = float4(CUSTOM_SUN_SHAFTS, CUSTOM_SUN_SHAFTS, CUSTOM_SUN_SHAFTS, CUSTOM_SUN_SHAFTS) * r0.xyzw;  // reduce transparency
+    o0.xyzw = (CUSTOM_SUN_SHAFTS * (0.166666672 * 0.4)) * r0.xyzw;  // reduce transparency
   }
   return;
 }

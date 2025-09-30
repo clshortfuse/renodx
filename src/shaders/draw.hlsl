@@ -6,6 +6,7 @@
 #include "./colorcorrect.hlsl"
 #include "./inverse_tonemap.hlsl"
 #include "./math.hlsl"
+#include "./random.hlsl"
 #include "./tonemap.hlsl"
 
 namespace renodx {
@@ -53,6 +54,10 @@ struct Config {
   float swap_chain_clamp_color_space;        // -1 = none, bt709, bt2020, ap1
   float swap_chain_encoding;                 // 0 = none, 4 = hdr10, 5 = scrgb
   float swap_chain_encoding_color_space;     // -1 = none, bt709, bt2020, ap1
+  float swap_chain_output_preset;            // -1 = none, 0 = sdr, 1 = hdr10, 2 = scrgb
+  float swap_chain_output_dither_bits;       // 0 = none, 8 = 8-bit, 10 = 10-bit, 12 = 12-bit, etc
+  float swap_chain_output_dither_amplitude;  // 0 = none, 8 = 8-bit, 10 = 10-bit, 12 = 12-bit, etc
+  float swap_chain_output_dither_seed;       // seed for per-pixel dither
 };
 
 static const float GAMMA_CORRECTION_NONE = 0;
@@ -89,6 +94,11 @@ static const float TONE_MAP_TYPE_VANILLA = 0;
 static const float TONE_MAP_TYPE_UNTONEMAPPED = 1.f;
 static const float TONE_MAP_TYPE_ACES = 2.f;
 static const float TONE_MAP_TYPE_RENO_DRT = 3.f;
+
+static const float SWAP_CHAIN_OUTPUT_PRESET_NONE = -1.f;
+static const float SWAP_CHAIN_OUTPUT_PRESET_SDR = 0.f;
+static const float SWAP_CHAIN_OUTPUT_PRESET_HDR10 = 1.f;
+static const float SWAP_CHAIN_OUTPUT_PRESET_SCRGB = 2.f;
 
 Config BuildConfig() {
   Config config;
@@ -304,6 +314,26 @@ Config BuildConfig() {
 #endif
   config.swap_chain_encoding_color_space = RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE;
 
+#if !defined(RENODX_SWAP_CHAIN_OUTPUT_PRESET)
+#define RENODX_SWAP_CHAIN_OUTPUT_PRESET SWAP_CHAIN_OUTPUT_PRESET_NONE
+#endif
+  config.swap_chain_output_preset = RENODX_SWAP_CHAIN_OUTPUT_PRESET;
+
+#if !defined(RENODX_SWAP_CHAIN_OUTPUT_DITHER_BITS)
+#define RENODX_SWAP_CHAIN_OUTPUT_DITHER_BITS 0.f
+#endif
+  config.swap_chain_output_dither_bits = RENODX_SWAP_CHAIN_OUTPUT_DITHER_BITS;
+
+#if !defined(RENODX_SWAP_CHAIN_OUTPUT_DITHER_AMPLITUDE)
+#define RENODX_SWAP_CHAIN_OUTPUT_DITHER_AMPLITUDE (RENODX_SWAP_CHAIN_OUTPUT_DITHER_BITS + 2.f)
+#endif
+  config.swap_chain_output_dither_amplitude = RENODX_SWAP_CHAIN_OUTPUT_DITHER_AMPLITUDE;
+
+#if !defined(RENODX_SWAP_CHAIN_OUTPUT_DITHER_SEED)
+#define RENODX_SWAP_CHAIN_OUTPUT_DITHER_SEED 0.f
+#endif
+  config.swap_chain_output_dither_seed = RENODX_SWAP_CHAIN_OUTPUT_DITHER_SEED;
+
   return config;
 };
 
@@ -430,7 +460,7 @@ float3 InvertIntermediatePass(float3 color, Config config) {
   return color;
 }
 
-float3 SwapChainPass(float3 color, Config config) {
+float3 SwapChainPass(float3 color, float2 position, Config config) {
   color = DecodeColor(color, config.swap_chain_decoding);
 
   if (config.swap_chain_gamma_correction == GAMMA_CORRECTION_GAMMA_2_2) {
@@ -441,6 +471,23 @@ float3 SwapChainPass(float3 color, Config config) {
     color = renodx::color::convert::ColorSpaces(color, config.swap_chain_decoding_color_space, renodx::color::convert::COLOR_SPACE_BT709);
     config.swap_chain_decoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
     color = renodx::color::correct::GammaSafe(color, false, 2.4f);
+  }
+
+  [branch]
+  if (config.swap_chain_output_preset == SWAP_CHAIN_OUTPUT_PRESET_SDR) {
+    config.swap_chain_clamp_color_space = renodx::color::convert::COLOR_SPACE_BT709;
+    config.swap_chain_encoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
+    config.swap_chain_encoding = ENCODING_SRGB;
+    config.swap_chain_scaling_nits = 1.f;
+    config.swap_chain_clamp_nits = 1.f;
+  } else if (config.swap_chain_output_preset == SWAP_CHAIN_OUTPUT_PRESET_HDR10) {
+    config.swap_chain_clamp_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
+    config.swap_chain_encoding_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
+    config.swap_chain_encoding = ENCODING_PQ;
+  } else if (config.swap_chain_output_preset == SWAP_CHAIN_OUTPUT_PRESET_SCRGB) {
+    config.swap_chain_clamp_color_space = renodx::color::convert::COLOR_SPACE_BT2020;
+    config.swap_chain_encoding_color_space = renodx::color::convert::COLOR_SPACE_BT709;
+    config.swap_chain_encoding = ENCODING_SCRGB;
   }
 
   color *= config.swap_chain_scaling_nits;
@@ -481,6 +528,22 @@ float3 SwapChainPass(float3 color, Config config) {
   }
 
   color = EncodeColor(color, config.swap_chain_encoding);
+
+  if (config.swap_chain_output_dither_bits > 0.f && config.swap_chain_output_dither_amplitude != 0.f) {
+    float maxValue = exp2(config.swap_chain_output_dither_bits) - 1.0;
+    float dither_strength = exp2(config.swap_chain_output_dither_amplitude) - 1.0;
+    // ie: 12bit amplitude for 10bit quantization
+
+    float random_number = renodx::random::Generate(position + config.swap_chain_output_dither_seed);
+
+    float3 noise = (random_number - 0.5) * (1.f / maxValue);
+
+    float3 dithered = color.rgb * maxValue + noise * dither_strength;
+
+    float3 rounded = round(max(0, dithered)) / maxValue;
+
+    color = rounded;
+  }
 
   return color;
 }
@@ -594,11 +657,11 @@ float3 ApplyPerChannelCorrection(
     float hue_correction_strength = 1.f,
     float chrominance_correction_strength = 1.f,
     float hue_shift_strength = 0.5f) {
-  const float tonemapped_luminance = renodx::color::y::from::BT709(abs(per_channel_color));
+  const float tonemapped_luminance = renodx::color::y::from::BT709(per_channel_color);
 
   const float AUTO_CORRECT_BLACK = 0.02f;
   // Fix near black
-  const float untonemapped_luminance = renodx::color::y::from::BT709(abs(untonemapped));
+  const float untonemapped_luminance = renodx::color::y::from::BT709(untonemapped);
   float ratio = tonemapped_luminance / untonemapped_luminance;
   float auto_correct_ratio = lerp(ratio, 1.f, saturate(untonemapped_luminance / AUTO_CORRECT_BLACK));
   untonemapped *= auto_correct_ratio;
@@ -754,12 +817,25 @@ float4 InvertIntermediatePass(float4 color) {
   return float4(InvertIntermediatePass(color.rgb, BuildConfig()).rgb, 1.f);
 }
 
+// Deprecated
+float3 SwapChainPass(float3 color, Config config) {
+  return SwapChainPass(color, 0, config);
+}
+
+float3 SwapChainPass(float3 color, float2 position) {
+  return SwapChainPass(color, position, BuildConfig());
+}
+
+float4 SwapChainPass(float4 color, float2 position) {
+  return float4(SwapChainPass(color.rgb, position, BuildConfig()).rgb, 1.f);
+}
+
 float3 SwapChainPass(float3 color) {
-  return SwapChainPass(color, BuildConfig());
+  return SwapChainPass(color, 0, BuildConfig());
 }
 
 float4 SwapChainPass(float4 color) {
-  return float4(SwapChainPass(color.rgb, BuildConfig()).rgb, 1.f);
+  return float4(SwapChainPass(color.rgb, 0, BuildConfig()).rgb, 1.f);
 }
 
 float3 ToneMapPass(float3 untonemapped, float3 graded_sdr_color) {

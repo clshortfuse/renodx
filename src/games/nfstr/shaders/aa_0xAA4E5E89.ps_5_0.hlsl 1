@@ -1,0 +1,225 @@
+// ---- Created with 3Dmigoto v1.3.16 on Tue Aug 05 13:09:08 2025
+
+#include "../shared.h"
+
+Texture2D<float4> t0 : register(t0);
+
+SamplerState s0_s : register(s0);
+
+cbuffer cb0 : register(b0)
+{
+  float4 cb0[1];
+}
+
+// 3Dmigoto declarations
+#define cmp -
+
+
+void main(
+  float4 v0 : SV_POSITION0,
+  float2 v1 : TEXCOORD0,
+  out float4 o0 : SV_TARGET0)
+{
+  // o0 = t0.Sample(s0_s, v1.xy).xyzw;
+  // return;
+
+  float4 r0,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+
+  r0.xyzw = t0.SampleLevel(s0_s, v1.xy, 0, int2(0, 0)).xyzw;
+  r1.xyz = t0.SampleLevel(s0_s, v1.xy, 0, int2(0, -1)).xyz;
+  r2.xyz = t0.SampleLevel(s0_s, v1.xy, 0, int2(-1, 0)).xyz;
+  r3.xyz = t0.SampleLevel(s0_s, v1.xy, 0, int2(1, 0)).xyz;
+  r4.xyz = t0.SampleLevel(s0_s, v1.xy, 0, int2(0, 1)).xyz;
+  r1.w = r1.y * 1.9632107 + r1.x;
+  r2.w = r2.y * 1.9632107 + r2.x;
+  r3.w = r0.y * 1.9632107 + r0.x;
+  r4.w = r3.y * 1.9632107 + r3.x;
+  r5.x = r4.y * 1.9632107 + r4.x;
+  r5.y = min(r2.w, r1.w);
+  r5.z = min(r5.x, r4.w);
+  r5.y = min(r5.y, r5.z);
+  r5.y = min(r5.y, r3.w);
+  r5.z = max(r2.w, r1.w);
+  r5.w = max(r5.x, r4.w);
+  r5.z = max(r5.z, r5.w);
+  r5.z = max(r5.z, r3.w);
+  r5.y = r5.z + -r5.y;
+  r5.z = 0.125 * r5.z;
+  r5.z = max(0.0625, r5.z);
+  r5.z = cmp(r5.y < r5.z);
+  if (r5.z != 0) {
+    r6.xyz = r0.xyz;
+  }
+  if (r5.z == 0) {
+    r1.xyz = r2.xyz + r1.xyz;
+    r1.xyz = r1.xyz + r0.xyz;
+    r1.xyz = r1.xyz + r3.xyz;
+    r1.xyz = r1.xyz + r4.xyz;
+    r2.x = r2.w + r1.w;
+    r2.x = r2.x + r4.w;
+    r2.x = r2.x + r5.x;
+    r2.x = r2.x * 0.25 + -r3.w;
+    r2.x = abs(r2.x) / r5.y;
+    r2.x = -0.25 + r2.x;
+    r2.x = max(0, r2.x);
+    r2.x = 1.33333337 * r2.x;
+    r2.x = min(0.75, r2.x);
+    r3.xyz = t0.SampleLevel(s0_s, v1.xy, 0, int2(-1, -1)).xyz;
+    r4.xyz = t0.SampleLevel(s0_s, v1.xy, 0, int2(1, -1)).xyz;
+    r5.yzw = t0.SampleLevel(s0_s, v1.xy, 0, int2(-1, 1)).xyz;
+    r7.xyz = t0.SampleLevel(s0_s, v1.xy, 0, int2(1, 1)).xyz;
+    r8.xyz = r4.xyz + r3.xyz;
+    r8.xyz = r8.xyz + r5.yzw;
+    r8.xyz = r8.xyz + r7.xyz;
+    r1.xyz = r8.xyz + r1.xyz;
+    r2.y = r3.y * 1.9632107 + r3.x;
+    r2.z = r4.y * 1.9632107 + r4.x;
+    r3.x = r5.z * 1.9632107 + r5.y;
+    r3.y = r7.y * 1.9632107 + r7.x;
+    r3.z = -0.5 * r1.w;
+    r3.z = r2.y * 0.25 + r3.z;
+    r3.z = r2.z * 0.25 + r3.z;
+    r4.x = -0.5 * r2.w;
+    r4.y = r2.w * 0.5 + -r3.w;
+    r4.z = -0.5 * r4.w;
+    r4.y = r4.w * 0.5 + r4.y;
+    r3.z = abs(r4.y) + abs(r3.z);
+    r4.y = -0.5 * r5.x;
+    r4.y = r3.x * 0.25 + r4.y;
+    r4.y = r3.y * 0.25 + r4.y;
+    r3.z = abs(r4.y) + r3.z;
+    r2.y = r2.y * 0.25 + r4.x;
+    r2.y = r3.x * 0.25 + r2.y;
+    r3.x = r1.w * 0.5 + -r3.w;
+    r3.x = r5.x * 0.5 + r3.x;
+    r2.y = abs(r3.x) + abs(r2.y);
+    r2.z = r2.z * 0.25 + r4.z;
+    r2.z = r3.y * 0.25 + r2.z;
+    r2.y = r2.y + abs(r2.z);
+    r2.y = cmp(r2.y >= r3.z);
+    r2.z = r2.y ? -cb0[0].y : -cb0[0].x;
+    if (r2.y == 0) {
+      r1.w = r2.w;
+      r5.x = r4.w;
+    }
+    r2.w = r1.w + -r3.w;
+    r3.x = r5.x + -r3.w;
+    r3.y = cmp(abs(r2.w) < abs(r3.x));
+    if (r3.y != 0) {
+      r3.y = r5.x + r3.w;
+      r3.y = 0.5 * r3.y;
+      r2.w = abs(r3.x);
+      r2.z = -r2.z;
+    } else {
+      r1.w = r1.w + r3.w;
+      r3.y = 0.5 * r1.w;
+      r2.w = abs(r2.w);
+    }
+    r1.w = 0.5 * r2.z;
+    r3.x = r2.y ? 0 : r1.w;
+    r4.x = v1.x + r3.x;
+    r1.w = r2.y ? r1.w : 0;
+    r4.y = v1.y + r1.w;
+    r1.w = 0.25 * r2.w;
+    r5.yz = float2(0,0);
+    r5.xw = cb0[0].xy;
+    r3.xz = r2.yy ? r5.xy : r5.zw;
+    r4.zw = float2(3,3) * r3.xz;
+    r5.xy = r3.xz * float2(-2,-2) + r4.xy;
+    r4.xy = r3.xz * float2(2,2) + r4.xy;
+    r7.xyzw = float4(0,0,0,0);
+    r5.zw = r5.xy;
+    r8.xy = r4.xy;
+    r8.zw = r3.yy;
+    r2.w = 0;
+    while (true) {
+      r6.w = cmp((int)r2.w >= 4);
+      if (r6.w != 0) break;
+      r9.xy = t0.SampleGrad(s0_s, r5.zw, r4.zw, r4.zw).xy;
+      r6.w = r9.y * 1.9632107 + r9.x;
+      r9.xy = -r3.xz * float2(3,3) + r5.zw;
+      r9.zw = t0.SampleGrad(s0_s, r9.xy, r4.zz, r4.zz).xy;
+      r9.z = r9.w * 1.9632107 + r9.z;
+      r10.xy = t0.SampleGrad(s0_s, r8.xy, r4.zw, r4.zw).xy;
+      r9.w = r10.y * 1.9632107 + r10.x;
+      r10.xy = r3.xz * float2(3,3) + r8.xy;
+      r10.zw = t0.SampleGrad(s0_s, r10.xy, r4.zz, r4.zz).xy;
+      r10.z = r10.w * 1.9632107 + r10.z;
+      r10.w = r6.w + -r3.y;
+      r10.w = cmp(abs(r10.w) >= r1.w);
+      r10.w = (int)r7.x | (int)r10.w;
+      r11.xy = r9.wz + -r3.yy;
+      r11.xy = cmp(abs(r11.xy) >= r1.ww);
+      r11.x = (int)r7.y | (int)r11.x;
+      r7.z = (int)r7.z | (int)r11.y;
+      r11.y = r10.z + -r3.y;
+      r11.y = cmp(abs(r11.y) >= r1.w);
+      r7.w = (int)r7.w | (int)r11.y;
+      r11.y = ~(int)r10.w;
+      r11.y = r11.y ? r7.z : 0;
+      r12.x = r11.y ? r9.z : r6.w;
+      r6.w = ~(int)r11.x;
+      r6.w = (int)r7.w & (int)r6.w;
+      r12.y = r6.w ? r10.z : r9.w;
+      r9.xy = r11.yy ? r9.xy : r5.zw;
+      r9.zw = r6.ww ? r10.xy : r8.xy;
+      r7.x = (int)r7.z | (int)r10.w;
+      r7.y = (int)r7.w | (int)r11.x;
+      r6.w = (int)r7.y & (int)r7.x;
+      if (r6.w != 0) {
+        r5.zw = r9.xy;
+        r8.xy = r9.zw;
+        r8.zw = r12.xy;
+        break;
+      }
+      if (r7.x == 0) {
+        r5.zw = -r3.xz * float2(6,6) + r9.xy;
+      } else {
+        r5.zw = r9.xy;
+      }
+      if (r7.y == 0) {
+        r8.xy = r3.xz * float2(6,6) + r9.zw;
+      } else {
+        r8.xy = r9.zw;
+      }
+      r2.w = (int)r2.w + 2;
+      r8.zw = r12.xy;
+    }
+    r3.xz = v1.xy + -r5.zw;
+    r1.w = r2.y ? r3.x : r3.z;
+    r3.xz = -v1.xy + r8.xy;
+    r2.w = r2.y ? r3.x : r3.z;
+    r3.x = cmp(r1.w < r2.w);
+    r3.x = r3.x ? r8.z : r8.w;
+    r3.z = r3.w + -r3.y;
+    r3.x = r3.x + -r3.y;
+    r3.xz = cmp(r3.xz < float2(0,0));
+    r3.x = cmp((int)r3.z == (int)r3.x);
+    if (r3.x != 0) {
+      r2.z = 0;
+    }
+    r3.x = r2.w + r1.w;
+    r1.w = min(r2.w, r1.w);
+    r2.w = -1 / r3.x;
+    r1.w = r1.w * r2.w + 0.5;
+    r1.w = r1.w * r2.z;
+    r2.z = r2.y ? 0 : 1;
+    r3.x = r2.z * r1.w + v1.x;
+    r2.y = r2.y ? 1.000000 : 0;
+    r3.y = r2.y * r1.w + v1.y;
+    r2.yzw = t0.SampleLevel(s0_s, r3.xy, 0).xyz;
+    r1.xyz = r1.xyz * float3(0.111111112,0.111111112,0.111111112) + -r2.yzw;
+    r0.xyz = r2.xxx * r1.xyz + r2.yzw;
+  } else {
+    r0.xyz = r6.xyz;
+  }
+
+  // r0.xyz = renodx::color::gamma::DecodeSafe(r0.xyz, 2.2);
+  // r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
+  // r0.xyz = renodx::draw::RenderIntermediatePass(r0.xyz);
+
+  o0.xyzw = r0.xyzw;
+  return;
+}

@@ -211,9 +211,9 @@ float3 UpgradeToneMap(
     float auto_correction = 0.f) {
   float ratio = 1.f;
 
-  float y_untonemapped = renodx::color::y::from::BT709(abs(color_untonemapped));
-  float y_tonemapped = renodx::color::y::from::BT709(abs(color_tonemapped));
-  float y_tonemapped_graded = renodx::color::y::from::BT709(abs(color_tonemapped_graded));
+  float y_untonemapped = renodx::color::y::from::BT709(color_untonemapped);
+  float y_tonemapped = renodx::color::y::from::BT709(color_tonemapped);
+  float y_tonemapped_graded = renodx::color::y::from::BT709(color_tonemapped_graded);
 
   if (y_untonemapped < y_tonemapped) {
     // If substracting (user contrast or paperwhite) scale down instead

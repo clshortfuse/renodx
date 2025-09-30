@@ -5,6 +5,29 @@
 
 namespace renodx {
 namespace debug {
+
+float DrawFullScreenBandingTest(float2 uv) {
+  float bitDepth;
+  // if (uv.y < 0.25f) {
+  //   bitDepth = 4.0;
+  // } else if (uv.y < 0.50f) {
+  //   bitDepth = 6.0;
+  // } else if (uv.y < 0.75f) {
+  //   bitDepth = 8.0;
+  // } else {
+  //   bitDepth = 10.0;
+  // }
+  //
+
+  bitDepth = uv.y / 0.25f;
+  bitDepth = trunc(bitDepth);
+  bitDepth = bitDepth * 2.0 + 4.0;
+
+  float maxValue = exp2(bitDepth) - 1.0;
+  float bandedValue = round(uv.x * maxValue) / maxValue;
+  return bandedValue;
+}
+
 namespace graph {
 static const uint SIZE = 512;
 static const uint PADDING = 8;

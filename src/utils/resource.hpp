@@ -96,6 +96,7 @@ struct ResourceUpgradeInfo {
   static const int16_t BACK_BUFFER = -1;
   static const int16_t ANY = -2;
   float aspect_ratio = ANY;
+  float aspect_ratio_tolerance = 0.0001f;
 
   uint32_t usage_set = 0;
   uint32_t usage_unset = 0;
@@ -165,9 +166,8 @@ struct ResourceUpgradeInfo {
         } else {
           target_ratio = this->aspect_ratio;
         }
-        static const float TOLERANCE = 0.0001f;
         const float diff = std::abs(view_ratio - target_ratio);
-        if (diff > TOLERANCE) return false;
+        if (diff > this->aspect_ratio_tolerance) return false;
       }
     }
     return true;
@@ -745,18 +745,23 @@ static uint32_t ComputeTextureSize(
   return size;
 }
 
+// https://learn.microsoft.com/en-us/windows/win32/direct3d10/d3d10-graphics-programming-guide-resources-block-compression#format-conversion-using-direct3d-101
+// https://learn.microsoft.com/en-us/windows/win32/direct3d11/texture-block-compression-in-direct3d-11
 static bool IsCompressible(
     reshade::api::format uncompressed,
     reshade::api::format compressed) {
   switch (uncompressed) {
+    // 32 bit width
     case reshade::api::format::r32_uint:
     case reshade::api::format::r32_sint:
       switch (compressed) {
+        // Special case
         case reshade::api::format::r9g9b9e5:
           return true;
         default:
           return false;
       }
+    // 64 bit width / 8 bytes per 4x4 block
     case reshade::api::format::r16g16b16a16_uint:
     case reshade::api::format::r16g16b16a16_sint:
     case reshade::api::format::r32g32_uint:
@@ -772,6 +777,7 @@ static bool IsCompressible(
         default:
           return false;
       }
+    // 128 bit width / 16 bytes per 4x4 block
     case reshade::api::format::r32g32b32a32_uint:
     case reshade::api::format::r32g32b32a32_sint:
       switch (compressed) {
@@ -784,6 +790,12 @@ static bool IsCompressible(
         case reshade::api::format::bc5_unorm:
         case reshade::api::format::bc5_snorm:
         case reshade::api::format::bc5_typeless:
+        case reshade::api::format::bc6h_typeless:
+        case reshade::api::format::bc6h_ufloat:
+        case reshade::api::format::bc6h_sfloat:
+        case reshade::api::format::bc7_unorm:
+        case reshade::api::format::bc7_unorm_srgb:
+        case reshade::api::format::bc7_typeless:
           return true;
         default:
           return false;
