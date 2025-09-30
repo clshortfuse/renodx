@@ -1571,16 +1571,16 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   auto old_present_flags = desc.present_flags;
   auto old_buffer_count = desc.back_buffer_count;
 
-  if (!use_resize_buffer && is_dxgi && !use_device_proxy) {
-    desc.back_buffer.texture.format = target_format;
-
-    if (desc.back_buffer_count == 1) {
-      // 0 is only for resize, so if game uses more than 2 buffers, that will be retained
-      desc.back_buffer_count = 2;
-    }
-  }
-
   if (is_dxgi) {
+    if (!use_resize_buffer && !use_device_proxy) {
+      desc.back_buffer.texture.format = target_format;
+
+      if (desc.back_buffer_count == 1) {
+        // 0 is only for resize, so if game uses more than 2 buffers, that will be retained
+        desc.back_buffer_count = 2;
+      }
+    }
+
     if (!use_device_proxy) {
       switch (desc.present_mode) {
         case static_cast<uint32_t>(DXGI_SWAP_EFFECT_SEQUENTIAL):
@@ -1636,12 +1636,49 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   s << "0x" << std::hex << desc.present_mode << std::dec;
   s << ", present flag:";
   s << "0x" << std::hex << old_present_flags << std::dec;
+
+  static constexpr auto DXGI_SWAP_CHAIN_FLAG_NAMES = frozen::make_unordered_map<uint32_t, const char*>({
+      {DXGI_SWAP_CHAIN_FLAG_NONPREROTATED, "NONPREROTATED"},
+      {DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH, "ALLOW_MODE_SWITCH"},
+      {DXGI_SWAP_CHAIN_FLAG_GDI_COMPATIBLE, "GDI_COMPATIBLE"},
+      {DXGI_SWAP_CHAIN_FLAG_RESTRICTED_CONTENT, "RESTRICTED_CONTENT"},
+      {DXGI_SWAP_CHAIN_FLAG_RESTRICT_SHARED_RESOURCE_DRIVER, "RESTRICT_SHARED_RESOURCE_DRIVER"},
+      {DXGI_SWAP_CHAIN_FLAG_DISPLAY_ONLY, "DISPLAY_ONLY"},
+      {DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT, "FRAME_LATENCY_WAITABLE_OBJECT"},
+      {DXGI_SWAP_CHAIN_FLAG_FOREGROUND_LAYER, "FOREGROUND_LAYER"},
+      {DXGI_SWAP_CHAIN_FLAG_FULLSCREEN_VIDEO, "FULLSCREEN_VIDEO"},
+      {DXGI_SWAP_CHAIN_FLAG_YUV_VIDEO, "YUV_VIDEO"},
+      {DXGI_SWAP_CHAIN_FLAG_HW_PROTECTED, "HW_PROTECTED"},
+      {DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING, "ALLOW_TEARING"},
+      {DXGI_SWAP_CHAIN_FLAG_RESTRICTED_TO_ALL_HOLOGRAPHIC_DISPLAYS, "RESTRICTED_TO_ALL_HOLOGRAPHIC_DISPLAYS"},
+  });
+  {
+    bool has_flag = false;
+    for (const auto& [flag_value, flag_string] : DXGI_SWAP_CHAIN_FLAG_NAMES) {
+      if (renodx::utils::bitwise::HasFlag(old_present_flags, flag_value)) {
+        s << (has_flag ? " | " : " (") << flag_string;
+        has_flag = true;
+      }
+    }
+    if (has_flag) s << ")";
+  }
+
   s << " => ";
   s << "0x" << std::hex << desc.present_flags << std::dec;
-  s << ", buffers:";
-  s << old_buffer_count;
-  s << " => ";
-  s << desc.back_buffer_count;
+
+  if (old_present_flags != desc.present_flags) {
+    bool has_flag = false;
+    for (const auto& [flag_value, flag_string] : DXGI_SWAP_CHAIN_FLAG_NAMES) {
+      if (renodx::utils::bitwise::HasFlag(desc.present_flags, flag_value)) {
+        s << (has_flag ? " | " : " (") << flag_string;
+        has_flag = true;
+      }
+    }
+    if (has_flag) s << ")";
+  }
+
+  s << ", buffers:" << old_buffer_count << " => " << desc.back_buffer_count;
+  s << ", fullscreen:" << old_fullscreen_state << " => " << desc.fullscreen_state;
   s << ", width: " << desc.back_buffer.texture.width;
   s << ", height: " << desc.back_buffer.texture.height;
   s << ")";
