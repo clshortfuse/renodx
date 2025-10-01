@@ -30,19 +30,54 @@
 
 namespace {
 
+const int BASE_PLUS_TEXTURE_SHADER = 0x09A523A4;
+// const auto PAUSE_SHADERS = {0x74CBBFCC, 0xEFD1A772, 0x451D08B2};
+float g_base_plus_texture_draws = 0.f;
+float g_base_plus_texture_count = 0.f;
+bool g_has_drawn_ui_dim = 0.f;
+float g_draw_pause_menu = 1.f;
+
 ShaderInjectData shader_injection;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    // {
-    //     0x7F6D6130,
-    //     {
-    //         .crc32 = 0x7F6D6130,
-    //         .code = __0x7F6D6130,
-    //         .on_replace = [](auto* cmd_list) { return renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list); },
-    //         .on_drawn = [](auto* cmd_list) { OutputDebugStringW(L"blit2d drawn\n"); },
-    //     },
-    // },
-    CustomShaderEntry(0x09A523A4),
+    CustomShaderEntryCallback(0x09A523A4, [](auto*) {
+      ++g_base_plus_texture_count;
+      if (g_base_plus_texture_draws == g_base_plus_texture_count) {
+        shader_injection.custom_is_base_texture_render = 1.f;
+      } else {
+        shader_injection.custom_is_base_texture_render = 0.f;
+      }
+
+      return true;
+    }),
+    {
+        0x57B6FE13,
+        {
+            .crc32 = 0x57B6FE13,
+            .on_draw = [](auto) {
+              g_has_drawn_ui_dim = 1.f;
+              return g_draw_pause_menu;
+            },
+        },
+    },
+    {
+        0x137139EE,
+        {
+            .crc32 = 0x137139EE,
+            .on_draw = [](auto) {
+              return g_draw_pause_menu || !g_has_drawn_ui_dim;
+            },
+        },
+    },
+    {
+        0xAA2CCDEA,
+        {
+            .crc32 = 0xAA2CCDEA,
+            .on_draw = [](auto) {
+              return g_draw_pause_menu || !g_has_drawn_ui_dim;
+            },
+        },
+    },
 
 };
 
@@ -299,24 +334,24 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type == 3; },
         .parse = [](float value) { return value * 0.02f; },
     },
-    new renodx::utils::settings::Setting{
-        .key = "FxVignette",
-        .binding = &shader_injection.custom_vignette,
-        .default_value = 50.f,
-        .label = "Vignette",
-        .section = "Effects",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "FxBloom",
-        .binding = &shader_injection.custom_bloom,
-        .default_value = 25.f,
-        .label = "Bloom",
-        .section = "Effects",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
-    },
+    // new renodx::utils::settings::Setting{
+    //     .key = "FxVignette",
+    //     .binding = &shader_injection.custom_vignette,
+    //     .default_value = 50.f,
+    //     .label = "Vignette",
+    //     .section = "Effects",
+    //     .max = 100.f,
+    //     .parse = [](float value) { return value * 0.02f; },
+    // },
+    // new renodx::utils::settings::Setting{
+    //     .key = "FxBloom",
+    //     .binding = &shader_injection.custom_bloom,
+    //     .default_value = 25.f,
+    //     .label = "Bloom",
+    //     .section = "Effects",
+    //     .max = 100.f,
+    //     .parse = [](float value) { return value * 0.02f; },
+    // },
     new renodx::utils::settings::Setting{
         .key = "FxGrainStrength",
         .binding = &shader_injection.custom_grain_strength,
@@ -326,16 +361,16 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
-    // new renodx::utils::settings::Setting{
-    //     .key = "FxDrawPauseMenu",
-    //     .binding = &g_draw_pause_menu,
-    //     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-    //     .default_value = 1.f,
-    //     .label = "Draw Pause Menu",
-    //     .section = "Effects",
-    //     .tooltip = "Allows hiding of pause menu (useful for screenshots)",
-    //     .labels = {"Off", "On"},
-    // },
+    new renodx::utils::settings::Setting{
+        .key = "FxDrawPauseMenu",
+        .binding = &g_draw_pause_menu,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Draw Pause Menu",
+        .section = "Effects",
+        .tooltip = "Allows hiding of pause menu (useful for screenshots)",
+        .labels = {"Off", "On"},
+    },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
@@ -360,8 +395,8 @@ renodx::utils::settings::Settings settings = {
               {"ColorGradeContrast", 60.f},
               {"ColorGradeSaturation", 60.f},
               {"ColorGradeBlowout", 25.f},
-              {"FxVignette", 50.f},
-              {"FxBloom", 25.f},
+              // {"FxVignette", 50.f},
+              // {"FxBloom", 25.f},
               {"FxGrainStrength", 25.f},
           });
           if (output_mode_setting->GetValue() == 1.f) {
@@ -392,16 +427,16 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
         },
     },
-    // new renodx::utils::settings::Setting{
-    //     .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
-    //     .section = "Debug",
-    //     .group = "button-line-3",
-    //     .on_draw = []() {
-    //       // Number of draws based on g_base_plus_texture_draws
-    //       ImGui::Text("Base+Texture Draws: %d", static_cast<int>(g_base_plus_texture_draws));
-    //       return false; },
-    //     .is_visible = []() { return current_settings_mode >= 2; },
-    // },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
+        .section = "Debug",
+        .group = "button-line-3",
+        .on_draw = []() {
+          // Number of draws based on g_base_plus_texture_draws
+          ImGui::Text("Base+Texture Draws: %d", static_cast<int>(g_base_plus_texture_draws));
+          return false; },
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
 };
 
 void OnPresetOff() {
@@ -424,7 +459,8 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
-      {"FxVignette", 50.f},
+      // {"FxVignette", 50.f},
+      // {"FxBloom", 50.f},
       {"FxGrainStrength", 0.f},
   });
 }
@@ -484,9 +520,9 @@ void OnPresent(reshade::api::command_queue* queue,
                const reshade::api::rect* dest_rect,
                uint32_t dirty_rect_count,
                const reshade::api::rect* dirty_rects) {
-  //   g_base_plus_texture_draws = g_base_plus_texture_count;
-  //   g_base_plus_texture_count = 0.f;
-  //   g_has_drawn_ui_dim = 0.f;
+  g_base_plus_texture_draws = g_base_plus_texture_count;
+  g_base_plus_texture_count = 0.f;
+  g_has_drawn_ui_dim = 0.f;
   auto* device = queue->get_device();
 
   auto* data = renodx::utils::data::Get<renodx::mods::swapchain::DeviceData>(device);
