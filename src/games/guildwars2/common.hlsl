@@ -306,6 +306,7 @@ float3 applyUserTonemap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   lut_config.type_output = renodx::lut::config::type::SRGB;
   lut_config.size = 16;
   lut_config.tetrahedral = injectedData.colorGradeLUTSampling != 0.f;
+  lut_config.recolor = injectedData.toneMapType != 0.f ? 1.f : 0.f;
     float y = renodx::color::y::from::BT709(untonemapped);
     float3 neutralSDR = renodx::tonemap::renodrt::NeutralSDR(untonemapped);
     float3 sdrColor = lerp(untonemapped, neutralSDR, saturate(y));
