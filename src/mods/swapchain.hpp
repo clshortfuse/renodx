@@ -12,6 +12,7 @@
 #include <dxgi1_6.h>
 #include <windef.h>
 
+#include <frozen/unordered_map.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
