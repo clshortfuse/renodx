@@ -88,10 +88,6 @@ void main(
     float luma = dot(gamma_color, float3(0.219999999, 0.707000017, 0.0710000023));
     // Lerp luminance to desaturate
     gamma_color.rgb = lerp(luma, gamma_color.rgb, cb0[2].z);  // 0 = black & white
-    neutral_sdr = lut_input_color;
-    float neutral_luma = dot(neutral_sdr, float3(0.219999999, 0.707000017, 0.0710000023));
-    neutral_sdr.rgb = lerp(neutral_luma, neutral_sdr.rgb, cb0[2].z);  // 0 = black & white
-    neutral_sdr = renodx::color::srgb::DecodeSafe(neutral_sdr);
 
     float3 graded_color = renodx::color::srgb::DecodeSafe(gamma_color);
 

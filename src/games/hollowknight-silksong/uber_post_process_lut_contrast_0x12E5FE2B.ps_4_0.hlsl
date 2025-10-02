@@ -97,13 +97,6 @@ void main(
     gamma_color = gamma_color * cb0[2].xxx;                   // Game Brightness Slider
     gamma_color = lerp(0.5f, gamma_color, cb0[2].yyy);        // (b-a) * t + a  = lerp(a, b, t)
 
-    neutral_sdr = lut_input_color;
-    float neutral_luma = dot(neutral_sdr, float3(0.219999999, 0.707000017, 0.0710000023));
-    neutral_sdr.rgb = lerp(neutral_luma, neutral_sdr.rgb, cb0[2].z);  // 0 = black & white
-    neutral_sdr = neutral_sdr * cb0[2].xxx;                           // Game Brightness Slider
-    neutral_sdr = lerp(0.5f, neutral_sdr, cb0[2].yyy);                // (b-a) * t + a  = lerp(a, b, t)
-    neutral_sdr = renodx::color::srgb::DecodeSafe(neutral_sdr);
-
     float3 graded_color = renodx::color::srgb::DecodeSafe(gamma_color);
 
     o0.rgb = renodx::draw::ToneMapPass(untonemapped, graded_color, neutral_sdr);
