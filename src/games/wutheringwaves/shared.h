@@ -39,6 +39,7 @@ struct ShaderInjectData {
   float wuwa_ktm_sharpening;
   float wuwa_chromatic_aberration;
   float wuwa_bloom;
+  float wuwa_blowout;
 
   float text_opacity;
   float hud_opacity;
@@ -77,7 +78,6 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_TONE_MAP_CONTRAST                 shader_injection.color_grade_contrast
 #define RENODX_TONE_MAP_SATURATION               shader_injection.color_grade_saturation
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION     shader_injection.color_grade_highlight_saturation
-#define RENODX_TONE_MAP_BLOWOUT                  shader_injection.color_grade_blowout
 #define RENODX_TONE_MAP_FLARE                    shader_injection.color_grade_flare
 
 // #define RENODX_TONE_MAP_HUE_CORRECTION           1.f
@@ -135,6 +135,7 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_WUWA_CA                           1.f
 #define RENODX_WUWA_BLOOM                        shader_injection.wuwa_bloom
 #define RENODX_WUWA_GRAIN                        1.f
+#define RENODX_WUWA_BLOWOUT                      shader_injection.wuwa_blowout
 
 #define TEXT_OPACITY                             shader_injection.text_opacity
 #define HUD_OPACITY                              shader_injection.hud_opacity
