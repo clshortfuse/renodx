@@ -145,9 +145,17 @@ static void OnInitDevice(reshade::api::device* device) {
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 
   auto* data = renodx::utils::data::Create<DeviceData>(device);
-  data->use_pipeline_layout_cloning = use_pipeline_layout_cloning;
   data->expected_constant_buffer_index = expected_constant_buffer_index;
-  data->expected_constant_buffer_space = expected_constant_buffer_space;
+  switch (device->get_api()) {
+    case reshade::api::device_api::vulkan:
+    case reshade::api::device_api::d3d12:
+      data->use_pipeline_layout_cloning = use_pipeline_layout_cloning;
+      data->expected_constant_buffer_space = expected_constant_buffer_space;
+      break;
+    default:
+      // Guard against unsupported APIs
+      break;
+  }
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {

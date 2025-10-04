@@ -23,15 +23,13 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
   } else {
     r0.xyz = OverlayColor.w * r0.xyz + r1.xyz;
   }
-  // r1.xyz = max(r0.xyz, 9.99999997e-007);              // max r1.xyz, r0.xyz, c1.x
-  // r0.x = log2(r1.x);                                  // log r0.x, r1.x
-  // r0.y = log2(r1.y);                                  // log r0.y, r1.y
-  // r0.z = log2(r1.z);                                  // log r0.z, r1.z
-  // r0.xyz = r0.xyz * InverseGamma.x;                   // mul r0.xyz, r0.xyz, c5.x
-  // o.x = exp2(r0.x);                                   // exp oC0.x, r0.x
-  // o.y = exp2(r0.y);                                   // exp oC0.y, r0.y
-  // o.z = exp2(r0.z);                                   // exp oC0.z, r0.z
-  o.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
-  
+  r1.xyz = max(r0.xyz, 9.99999997e-007);              // max r1.xyz, r0.xyz, c1.x
+  r0.x = log2(r1.x);                                  // log r0.x, r1.x
+  r0.y = log2(r1.y);                                  // log r0.y, r1.y
+  r0.z = log2(r1.z);                                  // log r0.z, r1.z
+  r0.xyz = r0.xyz * InverseGamma.x;                   // mul r0.xyz, r0.xyz, c5.x
+  o.x = exp2(r0.x);                                   // exp oC0.x, r0.x
+  o.y = exp2(r0.y);                                   // exp oC0.y, r0.y
+  o.z = exp2(r0.z);                                   // exp oC0.z, r0.z
 	return o;
 }

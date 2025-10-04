@@ -1,0 +1,132 @@
+name: Auto-Merge HLSL PRs
+
+# This workflow automatically merges a pull request when the author has
+# updated at least one `.hlsl` file that they also last committed to.
+# It runs on `pull_request_target` so it can use the repository token with
+# write permissions without exposing secrets.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+permissions:
+  # We need write access to merge PRs and read access for file listings.
+  pull-requests: write
+  contents: read
+
+jobs:
+  auto_merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Conventional Commit messages
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            // Retrieve all commits in the PR.
+            const { data: commits } = await github.rest.pulls.listCommits({
+              owner,
+              repo,
+              pull_number: pr.number,
+            });
+
+            // Conventional Commit regex (simplified).
+            const conventionalRegex = /^(feat|fix|docs|style|refactor|perf|test|chore)(\([^)]+\))?: .+/;
+
+            for (const commit of commits) {
+              const message = commit.commit.message.split('\n')[0];
+              if (!conventionalRegex.test(message)) {
+                core.setFailed(`Commit "${message}" does not follow Conventional Commit format.`);
+                return;
+              }
+            }
+      - name: Auto-merge if author updated an HLSL file they last committed to
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            // Abort early if the PR is a draft.
+            if (pr.draft) {
+              core.setFailed('PR is a draft; skipping merge.');
+              return;
+            }
+
+            // Fetch the list of files changed in this PR.
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner,
+              repo,
+              pull_number: pr.number,
+            });
+
+            let shouldMerge = false;
+            let gameName = null;
+
+            for (const file of files) {
+              if (!file.filename.endsWith('.hlsl')) continue;
+
+              // Ensure the file is under src/games/<game>/
+              const parts = file.filename.split('/');
+              if (parts.length < 4 || parts[0] !== 'src' || parts[1] !== 'games') {
+                core.setFailed(`HLSL file ${file.filename} is not under src/games/<game>/`);
+                return;
+              }
+
+              const currentGame = parts[2];
+              if (!gameName) gameName = currentGame;
+              else if (currentGame !== gameName) {
+                core.setFailed('Multi-game PR detected: HLSL files belong to different games.');
+                return;
+              }
+
+              // Get the most recent commit that touched this file.
+              const { data: commits } = await github.rest.repos.listCommits({
+                owner,
+                repo,
+                path: file.filename,
+                per_page: 1,
+              });
+
+              if (commits.length === 0) continue;
+              const lastCommitAuthor = commits[0].author?.login || commits[0].commit.author.name;
+
+              let authorMatches = false;
+              if (lastCommitAuthor && lastCommitAuthor.toLowerCase() === pr.user.login.toLowerCase()) {
+                authorMatches = true;
+              } else {
+                // Check addon.cpp author for the same game
+                const addonPath = `src/games/${gameName}/addon.cpp`;
+                const { data: addonCommits } = await github.rest.repos.listCommits({
+                  owner,
+                  repo,
+                  path: addonPath,
+                  per_page: 1,
+                });
+                if (addonCommits.length > 0) {
+                  const addonAuthor = addonCommits[0].author?.login || addonCommits[0].commit.author.name;
+                  if (pr.user.login.toLowerCase() === addonAuthor.toLowerCase()) {
+                    authorMatches = true;
+                  }
+                }
+              }
+
+              if (!authorMatches) {
+                core.setFailed(`PR author ${pr.user.login} does not match last commit author for ${file.filename} or addon.cpp`);
+                return;
+              }
+
+              shouldMerge = true; // at least one file passes
+            }
+
+            if (!shouldMerge) {
+              core.info('No matching .hlsl file updated by PR author - skipping merge.');
+              return;
+            }
+
+            // In test mode, we skip the actual merge but log what would happen.
+            core.info(`PR #${pr.number} would be merged (merge step disabled for testing).`);

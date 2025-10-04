@@ -39,5 +39,8 @@ void main(
   r0.yzw = v1.xyz * r1.xyz;
   o0.w = r1.w * r0.x;
   o0.xyz = r0.yzw * r0.xxx;
+
+  o0.rgb = ApplyCustomHueShiftFire(o0.rgb);
+
   return;
 }

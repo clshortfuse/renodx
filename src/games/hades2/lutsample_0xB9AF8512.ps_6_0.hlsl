@@ -26,16 +26,35 @@ float4 main(
     _25 = ColorGradingLUT.Sample(Sampler, float3((_12 + (_10 * _13.x)), (_12 + (_10 * _13.y)), (_12 + (_10 * _13.z))));
   } else {
     float3 input_color = _13.rgb;
-    float max_channel = max(max(max(input_color.r, input_color.g), input_color.b), 1.f);
+    // linearize
+    float3 linear_color = renodx::color::srgb::DecodeSafe(input_color);
+
+    float linear_grayscale = renodx::color::convert::Luminance(linear_color, 0);
+    const float MID_GRAY_LINEAR = 1 / (pow(10, 0.75));                          // ~0.18f
+    const float MID_GRAY_PERCENT = 0.5f;                                        // 50%
+    const float MID_GRAY_GAMMA = log(MID_GRAY_LINEAR) / log(MID_GRAY_PERCENT);  // ~2.49f
+    float encode_gamma = MID_GRAY_GAMMA;
+    float3 encoded = renodx::color::gamma::EncodeSafe(linear_color, encode_gamma);
+    float encoded_grayscale = renodx::color::gamma::Encode(linear_grayscale, encode_gamma);
+    float compression_scale = renodx::color::correct::ComputeGamutCompressionScale(encoded, encoded_grayscale);
+    float3 compressed = renodx::color::correct::GamutCompress(encoded, encoded_grayscale, compression_scale);
+    linear_color = renodx::color::gamma::DecodeSafe(compressed, encode_gamma);
+    _13.rgb = renodx::color::srgb::EncodeSafe(linear_color);
+
+    float max_channel = max(max(max(_13.r, _13.g), _13.b), 1.f);
     _13 /= max_channel;
-    float grayscale = renodx::color::y::from::BT709(_13.rgb);
-    float lowest_negative_channel = min(0.f, min(_13.r, min(_13.g, _13.b)));
-    float distance = grayscale - lowest_negative_channel;
-    float ratio = renodx::math::DivideSafe(-lowest_negative_channel, distance, 0.f);
-    _13.rgb = lerp(grayscale, _13.rgb, 1.f - ratio);
+
     _25 = ColorGradingLUT.Sample(Sampler, float3((_12 + (_10 * _13.x)), (_12 + (_10 * _13.y)), (_12 + (_10 * _13.z))));
-    _25.rgb = lerp(renodx::color::y::from::BT709(_25.rgb), _25.rgb, 1.f + ratio);
     _25.rgb *= max_channel;
+
+    linear_grayscale = renodx::color::convert::Luminance(linear_color, 0);
+    linear_color = renodx::color::srgb::DecodeSafe(_25.rgb);
+    encoded = renodx::color::gamma::EncodeSafe(linear_color, encode_gamma);
+    encoded_grayscale = renodx::color::gamma::Encode(linear_grayscale, encode_gamma);
+    float3 decompressed = renodx::color::correct::GamutDecompress(encoded, encoded_grayscale, compression_scale);
+    _25.rgb = renodx::color::gamma::DecodeSafe(decompressed, encode_gamma);
+    _25.rgb = renodx::color::srgb::EncodeSafe(_25.rgb);
+
     _13.rgb = input_color;
   }
   SV_Target.x = (_13.x + (Lerp * (_25.x - _13.x)));

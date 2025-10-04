@@ -126,6 +126,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Force Display HDR",
         .tooltip = "Forces Display into HDR mode on game start (if supported)",
         .labels = {"Off", "On"},
+        .is_global = true,
         .is_visible = []() { return current_settings_mode >= 2; },
 
     },
@@ -370,6 +371,15 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxBlurFix",
+        .binding = &shader_injection.custom_blur_fix,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Background blur fix",
+        .section = "Effects",
+        .labels = {"Vanilla", "Centered", "Symmetrical"},
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxGrainStrength",
         .binding = &shader_injection.custom_grain_strength,
         .default_value = 0.f,
@@ -514,6 +524,7 @@ void OnPresetOff() {
       {"FxVignette", 100.f},
       {"FxBloom", 50.f},
       {"FxHeroLight", 50.f},
+      {"FxBlurFix", 0.f},
       {"FxGrainStrength", 0.f},
       {"FxDithering", 1.f},
       {"FxHDRVideos", 0.f},

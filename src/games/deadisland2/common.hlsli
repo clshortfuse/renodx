@@ -10,7 +10,8 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
 
   const float y_normalized = y / mid_gray;
   const float highlight_mask = 1.f / mid_gray;
-  const float shadow_mask = mid_gray;
+  float shadow_mask = 1.f;
+  if (config.shadows < 1.f) shadow_mask = mid_gray;
 
   // contrast & flare
   float flare = renodx::math::DivideSafe(y_normalized + config.flare, y_normalized, 1.f);
@@ -27,7 +28,7 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
 
   const float y_final = y_shadowed * mid_gray;
 
-  color *= (y > 0 ? (y_final / y) : 0);
+  color = renodx::color::correct::Luminance(color, y, y_final);
 
   return color;
 }
@@ -94,8 +95,10 @@ float3 ApplyGammaCorrection(float3 incorrect_color) {
   float3 corrected_color;
   if (RENODX_GAMMA_CORRECTION == 2.f) {
     corrected_color = GammaCorrectHuePreserving(incorrect_color);
-  } else {
+  } else if (RENODX_GAMMA_CORRECTION == 1.f) {
     corrected_color = renodx::color::correct::GammaSafe(incorrect_color);
+  } else {
+    corrected_color = incorrect_color;
   }
 
   return corrected_color;
@@ -147,11 +150,11 @@ float4 GenerateOutput(float3 untonemapped_ap1) {
 
     // tonemap both by channel and luminance
     renodx::tonemap::aces::ODTConfig odt_config = renodx::tonemap::aces::CreateODTConfig(aces_min * 48.f, aces_max * 48.f);
-    float y_in = renodx::color::y::from::AP1(untonemapped_ap1);
+    float y_in = renodx::color::y::from::AP1(graded_ap1);
     float y_out = renodx::tonemap::aces::ODTToneMap(y_in, odt_config) / 48.f;
 
-    float3 channel_tonemapped_ap1 = renodx::tonemap::aces::ODTToneMap(untonemapped_ap1, odt_config) / 48.f;
-    float3 luminance_tonemapped_ap1 = renodx::color::correct::Luminance(untonemapped_ap1, y_in, y_out);
+    float3 channel_tonemapped_ap1 = renodx::tonemap::aces::ODTToneMap(graded_ap1, odt_config) / 48.f;
+    float3 luminance_tonemapped_ap1 = renodx::color::correct::Luminance(graded_ap1, y_in, y_out);
 
     // correct luminance tonemap saturation
     luminance_tonemapped_ap1 = renodx::color::ap1::from::BT709(

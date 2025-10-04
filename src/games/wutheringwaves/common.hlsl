@@ -39,6 +39,16 @@ float3 HandleLUTOutput(float3 lut_output, float3 untonemapped, float3 tonemapped
                 1.f);
     }
 
+    // Custom blowout
+    [branch]
+    if (RENODX_WUWA_BLOWOUT > 0) {
+      const float y = renodx::color::y::from::BT709(lut_output);
+      lut_output = lerp(lut_output, saturate(lut_output), RENODX_WUWA_BLOWOUT);
+      const float y_clipped = renodx::color::y::from::BT709(lut_output);
+
+      lut_output = renodx::color::correct::Luminance(lut_output, y_clipped, y);
+    }
+
     lut_output = renodx::draw::ToneMapPass(lut_output);
   }
 

@@ -7,6 +7,23 @@
 #include "./math.hlsl"
 #include "./reinhard.hlsl"
 #include "./tonemap/daniele.hlsl"
+#include "./tonemap/hermite_spline.hlsl"
+
+#ifndef RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK
+#define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK 0.f
+#endif
+
+#ifndef RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE
+#define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE 0.f
+#endif
+
+#ifndef RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD
+#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD 0.f
+#endif
+
+#ifndef RENODX_RENO_DRT_NEUTRAL_SDR_WHITE_CLIP
+#define RENODX_RENO_DRT_NEUTRAL_SDR_WHITE_CLIP 100.f
+#endif
 
 namespace renodx {
 namespace tonemap {
@@ -25,10 +42,10 @@ struct Config {
   float flare;
   float hue_correction_strength;
   float3 hue_correction_source;
-  int hue_correction_method;
-  int tone_map_method;
-  int hue_correction_type;
-  int working_color_space;
+  float hue_correction_method;
+  float tone_map_method;
+  float hue_correction_type;
+  float working_color_space;
   bool per_channel;
   float blowout;
   float clamp_color_space;
@@ -39,19 +56,21 @@ struct Config {
 namespace config {
 
 namespace hue_correction_type {
-static const int INPUT = 0;
-static const int CUSTOM = 1;
+static const float INPUT = 0.f;
+static const float CUSTOM = 1.f;
 }
 
 namespace hue_correction_method {
-static const int OKLAB = 0;
-static const int ICTCP = 1;
-static const int DARKTABLE_UCS = 2;
+static const float OKLAB = 0.f;
+static const float ICTCP = 1.f;
+static const float DARKTABLE_UCS = 2.f;
 }
 
 namespace tone_map_method {
-static const int DANIELE = 0;
-static const int REINHARD = 1;
+static const float NONE = -1.f;
+static const float DANIELE = 0.f;
+static const float REINHARD = 1.f;
+static const float HERMITE_SPLINE = 2.f;
 }
 
 Config Create(
@@ -66,13 +85,13 @@ Config Create(
     float dechroma = 0.5f,
     float flare = 0.f,
     float hue_correction_strength = 1.f,
-    float3 hue_correction_source = 0,
-    int hue_correction_method = config::hue_correction_method::OKLAB,
-    int tone_map_method = config::tone_map_method::DANIELE,
-    int hue_correction_type = config::hue_correction_type::INPUT,
-    int working_color_space = 0,
+    float3 hue_correction_source = 0.f,
+    float hue_correction_method = config::hue_correction_method::OKLAB,
+    float tone_map_method = config::tone_map_method::DANIELE,
+    float hue_correction_type = config::hue_correction_type::INPUT,
+    float working_color_space = 0.f,
     bool per_channel = false,
-    float blowout = 0,
+    float blowout = 0.f,
     float clamp_color_space = 2.f,
     float clamp_peak = 0.f,
     float white_clip = 100.f) {
@@ -113,10 +132,10 @@ float3 BT709(float3 bt709, Config current_config) {
 
   float current_color_space = current_config.working_color_space;
 
-  if (current_color_space == 2) {
+  if (current_color_space == 2.f) {
     input_color = max(0, renodx::color::ap1::from::BT709(bt709));
     y_original = renodx::color::y::from::AP1(input_color);
-  } else if (current_color_space == 1) {
+  } else if (current_color_space == 1.f) {
     input_color = renodx::color::bt2020::from::BT709(bt709);
     y_original = renodx::color::y::from::BT2020(input_color);
   } else {
@@ -174,8 +193,8 @@ float3 BT709(float3 bt709, Config current_config) {
 
       color_output = input_color * (y_original > 0 ? (y_new / y_original) : 0);
     }
-  } else if (current_config.tone_map_method == config::tone_map_method::REINHARD) {
-    float white_clip = max(current_config.white_clip, peak);
+  } else {
+    float white_clip = current_config.white_clip;
     [branch]
     if (current_config.highlights != 1.f) {
       white_clip = renodx::color::grade::Highlights(white_clip, current_config.highlights, current_config.mid_gray_value);
@@ -209,14 +228,24 @@ float3 BT709(float3 bt709, Config current_config) {
         color_output = pow(color_output, computed_contrast);
         color_output *= current_config.mid_gray_value;
       }
-
-      color_output = ReinhardScalableExtended(
-          color_output,
-          white_clip,
-          peak,
-          0,
-          current_config.mid_gray_value,
-          current_config.mid_gray_nits / 100.f);
+      [branch]
+      if (current_config.tone_map_method == config::tone_map_method::NONE) {
+        // noop
+      } else if (current_config.tone_map_method == config::tone_map_method::REINHARD) {
+        color_output = ReinhardScalableExtended(
+            color_output,
+            max(white_clip, peak),
+            peak,
+            0,
+            current_config.mid_gray_value,
+            current_config.mid_gray_nits / 100.f);
+      } else {
+        // HERMITE_SPLINE
+        color_output = HermiteSplinePerChannelRolloff(
+            color_output,
+            peak,
+            clamp(white_clip, peak, 500.f));
+      }
 
       color_output *= signs;
 
@@ -224,14 +253,25 @@ float3 BT709(float3 bt709, Config current_config) {
       if (current_config.contrast != 1.f || current_config.flare != 0.f) {
         y = renodx::color::grade::Contrast(y, computed_contrast, current_config.mid_gray_value);
       }
-
-      float y_new = ReinhardScalableExtended(
-          y,
-          white_clip,
-          peak,
-          0,
-          current_config.mid_gray_value,
-          current_config.mid_gray_nits / 100.f);
+      float y_new = y;
+      [branch]
+      if (current_config.tone_map_method == config::tone_map_method::NONE) {
+        // noop
+      } else if (current_config.tone_map_method == config::tone_map_method::REINHARD) {
+        y_new = ReinhardScalableExtended(
+            y,
+            max(white_clip, peak),
+            peak,
+            0,
+            current_config.mid_gray_value,
+            current_config.mid_gray_nits / 100.f);
+      } else {
+        // HERMITE_SPLINE
+        y_new = HermiteSplineLuminanceRolloff(
+            y,
+            peak,
+            clamp(white_clip, peak, 500.f));
+      }
 
       color_output = input_color * (y_original > 0 ? (y_new / y_original) : 0);
     }
@@ -254,15 +294,15 @@ float3 BT709(float3 bt709, Config current_config) {
                           : current_config.hue_correction_source;
 
       [branch]
-      if (current_config.hue_correction_method == config::hue_correction_method::OKLAB) {
-        perceptual_new = renodx::color::oklab::from::BT709(color_output);
-        perceptual_old = renodx::color::oklab::from::BT709(source);
-      } else if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
+      if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
         perceptual_new = renodx::color::ictcp::from::BT709(color_output);
         perceptual_old = renodx::color::ictcp::from::BT709(source);
       } else if (current_config.hue_correction_method == config::hue_correction_method::DARKTABLE_UCS) {
         perceptual_new = renodx::color::dtucs::uvY::from::BT709(color_output).zxy;
         perceptual_old = renodx::color::dtucs::uvY::from::BT709(source).zxy;
+      } else {  // OKLab
+        perceptual_new = renodx::color::oklab::from::BT709(color_output);
+        perceptual_old = renodx::color::oklab::from::BT709(source);
       }
 
       // Save chrominance to apply back
@@ -277,13 +317,11 @@ float3 BT709(float3 bt709, Config current_config) {
       perceptual_new.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
     } else {
       [branch]
-      if (current_config.hue_correction_method == config::hue_correction_method::OKLAB) {
-        perceptual_new = renodx::color::oklab::from::BT709(color_output);
-      } else if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
+      if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
         perceptual_new = renodx::color::ictcp::from::BT709(color_output);
       } else if (current_config.hue_correction_method == config::hue_correction_method::DARKTABLE_UCS) {
         perceptual_new = renodx::color::dtucs::uvY::from::BT709(color_output).zxy;
-      } else {
+      } else {  // OKLab
         perceptual_new = renodx::color::oklab::from::BT709(color_output);
       }
     }
@@ -307,12 +345,12 @@ float3 BT709(float3 bt709, Config current_config) {
     perceptual_new.yz *= current_config.saturation;
 
     [branch]
-    if (current_config.hue_correction_method == config::hue_correction_method::OKLAB) {
-      color_output = renodx::color::bt709::from::OkLab(perceptual_new);
-    } else if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
+    if (current_config.hue_correction_method == config::hue_correction_method::ICTCP) {
       color_output = renodx::color::bt709::from::ICtCp(perceptual_new);
     } else if (current_config.hue_correction_method == config::hue_correction_method::DARKTABLE_UCS) {
       color_output = renodx::color::bt709::from::dtucs::uvY(perceptual_new.yzx);
+    } else {  // OKLab
+      color_output = renodx::color::bt709::from::OkLab(perceptual_new);
     }
 
   } else {
@@ -411,8 +449,11 @@ float3 NeutralSDR(float3 bt709, bool per_channel = false) {
   renodrt_config.flare = 0.f;
   renodrt_config.per_channel = per_channel;
   renodrt_config.hue_correction_strength = 0.f;
-  renodrt_config.working_color_space = 0u;
-  renodrt_config.clamp_color_space = 0u;
+  renodrt_config.working_color_space = 0.f;
+  renodrt_config.tone_map_method = RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD;
+  renodrt_config.clamp_peak = RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK;
+  renodrt_config.clamp_color_space = RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE;
+  renodrt_config.white_clip = RENODX_RENO_DRT_NEUTRAL_SDR_WHITE_CLIP;
 
   return BT709(bt709, renodrt_config);
 }

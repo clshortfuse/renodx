@@ -192,6 +192,10 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lut_texture, SamplerState
     float3 true_vanilla = renodx::lut::Sample(vanillaColor, lut_config, lut_texture);
     true_vanilla = renodx::color::gamma::EncodeSafe(true_vanilla, 2.2f);  // Back to LUT output
     true_vanilla = renodx::color::srgb::DecodeSafe(true_vanilla);         // Delinearize as vanilla HDR
+
+    // Vanilla goes to 2.2 for LUT sampling and output
+    vanillaColor = renodx::color::correct::GammaSafe(vanillaColor, true);
+    untonemapped *= vanillaMidGray / 0.18f;
     return renodx::draw::ToneMapPass(untonemapped, true_vanilla);
   }
 
