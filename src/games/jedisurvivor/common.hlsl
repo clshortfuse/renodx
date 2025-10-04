@@ -84,13 +84,13 @@ float3 ApplyUserToneMap(float3 untonemapped_ap1) {
   float reno_drt_highlights = 1.1025f;
   float reno_drt_shadows = 0.86f;
   float reno_drt_contrast = 1.45f;
-  float reno_drt_saturation = 3.2f;
+  float reno_drt_saturation = 22.5f;
   float renoDRTDechroma = 0.90f;
   tm_config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
   tm_config.hue_correction_strength = RENODX_TONE_MAP_HUE_SHIFT;
   tm_config.hue_correction_type = renodx::tonemap::renodrt::config::hue_correction_type::CUSTOM;
-  tm_config.reno_drt_hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::ICTCP;
-  tm_config.reno_drt_per_channel = false;
+  tm_config.reno_drt_hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::OKLAB;
+  tm_config.reno_drt_per_channel = RENODX_TONE_MAP_PER_CHANNEL;
 
   tm_config.type = RENODX_TONE_MAP_TYPE;
   tm_config.peak_nits = RENODX_PEAK_WHITE_NITS;
@@ -113,7 +113,7 @@ float3 ApplyUserToneMap(float3 untonemapped_ap1) {
   tm_config.reno_drt_working_color_space = 2;
 
   float3 incorrect_hue_ap1 = (untonemapped_ap1 * tm_config.mid_gray_value / 0.18f);
-  float3 hue_shifted_color = renodx::color::bt709::from::AP1(renodx::tonemap::ExponentialRollOff(incorrect_hue_ap1, tm_config.mid_gray_value, 1.5f));
+  float3 hue_shifted_color = renodx::color::bt709::from::AP1(renodx::tonemap::ReinhardPiecewise(incorrect_hue_ap1, 1.5f, tm_config.mid_gray_value));
 
   tm_config.hue_correction_color = hue_shifted_color;
 
@@ -143,11 +143,61 @@ float3 ApplyACES(float3 untonemapped_ap1) {
   }
 
   untonemapped_ap1 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped_ap1, untonemapped_lum, cg_config);
-  float3 tonemapped_ap1 = renodx::tonemap::aces::ODT(untonemapped_ap1, aces_min * 48.f, aces_max * 48.f, renodx::color::IDENTITY_MAT) / 48.f;
-  float3 tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
+
+  float3 tonemapped_ap1, tonemapped_bt709;
+  if (RENODX_TONE_MAP_PER_CHANNEL) {
+    tonemapped_ap1 = renodx::tonemap::aces::ODT(untonemapped_ap1, aces_min * 48.f, aces_max * 48.f, renodx::color::IDENTITY_MAT) / 48.f;
+    tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
+  } else {
+    // tonemap both by channel and luminance
+    renodx::tonemap::aces::ODTConfig odt_config = renodx::tonemap::aces::CreateODTConfig(aces_min * 48.f, aces_max * 48.f);
+    float y_in = renodx::color::y::from::AP1(untonemapped_ap1);
+    float y_out = renodx::tonemap::aces::ODTToneMap(y_in, odt_config) / 48.f;
+
+    float3 channel_tonemapped_ap1 = renodx::tonemap::aces::ODTToneMap(untonemapped_ap1, odt_config) / 48.f;
+    float3 luminance_tonemapped_ap1 = renodx::color::correct::Luminance(untonemapped_ap1, y_in, y_out);
+
+    float3 channel_tonemapped_bt709 = renodx::color::bt709::from::AP1(channel_tonemapped_ap1);
+    float3 luminance_tonemapped_bt709 = renodx::color::bt709::from::AP1(luminance_tonemapped_ap1);
+
+    // match luminance tm chrominance with perch tm
+    luminance_tonemapped_ap1 = renodx::color::correct::Chrominance(
+        luminance_tonemapped_bt709,
+        channel_tonemapped_bt709);
+
+    float blending_ratio = saturate(renodx::color::y::from::BT709(luminance_tonemapped_ap1) / 0.6f);
+    tonemapped_bt709 = lerp(luminance_tonemapped_ap1, channel_tonemapped_bt709, blending_ratio);
+  }
   tonemapped_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(tonemapped_bt709, renodx::color::bt709::from::AP1(untonemapped_ap1), untonemapped_lum, cg_config);
 
   return tonemapped_bt709;
+}
+
+float3 GammaCorrectHuePreserving(float3 incorrect_color) {
+  float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
+
+  const float y_in = renodx::color::y::from::BT709(incorrect_color);
+  const float y_out = max(0, renodx::color::correct::Gamma(y_in));
+
+  float3 lum = renodx::color::correct::Luminance(incorrect_color, y_in, y_out);
+
+  // use chrominance from per channel gamma correction
+  float3 result = renodx::color::correct::ChrominanceOKLab(lum, ch, 1.f, 1.f);
+
+  return result;
+}
+
+float3 ApplyGammaCorrection(float3 incorrect_color) {
+  float3 corrected_color;
+  if (RENODX_GAMMA_CORRECTION == 2.f) {  //   if (RENODX_GAMMA_CORRECTION == 2.f) {
+    corrected_color = GammaCorrectHuePreserving(incorrect_color);
+  } else if (RENODX_GAMMA_CORRECTION == 1.f) {
+    corrected_color = renodx::color::correct::GammaSafe(incorrect_color);
+  } else {
+    corrected_color = incorrect_color;
+  }
+
+  return corrected_color;
 }
 
 float4 GenerateOutput(float3 untonemapped_ap1) {
@@ -158,9 +208,10 @@ float4 GenerateOutput(float3 untonemapped_ap1) {
     tonemapped_bt709 = ApplyUserToneMap(untonemapped_ap1);
   }
 
-  if (RENODX_GAMMA_CORRECTION != 0.f) {
-    tonemapped_bt709 = renodx::color::correct::GammaSafe(tonemapped_bt709);
-  }
+  // if (RENODX_GAMMA_CORRECTION != 0.f) {
+  //   tonemapped_bt709 = renodx::color::correct::GammaSafe(tonemapped_bt709);
+  // }
+  tonemapped_bt709 = ApplyGammaCorrection(tonemapped_bt709);
 
   float3 pq_color = renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(tonemapped_bt709), RENODX_DIFFUSE_WHITE_NITS);
   pq_color /= 1.05f;
