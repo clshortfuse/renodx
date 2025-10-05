@@ -82,6 +82,56 @@ std::atomic_bool shaders_pane_show_compute_shaders = true;
 uint32_t skip_draw_count = 0;
 std::atomic_uint32_t device_data_index = 0;
 
+// Per-shader snapshot data
+struct SnapshotData {
+  std::vector<int> occurrences;                      // position -> draw index
+  std::unordered_map<int, int> draw_index_positions; // draw index -> position
+
+  void PushBack(int draw_index) {
+    int position = static_cast<int>(occurrences.size());
+    occurrences.push_back(draw_index);
+    draw_index_positions.emplace(draw_index, position);
+  }
+
+  [[nodiscard]] std::optional<int> PositionOfDrawIndex(int draw_index) const {
+    auto it = draw_index_positions.find(draw_index);
+
+    return it == draw_index_positions.end()
+               ? std::nullopt
+               : std::optional(it->second);
+  }
+
+  [[nodiscard]] std::optional<int> DrawIndexAtPosition(int position) const {
+    return (position < 0 || position >= static_cast<int>(occurrences.size()))
+               ? std::nullopt
+               : std::optional(occurrences[position]);
+  }
+
+  [[nodiscard]] std::optional<int> PreviousDrawIndex(int draw_index) const {
+    auto position = PositionOfDrawIndex(draw_index);
+
+    if (!position.has_value() || position.value() == 0) {
+      return std::nullopt;
+    }
+
+    return occurrences[position.value() - 1];
+  }
+
+  [[nodiscard]] std::optional<int> NextDrawIndex(int draw_index) const {
+    auto position = PositionOfDrawIndex(draw_index);
+    if (!position.has_value()) {
+      return std::nullopt;
+    }
+
+    int next_position = position.value() + 1;
+    if (next_position >= static_cast<int>(occurrences.size())) {
+      return std::nullopt;
+    }
+
+    return occurrences[next_position];
+  }
+};
+
 struct ResourceBind {
   enum class BindType : std::uint8_t {
     SRV = 0,
@@ -275,6 +325,9 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
   std::unordered_map<uint64_t, std::unordered_map<reshade::api::format, reshade::api::resource_view>> preview_srvs;
   std::shared_mutex mutex;
   std::unordered_map<uint64_t, reshade::api::blend_desc> pipeline_blends;
+
+  // Shader hash -> snapshot data
+  std::unordered_map<uint32_t, SnapshotData> shader_snapshot_data;
 
   reshade::api::effect_runtime* runtime = nullptr;
 
@@ -531,6 +584,9 @@ const std::vector<std::pair<const char*, const char*>> SETTING_NAV_TITLES = {
 bool setting_auto_dump = false;
 bool setting_live_reload = false;
 uint32_t setting_nav_item = 0;
+
+// When non-negative, indicates a pending request to focus a specific snapshot (draw) index
+int snapshot_focus_pending_index = -1;
 
 struct SettingSelection {
   uint32_t shader_hash = 0;
@@ -1559,6 +1615,12 @@ enum CapturePaneColumns : uint8_t {
   CAPTURE_PANE_COLUMN_COUNT
 };
 
+// Request a jump to the Snapshot pane and focus the given snapshot index
+inline void RequestSnapshotJump(int snapshot_index) {
+  setting_nav_item = 0; // Snapshot is the first nav item
+  snapshot_focus_pending_index = snapshot_index;
+}
+
 void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
   static ImGuiTreeNodeFlags tree_node_flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_SpanFullWidth;
   if (ImGui::BeginTable(
@@ -1593,6 +1655,14 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
 
       if (ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REF)) {
         ImGui::Text("%03d", draw_index);
+
+        // If a pending focus request targets this draw index, set focus/scroll here
+        const int pending = snapshot_focus_pending_index;
+        if (pending >= 0 && pending == draw_index) {
+          ImGui::SetItemDefaultFocus();
+          ImGui::SetScrollHereY();
+          snapshot_focus_pending_index = -1;
+        }
       }
 
       for (const auto& [slot_space, buffer_range] : draw_details.constants) {
@@ -1687,30 +1757,93 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
                                 | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_NoTreePushOnOpen
                                 | selection.GetTreeNodeFlags();
 
-            // Fallback to subobject
+            // Render the "Ref" column first so we can detect button clicks and
+            // let them override the full-row tree click.
+            bool row_button_clicked = false;
+            int prev_index = -1;
+            int next_index = -1;
+
+            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REF))) {
+              ImGui::Text("0x%08X", shader_hash);
+
+              if (data != nullptr) {
+                // If found, look up current draw index position and compute
+                // the previous and next snapshot indices from the occurrences.
+                if (auto occurrences_it = data->shader_snapshot_data.find(shader_hash);
+                    occurrences_it != data->shader_snapshot_data.end()) {
+                  const auto& occurrence = occurrences_it->second;
+                  const auto position = occurrence.PositionOfDrawIndex(draw_index);
+
+                  if (position.has_value()) {
+                    int occ_pos = position.value();
+
+                    if (auto prev = occurrence.DrawIndexAtPosition(occ_pos - 1);
+                        prev.has_value()) {
+                      prev_index = prev.value();
+                    }
+
+                    if (auto next = occurrence.DrawIndexAtPosition(occ_pos + 1);
+                        next.has_value()) {
+                      next_index = next.value();
+                    }
+                  }
+                }
+              }
+
+              ImGui::SameLine();
+              ImGui::PushID(row_index);
+
+              // Previous button
+              if (prev_index < 0) {
+                ImGui::BeginDisabled();
+                ImGui::SmallButton("<");
+                ImGui::EndDisabled();
+              } else {
+                if (ImGui::SmallButton("<")) {
+                  RequestSnapshotJump(prev_index);
+                  row_button_clicked = true;
+                }
+              }
+
+              ImGui::SameLine();
+
+              // Next button
+              if (next_index < 0) {
+                ImGui::BeginDisabled();
+                ImGui::SmallButton(">");
+                ImGui::EndDisabled();
+              } else {
+                if (ImGui::SmallButton(">")) {
+                  RequestSnapshotJump(next_index);
+                  row_button_clicked = true;
+                }
+              }
+
+              ImGui::PopID();
+            }
+
             if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_TYPE))) {
               ImGui::PushID(row_index);
+              const auto row_flags = bullet_flags;
+
               if (shader_details->program_version.has_value()) {
-                ImGui::TreeNodeEx("", bullet_flags, "%s_%d_%d",
+                ImGui::TreeNodeEx("", row_flags, "%s_%d_%d",
                                   shader_details->program_version->GetKindAbbr(),
                                   shader_details->program_version->GetMajor(),
                                   shader_details->program_version->GetMinor());
               } else {
                 std::stringstream s;
                 s << shader_details->shader_type;
-                ImGui::TreeNodeEx("", bullet_flags, "%s", s.str().c_str());
+                ImGui::TreeNodeEx("", row_flags, "%s", s.str().c_str());
               }
               ImGui::PopID();
-              if (ImGui::IsItemClicked()) {
+              if (ImGui::IsItemClicked() && !row_button_clicked) {
                 MakeSelectionCurrent(selection);
                 ImGui::SetItemDefaultFocus();
               }
-              if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+              if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && !row_button_clicked) {
                 selection.is_pinned = true;
               }
-            }
-            if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_REF))) {
-              ImGui::Text("0x%08X", shader_hash);
             }
 
             if ((ImGui::TableSetColumnIndex(CAPTURE_PANE_COLUMN_INFO))) {
@@ -2501,6 +2634,13 @@ enum ShaderPaneColumns : uint8_t {
   SHADER_PANE_COLUMN_COUNT
 };
 
+// Creates a selectable with the given label that jumps to the specified snapshot index
+inline void CreateSnapshotJumper(const std::string& label, int snapshot_index) {
+  if (ImGui::Selectable(label.c_str())) {
+    RequestSnapshotJump(snapshot_index);
+  }
+}
+
 void RenderShadersPane(reshade::api::device* device, DeviceData* data) {
   static ImGuiTreeNodeFlags tree_node_flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_SpanFullWidth;
 
@@ -2662,7 +2802,7 @@ void RenderShadersPane(reshade::api::device* device, DeviceData* data) {
       if (ImGui::TableSetColumnIndex(SHADER_PANE_COLUMN_SNAPSHOT)) {  // Snapshot
         ImGui::PushID(cell_index_id++);
         if (snapshot_index != -1) {
-          ImGui::Text("%03d", snapshot_index);
+          CreateSnapshotJumper(std::format("{:03}", snapshot_index), snapshot_index);
         }
         ImGui::PopID();
       }
@@ -3173,9 +3313,11 @@ void RenderResourceViewHistory(reshade::api::device* device, DeviceData* data, r
         }
       }
       if (space == 0) {
-        ImGui::Text("Snapshot %03d: T%d", current_snapshot_index, slot);
+        std::string label = std::format("Snapshot {:03d}: T{}", current_snapshot_index, slot);
+        CreateSnapshotJumper(label, current_snapshot_index);
       } else {
-        ImGui::Text("Snapshot %03d: T%d,space%d", current_snapshot_index, slot, space);
+        std::string label = std::format("Snapshot {:03d}: T{},space{}", current_snapshot_index, slot, space);
+        CreateSnapshotJumper(label, current_snapshot_index);
       }
     }
     for (const auto& [slot_space, resource_view_details] : draw_details.uav_binds) {
@@ -3190,21 +3332,27 @@ void RenderResourceViewHistory(reshade::api::device* device, DeviceData* data, r
         }
       }
       if (space == 0) {
-        ImGui::Text("Snapshot %03d: U%d", current_snapshot_index, slot);
+        std::string label = std::format("Snapshot {:03d}: U{}", current_snapshot_index, slot);
+        CreateSnapshotJumper(label, current_snapshot_index);
       } else {
-        ImGui::Text("Snapshot %03d: U%d,space%d", current_snapshot_index, slot, space);
+        std::string label = std::format("Snapshot {:03d}: U{},space{}", current_snapshot_index, slot, space);
+        CreateSnapshotJumper(label, current_snapshot_index);
       }
     }
     for (const auto& [slot, resource_view_details] : draw_details.render_targets) {
       if (resource_view_details.resource.handle != resource.handle) continue;
-      ImGui::Text("Snapshot %03d: RTV%d", current_snapshot_index,
-                  slot);
+      {
+        std::string label = std::format("Snapshot {:03d}: RTV{}", current_snapshot_index, slot);
+        CreateSnapshotJumper(label, current_snapshot_index);
+      }
     }
     if (draw_details.copy_source == resource.handle) {
-      ImGui::Text("Snapshot %03d: Copy Source", current_snapshot_index);
+      std::string label = std::format("Snapshot {:03d}: Copy Source", current_snapshot_index);
+        CreateSnapshotJumper(label, current_snapshot_index);
     }
     if (draw_details.copy_destination == resource.handle) {
-      ImGui::Text("Snapshot %03d: Copy Destination", current_snapshot_index);
+      std::string label = std::format("Snapshot {:03d}: Copy Destination", current_snapshot_index);
+        CreateSnapshotJumper(label, current_snapshot_index);
     }
 
     current_snapshot_index++;
@@ -3693,6 +3841,23 @@ void OnPresent(
     std::ranges::sort(data->draw_details_list, [](const DrawDetails& a, const DrawDetails& b) {
       return a.timestamp < b.timestamp;
     });
+
+    if (data != nullptr) {
+      data->shader_snapshot_data.clear();
+
+      int index = 0;
+
+      for (const auto& draw_details : data->draw_details_list) {
+        for (const auto& pipeline_bind : draw_details.pipeline_binds) {
+          for (const auto& shader_hash : pipeline_bind.shader_hashes) {
+            auto &occurrence = data->shader_snapshot_data[shader_hash];
+            occurrence.PushBack(index);
+          }
+        }
+
+        ++index;
+      }
+    }
   }
 }
 
