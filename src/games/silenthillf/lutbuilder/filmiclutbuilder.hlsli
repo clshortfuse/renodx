@@ -274,7 +274,7 @@ void ApplyFilmicToneMap(
   cg_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
 
   float3 untonemapped = untonemapped_pre_grade;
-  if (RENODX_TONE_MAP_TYPE != 4.f) {
+  if (RENODX_TONE_MAP_TYPE != 4.f && RENODX_TONE_MAP_TYPE != 0.f) {
     untonemapped = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped_pre_grade, untonemapped_lum, cg_config);
   }
 
@@ -291,7 +291,7 @@ void ApplyFilmicToneMap(
       tonemapped = lerp(tonemapped, hdr_tonemapped, saturate(blend_factor));
     }
   }
-  if (RENODX_TONE_MAP_TYPE != 4.f) {
+  if (RENODX_TONE_MAP_TYPE != 4.f && RENODX_TONE_MAP_TYPE != 0.f) {
     tonemapped = renodx::color::ap1::from::BT709(ApplySaturationBlowoutHueCorrectionHighlightSaturation(renodx::color::bt709::from::AP1(tonemapped), renodx::color::bt709::from::AP1(LerpToneMapStrength(untonemapped, float3(preRRT_r, preRRT_g, preRRT_b))), untonemapped_lum, cg_config));
   }
 
@@ -343,7 +343,9 @@ float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
   lut_config.scaling = CUSTOM_LUT_SCALING;
   lut_config.type_input = renodx::lut::config::type::SRGB;
   lut_config.type_output = renodx::lut::config::type::SRGB;
-  lut_config.recolor = 1.f;
+  lut_config.recolor = 0.f;
+
+  color_input = CorrectOutOfRangeColor(color_input, true, false, 1.f, 0.5f, 0.5f, false);
 
   float3 lut_input_color = renodx::lut::ConvertInput(color_input, lut_config);
   float3 lut_output_color = SamplePacked1DLut(lut_input_color, lut_config.lut_sampler, lut_texture);
@@ -415,12 +417,6 @@ float3 Sample2Packed1DLuts(
   float _1023 = ((((lerp(_968.x, _975.x, _963)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _928)) + ((lerp(_998.x, _1004.x, _963)) * (LUTWeights[0].z)));
   float _1024 = ((((lerp(_968.y, _975.y, _963)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _939)) + ((lerp(_998.y, _1004.y, _963)) * (LUTWeights[0].z)));
   float _1025 = ((((lerp(_968.z, _975.z, _963)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _950)) + ((lerp(_998.z, _1004.z, _963)) * (LUTWeights[0].z)));
-  _1023 = max(6.103519990574569e-05f, _1023);
-  _1024 = max(6.103519990574569e-05f, _1024);
-  _1025 = max(6.103519990574569e-05f, _1025);
-  // float _1047 = select((_1023 > 0.040449999272823334f), exp2(log2((_1023 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1023 * 0.07739938050508499f));
-  // float _1048 = select((_1024 > 0.040449999272823334f), exp2(log2((_1024 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1024 * 0.07739938050508499f));
-  // float _1049 = select((_1025 > 0.040449999272823334f), exp2(log2((_1025 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1025 * 0.07739938050508499f));
 
   float3 lutted_srgb = float3(_1023, _1024, _1025);
   return lutted_srgb;
@@ -431,7 +427,9 @@ float3 Sample2LUTSRGBInSRGBOut(Texture2D<float4> lut_texture1, Texture2D<float4>
   lut_config.scaling = CUSTOM_LUT_SCALING;
   lut_config.type_input = renodx::lut::config::type::SRGB;
   lut_config.type_output = renodx::lut::config::type::SRGB;
-  lut_config.recolor = 1.f;
+  lut_config.recolor = 0.f;
+
+  color_input = CorrectOutOfRangeColor(color_input, true, false, 1.f, 0.5f, 0.5f, false);
 
   float3 lut_input_color = renodx::lut::ConvertInput(color_input, lut_config);
   float3 lut_output_color = Sample2Packed1DLuts(lut_input_color, lut_sampler1, lut_sampler2, lut_texture1, lut_texture2);
