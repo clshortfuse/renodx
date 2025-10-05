@@ -74,9 +74,9 @@ cbuffer cb13 : register(b13, space50) {
 #define RENODX_PEAK_WHITE_NITS               400.f
 #define RENODX_DIFFUSE_WHITE_NITS            100.f
 #define RENODX_GRAPHICS_WHITE_NITS           100.f
-#define RENODX_GAMMA_CORRECTION              2.f
+#define RENODX_GAMMA_CORRECTION              1.f
 #define RENODX_GAMMA_CORRECTION_UI           1.f
-#define RENODX_TONE_MAP_PER_CHANNEL          0.f
+#define RENODX_TONE_MAP_PER_CHANNEL          1.f
 #define RENODX_TONE_MAP_HUE_CORRECTION       0.f
 #define RENODX_TONE_MAP_EXPOSURE             1.f
 #define RENODX_TONE_MAP_HIGHLIGHTS           1.f
