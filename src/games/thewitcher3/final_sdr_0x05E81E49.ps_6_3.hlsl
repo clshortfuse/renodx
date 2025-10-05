@@ -45,8 +45,8 @@ float4 main(
   float4 linearGameColor = _25;
   float4 linearUiColor = _20;
 
-  //linearGameColor.xyz = ApplyRCAS(linearGameColor.xyz, TEXCOORD, t0, s1);
-  linearGameColor.xyz = CustomTonemap(linearGameColor.xyz, SdrConfig());
+  linearGameColor.xyz = ApplyRCAS(linearGameColor.xyz, TEXCOORD, t0, s1);
+  //linearGameColor.xyz = CustomTonemap(linearGameColor.xyz, SdrConfig());
   linearGameColor.xyz = renodx::effects::ApplyFilmGrain(
       linearGameColor.xyz,
       float2(TEXCOORD.x, TEXCOORD.y),
