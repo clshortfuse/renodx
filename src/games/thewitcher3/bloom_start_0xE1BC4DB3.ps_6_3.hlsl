@@ -1,31 +1,7 @@
 #include "./common.hlsl"
+#include "./uncharted2.hlsl"
 
 Texture2D<float4> t0 : register(t0);
-
-cbuffer cb3 : register(b3) {
-  float4 CustomPixelConsts_000 : packoffset(c000.x);
-  float4 CustomPixelConsts_016 : packoffset(c001.x);
-  float4 CustomPixelConsts_032 : packoffset(c002.x);
-  float4 CustomPixelConsts_048 : packoffset(c003.x);
-  float4 CustomPixelConsts_064 : packoffset(c004.x);
-  float4 CustomPixelConsts_080 : packoffset(c005.x);
-  float4 CustomPixelConsts_096 : packoffset(c006.x);
-  float4 CustomPixelConsts_112 : packoffset(c007.x);
-  float4 CustomPixelConsts_128 : packoffset(c008.x);
-  float4 CustomPixelConsts_144 : packoffset(c009.x);
-  float4 CustomPixelConsts_160 : packoffset(c010.x);
-  float4 CustomPixelConsts_176 : packoffset(c011.x);
-  float4 CustomPixelConsts_192 : packoffset(c012.x);
-  float4 CustomPixelConsts_208 : packoffset(c013.x);
-  float4 CustomPixelConsts_224 : packoffset(c014.x);
-  float4 CustomPixelConsts_240 : packoffset(c015.x);
-  float4 CustomPixelConsts_256 : packoffset(c016.x);
-  float4 CustomPixelConsts_272 : packoffset(c017.x);
-  float4 CustomPixelConsts_288 : packoffset(c018.x);
-  float4 CustomPixelConsts_304 : packoffset(c019.x);
-  float4 CustomPixelConsts_320 : packoffset(c020.x);
-  float4 CustomPixelConsts_336[4] : packoffset(c021.x);
-};
 
 SamplerState s0 : register(s0);
 
@@ -55,11 +31,25 @@ float4 main(
   // _69.rgb = CustomBloomTonemap(_69.rgb);
   // _80.rgb = CustomBloomTonemap(_80.rgb);
   // _87.rgb = CustomBloomTonemap(_87.rgb);
-  if (RENODX_TONE_MAP_TYPE != 0) {
-    _61.rgb = min(_61.rgb, 1.f);
-    _69.rgb = min(_69.rgb, 1.f);
-    _80.rgb = min(_80.rgb, 1.f);
-    _87.rgb = min(_87.rgb, 1.f);
+  if (RENODX_TONE_MAP_TYPE != 0 && BLOOM_EMULATION == 0) {
+    // float clamp_value = Uncharted2Tonemap1(1.f);
+    float clamp_value = 1.f;
+     _61.rgb = ClampPostProcessing(_61.rgb, clamp_value);
+     _69.rgb = ClampPostProcessing(_69.rgb, clamp_value);
+     _80.rgb = ClampPostProcessing(_80.rgb, clamp_value);
+     _87.rgb = ClampPostProcessing(_87.rgb, clamp_value);
+
+    // _61.rgb = Uncharted2Tonemap1(_61.rgb);
+    // _69.rgb = Uncharted2Tonemap1(_69.rgb);
+    // _80.rgb = Uncharted2Tonemap1(_80.rgb);
+    // _87.rgb = Uncharted2Tonemap1(_87.rgb);
+
+    // float rolloff_start = 0.9999999f;
+    // float output_max = clamp_value * 1.5f;
+    // _61.rgb = ToneMapMaxCLL(_61.rgb, rolloff_start, output_max);
+    // _69.rgb = ToneMapMaxCLL(_69.rgb, rolloff_start, output_max);
+    // _80.rgb = ToneMapMaxCLL(_80.rgb, rolloff_start, output_max);
+    // _87.rgb = ToneMapMaxCLL(_87.rgb, rolloff_start, output_max);
   }
 
 
@@ -84,17 +74,18 @@ float4 main(
   float3 CC096 = float3(CustomPixelConsts_096.x, CustomPixelConsts_096.y, CustomPixelConsts_096.z);
   float3 CC128 = float3(CustomPixelConsts_128.x, CustomPixelConsts_128.y, CustomPixelConsts_128.z);
 
-  if (RENODX_TONE_MAP_TYPE != 0) {
-    //CC144 *= CUSTOM_BLOOM; // bloom intensity?
-    //CC096 *= CUSTOM_BLOOM;
-    //CC128 *= CUSTOM_BLOOM;
-    // CC128.y *= CUSTOM_BLOOM;
-    //CC112.x *= CUSTOM_BLOOM;
+  if (RENODX_TONE_MAP_TYPE != 0 && BLOOM_EMULATION == 1) {
+    //CC144 *= 0.8f; // luminance / color weights
+    CC096.x *= 0.3f; // final bloom intensity
+    CC128.y /= 2.5f; // knee / curve coefficient
+    CC112.x += 3.f; // max clamp
+    //CC128.x += 1.f; // bloom threshold
   }
 
   float _113 = dot(float3(CC144.x, CC144.y, CC144.z), float3(_106, _107, _108));
   float _117 = max(0.0f, (_113 - CC128.x));
   float _126 = min(CC112.x, saturate((CC128.y * _117) * _117)) / max(9.999999747378752e-05f, _113);
+  //float _126 = min(CC112.x, min(100.f, max(0, (CC128.y * _117) * _117))) / max(9.999999747378752e-05f, _113);
   SV_Target.x = ((_126 * _106) * CC096.x);
   SV_Target.y = ((_126 * _107) * CC096.x);
   SV_Target.z = ((_126 * _108) * CC096.x);
