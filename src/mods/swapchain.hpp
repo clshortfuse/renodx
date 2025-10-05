@@ -2488,9 +2488,11 @@ inline void OnInitResourceViewInfo(utils::resource::ResourceViewInfo* resource_v
 }
 
 inline void OnDestroyResourceViewInfo(utils::resource::ResourceViewInfo* resource_view_info) {
+#ifdef DEBUG_LEVEL_2
   if (resource_view_info->resource_info != nullptr && resource_view_info->resource_info->is_swap_chain) {
     reshade::log::message(reshade::log::level::warning, "Destroyed swapchain RTV");
   }
+#endif
   if (resource_view_info->clone.handle != 0u) {
     assert(resource_view_info->device != nullptr);
     resource_view_info->device->destroy_resource_view(resource_view_info->clone);
