@@ -33,15 +33,17 @@
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT2020
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 //#define RENODX_RENO_DRT_WHITE_CLIP             100.f
-#define CUSTOM_SCENE_GRADE_METHOD              shader_injection.scene_grade_method
-#define CUSTOM_SCENE_GRADE_HUE_CORRECTION      shader_injection.scene_grade_hue_correction
+//#define CUSTOM_SCENE_GRADE_METHOD              shader_injection.scene_grade_method
+#define CUSTOM_SCENE_HUE_METHOD                0.f
+//#define CUSTOM_SCENE_GRADE_HUE_CORRECTION      shader_injection.scene_grade_hue_correction
 #define CUSTOM_SCENE_GRADE_SATURATION_CORRECTION shader_injection.scene_grade_saturation_correction
 #define CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION shader_injection.scene_grade_blowout_restoration
-#define CUSTOM_SCENE_GRADE_HUE_SHIFT           shader_injection.scene_grade_hue_shift
+//#define CUSTOM_SCENE_GRADE_HUE_SHIFT           shader_injection.scene_grade_hue_shift
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define CUSTOM_LUT_STRENGTH                    shader_injection.custom_lut_strength
 //#define CUSTOM_POST_MAXCLL                     shader_injection.custom_post_maxcll
+#define BLOOM_EMULATION                        shader_injection.bloom_emulation
 #define CUSTOM_BLOOM                           shader_injection.custom_bloom
 #define CUSTOM_LENS_DIRT                       shader_injection.custom_lens_dirt
 #define CUSTOM_SUNSHAFTS_STRENGTH              shader_injection.custom_sunshafts_strength
@@ -49,7 +51,8 @@
 #define CUSTOM_SHARPENING_TYPE                shader_injection.custom_sharpening_type
 #define CUSTOM_SHARPNESS                      shader_injection.custom_sharpness
 #define CUSTOM_TONEMAP_EXPOSURE                shader_injection.tone_map_exposure
-#define UTILITY_HUD                            shader_injection.utility_hud
+
+//#define UTILITY_HUD                            shader_injection.utility_hud
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -72,16 +75,18 @@ struct ShaderInjectData {
   float tone_map_per_channel;
   float tone_map_color_grade_strength;
   float swap_chain_custom_color_space;
-  float scene_grade_method;
+  //float scene_grade_method;
+  //float scene_hue_method;
   float scene_grade_strength;
-  float scene_grade_hue_correction;
+  //float scene_grade_hue_correction;
   float scene_grade_saturation_correction;
   float scene_grade_blowout_restoration;
-  float scene_grade_hue_shift;
+  //float scene_grade_hue_shift;
   float custom_film_grain;
   float custom_random;
   float custom_lut_strength;
   //float custom_post_maxcll;
+  float bloom_emulation;
   float custom_bloom;
   float custom_lens_dirt;
   float custom_sunshafts_strength;
@@ -89,7 +94,8 @@ struct ShaderInjectData {
   float custom_depth_blur;
   float custom_sharpening_type;
   float custom_sharpness;
-  float utility_hud;
+
+  //float utility_hud;
 };
 
 #ifndef __cplusplus

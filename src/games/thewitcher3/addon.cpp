@@ -36,55 +36,33 @@ const std::string build_time = __TIME__;
 float current_settings_mode = 0;
 auto last_is_hdr = false;
 
-const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
-   // {"ToneMapType", 3.f},
-    {"SceneGradeMethod", 1.f},
-    {"SceneGradeHueShift", 50.f},
-    {"SceneGradeHueCorrection", 50.f},
-    {"SceneGradeSaturationCorrection", 75.f},
-    {"SceneGradeBlowoutRestoration", 80.f},
-    {"ColorGradeExposure", 1.12f},
-    {"ColorGradeHighlights", 52.f},
-    {"ColorGradeShadows", 57.f},
-    {"ColorGradeContrast", 55.f},
-    {"ColorGradeSaturation", 56.f},
-    {"ColorGradeHighlightSaturation", 50.f},
-    {"ColorGradeBlowout", 43.f},
-    {"ColorGradeFlare", 58.f},
-   // {"SwapChainCustomColorSpace", 0.f},
-    //{"LutGradeStrength", 100.f},
-   // {"TonemapGradeStrength", 100.f},
-    //{"FxFilmGrain", 0.f},
-    //{"FxPostProcessingMaxCLL", 40.f},
-    {"FxBloom", 33.f},
-    //{"FxLensDirt", 50.f},
-    {"FxSunShaftStrength", 50.f},
+const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
+
+};
+
+const std::unordered_map<std::string, float> PURIST_VALUES = {
+    {"SceneGradeSaturationCorrection", 0.f},
+    {"BloomEmulation", 0.f},
 };
 
 const std::unordered_map<std::string, float> FILMIC_VALUES = {
-   // {"ToneMapType", 3.f},
-    {"SceneGradeMethod", 1.f},
-    {"SceneGradeHueShift", 70.f},
-    {"SceneGradeHueCorrection", 50.f},
-    {"SceneGradeSaturationCorrection", 100.f},
-    {"SceneGradeBlowoutRestoration", 50.f},
     {"ColorGradeExposure", 0.80f},
-    {"ColorGradeHighlights", 57.f},
-    {"ColorGradeShadows", 62.f},
-    //{"ColorGradeContrast", 50.f},
-    {"ColorGradeSaturation", 52.f},
-    {"ColorGradeHighlightSaturation", 70.f},
-    {"ColorGradeBlowout", 75.f},
-    //{"ColorGradeFlare", 62.f},
+    {"ColorGradeHighlights", 63.f},
+    {"ColorGradeShadows", 54.f},
+    {"ColorGradeContrast", 45.f},
+    {"ColorGradeSaturation", 45.f},
+    {"ColorGradeHighlightSaturation", 52.f},
+    {"ColorGradeBlowout", 1.f},
+    {"ColorGradeFlare", 1.f},
    // {"SwapChainCustomColorSpace", 0.f},
     //{"LutGradeStrength", 100.f},
    // {"TonemapGradeStrength", 100.f},
     {"FxFilmGrain", 50.f},
     //{"FxPostProcessingMaxCLL", 40.f},
-    {"FxBloom", 15.f},
-    {"FxDepthBlur", 100.f},
+    //{"FxBloom", 15.f},
+    //{"FxDepthBlur", 100.f},
     //{"FxLensDirt", 50.f},
-    {"FxSunShaftStrength", 60.f},
+    //{"FxSunShaftStrength", 60.f},
 };
 
 const std::unordered_map<std::string, float> CANNOT_PRESET_VALUES = {
@@ -95,7 +73,8 @@ const std::unordered_map<std::string, float> CANNOT_PRESET_VALUES = {
     //{"FxFilmGrain", 0},
     {"FxLensDirt", 0},
     {"FxSharpness", 0},
-    //{"FxSunShaftStrength", 0},
+    {"FxSunShaftStrength", 0},
+    {"FXBloom", 0},
 };
 
 
@@ -114,14 +93,14 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapType",
         .binding = &shader_injection.tone_map_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 3.f,
+        .default_value = 1.f,
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "ACES", "RenoDRT"},
+        .labels = {"Vanilla", "Piecewise Reinhard"},
         .parse = [](float value) { return value; },
-        .is_visible = []() { return current_settings_mode >= 2.f; },
+        .is_visible = []() { return current_settings_mode >= 2.f && last_is_hdr; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -158,6 +137,63 @@ renodx::utils::settings::Settings settings = {
         .min = 80.f,
         .max = 500.f,
         .is_visible = []() { return last_is_hdr; },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Recommended",
+        .section = "Presets",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
+            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
+            if (RECOMMENDED_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, RECOMMENDED_VALUES.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
+          }
+        },
+    },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Purist",
+        .section = "Presets",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
+            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
+            if (PURIST_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, PURIST_VALUES.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
+          }
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Filmic",
+        .section = "Presets",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
+            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
+            if (FILMIC_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, FILMIC_VALUES.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
+          }
+        },
     },
     //     new renodx::utils::settings::Setting{
     //     .key = "ToneMapHueProcessor",
@@ -196,59 +232,73 @@ renodx::utils::settings::Settings settings = {
     //     .parse = [](float value) { return value * 0.01f; },
     //     .is_visible = []() { return settings[0]->GetValue() >= 2; },
     // },
-        new renodx::utils::settings::Setting{
-        .key = "SceneGradeMethod",
-        .binding = &CUSTOM_SCENE_GRADE_METHOD,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Tonemap Upgrade Method",
-        .section = "Scene Grading",
-        .tooltip = "Selects hue processor",
-        .labels = {"Vanilla", "Blowout Restoration"},
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
-        .is_visible = []() { return settings[0]->GetValue() >= 2; },
-    },
-            new renodx::utils::settings::Setting{
-        .key = "SceneGradeHueCorrection",
-        .binding = &shader_injection.scene_grade_hue_correction,
-        .default_value = 100.f,
-        .label = "Hue Correction",
-        .section = "Scene Grading",
-        .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0 && CUSTOM_SCENE_GRADE_METHOD == 1; },
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 2.f; },
-    },
-            new renodx::utils::settings::Setting{
-        .key = "SceneGradeHueShift",
-        .binding = &shader_injection.scene_grade_hue_shift,
-        .default_value = 100.f,
-        .label = "Hue Shift",
-        .section = "Scene Grading",
-        .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0 && CUSTOM_SCENE_GRADE_METHOD == 1; },
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 2.f; },
-    },
+    //     new renodx::utils::settings::Setting{
+    //     .key = "SceneGradeMethod",
+    //     .binding = &CUSTOM_SCENE_GRADE_METHOD,
+    //     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+    //     .default_value = 1.f,
+    //     .label = "Tonemap Upgrade Method",
+    //     .section = "Scene Grading",
+    //     .tooltip = "Selects hue processor",
+    //     .labels = {"Vanilla+", "Custom"},
+    //     .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+    //     .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    // },
+    // new renodx::utils::settings::Setting{
+    //     .key = "SceneGradeHueCorrection",
+    //     .binding = &shader_injection.scene_hue_method,
+    //     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+    //     .default_value = 0.f,
+    //     .label = "Hue Method",
+    //     .section = "Scene Grading",
+    //     //.max = 100.f,
+    //     .labels = {"OKLab", "ICtCp", "OKLCH"},
+    //     //.is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0 && CUSTOM_SCENE_GRADE_METHOD == 1; },
+    //     .parse = [](float value) { return value * 0.01f; },
+    //     .is_visible = []() { return current_settings_mode >= 2.f; },
+    // },
+    // new renodx::utils::settings::Setting{
+    //     .key = "SceneGradeHueCorrection",
+    //     .binding = &shader_injection.scene_grade_hue_correction,
+    //     .default_value = 25.f,
+    //     .label = "Hue Correction",
+    //     .section = "Scene Grading",
+    //     .max = 100.f,
+    //     .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0 && CUSTOM_SCENE_GRADE_METHOD == 1; },
+    //     .parse = [](float value) { return value * 0.01f; },
+    //     .is_visible = []() { return current_settings_mode >= 2.f; },
+    // },
+    //         new renodx::utils::settings::Setting{
+    //     .key = "SceneGradeHueShift",
+    //     .binding = &shader_injection.scene_grade_hue_shift,
+    //     .default_value = 100.f,
+    //     .label = "Hue Shift",
+    //     .section = "Scene Grading",
+    //     .max = 100.f,
+    //     .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0 && CUSTOM_SCENE_GRADE_METHOD == 1; },
+    //     .parse = [](float value) { return value * 0.01f; },
+    //     .is_visible = []() { return current_settings_mode >= 2.f; },
+    // },
     new renodx::utils::settings::Setting{
         .key = "SceneGradeSaturationCorrection",
         .binding = &shader_injection.scene_grade_saturation_correction,
         .default_value = 100.f,
         .label = "Saturation Correction",
         .section = "Scene Grading",
+        .tooltip = "Corrects saturation shifts from per-channel tonemapping",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0 && CUSTOM_SCENE_GRADE_METHOD == 1; },
+        //.is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0 && CUSTOM_SCENE_GRADE_METHOD == 1; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "SceneGradeBlowoutRestoration",
         .binding = &shader_injection.scene_grade_blowout_restoration,
-        .default_value = 50.f,
+        .default_value = 100.f,
         .label = "Blowout Restoration",
         .section = "Scene Grading",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0 && CUSTOM_SCENE_GRADE_METHOD == 1; },
+        //.is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2.f; },
     },
@@ -259,7 +309,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tonemapper Strength",
         .section = "Scene Grading",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        //.is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2.f; },
     },
@@ -332,7 +382,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
+        //.is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -344,8 +394,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adds highlight desaturation due to overexposure.",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
-        .parse = [](float value) { return fmax(value * 0.01f, 0.000001f); },
+        //.is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
+        .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
@@ -356,8 +406,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
-        .parse = [](float value) { return value * 0.01f; },
+        //.is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
+        .parse = [](float value) { return value * 0.001f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
@@ -407,6 +457,20 @@ renodx::utils::settings::Settings settings = {
     //     .parse = [](float value) { return value * 0.1f; },
     //     .is_visible = []() { return current_settings_mode >= 2.f; },
     // },
+        new renodx::utils::settings::Setting{
+        .key = "BloomEmulation",
+        .binding = &shader_injection.bloom_emulation,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .can_reset = true,
+        .label = "Bloom Emulation",
+        .section = "Effects",
+        .tooltip = "Approximately emulate SDR behavior, or upgrade bloom parameters for an HDR input.",
+        .labels = {"SDR Approximate", "HDR Upgrade"},
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .parse = [](float value) { return value; },
+        .is_visible = []() { return current_settings_mode >= 2.f && last_is_hdr; },
+    },
         new renodx::utils::settings::Setting{
         .key = "FxBloom",
         .binding = &shader_injection.custom_bloom,
@@ -472,7 +536,7 @@ renodx::utils::settings::Settings settings = {
             return value * 0.02f; // NIS
         }
         return value == 0 ? 0.f : exp2(-(1.f - (value * 0.01f))); },
-    .is_visible = []() { return settings[0]->GetValue() >= 1.f && last_is_hdr; },
+    .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
 },
     // new renodx::utils::settings::Setting{
     //     .key = "FxNIS",
@@ -508,57 +572,19 @@ renodx::utils::settings::Settings settings = {
     //     .parse = [](float value) { return value; },
     //     .is_visible = []() { return current_settings_mode >= 2.f; },
     // },
-        new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "HDR Look",
-        .section = "Presets",
-        .group = "button-line-1",
-        .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-            if (setting->is_global) continue;
-            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
-            if (HDR_LOOK_VALUES.contains(setting->key)) {
-              renodx::utils::settings::UpdateSetting(setting->key, HDR_LOOK_VALUES.at(setting->key));
-            } else {
-              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-            }
-          }
-        },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Filmic",
-        .section = "Presets",
-        .group = "button-line-1",
-        .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-            if (setting->is_global) continue;
-            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
-            if (FILMIC_VALUES.contains(setting->key)) {
-              renodx::utils::settings::UpdateSetting(setting->key, FILMIC_VALUES.at(setting->key));
-            } else {
-              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-            }
-          }
-        },
-    },
-        new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Reset All",
-        .section = "Options",
-        .group = "button-line-2",
-        .on_change = []() {
-          for (auto setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-          }
-        },
-    },
+    //     new renodx::utils::settings::Setting{
+    //     .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    //     .label = "Reset All",
+    //     .section = "Options",
+    //     .group = "button-line-2",
+    //     .on_change = []() {
+    //       for (auto setting : settings) {
+    //         if (setting->key.empty()) continue;
+    //         if (!setting->can_reset) continue;
+    //         renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+    //       }
+    //     },
+    // },
     // new renodx::utils::settings::Setting{
     //     .value_type = renodx::utils::settings::SettingValueType::BUTTON,
     //     .label = "Vanilla+",
@@ -585,12 +611,12 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "HDR Den Discord",
+        .label = "RenoDX Discord",
         .section = "Links",
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::Launch(("https://discord.gg/XUhv") + std::string("tR54yc"));
+          renodx::utils::platform::Launch(("https://discord.gg/QgXDC") + std::string("fccRy"));
         },
     },
         new renodx::utils::settings::Setting{
@@ -657,6 +683,11 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 1000.f);
   renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
   renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
+
+  renodx::utils::settings::UpdateSetting("SceneGradeSaturationCorrection", 0.f);
+  renodx::utils::settings::UpdateSetting("SceneGradeBlowoutRestoration", 0.f);
+  renodx::utils::settings::UpdateSetting("SceneGradeStrength", 100.f);
+
   renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
@@ -665,9 +696,11 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
+
   //renodx::utils::settings::UpdateSetting("SwapChainCustomColorSpace", 0.f);
   renodx::utils::settings::UpdateSetting("LutGradeStrength", 100.f);
   renodx::utils::settings::UpdateSetting("TonemapGradeStrength", 100.f);
+
   renodx::utils::settings::UpdateSetting("FxFilmGrain", 0.f);
   renodx::utils::settings::UpdateSetting("FxPostProcessingMaxCLL", 50.f);
   renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
@@ -713,7 +746,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
-            reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       // while (IsDebuggerPresent() == 0) Sleep(100);
 
       renodx::mods::shader::expected_constant_buffer_space = 50;
@@ -727,6 +759,15 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       //renodx::mods::swapchain::use_resource_cloning = true;
 
       //renodx::utils::shader::use_replace_async = true; 
+      renodx::mods::swapchain::use_resource_cloning = true;
+
+      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      //     .old_format = reshade::api::format::r8g8b8a8_unorm,
+      //     .new_format = reshade::api::format::r16g16b16a16_float,
+      //     .ignore_size = false,
+      //     .use_resource_view_cloning = true,
+      //     .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::ANY,
+      // });
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
