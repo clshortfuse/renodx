@@ -264,10 +264,8 @@ float3 ApplyGammaCorrection(float3 incorrect_color) {
   return corrected_color;
 }
 
-float3 ApplyExponentialRolloff(float3 untonemapped, float diffuse_nits, float peak_nits) {
-  // const float diffuse_nits = whitePaperNits;
-  // const float peak_nits = max(displayMaxNits, whitePaperNits);
-  const float rolloff_start = peak_nits * 0.465f;
-  // const float rolloff_modulation = 1.25f;
-  return exp2(renodx::tonemap::ExponentialRollOff(log2(untonemapped * diffuse_nits), log2(rolloff_start), log2(peak_nits))) / diffuse_nits;
+float3 ApplyDisplayMap(float3 untonemapped, float diffuse_nits, float peak_nits) {
+  const float peak_ratio = peak_nits / diffuse_nits;
+  const float rolloff_start = min(1.f, peak_ratio * 0.75f);
+  return renodx::tonemap::ReinhardPiecewiseExtended(untonemapped, 100.f, peak_ratio, rolloff_start);
 }
