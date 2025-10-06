@@ -134,11 +134,11 @@ float3 PreTonemapSliders(float3 untonemapped) {
 float3 CustomUpgradeToneMap(float3 untonemapped, float3 tonemapped_bt709_ch, float3 tonemapped_bt709_lum, float mid_gray) {
   float3 outputColor;
 
-  float3 tonemapped_bt709 = lerp(tonemapped_bt709_ch, tonemapped_bt709_lum, CUSTOM_SCENE_GRADE_SATURATION_CORRECTION);
-  tonemapped_bt709 = lerp(untonemapped, tonemapped_bt709, RENODX_COLOR_GRADE_STRENGTH);
-
   float mid_gray_scale = mid_gray / 0.18f;
   float3 untonemapped_midgray = untonemapped * mid_gray_scale;
+
+  float3 tonemapped_bt709 = lerp(tonemapped_bt709_ch, tonemapped_bt709_lum, CUSTOM_SCENE_GRADE_SATURATION_CORRECTION);
+  tonemapped_bt709 = lerp(untonemapped_midgray, tonemapped_bt709, RENODX_COLOR_GRADE_STRENGTH);
 
   float untonemapped_midgray_y = renodx::color::y::from::BT709(untonemapped_midgray);
   float untonemapped_y = renodx::color::y::from::BT709(untonemapped);
