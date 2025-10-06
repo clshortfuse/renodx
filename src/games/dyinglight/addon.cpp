@@ -261,7 +261,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxLensFlare",
         .binding = &shader_injection.custom_lens_flare,
-        .default_value = 50.f,
+        .default_value = 100.f,
         .label = "Lens Flare 1",
         .section = "Effects",
         .max = 100.f,
@@ -270,7 +270,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxLensFlare2",
         .binding = &shader_injection.custom_lens_flare_2,
-        .default_value = 50.f,
+        .default_value = 100.f,
         .label = "Lens Flare 2",
         .section = "Effects",
         .max = 100.f,
@@ -329,6 +329,15 @@ renodx::utils::settings::Settings settings = {
         .label = "Boost Sky Brightness",
         .section = "Advanced",
         .tooltip = "Brightens sky",
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ClampLensFlare",
+        .binding = &shader_injection.custom_clamp_lens_flare,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "Clamp Lens Flare",
+        .section = "Advanced",
+        .tooltip = "Clamp the strength of lens flares",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -456,6 +465,7 @@ void OnPresetOff() {
       {"ClampAutoexposure", 0.f},
       {"HueShiftFire", 0.f},
       {"BoostSky", 0.f},
+      {"ClampLensFlare", 0.f},
   });
 }
 
