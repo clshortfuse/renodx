@@ -152,9 +152,7 @@ float3 CustomUpgradeToneMap(float3 untonemapped, float3 tonemapped_bt709_ch, flo
   else {
     outputColor = lerp(tonemapped_bt709, untonemapped_midgray, saturate(tonemapped_bt709_y));
   }
-  if (tonemapped_bt709_y > (mid_gray * 0.25f)) {
-    outputColor = renodx::color::correct::Chrominance(outputColor, tonemapped_bt709_ch, 1.f, CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION);
-  }
+  outputColor = renodx::color::correct::Chrominance(outputColor, lerp(tonemapped_bt709, tonemapped_bt709_ch, saturate(tonemapped_bt709_y / mid_gray)), 1.f, CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION);
   return outputColor;
 }
 
