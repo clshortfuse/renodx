@@ -42,6 +42,7 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
 
 const std::unordered_map<std::string, float> PURIST_VALUES = {
     {"SceneGradeSaturationCorrection", 0.f},
+    {"ColorGradeHighlights", 50.f},
     {"BloomEmulation", 0.f},
 };
 
@@ -337,7 +338,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
-        .default_value = 50.f,
+        .default_value = 55.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
