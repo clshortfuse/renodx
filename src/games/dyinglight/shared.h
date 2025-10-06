@@ -42,6 +42,7 @@ struct ShaderInjectData {
   float clamp_autoexposure;
   float hue_shift_fire;
   float boost_sky;
+  float custom_clamp_lens_flare;
 };
 
 #ifndef __cplusplus
@@ -76,6 +77,7 @@ cbuffer cb13 : register(b13) {
 #define CUSTOM_CLAMP_AUTOEXPOSURE shader_injection.clamp_autoexposure
 #define CUSTOM_HUE_SHIFT_FIRE     shader_injection.hue_shift_fire
 #define CUSTOM_BOOST_SKY          shader_injection.boost_sky
+#define CUSTOM_CLAMP_LENS_FLARE   shader_injection.custom_clamp_lens_flare
 
 #include "../../shaders/renodx.hlsl"
 
