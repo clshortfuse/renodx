@@ -42,10 +42,10 @@ float4 main(
   float3 untonemapped_2 = float3(_117, _118, _119);
   untonemapped_2 = PreTonemapSliders(untonemapped_2);
 
-  float3 tonemapped_bt709_ch_2 = Uncharted2Tonemap1(untonemapped_2);
+  float3 tonemapped_bt709_ch_2 = Uncharted2Tonemap2(untonemapped_2);
   float y_in_2 = renodx::color::y::from::BT709(untonemapped_2);
-  float y_out_2 = Uncharted2Tonemap1(y_in_2);
-  float3 tonemapped_bt709_lum_2 = renodx::color::correct::Luminance(untonemapped_1, y_in_2, y_out_2);
+  float y_out_2 = Uncharted2Tonemap2(y_in_2);
+  float3 tonemapped_bt709_lum_2 = renodx::color::correct::Luminance(untonemapped_2, y_in_2, y_out_2);
 
   float out_mid_gray_2 = Uncharted2Tonemap2(0.18);
 
