@@ -86,13 +86,13 @@ float3 ApplyUserToneMap(float3 untonemapped_bt709, float mid_gray) {
 float3 GammaCorrectHuePreserving(float3 incorrect_color) {
   float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
 
-  const float y_in = renodx::color::y::from::BT709(incorrect_color);
-  const float y_out = max(0, renodx::color::correct::Gamma(y_in));
+  const float y_in = max(0, renodx::color::y::from::BT709(incorrect_color));
+  const float y_out = renodx::color::correct::Gamma(y_in);
 
-  float3 lum = incorrect_color * (y_in > 0 ? y_out / y_in : 0.f);
+  float3 lum = renodx::color::correct::Luminance(incorrect_color, y_in, y_out);
 
-  // use chrominance from channel gamma correction and apply hue shifting from per channel tonemap
-  float3 result = ChrominanceOKLab(lum, ch);
+  // use chrominance from per channel gamma correction
+  float3 result = renodx::color::correct::ChrominanceOKLab(lum, ch, 1.f, 1.f);
 
   return result;
 }
