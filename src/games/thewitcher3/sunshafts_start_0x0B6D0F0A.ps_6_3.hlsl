@@ -28,7 +28,7 @@ float4 main(
   float4 _32 = t1.Load(int3((uint)(uint(((cb12_270x * _14) + _19) * cb12_271x)), (uint)(uint((_20 - (cb12_270y * _14)) * cb12_271x)), 0));
   float4 _34 = t0.Load(int3(_10, _11, 0));
 
-  // if (RENODX_TONE_MAP_TYPE != 0) {
+  // if (RENODX_TONE_MAP_TYPE > 1) {
   //   // float clamp_value = Uncharted2Tonemap1(100.f);
   //   float clamp_value = 5.f;
   //   _34.rgb = ClampPostProcessing(_34.rgb, clamp_value);

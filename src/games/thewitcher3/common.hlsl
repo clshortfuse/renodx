@@ -85,7 +85,7 @@ float3 ApplySaturationBlowoutHighlightSaturation(float3 tonemapped, float y, ren
 }
 
 // float3 ColorPicker(float3 color, float3 sdr_color) {
-//   if (RENODX_TONE_MAP_TYPE == 0.f) {
+//   if (RENODX_TONE_MAP_TYPE < 2.f) {
 //     return sdr_color;
 //   }
 //   return color;
@@ -98,7 +98,7 @@ float3 ApplySaturationBlowoutHighlightSaturation(float3 tonemapped, float y, ren
 /// Applies Exponential Roll-Off tonemapping using the maximum channel.
 /// Used to fit the color into a 0–output_max range for SDR LUT compatibility.
 float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.375f, float output_max = 1.f) {
-  if (RENODX_TONE_MAP_TYPE == 0.f) {
+  if (RENODX_TONE_MAP_TYPE < 2.f) {
     return color;
   }
   color = min(color, 100.f);
@@ -120,6 +120,7 @@ float3 NeutralSDRYLerp(float3 color) {
 }
 
 float3 PreTonemapSliders(float3 untonemapped) {
+  if (RENODX_TONE_MAP_TYPE == 1.f) return untonemapped;
   renodx::color::grade::Config config = renodx::color::grade::config::Create();
   config.exposure = RENODX_TONE_MAP_EXPOSURE;
   config.contrast = RENODX_TONE_MAP_CONTRAST;
@@ -132,6 +133,7 @@ float3 PreTonemapSliders(float3 untonemapped) {
 }
 
 float3 CustomUpgradeToneMap(float3 untonemapped, float3 tonemapped_bt709_ch, float3 tonemapped_bt709_lum, float mid_gray) {
+  if (RENODX_TONE_MAP_TYPE == 1.f) return tonemapped_bt709_ch;
   float3 outputColor;
 
   float mid_gray_scale = mid_gray / 0.18f;
@@ -146,13 +148,15 @@ float3 CustomUpgradeToneMap(float3 untonemapped, float3 tonemapped_bt709_ch, flo
   float tonemapped_bt709_lum_y = renodx::color::y::from::BT709(tonemapped_bt709_lum);
   float tonemapped_bt709_y = renodx::color::y::from::BT709(tonemapped_bt709);
 
-  if (RENODX_TONE_MAP_TYPE == 0) {
+  if (RENODX_TONE_MAP_TYPE < 2.f) {
     outputColor = tonemapped_bt709;
   }
   else {
     outputColor = lerp(tonemapped_bt709, untonemapped_midgray, saturate(tonemapped_bt709_y));
   }
   outputColor = renodx::color::correct::Chrominance(outputColor, lerp(tonemapped_bt709, tonemapped_bt709_ch, saturate(tonemapped_bt709_y / mid_gray)), 1.f, CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION);
+  //outputColor = renodx::color::correct::Chrominance(outputColor, tonemapped_bt709_ch, 1.f, CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION);
+
   return outputColor;
 }
 
@@ -197,7 +201,7 @@ float3 ColorGradeHDR(float4 rgbGraded) {
 }
 
 float3 CustomGradingSDR(float3 ungraded) {
-  if (RENODX_TONE_MAP_TYPE == 0.f) {
+  if (RENODX_TONE_MAP_TYPE < 2.f) {
     return ungraded;
   }
   // return NeutralSDRYLerp(ungraded);
@@ -206,7 +210,7 @@ float3 CustomGradingSDR(float3 ungraded) {
 }
 
 float3 CustomUpgradeGrading(float3 ungraded, float3 ungraded_sdr, float3 graded) {
-  if (RENODX_TONE_MAP_TYPE == 0.f) {
+  if (RENODX_TONE_MAP_TYPE < 2.f) {
     return lerp(ungraded, graded, CUSTOM_LUT_STRENGTH);
   }
   // float3 neutral_sdr = ToneMapMaxCLL(ungraded);
@@ -236,8 +240,12 @@ float3 CustomTonemap(float3 color, renodx::draw::Config config = renodx::draw::B
   configsat.dechroma = RENODX_TONE_MAP_BLOWOUT;
   configsat.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
 
-  if (RENODX_TONE_MAP_TYPE == 0.f) {
-    return ApplySaturationBlowoutHighlightSaturation(color, renodx::color::y::from::BT709(color), configsat);
+  if (RENODX_TONE_MAP_TYPE < 2.f) {
+    if (RENODX_TONE_MAP_TYPE == 1.f) {
+      return saturate(color);
+    }
+    color = ApplySaturationBlowoutHighlightSaturation(color, renodx::color::y::from::BT709(color), configsat);
+    return color;
   }
   float peak_white_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;
   float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE;
@@ -258,21 +266,21 @@ float GetBloomScale() {
 }
 
 float3 CustomBloomTonemap(float3 color, float exposure = 0.2f) {
-  if (RENODX_TONE_MAP_TYPE == 0.f) {
+  if (RENODX_TONE_MAP_TYPE < 2.f) {
     return color;
   }
   return min(color, CUSTOM_BLOOM);
 }
 
 float3 CustomSunshaftsTonemap(float3 color) {
-  if (RENODX_TONE_MAP_TYPE == 0.f) {
+  if (RENODX_TONE_MAP_TYPE < 2.f) {
     return color;
   }
   return min(color, CUSTOM_SUNSHAFTS_STRENGTH);
 }
 
 float hdrSaturate(float color) {
-  if (RENODX_TONE_MAP_TYPE == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 1.f) {
     return saturate(color);
   }
   color = max(color, 0.f);
