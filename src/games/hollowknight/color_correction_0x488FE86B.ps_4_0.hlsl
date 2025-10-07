@@ -24,6 +24,7 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
+  [branch]
   if (RENODX_TONE_MAP_TYPE == 0) {
     r0.yw = float2(0.125, 0.375);
     r1.xyzw = t0.Sample(s0_s, v1.xy).zxyw;
@@ -41,30 +42,57 @@ void main(
     o0.xyz = cb0[2].xxx * r0.xyz + r0.www;
 
     o0 = saturate(o0);
-    return;
+
+    o0.rgb = renodx::color::srgb::Decode(o0.rgb);
+  } else {
+    float4 sampled_color = t0.Sample(s0_s, v1.xy).rgba;
+    o0.a = sampled_color.a;
+
+    float3 gamma_color = sampled_color.rgb;
+
+    float3 untonemapped = renodx::color::srgb::Decode(gamma_color.rgb);
+
+    renodx::tonemap::renodrt::Config renodrt_config = renodx::tonemap::renodrt::config::Create();
+    renodrt_config.nits_peak = 100.f;
+    renodrt_config.mid_gray_value = 0.18f;
+    renodrt_config.mid_gray_nits = 18.f;
+    renodrt_config.exposure = 1.f;
+    renodrt_config.highlights = 1.f;
+    renodrt_config.shadows = 1.f;
+    renodrt_config.contrast = 1.f;
+    renodrt_config.saturation = 1.f;
+    renodrt_config.dechroma = 0.f;
+    renodrt_config.flare = 0.f;
+    renodrt_config.tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
+    renodrt_config.white_clip = 4.f;
+    renodrt_config.hue_correction_strength = 0.f;
+    renodrt_config.working_color_space = 0u;
+    renodrt_config.clamp_color_space = -1.f;
+
+    float3 neutral_sdr = lerp(
+        renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config),
+        renodx::tonemap::ExponentialRollOff(untonemapped, 0.75f),
+        CUSTOM_SATURATION_CLIP);
+
+    neutral_sdr = renodx::color::correct::Hue(neutral_sdr, untonemapped, 1.f - CUSTOM_HUE_CLIP);
+
+    float3 neutral_gamma = renodx::color::srgb::Encode(abs(neutral_sdr));
+
+    float max_channel = max(max(max(neutral_gamma.r, neutral_gamma.g), neutral_gamma.b), 1.f);
+    float3 lut_input_color = neutral_gamma / max_channel;
+    gamma_color = lut_input_color;
+    gamma_color.r = t1.Sample(s1_s, float2(gamma_color.r, 0.125)).r;
+    gamma_color.g = t1.Sample(s1_s, float2(gamma_color.g, 0.375)).g;
+    gamma_color.b = t1.Sample(s1_s, float2(gamma_color.b, 0.625)).b;
+    gamma_color = gamma_color * max_channel;
+    float luma = dot(gamma_color, float3(0.219999999, 0.707000017, 0.0710000023));
+    // Lerp luminance to desaturate
+    gamma_color.rgb = lerp(luma, gamma_color.rgb, cb0[2].x);
+
+    float3 graded_color = renodx::color::srgb::DecodeSafe(gamma_color);
+
+    o0.rgb = renodx::draw::ToneMapPass(untonemapped, graded_color, neutral_sdr);
   }
-
-  float4 sampled_color = t0.Sample(s0_s, v1.xy).rgba;
-  o0.a = sampled_color.a;
-
-  float3 gamma_color = sampled_color.rgb;
-
-  float3 untonemapped = renodx::color::srgb::Decode(gamma_color.rgb);
-
-  float3 neutral_sdr = renodx::tonemap::renodrt::NeutralSDR(untonemapped);
-
-  
-  gamma_color = renodx::color::srgb::Encode(neutral_sdr);
-
-  gamma_color.r = t1.Sample(s1_s, float2(gamma_color.r, 0.125)).r;
-  gamma_color.g = t1.Sample(s1_s, float2(gamma_color.g, 0.375)).g;
-  gamma_color.b = t1.Sample(s1_s, float2(gamma_color.b, 0.625)).b;
-  float luma = dot(gamma_color, float3(0.219999999, 0.707000017, 0.0710000023));
-  gamma_color.rgb = lerp(luma, gamma_color.rgb, cb0[2].x);
-
-  float3 graded_color = renodx::color::srgb::Decode(gamma_color);
-
-  float3 tonemapped = renodx::draw::ToneMapPass(untonemapped, graded_color, neutral_sdr);
-  o0.rgb = renodx::draw::RenderIntermediatePass(tonemapped);
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   return;
 }
