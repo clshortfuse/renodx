@@ -60,9 +60,9 @@ float4 main(
   //_87.rgb = CustomBloomTonemap(_87.rgb, 0.375f);
 
   float CC096 = CustomPixelConsts_096.x;
-  if (RENODX_TONE_MAP_TYPE != 0) {
+  //if (RENODX_TONE_MAP_TYPE > 1) {
     //CC096 *= CUSTOM_BLOOM;
-  }
+  //}
   
 
   float _91 = ((_69.x + _61.x) + _80.x) + _87.x;

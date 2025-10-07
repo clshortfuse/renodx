@@ -31,7 +31,7 @@ float4 main(
   // _69.rgb = CustomBloomTonemap(_69.rgb);
   // _80.rgb = CustomBloomTonemap(_80.rgb);
   // _87.rgb = CustomBloomTonemap(_87.rgb);
-  if (RENODX_TONE_MAP_TYPE != 0 && BLOOM_EMULATION == 0) {
+  if (RENODX_TONE_MAP_TYPE > 1 && BLOOM_EMULATION == 0) {
     // float clamp_value = Uncharted2Tonemap1(1.f);
     float clamp_value = 1.f;
      _61.rgb = ClampPostProcessing(_61.rgb, clamp_value);
@@ -74,7 +74,7 @@ float4 main(
   float3 CC096 = float3(CustomPixelConsts_096.x, CustomPixelConsts_096.y, CustomPixelConsts_096.z);
   float3 CC128 = float3(CustomPixelConsts_128.x, CustomPixelConsts_128.y, CustomPixelConsts_128.z);
 
-  if (RENODX_TONE_MAP_TYPE != 0 && BLOOM_EMULATION == 1) {
+  if (RENODX_TONE_MAP_TYPE > 1 && BLOOM_EMULATION == 1) {
     //CC144 *= 0.8f; // luminance / color weights
     CC096.x *= 0.3f; // final bloom intensity
     CC128.y /= 2.5f; // knee / curve coefficient
