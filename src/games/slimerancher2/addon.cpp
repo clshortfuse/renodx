@@ -23,6 +23,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
   CustomShaderEntry(0x02AB22C6),
   CustomShaderEntry(0x9A3E0141),
   CustomShaderEntry(0xC04C9047),
+  CustomShaderEntry(0x20133A8B),
 
 };
 
@@ -107,13 +108,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::swapchain::use_resource_cloning = true;
-      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader_dx11;
-      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx11;
 
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
         .old_format = reshade::api::format::r8g8b8a8_typeless,
         .new_format = reshade::api::format::r16g16b16a16_float,
       });
+
 
       break;
     case DLL_PROCESS_DETACH:
