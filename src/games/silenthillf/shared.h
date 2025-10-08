@@ -30,6 +30,7 @@ struct ShaderInjectData {
   float custom_random;
   float custom_grain_type;
   float custom_grain_strength;
+  float custom_sharpness;
 
   // float fix_post_process;
 };
@@ -64,6 +65,7 @@ cbuffer cb13 : register(b13, space50) {
 #define CUSTOM_RANDOM         shader_injection.custom_random
 #define CUSTOM_GRAIN_TYPE     shader_injection.custom_grain_type
 #define CUSTOM_GRAIN_STRENGTH shader_injection.custom_grain_strength
+#define CUSTOM_SHARPNESS      shader_injection.custom_sharpness
 
 // #define FIX_POST_PROCESS                     shader_injection.fix_post_process     // 0 - BT.2020 PQ, 1 - BT.709 piecewise sRGB, 2 - BT.2020 piecewise sRGB
 #define OVERRIDE_BLACK_CLIP shader_injection.override_black_clip  // 0 - Off, 1 - 0.0001 nits
@@ -89,8 +91,10 @@ cbuffer cb13 : register(b13, space50) {
 #define CUSTOM_LUT_STRENGTH                  1.f
 #define CUSTOM_LUT_SCALING                   1.f
 
+#define CUSTOM_RANDOM         0.f
 #define CUSTOM_GRAIN_TYPE     0.f
 #define CUSTOM_GRAIN_STRENGTH 0.f
+#define CUSTOM_SHARPNESS      0.f
 
 // #define FIX_POST_PROCESS                     shader_injection.fix_post_process     // 0 - BT.2020 PQ, 1 - BT.709 piecewise sRGB, 2 - BT.2020 piecewise sRGB
 #define OVERRIDE_BLACK_CLIP   1.f  // 0 - Off, 1 - 0.0001 nits

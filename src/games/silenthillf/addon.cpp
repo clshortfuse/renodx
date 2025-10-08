@@ -225,6 +225,11 @@ renodx::utils::settings::Settings settings = {
     //     .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     // },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("\nSliders in this section do not work with FSR Frame Generation enabled.\n\n"),
+        .section = "Effects",
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxGrainType",
         .binding = &shader_injection.custom_grain_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -244,6 +249,16 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.custom_grain_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxSharpening",
+        .binding = &shader_injection.custom_sharpness,
+        .default_value = 0.f,
+        .label = "Lilium RCAS Sharpening",
+        .section = "Effects",
+        .tooltip = "Adds RCAS, as implemented by Lilium for HDR.",
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value == 0 ? 0.f : exp2(-(1.f - (value * 0.01f))); },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
