@@ -529,10 +529,14 @@ float4 main(
   float _1577 = ((mad(-0.20366770029067993f, _1560, mad(1.2036634683609009f, _1559, (_1558 * -2.57161445915699e-07f))) - _1559) * BlueCorrection) + _1559;
   float _1578 = ((mad(0.9999996423721313f, _1560, mad(2.0954757928848267e-08f, _1559, (_1558 * 1.862645149230957e-08f))) - _1560) * BlueCorrection) + _1560;
 #endif
-  float _1600 = max(0.0f, mad((WorkingColorSpace_FromAP1[0].z), _1578, mad((WorkingColorSpace_FromAP1[0].y), _1577, ((WorkingColorSpace_FromAP1[0].x) * _1576))));
+  float _1600 = mad((WorkingColorSpace_FromAP1[0].z), _1578, mad((WorkingColorSpace_FromAP1[0].y), _1577, ((WorkingColorSpace_FromAP1[0].x) * _1576)));
+  float _1601 = mad((WorkingColorSpace_FromAP1[1].z), _1578, mad((WorkingColorSpace_FromAP1[1].y), _1577, ((WorkingColorSpace_FromAP1[1].x) * _1576)));
+  float _1602 = mad((WorkingColorSpace_FromAP1[2].z), _1578, mad((WorkingColorSpace_FromAP1[2].y), _1577, ((WorkingColorSpace_FromAP1[2].x) * _1576)));
+
+  /* float _1600 = max(0.0f, mad((WorkingColorSpace_FromAP1[0].z), _1578, mad((WorkingColorSpace_FromAP1[0].y), _1577, ((WorkingColorSpace_FromAP1[0].x) * _1576))));
   float _1601 = max(0.0f, mad((WorkingColorSpace_FromAP1[1].z), _1578, mad((WorkingColorSpace_FromAP1[1].y), _1577, ((WorkingColorSpace_FromAP1[1].x) * _1576))));
   float _1602 = max(0.0f, mad((WorkingColorSpace_FromAP1[2].z), _1578, mad((WorkingColorSpace_FromAP1[2].y), _1577, ((WorkingColorSpace_FromAP1[2].x) * _1576))));
-  /* float _1616 = ((mad(0.061360642313957214f, _1239, mad(-4.540197551250458e-09f, _1237, (_1235 * 0.9386394023895264f))) - _1235) * BlueCorrection) + _1235;
+  float _1616 = ((mad(0.061360642313957214f, _1239, mad(-4.540197551250458e-09f, _1237, (_1235 * 0.9386394023895264f))) - _1235) * BlueCorrection) + _1235;
   float _1617 = ((mad(0.169205904006958f, _1239, mad(0.8307942152023315f, _1237, (_1235 * 6.775371730327606e-08f))) - _1237) * BlueCorrection) + _1237;
   float _1618 = (mad(-2.3283064365386963e-10f, _1237, (_1235 * -9.313225746154785e-10f)) * BlueCorrection) + _1239;
   float _1621 = mad(0.16386905312538147f, _1618, mad(0.14067868888378143f, _1617, (_1616 * 0.6954522132873535f)));
