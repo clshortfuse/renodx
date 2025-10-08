@@ -52,6 +52,7 @@
 #define CUSTOM_SHARPNESS                      shader_injection.custom_sharpness
 #define CUSTOM_TONEMAP_EXPOSURE                shader_injection.tone_map_exposure
 
+//#define UTILITY_COMPARISON                    shader_injection.utility_comparison
 //#define UTILITY_HUD                            shader_injection.utility_hud
 
 // Must be 32bit aligned
@@ -95,6 +96,7 @@ struct ShaderInjectData {
   float custom_sharpening_type;
   float custom_sharpness;
 
+  //float utility_comparison;
   //float utility_hud;
 };
 

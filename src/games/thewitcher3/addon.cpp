@@ -144,6 +144,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Recommended",
         .section = "Presets",
         .group = "button-line-1",
+        .is_enabled = []() { return last_is_hdr; },
         .on_change = []() {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
@@ -182,6 +183,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Filmic",
         .section = "Presets",
         .group = "button-line-1",
+        .is_enabled = []() { return last_is_hdr; },
         .on_change = []() {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
@@ -573,6 +575,18 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
+    //     new renodx::utils::settings::Setting{
+    //     .key = "UtilityComparison",
+    //     .binding = &shader_injection.utility_comparison,
+    //     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+    //     .default_value = 1.f,
+    //     .label = "SDR/HDR Comparison",
+    //     .section = "Utility",
+    //     .tooltip = "Split the screen between SDR and HDR.",
+    //     .labels = {"Off", "On"},
+    //     .parse = [](float value) { return value; },
+    //     .is_visible = []() { return current_settings_mode >= 2.f; },
+    // },
     // new renodx::utils::settings::Setting{
     //     .key = "UtilHUD",
     //     .binding = &shader_injection.utility_hud,
