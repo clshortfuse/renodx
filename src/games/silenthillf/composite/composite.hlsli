@@ -1,4 +1,5 @@
 #include "../shared.h"
+#include "./lilium_rcas.hlsli"
 
 float4 OutputscRGB(float4 color, float scale) {
   return float4(color.rgb *= scale / 80.f, color.a);
@@ -7,6 +8,14 @@ float4 OutputscRGB(float4 color, float scale) {
 float4 OutputHDR10(float4 color, float scale) {
   float3 pq_color = renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(color.rgb), scale);
   return float4(pq_color, color.a);
+}
+
+float3 ApplyRCAS(float3 center_color, float2 texcoord, Texture2D<float4> scene_color_texture, SamplerState scene_color_sampler) {
+  if (CUSTOM_SHARPNESS == 0.f) return center_color;  // Skip sharpening if amount is zero
+
+  // scale input so diffuse white is at 1.0
+  center_color *= RENODX_GRAPHICS_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+  return ApplyLiliumRCAS(center_color, texcoord, scene_color_texture, scene_color_sampler) * RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
 }
 
 float3 ApplyFilmGrain(float3 color, float2 position, float random) {
@@ -22,7 +31,7 @@ float3 ApplyFilmGrain(float3 color, float2 position, float random) {
   return color;
 }
 
-bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout float4 output_color, float2 position, uint output_mode = 0u) {
+bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout float4 output_color, float2 position, Texture2D<float4> scene_color_texture, SamplerState scene_color_sampler, uint output_mode = 0u) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
   float ui_alpha = ui_color_gamma.a;
 
@@ -36,6 +45,9 @@ bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout flo
 
   // linearize scene, normalize game brightness as a ratio of ui brightness
   float3 scene_color_linear = renodx::color::pq::DecodeSafe(scene_color_pq.rgb, RENODX_GRAPHICS_WHITE_NITS);
+
+  scene_color_linear = ApplyRCAS(scene_color_linear, position, scene_color_texture, scene_color_sampler);
+
   scene_color_linear = renodx::color::bt709::from::BT2020(scene_color_linear);
 
   scene_color_linear = ApplyFilmGrain(scene_color_linear, position, CUSTOM_RANDOM);
