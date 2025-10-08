@@ -370,16 +370,22 @@ float4 main(
   float _1213;
   SampleLUTUpgradeToneMap(untonemapped_bt709, Samplers_1, Textures_1, _1211, _1212, _1213);
 
-  if (GenerateOutput(_1211, _1212, _1213, SV_Target, is_hdr)) {
-    return SV_Target;
-  }
-
   float _1239 = ColorScale.x * (((MappingPolynomial.y + (MappingPolynomial.x * _1211)) * _1211) + MappingPolynomial.z);
   float _1240 = ColorScale.y * (((MappingPolynomial.y + (MappingPolynomial.x * _1212)) * _1212) + MappingPolynomial.z);
   float _1241 = ColorScale.z * (((MappingPolynomial.y + (MappingPolynomial.x * _1213)) * _1213) + MappingPolynomial.z);
-  float _1262 = exp2(log2(max(0.0f, (lerp(_1239, OverlayColor.x, OverlayColor.w)))) * InverseGamma.y);
-  float _1263 = exp2(log2(max(0.0f, (lerp(_1240, OverlayColor.y, OverlayColor.w)))) * InverseGamma.y);
-  float _1264 = exp2(log2(max(0.0f, (lerp(_1241, OverlayColor.z, OverlayColor.w)))) * InverseGamma.y);
+  // Separate the lerp results into individual variables
+  float _1265 = lerp(_1239, OverlayColor.x, OverlayColor.w);
+  float _1266 = lerp(_1240, OverlayColor.y, OverlayColor.w);
+  float _1267 = lerp(_1241, OverlayColor.z, OverlayColor.w);
+
+  if (GenerateOutput(_1265, _1266, _1267, SV_Target, is_hdr)) {
+    return SV_Target;
+  }
+  
+  // Apply gamma correction to each component
+  float _1262 = exp2(log2(max(0.0f, _1265)) * InverseGamma.y);
+  float _1263 = exp2(log2(max(0.0f, _1266)) * InverseGamma.y);
+  float _1264 = exp2(log2(max(0.0f, _1267)) * InverseGamma.y);
 
   if (WorkingColorSpace.bIsSRGB == 0) {
     float _1283 = mad((WorkingColorSpace.ToAP1[0].z), _1264, mad((WorkingColorSpace.ToAP1[0].y), _1263, ((WorkingColorSpace.ToAP1[0].x) * _1262)));
