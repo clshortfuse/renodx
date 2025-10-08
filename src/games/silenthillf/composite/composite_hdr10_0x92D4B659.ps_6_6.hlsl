@@ -21,7 +21,7 @@ float4 main(
   float4 _11 = UITexture.Sample(UISampler, float2(TEXCOORD.x, TEXCOORD.y));
   float4 _59 = SceneTexture.Sample(SceneSampler, float2(TEXCOORD.x, TEXCOORD.y));
 
-  if (HandleUICompositing(_11, _59, SV_Target, TEXCOORD.xy)) {
+  if (HandleUICompositing(_11, _59, SV_Target, TEXCOORD.xy, SceneTexture, SceneSampler)) {
     return SV_Target;
   }
 
